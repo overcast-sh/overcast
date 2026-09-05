@@ -115,9 +115,10 @@ Which half a new test belongs in:
   container and talks to no daemon. This is the default home; put a test here
   unless it needs a running Lambda.
 - **`tests/integration/lambdadocker`** — everything that starts a container:
-  anything that would call `skipIfNoDocker`, `helpers.WithLambdaDocker()` or
-  `requireLambdaInit`. **Never add `t.Parallel()` to a test here** — they share
-  named Docker networks, fixed registry ports and the daemon's address pool.
+  anything that would call `helpers.SkipWithoutDocker`,
+  `helpers.WithLambdaDocker()` or `requireLambdaInit`. **Never add
+  `t.Parallel()` to a test here** — they share named Docker networks, fixed
+  registry ports and the daemon's address pool.
 
 The two halves cannot see each other's unexported declarations, so anything
 both need — the wire types, `doJSON`, `lambdaURL`, the in-container init
@@ -132,6 +133,35 @@ time, so that half's `TestMain` builds them once per test binary and points
 whichever test happens to sort first — that is what the old single package did,
 and it made `go test -run TestInvoke_nodeRuntime_success` fail on a fresh
 checkout with an "Unhandled" function error naming nothing.
+
+##### What the container half requires, per platform
+
+`lambdadocker` is expected to run everywhere, and a skip here has to name a
+capability rather than a platform. There is exactly one Docker gate,
+`helpers.SkipWithoutDocker`: it resolves the endpoint with
+`helpers.TestDockerSocket` — `LAMBDA_DOCKER_SOCKET`, else the platform default
+— and pings that daemon. **Never gate on a socket path.** A gate that stat-ed
+`/var/run/docker.sock` skipped all 49 tests on every Windows machine, and one
+that dialled the empty string skipped everywhere including Linux CI; both
+reported green ([#1785](https://github.com/overcast-sh/overcast/issues/1785)).
+`TestMain`'s image pre-pull uses the same resolution, through
+`helpers.DockerAvailable`, so the daemon the suite warms is the daemon it tests.
+
+| Platform | What runs | What does not, and why |
+| --- | --- | --- |
+| Linux, daemon on this kernel | everything | — |
+| Windows / macOS, Docker Desktop | everything but one | the Telemetry API delivery test: its destination is a listener inside the sandbox that Overcast posts to at the container's bridge IP, and Desktop's engine is in a VM the host cannot route into. `skipIfHostCannotReachContainerIPs` |
+| The suite itself in a container | everything, if the daemon's socket is mounted | a hot-reload bind mount needs a path this process and the daemon both see; `hotReloadSourceDir` uses `OVERCAST_TEST_LAMBDA_HOT_RELOAD_DIR`, else `/workspace`, else `skipIfContainerizedHotReloadBindMount` |
+
+Two notes measured on Windows 11 with Docker Desktop 29.7.2, since both are
+easy to assume the other way round. All twelve hot-reload cases **pass** there:
+Desktop bind-mounts host paths, and `skipIfContainerizedHotReloadBindMount`
+correctly does not fire because that condition is about *this process* being
+containerised, not about the daemon being in a VM. And the image-build helper
+reaches the daemon through `docker.Transport`, the emulator's own dialer — a
+hand-rolled one that assumed a Unix socket failed six tests there with `dial
+unix npipe://…`. Anything needing an Engine API call `docker.Client` does not
+implement takes that transport; never write a second dialer in test code.
 
 ---
 
