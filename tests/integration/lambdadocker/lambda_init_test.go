@@ -144,7 +144,7 @@ func indexOfLine(messages []string, want string) int {
 // what is not racy is that a line goes to the invocation that was in flight
 // when it was written.
 func TestInvoke_logTail_exactAttribution(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 	requireLambdaInit(t)
 
 	srv := helpers.NewTestServer(t, helpers.WithLambdaDocker())
@@ -242,7 +242,7 @@ func requestIDOf(t *testing.T, tail string) string {
 // startup-exit capture in awaitContainerIP able to explain a container that
 // died. Its own diagnostics are there too, on stderr, clearly labelled.
 func TestInvoke_containerLogsStillCarryTheHandlersOutput(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 	requireLambdaInit(t)
 
 	srv := helpers.NewTestServer(t, helpers.WithLambdaDocker())
@@ -301,7 +301,7 @@ exports.handler = async () => {
 // response arrived, while the handler's line was still travelling through the
 // daemon.
 func TestInvoke_cloudWatchOrderingIsExact(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 	requireLambdaInit(t)
 
 	srv := helpers.NewTestServer(t, helpers.WithLambdaDocker())
@@ -339,7 +339,7 @@ exports.handler = async () => {
 // the daemon's pipe was lost. The init drains, flushes and closes its stream
 // when its child exits, so the host waits for an event rather than for silence.
 func TestInvoke_crashedHandlersOutputLandsBeforeEndAndReport(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 	requireLambdaInit(t)
 
 	srv := helpers.NewTestServer(t, helpers.WithLambdaDocker())
@@ -431,7 +431,7 @@ func buildLambdaImage(t *testing.T, dockerfile string, files map[string]string) 
 // daemonHTTPClient talks to the Docker daemon over its Unix socket. The build
 // endpoint is not on internal/docker.Client — nothing in Overcast builds images
 // — so these tests speak to it directly. Unix only, which is where the
-// Docker-gated tests run (skipIfNoDocker checks for the socket).
+// Docker-gated tests run (helpers.SkipWithoutDocker gates them).
 func daemonHTTPClient(t *testing.T) *http.Client {
 	t.Helper()
 	socket := helpers.TestDockerSocket()
@@ -468,7 +468,7 @@ func createImageFunction(t *testing.T, srv *helpers.TestServer, name, imageURI s
 // override has to reach the child, and the tail has to work exactly as it does
 // for a zip function.
 func TestInvoke_imageFunction_withImageConfigEntrypoint(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 	requireLambdaInit(t)
 
 	image := buildLambdaImage(t, `FROM public.ecr.aws/lambda/nodejs:20
@@ -501,7 +501,7 @@ exports.overridden = async () => {
 // With no ImageConfig at all, the child is the image's own ENTRYPOINT+CMD, read
 // back from the daemon because the daemon can no longer merge them in.
 func TestInvoke_imageFunction_usesTheImagesOwnEntrypoint(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 	requireLambdaInit(t)
 
 	image := buildLambdaImage(t, `FROM public.ecr.aws/lambda/nodejs:20
@@ -532,7 +532,7 @@ exports.baked = async () => {
 // subscriber (asserted against the sink in
 // internal/services/lambda/container_logs_test.go).
 func TestInvoke_imageFunction_startsExtensions(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 	requireLambdaInit(t)
 
 	image := buildLambdaImage(t, `FROM public.ecr.aws/lambda/nodejs:20
@@ -619,7 +619,7 @@ function call(method, path, headers, body) {
 // first is proved by reading the volume back through a container that had no
 // part in seeding it.
 func TestInvoke_initIsMountedFromASeededVolume(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 	requireLambdaInit(t)
 
 	srv := helpers.NewTestServer(t, helpers.WithLambdaDocker())
@@ -763,7 +763,7 @@ func initArtefactSize(t *testing.T, goarch string) int64 {
 // A custom image ENTRYPOINT is the sharpest form of it: the line is printed
 // before the runtime interface client even exists.
 func TestInvoke_initPhaseOutputPrecedesTheFirstStart(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 	requireLambdaInit(t)
 
 	image := buildLambdaImage(t, `FROM public.ecr.aws/lambda/nodejs:20
@@ -818,7 +818,7 @@ exports.handler = async () => {
 // the next one, which had not begun. It reaches CloudWatch, and it reaches
 // neither tail.
 func TestInvoke_outputAfterTheResponseBelongsToNoInvocation(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 	requireLambdaInit(t)
 
 	srv := helpers.NewTestServer(t, helpers.WithLambdaDocker())

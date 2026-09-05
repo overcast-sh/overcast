@@ -248,13 +248,45 @@ func removeTestRegistryVolume(port int) {
 	_ = dc.RemoveVolume(ctx, "overcast-ecr-registry-data-"+strconv.Itoa(port), true)
 }
 
+// DockerAvailable reports why the Docker daemon cannot be reached, or nil when
+// it can. It resolves the endpoint exactly as TestDockerSocket does — so the
+// gate and the server under test always agree about which daemon is meant —
+// and then asks that daemon, rather than looking for a file.
+//
+// Two ways of answering this question have already been got wrong here, and
+// both failed in the same silent direction: reporting "no Docker" on a machine
+// with a healthy daemon, which turns every test behind the gate into a skip
+// nobody reads.
+//
+//   - Dialling the empty string. NewClient("") hands "" to dialEndpoint, which
+//     on every platform falls through to the Unix-socket branch, so the ping
+//     died with "dial unix: missing address" whatever the daemon was doing.
+//     helpers.SkipWithoutDocker did this until #1785, and the ECS,
+//     CloudFormation and Lambda container tests behind it skipped everywhere,
+//     Linux CI included.
+//   - Stat-ing "/var/run/docker.sock". That path does not exist on Windows,
+//     where Docker Desktop listens on a named pipe, and it is the wrong path
+//     wherever DOCKER_HOST or LAMBDA_DOCKER_SOCKET names another daemon. The
+//     Lambda container package's private gate did this until #1785 and skipped
+//     all 49 of its tests on any Windows workstation.
+//
+// It takes a context rather than a *testing.T so TestMain can use it: a
+// package that pre-pulls images before any test runs needs the same answer, from
+// the same resolution, and pre-pulling through a second one is how the daemon a
+// suite warms stops being the daemon it tests.
+func DockerAvailable(ctx context.Context) error {
+	return docker.NewClient(TestDockerSocket(), nil).Ping(ctx)
+}
+
 // SkipWithoutDocker calls t.Skip if Docker is not reachable. Use at the top of
 // tests that need a running daemon (ECS, Lambda, RDS, ElastiCache, MSK, EFS).
+//
+// The skip message names the endpoint, because the interesting failure is not
+// "no daemon" but "not the daemon you meant" — see DockerAvailable.
 func SkipWithoutDocker(t *testing.T) {
 	t.Helper()
-	dc := docker.NewClient("", nil)
-	if err := dc.Ping(t.Context()); err != nil {
-		t.Skipf("skipping: Docker is not available (%v)", err)
+	if err := DockerAvailable(t.Context()); err != nil {
+		t.Skipf("skipping: Docker is not available at %s (%v)", TestDockerSocket(), err)
 	}
 }
 

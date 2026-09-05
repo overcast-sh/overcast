@@ -96,7 +96,7 @@ func dockerCLI(t *testing.T, args ...string) string {
 // TestInvoke_imageFunction_pushedToECRAndAddressedAsAWS runs AWS's documented
 // container-image pattern end to end.
 func TestInvoke_imageFunction_pushedToECRAndAddressedAsAWS(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 	requireLambdaInit(t)
 
 	const account = "000000000000"

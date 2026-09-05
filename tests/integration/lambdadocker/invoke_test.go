@@ -36,11 +36,17 @@ import (
 
 // TestMain pre-pulls Docker images used by tests so that individual test
 // cases don't all attempt to pull concurrently (thundering herd).
+//
+// The pre-pull resolves the daemon through helpers.TestDockerSocket, the same
+// resolution helpers.SkipWithoutDocker and every test server here use. It used
+// to run only when LAMBDA_DOCKER_SOCKET was unset and then pull through a
+// literal "/var/run/docker.sock", which is no daemon at all on Windows and the
+// wrong one wherever the variable pointed elsewhere — so the warming either
+// filled a cache nothing would read, or did not happen (#1785).
 func TestMain(m *testing.M) {
-	if socket := os.Getenv("LAMBDA_DOCKER_SOCKET"); socket == "" {
-		socket = "/var/run/docker.sock"
-		dc := docker.NewClient(socket, zap.NewNop())
-		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	if helpers.DockerAvailable(ctx) == nil {
+		dc := docker.NewClient(helpers.TestDockerSocket(), zap.NewNop())
 		for _, img := range []string{
 			"public.ecr.aws/lambda/nodejs:20",
 			"public.ecr.aws/lambda/nodejs:22",
@@ -50,17 +56,15 @@ func TestMain(m *testing.M) {
 				_ = dc.PullImage(ctx, img)
 			}
 		}
-		cancel()
-	}
-	// Build the in-container init before any test runs. It is build output
-	// and its embed is baked at compile time, so a binary that starts
-	// containers has to build it for itself; doing it here rather than in
-	// whichever test happens to run first is what keeps this package
-	// independent of file order. Failures are left for the tests' own
-	// requireLambdaInit to report, against the test that needed it.
-	if dockerUnavailable() == nil {
+		// Build the in-container init before any test runs. It is build output
+		// and its embed is baked at compile time, so a binary that starts
+		// containers has to build it for itself; doing it here rather than in
+		// whichever test happens to run first is what keeps this package
+		// independent of file order. Failures are left for the tests' own
+		// requireLambdaInit to report, against the test that needed it.
 		_ = lambdafixture.EnsureInit()
 	}
+	cancel()
 	os.Exit(m.Run())
 }
 
@@ -70,22 +74,15 @@ func TestMain(m *testing.M) {
 // when Docker is unavailable (CI without Docker socket, Windows dev without
 // Docker Desktop, etc.).
 
-// dockerSocket is the socket every test in this package gates on.
-const dockerSocket = "/var/run/docker.sock"
-
-// dockerUnavailable reports why Docker cannot be used, or nil if it can.
-func dockerUnavailable() error {
-	_, err := os.Stat(dockerSocket)
-	return err
-}
-
-// skipIfNoDocker skips the test if the Docker socket is not accessible.
-func skipIfNoDocker(t *testing.T) {
-	t.Helper()
-	if err := dockerUnavailable(); err != nil {
-		t.Skipf("Docker socket %s not available: %v", dockerSocket, err)
-	}
-}
+// The gate is helpers.SkipWithoutDocker, and this package deliberately keeps no
+// private one. It had a private one until #1785: it stat-ed the literal path
+// "/var/run/docker.sock", which does not exist on Windows — where Docker
+// Desktop listens on a named pipe — and is the wrong daemon wherever
+// LAMBDA_DOCKER_SOCKET or DOCKER_HOST names another. All 49 tests here
+// therefore skipped on any Windows workstation however healthy Docker was, and
+// the contributor saw green. The shared helper resolves the endpoint the way
+// the emulator does and asks the daemon, so the gate and the server under test
+// can never disagree about which daemon is meant.
 
 func skipIfContainerizedHotReloadBindMount(t *testing.T) {
 	t.Helper()
@@ -195,7 +192,7 @@ func waitForFunctionActive(t *testing.T, srv *helpers.TestServer, name string) {
 }
 
 func TestInvoke_nodeRuntime_success(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 
 	// Given a Node.js function that echoes its input
 	srv := helpers.NewTestServer(t, helpers.WithLambdaDocker())
@@ -237,7 +234,7 @@ exports.handler = async (event) => {
 }
 
 func TestInvoke_nodeRuntime_hotReloadMountedSource(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 	skipIfContainerizedHotReloadBindMount(t)
 
 	// Given a function that opts into hot-reload with source mounted from host.
@@ -298,7 +295,7 @@ exports.handler = async () => {
 // the second — a boundary the docs state and a test must not pretend away by
 // sleeping through it.
 func TestInvoke_nodeRuntime_hotReload_sourceEditedInPlace(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 	sourceDir := hotReloadSourceDir(t)
 	handler := sourceDir + "/index.js"
 	if err := os.WriteFile(handler, []byte(`exports.handler = async () => ({ v: 1 });`+"\n"), 0o644); err != nil {
@@ -351,7 +348,7 @@ func TestInvoke_nodeRuntime_hotReload_sourceEditedInPlace(t *testing.T) {
 }
 
 func TestInvoke_nodeRuntime_hotReloadMountedSource_withLayer(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 	skipIfContainerizedHotReloadBindMount(t)
 
 	// Given a hot-reload source directory that imports a dependency from a layer.
@@ -423,7 +420,7 @@ exports.handler = async () => {
 }
 
 func TestInvoke_pythonRuntime_hotReloadMountedSource_withLayer(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 	skipIfContainerizedHotReloadBindMount(t)
 
 	// Given a hot-reload Python source directory that imports from a layer module.
@@ -495,7 +492,7 @@ def handler(event, context):
 }
 
 func TestInvoke_nodeRuntime_hotReloadMountedSource_withLayer_precedenceLastWins(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 	skipIfContainerizedHotReloadBindMount(t)
 
 	// Given a hot-reload source directory importing a module provided by layers.
@@ -574,7 +571,7 @@ exports.handler = async () => {
 }
 
 func TestInvoke_pythonRuntime_hotReloadMountedSource_withLayer_precedenceLastWins(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 	skipIfContainerizedHotReloadBindMount(t)
 
 	// Given a hot-reload Python source directory importing a module from layers.
@@ -653,7 +650,7 @@ def handler(event, context):
 }
 
 func TestInvoke_nodeRuntime_zipCode_withLayer(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 
 	// Given a zip-based Node function that imports from a layer module.
 	srv := helpers.NewTestServer(t, helpers.WithLambdaDocker())
@@ -709,7 +706,7 @@ exports.handler = async () => {
 }
 
 func TestInvoke_nodeRuntime_zipCode_withLayer_precedenceLastWins(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 
 	// Given a zip-based Node function importing a module provided by layers.
 	srv := helpers.NewTestServer(t, helpers.WithLambdaDocker())
@@ -763,7 +760,7 @@ exports.handler = async () => {
 }
 
 func TestInvoke_pythonRuntime_zipCode_withLayer(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 
 	// Given a zip-based Python function that imports from a layer module.
 	srv := helpers.NewTestServer(t, helpers.WithLambdaDocker())
@@ -811,7 +808,7 @@ def handler(event, context):
 }
 
 func TestInvoke_pythonRuntime_zipCode_withLayer_precedenceLastWins(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 
 	// Given a zip-based Python function importing a symbol from layer code.
 	srv := helpers.NewTestServer(t, helpers.WithLambdaDocker())
@@ -865,7 +862,7 @@ def handler(event, context):
 }
 
 func TestInvoke_nodeRuntime_deletedAttachedLayerVersionFailsInit(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 
 	// Given a zip-based Node function with a real attached layer version.
 	srv := helpers.NewTestServer(t, helpers.WithLambdaDocker())
@@ -949,7 +946,7 @@ exports.handler = async () => {
 }
 
 func TestInvoke_pythonRuntime_deletedAttachedLayerVersionFailsInit(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 
 	// Given a zip-based Python function with a real attached layer version.
 	srv := helpers.NewTestServer(t, helpers.WithLambdaDocker())
@@ -1032,7 +1029,7 @@ def handler(event, context):
 }
 
 func TestInvoke_nodeRuntime_deletedLayerRecoveryAfterClearingLayers(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 
 	// Given a zip-based Node function with an attached layer that later gets deleted.
 	srv := helpers.NewTestServer(t, helpers.WithLambdaDocker())
@@ -1118,7 +1115,7 @@ exports.handler = async () => {
 }
 
 func TestInvoke_pythonRuntime_deletedLayerRecoveryAfterClearingLayers(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 
 	// Given a zip-based Python function with an attached layer that later gets deleted.
 	srv := helpers.NewTestServer(t, helpers.WithLambdaDocker())
@@ -1203,7 +1200,7 @@ def handler(event, context):
 }
 
 func TestInvoke_nodeRuntime_hotReload_deletedAttachedLayerVersionFailsInit(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 	skipIfContainerizedHotReloadBindMount(t)
 
 	// Given a hot-reload Node function with a real attached layer version.
@@ -1296,7 +1293,7 @@ exports.handler = async () => {
 }
 
 func TestInvoke_pythonRuntime_hotReload_deletedAttachedLayerVersionFailsInit(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 	skipIfContainerizedHotReloadBindMount(t)
 
 	// Given a hot-reload Python function with a real attached layer version.
@@ -1388,7 +1385,7 @@ def handler(event, context):
 }
 
 func TestInvoke_nodeRuntime_hotReload_deletedLayerRecoveryAfterClearingLayers(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 	skipIfContainerizedHotReloadBindMount(t)
 
 	// Given a hot-reload Node function with an attached layer that later gets deleted.
@@ -1508,7 +1505,7 @@ exports.handler = async () => {
 }
 
 func TestInvoke_pythonRuntime_hotReload_deletedLayerRecoveryAfterClearingLayers(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 	skipIfContainerizedHotReloadBindMount(t)
 
 	// Given a hot-reload Python function with an attached layer that later gets deleted.
@@ -1627,7 +1624,7 @@ def handler(event, context):
 }
 
 func TestInvoke_nodeRuntime_missingLayerVersionFailsInit(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 
 	// Given a zip-based Node function whose configuration references a
 	// non-existent layer version ARN.
@@ -1675,7 +1672,7 @@ exports.handler = async () => {
 }
 
 func TestInvoke_pythonRuntime_missingLayerVersionFailsInit(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 
 	// Given a zip-based Python function whose configuration references a
 	// non-existent layer version ARN.
@@ -1722,7 +1719,7 @@ def handler(event, context):
 }
 
 func TestInvoke_nodeRuntime_hotReload_missingLayerVersionFailsInit(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 	skipIfContainerizedHotReloadBindMount(t)
 
 	// Given a hot-reload function whose configuration references a
@@ -1790,7 +1787,7 @@ exports.handler = async () => {
 }
 
 func TestInvoke_pythonRuntime_hotReload_missingLayerVersionFailsInit(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 	skipIfContainerizedHotReloadBindMount(t)
 
 	// Given a hot-reload Python function whose configuration references a
@@ -1857,7 +1854,7 @@ def handler(event, context):
 }
 
 func TestInvoke_functionError(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 
 	// Given a function that always throws
 	srv := helpers.NewTestServer(t, helpers.WithLambdaDocker())
@@ -1890,7 +1887,7 @@ exports.handler = async () => {
 }
 
 func TestInvoke_timeout(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 
 	// Given a function that sleeps longer than its timeout
 	srv := helpers.NewTestServer(t, helpers.WithLambdaDocker())
@@ -1971,7 +1968,7 @@ func invokeForLogTail(t *testing.T, srv *helpers.TestServer, fn string, payload 
 // read watermark already holds the first invocation's timestamp; that case
 // went uncovered for a long time and hid a wait that had become a no-op.
 func TestInvoke_logTail(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 
 	// Given a function that echoes a caller-supplied marker
 	srv := helpers.NewTestServer(t, helpers.WithLambdaDocker())
@@ -2013,7 +2010,7 @@ exports.handler = async (event) => {
 // exercises the full pipeline: Docker stdout → streamLogs goroutine → batched
 // flush → logsStore.appendEvents (cache + debounced persist) → GetLogEvents.
 func TestInvoke_logsLandInCloudWatch(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 
 	srv := helpers.NewTestServer(t, helpers.WithLambdaDocker())
 	code := makeZip(t, "index.js", `
@@ -2174,7 +2171,7 @@ func parseESHeaders(b []byte) map[string]string {
 }
 
 func TestInvokeWithResponseStream_nodeRuntime(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 
 	// Approach B (tracked on helpers.WithLambdaDocker) would let these 5 Docker
 	// tests share a single ContainerRuntime + InstancePool via a package-level
@@ -2229,9 +2226,9 @@ exports.handler = async (event) => {
 // function URL config, then invoke it via its Host-routed FunctionUrl and
 // confirm the request reaches the function through the same runtime
 // InvokeFunction uses. Requires Docker, like the other real-runtime
-// invocation tests in this file (skipIfNoDocker).
+// invocation tests in this file (helpers.SkipWithoutDocker).
 func TestInvokeFunctionURL_hostRouted_success(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 
 	// Given a Node.js function that echoes a structured function-URL response
 	srv := helpers.NewTestServer(t, helpers.WithLambdaDocker())

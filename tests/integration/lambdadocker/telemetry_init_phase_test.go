@@ -32,7 +32,7 @@ import (
 var initPhaseRecordTypes = []string{"platform.initStart", "platform.initRuntimeDone", "platform.initReport"}
 
 func TestInvoke_extensionSubscribedToTelemetryReceivesTheInitPhaseRecords(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 	requireLambdaInit(t)
 
 	image := buildLambdaImage(t, `FROM public.ecr.aws/lambda/nodejs:20

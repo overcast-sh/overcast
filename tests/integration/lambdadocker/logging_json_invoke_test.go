@@ -241,7 +241,7 @@ exports.handler = async () => {
 // ─── platform records ────────────────────────────────────────────────────────
 
 func TestInvoke_jsonLogFormatPlatformRecords(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 
 	// Given: a function configured for the JSON log format
 	srv := helpers.NewTestServer(t, helpers.WithLambdaDocker())
@@ -326,7 +326,7 @@ exports.handler = async () => {
 // ─── SystemLogLevel ──────────────────────────────────────────────────────────
 
 func TestInvoke_jsonSystemLogLevelFiltersPlatformRecords(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 
 	code := makeZip(t, "index.js", `
 exports.handler = async () => ({ ok: true });
@@ -405,7 +405,7 @@ exports.handler = async () => ({ ok: true });
 // ─── ApplicationLogLevel ─────────────────────────────────────────────────────
 
 func TestInvoke_jsonApplicationLogLevelFiltersFunctionOutput(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 
 	code := makeZip(t, "index.js", applicationRecordHandler)
 
@@ -464,7 +464,7 @@ func TestInvoke_jsonApplicationLogLevelFiltersFunctionOutput(t *testing.T) {
 // ─── Text mode regression fence ──────────────────────────────────────────────
 
 func TestInvoke_textLogFormatPlainTextRecords(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 
 	// Given: a function left on the default Text log format
 	srv := helpers.NewTestServer(t, helpers.WithLambdaDocker())
@@ -515,7 +515,7 @@ func TestInvoke_textLogFormatPlainTextRecords(t *testing.T) {
 // execution environment is created. A warm container reused across the change
 // would keep serving the old ones.
 func TestUpdateFunctionConfiguration_loggingChangeRetiresWarmEnvironment(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 
 	// Given: a Text-mode function with a warm execution environment, whose
 	// handler reports the logging variables its container was started with
@@ -595,7 +595,7 @@ func invokeLoggingEnv(t *testing.T, srv *helpers.TestServer, name, wantFormat, w
 // ingested, so this order is a guarantee, not a race that usually comes out
 // right.
 func TestInvoke_initPhaseRecordsAreOrderedInCloudWatch(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 	requireLambdaInit(t)
 
 	srv := helpers.NewTestServer(t, helpers.WithLambdaDocker())

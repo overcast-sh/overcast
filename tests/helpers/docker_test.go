@@ -1,11 +1,46 @@
 package helpers_test
 
 import (
+	"context"
 	"errors"
+	"os/exec"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/overcast-sh/overcast/tests/helpers"
 )
+
+// The Docker gate has to agree with the Docker CLI, and for a long time it
+// could not: DockerAvailable's predecessor built its client from the empty
+// string, which every platform's dialEndpoint reads as a Unix socket path, so
+// the ping failed with "dial unix: missing address" whatever the daemon was
+// doing. Every test behind helpers.SkipWithoutDocker — ECS service lifecycle,
+// the CloudFormation ECS service stacks, and after #1785 the Lambda container
+// suite — therefore skipped unconditionally, on Linux CI as much as on a
+// Windows workstation, and reported green.
+//
+// A gate cannot be tested by asking it whether Docker is there; that is the
+// question it exists to answer. So this asks a second, independent oracle —
+// the `docker` CLI, with its own config, context and socket resolution — and
+// requires the two to agree in the direction that matters: where the CLI
+// reaches a daemon, the gate must not claim there is none. The reverse is not
+// asserted, because a CLI that cannot reach a daemon says nothing about
+// LAMBDA_DOCKER_SOCKET, and this test then has no oracle and skips.
+func TestDockerAvailable_agreesWithTheDockerCLI(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+
+	out, err := exec.CommandContext(ctx, "docker", "version", "--format", "{{.Server.Version}}").CombinedOutput()
+	if err != nil {
+		t.Skipf("skipping: the docker CLI reaches no daemon on this host, so there is nothing for the gate to agree with: %v: %s",
+			err, strings.TrimSpace(string(out)))
+	}
+	if err := helpers.DockerAvailable(ctx); err != nil {
+		t.Fatalf("the docker CLI reaches a daemon (server %s) but the test gate does not, at %s: %v",
+			strings.TrimSpace(string(out)), helpers.TestDockerSocket(), err)
+	}
+}
 
 // The environmental cases below are the verbatim errors GitHub's runners
 // produced when Docker Hub became unreachable mid-run (PR #491), which reds

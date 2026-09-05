@@ -31,7 +31,7 @@ exports.handler = async () => {
 `
 
 func TestInvoke_jsonLogFormatInitPhaseRecords(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 	requireLambdaInit(t)
 
 	// Given: a function logging JSON at the system level that shows an
@@ -132,7 +132,7 @@ func TestInvoke_jsonLogFormatInitPhaseRecords(t *testing.T) {
 // mode does keep is exactly what it kept before: the container's own output,
 // and the START / END / REPORT lines.
 func TestInvoke_textLogFormatWritesNoInitPhaseRecords(t *testing.T) {
-	skipIfNoDocker(t)
+	helpers.SkipWithoutDocker(t)
 	requireLambdaInit(t)
 
 	srv := helpers.NewTestServer(t, helpers.WithLambdaDocker())
