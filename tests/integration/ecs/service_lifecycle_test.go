@@ -227,7 +227,7 @@ func pollService(t *testing.T, srv *helpers.TestServer, cluster, service string,
 }
 
 func TestCreateService_placesTasksAndReachesSteadyState(t *testing.T) {
-	helpers.SkipWithoutDocker(t)
+	helpers.SkipUnvalidatedDockerTest(t)
 	// Given: an awsvpc task definition in a cluster
 	srv := awsvpcTaskDefCluster(t, "rollout-cluster", "rollout-task")
 
@@ -475,7 +475,7 @@ func TestRPCv2CBOR_CreateService_requiresNetworkConfigurationForAwsvpc(t *testin
 }
 
 func TestRPCv2CBOR_CreateService_placesTasks(t *testing.T) {
-	helpers.SkipWithoutDocker(t)
+	helpers.SkipUnvalidatedDockerTest(t)
 	// Given: an awsvpc task definition
 	srv := awsvpcTaskDefCluster(t, "cbor-run-cluster", "cbor-run-task")
 

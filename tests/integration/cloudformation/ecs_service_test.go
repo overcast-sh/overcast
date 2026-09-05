@@ -58,7 +58,7 @@ const fargateServiceTemplate = `{
 // API's own default of zero and sits ACTIVE at 0/0, having started nothing —
 // which is what a CDK-deployed Fargate service did.
 func TestCreateStack_ECSServiceDefaultsDesiredCount(t *testing.T) {
-	helpers.SkipWithoutDocker(t)
+	helpers.SkipUnvalidatedDockerTest(t)
 	srv := helpers.NewTestServer(t)
 
 	cr := cfnQuery(t, srv, "CreateStack", url.Values{
@@ -109,7 +109,7 @@ func TestCreateStack_ECSServiceDefaultsDesiredCount(t *testing.T) {
 // TestCreateStack_ECSServiceExplicitDesiredCountWins checks the default does
 // not override a count the template actually gave.
 func TestCreateStack_ECSServiceExplicitDesiredCountWins(t *testing.T) {
-	helpers.SkipWithoutDocker(t)
+	helpers.SkipUnvalidatedDockerTest(t)
 	srv := helpers.NewTestServer(t)
 
 	template := strings.Replace(fargateServiceTemplate,

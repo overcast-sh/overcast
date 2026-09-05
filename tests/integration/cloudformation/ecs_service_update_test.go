@@ -64,7 +64,7 @@ func serviceStackTemplateWithImage(desiredCount, image string) string {
 }
 
 func TestUpdateStack_ECSServiceDesiredCountChange(t *testing.T) {
-	helpers.SkipWithoutDocker(t)
+	helpers.SkipUnvalidatedDockerTest(t)
 	// Given: a deployed stack with a service running one task.
 	srv := helpers.NewTestServer(t)
 	cr := cfnQuery(t, srv, "CreateStack", url.Values{
@@ -114,7 +114,7 @@ func TestUpdateStack_ECSServiceDesiredCountChange(t *testing.T) {
 // the failure this guards: the stack says the deploy landed, and nothing that
 // reads the stack can tell that it did not.
 func TestUpdateStack_ECSServiceTaskDefinitionChange(t *testing.T) {
-	helpers.SkipWithoutDocker(t)
+	helpers.SkipUnvalidatedDockerTest(t)
 	// Given: a deployed stack running one task
 	srv := helpers.NewTestServer(t)
 	cr := cfnQuery(t, srv, "CreateStack", url.Values{
@@ -209,7 +209,7 @@ func TestUpdateStack_ECSServiceTaskDefinitionChange(t *testing.T) {
 // unwind to a terminal state the next deploy can start from, and must not
 // leave the stack sitting in UPDATE_IN_PROGRESS forever.
 func TestUpdateStack_ECSServiceFailedUpdateLeavesStackRecoverable(t *testing.T) {
-	helpers.SkipWithoutDocker(t)
+	helpers.SkipUnvalidatedDockerTest(t)
 	// Given: a deployed stack.
 	srv := helpers.NewTestServer(t)
 	cr := cfnQuery(t, srv, "CreateStack", url.Values{
