@@ -120,6 +120,7 @@ python-sdk/
     clients.py        ← make_clients(endpoint, region) → named tuple of clients
     registry.py       ← loads registry.json + registry.generated.json, merges and
                         validates impl keys, builds the groups
+    scenario/         ← the scenario interpreter: executes the generated IR
 
   groups/             ← one file per AWS service
     s3.py
@@ -131,11 +132,39 @@ python-sdk/
   tests/
     test_registry.py  ← impl-key resolution tests; run with
                         `python -m unittest discover -s tests`
+    test_scenario.py  ← the interpreter, against an in-memory fake client
 ```
 
 This suite ships no `Dockerfile`: the compat runner container already carries
 Python, so it runs there as a plain subprocess (see `defaultSuites` in
 [compat/runner.go](../../runner.go)).
+
+### The scenario interpreter (`lib/scenario/`)
+
+Groups in `registry.generated.json` have no Python source of their own. Each
+carries a `scenario` field naming a file under `compat/model/scenarios/`, and
+`lib/scenario` executes that IR with boto3 — `boto3.client(<endpointPrefix>)`
+plus `getattr(client, botocore.xform_name(op))(**params)`, which is boto3's
+ordinary public API and therefore the same serialization path a real
+application takes. `runner.py` calls `scenario_hooks(registry)` once and passes
+the result to `build_groups_from_registry` as the scenario backend plus the
+generated groups' setup and teardown. Hand-written groups are untouched: the
+backend is consulted only for a test with no registered impl, and it answers
+"not mine" for anything outside a scenario file.
+
+| Module | Responsibility |
+| --- | --- |
+| `loader.py` | reads the scenario files the registry names, lazily and once |
+| `expressions.py` | `$lit`/`$ref`/`$name`/`$concat`/`$index`, the path syntax, JSON equality |
+| `executor.py` | the boto3 calls, the group's context bag, exports, error names |
+| `assertions.py` | the closed assertion set (`responseField`, `readback`, `listContains`, `absent`, `errorCode`, `eventually`) |
+| `failures.py` | the one builder for the six-field failure message |
+
+The normative specification is [compat/model/README.md](../../model/README.md);
+where it and this interpreter disagree, that document is right and the
+interpreter has a bug. `cmd/compatgen -explain <group>/<test> -lang python`
+renders a generated test as pseudo-code, which is how a failure message is
+turned back into something to run by hand.
 
 ### Key types (`lib/harness.py`)
 

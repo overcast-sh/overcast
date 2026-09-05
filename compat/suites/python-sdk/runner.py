@@ -32,6 +32,7 @@ from lib.harness import (emit_building, emit_ready, emit_batch_complete,
                           emit_cancelled, read_commands)
 from lib.registry import (load_registry, build_groups_from_registry, merge_impls,
                           validate_impls)
+from lib.scenario import scenario_hooks
 from groups import (
     s3,
     sqs,
@@ -127,6 +128,16 @@ all_impls = merge_impls(((mod.__name__, mod.IMPLS) for mod in _modules), SUITE)
 registry = load_registry()
 validate_impls(registry, all_impls, SUITE)
 
+# The scenario interpreter (#1113 phase G2) supplies the implementations for
+# generated groups — the ones registry.generated.json points at a scenario file
+# — plus their setup and teardown, which the loader's per-test hook has nowhere
+# to carry. Hand-written groups are untouched: the backend is consulted only
+# for a test with no registered impl, and it answers None for anything outside
+# a scenario file.
+scenario = scenario_hooks(registry)
+all_setup.update(scenario.setup)
+all_teardown.update(scenario.teardown)
+
 groups = build_groups_from_registry(
     registry,
     all_impls,
@@ -134,6 +145,7 @@ groups = build_groups_from_registry(
     capabilities=set() if skip_docker else {"docker"},
     setup=all_setup,
     teardown=all_teardown,
+    scenario_backend=scenario.backend,
 )
 
 # ─── Apply filters ─────────────────────────────────────────────────────────────
