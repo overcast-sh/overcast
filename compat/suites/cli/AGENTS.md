@@ -62,6 +62,7 @@ compat/suites/cli/
     awscli/          ← the only place the `aws` binary is spawned
     harness/         ← TestContext, TestFn, TestGroup, RunSuite, Namer
     registry/        ← registry loading, impl-key merge/validate, group building
+    scenario/        ← the scenario backend: executes the generated IR
     groups/          ← one file per AWS service
       groups.go      ← the ServiceGroup type and All(), the registration point
       groups_test.go ← this suite's registrations vs. the real registry.json
@@ -199,11 +200,36 @@ stderr, so pass that error through rather than replacing it with a summary.
 `internal/registry` loads `registry.json` and its machine-written sibling
 `registry.generated.json` (concatenated, hand-written groups first — see
 [compat/AGENTS.md § registry.json](../../AGENTS.md#registryjson--canonical-test-matrix)).
-`registry.generated.json` currently declares no groups. A generated group is
-meant to be executed by a scenario interpreter rather than by a registered
-impl; this suite has no such backend, so once one is scoped to `cli` it will
-report a hard failure naming the group rather than a skip. Do not add a
-backend speculatively.
+A generated group carries a `scenario` path instead of a registered impl, and
+**`internal/scenario` executes it** — the suite's scenario backend (G2, #1768).
+`cmd/runner` installs it as `BuildGroupsOptions.Scenario` and takes each
+generated group's setup and teardown from the same file.
+
+Rules for that package:
+
+- The IR it executes is specified by [compat/model/README.md](../../model/README.md).
+  That file is normative; where it and this interpreter disagree, one of them is
+  a bug, and the IR is settled across three suites — take a change to #1113
+  rather than making it here.
+- **Never hand-edit `compat/model/scenarios/*.json` or
+  `registry.generated.json`.** `cmd/compatgen` rewrites both wholly, and
+  `make compat-model-check` fails on a hand edit. A missing generated test is
+  a recipe change, not a scenario-file change.
+- Every call still goes through `internal/awscli`, as
+  `aws <endpointPrefix> <kebab-op> --cli-input-json '<json>'`. There is no
+  second process-spawning path, and the operation → subcommand derivation is
+  botocore's `xform_name`, pinned against the real CLI by
+  `TestKebabOpMatchesTheCLI`.
+- Every failure carries the six fields in
+  [compat/model/README.md § Failure messages](../../model/README.md#failure-messages),
+  built by the single helper in `failure.go`. Its wording deliberately avoids
+  every phrase `harness.IsUnimplemented` matches, so an assertion failure can
+  never be mis-reported as `unimplemented` — and the CLI's own error text is
+  quoted verbatim so a real 501 still is.
+- One process is spawned per call, so `eventually` is expensive: honour the
+  IR's `maxAttempts`/`delayMs` exactly and add no sleeps of your own.
+- Unit tests use the in-memory fake runner in `executor_test.go`; the package's
+  tests never spawn `aws` and never need an emulator.
 
 ---
 

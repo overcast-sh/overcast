@@ -376,12 +376,35 @@ describe("generated registry loading", () => {
     }
   });
 
-  it("the checked-in empty file is a no-op", () => {
+  it("the checked-in file loads and leaves hand-written groups alone", () => {
     // Exercises the real, checked-in registry.generated.json at its default
-    // sibling-of-registry.json location — but asserts only that an empty
-    // file is inert, not that the file stays empty forever.
+    // sibling-of-registry.json location, and asserts only the invariant: it
+    // loads, and concatenating it disturbs nothing hand-written. Never a fact
+    // about its current contents — the file is empty exactly while no suite
+    // has a scenario backend (the scenarioBackends table in
+    // cmd/compatgen/registry.go), and one has had one since G2 (#1768).
     const generated = loadGeneratedRegistry();
-    assert.deepEqual(generated.groups, []);
+    assert.equal(generated.version, 1);
+
+    const handWritten: Registry = {
+      version: 1,
+      groups: [
+        {
+          service: "s3",
+          name: "s3-crud",
+          tests: [{ name: "CreateBucket" }],
+        },
+      ],
+    };
+    const merged = mergeRegistries(handWritten, generated);
+    assert.deepEqual(
+      merged.groups.slice(0, handWritten.groups.length).map((g) => g.name),
+      handWritten.groups.map((g) => g.name),
+    );
+    assert.equal(
+      merged.groups.length,
+      handWritten.groups.length + generated.groups.length,
+    );
   });
 
   it("a synthetic non-empty file is concatenated after hand-written groups", () => {

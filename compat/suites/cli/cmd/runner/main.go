@@ -18,6 +18,7 @@ import (
 	"github.com/overcast-sh/overcast-compat-cli/internal/groups"
 	"github.com/overcast-sh/overcast-compat-cli/internal/harness"
 	"github.com/overcast-sh/overcast-compat-cli/internal/registry"
+	"github.com/overcast-sh/overcast-compat-cli/internal/scenario"
 )
 
 // splitCSV parses a comma-separated env var into a set of trimmed non-empty
@@ -109,11 +110,28 @@ func main() {
 		}
 	}
 
+	// The scenario backend executes the generated groups — the ones carrying a
+	// "scenario" path instead of a registered impl. Their setup and teardown
+	// are step lists in the same file, so they are installed here, before
+	// BuildGroups reads the maps. A hand-written group never declares a
+	// scenario (the field is only legal in registry.generated.json), so this
+	// cannot displace a registered setup.
+	scenarios := scenario.New(registry.RepoRoot())
+	for _, rg := range reg.Groups {
+		if fn, ok := scenarios.Setup(rg); ok {
+			setupFns[rg.Name] = fn
+		}
+		if fn, ok := scenarios.Teardown(rg); ok {
+			teardownFns[rg.Name] = fn
+		}
+	}
+
 	testGroups := registry.BuildGroups(reg, impls, registry.BuildGroupsOptions{
 		Suite:        suite,
 		Setup:        setupFns,
 		Teardown:     teardownFns,
 		Capabilities: caps,
+		Scenario:     scenarios.Resolve,
 	})
 
 	// Apply dashboard filters passed in via env vars. The Go runner sets these
