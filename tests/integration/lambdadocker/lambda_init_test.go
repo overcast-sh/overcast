@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -398,9 +397,9 @@ func buildLambdaImage(t *testing.T, dockerfile string, files map[string]string) 
 		t.Fatal(err)
 	}
 
-	client := daemonHTTPClient(t)
-	req, err := http.NewRequest(http.MethodPost,
-		"http://docker/v1.45/build?t="+tag+"&dockerfile=Dockerfile&rm=1&forcerm=1", bytes.NewReader(ctxTar.Bytes()))
+	client, base := daemonHTTPClient(t)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost,
+		base+"/v1.45/build?t="+tag+"&dockerfile=Dockerfile&rm=1&forcerm=1", bytes.NewReader(ctxTar.Bytes()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -416,7 +415,10 @@ func buildLambdaImage(t *testing.T, dockerfile string, files map[string]string) 
 	}
 
 	t.Cleanup(func() {
-		delReq, err := http.NewRequest(http.MethodDelete, "http://docker/v1.45/images/"+tag+"?force=1", nil)
+		// A fresh context: t's is already cancelled by the time cleanups run.
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		delReq, err := http.NewRequestWithContext(ctx, http.MethodDelete, base+"/v1.45/images/"+tag+"?force=1", nil)
 		if err != nil {
 			return
 		}
@@ -428,21 +430,30 @@ func buildLambdaImage(t *testing.T, dockerfile string, files map[string]string) 
 	return tag
 }
 
-// daemonHTTPClient talks to the Docker daemon over its Unix socket. The build
-// endpoint is not on internal/docker.Client — nothing in Overcast builds images
-// — so these tests speak to it directly. Unix only, which is where the
-// Docker-gated tests run (helpers.SkipWithoutDocker gates them).
-func daemonHTTPClient(t *testing.T) *http.Client {
+// daemonHTTPClient talks to the Docker daemon directly, because the build
+// endpoint is not on internal/docker.Client — nothing in Overcast builds
+// images. It returns the client and the base URL Engine API paths hang off.
+//
+// The transport comes from docker.Transport, so this dials the daemon exactly
+// as the emulator does on every platform. It used to hand-roll one that dialled
+// "unix" whatever the endpoint was, which on Windows asked the kernel to open a
+// named pipe as a filesystem socket:
+//
+//	dial unix npipe:////./pipe/docker_engine: connect: An invalid argument was supplied
+//
+// That was invisible while the package's Docker gate stat-ed /var/run/docker.sock
+// and skipped every test on Windows; it failed six of them the moment the gate
+// started telling the truth (#1785). There must be exactly one place that knows
+// how to dial a Docker endpoint, and it is not here.
+//
+// The response-header deadline is dropped: a build that has to pull its base
+// image can sit silent for longer than the 30s the short-call default allows,
+// and the transport is this caller's own to adjust.
+func daemonHTTPClient(t *testing.T) (*http.Client, string) {
 	t.Helper()
-	socket := helpers.TestDockerSocket()
-	return &http.Client{
-		Timeout: 10 * time.Minute,
-		Transport: &http.Transport{
-			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-				return (&net.Dialer{}).DialContext(ctx, "unix", socket)
-			},
-		},
-	}
+	transport, base := docker.Transport(helpers.TestDockerSocket())
+	transport.ResponseHeaderTimeout = 0
+	return &http.Client{Timeout: 10 * time.Minute, Transport: transport}, base
 }
 
 // createImageFunction creates a PackageType=Image function.

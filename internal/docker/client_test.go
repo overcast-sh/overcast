@@ -783,3 +783,57 @@ func TestWaitContainerRemoved_daemonErrorIsReturned(t *testing.T) {
 		t.Errorf("WaitContainerRemoved error = %v, want it to carry the daemon's message", err)
 	}
 }
+
+// Transport is what a caller outside this package reaches for when it needs an
+// Engine API endpoint Client does not implement, so it has to dial exactly as
+// Client does — including on Windows, where an endpoint is a named pipe and a
+// hand-rolled `unix` dial fails with "An invalid argument was supplied" (see
+// Transport's comment and #1785). Asserting the two agree, endpoint by
+// endpoint, is what stops a second dialer growing back by drift.
+func TestTransport_dialsAsNewClientDoes(t *testing.T) {
+	// The platform default is deliberately included by name for both
+	// platforms: on each of them one of these is the shape that matters and
+	// the other exercises the fall-through, and neither must be special-cased
+	// by the caller.
+	for _, endpoint := range []string{
+		"/var/run/docker.sock",
+		`npipe:////./pipe/docker_engine`,
+		"tcp://dind:2375",
+		"",
+	} {
+		t.Run(endpoint, func(t *testing.T) {
+			transport, host := Transport(endpoint)
+			client := NewClient(endpoint, zap.NewNop())
+			if host != client.host {
+				t.Errorf("Transport host = %q, NewClient host = %q", host, client.host)
+			}
+			clientTransport, ok := client.httpClient.Transport.(*http.Transport)
+			if !ok {
+				t.Fatalf("NewClient transport is %T, not *http.Transport", client.httpClient.Transport)
+			}
+			if (transport.DialContext == nil) != (clientTransport.DialContext == nil) {
+				t.Errorf("Transport dial func set = %v, NewClient dial func set = %v",
+					transport.DialContext != nil, clientTransport.DialContext != nil)
+			}
+			if transport.ResponseHeaderTimeout != clientTransport.ResponseHeaderTimeout {
+				t.Errorf("Transport ResponseHeaderTimeout = %v, NewClient = %v",
+					transport.ResponseHeaderTimeout, clientTransport.ResponseHeaderTimeout)
+			}
+		})
+	}
+}
+
+// Each call owns its transport: a caller that adjusts one — the image build
+// streams for minutes and wants no response-header deadline — must not be
+// changing the timeouts of every Docker client in the process.
+func TestTransport_isNotShared(t *testing.T) {
+	first, _ := Transport("/var/run/docker.sock")
+	second, _ := Transport("/var/run/docker.sock")
+	if first == second {
+		t.Fatal("Transport returned the same *http.Transport twice")
+	}
+	first.ResponseHeaderTimeout = 0
+	if second.ResponseHeaderTimeout == 0 {
+		t.Fatal("adjusting one transport changed another")
+	}
+}

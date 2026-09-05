@@ -92,6 +92,40 @@ func NewClient(endpoint string, logger *zap.Logger) *Client {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
+	transport, host := Transport(endpoint)
+	return &Client{
+		httpClient: &http.Client{Transport: transport},
+		host:       host,
+		logger:     logger,
+		sem:        make(chan struct{}, maxConcurrentOps),
+	}
+}
+
+// Transport returns the http.Transport this package dials endpoint with, and
+// the base URL its Engine API paths hang off — "http://docker" for a Unix
+// socket or a Windows named pipe, "http://host:port" for tcp://. NewClient is
+// built from exactly this, so the two can never drift.
+//
+// It is exported for the one caller that needs an Engine API endpoint Client
+// does not implement: the image build, which nothing in Overcast uses and only
+// tests/integration/lambdadocker drives. Reaching for the transport is the
+// supported way to do that; hand-rolling an http.Client is not.
+//
+// The reason it is not, concretely. That package built its own client with
+// `net.Dialer.DialContext(ctx, "unix", socket)` and passed it the endpoint
+// Overcast had resolved — correct on Linux and macOS, and on Windows a request
+// to dial a named pipe as though it were a filesystem socket:
+//
+//	dial unix npipe:////./pipe/docker_engine: connect: An invalid argument was supplied
+//
+// Six tests failed that way once the package's Docker gate started letting them
+// run on Windows (#1785, from #1776). Only dialEndpoint knows that npipe://
+// means winio.DialPipeContext, and only one place should have to.
+//
+// The returned transport is fresh on every call and belongs to the caller,
+// which may adjust it — a long-running endpoint that streams progress before
+// finishing has different timeout needs from the short calls Client makes.
+func Transport(endpoint string) (*http.Transport, string) {
 	dialFn, host := dialEndpoint(endpoint)
 	transport := &http.Transport{
 		MaxConnsPerHost:       maxDockerConns,
@@ -103,12 +137,7 @@ func NewClient(endpoint string, logger *zap.Logger) *Client {
 	if dialFn != nil {
 		transport.DialContext = dialFn
 	}
-	return &Client{
-		httpClient: &http.Client{Transport: transport},
-		host:       host,
-		logger:     logger,
-		sem:        make(chan struct{}, maxConcurrentOps),
-	}
+	return transport, host
 }
 
 // acquireOp blocks until a concurrent-operation slot is available.  Call
