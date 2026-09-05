@@ -668,12 +668,31 @@ class GeneratedRegistryLoading(unittest.TestCase):
             merged = build_groups_from_registry(with_generated, {}, "python-sdk")
             self.assertEqual([g.name for g in without], [g.name for g in merged])
 
-    def test_checked_in_empty_file_is_a_no_op(self):
+    def test_checked_in_file_leaves_hand_written_groups_alone(self):
         # Exercises the real, checked-in registry.generated.json at its
-        # default sibling-of-registry.json location — but asserts only that
-        # an empty file is inert, not that the file stays empty forever.
+        # default sibling-of-registry.json location, and asserts only the
+        # invariant: it loads, and concatenating it disturbs nothing
+        # hand-written. Never a fact about its current contents — the file is
+        # empty exactly while no suite has a scenario backend (the
+        # scenarioBackends table in cmd/compatgen/registry.go), and one has
+        # had one since G2 (#1768).
         generated = load_generated_registry()
-        self.assertEqual([], generated["groups"])
+        self.assertEqual(1, generated["version"])
+
+        hand_written = {
+            "groups": [
+                {"service": "s3", "name": "s3-crud", "tests": [{"name": "CreateBucket"}]},
+            ]
+        }
+        merged = merge_registries(hand_written, generated)
+        self.assertEqual(
+            [g["name"] for g in hand_written["groups"]],
+            [g["name"] for g in merged["groups"][: len(hand_written["groups"])]],
+        )
+        self.assertEqual(
+            len(hand_written["groups"]) + len(generated["groups"]),
+            len(merged["groups"]),
+        )
 
     def test_synthetic_file_is_concatenated_after_hand_written(self):
         hand_written = {
