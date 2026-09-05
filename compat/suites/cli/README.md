@@ -165,6 +165,9 @@ cli/
       namer.go       ← Namer: per-group resource names scoped to the run
     registry/registry.go ← loads registry.json + registry.generated.json, merges
                            and validates impl keys, builds TestGroups
+    scenario/        ← the scenario backend: runs a generated group straight
+                       from compat/model/scenarios/<service>.json (loader,
+                       expr/path, executor, assert, failure)
     groups/          ← one file per AWS service
       groups.go      ← the ServiceGroup type and All(), the registration point
       s3.go  sqs.go  dynamodb.go  …
@@ -175,6 +178,22 @@ registry at [compat/suites/registry.json](../registry.json), the single source
 of truth for which groups and tests exist across every suite. `cmd/runner`
 loads it, collects this suite's implementations keyed `group:Test`, and builds
 the groups from it.
+
+### Generated groups
+
+Alongside `registry.json` the loader reads its machine-written sibling
+`registry.generated.json`. A group there has no Go implementation: it names a
+scenario file under [compat/model/scenarios/](../../model/scenarios), and
+`internal/scenario` executes it — the calls, the assertions, the setup and the
+teardown all come out of that file. `aws <service> <kebab-op> --cli-input-json`
+is still the only way a call is made, through the same `internal/awscli`
+helpers every hand-written group uses.
+
+Nothing about a generated group is edited here: the scenario files and the
+generated registry are both written by `cmd/compatgen` from
+[compat/model/recipes/](../../model/recipes), and `make compat-model-check`
+fails on a hand edit. `compat/model/README.md` is the normative description of
+what the interpreter executes.
 
 ### Key types
 

@@ -15,10 +15,16 @@ import (
 // ---------------------------------------------------------------------------
 
 // TestEmptyGeneratedRegistryLeavesGatesUnchanged is the phase's acceptance
-// gate, asserted directly. The generated sibling ships empty and stays empty
-// until cmd/compatgen exists, so every gate must produce byte-for-byte the same
-// verdict as it did before the file existed. If this test ever fails, the
-// harness started treating "the file is there" as a signal in itself.
+// gate, asserted directly: an empty generated sibling must produce byte-for-byte
+// the same verdict as no file at all. If this test ever fails, the harness
+// started treating "the file is there" as a signal in itself.
+//
+// The registry it reads is a written-out empty one rather than the checked-in
+// file. Through G0 the two were the same thing, because the checked-in file
+// stays empty exactly while no suite has a scenario backend (the scenarioBackends
+// table in cmd/compatgen/registry.go); G2 gave `cli` one, so the checked-in file
+// now carries the pilot groups and the property under test needs an empty
+// registry of its own to be stated against.
 func TestEmptyGeneratedRegistryLeavesGatesUnchanged(t *testing.T) {
 	// Given: a run with one pass and one fail, and the empty generated
 	// registry that this PR checks in.
@@ -31,12 +37,12 @@ func TestEmptyGeneratedRegistryLeavesGatesUnchanged(t *testing.T) {
 		{Suite: "go-sdk", Service: "s3", Group: "s3-crud", Test: "DeleteBucket", Status: compat.StatusPass},
 	}}
 
-	gen, err := readGeneratedRegistry(repoPath(t, "compat", "suites", "registry.generated.json"))
+	gen, err := readGeneratedRegistry(emptyGeneratedRegistryFile(t))
 	if err != nil {
 		t.Fatalf("readGeneratedRegistry: %v", err)
 	}
 	if len(gen.Groups) != 0 {
-		t.Fatalf("checked-in generated registry has %d group(s); G0 ships it empty", len(gen.Groups))
+		t.Fatalf("the fixture registry has %d group(s); it must be empty", len(gen.Groups))
 	}
 
 	// When: each gate is asked with the empty registry and with no registry
@@ -83,10 +89,10 @@ func TestEmptyGeneratedRegistryLeavesParityUnchanged(t *testing.T) {
 	hand := testRegistry()
 	handOnly := computeParity(hand, report, []string{"rust-sdk"})
 
-	// When: the empty checked-in sibling is concatenated in.
+	// When: an empty sibling is concatenated in.
 	concat, err := readParityRegistries(
 		writeTempJSON(t, "registry.json", hand),
-		repoPath(t, "compat", "suites", "registry.generated.json"))
+		emptyGeneratedRegistryFile(t))
 	if err != nil {
 		t.Fatalf("readParityRegistries: %v", err)
 	}
@@ -591,6 +597,18 @@ func TestGeneratedSchemaRefsSharedTestGroup(t *testing.T) {
 
 // repoPath resolves a path relative to the repository root. Tests run with the
 // package directory as their working directory.
+// emptyGeneratedRegistryFile writes a generated registry with no groups, which
+// is what the two "empty sibling" gates are stated against — see
+// TestEmptyGeneratedRegistryLeavesGatesUnchanged for why it is not the
+// checked-in file.
+func emptyGeneratedRegistryFile(t *testing.T) string {
+	t.Helper()
+	return writeTempJSON(t, "registry.generated.json", &generatedRegistry{
+		Version: generatedRegistryVersion,
+		Groups:  []generatedGroup{},
+	})
+}
+
 func repoPath(t *testing.T, parts ...string) string {
 	t.Helper()
 	return filepath.Join(append([]string{"..", ".."}, parts...)...)

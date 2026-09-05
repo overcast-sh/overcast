@@ -93,6 +93,19 @@ func generatedRegistryPath() string {
 	return filepath.Join(filepath.Dir(registryPath()), "registry.generated.json")
 }
 
+// RepoRoot returns the repository root, derived from registryPath() rather than
+// from the working directory, so an OVERCAST_REGISTRY_PATH override moves both
+// together. A generated group's `scenario` field is a repository-relative path
+// (compat/model/scenarios/<service>.json), and the scenario backend resolves it
+// from here — never from CWD, which differs between `go run ./cmd/runner` and
+// `go test ./...`.
+//
+// registry.json always lives at <root>/compat/suites/registry.json, so the root
+// is two levels above its directory.
+func RepoRoot() string {
+	return filepath.Join(filepath.Dir(registryPath()), "..", "..")
+}
+
 // generatedRegistryVersion is the only "version" registry.generated.json may
 // declare. cmd/compat's own generated-registry reader enforces the same
 // constant; kept in step so a schema bump has to be a deliberate multi-file
