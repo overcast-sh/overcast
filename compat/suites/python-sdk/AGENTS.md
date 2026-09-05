@@ -52,6 +52,7 @@ compat/suites/python-sdk/
     clients.py       ← make_clients(endpoint, region) → named tuple of clients
     registry.py      ← loads registry.json + registry.generated.json, merges and
                        validates impl keys, builds the groups
+    scenario/        ← the scenario interpreter for generated groups (see below)
   groups/            ← one file per AWS service
     s3.py
     sqs.py
@@ -59,9 +60,30 @@ compat/suites/python-sdk/
   tests/
     test_registry.py ← impl-key resolution tests, run with
                        `python -m unittest discover -s tests`
+    test_scenario.py ← the interpreter, against an in-memory fake client
 ```
 
 **One file per AWS service.** Never split a service across files.
+
+---
+
+## Generated groups have no file here
+
+A group in `registry.generated.json` is executed from the scenario IR
+(`compat/model/scenarios/<service>.json`) by `lib/scenario`, not from a file
+under `groups/`. **Never hand-write an impl for a generated test.** If a
+generated group is wrong, the fix is in `compat/model/recipes/<service>.json`
+plus `make generate-compat-model` — a hand-written impl would shadow the
+scenario (the loader prefers a registered impl and only then consults the
+backend) and would silently stop tracking the model.
+
+`lib/scenario` is written against
+[compat/model/README.md](../../model/README.md), which is normative for the IR:
+the step kinds, the assertion set, the value expressions, the path syntax and
+the six fields every failure message carries. Change the interpreter to match
+that document, never the other way round, and take an IR ambiguity to #1113
+rather than settling it in one suite — `node-js-sdk` and `cli` have to make the
+same decisions.
 
 ---
 

@@ -20,14 +20,23 @@ _REGISTRY_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "registry.j
 _GENERATED_REGISTRY_PATH = os.path.join(
     os.path.dirname(os.path.abspath(_REGISTRY_PATH)), "registry.generated.json"
 )
+# The repository root, derived from registry.json's own location (compat/suites/
+# is two levels below it). A generated group's `scenario` field is a
+# repository-relative path, and lib/scenario resolves it from the same base the
+# registry itself is resolved from — never from the current working directory,
+# which is the repo root under `cmd/compat`, the suite directory when the runner
+# is invoked by hand, and `/` in a container.
+REPO_ROOT = os.path.abspath(
+    os.path.join(os.path.dirname(os.path.abspath(_REGISTRY_PATH)), "..", "..")
+)
 
 ImplMap = dict[str, TestFn]
 
 # A scenario backend resolves an implementation for a generated group's test
 # that has no registered impl. Given (group name, test name, the group's
 # `scenario` path or None if absent) it may return a TestFn to run, or None to
-# say it cannot handle this test either. Nothing in this suite provides one
-# yet — the G2 python-sdk interpreter will (#1393, #1113 phase G2).
+# say it cannot handle this test either. lib/scenario provides one (#1113 phase
+# G2); runner.py wires it in alongside the group's scenario setup/teardown.
 ScenarioBackend = Callable[[str, str, Optional[str]], Optional[TestFn]]
 
 # ─── Loader ───────────────────────────────────────────────────────────────────
@@ -183,8 +192,8 @@ def build_groups_from_registry(
         teardown:         Dict of group_name → teardown callable.
         scenario_backend: Optional resolver consulted for a test with no
                           registered impl, before falling back to the
-                          not-implemented sentinel. Nothing provides one yet
-                          (#1393) — the G2 python-sdk interpreter will.
+                          not-implemented sentinel. lib/scenario provides one;
+                          runner.py wires it in (#1393, #1113 phase G2).
     """
     caps = set(capabilities or [])
     ambiguous = ambiguous_test_names(registry)

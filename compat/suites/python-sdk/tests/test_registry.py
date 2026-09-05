@@ -668,12 +668,27 @@ class GeneratedRegistryLoading(unittest.TestCase):
             merged = build_groups_from_registry(with_generated, {}, "python-sdk")
             self.assertEqual([g.name for g in without], [g.name for g in merged])
 
-    def test_checked_in_empty_file_is_a_no_op(self):
-        # Exercises the real, checked-in registry.generated.json at its
-        # default sibling-of-registry.json location — but asserts only that
-        # an empty file is inert, not that the file stays empty forever.
+    def test_an_empty_file_is_a_no_op(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "registry.generated.json")
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({"version": 1, "groups": []}, f)
+            self.assertEqual([], load_generated_registry(path)["groups"])
+
+    def test_the_checked_in_file_loads_at_its_default_location(self):
+        # The real, checked-in registry.generated.json, at its default
+        # sibling-of-registry.json location. It was empty until the python-sdk
+        # scenario backend landed (#1113 phase G2), and cmd/compatgen rewrites
+        # it whenever a recipe, a scenario or the backend table changes — so
+        # this asserts the shape the loader depends on, never the contents,
+        # which another in-flight branch may be about to change.
         generated = load_generated_registry()
-        self.assertEqual([], generated["groups"])
+        self.assertEqual(1, generated["version"])
+        for rg in generated["groups"]:
+            for key in ("service", "name", "generated", "state", "suites", "tests"):
+                self.assertIn(key, rg, msg=rg.get("name"))
+            self.assertTrue(rg["suites"], msg=rg["name"])
+            self.assertTrue(rg["tests"], msg=rg["name"])
 
     def test_synthetic_file_is_concatenated_after_hand_written(self):
         hand_written = {

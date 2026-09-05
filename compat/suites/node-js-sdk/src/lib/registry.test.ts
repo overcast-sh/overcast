@@ -376,12 +376,64 @@ describe("generated registry loading", () => {
     }
   });
 
-  it("the checked-in empty file is a no-op", () => {
-    // Exercises the real, checked-in registry.generated.json at its default
-    // sibling-of-registry.json location — but asserts only that an empty
-    // file is inert, not that the file stays empty forever.
+  it("an empty file is a no-op", () => {
+    const cleanup = withTmpDir();
+    try {
+      const path = join(tmpDir, "registry.generated.json");
+      writeFileSync(path, JSON.stringify({ version: 1, groups: [] }));
+      assert.deepEqual(loadGeneratedRegistry(path).groups, []);
+
+      const handWritten: Registry = {
+        version: 1,
+        groups: [
+          {
+            service: "s3",
+            name: "s3-crud",
+            tests: [{ name: "CreateBucket" }],
+          },
+        ],
+      };
+      const withGenerated = mergeRegistries(
+        handWritten,
+        loadGeneratedRegistry(path),
+      );
+      const without = buildGroupsFromRegistry(handWritten, {}, {
+        suite: "node-js-sdk",
+      });
+      const merged = buildGroupsFromRegistry(withGenerated, {}, {
+        suite: "node-js-sdk",
+      });
+      assert.deepEqual(
+        without.map((g) => g.name),
+        merged.map((g) => g.name),
+      );
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("the checked-in file loads at its default location", () => {
+    // The real, checked-in registry.generated.json, at its default
+    // sibling-of-registry.json location. It stopped being empty when the
+    // first scenario backend landed (#1113 phase G2), and cmd/compatgen
+    // rewrites it whenever a recipe, a scenario or the backend table
+    // changes — so this asserts the shape the loader depends on, never the
+    // contents, which another in-flight branch may be about to change.
     const generated = loadGeneratedRegistry();
-    assert.deepEqual(generated.groups, []);
+    assert.equal(generated.version, 1);
+    for (const group of generated.groups) {
+      assert.ok(group.name, "every generated group names itself");
+      assert.equal(group.generated, true, `${group.name} is generated`);
+      assert.ok(
+        group.state === "candidate" || group.state === "gated",
+        `${group.name} declares a candidate or gated state`,
+      );
+      assert.ok(
+        group.suites && group.suites.length > 0,
+        `${group.name} declares at least one suite`,
+      );
+      assert.ok(group.scenario, `${group.name} declares a scenario path`);
+    }
   });
 
   it("a synthetic non-empty file is concatenated after hand-written groups", () => {

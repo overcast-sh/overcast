@@ -124,3 +124,16 @@ class Clients:
 
 def make_clients(endpoint: str, region: str) -> Clients:
     return Clients(endpoint, region)
+
+
+def make_client(endpoint: str, region: str, service: str):
+    """One boto3 client for an arbitrary botocore service name.
+
+    ``Clients`` above is a fixed bundle with a property per service the
+    hand-written groups use; the scenario interpreter's service name comes from
+    a generated file at runtime, so it needs the same construction without the
+    property. Deliberately the same ``_cfg``: the endpoint override is the only
+    deviation from production configuration, and exactly one place should
+    decide what that configuration is.
+    """
+    return boto3.client(service, **_cfg(endpoint, region))
