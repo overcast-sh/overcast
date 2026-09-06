@@ -1,0 +1,803 @@
+{
+  "$comment": "AWS Identity and Access Management (AWS Query, API version 2010-05-08), G4 wave 2 of docs/plans/compat-coverage-modelgen.md §5 and the largest service in the generated corpus so far: 180 modeled operations, of which Overcast implements 74. Five resources, because IAM's graph is five nouns that refer to each other rather than one noun with sub-objects: a managed policy, a user, a group, a role and an instance profile. Each group creates only what it needs — the user group requires the policy so that Attach/Detach and the permissions boundary have something real to name, the group group requires the user so that AddUserToGroup does, and the instance profile group requires the role — and every one of them removes what it made, in dependency order, before its own delete: detach before delete-policy, RemoveUserFromGroup before DeleteGroup, RemoveRoleFromInstanceProfile before DeleteInstanceProfile and before the teardown's DeleteRole. That order is not decoration. AWS answers DeleteConflict (409) for a role that still has an instance profile association or a policy attached, for a group that still has members, for a user that still has an access key, and for a policy that is still attached to anything or used as anybody's permissions boundary, and Overcast's capability notes say it answers the same. Three things shaped the file and are worth stating before the resources. First, `notFound` is written out on every resource rather than derived: IAM spells its single not-found error NoSuchEntityException, whose Query code is NoSuchEntity, and the derivation matches only a shape name ending in NotFound, NotFoundException, DoesNotExist or NonExistent — so without the line every delete would have been refused `no-readback-path`. Second, no assertion in this file compares the content of a member whose modeled shape is policyDocumentType, and that is a hard constraint rather than a preference: botocore registers json_decode_policies on after-call.iam, which URL-decodes and json.loads every policyDocumentType member, so `aws iam get-role` hands back AssumeRolePolicyDocument as a JSON *object* while go-sdk, java-sdk, dotnet-sdk and rust-sdk see the string. Measured against this branch: the CLI printed the document as an object where the Go client's field is a *string. An `equals` on such a member would therefore pass in some suites and fail in others whatever it named, so the inline-policy reads assert PolicyName and the owning entity's name — both of them values this run chose — and UpdateAssumeRolePolicy asserts the role's identity plus a document that is present at all, with the reason recorded on the test. The hand-written iam-users and iam-roles groups made the same call for the same reason: their GetUserPolicy and GetRolePolicy check that PolicyDocument is present and never what it says. Third, the user's only observable update is its path: UpdateUser takes NewUserName and NewPath and nothing else, and renaming would strip every later call of the name `binds` supplies — so the mutation is NewPath, and the user's list identity is UserName rather than the ARN, because on AWS and on Overcast alike a user's ARN embeds its path and a path change moves it. `from` is not written for that mutation because `from` is merged into the create params at the member path and CreateUser has no NewPath member; the create leaves the path at AWS's own default `/`, which is what makes the update a real change. `async` is declared on all five resources: the IAM User Guide states that IAM is eventually consistent and that a change may not be visible to a read that follows it, so every clause that verifies by calling the service again gets six attempts half a second apart — a budget that costs nothing when the emulator answers immediately and keeps the same scenario honest against a real account. On the #1886 identifier caps: RoleName and UserName are capped at 64 characters, GroupName, PolicyName and InstanceProfileName at 128, and `$name` here is {runId}-{group}-{suffix} — at most `oc-xxxxxxxx-go` plus `iam-gen-instanceprofile` plus two characters, 41 in the worst case, so every identifier fits and no workaround is needed. One implemented operation is deliberately uncovered: CreateServiceLinkedRole. It names its role after the service principal rather than after anything a run chooses, AWS refuses a second one for the same principal, and DeleteServiceLinkedRole is not implemented here — so a run that called it would leave behind a role nothing in the scenario could remove. gaps.json records it as probe-of-implemented-op, which is the accurate reason: it is implemented, so it may not be probed, and no honest role exists for it.",
+  "service": "iam",
+  "neverProbe": {
+    "ChangePassword": "Changes the console password of the IAM user whose credentials signed the request, which locks that user out of the console until somebody with the new password says otherwise.",
+    "CreateAccountAlias": "Sets the account-wide sign-in alias. There is one per account, so the call silently replaces whatever the account already had, and every bookmarked sign-in URL for the old alias stops working.",
+    "CreateLoginProfile": "Gives an IAM user a console password. It turns a programmatic-only identity into one that can sign in to the console, which is a change to the account's attack surface rather than to a test fixture.",
+    "CreateSAMLProvider": "Registers a SAML identity provider for the account. Everything the provider's assertions are trusted for follows from it, and nothing in a probe group removes it.",
+    "CreateVirtualMFADevice": "Allocates a virtual MFA device with its own seed. AWS counts it against the account's device quota whether or not anybody ever enables it, and only DeleteVirtualMFADevice reclaims it.",
+    "DeactivateMFADevice": "Removes the MFA device from a user, so an identity that was protected by a second factor no longer is.",
+    "DeleteAccountAlias": "Removes the account's sign-in alias, breaking every sign-in URL built on it.",
+    "DeleteAccountPasswordPolicy": "Deletes the account-wide password policy, so every complexity, rotation and reuse rule the account relied on is gone at once and AWS keeps no copy to restore.",
+    "DeleteLoginProfile": "Removes an IAM user's console password, locking that user out of the console immediately.",
+    "DeleteServiceLinkedRole": "Starts the deletion of a service-linked role. The role is what an AWS service uses to act in the account, so deleting it stops that service working, and the deletion is asynchronous — the call returns a task id and cannot be taken back.",
+    "DeleteSigningCertificate": "Deletes an X.509 signing certificate from a user. Anything signing requests with that certificate stops being able to authenticate.",
+    "DeleteVirtualMFADevice": "Deletes a virtual MFA device. AWS keeps no copy of its seed, so the device cannot be recreated and whoever enrolled it has to enrol again.",
+    "DisableOrganizationsRootCredentialsManagement": "Turns off centralised root-credentials management for the organization, returning root credentials to each member account. It is an organization-wide security posture change made from one API call.",
+    "DisableOrganizationsRootSessions": "Turns off privileged root sessions for the organization's member accounts, changing what the management account can do in every one of them.",
+    "DisableOutboundWebIdentityFederation": "Turns off the account's outbound web identity federation, so every external workload that was exchanging this account's identity for a token stops being able to.",
+    "EnableMFADevice": "Associates an MFA device with a user and requires two consecutive authentication codes to do it. A probe would either enrol a device nobody asked to enrol or spend the user's authentication attempts guessing codes.",
+    "EnableOrganizationsRootCredentialsManagement": "Turns on centralised root-credentials management across the organization, which takes root credentials away from every member account.",
+    "EnableOrganizationsRootSessions": "Turns on privileged root sessions across the organization's member accounts.",
+    "EnableOutboundWebIdentityFederation": "Turns on outbound web identity federation for the account, which starts vending tokens that name this account to external workloads.",
+    "GetAccountProperties": "A read, and the one entry here that is not about danger. AWS added GetAccountProperties to the model after every SDK the typed suites pin: aws-sdk-go-v2/service/iam v1.53.7 declares no GetAccountPropertiesInput, so probing it scopes this whole probe group away from go-sdk with go-emit-unsupported, and the java, dotnet and rust emitters — which read the model rather than their SDK — would emit a call those builds cannot compile. It takes no required member, so withholding a curated literal, which is what leaves GetRoleTemplateVersion refused, cannot reach it and this map is the only lever. Delete the entry once the pins carry the operation.",
+    "GenerateCredentialReport": "Starts the account-wide credential report job. It is billed, it is rate limited to one report every four hours, and it collects every credential's age and last-used data into a report a probe has no reason to want.",
+    "PutAccountProperties": "Writes account-level IAM properties. There is one set per account, so a probe would overwrite the caller's own settings with no way to know what they were.",
+    "ResyncMFADevice": "Resynchronises a user's MFA device with two authentication codes, which consumes the user's codes and, on repeated failure, is what an attacker guessing them looks like.",
+    "SetDefaultPolicyVersion": "Changes which version of a managed policy is the operative one. Every principal the policy is attached to gets a different effective permission set the moment the call lands.",
+    "SetSecurityTokenServicePreferences": "Sets the account-wide STS global endpoint token version, which decides whether tokens the account mints are usable in Regions enabled after the call.",
+    "UpdateAccessKey": "Activates or deactivates an access key. Deactivating one an application is signing with breaks that application immediately, and a probe cannot know which keys are in use.",
+    "UpdateAccountPasswordPolicy": "Replaces the account-wide password policy wholesale. Unset members are reset to AWS's defaults rather than left alone, so a partial call silently relaxes rules the account depended on.",
+    "UpdateLoginProfile": "Sets a new console password for an IAM user, locking out whoever held the old one.",
+    "UpdateSAMLProvider": "Replaces the metadata document of a live SAML provider, which changes which assertions the account trusts.",
+    "UploadServerCertificate": "Uploads a server certificate and its private key into the account's IAM certificate store. A probe has no key to upload that is not either a real one or a fake the account then holds forever.",
+    "UploadSigningCertificate": "Uploads an X.509 signing certificate for a user, adding a new way to authenticate as that identity."
+  },
+  "resources": [
+    {
+      "$comment": "The customer-managed policy, and the only resource with no dependencies — the user, group and role groups all require it, because Attach*Policy, Detach*Policy and the two permissions-boundary pairs each need a policy ARN that really resolves and the run must own the policy it names. The identity is the ARN, which CreatePolicy states directly. `list` is scoped to Scope=Local: ListPolicies defaults to All, which on a real account is roughly a thousand AWS-managed policies ahead of the one this run created, and membership decided on page one of that is membership decided by luck. CreatePolicyVersion is authored rather than declared as a mutation because the change it makes is not a member of the read's response but the policy's DefaultVersionId — the version becomes v2 and the policy points at it — and that is the assertion. Its siblings GetPolicyVersion, ListPolicyVersions, SetDefaultPolicyVersion and DeletePolicyVersion are not implemented. DeletePolicyVersion is nevertheless a test here rather than a refusal, because AWS refuses DeletePolicy while a non-default version remains and CreatePolicyVersion has just left one: the test reports `unimplemented` against the emulator and is the step that makes the group's delete legal against a real account. The two reads are probed with a curated policy ARN from values.json, because the policy resource binds PolicyArn and a probe may not draw on that; SetDefaultPolicyVersion is refused by the verb rule with a sentence of its own, since `changes which version every attached principal is evaluated against` says more than `not a read operation` does. SimulateCustomPolicy lives here rather than on a principal because it evaluates the documents it is given and touches no stored entity at all, which is exactly what the policy group is about.",
+      "id": "policy",
+      "create": {
+        "op": "CreatePolicy",
+        "params": {
+          "PolicyName": { "$name": "p" },
+          "Description": "compat scenario managed policy",
+          "PolicyDocument": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:GetObject\",\"Resource\":\"arn:aws:s3:::compat-scenario-nonexistent/*\"}]}"
+        }
+      },
+      "exports": {
+        "arn": "$.Policy.Arn",
+        "name": "$.Policy.PolicyName"
+      },
+      "binds": { "PolicyArn": "policy.arn" },
+      "read": {
+        "op": "GetPolicy",
+        "identityPath": "$.Policy.Arn",
+        "identity": "arn"
+      },
+      "list": {
+        "$comment": "Scope Local so the page holds the account's own policies rather than AWS's; itemsPath is derived from @paginated.items (Policies).",
+        "op": "ListPolicies",
+        "params": { "Scope": "Local" },
+        "identityPath": "$.Arn",
+        "identity": "arn"
+      },
+      "tags": {
+        "tag": { "op": "TagPolicy", "member": "Tags" },
+        "untag": { "op": "UntagPolicy", "member": "TagKeys" },
+        "list": { "op": "ListPolicyTags", "path": "$.Tags" }
+      },
+      "delete": { "op": "DeletePolicy" },
+      "notFound": { "error": "NoSuchEntityException" },
+      "async": { "maxAttempts": 6, "delayMs": 500 },
+      "operations": [
+        {
+          "$comment": "A second version, made the default. AWS numbers versions v1, v2, … per policy, so a policy one call old whose next version is anything but v2 has lost count; IsDefaultVersion on the response and DefaultVersionId on the policy are the two places the same fact is stated, and a service that set one without the other is the bug this pair catches. The document is a different one from the create's — s3:PutObject rather than s3:GetObject — so the version really is a new document, even though nothing here may read it back (see the file comment on policyDocumentType).",
+          "op": "CreatePolicyVersion",
+          "params": {
+            "PolicyDocument": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:PutObject\",\"Resource\":\"arn:aws:s3:::compat-scenario-nonexistent/*\"}]}",
+            "SetAsDefault": true
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.PolicyVersion.VersionId": { "equals": "v2" },
+                "$.PolicyVersion.IsDefaultVersion": { "equals": true }
+              }
+            },
+            {
+              "kind": "readback",
+              "call": { "op": "GetPolicy" },
+              "checks": { "$.Policy.DefaultVersionId": { "equals": "v2" } }
+            }
+          ]
+        },
+        {
+          "$comment": "The version the create made, deleted so that the group's own DeletePolicy is legal on AWS. `DeletePolicy` is documented as refusing a policy that still has versions — 'you must delete all of the policy's versions', and the error is DeleteConflict — and after CreatePolicyVersion above, v1 is a non-default version sitting behind v2. Overcast does not implement DeletePolicyVersion (its CreatePolicyVersion note says superseded versions are not retained at all), so this test reports `unimplemented` against the emulator and its absence clause is never reached; against a real account it is the step without which the delete below cannot succeed. The clause reads ListPolicyVersions, which Overcast does not implement either — that is why the operation is asserted through a call rather than given a test of its own, and why ListPolicyVersions stays in the probe group.",
+          "op": "DeletePolicyVersion",
+          "params": { "VersionId": "v1" },
+          "assert": [
+            {
+              "kind": "absent",
+              "call": { "op": "ListPolicyVersions" },
+              "itemsPath": "$.Versions",
+              "where": { "$.VersionId": "v1" }
+            }
+          ]
+        },
+        {
+          "$comment": "The policy simulator over documents the caller supplies, which is the one IAM operation that reads nothing and writes nothing. The document allows s3:GetObject on one prefix, the simulation asks about exactly that action on a resource inside the prefix, and the answer AWS documents is `allowed`; the echoed EvalActionName is the second assertion because a simulator that answered about a different action would otherwise look right. The resource ARN names a bucket that does not exist and is never created — a simulation is a policy evaluation, not a call against the resource.",
+          "op": "SimulateCustomPolicy",
+          "params": {
+            "PolicyInputList": ["{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:GetObject\",\"Resource\":\"arn:aws:s3:::compat-scenario-nonexistent/*\"}]}"],
+            "ActionNames": ["s3:GetObject"],
+            "ResourceArns": ["arn:aws:s3:::compat-scenario-nonexistent/report.csv"]
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.EvaluationResults[0].EvalActionName": { "equals": "s3:GetObject" },
+                "$.EvaluationResults[0].EvalDecision": { "equals": "allowed" }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "$comment": "The IAM user, which is where IAM keeps the most sub-objects: an inline policy, an attached managed policy, an access key and a permissions boundary. Every one of them is authored here rather than made a resource of its own, because none has a create/read/list/delete quartet the lifecycle vocabulary can describe — an inline policy is read by name off its owner, an access key is listed but never read, and a boundary is a member of the user rather than a thing. UserName is the identity: GetUser's own UserName member is optional, so the read carries it as an explicit param — without it the call would describe whoever signed the request — and the list matches on UserName rather than on the ARN because the mutation below moves the user's path, which moves its ARN with it. The order of the authored operations is the order the resource has to be dismantled in: the inline policy is written, read, listed and deleted; the managed policy is attached, listed and detached; the access key is created, listed and deleted; and the permissions boundary is put and then removed. By the time DeleteUser runs the user owns nothing, which is what AWS requires of it.",
+      "id": "user",
+      "requires": ["policy"],
+      "create": {
+        "op": "CreateUser",
+        "params": { "UserName": { "$name": "u" } }
+      },
+      "exports": {
+        "arn": "$.User.Arn",
+        "name": "$.User.UserName"
+      },
+      "binds": { "UserName": "user.name" },
+      "read": {
+        "op": "GetUser",
+        "params": { "UserName": { "$ref": "user.name" } },
+        "identityPath": "$.User.UserName",
+        "identity": "name"
+      },
+      "list": {
+        "$comment": "Account-wide; membership is by the name this run allocated, which no other run holds. Matching on the ARN would be wrong here rather than merely different: the mutation below changes the user's path, and a user's ARN embeds its path.",
+        "op": "ListUsers",
+        "identityPath": "$.UserName",
+        "identity": "name"
+      },
+      "mutable": [
+        {
+          "op": "UpdateUser",
+          "member": "NewPath",
+          "to": "/compat-scenario-updated/",
+          "readPath": "$.User.Path"
+        }
+      ],
+      "tags": {
+        "tag": { "op": "TagUser", "member": "Tags" },
+        "untag": { "op": "UntagUser", "member": "TagKeys" },
+        "list": { "op": "ListUserTags", "path": "$.Tags" }
+      },
+      "delete": { "op": "DeleteUser" },
+      "notFound": { "error": "NoSuchEntityException" },
+      "async": { "maxAttempts": 6, "delayMs": 500 },
+      "operations": [
+        {
+          "$comment": "An inline policy, embedded in the user rather than attached to it. Membership of ListUserPolicies is the assertion because it is the one thing about an inline policy a caller can compare against a value the run chose: the document itself is out of reach for every assertion in this file, for the reason the file comment gives.",
+          "op": "PutUserPolicy",
+          "params": {
+            "PolicyName": { "$name": "inline" },
+            "PolicyDocument": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:GetObject\",\"Resource\":\"arn:aws:s3:::compat-scenario-nonexistent/*\"}]}"
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "call": { "op": "ListUserPolicies" },
+              "itemsPath": "$.PolicyNames",
+              "where": { "$": { "$name": "inline" } }
+            }
+          ]
+        },
+        {
+          "$comment": "AWS echoes both the policy name and the owning user on this response, and both are values the run chose, so the pair is a real read of the inline policy without touching the document.",
+          "op": "GetUserPolicy",
+          "params": { "PolicyName": { "$name": "inline" } },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.PolicyName": { "equals": { "$name": "inline" } },
+                "$.UserName": { "equals": { "$ref": "user.name" } }
+              }
+            }
+          ]
+        },
+        {
+          "op": "ListUserPolicies",
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.PolicyNames",
+              "where": { "$": { "$name": "inline" } }
+            }
+          ]
+        },
+        {
+          "op": "DeleteUserPolicy",
+          "params": { "PolicyName": { "$name": "inline" } },
+          "assert": [
+            {
+              "kind": "absent",
+              "call": { "op": "ListUserPolicies" },
+              "itemsPath": "$.PolicyNames",
+              "where": { "$": { "$name": "inline" } }
+            }
+          ]
+        },
+        {
+          "$comment": "The managed policy the group requires, attached to the user. Both members of the listed item are compared: an attachment that carried the right ARN under the wrong name, or the reverse, is a response an SDK building a permissions view would render wrongly.",
+          "op": "AttachUserPolicy",
+          "assert": [
+            {
+              "kind": "listContains",
+              "call": { "op": "ListAttachedUserPolicies" },
+              "itemsPath": "$.AttachedPolicies",
+              "where": {
+                "$.PolicyArn": { "$ref": "policy.arn" },
+                "$.PolicyName": { "$ref": "policy.name" }
+              }
+            }
+          ]
+        },
+        {
+          "op": "ListAttachedUserPolicies",
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.AttachedPolicies",
+              "where": {
+                "$.PolicyArn": { "$ref": "policy.arn" },
+                "$.PolicyName": { "$ref": "policy.name" }
+              }
+            }
+          ]
+        },
+        {
+          "op": "DetachUserPolicy",
+          "assert": [
+            {
+              "kind": "absent",
+              "call": { "op": "ListAttachedUserPolicies" },
+              "itemsPath": "$.AttachedPolicies",
+              "where": { "$.PolicyArn": { "$ref": "policy.arn" } }
+            }
+          ]
+        },
+        {
+          "$comment": "An access key, and the one place in this file where a response's shape is asserted rather than its content: AWS documents an access key id as AKIA followed by sixteen more characters, and it is the only identifier in the response a caller can check at all — the secret is generated and the user name and status are echoes. UserName is passed explicitly on all three access-key calls because IAM models it optional and applies the call to the caller's own identity when it is absent, which for a compat run signing as the account root is a call about the wrong principal rather than a failure.",
+          "op": "CreateAccessKey",
+          "params": { "UserName": { "$ref": "user.name" } },
+          "export": { "user.accesskeyid": "$.AccessKey.AccessKeyId" },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.AccessKey.AccessKeyId": { "matches": "^AKIA[A-Z0-9]{16}$" },
+                "$.AccessKey.SecretAccessKey": { "nonEmpty": true },
+                "$.AccessKey.Status": { "equals": "Active" },
+                "$.AccessKey.UserName": { "equals": { "$ref": "user.name" } }
+              }
+            },
+            {
+              "kind": "listContains",
+              "call": {
+                "op": "ListAccessKeys",
+                "params": { "UserName": { "$ref": "user.name" } }
+              },
+              "itemsPath": "$.AccessKeyMetadata",
+              "where": { "$.AccessKeyId": { "$ref": "user.accesskeyid" } }
+            }
+          ]
+        },
+        {
+          "$comment": "The listing carries no secret, which is why AWS gives it a metadata shape of its own; the three members it does carry are all values this run can name.",
+          "op": "ListAccessKeys",
+          "params": { "UserName": { "$ref": "user.name" } },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.AccessKeyMetadata",
+              "where": {
+                "$.AccessKeyId": { "$ref": "user.accesskeyid" },
+                "$.Status": "Active",
+                "$.UserName": { "$ref": "user.name" }
+              }
+            }
+          ]
+        },
+        {
+          "op": "DeleteAccessKey",
+          "params": {
+            "AccessKeyId": { "$ref": "user.accesskeyid" },
+            "UserName": { "$ref": "user.name" }
+          },
+          "assert": [
+            {
+              "kind": "absent",
+              "call": {
+                "op": "ListAccessKeys",
+                "params": { "UserName": { "$ref": "user.name" } }
+              },
+              "itemsPath": "$.AccessKeyMetadata",
+              "where": { "$.AccessKeyId": { "$ref": "user.accesskeyid" } }
+            }
+          ]
+        },
+        {
+          "$comment": "A permissions boundary is the managed policy pointed at the user in a second role, and GetUser is where it shows: AWS reports it as a structure carrying the policy's ARN and the attachment type, whose only modeled value is the wire string PermissionsBoundaryPolicy — the enum member is spelled Policy in the model and that is not what goes on the wire.",
+          "op": "PutUserPermissionsBoundary",
+          "params": { "PermissionsBoundary": { "$ref": "policy.arn" } },
+          "assert": [
+            {
+              "kind": "readback",
+              "call": {
+                "op": "GetUser",
+                "params": { "UserName": { "$ref": "user.name" } }
+              },
+              "checks": {
+                "$.User.PermissionsBoundary.PermissionsBoundaryArn": { "equals": { "$ref": "policy.arn" } },
+                "$.User.PermissionsBoundary.PermissionsBoundaryType": { "equals": "PermissionsBoundaryPolicy" }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "Removing the boundary removes the member, rather than leaving an empty structure behind — `missing` says the path does not resolve at all, which is the difference between a member AWS omits and one it sends empty.",
+          "op": "DeleteUserPermissionsBoundary",
+          "assert": [
+            {
+              "kind": "readback",
+              "call": {
+                "op": "GetUser",
+                "params": { "UserName": { "$ref": "user.name" } }
+              },
+              "checks": { "$.User.PermissionsBoundary": { "missing": true } }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "$comment": "The IAM group, which requires the user because everything that makes a group a group needs a member. IAM gives a group no tags and no update AWS's own API models as observable here — UpdateGroup is not implemented and would rename the group out from under every later call anyway — so this resource has neither `tags` nor `mutable`, and its coverage is membership, inline policies and attached policies. GetGroup does double duty: it is the read that identifies the group at create time, and, under the variant name GetGroupMembers, the operation that proves AddUserToGroup put the user in the response's Users list. The user is removed from the group before DeleteGroup, which AWS refuses with DeleteConflict while members remain.",
+      "id": "group",
+      "requires": ["user"],
+      "create": {
+        "op": "CreateGroup",
+        "params": { "GroupName": { "$name": "g" } }
+      },
+      "exports": {
+        "arn": "$.Group.Arn",
+        "name": "$.Group.GroupName"
+      },
+      "binds": { "GroupName": "group.name" },
+      "read": {
+        "op": "GetGroup",
+        "identityPath": "$.Group.Arn",
+        "identity": "arn"
+      },
+      "list": {
+        "$comment": "itemsPath from @paginated.items (Groups); membership by the ARN the create allocated.",
+        "op": "ListGroups",
+        "identityPath": "$.Arn",
+        "identity": "arn"
+      },
+      "delete": { "op": "DeleteGroup" },
+      "notFound": { "error": "NoSuchEntityException" },
+      "async": { "maxAttempts": 6, "delayMs": 500 },
+      "operations": [
+        {
+          "$comment": "Membership seen from the user's side. ListGroupsForUser is scoped to one user, so the group this run created is the only one that can be in the page, and the ARN is what identifies it.",
+          "op": "AddUserToGroup",
+          "assert": [
+            {
+              "kind": "listContains",
+              "call": { "op": "ListGroupsForUser" },
+              "itemsPath": "$.Groups",
+              "where": { "$.Arn": { "$ref": "group.arn" } }
+            }
+          ]
+        },
+        {
+          "$comment": "The same membership seen from the group's side. AWS returns a group's members in GetGroup's own Users list rather than in a listing of its own, which is why this is a variant of the read rather than another operation.",
+          "name": "GetGroupMembers",
+          "op": "GetGroup",
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Users",
+              "where": { "$.UserName": { "$ref": "user.name" } }
+            }
+          ]
+        },
+        {
+          "op": "ListGroupsForUser",
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Groups",
+              "where": {
+                "$.Arn": { "$ref": "group.arn" },
+                "$.GroupName": { "$ref": "group.name" }
+              }
+            }
+          ]
+        },
+        {
+          "op": "PutGroupPolicy",
+          "params": {
+            "PolicyName": { "$name": "inline" },
+            "PolicyDocument": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:GetObject\",\"Resource\":\"arn:aws:s3:::compat-scenario-nonexistent/*\"}]}"
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "call": { "op": "ListGroupPolicies" },
+              "itemsPath": "$.PolicyNames",
+              "where": { "$": { "$name": "inline" } }
+            }
+          ]
+        },
+        {
+          "op": "GetGroupPolicy",
+          "params": { "PolicyName": { "$name": "inline" } },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.GroupName": { "equals": { "$ref": "group.name" } },
+                "$.PolicyName": { "equals": { "$name": "inline" } }
+              }
+            }
+          ]
+        },
+        {
+          "op": "ListGroupPolicies",
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.PolicyNames",
+              "where": { "$": { "$name": "inline" } }
+            }
+          ]
+        },
+        {
+          "op": "DeleteGroupPolicy",
+          "params": { "PolicyName": { "$name": "inline" } },
+          "assert": [
+            {
+              "kind": "absent",
+              "call": { "op": "ListGroupPolicies" },
+              "itemsPath": "$.PolicyNames",
+              "where": { "$": { "$name": "inline" } }
+            }
+          ]
+        },
+        {
+          "op": "AttachGroupPolicy",
+          "assert": [
+            {
+              "kind": "listContains",
+              "call": { "op": "ListAttachedGroupPolicies" },
+              "itemsPath": "$.AttachedPolicies",
+              "where": {
+                "$.PolicyArn": { "$ref": "policy.arn" },
+                "$.PolicyName": { "$ref": "policy.name" }
+              }
+            }
+          ]
+        },
+        {
+          "op": "ListAttachedGroupPolicies",
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.AttachedPolicies",
+              "where": {
+                "$.PolicyArn": { "$ref": "policy.arn" },
+                "$.PolicyName": { "$ref": "policy.name" }
+              }
+            }
+          ]
+        },
+        {
+          "op": "DetachGroupPolicy",
+          "assert": [
+            {
+              "kind": "absent",
+              "call": { "op": "ListAttachedGroupPolicies" },
+              "itemsPath": "$.AttachedPolicies",
+              "where": { "$.PolicyArn": { "$ref": "policy.arn" } }
+            }
+          ]
+        },
+        {
+          "$comment": "The last authored operation, and the one that lets DeleteGroup succeed: AWS answers DeleteConflict for a group that still has members. Absence is checked from the user's side because that listing is scoped to the one user this group owns.",
+          "op": "RemoveUserFromGroup",
+          "assert": [
+            {
+              "kind": "absent",
+              "call": { "op": "ListGroupsForUser" },
+              "itemsPath": "$.Groups",
+              "where": { "$.Arn": { "$ref": "group.arn" } }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "$comment": "The IAM role. Its create carries AWS's own documented trust policy — the one the CreateRole reference and the IAM User Guide use, allowing ec2.amazonaws.com to call sts:AssumeRole — because a role's trust policy is required and a wrong one is refused with MalformedPolicyDocument rather than stored. Description is the mutation: UpdateRole takes Description and MaxSessionDuration, and Description is the one Overcast's own capability note describes semantics for (an empty value clears it, an omitted one leaves it alone), so `from` puts an initial description on the create — which the create's read-back then asserts — and `to` changes it. The role carries the same inline-policy, attached-policy and permissions-boundary coverage the user does, plus the two operations that only make sense on a principal: SimulatePrincipalPolicy, which is placed after PutRolePolicy so that there is a policy for it to find, and GetAccountAuthorizationDetails, which is IAM's one whole-account read.",
+      "id": "role",
+      "requires": ["policy"],
+      "create": {
+        "op": "CreateRole",
+        "params": {
+          "RoleName": { "$name": "r" },
+          "AssumeRolePolicyDocument": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"ec2.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}"
+        }
+      },
+      "exports": {
+        "arn": "$.Role.Arn",
+        "name": "$.Role.RoleName"
+      },
+      "binds": { "RoleName": "role.name" },
+      "read": {
+        "op": "GetRole",
+        "identityPath": "$.Role.Arn",
+        "identity": "arn"
+      },
+      "list": {
+        "$comment": "itemsPath from @paginated.items (Roles); membership by the ARN the create allocated.",
+        "op": "ListRoles",
+        "identityPath": "$.Arn",
+        "identity": "arn"
+      },
+      "mutable": [
+        {
+          "op": "UpdateRole",
+          "member": "Description",
+          "from": "compat scenario role, initial description",
+          "to": "compat scenario role, updated description",
+          "readPath": "$.Role.Description"
+        }
+      ],
+      "tags": {
+        "tag": { "op": "TagRole", "member": "Tags" },
+        "untag": { "op": "UntagRole", "member": "TagKeys" },
+        "list": { "op": "ListRoleTags", "path": "$.Tags" }
+      },
+      "delete": { "op": "DeleteRole" },
+      "notFound": { "error": "NoSuchEntityException" },
+      "async": { "maxAttempts": 6, "delayMs": 500 },
+      "operations": [
+        {
+          "$comment": "The trust policy is replaced with one naming lambda.amazonaws.com instead of ec2.amazonaws.com. What this test cannot do is compare the document it wrote: AssumeRolePolicyDocument is a policyDocumentType member, and botocore's json_decode_policies hands the CLI and python-sdk suites a JSON object where the four typed suites see the string — measured on this branch, where `aws iam get-role` printed the document as an object and the Go client's field is a *string. So the read-back asserts the role's own identity and that the document is present at all, and the change itself is verified only in the sense that the call was accepted. The gap is the IR's, not the recipe's: nothing in the assertion vocabulary can say `this member deserializes differently per SDK, compare it structurally`.",
+          "op": "UpdateAssumeRolePolicy",
+          "params": {
+            "PolicyDocument": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"lambda.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}"
+          },
+          "assert": [
+            {
+              "kind": "readback",
+              "call": { "op": "GetRole" },
+              "checks": {
+                "$.Role.Arn": { "equals": { "$ref": "role.arn" } },
+                "$.Role.AssumeRolePolicyDocument": { "nonEmpty": true }
+              }
+            }
+          ]
+        },
+        {
+          "op": "PutRolePolicy",
+          "params": {
+            "PolicyName": { "$name": "inline" },
+            "PolicyDocument": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:GetObject\",\"Resource\":\"arn:aws:s3:::compat-scenario-nonexistent/*\"}]}"
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "call": { "op": "ListRolePolicies" },
+              "itemsPath": "$.PolicyNames",
+              "where": { "$": { "$name": "inline" } }
+            }
+          ]
+        },
+        {
+          "op": "GetRolePolicy",
+          "params": { "PolicyName": { "$name": "inline" } },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.PolicyName": { "equals": { "$name": "inline" } },
+                "$.RoleName": { "equals": { "$ref": "role.name" } }
+              }
+            }
+          ]
+        },
+        {
+          "op": "ListRolePolicies",
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.PolicyNames",
+              "where": { "$": { "$name": "inline" } }
+            }
+          ]
+        },
+        {
+          "$comment": "The simulator run against a real principal rather than a supplied document, which is the difference between this and SimulateCustomPolicy: the policies it evaluates are the ones the role actually holds. It runs here, between PutRolePolicy and DeleteRolePolicy, because the only policy the role has is that inline one — it allows s3:GetObject on a prefix, the simulation asks about that action on a key inside it, and AWS's answer is `allowed`. Asking after the delete would answer implicitDeny, which is a true statement about an empty role and no statement at all about the simulator.",
+          "op": "SimulatePrincipalPolicy",
+          "params": {
+            "PolicySourceArn": { "$ref": "role.arn" },
+            "ActionNames": ["s3:GetObject"],
+            "ResourceArns": ["arn:aws:s3:::compat-scenario-nonexistent/report.csv"]
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.EvaluationResults[0].EvalActionName": { "equals": "s3:GetObject" },
+                "$.EvaluationResults[0].EvalDecision": { "equals": "allowed" }
+              }
+            }
+          ]
+        },
+        {
+          "op": "DeleteRolePolicy",
+          "params": { "PolicyName": { "$name": "inline" } },
+          "assert": [
+            {
+              "kind": "absent",
+              "call": { "op": "ListRolePolicies" },
+              "itemsPath": "$.PolicyNames",
+              "where": { "$": { "$name": "inline" } }
+            }
+          ]
+        },
+        {
+          "op": "AttachRolePolicy",
+          "assert": [
+            {
+              "kind": "listContains",
+              "call": { "op": "ListAttachedRolePolicies" },
+              "itemsPath": "$.AttachedPolicies",
+              "where": {
+                "$.PolicyArn": { "$ref": "policy.arn" },
+                "$.PolicyName": { "$ref": "policy.name" }
+              }
+            }
+          ]
+        },
+        {
+          "op": "ListAttachedRolePolicies",
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.AttachedPolicies",
+              "where": {
+                "$.PolicyArn": { "$ref": "policy.arn" },
+                "$.PolicyName": { "$ref": "policy.name" }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "Detaching is what lets both deletes succeed: AWS refuses DeleteRole while a managed policy is attached, and refuses DeletePolicy — which this group's teardown runs — while the policy is attached to anything.",
+          "op": "DetachRolePolicy",
+          "assert": [
+            {
+              "kind": "absent",
+              "call": { "op": "ListAttachedRolePolicies" },
+              "itemsPath": "$.AttachedPolicies",
+              "where": { "$.PolicyArn": { "$ref": "policy.arn" } }
+            }
+          ]
+        },
+        {
+          "op": "PutRolePermissionsBoundary",
+          "params": { "PermissionsBoundary": { "$ref": "policy.arn" } },
+          "assert": [
+            {
+              "kind": "readback",
+              "call": { "op": "GetRole" },
+              "checks": {
+                "$.Role.PermissionsBoundary.PermissionsBoundaryArn": { "equals": { "$ref": "policy.arn" } },
+                "$.Role.PermissionsBoundary.PermissionsBoundaryType": { "equals": "PermissionsBoundaryPolicy" }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "The boundary is removed as well as detached, because AWS counts a policy used as anybody's permissions boundary as attached for the purposes of DeletePolicy — Overcast's own GetPolicy note says it derives PermissionsBoundaryUsageCount the same way.",
+          "op": "DeleteRolePermissionsBoundary",
+          "assert": [
+            {
+              "kind": "readback",
+              "call": { "op": "GetRole" },
+              "checks": { "$.Role.PermissionsBoundary": { "missing": true } }
+            }
+          ]
+        },
+        {
+          "$comment": "IAM's one whole-account read, and the only operation in the service that reports users, groups, roles and managed policies together. The assertion is that the role this run created appears in the role half of it, by ARN. It is an unfiltered account-wide listing and AWS pages it, so on an account with more than a page of roles ahead of this one the membership would not be found — the same exposure every account-wide listing in the corpus has, and the reason the entity-scoped listings above are preferred wherever IAM offers one.",
+          "op": "GetAccountAuthorizationDetails",
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.RoleDetailList",
+              "where": { "$.Arn": { "$ref": "role.arn" } }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "$comment": "The instance profile: the container EC2 hands a role to an instance through, and the one IAM resource whose whole purpose is to hold another one. It requires the role, and the role requires the policy, so this group's setup builds all three and its teardown removes them in the reverse order. The association is made, read from both sides — GetInstanceProfile's Roles list and ListInstanceProfilesForRole, which are the same fact indexed two ways — and then removed, which is what both deletes need: AWS refuses DeleteInstanceProfile while the profile still holds a role, and refuses the teardown's DeleteRole while any instance profile association remains.",
+      "id": "instanceprofile",
+      "requires": ["role"],
+      "create": {
+        "op": "CreateInstanceProfile",
+        "params": { "InstanceProfileName": { "$name": "ip" } }
+      },
+      "exports": {
+        "arn": "$.InstanceProfile.Arn",
+        "name": "$.InstanceProfile.InstanceProfileName"
+      },
+      "binds": { "InstanceProfileName": "instanceprofile.name" },
+      "read": {
+        "op": "GetInstanceProfile",
+        "identityPath": "$.InstanceProfile.Arn",
+        "identity": "arn"
+      },
+      "list": {
+        "$comment": "itemsPath from @paginated.items (InstanceProfiles); membership by the ARN the create allocated.",
+        "op": "ListInstanceProfiles",
+        "identityPath": "$.Arn",
+        "identity": "arn"
+      },
+      "tags": {
+        "tag": { "op": "TagInstanceProfile", "member": "Tags" },
+        "untag": { "op": "UntagInstanceProfile", "member": "TagKeys" },
+        "list": { "op": "ListInstanceProfileTags", "path": "$.Tags" }
+      },
+      "delete": { "op": "DeleteInstanceProfile" },
+      "notFound": { "error": "NoSuchEntityException" },
+      "async": { "maxAttempts": 6, "delayMs": 500 },
+      "operations": [
+        {
+          "$comment": "AWS puts the whole role — not a reference to it — into the profile's Roles list, and an instance profile holds at most one, so index 0 is the role or the association did not happen. Both the name and the ARN are compared because a profile that embedded a role of the right name from the wrong account would still be wrong.",
+          "op": "AddRoleToInstanceProfile",
+          "assert": [
+            {
+              "kind": "readback",
+              "call": { "op": "GetInstanceProfile" },
+              "checks": {
+                "$.InstanceProfile.Roles[0].Arn": { "equals": { "$ref": "role.arn" } },
+                "$.InstanceProfile.Roles[0].RoleName": { "equals": { "$ref": "role.name" } }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "The same association indexed by role rather than by profile, which is the listing EC2's console uses to offer a role's profiles.",
+          "op": "ListInstanceProfilesForRole",
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.InstanceProfiles",
+              "where": { "$.Arn": { "$ref": "instanceprofile.arn" } }
+            }
+          ]
+        },
+        {
+          "op": "RemoveRoleFromInstanceProfile",
+          "assert": [
+            {
+              "kind": "absent",
+              "call": { "op": "GetInstanceProfile" },
+              "itemsPath": "$.InstanceProfile.Roles",
+              "where": { "$.RoleName": { "$ref": "role.name" } }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -191,6 +191,482 @@
       "detail": "Replaces the policies applied to a listener wholesale, which is how a listener loses its stickiness or its cipher policy."
     },
     {
+      "service": "iam",
+      "operation": "AcceptDelegationRequest",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "AcceptDelegationRequest is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "AcquireRole",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "AcquireRole is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "AddClientIDToOpenIDConnectProvider",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "AddClientIDToOpenIDConnectProvider is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "AssociateDelegationRequest",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "AssociateDelegationRequest is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "ChangePassword",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "Changes the console password of the IAM user whose credentials signed the request, which locks that user out of the console until somebody with the new password says otherwise."
+    },
+    {
+      "service": "iam",
+      "operation": "CreateAccountAlias",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "Sets the account-wide sign-in alias. There is one per account, so the call silently replaces whatever the account already had, and every bookmarked sign-in URL for the old alias stops working."
+    },
+    {
+      "service": "iam",
+      "operation": "CreateDelegationRequest",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "CreateDelegationRequest is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "CreateLoginProfile",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "Gives an IAM user a console password. It turns a programmatic-only identity into one that can sign in to the console, which is a change to the account's attack surface rather than to a test fixture."
+    },
+    {
+      "service": "iam",
+      "operation": "CreateOpenIDConnectProvider",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "CreateOpenIDConnectProvider is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "CreateSAMLProvider",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "Registers a SAML identity provider for the account. Everything the provider's assertions are trusted for follows from it, and nothing in a probe group removes it."
+    },
+    {
+      "service": "iam",
+      "operation": "CreateServiceLinkedRole",
+      "group": "iam-gen-probe",
+      "reason": "probe-of-implemented-op",
+      "detail": "CreateServiceLinkedRole is implemented (Supported), so it may not be probed, and no recipe resource gives it a role"
+    },
+    {
+      "service": "iam",
+      "operation": "CreateServiceSpecificCredential",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "CreateServiceSpecificCredential is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "CreateVirtualMFADevice",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "Allocates a virtual MFA device with its own seed. AWS counts it against the account's device quota whether or not anybody ever enables it, and only DeleteVirtualMFADevice reclaims it."
+    },
+    {
+      "service": "iam",
+      "operation": "DeactivateMFADevice",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "Removes the MFA device from a user, so an identity that was protected by a second factor no longer is."
+    },
+    {
+      "service": "iam",
+      "operation": "DeleteAccountAlias",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "Removes the account's sign-in alias, breaking every sign-in URL built on it."
+    },
+    {
+      "service": "iam",
+      "operation": "DeleteAccountPasswordPolicy",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "Deletes the account-wide password policy, so every complexity, rotation and reuse rule the account relied on is gone at once and AWS keeps no copy to restore."
+    },
+    {
+      "service": "iam",
+      "operation": "DeleteLoginProfile",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "Removes an IAM user's console password, locking that user out of the console immediately."
+    },
+    {
+      "service": "iam",
+      "operation": "DeleteOpenIDConnectProvider",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "DeleteOpenIDConnectProvider is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "DeleteSAMLProvider",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "DeleteSAMLProvider is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "DeleteSSHPublicKey",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "DeleteSSHPublicKey is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "DeleteServerCertificate",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "DeleteServerCertificate is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "DeleteServiceLinkedRole",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "Starts the deletion of a service-linked role. The role is what an AWS service uses to act in the account, so deleting it stops that service working, and the deletion is asynchronous — the call returns a task id and cannot be taken back."
+    },
+    {
+      "service": "iam",
+      "operation": "DeleteServiceSpecificCredential",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "DeleteServiceSpecificCredential is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "DeleteSigningCertificate",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "Deletes an X.509 signing certificate from a user. Anything signing requests with that certificate stops being able to authenticate."
+    },
+    {
+      "service": "iam",
+      "operation": "DeleteVirtualMFADevice",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "Deletes a virtual MFA device. AWS keeps no copy of its seed, so the device cannot be recreated and whoever enrolled it has to enrol again."
+    },
+    {
+      "service": "iam",
+      "operation": "DisableOrganizationsRootCredentialsManagement",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "Turns off centralised root-credentials management for the organization, returning root credentials to each member account. It is an organization-wide security posture change made from one API call."
+    },
+    {
+      "service": "iam",
+      "operation": "DisableOrganizationsRootSessions",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "Turns off privileged root sessions for the organization's member accounts, changing what the management account can do in every one of them."
+    },
+    {
+      "service": "iam",
+      "operation": "DisableOutboundWebIdentityFederation",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "Turns off the account's outbound web identity federation, so every external workload that was exchanging this account's identity for a token stops being able to."
+    },
+    {
+      "service": "iam",
+      "operation": "EnableMFADevice",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "Associates an MFA device with a user and requires two consecutive authentication codes to do it. A probe would either enrol a device nobody asked to enrol or spend the user's authentication attempts guessing codes."
+    },
+    {
+      "service": "iam",
+      "operation": "EnableOrganizationsRootCredentialsManagement",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "Turns on centralised root-credentials management across the organization, which takes root credentials away from every member account."
+    },
+    {
+      "service": "iam",
+      "operation": "EnableOrganizationsRootSessions",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "Turns on privileged root sessions across the organization's member accounts."
+    },
+    {
+      "service": "iam",
+      "operation": "EnableOutboundWebIdentityFederation",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "Turns on outbound web identity federation for the account, which starts vending tokens that name this account to external workloads."
+    },
+    {
+      "service": "iam",
+      "operation": "GenerateCredentialReport",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "Starts the account-wide credential report job. It is billed, it is rate limited to one report every four hours, and it collects every credential's age and last-used data into a report a probe has no reason to want."
+    },
+    {
+      "service": "iam",
+      "operation": "GenerateOrganizationsAccessReport",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "GenerateOrganizationsAccessReport is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "GenerateServiceLastAccessedDetails",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "GenerateServiceLastAccessedDetails is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "GetAccountProperties",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "A read, and the one entry here that is not about danger. AWS added GetAccountProperties to the model after every SDK the typed suites pin: aws-sdk-go-v2/service/iam v1.53.7 declares no GetAccountPropertiesInput, so probing it scopes this whole probe group away from go-sdk with go-emit-unsupported, and the java, dotnet and rust emitters — which read the model rather than their SDK — would emit a call those builds cannot compile. It takes no required member, so withholding a curated literal, which is what leaves GetRoleTemplateVersion refused, cannot reach it and this map is the only lever. Delete the entry once the pins carry the operation."
+    },
+    {
+      "service": "iam",
+      "operation": "GetRoleTemplateVersion",
+      "group": "iam-gen-probe",
+      "reason": "unbound-required-member:TemplateArn",
+      "detail": "GetRoleTemplateVersion.TemplateArn (arnType, a string) has no bind, no matching export, no curated value and no derivable literal"
+    },
+    {
+      "service": "iam",
+      "operation": "PutAccountProperties",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "Writes account-level IAM properties. There is one set per account, so a probe would overwrite the caller's own settings with no way to know what they were."
+    },
+    {
+      "service": "iam",
+      "operation": "RejectDelegationRequest",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "RejectDelegationRequest is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "RemoveClientIDFromOpenIDConnectProvider",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "RemoveClientIDFromOpenIDConnectProvider is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "ResetServiceSpecificCredential",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "ResetServiceSpecificCredential is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "ResyncMFADevice",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "Resynchronises a user's MFA device with two authentication codes, which consumes the user's codes and, on repeated failure, is what an attacker guessing them looks like."
+    },
+    {
+      "service": "iam",
+      "operation": "SendDelegationToken",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "SendDelegationToken is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "SetDefaultPolicyVersion",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "Changes which version of a managed policy is the operative one. Every principal the policy is attached to gets a different effective permission set the moment the call lands."
+    },
+    {
+      "service": "iam",
+      "operation": "SetSecurityTokenServicePreferences",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "Sets the account-wide STS global endpoint token version, which decides whether tokens the account mints are usable in Regions enabled after the call."
+    },
+    {
+      "service": "iam",
+      "operation": "TagMFADevice",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "TagMFADevice is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "TagOpenIDConnectProvider",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "TagOpenIDConnectProvider is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "TagSAMLProvider",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "TagSAMLProvider is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "TagServerCertificate",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "TagServerCertificate is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "UntagMFADevice",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "UntagMFADevice is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "UntagOpenIDConnectProvider",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "UntagOpenIDConnectProvider is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "UntagSAMLProvider",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "UntagSAMLProvider is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "UntagServerCertificate",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "UntagServerCertificate is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "UpdateAccessKey",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "Activates or deactivates an access key. Deactivating one an application is signing with breaks that application immediately, and a probe cannot know which keys are in use."
+    },
+    {
+      "service": "iam",
+      "operation": "UpdateAccountPasswordPolicy",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "Replaces the account-wide password policy wholesale. Unset members are reset to AWS's defaults rather than left alone, so a partial call silently relaxes rules the account depended on."
+    },
+    {
+      "service": "iam",
+      "operation": "UpdateDelegationRequest",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "UpdateDelegationRequest is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "UpdateGroup",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "UpdateGroup is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "UpdateLoginProfile",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "Sets a new console password for an IAM user, locking out whoever held the old one."
+    },
+    {
+      "service": "iam",
+      "operation": "UpdateOpenIDConnectProviderThumbprint",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "UpdateOpenIDConnectProviderThumbprint is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "UpdateRoleDescription",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "UpdateRoleDescription is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "UpdateSAMLProvider",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "Replaces the metadata document of a live SAML provider, which changes which assertions the account trusts."
+    },
+    {
+      "service": "iam",
+      "operation": "UpdateSSHPublicKey",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "UpdateSSHPublicKey is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "UpdateServerCertificate",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "UpdateServerCertificate is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "UpdateServiceSpecificCredential",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "UpdateServiceSpecificCredential is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "UpdateSigningCertificate",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "UpdateSigningCertificate is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "UploadSSHPublicKey",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "UploadSSHPublicKey is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "iam",
+      "operation": "UploadServerCertificate",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "Uploads a server certificate and its private key into the account's IAM certificate store. A probe has no key to upload that is not either a real one or a fake the account then holds forever."
+    },
+    {
+      "service": "iam",
+      "operation": "UploadSigningCertificate",
+      "group": "iam-gen-probe",
+      "reason": "never-probe",
+      "detail": "Uploads an X.509 signing certificate for a user, adding a new way to authenticate as that identity."
+    },
+    {
       "service": "kms",
       "operation": "ConnectCustomKeyStore",
       "group": "kms-gen-probe",

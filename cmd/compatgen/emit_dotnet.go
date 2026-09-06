@@ -454,10 +454,17 @@ func dotnetCheck(path string, c check) string {
 // is AmazonSecurityTokenServiceClient, IAM's are Amazon.IdentityManagement and
 // AmazonIdentityManagementServiceClient, and DynamoDB's are Amazon.DynamoDBv2
 // and AmazonDynamoDBClient. A single-stem table would name three clients that
-// do not exist, so the remaining rows — SNS, STS, IAM, SSM and DynamoDB — are
-// left to the scenario that needs them and to the `dotnet publish` that proves
-// each spelling, rather than written blind from the README's summary.
+// do not exist, so the remaining rows — STS, SSM and DynamoDB — are left to the
+// scenario that needs them and to the `dotnet publish` that proves each
+// spelling, rather than written blind from the README's summary.
 var dotnetSDKName = map[string]struct{ namespace, client string }{
+	// IAM: namespace Amazon.IdentityManagement, client
+	// AmazonIdentityManagementServiceClient, config
+	// AmazonIdentityManagementServiceConfig — the first row whose two stems
+	// actually diverge, which is the reason the table carries both. Verified
+	// by the dotnet-sdk suite's own image build against
+	// AWSSDK.IdentityManagement 4.0.103.4 (#1883).
+	"IAM": {namespace: "IdentityManagement", client: "IdentityManagementService"},
 	// KMS: namespace Amazon.KeyManagementService, client
 	// AmazonKeyManagementServiceClient, config AmazonKeyManagementServiceConfig.
 	// Verified by the dotnet-sdk suite's own image build against

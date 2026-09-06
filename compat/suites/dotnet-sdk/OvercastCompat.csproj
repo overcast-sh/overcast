@@ -24,14 +24,19 @@
        - and AWSSDK.Core rises to the version that package requires. AWSSDK.Batch
        is pinned on the same reasoning: models/aws/shapes/batch.json carries the
        quota-share and service-environment operations, which the 4.0.0 package
-       predates. -->
+       predates. AWSSDK.IdentityManagement follows the same rule:
+       models/aws/shapes/iam.json carries the delegation-request,
+       outbound-web-identity-federation and human-readable-summary operations
+       the iam probe group calls, and 4.0.0 declares none of them. Its own
+       dependency floor is AWSSDK.Core 4.0.102.3, which is what is pinned
+       above, so this bump moves nothing else. -->
   <ItemGroup>
     <PackageReference Include="AWSSDK.Batch" Version="4.0.102.3" />
     <PackageReference Include="AWSSDK.Core" Version="4.0.102.3" />
     <PackageReference Include="AWSSDK.DynamoDBv2" Version="4.0.0" />
     <PackageReference Include="AWSSDK.ElasticLoadBalancing" Version="4.0.100.12" />
     <PackageReference Include="AWSSDK.EventBridge" Version="4.0.0" />
-    <PackageReference Include="AWSSDK.IdentityManagement" Version="4.0.0" />
+    <PackageReference Include="AWSSDK.IdentityManagement" Version="4.0.103.4" />
     <PackageReference Include="AWSSDK.KeyManagementService" Version="4.0.0" />
     <PackageReference Include="AWSSDK.Lambda" Version="4.0.0" />
     <PackageReference Include="AWSSDK.Organizations" Version="4.0.101.4" />

@@ -17,6 +17,9 @@ mod scenarios_batch_gen;
 #[path = "scenarios_elastic_load_balancing_gen.rs"]
 mod scenarios_elastic_load_balancing_gen;
 
+#[path = "scenarios_iam_gen.rs"]
+mod scenarios_iam_gen;
+
 #[path = "scenarios_kms_gen.rs"]
 mod scenarios_kms_gen;
 
@@ -40,6 +43,7 @@ pub fn scenario_groups(clients: &Arc<AwsClients>) -> Vec<Box<dyn ServiceGroup>> 
         Box::new(scenarios_authored_sqs_queues_gen::ScenariosAuthoredSqsQueues::new(clients)),
         Box::new(scenarios_batch_gen::ScenariosBatch::new(clients)),
         Box::new(scenarios_elastic_load_balancing_gen::ScenariosElasticLoadBalancing::new(clients)),
+        Box::new(scenarios_iam_gen::ScenariosIam::new(clients)),
         Box::new(scenarios_kms_gen::ScenariosKms::new(clients)),
         Box::new(scenarios_organizations_gen::ScenariosOrganizations::new(clients)),
         Box::new(scenarios_secretsmanager_gen::ScenariosSecretsmanager::new(clients)),

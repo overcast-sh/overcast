@@ -14,6 +14,47 @@
         "ListQuotaShares": { "jobQueue": "compat-scenario-nonexistent" }
       }
     },
+    "iam": {
+      "$comment": "Identifiers of IAM objects that do not exist, all of them in the documentation account 123456789012 rather than the caller's, so no probe can reach the policy, user, role, group or instance profile a run created. Four shapes matter, because a value of the wrong shape is answered with a validation error rather than the NoSuchEntity a probe is written for. An IAM ARN is arn:aws:iam::<account>:<type>/<name>, the type spelling the object — policy, user, role, mfa, oidc-provider, saml-provider — and an OIDC provider's name being its issuer host rather than a word. An access key id is AKIA and sixteen more characters and an SSH public key id APKA and sixteen more, both of them AWS's own documentation examples. A service namespace is the prefix an IAM action is written with, so s3 is real and names nothing this run owns. And an access-advisor or organizations-report JobId is exactly 36 characters, which is a UUID — hence the nil UUID rather than a word. PolicyArn is written out on each of the three unimplemented reads that take one because the policy resource binds PolicyArn and a probe may never draw on a binding a live resource supplies; GetSSHPublicKey's UserName is the same story. Three probeable reads are deliberately left with no literal. GetRoleTemplateVersion belongs to the role-template API AWS added to the model after every released SDK: aws-sdk-go-v2/service/iam v1.53.7 declares no GetRoleTemplateVersionInput, so a literal here would scope the whole iam probe group away from go-sdk and break the java, dotnet and rust builds, which resolve an operation only at compile time. GetOrganizationsAccessReport and GetServiceLastAccessedDetails, by contrast, do get one: their JobId is minted by a Generate* call no probe may make, and a job id nobody generated is precisely the well-formed-but-nonexistent identifier every other entry here is.",
+      "operations": {
+        "GetAccessKeyLastUsed": { "AccessKeyId": "AKIAIOSFODNN7EXAMPLE" },
+        "GetContextKeysForCustomPolicy": {
+          "PolicyInputList": ["{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:GetObject\",\"Resource\":\"arn:aws:s3:::compat-scenario-nonexistent/*\"}]}"]
+        },
+        "GetContextKeysForPrincipalPolicy": { "PolicySourceArn": "arn:aws:iam::123456789012:user/compat-scenario-nonexistent" },
+        "GetDelegationRequest": { "DelegationRequestId": "compat-scenario-nonexistent-delegation" },
+        "GetHumanReadableSummary": { "EntityArn": "arn:aws:iam::123456789012:role/compat-scenario-nonexistent" },
+        "GetMFADevice": { "SerialNumber": "arn:aws:iam::123456789012:mfa/compat-scenario-nonexistent" },
+        "GetOpenIDConnectProvider": { "OpenIDConnectProviderArn": "arn:aws:iam::123456789012:oidc-provider/compat-scenario-nonexistent.example.com" },
+        "GetOrganizationsAccessReport": { "JobId": "00000000-0000-0000-0000-000000000000" },
+        "GetPolicyVersion": {
+          "PolicyArn": "arn:aws:iam::123456789012:policy/compat-scenario-nonexistent",
+          "VersionId": "v1"
+        },
+        "GetSAMLProvider": { "SAMLProviderArn": "arn:aws:iam::123456789012:saml-provider/compat-scenario-nonexistent" },
+        "GetSSHPublicKey": {
+          "SSHPublicKeyId": "APKAEIBAERJR2EXAMPLE",
+          "UserName": "compat-scenario-nonexistent"
+        },
+        "GetServerCertificate": { "ServerCertificateName": "compat-scenario-nonexistent" },
+        "GetServiceLastAccessedDetails": { "JobId": "00000000-0000-0000-0000-000000000000" },
+        "GetServiceLastAccessedDetailsWithEntities": {
+          "JobId": "00000000-0000-0000-0000-000000000000",
+          "ServiceNamespace": "s3"
+        },
+        "GetServiceLinkedRoleDeletionStatus": { "DeletionTaskId": "task/aws-service-role/compat-scenario-nonexistent.amazonaws.com/AWSServiceRoleForCompatScenario/00000000-0000-0000-0000-000000000000" },
+        "ListEntitiesForPolicy": { "PolicyArn": "arn:aws:iam::123456789012:policy/compat-scenario-nonexistent" },
+        "ListMFADeviceTags": { "SerialNumber": "arn:aws:iam::123456789012:mfa/compat-scenario-nonexistent" },
+        "ListOpenIDConnectProviderTags": { "OpenIDConnectProviderArn": "arn:aws:iam::123456789012:oidc-provider/compat-scenario-nonexistent.example.com" },
+        "ListPoliciesGrantingServiceAccess": {
+          "Arn": "arn:aws:iam::123456789012:user/compat-scenario-nonexistent",
+          "ServiceNamespaces": ["s3"]
+        },
+        "ListPolicyVersions": { "PolicyArn": "arn:aws:iam::123456789012:policy/compat-scenario-nonexistent" },
+        "ListSAMLProviderTags": { "SAMLProviderArn": "arn:aws:iam::123456789012:saml-provider/compat-scenario-nonexistent" },
+        "ListServerCertificateTags": { "ServerCertificateName": "compat-scenario-nonexistent" }
+      }
+    },
     "kms": {
       "$comment": "One key identifier, written out per operation rather than once against KeyIdType: the key resource binds KeyId, and a probe may not draw on a binding a live resource supplies, so each unimplemented read that takes a key needs its own entry. A KMS key id is a UUID — an identifier of any other shape is answered with a validation error rather than the NotFoundException a probe is written for — and the nil UUID is a well-formed key id no account holds. It carries no $name prefix, so it can never name the key the run created. GetKeyLastUsage is the fourth such read and is deliberately left refused rather than given a literal: AWS added it to the model in April 2026, and three of the four typed suites pin an SDK older than that — aws-sdk-go-v2/service/kms v1.50.4 declares no GetKeyLastUsageInput, and the rust suite's aws-sdk-kms 1.52.0 is from December 2024 — so probing it would scope the whole probe group away from go-sdk and break the java, dotnet and rust builds, which resolve the operation only at compile time. Adding the literal is the one line that reverses this once those pins move.",
       "operations": {

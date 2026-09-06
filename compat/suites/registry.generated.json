@@ -480,6 +480,664 @@
       ]
     },
     {
+      "service": "iam",
+      "name": "iam-gen-group",
+      "generated": true,
+      "scenario": "compat/model/scenarios/iam.json",
+      "state": "candidate",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "CreateGroup"
+        },
+        {
+          "name": "GetGroup",
+          "depends": [
+            "CreateGroup"
+          ]
+        },
+        {
+          "name": "AddUserToGroup",
+          "depends": [
+            "CreateGroup"
+          ]
+        },
+        {
+          "name": "GetGroupMembers",
+          "op": "GetGroup",
+          "depends": [
+            "CreateGroup"
+          ]
+        },
+        {
+          "name": "ListGroupsForUser",
+          "depends": [
+            "CreateGroup"
+          ]
+        },
+        {
+          "name": "PutGroupPolicy",
+          "depends": [
+            "CreateGroup"
+          ]
+        },
+        {
+          "name": "GetGroupPolicy",
+          "depends": [
+            "CreateGroup"
+          ]
+        },
+        {
+          "name": "ListGroupPolicies",
+          "depends": [
+            "CreateGroup"
+          ]
+        },
+        {
+          "name": "DeleteGroupPolicy",
+          "depends": [
+            "CreateGroup"
+          ]
+        },
+        {
+          "name": "AttachGroupPolicy",
+          "depends": [
+            "CreateGroup"
+          ]
+        },
+        {
+          "name": "ListAttachedGroupPolicies",
+          "depends": [
+            "CreateGroup"
+          ]
+        },
+        {
+          "name": "DetachGroupPolicy",
+          "depends": [
+            "CreateGroup"
+          ]
+        },
+        {
+          "name": "RemoveUserFromGroup",
+          "depends": [
+            "CreateGroup"
+          ]
+        },
+        {
+          "name": "ListGroups",
+          "depends": [
+            "CreateGroup"
+          ]
+        },
+        {
+          "name": "DeleteGroup",
+          "depends": [
+            "CreateGroup"
+          ]
+        }
+      ]
+    },
+    {
+      "service": "iam",
+      "name": "iam-gen-instanceprofile",
+      "generated": true,
+      "scenario": "compat/model/scenarios/iam.json",
+      "state": "candidate",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "CreateInstanceProfile"
+        },
+        {
+          "name": "GetInstanceProfile",
+          "depends": [
+            "CreateInstanceProfile"
+          ]
+        },
+        {
+          "name": "TagInstanceProfile",
+          "depends": [
+            "CreateInstanceProfile"
+          ]
+        },
+        {
+          "name": "ListInstanceProfileTags",
+          "depends": [
+            "CreateInstanceProfile"
+          ]
+        },
+        {
+          "name": "UntagInstanceProfile",
+          "depends": [
+            "CreateInstanceProfile"
+          ]
+        },
+        {
+          "name": "AddRoleToInstanceProfile",
+          "depends": [
+            "CreateInstanceProfile"
+          ]
+        },
+        {
+          "name": "ListInstanceProfilesForRole",
+          "depends": [
+            "CreateInstanceProfile"
+          ]
+        },
+        {
+          "name": "RemoveRoleFromInstanceProfile",
+          "depends": [
+            "CreateInstanceProfile"
+          ]
+        },
+        {
+          "name": "ListInstanceProfiles",
+          "depends": [
+            "CreateInstanceProfile"
+          ]
+        },
+        {
+          "name": "DeleteInstanceProfile",
+          "depends": [
+            "CreateInstanceProfile"
+          ]
+        }
+      ]
+    },
+    {
+      "service": "iam",
+      "name": "iam-gen-policy",
+      "generated": true,
+      "scenario": "compat/model/scenarios/iam.json",
+      "state": "candidate",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "CreatePolicy"
+        },
+        {
+          "name": "GetPolicy",
+          "depends": [
+            "CreatePolicy"
+          ]
+        },
+        {
+          "name": "TagPolicy",
+          "depends": [
+            "CreatePolicy"
+          ]
+        },
+        {
+          "name": "ListPolicyTags",
+          "depends": [
+            "CreatePolicy"
+          ]
+        },
+        {
+          "name": "UntagPolicy",
+          "depends": [
+            "CreatePolicy"
+          ]
+        },
+        {
+          "name": "CreatePolicyVersion",
+          "depends": [
+            "CreatePolicy"
+          ]
+        },
+        {
+          "name": "DeletePolicyVersion",
+          "depends": [
+            "CreatePolicy"
+          ]
+        },
+        {
+          "name": "SimulateCustomPolicy"
+        },
+        {
+          "name": "ListPolicies",
+          "depends": [
+            "CreatePolicy"
+          ]
+        },
+        {
+          "name": "DeletePolicy",
+          "depends": [
+            "CreatePolicy"
+          ]
+        }
+      ]
+    },
+    {
+      "service": "iam",
+      "name": "iam-gen-probe",
+      "generated": true,
+      "scenario": "compat/model/scenarios/iam.json",
+      "state": "candidate",
+      "parallel": true,
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "GetAccessKeyLastUsed"
+        },
+        {
+          "name": "GetAccountPasswordPolicy"
+        },
+        {
+          "name": "GetAccountSummary"
+        },
+        {
+          "name": "GetContextKeysForCustomPolicy"
+        },
+        {
+          "name": "GetContextKeysForPrincipalPolicy"
+        },
+        {
+          "name": "GetCredentialReport"
+        },
+        {
+          "name": "GetDelegationRequest"
+        },
+        {
+          "name": "GetHumanReadableSummary"
+        },
+        {
+          "name": "GetLoginProfile"
+        },
+        {
+          "name": "GetMFADevice"
+        },
+        {
+          "name": "GetOpenIDConnectProvider"
+        },
+        {
+          "name": "GetOrganizationsAccessReport"
+        },
+        {
+          "name": "GetOutboundWebIdentityFederationInfo"
+        },
+        {
+          "name": "GetPolicyVersion"
+        },
+        {
+          "name": "GetSAMLProvider"
+        },
+        {
+          "name": "GetSSHPublicKey"
+        },
+        {
+          "name": "GetServerCertificate"
+        },
+        {
+          "name": "GetServiceLastAccessedDetails"
+        },
+        {
+          "name": "GetServiceLastAccessedDetailsWithEntities"
+        },
+        {
+          "name": "GetServiceLinkedRoleDeletionStatus"
+        },
+        {
+          "name": "ListAccountAliases"
+        },
+        {
+          "name": "ListDelegationRequests"
+        },
+        {
+          "name": "ListEntitiesForPolicy"
+        },
+        {
+          "name": "ListMFADeviceTags"
+        },
+        {
+          "name": "ListMFADevices"
+        },
+        {
+          "name": "ListOpenIDConnectProviderTags"
+        },
+        {
+          "name": "ListOpenIDConnectProviders"
+        },
+        {
+          "name": "ListOrganizationsFeatures"
+        },
+        {
+          "name": "ListPoliciesGrantingServiceAccess"
+        },
+        {
+          "name": "ListPolicyVersions"
+        },
+        {
+          "name": "ListSAMLProviderTags"
+        },
+        {
+          "name": "ListSAMLProviders"
+        },
+        {
+          "name": "ListSSHPublicKeys"
+        },
+        {
+          "name": "ListServerCertificateTags"
+        },
+        {
+          "name": "ListServerCertificates"
+        },
+        {
+          "name": "ListServiceSpecificCredentials"
+        },
+        {
+          "name": "ListSigningCertificates"
+        },
+        {
+          "name": "ListVirtualMFADevices"
+        }
+      ]
+    },
+    {
+      "service": "iam",
+      "name": "iam-gen-role",
+      "generated": true,
+      "scenario": "compat/model/scenarios/iam.json",
+      "state": "candidate",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "CreateRole"
+        },
+        {
+          "name": "GetRole",
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "UpdateRole",
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "TagRole",
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "ListRoleTags",
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "UntagRole",
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "UpdateAssumeRolePolicy",
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "PutRolePolicy",
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "GetRolePolicy",
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "ListRolePolicies",
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "SimulatePrincipalPolicy",
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "DeleteRolePolicy",
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "AttachRolePolicy",
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "ListAttachedRolePolicies",
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "DetachRolePolicy",
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "PutRolePermissionsBoundary",
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "DeleteRolePermissionsBoundary",
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "GetAccountAuthorizationDetails",
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "ListRoles",
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "DeleteRole",
+          "depends": [
+            "CreateRole"
+          ]
+        }
+      ]
+    },
+    {
+      "service": "iam",
+      "name": "iam-gen-user",
+      "generated": true,
+      "scenario": "compat/model/scenarios/iam.json",
+      "state": "candidate",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "CreateUser"
+        },
+        {
+          "name": "GetUser",
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "UpdateUser",
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "TagUser",
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "ListUserTags",
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "UntagUser",
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "PutUserPolicy",
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "GetUserPolicy",
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "ListUserPolicies",
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "DeleteUserPolicy",
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "AttachUserPolicy",
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "ListAttachedUserPolicies",
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "DetachUserPolicy",
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "CreateAccessKey",
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "ListAccessKeys",
+          "depends": [
+            "CreateAccessKey",
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "DeleteAccessKey",
+          "depends": [
+            "CreateAccessKey",
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "PutUserPermissionsBoundary",
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "DeleteUserPermissionsBoundary",
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "ListUsers",
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "DeleteUser",
+          "depends": [
+            "CreateUser"
+          ]
+        }
+      ]
+    },
+    {
       "service": "kms",
       "name": "kms-gen-key",
       "generated": true,
