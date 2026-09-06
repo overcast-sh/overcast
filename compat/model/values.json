@@ -64,10 +64,9 @@
       }
     },
     "elastic-load-balancing": {
-      "$comment": "Both entries name a Classic load balancer that does not exist. The name is 27 characters, inside AWS's 32-character limit for a load balancer name, and it carries no $name prefix, so it can never be the one a run created: DescribeLoadBalancerAttributes and DescribeTags both answer LoadBalancerNotFound for it rather than reaching anything. DescribeLoadBalancerAttributes needs an entry of its own because the loadbalancer resource binds LoadBalancerName, and a probe may not draw on a binding a live resource supplies.",
+      "$comment": "Names a Classic load balancer that does not exist. The name is 27 characters, inside AWS's 32-character limit for a load balancer name, and it carries no $name prefix, so it can never be the one a run created: DescribeLoadBalancerAttributes answers LoadBalancerNotFound for it rather than reaching anything. It needs an entry of its own because the loadbalancer resource binds LoadBalancerName, and a probe may not draw on a binding a live resource supplies. DescribeTags carried a matching entry once, but the loadbalancer resource's `tags` role claims DescribeTags as its list operation, and a curated LoadBalancerNames literal here would let that role bind it — against a load balancer this literal deliberately does not name, so the generated assertion would look for the run's tag on a describe of something else entirely. AddTags and RemoveTags need LoadBalancerNames too and have no such literal, so the honest state for all three is the same refusal (unbound-required-member:LoadBalancerNames) until a follow-up teaches `tags` to bind a list member from the resource's own export — see the elastic-load-balancing recipe's `$comment`.",
       "operations": {
-        "DescribeLoadBalancerAttributes": { "LoadBalancerName": "compat-scenario-nonexistent" },
-        "DescribeTags": { "LoadBalancerNames": ["compat-scenario-nonexistent"] }
+        "DescribeLoadBalancerAttributes": { "LoadBalancerName": "compat-scenario-nonexistent" }
       }
     },
     "servicediscovery": {
