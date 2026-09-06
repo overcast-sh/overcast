@@ -32,3 +32,16 @@ type SprocketTag struct {
 type GaugeCursor interface {
 	isGaugeCursor()
 }
+
+// GaugeTag is the {TagKey, TagValue} spelling detectTagShape's widening
+// accepts alongside {Key, Value} — the pair KMS's own Tag structure uses.
+type GaugeTag struct {
+	TagKey   *string
+	TagValue *string
+}
+
+// ValveTagKeyOnly is a key-only tag structure: the untag-list shape ELB
+// Classic's RemoveTags uses (TagKeyOnly) instead of a plain string.
+type ValveTagKeyOnly struct {
+	Key *string
+}

@@ -31,7 +31,6 @@ import software.amazon.awssdk.services.elasticloadbalancing.model.DescribeLoadBa
 import software.amazon.awssdk.services.elasticloadbalancing.model.DescribeLoadBalancerPoliciesRequest;
 import software.amazon.awssdk.services.elasticloadbalancing.model.DescribeLoadBalancerPolicyTypesRequest;
 import software.amazon.awssdk.services.elasticloadbalancing.model.DescribeLoadBalancersRequest;
-import software.amazon.awssdk.services.elasticloadbalancing.model.DescribeTagsRequest;
 import software.amazon.awssdk.services.elasticloadbalancing.model.HealthCheck;
 import software.amazon.awssdk.services.elasticloadbalancing.model.Listener;
 import software.amazon.awssdk.services.elasticloadbalancing.model.LoadBalancerAttributes;
@@ -84,8 +83,7 @@ public final class ScenariosElasticLoadBalancingGen implements ServiceGroup {
                 Map.entry("elastic-load-balancing-gen-loadbalancerpolicy:DeleteLoadBalancerPolicy", this::testElasticLoadBalancingGenLoadbalancerpolicyDeleteLoadBalancerPolicy),
                 Map.entry("elastic-load-balancing-gen-probe:DescribeAccountLimits", this::testElasticLoadBalancingGenProbeDescribeAccountLimits),
                 Map.entry("elastic-load-balancing-gen-probe:DescribeLoadBalancerAttributes", this::testElasticLoadBalancingGenProbeDescribeLoadBalancerAttributes),
-                Map.entry("elastic-load-balancing-gen-probe:DescribeLoadBalancerPolicyTypes", this::testElasticLoadBalancingGenProbeDescribeLoadBalancerPolicyTypes),
-                Map.entry("elastic-load-balancing-gen-probe:DescribeTags", this::testElasticLoadBalancingGenProbeDescribeTags));
+                Map.entry("elastic-load-balancing-gen-probe:DescribeLoadBalancerPolicyTypes", this::testElasticLoadBalancingGenProbeDescribeLoadBalancerPolicyTypes));
     }
 
     @Override
@@ -496,20 +494,6 @@ public final class ScenariosElasticLoadBalancingGen implements ServiceGroup {
                 List.of(
                         Clause.responseField(
                                 Check.isList("$.PolicyTypeDescriptions")
-                        )
-                ));
-    }
-
-    private void testElasticLoadBalancingGenProbeDescribeTags(TestContext t) {
-        GROUP_ELASTIC_LOAD_BALANCING_GEN_PROBE.runTest(t, "DescribeTags",
-                new Call("DescribeTags", "{\"LoadBalancerNames\":[\"compat-scenario-nonexistent\"]}",
-                        b -> DescribeTagsRequest.builder()
-                                .loadBalancerNames(List.of("compat-scenario-nonexistent"))
-                                .build(),
-                        r -> cl().describeTags((DescribeTagsRequest) r)),
-                List.of(
-                        Clause.responseField(
-                                Check.isList("$.TagDescriptions")
                         )
                 ));
     }

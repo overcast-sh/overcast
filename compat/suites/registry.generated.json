@@ -473,9 +473,6 @@
         },
         {
           "name": "DescribeLoadBalancerPolicyTypes"
-        },
-        {
-          "name": "DescribeTags"
         }
       ]
     },

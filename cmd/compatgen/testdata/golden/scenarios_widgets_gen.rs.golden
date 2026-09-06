@@ -25,6 +25,11 @@ const GROUP_WIDGETS_GEN_GAUGE: Group = Group {
     file: SCENARIO_FILE,
 };
 
+const GROUP_WIDGETS_GEN_VALVE: Group = Group {
+    name: "widgets-gen-valve",
+    file: SCENARIO_FILE,
+};
+
 const GROUP_WIDGETS_GEN_SPROCKET: Group = Group {
     name: "widgets-gen-sprocket",
     file: SCENARIO_FILE,
@@ -220,12 +225,110 @@ impl ServiceGroup for ScenariosWidgets {
         {
             let client = self.client.clone();
             impls.insert(
+                "widgets-gen-gauge:TagGauge".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_WIDGETS_GEN_GAUGE
+                            .run_test(&ctx, "TagGauge", test_widgets_gen_gauge_tag_gauge(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
+                "widgets-gen-gauge:ListGaugeTags".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_WIDGETS_GEN_GAUGE
+                            .run_test(&ctx, "ListGaugeTags", test_widgets_gen_gauge_list_gauge_tags(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
+                "widgets-gen-gauge:UntagGauge".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_WIDGETS_GEN_GAUGE
+                            .run_test(&ctx, "UntagGauge", test_widgets_gen_gauge_untag_gauge(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
                 "widgets-gen-gauge:CalibrateGauge".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
                         GROUP_WIDGETS_GEN_GAUGE
                             .run_test(&ctx, "CalibrateGauge", test_widgets_gen_gauge_calibrate_gauge(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
+                "widgets-gen-valve:DescribeValve".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_WIDGETS_GEN_VALVE
+                            .run_test(&ctx, "DescribeValve", test_widgets_gen_valve_describe_valve(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
+                "widgets-gen-valve:TagValve".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_WIDGETS_GEN_VALVE
+                            .run_test(&ctx, "TagValve", test_widgets_gen_valve_tag_valve(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
+                "widgets-gen-valve:ListValveTags".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_WIDGETS_GEN_VALVE
+                            .run_test(&ctx, "ListValveTags", test_widgets_gen_valve_list_valve_tags(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
+                "widgets-gen-valve:UntagValve".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_WIDGETS_GEN_VALVE
+                            .run_test(&ctx, "UntagValve", test_widgets_gen_valve_untag_valve(&client))
                             .await
                     })
                 }),
@@ -389,6 +492,18 @@ impl ServiceGroup for ScenariosWidgets {
         {
             let client = self.client.clone();
             setups.insert(
+                "widgets-gen-valve".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_WIDGETS_GEN_VALVE.run_setup(&ctx, setup_widgets_gen_valve(&client)).await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            setups.insert(
                 "widgets-gen-sprocket".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
@@ -435,6 +550,18 @@ impl ServiceGroup for ScenariosWidgets {
                     let client = client.clone();
                     Box::pin(async move {
                         GROUP_WIDGETS_GEN_GAUGE.run_teardown(&ctx, teardown_widgets_gen_gauge(&client)).await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            teardowns.insert(
+                "widgets-gen-valve".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_WIDGETS_GEN_VALVE.run_teardown(&ctx, teardown_widgets_gen_valve(&client)).await
                     })
                 }),
             );
@@ -1049,6 +1176,166 @@ fn test_widgets_gen_gauge_describe_gauge(client: &aws_sdk_widgets::Client) -> Te
     }
 }
 
+fn test_widgets_gen_gauge_tag_gauge(client: &aws_sdk_widgets::Client) -> Test {
+    Test {
+        call: Call {
+            op: "TagGauge",
+            params: scenario::map(vec![
+                ("GaugeId", scenario::context("gauge.id")),
+                ("Tags", scenario::lit(::serde_json::json!([{"TagKey": "compat", "TagValue": "scenario"}]))),
+            ]),
+            export: Vec::new(),
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .tag_gauge()
+                            .gauge_id(b.string("GaugeId")?)
+                            .tags(
+                                aws_sdk_widgets::types::GaugeTag::builder()
+                                    .tag_key("compat")
+                                    .tag_value("scenario")
+                                    .build()
+                                    .map_err(|err| scenario::build_error("Tags[0]", err))?
+                            )
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::list_contains(
+                Some(Call {
+                    op: "ListGaugeTags",
+                    params: scenario::map(vec![
+                        ("GaugeId", scenario::context("gauge.id")),
+                    ]),
+                    export: Vec::new(),
+                    invoke: {
+                        let client = client.clone();
+                        scenario::invoker(move |b| {
+                            let client = client.clone();
+                            Box::pin(async move {
+                                let capture = scenario::Capture::new();
+                                let request = client
+                                    .list_gauge_tags()
+                                    .gauge_id(b.string("GaugeId")?)
+                                    .customize()
+                                    .interceptor(capture.clone());
+                                Ok(scenario::observe(request.send().await, &capture))
+                            })
+                        })
+                    },
+                }),
+                "$.Tags",
+                vec![
+                    scenario::where_entry("$.TagKey", scenario::lit(::serde_json::json!("compat"))),
+                    scenario::where_entry("$.TagValue", scenario::lit(::serde_json::json!("scenario"))),
+                ],
+            ),
+        ],
+    }
+}
+
+fn test_widgets_gen_gauge_list_gauge_tags(client: &aws_sdk_widgets::Client) -> Test {
+    Test {
+        call: Call {
+            op: "ListGaugeTags",
+            params: scenario::map(vec![("GaugeId", scenario::context("gauge.id"))]),
+            export: Vec::new(),
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .list_gauge_tags()
+                            .gauge_id(b.string("GaugeId")?)
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::list_contains(
+                None,
+                "$.Tags",
+                vec![
+                    scenario::where_entry("$.TagKey", scenario::lit(::serde_json::json!("compat"))),
+                    scenario::where_entry("$.TagValue", scenario::lit(::serde_json::json!("scenario"))),
+                ],
+            ),
+        ],
+    }
+}
+
+fn test_widgets_gen_gauge_untag_gauge(client: &aws_sdk_widgets::Client) -> Test {
+    Test {
+        call: Call {
+            op: "UntagGauge",
+            params: scenario::map(vec![
+                ("GaugeId", scenario::context("gauge.id")),
+                ("TagKeys", scenario::lit(::serde_json::json!(["compat"]))),
+            ]),
+            export: Vec::new(),
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .untag_gauge()
+                            .gauge_id(b.string("GaugeId")?)
+                            .tag_keys("compat")
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::absent_from_list(
+                Some(Call {
+                    op: "ListGaugeTags",
+                    params: scenario::map(vec![
+                        ("GaugeId", scenario::context("gauge.id")),
+                    ]),
+                    export: Vec::new(),
+                    invoke: {
+                        let client = client.clone();
+                        scenario::invoker(move |b| {
+                            let client = client.clone();
+                            Box::pin(async move {
+                                let capture = scenario::Capture::new();
+                                let request = client
+                                    .list_gauge_tags()
+                                    .gauge_id(b.string("GaugeId")?)
+                                    .customize()
+                                    .interceptor(capture.clone());
+                                Ok(scenario::observe(request.send().await, &capture))
+                            })
+                        })
+                    },
+                }),
+                "$.Tags",
+                vec![
+                    scenario::where_entry("$.TagKey", scenario::lit(::serde_json::json!("compat"))),
+                ],
+            ),
+        ],
+    }
+}
+
 fn test_widgets_gen_gauge_calibrate_gauge(client: &aws_sdk_widgets::Client) -> Test {
     Test {
         call: Call {
@@ -1075,6 +1362,211 @@ fn test_widgets_gen_gauge_calibrate_gauge(client: &aws_sdk_widgets::Client) -> T
             scenario::response_field(vec![
                 scenario::non_empty("$.Status"),
             ]),
+        ],
+    }
+}
+
+fn setup_widgets_gen_valve(_client: &aws_sdk_widgets::Client) -> Vec<Call> {
+    // An empty phase is a no-op, not a missing one.
+    Vec::new()
+}
+
+fn teardown_widgets_gen_valve(_client: &aws_sdk_widgets::Client) -> Vec<Call> {
+    // An empty phase is a no-op, not a missing one.
+    Vec::new()
+}
+
+fn test_widgets_gen_valve_describe_valve(client: &aws_sdk_widgets::Client) -> Test {
+    Test {
+        call: Call {
+            op: "DescribeValve",
+            params: scenario::lit(::serde_json::json!({})),
+            export: vec![
+                ("valve.arn", "$.Valve.Arn"),
+                ("valve.id", "$.Valve.ValveId"),
+            ],
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |_b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .describe_valve()
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::response_field(vec![
+                scenario::matches("$.Valve.ValveId", "^v-[0-9a-f]{8}$"),
+            ]),
+        ],
+    }
+}
+
+fn test_widgets_gen_valve_tag_valve(client: &aws_sdk_widgets::Client) -> Test {
+    Test {
+        call: Call {
+            op: "TagValve",
+            params: scenario::map(vec![
+                ("Tags", scenario::lit(::serde_json::json!([{"Key": "compat", "Value": "scenario"}]))),
+                ("ValveId", scenario::context("valve.id")),
+            ]),
+            export: Vec::new(),
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .tag_valve()
+                            .tags(
+                                aws_sdk_widgets::types::SprocketTag::builder()
+                                    .key("compat")
+                                    .value("scenario")
+                                    .build()
+                            )
+                            .valve_id(b.string("ValveId")?)
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::list_contains(
+                Some(Call {
+                    op: "ListValveTags",
+                    params: scenario::map(vec![
+                        ("ValveId", scenario::context("valve.id")),
+                    ]),
+                    export: Vec::new(),
+                    invoke: {
+                        let client = client.clone();
+                        scenario::invoker(move |b| {
+                            let client = client.clone();
+                            Box::pin(async move {
+                                let capture = scenario::Capture::new();
+                                let request = client
+                                    .list_valve_tags()
+                                    .valve_id(b.string("ValveId")?)
+                                    .customize()
+                                    .interceptor(capture.clone());
+                                Ok(scenario::observe(request.send().await, &capture))
+                            })
+                        })
+                    },
+                }),
+                "$.Tags",
+                vec![
+                    scenario::where_entry("$.Key", scenario::lit(::serde_json::json!("compat"))),
+                    scenario::where_entry("$.Value", scenario::lit(::serde_json::json!("scenario"))),
+                ],
+            ),
+        ],
+    }
+}
+
+fn test_widgets_gen_valve_list_valve_tags(client: &aws_sdk_widgets::Client) -> Test {
+    Test {
+        call: Call {
+            op: "ListValveTags",
+            params: scenario::map(vec![("ValveId", scenario::context("valve.id"))]),
+            export: Vec::new(),
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .list_valve_tags()
+                            .valve_id(b.string("ValveId")?)
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::list_contains(
+                None,
+                "$.Tags",
+                vec![
+                    scenario::where_entry("$.Key", scenario::lit(::serde_json::json!("compat"))),
+                    scenario::where_entry("$.Value", scenario::lit(::serde_json::json!("scenario"))),
+                ],
+            ),
+        ],
+    }
+}
+
+fn test_widgets_gen_valve_untag_valve(client: &aws_sdk_widgets::Client) -> Test {
+    Test {
+        call: Call {
+            op: "UntagValve",
+            params: scenario::map(vec![
+                ("TagKeys", scenario::lit(::serde_json::json!([{"Key": "compat"}]))),
+                ("ValveId", scenario::context("valve.id")),
+            ]),
+            export: Vec::new(),
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .untag_valve()
+                            .tag_keys(
+                                aws_sdk_widgets::types::ValveTagKeyOnly::builder()
+                                    .key("compat")
+                                    .build()
+                            )
+                            .valve_id(b.string("ValveId")?)
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::absent_from_list(
+                Some(Call {
+                    op: "ListValveTags",
+                    params: scenario::map(vec![
+                        ("ValveId", scenario::context("valve.id")),
+                    ]),
+                    export: Vec::new(),
+                    invoke: {
+                        let client = client.clone();
+                        scenario::invoker(move |b| {
+                            let client = client.clone();
+                            Box::pin(async move {
+                                let capture = scenario::Capture::new();
+                                let request = client
+                                    .list_valve_tags()
+                                    .valve_id(b.string("ValveId")?)
+                                    .customize()
+                                    .interceptor(capture.clone());
+                                Ok(scenario::observe(request.send().await, &capture))
+                            })
+                        })
+                    },
+                }),
+                "$.Tags",
+                vec![
+                    scenario::where_entry("$.Key", scenario::lit(::serde_json::json!("compat"))),
+                ],
+            ),
         ],
     }
 }

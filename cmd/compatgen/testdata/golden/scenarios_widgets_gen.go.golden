@@ -35,7 +35,14 @@ func ScenariosWidgets(c *clients.Clients) ServiceGroup {
 			"widgets-gen-widget:ListWidgets":        g.testWidgetsGenWidgetListWidgets,
 			"widgets-gen-widget:DeleteWidget":       g.testWidgetsGenWidgetDeleteWidget,
 			"widgets-gen-gauge:DescribeGauge":       g.testWidgetsGenGaugeDescribeGauge,
+			"widgets-gen-gauge:TagGauge":            g.testWidgetsGenGaugeTagGauge,
+			"widgets-gen-gauge:ListGaugeTags":       g.testWidgetsGenGaugeListGaugeTags,
+			"widgets-gen-gauge:UntagGauge":          g.testWidgetsGenGaugeUntagGauge,
 			"widgets-gen-gauge:CalibrateGauge":      g.testWidgetsGenGaugeCalibrateGauge,
+			"widgets-gen-valve:DescribeValve":       g.testWidgetsGenValveDescribeValve,
+			"widgets-gen-valve:TagValve":            g.testWidgetsGenValveTagValve,
+			"widgets-gen-valve:ListValveTags":       g.testWidgetsGenValveListValveTags,
+			"widgets-gen-valve:UntagValve":          g.testWidgetsGenValveUntagValve,
 			"widgets-gen-sprocket:CreateSprocket":   g.testWidgetsGenSprocketCreateSprocket,
 			"widgets-gen-sprocket:GetSprocket":      g.testWidgetsGenSprocketGetSprocket,
 			"widgets-gen-sprocket:TagSprocket":      g.testWidgetsGenSprocketTagSprocket,
@@ -49,12 +56,14 @@ func ScenariosWidgets(c *clients.Clients) ServiceGroup {
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
 			"widgets-gen-widget":   g.setupWidgetsGenWidget,
 			"widgets-gen-gauge":    g.setupWidgetsGenGauge,
+			"widgets-gen-valve":    g.setupWidgetsGenValve,
 			"widgets-gen-sprocket": g.setupWidgetsGenSprocket,
 			"widgets-gen-probe":    g.setupWidgetsGenProbe,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
 			"widgets-gen-widget":   g.teardownWidgetsGenWidget,
 			"widgets-gen-gauge":    g.teardownWidgetsGenGauge,
+			"widgets-gen-valve":    g.teardownWidgetsGenValve,
 			"widgets-gen-sprocket": g.teardownWidgetsGenSprocket,
 			"widgets-gen-probe":    g.teardownWidgetsGenProbe,
 		},
@@ -461,6 +470,106 @@ func (g *widgetsScenarios) testWidgetsGenGaugeDescribeGauge(ctx context.Context,
 	})
 }
 
+func (g *widgetsScenarios) testWidgetsGenGaugeTagGauge(ctx context.Context, t *harness.TestContext) error {
+	return groupWidgetsGenGauge.RunTest(ctx, t, "TagGauge", scenario.Test{
+		Call: scenario.Call{
+			Op:     "TagGauge",
+			Params: `{"GaugeId":{"$ref":"gauge.id"},"Tags":[{"TagKey":"compat","TagValue":"scenario"}]}`,
+			Build: func(b *scenario.Binder) any {
+				in := &widgets.TagGaugeInput{}
+				in.GaugeId = aws.String(scenario.Bind[string](b, "GaugeId", scenario.Ref("gauge.id")))
+				in.Tags = []types.GaugeTag{
+					{TagKey: aws.String("compat"), TagValue: aws.String("scenario")},
+				}
+				return in
+			},
+			Send: func(ctx context.Context, in any) (any, error) {
+				return g.cl().TagGauge(ctx, in.(*widgets.TagGaugeInput))
+			},
+		},
+		Assert: []scenario.Clause{
+			scenario.ListContains(
+				&scenario.Call{
+					Op:     "ListGaugeTags",
+					Params: `{"GaugeId":{"$ref":"gauge.id"}}`,
+					Build: func(b *scenario.Binder) any {
+						in := &widgets.ListGaugeTagsInput{}
+						in.GaugeId = aws.String(scenario.Bind[string](b, "GaugeId", scenario.Ref("gauge.id")))
+						return in
+					},
+					Send: func(ctx context.Context, in any) (any, error) {
+						return g.cl().ListGaugeTags(ctx, in.(*widgets.ListGaugeTagsInput))
+					},
+				},
+				"$.Tags",
+				scenario.Where("$.TagKey", "compat"),
+				scenario.Where("$.TagValue", "scenario"),
+			),
+		},
+	})
+}
+
+func (g *widgetsScenarios) testWidgetsGenGaugeListGaugeTags(ctx context.Context, t *harness.TestContext) error {
+	return groupWidgetsGenGauge.RunTest(ctx, t, "ListGaugeTags", scenario.Test{
+		Call: scenario.Call{
+			Op:     "ListGaugeTags",
+			Params: `{"GaugeId":{"$ref":"gauge.id"}}`,
+			Build: func(b *scenario.Binder) any {
+				in := &widgets.ListGaugeTagsInput{}
+				in.GaugeId = aws.String(scenario.Bind[string](b, "GaugeId", scenario.Ref("gauge.id")))
+				return in
+			},
+			Send: func(ctx context.Context, in any) (any, error) {
+				return g.cl().ListGaugeTags(ctx, in.(*widgets.ListGaugeTagsInput))
+			},
+		},
+		Assert: []scenario.Clause{
+			scenario.ListContains(
+				nil,
+				"$.Tags",
+				scenario.Where("$.TagKey", "compat"),
+				scenario.Where("$.TagValue", "scenario"),
+			),
+		},
+	})
+}
+
+func (g *widgetsScenarios) testWidgetsGenGaugeUntagGauge(ctx context.Context, t *harness.TestContext) error {
+	return groupWidgetsGenGauge.RunTest(ctx, t, "UntagGauge", scenario.Test{
+		Call: scenario.Call{
+			Op:     "UntagGauge",
+			Params: `{"GaugeId":{"$ref":"gauge.id"},"TagKeys":["compat"]}`,
+			Build: func(b *scenario.Binder) any {
+				in := &widgets.UntagGaugeInput{}
+				in.GaugeId = aws.String(scenario.Bind[string](b, "GaugeId", scenario.Ref("gauge.id")))
+				in.TagKeys = []string{"compat"}
+				return in
+			},
+			Send: func(ctx context.Context, in any) (any, error) {
+				return g.cl().UntagGauge(ctx, in.(*widgets.UntagGaugeInput))
+			},
+		},
+		Assert: []scenario.Clause{
+			scenario.AbsentFromList(
+				&scenario.Call{
+					Op:     "ListGaugeTags",
+					Params: `{"GaugeId":{"$ref":"gauge.id"}}`,
+					Build: func(b *scenario.Binder) any {
+						in := &widgets.ListGaugeTagsInput{}
+						in.GaugeId = aws.String(scenario.Bind[string](b, "GaugeId", scenario.Ref("gauge.id")))
+						return in
+					},
+					Send: func(ctx context.Context, in any) (any, error) {
+						return g.cl().ListGaugeTags(ctx, in.(*widgets.ListGaugeTagsInput))
+					},
+				},
+				"$.Tags",
+				scenario.Where("$.TagKey", "compat"),
+			),
+		},
+	})
+}
+
 func (g *widgetsScenarios) testWidgetsGenGaugeCalibrateGauge(ctx context.Context, t *harness.TestContext) error {
 	return groupWidgetsGenGauge.RunTest(ctx, t, "CalibrateGauge", scenario.Test{
 		Call: scenario.Call{
@@ -478,6 +587,141 @@ func (g *widgetsScenarios) testWidgetsGenGaugeCalibrateGauge(ctx context.Context
 		Assert: []scenario.Clause{
 			scenario.ResponseField(
 				scenario.NonEmpty("$.Status"),
+			),
+		},
+	})
+}
+
+var groupWidgetsGenValve = scenario.Group{Name: "widgets-gen-valve", File: "compat/model/scenarios/widgets.json"}
+
+func (g *widgetsScenarios) setupWidgetsGenValve(ctx context.Context, t *harness.TestContext) error {
+	// No setup steps: an empty phase is a no-op, not a missing one.
+	return groupWidgetsGenValve.RunSetup(ctx, t)
+}
+
+func (g *widgetsScenarios) teardownWidgetsGenValve(ctx context.Context, t *harness.TestContext) error {
+	// No teardown steps: an empty phase is a no-op, not a missing one.
+	return groupWidgetsGenValve.RunTeardown(ctx, t)
+}
+
+func (g *widgetsScenarios) testWidgetsGenValveDescribeValve(ctx context.Context, t *harness.TestContext) error {
+	return groupWidgetsGenValve.RunTest(ctx, t, "DescribeValve", scenario.Test{
+		Call: scenario.Call{
+			Op:     "DescribeValve",
+			Params: `{}`,
+			Build: func(b *scenario.Binder) any {
+				in := &widgets.DescribeValveInput{}
+				return in
+			},
+			Send: func(ctx context.Context, in any) (any, error) {
+				return g.cl().DescribeValve(ctx, in.(*widgets.DescribeValveInput))
+			},
+			Export: map[string]string{
+				"valve.arn": "$.Valve.Arn",
+				"valve.id":  "$.Valve.ValveId",
+			},
+		},
+		Assert: []scenario.Clause{
+			scenario.ResponseField(
+				scenario.Matches("$.Valve.ValveId", "^v-[0-9a-f]{8}$"),
+			),
+		},
+	})
+}
+
+func (g *widgetsScenarios) testWidgetsGenValveTagValve(ctx context.Context, t *harness.TestContext) error {
+	return groupWidgetsGenValve.RunTest(ctx, t, "TagValve", scenario.Test{
+		Call: scenario.Call{
+			Op:     "TagValve",
+			Params: `{"Tags":[{"Key":"compat","Value":"scenario"}],"ValveId":{"$ref":"valve.id"}}`,
+			Build: func(b *scenario.Binder) any {
+				in := &widgets.TagValveInput{}
+				in.Tags = []types.SprocketTag{{Key: aws.String("compat"), Value: aws.String("scenario")}}
+				in.ValveId = aws.String(scenario.Bind[string](b, "ValveId", scenario.Ref("valve.id")))
+				return in
+			},
+			Send: func(ctx context.Context, in any) (any, error) {
+				return g.cl().TagValve(ctx, in.(*widgets.TagValveInput))
+			},
+		},
+		Assert: []scenario.Clause{
+			scenario.ListContains(
+				&scenario.Call{
+					Op:     "ListValveTags",
+					Params: `{"ValveId":{"$ref":"valve.id"}}`,
+					Build: func(b *scenario.Binder) any {
+						in := &widgets.ListValveTagsInput{}
+						in.ValveId = aws.String(scenario.Bind[string](b, "ValveId", scenario.Ref("valve.id")))
+						return in
+					},
+					Send: func(ctx context.Context, in any) (any, error) {
+						return g.cl().ListValveTags(ctx, in.(*widgets.ListValveTagsInput))
+					},
+				},
+				"$.Tags",
+				scenario.Where("$.Key", "compat"),
+				scenario.Where("$.Value", "scenario"),
+			),
+		},
+	})
+}
+
+func (g *widgetsScenarios) testWidgetsGenValveListValveTags(ctx context.Context, t *harness.TestContext) error {
+	return groupWidgetsGenValve.RunTest(ctx, t, "ListValveTags", scenario.Test{
+		Call: scenario.Call{
+			Op:     "ListValveTags",
+			Params: `{"ValveId":{"$ref":"valve.id"}}`,
+			Build: func(b *scenario.Binder) any {
+				in := &widgets.ListValveTagsInput{}
+				in.ValveId = aws.String(scenario.Bind[string](b, "ValveId", scenario.Ref("valve.id")))
+				return in
+			},
+			Send: func(ctx context.Context, in any) (any, error) {
+				return g.cl().ListValveTags(ctx, in.(*widgets.ListValveTagsInput))
+			},
+		},
+		Assert: []scenario.Clause{
+			scenario.ListContains(
+				nil,
+				"$.Tags",
+				scenario.Where("$.Key", "compat"),
+				scenario.Where("$.Value", "scenario"),
+			),
+		},
+	})
+}
+
+func (g *widgetsScenarios) testWidgetsGenValveUntagValve(ctx context.Context, t *harness.TestContext) error {
+	return groupWidgetsGenValve.RunTest(ctx, t, "UntagValve", scenario.Test{
+		Call: scenario.Call{
+			Op:     "UntagValve",
+			Params: `{"TagKeys":[{"Key":"compat"}],"ValveId":{"$ref":"valve.id"}}`,
+			Build: func(b *scenario.Binder) any {
+				in := &widgets.UntagValveInput{}
+				in.TagKeys = []types.ValveTagKeyOnly{{Key: aws.String("compat")}}
+				in.ValveId = aws.String(scenario.Bind[string](b, "ValveId", scenario.Ref("valve.id")))
+				return in
+			},
+			Send: func(ctx context.Context, in any) (any, error) {
+				return g.cl().UntagValve(ctx, in.(*widgets.UntagValveInput))
+			},
+		},
+		Assert: []scenario.Clause{
+			scenario.AbsentFromList(
+				&scenario.Call{
+					Op:     "ListValveTags",
+					Params: `{"ValveId":{"$ref":"valve.id"}}`,
+					Build: func(b *scenario.Binder) any {
+						in := &widgets.ListValveTagsInput{}
+						in.ValveId = aws.String(scenario.Bind[string](b, "ValveId", scenario.Ref("valve.id")))
+						return in
+					},
+					Send: func(ctx context.Context, in any) (any, error) {
+						return g.cl().ListValveTags(ctx, in.(*widgets.ListValveTagsInput))
+					},
+				},
+				"$.Tags",
+				scenario.Where("$.Key", "compat"),
 			),
 		},
 	})

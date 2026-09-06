@@ -1079,45 +1079,113 @@ func (gb *groupBuilder) mutableTests(res resource) error {
 	return nil
 }
 
-// tagShape says how a service carries tags: a string map, or a list of
-// {Key, Value} structures.
-type tagShape int
+// tagShape says how a service carries tags: whether the tag member is a
+// string map or a list of structures — and, for the list case, which pair of
+// member names that structure uses — plus, independently, whether the untag
+// member takes bare tag-key strings or a list of key-only structures.
+//
+// The two questions are independent because AWS answers them independently:
+// KMS pairs {TagKey, TagValue} tags (TagResource/ListResourceTags) with a
+// plain list of key strings (UntagResource.TagKeys), while ELB Classic pairs
+// ordinary {Key, Value} tags (AddTags) with a list of TagKeyOnly structures
+// (RemoveTags.Tags) instead of bare strings.
+type tagShape struct {
+	mode tagMode
+	// keyField and valueField name the tag structure's two string members,
+	// set only when mode is tagsAsList.
+	keyField, valueField string
+	// untagKeyOnly is true when the untag member is a list of key-only
+	// structures rather than a list of bare tag-key strings; untagKeyField
+	// then names that structure's single string member.
+	untagKeyOnly  bool
+	untagKeyField string
+}
+
+type tagMode int
 
 const (
-	tagsAsMap tagShape = iota + 1
+	tagsAsMap tagMode = iota + 1
 	tagsAsList
 )
+
+// tagFieldSpellings is every {key, value} member-name pair a list-shaped tag
+// structure is accepted under. AWS spells the pair {Key, Value} everywhere
+// this generator has met except KMS, which spells its Tag structure
+// {TagKey, TagValue}.
+var tagFieldSpellings = []struct{ key, value string }{
+	{"Key", "Value"},
+	{"TagKey", "TagValue"},
+}
 
 func (gb *groupBuilder) detectTagShape(res resource) (tagShape, *refusal, error) {
 	tags := res.Tags
 	input := gb.g.model.InputShape(tags.Tag.Op)
 	target, ok := gb.g.model.MemberTarget(input, tags.Tag.Member)
 	if !ok {
-		return 0, nil, fmt.Errorf("resource %q: %s has no member %q", res.ID, tags.Tag.Op, tags.Tag.Member)
+		return tagShape{}, nil, fmt.Errorf("resource %q: %s has no member %q", res.ID, tags.Tag.Op, tags.Tag.Member)
 	}
 	untagInput := gb.g.model.InputShape(tags.Untag.Op)
 	untagTarget, ok := gb.g.model.MemberTarget(untagInput, tags.Untag.Member)
 	if !ok {
-		return 0, nil, fmt.Errorf("resource %q: %s has no member %q", res.ID, tags.Untag.Op, tags.Untag.Member)
+		return tagShape{}, nil, fmt.Errorf("resource %q: %s has no member %q", res.ID, tags.Untag.Op, tags.Untag.Member)
 	}
-	if gb.g.model.Kind(untagTarget) != "list" || gb.g.model.Kind(gb.g.model.Shapes[untagTarget].Member) != "string" {
-		return 0, refuse(reasonUnsupportedTagShape+":"+bareShapeName(untagTarget), fmt.Sprintf("%s.%s targets %s, which is not a list of strings", tags.Untag.Op, tags.Untag.Member, untagTarget)), nil
+	untagKeyOnly, untagKeyField, ok := gb.untagListShape(untagTarget)
+	if !ok {
+		return tagShape{}, refuse(reasonUnsupportedTagShape+":"+bareShapeName(untagTarget),
+			fmt.Sprintf("%s.%s targets %s, which is not a list of strings or of key-only structures", tags.Untag.Op, tags.Untag.Member, untagTarget)), nil
 	}
 	switch gb.g.model.Kind(target) {
 	case "map":
 		shape := gb.g.model.Shapes[target]
 		if gb.g.model.Kind(shape.Key) == "string" && gb.g.model.Kind(shape.Value) == "string" {
-			return tagsAsMap, nil, nil
+			return tagShape{mode: tagsAsMap, untagKeyOnly: untagKeyOnly, untagKeyField: untagKeyField}, nil, nil
 		}
 	case "list":
 		item := gb.g.model.Shapes[target].Member
-		key, hasKey := gb.g.model.MemberTarget(item, "Key")
-		value, hasValue := gb.g.model.MemberTarget(item, "Value")
-		if hasKey && hasValue && gb.g.model.Kind(key) == "string" && gb.g.model.Kind(value) == "string" {
-			return tagsAsList, nil, nil
+		for _, spelling := range tagFieldSpellings {
+			key, hasKey := gb.g.model.MemberTarget(item, spelling.key)
+			value, hasValue := gb.g.model.MemberTarget(item, spelling.value)
+			if hasKey && hasValue && gb.g.model.Kind(key) == "string" && gb.g.model.Kind(value) == "string" {
+				return tagShape{
+					mode:          tagsAsList,
+					keyField:      spelling.key,
+					valueField:    spelling.value,
+					untagKeyOnly:  untagKeyOnly,
+					untagKeyField: untagKeyField,
+				}, nil, nil
+			}
 		}
 	}
-	return 0, refuse(reasonUnsupportedTagShape+":"+bareShapeName(target), fmt.Sprintf("%s.%s targets %s, which is neither a string map nor a list of {Key, Value}", tags.Tag.Op, tags.Tag.Member, target)), nil
+	return tagShape{}, refuse(reasonUnsupportedTagShape+":"+bareShapeName(target),
+		fmt.Sprintf("%s.%s targets %s, which is neither a string map nor a list of {Key, Value} or {TagKey, TagValue}", tags.Tag.Op, tags.Tag.Member, target)), nil
+}
+
+// untagListShape reports whether an untag member's target is a list this
+// generator can bind a tag key into: a list of strings (the key itself), or
+// a list of structures carrying exactly one string member (ELB's
+// TagKeyOnly). keyField names that structure's member and is empty when the
+// list is of bare strings; ok is false when the target is neither.
+func (gb *groupBuilder) untagListShape(target string) (keyOnly bool, keyField string, ok bool) {
+	if gb.g.model.Kind(target) != "list" {
+		return false, "", false
+	}
+	element := gb.g.model.Shapes[target].Member
+	switch gb.g.model.Kind(element) {
+	case "string":
+		return false, "", true
+	case "structure":
+		members := gb.g.model.Members(element)
+		if len(members) != 1 {
+			return false, "", false
+		}
+		fieldTarget, _ := gb.g.model.MemberTarget(element, members[0])
+		if gb.g.model.Kind(fieldTarget) != "string" {
+			return false, "", false
+		}
+		return true, members[0], true
+	default:
+		return false, "", false
+	}
 }
 
 // bareShapeName is a Smithy shape id without its namespace. A refusal reason
@@ -1148,10 +1216,10 @@ func (gb *groupBuilder) tagTests(res resource) error {
 		return nil
 	}
 	var tagValue any
-	if shape == tagsAsMap {
+	if shape.mode == tagsAsMap {
 		tagValue = map[string]any{compatTagKey: compatTagValue}
 	} else {
-		tagValue = []any{map[string]any{"Key": compatTagKey, "Value": compatTagValue}}
+		tagValue = []any{map[string]any{shape.keyField: compatTagKey, shape.valueField: compatTagValue}}
 	}
 	// The listing call is bound once; every clause below takes its own copy.
 	listing, ref, err := gb.bindCall(tags.List.Op, tags.List.Params)
@@ -1164,7 +1232,10 @@ func (gb *groupBuilder) tagTests(res resource) error {
 		}
 		return nil
 	}
-	present := map[string]any{"$.Key": compatTagKey, "$.Value": compatTagValue}
+	var present map[string]any
+	if shape.mode == tagsAsList {
+		present = map[string]any{"$." + shape.keyField: compatTagKey, "$." + shape.valueField: compatTagValue}
+	}
 
 	// Tag: the tag shows up in the listing.
 	c, ref, err := gb.bindCall(tags.Tag.Op, map[string]any{tags.Tag.Member: tagValue})
@@ -1176,7 +1247,7 @@ func (gb *groupBuilder) tagTests(res resource) error {
 	} else {
 		lc := cloneCall(listing)
 		var a assertion
-		if shape == tagsAsMap {
+		if shape.mode == tagsAsMap {
 			a = readback(lc, checks(joinPath(tags.List.Path, compatTagKey), equals(compatTagValue)))
 		} else {
 			a = listContains(&lc, tags.List.Path, cloneValue(present).(map[string]any))
@@ -1196,7 +1267,7 @@ func (gb *groupBuilder) tagTests(res resource) error {
 	} else {
 		lc := cloneCall(listing)
 		var a assertion
-		if shape == tagsAsMap {
+		if shape.mode == tagsAsMap {
 			a = responseField(checks(joinPath(tags.List.Path, compatTagKey), equals(compatTagValue)))
 		} else {
 			a = listContains(nil, tags.List.Path, cloneValue(present).(map[string]any))
@@ -1210,8 +1281,17 @@ func (gb *groupBuilder) tagTests(res resource) error {
 		}
 	}
 
-	// Untag: the tag is gone from the listing.
-	uc, ref, err := gb.bindCall(tags.Untag.Op, map[string]any{tags.Untag.Member: []any{compatTagKey}})
+	// Untag: the tag is gone from the listing. The value it takes follows
+	// the untag member's own shape, independent of how the tag structure
+	// itself is spelled — a bare key string, or a key-only structure whose
+	// single member carries the key (ELB's TagKeyOnly).
+	var untagValue any
+	if shape.untagKeyOnly {
+		untagValue = []any{map[string]any{shape.untagKeyField: compatTagKey}}
+	} else {
+		untagValue = []any{compatTagKey}
+	}
+	uc, ref, err := gb.bindCall(tags.Untag.Op, map[string]any{tags.Untag.Member: untagValue})
 	if err != nil {
 		return err
 	}
@@ -1221,10 +1301,10 @@ func (gb *groupBuilder) tagTests(res resource) error {
 	}
 	lc := cloneCall(listing)
 	var a assertion
-	if shape == tagsAsMap {
+	if shape.mode == tagsAsMap {
 		a = readback(lc, checks(joinPath(tags.List.Path, compatTagKey), missing()))
 	} else {
-		a = absentFromList(&lc, tags.List.Path, map[string]any{"$.Key": compatTagKey})
+		a = absentFromList(&lc, tags.List.Path, map[string]any{"$." + shape.keyField: compatTagKey})
 	}
 	if ref, err := gb.completeAssertion(&a, "", tags.Untag.Op); err != nil || ref != nil {
 		return firstErr(ref, err, gb, tags.Untag.Op)

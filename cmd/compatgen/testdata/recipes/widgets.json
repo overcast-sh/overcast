@@ -1,5 +1,5 @@
 {
-  "$comment": "Test fixture: five resources between them exercising every recipe role against testdata/shapes/widgets.json. `widget` is the full lifecycle (create, two reads, a mutation, map-shaped tags, an authored operation, list, delete); `cog` is setup-only and its create cannot be bound, so `spare`, which requires it, has its whole group refused with setup-refused; `gauge` is pre-existing and shows that such a resource carries more than its read; `sprocket` requires `gauge`, verifies its create with an authored assertion rather than a derived read-back, carries list-shaped tags, and is declared async so every clause that calls the service again — authored ones included — is wrapped in `eventually`.",
+  "$comment": "Test fixture: seven resources between them exercising every recipe role against testdata/shapes/widgets.json. `widget` is the full lifecycle (create, two reads, a mutation, map-shaped tags, an authored operation, list, delete); `cog` is setup-only and its create cannot be bound, so `spare`, which requires it, has its whole group refused with setup-refused; `gauge` is pre-existing and shows that such a resource carries more than its read, and its tags carry KMS's {TagKey, TagValue} spelling; `sprocket` requires `gauge`, verifies its create with an authored assertion rather than a derived read-back, carries {Key, Value}-shaped tags, and is declared async so every clause that calls the service again — authored ones included — is wrapped in `eventually`; `valve` is pre-existing like `gauge`, and its tags pair ordinary {Key, Value} tags with an ELB-style untag list of key-only structures instead of bare strings.",
   "service": "widgets",
   "neverProbe": {
     "GetWidgetSecret": "Rotates the secret it returns, so the read verb in its name is a lie; every later reader of the old secret is broken by the call.",
@@ -69,7 +69,7 @@
       "notFound": { "error": "WidgetNotFound" }
     },
     {
-      "$comment": "Pre-existing: no create, no delete, and its exports come from its read. Its group is not that read alone — an authored operation binding one of those exports gets a test of its own.",
+      "$comment": "Pre-existing: no create, no delete, and its exports come from its read. Its group is not that read alone — an authored operation binding one of those exports gets a test of its own. Its tags are the {TagKey, TagValue} spelling KMS uses (Tag/ListResourceTags/UntagResource), paired with an ordinary string-list untag — the same untag shape `widget` and `sprocket` use, so this resource isolates the tag-structure axis of detectTagShape from the untag-list axis `valve` isolates below.",
       "id": "gauge",
       "read": {
         "op": "DescribeGauge",
@@ -84,7 +84,27 @@
             { "kind": "responseField", "checks": { "$.Status": { "nonEmpty": true } } }
           ]
         }
-      ]
+      ],
+      "tags": {
+        "tag": { "op": "TagGauge", "member": "Tags" },
+        "untag": { "op": "UntagGauge", "member": "TagKeys" },
+        "list": { "op": "ListGaugeTags", "path": "$.Tags" }
+      }
+    },
+    {
+      "$comment": "Pre-existing, like `gauge`, and exists only to carry a tags block: ordinary {Key, Value} tags (the same structure `sprocket` uses) paired with an untag member that takes a list of key-only structures instead of bare strings — the shape ELB Classic's RemoveTags uses. This isolates the untag-list axis of detectTagShape from the tag-structure axis `gauge` isolates above.",
+      "id": "valve",
+      "read": {
+        "op": "DescribeValve",
+        "identityPath": "$.Valve.ValveId",
+        "exports": { "id": "$.Valve.ValveId", "arn": "$.Valve.Arn" }
+      },
+      "binds": { "ValveId": "valve.id" },
+      "tags": {
+        "tag": { "op": "TagValve", "member": "Tags" },
+        "untag": { "op": "UntagValve", "member": "TagKeys" },
+        "list": { "op": "ListValveTags", "path": "$.Tags" }
+      }
     },
     {
       "$comment": "Requires the pre-existing gauge, whose read runs in setup and whose ARN the sprocket records. The create is verified by an authored assertion instead of the derived read-back, and `async` wraps that authored clause — it calls the service again — while leaving the responseField clause beside it alone.",

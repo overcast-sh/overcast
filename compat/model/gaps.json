@@ -89,8 +89,8 @@
       "service": "elastic-load-balancing",
       "operation": "AddTags",
       "group": "elastic-load-balancing-gen-loadbalancer",
-      "reason": "unsupported-tag-shape:TagKeyList",
-      "detail": "RemoveTags.Tags targets TagKeyList, which is not a list of strings"
+      "reason": "unbound-required-member:LoadBalancerNames",
+      "detail": "tag listing via DescribeTags: DescribeTags.LoadBalancerNames (LoadBalancerNamesMax20, a list) has no bind, no matching export, no curated value and no derivable literal"
     },
     {
       "service": "elastic-load-balancing",
@@ -124,8 +124,15 @@
       "service": "elastic-load-balancing",
       "operation": "DescribeTags",
       "group": "elastic-load-balancing-gen-loadbalancer",
-      "reason": "unsupported-tag-shape:TagKeyList",
-      "detail": "RemoveTags.Tags targets TagKeyList, which is not a list of strings"
+      "reason": "unbound-required-member:LoadBalancerNames",
+      "detail": "tag listing via DescribeTags: DescribeTags.LoadBalancerNames (LoadBalancerNamesMax20, a list) has no bind, no matching export, no curated value and no derivable literal"
+    },
+    {
+      "service": "elastic-load-balancing",
+      "operation": "DescribeTags",
+      "group": "elastic-load-balancing-gen-probe",
+      "reason": "unbound-required-member:LoadBalancerNames",
+      "detail": "DescribeTags.LoadBalancerNames (LoadBalancerNamesMax20, a list) has no bind, no matching export, no curated value and no derivable literal"
     },
     {
       "service": "elastic-load-balancing",
@@ -159,8 +166,8 @@
       "service": "elastic-load-balancing",
       "operation": "RemoveTags",
       "group": "elastic-load-balancing-gen-loadbalancer",
-      "reason": "unsupported-tag-shape:TagKeyList",
-      "detail": "RemoveTags.Tags targets TagKeyList, which is not a list of strings"
+      "reason": "unbound-required-member:LoadBalancerNames",
+      "detail": "tag listing via DescribeTags: DescribeTags.LoadBalancerNames (LoadBalancerNamesMax20, a list) has no bind, no matching export, no curated value and no derivable literal"
     },
     {
       "service": "elastic-load-balancing",

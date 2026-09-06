@@ -732,28 +732,6 @@
               }
             }
           ]
-        },
-        {
-          "name": "DescribeTags",
-          "op": "DescribeTags",
-          "call": {
-            "op": "DescribeTags",
-            "params": {
-              "LoadBalancerNames": [
-                "compat-scenario-nonexistent"
-              ]
-            }
-          },
-          "assert": [
-            {
-              "kind": "responseField",
-              "checks": {
-                "$.TagDescriptions": {
-                  "isList": true
-                }
-              }
-            }
-          ]
         }
       ],
       "teardown": []

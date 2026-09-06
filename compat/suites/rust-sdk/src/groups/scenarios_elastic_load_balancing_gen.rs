@@ -282,20 +282,6 @@ impl ServiceGroup for ScenariosElasticLoadBalancing {
                 }),
             );
         }
-        {
-            let client = self.client.clone();
-            impls.insert(
-                "elastic-load-balancing-gen-probe:DescribeTags".to_string(),
-                Arc::new(move |ctx: TestContext| {
-                    let client = client.clone();
-                    Box::pin(async move {
-                        GROUP_ELASTIC_LOAD_BALANCING_GEN_PROBE
-                            .run_test(&ctx, "DescribeTags", test_elastic_load_balancing_gen_probe_describe_tags(&client))
-                            .await
-                    })
-                }),
-            );
-        }
         impls
     }
 
@@ -1444,36 +1430,6 @@ fn test_elastic_load_balancing_gen_probe_describe_load_balancer_policy_types(cli
         assert: vec![
             scenario::response_field(vec![
                 scenario::is_list("$.PolicyTypeDescriptions"),
-            ]),
-        ],
-    }
-}
-
-fn test_elastic_load_balancing_gen_probe_describe_tags(client: &aws_sdk_elasticloadbalancing::Client) -> Test {
-    Test {
-        call: Call {
-            op: "DescribeTags",
-            params: scenario::lit(::serde_json::json!({"LoadBalancerNames": ["compat-scenario-nonexistent"]})),
-            export: Vec::new(),
-            invoke: {
-                let client = client.clone();
-                scenario::invoker(move |_b| {
-                    let client = client.clone();
-                    Box::pin(async move {
-                        let capture = scenario::Capture::new();
-                        let request = client
-                            .describe_tags()
-                            .load_balancer_names("compat-scenario-nonexistent")
-                            .customize()
-                            .interceptor(capture.clone());
-                        Ok(scenario::observe(request.send().await, &capture))
-                    })
-                })
-            },
-        },
-        assert: vec![
-            scenario::response_field(vec![
-                scenario::is_list("$.TagDescriptions"),
             ]),
         ],
     }

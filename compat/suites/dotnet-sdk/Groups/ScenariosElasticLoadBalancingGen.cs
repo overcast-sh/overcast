@@ -53,7 +53,6 @@ internal sealed class ScenariosElasticLoadBalancing : IServiceGroup
         ["elastic-load-balancing-gen-probe:DescribeAccountLimits"] = TestElasticLoadBalancingGenProbeDescribeAccountLimits,
         ["elastic-load-balancing-gen-probe:DescribeLoadBalancerAttributes"] = TestElasticLoadBalancingGenProbeDescribeLoadBalancerAttributes,
         ["elastic-load-balancing-gen-probe:DescribeLoadBalancerPolicyTypes"] = TestElasticLoadBalancingGenProbeDescribeLoadBalancerPolicyTypes,
-        ["elastic-load-balancing-gen-probe:DescribeTags"] = TestElasticLoadBalancingGenProbeDescribeTags,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
@@ -801,29 +800,6 @@ internal sealed class ScenariosElasticLoadBalancing : IServiceGroup
         [
             Clause.ResponseField(
                 Check.IsList("$.PolicyTypeDescriptions")
-            )
-        ],
-    });
-
-    private Task TestElasticLoadBalancingGenProbeDescribeTags(TestContext t) => GroupElasticLoadBalancingGenProbe.RunTestAsync(t, "DescribeTags", new ScenarioTest
-    {
-        Call = new ScenarioCall
-        {
-            Op = "DescribeTags",
-            Params = "{\"LoadBalancerNames\":[\"compat-scenario-nonexistent\"]}",
-            Build = b =>
-            {
-                var request = new DescribeTagsRequest();
-                request.LoadBalancerNames = ["compat-scenario-nonexistent"];
-                return request;
-            },
-            SendAsync = async request =>
-                await Cl().DescribeTagsAsync((DescribeTagsRequest)request),
-        },
-        Assert =
-        [
-            Clause.ResponseField(
-                Check.IsList("$.TagDescriptions")
             )
         ],
     });

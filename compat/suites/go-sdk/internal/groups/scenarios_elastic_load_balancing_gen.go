@@ -40,7 +40,6 @@ func ScenariosElasticLoadBalancing(c *clients.Clients) ServiceGroup {
 			"elastic-load-balancing-gen-probe:DescribeAccountLimits":                     g.testElasticLoadBalancingGenProbeDescribeAccountLimits,
 			"elastic-load-balancing-gen-probe:DescribeLoadBalancerAttributes":            g.testElasticLoadBalancingGenProbeDescribeLoadBalancerAttributes,
 			"elastic-load-balancing-gen-probe:DescribeLoadBalancerPolicyTypes":           g.testElasticLoadBalancingGenProbeDescribeLoadBalancerPolicyTypes,
-			"elastic-load-balancing-gen-probe:DescribeTags":                              g.testElasticLoadBalancingGenProbeDescribeTags,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
 			"elastic-load-balancing-gen-loadbalancer":       g.setupElasticLoadBalancingGenLoadbalancer,
@@ -763,28 +762,6 @@ func (g *elasticLoadBalancingScenarios) testElasticLoadBalancingGenProbeDescribe
 		Assert: []scenario.Clause{
 			scenario.ResponseField(
 				scenario.IsList("$.PolicyTypeDescriptions"),
-			),
-		},
-	})
-}
-
-func (g *elasticLoadBalancingScenarios) testElasticLoadBalancingGenProbeDescribeTags(ctx context.Context, t *harness.TestContext) error {
-	return groupElasticLoadBalancingGenProbe.RunTest(ctx, t, "DescribeTags", scenario.Test{
-		Call: scenario.Call{
-			Op:     "DescribeTags",
-			Params: `{"LoadBalancerNames":["compat-scenario-nonexistent"]}`,
-			Build: func(b *scenario.Binder) any {
-				in := &elasticloadbalancing.DescribeTagsInput{}
-				in.LoadBalancerNames = []string{"compat-scenario-nonexistent"}
-				return in
-			},
-			Send: func(ctx context.Context, in any) (any, error) {
-				return g.cl().DescribeTags(ctx, in.(*elasticloadbalancing.DescribeTagsInput))
-			},
-		},
-		Assert: []scenario.Clause{
-			scenario.ResponseField(
-				scenario.IsList("$.TagDescriptions"),
 			),
 		},
 	})
