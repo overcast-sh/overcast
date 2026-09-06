@@ -928,7 +928,7 @@ declared in [compat/parity-debt.json](./parity-debt.json).
   calling operations one at a time, so registry-wide uniformity does not apply
   to it and it runs only groups scoped to it.
 
-  This has two halves, and they are not symmetric:
+  This has three cases, and they are not symmetric:
 
   - **On a hand-written group** (an entry in `compat/suites/registry.json`),
     `suites` scoping remains reserved for `cdk-lifecycle`. Reach for it rarely;
@@ -940,10 +940,20 @@ declared in [compat/parity-debt.json](./parity-debt.json).
     for that recipe. It is written by the generator and widens automatically as
     typed backends land (see the model-driven coverage plan); it is never
     hand-edited.
+  - **On a ported group** — a hand-written group carrying `scenario`, whose
+    tests an authored IR scenario resolves — `suites` is neither written nor
+    left to default: it is **derived**, from the same backend availability a
+    generated group's comes from, and recorded by `cmd/compatgen` in the
+    **`ported` index** of `registry.generated.json`. `cmd/compat` applies it on
+    load, so the parity checker asks of a ported group exactly what it asks of
+    a generated one, and a suite with no backend for it neither implements it
+    nor owes debt for it. The hand-written entry carries no `suites` of its
+    own, and the `cdk-lifecycle` allowlist is untouched by any of this.
 
-  `scripts/validate-compat-registry.py` enforces both halves: a hand-written
-  group with `suites` outside the allowed set fails, and a generated group
-  without `suites` fails.
+  `scripts/validate-compat-registry.py` enforces all three: a hand-written
+  group with `suites` outside the allowed set fails, a generated group without
+  `suites` fails, and a ported group missing from the `ported` index — or an
+  index entry naming a group that is not ported — fails.
 - **`compat/parity-debt.json`** — a group a suite has not implemented *yet*.
   Temporary, and it only shrinks. The check fails if debt grows, if new debt is
   undeclared, or if declared debt is stale (the group is now implemented, so the
@@ -1058,6 +1068,38 @@ differently — the evidence the flip PR cites when it deletes the native code.
 A shadow group is always in state `candidate` and never promotes;
 `--promote-generated` skips it. Like every field above it is derived by
 `cmd/compatgen`, from the group's own name, and is never hand-written.
+
+#### `scenario` on a hand-written group — a ported group
+
+`scenario` is the one field above that is legal in **both** registries.
+`generated`, `state`, `shadowOf` and `parallel` each state a fact about
+generator output, and a hand-written copy of one could only contradict it;
+`scenario` states something a human decides. On a hand-written group it means
+the group has been **ported** (#1903, and
+[compat/model/README.md § Authored scenarios](./model/README.md#authored-scenarios)):
+an authored IR scenario under `compat/model/authored/` resolves its tests
+through each suite's scenario backend, and the per-language implementations are
+gone.
+
+Three rules follow, and each is enforced rather than trusted:
+
+- **A ported group has no per-suite implementations.** The port replaces them;
+  an impl left behind for one of its tests is a duplicate, not a fallback, and
+  in `java-sdk` and `dotnet-sdk` a leftover *setup* hook aborts the run. Delete
+  them in the same change that adds the field.
+- **The two halves of a port are one change.** `cmd/compatgen` refuses a
+  registry group carrying `scenario` while its authored scenario is still a
+  `-shadow`, refuses a live authored group whose registry entry carries no
+  `scenario`, and refuses a `scenario` no authored file backs. Either half
+  alone fails silently: the interpreting suites resolve nothing while the typed
+  suites resolve by group name and run the port anyway.
+- **Its `suites` is derived, never written** — see the `ported` index in
+  [§ Uniformity](#2-uniformity--the-registry-is-the-contract) above.
+
+`cmd/compat`'s `lintGeneratedRegistry` and
+`scripts/validate-compat-registry.py` both hold the hand-written registry to
+the shortened generated-only list and both check the `ported` join in each
+direction.
 
 **Every loader concatenates `registry.generated.json`** onto `registry.json`
 (hand-written groups first) and honours `"suites"` on **every** group, generated

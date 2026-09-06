@@ -147,3 +147,52 @@ describe("the scenario backend", () => {
     assert.deepEqual(other.teardown, {});
   });
 });
+
+/**
+ * A ported group: a hand-written registry entry carrying `scenario` and no
+ * `generated` flag, its tests resolved by an authored scenario rather than by
+ * a per-language implementation (docs/plans/compat-coverage-modelgen.md §3.11
+ * step 3, #1903).
+ *
+ * The file used is the real authored one, still under its shadow name because
+ * nothing is flipped yet. What these cases are about is the *absent
+ * `generated` flag*, not the group's name.
+ */
+const AUTHORED = "compat/model/authored/sqs-queues.json";
+
+function portedRegistry(name: string, scenario: string): Registry {
+  return {
+    version: 1,
+    groups: [{ service: "sqs", name, scenario, tests: [] }],
+  };
+}
+
+describe("a ported hand-written group", () => {
+  const support = makeScenarioSupport(portedRegistry("sqs-queues-shadow", AUTHORED), {
+    suite: "node-js-sdk",
+  });
+
+  it("resolves its tests through the scenario backend", () => {
+    assert.equal(
+      typeof support.backend("sqs-queues-shadow", "SetQueueAttributes", AUTHORED),
+      "function",
+    );
+  });
+
+  it("gets its setup and teardown hooks", () => {
+    // This is the half that used to be missing: makeScenarioSupport gated on
+    // `generated` while the backend gated on `scenario`, so a ported lifecycle
+    // group got every one of its tests and none of its setup — and ran them
+    // all against a queue that was never created.
+    assert.equal(typeof support.setup["sqs-queues-shadow"], "function");
+    assert.equal(typeof support.teardown["sqs-queues-shadow"], "function");
+  });
+
+  it("is still scoped away from a suite its `suites` excludes", () => {
+    const scoped = portedRegistry("sqs-queues-shadow", AUTHORED);
+    scoped.groups[0].suites = ["python-sdk"];
+    const other = makeScenarioSupport(scoped, { suite: "node-js-sdk" });
+    assert.deepEqual(other.setup, {});
+    assert.deepEqual(other.teardown, {});
+  });
+});

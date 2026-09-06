@@ -38,15 +38,19 @@ type parityGroup struct {
 	Name    string `json:"name"`
 	// Suites restricts the group to specific suites. Empty = every suite.
 	Suites []string `json:"suites"`
-	// Generated, State, Scenario and Parallel are set only on groups from
+	// Generated, State and Parallel are set only on groups from
 	// registry.generated.json. They are parsed from the hand-written registry
 	// too so lintGeneratedRegistry can reject a hand-written group that carries
 	// them — the shared schema has to permit the properties for the generated
 	// schema to extend its TestGroup by $ref. See generatedregistry.go.
 	Generated bool   `json:"generated"`
 	State     string `json:"state"`
-	Scenario  string `json:"scenario"`
 	Parallel  bool   `json:"parallel"`
+	// Scenario is the IR file that resolves the group's tests. A generated
+	// group always carries it; a hand-written group carries it once it has
+	// been ported (#1903), which is how it says the scenario backend resolves
+	// its tests and no suite implements them by hand any more.
+	Scenario string `json:"scenario"`
 	// ShadowOf is the same: only a generated group carries it, and it names the
 	// hand-written group the authored scenario behind it is being compared
 	// against before the native implementations are deleted.
@@ -390,6 +394,14 @@ func readParityRegistry(path string) (*parityRegistry, error) {
 // carries debt for it. That is deliberate — a model refresh that adds a
 // thousand tests must not add a thousand entries of debt to six suites that
 // were never asked to run them.
+//
+// A *ported* hand-written group — one carrying `scenario`, resolved by an
+// authored scenario rather than by per-language implementations — is executed
+// by the same backends and so needs the same scoping. It cannot carry `suites`
+// itself, because that list is derived from backend availability rather than
+// decided by a human, so it is applied here from the generated sibling's
+// `ported` index (applyPortedSuites). Downstream nothing knows the difference:
+// expects() sees one `suites` list whatever produced it.
 func readParityRegistries(registryPath, generatedPath string) (*parityRegistry, error) {
 	reg, err := readParityRegistry(registryPath)
 	if err != nil {
@@ -402,6 +414,7 @@ func readParityRegistries(registryPath, generatedPath string) (*parityRegistry, 
 	if issues := lintGeneratedRegistry(reg, gen); len(issues) > 0 {
 		return nil, generatedRegistryIssueError(generatedPath, issues)
 	}
+	applyPortedSuites(reg, gen)
 	reg.Groups = append(reg.Groups, gen.parityGroups()...)
 	return reg, nil
 }

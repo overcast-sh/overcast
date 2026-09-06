@@ -864,9 +864,32 @@ nothing:
    cites. A pair where one half reported nothing is a divergence too: a suite
    that ran the native group and not the shadow has proved nothing about the
    port.
-3. **The flip.** Rename the group in the authored file to `<group>`, move the
-   registry entry into the hand-written `registry.json` with a `scenario`
-   field, delete the native implementations, regenerate.
+3. **The flip.** Five edits, in one PR, citing the nightly summary from step 2:
+
+   1. rename the group in `authored/<group>.json` from `<group>-shadow` to
+      `<group>`;
+   2. add `"scenario": "compat/model/authored/<group>.json"` to the
+      hand-written `registry.json` entry — that entry never moves, because the
+      names on it are what `compat/baseline/`, `compat/flaky.json` and
+      `compat/parity-debt.json` key on;
+   3. delete the native implementations in all seven suites, **with their
+      setup and teardown hooks and their impl keys** — a leftover impl is a
+      duplicate rather than a fallback, and a leftover setup hook aborts the
+      `java-sdk` and `dotnet-sdk` runs;
+   4. regenerate (`make generate-compat-model`): the group leaves
+      `registry.generated.json`'s `groups` (it would now collide with the
+      hand-written entry) and appears in its **`ported`** index instead,
+      carrying the `suites` derived from backend availability;
+   5. leave `compat/baseline/` alone. The names are unchanged, which is the
+      whole point of the join keys; `dotnet-sdk` and `rust-sdk` move from skip
+      to pass on the next promotion on `main`.
+
+   Steps 1 and 2 are one decision and the generator treats them as one:
+   `scenario` on a group whose authored scenario is still a shadow is refused,
+   and so is a live authored group whose registry entry does not name it. Half
+   a flip fails silently otherwise — `cli` and `python-sdk` read `scenario` and
+   would resolve nothing, while `go-sdk`, `java-sdk`, `dotnet-sdk` and
+   `rust-sdk` resolve by group name and would run the port regardless.
 
 A divergence blocks step 3, never the gate, and is triaged as an IR
 expressiveness gap or a latent bug in one of the eight copies — which is how
@@ -881,6 +904,37 @@ asked, and a group with a scheduled deletion date has no business in the gate.
 `cmd/compat`'s lint and `scripts/validate-compat-registry.py` both refuse a
 shadow that names a group the hand-written registry does not declare, one whose
 test names have drifted from it, and one somebody has gated.
+
+### What a ported group's `suites` is, and where it lives
+
+A ported group is executed by whichever suites have a scenario backend for it —
+the same question a generated group's `suites` answers, and the same answer.
+It cannot be written on the hand-written entry: it is derived from the
+`scenarioBackends` table and from which emitters refused the group, so it
+widens on its own as backends land and narrows the first time an emitter cannot
+express a member. A hand-written copy would be a human maintaining generator
+output.
+
+So `cmd/compatgen` writes it into a `ported` index at the top of
+`registry.generated.json`, one small entry per ported group:
+
+```json
+"ported": [
+  {
+    "group": "sqs-queues",
+    "scenario": "compat/model/authored/sqs-queues.json",
+    "suites": ["cli", "dotnet-sdk", "go-sdk", "java-sdk", "node-js-sdk", "python-sdk", "rust-sdk"]
+  }
+]
+```
+
+`cmd/compat` applies it when it concatenates the two registries, so
+`--check-parity` scopes a ported group exactly as it scopes a generated one and
+a suite with no backend for it owes no debt. `registry.json` stays hand-written
+and the generator never edits it. The two files are then one statement in two
+halves, and both the Go lint and the Python validator check the join in each
+direction: a group carrying `scenario` and absent from the index, or an index
+entry naming a group that is not ported, is refused.
 
 ## Refusals
 
