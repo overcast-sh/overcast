@@ -27,6 +27,9 @@ func ScenariosElasticLoadBalancing(c *clients.Clients) ServiceGroup {
 			"elastic-load-balancing-gen-loadbalancer:CreateLoadBalancer":                 g.testElasticLoadBalancingGenLoadbalancerCreateLoadBalancer,
 			"elastic-load-balancing-gen-loadbalancer:DescribeLoadBalancers":              g.testElasticLoadBalancingGenLoadbalancerDescribeLoadBalancers,
 			"elastic-load-balancing-gen-loadbalancer:ConfigureHealthCheck":               g.testElasticLoadBalancingGenLoadbalancerConfigureHealthCheck,
+			"elastic-load-balancing-gen-loadbalancer:AddTags":                            g.testElasticLoadBalancingGenLoadbalancerAddTags,
+			"elastic-load-balancing-gen-loadbalancer:DescribeTags":                       g.testElasticLoadBalancingGenLoadbalancerDescribeTags,
+			"elastic-load-balancing-gen-loadbalancer:RemoveTags":                         g.testElasticLoadBalancingGenLoadbalancerRemoveTags,
 			"elastic-load-balancing-gen-loadbalancer:CreateLoadBalancerListeners":        g.testElasticLoadBalancingGenLoadbalancerCreateLoadBalancerListeners,
 			"elastic-load-balancing-gen-loadbalancer:DeleteLoadBalancerListeners":        g.testElasticLoadBalancingGenLoadbalancerDeleteLoadBalancerListeners,
 			"elastic-load-balancing-gen-loadbalancer:ModifyLoadBalancerAttributes":       g.testElasticLoadBalancingGenLoadbalancerModifyLoadBalancerAttributes,
@@ -246,6 +249,118 @@ func (g *elasticLoadBalancingScenarios) testElasticLoadBalancingGenLoadbalancerC
 						},
 					},
 					scenario.Equals("$.LoadBalancerDescriptions[0].HealthCheck.Interval", 30),
+				),
+			),
+		},
+	})
+}
+
+func (g *elasticLoadBalancingScenarios) testElasticLoadBalancingGenLoadbalancerAddTags(ctx context.Context, t *harness.TestContext) error {
+	return groupElasticLoadBalancingGenLoadbalancer.RunTest(ctx, t, "AddTags", scenario.Test{
+		Call: scenario.Call{
+			Op:     "AddTags",
+			Params: `{"LoadBalancerNames":[{"$ref":"loadbalancer.name"}],"Tags":[{"Key":"compat","Value":"scenario"}]}`,
+			Build: func(b *scenario.Binder) any {
+				in := &elasticloadbalancing.AddTagsInput{}
+				in.LoadBalancerNames = []string{
+					scenario.Bind[string](b, "LoadBalancerNames", scenario.Ref("loadbalancer.name")),
+				}
+				in.Tags = []types.Tag{{Key: aws.String("compat"), Value: aws.String("scenario")}}
+				return in
+			},
+			Send: func(ctx context.Context, in any) (any, error) {
+				return g.cl().AddTags(ctx, in.(*elasticloadbalancing.AddTagsInput))
+			},
+		},
+		Assert: []scenario.Clause{
+			scenario.Eventually(30, 2000,
+				scenario.ListContains(
+					&scenario.Call{
+						Op:     "DescribeTags",
+						Params: `{"LoadBalancerNames":[{"$ref":"loadbalancer.name"}]}`,
+						Build: func(b *scenario.Binder) any {
+							in := &elasticloadbalancing.DescribeTagsInput{}
+							in.LoadBalancerNames = []string{
+								scenario.Bind[string](b, "LoadBalancerNames", scenario.Ref("loadbalancer.name")),
+							}
+							return in
+						},
+						Send: func(ctx context.Context, in any) (any, error) {
+							return g.cl().DescribeTags(ctx, in.(*elasticloadbalancing.DescribeTagsInput))
+						},
+					},
+					"$.TagDescriptions[0].Tags",
+					scenario.Where("$.Key", "compat"),
+					scenario.Where("$.Value", "scenario"),
+				),
+			),
+		},
+	})
+}
+
+func (g *elasticLoadBalancingScenarios) testElasticLoadBalancingGenLoadbalancerDescribeTags(ctx context.Context, t *harness.TestContext) error {
+	return groupElasticLoadBalancingGenLoadbalancer.RunTest(ctx, t, "DescribeTags", scenario.Test{
+		Call: scenario.Call{
+			Op:     "DescribeTags",
+			Params: `{"LoadBalancerNames":[{"$ref":"loadbalancer.name"}]}`,
+			Build: func(b *scenario.Binder) any {
+				in := &elasticloadbalancing.DescribeTagsInput{}
+				in.LoadBalancerNames = []string{
+					scenario.Bind[string](b, "LoadBalancerNames", scenario.Ref("loadbalancer.name")),
+				}
+				return in
+			},
+			Send: func(ctx context.Context, in any) (any, error) {
+				return g.cl().DescribeTags(ctx, in.(*elasticloadbalancing.DescribeTagsInput))
+			},
+		},
+		Assert: []scenario.Clause{
+			scenario.ListContains(
+				nil,
+				"$.TagDescriptions[0].Tags",
+				scenario.Where("$.Key", "compat"),
+				scenario.Where("$.Value", "scenario"),
+			),
+		},
+	})
+}
+
+func (g *elasticLoadBalancingScenarios) testElasticLoadBalancingGenLoadbalancerRemoveTags(ctx context.Context, t *harness.TestContext) error {
+	return groupElasticLoadBalancingGenLoadbalancer.RunTest(ctx, t, "RemoveTags", scenario.Test{
+		Call: scenario.Call{
+			Op:     "RemoveTags",
+			Params: `{"LoadBalancerNames":[{"$ref":"loadbalancer.name"}],"Tags":[{"Key":"compat"}]}`,
+			Build: func(b *scenario.Binder) any {
+				in := &elasticloadbalancing.RemoveTagsInput{}
+				in.LoadBalancerNames = []string{
+					scenario.Bind[string](b, "LoadBalancerNames", scenario.Ref("loadbalancer.name")),
+				}
+				in.Tags = []types.TagKeyOnly{{Key: aws.String("compat")}}
+				return in
+			},
+			Send: func(ctx context.Context, in any) (any, error) {
+				return g.cl().RemoveTags(ctx, in.(*elasticloadbalancing.RemoveTagsInput))
+			},
+		},
+		Assert: []scenario.Clause{
+			scenario.Eventually(30, 2000,
+				scenario.AbsentFromList(
+					&scenario.Call{
+						Op:     "DescribeTags",
+						Params: `{"LoadBalancerNames":[{"$ref":"loadbalancer.name"}]}`,
+						Build: func(b *scenario.Binder) any {
+							in := &elasticloadbalancing.DescribeTagsInput{}
+							in.LoadBalancerNames = []string{
+								scenario.Bind[string](b, "LoadBalancerNames", scenario.Ref("loadbalancer.name")),
+							}
+							return in
+						},
+						Send: func(ctx context.Context, in any) (any, error) {
+							return g.cl().DescribeTags(ctx, in.(*elasticloadbalancing.DescribeTagsInput))
+						},
+					},
+					"$.TagDescriptions[0].Tags",
+					scenario.Where("$.Key", "compat"),
 				),
 			),
 		},

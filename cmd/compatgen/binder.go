@@ -145,23 +145,33 @@ func (b *binder) bindMember(group, op, member, target string, scope bindScope) (
 	// supplies the member, the refusal names the bind. live records what a
 	// rule-1 or rule-2 binding would have been inside a probe group, where
 	// both rules are off.
+	//
+	// A bind the recipe wrapped in a list supplies the same reference inside
+	// a one-element list, for a member the service models as a list of what
+	// the export names (ELB Classic's LoadBalancerNames). The element's kind
+	// is not checked here: bind hands every value it produces to checkValue,
+	// which walks a list target into its member shape and compares the $ref's
+	// exported kind there. A wrap that contradicts the model — a list bind on
+	// a scalar member, or an export of the wrong kind — is therefore an error
+	// naming the member, exactly as a mistyped literal in `params` is, and
+	// not a refusal.
 	var unavailable, live string
 	for _, res := range scope.resources {
-		ref, ok := res.Binds[member]
+		bind, ok := res.Binds[member]
 		if !ok {
 			continue
 		}
 		if scope.probe {
 			if live == "" {
-				live = ref
+				live = bind.String()
 			}
 			continue
 		}
-		if _, available := scope.exports[ref]; available {
-			return map[string]any{"$ref": ref}, nil
+		if _, available := scope.exports[bind.Ref]; available {
+			return bind.value(), nil
 		}
 		if unavailable == "" {
-			unavailable = ref
+			unavailable = bind.String()
 		}
 	}
 	// Rule 2: an export with exactly the member's name.

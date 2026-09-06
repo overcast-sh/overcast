@@ -14,6 +14,7 @@
 //	[]types.SprocketTag        TagSprocketInput.Tags            → []types.SprocketTag{{…}}
 //	[]types.GaugeTag           TagGaugeInput.Tags               → {TagKey, TagValue} spelling (KMS)
 //	[]types.ValveTagKeyOnly    UntagValveInput.TagKeys          → key-only untag list (ELB)
+//	[]string                   TagHubInput.HubNames             → a list bound from a scalar export
 //	*time.Time                 ListWidgetsInput.CreatedAfter    → refused (no literal)
 //	int32                      RotateWidgetInput.Angle          → a bare literal; 0 is refused
 //	types.GaugeCursor          ListGaugesInput.Cursor           → refused (a union)
@@ -172,4 +173,25 @@ type ListValveTagsInput struct {
 type UntagValveInput struct {
 	TagKeys []types.ValveTagKeyOnly
 	ValveId *string
+}
+
+type DescribeHubInput struct{}
+
+// TagHubInput, DescribeHubTagsInput and UntagHubInput take the resource
+// identifier as a list (HubNames) rather than as a scalar — the shape ELB
+// Classic's AddTags, DescribeTags and RemoveTags use. The `hub` resource
+// exports the singular name and wraps it in `binds`, so what the emitter has
+// to spell here is a list holding one bound expression.
+type TagHubInput struct {
+	HubNames []string
+	Tags     []types.SprocketTag
+}
+
+type DescribeHubTagsInput struct {
+	HubNames []string
+}
+
+type UntagHubInput struct {
+	HubNames []string
+	TagKeys  []string
 }

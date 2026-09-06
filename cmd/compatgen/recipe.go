@@ -106,19 +106,74 @@ type resource struct {
 	Requires  []string `json:"requires,omitempty"`
 	// Create is absent for a pre-existing resource (an organization), whose
 	// exports come from its read and which is never set up or torn down.
-	Create     *recipeCall       `json:"create,omitempty"`
-	Exports    map[string]string `json:"exports,omitempty"`
-	Derived    []derivedExport   `json:"derived,omitempty"`
-	Binds      map[string]string `json:"binds,omitempty"`
-	Read       *readSpec         `json:"read,omitempty"`
-	Reads      []readSpec        `json:"reads,omitempty"`
-	List       *listSpec         `json:"list,omitempty"`
-	Mutable    []mutation        `json:"mutable,omitempty"`
-	Tags       *tagSpec          `json:"tags,omitempty"`
-	Delete     *recipeCall       `json:"delete,omitempty"`
-	NotFound   *notFoundSpec     `json:"notFound,omitempty"`
-	Async      *retrySpec        `json:"async,omitempty"`
-	Operations []authoredOp      `json:"operations,omitempty"`
+	Create     *recipeCall        `json:"create,omitempty"`
+	Exports    map[string]string  `json:"exports,omitempty"`
+	Derived    []derivedExport    `json:"derived,omitempty"`
+	Binds      map[string]bindRef `json:"binds,omitempty"`
+	Read       *readSpec          `json:"read,omitempty"`
+	Reads      []readSpec         `json:"reads,omitempty"`
+	List       *listSpec          `json:"list,omitempty"`
+	Mutable    []mutation         `json:"mutable,omitempty"`
+	Tags       *tagSpec           `json:"tags,omitempty"`
+	Delete     *recipeCall        `json:"delete,omitempty"`
+	NotFound   *notFoundSpec      `json:"notFound,omitempty"`
+	Async      *retrySpec         `json:"async,omitempty"`
+	Operations []authoredOp       `json:"operations,omitempty"`
+}
+
+// bindRef is one `binds` entry: the context path supplying an input member,
+// and whether the recipe wrapped that path in a one-element list.
+//
+// A recipe writes either the path — `"WidgetId": "widget.id"` — or the path
+// inside a list — `"LoadBalancerNames": ["loadbalancer.name"]` — for a member
+// the service models as a *list* of the thing the export names. ELB Classic
+// is the case that forced it: `AddTags`, `RemoveTags` and `DescribeTags` all
+// take `LoadBalancerNames`, while the resource exports the singular name its
+// `DescribeLoadBalancers` read needs.
+//
+// One level of wrapping is all there is, and deliberately: a bind supplies
+// one exported value, so the only question a recipe can be asked is whether
+// the member takes that value bare or in a list of its own. Anything deeper
+// is a literal the recipe writes out in `params`.
+type bindRef struct {
+	Ref  string
+	List bool
+}
+
+func (b *bindRef) UnmarshalJSON(contents []byte) error {
+	var path string
+	if err := json.Unmarshal(contents, &path); err == nil {
+		*b = bindRef{Ref: path}
+		return nil
+	}
+	var wrapped []string
+	if err := json.Unmarshal(contents, &wrapped); err != nil {
+		return fmt.Errorf("a bind is a context path, or a one-element list holding one: %s", contents)
+	}
+	if len(wrapped) != 1 {
+		return fmt.Errorf("a list bind wraps exactly one context path, not %d: %s", len(wrapped), contents)
+	}
+	*b = bindRef{Ref: wrapped[0], List: true}
+	return nil
+}
+
+// value is what binding rule 1 supplies for the member: the reference, or a
+// one-element list holding it.
+func (b bindRef) value() any {
+	ref := map[string]any{"$ref": b.Ref}
+	if b.List {
+		return []any{ref}
+	}
+	return ref
+}
+
+// String renders the bind the way the recipe wrote it, so a refusal detail
+// names a wrapped bind as wrapped.
+func (b bindRef) String() string {
+	if b.List {
+		return "[" + b.Ref + "]"
+	}
+	return b.Ref
 }
 
 // recipeCall names an operation and the params the recipe supplies for it.
@@ -357,8 +412,8 @@ func (res resource) validate() error {
 			return fmt.Errorf("derived[%d] re-exports %q, which create already exports", i, d.Export)
 		}
 	}
-	for member, ref := range res.Binds {
-		if !validContextPath(ref) {
+	for _, member := range sortedStringKeys(res.Binds) {
+		if ref := res.Binds[member].Ref; !validContextPath(ref) {
 			return fmt.Errorf("binds.%s: %q is not a context path", member, ref)
 		}
 	}

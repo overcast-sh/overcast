@@ -103,6 +103,48 @@ impl ServiceGroup for ScenariosElasticLoadBalancing {
         {
             let client = self.client.clone();
             impls.insert(
+                "elastic-load-balancing-gen-loadbalancer:AddTags".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_ELASTIC_LOAD_BALANCING_GEN_LOADBALANCER
+                            .run_test(&ctx, "AddTags", test_elastic_load_balancing_gen_loadbalancer_add_tags(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
+                "elastic-load-balancing-gen-loadbalancer:DescribeTags".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_ELASTIC_LOAD_BALANCING_GEN_LOADBALANCER
+                            .run_test(&ctx, "DescribeTags", test_elastic_load_balancing_gen_loadbalancer_describe_tags(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
+                "elastic-load-balancing-gen-loadbalancer:RemoveTags".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_ELASTIC_LOAD_BALANCING_GEN_LOADBALANCER
+                            .run_test(&ctx, "RemoveTags", test_elastic_load_balancing_gen_loadbalancer_remove_tags(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
                 "elastic-load-balancing-gen-loadbalancer:CreateLoadBalancerListeners".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
@@ -631,6 +673,180 @@ fn test_elastic_load_balancing_gen_loadbalancer_configure_health_check(client: &
                     },
                     vec![
                         scenario::equals("$.LoadBalancerDescriptions[0].HealthCheck.Interval", scenario::lit(::serde_json::json!(30))),
+                    ],
+                ),
+            ),
+        ],
+    }
+}
+
+fn test_elastic_load_balancing_gen_loadbalancer_add_tags(client: &aws_sdk_elasticloadbalancing::Client) -> Test {
+    Test {
+        call: Call {
+            op: "AddTags",
+            params: scenario::map(vec![
+                ("LoadBalancerNames", scenario::list(vec![scenario::context("loadbalancer.name")])),
+                ("Tags", scenario::lit(::serde_json::json!([{"Key": "compat", "Value": "scenario"}]))),
+            ]),
+            export: Vec::new(),
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .add_tags()
+                            .load_balancer_names(b.string("LoadBalancerNames[0]")?)
+                            .tags(
+                                aws_sdk_elasticloadbalancing::types::Tag::builder()
+                                    .key("compat")
+                                    .value("scenario")
+                                    .build()
+                                    .map_err(|err| scenario::build_error("Tags[0]", err))?
+                            )
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::eventually(30, 2000,
+                scenario::list_contains(
+                    Some(Call {
+                        op: "DescribeTags",
+                        params: scenario::map(vec![
+                            ("LoadBalancerNames", scenario::list(vec![
+                                scenario::context("loadbalancer.name"),
+                            ])),
+                        ]),
+                        export: Vec::new(),
+                        invoke: {
+                            let client = client.clone();
+                            scenario::invoker(move |b| {
+                                let client = client.clone();
+                                Box::pin(async move {
+                                    let capture = scenario::Capture::new();
+                                    let request = client
+                                        .describe_tags()
+                                        .load_balancer_names(b.string("LoadBalancerNames[0]")?)
+                                        .customize()
+                                        .interceptor(capture.clone());
+                                    Ok(scenario::observe(request.send().await, &capture))
+                                })
+                            })
+                        },
+                    }),
+                    "$.TagDescriptions[0].Tags",
+                    vec![
+                        scenario::where_entry("$.Key", scenario::lit(::serde_json::json!("compat"))),
+                        scenario::where_entry("$.Value", scenario::lit(::serde_json::json!("scenario"))),
+                    ],
+                ),
+            ),
+        ],
+    }
+}
+
+fn test_elastic_load_balancing_gen_loadbalancer_describe_tags(client: &aws_sdk_elasticloadbalancing::Client) -> Test {
+    Test {
+        call: Call {
+            op: "DescribeTags",
+            params: scenario::map(vec![
+                ("LoadBalancerNames", scenario::list(vec![scenario::context("loadbalancer.name")])),
+            ]),
+            export: Vec::new(),
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .describe_tags()
+                            .load_balancer_names(b.string("LoadBalancerNames[0]")?)
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::list_contains(
+                None,
+                "$.TagDescriptions[0].Tags",
+                vec![
+                    scenario::where_entry("$.Key", scenario::lit(::serde_json::json!("compat"))),
+                    scenario::where_entry("$.Value", scenario::lit(::serde_json::json!("scenario"))),
+                ],
+            ),
+        ],
+    }
+}
+
+fn test_elastic_load_balancing_gen_loadbalancer_remove_tags(client: &aws_sdk_elasticloadbalancing::Client) -> Test {
+    Test {
+        call: Call {
+            op: "RemoveTags",
+            params: scenario::map(vec![
+                ("LoadBalancerNames", scenario::list(vec![scenario::context("loadbalancer.name")])),
+                ("Tags", scenario::lit(::serde_json::json!([{"Key": "compat"}]))),
+            ]),
+            export: Vec::new(),
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .remove_tags()
+                            .load_balancer_names(b.string("LoadBalancerNames[0]")?)
+                            .tags(
+                                aws_sdk_elasticloadbalancing::types::TagKeyOnly::builder()
+                                    .key("compat")
+                                    .build()
+                            )
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::eventually(30, 2000,
+                scenario::absent_from_list(
+                    Some(Call {
+                        op: "DescribeTags",
+                        params: scenario::map(vec![
+                            ("LoadBalancerNames", scenario::list(vec![
+                                scenario::context("loadbalancer.name"),
+                            ])),
+                        ]),
+                        export: Vec::new(),
+                        invoke: {
+                            let client = client.clone();
+                            scenario::invoker(move |b| {
+                                let client = client.clone();
+                                Box::pin(async move {
+                                    let capture = scenario::Capture::new();
+                                    let request = client
+                                        .describe_tags()
+                                        .load_balancer_names(b.string("LoadBalancerNames[0]")?)
+                                        .customize()
+                                        .interceptor(capture.clone());
+                                    Ok(scenario::observe(request.send().await, &capture))
+                                })
+                            })
+                        },
+                    }),
+                    "$.TagDescriptions[0].Tags",
+                    vec![
+                        scenario::where_entry("$.Key", scenario::lit(::serde_json::json!("compat"))),
                     ],
                 ),
             ),

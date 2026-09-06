@@ -1721,7 +1721,10 @@ func cloneAssertion(a assertion) assertion {
 	return out
 }
 
-func sortedStringKeys(m map[string]string) []string {
+// sortedStringKeys is the deterministic iteration order of a string-keyed
+// map. It is generic in the value type so that a map the recipe grows — one
+// of bindRef, say — needs no near-identical helper of its own.
+func sortedStringKeys[V any](m map[string]V) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)

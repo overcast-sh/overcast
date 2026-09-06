@@ -378,6 +378,24 @@
           ]
         },
         {
+          "name": "AddTags",
+          "depends": [
+            "CreateLoadBalancer"
+          ]
+        },
+        {
+          "name": "DescribeTags",
+          "depends": [
+            "CreateLoadBalancer"
+          ]
+        },
+        {
+          "name": "RemoveTags",
+          "depends": [
+            "CreateLoadBalancer"
+          ]
+        },
+        {
           "name": "CreateLoadBalancerListeners",
           "depends": [
             "CreateLoadBalancer"
@@ -1166,19 +1184,6 @@
           ]
         },
         {
-          "name": "DescribeKeyMetadata",
-          "op": "DescribeKey",
-          "depends": [
-            "CreateKey"
-          ]
-        },
-        {
-          "name": "ListKeys",
-          "depends": [
-            "CreateKey"
-          ]
-        },
-        {
           "name": "TagResource",
           "depends": [
             "CreateKey"
@@ -1192,6 +1197,19 @@
         },
         {
           "name": "UntagResource",
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "DescribeKeyMetadata",
+          "op": "DescribeKey",
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "ListKeys",
           "depends": [
             "CreateKey"
           ]

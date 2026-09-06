@@ -14,7 +14,7 @@ import (
 
 // The fixture: testdata/shapes/widgets.json models a service whose operations
 // cover every emitter decision, testdata/recipes/widgets.json spreads every
-// recipe role over seven resources, and the capability table below decides
+// recipe role over eight resources, and the capability table below decides
 // which operations count as implemented.
 //
 //	CreateWidget … PolishWidget     implemented or in the recipe → lifecycle tests
@@ -25,6 +25,9 @@ import (
 //	DescribeValve                   a second pre-existing resource → read
 //	TagValve, ListValveTags,
 //	UntagValve                      key-only untag list          → lifecycle tags trio
+//	DescribeHub                     a third pre-existing resource → read
+//	TagHub, DescribeHubTags,
+//	UntagHub                        a list-shaped identifier     → lifecycle tags trio
 //	SetWidgetSize                   implemented, update family   → update-without-mutable
 //	ArchiveWidget                   implemented, no role         → probe-of-implemented-op
 //	CreateWidget (as `spare`)       requires an unbindable cog   → setup-refused:cog
@@ -111,6 +114,7 @@ func TestGenerate_lifecycleGroupCoversEveryRole(t *testing.T) {
 		"widgets-gen-gauge":    {"DescribeGauge", "TagGauge", "ListGaugeTags", "UntagGauge", "CalibrateGauge"},
 		"widgets-gen-sprocket": {"CreateSprocket", "GetSprocket", "TagSprocket", "ListSprocketTags", "UntagSprocket", "DeleteSprocket"},
 		"widgets-gen-valve":    {"DescribeValve", "TagValve", "ListValveTags", "UntagValve"},
+		"widgets-gen-hub":      {"DescribeHub", "TagHub", "DescribeHubTags", "UntagHub"},
 		"widgets-gen-probe":    {"ListCogs", "ListGauges", "PingWidgets"},
 	}
 	if len(gen.scenario.Groups) != len(want) {
@@ -476,6 +480,121 @@ func TestGenerate_tagShapeVariants(t *testing.T) {
 	}
 }
 
+// TestGenerate_listShapedIdentifierIsBoundByWrapping proves binding rule 1's
+// one level of list wrapping (#1923) on `hub`, whose TagHub, DescribeHubTags
+// and UntagHub all take the identifier as HubNames — the plural list, as ELB
+// Classic's AddTags, DescribeTags and RemoveTags do — while the resource
+// exports only the singular name. Every one of the three carries the same
+// one-element list holding the resource's own $ref, and the tag role's three
+// tests are generated rather than refused unbound-required-member:HubNames.
+func TestGenerate_listShapedIdentifierIsBoundByWrapping(t *testing.T) {
+	_, gen := generateFixture(t)
+
+	wrapped := []any{map[string]any{"$ref": "hub.name"}}
+	for _, op := range []string{"TagHub", "DescribeHubTags", "UntagHub"} {
+		_, tc, ok := gen.scenario.findTest("widgets-gen-hub", op)
+		if !ok {
+			t.Fatalf("%s was not generated", op)
+		}
+		if got := tc.Call.Params["HubNames"]; !equalJSON(got, wrapped) {
+			t.Errorf("%s HubNames = %+v, want %+v", op, got, wrapped)
+		}
+	}
+
+	// The tag clause reads the listing back through the same wrapped bind,
+	// at the indexed path the recipe names.
+	_, tag, _ := gen.scenario.findTest("widgets-gen-hub", "TagHub")
+	if tag.Assert[0].Kind != assertListContains || tag.Assert[0].ItemsPath != "$.TagDescriptions[0].Tags" {
+		t.Errorf("TagHub asserts %+v, want listContains on $.TagDescriptions[0].Tags", tag.Assert[0])
+	}
+	if got := tag.Assert[0].Call.Params["HubNames"]; !equalJSON(got, wrapped) {
+		t.Errorf("TagHub read-back HubNames = %+v, want %+v", got, wrapped)
+	}
+
+	// Nothing about the wrap changes the tag structure or the untag list:
+	// `hub` moves only the identifier axis.
+	if got := tag.Call.Params["Tags"]; !equalJSON(got, []any{map[string]any{"Key": "compat", "Value": "scenario"}}) {
+		t.Errorf("TagHub Tags = %+v, want [{Key: compat, Value: scenario}]", got)
+	}
+	_, untag, _ := gen.scenario.findTest("widgets-gen-hub", "UntagHub")
+	if got := untag.Call.Params["TagKeys"]; !equalJSON(got, []any{"compat"}) {
+		t.Errorf("UntagHub TagKeys = %+v, want a plain string list [\"compat\"]", got)
+	}
+}
+
+// TestBinder_listWrapIsCheckedAgainstTheModel proves the two halves of the
+// wrap's contract: a wrapped bind whose element kind matches the export is
+// bound, and one the model contradicts is an error naming the member rather
+// than a refusal — the same treatment a mistyped literal in `params` gets.
+func TestBinder_listWrapIsCheckedAgainstTheModel(t *testing.T) {
+	f := loadFixture(t)
+	hub := resourceByID(t, f.recipe, "hub")
+	b := &binder{model: f.model, service: "widgets", values: f.values}
+	scope := bindScope{resources: []resource{hub}, exports: exportKinds{"hub.name": "string"}}
+
+	params, ref, err := b.bind("widgets-gen-hub", "DescribeHubTags", nil, scope)
+	if err != nil || ref != nil {
+		t.Fatalf("bind: ref=%v err=%v", ref, err)
+	}
+	if got := params["HubNames"]; !equalJSON(got, []any{map[string]any{"$ref": "hub.name"}}) {
+		t.Fatalf("HubNames = %+v, want a one-element list holding $ref hub.name", got)
+	}
+
+	// The same wrap aimed at a member the model calls a plain string. It is
+	// the recipe contradicting the model, so it is an error naming the
+	// member, raised where every other value is checked.
+	scalar := hub
+	scalar.Binds = map[string]bindRef{"WidgetId": {Ref: "hub.name", List: true}}
+	scope.resources = []resource{scalar}
+	scope.exports = exportKinds{"hub.name": "string"}
+	if _, _, err := b.bind("widgets-gen-hub", "GetWidget", nil, scope); err == nil || !strings.Contains(err.Error(), "wants a string, got a list") {
+		t.Fatalf("err = %v, want it to say the member wants a string", err)
+	}
+}
+
+// TestBindRef_decodesBothForms covers the decoder directly, including the two
+// shapes the schema already refuses. Both gates are wanted: the schema is what
+// a recipe author sees, and the decoder is what protects a recipe reached any
+// other way.
+func TestBindRef_decodesBothForms(t *testing.T) {
+	cases := []struct {
+		name, body string
+		want       bindRef
+		errText    string
+	}{
+		{name: "a bare path", body: `"widget.id"`, want: bindRef{Ref: "widget.id"}},
+		{name: "a wrapped path", body: `["widget.id"]`, want: bindRef{Ref: "widget.id", List: true}},
+		{name: "two paths", body: `["a.id","b.id"]`, errText: "exactly one context path, not 2"},
+		{name: "neither", body: `7`, errText: "a context path, or a one-element list"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var got bindRef
+			err := json.Unmarshal([]byte(tc.body), &got)
+			if tc.errText != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.errText) {
+					t.Fatalf("err = %v, want it to mention %q", err, tc.errText)
+				}
+				return
+			}
+			if err != nil || got != tc.want {
+				t.Fatalf("got %+v (err %v), want %+v", got, err, tc.want)
+			}
+		})
+	}
+}
+
+func resourceByID(t *testing.T, r recipe, id string) resource {
+	t.Helper()
+	for _, res := range r.Resources {
+		if res.ID == id {
+			return res
+		}
+	}
+	t.Fatalf("fixture recipe has no resource %q", id)
+	return resource{}
+}
+
 // equalJSON compares two decoded-JSON values (map[string]any / []any /
 // scalars) for equality by round-tripping both through json.Marshal, which
 // is simpler and just as exact as a hand-rolled deep-equal for this shape.
@@ -613,6 +732,9 @@ func TestRecipe_rejectsUnknownFieldsAndBadReferences(t *testing.T) {
 		{"unknown requirement", `{"service":"w","resources":[{"id":"a","requires":["b"],"create":{"op":"CreateWidget"}}]}`, "unknown resource"},
 		{"identity not exported", `{"service":"w","resources":[{"id":"a","create":{"op":"CreateWidget"},"read":{"op":"GetWidget","identityPath":"$.Widget.WidgetId","identity":"nope"}}]}`, "not an export"},
 		{"authored op without assertion", `{"service":"w","resources":[{"id":"a","create":{"op":"CreateWidget"},"operations":[{"op":"PingWidgets","assert":[]}]}]}`, "recipe.schema.json"},
+		{"bind that is neither a path nor a list", `{"service":"w","resources":[{"id":"a","create":{"op":"CreateWidget"},"binds":{"WidgetId":7}}]}`, "recipe.schema.json"},
+		{"list bind holding more than one path", `{"service":"w","resources":[{"id":"a","create":{"op":"CreateWidget"},"binds":{"WidgetIds":["a.id","b.id"]}}]}`, "recipe.schema.json"},
+		{"list bind holding a non-path", `{"service":"w","resources":[{"id":"a","create":{"op":"CreateWidget"},"binds":{"WidgetIds":["WidgetId"]}}]}`, "recipe.schema.json"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

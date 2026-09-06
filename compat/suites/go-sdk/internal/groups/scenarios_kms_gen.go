@@ -27,11 +27,11 @@ func ScenariosKms(c *clients.Clients) ServiceGroup {
 			"kms-gen-key:CreateKey":                       g.testKmsGenKeyCreateKey,
 			"kms-gen-key:DescribeKey":                     g.testKmsGenKeyDescribeKey,
 			"kms-gen-key:UpdateKeyDescription":            g.testKmsGenKeyUpdateKeyDescription,
-			"kms-gen-key:DescribeKeyMetadata":             g.testKmsGenKeyDescribeKeyMetadata,
-			"kms-gen-key:ListKeys":                        g.testKmsGenKeyListKeys,
 			"kms-gen-key:TagResource":                     g.testKmsGenKeyTagResource,
 			"kms-gen-key:ListResourceTags":                g.testKmsGenKeyListResourceTags,
 			"kms-gen-key:UntagResource":                   g.testKmsGenKeyUntagResource,
+			"kms-gen-key:DescribeKeyMetadata":             g.testKmsGenKeyDescribeKeyMetadata,
+			"kms-gen-key:ListKeys":                        g.testKmsGenKeyListKeys,
 			"kms-gen-key:GetKeyPolicy":                    g.testKmsGenKeyGetKeyPolicy,
 			"kms-gen-key:PutKeyPolicy":                    g.testKmsGenKeyPutKeyPolicy,
 			"kms-gen-key:ListKeyPolicies":                 g.testKmsGenKeyListKeyPolicies,
@@ -206,58 +206,6 @@ func (g *kmsScenarios) testKmsGenKeyUpdateKeyDescription(ctx context.Context, t 
 	})
 }
 
-func (g *kmsScenarios) testKmsGenKeyDescribeKeyMetadata(ctx context.Context, t *harness.TestContext) error {
-	return groupKmsGenKey.RunTest(ctx, t, "DescribeKeyMetadata", scenario.Test{
-		Call: scenario.Call{
-			Op:     "DescribeKey",
-			Params: `{"KeyId":{"$ref":"key.id"}}`,
-			Build: func(b *scenario.Binder) any {
-				in := &kms.DescribeKeyInput{}
-				in.KeyId = aws.String(scenario.Bind[string](b, "KeyId", scenario.Ref("key.id")))
-				return in
-			},
-			Send: func(ctx context.Context, in any) (any, error) {
-				return g.cl().DescribeKey(ctx, in.(*kms.DescribeKeyInput))
-			},
-		},
-		Assert: []scenario.Clause{
-			scenario.ResponseField(
-				scenario.Matches("$.KeyMetadata.AWSAccountId", "^[0-9]{12}$"),
-				scenario.Equals("$.KeyMetadata.Enabled", true),
-				scenario.Equals("$.KeyMetadata.KeyManager", "CUSTOMER"),
-				scenario.Equals("$.KeyMetadata.KeySpec", "SYMMETRIC_DEFAULT"),
-				scenario.Equals("$.KeyMetadata.KeyState", "Enabled"),
-				scenario.Equals("$.KeyMetadata.KeyUsage", "ENCRYPT_DECRYPT"),
-				scenario.Equals("$.KeyMetadata.MultiRegion", false),
-				scenario.Equals("$.KeyMetadata.Origin", "AWS_KMS"),
-			),
-		},
-	})
-}
-
-func (g *kmsScenarios) testKmsGenKeyListKeys(ctx context.Context, t *harness.TestContext) error {
-	return groupKmsGenKey.RunTest(ctx, t, "ListKeys", scenario.Test{
-		Call: scenario.Call{
-			Op:     "ListKeys",
-			Params: `{}`,
-			Build: func(b *scenario.Binder) any {
-				in := &kms.ListKeysInput{}
-				return in
-			},
-			Send: func(ctx context.Context, in any) (any, error) {
-				return g.cl().ListKeys(ctx, in.(*kms.ListKeysInput))
-			},
-		},
-		Assert: []scenario.Clause{
-			scenario.ListContains(
-				nil,
-				"$.Keys",
-				scenario.Where("$.KeyArn", scenario.Ref("key.arn")),
-			),
-		},
-	})
-}
-
 func (g *kmsScenarios) testKmsGenKeyTagResource(ctx context.Context, t *harness.TestContext) error {
 	return groupKmsGenKey.RunTest(ctx, t, "TagResource", scenario.Test{
 		Call: scenario.Call{
@@ -355,6 +303,58 @@ func (g *kmsScenarios) testKmsGenKeyUntagResource(ctx context.Context, t *harnes
 					"$.Tags",
 					scenario.Where("$.TagKey", "compat"),
 				),
+			),
+		},
+	})
+}
+
+func (g *kmsScenarios) testKmsGenKeyDescribeKeyMetadata(ctx context.Context, t *harness.TestContext) error {
+	return groupKmsGenKey.RunTest(ctx, t, "DescribeKeyMetadata", scenario.Test{
+		Call: scenario.Call{
+			Op:     "DescribeKey",
+			Params: `{"KeyId":{"$ref":"key.id"}}`,
+			Build: func(b *scenario.Binder) any {
+				in := &kms.DescribeKeyInput{}
+				in.KeyId = aws.String(scenario.Bind[string](b, "KeyId", scenario.Ref("key.id")))
+				return in
+			},
+			Send: func(ctx context.Context, in any) (any, error) {
+				return g.cl().DescribeKey(ctx, in.(*kms.DescribeKeyInput))
+			},
+		},
+		Assert: []scenario.Clause{
+			scenario.ResponseField(
+				scenario.Matches("$.KeyMetadata.AWSAccountId", "^[0-9]{12}$"),
+				scenario.Equals("$.KeyMetadata.Enabled", true),
+				scenario.Equals("$.KeyMetadata.KeyManager", "CUSTOMER"),
+				scenario.Equals("$.KeyMetadata.KeySpec", "SYMMETRIC_DEFAULT"),
+				scenario.Equals("$.KeyMetadata.KeyState", "Enabled"),
+				scenario.Equals("$.KeyMetadata.KeyUsage", "ENCRYPT_DECRYPT"),
+				scenario.Equals("$.KeyMetadata.MultiRegion", false),
+				scenario.Equals("$.KeyMetadata.Origin", "AWS_KMS"),
+			),
+		},
+	})
+}
+
+func (g *kmsScenarios) testKmsGenKeyListKeys(ctx context.Context, t *harness.TestContext) error {
+	return groupKmsGenKey.RunTest(ctx, t, "ListKeys", scenario.Test{
+		Call: scenario.Call{
+			Op:     "ListKeys",
+			Params: `{}`,
+			Build: func(b *scenario.Binder) any {
+				in := &kms.ListKeysInput{}
+				return in
+			},
+			Send: func(ctx context.Context, in any) (any, error) {
+				return g.cl().ListKeys(ctx, in.(*kms.ListKeysInput))
+			},
+		},
+		Assert: []scenario.Clause{
+			scenario.ListContains(
+				nil,
+				"$.Keys",
+				scenario.Where("$.KeyArn", scenario.Ref("key.arn")),
 			),
 		},
 	})

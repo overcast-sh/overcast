@@ -197,6 +197,127 @@
           ]
         },
         {
+          "name": "AddTags",
+          "op": "AddTags",
+          "call": {
+            "op": "AddTags",
+            "params": {
+              "LoadBalancerNames": [
+                {
+                  "$ref": "loadbalancer.name"
+                }
+              ],
+              "Tags": [
+                {
+                  "Key": "compat",
+                  "Value": "scenario"
+                }
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 30,
+              "delayMs": 2000,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "DescribeTags",
+                  "params": {
+                    "LoadBalancerNames": [
+                      {
+                        "$ref": "loadbalancer.name"
+                      }
+                    ]
+                  }
+                },
+                "itemsPath": "$.TagDescriptions[0].Tags",
+                "where": {
+                  "$.Key": "compat",
+                  "$.Value": "scenario"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateLoadBalancer"
+          ]
+        },
+        {
+          "name": "DescribeTags",
+          "op": "DescribeTags",
+          "call": {
+            "op": "DescribeTags",
+            "params": {
+              "LoadBalancerNames": [
+                {
+                  "$ref": "loadbalancer.name"
+                }
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.TagDescriptions[0].Tags",
+              "where": {
+                "$.Key": "compat",
+                "$.Value": "scenario"
+              }
+            }
+          ],
+          "depends": [
+            "CreateLoadBalancer"
+          ]
+        },
+        {
+          "name": "RemoveTags",
+          "op": "RemoveTags",
+          "call": {
+            "op": "RemoveTags",
+            "params": {
+              "LoadBalancerNames": [
+                {
+                  "$ref": "loadbalancer.name"
+                }
+              ],
+              "Tags": [
+                {
+                  "Key": "compat"
+                }
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 30,
+              "delayMs": 2000,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "DescribeTags",
+                  "params": {
+                    "LoadBalancerNames": [
+                      {
+                        "$ref": "loadbalancer.name"
+                      }
+                    ]
+                  }
+                },
+                "itemsPath": "$.TagDescriptions[0].Tags",
+                "where": {
+                  "$.Key": "compat"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateLoadBalancer"
+          ]
+        },
+        {
           "name": "CreateLoadBalancerListeners",
           "op": "CreateLoadBalancerListeners",
           "call": {

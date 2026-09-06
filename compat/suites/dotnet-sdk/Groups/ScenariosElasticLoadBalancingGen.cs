@@ -40,6 +40,9 @@ internal sealed class ScenariosElasticLoadBalancing : IServiceGroup
         ["elastic-load-balancing-gen-loadbalancer:CreateLoadBalancer"] = TestElasticLoadBalancingGenLoadbalancerCreateLoadBalancer,
         ["elastic-load-balancing-gen-loadbalancer:DescribeLoadBalancers"] = TestElasticLoadBalancingGenLoadbalancerDescribeLoadBalancers,
         ["elastic-load-balancing-gen-loadbalancer:ConfigureHealthCheck"] = TestElasticLoadBalancingGenLoadbalancerConfigureHealthCheck,
+        ["elastic-load-balancing-gen-loadbalancer:AddTags"] = TestElasticLoadBalancingGenLoadbalancerAddTags,
+        ["elastic-load-balancing-gen-loadbalancer:DescribeTags"] = TestElasticLoadBalancingGenLoadbalancerDescribeTags,
+        ["elastic-load-balancing-gen-loadbalancer:RemoveTags"] = TestElasticLoadBalancingGenLoadbalancerRemoveTags,
         ["elastic-load-balancing-gen-loadbalancer:CreateLoadBalancerListeners"] = TestElasticLoadBalancingGenLoadbalancerCreateLoadBalancerListeners,
         ["elastic-load-balancing-gen-loadbalancer:DeleteLoadBalancerListeners"] = TestElasticLoadBalancingGenLoadbalancerDeleteLoadBalancerListeners,
         ["elastic-load-balancing-gen-loadbalancer:ModifyLoadBalancerAttributes"] = TestElasticLoadBalancingGenLoadbalancerModifyLoadBalancerAttributes,
@@ -259,6 +262,123 @@ internal sealed class ScenariosElasticLoadBalancing : IServiceGroup
                             await Cl().DescribeLoadBalancersAsync((DescribeLoadBalancersRequest)request),
                     },
                     Check.EqualTo("$.LoadBalancerDescriptions[0].HealthCheck.Interval", 30)
+                )
+            )
+        ],
+    });
+
+    private Task TestElasticLoadBalancingGenLoadbalancerAddTags(TestContext t) => GroupElasticLoadBalancingGenLoadbalancer.RunTestAsync(t, "AddTags", new ScenarioTest
+    {
+        Call = new ScenarioCall
+        {
+            Op = "AddTags",
+            Params = "{\"LoadBalancerNames\":[{\"$ref\":\"loadbalancer.name\"}],\"Tags\":[{\"Key\":\"compat\",\"Value\":\"scenario\"}]}",
+            Build = b =>
+            {
+                var request = new AddTagsRequest();
+                request.LoadBalancerNames = [
+                    b.Bind<string>("LoadBalancerNames", Val.Ref("loadbalancer.name")),
+                ];
+                request.Tags = [new() { Key = "compat", Value = "scenario" }];
+                return request;
+            },
+            SendAsync = async request =>
+                await Cl().AddTagsAsync((AddTagsRequest)request),
+        },
+        Assert =
+        [
+            Clause.Eventually(30, 2000,
+                Clause.ListContains(
+                    new ScenarioCall
+                    {
+                        Op = "DescribeTags",
+                        Params = "{\"LoadBalancerNames\":[{\"$ref\":\"loadbalancer.name\"}]}",
+                        Build = b =>
+                        {
+                            var request = new DescribeTagsRequest();
+                            request.LoadBalancerNames = [
+                                b.Bind<string>("LoadBalancerNames", Val.Ref("loadbalancer.name")),
+                            ];
+                            return request;
+                        },
+                        SendAsync = async request =>
+                            await Cl().DescribeTagsAsync((DescribeTagsRequest)request),
+                    },
+                    "$.TagDescriptions[0].Tags",
+                    new WhereEntry("$.Key", "compat"),
+                    new WhereEntry("$.Value", "scenario")
+                )
+            )
+        ],
+    });
+
+    private Task TestElasticLoadBalancingGenLoadbalancerDescribeTags(TestContext t) => GroupElasticLoadBalancingGenLoadbalancer.RunTestAsync(t, "DescribeTags", new ScenarioTest
+    {
+        Call = new ScenarioCall
+        {
+            Op = "DescribeTags",
+            Params = "{\"LoadBalancerNames\":[{\"$ref\":\"loadbalancer.name\"}]}",
+            Build = b =>
+            {
+                var request = new DescribeTagsRequest();
+                request.LoadBalancerNames = [
+                    b.Bind<string>("LoadBalancerNames", Val.Ref("loadbalancer.name")),
+                ];
+                return request;
+            },
+            SendAsync = async request =>
+                await Cl().DescribeTagsAsync((DescribeTagsRequest)request),
+        },
+        Assert =
+        [
+            Clause.ListContains(
+                null,
+                "$.TagDescriptions[0].Tags",
+                new WhereEntry("$.Key", "compat"),
+                new WhereEntry("$.Value", "scenario")
+            )
+        ],
+    });
+
+    private Task TestElasticLoadBalancingGenLoadbalancerRemoveTags(TestContext t) => GroupElasticLoadBalancingGenLoadbalancer.RunTestAsync(t, "RemoveTags", new ScenarioTest
+    {
+        Call = new ScenarioCall
+        {
+            Op = "RemoveTags",
+            Params = "{\"LoadBalancerNames\":[{\"$ref\":\"loadbalancer.name\"}],\"Tags\":[{\"Key\":\"compat\"}]}",
+            Build = b =>
+            {
+                var request = new RemoveTagsRequest();
+                request.LoadBalancerNames = [
+                    b.Bind<string>("LoadBalancerNames", Val.Ref("loadbalancer.name")),
+                ];
+                request.Tags = [new() { Key = "compat" }];
+                return request;
+            },
+            SendAsync = async request =>
+                await Cl().RemoveTagsAsync((RemoveTagsRequest)request),
+        },
+        Assert =
+        [
+            Clause.Eventually(30, 2000,
+                Clause.AbsentFromList(
+                    new ScenarioCall
+                    {
+                        Op = "DescribeTags",
+                        Params = "{\"LoadBalancerNames\":[{\"$ref\":\"loadbalancer.name\"}]}",
+                        Build = b =>
+                        {
+                            var request = new DescribeTagsRequest();
+                            request.LoadBalancerNames = [
+                                b.Bind<string>("LoadBalancerNames", Val.Ref("loadbalancer.name")),
+                            ];
+                            return request;
+                        },
+                        SendAsync = async request =>
+                            await Cl().DescribeTagsAsync((DescribeTagsRequest)request),
+                    },
+                    "$.TagDescriptions[0].Tags",
+                    new WhereEntry("$.Key", "compat")
                 )
             )
         ],

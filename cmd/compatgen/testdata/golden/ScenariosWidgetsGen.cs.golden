@@ -18,6 +18,7 @@ internal sealed class ScenariosWidgets : IServiceGroup
     private static readonly ScenarioGroup GroupWidgetsGenWidget = new("widgets-gen-widget", "compat/model/scenarios/widgets.json");
     private static readonly ScenarioGroup GroupWidgetsGenGauge = new("widgets-gen-gauge", "compat/model/scenarios/widgets.json");
     private static readonly ScenarioGroup GroupWidgetsGenValve = new("widgets-gen-valve", "compat/model/scenarios/widgets.json");
+    private static readonly ScenarioGroup GroupWidgetsGenHub = new("widgets-gen-hub", "compat/model/scenarios/widgets.json");
     private static readonly ScenarioGroup GroupWidgetsGenSprocket = new("widgets-gen-sprocket", "compat/model/scenarios/widgets.json");
     private static readonly ScenarioGroup GroupWidgetsGenProbe = new("widgets-gen-probe", "compat/model/scenarios/widgets.json");
 
@@ -58,6 +59,10 @@ internal sealed class ScenariosWidgets : IServiceGroup
         ["widgets-gen-valve:TagValve"] = TestWidgetsGenValveTagValve,
         ["widgets-gen-valve:ListValveTags"] = TestWidgetsGenValveListValveTags,
         ["widgets-gen-valve:UntagValve"] = TestWidgetsGenValveUntagValve,
+        ["widgets-gen-hub:DescribeHub"] = TestWidgetsGenHubDescribeHub,
+        ["widgets-gen-hub:TagHub"] = TestWidgetsGenHubTagHub,
+        ["widgets-gen-hub:DescribeHubTags"] = TestWidgetsGenHubDescribeHubTags,
+        ["widgets-gen-hub:UntagHub"] = TestWidgetsGenHubUntagHub,
         ["widgets-gen-sprocket:CreateSprocket"] = TestWidgetsGenSprocketCreateSprocket,
         ["widgets-gen-sprocket:GetSprocket"] = TestWidgetsGenSprocketGetSprocket,
         ["widgets-gen-sprocket:TagSprocket"] = TestWidgetsGenSprocketTagSprocket,
@@ -74,6 +79,7 @@ internal sealed class ScenariosWidgets : IServiceGroup
         ["widgets-gen-widget"] = SetupWidgetsGenWidget,
         ["widgets-gen-gauge"] = SetupWidgetsGenGauge,
         ["widgets-gen-valve"] = SetupWidgetsGenValve,
+        ["widgets-gen-hub"] = SetupWidgetsGenHub,
         ["widgets-gen-sprocket"] = SetupWidgetsGenSprocket,
         ["widgets-gen-probe"] = SetupWidgetsGenProbe,
     };
@@ -83,6 +89,7 @@ internal sealed class ScenariosWidgets : IServiceGroup
         ["widgets-gen-widget"] = TeardownWidgetsGenWidget,
         ["widgets-gen-gauge"] = TeardownWidgetsGenGauge,
         ["widgets-gen-valve"] = TeardownWidgetsGenValve,
+        ["widgets-gen-hub"] = TeardownWidgetsGenHub,
         ["widgets-gen-sprocket"] = TeardownWidgetsGenSprocket,
         ["widgets-gen-probe"] = TeardownWidgetsGenProbe,
     };
@@ -745,6 +752,143 @@ internal sealed class ScenariosWidgets : IServiceGroup
                         await Cl().ListValveTagsAsync((ListValveTagsRequest)request),
                 },
                 "$.Tags",
+                new WhereEntry("$.Key", "compat")
+            )
+        ],
+    });
+
+    private Task SetupWidgetsGenHub(TestContext t) =>
+        // No setup steps: an empty phase is a no-op, not a missing one.
+        GroupWidgetsGenHub.RunSetupAsync(t);
+
+    private Task TeardownWidgetsGenHub(TestContext t) =>
+        // No teardown steps: an empty phase is a no-op, not a missing one.
+        GroupWidgetsGenHub.RunTeardownAsync(t);
+
+    private Task TestWidgetsGenHubDescribeHub(TestContext t) => GroupWidgetsGenHub.RunTestAsync(t, "DescribeHub", new ScenarioTest
+    {
+        Call = new ScenarioCall
+        {
+            Op = "DescribeHub",
+            Params = "{}",
+            Build = b =>
+            {
+                var request = new DescribeHubRequest();
+                return request;
+            },
+            SendAsync = async request =>
+                await Cl().DescribeHubAsync((DescribeHubRequest)request),
+            Export = new()
+            {
+                ["hub.name"] = "$.Hub.HubName",
+            },
+        },
+        Assert =
+        [
+            Clause.ResponseField(
+                Check.Matches("$.Hub.HubName", "^h-[0-9a-f]{8}$")
+            )
+        ],
+    });
+
+    private Task TestWidgetsGenHubTagHub(TestContext t) => GroupWidgetsGenHub.RunTestAsync(t, "TagHub", new ScenarioTest
+    {
+        Call = new ScenarioCall
+        {
+            Op = "TagHub",
+            Params = "{\"HubNames\":[{\"$ref\":\"hub.name\"}],\"Tags\":[{\"Key\":\"compat\",\"Value\":\"scenario\"}]}",
+            Build = b =>
+            {
+                var request = new TagHubRequest();
+                request.HubNames = [b.Bind<string>("HubNames", Val.Ref("hub.name"))];
+                request.Tags = [new() { Key = "compat", Value = "scenario" }];
+                return request;
+            },
+            SendAsync = async request =>
+                await Cl().TagHubAsync((TagHubRequest)request),
+        },
+        Assert =
+        [
+            Clause.ListContains(
+                new ScenarioCall
+                {
+                    Op = "DescribeHubTags",
+                    Params = "{\"HubNames\":[{\"$ref\":\"hub.name\"}]}",
+                    Build = b =>
+                    {
+                        var request = new DescribeHubTagsRequest();
+                        request.HubNames = [b.Bind<string>("HubNames", Val.Ref("hub.name"))];
+                        return request;
+                    },
+                    SendAsync = async request =>
+                        await Cl().DescribeHubTagsAsync((DescribeHubTagsRequest)request),
+                },
+                "$.TagDescriptions[0].Tags",
+                new WhereEntry("$.Key", "compat"),
+                new WhereEntry("$.Value", "scenario")
+            )
+        ],
+    });
+
+    private Task TestWidgetsGenHubDescribeHubTags(TestContext t) => GroupWidgetsGenHub.RunTestAsync(t, "DescribeHubTags", new ScenarioTest
+    {
+        Call = new ScenarioCall
+        {
+            Op = "DescribeHubTags",
+            Params = "{\"HubNames\":[{\"$ref\":\"hub.name\"}]}",
+            Build = b =>
+            {
+                var request = new DescribeHubTagsRequest();
+                request.HubNames = [b.Bind<string>("HubNames", Val.Ref("hub.name"))];
+                return request;
+            },
+            SendAsync = async request =>
+                await Cl().DescribeHubTagsAsync((DescribeHubTagsRequest)request),
+        },
+        Assert =
+        [
+            Clause.ListContains(
+                null,
+                "$.TagDescriptions[0].Tags",
+                new WhereEntry("$.Key", "compat"),
+                new WhereEntry("$.Value", "scenario")
+            )
+        ],
+    });
+
+    private Task TestWidgetsGenHubUntagHub(TestContext t) => GroupWidgetsGenHub.RunTestAsync(t, "UntagHub", new ScenarioTest
+    {
+        Call = new ScenarioCall
+        {
+            Op = "UntagHub",
+            Params = "{\"HubNames\":[{\"$ref\":\"hub.name\"}],\"TagKeys\":[\"compat\"]}",
+            Build = b =>
+            {
+                var request = new UntagHubRequest();
+                request.HubNames = [b.Bind<string>("HubNames", Val.Ref("hub.name"))];
+                request.TagKeys = ["compat"];
+                return request;
+            },
+            SendAsync = async request =>
+                await Cl().UntagHubAsync((UntagHubRequest)request),
+        },
+        Assert =
+        [
+            Clause.AbsentFromList(
+                new ScenarioCall
+                {
+                    Op = "DescribeHubTags",
+                    Params = "{\"HubNames\":[{\"$ref\":\"hub.name\"}]}",
+                    Build = b =>
+                    {
+                        var request = new DescribeHubTagsRequest();
+                        request.HubNames = [b.Bind<string>("HubNames", Val.Ref("hub.name"))];
+                        return request;
+                    },
+                    SendAsync = async request =>
+                        await Cl().DescribeHubTagsAsync((DescribeHubTagsRequest)request),
+                },
+                "$.TagDescriptions[0].Tags",
                 new WhereEntry("$.Key", "compat")
             )
         ],

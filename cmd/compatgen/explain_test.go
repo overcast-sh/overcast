@@ -32,6 +32,40 @@ func TestExplain_rendersEveryLanguage(t *testing.T) {
 	}
 }
 
+// TestExplain_rendersAWrappedBind proves every rendering spells a list-shaped
+// member bound from a scalar export (#1923) as a list holding the context
+// value, in that backend's own syntax, rather than leaking the IR's `$ref` or
+// sending the reference bare. Rust is the odd one out and correctly so: a
+// smithy-rs fluent setter appends one element at a time, so the list is the
+// repeated call and the binder key carries the index.
+func TestExplain_rendersAWrappedBind(t *testing.T) {
+	_, gen := generateFixture(t)
+	g, tc, ok := gen.scenario.findTest("widgets-gen-hub", "TagHub")
+	if !ok {
+		t.Fatal("fixture has no TagHub")
+	}
+	want := map[string]string{
+		"cli":    `"HubNames": [$HUB_NAME]`,
+		"dotnet": `request.HubNames = [b.Bind<string>("HubNames", Val.Ref("hub.name"))];`,
+		"go":     `in.HubNames = []string{scenario.Bind[string](b, "HubNames", scenario.Ref("hub.name"))}`,
+		"java":   `.hubNames(List.of(b.string("HubNames", Values.ref("hub.name"))))`,
+		"node":   `HubNames: [ctx["hub.name"]]`,
+		"python": `HubNames=[ctx["hub.name"]]`,
+		"rust":   `.hub_names(b.string("HubNames[0]")?)`,
+	}
+	for _, lang := range rendererNames() {
+		t.Run(lang, func(t *testing.T) {
+			out := renderers[lang](fixtureRenderEnv(gen), gen.scenario, g, tc)
+			if !strings.Contains(out, want[lang]) {
+				t.Errorf("%s rendering lacks %q:\n%s", lang, want[lang], out)
+			}
+			if strings.Contains(out, "$ref") {
+				t.Errorf("%s rendering leaks IR syntax:\n%s", lang, out)
+			}
+		})
+	}
+}
+
 func TestExplain_readsTheCommittedScenario(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	if code := run([]string{"-root", repoRoot, "-explain", "sqs-gen-queue/DeleteQueue", "-lang", "python"}, &stdout, &stderr); code != 0 {
@@ -57,7 +91,7 @@ func TestReport_listsCoverageRefusalsAndSamples(t *testing.T) {
 	writeReport(&out, gen, 2)
 	report := out.String()
 	for _, want := range []string{
-		"28 of 41 modeled operations",
+		"32 of 45 modeled operations",
 		"| RotateWidget | widgets-gen-probe | `never-probe` |",
 		"| SetWidgetSize | widgets-gen-probe | `update-without-mutable` |",
 		"### Automatic name-match bindings",

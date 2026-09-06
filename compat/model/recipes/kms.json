@@ -18,7 +18,7 @@
   },
   "resources": [
     {
-      "$comment": "The KMS key, and the only resource here: aliases and grants are sub-objects of a key rather than things with a lifecycle of their own, and the alias needs a second key to point at before UpdateAlias is observable, so both are authored on this resource instead of being resources that `requires` a key. That also keeps every key the run creates inside one group, where the authored ScheduleKeyDeletion tests can dispose of both of them — a resource with no `delete` gets no teardown, so disposal has to be a test. The identity is the key ARN, which CreateKey states directly in KeyMetadata.Arn, and the read is DescribeKey compared against it. KeySpec and KeyUsage are written out even though they are AWS's own defaults, so that the metadata assertions compare what KMS echoed rather than what it decided. `async` is short but real: every KMS API reference page states that the service follows an eventual consistency model, and CreateGrant documents a delay of up to five minutes before a grant is visible without its token — the read-backs here use the grant id rather than the token, so six attempts half a second apart is the budget for the ordinary case and a genuinely slow grant would be a finding rather than a flake. `tags` is deliberately not declared: KMS spells its tag structure {TagKey, TagValue} rather than {Key, Value}, which detectTagShape does not accept, so declaring it would refuse TagResource, ListResourceTags and UntagResource as unsupported-tag-shape and lose three implemented operations. They are authored below instead, with the same tag/list/untag shape the derived path would have produced.",
+      "$comment": "The KMS key, and the only resource here: aliases and grants are sub-objects of a key rather than things with a lifecycle of their own, and the alias needs a second key to point at before UpdateAlias is observable, so both are authored on this resource instead of being resources that `requires` a key. That also keeps every key the run creates inside one group, where the authored ScheduleKeyDeletion tests can dispose of both of them — a resource with no `delete` gets no teardown, so disposal has to be a test. The identity is the key ARN, which CreateKey states directly in KeyMetadata.Arn, and the read is DescribeKey compared against it. KeySpec and KeyUsage are written out even though they are AWS's own defaults, so that the metadata assertions compare what KMS echoed rather than what it decided. `async` is short but real: every KMS API reference page states that the service follows an eventual consistency model, and CreateGrant documents a delay of up to five minutes before a grant is visible without its token — the read-backs here use the grant id rather than the token, so six attempts half a second apart is the budget for the ordinary case and a genuinely slow grant would be a finding rather than a flake. `tags` is declared, so TagResource, ListResourceTags and UntagResource come from the derived path: KMS spells its tag structure {TagKey, TagValue} rather than {Key, Value}, and detectTagShape accepts that spelling. The trio was written out by hand while it did not, and moving it to the derived path changed nothing about the three tests except where they sit — derived tags run at their lifecycle position, straight after the mutation, rather than after ListKeys.",
       "id": "key",
       "create": {
         "op": "CreateKey",
@@ -46,6 +46,11 @@
           "readPath": "$.KeyMetadata.Description"
         }
       ],
+      "tags": {
+        "tag": { "op": "TagResource", "member": "Tags" },
+        "untag": { "op": "UntagResource", "member": "TagKeys" },
+        "list": { "op": "ListResourceTags", "path": "$.Tags" }
+      },
       "async": { "maxAttempts": 6, "delayMs": 500 },
       "operations": [
         {
@@ -76,43 +81,6 @@
               "kind": "listContains",
               "itemsPath": "$.Keys",
               "where": { "$.KeyArn": { "$ref": "key.arn" } }
-            }
-          ]
-        },
-        {
-          "$comment": "The tag lifecycle the `tags` role would have generated, written by hand because KMS names the tag members TagKey and TagValue.",
-          "op": "TagResource",
-          "params": {
-            "Tags": [{ "TagKey": "compat", "TagValue": "scenario" }]
-          },
-          "assert": [
-            {
-              "kind": "listContains",
-              "call": { "op": "ListResourceTags" },
-              "itemsPath": "$.Tags",
-              "where": { "$.TagKey": "compat", "$.TagValue": "scenario" }
-            }
-          ]
-        },
-        {
-          "op": "ListResourceTags",
-          "assert": [
-            {
-              "kind": "listContains",
-              "itemsPath": "$.Tags",
-              "where": { "$.TagKey": "compat", "$.TagValue": "scenario" }
-            }
-          ]
-        },
-        {
-          "op": "UntagResource",
-          "params": { "TagKeys": ["compat"] },
-          "assert": [
-            {
-              "kind": "absent",
-              "call": { "op": "ListResourceTags" },
-              "itemsPath": "$.Tags",
-              "where": { "$.TagKey": "compat" }
             }
           ]
         },

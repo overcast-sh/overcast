@@ -87,20 +87,6 @@
     },
     {
       "service": "elastic-load-balancing",
-      "operation": "AddTags",
-      "group": "elastic-load-balancing-gen-loadbalancer",
-      "reason": "unbound-required-member:LoadBalancerNames",
-      "detail": "tag listing via DescribeTags: DescribeTags.LoadBalancerNames (LoadBalancerNamesMax20, a list) has no bind, no matching export, no curated value and no derivable literal"
-    },
-    {
-      "service": "elastic-load-balancing",
-      "operation": "AddTags",
-      "group": "elastic-load-balancing-gen-probe",
-      "reason": "never-probe",
-      "detail": "Tags a live load balancer. Harmless in itself, but nothing in a probe group removes what it adds, and an account's tags are what its owner's cost allocation is keyed on."
-    },
-    {
-      "service": "elastic-load-balancing",
       "operation": "ApplySecurityGroupsToLoadBalancer",
       "group": "elastic-load-balancing-gen-probe",
       "reason": "never-probe",
@@ -119,20 +105,6 @@
       "group": "elastic-load-balancing-gen-probe",
       "reason": "never-probe",
       "detail": "Takes instances out of service behind a live load balancer."
-    },
-    {
-      "service": "elastic-load-balancing",
-      "operation": "DescribeTags",
-      "group": "elastic-load-balancing-gen-loadbalancer",
-      "reason": "unbound-required-member:LoadBalancerNames",
-      "detail": "tag listing via DescribeTags: DescribeTags.LoadBalancerNames (LoadBalancerNamesMax20, a list) has no bind, no matching export, no curated value and no derivable literal"
-    },
-    {
-      "service": "elastic-load-balancing",
-      "operation": "DescribeTags",
-      "group": "elastic-load-balancing-gen-probe",
-      "reason": "unbound-required-member:LoadBalancerNames",
-      "detail": "DescribeTags.LoadBalancerNames (LoadBalancerNamesMax20, a list) has no bind, no matching export, no curated value and no derivable literal"
     },
     {
       "service": "elastic-load-balancing",
@@ -161,20 +133,6 @@
       "group": "elastic-load-balancing-gen-probe",
       "reason": "never-probe",
       "detail": "Puts EC2 instances into service behind a live load balancer, sending it traffic it was not meant to receive."
-    },
-    {
-      "service": "elastic-load-balancing",
-      "operation": "RemoveTags",
-      "group": "elastic-load-balancing-gen-loadbalancer",
-      "reason": "unbound-required-member:LoadBalancerNames",
-      "detail": "tag listing via DescribeTags: DescribeTags.LoadBalancerNames (LoadBalancerNamesMax20, a list) has no bind, no matching export, no curated value and no derivable literal"
-    },
-    {
-      "service": "elastic-load-balancing",
-      "operation": "RemoveTags",
-      "group": "elastic-load-balancing-gen-probe",
-      "reason": "never-probe",
-      "detail": "Removes tags from a live load balancer; the tags it deletes are not recoverable, and cost allocation is keyed on them."
     },
     {
       "service": "elastic-load-balancing",

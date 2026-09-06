@@ -39,11 +39,11 @@ internal sealed class ScenariosKms : IServiceGroup
         ["kms-gen-key:CreateKey"] = TestKmsGenKeyCreateKey,
         ["kms-gen-key:DescribeKey"] = TestKmsGenKeyDescribeKey,
         ["kms-gen-key:UpdateKeyDescription"] = TestKmsGenKeyUpdateKeyDescription,
-        ["kms-gen-key:DescribeKeyMetadata"] = TestKmsGenKeyDescribeKeyMetadata,
-        ["kms-gen-key:ListKeys"] = TestKmsGenKeyListKeys,
         ["kms-gen-key:TagResource"] = TestKmsGenKeyTagResource,
         ["kms-gen-key:ListResourceTags"] = TestKmsGenKeyListResourceTags,
         ["kms-gen-key:UntagResource"] = TestKmsGenKeyUntagResource,
+        ["kms-gen-key:DescribeKeyMetadata"] = TestKmsGenKeyDescribeKeyMetadata,
+        ["kms-gen-key:ListKeys"] = TestKmsGenKeyListKeys,
         ["kms-gen-key:GetKeyPolicy"] = TestKmsGenKeyGetKeyPolicy,
         ["kms-gen-key:PutKeyPolicy"] = TestKmsGenKeyPutKeyPolicy,
         ["kms-gen-key:ListKeyPolicies"] = TestKmsGenKeyListKeyPolicies,
@@ -209,60 +209,6 @@ internal sealed class ScenariosKms : IServiceGroup
         ],
     });
 
-    private Task TestKmsGenKeyDescribeKeyMetadata(TestContext t) => GroupKmsGenKey.RunTestAsync(t, "DescribeKeyMetadata", new ScenarioTest
-    {
-        Call = new ScenarioCall
-        {
-            Op = "DescribeKey",
-            Params = "{\"KeyId\":{\"$ref\":\"key.id\"}}",
-            Build = b =>
-            {
-                var request = new DescribeKeyRequest();
-                request.KeyId = b.Bind<string>("KeyId", Val.Ref("key.id"));
-                return request;
-            },
-            SendAsync = async request =>
-                await Cl().DescribeKeyAsync((DescribeKeyRequest)request),
-        },
-        Assert =
-        [
-            Clause.ResponseField(
-                Check.Matches("$.KeyMetadata.AWSAccountId", "^[0-9]{12}$"),
-                Check.EqualTo("$.KeyMetadata.Enabled", true),
-                Check.EqualTo("$.KeyMetadata.KeyManager", "CUSTOMER"),
-                Check.EqualTo("$.KeyMetadata.KeySpec", "SYMMETRIC_DEFAULT"),
-                Check.EqualTo("$.KeyMetadata.KeyState", "Enabled"),
-                Check.EqualTo("$.KeyMetadata.KeyUsage", "ENCRYPT_DECRYPT"),
-                Check.EqualTo("$.KeyMetadata.MultiRegion", false),
-                Check.EqualTo("$.KeyMetadata.Origin", "AWS_KMS")
-            )
-        ],
-    });
-
-    private Task TestKmsGenKeyListKeys(TestContext t) => GroupKmsGenKey.RunTestAsync(t, "ListKeys", new ScenarioTest
-    {
-        Call = new ScenarioCall
-        {
-            Op = "ListKeys",
-            Params = "{}",
-            Build = b =>
-            {
-                var request = new ListKeysRequest();
-                return request;
-            },
-            SendAsync = async request =>
-                await Cl().ListKeysAsync((ListKeysRequest)request),
-        },
-        Assert =
-        [
-            Clause.ListContains(
-                null,
-                "$.Keys",
-                new WhereEntry("$.KeyArn", Val.Ref("key.arn"))
-            )
-        ],
-    });
-
     private Task TestKmsGenKeyTagResource(TestContext t) => GroupKmsGenKey.RunTestAsync(t, "TagResource", new ScenarioTest
     {
         Call = new ScenarioCall
@@ -366,6 +312,60 @@ internal sealed class ScenariosKms : IServiceGroup
                     "$.Tags",
                     new WhereEntry("$.TagKey", "compat")
                 )
+            )
+        ],
+    });
+
+    private Task TestKmsGenKeyDescribeKeyMetadata(TestContext t) => GroupKmsGenKey.RunTestAsync(t, "DescribeKeyMetadata", new ScenarioTest
+    {
+        Call = new ScenarioCall
+        {
+            Op = "DescribeKey",
+            Params = "{\"KeyId\":{\"$ref\":\"key.id\"}}",
+            Build = b =>
+            {
+                var request = new DescribeKeyRequest();
+                request.KeyId = b.Bind<string>("KeyId", Val.Ref("key.id"));
+                return request;
+            },
+            SendAsync = async request =>
+                await Cl().DescribeKeyAsync((DescribeKeyRequest)request),
+        },
+        Assert =
+        [
+            Clause.ResponseField(
+                Check.Matches("$.KeyMetadata.AWSAccountId", "^[0-9]{12}$"),
+                Check.EqualTo("$.KeyMetadata.Enabled", true),
+                Check.EqualTo("$.KeyMetadata.KeyManager", "CUSTOMER"),
+                Check.EqualTo("$.KeyMetadata.KeySpec", "SYMMETRIC_DEFAULT"),
+                Check.EqualTo("$.KeyMetadata.KeyState", "Enabled"),
+                Check.EqualTo("$.KeyMetadata.KeyUsage", "ENCRYPT_DECRYPT"),
+                Check.EqualTo("$.KeyMetadata.MultiRegion", false),
+                Check.EqualTo("$.KeyMetadata.Origin", "AWS_KMS")
+            )
+        ],
+    });
+
+    private Task TestKmsGenKeyListKeys(TestContext t) => GroupKmsGenKey.RunTestAsync(t, "ListKeys", new ScenarioTest
+    {
+        Call = new ScenarioCall
+        {
+            Op = "ListKeys",
+            Params = "{}",
+            Build = b =>
+            {
+                var request = new ListKeysRequest();
+                return request;
+            },
+            SendAsync = async request =>
+                await Cl().ListKeysAsync((ListKeysRequest)request),
+        },
+        Assert =
+        [
+            Clause.ListContains(
+                null,
+                "$.Keys",
+                new WhereEntry("$.KeyArn", Val.Ref("key.arn"))
             )
         ],
     });
