@@ -141,6 +141,125 @@ class GeneratedGroupMustDeclareSuitesTest(unittest.TestCase):
         self.assertEqual(errors, [])
 
 
+class GeneratedOnlyFieldTest(unittest.TestCase):
+    """A hand-written group may carry `scenario`, and nothing else generated.
+
+    #1903 item 1: `scenario` on a hand-written group is how it says its tests
+    are resolved by an authored IR scenario through each suite's scenario
+    backend, which is the whole of the flip. `generated`, `state`, `shadowOf`
+    and `parallel` stay cmd/compatgen's: each states a fact about generator
+    output, and a hand-written copy could only contradict it.
+    """
+
+    def test_scenario_is_allowed(self):
+        registry = {"groups": [dict(group("sqs-queues"), scenario="compat/model/authored/sqs-queues.json")]}
+        self.assertEqual(vcr.generated_only_field_errors(registry), [])
+
+    def test_plain_group_is_allowed(self):
+        self.assertEqual(vcr.generated_only_field_errors({"groups": [group("s3-crud")]}), [])
+
+    def test_each_generated_only_field_is_rejected(self):
+        for field, value in (
+            ("generated", True),
+            ("state", "candidate"),
+            ("shadowOf", "s3-other"),
+            ("parallel", True),
+        ):
+            with self.subTest(field=field):
+                registry = {"groups": [dict(group("s3-crud"), **{field: value})]}
+                errors = vcr.generated_only_field_errors(registry)
+                self.assertEqual(len(errors), 1)
+                self.assertIn(field, errors[0])
+                self.assertIn("s3-crud", errors[0])
+
+    def test_real_registry_carries_none_of_them(self):
+        registry = vcr.load_json(vcr.DEFAULT_REGISTRY)
+        self.assertEqual(vcr.generated_only_field_errors(registry), [])
+
+
+class PortedGroupTest(unittest.TestCase):
+    """A ported group and the index that scopes it must agree, both ways.
+
+    #1903 item 2. `suites` on a ported group is derived from backend
+    availability, exactly as it is on a generated group, so it is written into
+    the generated sibling's `ported` index rather than onto the hand-written
+    group. The two files are then one statement in two halves, and either half
+    alone fails silently: a group with no entry is scoped to every uniform
+    suite whether or not they can run it, an entry for a group that is not
+    ported scopes nothing.
+    """
+
+    SCENARIO = "compat/model/authored/sqs-queues.json"
+
+    @classmethod
+    def hand(cls, scenario=SCENARIO):
+        g = group("sqs-queues", service="sqs")
+        if scenario is not None:
+            g["scenario"] = scenario
+        return {"groups": [g]}
+
+    @classmethod
+    def indexed(cls, group_name="sqs-queues", scenario=SCENARIO, suites=("cli", "go-sdk")):
+        entry = {"group": group_name, "scenario": scenario}
+        if suites is not None:
+            entry["suites"] = list(suites)
+        return {"groups": [], "ported": [entry]}
+
+    def test_a_matching_pair_passes(self):
+        self.assertEqual(vcr.ported_group_errors(self.hand(), self.indexed()), [])
+
+    def test_a_registry_with_no_ported_group_and_an_empty_index_passes(self):
+        self.assertEqual(vcr.ported_group_errors({"groups": [group("s3-crud")]}, {"groups": []}), [])
+
+    def test_a_ported_group_with_no_index_entry_is_rejected(self):
+        errors = vcr.ported_group_errors(self.hand(), {"groups": [group("sqs-gen-queue", generated=True)]})
+        self.assertEqual(len(errors), 1)
+        self.assertIn("sqs-queues", errors[0])
+        self.assertIn("ported", errors[0])
+
+    def test_an_empty_generated_registry_indexes_nothing_and_is_not_checked(self):
+        # Phase G0's equivalence: absent and present-but-empty must reach the
+        # same verdict, and neither can index anything.
+        self.assertEqual(vcr.ported_group_errors(self.hand(), {"groups": []}), [])
+
+    def test_an_entry_for_an_unported_group_is_rejected(self):
+        errors = vcr.ported_group_errors(self.hand(scenario=None), self.indexed())
+        self.assertTrue(any("sqs-queues" in e for e in errors))
+
+    def test_disagreeing_scenario_paths_are_rejected(self):
+        errors = vcr.ported_group_errors(
+            self.hand(), self.indexed(scenario="compat/model/authored/other.json")
+        )
+        self.assertTrue(any("other.json" in e for e in errors))
+
+    def test_an_entry_with_no_suites_is_rejected(self):
+        errors = vcr.ported_group_errors(self.hand(), self.indexed(suites=None))
+        self.assertTrue(any("suites" in e for e in errors))
+
+    def test_a_duplicate_entry_is_rejected(self):
+        generated = self.indexed()
+        generated["ported"].append(dict(generated["ported"][0]))
+        errors = vcr.ported_group_errors(self.hand(), generated)
+        self.assertTrue(any("twice" in e for e in errors))
+
+    def test_an_entry_colliding_with_a_generated_group_is_rejected(self):
+        generated = self.indexed()
+        generated["groups"] = [
+            group("sqs-queues", service="sqs", suites=["cli"], generated=True)
+        ]
+        errors = vcr.ported_group_errors(self.hand(), generated)
+        self.assertTrue(any("also a generated group" in e for e in errors))
+
+    def test_the_real_pair_ports_nothing_yet(self):
+        # The prerequisites land without flipping anything: sqs-queues is still
+        # resolved by its seven native implementations (#1903 item 3).
+        registry = vcr.load_json(vcr.DEFAULT_REGISTRY)
+        generated = vcr.load_json_optional(vcr.DEFAULT_GENERATED_REGISTRY)
+        self.assertIsNotNone(generated)
+        self.assertEqual(vcr.ported_group_errors(registry, generated), [])
+        self.assertEqual(generated.get("ported", []), [])
+
+
 class ShadowGroupTest(unittest.TestCase):
     """A shadow group has to join the hand-written group it names.
 

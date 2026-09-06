@@ -13,12 +13,39 @@
     "comment": {
       "type": "string"
     },
+    "ported": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/PortedGroup" },
+      "description": "Hand-written groups an authored scenario resolves (docs/plans/compat-coverage-modelgen.md §3.11 step 3). Each names a group declared in registry.json — never one in `groups` below — and carries the one thing about it that is derived rather than decided: the suites whose scenario backend can execute it. The group's own entry, and the names every gate file keys on, stay in the hand-written registry."
+    },
     "groups": {
       "type": "array",
       "items": { "$ref": "#/definitions/GeneratedTestGroup" }
     }
   },
   "definitions": {
+    "PortedGroup": {
+      "type": "object",
+      "required": ["group", "scenario", "suites"],
+      "additionalProperties": false,
+      "properties": {
+        "group": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+          "description": "The hand-written registry group this scopes. It must declare `scenario` with the same value as the entry's, and it must not also appear in `groups`."
+        },
+        "scenario": {
+          "type": "string",
+          "description": "The authored IR file that resolves the group, repository-relative. Cross-checked against the hand-written group's own `scenario`, so a half-applied edit cannot survive."
+        },
+        "suites": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "Mechanically derived from backend availability, exactly as a generated group's `suites` is: the scenarioBackends table minus any suite whose emitter refused the group. A suite absent from it neither implements the group nor carries parity debt for it. An empty list would scope a group whose native implementations are being deleted to no suite at all, so it fails generation rather than being written."
+        }
+      }
+    },
     "GeneratedTestGroup": {
       "description": "The shared TestGroup shape plus the three fields that only generated groups carry. The shape is $ref'd rather than copied: the two registries are joined on group and test names, so a second copy of the definition could drift and start accepting names the hand-written registry rejects.",
       "allOf": [

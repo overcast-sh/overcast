@@ -151,7 +151,8 @@ func loadCorpus(root string) (*corpus, error) {
 		return nil, err
 	}
 	// compat/suites/registry.json is read for one reason and not kept: an
-	// authored scenario ports a group of it, and the names have to match.
+	// authored scenario ports a group of it, and the names — and, once the
+	// port is live, the `scenario` field — have to match.
 	hand, err := loadHandRegistry(filepath.Join(root, filepath.FromSlash(handRegistryPath)))
 	if err != nil {
 		return nil, err
@@ -160,6 +161,9 @@ func loadCorpus(root string) (*corpus, error) {
 		if err := checkAuthoredAgainstRegistry(a, hand); err != nil {
 			return nil, err
 		}
+	}
+	if err := checkPortedGroupsHaveAuthoredScenarios(hand, authoredScenarios); err != nil {
+		return nil, err
 	}
 	return &corpus{
 		schemas:    schemas,

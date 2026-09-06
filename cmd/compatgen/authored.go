@@ -255,9 +255,14 @@ type handRegistry struct {
 }
 
 type handGroup struct {
-	Service string     `json:"service"`
-	Name    string     `json:"name"`
-	Tests   []handTest `json:"tests"`
+	Service string `json:"service"`
+	Name    string `json:"name"`
+	// Scenario is set once the group has been ported: the authored IR file
+	// that resolves its tests, in place of the per-language implementations
+	// the flip deletes (#1903). Absent while the port is still soaking under
+	// a shadow name.
+	Scenario string     `json:"scenario,omitempty"`
+	Tests    []handTest `json:"tests"`
 }
 
 type handTest struct {
@@ -317,9 +322,13 @@ func checkAuthoredAgainstRegistry(a authored, hand *handRegistry) error {
 			a.file, len(a.scenario.Groups))
 	}
 	g := a.scenario.Groups[0]
-	if got, _ := nativeGroupOf(g.Name); got != native {
+	got, shadow := nativeGroupOf(g.Name)
+	if got != native {
 		return fmt.Errorf("%s: group %q; an authored scenario's group is %q while it is live, or %q while it shadows the native one",
 			a.file, g.Name, native, native+shadowSuffix)
+	}
+	if err := checkPortedPairing(a, group, shadow); err != nil {
+		return err
 	}
 	if len(g.Tests) != len(group.Tests) {
 		return fmt.Errorf("%s: group %s has %d tests, registry group %s has %d; the names are the join keys and every one must survive the port",
@@ -342,6 +351,75 @@ func checkAuthoredAgainstRegistry(a authored, hand *handRegistry) error {
 		if !equalStrings(got.Depends, want.Depends) {
 			return fmt.Errorf("%s: group %s test %s depends on %v, the registry says %v; the loader orders and skips on this list, so a shadow that differs is not running the same schedule",
 				a.file, g.Name, got.Name, got.Depends, want.Depends)
+		}
+	}
+	return nil
+}
+
+// checkPortedPairing holds the two halves of a port to each other.
+//
+// A group is ported when its hand-written entry carries `scenario` and the
+// authored file's group is live rather than a shadow — the two are one
+// decision, taken in one PR (§3.11 step 3), and either half alone is a
+// half-flipped group whose symptom is silence:
+//
+//   - `scenario` on the registry group while the authored group is still a
+//     shadow means the suites are told to resolve `<group>` through a file
+//     that declares `<group>-shadow`. Every loader falls through to "not yet
+//     implemented", and the group's implementations may already be deleted.
+//   - a live authored group whose registry entry carries no `scenario` means
+//     the two files disagree about whether the port happened. The cli and
+//     python-sdk interpreters read `scenario` and would resolve nothing; the
+//     four typed suites resolve by group name and would run the port anyway,
+//     so the suites would silently disagree with each other about what they
+//     ran.
+func checkPortedPairing(a authored, group *handGroup, shadow bool) error {
+	switch {
+	case shadow && group.Scenario != "":
+		return fmt.Errorf("%s: group %q is still a shadow, but registry group %q already carries \"scenario\": %q — the flip renames the group and adds the field in one change; until then the natives resolve the group",
+			a.file, a.scenario.Groups[0].Name, group.Name, group.Scenario)
+	case shadow:
+		return nil
+	case group.Scenario == "":
+		return fmt.Errorf("%s: group %q is live, so registry group %q must carry \"scenario\": %q — otherwise the interpreters have nothing to resolve it from while the typed suites resolve it by name, and the suites disagree about what they ran",
+			a.file, group.Name, group.Name, a.file)
+	case group.Scenario != a.file:
+		return fmt.Errorf("%s: registry group %q carries \"scenario\": %q — an authored scenario is named for the group it ports, so the two must be the same file",
+			a.file, group.Name, group.Scenario)
+	}
+	return nil
+}
+
+// checkPortedGroupsHaveAuthoredScenarios is the reverse sweep: every
+// hand-written group claiming to be ported must be backed by an authored file
+// this run actually read.
+//
+// checkAuthoredAgainstRegistry walks authored files and can only judge the
+// groups they name. A registry group carrying a `scenario` that names no file
+// at all — a typo, or a file deleted without the entry — would never be
+// visited by it, and downstream the failure is a group every suite skips.
+func checkPortedGroupsHaveAuthoredScenarios(hand *handRegistry, scenarios []authored) error {
+	live := make(map[string]string, len(scenarios))
+	for _, a := range scenarios {
+		if len(a.scenario.Groups) != 1 {
+			continue
+		}
+		if _, shadow := nativeGroupOf(a.scenario.Groups[0].Name); !shadow {
+			live[a.name] = a.file
+		}
+	}
+	for _, g := range hand.Groups {
+		if g.Scenario == "" {
+			continue
+		}
+		file, ok := live[g.Name]
+		if !ok {
+			return fmt.Errorf("%s: group %q carries \"scenario\": %q, but %s holds no live authored scenario for it; a ported group is resolved by an authored file named for it",
+				handRegistryPath, g.Name, g.Scenario, authoredDir)
+		}
+		if file != g.Scenario {
+			return fmt.Errorf("%s: group %q carries \"scenario\": %q, but its authored scenario is %s",
+				handRegistryPath, g.Name, g.Scenario, file)
 		}
 	}
 	return nil

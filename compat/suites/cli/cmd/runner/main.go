@@ -113,12 +113,19 @@ func main() {
 		}
 	}
 
-	// The scenario backend executes the generated groups — the ones carrying a
-	// "scenario" path instead of a registered impl. Their setup and teardown
-	// are step lists in the same file, so they are installed here, before
-	// BuildGroups reads the maps. A hand-written group never declares a
-	// scenario (the field is only legal in registry.generated.json), so this
-	// cannot displace a registered setup.
+	// The scenario backend executes every group carrying a "scenario" path
+	// instead of a registered impl — the generated ones, and the ported
+	// hand-written ones, which since #1903 may carry the field too
+	// (docs/plans/compat-coverage-modelgen.md §3.11 step 3). Their setup and
+	// teardown are step lists in the same file, so they are installed here,
+	// before BuildGroups reads the maps.
+	//
+	// A ported group has no registered setup left to displace: the port
+	// deletes the native implementations and their hooks in the same change
+	// that adds the field, and cmd/compatgen refuses a group carrying
+	// "scenario" while its authored scenario is still a shadow. Were both to
+	// exist anyway the scenario's hook would win, silently — which is why that
+	// refusal lives in the generator rather than here.
 	scenarios := scenario.New(registry.RepoRoot())
 	for _, rg := range reg.Groups {
 		if fn, ok := scenarios.Setup(rg); ok {

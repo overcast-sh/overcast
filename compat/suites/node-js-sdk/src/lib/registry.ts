@@ -65,7 +65,13 @@ export interface RegistryGroup {
   tests: RegistryTestCase[];
   /** Only set on a group from registry.generated.json — see GeneratedRegistryGroup. */
   generated?: boolean;
-  /** Only set on a group from registry.generated.json — see GeneratedRegistryGroup. */
+  /**
+   * The scenario IR file that resolves this group's tests. Always set on a
+   * group from registry.generated.json; set on a hand-written group once it
+   * has been *ported* — an authored scenario resolves its tests through this
+   * suite's scenario backend and no suite implements them by hand any more
+   * (docs/plans/compat-coverage-modelgen.md §3.11, #1903).
+   */
   scenario?: string;
   /** Only set on a group from registry.generated.json — see GeneratedRegistryGroup. */
   state?: "candidate" | "gated";
