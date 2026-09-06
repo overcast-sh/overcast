@@ -604,6 +604,59 @@ func TestErrorClauseMatchesTheCodeExactly(t *testing.T) {
 			wantMatch: true,
 		},
 		{
+			// The nested position of compat/model/README.md § Errors, in the
+			// spelling a JSON body puts it in.
+			name: "a nested Error.Code in a JSON body", shape: "NoSuchEntity", code: "NoSuchEntity",
+			cliErr:    errors.New(`aws iam get-role: exit status 255: {"Error":{"Type":"Sender","Code":"NoSuchEntity","Message":"…"}}`),
+			wantMatch: true,
+		},
+		{
+			// The same position on the wire an AWS Query service really uses.
+			// The old extractor was a regex over the serialized message and
+			// could not read this at all.
+			name:  "the Code of a Query ErrorResponse envelope the CLI echoed",
+			shape: "NoSuchEntity", code: "NoSuchEntity",
+			cliErr: errors.New(`aws iam get-group: exit status 255: <ErrorResponse><Error>` +
+				`<Type>Sender</Type><Code>NoSuchEntity</Code><Message>…</Message></Error>` +
+				`<RequestId>r-1</RequestId></ErrorResponse>`),
+			wantMatch: true,
+		},
+		{
+			// REST XML's bare <Error> root, which states the code at the top
+			// level of the same body.
+			name:  "the Code of a bare REST XML Error the CLI echoed",
+			shape: "NoSuchBucket", code: "NoSuchBucket",
+			cliErr: errors.New(`aws s3api list-objects-v2: exit status 255: ` +
+				`<Error><Code>NoSuchBucket</Code><Message>…</Message></Error>`),
+			wantMatch: true,
+		},
+		{
+			// EC2 writes a third dialect, and botocore folds it into the same
+			// Error node the other two use.
+			name:  "the Code of an EC2 Response envelope the CLI echoed",
+			shape: "InvalidVpcID.NotFound", code: "InvalidVpcID.NotFound",
+			cliErr: errors.New(`aws ec2 describe-vpcs: exit status 255: <Response><Errors><Error>` +
+				`<Code>InvalidVpcID.NotFound</Code><Message>…</Message></Error></Errors>` +
+				`<RequestID>r-1</RequestID></Response>`),
+			wantMatch: true,
+		},
+		{
+			// The fault an ErrorResponse carries beside the code is not a
+			// code, and a structural read is what keeps the two apart.
+			name: "the Type of a Query envelope is not its code", shape: "Sender", code: "Sender",
+			cliErr: errors.New(`aws iam get-group: exit status 255: <ErrorResponse><Error>` +
+				`<Type>Sender</Type><Code>NoSuchEntity</Code></Error></ErrorResponse>`),
+			wantMatch: false,
+		},
+		{
+			// XML that is not an error envelope states no code, whatever
+			// elements it happens to contain — a proxy's HTML error page is
+			// the case this excludes.
+			name: "a Code element in XML that is not an error envelope", shape: "NoSuchEntity", code: "NoSuchEntity",
+			cliErr:    errors.New(`aws iam get-group: exit status 255: <html><body><Code>NoSuchEntity</Code></body></html>`),
+			wantMatch: false,
+		},
+		{
 			name:  "a code named only in the message text is not the error's code",
 			shape: "ValidationException", code: "ValidationException",
 			cliErr: errors.New(`aws widgets create-thing: exit status 254: An error occurred (AccessDeniedException) ` +

@@ -47,7 +47,9 @@ public sealed class ScenarioErrorFixtureTests
     /// observed through AmazonServiceException.ErrorCode: the SDK parses the
     /// body away before the caller sees the error, and what survives is the
     /// code its unmarshaller resolved — from __type, from the body's lowercase
-    /// code member, or from the query-error header where the service sends one.
+    /// code member, from the Code inside an XML error node (the Query protocol's
+    /// ErrorResponse envelope and REST XML's bare Error root), or from the
+    /// query-error header where the service sends one.
     /// </summary>
     private static readonly HashSet<string> ObservedCarriers = new(StringComparer.Ordinal)
     {
@@ -98,6 +100,89 @@ public sealed class ScenarioErrorFixtureTests
             QueueUrl = $"{endpoint}/000000000000/compat",
         });
     }
+
+    /// <summary>
+    /// The AWS Query protocol, replayed through IAM — a service whose whole
+    /// API is Query, so the SDK's XML error unmarshaller is what reads the
+    /// wire and resolves ErrorCode out of
+    /// <c>&lt;ErrorResponse&gt;&lt;Error&gt;&lt;Code&gt;</c>.
+    /// </summary>
+    /// <remarks>
+    /// That is the point of routing an XML fixture away from the SQS default:
+    /// SQS is AWS JSON, its unmarshaller reads <c>__type</c>, and an XML body
+    /// replayed through it states no code at all — which is what this suite
+    /// was silently unable to say before #1896, because its fixture schema
+    /// could not carry such a body in the first place.
+    /// </remarks>
+    private static async Task QueryProtocol(string endpoint)
+    {
+        using var client = new Amazon.IdentityManagement.AmazonIdentityManagementServiceClient(
+            Credentials, Configure(new Amazon.IdentityManagement.AmazonIdentityManagementServiceConfig(), endpoint));
+        await client.GetGroupAsync(new Amazon.IdentityManagement.Model.GetGroupRequest { GroupName = "compat-absent" });
+    }
+
+    /// <summary>
+    /// REST XML, replayed through S3 — the dialect that states the code in a
+    /// bare <c>&lt;Error&gt;</c> root with no envelope around it, and the one
+    /// service whose unmarshaller is written for that shape.
+    /// </summary>
+    private static async Task RestXmlProtocol(string endpoint)
+    {
+        var config = Configure(new Amazon.S3.AmazonS3Config(), endpoint);
+        config.ForcePathStyle = true;
+        using var client = new Amazon.S3.AmazonS3Client(Credentials, config);
+        await client.ListObjectsV2Async(new Amazon.S3.Model.ListObjectsV2Request { BucketName = "compat" });
+    }
+
+    /// <summary>
+    /// The client a fixture's wire is replayed through.
+    /// </summary>
+    /// <remarks>
+    /// An exceptionName names the service that models that error, because an
+    /// SDK only mints a modeled exception for one its own service declares.
+    /// A wire with none is chosen by protocol instead: an XML body goes to the
+    /// client whose unmarshaller reads that envelope, and everything else to
+    /// the AWS JSON default.
+    /// </remarks>
+    private static Func<string, Task> ChooseReplay(FixtureWire wire)
+    {
+        if (!string.IsNullOrEmpty(wire.ExceptionName))
+        {
+            return Replays.TryGetValue(wire.ExceptionName, out var modeled)
+                ? modeled
+                : throw new InvalidOperationException(
+                    $"no client replays {wire.ExceptionName}; add one to Replays so the exceptionName carrier is really observed");
+        }
+        return XmlRootElement(wire) switch
+        {
+            "Error" => RestXmlProtocol,
+            "ErrorResponse" => QueryProtocol,
+            null => Replays[""],
+            var root => throw new InvalidOperationException(
+                $"no client replays an XML error body rooted at <{root}>; add one so the bodyCode carrier is really observed"),
+        };
+    }
+
+    /// <summary>
+    /// The root element of a raw XML body, or null when the wire's body is not
+    /// one.
+    /// </summary>
+    private static string? XmlRootElement(FixtureWire wire)
+    {
+        if (RawBody(wire) is not { } raw)
+        {
+            return null;
+        }
+        using var reader = System.Xml.XmlReader.Create(new StringReader(raw));
+        return reader.MoveToContent() == System.Xml.XmlNodeType.Element ? reader.Name : null;
+    }
+
+    /// <summary>
+    /// The raw bytes of a wire whose body is not JSON, or null for one whose
+    /// body is a JSON object.
+    /// </summary>
+    private static string? RawBody(FixtureWire wire) =>
+        wire.Body is { ValueKind: JsonValueKind.String } body ? body.GetString() : null;
 
     private static T Configure<T>(T config, string endpoint) where T : ClientConfig
     {
@@ -220,10 +305,7 @@ public sealed class ScenarioErrorFixtureTests
             return new Amazon.SQS.AmazonSQSException(stderr);
         }
 
-        var replay = Replays.TryGetValue(fixture.Wire.ExceptionName ?? "", out var chosen)
-            ? chosen
-            : throw new InvalidOperationException(
-                $"no client replays {fixture.Wire.ExceptionName}; add one to Replays so the exceptionName carrier is really observed");
+        var replay = ChooseReplay(fixture.Wire);
 
         var port = FreePort();
         var endpoint = $"http://127.0.0.1:{port}";
@@ -233,13 +315,27 @@ public sealed class ScenarioErrorFixtureTests
         var serving = Task.Run(async () =>
         {
             var http = await listener.GetContextAsync();
-            var body = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(fixture.Wire.Body));
+            // A non-JSON wire is served as the service wrote it, byte for
+            // byte, under the content type the fixture states. Re-encoding it
+            // as JSON would be serving a wire no service sends, and the SDK's
+            // XML unmarshaller — the whole reason an XML fixture is replayed
+            // through a Query or REST XML client — would never run.
+            var body = Encoding.UTF8.GetBytes(
+                RawBody(fixture.Wire) ?? JsonSerializer.Serialize(fixture.Wire.Body));
             http.Response.StatusCode = fixture.Wire.Status;
             foreach (var header in fixture.Wire.Headers)
             {
+                // Content-Type is a restricted header on HttpListenerResponse
+                // and is set through its own property below.
+                if (string.Equals(header.Key, "Content-Type", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
                 http.Response.Headers[header.Key] = header.Value;
             }
-            http.Response.ContentType = "application/x-amz-json-1.0";
+            http.Response.ContentType = fixture.Wire.Headers
+                .FirstOrDefault(header => string.Equals(header.Key, "Content-Type", StringComparison.OrdinalIgnoreCase))
+                .Value ?? "application/x-amz-json-1.0";
             http.Response.ContentLength64 = body.Length;
             await http.Response.OutputStream.WriteAsync(body);
             http.Response.Close();
@@ -409,7 +505,16 @@ public sealed class ScenarioErrorFixtureTests
         [JsonPropertyName("status")] public int Status { get; init; }
         [JsonPropertyName("exceptionName")] public string? ExceptionName { get; init; }
         [JsonPropertyName("headers")] public IReadOnlyDictionary<string, string> Headers { get; init; } = new Dictionary<string, string>();
-        [JsonPropertyName("body")] public IReadOnlyDictionary<string, string> Body { get; init; } = new Dictionary<string, string>();
+        /// <summary>
+        /// A JSON object for a JSON wire, and a JSON string — the raw XML
+        /// bytes — for one that is not, so it is held as a JsonElement rather
+        /// than a flat dictionary of strings (compat/model/README.md
+        /// § Errors). It used to be
+        /// IReadOnlyDictionary&lt;string, string&gt;, which could represent
+        /// neither an XML body nor a nested one, and that is why the shared
+        /// corpus carried no Query error until #1896.
+        /// </summary>
+        [JsonPropertyName("body")] public JsonElement? Body { get; init; }
         [JsonPropertyName("stderr")] public string? Stderr { get; init; }
     }
 

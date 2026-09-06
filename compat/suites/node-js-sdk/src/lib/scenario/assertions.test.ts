@@ -221,6 +221,28 @@ describe("error matching", () => {
     );
   });
 
+  it("reads the code out of a nested Error node, not only the top level", () => {
+    // The AWS Query envelope, deserialized: the code is only ever inside the
+    // error node, and reading the top level alone found none at all — which
+    // failed every errorCode clause against a Query service here while the
+    // backends that did read it passed (#1896).
+    assert.ok(
+      errorMatches(
+        { Error: { Type: "Sender", Code: "NoSuchEntity", Message: "…" } },
+        { shape: "NoSuchEntity", code: "NoSuchEntity" },
+      ),
+    );
+    // The fault beside it is not a code, and a near miss is still a miss.
+    assert.ok(
+      !errorMatches({ Error: { Type: "Sender", Code: "NoSuchEntity" } }, { shape: "Sender", code: "Sender" }),
+    );
+    assert.ok(
+      !errorMatches({ Error: { Code: "NoSuchEntity" } }, { shape: "SuchEntity", code: "SuchEntity" }),
+    );
+    // A nested Error that is not an object states nothing.
+    assert.deepEqual(errorCodes({ Error: "NoSuchEntity" }), []);
+  });
+
   it("rejects another error and a non-error", () => {
     assert.ok(!errorMatches({ name: "AccessDenied" }, spec));
     assert.ok(!errorMatches(undefined, spec));

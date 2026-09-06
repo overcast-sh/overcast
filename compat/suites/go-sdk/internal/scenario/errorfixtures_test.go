@@ -3,6 +3,7 @@ package scenario
 import (
 	"bytes"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"net/http"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	awsxml "github.com/aws/aws-sdk-go-v2/aws/protocol/xml"
 	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	apigatewaytypes "github.com/aws/aws-sdk-go-v2/service/apigateway/types"
 	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
@@ -47,7 +49,9 @@ var knownCarriers = map[string]bool{
 // observedCarriers is what this suite can see. bodyType and bodyCode are
 // observed indirectly but faithfully: the Go SDK parses the body away before
 // the caller sees it, and what survives is smithy.APIError.ErrorCode(), which
-// is the code the protocol deserializer read out of __type or the code member.
+// is the code the protocol deserializer read — out of __type or the code member
+// for a JSON wire, and out of the error node of an XML one, whether that node
+// is the Query ErrorResponse envelope's or REST XML's bare <Error> root.
 var observedCarriers = map[string]bool{
 	"exceptionName":    true,
 	"bodyType":         true,
@@ -68,8 +72,11 @@ type errorFixtureWire struct {
 	Status        int               `json:"status"`
 	ExceptionName string            `json:"exceptionName"`
 	Headers       map[string]string `json:"headers"`
-	Body          map[string]any    `json:"body"`
-	Stderr        string            `json:"stderr"`
+	// Body is a JSON object for a JSON wire and a JSON string — the raw XML
+	// bytes — for one that is not, so it is kept undecoded and read by
+	// bodyCode/bodyMessage below (compat/model/README.md § Errors).
+	Body   json.RawMessage `json:"body"`
+	Stderr string          `json:"stderr"`
 }
 
 type errorFixtureCase struct {
@@ -136,20 +143,83 @@ func (f errorFixture) asSDKError(t *testing.T) error {
 	return &smithy.OperationError{ServiceID: "SQS", OperationName: "DeleteQueue", Err: transport}
 }
 
-func bodyCode(body map[string]any) string {
+// bodyCode is the code this suite's SDK would have resolved out of the error
+// body — the value that reaches the matcher as smithy.APIError.ErrorCode().
+//
+// A JSON body states it at the top level, in one of the three spellings
+// compat/model/README.md § Errors fixes. An XML one states it inside an error
+// node instead, and the code is resolved there by the SDK's own
+// awsxml.GetErrorResponseComponents — the function every generated Query and
+// REST XML deserializer calls, so what this returns for an XML wire is what a
+// live failure against a Query service really carries rather than a second
+// reading written here.
+func bodyCode(body json.RawMessage) string {
+	if components, ok := xmlErrorComponents(body); ok {
+		return components.Code
+	}
+	members := jsonBody(body)
 	for _, key := range []string{"__type", "Code", "code"} {
-		if v, ok := body[key].(string); ok {
+		if v, ok := members[key].(string); ok {
 			return v
 		}
 	}
 	return ""
 }
 
-func bodyMessage(body map[string]any) string {
-	if v, ok := body["message"].(string); ok {
+func bodyMessage(body json.RawMessage) string {
+	if components, ok := xmlErrorComponents(body); ok {
+		return components.Message
+	}
+	if v, ok := jsonBody(body)["message"].(string); ok {
 		return v
 	}
 	return ""
+}
+
+// xmlErrorComponents deserializes an XML error body the way the SDK does, or
+// reports false for a wire whose body is JSON.
+//
+// The fixture spells a non-JSON body as a JSON string holding its raw bytes,
+// so a body that decodes to a string is the raw wire and one that decodes to
+// an object is already parsed. Which of GetErrorResponseComponents' two modes
+// applies is the noErrorWrapping argument the generated deserializers pass:
+// REST XML's bare <Error> root is true, and the Query protocol's
+// <ErrorResponse> wrapper around one is false.
+func xmlErrorComponents(body json.RawMessage) (awsxml.ErrorComponents, bool) {
+	var raw string
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return awsxml.ErrorComponents{}, false
+	}
+	components, err := awsxml.GetErrorResponseComponents(strings.NewReader(raw), bareErrorRoot(raw))
+	if err != nil {
+		return awsxml.ErrorComponents{}, true
+	}
+	return components, true
+}
+
+// jsonBody decodes an object body, or returns nothing for a body that is
+// absent or not an object.
+func jsonBody(body json.RawMessage) map[string]any {
+	var out map[string]any
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil
+	}
+	return out
+}
+
+// bareErrorRoot reports whether an XML error body is REST XML's bare <Error>
+// root rather than the Query protocol's <ErrorResponse> wrapper around one.
+func bareErrorRoot(raw string) bool {
+	decoder := xml.NewDecoder(strings.NewReader(raw))
+	for {
+		token, err := decoder.Token()
+		if err != nil {
+			return false
+		}
+		if start, ok := token.(xml.StartElement); ok {
+			return start.Name.Local == "Error"
+		}
+	}
 }
 
 func TestSharedErrorFixtures(t *testing.T) {

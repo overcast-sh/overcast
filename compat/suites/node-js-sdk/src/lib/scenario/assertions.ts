@@ -215,9 +215,10 @@ function renderWhere(where: Where, ctx: EvalContext): string {
  * The two spellings exist because SDKs disagree about which they surface:
  * for SQS's not-found they are `QueueDoesNotExist` (the modeled shape) and
  * `AWS.SimpleQueueService.NonExistentQueue` (the awsQueryError code). The
- * JSON protocol carries whichever the service chose in `__type`, and AWS also
- * sends the legacy one in the `x-amzn-query-error` header, so all of those
- * surfaces are read. Nothing here is conditioned on Overcast.
+ * JSON protocol carries whichever the service chose in `__type`, an XML one
+ * carries it in the `Code` of its error node, and AWS also sends the legacy
+ * one in the `x-amzn-query-error` header, so all of those surfaces are read.
+ * Nothing here is conditioned on Overcast.
  */
 export function errorMatches(err: unknown, spec: ErrorSpec): boolean {
   const accepted = new Set([spec.shape, spec.code]);
@@ -245,6 +246,20 @@ export function errorCodes(err: unknown): string[] {
   add(e["__type"]);
   add(e["Code"]);
   add(e["code"]);
+
+  // The nested half of the Errors table's body-code row. An AWS Query service
+  // states its code only inside the ErrorResponse envelope's error node, and
+  // REST XML's bare <Error> body reads the same way wherever a parser keeps
+  // the root element rather than dropping it — which is the position the
+  // SDK's own loadQueryErrorCode and loadRestXmlErrorCode read. Reading only
+  // the top level saw no code at all in a Query error, and every errorCode
+  // clause against a Query service failed here while passing in the backends
+  // that did read it (#1896).
+  const nested = e["Error"];
+  if (nested !== null && typeof nested === "object") {
+    add((nested as Record<string, unknown>)["Code"]);
+    add((nested as Record<string, unknown>)["code"]);
+  }
 
   const response = e["$response"];
   if (response !== null && typeof response === "object") {

@@ -56,8 +56,11 @@ type errorFixtureWire struct {
 	Status        int               `json:"status"`
 	ExceptionName string            `json:"exceptionName"`
 	Headers       map[string]string `json:"headers"`
-	Body          map[string]any    `json:"body"`
-	Stderr        string            `json:"stderr"`
+	// Body is a JSON object for a JSON wire and a JSON string — the raw XML
+	// bytes — for one that is not, so it is kept undecoded and echoed as the
+	// CLI would echo it (compat/model/README.md § Errors).
+	Body   json.RawMessage `json:"body"`
+	Stderr string          `json:"stderr"`
 }
 
 type errorFixtureCase struct {
@@ -68,18 +71,24 @@ type errorFixtureCase struct {
 }
 
 // asCLIError renders a fixture the way this suite would have observed it: the
-// banner when the fixture states one, and otherwise the JSON body printed
-// after the `aws` invocation's exit status, which is how an error the CLI
-// could not model arrives.
+// banner when the fixture states one, and otherwise the body printed after the
+// `aws` invocation's exit status, which is how an error the CLI could not
+// model arrives.
+//
+// The body goes out as the service wrote it: a JSON wire's object serialized,
+// and a non-JSON wire's raw bytes — the XML of a Query or REST XML error —
+// verbatim. Echoing XML as a JSON string would be the fixture writing a wire
+// no service sends, and it is exactly what let the old regex extractor read a
+// nested code out of a body it could not have parsed.
 func (f errorFixture) asCLIError() error {
 	if f.Wire.Stderr != "" {
 		return fmt.Errorf("%s", f.Wire.Stderr)
 	}
-	body, err := json.Marshal(f.Wire.Body)
-	if err != nil {
-		return fmt.Errorf("aws widgets get-thing: exit status 255: %v", f.Wire.Body)
+	var raw string
+	if err := json.Unmarshal(f.Wire.Body, &raw); err == nil {
+		return fmt.Errorf("aws widgets get-thing: exit status 255: %s", raw)
 	}
-	return fmt.Errorf("aws widgets get-thing: exit status 255: %s", body)
+	return fmt.Errorf("aws widgets get-thing: exit status 255: %s", f.Wire.Body)
 }
 
 func TestSharedErrorFixtures(t *testing.T) {

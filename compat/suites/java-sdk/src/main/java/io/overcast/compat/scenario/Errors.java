@@ -28,9 +28,13 @@ import java.util.Map;
  *   <caption>Error surfaces</caption>
  *   <tr><td>{@code AwsServiceException.awsErrorDetails().errorCode()}</td>
  *       <td>the code the protocol unmarshaller resolved — the AWS JSON
- *           protocols' {@code __type}, the REST JSON body's {@code code}, a
- *           Query error's {@code Code}. The {@code bodyType} and
- *           {@code bodyCode} carriers.</td></tr>
+ *           protocols' {@code __type}, the REST JSON body's {@code code}, and
+ *           the {@code Code} inside an XML error node: the Query protocol's
+ *           {@code <ErrorResponse><Error><Code>} and REST XML's bare
+ *           {@code <Error><Code>}. The {@code bodyType} and {@code bodyCode}
+ *           carriers, which is why nothing in this class reads a body — the
+ *           unmarshaller has already found the code at whichever depth the
+ *           protocol states it.</td></tr>
  *   <tr><td>the exception's class simple name</td>
  *       <td>the class the SDK minted for a modeled error shape. The
  *           {@code exceptionName} carrier.</td></tr>

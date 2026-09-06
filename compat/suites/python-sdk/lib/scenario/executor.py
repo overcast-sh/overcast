@@ -244,12 +244,17 @@ def error_names(exc: Exception) -> list[str]:
     * ``Error.Code`` — one field, wherever the code came from. botocore
       resolves it from the body's ``__type`` (namespace already stripped), from
       ``x-amzn-errortype`` or the body's ``code``/``Code`` member for REST JSON,
-      and replaces it with the ``x-amzn-query-error`` code for a
-      query-compatible service. There is no ``Error.__type`` and no top-level
-      ``__type`` to read: botocore never sets either, so looking for them would
-      be reading a key only a test fixture could put there. ``Error.code`` is
-      read because the Errors table names that spelling, but botocore does not
-      use it;
+      from the ``Code`` inside the XML error node for AWS Query and REST XML —
+      ``<ErrorResponse><Error><Code>`` and the bare ``<Error><Code>`` alike,
+      which is the nested half of the Errors table's body-code row and the only
+      place a Query service ever states its code — and replaces it with the
+      ``x-amzn-query-error`` code for a query-compatible service. This one
+      field is why the nested position needs no separate read here: botocore
+      has already put it where the top-level one goes. There is no
+      ``Error.__type`` and no top-level ``__type`` to read: botocore never sets
+      either, so looking for them would be reading a key only a test fixture
+      could put there. ``Error.code`` is read because the Errors table names
+      that spelling, but botocore does not use it;
     * the ``x-amzn-query-error`` header itself, which is on the response
       whether or not the parser preferred it.
 

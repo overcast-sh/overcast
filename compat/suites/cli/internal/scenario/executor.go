@@ -2,6 +2,8 @@ package scenario
 
 import (
 	"context"
+	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"regexp"
@@ -427,21 +429,126 @@ func matchesError(err error, want *ErrorClause) bool {
 //
 // Two surfaces, because the CLI has two. Its own rendering of a modeled error
 // is the banner `An error occurred (<Code>) when calling the <Op> operation:`.
-// When it cannot model the response it prints the body instead, and a JSON
-// error body carries the code in `__type` (the AWS JSON protocols), `Code`
-// (a query-protocol error the CLI printed as JSON) or `code` (the REST JSON
-// spelling) — which is also how an Overcast fallback error arrives. Response
-// headers are not a surface here: the CLI hands this suite a process's stderr,
-// so `x-amzn-query-error` only ever reaches it already resolved into a banner.
+// When it cannot model the response it prints the body instead, and that body
+// is **parsed** rather than pattern-matched: `echoedBodyCodes` finds where it
+// starts, decodes it as JSON or as XML, and reads the code out of the
+// positions compat/model/README.md § Errors names — `__type`, `Code` or `code`
+// at the top level, and the `Code` inside an error node one level down, which
+// is the only place an AWS Query or REST XML service ever states it.
+//
+// It used to be one unanchored regex over the whole of stderr,
+// `"(?:__type|Code|code)"\s*:\s*"([^"]+)"`, and that read a nested code
+// correctly only by accident: it matched a `Code` member at any depth of
+// anything JSON-shaped, including one inside an unrelated object the CLI
+// happened to print, and it could not see an XML body at all. Parsing says
+// which position the code came from, which is what the shared fixtures assert
+// (#1896).
+//
+// Response headers are not a surface here: the CLI hands this suite a
+// process's stderr, so `x-amzn-query-error` only ever reaches it already
+// resolved into a banner.
 func errorCodes(msg string) []string {
 	var codes []string
 	for _, m := range cliErrorBannerRe.FindAllStringSubmatch(msg, -1) {
 		codes = append(codes, errorCodeSpellings(m[1])...)
 	}
-	for _, m := range jsonErrorCodeRe.FindAllStringSubmatch(msg, -1) {
-		codes = append(codes, errorCodeSpellings(m[1])...)
+	for _, code := range echoedBodyCodes(msg) {
+		codes = append(codes, errorCodeSpellings(code)...)
 	}
 	return codes
+}
+
+// echoedBodyCodes returns every code an error body the CLI echoed states, or
+// nothing when stderr carries no body this parser can decode.
+//
+// The body is embedded in a line the CLI wrote around it, so its start is
+// found rather than assumed: the first `{` that decodes as a JSON object, or
+// the first `<` that decodes as one of the three XML error envelopes AWS uses.
+// A candidate that does not decode is not a body, and a decode that succeeds
+// on something that is not an error envelope states no code — neither is a
+// reason to fall back to matching text.
+func echoedBodyCodes(msg string) []string {
+	if codes := jsonBodyCodes(msg); len(codes) > 0 {
+		return codes
+	}
+	return xmlBodyCodes(msg)
+}
+
+// jsonBodyCodes reads a JSON error body: the three top-level spellings, and
+// the same two inside a nested `Error` object.
+func jsonBodyCodes(msg string) []string {
+	for offset := strings.Index(msg, "{"); offset >= 0; {
+		var body map[string]any
+		if err := json.NewDecoder(strings.NewReader(msg[offset:])).Decode(&body); err == nil {
+			return jsonErrorCodes(body)
+		}
+		next := strings.Index(msg[offset+1:], "{")
+		if next < 0 {
+			return nil
+		}
+		offset += next + 1
+	}
+	return nil
+}
+
+// jsonErrorCodes reads the code positions of one decoded JSON body.
+func jsonErrorCodes(body map[string]any) []string {
+	var codes []string
+	add := func(from map[string]any, keys ...string) {
+		for _, key := range keys {
+			if value, ok := from[key].(string); ok && value != "" {
+				codes = append(codes, value)
+			}
+		}
+	}
+	add(body, "__type", "Code", "code")
+	if nested, ok := body["Error"].(map[string]any); ok {
+		add(nested, "Code", "code")
+	}
+	return codes
+}
+
+// xmlBodyCodes reads an XML error body — the AWS Query `<ErrorResponse>`
+// envelope, EC2's `<Response><Errors><Error>` dialect, and REST XML's bare
+// `<Error>` root. Only those three roots are read: an emulator or a proxy that
+// answered HTML would otherwise have any `<Code>` element in it treated as an
+// error code.
+func xmlBodyCodes(msg string) []string {
+	for offset := strings.Index(msg, "<"); offset >= 0; {
+		var body xmlErrorBody
+		if err := xml.Unmarshal([]byte(msg[offset:]), &body); err == nil {
+			switch body.XMLName.Local {
+			case "Error", "ErrorResponse", "Response":
+				var codes []string
+				for _, code := range []string{body.Code, body.NestedCode, body.EC2Code} {
+					if code != "" {
+						codes = append(codes, code)
+					}
+				}
+				return codes
+			}
+		}
+		next := strings.Index(msg[offset+1:], "<")
+		if next < 0 {
+			return nil
+		}
+		offset += next + 1
+	}
+	return nil
+}
+
+// xmlErrorBody is the three XML error envelopes at once. Each `Code` has its
+// own path, so one decode answers whichever envelope the body turned out to
+// be and leaves the other two empty.
+type xmlErrorBody struct {
+	XMLName xml.Name
+	// REST XML's bare <Error><Code>, the shape S3 answers with.
+	Code string `xml:"Code"`
+	// The AWS Query protocol's <ErrorResponse><Error><Code>, which IAM, SNS
+	// and every other Query service answers with.
+	NestedCode string `xml:"Error>Code"`
+	// EC2's own dialect, <Response><Errors><Error><Code>.
+	EC2Code string `xml:"Errors>Error>Code"`
 }
 
 // errorCodeSpellings returns one observed code in every spelling a clause may
@@ -465,14 +572,9 @@ func errorCodeSpellings(code string) []string {
 	return out
 }
 
-var (
-	// cliErrorBannerRe matches the AWS CLI's own error line. The fixture in
-	// executor_test.go writes it the same way the CLI does.
-	cliErrorBannerRe = regexp.MustCompile(`An error occurred \(([^()]+)\) when calling the `)
-	// jsonErrorCodeRe matches the code member of a JSON error body the CLI
-	// echoed rather than modeled.
-	jsonErrorCodeRe = regexp.MustCompile(`"(?:__type|Code|code)"\s*:\s*"([^"]+)"`)
-)
+// cliErrorBannerRe matches the AWS CLI's own error line. The fixture in
+// executor_test.go writes it the same way the CLI does.
+var cliErrorBannerRe = regexp.MustCompile(`An error occurred \(([^()]+)\) when calling the `)
 
 // acceptedCodes renders both halves of an error clause for a failure message.
 func acceptedCodes(want *ErrorClause) string {
