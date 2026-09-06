@@ -1,0 +1,1379 @@
+{
+  "version": 1,
+  "service": "kms",
+  "client": {
+    "sdkId": "KMS",
+    "endpointPrefix": "kms",
+    "signingName": "kms",
+    "protocol": "awsJson1_1",
+    "apiVersion": "2014-11-01",
+    "targetPrefix": "TrentService",
+    "awsQueryCompatible": false
+  },
+  "groups": [
+    {
+      "name": "kms-gen-key",
+      "kind": "lifecycle",
+      "setup": [],
+      "tests": [
+        {
+          "name": "CreateKey",
+          "op": "CreateKey",
+          "call": {
+            "op": "CreateKey",
+            "params": {
+              "Description": "compat-scenario key, initial description",
+              "KeySpec": "SYMMETRIC_DEFAULT",
+              "KeyUsage": "ENCRYPT_DECRYPT"
+            },
+            "export": {
+              "key.arn": "$.KeyMetadata.Arn",
+              "key.id": "$.KeyMetadata.KeyId"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.KeyMetadata.Arn": {
+                  "nonEmpty": true
+                },
+                "$.KeyMetadata.KeyId": {
+                  "nonEmpty": true
+                }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "DescribeKey",
+                  "params": {
+                    "KeyId": {
+                      "$ref": "key.id"
+                    }
+                  }
+                },
+                "checks": {
+                  "$.KeyMetadata.Arn": {
+                    "equals": {
+                      "$ref": "key.arn"
+                    }
+                  },
+                  "$.KeyMetadata.Description": {
+                    "equals": "compat-scenario key, initial description"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "DescribeKey",
+          "op": "DescribeKey",
+          "call": {
+            "op": "DescribeKey",
+            "params": {
+              "KeyId": {
+                "$ref": "key.id"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.KeyMetadata.Arn": {
+                  "equals": {
+                    "$ref": "key.arn"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "UpdateKeyDescription",
+          "op": "UpdateKeyDescription",
+          "call": {
+            "op": "UpdateKeyDescription",
+            "params": {
+              "Description": "compat-scenario key, updated description",
+              "KeyId": {
+                "$ref": "key.id"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "DescribeKey",
+                  "params": {
+                    "KeyId": {
+                      "$ref": "key.id"
+                    }
+                  }
+                },
+                "checks": {
+                  "$.KeyMetadata.Description": {
+                    "equals": "compat-scenario key, updated description"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "DescribeKeyMetadata",
+          "op": "DescribeKey",
+          "call": {
+            "op": "DescribeKey",
+            "params": {
+              "KeyId": {
+                "$ref": "key.id"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.KeyMetadata.AWSAccountId": {
+                  "matches": "^[0-9]{12}$"
+                },
+                "$.KeyMetadata.Enabled": {
+                  "equals": true
+                },
+                "$.KeyMetadata.KeyManager": {
+                  "equals": "CUSTOMER"
+                },
+                "$.KeyMetadata.KeySpec": {
+                  "equals": "SYMMETRIC_DEFAULT"
+                },
+                "$.KeyMetadata.KeyState": {
+                  "equals": "Enabled"
+                },
+                "$.KeyMetadata.KeyUsage": {
+                  "equals": "ENCRYPT_DECRYPT"
+                },
+                "$.KeyMetadata.MultiRegion": {
+                  "equals": false
+                },
+                "$.KeyMetadata.Origin": {
+                  "equals": "AWS_KMS"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "ListKeys",
+          "op": "ListKeys",
+          "call": {
+            "op": "ListKeys",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Keys",
+              "where": {
+                "$.KeyArn": {
+                  "$ref": "key.arn"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "TagResource",
+          "op": "TagResource",
+          "call": {
+            "op": "TagResource",
+            "params": {
+              "KeyId": {
+                "$ref": "key.id"
+              },
+              "Tags": [
+                {
+                  "TagKey": "compat",
+                  "TagValue": "scenario"
+                }
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "ListResourceTags",
+                  "params": {
+                    "KeyId": {
+                      "$ref": "key.id"
+                    }
+                  }
+                },
+                "itemsPath": "$.Tags",
+                "where": {
+                  "$.TagKey": "compat",
+                  "$.TagValue": "scenario"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "ListResourceTags",
+          "op": "ListResourceTags",
+          "call": {
+            "op": "ListResourceTags",
+            "params": {
+              "KeyId": {
+                "$ref": "key.id"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Tags",
+              "where": {
+                "$.TagKey": "compat",
+                "$.TagValue": "scenario"
+              }
+            }
+          ],
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "UntagResource",
+          "op": "UntagResource",
+          "call": {
+            "op": "UntagResource",
+            "params": {
+              "KeyId": {
+                "$ref": "key.id"
+              },
+              "TagKeys": [
+                "compat"
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "ListResourceTags",
+                  "params": {
+                    "KeyId": {
+                      "$ref": "key.id"
+                    }
+                  }
+                },
+                "itemsPath": "$.Tags",
+                "where": {
+                  "$.TagKey": "compat"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "GetKeyPolicy",
+          "op": "GetKeyPolicy",
+          "call": {
+            "op": "GetKeyPolicy",
+            "params": {
+              "KeyId": {
+                "$ref": "key.id"
+              },
+              "PolicyName": "default"
+            },
+            "export": {
+              "key.policy": "$.Policy"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Policy": {
+                  "matches": "\"Version\"\\s*:\\s*\"2012-10-17\""
+                },
+                "$.PolicyName": {
+                  "equals": "default"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "PutKeyPolicy",
+          "op": "PutKeyPolicy",
+          "call": {
+            "op": "PutKeyPolicy",
+            "params": {
+              "KeyId": {
+                "$ref": "key.id"
+              },
+              "Policy": {
+                "$ref": "key.policy"
+              },
+              "PolicyName": "default"
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "GetKeyPolicy",
+                  "params": {
+                    "KeyId": {
+                      "$ref": "key.id"
+                    },
+                    "PolicyName": "default"
+                  }
+                },
+                "checks": {
+                  "$.Policy": {
+                    "equals": {
+                      "$ref": "key.policy"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKey",
+            "GetKeyPolicy"
+          ]
+        },
+        {
+          "name": "ListKeyPolicies",
+          "op": "ListKeyPolicies",
+          "call": {
+            "op": "ListKeyPolicies",
+            "params": {
+              "KeyId": {
+                "$ref": "key.id"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.PolicyNames",
+              "where": {
+                "$": "default"
+              }
+            }
+          ],
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "GenerateDataKey",
+          "op": "GenerateDataKey",
+          "call": {
+            "op": "GenerateDataKey",
+            "params": {
+              "KeyId": {
+                "$ref": "key.id"
+              },
+              "KeySpec": "AES_256"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.KeyId": {
+                  "equals": {
+                    "$ref": "key.arn"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "GenerateDataKeyWithoutPlaintext",
+          "op": "GenerateDataKeyWithoutPlaintext",
+          "call": {
+            "op": "GenerateDataKeyWithoutPlaintext",
+            "params": {
+              "KeyId": {
+                "$ref": "key.id"
+              },
+              "KeySpec": "AES_256"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.KeyId": {
+                  "equals": {
+                    "$ref": "key.arn"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "GenerateDataKeyPair",
+          "op": "GenerateDataKeyPair",
+          "call": {
+            "op": "GenerateDataKeyPair",
+            "params": {
+              "KeyId": {
+                "$ref": "key.id"
+              },
+              "KeyPairSpec": "RSA_2048"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.KeyId": {
+                  "equals": {
+                    "$ref": "key.arn"
+                  }
+                },
+                "$.KeyPairSpec": {
+                  "equals": "RSA_2048"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "GenerateRandom",
+          "op": "GenerateRandom",
+          "call": {
+            "op": "GenerateRandom",
+            "params": {
+              "NumberOfBytes": 32
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Plaintext": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "CreateGrant",
+          "op": "CreateGrant",
+          "call": {
+            "op": "CreateGrant",
+            "params": {
+              "GranteePrincipal": "arn:aws:iam::123456789012:root",
+              "KeyId": {
+                "$ref": "key.id"
+              },
+              "Name": {
+                "$name": "grant"
+              },
+              "Operations": [
+                "Decrypt",
+                "Encrypt"
+              ],
+              "RetiringPrincipal": "arn:aws:iam::123456789012:root"
+            },
+            "export": {
+              "key.grantid": "$.GrantId"
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "ListGrants",
+                  "params": {
+                    "KeyId": {
+                      "$ref": "key.id"
+                    }
+                  }
+                },
+                "itemsPath": "$.Grants",
+                "where": {
+                  "$.GrantId": {
+                    "$ref": "key.grantid"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "ListGrants",
+          "op": "ListGrants",
+          "call": {
+            "op": "ListGrants",
+            "params": {
+              "KeyId": {
+                "$ref": "key.id"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Grants",
+              "where": {
+                "$.GrantId": {
+                  "$ref": "key.grantid"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateGrant",
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "ListRetirableGrants",
+          "op": "ListRetirableGrants",
+          "call": {
+            "op": "ListRetirableGrants",
+            "params": {
+              "RetiringPrincipal": "arn:aws:iam::123456789012:root"
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Grants",
+              "where": {
+                "$.GrantId": {
+                  "$ref": "key.grantid"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateGrant"
+          ]
+        },
+        {
+          "name": "RevokeGrant",
+          "op": "RevokeGrant",
+          "call": {
+            "op": "RevokeGrant",
+            "params": {
+              "GrantId": {
+                "$ref": "key.grantid"
+              },
+              "KeyId": {
+                "$ref": "key.id"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "ListGrants",
+                  "params": {
+                    "KeyId": {
+                      "$ref": "key.id"
+                    }
+                  }
+                },
+                "itemsPath": "$.Grants",
+                "where": {
+                  "$.GrantId": {
+                    "$ref": "key.grantid"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateGrant",
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "CreateGrantForRetire",
+          "op": "CreateGrant",
+          "call": {
+            "op": "CreateGrant",
+            "params": {
+              "GranteePrincipal": "arn:aws:iam::123456789012:root",
+              "KeyId": {
+                "$ref": "key.id"
+              },
+              "Name": {
+                "$name": "retire"
+              },
+              "Operations": [
+                "Decrypt",
+                "Encrypt"
+              ],
+              "RetiringPrincipal": "arn:aws:iam::123456789012:root"
+            },
+            "export": {
+              "key.retiregrantid": "$.GrantId",
+              "key.retiregranttoken": "$.GrantToken"
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "ListGrants",
+                  "params": {
+                    "KeyId": {
+                      "$ref": "key.id"
+                    }
+                  }
+                },
+                "itemsPath": "$.Grants",
+                "where": {
+                  "$.GrantId": {
+                    "$ref": "key.retiregrantid"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "RetireGrant",
+          "op": "RetireGrant",
+          "call": {
+            "op": "RetireGrant",
+            "params": {
+              "GrantToken": {
+                "$ref": "key.retiregranttoken"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "ListGrants",
+                  "params": {
+                    "KeyId": {
+                      "$ref": "key.id"
+                    }
+                  }
+                },
+                "itemsPath": "$.Grants",
+                "where": {
+                  "$.GrantId": {
+                    "$ref": "key.retiregrantid"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateGrantForRetire",
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "CreateKeyAsymmetric",
+          "op": "CreateKey",
+          "call": {
+            "op": "CreateKey",
+            "params": {
+              "Description": "compat-scenario asymmetric key",
+              "KeySpec": "RSA_2048",
+              "KeyUsage": "ENCRYPT_DECRYPT"
+            },
+            "export": {
+              "key.rsaarn": "$.KeyMetadata.Arn",
+              "key.rsaid": "$.KeyMetadata.KeyId"
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "DescribeKey",
+                  "params": {
+                    "KeyId": {
+                      "$ref": "key.rsaid"
+                    }
+                  }
+                },
+                "checks": {
+                  "$.KeyMetadata.Arn": {
+                    "equals": {
+                      "$ref": "key.rsaarn"
+                    }
+                  },
+                  "$.KeyMetadata.KeySpec": {
+                    "equals": "RSA_2048"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetPublicKey",
+          "op": "GetPublicKey",
+          "call": {
+            "op": "GetPublicKey",
+            "params": {
+              "KeyId": {
+                "$ref": "key.rsaid"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.KeyId": {
+                  "equals": {
+                    "$ref": "key.rsaarn"
+                  }
+                },
+                "$.KeySpec": {
+                  "equals": "RSA_2048"
+                },
+                "$.KeyUsage": {
+                  "equals": "ENCRYPT_DECRYPT"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKeyAsymmetric"
+          ]
+        },
+        {
+          "name": "CreateAlias",
+          "op": "CreateAlias",
+          "call": {
+            "op": "CreateAlias",
+            "params": {
+              "AliasName": {
+                "$concat": [
+                  "alias/",
+                  {
+                    "$name": "alias"
+                  }
+                ]
+              },
+              "TargetKeyId": {
+                "$ref": "key.id"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "ListAliases",
+                  "params": {
+                    "KeyId": {
+                      "$ref": "key.id"
+                    }
+                  }
+                },
+                "itemsPath": "$.Aliases",
+                "where": {
+                  "$.AliasName": {
+                    "$concat": [
+                      "alias/",
+                      {
+                        "$name": "alias"
+                      }
+                    ]
+                  },
+                  "$.TargetKeyId": {
+                    "$ref": "key.id"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "ListAliases",
+          "op": "ListAliases",
+          "call": {
+            "op": "ListAliases",
+            "params": {
+              "KeyId": {
+                "$ref": "key.id"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Aliases",
+              "where": {
+                "$.AliasName": {
+                  "$concat": [
+                    "alias/",
+                    {
+                      "$name": "alias"
+                    }
+                  ]
+                },
+                "$.TargetKeyId": {
+                  "$ref": "key.id"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "UpdateAlias",
+          "op": "UpdateAlias",
+          "call": {
+            "op": "UpdateAlias",
+            "params": {
+              "AliasName": {
+                "$concat": [
+                  "alias/",
+                  {
+                    "$name": "alias"
+                  }
+                ]
+              },
+              "TargetKeyId": {
+                "$ref": "key.rsaid"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "ListAliases",
+                  "params": {
+                    "KeyId": {
+                      "$ref": "key.rsaid"
+                    }
+                  }
+                },
+                "itemsPath": "$.Aliases",
+                "where": {
+                  "$.AliasName": {
+                    "$concat": [
+                      "alias/",
+                      {
+                        "$name": "alias"
+                      }
+                    ]
+                  },
+                  "$.TargetKeyId": {
+                    "$ref": "key.rsaid"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKeyAsymmetric"
+          ]
+        },
+        {
+          "name": "DeleteAlias",
+          "op": "DeleteAlias",
+          "call": {
+            "op": "DeleteAlias",
+            "params": {
+              "AliasName": {
+                "$concat": [
+                  "alias/",
+                  {
+                    "$name": "alias"
+                  }
+                ]
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "ListAliases",
+                  "params": {
+                    "KeyId": {
+                      "$ref": "key.rsaid"
+                    }
+                  }
+                },
+                "itemsPath": "$.Aliases",
+                "where": {
+                  "$.AliasName": {
+                    "$concat": [
+                      "alias/",
+                      {
+                        "$name": "alias"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKeyAsymmetric"
+          ]
+        },
+        {
+          "name": "ScheduleKeyDeletionAsymmetric",
+          "op": "ScheduleKeyDeletion",
+          "call": {
+            "op": "ScheduleKeyDeletion",
+            "params": {
+              "KeyId": {
+                "$ref": "key.rsaid"
+              },
+              "PendingWindowInDays": 7
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "DescribeKey",
+                  "params": {
+                    "KeyId": {
+                      "$ref": "key.rsaid"
+                    }
+                  }
+                },
+                "checks": {
+                  "$.KeyMetadata.KeyState": {
+                    "equals": "PendingDeletion"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKeyAsymmetric"
+          ]
+        },
+        {
+          "name": "DisableKey",
+          "op": "DisableKey",
+          "call": {
+            "op": "DisableKey",
+            "params": {
+              "KeyId": {
+                "$ref": "key.id"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "DescribeKey",
+                  "params": {
+                    "KeyId": {
+                      "$ref": "key.id"
+                    }
+                  }
+                },
+                "checks": {
+                  "$.KeyMetadata.Enabled": {
+                    "equals": false
+                  },
+                  "$.KeyMetadata.KeyState": {
+                    "equals": "Disabled"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "EnableKey",
+          "op": "EnableKey",
+          "call": {
+            "op": "EnableKey",
+            "params": {
+              "KeyId": {
+                "$ref": "key.id"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "DescribeKey",
+                  "params": {
+                    "KeyId": {
+                      "$ref": "key.id"
+                    }
+                  }
+                },
+                "checks": {
+                  "$.KeyMetadata.Enabled": {
+                    "equals": true
+                  },
+                  "$.KeyMetadata.KeyState": {
+                    "equals": "Enabled"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "ScheduleKeyDeletion",
+          "op": "ScheduleKeyDeletion",
+          "call": {
+            "op": "ScheduleKeyDeletion",
+            "params": {
+              "KeyId": {
+                "$ref": "key.id"
+              },
+              "PendingWindowInDays": 7
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.KeyId": {
+                  "equals": {
+                    "$ref": "key.arn"
+                  }
+                },
+                "$.KeyState": {
+                  "equals": "PendingDeletion"
+                },
+                "$.PendingWindowInDays": {
+                  "equals": 7
+                }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "DescribeKey",
+                  "params": {
+                    "KeyId": {
+                      "$ref": "key.id"
+                    }
+                  }
+                },
+                "checks": {
+                  "$.KeyMetadata.KeyState": {
+                    "equals": "PendingDeletion"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "CancelKeyDeletion",
+          "op": "CancelKeyDeletion",
+          "call": {
+            "op": "CancelKeyDeletion",
+            "params": {
+              "KeyId": {
+                "$ref": "key.id"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "DescribeKey",
+                  "params": {
+                    "KeyId": {
+                      "$ref": "key.id"
+                    }
+                  }
+                },
+                "checks": {
+                  "$.KeyMetadata.KeyState": {
+                    "equals": "Disabled"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "ScheduleKeyDeletionFinal",
+          "op": "ScheduleKeyDeletion",
+          "call": {
+            "op": "ScheduleKeyDeletion",
+            "params": {
+              "KeyId": {
+                "$ref": "key.id"
+              },
+              "PendingWindowInDays": 7
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "DescribeKey",
+                  "params": {
+                    "KeyId": {
+                      "$ref": "key.id"
+                    }
+                  }
+                },
+                "checks": {
+                  "$.KeyMetadata.KeyState": {
+                    "equals": "PendingDeletion"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKey"
+          ]
+        }
+      ],
+      "teardown": []
+    },
+    {
+      "name": "kms-gen-probe",
+      "kind": "probe",
+      "parallel": true,
+      "setup": [],
+      "tests": [
+        {
+          "name": "DescribeCustomKeyStores",
+          "op": "DescribeCustomKeyStores",
+          "call": {
+            "op": "DescribeCustomKeyStores",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Truncated": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetKeyRotationStatus",
+          "op": "GetKeyRotationStatus",
+          "call": {
+            "op": "GetKeyRotationStatus",
+            "params": {
+              "KeyId": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.KeyId": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetParametersForImport",
+          "op": "GetParametersForImport",
+          "call": {
+            "op": "GetParametersForImport",
+            "params": {
+              "KeyId": "00000000-0000-0000-0000-000000000000",
+              "WrappingAlgorithm": "RSAES_OAEP_SHA_1",
+              "WrappingKeySpec": "RSA_2048"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.KeyId": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "ListKeyRotations",
+          "op": "ListKeyRotations",
+          "call": {
+            "op": "ListKeyRotations",
+            "params": {
+              "KeyId": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Truncated": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "teardown": []
+    }
+  ]
+}
