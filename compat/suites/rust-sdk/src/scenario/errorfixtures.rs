@@ -65,7 +65,7 @@ const EXPECTED_SKIPS: &[&str] = &[
 /// stands. A floor, not an equality: a fixture added later raises it, and a
 /// change that quietly stopped answering some of them lowers it, which is the
 /// direction that has to fail.
-const MINIMUM_CHECKED: usize = 20;
+const MINIMUM_CHECKED: usize = 27;
 
 const WHAT_THIS_SUITE_SEES: &str =
     "the SDK hands this suite a resolved error code, the raw response body its own \
@@ -115,6 +115,24 @@ struct Expectation {
 struct FixtureError {
     shape: String,
     code: String,
+}
+
+/// The fixture's body as this suite's interceptor would have handed it to the
+/// matcher.
+///
+/// A JSON wire's body is already the document. A wire that is not JSON is
+/// spelled as a string holding its raw bytes, and reaches [`errors::body_code`]
+/// only once [`super::xml`] has converted it — which is exactly what
+/// `Capture::parsed` in [`super::capture`] does on a live response, and the
+/// whole of what #1878 fixed: an XML body parsed as JSON is `Json::Null`, so
+/// every path and every body code went missing rather than failing.
+fn deserialized_body(body: Option<&Json>) -> Option<Json> {
+    match body {
+        Some(Json::String(raw)) if super::xml::looks_like_xml(raw.as_bytes()) => {
+            super::xml::to_document(raw.as_bytes())
+        }
+        other => other.cloned(),
+    }
 }
 
 fn fixture_dir() -> PathBuf {
@@ -221,7 +239,8 @@ fn shared_error_fixtures() {
             .as_ref()
             .and_then(|headers| headers.get(errors::QUERY_ERROR_HEADER))
             .map(String::as_str);
-        let codes = errors::surfaces(None, header, fixture.wire.body.as_ref());
+        let body = deserialized_body(fixture.wire.body.as_ref());
+        let codes = errors::surfaces(None, header, body.as_ref());
 
         for expectation in &fixture.expect {
             if expectation.matches {

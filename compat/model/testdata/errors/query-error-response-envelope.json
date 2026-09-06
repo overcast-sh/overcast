@@ -1,0 +1,36 @@
+{
+  "id": "query-error-response-envelope",
+  "title": "AWS Query not-found, the ErrorResponse envelope's nested Error.Code",
+  "why": "The body-code carrier's nested row, which only one backend read structurally before #1896. An AWS Query service states its code inside <ErrorResponse><Error><Code>, never at the top level of the body, so a matcher that reads the top level alone sees no code at all and an errorCode clause fails — in five suites at once, while rust-sdk and cli passed. This is IAM's own shape: byte for byte what internal/protocol's WriteQueryXMLError emits for a GetGroup naming a group that does not exist, and what AWS answers but for the xmlns attribute it puts on the root, which no code carrier reads. The body is a string here rather than an object because it is not JSON: the wire is XML, and each suite renders it the way its own stack does, which is what lets the dotnet-sdk suite replay it through a real Query client and see its SDK's XML error unmarshaller resolve the code. The obvious other near miss — a clause naming NoSuchEntityException, which the observed code is a prefix of — is deliberately not among the expectations: the AWS SDK for .NET names IAM's modeled exception class exactly that, so it is a genuine exceptionName surface there and a genuine miss everywhere else. A near miss the corpus cannot state uniformly belongs in a suite's own tests, and near-miss-longer-code pins the rule itself.",
+  "carriers": ["bodyCode"],
+  "wire": {
+    "status": 400,
+    "headers": {
+      "Content-Type": "text/xml"
+    },
+    "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ErrorResponse><Error><Type>Sender</Type><Code>NoSuchEntity</Code><Message>The group with name compat-absent cannot be found.</Message></Error><RequestId>2e6d4dd2-6f2a-4c6e-9b3f-1f0a0b2c3d4e</RequestId></ErrorResponse>"
+  },
+  "expect": [
+    {
+      "name": "a clause naming the code the envelope states",
+      "error": { "shape": "NoSuchEntity", "code": "NoSuchEntity" },
+      "matches": true,
+      "via": "bodyCode"
+    },
+    {
+      "name": "a near miss the observed code ends with",
+      "error": { "shape": "SuchEntity", "code": "SuchEntity" },
+      "matches": false
+    },
+    {
+      "name": "an unrelated code from the same service",
+      "error": { "shape": "EntityAlreadyExists", "code": "EntityAlreadyExists" },
+      "matches": false
+    },
+    {
+      "name": "the fault the envelope also carries, which is not a code",
+      "error": { "shape": "Sender", "code": "Sender" },
+      "matches": false
+    }
+  ]
+}

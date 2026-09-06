@@ -90,7 +90,11 @@ interface FixtureWire {
   status?: number;
   exceptionName?: string;
   headers?: Record<string, string>;
-  body?: Record<string, unknown>;
+  /**
+   * A JSON object for a JSON wire, and a string — the raw XML bytes — for one
+   * that is not (compat/model/README.md § Errors).
+   */
+  body?: Record<string, unknown> | string;
   stderr?: string;
 }
 
@@ -139,13 +143,23 @@ function loadFixtures(): Fixture[] {
  * The fixture as this suite would have observed it: an Error carrying the
  * class name the SDK minted, the deserialized body members it lifts onto the
  * error, and the raw response the SDK attaches as `$response`.
+ *
+ * An XML wire is deserialized first, by the rule `@smithy/core`'s
+ * `parseXmlBody` follows: the root element is dropped and its contents are the
+ * document. So the AWS Query envelope
+ * `<ErrorResponse><Error><Code>…</Error></ErrorResponse>` deserializes to a
+ * nested `Error.Code`, and REST XML's bare `<Error><Code>…</Error>` to a
+ * top-level `Code` — the two positions the Errors table's body-code row names,
+ * from one and the same rule rather than from two.
  */
 function asSdkError(wire: FixtureWire): Error {
-  const body = wire.body ?? {};
-  const err = new Error(String(body["message"] ?? "")) as Error &
+  const body = typeof wire.body === "string"
+    ? parseXmlDocument(wire.body)
+    : (wire.body ?? {});
+  const err = new Error(String(body["message"] ?? body["Message"] ?? "")) as Error &
     Record<string, unknown>;
   if (wire.exceptionName !== undefined) err.name = wire.exceptionName;
-  for (const key of ["__type", "Code", "code"]) {
+  for (const key of ["__type", "Code", "code", "Error"]) {
     if (body[key] !== undefined) err[key] = body[key];
   }
   err["$response"] = {
@@ -153,6 +167,60 @@ function asSdkError(wire: FixtureWire): Error {
     headers: { ...(wire.headers ?? {}) },
   };
   return err;
+}
+
+/**
+ * The element-only subset of XML that AWS error bodies are written in, as the
+ * document `parseXmlBody` would have produced: elements become object keys,
+ * a leaf is its text, and the root element is dropped.
+ *
+ * Deliberately small. Attributes, namespaces, CDATA, repeated siblings and
+ * mixed content are all things a real response body has and an error body does
+ * not, and every one of them belongs to the SDK's parser rather than to a test
+ * that renders one wire. A fixture that needed any of them would be a fixture
+ * this suite should not be answering by hand.
+ */
+function parseXmlDocument(source: string): Record<string, unknown> {
+  const token =
+    /<\?[\s\S]*?\?>|<!--[\s\S]*?-->|<\/([A-Za-z_][\w.:-]*)\s*>|<([A-Za-z_][\w.:-]*)[^>]*?(\/?)>/g;
+  const stack: { name: string; children: Record<string, unknown>; text: string }[] = [
+    { name: "", children: {}, text: "" },
+  ];
+  let consumed = 0;
+  for (let match = token.exec(source); match !== null; match = token.exec(source)) {
+    const top = stack[stack.length - 1]!;
+    top.text += source.slice(consumed, match.index);
+    consumed = token.lastIndex;
+    if (match[0].startsWith("<?") || match[0].startsWith("<!--")) continue;
+    if (match[1] !== undefined) {
+      const node = stack.pop()!;
+      const parent = stack[stack.length - 1]!;
+      parent.children[node.name] =
+        Object.keys(node.children).length > 0 ? node.children : decodeEntities(node.text.trim());
+    } else if (match[3] === "/") {
+      top.children[match[2]!] = "";
+    } else {
+      stack.push({ name: match[2]!, children: {}, text: "" });
+    }
+  }
+  const root = stack[0]!.children;
+  const rootName = Object.keys(root)[0];
+  const contents = rootName === undefined ? undefined : root[rootName];
+  return contents !== null && typeof contents === "object"
+    ? (contents as Record<string, unknown>)
+    : {};
+}
+
+const ENTITIES: Record<string, string> = {
+  "&amp;": "&",
+  "&lt;": "<",
+  "&gt;": ">",
+  "&quot;": '"',
+  "&apos;": "'",
+};
+
+function decodeEntities(text: string): string {
+  return text.replace(/&(?:amp|lt|gt|quot|apos);/g, (entity) => ENTITIES[entity] ?? entity);
 }
 
 /**

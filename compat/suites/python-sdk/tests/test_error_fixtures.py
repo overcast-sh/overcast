@@ -18,6 +18,7 @@ from __future__ import annotations
 import glob
 import json
 import os
+import re
 import sys
 import unittest
 from typing import Any
@@ -25,6 +26,7 @@ from typing import Any
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from botocore.exceptions import ClientError  # noqa: E402
+from botocore.parsers import create_parser  # noqa: E402
 
 # REPO_ROOT is derived from registry.json's own location, which is the rule the
 # scenario loader already resolves a group's `scenario` path by — never the
@@ -101,66 +103,63 @@ def load_fixtures() -> list[dict]:
 def as_client_error(wire: dict) -> ClientError:
     """The fixture as botocore would have handed it to this suite.
 
-    This mirrors ``botocore.parsers``: ``BaseJSONParser._do_error_parse``
-    resolves one ``Error.Code`` out of the body's ``__type`` (cut at the first
-    ``:``, then after the last ``#``); ``_do_query_compatible_error_parse``
-    replaces it with the ``x-amzn-query-error`` code when that header is there,
-    keeping the displaced one as ``QueryErrorCode`` and the fault as ``Type``;
-    and ``RestJSONParser._inject_error_code`` then prefers ``x-amzn-errortype``
-    and falls back to the body's ``code``/``Code`` member. Applying all three in
-    that order renders every fixture exactly as its own protocol's parser
-    would, because no fixture carries two protocols' surfaces at once.
+    The wire is handed to **botocore's own parser** for the protocol that wrote
+    it, rather than to a reimplementation of one here. That is what makes this
+    suite's answer to a fixture the answer boto3 gives: ``Error.Code`` is
+    resolved by ``BaseJSONParser._do_error_parse`` out of ``__type``, replaced
+    with the ``x-amzn-query-error`` code by ``_do_query_compatible_error_parse``
+    when that header is present, injected from ``x-amzn-errortype`` or the
+    body's ``code``/``Code`` member by ``RestJSONParser._inject_error_code``,
+    and read out of the XML error node by ``QueryParser`` and
+    ``RestXMLParser`` — including the ``str(status_code)`` botocore substitutes
+    for a JSON body that names no code at all, which is botocore's behaviour to
+    state rather than this file's to invent.
 
-    Nothing here invents a key botocore does not set: there is no
-    ``Error.__type`` and no top-level ``__type``, which is why ``error_names``
-    no longer looks for either. Verified against botocore 1.43.67 by driving a
-    real client with a stubbed transport for each of these wires."""
-    body = dict(wire.get("body") or {})
+    A hand-written mirror of those rules stood here until #1896, and being a
+    mirror is how it came to be wrong: it read only the top level of a JSON
+    object, so an AWS Query error — whose code is only ever inside
+    ``<ErrorResponse><Error><Code>`` — resolved to no code at all, and the
+    substituted status code stood in its place. There is nothing left to keep
+    in step now.
+
+    The protocol is taken from the wire, because no fixture carries two
+    protocols' surfaces at once and the corpus does not name one:
+    ``<ErrorResponse>``/``<Response>`` is the AWS Query envelope, a bare
+    ``<Error>`` root is REST XML's, a JSON body naming ``code``/``Code`` rather
+    than ``__type`` is REST JSON's, and anything else is an AWS JSON one."""
+    if wire.get("stderr"):
+        # No HTTP exchange at all: the process died before the wire, and there
+        # is no response for a parser to read. The error states **no code** —
+        # not the status of a response that never arrived, which is what
+        # cli-no-parseable-code exists to pin.
+        return ClientError(
+            {"Error": {"Code": "", "Message": wire["stderr"]}, "ResponseMetadata": {}},
+            "Op",
+        )
+
+    body = wire.get("body")
     headers = dict(wire.get("headers") or {})
     status = wire.get("status", 400)
+    raw = body.encode("utf-8") if isinstance(body, str) else json.dumps(body or {}).encode("utf-8")
 
-    error: dict[str, Any] = {
-        "Message": body.get("message", body.get("Message", "")),
-        "Code": "",
-    }
+    parsed = create_parser(_protocol(body)).parse(
+        {"body": raw, "headers": headers, "status_code": status}, None
+    )
 
-    code = body.get("__type", str(status) if status is not None else None)
-    if code is not None:
-        if ":" in code:
-            code = code.split(":", 1)[0]
-        if "#" in code:
-            code = code.rsplit("#", 1)[1]
-        if "x-amzn-query-error" in headers:
-            parts = headers["x-amzn-query-error"].split(";")
-            if len(parts) == 2 and parts[0]:
-                error["QueryErrorCode"] = code
-                error["Type"] = parts[1]
-                code = parts[0]
-        error["Code"] = code
-
-    injected = None
-    if "x-amzn-errortype" in headers:
-        injected = headers["x-amzn-errortype"]
-    elif "code" in body or "Code" in body:
-        injected = body.get("code", body.get("Code", ""))
-    if isinstance(injected, str):
-        error["Code"] = injected.split(":", 1)[0].rsplit("#", 1)[-1]
-    elif injected is not None:
-        error["Code"] = injected
-
-    response = {
-        "Error": error,
-        "ResponseMetadata": {
-            "HTTPStatusCode": status,
-            "HTTPHeaders": headers,
-            "RetryAttempts": 0,
-        },
-    }
     cls = ClientError
     name = wire.get("exceptionName")
     if name:
         cls = type(name, (ClientError,), {})
-    return cls(response, "Op")
+    return cls(parsed, "Op")
+
+
+def _protocol(body: Any) -> str:
+    """Which botocore parser wrote this wire (see ``as_client_error``)."""
+    if isinstance(body, str):
+        root = re.search(r"<\s*([A-Za-z_][\w.-]*)", body)
+        return "rest-xml" if root is not None and root.group(1) == "Error" else "query"
+    members = body or {}
+    return "rest-json" if "__type" not in members and ("code" in members or "Code" in members) else "json"
 
 
 class TestSharedErrorFixtures(unittest.TestCase):

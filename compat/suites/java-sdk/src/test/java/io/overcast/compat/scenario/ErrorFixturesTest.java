@@ -8,6 +8,10 @@ import org.junit.jupiter.api.DynamicNode;
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
+import org.w3c.dom.Element;
+import org.w3c.dom.NodeList;
+import org.xml.sax.InputSource;
+import org.xml.sax.SAXException;
 import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
 import software.amazon.awssdk.http.SdkHttpResponse;
@@ -16,8 +20,13 @@ import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.organizations.model.PolicyNotFoundException;
 import software.amazon.awssdk.services.sqs.model.QueueDoesNotExistException;
 
+import javax.xml.XMLConstants;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+
 import java.io.File;
 import java.io.IOException;
+import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -61,7 +70,10 @@ class ErrorFixturesTest {
      * observed indirectly but faithfully: the Java SDK parses the body away
      * before the caller sees the error, and what survives is
      * {@code awsErrorDetails().errorCode()}, which is the code the protocol
-     * unmarshaller read out of {@code __type} or the {@code code} member.
+     * unmarshaller read — out of {@code __type} or the {@code code} member for
+     * a JSON wire, and out of the error node of an XML one, whether that node
+     * is the Query {@code ErrorResponse} envelope's or REST XML's bare
+     * {@code <Error>} root.
      */
     private static final Set<String> OBSERVED_CARRIERS =
             Set.of("exceptionName", "bodyType", "bodyCode", "queryErrorHeader");
@@ -84,9 +96,15 @@ class ErrorFixturesTest {
     @JsonIgnoreProperties(ignoreUnknown = false)
     record Fixture(String id, String title, String why, List<String> carriers, Wire wire, List<Case> expect) {}
 
+    /**
+     * {@code body} is a {@code Map} for a JSON wire and a {@code String} — the
+     * raw XML bytes — for one that is not, so it is typed as {@code Object}
+     * and read by {@code bodyCode}/{@code bodyMessage} below
+     * ({@code compat/model/README.md} § Errors).
+     */
     @JsonIgnoreProperties(ignoreUnknown = false)
     record Wire(Integer status, String exceptionName, Map<String, String> headers,
-                Map<String, Object> body, String stderr) {}
+                Object body, String stderr) {}
 
     @JsonIgnoreProperties(ignoreUnknown = false)
     record Case(String name, Spec error, boolean matches, String via) {}
@@ -218,20 +236,83 @@ class ErrorFixturesTest {
                 .build();
     }
 
-    private static String bodyCode(Map<String, Object> body) {
-        if (body == null) {
-            return null;
+    /**
+     * The code this suite's SDK would have resolved out of the error body —
+     * the value that reaches the matcher as
+     * {@code awsErrorDetails().errorCode()}.
+     *
+     * <p>A JSON body states it at the top level, in one of the three spellings
+     * {@code compat/model/README.md} § Errors fixes. An XML one states it
+     * inside an error node instead, which is where the SDK's own XML error
+     * unmarshaller looks: the AWS Query protocol wraps that node in
+     * {@code <ErrorResponse>} and REST XML's S3 dialect makes it the root, and
+     * both are read below. Reading only the top level found no code at all in
+     * a Query error, which failed every {@code errorCode} clause against a
+     * Query service here while passing in the backends that read the nested
+     * position (#1896).
+     */
+    private static String bodyCode(Object body) {
+        if (body instanceof String xml) {
+            return xmlErrorField(xml, "Code");
         }
-        for (String key : List.of("__type", "Code", "code")) {
-            if (body.get(key) instanceof String s) {
-                return s;
+        if (body instanceof Map<?, ?> members) {
+            for (String key : List.of("__type", "Code", "code")) {
+                if (members.get(key) instanceof String s) {
+                    return s;
+                }
             }
         }
         return null;
     }
 
-    private static String bodyMessage(Map<String, Object> body) {
-        return body != null && body.get("message") instanceof String s ? s : "";
+    private static String bodyMessage(Object body) {
+        if (body instanceof String xml) {
+            String message = xmlErrorField(xml, "Message");
+            return message == null ? "" : message;
+        }
+        return body instanceof Map<?, ?> members && members.get("message") instanceof String s ? s : "";
+    }
+
+    /**
+     * One field of an XML error body's error node, or null when the body is
+     * not one of the two envelopes AWS writes.
+     *
+     * <p>The error node is the root itself for REST XML's bare
+     * {@code <Error>}, and the root's {@code <Error>} child for the AWS Query
+     * protocol's {@code <ErrorResponse>} wrapper. Only direct children are
+     * searched, so a {@code <Code>} somewhere else in a body that is not an
+     * error envelope states nothing.
+     */
+    private static String xmlErrorField(String body, String field) {
+        try {
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            // The fixture corpus is trusted, but a parser that resolves
+            // external entities is never worth leaving switched on.
+            factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+            Element root = factory.newDocumentBuilder()
+                    .parse(new InputSource(new StringReader(body)))
+                    .getDocumentElement();
+            Element error = "Error".equals(root.getTagName()) ? root : childElement(root, "Error");
+            if (error == null) {
+                return null;
+            }
+            Element value = childElement(error, field);
+            return value == null ? null : value.getTextContent();
+        } catch (ParserConfigurationException | SAXException | IOException e) {
+            return null;
+        }
+    }
+
+    /** The first direct child element of {@code parent} named {@code name}. */
+    private static Element childElement(Element parent, String name) {
+        NodeList children = parent.getChildNodes();
+        for (int i = 0; i < children.getLength(); i++) {
+            if (children.item(i) instanceof Element child && child.getTagName().equals(name)) {
+                return child;
+            }
+        }
+        return null;
     }
 
     /**

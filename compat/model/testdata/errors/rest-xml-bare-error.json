@@ -1,0 +1,31 @@
+{
+  "id": "rest-xml-bare-error",
+  "title": "REST XML not-found, the bare <Error> body with no envelope",
+  "why": "The other XML shape a body-code carrier arrives in, and the reason the carrier row names two positions rather than one. REST XML's S3 dialect states the code in a root <Error> with no ErrorResponse around it, so a parser that drops the root element — the JS SDK's parseXmlBody and this corpus's rust converter both do — reads the code at the top level, while one that keeps the error node under an Error key — botocore's RestXMLParser does — reads it nested. Both are the same wire, and every backend must answer it whichever way its own stack lands. Verified against internal/protocol's WriteXMLError, which is byte for byte this envelope.",
+  "carriers": ["bodyCode"],
+  "wire": {
+    "status": 404,
+    "headers": {
+      "Content-Type": "application/xml"
+    },
+    "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Error><Code>NoSuchBucket</Code><Message>The specified bucket does not exist.</Message><RequestId>7c1b0a3e-5d4f-4a2b-8c9d-0e1f2a3b4c5d</RequestId></Error>"
+  },
+  "expect": [
+    {
+      "name": "a clause naming the code the body states",
+      "error": { "shape": "NoSuchBucket", "code": "NoSuchBucket" },
+      "matches": true,
+      "via": "bodyCode"
+    },
+    {
+      "name": "a near miss the observed code ends with",
+      "error": { "shape": "SuchBucket", "code": "SuchBucket" },
+      "matches": false
+    },
+    {
+      "name": "an unrelated code",
+      "error": { "shape": "NoSuchKey", "code": "NoSuchKey" },
+      "matches": false
+    }
+  ]
+}

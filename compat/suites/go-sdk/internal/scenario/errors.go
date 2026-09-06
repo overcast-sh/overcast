@@ -34,8 +34,15 @@ import (
 //
 //	smithy.APIError.ErrorCode()   the code the protocol deserializer resolved —
 //	                              the AWS JSON protocols' __type, the REST JSON
-//	                              body's `code`, a query error's Code. This is
-//	                              the bodyType and bodyCode carriers.
+//	                              body's `code`, and the Code inside an XML
+//	                              error node: the Query protocol's
+//	                              <ErrorResponse><Error><Code> and REST XML's
+//	                              bare <Error><Code>, both resolved by the SDK's
+//	                              own awsxml.GetErrorResponseComponents. This is
+//	                              the bodyType and bodyCode carriers, and it is
+//	                              why nothing in this file reads a body: the
+//	                              deserializer has already found the code at
+//	                              whichever depth its protocol states it.
 //	the Go type name of the error the modeled exception type smithy-go minted for a
 //	                              modeled error (*types.QueueDoesNotExist), read
 //	                              off the error chain rather than named in an

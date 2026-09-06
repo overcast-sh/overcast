@@ -241,14 +241,30 @@ so an interpreter accepts an error when **any** of these surfaces equals
 | --- | --- |
 | the exception's class or type name | the class an SDK minted for a modeled error, or a `name` field on the error object |
 | `__type`, raw and after the last `#` | the AWS JSON protocols' error body: `com.amazonaws.sqs#QueueDoesNotExist` states the same code as `QueueDoesNotExist` |
-| `Error.Code`, `Code`, `code` | the parsed error body, in whichever spelling the protocol and the SDK use |
+| `Error.Code`, `Code`, `code` | the parsed error body, in whichever spelling and at whichever of the two depths below the protocol and the parser put it |
 | the `x-amzn-query-error` header, before the first `;` | the header an `awsQueryCompatible` service sends, as `<code>;<Sender\|Receiver>` |
+
+**The body-code row is two positions, not one, and a backend reads both.** The
+JSON protocols state the code at the top level of the body — REST JSON's
+`code`, and the `Code` an emulator's fallback writer uses. The XML protocols
+state it one level down, inside an error node: AWS Query answers
+`<ErrorResponse><Error><Code>NoSuchEntity</Code>…</Error>…</ErrorResponse>`,
+and REST XML's S3 dialect answers a bare `<Error><Code>NoSuchBucket</Code>…`.
+Which depth that lands at once parsed is the parser's choice rather than the
+wire's — botocore keeps the error node under `Error`, while the JS SDK's
+`parseXmlBody` and this corpus's Rust converter drop the root element, so one
+and the same bare `<Error>` body reads as `Error.Code` in the first and as
+`Code` in the second. An interpreter that reads only the top level sees no code
+at all in a Query error, and every `errorCode` clause against a Query service
+then fails in it while passing elsewhere (#1896). Reading both positions is
+what the row means, and `query-error-response-envelope` and
+`rest-xml-bare-error` pin it.
 
 Each backend reads the surfaces it actually has. The CLI's whole view of a
 failure is a process's stderr, so it reads its own banner —
-`An error occurred (<Code>) when calling the <Op> operation:` — and a JSON
-error body the CLI echoed rather than modeled; no response header ever reaches
-it.
+`An error occurred (<Code>) when calling the <Op> operation:` — and an error
+body the CLI echoed rather than modeled, JSON or XML alike; no response header
+ever reaches it.
 
 The match is an **equality** against a code parsed out of one of those
 surfaces, never containment over the whole message. Containment cannot tell a
@@ -312,6 +328,7 @@ a reason**: a silently ignored fixture looks exactly like a passing one.
 | --- | --- |
 | `carriers` | which surfaces of `wire` state the code. The vocabulary is closed — `exceptionName`, `bodyType`, `bodyCode`, `queryErrorHeader`, `cliBanner` — and each suite asserts it, so a typo cannot skip quietly in all three at once |
 | `wire` | the raw observation: `status`, `headers`, `body` and the `exceptionName` an SDK would mint, or `stderr` for a CLI failure |
+| `wire.body` | a JSON object for a JSON wire, and **a string for one that is not** — the XML bytes exactly as the service wrote them. A suite renders a string the way its own stack parses one, which is what lets the dotnet-sdk suite serve it verbatim and read the code its SDK's XML unmarshaller resolved |
 | `expect[]` | one clause each — a clause naming the shape, one naming the code, one naming a near miss. `error` is the clause's `{shape, code}`, `matches` the outcome, `via` the carrier a matching clause matches through |
 
 Every reader is strict: an unknown key anywhere in a fixture is an error, not
