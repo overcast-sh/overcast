@@ -66,6 +66,341 @@ can be applied mechanically rather than reconstructed from memory.
 
 ## [Unreleased]
 
+## [0.0.1-alpha.41] - 2026-09-06
+
+### Added
+
+- [ec2/autoscaling/cloudformation] EC2 launch templates, and Auto Scaling groups that launch from them — a CDK ASG stack now deploys instead of hitting a 501.
+  seven EC2 operations, `lt-` IDs, versions from 1 with `$Latest`/`$Default`, and `RunInstances` merging a template under explicit parameters.
+  `AWS::EC2::LaunchTemplate` provisions for real: `Ref` is the template ID, and a data change makes a new default version rather than replacing.
+  CDK's `autoscaling.AutoScalingGroup` emits a launch template by default, which is what used to stop the whole stack.
+
+- [lambda] `Get`/`Put`/`DeleteResourcePolicy` manage a function's resource-based policy as one document, with optional enforcement on service invokes.
+  the document `AddPermission` and `GetPolicy` already maintain, by function, version or alias ARN; `PutResourcePolicy` replaces it wholesale and a stale `RevisionId` is `PreconditionFailedException`.
+  `OVERCAST_ENFORCE_LAMBDA_RESOURCE_POLICY=true` makes S3, SNS, API Gateway and EventBridge check the policy before invoking and fail as AWS does; direct client `Invoke` is never gated.
+  off by default, so a stack that never called `AddPermission` keeps working; statements evaluate as on AWS — `Principal.Service`, `AWS:SourceArn`/`AWS:SourceAccount`, explicit `Deny` winning.
+
+- [lambda] `sandbox.localdomain` resolves to the execution environment's own loopback inside a Lambda sandbox, as it does on AWS.
+  an extension subscribing the destination AWS documents — `http://sandbox.localdomain:<port>` — receives its records; before, the subscription was accepted and every delivery died in the resolver.
+  the container carries an /etc/hosts entry for the name, so the runtime, the function and every extension resolve it too, not only the telemetry path.
+
+- [backup] Backup Access Points — create, describe, list, delete and the two filtered listings, at AWS's `/backup-access-point` bindings.
+  metadata only, like the rest of the service: `AccessPointPolicy` is dropped and no S3 access point is created, so `S3AccessPointArn`/`S3AccessPointAlias` are absent rather than invented.
+  no backup job runs, so the two `ListBackupAccessPointsBy*` listings filter real stored metadata and come back empty.
+  `/backup-access-point` now classifies as `backup`; an unsigned request there was labelled, and IAM-authorised, as `s3`.
+
+- [organizations] organizational units and the organization root, with AWS-shaped IDs, ARNs and paths — `ListRoots` plus the five OU operations.
+  create, describe, rename, list by parent and delete a unit, nested under the root or another unit; the tag operations accept a unit or root ID as well as a policy ID.
+  every identifier is derived rather than minted, so the root and each unit keep their IDs, ARNs and `Path` across a restart or a state export/import.
+  inert, as the policy surface is: nothing is placed in a unit and `Root.PolicyTypes` is always empty, because accounts and policy-type enablement are not emulated.
+
+- [appsync] optional verification of `AMAZON_COGNITO_USER_POOLS` bearer tokens against the local Cognito user pool.
+  `OVERCAST_ENFORCE_APPSYNC_COGNITO_AUTH=true` checks the RS256 signature, issuer, `token_use`, expiry and `appIdClientRegex`; anything failing gets AppSync's 401 `UnauthorizedException`.
+  off by default, so a resolver test can keep sending an unsigned JWT to populate `$ctx.identity`.
+  the primary authorization mode and any Cognito entry in `additionalAuthenticationProviders` follow the same rule.
+
+- [cli] one-line installers: `curl -fsSL https://overcast.sh/install.sh | sh` and `irm https://overcast.sh/install.ps1 | iex`.
+  detects OS and CPU, verifies the download against SHA256SUMS and installs to a per-user directory without sudo; flags and variables in docs/install.md.
+  each release carries a copy of both scripts pinned to that release, and CI installs from the published assets on Linux, macOS and Windows.
+
+- [cloudformation/eks/msk] an EKS cluster, nodegroup or MSK cluster property the handler does not act on is reported instead of dropped in silence.
+  it becomes the resource's `ResourceStatusReason` (`Overcast: AWS::MSK::Cluster properties not applied: …`), so it appears in `cdk deploy` output beside the resource it was dropped from.
+
+- [acm] `ListCertificateDomainValidations` returns one synthesized SUCCESS summary per domain on a certificate.
+  covers the base `DomainName` plus each `SubjectAlternativeNames` entry, `MaxItems`/`NextToken` paginated.
+
+- [cloudwatch-logs] `FilterLogEvents` returns an `eventId` for every event, and `GetLogRecord` resolves one back to that event.
+
+- [kms] `GenerateRandom` returns `NumberOfBytes` (1-1024) cryptographically secure random bytes; it previously returned 501.
+  `CustomKeyStoreId` and `Recipient` are ignored.
+
+- [msk] a cluster created with `clientAuthentication` or `encryptionInfo` now says the broker behind it does not enforce them.
+  both are stored and returned by `DescribeCluster` as AWS does, but the Redpanda broker listens in plaintext, and a cluster that looked authenticated was worse than one that admits it.
+
+- [router/ec2] the `vpc-network-unbacked` advisory reports a VPC whose Docker network Docker refused to create, the moment it happens.
+  `CreateVpc` still answers 200 and the next reconcile retries, but the health page names the VPC and quotes Docker's reason rather than leaving an RDS or ECS failure to say so later.
+
+- [s3] `encoding-type=url` and `fetch-owner` on the bucket listings.
+  `Key`, `Prefix`, `Delimiter`, `StartAfter` and `CommonPrefixes` come back percent-encoded, with `EncodingType` echoed; an unsupported value is rejected with `InvalidArgument`.
+  `fetch-owner=true` adds the `Owner` element to each `ListObjectsV2` entry.
+
+- [sqs] `SendMessage` and `SendMessageBatch` return `MD5OfMessageAttributes` when a message carries attributes.
+
+- [web] a table row can open a detail panel underneath itself, and several rows can be open at once.
+  Step Functions' state history keeps its per-event JSON; IAM group members, usage-plan keys and ECS task containers move from a panel at the bottom of the list to the row they belong to.
+
+- [web] the RDS instance Events feed is back on the shared table, failure rows still tinted red.
+  it gains the skeleton, error and empty states every other list has, and a sortable Time column.
+
+- [docs/cloudwatch-logs] the service page says how to reach `StartLiveTail` from Go, which needs an immutable endpoint.
+  the Go SDK prefixes `streaming-` onto whatever host you configure, and only the legacy resolver can suppress it.
+
+### Changed
+
+- **BREAKING** [dynamodb] `UpdateTimeToLive` is asynchronous, as on AWS: TTL changes pass through `ENABLING`/`DISABLING` before they settle.
+  `DescribeTimeToLive` reports all four `TimeToLiveStatus` values, and the sweeper expires items only once the status is `ENABLED`.
+  a second `UpdateTimeToLive` inside the window, re-enabling an `ENABLED` table, or disabling a `DISABLED` one is now a `ValidationException`, matching AWS.
+  both `TimeToLiveSpecification` members are required (`AttributeName` 1..255), and `AWS::DynamoDB::Table` refuses an attribute rename while TTL is enabled.
+  migration: change a TTL attribute name by disabling TTL, waiting for `DISABLED`, then enabling it again — the same two-step AWS requires.
+
+- **BREAKING** [config] `OVERCAST_ACCOUNT_ID` now rejects a value that is not exactly 12 ASCII digits at startup.
+  migration: set `OVERCAST_ACCOUNT_ID` to a 12-digit value or unset it.
+
+- [web] tables: a focused row carries the 2px accent ring, wide tables reflow at narrow widths, and the Columns menu appears only where it earns its place.
+  an outline on a `<tr>` painted only the row's top and bottom edges; the ring is drawn across the row's cells, on the hover wash. The dashboard's service table gained the horizontal scroller.
+  a scroller with content off either edge shows a shadow there, and page-header controls wrap instead of running off-screen.
+  a Columns menu now needs five columns or more and never appears on a sub-table; the old rule put one on nearly every list, and 70 tables had turned it off by hand.
+
+- [web] a sorted list is a shareable link on every index page, and Back out of a request trace returns to where you were in the list.
+  the sorted view lives in the URL as `?sort=<column>` / `?sort=-<column>`, surviving a reload and Back; Lambda, ECS, Auto Scaling, Applications, SQS, SNS, Kinesis, MSK and Pipes join the rest.
+  scroll offsets are cached per history entry, so a fresh navigation to the same page still starts at the top.
+  the cross-region notice — "No queues in us-east-1. There are 3 in ap-southeast-2." — now sits under the empty state, inside the list card, on every page that shows one.
+
+- [docs] every service page and guide was confirmed against the code, and what had drifted was corrected.
+  ACM's unimplemented import/renewal operations answer `400 UnknownOperationException`, not `501`; SSM's `RemoveTagsFromResource` is supported and listed; the sample 501 body is the real one.
+  Lambda's pages pointed "every LAMBDA_* variable" at docs/configuration.md, which no longer lists any; the LocalStack matrix now names `/_overcast/metrics` and lists `/_localstack/state`.
+  the guides had the same pass: missing `elb`/`localhost.floci.io` host-routing rows, which egress variables reach a Lambda versus an ECS task, an unmeasured startup claim, a stale Testcontainers tag.
+
+- [docs] every service quick start says what to do about credentials, and every divergence table reads `| Area | On AWS | Overcast |`.
+  the 50 landing pages gained one line under the quick-start block: with an empty ~/.aws the CLI refused to sign and the first command died before reaching Overcast.
+  24 pages had the AWS half buried inside the Overcast cell or negated into the Area cell; same facts, own column. `make docs-check` fails a two-column table unless a marker says why.
+  docs-lint also rejects two callouts stacked with nothing between them, which 24 pages had, and the design-rationale asides the template bans were cut across the ACM–WAF pages.
+
+- [docs] the S3, RDS and ECR limitations pages have room to grow again, README points at the hub instead of reproducing it, and docs/dev has a length budget.
+  S3's EventBridge material is now `s3/notifications.md` and RDS's master account rules `rds/master-account.md`; ECR's paragraphs became tables, 4,720 to 2,583 characters.
+  fourteen README routing rows were a second copy of `docs/README.md`; both are now the fact plus a link, and README is linted for the house-style tells.
+  docs/dev pages get 26,000 characters of prose and 30,000 of page; `dev/networking.md` drops from 41,448 to 24,123, its container half staying in `dev/container-networking.md`.
+
+- [ci] the real-engine RDS master-user tests retry an engine container the Docker daemon declined to start, and say what the container did when they fail.
+  a daemon that cannot start the engine image at all is a skip naming the reason, rather than a failure that reads as an RDS regression.
+  a failure quotes the container's state and the last 40 lines of its output, where the reason on the record was one truncated line.
+
+### Fixed
+
+- **BREAKING** [ec2] `Describe*` resolves an explicit resource ID; a miss is `Invalid<Resource>ID.NotFound` or `.Malformed`, not an empty 200.
+  twelve operations: Vpcs, Subnets, SecurityGroups, RouteTables, InternetGateways, NetworkInterfaces, Instances, Addresses, NatGateways, VpnGateways, VpcEndpoints and VpcPeeringConnections.
+  a filter matching nothing is unchanged, still 200 with an empty list; AWS's per-resource casing is exact, and where AWS documents no Malformed code a wrongly shaped ID is `.NotFound`.
+  `DeleteVpc`, `DeleteSecurityGroup`, `StopInstances`, `ReleaseAddress` and every other single-ID lookup answer AWS's per-resource code too, not `InvalidId.NotFound`.
+  migration: code that read an empty list for a named ID as "it is gone" must catch the error, and code matching `InvalidId.NotFound` must match the per-resource code — as it already must against AWS.
+
+- **BREAKING** [elbv2] `Describe*` raises the documented not-found error for an ARN or name it cannot resolve, instead of an empty 200.
+  DescribeLoadBalancers, DescribeTargetGroups and DescribeListeners, by ARN and by name; a value that is not an ARN for the resource raises `ValidationError`.
+  a `Describe*` naming no identifier still lists the region, and `DeleteListener` now names `ListenerNotFound` rather than `LoadBalancerNotFound`.
+  `CreateLoadBalancer` requires at least one subnet, `CreateTargetGroup` validates `Protocol` and `Port`, and new ARNs end in AWS's sixteen hex characters.
+  migration: code that named a load balancer or target group and read the empty list as "it is gone" must catch the error, as it already has to against AWS.
+
+- **BREAKING** [autoscaling] a group must name `AvailabilityZones` or `VPCZoneIdentifier`, and if both, they must agree — otherwise AWS's `ValidationError`.
+  a group with neither used to be stored and launched nowhere in particular, falling back to `<region>a`; `UpdateAutoScalingGroup` applies the same rule to the group the update would leave.
+  a subnet outside the listed zones used to be stored unchecked and round-robinned independently, so a launch could land in a zone its own subnet contradicted.
+  given only `VPCZoneIdentifier`, the group takes its zones from the subnets, as AWS does; each launch goes to a subnet and lets EC2 place it in that subnet's zone.
+  migration: give every group `--availability-zones` or `--vpc-zone-identifier`; when both, list exactly the zones the subnets are in, or drop `AvailabilityZones` and let the subnets set them.
+
+- **BREAKING** [dynamodb] a DynamoDB reserved word used as a bare attribute name in an expression is rejected, as AWS rejects it (#1638).
+  covers `UpdateExpression`, `ConditionExpression`, `FilterExpression`, `KeyConditionExpression` and `ProjectionExpression`, with AWS's message naming the parameter and the keyword.
+  `size(...)` and the other function names are not attribute names and keep parsing; the 573-word list is generated from the AWS Developer Guide.
+  migration: reach a reserved word through an `ExpressionAttributeNames` alias (`#s` mapped to `size`), which is what the same expression already needs on AWS.
+
+- **BREAKING** [dynamodb] key attributes are validated against `KeySchema`/`AttributeDefinitions` on every item and key operation (#1637).
+  a key whose type disagreed with the declared one used to be stored under an encoding a correctly typed `GetItem` never looked under.
+  covers `PutItem`, `GetItem`, `UpdateItem`, `DeleteItem`, the batch and transact operations, and `Query` key conditions; non-key attributes stay schemaless.
+  migration: send key attributes with the type `AttributeDefinitions` declares, or declare the type your code sends — real AWS rejects the mismatch either way.
+
+- **BREAKING** [kms] `Decrypt` and `ReEncrypt` refuse a `KeyId`/`SourceKeyId` that did not produce the ciphertext with `IncorrectKeyException`, as AWS does.
+  both decrypted anyway before, so multi-key rotation and key-hierarchy mistakes all looked like successes.
+  migration: name the key that produced the ciphertext, or omit `KeyId`/`SourceKeyId` and let the symmetric ciphertext blob resolve it.
+
+- **BREAKING** [kms] `GenerateDataKey*`, `Encrypt`, `ScheduleKeyDeletion` and `CreateAlias` enforce AWS's parameter rules instead of accepting what AWS refuses.
+  `GenerateDataKey` and `GenerateDataKeyWithoutPlaintext` require exactly one of `KeySpec` (`AES_256`/`AES_128`) or `NumberOfBytes` (1-1024); both, neither or out of range is `ValidationException`.
+  `Encrypt` enforces the 4096-byte `Plaintext` limit and `ScheduleKeyDeletion` the 7-30 day `PendingWindowInDays` range, both as `ValidationException`.
+  `CreateAlias` requires the `alias/` prefix (`alias/aws/` reserved) — `InvalidAliasNameException` — and refuses a name in use with `AlreadyExistsException`; `UpdateAlias` still re-points.
+  migration: pass exactly one length parameter (`KeySpec=AES_256` for the old 32-byte default), envelope-encrypt over 4096 bytes, clamp windows into 7-30, re-point an alias with `UpdateAlias`.
+
+- **BREAKING** [iam] a malformed policy document is refused with `MalformedPolicyDocument`, as AWS does, instead of being stored unparsed.
+  covers `CreatePolicy`, `CreatePolicyVersion`, `CreateRole`, `UpdateAssumeRolePolicy` and the three `Put*Policy` writers, through the parser the simulator already evaluates with.
+  structural only: valid JSON, a `Statement` that is an object or a non-empty array, each statement an exact `Allow`/`Deny` `Effect` and an `Action` or `NotAction`. ARN syntax stays unchecked.
+  migration: give any placeholder document a real statement — `{}` and an empty `Statement` list were never accepted by AWS either.
+
+- **BREAKING** [mcp] `runtime_iam_create_role` defaults to a real `sts:AssumeRole` trust policy, and both IAM create tools refuse a malformed document.
+  the placeholder default carried an empty `Statement` list, which grants nothing and which the IAM API itself will not store, so a role created through MCP could not be assumed.
+  the check is `iampolicy.ValidateDocument`, the same one `CreateRole` and `CreatePolicy` apply, so the two write paths agree on what a well-formed document is.
+  migration: pass a document with at least one statement to `runtime_iam_create_role` and `runtime_iam_create_policy`, or leave the trust policy out and take the default.
+
+- **BREAKING** [s3] `ListObjectsV2` and `ListObjects` validate `max-keys` instead of returning a 500 or ignoring it.
+  `max-keys=0` returns an empty untruncated page rather than crashing the request; a negative value crashed it too.
+  a non-numeric or out-of-int32 value is rejected with `InvalidArgument` where it used to be replaced by the 1000 default.
+  a value above 1000 is clamped, and `MaxKeys` reports the clamped page size; `ListObjectVersions` shares the validation.
+  migration: clients sending a malformed or negative `max-keys` now get a 400 and must send a value between 0 and 2147483647.
+
+- **BREAKING** [s3] `PutBucketTagging` and `PutObjectTagging` enforce the documented tag-set limits.
+  a tag set repeating a key, or carrying a key outside 1-128 characters or a value over 256, is rejected with `InvalidTag` instead of silently collapsing to the last value.
+  more than 50 bucket tags or 10 object tags is rejected with `BadRequest`.
+  migration: a client sending duplicate tag keys or an over-long key/value now gets a 400 and must deduplicate or shorten the tag set.
+
+- **BREAKING** [s3] `CreateBucket` rejects an invalid bucket name with S3's documented `InvalidBucketName` code instead of `InvalidArgument`.
+  the reserved `-an` suffix follows it; an unrecognised `x-amz-bucket-namespace` value stays `InvalidArgument`, which is what S3 documents for a bad request argument.
+  migration: a test asserting `InvalidArgument` from `CreateBucket` on a malformed name should expect `InvalidBucketName` — the code real S3 returns.
+
+- **BREAKING** [sqs] the three batch operations enforce AWS's entry limits, rejecting a whole batch rather than half-applying it.
+  an empty batch, more than 10 entries, or duplicate entry `Id`s are refused with `EmptyBatchRequest`, `TooManyEntriesInBatchRequest` and `BatchEntryIdsNotDistinct`.
+  migration: a client sending oversized or duplicate-id batches was silently succeeding locally and failing on AWS; chunk to 10 distinct-id entries per call.
+
+- **BREAKING** [sqs] `GetQueueAttributes` rejects an unmodelled attribute name with `InvalidAttributeName`.
+  it used to answer with whatever else matched, so a typo read as "that attribute is empty".
+  migration: a typo in an `AttributeNames` entry now fails the call; correct the name.
+
+- **BREAKING** [cloudwatch-logs] `PutLogEvents` enforces AWS's ingestion window and batch ordering.
+  an event more than 2 hours ahead, older than 14 days, or older than the log group's retention is discarded behind a `200` and reported in `rejectedLogEventsInfo`, as on AWS.
+  a batch whose events are not in chronological order is refused whole with `InvalidParameterException`.
+  migration: send current timestamps and sort each batch by `timestamp` — events outside the window are no longer stored, and the field is the only signal they were dropped.
+
+- **BREAKING** [cloudformation] `{{resolve:ssm-secure:...}}` resolves only in the properties AWS allows secure strings in (#605).
+  a reference anywhere else fails the resource and rolls the stack back, naming the reference and the property path; the parameter is never decrypted.
+  `secretsmanager` and plain `ssm` references stay usable in any property.
+  migration: move an `ssm-secure` reference outside AWS's enumerated properties to `secretsmanager`, or to a stack parameter.
+
+- **BREAKING** [eks/cloudformation] `CreateAddon` and `AWS::EKS::Addon` refuse an `addonName` that `DescribeAddonVersions` does not publish.
+  `Ref` on `AWS::EKS::Addon` now returns `<cluster>|<addon>`, as on AWS.
+  migration: use a published add-on name (vpc-cni, coredns, kube-proxy, aws-ebs-csi-driver, eks-pod-identity-agent) or add the add-on to the emulated catalog.
+
+- **BREAKING** [appsync] a GraphQL authorization failure now returns AppSync's GraphQL error envelope instead of the AWS JSON envelope.
+  status code and errorType/message are unchanged; only `errors[0].errorType` replaces the top-level `__type`.
+  migration: read `errors[0].errorType` instead of `__type` when detecting an auth failure on POST .../graphql.
+
+- **BREAKING** [acm] `ResourceNotFoundException` now answers HTTP 400, matching AWS docs, instead of 404.
+  migration: raw-HTTP or status-code-based ACM error handling should branch on 400, not 404.
+
+- **BREAKING** [secretsmanager] `BlockPublicPolicy` refuses a `*` principal whose `Condition` is an empty object, as it already did for an omitted one.
+  AWS defines a public statement as one with no condition keys, so `Condition: {}` narrows nothing; the check is now shared with Lambda through `serviceutil`.
+  migration: give a policy that relied on `Condition: {}` a real condition key or a specific principal, or send `BlockPublicPolicy: false`.
+
+- [cloudformation] two unnamed resources of one type in a stack no longer share a generated name, and generated names are capped at each service's own limit.
+  31 handlers named an unnamed resource from the stack name alone, so the second collided with or overwrote the first — ELBv2, EKS, MSK, RDS, ElastiCache, Cognito, Glue, Firehose, Pipes, WAFv2 and more.
+  S3 bucket, SQS queue, SNS topic, Lambda function and layer, IAM role, user, group, policy and instance profile, and Kinesis stream names were minted against a 255 default real AWS rejects.
+  IAM allows a group, policy or instance profile 128 characters and a role or user 64; one constant carried 64 for all of them. An unnamed `AWS::Glue::Database` now deploys at all.
+
+- [cloudformation/eks/msk] `AWS::EKS::Cluster`, `AWS::EKS::Nodegroup` and `AWS::MSK::Cluster` now pass every documented property through.
+  the cluster sent its VPC config under the template's key names, so a CDK cluster ignored `SubnetIds` and stayed on the default network plane; `AccessConfig`, `Logging` and `Tags` were dropped.
+  the nodegroup dropped `InstanceTypes`, `AmiType`, `DiskSize`, `CapacityType`, `Labels`, `Taints`, `LaunchTemplate`, `UpdateConfig` and five more; `UpdateConfig` now also applies on a stack update.
+  MSK dropped `ClientAuthentication`, `EncryptionInfo`, `ConfigurationInfo`, `LoggingInfo` and four more; all are stored and echoed as AWS does, the configuration under `currentBrokerSoftwareInfo`.
+
+- [cloudformation] a resource that fails because a service call did now reports CloudFormation's own reason shape instead of the raw error body.
+  the reason names the service, status, error code and request ID, then the operation's token and a HandlerErrorCode, as real CloudFormation does.
+  a body that parses as neither XML nor JSON still falls back to the status and the body, so nothing is lost.
+
+- [cloudformation] `Ref` on `AWS::EKS::Cluster` returns the cluster name, as on AWS, instead of the ARN.
+  a nodegroup, Fargate profile or add-on wired to its cluster by `Ref` now reaches CREATE_COMPLETE; `Fn::GetAtt Cluster.Arn` still returns the ARN, and older stacks still delete cleanly.
+
+- [cloudformation/autoscaling] `AWS::AutoScaling::AutoScalingGroup` reads `VPCZoneIdentifier` in its documented list form, not only as a string.
+
+- [ec2/router] VPC networks are no longer deleted when Overcast restarts into a schema migration, stranding every ECS task and Lambda in the VPC.
+  the Docker reconcile ran on the daemon's connected event without waiting for the state store, so on an upgrade carrying a migration it read no VPCs at all.
+  every EC2 network then looked unclaimed and was swept as an orphan, and the completed pass vouched for the result, so nothing looked at the question again.
+  placements failed with `ResourceInitializationError: … connect to VPC network <id>: 404: network <id> not found` for the life of the process, through redeploys alike.
+
+- [ec2/docker] wiping the data directory no longer strands the Docker networks and containers the previous run created, so a redeploy gets its CIDR back.
+  the identity every Docker resource is labelled with was a UUID stored inside the very state store it named, so a wipe minted a new one and the old resources became nobody's.
+  each wipe held another VPC's /16 on the daemon until `CreateVpc` was refused with `Pool overlaps with other one on this address space` and the deploy failed at RDS.
+  the identity is now derived from the data directory — its volume or bind in a container, its path and host name natively — so it survives a wipe and a memory-backed restart.
+
+- [ec2] `RunInstances` places an instance in the availability zone of its `SubnetId`, and honours `Placement.AvailabilityZone` on the typed path (#1722, #1743).
+  the zone fell back to `<region>a` whatever the subnet or placement said, so a multi-zone Auto Scaling group launched every instance into one zone, and a placement contradicted its own `subnetId`.
+  a `Placement.AvailabilityZone` that disagrees with the subnet's zone is now refused with `InvalidParameterValue`, as EC2 does.
+
+- [elbv2] `ModifyLoadBalancerAttributes` and `DescribeLoadBalancerAttributes` are emulated rather than answering 501.
+  CloudFormation treats a failed in-place update as a replacement, and CDK sets `deletion_protection.enabled` on every load balancer it creates.
+  so each stack update tore the load balancer down and took its listener and the target group the ECS service was registered with along with it.
+
+- [elbv2/router] an ELB Classic call (API version `2012-06-01`) now gets a 501 instead of an ELBv2-shaped answer.
+  Classic and ELBv2 share the `elasticloadbalancing` signing name and most action names, so `DescribeTags` was answered 200 by ELBv2 and `CreateLoadBalancer` 400, naming an ELBv2 member.
+  a Query request is resolved by the API version the pinned models attribute it to before any action-name match, so the log, trace and IAM labels name the service that answered.
+
+- [cloudwatch-logs] `StartLiveTail` opens with the `initial-response` frame, so the AWS SDK for Go v2 gets a session instead of deadlocking (#1064).
+  the AWS JSON protocols carry an operation's initial response document there, and smithy-go parks the deserializer on that frame before it yields the stream.
+  `sessionStart` and `sessionUpdate` follow it unchanged, so the console's tail view and every JS SDK consumer see what they saw before.
+
+- [cloudwatch-logs] `DescribeLogGroups` and `DescribeLogStreams` honour `limit` and page with `nextToken`.
+  the page defaults to and is capped at AWS's documented 50 items; an unrecognised `nextToken` reports `InvalidParameterException` instead of silently restarting at page one.
+
+- [acm/dynamodb/sqs/kinesis/cloudwatch] a real, unimplemented AWS operation now answers 501 `NotImplemented`, not a 400 claiming it does not exist.
+  also CloudWatch Logs, CloudTrail, ECS, Secrets Manager, Shield and Step Functions; ACM's `ImportCertificate`, `RenewCertificate` and `ExportCertificate` answered `UnknownOperationException`.
+  the 501 is in the request's own wire format, so an RPC v2 CBOR caller gets CBOR.
+  a name AWS does not model keeps each service's own 400 — and now gets it on the no-codec legacy path too, where ACM, Kinesis, Shield and Step Functions answered a blanket 501.
+
+- [appsync] `List*` operations return AWS's default page of 25 when `maxResults` is omitted, instead of the whole collection.
+  omitting it meant "everything", so a client's paging loop terminated on the first call locally and paged for real against AWS; one constant now serves both the cap and the default.
+
+- [dynamodb] a TTL transition settling at the same moment as a new `UpdateTimeToLive` no longer overwrites it.
+  the settle now runs under the table's lock and only for the transition it was armed for, so a just-disabled table cannot read `ENABLED`.
+
+- [iam] `Get*` and `Create*` return a resource's `Tags`, `AttachmentCount` is counted, and `List*` trims to AWS's documented subset.
+  `GetRole`, `GetUser`, `GetPolicy` and `GetInstanceProfile` return the `Tags` that were stored but never rendered; `List*` still omits them, as AWS does, and points at the matching `Get*`.
+  `AttachmentCount` counts the users, groups and roles a managed policy is attached to instead of always reading 0; `PermissionsBoundaryUsageCount` is reported too, derived on read.
+  `ListRoles` and `ListUsers` omit `PermissionsBoundary` and `ListPolicies` omits `Description`; `GetAccountAuthorizationDetails` keeps both, as AWS documents.
+
+- [kms] `GenerateDataKey*` honour `NumberOfBytes`; `ScheduleKeyDeletion` and `CancelKeyDeletion` return the key ARN, and the former its `PendingWindowInDays`.
+  a request for 64 bytes returned 32, so envelope-encryption code splitting a data key derived both halves from overlapping bytes.
+  the deletion calls returned the bare key id, which does not parse where a caller feeds it into something ARN-shaped, and omitted the waiting period that applied, hiding the 30-day default.
+
+- [cognito] token validation no longer mints a signing key for the pool named in an unverified issuer claim.
+  a bearer token with a made-up issuer reaching an API Gateway Cognito authorizer cost an RSA-2048 generation and a permanent `cognito:sigkeys` record per issuer.
+
+- [lambda] extensions subscribed to the Telemetry API or the Logs API now receive their records on Docker Desktop.
+  batches are POSTed to the extension's listener by the in-container init, from inside the execution environment, exactly as AWS's platform posts them.
+  previously the emulator posted them from the host at the container's bridge IP, which Docker Desktop's VM-hosted engine has no route back from, so every delivery timed out on Windows and macOS.
+
+- [lifecycle] cancelling a delayed state transition at the moment it fires no longer crashes the process.
+  Cancel, Stop and a rescheduled key all read the timer's own report of having been stopped as proof its callback would not run, so both sides could finish the same transition.
+  the second close of its completion channel then panicked; ownership is now claimed once, under the scheduler's lock, and a transition a cancel wins does not run its callback at all.
+
+- [networking] Docker network events reach the daemon for the first time, so health stops reporting a removed network and a repaired one reports `ok` again.
+  the event stream filtered on the `overcast.managed` label, and the Engine sends no labels at all on a network event — so every network event had always been suppressed.
+  the daemon re-verifies a managed network on its `create` event against the spec the probe resolved for it — read-only, so it never races `overcast network reset`.
+  a `destroy` delivered after the probe recorded a network heals on the `create` behind it, rather than vanishing from `docker.networks` until Overcast is restarted.
+
+- [organizations] the organization ID has AWS's shape (`o-` plus ten characters), and invalid input is `InvalidInputException` with the modeled `Reason`.
+  the ID is derived deterministically from the account ID, so it stays stable for the life of the store; it was the eight-character `o-overcast`.
+  `MaxResults` outside 1-20 is refused instead of silently clamped, and a policy `Name`/`Description` over 128/512 characters is `MAX_LENGTH_EXCEEDED`.
+
+- [route53] `ChangeResourceRecordSets` no longer 404s for boto3 and the AWS CLI — the trailing-slash URI they build is registered.
+  botocore binds the operation to `POST /2013-04-01/hostedzone/{Id}/rrset/`, the Smithy model Overcast pins binds it without the slash, and chi treats the two as separate routes.
+  `ListResourceRecordSets` answers both spellings too, and the reachability sweep now probes a modeled trailing slash instead of normalising it away.
+
+- [s3] an unsatisfiable `Range` answers `416` with the `InvalidRange` document real S3 sends, and without the `Content-Range` header real S3 omits.
+  it previously announced the whole object length and sent no body, so SDK clients saw a broken connection rather than an error code.
+  the body carries `RangeRequested` and `ActualObjectSize`, the two fields a ranged-download client compares to find its own off-by-one; confirmed against real S3 on 2026-09-06.
+  `HeadObject` honours `Range` too, and a `Range` S3 cannot parse is ignored — the whole object, as on AWS — rather than a 416.
+
+- [s3] `PutObject` and `CompleteMultipartUpload` honour `If-None-Match` and `If-Match`, so conditional writes no longer overwrite.
+  a guarded write against a key that already has a current object answers 412 `PreconditionFailed`; `If-Match` against a key with none answers 404.
+  an `If-None-Match` carrying an ETag rather than `*` answers 501 `NotImplemented` instead of being ignored.
+
+- [s3] `GetObject`, `GetObjectTagging` and `CopyObject`'s source lookup return `NoSuchBucket` for a bucket that does not exist (#1635).
+  previously both answered `NoSuchKey`, indistinguishable from a missing key in an existing bucket.
+
+- [s3] `HeadObject` returns the `x-amz-meta-*` user metadata `GetObject` returns for the same object, instead of an empty metadata map.
+
+- [sqs] a FIFO `ReceiveMessage` batch drains a whole message group instead of one message per group.
+  `MaxNumberOfMessages=10` against a five-message group returned one message; it now returns all five in sequence order and fills the batch from other unblocked groups, as AWS does.
+
+- [sqs] `GetQueueAttributes` reports `CreatedTimestamp`, `LastModifiedTimestamp` and `ApproximateNumberOfMessagesDelayed`.
+  `All` is honoured from any position in the `AttributeNames` list, not only the first.
+
+- [sqs] JSON-protocol error responses carry `x-amzn-query-error`, matching AWS's `awsQueryCompatible` behaviour (#1810).
+  e.g. `GetQueueUrl` on a missing queue sends `AWS.SimpleQueueService.NonExistentQueue;Sender` alongside the JSON body's own `__type`.
+
+- [cli] `overcast serve --help` links the published configuration reference instead of an `internal/config/config.go` source path.
+
+- [config] the `OVERCAST_STATE_<SERVICE>` unknown-service error points at docs/configuration.md#service-names instead of the removed docs/README.md table.
+
+- [web] "Hide internal" on the traces page hides the console's own topology and Lambda-instance polling.
+  the emulator classified `/_overcast/topology` and `/_overcast/lambda/instances` as user traffic, so a row of each appeared roughly once a second.
+  a deep-search match is filtered the same way as a listed row, which it was not before — a hidden service reappeared as soon as a search matched a body.
+
+- [web] the deploy-diagnostics tab no longer crashes for a stack whose failed resource is not an ECS service.
+  the server omits a resource's evidence sections when no collector covers its type, which is every type but AWS::ECS::Service; the console's type declared the field required.
+
+- [web] a right-aligned sortable column right-aligns its header, and clicking beside the copy control in an S3 bucket's URL cell no longer opens the bucket.
+
 ## [0.0.1-alpha.40] - 2026-09-03
 
 ### Added
@@ -2665,7 +3000,8 @@ can be applied mechanically rather than reconstructed from memory.
 [x.y.z]: https://github.com/overcast-sh/overcast/compare/vA.B.C...vx.y.z
 -->
 
-[Unreleased]: https://github.com/overcast-sh/overcast/compare/v0.0.1-alpha.40...HEAD
+[Unreleased]: https://github.com/overcast-sh/overcast/compare/v0.0.1-alpha.41...HEAD
+[0.0.1-alpha.41]: https://github.com/overcast-sh/overcast/compare/v0.0.1-alpha.40...v0.0.1-alpha.41
 [0.0.1-alpha.40]: https://github.com/overcast-sh/overcast/compare/v0.0.1-alpha.39...v0.0.1-alpha.40
 [0.0.1-alpha.39]: https://github.com/overcast-sh/overcast/compare/v0.0.1-alpha.38...v0.0.1-alpha.39
 [0.0.1-alpha.38]: https://github.com/overcast-sh/overcast/compare/v0.0.1-alpha.37...v0.0.1-alpha.38
