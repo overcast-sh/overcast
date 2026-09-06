@@ -1,0 +1,3848 @@
+{
+  "version": 1,
+  "service": "iam",
+  "client": {
+    "sdkId": "IAM",
+    "endpointPrefix": "iam",
+    "signingName": "iam",
+    "protocol": "awsQuery",
+    "apiVersion": "2010-05-08",
+    "awsQueryCompatible": false
+  },
+  "groups": [
+    {
+      "name": "iam-gen-policy",
+      "kind": "lifecycle",
+      "setup": [],
+      "tests": [
+        {
+          "name": "CreatePolicy",
+          "op": "CreatePolicy",
+          "call": {
+            "op": "CreatePolicy",
+            "params": {
+              "Description": "compat scenario managed policy",
+              "PolicyDocument": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:GetObject\",\"Resource\":\"arn:aws:s3:::compat-scenario-nonexistent/*\"}]}",
+              "PolicyName": {
+                "$name": "p"
+              }
+            },
+            "export": {
+              "policy.arn": "$.Policy.Arn",
+              "policy.name": "$.Policy.PolicyName"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Policy.Arn": {
+                  "nonEmpty": true
+                },
+                "$.Policy.PolicyName": {
+                  "matches": "^[\\w+=,.@-]+$"
+                }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "GetPolicy",
+                  "params": {
+                    "PolicyArn": {
+                      "$ref": "policy.arn"
+                    }
+                  }
+                },
+                "checks": {
+                  "$.Policy.Arn": {
+                    "equals": {
+                      "$ref": "policy.arn"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "ListPolicies",
+                  "params": {
+                    "Scope": "Local"
+                  }
+                },
+                "itemsPath": "$.Policies",
+                "where": {
+                  "$.Arn": {
+                    "$ref": "policy.arn"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetPolicy",
+          "op": "GetPolicy",
+          "call": {
+            "op": "GetPolicy",
+            "params": {
+              "PolicyArn": {
+                "$ref": "policy.arn"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Policy.Arn": {
+                  "equals": {
+                    "$ref": "policy.arn"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreatePolicy"
+          ]
+        },
+        {
+          "name": "TagPolicy",
+          "op": "TagPolicy",
+          "call": {
+            "op": "TagPolicy",
+            "params": {
+              "PolicyArn": {
+                "$ref": "policy.arn"
+              },
+              "Tags": [
+                {
+                  "Key": "compat",
+                  "Value": "scenario"
+                }
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "ListPolicyTags",
+                  "params": {
+                    "PolicyArn": {
+                      "$ref": "policy.arn"
+                    }
+                  }
+                },
+                "itemsPath": "$.Tags",
+                "where": {
+                  "$.Key": "compat",
+                  "$.Value": "scenario"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreatePolicy"
+          ]
+        },
+        {
+          "name": "ListPolicyTags",
+          "op": "ListPolicyTags",
+          "call": {
+            "op": "ListPolicyTags",
+            "params": {
+              "PolicyArn": {
+                "$ref": "policy.arn"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Tags",
+              "where": {
+                "$.Key": "compat",
+                "$.Value": "scenario"
+              }
+            }
+          ],
+          "depends": [
+            "CreatePolicy"
+          ]
+        },
+        {
+          "name": "UntagPolicy",
+          "op": "UntagPolicy",
+          "call": {
+            "op": "UntagPolicy",
+            "params": {
+              "PolicyArn": {
+                "$ref": "policy.arn"
+              },
+              "TagKeys": [
+                "compat"
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "ListPolicyTags",
+                  "params": {
+                    "PolicyArn": {
+                      "$ref": "policy.arn"
+                    }
+                  }
+                },
+                "itemsPath": "$.Tags",
+                "where": {
+                  "$.Key": "compat"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreatePolicy"
+          ]
+        },
+        {
+          "name": "CreatePolicyVersion",
+          "op": "CreatePolicyVersion",
+          "call": {
+            "op": "CreatePolicyVersion",
+            "params": {
+              "PolicyArn": {
+                "$ref": "policy.arn"
+              },
+              "PolicyDocument": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:PutObject\",\"Resource\":\"arn:aws:s3:::compat-scenario-nonexistent/*\"}]}",
+              "SetAsDefault": true
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.PolicyVersion.IsDefaultVersion": {
+                  "equals": true
+                },
+                "$.PolicyVersion.VersionId": {
+                  "equals": "v2"
+                }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "GetPolicy",
+                  "params": {
+                    "PolicyArn": {
+                      "$ref": "policy.arn"
+                    }
+                  }
+                },
+                "checks": {
+                  "$.Policy.DefaultVersionId": {
+                    "equals": "v2"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreatePolicy"
+          ]
+        },
+        {
+          "name": "DeletePolicyVersion",
+          "op": "DeletePolicyVersion",
+          "call": {
+            "op": "DeletePolicyVersion",
+            "params": {
+              "PolicyArn": {
+                "$ref": "policy.arn"
+              },
+              "VersionId": "v1"
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "ListPolicyVersions",
+                  "params": {
+                    "PolicyArn": {
+                      "$ref": "policy.arn"
+                    }
+                  }
+                },
+                "itemsPath": "$.Versions",
+                "where": {
+                  "$.VersionId": "v1"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreatePolicy"
+          ]
+        },
+        {
+          "name": "SimulateCustomPolicy",
+          "op": "SimulateCustomPolicy",
+          "call": {
+            "op": "SimulateCustomPolicy",
+            "params": {
+              "ActionNames": [
+                "s3:GetObject"
+              ],
+              "PolicyInputList": [
+                "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:GetObject\",\"Resource\":\"arn:aws:s3:::compat-scenario-nonexistent/*\"}]}"
+              ],
+              "ResourceArns": [
+                "arn:aws:s3:::compat-scenario-nonexistent/report.csv"
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.EvaluationResults[0].EvalActionName": {
+                  "equals": "s3:GetObject"
+                },
+                "$.EvaluationResults[0].EvalDecision": {
+                  "equals": "allowed"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "ListPolicies",
+          "op": "ListPolicies",
+          "call": {
+            "op": "ListPolicies",
+            "params": {
+              "Scope": "Local"
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Policies",
+              "where": {
+                "$.Arn": {
+                  "$ref": "policy.arn"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreatePolicy"
+          ]
+        },
+        {
+          "name": "DeletePolicy",
+          "op": "DeletePolicy",
+          "call": {
+            "op": "DeletePolicy",
+            "params": {
+              "PolicyArn": {
+                "$ref": "policy.arn"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "GetPolicy",
+                  "params": {
+                    "PolicyArn": {
+                      "$ref": "policy.arn"
+                    }
+                  }
+                },
+                "error": {
+                  "shape": "NoSuchEntityException",
+                  "code": "NoSuchEntity"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreatePolicy"
+          ]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "DeletePolicy",
+          "params": {
+            "PolicyArn": {
+              "$ref": "policy.arn"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "iam-gen-user",
+      "kind": "lifecycle",
+      "setup": [
+        {
+          "op": "CreatePolicy",
+          "params": {
+            "Description": "compat scenario managed policy",
+            "PolicyDocument": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:GetObject\",\"Resource\":\"arn:aws:s3:::compat-scenario-nonexistent/*\"}]}",
+            "PolicyName": {
+              "$name": "p"
+            }
+          },
+          "export": {
+            "policy.arn": "$.Policy.Arn",
+            "policy.name": "$.Policy.PolicyName"
+          }
+        }
+      ],
+      "tests": [
+        {
+          "name": "CreateUser",
+          "op": "CreateUser",
+          "call": {
+            "op": "CreateUser",
+            "params": {
+              "UserName": {
+                "$name": "u"
+              }
+            },
+            "export": {
+              "user.arn": "$.User.Arn",
+              "user.name": "$.User.UserName"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.User.Arn": {
+                  "nonEmpty": true
+                },
+                "$.User.UserName": {
+                  "matches": "^[\\w+=,.@-]+$"
+                }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "GetUser",
+                  "params": {
+                    "UserName": {
+                      "$ref": "user.name"
+                    }
+                  }
+                },
+                "checks": {
+                  "$.User.UserName": {
+                    "equals": {
+                      "$ref": "user.name"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "ListUsers",
+                  "params": {}
+                },
+                "itemsPath": "$.Users",
+                "where": {
+                  "$.UserName": {
+                    "$ref": "user.name"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetUser",
+          "op": "GetUser",
+          "call": {
+            "op": "GetUser",
+            "params": {
+              "UserName": {
+                "$ref": "user.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.User.UserName": {
+                  "equals": {
+                    "$ref": "user.name"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "UpdateUser",
+          "op": "UpdateUser",
+          "call": {
+            "op": "UpdateUser",
+            "params": {
+              "NewPath": "/compat-scenario-updated/",
+              "UserName": {
+                "$ref": "user.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "GetUser",
+                  "params": {
+                    "UserName": {
+                      "$ref": "user.name"
+                    }
+                  }
+                },
+                "checks": {
+                  "$.User.Path": {
+                    "equals": "/compat-scenario-updated/"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "TagUser",
+          "op": "TagUser",
+          "call": {
+            "op": "TagUser",
+            "params": {
+              "Tags": [
+                {
+                  "Key": "compat",
+                  "Value": "scenario"
+                }
+              ],
+              "UserName": {
+                "$ref": "user.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "ListUserTags",
+                  "params": {
+                    "UserName": {
+                      "$ref": "user.name"
+                    }
+                  }
+                },
+                "itemsPath": "$.Tags",
+                "where": {
+                  "$.Key": "compat",
+                  "$.Value": "scenario"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "ListUserTags",
+          "op": "ListUserTags",
+          "call": {
+            "op": "ListUserTags",
+            "params": {
+              "UserName": {
+                "$ref": "user.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Tags",
+              "where": {
+                "$.Key": "compat",
+                "$.Value": "scenario"
+              }
+            }
+          ],
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "UntagUser",
+          "op": "UntagUser",
+          "call": {
+            "op": "UntagUser",
+            "params": {
+              "TagKeys": [
+                "compat"
+              ],
+              "UserName": {
+                "$ref": "user.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "ListUserTags",
+                  "params": {
+                    "UserName": {
+                      "$ref": "user.name"
+                    }
+                  }
+                },
+                "itemsPath": "$.Tags",
+                "where": {
+                  "$.Key": "compat"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "PutUserPolicy",
+          "op": "PutUserPolicy",
+          "call": {
+            "op": "PutUserPolicy",
+            "params": {
+              "PolicyDocument": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:GetObject\",\"Resource\":\"arn:aws:s3:::compat-scenario-nonexistent/*\"}]}",
+              "PolicyName": {
+                "$name": "inline"
+              },
+              "UserName": {
+                "$ref": "user.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "ListUserPolicies",
+                  "params": {
+                    "UserName": {
+                      "$ref": "user.name"
+                    }
+                  }
+                },
+                "itemsPath": "$.PolicyNames",
+                "where": {
+                  "$": {
+                    "$name": "inline"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "GetUserPolicy",
+          "op": "GetUserPolicy",
+          "call": {
+            "op": "GetUserPolicy",
+            "params": {
+              "PolicyName": {
+                "$name": "inline"
+              },
+              "UserName": {
+                "$ref": "user.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.PolicyName": {
+                  "equals": {
+                    "$name": "inline"
+                  }
+                },
+                "$.UserName": {
+                  "equals": {
+                    "$ref": "user.name"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "ListUserPolicies",
+          "op": "ListUserPolicies",
+          "call": {
+            "op": "ListUserPolicies",
+            "params": {
+              "UserName": {
+                "$ref": "user.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.PolicyNames",
+              "where": {
+                "$": {
+                  "$name": "inline"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "DeleteUserPolicy",
+          "op": "DeleteUserPolicy",
+          "call": {
+            "op": "DeleteUserPolicy",
+            "params": {
+              "PolicyName": {
+                "$name": "inline"
+              },
+              "UserName": {
+                "$ref": "user.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "ListUserPolicies",
+                  "params": {
+                    "UserName": {
+                      "$ref": "user.name"
+                    }
+                  }
+                },
+                "itemsPath": "$.PolicyNames",
+                "where": {
+                  "$": {
+                    "$name": "inline"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "AttachUserPolicy",
+          "op": "AttachUserPolicy",
+          "call": {
+            "op": "AttachUserPolicy",
+            "params": {
+              "PolicyArn": {
+                "$ref": "policy.arn"
+              },
+              "UserName": {
+                "$ref": "user.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "ListAttachedUserPolicies",
+                  "params": {
+                    "UserName": {
+                      "$ref": "user.name"
+                    }
+                  }
+                },
+                "itemsPath": "$.AttachedPolicies",
+                "where": {
+                  "$.PolicyArn": {
+                    "$ref": "policy.arn"
+                  },
+                  "$.PolicyName": {
+                    "$ref": "policy.name"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "ListAttachedUserPolicies",
+          "op": "ListAttachedUserPolicies",
+          "call": {
+            "op": "ListAttachedUserPolicies",
+            "params": {
+              "UserName": {
+                "$ref": "user.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.AttachedPolicies",
+              "where": {
+                "$.PolicyArn": {
+                  "$ref": "policy.arn"
+                },
+                "$.PolicyName": {
+                  "$ref": "policy.name"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "DetachUserPolicy",
+          "op": "DetachUserPolicy",
+          "call": {
+            "op": "DetachUserPolicy",
+            "params": {
+              "PolicyArn": {
+                "$ref": "policy.arn"
+              },
+              "UserName": {
+                "$ref": "user.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "ListAttachedUserPolicies",
+                  "params": {
+                    "UserName": {
+                      "$ref": "user.name"
+                    }
+                  }
+                },
+                "itemsPath": "$.AttachedPolicies",
+                "where": {
+                  "$.PolicyArn": {
+                    "$ref": "policy.arn"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "CreateAccessKey",
+          "op": "CreateAccessKey",
+          "call": {
+            "op": "CreateAccessKey",
+            "params": {
+              "UserName": {
+                "$ref": "user.name"
+              }
+            },
+            "export": {
+              "user.accesskeyid": "$.AccessKey.AccessKeyId"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.AccessKey.AccessKeyId": {
+                  "matches": "^AKIA[A-Z0-9]{16}$"
+                },
+                "$.AccessKey.SecretAccessKey": {
+                  "nonEmpty": true
+                },
+                "$.AccessKey.Status": {
+                  "equals": "Active"
+                },
+                "$.AccessKey.UserName": {
+                  "equals": {
+                    "$ref": "user.name"
+                  }
+                }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "ListAccessKeys",
+                  "params": {
+                    "UserName": {
+                      "$ref": "user.name"
+                    }
+                  }
+                },
+                "itemsPath": "$.AccessKeyMetadata",
+                "where": {
+                  "$.AccessKeyId": {
+                    "$ref": "user.accesskeyid"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "ListAccessKeys",
+          "op": "ListAccessKeys",
+          "call": {
+            "op": "ListAccessKeys",
+            "params": {
+              "UserName": {
+                "$ref": "user.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.AccessKeyMetadata",
+              "where": {
+                "$.AccessKeyId": {
+                  "$ref": "user.accesskeyid"
+                },
+                "$.Status": "Active",
+                "$.UserName": {
+                  "$ref": "user.name"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateAccessKey",
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "DeleteAccessKey",
+          "op": "DeleteAccessKey",
+          "call": {
+            "op": "DeleteAccessKey",
+            "params": {
+              "AccessKeyId": {
+                "$ref": "user.accesskeyid"
+              },
+              "UserName": {
+                "$ref": "user.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "ListAccessKeys",
+                  "params": {
+                    "UserName": {
+                      "$ref": "user.name"
+                    }
+                  }
+                },
+                "itemsPath": "$.AccessKeyMetadata",
+                "where": {
+                  "$.AccessKeyId": {
+                    "$ref": "user.accesskeyid"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateAccessKey",
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "PutUserPermissionsBoundary",
+          "op": "PutUserPermissionsBoundary",
+          "call": {
+            "op": "PutUserPermissionsBoundary",
+            "params": {
+              "PermissionsBoundary": {
+                "$ref": "policy.arn"
+              },
+              "UserName": {
+                "$ref": "user.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "GetUser",
+                  "params": {
+                    "UserName": {
+                      "$ref": "user.name"
+                    }
+                  }
+                },
+                "checks": {
+                  "$.User.PermissionsBoundary.PermissionsBoundaryArn": {
+                    "equals": {
+                      "$ref": "policy.arn"
+                    }
+                  },
+                  "$.User.PermissionsBoundary.PermissionsBoundaryType": {
+                    "equals": "PermissionsBoundaryPolicy"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "DeleteUserPermissionsBoundary",
+          "op": "DeleteUserPermissionsBoundary",
+          "call": {
+            "op": "DeleteUserPermissionsBoundary",
+            "params": {
+              "UserName": {
+                "$ref": "user.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "GetUser",
+                  "params": {
+                    "UserName": {
+                      "$ref": "user.name"
+                    }
+                  }
+                },
+                "checks": {
+                  "$.User.PermissionsBoundary": {
+                    "missing": true
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "ListUsers",
+          "op": "ListUsers",
+          "call": {
+            "op": "ListUsers",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Users",
+              "where": {
+                "$.UserName": {
+                  "$ref": "user.name"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "DeleteUser",
+          "op": "DeleteUser",
+          "call": {
+            "op": "DeleteUser",
+            "params": {
+              "UserName": {
+                "$ref": "user.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "GetUser",
+                  "params": {
+                    "UserName": {
+                      "$ref": "user.name"
+                    }
+                  }
+                },
+                "error": {
+                  "shape": "NoSuchEntityException",
+                  "code": "NoSuchEntity"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateUser"
+          ]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "DeleteUser",
+          "params": {
+            "UserName": {
+              "$ref": "user.name"
+            }
+          }
+        },
+        {
+          "op": "DeletePolicy",
+          "params": {
+            "PolicyArn": {
+              "$ref": "policy.arn"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "iam-gen-group",
+      "kind": "lifecycle",
+      "setup": [
+        {
+          "op": "CreatePolicy",
+          "params": {
+            "Description": "compat scenario managed policy",
+            "PolicyDocument": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:GetObject\",\"Resource\":\"arn:aws:s3:::compat-scenario-nonexistent/*\"}]}",
+            "PolicyName": {
+              "$name": "p"
+            }
+          },
+          "export": {
+            "policy.arn": "$.Policy.Arn",
+            "policy.name": "$.Policy.PolicyName"
+          }
+        },
+        {
+          "op": "CreateUser",
+          "params": {
+            "UserName": {
+              "$name": "u"
+            }
+          },
+          "export": {
+            "user.arn": "$.User.Arn",
+            "user.name": "$.User.UserName"
+          }
+        }
+      ],
+      "tests": [
+        {
+          "name": "CreateGroup",
+          "op": "CreateGroup",
+          "call": {
+            "op": "CreateGroup",
+            "params": {
+              "GroupName": {
+                "$name": "g"
+              }
+            },
+            "export": {
+              "group.arn": "$.Group.Arn",
+              "group.name": "$.Group.GroupName"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Group.Arn": {
+                  "nonEmpty": true
+                },
+                "$.Group.GroupName": {
+                  "matches": "^[\\w+=,.@-]+$"
+                }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "GetGroup",
+                  "params": {
+                    "GroupName": {
+                      "$ref": "group.name"
+                    }
+                  }
+                },
+                "checks": {
+                  "$.Group.Arn": {
+                    "equals": {
+                      "$ref": "group.arn"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "ListGroups",
+                  "params": {}
+                },
+                "itemsPath": "$.Groups",
+                "where": {
+                  "$.Arn": {
+                    "$ref": "group.arn"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetGroup",
+          "op": "GetGroup",
+          "call": {
+            "op": "GetGroup",
+            "params": {
+              "GroupName": {
+                "$ref": "group.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Group.Arn": {
+                  "equals": {
+                    "$ref": "group.arn"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateGroup"
+          ]
+        },
+        {
+          "name": "AddUserToGroup",
+          "op": "AddUserToGroup",
+          "call": {
+            "op": "AddUserToGroup",
+            "params": {
+              "GroupName": {
+                "$ref": "group.name"
+              },
+              "UserName": {
+                "$ref": "user.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "ListGroupsForUser",
+                  "params": {
+                    "UserName": {
+                      "$ref": "user.name"
+                    }
+                  }
+                },
+                "itemsPath": "$.Groups",
+                "where": {
+                  "$.Arn": {
+                    "$ref": "group.arn"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateGroup"
+          ]
+        },
+        {
+          "name": "GetGroupMembers",
+          "op": "GetGroup",
+          "call": {
+            "op": "GetGroup",
+            "params": {
+              "GroupName": {
+                "$ref": "group.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Users",
+              "where": {
+                "$.UserName": {
+                  "$ref": "user.name"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateGroup"
+          ]
+        },
+        {
+          "name": "ListGroupsForUser",
+          "op": "ListGroupsForUser",
+          "call": {
+            "op": "ListGroupsForUser",
+            "params": {
+              "UserName": {
+                "$ref": "user.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Groups",
+              "where": {
+                "$.Arn": {
+                  "$ref": "group.arn"
+                },
+                "$.GroupName": {
+                  "$ref": "group.name"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateGroup"
+          ]
+        },
+        {
+          "name": "PutGroupPolicy",
+          "op": "PutGroupPolicy",
+          "call": {
+            "op": "PutGroupPolicy",
+            "params": {
+              "GroupName": {
+                "$ref": "group.name"
+              },
+              "PolicyDocument": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:GetObject\",\"Resource\":\"arn:aws:s3:::compat-scenario-nonexistent/*\"}]}",
+              "PolicyName": {
+                "$name": "inline"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "ListGroupPolicies",
+                  "params": {
+                    "GroupName": {
+                      "$ref": "group.name"
+                    }
+                  }
+                },
+                "itemsPath": "$.PolicyNames",
+                "where": {
+                  "$": {
+                    "$name": "inline"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateGroup"
+          ]
+        },
+        {
+          "name": "GetGroupPolicy",
+          "op": "GetGroupPolicy",
+          "call": {
+            "op": "GetGroupPolicy",
+            "params": {
+              "GroupName": {
+                "$ref": "group.name"
+              },
+              "PolicyName": {
+                "$name": "inline"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.GroupName": {
+                  "equals": {
+                    "$ref": "group.name"
+                  }
+                },
+                "$.PolicyName": {
+                  "equals": {
+                    "$name": "inline"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateGroup"
+          ]
+        },
+        {
+          "name": "ListGroupPolicies",
+          "op": "ListGroupPolicies",
+          "call": {
+            "op": "ListGroupPolicies",
+            "params": {
+              "GroupName": {
+                "$ref": "group.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.PolicyNames",
+              "where": {
+                "$": {
+                  "$name": "inline"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateGroup"
+          ]
+        },
+        {
+          "name": "DeleteGroupPolicy",
+          "op": "DeleteGroupPolicy",
+          "call": {
+            "op": "DeleteGroupPolicy",
+            "params": {
+              "GroupName": {
+                "$ref": "group.name"
+              },
+              "PolicyName": {
+                "$name": "inline"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "ListGroupPolicies",
+                  "params": {
+                    "GroupName": {
+                      "$ref": "group.name"
+                    }
+                  }
+                },
+                "itemsPath": "$.PolicyNames",
+                "where": {
+                  "$": {
+                    "$name": "inline"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateGroup"
+          ]
+        },
+        {
+          "name": "AttachGroupPolicy",
+          "op": "AttachGroupPolicy",
+          "call": {
+            "op": "AttachGroupPolicy",
+            "params": {
+              "GroupName": {
+                "$ref": "group.name"
+              },
+              "PolicyArn": {
+                "$ref": "policy.arn"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "ListAttachedGroupPolicies",
+                  "params": {
+                    "GroupName": {
+                      "$ref": "group.name"
+                    }
+                  }
+                },
+                "itemsPath": "$.AttachedPolicies",
+                "where": {
+                  "$.PolicyArn": {
+                    "$ref": "policy.arn"
+                  },
+                  "$.PolicyName": {
+                    "$ref": "policy.name"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateGroup"
+          ]
+        },
+        {
+          "name": "ListAttachedGroupPolicies",
+          "op": "ListAttachedGroupPolicies",
+          "call": {
+            "op": "ListAttachedGroupPolicies",
+            "params": {
+              "GroupName": {
+                "$ref": "group.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.AttachedPolicies",
+              "where": {
+                "$.PolicyArn": {
+                  "$ref": "policy.arn"
+                },
+                "$.PolicyName": {
+                  "$ref": "policy.name"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateGroup"
+          ]
+        },
+        {
+          "name": "DetachGroupPolicy",
+          "op": "DetachGroupPolicy",
+          "call": {
+            "op": "DetachGroupPolicy",
+            "params": {
+              "GroupName": {
+                "$ref": "group.name"
+              },
+              "PolicyArn": {
+                "$ref": "policy.arn"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "ListAttachedGroupPolicies",
+                  "params": {
+                    "GroupName": {
+                      "$ref": "group.name"
+                    }
+                  }
+                },
+                "itemsPath": "$.AttachedPolicies",
+                "where": {
+                  "$.PolicyArn": {
+                    "$ref": "policy.arn"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateGroup"
+          ]
+        },
+        {
+          "name": "RemoveUserFromGroup",
+          "op": "RemoveUserFromGroup",
+          "call": {
+            "op": "RemoveUserFromGroup",
+            "params": {
+              "GroupName": {
+                "$ref": "group.name"
+              },
+              "UserName": {
+                "$ref": "user.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "ListGroupsForUser",
+                  "params": {
+                    "UserName": {
+                      "$ref": "user.name"
+                    }
+                  }
+                },
+                "itemsPath": "$.Groups",
+                "where": {
+                  "$.Arn": {
+                    "$ref": "group.arn"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateGroup"
+          ]
+        },
+        {
+          "name": "ListGroups",
+          "op": "ListGroups",
+          "call": {
+            "op": "ListGroups",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Groups",
+              "where": {
+                "$.Arn": {
+                  "$ref": "group.arn"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateGroup"
+          ]
+        },
+        {
+          "name": "DeleteGroup",
+          "op": "DeleteGroup",
+          "call": {
+            "op": "DeleteGroup",
+            "params": {
+              "GroupName": {
+                "$ref": "group.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "GetGroup",
+                  "params": {
+                    "GroupName": {
+                      "$ref": "group.name"
+                    }
+                  }
+                },
+                "error": {
+                  "shape": "NoSuchEntityException",
+                  "code": "NoSuchEntity"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateGroup"
+          ]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "DeleteGroup",
+          "params": {
+            "GroupName": {
+              "$ref": "group.name"
+            }
+          }
+        },
+        {
+          "op": "DeleteUser",
+          "params": {
+            "UserName": {
+              "$ref": "user.name"
+            }
+          }
+        },
+        {
+          "op": "DeletePolicy",
+          "params": {
+            "PolicyArn": {
+              "$ref": "policy.arn"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "iam-gen-role",
+      "kind": "lifecycle",
+      "setup": [
+        {
+          "op": "CreatePolicy",
+          "params": {
+            "Description": "compat scenario managed policy",
+            "PolicyDocument": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:GetObject\",\"Resource\":\"arn:aws:s3:::compat-scenario-nonexistent/*\"}]}",
+            "PolicyName": {
+              "$name": "p"
+            }
+          },
+          "export": {
+            "policy.arn": "$.Policy.Arn",
+            "policy.name": "$.Policy.PolicyName"
+          }
+        }
+      ],
+      "tests": [
+        {
+          "name": "CreateRole",
+          "op": "CreateRole",
+          "call": {
+            "op": "CreateRole",
+            "params": {
+              "AssumeRolePolicyDocument": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"ec2.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}",
+              "Description": "compat scenario role, initial description",
+              "RoleName": {
+                "$name": "r"
+              }
+            },
+            "export": {
+              "role.arn": "$.Role.Arn",
+              "role.name": "$.Role.RoleName"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Role.Arn": {
+                  "nonEmpty": true
+                },
+                "$.Role.RoleName": {
+                  "matches": "^[\\w+=,.@-]+$"
+                }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "GetRole",
+                  "params": {
+                    "RoleName": {
+                      "$ref": "role.name"
+                    }
+                  }
+                },
+                "checks": {
+                  "$.Role.Arn": {
+                    "equals": {
+                      "$ref": "role.arn"
+                    }
+                  },
+                  "$.Role.Description": {
+                    "equals": "compat scenario role, initial description"
+                  }
+                }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "ListRoles",
+                  "params": {}
+                },
+                "itemsPath": "$.Roles",
+                "where": {
+                  "$.Arn": {
+                    "$ref": "role.arn"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetRole",
+          "op": "GetRole",
+          "call": {
+            "op": "GetRole",
+            "params": {
+              "RoleName": {
+                "$ref": "role.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Role.Arn": {
+                  "equals": {
+                    "$ref": "role.arn"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "UpdateRole",
+          "op": "UpdateRole",
+          "call": {
+            "op": "UpdateRole",
+            "params": {
+              "Description": "compat scenario role, updated description",
+              "RoleName": {
+                "$ref": "role.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "GetRole",
+                  "params": {
+                    "RoleName": {
+                      "$ref": "role.name"
+                    }
+                  }
+                },
+                "checks": {
+                  "$.Role.Description": {
+                    "equals": "compat scenario role, updated description"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "TagRole",
+          "op": "TagRole",
+          "call": {
+            "op": "TagRole",
+            "params": {
+              "RoleName": {
+                "$ref": "role.name"
+              },
+              "Tags": [
+                {
+                  "Key": "compat",
+                  "Value": "scenario"
+                }
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "ListRoleTags",
+                  "params": {
+                    "RoleName": {
+                      "$ref": "role.name"
+                    }
+                  }
+                },
+                "itemsPath": "$.Tags",
+                "where": {
+                  "$.Key": "compat",
+                  "$.Value": "scenario"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "ListRoleTags",
+          "op": "ListRoleTags",
+          "call": {
+            "op": "ListRoleTags",
+            "params": {
+              "RoleName": {
+                "$ref": "role.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Tags",
+              "where": {
+                "$.Key": "compat",
+                "$.Value": "scenario"
+              }
+            }
+          ],
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "UntagRole",
+          "op": "UntagRole",
+          "call": {
+            "op": "UntagRole",
+            "params": {
+              "RoleName": {
+                "$ref": "role.name"
+              },
+              "TagKeys": [
+                "compat"
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "ListRoleTags",
+                  "params": {
+                    "RoleName": {
+                      "$ref": "role.name"
+                    }
+                  }
+                },
+                "itemsPath": "$.Tags",
+                "where": {
+                  "$.Key": "compat"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "UpdateAssumeRolePolicy",
+          "op": "UpdateAssumeRolePolicy",
+          "call": {
+            "op": "UpdateAssumeRolePolicy",
+            "params": {
+              "PolicyDocument": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"lambda.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}",
+              "RoleName": {
+                "$ref": "role.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "GetRole",
+                  "params": {
+                    "RoleName": {
+                      "$ref": "role.name"
+                    }
+                  }
+                },
+                "checks": {
+                  "$.Role.Arn": {
+                    "equals": {
+                      "$ref": "role.arn"
+                    }
+                  },
+                  "$.Role.AssumeRolePolicyDocument": {
+                    "nonEmpty": true
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "PutRolePolicy",
+          "op": "PutRolePolicy",
+          "call": {
+            "op": "PutRolePolicy",
+            "params": {
+              "PolicyDocument": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:GetObject\",\"Resource\":\"arn:aws:s3:::compat-scenario-nonexistent/*\"}]}",
+              "PolicyName": {
+                "$name": "inline"
+              },
+              "RoleName": {
+                "$ref": "role.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "ListRolePolicies",
+                  "params": {
+                    "RoleName": {
+                      "$ref": "role.name"
+                    }
+                  }
+                },
+                "itemsPath": "$.PolicyNames",
+                "where": {
+                  "$": {
+                    "$name": "inline"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "GetRolePolicy",
+          "op": "GetRolePolicy",
+          "call": {
+            "op": "GetRolePolicy",
+            "params": {
+              "PolicyName": {
+                "$name": "inline"
+              },
+              "RoleName": {
+                "$ref": "role.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.PolicyName": {
+                  "equals": {
+                    "$name": "inline"
+                  }
+                },
+                "$.RoleName": {
+                  "equals": {
+                    "$ref": "role.name"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "ListRolePolicies",
+          "op": "ListRolePolicies",
+          "call": {
+            "op": "ListRolePolicies",
+            "params": {
+              "RoleName": {
+                "$ref": "role.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.PolicyNames",
+              "where": {
+                "$": {
+                  "$name": "inline"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "SimulatePrincipalPolicy",
+          "op": "SimulatePrincipalPolicy",
+          "call": {
+            "op": "SimulatePrincipalPolicy",
+            "params": {
+              "ActionNames": [
+                "s3:GetObject"
+              ],
+              "PolicySourceArn": {
+                "$ref": "role.arn"
+              },
+              "ResourceArns": [
+                "arn:aws:s3:::compat-scenario-nonexistent/report.csv"
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.EvaluationResults[0].EvalActionName": {
+                  "equals": "s3:GetObject"
+                },
+                "$.EvaluationResults[0].EvalDecision": {
+                  "equals": "allowed"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "DeleteRolePolicy",
+          "op": "DeleteRolePolicy",
+          "call": {
+            "op": "DeleteRolePolicy",
+            "params": {
+              "PolicyName": {
+                "$name": "inline"
+              },
+              "RoleName": {
+                "$ref": "role.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "ListRolePolicies",
+                  "params": {
+                    "RoleName": {
+                      "$ref": "role.name"
+                    }
+                  }
+                },
+                "itemsPath": "$.PolicyNames",
+                "where": {
+                  "$": {
+                    "$name": "inline"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "AttachRolePolicy",
+          "op": "AttachRolePolicy",
+          "call": {
+            "op": "AttachRolePolicy",
+            "params": {
+              "PolicyArn": {
+                "$ref": "policy.arn"
+              },
+              "RoleName": {
+                "$ref": "role.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "ListAttachedRolePolicies",
+                  "params": {
+                    "RoleName": {
+                      "$ref": "role.name"
+                    }
+                  }
+                },
+                "itemsPath": "$.AttachedPolicies",
+                "where": {
+                  "$.PolicyArn": {
+                    "$ref": "policy.arn"
+                  },
+                  "$.PolicyName": {
+                    "$ref": "policy.name"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "ListAttachedRolePolicies",
+          "op": "ListAttachedRolePolicies",
+          "call": {
+            "op": "ListAttachedRolePolicies",
+            "params": {
+              "RoleName": {
+                "$ref": "role.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.AttachedPolicies",
+              "where": {
+                "$.PolicyArn": {
+                  "$ref": "policy.arn"
+                },
+                "$.PolicyName": {
+                  "$ref": "policy.name"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "DetachRolePolicy",
+          "op": "DetachRolePolicy",
+          "call": {
+            "op": "DetachRolePolicy",
+            "params": {
+              "PolicyArn": {
+                "$ref": "policy.arn"
+              },
+              "RoleName": {
+                "$ref": "role.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "ListAttachedRolePolicies",
+                  "params": {
+                    "RoleName": {
+                      "$ref": "role.name"
+                    }
+                  }
+                },
+                "itemsPath": "$.AttachedPolicies",
+                "where": {
+                  "$.PolicyArn": {
+                    "$ref": "policy.arn"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "PutRolePermissionsBoundary",
+          "op": "PutRolePermissionsBoundary",
+          "call": {
+            "op": "PutRolePermissionsBoundary",
+            "params": {
+              "PermissionsBoundary": {
+                "$ref": "policy.arn"
+              },
+              "RoleName": {
+                "$ref": "role.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "GetRole",
+                  "params": {
+                    "RoleName": {
+                      "$ref": "role.name"
+                    }
+                  }
+                },
+                "checks": {
+                  "$.Role.PermissionsBoundary.PermissionsBoundaryArn": {
+                    "equals": {
+                      "$ref": "policy.arn"
+                    }
+                  },
+                  "$.Role.PermissionsBoundary.PermissionsBoundaryType": {
+                    "equals": "PermissionsBoundaryPolicy"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "DeleteRolePermissionsBoundary",
+          "op": "DeleteRolePermissionsBoundary",
+          "call": {
+            "op": "DeleteRolePermissionsBoundary",
+            "params": {
+              "RoleName": {
+                "$ref": "role.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "GetRole",
+                  "params": {
+                    "RoleName": {
+                      "$ref": "role.name"
+                    }
+                  }
+                },
+                "checks": {
+                  "$.Role.PermissionsBoundary": {
+                    "missing": true
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "GetAccountAuthorizationDetails",
+          "op": "GetAccountAuthorizationDetails",
+          "call": {
+            "op": "GetAccountAuthorizationDetails",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.RoleDetailList",
+              "where": {
+                "$.Arn": {
+                  "$ref": "role.arn"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "ListRoles",
+          "op": "ListRoles",
+          "call": {
+            "op": "ListRoles",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Roles",
+              "where": {
+                "$.Arn": {
+                  "$ref": "role.arn"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateRole"
+          ]
+        },
+        {
+          "name": "DeleteRole",
+          "op": "DeleteRole",
+          "call": {
+            "op": "DeleteRole",
+            "params": {
+              "RoleName": {
+                "$ref": "role.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "GetRole",
+                  "params": {
+                    "RoleName": {
+                      "$ref": "role.name"
+                    }
+                  }
+                },
+                "error": {
+                  "shape": "NoSuchEntityException",
+                  "code": "NoSuchEntity"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateRole"
+          ]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "DeleteRole",
+          "params": {
+            "RoleName": {
+              "$ref": "role.name"
+            }
+          }
+        },
+        {
+          "op": "DeletePolicy",
+          "params": {
+            "PolicyArn": {
+              "$ref": "policy.arn"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "iam-gen-instanceprofile",
+      "kind": "lifecycle",
+      "setup": [
+        {
+          "op": "CreatePolicy",
+          "params": {
+            "Description": "compat scenario managed policy",
+            "PolicyDocument": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:GetObject\",\"Resource\":\"arn:aws:s3:::compat-scenario-nonexistent/*\"}]}",
+            "PolicyName": {
+              "$name": "p"
+            }
+          },
+          "export": {
+            "policy.arn": "$.Policy.Arn",
+            "policy.name": "$.Policy.PolicyName"
+          }
+        },
+        {
+          "op": "CreateRole",
+          "params": {
+            "AssumeRolePolicyDocument": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"ec2.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}",
+            "Description": "compat scenario role, initial description",
+            "RoleName": {
+              "$name": "r"
+            }
+          },
+          "export": {
+            "role.arn": "$.Role.Arn",
+            "role.name": "$.Role.RoleName"
+          }
+        }
+      ],
+      "tests": [
+        {
+          "name": "CreateInstanceProfile",
+          "op": "CreateInstanceProfile",
+          "call": {
+            "op": "CreateInstanceProfile",
+            "params": {
+              "InstanceProfileName": {
+                "$name": "ip"
+              }
+            },
+            "export": {
+              "instanceprofile.arn": "$.InstanceProfile.Arn",
+              "instanceprofile.name": "$.InstanceProfile.InstanceProfileName"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.InstanceProfile.Arn": {
+                  "nonEmpty": true
+                },
+                "$.InstanceProfile.InstanceProfileName": {
+                  "matches": "^[\\w+=,.@-]+$"
+                }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "GetInstanceProfile",
+                  "params": {
+                    "InstanceProfileName": {
+                      "$ref": "instanceprofile.name"
+                    }
+                  }
+                },
+                "checks": {
+                  "$.InstanceProfile.Arn": {
+                    "equals": {
+                      "$ref": "instanceprofile.arn"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "ListInstanceProfiles",
+                  "params": {}
+                },
+                "itemsPath": "$.InstanceProfiles",
+                "where": {
+                  "$.Arn": {
+                    "$ref": "instanceprofile.arn"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetInstanceProfile",
+          "op": "GetInstanceProfile",
+          "call": {
+            "op": "GetInstanceProfile",
+            "params": {
+              "InstanceProfileName": {
+                "$ref": "instanceprofile.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.InstanceProfile.Arn": {
+                  "equals": {
+                    "$ref": "instanceprofile.arn"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateInstanceProfile"
+          ]
+        },
+        {
+          "name": "TagInstanceProfile",
+          "op": "TagInstanceProfile",
+          "call": {
+            "op": "TagInstanceProfile",
+            "params": {
+              "InstanceProfileName": {
+                "$ref": "instanceprofile.name"
+              },
+              "Tags": [
+                {
+                  "Key": "compat",
+                  "Value": "scenario"
+                }
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "ListInstanceProfileTags",
+                  "params": {
+                    "InstanceProfileName": {
+                      "$ref": "instanceprofile.name"
+                    }
+                  }
+                },
+                "itemsPath": "$.Tags",
+                "where": {
+                  "$.Key": "compat",
+                  "$.Value": "scenario"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateInstanceProfile"
+          ]
+        },
+        {
+          "name": "ListInstanceProfileTags",
+          "op": "ListInstanceProfileTags",
+          "call": {
+            "op": "ListInstanceProfileTags",
+            "params": {
+              "InstanceProfileName": {
+                "$ref": "instanceprofile.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Tags",
+              "where": {
+                "$.Key": "compat",
+                "$.Value": "scenario"
+              }
+            }
+          ],
+          "depends": [
+            "CreateInstanceProfile"
+          ]
+        },
+        {
+          "name": "UntagInstanceProfile",
+          "op": "UntagInstanceProfile",
+          "call": {
+            "op": "UntagInstanceProfile",
+            "params": {
+              "InstanceProfileName": {
+                "$ref": "instanceprofile.name"
+              },
+              "TagKeys": [
+                "compat"
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "ListInstanceProfileTags",
+                  "params": {
+                    "InstanceProfileName": {
+                      "$ref": "instanceprofile.name"
+                    }
+                  }
+                },
+                "itemsPath": "$.Tags",
+                "where": {
+                  "$.Key": "compat"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateInstanceProfile"
+          ]
+        },
+        {
+          "name": "AddRoleToInstanceProfile",
+          "op": "AddRoleToInstanceProfile",
+          "call": {
+            "op": "AddRoleToInstanceProfile",
+            "params": {
+              "InstanceProfileName": {
+                "$ref": "instanceprofile.name"
+              },
+              "RoleName": {
+                "$ref": "role.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "GetInstanceProfile",
+                  "params": {
+                    "InstanceProfileName": {
+                      "$ref": "instanceprofile.name"
+                    }
+                  }
+                },
+                "checks": {
+                  "$.InstanceProfile.Roles[0].Arn": {
+                    "equals": {
+                      "$ref": "role.arn"
+                    }
+                  },
+                  "$.InstanceProfile.Roles[0].RoleName": {
+                    "equals": {
+                      "$ref": "role.name"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateInstanceProfile"
+          ]
+        },
+        {
+          "name": "ListInstanceProfilesForRole",
+          "op": "ListInstanceProfilesForRole",
+          "call": {
+            "op": "ListInstanceProfilesForRole",
+            "params": {
+              "RoleName": {
+                "$ref": "role.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.InstanceProfiles",
+              "where": {
+                "$.Arn": {
+                  "$ref": "instanceprofile.arn"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateInstanceProfile"
+          ]
+        },
+        {
+          "name": "RemoveRoleFromInstanceProfile",
+          "op": "RemoveRoleFromInstanceProfile",
+          "call": {
+            "op": "RemoveRoleFromInstanceProfile",
+            "params": {
+              "InstanceProfileName": {
+                "$ref": "instanceprofile.name"
+              },
+              "RoleName": {
+                "$ref": "role.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "GetInstanceProfile",
+                  "params": {
+                    "InstanceProfileName": {
+                      "$ref": "instanceprofile.name"
+                    }
+                  }
+                },
+                "itemsPath": "$.InstanceProfile.Roles",
+                "where": {
+                  "$.RoleName": {
+                    "$ref": "role.name"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateInstanceProfile"
+          ]
+        },
+        {
+          "name": "ListInstanceProfiles",
+          "op": "ListInstanceProfiles",
+          "call": {
+            "op": "ListInstanceProfiles",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.InstanceProfiles",
+              "where": {
+                "$.Arn": {
+                  "$ref": "instanceprofile.arn"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateInstanceProfile"
+          ]
+        },
+        {
+          "name": "DeleteInstanceProfile",
+          "op": "DeleteInstanceProfile",
+          "call": {
+            "op": "DeleteInstanceProfile",
+            "params": {
+              "InstanceProfileName": {
+                "$ref": "instanceprofile.name"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "GetInstanceProfile",
+                  "params": {
+                    "InstanceProfileName": {
+                      "$ref": "instanceprofile.name"
+                    }
+                  }
+                },
+                "error": {
+                  "shape": "NoSuchEntityException",
+                  "code": "NoSuchEntity"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateInstanceProfile"
+          ]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "DeleteInstanceProfile",
+          "params": {
+            "InstanceProfileName": {
+              "$ref": "instanceprofile.name"
+            }
+          }
+        },
+        {
+          "op": "DeleteRole",
+          "params": {
+            "RoleName": {
+              "$ref": "role.name"
+            }
+          }
+        },
+        {
+          "op": "DeletePolicy",
+          "params": {
+            "PolicyArn": {
+              "$ref": "policy.arn"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "iam-gen-probe",
+      "kind": "probe",
+      "parallel": true,
+      "setup": [],
+      "tests": [
+        {
+          "name": "GetAccessKeyLastUsed",
+          "op": "GetAccessKeyLastUsed",
+          "call": {
+            "op": "GetAccessKeyLastUsed",
+            "params": {
+              "AccessKeyId": "AKIAIOSFODNN7EXAMPLE"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.UserName": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetAccountPasswordPolicy",
+          "op": "GetAccountPasswordPolicy",
+          "call": {
+            "op": "GetAccountPasswordPolicy",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.PasswordPolicy": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetAccountSummary",
+          "op": "GetAccountSummary",
+          "call": {
+            "op": "GetAccountSummary",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.SummaryMap": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetContextKeysForCustomPolicy",
+          "op": "GetContextKeysForCustomPolicy",
+          "call": {
+            "op": "GetContextKeysForCustomPolicy",
+            "params": {
+              "PolicyInputList": [
+                "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:GetObject\",\"Resource\":\"arn:aws:s3:::compat-scenario-nonexistent/*\"}]}"
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.ContextKeyNames": {
+                  "isList": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetContextKeysForPrincipalPolicy",
+          "op": "GetContextKeysForPrincipalPolicy",
+          "call": {
+            "op": "GetContextKeysForPrincipalPolicy",
+            "params": {
+              "PolicySourceArn": "arn:aws:iam::123456789012:user/compat-scenario-nonexistent"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.ContextKeyNames": {
+                  "isList": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetCredentialReport",
+          "op": "GetCredentialReport",
+          "call": {
+            "op": "GetCredentialReport",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Content": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetDelegationRequest",
+          "op": "GetDelegationRequest",
+          "call": {
+            "op": "GetDelegationRequest",
+            "params": {
+              "DelegationRequestId": "compat-scenario-nonexistent-delegation"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.PermissionCheckStatus": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetHumanReadableSummary",
+          "op": "GetHumanReadableSummary",
+          "call": {
+            "op": "GetHumanReadableSummary",
+            "params": {
+              "EntityArn": "arn:aws:iam::123456789012:role/compat-scenario-nonexistent"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.SummaryState": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetLoginProfile",
+          "op": "GetLoginProfile",
+          "call": {
+            "op": "GetLoginProfile",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.LoginProfile": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetMFADevice",
+          "op": "GetMFADevice",
+          "call": {
+            "op": "GetMFADevice",
+            "params": {
+              "SerialNumber": "arn:aws:iam::123456789012:mfa/compat-scenario-nonexistent"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.UserName": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetOpenIDConnectProvider",
+          "op": "GetOpenIDConnectProvider",
+          "call": {
+            "op": "GetOpenIDConnectProvider",
+            "params": {
+              "OpenIDConnectProviderArn": "arn:aws:iam::123456789012:oidc-provider/compat-scenario-nonexistent.example.com"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Url": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetOrganizationsAccessReport",
+          "op": "GetOrganizationsAccessReport",
+          "call": {
+            "op": "GetOrganizationsAccessReport",
+            "params": {
+              "JobId": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.JobStatus": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetOutboundWebIdentityFederationInfo",
+          "op": "GetOutboundWebIdentityFederationInfo",
+          "call": {
+            "op": "GetOutboundWebIdentityFederationInfo",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.IssuerIdentifier": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetPolicyVersion",
+          "op": "GetPolicyVersion",
+          "call": {
+            "op": "GetPolicyVersion",
+            "params": {
+              "PolicyArn": "arn:aws:iam::123456789012:policy/compat-scenario-nonexistent",
+              "VersionId": "v1"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.PolicyVersion": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetSAMLProvider",
+          "op": "GetSAMLProvider",
+          "call": {
+            "op": "GetSAMLProvider",
+            "params": {
+              "SAMLProviderArn": "arn:aws:iam::123456789012:saml-provider/compat-scenario-nonexistent"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.AssertionEncryptionMode": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetSSHPublicKey",
+          "op": "GetSSHPublicKey",
+          "call": {
+            "op": "GetSSHPublicKey",
+            "params": {
+              "Encoding": "PEM",
+              "SSHPublicKeyId": "APKAEIBAERJR2EXAMPLE",
+              "UserName": "compat-scenario-nonexistent"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.SSHPublicKey": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetServerCertificate",
+          "op": "GetServerCertificate",
+          "call": {
+            "op": "GetServerCertificate",
+            "params": {
+              "ServerCertificateName": "compat-scenario-nonexistent"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.ServerCertificate": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetServiceLastAccessedDetails",
+          "op": "GetServiceLastAccessedDetails",
+          "call": {
+            "op": "GetServiceLastAccessedDetails",
+            "params": {
+              "JobId": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.JobStatus": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetServiceLastAccessedDetailsWithEntities",
+          "op": "GetServiceLastAccessedDetailsWithEntities",
+          "call": {
+            "op": "GetServiceLastAccessedDetailsWithEntities",
+            "params": {
+              "JobId": "00000000-0000-0000-0000-000000000000",
+              "ServiceNamespace": "s3"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.JobStatus": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetServiceLinkedRoleDeletionStatus",
+          "op": "GetServiceLinkedRoleDeletionStatus",
+          "call": {
+            "op": "GetServiceLinkedRoleDeletionStatus",
+            "params": {
+              "DeletionTaskId": "task/aws-service-role/compat-scenario-nonexistent.amazonaws.com/AWSServiceRoleForCompatScenario/00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Status": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "ListAccountAliases",
+          "op": "ListAccountAliases",
+          "call": {
+            "op": "ListAccountAliases",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.IsTruncated": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "ListDelegationRequests",
+          "op": "ListDelegationRequests",
+          "call": {
+            "op": "ListDelegationRequests",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.isTruncated": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "ListEntitiesForPolicy",
+          "op": "ListEntitiesForPolicy",
+          "call": {
+            "op": "ListEntitiesForPolicy",
+            "params": {
+              "PolicyArn": "arn:aws:iam::123456789012:policy/compat-scenario-nonexistent"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.IsTruncated": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "ListMFADeviceTags",
+          "op": "ListMFADeviceTags",
+          "call": {
+            "op": "ListMFADeviceTags",
+            "params": {
+              "SerialNumber": "arn:aws:iam::123456789012:mfa/compat-scenario-nonexistent"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.IsTruncated": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "ListMFADevices",
+          "op": "ListMFADevices",
+          "call": {
+            "op": "ListMFADevices",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.IsTruncated": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "ListOpenIDConnectProviderTags",
+          "op": "ListOpenIDConnectProviderTags",
+          "call": {
+            "op": "ListOpenIDConnectProviderTags",
+            "params": {
+              "OpenIDConnectProviderArn": "arn:aws:iam::123456789012:oidc-provider/compat-scenario-nonexistent.example.com"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.IsTruncated": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "ListOpenIDConnectProviders",
+          "op": "ListOpenIDConnectProviders",
+          "call": {
+            "op": "ListOpenIDConnectProviders",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.OpenIDConnectProviderList": {
+                  "isList": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "ListOrganizationsFeatures",
+          "op": "ListOrganizationsFeatures",
+          "call": {
+            "op": "ListOrganizationsFeatures",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.OrganizationId": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "ListPoliciesGrantingServiceAccess",
+          "op": "ListPoliciesGrantingServiceAccess",
+          "call": {
+            "op": "ListPoliciesGrantingServiceAccess",
+            "params": {
+              "Arn": "arn:aws:iam::123456789012:user/compat-scenario-nonexistent",
+              "ServiceNamespaces": [
+                "s3"
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.IsTruncated": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "ListPolicyVersions",
+          "op": "ListPolicyVersions",
+          "call": {
+            "op": "ListPolicyVersions",
+            "params": {
+              "PolicyArn": "arn:aws:iam::123456789012:policy/compat-scenario-nonexistent"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.IsTruncated": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "ListSAMLProviderTags",
+          "op": "ListSAMLProviderTags",
+          "call": {
+            "op": "ListSAMLProviderTags",
+            "params": {
+              "SAMLProviderArn": "arn:aws:iam::123456789012:saml-provider/compat-scenario-nonexistent"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.IsTruncated": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "ListSAMLProviders",
+          "op": "ListSAMLProviders",
+          "call": {
+            "op": "ListSAMLProviders",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.SAMLProviderList": {
+                  "isList": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "ListSSHPublicKeys",
+          "op": "ListSSHPublicKeys",
+          "call": {
+            "op": "ListSSHPublicKeys",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.IsTruncated": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "ListServerCertificateTags",
+          "op": "ListServerCertificateTags",
+          "call": {
+            "op": "ListServerCertificateTags",
+            "params": {
+              "ServerCertificateName": "compat-scenario-nonexistent"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.IsTruncated": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "ListServerCertificates",
+          "op": "ListServerCertificates",
+          "call": {
+            "op": "ListServerCertificates",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.IsTruncated": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "ListServiceSpecificCredentials",
+          "op": "ListServiceSpecificCredentials",
+          "call": {
+            "op": "ListServiceSpecificCredentials",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.IsTruncated": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "ListSigningCertificates",
+          "op": "ListSigningCertificates",
+          "call": {
+            "op": "ListSigningCertificates",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.IsTruncated": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "ListVirtualMFADevices",
+          "op": "ListVirtualMFADevices",
+          "call": {
+            "op": "ListVirtualMFADevices",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.IsTruncated": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "teardown": []
+    }
+  ]
+}

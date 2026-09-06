@@ -10,6 +10,13 @@ aws-sdk-batch = "=1.126.0"
 aws-sdk-dynamodb = "=1.56.0"
 aws-sdk-elasticloadbalancing = "=1.111.0"
 aws-sdk-eventbridge = "=1.54.0"
+# Newer than its neighbours on purpose: emit_rust.go writes a call for every
+# operation models/aws/shapes/iam.json carries, and an older crate is a build
+# failure of this suite rather than a generation-time refusal. 1.123.0 is the
+# version cargo resolves under the aws-smithy-runtime-api and aws-smithy-types
+# pins below, and it declares the delegation-request, human-readable-summary
+# and outbound-web-identity-federation operations the iam probe group calls.
+aws-sdk-iam = "=1.123.0"
 aws-sdk-kms = "=1.52.0"
 aws-sdk-lambda = "=1.55.0"
 aws-sdk-organizations = "=1.102.0"
