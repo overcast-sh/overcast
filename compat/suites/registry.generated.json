@@ -480,6 +480,253 @@
       ]
     },
     {
+      "service": "kms",
+      "name": "kms-gen-key",
+      "generated": true,
+      "scenario": "compat/model/scenarios/kms.json",
+      "state": "candidate",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "CreateKey"
+        },
+        {
+          "name": "DescribeKey",
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "UpdateKeyDescription",
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "DescribeKeyMetadata",
+          "op": "DescribeKey",
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "ListKeys",
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "TagResource",
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "ListResourceTags",
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "UntagResource",
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "GetKeyPolicy",
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "PutKeyPolicy",
+          "depends": [
+            "CreateKey",
+            "GetKeyPolicy"
+          ]
+        },
+        {
+          "name": "ListKeyPolicies",
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "GenerateDataKey",
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "GenerateDataKeyWithoutPlaintext",
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "GenerateDataKeyPair",
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "GenerateRandom"
+        },
+        {
+          "name": "CreateGrant",
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "ListGrants",
+          "depends": [
+            "CreateGrant",
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "ListRetirableGrants",
+          "depends": [
+            "CreateGrant"
+          ]
+        },
+        {
+          "name": "RevokeGrant",
+          "depends": [
+            "CreateGrant",
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "CreateGrantForRetire",
+          "op": "CreateGrant",
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "RetireGrant",
+          "depends": [
+            "CreateGrantForRetire",
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "CreateKeyAsymmetric",
+          "op": "CreateKey"
+        },
+        {
+          "name": "GetPublicKey",
+          "depends": [
+            "CreateKeyAsymmetric"
+          ]
+        },
+        {
+          "name": "CreateAlias",
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "ListAliases",
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "UpdateAlias",
+          "depends": [
+            "CreateKeyAsymmetric"
+          ]
+        },
+        {
+          "name": "DeleteAlias",
+          "depends": [
+            "CreateKeyAsymmetric"
+          ]
+        },
+        {
+          "name": "ScheduleKeyDeletionAsymmetric",
+          "op": "ScheduleKeyDeletion",
+          "depends": [
+            "CreateKeyAsymmetric"
+          ]
+        },
+        {
+          "name": "DisableKey",
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "EnableKey",
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "ScheduleKeyDeletion",
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "CancelKeyDeletion",
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "ScheduleKeyDeletionFinal",
+          "op": "ScheduleKeyDeletion",
+          "depends": [
+            "CreateKey"
+          ]
+        }
+      ]
+    },
+    {
+      "service": "kms",
+      "name": "kms-gen-probe",
+      "generated": true,
+      "scenario": "compat/model/scenarios/kms.json",
+      "state": "candidate",
+      "parallel": true,
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "DescribeCustomKeyStores"
+        },
+        {
+          "name": "GetKeyRotationStatus"
+        },
+        {
+          "name": "GetParametersForImport"
+        },
+        {
+          "name": "ListKeyRotations"
+        }
+      ]
+    },
+    {
       "service": "organizations",
       "name": "organizations-gen-organization",
       "generated": true,

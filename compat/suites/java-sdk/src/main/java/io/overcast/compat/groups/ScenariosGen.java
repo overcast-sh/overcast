@@ -23,6 +23,7 @@ public final class ScenariosGen {
                 new ScenariosAuthoredSqsQueuesGen(clients),
                 new ScenariosBatchGen(clients),
                 new ScenariosElasticLoadBalancingGen(clients),
+                new ScenariosKmsGen(clients),
                 new ScenariosOrganizationsGen(clients),
                 new ScenariosSecretsmanagerGen(clients),
                 new ScenariosServicediscoveryGen(clients),

@@ -191,6 +191,160 @@
       "detail": "Replaces the policies applied to a listener wholesale, which is how a listener loses its stickiness or its cipher policy."
     },
     {
+      "service": "kms",
+      "operation": "ConnectCustomKeyStore",
+      "group": "kms-gen-probe",
+      "reason": "never-probe",
+      "detail": "Connects a custom key store to its AWS CloudHSM cluster or external key store proxy, which changes whether every KMS key in that store can be used at all."
+    },
+    {
+      "service": "kms",
+      "operation": "CreateCustomKeyStore",
+      "group": "kms-gen-probe",
+      "reason": "never-probe",
+      "detail": "Creates a custom key store bound to a CloudHSM cluster or an external key manager. Nothing in a probe group removes it, and an orphaned key store keeps its backing cluster associated."
+    },
+    {
+      "service": "kms",
+      "operation": "Decrypt",
+      "group": "kms-gen-probe",
+      "reason": "probe-of-implemented-op",
+      "detail": "Decrypt is implemented (Supported), so it may not be probed, and no recipe resource gives it a role"
+    },
+    {
+      "service": "kms",
+      "operation": "DeleteCustomKeyStore",
+      "group": "kms-gen-probe",
+      "reason": "never-probe",
+      "detail": "Deletes a custom key store. AWS refuses only while the store still holds KMS keys, so a store emptied by an earlier deletion is destroyed by this call."
+    },
+    {
+      "service": "kms",
+      "operation": "DeleteImportedKeyMaterial",
+      "group": "kms-gen-probe",
+      "reason": "never-probe",
+      "detail": "Deletes the imported key material of a KMS key. Every ciphertext encrypted under that key becomes undecryptable until the same material is imported again, and AWS keeps no copy of it."
+    },
+    {
+      "service": "kms",
+      "operation": "DeriveSharedSecret",
+      "group": "kms-gen-probe",
+      "reason": "never-probe",
+      "detail": "Performs an ECDH key agreement with the caller's public key and bills for it. It also takes a raw public key blob, which the IR cannot express."
+    },
+    {
+      "service": "kms",
+      "operation": "DisableKeyRotation",
+      "group": "kms-gen-probe",
+      "reason": "never-probe",
+      "detail": "Turns off automatic annual rotation for a live KMS key, which is a control an account's compliance posture is usually built on."
+    },
+    {
+      "service": "kms",
+      "operation": "DisconnectCustomKeyStore",
+      "group": "kms-gen-probe",
+      "reason": "never-probe",
+      "detail": "Disconnects a custom key store from its backing cluster. Every KMS key in the store stops working for cryptographic operations until it is reconnected."
+    },
+    {
+      "service": "kms",
+      "operation": "EnableKeyRotation",
+      "group": "kms-gen-probe",
+      "reason": "never-probe",
+      "detail": "Turns on automatic annual rotation for a live KMS key. AWS bills for each key version the rotation creates, and rotation cannot be undone for versions already generated."
+    },
+    {
+      "service": "kms",
+      "operation": "Encrypt",
+      "group": "kms-gen-probe",
+      "reason": "probe-of-implemented-op",
+      "detail": "Encrypt is implemented (Supported), so it may not be probed, and no recipe resource gives it a role"
+    },
+    {
+      "service": "kms",
+      "operation": "GenerateDataKeyPairWithoutPlaintext",
+      "group": "kms-gen-probe",
+      "reason": "never-probe",
+      "detail": "GenerateDataKeyPairWithoutPlaintext is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "kms",
+      "operation": "GenerateMac",
+      "group": "kms-gen-probe",
+      "reason": "never-probe",
+      "detail": "GenerateMac is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "kms",
+      "operation": "GetKeyLastUsage",
+      "group": "kms-gen-probe",
+      "reason": "probe-binds-live-resource:KeyId",
+      "detail": "GetKeyLastUsage.KeyId would bind to key.id, a value exported from a resource the run owns; a probe calls an operation the emulator does not implement, so against real AWS it would act on that resource for real. Add a curated literal for KeyId to values.json, or leave the operation refused"
+    },
+    {
+      "service": "kms",
+      "operation": "ImportKeyMaterial",
+      "group": "kms-gen-probe",
+      "reason": "never-probe",
+      "detail": "Replaces the key material of a KMS key with material the caller supplies, which changes what every existing ciphertext under that key decrypts with."
+    },
+    {
+      "service": "kms",
+      "operation": "ReEncrypt",
+      "group": "kms-gen-probe",
+      "reason": "probe-of-implemented-op",
+      "detail": "ReEncrypt is implemented (Supported), so it may not be probed, and no recipe resource gives it a role"
+    },
+    {
+      "service": "kms",
+      "operation": "ReplicateKey",
+      "group": "kms-gen-probe",
+      "reason": "never-probe",
+      "detail": "Creates a replica of a multi-Region key in another Region. The replica is a KMS key of its own, in a Region nothing in this run looks at, and it can only be removed by scheduling its deletion there."
+    },
+    {
+      "service": "kms",
+      "operation": "RotateKeyOnDemand",
+      "group": "kms-gen-probe",
+      "reason": "never-probe",
+      "detail": "Creates a new key version of a live KMS key immediately. AWS bills for each version and a version cannot be removed."
+    },
+    {
+      "service": "kms",
+      "operation": "Sign",
+      "group": "kms-gen-probe",
+      "reason": "probe-of-implemented-op",
+      "detail": "Sign is implemented (Supported), so it may not be probed, and no recipe resource gives it a role"
+    },
+    {
+      "service": "kms",
+      "operation": "UpdateCustomKeyStore",
+      "group": "kms-gen-probe",
+      "reason": "never-probe",
+      "detail": "Changes the cluster, credentials or proxy configuration of a live custom key store, which can leave every KMS key in it unusable."
+    },
+    {
+      "service": "kms",
+      "operation": "UpdatePrimaryRegion",
+      "group": "kms-gen-probe",
+      "reason": "never-probe",
+      "detail": "Moves the primary of a multi-Region key to another Region, demoting the current primary to a replica. It changes which Region may replicate and manage the key."
+    },
+    {
+      "service": "kms",
+      "operation": "Verify",
+      "group": "kms-gen-probe",
+      "reason": "probe-of-implemented-op",
+      "detail": "Verify is implemented (Supported), so it may not be probed, and no recipe resource gives it a role"
+    },
+    {
+      "service": "kms",
+      "operation": "VerifyMac",
+      "group": "kms-gen-probe",
+      "reason": "probe-of-implemented-op",
+      "detail": "VerifyMac is implemented (Supported), so it may not be probed, and no recipe resource gives it a role"
+    },
+    {
       "service": "organizations",
       "operation": "AcceptHandshake",
       "group": "organizations-gen-probe",

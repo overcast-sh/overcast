@@ -1,0 +1,515 @@
+{
+  "$comment": "AWS Key Management Service (AWS JSON 1.1, API version 2014-11-01), G4 wave 2 of docs/plans/compat-coverage-modelgen.md §5. Overcast implements 34 of the 54 modeled operations, so unlike wave 1 this file produces real pass/fail. Three facts about KMS shape the whole recipe. First, a KMS key cannot be deleted: ScheduleKeyDeletion moves it to KeyState PendingDeletion for 7-30 days and CancelKeyDeletion brings it back to Disabled, so absence is a state check and never a not-found. The IR's `delete` role can only prove absence with `notFound` (the read raises a not-found error) or with `list` non-membership, and neither is true of AWS here — DescribeKey still answers for a pending-deletion key, and ListKeys is documented as returning all KMS keys in the account and Region. So this resource declares no `delete`, and ScheduleKeyDeletion, CancelKeyDeletion and a second ScheduleKeyDeletion are authored operations with KeyState read-backs instead. The last of them is what disposes of the key: it is the final test in the group, so a run leaves nothing enabled behind even though the group has no teardown. Second, `list` is authored rather than declared for the same reason: the generator puts the derived list test after every authored operation, and a key the run has just scheduled for deletion is one Overcast's ListKeys omits, so the membership check has to run before the disposal rather than after it. Third, six implemented operations cannot be reached at all: Encrypt, Decrypt, ReEncrypt, Sign, Verify and VerifyMac each take a blob input (Plaintext, CiphertextBlob, Message, Signature, Mac) and the IR carries no portable literal for a blob — compat/model/README.md § Values, and binder.checkValue refuses one outright. Chaining them (GenerateRandom exports a Plaintext blob, Encrypt exports a CiphertextBlob) is expressible in the binder but not in the four source emitters, each of which refuses a blob member and would scope this whole group away from its suite, so it is not attempted. They are left uncovered and the gap report records them. Two curated compromises are worth naming. The grant principals are the documentation account's root, arn:aws:iam::123456789012:root, rather than the caller's: KMS documents CreateGrant as usable cross-account and its own example grants to a role in another account, but nothing in the IR can name the running account — KeyMetadata.AWSAccountId would supply it and Overcast does not return that member, so binding to it would fail every grant test rather than the one that asserts it. That assertion lives in DescribeKeyMetadata, on its own, where its failure names the missing member and nothing else depends on it. And no identifier this recipe names is capped below 54 characters (#1886): AliasName and the grant Name are 256, Description is 8192, so `$name` fits everywhere it is used.",
+  "service": "kms",
+  "neverProbe": {
+    "ConnectCustomKeyStore": "Connects a custom key store to its AWS CloudHSM cluster or external key store proxy, which changes whether every KMS key in that store can be used at all.",
+    "CreateCustomKeyStore": "Creates a custom key store bound to a CloudHSM cluster or an external key manager. Nothing in a probe group removes it, and an orphaned key store keeps its backing cluster associated.",
+    "DeleteCustomKeyStore": "Deletes a custom key store. AWS refuses only while the store still holds KMS keys, so a store emptied by an earlier deletion is destroyed by this call.",
+    "DeleteImportedKeyMaterial": "Deletes the imported key material of a KMS key. Every ciphertext encrypted under that key becomes undecryptable until the same material is imported again, and AWS keeps no copy of it.",
+    "DeriveSharedSecret": "Performs an ECDH key agreement with the caller's public key and bills for it. It also takes a raw public key blob, which the IR cannot express.",
+    "DisableKeyRotation": "Turns off automatic annual rotation for a live KMS key, which is a control an account's compliance posture is usually built on.",
+    "DisconnectCustomKeyStore": "Disconnects a custom key store from its backing cluster. Every KMS key in the store stops working for cryptographic operations until it is reconnected.",
+    "EnableKeyRotation": "Turns on automatic annual rotation for a live KMS key. AWS bills for each key version the rotation creates, and rotation cannot be undone for versions already generated.",
+    "ImportKeyMaterial": "Replaces the key material of a KMS key with material the caller supplies, which changes what every existing ciphertext under that key decrypts with.",
+    "ReplicateKey": "Creates a replica of a multi-Region key in another Region. The replica is a KMS key of its own, in a Region nothing in this run looks at, and it can only be removed by scheduling its deletion there.",
+    "RotateKeyOnDemand": "Creates a new key version of a live KMS key immediately. AWS bills for each version and a version cannot be removed.",
+    "UpdateCustomKeyStore": "Changes the cluster, credentials or proxy configuration of a live custom key store, which can leave every KMS key in it unusable.",
+    "UpdatePrimaryRegion": "Moves the primary of a multi-Region key to another Region, demoting the current primary to a replica. It changes which Region may replicate and manage the key."
+  },
+  "resources": [
+    {
+      "$comment": "The KMS key, and the only resource here: aliases and grants are sub-objects of a key rather than things with a lifecycle of their own, and the alias needs a second key to point at before UpdateAlias is observable, so both are authored on this resource instead of being resources that `requires` a key. That also keeps every key the run creates inside one group, where the authored ScheduleKeyDeletion tests can dispose of both of them — a resource with no `delete` gets no teardown, so disposal has to be a test. The identity is the key ARN, which CreateKey states directly in KeyMetadata.Arn, and the read is DescribeKey compared against it. KeySpec and KeyUsage are written out even though they are AWS's own defaults, so that the metadata assertions compare what KMS echoed rather than what it decided. `async` is short but real: every KMS API reference page states that the service follows an eventual consistency model, and CreateGrant documents a delay of up to five minutes before a grant is visible without its token — the read-backs here use the grant id rather than the token, so six attempts half a second apart is the budget for the ordinary case and a genuinely slow grant would be a finding rather than a flake. `tags` is deliberately not declared: KMS spells its tag structure {TagKey, TagValue} rather than {Key, Value}, which detectTagShape does not accept, so declaring it would refuse TagResource, ListResourceTags and UntagResource as unsupported-tag-shape and lose three implemented operations. They are authored below instead, with the same tag/list/untag shape the derived path would have produced.",
+      "id": "key",
+      "create": {
+        "op": "CreateKey",
+        "params": {
+          "KeySpec": "SYMMETRIC_DEFAULT",
+          "KeyUsage": "ENCRYPT_DECRYPT"
+        }
+      },
+      "exports": {
+        "id": "$.KeyMetadata.KeyId",
+        "arn": "$.KeyMetadata.Arn"
+      },
+      "binds": { "KeyId": "key.id" },
+      "read": {
+        "op": "DescribeKey",
+        "identityPath": "$.KeyMetadata.Arn",
+        "identity": "arn"
+      },
+      "mutable": [
+        {
+          "op": "UpdateKeyDescription",
+          "member": "Description",
+          "from": "compat-scenario key, initial description",
+          "to": "compat-scenario key, updated description",
+          "readPath": "$.KeyMetadata.Description"
+        }
+      ],
+      "async": { "maxAttempts": 6, "delayMs": 500 },
+      "operations": [
+        {
+          "$comment": "The metadata fields AWS states for every customer-managed key, checked on their own so that one missing member does not take the rest of the group with it. AWSAccountId is the twelve digits of the account that owns the key; KeyManager is CUSTOMER for a key CreateKey made; Origin is AWS_KMS for material KMS generated; MultiRegion is false because the create asked for a single-Region key; and KeySpec and KeyUsage are what the create sent, so this compares an echo rather than a default.",
+          "name": "DescribeKeyMetadata",
+          "op": "DescribeKey",
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.KeyMetadata.AWSAccountId": { "matches": "^[0-9]{12}$" },
+                "$.KeyMetadata.Enabled": { "equals": true },
+                "$.KeyMetadata.KeyManager": { "equals": "CUSTOMER" },
+                "$.KeyMetadata.KeySpec": { "equals": "SYMMETRIC_DEFAULT" },
+                "$.KeyMetadata.KeyState": { "equals": "Enabled" },
+                "$.KeyMetadata.KeyUsage": { "equals": "ENCRYPT_DECRYPT" },
+                "$.KeyMetadata.MultiRegion": { "equals": false },
+                "$.KeyMetadata.Origin": { "equals": "AWS_KMS" }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "Membership in the account-wide listing, authored rather than declared as `list` so that it runs here — before the key is scheduled for deletion — instead of after every authored operation, which is where the derived list test would sit.",
+          "op": "ListKeys",
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Keys",
+              "where": { "$.KeyArn": { "$ref": "key.arn" } }
+            }
+          ]
+        },
+        {
+          "$comment": "The tag lifecycle the `tags` role would have generated, written by hand because KMS names the tag members TagKey and TagValue.",
+          "op": "TagResource",
+          "params": {
+            "Tags": [{ "TagKey": "compat", "TagValue": "scenario" }]
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "call": { "op": "ListResourceTags" },
+              "itemsPath": "$.Tags",
+              "where": { "$.TagKey": "compat", "$.TagValue": "scenario" }
+            }
+          ]
+        },
+        {
+          "op": "ListResourceTags",
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Tags",
+              "where": { "$.TagKey": "compat", "$.TagValue": "scenario" }
+            }
+          ]
+        },
+        {
+          "op": "UntagResource",
+          "params": { "TagKeys": ["compat"] },
+          "assert": [
+            {
+              "kind": "absent",
+              "call": { "op": "ListResourceTags" },
+              "itemsPath": "$.Tags",
+              "where": { "$.TagKey": "compat" }
+            }
+          ]
+        },
+        {
+          "$comment": "A KMS key always has a policy named default, and AWS's own default key policy carries the statement id `Enable IAM User Permissions`. Matching the policy version rather than the whole document keeps the check independent of how the account root is spelled, which is the one part of the document a run cannot know. The document itself is exported so that PutKeyPolicy has something legal to send.",
+          "op": "GetKeyPolicy",
+          "params": { "PolicyName": "default" },
+          "export": { "key.policy": "$.Policy" },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Policy": { "matches": "\"Version\"\\s*:\\s*\"2012-10-17\"" },
+                "$.PolicyName": { "equals": "default" }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "PutKeyPolicy sends the key's own current policy back. A policy naming any other principal would have to name an account the run cannot know, and a policy naming none is refused by AWS's lockout check; putting the document GetKeyPolicy just returned is legal on AWS and asserts the round trip — the document that comes back has to be the document that went in, byte for byte, which is what an SDK reading a key policy depends on.",
+          "op": "PutKeyPolicy",
+          "params": {
+            "PolicyName": "default",
+            "Policy": { "$ref": "key.policy" }
+          },
+          "assert": [
+            {
+              "kind": "readback",
+              "call": { "op": "GetKeyPolicy", "params": { "PolicyName": "default" } },
+              "checks": { "$.Policy": { "equals": { "$ref": "key.policy" } } }
+            }
+          ]
+        },
+        {
+          "$comment": "AWS gives a KMS key exactly one policy, named default, so membership of that one name is the whole content of the response.",
+          "op": "ListKeyPolicies",
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.PolicyNames",
+              "where": { "$": "default" }
+            }
+          ]
+        },
+        {
+          "$comment": "The data-key operations return blobs this recipe cannot compare, but each also states the ARN of the KMS key that wrapped the data key, and that is a real assertion: a response naming a different key is the bug these calls can actually have.",
+          "op": "GenerateDataKey",
+          "params": { "KeySpec": "AES_256" },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.KeyId": { "equals": { "$ref": "key.arn" } } }
+            }
+          ]
+        },
+        {
+          "op": "GenerateDataKeyWithoutPlaintext",
+          "params": { "KeySpec": "AES_256" },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.KeyId": { "equals": { "$ref": "key.arn" } } }
+            }
+          ]
+        },
+        {
+          "$comment": "GenerateDataKeyPair is called on the symmetric key, which is what AWS requires: the KMS key wraps the generated private key rather than being the pair. The echoed KeyPairSpec is the second assertion because a response describing a different pair spec than the one asked for is the other way this call can be wrong.",
+          "op": "GenerateDataKeyPair",
+          "params": { "KeyPairSpec": "RSA_2048" },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.KeyId": { "equals": { "$ref": "key.arn" } },
+                "$.KeyPairSpec": { "equals": "RSA_2048" }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "GenerateRandom returns nothing but blobs, so a non-empty Plaintext is the only honest assertion available; it is still a real one, because a service that answers with no random bytes has failed the call.",
+          "op": "GenerateRandom",
+          "params": { "NumberOfBytes": 32 },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.Plaintext": { "nonEmpty": true } }
+            }
+          ]
+        },
+        {
+          "$comment": "Grants. The grantee and retiring principals are the documentation account's root rather than the caller's: KMS documents CreateGrant as a cross-account operation and its own example grants to a principal in another account, and no expression in the IR can name the account this run is signing as. The membership check is on the grant id the call returned, which is what ListGrants is for.",
+          "op": "CreateGrant",
+          "params": {
+            "GranteePrincipal": "arn:aws:iam::123456789012:root",
+            "RetiringPrincipal": "arn:aws:iam::123456789012:root",
+            "Name": { "$name": "grant" },
+            "Operations": ["Decrypt", "Encrypt"]
+          },
+          "export": { "key.grantid": "$.GrantId" },
+          "assert": [
+            {
+              "kind": "listContains",
+              "call": { "op": "ListGrants" },
+              "itemsPath": "$.Grants",
+              "where": { "$.GrantId": { "$ref": "key.grantid" } }
+            }
+          ]
+        },
+        {
+          "op": "ListGrants",
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Grants",
+              "where": { "$.GrantId": { "$ref": "key.grantid" } }
+            }
+          ]
+        },
+        {
+          "$comment": "The same grant seen from the retiring principal's side: ListRetirableGrants is indexed by RetiringPrincipal rather than by key, so it is the one listing that proves the retiring principal was recorded at all.",
+          "op": "ListRetirableGrants",
+          "params": { "RetiringPrincipal": "arn:aws:iam::123456789012:root" },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Grants",
+              "where": { "$.GrantId": { "$ref": "key.grantid" } }
+            }
+          ]
+        },
+        {
+          "op": "RevokeGrant",
+          "params": { "GrantId": { "$ref": "key.grantid" } },
+          "assert": [
+            {
+              "kind": "absent",
+              "call": { "op": "ListGrants" },
+              "itemsPath": "$.Grants",
+              "where": { "$.GrantId": { "$ref": "key.grantid" } }
+            }
+          ]
+        },
+        {
+          "$comment": "A second grant, so that RetireGrant has one of its own to retire: revoking and retiring are different operations on AWS — one is the key owner's, the other the retiring principal's — and each has to remove a grant that is still there.",
+          "name": "CreateGrantForRetire",
+          "op": "CreateGrant",
+          "params": {
+            "GranteePrincipal": "arn:aws:iam::123456789012:root",
+            "RetiringPrincipal": "arn:aws:iam::123456789012:root",
+            "Name": { "$name": "retire" },
+            "Operations": ["Decrypt", "Encrypt"]
+          },
+          "export": {
+            "key.retiregrantid": "$.GrantId",
+            "key.retiregranttoken": "$.GrantToken"
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "call": { "op": "ListGrants" },
+              "itemsPath": "$.Grants",
+              "where": { "$.GrantId": { "$ref": "key.retiregrantid" } }
+            }
+          ]
+        },
+        {
+          "$comment": "Retired by its grant token, which is the identifier CreateGrant hands back for exactly this purpose and the one form of RetireGrant that needs neither the key id nor the grant id.",
+          "op": "RetireGrant",
+          "params": { "GrantToken": { "$ref": "key.retiregranttoken" } },
+          "assert": [
+            {
+              "kind": "absent",
+              "call": { "op": "ListGrants" },
+              "itemsPath": "$.Grants",
+              "where": { "$.GrantId": { "$ref": "key.retiregrantid" } }
+            }
+          ]
+        },
+        {
+          "$comment": "A second, asymmetric key. It is what GetPublicKey needs — a symmetric key has no public half — and it is also what makes UpdateAlias observable, because an alias re-pointed at the key it already names changes nothing anyone can read back. It is disposed of by ScheduleKeyDeletionAsymmetric below.",
+          "name": "CreateKeyAsymmetric",
+          "op": "CreateKey",
+          "params": {
+            "Description": "compat-scenario asymmetric key",
+            "KeySpec": "RSA_2048",
+            "KeyUsage": "ENCRYPT_DECRYPT"
+          },
+          "export": {
+            "key.rsaid": "$.KeyMetadata.KeyId",
+            "key.rsaarn": "$.KeyMetadata.Arn"
+          },
+          "assert": [
+            {
+              "kind": "readback",
+              "call": {
+                "op": "DescribeKey",
+                "params": { "KeyId": { "$ref": "key.rsaid" } }
+              },
+              "checks": {
+                "$.KeyMetadata.Arn": { "equals": { "$ref": "key.rsaarn" } },
+                "$.KeyMetadata.KeySpec": { "equals": "RSA_2048" }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "The public half of the asymmetric key. KeySpec and KeyUsage are asserted alongside the ARN because AWS states both on this response and an SDK uses them to decide which encryption algorithm it may offer.",
+          "op": "GetPublicKey",
+          "params": { "KeyId": { "$ref": "key.rsaid" } },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.KeyId": { "equals": { "$ref": "key.rsaarn" } },
+                "$.KeySpec": { "equals": "RSA_2048" },
+                "$.KeyUsage": { "equals": "ENCRYPT_DECRYPT" }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "Aliases. The name carries the alias/ prefix AWS requires, and the listing is filtered by key id so that membership is decided against this run's key rather than against a page of whatever else the account holds — ListAliases pages at 50 entries by default, and an account with more aliases than that would otherwise hide the one just created.",
+          "op": "CreateAlias",
+          "params": {
+            "AliasName": { "$concat": ["alias/", { "$name": "alias" }] },
+            "TargetKeyId": { "$ref": "key.id" }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "call": {
+                "op": "ListAliases",
+                "params": { "KeyId": { "$ref": "key.id" } }
+              },
+              "itemsPath": "$.Aliases",
+              "where": {
+                "$.AliasName": { "$concat": ["alias/", { "$name": "alias" }] },
+                "$.TargetKeyId": { "$ref": "key.id" }
+              }
+            }
+          ]
+        },
+        {
+          "op": "ListAliases",
+          "params": { "KeyId": { "$ref": "key.id" } },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Aliases",
+              "where": {
+                "$.AliasName": { "$concat": ["alias/", { "$name": "alias" }] },
+                "$.TargetKeyId": { "$ref": "key.id" }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "Re-pointed at the asymmetric key, and read back through the listing filtered by that key: an alias that still resolved to the old key would not appear there at all, so the membership check is the change rather than a restatement of it.",
+          "op": "UpdateAlias",
+          "params": {
+            "AliasName": { "$concat": ["alias/", { "$name": "alias" }] },
+            "TargetKeyId": { "$ref": "key.rsaid" }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "call": {
+                "op": "ListAliases",
+                "params": { "KeyId": { "$ref": "key.rsaid" } }
+              },
+              "itemsPath": "$.Aliases",
+              "where": {
+                "$.AliasName": { "$concat": ["alias/", { "$name": "alias" }] },
+                "$.TargetKeyId": { "$ref": "key.rsaid" }
+              }
+            }
+          ]
+        },
+        {
+          "op": "DeleteAlias",
+          "params": {
+            "AliasName": { "$concat": ["alias/", { "$name": "alias" }] }
+          },
+          "assert": [
+            {
+              "kind": "absent",
+              "call": {
+                "op": "ListAliases",
+                "params": { "KeyId": { "$ref": "key.rsaid" } }
+              },
+              "itemsPath": "$.Aliases",
+              "where": {
+                "$.AliasName": { "$concat": ["alias/", { "$name": "alias" }] }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "Disposal of the asymmetric key, and a second reading of the state transition on a key nothing else in the group touches afterwards.",
+          "name": "ScheduleKeyDeletionAsymmetric",
+          "op": "ScheduleKeyDeletion",
+          "params": {
+            "KeyId": { "$ref": "key.rsaid" },
+            "PendingWindowInDays": 7
+          },
+          "assert": [
+            {
+              "kind": "readback",
+              "call": {
+                "op": "DescribeKey",
+                "params": { "KeyId": { "$ref": "key.rsaid" } }
+              },
+              "checks": {
+                "$.KeyMetadata.KeyState": { "equals": "PendingDeletion" }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "Disabling and re-enabling the key. DisableKey is what AWS documents as the way to stop a key being used without deleting it, and Enabled plus KeyState are the two members that say so.",
+          "op": "DisableKey",
+          "assert": [
+            {
+              "kind": "readback",
+              "call": { "op": "DescribeKey" },
+              "checks": {
+                "$.KeyMetadata.Enabled": { "equals": false },
+                "$.KeyMetadata.KeyState": { "equals": "Disabled" }
+              }
+            }
+          ]
+        },
+        {
+          "op": "EnableKey",
+          "assert": [
+            {
+              "kind": "readback",
+              "call": { "op": "DescribeKey" },
+              "checks": {
+                "$.KeyMetadata.Enabled": { "equals": true },
+                "$.KeyMetadata.KeyState": { "equals": "Enabled" }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "The deletion window. Seven days is AWS's documented minimum, and the response echoes it alongside the new state; the read-back is what proves the key really moved rather than that the call answered.",
+          "op": "ScheduleKeyDeletion",
+          "params": { "PendingWindowInDays": 7 },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.KeyId": { "equals": { "$ref": "key.arn" } },
+                "$.KeyState": { "equals": "PendingDeletion" },
+                "$.PendingWindowInDays": { "equals": 7 }
+              }
+            },
+            {
+              "kind": "readback",
+              "call": { "op": "DescribeKey" },
+              "checks": {
+                "$.KeyMetadata.KeyState": { "equals": "PendingDeletion" }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "Cancelling the deletion returns the key to Disabled, not to Enabled — AWS states that explicitly, and it is the one part of this transition an implementation is likely to get wrong.",
+          "op": "CancelKeyDeletion",
+          "assert": [
+            {
+              "kind": "readback",
+              "call": { "op": "DescribeKey" },
+              "checks": {
+                "$.KeyMetadata.KeyState": { "equals": "Disabled" }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "The last test in the group, and the reason the group needs no teardown: it puts the key the run created back into PendingDeletion and leaves it there, so a run against a real account ends with nothing enabled that it made.",
+          "name": "ScheduleKeyDeletionFinal",
+          "op": "ScheduleKeyDeletion",
+          "params": { "PendingWindowInDays": 7 },
+          "assert": [
+            {
+              "kind": "readback",
+              "call": { "op": "DescribeKey" },
+              "checks": {
+                "$.KeyMetadata.KeyState": { "equals": "PendingDeletion" }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

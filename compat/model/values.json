@@ -14,6 +14,14 @@
         "ListQuotaShares": { "jobQueue": "compat-scenario-nonexistent" }
       }
     },
+    "kms": {
+      "$comment": "One key identifier, written out per operation rather than once against KeyIdType: the key resource binds KeyId, and a probe may not draw on a binding a live resource supplies, so each unimplemented read that takes a key needs its own entry. A KMS key id is a UUID — an identifier of any other shape is answered with a validation error rather than the NotFoundException a probe is written for — and the nil UUID is a well-formed key id no account holds. It carries no $name prefix, so it can never name the key the run created. GetKeyLastUsage is the fourth such read and is deliberately left refused rather than given a literal: AWS added it to the model in April 2026, and three of the four typed suites pin an SDK older than that — aws-sdk-go-v2/service/kms v1.50.4 declares no GetKeyLastUsageInput, and the rust suite's aws-sdk-kms 1.52.0 is from December 2024 — so probing it would scope the whole probe group away from go-sdk and break the java, dotnet and rust builds, which resolve the operation only at compile time. Adding the literal is the one line that reverses this once those pins move.",
+      "operations": {
+        "GetKeyRotationStatus": { "KeyId": "00000000-0000-0000-0000-000000000000" },
+        "GetParametersForImport": { "KeyId": "00000000-0000-0000-0000-000000000000" },
+        "ListKeyRotations": { "KeyId": "00000000-0000-0000-0000-000000000000" }
+      }
+    },
     "elastic-load-balancing": {
       "$comment": "Both entries name a Classic load balancer that does not exist. The name is 27 characters, inside AWS's 32-character limit for a load balancer name, and it carries no $name prefix, so it can never be the one a run created: DescribeLoadBalancerAttributes and DescribeTags both answer LoadBalancerNotFound for it rather than reaching anything. DescribeLoadBalancerAttributes needs an entry of its own because the loadbalancer resource binds LoadBalancerName, and a probe may not draw on a binding a live resource supplies.",
       "operations": {

@@ -12,6 +12,7 @@ func scenarioGroups(c *clients.Clients) []ServiceGroup {
 		ScenariosAuthoredSqsQueues(c),
 		ScenariosBatch(c),
 		ScenariosElasticLoadBalancing(c),
+		ScenariosKms(c),
 		ScenariosOrganizations(c),
 		ScenariosSecretsmanager(c),
 		ScenariosServicediscovery(c),
