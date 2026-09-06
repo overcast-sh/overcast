@@ -3,6 +3,116 @@
   "$comment": "The candidate → gated soak ledger for generated compat groups. Written only by `go run ./cmd/compat --promote-generated` (the nightly bot PR on automation/promote-generated) and read only by cmd/compatgen, which emits each group's `state` from it. Do not hand-edit to gate a group: promotion is the evidence of N agreeing nightly runs, and typing it here would be the hand edit the soak exists to replace. Removing an entry demotes the group to candidate, which is the supported way to take a group back out of the gate. See docs/plans/compat-coverage-modelgen.md § 3.6 and compat/model/README.md.",
   "version": 1,
   "groups": {
+    "batch-gen-computeenvironment": {
+      "state": "candidate",
+      "firstSeen": "2026-09-06"
+    },
+    "batch-gen-consumableresource": {
+      "state": "candidate",
+      "firstSeen": "2026-09-06"
+    },
+    "batch-gen-jobdefinition": {
+      "state": "candidate",
+      "firstSeen": "2026-09-06"
+    },
+    "batch-gen-jobqueue": {
+      "state": "candidate",
+      "firstSeen": "2026-09-06"
+    },
+    "batch-gen-probe": {
+      "state": "gated",
+      "firstSeen": "2026-09-06",
+      "promotedAt": "2026-09-06",
+      "runs": [
+        "run-34066538988-1",
+        "run-34066538988-2",
+        "run-34066538988-3"
+      ]
+    },
+    "batch-gen-schedulingpolicy": {
+      "state": "candidate",
+      "firstSeen": "2026-09-06"
+    },
+    "elastic-load-balancing-gen-loadbalancer": {
+      "state": "candidate",
+      "firstSeen": "2026-09-06"
+    },
+    "elastic-load-balancing-gen-loadbalancerpolicy": {
+      "state": "candidate",
+      "firstSeen": "2026-09-06"
+    },
+    "elastic-load-balancing-gen-probe": {
+      "state": "gated",
+      "firstSeen": "2026-09-06",
+      "promotedAt": "2026-09-06",
+      "runs": [
+        "run-34066538988-1",
+        "run-34066538988-2",
+        "run-34066538988-3"
+      ]
+    },
+    "iam-gen-group": {
+      "state": "gated",
+      "firstSeen": "2026-09-06",
+      "promotedAt": "2026-09-06",
+      "runs": [
+        "run-34066538988-1",
+        "run-34066538988-2",
+        "run-34066538988-3"
+      ]
+    },
+    "iam-gen-instanceprofile": {
+      "state": "gated",
+      "firstSeen": "2026-09-06",
+      "promotedAt": "2026-09-06",
+      "runs": [
+        "run-34066538988-1",
+        "run-34066538988-2",
+        "run-34066538988-3"
+      ]
+    },
+    "iam-gen-policy": {
+      "state": "gated",
+      "firstSeen": "2026-09-06",
+      "promotedAt": "2026-09-06",
+      "runs": [
+        "run-34066538988-1",
+        "run-34066538988-2",
+        "run-34066538988-3"
+      ]
+    },
+    "iam-gen-probe": {
+      "state": "gated",
+      "firstSeen": "2026-09-06",
+      "promotedAt": "2026-09-06",
+      "runs": [
+        "run-34066538988-1",
+        "run-34066538988-2",
+        "run-34066538988-3"
+      ]
+    },
+    "iam-gen-role": {
+      "state": "candidate",
+      "firstSeen": "2026-09-06"
+    },
+    "iam-gen-user": {
+      "state": "candidate",
+      "firstSeen": "2026-09-06"
+    },
+    "kms-gen-key": {
+      "state": "candidate",
+      "firstSeen": "2026-09-06"
+    },
+    "kms-gen-probe": {
+      "state": "gated",
+      "firstSeen": "2026-09-06",
+      "promotedAt": "2026-09-06",
+      "runs": [
+        "run-34066538988-1",
+        "run-34066538988-2",
+        "run-34066538988-3"
+      ]
+    },
     "organizations-gen-organization": {
       "state": "gated",
       "firstSeen": "2026-09-06",
@@ -52,6 +162,60 @@
         "run-34019722674-2",
         "run-34019722674-3"
       ]
+    },
+    "secretsmanager-gen-secret": {
+      "state": "candidate",
+      "firstSeen": "2026-09-06"
+    },
+    "secretsmanager-gen-version": {
+      "state": "gated",
+      "firstSeen": "2026-09-06",
+      "promotedAt": "2026-09-06",
+      "runs": [
+        "run-34066538988-1",
+        "run-34066538988-2",
+        "run-34066538988-3"
+      ]
+    },
+    "servicediscovery-gen-instance": {
+      "state": "candidate",
+      "firstSeen": "2026-09-06"
+    },
+    "servicediscovery-gen-namespace": {
+      "state": "candidate",
+      "firstSeen": "2026-09-06"
+    },
+    "servicediscovery-gen-probe": {
+      "state": "gated",
+      "firstSeen": "2026-09-06",
+      "promotedAt": "2026-09-06",
+      "runs": [
+        "run-34066538988-1",
+        "run-34066538988-2",
+        "run-34066538988-3"
+      ]
+    },
+    "servicediscovery-gen-service": {
+      "state": "candidate",
+      "firstSeen": "2026-09-06"
+    },
+    "sns-gen-probe": {
+      "state": "gated",
+      "firstSeen": "2026-09-06",
+      "promotedAt": "2026-09-06",
+      "runs": [
+        "run-34066538988-1",
+        "run-34066538988-2",
+        "run-34066538988-3"
+      ]
+    },
+    "sns-gen-subscription": {
+      "state": "candidate",
+      "firstSeen": "2026-09-06"
+    },
+    "sns-gen-topic": {
+      "state": "candidate",
+      "firstSeen": "2026-09-06"
     },
     "sqs-gen-batch": {
       "state": "gated",
