@@ -14,12 +14,17 @@ import (
 
 // The fixture: testdata/shapes/widgets.json models a service whose operations
 // cover every emitter decision, testdata/recipes/widgets.json spreads every
-// recipe role over five resources, and the capability table below decides
+// recipe role over seven resources, and the capability table below decides
 // which operations count as implemented.
 //
 //	CreateWidget … PolishWidget     implemented or in the recipe → lifecycle tests
 //	DescribeGauge, CalibrateGauge   a pre-existing resource      → read plus authored test
+//	TagGauge, ListGaugeTags,
+//	UntagGauge                      {TagKey, TagValue} tags      → lifecycle tags trio
 //	CreateSprocket … DeleteSprocket async, list-shaped tags      → lifecycle tests
+//	DescribeValve                   a second pre-existing resource → read
+//	TagValve, ListValveTags,
+//	UntagValve                      key-only untag list          → lifecycle tags trio
 //	SetWidgetSize                   implemented, update family   → update-without-mutable
 //	ArchiveWidget                   implemented, no role         → probe-of-implemented-op
 //	CreateWidget (as `spare`)       requires an unbindable cog   → setup-refused:cog
@@ -103,8 +108,9 @@ func TestGenerate_lifecycleGroupCoversEveryRole(t *testing.T) {
 	// all: the resource it requires cannot be set up.
 	want := map[string][]string{
 		"widgets-gen-widget":   {"CreateWidget", "GetWidget", "DescribeWidget", "UpdateWidget", "TagWidget", "ListWidgetTags", "UntagWidget", "PolishWidget", "ListWidgets", "DeleteWidget"},
-		"widgets-gen-gauge":    {"DescribeGauge", "CalibrateGauge"},
+		"widgets-gen-gauge":    {"DescribeGauge", "TagGauge", "ListGaugeTags", "UntagGauge", "CalibrateGauge"},
 		"widgets-gen-sprocket": {"CreateSprocket", "GetSprocket", "TagSprocket", "ListSprocketTags", "UntagSprocket", "DeleteSprocket"},
+		"widgets-gen-valve":    {"DescribeValve", "TagValve", "ListValveTags", "UntagValve"},
 		"widgets-gen-probe":    {"ListCogs", "ListGauges", "PingWidgets"},
 	}
 	if len(gen.scenario.Groups) != len(want) {
@@ -377,6 +383,106 @@ func TestGenerate_assertionsFollowTheContract(t *testing.T) {
 	if len(create.Depends) != 0 {
 		t.Errorf("CreateWidget depends = %v", create.Depends)
 	}
+}
+
+// TestGenerate_tagShapeVariants proves detectTagShape's widening (#1909)
+// directly against the values a) and b) it produces, alongside c) the
+// unchanged {Key, Value} + string-untag shape `sprocket` already exercised
+// before this change:
+//
+//	a) `gauge`'s {TagKey, TagValue} tag structure (KMS's spelling) — tag,
+//	   list and untag emitted exactly as for {Key, Value}, with the list
+//	   read-back path spelled in the service's own field names.
+//	b) `valve`'s untag member: a list of key-only structures (ELB Classic's
+//	   TagKeyOnly) instead of bare tag-key strings.
+//	c) `sprocket`'s ordinary {Key, Value} tags with a plain string-list
+//	   untag, unaffected by either widening.
+func TestGenerate_tagShapeVariants(t *testing.T) {
+	_, gen := generateFixture(t)
+
+	// a) gauge: {TagKey, TagValue} tag structure, plain string-list untag.
+	_, tag, ok := gen.scenario.findTest("widgets-gen-gauge", "TagGauge")
+	if !ok {
+		t.Fatal("TagGauge was not generated")
+	}
+	tags, _ := tag.Call.Params["Tags"].([]any)
+	if len(tags) != 1 {
+		t.Fatalf("TagGauge Tags = %+v, want one entry", tag.Call.Params["Tags"])
+	}
+	if entry, ok := tags[0].(map[string]any); !ok || entry["TagKey"] != "compat" || entry["TagValue"] != "scenario" {
+		t.Errorf("TagGauge Tags[0] = %+v, want {TagKey: compat, TagValue: scenario}", tags[0])
+	}
+	if tag.Assert[0].Kind != assertListContains || tag.Assert[0].Where["$.TagKey"] != "compat" || tag.Assert[0].Where["$.TagValue"] != "scenario" {
+		t.Errorf("TagGauge asserts %+v, want a listContains on {$.TagKey, $.TagValue}", tag.Assert[0])
+	}
+
+	_, list, ok := gen.scenario.findTest("widgets-gen-gauge", "ListGaugeTags")
+	if !ok {
+		t.Fatal("ListGaugeTags was not generated")
+	}
+	if list.Assert[0].Kind != assertListContains || list.Assert[0].ItemsPath != "$.Tags" {
+		t.Errorf("ListGaugeTags asserts %+v, want listContains on $.Tags", list.Assert[0])
+	}
+
+	_, untag, ok := gen.scenario.findTest("widgets-gen-gauge", "UntagGauge")
+	if !ok {
+		t.Fatal("UntagGauge was not generated")
+	}
+	if got := untag.Call.Params["TagKeys"]; !equalJSON(got, []any{"compat"}) {
+		t.Errorf("UntagGauge TagKeys = %+v, want a plain string list [\"compat\"]", got)
+	}
+	if untag.Assert[0].Kind != assertAbsent || untag.Assert[0].ItemsPath != "$.Tags" || untag.Assert[0].Where["$.TagKey"] != "compat" {
+		t.Errorf("UntagGauge asserts %+v, want absentFromList on $.Tags where $.TagKey", untag.Assert[0])
+	}
+
+	// b) valve: ordinary {Key, Value} tags, but the untag member takes a
+	// list of key-only structures instead of bare strings.
+	_, valveTag, ok := gen.scenario.findTest("widgets-gen-valve", "TagValve")
+	if !ok {
+		t.Fatal("TagValve was not generated")
+	}
+	valveTags, _ := valveTag.Call.Params["Tags"].([]any)
+	if entry, ok := valveTags[0].(map[string]any); !ok || entry["Key"] != "compat" || entry["Value"] != "scenario" {
+		t.Errorf("TagValve Tags[0] = %+v, want {Key: compat, Value: scenario}", valveTags[0])
+	}
+
+	_, valveUntag, ok := gen.scenario.findTest("widgets-gen-valve", "UntagValve")
+	if !ok {
+		t.Fatal("UntagValve was not generated")
+	}
+	if got := valveUntag.Call.Params["TagKeys"]; !equalJSON(got, []any{map[string]any{"Key": "compat"}}) {
+		t.Errorf("UntagValve TagKeys = %+v, want a key-only structure list [{Key: compat}]", got)
+	}
+	if valveUntag.Assert[0].Kind != assertAbsent || valveUntag.Assert[0].Where["$.Key"] != "compat" {
+		t.Errorf("UntagValve asserts %+v, want absentFromList where $.Key", valveUntag.Assert[0])
+	}
+
+	// c) sprocket: the pre-existing {Key, Value} tag structure paired with a
+	// plain string-list untag, unaffected by either widening.
+	_, sprocketTag, ok := gen.scenario.findTest("widgets-gen-sprocket", "TagSprocket")
+	if !ok {
+		t.Fatal("TagSprocket was not generated")
+	}
+	sprocketTags, _ := sprocketTag.Call.Params["Tags"].([]any)
+	if entry, ok := sprocketTags[0].(map[string]any); !ok || entry["Key"] != "compat" || entry["Value"] != "scenario" {
+		t.Errorf("TagSprocket Tags[0] = %+v, want {Key: compat, Value: scenario}", sprocketTags[0])
+	}
+	_, sprocketUntag, ok := gen.scenario.findTest("widgets-gen-sprocket", "UntagSprocket")
+	if !ok {
+		t.Fatal("UntagSprocket was not generated")
+	}
+	if got := sprocketUntag.Call.Params["TagKeys"]; !equalJSON(got, []any{"compat"}) {
+		t.Errorf("UntagSprocket TagKeys = %+v, want a plain string list [\"compat\"]", got)
+	}
+}
+
+// equalJSON compares two decoded-JSON values (map[string]any / []any /
+// scalars) for equality by round-tripping both through json.Marshal, which
+// is simpler and just as exact as a hand-rolled deep-equal for this shape.
+func equalJSON(a, b any) bool {
+	ab, aerr := json.Marshal(a)
+	bb, berr := json.Marshal(b)
+	return aerr == nil && berr == nil && string(ab) == string(bb)
 }
 
 func assertionKinds(clauses []assertion) []string {

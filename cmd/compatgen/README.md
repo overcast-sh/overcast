@@ -477,10 +477,14 @@ rewrites `testdata/golden/scenarios_widgets_gen.go.golden`,
 `testdata/golden/ScenariosWidgetsGen.java.golden` and
 `testdata/golden/ScenariosWidgetsGen.cs.golden`. Read the diff
 before committing it — the golden file is the review artifact for what the
-emitter writes, and one regenerated without being read proves nothing. Its five resources between
-them carry every recipe role — a full lifecycle, a pre-existing resource, a
+emitter writes, and one regenerated without being read proves nothing. Its seven resources between
+them carry every recipe role — a full lifecycle, two pre-existing resources, a
 setup-only resource whose create cannot be bound and one that requires it,
-authored operations, an authored create assertion, an async budget, and both
-tag shapes — so the suite exercises every binding rule, every refusal reason,
-the assertion contract, determinism, scaffolding, explain rendering and the
-review report, plus the sync and schema checks over the committed corpus.
+authored operations, an authored create assertion, an async budget, and every
+tag shape `detectTagShape` accepts: a string map, a list of `{Key, Value}`
+structures, a list of `{TagKey, TagValue}` structures (KMS's spelling), and an
+untag member that takes a list of key-only structures instead of bare strings
+(ELB Classic's `TagKeyOnly`) — so the suite exercises every binding rule,
+every refusal reason, the assertion contract, determinism, scaffolding,
+explain rendering and the review report, plus the sync and schema checks over
+the committed corpus.

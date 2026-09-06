@@ -21,22 +21,31 @@ import software.amazon.awssdk.services.widgets.model.CreateWidgetRequest;
 import software.amazon.awssdk.services.widgets.model.DeleteSprocketRequest;
 import software.amazon.awssdk.services.widgets.model.DeleteWidgetRequest;
 import software.amazon.awssdk.services.widgets.model.DescribeGaugeRequest;
+import software.amazon.awssdk.services.widgets.model.DescribeValveRequest;
 import software.amazon.awssdk.services.widgets.model.DescribeWidgetRequest;
+import software.amazon.awssdk.services.widgets.model.GaugeTag;
 import software.amazon.awssdk.services.widgets.model.GetSprocketRequest;
 import software.amazon.awssdk.services.widgets.model.GetWidgetRequest;
 import software.amazon.awssdk.services.widgets.model.ListCogsRequest;
+import software.amazon.awssdk.services.widgets.model.ListGaugeTagsRequest;
 import software.amazon.awssdk.services.widgets.model.ListGaugesRequest;
 import software.amazon.awssdk.services.widgets.model.ListSprocketTagsRequest;
+import software.amazon.awssdk.services.widgets.model.ListValveTagsRequest;
 import software.amazon.awssdk.services.widgets.model.ListWidgetTagsRequest;
 import software.amazon.awssdk.services.widgets.model.ListWidgetsRequest;
 import software.amazon.awssdk.services.widgets.model.PingWidgetsRequest;
 import software.amazon.awssdk.services.widgets.model.PolishWidgetRequest;
 import software.amazon.awssdk.services.widgets.model.SprocketTag;
+import software.amazon.awssdk.services.widgets.model.TagGaugeRequest;
 import software.amazon.awssdk.services.widgets.model.TagSprocketRequest;
+import software.amazon.awssdk.services.widgets.model.TagValveRequest;
 import software.amazon.awssdk.services.widgets.model.TagWidgetRequest;
+import software.amazon.awssdk.services.widgets.model.UntagGaugeRequest;
 import software.amazon.awssdk.services.widgets.model.UntagSprocketRequest;
+import software.amazon.awssdk.services.widgets.model.UntagValveRequest;
 import software.amazon.awssdk.services.widgets.model.UntagWidgetRequest;
 import software.amazon.awssdk.services.widgets.model.UpdateWidgetRequest;
+import software.amazon.awssdk.services.widgets.model.ValveTagKeyOnly;
 
 /**
  * The generated widgets groups.
@@ -51,6 +60,8 @@ public final class ScenariosWidgetsGen implements ServiceGroup {
             new Group("widgets-gen-widget", "compat/model/scenarios/widgets.json");
     private static final Group GROUP_WIDGETS_GEN_GAUGE =
             new Group("widgets-gen-gauge", "compat/model/scenarios/widgets.json");
+    private static final Group GROUP_WIDGETS_GEN_VALVE =
+            new Group("widgets-gen-valve", "compat/model/scenarios/widgets.json");
     private static final Group GROUP_WIDGETS_GEN_SPROCKET =
             new Group("widgets-gen-sprocket", "compat/model/scenarios/widgets.json");
     private static final Group GROUP_WIDGETS_GEN_PROBE =
@@ -82,7 +93,14 @@ public final class ScenariosWidgetsGen implements ServiceGroup {
                 Map.entry("widgets-gen-widget:ListWidgets", this::testWidgetsGenWidgetListWidgets),
                 Map.entry("widgets-gen-widget:DeleteWidget", this::testWidgetsGenWidgetDeleteWidget),
                 Map.entry("widgets-gen-gauge:DescribeGauge", this::testWidgetsGenGaugeDescribeGauge),
+                Map.entry("widgets-gen-gauge:TagGauge", this::testWidgetsGenGaugeTagGauge),
+                Map.entry("widgets-gen-gauge:ListGaugeTags", this::testWidgetsGenGaugeListGaugeTags),
+                Map.entry("widgets-gen-gauge:UntagGauge", this::testWidgetsGenGaugeUntagGauge),
                 Map.entry("widgets-gen-gauge:CalibrateGauge", this::testWidgetsGenGaugeCalibrateGauge),
+                Map.entry("widgets-gen-valve:DescribeValve", this::testWidgetsGenValveDescribeValve),
+                Map.entry("widgets-gen-valve:TagValve", this::testWidgetsGenValveTagValve),
+                Map.entry("widgets-gen-valve:ListValveTags", this::testWidgetsGenValveListValveTags),
+                Map.entry("widgets-gen-valve:UntagValve", this::testWidgetsGenValveUntagValve),
                 Map.entry("widgets-gen-sprocket:CreateSprocket", this::testWidgetsGenSprocketCreateSprocket),
                 Map.entry("widgets-gen-sprocket:GetSprocket", this::testWidgetsGenSprocketGetSprocket),
                 Map.entry("widgets-gen-sprocket:TagSprocket", this::testWidgetsGenSprocketTagSprocket),
@@ -99,6 +117,7 @@ public final class ScenariosWidgetsGen implements ServiceGroup {
         return Map.ofEntries(
                 Map.entry("widgets-gen-widget", this::setupWidgetsGenWidget),
                 Map.entry("widgets-gen-gauge", this::setupWidgetsGenGauge),
+                Map.entry("widgets-gen-valve", this::setupWidgetsGenValve),
                 Map.entry("widgets-gen-sprocket", this::setupWidgetsGenSprocket),
                 Map.entry("widgets-gen-probe", this::setupWidgetsGenProbe));
     }
@@ -108,6 +127,7 @@ public final class ScenariosWidgetsGen implements ServiceGroup {
         return Map.ofEntries(
                 Map.entry("widgets-gen-widget", this::teardownWidgetsGenWidget),
                 Map.entry("widgets-gen-gauge", this::teardownWidgetsGenGauge),
+                Map.entry("widgets-gen-valve", this::teardownWidgetsGenValve),
                 Map.entry("widgets-gen-sprocket", this::teardownWidgetsGenSprocket),
                 Map.entry("widgets-gen-probe", this::teardownWidgetsGenProbe));
     }
@@ -360,6 +380,66 @@ public final class ScenariosWidgetsGen implements ServiceGroup {
                 ));
     }
 
+    private void testWidgetsGenGaugeTagGauge(TestContext t) {
+        GROUP_WIDGETS_GEN_GAUGE.runTest(t, "TagGauge",
+                new Call("TagGauge", "{\"GaugeId\":{\"$ref\":\"gauge.id\"},\"Tags\":[{\"TagKey\":\"compat\",\"TagValue\":\"scenario\"}]}",
+                        b -> TagGaugeRequest.builder()
+                                .gaugeId(b.string("GaugeId", Values.ref("gauge.id")))
+                                .tags(List.of(GaugeTag.builder().tagKey("compat").tagValue("scenario").build()))
+                                .build(),
+                        r -> cl().tagGauge((TagGaugeRequest) r)),
+                List.of(
+                        Clause.listContains(
+                                new Call("ListGaugeTags", "{\"GaugeId\":{\"$ref\":\"gauge.id\"}}",
+                                        b -> ListGaugeTagsRequest.builder()
+                                                .gaugeId(b.string("GaugeId", Values.ref("gauge.id")))
+                                                .build(),
+                                        r -> cl().listGaugeTags((ListGaugeTagsRequest) r)),
+                                "$.Tags",
+                                Where.of("$.TagKey", "compat"),
+                                Where.of("$.TagValue", "scenario")
+                        )
+                ));
+    }
+
+    private void testWidgetsGenGaugeListGaugeTags(TestContext t) {
+        GROUP_WIDGETS_GEN_GAUGE.runTest(t, "ListGaugeTags",
+                new Call("ListGaugeTags", "{\"GaugeId\":{\"$ref\":\"gauge.id\"}}",
+                        b -> ListGaugeTagsRequest.builder()
+                                .gaugeId(b.string("GaugeId", Values.ref("gauge.id")))
+                                .build(),
+                        r -> cl().listGaugeTags((ListGaugeTagsRequest) r)),
+                List.of(
+                        Clause.listContains(
+                                null,
+                                "$.Tags",
+                                Where.of("$.TagKey", "compat"),
+                                Where.of("$.TagValue", "scenario")
+                        )
+                ));
+    }
+
+    private void testWidgetsGenGaugeUntagGauge(TestContext t) {
+        GROUP_WIDGETS_GEN_GAUGE.runTest(t, "UntagGauge",
+                new Call("UntagGauge", "{\"GaugeId\":{\"$ref\":\"gauge.id\"},\"TagKeys\":[\"compat\"]}",
+                        b -> UntagGaugeRequest.builder()
+                                .gaugeId(b.string("GaugeId", Values.ref("gauge.id")))
+                                .tagKeys(List.of("compat"))
+                                .build(),
+                        r -> cl().untagGauge((UntagGaugeRequest) r)),
+                List.of(
+                        Clause.absentFromList(
+                                new Call("ListGaugeTags", "{\"GaugeId\":{\"$ref\":\"gauge.id\"}}",
+                                        b -> ListGaugeTagsRequest.builder()
+                                                .gaugeId(b.string("GaugeId", Values.ref("gauge.id")))
+                                                .build(),
+                                        r -> cl().listGaugeTags((ListGaugeTagsRequest) r)),
+                                "$.Tags",
+                                Where.of("$.TagKey", "compat")
+                        )
+                ));
+    }
+
     private void testWidgetsGenGaugeCalibrateGauge(TestContext t) {
         GROUP_WIDGETS_GEN_GAUGE.runTest(t, "CalibrateGauge",
                 new Call("CalibrateGauge", "{\"GaugeId\":{\"$ref\":\"gauge.id\"}}",
@@ -370,6 +450,91 @@ public final class ScenariosWidgetsGen implements ServiceGroup {
                 List.of(
                         Clause.responseField(
                                 Check.nonEmpty("$.Status")
+                        )
+                ));
+    }
+
+    private void setupWidgetsGenValve(TestContext t) {
+        // No setup steps: an empty phase is a no-op, not a missing one.
+        GROUP_WIDGETS_GEN_VALVE.runSetup(t);
+    }
+
+    private void teardownWidgetsGenValve(TestContext t) {
+        // No teardown steps: an empty phase is a no-op, not a missing one.
+        GROUP_WIDGETS_GEN_VALVE.runTeardown(t);
+    }
+
+    private void testWidgetsGenValveDescribeValve(TestContext t) {
+        GROUP_WIDGETS_GEN_VALVE.runTest(t, "DescribeValve",
+                new Call("DescribeValve", "{}",
+                        b -> DescribeValveRequest.builder()
+                                .build(),
+                        r -> cl().describeValve((DescribeValveRequest) r))
+                        .export("valve.arn", "$.Valve.Arn")
+                        .export("valve.id", "$.Valve.ValveId"),
+                List.of(
+                        Clause.responseField(
+                                Check.matches("$.Valve.ValveId", "^v-[0-9a-f]{8}$")
+                        )
+                ));
+    }
+
+    private void testWidgetsGenValveTagValve(TestContext t) {
+        GROUP_WIDGETS_GEN_VALVE.runTest(t, "TagValve",
+                new Call("TagValve", "{\"Tags\":[{\"Key\":\"compat\",\"Value\":\"scenario\"}],\"ValveId\":{\"$ref\":\"valve.id\"}}",
+                        b -> TagValveRequest.builder()
+                                .tags(List.of(SprocketTag.builder().key("compat").value("scenario").build()))
+                                .valveId(b.string("ValveId", Values.ref("valve.id")))
+                                .build(),
+                        r -> cl().tagValve((TagValveRequest) r)),
+                List.of(
+                        Clause.listContains(
+                                new Call("ListValveTags", "{\"ValveId\":{\"$ref\":\"valve.id\"}}",
+                                        b -> ListValveTagsRequest.builder()
+                                                .valveId(b.string("ValveId", Values.ref("valve.id")))
+                                                .build(),
+                                        r -> cl().listValveTags((ListValveTagsRequest) r)),
+                                "$.Tags",
+                                Where.of("$.Key", "compat"),
+                                Where.of("$.Value", "scenario")
+                        )
+                ));
+    }
+
+    private void testWidgetsGenValveListValveTags(TestContext t) {
+        GROUP_WIDGETS_GEN_VALVE.runTest(t, "ListValveTags",
+                new Call("ListValveTags", "{\"ValveId\":{\"$ref\":\"valve.id\"}}",
+                        b -> ListValveTagsRequest.builder()
+                                .valveId(b.string("ValveId", Values.ref("valve.id")))
+                                .build(),
+                        r -> cl().listValveTags((ListValveTagsRequest) r)),
+                List.of(
+                        Clause.listContains(
+                                null,
+                                "$.Tags",
+                                Where.of("$.Key", "compat"),
+                                Where.of("$.Value", "scenario")
+                        )
+                ));
+    }
+
+    private void testWidgetsGenValveUntagValve(TestContext t) {
+        GROUP_WIDGETS_GEN_VALVE.runTest(t, "UntagValve",
+                new Call("UntagValve", "{\"TagKeys\":[{\"Key\":\"compat\"}],\"ValveId\":{\"$ref\":\"valve.id\"}}",
+                        b -> UntagValveRequest.builder()
+                                .tagKeys(List.of(ValveTagKeyOnly.builder().key("compat").build()))
+                                .valveId(b.string("ValveId", Values.ref("valve.id")))
+                                .build(),
+                        r -> cl().untagValve((UntagValveRequest) r)),
+                List.of(
+                        Clause.absentFromList(
+                                new Call("ListValveTags", "{\"ValveId\":{\"$ref\":\"valve.id\"}}",
+                                        b -> ListValveTagsRequest.builder()
+                                                .valveId(b.string("ValveId", Values.ref("valve.id")))
+                                                .build(),
+                                        r -> cl().listValveTags((ListValveTagsRequest) r)),
+                                "$.Tags",
+                                Where.of("$.Key", "compat")
                         )
                 ));
     }

@@ -17,6 +17,7 @@ internal sealed class ScenariosWidgets : IServiceGroup
 {
     private static readonly ScenarioGroup GroupWidgetsGenWidget = new("widgets-gen-widget", "compat/model/scenarios/widgets.json");
     private static readonly ScenarioGroup GroupWidgetsGenGauge = new("widgets-gen-gauge", "compat/model/scenarios/widgets.json");
+    private static readonly ScenarioGroup GroupWidgetsGenValve = new("widgets-gen-valve", "compat/model/scenarios/widgets.json");
     private static readonly ScenarioGroup GroupWidgetsGenSprocket = new("widgets-gen-sprocket", "compat/model/scenarios/widgets.json");
     private static readonly ScenarioGroup GroupWidgetsGenProbe = new("widgets-gen-probe", "compat/model/scenarios/widgets.json");
 
@@ -49,7 +50,14 @@ internal sealed class ScenariosWidgets : IServiceGroup
         ["widgets-gen-widget:ListWidgets"] = TestWidgetsGenWidgetListWidgets,
         ["widgets-gen-widget:DeleteWidget"] = TestWidgetsGenWidgetDeleteWidget,
         ["widgets-gen-gauge:DescribeGauge"] = TestWidgetsGenGaugeDescribeGauge,
+        ["widgets-gen-gauge:TagGauge"] = TestWidgetsGenGaugeTagGauge,
+        ["widgets-gen-gauge:ListGaugeTags"] = TestWidgetsGenGaugeListGaugeTags,
+        ["widgets-gen-gauge:UntagGauge"] = TestWidgetsGenGaugeUntagGauge,
         ["widgets-gen-gauge:CalibrateGauge"] = TestWidgetsGenGaugeCalibrateGauge,
+        ["widgets-gen-valve:DescribeValve"] = TestWidgetsGenValveDescribeValve,
+        ["widgets-gen-valve:TagValve"] = TestWidgetsGenValveTagValve,
+        ["widgets-gen-valve:ListValveTags"] = TestWidgetsGenValveListValveTags,
+        ["widgets-gen-valve:UntagValve"] = TestWidgetsGenValveUntagValve,
         ["widgets-gen-sprocket:CreateSprocket"] = TestWidgetsGenSprocketCreateSprocket,
         ["widgets-gen-sprocket:GetSprocket"] = TestWidgetsGenSprocketGetSprocket,
         ["widgets-gen-sprocket:TagSprocket"] = TestWidgetsGenSprocketTagSprocket,
@@ -65,6 +73,7 @@ internal sealed class ScenariosWidgets : IServiceGroup
     {
         ["widgets-gen-widget"] = SetupWidgetsGenWidget,
         ["widgets-gen-gauge"] = SetupWidgetsGenGauge,
+        ["widgets-gen-valve"] = SetupWidgetsGenValve,
         ["widgets-gen-sprocket"] = SetupWidgetsGenSprocket,
         ["widgets-gen-probe"] = SetupWidgetsGenProbe,
     };
@@ -73,6 +82,7 @@ internal sealed class ScenariosWidgets : IServiceGroup
     {
         ["widgets-gen-widget"] = TeardownWidgetsGenWidget,
         ["widgets-gen-gauge"] = TeardownWidgetsGenGauge,
+        ["widgets-gen-valve"] = TeardownWidgetsGenValve,
         ["widgets-gen-sprocket"] = TeardownWidgetsGenSprocket,
         ["widgets-gen-probe"] = TeardownWidgetsGenProbe,
     };
@@ -476,6 +486,109 @@ internal sealed class ScenariosWidgets : IServiceGroup
         ],
     });
 
+    private Task TestWidgetsGenGaugeTagGauge(TestContext t) => GroupWidgetsGenGauge.RunTestAsync(t, "TagGauge", new ScenarioTest
+    {
+        Call = new ScenarioCall
+        {
+            Op = "TagGauge",
+            Params = "{\"GaugeId\":{\"$ref\":\"gauge.id\"},\"Tags\":[{\"TagKey\":\"compat\",\"TagValue\":\"scenario\"}]}",
+            Build = b =>
+            {
+                var request = new TagGaugeRequest();
+                request.GaugeId = b.Bind<string>("GaugeId", Val.Ref("gauge.id"));
+                request.Tags = [new() { TagKey = "compat", TagValue = "scenario" }];
+                return request;
+            },
+            SendAsync = async request =>
+                await Cl().TagGaugeAsync((TagGaugeRequest)request),
+        },
+        Assert =
+        [
+            Clause.ListContains(
+                new ScenarioCall
+                {
+                    Op = "ListGaugeTags",
+                    Params = "{\"GaugeId\":{\"$ref\":\"gauge.id\"}}",
+                    Build = b =>
+                    {
+                        var request = new ListGaugeTagsRequest();
+                        request.GaugeId = b.Bind<string>("GaugeId", Val.Ref("gauge.id"));
+                        return request;
+                    },
+                    SendAsync = async request =>
+                        await Cl().ListGaugeTagsAsync((ListGaugeTagsRequest)request),
+                },
+                "$.Tags",
+                new WhereEntry("$.TagKey", "compat"),
+                new WhereEntry("$.TagValue", "scenario")
+            )
+        ],
+    });
+
+    private Task TestWidgetsGenGaugeListGaugeTags(TestContext t) => GroupWidgetsGenGauge.RunTestAsync(t, "ListGaugeTags", new ScenarioTest
+    {
+        Call = new ScenarioCall
+        {
+            Op = "ListGaugeTags",
+            Params = "{\"GaugeId\":{\"$ref\":\"gauge.id\"}}",
+            Build = b =>
+            {
+                var request = new ListGaugeTagsRequest();
+                request.GaugeId = b.Bind<string>("GaugeId", Val.Ref("gauge.id"));
+                return request;
+            },
+            SendAsync = async request =>
+                await Cl().ListGaugeTagsAsync((ListGaugeTagsRequest)request),
+        },
+        Assert =
+        [
+            Clause.ListContains(
+                null,
+                "$.Tags",
+                new WhereEntry("$.TagKey", "compat"),
+                new WhereEntry("$.TagValue", "scenario")
+            )
+        ],
+    });
+
+    private Task TestWidgetsGenGaugeUntagGauge(TestContext t) => GroupWidgetsGenGauge.RunTestAsync(t, "UntagGauge", new ScenarioTest
+    {
+        Call = new ScenarioCall
+        {
+            Op = "UntagGauge",
+            Params = "{\"GaugeId\":{\"$ref\":\"gauge.id\"},\"TagKeys\":[\"compat\"]}",
+            Build = b =>
+            {
+                var request = new UntagGaugeRequest();
+                request.GaugeId = b.Bind<string>("GaugeId", Val.Ref("gauge.id"));
+                request.TagKeys = ["compat"];
+                return request;
+            },
+            SendAsync = async request =>
+                await Cl().UntagGaugeAsync((UntagGaugeRequest)request),
+        },
+        Assert =
+        [
+            Clause.AbsentFromList(
+                new ScenarioCall
+                {
+                    Op = "ListGaugeTags",
+                    Params = "{\"GaugeId\":{\"$ref\":\"gauge.id\"}}",
+                    Build = b =>
+                    {
+                        var request = new ListGaugeTagsRequest();
+                        request.GaugeId = b.Bind<string>("GaugeId", Val.Ref("gauge.id"));
+                        return request;
+                    },
+                    SendAsync = async request =>
+                        await Cl().ListGaugeTagsAsync((ListGaugeTagsRequest)request),
+                },
+                "$.Tags",
+                new WhereEntry("$.TagKey", "compat")
+            )
+        ],
+    });
+
     private Task TestWidgetsGenGaugeCalibrateGauge(TestContext t) => GroupWidgetsGenGauge.RunTestAsync(t, "CalibrateGauge", new ScenarioTest
     {
         Call = new ScenarioCall
@@ -495,6 +608,144 @@ internal sealed class ScenariosWidgets : IServiceGroup
         [
             Clause.ResponseField(
                 Check.NonEmpty("$.Status")
+            )
+        ],
+    });
+
+    private Task SetupWidgetsGenValve(TestContext t) =>
+        // No setup steps: an empty phase is a no-op, not a missing one.
+        GroupWidgetsGenValve.RunSetupAsync(t);
+
+    private Task TeardownWidgetsGenValve(TestContext t) =>
+        // No teardown steps: an empty phase is a no-op, not a missing one.
+        GroupWidgetsGenValve.RunTeardownAsync(t);
+
+    private Task TestWidgetsGenValveDescribeValve(TestContext t) => GroupWidgetsGenValve.RunTestAsync(t, "DescribeValve", new ScenarioTest
+    {
+        Call = new ScenarioCall
+        {
+            Op = "DescribeValve",
+            Params = "{}",
+            Build = b =>
+            {
+                var request = new DescribeValveRequest();
+                return request;
+            },
+            SendAsync = async request =>
+                await Cl().DescribeValveAsync((DescribeValveRequest)request),
+            Export = new()
+            {
+                ["valve.arn"] = "$.Valve.Arn",
+                ["valve.id"] = "$.Valve.ValveId",
+            },
+        },
+        Assert =
+        [
+            Clause.ResponseField(
+                Check.Matches("$.Valve.ValveId", "^v-[0-9a-f]{8}$")
+            )
+        ],
+    });
+
+    private Task TestWidgetsGenValveTagValve(TestContext t) => GroupWidgetsGenValve.RunTestAsync(t, "TagValve", new ScenarioTest
+    {
+        Call = new ScenarioCall
+        {
+            Op = "TagValve",
+            Params = "{\"Tags\":[{\"Key\":\"compat\",\"Value\":\"scenario\"}],\"ValveId\":{\"$ref\":\"valve.id\"}}",
+            Build = b =>
+            {
+                var request = new TagValveRequest();
+                request.Tags = [new() { Key = "compat", Value = "scenario" }];
+                request.ValveId = b.Bind<string>("ValveId", Val.Ref("valve.id"));
+                return request;
+            },
+            SendAsync = async request =>
+                await Cl().TagValveAsync((TagValveRequest)request),
+        },
+        Assert =
+        [
+            Clause.ListContains(
+                new ScenarioCall
+                {
+                    Op = "ListValveTags",
+                    Params = "{\"ValveId\":{\"$ref\":\"valve.id\"}}",
+                    Build = b =>
+                    {
+                        var request = new ListValveTagsRequest();
+                        request.ValveId = b.Bind<string>("ValveId", Val.Ref("valve.id"));
+                        return request;
+                    },
+                    SendAsync = async request =>
+                        await Cl().ListValveTagsAsync((ListValveTagsRequest)request),
+                },
+                "$.Tags",
+                new WhereEntry("$.Key", "compat"),
+                new WhereEntry("$.Value", "scenario")
+            )
+        ],
+    });
+
+    private Task TestWidgetsGenValveListValveTags(TestContext t) => GroupWidgetsGenValve.RunTestAsync(t, "ListValveTags", new ScenarioTest
+    {
+        Call = new ScenarioCall
+        {
+            Op = "ListValveTags",
+            Params = "{\"ValveId\":{\"$ref\":\"valve.id\"}}",
+            Build = b =>
+            {
+                var request = new ListValveTagsRequest();
+                request.ValveId = b.Bind<string>("ValveId", Val.Ref("valve.id"));
+                return request;
+            },
+            SendAsync = async request =>
+                await Cl().ListValveTagsAsync((ListValveTagsRequest)request),
+        },
+        Assert =
+        [
+            Clause.ListContains(
+                null,
+                "$.Tags",
+                new WhereEntry("$.Key", "compat"),
+                new WhereEntry("$.Value", "scenario")
+            )
+        ],
+    });
+
+    private Task TestWidgetsGenValveUntagValve(TestContext t) => GroupWidgetsGenValve.RunTestAsync(t, "UntagValve", new ScenarioTest
+    {
+        Call = new ScenarioCall
+        {
+            Op = "UntagValve",
+            Params = "{\"TagKeys\":[{\"Key\":\"compat\"}],\"ValveId\":{\"$ref\":\"valve.id\"}}",
+            Build = b =>
+            {
+                var request = new UntagValveRequest();
+                request.TagKeys = [new() { Key = "compat" }];
+                request.ValveId = b.Bind<string>("ValveId", Val.Ref("valve.id"));
+                return request;
+            },
+            SendAsync = async request =>
+                await Cl().UntagValveAsync((UntagValveRequest)request),
+        },
+        Assert =
+        [
+            Clause.AbsentFromList(
+                new ScenarioCall
+                {
+                    Op = "ListValveTags",
+                    Params = "{\"ValveId\":{\"$ref\":\"valve.id\"}}",
+                    Build = b =>
+                    {
+                        var request = new ListValveTagsRequest();
+                        request.ValveId = b.Bind<string>("ValveId", Val.Ref("valve.id"));
+                        return request;
+                    },
+                    SendAsync = async request =>
+                        await Cl().ListValveTagsAsync((ListValveTagsRequest)request),
+                },
+                "$.Tags",
+                new WhereEntry("$.Key", "compat")
             )
         ],
     });

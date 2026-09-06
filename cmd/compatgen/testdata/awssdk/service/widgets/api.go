@@ -12,6 +12,8 @@
 //	map[string]string          TagWidgetInput.Tags              → map[string]string{…}
 //	[]string                   UntagWidgetInput.TagKeys         → []string{…}
 //	[]types.SprocketTag        TagSprocketInput.Tags            → []types.SprocketTag{{…}}
+//	[]types.GaugeTag           TagGaugeInput.Tags               → {TagKey, TagValue} spelling (KMS)
+//	[]types.ValveTagKeyOnly    UntagValveInput.TagKeys          → key-only untag list (ELB)
 //	*time.Time                 ListWidgetsInput.CreatedAfter    → refused (no literal)
 //	int32                      RotateWidgetInput.Angle          → a bare literal; 0 is refused
 //	types.GaugeCursor          ListGaugesInput.Cursor           → refused (a union)
@@ -133,3 +135,41 @@ type RotateWidgetInput struct {
 // member differently from the model, and a member with no field is the
 // refusal that used to compile and then fail at run time.
 type FreezeWidgetInput struct{}
+
+// TagGaugeInput, ListGaugeTagsInput and UntagGaugeInput exercise the
+// {TagKey, TagValue} tag-structure spelling (types.GaugeTag) paired with an
+// ordinary string-keyed untag list — the shape KMS's TagResource,
+// ListResourceTags and UntagResource use.
+type TagGaugeInput struct {
+	GaugeId *string
+	Tags    []types.GaugeTag
+}
+
+type ListGaugeTagsInput struct {
+	GaugeId *string
+}
+
+type UntagGaugeInput struct {
+	GaugeId *string
+	TagKeys []string
+}
+
+type DescribeValveInput struct{}
+
+// TagValveInput, ListValveTagsInput and UntagValveInput exercise ordinary
+// {Key, Value} tags paired with an untag list of key-only structures
+// (types.ValveTagKeyOnly) instead of bare strings — the shape ELB Classic's
+// AddTags and RemoveTags use.
+type TagValveInput struct {
+	Tags    []types.SprocketTag
+	ValveId *string
+}
+
+type ListValveTagsInput struct {
+	ValveId *string
+}
+
+type UntagValveInput struct {
+	TagKeys []types.ValveTagKeyOnly
+	ValveId *string
+}
