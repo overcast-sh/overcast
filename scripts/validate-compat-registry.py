@@ -14,6 +14,13 @@ express:
   - `suites` scoping on a hand-written group is reserved for the small
     allowed set (today just `cdk-lifecycle`) -- see compat/AGENTS.md's
     suites-scoping amendment (docs/plans/compat-coverage-modelgen.md §3.6);
+  - a hand-written group may carry `scenario` -- that is how it says it has
+    been ported to an authored IR scenario -- but never `generated`, `state`,
+    `shadowOf` or `parallel`, each of which states a fact about generator
+    output (#1903). A ported group must also appear in the generated
+    sibling's `ported` index, which is where its `suites` is derived, and
+    every entry in that index must name a hand-written group carrying the
+    same `scenario`;
   - a *generated* group carrying `shadowOf` must name a group registry.json
     really declares, with exactly its test names, and must stay in state
     "candidate" (docs/plans/compat-coverage-modelgen.md §3.11);
@@ -206,6 +213,125 @@ def suites_scope_errors(registry: object) -> list[str]:
                 f"(reserved for {sorted(HAND_WRITTEN_SUITES_SCOPE_ALLOWLIST)!r}); "
                 "see compat/AGENTS.md's suites-scoping amendment"
             )
+    return errors
+
+
+# Fields only cmd/compatgen may write onto a group. `scenario` is deliberately
+# absent (#1903): it is the one field of the five that states something a human
+# decides -- that this group's tests are resolved by an authored IR scenario
+# rather than by seven per-language implementations -- while the other four are
+# facts about generator output that a hand-written copy could only contradict.
+# cmd/compat's lintGeneratedRegistry enforces the same list wherever the Go
+# loader runs; this is the CI-side copy, so a hand-edited registry is caught by
+# the schema job too.
+GENERATED_ONLY_FIELDS = ("generated", "state", "shadowOf", "parallel")
+
+
+def generated_only_field_errors(registry: object) -> list[str]:
+    """A hand-written group may not carry a field cmd/compatgen owns."""
+    if not isinstance(registry, dict):
+        return []
+
+    errors: list[str] = []
+    for group in registry.get("groups", []):
+        if not isinstance(group, dict):
+            continue
+        name = group.get("name", "(unnamed)")
+        carried = [f for f in GENERATED_ONLY_FIELDS if f in group]
+        if carried:
+            errors.append(
+                f"group {name!r}: hand-written groups may not declare "
+                f"{', '.join(repr(f) for f in carried)} -- "
+                "those belong in compat/suites/registry.generated.json, which "
+                "cmd/compatgen owns"
+            )
+    return errors
+
+
+def ported_group_errors(registry: object, generated: object) -> list[str]:
+    """A ported group and the index that scopes it must agree, both ways.
+
+    A hand-written group carrying `scenario` has been ported
+    (docs/plans/compat-coverage-modelgen.md §3.11 step 3): an authored IR
+    scenario under compat/model/authored/ resolves its tests through each
+    suite's scenario backend, and the per-language implementations are gone.
+
+    Which suites can execute it is derived from backend availability exactly as
+    a generated group's `suites` is, so it is not written on the group -- it is
+    written by cmd/compatgen into the `ported` index of
+    compat/suites/registry.generated.json. That makes the two files one
+    statement in two halves, and either half alone is wrong in a way nothing
+    downstream reports: a group with no index entry falls back to "every
+    uniform suite", right today only by coincidence; an entry naming a group
+    that is not ported scopes nothing at all.
+
+    Absence of the generated file is tolerated, as everywhere else here: it
+    cannot index anything, so the forward direction has nothing to check
+    against. cmd/compatgen owns that case, where both files are always in hand.
+    """
+    if not isinstance(registry, dict):
+        return []
+
+    ported_groups: dict[str, str] = {}
+    for group in registry.get("groups", []):
+        if isinstance(group, dict) and group.get("scenario"):
+            ported_groups[group.get("name", "(unnamed)")] = group["scenario"]
+
+    if not isinstance(generated, dict):
+        return []
+
+    errors: list[str] = []
+    generated_names = {
+        g.get("name")
+        for g in generated.get("groups", [])
+        if isinstance(g, dict)
+    }
+    indexed: dict[str, str] = {}
+    for entry in generated.get("ported", []):
+        if not isinstance(entry, dict):
+            continue
+        name = entry.get("group", "(unnamed)")
+        if name in indexed:
+            errors.append(
+                f"ported group {name!r}: indexed twice -- two entries could "
+                "scope one group two ways, and which won would depend on "
+                "iteration order"
+            )
+            continue
+        indexed[name] = entry.get("scenario", "")
+        if name in generated_names:
+            errors.append(
+                f"ported group {name!r}: is also a generated group -- a port "
+                "replaces a hand-written group, it does not stand beside a "
+                "generated one of the same name"
+            )
+        if not entry.get("suites"):
+            errors.append(
+                f"ported group {name!r}: must declare \"suites\" -- the index "
+                "exists to say which backends can execute the group"
+            )
+        if name not in ported_groups:
+            errors.append(
+                f"ported group {name!r}: registry.json declares no group of "
+                "that name carrying \"scenario\" -- the index says an authored "
+                "scenario resolves it and the group says nothing does"
+            )
+        elif ported_groups[name] != entry.get("scenario"):
+            errors.append(
+                f"ported group {name!r}: indexed against scenario "
+                f"{entry.get('scenario')!r} but registry.json names "
+                f"{ported_groups[name]!r} -- one file was edited without the other"
+            )
+
+    if generated.get("groups") or generated.get("ported"):
+        for name in ported_groups:
+            if name not in indexed:
+                errors.append(
+                    f"group {name!r}: carries \"scenario\" but is not in the "
+                    "\"ported\" index of registry.generated.json -- that index "
+                    "is where its \"suites\" comes from; regenerate with "
+                    "`make generate-compat-model`"
+                )
     return errors
 
 
@@ -465,6 +591,7 @@ def main(argv: list[str] | None = None) -> int:
         schema_errors(registry, schema)
         + reference_errors(registry)
         + suites_scope_errors(registry)
+        + generated_only_field_errors(registry)
         + service_key_errors(registry, capability_keys)
     )
 
@@ -477,6 +604,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         errors += generated_group_errors(generated, capability_keys, snapshot_keys)
         errors += shadow_group_errors(registry, generated)
+        errors += ported_group_errors(registry, generated)
 
     if errors:
         rel = args.registry.relative_to(REPO_ROOT) if args.registry.is_relative_to(REPO_ROOT) else args.registry

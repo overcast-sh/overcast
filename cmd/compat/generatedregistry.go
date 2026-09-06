@@ -54,9 +54,47 @@ const (
 // ---------------------------------------------------------------------------
 
 type generatedRegistry struct {
-	Version int              `json:"version"`
-	Comment string           `json:"comment,omitempty"`
-	Groups  []generatedGroup `json:"groups"`
+	Version int    `json:"version"`
+	Comment string `json:"comment,omitempty"`
+	// Ported indexes the hand-written groups an authored scenario now
+	// resolves. See portedGroup.
+	Ported []portedGroup    `json:"ported,omitempty"`
+	Groups []generatedGroup `json:"groups"`
+}
+
+// portedGroup is one hand-written registry group whose tests are resolved by
+// an authored IR scenario instead of by per-language implementations — step 3
+// of docs/plans/compat-coverage-modelgen.md §3.11.
+//
+// A ported group is *not* a generated group and does not appear in `groups`:
+// its entry stays in the hand-written compat/suites/registry.json, which is
+// where the names baseline.json, flaky.json and parity-debt.json key on have
+// always lived and where they must stay for the port to be invisible to them.
+// The group there says only *that* it is ported, by carrying `scenario`.
+//
+// Everything a human cannot know — which suites can actually execute it — is
+// derived, and this index is where cmd/compatgen writes that derivation down.
+// Why an index rather than a `suites` list on the hand-written group: `suites`
+// on a ported group is mechanically derived from backend availability exactly
+// as it is on a generated one, and widens on its own as backends land. A
+// hand-written copy would be a human maintaining generator output, stale the
+// first time an emitter refused a member; the alternative — the generator
+// editing registry.json to keep it fresh — would put a machine in charge of
+// the file review assumes a human owns. So the derived fact lives here, beside
+// every other mechanically-derived scoping decision, and registry.json stays
+// hand-written.
+type portedGroup struct {
+	// Group is the hand-written group this indexes. It names a group in
+	// compat/suites/registry.json, never one in `groups` above.
+	Group string `json:"group"`
+	// Scenario is the authored IR file that resolves the group, and is the
+	// same path the hand-written group carries. The two are written from one
+	// run and cross-checked below, so a half-applied edit cannot survive.
+	Scenario string `json:"scenario"`
+	// Suites lists the backends that can execute the group. A suite absent
+	// from it is out of scope, not indebted — the same rule a generated
+	// group's `suites` states.
+	Suites []string `json:"suites"`
 }
 
 // generatedGroup models only what the gate path reads. The full group shape —
@@ -192,7 +230,7 @@ func loadCandidateGroups() (candidateSet, error) {
 	// against, and must not require one: --compare-baseline is run against
 	// artifacts in contexts where compat/suites/registry.json may not be at
 	// the default path.
-	if len(gen.Groups) == 0 {
+	if gen.empty() {
 		return candidateSet{}, nil
 	}
 	hand, err := readParityRegistry(*registryFile)
@@ -233,13 +271,22 @@ func lintGeneratedRegistry(hand *parityRegistry, gen *generatedRegistry) []strin
 			for _, t := range g.Tests {
 				handKeys[g.Name+"/"+t.Name] = true
 			}
-			// The shared schema has to permit generated/state/scenario for
+			// The shared schema has to permit these for
 			// registry.generated.schema.json to extend its TestGroup by $ref,
 			// so the ban on hand-written groups carrying them is enforced here
 			// instead of by the schema.
-			if g.Generated || g.State != "" || g.Scenario != "" || g.Parallel || g.ShadowOf != "" {
+			//
+			// `scenario` is deliberately not in this list (#1903). It is the
+			// one field of the five that states something a human can know and
+			// must decide: that this group's tests are resolved by an authored
+			// IR scenario rather than by seven per-language implementations.
+			// The other four are facts about generator output — which file
+			// wrote the group, where it is in its soak, what it shadows, how it
+			// may be scheduled — and a hand-written copy of any of them could
+			// only disagree with the generator.
+			if g.Generated || g.State != "" || g.Parallel || g.ShadowOf != "" {
 				issues = append(issues, fmt.Sprintf(
-					"hand-written group %q carries a generated-only field (generated/state/scenario/shadowOf/parallel) — those belong in compat/suites/registry.generated.json, which cmd/compatgen owns",
+					"hand-written group %q carries a generated-only field (generated/state/shadowOf/parallel) — those belong in compat/suites/registry.generated.json, which cmd/compatgen owns",
 					g.Name))
 			}
 		}
@@ -302,8 +349,150 @@ func lintGeneratedRegistry(hand *parityRegistry, gen *generatedRegistry) []strin
 		}
 	}
 
+	issues = append(issues, portedIssues(hand, gen, seenGroups)...)
+
 	sort.Strings(issues)
 	return issues
+}
+
+// ---------------------------------------------------------------------------
+// Ported groups
+// ---------------------------------------------------------------------------
+
+// empty reports whether the generated sibling carries nothing at all — no
+// groups and no ported index.
+//
+// "Absent" and "present but empty" have to produce the same verdict
+// everywhere; that equivalence is phase G0's acceptance gate, and it is why
+// readGeneratedRegistry tolerates a missing file. Asking it through one method
+// keeps the two halves of the file from drifting apart the way they would if
+// each caller spelled out `len(gen.Groups) == 0` and forgot the other half.
+func (r *generatedRegistry) empty() bool { return len(r.Groups) == 0 && len(r.Ported) == 0 }
+
+// portedIssues checks the join between a hand-written group that carries
+// `scenario` and the generated sibling's index of it, in both directions.
+//
+// The two files are written from one run — cmd/compatgen reads registry.json
+// and rewrites registry.generated.json — so any disagreement between them is a
+// half-applied edit. It matters because the index is the *only* place a ported
+// group's `suites` is stated: a group with `scenario` and no entry falls back
+// to "every uniform suite", which is right today by coincidence and wrong the
+// first time an emitter refuses it; an entry naming a group that is not ported
+// derives scoping for nothing at all.
+//
+// The forward direction is skipped against an empty sibling, and deliberately.
+// An absent generated registry and an empty one must reach the same verdict,
+// and neither can index anything, so demanding an entry there would make the
+// gate depend on a file this command is documented to run without.
+// cmd/compatgen owns the reverse of that case: it always has both files, and
+// checkPortedGroupsHaveAuthoredScenarios refuses a `scenario` that no
+// authored file backs.
+func portedIssues(hand *parityRegistry, gen *generatedRegistry, generatedGroups map[string]bool) []string {
+	var issues []string
+
+	indexed := make(map[string]bool, len(gen.Ported))
+	for _, p := range gen.Ported {
+		if indexed[p.Group] {
+			issues = append(issues, fmt.Sprintf(
+				"ported group %q is indexed twice in compat/suites/registry.generated.json — two entries could scope one group two ways, and which won would depend on iteration order",
+				p.Group))
+			continue
+		}
+		indexed[p.Group] = true
+		if generatedGroups[p.Group] {
+			issues = append(issues, fmt.Sprintf(
+				"ported group %q is also a generated group — a port replaces a hand-written group, it does not stand beside a generated one of the same name",
+				p.Group))
+		}
+		if len(p.Suites) == 0 {
+			issues = append(issues, fmt.Sprintf(
+				"ported group %q has no \"suites\" — the index exists to say which backends can execute the group, and an empty list scopes it to none",
+				p.Group))
+		}
+	}
+
+	handByName := make(map[string]parityGroup)
+	if hand != nil {
+		for _, g := range hand.Groups {
+			handByName[g.Name] = g
+		}
+	}
+	for _, p := range gen.Ported {
+		g, ok := handByName[p.Group]
+		if !ok {
+			issues = append(issues, fmt.Sprintf(
+				"ported group %q is not a group in the hand-written registry — the index scopes a group compat/suites/registry.json declares, and this one scopes nothing",
+				p.Group))
+			continue
+		}
+		switch {
+		case g.Scenario == "":
+			issues = append(issues, fmt.Sprintf(
+				"ported group %q carries no \"scenario\" in the hand-written registry — the index says an authored scenario resolves it and the group says nothing does",
+				p.Group))
+		case g.Scenario != p.Scenario:
+			issues = append(issues, fmt.Sprintf(
+				"ported group %q is indexed against scenario %q but the hand-written registry names %q — one of the two files was edited without the other",
+				p.Group, p.Scenario, g.Scenario))
+		}
+	}
+
+	if gen.empty() {
+		return issues
+	}
+	for _, name := range handHavingScenario(hand) {
+		if !indexed[name] {
+			issues = append(issues, fmt.Sprintf(
+				"hand-written group %q carries \"scenario\" but is not in the \"ported\" index of compat/suites/registry.generated.json — that index is where its `suites` comes from, so without it the group is scoped to every uniform suite whether or not they can run it; regenerate with `make generate-compat-model`",
+				name))
+		}
+	}
+	return issues
+}
+
+// handHavingScenario names the hand-written groups that declare themselves
+// ported, in registry order.
+func handHavingScenario(hand *parityRegistry) []string {
+	if hand == nil {
+		return nil
+	}
+	var out []string
+	for _, g := range hand.Groups {
+		if g.Scenario != "" {
+			out = append(out, g.Name)
+		}
+	}
+	return out
+}
+
+// applyPortedSuites scopes each ported hand-written group to the suites the
+// index derived for it.
+//
+// This is the whole of #1903 item 2 on the reading side. A ported group is
+// executed by whichever suites have a scenario backend for it, exactly as a
+// generated group is, so parityGroup.expects has to answer for it exactly as
+// it answers for a generated group — otherwise a suite with no backend is
+// counted as owing tests it was never asked to run, which is the debt
+// inflation `suites` was introduced to prevent.
+//
+// Assigning into Suites rather than teaching expects a second source keeps
+// there being one answer to "which suites run this group", whatever produced
+// it. An explicit `suites` on the hand-written group is not merged with the
+// derived list: the two would be two answers, and the hand-written one is
+// reserved for cdk-lifecycle, which carries no scenario.
+func applyPortedSuites(reg *parityRegistry, gen *generatedRegistry) {
+	if len(gen.Ported) == 0 {
+		return
+	}
+	byName := make(map[string][]string, len(gen.Ported))
+	for _, p := range gen.Ported {
+		byName[p.Group] = p.Suites
+	}
+	for i := range reg.Groups {
+		if suites, ok := byName[reg.Groups[i].Name]; ok {
+			reg.Groups[i].Suites = suites
+		}
+	}
 }
 
 // generatedRegistryIssueError renders lint issues as a single error, one per

@@ -49,11 +49,11 @@
         },
         "generated": {
           "type": "boolean",
-          "description": "Only legal in registry.generated.json, where it is required and always true. It is declared here because registry.generated.schema.json extends this definition by $ref, and a draft-07 `additionalProperties: false` rejects any property the referenced schema does not name. A hand-written group carrying it is rejected by the Go lint in cmd/compat (lintGeneratedRegistry)."
+          "description": "Only legal in registry.generated.json, where it is required and always true. It is declared here because registry.generated.schema.json extends this definition by $ref, and a draft-07 `additionalProperties: false` rejects any property the referenced schema does not name. A hand-written group carrying it is rejected by the Go lint in cmd/compat (lintGeneratedRegistry) and by scripts/validate-compat-registry.py."
         },
         "scenario": {
           "type": "string",
-          "description": "Only legal in registry.generated.json — see `generated`. Path to the scenario IR file the group was produced from."
+          "description": "Path to the scenario IR file that resolves this group's tests. Legal in both registries — the only field in this block that is (#1903). On a generated group it records the recipe output the group was produced from. On a hand-written group it means the group has been ported: an authored scenario under compat/model/authored/ resolves its tests through each suite's scenario backend, and no suite implements them by hand any more, so a per-suite implementation of one of its tests is a duplicate rather than a fallback. Which suites can execute a ported group is derived rather than written here — cmd/compatgen records it in the `ported` index of registry.generated.json."
         },
         "state": {
           "type": "string",

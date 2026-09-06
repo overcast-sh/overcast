@@ -49,8 +49,17 @@ export interface ScenarioSupportOptions {
 }
 
 /**
- * Build the backend and the setup/teardown maps for every generated group in
- * the registry that names a scenario file and is in scope for this suite.
+ * Build the backend and the setup/teardown maps for every group in the
+ * registry that names a scenario file and is in scope for this suite.
+ *
+ * The condition is `scenario`, not `generated`. A *ported* group — a
+ * hand-written group whose tests an authored IR scenario resolves
+ * (docs/plans/compat-coverage-modelgen.md §3.11 step 3, #1903) — carries
+ * `scenario` and is not generated, and it needs these hooks exactly as a
+ * generated group does. Gating on `generated` here while makeScenarioBackend
+ * below gates on `scenario` gave a ported lifecycle group all of its tests and
+ * none of its setup, so every one of them ran against a fixture that was never
+ * created.
  *
  * A scenario file that cannot be read or does not validate is reported per
  * test, as a failure with the parser's message, rather than thrown here: a
@@ -65,7 +74,7 @@ export function makeScenarioSupport(
   const teardown: Record<string, GroupHook> = {};
 
   for (const rg of registry.groups) {
-    if (!rg.generated || !rg.scenario) continue;
+    if (!rg.scenario) continue;
     if (rg.suites && !rg.suites.includes(opts.suite)) continue;
     const scenarioFile = rg.scenario;
 
@@ -79,11 +88,11 @@ export function makeScenarioSupport(
     }
     if (!group) continue;
 
-    // Register the hook for every generated group, unconditionally, and let
-    // an empty calls list make it a no-op. A probe group carries no setup and
-    // no teardown steps — there is nothing to set up and nothing to clean up
-    // — but that is a property of the scenario file's calls list, not a
-    // reason to withhold the hook itself; withholding it was a distinction
+    // Register the hook for every scenario-resolved group, unconditionally,
+    // and let an empty calls list make it a no-op. A probe group carries no
+    // setup and no teardown steps — there is nothing to set up and nothing to
+    // clean up — but that is a property of the scenario file's calls list, not
+    // a reason to withhold the hook itself; withholding it was a distinction
     // without a difference that this backend used to make on its own. The
     // python interpreter always registers the hooks, and this is the rule
     // the README will pin.

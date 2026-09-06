@@ -191,8 +191,11 @@ func TestCheckAuthoredAgainstRegistry_acceptsEitherTheGroupOrItsShadow(t *testin
 	doc["groups"].([]any)[0].(map[string]any)["name"] = "widgets-hand"
 
 	// When/Then: accepted, and the shadow suffix is what tells the two apart.
+	// The registry entry given here is the flipped one as well: since #1903 the
+	// two halves of a port are one change, and ported_test.go pins what each
+	// half alone is refused for.
 	a := loadAuthoredFixture(t, "widgets-hand", doc)
-	if err := checkAuthoredAgainstRegistry(a, authoredHandRegistry()); err != nil {
+	if err := checkAuthoredAgainstRegistry(a, portedHandRegistry()); err != nil {
 		t.Fatalf("the flipped name must be accepted: %v", err)
 	}
 	if native, shadow := nativeGroupOf("widgets-hand"); native != "widgets-hand" || shadow {

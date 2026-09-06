@@ -36,6 +36,7 @@ from lib.registry import (  # noqa: E402
     test_name_owners,
     validate_impls,
 )
+from lib.scenario import scenario_hooks  # noqa: E402
 
 
 def _noop(ctx):
@@ -930,6 +931,88 @@ class GeneratedGroupInterimFailRule(unittest.TestCase):
         groups = build_groups_from_registry(registry, {}, "python-sdk")
         tc = groups[0].tests[0]
         self.assertEqual("not yet implemented in python-sdk test suite", tc.skip)
+
+
+class PortedHandWrittenGroup(unittest.TestCase):
+    """A hand-written group carrying `scenario` resolves through the backend.
+
+    That is what a *port* is (docs/plans/compat-coverage-modelgen.md §3.11
+    step 3, #1903): the group's entry stays in the hand-written registry, the
+    seven per-language implementations are deleted, and an authored IR scenario
+    resolves its tests in every suite instead. So the loader has to consult the
+    backend for a group that is *not* generated — otherwise the flip turns a
+    passing group into seven suites' worth of skips.
+    """
+
+    REGISTRY = {
+        "groups": [
+            {
+                "service": "sqs",
+                "name": "sqs-queues",
+                "scenario": "compat/model/authored/sqs-queues.json",
+                "tests": [{"name": "CreateQueue"}],
+            }
+        ]
+    }
+
+    def test_the_backend_is_consulted_and_its_impl_runs(self):
+        seen = []
+
+        def backend(group, test, scenario):
+            seen.append((group, test, scenario))
+            return lambda ctx: None
+
+        groups = build_groups_from_registry(
+            self.REGISTRY, {}, "python-sdk", scenario_backend=backend
+        )
+        self.assertEqual(
+            [("sqs-queues", "CreateQueue", "compat/model/authored/sqs-queues.json")],
+            seen,
+        )
+        tc = groups[0].tests[0]
+        self.assertIsNone(tc.skip)
+        self.assertIsNone(tc.na)
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            run_group(groups[0], TestContext("", "us-east-1", "test"))
+        self.assertEqual("pass", _only_test_result(buf)["status"])
+
+    def test_a_declining_backend_leaves_the_skip_sentinel(self):
+        # Not the generated groups' fail rule: this group is hand-written, so
+        # "nothing resolved it" is a parity gap rather than a scoping decision
+        # the generator got wrong.
+        groups = build_groups_from_registry(
+            self.REGISTRY,
+            {},
+            "python-sdk",
+            scenario_backend=lambda group, test, scenario: None,
+        )
+        self.assertEqual(
+            "not yet implemented in python-sdk test suite", groups[0].tests[0].skip
+        )
+
+    def test_scenario_hooks_registers_setup_and_teardown_for_it(self):
+        # scenario_hooks keys on `scenario`, not on `generated` — a ported
+        # lifecycle group needs its setup as much as a generated one does.
+        #
+        # This one reads the real authored file rather than a stub backend, so
+        # the group is named the way that file names it *today*: sqs-queues is
+        # still soaking as a shadow (#1903 item 3 is the flip). What is under
+        # test is the absent `generated` flag, not the name.
+        registry = {
+            "groups": [
+                {
+                    "service": "sqs",
+                    "name": "sqs-queues-shadow",
+                    "scenario": "compat/model/authored/sqs-queues.json",
+                    "tests": [{"name": "CreateQueue"}],
+                }
+            ]
+        }
+        hooks = scenario_hooks(registry)
+        self.assertIn("sqs-queues-shadow", hooks.setup)
+        self.assertIn("sqs-queues-shadow", hooks.teardown)
 
 
 if __name__ == "__main__":
