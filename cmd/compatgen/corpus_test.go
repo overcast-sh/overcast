@@ -332,3 +332,41 @@ func TestOrganizationsProbeGroupIsExactlyItsReads(t *testing.T) {
 		t.Errorf("%d of the recipe's %d neverProbe sentences reached gaps.json", curated, len(organizations.NeverProbe))
 	}
 }
+
+// TestClientInfoFor_prefersTheCanonicalModelIdentityOfAnAliasedService pins the
+// one place a service key with two modeled identities could pick the wrong one.
+//
+// awsapi.Operations answers on the Overcast key, and "cloudwatch-events" is an
+// alias of "eventbridge": both identities declare every EventBridge operation,
+// so a lookup returns two manifest entries and the first in name order is the
+// former name. Only SDKID differs, and SDKID is the field every backend derives
+// a package and a client class from — "CloudWatch Events" spells
+// aws_sdk_cloudwatchevents, AmazonCloudWatchEventsClient and
+// @aws-sdk/client-cloudwatch-events, none of which any suite depends on. Taking
+// entries[0] made the eventbridge-rules port fail to generate at all, which is
+// the loud half; a service whose two identities differed only in a name a suite
+// happened to have would have compiled and talked to the wrong package.
+func TestClientInfoFor_prefersTheCanonicalModelIdentityOfAnAliasedService(t *testing.T) {
+	// Given: the committed snapshot of a service the manifest models twice.
+	model, err := loadModel(filepath.Join(repoRoot, filepath.FromSlash(shapesDir)), "eventbridge")
+	if err != nil {
+		t.Fatalf("load eventbridge model: %v", err)
+	}
+
+	// When: the naming header is assembled for the Overcast service key.
+	client, err := clientInfoFor(model, "eventbridge")
+	if err != nil {
+		t.Fatalf("clientInfoFor: %v", err)
+	}
+
+	// Then: it carries the SDK id of the identity that *is* the key.
+	if client.SDKID != "EventBridge" {
+		t.Errorf("SDKID = %q, want %q — the cloudwatch-events alias was preferred over the canonical entry", client.SDKID, "EventBridge")
+	}
+	if client.EndpointPrefix != "events" || client.SigningName != "events" {
+		t.Errorf("endpointPrefix/signingName = %q/%q, want events/events", client.EndpointPrefix, client.SigningName)
+	}
+	if client.TargetPrefix != "AWSEvents" {
+		t.Errorf("targetPrefix = %q, want AWSEvents", client.TargetPrefix)
+	}
+}

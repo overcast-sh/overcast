@@ -128,7 +128,23 @@ func clientInfoFor(model *serviceModel, service string) (clientInfo, error) {
 	if len(entries) == 0 {
 		return clientInfo{}, fmt.Errorf("the routing manifest has no entry for %s/%s; is the capability key right?", service, ops[0])
 	}
+	// awsapi.Operations answers on the Overcast service key, and several keys
+	// are the destination of an alias: "cloudwatch-events" and "eventbridge"
+	// are one service modeled twice, so every EventBridge operation has two
+	// manifest entries and the first in name order is the former identity.
+	// Only SDKID differs between them, and SDKID is the one field every
+	// backend derives a package and a client class from — "CloudWatch Events"
+	// would name aws_sdk_cloudwatchevents, AmazonCloudWatchEventsClient and
+	// @aws-sdk/client-cloudwatch-events, none of which any suite depends on.
+	// So prefer the entry whose modeled identity *is* the key, and fall back
+	// to the first only where none is (an alias with no canonical entry).
 	op := entries[0]
+	for _, entry := range entries {
+		if entry.Service == service {
+			op = entry
+			break
+		}
+	}
 	return clientInfo{
 		SDKID:              op.SDKID,
 		EndpointPrefix:     model.EndpointPrefix,

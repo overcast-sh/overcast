@@ -510,6 +510,77 @@
       ]
     },
     {
+      "service": "eventbridge",
+      "name": "eventbridge-rules-shadow",
+      "generated": true,
+      "scenario": "compat/model/authored/eventbridge-rules.json",
+      "state": "candidate",
+      "shadowOf": "eventbridge-rules",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "PutRule"
+        },
+        {
+          "name": "DescribeRule",
+          "depends": [
+            "PutRule"
+          ]
+        },
+        {
+          "name": "ListRules",
+          "depends": [
+            "PutRule"
+          ]
+        },
+        {
+          "name": "PutTargets",
+          "depends": [
+            "PutRule"
+          ]
+        },
+        {
+          "name": "ListTargetsByRule",
+          "depends": [
+            "PutTargets"
+          ]
+        },
+        {
+          "name": "DisableRule",
+          "depends": [
+            "PutRule"
+          ]
+        },
+        {
+          "name": "EnableRule",
+          "depends": [
+            "DisableRule"
+          ]
+        },
+        {
+          "name": "RemoveTargets",
+          "depends": [
+            "ListTargetsByRule",
+            "EnableRule"
+          ]
+        },
+        {
+          "name": "DeleteRule",
+          "depends": [
+            "RemoveTargets"
+          ]
+        }
+      ]
+    },
+    {
       "service": "iam",
       "name": "iam-gen-group",
       "generated": true,

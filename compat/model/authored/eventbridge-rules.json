@@ -1,0 +1,299 @@
+{
+  "$comment": "Authored port of the hand-written registry group eventbridge-rules (docs/plans/compat-coverage-modelgen.md §3.11, G6 wave 1, #1116). One spec in place of the five per-language implementations that exist and the two (dotnet-sdk, rust-sdk) that never did — 9 tests of parity debt per missing suite. It runs today under the shadow name eventbridge-rules-shadow, beside the natives, so the nightly can compare the two per (suite, test); the flip PR renames this group to eventbridge-rules, adds the scenario field to the hand-written registry.json entry, and deletes the native code. The clauses are the union of what the five natives assert — see compat/model/README.md § Authored scenarios.",
+  "version": 1,
+  "service": "eventbridge",
+  "client": {
+    "sdkId": "EventBridge",
+    "endpointPrefix": "events",
+    "signingName": "events",
+    "protocol": "awsJson1_1",
+    "apiVersion": "2015-10-07",
+    "targetPrefix": "AWSEvents",
+    "awsQueryCompatible": false
+  },
+  "groups": [
+    {
+      "$comment": "One rule on one custom bus. The bus is created in setup (go-sdk, cli, python-sdk and java-sdk all do this; node-js-sdk is the one native that works on the default bus, which cannot isolate concurrent runs from each other). The rule itself is created by the PutRule test rather than by setup — that is what cli, python-sdk, node-js-sdk and java-sdk do, and it is what lets DescribeRule, ListRules, the target tests, Disable/EnableRule and DeleteRule all act on the one rule PutRule made. go-sdk is the outlier: its setup creates the rule and its PutRule creates a second, ephemeral one it deletes again, which asserts nothing the shared shape does not. No clause is wrapped in `eventually`: no native polls, EventBridge documents no consistency window for a rule or target write, and every native reads its own write back immediately.",
+      "name": "eventbridge-rules-shadow",
+      "kind": "lifecycle",
+      "setup": [
+        {
+          "op": "CreateEventBus",
+          "params": { "Name": { "$name": "bus" } }
+        }
+      ],
+      "tests": [
+        {
+          "$comment": "cli, python-sdk, node-js-sdk and java-sdk all assert the response carries a RuleArn; go-sdk asserts only that the call succeeded. EventPattern rather than ScheduleExpression: python-sdk, node-js-sdk and java-sdk use a pattern, go-sdk and cli a rate() schedule, and AWS accepts ScheduleExpression only on the default event bus — a schedule rule on a custom bus is a ValidationException there, so the pattern is both the majority spelling and the one real AWS would take. The pattern is a fixed literal because the rule it selects on is already isolated by a per-run bus and a per-run name.",
+          "name": "PutRule",
+          "op": "PutRule",
+          "call": {
+            "op": "PutRule",
+            "params": {
+              "Name": { "$name": "rule" },
+              "EventBusName": { "$name": "bus" },
+              "EventPattern": "{\"source\":[\"compat.eventbridge-rules\"]}",
+              "State": "ENABLED"
+            },
+            "export": { "rule.arn": "$.RuleArn" }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.RuleArn": { "nonEmpty": true } }
+            }
+          ]
+        },
+        {
+          "$comment": "Union of three assertions no one native makes together: go-sdk, cli, python-sdk and java-sdk check Name; go-sdk, python-sdk and node-js-sdk check State is ENABLED; node-js-sdk checks Arn is present. Arn is compared to the ARN PutRule returned rather than merely non-empty — expressible, and stronger.",
+          "name": "DescribeRule",
+          "op": "DescribeRule",
+          "call": {
+            "op": "DescribeRule",
+            "params": {
+              "Name": { "$name": "rule" },
+              "EventBusName": { "$name": "bus" }
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Name": { "equals": { "$name": "rule" } },
+                "$.Arn": { "equals": { "$ref": "rule.arn" } },
+                "$.State": { "equals": "ENABLED" }
+              }
+            }
+          ],
+          "depends": ["PutRule"]
+        },
+        {
+          "$comment": "cli, python-sdk, node-js-sdk and java-sdk assert the rule is in the page; go-sdk asserts only that ListRules answered. NamePrefix scopes the page to this run's own rule — node-js-sdk is the only native that passes a NamePrefix, and it has to, because it lists the default bus. Passing both the bus and the prefix is the narrower page and the one whose non-membership DeleteRule can prove below.",
+          "name": "ListRules",
+          "op": "ListRules",
+          "call": {
+            "op": "ListRules",
+            "params": {
+              "EventBusName": { "$name": "bus" },
+              "NamePrefix": { "$name": "rule" }
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Rules",
+              "where": { "$.Name": { "$name": "rule" } }
+            }
+          ],
+          "depends": ["PutRule"]
+        },
+        {
+          "$comment": "go-sdk and python-sdk assert FailedEntryCount is 0; node-js-sdk asserts the same claim as `<= 0`; cli lists the targets back and asserts the list is non-empty; java-sdk asserts nothing at all (#1904). The union is both: the count, and a read-back that finds this exact target id. The target ARN is a fabricated SQS ARN naming nothing that exists — every native does the same, because PutTargets does not resolve the ARN at registration time — so it is a literal and not a cross-service reference (#1931); a real queue would make this group depend on SQS, which eventbridge-target-fanout already covers.",
+          "name": "PutTargets",
+          "op": "PutTargets",
+          "call": {
+            "op": "PutTargets",
+            "params": {
+              "Rule": { "$name": "rule" },
+              "EventBusName": { "$name": "bus" },
+              "Targets": [
+                {
+                  "Id": "t1",
+                  "Arn": "arn:aws:sqs:us-east-1:000000000000:compat-eventbridge-rules-target"
+                }
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.FailedEntryCount": { "equals": 0 } }
+            },
+            {
+              "kind": "listContains",
+              "call": {
+                "op": "ListTargetsByRule",
+                "params": {
+                  "Rule": { "$name": "rule" },
+                  "EventBusName": { "$name": "bus" }
+                }
+              },
+              "itemsPath": "$.Targets",
+              "where": { "$.Id": "t1" }
+            }
+          ],
+          "depends": ["PutRule"]
+        },
+        {
+          "$comment": "go-sdk, cli, python-sdk and java-sdk assert only that the list is non-empty; node-js-sdk that it holds the target it registered. Membership is the stronger reading, and it also checks the ARN survived the round trip, which no native does. The id literal is \"t1\", which go-sdk, python-sdk and java-sdk use; cli names it <runId>-tgt and node-js-sdk \"target-1\", and nothing in the group depends on which.",
+          "name": "ListTargetsByRule",
+          "op": "ListTargetsByRule",
+          "call": {
+            "op": "ListTargetsByRule",
+            "params": {
+              "Rule": { "$name": "rule" },
+              "EventBusName": { "$name": "bus" }
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Targets",
+              "where": {
+                "$.Id": "t1",
+                "$.Arn": "arn:aws:sqs:us-east-1:000000000000:compat-eventbridge-rules-target"
+              }
+            }
+          ],
+          "depends": ["PutTargets"]
+        },
+        {
+          "$comment": "cli, python-sdk and node-js-sdk describe the rule again and assert State is DISABLED; go-sdk and java-sdk call DisableRule and immediately re-enable the rule inside the same test, asserting nothing (#1904). The read-back is the union. Nothing here needs to re-enable: the registry's own order puts EnableRule next, depending on this test.",
+          "name": "DisableRule",
+          "op": "DisableRule",
+          "call": {
+            "op": "DisableRule",
+            "params": {
+              "Name": { "$name": "rule" },
+              "EventBusName": { "$name": "bus" }
+            }
+          },
+          "assert": [
+            {
+              "kind": "readback",
+              "call": {
+                "op": "DescribeRule",
+                "params": {
+                  "Name": { "$name": "rule" },
+                  "EventBusName": { "$name": "bus" }
+                }
+              },
+              "checks": { "$.State": { "equals": "DISABLED" } }
+            }
+          ],
+          "depends": ["PutRule"]
+        },
+        {
+          "$comment": "cli, python-sdk and node-js-sdk describe the rule again and assert State is ENABLED; go-sdk and java-sdk call EnableRule and assert nothing (#1904). Depending on DisableRule is what makes the read-back mean something: the rule was DISABLED a moment ago, so ENABLED here is this call's doing.",
+          "name": "EnableRule",
+          "op": "EnableRule",
+          "call": {
+            "op": "EnableRule",
+            "params": {
+              "Name": { "$name": "rule" },
+              "EventBusName": { "$name": "bus" }
+            }
+          },
+          "assert": [
+            {
+              "kind": "readback",
+              "call": {
+                "op": "DescribeRule",
+                "params": {
+                  "Name": { "$name": "rule" },
+                  "EventBusName": { "$name": "bus" }
+                }
+              },
+              "checks": { "$.State": { "equals": "ENABLED" } }
+            }
+          ],
+          "depends": ["DisableRule"]
+        },
+        {
+          "$comment": "go-sdk and python-sdk assert FailedEntryCount is 0; cli and python-sdk list the targets back and assert the list is empty; java-sdk asserts nothing (#1904); node-js-sdk's assertion cannot fail — `resp.Targets?.some((t) => t.Id, \"target-1\")` passes the literal as `some`'s thisArg rather than comparing it, and assert.notStrictEqual then compares a boolean against a string, which is never strictly equal either way. That is a native bug the port closes rather than reproduces. Absence of this target id is asserted rather than emptiness of the list, which is the same claim here and survives a group that later registers a second target.",
+          "name": "RemoveTargets",
+          "op": "RemoveTargets",
+          "call": {
+            "op": "RemoveTargets",
+            "params": {
+              "Rule": { "$name": "rule" },
+              "EventBusName": { "$name": "bus" },
+              "Ids": ["t1"]
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.FailedEntryCount": { "equals": 0 } }
+            },
+            {
+              "kind": "absent",
+              "call": {
+                "op": "ListTargetsByRule",
+                "params": {
+                  "Rule": { "$name": "rule" },
+                  "EventBusName": { "$name": "bus" }
+                }
+              },
+              "itemsPath": "$.Targets",
+              "where": { "$.Id": "t1" }
+            }
+          ],
+          "depends": ["ListTargetsByRule", "EnableRule"]
+        },
+        {
+          "$comment": "cli, python-sdk and node-js-sdk prove the delete by listing the rules again and finding nothing; go-sdk and java-sdk assert only that DeleteRule returned (#1904). The port asserts both halves of absence: the modeled not-found error from a read of the deleted rule, which is the direct statement and which no native makes, and the list non-membership the three natives assert. It deletes the group's own rule, as cli, node-js-sdk and java-sdk do; go-sdk and python-sdk create a second rule inside the test and delete that, which leaves the group's rule for teardown and proves the same thing about a rule nothing else touched. No Force is needed: RemoveTargets ran first, and the registry's depends says so.",
+          "name": "DeleteRule",
+          "op": "DeleteRule",
+          "call": {
+            "op": "DeleteRule",
+            "params": {
+              "Name": { "$name": "rule" },
+              "EventBusName": { "$name": "bus" }
+            }
+          },
+          "assert": [
+            {
+              "kind": "absent",
+              "call": {
+                "op": "DescribeRule",
+                "params": {
+                  "Name": { "$name": "rule" },
+                  "EventBusName": { "$name": "bus" }
+                }
+              },
+              "error": {
+                "shape": "ResourceNotFoundException",
+                "code": "ResourceNotFoundException"
+              }
+            },
+            {
+              "kind": "absent",
+              "call": {
+                "op": "ListRules",
+                "params": {
+                  "EventBusName": { "$name": "bus" },
+                  "NamePrefix": { "$name": "rule" }
+                }
+              },
+              "itemsPath": "$.Rules",
+              "where": { "$.Name": { "$name": "rule" } }
+            }
+          ],
+          "depends": ["RemoveTargets"]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "RemoveTargets",
+          "params": {
+            "Rule": { "$name": "rule" },
+            "EventBusName": { "$name": "bus" },
+            "Ids": ["t1"]
+          }
+        },
+        {
+          "op": "DeleteRule",
+          "params": {
+            "Name": { "$name": "rule" },
+            "EventBusName": { "$name": "bus" }
+          }
+        },
+        {
+          "op": "DeleteEventBus",
+          "params": { "Name": { "$name": "bus" } }
+        }
+      ]
+    }
+  ]
+}
