@@ -21,6 +21,8 @@ import software.amazon.awssdk.services.widgets.model.CreateWidgetRequest;
 import software.amazon.awssdk.services.widgets.model.DeleteSprocketRequest;
 import software.amazon.awssdk.services.widgets.model.DeleteWidgetRequest;
 import software.amazon.awssdk.services.widgets.model.DescribeGaugeRequest;
+import software.amazon.awssdk.services.widgets.model.DescribeHubRequest;
+import software.amazon.awssdk.services.widgets.model.DescribeHubTagsRequest;
 import software.amazon.awssdk.services.widgets.model.DescribeValveRequest;
 import software.amazon.awssdk.services.widgets.model.DescribeWidgetRequest;
 import software.amazon.awssdk.services.widgets.model.GaugeTag;
@@ -37,10 +39,12 @@ import software.amazon.awssdk.services.widgets.model.PingWidgetsRequest;
 import software.amazon.awssdk.services.widgets.model.PolishWidgetRequest;
 import software.amazon.awssdk.services.widgets.model.SprocketTag;
 import software.amazon.awssdk.services.widgets.model.TagGaugeRequest;
+import software.amazon.awssdk.services.widgets.model.TagHubRequest;
 import software.amazon.awssdk.services.widgets.model.TagSprocketRequest;
 import software.amazon.awssdk.services.widgets.model.TagValveRequest;
 import software.amazon.awssdk.services.widgets.model.TagWidgetRequest;
 import software.amazon.awssdk.services.widgets.model.UntagGaugeRequest;
+import software.amazon.awssdk.services.widgets.model.UntagHubRequest;
 import software.amazon.awssdk.services.widgets.model.UntagSprocketRequest;
 import software.amazon.awssdk.services.widgets.model.UntagValveRequest;
 import software.amazon.awssdk.services.widgets.model.UntagWidgetRequest;
@@ -62,6 +66,8 @@ public final class ScenariosWidgetsGen implements ServiceGroup {
             new Group("widgets-gen-gauge", "compat/model/scenarios/widgets.json");
     private static final Group GROUP_WIDGETS_GEN_VALVE =
             new Group("widgets-gen-valve", "compat/model/scenarios/widgets.json");
+    private static final Group GROUP_WIDGETS_GEN_HUB =
+            new Group("widgets-gen-hub", "compat/model/scenarios/widgets.json");
     private static final Group GROUP_WIDGETS_GEN_SPROCKET =
             new Group("widgets-gen-sprocket", "compat/model/scenarios/widgets.json");
     private static final Group GROUP_WIDGETS_GEN_PROBE =
@@ -101,6 +107,10 @@ public final class ScenariosWidgetsGen implements ServiceGroup {
                 Map.entry("widgets-gen-valve:TagValve", this::testWidgetsGenValveTagValve),
                 Map.entry("widgets-gen-valve:ListValveTags", this::testWidgetsGenValveListValveTags),
                 Map.entry("widgets-gen-valve:UntagValve", this::testWidgetsGenValveUntagValve),
+                Map.entry("widgets-gen-hub:DescribeHub", this::testWidgetsGenHubDescribeHub),
+                Map.entry("widgets-gen-hub:TagHub", this::testWidgetsGenHubTagHub),
+                Map.entry("widgets-gen-hub:DescribeHubTags", this::testWidgetsGenHubDescribeHubTags),
+                Map.entry("widgets-gen-hub:UntagHub", this::testWidgetsGenHubUntagHub),
                 Map.entry("widgets-gen-sprocket:CreateSprocket", this::testWidgetsGenSprocketCreateSprocket),
                 Map.entry("widgets-gen-sprocket:GetSprocket", this::testWidgetsGenSprocketGetSprocket),
                 Map.entry("widgets-gen-sprocket:TagSprocket", this::testWidgetsGenSprocketTagSprocket),
@@ -118,6 +128,7 @@ public final class ScenariosWidgetsGen implements ServiceGroup {
                 Map.entry("widgets-gen-widget", this::setupWidgetsGenWidget),
                 Map.entry("widgets-gen-gauge", this::setupWidgetsGenGauge),
                 Map.entry("widgets-gen-valve", this::setupWidgetsGenValve),
+                Map.entry("widgets-gen-hub", this::setupWidgetsGenHub),
                 Map.entry("widgets-gen-sprocket", this::setupWidgetsGenSprocket),
                 Map.entry("widgets-gen-probe", this::setupWidgetsGenProbe));
     }
@@ -128,6 +139,7 @@ public final class ScenariosWidgetsGen implements ServiceGroup {
                 Map.entry("widgets-gen-widget", this::teardownWidgetsGenWidget),
                 Map.entry("widgets-gen-gauge", this::teardownWidgetsGenGauge),
                 Map.entry("widgets-gen-valve", this::teardownWidgetsGenValve),
+                Map.entry("widgets-gen-hub", this::teardownWidgetsGenHub),
                 Map.entry("widgets-gen-sprocket", this::teardownWidgetsGenSprocket),
                 Map.entry("widgets-gen-probe", this::teardownWidgetsGenProbe));
     }
@@ -534,6 +546,90 @@ public final class ScenariosWidgetsGen implements ServiceGroup {
                                                 .build(),
                                         r -> cl().listValveTags((ListValveTagsRequest) r)),
                                 "$.Tags",
+                                Where.of("$.Key", "compat")
+                        )
+                ));
+    }
+
+    private void setupWidgetsGenHub(TestContext t) {
+        // No setup steps: an empty phase is a no-op, not a missing one.
+        GROUP_WIDGETS_GEN_HUB.runSetup(t);
+    }
+
+    private void teardownWidgetsGenHub(TestContext t) {
+        // No teardown steps: an empty phase is a no-op, not a missing one.
+        GROUP_WIDGETS_GEN_HUB.runTeardown(t);
+    }
+
+    private void testWidgetsGenHubDescribeHub(TestContext t) {
+        GROUP_WIDGETS_GEN_HUB.runTest(t, "DescribeHub",
+                new Call("DescribeHub", "{}",
+                        b -> DescribeHubRequest.builder()
+                                .build(),
+                        r -> cl().describeHub((DescribeHubRequest) r))
+                        .export("hub.name", "$.Hub.HubName"),
+                List.of(
+                        Clause.responseField(
+                                Check.matches("$.Hub.HubName", "^h-[0-9a-f]{8}$")
+                        )
+                ));
+    }
+
+    private void testWidgetsGenHubTagHub(TestContext t) {
+        GROUP_WIDGETS_GEN_HUB.runTest(t, "TagHub",
+                new Call("TagHub", "{\"HubNames\":[{\"$ref\":\"hub.name\"}],\"Tags\":[{\"Key\":\"compat\",\"Value\":\"scenario\"}]}",
+                        b -> TagHubRequest.builder()
+                                .hubNames(List.of(b.string("HubNames", Values.ref("hub.name"))))
+                                .tags(List.of(SprocketTag.builder().key("compat").value("scenario").build()))
+                                .build(),
+                        r -> cl().tagHub((TagHubRequest) r)),
+                List.of(
+                        Clause.listContains(
+                                new Call("DescribeHubTags", "{\"HubNames\":[{\"$ref\":\"hub.name\"}]}",
+                                        b -> DescribeHubTagsRequest.builder()
+                                                .hubNames(List.of(b.string("HubNames", Values.ref("hub.name"))))
+                                                .build(),
+                                        r -> cl().describeHubTags((DescribeHubTagsRequest) r)),
+                                "$.TagDescriptions[0].Tags",
+                                Where.of("$.Key", "compat"),
+                                Where.of("$.Value", "scenario")
+                        )
+                ));
+    }
+
+    private void testWidgetsGenHubDescribeHubTags(TestContext t) {
+        GROUP_WIDGETS_GEN_HUB.runTest(t, "DescribeHubTags",
+                new Call("DescribeHubTags", "{\"HubNames\":[{\"$ref\":\"hub.name\"}]}",
+                        b -> DescribeHubTagsRequest.builder()
+                                .hubNames(List.of(b.string("HubNames", Values.ref("hub.name"))))
+                                .build(),
+                        r -> cl().describeHubTags((DescribeHubTagsRequest) r)),
+                List.of(
+                        Clause.listContains(
+                                null,
+                                "$.TagDescriptions[0].Tags",
+                                Where.of("$.Key", "compat"),
+                                Where.of("$.Value", "scenario")
+                        )
+                ));
+    }
+
+    private void testWidgetsGenHubUntagHub(TestContext t) {
+        GROUP_WIDGETS_GEN_HUB.runTest(t, "UntagHub",
+                new Call("UntagHub", "{\"HubNames\":[{\"$ref\":\"hub.name\"}],\"TagKeys\":[\"compat\"]}",
+                        b -> UntagHubRequest.builder()
+                                .hubNames(List.of(b.string("HubNames", Values.ref("hub.name"))))
+                                .tagKeys(List.of("compat"))
+                                .build(),
+                        r -> cl().untagHub((UntagHubRequest) r)),
+                List.of(
+                        Clause.absentFromList(
+                                new Call("DescribeHubTags", "{\"HubNames\":[{\"$ref\":\"hub.name\"}]}",
+                                        b -> DescribeHubTagsRequest.builder()
+                                                .hubNames(List.of(b.string("HubNames", Values.ref("hub.name"))))
+                                                .build(),
+                                        r -> cl().describeHubTags((DescribeHubTagsRequest) r)),
+                                "$.TagDescriptions[0].Tags",
                                 Where.of("$.Key", "compat")
                         )
                 ));

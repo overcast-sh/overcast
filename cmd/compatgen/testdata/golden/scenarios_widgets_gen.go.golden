@@ -43,6 +43,10 @@ func ScenariosWidgets(c *clients.Clients) ServiceGroup {
 			"widgets-gen-valve:TagValve":            g.testWidgetsGenValveTagValve,
 			"widgets-gen-valve:ListValveTags":       g.testWidgetsGenValveListValveTags,
 			"widgets-gen-valve:UntagValve":          g.testWidgetsGenValveUntagValve,
+			"widgets-gen-hub:DescribeHub":           g.testWidgetsGenHubDescribeHub,
+			"widgets-gen-hub:TagHub":                g.testWidgetsGenHubTagHub,
+			"widgets-gen-hub:DescribeHubTags":       g.testWidgetsGenHubDescribeHubTags,
+			"widgets-gen-hub:UntagHub":              g.testWidgetsGenHubUntagHub,
 			"widgets-gen-sprocket:CreateSprocket":   g.testWidgetsGenSprocketCreateSprocket,
 			"widgets-gen-sprocket:GetSprocket":      g.testWidgetsGenSprocketGetSprocket,
 			"widgets-gen-sprocket:TagSprocket":      g.testWidgetsGenSprocketTagSprocket,
@@ -57,6 +61,7 @@ func ScenariosWidgets(c *clients.Clients) ServiceGroup {
 			"widgets-gen-widget":   g.setupWidgetsGenWidget,
 			"widgets-gen-gauge":    g.setupWidgetsGenGauge,
 			"widgets-gen-valve":    g.setupWidgetsGenValve,
+			"widgets-gen-hub":      g.setupWidgetsGenHub,
 			"widgets-gen-sprocket": g.setupWidgetsGenSprocket,
 			"widgets-gen-probe":    g.setupWidgetsGenProbe,
 		},
@@ -64,6 +69,7 @@ func ScenariosWidgets(c *clients.Clients) ServiceGroup {
 			"widgets-gen-widget":   g.teardownWidgetsGenWidget,
 			"widgets-gen-gauge":    g.teardownWidgetsGenGauge,
 			"widgets-gen-valve":    g.teardownWidgetsGenValve,
+			"widgets-gen-hub":      g.teardownWidgetsGenHub,
 			"widgets-gen-sprocket": g.teardownWidgetsGenSprocket,
 			"widgets-gen-probe":    g.teardownWidgetsGenProbe,
 		},
@@ -721,6 +727,140 @@ func (g *widgetsScenarios) testWidgetsGenValveUntagValve(ctx context.Context, t 
 					},
 				},
 				"$.Tags",
+				scenario.Where("$.Key", "compat"),
+			),
+		},
+	})
+}
+
+var groupWidgetsGenHub = scenario.Group{Name: "widgets-gen-hub", File: "compat/model/scenarios/widgets.json"}
+
+func (g *widgetsScenarios) setupWidgetsGenHub(ctx context.Context, t *harness.TestContext) error {
+	// No setup steps: an empty phase is a no-op, not a missing one.
+	return groupWidgetsGenHub.RunSetup(ctx, t)
+}
+
+func (g *widgetsScenarios) teardownWidgetsGenHub(ctx context.Context, t *harness.TestContext) error {
+	// No teardown steps: an empty phase is a no-op, not a missing one.
+	return groupWidgetsGenHub.RunTeardown(ctx, t)
+}
+
+func (g *widgetsScenarios) testWidgetsGenHubDescribeHub(ctx context.Context, t *harness.TestContext) error {
+	return groupWidgetsGenHub.RunTest(ctx, t, "DescribeHub", scenario.Test{
+		Call: scenario.Call{
+			Op:     "DescribeHub",
+			Params: `{}`,
+			Build: func(b *scenario.Binder) any {
+				in := &widgets.DescribeHubInput{}
+				return in
+			},
+			Send: func(ctx context.Context, in any) (any, error) {
+				return g.cl().DescribeHub(ctx, in.(*widgets.DescribeHubInput))
+			},
+			Export: map[string]string{
+				"hub.name": "$.Hub.HubName",
+			},
+		},
+		Assert: []scenario.Clause{
+			scenario.ResponseField(
+				scenario.Matches("$.Hub.HubName", "^h-[0-9a-f]{8}$"),
+			),
+		},
+	})
+}
+
+func (g *widgetsScenarios) testWidgetsGenHubTagHub(ctx context.Context, t *harness.TestContext) error {
+	return groupWidgetsGenHub.RunTest(ctx, t, "TagHub", scenario.Test{
+		Call: scenario.Call{
+			Op:     "TagHub",
+			Params: `{"HubNames":[{"$ref":"hub.name"}],"Tags":[{"Key":"compat","Value":"scenario"}]}`,
+			Build: func(b *scenario.Binder) any {
+				in := &widgets.TagHubInput{}
+				in.HubNames = []string{scenario.Bind[string](b, "HubNames", scenario.Ref("hub.name"))}
+				in.Tags = []types.SprocketTag{{Key: aws.String("compat"), Value: aws.String("scenario")}}
+				return in
+			},
+			Send: func(ctx context.Context, in any) (any, error) {
+				return g.cl().TagHub(ctx, in.(*widgets.TagHubInput))
+			},
+		},
+		Assert: []scenario.Clause{
+			scenario.ListContains(
+				&scenario.Call{
+					Op:     "DescribeHubTags",
+					Params: `{"HubNames":[{"$ref":"hub.name"}]}`,
+					Build: func(b *scenario.Binder) any {
+						in := &widgets.DescribeHubTagsInput{}
+						in.HubNames = []string{scenario.Bind[string](b, "HubNames", scenario.Ref("hub.name"))}
+						return in
+					},
+					Send: func(ctx context.Context, in any) (any, error) {
+						return g.cl().DescribeHubTags(ctx, in.(*widgets.DescribeHubTagsInput))
+					},
+				},
+				"$.TagDescriptions[0].Tags",
+				scenario.Where("$.Key", "compat"),
+				scenario.Where("$.Value", "scenario"),
+			),
+		},
+	})
+}
+
+func (g *widgetsScenarios) testWidgetsGenHubDescribeHubTags(ctx context.Context, t *harness.TestContext) error {
+	return groupWidgetsGenHub.RunTest(ctx, t, "DescribeHubTags", scenario.Test{
+		Call: scenario.Call{
+			Op:     "DescribeHubTags",
+			Params: `{"HubNames":[{"$ref":"hub.name"}]}`,
+			Build: func(b *scenario.Binder) any {
+				in := &widgets.DescribeHubTagsInput{}
+				in.HubNames = []string{scenario.Bind[string](b, "HubNames", scenario.Ref("hub.name"))}
+				return in
+			},
+			Send: func(ctx context.Context, in any) (any, error) {
+				return g.cl().DescribeHubTags(ctx, in.(*widgets.DescribeHubTagsInput))
+			},
+		},
+		Assert: []scenario.Clause{
+			scenario.ListContains(
+				nil,
+				"$.TagDescriptions[0].Tags",
+				scenario.Where("$.Key", "compat"),
+				scenario.Where("$.Value", "scenario"),
+			),
+		},
+	})
+}
+
+func (g *widgetsScenarios) testWidgetsGenHubUntagHub(ctx context.Context, t *harness.TestContext) error {
+	return groupWidgetsGenHub.RunTest(ctx, t, "UntagHub", scenario.Test{
+		Call: scenario.Call{
+			Op:     "UntagHub",
+			Params: `{"HubNames":[{"$ref":"hub.name"}],"TagKeys":["compat"]}`,
+			Build: func(b *scenario.Binder) any {
+				in := &widgets.UntagHubInput{}
+				in.HubNames = []string{scenario.Bind[string](b, "HubNames", scenario.Ref("hub.name"))}
+				in.TagKeys = []string{"compat"}
+				return in
+			},
+			Send: func(ctx context.Context, in any) (any, error) {
+				return g.cl().UntagHub(ctx, in.(*widgets.UntagHubInput))
+			},
+		},
+		Assert: []scenario.Clause{
+			scenario.AbsentFromList(
+				&scenario.Call{
+					Op:     "DescribeHubTags",
+					Params: `{"HubNames":[{"$ref":"hub.name"}]}`,
+					Build: func(b *scenario.Binder) any {
+						in := &widgets.DescribeHubTagsInput{}
+						in.HubNames = []string{scenario.Bind[string](b, "HubNames", scenario.Ref("hub.name"))}
+						return in
+					},
+					Send: func(ctx context.Context, in any) (any, error) {
+						return g.cl().DescribeHubTags(ctx, in.(*widgets.DescribeHubTagsInput))
+					},
+				},
+				"$.TagDescriptions[0].Tags",
 				scenario.Where("$.Key", "compat"),
 			),
 		},

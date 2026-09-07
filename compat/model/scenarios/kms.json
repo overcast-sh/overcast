@@ -138,74 +138,6 @@
           ]
         },
         {
-          "name": "DescribeKeyMetadata",
-          "op": "DescribeKey",
-          "call": {
-            "op": "DescribeKey",
-            "params": {
-              "KeyId": {
-                "$ref": "key.id"
-              }
-            }
-          },
-          "assert": [
-            {
-              "kind": "responseField",
-              "checks": {
-                "$.KeyMetadata.AWSAccountId": {
-                  "matches": "^[0-9]{12}$"
-                },
-                "$.KeyMetadata.Enabled": {
-                  "equals": true
-                },
-                "$.KeyMetadata.KeyManager": {
-                  "equals": "CUSTOMER"
-                },
-                "$.KeyMetadata.KeySpec": {
-                  "equals": "SYMMETRIC_DEFAULT"
-                },
-                "$.KeyMetadata.KeyState": {
-                  "equals": "Enabled"
-                },
-                "$.KeyMetadata.KeyUsage": {
-                  "equals": "ENCRYPT_DECRYPT"
-                },
-                "$.KeyMetadata.MultiRegion": {
-                  "equals": false
-                },
-                "$.KeyMetadata.Origin": {
-                  "equals": "AWS_KMS"
-                }
-              }
-            }
-          ],
-          "depends": [
-            "CreateKey"
-          ]
-        },
-        {
-          "name": "ListKeys",
-          "op": "ListKeys",
-          "call": {
-            "op": "ListKeys",
-            "params": {}
-          },
-          "assert": [
-            {
-              "kind": "listContains",
-              "itemsPath": "$.Keys",
-              "where": {
-                "$.KeyArn": {
-                  "$ref": "key.arn"
-                }
-              }
-            }
-          ],
-          "depends": [
-            "CreateKey"
-          ]
-        },
-        {
           "name": "TagResource",
           "op": "TagResource",
           "call": {
@@ -306,6 +238,74 @@
                 "itemsPath": "$.Tags",
                 "where": {
                   "$.TagKey": "compat"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "DescribeKeyMetadata",
+          "op": "DescribeKey",
+          "call": {
+            "op": "DescribeKey",
+            "params": {
+              "KeyId": {
+                "$ref": "key.id"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.KeyMetadata.AWSAccountId": {
+                  "matches": "^[0-9]{12}$"
+                },
+                "$.KeyMetadata.Enabled": {
+                  "equals": true
+                },
+                "$.KeyMetadata.KeyManager": {
+                  "equals": "CUSTOMER"
+                },
+                "$.KeyMetadata.KeySpec": {
+                  "equals": "SYMMETRIC_DEFAULT"
+                },
+                "$.KeyMetadata.KeyState": {
+                  "equals": "Enabled"
+                },
+                "$.KeyMetadata.KeyUsage": {
+                  "equals": "ENCRYPT_DECRYPT"
+                },
+                "$.KeyMetadata.MultiRegion": {
+                  "equals": false
+                },
+                "$.KeyMetadata.Origin": {
+                  "equals": "AWS_KMS"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "ListKeys",
+          "op": "ListKeys",
+          "call": {
+            "op": "ListKeys",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Keys",
+              "where": {
+                "$.KeyArn": {
+                  "$ref": "key.arn"
                 }
               }
             }

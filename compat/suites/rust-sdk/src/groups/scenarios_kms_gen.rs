@@ -98,34 +98,6 @@ impl ServiceGroup for ScenariosKms {
         {
             let client = self.client.clone();
             impls.insert(
-                "kms-gen-key:DescribeKeyMetadata".to_string(),
-                Arc::new(move |ctx: TestContext| {
-                    let client = client.clone();
-                    Box::pin(async move {
-                        GROUP_KMS_GEN_KEY
-                            .run_test(&ctx, "DescribeKeyMetadata", test_kms_gen_key_describe_key_metadata(&client))
-                            .await
-                    })
-                }),
-            );
-        }
-        {
-            let client = self.client.clone();
-            impls.insert(
-                "kms-gen-key:ListKeys".to_string(),
-                Arc::new(move |ctx: TestContext| {
-                    let client = client.clone();
-                    Box::pin(async move {
-                        GROUP_KMS_GEN_KEY
-                            .run_test(&ctx, "ListKeys", test_kms_gen_key_list_keys(&client))
-                            .await
-                    })
-                }),
-            );
-        }
-        {
-            let client = self.client.clone();
-            impls.insert(
                 "kms-gen-key:TagResource".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
@@ -160,6 +132,34 @@ impl ServiceGroup for ScenariosKms {
                     Box::pin(async move {
                         GROUP_KMS_GEN_KEY
                             .run_test(&ctx, "UntagResource", test_kms_gen_key_untag_resource(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
+                "kms-gen-key:DescribeKeyMetadata".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_KMS_GEN_KEY
+                            .run_test(&ctx, "DescribeKeyMetadata", test_kms_gen_key_describe_key_metadata(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
+                "kms-gen-key:ListKeys".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_KMS_GEN_KEY
+                            .run_test(&ctx, "ListKeys", test_kms_gen_key_list_keys(&client))
                             .await
                     })
                 }),
@@ -799,76 +799,6 @@ fn test_kms_gen_key_update_key_description(client: &aws_sdk_kms::Client) -> Test
     }
 }
 
-fn test_kms_gen_key_describe_key_metadata(client: &aws_sdk_kms::Client) -> Test {
-    Test {
-        call: Call {
-            op: "DescribeKey",
-            params: scenario::map(vec![("KeyId", scenario::context("key.id"))]),
-            export: Vec::new(),
-            invoke: {
-                let client = client.clone();
-                scenario::invoker(move |b| {
-                    let client = client.clone();
-                    Box::pin(async move {
-                        let capture = scenario::Capture::new();
-                        let request = client
-                            .describe_key()
-                            .key_id(b.string("KeyId")?)
-                            .customize()
-                            .interceptor(capture.clone());
-                        Ok(scenario::observe(request.send().await, &capture))
-                    })
-                })
-            },
-        },
-        assert: vec![
-            scenario::response_field(vec![
-                scenario::matches("$.KeyMetadata.AWSAccountId", "^[0-9]{12}$"),
-                scenario::equals("$.KeyMetadata.Enabled", scenario::lit(::serde_json::json!(true))),
-                scenario::equals("$.KeyMetadata.KeyManager", scenario::lit(::serde_json::json!("CUSTOMER"))),
-                scenario::equals("$.KeyMetadata.KeySpec", scenario::lit(::serde_json::json!("SYMMETRIC_DEFAULT"))),
-                scenario::equals("$.KeyMetadata.KeyState", scenario::lit(::serde_json::json!("Enabled"))),
-                scenario::equals("$.KeyMetadata.KeyUsage", scenario::lit(::serde_json::json!("ENCRYPT_DECRYPT"))),
-                scenario::equals("$.KeyMetadata.MultiRegion", scenario::lit(::serde_json::json!(false))),
-                scenario::equals("$.KeyMetadata.Origin", scenario::lit(::serde_json::json!("AWS_KMS"))),
-            ]),
-        ],
-    }
-}
-
-fn test_kms_gen_key_list_keys(client: &aws_sdk_kms::Client) -> Test {
-    Test {
-        call: Call {
-            op: "ListKeys",
-            params: scenario::lit(::serde_json::json!({})),
-            export: Vec::new(),
-            invoke: {
-                let client = client.clone();
-                scenario::invoker(move |_b| {
-                    let client = client.clone();
-                    Box::pin(async move {
-                        let capture = scenario::Capture::new();
-                        let request = client
-                            .list_keys()
-                            .customize()
-                            .interceptor(capture.clone());
-                        Ok(scenario::observe(request.send().await, &capture))
-                    })
-                })
-            },
-        },
-        assert: vec![
-            scenario::list_contains(
-                None,
-                "$.Keys",
-                vec![
-                    scenario::where_entry("$.KeyArn", scenario::context("key.arn")),
-                ],
-            ),
-        ],
-    }
-}
-
 fn test_kms_gen_key_tag_resource(client: &aws_sdk_kms::Client) -> Test {
     Test {
         call: Call {
@@ -1028,6 +958,76 @@ fn test_kms_gen_key_untag_resource(client: &aws_sdk_kms::Client) -> Test {
                         scenario::where_entry("$.TagKey", scenario::lit(::serde_json::json!("compat"))),
                     ],
                 ),
+            ),
+        ],
+    }
+}
+
+fn test_kms_gen_key_describe_key_metadata(client: &aws_sdk_kms::Client) -> Test {
+    Test {
+        call: Call {
+            op: "DescribeKey",
+            params: scenario::map(vec![("KeyId", scenario::context("key.id"))]),
+            export: Vec::new(),
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .describe_key()
+                            .key_id(b.string("KeyId")?)
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::response_field(vec![
+                scenario::matches("$.KeyMetadata.AWSAccountId", "^[0-9]{12}$"),
+                scenario::equals("$.KeyMetadata.Enabled", scenario::lit(::serde_json::json!(true))),
+                scenario::equals("$.KeyMetadata.KeyManager", scenario::lit(::serde_json::json!("CUSTOMER"))),
+                scenario::equals("$.KeyMetadata.KeySpec", scenario::lit(::serde_json::json!("SYMMETRIC_DEFAULT"))),
+                scenario::equals("$.KeyMetadata.KeyState", scenario::lit(::serde_json::json!("Enabled"))),
+                scenario::equals("$.KeyMetadata.KeyUsage", scenario::lit(::serde_json::json!("ENCRYPT_DECRYPT"))),
+                scenario::equals("$.KeyMetadata.MultiRegion", scenario::lit(::serde_json::json!(false))),
+                scenario::equals("$.KeyMetadata.Origin", scenario::lit(::serde_json::json!("AWS_KMS"))),
+            ]),
+        ],
+    }
+}
+
+fn test_kms_gen_key_list_keys(client: &aws_sdk_kms::Client) -> Test {
+    Test {
+        call: Call {
+            op: "ListKeys",
+            params: scenario::lit(::serde_json::json!({})),
+            export: Vec::new(),
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |_b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .list_keys()
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::list_contains(
+                None,
+                "$.Keys",
+                vec![
+                    scenario::where_entry("$.KeyArn", scenario::context("key.arn")),
+                ],
             ),
         ],
     }

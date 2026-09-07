@@ -1,5 +1,5 @@
 {
-  "$comment": "Test fixture: seven resources between them exercising every recipe role against testdata/shapes/widgets.json. `widget` is the full lifecycle (create, two reads, a mutation, map-shaped tags, an authored operation, list, delete); `cog` is setup-only and its create cannot be bound, so `spare`, which requires it, has its whole group refused with setup-refused; `gauge` is pre-existing and shows that such a resource carries more than its read, and its tags carry KMS's {TagKey, TagValue} spelling; `sprocket` requires `gauge`, verifies its create with an authored assertion rather than a derived read-back, carries {Key, Value}-shaped tags, and is declared async so every clause that calls the service again — authored ones included — is wrapped in `eventually`; `valve` is pre-existing like `gauge`, and its tags pair ordinary {Key, Value} tags with an ELB-style untag list of key-only structures instead of bare strings.",
+  "$comment": "Test fixture: eight resources between them exercising every recipe role against testdata/shapes/widgets.json. `widget` is the full lifecycle (create, two reads, a mutation, map-shaped tags, an authored operation, list, delete); `cog` is setup-only and its create cannot be bound, so `spare`, which requires it, has its whole group refused with setup-refused; `gauge` is pre-existing and shows that such a resource carries more than its read, and its tags carry KMS's {TagKey, TagValue} spelling; `sprocket` requires `gauge`, verifies its create with an authored assertion rather than a derived read-back, carries {Key, Value}-shaped tags, and is declared async so every clause that calls the service again — authored ones included — is wrapped in `eventually`; `valve` is pre-existing like `gauge`, and its tags pair ordinary {Key, Value} tags with an ELB-style untag list of key-only structures instead of bare strings; `hub` is pre-existing too, and its tag operations take the resource identifier as a list (HubNames) bound from the resource's own scalar export through a wrapped `binds` entry.",
   "service": "widgets",
   "neverProbe": {
     "GetWidgetSecret": "Rotates the secret it returns, so the read verb in its name is a lie; every later reader of the old secret is broken by the call.",
@@ -104,6 +104,21 @@
         "tag": { "op": "TagValve", "member": "Tags" },
         "untag": { "op": "UntagValve", "member": "TagKeys" },
         "list": { "op": "ListValveTags", "path": "$.Tags" }
+      }
+    },
+    {
+      "$comment": "Pre-existing, like `gauge` and `valve`, and the resource that carries a list-shaped identifier: TagHub, DescribeHubTags and UntagHub all take HubNames — the plural list — which is how ELB Classic's AddTags, DescribeTags and RemoveTags take a load balancer. The read exports the singular name, and `binds` wraps that one export in a one-element list so rule 1 can supply the plural member; every emitter then has to spell a list holding a bound expression. The tag structure is the ordinary {Key, Value} and the untag member a plain string list, so the only axis this resource moves is the identifier's own shape — detectTagShape's two axes stay isolated on `gauge` and `valve`. The tag listing is read at $.TagDescriptions[0].Tags, which is where ELB's DescribeTags puts it.",
+      "id": "hub",
+      "read": {
+        "op": "DescribeHub",
+        "identityPath": "$.Hub.HubName",
+        "exports": { "name": "$.Hub.HubName" }
+      },
+      "binds": { "HubNames": ["hub.name"] },
+      "tags": {
+        "tag": { "op": "TagHub", "member": "Tags" },
+        "untag": { "op": "UntagHub", "member": "TagKeys" },
+        "list": { "op": "DescribeHubTags", "path": "$.TagDescriptions[0].Tags" }
       }
     },
     {

@@ -80,11 +80,11 @@ public final class ScenariosKmsGen implements ServiceGroup {
                 Map.entry("kms-gen-key:CreateKey", this::testKmsGenKeyCreateKey),
                 Map.entry("kms-gen-key:DescribeKey", this::testKmsGenKeyDescribeKey),
                 Map.entry("kms-gen-key:UpdateKeyDescription", this::testKmsGenKeyUpdateKeyDescription),
-                Map.entry("kms-gen-key:DescribeKeyMetadata", this::testKmsGenKeyDescribeKeyMetadata),
-                Map.entry("kms-gen-key:ListKeys", this::testKmsGenKeyListKeys),
                 Map.entry("kms-gen-key:TagResource", this::testKmsGenKeyTagResource),
                 Map.entry("kms-gen-key:ListResourceTags", this::testKmsGenKeyListResourceTags),
                 Map.entry("kms-gen-key:UntagResource", this::testKmsGenKeyUntagResource),
+                Map.entry("kms-gen-key:DescribeKeyMetadata", this::testKmsGenKeyDescribeKeyMetadata),
+                Map.entry("kms-gen-key:ListKeys", this::testKmsGenKeyListKeys),
                 Map.entry("kms-gen-key:GetKeyPolicy", this::testKmsGenKeyGetKeyPolicy),
                 Map.entry("kms-gen-key:PutKeyPolicy", this::testKmsGenKeyPutKeyPolicy),
                 Map.entry("kms-gen-key:ListKeyPolicies", this::testKmsGenKeyListKeyPolicies),
@@ -221,42 +221,6 @@ public final class ScenariosKmsGen implements ServiceGroup {
                 ));
     }
 
-    private void testKmsGenKeyDescribeKeyMetadata(TestContext t) {
-        GROUP_KMS_GEN_KEY.runTest(t, "DescribeKeyMetadata",
-                new Call("DescribeKey", "{\"KeyId\":{\"$ref\":\"key.id\"}}",
-                        b -> DescribeKeyRequest.builder()
-                                .keyId(b.string("KeyId", Values.ref("key.id")))
-                                .build(),
-                        r -> cl().describeKey((DescribeKeyRequest) r)),
-                List.of(
-                        Clause.responseField(
-                                Check.matches("$.KeyMetadata.AWSAccountId", "^[0-9]{12}$"),
-                                Check.equalTo("$.KeyMetadata.Enabled", true),
-                                Check.equalTo("$.KeyMetadata.KeyManager", "CUSTOMER"),
-                                Check.equalTo("$.KeyMetadata.KeySpec", "SYMMETRIC_DEFAULT"),
-                                Check.equalTo("$.KeyMetadata.KeyState", "Enabled"),
-                                Check.equalTo("$.KeyMetadata.KeyUsage", "ENCRYPT_DECRYPT"),
-                                Check.equalTo("$.KeyMetadata.MultiRegion", false),
-                                Check.equalTo("$.KeyMetadata.Origin", "AWS_KMS")
-                        )
-                ));
-    }
-
-    private void testKmsGenKeyListKeys(TestContext t) {
-        GROUP_KMS_GEN_KEY.runTest(t, "ListKeys",
-                new Call("ListKeys", "{}",
-                        b -> ListKeysRequest.builder()
-                                .build(),
-                        r -> cl().listKeys((ListKeysRequest) r)),
-                List.of(
-                        Clause.listContains(
-                                null,
-                                "$.Keys",
-                                Where.of("$.KeyArn", Values.ref("key.arn"))
-                        )
-                ));
-    }
-
     private void testKmsGenKeyTagResource(TestContext t) {
         GROUP_KMS_GEN_KEY.runTest(t, "TagResource",
                 new Call("TagResource", "{\"KeyId\":{\"$ref\":\"key.id\"},\"Tags\":[{\"TagKey\":\"compat\",\"TagValue\":\"scenario\"}]}",
@@ -316,6 +280,42 @@ public final class ScenariosKmsGen implements ServiceGroup {
                                         "$.Tags",
                                         Where.of("$.TagKey", "compat")
                                 ))
+                ));
+    }
+
+    private void testKmsGenKeyDescribeKeyMetadata(TestContext t) {
+        GROUP_KMS_GEN_KEY.runTest(t, "DescribeKeyMetadata",
+                new Call("DescribeKey", "{\"KeyId\":{\"$ref\":\"key.id\"}}",
+                        b -> DescribeKeyRequest.builder()
+                                .keyId(b.string("KeyId", Values.ref("key.id")))
+                                .build(),
+                        r -> cl().describeKey((DescribeKeyRequest) r)),
+                List.of(
+                        Clause.responseField(
+                                Check.matches("$.KeyMetadata.AWSAccountId", "^[0-9]{12}$"),
+                                Check.equalTo("$.KeyMetadata.Enabled", true),
+                                Check.equalTo("$.KeyMetadata.KeyManager", "CUSTOMER"),
+                                Check.equalTo("$.KeyMetadata.KeySpec", "SYMMETRIC_DEFAULT"),
+                                Check.equalTo("$.KeyMetadata.KeyState", "Enabled"),
+                                Check.equalTo("$.KeyMetadata.KeyUsage", "ENCRYPT_DECRYPT"),
+                                Check.equalTo("$.KeyMetadata.MultiRegion", false),
+                                Check.equalTo("$.KeyMetadata.Origin", "AWS_KMS")
+                        )
+                ));
+    }
+
+    private void testKmsGenKeyListKeys(TestContext t) {
+        GROUP_KMS_GEN_KEY.runTest(t, "ListKeys",
+                new Call("ListKeys", "{}",
+                        b -> ListKeysRequest.builder()
+                                .build(),
+                        r -> cl().listKeys((ListKeysRequest) r)),
+                List.of(
+                        Clause.listContains(
+                                null,
+                                "$.Keys",
+                                Where.of("$.KeyArn", Values.ref("key.arn"))
+                        )
                 ));
     }
 

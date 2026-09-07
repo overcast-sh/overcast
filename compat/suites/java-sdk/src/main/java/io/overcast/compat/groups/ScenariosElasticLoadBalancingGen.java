@@ -15,6 +15,7 @@ import io.overcast.compat.scenario.Where;
 import java.util.List;
 import java.util.Map;
 import software.amazon.awssdk.services.elasticloadbalancing.ElasticLoadBalancingClient;
+import software.amazon.awssdk.services.elasticloadbalancing.model.AddTagsRequest;
 import software.amazon.awssdk.services.elasticloadbalancing.model.ConfigureHealthCheckRequest;
 import software.amazon.awssdk.services.elasticloadbalancing.model.CreateAppCookieStickinessPolicyRequest;
 import software.amazon.awssdk.services.elasticloadbalancing.model.CreateLbCookieStickinessPolicyRequest;
@@ -31,11 +32,15 @@ import software.amazon.awssdk.services.elasticloadbalancing.model.DescribeLoadBa
 import software.amazon.awssdk.services.elasticloadbalancing.model.DescribeLoadBalancerPoliciesRequest;
 import software.amazon.awssdk.services.elasticloadbalancing.model.DescribeLoadBalancerPolicyTypesRequest;
 import software.amazon.awssdk.services.elasticloadbalancing.model.DescribeLoadBalancersRequest;
+import software.amazon.awssdk.services.elasticloadbalancing.model.DescribeTagsRequest;
 import software.amazon.awssdk.services.elasticloadbalancing.model.HealthCheck;
 import software.amazon.awssdk.services.elasticloadbalancing.model.Listener;
 import software.amazon.awssdk.services.elasticloadbalancing.model.LoadBalancerAttributes;
 import software.amazon.awssdk.services.elasticloadbalancing.model.ModifyLoadBalancerAttributesRequest;
 import software.amazon.awssdk.services.elasticloadbalancing.model.PolicyAttribute;
+import software.amazon.awssdk.services.elasticloadbalancing.model.RemoveTagsRequest;
+import software.amazon.awssdk.services.elasticloadbalancing.model.Tag;
+import software.amazon.awssdk.services.elasticloadbalancing.model.TagKeyOnly;
 
 /**
  * The generated elastic-load-balancing groups.
@@ -71,6 +76,9 @@ public final class ScenariosElasticLoadBalancingGen implements ServiceGroup {
                 Map.entry("elastic-load-balancing-gen-loadbalancer:CreateLoadBalancer", this::testElasticLoadBalancingGenLoadbalancerCreateLoadBalancer),
                 Map.entry("elastic-load-balancing-gen-loadbalancer:DescribeLoadBalancers", this::testElasticLoadBalancingGenLoadbalancerDescribeLoadBalancers),
                 Map.entry("elastic-load-balancing-gen-loadbalancer:ConfigureHealthCheck", this::testElasticLoadBalancingGenLoadbalancerConfigureHealthCheck),
+                Map.entry("elastic-load-balancing-gen-loadbalancer:AddTags", this::testElasticLoadBalancingGenLoadbalancerAddTags),
+                Map.entry("elastic-load-balancing-gen-loadbalancer:DescribeTags", this::testElasticLoadBalancingGenLoadbalancerDescribeTags),
+                Map.entry("elastic-load-balancing-gen-loadbalancer:RemoveTags", this::testElasticLoadBalancingGenLoadbalancerRemoveTags),
                 Map.entry("elastic-load-balancing-gen-loadbalancer:CreateLoadBalancerListeners", this::testElasticLoadBalancingGenLoadbalancerCreateLoadBalancerListeners),
                 Map.entry("elastic-load-balancing-gen-loadbalancer:DeleteLoadBalancerListeners", this::testElasticLoadBalancingGenLoadbalancerDeleteLoadBalancerListeners),
                 Map.entry("elastic-load-balancing-gen-loadbalancer:ModifyLoadBalancerAttributes", this::testElasticLoadBalancingGenLoadbalancerModifyLoadBalancerAttributes),
@@ -209,6 +217,68 @@ public final class ScenariosElasticLoadBalancingGen implements ServiceGroup {
                                                         .build(),
                                                 r -> cl().describeLoadBalancers((DescribeLoadBalancersRequest) r)),
                                         Check.equalTo("$.LoadBalancerDescriptions[0].HealthCheck.Interval", 30.0)
+                                ))
+                ));
+    }
+
+    private void testElasticLoadBalancingGenLoadbalancerAddTags(TestContext t) {
+        GROUP_ELASTIC_LOAD_BALANCING_GEN_LOADBALANCER.runTest(t, "AddTags",
+                new Call("AddTags", "{\"LoadBalancerNames\":[{\"$ref\":\"loadbalancer.name\"}],\"Tags\":[{\"Key\":\"compat\",\"Value\":\"scenario\"}]}",
+                        b -> AddTagsRequest.builder()
+                                .loadBalancerNames(List.of(b.string("LoadBalancerNames", Values.ref("loadbalancer.name"))))
+                                .tags(List.of(Tag.builder().key("compat").value("scenario").build()))
+                                .build(),
+                        r -> cl().addTags((AddTagsRequest) r)),
+                List.of(
+                        Clause.eventually(30, 2000,
+                                Clause.listContains(
+                                        new Call("DescribeTags", "{\"LoadBalancerNames\":[{\"$ref\":\"loadbalancer.name\"}]}",
+                                                b -> DescribeTagsRequest.builder()
+                                                        .loadBalancerNames(List.of(b.string("LoadBalancerNames", Values.ref("loadbalancer.name"))))
+                                                        .build(),
+                                                r -> cl().describeTags((DescribeTagsRequest) r)),
+                                        "$.TagDescriptions[0].Tags",
+                                        Where.of("$.Key", "compat"),
+                                        Where.of("$.Value", "scenario")
+                                ))
+                ));
+    }
+
+    private void testElasticLoadBalancingGenLoadbalancerDescribeTags(TestContext t) {
+        GROUP_ELASTIC_LOAD_BALANCING_GEN_LOADBALANCER.runTest(t, "DescribeTags",
+                new Call("DescribeTags", "{\"LoadBalancerNames\":[{\"$ref\":\"loadbalancer.name\"}]}",
+                        b -> DescribeTagsRequest.builder()
+                                .loadBalancerNames(List.of(b.string("LoadBalancerNames", Values.ref("loadbalancer.name"))))
+                                .build(),
+                        r -> cl().describeTags((DescribeTagsRequest) r)),
+                List.of(
+                        Clause.listContains(
+                                null,
+                                "$.TagDescriptions[0].Tags",
+                                Where.of("$.Key", "compat"),
+                                Where.of("$.Value", "scenario")
+                        )
+                ));
+    }
+
+    private void testElasticLoadBalancingGenLoadbalancerRemoveTags(TestContext t) {
+        GROUP_ELASTIC_LOAD_BALANCING_GEN_LOADBALANCER.runTest(t, "RemoveTags",
+                new Call("RemoveTags", "{\"LoadBalancerNames\":[{\"$ref\":\"loadbalancer.name\"}],\"Tags\":[{\"Key\":\"compat\"}]}",
+                        b -> RemoveTagsRequest.builder()
+                                .loadBalancerNames(List.of(b.string("LoadBalancerNames", Values.ref("loadbalancer.name"))))
+                                .tags(List.of(TagKeyOnly.builder().key("compat").build()))
+                                .build(),
+                        r -> cl().removeTags((RemoveTagsRequest) r)),
+                List.of(
+                        Clause.eventually(30, 2000,
+                                Clause.absentFromList(
+                                        new Call("DescribeTags", "{\"LoadBalancerNames\":[{\"$ref\":\"loadbalancer.name\"}]}",
+                                                b -> DescribeTagsRequest.builder()
+                                                        .loadBalancerNames(List.of(b.string("LoadBalancerNames", Values.ref("loadbalancer.name"))))
+                                                        .build(),
+                                                r -> cl().describeTags((DescribeTagsRequest) r)),
+                                        "$.TagDescriptions[0].Tags",
+                                        Where.of("$.Key", "compat")
                                 ))
                 ));
     }

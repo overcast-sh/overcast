@@ -58,8 +58,8 @@
         "binds": {
           "type": "object",
           "propertyNames": { "pattern": "^[A-Za-z][A-Za-z0-9]*$" },
-          "additionalProperties": { "type": "string", "pattern": "^[a-z][a-z0-9]*\\.[a-zA-Z][a-zA-Z0-9]*$" },
-          "description": "Input member name → context path. Binding rule 1."
+          "additionalProperties": { "$ref": "#/definitions/Bind" },
+          "description": "Input member name → context path, or that path inside a one-element list for a member the service models as a list of it. Binding rule 1."
         },
         "read": { "$ref": "#/definitions/Read" },
         "reads": { "type": "array", "items": { "$ref": "#/definitions/Read" }, "description": "Further read operations (GetQueueUrl beside GetQueueAttributes)." },
@@ -271,6 +271,14 @@
         "code": { "type": "string", "description": "Filled in by the generator from the model; may be omitted." }
       }
     },
+    "Bind": {
+      "description": "The context path supplying one input member, or that path inside a one-element list where the service models the member as a list of what the export names (ELB Classic's LoadBalancerNames beside the singular LoadBalancerName). One level of wrapping is all there is: a bind supplies one exported value, and the only question is whether the member takes it bare or in a list.",
+      "oneOf": [
+        { "$ref": "#/definitions/ContextPath" },
+        { "type": "array", "minItems": 1, "maxItems": 1, "items": { "$ref": "#/definitions/ContextPath" } }
+      ]
+    },
+    "ContextPath": { "type": "string", "pattern": "^[a-z][a-z0-9]*\\.[a-zA-Z][a-zA-Z0-9]*$" },
     "OpName": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]*$" },
     "Params": {
       "type": "object",

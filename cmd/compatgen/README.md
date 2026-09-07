@@ -115,6 +115,13 @@ entries and the gap report.
   so the shortest match for `^arn:aws:.*` is a well-formed ARN of something
   that does not exist. The emulator accepts far more of those than AWS does,
   which is the class of value §3.10 says belongs in the gap report.
+- Reshape a bound value. Rule 1 hands the member what the export holds, or
+  that value inside a **one-element list** where the service models the member
+  as a list of it — ELB Classic's `LoadBalancerNames` beside the singular
+  `LoadBalancerName`, written `"LoadBalancerNames": ["loadbalancer.name"]`.
+  One level of wrapping is the whole of it: no second element, no nesting and
+  no conversion. A wrap the model contradicts is an error naming the member,
+  not a refusal, exactly as a mistyped literal in `params` is.
 - Point a probe at anything the run owns. A probe is the one generated call
   no create/delete pair contains, so rules 1 and 2 are off inside a probe
   group: it binds only curated or synthetic literals. A member only a live
@@ -477,10 +484,12 @@ rewrites `testdata/golden/scenarios_widgets_gen.go.golden`,
 `testdata/golden/ScenariosWidgetsGen.java.golden` and
 `testdata/golden/ScenariosWidgetsGen.cs.golden`. Read the diff
 before committing it — the golden file is the review artifact for what the
-emitter writes, and one regenerated without being read proves nothing. Its seven resources between
-them carry every recipe role — a full lifecycle, two pre-existing resources, a
+emitter writes, and one regenerated without being read proves nothing. Its eight resources between
+them carry every recipe role — a full lifecycle, three pre-existing resources, a
 setup-only resource whose create cannot be bound and one that requires it,
-authored operations, an authored create assertion, an async budget, and every
+authored operations, an authored create assertion, an async budget, a
+list-shaped identifier bound from a scalar export through a one-element-list
+`binds` entry (ELB Classic's `LoadBalancerNames`), and every
 tag shape `detectTagShape` accepts: a string map, a list of `{Key, Value}`
 structures, a list of `{TagKey, TagValue}` structures (KMS's spelling), and an
 untag member that takes a list of key-only structures instead of bare strings

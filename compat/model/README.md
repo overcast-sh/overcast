@@ -689,7 +689,7 @@ against the real AWS API.
 | `create.assert` | authored clauses that verify the create in place of the derived read-back and list-membership, for a resource whose read cannot simply be replayed. At least one of them must call the service again, or the create is refused (`no-readback-path`): restating the create's own response is not a read-back |
 | `exports` | export name → path in the create response |
 | `derived` | exports that need a second call (an ARN only `GetQueueAttributes` returns); each becomes a read-back in the create test |
-| `binds` | input member name → context path, for every operation the resource takes part in — binding rule 1 |
+| `binds` | input member name → context path, for every operation the resource takes part in — binding rule 1. A path written inside a **one-element list** binds a member the service models as a list of what the export names, which is how ELB Classic's `AddTags`, `RemoveTags` and `DescribeTags` reach a load balancer whose only handle is the singular name. See [What a bind may reshape](#what-a-bind-may-reshape) |
 | `read` | the read-back: `identityPath` must equal the export `identity` names (or, without `identity`, match the model's pattern). `consuming: true` marks a read that changes state (`ReceiveMessage`); it is emitted once, as its own test, and never used as a read-back. `exports` take values from the read response |
 | `reads` | further reads, each its own test |
 | `list` | the list-membership check: an item at `itemsPath` whose `identityPath` equals the `identity` export. `itemsPath` is optional — see [What the generator derives](#what-the-generator-derives). Its own test runs last before delete; `exports` taken from that response are therefore the freshest values the delete can carry (SQS wants a delete to quote the most recent receipt handle) |
@@ -960,7 +960,7 @@ service and operation, with a stable reason:
 
 | Reason | Meaning |
 | --- | --- |
-| `unbound-required-member:<Member>` | no rule supplied a legal value; add a `binds` entry or a `values.json` literal |
+| `unbound-required-member:<Member>` | no rule supplied a legal value; add a `binds` entry — the one-element-list form where the member is a list of something the resource already exports — or a `values.json` literal |
 | `update-without-mutable` | an implemented Update/Set/Put/Tag/Untag operation with no `mutable` or `tags` entry |
 | `update-without-readback` | the same operation authored under `operations`, with no clause that calls the service again — it would assert only that the service echoed the request |
 | `no-readback-path` | the role exists but nothing can verify it: a create whose read, list and authored `create.assert` between them make no call of their own; a delete with neither `notFound` nor `list`, or one whose `notFound` has no non-consuming read to raise it; a mutation whose read consumes |
@@ -1004,6 +1004,31 @@ services omit an empty list member instead of serializing `[]` (SQS's
 `ListQueues` among them), and a probe run against real AWS must pass there
 too. An operation with two lists and no `items` to choose between them, or
 with nothing but a token, is refused (`no-output-to-assert`).
+
+### What a bind may reshape
+
+Binding rule 1 hands the member the value its context path holds, or that
+value inside a **one-element list**:
+
+```jsonc
+"binds": {
+  "LoadBalancerName":  "loadbalancer.name",    // DescribeLoadBalancers takes the singular…
+  "LoadBalancerNames": ["loadbalancer.name"]   // …AddTags the plural, from the same export
+}
+```
+
+One level of wrapping is the whole of it: no second element, no nesting, no
+conversion. It exists because several services take the resource identifier as
+a *list* on exactly the operations a `tags` role reaches — ELB Classic's
+`AddTags`, `RemoveTags` and `DescribeTags` all take `LoadBalancerNames`, while
+the load balancer's only handle is the singular name its
+`DescribeLoadBalancers` read answers with.
+
+The element's kind is checked against the export's, in the same pass that
+checks every other value, so a wrap the model contradicts — a list bind on a
+scalar member, or an export of the wrong kind — is an **error naming the
+member**, not a refusal. A recipe that contradicts the model is wrong; only a
+member nothing can supply is a gap.
 
 ### What a probe may bind
 

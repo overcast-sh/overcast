@@ -30,6 +30,11 @@ const GROUP_WIDGETS_GEN_VALVE: Group = Group {
     file: SCENARIO_FILE,
 };
 
+const GROUP_WIDGETS_GEN_HUB: Group = Group {
+    name: "widgets-gen-hub",
+    file: SCENARIO_FILE,
+};
+
 const GROUP_WIDGETS_GEN_SPROCKET: Group = Group {
     name: "widgets-gen-sprocket",
     file: SCENARIO_FILE,
@@ -337,6 +342,62 @@ impl ServiceGroup for ScenariosWidgets {
         {
             let client = self.client.clone();
             impls.insert(
+                "widgets-gen-hub:DescribeHub".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_WIDGETS_GEN_HUB
+                            .run_test(&ctx, "DescribeHub", test_widgets_gen_hub_describe_hub(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
+                "widgets-gen-hub:TagHub".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_WIDGETS_GEN_HUB
+                            .run_test(&ctx, "TagHub", test_widgets_gen_hub_tag_hub(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
+                "widgets-gen-hub:DescribeHubTags".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_WIDGETS_GEN_HUB
+                            .run_test(&ctx, "DescribeHubTags", test_widgets_gen_hub_describe_hub_tags(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
+                "widgets-gen-hub:UntagHub".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_WIDGETS_GEN_HUB
+                            .run_test(&ctx, "UntagHub", test_widgets_gen_hub_untag_hub(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
                 "widgets-gen-sprocket:CreateSprocket".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
@@ -504,6 +565,18 @@ impl ServiceGroup for ScenariosWidgets {
         {
             let client = self.client.clone();
             setups.insert(
+                "widgets-gen-hub".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_WIDGETS_GEN_HUB.run_setup(&ctx, setup_widgets_gen_hub(&client)).await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            setups.insert(
                 "widgets-gen-sprocket".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
@@ -562,6 +635,18 @@ impl ServiceGroup for ScenariosWidgets {
                     let client = client.clone();
                     Box::pin(async move {
                         GROUP_WIDGETS_GEN_VALVE.run_teardown(&ctx, teardown_widgets_gen_valve(&client)).await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            teardowns.insert(
+                "widgets-gen-hub".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_WIDGETS_GEN_HUB.run_teardown(&ctx, teardown_widgets_gen_hub(&client)).await
                     })
                 }),
             );
@@ -1563,6 +1648,208 @@ fn test_widgets_gen_valve_untag_valve(client: &aws_sdk_widgets::Client) -> Test 
                     },
                 }),
                 "$.Tags",
+                vec![
+                    scenario::where_entry("$.Key", scenario::lit(::serde_json::json!("compat"))),
+                ],
+            ),
+        ],
+    }
+}
+
+fn setup_widgets_gen_hub(_client: &aws_sdk_widgets::Client) -> Vec<Call> {
+    // An empty phase is a no-op, not a missing one.
+    Vec::new()
+}
+
+fn teardown_widgets_gen_hub(_client: &aws_sdk_widgets::Client) -> Vec<Call> {
+    // An empty phase is a no-op, not a missing one.
+    Vec::new()
+}
+
+fn test_widgets_gen_hub_describe_hub(client: &aws_sdk_widgets::Client) -> Test {
+    Test {
+        call: Call {
+            op: "DescribeHub",
+            params: scenario::lit(::serde_json::json!({})),
+            export: vec![
+                ("hub.name", "$.Hub.HubName"),
+            ],
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |_b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .describe_hub()
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::response_field(vec![
+                scenario::matches("$.Hub.HubName", "^h-[0-9a-f]{8}$"),
+            ]),
+        ],
+    }
+}
+
+fn test_widgets_gen_hub_tag_hub(client: &aws_sdk_widgets::Client) -> Test {
+    Test {
+        call: Call {
+            op: "TagHub",
+            params: scenario::map(vec![
+                ("HubNames", scenario::list(vec![scenario::context("hub.name")])),
+                ("Tags", scenario::lit(::serde_json::json!([{"Key": "compat", "Value": "scenario"}]))),
+            ]),
+            export: Vec::new(),
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .tag_hub()
+                            .hub_names(b.string("HubNames[0]")?)
+                            .tags(
+                                aws_sdk_widgets::types::SprocketTag::builder()
+                                    .key("compat")
+                                    .value("scenario")
+                                    .build()
+                            )
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::list_contains(
+                Some(Call {
+                    op: "DescribeHubTags",
+                    params: scenario::map(vec![
+                        ("HubNames", scenario::list(vec![scenario::context("hub.name")])),
+                    ]),
+                    export: Vec::new(),
+                    invoke: {
+                        let client = client.clone();
+                        scenario::invoker(move |b| {
+                            let client = client.clone();
+                            Box::pin(async move {
+                                let capture = scenario::Capture::new();
+                                let request = client
+                                    .describe_hub_tags()
+                                    .hub_names(b.string("HubNames[0]")?)
+                                    .customize()
+                                    .interceptor(capture.clone());
+                                Ok(scenario::observe(request.send().await, &capture))
+                            })
+                        })
+                    },
+                }),
+                "$.TagDescriptions[0].Tags",
+                vec![
+                    scenario::where_entry("$.Key", scenario::lit(::serde_json::json!("compat"))),
+                    scenario::where_entry("$.Value", scenario::lit(::serde_json::json!("scenario"))),
+                ],
+            ),
+        ],
+    }
+}
+
+fn test_widgets_gen_hub_describe_hub_tags(client: &aws_sdk_widgets::Client) -> Test {
+    Test {
+        call: Call {
+            op: "DescribeHubTags",
+            params: scenario::map(vec![
+                ("HubNames", scenario::list(vec![scenario::context("hub.name")])),
+            ]),
+            export: Vec::new(),
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .describe_hub_tags()
+                            .hub_names(b.string("HubNames[0]")?)
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::list_contains(
+                None,
+                "$.TagDescriptions[0].Tags",
+                vec![
+                    scenario::where_entry("$.Key", scenario::lit(::serde_json::json!("compat"))),
+                    scenario::where_entry("$.Value", scenario::lit(::serde_json::json!("scenario"))),
+                ],
+            ),
+        ],
+    }
+}
+
+fn test_widgets_gen_hub_untag_hub(client: &aws_sdk_widgets::Client) -> Test {
+    Test {
+        call: Call {
+            op: "UntagHub",
+            params: scenario::map(vec![
+                ("HubNames", scenario::list(vec![scenario::context("hub.name")])),
+                ("TagKeys", scenario::lit(::serde_json::json!(["compat"]))),
+            ]),
+            export: Vec::new(),
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .untag_hub()
+                            .hub_names(b.string("HubNames[0]")?)
+                            .tag_keys("compat")
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::absent_from_list(
+                Some(Call {
+                    op: "DescribeHubTags",
+                    params: scenario::map(vec![
+                        ("HubNames", scenario::list(vec![scenario::context("hub.name")])),
+                    ]),
+                    export: Vec::new(),
+                    invoke: {
+                        let client = client.clone();
+                        scenario::invoker(move |b| {
+                            let client = client.clone();
+                            Box::pin(async move {
+                                let capture = scenario::Capture::new();
+                                let request = client
+                                    .describe_hub_tags()
+                                    .hub_names(b.string("HubNames[0]")?)
+                                    .customize()
+                                    .interceptor(capture.clone());
+                                Ok(scenario::observe(request.send().await, &capture))
+                            })
+                        })
+                    },
+                }),
+                "$.TagDescriptions[0].Tags",
                 vec![
                     scenario::where_entry("$.Key", scenario::lit(::serde_json::json!("compat"))),
                 ],
