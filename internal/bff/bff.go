@@ -146,6 +146,11 @@ func NewHandler(staticFS, docsFS fs.FS, cfg UIConfig) http.Handler {
 	r.Get("/api/debug/traces", handleDebugTraces)
 	r.Get("/api/debug/traces/count", handleDebugTraceCount)
 	r.Get("/api/debug/traces/search", handleDebugTraceSearch)
+	// Compute debugger (docs/plans/compute-debugger.md § 6): the list and one
+	// target, status and body passed through — an unknown resource's 404 is
+	// what the console renders as "off".
+	r.Get("/api/debugger/targets", proxyJSONHandler("/_overcast/debugger/targets"))
+	r.Get("/api/debugger/targets/{service}/{resource}", handleDebuggerTarget)
 	r.Get("/api/lambda/runtimes", proxyJSONHandler("/_overcast/lambda/runtimes"))
 	r.Get("/api/lambda/layers/{layerName}/versions/{version}/metadata", handleLambdaLayerMetadata)
 	r.Get("/api/lambda/instances", handleLambdaInstances)
@@ -406,6 +411,20 @@ func proxyJSONHandler(path string) http.HandlerFunc {
 			return
 		}
 	}
+}
+
+// handleDebuggerTarget proxies GET /_overcast/debugger/targets/{service}/{resource},
+// carrying the optional ?container= an ECS task's containers are told apart by.
+// The emulator's status is passed through as-is: the synthesised "not tagged"
+// entry is a 200, and a resource no service can describe is a 404 the console
+// treats as "off" rather than as a failure.
+func handleDebuggerTarget(w http.ResponseWriter, r *http.Request) {
+	path := "/_overcast/debugger/targets/" + url.PathEscape(chi.URLParam(r, "service")) +
+		"/" + url.PathEscape(chi.URLParam(r, "resource"))
+	if container := r.URL.Query().Get("container"); container != "" {
+		path += "?container=" + url.QueryEscape(container)
+	}
+	proxyJSONHandler(path)(w, r)
 }
 
 func handleDebugState(w http.ResponseWriter, r *http.Request) {

@@ -20,8 +20,9 @@ import { decodeBase64Text } from "@/lib/base64"
 import { summarisePlatformRecords } from "@/lib/log-format"
 import { fieldLabel, sectionLabel } from "@/lib/typography"
 import { cn } from "@/lib/utils"
+import { InvokeDebugHint } from "@/features/debugger/components/invoke-debug-hint"
 
-export function TestTab({ name }: { name: string }) {
+export function TestTab({ name, timeoutSeconds }: { name: string; timeoutSeconds?: number }) {
   // Event state
   const [eventPayload, setEventPayload] = useState('{\n  "key": "value"\n}')
   const [jsonError, setJsonError] = useState<string | null>(null)
@@ -213,6 +214,9 @@ export function TestTab({ name }: { name: string }) {
 
       {/* ── Main content ── */}
       <div className="flex min-w-0 flex-1 flex-col gap-4">
+        {/* What the debugger does to the timeout — nothing while it is off. */}
+        <InvokeDebugHint service="lambda" resource={name} timeoutSeconds={timeoutSeconds} />
+
         {/* Event header: name + actions */}
         <div className="flex items-end gap-3">
           <div className="flex flex-1 flex-col gap-1">

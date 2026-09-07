@@ -56,6 +56,19 @@ export function formatPreciseTimeOfDay(value: number | string | Date): string {
   })
 }
 
+/**
+ * An elapsed time as the coarse "Xs ago" / "Xm ago" / "Xh ago" a live line
+ * wants — a map node's last invoke, a debugger's attached-since. Negative
+ * ages (a clock that is a little ahead of the server's) read as "0s ago".
+ */
+export function formatAge(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000))
+  if (s < 60) return `${s}s ago`
+  const m = Math.floor(s / 60)
+  if (m < 60) return `${m}m ago`
+  return `${Math.floor(m / 60)}h ago`
+}
+
 export function formatStorageClass(sc: string): string {
   return sc
     .replace(/_/g, " ")

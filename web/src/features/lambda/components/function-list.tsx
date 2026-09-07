@@ -20,6 +20,9 @@ import {
 import { ResourceTable, type ResourceTableSort } from "@/components/ui/resource-table"
 import { CreateFunctionWizard } from "./create-wizard"
 import { ServiceDocsButton, useDocsFromHash } from "@/features/docs/service-docs-modal"
+import { useDebugTargets } from "@/features/debugger/hooks"
+import { indexTargetsByResource } from "@/features/debugger/data"
+import { DebugStateBadge } from "@/features/debugger/components/debug-state-badge"
 import { cn } from "@/lib/utils"
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -43,6 +46,11 @@ export function FunctionList({ sort, onSortChange }: FunctionListProps = {}) {
     refetch,
     error,
   } = useQuery(lambdaFunctionsQueryOptions())
+
+  // One list query for every row's debug badge, polled while this page is
+  // mounted. A server without the endpoint errors, which reads as no targets.
+  const { data: debugTargets } = useDebugTargets()
+  const debugIndex = indexTargetsByResource(debugTargets, "lambda")
 
   const deleteMut = useResourceMutation({
     options: deleteFunctionMutationOptions(),
@@ -117,16 +125,22 @@ export function FunctionList({ sort, onSortChange }: FunctionListProps = {}) {
           },
           {
             header: "State",
-            cell: (fn) => (
-              <span
-                className={cn(
-                  "font-mono text-xs",
-                  fn.State === "Active" ? "font-medium text-success" : "text-fg-muted",
-                )}
-              >
-                {fn.State}
-              </span>
-            ),
+            cell: (fn) => {
+              const debug = debugIndex.get(fn.FunctionName ?? "")
+              return (
+                <span className="inline-flex items-center gap-2">
+                  <span
+                    className={cn(
+                      "font-mono text-xs",
+                      fn.State === "Active" ? "font-medium text-success" : "text-fg-muted",
+                    )}
+                  >
+                    {fn.State}
+                  </span>
+                  {debug && <DebugStateBadge state={debug.state} />}
+                </span>
+              )
+            },
           },
         ]}
         rowActions={(fn) => (

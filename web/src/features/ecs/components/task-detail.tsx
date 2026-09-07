@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Definition, DefinitionList } from "@/components/ui/definition-card"
 import { LogViewer } from "@/components/logs/log-viewer"
 import type { EcsContainer } from "@/types"
+import { DebugTargetPanel } from "@/features/debugger/components/debug-panel"
 
 export function TaskDetail({
   clusterName,
@@ -114,6 +115,7 @@ export function TaskDetail({
             {task.containers.map((c) => (
               <ContainerCard
                 key={c.name}
+                taskId={taskId}
                 taskArn={task.taskArn}
                 container={c}
                 initiallyShowLogs={
@@ -129,10 +131,12 @@ export function TaskDetail({
 }
 
 function ContainerCard({
+  taskId,
   taskArn,
   container,
   initiallyShowLogs,
 }: {
+  taskId: string
   taskArn: string
   container: EcsContainer
   initiallyShowLogs: boolean
@@ -207,6 +211,12 @@ function ContainerCard({
           </div>
         </div>
       )}
+
+      {/* Debugger — target id ecs/<taskId>/<container>; "off" until the task is tagged. */}
+      <div className="space-y-1.5">
+        <p className="font-mono text-xs font-medium text-fg-muted">Debugger</p>
+        <DebugTargetPanel service="ecs" resource={taskId} container={container.name} />
+      </div>
 
       {/* Environment variables — collapsible placeholder */}
       {/* ECS DescribeTasks doesn't return env vars directly, but we show the section if available */}

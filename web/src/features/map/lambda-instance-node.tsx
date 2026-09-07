@@ -11,6 +11,7 @@
 import { memo, useEffect, useRef, useState } from "react"
 import { FileText } from "lucide-react"
 import { fieldLabel } from "@/lib/typography"
+import { formatAge } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { ArnLink } from "@/components/ui/arn-link"
 import { SERVICES } from "@/lib/service-registry"
@@ -64,15 +65,6 @@ interface TriggerInfo {
   label: string
   arn?: string
   serviceKey?: keyof typeof SERVICES
-}
-
-/** Formats an age in ms as "Xs ago" / "Xm ago" / "Xh ago". */
-function fmtAgo(ms: number): string {
-  const s = Math.round(ms / 1000)
-  if (s < 60) return `${s}s ago`
-  const m = Math.floor(s / 60)
-  if (m < 60) return `${m}m ago`
-  return `${Math.floor(m / 60)}h ago`
 }
 
 /**
@@ -532,7 +524,7 @@ function TriggerRow({
       </span>
       <span
         className={cn("ml-auto shrink-0 font-mono tabular-nums", statusClass[status])}
-        title={`Last invoke ${fmtAgo(now - lastUsed)} (${durationLabel})`}
+        title={`Last invoke ${formatAge(now - lastUsed)} (${durationLabel})`}
       >
         {durationLabel}
       </span>

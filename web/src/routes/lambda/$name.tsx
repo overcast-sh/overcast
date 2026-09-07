@@ -1,5 +1,5 @@
 /**
- * Lambda function detail page — Overview, Code, Test, and Configuration tabs.
+ * Lambda function detail page — Overview, Code, Test, Debug, and Configuration tabs.
  */
 import { useState, useCallback, useEffect } from "react"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
@@ -21,6 +21,7 @@ import { VersionsTab } from "@/features/lambda/components/versions-tab"
 import { MonitorTab } from "@/features/lambda/components/monitor-tab"
 import { ConfigurationTab } from "@/features/lambda/components/configuration-tab"
 import { TriggersTab } from "@/features/lambda/components/triggers-tab"
+import { DebugTargetPanel } from "@/features/debugger/components/debug-panel"
 import { Tabs, TabList, Tab, TabPanel } from "@/components/ui/tabs"
 
 export const Route = createFileRoute("/lambda/$name")({
@@ -28,11 +29,12 @@ export const Route = createFileRoute("/lambda/$name")({
   component: FunctionDetail,
 })
 
-type TabKey = "code" | "test" | "versions" | "monitor" | "configuration" | "triggers"
+type TabKey = "code" | "test" | "debug" | "versions" | "monitor" | "configuration" | "triggers"
 
 const VALID_TABS = new Set<TabKey>([
   "code",
   "test",
+  "debug",
   "versions",
   "monitor",
   "configuration",
@@ -137,6 +139,7 @@ function FunctionDetail() {
         <TabList>
           <Tab id="code">Code</Tab>
           <Tab id="test">Test</Tab>
+          <Tab id="debug">Debug</Tab>
           <Tab id="versions">Versions</Tab>
           <Tab id="monitor">Monitor</Tab>
           <Tab id="configuration">Configuration</Tab>
@@ -160,7 +163,10 @@ function FunctionDetail() {
           />
         </TabPanel>
         <TabPanel id="test" className="pt-4">
-          <TestTab name={name} />
+          <TestTab name={name} timeoutSeconds={fn.Timeout ?? 3} />
+        </TabPanel>
+        <TabPanel id="debug" className="pt-4">
+          <DebugTargetPanel service="lambda" resource={name} />
         </TabPanel>
         <TabPanel id="versions" className="pt-4">
           <VersionsTab name={name} />
