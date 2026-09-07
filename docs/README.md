@@ -40,6 +40,7 @@ Credentials, regions and per-language client setup are in
 | [Service reference](./services/README.md) | What each AWS service supports, operation by operation |
 | [Networking and host-based addressing](./networking.md) | Host-routed endpoints, wildcard DNS, sibling containers, VPC isolation |
 | [The inner loop](./local-dev.md) | Editing a file and seeing it take effect — `cdk watch`, Lambda and ECS hot reload |
+| [Step debugging inside emulated compute](./debugger.md) | Attaching VS Code, a JetBrains IDE or Chrome DevTools to code running inside a Lambda function or ECS task |
 | [HTTPS and HTTP/2](./https.md) | Browser-trusted TLS in two commands, in Docker, and by hand |
 
 ## Tune and inspect
