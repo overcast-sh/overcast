@@ -37,3 +37,7 @@ iam
 # scenario is held to the model exactly as a generated one is, so the port
 # needs the service's shapes committed.
 eventbridge
+# compat-coverage-modelgen G6 wave 1 (#1116): the hand-written groups being
+# ported to authored IR scenarios. An authored scenario is held to the model
+# exactly as a generated one is, so its service needs a snapshot.
+cloudwatch-logs

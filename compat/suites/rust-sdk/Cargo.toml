@@ -7,6 +7,12 @@ edition = "2021"
 aws-config = "=1.5.10"
 aws-credential-types = "=1.3.0"
 aws-sdk-batch = "=1.126.0"
+# Added with the authored logs-groups port (#1116): emit_rust.go writes
+# aws_sdk_cloudwatchlogs calls for it, and a crate this suite does not depend on
+# is a build failure here rather than a generation-time refusal. 1.57.0 is the
+# release of the same vintage as its neighbours below, so it resolves under the
+# aws-smithy-runtime-api and aws-smithy-types pins without moving them.
+aws-sdk-cloudwatchlogs = "=1.57.0"
 aws-sdk-dynamodb = "=1.56.0"
 aws-sdk-elasticloadbalancing = "=1.111.0"
 aws-sdk-eventbridge = "=1.54.0"

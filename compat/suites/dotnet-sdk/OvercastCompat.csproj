@@ -32,6 +32,7 @@
        above, so this bump moves nothing else. -->
   <ItemGroup>
     <PackageReference Include="AWSSDK.Batch" Version="4.0.102.3" />
+    <PackageReference Include="AWSSDK.CloudWatchLogs" Version="4.0.0" />
     <PackageReference Include="AWSSDK.Core" Version="4.0.102.3" />
     <PackageReference Include="AWSSDK.DynamoDBv2" Version="4.0.0" />
     <PackageReference Include="AWSSDK.ElasticLoadBalancing" Version="4.0.100.12" />
