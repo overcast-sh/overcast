@@ -435,28 +435,41 @@ at full operation depth (§3.9).
 >
 > | Service | Bytes | Ops | B/op | Implemented ops | impl/KB |
 > | --- | ---: | ---: | ---: | ---: | ---: |
-> | `secretsmanager` | 32,256 | 46 | 701 | 19 | 0.603 |
-> | `sns` | 43,009 | 84 | 512 | 22 | 0.524 |
-> | `iam` | 181,071 | 360 | 503 | 74 | 0.418 |
-> | `kms` | 86,962 | 108 | 805 | 34 | 0.400 |
+> | `secretsmanager` | 32,256 | 23 | 1,402 | 19 | 0.603 |
+> | `sns` | 43,009 | 42 | 1,024 | 22 | 0.524 |
+> | `iam` | 181,071 | 180 | 1,006 | 74 | 0.418 |
+> | `kms` | 86,962 | 54 | 1,610 | 34 | 0.400 |
 > | `cognito-idp` | 197,617 | 264 | 749 | 70 | 0.363 |
 > | `lambda` | 188,486 | 176 | 1,071 | 61 | 0.331 |
 > | `dynamodb` | 122,247 | 116 | 1,054 | 21 | 0.176 |
 > | `s3` | 246,352 | 112 | 2,200 — over the 1,608 gate | 45 | 0.187 |
 > | `ec2` | 1,899,684 | 1,602 | 1,186 | 79 | 0.043 |
 >
-> **Wave 2 = `secretsmanager`, `sns`, `kms`, `iam`**: 343,298 B / 598 ops / 574
-> B/op / 149 implemented operations combined. The committed snapshot — five
-> services, 307,535 B today, inside the 336 KiB budget
+> **Correction, 2026-09-08:** the `Ops` and `B/op` values for the four wave-2
+> rows above were double-counted when this note was first written; `iam` is
+> **180** modeled operations, not 360, and the same halving applies to
+> `secretsmanager` (23), `sns` (42) and `kms` (54) — each service's own recipe
+> PR states the true count independently (#1897, #1900, #1899, #1919). `B/op`
+> is recomputed from the corrected count, roughly doubling each of the four.
+> `impl/KB`, the column that actually chose the wave, divides implemented
+> operations by snapshot bytes and never read the wrong count, so the ranking
+> and the wave it produced stand unchanged. The other five rows were produced
+> by the same measurement run and are plausibly halved the same way, but no
+> merged PR has independently re-stated their true operation counts, so they
+> are left as measured rather than corrected on an assumption.
+>
+> **Wave 2 = `secretsmanager`, `sns`, `kms`, `iam`**: 343,298 B / 299 ops /
+> 1,148 B/op / 149 implemented operations combined. The committed snapshot —
+> five services, 307,535 B today, inside the 336 KiB budget
 > `internal/awsapi/shapes_provenance_test.go` enforces — would grow to
 > 650,833 B, so `maxShapeSnapshotBytes` needs raising once, deliberately, to
 > 800 KiB (650,833 B × ~1.26 headroom, the same factor `inert-tier-rollout.md`
 > §4.6 used to set 336 KiB): 2.6% of the 24 MiB fleet ceiling. Landing order:
 > one PR adds the four snapshots and the budget raise, then one recipe PR per
 > service — `secretsmanager`, `sns`, `kms` in parallel, `iam` after (it alone
-> is 360 operations). **The snapshot/budget PR merged as #1891** (2026-09-07;
-> merged at this writing, and unreflected in the tree this note was checked
-> against); none of the four recipe PRs is open yet.
+> is 180 operations). **The snapshot/budget PR merged as #1891** (2026-09-07).
+> All four recipe PRs are merged too, as of the dated note below — wave 2 is
+> done.
 >
 > Two findings for `inert-tier-rollout.md`, not blockers here: `s3` is the
 > only measured service over the per-op gate, and needs structural pruning or
@@ -470,6 +483,80 @@ at full operation depth (§3.9).
 > `inert-tier-rollout.md` §4.6 citing a stale model revision (`66e973ca`);
 > `models/aws/VERSION` now pins `06544fdc`, though the five committed
 > snapshots still total exactly 307,535 B either way.
+
+> **G4 wave 2 is done, 2026-09-07.** All four recipe PRs are merged:
+> `secretsmanager` (#1897), `sns` (#1900), `kms` (#1899), `iam` (#1919, the
+> wave's largest at 180 modeled operations). Each is the first generated
+> corpus entry for a service Overcast actually implements, so results are
+> real `pass`/`fail` rather than wave 1's uniform `unimplemented`/`skip`:
+>
+> | Service | Groups / tests | pass | fail | unimplemented |
+> | --- | --- | ---: | ---: | ---: |
+> | `secretsmanager` | 2 / 18 | 18 (17 in `rust-sdk`) | 0 (1 in `rust-sdk`, below) | 0 |
+> | `sns` | 3 / 29 | 16 | 2 | 11 |
+> | `kms` | 2 / 37 | 32 | 1 | 4 |
+> | `iam` | 6 / 113 | 72 | 2 | 39 |
+>
+> `secretsmanager` held 18/18 in `go-sdk`, `cli`, `python-sdk` and
+> `node-js-sdk`; `rust-sdk` read 17/18 (one fidelity defect, below); `java-sdk`
+> and `dotnet-sdk` compiled and ran but could not reach the emulator from the
+> Windows host the PR was verified on (`--network host` does not reach
+> loopback there), so both are unconfirmed rather than failing — a
+> platform-specific gap, not a defect. Wall clock was seconds per run
+> throughout except `iam`'s `cli` suite, which spawns a process per call and
+> averaged ~45 s across three runs; `iam`'s `go-sdk` runs stayed under 3 s.
+>
+> Every failure and every unconfirmed-by-design gap is a filed emulator
+> defect, never a recipe fault: `secretsmanager` — #1901 (`DescribeSecret`
+> serialises unset `Tags`/`Description` as `null`/`""` instead of omitting
+> them) and #1902 (`DeleteSecret` ignores `RecoveryWindowInDays`, and a forced
+> delete of an already-deleted secret answers `ResourceNotFoundException`
+> where AWS does not); `sns` — #1911 (`ConfirmSubscription` accepts any token
+> and answers with an ARN for a subscription that never existed) and #1912
+> (`CreateTopic` ignores its `Attributes` map); `kms` — #1906 (`KeyMetadata`
+> omits `AWSAccountId` on `CreateKey`/`DescribeKey`) and #1907 (six further
+> wire divergences found while authoring the recipe); `iam` — #1920 (both
+> failures: `PermissionsBoundaryType` is emitted as the enum member name
+> `Policy` instead of AWS's wire value `PermissionsBoundaryPolicy`).
+> Generator/IR findings, filed rather than worked around in a recipe: #1908
+> (go-sdk's failure message renders the SDK input struct, not the evaluated
+> params), #1909 — **fixed by #1917**, `detectTagShape` now accepts KMS's
+> `{TagKey, TagValue}` tags and ELB's key-only untag lists, #1910 (a `$ref`
+> bound to a blob member is refused only by the four source emitters, so the
+> refusal silently narrows a group's `suites` rather than surfacing in
+> `gaps.json`), #1921 and #1922 (added to §7 below), #1923 — **fixed by
+> #1926**, `binds` now wraps a scalar export into a list member, #1924 —
+> **fixed by #1928**, hand-written harnesses now classify `unimplemented` by
+> HTTP status rather than by "501" appearing in composed failure text.
+
+> **Promotion, 2026-09-07.** The hand-triggered nightly (run 34066538988)
+> gated ten clean wave-1/wave-2 groups via #1925 — `batch-gen-probe`,
+> `elastic-load-balancing-gen-probe`, `iam-gen-group`,
+> `iam-gen-instanceprofile`, `iam-gen-policy`, `iam-gen-probe`,
+> `kms-gen-probe`, `secretsmanager-gen-version`, `servicediscovery-gen-probe`,
+> `sns-gen-probe` — bringing the gated total to 19 (nine already gated from
+> the pilot: the five `organizations-*` groups and four `sqs-*` groups). The
+> sixteen groups still `candidate` in `compat/model/promotions.json` either
+> carry a known defect failure (`iam-gen-role`, `iam-gen-user` — #1920;
+> `kms-gen-key` — #1906; `secretsmanager-gen-secret` — #1901; `sns-gen-topic`,
+> `sns-gen-subscription` — #1911, #1912) or are still Tier-0 `skip` groups
+> awaiting their service's inert-tier implementation: `batch-gen-*` (five
+> groups), `elastic-load-balancing-gen-loadbalancer` and
+> `-loadbalancerpolicy`, `servicediscovery-gen-instance`, `-namespace` and
+> `-service`.
+
+> **G3 follow-ups landed, 2026-09-07.** #1917 fixed #1909 (above). #1918
+> fixed #1896 — every backend now reads a nested `Error.Code`, both a Query
+> `<ErrorResponse><Error><Code>` and a REST-XML bare `<Error><Code>` body,
+> proved by a shared fixture — closing the gap the §5 G4 row named as
+> blocking before the first Query/REST-XML service reached Tier 1 (`sns` and
+> `iam` are both Query-protocol, and are the proof). #1926 fixed #1923
+> (above); the ELB and KMS tag trios move to the derived `binds` path and
+> regenerate byte-identically. #1928 fixed #1924 (above). #1894 landed the
+> `rust-sdk` XML→document conversion, closing #1878. #1895 closed #1865: one
+> convention for where the shared error-fixture corpus runs, across all four
+> typed backends (§7). #1930 is filed, not landed: the suite modules have no
+> lint/format gate of their own.
 
 Counts below were computed from the checked-in generated artifacts, not from
 `STATUS.md` — **`STATUS.md` prose is stale** (it describes Shield as "Stub — all
@@ -1252,8 +1339,11 @@ those exercise SDK client code paths the interpreter/generated-source path does
 not touch. An entry without a reason, or a reason the IR has since learned to
 express, fails the lint.
 
-**Migration of the existing 94 groups / 496 tests**, group by group, any time
-after the relevant backends exist (G3):
+**Migration of the existing hand-written groups**, group by group, any time
+after the relevant backends exist (G3) — 94 groups / 496 tests when this
+section was proposed (2026-08-03); **141 groups / 803 tests as of 2026-09-08**
+(`compat/suites/registry.json`), since hand-written coverage kept growing
+independently of this migration:
 
 1. Author the IR scenario under the **same registry group/test names** — the
    names are the join keys, so baseline history, dashboard history, and
@@ -1340,6 +1430,61 @@ name"**. `matches` takes a fixed pattern and cannot embed a `$name`, so
 `rust-sdk`'s "the queue URL contains the queue name" has no direct spelling.
 Here the list-membership clause is strictly stronger and the loss is nil, but a
 later port may not be so lucky.
+
+#### 2026-09-07 — the first flip, and the two-PR shape of a port
+
+`sqs-queues` is the first flip (#1932, `ee7a2d35`, closing the prerequisites
+tracker #1903): the seven native implementations are deleted, the
+hand-written `sqs-queues` entry in `registry.json` now names
+`compat/model/authored/sqs-queues.json`, and `registry.generated.json`'s
+`ported` index carries the group with all seven `suites`. 1,161 native lines
+went with it (rust 328, cli 184, node 180, go 178, dotnet 121, python 100,
+java 70). Results: 8/8 `pass` in every suite, matching the shadow's own
+soak — three nightly runs of `--compare-shadow` (run 34066538988), 56
+(suite, test) pairs agreeing each time — that the flip PR cited rather than
+re-proved.
+
+**A port is two PRs with a soak between them**, and neither PR alone is the
+migration (`compat/model/README.md` § Authored scenarios): the shadow PR
+authors the scenario under `<group>-shadow`, `candidate`, running beside the
+natives it will replace and gating nothing; one nightly cycle of
+`--compare-shadow` either reports zero divergences or blocks the flip; the
+flip PR then makes the group's registry entry and the generated artifacts
+agree — rename `<group>-shadow` → `<group>`, point the hand-written entry at
+the scenario, delete the native implementations with their setup/teardown
+hooks, regenerate so the group moves from `registry.generated.json`'s
+`groups` into its `ported` index, and leave `compat/baseline/` untouched
+because the names never moved. #1932 found a sixth thing the flip needs that
+the README's five-edit list did not name: inverting every corpus guard test
+that still asserted no port had happened yet
+(`cmd/compat/ported_test.go`, `cmd/compatgen/ported_test.go`,
+`scripts/validate_compat_registry_test.py`, and the python-sdk/node-js-sdk
+registry tests) — now recorded there.
+
+**The prediction on #1903 needs one correction.** `sqs-queues` carried no
+`dotnet-sdk`/`rust-sdk` parity debt going in — all seven baseline rows were
+already `pass` — so the flip closes no debt row by itself; the measurable
+gain is strictly the union of assertions the pilot found missing above
+(`java-sdk` asserting nothing for four of eight tests, `rust-sdk`'s
+`SetQueueAttributes` with no read-back). Debt closes with the groups G6 wave 1
+chose next.
+
+**G6 wave 1 chosen, 2026-09-08** (#1116 comment). Ranked hand-written groups
+by `dotnet-sdk`+`rust-sdk` baseline rows the port would close, divided by
+estimated effort, restricted to groups the current IR can already express —
+six groups, 94 rows total: `kinesis-streams`, `logs-groups`,
+`eventbridge-rules`, `ecs-clusters`, `cognito-userpools`, `rds-instances`.
+Deferred: the five-resource `ec2-vpc`/`ec2-instances` chain (the highest raw
+debt, 30/20 rows, but the biggest port — next wave); `pipes-wiring` and
+`eventbridge-target-fanout`, which need a scenario to set up a resource of
+*another* service, an IR gap the current single-service authored format
+cannot express, filed as **#1931**; the `iam-*` family, which needs #1922's
+`equalsJSON` and whose operations the generated `iam` recipe (#1919) already
+covers; and the cli-only groups (`msk`, `eks`, `backup`, `opensearch`,
+`appconfig`, `ecr` — the largest raw debt, up to 32 rows each), whose
+expressibility has to be read from the cli implementation rather than assumed
+from go-sdk's. Each port follows the two-PR shape above; ranks 1–3 start
+first.
 
 ---
 
@@ -1836,9 +1981,9 @@ original scope stays legible.
 | **G1** Model layer | **Done** — `internal/awsmodel` #1359, shape snapshot via inert-tier I1 with `sqs` added in #1684, `cmd/compatgen` and `compat/model/` in #1709. The model-utilisation follow-ups (#1795, closed) then moved three derivations out of the recipes and into the generator — see the §2 note | Extract `internal/awsmodel` AST reader; `cmd/compatgen` skeleton; the pruned shape snapshot `models/aws/shapes/` + `shapes-sha256` (shared deliverable with [inert-tier-rollout.md](./inert-tier-rollout.md) Phase I1 — build once, whichever plan gets there first); IR + recipe JSON schemas; `--scaffold`, `--review-report`, `--explain`; `gaps.json` | M | `make compat-model-check` regenerates byte-identically offline; the sha gate catches a hand edit; the snapshot is within its size budget; scaffolding a service produces a recipe skeleton a human can complete |
 | **G2** Pilot | **Done**, tracked as **#1768** (closed 2026-09-06). All three interpreters are merged — `python-sdk` #1787, `node-js-sdk` #1788 (+ #1796), `cli` #1790 — and the seven pilot groups run in all three suites with zero failures, identical across three runs, inside the §4.3 budget; the §2 note has the tally. Every §4.1 criterion and §4.2's 1–3 are met. #1813, the §4.2 criterion 5 regeneration demonstration, is met (#1818 then #1813): regeneration changed no byte of the corpus and the generated OU tests started passing on their own, in all three interpreters. The first candidate → gated promotion (machinery #1792/#1798) happened on 2026-09-06 as #1871, gating all nine groups; #1879 made the gate test state-aware. #1801 landed as #1823 | `python-sdk`, `node-js-sdk` and `cli` interpreters; `recipes/sqs.json` + `recipes/organizations.json`; the §4 acceptance criteria | L | Every §4.1 and §4.2 criterion met, including the regeneration demonstration in §4.2.5 |
 | **G3** Typed backends | **Done**, tracked as **#1820**. All four typed backends landed, one PR each: `go-sdk` (#1830, plus #1836 for emit-time SDK type resolution and #1833 for the precedent notes), `java-sdk` (#1851), `dotnet-sdk` (#1848), `rust-sdk` (#1853). Every backend produces results identical, test for test, to the three interpreters and to each other — 39 `pass` / 23 `unimplemented` / 0 `fail` / 0 `skip`, three runs each — and every generated group's `suites` now lists all seven backends. §3.2's binding decision, measured rather than assumed: only `go-sdk` reads the vendored SDK at emit time; `java-sdk`, `dotnet-sdk` and `rust-sdk` derive types from the pinned model alone. G4 fleet rollout is unblocked; see the §2 note dated 2026-09-06 | Source emitters for `go-sdk`, then `java-sdk`, `dotnet-sdk`, `rust-sdk` (one suite per PR); member→field naming rules per language | L each | Generated source compiles in the suite's normal build; the pilot groups produce **identical** results to the interpreter suites; generated `suites` scoping widens automatically on regeneration |
-| **G4** Tier-1 fleet rollout | **In progress**, tracked as **#1883**. **Wave 1 done** at Tier 0 (2026-09-07): `batch` #1881, `elastic-load-balancing` #1882 (+ classification fix #1889, closing #1884), `servicediscovery` #1887 — the inert tier's Phase I4 pilot trio, stacked bottom-up and merged. Every probe test lands `unimplemented` and every lifecycle group `skip` until the inert tier implements each service (the #1818 → #1821 precedent) — measured 0 `pass` / 0 `fail` in all three, batch 11 `unimplemented`/34 `skip`, servicediscovery 3/25, elastic-load-balancing 5/12; see the §2 note dated 2026-09-07 for the per-service table and the four generator faults the wave found. The 13 new groups are `candidate`, pending the wave's first nightly promotion. **Wave 2 chosen by measurement** (#1883, 2026-09-07): `secretsmanager`, `sns`, `kms`, `iam`, selected by implemented-operations-per-snapshot-byte rather than by smallest operation count; its snapshot/budget PR (`maxShapeSnapshotBytes` to 800 KiB) merged as #1891, and the `secretsmanager`, `sns` and `kms` recipe PRs are in flight (`iam` follows). Known gap before any Query/REST-XML service reaches Tier 1: #1878 (rust-sdk XML → document); the rust nested-composite fault (#1885) is fixed by #1890, so no group is scoped away from `rust-sdk` any more; and #1896 (only `rust-sdk` reads a nested `Error.Code`) must land before the first Query service reaches Tier 1 | One service per PR, ordered by [inert-tier-rollout.md](./inert-tier-rollout.md) then [full-emulation-priority.md](./full-emulation-priority.md); capped probe groups for [services-never-emulated.md](./services-never-emulated.md) | L, parallelizable per service | Per service: recipe reviewed, no unexplained refusal in `gaps.json`, soak passed, CI wall-clock within budget, coverage metric moves |
+| **G4** Tier-1 fleet rollout | **In progress**, tracked as **#1883**. **Wave 1 done** at Tier 0 (2026-09-07): `batch` #1881, `elastic-load-balancing` #1882 (+ classification fix #1889, closing #1884), `servicediscovery` #1887 — the inert tier's Phase I4 pilot trio, stacked bottom-up and merged. Every probe test lands `unimplemented` and every lifecycle group `skip` until the inert tier implements each service (the #1818 → #1821 precedent) — measured 0 `pass` / 0 `fail` in all three, batch 11 `unimplemented`/34 `skip`, servicediscovery 3/25, elastic-load-balancing 5/12; see the §2 note dated 2026-09-07 for the per-service table and the four generator faults the wave found. **Wave 2 done** (#1883, 2026-09-07): `secretsmanager` (#1897), `sns` (#1900), `kms` (#1899), `iam` (#1919, 180 modeled operations), chosen by implemented-operations-per-snapshot-byte rather than by smallest operation count; its snapshot/budget PR (`maxShapeSnapshotBytes` to 800 KiB) merged as #1891. Ten of the 26 new wave-1/wave-2 groups are gated on `main` (#1925); the rest stay `candidate` behind a known defect or a Tier-0 skip — see the §2 notes dated 2026-09-07 for per-service results, every defect filed, and the exact list. `elastic-load-balancing`'s rust nested-composite fault (#1885) is fixed by #1890, and #1896 (only `rust-sdk` read a nested `Error.Code`) is fixed by #1918 — `sns` and `iam`, both Query-protocol, are the proof — so no wave-1 or wave-2 group is scoped away from `rust-sdk` or blocked on Query error handling any more | One service per PR, ordered by [inert-tier-rollout.md](./inert-tier-rollout.md) then [full-emulation-priority.md](./full-emulation-priority.md); capped probe groups for [services-never-emulated.md](./services-never-emulated.md) | L, parallelizable per service | Per service: recipe reviewed, no unexplained refusal in `gaps.json`, soak passed, CI wall-clock within budget, coverage metric moves |
 | **G5** Steady state | Not started | Weekly model-refresh PR regenerates scenarios; coverage becomes the dashboard headline; `--slowest N` latency census | S | A model-refresh PR shows added/removed operations per service and cannot break the gate; coverage per service/tier is published |
-| **G6** Native-group migration (§3.11; overlaps G4/G5, starts any time after G3) | **In progress** — the mechanism landed with the pilot (#1898) and its prerequisites (#1916), and the first group is ported: `sqs-queues` (#1903, 2026-09-07), after the nightly `--compare-shadow` (run 34066538988) reported all 56 (suite, test) pairs in agreement in each of its three soak runs. One authored scenario replaced seven native implementations; the registry and baseline names did not move — all seven suites' `sqs-queues` rows were `pass` before the flip and stay `pass` — and `java-sdk` and `rust-sdk` gain the clauses their natives omitted | Port the existing 94 hand-written groups to authored IR scenarios, group by group: same registry names, one parallel soak cycle, results must match, then delete the per-language code. Exceptions file + lint for what stays native (streaming, presigned flows, the idiom suite). | L, parallelizable per group | Per group: soak-parity with the native predecessor, native code deleted, registry names unchanged; fleet-wide: rust/dotnet parity debt reaches zero via backends, the exceptions file is the only remaining native test code and every entry carries a reason |
+| **G6** Native-group migration (§3.11; overlaps G4/G5, starts any time after G3) | **In progress** — the mechanism landed with the pilot (#1898) and its prerequisites (#1916), and the first flip is merged: `sqs-queues` (#1932, closing the prerequisites tracker #1903, 2026-09-07), after the nightly `--compare-shadow` (run 34066538988) reported all 56 (suite, test) pairs in agreement in each of its three soak runs. The flip deleted 1,161 native lines across all seven suites and left every suite's `sqs-queues` row `pass` (8/8); the registry and baseline names did not move. `sqs-queues` carried no `dotnet-sdk`/`rust-sdk` parity debt going in, so the measurable gain is the union of assertions — `java-sdk` and `rust-sdk` gain the clauses their natives omitted. **G6 wave 1 chosen** (#1116, 2026-09-08): `kinesis-streams`, `logs-groups`, `eventbridge-rules`, `ecs-clusters`, `cognito-userpools`, `rds-instances` — 94 `dotnet-sdk`+`rust-sdk` rows; cross-service groups (`pipes-wiring`, `eventbridge-target-fanout`) wait on #1931. See the §3.11 notes dated 2026-09-07/08 for the two-PR shape and what the pilot found in the natives. The plan's original "94 hand-written groups" scope (below) is itself stale: `registry.json` has 141 groups / 803 tests as of 2026-09-08 | Port the existing 94 hand-written groups to authored IR scenarios, group by group: same registry names, one parallel soak cycle, results must match, then delete the per-language code. Exceptions file + lint for what stays native (streaming, presigned flows, the idiom suite). | L, parallelizable per group | Per group: soak-parity with the native predecessor, native code deleted, registry names unchanged; fleet-wide: rust/dotnet parity debt reaches zero via backends, the exceptions file is the only remaining native test code and every entry carries a reason |
 
 Every phase begins with a failing check, lands as small independently
 reviewable PRs, and leaves `main` green under both existing gates.
@@ -1945,7 +2090,8 @@ Done means all of the following hold simultaneously:
    per-service cadence, because the cost of the heuristic scales with the
    allowlist and the exceptions are hand-written.
 9. **The shared error-fixture corpus runs in two different places across the
-   four typed backends — added 2026-09-06, filed as #1865.** `go-sdk` answers
+   four typed backends — added 2026-09-06, filed as #1865; resolved
+   2026-09-06 by #1895.** `go-sdk` answers
    `compat/model/testdata/errors` from a root checkout, in
    `compat-suite-unit-tests` plus a host `go test`; `java-sdk` and `rust-sdk`
    answer it in the same job (`mvn -B test` / `cargo test`, from the checkout)
@@ -1960,7 +2106,12 @@ Done means all of the following hold simultaneously:
    the gap #1851's review found: `java-sdk`'s fixture test asserted nothing on
    every push, because `compat-suite-unit-tests` excluded it on the assumption
    that the image build already covered it, and the image build's context
-   could not reach the corpus at all.
+   could not reach the corpus at all. **#1895 moved every fixture test into
+   `compat-suite-unit-tests` from a full checkout** — `dotnet-sdk`'s image
+   context reverted to `compat/suites/` to match `java-sdk`/`rust-sdk` — and
+   gated all of them behind `OVERCAST_COMPAT_FIXTURES_REQUIRED`, set only for
+   that job: found and required there, skipped by name (with a reason) inside
+   a narrower image build, and never silently vacuous either way.
 10. **`$name` can exceed an AWS length limit the model never declares — added
     2026-09-07, filed as #1886.** The IR's name-hygiene rule (§2.4, §3.3)
     fixes `$name` as `{runId}-{group}-{suffix}`, and a recipe has no shorter
@@ -1975,14 +2126,42 @@ Done means all of the following hold simultaneously:
     `$name` scheme, and the second changes every generated name in the corpus
     at once — not a decision for one recipe PR. Decide the corpus-wide
     spelling before a second service with a comparable cap lands.
-11. **Two G4 wave 1 follow-ups remain open, both filed 2026-09-06, neither
-    blocking.** #1885: the rust emitter cannot spell a composite nested inside
+11. **Two G4 wave 1 follow-ups, both filed 2026-09-06, both now fixed.**
+    #1885: the rust emitter cannot spell a composite nested inside
     a structure literal, which costs `batch-gen-jobdefinition`,
     `elastic-load-balancing-gen-loadbalancer` and
     `servicediscovery-gen-service` their `rust-sdk` row until it lands — a
-    fix merged as #1890 on 2026-09-07. #1878: `rust-sdk` needs an
+    fix merged as #1890 on 2026-09-07. #1878: `rust-sdk` needed an
     XML→document conversion before a Query or
-    REST-XML service reaches Tier 1 — it blocks nothing generated so far, but
-    will block `elastic-load-balancing`'s own inert-tier implementation from
-    reaching `rust-sdk` parity. See the §2 note dated 2026-09-07 for what each
-    currently costs.
+    REST-XML service could reach Tier 1 — it blocked nothing generated at the
+    time, but would have blocked `elastic-load-balancing`'s own inert-tier
+    implementation, and later `sns`'s and `iam`'s generated groups, from
+    reaching `rust-sdk` parity. **Fixed 2026-09-06 by #1894**, which builds
+    the rust-sdk scenario document from Query/REST-XML wire bodies as well as
+    JSON. See the §2 note dated 2026-09-07 for what each cost while open.
+12. **A member-less new operation could scope a whole probe group away from
+    one suite, not just itself — added 2026-09-07, filed as #1921.** The
+    existing lever for "the pinned SDK predates this operation" is indirect:
+    withhold a required member's `values.json` literal so the probe is
+    refused `unbound-required-member` (kms's `GetKeyLastUsage`, iam's
+    `GetRoleTemplateVersion`). An operation with no required member has no
+    such lever — iam's `GetAccountProperties` (added to the model in 2026)
+    would be probed automatically, `go-sdk` would refuse it at emit time and
+    take the whole probe group's `go-sdk` row with it, and `java-sdk`,
+    `dotnet-sdk` and `rust-sdk` would each emit a call their SDK cannot
+    compile; the iam recipe (#1919) parks it under `never-probe` with a
+    sentence explaining the pin, which is a safety list carrying a pin fact.
+    #1921 asks for a first-class `sdk-older-than-model:<Op>` refusal,
+    declared per operation and lint-checked to name the pin that lifts it, so
+    `never-probe` goes back to being only about safety.
+13. **The IR cannot compare a member the SDKs deserialize differently —
+    added 2026-09-07, filed as #1922.** IAM's five `policyDocumentType`
+    members are URL-encoded JSON strings on the wire; botocore's
+    `json_decode_policies` hook decodes them, so `python-sdk` and `cli` see an
+    object where `go-sdk`'s field is a `*string` — measured on #1919 (`aws iam
+    get-role` prints an object). `equals` is strict JSON-type equality, so no
+    clause can assert the document's content across all seven suites, and the
+    iam recipe asserts none. #1922 asks for an `equalsJSON` check kind: both
+    sides parsed as JSON (a string operand URL-decoded first) and compared
+    structurally, so the same clause holds regardless of which shape the
+    backend saw.
