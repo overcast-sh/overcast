@@ -24,20 +24,20 @@ func ScenariosAuthoredSqsQueues(c *clients.Clients) ServiceGroup {
 	return ServiceGroup{
 		Name: "scenarios/authored-sqs-queues",
 		Impls: map[string]harness.TestFn{
-			"sqs-queues-shadow:CreateQueue":        g.testSqsQueuesShadowCreateQueue,
-			"sqs-queues-shadow:GetQueueUrl":        g.testSqsQueuesShadowGetQueueUrl,
-			"sqs-queues-shadow:ListQueues":         g.testSqsQueuesShadowListQueues,
-			"sqs-queues-shadow:SetQueueAttributes": g.testSqsQueuesShadowSetQueueAttributes,
-			"sqs-queues-shadow:GetQueueAttributes": g.testSqsQueuesShadowGetQueueAttributes,
-			"sqs-queues-shadow:TagQueue":           g.testSqsQueuesShadowTagQueue,
-			"sqs-queues-shadow:UntagQueue":         g.testSqsQueuesShadowUntagQueue,
-			"sqs-queues-shadow:DeleteQueue":        g.testSqsQueuesShadowDeleteQueue,
+			"sqs-queues:CreateQueue":        g.testSqsQueuesCreateQueue,
+			"sqs-queues:GetQueueUrl":        g.testSqsQueuesGetQueueUrl,
+			"sqs-queues:ListQueues":         g.testSqsQueuesListQueues,
+			"sqs-queues:SetQueueAttributes": g.testSqsQueuesSetQueueAttributes,
+			"sqs-queues:GetQueueAttributes": g.testSqsQueuesGetQueueAttributes,
+			"sqs-queues:TagQueue":           g.testSqsQueuesTagQueue,
+			"sqs-queues:UntagQueue":         g.testSqsQueuesUntagQueue,
+			"sqs-queues:DeleteQueue":        g.testSqsQueuesDeleteQueue,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"sqs-queues-shadow": g.setupSqsQueuesShadow,
+			"sqs-queues": g.setupSqsQueues,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"sqs-queues-shadow": g.teardownSqsQueuesShadow,
+			"sqs-queues": g.teardownSqsQueues,
 		},
 	}
 }
@@ -57,10 +57,10 @@ func (g *authoredSqsQueuesScenarios) cl() *sqs.Client {
 	return g.client
 }
 
-var groupSqsQueuesShadow = scenario.Group{Name: "sqs-queues-shadow", File: "compat/model/authored/sqs-queues.json"}
+var groupSqsQueues = scenario.Group{Name: "sqs-queues", File: "compat/model/authored/sqs-queues.json"}
 
-func (g *authoredSqsQueuesScenarios) setupSqsQueuesShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupSqsQueuesShadow.RunSetup(ctx, t,
+func (g *authoredSqsQueuesScenarios) setupSqsQueues(ctx context.Context, t *harness.TestContext) error {
+	return groupSqsQueues.RunSetup(ctx, t,
 		scenario.Call{
 			Op:     "CreateQueue",
 			Params: `{"QueueName":{"$name":"q"}}`,
@@ -79,8 +79,8 @@ func (g *authoredSqsQueuesScenarios) setupSqsQueuesShadow(ctx context.Context, t
 	)
 }
 
-func (g *authoredSqsQueuesScenarios) teardownSqsQueuesShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupSqsQueuesShadow.RunTeardown(ctx, t,
+func (g *authoredSqsQueuesScenarios) teardownSqsQueues(ctx context.Context, t *harness.TestContext) error {
+	return groupSqsQueues.RunTeardown(ctx, t,
 		scenario.Call{
 			Op:     "DeleteQueue",
 			Params: `{"QueueUrl":{"$ref":"queue.createdUrl"}}`,
@@ -108,8 +108,8 @@ func (g *authoredSqsQueuesScenarios) teardownSqsQueuesShadow(ctx context.Context
 	)
 }
 
-func (g *authoredSqsQueuesScenarios) testSqsQueuesShadowCreateQueue(ctx context.Context, t *harness.TestContext) error {
-	return groupSqsQueuesShadow.RunTest(ctx, t, "CreateQueue", scenario.Test{
+func (g *authoredSqsQueuesScenarios) testSqsQueuesCreateQueue(ctx context.Context, t *harness.TestContext) error {
+	return groupSqsQueues.RunTest(ctx, t, "CreateQueue", scenario.Test{
 		Call: scenario.Call{
 			Op:     "CreateQueue",
 			Params: `{"QueueName":{"$name":"created"}}`,
@@ -149,8 +149,8 @@ func (g *authoredSqsQueuesScenarios) testSqsQueuesShadowCreateQueue(ctx context.
 	})
 }
 
-func (g *authoredSqsQueuesScenarios) testSqsQueuesShadowGetQueueUrl(ctx context.Context, t *harness.TestContext) error {
-	return groupSqsQueuesShadow.RunTest(ctx, t, "GetQueueUrl", scenario.Test{
+func (g *authoredSqsQueuesScenarios) testSqsQueuesGetQueueUrl(ctx context.Context, t *harness.TestContext) error {
+	return groupSqsQueues.RunTest(ctx, t, "GetQueueUrl", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetQueueUrl",
 			Params: `{"QueueName":{"$name":"q"}}`,
@@ -171,8 +171,8 @@ func (g *authoredSqsQueuesScenarios) testSqsQueuesShadowGetQueueUrl(ctx context.
 	})
 }
 
-func (g *authoredSqsQueuesScenarios) testSqsQueuesShadowListQueues(ctx context.Context, t *harness.TestContext) error {
-	return groupSqsQueuesShadow.RunTest(ctx, t, "ListQueues", scenario.Test{
+func (g *authoredSqsQueuesScenarios) testSqsQueuesListQueues(ctx context.Context, t *harness.TestContext) error {
+	return groupSqsQueues.RunTest(ctx, t, "ListQueues", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListQueues",
 			Params: `{"QueueNamePrefix":{"$name":"q"}}`,
@@ -195,8 +195,8 @@ func (g *authoredSqsQueuesScenarios) testSqsQueuesShadowListQueues(ctx context.C
 	})
 }
 
-func (g *authoredSqsQueuesScenarios) testSqsQueuesShadowSetQueueAttributes(ctx context.Context, t *harness.TestContext) error {
-	return groupSqsQueuesShadow.RunTest(ctx, t, "SetQueueAttributes", scenario.Test{
+func (g *authoredSqsQueuesScenarios) testSqsQueuesSetQueueAttributes(ctx context.Context, t *harness.TestContext) error {
+	return groupSqsQueues.RunTest(ctx, t, "SetQueueAttributes", scenario.Test{
 		Call: scenario.Call{
 			Op:     "SetQueueAttributes",
 			Params: `{"Attributes":{"VisibilityTimeout":"60"},"QueueUrl":{"$ref":"queue.url"}}`,
@@ -231,8 +231,8 @@ func (g *authoredSqsQueuesScenarios) testSqsQueuesShadowSetQueueAttributes(ctx c
 	})
 }
 
-func (g *authoredSqsQueuesScenarios) testSqsQueuesShadowGetQueueAttributes(ctx context.Context, t *harness.TestContext) error {
-	return groupSqsQueuesShadow.RunTest(ctx, t, "GetQueueAttributes", scenario.Test{
+func (g *authoredSqsQueuesScenarios) testSqsQueuesGetQueueAttributes(ctx context.Context, t *harness.TestContext) error {
+	return groupSqsQueues.RunTest(ctx, t, "GetQueueAttributes", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetQueueAttributes",
 			Params: `{"AttributeNames":["All"],"QueueUrl":{"$ref":"queue.url"}}`,
@@ -256,8 +256,8 @@ func (g *authoredSqsQueuesScenarios) testSqsQueuesShadowGetQueueAttributes(ctx c
 	})
 }
 
-func (g *authoredSqsQueuesScenarios) testSqsQueuesShadowTagQueue(ctx context.Context, t *harness.TestContext) error {
-	return groupSqsQueuesShadow.RunTest(ctx, t, "TagQueue", scenario.Test{
+func (g *authoredSqsQueuesScenarios) testSqsQueuesTagQueue(ctx context.Context, t *harness.TestContext) error {
+	return groupSqsQueues.RunTest(ctx, t, "TagQueue", scenario.Test{
 		Call: scenario.Call{
 			Op:     "TagQueue",
 			Params: `{"QueueUrl":{"$ref":"queue.url"},"Tags":{"env":"test","project":"overcast"}}`,
@@ -292,8 +292,8 @@ func (g *authoredSqsQueuesScenarios) testSqsQueuesShadowTagQueue(ctx context.Con
 	})
 }
 
-func (g *authoredSqsQueuesScenarios) testSqsQueuesShadowUntagQueue(ctx context.Context, t *harness.TestContext) error {
-	return groupSqsQueuesShadow.RunTest(ctx, t, "UntagQueue", scenario.Test{
+func (g *authoredSqsQueuesScenarios) testSqsQueuesUntagQueue(ctx context.Context, t *harness.TestContext) error {
+	return groupSqsQueues.RunTest(ctx, t, "UntagQueue", scenario.Test{
 		Call: scenario.Call{
 			Op:     "UntagQueue",
 			Params: `{"QueueUrl":{"$ref":"queue.url"},"TagKeys":["env"]}`,
@@ -328,8 +328,8 @@ func (g *authoredSqsQueuesScenarios) testSqsQueuesShadowUntagQueue(ctx context.C
 	})
 }
 
-func (g *authoredSqsQueuesScenarios) testSqsQueuesShadowDeleteQueue(ctx context.Context, t *harness.TestContext) error {
-	return groupSqsQueuesShadow.RunTest(ctx, t, "DeleteQueue", scenario.Test{
+func (g *authoredSqsQueuesScenarios) testSqsQueuesDeleteQueue(ctx context.Context, t *harness.TestContext) error {
+	return groupSqsQueues.RunTest(ctx, t, "DeleteQueue", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteQueue",
 			Params: `{"QueueUrl":{"$ref":"queue.createdUrl"}}`,

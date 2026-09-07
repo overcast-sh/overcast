@@ -13,7 +13,8 @@ import java.util.Map;
 /**
  * SQS compatibility test group.
  *
- * <p>Groups: sqs-queues, sqs-messages, sqs-dlq, sqs-fifo.
+ * <p>Groups: sqs-messages, sqs-dlq, sqs-fifo. sqs-queues is a ported group, resolved
+ * from compat/model/authored/sqs-queues.json by the scenario backend (#1903).
  */
 public final class SqsGroup implements ServiceGroup {
 
@@ -28,14 +29,6 @@ public final class SqsGroup implements ServiceGroup {
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("sqs-queues:CreateQueue",               this::createQueue),
-                Map.entry("sqs-queues:GetQueueUrl",               this::getQueueUrl),
-                Map.entry("sqs-queues:ListQueues",                this::listQueues),
-                Map.entry("sqs-queues:SetQueueAttributes",        this::setQueueAttributes),
-                Map.entry("sqs-queues:GetQueueAttributes",        this::getQueueAttributes),
-                Map.entry("sqs-queues:TagQueue",                  this::tagQueue),
-                Map.entry("sqs-queues:UntagQueue",                this::untagQueue),
-                Map.entry("sqs-queues:DeleteQueue",               this::deleteQueue),
                 Map.entry("sqs-messages:SendMessage",             this::sendMessage),
                 Map.entry("sqs-messages:SendMessageBatch",        this::sendMessageBatch),
                 Map.entry("sqs-messages:ReceiveMessage",          this::receiveMessage),
@@ -55,7 +48,6 @@ public final class SqsGroup implements ServiceGroup {
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("sqs-queues",   this::setupQueues),
                 Map.entry("sqs-messages", this::setupMessages),
                 Map.entry("sqs-dlq",      this::setupDlq),
                 Map.entry("sqs-fifo",     this::setupFifo)
@@ -65,70 +57,10 @@ public final class SqsGroup implements ServiceGroup {
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("sqs-queues",   ctx -> deleteQueueSilently(ctx.getString("sqsQueueUrl"))),
                 Map.entry("sqs-messages", ctx -> deleteQueueSilently(ctx.getString("sqsMsgQueueUrl"))),
                 Map.entry("sqs-dlq",      this::teardownDlq),
                 Map.entry("sqs-fifo",     ctx -> deleteQueueSilently(ctx.getString("sqsFifoUrl")))
         );
-    }
-
-    // ── sqs-queues ─────────────────────────────────────────────────────────────
-
-    private void setupQueues(TestContext ctx) throws Exception {
-        String name = ctx.runId() + "-sqsq";
-        var resp = sqs().createQueue(r -> r.queueName(name));
-        ctx.set("sqsQueueUrl", resp.queueUrl());
-        ctx.set("sqsQueueName", name);
-    }
-
-    private void createQueue(TestContext ctx) {
-        // Queue created in setup — verify URL is set.
-        Assertions.assertNotBlank(ctx.getString("sqsQueueUrl"), "sqsQueueUrl");
-    }
-
-    private void getQueueUrl(TestContext ctx) throws Exception {
-        String name = ctx.getString("sqsQueueName");
-        var resp = sqs().getQueueUrl(r -> r.queueName(name));
-        Assertions.assertNotBlank(resp.queueUrl(), "GetQueueUrl: queueUrl");
-    }
-
-    private void listQueues(TestContext ctx) throws Exception {
-        String name = ctx.getString("sqsQueueName");
-        var resp = sqs().listQueues(r -> r.queueNamePrefix(name));
-        boolean found = resp.queueUrls().stream().anyMatch(u -> u.contains(name));
-        Assertions.assertTrue(found, "ListQueues: queue " + name + " not found");
-    }
-
-    private void setQueueAttributes(TestContext ctx) throws Exception {
-        String url = ctx.getString("sqsQueueUrl");
-        sqs().setQueueAttributes(r -> r.queueUrl(url)
-                .attributes(Map.of(QueueAttributeName.VISIBILITY_TIMEOUT, "60")));
-    }
-
-    private void getQueueAttributes(TestContext ctx) throws Exception {
-        String url = ctx.getString("sqsQueueUrl");
-        var resp = sqs().getQueueAttributes(r -> r.queueUrl(url)
-                .attributeNames(QueueAttributeName.ALL));
-        Assertions.assertTrue(resp.hasAttributes(), "GetQueueAttributes: no attributes returned");
-        String vt = resp.attributesAsStrings().get("VisibilityTimeout");
-        Assertions.assertEquals("60", vt, "GetQueueAttributes: VisibilityTimeout mismatch");
-    }
-
-    private void tagQueue(TestContext ctx) throws Exception {
-        String url = ctx.getString("sqsQueueUrl");
-        sqs().tagQueue(r -> r.queueUrl(url).tags(Map.of("env", "test")));
-    }
-
-    private void untagQueue(TestContext ctx) throws Exception {
-        String url = ctx.getString("sqsQueueUrl");
-        sqs().untagQueue(r -> r.queueUrl(url).tagKeys("env"));
-    }
-
-    private void deleteQueue(TestContext ctx) throws Exception {
-        // The teardown deletes the setup queue; this test creates an ephemeral one.
-        String name = ctx.runId() + "-sqsdel";
-        var resp = sqs().createQueue(r -> r.queueName(name));
-        sqs().deleteQueue(r -> r.queueUrl(resp.queueUrl()));
     }
 
     // ── sqs-messages ──────────────────────────────────────────────────────────

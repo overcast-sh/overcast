@@ -33,8 +33,8 @@ import software.amazon.awssdk.services.sqs.model.UntagQueueRequest;
  */
 public final class ScenariosAuthoredSqsQueuesGen implements ServiceGroup {
 
-    private static final Group GROUP_SQS_QUEUES_SHADOW =
-            new Group("sqs-queues-shadow", "compat/model/authored/sqs-queues.json");
+    private static final Group GROUP_SQS_QUEUES =
+            new Group("sqs-queues", "compat/model/authored/sqs-queues.json");
 
     private final AwsClients clients;
     private volatile SqsClient client;
@@ -51,26 +51,26 @@ public final class ScenariosAuthoredSqsQueuesGen implements ServiceGroup {
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("sqs-queues-shadow:CreateQueue", this::testSqsQueuesShadowCreateQueue),
-                Map.entry("sqs-queues-shadow:GetQueueUrl", this::testSqsQueuesShadowGetQueueUrl),
-                Map.entry("sqs-queues-shadow:ListQueues", this::testSqsQueuesShadowListQueues),
-                Map.entry("sqs-queues-shadow:SetQueueAttributes", this::testSqsQueuesShadowSetQueueAttributes),
-                Map.entry("sqs-queues-shadow:GetQueueAttributes", this::testSqsQueuesShadowGetQueueAttributes),
-                Map.entry("sqs-queues-shadow:TagQueue", this::testSqsQueuesShadowTagQueue),
-                Map.entry("sqs-queues-shadow:UntagQueue", this::testSqsQueuesShadowUntagQueue),
-                Map.entry("sqs-queues-shadow:DeleteQueue", this::testSqsQueuesShadowDeleteQueue));
+                Map.entry("sqs-queues:CreateQueue", this::testSqsQueuesCreateQueue),
+                Map.entry("sqs-queues:GetQueueUrl", this::testSqsQueuesGetQueueUrl),
+                Map.entry("sqs-queues:ListQueues", this::testSqsQueuesListQueues),
+                Map.entry("sqs-queues:SetQueueAttributes", this::testSqsQueuesSetQueueAttributes),
+                Map.entry("sqs-queues:GetQueueAttributes", this::testSqsQueuesGetQueueAttributes),
+                Map.entry("sqs-queues:TagQueue", this::testSqsQueuesTagQueue),
+                Map.entry("sqs-queues:UntagQueue", this::testSqsQueuesUntagQueue),
+                Map.entry("sqs-queues:DeleteQueue", this::testSqsQueuesDeleteQueue));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("sqs-queues-shadow", this::setupSqsQueuesShadow));
+                Map.entry("sqs-queues", this::setupSqsQueues));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("sqs-queues-shadow", this::teardownSqsQueuesShadow));
+                Map.entry("sqs-queues", this::teardownSqsQueues));
     }
 
     /**
@@ -90,8 +90,8 @@ public final class ScenariosAuthoredSqsQueuesGen implements ServiceGroup {
         return client;
     }
 
-    private void setupSqsQueuesShadow(TestContext t) {
-        GROUP_SQS_QUEUES_SHADOW.runSetup(t,
+    private void setupSqsQueues(TestContext t) {
+        GROUP_SQS_QUEUES.runSetup(t,
                 new Call("CreateQueue", "{\"QueueName\":{\"$name\":\"q\"}}",
                         b -> CreateQueueRequest.builder()
                                 .queueName(b.string("QueueName", Values.name("q")))
@@ -100,8 +100,8 @@ public final class ScenariosAuthoredSqsQueuesGen implements ServiceGroup {
                         .export("queue.url", "$.QueueUrl"));
     }
 
-    private void teardownSqsQueuesShadow(TestContext t) {
-        GROUP_SQS_QUEUES_SHADOW.runTeardown(t,
+    private void teardownSqsQueues(TestContext t) {
+        GROUP_SQS_QUEUES.runTeardown(t,
                 new Call("DeleteQueue", "{\"QueueUrl\":{\"$ref\":\"queue.createdUrl\"}}",
                         b -> DeleteQueueRequest.builder()
                                 .queueUrl(b.string("QueueUrl", Values.ref("queue.createdUrl")))
@@ -114,8 +114,8 @@ public final class ScenariosAuthoredSqsQueuesGen implements ServiceGroup {
                         r -> cl().deleteQueue((DeleteQueueRequest) r)));
     }
 
-    private void testSqsQueuesShadowCreateQueue(TestContext t) {
-        GROUP_SQS_QUEUES_SHADOW.runTest(t, "CreateQueue",
+    private void testSqsQueuesCreateQueue(TestContext t) {
+        GROUP_SQS_QUEUES.runTest(t, "CreateQueue",
                 new Call("CreateQueue", "{\"QueueName\":{\"$name\":\"created\"}}",
                         b -> CreateQueueRequest.builder()
                                 .queueName(b.string("QueueName", Values.name("created")))
@@ -138,8 +138,8 @@ public final class ScenariosAuthoredSqsQueuesGen implements ServiceGroup {
                 ));
     }
 
-    private void testSqsQueuesShadowGetQueueUrl(TestContext t) {
-        GROUP_SQS_QUEUES_SHADOW.runTest(t, "GetQueueUrl",
+    private void testSqsQueuesGetQueueUrl(TestContext t) {
+        GROUP_SQS_QUEUES.runTest(t, "GetQueueUrl",
                 new Call("GetQueueUrl", "{\"QueueName\":{\"$name\":\"q\"}}",
                         b -> GetQueueUrlRequest.builder()
                                 .queueName(b.string("QueueName", Values.name("q")))
@@ -152,8 +152,8 @@ public final class ScenariosAuthoredSqsQueuesGen implements ServiceGroup {
                 ));
     }
 
-    private void testSqsQueuesShadowListQueues(TestContext t) {
-        GROUP_SQS_QUEUES_SHADOW.runTest(t, "ListQueues",
+    private void testSqsQueuesListQueues(TestContext t) {
+        GROUP_SQS_QUEUES.runTest(t, "ListQueues",
                 new Call("ListQueues", "{\"QueueNamePrefix\":{\"$name\":\"q\"}}",
                         b -> ListQueuesRequest.builder()
                                 .queueNamePrefix(b.string("QueueNamePrefix", Values.name("q")))
@@ -168,8 +168,8 @@ public final class ScenariosAuthoredSqsQueuesGen implements ServiceGroup {
                 ));
     }
 
-    private void testSqsQueuesShadowSetQueueAttributes(TestContext t) {
-        GROUP_SQS_QUEUES_SHADOW.runTest(t, "SetQueueAttributes",
+    private void testSqsQueuesSetQueueAttributes(TestContext t) {
+        GROUP_SQS_QUEUES.runTest(t, "SetQueueAttributes",
                 new Call("SetQueueAttributes", "{\"Attributes\":{\"VisibilityTimeout\":\"60\"},\"QueueUrl\":{\"$ref\":\"queue.url\"}}",
                         b -> SetQueueAttributesRequest.builder()
                                 .attributesWithStrings(Map.of("VisibilityTimeout", "60"))
@@ -189,8 +189,8 @@ public final class ScenariosAuthoredSqsQueuesGen implements ServiceGroup {
                 ));
     }
 
-    private void testSqsQueuesShadowGetQueueAttributes(TestContext t) {
-        GROUP_SQS_QUEUES_SHADOW.runTest(t, "GetQueueAttributes",
+    private void testSqsQueuesGetQueueAttributes(TestContext t) {
+        GROUP_SQS_QUEUES.runTest(t, "GetQueueAttributes",
                 new Call("GetQueueAttributes", "{\"AttributeNames\":[\"All\"],\"QueueUrl\":{\"$ref\":\"queue.url\"}}",
                         b -> GetQueueAttributesRequest.builder()
                                 .attributeNamesWithStrings(List.of("All"))
@@ -206,8 +206,8 @@ public final class ScenariosAuthoredSqsQueuesGen implements ServiceGroup {
                 ));
     }
 
-    private void testSqsQueuesShadowTagQueue(TestContext t) {
-        GROUP_SQS_QUEUES_SHADOW.runTest(t, "TagQueue",
+    private void testSqsQueuesTagQueue(TestContext t) {
+        GROUP_SQS_QUEUES.runTest(t, "TagQueue",
                 new Call("TagQueue", "{\"QueueUrl\":{\"$ref\":\"queue.url\"},\"Tags\":{\"env\":\"test\",\"project\":\"overcast\"}}",
                         b -> TagQueueRequest.builder()
                                 .queueUrl(b.string("QueueUrl", Values.ref("queue.url")))
@@ -227,8 +227,8 @@ public final class ScenariosAuthoredSqsQueuesGen implements ServiceGroup {
                 ));
     }
 
-    private void testSqsQueuesShadowUntagQueue(TestContext t) {
-        GROUP_SQS_QUEUES_SHADOW.runTest(t, "UntagQueue",
+    private void testSqsQueuesUntagQueue(TestContext t) {
+        GROUP_SQS_QUEUES.runTest(t, "UntagQueue",
                 new Call("UntagQueue", "{\"QueueUrl\":{\"$ref\":\"queue.url\"},\"TagKeys\":[\"env\"]}",
                         b -> UntagQueueRequest.builder()
                                 .queueUrl(b.string("QueueUrl", Values.ref("queue.url")))
@@ -248,8 +248,8 @@ public final class ScenariosAuthoredSqsQueuesGen implements ServiceGroup {
                 ));
     }
 
-    private void testSqsQueuesShadowDeleteQueue(TestContext t) {
-        GROUP_SQS_QUEUES_SHADOW.runTest(t, "DeleteQueue",
+    private void testSqsQueuesDeleteQueue(TestContext t) {
+        GROUP_SQS_QUEUES.runTest(t, "DeleteQueue",
                 new Call("DeleteQueue", "{\"QueueUrl\":{\"$ref\":\"queue.createdUrl\"}}",
                         b -> DeleteQueueRequest.builder()
                                 .queueUrl(b.string("QueueUrl", Values.ref("queue.createdUrl")))

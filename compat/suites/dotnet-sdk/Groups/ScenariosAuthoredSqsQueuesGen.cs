@@ -15,7 +15,7 @@ namespace OvercastCompat.Groups;
 /// </remarks>
 internal sealed class ScenariosAuthoredSqsQueues : IServiceGroup
 {
-    private static readonly ScenarioGroup GroupSqsQueuesShadow = new("sqs-queues-shadow", "compat/model/authored/sqs-queues.json");
+    private static readonly ScenarioGroup GroupSqsQueues = new("sqs-queues", "compat/model/authored/sqs-queues.json");
 
     private readonly Lazy<AmazonSQSClient> _client;
 
@@ -35,30 +35,30 @@ internal sealed class ScenariosAuthoredSqsQueues : IServiceGroup
 
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["sqs-queues-shadow:CreateQueue"] = TestSqsQueuesShadowCreateQueue,
-        ["sqs-queues-shadow:GetQueueUrl"] = TestSqsQueuesShadowGetQueueUrl,
-        ["sqs-queues-shadow:ListQueues"] = TestSqsQueuesShadowListQueues,
-        ["sqs-queues-shadow:SetQueueAttributes"] = TestSqsQueuesShadowSetQueueAttributes,
-        ["sqs-queues-shadow:GetQueueAttributes"] = TestSqsQueuesShadowGetQueueAttributes,
-        ["sqs-queues-shadow:TagQueue"] = TestSqsQueuesShadowTagQueue,
-        ["sqs-queues-shadow:UntagQueue"] = TestSqsQueuesShadowUntagQueue,
-        ["sqs-queues-shadow:DeleteQueue"] = TestSqsQueuesShadowDeleteQueue,
+        ["sqs-queues:CreateQueue"] = TestSqsQueuesCreateQueue,
+        ["sqs-queues:GetQueueUrl"] = TestSqsQueuesGetQueueUrl,
+        ["sqs-queues:ListQueues"] = TestSqsQueuesListQueues,
+        ["sqs-queues:SetQueueAttributes"] = TestSqsQueuesSetQueueAttributes,
+        ["sqs-queues:GetQueueAttributes"] = TestSqsQueuesGetQueueAttributes,
+        ["sqs-queues:TagQueue"] = TestSqsQueuesTagQueue,
+        ["sqs-queues:UntagQueue"] = TestSqsQueuesUntagQueue,
+        ["sqs-queues:DeleteQueue"] = TestSqsQueuesDeleteQueue,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["sqs-queues-shadow"] = SetupSqsQueuesShadow,
+        ["sqs-queues"] = SetupSqsQueues,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["sqs-queues-shadow"] = TeardownSqsQueuesShadow,
+        ["sqs-queues"] = TeardownSqsQueues,
     };
 
     private AmazonSQSClient Cl() => _client.Value;
 
-    private Task SetupSqsQueuesShadow(TestContext t) =>
-        GroupSqsQueuesShadow.RunSetupAsync(t,
+    private Task SetupSqsQueues(TestContext t) =>
+        GroupSqsQueues.RunSetupAsync(t,
             new ScenarioCall
             {
                 Op = "CreateQueue",
@@ -78,8 +78,8 @@ internal sealed class ScenariosAuthoredSqsQueues : IServiceGroup
             }
         );
 
-    private Task TeardownSqsQueuesShadow(TestContext t) =>
-        GroupSqsQueuesShadow.RunTeardownAsync(t,
+    private Task TeardownSqsQueues(TestContext t) =>
+        GroupSqsQueues.RunTeardownAsync(t,
             new ScenarioCall
             {
                 Op = "DeleteQueue",
@@ -108,7 +108,7 @@ internal sealed class ScenariosAuthoredSqsQueues : IServiceGroup
             }
         );
 
-    private Task TestSqsQueuesShadowCreateQueue(TestContext t) => GroupSqsQueuesShadow.RunTestAsync(t, "CreateQueue", new ScenarioTest
+    private Task TestSqsQueuesCreateQueue(TestContext t) => GroupSqsQueues.RunTestAsync(t, "CreateQueue", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -152,7 +152,7 @@ internal sealed class ScenariosAuthoredSqsQueues : IServiceGroup
         ],
     });
 
-    private Task TestSqsQueuesShadowGetQueueUrl(TestContext t) => GroupSqsQueuesShadow.RunTestAsync(t, "GetQueueUrl", new ScenarioTest
+    private Task TestSqsQueuesGetQueueUrl(TestContext t) => GroupSqsQueues.RunTestAsync(t, "GetQueueUrl", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -175,7 +175,7 @@ internal sealed class ScenariosAuthoredSqsQueues : IServiceGroup
         ],
     });
 
-    private Task TestSqsQueuesShadowListQueues(TestContext t) => GroupSqsQueuesShadow.RunTestAsync(t, "ListQueues", new ScenarioTest
+    private Task TestSqsQueuesListQueues(TestContext t) => GroupSqsQueues.RunTestAsync(t, "ListQueues", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -200,7 +200,7 @@ internal sealed class ScenariosAuthoredSqsQueues : IServiceGroup
         ],
     });
 
-    private Task TestSqsQueuesShadowSetQueueAttributes(TestContext t) => GroupSqsQueuesShadow.RunTestAsync(t, "SetQueueAttributes", new ScenarioTest
+    private Task TestSqsQueuesSetQueueAttributes(TestContext t) => GroupSqsQueues.RunTestAsync(t, "SetQueueAttributes", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -238,7 +238,7 @@ internal sealed class ScenariosAuthoredSqsQueues : IServiceGroup
         ],
     });
 
-    private Task TestSqsQueuesShadowGetQueueAttributes(TestContext t) => GroupSqsQueuesShadow.RunTestAsync(t, "GetQueueAttributes", new ScenarioTest
+    private Task TestSqsQueuesGetQueueAttributes(TestContext t) => GroupSqsQueues.RunTestAsync(t, "GetQueueAttributes", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -264,7 +264,7 @@ internal sealed class ScenariosAuthoredSqsQueues : IServiceGroup
         ],
     });
 
-    private Task TestSqsQueuesShadowTagQueue(TestContext t) => GroupSqsQueuesShadow.RunTestAsync(t, "TagQueue", new ScenarioTest
+    private Task TestSqsQueuesTagQueue(TestContext t) => GroupSqsQueues.RunTestAsync(t, "TagQueue", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -302,7 +302,7 @@ internal sealed class ScenariosAuthoredSqsQueues : IServiceGroup
         ],
     });
 
-    private Task TestSqsQueuesShadowUntagQueue(TestContext t) => GroupSqsQueuesShadow.RunTestAsync(t, "UntagQueue", new ScenarioTest
+    private Task TestSqsQueuesUntagQueue(TestContext t) => GroupSqsQueues.RunTestAsync(t, "UntagQueue", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -340,7 +340,7 @@ internal sealed class ScenariosAuthoredSqsQueues : IServiceGroup
         ],
     });
 
-    private Task TestSqsQueuesShadowDeleteQueue(TestContext t) => GroupSqsQueuesShadow.RunTestAsync(t, "DeleteQueue", new ScenarioTest
+    private Task TestSqsQueuesDeleteQueue(TestContext t) => GroupSqsQueues.RunTestAsync(t, "DeleteQueue", new ScenarioTest
     {
         Call = new ScenarioCall
         {
