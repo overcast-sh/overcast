@@ -23,6 +23,11 @@ aws-sdk-eventbridge = "=1.54.0"
 # pins below, and it declares the delegation-request, human-readable-summary
 # and outbound-web-identity-federation operations the iam probe group calls.
 aws-sdk-iam = "=1.123.0"
+# G6 wave 1 (#1116): the authored kinesis-streams scenario is the first thing
+# this suite runs against Kinesis, so the crate is added with it. Pinned in the
+# same release train as its neighbours — its requirements (aws-smithy-types
+# ^1.2.9, aws-smithy-runtime-api ^1.7.3) are met by the exact pins below.
+aws-sdk-kinesis = "=1.52.0"
 aws-sdk-kms = "=1.52.0"
 aws-sdk-lambda = "=1.55.0"
 aws-sdk-organizations = "=1.102.0"

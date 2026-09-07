@@ -1239,6 +1239,67 @@
       ]
     },
     {
+      "service": "kinesis",
+      "name": "kinesis-streams-shadow",
+      "generated": true,
+      "scenario": "compat/model/authored/kinesis-streams.json",
+      "state": "candidate",
+      "shadowOf": "kinesis-streams",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "CreateStream"
+        },
+        {
+          "name": "DescribeStream",
+          "depends": [
+            "CreateStream"
+          ]
+        },
+        {
+          "name": "DescribeStreamSummary",
+          "depends": [
+            "CreateStream"
+          ]
+        },
+        {
+          "name": "ListStreams",
+          "depends": [
+            "CreateStream"
+          ]
+        },
+        {
+          "name": "AddTagsToStream",
+          "depends": [
+            "CreateStream"
+          ]
+        },
+        {
+          "name": "ListTagsForStream",
+          "depends": [
+            "AddTagsToStream"
+          ]
+        },
+        {
+          "name": "DeleteStream",
+          "depends": [
+            "DescribeStream",
+            "DescribeStreamSummary",
+            "ListStreams",
+            "ListTagsForStream"
+          ]
+        }
+      ]
+    },
+    {
       "service": "kms",
       "name": "kms-gen-key",
       "generated": true,

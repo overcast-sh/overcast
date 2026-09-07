@@ -166,10 +166,16 @@ func TestRun_removesAScenarioWhoseRecipeIsGone(t *testing.T) {
 	}
 }
 
+// TestRun_refusesAServiceOutsideTheSnapshot names a service deliberately absent
+// from models/aws/shapes-services.txt. It was kinesis until G6's kinesis-streams
+// port (#1116) put that service in the snapshot; athena is the replacement, and
+// a later wave adding it has to move this fixture again rather than delete the
+// case — the rule it pins is that a recipe for an unlisted service stops the run
+// naming the list, instead of reading as "this service has no operations".
 func TestRun_refusesAServiceOutsideTheSnapshot(t *testing.T) {
 	root := copyCorpus(t)
-	writeFile(t, filepath.Join(root, filepath.FromSlash(recipesDir), "kinesis.json"),
-		`{"service":"kinesis","resources":[{"id":"stream","create":{"op":"CreateStream"}}]}`)
+	writeFile(t, filepath.Join(root, filepath.FromSlash(recipesDir), "athena.json"),
+		`{"service":"athena","resources":[{"id":"workgroup","create":{"op":"CreateWorkGroup"}}]}`)
 	var stdout, stderr bytes.Buffer
 	if code := run([]string{"-root", root}, &stdout, &stderr); code != 1 || !strings.Contains(stderr.String(), "shapes-services.txt") {
 		t.Fatalf("code=%d stderr=%s", code, stderr.String())

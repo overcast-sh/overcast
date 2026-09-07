@@ -1,0 +1,241 @@
+{
+  "$comment": "Authored port of the hand-written registry group kinesis-streams (docs/plans/compat-coverage-modelgen.md §3.11, G6 wave 1 rank 1, #1116). One spec in place of five per-language implementations — and of the two that were never written: dotnet-sdk and rust-sdk carry 7 rows each of parity debt for this group, which the port closes. It runs today under the shadow name kinesis-streams-shadow, beside the natives, so the nightly can compare the two per (suite, test); the flip PR renames this group to kinesis-streams, moves the registry entry into the hand-written registry.json, and deletes the native code. The clauses are the union of what the five natives assert — see compat/model/README.md § Authored scenarios.",
+  "version": 1,
+  "service": "kinesis",
+  "client": {
+    "sdkId": "Kinesis",
+    "endpointPrefix": "kinesis",
+    "signingName": "kinesis",
+    "protocol": "awsJson1_1",
+    "apiVersion": "2013-12-02",
+    "targetPrefix": "Kinesis_20131202",
+    "awsQueryCompatible": false
+  },
+  "groups": [
+    {
+      "$comment": "Two streams: the group's own (created in setup, read and tagged by every test) and an ephemeral one the CreateStream test creates and the DeleteStream test removes. That split is what go-sdk and python-sdk already do, and it is what lets DeleteStream prove a delete without destroying the stream the earlier tests read; cli, node-js-sdk and java-sdk instead create the one stream in CreateStream and delete it in DeleteStream, which leaves the delete unverifiable against a stream anything else still needs. CreateStream returns no output at all (the operation's output shape is Unit), so every clause on it necessarily calls the service again. AWS documents CreateStream as asynchronous — the stream is CREATING until it is ACTIVE — and DeleteStream likewise leaves it DELETING until the deletion completes, so both are read through `eventually`. All five natives poll for ACTIVE with budgets between 3 s (node-js-sdk, 10 × 300 ms) and 30 s (go-sdk, cli, java-sdk); 15 s (30 × 500 ms) sits inside that range, and the delete's 10 s (20 × 500 ms) is the same order. Overcast answers ACTIVE on the first attempt, so the budget is fidelity to AWS rather than latency the emulator has.",
+      "name": "kinesis-streams-shadow",
+      "kind": "lifecycle",
+      "setup": [
+        {
+          "op": "CreateStream",
+          "params": {
+            "StreamName": { "$name": "s" },
+            "ShardCount": 1
+          }
+        }
+      ],
+      "tests": [
+        {
+          "$comment": "Union: cli, python-sdk and java-sdk assert the new stream reaches ACTIVE (java-sdk's waitActive returns silently after 30 attempts rather than raising, so its CreateStream in fact asserts nothing — #1904); go-sdk and node-js-sdk assert it appears in ListStreams. Both, here, plus the summary's own name and ARN. go-sdk and python-sdk delete this stream inside the test; the port leaves it for DeleteStream below, which is what gives that test something of its own to remove.",
+          "name": "CreateStream",
+          "op": "CreateStream",
+          "call": {
+            "op": "CreateStream",
+            "params": {
+              "StreamName": { "$name": "created" },
+              "ShardCount": 1
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 30,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "DescribeStreamSummary",
+                  "params": { "StreamName": { "$name": "created" } }
+                },
+                "checks": {
+                  "$.StreamDescriptionSummary.StreamStatus": { "equals": "ACTIVE" },
+                  "$.StreamDescriptionSummary.StreamName": { "equals": { "$name": "created" } },
+                  "$.StreamDescriptionSummary.StreamARN": { "nonEmpty": true }
+                }
+              }
+            },
+            {
+              "kind": "listContains",
+              "call": { "op": "ListStreams", "params": {} },
+              "itemsPath": "$.StreamNames",
+              "where": { "$": { "$name": "created" } }
+            }
+          ]
+        },
+        {
+          "$comment": "Five natives, five different assertions: go-sdk that StreamDescription is non-nil; node-js-sdk and java-sdk that StreamARN is present; java-sdk also that the status is ACTIVE; cli that Shards is non-empty; python-sdk that StreamName matches and Shards is non-empty. The union is all of them. Name and ARN are read off this test's own response, since they are true the moment the stream exists; the status and the shard list go through `eventually`, because a stream AWS is still CREATING has neither.",
+          "name": "DescribeStream",
+          "op": "DescribeStream",
+          "call": {
+            "op": "DescribeStream",
+            "params": { "StreamName": { "$name": "s" } }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.StreamDescription.StreamName": { "equals": { "$name": "s" } },
+                "$.StreamDescription.StreamARN": { "nonEmpty": true }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 30,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "DescribeStream",
+                  "params": { "StreamName": { "$name": "s" } }
+                },
+                "checks": {
+                  "$.StreamDescription.StreamStatus": { "equals": "ACTIVE" },
+                  "$.StreamDescription.Shards[0].ShardId": { "nonEmpty": true }
+                }
+              }
+            }
+          ],
+          "depends": ["CreateStream"]
+        },
+        {
+          "$comment": "go-sdk asserts StreamName is non-empty; python-sdk that it equals the stream's name and that OpenShardCount is at least 1; node-js-sdk and java-sdk that StreamARN is present; cli and java-sdk that the status is ACTIVE. The union, with two choices stated: OpenShardCount is asserted `equals: 1` rather than python-sdk's ≥ 1, because the IR has no ordered numeric comparison (recorded as an IR gap) and setup asks for exactly one shard, which makes the exact value the stronger claim; and the status again goes through `eventually`.",
+          "name": "DescribeStreamSummary",
+          "op": "DescribeStreamSummary",
+          "call": {
+            "op": "DescribeStreamSummary",
+            "params": { "StreamName": { "$name": "s" } }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.StreamDescriptionSummary.StreamName": { "equals": { "$name": "s" } },
+                "$.StreamDescriptionSummary.StreamARN": { "nonEmpty": true }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 30,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "DescribeStreamSummary",
+                  "params": { "StreamName": { "$name": "s" } }
+                },
+                "checks": {
+                  "$.StreamDescriptionSummary.StreamStatus": { "equals": "ACTIVE" },
+                  "$.StreamDescriptionSummary.OpenShardCount": { "equals": 1 }
+                }
+              }
+            }
+          ],
+          "depends": ["CreateStream"]
+        },
+        {
+          "$comment": "All five natives assert the same thing — the group's stream is in StreamNames. java-sdk bounds the page at 100 and the other four take the default; the port takes the default, since a bound page is the one way this clause could fail for a reason that is not the emulator's.",
+          "name": "ListStreams",
+          "op": "ListStreams",
+          "call": { "op": "ListStreams", "params": {} },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.StreamNames",
+              "where": { "$": { "$name": "s" } }
+            }
+          ],
+          "depends": ["CreateStream"]
+        },
+        {
+          "$comment": "go-sdk and cli write env=test; python-sdk, node-js-sdk and java-sdk write env=compat, and python-sdk a second tag beside it. java-sdk asserts nothing at all after the write (#1904); the other four read the tag back. env=compat is taken as the majority spelling, and a second tag is kept so a multi-tag write is exercised as python-sdk's is — both are read back, which is what would catch an AddTagsToStream that replaced the tag set rather than merging into it.",
+          "name": "AddTagsToStream",
+          "op": "AddTagsToStream",
+          "call": {
+            "op": "AddTagsToStream",
+            "params": {
+              "StreamName": { "$name": "s" },
+              "Tags": { "env": "compat", "project": "overcast" }
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "call": {
+                "op": "ListTagsForStream",
+                "params": { "StreamName": { "$name": "s" } }
+              },
+              "itemsPath": "$.Tags",
+              "where": { "$.Key": "env", "$.Value": "compat" }
+            },
+            {
+              "kind": "listContains",
+              "call": {
+                "op": "ListTagsForStream",
+                "params": { "StreamName": { "$name": "s" } }
+              },
+              "itemsPath": "$.Tags",
+              "where": { "$.Key": "project", "$.Value": "overcast" }
+            }
+          ],
+          "depends": ["CreateStream"]
+        },
+        {
+          "$comment": "go-sdk and cli assert only that the list is non-empty; node-js-sdk that some tag has the key env; python-sdk and java-sdk that env carries the value the write gave it. Naming both tags and both values is the union and the strongest of the five.",
+          "name": "ListTagsForStream",
+          "op": "ListTagsForStream",
+          "call": {
+            "op": "ListTagsForStream",
+            "params": { "StreamName": { "$name": "s" } }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Tags",
+              "where": { "$.Key": "env", "$.Value": "compat" }
+            },
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Tags",
+              "where": { "$.Key": "project", "$.Value": "overcast" }
+            }
+          ],
+          "depends": ["AddTagsToStream"]
+        },
+        {
+          "$comment": "go-sdk, cli, python-sdk and node-js-sdk prove the delete took effect by listing the streams again and finding nothing; java-sdk only calls DeleteStream and clears its own context entry (#1904). List non-membership is what the natives assert, so it is what the port asserts; DescribeStreamSummary raising ResourceNotFoundException would be stronger still, but no native reads it and a clause no predecessor made is a divergence this soak cannot attribute. The stream deleted is the one CreateStream made, so the group's own stream survives for teardown. depends mirrors registry.json exactly.",
+          "name": "DeleteStream",
+          "op": "DeleteStream",
+          "call": {
+            "op": "DeleteStream",
+            "params": { "StreamName": { "$name": "created" } }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 20,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": { "op": "ListStreams", "params": {} },
+                "itemsPath": "$.StreamNames",
+                "where": { "$": { "$name": "created" } }
+              }
+            }
+          ],
+          "depends": ["DescribeStream", "DescribeStreamSummary", "ListStreams", "ListTagsForStream"]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "DeleteStream",
+          "params": { "StreamName": { "$name": "created" } }
+        },
+        {
+          "op": "DeleteStream",
+          "params": { "StreamName": { "$name": "s" } }
+        }
+      ]
+    }
+  ]
+}
