@@ -4286,7 +4286,7 @@
           "operation": "RunTask",
           "category": "General",
           "status": "✅ Supported",
-          "notes": "Docker-backed when available, metadata-only when no container runtime is wired; a task whose containers fail to start is STOPPED with stopCode TaskFailedToStart rather than reported RUNNING; async state transitions; networkConfiguration required when the task definition's networkMode is awsvpc, synthetic ENI attachment returned, platformVersion defaults to LATEST; awsvpc task containers share one network namespace and address; each lastStatus transition emits an ECS Task State Change event to the default EventBridge bus"
+          "notes": "Docker-backed when available, metadata-only when no container runtime is wired; a task whose containers fail to start is STOPPED with stopCode TaskFailedToStart rather than reported RUNNING; async state transitions; networkConfiguration required when the task definition's networkMode is awsvpc, synthetic ENI attachment returned, platformVersion defaults to LATEST; awsvpc task containers share one network namespace and address; each lastStatus transition emits an ECS Task State Change event to the default EventBridge bus; emulator-only and off by default, a task definition tagged overcast:debug=true (or overcast:debug/\u003ccontainer\u003e=true) under OVERCAST_ECS_DEBUGGER=true gets a step debugger port per named container, published on the task's network namespace and released when the task stops — never observable on the AWS API, and a second running task of the same definition runs undebugged (#1939)"
         },
         {
           "operation": "StartTask",

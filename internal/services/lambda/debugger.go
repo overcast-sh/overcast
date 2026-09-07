@@ -13,8 +13,6 @@ package lambda
 
 import (
 	"context"
-	"net"
-	"strconv"
 	"time"
 
 	"go.uber.org/zap"
@@ -112,7 +110,7 @@ func (cr *ContainerRuntime) bindDebugTarget(ctx context.Context, target *debugge
 			return
 		}
 	}
-	upstream, ok := debugUpstream(target, containerAddr, inspect)
+	upstream, ok := target.UpstreamFor(containerAddr, inspect)
 	if !ok {
 		cr.logger.Warn("debugger: container published no host port for the debug port — target left unbound",
 			zap.String("container", shortContainerID(containerID)),
@@ -123,20 +121,6 @@ func (cr *ContainerRuntime) bindDebugTarget(ctx context.Context, target *debugge
 	target.SetUpstream(upstream)
 	target.SetContainerID(containerID)
 	cr.logger.Debug("debugger: target bound", zap.String("target", target.ID()), zap.String("upstream", upstream))
-}
-
-// debugUpstream is the address the proxy dials for a container: containerAddr
-// with the debug port when Overcast can reach the container directly, else
-// the loopback host port inspect reports for it.
-func debugUpstream(target *debugger.Target, containerAddr string, inspect *docker.ContainerInspect) (string, bool) {
-	if containerAddr != "" {
-		return net.JoinHostPort(containerAddr, strconv.Itoa(target.Port())), true
-	}
-	hostPort, ok := target.HostPortFrom(inspect)
-	if !ok {
-		return "", false
-	}
-	return net.JoinHostPort("127.0.0.1", strconv.Itoa(hostPort)), true
 }
 
 // liveDebugTarget is fn's target when an editor could attach to it: enabled

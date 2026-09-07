@@ -18,6 +18,7 @@ import (
 
 	"github.com/overcast-sh/overcast/internal/clock"
 	"github.com/overcast-sh/overcast/internal/config"
+	"github.com/overcast-sh/overcast/internal/debugger"
 	"github.com/overcast-sh/overcast/internal/docker"
 	"github.com/overcast-sh/overcast/internal/events"
 	"github.com/overcast-sh/overcast/internal/protocol"
@@ -45,11 +46,17 @@ type Service struct {
 }
 
 // New returns a configured ECS Service.
-func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Clock) *Service {
+//
+// dbg is the router-owned debug-target manager (docs/plans/compute-debugger.md);
+// nil leaves the debugger off, which is what every test that does not exercise
+// it wants.
+func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Clock, dbg *debugger.Manager) *Service {
 	log := serviceutil.NewServiceLogger(logger, serviceName)
 	s := newECSStore(store, cfg.Region)
+	h := newHandler(cfg, s, log, clk)
+	h.debugger = dbg
 	svc := &Service{
-		handler: newHandler(cfg, s, log, clk),
+		handler: h,
 		cfg:     cfg,
 		log:     log,
 	}

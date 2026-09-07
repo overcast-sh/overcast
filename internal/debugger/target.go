@@ -373,6 +373,25 @@ func (t *Target) HostPortFrom(inspect *docker.ContainerInspect) (int, bool) {
 	return 0, false
 }
 
+// UpstreamFor is the address the proxy dials for a started container, per
+// docs/plans/compute-debugger.md § 3.6: containerAddr on the debug port when
+// Overcast can reach the container directly (dataplane.ContainerAddr, only
+// ever non-empty for a containerised Overcast), else the loopback host port
+// inspect reports for the binding ApplyPortBinding asked for. inspect must be
+// of the container whose HostConfig carries that binding — the container
+// itself, or the namespace container an ECS awsvpc task's containers share.
+// ok is false when neither is known, which is reported rather than guessed.
+func (t *Target) UpstreamFor(containerAddr string, inspect *docker.ContainerInspect) (string, bool) {
+	if containerAddr != "" {
+		return net.JoinHostPort(containerAddr, strconv.Itoa(t.Port())), true
+	}
+	hostPort, ok := t.HostPortFrom(inspect)
+	if !ok {
+		return "", false
+	}
+	return net.JoinHostPort("127.0.0.1", strconv.Itoa(hostPort)), true
+}
+
 func (t *Target) portKey() string {
 	return strconv.Itoa(t.Port()) + "/tcp"
 }

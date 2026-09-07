@@ -287,6 +287,27 @@ func TestSpecsFromTaskTags_unknownAndEmptyContainer(t *testing.T) {
 	}
 }
 
+func TestSpecsFromTaskTags_hotReloadKeysBelongToHotReload(t *testing.T) {
+	// Given: a two-container task whose hot-reload tags name volumes — the
+	// bare key and one suffixed with a volume name — beside a debug tag
+	tags := map[string]string{
+		TagDebug + "/app":             "true",
+		TagHotReloadPath:              "/home/dev/app",
+		TagHotReloadPath + "/app-src": "/home/dev/app/src",
+		TagHotReloadPath + "/vendor":  "/home/dev/vendor",
+	}
+
+	// When: specs are resolved
+	specs, problems := SpecsFromTaskTags(tags, []string{"app", "sidecar"}, true)
+
+	// Then: neither hot-reload key is refused as an unknown container or an
+	// ambiguous bare tag, and neither supplies a source path — the service
+	// derives that from the mount the tag redirects
+	assert.Empty(t, problems, "problems: %v", problemKeys(problems))
+	require.Len(t, specs, 1)
+	assert.Equal(t, Spec{Service: ServiceECS, Container: "app", FlagOn: true, Tagged: true}, specs["app"])
+}
+
 func TestSpecsFromTaskTags_flagOff(t *testing.T) {
 	// Given: two tagged containers and the ECS flag off
 	tags := map[string]string{TagDebug + "/app": "true", TagDebug + "/worker": "true"}

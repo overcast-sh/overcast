@@ -110,9 +110,11 @@ func (h *Handler) handleContainerDied(_ context.Context, e events.Event) {
 	}
 	ctx := middleware.ContextWithRegion(context.Background(), region)
 	h.retainContainerLogs(ctx, task, p.ContainerID)
+	h.clearDebugContainer(task, p.ContainerID)
 	if !allStopped {
 		return
 	}
+	h.releaseDebugTargets(task)
 
 	// The task is fully stopped, so its task-lifetime volumes have no reader
 	// left. Shared-scope volumes are left alone; see removeTaskVolumes.

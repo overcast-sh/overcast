@@ -20,7 +20,7 @@ func TestDispatch_unimplementedVsUnknownOperation(t *testing.T) {
 	// Given: SubmitTaskStateChange is a real, documented ECS operation
 	// (internal/awsapi/manifest.gen.go) with no handler here.
 	const unimplemented, unknown = "SubmitTaskStateChange", "NotAnECSOperation"
-	svc := New(&config.Config{Region: "us-east-1", AccountID: "000000000000"}, state.NewMemoryStore(), zap.NewNop(), clock.NewMock())
+	svc := New(&config.Config{Region: "us-east-1", AccountID: "000000000000"}, state.NewMemoryStore(), zap.NewNop(), clock.NewMock(), nil)
 	if _, ok := svc.handler.ops[unimplemented]; ok {
 		t.Fatalf("test setup: %q is implemented, pick an unimplemented operation", unimplemented)
 	}

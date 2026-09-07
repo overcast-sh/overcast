@@ -10,9 +10,9 @@ import (
 
 // debuggerDescribers is the router's debugger.Describer: it hands an untagged
 // resource to the compute service that owns it, keyed by the service segment
-// of the target id. Each compute service registers itself once, where it is
-// constructed in New — Lambda today, ECS when its integration lands — and
-// nothing here knows what either does with the request.
+// of the target id. Each compute service registers itself once, where both are
+// constructed in New, and nothing here knows what either does with the
+// request.
 type debuggerDescribers map[debugger.Service]debugger.Describer
 
 // DescribeUntagged implements debugger.Describer.

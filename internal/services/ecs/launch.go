@@ -128,6 +128,9 @@ func (h *Handler) launchTask(ctx context.Context, spec taskLaunchSpec) (*Task, *
 				zap.String("task", taskID),
 				zap.Error(startErr))
 			markTaskFailedToStart(task, h.clk.Now().Unix(), startErr)
+			// Targets registered before the failure have no container to
+			// come; their ports go back for the next attempt.
+			h.releaseDebugTargets(task)
 		}
 	}
 

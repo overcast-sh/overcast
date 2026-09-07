@@ -18,30 +18,9 @@ import (
 	"github.com/overcast-sh/overcast/internal/clock"
 	"github.com/overcast-sh/overcast/internal/config"
 	"github.com/overcast-sh/overcast/internal/debugger"
-	"github.com/overcast-sh/overcast/internal/docker"
+	"github.com/overcast-sh/overcast/internal/debugger/debuggertest"
 	"github.com/overcast-sh/overcast/internal/state"
 )
-
-// freeDebugPortRange is a small port range starting at a port the OS just
-// handed out, so a manager under test binds without touching the real
-// 9229-9329 range or any fixed port.
-func freeDebugPortRange(t *testing.T) [2]int {
-	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
-	port := ln.Addr().(*net.TCPAddr).Port
-	_ = ln.Close()
-	return [2]int{port, port + 50}
-}
-
-func newTestDebugManager(t *testing.T, clk clock.Clock, policy config.DebuggerTimeoutPolicy) *debugger.Manager {
-	t.Helper()
-	m := debugger.NewManager(clk, zap.NewNop(), "127.0.0.1", freeDebugPortRange(t), policy)
-	t.Cleanup(m.Close)
-	return m
-}
 
 // boundDebugTarget registers an enabled, listening target for fn as a cold
 // start would, speaking the protocol its runtime resolves to.
@@ -125,7 +104,7 @@ func TestContainerRuntimeBuildEnv_injectsTheDebuggerFlagsOnlyWithATarget(t *test
 	}
 	fn := debugTaggedNodeFunction("demo")
 	fn.Environment = map[string]string{"NODE_OPTIONS": "--enable-source-maps"}
-	target := boundDebugTarget(t, newTestDebugManager(t, clock.NewMock(), config.DebuggerTimeoutAttached), fn)
+	target := boundDebugTarget(t, debuggertest.NewManager(t, clock.NewMock(), config.DebuggerTimeoutAttached), fn)
 	port := strconv.Itoa(target.Port())
 
 	// When: the container environment is built with and without the target
@@ -175,7 +154,7 @@ func TestAcquireContainer_publishesTheDebugPortOnlyForATaggedFunction(t *testing
 			daemon := newRecordingDaemon(t)
 			cr := newDaemonContainerRuntime(t, daemon.Server)
 			cr.cfg.LambdaDebugger = true
-			m := newTestDebugManager(t, clock.New(), config.DebuggerTimeoutAttached)
+			m := debuggertest.NewManager(t, clock.New(), config.DebuggerTimeoutAttached)
 			cr.SetDebugger(m)
 			fn := imageFunction()
 			fn.Tags = tc.tags
@@ -237,7 +216,7 @@ func TestAcquireContainer_flagOffRegistersAnInertTarget(t *testing.T) {
 	// Given: a tagged function on a server whose Lambda debugger flag is off
 	daemon := newRecordingDaemon(t)
 	cr := newDaemonContainerRuntime(t, daemon.Server)
-	m := newTestDebugManager(t, clock.New(), config.DebuggerTimeoutAttached)
+	m := debuggertest.NewManager(t, clock.New(), config.DebuggerTimeoutAttached)
 	cr.SetDebugger(m)
 	fn := imageFunction()
 	fn.Tags = map[string]string{debugger.TagDebug: "true"}
@@ -265,49 +244,6 @@ func TestAcquireContainer_flagOffRegistersAnInertTarget(t *testing.T) {
 	}
 }
 
-// ─── reaching the container ──────────────────────────────────────────────────
-
-func TestDebugUpstream_dialsTheContainerDirectlyOrItsPublishedPort(t *testing.T) {
-	// Given: a bound target and an inspect naming the published host port
-	fn := debugTaggedNodeFunction("demo")
-	target := boundDebugTarget(t, newTestDebugManager(t, clock.NewMock(), config.DebuggerTimeoutAttached), fn)
-	port := strconv.Itoa(target.Port())
-	inspect := &docker.ContainerInspect{}
-	inspect.NetworkSettings.Ports = map[string][]docker.PortBinding{
-		port + "/tcp": {{HostIP: "127.0.0.1", HostPort: "55012"}},
-	}
-
-	t.Run("overcast in docker dials the container ip on the debug port", func(t *testing.T) {
-		// When: the container's address is routable
-		got, ok := debugUpstream(target, "172.18.0.5", nil)
-
-		// Then: the upstream is the container itself, on the same port number
-		if !ok || got != "172.18.0.5:"+port {
-			t.Fatalf("upstream = %q (%v), want 172.18.0.5:%s", got, ok, port)
-		}
-	})
-
-	t.Run("native overcast dials the published loopback port", func(t *testing.T) {
-		// When: the container's address is not routable
-		got, ok := debugUpstream(target, "", inspect)
-
-		// Then: the upstream is the host port Docker published
-		if !ok || got != "127.0.0.1:55012" {
-			t.Fatalf("upstream = %q (%v), want 127.0.0.1:55012", got, ok)
-		}
-	})
-
-	t.Run("no published port is reported rather than guessed", func(t *testing.T) {
-		// When: the inspect carries no binding for the debug port
-		_, ok := debugUpstream(target, "", &docker.ContainerInspect{})
-
-		// Then: there is no upstream
-		if ok {
-			t.Fatal("an upstream was invented without a published port")
-		}
-	})
-}
-
 // ─── one execution environment ───────────────────────────────────────────────
 
 func TestAcquire_liveDebugTargetPinsTheFunctionToOneInstance(t *testing.T) {
@@ -316,7 +252,7 @@ func TestAcquire_liveDebugTargetPinsTheFunctionToOneInstance(t *testing.T) {
 	rt := &countingColdStartRuntime{}
 	pool := NewInstancePool(rt, zap.NewNop(), clock.NewMock(), PoolLimits{MaxInstancesPerFunction: 10})
 	defer pool.Stop()
-	m := newTestDebugManager(t, clock.NewMock(), config.DebuggerTimeoutAttached)
+	m := debuggertest.NewManager(t, clock.NewMock(), config.DebuggerTimeoutAttached)
 	pool.debugger = m
 	fn := debugTaggedNodeFunction("debugged")
 	fn.Timeout = 1
@@ -354,7 +290,7 @@ func TestAcquire_inertOrErrorTargetDoesNotPin(t *testing.T) {
 	rt := &countingColdStartRuntime{}
 	pool := NewInstancePool(rt, zap.NewNop(), clock.NewMock(), PoolLimits{MaxInstancesPerFunction: 10})
 	defer pool.Stop()
-	m := newTestDebugManager(t, clock.NewMock(), config.DebuggerTimeoutAttached)
+	m := debuggertest.NewManager(t, clock.NewMock(), config.DebuggerTimeoutAttached)
 	pool.debugger = m
 	fn := debugTaggedNodeFunction("inert")
 	spec, _ := debugger.SpecFromTags(debugger.ServiceLambda, fn.Tags, false)
@@ -377,7 +313,7 @@ func TestSetProvisionedConcurrency_liveDebugTargetFillsOneEnvironment(t *testing
 	rt := &countingColdStartRuntime{}
 	pool := NewInstancePool(rt, zap.NewNop(), clock.NewMock(), PoolLimits{MaxWarmPerFunction: 5})
 	defer pool.Stop()
-	m := newTestDebugManager(t, clock.NewMock(), config.DebuggerTimeoutAttached)
+	m := debuggertest.NewManager(t, clock.NewMock(), config.DebuggerTimeoutAttached)
 	pool.debugger = m
 	fn := debugTaggedNodeFunction("provisioned")
 	boundDebugTarget(t, m, fn)
@@ -429,7 +365,7 @@ func TestBoundInvocation_isAPlainTimeoutWithoutATarget(t *testing.T) {
 func TestBoundInvocation_stopsTheClockWhileAClientIsAttached(t *testing.T) {
 	// Given: an instance created for a live target with an editor attached
 	clk := clock.NewMock()
-	m := newTestDebugManager(t, clk, config.DebuggerTimeoutAttached)
+	m := debuggertest.NewManager(t, clk, config.DebuggerTimeoutAttached)
 	fn := debugTaggedNodeFunction("paused")
 	target := boundDebugTarget(t, m, fn)
 	target.SetUpstream(holdUpstream(t))
@@ -458,7 +394,7 @@ func TestBoundInvocation_stopsTheClockWhileAClientIsAttached(t *testing.T) {
 func TestBoundInvocation_strictPolicyKeepsTheRealTimeout(t *testing.T) {
 	// Given: the same attached client under the strict policy
 	clk := clock.NewMock()
-	m := newTestDebugManager(t, clk, config.DebuggerTimeoutStrict)
+	m := debuggertest.NewManager(t, clk, config.DebuggerTimeoutStrict)
 	fn := debugTaggedNodeFunction("strict")
 	target := boundDebugTarget(t, m, fn)
 	target.SetUpstream(holdUpstream(t))
@@ -481,7 +417,7 @@ func TestBoundInvocation_strictPolicyKeepsTheRealTimeout(t *testing.T) {
 
 func TestContainerInstanceClose_clearsTheUpstreamOfItsOwnContainerOnly(t *testing.T) {
 	// Given: a target bound to a container, and an instance for it
-	m := newTestDebugManager(t, clock.NewMock(), config.DebuggerTimeoutAttached)
+	m := debuggertest.NewManager(t, clock.NewMock(), config.DebuggerTimeoutAttached)
 	target := boundDebugTarget(t, m, debugTaggedNodeFunction("closing"))
 	newInstance := func(id string) *containerInstance {
 		return &containerInstance{id: id, logger: zap.NewNop(), clk: clock.NewMock(), debug: target}
@@ -518,7 +454,7 @@ func TestContainerInstanceClose_clearsTheUpstreamOfItsOwnContainerOnly(t *testin
 func TestDeleteFunction_releasesTheDebugTarget(t *testing.T) {
 	// Given: a function with a registered target
 	h, _ := lifecycleTestHandler(t)
-	m := newTestDebugManager(t, clock.NewMock(), config.DebuggerTimeoutAttached)
+	m := debuggertest.NewManager(t, clock.NewMock(), config.DebuggerTimeoutAttached)
 	h.debugger = m
 	fn := seedLifecycleFunction(t, h, nil)
 	fn.Tags = map[string]string{debugger.TagDebug: "true"}

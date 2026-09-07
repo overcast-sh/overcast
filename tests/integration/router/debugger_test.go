@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/overcast-sh/overcast/internal/debugger"
@@ -87,6 +88,72 @@ func TestDebuggerTargets_untaggedFunctionIsSynthesised(t *testing.T) {
 	}
 	if d.Editors == nil {
 		t.Error("editors = null, want an empty array")
+	}
+}
+
+func TestDebuggerTargets_untaggedTaskIsSynthesisedPerContainer(t *testing.T) {
+	// Given: a task placed from a task definition no tag mentions — metadata
+	// only, since this server has no Docker, which is enough for it to exist
+	srv := helpers.NewTestServer(t)
+	ecsCall := func(operation string, body map[string]any, into any) {
+		t.Helper()
+		raw, _ := json.Marshal(body)
+		req, _ := http.NewRequest(http.MethodPost, srv.URL+"/", bytes.NewReader(raw))
+		req.Header.Set("Content-Type", "application/x-amz-json-1.1")
+		req.Header.Set("X-Amz-Target", "AmazonEC2ContainerServiceV20141113."+operation)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("%s: %v", operation, err)
+		}
+		defer resp.Body.Close()
+		helpers.AssertStatus(t, resp, http.StatusOK)
+		if into != nil {
+			helpers.DecodeJSON(t, resp, into)
+		}
+	}
+	ecsCall("CreateCluster", map[string]any{"clusterName": "plain"}, nil)
+	var registered struct {
+		TaskDefinition struct {
+			TaskDefinitionArn string `json:"taskDefinitionArn"`
+		} `json:"taskDefinition"`
+	}
+	ecsCall("RegisterTaskDefinition", map[string]any{
+		"family": "plain-td",
+		"containerDefinitions": []map[string]any{
+			{"name": "app", "image": "busybox"},
+			{"name": "sidecar", "image": "busybox"},
+		},
+	}, &registered)
+	var placed struct {
+		Tasks []struct {
+			TaskArn string `json:"taskArn"`
+		} `json:"tasks"`
+	}
+	ecsCall("RunTask", map[string]any{"cluster": "plain", "taskDefinition": "plain-td"}, &placed)
+	if len(placed.Tasks) != 1 {
+		t.Fatalf("placed %d tasks, want 1", len(placed.Tasks))
+	}
+	taskID := placed.Tasks[0].TaskArn[strings.LastIndex(placed.Tasks[0].TaskArn, "/")+1:]
+
+	// When: the console opens the task's Debug panel for its sidecar
+	var d debugger.Descriptor
+	resp := getDebuggerJSON(t, srv, "/_overcast/debugger/targets/ecs/"+taskID+"?container=sidecar", &d)
+
+	// Then: the entry is off, why, and how to turn it on — tagging the task
+	// definition, which is where ECS reads the tag from
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	if d.ID != "ecs/"+taskID+"/sidecar" || d.Container != "sidecar" || d.Enabled || d.Reason != debugger.ReasonNotTagged {
+		t.Errorf("descriptor = %+v, want ecs/%s/sidecar, off, %q", d, taskID, debugger.ReasonNotTagged)
+	}
+	if want := "--resource-arn " + registered.TaskDefinition.TaskDefinitionArn; !strings.Contains(d.Setup.TagCLI, want) {
+		t.Errorf("setup.tagCli = %q, want it to name %q", d.Setup.TagCLI, want)
+	}
+
+	// And: without a container named, the first one answers
+	resp = getDebuggerJSON(t, srv, "/_overcast/debugger/targets/ecs/"+taskID, &d)
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	if d.Container != "app" {
+		t.Errorf("default container = %q, want the first, app", d.Container)
 	}
 }
 

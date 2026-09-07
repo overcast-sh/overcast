@@ -489,9 +489,25 @@ func WithLambdaHotReload() Option {
 func WithLambdaDebugger() Option {
 	return func(so *serverOptions) {
 		so.cfg.LambdaDebugger = true
-		so.cfg.DebuggerListen = "127.0.0.1"
-		so.cfg.DebuggerPorts = [2]int{9229, 9329}
+		debuggerDefaults(so.cfg)
 	}
+}
+
+// WithECSDebugger is WithLambdaDebugger for ECS task definitions that opt in
+// with the same tags, optionally suffixed with a container name.
+func WithECSDebugger() Option {
+	return func(so *serverOptions) {
+		so.cfg.ECSDebugger = true
+		debuggerDefaults(so.cfg)
+	}
+}
+
+// debuggerDefaults is the shipped listen address and port range, which
+// config.Load would otherwise resolve and a test config built by hand has
+// not.
+func debuggerDefaults(cfg *config.Config) {
+	cfg.DebuggerListen = "127.0.0.1"
+	cfg.DebuggerPorts = [2]int{9229, 9329}
 }
 
 // WithDebuggerTimeout sets what a function's timeout means while a debugger

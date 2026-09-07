@@ -45,7 +45,10 @@ const (
 	// to. It falls back to TagHotReloadPath, which usually names the same tree.
 	TagSourcePath = "overcast:source-path"
 	// TagHotReloadPath is hot reload's tag, read here only as the fallback
-	// for TagSourcePath.
+	// for TagSourcePath — and only for Lambda. On an ECS task definition its
+	// suffix names a volume, not a container, so SpecsFromTaskTags leaves it
+	// alone and the ECS service supplies the local root from the redirected
+	// mount itself.
 	TagHotReloadPath = "overcast:hot-reload-path"
 )
 
@@ -177,6 +180,11 @@ func SpecsFromTaskTags(tags map[string]string, containers []string, flagOn bool)
 			continue
 		}
 		base, container, hasSuffix := strings.Cut(key, "/")
+		if base == TagHotReloadPath {
+			// Hot reload's own tag, whose suffix is a volume name: not a
+			// container, and not this package's to warn about.
+			continue
+		}
 		switch {
 		case !hasSuffix:
 			if bare == nil {

@@ -336,12 +336,6 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	if cfg.Debug {
 		r.Route("/_overcast/debug", debugHandlers(cfg, store, ec2Svc, lambdaSvc, debugProviders, traceBuf, dockerStatusNow))
 	}
-	// The debugger's own endpoints. A compute service that can synthesise
-	// the entry for an untagged resource adds itself here under its
-	// debugger.Service key (ECS registers its describer the same way).
-	registerDebuggerRoutes(r, debuggerMgr, debuggerDescribers{
-		debugger.ServiceLambda: lambdaSvc,
-	})
 	// ---- Reset (always available) ------------------------------------------
 	// Unlike the rest of the /_overcast/debug namespace above, reset is not
 	// expensive or leaky instrumentation, and it grants no destructive power
@@ -371,8 +365,16 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	prof.mark("  new: cloudformation")
 	rdsSvc := rds.New(cfg, store, logger, clk)
 	prof.mark("  new: rds")
-	ecsSvc := ecs.New(cfg, store, logger, clk)
+	ecsSvc := ecs.New(cfg, store, logger, clk, debuggerMgr)
 	prof.mark("  new: ecs")
+	// The debugger's own endpoints, once both compute services exist: each
+	// synthesises the entry for an untagged resource of its own under its
+	// debugger.Service key. Registered on r directly, like the reset routes
+	// above; chi does not care what order absolute routes are added in.
+	registerDebuggerRoutes(r, debuggerMgr, debuggerDescribers{
+		debugger.ServiceLambda: lambdaSvc,
+		debugger.ServiceECS:    ecsSvc,
+	})
 	cognitoSvc := cognito.New(cfg, store, logger, clk)
 	prof.mark("  new: cognito")
 	sfnSvc := stepfunctions.New(cfg, store, logger, clk)

@@ -62,7 +62,7 @@ func TestRunTask_runningTransitionScheduledAfterTheRecordLands(t *testing.T) {
 		release: make(chan struct{}),
 	}
 	clk := clock.NewMock()
-	svc := New(&config.Config{Region: "us-east-1", AccountID: "123456789012"}, gate, zap.NewNop(), clk)
+	svc := New(&config.Config{Region: "us-east-1", AccountID: "123456789012"}, gate, zap.NewNop(), clk, nil)
 	h := svc.handler
 	// The transition being ordered here is scheduled only when Docker is ready,
 	// so the race this test is about does not exist on a metadata-only handler.

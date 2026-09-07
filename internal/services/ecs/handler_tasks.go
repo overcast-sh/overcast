@@ -325,12 +325,30 @@ func (h *Handler) startTaskContainers(ctx context.Context, task *Task, td *TaskD
 	// service, so there is nothing to ensure here.
 	endpoint := h.containerEndpoint(ctx)
 
+	// Build an override index by container name.
+	overrides := make(map[string]*ContainerOverride)
+	if task.Overrides != nil {
+		for i := range task.Overrides.ContainerOverrides {
+			co := &task.Overrides.ContainerOverrides[i]
+			overrides[co.Name] = co
+		}
+	}
+
+	// Hot-reload redirects and debug targets are resolved once for the task:
+	// the tags belong to the task definition, so asking per container would
+	// repeat the same store read and the same warnings for every container in
+	// it. Both come before the namespace container below, which is where an
+	// awsvpc task's debug ports are published.
+	tags := h.taskDefinitionTags(ctx, td.TaskDefinitionArn)
+	hotReload := h.hotReloadPaths(td, tags)
+	debug := h.debugTargets(td, taskID, tags, overrides, hotReload)
+
 	// An awsvpc task's containers all run in one network namespace, so it is
 	// built before any of them — the task's whole networking hangs off it. See
 	// task_netns.go.
 	namespaceID := ""
 	if taskSharesNetworkNamespace(td, task.LaunchType) {
-		id, err := h.startTaskNamespaceContainer(ctx, task, td, clusterName, taskID, placement, endpoint)
+		id, err := h.startTaskNamespaceContainer(ctx, task, td, clusterName, taskID, placement, endpoint, debug)
 		if err != nil {
 			return err
 		}
@@ -349,23 +367,9 @@ func (h *Handler) startTaskContainers(ctx context.Context, task *Task, td *TaskD
 		}()
 	}
 
-	// Build an override index by container name.
-	overrides := make(map[string]*ContainerOverride)
-	if task.Overrides != nil {
-		for i := range task.Overrides.ContainerOverrides {
-			co := &task.Overrides.ContainerOverrides[i]
-			overrides[co.Name] = co
-		}
-	}
-
 	// Resource ID for Docker labels: "clusterName/taskID" so the exit notifier
 	// can look up the task.
 	resourceID := clusterName + "/" + taskID
-
-	// Hot-reload redirects are resolved once for the task: the tags belong to
-	// the task definition, so asking per container would repeat the same store
-	// read and the same warnings for every container in it.
-	hotReload := h.hotReloadPaths(td, h.taskDefinitionTags(ctx, td.TaskDefinitionArn))
 
 	// Volumes before containers: a mount naming a volume that does not exist
 	// fails container creation, and provisioning once here rather than per
@@ -407,11 +411,15 @@ func (h *Handler) startTaskContainers(ctx context.Context, task *Task, td *TaskD
 		if err := h.puller.Ensure(ctx, image); err != nil {
 			return containerFailure(cd.Name, "ecs: %w", err)
 		}
+		debug.setRemoteRoot(ctx, h, &td.ContainerDefinitions[i])
 
 		// Build environment variables, including any resolved from Secrets
 		// Manager or SSM via the definition's secrets.
 		env := buildContainerEnv(cd, overrides[cd.Name], endpoint)
 		env = append(env, h.secretEnv(ctx, cd)...)
+		// Last, so the debugger appends to a NODE_OPTIONS or JAVA_TOOL_OPTIONS
+		// the definition set rather than replacing it.
+		env = debug.inject(cd.Name, env)
 
 		// Build command.
 		var cmd []string
@@ -447,6 +455,11 @@ func (h *Handler) startTaskContainers(ctx context.Context, task *Task, td *TaskD
 			},
 		}
 		h.applyTaskNetwork(ccfg, namespaceID, endpoint, portSurfaceFor(cd))
+		if namespaceID == "" {
+			// A container with a namespace of its own publishes its own debug
+			// port; in a shared one it was published on the namespace container.
+			debug.applyPortBinding(ccfg, cd.Name)
+		}
 
 		// The puller retries once when the image was removed behind our back
 		// (docker rmi after the recorded pull) instead of failing until restart.
@@ -507,6 +520,17 @@ func (h *Handler) startTaskContainers(ctx context.Context, task *Task, td *TaskD
 
 		task.Containers[i].RuntimeId = dockerID
 
+		// The debug port is reachable now the container runs. It is read from
+		// whichever container owns the binding — this one, or the namespace
+		// container it runs inside.
+		if target, ok := debug[cd.Name]; ok {
+			owner := namespaceID
+			if owner == "" {
+				owner = dockerID
+			}
+			h.bindDebugTarget(ctx, target, owner, dockerID)
+		}
+
 		// Ship this container's output to CloudWatch Logs when the task
 		// definition asked for the awslogs driver. Started after the container
 		// is running so the stream exists to attach to.
@@ -523,6 +547,9 @@ func (h *Handler) startTaskContainers(ctx context.Context, task *Task, td *TaskD
 // Both StopTask paths come through here — the JSON one and the typed one — so a
 // task stopped over CBOR is torn down exactly as one stopped over JSON is.
 func (h *Handler) stopTaskContainers(ctx context.Context, task *Task) {
+	// A stopped task's debug ports go with it, before its containers do, so
+	// nothing is dialled behind them meanwhile.
+	h.releaseDebugTargets(task)
 	if !h.dockerReady.Load() {
 		return
 	}

@@ -52,7 +52,7 @@ const (
 
 func TestUpdateService_scaleDownConcurrentWithTaskTransitions(t *testing.T) {
 	// Given: several services, each running several tasks
-	svc := New(&config.Config{Region: "us-east-1", AccountID: "123456789012"}, state.NewMemoryStore(), zap.NewNop(), clock.New())
+	svc := New(&config.Config{Region: "us-east-1", AccountID: "123456789012"}, state.NewMemoryStore(), zap.NewNop(), clock.New(), nil)
 	h := svc.handler
 	// Tasks only transition, and so only reconcile their service, when Docker
 	// is ready — without it there are no transitions to race the update against.

@@ -427,6 +427,34 @@ becoming 1 while `liveDebugTarget` (enabled, not in error) exists; it takes
 effect from the first cold start on, so a burst of first invocations is admitted
 at the ordinary cap.
 
+Phase B2 (ECS) notes: `ecs.New` takes the same manager and the router registers
+`debugger.ServiceECS: ecsSvc` once both services exist (the route registration
+moved below `ecs.New`; chi does not order absolute routes). All ECS glue is
+`internal/services/ecs/debugger.go`. Targets are resolved once per task in
+`startTaskContainers`, before the namespace container, because under awsvpc that
+container is the one whose `HostConfig` publishes the task's ports — so the debug
+binding goes on it and the post-start inspect reads it, while `containerId` and
+the die-event `ClearContainer` name the application container. In bridge/host
+modes the application container carries its own binding. The upstream rule left
+Lambda's glue for `Target.UpstreamFor`, shared by both services; the
+port-range/manager test helpers likewise moved to `internal/debugger/debuggertest`.
+`SpecsFromTaskTags` now ignores `overcast:hot-reload-path[/<volume>]` outright —
+its suffix names a volume, not a container, and treating it as one warned on every
+hot-reloaded task — so the ECS glue derives the local root from the first mount
+point a hot-reload tag redirects. Two deviations from § 5: `SetResourceARN` records
+the task definition ARN, not the task's, because that is the resource the tag
+lives on and what `setup.tagCli` must name; and the remote root is the
+definition's `workingDirectory`, else one `InspectImage` of the container's image
+(only for a debugged container, after the pull), else `/`. Duplicate tasks are
+tracked by an in-memory owner map keyed by task definition ARN and container:
+the second task of a definition whose target is still registered runs undebugged
+with a WARN naming the first, and the port moves to the next task once the first
+stops. Every stop path releases — `StopTask`, the service scheduler's retire, the
+last container's die event, and a failed placement. There is no ECS runtime
+string, so a plain `overcast:debug=true` on a Node image resolves to passthrough
+unless `NODE_OPTIONS` already carries `--inspect`; the Docker-backed test tags
+`overcast:debug-protocol=inspector` for that reason.
+
 - **A — core package and config.** `internal/debugger` complete with tests;
   config fields and reference comments. No service changes. Compiles under
   `slim`, `slim,nosqlite`, `slim,dev`.
