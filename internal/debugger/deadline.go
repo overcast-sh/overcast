@@ -19,7 +19,7 @@ import (
 // is exactly context.WithTimeout: nothing here runs, and the invoke hot path
 // for an undebugged function gains only the nil check.
 func WithDeadline(ctx context.Context, clk clock.Clock, timeout time.Duration, t *Target, policy TimeoutPolicy) (context.Context, context.CancelFunc) {
-	if t == nil || policy == config.DebuggerTimeoutStrict || !t.bound() {
+	if t == nil || policy == config.DebuggerTimeoutStrict || !t.Bound() {
 		return context.WithTimeout(ctx, timeout)
 	}
 	// paused needs the protocol to say when it is paused; otherwise the
@@ -37,12 +37,18 @@ func WithDeadline(ctx context.Context, clk clock.Clock, timeout time.Duration, t
 		nominal:   now.Add(timeout),
 		done:      make(chan struct{}),
 		remaining: timeout,
-		suspended: true, // resume() below starts the clock if the target is idle
+		suspended: true, // the seed below starts the clock if the target is idle
 	}
-	// Subscribe before reading the state, so a transition between the two
-	// is seen either way; setSuspended is idempotent, so seeing it twice is
-	// harmless.
-	unsubscribe := t.Subscribe(func(ev Event) {
+	// The starting state and the subscription are taken together under the
+	// target's transition lock, so the clock starts from exactly the state the
+	// first event follows — never from a read a transition already overtook.
+	unsubscribe := t.subscribe(func(attached, paused bool) {
+		if policy == config.DebuggerTimeoutPaused {
+			c.setSuspended(paused)
+			return
+		}
+		c.setSuspended(attached)
+	}, func(ev Event) {
 		switch ev.Kind {
 		case EventAttach, EventDetach:
 			if policy == config.DebuggerTimeoutAttached {
@@ -55,8 +61,9 @@ func WithDeadline(ctx context.Context, clk clock.Clock, timeout time.Duration, t
 		}
 	})
 	stopParent := context.AfterFunc(ctx, func() { c.finish(ctx.Err()) })
-	// A callback may already be running; the cleanups are handed over under
-	// the lock, and run here if the context finished before they arrived.
+	// The budget may already have run out (a zero timeout) or the parent may
+	// already be done; the cleanups are handed over under the lock, and run
+	// here if the context finished before they arrived.
 	c.mu.Lock()
 	c.unsubscribe, c.stopParent = unsubscribe, stopParent
 	finished := c.err != nil
@@ -66,12 +73,6 @@ func WithDeadline(ctx context.Context, clk clock.Clock, timeout time.Duration, t
 		stopParent()
 		return c, func() {}
 	}
-
-	suspended := t.Attached()
-	if policy == config.DebuggerTimeoutPaused {
-		suspended = t.Paused()
-	}
-	c.setSuspended(suspended)
 	return c, func() { c.finish(context.Canceled) }
 }
 

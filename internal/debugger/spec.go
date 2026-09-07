@@ -238,7 +238,7 @@ func SpecsFromTaskTags(tags map[string]string, containers []string, flagOn bool)
 		default:
 			problems = append(problems, Problem{Key: firstKey(bare),
 				Reason: "the task definition declares more than one container, so the bare tag is ambiguous",
-				Hint:   "name the container in the tag key, for example " + firstKey(bare) + "/" + containers[0]})
+				Hint:   "name the container in the tag key, for example " + firstKey(bare) + "/" + containers[0] + "; declared containers: " + strings.Join(containers, ", ")})
 		}
 	}
 
@@ -341,4 +341,19 @@ func firstKey(values tagValues) string {
 	}
 	sort.Strings(keys)
 	return keys[0]
+}
+
+// Warner is the one method of a logger WarnProblems needs, so a service's own
+// logger wrapper and a bare *zap.Logger both serve.
+type Warner interface {
+	Warn(msg string, fields ...zap.Field)
+}
+
+// WarnProblems logs every problem at WARN, one line each, with fields naming
+// the resource the caller is about: the one place the "tag could not be
+// honoured" line is spelled for every compute service.
+func WarnProblems(log Warner, problems []Problem, resource ...zap.Field) {
+	for _, p := range problems {
+		log.Warn("debugger: "+p.Reason, append(append([]zap.Field{}, resource...), p.Fields()...)...)
+	}
 }

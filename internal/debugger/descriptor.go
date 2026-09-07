@@ -116,7 +116,7 @@ func (t *Target) Descriptor() Descriptor {
 		Container:     t.container,
 		Enabled:       t.enabled,
 		Reason:        t.reason,
-		Listen:        Listen{Host: t.host, Port: t.port},
+		Listen:        Listen{Host: dialHost(t.host), Port: t.port},
 		State:         string(t.stateLocked()),
 		AttachedSince: formatTime(t.attachedSince),
 		PausedSince:   formatTime(t.pausedSince),
@@ -194,4 +194,16 @@ func formatTime(t time.Time) string {
 		return ""
 	}
 	return t.UTC().Format(time.RFC3339)
+}
+
+// dialHost is the address an editor dials for a listener bound on host. A
+// wildcard bind — Overcast in Docker listening on every interface so a
+// published port range reaches it — is loopback from the editor's side, and
+// "0.0.0.0" in a launch configuration does not connect on every platform.
+func dialHost(host string) string {
+	switch host {
+	case "", "0.0.0.0", "::", "[::]":
+		return "127.0.0.1"
+	}
+	return host
 }

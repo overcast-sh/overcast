@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -49,34 +50,56 @@ func holdUpstream(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
-	t.Cleanup(func() { _ = ln.Close() })
+	// Held connections are collected here and closed by one cleanup on the
+	// test goroutine: t.Cleanup from the accept goroutine would race teardown.
+	var mu sync.Mutex
+	var held []net.Conn
+	t.Cleanup(func() {
+		_ = ln.Close()
+		mu.Lock()
+		defer mu.Unlock()
+		for _, c := range held {
+			_ = c.Close()
+		}
+	})
 	go func() {
 		for {
 			c, err := ln.Accept()
 			if err != nil {
 				return
 			}
-			t.Cleanup(func() { _ = c.Close() })
+			mu.Lock()
+			held = append(held, c)
+			mu.Unlock()
 		}
 	}()
 	return ln.Addr().String()
 }
 
 // attachClient dials the target's port and waits until the proxy reports the
-// client attached.
+// client attached — on the attach event, which the target delivers as the
+// count goes 0→1, so nothing here polls.
 func attachClient(t *testing.T, target *debugger.Target) net.Conn {
 	t.Helper()
+	attached := make(chan struct{}, 1)
+	unsubscribe := target.Subscribe(func(ev debugger.Event) {
+		if ev.Kind == debugger.EventAttach {
+			select {
+			case attached <- struct{}{}:
+			default:
+			}
+		}
+	})
+	defer unsubscribe()
 	c, err := net.DialTimeout("tcp", net.JoinHostPort(target.Host(), strconv.Itoa(target.Port())), 2*time.Second)
 	if err != nil {
 		t.Fatalf("dial target: %v", err)
 	}
 	t.Cleanup(func() { _ = c.Close() })
-	deadline := time.Now().Add(5 * time.Second)
-	for !target.Attached() {
-		if time.Now().After(deadline) {
-			t.Fatal("client never counted as attached")
-		}
-		time.Sleep(5 * time.Millisecond)
+	select {
+	case <-attached:
+	case <-time.After(5 * time.Second):
+		t.Fatal("client never counted as attached")
 	}
 	return c
 }

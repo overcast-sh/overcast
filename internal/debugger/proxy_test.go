@@ -557,3 +557,45 @@ func TestTarget_subscribeUnsubscribe(t *testing.T) {
 	// Then: it is not called
 	assert.False(t, called)
 }
+
+func TestTarget_subscribeSeedsTheStateTheFirstEventFollows(t *testing.T) {
+	// Given: a target with one client attached
+	m := newTestManager(t, clock.NewMock(), config.DebuggerTimeoutAttached)
+	tgt := boundTarget(t, m, "lambda/fn", passthrough{})
+	tgt.attach()
+
+	// When: a subscriber registers, and the client then detaches
+	var seededAttached, seededPaused bool
+	var got []EventKind
+	unsubscribe := tgt.subscribe(
+		func(attached, paused bool) { seededAttached, seededPaused = attached, paused },
+		func(ev Event) { got = append(got, ev.Kind) })
+	defer unsubscribe()
+	tgt.detach(&connection{target: tgt})
+
+	// Then: the seed saw the attachment and the only event is the one after it
+	assert.True(t, seededAttached)
+	assert.False(t, seededPaused)
+	assert.Equal(t, []EventKind{EventDetach}, got)
+}
+
+func TestManager_ensureReleasesTheTargetWhenNothingAsksAnyMore(t *testing.T) {
+	// Given: a bound target for a function whose tag has since been removed
+	m := newTestManager(t, clock.NewMock(), config.DebuggerTimeoutAttached)
+	tgt := boundTarget(t, m, "lambda/fn", inspector{})
+	port := tgt.Port()
+
+	// When: the next cold start resolves nothing to debug
+	_, err := m.Ensure("lambda/fn", Spec{Service: ServiceLambda, FlagOn: true}, Resolution{})
+
+	// Then: the stale target is gone with its port, not left pinning the
+	// function to one instance
+	assert.ErrorIs(t, err, ErrNothingToDebug)
+	_, ok := m.Get("lambda/fn")
+	assert.False(t, ok)
+	assert.False(t, tgt.Bound())
+	ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+	if assert.NoError(t, err, "port still held after the tag was removed") {
+		ln.Close()
+	}
+}

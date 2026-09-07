@@ -906,7 +906,7 @@ func (cr *ContainerRuntime) acquireContainer(ctx context.Context, fn *Function, 
 
 	mark("await_ip")
 	if target != nil {
-		cr.bindDebugTarget(ctx, target, id)
+		target.Bind(ctx, cr.docker, cr.cfg, id, id)
 	}
 	// One line per cold start carrying the phase breakdown; INIT time (runtime
 	// bootstrap to first GET /next) is reported separately as the REPORT line's

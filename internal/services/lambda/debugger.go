@@ -7,9 +7,10 @@ package lambda
 // docs/plans/compute-debugger.md § 4.
 //
 // Every entry point here is nil-safe against a service built without a
-// Manager, and a function nothing asked to debug costs the invoke path one nil
-// check: the target rides on the containerInstance from the cold start that
-// registered it, so no lookup happens per invoke.
+// Manager. The invoke path costs a function nothing asked to debug one nil
+// check for its deadline — the target rides on the containerInstance from the
+// cold start that registered it — and, only while OVERCAST_LAMBDA_DEBUGGER is
+// on, one registry lookup at admission for the instance pin.
 
 import (
 	"context"
@@ -19,9 +20,7 @@ import (
 
 	"github.com/overcast-sh/overcast/internal/clock"
 	"github.com/overcast-sh/overcast/internal/config"
-	"github.com/overcast-sh/overcast/internal/dataplane"
 	"github.com/overcast-sh/overcast/internal/debugger"
-	"github.com/overcast-sh/overcast/internal/docker"
 )
 
 // lambdaTaskRoot is where a zip deployment's code lands in the container, and
@@ -53,24 +52,18 @@ func (cr *ContainerRuntime) debugTarget(ctx context.Context, fn *Function, resol
 		return nil
 	}
 	spec, problems := debugger.SpecFromTags(debugger.ServiceLambda, fn.Tags, cr.cfg.LambdaDebugger)
-	for _, p := range problems {
-		cr.logger.Warn("debugger: "+p.Reason, append([]zap.Field{zap.String("function", fn.Name)}, p.Fields()...)...)
-	}
+	debugger.WarnProblems(cr.logger, problems, zap.String("function", fn.Name))
 	res := debugger.Default.Resolve(spec, fn.Runtime, fn.Environment)
 	target, err := cr.debugger.Ensure(debugger.TargetID(debugger.ServiceLambda, fn.Name, ""), spec, res)
 	if err != nil {
 		// ErrNothingToDebug is the untagged, undetected common case and is
 		// not worth a line; a closed manager means Overcast is shutting down.
+		// A target that could not bind its port is the manager's to warn
+		// about; it is returned so the console can show the reason.
 		return nil
 	}
 	target.SetResourceARN(fn.ARN)
 	target.SetRemoteRoot(cr.debugRemoteRoot(ctx, fn, resolvedRef, platform))
-	if target.State() == debugger.StateError {
-		cr.logger.Warn("debugger: target could not be bound — the function runs undebugged",
-			zap.String("function", fn.Name),
-			zap.String("reason", target.Reason()),
-			zap.String("hint", "free the port named by "+debugger.TagPort+", or drop the tag to auto-allocate one from OVERCAST_DEBUGGER_PORTS"))
-	}
 	return target
 }
 
@@ -92,47 +85,16 @@ func (cr *ContainerRuntime) debugRemoteRoot(ctx context.Context, fn *Function, r
 	return lambdaTaskRoot
 }
 
-// bindDebugTarget points the target's proxy at the started container, per
-// docs/plans/compute-debugger.md § 3.6: the container's own IP when Overcast
-// can route to it (Overcast in Docker), else the ephemeral loopback port
-// Docker published for the debug port. Failure to find either leaves the
-// target unbound with a warning — the function still runs.
-func (cr *ContainerRuntime) bindDebugTarget(ctx context.Context, target *debugger.Target, containerID string) {
-	var inspect *docker.ContainerInspect
-	containerAddr := dataplane.ContainerAddr(ctx, cr.docker, cr.cfg, containerID)
-	if containerAddr == "" {
-		// Host ports are assigned at start, so the create-time inspect the
-		// cold start already made cannot have carried this one.
-		var err error
-		if inspect, err = cr.docker.InspectContainer(ctx, containerID); err != nil {
-			cr.logger.Warn("debugger: inspect started container for its published debug port — target left unbound",
-				zap.String("container", shortContainerID(containerID)), zap.Error(err))
-			return
-		}
-	}
-	upstream, ok := target.UpstreamFor(containerAddr, inspect)
-	if !ok {
-		cr.logger.Warn("debugger: container published no host port for the debug port — target left unbound",
-			zap.String("container", shortContainerID(containerID)),
-			zap.Int("port", target.Port()),
-			zap.String("hint", "check that the Docker daemon can publish ports on 127.0.0.1 (a rootless or remote daemon may not)"))
-		return
-	}
-	target.SetUpstream(upstream)
-	target.SetContainerID(containerID)
-	cr.logger.Debug("debugger: target bound", zap.String("target", target.ID()), zap.String("upstream", upstream))
-}
-
-// liveDebugTarget is fn's target when an editor could attach to it: enabled
-// and bound, so neither inert (flag off) nor in error (port taken). Only such
-// a target pins the function to one execution environment — a port belongs
-// to one container — and only such a target can stop the invocation clock.
+// liveDebugTarget is fn's target when an editor could attach to it: bound, so
+// neither inert (flag off) nor in error (port taken). Only such a target pins
+// the function to one execution environment — a port belongs to one container
+// — and only such a target can stop the invocation clock.
 func liveDebugTarget(m *debugger.Manager, functionName string) *debugger.Target {
 	if m == nil {
 		return nil
 	}
 	t, ok := m.Get(debugger.TargetID(debugger.ServiceLambda, functionName, ""))
-	if !ok || !t.Enabled() || t.State() == debugger.StateError {
+	if !ok || !t.Bound() {
 		return nil
 	}
 	return t

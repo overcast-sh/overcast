@@ -210,3 +210,22 @@ func TestTarget_descriptorShape(t *testing.T) {
 	assert.Equal(t, `C:\src\app`, d.LocalRoot)
 	assert.Contains(t, d.Editors[0].Body, `"localRoot": "C:\\src\\app"`)
 }
+
+func TestDescriptor_wildcardListenHostRendersAsLoopback(t *testing.T) {
+	// Given: a manager bound on every interface, as Overcast in Docker is
+	m := NewManager(clock.NewMock(), nil, "0.0.0.0", freePortRange(t), config.DebuggerTimeoutAttached)
+	t.Cleanup(m.Close)
+	target, err := m.Ensure("lambda/fn", Spec{Service: ServiceLambda, Tagged: true, FlagOn: true},
+		Resolution{Protocol: inspector{}, Source: SourceRuntime})
+	require.NoError(t, err)
+
+	// When: the descriptor is rendered
+	d := target.Descriptor()
+
+	// Then: the editor is told to dial loopback, in the listen block and in
+	// every template, because the published port is on the developer's machine
+	assert.Equal(t, "127.0.0.1", d.Listen.Host)
+	for _, e := range d.Editors {
+		assert.NotContains(t, e.Body, "0.0.0.0:", e.ID)
+	}
+}

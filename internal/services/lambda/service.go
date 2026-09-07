@@ -1095,7 +1095,11 @@ func (s *Service) wireDockerRuntime(cfg *config.Config, clk clock.Clock, rr *run
 	// Keep the instance tracker in step with the containers that actually exist.
 	pool.observer = s.tracker
 	// A function an editor can attach to runs one execution environment.
-	pool.debugger = s.debugger
+	// Only with the flag on: with it off no target can ever be bound, so the
+	// pin's lookup at admission is not paid for.
+	if cfg.LambdaDebugger {
+		pool.debugger = s.debugger
+	}
 	// Wire ConcurrentExecutions sampling if InitMetrics already ran (it may
 	// run before or after Docker init completes — same race InitBus/InitLogWriter
 	// already handle for this goroutine's other optional wiring).

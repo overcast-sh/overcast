@@ -205,7 +205,7 @@ func (p *InstancePool) admit(ctx context.Context, fn *Function) error {
 // held to one execution environment. One nil check for a pool without a
 // manager, which is every pool the debugger is not enabled for.
 func (p *InstancePool) debugPinned(fn *Function) bool {
-	return p.debugger != nil && liveDebugTarget(p.debugger, fn.Name) != nil
+	return p.debugger != nil && fn != nil && liveDebugTarget(p.debugger, fn.Name) != nil
 }
 
 // admitContainer is the global counterpart to admit, called only when the warm

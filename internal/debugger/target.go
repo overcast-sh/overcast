@@ -15,6 +15,7 @@ import (
 
 	"github.com/overcast-sh/overcast/internal/clock"
 	"github.com/overcast-sh/overcast/internal/config"
+	"github.com/overcast-sh/overcast/internal/dataplane"
 	"github.com/overcast-sh/overcast/internal/docker"
 )
 
@@ -220,9 +221,12 @@ func (t *Target) Paused() bool {
 	return t.paused > 0
 }
 
-// bound reports whether the listener exists — the precondition for
-// injecting, binding ports and suspending a deadline.
-func (t *Target) bound() bool {
+// Bound reports whether the target has a listener an editor could attach to:
+// enabled, not in error, not released. It is the precondition for injecting,
+// publishing ports, dialling a container and suspending a deadline, and what
+// a service checks before it pays anything — an image inspect, an instance
+// cap — on the target's behalf.
+func (t *Target) Bound() bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return t.listener != nil
@@ -307,6 +311,23 @@ func (t *Target) Subscribe(fn func(Event)) (unsubscribe func()) {
 	}
 }
 
+// subscribe is Subscribe plus a consistent starting point: it registers fn and
+// calls seed with the attach and pause state as of that moment, both under
+// the transition lock, so fn sees every transition after the state seed saw
+// and none before it. Reading the state before or after Subscribe on its own
+// leaves a window in which a transition is applied on top of a read that
+// already reflected it — a clock running while attached, or never resuming.
+func (t *Target) subscribe(seed func(attached, paused bool), fn func(Event)) (unsubscribe func()) {
+	t.emitMu.Lock()
+	defer t.emitMu.Unlock()
+	unsubscribe = t.Subscribe(fn)
+	t.mu.Lock()
+	attached, paused := t.attached > 0, t.paused > 0
+	t.mu.Unlock()
+	seed(attached, paused)
+	return unsubscribe
+}
+
 // deliver runs every subscriber with the event. Called under emitMu, never
 // under mu, so a subscriber may read the target's state.
 func (t *Target) deliver(kind EventKind, at time.Time) {
@@ -331,7 +352,7 @@ const DebugPortEnv = "OVERCAST_DEBUG_PORT"
 // flag that makes the runtime wait for a debugger nobody can reach would
 // hang the function.
 func (t *Target) Inject(env map[string]string) {
-	if !t.bound() {
+	if !t.Bound() {
 		return
 	}
 	port := t.Port()
@@ -344,7 +365,7 @@ func (t *Target) Inject(env map[string]string) {
 // not Overcast will use it (a containerised Overcast dials the container's
 // IP instead): it is cheap, and it avoids a second decision at create time.
 func (t *Target) ApplyPortBinding(cfg *docker.ContainerConfig, hc *docker.HostConfig) {
-	if !t.bound() {
+	if !t.Bound() {
 		return
 	}
 	key := t.portKey()
@@ -362,7 +383,7 @@ func (t *Target) ApplyPortBinding(cfg *docker.ContainerConfig, hc *docker.HostCo
 // an inspect response, for the native case where the container's own IP is
 // not routable from Overcast.
 func (t *Target) HostPortFrom(inspect *docker.ContainerInspect) (int, bool) {
-	if inspect == nil || !t.bound() {
+	if inspect == nil || !t.Bound() {
 		return 0, false
 	}
 	for _, b := range inspect.NetworkSettings.Ports[t.portKey()] {
@@ -396,6 +417,53 @@ func (t *Target) portKey() string {
 	return strconv.Itoa(t.Port()) + "/tcp"
 }
 
+// ContainerInspector is the slice of the Docker client Bind needs: what
+// dataplane.ContainerAddr reads, plus the inspect that reports a published
+// port.
+type ContainerInspector interface {
+	ConnectNetwork(ctx context.Context, networkID, containerID string) error
+	InspectContainer(ctx context.Context, id string) (*docker.ContainerInspect, error)
+}
+
+// Bind points the proxy at a container that has just started, per
+// docs/plans/compute-debugger.md § 3.6: the container's own address when
+// Overcast can route to it (Overcast in Docker), else the ephemeral loopback
+// port Docker published for the binding ApplyPortBinding asked for. Both are
+// read from networkOwnerID, the container whose network the debugged process
+// runs in — the container itself, or the namespace container an ECS awsvpc
+// task's containers share — while containerID is what the console names and
+// what ClearContainer later matches. A target with no listener has nothing to
+// bind and is left alone; failing to find the port leaves the target unbound
+// with a WARN, and the container runs undebugged.
+func (t *Target) Bind(ctx context.Context, dc ContainerInspector, cfg *config.Config, networkOwnerID, containerID string) {
+	if !t.Bound() {
+		return
+	}
+	var inspect *docker.ContainerInspect
+	containerAddr := dataplane.ContainerAddr(ctx, dc, cfg, networkOwnerID)
+	if containerAddr == "" {
+		// Host ports are assigned at start, so nothing inspected before it
+		// could have carried this one.
+		var err error
+		if inspect, err = dc.InspectContainer(ctx, networkOwnerID); err != nil {
+			t.log.Warn("debugger: inspect started container for its published debug port — target left unbound",
+				zap.String("container", networkOwnerID), zap.Error(err))
+			return
+		}
+	}
+	upstream, ok := t.UpstreamFor(containerAddr, inspect)
+	if !ok {
+		t.log.Warn("debugger: container published no host port for the debug port — target left unbound",
+			zap.String("container", networkOwnerID),
+			zap.Int("port", t.Port()),
+			zap.String("hint", "check that the Docker daemon can publish ports on 127.0.0.1 (a rootless or remote daemon may not)"))
+		return
+	}
+	t.SetUpstream(upstream)
+	t.SetContainerID(containerID)
+	t.log.Debug("debugger: target bound", zap.String("upstream", upstream), zap.String("container", containerID))
+}
+
 // Manager is the registry of live targets and the owner of their ports.
 // Services call Ensure when a resource is about to run and Release when it is
 // gone; Close is shutdown.
@@ -406,9 +474,15 @@ type Manager struct {
 	ports  [2]int
 	policy TimeoutPolicy
 
-	mu      sync.Mutex
-	targets map[string]*Target
-	closed  bool
+	// ensureMu serialises Ensure — one bind or replacement at a time, so two
+	// targets cannot race for an auto port and two calls for one id cannot
+	// both create it — while mu guards only the map, so Get, which the Lambda
+	// pool consults at admission, never waits behind a port scan or a
+	// replaced target draining its connections.
+	ensureMu sync.Mutex
+	mu       sync.Mutex
+	targets  map[string]*Target
+	closed   bool
 }
 
 // NewManager builds a manager binding on host, allocating auto ports from
@@ -449,21 +523,31 @@ func (m *Manager) Ensure(id string, spec Spec, res Resolution) (*Target, error) 
 		return nil, err
 	}
 	if res.Protocol == nil && !spec.Tagged {
+		// Nothing asks for a debugger any more — the tag was removed — so a
+		// target an earlier request registered is stale: its port goes back
+		// and, for Lambda, the function is no longer pinned to one instance.
+		m.Release(id)
 		return nil, ErrNothingToDebug
 	}
 
+	m.ensureMu.Lock()
+	defer m.ensureMu.Unlock()
 	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.closed {
-		return nil, ErrClosed
-	}
-	if existing, ok := m.targets[id]; ok {
-		if existing.sameRequest(spec, res) {
-			return existing, nil
-		}
-		// Closed under the lock so no concurrent Ensure for the same id can
-		// slip in between; nothing close waits for takes m.mu.
+	existing, ok := m.targets[id]
+	closed := m.closed
+	if ok && !closed && !existing.sameRequest(spec, res) {
+		// Forgotten before it is closed, so a lookup meanwhile finds nothing
+		// rather than a target on its way out; ensureMu keeps a concurrent
+		// Ensure for the same id from slipping in between.
 		delete(m.targets, id)
+	}
+	m.mu.Unlock()
+	switch {
+	case closed:
+		return nil, ErrClosed
+	case ok && existing.sameRequest(spec, res):
+		return existing, nil
+	case ok:
 		existing.close()
 	}
 
@@ -491,8 +575,25 @@ func (m *Manager) Ensure(id string, spec Spec, res Resolution) (*Target, error) 
 	default:
 		t.enabled = true
 		m.bind(t)
+		switch {
+		case !t.Bound():
+			t.log.Warn("debugger: target could not be bound — the resource runs undebugged",
+				zap.String("reason", t.Reason()),
+				zap.String("hint", "free the port named by "+TagPort+", or drop the tag to auto-allocate one from OVERCAST_DEBUGGER_PORTS"))
+		case res.Source == SourceEnv && !spec.Tagged:
+			t.log.Warn("debugger: a debug flag in the environment of an untagged resource is proxied on the port it names",
+				zap.Int("port", t.Port()),
+				zap.String("hint", "tag the resource "+TagDebug+"=true to say so, or remove the flag; a hostPort published on the same port conflicts with this listener"))
+		}
+	}
+	m.mu.Lock()
+	if m.closed {
+		m.mu.Unlock()
+		t.close()
+		return nil, ErrClosed
 	}
 	m.targets[id] = t
+	m.mu.Unlock()
 	return t, nil
 }
 
@@ -508,15 +609,15 @@ func (t *Target) sameRequest(spec Spec, res Resolution) bool {
 }
 
 // bind opens the target's listener: the fixed port, or the lowest free port
-// of the range not already held by another target. Called under m.mu so two
-// targets cannot race for the same auto port.
+// of the range not already held by another target. Called under ensureMu so
+// two targets cannot race for the same auto port.
 func (m *Manager) bind(t *Target) {
 	if t.res.Port != 0 {
 		m.listen(t, t.res.Port)
 		return
 	}
-	held := make(map[int]bool, len(m.targets))
-	for _, other := range m.targets {
+	held := make(map[int]bool)
+	for _, other := range m.List() {
 		if p := other.Port(); p != 0 {
 			held[p] = true
 		}
@@ -533,7 +634,6 @@ func (m *Manager) bind(t *Target) {
 	t.reason = fmt.Sprintf("no free port in %d-%d (OVERCAST_DEBUGGER_PORTS)", m.ports[0], m.ports[1])
 	t.port = 0
 	t.mu.Unlock()
-	t.log.Warn("debugger: no free port for target", zap.String("reason", t.reason))
 }
 
 // listen binds one port and starts accepting. On failure the target keeps
