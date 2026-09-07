@@ -140,7 +140,7 @@ impl ServiceGroup for S3Group {
                         .send()
                         .await
                         .map_err(crate::harness::sdk_error)?;
-                    let body = object.body.collect().await.map_err(crate::harness::sdk_error)?;
+                    let body = object.body.collect().await.map_err(crate::harness::sdk_error_message)?;
                     (body.into_bytes().as_ref() == b"hello world")
                         .then_some(())
                         .ok_or_else(|| "GetObject: body mismatch".to_string())
@@ -284,7 +284,7 @@ impl ServiceGroup for S3Group {
                         .body
                         .collect()
                         .await
-                        .map_err(crate::harness::sdk_error)?;
+                        .map_err(crate::harness::sdk_error_message)?;
                     if body.into_bytes().as_ref() != b"hello-body-check" {
                         return Err(
                             "PutObjectFormContentType: stored body does not match what was sent"
@@ -348,7 +348,7 @@ impl ServiceGroup for S3Group {
                         .body
                         .collect()
                         .await
-                        .map_err(crate::harness::sdk_error)?;
+                        .map_err(crate::harness::sdk_error_message)?;
                     if body.into_bytes().as_ref() != b"plus-body" {
                         return Err(format!("PutObjectPlusInKey: body mismatch for {key}"));
                     }
@@ -453,16 +453,16 @@ impl ServiceGroup for S3Group {
                             ObjectIdentifier::builder()
                                 .key("del/a")
                                 .build()
-                                .map_err(crate::harness::sdk_error)?,
+                                .map_err(crate::harness::sdk_error_message)?,
                         )
                         .objects(
                             ObjectIdentifier::builder()
                                 .key("del/b")
                                 .build()
-                                .map_err(crate::harness::sdk_error)?,
+                                .map_err(crate::harness::sdk_error_message)?,
                         )
                         .build()
-                        .map_err(crate::harness::sdk_error)?;
+                        .map_err(crate::harness::sdk_error_message)?;
                     clients
                         .s3()
                         .delete_objects()
@@ -579,7 +579,7 @@ impl ServiceGroup for S3Group {
                         .copy_source(format!("{}/source.txt", src))
                         .send().await.map_err(crate::harness::sdk_error)?;
                     let object = clients.s3().get_object().bucket(&dst).key("dest.txt").send().await.map_err(crate::harness::sdk_error)?;
-                    let body = object.body.collect().await.map_err(crate::harness::sdk_error)?;
+                    let body = object.body.collect().await.map_err(crate::harness::sdk_error_message)?;
                     (body.into_bytes().as_ref() == b"copy me").then_some(()).ok_or_else(|| "CopyObject: body mismatch".to_string())
                 })
             }),
@@ -725,8 +725,8 @@ impl ServiceGroup for S3Group {
                 let clients = clients.clone();
                 Box::pin(async move {
                     let bucket = ctx.get("s3TagBucket").ok_or_else(|| "s3TagBucket not set".to_string())?;
-                    let tag = Tag::builder().key("env").value("test").build().map_err(crate::harness::sdk_error)?;
-                    let tagging = Tagging::builder().tag_set(tag).build().map_err(crate::harness::sdk_error)?;
+                    let tag = Tag::builder().key("env").value("test").build().map_err(crate::harness::sdk_error_message)?;
+                    let tagging = Tagging::builder().tag_set(tag).build().map_err(crate::harness::sdk_error_message)?;
                     clients.s3().put_object_tagging()
                         .bucket(&bucket)
                         .key("test-key")
@@ -766,8 +766,8 @@ impl ServiceGroup for S3Group {
                 let clients = clients.clone();
                 Box::pin(async move {
                     let bucket = ctx.get("s3TagBucket").ok_or_else(|| "s3TagBucket not set".to_string())?;
-                    let tag = Tag::builder().key("project").value("overcast").build().map_err(crate::harness::sdk_error)?;
-                    let tagging = Tagging::builder().tag_set(tag).build().map_err(crate::harness::sdk_error)?;
+                    let tag = Tag::builder().key("project").value("overcast").build().map_err(crate::harness::sdk_error_message)?;
+                    let tagging = Tagging::builder().tag_set(tag).build().map_err(crate::harness::sdk_error_message)?;
                     clients.s3().put_bucket_tagging()
                         .bucket(&bucket)
                         .tagging(tagging)
@@ -805,8 +805,8 @@ impl ServiceGroup for S3Group {
                 Box::pin(async move {
                     let bucket = ctx.get("s3WebBucket").ok_or_else(|| "s3WebBucket not set".to_string())?;
                     let website_cfg = WebsiteConfiguration::builder()
-                        .index_document(IndexDocument::builder().suffix("index.html").build().map_err(crate::harness::sdk_error)?)
-                        .error_document(ErrorDocument::builder().key("error.html").build().map_err(crate::harness::sdk_error)?)
+                        .index_document(IndexDocument::builder().suffix("index.html").build().map_err(crate::harness::sdk_error_message)?)
+                        .error_document(ErrorDocument::builder().key("error.html").build().map_err(crate::harness::sdk_error_message)?)
                         .build();
                     clients.s3().put_bucket_website()
                         .bucket(&bucket)
@@ -849,11 +849,11 @@ impl ServiceGroup for S3Group {
                         .allowed_origins("*")
                         .allowed_headers("*")
                         .build()
-                        .map_err(crate::harness::sdk_error)?;
+                        .map_err(crate::harness::sdk_error_message)?;
                     let cors_cfg = CorsConfiguration::builder()
                         .cors_rules(rule)
                         .build()
-                        .map_err(crate::harness::sdk_error)?;
+                        .map_err(crate::harness::sdk_error_message)?;
                     clients.s3().put_bucket_cors()
                         .bucket(&bucket)
                         .cors_configuration(cors_cfg)
@@ -906,11 +906,11 @@ impl ServiceGroup for S3Group {
                                 .build(),
                         )
                         .build()
-                        .map_err(crate::harness::sdk_error)?;
+                        .map_err(crate::harness::sdk_error_message)?;
                     let cfg = BucketLifecycleConfiguration::builder()
                         .rules(rule)
                         .build()
-                        .map_err(crate::harness::sdk_error)?;
+                        .map_err(crate::harness::sdk_error_message)?;
                     clients
                         .s3()
                         .put_bucket_lifecycle_configuration()
@@ -1007,7 +1007,7 @@ impl ServiceGroup for S3Group {
                             resp.rules().len()
                         )),
                         Err(err) => {
-                            let text = crate::harness::sdk_error(err);
+                            let text = crate::harness::sdk_error_message(err);
                             if text.contains("NoSuchLifecycleConfiguration") {
                                 Ok(())
                             } else {

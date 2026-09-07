@@ -197,17 +197,17 @@ func httpHeader(err error) (http.Header, bool) {
 
 // isUnimplementedResponse reports whether the emulator answered 501.
 //
-// The status code is read from the transport error where there is one, which
-// is exact. Only when there is no HTTP response at all — the SDK failed before
-// or after the exchange — does this fall back to the harness's substring
-// heuristic over the SDK's own text, which is what that heuristic is for.
+// One rule serves both paths: harness.ClassifyResponse reads the response the
+// SDK's error carries, which is exact, and only an error carrying no response
+// at all — the SDK failed before or after the exchange — falls back to the
+// substring heuristic, which is what that heuristic is for. The interpreter
+// calls it on the raw SDK error, before any composed message wraps it, which is
+// what keeps a genuine 501 classified once the failure is assembled.
 func isUnimplementedResponse(err error) bool {
-	for _, e := range chain(err) {
-		if s, ok := e.(interface{ HTTPStatusCode() int }); ok {
-			return s.HTTPStatusCode() == http.StatusNotImplemented
-		}
+	if unimplemented, decided := harness.ClassifyResponse(err); decided {
+		return unimplemented
 	}
-	return harness.LooksUnimplemented(err.Error())
+	return harness.LooksUnimplementedWithoutResponse(err.Error())
 }
 
 // chain flattens an error chain, following both Unwrap forms. The AWS SDK

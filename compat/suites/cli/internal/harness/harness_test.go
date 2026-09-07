@@ -152,9 +152,12 @@ func (w wrappedUnimplemented) Error() string   { return w.err.Error() }
 func (w wrappedUnimplemented) Unwrap() []error { return []error{w.err, ErrUnimplemented} }
 
 // TestIsUnimplementedReadsTheSentinelNotTheProse is the bug this classification
-// existed to have: the heuristic matches a bare "501", and a composed failure
-// message embeds the params JSON, so a run id or a port number in there was
-// enough to report every failure of that test as unimplemented.
+// existed to have, twice over: the heuristic matches a bare "501", and both a
+// composed failure message (which embeds the params JSON) and a plain CLI error
+// (which quotes a request id, an ARN or a resource name) are enough to put one
+// there. Neither is read as text now — a composed failure states its own
+// classification, and a CLI error is classified from the code its banner
+// states.
 func TestIsUnimplementedReadsTheSentinelNotTheProse(t *testing.T) {
 	cases := []struct {
 		name string
@@ -170,6 +173,38 @@ func TestIsUnimplementedReadsTheSentinelNotTheProse(t *testing.T) {
 			name: "a raw CLI error that is not a 501",
 			err:  errors.New(`aws widgets get: exit status 254: An error occurred (AccessDenied) when calling the Get operation`),
 			want: false,
+		},
+		{
+			// #1924: the bug. The banner names a 400, and the "501" is in the
+			// request id — the same shape that flipped the sibling go-sdk
+			// suite's RotateSecretWithoutLambda row on CI run 34064243252.
+			name: "a 400 whose request id contains 501",
+			err: errors.New(`aws secretsmanager rotate-secret: exit status 254: An error occurred (InvalidRequestException) ` +
+				`when calling the RotateSecret operation: No Lambda rotation function ARN is associated with this secret. ` +
+				`(Request ID: 5f2c9501-0f3a-4c7d-9a11-6b1d0c2e4a77)`),
+			want: false,
+		},
+		{
+			name: "a 400 whose resource name contains 501",
+			err: errors.New(`aws secretsmanager describe-secret: exit status 254: An error occurred (ResourceNotFoundException) ` +
+				`when calling the DescribeSecret operation: Secrets Manager can't find the specified secret: oc-501abcde-rotate`),
+			want: false,
+		},
+		{
+			// A real 501: Overcast's body models cleanly, so the CLI states
+			// the code rather than falling back to the status.
+			name: "a real 501, stated as its code",
+			err: errors.New(`aws scheduler create-schedule: exit status 254: An error occurred (NotImplemented) ` +
+				`when calling the CreateSchedule operation: This operation is not implemented by the emulator`),
+			want: true,
+		},
+		{
+			// No banner at all: the CLI never reached the wire, or echoed a
+			// body it could not model. The heuristic is all there is.
+			name: "output stating no code at all",
+			err: errors.New(`aws widgets probe: exit status 255: ` +
+				`{"__type":"UnknownOperationException","message":"Unknown target: Widgets.Probe"}`),
+			want: true,
 		},
 		{
 			name: "a composed failure whose params happen to contain 501",

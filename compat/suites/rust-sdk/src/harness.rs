@@ -5,6 +5,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
+use aws_smithy_runtime_api::client::result::SdkError;
+use aws_smithy_types::error::display::DisplayErrorContext;
+use aws_smithy_types::error::metadata::ProvideErrorMetadata;
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
@@ -12,17 +16,83 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 pub type TestFuture = Pin<Box<dyn Future<Output = Result<(), String>> + Send>>;
 pub type TestFn = Arc<dyn Fn(TestContext) -> TestFuture + Send + Sync>;
 
-/// Render an AWS SDK error with everything the service actually said.
+/// Render an AWS SDK error as the string a test returns, classified.
 ///
-/// `SdkError`'s own `Display` is the single word "service error" — the error
-/// code, message and request id all live further down the `source()` chain.
-/// Reporting only the head made every rust-sdk failure in the compat baseline
-/// unactionable: nine tests said "service error" and nothing else, so the one
-/// thing a compat suite exists to tell you — how the emulator diverged — was
-/// exactly what got dropped. `DisplayErrorContext` walks the chain, which is
-/// what the AWS SDK's own examples use for logging.
-pub fn sdk_error(err: impl std::error::Error + Send + Sync + 'static) -> String {
-    format!("{}", aws_smithy_types::error::display::DisplayErrorContext(&err))
+/// Two things happen here, and the first is why every `map_err` in this suite
+/// names this function. `SdkError`'s own `Display` is the single word "service
+/// error" — the error code, message and request id all live further down the
+/// `source()` chain. Reporting only the head made every rust-sdk failure in the
+/// compat baseline unactionable: nine tests said "service error" and nothing
+/// else, so the one thing a compat suite exists to tell you — how the emulator
+/// diverged — was exactly what got dropped. `DisplayErrorContext` walks the
+/// chain, which is what the AWS SDK's own examples use for logging.
+///
+/// The second is the classification. A test's error is a `String` by the time
+/// [`classify`] sees it, and this is the last place the response itself is in
+/// hand — so the answer is stated here, as a tag, rather than guessed at later
+/// by looking for "501" in the text. That guess was the bug: a request id, an
+/// ARN, a resource name or a port is enough to put those digits in a 400's
+/// message, and the sibling go-sdk suite reported a test asserting an
+/// `InvalidRequestException` as `unimplemented` on one CI run, flipping a gated
+/// baseline row and failing an unrelated pull request (#1924).
+///
+/// Use [`sdk_error_message`] instead where the text is quoted **inside** a
+/// larger message: a tag is only read at the front of the string a test returns.
+pub fn sdk_error<E>(err: SdkError<E, HttpResponse>) -> String
+where
+    E: std::error::Error + ProvideErrorMetadata + Send + Sync + 'static,
+{
+    let message = format!("{}", DisplayErrorContext(&err));
+    match classify_sdk_error(&err) {
+        Some(true) => format!("{UNIMPLEMENTED_TAG}{message}"),
+        Some(false) => format!("{FAIL_TAG}{message}"),
+        None => message,
+    }
+}
+
+/// [`sdk_error`]'s rendering without the classification tag.
+///
+/// Two callers want it. One quotes the SDK's text **inside** a message of its
+/// own, where a tag would land in the middle of the string and be read by
+/// nobody. The other holds an error that never reached the wire and so has no
+/// response to classify from — a `BuildError` from an operation's own input
+/// validation, say — which [`sdk_error`]'s signature excludes for exactly that
+/// reason.
+pub fn sdk_error_message(err: impl std::error::Error + Send + Sync + 'static) -> String {
+    format!("{}", DisplayErrorContext(&err))
+}
+
+/// Decide, from the HTTP response an SDK error carries, whether the emulator
+/// refused the operation as unimplemented. `None` when the error carries no
+/// response — the SDK failed before or after the exchange — which is the one
+/// case [`classify`]'s substring heuristic is for.
+///
+/// Two things say "unimplemented", and both are facts of the response rather
+/// than of its wording: HTTP 501, with the `x-emulator-unsupported` header
+/// Overcast sets alongside every one of them; and an error **code** of
+/// `NotImplemented` or `UnknownOperationException`, by equality. AWS — and
+/// Overcast — answer a target naming no modeled operation with the latter at
+/// HTTP 400, so the status alone would miss it.
+fn classify_sdk_error<E: ProvideErrorMetadata>(err: &SdkError<E, HttpResponse>) -> Option<bool> {
+    let response = err.raw_response()?;
+    if response.status().as_u16() == 501 {
+        return Some(true);
+    }
+    if response
+        .headers()
+        .get("x-emulator-unsupported")
+        .is_some_and(|value| value.eq_ignore_ascii_case("true"))
+    {
+        return Some(true);
+    }
+    let code = match err {
+        SdkError::ServiceError(context) => context.err().code(),
+        _ => None,
+    };
+    Some(matches!(
+        code,
+        Some("NotImplemented") | Some("UnknownOperationException")
+    ))
 }
 
 #[derive(Clone)]
@@ -437,7 +507,14 @@ pub fn parallel_slots() -> usize {
         .unwrap_or(8)
 }
 
-pub fn is_unimplemented(err: &str) -> bool {
+/// The substring heuristic, and it is for a message that carries **no
+/// classification tag** — an error a test wrote itself, or an SDK error that
+/// never reached the wire, where there is no response to read.
+///
+/// It is never right for one that did reach the wire: the response states the
+/// status, and "501" appears in request ids, ARNs, resource names and port
+/// numbers. [`sdk_error`] tags those instead.
+pub fn looks_unimplemented_without_tag(err: &str) -> bool {
     let err = err.to_ascii_lowercase();
     err.contains("501")
         || err.contains("notimplemented")
@@ -448,18 +525,18 @@ pub fn is_unimplemented(err: &str) -> bool {
 
 /// A failure that states its own classification, rather than being guessed at.
 ///
-/// `is_unimplemented` reads the whole message, which is right for a
-/// hand-written group — its error strings are prose a person wrote about one
-/// call. It is wrong for a generated group's, which embeds the exact params
-/// JSON sent (compat/model/README.md § Failure messages): a run id, a port
-/// number or a queue URL can put "501" in a message about something else
-/// entirely, and the result would be filed as `unimplemented` — a pass, in
-/// effect — instead of the failure it is.
+/// `looks_unimplemented_without_tag` reads the whole message, and a message is
+/// the wrong thing to read: a run id, a port number, a queue URL or an ARN can
+/// put "501" in one that says nothing about the status, and the result would be
+/// filed as `unimplemented` — a pass, in effect — instead of the failure it is.
+/// A generated group's message makes that certain, because it embeds the exact
+/// params JSON sent (compat/model/README.md § Failure messages), but #1924
+/// showed a hand-written one is no safer.
 ///
-/// So `crate::scenario` states the classification instead, as a tag in front of
-/// the message. The tag is a control character no AWS error text or params JSON
-/// contains, [`classify`] strips it before the message is emitted, and it is
-/// the only way a message escapes the heuristic.
+/// So [`sdk_error`] and `crate::scenario` state the classification instead, as
+/// a tag in front of the message. The tag is a control character no AWS error
+/// text or params JSON contains, [`classify`] strips it before the message is
+/// emitted, and it is the only way a message escapes the heuristic.
 pub const UNIMPLEMENTED_TAG: &str = "\u{1}unimplemented\u{1}";
 
 /// The same, for a failure that is a plain failure whatever its text contains.
@@ -467,9 +544,9 @@ pub const FAIL_TAG: &str = "\u{1}fail\u{1}";
 
 /// The status a failed test reports, and the message to emit with it.
 ///
-/// A tagged message says which it is; an untagged one — every hand-written
-/// group's — falls back to the substring heuristic, which is what it has always
-/// been classified by.
+/// A tagged message says which it is; an untagged one — a message a test wrote
+/// itself, with no SDK error behind it — falls back to the substring
+/// heuristic.
 pub fn classify(err: &str) -> (&'static str, String) {
     if let Some(rest) = err.strip_prefix(UNIMPLEMENTED_TAG) {
         return ("unimplemented", rest.to_string());
@@ -477,7 +554,7 @@ pub fn classify(err: &str) -> (&'static str, String) {
     if let Some(rest) = err.strip_prefix(FAIL_TAG) {
         return ("fail", rest.to_string());
     }
-    if is_unimplemented(err) {
+    if looks_unimplemented_without_tag(err) {
         ("unimplemented", err.to_string())
     } else {
         ("fail", err.to_string())
@@ -994,6 +1071,140 @@ async fn run_group_interactive(
     }
 
     (passed, failed, skipped, unimplemented, cancelled)
+}
+
+#[cfg(test)]
+mod classification_tests {
+    use super::*;
+    use aws_smithy_runtime_api::http::StatusCode;
+    use aws_smithy_types::body::SdkBody;
+    use aws_smithy_types::error::metadata::ErrorMetadata;
+
+    /// A modeled operation error, as the SDK hands one back: an error code and
+    /// a message, reachable through `ProvideErrorMetadata`.
+    #[derive(Debug)]
+    struct ModeledError(ErrorMetadata);
+
+    impl std::fmt::Display for ModeledError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(
+                f,
+                "{}: {} (request id 5f2c9501-0f3a-4c7d-9a11-6b1d0c2e4a77)",
+                self.0.code().unwrap_or_default(),
+                self.0.message().unwrap_or_default()
+            )
+        }
+    }
+
+    impl std::error::Error for ModeledError {}
+
+    impl ProvideErrorMetadata for ModeledError {
+        fn meta(&self) -> &ErrorMetadata {
+            &self.0
+        }
+    }
+
+    /// The error shape a failed `send()` produces: the modeled error, and the
+    /// raw response the exchange produced.
+    fn service_error(
+        code: &str,
+        message: &str,
+        status: u16,
+        unsupported_header: bool,
+    ) -> SdkError<ModeledError, HttpResponse> {
+        let mut raw = HttpResponse::new(StatusCode::try_from(status).unwrap(), SdkBody::empty());
+        if unsupported_header {
+            raw.headers_mut().insert("x-emulator-unsupported", "true");
+        }
+        let meta = ErrorMetadata::builder().code(code).message(message).build();
+        SdkError::service_error(ModeledError(meta), raw)
+    }
+
+    /// #1924: the classification reads the response, not the prose. The rule
+    /// this replaced matched a bare "501" anywhere in the message, so a request
+    /// id was enough to report a 400 as `unimplemented` — which is how the
+    /// sibling go-sdk suite flipped a gated baseline row on CI run 34064243252
+    /// and failed an unrelated pull request.
+    #[test]
+    fn a_400_is_a_failure_however_its_prose_reads() {
+        let rendered = sdk_error(service_error(
+            "InvalidRequestException",
+            "No Lambda rotation function ARN is associated with this secret.",
+            400,
+            false,
+        ));
+        assert!(
+            rendered.contains("501"),
+            "the fixture must carry the digits that caused the bug: {rendered}"
+        );
+        assert_eq!(classify(&rendered).0, "fail");
+    }
+
+    #[test]
+    fn a_400_whose_resource_name_contains_501_is_a_failure() {
+        let rendered = sdk_error(service_error(
+            "ResourceNotFoundException",
+            "Secrets Manager can't find the specified secret: oc-501abcde-rotate",
+            400,
+            false,
+        ));
+        assert_eq!(classify(&rendered).0, "fail");
+    }
+
+    #[test]
+    fn a_real_501_is_unimplemented() {
+        let rendered = sdk_error(service_error(
+            "NotImplemented",
+            "This operation is not implemented by the emulator",
+            501,
+            true,
+        ));
+        assert_eq!(classify(&rendered).0, "unimplemented");
+    }
+
+    #[test]
+    fn a_501_named_only_by_its_header_is_unimplemented() {
+        let rendered = sdk_error(service_error("", "", 200, true));
+        assert_eq!(classify(&rendered).0, "unimplemented");
+    }
+
+    #[test]
+    fn an_unknown_operation_is_unimplemented_at_400() {
+        let rendered = sdk_error(service_error(
+            "UnknownOperationException",
+            "Unknown operation: Frobnicate",
+            400,
+            false,
+        ));
+        assert_eq!(classify(&rendered).0, "unimplemented");
+    }
+
+    #[test]
+    fn the_emitted_message_never_carries_the_tag() {
+        let rendered = sdk_error(service_error(
+            "NotImplemented",
+            "not implemented",
+            501,
+            true,
+        ));
+        let (status, message) = classify(&rendered);
+        assert_eq!(status, "unimplemented");
+        assert!(
+            !message.contains(UNIMPLEMENTED_TAG) && !message.contains(FAIL_TAG),
+            "a tag must never reach the NDJSON error field: {message:?}"
+        );
+    }
+
+    /// A message no SDK error produced — a test's own prose — still falls back
+    /// to the heuristic, which is all it has.
+    #[test]
+    fn an_untagged_message_falls_back_to_the_heuristic() {
+        assert_eq!(
+            classify("CreateThing: 501 Not Implemented").0,
+            "unimplemented"
+        );
+        assert_eq!(classify("CreateThing: arn is empty").0, "fail");
+    }
 }
 
 #[cfg(test)]

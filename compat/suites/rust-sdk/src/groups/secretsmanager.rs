@@ -439,7 +439,7 @@ impl ServiceGroup for SecretsManagerGroup {
                                 .to_string(),
                         ),
                         Err(err) => {
-                            let msg = crate::harness::sdk_error(err);
+                            let msg = crate::harness::sdk_error_message(err);
                             if msg.contains("InvalidRequestException") {
                                 Ok(())
                             } else {

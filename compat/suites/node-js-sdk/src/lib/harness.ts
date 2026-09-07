@@ -194,20 +194,30 @@ export function emitEvent(
  * Returns true if the error represents an unimplemented operation in the
  * emulator. These are known feature gaps, not broken implementations.
  *
- * Three paths to detect "not implemented":
+ * Every path below reads a **field of the response** — its status, its headers,
+ * the error code the SDK parsed out of its body. None of them reads the
+ * message, and none of them may: "501" appears in request ids, ARNs, resource
+ * names and port numbers, and a sibling suite classifying by substring reported
+ * a 400 `InvalidRequestException` as `unimplemented` on one CI run, flipping a
+ * gated baseline row and failing an unrelated pull request (#1924).
+ *
+ * Five paths to detect "not implemented":
  *  1. HTTP 501: JSON-protocol services expose the status via
  *     `err.$metadata.httpStatusCode`.
  *  2. HTTP 501 on XML-protocol services (IAM, SES, STS, …): Overcast returns
  *     a JSON 501 body; the SDK's XML parser fails before populating
  *     `$metadata`. The raw HTTP response is still on `err.$response.statusCode`.
- *  3. UnknownOperationException (HTTP 400): returned by JSON-protocol services
+ *  3. The `x-emulator-unsupported` header Overcast sets alongside every 501
+ *     (internal/protocol/errors.go), which survives a body neither parser
+ *     could turn into a status.
+ *  4. UnknownOperationException (HTTP 400): returned by JSON-protocol services
  *     (DynamoDB, CloudWatch Logs, DynamoDB Streams) and the router's JSON
  *     fallback when the target action is not registered.
- *  4. NotImplemented (HTTP 400): returned by the router's XML fallback for
+ *  5. NotImplemented (HTTP 400): returned by the router's XML fallback for
  *     query-protocol services (IAM, STS, SES, etc.) whose action is not
  *     registered. The SDK parses this into `err.name === "NotImplemented"`.
  */
-function isUnimplemented(err: unknown): boolean {
+export function isUnimplemented(err: unknown): boolean {
   if (err == null || typeof err !== "object") return false;
   const e = err as Record<string, unknown>;
 
@@ -221,14 +231,22 @@ function isUnimplemented(err: unknown): boolean {
   // Path 2: deserialization error wrapping a raw HTTP response.
   const resp = e["$response"];
   if (resp != null && typeof resp === "object") {
-    if ((resp as Record<string, unknown>)["statusCode"] === 501) return true;
+    const raw = resp as Record<string, unknown>;
+    if (raw["statusCode"] === 501) return true;
+
+    // Path 3: the emulator's own header on that raw response.
+    const headers = raw["headers"];
+    if (headers != null && typeof headers === "object") {
+      const value = (headers as Record<string, unknown>)["x-emulator-unsupported"];
+      if (String(value).toLowerCase() === "true") return true;
+    }
   }
 
-  // Path 3: UnknownOperationException — JSON-protocol "not registered" error.
+  // Path 4: UnknownOperationException — JSON-protocol "not registered" error.
   if (e["name"] === "UnknownOperationException") return true;
   if (e["__type"] === "UnknownOperationException") return true;
 
-  // Path 4: NotImplemented — XML query-protocol "not registered" error (IAM, STS, etc.).
+  // Path 5: NotImplemented — XML query-protocol "not registered" error (IAM, STS, etc.).
   if (e["name"] === "NotImplemented") return true;
   if (e["Code"] === "NotImplemented") return true;
 

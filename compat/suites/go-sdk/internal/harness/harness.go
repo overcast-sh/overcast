@@ -10,11 +10,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/aws/smithy-go"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 // TestFn is the signature for a single test.
@@ -187,20 +191,28 @@ var ErrUnimplemented = errors.New("unimplemented")
 // scenario data rather than produced by the AWS SDK — the params JSON that was
 // sent, expected and actual values, the SDK's own text quoted inside it.
 //
-// LooksUnimplemented must never be applied to such a message. It matches a
-// bare "501", and a run id or a port like 4501 in the params is enough to put
-// one there, which would report every failure of that test as unimplemented.
-// A composed error states the 501 by wrapping ErrUnimplemented instead. This
-// is the treatment the cli suite's interpreter got in #1790, for the same
-// reason and in the same shape.
+// LooksUnimplementedWithoutResponse must never be applied to such a message. It
+// matches a bare "501", and a run id or a port like 4501 in the params is
+// enough to put one there, which would report every failure of that test as
+// unimplemented. A composed error states the 501 by wrapping ErrUnimplemented
+// instead. This is the treatment the cli suite's interpreter got in #1790, for
+// the same reason and in the same shape.
 type Composed interface{ ComposedFailure() }
 
 // IsUnimplemented reports whether err signals a 501 / not-implemented response
 // from the Overcast emulator.
 //
 // The sentinel is checked first, so a caller that has already classified the
-// SDK's own error is believed. The substring heuristic is applied only to an
-// error nobody classified, and never to a composed message — see Composed.
+// SDK's own error is believed, and a composed message is never read as text —
+// see Composed. Everything else is decided from the **response the SDK's error
+// carries**, not from its prose: ClassifyResponse. The substring heuristic is
+// the last resort and applies only to an error that carries no response at all.
+//
+// The prose was the whole rule until #1924, and a 400 was enough to defeat it:
+// go-sdk/secretsmanager-rotate/RotateSecretWithoutLambda asserts an
+// InvalidRequestException, and one CI run whose request id happened to contain
+// "501" reported it `unimplemented`, flipping a gated baseline row and failing
+// an unrelated pull request.
 func IsUnimplemented(err error) bool {
 	if err == nil {
 		return false
@@ -212,12 +224,101 @@ func IsUnimplemented(err error) bool {
 	if errors.As(err, &composed) {
 		return false
 	}
-	return LooksUnimplemented(err.Error())
+	if unimplemented, decided := ClassifyResponse(err); decided {
+		return unimplemented
+	}
+	return LooksUnimplementedWithoutResponse(err.Error())
 }
 
-// LooksUnimplemented is the substring heuristic over one raw AWS SDK error
-// text. Pass it what the SDK said and nothing else.
-func LooksUnimplemented(s string) bool {
+// ClassifyResponse decides, from the HTTP response an AWS SDK error carries,
+// whether the emulator refused the operation as unimplemented. decided is false
+// when the error carries no response — the SDK failed before or after the
+// exchange — which is the one case a caller may fall back to the text.
+//
+// Two things say "unimplemented", and both are facts of the response rather
+// than of its wording:
+//
+//   - HTTP 501, with the x-emulator-unsupported header Overcast sets alongside
+//     it on every one (internal/protocol/errors.go). Either is enough; the
+//     header is read because a 501 whose body the SDK could not deserialise
+//     still arrives with its headers intact.
+//   - An error **code** of NotImplemented or UnknownOperationException, by
+//     equality and never by containment. Overcast answers a target naming no
+//     modeled operation with UnknownOperationException at HTTP 400
+//     (internal/services/dynamodb/service.go), so the status alone would miss
+//     it.
+//
+// Anything else the emulator answered is a failure of the operation, whatever
+// its message contains.
+func ClassifyResponse(err error) (unimplemented, decided bool) {
+	status, header, ok := httpResponse(err)
+	if !ok {
+		return false, false
+	}
+	if status == http.StatusNotImplemented || header.Get("x-emulator-unsupported") == "true" {
+		return true, true
+	}
+	return notRegisteredCode(err), true
+}
+
+// httpResponse returns the status and headers of the response err carries, and
+// whether it carried one. The AWS SDK wraps a modeled error in an
+// *smithy.OperationError and a transport error, so the response is reached
+// through the chain rather than off the error itself; both smithy-go's
+// *smithyhttp.ResponseError and the aws-sdk-go-v2 *awshttp.ResponseError that
+// embeds it satisfy these interfaces.
+func httpResponse(err error) (int, http.Header, bool) {
+	var statuser interface{ HTTPStatusCode() int }
+	if !errors.As(err, &statuser) {
+		return 0, nil, false
+	}
+	return statuser.HTTPStatusCode(), responseHeader(err), true
+}
+
+// responseHeader returns the headers of the response err carries, or nil. The
+// two shapes are the two spellings of HTTPResponse the SDK stack has.
+func responseHeader(err error) http.Header {
+	// nolint:bodyclose — this is a response the SDK already read and closed on
+	// its way to building the error; only its headers are looked at, and
+	// closing a body the middleware stack owns would be wrong.
+	var smithyResp interface{ HTTPResponse() *smithyhttp.Response }
+	if errors.As(err, &smithyResp) {
+		if resp := smithyResp.HTTPResponse(); resp != nil && resp.Response != nil { //nolint:bodyclose
+			return resp.Header
+		}
+	}
+	var stdResp interface{ HTTPResponse() *http.Response }
+	if errors.As(err, &stdResp) {
+		if resp := stdResp.HTTPResponse(); resp != nil { //nolint:bodyclose
+			return resp.Header
+		}
+	}
+	return nil
+}
+
+// notRegisteredCode reports whether the API error in err's chain states one of
+// the two codes Overcast uses for an operation it does not serve, by equality.
+func notRegisteredCode(err error) bool {
+	var apiErr smithy.APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	switch apiErr.ErrorCode() {
+	case "NotImplemented", "UnknownOperationException":
+		return true
+	}
+	return false
+}
+
+// LooksUnimplementedWithoutResponse is the substring heuristic, and it is for
+// an error that carries **no HTTP response** — a transport failure, or an SDK
+// error raised before the exchange. Pass it what the SDK said and nothing else.
+//
+// It is never right for an error that reached the wire: the response states the
+// status, and "501" appears in request ids, ARNs, resource names and port
+// numbers. ClassifyResponse answers that case; this one only answers the case
+// where there is nothing to read.
+func LooksUnimplementedWithoutResponse(s string) bool {
 	return strings.Contains(s, "501") ||
 		strings.Contains(s, "NotImplemented") ||
 		strings.Contains(s, "UnknownOperationException")

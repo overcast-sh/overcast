@@ -13,7 +13,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { runGroup, type TestContext, type TestGroup } from "./harness.ts";
+import { isUnimplemented, runGroup, type TestContext, type TestGroup } from "./harness.ts";
 
 function makeCtx(): TestContext {
   return {
@@ -392,3 +392,76 @@ describe("parallel groups", () => {
   });
 });
 
+// ── unimplemented classification (#1924) ─────────────────────────────────────
+
+/**
+ * The error shape the AWS SDK v3 hands a caller: the parsed error code as the
+ * `name`, and `$metadata` carrying the status and request id of the exchange.
+ */
+function sdkError(
+  name: string,
+  message: string,
+  httpStatusCode: number,
+  headers?: Record<string, string>,
+): Error {
+  const err = new Error(message);
+  err.name = name;
+  Object.assign(err, {
+    $metadata: {
+      httpStatusCode,
+      requestId: "5f2c9501-0f3a-4c7d-9a11-6b1d0c2e4a77",
+    },
+    ...(headers === undefined
+      ? {}
+      : { $response: { statusCode: httpStatusCode, headers } }),
+  });
+  return err;
+}
+
+describe("isUnimplemented", () => {
+  it("reports a 400 as a failure however its prose reads", () => {
+    // The bug #1924 fixed elsewhere: a sibling suite matched a bare "501"
+    // anywhere in the error text, and a request id was enough to put one
+    // there — reporting a test that asserts an InvalidRequestException as
+    // `unimplemented`, which flipped a gated baseline row on CI run
+    // 34064243252 and failed an unrelated pull request.
+    const err = sdkError(
+      "InvalidRequestException",
+      "No Lambda rotation function ARN is associated with this secret.",
+      400,
+    );
+    assert.equal(isUnimplemented(err), false);
+  });
+
+  it("reports a 400 whose resource name contains 501 as a failure", () => {
+    const err = sdkError(
+      "ResourceNotFoundException",
+      "Secrets Manager can't find the specified secret: oc-501abcde-rotate",
+      400,
+    );
+    assert.equal(isUnimplemented(err), false);
+  });
+
+  it("reports a real 501 as unimplemented", () => {
+    const err = sdkError(
+      "NotImplemented",
+      "This operation is not implemented by the emulator",
+      501,
+      { "x-emulator-unsupported": "true" },
+    );
+    assert.equal(isUnimplemented(err), true);
+  });
+
+  it("reads the emulator's header when neither parser produced a status", () => {
+    const err = new Error("Deserialization error");
+    Object.assign(err, {
+      $response: { statusCode: undefined, headers: { "x-emulator-unsupported": "true" } },
+    });
+    assert.equal(isUnimplemented(err), true);
+  });
+
+  it("reports an unknown operation as unimplemented at 400", () => {
+    const err = sdkError("UnknownOperationException", "Unknown operation: Frobnicate", 400);
+    assert.equal(isUnimplemented(err), true);
+  });
+});

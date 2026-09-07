@@ -307,12 +307,12 @@ impl ServiceGroup for KmsGroup {
                         .tag_key("project")
                         .tag_value("overcast")
                         .build()
-                        .map_err(crate::harness::sdk_error)?;
+                        .map_err(crate::harness::sdk_error_message)?;
                     let tag_env = Tag::builder()
                         .tag_key("env")
                         .tag_value("test")
                         .build()
-                        .map_err(crate::harness::sdk_error)?;
+                        .map_err(crate::harness::sdk_error_message)?;
                     clients
                         .kms()
                         .tag_resource()

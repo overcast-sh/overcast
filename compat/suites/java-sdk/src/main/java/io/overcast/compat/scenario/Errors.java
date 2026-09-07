@@ -2,7 +2,6 @@ package io.overcast.compat.scenario;
 
 import io.overcast.compat.harness.Runner;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
-import software.amazon.awssdk.core.exception.SdkServiceException;
 
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
@@ -153,19 +152,19 @@ final class Errors {
     /**
      * Reports whether the emulator answered 501.
      *
-     * <p>The status code is read from the SDK's own service exception where
-     * there is one, which is exact. Only when there is none — the SDK failed
-     * before or after the exchange — does this fall back to the harness's
-     * substring heuristic over the SDK's own text, which is what that heuristic
-     * is for.
+     * <p>One rule serves both paths: {@link Runner#classifyResponse} reads the
+     * response the SDK's exception carries, which is exact, and only an
+     * exception carrying none falls back to the substring heuristic, which is
+     * what that heuristic is for. The chain is walked here as well as there
+     * because the SDK wraps a modeled exception in a {@code CompletionException}
+     * in some paths, whose {@code getCause} chain the Runner already follows.
      */
     static boolean isUnimplemented(Throwable err) {
         for (Throwable e : chain(err)) {
-            if (e instanceof SdkServiceException sdk) {
-                return sdk.statusCode() == 501;
-            }
+            Boolean fromResponse = Runner.classifyResponse(e);
+            if (fromResponse != null) return fromResponse;
         }
-        return Runner.looksUnimplemented(err.getMessage());
+        return Runner.looksUnimplementedWithoutResponse(err.getMessage());
     }
 
     /**

@@ -9,8 +9,8 @@ public delegate Task SetupFn(TestContext context);
 /// values, the SDK's own text quoted inside it.
 /// </summary>
 /// <remarks>
-/// <see cref="Runner.LooksUnimplemented"/> must never be applied to such a
-/// message. It matches a bare "501", and a run id or a port like 4501 in the
+/// <see cref="Runner.LooksUnimplementedWithoutResponse"/> must never be
+/// applied to such a message. It matches a bare "501", and a run id or a port like 4501 in the
 /// params is enough to put one there, which would report every failure of that
 /// test as unimplemented. A composed failure states the 501 itself instead, in
 /// <see cref="Unimplemented"/>, decided where the raw SDK error was still in

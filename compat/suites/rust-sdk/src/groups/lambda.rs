@@ -377,7 +377,7 @@ impl ServiceGroup for LambdaGroup {
                         }
                         Err(err) => Err(format!(
                             "RemovePermission: expected ResourceNotFoundException, got {}",
-                            crate::harness::sdk_error(err)
+                            crate::harness::sdk_error_message(err)
                         )),
                     }
                 })

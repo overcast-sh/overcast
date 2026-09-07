@@ -342,12 +342,12 @@ impl ServiceGroup for SqsGroup {
                         .id("1")
                         .message_body("batch-1")
                         .build()
-                        .map_err(crate::harness::sdk_error)?;
+                        .map_err(crate::harness::sdk_error_message)?;
                     let entry2 = SendMessageBatchRequestEntry::builder()
                         .id("2")
                         .message_body("batch-2")
                         .build()
-                        .map_err(crate::harness::sdk_error)?;
+                        .map_err(crate::harness::sdk_error_message)?;
                     let response = clients
                         .sqs()
                         .send_message_batch()

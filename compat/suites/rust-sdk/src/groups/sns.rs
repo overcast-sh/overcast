@@ -234,7 +234,7 @@ impl ServiceGroup for SnsGroup {
                             .data_type("String")
                             .string_value("red")
                             .build()
-                            .map_err(crate::harness::sdk_error)?,
+                            .map_err(crate::harness::sdk_error_message)?,
                     );
                     message_attributes.insert(
                         "count".to_string(),
@@ -242,7 +242,7 @@ impl ServiceGroup for SnsGroup {
                             .data_type("Number")
                             .string_value("5")
                             .build()
-                            .map_err(crate::harness::sdk_error)?,
+                            .map_err(crate::harness::sdk_error_message)?,
                     );
                     let response = clients
                         .sns()
@@ -278,12 +278,12 @@ impl ServiceGroup for SnsGroup {
                         .id("1")
                         .message("batch-msg-1")
                         .build()
-                        .map_err(crate::harness::sdk_error)?;
+                        .map_err(crate::harness::sdk_error_message)?;
                     let entry2 = PublishBatchRequestEntry::builder()
                         .id("2")
                         .message("batch-msg-2")
                         .build()
-                        .map_err(crate::harness::sdk_error)?;
+                        .map_err(crate::harness::sdk_error_message)?;
                     let response = clients
                         .sns()
                         .publish_batch()

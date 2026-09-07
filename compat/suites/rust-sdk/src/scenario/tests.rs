@@ -444,7 +444,7 @@ async fn a_501_is_unimplemented_and_a_501_in_the_params_is_not() {
         .await
         .expect_err("the call failed");
     assert!(
-        harness::is_unimplemented(&failed),
+        harness::looks_unimplemented_without_tag(&failed),
         "the fixture no longer trips the heuristic"
     );
     assert_eq!(harness::classify(&failed).0, "fail");

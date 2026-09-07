@@ -5,12 +5,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
+	"github.com/aws/smithy-go"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 // captureEvents runs fn with os.Stdout redirected to a file and returns the
@@ -337,3 +342,113 @@ func TestMarkerOutranksTheDependencyGate(t *testing.T) {
 }
 
 func _noopTest(context.Context, *TestContext) error { return nil }
+
+// ── unimplemented classification (#1924) ─────────────────────────────────────
+
+// composedFailure stands in for the scenario interpreter's failure type: a
+// message assembled out of scenario data, which the substring heuristic must
+// never be pointed at.
+type composedFailure struct{ msg string }
+
+func (c composedFailure) Error() string  { return c.msg }
+func (composedFailure) ComposedFailure() {}
+
+type wrappedUnimplemented struct{ err error }
+
+func (w wrappedUnimplemented) Error() string   { return w.err.Error() }
+func (w wrappedUnimplemented) Unwrap() []error { return []error{w.err, ErrUnimplemented} }
+
+// sdkError builds the error shape the AWS Go SDK v2 hands a caller: the modeled
+// API error inside a transport error carrying the response, inside the
+// operation error that names the call. Nothing here is a stand-in — these are
+// the SDK's own types, and IsUnimplemented reads them the way it reads a real
+// one.
+func sdkError(status int, code, message, requestID string, header http.Header) error {
+	resp := &smithyhttp.Response{Response: &http.Response{
+		StatusCode: status,
+		Header:     header,
+	}}
+	if resp.Header == nil {
+		resp.Header = http.Header{}
+	}
+	return &smithy.OperationError{
+		ServiceID:     "Secrets Manager",
+		OperationName: "RotateSecret",
+		Err: &awshttp.ResponseError{
+			ResponseError: &smithyhttp.ResponseError{
+				Response: resp,
+				Err:      &smithy.GenericAPIError{Code: code, Message: message},
+			},
+			RequestID: requestID,
+		},
+	}
+}
+
+// TestIsUnimplementedReadsTheResponseNotTheProse is the bug this classification
+// exists to have (#1924). The heuristic matched a bare "501", and a request id
+// is enough to put one in a 400's text: on CI run 34064243252
+// go-sdk/secretsmanager-rotate/RotateSecretWithoutLambda — a test that asserts
+// an InvalidRequestException — was reported `unimplemented`, which flipped a
+// gated baseline row and failed an unrelated pull request.
+func TestIsUnimplementedReadsTheResponseNotTheProse(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "a 400 whose request id contains 501",
+			err: sdkError(http.StatusBadRequest, "InvalidRequestException",
+				"No Lambda rotation function ARN is associated with this secret.",
+				"5f2c9501-0f3a-4c7d-9a11-6b1d0c2e4a77", nil),
+			want: false,
+		},
+		{
+			name: "a 400 whose message contains 501",
+			err: sdkError(http.StatusBadRequest, "InvalidRequestException",
+				"Secret oc-501abcde-rotate is not versioned", "req-1", nil),
+			want: false,
+		},
+		{
+			name: "a real 501",
+			err: sdkError(http.StatusNotImplemented, "NotImplemented",
+				"This operation is not implemented by the emulator", "req-2",
+				http.Header{"X-Emulator-Unsupported": []string{"true"}}),
+			want: true,
+		},
+		{
+			name: "a 501 whose body the SDK could not model, named only by the header",
+			err: sdkError(http.StatusNotImplemented, "", "", "req-3",
+				http.Header{"X-Emulator-Unsupported": []string{"true"}}),
+			want: true,
+		},
+		{
+			name: "an unknown operation, which AWS answers 400",
+			err:  sdkError(http.StatusBadRequest, "UnknownOperationException", "Unknown operation: Frobnicate", "req-4", nil),
+			want: true,
+		},
+		{
+			name: "a transport failure carrying no response",
+			err:  fmt.Errorf("operation error Secrets Manager: RotateSecret: %w", errors.New("dial tcp 127.0.0.1:4501: connect: connection refused")),
+			want: true, // no response to read: the heuristic is all there is
+		},
+		{
+			name: "a composed failure whose params happen to contain 501",
+			err:  composedFailure{msg: `widgets-gen-thing/GetThing: GetThing params {"Id":"oc-501abcde-thing"}: responseField equals at $.Id: expected "x", actual "y" (f.json assert[0])`},
+			want: false,
+		},
+		{
+			name: "a composed failure carrying the sentinel",
+			err:  wrappedUnimplemented{err: composedFailure{msg: `widgets-gen-probe/Probe: Probe params {}: call: expected the call to succeed, actual "501 …" (f.json call)`}},
+			want: true,
+		},
+		{name: "no error", err: nil, want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := IsUnimplemented(tc.err); got != tc.want {
+				t.Errorf("IsUnimplemented = %v, want %v for %v", got, tc.want, tc.err)
+			}
+		})
+	}
+}

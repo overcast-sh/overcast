@@ -312,14 +312,15 @@ func (e *execution) call(ctx context.Context, c *Call, step string) (observed, e
 // quoted verbatim as the actual value, so the reader sees what the CLI said.
 //
 // Classification is decided here rather than left to the message: this is the
-// one place holding the *raw* CLI error, and a composed failure message is not
-// something harness.LooksUnimplemented may be pointed at — it embeds the params
-// JSON, where a run id or a port number puts a "501" that means nothing. So a
-// 501 is stated by wrapping harness.ErrUnimplemented, and every other failure
-// carries no sentinel and is a plain fail.
+// one place holding the *raw* CLI error, which states the error code the
+// classification reads. A composed failure message is not something
+// harness.IsUnimplemented may be pointed at — it embeds the params JSON, where
+// a run id or a port number puts a "501" that means nothing. So a 501 is stated
+// by wrapping harness.ErrUnimplemented, and every other failure carries no
+// sentinel and is a plain fail.
 func (e *execution) failedCall(obs observed, step string, cliErr error) error {
 	f := e.fail(obs, step, "call", "", "the call to succeed", quote(cliErr.Error()))
-	if harness.LooksUnimplemented(cliErr.Error()) {
+	if harness.IsUnimplemented(cliErr) {
 		return unimplementedFailure{f}
 	}
 	return f
@@ -449,8 +450,8 @@ func matchesError(err error, want *ErrorClause) bool {
 // resolved into a banner.
 func errorCodes(msg string) []string {
 	var codes []string
-	for _, m := range cliErrorBannerRe.FindAllStringSubmatch(msg, -1) {
-		codes = append(codes, errorCodeSpellings(m[1])...)
+	for _, code := range harness.BannerCodes(msg) {
+		codes = append(codes, errorCodeSpellings(code)...)
 	}
 	for _, code := range echoedBodyCodes(msg) {
 		codes = append(codes, errorCodeSpellings(code)...)
@@ -571,10 +572,6 @@ func errorCodeSpellings(code string) []string {
 	}
 	return out
 }
-
-// cliErrorBannerRe matches the AWS CLI's own error line. The fixture in
-// executor_test.go writes it the same way the CLI does.
-var cliErrorBannerRe = regexp.MustCompile(`An error occurred \(([^()]+)\) when calling the `)
 
 // acceptedCodes renders both halves of an error clause for a failure message.
 func acceptedCodes(want *ErrorClause) string {

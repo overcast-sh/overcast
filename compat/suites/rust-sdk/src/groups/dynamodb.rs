@@ -48,28 +48,28 @@ impl ServiceGroup for DynamoDbGroup {
                                 .attribute_name("pk")
                                 .key_type(KeyType::Hash)
                                 .build()
-                                .map_err(crate::harness::sdk_error)?,
+                                .map_err(crate::harness::sdk_error_message)?,
                         )
                         .key_schema(
                             KeySchemaElement::builder()
                                 .attribute_name("sk")
                                 .key_type(KeyType::Range)
                                 .build()
-                                .map_err(crate::harness::sdk_error)?,
+                                .map_err(crate::harness::sdk_error_message)?,
                         )
                         .attribute_definitions(
                             AttributeDefinition::builder()
                                 .attribute_name("pk")
                                 .attribute_type(ScalarAttributeType::S)
                                 .build()
-                                .map_err(crate::harness::sdk_error)?,
+                                .map_err(crate::harness::sdk_error_message)?,
                         )
                         .attribute_definitions(
                             AttributeDefinition::builder()
                                 .attribute_name("sk")
                                 .attribute_type(ScalarAttributeType::S)
                                 .build()
-                                .map_err(crate::harness::sdk_error)?,
+                                .map_err(crate::harness::sdk_error_message)?,
                         )
                         .billing_mode(BillingMode::PayPerRequest)
                         .send()
@@ -157,7 +157,7 @@ impl ServiceGroup for DynamoDbGroup {
                                 .attribute_name("gpk")
                                 .key_type(KeyType::Hash)
                                 .build()
-                                .map_err(crate::harness::sdk_error)?,
+                                .map_err(crate::harness::sdk_error_message)?,
                         )
                         .projection(
                             Projection::builder()
@@ -165,7 +165,7 @@ impl ServiceGroup for DynamoDbGroup {
                                 .build(),
                         )
                         .build()
-                        .map_err(crate::harness::sdk_error)?;
+                        .map_err(crate::harness::sdk_error_message)?;
                     clients
                         .dynamodb()
                         .update_table()
@@ -175,7 +175,7 @@ impl ServiceGroup for DynamoDbGroup {
                                 .attribute_name("gpk")
                                 .attribute_type(ScalarAttributeType::S)
                                 .build()
-                                .map_err(crate::harness::sdk_error)?,
+                                .map_err(crate::harness::sdk_error_message)?,
                         )
                         .global_secondary_index_updates(
                             GlobalSecondaryIndexUpdate::builder()
@@ -382,7 +382,7 @@ impl ServiceGroup for DynamoDbGroup {
                         .await;
                     match result {
                         Err(err) => {
-                            let rendered = crate::harness::sdk_error(err);
+                            let rendered = crate::harness::sdk_error_message(err);
                             let msg = rendered.to_ascii_lowercase();
                             if msg.contains("conditionalcheckfailed")
                                 || msg.contains("condition")
@@ -686,7 +686,7 @@ impl ServiceGroup for DynamoDbGroup {
                         let put = PutRequest::builder()
                             .set_item(Some(item))
                             .build()
-                            .map_err(crate::harness::sdk_error)?;
+                            .map_err(crate::harness::sdk_error_message)?;
                         writes.push(WriteRequest::builder().put_request(put).build());
                     }
                     let mut request_items: HashMap<String, Vec<WriteRequest>> = HashMap::new();
@@ -730,7 +730,7 @@ impl ServiceGroup for DynamoDbGroup {
                     let ka = KeysAndAttributes::builder()
                         .set_keys(Some(keys))
                         .build()
-                        .map_err(crate::harness::sdk_error)?;
+                        .map_err(crate::harness::sdk_error_message)?;
                     let mut request_items = HashMap::new();
                     request_items.insert(table.clone(), ka);
                     let response = clients
@@ -773,7 +773,7 @@ impl ServiceGroup for DynamoDbGroup {
                             .table_name(&table)
                             .set_item(Some(item))
                             .build()
-                            .map_err(crate::harness::sdk_error)?;
+                            .map_err(crate::harness::sdk_error_message)?;
                         transact_items.push(TransactWriteItem::builder().put(put).build());
                     }
                     clients
@@ -831,7 +831,7 @@ impl ServiceGroup for DynamoDbGroup {
                             .table_name(&table)
                             .set_key(Some(key))
                             .build()
-                            .map_err(crate::harness::sdk_error)?;
+                            .map_err(crate::harness::sdk_error_message)?;
                         transact_items.push(TransactGetItem::builder().get(get).build());
                     }
                     let response = clients
@@ -874,7 +874,7 @@ impl ServiceGroup for DynamoDbGroup {
                         .set_item(Some(item))
                         .condition_expression("attribute_not_exists(pk)")
                         .build()
-                        .map_err(crate::harness::sdk_error)?;
+                        .map_err(crate::harness::sdk_error_message)?;
                     let transact_items = vec![TransactWriteItem::builder().put(put).build()];
                     let result = clients
                         .dynamodb()
@@ -884,7 +884,7 @@ impl ServiceGroup for DynamoDbGroup {
                         .await;
                     match result {
                         Err(err) => {
-                            let rendered = crate::harness::sdk_error(err);
+                            let rendered = crate::harness::sdk_error_message(err);
                             let msg = rendered.to_ascii_lowercase();
                             if msg.contains("transactioncanceled")
                                 || msg.contains("condition")
@@ -917,7 +917,7 @@ impl ServiceGroup for DynamoDbGroup {
                         .enabled(true)
                         .attribute_name("expires_at")
                         .build()
-                        .map_err(crate::harness::sdk_error)?;
+                        .map_err(crate::harness::sdk_error_message)?;
                     let response = clients
                         .dynamodb()
                         .update_time_to_live()
@@ -1008,28 +1008,28 @@ impl ServiceGroup for DynamoDbGroup {
                                 .attribute_name("pk")
                                 .key_type(KeyType::Hash)
                                 .build()
-                                .map_err(crate::harness::sdk_error)?,
+                                .map_err(crate::harness::sdk_error_message)?,
                         )
                         .key_schema(
                             KeySchemaElement::builder()
                                 .attribute_name("sk")
                                 .key_type(KeyType::Range)
                                 .build()
-                                .map_err(crate::harness::sdk_error)?,
+                                .map_err(crate::harness::sdk_error_message)?,
                         )
                         .attribute_definitions(
                             AttributeDefinition::builder()
                                 .attribute_name("pk")
                                 .attribute_type(ScalarAttributeType::S)
                                 .build()
-                                .map_err(crate::harness::sdk_error)?,
+                                .map_err(crate::harness::sdk_error_message)?,
                         )
                         .attribute_definitions(
                             AttributeDefinition::builder()
                                 .attribute_name("sk")
                                 .attribute_type(ScalarAttributeType::S)
                                 .build()
-                                .map_err(crate::harness::sdk_error)?,
+                                .map_err(crate::harness::sdk_error_message)?,
                         )
                         .billing_mode(BillingMode::PayPerRequest)
                         .send()
@@ -1058,28 +1058,28 @@ impl ServiceGroup for DynamoDbGroup {
                                 .attribute_name("pk")
                                 .key_type(KeyType::Hash)
                                 .build()
-                                .map_err(crate::harness::sdk_error)?,
+                                .map_err(crate::harness::sdk_error_message)?,
                         )
                         .key_schema(
                             KeySchemaElement::builder()
                                 .attribute_name("sk")
                                 .key_type(KeyType::Range)
                                 .build()
-                                .map_err(crate::harness::sdk_error)?,
+                                .map_err(crate::harness::sdk_error_message)?,
                         )
                         .attribute_definitions(
                             AttributeDefinition::builder()
                                 .attribute_name("pk")
                                 .attribute_type(ScalarAttributeType::S)
                                 .build()
-                                .map_err(crate::harness::sdk_error)?,
+                                .map_err(crate::harness::sdk_error_message)?,
                         )
                         .attribute_definitions(
                             AttributeDefinition::builder()
                                 .attribute_name("sk")
                                 .attribute_type(ScalarAttributeType::S)
                                 .build()
-                                .map_err(crate::harness::sdk_error)?,
+                                .map_err(crate::harness::sdk_error_message)?,
                         )
                         .billing_mode(BillingMode::PayPerRequest)
                         .send()
@@ -1127,28 +1127,28 @@ impl ServiceGroup for DynamoDbGroup {
                                 .attribute_name("pk")
                                 .key_type(KeyType::Hash)
                                 .build()
-                                .map_err(crate::harness::sdk_error)?,
+                                .map_err(crate::harness::sdk_error_message)?,
                         )
                         .key_schema(
                             KeySchemaElement::builder()
                                 .attribute_name("sk")
                                 .key_type(KeyType::Range)
                                 .build()
-                                .map_err(crate::harness::sdk_error)?,
+                                .map_err(crate::harness::sdk_error_message)?,
                         )
                         .attribute_definitions(
                             AttributeDefinition::builder()
                                 .attribute_name("pk")
                                 .attribute_type(ScalarAttributeType::S)
                                 .build()
-                                .map_err(crate::harness::sdk_error)?,
+                                .map_err(crate::harness::sdk_error_message)?,
                         )
                         .attribute_definitions(
                             AttributeDefinition::builder()
                                 .attribute_name("sk")
                                 .attribute_type(ScalarAttributeType::S)
                                 .build()
-                                .map_err(crate::harness::sdk_error)?,
+                                .map_err(crate::harness::sdk_error_message)?,
                         )
                         .billing_mode(BillingMode::PayPerRequest)
                         .send()
@@ -1177,28 +1177,28 @@ impl ServiceGroup for DynamoDbGroup {
                                 .attribute_name("pk")
                                 .key_type(KeyType::Hash)
                                 .build()
-                                .map_err(crate::harness::sdk_error)?,
+                                .map_err(crate::harness::sdk_error_message)?,
                         )
                         .key_schema(
                             KeySchemaElement::builder()
                                 .attribute_name("sk")
                                 .key_type(KeyType::Range)
                                 .build()
-                                .map_err(crate::harness::sdk_error)?,
+                                .map_err(crate::harness::sdk_error_message)?,
                         )
                         .attribute_definitions(
                             AttributeDefinition::builder()
                                 .attribute_name("pk")
                                 .attribute_type(ScalarAttributeType::S)
                                 .build()
-                                .map_err(crate::harness::sdk_error)?,
+                                .map_err(crate::harness::sdk_error_message)?,
                         )
                         .attribute_definitions(
                             AttributeDefinition::builder()
                                 .attribute_name("sk")
                                 .attribute_type(ScalarAttributeType::S)
                                 .build()
-                                .map_err(crate::harness::sdk_error)?,
+                                .map_err(crate::harness::sdk_error_message)?,
                         )
                         .billing_mode(BillingMode::PayPerRequest)
                         .send()
@@ -1227,14 +1227,14 @@ impl ServiceGroup for DynamoDbGroup {
                                 .attribute_name("pk")
                                 .key_type(KeyType::Hash)
                                 .build()
-                                .map_err(crate::harness::sdk_error)?,
+                                .map_err(crate::harness::sdk_error_message)?,
                         )
                         .attribute_definitions(
                             AttributeDefinition::builder()
                                 .attribute_name("pk")
                                 .attribute_type(ScalarAttributeType::S)
                                 .build()
-                                .map_err(crate::harness::sdk_error)?,
+                                .map_err(crate::harness::sdk_error_message)?,
                         )
                         .billing_mode(BillingMode::PayPerRequest)
                         .send()

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -137,19 +138,28 @@ var ErrUnimplemented = errors.New("unimplemented")
 // that was sent, expected and actual values, the CLI's own text quoted inside
 // it.
 //
-// LooksUnimplemented must never be applied to such a message. It matches a bare
-// "501", and a run id (`oc-` plus eight hex digits) or a port like 4501 in the
-// params is enough to put one there, which would report every failure of that
-// test as unimplemented. A composed error states the 501 by wrapping
-// ErrUnimplemented instead.
+// LooksUnimplementedWithoutBanner must never be applied to such a message. It
+// matches a bare "501", and a run id (`oc-` plus eight hex digits) or a port
+// like 4501 in the params is enough to put one there, which would report every
+// failure of that test as unimplemented. A composed error states the 501 by
+// wrapping ErrUnimplemented instead.
 type Composed interface{ ComposedFailure() }
 
 // IsUnimplemented reports whether an error represents a 501 / not-implemented
 // response.
 //
 // The sentinel is checked first, so a caller that has already classified the
-// CLI's own text is believed. The substring heuristic is applied only to an
-// error nobody classified, and never to a composed message — see Composed.
+// CLI's own text is believed, and a composed message is never read as text —
+// see Composed. Everything else is decided from the **code the CLI states**,
+// not from its prose: ClassifyBanner. The substring heuristic is the last
+// resort and applies only to output stating no code at all.
+//
+// The prose was the whole rule until #1924, and a 400 was enough to defeat it:
+// the sibling go-sdk suite reported its RotateSecretWithoutLambda test —
+// which asserts an InvalidRequestException — as `unimplemented` on one CI run
+// whose request id happened to contain "501", flipping a gated baseline row
+// and failing an unrelated pull request. The CLI's output carries the same
+// hazard in the same places.
 func IsUnimplemented(err error) bool {
 	if err == nil {
 		return false
@@ -161,13 +171,77 @@ func IsUnimplemented(err error) bool {
 	if errors.As(err, &composed) {
 		return false
 	}
-	return LooksUnimplemented(err.Error())
+	if unimplemented, decided := ClassifyBanner(err.Error()); decided {
+		return unimplemented
+	}
+	return LooksUnimplementedWithoutBanner(err.Error())
 }
 
-// LooksUnimplemented is the substring heuristic over one raw AWS CLI error
-// text. The CLI prints an error's code but never its HTTP status, so a 501 only
-// ever reaches us inside prose; pass it what the CLI said and nothing else.
-func LooksUnimplemented(s string) bool {
+// ClassifyBanner decides, from the error code the AWS CLI states, whether the
+// emulator refused the operation as unimplemented. decided is false when the
+// output states no code — the CLI died before it reached the wire, or printed a
+// body it could not model — which is the one case a caller may fall back to the
+// text.
+//
+// The CLI never prints an HTTP status of its own accord, but its banner carries
+// what stands in for one, and carries it in a delimited position rather than
+// loose in prose. Four spellings mean unimplemented, matched by **equality**
+// against that position and nowhere else:
+//
+//   - NotImplemented, which Overcast answers with HTTP 501 and nothing else
+//     (internal/protocol/errors.go), and UnsupportedOperation beside it.
+//   - UnknownOperationException, which AWS — and Overcast — answer with HTTP
+//     400 for a target naming no modeled operation, so a status alone would
+//     miss it.
+//   - "501" itself: botocore puts the HTTP status in the code position when it
+//     cannot model the response body into an error code. That is a parsed
+//     field of the response, not the digits appearing somewhere in a message.
+func ClassifyBanner(text string) (unimplemented, decided bool) {
+	codes := BannerCodes(text)
+	if len(codes) == 0 {
+		return false, false
+	}
+	for _, code := range codes {
+		switch code {
+		case "501", "NotImplemented", "UnknownOperationException", "UnsupportedOperation":
+			return true, true
+		}
+	}
+	return false, true
+}
+
+// BannerCodes returns every error code the AWS CLI's own banner states, in the
+// order they were found, or nil when it states none. Retries print one banner
+// each, so more than one is normal.
+//
+// This is the CLI's rendering of a modeled error, and the one place in its
+// output where a code sits in a position rather than in prose. The scenario
+// interpreter reads the same surface — see errorCodes in
+// internal/scenario/executor.go, which adds the second surface (an error body
+// the CLI echoed because it could not model it) that only error *matching*
+// needs.
+func BannerCodes(text string) []string {
+	var codes []string
+	for _, m := range errorBannerRe.FindAllStringSubmatch(text, -1) {
+		codes = append(codes, m[1])
+	}
+	return codes
+}
+
+// errorBannerRe matches botocore's rendering of a service error:
+// `An error occurred (<Code>) when calling the <Op> operation:`.
+var errorBannerRe = regexp.MustCompile(`An error occurred \(([^()]+)\) when calling the `)
+
+// LooksUnimplementedWithoutBanner is the substring heuristic, and it is for
+// output that states **no error code** — the CLI died before it reached the
+// wire, or echoed a body it could not model. Pass it what the CLI said and
+// nothing else.
+//
+// It is never right for output that does state one: the banner names the error,
+// and "501" appears in request ids, ARNs, resource names and port numbers.
+// ClassifyBanner answers that case; this one only answers the case where there
+// is no code to read.
+func LooksUnimplementedWithoutBanner(s string) bool {
 	return strings.Contains(s, "501") ||
 		strings.Contains(s, "NotImplemented") ||
 		strings.Contains(s, "UnknownOperationException") ||
