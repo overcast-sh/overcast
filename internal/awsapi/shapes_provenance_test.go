@@ -43,13 +43,22 @@ import (
 // argue for a larger one: as the reviewed scope decision below, not as the
 // reflex that turns its own rebase green.
 //
+// Reviewed 2026-09-09, ahead of those two ports rather than inside either:
+// the whole of G6 wave 1 is 734,034 + 161,975 + 61,721 = 957,730 bytes across
+// 12 services, 3.8% of the 24 MiB fleet ceiling, every service inside the
+// 1,608 B/op gate. The cap goes to 1,200 KiB — ~1.28x that total, the same
+// headroom the two raises before it used — so both ports land on their
+// merits. The next raise is a G6 cost as much as a G4 one: an authored
+// scenario is model-checked, so porting a group of a service outside the
+// corpus adds that service's snapshot (#1883, #1116).
+//
 // **Raise this constant deliberately, as a reviewer, never automatically.** It
 // is the enforcement half of §4.6's size gate: growing it is how the fleet
 // budget gets spent, and the projection that budget rests on is in §4.6. A
 // failure here means the snapshot grew — decide whether the growth is scope
 // (a service was added to models/aws/shapes-services.txt, which is a review
 // decision) or encoding drift (which is a bug), and say which in the PR.
-const maxShapeSnapshotBytes = 800 * 1024
+const maxShapeSnapshotBytes = 1200 * 1024
 
 // shapeSnapshotDir is the committed snapshot, relative to this package.
 var shapeSnapshotDir = filepath.Join("..", "..", "models", "aws", "shapes")
