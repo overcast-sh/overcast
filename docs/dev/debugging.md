@@ -1,5 +1,9 @@
 # Step debugging
 
+This page is about Overcast's own Go code. Attaching a debugger to *your*
+code inside an emulated Lambda function or ECS task is covered by
+[Step debugging inside emulated compute](../debugger.md).
+
 Overcast supports full step debugging via [Delve](https://github.com/go-delve/delve),
 Go's debugger. You can set breakpoints, step through handler code, inspect
 variables, watch expressions, and navigate the call stack — all from VS Code.

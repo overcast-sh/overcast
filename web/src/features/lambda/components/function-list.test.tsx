@@ -1,7 +1,9 @@
 import { renderWithData, screen, within } from "@/test/render"
 import { lambdaFunctionsQueryOptions } from "@/features/lambda/data"
 import { preflightRegionQueryOptions } from "@/features/preflight/data"
-import type { LambdaFunction } from "@/types"
+import { debuggerTargetsQueryOptions } from "@/features/debugger/data"
+import type { DebuggerTarget, LambdaFunction } from "@/types"
+import { debugTarget } from "@/test/debug-target"
 import { FunctionList } from "./function-list"
 
 vi.mock("@tanstack/react-router", () => ({
@@ -122,5 +124,34 @@ describe("FunctionList — sort bound to the route", () => {
       [lambdaFunctionsQueryOptions().queryKey, functions],
     ])
     expect(renderedNames()).toEqual(["gamma", "beta", "alpha"])
+  })
+})
+
+// The debug badge reads one cached list query (docs/plans/compute-debugger.md
+// § 7) rather than asking once per row, so the seed is the list.
+describe("FunctionList — debugger badge", () => {
+  function debugTargetFor(resource: string, state: string): DebuggerTarget {
+    return debugTarget({ id: `lambda/${resource}`, resource, state, containerId: "", upstream: "" })
+  }
+
+  it("marks only the rows that have a target, with the target's state", () => {
+    renderWithData(<FunctionList />, [
+      [lambdaFunctionsQueryOptions().queryKey, functions],
+      [debuggerTargetsQueryOptions().queryKey, [debugTargetFor("beta", "attached")]],
+    ])
+
+    const rows = screen.getAllByRole("row").slice(1)
+    const beta = rows.find((row) => within(row).getAllByRole("cell")[0].textContent === "beta")
+    expect(within(beta!).getByTitle("Debugger: attached")).toHaveTextContent("attached")
+    expect(screen.getAllByTitle(/^Debugger: /)).toHaveLength(1)
+  })
+
+  it("renders no badge at all when there are no targets", () => {
+    renderWithData(<FunctionList />, [
+      [lambdaFunctionsQueryOptions().queryKey, functions],
+      [debuggerTargetsQueryOptions().queryKey, []],
+    ])
+
+    expect(screen.queryByTitle(/^Debugger: /)).not.toBeInTheDocument()
   })
 })

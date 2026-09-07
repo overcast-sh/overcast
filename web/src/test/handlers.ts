@@ -72,6 +72,21 @@ export const inboxHandlers = [http.get("/api/inbox/messages", () => HttpResponse
 
 export const debugHandlers = [http.get("/api/debug/state", () => HttpResponse.json({}))]
 
+// ─── Compute debugger ─────────────────────────────────────────────────────
+
+// The default configuration has no targets, and a resource the server knows
+// nothing about is a 404 the console renders as "off". Tests that want a
+// target seed the query cache or override these with `server.use(...)`.
+export const debuggerHandlers = [
+  http.get("/api/debugger/targets", () => HttpResponse.json({ targets: [] })),
+  http.get("/api/debugger/targets/:service/:resource", ({ params }) =>
+    HttpResponse.json(
+      { error: `no such resource: ${String(params.service)}/${String(params.resource)}` },
+      { status: 404 },
+    ),
+  ),
+]
+
 // ─── Preflight ────────────────────────────────────────────────────────────
 
 // Every list page asks this once it has rendered nothing, so the default is
@@ -126,6 +141,7 @@ export const handlers = [
   ...ecsHandlers,
   ...inboxHandlers,
   ...debugHandlers,
+  ...debuggerHandlers,
   ...preflightHandlers,
   ...settingsHandlers,
 ]

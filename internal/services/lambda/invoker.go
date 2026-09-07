@@ -267,7 +267,7 @@ func (inv *ServiceInvoker) Invoke(ctx context.Context, functionName string, payl
 	}
 	tracked.Bind(inst)
 	tracked.Ready()
-	if err := awaitRuntimeReady(ctx, inv.cfg, inst); err != nil {
+	if err := awaitRuntimeReady(ctx, inv.h.clk, inv.cfg, inst); err != nil {
 		rt.Release(ctx, inst, false)
 		tracked.Abandon(err.Error())
 		inv.logger.Error("lambda: invoke: runtime init failed",

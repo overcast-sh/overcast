@@ -1140,6 +1140,7 @@ func (h *Handler) stopServiceTasks(ctx context.Context, clusterName string, svc 
 // The die event still fires and still captures; captureContainerLogs keeps the
 // first success rather than letting the two orderings overwrite each other.
 func (h *Handler) retireTaskContainers(ctx context.Context, task *Task) {
+	h.releaseDebugTargets(task)
 	if !h.dockerReady.Load() {
 		return
 	}

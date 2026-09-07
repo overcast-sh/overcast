@@ -2,7 +2,6 @@ package ecs
 
 import (
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/overcast-sh/overcast/internal/config"
@@ -16,18 +15,6 @@ import (
 // endpoint from the QueueUrl rather than from client configuration, and
 // AWS_ENDPOINT_URL does not override that. A task handed a queue URL on
 // localhost:4566 sends its SQS client to its own loopback.
-
-// envMap turns "K=V" entries into a map, last value winning — matching how
-// Docker resolves duplicate environment keys.
-func envMap(env []string) map[string]string {
-	out := make(map[string]string, len(env))
-	for _, kv := range env {
-		if k, v, ok := strings.Cut(kv, "="); ok {
-			out[k] = v
-		}
-	}
-	return out
-}
 
 func TestBuildContainerEnv_pointsAWSEndpointURLAtAReachableAddress(t *testing.T) {
 	// Given: Overcast reachable from the ECS network at a routable IP.

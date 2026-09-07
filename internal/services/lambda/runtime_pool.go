@@ -45,6 +45,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/overcast-sh/overcast/internal/clock"
+	"github.com/overcast-sh/overcast/internal/debugger"
 	"github.com/overcast-sh/overcast/internal/events"
 	"github.com/overcast-sh/overcast/internal/logging"
 )
@@ -137,6 +138,10 @@ type InstancePool struct {
 	maxWarm        int
 	maxInstances   int
 	maxPerFunction int
+	// debugger, when set, is consulted by admission: a function with a live
+	// debug target is pinned to one execution environment, because the debug
+	// port belongs to one container. Nil means no function is ever pinned.
+	debugger *debugger.Manager
 	// maxMemoryMB bounds Σ MemorySize over live containers; 0 = unlimited.
 	maxMemoryMB int
 	// liveMemMB records the MemorySize (MB) each live container was created
@@ -267,8 +272,9 @@ func NewInstancePool(rt Runtime, log *zap.Logger, clk clock.Clock, limits PoolLi
 // the code hash alone, when deciding whether a warm instance is still usable.
 //
 // Fields that never reach the container (Description, Role, RevisionId, tags
-// other than the hot-reload path) are deliberately excluded: including them
-// would force a pointless cold start on a cosmetic edit.
+// other than the hot-reload path and the debug tags) are deliberately
+// excluded: including them would force a pointless cold start on a cosmetic
+// edit.
 func functionInstanceIdentity(fn *Function) string {
 	if fn == nil {
 		return ""
@@ -316,6 +322,14 @@ func functionInstanceIdentity(fn *Function) string {
 		add("entrypoint", strings.Join(fn.ImageConfig.EntryPoint, "\x00"))
 		add("command", strings.Join(fn.ImageConfig.Command, "\x00"))
 		add("workdir", fn.ImageConfig.WorkingDirectory)
+	}
+	// The debug tags are the exception to "tags never reach the container":
+	// they become an injected flag, OVERCAST_DEBUG_PORT and a port binding, so
+	// a tag change has to retire the environment built without them.
+	for _, key := range debugTagKeys {
+		if value, ok := fn.Tags[key]; ok {
+			add("tag:"+key, value)
+		}
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }
@@ -1050,6 +1064,13 @@ func (p *InstancePool) replenishProvisioned(name string) {
 	// concurrency is a floor, not a ceiling: a burst of on-demand instances
 	// must not make the pool think the reservation is already satisfied.
 	shortfall := st.target - len(p.provisionedInstances[name]) - p.provisionedPending[name]
+	if p.debugPinned(st.fn) {
+		// One environment in total while a debugger can attach, counting
+		// whatever exists or is starting, however the reservation is sized.
+		if room := 1 - len(p.entries[name]) - p.checkedOut[name] - p.provisionedPending[name]; shortfall > room {
+			shortfall = room
+		}
+	}
 	if shortfall <= 0 {
 		p.mu.Unlock()
 		return

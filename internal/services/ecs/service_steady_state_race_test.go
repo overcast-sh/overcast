@@ -71,7 +71,7 @@ const (
 
 func TestServiceSteadyState_concurrentTaskTransitions(t *testing.T) {
 	// Given: several services, each wanting several tasks
-	svc := New(&config.Config{Region: "us-east-1", AccountID: "123456789012"}, state.NewMemoryStore(), zap.NewNop(), clock.New())
+	svc := New(&config.Config{Region: "us-east-1", AccountID: "123456789012"}, state.NewMemoryStore(), zap.NewNop(), clock.New(), nil)
 	h := svc.handler
 	// Tasks only transition, and so only reconcile their service, when Docker
 	// is ready — without it no service ever reaches a steady state to race.

@@ -62,7 +62,8 @@ type VPCConfigResp struct {
 	VpcId            string   `json:"VpcId"`
 }
 
-// Env is the Environment member of a CreateFunction request.
+// Env is the Environment member of a CreateFunction request and of a function
+// configuration response.
 type Env struct {
 	Variables map[string]string `json:"Variables"`
 }
@@ -91,6 +92,7 @@ type FunctionConfiguration struct {
 	PackageType         string               `json:"PackageType"`
 	Architectures       []string             `json:"Architectures"`
 	ImageUri            string               `json:"ImageUri,omitempty"`
+	Environment         *Env                 `json:"Environment,omitempty"`
 	VpcConfig           *VPCConfigResp       `json:"VpcConfig,omitempty"`
 	ImageConfigResponse *ImageConfigResponse `json:"ImageConfigResponse,omitempty"`
 }

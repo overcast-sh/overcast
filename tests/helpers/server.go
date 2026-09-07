@@ -480,6 +480,44 @@ func WithLambdaHotReload() Option {
 	}
 }
 
+// WithLambdaDebugger enables the compute debugger for Lambda functions that
+// opt in with the overcast:debug tag (docs/plans/compute-debugger.md), with
+// the shipped defaults for the rest: the ports bind on loopback and are
+// scanned from the same 9229-9329 range a real run uses, lowest free first,
+// so two test servers — or a developer's own inspector — never collide on a
+// fixed port. Off by default, as in a real run.
+func WithLambdaDebugger() Option {
+	return func(so *serverOptions) {
+		so.cfg.LambdaDebugger = true
+		debuggerDefaults(so.cfg)
+	}
+}
+
+// WithECSDebugger is WithLambdaDebugger for ECS task definitions that opt in
+// with the same tags, optionally suffixed with a container name.
+func WithECSDebugger() Option {
+	return func(so *serverOptions) {
+		so.cfg.ECSDebugger = true
+		debuggerDefaults(so.cfg)
+	}
+}
+
+// debuggerDefaults is the shipped listen address and port range, which
+// config.Load would otherwise resolve and a test config built by hand has
+// not.
+func debuggerDefaults(cfg *config.Config) {
+	cfg.DebuggerListen = "127.0.0.1"
+	cfg.DebuggerPorts = [2]int{9229, 9329}
+}
+
+// WithDebuggerTimeout sets what a function's timeout means while a debugger
+// is attached (OVERCAST_DEBUGGER_TIMEOUT). The default is attached.
+func WithDebuggerTimeout(policy config.DebuggerTimeoutPolicy) Option {
+	return func(so *serverOptions) {
+		so.cfg.DebuggerTimeout = policy
+	}
+}
+
 // WithSMTPMock enables the built-in SMTP capture server on a random port.
 // Emails delivered to SNS email/email-json subscribers are captured and
 // accessible via GET /_overcast/ses/inbox/messages on the test server.

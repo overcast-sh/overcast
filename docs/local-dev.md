@@ -35,6 +35,10 @@ AWS_ENDPOINT_URL=http://localhost:4566 cdk watch
 
 Reach for a bind mount when the redeploy cycle itself is the cost you want gone.
 
+Breakpoints are a separate switch: [Step debugging inside emulated compute](./debugger.md)
+attaches your editor to the same containers, and reads `overcast:hot-reload-path`
+as its source root so a hot-reloaded function needs no second tag.
+
 ## Turning hot reload on
 
 Both services are off by default — a server that binds arbitrary host paths on
@@ -229,5 +233,6 @@ docker exec $(docker ps -q -f name=overcast-ecs) ls -la /var/www/html
 
 - [Lambda examples](./services/lambda/examples.md) — hot reload for functions
 - [ECS examples](./services/ecs/examples.md) — hot reload inside a task
+- [Step debugging inside emulated compute](./debugger.md) — breakpoints inside the same containers
 - [Using AWS CDK](./cdk.md) — `cdk watch` against Overcast
 - [Troubleshooting](./troubleshooting.md) — when an edit does not reach a container

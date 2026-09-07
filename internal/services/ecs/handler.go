@@ -17,6 +17,7 @@ import (
 	"github.com/overcast-sh/overcast/internal/clock"
 	"github.com/overcast-sh/overcast/internal/config"
 	"github.com/overcast-sh/overcast/internal/containerendpoint"
+	"github.com/overcast-sh/overcast/internal/debugger"
 	"github.com/overcast-sh/overcast/internal/docker"
 	"github.com/overcast-sh/overcast/internal/events"
 	"github.com/overcast-sh/overcast/internal/lifecycle"
@@ -77,6 +78,12 @@ type Handler struct {
 	// containers can dial. Resolved on first task start — see containerEndpoint.
 	endpoint     *containerendpoint.Mapper
 	endpointOnce sync.Once
+
+	// debugger owns the debug targets a task's containers are registered
+	// with at start (see debugger.go); nil when the debugger is not wired.
+	// debugPorts remembers which task holds each definition's port.
+	debugger   *debugger.Manager
+	debugPorts debugPortOwners
 }
 
 // EFSVolumeResolver maps EFS references to the Docker volume backing them.

@@ -1,6 +1,6 @@
 ---
 title: "ECS examples"
-description: "Running images from the emulated ECR, injecting secrets, shipping container logs, serving through a load balancer, and hot-reloading local source inside a task."
+description: "Running images from the emulated ECR, injecting secrets, shipping container logs, serving through a load balancer, hot-reloading local source inside a task, and attaching a debugger to a container."
 section: "Service Reference"
 tags:
   - docs
@@ -126,9 +126,29 @@ Anything that cannot be honoured — the flag off, an ambiguous bare tag, an unk
 or unredirectable volume, a relative path — leaves the task running on the plain
 scratch volumes it declared, and says so in a warning naming what to fix.
 
+## Step debugging
+
+The same flag family and tag as Lambda, on the task definition:
+
+```bash
+OVERCAST_DEBUGGER=true overcast serve
+```
+
+```typescript
+cdk.Tags.of(taskDef).add("overcast:debug-port/app", "9229");
+cdk.Tags.of(taskDef).add("overcast:debug-protocol/app", "inspector");
+```
+
+The container name goes in the key, as for hot reload; a single-container
+task definition takes the bare `overcast:debug=true`. Overcast opens the port at
+task start and forwards your editor to the container. Protocols,
+path mappings and editor setup are in
+[Step debugging inside emulated compute](../../debugger.md#ecs).
+
 ## Related
 
 - [ECS](../ecs.md) — quick start and what works
 - [ECS limitations](./limitations.md) — rollouts, volumes, networking
 - [ECS troubleshooting](./troubleshooting.md) — tasks that will not start or stay up
 - [The inner loop](../../local-dev.md) — hot reload across services
+- [Step debugging inside emulated compute](../../debugger.md) — breakpoints inside a container

@@ -28,7 +28,7 @@ import (
 func newECSRegionTestHandler(t *testing.T) (*Handler, *clock.Mock) {
 	t.Helper()
 	clk := clock.NewMock()
-	svc := New(&config.Config{Region: "us-east-1", AccountID: "123456789012", Network: "overcast"}, state.NewMemoryStore(), zap.NewNop(), clk)
+	svc := New(&config.Config{Region: "us-east-1", AccountID: "123456789012", Network: "overcast"}, state.NewMemoryStore(), zap.NewNop(), clk, nil)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()

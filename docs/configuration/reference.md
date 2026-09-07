@@ -87,6 +87,12 @@ explaining.
 | `OVERCAST_HOT_RELOAD`            | `false`                | Umbrella switch for hot reload across every compute service — see [The inner loop](../local-dev.md) |
 | `OVERCAST_LAMBDA_HOT_RELOAD`     | _(`OVERCAST_HOT_RELOAD`)_ | Per-service override: hot reload for Lambda functions                             |
 | `OVERCAST_ECS_HOT_RELOAD`        | _(`OVERCAST_HOT_RELOAD`)_ | Per-service override: hot reload for ECS tasks                                    |
+| `OVERCAST_DEBUGGER`              | `false`                | Umbrella switch for step debugging of user code across every compute service — see [Step debugging inside emulated compute](../debugger.md) |
+| `OVERCAST_LAMBDA_DEBUGGER`       | _(`OVERCAST_DEBUGGER`)_ | Per-service override: debug ports for Lambda functions                              |
+| `OVERCAST_ECS_DEBUGGER`          | _(`OVERCAST_DEBUGGER`)_ | Per-service override: debug ports for ECS tasks                                     |
+| `OVERCAST_DEBUGGER_LISTEN`       | _(`OVERCAST_LISTEN` host)_ | Address the debug ports bind on: `127.0.0.1` native, `0.0.0.0` in a container so `-p 9229-9329:9229-9329` reaches them |
+| `OVERCAST_DEBUGGER_PORTS`        | `9229-9329`            | Range auto-allocated debug ports are taken from, lowest free first                  |
+| `OVERCAST_DEBUGGER_TIMEOUT`      | `attached`             | When a Lambda function's timeout clock stops: `attached` (a client is connected), `paused` (only at a breakpoint; Node.js so far), `strict` (never) — see [Timeouts while paused](../debugger.md#timeouts-while-paused) |
 | `OVERCAST_EC2_VPC_STRATEGY`      | `shared`               | How VPCs map to Docker networks when their CIDRs overlap: `shared`, `strict` or `remapped` — see [How a VPC is backed by a Docker network](../networking/vpc-backing.md#overlapping-cidrs) |
 | `OVERCAST_MCP_REMOTE_EXPOSURE`   | `false`                | **Security-relevant.** Declares that `/_overcast/mcp` will be reachable by non-local clients, and requires `OVERCAST_MCP_AUTH_TOKEN`. See [Exposing MCP](./mcp.md) |
 | `OVERCAST_MCP_AUTH_TOKEN`        | —                      | Bearer token every MCP request must present once set. Treat it like any other credential |

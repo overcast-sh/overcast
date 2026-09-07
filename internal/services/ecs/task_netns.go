@@ -169,13 +169,14 @@ func (h *Handler) joinTaskDataPlane(ctx context.Context, placement awsvpcPlaceme
 }
 
 // startTaskNamespaceContainer starts the container holding an awsvpc task's
-// network namespace and puts the whole of the task's networking on it. It
-// returns the Docker ID the task's application containers join.
+// network namespace and puts the whole of the task's networking on it — its
+// port mappings and, for the containers a debug tag names, their debug ports.
+// It returns the Docker ID the task's application containers join.
 //
 // Failures here are the task's rather than any one container's, which is what
 // AWS does with them too: a task that cannot provision its ENI is STOPPED with
 // a reason of its own and no container blamed for it.
-func (h *Handler) startTaskNamespaceContainer(ctx context.Context, task *Task, td *TaskDefinition, clusterName, taskID string, placement awsvpcPlacement, endpoint *containerendpoint.Mapper) (string, error) {
+func (h *Handler) startTaskNamespaceContainer(ctx context.Context, task *Task, td *TaskDefinition, clusterName, taskID string, placement awsvpcPlacement, endpoint *containerendpoint.Mapper, debug taskDebugTargets) (string, error) {
 	if err := h.puller.Ensure(ctx, docker.UtilityImage); err != nil {
 		return "", fmt.Errorf("ecs: %w: %w", errTaskNetworkNamespace, err)
 	}
@@ -191,6 +192,9 @@ func (h *Handler) startTaskNamespaceContainer(ctx context.Context, task *Task, t
 		HostConfig: &docker.HostConfig{AutoRemove: false},
 	}
 	h.applyTaskNetwork(ccfg, "", endpoint, portSurfaceFor(td.ContainerDefinitions...))
+	for _, cd := range td.ContainerDefinitions {
+		debug.applyPortBinding(ccfg, cd.Name)
+	}
 
 	name := fmt.Sprintf("overcast-ecs-%s-%s-%s", clusterName, taskID[:8], taskNamespaceContainerSuffix)
 	namespaceID, err := h.puller.CreateContainerWithRetry(ctx, name, ccfg)

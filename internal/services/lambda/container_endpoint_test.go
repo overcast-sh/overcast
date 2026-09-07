@@ -44,7 +44,7 @@ func TestBuildEnv_rewritesHostMintedURLs(t *testing.T) {
 	}
 
 	// When: the container environment is built.
-	env := envMap(runtime.buildEnv(fn, "stream", initTypeOnDemand, "172.18.0.1:41001"))
+	env := envMap(runtime.buildEnv(fn, "stream", initTypeOnDemand, "172.18.0.1:41001", nil))
 
 	// Then: Overcast loopback origins are re-pointed at the container-reachable
 	// endpoint, and everything else is left as the user set it.
@@ -73,7 +73,7 @@ func TestBuildEnv_leavesSplitHorizonHostsAlone(t *testing.T) {
 	}
 
 	// When: the container environment is built.
-	env := envMap(runtime.buildEnv(fn, "stream", initTypeOnDemand, "172.18.0.1:41001"))
+	env := envMap(runtime.buildEnv(fn, "stream", initTypeOnDemand, "172.18.0.1:41001", nil))
 
 	// Then: the URL is preserved — it already works on both sides of the boundary.
 	want := "http://localhost.overcast.sh:4566/000000000000/orders"

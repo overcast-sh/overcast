@@ -25,6 +25,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -67,6 +69,58 @@ type fakeECSDockerDaemon struct {
 	// of these place containers that publish nothing and would only pay for
 	// the bookkeeping.
 	hostPorts map[string]string // host port → the container ID holding it
+
+	// imageWorkingDirs is the WORKDIR an image inspect reports, by image
+	// reference, for the tests about a debugged container's remote root.
+	imageWorkingDirs map[string]string
+}
+
+// setImageWorkingDir makes the daemon report dir as the image's WORKDIR.
+func (fd *fakeECSDockerDaemon) setImageWorkingDir(image, dir string) {
+	fd.mu.Lock()
+	defer fd.mu.Unlock()
+	if fd.imageWorkingDirs == nil {
+		fd.imageWorkingDirs = map[string]string{}
+	}
+	fd.imageWorkingDirs[image] = dir
+}
+
+// imageWorkingDir is the WORKDIR set for the image an inspect path names, or
+// "" for an image no test described.
+func (fd *fakeECSDockerDaemon) imageWorkingDir(p string) string {
+	const marker = "/images/"
+	i := strings.Index(p, marker)
+	if i < 0 {
+		return ""
+	}
+	image, _ := url.PathUnescape(strings.TrimSuffix(p[i+len(marker):], "/json"))
+	fd.mu.Lock()
+	defer fd.mu.Unlock()
+	return fd.imageWorkingDirs[image]
+}
+
+// publishedPorts is what a container's inspect reports under
+// NetworkSettings.Ports: every binding its create asked for, with an
+// ephemeral one (host port 0) answered with a port derived from the
+// container's sequence number, so two containers never report the same one.
+func (fd *fakeECSDockerDaemon) publishedPorts(containerID string) map[string][]docker.PortBinding {
+	fd.mu.Lock()
+	defer fd.mu.Unlock()
+	ports := map[string][]docker.PortBinding{}
+	for n, c := range fd.created {
+		if c.id != containerID || c.req.HostConfig == nil {
+			continue
+		}
+		for key, bindings := range c.req.HostConfig.PortBindings {
+			for i, b := range bindings {
+				if b.HostPort == "" || b.HostPort == "0" {
+					b.HostPort = strconv.Itoa(40000 + 10*n + i)
+				}
+				ports[key] = append(ports[key], b)
+			}
+		}
+	}
+	return ports
 }
 
 // enforceHostPorts makes the daemon refuse to start a container whose
@@ -240,6 +294,11 @@ func newFakeECSDockerDaemon(t *testing.T) *fakeECSDockerDaemon {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := r.URL.Path
 		switch {
+		// Image inspect, for an image a test gave a working directory — what
+		// the debugger reads for a container's remote root.
+		case strings.Contains(p, "/images/") && strings.HasSuffix(p, "/json") && fd.imageWorkingDir(p) != "":
+			w.Write([]byte(`{"Config":{"WorkingDir":"` + fd.imageWorkingDir(p) + `"}}`)) //nolint:errcheck
+
 		// Image pull, and the inspect the puller does around it.
 		case strings.HasSuffix(p, "/images/create"), strings.Contains(p, "/images/"):
 			w.WriteHeader(http.StatusOK)
@@ -336,11 +395,14 @@ func newFakeECSDockerDaemon(t *testing.T) *fakeECSDockerDaemon {
 			fd.mu.Unlock()
 			w.WriteHeader(http.StatusNoContent)
 
-		// Container inspect, once one exists.
+		// Container inspect, once one exists. Its published ports are the
+		// ones its create asked for, an ephemeral binding answered with the
+		// port the daemon "picked" — see publishedPorts.
 		case strings.Contains(p, "/containers/") && strings.HasSuffix(p, "/json"):
+			ports, _ := json.Marshal(fd.publishedPorts(containerIDFromPath(p)))
 			w.Write([]byte(`{"Id":"` + containerIDFromPath(p) + `",` + //nolint:errcheck
 				`"State":{"Status":"running","Running":true},` +
-				`"NetworkSettings":{"Networks":{"bridge":{"IPAddress":"172.17.0.2"}},"Ports":{}}}`))
+				`"NetworkSettings":{"Networks":{"bridge":{"IPAddress":"172.17.0.2"}},"Ports":` + string(ports) + `}}`))
 
 		case strings.HasSuffix(p, "/networks/create"):
 			w.Write([]byte(`{"Id":"net-ecs-fake"}`)) //nolint:errcheck
@@ -441,7 +503,7 @@ func containerIDFromPath(p string) string {
 func newECSDockerTestHandler(t *testing.T) (*Handler, *clock.Mock, *fakeECSDockerDaemon) {
 	t.Helper()
 	clk := clock.NewMock()
-	svc := New(&config.Config{Region: "us-east-1", AccountID: "123456789012"}, state.NewMemoryStore(), zap.NewNop(), clk)
+	svc := New(&config.Config{Region: "us-east-1", AccountID: "123456789012"}, state.NewMemoryStore(), zap.NewNop(), clk, nil)
 	h := svc.handler
 	fd := wireFakeDocker(t, h)
 	t.Cleanup(func() {

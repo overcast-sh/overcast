@@ -106,6 +106,50 @@ const (
 	ServiceMetricsDisabled ServiceMetricsMode = "disabled"
 )
 
+// DebuggerTimeoutPolicy decides what a function's timeout means while a
+// debugger is involved (docs/plans/compute-debugger.md § 3.7). On AWS a
+// function paused in a debugger would be killed at its timeout, which makes
+// step debugging impossible; the policy is the one deliberate divergence, and
+// it only ever applies while a debugger client is connected.
+type DebuggerTimeoutPolicy string
+
+const (
+	// DebuggerTimeoutAttached stops the invocation clock while at least one
+	// debugger client is connected to the target. The default: it works for
+	// every protocol, including ones whose pauses Overcast cannot see.
+	DebuggerTimeoutAttached DebuggerTimeoutPolicy = "attached"
+
+	// DebuggerTimeoutPaused stops the clock only while the protocol reports
+	// the program as paused, so a connected-but-running debugger still sees
+	// the real timeout. Protocols without a pause observer fall back to
+	// attached.
+	DebuggerTimeoutPaused DebuggerTimeoutPolicy = "paused"
+
+	// DebuggerTimeoutStrict enforces the real timeout always, exactly as AWS
+	// would — for reproducing timeout behaviour with a debugger attached.
+	DebuggerTimeoutStrict DebuggerTimeoutPolicy = "strict"
+)
+
+// String returns the policy as it is spelled in OVERCAST_DEBUGGER_TIMEOUT.
+func (p DebuggerTimeoutPolicy) String() string { return string(p) }
+
+// ParseDebuggerTimeoutPolicy reads an OVERCAST_DEBUGGER_TIMEOUT value. Empty
+// means the default. Anything else that is not one of the three policies is
+// an error rather than a fallback: the policy decides whether a paused
+// function survives, and a typo that quietly restored the default is exactly
+// the surprise it exists to prevent.
+func ParseDebuggerTimeoutPolicy(raw string) (DebuggerTimeoutPolicy, error) {
+	p := DebuggerTimeoutPolicy(strings.ToLower(strings.TrimSpace(raw)))
+	switch p {
+	case "":
+		return DebuggerTimeoutAttached, nil
+	case DebuggerTimeoutAttached, DebuggerTimeoutPaused, DebuggerTimeoutStrict:
+		return p, nil
+	default:
+		return "", fmt.Errorf("config: OVERCAST_DEBUGGER_TIMEOUT %q is invalid (expected attached, paused, or strict)", raw)
+	}
+}
+
 // VPCEgressMode decides whether the containers Overcast starts can reach
 // anything outside this machine — the internet, real AWS endpoints, a
 // third-party API.
@@ -793,6 +837,46 @@ type Config struct {
 	// HotReload when that variable is unset.
 	LambdaHotReload bool
 
+	// Debugger is the umbrella opt-in for attaching a step debugger to user
+	// code running inside emulated compute (docs/plans/compute-debugger.md).
+	// It mirrors HotReload: one switch for every compute service, with the
+	// per-service fields below overriding it in either direction. The switch
+	// is server-side because it opens listening ports on the developer's
+	// machine, which a tag alone must not be able to do.
+	// Corresponds to env var OVERCAST_DEBUGGER. Default false.
+	Debugger bool
+
+	// LambdaDebugger enables the debugger for functions that opt in via the
+	// overcast:debug / overcast:debug-port tags.
+	// Corresponds to env var OVERCAST_LAMBDA_DEBUGGER, defaulting to Debugger
+	// when that variable is unset.
+	LambdaDebugger bool
+
+	// ECSDebugger enables the debugger for task definitions that opt in via
+	// the same tags, optionally suffixed with a container name.
+	// Corresponds to env var OVERCAST_ECS_DEBUGGER, defaulting to Debugger
+	// when that variable is unset.
+	ECSDebugger bool
+
+	// DebuggerListen is the address the per-target debug ports bind on. It
+	// follows Host's containerised-vs-native rule (#761) by defaulting to
+	// Host itself: loopback natively, every interface in Docker so that
+	// `-p 9229-9329:9229-9329` reaches the ports.
+	// Corresponds to env var OVERCAST_DEBUGGER_LISTEN.
+	DebuggerListen string
+
+	// DebuggerPorts is the inclusive range auto-allocated debug ports are
+	// taken from, lowest free first. A fixed range rather than ephemeral
+	// ports because the developer publishes it from Docker and types it into
+	// an editor; it has to be predictable.
+	// Corresponds to env var OVERCAST_DEBUGGER_PORTS, "lo-hi". Default 9229-9329.
+	DebuggerPorts [2]int
+
+	// DebuggerTimeout is what the function timeout means while a debugger is
+	// attached — see DebuggerTimeoutPolicy.
+	// Corresponds to env var OVERCAST_DEBUGGER_TIMEOUT. Default attached.
+	DebuggerTimeout DebuggerTimeoutPolicy
+
 	// LambdaFetchRemoteLayers enables downloading layer content from real AWS
 	// when a layer ARN is not found locally. Requires valid AWS credentials.
 	// Downloaded layers are cached on disk and have /opt/extensions/ stripped
@@ -1163,6 +1247,47 @@ func parseHosts(raw string) ([]string, error) {
 		}
 	}
 	return hosts, nil
+}
+
+// defaultDebuggerPorts is the auto-allocation range for debug ports. It
+// starts at 9229 because that is the port every Node.js editor integration
+// assumes, so the first debugged function lands where a default launch
+// configuration already points.
+const defaultDebuggerPorts = "9229-9329"
+
+// resolveDebuggerListen validates an OVERCAST_DEBUGGER_LISTEN value: one bind
+// address. Unlike OVERCAST_LISTEN it takes no list — each debug port is a
+// separate listener already, and a per-port address list would multiply them
+// for no case anyone has asked for.
+func resolveDebuggerListen(raw string) (string, error) {
+	host := strings.TrimSpace(raw)
+	if host == "" || strings.Contains(host, ",") {
+		return "", fmt.Errorf("config: OVERCAST_DEBUGGER_LISTEN %q must name exactly one bind address", raw)
+	}
+	return host, nil
+}
+
+// parseDebuggerPorts reads an OVERCAST_DEBUGGER_PORTS range, "lo-hi"
+// inclusive, or a single port meaning a range of one. Both ends must be real
+// ports and lo may not exceed hi; the reversed spelling is refused rather
+// than swapped because it is more often a typo than an intention.
+func parseDebuggerPorts(raw string) ([2]int, error) {
+	invalid := func() ([2]int, error) {
+		return [2]int{}, fmt.Errorf("config: OVERCAST_DEBUGGER_PORTS %q is not a port range (expected lo-hi, each 1-65535, lo <= hi)", raw)
+	}
+	loStr, hiStr, isRange := strings.Cut(strings.TrimSpace(raw), "-")
+	if !isRange {
+		hiStr = loStr
+	}
+	lo, err := strconv.Atoi(strings.TrimSpace(loStr))
+	if err != nil || lo < 1 || lo > 65535 {
+		return invalid()
+	}
+	hi, err := strconv.Atoi(strings.TrimSpace(hiStr))
+	if err != nil || hi < 1 || hi > 65535 || hi < lo {
+		return invalid()
+	}
+	return [2]int{lo, hi}, nil
 }
 
 // ListenSource identifies whether the effective bind address (Config.Host /
@@ -1730,6 +1855,20 @@ func ServiceOverrideIneffective(service string) (reason string, ok bool) {
 //	OVERCAST_SHUTDOWN_TIMEOUT          5s
 //	OVERCAST_HOT_RELOAD                false   (umbrella for every compute service)
 //	OVERCAST_LAMBDA_HOT_RELOAD         <OVERCAST_HOT_RELOAD>
+//	OVERCAST_DEBUGGER                  false   (umbrella for every compute service: attach a step
+//	                                           debugger to functions and tasks tagged overcast:debug —
+//	                                           see docs/plans/compute-debugger.md)
+//	OVERCAST_LAMBDA_DEBUGGER           <OVERCAST_DEBUGGER>
+//	OVERCAST_ECS_DEBUGGER              <OVERCAST_DEBUGGER>
+//	OVERCAST_DEBUGGER_LISTEN           <OVERCAST_LISTEN's resolved host> (one address the debug
+//	                                           ports bind on: loopback natively, every interface when
+//	                                           containerised so -p 9229-9329:9229-9329 reaches them)
+//	OVERCAST_DEBUGGER_PORTS            9229-9329 (inclusive range auto-allocated debug ports are
+//	                                           taken from, lowest free first)
+//	OVERCAST_DEBUGGER_TIMEOUT          attached (attached | paused | strict — whether the function
+//	                                           timeout clock stops while a debugger client is
+//	                                           connected, only while the protocol reports a pause,
+//	                                           or never)
 //	OVERCAST_DEBUG                     false
 //	OVERCAST_DEBUG_TRACE_BUFFER        1000    (traces always retained — the floor; only read
 //	                                           when OVERCAST_DEBUG is on)
@@ -2413,6 +2552,26 @@ func Load() (*Config, error) {
 	// and the fallback only for an absent variable.
 	cfg.HotReload = envBool("OVERCAST_HOT_RELOAD", false)
 	cfg.LambdaHotReload = envBool("OVERCAST_LAMBDA_HOT_RELOAD", cfg.HotReload)
+
+	// The debugger follows the same umbrella-then-override shape, and its
+	// listen address follows Host so the containerised-vs-native decision
+	// (#761) is made exactly once, above, and never repeated here.
+	cfg.Debugger = envBool("OVERCAST_DEBUGGER", false)
+	cfg.LambdaDebugger = envBool("OVERCAST_LAMBDA_DEBUGGER", cfg.Debugger)
+	cfg.ECSDebugger = envBool("OVERCAST_ECS_DEBUGGER", cfg.Debugger)
+	cfg.DebuggerListen, err = resolveDebuggerListen(envOr("OVERCAST_DEBUGGER_LISTEN", cfg.Host))
+	if err != nil {
+		return nil, err
+	}
+	cfg.DebuggerPorts, err = parseDebuggerPorts(envOr("OVERCAST_DEBUGGER_PORTS", defaultDebuggerPorts))
+	if err != nil {
+		return nil, err
+	}
+	cfg.DebuggerTimeout, err = ParseDebuggerTimeoutPolicy(os.Getenv("OVERCAST_DEBUGGER_TIMEOUT"))
+	if err != nil {
+		return nil, err
+	}
+
 	cfg.LambdaFetchRemoteLayers = envBool("LAMBDA_FETCH_REMOTE_LAYERS", false)
 	cfg.LambdaLayerCacheDir = envOr("LAMBDA_LAYER_CACHE_DIR", "")
 	cfg.LambdaRemoteAWSAccessKeyID = envOr("LAMBDA_REMOTE_AWS_ACCESS_KEY_ID", "")

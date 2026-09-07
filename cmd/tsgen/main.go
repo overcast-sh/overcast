@@ -163,6 +163,16 @@ var manifest = []target{
 	{"internal/metrics", "MonitorSeries", "MonitorSeries"},
 	{"internal/metrics", "ChartPoint", "ChartPoint"},
 
+	// GET /_overcast/debugger/targets and
+	// GET /_overcast/debugger/targets/{service}/{resource} — the compute
+	// debugger's target list and one target's descriptor, which the Debug tab
+	// renders (docs/plans/compute-debugger.md § 6).
+	{"internal/debugger", "TargetList", "DebuggerTargetList"},
+	{"internal/debugger", "Descriptor", "DebuggerTarget"},
+	{"internal/debugger", "Listen", "DebuggerListen"},
+	{"internal/debugger", "Setup", "DebuggerSetup"},
+	{"internal/debugger", "Editor", "DebuggerEditor"},
+
 	// GET /api/docs/nav — the console's docs sidebar and "On this page" list.
 	// The console used to import this data as a generated TypeScript module
 	// committed to the repository; it fetches it now (internal/docsindex).

@@ -74,6 +74,25 @@ Overcast logs a `WARN` at container acquire time if it finds `.ts` files and no
 that decides it, are in
 [The inner loop § What counts as a change](../../local-dev.md#what-counts-as-a-change).
 
+## Step debugging
+
+Set breakpoints in the handler from your editor with one flag and one tag:
+
+```bash
+OVERCAST_DEBUGGER=true overcast serve
+
+aws lambda tag-resource \
+  --resource arn:aws:lambda:us-east-1:000000000000:function:demo-hot \
+  --tags overcast:debug=true
+```
+
+Overcast starts the container with the runtime's debug flag set and listens on
+`127.0.0.1`, on the lowest free port from 9229 upward, for VS Code, a JetBrains
+IDE or Chrome DevTools, and the function's timeout clock stops while a debugger
+is attached. Runtimes, path
+mappings and the `launch.json` entry are in
+[Step debugging inside emulated compute](../../debugger.md).
+
 ## Container images
 
 A `PackageType=Image` function runs from an image you pushed to Overcast's
@@ -245,4 +264,5 @@ and Lambda ARNs expose. The AWS Parameters and Secrets Lambda Extension for
 - [Lambda limitations](./limitations.md) — concurrency, runtimes, logging, VPC placement
 - [Lambda troubleshooting](./troubleshooting.md) — throttles, layer errors, extension endpoints
 - [The inner loop](../../local-dev.md) — hot reload across services
+- [Step debugging inside emulated compute](../../debugger.md) — breakpoints inside the handler
 - [Egress modes](../../networking/egress.md) — what a function can reach outside the machine
