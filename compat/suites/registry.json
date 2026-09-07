@@ -845,7 +845,7 @@
         },
         {
           "name": "VerifyRetentionPolicy",
-          "op": null,
+          "op": "DescribeLogGroups",
           "depends": [
             "PutRetentionPolicy"
           ]

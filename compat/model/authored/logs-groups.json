@@ -1,0 +1,220 @@
+{
+  "$comment": "Authored port of the hand-written registry group logs-groups (docs/plans/compat-coverage-modelgen.md §3.11, G6 wave 1, #1116). One spec in place of five per-language implementations — dotnet-sdk and rust-sdk never had one, and the port closes 16 rows of compat/parity-debt.json. It runs today under the shadow name logs-groups-shadow, beside the natives, so the nightly can compare the two per (suite, test); the flip PR renames this group to logs-groups, moves the registry entry into the hand-written registry.json, and deletes the native code. The clauses are the union of what the five natives assert — see compat/model/README.md § Authored scenarios.",
+  "version": 1,
+  "service": "cloudwatch-logs",
+  "client": {
+    "sdkId": "CloudWatch Logs",
+    "endpointPrefix": "logs",
+    "signingName": "logs",
+    "protocol": "awsJson1_1",
+    "apiVersion": "2014-03-28",
+    "targetPrefix": "Logs_20140328",
+    "awsQueryCompatible": false
+  },
+  "groups": [
+    {
+      "$comment": "Two log groups: the group's own (created in setup, read and mutated by the retention, stream and tag tests) and an ephemeral one the CreateLogGroup test creates and the DeleteLogGroup test removes. go-sdk and python-sdk already split them that way; cli, node-js-sdk and java-sdk instead delete the one every earlier test read, which only works because the loaders topologically sort `depends` — DeleteLogGroup is listed sixth in the registry but depends on the seventh and eighth tests. Splitting them makes this group correct in file order as well as in dependency order. Nothing here exports: every CloudWatch Logs mutation in this group returns smithy.api#Unit, so no response carries a handle, and `$name` is what names a resource — deterministic within a run, so `{\"$name\": \"group\"}` is the same string wherever it appears.",
+      "name": "logs-groups-shadow",
+      "kind": "lifecycle",
+      "setup": [
+        {
+          "op": "CreateLogGroup",
+          "params": { "logGroupName": { "$name": "group" } }
+        }
+      ],
+      "tests": [
+        {
+          "$comment": "go-sdk, python-sdk and node-js-sdk create a log group and read it back out of DescribeLogGroups by its own name prefix; cli and java-sdk call CreateLogGroup and assert nothing at all (#1904). The read-back is the union. go-sdk and python-sdk delete their ephemeral group inside the test; here it survives for DeleteLogGroup to remove, which is what lets that test prove a delete without destroying the group the retention tests read.",
+          "name": "CreateLogGroup",
+          "op": "CreateLogGroup",
+          "call": {
+            "op": "CreateLogGroup",
+            "params": { "logGroupName": { "$name": "created" } }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "call": {
+                "op": "DescribeLogGroups",
+                "params": { "logGroupNamePrefix": { "$name": "created" } }
+              },
+              "itemsPath": "$.logGroups",
+              "where": { "$.logGroupName": { "$name": "created" } }
+            }
+          ]
+        },
+        {
+          "$comment": "python-sdk, node-js-sdk and java-sdk assert this group's own log group is in the page; go-sdk and cli only that the page is non-empty, and cli asks for the prefix `/oc/cwl/` rather than a run-scoped one, so any leftover group from any earlier run satisfies it. The membership check is the union and the stronger reading.",
+          "name": "DescribeLogGroups",
+          "op": "DescribeLogGroups",
+          "call": {
+            "op": "DescribeLogGroups",
+            "params": { "logGroupNamePrefix": { "$name": "group" } }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.logGroups",
+              "where": { "$.logGroupName": { "$name": "group" } }
+            }
+          ],
+          "depends": ["CreateLogGroup"]
+        },
+        {
+          "$comment": "go-sdk, python-sdk and node-js-sdk read the retention back out of DescribeLogGroups; cli and java-sdk call PutRetentionPolicy and assert nothing (#1904). All five that write, write 7 days. The read-back pins the name beside the value, so a page that answered about some other log group cannot satisfy it — the prefix is this group's full name, so `logGroups[0]` is that group.",
+          "name": "PutRetentionPolicy",
+          "op": "PutRetentionPolicy",
+          "call": {
+            "op": "PutRetentionPolicy",
+            "params": {
+              "logGroupName": { "$name": "group" },
+              "retentionInDays": 7
+            }
+          },
+          "assert": [
+            {
+              "kind": "readback",
+              "call": {
+                "op": "DescribeLogGroups",
+                "params": { "logGroupNamePrefix": { "$name": "group" } }
+              },
+              "checks": {
+                "$.logGroups[0].logGroupName": { "equals": { "$name": "group" } },
+                "$.logGroups[0].retentionInDays": { "equals": 7 }
+              }
+            }
+          ],
+          "depends": ["CreateLogGroup"]
+        },
+        {
+          "$comment": "All five natives agree here, and it is the one test of the group they all assert: DescribeLogGroups again, and retentionInDays is still 7. The registry recorded its op as null — \"no documentation link (internal setup step)\" — which was never true of it: every native issues a real DescribeLogGroups. The registry now records DescribeLogGroups there, because an IR test's op has to be a modeled operation and null resolves to the test name, which is not one.",
+          "name": "VerifyRetentionPolicy",
+          "op": "DescribeLogGroups",
+          "call": {
+            "op": "DescribeLogGroups",
+            "params": { "logGroupNamePrefix": { "$name": "group" } }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.logGroups[0].logGroupName": { "equals": { "$name": "group" } },
+                "$.logGroups[0].retentionInDays": { "equals": 7 }
+              }
+            }
+          ],
+          "depends": ["PutRetentionPolicy"]
+        },
+        {
+          "$comment": "cli, python-sdk and node-js-sdk require the member to be gone; go-sdk accepts a zero as well as an absence, because it reads the pointer through aws.ToInt32 and cannot tell them apart; java-sdk asserts nothing (#1904). The absence is what AWS does — DescribeLogGroups omits retentionInDays for a group with no retention policy — and it is the strongest of the three, so `missing` is the union.",
+          "name": "DeleteRetentionPolicy",
+          "op": "DeleteRetentionPolicy",
+          "call": {
+            "op": "DeleteRetentionPolicy",
+            "params": { "logGroupName": { "$name": "group" } }
+          },
+          "assert": [
+            {
+              "kind": "readback",
+              "call": {
+                "op": "DescribeLogGroups",
+                "params": { "logGroupNamePrefix": { "$name": "group" } }
+              },
+              "checks": {
+                "$.logGroups[0].logGroupName": { "equals": { "$name": "group" } },
+                "$.logGroups[0].retentionInDays": { "missing": true }
+              }
+            }
+          ],
+          "depends": ["VerifyRetentionPolicy"]
+        },
+        {
+          "$comment": "go-sdk, cli, python-sdk and node-js-sdk prove the delete took effect by describing the name prefix again and finding nothing; java-sdk only calls DeleteLogGroup (#1904). depends mirrors registry.json exactly; CreateLogGroup, whose log group this removes, is reached through DescribeLogGroups.",
+          "name": "DeleteLogGroup",
+          "op": "DeleteLogGroup",
+          "call": {
+            "op": "DeleteLogGroup",
+            "params": { "logGroupName": { "$name": "created" } }
+          },
+          "assert": [
+            {
+              "kind": "absent",
+              "call": {
+                "op": "DescribeLogGroups",
+                "params": { "logGroupNamePrefix": { "$name": "created" } }
+              },
+              "itemsPath": "$.logGroups",
+              "where": { "$.logGroupName": { "$name": "created" } }
+            }
+          ],
+          "depends": [
+            "DescribeLogGroups",
+            "DeleteRetentionPolicy",
+            "CreateLogStream",
+            "TagLogGroup"
+          ]
+        },
+        {
+          "$comment": "node-js-sdk reads the stream back out of DescribeLogStreams; go-sdk, cli, python-sdk and java-sdk create it and assert nothing (#1904). node's read-back is the union. The stream name is scoped by the prefix so the page cannot be satisfied by some other stream in the group.",
+          "name": "CreateLogStream",
+          "op": "CreateLogStream",
+          "call": {
+            "op": "CreateLogStream",
+            "params": {
+              "logGroupName": { "$name": "group" },
+              "logStreamName": { "$name": "stream" }
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "call": {
+                "op": "DescribeLogStreams",
+                "params": {
+                  "logGroupName": { "$name": "group" },
+                  "logStreamNamePrefix": { "$name": "stream" }
+                }
+              },
+              "itemsPath": "$.logStreams",
+              "where": { "$.logStreamName": { "$name": "stream" } }
+            }
+          ],
+          "depends": ["CreateLogGroup"]
+        },
+        {
+          "$comment": "node-js-sdk reads the tag back out of ListTagsLogGroup; go-sdk, cli, python-sdk and java-sdk tag and assert nothing (#1904). The read-back is the union. Two literals are in play — go-sdk, cli and python-sdk write env=test, node-js-sdk and java-sdk env=compat — and node's is taken because node is the only one that reads a tag back, so its literal is the only one any native has ever asserted. This group has no untag test, so a second tag would prove nothing the one does not. TagLogGroup/ListTagsLogGroup are the legacy pair the natives call and the names the registry keys on; the modern TagResource/ListTagsForResource pair would be a different test.",
+          "name": "TagLogGroup",
+          "op": "TagLogGroup",
+          "call": {
+            "op": "TagLogGroup",
+            "params": {
+              "logGroupName": { "$name": "group" },
+              "tags": { "env": "compat" }
+            }
+          },
+          "assert": [
+            {
+              "kind": "readback",
+              "call": {
+                "op": "ListTagsLogGroup",
+                "params": { "logGroupName": { "$name": "group" } }
+              },
+              "checks": { "$.tags.env": { "equals": "compat" } }
+            }
+          ],
+          "depends": ["CreateLogGroup"]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "DeleteLogGroup",
+          "params": { "logGroupName": { "$name": "created" } }
+        },
+        {
+          "op": "DeleteLogGroup",
+          "params": { "logGroupName": { "$name": "group" } }
+        }
+      ]
+    }
+  ]
+}
