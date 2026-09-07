@@ -303,11 +303,11 @@ func TestProvisionedEnvironments_reportInitializationTypeToTheContainer(t *testi
 	// When/Then: an on-demand environment and a provisioned one report
 	// different AWS_LAMBDA_INITIALIZATION_TYPE values, which is what
 	// Powertools and friends read to classify a cold start.
-	onDemand := envMap(runtime.buildEnv(fn, "stream", initTypeOnDemand, "172.18.0.1:41001"))
+	onDemand := envMap(runtime.buildEnv(fn, "stream", initTypeOnDemand, "172.18.0.1:41001", nil))
 	if got := onDemand["AWS_LAMBDA_INITIALIZATION_TYPE"]; got != "on-demand" {
 		t.Fatalf("on-demand init type = %q, want on-demand", got)
 	}
-	provisioned := envMap(runtime.buildEnv(fn, "stream", initTypeProvisioned, "172.18.0.1:41001"))
+	provisioned := envMap(runtime.buildEnv(fn, "stream", initTypeProvisioned, "172.18.0.1:41001", nil))
 	if got := provisioned["AWS_LAMBDA_INITIALIZATION_TYPE"]; got != "provisioned-concurrency" {
 		t.Fatalf("provisioned init type = %q, want provisioned-concurrency", got)
 	}

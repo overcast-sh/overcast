@@ -411,6 +411,22 @@ tagged spec while env detection always runs, so an untagged Node function gets n
 target; `Ensure` replaces a target whose spec changed; the CDP observer reports the
 net change per read.
 
+Phase B1 (Lambda, router, types) notes for the ECS half: the router builds one
+`debugger.Manager` and passes it to `lambda.New`; the endpoints are registered by
+`registerDebuggerRoutes` in `internal/router/debugger.go` with a
+`debuggerDescribers` map keyed by `debugger.Service` — ECS adds
+`debugger.ServiceECS: ecsSvc` and implements `DescribeUntagged(ctx, service,
+resource)`, which gained a context so a describer can read its store.
+`Target.ClearContainer(id)` replaced the unconditional `ClearUpstream` on
+container close, so a container retired after its replacement was bound does not
+blind the proxy. The target rides on the `containerInstance` (`DebugTarget()`),
+so the invoke path never looks one up. The debug tags are part of
+`functionInstanceIdentity`: a tag change retires the environment, and the next
+cold start re-resolves. The one-instance pin is `admit`'s per-function limit
+becoming 1 while `liveDebugTarget` (enabled, not in error) exists; it takes
+effect from the first cold start on, so a burst of first invocations is admitted
+at the ordinary cap.
+
 - **A — core package and config.** `internal/debugger` complete with tests;
   config fields and reference comments. No service changes. Compiles under
   `slim`, `slim,nosqlite`, `slim,dev`.

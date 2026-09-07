@@ -1,6 +1,7 @@
 package debugger
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -17,7 +18,7 @@ import (
 // fakeDescriber knows one untagged function.
 type fakeDescriber struct{}
 
-func (fakeDescriber) DescribeUntagged(service Service, resource string) (Descriptor, bool) {
+func (fakeDescriber) DescribeUntagged(_ context.Context, service Service, resource string) (Descriptor, bool) {
 	if service == ServiceLambda && resource == "plain" {
 		return UntaggedDescriptor(service, resource, "", "arn:plain"), true
 	}

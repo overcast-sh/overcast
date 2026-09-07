@@ -1106,6 +1106,91 @@ export interface ChartPoint {
 }
 
 /**
+ * TargetList is the GET /_overcast/debugger/targets body.
+ *
+ * Generated from Go `debugger.TargetList` (internal/debugger/descriptor.go).
+ */
+export interface DebuggerTargetList {
+  targets: DebuggerTarget[]
+}
+
+/**
+ * Descriptor is one target as the console and the CLI see it — the JSON
+ * shape in docs/plans/compute-debugger.md § 6. Field types stay plain
+ * (strings, ints, bools, nested structs, slices) because cmd/tsgen renders
+ * this struct for the web console; there is deliberately no custom
+ * MarshalJSON to hide anything from it.
+ *
+ * Generated from Go `debugger.Descriptor` (internal/debugger/descriptor.go).
+ */
+export interface DebuggerTarget {
+  id: string
+  /** "lambda" | "ecs" */
+  service: string
+  /** function name, or task id */
+  resource: string
+  /** ECS container name */
+  container: string
+  enabled: boolean
+  /** why not, when !enabled */
+  reason: string
+  protocol: string
+  /** "tag" | "runtime" | "env" | "fallback" */
+  protocolSource: string
+  listen: DebuggerListen
+  /** "inert" | "unbound" | "listening" | "attached" | "paused" | "error" */
+  state: string
+  attachedSince: string
+  pausedSince: string
+  containerId: string
+  upstream: string
+  remoteRoot: string
+  /** as the user wrote it; "" when unknown */
+  localRoot: string
+  timeoutPolicy: string
+  /** always present */
+  setup: DebuggerSetup
+  editors: DebuggerEditor[]
+}
+
+/**
+ * Listen is the host and port an editor attaches to.
+ *
+ * Generated from Go `debugger.Listen` (internal/debugger/descriptor.go).
+ */
+export interface DebuggerListen {
+  host: string
+  port: number
+}
+
+/**
+ * Setup is how to turn the debugger on: the flag, and the tag as a CLI
+ * command and a CDK line. Present even when everything is already on, so the
+ * console never has to know how to spell them.
+ *
+ * Generated from Go `debugger.Setup` (internal/debugger/descriptor.go).
+ */
+export interface DebuggerSetup {
+  flag: string
+  tagCli: string
+  tagCdk: string
+}
+
+/**
+ * Editor is one rendered editor tab.
+ *
+ * Generated from Go `debugger.Editor` (internal/debugger/descriptor.go).
+ */
+export interface DebuggerEditor {
+  id: string
+  label: string
+  /** "json" | "steps" | "shell" */
+  kind: string
+  body: string
+  verified: boolean
+}
+
+/**
  * Entry is the navigation shape: what the console needs to render the docs
  * sidebar and the "On this page" table of contents. It carries no search
  * corpus — that comes from SearchEntries, which the SPA never downloads.

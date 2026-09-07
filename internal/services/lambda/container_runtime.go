@@ -37,6 +37,7 @@ import (
 	"github.com/overcast-sh/overcast/internal/config"
 	"github.com/overcast-sh/overcast/internal/containerendpoint"
 	"github.com/overcast-sh/overcast/internal/dataplane"
+	"github.com/overcast-sh/overcast/internal/debugger"
 	"github.com/overcast-sh/overcast/internal/docker"
 	"github.com/overcast-sh/overcast/internal/events"
 	"github.com/overcast-sh/overcast/internal/logging"
@@ -77,6 +78,7 @@ type ContainerRuntime struct {
 	layerFetcher  LayerContentFetcher                  // resolves a layer ARN to zip bytes for /opt injection
 	remoteFetcher *RemoteLayerFetcher                  // optional — fetches layers from real AWS
 	codeFetcher   CodeFetcher                          // populates fn.CodeZip at cold start; nil in tests
+	debugger      *debugger.Manager                    // debug targets per function; nil = debugger off (see debugger.go)
 	tarCache      *tarCache                            // pre-built code/layer tars; nil = disabled
 	imageVerified sync.Map                             // pull key → struct{}{}: image confirmed present, skip the per-acquire daemon check
 	imageConfigs  sync.Map                             // pull key → docker.ImageConfig: the image's own ENTRYPOINT/CMD, which the init now has to reproduce
@@ -682,7 +684,12 @@ func (cr *ContainerRuntime) acquireContainer(ctx context.Context, fn *Function, 
 	}()
 
 	logStream := lambdaLogStreamName(cr.clk)
-	env := cr.buildEnv(fn, logStream, initType, rapiListener.Addr())
+	// The debug target, when the tags ask for one, is resolved here — at the
+	// cold start — because everything it changes is baked into the container:
+	// the injected flag and OVERCAST_DEBUG_PORT below, and the port binding on
+	// the create request.
+	target := cr.debugTarget(ctx, fn, ref.resolved.Ref, platform)
+	env := cr.buildEnv(fn, logStream, initType, rapiListener.Addr(), target)
 	containerName := fmt.Sprintf("overcast-lambda-%s-%d", sanitizeName(fn.Name), cr.clk.Now().UnixNano())
 
 	// The log sink exists before the container does, for the same reason the
@@ -750,6 +757,9 @@ func (cr *ContainerRuntime) acquireContainer(ctx context.Context, fn *Function, 
 			ExtraHosts: cr.extraHosts(),
 			Dns:        cr.endpoint.DNSServers(),
 		},
+	}
+	if target != nil {
+		target.ApplyPortBinding(ccfg, req.HostConfig)
 	}
 
 	id, err := cr.docker.CreateContainer(ctx, containerName, req)
@@ -895,6 +905,9 @@ func (cr *ContainerRuntime) acquireContainer(ctx context.Context, fn *Function, 
 	}
 
 	mark("await_ip")
+	if target != nil {
+		cr.bindDebugTarget(ctx, target, id)
+	}
 	// One line per cold start carrying the phase breakdown; INIT time (runtime
 	// bootstrap to first GET /next) is reported separately as the REPORT line's
 	// Init Duration.
@@ -911,7 +924,7 @@ func (cr *ContainerRuntime) acquireContainer(ctx context.Context, fn *Function, 
 		}, phases...)...,
 	)
 
-	ci := cr.newContainerInstance(id, containerIP, fn, logStream, rapiListener, sink)
+	ci := cr.newContainerInstance(id, containerIP, fn, logStream, rapiListener, sink, target)
 	listenerHandedOff = true
 	sinkHandedOff = true
 	ci.initStartedAt = initStartedAt
@@ -1021,7 +1034,7 @@ func (cr *ContainerRuntime) newLogSink(fn *Function, logStream, initType string)
 }
 
 // newContainerInstance builds a containerInstance from the created container.
-func (cr *ContainerRuntime) newContainerInstance(id, containerIP string, fn *Function, logStream string, rapiListener *containerListener, sink *logSink) *containerInstance {
+func (cr *ContainerRuntime) newContainerInstance(id, containerIP string, fn *Function, logStream string, rapiListener *containerListener, sink *logSink, target *debugger.Target) *containerInstance {
 	appLogLevel, sysLogLevel := resolveLogLevels(fn)
 	ci := &containerInstance{
 		id:             id,
@@ -1052,6 +1065,7 @@ func (cr *ContainerRuntime) newContainerInstance(id, containerIP string, fn *Fun
 		rapiListener:   rapiListener,
 		reach:          cr.reach,
 		reachHintPath:  cr.reachHintPath,
+		debug:          target,
 	}
 	ci.forgetInitBurst = func() { cr.clearInitBurst(id) }
 	return ci
@@ -1306,7 +1320,10 @@ func (cr *ContainerRuntime) ensureImage(ctx context.Context, ref imageRef, platf
 
 // runtimeAPIAddr is this execution environment's own Runtime API endpoint, not
 // the shared one: the port it dials is what identifies it to the Runtime API.
-func (cr *ContainerRuntime) buildEnv(fn *Function, logStream, initType, runtimeAPIAddr string) []string {
+// target, when not nil, adds its protocol's listen flag and OVERCAST_DEBUG_PORT
+// last: it appends to a user's own value rather than replacing it, and it is
+// the one thing here that must see the runtime variables already applied.
+func (cr *ContainerRuntime) buildEnv(fn *Function, logStream, initType, runtimeAPIAddr string, target *debugger.Target) []string {
 	// AWS_REGION must reflect the function's actual region (encoded in its
 	// ARN), not the emulator's global default. SDKs sign requests with this
 	// region; if we used the default (e.g. us-east-1) for a function deployed
@@ -1417,6 +1434,9 @@ func (cr *ContainerRuntime) buildEnv(fn *Function, logStream, initType, runtimeA
 		applicationLevel, _ := resolveLogLevels(fn)
 		env["AWS_LAMBDA_LOG_LEVEL"] = applicationLevel.String()
 	}
+	if target != nil {
+		target.Inject(env)
+	}
 
 	keys := make([]string, 0, len(env))
 	for k := range env {
@@ -1471,6 +1491,11 @@ type containerInstance struct {
 	reachHintPath  string                    // the remembered probe result, dropped when this container disproves it
 	healthy        bool
 	keepContainers bool // when true, Close only stops the container instead of removing it
+	// debug is the debugger target this environment was created for, whose
+	// proxy dials this container; nil for the undebugged majority. It is what
+	// lets an invocation on this environment suspend its clock — see
+	// boundInvocation — without a lookup per invoke.
+	debug *debugger.Target
 
 	// forgetInitBurst drops this container's pending INIT-burst entry when the
 	// environment is destroyed. An environment that dies before its first
@@ -2265,6 +2290,10 @@ func billedDuration(d time.Duration) int64 {
 // Healthy reports whether this container is safe to reuse.
 func (ci *containerInstance) Healthy() bool { return ci.healthy }
 
+// DebugTarget is the debugger target this environment was created for, nil
+// for an undebugged one. Implements debugTargetInstance.
+func (ci *containerInstance) DebugTarget() *debugger.Target { return ci.debug }
+
 // Close drains logs, deregisters from the Runtime API, stops the container
 // immediately (to halt any code running inside), and schedules deferred removal
 // via the GC with exponential backoff.
@@ -2272,6 +2301,13 @@ func (ci *containerInstance) Close() error {
 	ci.logger.Debug("stopping lambda container", zap.String("container", ci.id[:12]))
 	if ci.forgetInitBurst != nil {
 		ci.forgetInitBurst()
+	}
+	// The port outlives the container — that is what lets an editor reconnect
+	// to the replacement hot reload brings up — but nothing may be dialled
+	// behind it once this container is gone. Keyed by id so a container
+	// retired after its replacement was bound leaves the replacement alone.
+	if ci.debug != nil {
+		ci.debug.ClearContainer(ci.id)
 	}
 	if ci.containerIP != "" {
 		if queued := ci.runtimeAPI.EnqueueExtensionShutdown(ci.containerIP, "SPINDOWN", ci.clk.Now().Add(2*time.Second)); queued > 0 {

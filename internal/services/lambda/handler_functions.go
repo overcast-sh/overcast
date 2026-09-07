@@ -32,6 +32,7 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
+	"github.com/overcast-sh/overcast/internal/clock"
 	"github.com/overcast-sh/overcast/internal/config"
 	"github.com/overcast-sh/overcast/internal/events"
 	"github.com/overcast-sh/overcast/internal/middleware"
@@ -2332,6 +2333,7 @@ func (h *Handler) DeleteFunction(w http.ResponseWriter, r *http.Request) {
 	}
 	h.tracker.Evict(name)
 	h.proactive.NoteFunctionDeleted(name)
+	h.releaseDebugTarget(name)
 
 	if h.bus != nil {
 		h.bus.Publish(ctx, events.Event{
@@ -2805,12 +2807,15 @@ func invokeFailurePayload(err error) []byte {
 	return []byte(fmt.Sprintf(`{"errorMessage":%q,"errorType":"Runtime.ExitError"}`, err.Error()))
 }
 
-func awaitRuntimeReady(ctx context.Context, cfg *config.Config, inst RuntimeInstance) error {
+func awaitRuntimeReady(ctx context.Context, clk clock.Clock, cfg *config.Config, inst RuntimeInstance) error {
 	ready, ok := inst.(runtimeReadyInstance)
 	if !ok {
 		return nil
 	}
-	initCtx, cancel := context.WithTimeout(ctx, lambdaInitTimeout(cfg))
+	// The same suspendable bound as the invocation itself, so a runtime told
+	// to wait for a debugger before running its first line (--inspect-wait)
+	// is not killed for waiting.
+	initCtx, cancel := boundInvocation(ctx, clk, cfg, lambdaInitTimeout(cfg), inst)
 	defer cancel()
 	if err := ready.AwaitReady(initCtx); err != nil {
 		return fmt.Errorf("lambda runtime did not initialize within %s: %w", lambdaInitTimeout(cfg), err)
@@ -2819,7 +2824,7 @@ func awaitRuntimeReady(ctx context.Context, cfg *config.Config, inst RuntimeInst
 }
 
 func (h *Handler) awaitRuntimeReady(ctx context.Context, fn *Function, rt Runtime, inst RuntimeInstance) error {
-	return awaitRuntimeReady(ctx, h.cfg, inst)
+	return awaitRuntimeReady(ctx, h.clk, h.cfg, inst)
 }
 
 // invokeSyncOnce performs a single acquire → invoke → release cycle.
@@ -2882,8 +2887,9 @@ func (h *Handler) invokeSyncOnce(ctx context.Context, fn *Function, rt Runtime, 
 
 	// Bound the invocation by the function's configured timeout so that
 	// context.getRemainingTimeInMillis() inside the function reflects the
-	// real deadline, and so we kill the container if it overruns.
-	invokeCtx, cancel := context.WithTimeout(ctx, functionTimeout(fn))
+	// real deadline, and so we kill the container if it overruns — unless a
+	// debugger is attached to this environment, when the clock stops with it.
+	invokeCtx, cancel := boundInvocation(ctx, h.clk, h.cfg, functionTimeout(fn), inst)
 	defer cancel()
 
 	log.Debug("invoke function: dispatching", zap.String("function", name), zap.Int("payload_bytes", len(payload)))
@@ -3184,7 +3190,7 @@ func (h *Handler) invokeAsyncOnce(ctx context.Context, fn *Function, rt Runtime,
 		}
 	}
 
-	invokeCtx, cancel := context.WithTimeout(ctx, functionTimeout(fn))
+	invokeCtx, cancel := boundInvocation(ctx, h.clk, h.cfg, functionTimeout(fn), inst)
 	defer cancel()
 	// No tail: an Event invocation answered 202 long ago and has no caller left
 	// to hand a LogResult to.
@@ -3399,7 +3405,7 @@ func (h *Handler) InvokeFunctionSSE(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Invoke with timeout.
-	invokeCtx, cancel := context.WithTimeout(ctx, functionTimeout(fn))
+	invokeCtx, cancel := boundInvocation(ctx, h.clk, h.cfg, functionTimeout(fn), inst)
 	defer cancel()
 
 	sendEvent("progress", "Invoking function handler")

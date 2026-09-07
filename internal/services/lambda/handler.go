@@ -13,6 +13,7 @@ import (
 
 	"github.com/overcast-sh/overcast/internal/clock"
 	"github.com/overcast-sh/overcast/internal/config"
+	"github.com/overcast-sh/overcast/internal/debugger"
 	"github.com/overcast-sh/overcast/internal/events"
 	"github.com/overcast-sh/overcast/internal/eventtarget"
 	"github.com/overcast-sh/overcast/internal/protocol"
@@ -91,6 +92,11 @@ type Handler struct {
 	// tarCacheStats reports the artifact cache for the debug endpoint; nil
 	// until the container runtime is up.
 	tarCacheStats func() (entries int, bytes, maxBytes int64)
+
+	// debugger owns the debug targets functions are registered with at cold
+	// start (see debugger.go). The handler only ever releases one, when the
+	// function is deleted. Nil when the debugger is not wired.
+	debugger *debugger.Manager
 
 	// metrics is the shared service-metrics recorder (see metrics_lambda.go),
 	// nil until Service.InitMetrics is called (or when automatic collection

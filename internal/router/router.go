@@ -22,6 +22,7 @@ import (
 	"github.com/overcast-sh/overcast/internal/clock"
 	"github.com/overcast-sh/overcast/internal/config"
 	"github.com/overcast-sh/overcast/internal/dataplane"
+	"github.com/overcast-sh/overcast/internal/debugger"
 	"github.com/overcast-sh/overcast/internal/docker"
 	"github.com/overcast-sh/overcast/internal/domainregistry"
 	"github.com/overcast-sh/overcast/internal/events"
@@ -309,7 +310,13 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	// side-effects beyond spawning the background Docker probe it always
 	// spawns regardless of where it's constructed — see docs/dev/performance.md
 	// § Startup budget.
-	lambdaSvc := lambda.New(cfg, store, logger, clk)
+	// One debug-target manager for every compute service: it owns the debug
+	// ports, so the registry that allocates them has to be shared. Closed with
+	// the other handles at shutdown, after the services that register targets
+	// have stopped.
+	debuggerMgr := debugger.NewManager(clk, logger, cfg.DebuggerListen, cfg.DebuggerPorts, cfg.DebuggerTimeout)
+	cleanups = append(cleanups, debuggerMgr.Close)
+	lambdaSvc := lambda.New(cfg, store, logger, clk, debuggerMgr)
 	prof.mark("  new: lambda")
 	// debugProviders is built unconditionally: /_overcast/reset (always-on,
 	// below) needs it regardless of cfg.Debug, and it's used again for the
@@ -329,6 +336,12 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	if cfg.Debug {
 		r.Route("/_overcast/debug", debugHandlers(cfg, store, ec2Svc, lambdaSvc, debugProviders, traceBuf, dockerStatusNow))
 	}
+	// The debugger's own endpoints. A compute service that can synthesise
+	// the entry for an untagged resource adds itself here under its
+	// debugger.Service key (ECS registers its describer the same way).
+	registerDebuggerRoutes(r, debuggerMgr, debuggerDescribers{
+		debugger.ServiceLambda: lambdaSvc,
+	})
 	// ---- Reset (always available) ------------------------------------------
 	// Unlike the rest of the /_overcast/debug namespace above, reset is not
 	// expensive or leaky instrumentation, and it grants no destructive power

@@ -21,6 +21,7 @@ type (
 	imageConfigReq         = lambdafixture.ImageConfigReq
 	vpcConfigReq           = lambdafixture.VPCConfigReq
 	lambdaCode             = lambdafixture.FunctionCode
+	functionEnvironment    = lambdafixture.Env
 	functionConfiguration  = lambdafixture.FunctionConfiguration
 	imageConfigResponse    = lambdafixture.ImageConfigResponse
 	publishLayerVersionReq = lambdafixture.PublishLayerVersionReq

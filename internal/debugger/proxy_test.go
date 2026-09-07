@@ -453,6 +453,33 @@ func TestTarget_injectAndPortBinding(t *testing.T) {
 	assert.False(t, ok)
 }
 
+func TestTarget_clearContainerOnlyForgetsTheCurrentContainer(t *testing.T) {
+	// Given: a bound target whose container was replaced — hot reload retired
+	// the old one and the new one has already been bound
+	m := newTestManager(t, clock.NewMock(), config.DebuggerTimeoutAttached)
+	tgt := boundTarget(t, m, "lambda/fn", inspector{})
+	tgt.SetUpstream("127.0.0.1:55001")
+	tgt.SetContainerID("old")
+	tgt.SetUpstream("127.0.0.1:55002")
+	tgt.SetContainerID("new")
+
+	// When: the old container's Close reports it gone
+	tgt.ClearContainer("old")
+
+	// Then: the replacement stays reachable
+	assert.Equal(t, "127.0.0.1:55002", tgt.Upstream())
+	assert.Equal(t, "new", tgt.Descriptor().ContainerID)
+	assert.Equal(t, StateListening, tgt.State())
+
+	// When: the current container goes
+	tgt.ClearContainer("new")
+
+	// Then: the port has nothing behind it
+	assert.Equal(t, "", tgt.Upstream())
+	assert.Equal(t, "", tgt.Descriptor().ContainerID)
+	assert.Equal(t, StateUnbound, tgt.State())
+}
+
 func TestTarget_observerDrivesPauseState(t *testing.T) {
 	// Given: an inspector target whose "container" replays a CDP session
 	m := newTestManager(t, clock.NewMock(), config.DebuggerTimeoutPaused)

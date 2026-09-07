@@ -1,6 +1,7 @@
 package debugger
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -12,9 +13,11 @@ import (
 // GET /_overcast/debugger/targets/{service}/{resource} always has something
 // for the console to render: enabled false, reason "not tagged", and the
 // setup block. Each compute service implements it for the resources it owns;
-// it is optional, and without one an unknown resource is a 404.
+// it is optional, and without one an unknown resource is a 404. ctx is the
+// request's: a service reads its store with it, and the region the request
+// names travels in it.
 type Describer interface {
-	DescribeUntagged(service Service, resource string) (Descriptor, bool)
+	DescribeUntagged(ctx context.Context, service Service, resource string) (Descriptor, bool)
 }
 
 // Handler serves the two emulator-only endpoints under /_overcast/debugger.
@@ -63,7 +66,7 @@ func (h *Handler) GetTarget(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if h.describer != nil {
-		if d, ok := h.describer.DescribeUntagged(service, resource); ok {
+		if d, ok := h.describer.DescribeUntagged(r.Context(), service, resource); ok {
 			if container != "" {
 				d.ID = TargetID(service, resource, container)
 				d.Container = container

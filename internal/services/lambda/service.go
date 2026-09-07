@@ -35,6 +35,7 @@ import (
 	"github.com/overcast-sh/overcast/internal/config"
 	"github.com/overcast-sh/overcast/internal/containerendpoint"
 	"github.com/overcast-sh/overcast/internal/dataplane"
+	"github.com/overcast-sh/overcast/internal/debugger"
 	"github.com/overcast-sh/overcast/internal/docker"
 	"github.com/overcast-sh/overcast/internal/events"
 	"github.com/overcast-sh/overcast/internal/eventtarget"
@@ -486,6 +487,10 @@ type Service struct {
 	// created, so one Overcast's shutdown does not kill another's warm runtime
 	// containers mid-invocation. See docker.LabelInstance.
 	instances *serviceutil.InstanceDomain
+	// debugger is the shared debug-target manager the router owns; handed to
+	// the container runtime and the pool once Docker is up. Nil when the
+	// service was built without one, which turns the feature off.
+	debugger *debugger.Manager
 	// stop is closed by Stop; it ends the background re-probe loop that runs
 	// when Docker was not available at startup.
 	stop     chan struct{}
@@ -534,6 +539,22 @@ type Service struct {
 // not). Production callers should never need this; it exists so integration
 // tests can ensure the ContainerRuntime is wired before invoking functions.
 func (s *Service) WaitReady() { s.initWg.Wait() }
+
+// DescribeUntagged implements debugger.Describer for functions: an existing
+// function no tag mentions gets the synthesised "not tagged" entry, with its
+// ARN in the setup block so the tagging command is copy-paste ready. A
+// function that does not exist, or another service's resource, is not ours
+// to describe.
+func (s *Service) DescribeUntagged(ctx context.Context, service debugger.Service, resource string) (debugger.Descriptor, bool) {
+	if service != debugger.ServiceLambda {
+		return debugger.Descriptor{}, false
+	}
+	fn, aerr := s.ls.getFunction(ctx, resource)
+	if aerr != nil || fn == nil {
+		return debugger.Descriptor{}, false
+	}
+	return debugger.UntaggedDescriptor(debugger.ServiceLambda, fn.Name, "", fn.ARN), true
+}
 
 // RuntimeAPIListenStatus reports how the shared Runtime API listener's bind
 // went, for /_overcast/health. ok is false until a bind has been attempted.
@@ -788,7 +809,11 @@ func (s *Service) SetImageResolver(r docker.ImageResolver) {
 // Docker availability is checked in the background — the service starts
 // immediately using the stub NodeRuntime and upgrades to ContainerRuntime once
 // Docker is confirmed reachable. Other services are never blocked.
-func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Clock) *Service {
+//
+// dbg is the router-owned debug-target manager (docs/plans/compute-debugger.md);
+// nil leaves the debugger off, which is what every test that does not exercise
+// it wants.
+func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Clock, dbg *debugger.Manager) *Service {
 	log := serviceutil.NewServiceLogger(logger, "lambda")
 	ls := newLambdaStore(store, cfg.Region, clk)
 	tracker := newInstanceTracker(clk, logger)
@@ -803,6 +828,7 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	esmSt := newESMStore(ls)
 	h := newHandler(cfg, log, clk, rr, ls, tracker)
 	h.esm = esmSt
+	h.debugger = dbg
 
 	s := &Service{
 		cfg:                 cfg,
@@ -817,6 +843,7 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 		probe:               docker.Probe,
 		dockerRetryInterval: dockerRetryInterval,
 		instances:           serviceutil.NewAnchoredInstanceDomain(store, nsInstance, serviceutil.DataDirAnchor(cfg.DataDir)),
+		debugger:            dbg,
 	}
 
 	// Probe Docker in the background so startup of other services is not delayed.
@@ -989,6 +1016,7 @@ func (s *Service) wireDockerRuntime(cfg *config.Config, clk clock.Clock, rr *run
 
 	containerRuntime := NewContainerRuntime(cfg, clk, dc, s.gc, runtimeAPI, log, limits.maxConcurrentStarts, s.instances)
 	containerRuntime.SetRuntimeAPIReachability(listen, containerendpoint.HintPath(cfg.DataDir, dataplane.Primary(cfg)))
+	containerRuntime.SetDebugger(s.debugger)
 
 	// When a container's RIC issues its first GET /next, throttle that
 	// container's INIT-burst CPU down to the steady-state proportional
@@ -1066,6 +1094,8 @@ func (s *Service) wireDockerRuntime(cfg *config.Config, clk clock.Clock, rr *run
 	pool := NewInstancePool(containerRuntime, log, clk, limits.pool)
 	// Keep the instance tracker in step with the containers that actually exist.
 	pool.observer = s.tracker
+	// A function an editor can attach to runs one execution environment.
+	pool.debugger = s.debugger
 	// Wire ConcurrentExecutions sampling if InitMetrics already ran (it may
 	// run before or after Docker init completes — same race InitBus/InitLogWriter
 	// already handle for this goroutine's other optional wiring).

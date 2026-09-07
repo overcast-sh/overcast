@@ -143,6 +143,15 @@ func queueBudget(fn *Function) time.Duration { return functionTimeout(fn) }
 // create.
 func (p *InstancePool) admit(ctx context.Context, fn *Function) error {
 	perFunction := p.maxPerFunction
+	if p.debugPinned(fn) {
+		// The debug port belongs to one container, so a function an editor
+		// can attach to runs one execution environment; further invocations
+		// queue exactly as they do at the emulator cap. The target exists
+		// from the first cold start on, so a burst of first invocations is
+		// admitted at the ordinary cap and only the container that binds
+		// last answers on the port until the others retire.
+		perFunction = 1
+	}
 	if reserved := reservedConcurrencyOf(fn); reserved >= 0 && reserved < perFunction {
 		// A reservation below the emulator's own cap makes the emulator cap
 		// irrelevant — the AWS limit binds first and throttles rather than
@@ -190,6 +199,13 @@ func (p *InstancePool) admit(ctx context.Context, fn *Function) error {
 			return err
 		}
 	}
+}
+
+// debugPinned reports whether fn has a live debug target and is therefore
+// held to one execution environment. One nil check for a pool without a
+// manager, which is every pool the debugger is not enabled for.
+func (p *InstancePool) debugPinned(fn *Function) bool {
+	return p.debugger != nil && liveDebugTarget(p.debugger, fn.Name) != nil
 }
 
 // admitContainer is the global counterpart to admit, called only when the warm

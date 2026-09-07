@@ -129,7 +129,7 @@ func TestContainerRuntimeBuildEnv_includesServiceSpecificEndpointURLs(t *testing
 	}
 
 	// When: Lambda environment variables are built.
-	env := envMap(runtime.buildEnv(fn, "stream", initTypeOnDemand, "172.18.0.1:41001"))
+	env := envMap(runtime.buildEnv(fn, "stream", initTypeOnDemand, "172.18.0.1:41001", nil))
 
 	// Then: both the global SDK endpoint and Parameters/Secrets backend endpoints target Overcast.
 	if env["AWS_ENDPOINT_URL"] != runtime.overcastEndpoint {
@@ -167,7 +167,7 @@ func TestContainerRuntimeBuildEnv_runtimeEndpointsOverrideBlankUserEnv(t *testin
 	}
 
 	// When: Lambda environment variables are built for the container.
-	env := envMap(runtime.buildEnv(fn, "stream", initTypeOnDemand, "172.18.0.1:41001"))
+	env := envMap(runtime.buildEnv(fn, "stream", initTypeOnDemand, "172.18.0.1:41001", nil))
 
 	// Then: runtime-provided endpoint and credential values win so extensions inherit usable values.
 	if env["AWS_ENDPOINT_URL"] != runtime.overcastEndpoint {

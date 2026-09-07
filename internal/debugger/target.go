@@ -249,6 +249,20 @@ func (t *Target) SetContainerID(id string) {
 	t.mu.Unlock()
 }
 
+// ClearContainer forgets the upstream and the container id, but only while
+// id is still the container behind the port. A service calls it when a
+// container goes away; a retired container closing after its replacement was
+// bound must not blind the proxy to the replacement, which is what an
+// unconditional ClearUpstream from that container's Close would do.
+func (t *Target) ClearContainer(id string) {
+	t.mu.Lock()
+	if t.containerID == id {
+		t.upstream = ""
+		t.containerID = ""
+	}
+	t.mu.Unlock()
+}
+
 // SetRemoteRoot records the container path editors map the local root to:
 // /var/task for a zip, the image's working directory otherwise.
 func (t *Target) SetRemoteRoot(path string) {
