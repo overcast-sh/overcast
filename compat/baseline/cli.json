@@ -1109,6 +1109,55 @@
     },
     {
       "suite": "cli",
+      "service": "batch",
+      "group": "batch-gen-probe",
+      "test": "DescribeJobs",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "batch",
+      "group": "batch-gen-probe",
+      "test": "DescribeQuotaShare",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "batch",
+      "group": "batch-gen-probe",
+      "test": "DescribeServiceEnvironments",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "batch",
+      "group": "batch-gen-probe",
+      "test": "DescribeServiceJob",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "batch",
+      "group": "batch-gen-probe",
+      "test": "ListJobsByConsumableResource",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "batch",
+      "group": "batch-gen-probe",
+      "test": "ListQuotaShares",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "batch",
+      "group": "batch-gen-probe",
+      "test": "ListServiceJobs",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
       "service": "cloudformation",
       "group": "cloudformation-eks-refs",
       "test": "CreateStackWithEksRefs",
@@ -2712,6 +2761,27 @@
     },
     {
       "suite": "cli",
+      "service": "elastic-load-balancing",
+      "group": "elastic-load-balancing-gen-probe",
+      "test": "DescribeAccountLimits",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "elastic-load-balancing",
+      "group": "elastic-load-balancing-gen-probe",
+      "test": "DescribeLoadBalancerAttributes",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "elastic-load-balancing",
+      "group": "elastic-load-balancing-gen-probe",
+      "test": "DescribeLoadBalancerPolicyTypes",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
       "service": "elasticache",
       "group": "elasticache-clusters",
       "test": "CreateCacheCluster",
@@ -2947,6 +3017,517 @@
       "group": "eventbridge-target-fanout",
       "test": "PutFanoutTargets",
       "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-group",
+      "test": "AddUserToGroup",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-group",
+      "test": "AttachGroupPolicy",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-group",
+      "test": "CreateGroup",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-group",
+      "test": "DeleteGroup",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-group",
+      "test": "DeleteGroupPolicy",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-group",
+      "test": "DetachGroupPolicy",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-group",
+      "test": "GetGroup",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-group",
+      "test": "GetGroupMembers",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-group",
+      "test": "GetGroupPolicy",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-group",
+      "test": "ListAttachedGroupPolicies",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-group",
+      "test": "ListGroupPolicies",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-group",
+      "test": "ListGroups",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-group",
+      "test": "ListGroupsForUser",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-group",
+      "test": "PutGroupPolicy",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-group",
+      "test": "RemoveUserFromGroup",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-instanceprofile",
+      "test": "AddRoleToInstanceProfile",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-instanceprofile",
+      "test": "CreateInstanceProfile",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-instanceprofile",
+      "test": "DeleteInstanceProfile",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-instanceprofile",
+      "test": "GetInstanceProfile",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-instanceprofile",
+      "test": "ListInstanceProfileTags",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-instanceprofile",
+      "test": "ListInstanceProfiles",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-instanceprofile",
+      "test": "ListInstanceProfilesForRole",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-instanceprofile",
+      "test": "RemoveRoleFromInstanceProfile",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-instanceprofile",
+      "test": "TagInstanceProfile",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-instanceprofile",
+      "test": "UntagInstanceProfile",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-policy",
+      "test": "CreatePolicy",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-policy",
+      "test": "CreatePolicyVersion",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-policy",
+      "test": "DeletePolicy",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-policy",
+      "test": "DeletePolicyVersion",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-policy",
+      "test": "GetPolicy",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-policy",
+      "test": "ListPolicies",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-policy",
+      "test": "ListPolicyTags",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-policy",
+      "test": "SimulateCustomPolicy",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-policy",
+      "test": "TagPolicy",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-policy",
+      "test": "UntagPolicy",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetAccessKeyLastUsed",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetAccountPasswordPolicy",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetAccountSummary",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetContextKeysForCustomPolicy",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetContextKeysForPrincipalPolicy",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetCredentialReport",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetDelegationRequest",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetHumanReadableSummary",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetLoginProfile",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetMFADevice",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetOpenIDConnectProvider",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetOrganizationsAccessReport",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetOutboundWebIdentityFederationInfo",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetPolicyVersion",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetSAMLProvider",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetSSHPublicKey",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetServerCertificate",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetServiceLastAccessedDetails",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetServiceLastAccessedDetailsWithEntities",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetServiceLinkedRoleDeletionStatus",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListAccountAliases",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListDelegationRequests",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListEntitiesForPolicy",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListMFADeviceTags",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListMFADevices",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListOpenIDConnectProviderTags",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListOpenIDConnectProviders",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListOrganizationsFeatures",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListPoliciesGrantingServiceAccess",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListPolicyVersions",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListSAMLProviderTags",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListSAMLProviders",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListSSHPublicKeys",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListServerCertificateTags",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListServerCertificates",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListServiceSpecificCredentials",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListSigningCertificates",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListVirtualMFADevices",
+      "status": "unimplemented"
     },
     {
       "suite": "cli",
@@ -3409,6 +3990,34 @@
       "group": "kms-crypto",
       "test": "GenerateDataKeyWithoutPlaintext",
       "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "kms",
+      "group": "kms-gen-probe",
+      "test": "DescribeCustomKeyStores",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "kms",
+      "group": "kms-gen-probe",
+      "test": "GetKeyRotationStatus",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "kms",
+      "group": "kms-gen-probe",
+      "test": "GetParametersForImport",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "kms",
+      "group": "kms-gen-probe",
+      "test": "ListKeyRotations",
+      "status": "unimplemented"
     },
     {
       "suite": "cli",
@@ -4946,6 +5555,34 @@
     {
       "suite": "cli",
       "service": "secretsmanager",
+      "group": "secretsmanager-gen-version",
+      "test": "GetSecretValue",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "secretsmanager",
+      "group": "secretsmanager-gen-version",
+      "test": "ListSecretVersionIds",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "secretsmanager",
+      "group": "secretsmanager-gen-version",
+      "test": "PutSecretValue",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "secretsmanager",
+      "group": "secretsmanager-gen-version",
+      "test": "UpdateSecretVersionStage",
+      "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "secretsmanager",
       "group": "secretsmanager-policy",
       "test": "DeleteResourcePolicy",
       "status": "pass"
@@ -5012,6 +5649,20 @@
       "group": "secretsmanager-rotate",
       "test": "UpdateSecretVersionStage",
       "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "servicediscovery",
+      "group": "servicediscovery-gen-probe",
+      "test": "GetInstancesHealthStatus",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "servicediscovery",
+      "group": "servicediscovery-gen-probe",
+      "test": "GetOperation",
+      "status": "unimplemented"
     },
     {
       "suite": "cli",
@@ -5236,6 +5887,83 @@
       "group": "shield-protections",
       "test": "ListProtections",
       "status": "pass"
+    },
+    {
+      "suite": "cli",
+      "service": "sns",
+      "group": "sns-gen-probe",
+      "test": "CheckIfPhoneNumberIsOptedOut",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "sns",
+      "group": "sns-gen-probe",
+      "test": "GetDataProtectionPolicy",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "sns",
+      "group": "sns-gen-probe",
+      "test": "GetEndpointAttributes",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "sns",
+      "group": "sns-gen-probe",
+      "test": "GetPlatformApplicationAttributes",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "sns",
+      "group": "sns-gen-probe",
+      "test": "GetSMSAttributes",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "sns",
+      "group": "sns-gen-probe",
+      "test": "GetSMSSandboxAccountStatus",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "sns",
+      "group": "sns-gen-probe",
+      "test": "ListEndpointsByPlatformApplication",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "sns",
+      "group": "sns-gen-probe",
+      "test": "ListOriginationNumbers",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "sns",
+      "group": "sns-gen-probe",
+      "test": "ListPhoneNumbersOptedOut",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "sns",
+      "group": "sns-gen-probe",
+      "test": "ListPlatformApplications",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "cli",
+      "service": "sns",
+      "group": "sns-gen-probe",
+      "test": "ListSMSSandboxPhoneNumbers",
+      "status": "unimplemented"
     },
     {
       "suite": "cli",
