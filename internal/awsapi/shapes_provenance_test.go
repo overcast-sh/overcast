@@ -31,6 +31,18 @@ import (
 // 2,200 bytes/op it is the only service over the 1,608 B/op gate, so it needs
 // structural pruning or a compact encoding before it can join a wave.
 //
+// G6's eventbridge (#1116) then took it to 10 services / 734,034 bytes: 83,201
+// bytes over 57 operations, 1,460 B/op, inside the same gate. It fits under the
+// existing cap and does not raise it, leaving 85,166 bytes of headroom.
+//
+// Wave 1 of that phase ports three groups at once, and the other two services
+// measure 61,721 bytes (kinesis) and 161,975 (cloudwatch-logs) at this
+// revision. Only one further pair fits: eventbridge with kinesis, at 795,755.
+// Every other combination exceeds the cap, so the port that lands after
+// cloudwatch-logs — in whichever order they merge — is the one that has to
+// argue for a larger one: as the reviewed scope decision below, not as the
+// reflex that turns its own rebase green.
+//
 // **Raise this constant deliberately, as a reviewer, never automatically.** It
 // is the enforcement half of §4.6's size gate: growing it is how the fleet
 // budget gets spent, and the projection that budget rests on is in §4.6. A
