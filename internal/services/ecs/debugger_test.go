@@ -412,7 +412,7 @@ func TestRunTask_debugger_secondTaskOfTheDefinitionRunsUndebugged(t *testing.T) 
 		t.Error("the second task was given a target of its own")
 	}
 	assertNoDebugSurface(t, d.fd.createdContainers()[1])
-	if !d.warned("already in use by task " + first) {
+	if !d.warned("port already held by another task") || !d.warned(first) {
 		t.Errorf("warnings = %v, want one naming task %s", d.logs.All(), first)
 	}
 	if still, _ := d.m.Get(firstTarget.ID()); still != firstTarget {
@@ -473,7 +473,7 @@ func TestContainerDied_debugger_clearsTheContainerThenReleasesOnTheLastExit(t *t
 	app, sidecar := d.created(t, "app"), d.created(t, "sidecar")
 	died := func(containerID string) {
 		d.h.handleContainerDied(context.Background(), events.Event{
-			Type: events.DockerContainerDied, Time: time.Now(),
+			Type: events.DockerContainerDied, Time: d.h.clk.Now(),
 			Payload: events.DockerContainerPayload{
 				ContainerID: containerID, Action: "die", ExitCode: "0",
 				Service: serviceName, ResourceID: "c1/" + taskID,

@@ -523,13 +523,11 @@ func (h *Handler) startTaskContainers(ctx context.Context, task *Task, td *TaskD
 		// The debug port is reachable now the container runs. It is read from
 		// whichever container owns the binding — this one, or the namespace
 		// container it runs inside.
-		if target, ok := debug[cd.Name]; ok {
-			owner := namespaceID
-			if owner == "" {
-				owner = dockerID
-			}
-			h.bindDebugTarget(ctx, target, owner, dockerID)
+		owner := namespaceID
+		if owner == "" {
+			owner = dockerID
 		}
+		debug.bind(ctx, h, cd.Name, owner, dockerID)
 
 		// Ship this container's output to CloudWatch Logs when the task
 		// definition asked for the awslogs driver. Started after the container

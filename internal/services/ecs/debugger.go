@@ -15,6 +15,10 @@ package ecs
 // environments are: a stopped task's targets are released outright, and a
 // task definition is not a target — it is the tag carrier the setup block
 // names.
+//
+// TODO(priority:P2): a task that survives an Overcast restart is reconciled
+// back to RUNNING (reconcileContainers) but its targets are not re-registered,
+// so the console shows it as untagged while its container still listens.
 
 import (
 	"context"
@@ -24,7 +28,6 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/overcast-sh/overcast/internal/dataplane"
 	"github.com/overcast-sh/overcast/internal/debugger"
 	"github.com/overcast-sh/overcast/internal/docker"
 )
@@ -49,20 +52,24 @@ func debugPortKey(taskDefinitionArn, container string) string {
 	return taskDefinitionArn + "/" + container
 }
 
-// holder is the task that owns the port, or "" when it is free.
-func (o *debugPortOwners) holder(key string) string {
+// claim takes the port for taskID unless another task still holds it, in
+// which case that task is returned and nothing changes. live reports whether
+// a recorded holder still has its target: one that lost it without a release,
+// however that happened, is displaced rather than honoured. The decision and
+// the record are one critical section, so two tasks of one definition
+// starting together — a RunTask and the service scheduler's placement —
+// cannot both find the port free.
+func (o *debugPortOwners) claim(key, taskID string, live func(owner string) bool) (holder string, ok bool) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	return o.byPort[key]
-}
-
-func (o *debugPortOwners) claim(key, taskID string) {
-	o.mu.Lock()
+	if owner := o.byPort[key]; owner != "" && owner != taskID && live(owner) {
+		return owner, false
+	}
 	if o.byPort == nil {
 		o.byPort = map[string]string{}
 	}
 	o.byPort[key] = taskID
-	o.mu.Unlock()
+	return "", true
 }
 
 // release frees the port only if taskID still holds it.
@@ -100,10 +107,7 @@ func (h *Handler) debugTargets(td *TaskDefinition, taskID string, tags map[strin
 		names = append(names, cd.Name)
 	}
 	specs, problems := debugger.SpecsFromTaskTags(tags, names, flagOn)
-	for _, p := range problems {
-		h.log.Warn("ecs: debugger: "+p.Reason,
-			append([]zap.Field{zap.String("task_definition", td.TaskDefinitionArn)}, p.Fields()...)...)
-	}
+	debugger.WarnProblems(h.log, problems, zap.String("task_definition", td.TaskDefinitionArn))
 
 	var targets taskDebugTargets
 	for i := range td.ContainerDefinitions {
@@ -123,39 +127,38 @@ func (h *Handler) debugTargets(td *TaskDefinition, taskID string, tags map[strin
 			continue
 		}
 
+		// A target that will listen — the flag on and a protocol resolved,
+		// whether a tag or the container's own flag asked for it — takes the
+		// definition's port, which one task holds at a time.
 		portKey := debugPortKey(td.TaskDefinitionArn, cd.Name)
-		if spec.Enabled() {
-			if owner := h.debugPorts.holder(portKey); owner != "" && owner != taskID {
-				if _, live := h.debugger.Get(debugger.TargetID(debugger.ServiceECS, owner, cd.Name)); live {
-					h.log.Warn("ecs: debugger: port already in use by task "+owner+" — this task runs undebugged",
-						zap.String("task_definition", td.TaskDefinitionArn),
-						zap.String("task", taskID),
-						zap.String("container", cd.Name),
-						zap.String("hint", "a debug port belongs to one container; stop task "+owner+" to move the debugger to a newer task, or run one task of this definition while debugging"))
-					continue
-				}
-				h.debugPorts.release(portKey, owner)
+		listens := flagOn && res.Protocol != nil
+		if listens {
+			holder, ok := h.debugPorts.claim(portKey, taskID, func(owner string) bool {
+				_, live := h.debugger.Get(debugger.TargetID(debugger.ServiceECS, owner, cd.Name))
+				return live
+			})
+			if !ok {
+				h.log.Warn("ecs: debugger: port already held by another task of this definition — this task runs undebugged",
+					zap.String("task_definition", td.TaskDefinitionArn),
+					zap.String("task", taskID),
+					zap.String("container", cd.Name),
+					zap.String("holder", holder),
+					zap.String("hint", "a debug port belongs to one container; stop the holder to move the debugger to a newer task, or run one task of this definition while debugging"))
+				continue
 			}
 		}
 
 		target, err := h.debugger.Ensure(debugger.TargetID(debugger.ServiceECS, taskID, cd.Name), spec, res)
+		if err != nil || (listens && !target.Bound()) {
+			// A closed manager means Overcast is shutting down; a target that
+			// could not bind its port is the manager's to warn about, and it
+			// holds no claim on the definition's port.
+			h.debugPorts.release(portKey, taskID)
+		}
 		if err != nil {
-			// ErrNothingToDebug cannot happen past the check above; a closed
-			// manager means Overcast is shutting down.
 			continue
 		}
 		target.SetResourceARN(td.TaskDefinitionArn)
-		if spec.Enabled() && target.State() != debugger.StateError {
-			h.debugPorts.claim(portKey, taskID)
-		}
-		if target.State() == debugger.StateError {
-			h.log.Warn("ecs: debugger: target could not be bound — the container runs undebugged",
-				zap.String("task_definition", td.TaskDefinitionArn),
-				zap.String("task", taskID),
-				zap.String("container", cd.Name),
-				zap.String("reason", target.Reason()),
-				zap.String("hint", "free the port named by "+debugger.TagPort+", or drop the tag to auto-allocate one from OVERCAST_DEBUGGER_PORTS"))
-		}
 		if targets == nil {
 			targets = taskDebugTargets{}
 		}
@@ -227,7 +230,9 @@ func (d taskDebugTargets) setRemoteRoot(ctx context.Context, h *Handler, cd *Con
 	switch {
 	case cd.WorkingDirectory != "":
 		root = cd.WorkingDirectory
-	case h.docker != nil:
+	case h.docker != nil && target.Bound():
+		// Only for a container an editor can attach to; an inert or errored
+		// target is not worth a daemon round trip.
 		inspect, err := h.docker.InspectImage(ctx, cd.Image)
 		switch {
 		case err != nil:
@@ -292,45 +297,24 @@ func (d taskDebugTargets) applyPortBinding(ccfg *docker.CreateContainerRequest, 
 	}
 }
 
-// bindDebugTarget points the target's proxy at the started container, per
-// docs/plans/compute-debugger.md § 3.6: the address Overcast can route to
-// when it is itself in Docker, else the ephemeral loopback port Docker
-// published for the debug port. Both are read from ownerID, the container
-// whose network the debugged one runs in — itself, or the task's namespace
-// container under awsvpc — while containerID is what the console names and
-// what a die event later clears. Failure leaves the target unbound with a
-// warning; the task still runs.
-func (h *Handler) bindDebugTarget(ctx context.Context, target *debugger.Target, ownerID, containerID string) {
-	var inspect *docker.ContainerInspect
-	containerAddr := dataplane.ContainerAddr(ctx, h.docker, h.cfg, ownerID)
-	if containerAddr == "" {
-		// Host ports are assigned at start, so nothing read before it could
-		// have carried this one.
-		var err error
-		if inspect, err = h.docker.InspectContainer(ctx, ownerID); err != nil {
-			h.log.Warn("ecs: debugger: inspect started container for its published debug port — target left unbound",
-				zap.String("target", target.ID()), zap.String("container", ownerID), zap.Error(err))
-			return
-		}
+// bind points the named container's target at it once it runs (Target.Bind):
+// the debug port is read from ownerID, the container whose network the
+// debugged one runs in — itself, or the task's namespace container under
+// awsvpc — while containerID is what the console names and what a die event
+// later clears.
+func (d taskDebugTargets) bind(ctx context.Context, h *Handler, container, ownerID, containerID string) {
+	if target, ok := d[container]; ok {
+		target.Bind(ctx, h.docker, h.cfg, ownerID, containerID)
 	}
-	upstream, ok := target.UpstreamFor(containerAddr, inspect)
-	if !ok {
-		h.log.Warn("ecs: debugger: container published no host port for the debug port — target left unbound",
-			zap.String("target", target.ID()),
-			zap.String("container", ownerID),
-			zap.Int("port", target.Port()),
-			zap.String("hint", "check that the Docker daemon can publish ports on 127.0.0.1 (a rootless or remote daemon may not)"))
-		return
-	}
-	target.SetUpstream(upstream)
-	target.SetContainerID(containerID)
-	h.log.Debug("ecs: debugger: target bound", zap.String("target", target.ID()), zap.String("upstream", upstream))
 }
 
 // clearDebugContainer forgets the upstream behind the target of the task
 // container that just exited, so nothing is dialled at a port that is gone.
 // Keyed by container id, so a stale event about a container already replaced
-// leaves the replacement alone.
+// leaves the replacement alone. The namespace container an awsvpc task's
+// ports are published on is not in task.Containers; when it dies first the
+// upstream lingers until the application containers' own die events, which
+// follow at once.
 func (h *Handler) clearDebugContainer(task *Task, dockerID string) {
 	if h.debugger == nil {
 		return
@@ -386,6 +370,7 @@ func (s *Service) DescribeUntagged(ctx context.Context, service debugger.Service
 func (h *Handler) findTask(ctx context.Context, taskID string) (*Task, bool) {
 	tasks, aerr := h.store.listAllTasks(ctx)
 	if aerr != nil {
+		h.log.Debug("ecs: debugger: list tasks for the console's target lookup", zap.String("task", taskID), zap.Error(aerr))
 		return nil, false
 	}
 	for i := range tasks {
