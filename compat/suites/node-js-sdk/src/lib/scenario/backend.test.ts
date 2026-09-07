@@ -154,9 +154,8 @@ describe("the scenario backend", () => {
  * a per-language implementation (docs/plans/compat-coverage-modelgen.md §3.11
  * step 3, #1903).
  *
- * The file used is the real authored one, still under its shadow name because
- * nothing is flipped yet. What these cases are about is the *absent
- * `generated` flag*, not the group's name.
+ * The file used is the real authored one, under the name it carries since the
+ * flip. What these cases are about is the *absent `generated` flag*.
  */
 const AUTHORED = "compat/model/authored/sqs-queues.json";
 
@@ -168,13 +167,13 @@ function portedRegistry(name: string, scenario: string): Registry {
 }
 
 describe("a ported hand-written group", () => {
-  const support = makeScenarioSupport(portedRegistry("sqs-queues-shadow", AUTHORED), {
+  const support = makeScenarioSupport(portedRegistry("sqs-queues", AUTHORED), {
     suite: "node-js-sdk",
   });
 
   it("resolves its tests through the scenario backend", () => {
     assert.equal(
-      typeof support.backend("sqs-queues-shadow", "SetQueueAttributes", AUTHORED),
+      typeof support.backend("sqs-queues", "SetQueueAttributes", AUTHORED),
       "function",
     );
   });
@@ -184,12 +183,12 @@ describe("a ported hand-written group", () => {
     // `generated` while the backend gated on `scenario`, so a ported lifecycle
     // group got every one of its tests and none of its setup — and ran them
     // all against a queue that was never created.
-    assert.equal(typeof support.setup["sqs-queues-shadow"], "function");
-    assert.equal(typeof support.teardown["sqs-queues-shadow"], "function");
+    assert.equal(typeof support.setup["sqs-queues"], "function");
+    assert.equal(typeof support.teardown["sqs-queues"], "function");
   });
 
   it("is still scoped away from a suite its `suites` excludes", () => {
-    const scoped = portedRegistry("sqs-queues-shadow", AUTHORED);
+    const scoped = portedRegistry("sqs-queues", AUTHORED);
     scoped.groups[0].suites = ["python-sdk"];
     const other = makeScenarioSupport(scoped, { suite: "node-js-sdk" });
     assert.deepEqual(other.setup, {});

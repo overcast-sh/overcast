@@ -4,6 +4,7 @@ package main
 
 import (
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -212,18 +213,25 @@ func TestBuildRegistryStillDeclaresAShadowAsAGroup(t *testing.T) {
 	}
 }
 
-// TestCommittedRegistryPortsNothingYet is the corpus half of #1903: these are
-// the prerequisites, and the flip is a separate PR. sqs-queues must still be
-// resolved by its seven native implementations, and sqs-queues-shadow must
-// still be soaking.
-func TestCommittedRegistryPortsNothingYet(t *testing.T) {
+// TestCommittedRegistryPortsSqsQueues is the corpus half of #1903 after the
+// flip: the hand-written sqs-queues entry names the authored scenario that
+// replaced its seven native implementations, and it is the only ported group
+// so far. Every consequence of the field — the group leaving the generated
+// groups list, the ported index, the emitted source — follows from the pair
+// of names, and the generator refuses either half without the other.
+func TestCommittedRegistryPortsSqsQueues(t *testing.T) {
 	hand, err := loadHandRegistry(filepath.Join(repoRoot, filepath.FromSlash(handRegistryPath)))
 	if err != nil {
 		t.Fatalf("loadHandRegistry: %v", err)
 	}
+	ported := map[string]string{}
 	for _, g := range hand.Groups {
 		if g.Scenario != "" {
-			t.Errorf("hand-written group %q carries scenario %q — the flip is #1903 item 3", g.Name, g.Scenario)
+			ported[g.Name] = g.Scenario
 		}
+	}
+	want := map[string]string{"sqs-queues": "compat/model/authored/sqs-queues.json"}
+	if !reflect.DeepEqual(ported, want) {
+		t.Errorf("ported hand-written groups = %#v, want %#v", ported, want)
 	}
 }

@@ -2,18 +2,19 @@
  * groups/sqs.ts — SQS compatibility test groups for the Node.js suite.
  *
  * Groups:
- *   sqs-queues    — queue lifecycle (implemented)
  *   sqs-messages  — send/receive/delete (implemented)
  *   sqs-dlq       — dead-letter queues (implemented)
  *   sqs-fifo      — FIFO queues (implemented)
  *   sqs-attributes — queue attributes and tags (implemented)
+ *
+ * sqs-queues is not here: it is a ported group, resolved from
+ * compat/model/authored/sqs-queues.json by the scenario backend (#1903).
  */
 
 import {
   CreateQueueCommand,
   DeleteQueueCommand,
   GetQueueUrlCommand,
-  ListQueuesCommand,
   SendMessageCommand,
   SendMessageBatchCommand,
   ReceiveMessageCommand,
@@ -23,9 +24,6 @@ import {
   PurgeQueueCommand,
   GetQueueAttributesCommand,
   SetQueueAttributesCommand,
-  ListQueueTagsCommand,
-  TagQueueCommand,
-  UntagQueueCommand,
 } from "@aws-sdk/client-sqs";
 import { makeClients } from "../lib/clients.ts";
 import type { TestGroup } from "../lib/harness.ts";
@@ -33,181 +31,6 @@ import * as assert from "node:assert/strict";
 
 export function makeSQSGroups(suite: string): TestGroup[] {
   return [
-    // ── sqs-queues ─────────────────────────────────────────────────────────
-    {
-      suite,
-      service: "sqs",
-      name: "sqs-queues",
-      tests: [
-        {
-          name: "CreateQueue",
-          fn: async (ctx) => {
-            const { sqs } = makeClients(ctx);
-            const name = `${ctx.runId}-sqs-q`;
-            const resp = await sqs.send(
-              new CreateQueueCommand({ QueueName: name }),
-            );
-            assert.ok(resp.QueueUrl, "CreateQueue: missing QueueUrl");
-          },
-        },
-        {
-          name: "GetQueueUrl",
-          fn: async (ctx) => {
-            const { sqs } = makeClients(ctx);
-            const name = `${ctx.runId}-sqs-q`;
-            const resp = await sqs.send(
-              new GetQueueUrlCommand({ QueueName: name }),
-            );
-            assert.ok(
-              resp.QueueUrl?.includes(name),
-              `GetQueueUrl: URL ${resp.QueueUrl} doesn't contain ${name}`,
-            );
-          },
-        },
-        {
-          name: "ListQueues",
-          fn: async (ctx) => {
-            const { sqs } = makeClients(ctx);
-            const name = `${ctx.runId}-sqs-q`;
-            const resp = await sqs.send(
-              new ListQueuesCommand({ QueueNamePrefix: ctx.runId }),
-            );
-            assert.ok(
-              resp.QueueUrls?.some((u) => u.includes(name)),
-              `ListQueues: ${name} not found`,
-            );
-          },
-        },
-        {
-          name: "GetQueueAttributes",
-          fn: async (ctx) => {
-            const { sqs } = makeClients(ctx);
-            const { QueueUrl } = await sqs.send(
-              new GetQueueUrlCommand({ QueueName: `${ctx.runId}-sqs-q` }),
-            );
-            const resp = await sqs.send(
-              new GetQueueAttributesCommand({
-                QueueUrl: QueueUrl!,
-                AttributeNames: ["All"],
-              }),
-            );
-            assert.ok(
-              resp.Attributes?.QueueArn,
-              "GetQueueAttributes: missing QueueArn",
-            );
-            if (!resp.Attributes?.ApproximateNumberOfMessages) {
-              // 0 is a valid value — check the key exists
-              assert.ok(
-                "ApproximateNumberOfMessages" in (resp.Attributes ?? {}),
-                "GetQueueAttributes: missing ApproximateNumberOfMessages",
-              );
-            }
-          },
-        },
-        {
-          name: "SetQueueAttributes",
-          fn: async (ctx) => {
-            const { sqs } = makeClients(ctx);
-            const { QueueUrl } = await sqs.send(
-              new GetQueueUrlCommand({ QueueName: `${ctx.runId}-sqs-q` }),
-            );
-            await sqs.send(
-              new SetQueueAttributesCommand({
-                QueueUrl: QueueUrl!,
-                Attributes: { VisibilityTimeout: "60" },
-              }),
-            );
-            const resp = await sqs.send(
-              new GetQueueAttributesCommand({
-                QueueUrl: QueueUrl!,
-                AttributeNames: ["VisibilityTimeout"],
-              }),
-            );
-            assert.strictEqual(
-              resp.Attributes?.VisibilityTimeout,
-              "60",
-              `SetQueueAttributes: expected VisibilityTimeout=60, got ${resp.Attributes?.VisibilityTimeout}`,
-            );
-          },
-        },
-        {
-          name: "TagQueue",
-          fn: async (ctx) => {
-            const { sqs } = makeClients(ctx);
-            const { QueueUrl } = await sqs.send(
-              new GetQueueUrlCommand({ QueueName: `${ctx.runId}-sqs-q` }),
-            );
-            await sqs.send(
-              new TagQueueCommand({
-                QueueUrl: QueueUrl!,
-                Tags: { project: "overcast", env: "test" },
-              }),
-            );
-            const resp = await sqs.send(
-              new ListQueueTagsCommand({ QueueUrl: QueueUrl! }),
-            );
-            assert.strictEqual(
-              resp.Tags?.project,
-              "overcast",
-              `TagQueue/ListQueueTags: expected project=overcast`,
-            );
-          },
-        },
-        {
-          name: "UntagQueue",
-          fn: async (ctx) => {
-            const { sqs } = makeClients(ctx);
-            const { QueueUrl } = await sqs.send(
-              new GetQueueUrlCommand({ QueueName: `${ctx.runId}-sqs-q` }),
-            );
-            await sqs.send(
-              new UntagQueueCommand({ QueueUrl: QueueUrl!, TagKeys: ["env"] }),
-            );
-            const resp = await sqs.send(
-              new ListQueueTagsCommand({ QueueUrl: QueueUrl! }),
-            );
-            assert.ok(
-              !("env" in (resp.Tags ?? {})),
-              "UntagQueue: env tag still present",
-            );
-          },
-        },
-        {
-          name: "DeleteQueue",
-          fn: async (ctx) => {
-            const { sqs } = makeClients(ctx);
-            const name = `${ctx.runId}-sqs-q`;
-            const { QueueUrl } = await sqs.send(
-              new GetQueueUrlCommand({ QueueName: name }),
-            );
-            await sqs.send(new DeleteQueueCommand({ QueueUrl: QueueUrl! }));
-            const { QueueUrls = [] } = await sqs.send(
-              new ListQueuesCommand({ QueueNamePrefix: name }),
-            );
-            assert.ok(
-              !QueueUrls.some((u) => u.includes(name)),
-              `DeleteQueue: queue ${name} still present after delete`,
-            );
-          },
-        },
-      ],
-      setup: async (ctx) => {
-        const { sqs } = makeClients(ctx);
-        await sqs.send(
-          new CreateQueueCommand({ QueueName: `${ctx.runId}-sqs-q` }),
-        );
-      },
-      teardown: async (ctx) => {
-        const { sqs } = makeClients(ctx);
-        try {
-          const { QueueUrl } = await sqs.send(
-            new GetQueueUrlCommand({ QueueName: `${ctx.runId}-sqs-q` }),
-          );
-          await sqs.send(new DeleteQueueCommand({ QueueUrl: QueueUrl! }));
-        } catch {}
-      },
-    },
-
     // ── sqs-messages ───────────────────────────────────────────────────────
     {
       suite,

@@ -12,96 +12,6 @@ def _sqs(ctx: TestContext):
     return make_clients(ctx.endpoint, ctx.region).sqs
 
 
-# ── sqs-queues ────────────────────────────────────────────────────────────────
-
-def setup_sqs_queues(ctx: TestContext) -> None:
-    sqs = _sqs(ctx)
-    resp = sqs.create_queue(QueueName=f"{ctx.run_id}-sqs-q")
-    ctx["sqs_queue_url"] = resp["QueueUrl"]
-
-
-def teardown_sqs_queues(ctx: TestContext) -> None:
-    url = ctx.get("sqs_queue_url")
-    if url:
-        try:
-            _sqs(ctx).delete_queue(QueueUrl=url)
-        except Exception:
-            pass
-
-
-def CreateQueue(ctx: TestContext) -> None:
-    sqs = _sqs(ctx)
-    name = f"{ctx.run_id}-sqs-create"
-    resp = sqs.create_queue(QueueName=name)
-    if not resp.get("QueueUrl"):
-        raise AssertionError("CreateQueue: missing QueueUrl")
-    sqs.delete_queue(QueueUrl=resp["QueueUrl"])
-
-
-def GetQueueUrl(ctx: TestContext) -> None:
-    sqs = _sqs(ctx)
-    name = f"{ctx.run_id}-sqs-q"
-    resp = sqs.get_queue_url(QueueName=name)
-    if not resp.get("QueueUrl"):
-        raise AssertionError("GetQueueUrl: missing QueueUrl")
-
-
-def ListQueues(ctx: TestContext) -> None:
-    sqs = _sqs(ctx)
-    resp = sqs.list_queues(QueueNamePrefix=ctx.run_id)
-    if not resp.get("QueueUrls"):
-        raise AssertionError("ListQueues: no queues returned for prefix")
-
-
-def GetQueueAttributes(ctx: TestContext) -> None:
-    sqs = _sqs(ctx)
-    url = ctx["sqs_queue_url"]
-    resp = sqs.get_queue_attributes(QueueUrl=url, AttributeNames=["All"])
-    if "QueueArn" not in resp.get("Attributes", {}):
-        raise AssertionError(f"GetQueueAttributes: missing QueueArn; got {resp.get('Attributes')}")
-
-
-def SetQueueAttributes(ctx: TestContext) -> None:
-    sqs = _sqs(ctx)
-    url = ctx["sqs_queue_url"]
-    sqs.set_queue_attributes(
-        QueueUrl=url,
-        Attributes={"VisibilityTimeout": "60"},
-    )
-    resp = sqs.get_queue_attributes(QueueUrl=url, AttributeNames=["VisibilityTimeout"])
-    if resp["Attributes"].get("VisibilityTimeout") != "60":
-        raise AssertionError("SetQueueAttributes: VisibilityTimeout not updated")
-
-
-def TagQueue(ctx: TestContext) -> None:
-    sqs = _sqs(ctx)
-    url = ctx["sqs_queue_url"]
-    sqs.tag_queue(QueueUrl=url, Tags={"env": "compat"})
-    resp = sqs.list_queue_tags(QueueUrl=url)
-    if resp.get("Tags", {}).get("env") != "compat":
-        raise AssertionError(f"TagQueue: env tag not found after tagging; got {resp.get('Tags')}")
-
-
-def UntagQueue(ctx: TestContext) -> None:
-    sqs = _sqs(ctx)
-    url = ctx["sqs_queue_url"]
-    sqs.untag_queue(QueueUrl=url, TagKeys=["env"])
-    resp = sqs.list_queue_tags(QueueUrl=url)
-    if "env" in resp.get("Tags", {}):
-        raise AssertionError("UntagQueue: env tag still present after untagging")
-
-
-def DeleteQueue(ctx: TestContext) -> None:
-    sqs = _sqs(ctx)
-    name = f"{ctx.run_id}-sqs-del"
-    resp = sqs.create_queue(QueueName=name)
-    url = resp["QueueUrl"]
-    sqs.delete_queue(QueueUrl=url)
-    resp2 = sqs.list_queues(QueueNamePrefix=name)
-    if url in resp2.get("QueueUrls", []):
-        raise AssertionError(f"DeleteQueue: queue {name} still listed after deletion")
-
-
 # ── sqs-messages ─────────────────────────────────────────────────────────────
 
 def setup_sqs_messages(ctx: TestContext) -> None:
@@ -323,14 +233,6 @@ def ReceiveFifoMessage(ctx: TestContext) -> None:
 # ── ImplMap ───────────────────────────────────────────────────────────────────
 
 IMPLS = {
-    "sqs-queues:CreateQueue": CreateQueue,
-    "sqs-queues:GetQueueUrl": GetQueueUrl,
-    "sqs-queues:ListQueues": ListQueues,
-    "sqs-queues:GetQueueAttributes": GetQueueAttributes,
-    "sqs-queues:SetQueueAttributes": SetQueueAttributes,
-    "sqs-queues:TagQueue": TagQueue,
-    "sqs-queues:UntagQueue": UntagQueue,
-    "sqs-queues:DeleteQueue": DeleteQueue,
     "sqs-messages:SendMessage": SendMessage,
     "sqs-messages:SendMessageBatch": SendMessageBatch,
     "sqs-messages:ReceiveMessage": ReceiveMessage,
@@ -347,14 +249,12 @@ IMPLS = {
 }
 
 SETUP = {
-    "sqs-queues": setup_sqs_queues,
     "sqs-messages": setup_sqs_messages,
     "sqs-dlq": setup_sqs_dlq,
     "sqs-fifo": setup_sqs_fifo,
 }
 
 TEARDOWN = {
-    "sqs-queues": teardown_sqs_queues,
     "sqs-messages": teardown_sqs_messages,
     "sqs-dlq": teardown_sqs_dlq,
     "sqs-fifo": teardown_sqs_fifo,

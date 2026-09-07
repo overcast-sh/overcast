@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -19,20 +18,12 @@ func SQS(c *clients.Clients) ServiceGroup {
 	s := &sqsGroup{c: c}
 	return ServiceGroup{
 		Impls: map[string]harness.TestFn{
-			"sqs-queues:CreateQueue":               s.CreateQueue,
-			"sqs-queues:GetQueueUrl":               s.GetQueueUrl,
-			"sqs-queues:ListQueues":                s.ListQueues,
-			"sqs-queues:SetQueueAttributes":        s.SetQueueAttributes,
-			"sqs-queues:GetQueueAttributes":        s.GetQueueAttributes,
-			"sqs-queues:DeleteQueue":               s.DeleteQueue,
 			"sqs-messages:SendMessage":             s.SendMessage,
 			"sqs-messages:ReceiveMessage":          s.ReceiveMessage,
 			"sqs-messages:DeleteMessage":           s.DeleteMessage,
 			"sqs-messages:SendMessageBatch":        s.SendMessageBatch,
 			"sqs-messages:PurgeQueue":              s.PurgeQueue,
 			"sqs-messages:ChangeMessageVisibility": s.ChangeMessageVisibility,
-			"sqs-queues:TagQueue":                  s.TagQueue,
-			"sqs-queues:UntagQueue":                s.UntagQueue,
 			"sqs-messages:DeleteMessageBatch":      s.DeleteMessageBatch,
 			"sqs-dlq:CreateDLQ":                    s.CreateDLQ,
 			"sqs-dlq:SetRedrivePolicy":             s.SetRedrivePolicy,
@@ -42,13 +33,11 @@ func SQS(c *clients.Clients) ServiceGroup {
 			"sqs-fifo:ReceiveFifoMessage":          s.ReceiveFifoMessage,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"sqs-queues":   s.setupQueues,
 			"sqs-messages": s.setupMessages,
 			"sqs-dlq":      s.setupDLQ,
 			"sqs-fifo":     s.setupFifo,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"sqs-queues":   s.teardownQueues,
 			"sqs-messages": s.teardownMessages,
 			"sqs-dlq":      s.teardownDLQ,
 			"sqs-fifo":     s.teardownFifo,
@@ -62,173 +51,6 @@ func (s *sqsGroup) client() *sqs.Client { return s.c.SQS() }
 
 func (s *sqsGroup) deleteQueue(ctx context.Context, url string) {
 	s.client().DeleteQueue(ctx, &sqs.DeleteQueueInput{QueueUrl: aws.String(url)}) //nolint:errcheck
-}
-
-// ── sqs-queues ────────────────────────────────────────────────────────────────
-
-func (s *sqsGroup) setupQueues(ctx context.Context, t *harness.TestContext) error {
-	name := fmt.Sprintf("%s-sqs", t.RunID)
-	resp, err := s.client().CreateQueue(ctx, &sqs.CreateQueueInput{QueueName: aws.String(name)})
-	if err != nil {
-		return err
-	}
-	t.Set("sqs_queue_url", aws.ToString(resp.QueueUrl))
-	t.Set("sqs_queue_name", name)
-	return nil
-}
-
-func (s *sqsGroup) teardownQueues(ctx context.Context, t *harness.TestContext) error {
-	if url := t.GetString("sqs_queue_url"); url != "" {
-		s.deleteQueue(ctx, url)
-	}
-	return nil
-}
-
-func (s *sqsGroup) CreateQueue(ctx context.Context, t *harness.TestContext) error {
-	name := fmt.Sprintf("%s-sqscreate", t.RunID)
-	resp, err := s.client().CreateQueue(ctx, &sqs.CreateQueueInput{QueueName: aws.String(name)})
-	if err != nil {
-		return err
-	}
-	defer s.deleteQueue(ctx, aws.ToString(resp.QueueUrl))
-	// Verify queue appears in ListQueues
-	list, err := s.client().ListQueues(ctx, &sqs.ListQueuesInput{QueueNamePrefix: aws.String(name)})
-	if err != nil {
-		return fmt.Errorf("CreateQueue: ListQueues verify failed: %w", err)
-	}
-	if len(list.QueueUrls) == 0 {
-		return fmt.Errorf("CreateQueue: queue %q not found in ListQueues", name)
-	}
-	return nil
-}
-
-func (s *sqsGroup) GetQueueUrl(ctx context.Context, t *harness.TestContext) error {
-	name := t.GetString("sqs_queue_name")
-	resp, err := s.client().GetQueueUrl(ctx, &sqs.GetQueueUrlInput{QueueName: aws.String(name)})
-	if err != nil {
-		return err
-	}
-	if aws.ToString(resp.QueueUrl) == "" {
-		return fmt.Errorf("GetQueueUrl: empty URL")
-	}
-	return nil
-}
-
-func (s *sqsGroup) ListQueues(ctx context.Context, t *harness.TestContext) error {
-	name := t.GetString("sqs_queue_name")
-	resp, err := s.client().ListQueues(ctx, &sqs.ListQueuesInput{
-		QueueNamePrefix: aws.String(name[:len(name)-4]),
-	})
-	if err != nil {
-		return err
-	}
-	if len(resp.QueueUrls) == 0 {
-		return fmt.Errorf("ListQueues: no queues returned with prefix")
-	}
-	return nil
-}
-
-func (s *sqsGroup) SetQueueAttributes(ctx context.Context, t *harness.TestContext) error {
-	url := t.GetString("sqs_queue_url")
-	_, err := s.client().SetQueueAttributes(ctx, &sqs.SetQueueAttributesInput{
-		QueueUrl:   aws.String(url),
-		Attributes: map[string]string{"VisibilityTimeout": "60"},
-	})
-	if err != nil {
-		return err
-	}
-	// Verify the attribute was updated
-	resp, err := s.client().GetQueueAttributes(ctx, &sqs.GetQueueAttributesInput{
-		QueueUrl:       aws.String(url),
-		AttributeNames: []sqstypes.QueueAttributeName{"VisibilityTimeout"},
-	})
-	if err != nil {
-		return fmt.Errorf("SetQueueAttributes: GetQueueAttributes failed: %w", err)
-	}
-	if resp.Attributes["VisibilityTimeout"] != "60" {
-		return fmt.Errorf("SetQueueAttributes: expected VisibilityTimeout=60, got %q", resp.Attributes["VisibilityTimeout"])
-	}
-	return nil
-}
-
-func (s *sqsGroup) GetQueueAttributes(ctx context.Context, t *harness.TestContext) error {
-	url := t.GetString("sqs_queue_url")
-	resp, err := s.client().GetQueueAttributes(ctx, &sqs.GetQueueAttributesInput{
-		QueueUrl:       aws.String(url),
-		AttributeNames: []sqstypes.QueueAttributeName{"VisibilityTimeout"},
-	})
-	if err != nil {
-		return err
-	}
-	if resp.Attributes["VisibilityTimeout"] != "60" {
-		return fmt.Errorf("GetQueueAttributes: expected VisibilityTimeout=60, got %q", resp.Attributes["VisibilityTimeout"])
-	}
-	return nil
-}
-
-func (s *sqsGroup) TagQueue(ctx context.Context, t *harness.TestContext) error {
-	url := t.GetString("sqs_queue_url")
-	_, err := s.client().TagQueue(ctx, &sqs.TagQueueInput{
-		QueueUrl: aws.String(url),
-		Tags:     map[string]string{"env": "test"},
-	})
-	if err != nil {
-		return err
-	}
-	// Verify tags were set
-	resp, err := s.client().ListQueueTags(ctx, &sqs.ListQueueTagsInput{
-		QueueUrl: aws.String(url),
-	})
-	if err != nil {
-		return err
-	}
-	if resp.Tags["env"] != "test" {
-		return fmt.Errorf("TagQueue: expected env=test, got %q", resp.Tags["env"])
-	}
-	return nil
-}
-
-func (s *sqsGroup) UntagQueue(ctx context.Context, t *harness.TestContext) error {
-	url := t.GetString("sqs_queue_url")
-	_, err := s.client().UntagQueue(ctx, &sqs.UntagQueueInput{
-		QueueUrl: aws.String(url),
-		TagKeys:  []string{"env"},
-	})
-	if err != nil {
-		return err
-	}
-	// Verify tag was removed
-	resp, err := s.client().ListQueueTags(ctx, &sqs.ListQueueTagsInput{
-		QueueUrl: aws.String(url),
-	})
-	if err != nil {
-		return err
-	}
-	if _, ok := resp.Tags["env"]; ok {
-		return fmt.Errorf("UntagQueue: env tag still present")
-	}
-	return nil
-}
-
-func (s *sqsGroup) DeleteQueue(ctx context.Context, t *harness.TestContext) error {
-	name := fmt.Sprintf("%s-sqsdel", t.RunID)
-	resp, err := s.client().CreateQueue(ctx, &sqs.CreateQueueInput{QueueName: aws.String(name)})
-	if err != nil {
-		return err
-	}
-	if _, err = s.client().DeleteQueue(ctx, &sqs.DeleteQueueInput{QueueUrl: resp.QueueUrl}); err != nil {
-		return err
-	}
-	listed, err := s.client().ListQueues(ctx, &sqs.ListQueuesInput{QueueNamePrefix: aws.String(name)})
-	if err != nil {
-		return fmt.Errorf("DeleteQueue: ListQueues failed: %w", err)
-	}
-	for _, u := range listed.QueueUrls {
-		if strings.Contains(u, name) {
-			return fmt.Errorf("DeleteQueue: queue %q still present after delete", name)
-		}
-	}
-	return nil
 }
 
 // ── sqs-messages ─────────────────────────────────────────────────────────────

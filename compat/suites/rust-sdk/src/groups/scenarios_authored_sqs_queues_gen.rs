@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/sqs-queues.json";
 
-const GROUP_SQS_QUEUES_SHADOW: Group = Group {
-    name: "sqs-queues-shadow",
+const GROUP_SQS_QUEUES: Group = Group {
+    name: "sqs-queues",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredSqsQueues {
         {
             let client = self.client.clone();
             impls.insert(
-                "sqs-queues-shadow:CreateQueue".to_string(),
+                "sqs-queues:CreateQueue".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_SQS_QUEUES_SHADOW
-                            .run_test(&ctx, "CreateQueue", test_sqs_queues_shadow_create_queue(&client))
+                        GROUP_SQS_QUEUES
+                            .run_test(&ctx, "CreateQueue", test_sqs_queues_create_queue(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredSqsQueues {
         {
             let client = self.client.clone();
             impls.insert(
-                "sqs-queues-shadow:GetQueueUrl".to_string(),
+                "sqs-queues:GetQueueUrl".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_SQS_QUEUES_SHADOW
-                            .run_test(&ctx, "GetQueueUrl", test_sqs_queues_shadow_get_queue_url(&client))
+                        GROUP_SQS_QUEUES
+                            .run_test(&ctx, "GetQueueUrl", test_sqs_queues_get_queue_url(&client))
                             .await
                     })
                 }),
@@ -79,12 +79,12 @@ impl ServiceGroup for ScenariosAuthoredSqsQueues {
         {
             let client = self.client.clone();
             impls.insert(
-                "sqs-queues-shadow:ListQueues".to_string(),
+                "sqs-queues:ListQueues".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_SQS_QUEUES_SHADOW
-                            .run_test(&ctx, "ListQueues", test_sqs_queues_shadow_list_queues(&client))
+                        GROUP_SQS_QUEUES
+                            .run_test(&ctx, "ListQueues", test_sqs_queues_list_queues(&client))
                             .await
                     })
                 }),
@@ -93,12 +93,12 @@ impl ServiceGroup for ScenariosAuthoredSqsQueues {
         {
             let client = self.client.clone();
             impls.insert(
-                "sqs-queues-shadow:SetQueueAttributes".to_string(),
+                "sqs-queues:SetQueueAttributes".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_SQS_QUEUES_SHADOW
-                            .run_test(&ctx, "SetQueueAttributes", test_sqs_queues_shadow_set_queue_attributes(&client))
+                        GROUP_SQS_QUEUES
+                            .run_test(&ctx, "SetQueueAttributes", test_sqs_queues_set_queue_attributes(&client))
                             .await
                     })
                 }),
@@ -107,12 +107,12 @@ impl ServiceGroup for ScenariosAuthoredSqsQueues {
         {
             let client = self.client.clone();
             impls.insert(
-                "sqs-queues-shadow:GetQueueAttributes".to_string(),
+                "sqs-queues:GetQueueAttributes".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_SQS_QUEUES_SHADOW
-                            .run_test(&ctx, "GetQueueAttributes", test_sqs_queues_shadow_get_queue_attributes(&client))
+                        GROUP_SQS_QUEUES
+                            .run_test(&ctx, "GetQueueAttributes", test_sqs_queues_get_queue_attributes(&client))
                             .await
                     })
                 }),
@@ -121,12 +121,12 @@ impl ServiceGroup for ScenariosAuthoredSqsQueues {
         {
             let client = self.client.clone();
             impls.insert(
-                "sqs-queues-shadow:TagQueue".to_string(),
+                "sqs-queues:TagQueue".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_SQS_QUEUES_SHADOW
-                            .run_test(&ctx, "TagQueue", test_sqs_queues_shadow_tag_queue(&client))
+                        GROUP_SQS_QUEUES
+                            .run_test(&ctx, "TagQueue", test_sqs_queues_tag_queue(&client))
                             .await
                     })
                 }),
@@ -135,12 +135,12 @@ impl ServiceGroup for ScenariosAuthoredSqsQueues {
         {
             let client = self.client.clone();
             impls.insert(
-                "sqs-queues-shadow:UntagQueue".to_string(),
+                "sqs-queues:UntagQueue".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_SQS_QUEUES_SHADOW
-                            .run_test(&ctx, "UntagQueue", test_sqs_queues_shadow_untag_queue(&client))
+                        GROUP_SQS_QUEUES
+                            .run_test(&ctx, "UntagQueue", test_sqs_queues_untag_queue(&client))
                             .await
                     })
                 }),
@@ -149,12 +149,12 @@ impl ServiceGroup for ScenariosAuthoredSqsQueues {
         {
             let client = self.client.clone();
             impls.insert(
-                "sqs-queues-shadow:DeleteQueue".to_string(),
+                "sqs-queues:DeleteQueue".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_SQS_QUEUES_SHADOW
-                            .run_test(&ctx, "DeleteQueue", test_sqs_queues_shadow_delete_queue(&client))
+                        GROUP_SQS_QUEUES
+                            .run_test(&ctx, "DeleteQueue", test_sqs_queues_delete_queue(&client))
                             .await
                     })
                 }),
@@ -168,11 +168,11 @@ impl ServiceGroup for ScenariosAuthoredSqsQueues {
         {
             let client = self.client.clone();
             setups.insert(
-                "sqs-queues-shadow".to_string(),
+                "sqs-queues".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_SQS_QUEUES_SHADOW.run_setup(&ctx, setup_sqs_queues_shadow(&client)).await
+                        GROUP_SQS_QUEUES.run_setup(&ctx, setup_sqs_queues(&client)).await
                     })
                 }),
             );
@@ -185,11 +185,11 @@ impl ServiceGroup for ScenariosAuthoredSqsQueues {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "sqs-queues-shadow".to_string(),
+                "sqs-queues".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_SQS_QUEUES_SHADOW.run_teardown(&ctx, teardown_sqs_queues_shadow(&client)).await
+                        GROUP_SQS_QUEUES.run_teardown(&ctx, teardown_sqs_queues(&client)).await
                     })
                 }),
             );
@@ -198,7 +198,7 @@ impl ServiceGroup for ScenariosAuthoredSqsQueues {
     }
 }
 
-fn setup_sqs_queues_shadow(client: &aws_sdk_sqs::Client) -> Vec<Call> {
+fn setup_sqs_queues(client: &aws_sdk_sqs::Client) -> Vec<Call> {
     vec![
         Call {
             op: "CreateQueue",
@@ -225,7 +225,7 @@ fn setup_sqs_queues_shadow(client: &aws_sdk_sqs::Client) -> Vec<Call> {
     ]
 }
 
-fn teardown_sqs_queues_shadow(client: &aws_sdk_sqs::Client) -> Vec<Call> {
+fn teardown_sqs_queues(client: &aws_sdk_sqs::Client) -> Vec<Call> {
     vec![
         Call {
             op: "DeleteQueue",
@@ -274,7 +274,7 @@ fn teardown_sqs_queues_shadow(client: &aws_sdk_sqs::Client) -> Vec<Call> {
     ]
 }
 
-fn test_sqs_queues_shadow_create_queue(client: &aws_sdk_sqs::Client) -> Test {
+fn test_sqs_queues_create_queue(client: &aws_sdk_sqs::Client) -> Test {
     Test {
         call: Call {
             op: "CreateQueue",
@@ -334,7 +334,7 @@ fn test_sqs_queues_shadow_create_queue(client: &aws_sdk_sqs::Client) -> Test {
     }
 }
 
-fn test_sqs_queues_shadow_get_queue_url(client: &aws_sdk_sqs::Client) -> Test {
+fn test_sqs_queues_get_queue_url(client: &aws_sdk_sqs::Client) -> Test {
     Test {
         call: Call {
             op: "GetQueueUrl",
@@ -364,7 +364,7 @@ fn test_sqs_queues_shadow_get_queue_url(client: &aws_sdk_sqs::Client) -> Test {
     }
 }
 
-fn test_sqs_queues_shadow_list_queues(client: &aws_sdk_sqs::Client) -> Test {
+fn test_sqs_queues_list_queues(client: &aws_sdk_sqs::Client) -> Test {
     Test {
         call: Call {
             op: "ListQueues",
@@ -398,7 +398,7 @@ fn test_sqs_queues_shadow_list_queues(client: &aws_sdk_sqs::Client) -> Test {
     }
 }
 
-fn test_sqs_queues_shadow_set_queue_attributes(client: &aws_sdk_sqs::Client) -> Test {
+fn test_sqs_queues_set_queue_attributes(client: &aws_sdk_sqs::Client) -> Test {
     Test {
         call: Call {
             op: "SetQueueAttributes",
@@ -458,7 +458,7 @@ fn test_sqs_queues_shadow_set_queue_attributes(client: &aws_sdk_sqs::Client) -> 
     }
 }
 
-fn test_sqs_queues_shadow_get_queue_attributes(client: &aws_sdk_sqs::Client) -> Test {
+fn test_sqs_queues_get_queue_attributes(client: &aws_sdk_sqs::Client) -> Test {
     Test {
         call: Call {
             op: "GetQueueAttributes",
@@ -494,7 +494,7 @@ fn test_sqs_queues_shadow_get_queue_attributes(client: &aws_sdk_sqs::Client) -> 
     }
 }
 
-fn test_sqs_queues_shadow_tag_queue(client: &aws_sdk_sqs::Client) -> Test {
+fn test_sqs_queues_tag_queue(client: &aws_sdk_sqs::Client) -> Test {
     Test {
         call: Call {
             op: "TagQueue",
@@ -554,7 +554,7 @@ fn test_sqs_queues_shadow_tag_queue(client: &aws_sdk_sqs::Client) -> Test {
     }
 }
 
-fn test_sqs_queues_shadow_untag_queue(client: &aws_sdk_sqs::Client) -> Test {
+fn test_sqs_queues_untag_queue(client: &aws_sdk_sqs::Client) -> Test {
     Test {
         call: Call {
             op: "UntagQueue",
@@ -613,7 +613,7 @@ fn test_sqs_queues_shadow_untag_queue(client: &aws_sdk_sqs::Client) -> Test {
     }
 }
 
-fn test_sqs_queues_shadow_delete_queue(client: &aws_sdk_sqs::Client) -> Test {
+fn test_sqs_queues_delete_queue(client: &aws_sdk_sqs::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteQueue",

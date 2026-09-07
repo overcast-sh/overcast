@@ -997,22 +997,21 @@ class PortedHandWrittenGroup(unittest.TestCase):
         # lifecycle group needs its setup as much as a generated one does.
         #
         # This one reads the real authored file rather than a stub backend, so
-        # the group is named the way that file names it *today*: sqs-queues is
-        # still soaking as a shadow (#1903 item 3 is the flip). What is under
-        # test is the absent `generated` flag, not the name.
+        # the group is named the way that file names it: sqs-queues, ported in
+        # #1903 item 3. What is under test is the absent `generated` flag.
         registry = {
             "groups": [
                 {
                     "service": "sqs",
-                    "name": "sqs-queues-shadow",
+                    "name": "sqs-queues",
                     "scenario": "compat/model/authored/sqs-queues.json",
                     "tests": [{"name": "CreateQueue"}],
                 }
             ]
         }
         hooks = scenario_hooks(registry)
-        self.assertIn("sqs-queues-shadow", hooks.setup)
-        self.assertIn("sqs-queues-shadow", hooks.teardown)
+        self.assertIn("sqs-queues", hooks.setup)
+        self.assertIn("sqs-queues", hooks.teardown)
 
 
 if __name__ == "__main__":

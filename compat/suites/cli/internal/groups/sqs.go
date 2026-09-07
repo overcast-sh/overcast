@@ -13,15 +13,6 @@ func SQS() ServiceGroup {
 	g := &sqsGroup{}
 	return ServiceGroup{
 		Impls: map[string]harness.TestFn{
-			// sqs-queues
-			"sqs-queues:CreateQueue":        g.CreateQueue,
-			"sqs-queues:GetQueueUrl":        g.GetQueueUrl,
-			"sqs-queues:ListQueues":         g.ListQueues,
-			"sqs-queues:GetQueueAttributes": g.GetQueueAttributes,
-			"sqs-queues:SetQueueAttributes": g.SetQueueAttributes,
-			"sqs-queues:TagQueue":           g.TagQueue,
-			"sqs-queues:UntagQueue":         g.UntagQueue,
-			"sqs-queues:DeleteQueue":        g.DeleteQueue,
 			// sqs-messages
 			"sqs-messages:SendMessage":             g.SendMessage,
 			"sqs-messages:SendMessageBatch":        g.SendMessageBatch,
@@ -40,13 +31,11 @@ func SQS() ServiceGroup {
 			"sqs-fifo:ReceiveFifoMessage": g.ReceiveFifoMessage,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"sqs-queues":   g.setupQueues,
 			"sqs-messages": g.setupMessages,
 			"sqs-dlq":      g.setupDLQ,
 			"sqs-fifo":     g.setupFIFO,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"sqs-queues":   g.teardownQueues,
 			"sqs-messages": g.teardownMessages,
 			"sqs-dlq":      g.teardownDLQ,
 			"sqs-fifo":     g.teardownFIFO,
@@ -56,7 +45,6 @@ func SQS() ServiceGroup {
 
 // One Namer per SQS sub-group ensures parallel groups never share queue names.
 var (
-	sqsQueuesNamer = harness.NewNamer("sqs-q")    // sqs-queues
 	sqsMsgNamer    = harness.NewNamer("sqs-m")    // sqs-messages
 	sqsDLQNamer    = harness.NewNamer("sqs-dlq")  // sqs-dlq dead-letter queue
 	sqsDLQSrcNamer = harness.NewNamer("sqs-dlqs") // sqs-dlq source queue (distinct from sqs-queues)
@@ -64,178 +52,6 @@ var (
 )
 
 type sqsGroup struct{}
-
-// ─── sqs-queues ───────────────────────────────────────────────────────────────
-
-func (g *sqsGroup) setupQueues(_ context.Context, _ *harness.TestContext) error { return nil }
-
-func (g *sqsGroup) CreateQueue(_ context.Context, t *harness.TestContext) error {
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"sqs", "create-queue",
-		"--queue-name", sqsQueuesNamer.Name(t),
-	)
-	if err != nil {
-		return err
-	}
-	url, _ := out["QueueUrl"].(string)
-	if url == "" {
-		return fmt.Errorf("sqs CreateQueue: missing QueueUrl")
-	}
-	t.Set("queue_url", url)
-	return nil
-}
-
-func (g *sqsGroup) GetQueueUrl(_ context.Context, t *harness.TestContext) error {
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"sqs", "get-queue-url",
-		"--queue-name", sqsQueuesNamer.Name(t),
-	)
-	if err != nil {
-		return err
-	}
-	url, _ := out["QueueUrl"].(string)
-	if url == "" {
-		return fmt.Errorf("sqs GetQueueUrl: missing QueueUrl")
-	}
-	return nil
-}
-
-func (g *sqsGroup) ListQueues(_ context.Context, t *harness.TestContext) error {
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"sqs", "list-queues",
-		"--queue-name-prefix", t.RunID+"-sqs",
-	)
-	if err != nil {
-		return err
-	}
-	urls, _ := out["QueueUrls"].([]any)
-	want := t.GetString("queue_url")
-	for _, u := range urls {
-		if u == want {
-			return nil
-		}
-	}
-	return fmt.Errorf("sqs ListQueues: queue URL %q not found in list", want)
-}
-
-func (g *sqsGroup) GetQueueAttributes(_ context.Context, t *harness.TestContext) error {
-	url := t.GetString("queue_url")
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"sqs", "get-queue-attributes",
-		"--queue-url", url,
-		"--attribute-names", "All",
-	)
-	if err != nil {
-		return err
-	}
-	attrs, _ := out["Attributes"].(map[string]any)
-	if arn, _ := attrs["QueueArn"].(string); arn == "" {
-		return fmt.Errorf("sqs GetQueueAttributes: missing QueueArn")
-	}
-	return nil
-}
-
-func (g *sqsGroup) SetQueueAttributes(_ context.Context, t *harness.TestContext) error {
-	url := t.GetString("queue_url")
-	if err := awscli.Run(t.Endpoint, t.Region,
-		"sqs", "set-queue-attributes",
-		"--queue-url", url,
-		"--attributes", `{"VisibilityTimeout":"60"}`,
-	); err != nil {
-		return err
-	}
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"sqs", "get-queue-attributes",
-		"--queue-url", url,
-		"--attribute-names", "VisibilityTimeout",
-	)
-	if err != nil {
-		return fmt.Errorf("sqs SetQueueAttributes: get-queue-attributes failed: %w", err)
-	}
-	attrs, _ := out["Attributes"].(map[string]any)
-	if attrs["VisibilityTimeout"] != "60" {
-		return fmt.Errorf("sqs SetQueueAttributes: VisibilityTimeout not updated; got %v", attrs["VisibilityTimeout"])
-	}
-	return nil
-}
-
-func (g *sqsGroup) TagQueue(_ context.Context, t *harness.TestContext) error {
-	url := t.GetString("queue_url")
-	if err := awscli.Run(t.Endpoint, t.Region,
-		"sqs", "tag-queue",
-		"--queue-url", url,
-		"--tags", `{"env":"test"}`,
-	); err != nil {
-		return err
-	}
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"sqs", "list-queue-tags",
-		"--queue-url", url,
-	)
-	if err != nil {
-		return fmt.Errorf("sqs TagQueue: list-queue-tags failed: %w", err)
-	}
-	tags, _ := out["Tags"].(map[string]any)
-	if tags["env"] != "test" {
-		return fmt.Errorf("sqs TagQueue: tag env=test not found after tagging; got %v", tags)
-	}
-	return nil
-}
-
-func (g *sqsGroup) UntagQueue(_ context.Context, t *harness.TestContext) error {
-	url := t.GetString("queue_url")
-	if err := awscli.Run(t.Endpoint, t.Region,
-		"sqs", "untag-queue",
-		"--queue-url", url,
-		"--tag-keys", "env",
-	); err != nil {
-		return err
-	}
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"sqs", "list-queue-tags",
-		"--queue-url", url,
-	)
-	if err != nil {
-		return fmt.Errorf("sqs UntagQueue: list-queue-tags failed: %w", err)
-	}
-	tags, _ := out["Tags"].(map[string]any)
-	if _, present := tags["env"]; present {
-		return fmt.Errorf("sqs UntagQueue: tag 'env' still present after untagging")
-	}
-	return nil
-}
-
-func (g *sqsGroup) DeleteQueue(_ context.Context, t *harness.TestContext) error {
-	url := t.GetString("queue_url")
-	if err := awscli.Run(t.Endpoint, t.Region,
-		"sqs", "delete-queue",
-		"--queue-url", url,
-	); err != nil {
-		return err
-	}
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"sqs", "list-queues",
-		"--queue-name-prefix", sqsQueuesNamer.Name(t),
-	)
-	if err != nil {
-		return fmt.Errorf("sqs DeleteQueue: list-queues failed: %w", err)
-	}
-	urls, _ := out["QueueUrls"].([]any)
-	for _, u := range urls {
-		if u == url {
-			return fmt.Errorf("sqs DeleteQueue: queue URL %q still present after deletion", url)
-		}
-	}
-	return nil
-}
-
-func (g *sqsGroup) teardownQueues(_ context.Context, t *harness.TestContext) error {
-	url := t.GetString("queue_url")
-	if url != "" {
-		awscli.Run(t.Endpoint, t.Region, "sqs", "delete-queue", "--queue-url", url) //nolint:errcheck
-	}
-	return nil
-}
 
 // ─── sqs-messages ────────────────────────────────────────────────────────────
 

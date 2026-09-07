@@ -1,5 +1,5 @@
 {
-  "$comment": "Authored port of the hand-written registry group sqs-queues (docs/plans/compat-coverage-modelgen.md §3.11, G6 pilot, #1116). One spec in place of seven per-language implementations. It runs today under the shadow name sqs-queues-shadow, beside the natives, so the nightly can compare the two per (suite, test); the flip PR renames this group to sqs-queues, moves the registry entry into the hand-written registry.json, and deletes the native code. The clauses are the union of what the seven natives assert — see compat/model/README.md § Authored scenarios.",
+  "$comment": "Authored port of the hand-written registry group sqs-queues (docs/plans/compat-coverage-modelgen.md §3.11, G6 pilot, #1116). One spec in place of the seven per-language implementations it replaced. It soaked as sqs-queues-shadow beside those natives until the nightly comparison agreed on all 56 (suite, test) pairs in each of three soak runs; #1903 then renamed it to sqs-queues, pointed the hand-written registry entry at it and deleted the native code. The clauses are the union of what the seven natives asserted — see compat/model/README.md § Authored scenarios.",
   "version": 1,
   "service": "sqs",
   "client": {
@@ -14,7 +14,7 @@
   "groups": [
     {
       "$comment": "Two queues: the group's own (created in setup, read and mutated by every test) and an ephemeral one the CreateQueue test creates and the DeleteQueue test removes. That split is what four of the seven natives already do, and it is what lets DeleteQueue prove a delete without destroying the queue the earlier tests read.",
-      "name": "sqs-queues-shadow",
+      "name": "sqs-queues",
       "kind": "lifecycle",
       "setup": [
         {

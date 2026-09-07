@@ -212,7 +212,7 @@ func TestCheckedInGeneratedRegistryLeavesParityUnchanged(t *testing.T) {
 	)
 	addSkip(report, suite, "s3", "s3-crud", "DeleteBucket", notImplementedSentinel(suite))
 
-	hand := withShadowNatives(t, testRegistry())
+	hand := withHandWrittenCounterparts(t, testRegistry())
 	handOnly := computeParity(hand, report, []string{suite})
 
 	// When: the checked-in sibling is concatenated in.
@@ -237,15 +237,17 @@ func TestCheckedInGeneratedRegistryLeavesParityUnchanged(t *testing.T) {
 	}
 }
 
-// withShadowNatives gives a fixture hand-written registry the groups the
-// checked-in generated registry shadows.
+// withHandWrittenCounterparts gives a fixture hand-written registry the groups
+// the checked-in generated registry names on the other side of the join: the
+// native of every shadow, and the ported group of every index entry.
 //
 // lintGeneratedRegistry requires a shadow group's native to exist and to
-// declare the same tests, which the real pair of files satisfies by
+// declare the same tests, and a ported index entry's group to exist and to
+// carry the same `scenario` — which the real pair of files satisfies by
 // construction. A case that pairs the *real* generated registry with a
 // *fixture* hand-written one has to satisfy it too, or it fails on the
 // fixture's incompleteness rather than on the property it is testing.
-func withShadowNatives(t *testing.T, hand *parityRegistry) *parityRegistry {
+func withHandWrittenCounterparts(t *testing.T, hand *parityRegistry) *parityRegistry {
 	t.Helper()
 	gen, err := readGeneratedRegistry(repoPath(t, "compat", "suites", "registry.generated.json"))
 	if err != nil {
@@ -256,6 +258,10 @@ func withShadowNatives(t *testing.T, hand *parityRegistry) *parityRegistry {
 			continue
 		}
 		hand.Groups = append(hand.Groups, parityGroup{Service: g.Service, Name: g.ShadowOf, Tests: g.Tests})
+	}
+	// The index carries no service, and the join does not read one.
+	for _, p := range gen.Ported {
+		hand.Groups = append(hand.Groups, parityGroup{Name: p.Group, Scenario: p.Scenario})
 	}
 	return hand
 }

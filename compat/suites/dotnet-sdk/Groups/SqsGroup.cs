@@ -8,14 +8,6 @@ public sealed class SqsGroup(AwsClients clients) : IServiceGroup
 {
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["sqs-queues:CreateQueue"] = CreateQueueAsync,
-        ["sqs-queues:GetQueueUrl"] = GetQueueUrlAsync,
-        ["sqs-queues:ListQueues"] = ListQueuesAsync,
-        ["sqs-queues:SetQueueAttributes"] = SetQueueAttributesAsync,
-        ["sqs-queues:GetQueueAttributes"] = GetQueueAttributesAsync,
-        ["sqs-queues:TagQueue"] = TagQueueAsync,
-        ["sqs-queues:UntagQueue"] = UntagQueueAsync,
-        ["sqs-queues:DeleteQueue"] = DeleteQueueAsync,
         ["sqs-messages:SendMessage"] = SendMessageAsync,
         ["sqs-messages:SendMessageBatch"] = SendMessageBatchAsync,
         ["sqs-messages:ReceiveMessage"] = ReceiveMessageAsync,
@@ -33,129 +25,16 @@ public sealed class SqsGroup(AwsClients clients) : IServiceGroup
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["sqs-queues"] = SetupQueuesAsync,
         ["sqs-messages"] = SetupMessagesAsync,
         ["sqs-dlq"] = SetupDlqAsync,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["sqs-queues"] = TeardownQueuesAsync,
         ["sqs-messages"] = TeardownMessagesAsync,
         ["sqs-dlq"] = TeardownDlqAsync,
         ["sqs-fifo"] = TeardownFifoAsync,
     };
-
-    // ── sqs-queues ──
-
-    private async Task SetupQueuesAsync(TestContext context)
-    {
-        var name = $"{context.RunId}-sqs-q";
-        var response = await clients.SQS().CreateQueueAsync(new CreateQueueRequest { QueueName = name });
-        context.Set("sqsQueueUrl", response.QueueUrl);
-    }
-
-    private async Task CreateQueueAsync(TestContext context)
-    {
-        var name = $"{context.RunId}-sqs-create-q";
-        var response = await clients.SQS().CreateQueueAsync(new CreateQueueRequest { QueueName = name });
-        var url = response.QueueUrl;
-        Assertions.NotBlank(url, "CreateQueue: url");
-        try
-        {
-            var list = await clients.SQS().ListQueuesAsync(new ListQueuesRequest { QueueNamePrefix = name });
-            Assertions.True(list.QueueUrls.Any(u => u == url), $"CreateQueue: queue {name} not found in ListQueues (runId={context.RunId})");
-        }
-        finally
-        {
-            try { await clients.SQS().DeleteQueueAsync(new DeleteQueueRequest { QueueUrl = url }); } catch { }
-        }
-    }
-
-    private async Task GetQueueUrlAsync(TestContext context)
-    {
-        var name = $"{context.RunId}-sqs-q";
-        var response = await clients.SQS().GetQueueUrlAsync(new GetQueueUrlRequest { QueueName = name });
-        Assertions.NotBlank(response.QueueUrl, "GetQueueUrl: url");
-    }
-
-    private async Task ListQueuesAsync(TestContext context)
-    {
-        var storedUrl = RequireQueueUrl(context, "sqsQueueUrl");
-        var response = await clients.SQS().ListQueuesAsync(new ListQueuesRequest { QueueNamePrefix = $"{context.RunId}-sqs-q" });
-        Assertions.True(response.QueueUrls.Any(u => u == storedUrl), $"ListQueues: queue URL not found (runId={context.RunId})");
-    }
-
-    private async Task SetQueueAttributesAsync(TestContext context)
-    {
-        var url = RequireQueueUrl(context, "sqsQueueUrl");
-        await clients.SQS().SetQueueAttributesAsync(new SetQueueAttributesRequest
-        {
-            QueueUrl = url,
-            Attributes = new Dictionary<string, string> { ["VisibilityTimeout"] = "120" },
-        });
-        var attrs = await clients.SQS().GetQueueAttributesAsync(new GetQueueAttributesRequest
-        {
-            QueueUrl = url,
-            AttributeNames = ["VisibilityTimeout"],
-        });
-        Assertions.Equal("120", attrs.Attributes["VisibilityTimeout"], "SetQueueAttributes: VisibilityTimeout");
-    }
-
-    private async Task GetQueueAttributesAsync(TestContext context)
-    {
-        var url = RequireQueueUrl(context, "sqsQueueUrl");
-        var response = await clients.SQS().GetQueueAttributesAsync(new GetQueueAttributesRequest
-        {
-            QueueUrl = url,
-            AttributeNames = ["All"],
-        });
-        Assertions.True(response.Attributes.Count > 0, "GetQueueAttributes: expected non-empty attributes");
-        Assertions.Equal("120", response.Attributes["VisibilityTimeout"], "GetQueueAttributes: VisibilityTimeout");
-    }
-
-    private async Task TagQueueAsync(TestContext context)
-    {
-        var url = RequireQueueUrl(context, "sqsQueueUrl");
-        await clients.SQS().TagQueueAsync(new TagQueueRequest
-        {
-            QueueUrl = url,
-            Tags = new Dictionary<string, string> { ["Environment"] = "compat", ["Team"] = "dotnet" },
-        });
-        var tags = await clients.SQS().ListQueueTagsAsync(new ListQueueTagsRequest { QueueUrl = url });
-        Assertions.Equal("compat", tags.Tags["Environment"], "TagQueue: Environment tag");
-    }
-
-    private async Task UntagQueueAsync(TestContext context)
-    {
-        var url = RequireQueueUrl(context, "sqsQueueUrl");
-        await clients.SQS().UntagQueueAsync(new UntagQueueRequest
-        {
-            QueueUrl = url,
-            TagKeys = ["Environment", "Team"],
-        });
-        var tags = await clients.SQS().ListQueueTagsAsync(new ListQueueTagsRequest { QueueUrl = url });
-        Assertions.True(tags.Tags.Count == 0, "UntagQueue: expected empty tags after untag");
-    }
-
-    private async Task DeleteQueueAsync(TestContext context)
-    {
-        var name = $"{context.RunId}-sqs-del-q";
-        var create = await clients.SQS().CreateQueueAsync(new CreateQueueRequest { QueueName = name });
-        var url = create.QueueUrl;
-        await clients.SQS().DeleteQueueAsync(new DeleteQueueRequest { QueueUrl = url });
-        var list = await clients.SQS().ListQueuesAsync(new ListQueuesRequest { QueueNamePrefix = name });
-        Assertions.True(list.QueueUrls.Count == 0, $"DeleteQueue: queue {name} still present (runId={context.RunId})");
-    }
-
-    private async Task TeardownQueuesAsync(TestContext context)
-    {
-        var url = context.GetString("sqsQueueUrl");
-        if (!string.IsNullOrWhiteSpace(url))
-        {
-            try { await clients.SQS().DeleteQueueAsync(new DeleteQueueRequest { QueueUrl = url }); } catch { }
-        }
-    }
 
     // ── sqs-messages ──
 

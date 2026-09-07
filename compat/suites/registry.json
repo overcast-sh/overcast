@@ -231,6 +231,7 @@
     {
       "service": "sqs",
       "name": "sqs-queues",
+      "scenario": "compat/model/authored/sqs-queues.json",
       "tests": [
         {
           "name": "CreateQueue"

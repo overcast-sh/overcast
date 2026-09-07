@@ -272,38 +272,45 @@ func TestPortedIndexIsNotCheckedAgainstAnEmptySibling(t *testing.T) {
 	}
 }
 
-// TestCheckedInRegistryHasNoPortedGroupsYet is the corpus half of #1903: the
-// prerequisites land without flipping anything. sqs-queues is still resolved
-// by seven native implementations and sqs-queues-shadow is still soaking, so
-// neither committed file may move.
-func TestCheckedInRegistryHasNoPortedGroupsYet(t *testing.T) {
+// TestCheckedInRegistryPortsSqsQueues is the corpus half of #1903 after the
+// flip: sqs-queues resolves through its authored scenario, the shadow it
+// soaked as is gone, and the ported index carries the derived suites the
+// parity checker scopes it by. The three move together — a hand-written group
+// carrying `scenario` with no index entry, or an index entry with no such
+// group, is what lintGeneratedRegistry refuses.
+func TestCheckedInRegistryPortsSqsQueues(t *testing.T) {
 	hand, err := readParityRegistry(repoPath(t, "compat", "suites", "registry.json"))
 	if err != nil {
 		t.Fatalf("readParityRegistry: %v", err)
 	}
+	var scenario string
 	for _, g := range hand.Groups {
-		if g.Scenario != "" {
-			t.Errorf("hand-written group %q carries scenario %q — the flip is a separate PR (#1903 item 3)", g.Name, g.Scenario)
+		if g.Name == "sqs-queues" {
+			scenario = g.Scenario
 		}
+	}
+	if want := "compat/model/authored/sqs-queues.json"; scenario != want {
+		t.Errorf("sqs-queues scenario = %q, want %q", scenario, want)
 	}
 	gen, err := readGeneratedRegistry(repoPath(t, "compat", "suites", "registry.generated.json"))
 	if err != nil {
 		t.Fatalf("readGeneratedRegistry: %v", err)
 	}
-	if len(gen.Ported) != 0 {
-		t.Errorf("ported = %#v, want none until the flip", gen.Ported)
-	}
-	// And the shadow is still there, soaking.
-	var shadow *generatedGroup
-	for i := range gen.Groups {
-		if gen.Groups[i].Name == "sqs-queues-shadow" {
-			shadow = &gen.Groups[i]
+	for _, g := range gen.Groups {
+		if g.Name == "sqs-queues-shadow" {
+			t.Error("sqs-queues-shadow is still declared — the flip deletes the shadow with the natives")
 		}
 	}
-	if shadow == nil {
-		t.Fatal("sqs-queues-shadow is gone — the soak is what the flip PR cites")
+	var ported *portedGroup
+	for i := range gen.Ported {
+		if gen.Ported[i].Group == "sqs-queues" {
+			ported = &gen.Ported[i]
+		}
 	}
-	if shadow.ShadowOf != "sqs-queues" || shadow.State != generatedStateCandidate {
-		t.Errorf("shadow = %+v, want shadowOf sqs-queues in state candidate", *shadow)
+	if ported == nil {
+		t.Fatalf("ported = %#v, want an entry for sqs-queues", gen.Ported)
+	}
+	if len(ported.Suites) != 7 {
+		t.Errorf("sqs-queues suites = %#v, want all seven backends", ported.Suites)
 	}
 }

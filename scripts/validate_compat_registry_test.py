@@ -250,14 +250,20 @@ class PortedGroupTest(unittest.TestCase):
         errors = vcr.ported_group_errors(self.hand(), generated)
         self.assertTrue(any("also a generated group" in e for e in errors))
 
-    def test_the_real_pair_ports_nothing_yet(self):
-        # The prerequisites land without flipping anything: sqs-queues is still
-        # resolved by its seven native implementations (#1903 item 3).
+    def test_the_real_pair_joins_on_sqs_queues(self):
+        # sqs-queues is the first ported group (#1903 item 3): the authored
+        # scenario replaced its seven native implementations, and the index
+        # entry is where its `suites` comes from.
         registry = vcr.load_json(vcr.DEFAULT_REGISTRY)
         generated = vcr.load_json_optional(vcr.DEFAULT_GENERATED_REGISTRY)
         self.assertIsNotNone(generated)
         self.assertEqual(vcr.ported_group_errors(registry, generated), [])
-        self.assertEqual(generated.get("ported", []), [])
+        indexed = {p["group"]: p for p in generated.get("ported", [])}
+        self.assertIn("sqs-queues", indexed)
+        self.assertEqual(
+            "compat/model/authored/sqs-queues.json", indexed["sqs-queues"]["scenario"]
+        )
+        self.assertEqual(7, len(indexed["sqs-queues"]["suites"]))
 
 
 class ShadowGroupTest(unittest.TestCase):
