@@ -3,6 +3,7 @@ import { lambdaFunctionsQueryOptions } from "@/features/lambda/data"
 import { preflightRegionQueryOptions } from "@/features/preflight/data"
 import { debuggerTargetsQueryOptions } from "@/features/debugger/data"
 import type { DebuggerTarget, LambdaFunction } from "@/types"
+import { debugTarget } from "@/test/debug-target"
 import { FunctionList } from "./function-list"
 
 vi.mock("@tanstack/react-router", () => ({
@@ -129,34 +130,14 @@ describe("FunctionList — sort bound to the route", () => {
 // The debug badge reads one cached list query (docs/plans/compute-debugger.md
 // § 7) rather than asking once per row, so the seed is the list.
 describe("FunctionList — debugger badge", () => {
-  function debugTarget(resource: string, state: string): DebuggerTarget {
-    return {
-      id: `lambda/${resource}`,
-      service: "lambda",
-      resource,
-      container: "",
-      enabled: true,
-      reason: "",
-      protocol: "inspector",
-      protocolSource: "runtime",
-      listen: { host: "127.0.0.1", port: 9229 },
-      state,
-      attachedSince: "",
-      pausedSince: "",
-      containerId: "",
-      upstream: "",
-      remoteRoot: "/var/task",
-      localRoot: "",
-      timeoutPolicy: "attached",
-      setup: { flag: "", tagCli: "", tagCdk: "" },
-      editors: [],
-    }
+  function debugTargetFor(resource: string, state: string): DebuggerTarget {
+    return debugTarget({ id: `lambda/${resource}`, resource, state, containerId: "", upstream: "" })
   }
 
   it("marks only the rows that have a target, with the target's state", () => {
     renderWithData(<FunctionList />, [
       [lambdaFunctionsQueryOptions().queryKey, functions],
-      [debuggerTargetsQueryOptions().queryKey, [debugTarget("beta", "attached")]],
+      [debuggerTargetsQueryOptions().queryKey, [debugTargetFor("beta", "attached")]],
     ])
 
     const rows = screen.getAllByRole("row").slice(1)

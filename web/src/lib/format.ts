@@ -59,9 +59,11 @@ export function formatPreciseTimeOfDay(value: number | string | Date): string {
 /**
  * An elapsed time as the coarse "Xs ago" / "Xm ago" / "Xh ago" a live line
  * wants — a map node's last invoke, a debugger's attached-since. Negative
- * ages (a clock that is a little ahead of the server's) read as "0s ago".
+ * ages (a clock that is a little ahead of the server's) read as "0s ago", and
+ * an age that is not a number (a timestamp the server left empty) as "—".
  */
 export function formatAge(ms: number): string {
+  if (!Number.isFinite(ms)) return "—"
   const s = Math.max(0, Math.round(ms / 1000))
   if (s < 60) return `${s}s ago`
   const m = Math.floor(s / 60)

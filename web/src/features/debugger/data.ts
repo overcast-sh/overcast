@@ -9,7 +9,10 @@
  * Both queries poll every two seconds. react-query only runs an interval
  * while a component observes the query, so the polling is "while the Debug
  * tab or a badge is mounted, off otherwise" without any surface having to
- * start or stop it. SSE is deliberately not used for v1.
+ * start or stop it. A query that has settled on an answer that cannot change
+ * on its own — an error (a server without the endpoint), or "no such
+ * resource" — stops polling; the next mount, or a manual refetch, asks
+ * again. SSE is deliberately not used for v1.
  */
 
 import { queryOptions } from "@tanstack/react-query"
@@ -26,11 +29,17 @@ export const debuggerKeys = {
     [...debuggerKeys.targets(), service, resource, container] as const,
 }
 
+/** The poll interval, off once the query has erred or found nothing to watch. */
+function pollUnlessSettled(query: { state: { error: unknown; data: unknown } }): number | false {
+  if (query.state.error || query.state.data === null) return false
+  return DEBUGGER_POLL_MS
+}
+
 export function debuggerTargetsQueryOptions() {
   return queryOptions({
     queryKey: debuggerKeys.targets(),
     queryFn: () => debuggerTargets.list(),
-    refetchInterval: DEBUGGER_POLL_MS,
+    refetchInterval: (query) => pollUnlessSettled(query),
   })
 }
 
@@ -39,7 +48,7 @@ export function debuggerTargetQueryOptions(service: string, resource: string, co
   return queryOptions({
     queryKey: debuggerKeys.target(service, resource, container),
     queryFn: () => debuggerTargets.get(service, resource, container || undefined),
-    refetchInterval: DEBUGGER_POLL_MS,
+    refetchInterval: (query) => pollUnlessSettled(query),
     enabled: Boolean(service && resource),
   })
 }

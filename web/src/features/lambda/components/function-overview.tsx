@@ -21,7 +21,7 @@ function DebuggerSummary({ name }: { name: string }) {
       : `${target.state} on ${listenAddress(target)}`
     : "off"
   return (
-    <a href="#debug" className="text-accent hover:underline">
+    <a href="#debug" className="text-accent hover:underline" aria-label={`Debugger ${text} — open the Debug tab`}>
       {text}
     </a>
   )

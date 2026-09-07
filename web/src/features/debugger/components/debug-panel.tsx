@@ -8,63 +8,22 @@
  *
  * `DebugPanel` takes the descriptor; `DebugTargetPanel` fetches it for a
  * `service/resource[/container]` and owns the loading, "off" and error
- * states around it.
+ * states around it. The editor tab strip is `EditorTabs`; the two hooks the
+ * live line needs are in `../hooks`.
  */
-import { useEffect, useState } from "react"
-import { CopyButton } from "@/components/ui/copy-button"
+import { useId } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { Code, CodeBlock, SectionLabel } from "@/components/ui/primitives"
+import { Code, SectionLabel } from "@/components/ui/primitives"
 import { Definition, DefinitionList } from "@/components/ui/definition-card"
 import { SkeletonRows } from "@/components/ui/skeleton"
-import { Tabs, TabList, Tab, TabPanel } from "@/components/ui/tabs"
 import { formatAge, formatDate } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import type { DebuggerEditor, DebuggerSetup, DebuggerTarget } from "@/types"
-import { useDebugTarget } from "../hooks"
+import type { DebuggerSetup, DebuggerTarget } from "@/types"
+import { useDebugTarget, useNow, useReplacedContainer } from "../hooks"
 import { ATTACHED_STATES, listenAddress, shortContainerId } from "../target"
 import { DebugStateBadge } from "./debug-state-badge"
-
-// ─── Container replacement ────────────────────────────────────────────────
-
-/**
- * Remembers the container an attached editor was talking to, so the panel
- * can say when it has been swapped out from under it — hot reload recycling
- * the container, a redeploy — before the editor notices.
- *
- * The remembered pair is adopted on every *new* attach session
- * (`attachedSince` changes when the client count goes 0 → 1), which is what
- * lets the notice clear on its own: an editor that reconnected to the new
- * container starts a new session, one that is still holding the old splice
- * does not. Returns the previous container id while a replacement is
- * pending, null otherwise.
- */
-function useReplacedContainer(target: DebuggerTarget): string | null {
-  const attachedNow = ATTACHED_STATES.has(target.state) && target.containerId !== ""
-  const [session, setSession] = useState<{ containerId: string; since: string } | null>(null)
-
-  // State adjusted from a prop during render — the React-documented form,
-  // guarded so it settles in one extra render rather than an effect's two.
-  if (attachedNow && (session === null || session.since !== target.attachedSince)) {
-    setSession({ containerId: target.containerId, since: target.attachedSince })
-    return null
-  }
-
-  if (session === null || target.containerId === "" || target.containerId === session.containerId) {
-    return null
-  }
-  return session.containerId
-}
-
-/** A once-a-second clock for the relative times on the live line. */
-function useNow(intervalMs = 1_000): number {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), intervalMs)
-    return () => clearInterval(id)
-  }, [intervalMs])
-  return now
-}
+import { EditorTabs } from "./editor-tabs"
 
 // ─── Blocks ───────────────────────────────────────────────────────────────
 
@@ -88,14 +47,13 @@ function StateLine({ target }: { target: DebuggerTarget }) {
  */
 function SetupBlock({ setup, service }: { setup: DebuggerSetup; service: string }) {
   const noun = service === "ecs" ? "task definition" : "function"
+  // One block per untagged container on an ECS task page, so the heading id
+  // is minted per instance rather than shared.
+  const headingId = useId()
   return (
     <Card>
-      <CardContent
-        role="region"
-        aria-labelledby="debugger-setup-heading"
-        className="flex flex-col gap-3"
-      >
-        <SectionLabel as="h3" id="debugger-setup-heading">
+      <CardContent role="region" aria-labelledby={headingId} className="flex flex-col gap-3">
+        <SectionLabel as="h3" id={headingId}>
           Turn it on
         </SectionLabel>
         <p className="text-sm text-fg-muted">
@@ -159,6 +117,15 @@ function ResolvedTarget({ target }: { target: DebuggerTarget }) {
   )
 }
 
+/** A relative time that ticks, with the absolute one on hover. */
+function Since({ at, now }: { at: string; now: number }) {
+  return (
+    <time dateTime={at} title={formatDate(at)}>
+      {formatAge(now - Date.parse(at))}
+    </time>
+  )
+}
+
 /** One line on what is happening now, ticking while a client is attached. */
 function LiveLine({
   target,
@@ -167,7 +134,9 @@ function LiveLine({
   target: DebuggerTarget
   replacedFrom: string | null
 }) {
-  const now = useNow()
+  // The clock only runs while there is an age to show; every other state
+  // re-renders when its data does.
+  const now = useNow(ATTACHED_STATES.has(target.state))
   const listen = listenAddress(target)
   let line: React.ReactNode
   switch (target.state) {
@@ -180,29 +149,19 @@ function LiveLine({
     case "attached":
       line = (
         <>
-          Attached since{" "}
-          <time dateTime={target.attachedSince} title={formatDate(target.attachedSince)}>
-            {formatAge(now - Date.parse(target.attachedSince))}
-          </time>
-          . The timeout clock is suspended.
+          Attached since <Since at={target.attachedSince} now={now} />. The timeout clock is
+          suspended.
         </>
       )
       break
     case "paused":
       line = (
         <>
-          Paused since{" "}
-          <time dateTime={target.pausedSince} title={formatDate(target.pausedSince)}>
-            {formatAge(now - Date.parse(target.pausedSince))}
-          </time>
+          Paused since <Since at={target.pausedSince} now={now} />
           {target.attachedSince && (
             <>
               {" "}
-              (attached{" "}
-              <time dateTime={target.attachedSince} title={formatDate(target.attachedSince)}>
-                {formatAge(now - Date.parse(target.attachedSince))}
-              </time>
-              )
+              (attached <Since at={target.attachedSince} now={now} />)
             </>
           )}
           .
@@ -212,8 +171,10 @@ function LiveLine({
     default:
       line = null
   }
+  // The replacement notice is the one thing worth announcing; the ticking
+  // age is not, so no live region wraps it.
   return (
-    <div className="flex flex-col gap-2" aria-live="polite">
+    <div className="flex flex-col gap-2">
       {line && <p className="text-sm text-fg-muted">{line}</p>}
       {replacedFrom && (
         <p
@@ -225,89 +186,6 @@ function LiveLine({
         </p>
       )}
     </div>
-  )
-}
-
-// ─── Editors ──────────────────────────────────────────────────────────────
-
-const STEP_PREFIX = /^\d+\.\s+/
-
-/**
- * A steps body is lines: numbered ones are the steps, anything else is a
- * sentence before or between them. Consecutive numbered lines become one
- * ordered list, so a list restarts its numbering exactly where the server's
- * text does.
- */
-function StepsBody({ body }: { body: string }) {
-  const blocks: Array<{ kind: "p"; text: string } | { kind: "ol"; items: string[] }> = []
-  for (const line of body.split("\n")) {
-    if (line.trim() === "") continue
-    if (STEP_PREFIX.test(line)) {
-      const item = line.replace(STEP_PREFIX, "")
-      const last = blocks.at(-1)
-      if (last?.kind === "ol") last.items.push(item)
-      else blocks.push({ kind: "ol", items: [item] })
-    } else {
-      blocks.push({ kind: "p", text: line })
-    }
-  }
-  return (
-    <div className="flex flex-col gap-2 text-sm text-fg">
-      {blocks.map((block, i) =>
-        block.kind === "p" ? (
-          <p key={i} className="text-fg-muted">
-            {block.text}
-          </p>
-        ) : (
-          <ol key={i} className="list-decimal space-y-1 pl-6 font-mono text-xs">
-            {block.items.map((item, j) => (
-              <li key={j}>{item}</li>
-            ))}
-          </ol>
-        ),
-      )}
-    </div>
-  )
-}
-
-function EditorBody({ editor }: { editor: DebuggerEditor }) {
-  if (editor.kind === "steps") return <StepsBody body={editor.body} />
-  // json and shell are both a block to paste; an unknown kind is shown the
-  // same way rather than hidden, so a new server kind degrades to readable.
-  return <CodeBlock className="whitespace-pre">{editor.body}</CodeBlock>
-}
-
-/** The editor tab strip: one tab per server-rendered editor, each with a copy button. */
-function EditorTabs({ editors }: { editors: DebuggerEditor[] }) {
-  const [selected, setSelected] = useState(editors[0].id)
-  // The server may drop an editor between polls (a protocol change); fall
-  // back to the first rather than rendering no panel.
-  const selectedKey = editors.some((e) => e.id === selected) ? selected : editors[0].id
-  return (
-    <Tabs selectedKey={selectedKey} onSelectionChange={setSelected}>
-      <TabList aria-label="Editor" className="gap-4">
-        {editors.map((editor) => (
-          <Tab key={editor.id} id={editor.id}>
-            {editor.label}
-          </Tab>
-        ))}
-      </TabList>
-      {editors.map((editor) => (
-        <TabPanel key={editor.id} id={editor.id} className="flex flex-col gap-2 pt-3">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-xs text-fg-muted">
-              {editor.verified ? (
-                <>Paste into your editor's attach configuration.</>
-              ) : (
-                <>Unverified — this configuration has not been tried end to end.</>
-              )}
-            </span>
-            <CopyButton value={editor.body} noun={`${editor.label} configuration`} />
-          </div>
-          <EditorBody editor={editor} />
-        </TabPanel>
-      ))}
-    </Tabs>
   )
 }
 

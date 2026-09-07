@@ -4,6 +4,7 @@ import { server } from "@/test/server"
 import { render, renderWithData, screen } from "@/test/render"
 import { debuggerTargetQueryOptions } from "@/features/debugger/data"
 import type { DebuggerTarget, InvokeResult } from "@/types"
+import { debugTarget } from "@/test/debug-target"
 
 const baseResult: InvokeResult = {
   statusCode: 200,
@@ -65,31 +66,6 @@ describe("TestTab > log output", () => {
 // The hint above Invoke (docs/plans/compute-debugger.md § 7): what the
 // debugger does to the timeout, and nothing at all while it is off.
 describe("TestTab > debugger hint", () => {
-  function debugTarget(overrides: Partial<DebuggerTarget>): DebuggerTarget {
-    return {
-      id: "lambda/my-fn",
-      service: "lambda",
-      resource: "my-fn",
-      container: "",
-      enabled: true,
-      reason: "",
-      protocol: "inspector",
-      protocolSource: "runtime",
-      listen: { host: "127.0.0.1", port: 9229 },
-      state: "listening",
-      attachedSince: "",
-      pausedSince: "",
-      containerId: "",
-      upstream: "",
-      remoteRoot: "/var/task",
-      localRoot: "",
-      timeoutPolicy: "attached",
-      setup: { flag: "", tagCli: "", tagCdk: "" },
-      editors: [],
-      ...overrides,
-    }
-  }
-
   function renderWithTarget(target: DebuggerTarget, timeoutSeconds = 3) {
     server.use(http.get("/api/lambda/functions/:name/test-events", () => HttpResponse.json([])))
     return renderWithData(<TestTab name="my-fn" timeoutSeconds={timeoutSeconds} />, [
