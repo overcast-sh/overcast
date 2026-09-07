@@ -404,6 +404,13 @@ Linux-only.
 
 ## 10. Phases
 
+Phase A landed as `c2ab20dd9`. Deviations recorded there: `TimeoutPolicy` aliases
+`config.DebuggerTimeoutPolicy` (one enum, config cannot import debugger);
+`Subscribe` returns an unsubscribe func; tag/runtime resolution applies only to a
+tagged spec while env detection always runs, so an untagged Node function gets no
+target; `Ensure` replaces a target whose spec changed; the CDP observer reports the
+net change per read.
+
 - **A — core package and config.** `internal/debugger` complete with tests;
   config fields and reference comments. No service changes. Compiles under
   `slim`, `slim,nosqlite`, `slim,dev`.
@@ -453,6 +460,74 @@ pieces:
 v1 lays the groundwork by keeping the observer and the target abstraction
 protocol-shaped, and by putting the descriptor on the same endpoint family
 the bridge will join.
+
+### 11.1 Console debugging UX
+
+Modelled on VS Code's Run view, because that is what the user already knows,
+but arranged around the one flow the console has that an editor does not:
+the Test tab's Invoke button.
+
+**Session model.** A `DebugSessionProvider` mounted at the function route
+holds the CDP client (over the WebSocket bridge), breakpoints, watch
+expressions and the current pause. Every tab reads it, so Code and Test stay
+in step. The session is one more attached client of the `Target`: it
+suspends the clock exactly as an editor would. Breakpoints and watches
+persist per function in `localStorage` and are re-applied on every
+`scriptParsed`, which is what survives hot reload recycling the container.
+
+**Flow.**
+
+1. Debug tab → *Debug in console* starts the session (or it starts the first
+   time a gutter breakpoint is placed while the target is enabled). State
+   shows `attached` immediately, before any invoke.
+2. Code tab: click the gutter for a breakpoint; right-click for a condition
+   or a logpoint (a condition that logs and returns false, as VS Code does).
+   Breakpoints show in the gutter and in the Breakpoints panel.
+3. Test tab → Invoke, as today. The invoke stream keeps rendering.
+4. On `Debugger.paused` the console switches to the Code tab at the paused
+   location: file opened, line highlighted, current-line marker in the gutter.
+   A toolbar over the code pane carries Continue, Step over, Step into, Step
+   out, Restart container, Stop, with F5/F10/F11/Shift+F11 bound while the
+   pane has focus.
+5. The right sidebar has four panels: **Locals** (scope chain from the
+   selected call frame, `Runtime.getProperties` on expand, previews inline),
+   **Watch** (expressions evaluated with `Debugger.evaluateOnCallFrame` on
+   every pause, editable, persisted), **Call stack** (frames with mapped
+   locations; selecting one re-scopes Locals and Watch), **Breakpoints**
+   (enable, disable, remove, edit condition; a *Pause on exceptions* toggle).
+6. The bottom drawer has two tabs. **Logs** reuses the Monitor tab's log
+   viewer, live, filtered to the current request id, with a marker line at
+   each pause and resume so output reads in order against the stepping.
+   **Debug console** shows `Runtime.consoleAPICalled` output the instant it
+   happens — before it reaches CloudWatch — and has a REPL input that
+   evaluates in the selected frame while paused, or globally while running.
+7. Continue to completion: the result lands in the Test tab as it does now,
+   the pause UI clears, the session stays attached for the next invoke.
+   Stop detaches and the clock resumes; a strict-timeout target shows the
+   countdown in the toolbar instead of "clock suspended".
+
+**With and without source maps.**
+
+- *No map* (plain JS, Python, or raw `.ts` on Node 24 hot reload): the file
+  list is the deployed tree, breakpoints and pauses are on those files.
+  Nothing to translate.
+- *Map beside the file* (`tsc`, esbuild with `sourcemap: true`): on
+  `scriptParsed` the console fetches the `.map` through the source endpoint,
+  adds the original sources to the file list under an *Original* group, and
+  hides generated files behind a *Show compiled* toggle. Gutter breakpoints
+  on an original file are translated to generated line/column before
+  `setBreakpointByUrl`; pause locations and call-stack frames are mapped
+  back. Sources present in the zip open editable-read-only from the zip;
+  sources outside it (a `cdk watch` bundle whose map points at `../src`)
+  open from the map's `sourcesContent`, read-only, with a badge saying so.
+- *Inline map*: same, without the fetch.
+- A frame the map cannot resolve falls back to the generated file with a
+  *no source map for this frame* badge rather than an empty pane.
+
+**Scope note.** Locals, Watch and the REPL are per-protocol clients. Node
+ships first because CDP already drives the observer and the bridge; DAP
+(Python) reuses the same panels with a DAP client, since DAP's `scopes`,
+`variables`, `evaluate` and `stackTrace` map one-to-one onto them.
 
 ## 12. Later, deliberately
 
