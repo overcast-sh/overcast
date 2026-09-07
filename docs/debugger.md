@@ -104,8 +104,9 @@ Ship `debugpy` in the deployment package or a layer.
 
 For an image or a `provided.*` runtime the runtime name says nothing about what
 could listen, so tag `overcast:debug-protocol` with `inspector`, `jdwp`, `dap`
-or `passthrough`. The first three inject the same flag the managed runtime gets;
-`passthrough` only forwards the port, and setting the runtime's flag on the port
+or `passthrough`. `inspector` and `jdwp` inject the same flag the managed runtime
+gets; `dap` renders the debugpy snippet and configuration above; `passthrough`
+only forwards the port, and setting the runtime's flag on the port
 `OVERCAST_DEBUG_PORT` names is yours to do. A function whose environment already
 carries `--inspect` or a JDWP agent string is detected and proxied with no tag
 at all once the flag is on.
@@ -122,7 +123,7 @@ function needs no second tag. Without either, the console's template leaves
 | --- | --- |
 | Raw `.ts` on Node.js 24, or plain `.js` | The two roots and nothing else |
 | Compiled `dist/` with `.map` files beside the output | `localRoot` at the compiled output; the maps lead back to the `.ts` files |
-| A bundle produced by `cdk watch` | Unverified so far — [#1939](https://github.com/overcast-sh/overcast/issues/1939); the console marks that template as such |
+| A bundle produced by `cdk watch` | Unverified so far — [#1939](https://github.com/overcast-sh/overcast/issues/1939) |
 
 ### Timeouts while paused
 
@@ -142,9 +143,9 @@ keeps counting down through a pause and can go negative, because the deadline
 the Runtime API hands the function is sent once and stays what AWS would send.
 Nothing diverges without a debugger attached.
 
-A function with a debug port runs in one execution environment, so breakpoints
-land in the container your editor is attached to; concurrent invocations queue
-behind it, as they do under a concurrency limit.
+From its first cold start on, a function with a debug port runs in one execution
+environment, so breakpoints land in the container your editor is attached to;
+concurrent invocations queue behind it, as they do under a concurrency limit.
 
 ## ECS
 
@@ -162,14 +163,18 @@ A bare key on a multi-container definition is refused with a warning naming the
 containers. There is no runtime name to go on, so name the protocol with
 `overcast:debug-protocol`; a container whose environment already carries the
 flag is detected without it, and anything else is passthrough. `remoteRoot` is
-the image's working directory; `localRoot` follows the Lambda rules above.
+the definition's `workingDirectory`, else the image's, else `/`; `localRoot`
+follows the Lambda rules above.
 
 Tasks have no timeout, so there is nothing to configure there. A second task
 from the same definition gets no port: Overcast warns and runs it undebugged.
 
-Without any tag, an ordinary port mapping with a `hostPort` on the debug port,
-plus the runtime's flag in the container's environment, is published like any
-other `hostPort` and works on its own — the console then has no target to show.
+With `OVERCAST_ECS_DEBUGGER` off, an ordinary port mapping with a `hostPort` on
+the debug port, plus the runtime's flag in the container's environment, is
+published like any other `hostPort` and works on its own, with no target in the
+console. Once the flag is on, that container is detected and proxied on the port
+its flag names, so drop the `hostPort` mapping rather than publish the same port
+twice.
 
 ## Overcast in Docker
 
@@ -186,7 +191,8 @@ docker run --rm -p 4566:4566 -p 9229-9329:9229-9329 \
 | `OVERCAST_DEBUGGER_PORTS` | `9229-9329` | Range auto-allocated ports come from, lowest free first |
 | `OVERCAST_DEBUGGER_LISTEN` | follows `OVERCAST_LISTEN` | Address the ports bind on: `127.0.0.1` native, `0.0.0.0` in a container |
 
-Editor configurations keep `127.0.0.1`: the published port is on your machine.
+The console's editor configurations still say `127.0.0.1`: the published port
+is on your machine, whatever address the listener binds inside the container.
 
 ## When it does not work
 

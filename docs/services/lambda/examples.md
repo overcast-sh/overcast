@@ -87,8 +87,9 @@ aws lambda tag-resource \
 ```
 
 Overcast starts the container with the runtime's debug flag set and listens on
-`127.0.0.1:9229` for VS Code, a JetBrains IDE or Chrome DevTools, and the
-function's timeout clock stops while a debugger is attached. Runtimes, path
+`127.0.0.1`, on the lowest free port from 9229 upward, for VS Code, a JetBrains
+IDE or Chrome DevTools, and the function's timeout clock stops while a debugger
+is attached. Runtimes, path
 mappings and the `launch.json` entry are in
 [Step debugging inside emulated compute](../../debugger.md).
 

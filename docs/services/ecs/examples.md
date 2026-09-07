@@ -140,8 +140,8 @@ cdk.Tags.of(taskDef).add("overcast:debug-protocol/app", "inspector");
 ```
 
 The container name goes in the key, as for hot reload; a single-container
-task definition takes the bare `overcast:debug=true`. Overcast opens the port on
-`127.0.0.1` at task start and forwards your editor to the container. Protocols,
+task definition takes the bare `overcast:debug=true`. Overcast opens the port at
+task start and forwards your editor to the container. Protocols,
 path mappings and editor setup are in
 [Step debugging inside emulated compute](../../debugger.md#ecs).
 
