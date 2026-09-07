@@ -21,6 +21,7 @@ public final class ScenariosGen {
     public static List<ServiceGroup> all(AwsClients clients) {
         return List.of(
                 new ScenariosAuthoredEventbridgeRulesGen(clients),
+                new ScenariosAuthoredKinesisStreamsGen(clients),
                 new ScenariosAuthoredLogsGroupsGen(clients),
                 new ScenariosAuthoredSqsQueuesGen(clients),
                 new ScenariosBatchGen(clients),

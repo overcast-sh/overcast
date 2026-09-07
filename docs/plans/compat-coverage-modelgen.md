@@ -1486,6 +1486,40 @@ expressibility has to be read from the cli implementation rather than assumed
 from go-sdk's. Each port follows the two-PR shape above; ranks 1–3 start
 first.
 
+#### 2026-09-07 — wave 1 rank 1: `kinesis-streams`, and the prerequisite the pilot did not have
+
+`kinesis-streams` is ported (#1116) — wave 1 rank 1's shadow, and one of the
+first ports to a service the G2 pilot had not already paid for. Three things it
+adds to the mechanism above:
+
+- **A port needs the service's shapes committed.** An authored scenario is
+  validated against the model and compiled by four typed emitters, all of which
+  read `models/aws/shapes/<service>.json`, so a group whose service is not in
+  `models/aws/shapes-services.txt` cannot be ported at all until it is added and
+  the snapshot regenerated. That is a reviewed decision with a size budget
+  attached (`internal/awsapi/shapes_provenance_test.go`), not a step: kinesis
+  costs 61,721 bytes over 44 operations, 1,403 B/op — the last of wave 1's three
+  services, taking the committed snapshot to 957,730 bytes under the 1,200 KiB
+  cap #1938 raised for exactly that total. `sqs` was already listed for the G2
+  pilot, which is why step 1 of §3.11 has not named this before.
+- **A port needs the two typed suites to depend on the service at all.**
+  `dotnet-sdk` and `rust-sdk` have no native Kinesis group — that is the parity
+  debt the port closes — so neither project referenced an SDK for it, and the
+  emitted source does not compile until `AWSSDK.Kinesis` and `aws-sdk-kinesis`
+  are added. Every port that closes debt in those two suites pays this, and it
+  is a compile failure rather than a generation-time refusal.
+- **The IR still has no ordered numeric comparison.** `python-sdk` asserts
+  `OpenShardCount >= 1`; the checks vocabulary offers `equals` and nothing
+  weaker than exact, so the port asserts `equals: 1` against a stream setup
+  created with one shard. Stronger here, and stated in the test's `$comment`,
+  but a port whose native asserts a bound it does not control has no spelling.
+
+The five natives disagreed as §3.11 predicted: three of `java-sdk`'s seven tests
+assert nothing at all (`CreateStream` — its `waitActive` returns silently rather
+than raising —, `AddTagsToStream` and `DeleteStream`), `go-sdk` and `cli` tag
+`env=test` where the other three tag `env=compat`, and no two of the five assert
+the same thing about `DescribeStream`. The authored scenario is the union.
+
 ---
 
 ## 4. First milestone — pilot (Phase G2)
