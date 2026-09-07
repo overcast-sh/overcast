@@ -881,7 +881,11 @@ nothing:
    cites. A pair where one half reported nothing is a divergence too: a suite
    that ran the native group and not the shadow has proved nothing about the
    port.
-3. **The flip.** Five edits, in one PR, citing the nightly summary from step 2:
+3. **The flip.** Five edits, in one PR, citing the nightly summary from step
+   2 — plus inverting every corpus guard test that still asserts the port has
+   not happened yet (`cmd/compat/ported_test.go`, `cmd/compatgen/ported_test.go`,
+   `scripts/validate_compat_registry_test.py`, and the python-sdk/node-js-sdk
+   registry tests), which is not one of the five and is easy to miss (#1932):
 
    1. rename the group in `authored/<group>.json` from `<group>-shadow` to
       `<group>`;
