@@ -1,7 +1,36 @@
 # Compute debugger: step debugging inside emulated Lambda and ECS — plan
 
-> Status: **in progress** 2026-09-07 — issue #1939. Phases A–D below are the
-> implementation order; each names what it lands and how it is verified.
+> Status: **complete** 2026-09-07 — issue #1939. Phase A (`c2ab20dd9`, the
+> shared `internal/debugger` package and config), Phase B (`3df066440` Lambda,
+> router and console types; `d052dc49f` ECS), Phase C (`28ab5df17`, the
+> console's Debug tab, list badge and Test tab hint), Phase D (`56b5c60ef`,
+> the published page and cross-links) and Phase E (the review pass over the
+> whole branch, whose fixes landed as the commits after it) are all in.
+>
+> What shipped differs from the design in a few measured ways. The one-instance
+> pin is `admit`'s per-function cap becoming 1 while a bound target exists,
+> from the first cold start on, so a burst of *first* invocations is still
+> admitted at the ordinary cap — § 4 asked for the existing admission seam,
+> and that is what the seam gives. Protocol resolution applies the tag and
+> runtime steps only to a tagged resource while environment detection always
+> runs when the flag is on, so an untagged Node function gets no port unless
+> it already carries `--inspect`, and a WARN says so when it does. ECS resolves
+> its targets before the namespace container, because under awsvpc that is the
+> container that publishes the task's ports; duplicate tasks are tracked by an
+> owner map keyed by task definition ARN and container, claimed under one lock;
+> and the remote root is the definition's `workingDirectory`, else one image
+> inspect, else `/`. Everything a service does with a container — the upstream
+> binding sequence, the "could not bind" and "flag without a tag" warnings,
+> the tag-problem lines, releasing a target whose tag was removed — lives in
+> the package (`Target.Bind`, `Manager.Ensure`, `WarnProblems`), so the Lambda
+> and ECS glue are the five touches § 4 and § 5 list and nothing else; the
+> suspendable deadline seeds its state under the target's transition lock.
+> The console renders `127.0.0.1` for a wildcard listen host, polls only while
+> an answer can still change, and keeps the editor strip in its own component.
+> Deviations that stay deliberate: `TimeoutPolicy` aliases the config enum,
+> `Subscribe` returns an unsubscribe, the CDP observer reports the net change
+> per read, and `--inspect-wait`, DAP/JDWP observers and the console session
+> of § 11 are later work (§ 12).
 >
 > This document is the brief for every agent working on the feature. Read it
 > end to end before touching code. Where it says "mirror X", open X first.
