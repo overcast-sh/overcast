@@ -248,7 +248,7 @@
       "name": "batch-gen-probe",
       "generated": true,
       "scenario": "compat/model/scenarios/batch.json",
-      "state": "candidate",
+      "state": "gated",
       "parallel": true,
       "suites": [
         "cli",
@@ -453,7 +453,7 @@
       "name": "elastic-load-balancing-gen-probe",
       "generated": true,
       "scenario": "compat/model/scenarios/elastic-load-balancing.json",
-      "state": "candidate",
+      "state": "gated",
       "parallel": true,
       "suites": [
         "cli",
@@ -481,7 +481,7 @@
       "name": "iam-gen-group",
       "generated": true,
       "scenario": "compat/model/scenarios/iam.json",
-      "state": "candidate",
+      "state": "gated",
       "suites": [
         "cli",
         "dotnet-sdk",
@@ -587,7 +587,7 @@
       "name": "iam-gen-instanceprofile",
       "generated": true,
       "scenario": "compat/model/scenarios/iam.json",
-      "state": "candidate",
+      "state": "gated",
       "suites": [
         "cli",
         "dotnet-sdk",
@@ -662,7 +662,7 @@
       "name": "iam-gen-policy",
       "generated": true,
       "scenario": "compat/model/scenarios/iam.json",
-      "state": "candidate",
+      "state": "gated",
       "suites": [
         "cli",
         "dotnet-sdk",
@@ -734,7 +734,7 @@
       "name": "iam-gen-probe",
       "generated": true,
       "scenario": "compat/model/scenarios/iam.json",
-      "state": "candidate",
+      "state": "gated",
       "parallel": true,
       "suites": [
         "cli",
@@ -1355,7 +1355,7 @@
       "name": "kms-gen-probe",
       "generated": true,
       "scenario": "compat/model/scenarios/kms.json",
-      "state": "candidate",
+      "state": "gated",
       "parallel": true,
       "suites": [
         "cli",
@@ -1735,7 +1735,7 @@
       "name": "secretsmanager-gen-version",
       "generated": true,
       "scenario": "compat/model/scenarios/secretsmanager.json",
-      "state": "candidate",
+      "state": "gated",
       "suites": [
         "cli",
         "dotnet-sdk",
@@ -1876,7 +1876,7 @@
       "name": "servicediscovery-gen-probe",
       "generated": true,
       "scenario": "compat/model/scenarios/servicediscovery.json",
-      "state": "candidate",
+      "state": "gated",
       "parallel": true,
       "suites": [
         "cli",
@@ -1997,7 +1997,7 @@
       "name": "sns-gen-probe",
       "generated": true,
       "scenario": "compat/model/scenarios/sns.json",
-      "state": "candidate",
+      "state": "gated",
       "parallel": true,
       "suites": [
         "cli",
