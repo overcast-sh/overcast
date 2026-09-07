@@ -2825,6 +2825,8 @@ func clearEnv(t *testing.T) {
 		// their machine and nowhere else.
 		"DOCKER_HOST", "LAMBDA_DOCKER_SOCKET",
 		"LAMBDA_RUNTIME_API_PORT", "OVERCAST_SMTP_PORT",
+		"OVERCAST_DEBUGGER", "OVERCAST_LAMBDA_DEBUGGER", "OVERCAST_ECS_DEBUGGER",
+		"OVERCAST_DEBUGGER_LISTEN", "OVERCAST_DEBUGGER_PORTS", "OVERCAST_DEBUGGER_TIMEOUT",
 	}
 	for _, v := range awsEmuVars {
 		original := os.Getenv(v)
