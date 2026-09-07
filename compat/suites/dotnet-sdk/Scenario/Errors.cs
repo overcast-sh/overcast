@@ -140,22 +140,24 @@ internal static class Errors
     /// Reports whether the emulator answered 501.
     /// </summary>
     /// <remarks>
-    /// The status code is read from the SDK's own exception where there is one,
-    /// which is exact. Only when no AmazonServiceException carries a status —
-    /// the SDK failed before or after the exchange — does this fall back to the
-    /// harness's substring heuristic over the SDK's own text, which is what
-    /// that heuristic is for.
+    /// One rule serves both paths: Runner.ClassifyResponse reads the response
+    /// the SDK parsed, which is exact, and only an exception carrying none
+    /// falls back to the substring heuristic, which is what that heuristic is
+    /// for. The chain is walked here as well as in the Runner because the SDK
+    /// wraps a modeled exception in an AggregateException in some paths, whose
+    /// children the Runner's InnerException walk does not reach.
     /// </remarks>
     public static bool IsUnimplementedResponse(Exception error)
     {
         foreach (var link in Chain(error))
         {
-            if (link is AmazonServiceException service && service.StatusCode != 0)
+            if (link is AmazonServiceException service
+                && Harness.Runner.ClassifyResponse(service) is bool decided)
             {
-                return service.StatusCode == HttpStatusCode.NotImplemented;
+                return decided;
             }
         }
-        return Harness.Runner.LooksUnimplemented(error.ToString());
+        return Harness.Runner.LooksUnimplementedWithoutResponse(error.ToString());
     }
 
     /// <summary>

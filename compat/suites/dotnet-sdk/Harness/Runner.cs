@@ -1,4 +1,7 @@
+using System.Net;
 using System.Text.Json;
+
+using Amazon.Runtime;
 
 namespace OvercastCompat.Harness;
 
@@ -240,8 +243,14 @@ public static class Runner
     /// <remarks>
     /// A caller that has already read the raw SDK error and classified it is
     /// believed: an <see cref="IComposedFailure"/> states the answer itself.
-    /// The substring heuristic below is applied only to an exception nobody
-    /// classified, and never to a composed message - see IComposedFailure.
+    /// Everything else is decided from the <b>response the SDK's exception
+    /// carries</b> - <see cref="ClassifyResponse"/> - and only an exception
+    /// carrying none reaches the substring heuristic. The prose was the whole
+    /// rule for a hand-written group until #1924, and a 400 was enough to
+    /// defeat it: the sibling go-sdk suite reported a test that asserts an
+    /// InvalidRequestException as unimplemented on one CI run whose request id
+    /// happened to contain "501", flipping a gated baseline row and failing an
+    /// unrelated pull request.
     /// </remarks>
     public static bool IsUnimplemented(Exception exception)
     {
@@ -251,15 +260,49 @@ public static class Runner
             {
                 return composed.Unimplemented;
             }
+            if (link is AmazonServiceException service && ClassifyResponse(service) is bool decided)
+            {
+                return decided;
+            }
         }
-        return LooksUnimplemented(exception.ToString());
+        return LooksUnimplementedWithoutResponse(exception.ToString());
     }
 
     /// <summary>
-    /// The substring heuristic over one raw AWS SDK error text. Pass it what
-    /// the SDK said and nothing else.
+    /// Decides, from the response the SDK parsed, whether the emulator refused
+    /// the operation as unimplemented.
     /// </summary>
-    public static bool LooksUnimplemented(string text) =>
+    /// <remarks>
+    /// Two things say so, and both are facts of the response rather than of its
+    /// wording: HTTP 501; and an error <b>code</b> of NotImplemented or
+    /// UnknownOperationException, by equality. AWS - and Overcast - answer a
+    /// target naming no modeled operation with the latter at HTTP 400, so the
+    /// status alone would miss it.
+    /// <para>Returns null when the exception states neither - the SDK raised it
+    /// without a response to read - which is the one case a caller may fall
+    /// back to the text.</para>
+    /// </remarks>
+    public static bool? ClassifyResponse(AmazonServiceException service)
+    {
+        if (service.StatusCode == 0 && string.IsNullOrEmpty(service.ErrorCode))
+        {
+            return null;
+        }
+        return service.StatusCode == HttpStatusCode.NotImplemented
+            || service.ErrorCode is "NotImplemented" or "UnknownOperationException";
+    }
+
+    /// <summary>
+    /// The substring heuristic, for an exception carrying <b>no response</b> -
+    /// the SDK failed before or after the exchange, so there is nothing else to
+    /// read. Pass it what the SDK said and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// Never right for an exception that reached the wire: the response states
+    /// the status, and "501" appears in request ids, ARNs, resource names and
+    /// port numbers. <see cref="ClassifyResponse"/> answers that case.
+    /// </remarks>
+    public static bool LooksUnimplementedWithoutResponse(string text) =>
         text.Contains("501", StringComparison.OrdinalIgnoreCase)
         || text.Contains("NotImplemented", StringComparison.OrdinalIgnoreCase)
         || text.Contains("UnknownOperationException", StringComparison.OrdinalIgnoreCase)

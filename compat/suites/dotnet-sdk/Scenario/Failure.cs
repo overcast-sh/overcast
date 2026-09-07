@@ -27,9 +27,10 @@ namespace OvercastCompat.Scenario;
 /// <code>
 /// sqs-gen-queue/SetQueueAttributes: GetQueueAttributes params {"AttributeNames":["All"],"QueueUrl":"http://…"}: readback equalTo at $.Attributes.VisibilityTimeout: expected "60", actual "30" (compat/model/scenarios/sqs.json assert[0].assert)
 /// </code>
-/// <para>The wording avoids every phrase Runner.LooksUnimplemented matches on,
-/// so this namespace's own prose can never turn an assertion failure into a
-/// false "unimplemented". The SDK's error text is quoted verbatim where it is
+/// <para>The wording avoids every phrase
+/// Runner.LooksUnimplementedWithoutResponse matches on, so this namespace's
+/// own prose can never turn an assertion failure into a false
+/// "unimplemented". The SDK's error text is quoted verbatim where it is
 /// the actual value, which is what lets a genuine 501 still be classified — by
 /// <see cref="IComposedFailure.Unimplemented"/>, not by the message.</para>
 /// </remarks>

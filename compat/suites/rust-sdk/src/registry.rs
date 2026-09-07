@@ -1179,7 +1179,7 @@ mod tests {
         );
         // The harness classifies an Err by its text; this one must land as
         // `fail`, not be swallowed as an emulator gap.
-        assert!(!crate::harness::is_unimplemented(&err), "{err}");
+        assert!(!crate::harness::looks_unimplemented_without_tag(&err), "{err}");
     }
 
     /// The two files are joined on group and test names. `cmd/compat` lints for

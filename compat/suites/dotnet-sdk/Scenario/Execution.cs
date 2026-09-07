@@ -495,7 +495,7 @@ internal sealed class Execution(ScenarioGroup group, TestContext context, Contex
     /// <remarks>
     /// Classification is decided here rather than left to the message: this is
     /// the one place holding the <em>raw</em> SDK error, and a composed failure
-    /// message is not something Runner.LooksUnimplemented may be pointed at —
+    /// message is not something Runner.IsUnimplemented may be pointed at —
     /// it embeds the params JSON, where a run id or a port puts a "501" that
     /// means nothing. So a 501 is stated on the failure, and every other
     /// failure carries no such flag and is a plain fail.

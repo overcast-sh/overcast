@@ -255,7 +255,7 @@ impl ServiceGroup for SsmGroup {
                         .option("Contains")
                         .values(prefix)
                         .build()
-                        .map_err(crate::harness::sdk_error)?;
+                        .map_err(crate::harness::sdk_error_message)?;
                     let response = clients
                         .ssm()
                         .describe_parameters()
@@ -283,12 +283,12 @@ impl ServiceGroup for SsmGroup {
                         .key("project")
                         .value("overcast")
                         .build()
-                        .map_err(crate::harness::sdk_error)?;
+                        .map_err(crate::harness::sdk_error_message)?;
                     let tag_env = aws_sdk_ssm::types::Tag::builder()
                         .key("env")
                         .value("test")
                         .build()
-                        .map_err(crate::harness::sdk_error)?;
+                        .map_err(crate::harness::sdk_error_message)?;
                     clients
                         .ssm()
                         .add_tags_to_resource()
@@ -354,7 +354,7 @@ impl ServiceGroup for SsmGroup {
                         .option("Contains")
                         .values(prefix)
                         .build()
-                        .map_err(crate::harness::sdk_error)?;
+                        .map_err(crate::harness::sdk_error_message)?;
                     let response = clients
                         .ssm()
                         .describe_parameters()

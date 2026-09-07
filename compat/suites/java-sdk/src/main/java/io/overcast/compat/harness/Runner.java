@@ -2,6 +2,10 @@ package io.overcast.compat.harness;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
+import software.amazon.awssdk.awscore.exception.AwsServiceException;
+import software.amazon.awssdk.core.exception.SdkServiceException;
+
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -335,25 +339,79 @@ public final class Runner {
      * from the SDK's own status code, and it must survive being wrapped.
      * {@link ComposedFailure} is the opposite guarantee: such a message embeds
      * the exact params JSON sent, where a run id, a queue URL or a port number
-     * can put a {@code "501"} that says nothing about the response, so the
-     * heuristic below may not be pointed at it.
+     * can put a {@code "501"} that says nothing about the response.
+     *
+     * <p>Everything else is decided from the <b>response the SDK's exception
+     * carries</b> — {@link #classifyResponse} — and only an exception carrying
+     * none reaches the substring heuristic. The prose used to be the whole rule
+     * for a hand-written group, and a 400 was enough to defeat it: the sibling
+     * go-sdk suite reported a test that asserts an
+     * {@code InvalidRequestException} as {@code unimplemented} on one CI run
+     * whose request id happened to contain "501", flipping a gated baseline row
+     * and failing an unrelated pull request (#1924).
      */
     public static boolean isUnimplemented(Throwable e) {
         if (e == null) return false;
         if (e instanceof Unimplemented) return true;
         if (e instanceof ComposedFailure) return false;
+        Boolean fromResponse = classifyResponse(e);
+        if (fromResponse != null) return fromResponse;
         String msg = e.getMessage();
         if (msg == null) msg = e.getClass().getName();
-        return looksUnimplemented(msg);
+        return looksUnimplementedWithoutResponse(msg);
     }
 
     /**
-     * The substring heuristic over an SDK error's own text, for a failure that
-     * states no status code of its own. It is the whole of what a hand-written
-     * group offers, and the fallback the scenario runtime uses when the SDK
-     * failed before or after the exchange and there is no HTTP response to read.
+     * Decides, from the HTTP response an AWS SDK exception carries, whether the
+     * emulator refused the operation as unimplemented. Returns {@code null}
+     * when the exception carries no response — the SDK failed before or after
+     * the exchange — which is the one case a caller may fall back to the text.
+     *
+     * <p>Two things say "unimplemented", and both are facts of the response
+     * rather than of its wording: HTTP 501, with the
+     * {@code x-emulator-unsupported} header Overcast sets alongside every one
+     * of them; and an error <b>code</b> of {@code NotImplemented} or
+     * {@code UnknownOperationException}, by equality. AWS — and Overcast —
+     * answer a target naming no modeled operation with the latter at HTTP 400,
+     * so the status alone would miss it.
      */
-    public static boolean looksUnimplemented(String msg) {
+    public static Boolean classifyResponse(Throwable e) {
+        for (Throwable link = e; link != null; link = link.getCause()) {
+            if (!(link instanceof SdkServiceException sdk)) continue;
+            AwsErrorDetails details =
+                    link instanceof AwsServiceException aws ? aws.awsErrorDetails() : null;
+            if (sdk.statusCode() == 0 && details == null) {
+                // A service exception the SDK raised without a response to
+                // read. Keep looking, and let the text answer if nothing else
+                // in the chain carries one.
+                continue;
+            }
+            if (sdk.statusCode() == 501 || emulatorUnsupported(details)) return true;
+            String code = details == null ? null : details.errorCode();
+            return "NotImplemented".equals(code) || "UnknownOperationException".equals(code);
+        }
+        return null;
+    }
+
+    /** Whether the response carries the header Overcast sets on every 501. */
+    private static boolean emulatorUnsupported(AwsErrorDetails details) {
+        if (details == null || details.sdkHttpResponse() == null) return false;
+        return details.sdkHttpResponse()
+                .firstMatchingHeader("x-emulator-unsupported")
+                .filter("true"::equalsIgnoreCase)
+                .isPresent();
+    }
+
+    /**
+     * The substring heuristic over an SDK error's own text, and it is for an
+     * exception carrying <b>no HTTP response</b> — the SDK failed before or
+     * after the exchange, so there is nothing else to read.
+     *
+     * <p>It is never right for an exception that reached the wire: the response
+     * states the status, and "501" appears in request ids, ARNs, resource names
+     * and port numbers. {@link #classifyResponse} answers that case.
+     */
+    public static boolean looksUnimplementedWithoutResponse(String msg) {
         if (msg == null) return false;
         return msg.contains("501")
                 || msg.contains("NotImplemented")

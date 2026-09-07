@@ -174,22 +174,53 @@ def _iso_now() -> str:
 
 # ─── Unimplemented detection ─────────────────────────────────────────────────
 
+# The two error codes Overcast answers with for an operation it does not serve.
+# UnknownOperationException comes back at HTTP 400, for a target naming no
+# modeled operation, so the status alone would miss it.
+_UNIMPLEMENTED_CODES = ("NotImplemented", "UnknownOperationException")
+
+
 def _is_unimplemented(exc: Exception) -> bool:
-    """Return True if the exception represents a 501 Not Implemented response."""
-    from botocore.exceptions import ClientError, BotoCoreError
+    """Return True if the exception represents a 501 Not Implemented response.
+
+    Decided from the **response botocore parsed**, never from the exception's
+    prose. A ``ClientError`` carries the status, the headers and the error code,
+    and once it has been read the answer is settled: a 400 stays a failure
+    whatever its message, request id or ARN happens to contain.
+
+    That mattered on #1924. The rule here used to end in a substring test, and
+    the sibling go-sdk suite's version of it reported
+    ``secretsmanager-rotate/RotateSecretWithoutLambda`` — a test that asserts an
+    ``InvalidRequestException`` — as ``unimplemented`` on one CI run whose
+    request id happened to contain "501", flipping a gated baseline row and
+    failing an unrelated pull request.
+
+    The substring fallback survives only for an exception carrying no response
+    at all — a connection failure, an endpoint that would not resolve — where
+    there is nothing else to read.
+    """
+    from botocore.exceptions import ClientError
     if isinstance(exc, ClientError):
-        code = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
-        if code == 501:
+        response = exc.response or {}
+        metadata = response.get("ResponseMetadata", {}) or {}
+        if metadata.get("HTTPStatusCode") == 501:
             return True
-        # Some services return "NotImplemented" or "UnknownOperationException"
-        err_code = exc.response.get("Error", {}).get("Code", "")
-        if err_code in ("NotImplemented", "UnknownOperationException"):
+        headers = metadata.get("HTTPHeaders", {}) or {}
+        # Overcast sets this alongside every 501 (internal/protocol/errors.go);
+        # it survives a body botocore could not parse into a status.
+        if str(headers.get("x-emulator-unsupported", "")).lower() == "true":
             return True
-    # Catch HTTP-level errors wrapped in EndpointResolutionError etc.
-    msg = str(exc)
-    if "501" in msg and "Not Implemented" in msg:
-        return True
-    return False
+        return (response.get("Error", {}) or {}).get("Code", "") in _UNIMPLEMENTED_CODES
+    return _looks_unimplemented_without_response(str(exc))
+
+
+def _looks_unimplemented_without_response(msg: str) -> bool:
+    """The substring heuristic, for an exception carrying no HTTP response.
+
+    Never right for one that reached the wire: the response states the status,
+    and "501" appears in request ids, ARNs, resource names and port numbers.
+    """
+    return "501" in msg and "Not Implemented" in msg
 
 
 # ─── Parallel slots ───────────────────────────────────────────────────────────
