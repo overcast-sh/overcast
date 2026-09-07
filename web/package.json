@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "packageManager": "pnpm@11.23.0",
+  "packageManager": "pnpm@11.25.0",
   "scripts": {
     "dev": "vite",
     "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit",
@@ -51,7 +51,7 @@
     "@aws-sdk/client-sqs": "^3.1017.0",
     "@aws-sdk/client-ssm": "^3.1028.0",
     "@aws-sdk/client-sts": "^3.1028.0",
-    "@aws-sdk/client-wafv2": "3.1116.0",
+    "@aws-sdk/client-wafv2": "3.1121.0",
     "@dagrejs/dagre": "^3.0.0",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
