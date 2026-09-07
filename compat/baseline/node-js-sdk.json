@@ -1140,6 +1140,55 @@
     },
     {
       "suite": "node-js-sdk",
+      "service": "batch",
+      "group": "batch-gen-probe",
+      "test": "DescribeJobs",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "batch",
+      "group": "batch-gen-probe",
+      "test": "DescribeQuotaShare",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "batch",
+      "group": "batch-gen-probe",
+      "test": "DescribeServiceEnvironments",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "batch",
+      "group": "batch-gen-probe",
+      "test": "DescribeServiceJob",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "batch",
+      "group": "batch-gen-probe",
+      "test": "ListJobsByConsumableResource",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "batch",
+      "group": "batch-gen-probe",
+      "test": "ListQuotaShares",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "batch",
+      "group": "batch-gen-probe",
+      "test": "ListServiceJobs",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
       "service": "cloudformation",
       "group": "cloudformation-eks-refs",
       "test": "CreateStackWithEksRefs",
@@ -2780,6 +2829,27 @@
     },
     {
       "suite": "node-js-sdk",
+      "service": "elastic-load-balancing",
+      "group": "elastic-load-balancing-gen-probe",
+      "test": "DescribeAccountLimits",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "elastic-load-balancing",
+      "group": "elastic-load-balancing-gen-probe",
+      "test": "DescribeLoadBalancerAttributes",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "elastic-load-balancing",
+      "group": "elastic-load-balancing-gen-probe",
+      "test": "DescribeLoadBalancerPolicyTypes",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
       "service": "elasticache",
       "group": "elasticache-clusters",
       "test": "CreateCacheCluster",
@@ -3021,6 +3091,518 @@
       "test": "PutFanoutTargets",
       "op": "PutTargets",
       "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-group",
+      "test": "AddUserToGroup",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-group",
+      "test": "AttachGroupPolicy",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-group",
+      "test": "CreateGroup",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-group",
+      "test": "DeleteGroup",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-group",
+      "test": "DeleteGroupPolicy",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-group",
+      "test": "DetachGroupPolicy",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-group",
+      "test": "GetGroup",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-group",
+      "test": "GetGroupMembers",
+      "op": "GetGroup",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-group",
+      "test": "GetGroupPolicy",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-group",
+      "test": "ListAttachedGroupPolicies",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-group",
+      "test": "ListGroupPolicies",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-group",
+      "test": "ListGroups",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-group",
+      "test": "ListGroupsForUser",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-group",
+      "test": "PutGroupPolicy",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-group",
+      "test": "RemoveUserFromGroup",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-instanceprofile",
+      "test": "AddRoleToInstanceProfile",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-instanceprofile",
+      "test": "CreateInstanceProfile",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-instanceprofile",
+      "test": "DeleteInstanceProfile",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-instanceprofile",
+      "test": "GetInstanceProfile",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-instanceprofile",
+      "test": "ListInstanceProfileTags",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-instanceprofile",
+      "test": "ListInstanceProfiles",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-instanceprofile",
+      "test": "ListInstanceProfilesForRole",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-instanceprofile",
+      "test": "RemoveRoleFromInstanceProfile",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-instanceprofile",
+      "test": "TagInstanceProfile",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-instanceprofile",
+      "test": "UntagInstanceProfile",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-policy",
+      "test": "CreatePolicy",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-policy",
+      "test": "CreatePolicyVersion",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-policy",
+      "test": "DeletePolicy",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-policy",
+      "test": "DeletePolicyVersion",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-policy",
+      "test": "GetPolicy",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-policy",
+      "test": "ListPolicies",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-policy",
+      "test": "ListPolicyTags",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-policy",
+      "test": "SimulateCustomPolicy",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-policy",
+      "test": "TagPolicy",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-policy",
+      "test": "UntagPolicy",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetAccessKeyLastUsed",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetAccountPasswordPolicy",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetAccountSummary",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetContextKeysForCustomPolicy",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetContextKeysForPrincipalPolicy",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetCredentialReport",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetDelegationRequest",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetHumanReadableSummary",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetLoginProfile",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetMFADevice",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetOpenIDConnectProvider",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetOrganizationsAccessReport",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetOutboundWebIdentityFederationInfo",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetPolicyVersion",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetSAMLProvider",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetSSHPublicKey",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetServerCertificate",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetServiceLastAccessedDetails",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetServiceLastAccessedDetailsWithEntities",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "GetServiceLinkedRoleDeletionStatus",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListAccountAliases",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListDelegationRequests",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListEntitiesForPolicy",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListMFADeviceTags",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListMFADevices",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListOpenIDConnectProviderTags",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListOpenIDConnectProviders",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListOrganizationsFeatures",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListPoliciesGrantingServiceAccess",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListPolicyVersions",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListSAMLProviderTags",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListSAMLProviders",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListSSHPublicKeys",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListServerCertificateTags",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListServerCertificates",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListServiceSpecificCredentials",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListSigningCertificates",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "iam",
+      "group": "iam-gen-probe",
+      "test": "ListVirtualMFADevices",
+      "status": "unimplemented"
     },
     {
       "suite": "node-js-sdk",
@@ -3494,6 +4076,34 @@
       "group": "kms-crypto",
       "test": "GenerateDataKeyWithoutPlaintext",
       "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "kms",
+      "group": "kms-gen-probe",
+      "test": "DescribeCustomKeyStores",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "kms",
+      "group": "kms-gen-probe",
+      "test": "GetKeyRotationStatus",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "kms",
+      "group": "kms-gen-probe",
+      "test": "GetParametersForImport",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "kms",
+      "group": "kms-gen-probe",
+      "test": "ListKeyRotations",
+      "status": "unimplemented"
     },
     {
       "suite": "node-js-sdk",
@@ -5075,6 +5685,34 @@
     {
       "suite": "node-js-sdk",
       "service": "secretsmanager",
+      "group": "secretsmanager-gen-version",
+      "test": "GetSecretValue",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "secretsmanager",
+      "group": "secretsmanager-gen-version",
+      "test": "ListSecretVersionIds",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "secretsmanager",
+      "group": "secretsmanager-gen-version",
+      "test": "PutSecretValue",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "secretsmanager",
+      "group": "secretsmanager-gen-version",
+      "test": "UpdateSecretVersionStage",
+      "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "secretsmanager",
       "group": "secretsmanager-policy",
       "test": "DeleteResourcePolicy",
       "status": "pass"
@@ -5144,6 +5782,20 @@
       "group": "secretsmanager-rotate",
       "test": "UpdateSecretVersionStage",
       "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "servicediscovery",
+      "group": "servicediscovery-gen-probe",
+      "test": "GetInstancesHealthStatus",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "servicediscovery",
+      "group": "servicediscovery-gen-probe",
+      "test": "GetOperation",
+      "status": "unimplemented"
     },
     {
       "suite": "node-js-sdk",
@@ -5369,6 +6021,83 @@
       "group": "shield-protections",
       "test": "ListProtections",
       "status": "pass"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "sns",
+      "group": "sns-gen-probe",
+      "test": "CheckIfPhoneNumberIsOptedOut",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "sns",
+      "group": "sns-gen-probe",
+      "test": "GetDataProtectionPolicy",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "sns",
+      "group": "sns-gen-probe",
+      "test": "GetEndpointAttributes",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "sns",
+      "group": "sns-gen-probe",
+      "test": "GetPlatformApplicationAttributes",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "sns",
+      "group": "sns-gen-probe",
+      "test": "GetSMSAttributes",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "sns",
+      "group": "sns-gen-probe",
+      "test": "GetSMSSandboxAccountStatus",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "sns",
+      "group": "sns-gen-probe",
+      "test": "ListEndpointsByPlatformApplication",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "sns",
+      "group": "sns-gen-probe",
+      "test": "ListOriginationNumbers",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "sns",
+      "group": "sns-gen-probe",
+      "test": "ListPhoneNumbersOptedOut",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "sns",
+      "group": "sns-gen-probe",
+      "test": "ListPlatformApplications",
+      "status": "unimplemented"
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "sns",
+      "group": "sns-gen-probe",
+      "test": "ListSMSSandboxPhoneNumbers",
+      "status": "unimplemented"
     },
     {
       "suite": "node-js-sdk",
