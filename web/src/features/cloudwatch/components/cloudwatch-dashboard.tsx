@@ -75,10 +75,31 @@ function readDatapointValue(datapoint: Datapoint, stat: Statistic): number | und
 
 const numberFormat = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 })
 
+/**
+ * The common CloudWatch units abbreviated the way the chart abbreviates
+ * them, so a summary tile reads "62.5 ms" rather than a truncated
+ * "62.5 Millis…"; anything else keeps AWS's own unit name.
+ */
+const UNIT_ABBREVIATIONS: Record<string, string> = {
+  Count: "",
+  None: "",
+  Milliseconds: "ms",
+  Microseconds: "µs",
+  Seconds: "s",
+  Bytes: "B",
+  Kilobytes: "KB",
+  Megabytes: "MB",
+  Gigabytes: "GB",
+  Percent: "%",
+  "Bytes/Second": "B/s",
+  "Count/Second": "/s",
+}
+
 function formatValue(value: number | undefined, unit?: string): string {
   if (value == null) return "—"
   const text = numberFormat.format(value)
-  return unit && unit !== "None" ? `${text} ${unit}` : text
+  const suffix = unit == null ? "" : (UNIT_ABBREVIATIONS[unit] ?? unit)
+  return suffix ? `${text} ${suffix}` : text
 }
 
 /** What the metric browser's filter matches against — everything visible on the row. */
@@ -490,7 +511,6 @@ export function CloudwatchDashboard() {
                           >
                             <th className="py-2 pr-4 font-medium">Timestamp</th>
                             <th className="py-2 pr-4 text-right font-medium">{selectedStat}</th>
-                            <th className="py-2 pr-4 text-right font-medium">Samples</th>
                             <th className="py-2 font-medium">Unit</th>
                           </tr>
                         </thead>
@@ -505,9 +525,6 @@ export function CloudwatchDashboard() {
                               </td>
                               <td className="py-1.5 pr-4 text-right text-fg tabular-nums">
                                 {formatValue(readDatapointValue(datapoint, selectedStat))}
-                              </td>
-                              <td className="py-1.5 pr-4 text-right text-fg-muted tabular-nums">
-                                {formatValue(datapoint.SampleCount)}
                               </td>
                               <td className="py-1.5 text-fg-muted">{datapoint.Unit ?? "—"}</td>
                             </tr>

@@ -61,9 +61,9 @@ function renderDashboard() {
     }).queryKey,
     {
       datapoints: [
-        { Timestamp: at(3), Average: 2, SampleCount: 2, Unit: "Count" },
-        { Timestamp: at(2), Average: 8, SampleCount: 4, Unit: "Count" },
-        { Timestamp: at(1), Average: 5, SampleCount: 5, Unit: "Count" },
+        { Timestamp: at(3), Average: 2, SampleCount: 2, Unit: "Milliseconds" },
+        { Timestamp: at(2), Average: 8, SampleCount: 4, Unit: "Milliseconds" },
+        { Timestamp: at(1), Average: 5, SampleCount: 5, Unit: "Milliseconds" },
       ],
     },
   )
@@ -128,13 +128,14 @@ describe("CloudwatchDashboard > selected metric", () => {
     expect(screen.getByRole("heading", { name: "Invocations" })).toBeInTheDocument()
   })
 
-  it("summarises the range — latest, mean, min, max — in the metric's unit", async () => {
+  it("summarises the range — latest, mean, min, max — in the metric's unit, abbreviated", async () => {
     renderDashboard()
 
-    // Latest and the mean of 2, 8, 5 are both 5; max 8; min 2.
-    expect(await screen.findAllByTitle("5 Count")).toHaveLength(2)
-    expect(screen.getByTitle("8 Count")).toBeInTheDocument()
-    expect(screen.getByTitle("2 Count")).toBeInTheDocument()
+    // Latest and the mean of 2, 8, 5 are both 5; max 8; min 2. The unit is
+    // the chart's short form, so a tile never truncates "Milliseconds".
+    expect(await screen.findAllByTitle("5 ms")).toHaveLength(2)
+    expect(screen.getByTitle("8 ms")).toBeInTheDocument()
+    expect(screen.getByTitle("2 ms")).toBeInTheDocument()
     expect(screen.getByText("Mean")).toBeInTheDocument()
   })
 
