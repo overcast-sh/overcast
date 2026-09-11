@@ -27,6 +27,15 @@ export interface TailLogEventsOptions {
    * once-a-second re-render.
    */
   onActivity?: () => void
+  /**
+   * Called once, when the session is open: StartLiveTail has returned its
+   * stream. The emulator subscribes the session to the log-write bus before
+   * it writes the initial-response frame the SDK parks on, so by the time
+   * this fires every write from here on will be pushed — which makes it the
+   * moment a caller can safely read the gap between what it last fetched and
+   * now, knowing nothing can fall between the read and the session.
+   */
+  onOpen?: () => void
 }
 
 export function parseLogFilterTerms(pattern: string): string[] {
@@ -258,6 +267,8 @@ export async function* tailLogEvents(opts: TailLogEventsOptions): AsyncGenerator
     // which case the session came back to nobody and no further `abort` event
     // is coming. Bail here and let `finally` hang it up.
     if (signal?.aborted) return
+    // Past that check the session is ours and subscribed: say so.
+    opts.onOpen?.()
 
     const aborted = new Promise<typeof ABORTED>((resolve) => {
       signal?.addEventListener("abort", () => resolve(ABORTED), { once: true })

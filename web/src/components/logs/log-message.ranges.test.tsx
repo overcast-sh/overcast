@@ -123,9 +123,23 @@ describe("LogMessage under the ranges presentation", () => {
     expect(await settledRangeCount()).toBe(expectedRangeCount(JSON_MESSAGE))
   })
 
-  it("round-trips collapse: a collapsed row's ranges leave the registry, expansion restores them", async () => {
+  it("round-trips collapse: a collapsed row keeps its ranges on the compact text, expansion restores the full set", async () => {
+    // Collapsed rows highlight too (a collapsed JSON stream used to lose
+    // every colour), always on the one-line form: with Format on, the
+    // expanded text is the pretty document and the collapsed text is not.
+    const pretty = JSON.stringify(JSON.parse(JSON_MESSAGE), null, 2)
+    const view = render(<LogMessage {...messageProps({ formatted: true })} />)
+    expect(await settledRangeCount()).toBe(expectedRangeCount(pretty))
+    view.rerender(<LogMessage {...messageProps({ formatted: true, collapsed: true })} />)
+    expect(view.container.querySelector("pre")!.textContent).toBe(JSON_MESSAGE)
+    expect(await settledRangeCount()).toBe(expectedRangeCount(JSON_MESSAGE))
+    view.rerender(<LogMessage {...messageProps({ formatted: true, collapsed: false })} />)
+    expect(await settledRangeCount()).toBe(expectedRangeCount(pretty))
+  })
+
+  it("holds no ranges for a collapsed row with Syntax off — the plain line has no text node to paint", async () => {
     const view = render(<LogMessage {...messageProps()} />)
-    view.rerender(<LogMessage {...messageProps({ collapsed: true })} />)
+    view.rerender(<LogMessage {...messageProps({ collapsed: true, syntaxHighlight: false })} />)
     expect(await settledRangeCount()).toBe(0)
     view.rerender(<LogMessage {...messageProps({ collapsed: false })} />)
     expect(await settledRangeCount()).toBe(expectedRangeCount(JSON_MESSAGE))

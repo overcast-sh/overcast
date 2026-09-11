@@ -114,7 +114,11 @@ const live = vi.hoisted(() => {
     pages: [] as { timestamp: number; message: string; logStreamName: string }[][],
     /** What DescribeLogStreams returns — the backward floor's metadata. */
     streams: [] as { logStreamName: string; firstEventTimestamp?: number }[],
-    /** When set, time-bounded FilterLogEvents calls wait on it before replying. */
+    /**
+     * When set, end-bounded FilterLogEvents calls wait on it before replying
+     * — backward chunks and the tail's catch-up read; never the initial page,
+     * whose window is open-ended.
+     */
     gate: null as Promise<void> | null,
     /** When set, every FilterLogEvents call rejects with it. */
     filterError: null as Error | null,
@@ -924,6 +928,134 @@ describe("LogEventsViewer > live tail", () => {
     await user.click(await clearButton())
 
     expect(rowsShowing(TAILED.message)).toBe(0)
+  })
+})
+
+/*
+ * A live session pushes only what is written after it opens, and the page on
+ * screen is as old as the visit. Ticking Tail therefore reads the stretch in
+ * between — from the newest event on screen up to now — once per opened
+ * session, and shows the result beside the page and the live buffer.
+ */
+describe("LogEventsViewer > live tail catch-up", () => {
+  /** The page on screen, in the shape the mock's store holds. */
+  const PAGE = [
+    { timestamp: 1_000, logStreamName: "s1", message: "first message" },
+    { timestamp: 2_000, logStreamName: "s1", message: "second message" },
+  ]
+  /** Written after the page was fetched, before Tail was ticked. */
+  const IN_THE_GAP = {
+    timestamp: 3_000,
+    logStreamName: "s1",
+    message: "logged while nobody was watching",
+  }
+
+  /**
+   * The catch-up read's window: the FilterLogEvents calls made after Tail was
+   * ticked, reduced to their time bounds (the mock records the whole input).
+   */
+  const catchUpWindows = (from: number) =>
+    live.filterInputs
+      .slice(from)
+      .map(({ startTime, endTime, nextToken }) => ({ startTime, endTime, nextToken }))
+
+  it("reads the events written between the page fetch and the session opening", async () => {
+    const { user } = renderViewer(EVENTS)
+    // What is on disk by the time Tail is ticked: the page, plus one more.
+    live.stored = [...PAGE, IN_THE_GAP]
+    const before = live.filterInputs.length
+
+    await user.click(await tailButton())
+    await waitFor(() => expect(live.sessions).toHaveLength(1))
+
+    expect(await screen.findByText(IN_THE_GAP.message)).toBeInTheDocument()
+    // The read starts at the newest event on screen — inclusive, so that
+    // event comes back too and is reconciled rather than doubled.
+    expect(catchUpWindows(before)).toEqual([
+      { startTime: 2_000, endTime: expect.any(Number), nextToken: undefined },
+    ])
+    expect(rowsShowing("second message")).toBe(1)
+    expect(rowsShowing("first message")).toBe(1)
+  })
+
+  it("pages the read to the end when the gap exceeds one page", async () => {
+    const { user } = renderViewer(EVENTS)
+    live.stored = [...PAGE, IN_THE_GAP]
+    live.pages = [[{ timestamp: 4_000, logStreamName: "s1", message: "second page" }]]
+
+    await user.click(await tailButton())
+
+    expect(await screen.findByText("second page")).toBeInTheDocument()
+    expect(rowsShowing(IN_THE_GAP.message)).toBe(1)
+  })
+
+  it("reconciles an event the session also pushes", async () => {
+    const { user } = renderViewer(EVENTS)
+    live.stored = [...PAGE, IN_THE_GAP]
+
+    await user.click(await tailButton())
+    await waitFor(() => expect(live.sessions).toHaveLength(1))
+    await screen.findByText(IN_THE_GAP.message)
+
+    // Written just as the session opened: the read returned it and the
+    // session pushes it. One row.
+    live.sessions[0].push(IN_THE_GAP)
+    await new Promise((r) => setTimeout(r, 20))
+
+    expect(rowsShowing(IN_THE_GAP.message)).toBe(1)
+  })
+
+  it("catches up again from where the view got to when Tail is reopened", async () => {
+    const { user } = renderViewer(EVENTS)
+    live.stored = [...PAGE, IN_THE_GAP]
+
+    await user.click(await tailButton())
+    await screen.findByText(IN_THE_GAP.message)
+
+    // Tail off; more gets written; Tail on again.
+    await user.click(await tailButton())
+    const LATER = { timestamp: 5_000, logStreamName: "s1", message: "later" }
+    live.stored = [...PAGE, IN_THE_GAP, LATER]
+    const before = live.filterInputs.length
+    await user.click(await tailButton())
+
+    expect(await screen.findByText("later")).toBeInTheDocument()
+    expect(catchUpWindows(before)).toEqual([
+      { startTime: 3_000, endTime: expect.any(Number), nextToken: undefined },
+    ])
+    expect(rowsShowing(IN_THE_GAP.message)).toBe(1)
+  })
+
+  it("starts from the cleared-through cut when the screen was cleared", async () => {
+    const { user } = renderViewer(EVENTS)
+    live.stored = [...PAGE, IN_THE_GAP]
+
+    await user.click(await clearButton())
+    const before = live.filterInputs.length
+    await user.click(await tailButton())
+
+    // Everything at or before the cut stays hidden; the gap event shows.
+    expect(await screen.findByText(IN_THE_GAP.message)).toBeInTheDocument()
+    expect(rowsShowing("second message")).toBe(0)
+    expect(catchUpWindows(before)).toEqual([
+      { startTime: 2_000, endTime: expect.any(Number), nextToken: undefined },
+    ])
+  })
+
+  it("says the read is in progress at the newest edge, then that it is watching", async () => {
+    const { user } = renderViewer(EVENTS)
+    // Hold the read open so the marker is observable: the mock gates only
+    // end-bounded calls, and the catch-up read is one.
+    let release!: () => void
+    live.gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+
+    await user.click(await tailButton())
+
+    expect(await screen.findByText(/catching up on events since the last fetch/i)).toBeVisible()
+    release()
+    expect(await screen.findByText(/watching for new events/i)).toBeVisible()
   })
 })
 

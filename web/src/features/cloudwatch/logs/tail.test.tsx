@@ -10,9 +10,19 @@
 
 import { StrictMode } from "react"
 import { QueryClientProvider } from "@tanstack/react-query"
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  RouterProvider,
+} from "@tanstack/react-router"
 import { render, screen, waitFor } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
 import { createTestQueryClient } from "@/test/render"
+import { ToastContextProvider } from "@/components/ui/toast"
+import { TooltipProvider } from "@/components/ui/tooltip"
+import type { LogStreamTarget } from "@/features/map/log-stream-peek"
 
 // ─── StartLiveTail double ──────────────────────────────────────────────────
 
@@ -171,6 +181,32 @@ const { LogStreamPeek } = await import("@/features/map/log-stream-peek")
 // layout and so no `scrollTo`.
 Element.prototype.scrollTo = () => {}
 
+/**
+ * The peek links to the full stream viewer, so it needs a router in the tree —
+ * a memory router with the peek as its one route, built fresh per render —
+ * and its rows carry a copy button, which needs the toast and tooltip
+ * providers the app shell supplies.
+ */
+function peekRouter(target: LogStreamTarget) {
+  const rootRoute = createRootRoute()
+  return createRouter({
+    routeTree: rootRoute.addChildren([
+      createRoute({
+        getParentRoute: () => rootRoute,
+        path: "/",
+        component: () => (
+          <ToastContextProvider>
+            <TooltipProvider>
+              <LogStreamPeek target={target} onClose={() => {}} />
+            </TooltipProvider>
+          </ToastContextProvider>
+        ),
+      }),
+    ]),
+    history: createMemoryHistory({ initialEntries: ["/"] }),
+  })
+}
+
 /** Let every already-scheduled microtask and zero-delay timer run. */
 async function settle(times = 4) {
   for (let i = 0; i < times; i++) await new Promise((r) => setTimeout(r, 0))
@@ -288,7 +324,7 @@ describe("LogStreamPeek live tail", () => {
     render(
       <StrictMode>
         <QueryClientProvider client={createTestQueryClient()}>
-          <LogStreamPeek target={target} onClose={() => {}} />
+          <RouterProvider router={peekRouter(target)} />
         </QueryClientProvider>
       </StrictMode>,
     )
@@ -307,7 +343,7 @@ describe("LogStreamPeek live tail", () => {
     render(
       <StrictMode>
         <QueryClientProvider client={createTestQueryClient()}>
-          <LogStreamPeek target={target} onClose={() => {}} />
+          <RouterProvider router={peekRouter(target)} />
         </QueryClientProvider>
       </StrictMode>,
     )
@@ -364,7 +400,7 @@ describe("LogStreamPeek live tail", () => {
       render(
         <StrictMode>
           <QueryClientProvider client={createTestQueryClient()}>
-            <LogStreamPeek target={target} onClose={() => {}} />
+            <RouterProvider router={peekRouter(target)} />
           </QueryClientProvider>
         </StrictMode>,
       )

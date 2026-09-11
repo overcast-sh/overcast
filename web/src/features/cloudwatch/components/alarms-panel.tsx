@@ -71,37 +71,41 @@ function AlarmRow({ alarm, highlighted }: { alarm: MetricAlarm; highlighted: boo
         highlighted ? "border-accent bg-accent-muted/20" : "border-border bg-bg-elevated",
       )}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+      {/* Every text line under the name is `break-words` on a `min-w-0`
+          column: an alarm name, a comparison summary or a dimension list is
+          one long token more often than not, and without both the card
+          spilled past its border instead of wrapping. */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+        <div className="min-w-0 flex-1">
           <button
             type="button"
             onClick={() => setExpanded((open) => !open)}
             aria-expanded={expanded}
-            className="flex items-center gap-1.5 text-left text-sm font-medium text-fg hover:text-accent"
+            className="flex max-w-full items-start gap-1.5 text-left text-sm font-medium text-fg hover:text-accent"
           >
             {expanded ? (
-              <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+              <ChevronDown className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             ) : (
-              <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+              <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             )}
-            {alarmName || "(unnamed alarm)"}
+            <span className="min-w-0 break-words">{alarmName || "(unnamed alarm)"}</span>
           </button>
-          <div className="mt-1 font-mono text-xs text-fg-muted">{comparisonSummary(alarm)}</div>
-          <div className="text-xs text-fg-muted">
+          <div className="mt-1 font-mono text-xs break-words text-fg-muted">
+            {comparisonSummary(alarm)}
+          </div>
+          <div className="text-xs break-words text-fg-muted">
             {alarm.Namespace ?? "—"} · {formatAlarmDimensions(alarm)}
           </div>
           {alarm.StateReason && (
-            <p className="mt-1.5 text-xs text-fg-muted">{alarm.StateReason}</p>
+            <p className="mt-1.5 text-xs break-words text-fg-muted">{alarm.StateReason}</p>
           )}
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-1">
+        <div className="flex shrink-0 flex-row flex-wrap items-center gap-2 sm:flex-col sm:items-end sm:gap-1">
           <Badge variant={alarmVariant(alarm.StateValue)}>{alarm.StateValue ?? "UNKNOWN"}</Badge>
-          <span className="text-xs text-fg-muted">
+          <span className="text-xs whitespace-nowrap text-fg-muted">
             {formatTimestamp(alarm.StateUpdatedTimestamp)}
           </span>
-          {alarm.ActionsEnabled === false && (
-            <Badge variant="outline">Actions disabled</Badge>
-          )}
+          {alarm.ActionsEnabled === false && <Badge variant="outline">Actions disabled</Badge>}
         </div>
       </div>
 

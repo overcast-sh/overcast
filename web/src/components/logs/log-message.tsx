@@ -113,8 +113,10 @@ export const LogMessage = memo(function LogMessage({
   /**
    * Render as one truncated line — the AWS console's collapsed row. The badge
    * stays, ANSI still colours the line, a platform record still shows its
-   * summary; Format/Syntax belong to the expanded rendering and are skipped
-   * (along with their JSON parse — collapsed rows are the cheap ones).
+   * summary, and Syntax still colours a JSON document — on its single-line
+   * form, since one line is the whole point. Format is the one toggle that
+   * belongs to the expanded rendering alone: pretty-printing means nothing
+   * on a line that cannot break, so it is skipped along with its parse.
    */
   collapsed?: boolean
   /**
@@ -134,8 +136,16 @@ export const LogMessage = memo(function LogMessage({
   // LRU (see `jsonDocumentText`) — a remounted row or a Format flip-back is a
   // map hit, not a parse. ANSI stripping and the "is this one JSON document"
   // decision live inside it.
-  const jsonText =
-    collapsed || (!formatted && !syntaxHighlight) ? null : jsonDocumentText(message, formatted)
+  //
+  // A collapsed row is one line, so its document form is always the compact
+  // one, and it only pays for the parse when Syntax will colour the result.
+  const jsonText = collapsed
+    ? syntaxHighlight
+      ? jsonDocumentText(message, false)
+      : null
+    : !formatted && !syntaxHighlight
+      ? null
+      : jsonDocumentText(message, formatted)
   // A system log record would otherwise render as a JSON blob among the
   // function's own output, so the summary is what shows until Format is ticked
   // — which is the toggle that means "show me the document".
@@ -150,18 +160,31 @@ export const LogMessage = memo(function LogMessage({
 
   if (collapsed) {
     // `truncate` is what enforces the single line: nowrap turns any embedded
-    // newline into a space and the overflow into an ellipsis.
+    // newline into a space and the overflow into an ellipsis. It works on the
+    // highlighted `<pre>` too — token colour is spans (or CSS Highlight
+    // ranges) inside one nowrap block, so the ellipsis still lands at the
+    // edge and the row keeps its fixed height.
+    const lineClass = cn("min-w-0 flex-1 truncate font-mono leading-relaxed", sizeClassName)
     return (
       <div className="flex min-w-0 items-center gap-1.5">
         {level && !hideLevel && <LevelBadge level={level} />}
-        <div className={cn("min-w-0 flex-1 truncate font-mono leading-relaxed", sizeClassName)}>
-          <AnsiText
-            text={displayText}
-            renderText={
-              filterMatcher ? (chunk) => highlightMatches(chunk, filterMatcher) : undefined
-            }
+        {showSyntax ? (
+          <HighlightedCode
+            text={withPrefix(jsonText)}
+            language="json"
+            defer={defer}
+            className={lineClass}
           />
-        </div>
+        ) : (
+          <div className={lineClass}>
+            <AnsiText
+              text={displayText}
+              renderText={
+                filterMatcher ? (chunk) => highlightMatches(chunk, filterMatcher) : undefined
+              }
+            />
+          </div>
+        )}
       </div>
     )
   }
