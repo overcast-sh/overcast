@@ -286,6 +286,39 @@ describe("DebugSession > binding > after a service restart", () => {
     ])
     expect(session.getState().status).toBe("attached")
   })
+
+  it("reads every source map again on the new connection, since hot reload may have rebuilt it", async () => {
+    // Given: a session whose first container's script carried a map
+    const { session, bridge } = makeSession({ "src/index.ts": ORIGINAL })
+    const first = await attach(session, bridge)
+    parsed(first, "dist/index.js", INLINE_MAP)
+    await flush()
+    await flush()
+    expect(session.getState().hasSourceMaps).toBe(true)
+    expect(session.getState().originalFiles).toHaveLength(1)
+
+    // When: the container is replaced and the new one has not parsed anything yet
+    first.serverClose(1012, "service restart")
+    await vi.advanceTimersByTimeAsync(10)
+    const second = bridge.latest()
+    second.open()
+    await flush()
+    second.respondAll()
+    await flush()
+
+    // Then: nothing of the old container's maps is kept — a breakpoint on
+    // the original file would translate through a map the new build may
+    // have changed — until the new container reports the script
+    expect(session.getState().hasSourceMaps).toBe(false)
+    expect(session.getState().originalFiles).toEqual([])
+    expect(session.isOriginalFile("src/index.ts")).toBe(false)
+
+    parsed(second, "dist/index.js", INLINE_MAP)
+    await flush()
+    await flush()
+    expect(session.getState().hasSourceMaps).toBe(true)
+    expect(session.isOriginalFile("src/index.ts")).toBe(true)
+  })
 })
 
 describe("DebugSession > pause", () => {

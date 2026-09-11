@@ -806,8 +806,15 @@ export class DebugSession {
     if (!client) return
     this.epoch += 1
     this.scriptPaths.clear()
+    // A new connection is a new container, and after a hot reload its
+    // compiled output and maps may differ from the last one's: every map is
+    // read again as its script parses, so a breakpoint on an original file
+    // translates against what this container runs.
+    this.registry.clear()
     this.set({
       scripts: [],
+      originalFiles: [],
+      hasSourceMaps: false,
       breakpoints: this.state.breakpoints.map((bp) => ({ ...bp, bound: false })),
     })
     try {
@@ -832,8 +839,12 @@ export class DebugSession {
   private async onScriptParsed(params: CdpEvents["Debugger.scriptParsed"]): Promise<void> {
     const path = scriptPath(params.url)
     if (path === null) return
+    const epoch = this.epoch
     this.scriptPaths.set(params.scriptId, path)
     const mapped = await this.registry.register({ path, sourceMapURL: params.sourceMapURL })
+    // The map was fetched for a connection that has since been replaced:
+    // the new one's own scriptParsed reports what it runs.
+    if (this.epoch !== epoch || !this.client) return
     const scripts = this.state.scripts.filter((s) => s.path !== path)
     this.set({
       scripts: [...scripts, { path, mapped }],
