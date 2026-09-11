@@ -47,27 +47,28 @@ describe("CallStackPanel", () => {
         { path: "internal/modules/run_main", functionName: "runMain", internal: true },
       ]),
     )
-    const list = screen.getByRole("listbox", { name: "Call stack" })
-    const options = within(list).getAllByRole("option")
-    expect(options).toHaveLength(2)
-    expect(options[0]).toHaveAttribute("aria-selected", "true")
-    expect(options[0]).toHaveTextContent("helper")
-    expect(options[0]).toHaveTextContent("src/index.ts:2:2")
+    const list = screen.getByRole("list", { name: "Call stack" })
+    // A frame's button is named by its function and location; the fold's by its count.
+    const frames = () => within(list).getAllByRole("button", { name: /:\d+:\d+/ })
+    expect(frames()).toHaveLength(2)
+    expect(frames()[0]).toHaveAttribute("aria-current", "true")
+    expect(frames()[0]).toHaveTextContent("helper")
+    expect(frames()[0]).toHaveTextContent("src/index.ts:2:2")
     // The generated location rides on the tooltip.
-    expect(options[0]).toHaveAttribute("title", "Compiled: dist/index.js:3:4")
-    expect(options[1]).toHaveTextContent("handler")
+    expect(frames()[0]).toHaveAttribute("title", "Compiled: dist/index.js:3:4")
+    expect(frames()[1]).toHaveTextContent("handler")
 
     const fold = within(list).getByRole("button", { name: "2 internal frames" })
     expect(fold).toHaveAttribute("aria-expanded", "false")
     expect(screen.queryByText("runMain")).not.toBeInTheDocument()
     await user.click(fold)
-    expect(within(list).getAllByRole("option")).toHaveLength(4)
+    expect(frames()).toHaveLength(4)
     expect(screen.getByText("runMain")).toBeInTheDocument()
 
-    await user.click(options[1])
+    await user.click(frames()[1])
     expect(session.getState().pause?.selectedFrame).toBe(1)
-    expect(options[1]).toHaveAttribute("aria-selected", "true")
-    expect(options[0]).toHaveAttribute("aria-selected", "false")
+    expect(frames()[1]).toHaveAttribute("aria-current", "true")
+    expect(frames()[0]).not.toHaveAttribute("aria-current")
   })
 
   it("selects with the keyboard and flags a frame no map resolves", async () => {
@@ -83,12 +84,12 @@ describe("CallStackPanel", () => {
         { path: "lib/plain.js", line0: 4, functionName: "raw" },
       ]),
     )
-    const options = screen.getAllByRole("option")
-    expect(options[1]).toHaveTextContent("lib/plain.js:5:0")
-    expect(options[1]).toHaveTextContent("(no source map)")
-    expect(options[0]).not.toHaveTextContent("(no source map)")
+    const frames = screen.getAllByRole("button", { name: /:\d+:\d+/ })
+    expect(frames[1]).toHaveTextContent("lib/plain.js:5:0")
+    expect(frames[1]).toHaveTextContent("(no source map)")
+    expect(frames[0]).not.toHaveTextContent("(no source map)")
 
-    options[1].focus()
+    frames[1].focus()
     await user.keyboard("{Enter}")
     expect(session.getState().pause?.selectedFrame).toBe(1)
   })
