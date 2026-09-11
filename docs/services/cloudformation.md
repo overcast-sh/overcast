@@ -51,11 +51,11 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | Rollback | Automatic on failure, plus `RollbackStack` and `ContinueUpdateRollback` (including `ResourcesToSkip`, with AWS's nested `Stack.Logical` paths). An update rollback restores the template, parameters and tags as well as the resources. |
 | Resources that wait | Twelve types stabilise before completing — RDS instances and clusters, ECS services, three ElastiCache types, MSK, EKS, three EFS types and Lambda functions — so `CREATE_COMPLETE` means settled, not merely accepted. |
 | Nested stacks and custom resources | `AWS::CloudFormation::Stack` fetches and provisions the child synchronously; `Custom::*` invokes the Lambda named by `ServiceToken` and reads back `PhysicalResourceId` and `Data`. |
-| Cross-stack references | `Fn::ImportValue` resolves exports from other active stacks in the same region; `ListExports` and `ListImports` return the index. |
+| Cross-stack references | `Fn::ImportValue` resolves exports from other active stacks in the same region, and `ListExports` and `ListImports` return the index; `Fn::GetStackOutput` reads any output of a stack in any region, exported or not — see [Cross-stack references in CDK](../cdk/cross-stack-references.md). |
 
 Intrinsics: `Ref`, `Fn::Sub`, `Fn::Join`, `Fn::Select`, `Fn::GetAtt`, `Fn::If`,
-`Fn::Split`, `Fn::GetAZs`, `Fn::ImportValue`, `Fn::FindInMap`, `Fn::Base64`,
-`Fn::Cidr`, `Fn::Equals`, `Fn::Not`, `Fn::And`, `Fn::Or`. Pseudo-parameters:
+`Fn::Split`, `Fn::GetAZs`, `Fn::ImportValue`, `Fn::GetStackOutput`, `Fn::FindInMap`,
+`Fn::Base64`, `Fn::Cidr`, `Fn::Equals`, `Fn::Not`, `Fn::And`, `Fn::Or`. Pseudo-parameters:
 `AWS::Region`, `AWS::AccountId`, `AWS::StackId`, `AWS::StackName`,
 `AWS::URLSuffix`, `AWS::Partition`, `AWS::NotificationARNs`, `AWS::NoValue`.
 
@@ -70,6 +70,8 @@ Intrinsics: `Ref`, `Fn::Sub`, `Fn::Join`, `Fn::Select`, `Fn::GetAtt`, `Fn::If`,
 | `DeleteStack`'s `RetainResources`                   | Supported                                      | Not implemented                                                                                  |
 | `DeletionPolicy: Snapshot`                          | Snapshots                                      | Treated as `Retain`; no snapshot is taken                                                        |
 | Drift detection, StackSets, stack policies, imports | Supported                                      | Not implemented                                                                                  |
+| `Fn::GetStackOutput` where AWS does not yet allow it | `InternalFailure` as a direct output value or inside `Fn::Sub` variables, `Fn::Base64`, `Fn::Equals`, `Fn::ImportValue` | Resolved wherever it appears |
+| `Fn::GetStackOutput` with a `RoleArn`               | Assumes the role to read another account's stack | Shape-checked only; the one emulated account is read |
 
 The full list is in [Limitations](./cloudformation/limitations.md), with the
 status machine and the waits. Behind it:
@@ -100,7 +102,7 @@ A stack that fails outright leaves a separate trail.
 
 ## Operations
 
-24 of 52 listed operations are implemented.
+25 of 53 listed operations are implemented.
 Per-operation status, notes and AWS API links: [CloudFormation operations](cloudformation/operations.md).
 
 <!-- END overcast:capabilities -->
@@ -112,6 +114,7 @@ Per-operation status, notes and AWS API links: [CloudFormation operations](cloud
 - [CloudFormation stack updates](./cloudformation/updates.md) — in-place, replace, and what a rollback puts back
 - [CloudFormation teardown](./cloudformation/teardown.md) — failed deletes and DeletionPolicy
 - [CloudFormation dynamic references](./cloudformation/dynamic-references.md) — resolve semantics
+- [Cross-stack references in CDK](../cdk/cross-stack-references.md) — strong and weak references, stacks in different regions
 - [All service pages](./README.md)
 - [Service names and state overrides](../configuration.md#service-names)
 - [CDK](../cdk.md) — the supported resource types and how to point CDK here
