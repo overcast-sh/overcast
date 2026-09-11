@@ -39,6 +39,8 @@ func init() {
 		capabilities.Capability{Service: "cloudformation", Operation: "ListImports", Category: "Exports", Status: capabilities.StatusSupported, Notes: "Returns stacks that import a given export name"},
 		capabilities.Capability{Service: "cloudformation", Operation: "Fn::ImportValue", Category: "Intrinsic functions", Status: capabilities.StatusSupported, Notes: "Cross-stack reference resolution", DocOnly: true,
 			DocsURL: "[docs](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/intrinsic-function-reference-importvalue.html)"},
+		capabilities.Capability{Service: "cloudformation", Operation: "Fn::GetStackOutput", Category: "Intrinsic functions", Status: capabilities.StatusSupported, Notes: "Weak cross-stack reference: any output of a stack in any region, no export needed; RoleArn accepted but not assumed", DocOnly: true,
+			DocsURL: "[docs](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/intrinsic-function-reference-getstackoutput.html)"},
 		// Dynamic references — plain text in a property value, resolved at
 		// deploy time against another service. Not intrinsic functions, and
 		// listed separately because they are documented separately by AWS.

@@ -346,8 +346,22 @@ func (p *provisioner) provisionStackResourcesCtx(ctx context.Context, stack *Sta
 
 	}
 
-	// Resolve outputs.
-	stack.Outputs = p.resolveOutputs(tmpl, rCtx)
+	// Resolve outputs. An output whose Fn::GetStackOutput cannot be resolved
+	// fails the operation the way a resource would have: AWS validates the
+	// reference during the operation, and an output that quietly read as
+	// empty would be found by whatever consumes it next, not here.
+	outputs, outErr := p.resolveOutputs(tmpl, rCtx)
+	if outErr != nil {
+		if stack.DisableRollback {
+			p.failStack(ctx, stack, StatusCreateFailed, outErr.Error())
+			return
+		}
+		p.rollbackCreate(ctx, stack, rCtx, outErr.Error(), createRollbackOptions{
+			retainExceptOnCreate: stack.RetainExceptOnCreate,
+		})
+		return
+	}
+	stack.Outputs = outputs
 
 	// Mark stack complete and emit the final stack event.
 	stack.Status = StatusCreateComplete
@@ -451,6 +465,12 @@ func (p *provisioner) updateStackResourcesCtx(ctx context.Context, stack *Stack,
 		// stale value, deferring expansion avoids an internal API call per secret
 		// on no-op stack updates.
 		recordedProps := resolveAllProperties(res.Properties, rCtx)
+		// An Fn::GetStackOutput that failed to resolve is taken here, with the
+		// resource that made it still selected. Left on the context it would be
+		// charged to whichever resource next expands its properties — and an
+		// unchanged resource never does, so its own failure would otherwise
+		// skip it and fail its neighbour.
+		resolveErr := rCtx.takeDynamicRefErr()
 		propsHash := hashResourceProperties(res.Type, recordedProps, stack.Tags)
 
 		// Same logical ID and type, with a resource still behind the record.
@@ -475,7 +495,7 @@ func (p *provisioner) updateStackResourcesCtx(ctx context.Context, stack *Stack,
 				rCtx.Attributes[logicalID] = old.Attributes
 			}
 
-			if resourcePropertiesMatch(old.PropertiesHash, res.Type, recordedProps, stack.Tags, previous.Tags) {
+			if resolveErr == nil && resourcePropertiesMatch(old.PropertiesHash, res.Type, recordedProps, stack.Tags, previous.Tags) {
 				// No change, or legacy resource without a recorded hash —
 				// treat as unchanged. (Stacks created before property
 				// hashing was added have no recorded hash; without a
@@ -500,6 +520,9 @@ func (p *provisioner) updateStackResourcesCtx(ctx context.Context, stack *Stack,
 
 			// Properties changed — attempt update.
 			props, refErr := expandResourceProperties(res.Type, recordedProps, rCtx)
+			if resolveErr != nil {
+				refErr = resolveErr
+			}
 			p.recordEvent(ctx, stack, logicalID, old.PhysicalID, res.Type, ResourceUpdateInProgress, "")
 			outcome, updErr := resourceUpdateOutcome{}, refErr
 			if updErr == nil {
@@ -592,6 +615,9 @@ func (p *provisioner) updateStackResourcesCtx(ctx context.Context, stack *Stack,
 		}
 
 		props, refErr := expandResourceProperties(res.Type, recordedProps, rCtx)
+		if resolveErr != nil {
+			refErr = resolveErr
+		}
 
 		// New (or different type) — emit CREATE_IN_PROGRESS before provisioning.
 		p.recordEvent(ctx, stack, logicalID, "", res.Type, ResourceCreateInProgress, "")
@@ -647,6 +673,15 @@ func (p *provisioner) updateStackResourcesCtx(ctx context.Context, stack *Stack,
 		// deploy shows it as the resource goes by, not only on a later describe.
 		p.recordEvent(ctx, stack, logicalID, physID, res.Type, ResourceCreateComplete, rCtx.EmulationLimitation)
 		p.publishResourceEvent(ctx, events.CFNResourceProvisioned, stack.StackName, logicalID, res.Type, physID)
+	}
+
+	// Outputs are resolved before the cleanup phase deletes anything, so an
+	// output whose Fn::GetStackOutput cannot be resolved can still roll back
+	// to the originals the update superseded or removed.
+	outputs, outErr := p.resolveOutputs(tmpl, rCtx)
+	if outErr != nil {
+		p.rollbackUpdate(ctx, stack, newResources, preUpdate, replacedBy, inPlaceUpdated, dirtyUpdates, rCtx, previous, outErr.Error())
+		return
 	}
 
 	// Cleanup phase. Every resource is updated; what remains is removing what
@@ -717,7 +752,7 @@ func (p *provisioner) updateStackResourcesCtx(ctx context.Context, stack *Stack,
 	}
 
 	stack.Resources = newResources
-	stack.Outputs = p.resolveOutputs(tmpl, rCtx)
+	stack.Outputs = outputs
 	now := p.clk.Now()
 	stack.UpdatedAt = &now
 	stack.Status = StatusUpdateComplete
@@ -1331,6 +1366,7 @@ func (p *provisioner) buildResolveContext(stack *Stack, tmpl *Template) *resolve
 		Mappings:           tmpl.Mappings,
 		Exports:            exports,
 		DynamicRef:         p.dynamicRefResolver(region),
+		StackOutput:        p.stackOutputResolver(),
 	}
 }
 
@@ -1398,9 +1434,9 @@ func (p *provisioner) collectExports(stack *Stack) map[string]string {
 	return exports
 }
 
-func (p *provisioner) resolveOutputs(tmpl *Template, rCtx *resolveContext) []Output {
+func (p *provisioner) resolveOutputs(tmpl *Template, rCtx *resolveContext) ([]Output, error) {
 	if tmpl.Outputs == nil {
-		return nil
+		return nil, nil
 	}
 	outputs := make([]Output, 0, len(tmpl.Outputs))
 	for name, o := range tmpl.Outputs {
@@ -1423,9 +1459,15 @@ func (p *provisioner) resolveOutputs(tmpl *Template, rCtx *resolveContext) []Out
 		if o.Export != nil {
 			out.ExportName = fmt.Sprintf("%v", resolveIntrinsics(o.Export.Name, rCtx))
 		}
+		// The value or the export name may carry an Fn::GetStackOutput; a
+		// failure is taken here so it is attributed to this output rather than
+		// left for whatever resolves next.
+		if err := rCtx.takeDynamicRefErr(); err != nil {
+			return nil, fmt.Errorf("output %s: %w", name, err)
+		}
 		outputs = append(outputs, out)
 	}
-	return outputs
+	return outputs, nil
 }
 
 // createFailureSummary renders the stack-level StackStatusReason AWS sets on a
