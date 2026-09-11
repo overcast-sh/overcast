@@ -7,6 +7,12 @@
  *   what it pushes. History pages backward through the top sentinel; when the
  *   live session dies, a forward token walk (see `useForwardLogPages`) takes
  *   over at the bottom so events written after the death stay reachable.
+ *   Rows render through the same pipeline as the CloudWatch stream viewer
+ *   (`LogMessage`: level tint and badge, ANSI colour, a system log record's
+ *   summary line, Format/Syntax/Wrap/Collapse) and share its persisted
+ *   display preferences, so the peek reads like a window onto the full view
+ *   rather than a wall of raw text — with a client-side filter over what is
+ *   loaded, and a link to the full view for everything it does not do.
  * - Trigger Event tab: pretty-prints the JSON payload that triggered the
  *   invocation (as recorded by the instance tracker).
  */
@@ -14,18 +20,26 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import * as Dialog from "@radix-ui/react-dialog"
 import { infiniteQueryOptions, useInfiniteQuery } from "@tanstack/react-query"
+import { Link } from "@tanstack/react-router"
 import { useVirtualizer } from "@tanstack/react-virtual"
-import { X, FileText, Zap } from "lucide-react"
-import { AnsiText } from "@/components/logs/ansi-text"
+import { X, FileText, Zap, ExternalLink, Search } from "lucide-react"
 import { LiveTailIndicator } from "@/components/logs/live-tail-indicator"
-import { formatLogTime } from "@/lib/log-format"
+import { LogMessage } from "@/components/logs/log-message"
+import { CopyButton } from "@/components/ui/copy-button"
+import { formatCount } from "@/lib/format"
+import { describeLogEvent, formatLogTime, logLevelRowClass } from "@/lib/log-format"
 import { cn } from "@/lib/utils"
 import { logs } from "@/services/api"
 import type { LogEvent } from "@/types"
 import { useScrollTrigger } from "@/hooks/use-scroll-trigger"
-import { dropTailedDuplicates, logEventKey } from "@/features/cloudwatch/logs/tail"
+import {
+  compileFilterHighlighter,
+  dropTailedDuplicates,
+  logEventKey,
+} from "@/features/cloudwatch/logs/tail"
 import { useForwardLogPages } from "@/features/cloudwatch/logs/use-forward-log-pages"
 import { useLogTailBuffer } from "@/features/cloudwatch/logs/use-log-tail-buffer"
+import { useLogViewPrefs } from "@/features/cloudwatch/logs/use-log-view-prefs"
 import { TriggerEventViewer } from "./trigger-event-viewer"
 
 type Tab = "logs" | "trigger"
@@ -157,7 +171,9 @@ export const LogStreamPeek = memo(function LogStreamPeek({ target, onClose }: Lo
             onInteractOutside. */}
         <Dialog.Overlay className="pointer-events-none fixed inset-0 z-60" />
 
-        {/* Slide-in panel */}
+        {/* Slide-in panel. Wide enough for a pretty-printed document beside
+            its timestamp; capped at the viewport so it never overflows a
+            small window. */}
         <Dialog.Content
           aria-describedby={undefined}
           onEscapeKeyDown={onClose}
@@ -173,7 +189,7 @@ export const LogStreamPeek = memo(function LogStreamPeek({ target, onClose }: Lo
             onClose()
           }}
           className={cn(
-            "fixed inset-y-0 right-0 z-70 flex w-120 flex-col border-l border-border bg-bg-elevated shadow-2xl",
+            "fixed inset-y-0 right-0 z-70 flex w-[min(44rem,100vw)] flex-col border-l border-border bg-bg-elevated shadow-2xl",
             "transition-transform duration-300",
             "data-[state=closed]:translate-x-full data-[state=open]:translate-x-0",
           )}
@@ -185,17 +201,34 @@ export const LogStreamPeek = memo(function LogStreamPeek({ target, onClose }: Lo
               <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-4 py-3">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold">{target.title}</p>
-                  <p className="truncate font-mono text-xs text-fg-muted">{target.subtitle}</p>
+                  <p className="truncate font-mono text-xs text-fg-muted" title={target.subtitle}>
+                    {target.subtitle}
+                  </p>
                 </div>
-                <Dialog.Close asChild>
-                  <button
-                    type="button"
-                    className="mt-0.5 shrink-0 rounded p-1 text-fg-muted hover:bg-fg-muted/15 hover:text-fg"
-                    aria-label="Close"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </Dialog.Close>
+                <div className="flex shrink-0 items-center gap-1">
+                  {target.logGroup && target.logStream && (
+                    // Everything the peek does not do — time ranges, server-side
+                    // search, deep links, export — lives one click away.
+                    <Link
+                      to="/cloudwatch/logs/stream"
+                      search={{ groupName: target.logGroup, streamName: target.logStream }}
+                      className="flex items-center gap-1 rounded px-2 py-1 font-mono text-2xs text-fg-muted uppercase hover:bg-fg-muted/15 hover:text-fg"
+                      title="Open this stream in the CloudWatch Logs viewer"
+                    >
+                      <ExternalLink aria-hidden className="h-3.5 w-3.5" />
+                      Open in Logs
+                    </Link>
+                  )}
+                  <Dialog.Close asChild>
+                    <button
+                      type="button"
+                      className="shrink-0 rounded p-1 text-fg-muted hover:bg-fg-muted/15 hover:text-fg"
+                      aria-label="Close"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </Dialog.Close>
+                </div>
               </div>
 
               {/* Tabs */}
@@ -234,6 +267,7 @@ export const LogStreamPeek = memo(function LogStreamPeek({ target, onClose }: Lo
                     loadingMore={logQuery.isFetchingNextPage}
                     onLoadMore={() => logQuery.fetchNextPage()}
                     tailOverflowed={tail.overflowed}
+                    tailDead={tailDead}
                     hasNewer={tailDead && !forward.exhausted}
                     loadingNewer={forward.loading}
                     onLoadNewer={forward.loadNewer}
@@ -284,14 +318,43 @@ function TabButton({
   )
 }
 
+/** One of the peek's display toggles — the stream viewer's, at the peek's density. */
+function PrefToggle({
+  label,
+  checked,
+  onChange,
+  title,
+}: {
+  label: string
+  checked: boolean
+  onChange: (checked: boolean) => void
+  title?: string
+}) {
+  return (
+    <label
+      className="flex cursor-pointer items-center gap-1 rounded border border-border px-1.5 py-1 font-mono text-2xs font-medium text-fg-muted uppercase select-none hover:bg-fg-muted/10"
+      title={title}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="h-3 w-3 accent-accent"
+      />
+      {label}
+    </label>
+  )
+}
+
 function LogsPane({
-  logEvents,
+  logEvents: allEvents,
   loading,
   hasStream,
   hasMore,
   loadingMore,
   onLoadMore,
   tailOverflowed = 0,
+  tailDead,
   hasNewer,
   loadingNewer,
   onLoadNewer,
@@ -304,6 +367,8 @@ function LogsPane({
   onLoadMore: () => void
   /** Live events the bounded tail buffer has dropped — shown, never silent. */
   tailOverflowed?: number
+  /** The live session died; what is on screen has stopped moving on its own. */
+  tailDead: boolean
   /** The tail is dead and the forward token walk has more to fetch. */
   hasNewer: boolean
   loadingNewer: boolean
@@ -323,18 +388,44 @@ function LogsPane({
   } | null>(null)
   const skipUnreadRef = useRef(false)
 
+  // The same persisted preferences as the stream viewer: how the user likes
+  // logs rendered is one setting, not one per surface. Only the four that
+  // change a row's rendering are offered here; sort, UTC and deltas stay
+  // the full view's.
+  const { prefs, setPref } = useLogViewPrefs()
+  const { formatted, syntaxHighlight, wrapLines, collapsed: collapseMode } = prefs
+  // Rows the user expanded out of collapse mode, by event key so a prepend
+  // keeps the expansion on the same event. Session state, like the viewer's.
+  const [expandedKeys, setExpandedKeys] = useState<ReadonlySet<number>>(() => new Set())
+
+  // A client-side filter over what is loaded — a substring match on the
+  // message as it reads (escape sequences stripped), case-insensitive. Not
+  // FilterLogEvents: the peek's job is a quick look at this instance's
+  // output, and "the ERROR lines out of what I can already see" is the
+  // question it gets asked. Anything more is the full view's, one click away.
+  const [filter, setFilter] = useState("")
+  const filterMatcher = useMemo(() => compileFilterHighlighter(filter), [filter])
+  const logEvents = useMemo(() => {
+    const needle = filter.trim().toLowerCase()
+    if (!needle) return allEvents
+    return allEvents.filter((e) => describeLogEvent(e).plain.toLowerCase().includes(needle))
+  }, [allEvents, filter])
+
   const virtualizer = useVirtualizer({
     count: logEvents.length,
     getScrollElement: () => scrollRef.current,
-    // One unwrapped line at text-2xs leading-relaxed; wrapped lines are
-    // corrected by measurement.
-    estimateSize: () => 18,
+    // One unwrapped line at text-2xs leading-relaxed plus the row's padding;
+    // wrapped and pretty-printed rows are corrected by measurement.
+    estimateSize: () => 22,
     overscan: 20,
     // Keyed by event, not by index, so a measurement made for a row stays
     // with that row when older pages shift every index under it.
     getItemKey: (index) => logEventKey(logEvents[index]),
   })
   const totalSize = virtualizer.getTotalSize()
+  // Rows mounted mid-scroll render their highlight plain and hydrate once the
+  // scroll settles — the same lightening the full viewer does.
+  const scrolling = virtualizer.isScrolling
 
   // When a row above the viewport is measured and turns out taller or shorter
   // than its estimate, shift the scroll position by the difference so what the
@@ -407,9 +498,22 @@ function LogsPane({
     }
   }, [hasNewer, loadingNewer, onLoadNewer])
 
+  // The filter the arrival logic below last saw. A filter edit changes the
+  // row count without any event arriving, and count growth is what that
+  // logic reads as "new logs" — so an edit rebases its baseline instead of
+  // scrolling the view or raising the unread pill.
+  const seenFilterRef = useRef(filter)
+
   useLayoutEffect(() => {
     const el = scrollRef.current
-    if (!el || logEvents.length === 0) return
+    if (!el) return
+
+    if (seenFilterRef.current !== filter) {
+      seenFilterRef.current = filter
+      prevLenRef.current = logEvents.length
+      return
+    }
+    if (logEvents.length === 0) return
 
     if (!initializedRef.current) {
       initializedRef.current = true
@@ -453,7 +557,7 @@ function LogsPane({
       const unreadTimer = window.setTimeout(() => setHasUnread(true), 0)
       return () => window.clearTimeout(unreadTimer)
     }
-  }, [logEvents, loadingMore, virtualizer])
+  }, [logEvents, loadingMore, virtualizer, filter])
 
   // Measurement refines row heights after the pin-to-bottom scroll above, so
   // the true bottom keeps moving for a frame or two; while pinned, follow it.
@@ -463,6 +567,21 @@ function LogsPane({
     if (el) el.scrollTop = el.scrollHeight
   }, [totalSize])
 
+  // One handler for every row (the key rides the DOM, not a per-row closure):
+  // in collapse mode a click expands just that row, and a second folds it.
+  const handleRowToggle = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (window.getSelection()?.toString()) return
+    if ((e.target as Element).closest("button, a")) return
+    const key = Number(e.currentTarget.dataset.rowKey)
+    if (!Number.isFinite(key)) return
+    setExpandedKeys((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }, [])
+
   if (!hasStream) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-fg-muted">
@@ -470,14 +589,14 @@ function LogsPane({
       </div>
     )
   }
-  if (loading && logEvents.length === 0) {
+  if (loading && allEvents.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-fg-muted">
         Loading logs…
       </div>
     )
   }
-  if (!loading && logEvents.length === 0) {
+  if (!loading && allEvents.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-fg-muted">
         No log events yet.
@@ -486,50 +605,153 @@ function LogsPane({
   }
   return (
     <div className="relative flex h-full flex-col overflow-hidden">
-      <div
-        ref={scrollRef}
-        onScroll={onScroll}
-        className="min-h-0 flex-1 overflow-y-auto p-2 font-mono text-2xs leading-relaxed"
-      >
-        {/* Top sentinel — triggers loading older pages when scrolled into view */}
-        <div ref={topSentinelRef} />
-        {loadingMore && (
-          <div className="py-2 text-center text-2xs text-fg-muted">Loading older logs…</div>
-        )}
-        {!loadingMore && !hasMore && (
-          <div className="py-2 text-center text-2xs text-fg-muted">No earlier logs</div>
-        )}
-        {tailOverflowed > 0 && (
-          <div className="py-1 text-center text-2xs text-warning">
-            {tailOverflowed.toLocaleString()} older live events dropped — the stream is faster than
-            the buffer
-          </div>
-        )}
-        <div style={{ height: `${totalSize}px`, width: "100%", position: "relative" }}>
-          {virtualizer.getVirtualItems().map((virtualRow) => {
-            const e = logEvents[virtualRow.index]
-            return (
-              <div
-                key={virtualRow.key}
-                data-index={virtualRow.index}
-                ref={virtualizer.measureElement}
-                className="absolute top-0 left-0 flex w-full gap-2 hover:bg-fg-muted/5"
-                style={{ transform: `translateY(${virtualRow.start}px)` }}
-              >
-                <span className="shrink-0 font-mono text-fg-muted tabular-nums">
-                  {formatLogTime(e.timestamp)}
-                </span>
-                <span className="min-w-0 wrap-break-word text-fg">
-                  <AnsiText text={e.message ?? ""} />
-                </span>
-              </div>
-            )
-          })}
+      {/* Toolbar: filter + display toggles */}
+      <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-border px-2 py-1.5">
+        <div className="flex min-w-32 flex-1 items-center gap-1.5 rounded-md border border-border bg-bg-muted px-2">
+          <Search aria-hidden className="h-3.5 w-3.5 shrink-0 text-fg-muted" />
+          <input
+            type="text"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setFilter("")
+            }}
+            placeholder="Filter loaded events"
+            aria-label="Filter loaded events"
+            data-1p-ignore
+            data-lpignore="true"
+            className="h-6 min-w-0 flex-1 bg-transparent font-mono text-2xs text-fg outline-none placeholder:text-fg-subtle"
+          />
+          {filter && (
+            <button
+              type="button"
+              onClick={() => setFilter("")}
+              aria-label="Clear filter"
+              className="rounded p-0.5 text-fg-muted hover:text-fg"
+            >
+              <X aria-hidden className="h-3 w-3" />
+            </button>
+          )}
         </div>
-        {loadingNewer && (
-          <div className="py-2 text-center text-2xs text-fg-muted">Loading newer logs…</div>
-        )}
+        <PrefToggle
+          label="Format"
+          checked={formatted}
+          onChange={(v) => setPref("formatted", v)}
+          title="Pretty-print JSON documents"
+        />
+        <PrefToggle
+          label="Syntax"
+          checked={syntaxHighlight}
+          onChange={(v) => setPref("syntaxHighlight", v)}
+          title="Colour JSON documents"
+        />
+        <PrefToggle
+          label="Wrap"
+          checked={wrapLines}
+          onChange={(v) => setPref("wrapLines", v)}
+          title="Wrap long lines instead of scrolling sideways"
+        />
+        <PrefToggle
+          label="Collapse"
+          checked={collapseMode}
+          onChange={(v) => setPref("collapsed", v)}
+          title="Show every row as one line — click a row to expand it"
+        />
+        <span className="ml-auto font-mono text-2xs text-fg-muted tabular-nums">
+          {filter
+            ? `${formatCount(logEvents.length)} of ${formatCount(allEvents.length)}`
+            : `${formatCount(allEvents.length)} event${allEvents.length === 1 ? "" : "s"}`}
+        </span>
       </div>
+
+      {logEvents.length === 0 ? (
+        <div className="flex flex-1 items-center justify-center text-sm text-fg-muted">
+          No loaded events match the filter.
+        </div>
+      ) : (
+        <div
+          ref={scrollRef}
+          onScroll={onScroll}
+          data-1p-ignore=""
+          data-lpignore="true"
+          data-form-type="other"
+          className="min-h-0 flex-1 overflow-auto font-mono text-2xs leading-relaxed"
+        >
+          {/* Top sentinel — triggers loading older pages when scrolled into view */}
+          <div ref={topSentinelRef} />
+          {loadingMore && (
+            <div className="py-2 text-center text-2xs text-fg-muted">Loading older logs…</div>
+          )}
+          {!loadingMore && !hasMore && (
+            <div className="py-2 text-center text-2xs text-fg-muted">No earlier logs</div>
+          )}
+          {tailOverflowed > 0 && (
+            <div className="py-1 text-center text-2xs text-warning">
+              {formatCount(tailOverflowed)} older live events dropped — the stream is faster than
+              the buffer
+            </div>
+          )}
+          <div style={{ height: `${totalSize}px`, width: "100%", position: "relative" }}>
+            {virtualizer.getVirtualItems().map((virtualRow) => {
+              const e = logEvents[virtualRow.index]
+              const meta = describeLogEvent(e)
+              const rowKey = logEventKey(e)
+              const rowCollapsed = collapseMode && !expandedKeys.has(rowKey)
+              return (
+                <div
+                  key={virtualRow.key}
+                  data-index={virtualRow.index}
+                  data-row-key={rowKey}
+                  ref={virtualizer.measureElement}
+                  onClick={collapseMode ? handleRowToggle : undefined}
+                  className={cn(
+                    "group/row absolute top-0 left-0 flex w-full gap-2 border-b border-l-2 border-border-muted border-l-transparent px-2 py-0.5 hover:bg-fg-muted/5",
+                    collapseMode && "cursor-pointer",
+                    meta.level && logLevelRowClass[meta.level],
+                  )}
+                  style={{ transform: `translateY(${virtualRow.start}px)` }}
+                >
+                  <span className="shrink-0 pt-px font-mono text-fg-muted tabular-nums select-none">
+                    {formatLogTime(e.timestamp)}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <LogMessage
+                      message={e.message ?? ""}
+                      summary={meta.summary}
+                      formatted={formatted}
+                      syntaxHighlight={syntaxHighlight}
+                      wrapLines={wrapLines}
+                      filterMatcher={filterMatcher}
+                      level={meta.level}
+                      collapsed={rowCollapsed}
+                      defer={scrolling}
+                    />
+                  </div>
+                  <CopyButton
+                    value={meta.plain}
+                    noun="log message"
+                    tone="inline"
+                    className="shrink-0 self-start p-0.5 text-fg-muted/40 opacity-0 transition-opacity group-hover/row:opacity-100 hover:text-fg-muted"
+                  />
+                </div>
+              )
+            })}
+          </div>
+          {loadingNewer && (
+            <div className="py-2 text-center text-2xs text-fg-muted">Loading newer logs…</div>
+          )}
+          {/* The bottom edge says what it is: a live session waiting, or one
+              that died (in which case the forward walk is what keeps this
+              edge honest, and reopening the peek is the recovery path). */}
+          {!loadingNewer && !hasNewer && (
+            <div className="py-2 text-center text-2xs text-fg-muted">
+              {tailDead
+                ? "Live tail disconnected — reopen to reconnect"
+                : "Live — watching for new events"}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* "New logs" pill — visible when scrolled up and new events arrive */}
       {hasUnread && (

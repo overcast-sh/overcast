@@ -48,6 +48,7 @@ import {
   mergeSortedEvents,
 } from "@/features/cloudwatch/logs/tail"
 import { useLogTailBuffer } from "@/features/cloudwatch/logs/use-log-tail-buffer"
+import { useTailCatchUp } from "@/features/cloudwatch/logs/use-tail-catch-up"
 import { useLoadMoreAtEdge } from "@/hooks/use-load-more-at-edge"
 import { useLogViewPrefs } from "@/features/cloudwatch/logs/use-log-view-prefs"
 import { ExportMenu } from "@/features/cloudwatch/logs/components/export-menu"
@@ -252,11 +253,31 @@ export function LogEventsViewer({ groupName, streamName, anchor }: Props) {
     streamName,
     filterPattern: activeFilter,
   })
+  // Ticking Tail must also pull in what was logged between the page fetch and
+  // the session opening — a session only pushes what is written after it
+  // opens, and the page is as old as the visit. Once per opened session, a
+  // FilterLogEvents read runs from the newest event on screen up to now and
+  // lands as a third source beside the pages and the live buffer (see
+  // use-tail-catch-up.ts for why the ordering leaves no seam).
+  const newestOnScreenRef = useRef<number | undefined>(undefined)
+  const catchUp = useTailCatchUp({
+    // Held back until the page is in: with nothing on screen the read would
+    // start from the beginning of the window — the very read in flight.
+    openSession: isLoading ? null : tail.openSession,
+    groupName,
+    streamName,
+    filterPattern: activeFilter,
+    // The newest event on screen from any source, else the cleared-through
+    // cut (everything before it is hidden anyway), else the window's start.
+    since: () => newestOnScreenRef.current ?? clearedThrough ?? windowStart,
+  })
   const clearTail = tail.clear
+  const resetCatchUp = catchUp.reset
   useEffect(() => {
     clearTail()
+    resetCatchUp()
     setClearedThrough(null)
-  }, [clearTail, groupName, streamName, activeFilter, windowStart, windowEnd])
+  }, [clearTail, resetCatchUp, groupName, streamName, activeFilter, windowStart, windowEnd])
 
   // Ascending is the canonical order and the other direction is its mirror.
   // Each page sorts once on first sight (cached on the page object itself, so
@@ -268,14 +289,27 @@ export function LogEventsViewer({ groupName, streamName, anchor }: Props) {
     if (pages.length === 0) return NO_EVENTS
     return pages.map(sortedPageEvents).reduce((merged, page) => mergeSortedEvents(merged, page))
   }, [data])
+  // The catch-up read starts at the newest fetched event (inclusive), so it
+  // overlaps the pages by at least that one — reconciled by count, like the
+  // live buffer below. From here on "stored" means pages plus catch-up.
+  const ascendingStored = useMemo(
+    () =>
+      catchUp.events.length === 0
+        ? ascendingFetched
+        : mergeSortedEvents(
+            ascendingFetched,
+            dropTailedDuplicates(ascendingFetched, catchUp.events),
+          ),
+    [ascendingFetched, catchUp.events],
+  )
   const visibleFetched = useMemo(
     () =>
       clearedThrough == null
-        ? ascendingFetched
-        : ascendingFetched.filter((evt) => (evt.timestamp ?? 0) > clearedThrough),
-    [ascendingFetched, clearedThrough],
+        ? ascendingStored
+        : ascendingStored.filter((evt) => (evt.timestamp ?? 0) > clearedThrough),
+    [ascendingStored, clearedThrough],
   )
-  const clearedCount = ascendingFetched.length - visibleFetched.length
+  const clearedCount = ascendingStored.length - visibleFetched.length
 
   // A refetch while tailing re-reads events the open session has already
   // pushed, so the two sources are reconciled rather than concatenated.
@@ -297,6 +331,12 @@ export function LogEventsViewer({ groupName, streamName, anchor }: Props) {
     () => (sortAsc ? ascending : [...ascending].reverse()),
     [ascending, sortAsc],
   )
+  // Where the next catch-up read starts. A ref written from an effect: the
+  // newest edge moves with every live event, and as state it would re-run
+  // the read's effect on each one.
+  useEffect(() => {
+    newestOnScreenRef.current = ascending.at(-1)?.timestamp
+  }, [ascending])
 
   // Row metadata is derived per event and cached on the event itself, so a
   // tail that has accumulated history never re-reads it: only the event that
@@ -1218,7 +1258,9 @@ export function LogEventsViewer({ groupName, streamName, anchor }: Props) {
                     : tailMode
                       ? tail.status === "error"
                         ? "Live tail disconnected — toggle Tail to reconnect"
-                        : "Live tail — watching for new events"
+                        : catchUp.loading
+                          ? "Live tail — catching up on events since the last fetch…"
+                          : "Live tail — watching for new events"
                       : "End of logs"}
               </div>
             ) : (

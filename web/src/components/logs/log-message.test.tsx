@@ -116,3 +116,73 @@ describe("LogMessage scroll-time highlight deferral", () => {
     expect(tokenCount(container)).toBe(0)
   })
 })
+
+/*
+ * A collapsed row is one truncated line, and Syntax used to be skipped for it
+ * outright — so ticking Collapse in a stream of JSON documents turned every
+ * colour off. The single line is still a document; it gets its tokens.
+ */
+describe("LogMessage collapsed rows", () => {
+  const PRETTY_MESSAGE = '{\n  "level": "error",\n  "msg": "boom"\n}'
+
+  function renderCollapsed(props: {
+    syntaxHighlight: boolean
+    formatted?: boolean
+    defer?: boolean
+  }) {
+    return render(
+      <LogMessage
+        message={PRETTY_MESSAGE}
+        formatted={props.formatted ?? false}
+        syntaxHighlight={props.syntaxHighlight}
+        wrapLines
+        filterMatcher={null}
+        level="error"
+        collapsed
+        defer={props.defer ?? false}
+      />,
+    )
+  }
+
+  it("syntax-highlights a JSON document on its single-line form", () => {
+    const { container } = renderCollapsed({ syntaxHighlight: true })
+    expect(tokenCount(container)).toBeGreaterThan(0)
+    // Compact, whatever shape it arrived in: a collapsed line cannot break.
+    expect(container.querySelector("pre")?.textContent).toBe('{"level":"error","msg":"boom"}')
+    expect(container.querySelector("pre")?.className).toContain("truncate")
+  })
+
+  it("ignores Format while collapsed — pretty-printing has nothing to print on one line", () => {
+    const { container } = renderCollapsed({ syntaxHighlight: true, formatted: true })
+    expect(container.querySelector("pre")?.textContent).toBe('{"level":"error","msg":"boom"}')
+  })
+
+  it("renders the raw line without a highlight block when Syntax is off", () => {
+    const { container } = renderCollapsed({ syntaxHighlight: false })
+    expect(container.querySelector("pre")).toBeNull()
+    expect(tokenCount(container)).toBe(0)
+  })
+
+  it("defers the tokens mid-scroll like an expanded row", () => {
+    const { container } = renderCollapsed({ syntaxHighlight: true, defer: true })
+    expect(tokenCount(container)).toBe(0)
+    expect(container.querySelector("pre")?.textContent).toBe('{"level":"error","msg":"boom"}')
+  })
+
+  it("keeps a platform record's summary as the collapsed text, uncoloured", () => {
+    const { container } = render(
+      <LogMessage
+        message='{"time":"2026-08-10T02:34:42.700Z","type":"platform.report","record":{"requestId":"abc","status":"success","metrics":{"durationMs":3.1}}}'
+        summary="REPORT RequestId: abc\tDuration: 3.10 ms"
+        formatted={false}
+        syntaxHighlight
+        wrapLines
+        filterMatcher={null}
+        level="info"
+        collapsed
+      />,
+    )
+    expect(container.textContent).toContain("REPORT RequestId: abc")
+    expect(container.querySelector("pre")).toBeNull()
+  })
+})

@@ -47,6 +47,15 @@ export interface LogTailBuffer {
    * session and clears the error.
    */
   status: "idle" | "live" | "error"
+  /**
+   * Identity of the session that is currently open, or null while none is —
+   * before StartLiveTail has answered, and after a session dies. Changes
+   * exactly once per session, when the emulator confirms it (see
+   * `TailLogEventsOptions.onOpen`), so an effect keyed on it runs once per
+   * session: that is how a viewer catches up on the gap between its last
+   * fetch and the moment the session started pushing.
+   */
+  openSession: string | null
   /** Empty the buffer without hanging up the session. */
   clear: () => void
 }
@@ -105,6 +114,10 @@ export function useLogTailBuffer({
   const session = JSON.stringify([enabled, groupIdentifier, streamName, filterPattern, cap])
   const [diedIn, setDiedIn] = useState<string | null>(null)
   const died = diedIn === session
+  // Likewise keyed on the session: the identity the emulator confirmed open.
+  // One state write per session, when StartLiveTail answers — never per
+  // frame, which is why this is not derived from `onActivity`.
+  const [openedIn, setOpenedIn] = useState<string | null>(null)
 
   // A buffer belongs to one stream identity. When the identity changes the
   // old events are another stream's, so they go — but `enabled` is not part
@@ -160,6 +173,7 @@ export function useLogTailBuffer({
           filterPattern,
           signal: controller.signal,
           onActivity: markActivity,
+          onOpen: () => setOpenedIn(session),
         })) {
           pending.push(event)
           frame ??= requestAnimationFrame(flush)
@@ -192,5 +206,6 @@ export function useLogTailBuffer({
   const clear = useCallback(() => setBuffer(EMPTY), [])
 
   const status = !enabled || !groupIdentifier ? "idle" : died ? "error" : "live"
-  return { events: buffer.events, overflowed: buffer.overflowed, status, clear }
+  const openSession = status === "live" && openedIn === session ? session : null
+  return { events: buffer.events, overflowed: buffer.overflowed, status, openSession, clear }
 }
