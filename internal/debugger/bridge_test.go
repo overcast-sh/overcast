@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/coder/websocket"
 	"github.com/go-chi/chi/v5"
@@ -433,4 +434,35 @@ func TestBridgePath(t *testing.T) {
 	assert.Equal(t, "/_overcast/debugger/targets/ecs/task-1/ws?container=app+1", BridgePath(ServiceECS, "task-1", "app 1"))
 	assert.Equal(t, "", UntaggedDescriptor(ServiceLambda, "fn", "", "").BridgePath)
 	assert.False(t, strings.Contains(BridgePath(ServiceLambda, "a/b", ""), "a/b"), "a slash in a resource is escaped")
+}
+
+func TestCloseReason_fitsAFrameInBytesOnARuneBoundary(t *testing.T) {
+	// Given: a reason longer than a close frame holds, ending in multi-byte
+	// runes right where the cut lands
+	long := strings.Repeat("a", closeReasonMax-4) + "éééé"
+	require.Greater(t, len(long), closeReasonMax)
+
+	// When: it is fitted
+	got := closeReason(long)
+
+	// Then: it is within the byte limit websocket.Close enforces, valid
+	// UTF-8, and says it was cut
+	assert.LessOrEqual(t, len(got), closeReasonMax)
+	assert.True(t, utf8.ValidString(got), "cut through a rune: %q", got)
+	assert.True(t, strings.HasSuffix(got, "…"))
+	assert.Equal(t, "short", closeReason("short"))
+
+	// And: a target whose reason is long still closes with the code and a
+	// reason the console can read, rather than an abnormal closure
+	m := newTestManager(t, clock.NewMock(), config.DebuggerTimeoutAttached)
+	tgt, err := m.Ensure("lambda/fn", Spec{Service: ServiceLambda, Tagged: true}, Resolution{Protocol: inspector{}, Source: SourceRuntime})
+	require.NoError(t, err)
+	tgt.mu.Lock()
+	tgt.reason = strings.Repeat("the port is held by something else; ", 6)
+	tgt.mu.Unlock()
+	srv := bridgeServer(t, m)
+	c := mustDialBridge(t, srv, tgt.Descriptor().BridgePath)
+	ce := readClose(t, c)
+	assert.Equal(t, websocket.StatusInternalError, ce.Code)
+	assert.True(t, strings.HasPrefix(ce.Reason, "not listening: the port is held"), ce.Reason)
 }

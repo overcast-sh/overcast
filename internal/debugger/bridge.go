@@ -21,6 +21,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"github.com/coder/websocket"
 	"go.uber.org/zap"
@@ -363,10 +364,18 @@ func (s *bridgeSession) closeClient(code websocket.StatusCode, reason string) {
 	_ = s.client.CloseNow()
 }
 
-// closeReason fits a reason into a close frame.
+// closeReason fits a reason into a close frame: the limit is in bytes, the
+// ellipsis is three of them, and the cut lands on a rune boundary, so the
+// frame is valid UTF-8 and websocket.Close does not refuse it — which would
+// leave the console with a 1006 and no reason at all.
 func closeReason(reason string) string {
 	if len(reason) <= closeReasonMax {
 		return reason
 	}
-	return reason[:closeReasonMax-1] + "…"
+	const ellipsis = "…"
+	cut := closeReasonMax - len(ellipsis)
+	for cut > 0 && !utf8.RuneStart(reason[cut]) {
+		cut--
+	}
+	return reason[:cut] + ellipsis
 }
