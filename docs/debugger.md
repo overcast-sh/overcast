@@ -83,6 +83,13 @@ page shows this configuration with the real port and roots filled in, and the
 equivalent for JetBrains, Chrome DevTools and the command line, each with a
 copy button.
 
+### In the console
+
+A Node.js function can also be debugged with no editor at all, from the Code
+tab of its console page: breakpoints in the gutter, stepping, locals, watches,
+the call stack and source maps, in
+[Debugging in the console](./debugger-console.md).
+
 ### Runtimes
 
 | Runtime | What to add | Wire protocol |

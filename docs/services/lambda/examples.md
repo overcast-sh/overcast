@@ -265,4 +265,5 @@ and Lambda ARNs expose. The AWS Parameters and Secrets Lambda Extension for
 - [Lambda troubleshooting](./troubleshooting.md) — throttles, layer errors, extension endpoints
 - [The inner loop](../../local-dev.md) — hot reload across services
 - [Step debugging inside emulated compute](../../debugger.md) — breakpoints inside the handler
+- [Debugging in the console](../../debugger-console.md) — the same breakpoints from the function page's Code tab
 - [Egress modes](../../networking/egress.md) — what a function can reach outside the machine

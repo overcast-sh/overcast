@@ -41,6 +41,7 @@ Credentials, regions and per-language client setup are in
 | [Networking and host-based addressing](./networking.md) | Host-routed endpoints, wildcard DNS, sibling containers, VPC isolation |
 | [The inner loop](./local-dev.md) | Editing a file and seeing it take effect — `cdk watch`, Lambda and ECS hot reload |
 | [Step debugging inside emulated compute](./debugger.md) | Attaching VS Code, a JetBrains IDE or Chrome DevTools to code running inside a Lambda function or ECS task |
+| [Debugging in the console](./debugger-console.md) | Breakpoints, stepping, locals and watches in the function page's Code tab, for Node.js functions |
 | [HTTPS and HTTP/2](./https.md) | Browser-trusted TLS in two commands, in Docker, and by hand |
 
 ## Tune and inspect
