@@ -3,7 +3,8 @@
  * overview line and the Test tab hint. Kept out of the component files so
  * those export only components (fast refresh).
  */
-import { API_BASE } from "@/services/api/base"
+import { API_BASE, endpointResolver } from "@/services/api/base"
+import { DEFAULT_ENDPOINT, type EmulatorEndpoint } from "@/services/discovery"
 import type { DebuggerTarget } from "@/types"
 
 /** The states in which a client holds the port — the clock is suspended in both. */
@@ -23,11 +24,9 @@ export function shortContainerId(id: string): string {
 
 /**
  * What the descriptor says about debugging inside the console
- * (docs/plans/compute-debugger-console.md § 3.2). The two fields —
- * `consoleDebug` and `bridgePath` — arrive with the regenerated `api.gen.ts`
- * from the backend phase; until then they are read here as optional, so a
- * descriptor without them means "not offered" rather than a crash, and no
- * generated file is edited by hand.
+ * (docs/plans/compute-debugger-console.md § 3.2): `consoleDebug` is the
+ * offer, `bridgePath` where to take it up. An entry synthesised for an
+ * untagged resource carries neither.
  */
 export interface ConsoleDebug {
   /** The server offers an in-console session for this target. */
@@ -36,11 +35,11 @@ export interface ConsoleDebug {
   bridgePath: string | null
 }
 
-export function consoleDebugOf(target: DebuggerTarget): ConsoleDebug {
-  const extra = target as { consoleDebug?: unknown; bridgePath?: unknown }
-  const bridgePath =
-    typeof extra.bridgePath === "string" && extra.bridgePath !== "" ? extra.bridgePath : null
-  return { available: extra.consoleDebug === true && bridgePath !== null, bridgePath }
+export function consoleDebugOf(
+  target: Pick<DebuggerTarget, "consoleDebug" | "bridgePath">,
+): ConsoleDebug {
+  const bridgePath = target.bridgePath === "" ? null : target.bridgePath
+  return { available: target.consoleDebug && bridgePath !== null, bridgePath }
 }
 
 /** The BFF's proxy prefix for the emulator's own endpoints — `/_overcast/x` is served at `/api/x`. */
@@ -50,14 +49,19 @@ const EMULATOR_PREFIX = /^\/_overcast(?=\/)/
  * The WebSocket URL for a bridge path, on the console's own origin and
  * through the BFF's `/api` prefix, as every other emulator endpoint is
  * reached (§ 2, "same origin"). The endpoint-selection headers `apiFetch`
- * sends cannot ride on a WebSocket upgrade; the BFF falls back to its
- * configured emulator for a request without them, which is the console's
- * default endpoint.
+ * sends cannot ride on a WebSocket upgrade, so a console pointed at an
+ * emulator other than its default names it in the query instead — `ep`,
+ * the parameter the BFF reads for the same reason on its event stream.
+ * On the default endpoint nothing is added and the BFF's own default
+ * applies, which is the same server.
  */
 export function bridgeUrl(
   bridgePath: string,
+  endpoint: Pick<EmulatorEndpoint, "baseUrl"> = endpointResolver.get(),
   location: { protocol: string; host: string } = window.location,
 ): string {
   const scheme = location.protocol === "https:" ? "wss:" : "ws:"
-  return `${scheme}//${location.host}${API_BASE}${bridgePath.replace(EMULATOR_PREFIX, "")}`
+  const url = `${scheme}//${location.host}${API_BASE}${bridgePath.replace(EMULATOR_PREFIX, "")}`
+  if (endpoint.baseUrl === DEFAULT_ENDPOINT.baseUrl) return url
+  return `${url}?${new URLSearchParams({ ep: endpoint.baseUrl }).toString()}`
 }

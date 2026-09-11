@@ -118,7 +118,7 @@ function ActiveCodeBrowser({
       })
     }
     const frame = pause?.frames.at(pause.selectedFrame)
-    if (frame) {
+    if (frame && !frame.internal) {
       push(frame.location.path, {
         line: frame.location.line,
         kind: "current",
@@ -198,7 +198,8 @@ function breakpointTitle(condition: string, enabled: boolean, bound: boolean): s
 /** Where to scroll on a pause: the selected frame, keyed so a new pause on the same line still reveals. */
 function revealFor(pause: PauseState | null) {
   const frame = pause?.frames.at(pause.selectedFrame)
-  if (!pause || !frame) return null
+  // An internal frame is outside the deployment: nothing to open for it.
+  if (!pause || !frame || frame.internal) return null
   return {
     path: frame.location.path,
     line: frame.location.line,

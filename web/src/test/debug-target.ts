@@ -25,6 +25,8 @@ export function debugTarget(overrides: Partial<DebuggerTarget> = {}): DebuggerTa
     remoteRoot: "/var/task",
     localRoot: "",
     timeoutPolicy: "attached",
+    consoleDebug: false,
+    bridgePath: "",
     setup: {
       flag: "OVERCAST_DEBUGGER=true",
       tagCli:

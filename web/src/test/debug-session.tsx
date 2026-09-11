@@ -1,6 +1,7 @@
 import type { ReactElement } from "react"
 import { DebugSessionContext } from "@/features/debugger/session/context"
 import { DebugSession } from "@/features/debugger/session/session"
+import type { CdpEvents, CdpScope } from "@/features/debugger/session/cdp-protocol"
 import { fakeBridge, type FakeBridgeSocket } from "@/test/fake-bridge"
 import { render } from "@/test/render"
 
@@ -77,6 +78,46 @@ export function pausedAt(socket: FakeBridgeSocket, path: string, line0: number, 
         this: { type: "undefined" },
       },
     ],
+  })
+}
+
+/**
+ * A pause with the given frames as the inspector reports them — for the
+ * panels, which need scopes, several frames, and internal ones. Each frame
+ * is `{ path, line0, functionName, scopes, internal }`; an internal frame
+ * carries a `node:` URL, which is what the session folds.
+ */
+export function pausedWith(
+  socket: FakeBridgeSocket,
+  frames: Array<{
+    path: string
+    line0?: number
+    column0?: number
+    functionName?: string
+    scopes?: Array<{ type: CdpScope["type"]; name?: string; objectId?: string }>
+    internal?: boolean
+  }>,
+  extra: Partial<CdpEvents["Debugger.paused"]> = {},
+) {
+  socket.event("Debugger.paused", {
+    reason: "other",
+    callFrames: frames.map((frame, i) => ({
+      callFrameId: `f${i}`,
+      functionName: frame.functionName ?? `fn${i}`,
+      location: {
+        scriptId: `s-${frame.path}`,
+        lineNumber: frame.line0 ?? 0,
+        columnNumber: frame.column0 ?? 0,
+      },
+      url: frame.internal ? `node:${frame.path}` : `file:///var/task/${frame.path}`,
+      scopeChain: (frame.scopes ?? []).map((scope) => ({
+        type: scope.type,
+        name: scope.name,
+        object: { type: "object", objectId: scope.objectId },
+      })),
+      this: { type: "undefined" },
+    })),
+    ...extra,
   })
 }
 

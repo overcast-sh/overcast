@@ -96,6 +96,18 @@ export default defineConfig(async () => {
       port: 3000,
       host: true,
       open: false,
+      // The console debugger's bridge is a WebSocket, which the Hono
+      // middleware above (a fetch per request) cannot carry; Vite's own
+      // proxy upgrades it straight to the Go BFF, at the same address the
+      // Hono app proxies everything else to (api/src/service-discovery.ts).
+      // The key is matched against the request URL, query string included,
+      // which is how a console on a non-default emulator names it (`?ep=`).
+      proxy: {
+        "^/api/debugger/targets/.+/ws([?].*)?$": {
+          target: goBffEndpoint(),
+          ws: true,
+        },
+      },
       watch: usePolling ? { usePolling: true, interval: 1000 } : {},
       // Pre-transform the app shell so the first page load is fast.
       warmup: {
@@ -109,6 +121,13 @@ export default defineConfig(async () => {
     },
   }
 })
+
+/** The Go BFF's address, as `api/src/service-discovery.ts` resolves it (the env vars are the same). */
+function goBffEndpoint(): string {
+  return (
+    process.env.GO_BFF_ENDPOINT || `http://localhost:${process.env.OVERCAST_UI_PORT || "4567"}`
+  ).replace(/\/$/, "")
+}
 
 // Detect whether the workspace is on a host-mounted volume (Windows/macOS)
 // where native fs.watch does not work reliably. If /.dockerenv exists we are

@@ -2,6 +2,7 @@ import { useCallback } from "react"
 import { AlertCircle } from "lucide-react"
 import { Spinner } from "@/components/ui/primitives"
 import { DebugCodeBrowser } from "@/features/debugger/components/debug-code-browser"
+import { DebugWorkspace } from "@/features/debugger/components/debug-workspace"
 import { lambda } from "@/services/api"
 import type { LambdaFunctionSource } from "@/types"
 
@@ -13,6 +14,7 @@ export function CodeTab({
   setEditedFiles,
   setActiveFilePath,
   name,
+  logGroup,
 }: {
   source: LambdaFunctionSource | undefined
   sourceLoading: boolean
@@ -21,6 +23,8 @@ export function CodeTab({
   setEditedFiles: React.Dispatch<React.SetStateAction<Record<string, string>>>
   setActiveFilePath: (path: string) => void
   name: string
+  /** The function's log group, for the debug drawer's Logs; `null` when it has none. */
+  logGroup: string | null
 }) {
   const loadFile = useCallback(
     async (path: string) => {
@@ -44,17 +48,20 @@ export function CodeTab({
   return (
     <div className="flex flex-col gap-3">
       {source?.placeholder && <PlaceholderSourceNotice />}
-      {/* A plain CodeBrowser until a console debug session opens over it. */}
-      <DebugCodeBrowser
-        files={(source?.files ?? []).map((f) => ({ name: f.name, size: f.size }))}
-        initialFile={source?.filename}
-        initialValue={currentEditorValue}
-        language={source?.language}
-        loadFile={loadFile}
-        onChange={(path, value) => setEditedFiles((prev) => ({ ...prev, [path]: value }))}
-        onActiveFileChange={setActiveFilePath}
-        height="65vh"
-      />
+      {/* A plain CodeBrowser until a console debug session opens over it —
+          then the panels sit beside it and the drawer below. */}
+      <DebugWorkspace logGroup={logGroup}>
+        <DebugCodeBrowser
+          files={(source?.files ?? []).map((f) => ({ name: f.name, size: f.size }))}
+          initialFile={source?.filename}
+          initialValue={currentEditorValue}
+          language={source?.language}
+          loadFile={loadFile}
+          onChange={(path, value) => setEditedFiles((prev) => ({ ...prev, [path]: value }))}
+          onActiveFileChange={setActiveFilePath}
+          height="65vh"
+        />
+      </DebugWorkspace>
     </div>
   )
 }

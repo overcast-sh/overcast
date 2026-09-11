@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react"
+import { useState, useCallback, useMemo } from "react"
 import { Link } from "@tanstack/react-router"
 import { useQuery } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
@@ -13,9 +13,12 @@ import {
   lambdaKeys,
 } from "@/features/lambda/data"
 import { eventTemplates, templateCategories } from "@/features/lambda/event-templates"
-import { lambda } from "@/services/api"
 import { useResourceMutation } from "@/hooks/use-resource-mutation"
-import type { InvokeResult } from "@/types"
+import {
+  DEFAULT_TEST_EVENT,
+  useLambdaInvoke,
+  type LambdaInvoke,
+} from "@/features/lambda/use-invoke"
 import { decodeBase64Text } from "@/lib/base64"
 import { summarisePlatformRecords } from "@/lib/log-format"
 import { fieldLabel, sectionLabel } from "@/lib/typography"
@@ -23,18 +26,29 @@ import { cn } from "@/lib/utils"
 import { InvokeDebugHint } from "@/features/debugger/components/invoke-debug-hint"
 import { useOptionalDebugSession } from "@/features/debugger/session/hooks"
 
-export function TestTab({ name, timeoutSeconds }: { name: string; timeoutSeconds?: number }) {
+export function TestTab({
+  name,
+  timeoutSeconds,
+  invoke: lifted,
+}: {
+  name: string
+  timeoutSeconds?: number
+  /**
+   * The invoke held by the page, so its event and result survive the tab
+   * unmounting (a debug pause switches to the Code tab). A caller without
+   * one — the invoke dialog — gets a tab-local invoke instead.
+   */
+  invoke?: LambdaInvoke
+}) {
+  const own = useLambdaInvoke(name)
+  const invoke = lifted ?? own
+  const { payload: eventPayload, setPayload: setEventPayload, result } = invoke
+  const { isPending, progressStep, error: invokeError } = invoke
+
   // Event state
-  const [eventPayload, setEventPayload] = useState('{\n  "key": "value"\n}')
-  const [jsonError, setJsonError] = useState<string | null>(null)
-  const [result, setResult] = useState<InvokeResult | null>(null)
+  const jsonError = useMemo(() => validateJson(eventPayload), [eventPayload])
   const [eventName, setEventName] = useState("")
   const [selectedSavedEvent, setSelectedSavedEvent] = useState<string | null>(null)
-
-  // Invoke progress state
-  const [isPending, setIsPending] = useState(false)
-  const [progressStep, setProgressStep] = useState<string | null>(null)
-  const [invokeError, setInvokeError] = useState<string | null>(null)
 
   // Saved events query
   const { data: savedEvents = [] } = useQuery(testEventsQueryOptions(name))
@@ -63,36 +77,13 @@ export function TestTab({ name, timeoutSeconds }: { name: string; timeoutSeconds
     },
   })
 
-  const handlePayloadChange = useCallback((val: string) => {
-    setEventPayload(val)
-    try {
-      if (val.trim()) JSON.parse(val)
-      setJsonError(null)
-    } catch (e) {
-      setJsonError((e as SyntaxError).message)
-    }
-  }, [])
+  const handlePayloadChange = setEventPayload
 
-  const handleInvoke = useCallback(async () => {
+  const handleInvoke = useCallback(() => {
     if (jsonError || isPending) return
-    setResult(null)
-    setInvokeError(null)
-    setIsPending(true)
-    setProgressStep("Starting invocation")
     debugSession?.invokeStarted()
-
-    try {
-      for await (const event of lambda.invokeStream(name, eventPayload)) {
-        if (event.type === "progress") setProgressStep(event.step)
-        else setResult(event.data)
-      }
-    } catch (err) {
-      setInvokeError((err as Error).message)
-    } finally {
-      setProgressStep(null)
-      setIsPending(false)
-    }
-  }, [name, eventPayload, jsonError, isPending, debugSession])
+    void invoke.run()
+  }, [jsonError, isPending, debugSession, invoke])
 
   const handleSave = useCallback(() => {
     if (!eventName.trim() || jsonError) return
@@ -106,28 +97,28 @@ export function TestTab({ name, timeoutSeconds }: { name: string; timeoutSeconds
         setSelectedSavedEvent(evtName)
         setEventName(evtName)
         setEventPayload(evt.body)
-        setJsonError(null)
       }
     },
-    [savedEvents],
+    [savedEvents, setEventPayload],
   )
 
-  const handleSelectTemplate = useCallback((templateName: string) => {
-    const tpl = eventTemplates.find((t) => t.name === templateName)
-    if (tpl) {
-      setEventPayload(tpl.body)
-      setEventName("")
-      setSelectedSavedEvent(null)
-      setJsonError(null)
-    }
-  }, [])
+  const handleSelectTemplate = useCallback(
+    (templateName: string) => {
+      const tpl = eventTemplates.find((t) => t.name === templateName)
+      if (tpl) {
+        setEventPayload(tpl.body)
+        setEventName("")
+        setSelectedSavedEvent(null)
+      }
+    },
+    [setEventPayload],
+  )
 
   const handleNewEvent = useCallback(() => {
     setSelectedSavedEvent(null)
     setEventName("")
-    setEventPayload('{\n  "key": "value"\n}')
-    setJsonError(null)
-  }, [])
+    setEventPayload(DEFAULT_TEST_EVENT)
+  }, [setEventPayload])
 
   let parsedPayload: string | undefined
   if (result?.payload) {
@@ -279,7 +270,10 @@ export function TestTab({ name, timeoutSeconds }: { name: string; timeoutSeconds
         {!isPending && invokeError && (
           <div className="flex flex-col gap-2 rounded-lg border border-danger/30 bg-danger-muted p-4">
             <p className="font-mono text-sm font-medium text-danger">Invocation failed</p>
-            <pre tabIndex={0} className="max-h-48 overflow-auto rounded-md border border-danger/20 bg-bg-elevated p-3 font-mono text-xs text-fg">
+            <pre
+              tabIndex={0}
+              className="max-h-48 overflow-auto rounded-md border border-danger/20 bg-bg-elevated p-3 font-mono text-xs text-fg"
+            >
               {invokeError}
             </pre>
           </div>
@@ -312,7 +306,10 @@ export function TestTab({ name, timeoutSeconds }: { name: string; timeoutSeconds
 
             <div className="flex flex-col gap-1">
               <span className="font-mono text-xs font-medium text-fg-muted">Response</span>
-              <pre tabIndex={0} className="max-h-64 overflow-auto rounded-md border border-border bg-bg-elevated p-3 font-mono text-xs text-fg">
+              <pre
+                tabIndex={0}
+                className="max-h-64 overflow-auto rounded-md border border-border bg-bg-elevated p-3 font-mono text-xs text-fg"
+              >
                 {parsedPayload ?? "null"}
               </pre>
             </div>
@@ -349,4 +346,14 @@ export function TestTab({ name, timeoutSeconds }: { name: string; timeoutSeconds
       </div>
     </div>
   )
+}
+
+/** The parse error for an event that is not JSON; an empty event is allowed. */
+function validateJson(text: string): string | null {
+  try {
+    if (text.trim()) JSON.parse(text)
+    return null
+  } catch (e) {
+    return (e as SyntaxError).message
+  }
 }

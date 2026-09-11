@@ -8,9 +8,15 @@
  *
  * What it holds: the connection state, the scripts the inspector has
  * parsed, breakpoints (persisted per function, with condition and enabled
- * flag), watches (persisted; evaluation is phase B2's), the current pause
- * with its call frames mapped through source maps, a console buffer, and
- * the pause-on-exceptions mode.
+ * flag), watches (persisted; evaluated on every pause and frame change),
+ * the current pause with its call frames mapped through source maps, a
+ * console buffer with the REPL's history, and the pause-on-exceptions mode.
+ *
+ * Values cross to the panels as `RemoteValue` — one line of text plus a
+ * handle for `getProperties` — so a Locals tree, a watch and a console
+ * result are drawn by one component that never sees a `RemoteObject`.
+ * Evaluations are grouped (`watch`, `console`) and the groups released on
+ * resume, so a pause's handles do not pin the runtime's heap after it.
  *
  * Breakpoints survive a container replacement because every open of the
  * socket starts a new *epoch*: nothing is considered bound until it has been
@@ -24,7 +30,9 @@ import type {
   CdpCallFrame,
   CdpCommands,
   CdpEvents,
+  CdpExceptionDetails,
   CdpMethod,
+  CdpPropertyDescriptor,
   CdpRemoteObject,
 } from "./cdp-protocol"
 import {
@@ -63,11 +71,39 @@ export interface Breakpoint {
   bound: boolean
 }
 
+/**
+ * A value as the panels see it: one line of text and, for anything with
+ * children, a handle `getProperties` accepts. `type` and `subtype` are the
+ * runtime's own words (`object`/`array`, `string`, `function`, …) and are
+ * only used to colour the text.
+ */
+export interface RemoteValue {
+  type: string
+  subtype: string | null
+  /** The primitive as written (strings quoted), or an object's preview. */
+  description: string
+  objectId: string | null
+}
+
+/** One row under an expanded value. */
+export interface Property {
+  name: string
+  /** `null` for an accessor whose getter has not been run. */
+  value: RemoteValue | null
+  /** A getter-backed property. It is never invoked on the reader's behalf. */
+  accessor: boolean
+  enumerable: boolean
+  /** A runtime-internal row such as `[[Prototype]]` or `[[Entries]]`. */
+  internal: boolean
+}
+
+export type EvalResult = { ok: true; value: RemoteValue } | { ok: false; error: string }
+
 export interface Watch {
   id: string
   expression: string
-  /** Rendered value from the last evaluation, or `null` before one. */
-  value: string | null
+  /** The last evaluation's value, or `null` before one or after an error. */
+  result: RemoteValue | null
   error: string | null
 }
 
@@ -88,6 +124,8 @@ export interface StackFrame {
   generated: Position
   /** False when no map resolves this frame — show `generated` with a badge. */
   mapped: boolean
+  /** A frame outside the deployment — the runtime's own or Node's internals; folded in the call stack. */
+  internal: boolean
   scopes: Scope[]
 }
 
@@ -103,7 +141,12 @@ export interface PauseState {
   exception: string | null
 }
 
-export type ConsoleEntryKind = "log" | "info" | "warn" | "error" | "debug" | "exception" | "marker"
+/**
+ * `log`…`debug` and `exception` come from the runtime; `marker` is a pause or
+ * resume; `input` and `result` are the REPL's own echo and answer.
+ */
+export type ConsoleEntryKind =
+  "log" | "info" | "warn" | "error" | "debug" | "exception" | "marker" | "input" | "result"
 
 export interface ConsoleEntry {
   id: number
@@ -111,6 +154,8 @@ export interface ConsoleEntry {
   text: string
   /** Epoch milliseconds. */
   timestamp: number
+  /** A `result` with children to expand; absent on every other kind. */
+  value?: RemoteValue
 }
 
 export interface ScriptRecord {
@@ -134,6 +179,8 @@ export interface DebugSessionState {
   watches: Watch[]
   pause: PauseState | null
   console: ConsoleEntry[]
+  /** What the REPL has been asked so far, oldest first; not persisted. */
+  consoleHistory: string[]
   pauseOnExceptions: PauseOnExceptionsMode
 }
 
@@ -188,7 +235,7 @@ function defaultStorage(): Storage | null {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
-/** A `RemoteObject` as one line of console text. */
+/** A `RemoteObject` as one line of console text — strings bare, as `console.log` prints them. */
 export function describeRemoteObject(obj: CdpRemoteObject): string {
   if (obj.value !== undefined) {
     if (typeof obj.value === "string") return obj.value
@@ -199,6 +246,74 @@ export function describeRemoteObject(obj: CdpRemoteObject): string {
     }
   }
   return obj.unserializableValue ?? obj.description ?? obj.type
+}
+
+const PREVIEW_ITEMS = 6
+const FUNCTION_PREVIEW_CHARS = 60
+
+/** `{a: 1, b: 'x', …}` / `(3) [1, 2, 3]` from the runtime's own preview, the way DevTools draws it. */
+function previewText(obj: CdpRemoteObject): string {
+  const preview = obj.preview
+  const description = obj.description ?? obj.className ?? "Object"
+  if (!preview) return description
+  if (preview.subtype && preview.subtype !== "array") return description
+  const items = preview.properties.slice(0, PREVIEW_ITEMS).map((p) => {
+    const value =
+      p.type === "string"
+        ? JSON.stringify(p.value ?? "")
+        : p.type === "object"
+          ? p.subtype === "array"
+            ? (p.value ?? "[…]")
+            : p.subtype === "null"
+              ? "null"
+              : "{…}"
+          : p.type === "function"
+            ? "ƒ"
+            : (p.value ?? p.type)
+    return preview.subtype === "array" ? value : `${p.name}: ${value}`
+  })
+  const overflow = preview.overflow || preview.properties.length > PREVIEW_ITEMS
+  if (overflow) items.push("…")
+  return preview.subtype === "array"
+    ? `(${preview.properties.length}${overflow ? "+" : ""}) [${items.join(", ")}]`
+    : `{${items.join(", ")}}`
+}
+
+/** A `RemoteObject` as the panels show it: strings quoted, objects previewed, functions signed. */
+export function toRemoteValue(obj: CdpRemoteObject): RemoteValue {
+  const base = { type: obj.type, subtype: obj.subtype ?? null, objectId: obj.objectId ?? null }
+  if (obj.type === "string") return { ...base, description: JSON.stringify(obj.value ?? "") }
+  if (obj.type === "function") {
+    const first = (obj.description ?? "ƒ").split("\n", 1)[0].trim()
+    return {
+      ...base,
+      description:
+        first.length > FUNCTION_PREVIEW_CHARS
+          ? `${first.slice(0, FUNCTION_PREVIEW_CHARS)}…`
+          : first,
+    }
+  }
+  if (obj.type === "object") {
+    if (obj.subtype === "null") return { ...base, description: "null" }
+    return { ...base, description: previewText(obj) }
+  }
+  return { ...base, description: describeRemoteObject(obj) }
+}
+
+/** The text of a failed evaluation: the thrown value when there is one, else the runtime's summary. */
+function exceptionText(details: CdpExceptionDetails): string {
+  return details.exception ? describeRemoteObject(details.exception) : details.text
+}
+
+/** A property descriptor as a tree row. An accessor's getter is not run: the row says so and stops there. */
+function toProperty(d: CdpPropertyDescriptor): Property {
+  return {
+    name: d.name,
+    value: d.value ? toRemoteValue(d.value) : null,
+    accessor: !d.value && d.get !== undefined,
+    enumerable: d.enumerable,
+    internal: false,
+  }
 }
 
 /** The description of a thrown value carried in a pause's `data`, when it is one. */
@@ -305,9 +420,10 @@ export class DebugSession {
       originalFiles: [],
       hasSourceMaps: false,
       breakpoints: persisted.breakpoints.map((bp) => ({ ...bp, bound: false })),
-      watches: persisted.watches.map((w) => ({ ...w, value: null, error: null })),
+      watches: persisted.watches.map((w) => ({ ...w, result: null, error: null })),
       pause: null,
       console: [],
+      consoleHistory: [],
       pauseOnExceptions: persisted.pauseOnExceptions,
     }
   }
@@ -385,6 +501,7 @@ export class DebugSession {
       originalFiles: [],
       hasSourceMaps: false,
       breakpoints: this.state.breakpoints.map((bp) => ({ ...bp, bound: false })),
+      watches: this.state.watches.map((w) => ({ ...w, result: null, error: null })),
     })
   }
 
@@ -449,6 +566,129 @@ export class DebugSession {
     const pause = this.state.pause
     if (!pause || index < 0 || index >= pause.frames.length) return
     this.set({ pause: { ...pause, selectedFrame: index } })
+    this.evaluateWatches()
+  }
+
+  // ─── Evaluation ─────────────────────────────────────────────────────────
+
+  /**
+   * Evaluate an expression: in a call frame while paused (the selected one
+   * unless `frameIndex` names another), globally otherwise. Never throws —
+   * a runtime exception, a closed socket and a missing session all come back
+   * as `{ ok: false }` with the reason.
+   */
+  evaluate(expression: string, frameIndex?: number): Promise<EvalResult> {
+    return this.evaluateIn(expression, "console", frameIndex)
+  }
+
+  /** The own properties of a value, getters left unread. Rejects when the handle is stale or the socket gone. */
+  async getProperties(objectId: string): Promise<Property[]> {
+    const client = this.client
+    if (!client) throw new Error("No session")
+    const reply = await client.send("Runtime.getProperties", {
+      objectId,
+      ownProperties: true,
+      generatePreview: true,
+    })
+    if (reply.exceptionDetails) throw new Error(exceptionText(reply.exceptionDetails))
+    const own = reply.result.map((d) => toProperty(d))
+    const internal = (reply.internalProperties ?? []).map((p): Property => ({
+      name: p.name,
+      value: p.value ? toRemoteValue(p.value) : null,
+      accessor: false,
+      enumerable: false,
+      internal: true,
+    }))
+    return [...own, ...internal]
+  }
+
+  /**
+   * The REPL: echo the expression, evaluate it where `evaluate` would, and
+   * record the answer or the error as console entries.
+   */
+  async runConsoleCommand(expression: string): Promise<void> {
+    const trimmed = expression.trim()
+    if (trimmed === "") return
+    const history = this.state.consoleHistory
+    this.set({
+      consoleHistory: history.at(-1) === trimmed ? history : [...history, trimmed],
+    })
+    this.log("input", trimmed)
+    const result = await this.evaluateIn(trimmed, "console")
+    if (result.ok) this.log("result", result.value.description, undefined, result.value)
+    else this.log("error", result.error)
+  }
+
+  private async evaluateIn(
+    expression: string,
+    objectGroup: "console" | "watch",
+    frameIndex?: number,
+  ): Promise<EvalResult> {
+    const client = this.client
+    if (!client || client.status !== "open") return { ok: false, error: "No session" }
+    const pause = this.state.pause
+    const frame = pause?.frames.at(frameIndex ?? pause.selectedFrame)
+    try {
+      const reply = frame
+        ? await client.send("Debugger.evaluateOnCallFrame", {
+            callFrameId: frame.id,
+            expression,
+            objectGroup,
+            includeCommandLineAPI: true,
+            generatePreview: true,
+          })
+        : await client.send("Runtime.evaluate", {
+            expression,
+            objectGroup,
+            includeCommandLineAPI: true,
+            generatePreview: true,
+            awaitPromise: true,
+          })
+      if (reply.exceptionDetails) return { ok: false, error: exceptionText(reply.exceptionDetails) }
+      return { ok: true, value: toRemoteValue(reply.result) }
+    } catch (err) {
+      return { ok: false, error: errorMessage(err) }
+    }
+  }
+
+  /**
+   * Re-evaluate every watch against the selected frame. Each answer is
+   * applied only if the pause and frame it was asked for are still the
+   * current ones, so a step that lands before a slow reply cannot paint a
+   * stale value over the new frame.
+   */
+  private evaluateWatches(): void {
+    const pause = this.state.pause
+    if (!pause) return
+    const { id: pauseId, selectedFrame } = pause
+    for (const watch of this.state.watches) {
+      void this.evaluateIn(watch.expression, "watch", selectedFrame).then((result) => {
+        const current = this.state.pause
+        if (!current || current.id !== pauseId || current.selectedFrame !== selectedFrame) return
+        // A watch has one line; the stack trace of a failed one belongs to the console.
+        this.patchWatch(watch.id, {
+          result: result.ok ? result.value : null,
+          error: result.ok ? null : result.error.split("\n", 1)[0],
+        })
+      })
+    }
+  }
+
+  /** Let go of everything a pause's evaluations pinned; their handles are invalid after it. */
+  private releaseObjectGroups(): void {
+    const client = this.client
+    if (client?.status === "open") {
+      for (const objectGroup of ["watch", "console"] as const) {
+        // Nothing to report on failure: a context that has already gone
+        // took the group with it.
+        void client.send("Runtime.releaseObjectGroup", { objectGroup }).catch(() => {})
+      }
+    }
+    this.set({
+      watches: this.state.watches.map((w) =>
+        w.result?.objectId ? { ...w, result: { ...w.result, objectId: null } } : w,
+      ),
+    })
   }
 
   // ─── Breakpoints ────────────────────────────────────────────────────────
@@ -499,19 +739,17 @@ export class DebugSession {
   // ─── Watches ────────────────────────────────────────────────────────────
 
   addWatch(expression: string): Watch {
-    const watch: Watch = { id: createId(), expression, value: null, error: null }
+    const watch: Watch = { id: createId(), expression, result: null, error: null }
     this.set({ watches: [...this.state.watches, watch] })
     this.persist()
+    this.evaluateWatches()
     return watch
   }
 
   updateWatch(id: string, expression: string): void {
-    this.set({
-      watches: this.state.watches.map((w) =>
-        w.id === id ? { ...w, expression, value: null, error: null } : w,
-      ),
-    })
+    this.patchWatch(id, { expression, result: null, error: null })
     this.persist()
+    this.evaluateWatches()
   }
 
   removeWatch(id: string): void {
@@ -635,6 +873,7 @@ export class DebugSession {
         : `Paused (${params.reason})`,
     )
     this.set({ pause })
+    this.evaluateWatches()
     for (const listener of this.pauseListeners) listener(pause)
   }
 
@@ -642,14 +881,17 @@ export class DebugSession {
     if (!this.state.pause) return
     this.log("marker", "Resumed")
     this.set({ pause: null })
+    this.releaseObjectGroups()
   }
 
   private onConsole(params: CdpEvents["Runtime.consoleAPICalled"]): void {
-    this.log(
-      CONSOLE_KINDS[params.type] ?? "log",
-      params.args.map(describeRemoteObject).join(" "),
-      params.timestamp,
-    )
+    // Strings bare, objects previewed — the line `console.log` would print.
+    const text = params.args
+      .map((arg) =>
+        arg.type === "object" ? toRemoteValue(arg).description : describeRemoteObject(arg),
+      )
+      .join(" ")
+    this.log(CONSOLE_KINDS[params.type] ?? "log", text, params.timestamp)
   }
 
   private onException(params: CdpEvents["Runtime.exceptionThrown"]): void {
@@ -659,7 +901,9 @@ export class DebugSession {
   }
 
   private toStackFrame(frame: CdpCallFrame): StackFrame {
-    const path = this.scriptPaths.get(frame.location.scriptId) ?? scriptPath(frame.url) ?? frame.url
+    const deployed = this.scriptPaths.get(frame.location.scriptId) ?? scriptPath(frame.url)
+    // A script the runtime gave no URL (an eval, a patched builtin) is shown as such.
+    const path = deployed ?? (frame.url || "(unknown)")
     const generated: Position = {
       path,
       line: frame.location.lineNumber + 1,
@@ -672,6 +916,7 @@ export class DebugSession {
       location: original ?? generated,
       generated,
       mapped: original !== null,
+      internal: deployed === null,
       scopes: frame.scopeChain.map((scope) => ({
         kind: scope.type,
         name: scope.name ?? null,
@@ -797,9 +1042,20 @@ export class DebugSession {
     })
   }
 
-  private log(kind: ConsoleEntryKind, text: string, timestamp = Date.now()): void {
+  private patchWatch(id: string, patch: Partial<Watch>): void {
+    if (!this.state.watches.some((w) => w.id === id)) return
+    this.set({ watches: this.state.watches.map((w) => (w.id === id ? { ...w, ...patch } : w)) })
+  }
+
+  private log(
+    kind: ConsoleEntryKind,
+    text: string,
+    timestamp = Date.now(),
+    value?: RemoteValue,
+  ): void {
     this.consoleCounter += 1
     const entry: ConsoleEntry = { id: this.consoleCounter, kind, text, timestamp }
+    if (value?.objectId) entry.value = value
     const next = [...this.state.console, entry]
     this.set({ console: next.length > CONSOLE_LIMIT ? next.slice(-CONSOLE_LIMIT) : next })
   }

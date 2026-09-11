@@ -17,6 +17,7 @@ import {
 import { FunctionOverview } from "@/features/lambda/components/function-overview"
 import { CodeTab } from "@/features/lambda/components/code-tab"
 import { TestTab } from "@/features/lambda/components/test-tab"
+import { useLambdaInvoke } from "@/features/lambda/use-invoke"
 import { VersionsTab } from "@/features/lambda/components/versions-tab"
 import { MonitorTab } from "@/features/lambda/components/monitor-tab"
 import { ConfigurationTab } from "@/features/lambda/components/configuration-tab"
@@ -106,8 +107,11 @@ function FunctionDetail() {
     [name],
   )
   const deployedFiles = useMemo(() => source?.files?.map((f) => f.name), [source?.files])
-  // A pause anywhere lands the reader on the code, at the paused line.
+  // A pause anywhere lands the reader on the code, at the paused line. The
+  // invoke lives here rather than in the Test tab, which that switch
+  // unmounts, so the result still lands on the Test tab after Continue.
   const showCodeOnPause = useCallback(() => switchTab("code"), [switchTab])
+  const invoke = useLambdaInvoke(name)
 
   if (functionsLoading) {
     return (
@@ -181,10 +185,11 @@ function FunctionDetail() {
               setEditedFiles={setEditedFiles}
               setActiveFilePath={setActiveFilePath}
               name={name}
+              logGroup={fn.LoggingConfig?.LogGroup || `/aws/lambda/${name}`}
             />
           </TabPanel>
           <TabPanel id="test" className="pt-4">
-            <TestTab name={name} timeoutSeconds={fn.Timeout ?? 3} />
+            <TestTab name={name} timeoutSeconds={fn.Timeout ?? 3} invoke={invoke} />
           </TabPanel>
           <TabPanel id="debug" className="flex flex-col gap-4 pt-4">
             <DebugSessionControls service="lambda" resource={name} />

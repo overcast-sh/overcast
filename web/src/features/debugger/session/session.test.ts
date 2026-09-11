@@ -108,7 +108,7 @@ describe("DebugSession > breakpoints persist", () => {
       expect.objectContaining({ path: "index.js", line: 5, condition: "", enabled: false }),
     ])
     expect(again.getState().watches).toEqual([
-      expect.objectContaining({ expression: "event.key", value: null }),
+      expect.objectContaining({ expression: "event.key", result: null }),
     ])
     expect(again.getState().pauseOnExceptions).toBe("uncaught")
 
@@ -313,6 +313,7 @@ describe("DebugSession > pause", () => {
       location: { path: "src/index.ts", line: 2, column: 2 },
       generated: { path: "dist/index.js", line: 3, column: 4 },
       mapped: true,
+      internal: false,
       scopes: [
         { kind: "local", name: null, objectId: "o1" },
         { kind: "global", name: null, objectId: null },
@@ -470,5 +471,255 @@ describe("DebugSession > waiting for a container", () => {
       breakpoints: [expect.objectContaining({ path: "plain.js", line: 1, bound: false })],
     })
     expect(session.isOpen).toBe(false)
+  })
+})
+
+describe("DebugSession > evaluation", () => {
+  it("evaluates in the selected frame while paused and globally otherwise, never throwing", async () => {
+    const { session, bridge } = makeSession()
+    expect(await session.evaluate("1")).toEqual({ ok: false, error: "No session" })
+    const socket = await attach(session, bridge)
+
+    const running = session.evaluate("process.version")
+    const global = socket.lastRequest("Runtime.evaluate")
+    expect(global.params).toMatchObject({
+      expression: "process.version",
+      objectGroup: "console",
+      includeCommandLineAPI: true,
+      generatePreview: true,
+      awaitPromise: true,
+    })
+    socket.respond(global.id, { result: { type: "string", value: "v22.0.0" } })
+    expect(await running).toEqual({
+      ok: true,
+      value: { type: "string", subtype: null, description: '"v22.0.0"', objectId: null },
+    })
+
+    paused(socket, "plain.js", 1)
+    const inFrame = session.evaluate("x", 0)
+    const frame = socket.lastRequest("Debugger.evaluateOnCallFrame")
+    expect(frame.params).toMatchObject({
+      callFrameId: "f0",
+      expression: "x",
+      objectGroup: "console",
+    })
+    socket.respond(frame.id, {
+      result: { type: "undefined" },
+      exceptionDetails: {
+        exceptionId: 1,
+        text: "Uncaught",
+        lineNumber: 0,
+        columnNumber: 0,
+        exception: { type: "object", description: "ReferenceError: x is not defined" },
+      },
+    })
+    expect(await inFrame).toEqual({ ok: false, error: "ReferenceError: x is not defined" })
+
+    const dropped = session.evaluate("y")
+    socket.fail(
+      socket.lastRequest("Debugger.evaluateOnCallFrame").id,
+      -32000,
+      "Cannot find context",
+    )
+    expect(await dropped).toEqual({ ok: false, error: "Cannot find context" })
+  })
+
+  it("reads own properties with previews, leaving getters unread, and lists internal rows last", async () => {
+    const { session, bridge } = makeSession()
+    const socket = await attach(session, bridge)
+    const reading = session.getProperties("obj-1")
+    const req = socket.lastRequest("Runtime.getProperties")
+    expect(req.params).toEqual({ objectId: "obj-1", ownProperties: true, generatePreview: true })
+    socket.respond(req.id, {
+      result: [
+        { name: "n", value: { type: "number", value: 1 }, configurable: true, enumerable: true },
+        {
+          name: "nested",
+          value: {
+            type: "object",
+            className: "Object",
+            description: "Object",
+            objectId: "obj-2",
+            preview: {
+              type: "object",
+              overflow: true,
+              properties: [
+                { name: "a", type: "string", value: "s" },
+                { name: "b", type: "object", subtype: "array", value: "Array(2)" },
+                { name: "c", type: "object", value: "Object" },
+                { name: "d", type: "function", value: "" },
+                { name: "e", type: "object", subtype: "null", value: "null" },
+              ],
+            },
+          },
+          configurable: true,
+          enumerable: true,
+        },
+        {
+          name: "fn",
+          value: { type: "function", description: "function fn(a) {\n  return a\n}" },
+          configurable: true,
+          enumerable: true,
+        },
+        { name: "later", get: { type: "function" }, configurable: true, enumerable: false },
+      ],
+      internalProperties: [
+        {
+          name: "[[Prototype]]",
+          value: { type: "object", description: "Object", objectId: "proto" },
+        },
+      ],
+    })
+    expect(await reading).toEqual([
+      {
+        name: "n",
+        value: { type: "number", subtype: null, description: "1", objectId: null },
+        accessor: false,
+        enumerable: true,
+        internal: false,
+      },
+      {
+        name: "nested",
+        value: {
+          type: "object",
+          subtype: null,
+          description: '{a: "s", b: Array(2), c: {…}, d: ƒ, e: null, …}',
+          objectId: "obj-2",
+        },
+        accessor: false,
+        enumerable: true,
+        internal: false,
+      },
+      {
+        name: "fn",
+        value: { type: "function", subtype: null, description: "function fn(a) {", objectId: null },
+        accessor: false,
+        enumerable: true,
+        internal: false,
+      },
+      { name: "later", value: null, accessor: true, enumerable: false, internal: false },
+      {
+        name: "[[Prototype]]",
+        value: { type: "object", subtype: null, description: "Object", objectId: "proto" },
+        accessor: false,
+        enumerable: false,
+        internal: true,
+      },
+    ])
+  })
+
+  it("evaluates every watch on pause, on frame change and on edit, applying only answers for the current frame", async () => {
+    const { session, bridge } = makeSession()
+    const socket = await attach(session, bridge)
+    const w = session.addWatch("a")
+    expect(socket.requests("Debugger.evaluateOnCallFrame")).toHaveLength(0)
+
+    socket.event("Debugger.paused", {
+      reason: "other",
+      callFrames: [0, 1].map((i) => ({
+        callFrameId: `f${i}`,
+        functionName: `fn${i}`,
+        location: { scriptId: "s-plain.js", lineNumber: i },
+        url: "file:///var/task/plain.js",
+        scopeChain: [],
+        this: { type: "undefined" as const },
+      })),
+    })
+    const first = socket.lastRequest("Debugger.evaluateOnCallFrame")
+    expect(first.params).toMatchObject({ callFrameId: "f0", expression: "a", objectGroup: "watch" })
+
+    // The frame changes before the first answer lands: that answer is stale.
+    session.selectFrame(1)
+    const second = socket.lastRequest("Debugger.evaluateOnCallFrame")
+    expect(second.params).toMatchObject({ callFrameId: "f1", expression: "a" })
+    socket.respond(first.id, { result: { type: "number", value: 1 } })
+    await flush()
+    expect(session.getState().watches[0].result).toBeNull()
+    socket.respond(second.id, { result: { type: "number", value: 2 } })
+    await flush()
+    expect(session.getState().watches[0]).toMatchObject({
+      result: { description: "2" },
+      error: null,
+    })
+
+    session.updateWatch(w.id, "b")
+    expect(session.getState().watches[0]).toMatchObject({ expression: "b", result: null })
+    expect(socket.lastRequest("Debugger.evaluateOnCallFrame").params).toMatchObject({
+      expression: "b",
+    })
+
+    socket.event("Debugger.resumed", {})
+    expect(socket.requests("Runtime.releaseObjectGroup").map((r) => r.params)).toEqual([
+      { objectGroup: "watch" },
+      { objectGroup: "console" },
+    ])
+  })
+
+  it("runs a console command: echoes it, records the answer with its handle, and keeps history", async () => {
+    const { session, bridge } = makeSession()
+    const socket = await attach(session, bridge)
+    const run = session.runConsoleCommand("  ({a: 1})  ")
+    socket.respond(socket.lastRequest("Runtime.evaluate").id, {
+      result: {
+        type: "object",
+        className: "Object",
+        description: "Object",
+        objectId: "o-1",
+        preview: {
+          type: "object",
+          overflow: false,
+          properties: [{ name: "a", type: "number", value: "1" }],
+        },
+      },
+    })
+    await run
+    expect(session.getState().console).toEqual([
+      expect.objectContaining({ kind: "input", text: "({a: 1})" }),
+      expect.objectContaining({
+        kind: "result",
+        text: "{a: 1}",
+        value: { type: "object", subtype: null, description: "{a: 1}", objectId: "o-1" },
+      }),
+    ])
+    expect(session.getState().consoleHistory).toEqual(["({a: 1})"])
+
+    const failing = session.runConsoleCommand("({a: 1})")
+    socket.fail(socket.lastRequest("Runtime.evaluate").id, -32000, "boom")
+    await failing
+    expect(session.getState().console.at(-1)).toMatchObject({ kind: "error", text: "boom" })
+    // A repeat of the last command is not a second history entry.
+    expect(session.getState().consoleHistory).toEqual(["({a: 1})"])
+    await session.runConsoleCommand("   ")
+    expect(session.getState().console).toHaveLength(4)
+  })
+
+  it("marks frames outside the deployment as internal", async () => {
+    const { session, bridge } = makeSession()
+    const socket = await attach(session, bridge)
+    socket.event("Debugger.paused", {
+      reason: "other",
+      callFrames: [
+        {
+          callFrameId: "f0",
+          functionName: "handler",
+          location: { scriptId: "s-plain.js", lineNumber: 0 },
+          url: "file:///var/task/plain.js",
+          scopeChain: [],
+          this: { type: "undefined" },
+        },
+        {
+          callFrameId: "f1",
+          functionName: "processTicksAndRejections",
+          location: { scriptId: "s-node", lineNumber: 90 },
+          url: "node:internal/process/task_queues",
+          scopeChain: [],
+          this: { type: "undefined" },
+        },
+      ],
+    })
+    expect(session.getState().pause?.frames.map((f) => [f.internal, f.location.path])).toEqual([
+      [false, "plain.js"],
+      [true, "node:internal/process/task_queues"],
+    ])
   })
 })

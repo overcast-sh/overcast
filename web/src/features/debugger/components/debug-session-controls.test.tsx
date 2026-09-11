@@ -6,13 +6,13 @@ import { debuggerTargetQueryOptions } from "@/features/debugger/data"
 import type { DebuggerTarget } from "@/types"
 import { DebugSessionControls } from "./debug-session-controls"
 
-/** The descriptor with the phase 2 fields the backend adds (§ 3.2), until `api.gen.ts` carries them. */
+/** A descriptor that offers a console session (§ 3.2). */
 function consoleTarget(overrides: Partial<DebuggerTarget> = {}): DebuggerTarget {
-  return {
-    ...debugTarget(overrides),
+  return debugTarget({
     consoleDebug: true,
     bridgePath: "/_overcast/debugger/targets/lambda/my-fn/ws",
-  } as DebuggerTarget
+    ...overrides,
+  })
 }
 
 function controls(target: DebuggerTarget) {
