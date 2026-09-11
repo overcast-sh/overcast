@@ -5,9 +5,12 @@
  * session mounted, or an idle one, this renders its child and nothing
  * else — no panel subscribes, no query polls.
  *
- * Widths are fixed (the repo has no resizable-panel primitive): a 20rem
- * sidebar that scrolls inside the code pane's height, a 16rem drawer.
- * Below the app's narrow breakpoint the sidebar becomes a tab strip
+ * Sizes are fixed (the repo has no resizable-panel primitive): a 20rem
+ * sidebar that scrolls inside the code pane's height, a 12rem drawer, and
+ * the code pane at `DEBUG_CODE_HEIGHT`, so the whole page — header,
+ * function overview, toolbar, code, panels and drawer — fits one 1080p
+ * screen instead of the drawer landing below the fold under a pane mostly
+ * empty. Below the app's narrow breakpoint the sidebar becomes a tab strip
  * between the code and the drawer.
  */
 import type { ReactNode } from "react"
@@ -17,6 +20,17 @@ import { useMediaQuery } from "@/hooks/use-media-query"
 import { useDebugSessionState, useOptionalDebugSession } from "../session/hooks"
 import { DebugDrawer } from "./debug-drawer"
 import { DebugSidebar } from "./debug-sidebar"
+
+/**
+ * The code pane's height while a session is open, in place of the Code
+ * tab's idle `65vh`: the viewport less what the rest of the page takes
+ * above and below it — the app header, the function overview and the tab
+ * strip (about 26rem), the toolbar, the drawer, the gaps and the page's
+ * padding — floored so a short window keeps a usable editor and scrolls
+ * instead, and never taller than the idle pane. Idle, the pane is not this
+ * component's to size.
+ */
+export const DEBUG_CODE_HEIGHT = "clamp(18rem, 100vh - 44rem, 65vh)"
 
 export interface DebugWorkspaceProps {
   /** The function's log group, for the Logs drawer; `null` when it has none. */
@@ -66,7 +80,7 @@ function OpenWorkspace({ logGroup, children }: DebugWorkspaceProps) {
       </div>
       <section
         aria-label="Debug drawer"
-        className="flex h-64 flex-col rounded-md border border-border bg-bg-elevated px-3 pb-2"
+        className="flex h-48 flex-col rounded-md border border-border bg-bg-elevated px-3 pb-2"
       >
         <DebugDrawer logGroup={logGroup} className="min-h-0 flex-1" />
       </section>

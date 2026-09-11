@@ -22,6 +22,7 @@ import { useDebugSessionState, useOptionalDebugSession } from "../session/hooks"
 import type { DebugSession, PauseState } from "../session/session"
 import { BreakpointConditionEditor } from "./breakpoint-condition-editor"
 import { DebugToolbar } from "./debug-toolbar"
+import { DEBUG_CODE_HEIGHT } from "./debug-workspace"
 
 const ORIGINAL_GROUP = "Original"
 
@@ -166,6 +167,9 @@ function ActiveCodeBrowser({
       )}
       <CodeBrowser
         {...props}
+        // The workspace's budget, not the idle tab's: the drawer has to fit
+        // under the pane on one screen.
+        height={DEBUG_CODE_HEIGHT}
         files={browserFiles}
         loadFile={loadDebugFile}
         decorations={decorations}
