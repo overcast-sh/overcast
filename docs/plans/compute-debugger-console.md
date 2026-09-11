@@ -1,10 +1,34 @@
 # Compute debugger, phase 2: step debugging inside the console — plan
 
-> Status: **in progress** 2026-09-12 — issue #1944. Builds on
+> Status: **complete** 2026-09-12 — issue #1944. Phase A (`438af1481`, the
+> WebSocket bridge, BFF upgrade proxy, descriptor fields and the source
+> endpoint's per-file reads), Phase B1 (`a66987eb1`, the session store, CDP
+> client, source maps, CodeBrowser props, gutter breakpoints, toolbar and
+> pause navigation), Phase B2 (`0f9cb6d0b`, the Locals/Watch/Call stack/
+> Breakpoints panels, the Logs + Debug console drawer, the lifted invoke and
+> the responsive layout), Phase C (`8f8173189`, `docs/debugger-console.md`
+> and the changelog fragment) and Phase D (the review pass over the whole
+> branch, whose fixes landed as `6194dd273`, `cae983087`, `72fccb9ba`,
+> `0743ac7b9` and `159255875`) are all in. Builds on
 > [compute-debugger.md](./compute-debugger.md) (#1939, shipped in #1941), whose
-> § 11 and § 11.1 are the design this plan turns into work. Read that document
-> first; this one only adds what phase 2 needs and pins the contracts the
-> parallel phases share.
+> § 11 and § 11.1 are the design this plan turned into work.
+>
+> What shipped matches § 3's contracts, with the deviations the phase notes
+> record. The invoke stream carries no request id, so the Logs drawer is the
+> function's whole log-group tail rather than one request's, and the program's
+> `console.log` lines show there — the Lambda runtime writes them to the log
+> stream, not to the inspector — while the Debug console shows evaluations,
+> exceptions and pause markers. The invoke moved out of the Test tab (which a
+> pause unmounts) into `features/lambda/use-invoke.ts`, owned by the route, so
+> Continue still lands the result where it was asked for. Fixed panel widths
+> stand in for a resizable-panel primitive the repo does not have, and the
+> code pane takes a bounded height while a session is open so the whole
+> workspace fits one screen. Source maps are re-read on every reconnect, since
+> a hot-reload rebuild may change them. "Restart container" is on the toolbar
+> disabled: it waits on the hot-reload retire path in § 6. The review pass
+> also made the bridge's truncated close reason valid UTF-8 and the call stack
+> a plain ARIA list. Read [compute-debugger.md](./compute-debugger.md) first;
+> this document only added what phase 2 needed and pinned the shared contracts.
 
 ## 1. Goal
 
