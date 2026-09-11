@@ -24,8 +24,10 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"net"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -151,6 +153,7 @@ func NewHandler(staticFS, docsFS fs.FS, cfg UIConfig) http.Handler {
 	// what the console renders as "off".
 	r.Get("/api/debugger/targets", proxyJSONHandler("/_overcast/debugger/targets"))
 	r.Get("/api/debugger/targets/{service}/{resource}", handleDebuggerTarget)
+	r.Get("/api/debugger/targets/{service}/{resource}/ws", handleDebuggerBridge)
 	r.Get("/api/lambda/runtimes", proxyJSONHandler("/_overcast/lambda/runtimes"))
 	r.Get("/api/lambda/layers/{layerName}/versions/{version}/metadata", handleLambdaLayerMetadata)
 	r.Get("/api/lambda/instances", handleLambdaInstances)
@@ -425,6 +428,52 @@ func handleDebuggerTarget(w http.ResponseWriter, r *http.Request) {
 		path += "?container=" + url.QueryEscape(container)
 	}
 	proxyJSONHandler(path)(w, r)
+}
+
+// handleDebuggerBridge proxies GET /_overcast/debugger/targets/{service}/{resource}/ws,
+// the console's WebSocket session on a debug target
+// (docs/plans/compute-debugger-console.md § 3.1), with the upgrade passed
+// through: httputil.ReverseProxy relays a 101 response's connection both ways
+// until either side closes, so the emulator's close codes — 1011 no
+// container, 1012 service restart — reach the browser as sent.
+//
+// Two things differ from the JSON proxies. The endpoint comes from the query
+// as well as the header, because a browser cannot set headers on a WebSocket
+// handshake. And the browser's Host header is preserved rather than rewritten
+// to the emulator's, so the emulator's origin check sees the console's own
+// origin as the request host — which is what lets a console served on some
+// non-loopback host (the host bridge) pass it without the emulator having to
+// know where the console lives.
+func handleDebuggerBridge(w http.ResponseWriter, r *http.Request) {
+	target, err := url.Parse(resolveEndpointQP(r))
+	if err != nil || target.Host == "" {
+		writeJSONError(w, http.StatusBadRequest, "invalid emulator endpoint")
+		return
+	}
+	service, resource := chi.URLParam(r, "service"), chi.URLParam(r, "resource")
+	query := url.Values{}
+	if container := r.URL.Query().Get("container"); container != "" {
+		query.Set("container", container)
+	}
+	proxy := &httputil.ReverseProxy{
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			pr.SetURL(target)
+			pr.Out.URL.Path = "/_overcast/debugger/targets/" + service + "/" + resource + "/ws"
+			pr.Out.URL.RawPath = "/_overcast/debugger/targets/" + url.PathEscape(service) + "/" + url.PathEscape(resource) + "/ws"
+			pr.Out.URL.RawQuery = query.Encode()
+			pr.Out.Host = pr.In.Host
+		},
+		// The streaming client's transport: nil dials plainly, and under TLS
+		// it is the one that trusts the emulator's certificate.
+		Transport: bffStreamingClient.Transport,
+		ErrorHandler: func(w http.ResponseWriter, _ *http.Request, _ error) {
+			writeJSONError(w, http.StatusBadGateway, "emulator unreachable")
+		},
+		// ErrorHandler already answers; the default would also print to
+		// stderr, which is not where this process logs.
+		ErrorLog: log.New(io.Discard, "", 0),
+	}
+	proxy.ServeHTTP(w, r)
 }
 
 func handleDebugState(w http.ResponseWriter, r *http.Request) {

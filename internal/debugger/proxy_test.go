@@ -66,10 +66,17 @@ func roundTrip(t *testing.T, c net.Conn, line string) string {
 	return got
 }
 
-// events subscribes and returns a channel of event kinds.
+// events subscribes and returns a channel of the client transitions —
+// attach, detach, pause, resume. Upstream changes are left out: the tests
+// here bind and rebind containers freely, and upstream_event_test.go covers
+// that kind on its own.
 func events(tgt *Target) <-chan EventKind {
 	ch := make(chan EventKind, 16)
-	tgt.Subscribe(func(ev Event) { ch <- ev.Kind })
+	tgt.Subscribe(func(ev Event) {
+		if ev.Kind != EventUpstream {
+			ch <- ev.Kind
+		}
+	})
 	return ch
 }
 

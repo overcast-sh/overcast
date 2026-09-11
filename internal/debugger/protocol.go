@@ -38,6 +38,24 @@ type Observer interface {
 	FromServer(b []byte) (paused, resumed bool)
 }
 
+// MessageObserver is optional on an Observer. The console's bridge relays a
+// WebSocket protocol message by message, so it hands the observer each whole
+// container→client message rather than re-encoding it into the frames
+// FromServer would parse. The two entry points share one state: a pause seen
+// either way is the same pause.
+type MessageObserver interface {
+	FromServerMessage(msg []byte) (paused, resumed bool)
+}
+
+// ConsoleProtocol is optional. A protocol implementing it says whether the
+// web console ships a client for it, which is what turns the Debug tab's
+// "Debug in console" on. Only the inspector does in this phase: its client is
+// CDP over the bridge, and a DAP client for Python follows on the same
+// surface (docs/plans/compute-debugger-console.md § 6).
+type ConsoleProtocol interface {
+	ConsoleDebug() bool
+}
+
 // Source says how a target's protocol was chosen, so the console can explain
 // a surprising choice ("env: NODE_OPTIONS already carried --inspect").
 type Source string

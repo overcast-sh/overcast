@@ -159,6 +159,41 @@ is the deployed tree.
 - **D — review.** Repo `code-review` skill over the branch; fixes; full
   verification; PR with screenshots (paused state, panels, dark and light).
 
+Phase A notes. The bridge is `Target.ServeWebSocket` in
+`internal/debugger/bridge.go`, reached through `Handler.Bridge` at
+`GET /_overcast/debugger/targets/{service}/{resource}/ws[?container=]` and
+proxied by the BFF at `/api/debugger/targets/{service}/{resource}/ws` with
+`httputil.ReverseProxy` (the upgrade passes through natively, so close codes
+reach the browser as sent); the BFF reads the endpoint from the query as well
+as the header, since a browser cannot set headers on a handshake, and
+preserves the browser's `Host`, which is what makes the emulator's origin
+check accept the console's own origin on a non-loopback host. A bridge
+session and a TCP client share one bookkeeping path — `Target.newConnection`
+/ `connection.close` — and the CDP observer gained `FromServerMessage` for
+messages the relay has already decoded. Close codes as shipped: 1011 with
+reason `no container` (nothing bound), `container unreachable` (discovery or
+dial failed) or `container closed` (the container ended the session) — the
+console keys on the code; 1012 `service restart` on any change of the
+target's upstream, including the container simply going away, since the
+console's reconnect then lands on 1011 and waits; 1001 `keepalive timeout`
+after two missed pongs at 20 s; and a target the flag keeps off answers 1011
+`not listening: <reason>` rather than the descriptor's reason being fetched
+first. The upstream change is a new `EventUpstream`, fired by `SetUpstream`
+and `ClearContainer` only when the address actually changes. Descriptor
+fields are `consoleDebug` (a `ConsoleProtocol` capability the inspector
+declares) and `bridgePath` (`debugger.BridgePath`, set on every registered
+target, empty on a synthesised entry). Origins accepted: the request's own
+host and `localhost`/`127.0.0.1` on any port; `[::1]` is not, because
+`path.Match` reads the brackets as a character class. Discovery is
+`GET /json/list` with a 2 s bound, first entry with a `webSocketDebuggerUrl`,
+host rewritten to the upstream. The source endpoint already had `?file=`; it
+now reads a hot-reload mount (`overcast:hot-reload-path` under
+`OVERCAST_LAMBDA_HOT_RELOAD`) for both the listing and the per-file read —
+listing with the fingerprint's skip list and bounds, reading any path
+resolved inside the mount, `.map` labelled `json` — and `PUT` still edits the
+package only. `TestInvoke_debugger_consoleBridgeSpeaksCDPToTheContainer`
+covers the bridge against a real Node container.
+
 ## 5. Tests
 
 | Area | Tests |

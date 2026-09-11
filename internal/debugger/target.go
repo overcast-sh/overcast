@@ -55,6 +55,9 @@ const (
 	EventPause EventKind = "pause"
 	// EventResume fires when the last paused connection resumes or drops.
 	EventResume EventKind = "resume"
+	// EventUpstream fires when the container behind the port changes — bound,
+	// replaced by hot reload, or gone. Target.Upstream reads the new address.
+	EventUpstream EventKind = "upstream"
 )
 
 // Event is delivered to subscribers, in order, from the goroutine that
@@ -237,9 +240,25 @@ func (t *Target) Bound() bool {
 // are left to close on their own, which is what lets an editor's reconnect
 // find the new container on the same port.
 func (t *Target) SetUpstream(addr string) {
+	t.setUpstream(func() bool {
+		changed := t.upstream != addr
+		t.upstream = addr
+		return changed
+	})
+}
+
+// setUpstream applies change under mu and, when it reports a change, tells
+// subscribers with EventUpstream — under emitMu like the other transitions,
+// so a bridge session sees the replacement in order with its attach.
+func (t *Target) setUpstream(change func() bool) {
+	t.emitMu.Lock()
+	defer t.emitMu.Unlock()
 	t.mu.Lock()
-	t.upstream = addr
+	changed := change()
 	t.mu.Unlock()
+	if changed {
+		t.deliver(EventUpstream, t.clk.Now())
+	}
 }
 
 // ClearUpstream makes new connections close immediately, which editors that
@@ -259,12 +278,15 @@ func (t *Target) SetContainerID(id string) {
 // bound must not blind the proxy to the replacement, which is what an
 // unconditional ClearUpstream from that container's Close would do.
 func (t *Target) ClearContainer(id string) {
-	t.mu.Lock()
-	if t.containerID == id {
+	t.setUpstream(func() bool {
+		if t.containerID != id {
+			return false
+		}
+		changed := t.upstream != ""
 		t.upstream = ""
 		t.containerID = ""
-	}
-	t.mu.Unlock()
+		return changed
+	})
 }
 
 // SetRemoteRoot records the container path editors map the local root to:

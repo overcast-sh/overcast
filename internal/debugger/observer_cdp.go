@@ -77,6 +77,14 @@ func (o *cdpObserver) FromServer(b []byte) (paused, resumed bool) {
 	return !was && o.paused, was && !o.paused
 }
 
+// FromServerMessage reads one whole message the bridge already decoded from
+// its frame, and reports the state change the same way FromServer does.
+func (o *cdpObserver) FromServerMessage(msg []byte) (paused, resumed bool) {
+	was := o.paused
+	o.message(msg)
+	return !was && o.paused, was && !o.paused
+}
+
 func (o *cdpObserver) consume(b []byte) {
 	for len(b) > 0 {
 		switch o.phase {

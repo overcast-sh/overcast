@@ -20,7 +20,8 @@ type Describer interface {
 	DescribeUntagged(ctx context.Context, service Service, resource string) (Descriptor, bool)
 }
 
-// Handler serves the two emulator-only endpoints under /_overcast/debugger.
+// Handler serves the emulator-only endpoints under /_overcast/debugger: the
+// target list, one target's descriptor, and the console's WebSocket bridge.
 // Routes are registered by internal/router; this only provides the handlers.
 type Handler struct {
 	manager   *Manager
@@ -48,22 +49,10 @@ func (h *Handler) ListTargets(w http.ResponseWriter, _ *http.Request) {
 // task answers with its first container by id, so the console has something
 // to show before it asks for a specific one.
 func (h *Handler) GetTarget(w http.ResponseWriter, r *http.Request) {
-	service := Service(chi.URLParam(r, "service"))
-	resource := chi.URLParam(r, "resource")
-	container := r.URL.Query().Get("container")
-
-	if t, ok := h.manager.Get(TargetID(service, resource, container)); ok {
+	service, resource, container := targetParams(r)
+	if t, ok := h.lookup(service, resource, container); ok {
 		writeJSON(w, http.StatusOK, t.Descriptor())
 		return
-	}
-	if container == "" {
-		prefix := TargetID(service, resource, "") + "/"
-		for _, t := range h.manager.List() {
-			if strings.HasPrefix(t.ID(), prefix) {
-				writeJSON(w, http.StatusOK, t.Descriptor())
-				return
-			}
-		}
 	}
 	if h.describer != nil {
 		if d, ok := h.describer.DescribeUntagged(r.Context(), service, resource); ok {
@@ -76,6 +65,45 @@ func (h *Handler) GetTarget(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusNotFound, errorBody{Error: "no such resource: " + TargetID(service, resource, container)})
+}
+
+// Bridge is GET /_overcast/debugger/targets/{service}/{resource}/ws, the
+// console's WebSocket session on a registered target (bridge.go). A resource
+// with no target is a 404 before the upgrade: there is nothing to attach to,
+// and the console only asks once the descriptor said consoleDebug.
+func (h *Handler) Bridge(w http.ResponseWriter, r *http.Request) {
+	service, resource, container := targetParams(r)
+	t, ok := h.lookup(service, resource, container)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, errorBody{Error: "no such target: " + TargetID(service, resource, container)})
+		return
+	}
+	t.ServeWebSocket(w, r)
+}
+
+// targetParams reads the target a request names: the route's service and
+// resource, and the optional ?container= an ECS task's containers are told
+// apart by.
+func targetParams(r *http.Request) (service Service, resource, container string) {
+	return Service(chi.URLParam(r, "service")), chi.URLParam(r, "resource"), r.URL.Query().Get("container")
+}
+
+// lookup finds the registered target, or — with no container named — the
+// first of an ECS task's containers by id.
+func (h *Handler) lookup(service Service, resource, container string) (*Target, bool) {
+	if t, ok := h.manager.Get(TargetID(service, resource, container)); ok {
+		return t, true
+	}
+	if container != "" {
+		return nil, false
+	}
+	prefix := TargetID(service, resource, "") + "/"
+	for _, t := range h.manager.List() {
+		if strings.HasPrefix(t.ID(), prefix) {
+			return t, true
+		}
+	}
+	return nil, false
 }
 
 type errorBody struct {

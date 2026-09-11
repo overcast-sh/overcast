@@ -6,12 +6,33 @@ package lambda
 // support the built-in code editor in the Overcast web UI.
 //
 //   GET /_overcast/lambda/functions/{name}/source
-//       Returns {"source": "...", "filename": "...", "language": "..."}
+//       Returns {"source": "...", "filename": "...", "language": "...",
+//       "files": [{"name", "size"}, ...]}: the handler's file, and the list of
+//       every file the function runs from.
+//
+//   GET /_overcast/lambda/functions/{name}/source?file=<path>
+//       Returns the one file at <path> — any file in the deployment, by its
+//       path under /var/task: "dist/index.js", "dist/index.js.map",
+//       "node_modules/x/index.js". The path is what a Node.js inspector's
+//       scriptParsed reports after "file:///var/task/", which is how the
+//       console's debugger fetches source maps and the files they name
+//       (docs/plans/compute-debugger-console.md § 3.3). "language" is the
+//       Monaco language for the file's extension. 404 when there is no such
+//       file, 400 when the function has no deployment at all.
+//
+//       The deployment is the function's zip, or — for a function tagged
+//       overcast:hot-reload-path under OVERCAST_LAMBDA_HOT_RELOAD — the
+//       mounted host directory, read live, so the console shows what the
+//       container runs. The directory listing skips the dependency and VCS
+//       trees the hot-reload fingerprint skips (node_modules, .git, …) and is
+//       bounded like it; a file under a skipped tree is still readable by
+//       path. A path is resolved inside the mount only.
 //
 //   PUT /_overcast/lambda/functions/{name}/source
 //       Body: {"source": "...", "filename": "..."}
 //       Stores the source text, packages it into an in-memory zip, updates
-//       CodeZip/CodeSize, generates a new RevisionId.
+//       CodeZip/CodeSize, generates a new RevisionId. It edits the package,
+//       never a hot-reload mount: the mount is the user's editor's.
 
 import (
 	"archive/zip"
@@ -20,6 +41,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path"
+	"path/filepath"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -145,7 +169,11 @@ func languageForFilename(filename, runtime string) string {
 	switch {
 	case strings.HasSuffix(filename, ".js"), strings.HasSuffix(filename, ".mjs"), strings.HasSuffix(filename, ".cjs"):
 		return "javascript"
-	case strings.HasSuffix(filename, ".ts"), strings.HasSuffix(filename, ".mts"):
+	case strings.HasSuffix(filename, ".jsx"):
+		return "javascript"
+	case strings.HasSuffix(filename, ".ts"), strings.HasSuffix(filename, ".mts"), strings.HasSuffix(filename, ".cts"):
+		return "typescript"
+	case strings.HasSuffix(filename, ".tsx"):
 		return "typescript"
 	case strings.HasSuffix(filename, ".py"):
 		return "python"
@@ -153,7 +181,8 @@ func languageForFilename(filename, runtime string) string {
 		return "java"
 	case strings.HasSuffix(filename, ".cs"):
 		return "csharp"
-	case strings.HasSuffix(filename, ".json"):
+	case strings.HasSuffix(filename, ".json"), strings.HasSuffix(filename, ".map"):
+		// A source map is JSON; the extension is a convention.
 		return "json"
 	case strings.HasSuffix(filename, ".yaml"), strings.HasSuffix(filename, ".yml"):
 		return "yaml"
@@ -405,12 +434,105 @@ func guessEntryFile(files []sourceFile, handler, runtime string) string {
 	return files[0].Name
 }
 
+// sourceTree is where a function's files are read from: its deployment zip,
+// or the host directory a hot-reload tag mounts at /var/task. Names are
+// slash-separated paths under that root, as the container sees them.
+type sourceTree interface {
+	list() []sourceFile
+	read(name string) (string, bool)
+}
+
+// zipTree is the deployment package.
+type zipTree []byte
+
+func (z zipTree) list() []sourceFile              { return listZipFiles(z) }
+func (z zipTree) read(name string) (string, bool) { return readZipFile(z, name) }
+
+// dirTree is a hot-reload mount, read live from Overcast's own filesystem —
+// which is the host's for a native Overcast, and whatever is mounted into
+// Overcast's container otherwise (hotReloadVisibilityDiagnostic says when
+// that is nothing).
+type dirTree string
+
+// sourceFileMax bounds one file read from a mount. A zip entry is bounded
+// by the package; a mounted tree could hold anything, and a file past this
+// is not source.
+const sourceFileMax = 32 << 20
+
+// list walks the mount with the fingerprint's bounds and skip list: the same
+// node_modules that would swamp the fingerprint swamps a file picker.
+func (d dirTree) list() []sourceFile {
+	var files []sourceFile
+	budget := hotReloadWalkMaxEntries
+	var walk func(dir, rel string, depth int)
+	walk = func(dir, rel string, depth int) {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return
+		}
+		for _, e := range entries {
+			if budget <= 0 {
+				return
+			}
+			budget--
+			name := e.Name()
+			childRel := name
+			if rel != "" {
+				childRel = rel + "/" + name
+			}
+			if e.IsDir() {
+				if _, skip := hotReloadSkipDirs[name]; skip || depth >= hotReloadWalkMaxDepth {
+					continue
+				}
+				walk(filepath.Join(dir, name), childRel, depth+1)
+				continue
+			}
+			info, err := e.Info()
+			if err != nil || !info.Mode().IsRegular() {
+				continue
+			}
+			files = append(files, sourceFile{Name: childRel, Size: info.Size()})
+		}
+	}
+	walk(string(d), "", 0)
+	return files
+}
+
+// read returns the file at name, resolved inside the mount: the name is
+// cleaned as a rooted path first, so ".." can climb no higher than the mount
+// itself.
+func (d dirTree) read(name string) (string, bool) {
+	rel := path.Clean("/" + filepath.ToSlash(name))
+	if rel == "/" {
+		return "", false
+	}
+	full := filepath.Join(string(d), filepath.FromSlash(rel))
+	info, err := os.Stat(full)
+	if err != nil || !info.Mode().IsRegular() || info.Size() > sourceFileMax {
+		return "", false
+	}
+	content, err := os.ReadFile(full)
+	if err != nil {
+		return "", false
+	}
+	return string(content), true
+}
+
+// mountedSourceRoot is the host directory a hot-reload function runs from —
+// its /var/task — or "" for a function that runs its package.
+func (h *Handler) mountedSourceRoot(fn *Function) string {
+	normalized, err := hotReloadBindPath(fn, h.cfg.LambdaHotReload)
+	if err != nil || normalized == "" {
+		return ""
+	}
+	return hotReloadLocalPath(hotReloadTagPath(fn), normalized)
+}
+
 // GetFunctionSource handles GET /_overcast/lambda/functions/{name}/source.
-// Returns the stored plain-text source (or a default stub if none stored yet).
-//
-// Query parameters:
-//
-//	?file=path — return content of a specific file inside the deployment zip.
+// Returns the handler's source (or a default stub if none stored yet) and the
+// file list, or with ?file=<path> that one file — from the deployment zip, or
+// from the hot-reload mount the function runs from instead. See the file
+// header for the shapes.
 func (h *Handler) GetFunctionSource(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 	fn, aerr := h.ls.getFunction(r.Context(), name)
@@ -434,19 +556,27 @@ func (h *Handler) GetFunctionSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build the file list from the deployment zip (if any).
+	// The files the function runs from: the mount when it has one, else the
+	// package.
+	var tree sourceTree
+	mounted := false
+	if root := h.mountedSourceRoot(fn); root != "" {
+		tree, mounted = dirTree(root), true
+	} else if len(fn.CodeZip) > 0 {
+		tree = zipTree(fn.CodeZip)
+	}
 	var files []sourceFile
-	if len(fn.CodeZip) > 0 {
-		files = listZipFiles(fn.CodeZip)
+	if tree != nil {
+		files = tree.list()
 	}
 
-	// If a specific file was requested, read it from the zip.
+	// If a specific file was requested, read it from the tree.
 	if reqFile := r.URL.Query().Get("file"); reqFile != "" {
-		if len(fn.CodeZip) == 0 {
+		if tree == nil {
 			protocol.WriteJSONError(w, r, protocol.ErrInvalidArgument("no deployment package"))
 			return
 		}
-		content, ok := readZipFile(fn.CodeZip, reqFile)
+		content, ok := tree.read(reqFile)
 		if !ok {
 			protocol.WriteJSONError(w, r, &protocol.AWSError{
 				Code:       "ResourceNotFoundException",
@@ -464,6 +594,25 @@ func (h *Handler) GetFunctionSource(w http.ResponseWriter, r *http.Request) {
 			Files:    files,
 		})
 		return
+	}
+
+	// A mounted function's handler is read from the mount — the package, if
+	// it even has one, is not what runs. An unreadable mount (Overcast in a
+	// container without it) falls through to the package's own answer.
+	if mounted {
+		if entry := guessEntryFile(files, fn.Handler, fn.Runtime); entry != "" {
+			if content, ok := tree.read(entry); ok {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_ = json.NewEncoder(w).Encode(sourceResponse{
+					Source:   content,
+					Filename: entry,
+					Language: languageForFilename(entry, fn.Runtime),
+					Files:    files,
+				})
+				return
+			}
+		}
 	}
 
 	source, filename, placeholder := resolveSource(fn, files)

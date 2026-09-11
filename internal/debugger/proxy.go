@@ -63,9 +63,8 @@ func (t *Target) handle(client net.Conn) {
 	}
 	defer t.untrack(server)
 
-	conn := &connection{target: t}
-	t.attach()
-	defer t.detach(conn)
+	conn := t.newConnection()
+	defer conn.close()
 
 	// Client→container needs no inspection. io.Copy lets the platform
 	// splice it when it can; either side closing ends both copies.
@@ -77,11 +76,7 @@ func (t *Target) handle(client net.Conn) {
 		client.Close()
 	}()
 
-	var from io.Reader = server
-	if po, ok := t.res.Protocol.(PauseObserver); ok {
-		from = &observed{r: server, observer: po.NewObserver(), conn: conn}
-	}
-	_, _ = io.Copy(client, from)
+	_, _ = io.Copy(client, conn.observedReader(server))
 	client.Close()
 	server.Close()
 }
@@ -105,32 +100,96 @@ func (t *Target) untrack(c net.Conn) {
 	t.mu.Unlock()
 }
 
-// connection is one client's pause state, so a target with several clients
-// counts pauses per connection and a dropped paused client resumes cleanly.
-type connection struct {
-	target *Target
-	paused bool
+// enter counts a goroutine the target must wait for before it is released —
+// a bridge session arriving on the HTTP server's goroutine, which serve did
+// not spawn. It refuses once the target is closed, so an arrival that lost
+// the race with Release does not outlive it; the caller owes a wg.Done.
+func (t *Target) enter() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closed {
+		return false
+	}
+	t.wg.Add(1)
+	return true
 }
 
-// observed feeds the container→client bytes through the protocol's Observer
-// and turns its verdicts into target transitions. It sits on the read side
-// so io.Copy's write path stays a plain socket write.
+// connection is one attached client, whichever way it arrived — the TCP
+// proxy or the console's WebSocket bridge — so the two count and observe
+// through one path. It carries the client's own pause state, so a target
+// with several clients counts pauses per connection and a dropped paused
+// client resumes cleanly, and the protocol's observer when it has one.
+type connection struct {
+	target   *Target
+	paused   bool
+	observer Observer // nil when the protocol cannot tell a pause
+}
+
+// newConnection counts a client as attached and gives it an observer for
+// the container→client direction when the protocol has one. close undoes
+// both.
+func (t *Target) newConnection() *connection {
+	c := &connection{target: t}
+	if po, ok := t.res.Protocol.(PauseObserver); ok {
+		c.observer = po.NewObserver()
+	}
+	t.attach()
+	return c
+}
+
+// close detaches the client, resuming it first if its last word was a pause.
+func (c *connection) close() { c.target.detach(c) }
+
+// fromServer feeds container→client bytes, as a socket delivers them, to the
+// observer and applies its verdict.
+func (c *connection) fromServer(b []byte) {
+	if c.observer == nil {
+		return
+	}
+	c.apply(c.observer.FromServer(b))
+}
+
+// fromServerMessage feeds one whole container→client message — a WebSocket
+// frame the bridge already decoded — to an observer that reads messages.
+func (c *connection) fromServerMessage(msg []byte) {
+	mo, ok := c.observer.(MessageObserver)
+	if !ok {
+		return
+	}
+	c.apply(mo.FromServerMessage(msg))
+}
+
+func (c *connection) apply(paused, resumed bool) {
+	if paused {
+		c.target.pause(c)
+	}
+	if resumed {
+		c.target.resume(c)
+	}
+}
+
+// observedReader wraps the container side of a byte splice so what is read
+// from it passes through the observer; r itself when there is none, so the
+// copy stays a plain socket read.
+func (c *connection) observedReader(r io.Reader) io.Reader {
+	if c.observer == nil {
+		return r
+	}
+	return &observed{r: r, conn: c}
+}
+
+// observed feeds the container→client bytes through the connection's
+// observer. It sits on the read side so io.Copy's write path stays a plain
+// socket write.
 type observed struct {
-	r        io.Reader
-	observer Observer
-	conn     *connection
+	r    io.Reader
+	conn *connection
 }
 
 func (o *observed) Read(p []byte) (int, error) {
 	n, err := o.r.Read(p)
 	if n > 0 {
-		paused, resumed := o.observer.FromServer(p[:n])
-		if paused {
-			o.conn.target.pause(o.conn)
-		}
-		if resumed {
-			o.conn.target.resume(o.conn)
-		}
+		o.conn.fromServer(p[:n])
 	}
 	return n, err
 }

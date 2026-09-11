@@ -58,6 +58,8 @@ func WithDeadline(ctx context.Context, clk clock.Clock, timeout time.Duration, t
 			if policy == config.DebuggerTimeoutPaused {
 				c.setSuspended(ev.Kind == EventPause)
 			}
+		case EventUpstream:
+			// Which container is behind the port does not move the clock.
 		}
 	})
 	stopParent := context.AfterFunc(ctx, func() { c.finish(ctx.Err()) })
