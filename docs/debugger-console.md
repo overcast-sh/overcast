@@ -25,10 +25,10 @@ Turn the debugger on as for an editor — `OVERCAST_DEBUGGER=true` and the
 `overcast:debug=true` tag, from
 [Step debugging inside emulated compute](./debugger.md#turning-it-on) — then
 open the function's **Debug** tab and press **Debug in console**. The button
-appears for Node.js functions only, so far: the console speaks the inspector
-protocol, and Python, Java and custom runtimes keep the editor configurations
-beside it. It stays disabled, with a tooltip saying so, until the flag and the
-tag are both in place.
+appears for tagged Node.js functions only, so far: the console speaks the
+inspector protocol, and Python, Java and custom runtimes keep the editor
+configurations beside it. It stays disabled, with a tooltip saying so, until
+the flag is on.
 
 The status line under the button says what the session is doing:
 
@@ -95,17 +95,19 @@ Beside the code, while a session is open:
 | Panel | Shows |
 | --- | --- |
 | Locals | The selected frame's scopes, expanding on click, with values previewed inline |
-| Watch | Expressions you add, re-evaluated in the selected frame on every pause and frame change; click one to edit it |
+| Watch | Expressions you add, re-evaluated in the selected frame on every pause and frame change; the pencil beside one edits it |
 | Call stack | Every frame at the pause, at its original location when a source map applies; clicking a frame selects it for Locals and Watch |
 | Breakpoints | Every breakpoint on the function — enable, disable, remove, edit the condition — and the pause-on-exceptions toggle |
 
 Below the code, a drawer with two tabs. **Logs** is the Monitor tab's log
-viewer, live, filtered to the current request when the invocation supplies a
-request id, with a marker line at each pause and resume. **Debug console**
-shows `console.*` output and thrown exceptions as they arrive, and takes an
-expression: evaluated in the selected frame while paused, in the function's
-global scope while it runs. On a narrow window the panels become a tab strip
-above the drawer.
+viewer over the function's log group, live — the last 15 minutes, every
+request, since the invocation does not name its request id — with a marker
+line at each pause and resume. The function's own `console.log` lines are
+there too: the Lambda runtime writes them to the log stream, not to the
+debugger. **Debug console** shows thrown exceptions as they arrive, the same
+pause and resume markers, and takes an expression: evaluated in the selected
+frame while paused, in the function's global scope while it runs. On a narrow
+window the panels become a tab strip above the drawer.
 
 ## Source maps
 
@@ -134,7 +136,7 @@ directory, so the tab shows what the container runs.
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | No **Debug in console** button on the Debug tab | The runtime's protocol is not the inspector; Node.js only, so far | Attach an editor with the configurations beside it |
-| The button is disabled | The flag or the tag is missing | [Turn the debugger on](./debugger.md#turning-it-on) and tag the function |
+| The button is disabled | The flag is off | [Turn the debugger on](./debugger.md#turning-it-on) |
 | "Waiting for a container — invoke once", and nothing happens | No container exists before the first invocation | Invoke from the Test tab; the session attaches to the container that starts |
 | The session dropped after an edit | Hot reload replaced the container | Nothing: it reconnects and re-applies breakpoints once the new container loads the code |
 | A breakpoint never binds | The path is not one the container loads from `/var/task` | Open the file from the Code tab's list and set it there; for a bundle, set it in the original file the map lists |
