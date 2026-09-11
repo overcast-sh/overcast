@@ -21,6 +21,7 @@ import { summarisePlatformRecords } from "@/lib/log-format"
 import { fieldLabel, sectionLabel } from "@/lib/typography"
 import { cn } from "@/lib/utils"
 import { InvokeDebugHint } from "@/features/debugger/components/invoke-debug-hint"
+import { useOptionalDebugSession } from "@/features/debugger/session/hooks"
 
 export function TestTab({ name, timeoutSeconds }: { name: string; timeoutSeconds?: number }) {
   // Event state
@@ -37,6 +38,10 @@ export function TestTab({ name, timeoutSeconds }: { name: string; timeoutSeconds
 
   // Saved events query
   const { data: savedEvents = [] } = useQuery(testEventsQueryOptions(name))
+
+  // A console debug session waiting for a container is woken by the invoke
+  // that starts one; absent on pages without the provider.
+  const debugSession = useOptionalDebugSession()
 
   const { mutate: saveEvent, isPending: isSaving } = useResourceMutation({
     options: putTestEventMutationOptions(),
@@ -74,6 +79,7 @@ export function TestTab({ name, timeoutSeconds }: { name: string; timeoutSeconds
     setInvokeError(null)
     setIsPending(true)
     setProgressStep("Starting invocation")
+    debugSession?.invokeStarted()
 
     try {
       for await (const event of lambda.invokeStream(name, eventPayload)) {
@@ -86,7 +92,7 @@ export function TestTab({ name, timeoutSeconds }: { name: string; timeoutSeconds
       setProgressStep(null)
       setIsPending(false)
     }
-  }, [name, eventPayload, jsonError, isPending])
+  }, [name, eventPayload, jsonError, isPending, debugSession])
 
   const handleSave = useCallback(() => {
     if (!eventName.trim() || jsonError) return

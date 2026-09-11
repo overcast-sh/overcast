@@ -13,11 +13,20 @@
  *     onChange={(path, value) => { ... }}
  *     height="60vh"
  *   />
+ *
+ * The optional editor-aware props — `decorations`, `onGutterClick`,
+ * `revealPosition`, file groups and `explorerActions` — are what a debugger
+ * (or any other annotator) needs from an editor, expressed without the
+ * browser knowing who is asking: it paints markers where it is told, reports
+ * gutter clicks, and scrolls to a position on request. Nothing is registered
+ * with Monaco for them until a caller passes them, so a plain browser costs
+ * nothing extra.
  */
-import { useState, useCallback, useMemo, useRef } from "react"
+import { useState, useCallback, useEffect, useMemo, useRef, type ReactNode } from "react"
 import Editor, { type OnMount } from "@monaco-editor/react"
 import type * as Monaco from "monaco-editor"
 import { ChevronRight, ChevronDown, FileCode, FolderOpen, Folder, X } from "lucide-react"
+import { languageForPath } from "@/lib/language-for-path"
 import { sectionLabel } from "@/lib/typography"
 import { cn } from "@/lib/utils"
 
@@ -28,11 +37,47 @@ export interface BrowserFile {
   name: string
   /** Uncompressed size in bytes */
   size: number
+  /**
+   * Explorer section this file is listed under. Ungrouped files form the
+   * main tree; each group is a labelled tree below it. The path is still the
+   * file's identity, so a grouped file and an ungrouped one must not share one.
+   */
+  group?: string
 }
 
 export interface LoadedFile {
   content: string
   language: string
+  /** Lock this one file against edits, whatever the browser-wide `readOnly` says. */
+  readOnly?: boolean
+  /** A one-line note shown above the editor while this file is open — where the content came from, say. */
+  notice?: string
+}
+
+/**
+ * A marker on one line of one file. `glyph` and `glyph-muted` are dots in
+ * the gutter (a breakpoint and a disabled one, to a debugger); `current` is
+ * a whole-line highlight with an arrow in the gutter (the paused line).
+ */
+export interface LineDecoration {
+  /** 1-based. */
+  line: number
+  kind: "glyph" | "glyph-muted" | "current"
+  /** Hover text for the gutter marker. */
+  title?: string
+}
+
+/** `toggle` is a plain click; `menu` is a right-click or a modifier-click — the caller decides what each means. */
+export type GutterClickKind = "toggle" | "menu"
+
+export interface RevealPosition {
+  path: string
+  /** 1-based. */
+  line: number
+  /** 0-based; defaults to the line start. */
+  column?: number
+  /** Change to reveal the same position again — a second pause on one line. */
+  key?: number
 }
 
 export interface CodeBrowserProps {
@@ -56,6 +101,26 @@ export interface CodeBrowserProps {
   readOnly?: boolean
   /** Extra CSS class on the root container. */
   className?: string
+  /**
+   * Line markers, keyed by file path. Applied to whichever file is open and
+   * re-applied when the file or the map changes; the gutter margin is shown
+   * only while this or `onGutterClick` is set.
+   */
+  decorations?: Readonly<Record<string, readonly LineDecoration[]>>
+  /**
+   * A click in the gutter (glyph margin or line numbers) of the open file.
+   * Left click reports `toggle`; right click, or a click with Ctrl, Cmd or
+   * Alt held, reports `menu`. F9 while the editor has focus reports `toggle`
+   * on the cursor line, so the gutter is reachable without a mouse.
+   */
+  onGutterClick?: (path: string, line: number, kind: GutterClickKind) => void
+  /**
+   * Open a file and scroll to a line, moving the cursor and focus there.
+   * Acted on when the object changes (by identity or `key`); `null` reveals nothing.
+   */
+  revealPosition?: RevealPosition | null
+  /** Controls rendered at the right of the explorer header — a toggle, a filter. */
+  explorerActions?: ReactNode
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -81,20 +146,38 @@ function fileIconColor(name: string): string {
   return "text-fg-muted"
 }
 
-function languageForPath(path: string): string {
-  if (/\.tsx?$/.test(path)) return "typescript"
-  if (/\.[mc]?jsx?$/.test(path)) return "javascript"
-  if (/\.py$/.test(path)) return "python"
-  if (/\.java$/.test(path)) return "java"
-  if (/\.cs$/.test(path)) return "csharp"
-  if (/\.json$/.test(path)) return "json"
-  if (/\.ya?ml$/.test(path)) return "yaml"
-  if (/\.md$/.test(path)) return "markdown"
-  if (/\.html?$/.test(path)) return "html"
-  if (/\.css$/.test(path)) return "css"
-  if (/\.sh$|\.bash$/.test(path)) return "shell"
-  if (/\.xml$/.test(path)) return "xml"
-  return "plaintext"
+/** Monaco decoration options per kind. The classes are styled in styles/global.css. */
+function decorationOptions(
+  monaco: typeof Monaco,
+  decoration: LineDecoration,
+): Monaco.editor.IModelDecorationOptions {
+  const hover = decoration.title ? { value: decoration.title } : undefined
+  const stickiness = monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
+  switch (decoration.kind) {
+    case "glyph":
+      return { glyphMarginClassName: "oc-gutter-glyph", glyphMarginHoverMessage: hover, stickiness }
+    case "glyph-muted":
+      return {
+        glyphMarginClassName: "oc-gutter-glyph oc-gutter-glyph-muted",
+        glyphMarginHoverMessage: hover,
+        stickiness,
+      }
+    case "current":
+      return {
+        isWholeLine: true,
+        className: "oc-line-current",
+        glyphMarginClassName: "oc-gutter-current",
+        glyphMarginHoverMessage: hover,
+        stickiness,
+      }
+  }
+}
+
+function isGutterTarget(monaco: typeof Monaco, target: Monaco.editor.IMouseTarget): boolean {
+  return (
+    target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN ||
+    target.type === monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS
+  )
 }
 
 // ─── Tree data structure ───────────────────────────────────────────────────
@@ -178,6 +261,10 @@ export function CodeBrowser({
   height = "60vh",
   readOnly = false,
   className = "",
+  decorations,
+  onGutterClick,
+  revealPosition,
+  explorerActions,
 }: CodeBrowserProps) {
   // ── File cache: path → { content, language } ──────────────────────────
   const [fileCache, setFileCache] = useState<Record<string, LoadedFile | undefined>>(() => {
@@ -208,6 +295,20 @@ export function CodeBrowser({
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null)
   const monacoRef = useRef<typeof Monaco | null>(null)
 
+  // ── Editor-aware props, read from refs by Monaco listeners ─────────────
+  //
+  // The listeners are registered once at mount and must see the latest
+  // props without being re-registered per render, so the props are mirrored
+  // into refs from effects. `activeFileRef` names the file the listeners
+  // are reporting about.
+  const decorationsRef = useRef(decorations)
+  const gutterClickRef = useRef(onGutterClick)
+  const activeFileRef = useRef("")
+  const decorationCollectionRef = useRef<Monaco.editor.IEditorDecorationsCollection | null>(null)
+  const pendingRevealRef = useRef<RevealPosition | null>(null)
+  const lastRevealRef = useRef<RevealPosition | null>(null)
+  const wantsGutter = Boolean(decorations || onGutterClick)
+
   // ── Detect dark mode ──────────────────────────────────────────────────
   const isDark =
     typeof document !== "undefined" &&
@@ -216,8 +317,18 @@ export function CodeBrowser({
         window.matchMedia("(prefers-color-scheme: dark)").matches))
 
   // ── Tree ──────────────────────────────────────────────────────────────
-  const tree = useMemo(() => buildTree(files), [files])
-  const hasExplorer = files.length > 1
+  const tree = useMemo(() => buildTree(files.filter((f) => !f.group)), [files])
+  const groups = useMemo(() => {
+    const byGroup = new Map<string, BrowserFile[]>()
+    for (const f of files) {
+      if (!f.group) continue
+      const list = byGroup.get(f.group) ?? []
+      list.push(f)
+      byGroup.set(f.group, list)
+    }
+    return [...byGroup.entries()].map(([name, list]) => ({ name, tree: buildTree(list) }))
+  }, [files])
+  const hasExplorer = files.length > 1 || explorerActions != null
   const openFile = useCallback(
     async (path: string) => {
       // Add to tabs if not already open
@@ -270,17 +381,111 @@ export function CodeBrowser({
     [activeFile, files, initialFile, onActiveFileChange],
   )
 
-  // ── Monaco mount ──────────────────────────────────────────────────────
-  const handleMount: OnMount = useCallback((editor, monaco) => {
-    editorRef.current = editor
-    monacoRef.current = monaco
-  }, [])
-
   // ── Current file data ─────────────────────────────────────────────────
   const currentData = fileCache[activeFile]
   const currentLanguage = currentData?.language ?? language ?? languageForPath(activeFile)
   const currentValue = currentData?.content ?? initialValue ?? ""
   const isLoading = loadingFile === activeFile
+  const currentReadOnly = readOnly || currentData?.readOnly === true
+
+  // ── Decorations & reveal (imperative, against the mounted editor) ─────
+  const applyDecorations = useCallback(() => {
+    const editor = editorRef.current
+    const monaco = monacoRef.current
+    if (!editor || !monaco) return
+    const list = decorationsRef.current?.[activeFileRef.current] ?? []
+    const collection = (decorationCollectionRef.current ??= editor.createDecorationsCollection())
+    collection.set(
+      list.map((d) => ({
+        range: new monaco.Range(d.line, 1, d.line, 1),
+        options: decorationOptions(monaco, d),
+      })),
+    )
+  }, [])
+
+  /** Scroll to the pending position once the editor shows its file. */
+  const consumePendingReveal = useCallback(() => {
+    const editor = editorRef.current
+    const pending = pendingRevealRef.current
+    if (!editor || !pending || pending.path !== activeFileRef.current) return
+    pendingRevealRef.current = null
+    editor.revealLineInCenter(pending.line)
+    editor.setPosition({ lineNumber: pending.line, column: (pending.column ?? 0) + 1 })
+    editor.focus()
+  }, [])
+
+  // ── Monaco mount ──────────────────────────────────────────────────────
+  const handleMount: OnMount = useCallback(
+    (editor, monaco) => {
+      editorRef.current = editor
+      monacoRef.current = monaco
+      decorationCollectionRef.current = null
+
+      // Report gutter clicks; swallow the context menu there so a right
+      // click is a report, not Monaco's own menu.
+      editor.onMouseDown((e) => {
+        const line = e.target.position?.lineNumber
+        if (!isGutterTarget(monaco, e.target) || !line) return
+        const menu = e.event.rightButton || e.event.ctrlKey || e.event.metaKey || e.event.altKey
+        gutterClickRef.current?.(activeFileRef.current, line, menu ? "menu" : "toggle")
+      })
+      editor.onContextMenu((e) => {
+        if (!isGutterTarget(monaco, e.target)) return
+        e.event.preventDefault()
+        e.event.stopPropagation()
+      })
+      editor.addAction({
+        id: "code-browser.gutter-toggle",
+        label: "Toggle gutter marker on the current line",
+        keybindings: [monaco.KeyCode.F9],
+        run: (ed) => {
+          const position = ed.getPosition()
+          if (position) {
+            gutterClickRef.current?.(activeFileRef.current, position.lineNumber, "toggle")
+          }
+        },
+      })
+      // Switching files swaps the model, which drops the decorations with it.
+      editor.onDidChangeModel(() => {
+        decorationCollectionRef.current = null
+        applyDecorations()
+        consumePendingReveal()
+      })
+      applyDecorations()
+      consumePendingReveal()
+    },
+    [applyDecorations, consumePendingReveal],
+  )
+
+  useEffect(() => {
+    gutterClickRef.current = onGutterClick
+  }, [onGutterClick])
+
+  // The editor is unmounted while a file loads and a new one mounts after,
+  // so the handle must not outlive it: a reveal aimed at the old editor
+  // would scroll a disposed instance and be lost. Declared before the
+  // effect below so a load and a file change in one commit see no editor.
+  useEffect(() => {
+    if (isLoading) {
+      editorRef.current = null
+      decorationCollectionRef.current = null
+    }
+  }, [isLoading])
+
+  useEffect(() => {
+    activeFileRef.current = activeFile
+    decorationsRef.current = decorations
+    applyDecorations()
+    consumePendingReveal()
+  }, [activeFile, decorations, applyDecorations, consumePendingReveal])
+
+  useEffect(() => {
+    if (!revealPosition || revealPosition === lastRevealRef.current) return
+    lastRevealRef.current = revealPosition
+    pendingRevealRef.current = revealPosition
+    if (revealPosition.path !== activeFileRef.current) void openFile(revealPosition.path)
+    else consumePendingReveal()
+  }, [revealPosition, openFile, consumePendingReveal])
 
   // ── Breadcrumb segments ───────────────────────────────────────────────
   const breadcrumb = activeFile.split("/")
@@ -379,14 +584,26 @@ export function CodeBrowser({
         >
           {/* Sidebar header */}
           <div
-            className={cn(sectionLabel, "flex items-center px-3 py-1.5")}
+            className={cn(sectionLabel, "flex items-center justify-between gap-2 px-3 py-1.5")}
             style={{ color: isDark ? "#888" : "var(--color-fg-muted)" }}
           >
-            Explorer
+            <span>Explorer</span>
+            {explorerActions}
           </div>
-          {/* File tree */}
+          {/* File tree, then one labelled tree per group */}
           <div className="flex-1 overflow-x-hidden overflow-y-auto py-0.5">
             {tree.map((n) => renderNode(n, 0))}
+            {groups.map((group) => (
+              <div key={group.name} role="group" aria-label={group.name}>
+                <div
+                  className={cn(sectionLabel, "mt-2 px-3 py-1")}
+                  style={{ color: isDark ? "#888" : "var(--color-fg-muted)" }}
+                >
+                  {group.name}
+                </div>
+                {group.tree.map((n) => renderNode(n, 0))}
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -457,6 +674,17 @@ export function CodeBrowser({
           ))}
         </div>
 
+        {/* A note the loader attached to this file */}
+        {currentData?.notice && (
+          <div
+            role="note"
+            className="border-t border-white/10 px-3 py-1 font-mono text-xs text-fg-muted"
+            style={{ backgroundColor: isDark ? "#1e1e1e" : "#fff" }}
+          >
+            {currentData.notice}
+          </div>
+        )}
+
         {/* Editor */}
         <div className="min-h-0 flex-1">
           {isLoading ? (
@@ -478,7 +706,8 @@ export function CodeBrowser({
               saveViewState
               options={{
                 fontSize: 13,
-                readOnly,
+                readOnly: currentReadOnly,
+                glyphMargin: wantsGutter,
                 minimap: { enabled: false },
                 scrollBeyondLastLine: false,
                 wordWrap: "on",

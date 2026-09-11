@@ -1,7 +1,7 @@
 /**
  * Lambda function detail page — Overview, Code, Test, Debug, and Configuration tabs.
  */
-import { useState, useCallback, useEffect } from "react"
+import { useState, useCallback, useEffect, useMemo } from "react"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { useQuery } from "@tanstack/react-query"
 import { useResourceMutation } from "@/hooks/use-resource-mutation"
@@ -22,6 +22,10 @@ import { MonitorTab } from "@/features/lambda/components/monitor-tab"
 import { ConfigurationTab } from "@/features/lambda/components/configuration-tab"
 import { TriggersTab } from "@/features/lambda/components/triggers-tab"
 import { DebugTargetPanel } from "@/features/debugger/components/debug-panel"
+import { DebugSessionControls } from "@/features/debugger/components/debug-session-controls"
+import { OnPause } from "@/features/debugger/components/on-pause"
+import { DebugSessionProvider } from "@/features/debugger/session/provider"
+import { lambda } from "@/services/api"
 import { Tabs, TabList, Tab, TabPanel } from "@/components/ui/tabs"
 
 export const Route = createFileRoute("/lambda/$name")({
@@ -95,6 +99,16 @@ function FunctionDetail() {
     deploy({ name, source: currentEditorValue, filename: activeFile })
   }, [name, source, currentEditorValue, activeFile, deploy])
 
+  // The console debug session (docs/plans/compute-debugger-console.md § 3.4)
+  // reads deployed files through the same source endpoint as the Code tab.
+  const fetchDeployedFile = useCallback(
+    (path: string) => lambda.getSource(name, path).then((data) => data.source),
+    [name],
+  )
+  const deployedFiles = useMemo(() => source?.files?.map((f) => f.name), [source?.files])
+  // A pause anywhere lands the reader on the code, at the paused line.
+  const showCodeOnPause = useCallback(() => switchTab("code"), [switchTab])
+
   if (functionsLoading) {
     return (
       <div className="flex items-center justify-center py-32">
@@ -135,52 +149,61 @@ function FunctionDetail() {
       <FunctionOverview fn={fn} />
 
       {/* ── Tabs ───────────────────────────────────────────────────────── */}
-      <Tabs selectedKey={activeTab} onSelectionChange={switchTab}>
-        <TabList>
-          <Tab id="code">Code</Tab>
-          <Tab id="test">Test</Tab>
-          <Tab id="debug">Debug</Tab>
-          <Tab id="versions">Versions</Tab>
-          <Tab id="monitor">Monitor</Tab>
-          <Tab id="configuration">Configuration</Tab>
-          <Tab id="triggers">Triggers</Tab>
-        </TabList>
+      <DebugSessionProvider
+        service="lambda"
+        resource={name}
+        fetchFile={fetchDeployedFile}
+        files={deployedFiles}
+      >
+        <OnPause onPause={showCodeOnPause} />
+        <Tabs selectedKey={activeTab} onSelectionChange={switchTab}>
+          <TabList>
+            <Tab id="code">Code</Tab>
+            <Tab id="test">Test</Tab>
+            <Tab id="debug">Debug</Tab>
+            <Tab id="versions">Versions</Tab>
+            <Tab id="monitor">Monitor</Tab>
+            <Tab id="configuration">Configuration</Tab>
+            <Tab id="triggers">Triggers</Tab>
+          </TabList>
 
-        {/*
+          {/*
           Only the code panel sits flush: its editor is a full-width bordered
           slab whose top edge continues the tab rule. Every other panel opens
           with bare text or a narrower card, which needs the rule to breathe.
         */}
-        <TabPanel id="code">
-          <CodeTab
-            source={source}
-            sourceLoading={sourceLoading}
-            sourceError={sourceError}
-            currentEditorValue={currentEditorValue}
-            setEditedFiles={setEditedFiles}
-            setActiveFilePath={setActiveFilePath}
-            name={name}
-          />
-        </TabPanel>
-        <TabPanel id="test" className="pt-4">
-          <TestTab name={name} timeoutSeconds={fn.Timeout ?? 3} />
-        </TabPanel>
-        <TabPanel id="debug" className="pt-4">
-          <DebugTargetPanel service="lambda" resource={name} />
-        </TabPanel>
-        <TabPanel id="versions" className="pt-4">
-          <VersionsTab name={name} />
-        </TabPanel>
-        <TabPanel id="monitor" className="pt-4">
-          <MonitorTab fn={fn} />
-        </TabPanel>
-        <TabPanel id="configuration" className="pt-4">
-          <ConfigurationTab fn={fn} />
-        </TabPanel>
-        <TabPanel id="triggers" className="pt-4">
-          <TriggersTab name={name} />
-        </TabPanel>
-      </Tabs>
+          <TabPanel id="code">
+            <CodeTab
+              source={source}
+              sourceLoading={sourceLoading}
+              sourceError={sourceError}
+              currentEditorValue={currentEditorValue}
+              setEditedFiles={setEditedFiles}
+              setActiveFilePath={setActiveFilePath}
+              name={name}
+            />
+          </TabPanel>
+          <TabPanel id="test" className="pt-4">
+            <TestTab name={name} timeoutSeconds={fn.Timeout ?? 3} />
+          </TabPanel>
+          <TabPanel id="debug" className="flex flex-col gap-4 pt-4">
+            <DebugSessionControls service="lambda" resource={name} />
+            <DebugTargetPanel service="lambda" resource={name} />
+          </TabPanel>
+          <TabPanel id="versions" className="pt-4">
+            <VersionsTab name={name} />
+          </TabPanel>
+          <TabPanel id="monitor" className="pt-4">
+            <MonitorTab fn={fn} />
+          </TabPanel>
+          <TabPanel id="configuration" className="pt-4">
+            <ConfigurationTab fn={fn} />
+          </TabPanel>
+          <TabPanel id="triggers" className="pt-4">
+            <TriggersTab name={name} />
+          </TabPanel>
+        </Tabs>
+      </DebugSessionProvider>
     </div>
   )
 }

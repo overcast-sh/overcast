@@ -1,7 +1,8 @@
 import { http, HttpResponse } from "msw"
 import { TestTab } from "@/features/lambda/components/test-tab"
 import { server } from "@/test/server"
-import { render, renderWithData, screen } from "@/test/render"
+import { act, render, renderWithData, screen } from "@/test/render"
+import { FAKE_BRIDGE_URL, fakeDebugSession, renderWithDebugSession } from "@/test/debug-session"
 import { debuggerTargetQueryOptions } from "@/features/debugger/data"
 import type { DebuggerTarget, InvokeResult } from "@/types"
 import { debugTarget } from "@/test/debug-target"
@@ -101,5 +102,25 @@ describe("TestTab > debugger hint", () => {
     renderWithTarget(debugTarget({ enabled: false, reason: "not tagged", state: "inert" }))
 
     expect(screen.queryByRole("status")).not.toBeInTheDocument()
+  })
+})
+
+// The console debug session (docs/plans/compute-debugger-console.md § 3.5,
+// Test tab): Invoke is what starts the container a waiting session needs.
+describe("TestTab > console debug session", () => {
+  it("wakes a session waiting for a container when Invoke is pressed", async () => {
+    respondWithLogTail("")
+    const { session, bridge } = fakeDebugSession()
+    session.start(FAKE_BRIDGE_URL)
+    act(() => bridge.latest().serverClose(1011, "no container"))
+    expect(session.getState().status).toBe("waiting")
+    expect(bridge.sockets).toHaveLength(1)
+
+    const { user } = renderWithDebugSession(<TestTab name="utf8-logger" />, session)
+    await user.click(screen.getByRole("button", { name: "Test" }))
+
+    expect(bridge.sockets).toHaveLength(2)
+    expect(await screen.findByText("Execution succeeded")).toBeInTheDocument()
+    session.dispose()
   })
 })

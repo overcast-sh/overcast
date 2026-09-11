@@ -150,6 +150,50 @@ is the deployed tree.
   current-line marker, toolbar and keys, pause navigation from Test. Own
   worktree, in parallel with A against the § 3 contracts; vitest with a fake
   bridge transport.
+  **Phase B1 notes** (landed; what B2 builds on). The session lives in
+  `web/src/features/debugger/session/`: `cdp-protocol.ts` (the typed
+  command/event slice), `cdp-client.ts` (`CdpClient` over an injectable
+  `BridgeDial`; `webSocketDial` in production, `src/test/fake-bridge.ts` in
+  tests; 1011 → `no-container`, 1012 and plain drops → backoff reconnect),
+  `source-maps.ts` (`SourceMapRegistry`: `register`, `toGenerated`,
+  `toOriginal`, `originalFiles`, `originalContent`), and `session.ts` —
+  `DebugSession`, a `useSyncExternalStore` store whose `DebugSessionState`
+  is `{ status, error, scripts, originalFiles, hasSourceMaps, breakpoints,
+  watches, pause, console, pauseOnExceptions }` with `Breakpoint { id, path,
+  line, condition, enabled, bound }`, `Watch { id, expression, value,
+  error }`, `PauseState { id, reason, frames, selectedFrame,
+  hitBreakpointIds, exception }`, `StackFrame { id, functionName, location,
+  generated, mapped, scopes[{ kind, name, objectId }] }` and `ConsoleEntry {
+  id, kind, text, timestamp }` (kinds `log|info|warn|error|debug|exception|
+  marker`; pause/resume markers are already written). Actions: `start(url)`,
+  `stop`, `retry`, `invokeStarted`, `containerChanged`, `resume`, `stepOver`,
+  `stepInto`, `stepOut`, `pause`, `setPauseOnExceptions`, `selectFrame`,
+  `toggleBreakpoint`, `addBreakpoint`, `updateBreakpoint`,
+  `removeBreakpoint`, `breakpointAt`, `addWatch`, `updateWatch`,
+  `removeWatch`, `clearConsole`, `originalContent`, `isOriginalFile`,
+  `onPause(listener)`. Hooks (`session/hooks.ts`): `useDebugSession`,
+  `useOptionalDebugSession`, `useDebugSessionState(selector)`; the provider
+  is `session/provider.tsx` (`DebugSessionProvider`, mounted around the
+  tabs in `routes/lambda/$name.tsx`, with `session/context.ts` for tests).
+  `session/status.ts` has `sessionStatusLine`, `isSessionOpen`,
+  `selectedFrame`. Components (`components/`): `DebugCodeBrowser` (wraps
+  `CodeBrowser`; the toolbar, keys, gutter, condition editor, *Original*
+  group and *Show compiled* toggle), `DebugToolbar`,
+  `BreakpointConditionEditor`, `DebugSessionControls` (Debug tab),
+  `OnPause`. `CodeBrowser` gained `decorations`, `onGutterClick`,
+  `revealPosition`, `explorerActions`, `BrowserFile.group` and
+  `LoadedFile.readOnly`/`notice`. B2 adds `evaluate`/`getProperties` to
+  `DebugSession` (the client stays private to it) and the watch evaluation
+  on pause and frame change; the `watches` shape and `Scope.objectId` are
+  what Locals and Watch consume. Two things B1 could not settle: the
+  descriptor's `consoleDebug`/`bridgePath` are read through
+  `target.ts#consoleDebugOf` as optional until the regenerated `api.gen.ts`
+  lands (then the cast in `debug-session-controls.test.tsx` goes); and the
+  bridge URL is minted on the console's origin under `/api` — the
+  endpoint-selection headers cannot ride a WebSocket upgrade, so a console
+  pointed at a non-default emulator needs the BFF to accept the endpoint
+  another way (phase A, or later).
+
 - **B2 — panels and drawer.** Locals, Watch, Call stack, Breakpoints, Logs
   and Debug console; responsive layout. After A and B1 are on the task
   branch; verified live against a real function.
