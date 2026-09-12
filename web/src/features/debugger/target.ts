@@ -56,12 +56,12 @@ export const DEBUG_WAIT_TAG = "overcast:debug-wait"
  * which reads as off, the server's default.
  */
 export function waitForDebuggerOf(target: DebuggerTarget): boolean {
-  return (target as { waitForDebugger?: boolean }).waitForDebugger === true
+  return target.waitForDebugger === true
 }
 
 /** The descriptor with the wait flag set — the optimistic shape while the tag call is in flight. */
 export function withWaitForDebugger(target: DebuggerTarget, on: boolean): DebuggerTarget {
-  return { ...target, waitForDebugger: on } as DebuggerTarget
+  return { ...target, waitForDebugger: on }
 }
 
 /** The BFF's proxy prefix for the emulator's own endpoints — `/_overcast/x` is served at `/api/x`. */

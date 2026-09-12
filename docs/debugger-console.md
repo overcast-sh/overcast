@@ -42,11 +42,10 @@ The status line under the button says what the session is doing:
 The invocation that starts a container — the first, or the first after hot
 reload replaced it — runs before the session reaches it and does not stop;
 the Test tab says so under the result, and the next one does. Turn on **Wait
-for a debugger before the first invocation** — on the same strip, or the
-Debug tab — and such an invocation is held until a debugger attaches, up to
-`OVERCAST_DEBUGGER_WAIT_TIMEOUT` (120 s by default), so it pauses too. The
-switch sets the `overcast:debug-wait` tag on the function and holds for an
-editor as well — see [Wait for a debugger](./debugger.md#wait-for-a-debugger).
+for a debugger** — on the same strip, or the Debug tab — and such an
+invocation is held until a debugger attaches, so it pauses too. The switch
+sets the `overcast:debug-wait` tag; the limit and the editor side are in
+[Wait for a debugger](./debugger.md#wait-for-a-debugger).
 
 A console session is one more attached client of the function's debug port.
 The Debug tab's state chip reads `attached` and `paused` for it, and the
