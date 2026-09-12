@@ -83,6 +83,7 @@ func parseTemplateYAML(body string) (*Template, error) {
 //	!Base64 v          → {"Fn::Base64": "v"}
 //	!GetAZs ""         → {"Fn::GetAZs": ""}
 //	!ImportValue v     → {"Fn::ImportValue": "v"}
+//	!GetStackOutput {…} → {"Fn::GetStackOutput": {…}}
 //	!Condition c       → {"Condition": "c"}
 func yamlNodeToValue(n *yaml.Node) any {
 	if n == nil {
@@ -101,6 +102,13 @@ func yamlNodeToValue(n *yaml.Node) any {
 		for i := 0; i+1 < len(n.Content); i += 2 {
 			key, _ := yamlNodeToValue(n.Content[i]).(string)
 			m[key] = yamlNodeToValue(n.Content[i+1])
+		}
+		// The one intrinsic whose short form tags a mapping:
+		//   Value: !GetStackOutput
+		//     StackName: Producer
+		//     OutputName: VpcId
+		if n.Tag == "!GetStackOutput" {
+			return map[string]any{"Fn::GetStackOutput": m}
 		}
 		return m
 
@@ -185,6 +193,7 @@ func yamlNodeToValue(n *yaml.Node) any {
 //   - Fn::Split
 //   - Fn::GetAZs
 //   - Fn::ImportValue (cross-stack references)
+//   - Fn::GetStackOutput (weak cross-stack references, any region)
 func resolveIntrinsics(v any, ctx *resolveContext) any {
 	switch val := v.(type) {
 	case map[string]any:
@@ -239,6 +248,9 @@ func resolveMap(m map[string]any, ctx *resolveContext) any {
 		if impVal, ok := m["Fn::ImportValue"]; ok {
 			return resolveImportValue(impVal, ctx)
 		}
+		if gso, ok := m["Fn::GetStackOutput"]; ok {
+			return resolveGetStackOutput(gso, ctx)
+		}
 	}
 
 	// Not an intrinsic — recurse into all values.
@@ -286,7 +298,13 @@ type resolveContext struct {
 	// without one records a failure per reference rather than silently
 	// leaving the reference text in a property value. See dynamic_refs.go.
 	DynamicRef func(ref dynamicRef) (string, error)
-	// dynamicRefErr holds the first reference that could not be resolved,
+	// StackOutput resolves an Fn::GetStackOutput reference against the stacks
+	// the emulator holds. Nil outside provisioning, with the same consequence
+	// as DynamicRef: a failure is recorded per reference rather than the
+	// property silently reading as empty. See stack_output_refs.go.
+	StackOutput func(ref stackOutputRef) (string, error)
+	// dynamicRefErr holds the first reference — dynamic, or an
+	// Fn::GetStackOutput — that could not be resolved,
 	// until the provisioner takes it and fails the resource.
 	dynamicRefErr error
 }

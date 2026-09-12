@@ -1,6 +1,6 @@
 ---
 title: "CloudFormation operations"
-description: "Every CloudFormation operation Overcast declares — 24 of 52 implemented — with status, behaviour notes and a link to the AWS API reference for each."
+description: "Every CloudFormation operation Overcast declares — 25 of 53 implemented — with status, behaviour notes and a link to the AWS API reference for each."
 section: "Service Reference"
 tags:
   - cloudformation
@@ -13,7 +13,7 @@ tags:
 
 # CloudFormation operations
 
-24 of 52 listed operations are implemented. Back to [CloudFormation](../cloudformation.md).
+25 of 53 listed operations are implemented. Back to [CloudFormation](../cloudformation.md).
 
 ## Summary
 
@@ -24,7 +24,7 @@ tags:
 | Resources and events | 3            |                |
 | Templates            | 3            | 1              |
 | Exports              | 2            |                |
-| Intrinsic functions  | 1            |                |
+| Intrinsic functions  | 2            |                |
 | Dynamic references   | 3            | 1              |
 | Resource types       |              | 1              |
 | StackSets            |              | 13             |
@@ -87,9 +87,10 @@ tags:
 
 ### Intrinsic functions
 
-| Operation         | Status       | Notes                            | AWS Docs                                                                                                             |
-| ----------------- | ------------ | -------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `Fn::ImportValue` | ✅ Supported | Cross-stack reference resolution | [docs](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/intrinsic-function-reference-importvalue.html) |
+| Operation            | Status       | Notes                                                                                                               | AWS Docs                                                                                                                        |
+| -------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `Fn::ImportValue`    | ✅ Supported | Cross-stack reference resolution                                                                                    | [docs](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/intrinsic-function-reference-importvalue.html)            |
+| `Fn::GetStackOutput` | ✅ Supported | Weak cross-stack reference: any output of a stack in any region, no export needed; RoleArn accepted but not assumed | [docs](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/intrinsic-function-reference-getstackoutput.html) |
 
 ### Dynamic references
 

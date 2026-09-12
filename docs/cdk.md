@@ -117,6 +117,7 @@ npx cdk deploy --require-approval never
 | [CDK resource type coverage](./cdk/resource-types.md) | Whether a construct provisions real state, is stubbed, or is unknown |
 | [Local VPCs for CDK](./cdk/local-vpc.md) | A VPC whose IDs change on every teardown, and the stack pattern that survives it |
 | [Importing a VPC into CDK](./cdk/vpc-lookups.md) | `Vpc.fromLookup`, availability zones, and a VPC something else created |
+| [Cross-stack references](./cdk/cross-stack-references.md) | Strong and weak references, stacks in different regions, and what a dangling reference does |
 | [CDK limitations](./cdk/limitations.md) | Custom resources, container assets, nested stacks, drift detection |
 | [CDK troubleshooting](./cdk/troubleshooting.md) | A bootstrap that fails, a stack stuck in progress, the Windows asset upload |
 

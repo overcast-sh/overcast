@@ -1,6 +1,6 @@
 {
   "generated_by": "go run -tags dev ./cmd/capgen --write-docs",
-  "total_ops": 1487,
+  "total_ops": 1488,
   "services": [
     {
       "service": "s3",
@@ -5124,8 +5124,8 @@
     {
       "service": "cloudformation",
       "display_name": "CloudFormation",
-      "total_ops": 52,
-      "implemented_ops": 24,
+      "total_ops": 53,
+      "implemented_ops": 25,
       "operations": [
         {
           "operation": "CreateStack",
@@ -5288,6 +5288,14 @@
           "status": "✅ Supported",
           "notes": "Cross-stack reference resolution",
           "docs_url": "[docs](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/intrinsic-function-reference-importvalue.html)",
+          "doc_only": true
+        },
+        {
+          "operation": "Fn::GetStackOutput",
+          "category": "Intrinsic functions",
+          "status": "✅ Supported",
+          "notes": "Weak cross-stack reference: any output of a stack in any region, no export needed; RoleArn accepted but not assumed",
+          "docs_url": "[docs](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/intrinsic-function-reference-getstackoutput.html)",
           "doc_only": true
         },
         {

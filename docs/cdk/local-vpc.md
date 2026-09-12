@@ -112,7 +112,9 @@ class ProdStage extends cdk.Stage {
 Passing a VPC between stacks in the same stage is ordinary CDK: the consuming
 stack references it through `Fn::ImportValue`, and CDK adds the stack dependency
 for you. Overcast's CloudFormation engine resolves cross-stack exports — see the
-[CloudFormation service reference](../services/cloudformation.md).
+[CloudFormation service reference](../services/cloudformation.md). Weak
+references, and stacks in different regions, are covered in
+[Cross-stack references in CDK](./cross-stack-references.md).
 
 ## Application stacks stay environment-agnostic
 
