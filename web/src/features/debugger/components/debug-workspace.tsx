@@ -5,6 +5,12 @@
  * session mounted, or an idle one, this renders its child and nothing
  * else — no panel subscribes, no query polls.
  *
+ * The stepping keys are bound here, on the workspace, rather than on the
+ * code pane: a reader whose focus is in the Watch strip or the console's
+ * input is still debugging, and F10 from there should still step. F5 is
+ * swallowed whenever a session is open, paused or not — a debugger's F5 is
+ * Continue, and the browser's is a reload that would end the session.
+ *
  * Sizes are fixed (the repo has no resizable-panel primitive): a 20rem
  * sidebar that scrolls inside the code pane's height, a 12rem drawer, and
  * the code pane at `DEBUG_CODE_HEIGHT`, so the whole page — header,
@@ -13,11 +19,12 @@
  * empty. Below the app's narrow breakpoint the sidebar becomes a tab strip
  * between the code and the drawer.
  */
-import type { ReactNode } from "react"
+import type { KeyboardEvent, ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { NARROW_SIDEBAR_QUERY } from "@/components/layout/use-sidebar-collapse"
 import { useMediaQuery } from "@/hooks/use-media-query"
-import { useDebugSessionState, useOptionalDebugSession } from "../session/hooks"
+import { useDebugSession, useDebugSessionState, useOptionalDebugSession } from "../session/hooks"
+import type { DebugSession } from "../session/session"
 import { DebugDrawer } from "./debug-drawer"
 import { DebugSidebar } from "./debug-sidebar"
 
@@ -31,6 +38,31 @@ import { DebugSidebar } from "./debug-sidebar"
  * component's to size.
  */
 export const DEBUG_CODE_HEIGHT = "clamp(18rem, 100vh - 44rem, 65vh)"
+
+/**
+ * The keys VS Code binds. Stepping acts only while paused; F5 is taken
+ * whenever the workspace is open, so a reflex reload cannot drop a session.
+ */
+function handleDebugKey(session: DebugSession, paused: boolean, e: KeyboardEvent): void {
+  switch (e.key) {
+    case "F5":
+      if (paused) session.resume()
+      break
+    case "F10":
+      if (!paused) return
+      session.stepOver()
+      break
+    case "F11":
+      if (!paused) return
+      if (e.shiftKey) session.stepOut()
+      else session.stepInto()
+      break
+    default:
+      return
+  }
+  e.preventDefault()
+  e.stopPropagation()
+}
 
 export interface DebugWorkspaceProps {
   /** The function's log group, for the Logs drawer; `null` when it has none. */
@@ -52,9 +84,16 @@ function SessionWorkspace({ logGroup, children }: DebugWorkspaceProps) {
 }
 
 function OpenWorkspace({ logGroup, children }: DebugWorkspaceProps) {
+  const session = useDebugSession()
+  const paused = useDebugSessionState((s) => s.pause !== null)
   const narrow = useMediaQuery(NARROW_SIDEBAR_QUERY)
   return (
-    <div className="flex flex-col gap-3" data-testid="debug-workspace" data-narrow={narrow}>
+    <div
+      className="flex flex-col gap-3"
+      data-testid="debug-workspace"
+      data-narrow={narrow}
+      onKeyDown={(e) => handleDebugKey(session, paused, e)}
+    >
       <div className={cn("flex gap-3", narrow ? "flex-col" : "items-stretch")}>
         <div className="min-w-0 flex-1">{children}</div>
         {narrow ? (

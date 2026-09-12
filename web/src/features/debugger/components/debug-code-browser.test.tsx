@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor, within } from "@/test/render"
+import { act, createTestQueryClient, fireEvent, screen, waitFor, within } from "@/test/render"
 import {
   attachFakeSession,
   fakeDebugSession,
@@ -7,7 +7,9 @@ import {
   scriptParsed,
   settle,
 } from "@/test/debug-session"
+import { debugTarget } from "@/test/debug-target"
 import { latestFakeEditor, resetFakeEditors } from "@/test/monaco"
+import { debuggerTargetQueryOptions } from "@/features/debugger/data"
 import { DebugCodeBrowser } from "./debug-code-browser"
 
 vi.mock("@monaco-editor/react", async () => {
@@ -33,8 +35,18 @@ const DEPLOYED = {
     '"use strict";\nexports.handler = async () => {\n    const x = 1;\n    return x;\n};\n',
 }
 
-function browser(files = DEPLOYED) {
+function browser(files = DEPLOYED, { consoleDebug }: { consoleDebug?: boolean } = {}) {
   const { session, bridge } = fakeDebugSession(files)
+  const queryClient = createTestQueryClient()
+  if (consoleDebug !== undefined) {
+    queryClient.setQueryData(
+      debuggerTargetQueryOptions("lambda", "my-fn").queryKey,
+      debugTarget({
+        consoleDebug,
+        bridgePath: consoleDebug ? "/_overcast/debugger/targets/lambda/my-fn/ws" : "",
+      }),
+    )
+  }
   const view = renderWithDebugSession(
     <DebugCodeBrowser
       files={Object.entries(files).map(([name, content]) => ({ name, size: content.length }))}
@@ -43,8 +55,10 @@ function browser(files = DEPLOYED) {
       loadFile={(path) =>
         Promise.resolve({ content: files[path as keyof typeof files], language: "javascript" })
       }
+      target={consoleDebug === undefined ? undefined : { service: "lambda", resource: "my-fn" }}
     />,
     session,
+    { queryClient },
   )
   return { session, bridge, ...view }
 }
@@ -56,6 +70,42 @@ describe("DebugCodeBrowser > idle", () => {
     browser()
     expect(screen.queryByRole("toolbar")).not.toBeInTheDocument()
     expect(screen.getByTestId("monaco")).toHaveAttribute("data-glyph-margin", "false")
+  })
+
+  it("stays plain on a resource the server offers no console session for", () => {
+    browser(DEPLOYED, { consoleDebug: false })
+    expect(screen.queryByRole("button", { name: "Debug in console" })).not.toBeInTheDocument()
+    expect(screen.getByTestId("monaco")).toHaveAttribute("data-glyph-margin", "false")
+  })
+
+  it("offers to start a session, takes breakpoints in the gutter, and paints them hollow until one binds them", async () => {
+    const { session, bridge, user } = browser(DEPLOYED, { consoleDebug: true })
+    expect(screen.getByRole("note")).toHaveTextContent(/set a breakpoint, then start a session/)
+    expect(screen.getByTestId("monaco")).toHaveAttribute("data-glyph-margin", "true")
+
+    act(() => latestFakeEditor().clickGutter(3))
+    expect(session.getState().breakpoints).toEqual([
+      expect.objectContaining({ path: "index.js", line: 3, resolved: false }),
+    ])
+    expect(screen.getByRole("note")).toHaveTextContent("1 breakpoint set — it binds when a session starts")
+    await waitFor(() =>
+      expect(latestFakeEditor().decorations.map((d) => d.options)).toEqual([
+        expect.objectContaining({
+          glyphMarginClassName: "oc-gutter-glyph oc-gutter-glyph-pending",
+          glyphMarginHoverMessage: { value: "Breakpoint — binds when a session starts" },
+        }),
+      ]),
+    )
+
+    await user.click(screen.getByRole("button", { name: "Debug in console" }))
+    expect(bridge.latest().url).toBe(
+      `ws://${window.location.host}/api/debugger/targets/lambda/my-fn/ws`,
+    )
+    await act(() => attachFakeSession(session, bridge))
+    expect(screen.getByRole("toolbar", { name: "Debug controls" })).toBeInTheDocument()
+    expect(bridge.latest().lastRequest("Debugger.setBreakpointByUrl").params).toMatchObject({
+      lineNumber: 2,
+    })
   })
 })
 
@@ -69,15 +119,33 @@ describe("DebugCodeBrowser > breakpoints", () => {
     expect(session.getState().breakpoints).toEqual([
       expect.objectContaining({ path: "index.js", line: 3, enabled: true }),
     ])
+    // Hollow, and saying why, until the inspector places it on a statement.
+    await waitFor(() =>
+      expect(latestFakeEditor().decorations.map((d) => d.options)).toEqual([
+        expect.objectContaining({
+          glyphMarginClassName: "oc-gutter-glyph oc-gutter-glyph-pending",
+          glyphMarginHoverMessage: {
+            value: "Breakpoint — not bound yet: it binds when the container loads index.js",
+          },
+        }),
+      ]),
+    )
+    const bind = bridge.latest().lastRequest("Debugger.setBreakpointByUrl")
+    expect(bind.params).toMatchObject({
+      lineNumber: 2,
+      urlRegex: "file:///var/task/index\\.js$",
+    })
+    act(() =>
+      bridge.latest().respond(bind.id, {
+        breakpointId: "bp:1",
+        locations: [{ scriptId: "s-index.js", lineNumber: 2, columnNumber: 0 }],
+      }),
+    )
     await waitFor(() =>
       expect(latestFakeEditor().decorations.map((d) => d.options.glyphMarginClassName)).toEqual([
         "oc-gutter-glyph",
       ]),
     )
-    expect(bridge.latest().lastRequest("Debugger.setBreakpointByUrl").params).toMatchObject({
-      lineNumber: 2,
-      urlRegex: "file:///var/task/index\\.js$",
-    })
 
     act(() => latestFakeEditor().clickGutter(3))
     expect(session.getState().breakpoints).toEqual([])
@@ -116,36 +184,19 @@ describe("DebugCodeBrowser > breakpoints", () => {
 })
 
 describe("DebugCodeBrowser > toolbar and keys", () => {
-  it("binds F5 / F10 / F11 / Shift+F11 inside the pane while paused, and nowhere else", async () => {
+  it("leaves the stepping keys to the workspace: the pane alone binds none", async () => {
+    // The keys are bound once, by DebugWorkspace, over the pane and the
+    // panels together (debug-workspace.test.tsx); a second binding here
+    // would step twice per press.
     const { session, bridge } = browser()
     const socket = await act(() => attachFakeSession(session, bridge))
-    const editorText = screen.getByRole("textbox", { name: "Editor" })
-
-    // Not paused: the keys are inert and the step buttons disabled.
-    fireEvent.keyDown(editorText, { key: "F10" })
-    expect(socket.requests("Debugger.stepOver")).toHaveLength(0)
-    expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled()
-
     act(() => {
       scriptParsed(socket, "index.js")
       pausedAt(socket, "index.js", 0)
     })
     expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled()
-
-    fireEvent.keyDown(editorText, { key: "F10" })
-    fireEvent.keyDown(editorText, { key: "F11" })
-    fireEvent.keyDown(editorText, { key: "F11", shiftKey: true })
-    fireEvent.keyDown(editorText, { key: "F5" })
-    expect(socket.sent.slice(-4).map((f) => f.method)).toEqual([
-      "Debugger.stepOver",
-      "Debugger.stepInto",
-      "Debugger.stepOut",
-      "Debugger.resume",
-    ])
-
-    // The same key outside the pane reaches nothing.
-    fireEvent.keyDown(document.body, { key: "F10" })
-    expect(socket.requests("Debugger.stepOver")).toHaveLength(1)
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Editor" }), { key: "F10" })
+    expect(socket.requests("Debugger.stepOver")).toHaveLength(0)
   })
 
   it("drives the session from the buttons, and Stop ends it", async () => {

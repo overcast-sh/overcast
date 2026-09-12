@@ -1,5 +1,11 @@
-import { act, screen, within } from "@/test/render"
-import { attachFakeSession, fakeDebugSession, renderWithDebugSession } from "@/test/debug-session"
+import { act, fireEvent, screen, within } from "@/test/render"
+import {
+  attachFakeSession,
+  fakeDebugSession,
+  pausedAt,
+  renderWithDebugSession,
+  scriptParsed,
+} from "@/test/debug-session"
 import { DebugWorkspace } from "./debug-workspace"
 
 vi.mock("./debug-logs", () => ({
@@ -10,12 +16,17 @@ function workspace() {
   const { session, bridge } = fakeDebugSession()
   const view = renderWithDebugSession(
     <DebugWorkspace logGroup="/aws/lambda/my-fn">
-      <div data-testid="code-pane">code</div>
+      <div data-testid="code-pane">
+        code
+        <input aria-label="Editor" />
+      </div>
     </DebugWorkspace>,
     session,
   )
   return { session, bridge, ...view }
 }
+
+beforeEach(() => localStorage.clear())
 
 describe("DebugWorkspace", () => {
   it("is the code pane alone until a session opens, then adds the sidebar and drawer, and takes them away on stop", async () => {
@@ -89,5 +100,65 @@ describe("DebugWorkspace", () => {
     expect(within(drawer).getByLabelText("1 new entries")).toBeInTheDocument()
     await user.click(within(drawer).getByRole("tab", { name: /Debug console/ }))
     expect(within(drawer).queryByLabelText(/new entries/)).not.toBeInTheDocument()
+  })
+})
+
+describe("DebugWorkspace > keys", () => {
+  it("binds F5 / F10 / F11 / Shift+F11 anywhere in the workspace while paused, and swallows F5 while open", async () => {
+    const { session, bridge } = workspace()
+    const socket = await act(() => attachFakeSession(session, bridge))
+    const pane = screen.getByRole("textbox", { name: "Editor" })
+
+    // Not paused: nothing steps, but F5 is still not the browser's reload.
+    fireEvent.keyDown(pane, { key: "F10" })
+    expect(socket.requests("Debugger.stepOver")).toHaveLength(0)
+    const reload = fireEvent.keyDown(pane, { key: "F5" })
+    expect(reload).toBe(false)
+    expect(socket.requests("Debugger.resume")).toHaveLength(0)
+
+    act(() => {
+      scriptParsed(socket, "index.js")
+      pausedAt(socket, "index.js", 0)
+    })
+    fireEvent.keyDown(pane, { key: "F10" })
+    fireEvent.keyDown(pane, { key: "F11" })
+    fireEvent.keyDown(pane, { key: "F11", shiftKey: true })
+    // From a panel too — the Watch strip's input — so a reader who just
+    // typed a watch can keep stepping without clicking back into the code.
+    fireEvent.keyDown(screen.getByLabelText("Add watch expression"), { key: "F10" })
+    fireEvent.keyDown(screen.getByLabelText("Add watch expression"), { key: "F5" })
+    expect(socket.sent.slice(-5).map((f) => f.method)).toEqual([
+      "Debugger.stepOver",
+      "Debugger.stepInto",
+      "Debugger.stepOut",
+      "Debugger.stepOver",
+      "Debugger.resume",
+    ])
+
+    // The same key outside the workspace reaches nothing.
+    fireEvent.keyDown(document.body, { key: "F10" })
+    expect(socket.requests("Debugger.stepOver")).toHaveLength(2)
+  })
+})
+
+describe("DebugWorkspace > drawer", () => {
+  it("opens on the tab the reader last chose", async () => {
+    const first = workspace()
+    await act(() => attachFakeSession(first.session, first.bridge))
+    const drawer = screen.getByRole("region", { name: "Debug drawer" })
+    expect(within(drawer).getByRole("tab", { name: "Logs" })).toHaveAttribute(
+      "aria-selected",
+      "false",
+    )
+    await first.user.click(within(drawer).getByRole("tab", { name: "Logs" }))
+    first.unmount()
+
+    const second = workspace()
+    await act(() => attachFakeSession(second.session, second.bridge))
+    expect(
+      within(screen.getByRole("region", { name: "Debug drawer" })).getByRole("tab", {
+        name: "Logs",
+      }),
+    ).toHaveAttribute("aria-selected", "true")
   })
 })

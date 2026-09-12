@@ -1,14 +1,20 @@
 /**
  * `CodeBrowser` with a debug session drawn over it (docs/plans/
  * compute-debugger-console.md § 3.5, Code tab): gutter breakpoints, the
- * current-line marker, the toolbar and its keys, the *Original* file group
- * and the *Show compiled* toggle once a map has loaded, and a reveal of the
- * paused location.
+ * current-line marker, the toolbar, the *Original* file group and the
+ * *Show compiled* toggle once a map has loaded, and a reveal of the paused
+ * location. The stepping keys are bound by `DebugWorkspace`, which wraps
+ * this and the panels, so they work from a panel as well as from the pane.
  *
- * With no session mounted, or a session that is idle, this is exactly
- * `CodeBrowser`: no decorations, no toolbar, no key handling, nothing
- * subscribed. Everything session-shaped lives in `ActiveCodeBrowser`, which
- * mounts only while a session is open.
+ * With no session mounted, or a session that is idle on a resource the
+ * server offers no console session for, this is exactly `CodeBrowser`: no
+ * decorations, no toolbar, nothing subscribed. Idle on a resource that
+ * *does* offer one, the gutter is live and the breakpoints the last session
+ * left are drawn hollow, with a strip above the pane that starts a session
+ * — so the reader who came to the code first sets breakpoints here and
+ * starts from here, rather than finding the button on the Debug tab.
+ * Everything session-shaped lives in `ActiveCodeBrowser`, which mounts only
+ * while a session is open.
  */
 import { useCallback, useMemo, useState } from "react"
 import {
@@ -18,46 +24,140 @@ import {
   type LoadedFile,
 } from "@/components/ui/code-browser"
 import { languageForPath } from "@/lib/language-for-path"
+import { useDebugTarget } from "../hooks"
 import { useDebugSessionState, useOptionalDebugSession } from "../session/hooks"
-import type { DebugSession, PauseState } from "../session/session"
+import type { Breakpoint, DebugSession, PauseState, SessionStatus } from "../session/session"
+import { consoleDebugOf } from "../target"
 import { BreakpointConditionEditor } from "./breakpoint-condition-editor"
+import { StartConsoleDebugButton } from "./debug-session-controls"
 import { DebugToolbar } from "./debug-toolbar"
 import { DEBUG_CODE_HEIGHT } from "./debug-workspace"
 
 const ORIGINAL_GROUP = "Original"
 
-export function DebugCodeBrowser(props: CodeBrowserProps) {
+export interface DebugCodeBrowserProps extends CodeBrowserProps {
+  /**
+   * The resource the page is about. With it, an idle pane can ask the
+   * server whether a console session is on offer and, if so, take
+   * breakpoints and start one; without it, idle is a plain browser.
+   */
+  target?: { service: string; resource: string }
+}
+
+export function DebugCodeBrowser({ target, ...props }: DebugCodeBrowserProps) {
   const session = useOptionalDebugSession()
   if (!session) return <CodeBrowser {...props} />
-  return <SessionCodeBrowser session={session} {...props} />
+  return <SessionCodeBrowser session={session} target={target} {...props} />
 }
 
-function SessionCodeBrowser({ session, ...props }: CodeBrowserProps & { session: DebugSession }) {
+function SessionCodeBrowser({
+  session,
+  target,
+  ...props
+}: CodeBrowserProps & { session: DebugSession; target?: { service: string; resource: string } }) {
   const status = useDebugSessionState((s) => s.status)
-  if (status === "idle") return <CodeBrowser {...props} />
-  return <ActiveCodeBrowser session={session} {...props} />
+  if (status !== "idle") return <ActiveCodeBrowser session={session} {...props} />
+  if (!target) return <CodeBrowser {...props} />
+  return <IdleCodeBrowser session={session} target={target} {...props} />
 }
 
-/** The keys VS Code binds, acted on only while paused and only inside the pane. */
-function handleDebugKey(session: DebugSession, paused: boolean, e: React.KeyboardEvent) {
-  if (!paused) return
-  switch (e.key) {
-    case "F5":
-      session.resume()
-      break
-    case "F10":
-      session.stepOver()
-      break
-    case "F11":
-      if (e.shiftKey) session.stepOut()
-      else session.stepInto()
-      break
-    default:
-      return
-  }
-  e.preventDefault()
-  e.stopPropagation()
+// ─── Gutter breakpoints, shared by the idle and the active pane ───────────
+
+/** The gutter's click handling and the inline condition editor it opens. */
+function useGutterBreakpoints(session: DebugSession) {
+  const [conditionAt, setConditionAt] = useState<{ path: string; line: number } | null>(null)
+  const onGutterClick = useCallback(
+    (path: string, line: number, kind: "toggle" | "menu") => {
+      if (kind === "toggle") session.toggleBreakpoint(path, line)
+      else setConditionAt({ path, line })
+    },
+    [session],
+  )
+  const existing = conditionAt
+    ? session.breakpointAt(conditionAt.path, conditionAt.line)
+    : undefined
+  const editor = conditionAt ? (
+    <BreakpointConditionEditor
+      key={`${conditionAt.path}:${conditionAt.line}`}
+      path={conditionAt.path}
+      line={conditionAt.line}
+      breakpoint={existing}
+      onSave={(condition) => {
+        if (existing) session.updateBreakpoint(existing.id, { condition })
+        else session.addBreakpoint(conditionAt.path, conditionAt.line, condition)
+        setConditionAt(null)
+      }}
+      onRemove={() => {
+        if (existing) session.removeBreakpoint(existing.id)
+        setConditionAt(null)
+      }}
+      onClose={() => setConditionAt(null)}
+    />
+  ) : null
+  return { onGutterClick, editor }
 }
+
+/** The breakpoint glyphs per file: filled once placed on a statement, hollow while waiting, dim when disabled. */
+function breakpointDecorations(
+  breakpoints: readonly Breakpoint[],
+  status: SessionStatus,
+): Record<string, LineDecoration[]> {
+  const byFile: Record<string, LineDecoration[]> = {}
+  for (const bp of breakpoints) {
+    ;(byFile[bp.path] ??= []).push({
+      line: bp.line,
+      kind: !bp.enabled ? "glyph-muted" : bp.resolved ? "glyph" : "glyph-pending",
+      title: breakpointTitle(bp, status),
+    })
+  }
+  return byFile
+}
+
+function breakpointTitle(bp: Breakpoint, status: SessionStatus): string {
+  const what = bp.condition ? `Conditional breakpoint: ${bp.condition}` : "Breakpoint"
+  if (!bp.enabled) return `${what} (disabled)`
+  if (status === "idle") return `${what} — binds when a session starts`
+  if (bp.resolved) return what
+  return `${what} — not bound yet: it binds when the container loads ${bp.path}`
+}
+
+// ─── Idle: the gutter takes breakpoints, the strip starts a session ───────
+
+function IdleCodeBrowser({
+  session,
+  target,
+  ...props
+}: CodeBrowserProps & { session: DebugSession; target: { service: string; resource: string } }) {
+  const { data: descriptor } = useDebugTarget(target.service, target.resource)
+  const breakpoints = useDebugSessionState((s) => s.breakpoints)
+  const { onGutterClick, editor } = useGutterBreakpoints(session)
+  const decorations = useMemo(() => breakpointDecorations(breakpoints, "idle"), [breakpoints])
+
+  if (!descriptor || !consoleDebugOf(descriptor).available) return <CodeBrowser {...props} />
+
+  const count = breakpoints.length
+  return (
+    <div className="flex flex-col gap-2">
+      <div
+        role="note"
+        className="flex flex-wrap items-center gap-3 rounded-md bg-bg-muted px-2 py-1 text-xs text-fg-muted"
+      >
+        <StartConsoleDebugButton target={descriptor} />
+        <span>
+          {count === 0
+            ? "Click a line's gutter to set a breakpoint, then start a session and invoke from the Test tab: execution pauses here."
+            : count === 1
+              ? "1 breakpoint set — it binds when a session starts."
+              : `${count} breakpoints set — they bind when a session starts.`}
+        </span>
+      </div>
+      {editor}
+      <CodeBrowser {...props} decorations={decorations} onGutterClick={onGutterClick} />
+    </div>
+  )
+}
+
+// ─── Active: the session drawn over the pane ──────────────────────────────
 
 function ActiveCodeBrowser({
   session,
@@ -65,12 +165,14 @@ function ActiveCodeBrowser({
   loadFile,
   ...props
 }: CodeBrowserProps & { session: DebugSession }) {
+  const status = useDebugSessionState((s) => s.status)
   const breakpoints = useDebugSessionState((s) => s.breakpoints)
   const pause = useDebugSessionState((s) => s.pause)
   const originalFiles = useDebugSessionState((s) => s.originalFiles)
   const hasSourceMaps = useDebugSessionState((s) => s.hasSourceMaps)
+  const connections = useDebugSessionState((s) => s.connections)
   const [showCompiled, setShowCompiled] = useState(false)
-  const [conditionAt, setConditionAt] = useState<{ path: string; line: number } | null>(null)
+  const { onGutterClick, editor: conditionEditor } = useGutterBreakpoints(session)
 
   // ── Files: original sources in their own group; compiled ones behind the toggle ──
   const browserFiles = useMemo(() => {
@@ -109,62 +211,24 @@ function ActiveCodeBrowser({
 
   // ── Decorations: breakpoints as glyphs, the selected frame's line as current ──
   const decorations = useMemo(() => {
-    const byFile: Record<string, LineDecoration[]> = {}
-    const push = (path: string, d: LineDecoration) => (byFile[path] ??= []).push(d)
-    for (const bp of breakpoints) {
-      push(bp.path, {
-        line: bp.line,
-        kind: bp.enabled ? "glyph" : "glyph-muted",
-        title: breakpointTitle(bp.condition, bp.enabled, bp.bound),
-      })
-    }
+    const byFile = breakpointDecorations(breakpoints, status)
     const frame = pause?.frames.at(pause.selectedFrame)
     if (frame && !frame.internal) {
-      push(frame.location.path, {
+      ;(byFile[frame.location.path] ??= []).push({
         line: frame.location.line,
         kind: "current",
         title: `Paused in ${frame.functionName}`,
       })
     }
     return byFile
-  }, [breakpoints, pause])
+  }, [breakpoints, pause, status])
 
   const revealPosition = useMemo(() => revealFor(pause), [pause])
 
-  const onGutterClick = useCallback(
-    (path: string, line: number, kind: "toggle" | "menu") => {
-      if (kind === "toggle") session.toggleBreakpoint(path, line)
-      else setConditionAt({ path, line })
-    },
-    [session],
-  )
-
-  const paused = pause !== null
-  const existing = conditionAt
-    ? session.breakpointAt(conditionAt.path, conditionAt.line)
-    : undefined
-
   return (
-    <div className="flex flex-col gap-2" onKeyDown={(e) => handleDebugKey(session, paused, e)}>
+    <div className="flex flex-col gap-2">
       <DebugToolbar />
-      {conditionAt && (
-        <BreakpointConditionEditor
-          key={`${conditionAt.path}:${conditionAt.line}`}
-          path={conditionAt.path}
-          line={conditionAt.line}
-          breakpoint={existing}
-          onSave={(condition) => {
-            if (existing) session.updateBreakpoint(existing.id, { condition })
-            else session.addBreakpoint(conditionAt.path, conditionAt.line, condition)
-            setConditionAt(null)
-          }}
-          onRemove={() => {
-            if (existing) session.removeBreakpoint(existing.id)
-            setConditionAt(null)
-          }}
-          onClose={() => setConditionAt(null)}
-        />
-      )}
+      {conditionEditor}
       <CodeBrowser
         {...props}
         // The workspace's budget, not the idle tab's: the drawer has to fit
@@ -175,6 +239,9 @@ function ActiveCodeBrowser({
         decorations={decorations}
         onGutterClick={onGutterClick}
         revealPosition={revealPosition}
+        // A new container may run new code — hot reload is why it was
+        // replaced — so what the pane shows is read again on each one.
+        contentVersion={connections}
         explorerActions={
           hasSourceMaps ? (
             <label className="flex cursor-pointer items-center gap-1 font-mono text-2xs tracking-normal normal-case">
@@ -191,12 +258,6 @@ function ActiveCodeBrowser({
       />
     </div>
   )
-}
-
-function breakpointTitle(condition: string, enabled: boolean, bound: boolean): string {
-  const what = condition ? `Conditional breakpoint: ${condition}` : "Breakpoint"
-  if (!enabled) return `${what} (disabled)`
-  return bound ? what : `${what} (not yet bound — waiting for the script)`
 }
 
 /** Where to scroll on a pause: the selected frame, keyed so a new pause on the same line still reveals. */

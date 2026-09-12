@@ -60,6 +60,7 @@ export function CodeTab({
           onChange={(path, value) => setEditedFiles((prev) => ({ ...prev, [path]: value }))}
           onActiveFileChange={setActiveFilePath}
           height="65vh"
+          target={{ service: "lambda", resource: name }}
         />
       </DebugWorkspace>
     </div>
