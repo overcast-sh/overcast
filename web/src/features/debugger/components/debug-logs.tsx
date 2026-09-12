@@ -58,6 +58,7 @@ export function DebugLogs({ logGroup }: { logGroup: string | null }) {
         emptyMessage="No log events in the last 15 minutes."
         defaultMode="table"
         showModeToggle={false}
+        follow
         className="min-h-0 flex-1"
       />
     </div>

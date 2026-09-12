@@ -95,7 +95,8 @@ export function DebugConsole() {
       >
         {entries.length === 0 && (
           <li className="text-fg-muted italic">
-            Nothing yet — the program's console output and your evaluations appear here.
+            Nothing yet — evaluations, exceptions and pause markers appear here. The
+            function&rsquo;s own console.log lines are on the Logs tab.
           </li>
         )}
         {entries.map((entry) => (

@@ -47,11 +47,18 @@ export interface ValueTreeProps {
   loadChildren: (objectId: string) => Promise<Property[]>
   "aria-label": string
   className?: string
+  /** Hover text for the whole tree — where a stale value came from, say. */
+  title?: string
 }
 
-export function ValueTree({ roots, loadChildren, className, ...aria }: ValueTreeProps) {
+export function ValueTree({ roots, loadChildren, className, title, ...aria }: ValueTreeProps) {
   return (
-    <ul role="tree" aria-label={aria["aria-label"]} className={cn("m-0 list-none p-0", className)}>
+    <ul
+      role="tree"
+      aria-label={aria["aria-label"]}
+      title={title}
+      className={cn("m-0 list-none p-0", className)}
+    >
       {roots.map((root) => (
         <TreeNode
           key={root.key}

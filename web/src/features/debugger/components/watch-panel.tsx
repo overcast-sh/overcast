@@ -97,7 +97,11 @@ function WatchRow({
         </form>
       ) : (
         <ValueTree
-          className="min-w-0 flex-1"
+          // A value left over from the last pause is still shown — it is
+          // often what the reader wants to compare against — but dimmed,
+          // and the row says where it came from.
+          className={cn("min-w-0 flex-1", !paused && watch.result && "opacity-60")}
+          title={!paused && watch.result ? "From the last pause; re-evaluated at the next" : undefined}
           aria-label={`Watch ${watch.expression}`}
           loadChildren={loadChildren}
           roots={[
@@ -171,7 +175,7 @@ function AddWatch({ onAdd }: { onAdd: (expression: string) => void }) {
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={onKeyDown}
-        placeholder="Add expression, e.g. event.Records.length"
+        placeholder="Add expression…"
         className="h-6 px-1.5 font-mono text-2xs"
       />
       <Button

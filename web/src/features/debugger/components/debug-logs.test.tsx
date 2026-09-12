@@ -32,6 +32,7 @@ vi.mock("@tanstack/react-virtual", () => ({
     return {
       getTotalSize: () => offset,
       getVirtualItems: () => items,
+      scrollToIndex: vi.fn(),
       measureElement: vi.fn(),
       measure: vi.fn(),
       isScrolling: false,
@@ -108,7 +109,7 @@ describe("DebugLogs", () => {
     await waitFor(() => expect(rowText()).toHaveLength(3))
     // The pause landed between the two events.
     expect(rowText()[0]).toContain("START RequestId: abc")
-    expect(rowText()[1]).toContain("── Paused at index.js:7 (other) ──")
+    expect(rowText()[1]).toContain("── Paused at index.js:7 (step) ──")
     expect(rowText()[2]).toContain("END RequestId: abc")
 
     act(() => socket.event("Debugger.resumed", {}))
