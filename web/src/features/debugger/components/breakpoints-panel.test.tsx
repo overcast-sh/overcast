@@ -1,5 +1,11 @@
 import { act, screen, within } from "@/test/render"
-import { attachFakeSession, fakeDebugSession, renderWithDebugSession } from "@/test/debug-session"
+import {
+  attachFakeSession,
+  fakeDebugSession,
+  renderWithDebugSession,
+  scriptParsed,
+  settle,
+} from "@/test/debug-session"
 import { BreakpointsPanel } from "./breakpoints-panel"
 
 function panel() {
@@ -76,5 +82,47 @@ describe("BreakpointsPanel", () => {
     await user.selectOptions(select, "none")
     expect(socket.lastRequest("Debugger.setPauseOnExceptions").params).toEqual({ state: "none" })
     expect(select).toHaveValue("none")
+  })
+})
+
+describe("BreakpointsPanel > source maps off", () => {
+  const ORIGINAL = "export const handler = async () => {\n  const x = 1\n  return x\n}\n"
+  const INLINE_MAP = `data:application/json;base64,${btoa(
+    JSON.stringify({
+      version: 3,
+      file: "index.js",
+      sources: ["../src/index.ts"],
+      sourcesContent: [ORIGINAL],
+      mappings: ";AAAA;IACE;IACA;AACF",
+    }),
+  )}`
+
+  it("lists a breakpoint in an original file as inactive, saying why", async () => {
+    const { session, bridge } = panel()
+    const socket = await act(() => attachFakeSession(session, bridge))
+    await act(async () => {
+      scriptParsed(socket, "dist/index.js", INLINE_MAP)
+      await settle()
+    })
+    act(() => {
+      session.addBreakpoint("src/index.ts", 2)
+      session.addBreakpoint("dist/index.js", 2)
+    })
+    const rows = () =>
+      within(screen.getByRole("list", { name: "Breakpoints" })).getAllByRole("listitem")
+    expect(rows()[0]).not.toHaveTextContent("source maps off")
+
+    await act(async () => {
+      session.setSourceMaps(false)
+      await settle()
+    })
+    expect(rows()[0]).toHaveTextContent("src/index.ts:2")
+    expect(rows()[0]).toHaveTextContent("source maps off")
+    expect(within(rows()[0]).getByTitle(/Inactive — source maps are off/)).toBeInTheDocument()
+    // The compiled file's breakpoint is unaffected.
+    expect(rows()[1]).not.toHaveTextContent("source maps off")
+    expect(
+      within(rows()[1]).getByTitle(/Not yet bound|Set in the runtime/),
+    ).toBeInTheDocument()
   })
 })

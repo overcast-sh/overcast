@@ -69,3 +69,30 @@ describe("DebugSessionControls", () => {
     expect(screen.getByRole("button", { name: "Debug in console" })).toBeDisabled()
   })
 })
+
+describe("DebugSessionControls > wait for a debugger", () => {
+  it("offers the switch with the function's ARN, and not without one", () => {
+    const queryClient = createTestQueryClient()
+    queryClient.setQueryData(debuggerTargetQueryOptions("lambda", "my-fn").queryKey, consoleTarget())
+    const { session } = fakeDebugSession()
+    const without = renderWithDebugSession(
+      <DebugSessionControls service="lambda" resource="my-fn" />,
+      session,
+      { queryClient },
+    )
+    expect(screen.queryByRole("switch")).not.toBeInTheDocument()
+    without.unmount()
+    renderWithDebugSession(
+      <DebugSessionControls
+        service="lambda"
+        resource="my-fn"
+        resourceArn="arn:aws:lambda:us-east-1:000000000000:function:my-fn"
+      />,
+      session,
+      { queryClient },
+    )
+    expect(
+      screen.getByRole("switch", { name: "Wait for a debugger before the first invocation" }),
+    ).toHaveAttribute("aria-checked", "false")
+  })
+})

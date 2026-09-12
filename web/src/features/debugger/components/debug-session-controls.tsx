@@ -18,6 +18,7 @@ import { useDebugSession, useDebugSessionState } from "../session/hooks"
 import { isSessionOpen, sessionStatusLine } from "../session/status"
 import { bridgeUrl, consoleDebugOf } from "../target"
 import { DebugStateBadge } from "./debug-state-badge"
+import { DebugWaitToggle } from "./debug-wait-toggle"
 
 /** Starts a session on the target's bridge; disabled, saying why, while the debugger is off for it. */
 export function StartConsoleDebugButton({ target }: { target: DebuggerTarget }) {
@@ -37,12 +38,24 @@ export function StartConsoleDebugButton({ target }: { target: DebuggerTarget }) 
   )
 }
 
-export function DebugSessionControls({ service, resource }: { service: string; resource: string }) {
+export interface DebugSessionControlsProps {
+  service: string
+  resource: string
+  /**
+   * The function's unqualified ARN, which is what the *Wait for a debugger*
+   * switch tags; the switch is offered only with it, so a page for a resource
+   * Lambda's tag API does not cover leaves it out.
+   */
+  resourceArn?: string
+}
+
+export function DebugSessionControls({ service, resource, resourceArn }: DebugSessionControlsProps) {
   const { data: target } = useDebugTarget(service, resource)
   const session = useDebugSession()
   const status = useDebugSessionState((s) => s.status)
   const error = useDebugSessionState((s) => s.error)
   const pause = useDebugSessionState((s) => s.pause)
+  const restored = useDebugSessionState((s) => s.restored)
 
   if (!target) return null
   if (!consoleDebugOf(target).available) {
@@ -69,9 +82,17 @@ export function DebugSessionControls({ service, resource }: { service: string; r
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         {open && <DebugStateBadge state={pause ? "paused" : status} />}
         <span role="status" className="text-sm text-fg-muted">
-          {sessionStatusLine(status, error)}
+          {sessionStatusLine(status, error, restored)}
         </span>
       </div>
+      {resourceArn && target.service === "lambda" && (
+        <DebugWaitToggle
+          service={service}
+          resource={resource}
+          resourceArn={resourceArn}
+          className="basis-full"
+        />
+      )}
     </Card>
   )
 }

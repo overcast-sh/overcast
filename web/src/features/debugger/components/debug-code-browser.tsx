@@ -23,6 +23,7 @@ import {
   type LineDecoration,
   type LoadedFile,
 } from "@/components/ui/code-browser"
+import { Switch } from "@/components/ui/switch"
 import { languageForPath } from "@/lib/language-for-path"
 import { useDebugTarget } from "../hooks"
 import { useDebugSessionState, useOptionalDebugSession } from "../session/hooks"
@@ -31,9 +32,18 @@ import { consoleDebugOf } from "../target"
 import { BreakpointConditionEditor } from "./breakpoint-condition-editor"
 import { StartConsoleDebugButton } from "./debug-session-controls"
 import { DebugToolbar } from "./debug-toolbar"
+import { DebugWaitToggle } from "./debug-wait-toggle"
 import { DEBUG_CODE_HEIGHT } from "./debug-workspace"
 
 const ORIGINAL_GROUP = "Original"
+
+/** The resource a pane is about, and — for a Lambda function — the ARN its tags hang off. */
+export interface DebugCodeBrowserTarget {
+  service: string
+  resource: string
+  /** With it, the idle strip carries the *Wait for a debugger* switch. */
+  resourceArn?: string
+}
 
 export interface DebugCodeBrowserProps extends CodeBrowserProps {
   /**
@@ -41,7 +51,7 @@ export interface DebugCodeBrowserProps extends CodeBrowserProps {
    * server whether a console session is on offer and, if so, take
    * breakpoints and start one; without it, idle is a plain browser.
    */
-  target?: { service: string; resource: string }
+  target?: DebugCodeBrowserTarget
 }
 
 export function DebugCodeBrowser({ target, ...props }: DebugCodeBrowserProps) {
@@ -54,7 +64,7 @@ function SessionCodeBrowser({
   session,
   target,
   ...props
-}: CodeBrowserProps & { session: DebugSession; target?: { service: string; resource: string } }) {
+}: CodeBrowserProps & { session: DebugSession; target?: DebugCodeBrowserTarget }) {
   const status = useDebugSessionState((s) => s.status)
   if (status !== "idle") return <ActiveCodeBrowser session={session} {...props} />
   if (!target) return <CodeBrowser {...props} />
@@ -127,7 +137,7 @@ function IdleCodeBrowser({
   session,
   target,
   ...props
-}: CodeBrowserProps & { session: DebugSession; target: { service: string; resource: string } }) {
+}: CodeBrowserProps & { session: DebugSession; target: DebugCodeBrowserTarget }) {
   const { data: descriptor } = useDebugTarget(target.service, target.resource)
   const breakpoints = useDebugSessionState((s) => s.breakpoints)
   const { onGutterClick, editor } = useGutterBreakpoints(session)
@@ -150,6 +160,14 @@ function IdleCodeBrowser({
               ? "1 breakpoint set — it binds when a session starts."
               : `${count} breakpoints set — they bind when a session starts.`}
         </span>
+        {target.resourceArn && descriptor.service === "lambda" && (
+          <DebugWaitToggle
+            service={target.service}
+            resource={target.resource}
+            resourceArn={target.resourceArn}
+            className="basis-full"
+          />
+        )}
       </div>
       {editor}
       <CodeBrowser {...props} decorations={decorations} onGutterClick={onGutterClick} />
@@ -171,7 +189,8 @@ function ActiveCodeBrowser({
   const originalFiles = useDebugSessionState((s) => s.originalFiles)
   const hasSourceMaps = useDebugSessionState((s) => s.hasSourceMaps)
   const connections = useDebugSessionState((s) => s.connections)
-  const [showCompiled, setShowCompiled] = useState(false)
+  const sourceMaps = useDebugSessionState((s) => s.sourceMaps)
+  const showCompiled = useDebugSessionState((s) => s.showCompiled)
   const { onGutterClick, editor: conditionEditor } = useGutterBreakpoints(session)
 
   // ── Files: original sources in their own group; compiled ones behind the toggle ──
@@ -243,17 +262,36 @@ function ActiveCodeBrowser({
         // replaced — so what the pane shows is read again on each one.
         contentVersion={connections}
         explorerActions={
-          hasSourceMaps ? (
-            <label className="flex cursor-pointer items-center gap-1 font-mono text-2xs tracking-normal normal-case">
-              <input
-                type="checkbox"
-                checked={showCompiled}
-                onChange={(e) => setShowCompiled(e.target.checked)}
-                className="accent-accent"
+          <span className="flex flex-col items-end gap-0.5 font-mono text-2xs tracking-normal normal-case">
+            {/* Off, the session reads no map: every file is debugged as
+                deployed, and a breakpoint in an original file waits. */}
+            <label
+              className="flex cursor-pointer items-center gap-1"
+              title={
+                sourceMaps
+                  ? "Source maps are read: original files are listed and breakpoints translated"
+                  : "Source maps are off: compiled files only, breakpoints on compiled lines"
+              }
+            >
+              <Switch
+                size="sm"
+                checked={sourceMaps}
+                onCheckedChange={(on) => session.setSourceMaps(on)}
               />
-              Show compiled
+              Source maps
             </label>
-          ) : undefined
+            {hasSourceMaps && (
+              <label className="flex cursor-pointer items-center gap-1">
+                <input
+                  type="checkbox"
+                  checked={showCompiled}
+                  onChange={(e) => session.setShowCompiled(e.target.checked)}
+                  className="accent-accent"
+                />
+                Show compiled
+              </label>
+            )}
+          </span>
         }
       />
     </div>

@@ -14,6 +14,7 @@ export function CodeTab({
   setEditedFiles,
   setActiveFilePath,
   name,
+  resourceArn,
   logGroup,
 }: {
   source: LambdaFunctionSource | undefined
@@ -23,6 +24,8 @@ export function CodeTab({
   setEditedFiles: React.Dispatch<React.SetStateAction<Record<string, string>>>
   setActiveFilePath: (path: string) => void
   name: string
+  /** The function's unqualified ARN, for the debug strip's *Wait for a debugger* switch. */
+  resourceArn?: string
   /** The function's log group, for the debug drawer's Logs; `null` when it has none. */
   logGroup: string | null
 }) {
@@ -60,7 +63,7 @@ export function CodeTab({
           onChange={(path, value) => setEditedFiles((prev) => ({ ...prev, [path]: value }))}
           onActiveFileChange={setActiveFilePath}
           height="65vh"
-          target={{ service: "lambda", resource: name }}
+          target={{ service: "lambda", resource: name, resourceArn }}
         />
       </DebugWorkspace>
     </div>

@@ -1011,3 +1011,175 @@ describe("DebugSession > reconnect", () => {
     })
   })
 })
+
+describe("DebugSession > source maps switch", () => {
+  beforeEach(() => localStorage.clear())
+
+  it("off: reads no map, keeps compiled locations, and re-maps the current pause when turned on again", async () => {
+    const { session, bridge } = makeSession({ "src/index.ts": ORIGINAL })
+    session.setSourceMaps(false)
+    expect(session.getState().sourceMaps).toBe(false)
+    const socket = await attach(session, bridge)
+    parsed(socket, "dist/index.js", INLINE_MAP)
+    await flush()
+    expect(session.getState().hasSourceMaps).toBe(false)
+    expect(session.getState().originalFiles).toEqual([])
+    expect(session.getState().scripts).toEqual([{ path: "dist/index.js", mapped: false }])
+
+    paused(socket, "dist/index.js", 2, 4)
+    const before = session.getState().pause
+    expect(before?.frames[0]).toMatchObject({
+      location: { path: "dist/index.js", line: 3, column: 4 },
+      mapped: false,
+    })
+
+    // On, while paused: the map is read from the script already parsed and
+    // the same pause is drawn in original terms.
+    session.setSourceMaps(true)
+    await flush()
+    await flush()
+    expect(session.getState().hasSourceMaps).toBe(true)
+    const after = session.getState().pause
+    expect(after?.id).toBe(before?.id)
+    expect(after?.frames[0]).toMatchObject({
+      location: { path: "src/index.ts", line: 2, column: 2 },
+      generated: { path: "dist/index.js", line: 3, column: 4 },
+      mapped: true,
+    })
+
+    // And off again: back to the compiled frame, nothing re-fetched.
+    session.setSourceMaps(false)
+    await flush()
+    expect(session.getState().hasSourceMaps).toBe(false)
+    expect(session.getState().pause?.frames[0]).toMatchObject({
+      location: { path: "dist/index.js", line: 3, column: 4 },
+      mapped: false,
+    })
+  })
+
+  it("holds a breakpoint in an original file inactive while off, and binds it again when on", async () => {
+    const { session, bridge } = makeSession({ "src/index.ts": ORIGINAL })
+    const socket = await attach(session, bridge)
+    parsed(socket, "dist/index.js", INLINE_MAP)
+    await flush()
+    await flush()
+    const bp = session.addBreakpoint("src/index.ts", 2)
+    expect(bp.original).toBe(true)
+    await flush()
+    const bind = socket.lastRequest("Debugger.setBreakpointByUrl")
+    expect(bind.params).toMatchObject({ urlRegex: "file:///var/task/dist/index\\.js$" })
+    socket.respond(bind.id, { breakpointId: "bp:ts", locations: [] })
+    await flush()
+    expect(session.getState().breakpoints[0].bound).toBe(true)
+
+    session.setSourceMaps(false)
+    await flush()
+    await flush()
+    expect(socket.lastRequest("Debugger.removeBreakpoint").params).toEqual({
+      breakpointId: "bp:ts",
+    })
+    expect(session.getState().breakpoints[0]).toMatchObject({
+      bound: false,
+      resolved: false,
+      original: true,
+    })
+    // Nothing else was asked for it: an original line has no compiled position without its map.
+    expect(socket.requests("Debugger.setBreakpointByUrl")).toHaveLength(1)
+    // The flag is what a reload reads, since maps stay off across it.
+    const record = JSON.parse(localStorage.getItem("overcast-debug:lambda/my-fn") ?? "{}")
+    expect(record.sourceMaps).toBe(false)
+    expect(record.breakpoints[0].original).toBe(true)
+    const reloaded = new DebugSession({ key: "lambda/my-fn", fetchFile: noFiles })
+    expect(reloaded.getState().sourceMaps).toBe(false)
+    expect(reloaded.getState().breakpoints[0].original).toBe(true)
+
+    session.setSourceMaps(true)
+    await flush()
+    await flush()
+    expect(socket.requests("Debugger.setBreakpointByUrl")).toHaveLength(2)
+    expect(socket.lastRequest("Debugger.setBreakpointByUrl").params).toMatchObject({
+      lineNumber: 2,
+      urlRegex: "file:///var/task/dist/index\\.js$",
+    })
+  })
+
+  it("takes a parsed script for a deployed file, whatever a map once said about a breakpoint on it", async () => {
+    localStorage.setItem(
+      "overcast-debug:lambda/my-fn",
+      JSON.stringify({
+        breakpoints: [
+          { id: "b1", path: "index.js", line: 2, condition: "", enabled: true, original: true },
+        ],
+        sourceMaps: false,
+      }),
+    )
+    const { session, bridge } = makeSession()
+    expect(session.getState().breakpoints[0].original).toBe(true)
+    const socket = await attach(session, bridge)
+    expect(socket.requests("Debugger.setBreakpointByUrl")).toHaveLength(0)
+    parsed(socket, "index.js")
+    await flush()
+    expect(session.getState().breakpoints[0].original).toBe(false)
+    expect(socket.requests("Debugger.setBreakpointByUrl")).toHaveLength(1)
+  })
+
+  it("remembers Show compiled with the same record", () => {
+    const { session } = makeSession()
+    expect(session.getState().showCompiled).toBe(false)
+    session.setShowCompiled(true)
+    expect(
+      new DebugSession({ key: "lambda/my-fn", fetchFile: noFiles }).getState().showCompiled,
+    ).toBe(true)
+    // A record from before the switches existed reads as maps on, compiled hidden.
+    localStorage.setItem("overcast-debug:lambda/other", JSON.stringify({ breakpoints: [] }))
+    const older = new DebugSession({ key: "lambda/other", fetchFile: noFiles })
+    expect(older.getState()).toMatchObject({ sourceMaps: true, showCompiled: false })
+  })
+})
+
+describe("DebugSession > auto-restore record", () => {
+  beforeEach(() => localStorage.clear())
+  const record = () =>
+    JSON.parse(localStorage.getItem("overcast-debug:lambda/my-fn") ?? "{}") as {
+      sessionOpen?: boolean
+    }
+
+  it("records a start, keeps it across dispose, clears it on stop, and settles the restore question once", async () => {
+    const { session } = makeSession()
+    expect(session.restorable).toBe(false)
+    session.start(BRIDGE)
+    expect(record().sessionOpen).toBe(true)
+    session.dispose()
+    expect(record().sessionOpen).toBe(true)
+    expect(session.getState().status).toBe("idle")
+
+    const next = makeSession()
+    expect(next.session.restorable).toBe(true)
+    next.session.settleRestore()
+    expect(next.session.restorable).toBe(false)
+    // Settling does not touch the record: only a stop does.
+    expect(record().sessionOpen).toBe(true)
+    next.session.start(BRIDGE, { restored: true })
+    expect(next.session.getState().restored).toBe(true)
+    const socket = next.bridge.latest()
+    socket.open()
+    await flush()
+    socket.respondAll()
+    await flush()
+    // The note goes at the first pause.
+    parsed(socket, "index.js")
+    paused(socket, "index.js", 0)
+    expect(next.session.getState().restored).toBe(false)
+    next.session.stop()
+    expect(record().sessionOpen).toBe(false)
+    expect(makeSession().session.restorable).toBe(false)
+  })
+
+  it("dismisses the note on request", () => {
+    const { session } = makeSession()
+    session.start(BRIDGE, { restored: true })
+    expect(session.getState().restored).toBe(true)
+    session.dismissRestoredNote()
+    expect(session.getState().restored).toBe(false)
+  })
+})

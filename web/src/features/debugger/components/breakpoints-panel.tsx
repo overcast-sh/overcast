@@ -6,7 +6,8 @@
  * does, under the row, so the two paths cannot disagree about what a
  * condition is. A row that is not yet bound says so in its title: the
  * script has not parsed on this connection, or the original line has no
- * mapping.
+ * mapping. With source maps off, a breakpoint in an original file is
+ * inactive — nothing loads that file — and the row says so.
  */
 import { useId, useState } from "react"
 import { Pencil, X } from "lucide-react"
@@ -24,8 +25,16 @@ const EXCEPTION_MODES: Array<{ value: PauseOnExceptionsMode; label: string }> = 
   { value: "all", label: "Caught and uncaught" },
 ]
 
-function bindingTitle(bp: Breakpoint): string {
+/** A breakpoint in an original file while source maps are off: held, bound to nothing. */
+function isInactive(bp: Breakpoint, sourceMaps: boolean): boolean {
+  return !sourceMaps && bp.original
+}
+
+function bindingTitle(bp: Breakpoint, sourceMaps: boolean): string {
   if (!bp.enabled) return "Disabled"
+  if (isInactive(bp, sourceMaps)) {
+    return "Inactive — source maps are off, and this file is one a map named"
+  }
   return bp.bound ? "Set in the runtime" : "Not yet bound — waiting for the script to load"
 }
 
@@ -33,6 +42,7 @@ export function BreakpointsPanel() {
   const session = useDebugSession()
   const breakpoints = useDebugSessionState((s) => s.breakpoints)
   const pauseOnExceptions = useDebugSessionState((s) => s.pauseOnExceptions)
+  const sourceMaps = useDebugSessionState((s) => s.sourceMaps)
   const [editingId, setEditingId] = useState<string | null>(null)
   const modeId = useId()
 
@@ -61,6 +71,7 @@ export function BreakpointsPanel() {
           {breakpoints.map((bp) => {
             const label = `${bp.path}:${bp.line}`
             const editing = editingId === bp.id
+            const inactive = isInactive(bp, sourceMaps)
             return (
               <li key={bp.id} className="flex flex-col gap-1">
                 <div className="group/bp flex items-center gap-1.5 rounded-sm px-1 py-0.5 hover:bg-bg-muted">
@@ -72,14 +83,19 @@ export function BreakpointsPanel() {
                     className="accent-accent"
                   />
                   <span
-                    title={bindingTitle(bp)}
+                    title={bindingTitle(bp, sourceMaps)}
                     className={cn(
                       "flex min-w-0 flex-1 flex-col font-mono text-2xs leading-snug",
                       !bp.enabled && "text-fg-muted line-through",
                       bp.enabled && !bp.bound && "text-fg-muted",
                     )}
                   >
-                    <span className="truncate">{label}</span>
+                    <span className="truncate">
+                      {label}
+                      {bp.enabled && inactive && (
+                        <span className="ml-1 text-warning">source maps off</span>
+                      )}
+                    </span>
                     {bp.condition && (
                       <span className="truncate text-fg-muted" title={bp.condition}>
                         when {bp.condition}

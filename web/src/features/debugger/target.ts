@@ -42,6 +42,28 @@ export function consoleDebugOf(
   return { available: target.consoleDebug && bridgePath !== null, bridgePath }
 }
 
+/**
+ * The tag that holds an invocation until a debugger attaches (§ 6, *Wait
+ * for a debugger*): the console sets and clears it through Lambda's own
+ * `TagResource`/`UntagResource`.
+ */
+export const DEBUG_WAIT_TAG = "overcast:debug-wait"
+
+/**
+ * Whether the descriptor says invocations wait for a debugger. Read as an
+ * optional field: the backend's `waitForDebugger` lands with the regenerated
+ * `api.gen.ts`, and until then the descriptor simply does not carry it —
+ * which reads as off, the server's default.
+ */
+export function waitForDebuggerOf(target: DebuggerTarget): boolean {
+  return (target as { waitForDebugger?: boolean }).waitForDebugger === true
+}
+
+/** The descriptor with the wait flag set — the optimistic shape while the tag call is in flight. */
+export function withWaitForDebugger(target: DebuggerTarget, on: boolean): DebuggerTarget {
+  return { ...target, waitForDebugger: on } as DebuggerTarget
+}
+
 /** The BFF's proxy prefix for the emulator's own endpoints — `/_overcast/x` is served at `/api/x`. */
 const EMULATOR_PREFIX = /^\/_overcast(?=\/)/
 

@@ -3,9 +3,20 @@ import type { SessionStatus } from "./session"
 /**
  * One sentence per session status, shared by the Debug tab's controls and
  * the Code tab's toolbar so the two never disagree about what "waiting"
- * means. `error` carries its own text.
+ * means. `error` carries its own text. `restored` — the page started this
+ * session again for one left open — is said first, briefly, so the reader
+ * knows why a session they did not start is up.
  */
-export function sessionStatusLine(status: SessionStatus, error: string | null): string {
+export function sessionStatusLine(
+  status: SessionStatus,
+  error: string | null,
+  restored = false,
+): string {
+  const line = statusSentence(status, error)
+  return restored ? `Session restored. ${line}` : line
+}
+
+function statusSentence(status: SessionStatus, error: string | null): string {
   switch (status) {
     case "idle":
       return "No console session."

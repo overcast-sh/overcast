@@ -336,3 +336,41 @@ describe("DebugCodeBrowser > source maps", () => {
     })
   })
 })
+
+describe("DebugCodeBrowser > source maps switch", () => {
+  it("turns the maps off and on: no Original group while off, the group back when on", async () => {
+    const { session, bridge, user } = browser()
+    const socket = await act(() => attachFakeSession(session, bridge))
+    await act(async () => {
+      scriptParsed(socket, "dist/index.js", INLINE_MAP)
+      await settle()
+    })
+    expect(screen.getByRole("group", { name: "Original" })).toBeInTheDocument()
+    const maps = screen.getByRole("switch", { name: "Source maps" })
+    expect(maps).toHaveAttribute("aria-checked", "true")
+
+    await user.click(maps)
+    expect(session.getState().sourceMaps).toBe(false)
+    await waitFor(() =>
+      expect(screen.queryByRole("group", { name: "Original" })).not.toBeInTheDocument(),
+    )
+    // Every deployed file is listed as such; nothing to show or hide.
+    expect(screen.getByRole("button", { name: "dist" })).toBeInTheDocument()
+    expect(screen.queryByRole("checkbox", { name: "Show compiled" })).not.toBeInTheDocument()
+    // A pause lands on the compiled line.
+    act(() => pausedAt(socket, "dist/index.js", 2, 4))
+    await waitFor(() =>
+      expect(screen.getByTestId("monaco")).toHaveAttribute("data-path", "dist/index.js"),
+    )
+    expect(screen.getByRole("toolbar")).toHaveTextContent("handler · dist/index.js:3")
+    expect(screen.queryByText("no source map for this frame")).not.toBeInTheDocument()
+
+    // On again while paused: the same pause moves to the original line.
+    await user.click(screen.getByRole("switch", { name: "Source maps" }))
+    expect(await screen.findByRole("group", { name: "Original" })).toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.getByTestId("monaco")).toHaveAttribute("data-path", "src/index.ts"),
+    )
+    expect(screen.getByRole("toolbar")).toHaveTextContent("handler · src/index.ts:2")
+  })
+})

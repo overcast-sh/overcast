@@ -215,6 +215,7 @@ function FunctionDetail() {
               setEditedFiles={setEditedFiles}
               setActiveFilePath={setActiveFilePath}
               name={name}
+              resourceArn={fn.FunctionArn}
               logGroup={fn.LoggingConfig?.LogGroup || `/aws/lambda/${name}`}
             />
           </TabPanel>
@@ -222,7 +223,7 @@ function FunctionDetail() {
             <TestTab name={name} timeoutSeconds={fn.Timeout ?? 3} invoke={invoke} />
           </TabPanel>
           <TabPanel id="debug" className="flex flex-col gap-4 pt-4">
-            <DebugSessionControls service="lambda" resource={name} />
+            <DebugSessionControls service="lambda" resource={name} resourceArn={fn.FunctionArn} />
             <DebugTargetPanel service="lambda" resource={name} />
           </TabPanel>
           <TabPanel id="versions" className="pt-4">

@@ -77,6 +77,13 @@ export interface Breakpoint {
    * next statement, and `line` follows it.
    */
   resolved: boolean
+  /**
+   * The file is an original a source map named, as last seen while binding.
+   * With source maps off such a breakpoint has nothing to bind to — the
+   * container never loads that file — so it is held inactive and listed as
+   * such. Persisted, so it reads the same after a reload with maps off.
+   */
+  original: boolean
 }
 
 /**
@@ -198,6 +205,20 @@ export interface DebugSessionState {
   /** What the REPL has been asked so far, oldest first; not persisted. */
   consoleHistory: string[]
   pauseOnExceptions: PauseOnExceptionsMode
+  /**
+   * Whether source maps are read (§ 6). Off, every script is debugged as
+   * deployed: no *Original* files, breakpoints bind on compiled lines, the
+   * call stack shows compiled locations. Persisted per function; on by default.
+   */
+  sourceMaps: boolean
+  /** Whether compiled files stay listed while a map hides them. Persisted per function. */
+  showCompiled: boolean
+  /**
+   * The page started this session again for one that was open when it was
+   * last left (§ 6, auto-restore). Cleared at the first pause and on stop —
+   * a note, not a mode.
+   */
+  restored: boolean
 }
 
 // ─── Persistence ──────────────────────────────────────────────────────────
@@ -214,13 +235,31 @@ const WAIT_RETRY_LIMIT = 20
  */
 const AUTO_STEP_OUT_LIMIT = 16
 
+/**
+ * The record under `localStorage["overcast-debug:<key>"]`. `sessionOpen` is
+ * what auto-restore reads: set by `start`, cleared by `stop` and by nothing
+ * else — leaving the page keeps it, which is the point.
+ */
 interface Persisted {
-  breakpoints: Array<Pick<Breakpoint, "id" | "path" | "line" | "condition" | "enabled">>
+  breakpoints: Array<
+    Pick<Breakpoint, "id" | "path" | "line" | "condition" | "enabled"> &
+      Partial<Pick<Breakpoint, "original">>
+  >
   watches: Array<Pick<Watch, "id" | "expression">>
   pauseOnExceptions: PauseOnExceptionsMode
+  sessionOpen: boolean
+  sourceMaps: boolean
+  showCompiled: boolean
 }
 
-const EMPTY_PERSISTED: Persisted = { breakpoints: [], watches: [], pauseOnExceptions: "none" }
+const EMPTY_PERSISTED: Persisted = {
+  breakpoints: [],
+  watches: [],
+  pauseOnExceptions: "none",
+  sessionOpen: false,
+  sourceMaps: true,
+  showCompiled: false,
+}
 
 function readPersisted(storage: Storage | null, key: string): Persisted {
   if (!storage) return EMPTY_PERSISTED
@@ -232,6 +271,10 @@ function readPersisted(storage: Storage | null, key: string): Persisted {
       breakpoints: Array.isArray(parsed.breakpoints) ? parsed.breakpoints : [],
       watches: Array.isArray(parsed.watches) ? parsed.watches : [],
       pauseOnExceptions: parsed.pauseOnExceptions ?? "none",
+      sessionOpen: parsed.sessionOpen === true,
+      // A record written before the switch existed reads as "on".
+      sourceMaps: parsed.sourceMaps !== false,
+      showCompiled: parsed.showCompiled === true,
     }
   } catch {
     return EMPTY_PERSISTED
@@ -438,6 +481,18 @@ export class DebugSession {
   private stepping = false
   private autoStepOuts = 0
   private readonly scriptPaths = new Map<string, string>()
+  /**
+   * Every script parsed on this connection with the map URL it declared,
+   * by path — what turning source maps on mid-session reads the maps from,
+   * since the inspector does not announce a script twice.
+   */
+  private readonly scriptMapUrls = new Map<string, string | undefined>()
+  /** The current pause's frames as the inspector sent them, so a map change can draw them again. */
+  private rawFrames: CdpCallFrame[] = []
+  /** `Persisted.sessionOpen` — see `restorable`. */
+  private sessionOpenPersisted: boolean
+  /** Whether the restore question has been answered for this session object — see `settleRestore`. */
+  private restoreSettled = false
   private deploymentFiles = new Set<string>()
   private pauseCounter = 0
   private consoleCounter = 0
@@ -454,6 +509,7 @@ export class DebugSession {
       hasFile: (path) => this.deploymentFiles.has(path),
     })
     const persisted = readPersisted(this.storage, key)
+    this.sessionOpenPersisted = persisted.sessionOpen
     this.state = {
       status: "idle",
       error: null,
@@ -462,12 +518,20 @@ export class DebugSession {
       scripts: [],
       originalFiles: [],
       hasSourceMaps: false,
-      breakpoints: persisted.breakpoints.map((bp) => ({ ...bp, bound: false, resolved: false })),
+      breakpoints: persisted.breakpoints.map((bp) => ({
+        ...bp,
+        original: bp.original === true,
+        bound: false,
+        resolved: false,
+      })),
       watches: persisted.watches.map((w) => ({ ...w, result: null, error: null })),
       pause: null,
       console: [],
       consoleHistory: [],
       pauseOnExceptions: persisted.pauseOnExceptions,
+      sourceMaps: persisted.sourceMaps,
+      showCompiled: persisted.showCompiled,
+      restored: false,
     }
   }
 
@@ -500,10 +564,35 @@ export class DebugSession {
     return this.client !== null
   }
 
+  /**
+   * Whether the page should start this session again: one was open on this
+   * function when its page was last left — `start` records it, `stop`
+   * clears it, leaving the page does not — and the question has not been
+   * answered yet (§ 6). Read through `subscribe`, like the state.
+   */
+  get restorable(): boolean {
+    return this.sessionOpenPersisted && !this.restoreSettled
+  }
+
+  /**
+   * The restore question is answered — the session was started, or the
+   * descriptor says the console is not on offer — so `restorable` stops
+   * asking. A `start` of any kind settles it too.
+   */
+  settleRestore(): void {
+    if (this.restoreSettled) return
+    this.restoreSettled = true
+    this.notify()
+  }
+
   // ─── Lifecycle ──────────────────────────────────────────────────────────
 
-  /** Open a session against the bridge URL. A second call with a session open is a no-op. */
-  start(bridgeUrl: string): void {
+  /**
+   * Open a session against the bridge URL. A second call with a session
+   * open is a no-op. `restored` marks a start the page made on the reader's
+   * behalf, for the status line.
+   */
+  start(bridgeUrl: string, { restored = false }: { restored?: boolean } = {}): void {
     if (this.client) return
     const client = new CdpClient({ url: bridgeUrl, dial: this.dial, backoffMs: this.backoffMs })
     this.client = client
@@ -522,12 +611,27 @@ export class DebugSession {
       client.on("Runtime.exceptionThrown", (params) => this.onException(params)),
       client.on("Runtime.executionContextDestroyed", () => this.onResumed()),
     ]
-    this.set({ error: null })
+    this.sessionOpenPersisted = true
+    this.restoreSettled = true
+    this.persist()
+    this.set({ error: null, restored })
     client.open()
   }
 
-  /** Close the session and forget everything but what is persisted. */
+  /**
+   * Close the session and forget everything but what is persisted. The
+   * reader's stop, so the session is not restored on the next visit;
+   * `dispose` closes the same way without touching that.
+   */
   stop(): void {
+    if (this.sessionOpenPersisted) {
+      this.sessionOpenPersisted = false
+      this.persist()
+    }
+    this.close()
+  }
+
+  private close(): void {
     this.clearWaitRetry()
     const client = this.client
     if (!client) return
@@ -538,10 +642,13 @@ export class DebugSession {
     this.bound.clear()
     this.resolvedEarly.clear()
     this.scriptPaths.clear()
+    this.scriptMapUrls.clear()
+    this.rawFrames = []
     this.registry.clear()
     this.stepping = false
     this.set({
       status: "idle",
+      restored: false,
       pause: null,
       scripts: [],
       originalFiles: [],
@@ -574,8 +681,14 @@ export class DebugSession {
     this.retry()
   }
 
+  /** The "Session restored" note has been up long enough. */
+  dismissRestoredNote(): void {
+    if (this.state.restored) this.set({ restored: false })
+  }
+
+  /** The page is going away: close the socket, keep the restore flag so the next visit picks the session up. */
   dispose(): void {
-    this.stop()
+    this.close()
     this.listeners.clear()
     this.pauseListeners.clear()
   }
@@ -621,6 +734,67 @@ export class DebugSession {
     if (!pause || index < 0 || index >= pause.frames.length) return
     this.set({ pause: { ...pause, selectedFrame: index } })
     this.evaluateWatches()
+  }
+
+  // ─── Source maps ────────────────────────────────────────────────────────
+
+  /**
+   * Read source maps, or stop reading them (§ 6). Persisted per function.
+   * With a session open the change applies at once: the registry is
+   * emptied and, when turning on, filled again from the scripts this
+   * connection has parsed; breakpoints are re-bound where the maps now say,
+   * and a current pause is drawn again in the new terms.
+   */
+  setSourceMaps(on: boolean): void {
+    if (this.state.sourceMaps === on) return
+    this.set({ sourceMaps: on })
+    this.persist()
+    if (this.client) void this.reloadSourceMaps()
+  }
+
+  /** Keep compiled files listed while a map hides them. Persisted per function. */
+  setShowCompiled(on: boolean): void {
+    if (this.state.showCompiled === on) return
+    this.set({ showCompiled: on })
+    this.persist()
+  }
+
+  private async reloadSourceMaps(): Promise<void> {
+    const epoch = this.epoch
+    this.registry.clear()
+    if (this.state.sourceMaps) {
+      for (const [path, sourceMapURL] of this.scriptMapUrls) {
+        await this.registry.register({ path, sourceMapURL })
+        if (this.epoch !== epoch || !this.client) return
+      }
+    }
+    this.publishScripts()
+    this.remapPause()
+    // Every breakpoint bound as an original is bound at a position a map
+    // gave, which the apply pass drops and binds afresh — or, with maps off,
+    // leaves inactive.
+    await this.applyAll()
+  }
+
+  /** The current pause's frames, mapped through whatever the registry holds now. */
+  private remapPause(): void {
+    const pause = this.state.pause
+    if (!pause) return
+    this.set({ pause: { ...pause, frames: this.rawFrames.map((f) => this.toStackFrame(f)) } })
+  }
+
+  /** Scripts, original files and the maps flag, from the registry and the scripts seen. */
+  private publishScripts(): void {
+    this.set({
+      scripts: [...this.scriptMapUrls.keys()].map((path) => ({
+        path,
+        mapped: this.registry.isMapped(path),
+      })),
+      originalFiles: this.registry
+        .originalFiles()
+        .map(({ path, origin, generated }) => ({ path, origin, generated: [...generated] })),
+      hasSourceMaps: this.registry.hasMaps,
+    })
   }
 
   // ─── Evaluation ─────────────────────────────────────────────────────────
@@ -772,6 +946,7 @@ export class DebugSession {
       enabled: true,
       bound: false,
       resolved: false,
+      original: this.registry.isOriginal(path),
     }
     this.set({ breakpoints: [...this.state.breakpoints, bp] })
     this.persist()
@@ -872,6 +1047,7 @@ export class DebugSession {
     if (!client) return
     this.epoch += 1
     this.scriptPaths.clear()
+    this.scriptMapUrls.clear()
     this.resolvedEarly.clear()
     // A new connection is a new container, and after a hot reload its
     // compiled output and maps may differ from the last one's: every map is
@@ -923,18 +1099,22 @@ export class DebugSession {
     if (path === null) return
     const epoch = this.epoch
     this.scriptPaths.set(params.scriptId, path)
-    const mapped = await this.registry.register({ path, sourceMapURL: params.sourceMapURL })
-    // The map was fetched for a connection that has since been replaced:
-    // the new one's own scriptParsed reports what it runs.
-    if (this.epoch !== epoch || !this.client) return
-    const scripts = this.state.scripts.filter((s) => s.path !== path)
-    this.set({
-      scripts: [...scripts, { path, mapped }],
-      originalFiles: this.registry
-        .originalFiles()
-        .map(({ path: p, origin, generated }) => ({ path: p, origin, generated: [...generated] })),
-      hasSourceMaps: this.registry.hasMaps,
-    })
+    this.scriptMapUrls.set(path, params.sourceMapURL)
+    // A script the container loads is a deployed file, whatever a map once
+    // said about a breakpoint on it — so with maps off it binds as one.
+    for (const bp of this.state.breakpoints) {
+      if (bp.original && bp.path === path) {
+        this.patchBreakpoint(bp.id, { original: false })
+        this.persist()
+      }
+    }
+    if (this.state.sourceMaps) {
+      await this.registry.register({ path, sourceMapURL: params.sourceMapURL })
+      // The map was fetched for a connection that has since been replaced:
+      // the new one's own scriptParsed reports what it runs.
+      if (this.epoch !== epoch || !this.client) return
+    }
+    this.publishScripts()
     await this.applyAll()
   }
 
@@ -967,6 +1147,7 @@ export class DebugSession {
       return
     }
     this.pauseCounter += 1
+    this.rawFrames = params.callFrames
     const pause: PauseState = {
       id: this.pauseCounter,
       reason: params.reason,
@@ -980,7 +1161,8 @@ export class DebugSession {
       "marker",
       top ? `Paused at ${top.location.path}:${top.location.line} (${label})` : `Paused (${label})`,
     )
-    this.set({ pause, pauseCount: this.pauseCounter })
+    // The restore note has done its job once the session is visibly working.
+    this.set({ pause, pauseCount: this.pauseCounter, restored: false })
     this.evaluateWatches()
     for (const listener of this.pauseListeners) listener(pause)
   }
@@ -1028,6 +1210,7 @@ export class DebugSession {
 
   private onResumed(): void {
     if (!this.state.pause) return
+    this.rawFrames = []
     this.log("marker", "Resumed")
     this.set({ pause: null })
     this.releaseObjectGroups()
@@ -1099,6 +1282,9 @@ export class DebugSession {
   private async apply(bp: Breakpoint): Promise<void> {
     const client = this.client
     if (!client || client.status !== "open" || !bp.enabled) return
+    // An original file's breakpoint has nowhere to bind without its map:
+    // the container never loads that file. Held, and listed as inactive.
+    if (!this.state.sourceMaps && bp.original) return
     if (this.bound.get(bp.id)?.epoch === this.epoch || this.binding.has(bp.id)) return
     const generated = this.generatedFor(bp)
     if (!generated) return
@@ -1128,7 +1314,8 @@ export class DebugSession {
         void client.send("Debugger.removeBreakpoint", { breakpointId }).catch(() => {})
       } else {
         this.bound.set(bp.id, { epoch, cdpId: breakpointId, asOriginal })
-        this.patchBreakpoint(bp.id, { bound: true })
+        this.patchBreakpoint(bp.id, { bound: true, original: asOriginal })
+        if (asOriginal !== bp.original) this.persist()
         // A script already loaded answers with where the breakpoint landed;
         // one not yet loaded answers later, through breakpointResolved —
         // which may already have arrived while this reply was in flight.
@@ -1188,6 +1375,10 @@ export class DebugSession {
 
   private set(patch: Partial<DebugSessionState>): void {
     this.state = { ...this.state, ...patch }
+    this.notify()
+  }
+
+  private notify(): void {
     for (const listener of this.listeners) listener()
   }
 
@@ -1218,15 +1409,21 @@ export class DebugSession {
 
   private persist(): void {
     writePersisted(this.storage, this.key, {
-      breakpoints: this.state.breakpoints.map(({ id, path, line, condition, enabled }) => ({
-        id,
-        path,
-        line,
-        condition,
-        enabled,
-      })),
+      breakpoints: this.state.breakpoints.map(
+        ({ id, path, line, condition, enabled, original }) => ({
+          id,
+          path,
+          line,
+          condition,
+          enabled,
+          original,
+        }),
+      ),
       watches: this.state.watches.map(({ id, expression }) => ({ id, expression })),
       pauseOnExceptions: this.state.pauseOnExceptions,
+      sessionOpen: this.sessionOpenPersisted,
+      sourceMaps: this.state.sourceMaps,
+      showCompiled: this.state.showCompiled,
     })
   }
 }

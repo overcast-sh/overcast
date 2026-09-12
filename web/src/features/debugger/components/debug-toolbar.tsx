@@ -66,6 +66,7 @@ export function DebugToolbar() {
   const pause = useDebugSessionState((s) => s.pause)
   const pauseOnExceptions = useDebugSessionState((s) => s.pauseOnExceptions)
   const hasSourceMaps = useDebugSessionState((s) => s.hasSourceMaps)
+  const restored = useDebugSessionState((s) => s.restored)
   const paused = pause !== null
   const frame = pause?.frames.at(pause.selectedFrame)
 
@@ -143,7 +144,7 @@ export function DebugToolbar() {
             {pause.exception && <> · {pause.exception}</>}
           </span>
         ) : (
-          <span className="truncate">{sessionStatusLine(status, error)}</span>
+          <span className="truncate">{sessionStatusLine(status, error, restored)}</span>
         )}
         {paused && frame && hasSourceMaps && !frame.mapped && (
           <Badge
