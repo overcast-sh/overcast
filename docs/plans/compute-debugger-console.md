@@ -296,6 +296,43 @@ is the deployed tree.
   B2 in its own worktree.
 - **D — review.** Repo `code-review` skill over the branch; fixes; full
   verification; PR with screenshots (paused state, panels, dark and light).
+- **Polish pass** (2026-09-12, driven end to end in a real browser against
+  five functions: plain, hot-reload, tsc + maps, untagged, Python). What it
+  found and changed, first-time path first. A tagged function that had never
+  cold-started read *OFF · not tagged* on the Debug tab and the overview and
+  offered no console button — registration only happened at the first
+  container start — so `Service.DescribeUntagged` now registers a tagged
+  function's target on describe (the same `Ensure` the cold start makes),
+  and the page reads `unbound` and offers the console before the first
+  invoke. The Code tab is now a place to start: idle on a resource that
+  offers a console session it shows a *Debug in console* strip, keeps the
+  gutter live so breakpoints are set before a session and between sessions,
+  and draws them hollow. Breakpoints now report where the runtime placed
+  them — the reply's `locations` and `Debugger.breakpointResolved` — so one
+  set on a blank line moves to the next statement, `Breakpoint.resolved`
+  drives a filled / hollow (`glyph-pending`) / dim glyph with a title saying
+  which, and the Breakpoints panel reads the same. The stepping keys moved
+  from the code pane to `DebugWorkspace`, so they work from a panel or the
+  console input, and F5 is swallowed whenever a session is open (a reflex
+  reload dropped the session). A step landing in a runtime-internal frame
+  — the runtime's patched `console.log` — is walked back out automatically
+  (bounded), as an editor's skipFiles would; pause markers say *breakpoint*
+  / *step* / *exception* rather than V8's `other` / `ambiguous`. The first
+  invocation after a session starts waiting, or after hot reload replaces
+  the container, runs before the session reaches the new container and so
+  never pauses: the Test tab now says so under the result, the console marks
+  the replacement, and the Code tab re-reads its files (`CodeBrowser`
+  gained `contentVersion`, keyed on the session's `connections`, keeping
+  edited files) so a hot-reloaded function shows what now runs. The invoke
+  result arriving while another tab is up raises a toast. Smaller: the Logs
+  drawer follows its tail (`LogViewer` `follow`), the drawer remembers its
+  tab, a watch value from the last pause dims while running, the console's
+  empty line no longer promises the program's output, the Debug tab
+  explains a non-inspector target (Python) instead of showing nothing, and
+  the Test tab counts breakpoints when nothing paused. Left as design
+  questions in the report: holding the first invocation until a waiting
+  console attaches (server-side), auto-restoring a session on reload, the
+  function list's badge for never-run tagged functions, resizable panels.
 
 Phase A notes. The bridge is `Target.ServeWebSocket` in
 `internal/debugger/bridge.go`, reached through `Handler.Bridge` at

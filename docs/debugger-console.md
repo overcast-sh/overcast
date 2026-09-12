@@ -24,9 +24,11 @@ debug console beside it, in the browser.
 Turn the debugger on as for an editor — `OVERCAST_DEBUGGER=true` and the
 `overcast:debug=true` tag, from
 [Step debugging inside emulated compute](./debugger.md#turning-it-on) — then
-open the function's **Debug** tab and press **Debug in console**. The button
-appears for tagged Node.js functions only, so far: the console speaks the
-inspector protocol, and Python, Java and custom runtimes keep the editor
+press **Debug in console**, on the strip above the Code tab's editor or on
+the **Debug** tab. It is there before the function has ever run — a tagged
+function is registered when its page opens — and for tagged Node.js
+functions only, so far: the console speaks the inspector protocol, and the
+Debug tab says so for Python, Java and custom runtimes, which keep the editor
 configurations beside it. It stays disabled, with a tooltip saying so, until
 the flag is on.
 
@@ -39,6 +41,10 @@ The status line under the button says what the session is doing:
 | Waiting for a container | The function has no container yet; invoke once and the session attaches to the one that starts |
 | Reconnecting | Hot reload replaced the container; breakpoints are re-applied when the new one loads the code |
 
+The invocation that starts a container — the first, or the first after hot
+reload replaced it — runs before the session reaches it and does not stop;
+the Test tab says so under the result, and the next one does.
+
 A console session is one more attached client of the function's debug port.
 The Debug tab's state chip reads `attached` and `paused` for it, and the
 timeout clock stops as it does for an editor. **Stop debugging** ends the
@@ -48,13 +54,17 @@ come back with the next one.
 ## Breakpoints and stepping
 
 Click a line's gutter in the Code tab to set or clear a breakpoint; F9 does
-the same for the cursor's line. Right-click the gutter, or click it with Ctrl,
-Cmd or Alt held, for a condition: a strip opens inline above the line and
-takes a JavaScript expression, evaluated in the function's scope, so the
-breakpoint pauses only when it is truthy. Enter saves, Escape closes. Hovering
-a breakpoint's glyph shows its condition and whether it has bound yet — a
-breakpoint set before the first invocation waits for the container to load
-the script.
+the same for the cursor's line. The gutter takes breakpoints before a session
+starts too, and keeps them between sessions. Right-click the gutter, or click
+it with Ctrl, Cmd or Alt held, for a condition: a strip opens inline above the
+line and takes a JavaScript expression, evaluated in the function's scope, so
+the breakpoint pauses only when it is truthy. Enter saves, Escape closes.
+
+The glyph says what the runtime has done with the breakpoint: a filled dot is
+placed on a statement, a hollow grey ring is waiting for a session or for the
+container to load the file, a dim ring is disabled; hovering it says which.
+A breakpoint on a line with no code moves to the next statement once the
+runtime places it.
 
 Once paused, the toolbar over the pane drives execution, with the keys VS Code
 uses:
@@ -68,9 +78,12 @@ uses:
 | Pause on exceptions | — | Toggle; pauses at uncaught exceptions, off by default |
 | Stop | — | End the session; the invocation runs on |
 
-The keys are bound while the code pane has focus, so they do nothing from the
-Test tab's editor. **Restart container** sits on the strip disabled until it is
-wired to hot reload's replace path
+The keys work from anywhere in the debug workspace — code, panels, drawer —
+and nowhere else, so they do nothing from the Test tab's editor. While a
+session is open F5 is Continue, never the browser's reload. A step that lands
+in the runtime's own code (its patched `console.log`, say) steps straight
+back out. **Restart container** sits on the strip disabled until it is wired
+to hot reload's replace path
 ([#1944](https://github.com/overcast-sh/overcast/issues/1944)).
 
 ## Invoke and pause
@@ -78,7 +91,8 @@ wired to hot reload's replace path
 Invoke from the **Test** tab as usual. When execution stops, the page switches
 to the Code tab with the paused line marked and the toolbar naming the function
 and location. Continue to the end and the result lands in the Test tab as it
-always does.
+always does; a toast says so while another tab is up. An invocation that
+finishes without pausing says why under its result.
 
 The function's timeout clock is suspended while the session is open, exactly
 as for an attached editor, so a 3-second function can sit at a breakpoint for
@@ -95,19 +109,20 @@ Beside the code, while a session is open:
 | Panel | Shows |
 | --- | --- |
 | Locals | The selected frame's scopes, expanding on click, with values previewed inline |
-| Watch | Expressions you add, re-evaluated in the selected frame on every pause and frame change; the pencil beside one edits it |
+| Watch | Expressions you add, re-evaluated in the selected frame on every pause and frame change; the pencil beside one edits it. A value from the last pause stays, dimmed, while the function runs |
 | Call stack | Every frame at the pause, at its original location when a source map applies; clicking a frame selects it for Locals and Watch |
 | Breakpoints | Every breakpoint on the function — enable, disable, remove, edit the condition — and the pause-on-exceptions toggle |
 
-Below the code, a drawer with two tabs. **Logs** is the Monitor tab's log
-viewer over the function's log group, live — the last 15 minutes, every
-request, since the invocation does not name its request id — with a marker
-line at each pause and resume. The function's own `console.log` lines are
-there too: the Lambda runtime writes them to the log stream, not to the
-debugger. **Debug console** shows thrown exceptions as they arrive, the same
-pause and resume markers, and takes an expression: evaluated in the selected
-frame while paused, in the function's global scope while it runs. On a narrow
-window the panels become a tab strip above the drawer.
+Below the code, a drawer with two tabs, opening on whichever you used last.
+**Logs** is the Monitor tab's log viewer over the function's log group, live
+and following its tail — the last 15 minutes, every request, since the
+invocation does not name its request id — with a marker line at each pause
+and resume. The function's own `console.log` lines are there too: the Lambda
+runtime writes them to the log stream, not to the debugger. **Debug console**
+shows thrown exceptions as they arrive, the same pause and resume markers, and
+takes an expression: evaluated in the selected frame while paused, in the
+function's global scope while it runs. On a narrow window the panels become a
+tab strip above the drawer.
 
 ## Source maps
 
@@ -129,7 +144,9 @@ A frame no map resolves — a bundled dependency, say — opens the compiled fil
 with a *no source map for this frame* badge on the toolbar. Raw `.ts` on
 Node.js 24 and plain JavaScript need none of this: the file list is the
 deployed tree. A hot-reloaded function's files are read live from the mounted
-directory, so the tab shows what the container runs.
+directory, and read again each time the session reaches a new container, so
+the tab shows what the container runs; a file you have edited in the tab
+keeps your edit.
 
 ## When it does not work
 
@@ -138,8 +155,9 @@ directory, so the tab shows what the container runs.
 | No **Debug in console** button on the Debug tab | The runtime's protocol is not the inspector; Node.js only, so far | Attach an editor with the configurations beside it |
 | The button is disabled | The flag is off | [Turn the debugger on](./debugger.md#turning-it-on) |
 | "Waiting for a container — invoke once", and nothing happens | No container exists before the first invocation | Invoke from the Test tab; the session attaches to the container that starts |
+| The invocation that started the container did not pause | It ran before the session reached the new container | Invoke again: the container is warm and the breakpoints are bound |
 | The session dropped after an edit | Hot reload replaced the container | Nothing: it reconnects and re-applies breakpoints once the new container loads the code |
-| A breakpoint never binds | The path is not one the container loads from `/var/task` | Open the file from the Code tab's list and set it there; for a bundle, set it in the original file the map lists |
+| A breakpoint stays a hollow ring | The container has not loaded that file, or the path is not one it loads from `/var/task` | Invoke once so the file loads; otherwise open the file from the Code tab's list and set it there — for a bundle, in the original file the map lists |
 | A breakpoint in module-level code never pauses | Init runs before the session attaches | Put the first breakpoint inside the handler |
 
 ## Related
