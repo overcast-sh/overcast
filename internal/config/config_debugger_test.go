@@ -3,6 +3,7 @@ package config_test
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/overcast-sh/overcast/internal/config"
 )
@@ -35,6 +36,9 @@ func TestLoad_debuggerDefaults(t *testing.T) {
 	}
 	if cfg.DebuggerTimeout != config.DebuggerTimeoutAttached {
 		t.Errorf("DebuggerTimeout = %q, want attached", cfg.DebuggerTimeout)
+	}
+	if cfg.DebuggerWaitTimeout != 120*time.Second {
+		t.Errorf("DebuggerWaitTimeout = %s, want 120s", cfg.DebuggerWaitTimeout)
 	}
 }
 
@@ -137,6 +141,7 @@ func TestLoad_debuggerSettings(t *testing.T) {
 		wantListen  string
 		wantPorts   [2]int
 		wantTimeout config.DebuggerTimeoutPolicy
+		wantWait    time.Duration
 		wantErr     string
 	}{
 		{
@@ -199,6 +204,24 @@ func TestLoad_debuggerSettings(t *testing.T) {
 			env:     map[string]string{"OVERCAST_DEBUGGER_TIMEOUT": "never"},
 			wantErr: "OVERCAST_DEBUGGER_TIMEOUT",
 		},
+		{
+			name:        "wait timeout",
+			env:         map[string]string{"OVERCAST_DEBUGGER_WAIT_TIMEOUT": "5s"},
+			wantListen:  "127.0.0.1",
+			wantPorts:   [2]int{9229, 9329},
+			wantTimeout: config.DebuggerTimeoutAttached,
+			wantWait:    5 * time.Second,
+		},
+		{
+			name:    "wait timeout not a duration",
+			env:     map[string]string{"OVERCAST_DEBUGGER_WAIT_TIMEOUT": "soon"},
+			wantErr: "OVERCAST_DEBUGGER_WAIT_TIMEOUT",
+		},
+		{
+			name:    "wait timeout zero",
+			env:     map[string]string{"OVERCAST_DEBUGGER_WAIT_TIMEOUT": "0s"},
+			wantErr: "OVERCAST_DEBUGGER_WAIT_TIMEOUT",
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -233,6 +256,13 @@ func TestLoad_debuggerSettings(t *testing.T) {
 			}
 			if cfg.DebuggerTimeout != tc.wantTimeout {
 				t.Errorf("DebuggerTimeout = %q, want %q", cfg.DebuggerTimeout, tc.wantTimeout)
+			}
+			wantWait := tc.wantWait
+			if wantWait == 0 {
+				wantWait = 120 * time.Second
+			}
+			if cfg.DebuggerWaitTimeout != wantWait {
+				t.Errorf("DebuggerWaitTimeout = %s, want %s", cfg.DebuggerWaitTimeout, wantWait)
 			}
 		})
 	}
