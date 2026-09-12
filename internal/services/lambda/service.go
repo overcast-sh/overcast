@@ -545,6 +545,16 @@ func (s *Service) WaitReady() { s.initWg.Wait() }
 // ARN in the setup block so the tagging command is copy-paste ready. A
 // function that does not exist, or another service's resource, is not ours
 // to describe.
+//
+// A *tagged* function that has not cold-started yet has no target either —
+// registration used to happen only at the first container start — and it
+// read "not tagged" here, which told the reader to add the tag they had
+// already added and offered no console session until they had invoked once.
+// So a tagged function is registered on describe, exactly as its cold start
+// would register it (the same Ensure, so the cold start finds the target and
+// binds the container to it): the Debug tab then reads unbound, offers the
+// console, and a session opened before the first invoke waits for the
+// container instead of not existing.
 func (s *Service) DescribeUntagged(ctx context.Context, service debugger.Service, resource string) (debugger.Descriptor, bool) {
 	if service != debugger.ServiceLambda {
 		return debugger.Descriptor{}, false
@@ -553,7 +563,29 @@ func (s *Service) DescribeUntagged(ctx context.Context, service debugger.Service
 	if aerr != nil || fn == nil {
 		return debugger.Descriptor{}, false
 	}
+	if t := s.registerTaggedDebugTarget(ctx, fn); t != nil {
+		return t.Descriptor(), true
+	}
 	return debugger.UntaggedDescriptor(debugger.ServiceLambda, fn.Name, "", fn.ARN), true
+}
+
+// registerTaggedDebugTarget registers fn's debug target ahead of its first
+// cold start when a tag asks for one, and returns nil for an untagged
+// function or a service with no container runtime (Docker not probed yet).
+// The image working directory an image function's remote root wants is not
+// known before a pull, so the target carries the zip default until the cold
+// start sets the real one.
+func (s *Service) registerTaggedDebugTarget(ctx context.Context, fn *Function) *debugger.Target {
+	s.mu.Lock()
+	cr := s.containerRuntime
+	s.mu.Unlock()
+	if cr == nil || cr.debugger == nil {
+		return nil
+	}
+	if spec, _ := debugger.SpecFromTags(debugger.ServiceLambda, fn.Tags, cr.cfg.LambdaDebugger); !spec.Tagged {
+		return nil
+	}
+	return cr.debugTarget(ctx, fn, "", "")
 }
 
 // RuntimeAPIListenStatus reports how the shared Runtime API listener's bind

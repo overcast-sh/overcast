@@ -545,6 +545,49 @@ func TestService_describeUntagged(t *testing.T) {
 	})
 }
 
+func TestService_describeUntagged_registersATaggedFunctionBeforeItsFirstColdStart(t *testing.T) {
+	// Given: a service whose runtime carries a debug manager, holding one
+	// tagged function and one untagged one, neither ever invoked
+	daemon := newRecordingDaemon(t)
+	cr := newDaemonContainerRuntime(t, daemon.Server)
+	cr.cfg.LambdaDebugger = true
+	m := debuggertest.NewManager(t, clock.New(), config.DebuggerTimeoutAttached)
+	cr.SetDebugger(m)
+	svc := &Service{ls: newLambdaStore(state.NewMemoryStore(), "us-east-1", clock.NewMock()), containerRuntime: cr}
+	tagged := debugTaggedNodeFunction("tagged")
+	plain := &Function{Name: "plain", ARN: "arn:aws:lambda:us-east-1:000000000000:function:plain", Runtime: "nodejs22.x"}
+	for _, fn := range []*Function{tagged, plain} {
+		if aerr := svc.ls.putFunction(context.Background(), fn); aerr != nil {
+			t.Fatalf("put function %s: %s", fn.Name, aerr.Message)
+		}
+	}
+
+	// When: the tagged function is described before any container exists
+	d, ok := svc.DescribeUntagged(context.Background(), debugger.ServiceLambda, "tagged")
+
+	// Then: it is registered as its cold start would register it — enabled,
+	// unbound, offering the console — rather than synthesised as "not tagged"
+	if !ok {
+		t.Fatal("tagged function not described")
+	}
+	if !d.Enabled || d.State != string(debugger.StateUnbound) || !d.ConsoleDebug || d.BridgePath == "" {
+		t.Errorf("descriptor = enabled %v state %s consoleDebug %v bridgePath %q, want enabled, unbound, console offered",
+			d.Enabled, d.State, d.ConsoleDebug, d.BridgePath)
+	}
+	if _, registered := m.Get(debugger.TargetID(debugger.ServiceLambda, "tagged", "")); !registered {
+		t.Error("target not registered with the manager")
+	}
+
+	// And: the untagged function is still synthesised, and nothing was registered for it
+	d, ok = svc.DescribeUntagged(context.Background(), debugger.ServiceLambda, "plain")
+	if !ok || d.Enabled || d.Reason != debugger.ReasonNotTagged {
+		t.Errorf("untagged descriptor = %+v, want off, %q", d, debugger.ReasonNotTagged)
+	}
+	if _, registered := m.Get(debugger.TargetID(debugger.ServiceLambda, "plain", "")); registered {
+		t.Error("an untagged function was registered")
+	}
+}
+
 // ─── identity ────────────────────────────────────────────────────────────────
 
 func TestFunctionInstanceIdentity_changesWithTheDebugTags(t *testing.T) {
