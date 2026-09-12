@@ -24,14 +24,29 @@ func (d debuggerDescribers) DescribeUntagged(ctx context.Context, service debugg
 	return describer.DescribeUntagged(ctx, service, resource)
 }
 
-// registerDebuggerRoutes mounts the two emulator-only debugger endpoints
-// (docs/plans/compute-debugger.md § 6). They live under /_overcast/ like the
-// rest of the console's API and, unlike /_overcast/debug/*, are not gated on
-// OVERCAST_DEBUG: the Debug tab has to be able to say "not enabled" on a
-// default configuration, and the list is a cheap read of an in-memory
+// ScanTagged implements debugger.TaggedScanner: each compute service that
+// can scan its store for tagged resources does so; one that cannot yet is
+// skipped. The services own their once-only, so this is cheap after the
+// first list.
+func (d debuggerDescribers) ScanTagged(ctx context.Context) {
+	for _, describer := range d {
+		if scanner, ok := describer.(debugger.TaggedScanner); ok {
+			scanner.ScanTagged(ctx)
+		}
+	}
+}
+
+// registerDebuggerRoutes mounts the emulator-only debugger endpoints
+// (docs/plans/compute-debugger.md § 6): the target list, one target's
+// descriptor, and the console's WebSocket bridge onto a target
+// (docs/plans/compute-debugger-console.md § 3.1). They live under /_overcast/
+// like the rest of the console's API and, unlike /_overcast/debug/*, are not
+// gated on OVERCAST_DEBUG: the Debug tab has to be able to say "not enabled"
+// on a default configuration, and the list is a cheap read of an in-memory
 // registry.
 func registerDebuggerRoutes(r chi.Router, manager *debugger.Manager, describers debuggerDescribers) {
 	h := debugger.NewHandler(manager, describers)
 	r.Get("/_overcast/debugger/targets", h.ListTargets)
 	r.Get("/_overcast/debugger/targets/{service}/{resource}", h.GetTarget)
+	r.Get("/_overcast/debugger/targets/{service}/{resource}/ws", h.Bridge)
 }

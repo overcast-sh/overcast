@@ -1148,6 +1148,23 @@ export interface DebuggerTarget {
   /** as the user wrote it; "" when unknown */
   localRoot: string
   timeoutPolicy: string
+  /**
+   * WaitForDebugger is TagWait as parsed: an invocation of this target
+   * with no client attached is held for one before its event is
+   * dispatched (Lambda only; see TagWait). The console toggles it with
+   * TagResource/UntagResource and reads it back here.
+   */
+  waitForDebugger: boolean
+  /**
+   * ConsoleDebug says the console can open a session of its own on this
+   * target — true only for a protocol it ships a client for (the
+   * inspector). BridgePath is where: the /_overcast/... path of the
+   * WebSocket bridge, which the BFF serves under /api as well, so the
+   * console never spells the path itself (docs/plans/compute-debugger-console.md
+   * § 3.1–3.2). Empty for an entry synthesised for an untagged resource.
+   */
+  consoleDebug: boolean
+  bridgePath: string
   /** always present */
   setup: DebuggerSetup
   editors: DebuggerEditor[]

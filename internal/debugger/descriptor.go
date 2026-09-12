@@ -1,6 +1,7 @@
 package debugger
 
 import (
+	"net/url"
 	"strings"
 	"time"
 )
@@ -29,6 +30,21 @@ type Descriptor struct {
 	RemoteRoot     string `json:"remoteRoot"`
 	LocalRoot      string `json:"localRoot"` // as the user wrote it; "" when unknown
 	TimeoutPolicy  string `json:"timeoutPolicy"`
+
+	// WaitForDebugger is TagWait as parsed: an invocation of this target
+	// with no client attached is held for one before its event is
+	// dispatched (Lambda only; see TagWait). The console toggles it with
+	// TagResource/UntagResource and reads it back here.
+	WaitForDebugger bool `json:"waitForDebugger"`
+
+	// ConsoleDebug says the console can open a session of its own on this
+	// target — true only for a protocol it ships a client for (the
+	// inspector). BridgePath is where: the /_overcast/... path of the
+	// WebSocket bridge, which the BFF serves under /api as well, so the
+	// console never spells the path itself (docs/plans/compute-debugger-console.md
+	// § 3.1–3.2). Empty for an entry synthesised for an untagged resource.
+	ConsoleDebug bool   `json:"consoleDebug"`
+	BridgePath   string `json:"bridgePath"`
 
 	Setup   Setup    `json:"setup"` // always present
 	Editors []Editor `json:"editors"`
@@ -110,23 +126,25 @@ func UntaggedDescriptor(service Service, resource, container, arn string) Descri
 func (t *Target) Descriptor() Descriptor {
 	t.mu.Lock()
 	d := Descriptor{
-		ID:            t.id,
-		Service:       string(t.service),
-		Resource:      t.resource,
-		Container:     t.container,
-		Enabled:       t.enabled,
-		Reason:        t.reason,
-		Listen:        Listen{Host: dialHost(t.host), Port: t.port},
-		State:         string(t.stateLocked()),
-		AttachedSince: formatTime(t.attachedSince),
-		PausedSince:   formatTime(t.pausedSince),
-		ContainerID:   t.containerID,
-		Upstream:      t.upstream,
-		RemoteRoot:    t.remoteRoot,
-		LocalRoot:     t.spec.SourcePathRaw,
-		TimeoutPolicy: t.policy.String(),
-		Setup:         SetupFor(t.service, t.arn),
-		Editors:       []Editor{},
+		ID:              t.id,
+		Service:         string(t.service),
+		Resource:        t.resource,
+		Container:       t.container,
+		Enabled:         t.enabled,
+		Reason:          t.reason,
+		Listen:          Listen{Host: dialHost(t.host), Port: t.port},
+		State:           string(t.stateLocked()),
+		AttachedSince:   formatTime(t.attachedSince),
+		PausedSince:     formatTime(t.pausedSince),
+		ContainerID:     t.containerID,
+		Upstream:        t.upstream,
+		RemoteRoot:      t.remoteRoot,
+		LocalRoot:       t.spec.SourcePathRaw,
+		TimeoutPolicy:   t.policy.String(),
+		WaitForDebugger: t.spec.Wait,
+		BridgePath:      BridgePath(t.service, t.resource, t.container),
+		Setup:           SetupFor(t.service, t.arn),
+		Editors:         []Editor{},
 	}
 	protocol := t.res.Protocol
 	t.mu.Unlock()
@@ -136,6 +154,9 @@ func (t *Target) Descriptor() Descriptor {
 	}
 	d.Protocol = protocol.Name()
 	d.ProtocolSource = string(t.res.Source)
+	if cp, ok := protocol.(ConsoleProtocol); ok {
+		d.ConsoleDebug = cp.ConsoleDebug()
+	}
 	d.Editors = renderEditors(protocol, editorData{
 		Name:       "Overcast: " + t.resource,
 		Resource:   t.resource,
@@ -145,6 +166,18 @@ func (t *Target) Descriptor() Descriptor {
 		RemoteRoot: d.RemoteRoot,
 	})
 	return d
+}
+
+// BridgePath is the path of a target's WebSocket bridge on the API listener:
+// GET /_overcast/debugger/targets/{service}/{resource}/ws, with ?container=
+// for an ECS task's container. The BFF serves the same path under /api, so
+// the console prefixes it and nothing else.
+func BridgePath(service Service, resource, container string) string {
+	p := "/_overcast/debugger/targets/" + url.PathEscape(string(service)) + "/" + url.PathEscape(resource) + "/ws"
+	if container != "" {
+		p += "?container=" + url.QueryEscape(container)
+	}
+	return p
 }
 
 // localRootHint is the leading line that says which tag fills the placeholder.

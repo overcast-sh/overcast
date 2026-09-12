@@ -518,6 +518,16 @@ func WithDebuggerTimeout(policy config.DebuggerTimeoutPolicy) Option {
 	}
 }
 
+// WithDebuggerWaitTimeout bounds how long an invocation of a function tagged
+// overcast:debug-wait=true is held for a debugger client
+// (OVERCAST_DEBUGGER_WAIT_TIMEOUT). The default is 120s, which is what a test
+// of the expiry path wants to shorten.
+func WithDebuggerWaitTimeout(d time.Duration) Option {
+	return func(so *serverOptions) {
+		so.cfg.DebuggerWaitTimeout = d
+	}
+}
+
 // WithSMTPMock enables the built-in SMTP capture server on a random port.
 // Emails delivered to SNS email/email-json subscribers are captured and
 // accessible via GET /_overcast/ses/inbox/messages on the test server.

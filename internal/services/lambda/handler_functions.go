@@ -1326,6 +1326,10 @@ func (h *Handler) CreateFunction(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// A function tagged for the debugger is registered now, so the console
+	// lists it and offers a session before the first invocation.
+	h.syncDebugTarget(ctx, fn)
+
 	// Auto-create CloudWatch Logs log group (idempotent). The log stream is
 	// created per-invocation with an AWS-style name, not here at create time.
 	if h.logWriter != nil {
@@ -2233,6 +2237,9 @@ func (h *Handler) UpdateFunctionConfiguration(w http.ResponseWriter, r *http.Req
 	}
 
 	h.retireExecutionEnvironment(ctx, fn, previousIdentity)
+	// The protocol resolver reads the environment (a --inspect in
+	// NODE_OPTIONS, a JDWP agent string), so the target follows the update.
+	h.syncDebugTarget(ctx, fn)
 
 	if h.bus != nil {
 		h.bus.Publish(ctx, events.Event{
@@ -2333,6 +2340,8 @@ func (h *Handler) DeleteFunction(w http.ResponseWriter, r *http.Request) {
 	}
 	h.tracker.Evict(name)
 	h.proactive.NoteFunctionDeleted(name)
+	// The target and its port go with the function; a later function of the
+	// same name registers its own.
 	h.releaseDebugTarget(name)
 
 	if h.bus != nil {
@@ -2889,7 +2898,8 @@ func (h *Handler) invokeSyncOnce(ctx context.Context, fn *Function, rt Runtime, 
 	// context.getRemainingTimeInMillis() inside the function reflects the
 	// real deadline, and so we kill the container if it overruns — unless a
 	// debugger is attached to this environment, when the clock stops with it.
-	invokeCtx, cancel := boundInvocation(ctx, h.clk, h.cfg, functionTimeout(fn), inst)
+	// A function tagged to wait for a debugger is held here first.
+	invokeCtx, cancel := h.invocationContext(ctx, fn, inst)
 	defer cancel()
 
 	log.Debug("invoke function: dispatching", zap.String("function", name), zap.Int("payload_bytes", len(payload)))
@@ -3190,7 +3200,7 @@ func (h *Handler) invokeAsyncOnce(ctx context.Context, fn *Function, rt Runtime,
 		}
 	}
 
-	invokeCtx, cancel := boundInvocation(ctx, h.clk, h.cfg, functionTimeout(fn), inst)
+	invokeCtx, cancel := h.invocationContext(ctx, fn, inst)
 	defer cancel()
 	// No tail: an Event invocation answered 202 long ago and has no caller left
 	// to hand a LogResult to.
@@ -3404,8 +3414,8 @@ func (h *Handler) InvokeFunctionSSE(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Invoke with timeout.
-	invokeCtx, cancel := boundInvocation(ctx, h.clk, h.cfg, functionTimeout(fn), inst)
+	// Invoke with timeout, after any hold for a debugger.
+	invokeCtx, cancel := h.invocationContext(ctx, fn, inst)
 	defer cancel()
 
 	sendEvent("progress", "Invoking function handler")

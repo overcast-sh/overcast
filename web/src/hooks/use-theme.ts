@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { useEffect, useSyncExternalStore } from "react"
 import { useLocalStorage } from "@/hooks/use-local-storage"
 
 type Theme = "light" | "dark" | "system"
@@ -50,4 +50,34 @@ export function useTheme() {
   }, [theme])
 
   return { theme, setTheme }
+}
+
+const DARK_QUERY = "(prefers-color-scheme: dark)"
+
+function readIsDark(): boolean {
+  const explicit = document.documentElement.getAttribute("data-theme")
+  if (explicit === "dark") return true
+  if (explicit === "light") return false
+  return window.matchMedia(DARK_QUERY).matches
+}
+
+function subscribeIsDark(onChange: () => void): () => void {
+  const observer = new MutationObserver(onChange)
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] })
+  const query = window.matchMedia(DARK_QUERY)
+  query.addEventListener("change", onChange)
+  return () => {
+    observer.disconnect()
+    query.removeEventListener("change", onChange)
+  }
+}
+
+/**
+ * Whether the page is dark right now — the explicit `data-theme`, else the
+ * system preference — and re-rendered when either changes. For a component
+ * that paints its own colours rather than reading the CSS tokens (the Monaco
+ * editor takes a theme name), so a theme toggle mid-session reaches it too.
+ */
+export function useIsDarkTheme(): boolean {
+  return useSyncExternalStore(subscribeIsDark, readIsDark, () => false)
 }

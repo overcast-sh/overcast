@@ -93,6 +93,7 @@ explaining.
 | `OVERCAST_DEBUGGER_LISTEN`       | _(`OVERCAST_LISTEN` host)_ | Address the debug ports bind on: `127.0.0.1` native, `0.0.0.0` in a container so `-p 9229-9329:9229-9329` reaches them |
 | `OVERCAST_DEBUGGER_PORTS`        | `9229-9329`            | Range auto-allocated debug ports are taken from, lowest free first                  |
 | `OVERCAST_DEBUGGER_TIMEOUT`      | `attached`             | When a Lambda function's timeout clock stops: `attached` (a client is connected), `paused` (only at a breakpoint; Node.js so far), `strict` (never) — see [Timeouts while paused](../debugger.md#timeouts-while-paused) |
+| `OVERCAST_DEBUGGER_WAIT_TIMEOUT` | `120s`                 | How long an invocation of a function tagged `overcast:debug-wait=true` is held for a debugger to attach before it runs anyway — see [Wait for a debugger](../debugger.md#wait-for-a-debugger) |
 | `OVERCAST_EC2_VPC_STRATEGY`      | `shared`               | How VPCs map to Docker networks when their CIDRs overlap: `shared`, `strict` or `remapped` — see [How a VPC is backed by a Docker network](../networking/vpc-backing.md#overlapping-cidrs) |
 | `OVERCAST_MCP_REMOTE_EXPOSURE`   | `false`                | **Security-relevant.** Declares that `/_overcast/mcp` will be reachable by non-local clients, and requires `OVERCAST_MCP_AUTH_TOKEN`. See [Exposing MCP](./mcp.md) |
 | `OVERCAST_MCP_AUTH_TOKEN`        | —                      | Bearer token every MCP request must present once set. Treat it like any other credential |

@@ -1,8 +1,16 @@
 package debugger
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // inspector is Node.js's debugger: the Chrome DevTools Protocol over a
@@ -39,6 +47,60 @@ func (inspector) Detect(env map[string]string) (int, bool) {
 func (inspector) Editors() []EditorTemplate { return inspectorEditors }
 
 func (inspector) NewObserver() Observer { return newCDPObserver() }
+
+// ConsoleDebug is true: the console's CDP client drives this protocol over
+// the bridge.
+func (inspector) ConsoleDebug() bool { return true }
+
+// inspectorDiscoveryTimeout bounds GET /json/list on the container. Node
+// answers it in milliseconds; a container that does not is not there.
+const inspectorDiscoveryTimeout = 2 * time.Second
+
+// inspectorDiscoveryClient is the HTTP client for /json/list, bounded so a
+// hung container cannot hold a console's connection attempt.
+var inspectorDiscoveryClient = &http.Client{Timeout: inspectorDiscoveryTimeout}
+
+// discoverWebSocket names the inspector's session for the bridge: the first
+// entry of GET /json/list, whose webSocketDebuggerUrl carries the host and
+// port the container knows itself by, rewritten to the upstream the proxy
+// actually dials.
+func (inspector) discoverWebSocket(ctx context.Context, upstream string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, inspectorDiscoveryTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+upstream+"/json/list", nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := inspectorDiscoveryClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("GET /json/list: %s", resp.Status)
+	}
+	var sessions []struct {
+		WebSocketDebuggerURL string `json:"webSocketDebuggerUrl"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, inspectorListMax)).Decode(&sessions); err != nil {
+		return "", fmt.Errorf("GET /json/list: %w", err)
+	}
+	for _, s := range sessions {
+		if s.WebSocketDebuggerURL == "" {
+			continue
+		}
+		u, err := url.Parse(s.WebSocketDebuggerURL)
+		if err != nil {
+			return "", fmt.Errorf("GET /json/list: webSocketDebuggerUrl %q: %w", s.WebSocketDebuggerURL, err)
+		}
+		u.Host = upstream
+		return u.String(), nil
+	}
+	return "", errors.New("GET /json/list: no session with a webSocketDebuggerUrl")
+}
+
+// inspectorListMax bounds the /json/list body: it is a handful of entries.
+const inspectorListMax = 1 << 20
 
 // nodeDefaultInspectPort is what --inspect without a port binds.
 const nodeDefaultInspectPort = 9229

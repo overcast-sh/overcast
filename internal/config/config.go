@@ -877,6 +877,15 @@ type Config struct {
 	// Corresponds to env var OVERCAST_DEBUGGER_TIMEOUT. Default attached.
 	DebuggerTimeout DebuggerTimeoutPolicy
 
+	// DebuggerWaitTimeout bounds how long an invocation of a function tagged
+	// overcast:debug-wait=true is held for a debugger client to attach
+	// before its event is dispatched. On expiry the invocation proceeds
+	// undebugged and a WARN says so. Long by default because the hold is
+	// what the tag asks for; the bound exists so a forgotten tag cannot
+	// park an invocation for ever.
+	// Corresponds to env var OVERCAST_DEBUGGER_WAIT_TIMEOUT. Default 120s.
+	DebuggerWaitTimeout time.Duration
+
 	// LambdaFetchRemoteLayers enables downloading layer content from real AWS
 	// when a layer ARN is not found locally. Requires valid AWS credentials.
 	// Downloaded layers are cached on disk and have /opt/extensions/ stripped
@@ -1254,6 +1263,12 @@ func parseHosts(raw string) ([]string, error) {
 // assumes, so the first debugged function lands where a default launch
 // configuration already points.
 const defaultDebuggerPorts = "9229-9329"
+
+// defaultDebuggerWaitTimeout bounds the hold for a debugger client. Two
+// minutes is long enough to press F5 or open the Code tab after invoking, and
+// short enough that a forgotten overcast:debug-wait tag reads as a slow
+// invocation with a WARN rather than a hung one.
+const defaultDebuggerWaitTimeout = "120s"
 
 // resolveDebuggerListen validates an OVERCAST_DEBUGGER_LISTEN value: one bind
 // address. Unlike OVERCAST_LISTEN it takes no list — each debug port is a
@@ -2570,6 +2585,11 @@ func Load() (*Config, error) {
 	cfg.DebuggerTimeout, err = ParseDebuggerTimeoutPolicy(os.Getenv("OVERCAST_DEBUGGER_TIMEOUT"))
 	if err != nil {
 		return nil, err
+	}
+	waitTimeoutStr := envOr("OVERCAST_DEBUGGER_WAIT_TIMEOUT", defaultDebuggerWaitTimeout)
+	cfg.DebuggerWaitTimeout, err = time.ParseDuration(waitTimeoutStr)
+	if err != nil || cfg.DebuggerWaitTimeout <= 0 {
+		return nil, fmt.Errorf("config: OVERCAST_DEBUGGER_WAIT_TIMEOUT %q is not a positive duration", waitTimeoutStr)
 	}
 
 	cfg.LambdaFetchRemoteLayers = envBool("LAMBDA_FETCH_REMOTE_LAYERS", false)

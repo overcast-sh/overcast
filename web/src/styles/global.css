@@ -667,6 +667,73 @@
   }
 }
 
+/* ─── CodeBrowser line decorations ───────────────────────────────────────
+   The classes `components/ui/code-browser.tsx` hands Monaco for its
+   `decorations` prop. Monaco paints them inside its own DOM, outside any
+   Tailwind utility, so they are plain rules on the same tokens: a breakpoint
+   is a danger-coloured dot, a disabled one an outline, and the current line a
+   warning wash with an arrow — the reading VS Code trained. Both themes
+   resolve through the variables. */
+.oc-gutter-glyph {
+  position: relative;
+}
+.oc-gutter-glyph::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 0.65em;
+  height: 0.65em;
+  border-radius: 9999px;
+  background-color: var(--danger);
+}
+.oc-gutter-glyph-muted::before {
+  background-color: transparent;
+  box-shadow: inset 0 0 0 2px var(--danger);
+  opacity: 0.6;
+}
+/* A breakpoint the runtime has not placed yet: a hollow grey ring, so it
+   reads as "not in effect" rather than as disabled (the dim red ring). */
+.oc-gutter-glyph-pending::before {
+  background-color: transparent;
+  box-shadow: inset 0 0 0 2px var(--fg-muted);
+}
+.oc-line-current {
+  background-color: var(--warning-muted);
+}
+.oc-gutter-current {
+  position: relative;
+}
+.oc-gutter-current::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 0;
+  height: 0;
+  border-top: 0.4em solid transparent;
+  border-bottom: 0.4em solid transparent;
+  border-left: 0.7em solid var(--warning);
+}
+/* A breakpoint on the paused line: the dot sits under the arrow. */
+.oc-gutter-glyph.oc-gutter-current::before {
+  width: 0.65em;
+  height: 0.65em;
+  border: 0;
+  background-color: var(--danger);
+}
+.oc-gutter-glyph.oc-gutter-current::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 0;
+  height: 0;
+  border-top: 0.4em solid transparent;
+  border-bottom: 0.4em solid transparent;
+  border-left: 0.7em solid var(--warning);
+}
+
 /* ─── React Flow — controls (zoom/fit buttons) ──────────────────────────
    These must live OUTSIDE @layer base. ReactFlow's own styles (imported via
    "@xyflow/react/dist/style.css") are unlayered — in CSS, unlayered rules

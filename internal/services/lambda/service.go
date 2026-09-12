@@ -491,6 +491,8 @@ type Service struct {
 	// the container runtime and the pool once Docker is up. Nil when the
 	// service was built without one, which turns the feature off.
 	debugger *debugger.Manager
+	// debugScanOnce guards ScanTagged's one pass over the store.
+	debugScanOnce sync.Once
 	// stop is closed by Stop; it ends the background re-probe loop that runs
 	// when Docker was not available at startup.
 	stop     chan struct{}
@@ -545,6 +547,16 @@ func (s *Service) WaitReady() { s.initWg.Wait() }
 // ARN in the setup block so the tagging command is copy-paste ready. A
 // function that does not exist, or another service's resource, is not ours
 // to describe.
+//
+// A *tagged* function that has not cold-started yet has no target either —
+// registration used to happen only at the first container start — and it
+// read "not tagged" here, which told the reader to add the tag they had
+// already added and offered no console session until they had invoked once.
+// So a tagged function is registered on describe, exactly as its cold start
+// would register it (the same Ensure, so the cold start finds the target and
+// binds the container to it): the Debug tab then reads unbound, offers the
+// console, and a session opened before the first invoke waits for the
+// container instead of not existing.
 func (s *Service) DescribeUntagged(ctx context.Context, service debugger.Service, resource string) (debugger.Descriptor, bool) {
 	if service != debugger.ServiceLambda {
 		return debugger.Descriptor{}, false
@@ -553,7 +565,50 @@ func (s *Service) DescribeUntagged(ctx context.Context, service debugger.Service
 	if aerr != nil || fn == nil {
 		return debugger.Descriptor{}, false
 	}
+	if t := s.registerTaggedDebugTarget(ctx, fn); t != nil {
+		return t.Descriptor(), true
+	}
 	return debugger.UntaggedDescriptor(debugger.ServiceLambda, fn.Name, "", fn.ARN), true
+}
+
+// registerTaggedDebugTarget registers fn's debug target ahead of its first
+// cold start when a tag asks for one — the handler's syncDebugTarget, which
+// needs the manager and the record, not Docker — and returns nil for an
+// untagged function or a service built without a manager. The image working
+// directory an image function's remote root wants is not known before a pull,
+// so the target carries the zip default until the cold start sets the real
+// one.
+func (s *Service) registerTaggedDebugTarget(ctx context.Context, fn *Function) *debugger.Target {
+	if s.handler == nil {
+		return nil
+	}
+	return s.handler.syncDebugTarget(ctx, fn)
+}
+
+// ScanTagged implements debugger.TaggedScanner: the first target list after
+// a start registers every tagged function the store already holds, so a
+// function tagged before a restart is listed — and the function list's badge
+// shows it — without a page visit or an invocation first. Once per process,
+// lazily from the handler rather than from New, which must not read the
+// store (docs/plans/compute-debugger-console.md § 6); every later call is a
+// Once check. Functions created, tagged or updated after the scan register
+// themselves as they change.
+func (s *Service) ScanTagged(ctx context.Context) {
+	s.debugScanOnce.Do(func() {
+		if s.debugger == nil || s.handler == nil {
+			return
+		}
+		// Every region: the console's list is not region-scoped, and a
+		// function's tags live on its record wherever it was created.
+		fns, aerr := s.ls.listAllFunctions(ctx)
+		if aerr != nil {
+			s.log.Warn("debugger: could not scan functions for debug tags", zap.String("error", aerr.Message))
+			return
+		}
+		for _, fn := range fns {
+			s.handler.syncDebugTarget(ctx, fn)
+		}
+	})
 }
 
 // RuntimeAPIListenStatus reports how the shared Runtime API listener's bind

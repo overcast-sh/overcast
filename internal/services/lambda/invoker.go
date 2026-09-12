@@ -295,6 +295,9 @@ func (inv *ServiceInvoker) Invoke(ctx context.Context, functionName string, payl
 	}
 
 	// No tail: InvokeOutcome carries no log field, so nothing would read it.
+	// A function tagged to wait for a debugger is held here as on the HTTP
+	// paths; this path bounds nothing itself, so the hold is all it adds.
+	inv.h.awaitDebugger(ctx, fn, inst)
 	invokeStart := inv.h.clk.Now()
 	result, err := inst.Invoke(ctx, payload, InvokeOptions{})
 	invokeDuration := inv.h.clk.Now().Sub(invokeStart)

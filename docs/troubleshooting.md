@@ -29,6 +29,7 @@ Find the symptom, follow the link. If nothing matches, start the daemon with
 | The console freezes while Lambdas run | [HTTPS and HTTP/2](./https.md) — it is the browser's 6-connection limit |
 | My file edits are not reaching a container | [The inner loop § When it does not work](./local-dev.md#when-it-does-not-work) |
 | My breakpoints never hit inside a function or task | [Step debugging § When it does not work](./debugger.md#when-it-does-not-work) |
+| The console's **Debug in console** button is missing or disabled, or the session keeps waiting for a container | [Debugging in the console § When it does not work](./debugger-console.md#when-it-does-not-work) |
 | It all feels slow | [Performance](./performance.md) — usually the client, not the emulator |
 | Something that worked on LocalStack does not here | [Migrating from LocalStack § Troubleshooting](./migration-from-localstack.md#troubleshooting) |
 | An operation returns `501 Not Implemented` | The service's page under [Reference index § Services](./README.md#services) — it is not emulated yet |
