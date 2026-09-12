@@ -1149,6 +1149,13 @@ export interface DebuggerTarget {
   localRoot: string
   timeoutPolicy: string
   /**
+   * WaitForDebugger is TagWait as parsed: an invocation of this target
+   * with no client attached is held for one before its event is
+   * dispatched (Lambda only; see TagWait). The console toggles it with
+   * TagResource/UntagResource and reads it back here.
+   */
+  waitForDebugger: boolean
+  /**
    * ConsoleDebug says the console can open a session of its own on this
    * target — true only for a protocol it ships a client for (the
    * inspector). BridgePath is where: the /_overcast/... path of the

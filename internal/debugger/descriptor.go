@@ -31,6 +31,12 @@ type Descriptor struct {
 	LocalRoot      string `json:"localRoot"` // as the user wrote it; "" when unknown
 	TimeoutPolicy  string `json:"timeoutPolicy"`
 
+	// WaitForDebugger is TagWait as parsed: an invocation of this target
+	// with no client attached is held for one before its event is
+	// dispatched (Lambda only; see TagWait). The console toggles it with
+	// TagResource/UntagResource and reads it back here.
+	WaitForDebugger bool `json:"waitForDebugger"`
+
 	// ConsoleDebug says the console can open a session of its own on this
 	// target — true only for a protocol it ships a client for (the
 	// inspector). BridgePath is where: the /_overcast/... path of the
@@ -120,24 +126,25 @@ func UntaggedDescriptor(service Service, resource, container, arn string) Descri
 func (t *Target) Descriptor() Descriptor {
 	t.mu.Lock()
 	d := Descriptor{
-		ID:            t.id,
-		Service:       string(t.service),
-		Resource:      t.resource,
-		Container:     t.container,
-		Enabled:       t.enabled,
-		Reason:        t.reason,
-		Listen:        Listen{Host: dialHost(t.host), Port: t.port},
-		State:         string(t.stateLocked()),
-		AttachedSince: formatTime(t.attachedSince),
-		PausedSince:   formatTime(t.pausedSince),
-		ContainerID:   t.containerID,
-		Upstream:      t.upstream,
-		RemoteRoot:    t.remoteRoot,
-		LocalRoot:     t.spec.SourcePathRaw,
-		TimeoutPolicy: t.policy.String(),
-		BridgePath:    BridgePath(t.service, t.resource, t.container),
-		Setup:         SetupFor(t.service, t.arn),
-		Editors:       []Editor{},
+		ID:              t.id,
+		Service:         string(t.service),
+		Resource:        t.resource,
+		Container:       t.container,
+		Enabled:         t.enabled,
+		Reason:          t.reason,
+		Listen:          Listen{Host: dialHost(t.host), Port: t.port},
+		State:           string(t.stateLocked()),
+		AttachedSince:   formatTime(t.attachedSince),
+		PausedSince:     formatTime(t.pausedSince),
+		ContainerID:     t.containerID,
+		Upstream:        t.upstream,
+		RemoteRoot:      t.remoteRoot,
+		LocalRoot:       t.spec.SourcePathRaw,
+		TimeoutPolicy:   t.policy.String(),
+		WaitForDebugger: t.spec.Wait,
+		BridgePath:      BridgePath(t.service, t.resource, t.container),
+		Setup:           SetupFor(t.service, t.arn),
+		Editors:         []Editor{},
 	}
 	protocol := t.res.Protocol
 	t.mu.Unlock()

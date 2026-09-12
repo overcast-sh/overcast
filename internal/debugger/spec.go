@@ -41,6 +41,13 @@ const (
 	// passthrough. Required for images and custom runtimes when nothing in
 	// the environment gives the protocol away.
 	TagProtocol = "overcast:debug-protocol"
+	// TagWait holds an invocation whose target has no attached client until
+	// one attaches (Target.AwaitClient), so a console or editor that attaches
+	// on the cold start sees its breakpoints bind before the handler runs.
+	// It is parsed for every service because the spec is shared, but only
+	// Lambda has an invocation to hold: an ECS task starts and runs, so on a
+	// task definition the tag reaches the descriptor and nothing else.
+	TagWait = "overcast:debug-wait"
 	// TagSourcePath is the local root editors map the container's code root
 	// to. It falls back to TagHotReloadPath, which usually names the same tree.
 	TagSourcePath = "overcast:source-path"
@@ -70,6 +77,9 @@ type Spec struct {
 	// Protocol is the TagProtocol override, validated against the default
 	// registry; empty means resolve.
 	Protocol string
+	// Wait is TagWait: hold an invocation for a client before dispatching
+	// its event. Lambda only, in effect; see TagWait.
+	Wait bool
 	// SourcePath is the local root as the daemon would see it (normalised
 	// through hostpath), used to decide whether a root is known.
 	SourcePath string
@@ -129,7 +139,7 @@ type tagValues map[string]string
 // a container suffix. It is the fast path: a resource with no such tag costs
 // one prefix check per tag and no allocation.
 func isDebuggerTag(key string) bool {
-	for _, base := range [...]string{TagDebug, TagPort, TagProtocol, TagSourcePath, TagHotReloadPath} {
+	for _, base := range [...]string{TagDebug, TagPort, TagProtocol, TagWait, TagSourcePath, TagHotReloadPath} {
 		if key == base || strings.HasPrefix(key, base+"/") {
 			return true
 		}
@@ -274,12 +284,18 @@ func specFromValues(service Service, container string, values tagValues, problem
 	}
 
 	if raw, ok := values[TagDebug]; ok {
-		switch strings.ToLower(strings.TrimSpace(raw)) {
-		case "true", "1", "yes":
-			spec.Tagged = true
-		case "false", "0", "no":
-		default:
+		if on, ok := parseBool(raw); ok {
+			spec.Tagged = on
+		} else {
 			problems = append(problems, Problem{Key: keyFor(TagDebug), Value: raw,
+				Reason: "the value is not a boolean", Hint: "use true or false"})
+		}
+	}
+	if raw, ok := values[TagWait]; ok {
+		if on, ok := parseBool(raw); ok {
+			spec.Wait = on
+		} else {
+			problems = append(problems, Problem{Key: keyFor(TagWait), Value: raw,
 				Reason: "the value is not a boolean", Hint: "use true or false"})
 		}
 	}
@@ -323,6 +339,18 @@ func specFromValues(service Service, container string, values tagValues, problem
 		}
 	}
 	return spec, problems
+}
+
+// parseBool reads a boolean tag value the way TagDebug always has: true, 1
+// and yes are on, false, 0 and no are off, anything else is a problem.
+func parseBool(raw string) (value, ok bool) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "true", "1", "yes":
+		return true, true
+	case "false", "0", "no":
+		return false, true
+	}
+	return false, false
 }
 
 func firstOr(list []string, fallback string) string {

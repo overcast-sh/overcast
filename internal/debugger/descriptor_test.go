@@ -178,7 +178,7 @@ func TestTarget_descriptorShape(t *testing.T) {
 	// Given: a bound inspector target with everything set
 	mock := clock.NewMock()
 	m := newTestManager(t, mock, config.DebuggerTimeoutPaused)
-	spec := Spec{Service: ServiceLambda, Tagged: true, FlagOn: true, SourcePath: "/c/src/app", SourcePathRaw: `C:\src\app`}
+	spec := Spec{Service: ServiceLambda, Tagged: true, FlagOn: true, Wait: true, SourcePath: "/c/src/app", SourcePathRaw: `C:\src\app`}
 	tgt, err := m.Ensure("lambda/my-fn", spec, Resolution{Protocol: inspector{}, Source: SourceRuntime})
 	require.NoError(t, err)
 	tgt.SetUpstream("127.0.0.1:55012")
@@ -199,7 +199,7 @@ func TestTarget_descriptorShape(t *testing.T) {
 		"enabled": true, "reason": "", "protocol": "inspector", "protocolSource": "runtime",
 		"state": "listening", "attachedSince": "", "pausedSince": "", "containerId": "0a1b",
 		"upstream": "127.0.0.1:55012", "remoteRoot": "/var/task", "localRoot": `C:\src\app`,
-		"timeoutPolicy": "paused",
+		"timeoutPolicy": "paused", "waitForDebugger": true,
 	} {
 		assert.Equal(t, want, got[key], key)
 	}

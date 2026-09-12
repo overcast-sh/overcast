@@ -58,6 +58,21 @@ func TestSpecFromTags_tagForms(t *testing.T) {
 			want: Spec{Service: ServiceLambda, FlagOn: true, Tagged: true, Protocol: "jdwp"},
 		},
 		{
+			name: "wait for a debugger",
+			tags: map[string]string{TagDebug: "true", TagWait: "true"},
+			want: Spec{Service: ServiceLambda, FlagOn: true, Tagged: true, Wait: true},
+		},
+		{
+			name: "wait spelled loosely, and off",
+			tags: map[string]string{TagDebug: "true", TagWait: " No "},
+			want: Spec{Service: ServiceLambda, FlagOn: true, Tagged: true},
+		},
+		{
+			name: "wait without debug is parsed but asks for nothing",
+			tags: map[string]string{TagWait: "true"},
+			want: Spec{Service: ServiceLambda, FlagOn: true, Wait: true},
+		},
+		{
 			name: "source path kept raw and normalised",
 			tags: map[string]string{TagDebug: "true", TagSourcePath: `C:\src\app`},
 			want: Spec{Service: ServiceLambda, FlagOn: true, Tagged: true, SourcePath: "/c/src/app", SourcePathRaw: `C:\src\app`},
@@ -125,6 +140,13 @@ func TestSpecFromTags_badValues(t *testing.T) {
 			wantKey: TagDebug,
 			wantHin: "true or false",
 			want:    Spec{Service: ServiceLambda, FlagOn: true},
+		},
+		{
+			name:    "wait not a boolean",
+			tags:    map[string]string{TagDebug: "true", TagWait: "later"},
+			wantKey: TagWait,
+			wantHin: "true or false",
+			want:    Spec{Service: ServiceLambda, FlagOn: true, Tagged: true},
 		},
 		{
 			name:    "port not a number",
@@ -195,18 +217,20 @@ func TestSpecsFromTaskTags_suffixes(t *testing.T) {
 		TagPort + "/app":        "5005",
 		TagDebug + "/worker":    "true",
 		TagProtocol + "/worker": "dap",
+		TagWait + "/worker":     "true",
 		TagSourcePath + "/app":  "/home/dev/app",
 	}
 
 	// When: specs are resolved for the declared containers
 	specs, problems := SpecsFromTaskTags(tags, []string{"app", "worker"}, true)
 
-	// Then: each container has its own spec and nothing was refused
+	// Then: each container has its own spec and nothing was refused — the
+	// wait tag included, which ECS parses and carries without acting on
 	assert.Empty(t, problems)
 	require.Len(t, specs, 2)
 	assert.Equal(t, Spec{Service: ServiceECS, Container: "app", FlagOn: true, Tagged: true, Port: 5005,
 		SourcePath: "/home/dev/app", SourcePathRaw: "/home/dev/app"}, specs["app"])
-	assert.Equal(t, Spec{Service: ServiceECS, Container: "worker", FlagOn: true, Tagged: true, Protocol: "dap"}, specs["worker"])
+	assert.Equal(t, Spec{Service: ServiceECS, Container: "worker", FlagOn: true, Tagged: true, Protocol: "dap", Wait: true}, specs["worker"])
 }
 
 func TestSpecsFromTaskTags_bareKey(t *testing.T) {

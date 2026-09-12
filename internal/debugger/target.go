@@ -150,8 +150,45 @@ func (t *Target) Resource() string { return t.resource }
 // Container is the ECS container name; empty for Lambda.
 func (t *Target) Container() string { return t.container }
 
-// Spec is what the tags asked for.
-func (t *Target) Spec() Spec { return t.spec }
+// Spec is what the tags asked for, as of the last Ensure.
+func (t *Target) Spec() Spec {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.spec
+}
+
+// Wait reports TagWait: an invocation with no client attached is held for
+// one before its event is dispatched. See AwaitClient.
+func (t *Target) Wait() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.spec.Wait
+}
+
+// setWait applies a changed TagWait in place. It is the one part of a spec
+// Ensure updates rather than replaces the target over: nothing about it is
+// baked into the listener or the container, and replacing the target would
+// drop the very client the console toggled it for. Under the strict policy
+// the tag has no effect, said once per turn-on rather than per invocation.
+func (t *Target) setWait(wait bool) {
+	t.mu.Lock()
+	changed := t.spec.Wait != wait
+	t.spec.Wait = wait
+	t.mu.Unlock()
+	if changed && wait {
+		t.warnWaitIgnoredUnderStrict()
+	}
+}
+
+// warnWaitIgnoredUnderStrict is the WARN a TagWait earns under
+// OVERCAST_DEBUGGER_TIMEOUT=strict, where nothing may hold an invocation.
+func (t *Target) warnWaitIgnoredUnderStrict() {
+	if t.policy != config.DebuggerTimeoutStrict {
+		return
+	}
+	t.log.Warn("debugger: "+TagWait+" is ignored under OVERCAST_DEBUGGER_TIMEOUT=strict — invocations are not held for a client",
+		zap.String("hint", "use the attached or paused policy to hold the first invocation for a debugger"))
+}
 
 // Protocol is the resolved protocol; nil for an inert target with no
 // resolution.
@@ -303,6 +340,14 @@ func (t *Target) SetResourceARN(arn string) {
 	t.mu.Lock()
 	t.arn = arn
 	t.mu.Unlock()
+}
+
+// RemoteRoot is the container path editors map the local root to, or empty
+// until a service sets it.
+func (t *Target) RemoteRoot() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.remoteRoot
 }
 
 // Upstream is the address new connections are forwarded to; empty when none.
@@ -568,6 +613,7 @@ func (m *Manager) Ensure(id string, spec Spec, res Resolution) (*Target, error) 
 	case closed:
 		return nil, ErrClosed
 	case ok && existing.sameRequest(spec, res):
+		existing.setWait(spec.Wait)
 		return existing, nil
 	case ok:
 		existing.close()
@@ -596,6 +642,9 @@ func (m *Manager) Ensure(id string, spec Spec, res Resolution) (*Target, error) 
 		t.reason = "no protocol resolved"
 	default:
 		t.enabled = true
+		if spec.Wait {
+			t.warnWaitIgnoredUnderStrict()
+		}
 		m.bind(t)
 		switch {
 		case !t.Bound():
@@ -620,14 +669,20 @@ func (m *Manager) Ensure(id string, spec Spec, res Resolution) (*Target, error) 
 }
 
 // sameRequest reports whether a repeated Ensure asks for what the target
-// already is, so the common per-invoke call is a map lookup.
+// already is, so the common per-invoke call is a map lookup. Wait is left
+// out: it changes nothing the listener or the container carries, so Ensure
+// applies it in place (setWait) rather than replacing the target.
 func (t *Target) sameRequest(spec Spec, res Resolution) bool {
 	sameProtocol := (t.res.Protocol == nil) == (res.Protocol == nil) &&
 		(res.Protocol == nil || t.res.Protocol.Name() == res.Protocol.Name())
+	t.mu.Lock()
+	current := t.spec
+	t.mu.Unlock()
+	current.Wait, spec.Wait = false, false
 	return sameProtocol &&
 		t.res.Port == res.Port &&
 		t.res.Source == res.Source &&
-		t.spec == spec
+		current == spec
 }
 
 // bind opens the target's listener: the fixed port, or the lowest free port
