@@ -381,7 +381,48 @@ covers the bridge against a real Node container.
 | session | breakpoint persistence and re-apply on `scriptParsed`; pause/resume state; watch evaluation on frame change |
 | components | toolbar keys, gutter toggle, Locals expand, Watch edit, Call stack select, Breakpoints edit, console REPL, Test→Code navigation on pause |
 
-## 6. Later
+## 6. Follow-ups decided 2026-09-12 (Phase F, same PR)
+
+The four questions the polish pass left were answered: the first-invocation
+hold is a per-function toggle; auto-restore, create-time registration and
+resizable panels are all in, chosen for the best experience. A fifth item
+came from review: a source-maps on/off switch. Contracts:
+
+- **Wait for a debugger** (`overcast:debug-wait=true`, `Spec.Wait`). With it
+  set, an invocation whose target has no attached client is held after the
+  environment is acquired and before the event is dispatched, until a client
+  attaches plus a 750 ms settle, so a console or editor that attaches on the
+  cold start still sees its breakpoints bind before the handler runs. The
+  invocation clock is suspended while holding (it already is while attached).
+  The hold is bounded by `OVERCAST_DEBUGGER_WAIT_TIMEOUT` (default `120s`);
+  on expiry the invocation proceeds and a `WARN` says so. `Descriptor` gains
+  `waitForDebugger bool`. The console toggles it on the Debug tab and the idle
+  Code tab strip by calling the AWS `TagResource`/`UntagResource` operations
+  it already has — no new endpoint. Applies to editor sessions equally.
+- **Registration at create time.** `CreateFunction`, `TagResource`,
+  `UntagResource`, `UpdateFunctionConfiguration` and `DeleteFunction` keep the
+  `Manager` in step, and the first `ListTargets` after a restart scans the
+  store once (`sync.Once`, lazily) so the function list badge shows every
+  tagged function without a page visit. Describe-time registration stays.
+- **Auto-restore.** Starting a console session records
+  `localStorage["overcast-debug:<id>"].sessionOpen = true`; Stop clears it.
+  Mounting the provider with it set and `consoleDebug` true starts the
+  session again. Cheap-when-idle holds: nothing happens for a function the
+  user never opened a session on.
+- **Resizable panels.** A generic `ResizableSplit` primitive in
+  `web/src/components/ui/` (pointer drag, arrow keys on the focused handle,
+  min/max, sizes persisted per key in `localStorage`) used for the sidebar
+  width and the drawer height. No new dependency.
+- **Source maps on/off.** A *Source maps* switch in the Code tab's explorer
+  actions while a session is open, persisted per function
+  (`localStorage["overcast-debug:<id>"].sourceMaps`, default on). Off: no map
+  is loaded, no *Original* group, breakpoints bind on compiled lines, the call
+  stack shows compiled locations, and breakpoints that belong to original
+  files are listed in the Breakpoints panel as inactive with the reason.
+  *Show compiled* stays as the visibility toggle when maps are on and is now
+  remembered with the same key.
+
+## 7. Later
 
 DAP client for Python on the same bridge and panels; logpoints via
 `console.log` conditions; a "Restart container" that goes through the
