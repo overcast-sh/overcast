@@ -43,7 +43,10 @@ The status line under the button says what the session is doing:
 
 The invocation that starts a container — the first, or the first after hot
 reload replaced it — runs before the session reaches it and does not stop;
-the Test tab says so under the result, and the next one does.
+the Test tab says so under the result, and the next one does. **Wait for a
+debugger** on the Debug tab holds such an invocation until the session
+attaches — the `overcast:debug-wait` tag, in
+[Wait for a debugger](./debugger.md#wait-for-a-debugger).
 
 A console session is one more attached client of the function's debug port.
 The Debug tab's state chip reads `attached` and `paused` for it, and the
@@ -80,7 +83,7 @@ uses:
 
 The keys work from anywhere in the debug workspace — code, panels, drawer —
 and nowhere else, so they do nothing from the Test tab's editor. While a
-session is open F5 is Continue, never the browser's reload. A step that lands
+session is open F5 is Continue, not the browser's reload. A step that lands
 in the runtime's own code (its patched `console.log`, say) steps straight
 back out. **Restart container** sits on the strip disabled until it is wired
 to hot reload's replace path
@@ -90,9 +93,9 @@ to hot reload's replace path
 
 Invoke from the **Test** tab as usual. When execution stops, the page switches
 to the Code tab with the paused line marked and the toolbar naming the function
-and location. Continue to the end and the result lands in the Test tab as it
-always does; a toast says so while another tab is up. An invocation that
-finishes without pausing says why under its result.
+and location. Continue to the end and the result lands in the Test tab; a
+toast says so while another tab is up. An invocation that finishes without
+pausing says why under its result.
 
 The function's timeout clock is suspended while the session is open, exactly
 as for an attached editor, so a 3-second function can sit at a breakpoint for
@@ -155,7 +158,7 @@ keeps your edit.
 | No **Debug in console** button on the Debug tab | The runtime's protocol is not the inspector; Node.js only, so far | Attach an editor with the configurations beside it |
 | The button is disabled | The flag is off | [Turn the debugger on](./debugger.md#turning-it-on) |
 | "Waiting for a container — invoke once", and nothing happens | No container exists before the first invocation | Invoke from the Test tab; the session attaches to the container that starts |
-| The invocation that started the container did not pause | It ran before the session reached the new container | Invoke again: the container is warm and the breakpoints are bound |
+| The invocation that started the container did not pause | It ran before the session reached the new container | Invoke again: the container is warm and the breakpoints are bound; or turn on **Wait for a debugger** |
 | The session dropped after an edit | Hot reload replaced the container | Nothing: it reconnects and re-applies breakpoints once the new container loads the code |
 | A breakpoint stays a hollow ring | The container has not loaded that file, or the path is not one it loads from `/var/task` | Invoke once so the file loads; otherwise open the file from the Code tab's list and set it there — for a bundle, in the original file the map lists |
 | A breakpoint in module-level code never pauses | Init runs before the session attaches | Put the first breakpoint inside the handler |

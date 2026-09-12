@@ -422,6 +422,46 @@ came from review: a source-maps on/off switch. Contracts:
   *Show compiled* stays as the visibility toggle when maps are on and is now
   remembered with the same key.
 
+**Phase F backend notes** (landed). The tag is `overcast:debug-wait`
+(`debugger.TagWait`, parsed by `specFromValues` for both services, so an ECS
+task definition carries it in its descriptor and nothing more), `Spec.Wait`,
+and `Descriptor.WaitForDebugger` (`waitForDebugger` in `api.gen.ts`). The
+hold is `Target.AwaitClient(ctx, timeout)` in `internal/debugger/wait.go`:
+subscribed to the attach event with a seeded start (no polling), then
+`SettleAfterAttach` (750 ms) measured from the attach — an attach a moment
+before the invocation still settles, one older than the settle is not waited
+on — bounded by `cfg.DebuggerWaitTimeout` (`OVERCAST_DEBUGGER_WAIT_TIMEOUT`,
+default `120s`, must be positive) and released by the caller's context. It
+returns `WaitSkipped` / `WaitAttached` / `WaitExpired` / `WaitCancelled` and
+the Lambda side (`Handler.awaitDebugger`) logs the expiry `WARN` naming the
+function, the tag and the timeout. One deliberate deviation from the § 6
+contract: the hold runs *before* `WithDeadline`, not as a suspended interval
+inside it. `Deadline()` is nominal — start + timeout — and the Runtime API
+sends it once as `Lambda-Runtime-Deadline-Ms`; a hold inside the deadline
+would have handed a function held for a minute a deadline already in the
+past. Holding first means the budget and the header both start at dispatch,
+which is what "suspended while holding" was meant to buy, and `WithDeadline`
+needed no change. Under `strict` the target skips the hold itself and warns
+once per turn-on. Wait is the one part of a `Spec` that `Ensure` applies in
+place (`sameRequest` ignores it): replacing the target would drop the very
+client the console toggled it for, and the tag is not in `debugTagKeys`, so
+it retires no environment. Every dispatch goes through
+`Handler.invocationContext` (hold, then bound): `invokeSyncOnce` (Invoke,
+function URLs and `InvokeWithResponseStream`, which reach `invokeSync`),
+`invokeAsyncOnce` (Event invokes, ESM-originated and in-process events),
+`InvokeFunctionSSE` (the console's Test tab); `ServiceInvoker.Invoke` (ESM
+batches, API Gateway) holds too but keeps its unbounded context. Registration
+is `Handler.syncDebugTarget`, called from `CreateFunction`, `TagResource`,
+`UntagResource` and `UpdateFunctionConfiguration`, and needing only the
+manager and the record, so it works before Docker is probed; `DeleteFunction`
+already released. An untagged function costs a map lookup unless it still has
+a target, which is re-resolved (kept if its environment carries a flag,
+released otherwise). `debugger.TaggedScanner` (`ScanTagged`) is the generic
+seam: `Handler.ListTargets` calls it on the describer when implemented, the
+router fans it out to each compute service that implements it, and Lambda's
+`Service.ScanTagged` lists every region's functions once under a `sync.Once`
+— lazily, never in `New`. ECS does not implement it yet.
+
 ## 7. Later
 
 DAP client for Python on the same bridge and panels; logpoints via
