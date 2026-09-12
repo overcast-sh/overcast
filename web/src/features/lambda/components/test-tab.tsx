@@ -24,7 +24,10 @@ import { summarisePlatformRecords } from "@/lib/log-format"
 import { fieldLabel, sectionLabel } from "@/lib/typography"
 import { cn } from "@/lib/utils"
 import { InvokeDebugHint } from "@/features/debugger/components/invoke-debug-hint"
-import { useOptionalDebugSession } from "@/features/debugger/session/hooks"
+import {
+  useOptionalDebugSession,
+  useOptionalDebugSessionState,
+} from "@/features/debugger/session/hooks"
 
 export function TestTab({
   name,
@@ -56,6 +59,17 @@ export function TestTab({
   // A console debug session waiting for a container is woken by the invoke
   // that starts one; absent on pages without the provider.
   const debugSession = useOptionalDebugSession()
+  const sessionOpen = useOptionalDebugSessionState((s) => s.status !== "idle", false)
+  const pauseCount = useOptionalDebugSessionState((s) => s.pauseCount, 0)
+  const connections = useOptionalDebugSessionState((s) => s.connections, 0)
+  const breakpointCount = useOptionalDebugSessionState((s) => s.breakpoints.length, 0)
+  // The pause and connection counts when the last invoke under a session
+  // was sent: a result arriving with no new pause means nothing stopped,
+  // which is worth a sentence, since the reader set breakpoints expecting
+  // it to — and a new connection since says why: the container this
+  // invocation started (or hot reload replaced) ran past them before the
+  // session reached it.
+  const [atInvoke, setAtInvoke] = useState<{ pauses: number; connections: number } | null>(null)
 
   const { mutate: saveEvent, isPending: isSaving } = useResourceMutation({
     options: putTestEventMutationOptions(),
@@ -82,8 +96,9 @@ export function TestTab({
   const handleInvoke = useCallback(() => {
     if (jsonError || isPending) return
     debugSession?.invokeStarted()
+    setAtInvoke(sessionOpen ? { pauses: pauseCount, connections } : null)
     void invoke.run()
-  }, [jsonError, isPending, debugSession, invoke])
+  }, [jsonError, isPending, debugSession, invoke, sessionOpen, pauseCount, connections])
 
   const handleSave = useCallback(() => {
     if (!eventName.trim() || jsonError) return
@@ -279,6 +294,12 @@ export function TestTab({
           </div>
         )}
 
+        {!isPending && result && sessionOpen && atInvoke?.pauses === pauseCount && (
+          <p role="status" className="text-xs text-fg-muted">
+            {noPauseExplanation(breakpointCount, connections > atInvoke.connections)}
+          </p>
+        )}
+
         {!isPending && result && (
           <div
             className={cn(
@@ -346,6 +367,23 @@ export function TestTab({
       </div>
     </div>
   )
+}
+
+/**
+ * Why an invocation under a session came back without a pause. The common
+ * first-time case is the container: it starts for the first invoke, and the
+ * session attaches to it after the code has already run past every
+ * breakpoint — the next invoke finds them bound.
+ */
+function noPauseExplanation(breakpoints: number, attachedDuringInvoke: boolean): string {
+  const count = `${breakpoints} breakpoint${breakpoints === 1 ? "" : "s"}`
+  if (breakpoints === 0) {
+    return "Finished without pausing — no breakpoints are set. Click a line's gutter on the Code tab to add one."
+  }
+  if (attachedDuringInvoke) {
+    return `Finished without pausing — the session attached to the container this invocation started, after the code had run past the ${count}. Invoke again: the container is warm and the breakpoints are bound.`
+  }
+  return `Finished without pausing — ${count} set, none reached. A breakpoint binds once the container loads its file, and one in module-level code never pauses: put it inside the handler.`
 }
 
 /** The parse error for an event that is not JSON; an empty event is allowed. */

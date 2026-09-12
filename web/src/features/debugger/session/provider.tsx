@@ -8,7 +8,7 @@
  * descriptor poll below runs only while a session is open — it is what
  * wakes a session waiting for a container once one appears.
  */
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react"
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { debuggerTargetQueryOptions } from "../data"
 import { DebugSessionContext } from "./context"
@@ -25,6 +25,12 @@ export interface DebugSessionProviderProps {
   fetchFile: (path: string) => Promise<string>
   /** Root-relative paths of the deployed files, once the source query has them. */
   files?: readonly string[]
+  /**
+   * Called when the descriptor names a different container than the one
+   * the session was last seen on — hot reload replaced it — so the page
+   * can re-read what the container runs. Pass a stable callback.
+   */
+  onContainerReplaced?: () => void
   children: ReactNode
 }
 
@@ -38,6 +44,7 @@ function ScopedProvider({
   resource,
   fetchFile,
   files,
+  onContainerReplaced,
   children,
 }: DebugSessionProviderProps) {
   const [session] = useState(() => new DebugSession({ key: `${service}/${resource}`, fetchFile }))
@@ -55,9 +62,15 @@ function ScopedProvider({
     enabled: status !== "idle" && status !== "error",
   })
   const containerId = target?.containerId ?? ""
+  const seenContainerRef = useRef<string | null>(null)
   useEffect(() => {
-    if (containerId) session.containerChanged()
-  }, [session, containerId])
+    if (!containerId) return
+    session.containerChanged()
+    if (seenContainerRef.current !== null && seenContainerRef.current !== containerId) {
+      onContainerReplaced?.()
+    }
+    seenContainerRef.current = containerId
+  }, [session, containerId, onContainerReplaced])
 
   return <DebugSessionContext.Provider value={session}>{children}</DebugSessionContext.Provider>
 }

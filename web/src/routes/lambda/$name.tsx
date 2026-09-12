@@ -1,12 +1,13 @@
 /**
  * Lambda function detail page — Overview, Code, Test, Debug, and Configuration tabs.
  */
-import { useState, useCallback, useEffect, useMemo } from "react"
+import { useState, useCallback, useEffect, useMemo, useRef } from "react"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useResourceMutation } from "@/hooks/use-resource-mutation"
 import { Button } from "@/components/ui/button"
 import { Spinner, PageHeader } from "@/components/ui/primitives"
+import { useToast } from "@/components/ui/toast"
 import { ApplicationOwnershipBanner } from "@/components/application-ownership-banner"
 import {
   lambdaFunctionsQueryOptions,
@@ -113,6 +114,34 @@ function FunctionDetail() {
   const showCodeOnPause = useCallback(() => switchTab("code"), [switchTab])
   const invoke = useLambdaInvoke(name)
 
+  // The result lands on the Test tab. When it arrives while another tab is
+  // up — the pause moved the reader to the code, and Continue ran the
+  // function to its end — a toast says so, or the reader is left looking at
+  // a pane that went quiet with no idea the invocation finished.
+  const { toast } = useToast()
+  const activeTabRef = useRef(activeTab)
+  useEffect(() => {
+    activeTabRef.current = activeTab
+  }, [activeTab])
+  const { isPending: invokePending, result: invokeResult, error: invokeError } = invoke
+  useEffect(() => {
+    if (invokePending || (!invokeResult && !invokeError) || activeTabRef.current === "test") return
+    const failed = invokeError !== null || Boolean(invokeResult?.functionError)
+    toast({
+      variant: failed ? "danger" : "success",
+      title: invokeError ? "Invocation failed" : failed ? "Execution failed" : "Execution succeeded",
+      description: "The result is on the Test tab.",
+      descriptionKind: "prose",
+    })
+  }, [invokePending, invokeResult, invokeError, toast])
+
+  // Hot reload replaced the container under a debug session: the files the
+  // Code tab shows may have changed with it.
+  const queryClient = useQueryClient()
+  const refreshSource = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: lambdaKeys.sourceFiles(name) })
+  }, [queryClient, name])
+
   if (functionsLoading) {
     return (
       <div className="flex items-center justify-center py-32">
@@ -158,6 +187,7 @@ function FunctionDetail() {
         resource={name}
         fetchFile={fetchDeployedFile}
         files={deployedFiles}
+        onContainerReplaced={refreshSource}
       >
         <OnPause onPause={showCodeOnPause} />
         <Tabs selectedKey={activeTab} onSelectionChange={switchTab}>

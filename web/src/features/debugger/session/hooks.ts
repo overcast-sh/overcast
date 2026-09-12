@@ -3,7 +3,7 @@
  * state through `useDebugSessionState` and act through the session object
  * itself; neither names a protocol.
  */
-import { useContext, useSyncExternalStore } from "react"
+import { useCallback, useContext, useSyncExternalStore } from "react"
 import { DebugSessionContext } from "./context"
 import type { DebugSession, DebugSessionState } from "./session"
 
@@ -28,4 +28,23 @@ export function useOptionalDebugSession(): DebugSession | null {
 export function useDebugSessionState<T>(selector: (state: DebugSessionState) => T): T {
   const session = useDebugSession()
   return useSyncExternalStore(session.subscribe, () => selector(session.getState()))
+}
+
+/**
+ * `useDebugSessionState` for a surface that may render without a provider
+ * (the Test tab inside the invoke dialog): `fallback` is the slice there.
+ * Same rule on the selector; `fallback` must be stable too.
+ */
+export function useOptionalDebugSessionState<T>(
+  selector: (state: DebugSessionState) => T,
+  fallback: T,
+): T {
+  const session = useOptionalDebugSession()
+  const subscribe = useCallback(
+    (listener: () => void) => (session ? session.subscribe(listener) : () => {}),
+    [session],
+  )
+  return useSyncExternalStore(subscribe, () =>
+    session ? selector(session.getState()) : fallback,
+  )
 }
