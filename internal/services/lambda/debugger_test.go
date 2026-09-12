@@ -546,14 +546,11 @@ func TestService_describeUntagged(t *testing.T) {
 }
 
 func TestService_describeUntagged_registersATaggedFunctionBeforeItsFirstColdStart(t *testing.T) {
-	// Given: a service whose runtime carries a debug manager, holding one
+	// Given: a service with the Lambda debugger on and a manager — and no
+	// container runtime yet, as before Docker has been probed — holding one
 	// tagged function and one untagged one, neither ever invoked
-	daemon := newRecordingDaemon(t)
-	cr := newDaemonContainerRuntime(t, daemon.Server)
-	cr.cfg.LambdaDebugger = true
-	m := debuggertest.NewManager(t, clock.New(), config.DebuggerTimeoutAttached)
-	cr.SetDebugger(m)
-	svc := &Service{ls: newLambdaStore(state.NewMemoryStore(), "us-east-1", clock.NewMock()), containerRuntime: cr}
+	h, m, _ := newDebugHandler(t, clock.NewMock(), config.DebuggerTimeoutAttached, 0)
+	svc := &Service{ls: h.ls, handler: h, debugger: m}
 	tagged := debugTaggedNodeFunction("tagged")
 	plain := &Function{Name: "plain", ARN: "arn:aws:lambda:us-east-1:000000000000:function:plain", Runtime: "nodejs22.x"}
 	for _, fn := range []*Function{tagged, plain} {

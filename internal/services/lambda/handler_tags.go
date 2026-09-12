@@ -65,6 +65,7 @@ func (h *Handler) tagResource(w http.ResponseWriter, r *http.Request) {
 		protocol.WriteJSONError(w, r, aerr)
 		return
 	}
+	h.syncDebugTargetForTagWrite(r.Context(), store)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -91,7 +92,23 @@ func (h *Handler) untagResource(w http.ResponseWriter, r *http.Request) {
 		protocol.WriteJSONError(w, r, aerr)
 		return
 	}
+	h.syncDebugTargetForTagWrite(r.Context(), store)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// syncDebugTargetForTagWrite re-reads a function after its tags changed and
+// keeps its debug target in step (syncDebugTarget): the overcast:debug* tags
+// are what the console's toggles write, and the Debug tab reads the result
+// back from the target list. Tags on an event source mapping change nothing.
+func (h *Handler) syncDebugTargetForTagWrite(ctx context.Context, store resourceTagStore) {
+	if _, isFunction := store.TagStore.(functionTagStore); !isFunction {
+		return
+	}
+	fn, aerr := h.ls.getFunction(ctx, store.key)
+	if aerr != nil || fn == nil {
+		return
+	}
+	h.syncDebugTarget(ctx, fn)
 }
 
 // listTags handles GET /2017-03-31/tags/{Resource}.

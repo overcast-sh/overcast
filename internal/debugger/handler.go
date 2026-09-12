@@ -20,6 +20,16 @@ type Describer interface {
 	DescribeUntagged(ctx context.Context, service Service, resource string) (Descriptor, bool)
 }
 
+// TaggedScanner is the optional second half of a Describer: a service that
+// can register every tagged resource its store already holds, so the first
+// ListTargets after a start lists resources tagged before a restart without
+// a describe or a run first. The service owns the once-only: the handler
+// calls it on every list, and a service that has scanned returns at once. A
+// describer that does not implement it is simply not scanned.
+type TaggedScanner interface {
+	ScanTagged(ctx context.Context)
+}
+
 // Handler serves the emulator-only endpoints under /_overcast/debugger: the
 // target list, one target's descriptor, and the console's WebSocket bridge.
 // Routes are registered by internal/router; this only provides the handlers.
@@ -34,8 +44,12 @@ func NewHandler(m *Manager, describer Describer) *Handler {
 }
 
 // ListTargets is GET /_overcast/debugger/targets: every registered target,
-// ordered by id.
-func (h *Handler) ListTargets(w http.ResponseWriter, _ *http.Request) {
+// ordered by id — after the describer has had its one chance to register
+// what its store already held (TaggedScanner).
+func (h *Handler) ListTargets(w http.ResponseWriter, r *http.Request) {
+	if scanner, ok := h.describer.(TaggedScanner); ok {
+		scanner.ScanTagged(r.Context())
+	}
 	targets := h.manager.List()
 	list := TargetList{Targets: make([]Descriptor, 0, len(targets))}
 	for _, t := range targets {

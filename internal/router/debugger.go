@@ -24,6 +24,18 @@ func (d debuggerDescribers) DescribeUntagged(ctx context.Context, service debugg
 	return describer.DescribeUntagged(ctx, service, resource)
 }
 
+// ScanTagged implements debugger.TaggedScanner: each compute service that
+// can scan its store for tagged resources does so; one that cannot yet is
+// skipped. The services own their once-only, so this is cheap after the
+// first list.
+func (d debuggerDescribers) ScanTagged(ctx context.Context) {
+	for _, describer := range d {
+		if scanner, ok := describer.(debugger.TaggedScanner); ok {
+			scanner.ScanTagged(ctx)
+		}
+	}
+}
+
 // registerDebuggerRoutes mounts the emulator-only debugger endpoints
 // (docs/plans/compute-debugger.md § 6): the target list, one target's
 // descriptor, and the console's WebSocket bridge onto a target

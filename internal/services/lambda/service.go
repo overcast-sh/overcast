@@ -491,6 +491,8 @@ type Service struct {
 	// the container runtime and the pool once Docker is up. Nil when the
 	// service was built without one, which turns the feature off.
 	debugger *debugger.Manager
+	// debugScanOnce guards ScanTagged's one pass over the store.
+	debugScanOnce sync.Once
 	// stop is closed by Stop; it ends the background re-probe loop that runs
 	// when Docker was not available at startup.
 	stop     chan struct{}
@@ -570,22 +572,43 @@ func (s *Service) DescribeUntagged(ctx context.Context, service debugger.Service
 }
 
 // registerTaggedDebugTarget registers fn's debug target ahead of its first
-// cold start when a tag asks for one, and returns nil for an untagged
-// function or a service with no container runtime (Docker not probed yet).
-// The image working directory an image function's remote root wants is not
-// known before a pull, so the target carries the zip default until the cold
-// start sets the real one.
+// cold start when a tag asks for one — the handler's syncDebugTarget, which
+// needs the manager and the record, not Docker — and returns nil for an
+// untagged function or a service built without a manager. The image working
+// directory an image function's remote root wants is not known before a pull,
+// so the target carries the zip default until the cold start sets the real
+// one.
 func (s *Service) registerTaggedDebugTarget(ctx context.Context, fn *Function) *debugger.Target {
-	s.mu.Lock()
-	cr := s.containerRuntime
-	s.mu.Unlock()
-	if cr == nil || cr.debugger == nil {
+	if s.handler == nil {
 		return nil
 	}
-	if spec, _ := debugger.SpecFromTags(debugger.ServiceLambda, fn.Tags, cr.cfg.LambdaDebugger); !spec.Tagged {
-		return nil
-	}
-	return cr.debugTarget(ctx, fn, "", "")
+	return s.handler.syncDebugTarget(ctx, fn)
+}
+
+// ScanTagged implements debugger.TaggedScanner: the first target list after
+// a start registers every tagged function the store already holds, so a
+// function tagged before a restart is listed — and the function list's badge
+// shows it — without a page visit or an invocation first. Once per process,
+// lazily from the handler rather than from New, which must not read the
+// store (docs/plans/compute-debugger-console.md § 6); every later call is a
+// Once check. Functions created, tagged or updated after the scan register
+// themselves as they change.
+func (s *Service) ScanTagged(ctx context.Context) {
+	s.debugScanOnce.Do(func() {
+		if s.debugger == nil || s.handler == nil {
+			return
+		}
+		// Every region: the console's list is not region-scoped, and a
+		// function's tags live on its record wherever it was created.
+		fns, aerr := s.ls.listAllFunctions(ctx)
+		if aerr != nil {
+			s.log.Warn("debugger: could not scan functions for debug tags", zap.String("error", aerr.Message))
+			return
+		}
+		for _, fn := range fns {
+			s.handler.syncDebugTarget(ctx, fn)
+		}
+	})
 }
 
 // RuntimeAPIListenStatus reports how the shared Runtime API listener's bind
