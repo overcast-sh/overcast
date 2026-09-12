@@ -32,6 +32,12 @@ interface LogViewerProps {
    * `LogPanel` got.
    */
   filterMatcher?: RegExp | null
+  /**
+   * Keep the newest row in view as rows arrive, as a terminal does — for a
+   * live tail. Scrolling up releases it until the reader scrolls back to
+   * the bottom, so reading an older row is not fought over.
+   */
+  follow?: boolean
 }
 
 /**
@@ -70,6 +76,7 @@ export function LogViewer({
   showModeToggle = true,
   className,
   filterMatcher = null,
+  follow = false,
 }: LogViewerProps) {
   const [mode, setMode] = useState<"table" | "plain">(defaultMode)
   const [formatted, setFormatted] = useState(false)
@@ -139,6 +146,17 @@ export function LogViewer({
     virtualizer.measure()
   }, [virtualizer, mode, expandedIndices])
 
+  // Following: stuck to the bottom until the reader scrolls away from it.
+  const stuckRef = useRef(true)
+  const onScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget
+    stuckRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24
+  }, [])
+  useEffect(() => {
+    if (!follow || !stuckRef.current || events.length === 0) return
+    virtualizer.scrollToIndex(events.length - 1, { align: "end" })
+  }, [follow, events.length, virtualizer])
+
   return (
     <div className={cn("flex min-h-0 flex-1 flex-col", className)}>
       {showModeToggle && (
@@ -179,7 +197,11 @@ export function LogViewer({
         </div>
       )}
 
-      <div ref={parentRef} className="min-h-0 flex-1 overflow-auto rounded bg-bg-elevated p-2">
+      <div
+        ref={parentRef}
+        onScroll={follow ? onScroll : undefined}
+        className="min-h-0 flex-1 overflow-auto rounded bg-bg-elevated p-2"
+      >
         {loading && events.length === 0 && (
           <div className="py-4 text-center text-2xs text-fg-muted">Loading logs...</div>
         )}

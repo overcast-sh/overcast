@@ -692,6 +692,12 @@
   box-shadow: inset 0 0 0 2px var(--danger);
   opacity: 0.6;
 }
+/* A breakpoint the runtime has not placed yet: a hollow grey ring, so it
+   reads as "not in effect" rather than as disabled (the dim red ring). */
+.oc-gutter-glyph-pending::before {
+  background-color: transparent;
+  box-shadow: inset 0 0 0 2px var(--fg-muted);
+}
 .oc-line-current {
   background-color: var(--warning-muted);
 }

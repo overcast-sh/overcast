@@ -26,6 +26,7 @@ import { useState, useCallback, useEffect, useMemo, useRef, type ReactNode } fro
 import Editor, { type OnMount } from "@monaco-editor/react"
 import type * as Monaco from "monaco-editor"
 import { ChevronRight, ChevronDown, FileCode, FolderOpen, Folder, X } from "lucide-react"
+import { useIsDarkTheme } from "@/hooks/use-theme"
 import { languageForPath } from "@/lib/language-for-path"
 import { sectionLabel } from "@/lib/typography"
 import { cn } from "@/lib/utils"
@@ -55,14 +56,15 @@ export interface LoadedFile {
 }
 
 /**
- * A marker on one line of one file. `glyph` and `glyph-muted` are dots in
- * the gutter (a breakpoint and a disabled one, to a debugger); `current` is
- * a whole-line highlight with an arrow in the gutter (the paused line).
+ * A marker on one line of one file. `glyph`, `glyph-pending` and
+ * `glyph-muted` are dots in the gutter (to a debugger: a breakpoint in
+ * effect, one not yet placed, and a disabled one); `current` is a
+ * whole-line highlight with an arrow in the gutter (the paused line).
  */
 export interface LineDecoration {
   /** 1-based. */
   line: number
-  kind: "glyph" | "glyph-muted" | "current"
+  kind: "glyph" | "glyph-pending" | "glyph-muted" | "current"
   /** Hover text for the gutter marker. */
   title?: string
 }
@@ -121,6 +123,12 @@ export interface CodeBrowserProps {
   revealPosition?: RevealPosition | null
   /** Controls rendered at the right of the explorer header — a toggle, a filter. */
   explorerActions?: ReactNode
+  /**
+   * Bump when the files may have changed behind the browser — a redeploy,
+   * a hot reload. Every file the reader has not edited is forgotten and the
+   * open one read again through `loadFile`; an edited file keeps the edit.
+   */
+  contentVersion?: number
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -156,6 +164,12 @@ function decorationOptions(
   switch (decoration.kind) {
     case "glyph":
       return { glyphMarginClassName: "oc-gutter-glyph", glyphMarginHoverMessage: hover, stickiness }
+    case "glyph-pending":
+      return {
+        glyphMarginClassName: "oc-gutter-glyph oc-gutter-glyph-pending",
+        glyphMarginHoverMessage: hover,
+        stickiness,
+      }
     case "glyph-muted":
       return {
         glyphMarginClassName: "oc-gutter-glyph oc-gutter-glyph-muted",
@@ -265,6 +279,7 @@ export function CodeBrowser({
   onGutterClick,
   revealPosition,
   explorerActions,
+  contentVersion,
 }: CodeBrowserProps) {
   // ── File cache: path → { content, language } ──────────────────────────
   const [fileCache, setFileCache] = useState<Record<string, LoadedFile | undefined>>(() => {
@@ -308,13 +323,16 @@ export function CodeBrowser({
   const pendingRevealRef = useRef<RevealPosition | null>(null)
   const lastRevealRef = useRef<RevealPosition | null>(null)
   const wantsGutter = Boolean(decorations || onGutterClick)
+  // Files the reader has typed into since they were loaded: a re-read on
+  // `contentVersion` leaves those alone rather than dropping the edit.
+  const dirtyRef = useRef(new Set<string>())
+  const loadFileRef = useRef(loadFile)
+  useEffect(() => {
+    loadFileRef.current = loadFile
+  }, [loadFile])
 
-  // ── Detect dark mode ──────────────────────────────────────────────────
-  const isDark =
-    typeof document !== "undefined" &&
-    (document.documentElement.getAttribute("data-theme") === "dark" ||
-      (document.documentElement.getAttribute("data-theme") == null &&
-        window.matchMedia("(prefers-color-scheme: dark)").matches))
+  // ── Follow the theme: Monaco takes a theme name, not the CSS tokens ────
+  const isDark = useIsDarkTheme()
 
   // ── Tree ──────────────────────────────────────────────────────────────
   const tree = useMemo(() => buildTree(files.filter((f) => !f.group)), [files])
@@ -478,6 +496,37 @@ export function CodeBrowser({
     applyDecorations()
     consumePendingReveal()
   }, [activeFile, decorations, applyDecorations, consumePendingReveal])
+
+  // The files changed behind the browser: forget every unedited one and
+  // read the open file again, so the pane shows what now runs. Skipped on
+  // the first render — the version then describes the files just loaded.
+  // The loader is read through its ref: a loader whose identity changes
+  // while the read is in flight must not cancel it, or the pane would be
+  // left on its spinner.
+  const versionRef = useRef(contentVersion)
+  useEffect(() => {
+    if (contentVersion === undefined || contentVersion === versionRef.current) return
+    versionRef.current = contentVersion
+    const dirty = dirtyRef.current
+    setFileCache((prev) => {
+      const next: typeof prev = {}
+      for (const [path, loaded] of Object.entries(prev)) if (dirty.has(path)) next[path] = loaded
+      return next
+    })
+    const path = activeFileRef.current
+    const load = loadFileRef.current
+    if (!load || !path || dirty.has(path)) return
+    setLoadingFile(path)
+    load(path)
+      .then((loaded) => setFileCache((prev) => ({ ...prev, [path]: loaded })))
+      .catch(() =>
+        setFileCache((prev) => ({
+          ...prev,
+          [path]: { content: `// Failed to load ${path}`, language: languageForPath(path) },
+        })),
+      )
+      .finally(() => setLoadingFile((current) => (current === path ? null : current)))
+  }, [contentVersion])
 
   useEffect(() => {
     if (!revealPosition || revealPosition === lastRevealRef.current) return
@@ -701,7 +750,10 @@ export function CodeBrowser({
               defaultLanguage={currentLanguage}
               defaultValue={currentValue}
               theme={isDark ? "vs-dark" : "light"}
-              onChange={(val) => onChange?.(activeFile, val ?? "")}
+              onChange={(val) => {
+                dirtyRef.current.add(activeFile)
+                onChange?.(activeFile, val ?? "")
+              }}
               onMount={handleMount}
               saveViewState
               options={{

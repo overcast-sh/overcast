@@ -1,4 +1,4 @@
-import { render, screen, within, waitFor } from "@/test/render"
+import { fireEvent, render, screen, within, waitFor } from "@/test/render"
 import { latestFakeEditor, resetFakeEditors } from "@/test/monaco"
 import { CodeBrowser, type LineDecoration } from "./code-browser"
 
@@ -212,5 +212,42 @@ describe("CodeBrowser > per-file loader flags", () => {
     await user.click(screen.getByRole("button", { name: "index.ts" }))
     expect(await screen.findByRole("note")).toHaveTextContent("Read-only: from the source map")
     expect(screen.getByRole("textbox", { name: "Editor" })).toHaveAttribute("readonly")
+  })
+})
+
+describe("CodeBrowser > contentVersion", () => {
+  it("re-reads the open file when the version changes, and keeps a file the reader edited", async () => {
+    const versions: Record<string, number> = {}
+    const load = vi.fn((path: string) => {
+      versions[path] = (versions[path] ?? 0) + 1
+      return Promise.resolve({ content: `// ${path} v${versions[path]}`, language: "javascript" })
+    })
+    const browser = (contentVersion: number) => (
+      <CodeBrowser
+        files={FILES}
+        initialFile="index.js"
+        initialValue="// index.js as deployed"
+        loadFile={load}
+        contentVersion={contentVersion}
+      />
+    )
+    const { rerender } = render(browser(1))
+    expect(screen.getByRole("textbox", { name: "Editor" })).toHaveValue("// index.js as deployed")
+    expect(load).not.toHaveBeenCalled()
+
+    // The version moves: the open file is read again, through the loader.
+    rerender(browser(2))
+    await waitFor(() =>
+      expect(screen.getByRole("textbox", { name: "Editor" })).toHaveValue("// index.js v1"),
+    )
+    expect(load).toHaveBeenCalledTimes(1)
+
+    // An edit made since is not thrown away by the next version.
+    fireEvent.change(screen.getByRole("textbox", { name: "Editor" }), {
+      target: { value: "// my edit" },
+    })
+    rerender(browser(3))
+    await waitFor(() => expect(load).toHaveBeenCalledTimes(1))
+    expect(screen.getByRole("textbox", { name: "Editor" })).toHaveValue("// my edit")
   })
 })
