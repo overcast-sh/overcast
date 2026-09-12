@@ -355,7 +355,7 @@ describe("DebugSession > pause", () => {
     expect(announced).toHaveLength(1)
     expect(session.getState().console.at(-1)).toMatchObject({
       kind: "marker",
-      text: "Paused at src/index.ts:2 (other)",
+      text: "Paused at src/index.ts:2 (step)",
     })
 
     session.resume()
@@ -754,5 +754,260 @@ describe("DebugSession > evaluation", () => {
       [false, "plain.js"],
       [true, "node:internal/process/task_queues"],
     ])
+  })
+})
+
+describe("DebugSession > binding > where the breakpoint landed", () => {
+  it("moves a breakpoint to the statement the inspector placed it on, once its script is loaded", async () => {
+    // Given: a breakpoint on a blank line of a script already parsed
+    const { session, bridge } = makeSession()
+    const socket = await attach(session, bridge)
+    parsed(socket, "index.js")
+    await flush()
+    const bp = session.addBreakpoint("index.js", 2)
+    expect(session.getState().breakpoints[0]).toMatchObject({ bound: false, resolved: false })
+
+    // When: the inspector answers with the next statement's location
+    socket.respond(socket.lastRequest("Debugger.setBreakpointByUrl").id, {
+      breakpointId: "bp:1",
+      locations: [{ scriptId: "s-index.js", lineNumber: 3, columnNumber: 2 }],
+    })
+    await flush()
+
+    // Then: the breakpoint sits on that line, resolved, and is persisted there
+    expect(session.getState().breakpoints).toEqual([
+      expect.objectContaining({ id: bp.id, line: 4, bound: true, resolved: true }),
+    ])
+    const again = new DebugSession({ key: "lambda/my-fn", fetchFile: noFiles })
+    expect(again.getState().breakpoints[0]).toMatchObject({ line: 4, resolved: false })
+  })
+
+  it("stays pending until breakpointResolved names the location, even one that arrives before the bind's reply", async () => {
+    const { session, bridge } = makeSession()
+    const socket = await attach(session, bridge)
+    session.addBreakpoint("index.js", 3)
+    const bind = socket.lastRequest("Debugger.setBreakpointByUrl")
+
+    // The script loads and resolves the breakpoint while the reply is still in flight.
+    parsed(socket, "index.js")
+    socket.event("Debugger.breakpointResolved", {
+      breakpointId: "bp:1",
+      location: { scriptId: "s-index.js", lineNumber: 2, columnNumber: 0 },
+    })
+    socket.respond(bind.id, { breakpointId: "bp:1", locations: [] })
+    await flush()
+    expect(session.getState().breakpoints[0]).toMatchObject({ line: 3, bound: true, resolved: true })
+
+    // A second breakpoint, held but unresolved, resolves later through the event alone.
+    session.addBreakpoint("index.js", 8)
+    socket.respond(socket.lastRequest("Debugger.setBreakpointByUrl").id, {
+      breakpointId: "bp:2",
+      locations: [],
+    })
+    await flush()
+    expect(session.getState().breakpoints[1]).toMatchObject({ bound: true, resolved: false })
+    socket.event("Debugger.breakpointResolved", {
+      breakpointId: "bp:2",
+      location: { scriptId: "s-index.js", lineNumber: 7, columnNumber: 4 },
+    })
+    expect(session.getState().breakpoints[1]).toMatchObject({ line: 8, resolved: true })
+  })
+
+  it("drops a breakpoint the inspector moved onto a line that already has one", async () => {
+    const { session, bridge } = makeSession()
+    const socket = await attach(session, bridge)
+    parsed(socket, "index.js")
+    await flush()
+    const kept = session.addBreakpoint("index.js", 4)
+    socket.respond(socket.lastRequest("Debugger.setBreakpointByUrl").id, {
+      breakpointId: "bp:kept",
+      locations: [{ scriptId: "s-index.js", lineNumber: 3, columnNumber: 2 }],
+    })
+    await flush()
+    session.addBreakpoint("index.js", 2)
+    socket.respond(socket.lastRequest("Debugger.setBreakpointByUrl").id, {
+      breakpointId: "bp:moved",
+      locations: [{ scriptId: "s-index.js", lineNumber: 3, columnNumber: 2 }],
+    })
+    await flush()
+    expect(session.getState().breakpoints.map((b) => b.id)).toEqual([kept.id])
+    expect(socket.lastRequest("Debugger.removeBreakpoint").params).toEqual({
+      breakpointId: "bp:moved",
+    })
+  })
+
+  it("maps a resolved location on a compiled script back to the original line", async () => {
+    const { session, bridge } = makeSession({ "src/index.ts": ORIGINAL })
+    const socket = await attach(session, bridge)
+    parsed(socket, "dist/index.js", INLINE_MAP)
+    await flush()
+    await flush()
+    session.addBreakpoint("src/index.ts", 2)
+    await flush()
+    // The inspector settles on generated line 4 (0-based 3), which the map says is original line 3.
+    socket.respond(socket.lastRequest("Debugger.setBreakpointByUrl").id, {
+      breakpointId: "bp:1",
+      locations: [{ scriptId: "s-dist/index.js", lineNumber: 3, columnNumber: 4 }],
+    })
+    await flush()
+    expect(session.getState().breakpoints[0]).toMatchObject({
+      path: "src/index.ts",
+      line: 3,
+      resolved: true,
+    })
+  })
+})
+
+describe("DebugSession > pause > labels and runtime internals", () => {
+  it("names a pause by what it stopped on: a breakpoint, an exception, else a step", async () => {
+    const { session, bridge } = makeSession()
+    const socket = await attach(session, bridge)
+    parsed(socket, "index.js")
+    await flush()
+    session.addBreakpoint("index.js", 3)
+    socket.respond(socket.lastRequest("Debugger.setBreakpointByUrl").id, {
+      breakpointId: "bp:1",
+      locations: [{ scriptId: "s-index.js", lineNumber: 2, columnNumber: 0 }],
+    })
+    await flush()
+
+    // V8 reports a breakpoint hit as reason "other" and the ids it stopped on.
+    paused(socket, "index.js", 2, 0, { hitBreakpoints: ["bp:1"] })
+    expect(session.getState().console.at(-1)?.text).toBe("Paused at index.js:3 (breakpoint)")
+    expect(session.getState().pause?.hitBreakpointIds).toEqual([
+      session.getState().breakpoints[0].id,
+    ])
+    socket.event("Debugger.resumed", {})
+
+    paused(socket, "index.js", 4, 0, { reason: "ambiguous" })
+    expect(session.getState().console.at(-1)?.text).toBe("Paused at index.js:5 (step)")
+    socket.event("Debugger.resumed", {})
+
+    paused(socket, "index.js", 4, 0, {
+      reason: "exception",
+      data: { type: "object", className: "Error", description: "Error: boom" },
+    })
+    expect(session.getState().console.at(-1)?.text).toBe("Paused at index.js:5 (exception)")
+    expect(session.getState().pause?.exception).toBe("Error: boom")
+    expect(session.getState().pauseCount).toBe(3)
+  })
+
+  it("steps back out of the runtime's own frames a step landed in, and keeps a breakpoint there", async () => {
+    const { session, bridge } = makeSession()
+    const socket = await attach(session, bridge)
+    parsed(socket, "index.js")
+    await flush()
+    const announced: PauseState[] = []
+    session.onPause((p) => announced.push(p))
+
+    // A step into console.log lands in the runtime's patched console.
+    session.stepInto()
+    socket.event("Debugger.resumed", {})
+    const internal = (functionName: string) =>
+      socket.event("Debugger.paused", {
+        reason: "other",
+        callFrames: [
+          {
+            callFrameId: "f-internal",
+            functionName,
+            location: { scriptId: "s-runtime", lineNumber: 669, columnNumber: 10 },
+            url: "",
+            scopeChain: [],
+            this: { type: "undefined" },
+          },
+          {
+            callFrameId: "f-user",
+            functionName: "handler",
+            location: { scriptId: "s-index.js", lineNumber: 6, columnNumber: 2 },
+            url: "file:///var/task/index.js",
+            scopeChain: [],
+            this: { type: "undefined" },
+          },
+        ],
+      })
+    internal("console.info")
+
+    // Then: the session asks to step out rather than announcing a pause nothing can show
+    expect(socket.lastRequest().method).toBe("Debugger.stepOut")
+    expect(session.getState().pause).toBeNull()
+    expect(announced).toHaveLength(0)
+
+    // Back in the deployment, the pause is a real one.
+    socket.event("Debugger.resumed", {})
+    paused(socket, "index.js", 7)
+    expect(session.getState().pause?.frames[0].location).toMatchObject({ path: "index.js", line: 8 })
+    expect(announced).toHaveLength(1)
+
+    // An exception thrown inside the runtime is a real stop: kept, and the
+    // frame named as the runtime's.
+    session.resume()
+    socket.event("Debugger.resumed", {})
+    session.stepInto()
+    socket.event("Debugger.resumed", {})
+    socket.event("Debugger.paused", {
+      reason: "exception",
+      data: { type: "object", className: "TypeError", description: "TypeError: boom" },
+      callFrames: [
+        {
+          callFrameId: "f-internal",
+          functionName: "console.info",
+          location: { scriptId: "s-runtime", lineNumber: 669, columnNumber: 10 },
+          url: "",
+          scopeChain: [],
+          this: { type: "undefined" },
+        },
+      ],
+    })
+    expect(session.getState().pause?.frames[0]).toMatchObject({
+      internal: true,
+      location: { path: "(runtime internals)", line: 670 },
+    })
+    expect(session.getState().console.at(-1)?.text).toBe(
+      "Paused at (runtime internals):670 (exception)",
+    )
+  })
+})
+
+describe("DebugSession > reconnect", () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  it("counts connections and says in the console that the container was replaced", async () => {
+    const { session, bridge } = makeSession()
+    // A session that waited through a "no container" close first: that
+    // socket reached nothing and is not a connection.
+    session.start(BRIDGE)
+    const waiting = bridge.latest()
+    waiting.open()
+    waiting.serverClose(1011, "no container")
+    expect(session.getState().status).toBe("waiting")
+    expect(session.getState().connections).toBe(0)
+    session.retry()
+    const first = bridge.latest()
+    first.open()
+    await flush()
+    first.respondAll()
+    await flush()
+    first.respondAll()
+    await flush()
+    expect(session.getState().connections).toBe(1)
+    expect(session.getState().console).toEqual([])
+
+    first.serverClose(1012, "service restart")
+    await vi.advanceTimersByTimeAsync(10)
+    const second = bridge.latest()
+    second.open()
+    await flush()
+    // Not yet: the new inspector has not answered.
+    expect(session.getState().connections).toBe(1)
+    second.respondAll()
+    await flush()
+    second.respondAll()
+    await flush()
+    expect(session.getState().connections).toBe(2)
+    expect(session.getState().console.at(-1)).toMatchObject({
+      kind: "marker",
+      text: expect.stringMatching(/^Container replaced — reconnected/),
+    })
   })
 })

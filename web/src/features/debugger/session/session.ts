@@ -31,6 +31,7 @@ import type {
   CdpCommands,
   CdpEvents,
   CdpExceptionDetails,
+  CdpLocation,
   CdpMethod,
   CdpPropertyDescriptor,
   CdpRemoteObject,
@@ -69,6 +70,13 @@ export interface Breakpoint {
   enabled: boolean
   /** Whether the inspector holds it on the current connection. */
   bound: boolean
+  /**
+   * Whether the inspector has placed it on a statement of a loaded script.
+   * A breakpoint set before the script parses is held (`bound`) but sits on
+   * nothing until the script loads; one on a blank line is moved to the
+   * next statement, and `line` follows it.
+   */
+  resolved: boolean
 }
 
 /**
@@ -172,6 +180,14 @@ export interface OriginalFileRecord {
 export interface DebugSessionState {
   status: SessionStatus
   error: string | null
+  /**
+   * How many times a connection to a container has opened on this session:
+   * 0 before the first, 2 or more after a replacement. A consumer holding
+   * anything read from the container — its files — re-reads on a change.
+   */
+  connections: number
+  /** How many pauses the session has seen, so a consumer can tell whether an invocation paused at all. */
+  pauseCount: number
   scripts: ScriptRecord[]
   originalFiles: OriginalFileRecord[]
   hasSourceMaps: boolean
@@ -191,6 +207,12 @@ const CONSOLE_LIMIT = 500
 /** Retries after an invoke while the bridge still reports no container. */
 const WAIT_RETRY_MS = 1_500
 const WAIT_RETRY_LIMIT = 20
+/**
+ * How many runtime-internal frames a step is walked out of before it is
+ * left where it landed — a guard against a step that never reaches the
+ * deployment again, not a limit anyone should meet.
+ */
+const AUTO_STEP_OUT_LIMIT = 16
 
 interface Persisted {
   breakpoints: Array<Pick<Breakpoint, "id" | "path" | "line" | "condition" | "enabled">>
@@ -341,6 +363,20 @@ function escapeRegex(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }
 
+/**
+ * The word for a pause, from the runtime's reason and what it stopped on.
+ * V8 says `other` for a breakpoint hit and `ambiguous` for a step that
+ * lands on one, so the reason alone reads wrong in a marker; a hit
+ * breakpoint is a breakpoint, a thrown value an exception, and everything
+ * else a step.
+ */
+export function pauseLabel(reason: string, hitBreakpoints: number, exception: string | null): string {
+  if (hitBreakpoints > 0) return "breakpoint"
+  if (exception !== null) return "exception"
+  if (reason === "debugCommand") return "paused"
+  return "step"
+}
+
 function clientStatusToSession(status: CdpClientStatus): SessionStatus {
   switch (status) {
     case "closed":
@@ -396,6 +432,11 @@ export class DebugSession {
   private readonly bound = new Map<string, { epoch: number; cdpId: string; asOriginal: boolean }>()
   /** Breakpoints with a bind in flight, so two apply passes cannot double-bind one. */
   private readonly binding = new Set<string>()
+  /** A `breakpointResolved` that arrived before its bind's reply was recorded, by inspector id. */
+  private readonly resolvedEarly = new Map<string, CdpLocation>()
+  /** Whether the last execution command was a step, which is what auto-stepping out of internals keys on. */
+  private stepping = false
+  private autoStepOuts = 0
   private readonly scriptPaths = new Map<string, string>()
   private deploymentFiles = new Set<string>()
   private pauseCounter = 0
@@ -416,10 +457,12 @@ export class DebugSession {
     this.state = {
       status: "idle",
       error: null,
+      connections: 0,
+      pauseCount: 0,
       scripts: [],
       originalFiles: [],
       hasSourceMaps: false,
-      breakpoints: persisted.breakpoints.map((bp) => ({ ...bp, bound: false })),
+      breakpoints: persisted.breakpoints.map((bp) => ({ ...bp, bound: false, resolved: false })),
       watches: persisted.watches.map((w) => ({ ...w, result: null, error: null })),
       pause: null,
       console: [],
@@ -474,6 +517,7 @@ export class DebugSession {
       }),
       client.on("Debugger.paused", (params) => this.onPaused(params)),
       client.on("Debugger.resumed", () => this.onResumed()),
+      client.on("Debugger.breakpointResolved", (params) => this.onBreakpointResolved(params)),
       client.on("Runtime.consoleAPICalled", (params) => this.onConsole(params)),
       client.on("Runtime.exceptionThrown", (params) => this.onException(params)),
       client.on("Runtime.executionContextDestroyed", () => this.onResumed()),
@@ -492,15 +536,17 @@ export class DebugSession {
     this.client = null
     client.close()
     this.bound.clear()
+    this.resolvedEarly.clear()
     this.scriptPaths.clear()
     this.registry.clear()
+    this.stepping = false
     this.set({
       status: "idle",
       pause: null,
       scripts: [],
       originalFiles: [],
       hasSourceMaps: false,
-      breakpoints: this.state.breakpoints.map((bp) => ({ ...bp, bound: false })),
+      breakpoints: this.state.breakpoints.map((bp) => ({ ...bp, bound: false, resolved: false })),
       watches: this.state.watches.map((w) => ({ ...w, result: null, error: null })),
     })
   }
@@ -537,23 +583,31 @@ export class DebugSession {
   // ─── Execution control ──────────────────────────────────────────────────
 
   resume(): void {
+    this.stepping = false
     this.command("Debugger.resume", {})
   }
 
   stepOver(): void {
-    this.command("Debugger.stepOver", {})
+    this.step("Debugger.stepOver")
   }
 
   stepInto(): void {
-    this.command("Debugger.stepInto", {})
+    this.step("Debugger.stepInto")
   }
 
   stepOut(): void {
-    this.command("Debugger.stepOut", {})
+    this.step("Debugger.stepOut")
   }
 
   pause(): void {
+    this.stepping = false
     this.command("Debugger.pause", {})
+  }
+
+  private step(method: "Debugger.stepOver" | "Debugger.stepInto" | "Debugger.stepOut"): void {
+    this.stepping = true
+    this.autoStepOuts = 0
+    this.command(method, {})
   }
 
   setPauseOnExceptions(mode: PauseOnExceptionsMode): void {
@@ -710,7 +764,15 @@ export class DebugSession {
       this.updateBreakpoint(existing.id, { condition, enabled: true })
       return this.breakpointAt(path, line) ?? existing
     }
-    const bp: Breakpoint = { id: createId(), path, line, condition, enabled: true, bound: false }
+    const bp: Breakpoint = {
+      id: createId(),
+      path,
+      line,
+      condition,
+      enabled: true,
+      bound: false,
+      resolved: false,
+    }
     this.set({ breakpoints: [...this.state.breakpoints, bp] })
     this.persist()
     void this.apply(bp)
@@ -793,8 +855,12 @@ export class DebugSession {
       // outlive its socket, and a breakpoint is bound again only once the
       // next open re-sends it.
       patch.pause = null
-      if (this.state.breakpoints.some((bp) => bp.bound)) {
-        patch.breakpoints = this.state.breakpoints.map((bp) => ({ ...bp, bound: false }))
+      if (this.state.breakpoints.some((bp) => bp.bound || bp.resolved)) {
+        patch.breakpoints = this.state.breakpoints.map((bp) => ({
+          ...bp,
+          bound: false,
+          resolved: false,
+        }))
       }
     }
     this.set(patch)
@@ -806,6 +872,7 @@ export class DebugSession {
     if (!client) return
     this.epoch += 1
     this.scriptPaths.clear()
+    this.resolvedEarly.clear()
     // A new connection is a new container, and after a hot reload its
     // compiled output and maps may differ from the last one's: every map is
     // read again as its script parses, so a breakpoint on an original file
@@ -815,7 +882,7 @@ export class DebugSession {
       scripts: [],
       originalFiles: [],
       hasSourceMaps: false,
-      breakpoints: this.state.breakpoints.map((bp) => ({ ...bp, bound: false })),
+      breakpoints: this.state.breakpoints.map((bp) => ({ ...bp, bound: false, resolved: false })),
     })
     try {
       await client.send("Debugger.enable", {})
@@ -832,6 +899,21 @@ export class DebugSession {
         })
       }
       return
+    }
+    // Counted once the inspector has answered: a socket the bridge opens
+    // only to close with "no container" reached nothing, and a session
+    // waiting through several of those has not seen a replacement.
+    const connections = this.state.connections + 1
+    this.set({ connections })
+    if (connections > 1) {
+      // Said once, in the console and the logs, because the toolbar's
+      // "reconnecting" comes and goes too fast to read — and because an
+      // invocation already running in the new container by the time the
+      // breakpoints land there ran past them.
+      this.log(
+        "marker",
+        "Container replaced — reconnected; breakpoints are re-applied as the new container loads the code. An invocation already running there was not stopped.",
+      )
     }
     await this.applyAll()
   }
@@ -867,6 +949,23 @@ export class DebugSession {
       params.reason === "exception" || params.reason === "promiseRejection"
         ? (describeException(params.data) ?? params.reason)
         : null
+    const top = frames.at(0)
+    // A step that lands in the runtime's own code — the patched console,
+    // Node's internals — is walked back out, as an editor's skipFiles
+    // would: the reader asked to step through their function, and a pane
+    // that can show nothing for the frame is not where the step ends. A
+    // breakpoint or an exception there is a real stop and is kept.
+    if (
+      this.stepping &&
+      top?.internal &&
+      hitBreakpointIds.length === 0 &&
+      exception === null &&
+      this.autoStepOuts < AUTO_STEP_OUT_LIMIT
+    ) {
+      this.autoStepOuts += 1
+      this.command("Debugger.stepOut", {})
+      return
+    }
     this.pauseCounter += 1
     const pause: PauseState = {
       id: this.pauseCounter,
@@ -876,16 +975,55 @@ export class DebugSession {
       hitBreakpointIds,
       exception,
     }
-    const top = frames.at(0)
+    const label = pauseLabel(params.reason, hitBreakpointIds.length, exception)
     this.log(
       "marker",
-      top
-        ? `Paused at ${top.location.path}:${top.location.line} (${params.reason})`
-        : `Paused (${params.reason})`,
+      top ? `Paused at ${top.location.path}:${top.location.line} (${label})` : `Paused (${label})`,
     )
-    this.set({ pause })
+    this.set({ pause, pauseCount: this.pauseCounter })
     this.evaluateWatches()
     for (const listener of this.pauseListeners) listener(pause)
+  }
+
+  /**
+   * The inspector placed a held breakpoint on a statement — when its script
+   * loaded, or right away for a script already loaded. The breakpoint moves
+   * to that line if the inspector shifted it off a line with no code, which
+   * is what an editor's gutter does too.
+   */
+  private onBreakpointResolved(params: CdpEvents["Debugger.breakpointResolved"]): void {
+    const entry = [...this.bound.entries()].find(([, b]) => b.cdpId === params.breakpointId)
+    if (!entry) {
+      this.resolvedEarly.set(params.breakpointId, params.location)
+      return
+    }
+    this.resolveBreakpoint(entry[0], params.location)
+  }
+
+  private resolveBreakpoint(id: string, location: CdpLocation): void {
+    const bp = this.state.breakpoints.find((b) => b.id === id)
+    if (!bp) return
+    const path = this.scriptPaths.get(location.scriptId)
+    const generated: Position = {
+      path: path ?? bp.path,
+      line: location.lineNumber + 1,
+      column: location.columnNumber ?? 0,
+    }
+    const shown = (path && this.registry.toOriginal(generated)) || generated
+    const line = shown.path === bp.path ? shown.line : bp.line
+    if (line !== bp.line) {
+      const occupant = this.breakpointAt(bp.path, line)
+      if (occupant && occupant.id !== bp.id) {
+        // The next statement already has one: this breakpoint would sit on
+        // top of it, so it goes, and the other keeps the line.
+        this.removeBreakpoint(bp.id)
+        return
+      }
+      this.patchBreakpoint(bp.id, { line, resolved: true })
+      this.persist()
+      return
+    }
+    this.patchBreakpoint(bp.id, { resolved: true })
   }
 
   private onResumed(): void {
@@ -913,8 +1051,9 @@ export class DebugSession {
 
   private toStackFrame(frame: CdpCallFrame): StackFrame {
     const deployed = this.scriptPaths.get(frame.location.scriptId) ?? scriptPath(frame.url)
-    // A script the runtime gave no URL (an eval, a patched builtin) is shown as such.
-    const path = deployed ?? (frame.url || "(unknown)")
+    // A script the runtime gave no URL (an eval, a patched builtin) is the
+    // runtime's own; it is named as such rather than as an unknown file.
+    const path = deployed ?? (frame.url || "(runtime internals)")
     const generated: Position = {
       path,
       line: frame.location.lineNumber + 1,
@@ -972,7 +1111,7 @@ export class DebugSession {
     let stale = false
     this.binding.add(bp.id)
     try {
-      const { breakpointId } = await client.send("Debugger.setBreakpointByUrl", {
+      const { breakpointId, locations } = await client.send("Debugger.setBreakpointByUrl", {
         lineNumber: generated.line - 1,
         columnNumber: asOriginal ? generated.column : undefined,
         urlRegex: `${escapeRegex(scriptUrl(generated.path))}$`,
@@ -990,6 +1129,12 @@ export class DebugSession {
       } else {
         this.bound.set(bp.id, { epoch, cdpId: breakpointId, asOriginal })
         this.patchBreakpoint(bp.id, { bound: true })
+        // A script already loaded answers with where the breakpoint landed;
+        // one not yet loaded answers later, through breakpointResolved —
+        // which may already have arrived while this reply was in flight.
+        const location = locations.at(0) ?? this.resolvedEarly.get(breakpointId)
+        this.resolvedEarly.delete(breakpointId)
+        if (location) this.resolveBreakpoint(bp.id, location)
       }
     } catch (err) {
       this.log("error", `Could not set breakpoint at ${bp.path}:${bp.line}: ${errorMessage(err)}`)
@@ -1010,7 +1155,7 @@ export class DebugSession {
   private unapply(bp: Breakpoint): void {
     const binding = this.bound.get(bp.id)
     this.bound.delete(bp.id)
-    this.patchBreakpoint(bp.id, { bound: false })
+    this.patchBreakpoint(bp.id, { bound: false, resolved: false })
     const client = this.client
     if (!binding || binding.epoch !== this.epoch || !client || client.status !== "open") return
     void client.send("Debugger.removeBreakpoint", { breakpointId: binding.cdpId }).catch(() => {

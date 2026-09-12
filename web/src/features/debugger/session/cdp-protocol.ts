@@ -215,6 +215,10 @@ export interface CdpEvents {
     asyncStackTrace?: CdpStackTrace
   }
   "Debugger.resumed": Record<string, never>
+  "Debugger.breakpointResolved": {
+    breakpointId: string
+    location: CdpLocation
+  }
   "Runtime.consoleAPICalled": {
     type: string
     args: CdpRemoteObject[]
