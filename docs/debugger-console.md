@@ -25,12 +25,10 @@ Turn the debugger on as for an editor — `OVERCAST_DEBUGGER=true` and the
 `overcast:debug=true` tag, from
 [Step debugging inside emulated compute](./debugger.md#turning-it-on) — then
 press **Debug in console**, on the strip above the Code tab's editor or on
-the **Debug** tab. It is there before the function has ever run — a tagged
-function is registered when its page opens — and for tagged Node.js
-functions only, so far: the console speaks the inspector protocol, and the
-Debug tab says so for Python, Java and custom runtimes, which keep the editor
-configurations beside it. It stays disabled, with a tooltip saying so, until
-the flag is on.
+the **Debug** tab. It is there before the function has ever run, for tagged
+Node.js functions only, so far — the Debug tab says so for Python, Java and
+custom runtimes, which keep the editor configurations — and stays disabled
+until the flag is on.
 
 The status line under the button says what the session is doing:
 
@@ -43,16 +41,20 @@ The status line under the button says what the session is doing:
 
 The invocation that starts a container — the first, or the first after hot
 reload replaced it — runs before the session reaches it and does not stop;
-the Test tab says so under the result, and the next one does. **Wait for a
-debugger** on the Debug tab holds such an invocation until the session
-attaches — the `overcast:debug-wait` tag, in
-[Wait for a debugger](./debugger.md#wait-for-a-debugger).
+the Test tab says so under the result, and the next one does. Turn on **Wait
+for a debugger before the first invocation** — on the same strip, or the
+Debug tab — and such an invocation is held until a debugger attaches, up to
+`OVERCAST_DEBUGGER_WAIT_TIMEOUT` (120 s by default), so it pauses too. The
+switch sets the `overcast:debug-wait` tag on the function and holds for an
+editor as well — see [Wait for a debugger](./debugger.md#wait-for-a-debugger).
 
 A console session is one more attached client of the function's debug port.
 The Debug tab's state chip reads `attached` and `paused` for it, and the
 timeout clock stops as it does for an editor. **Stop debugging** ends the
 session; breakpoints and watches are kept per function in the browser and
-come back with the next one.
+come back with the next one. A session still open when you leave the page is
+started again when you come back, and the status line says *Session restored*
+for a moment; only **Stop debugging** ends it.
 
 ## Breakpoints and stepping
 
@@ -66,8 +68,7 @@ the breakpoint pauses only when it is truthy. Enter saves, Escape closes.
 The glyph says what the runtime has done with the breakpoint: a filled dot is
 placed on a statement, a hollow grey ring is waiting for a session or for the
 container to load the file, a dim ring is disabled; hovering it says which.
-A breakpoint on a line with no code moves to the next statement once the
-runtime places it.
+A breakpoint on a line with no code moves to the next statement.
 
 Once paused, the toolbar over the pane drives execution, with the keys VS Code
 uses:
@@ -81,12 +82,11 @@ uses:
 | Pause on exceptions | — | Toggle; pauses at uncaught exceptions, off by default |
 | Stop | — | End the session; the invocation runs on |
 
-The keys work from anywhere in the debug workspace — code, panels, drawer —
-and nowhere else, so they do nothing from the Test tab's editor. While a
-session is open F5 is Continue, not the browser's reload. A step that lands
-in the runtime's own code (its patched `console.log`, say) steps straight
-back out. **Restart container** sits on the strip disabled until it is wired
-to hot reload's replace path
+The keys work anywhere in the debug workspace — code, panels, drawer — and
+nowhere else. While a session is open F5 is Continue, never the browser's
+reload. A step that lands in the runtime's own code steps straight back out.
+**Restart container** is on the strip, disabled until it is wired to hot
+reload's replace path
 ([#1944](https://github.com/overcast-sh/overcast/issues/1944)).
 
 ## Invoke and pause
@@ -97,13 +97,11 @@ and location. Continue to the end and the result lands in the Test tab; a
 toast says so while another tab is up. An invocation that finishes without
 pausing says why under its result.
 
-The function's timeout clock is suspended while the session is open, exactly
-as for an attached editor, so a 3-second function can sit at a breakpoint for
-as long as you need; `context.getRemainingTimeInMillis()` keeps counting down
-regardless, as
-[Timeouts while paused](./debugger.md#timeouts-while-paused) explains.
-Module-level code runs during init, before the session can reach the
-container, so the first breakpoint goes inside the handler.
+The timeout clock is suspended while the session is open, as for an attached
+editor; [Timeouts while paused](./debugger.md#timeouts-while-paused) says
+what `context.getRemainingTimeInMillis()` does meanwhile. Module-level code
+runs during init, before the session reaches the container, so the first
+breakpoint goes inside the handler.
 
 ## Panels
 
@@ -116,16 +114,20 @@ Beside the code, while a session is open:
 | Call stack | Every frame at the pause, at its original location when a source map applies; clicking a frame selects it for Locals and Watch |
 | Breakpoints | Every breakpoint on the function — enable, disable, remove, edit the condition — and the pause-on-exceptions toggle |
 
-Below the code, a drawer with two tabs, opening on whichever you used last.
-**Logs** is the Monitor tab's log viewer over the function's log group, live
-and following its tail — the last 15 minutes, every request, since the
-invocation does not name its request id — with a marker line at each pause
-and resume. The function's own `console.log` lines are there too: the Lambda
-runtime writes them to the log stream, not to the debugger. **Debug console**
-shows thrown exceptions as they arrive, the same pause and resume markers, and
-takes an expression: evaluated in the selected frame while paused, in the
-function's global scope while it runs. On a narrow window the panels become a
-tab strip above the drawer.
+Below the code, a drawer with two tabs, opening on whichever you used last:
+
+| Drawer tab | Shows |
+| --- | --- |
+| Logs | The Monitor tab's log viewer on the function's log group, following its tail: the last 15 minutes, every request, with a marker at each pause and resume |
+| Debug console | Thrown exceptions as they arrive, the same markers, and a prompt evaluated in the selected frame while paused, in the global scope while it runs |
+
+The function's own `console.log` lines are in Logs: the runtime writes them
+to the log stream, not to the debugger.
+
+On a narrow window the panels become a tab strip above the drawer. Drag the
+bar beside the panels or above the drawer to resize them, or focus it and use
+the arrow keys; a double-click puts the default back. The sizes are
+remembered in the browser.
 
 ## Source maps
 
@@ -135,7 +137,11 @@ a script, and the file list gains an *Original* group holding the `.ts` files
 the maps name. A breakpoint set in an original file is translated to the
 compiled position, and the paused line, the call stack and Locals are shown in
 original terms. The compiled files hide behind **Show compiled** once a map has
-loaded.
+loaded. **Source maps**, beside it, turns the maps off for the function: the
+file list is the deployed tree, breakpoints bind on compiled lines, the call
+stack shows compiled locations, and a breakpoint in an original file is
+listed in the Breakpoints panel as inactive, *source maps off*. Switching
+while paused redraws the pause. Both switches are remembered per function.
 
 | The map's source | The Code tab opens |
 | --- | --- |
@@ -144,12 +150,11 @@ loaded.
 | Is in neither | An empty pane; set the breakpoint in the compiled file instead |
 
 A frame no map resolves — a bundled dependency, say — opens the compiled file
-with a *no source map for this frame* badge on the toolbar. Raw `.ts` on
-Node.js 24 and plain JavaScript need none of this: the file list is the
-deployed tree. A hot-reloaded function's files are read live from the mounted
-directory, and read again each time the session reaches a new container, so
-the tab shows what the container runs; a file you have edited in the tab
-keeps your edit.
+with a *no source map for this frame* badge. Raw `.ts` on Node.js 24 and
+plain JavaScript need none of this. A hot-reloaded function's files are read
+live from the mounted directory, again each time the session reaches a new
+container, so the tab shows what the container runs; a file you edited in
+the tab keeps the edit.
 
 ## When it does not work
 

@@ -462,6 +462,48 @@ router fans it out to each compute service that implements it, and Lambda's
 `Service.ScanTagged` lists every region's functions once under a `sync.Once`
 — lazily, never in `New`. ECS does not implement it yet.
 
+**Phase F console notes** (landed). The four console pieces, as built. The
+*Wait for a debugger* switch is `components/debug-wait-toggle.tsx`, on the
+Debug tab's controls card and the Code tab's idle strip; it reads the
+descriptor through `useDebugTarget` itself — so the optimistic
+`setQueryData` on the target key is the one thing it draws from — calls
+`lambda.tagResource`/`untagResource` with `overcast:debug-wait`, rolls the
+cache back and toasts on error, and invalidates the `debugger/targets`
+prefix and the function's tag list on settle. It needs the function ARN,
+threaded from the route (`resourceArn` on `DebugSessionControls`, `CodeTab`
+and `DebugCodeBrowser.target`), and is offered for `service === "lambda"`
+only. `target.ts#waitForDebuggerOf` reads `waitForDebugger` as optional
+until the regenerated `api.gen.ts` lands; `withWaitForDebugger` is the one
+cast. Auto-restore is the session's own record: `Persisted.sessionOpen` is
+set by `start` and cleared by `stop`, and `dispose` (page unmount) leaves it,
+which is what makes a reload restore; `DebugSession.restorable` is that flag
+until `settleRestore` or a `start` answers it, and the provider enables the
+descriptor query while `restorable`, starts with `{ restored: true }` when
+`consoleDebug` is on offer and the target enabled, and settles either way —
+so an idle page for a function never opened asks nothing. `restored` in the
+state prefixes the status line with *Session restored.* (both the controls
+and the toolbar read `sessionStatusLine(status, error, restored)`) until the
+first pause, Stop, or 15 s. `ResizableSplit` (`components/ui/`) is one
+primitive for both axes: the sized pane takes `flex: 0 0 <px>`, the other
+`1 1 auto`; pointer capture on the handle, arrow keys (Shift ×4, Home/End),
+double-click reset, `localStorage` under `storageKey` or controlled. The
+workspace uses it uncontrolled for the sidebar (320 px, 240–640) and
+controlled for the drawer (224 px, 160–720) so it can publish
+`--debug-drawer-height`, which `DEBUG_CODE_HEIGHT` now subtracts — the
+one-screen fit holds at any drawer height. Source maps off is
+`DebugSession.setSourceMaps`: the registry is cleared and, when turning on,
+refilled from `scriptMapUrls` (every parsed script's `sourceMapURL`, kept
+because the inspector announces a script once), the pause is redrawn from
+the raw `callFrames` kept on `rawFrames`, and `applyAll` re-binds — a
+breakpoint bound as an original is dropped and, with maps off, left
+inactive. Which breakpoints those are is `Breakpoint.original`, persisted:
+set from `registry.isOriginal` at add and at every bind, cleared when the
+container parses a script at that path. `showCompiled` moved into the same
+record. Tests: `provider.test.tsx`, `debug-wait-toggle.test.tsx`,
+`resizable-split.test.tsx`, and new cases in `session.test.ts`,
+`breakpoints-panel.test.tsx`, `debug-code-browser.test.tsx` and
+`debug-session-controls.test.tsx`.
+
 ## 7. Later
 
 DAP client for Python on the same bridge and panels; logpoints via
