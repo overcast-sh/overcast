@@ -43,8 +43,8 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | Real engines | `CreateCacheCluster`, `CreateReplicationGroup` and `CreateServerlessCache` each start a container, ports allocated from `ELASTICACHE_PORT_BASE` (default 63790) |
 | Honest readiness | The status moves to `available` only after the engine answers its own protocol — `PING` for Redis and Valkey, `version` for Memcached. A published port that merely accepts a connection is not enough |
 | Failure is terminal | An engine that never answers settles in the status AWS documents for that shape — `incompatible-network` for a cache cluster, `create-failed` for a replication group or serverless cache — with the reason recorded |
-| VPC placement | A `CacheSubnetGroupName` puts the cache on that subnet group's VPC network and nothing else |
-| Per-caller endpoints | `ConfigurationEndpoint` answers with the container's address and the engine's own port for a sibling container, and `127.0.0.1` with the published port for the host |
+| VPC placement | A `CacheSubnetGroupName` puts the cache on that subnet group's VPC network and nothing else; a name Overcast has no record of is refused with `CacheSubnetGroupNotFoundFault`, as on AWS. Without one the cache is in the default VPC, which is the shared data plane |
+| Per-caller endpoints | `{id}.{region}.cfg.{base}` resolves to the engine container from a Lambda or ECS task, on the engine's own port; the host gets the published port, and `127.0.0.1` when `{base}` has no wildcard DNS. `DescribeCacheClusters` mints it for whoever asks, so a function reading it at runtime gets a name it can dial — [Data-plane endpoints](../networking/data-plane-endpoints.md) |
 | CloudFormation | `AWS::ElastiCache::CacheCluster` and `AWS::ElastiCache::ReplicationGroup`; `Fn::GetAtt` gives `RedisEndpoint.Address`/`.Port` for Redis and Valkey and `ConfigurationEndpoint.Address`/`.Port` for Memcached, the pair each engine has on AWS |
 | Without Docker | Every operation still works as metadata, and statuses settle immediately |
 
@@ -69,7 +69,10 @@ Supported engines: **redis** (`redis:6`, `redis:7`), **valkey**
 > [!IMPORTANT]
 > A cache in a VPC is reachable only from that VPC, as on AWS — ElastiCache has
 > no `PubliclyAccessible` escape hatch. Create both the cache and its caller
-> with the same subnet group, or leave both out of one. See
+> with the same subnet group, or leave both out of one. A `CfnCacheCluster`
+> with no `cacheSubnetGroupName` is in the default VPC, and a Fargate task in
+> the stack's own VPC cannot resolve it — the `data-plane-name-refused`
+> advisory says which two resources disagree. See
 > [Lambda, ECS and VPCs](../networking/vpcs.md).
 
 The cache id is constrained too, by Docker rather than by AWS.

@@ -51,7 +51,7 @@ directory before it accepts anything.
 | Aurora | Clusters, member instances that inherit the cluster's placement and credentials, writer promotion on deleting the writer, and both cluster endpoint names |
 | Master account | A real administrator account with the privileges AWS grants — `CREATEDB`/`CREATEROLE`/`rds_superuser` on PostgreSQL, the version-appropriate grant set on the MySQL family |
 | Password rotation | `ModifyDBInstance` and `ModifyDBCluster` run the engine's own `ALTER USER`, so the old password really stops working |
-| Reachability | `PubliclyAccessible` decides it, not just metadata — an instance in a subnet group is reachable only from that VPC |
+| Reachability | `PubliclyAccessible` decides it, not just metadata — an instance in a subnet group is reachable only from that VPC unless it is public, in which case it stays on the shared data plane too. `ModifyDBInstance` re-attaches a running container when the flag changes |
 | CloudFormation | A `DBInstance` or `DBCluster` is not `CREATE_COMPLETE` until the database is `available`, so anything downstream of it waits, as on AWS |
 | Diagnostics | `DescribeEvents` records the lifecycle, including why an instance failed; the console's Logs tab reads the container's output |
 | Persistence | Containers survive an Overcast restart, and one Overcast never reclaims another's — engine containers carry the identity of the state store that created them |

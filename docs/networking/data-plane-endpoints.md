@@ -22,6 +22,9 @@ answer on a different port depending on who is asking.
 {dbInstanceIdentifier}.{region}.rds.{base}             # RDS DB instance
 {dbClusterIdentifier}.cluster.{region}.rds.{base}      # Aurora writer
 {dbClusterIdentifier}.cluster-ro.{region}.rds.{base}   # Aurora reader
+{cacheClusterId}.{region}.cfg.{base}                   # ElastiCache cache cluster
+{replicationGroupId}.{region}.ng.cfg.{base}            # ElastiCache replication group
+{serverlessCacheName}.{region}.serverless.{base}       # ElastiCache serverless cache
 ```
 
 `{base}` is `OVERCAST_HOSTNAME` when set, otherwise the host you called Overcast
@@ -32,8 +35,13 @@ CDK stack bakes into an ECS task definition or a Secrets Manager secret.
 
 | Caller | `Endpoint.Address` | `Endpoint.Port` |
 | --- | --- | --- |
-| Lambda function, ECS task, any sibling container | the endpoint hostname | the engine port (3306/5432), as on AWS |
-| The host (CLI, SDK, `cdk deploy`) | the endpoint hostname, or `127.0.0.1` when `{base}` has no wildcard DNS | the published host port (`RDS_PORT_BASE`, 33060 upwards) |
+| Lambda function, ECS task, any sibling container | the endpoint hostname | the engine port (3306/5432, 6379/11211), as on AWS |
+| The host (CLI, SDK, `cdk deploy`) | the endpoint hostname, or `127.0.0.1` when `{base}` has no wildcard DNS | the published host port (`RDS_PORT_BASE`, 33060 upwards; `ELASTICACHE_PORT_BASE`, 63790 upwards) |
+
+The same table holds for ElastiCache's `ConfigurationEndpoint`, `RedisEndpoint`
+and a serverless cache's `Endpoint`, and it is applied on every read, not once
+at create: a function that discovers its cache through `DescribeCacheClusters`
+at runtime is given a name it can dial, not the address Overcast itself uses.
 
 Both pairs connect. Which one you were given is decided by the source address of
 your request: a split-horizon hostname is used from both sides of the container
@@ -45,8 +53,9 @@ why the host port starts at 33060 instead.
 
 The engine container carries its endpoint name as a **Docker network alias** on
 every network emulated compute runs on — the shared data plane
-(`OVERCAST_NETWORK`, default `overcast`), or the VPC network of its DB subnet
-group when it has one. Docker's embedded resolver answers from those aliases
+(`OVERCAST_NETWORK`, default `overcast`), or the VPC network of its DB or cache
+subnet group when it has one (both, for an RDS instance that is
+`PubliclyAccessible`). Docker's embedded resolver answers from those aliases
 before forwarding anything upstream, so Overcast's own DNS server is never
 involved: that one answers where *Overcast* is.
 

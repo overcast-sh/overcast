@@ -41,6 +41,7 @@ const (
 	advisoryCodeVPCNetworkIsolationStale  = "vpc-network-isolation-stale"
 	advisoryCodeVPCNetworkUnbacked        = "vpc-network-unbacked"
 	advisoryCodeEgressNotWithheld         = "vpc-egress-not-withheld"
+	advisoryCodeDataPlaneNameRefused      = "data-plane-name-refused"
 	advisoryCodeLambdaInitVolumeForeign   = "lambda-init-volume-foreign"
 	advisoryCodeRuntimeAPIUnreachable     = "lambda-runtime-api-unreachable"
 )
@@ -94,6 +95,10 @@ const vpcNetworkDocsPath = "networking/vpc-backing.md#internet-gateways-and-isol
 // what frees the address range the daemon refused. The fragment is the docs
 // browser's slug for that heading — see dataDirDocsPath.
 const vpcNetworkUnbackedDocsPath = "networking/vpc-backing.md#when-a-network-cannot-be-created"
+
+// vpcsDocsPath points the data-plane-name-refused advisory at the page that
+// says what a VPC restricts, what "refused" means, and the three ways out.
+const vpcsDocsPath = "networking/vpcs.md"
 
 // egressModeDocsPath points the egress advisory at the page that explains what
 // each mode can and cannot deliver, and on which hosts. It lands on the modes
@@ -202,6 +207,13 @@ type advisoryInput struct {
 	// internet-gateway state calls for — drives vpc-network-isolation-stale.
 	// Nil whenever EC2 is not wired (a service subset) or nothing is wrong.
 	VPCNetworkProblems []dataplane.VPCNetworkProblem
+
+	// DNSRefusals is dataplane.Guard.Recent(): the data-plane names the
+	// resolver declined to answer because the caller shares no network with
+	// the container advertising them — drives data-plane-name-refused. Nil
+	// whenever the resolver or its guard is not running, or nothing was
+	// refused.
+	DNSRefusals []dataplane.Refusal
 
 	// LambdaInitVolumeProblems is lambda.Service.InitVolumeProblems(): init
 	// volumes matching this build's content hash that this instance reused
@@ -321,6 +333,9 @@ func computeAdvisories(in advisoryInput) []Advisory {
 		advisories = append(advisories, *a)
 	}
 	if a := checkVPCNetworkIsolation(in.VPCNetworkProblems); a != nil {
+		advisories = append(advisories, *a)
+	}
+	if a := checkDataPlaneNameRefused(in.DNSRefusals); a != nil {
 		advisories = append(advisories, *a)
 	}
 	if a := checkLambdaInitVolumeOwnership(in.LambdaInitVolumeProblems); a != nil {
@@ -583,6 +598,48 @@ func checkVPCNetworkUnbacked(problems []dataplane.VPCNetworkProblem) *Advisory {
 			"usual one: `docker network ls` shows what holds it, `overcast network status` says whether it is " +
 			"Overcast's, and OVERCAST_EC2_VPC_STRATEGY=remapped gives the VPC a subnet of its own. " + listed,
 		DocsPath: vpcNetworkUnbackedDocsPath,
+	}
+}
+
+// dataPlaneRefusalMaxListed bounds how many refusals the advisory spells out.
+const dataPlaneRefusalMaxListed = 5
+
+// checkDataPlaneNameRefused fires when the resolver has refused a data-plane
+// name: some container asked for an RDS, ElastiCache, MSK or EFS endpoint
+// that only a container on another network advertises.
+//
+// This is the emulator doing what the template asked — a VPC restricts, here
+// as on AWS — but from inside the application it looks like a DNS outage,
+// and the log line that explains it is in Overcast's output, not the
+// application's. The advisory is what turns "Temporary failure in name
+// resolution" into "your cache is not in your task's VPC". Every entry
+// carries both sides so the reader sees which resource to move.
+func checkDataPlaneNameRefused(refusals []dataplane.Refusal) *Advisory {
+	if len(refusals) == 0 {
+		return nil
+	}
+	title := "A container asked for an endpoint it cannot reach — the resource is in a different VPC"
+	if len(refusals) > 1 {
+		title = fmt.Sprintf("%d endpoints were refused to containers in a different VPC", len(refusals))
+	}
+	var sb strings.Builder
+	// Newest first: the one somebody is debugging right now.
+	for i, n := len(refusals)-1, 0; i >= 0 && n < dataPlaneRefusalMaxListed; i, n = i-1, n+1 {
+		r := refusals[i]
+		fmt.Fprintf(&sb, " %s (on %s) asked for %s, advertised by %s (on %s).",
+			r.Caller, strings.Join(r.CallerNetworks, ", "), r.Name, r.Target, strings.Join(r.TargetNetworks, ", "))
+	}
+	if len(refusals) > dataPlaneRefusalMaxListed {
+		fmt.Fprintf(&sb, " …and %d more.", len(refusals)-dataPlaneRefusalMaxListed)
+	}
+	return &Advisory{
+		Severity: advisorySeverityWarning,
+		Code:     advisoryCodeDataPlaneNameRefused,
+		Title:    title,
+		Detail: "Overcast's resolver answered REFUSED rather than hand the caller Overcast's own address, " +
+			"which would have connected it to the emulator on the engine's port and hung. " +
+			dataplane.RefusalRemedy + sb.String(),
+		DocsPath: vpcsDocsPath,
 	}
 }
 

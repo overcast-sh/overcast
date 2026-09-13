@@ -853,3 +853,68 @@ func TestComputeAdvisories_includesTheRuntimeAPIRule(t *testing.T) {
 		t.Fatalf("advisories = %+v, want %s among them", advisories, advisoryCodeRuntimeAPIUnreachable)
 	}
 }
+
+func TestCheckDataPlaneNameRefused_namesBothSidesNewestFirst(t *testing.T) {
+	// Given: the resolver refused two names — a cache on the shared plane to a
+	// task in a VPC, then a database in one VPC to a function in another.
+	refusals := []dataplane.Refusal{
+		{Name: "sessions.us-east-1.cfg.localhost.overcast.sh", Target: "elasticache sessions", TargetNetworks: []string{"overcast"},
+			Caller: "ecs app/9f2", CallerNetworks: []string{"overcast-vpc-abc"}},
+		{Name: "orders.us-east-1.rds.localhost.overcast.sh", Target: "rds orders", TargetNetworks: []string{"overcast-vpc-abc"},
+			Caller: "lambda fn", CallerNetworks: []string{"overcast-vpc-def"}},
+	}
+
+	// When: the rule evaluates them.
+	a := checkDataPlaneNameRefused(refusals)
+
+	// Then: one warning, counting both, listing the newest first with the
+	// networks on each side, saying what to change, pointing at the VPC page.
+	if a == nil {
+		t.Fatal("expected an advisory, got nil")
+	}
+	if a.Severity != advisorySeverityWarning {
+		t.Errorf("severity = %q, want %q", a.Severity, advisorySeverityWarning)
+	}
+	if a.Code != advisoryCodeDataPlaneNameRefused {
+		t.Errorf("code = %q, want %q", a.Code, advisoryCodeDataPlaneNameRefused)
+	}
+	if !strings.HasPrefix(a.Title, "2 endpoints were refused") {
+		t.Errorf("title = %q", a.Title)
+	}
+	rds := strings.Index(a.Detail, "orders.us-east-1.rds")
+	cache := strings.Index(a.Detail, "sessions.us-east-1.cfg")
+	if rds < 0 || cache < 0 || rds > cache {
+		t.Errorf("detail lists refusals in the wrong order or not at all: %q", a.Detail)
+	}
+	for _, want := range []string{"lambda fn (on overcast-vpc-def)", "rds orders (on overcast-vpc-abc)", "CacheSubnetGroupName", "VpcConfig"} {
+		if !strings.Contains(a.Detail, want) {
+			t.Errorf("detail lacks %q: %q", want, a.Detail)
+		}
+	}
+	if a.DocsPath != vpcsDocsPath {
+		t.Errorf("docsPath = %q, want %q", a.DocsPath, vpcsDocsPath)
+	}
+}
+
+func TestCheckDataPlaneNameRefused_absentWhenNothingRefused(t *testing.T) {
+	if a := checkDataPlaneNameRefused(nil); a != nil {
+		t.Fatalf("expected no advisory, got %+v", a)
+	}
+}
+
+func TestCheckDataPlaneNameRefused_capsTheListing(t *testing.T) {
+	refusals := make([]dataplane.Refusal, dataPlaneRefusalMaxListed+3)
+	for i := range refusals {
+		refusals[i] = dataplane.Refusal{Name: fmt.Sprintf("name-%d", i), Target: "t", Caller: "c"}
+	}
+	a := checkDataPlaneNameRefused(refusals)
+	if a == nil {
+		t.Fatal("expected an advisory")
+	}
+	if !strings.Contains(a.Detail, "and 3 more") {
+		t.Errorf("detail does not say how many were left out: %q", a.Detail)
+	}
+	if strings.Contains(a.Detail, "name-0 ") || strings.Contains(a.Detail, "name-1,") {
+		t.Errorf("detail lists the oldest refusals: %q", a.Detail)
+	}
+}

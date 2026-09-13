@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -122,6 +123,10 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	if stopDNS != nil {
 		cleanups = append(cleanups, stopDNS)
 	}
+	// The guard is attached later, from the Docker probe; the health advisory
+	// reads its refusals from here. Nil until then, which Recent tolerates.
+	var dnsGuard atomic.Pointer[dataplane.Guard]
+	dnsRefusals := func() []dataplane.Refusal { return dnsGuard.Load().Recent() }
 
 	// ---- Event bus (declared early so middleware can reference it) ----------
 	// The bus pointer is set below, after middleware registration.
@@ -334,7 +339,7 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 		return dockerStatusFn()
 	}
 	if cfg.Debug {
-		r.Route("/_overcast/debug", debugHandlers(cfg, store, ec2Svc, lambdaSvc, debugProviders, traceBuf, dockerStatusNow))
+		r.Route("/_overcast/debug", debugHandlers(cfg, store, ec2Svc, lambdaSvc, debugProviders, traceBuf, dockerStatusNow, dnsRefusals))
 	}
 	// ---- Reset (always available) ------------------------------------------
 	// Unlike the rest of the /_overcast/debug namespace above, reset is not
@@ -951,7 +956,9 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 			// that a daemon is here, give it one — see internal/dataplane.Guard
 			// for why this is affordable on the query path.
 			if dnsServer != nil && len(results) > 0 {
-				dnsServer.SetGuard(dataplane.NewGuard(results[0].Client, logger))
+				guard := dataplane.NewGuard(results[0].Client, logger)
+				dnsGuard.Store(guard)
+				dnsServer.SetGuard(guard)
 			}
 
 			// Wire every successful service before reconciling. Services sharing

@@ -496,7 +496,7 @@ func TestDebugMetrics_reportsCountersForMemoryStore(t *testing.T) {
 	// When: the metrics endpoint is requested.
 	req := httptest.NewRequest(http.MethodGet, "/_overcast/debug/metrics", nil)
 	rec := httptest.NewRecorder()
-	debugMetrics(cfg, store, nil, nil, nil).ServeHTTP(rec, req)
+	debugMetrics(cfg, store, nil, nil, nil, nil).ServeHTTP(rec, req)
 
 	// Then: it responds 200 with one "memory" mode entry reporting counters.
 	if rec.Code != http.StatusOK {
@@ -534,7 +534,7 @@ func TestDebugMetrics_advisoriesReflectMemoryModeAndAreNeverNull(t *testing.T) {
 	// When: the metrics endpoint is requested.
 	req := httptest.NewRequest(http.MethodGet, "/_overcast/debug/metrics", nil)
 	rec := httptest.NewRecorder()
-	debugMetrics(cfg, store, nil, nil, nil).ServeHTTP(rec, req)
+	debugMetrics(cfg, store, nil, nil, nil, nil).ServeHTTP(rec, req)
 
 	// Then: the response carries a non-null Advisories array including the
 	// memory-mode advisory.

@@ -290,6 +290,50 @@ func (h *Handler) containerAliases(ctx context.Context, region string, inst *DBI
 		h.clusterAliasesForInstance(ctx, region, inst)...)
 }
 
+// instancePlacement is where inst's engine container belongs: its subnet
+// group's VPC, the default plane when it has none, and — the part that was
+// missing — the default plane *as well* when the instance is publicly
+// accessible. PubliclyAccessible is AWS's own escape hatch from a VPC, the
+// one docs/networking/vpcs.md tells people to reach for, and until this it
+// changed DescribeDBInstances and nothing else: the container joined its VPC
+// network alone, and a function outside that VPC had its endpoint refused.
+//
+// Every attach goes through here — fresh, adopted, promoted — so the record
+// and the wiring cannot disagree about it.
+func (h *Handler) instancePlacement(ctx context.Context, inst *DBInstance, aliases []string) (dataplane.Placement, error) {
+	placement, err := dataplane.PlaceInSubnets(ctx, h.vpcResolver, inst.VpcID, h.instanceSubnets(ctx, inst))
+	if err != nil {
+		return placement, err
+	}
+	placement.Public = inst.PubliclyAccessibleOrDefault()
+	placement.Aliases = aliases
+	return placement, nil
+}
+
+// reattachInstance moves inst's running container to the placement its
+// record now calls for, after a modification changed it. Reattach leaves
+// every plane and rejoins, which drops open connections — as it does on AWS,
+// where a PubliclyAccessible change is applied with a network interruption.
+// Best-effort, and logged rather than surfaced: the record is already
+// committed, and the next restart applies the same placement anyway.
+func (h *Handler) reattachInstance(ctx context.Context, inst *DBInstance) {
+	if h.docker == nil || !h.dockerReady.Load() || inst == nil || inst.DockerContainerID == "" {
+		return
+	}
+	placement, err := h.instancePlacement(ctx, inst, h.containerAliases(ctx, h.store.region(ctx), inst))
+	if err != nil {
+		h.log.Warn("RDS: modified instance could not be placed in its VPC — "+
+			"its reachability is unchanged until it is restarted",
+			zap.String("instance", inst.DBInstanceIdentifier), zap.Error(err))
+		return
+	}
+	if err := dataplane.Reattach(ctx, h.docker, h.cfg, inst.DockerContainerID, placement); err != nil {
+		h.log.Warn("RDS: modified instance could not be re-attached — "+
+			"its reachability is unchanged until it is restarted",
+			zap.String("instance", inst.DBInstanceIdentifier), zap.Error(err))
+	}
+}
+
 // instanceSubnets returns the subnets an instance's DB subnet group names, or
 // nil for an instance without one (which lands in the default VPC) or one
 // whose group Overcast has no record of. Under OVERCAST_VPC_EGRESS=routed the
@@ -333,14 +377,13 @@ func (h *Handler) adoptClusterEndpoints(ctx context.Context, instanceID string) 
 		return
 	}
 
-	placement, err := dataplane.PlaceInSubnets(ctx, h.vpcResolver, inst.VpcID, h.instanceSubnets(ctx, inst))
+	placement, err := h.instancePlacement(ctx, inst, h.containerAliases(ctx, h.store.region(ctx), inst))
 	if err != nil {
 		h.log.Warn("RDS: promoted instance could not be placed in its VPC — "+
 			"the cluster endpoints still resolve to the old writer",
 			zap.String("instance", instanceID), zap.Error(err))
 		return
 	}
-	placement.Aliases = h.containerAliases(ctx, h.store.region(ctx), inst)
 
 	if err := dataplane.Reattach(ctx, h.docker, h.cfg, inst.DockerContainerID, placement); err != nil {
 		h.log.Warn("RDS: promoted instance could not take over the cluster endpoints — "+

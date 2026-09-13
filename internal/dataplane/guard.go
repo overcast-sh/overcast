@@ -56,6 +56,66 @@ type Guard struct {
 	mu    sync.Mutex
 	cache map[string]cachedVerdict
 	clock func() time.Time
+
+	// recent is the last few refusals, newest last, for the health advisory.
+	// A refusal is logged too, but the log is where somebody looks once they
+	// suspect Overcast; the advisory is what tells them to. Bounded by
+	// maxRecentRefusals; a name refused again replaces its earlier entry
+	// rather than filling the list with one broken caller's retries.
+	recent []Refusal
+}
+
+// Refusal is one data-plane name the guard declined to answer: a caller on
+// one set of networks asked for a name advertised only on another.
+type Refusal struct {
+	// Name is the hostname queried, as the caller spelled it.
+	Name string `json:"name"`
+	// Target labels the container advertising Name — its service and resource
+	// when Overcast started it — and TargetNetworks the networks it is on.
+	Target         string   `json:"target"`
+	TargetNetworks []string `json:"targetNetworks"`
+	// Caller labels the container that asked, and CallerNetworks the networks
+	// it is on. The two network sets are disjoint, which is the whole finding.
+	Caller         string   `json:"caller"`
+	CallerNetworks []string `json:"callerNetworks"`
+	// At is when the refusal was recorded.
+	At time.Time `json:"at"`
+}
+
+// maxRecentRefusals bounds Recent. One entry per name is plenty to see the
+// shape of a misplacement, and a deployment with more than this many distinct
+// broken names has a problem the first few already describe.
+const maxRecentRefusals = 16
+
+// Recent returns the refusals recorded so far, oldest first. Nil for a guard
+// that has refused nothing, so a caller can render "nothing to report"
+// without a length check.
+func (g *Guard) Recent() []Refusal {
+	if g == nil {
+		return nil
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if len(g.recent) == 0 {
+		return nil
+	}
+	return append([]Refusal(nil), g.recent...)
+}
+
+// record keeps r for Recent, replacing an earlier refusal of the same name.
+func (g *Guard) record(r Refusal) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	for i := range g.recent {
+		if strings.EqualFold(g.recent[i].Name, r.Name) {
+			g.recent = append(g.recent[:i], g.recent[i+1:]...)
+			break
+		}
+	}
+	if len(g.recent) >= maxRecentRefusals {
+		g.recent = g.recent[1:]
+	}
+	g.recent = append(g.recent, r)
 }
 
 // verdictTTL bounds how long a refusal is reused. A client that cannot resolve
@@ -160,16 +220,32 @@ func (g *Guard) evaluate(ctx context.Context, name string, peer netip.Addr) bool
 		}
 	}
 
+	targetNetworks, callerNetworks := keys(advertisedOn), keys(callerOn)
 	g.log.Warn("refusing a data-plane name the caller cannot reach — "+
 		"the container is on a network this caller is not attached to, so answering "+
-		"with Overcast's address would connect it to the emulator on the engine's port and hang",
+		"with Overcast's address would connect it to the emulator on the engine's port and hang. "+
+		RefusalRemedy,
 		zap.String("name", name),
 		zap.String("target", target),
 		zap.String("caller", caller),
-		zap.Strings("target_networks", keys(advertisedOn)),
-		zap.Strings("caller_networks", keys(callerOn)))
+		zap.Strings("target_networks", targetNetworks),
+		zap.Strings("caller_networks", callerNetworks))
+	g.record(Refusal{
+		Name: name, Target: target, TargetNetworks: targetNetworks,
+		Caller: caller, CallerNetworks: callerNetworks, At: g.clock(),
+	})
 	return true
 }
+
+// RefusalRemedy is the one-line fix, said the same way in the log line and in
+// the health advisory: the two resources are not in the same VPC, which is
+// the placement the template asked for, and would not reach each other on AWS
+// either. Spelled in AWS's own terms because the fix that works here is the
+// fix that works there.
+const RefusalRemedy = "Put both resources in the same VPC — a CacheSubnetGroupName or DBSubnetGroupName " +
+	"on the resource, a VpcConfig on the function, awsvpcConfiguration subnets on the task — " +
+	"or leave both outside any VPC; a resource that named no subnet group is in the default VPC, " +
+	"which is the shared data plane. RDS also honours PubliclyAccessible and ECS assignPublicIp."
 
 // survey inspects each container once and answers both questions from the same
 // pass: which networks advertise name, and which the caller is attached to.
