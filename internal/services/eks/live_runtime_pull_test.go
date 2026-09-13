@@ -38,6 +38,14 @@ type fakeK3sDaemon struct {
 	creates []string
 	images  map[string]bool
 
+	// requests is every call in arrival order, as "METHOD path", so a test
+	// can assert on the order two operations happened in — a network connect
+	// before a container start, say — rather than only that both happened.
+	requests []string
+	// connects is every networks/{id}/connect the daemon served: which
+	// container joined which network advertising which aliases.
+	connects []networkConnect
+
 	// pullErr, when non-empty, fails images/create with this daemon message.
 	pullErr string
 	// createErr, when non-empty, fails containers/create with a 500 carrying
@@ -47,6 +55,11 @@ type fakeK3sDaemon struct {
 	// readyzPort is the host port containers/{id}/json advertises for
 	// 6443/tcp — where the readiness poll dials the k3s API.
 	readyzPort string
+
+	// adoptable, when set, is the cluster name whose managed container
+	// (overcast-eks-<name>) the daemon already holds, running, from an earlier
+	// Overcast run — the shape restart adoption finds.
+	adoptable string
 
 	// inspected closes when the daemon first serves the container inspect, so
 	// a test can act at the point a bootstrap has reached the readiness poll.
@@ -65,9 +78,50 @@ func newFakeK3sDaemon(t *testing.T) *fakeK3sDaemon {
 	return fd
 }
 
+// networkConnect is one networks/{id}/connect call as the daemon saw it.
+type networkConnect struct {
+	network   string
+	container string
+	aliases   []string
+}
+
 func (fd *fakeK3sDaemon) serve(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
+	fd.mu.Lock()
+	fd.requests = append(fd.requests, r.Method+" "+path)
+	adoptable := fd.adoptable
+	fd.mu.Unlock()
 	switch {
+	case r.Method == http.MethodPost && strings.HasSuffix(path, "/connect"):
+		var body struct {
+			Container      string `json:"Container"`
+			EndpointConfig *struct {
+				Aliases []string `json:"Aliases"`
+			} `json:"EndpointConfig"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		// /v1.45/networks/<name>/connect
+		parts := strings.Split(strings.Trim(path, "/"), "/")
+		connect := networkConnect{network: parts[len(parts)-2], container: body.Container}
+		if body.EndpointConfig != nil {
+			connect.aliases = body.EndpointConfig.Aliases
+		}
+		fd.mu.Lock()
+		fd.connects = append(fd.connects, connect)
+		fd.mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+
+	case r.Method == http.MethodGet && adoptable != "" &&
+		strings.HasSuffix(path, "/containers/overcast-eks-"+adoptable+"/json"):
+		fd.mu.Lock()
+		port := fd.readyzPort
+		fd.mu.Unlock()
+		labels, _ := json.Marshal(docker.ManagedLabels(serviceName, adoptable))
+		fmt.Fprintf(w, `{"Id":%q,"Name":"/overcast-eks-%s","Config":{"Labels":%s},`+
+			`"State":{"Status":"running","Running":true},`+
+			`"NetworkSettings":{"Ports":{"6443/tcp":[{"HostIp":"0.0.0.0","HostPort":%q}]}}}`,
+			fakeK3sContainerID, adoptable, labels, port)
+
 	case r.Method == http.MethodPost && strings.HasSuffix(path, "/images/create"):
 		image := r.URL.Query().Get("fromImage")
 		if tag := r.URL.Query().Get("tag"); tag != "" {
@@ -149,6 +203,18 @@ func (fd *fakeK3sDaemon) createdImages() []string {
 	fd.mu.Lock()
 	defer fd.mu.Unlock()
 	return append([]string(nil), fd.creates...)
+}
+
+func (fd *fakeK3sDaemon) requestLog() []string {
+	fd.mu.Lock()
+	defer fd.mu.Unlock()
+	return append([]string(nil), fd.requests...)
+}
+
+func (fd *fakeK3sDaemon) networkConnects() []networkConnect {
+	fd.mu.Lock()
+	defer fd.mu.Unlock()
+	return append([]networkConnect(nil), fd.connects...)
 }
 
 // k3sKubeconfigTar renders the archive `docker cp` would return for

@@ -14,12 +14,16 @@ import (
 	"github.com/overcast-sh/overcast/internal/state"
 )
 
-func newEKSReconcileService(t *testing.T, name string) (*Service, chan string) {
+// newEKSReconcileService wires a live-mode service to a fake daemon that
+// accepts every call and records the network attachments, so a test can say
+// both what was recovered and where an adopted container was put.
+func newEKSReconcileService(t *testing.T, name string) (*Service, *fakeK3sDaemon, chan string) {
 	t.Helper()
+	fd := newFakeK3sDaemon(t)
 	s := New(&config.Config{
-		Region: "us-east-1", AccountID: "000000000000", EKSMode: config.EKSModeLive,
+		Region: "us-east-1", AccountID: "000000000000", EKSMode: config.EKSModeLive, Network: "overcast",
 	}, state.NewMemoryStore(), zap.NewNop(), clock.New())
-	s.SetDocker(docker.NewClient("http://docker.invalid", zap.NewNop()))
+	s.SetDocker(docker.NewClient("tcp://"+fd.srv.Listener.Addr().String(), zap.NewNop()))
 	cluster := &Cluster{
 		Name: name, Arn: s.clusterARN("us-east-1", name), Status: "ACTIVE", Version: "1.31",
 		Endpoint: "https://example.invalid", CreatedAt: time.Now(),
@@ -32,11 +36,11 @@ func newEKSReconcileService(t *testing.T, name string) (*Service, chan string) {
 		started <- cluster.Name
 	}
 	t.Cleanup(s.liveCancel)
-	return s, started
+	return s, fd, started
 }
 
 func TestReconcileContainersRestartsMissingActiveControlPlane(t *testing.T) {
-	s, started := newEKSReconcileService(t, "demo")
+	s, _, started := newEKSReconcileService(t, "demo")
 
 	s.ReconcileContainers(context.Background(), nil)
 
@@ -51,25 +55,29 @@ func TestReconcileContainersRestartsMissingActiveControlPlane(t *testing.T) {
 }
 
 func TestReconcileContainersAdoptsRunningControlPlaneWithoutRestart(t *testing.T) {
-	s, started := newEKSReconcileService(t, "demo")
+	s, fd, started := newEKSReconcileService(t, "demo")
 
 	s.ReconcileContainers(context.Background(), []docker.ContainerSummary{{
-		ID: "container-1", State: "running",
+		ID: fakeK3sContainerID, State: "running",
 		Labels: s.instances.ManagedLabels(context.Background(), serviceName, "demo"),
 	}})
 
-	if runtime, ok := s.getLiveClusterRuntime("us-east-1", "demo"); !ok || runtime.containerID != "container-1" {
-		t.Fatalf("adopted runtime = %#v, %v; want container-1", runtime, ok)
+	if runtime, ok := s.getLiveClusterRuntime("us-east-1", "demo"); !ok || runtime.containerID != fakeK3sContainerID {
+		t.Fatalf("adopted runtime = %#v, %v; want %s", runtime, ok, fakeK3sContainerID)
 	}
 	select {
 	case got := <-started:
 		t.Fatalf("running control plane unexpectedly restarted %q", got)
 	default:
 	}
+	// Adoption is placement too: the container was attached by an earlier
+	// process, or by an older version that never put it on the control plane,
+	// and it has to end up where a fresh bootstrap would have put it.
+	assertAdoptedAttachments(t, fd.networkConnects(), "demo")
 }
 
 func TestReconcileContainersDoesNotAdoptAnotherOvercastsControlPlane(t *testing.T) {
-	s, started := newEKSReconcileService(t, "demo")
+	s, _, started := newEKSReconcileService(t, "demo")
 	labels := docker.ManagedLabels(serviceName, "demo")
 	labels[docker.LabelInstance] = "another-overcast-instance"
 
@@ -88,7 +96,7 @@ func TestReconcileContainersDoesNotAdoptAnotherOvercastsControlPlane(t *testing.
 }
 
 func TestLiveRuntimeExitTriggersImmediateRecovery(t *testing.T) {
-	s, started := newEKSReconcileService(t, "demo")
+	s, _, started := newEKSReconcileService(t, "demo")
 	s.setLiveClusterRuntime("us-east-1", "demo", &liveClusterRuntime{containerID: "container-1"})
 
 	s.handleLiveRuntimeDied(context.Background(), events.Event{

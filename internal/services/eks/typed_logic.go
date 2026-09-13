@@ -86,6 +86,7 @@ func (s *Service) describeClusterTyped(ctx context.Context, req *describeCluster
 	if !found {
 		return nil, &protocol.AWSError{Code: "ResourceNotFoundException", Message: "No cluster found for name: " + req.Name, HTTPStatus: 404}
 	}
+	cluster = s.renderCluster(ctx, region, cluster)
 	cluster.Tags = s.readTagsForARN(ctx, cluster.Arn)
 	return &describeClusterResponse{Cluster: cluster}, nil
 }
@@ -397,6 +398,7 @@ func (s *Service) updateKubeconfigTyped(ctx context.Context, req *updateKubeconf
 		return nil, aerr
 	}
 	caData, _ := cluster.CertificateAuthority["data"].(string)
+	server := s.clusterEndpointFor(ctx, region, cluster)
 	kubeconfig := fmt.Sprintf(`apiVersion: v1
 kind: Config
 clusters:
@@ -414,7 +416,7 @@ users:
 - name: %s
   user:
     token: overcast-dev-token
-`, cluster.Name, cluster.Endpoint, caData, cluster.Name, cluster.Name, cluster.Name, cluster.Name, cluster.Name)
+`, cluster.Name, server, caData, cluster.Name, cluster.Name, cluster.Name, cluster.Name, cluster.Name)
 	return &updateKubeconfigResponse{Kubeconfig: kubeconfig}, nil
 }
 

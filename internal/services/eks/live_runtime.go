@@ -99,8 +99,7 @@ func (s *Service) startLiveCluster(ctx context.Context, region string, cluster *
 	// containers should fail the cluster here rather than silently landing its
 	// control plane on the default plane, where nothing inside the VPC could
 	// reach it.
-	placement, err := s.placementFor(ctx, s.vpcForCluster(ctx, cluster),
-		clusterSubnetIDs(cluster.ResourcesVPCConfig), s.clusterEndpointAliases(region, cluster.Name))
+	placement, err := s.clusterPlacement(ctx, region, cluster)
 	if err != nil {
 		s.failLiveCluster(ctx, region, cluster.Name, issueConfigurationConflict, err)
 		return
@@ -151,6 +150,12 @@ func (s *Service) startLiveCluster(ctx context.Context, region string, cluster *
 				return
 			}
 			containerID = existing.ID
+			// A container that was already there was not created by this
+			// bootstrap: it is one left from an earlier run, so it is joined
+			// the way restart adoption joins one — control plane included, for
+			// a container an older version created elsewhere — and before it
+			// is started, when it is not already running.
+			s.attachLiveClusterContainer(ctx, cluster.Name, containerID, placement, true)
 			if !existing.State.Running {
 				if err := s.docker.StartContainer(ctx, containerID); err != nil {
 					s.failLiveCluster(ctx, region, cluster.Name, issueInternalFailure,
@@ -163,6 +168,12 @@ func (s *Service) startLiveCluster(ctx context.Context, region string, cluster *
 			return
 		}
 	} else {
+		// Join the data plane before starting, as every container-backed
+		// service does: k3s pulls images from its first moment running, and
+		// under OVERCAST_VPC_EGRESS=routed the route out it needs for that is
+		// the egress network the placement names. Started first, it races its
+		// own first outbound connection.
+		s.attachLiveClusterContainer(ctx, cluster.Name, containerID, placement, false)
 		if err := s.docker.StartContainer(ctx, containerID); err != nil {
 			_ = s.docker.RemoveContainerForce(containerID)
 			s.failLiveCluster(ctx, region, cluster.Name, issueInternalFailure, err)
@@ -170,17 +181,55 @@ func (s *Service) startLiveCluster(ctx context.Context, region string, cluster *
 		}
 	}
 
-	// The control plane is reachable by name from sibling containers, so a task
-	// or function running kubectl against it resolves the same endpoint the API
-	// hands out. Non-fatal: the published host port still serves the host.
-	if err := dataplane.Attach(ctx, s.docker, s.cfg, containerID, placement); err != nil {
-		s.log.Warn("eks: cluster container could not join the data plane — "+
-			"its endpoint resolves only from the host",
-			zap.String("cluster", cluster.Name), zap.Error(err))
-	}
-
 	s.setLiveClusterRuntime(region, cluster.Name, &liveClusterRuntime{containerID: containerID})
 	s.pollK3sReady(ctx, region, cluster, containerID)
+}
+
+// attachLiveClusterContainer joins a control-plane container to its data
+// plane(s) — and, for one adopted rather than created by this process, the
+// control plane too — advertising the endpoint names, so a task or function
+// running kubectl against it resolves the endpoint the API hands out.
+//
+// Non-fatal: the published host port still serves the host, and a control
+// plane that came up is more use reported ACTIVE with this shortfall in the
+// log than FAILED over a name that only sibling containers would have used.
+func (s *Service) attachLiveClusterContainer(ctx context.Context, name, containerID string, placement dataplane.Placement, adopted bool) {
+	var err error
+	if adopted {
+		err = dataplane.AttachAdopted(ctx, s.docker, s.cfg, containerID, placement)
+	} else {
+		err = dataplane.Attach(ctx, s.docker, s.cfg, containerID, placement)
+	}
+	if err != nil {
+		s.log.Warn("eks: cluster container could not join the data plane — "+
+			"its endpoint resolves only from the host",
+			zap.String("cluster", name), zap.Error(err))
+	}
+}
+
+// adoptLiveClusterContainer records containerID as cluster's running control
+// plane and puts it where a fresh bootstrap would have: on its VPC's network
+// or the default plane, carrying its endpoint names, and on the control plane
+// — which a container created by an older version may never have joined.
+// Recording the ID alone left an adopted control plane reachable by nothing
+// but the published host port until it was next recreated.
+func (s *Service) adoptLiveClusterContainer(ctx context.Context, region string, cluster *Cluster, containerID string) {
+	s.setLiveClusterRuntime(region, cluster.Name, &liveClusterRuntime{containerID: containerID})
+	s.attachAdoptedLiveCluster(ctx, region, cluster, containerID)
+}
+
+// attachAdoptedLiveCluster is the placement half of adoptLiveClusterContainer,
+// for the describe-time reconcile that records the runtime first and reads
+// the container's port bindings before it can be sure it has one to adopt.
+func (s *Service) attachAdoptedLiveCluster(ctx context.Context, region string, cluster *Cluster, containerID string) {
+	placement, err := s.clusterPlacement(ctx, region, cluster)
+	if err != nil {
+		s.log.Warn("eks: adopted cluster container could not be placed in its VPC — "+
+			"its endpoint resolves only from the host",
+			zap.String("cluster", cluster.Name), zap.Error(err))
+		return
+	}
+	s.attachLiveClusterContainer(ctx, cluster.Name, containerID, placement, true)
 }
 
 // clusterEndpointAliases is the set of DNS names a k3s control plane answers to
@@ -195,8 +244,29 @@ func (s *Service) clusterEndpointAliases(region, name string) []string {
 		return nil
 	}
 	return dataplane.Hostnames(s.cfg, func(base string) string {
-		return name + "." + region + ".eks." + base
+		return clusterEndpointHostname(name, region, base)
 	})
+}
+
+// clusterEndpointPublicAccess reads resourcesVpcConfig.endpointPublicAccess,
+// AWS's default of true standing in when the caller did not say. Anything
+// that is not a bool reads as the default rather than as an error: a
+// malformed field should leave the cluster reachable, not refuse to start it.
+func clusterEndpointPublicAccess(vpcConfig map[string]any) bool {
+	if v, ok := vpcConfig["endpointPublicAccess"].(bool); ok {
+		return v
+	}
+	return true
+}
+
+// clusterPlacement is the Placement cluster's control-plane container takes:
+// its VPC and subnets resolved from resourcesVpcConfig, its endpoint aliases,
+// and whether its API endpoint is public. One function for the fresh
+// bootstrap and every adoption path, so an adopted container cannot land
+// somewhere a freshly started one would not.
+func (s *Service) clusterPlacement(ctx context.Context, region string, cluster *Cluster) (dataplane.Placement, error) {
+	return s.placementFor(ctx, s.vpcForCluster(ctx, cluster), clusterSubnetIDs(cluster.ResourcesVPCConfig),
+		s.clusterEndpointAliases(region, cluster.Name), clusterEndpointPublicAccess(cluster.ResourcesVPCConfig))
 }
 
 // vpcForCluster returns the VPC an EKS control plane belongs in, or "" for the
@@ -265,7 +335,14 @@ func clusterSubnetIDs(vpcConfig map[string]any) []string {
 // placementFor turns a resolved VPC into the Placement the control-plane
 // container should take, carrying its endpoint aliases onto whichever plane it
 // lands on.
-func (s *Service) placementFor(ctx context.Context, vpcID string, subnetIDs, aliases []string) (dataplane.Placement, error) {
+//
+// public is resourcesVpcConfig.endpointPublicAccess. On AWS it is what makes
+// the API server reachable from outside the VPC, and here it keeps a
+// VPC-placed control plane on the default plane as well as its VPC's network
+// — the same AWS-spelled escape hatch RDS's PubliclyAccessible and ECS's
+// assignPublicIp are, so a cluster whose endpoint is private is held to its
+// VPC exactly as its consumers are.
+func (s *Service) placementFor(ctx context.Context, vpcID string, subnetIDs, aliases []string, public bool) (dataplane.Placement, error) {
 	var resolver dataplane.VPCResolver
 	if s.vpcResolver != nil {
 		resolver = s.vpcResolver
@@ -278,6 +355,7 @@ func (s *Service) placementFor(ctx context.Context, vpcID string, subnetIDs, ali
 		return placement, err
 	}
 	placement.Aliases = aliases
+	placement.Public = public
 	return placement, nil
 }
 
@@ -595,12 +673,13 @@ func (s *Service) reconcileLiveClusterContainers(ctx context.Context, containers
 		if runtime, ok := s.getLiveClusterRuntime(region, name); ok {
 			recordedID = runtime.containerID
 		}
-		running := s.instances.OwnContainer(middleware.ContextWithRegion(ctx, region), byResource[name], recordedID)
+		rctx := middleware.ContextWithRegion(ctx, region)
+		running := s.instances.OwnContainer(rctx, byResource[name], recordedID)
 		if running != nil && !strings.EqualFold(running.State, "running") {
 			running = nil
 		}
 		if running != nil {
-			s.setLiveClusterRuntime(region, name, &liveClusterRuntime{containerID: running.ID})
+			s.adoptLiveClusterContainer(rctx, region, &cluster, running.ID)
 			continue
 		}
 		s.recoverLiveCluster(region, &cluster)
@@ -658,6 +737,10 @@ func (s *Service) reconcileReadyLiveCluster(ctx context.Context, region string, 
 	}
 
 	var inspect *docker.ContainerInspect
+	// adopted marks a container this process did not start and has not yet
+	// put on its planes — one found by name after a restart, or behind a
+	// stale ID. It is attached once its port bindings say it is the one.
+	adopted := false
 	runtime, found := s.getLiveClusterRuntime(region, cluster.Name)
 	if !found || strings.TrimSpace(runtime.containerID) == "" {
 		containerName := "overcast-eks-" + cluster.Name
@@ -672,6 +755,7 @@ func (s *Service) reconcileReadyLiveCluster(ctx context.Context, region string, 
 			runtime = &liveClusterRuntime{containerID: inspect.ID}
 			s.setLiveClusterRuntime(region, cluster.Name, runtime)
 			found = true
+			adopted = true
 		}
 	}
 	if !found || strings.TrimSpace(runtime.containerID) == "" {
@@ -700,6 +784,7 @@ func (s *Service) reconcileReadyLiveCluster(ctx context.Context, region string, 
 			}
 			runtime = &liveClusterRuntime{containerID: nameInspect.ID}
 			s.setLiveClusterRuntime(region, cluster.Name, runtime)
+			adopted = true
 			inspect, err = s.docker.InspectContainer(ctx, runtime.containerID)
 			if err != nil {
 				s.log.Warn("failed to inspect refreshed EKS live runtime after stale ID recovery",
@@ -715,6 +800,9 @@ func (s *Service) reconcileReadyLiveCluster(ctx context.Context, region string, 
 	}
 	if hostPort == "" {
 		return cluster
+	}
+	if adopted {
+		s.attachAdoptedLiveCluster(ctx, region, cluster, runtime.containerID)
 	}
 
 	readyzURL := s.readyzURL(ctx, runtime.containerID, hostPort)
