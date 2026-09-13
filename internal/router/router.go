@@ -654,6 +654,9 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	ecsSvc.SetVPCResolver(ec2Svc)
 	rdsSvc.SetVPCResolver(ec2Svc)
 	elasticacheSvc.SetVPCResolver(ec2Svc)
+	// EFS → EC2: a mount target's export joins the VPC its subnet is in, where
+	// the functions and tasks that mount it are.
+	efsSvc.SetVPCResolver(ec2Svc)
 	// MSK/EKS → EC2: the same, for the subnets a cluster is created with. On
 	// AWS there is no non-VPC MSK cluster, so a broker container that stayed on
 	// the default plane could not be reached by a function in the VPC that
