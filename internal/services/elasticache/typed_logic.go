@@ -501,7 +501,7 @@ func (h *Handler) createCacheClusterTyped(ctx context.Context, req *ecCreateCach
 	arn := fmt.Sprintf("arn:aws:elasticache:%s:%s:cluster:%s", region, h.cfg.AccountID, req.CacheClusterId)
 	endpoint := &ClusterEndpoint{
 		Address: fmt.Sprintf("%s.%s.cfg.%s", req.CacheClusterId, region, h.cfg.ExternalHostname()),
-		Port:    defaultRedisPort,
+		Port:    enginePort(engine),
 	}
 	cluster := &CacheCluster{
 		CacheClusterId:            req.CacheClusterId,

@@ -281,7 +281,7 @@ func (h *Handler) CreateCacheCluster(w http.ResponseWriter, r *http.Request) {
 
 	endpoint := &ClusterEndpoint{
 		Address: fmt.Sprintf("%s.%s.cfg.%s", id, region, h.cfg.ExternalHostname()),
-		Port:    defaultRedisPort,
+		Port:    enginePort(engine),
 	}
 
 	cluster := &CacheCluster{
@@ -593,7 +593,7 @@ func (h *Handler) RemoveTagsFromResource(w http.ResponseWriter, r *http.Request)
 
 // startCacheContainer creates (or reuses) and starts a Docker container for the
 // given cache cluster. Supports redis, valkey, and memcached engines. Updates
-// c.DockerContainerID, c.HostPort, and c.ConfigurationEndpoint in place.
+// c.DockerContainerID, c.HostPort and the health-check dial target in place.
 // Follows the same reuse-on-restart semantics as RDS.
 func (h *Handler) startCacheContainer(ctx context.Context, c *CacheCluster) error {
 	image := engineImage(c.Engine, c.EngineVersion)
@@ -875,7 +875,7 @@ func (h *Handler) teardownOrphanedContainer(ctx context.Context, kind, id, conta
 
 // startReplicationGroupContainer creates (or reuses) and starts a single Docker
 // container for the given replication group (primary node). Updates rg.DockerContainerID,
-// rg.HostPort, and rg.ConfigurationEndpoint in place.
+// rg.HostPort and the health-check dial target in place.
 func (h *Handler) startReplicationGroupContainer(ctx context.Context, rg *ReplicationGroup) error {
 	image := engineImage(rg.Engine, rg.EngineVersion)
 	port := enginePort(rg.Engine)

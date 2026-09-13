@@ -1,8 +1,7 @@
 * [elasticache] cache endpoints are minted for whoever asks, on every read, instead of overwritten with the address Overcast itself dials
-  `DescribeCacheClusters`, `DescribeReplicationGroups` and `DescribeServerlessCaches` hand a Lambda function or
-  ECS task the endpoint hostname and the engine port, and the host the published port. The record used to be
-  rewritten after the container started with Overcast's own dial target, so a function reading the endpoint at
-  runtime was given `127.0.0.1` and connected to itself.
+  A Lambda function or ECS task gets the endpoint hostname and the engine port, the host the published port.
+  The record used to be rewritten after the container started with the address Overcast itself dials, so a
+  function reading the endpoint at runtime was given `127.0.0.1` and connected to itself.
 * [elasticache] a replication-group container adopted after a restart rejoins its subnet group's VPC network
   It used to be re-attached with no VPC at all and landed on the default plane, where the tasks in its VPC
   could not resolve it, while a freshly created group was placed correctly.

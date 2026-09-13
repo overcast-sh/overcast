@@ -79,15 +79,11 @@ func (h *Handler) callerDialTarget(ctx context.Context, containerID, engine stri
 
 // mintEndpoint renders one endpoint for this caller: name is the hostname on
 // the caller's base, and the port and address follow callerDialTarget.
-func (h *Handler) mintEndpoint(ctx context.Context, name func(base string) string, containerID, engine string, hostPort int, stored *ClusterEndpoint) *ClusterEndpoint {
-	declaredPort := enginePort(engine)
-	if stored != nil && stored.Port > 0 && net.ParseIP(stored.Address) == nil {
-		// A record created before this file carried the port it was minted
-		// with; one overwritten by an older build carries a dial target, whose
-		// port is Overcast's to use and nobody else's.
-		declaredPort = stored.Port
-	}
-	port, loopback := h.callerDialTarget(ctx, containerID, engine, hostPort, declaredPort)
+func (h *Handler) mintEndpoint(ctx context.Context, name func(base string) string, containerID, engine string, hostPort int) *ClusterEndpoint {
+	// The declared port is the engine's, derived rather than read back from the
+	// record: a record overwritten by an older build carries a dial target
+	// whose port is Overcast's to use and nobody else's.
+	port, loopback := h.callerDialTarget(ctx, containerID, engine, hostPort, enginePort(engine))
 	if loopback {
 		return &ClusterEndpoint{Address: loopbackAddress, Port: port}
 	}
@@ -102,7 +98,7 @@ func (h *Handler) clusterEndpointFor(ctx context.Context, c *CacheCluster) *Clus
 	}
 	return h.mintEndpoint(ctx, func(base string) string {
 		return clusterEndpointHostname(c.CacheClusterId, h.region(), base)
-	}, c.DockerContainerID, c.Engine, c.HostPort, c.ConfigurationEndpoint)
+	}, c.DockerContainerID, c.Engine, c.HostPort)
 }
 
 // replicationGroupEndpointFor is the ConfigurationEndpoint this caller should
@@ -113,7 +109,7 @@ func (h *Handler) replicationGroupEndpointFor(ctx context.Context, rg *Replicati
 	}
 	return h.mintEndpoint(ctx, func(base string) string {
 		return replicationGroupEndpointHostname(rg.ReplicationGroupId, h.region(), base)
-	}, rg.DockerContainerID, rg.Engine, rg.HostPort, rg.ConfigurationEndpoint)
+	}, rg.DockerContainerID, rg.Engine, rg.HostPort)
 }
 
 // serverlessEndpointFor is the Endpoint (and ReaderEndpoint — one node, two
@@ -124,7 +120,7 @@ func (h *Handler) serverlessEndpointFor(ctx context.Context, c *ServerlessCache)
 	}
 	return h.mintEndpoint(ctx, func(base string) string {
 		return serverlessEndpointHostname(c.ServerlessCacheName, h.region(), base)
-	}, c.DockerContainerID, c.Engine, c.HostPort, c.Endpoint)
+	}, c.DockerContainerID, c.Engine, c.HostPort)
 }
 
 // cacheClusterForCaller is c as this caller should see it: a shallow copy with
