@@ -422,6 +422,12 @@ func WithECSDocker() Option {
 // platform the first time the gate let them run (#1785).
 func WaitForECSDocker(t *testing.T, srv *TestServer) {
 	t.Helper()
+	// A daemon that is not there will never wire, so a caller that forgot its
+	// own SkipWithoutDocker would otherwise wait the full 30 seconds and fail
+	// on every workstation without Docker running. The gate belongs here as
+	// much as at the top of the test: this is the one call every Docker-backed
+	// ECS test makes.
+	SkipWithoutDocker(t)
 	Eventually(t, 30*time.Second, 25*time.Millisecond, func() bool {
 		body := []byte(`{"tasks":["11112222-3333-4444-5555-666677778888"]}`)
 		req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, srv.URL+"/", bytes.NewReader(body))
