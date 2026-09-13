@@ -26,13 +26,20 @@ func liveTestConfig(hostname string) *config.Config {
 // control plane and inspect the target for an address there; host runs do
 // neither. These fakes deliberately report no such address so both modes use
 // the published-port path the tests already model.
+//
+// Every other network connect is accepted and not recorded as well: a control
+// plane adopted after a restart is joined to its planes on the way, and which
+// planes those are is live_runtime_dataplane_test.go's concern, not these
+// tests'.
 func allowControlPlaneConnect(next http.HandlerFunc) http.HandlerFunc {
 	var addressInspectPending atomic.Bool
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost &&
 			strings.HasPrefix(r.URL.Path, "/v1.45/networks/") &&
-			strings.HasSuffix(r.URL.Path, "_control/connect") {
-			addressInspectPending.Store(true)
+			strings.HasSuffix(r.URL.Path, "/connect") {
+			if strings.HasSuffix(r.URL.Path, "_control/connect") {
+				addressInspectPending.Store(true)
+			}
 			w.WriteHeader(http.StatusOK)
 			return
 		}

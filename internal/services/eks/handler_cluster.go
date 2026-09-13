@@ -117,6 +117,10 @@ func (s *Service) describeCluster(w http.ResponseWriter, r *http.Request) {
 	if s.liveModeEnabled() {
 		cluster = s.reconcileReadyLiveCluster(r.Context(), region, cluster)
 	}
+	// The endpoint is minted for this caller, not replayed from the record:
+	// the stored form is canonical, and which address is dialable depends on
+	// who is asking — see clusterEndpointFor.
+	cluster = s.renderCluster(r.Context(), region, cluster)
 	cluster.Tags = s.readTagsForARN(r.Context(), cluster.Arn)
 	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{"cluster": cluster})
 }
@@ -372,6 +376,9 @@ func (s *Service) updateKubeconfig(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// The server the file names is the endpoint as this caller can dial it —
+	// a kubeconfig fetched from inside a container is used from there.
+	server := s.clusterEndpointFor(r.Context(), region, cluster)
 	kubeconfig := fmt.Sprintf(`apiVersion: v1
 kind: Config
 clusters:
@@ -389,7 +396,7 @@ users:
 - name: %s
   user:
     token: overcast-dev-token
-`, cluster.Name, cluster.Endpoint, caData, cluster.Name, cluster.Name, cluster.Name, cluster.Name, cluster.Name)
+`, cluster.Name, server, caData, cluster.Name, cluster.Name, cluster.Name, cluster.Name, cluster.Name)
 
 	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{
 		"kubeconfig": kubeconfig,

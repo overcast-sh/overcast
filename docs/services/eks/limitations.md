@@ -22,10 +22,18 @@ stops.
 | --- | --- | --- |
 | `CreateCluster` | Records the cluster, `ACTIVE` immediately | Pulls and starts a k3s container |
 | Status path | `ACTIVE` | `CREATING` → `ACTIVE` once k3s `/readyz` answers, or `FAILED` |
-| `cluster.endpoint` | `https://<name>.mock.eks.local` | `https://<OVERCAST_HOSTNAME or localhost>:<mapped port>` |
+| `cluster.endpoint` | `https://<name>.mock.eks.local` | Minted for the caller — see below |
 | `certificateAuthority` | Synthetic placeholder | The k3s cluster's real CA |
 | `UpdateKubeconfig` | Placeholder values | A kubeconfig that reaches the running control plane |
 | Resource footprint | None | One container per cluster |
+
+A live cluster's endpoint points at the k3s container, so `DescribeCluster`
+mints it for whoever asks. From the host it is
+`https://<OVERCAST_HOSTNAME or localhost>:<mapped port>`. From a Lambda
+function, an ECS task or any other sibling container it is
+`https://<name>.<region>.eks.<hostname>:6443`, a name the container answers to
+on the same networks the other [data-plane endpoints](../../networking/data-plane-endpoints.md)
+use. The generated kubeconfig's `server:` follows the same rule.
 
 A live cluster that cannot start reaches `FAILED` rather than sitting in
 `CREATING`, and `DescribeCluster` reports why under `cluster.health.issues` —
