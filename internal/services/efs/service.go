@@ -27,6 +27,7 @@ import (
 
 	"github.com/overcast-sh/overcast/internal/clock"
 	"github.com/overcast-sh/overcast/internal/config"
+	"github.com/overcast-sh/overcast/internal/dataplane"
 	"github.com/overcast-sh/overcast/internal/docker"
 	"github.com/overcast-sh/overcast/internal/events"
 	"github.com/overcast-sh/overcast/internal/lifecycle"
@@ -83,12 +84,34 @@ type Service struct {
 	// wired, and it returns empty for a subnet EC2 does not know, in which case
 	// the zone is derived from the subnet ID instead.
 	subnetZones SubnetZoneResolver
+
+	// vpcResolver maps a mount target's subnet onto its VPC and that VPC onto
+	// its Docker network, so an export lands on the plane the VPC's functions
+	// and tasks are on. Nil until wired; see live_nfs.go.
+	vpcResolver VPCNetworkResolver
 }
 
 // SubnetZoneResolver reports the availability zone a subnet was created in.
 // Implemented by the EC2 service.
 type SubnetZoneResolver interface {
 	AvailabilityZoneForSubnet(ctx context.Context, subnetID string) string
+}
+
+// VPCNetworkResolver resolves mount-target placement against EC2 VPC network
+// state. Implemented by the EC2 service; nil when EC2 is not enabled.
+type VPCNetworkResolver interface {
+	dataplane.VPCResolver
+	// VpcIDForSubnet returns the VPC ID that owns the given subnet.
+	VpcIDForSubnet(ctx context.Context, subnetID string) string
+}
+
+// SetVPCResolver wires EC2 so a mount target's export joins its subnet's VPC
+// network. A mount target is created in a subnet, which on AWS fixes the VPC
+// its ENI lives in — `fs-….efs.<region>.amazonaws.com` resolves only from
+// inside that VPC. Without this every export sat on the default plane, where
+// a function or task held to its VPC's network could not resolve it.
+func (s *Service) SetVPCResolver(r VPCNetworkResolver) {
+	s.vpcResolver = r
 }
 
 // SetSubnetZoneResolver wires EC2 so mount targets land in the zone their

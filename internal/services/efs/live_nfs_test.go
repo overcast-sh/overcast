@@ -50,6 +50,14 @@ type fakeNFSDaemon struct {
 	// exists holds every name and ID the daemon knows about, so inspecting an
 	// unknown container 404s the way a real daemon does.
 	exists map[string]bool
+	// idByName maps a pre-seeded container's name onto its ID, and labels
+	// holds what inspect reports for it, so GetContainerByName finds a
+	// container "left over from an earlier run" that carries our labels.
+	idByName map[string]string
+	labels   map[string]map[string]string
+	// connected records every POST /networks/{name}/connect: which network,
+	// which container, and the aliases it advertised there.
+	connected []networkConnect
 
 	// startGate, when non-nil, blocks every StartContainer until closed.
 	startGate chan struct{}
@@ -57,9 +65,19 @@ type fakeNFSDaemon struct {
 	srv *httptest.Server
 }
 
+// networkConnect is one container joining one network.
+type networkConnect struct {
+	Network   string
+	Container string
+	Aliases   []string
+}
+
 func newFakeNFSDaemon(t *testing.T) *fakeNFSDaemon {
 	t.Helper()
-	fd := &fakeNFSDaemon{inspectRun: map[string]bool{}, exists: map[string]bool{}}
+	fd := &fakeNFSDaemon{
+		inspectRun: map[string]bool{}, exists: map[string]bool{},
+		idByName: map[string]string{}, labels: map[string]map[string]string{},
+	}
 	fd.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		switch {
@@ -134,14 +152,35 @@ func newFakeNFSDaemon(t *testing.T) *fakeNFSDaemon {
 			fd.mu.Unlock()
 			_ = json.NewEncoder(w).Encode(out)
 
+		case r.Method == http.MethodPost && strings.Contains(path, "/networks/") && strings.HasSuffix(path, "/connect"):
+			var req struct {
+				Container      string `json:"Container"`
+				EndpointConfig *struct {
+					Aliases []string `json:"Aliases"`
+				} `json:"EndpointConfig"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&req)
+			nc := networkConnect{Network: networkFromPath(path), Container: req.Container}
+			if req.EndpointConfig != nil {
+				nc.Aliases = req.EndpointConfig.Aliases
+			}
+			fd.mu.Lock()
+			fd.connected = append(fd.connected, nc)
+			fd.mu.Unlock()
+			w.WriteHeader(http.StatusOK)
+
 		case r.Method == http.MethodGet && strings.HasSuffix(path, "/json"):
 			id := containerIDFromPath(path)
 			fd.mu.Lock()
+			if byName, ok := fd.idByName[id]; ok {
+				id = byName
+			}
 			known := fd.exists[id]
 			running, ok := fd.inspectRun[id]
 			if !ok {
 				running = true
 			}
+			labels := fd.labels[id]
 			fd.mu.Unlock()
 			if !known {
 				w.WriteHeader(http.StatusNotFound)
@@ -152,8 +191,11 @@ func newFakeNFSDaemon(t *testing.T) *fakeNFSDaemon {
 			if !running {
 				status = "exited"
 			}
-			w.Write([]byte(`{"Id":"` + id + `","State":{"Status":"` + status + `","Running":` + //nolint:errcheck
-				boolLit(running) + `,"ExitCode":0}}`))
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"Id":     id,
+				"Config": map[string]any{"Labels": labels},
+				"State":  map[string]any{"Status": status, "Running": running, "ExitCode": 0},
+			})
 
 		default:
 			w.WriteHeader(http.StatusNoContent)
@@ -161,13 +203,6 @@ func newFakeNFSDaemon(t *testing.T) *fakeNFSDaemon {
 	}))
 	t.Cleanup(fd.srv.Close)
 	return fd
-}
-
-func boolLit(b bool) string {
-	if b {
-		return "true"
-	}
-	return "false"
 }
 
 // containerIDFromPath pulls the container ID out of "/v1.x/containers/<id>/<verb>".
@@ -181,10 +216,38 @@ func containerIDFromPath(path string) string {
 	return ""
 }
 
+// networkFromPath pulls the network out of "/v1.x/networks/<name>/connect".
+func networkFromPath(path string) string {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	for i, p := range parts {
+		if p == "networks" && i+1 < len(parts) {
+			return parts[i+1]
+		}
+	}
+	return ""
+}
+
 func (fd *fakeNFSDaemon) createdContainers() []createdContainer {
 	fd.mu.Lock()
 	defer fd.mu.Unlock()
 	return append([]createdContainer(nil), fd.created...)
+}
+
+// connections returns every network connect the daemon saw, in order.
+func (fd *fakeNFSDaemon) connections() []networkConnect {
+	fd.mu.Lock()
+	defer fd.mu.Unlock()
+	return append([]networkConnect(nil), fd.connected...)
+}
+
+// seedContainer makes the daemon know a running container by name and ID —
+// one an earlier Overcast run left behind — carrying the given labels.
+func (fd *fakeNFSDaemon) seedContainer(name, id string, labels map[string]string) {
+	fd.mu.Lock()
+	defer fd.mu.Unlock()
+	fd.exists[name], fd.exists[id] = true, true
+	fd.idByName[name] = id
+	fd.labels[id] = labels
 }
 
 func (fd *fakeNFSDaemon) removedContainers() []string {

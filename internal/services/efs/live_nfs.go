@@ -15,6 +15,7 @@ import (
 	"github.com/overcast-sh/overcast/internal/dataplane"
 	"github.com/overcast-sh/overcast/internal/docker"
 	"github.com/overcast-sh/overcast/internal/middleware"
+	"github.com/overcast-sh/overcast/internal/protocol"
 	"github.com/overcast-sh/overcast/internal/serviceutil"
 	"github.com/overcast-sh/overcast/internal/serviceutil/readiness"
 )
@@ -327,12 +328,12 @@ func ganeshaStartScript(exports []ganeshaExport) string {
 // call — an image pull and a container start differ by orders of magnitude,
 // and a single deadline generous enough for the first is useless for the
 // second.
-func (s *Service) startExportAsync(region, mountTargetID, fsID string) {
+func (s *Service) startExportAsync(region, mountTargetID, fsID, subnetID string) {
 	s.nfsWg.Add(1)
 	go func() {
 		defer s.nfsWg.Done()
 		s.startExport(middleware.ContextWithRegion(context.Background(), region),
-			region, mountTargetID, fsID)
+			region, mountTargetID, fsID, subnetID)
 	}()
 }
 
@@ -342,7 +343,7 @@ func (s *Service) startExportAsync(region, mountTargetID, fsID string) {
 // metadata. What it does not do is claim to be serving — a mount target whose
 // export could not be brought up settles in "error", so DescribeMountTargets
 // tells the truth about a data plane the caller explicitly asked for.
-func (s *Service) startExport(ctx context.Context, region, mountTargetID, fsID string) {
+func (s *Service) startExport(ctx context.Context, region, mountTargetID, fsID, subnetID string) {
 	if !s.nfsActive() {
 		return
 	}
@@ -372,7 +373,21 @@ func (s *Service) startExport(ctx context.Context, region, mountTargetID, fsID s
 					zap.String("mount_target", mountTargetID), zap.Error(err))
 			}
 		}
+		s.reattachAdoptedExport(ctx, region, mountTargetID, fsID, subnetID, existing.ID)
 		s.recordExport(ctx, region, mountTargetID, existing.ID, hostPort)
+		return
+	}
+
+	// Resolve the plane before anything is acquired: a VPC that cannot take
+	// containers should fail here, not after a port reservation and an image
+	// pull that then have to be unwound. CreateMountTarget already refused
+	// this case on the request path; this catches the VPC losing its network
+	// between the two.
+	placement, err := s.exportPlacement(ctx, region, fsID, mountTargetID, subnetID)
+	if err != nil {
+		s.log.Warn("efs: mount target cannot be placed in its VPC — mount target has no export",
+			zap.String("mount_target", mountTargetID), zap.String("subnet", subnetID), zap.Error(err))
+		s.markExportFailed(ctx, region, mountTargetID)
 		return
 	}
 
@@ -443,8 +458,10 @@ func (s *Service) startExport(ctx context.Context, region, mountTargetID, fsID s
 
 	// Exports join the data plane so sibling NFS clients reach them by the
 	// mount target's DNS name; the published host port serves the host itself.
-	if err := dataplane.Attach(startCtx, s.docker, s.cfg, containerID,
-		dataplane.Placement{Aliases: s.mountTargetAliases(region, fsID, mountTargetID)}); err != nil {
+	// The plane is the subnet's VPC network when EC2 knows the subnet — where
+	// the functions and tasks placed in that VPC are — and the default plane
+	// otherwise.
+	if err := dataplane.Attach(startCtx, s.docker, s.cfg, containerID, placement); err != nil {
 		s.log.Warn("efs: export container could not join the data plane — "+
 			"the mount target is reachable by address but not by name",
 			zap.String("mount_target", mountTargetID), zap.Error(err))
@@ -666,6 +683,83 @@ func (s *Service) mountTargetAliases(region, fsID, mountTargetID string) []strin
 	}, mountTargetID+".efs."+region+"."+s.cfg.ExternalHostname())
 }
 
+// exportPlacement decides which data plane a mount target's export joins:
+// its subnet's VPC network when EC2 knows the subnet, the default plane
+// otherwise. Either way it carries the mount target's names.
+//
+// The subnet goes with the VPC: under OVERCAST_VPC_EGRESS=routed its route
+// table decides whether the export gets a route out. A subnet EC2 has no
+// record of — a synthetic ID from a hand-written call — names no VPC, and
+// the export stays on the default plane rather than being refused; "no VPC"
+// has always been a working mount target here. A VPC that cannot take
+// containers is the error PlaceInSubnets makes it.
+func (s *Service) exportPlacement(ctx context.Context, region, fsID, mountTargetID, subnetID string) (dataplane.Placement, error) {
+	var resolver dataplane.VPCResolver
+	vpcID := ""
+	if s.vpcResolver != nil {
+		resolver = s.vpcResolver
+		vpcID = s.vpcResolver.VpcIDForSubnet(ctx, subnetID)
+	}
+	placement, err := dataplane.PlaceInSubnets(ctx, resolver, vpcID, []string{subnetID})
+	if err != nil {
+		return placement, err
+	}
+	placement.Aliases = s.mountTargetAliases(region, fsID, mountTargetID)
+	return placement, nil
+}
+
+// reattachAdoptedExport puts a container Overcast did not create in this run
+// onto the planes it belongs on. A container adopted from an earlier run
+// predates the current alias set, and predates VPC placement entirely —
+// before this it sat on the default plane whatever subnet the mount target
+// named. Attaching is idempotent, so a container already in place is left as
+// it is. Failure is a warning, not a refusal: the container is serving and
+// reachable by address, and tearing it down would cost a live export to fix
+// a name.
+func (s *Service) reattachAdoptedExport(ctx context.Context, region, mountTargetID, fsID, subnetID, containerID string) {
+	placement, err := s.exportPlacement(ctx, region, fsID, mountTargetID, subnetID)
+	if err != nil {
+		s.log.Warn("efs: adopted export container could not be placed in its VPC",
+			zap.String("mount_target", mountTargetID), zap.Error(err))
+		return
+	}
+	if err := dataplane.AttachAdopted(ctx, s.docker, s.cfg, containerID, placement); err != nil {
+		s.log.Warn("efs: adopted export container could not join the data plane — "+
+			"the mount target is reachable by address but not by name",
+			zap.String("mount_target", mountTargetID), zap.Error(err))
+	}
+}
+
+// refuseUnlaunchableVPC is CreateMountTarget's request-path check that the
+// subnet's VPC can take the export container at all. Only asked while the NFS
+// data plane is on: with exports off a mount target is metadata, and refusing
+// it over a Docker network nobody needs would fail every mock-mode and
+// Docker-less deploy — "unbacked" is what a VPC created while Docker was
+// unavailable reports.
+//
+// AWS models no error for this, because the state does not exist there: a
+// VPC always has a network. So this is EFS's generic 400, `BadRequest`, with
+// the VPC and its status in the message. The codes AWS does model for
+// CreateMountTarget would each be a lie about the cause — `SubnetNotFound`
+// (the subnet exists), `NoFreeAddressesInSubnet` (a client would pick another
+// subnet, and the next one is in the same VPC), `UnsupportedAvailabilityZone`
+// (the zone is fine) — and a client that branched on one would take the wrong
+// corrective action.
+func (s *Service) refuseUnlaunchableVPC(ctx context.Context, subnetID string) *protocol.AWSError {
+	if !s.nfsActive() || s.vpcResolver == nil {
+		return nil
+	}
+	vpcID := s.vpcResolver.VpcIDForSubnet(ctx, subnetID)
+	if vpcID == "" {
+		return nil
+	}
+	if status := s.vpcResolver.VPCNetworkStatus(ctx, vpcID); !dataplane.Launchable(status) {
+		return errBadRequest(fmt.Sprintf("Subnet '%s' is in VPC '%s', which has no usable network for a mount target (network status=%s).",
+			subnetID, vpcID, status))
+	}
+	return nil
+}
+
 // exportProbeAddr returns the address to probe: the container's own address
 // when Overcast itself runs in a container (published host ports are not
 // reachable from a sibling), otherwise 127.0.0.1 and the published port.
@@ -823,6 +917,10 @@ func (s *Service) reconcileExportsSnapshot(ctx context.Context, containers []doc
 					break
 				}
 			}
+			// Before the record check, which short-circuits the common restart
+			// case: a container whose record already matches is exactly the
+			// one that predates the current plane layout.
+			s.reattachAdoptedExport(rctx, region, mtID, rec.FileSystemId, rec.SubnetId, c.ID)
 			if rec.NFSContainerId == c.ID && rec.NFSHostPort == hostPort {
 				s.reserveNFSPort(rctx, mtID, hostPort)
 				continue
@@ -846,9 +944,9 @@ func (s *Service) reconcileExportsSnapshot(ctx context.Context, containers []doc
 			if err := s.putMountTarget(rctx, region, rec); err != nil {
 				s.log.Warn("efs: clear stale export fields", zap.String("mount_target", mtID), zap.Error(err))
 			}
-			s.startExportAsync(region, mtID, rec.FileSystemId)
+			s.startExportAsync(region, mtID, rec.FileSystemId, rec.SubnetId)
 		default:
-			s.startExportAsync(region, mtID, rec.FileSystemId)
+			s.startExportAsync(region, mtID, rec.FileSystemId, rec.SubnetId)
 		}
 	}
 

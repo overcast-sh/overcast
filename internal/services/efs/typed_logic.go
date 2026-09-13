@@ -634,6 +634,13 @@ func (s *Service) createMountTargetTyped(ctx context.Context, req *createMountTa
 			return nil, errMountTargetConflict(fmt.Sprintf("mount target already exists in this AZ (%s)", azName))
 		}
 	}
+	// The export has to be placeable in the subnet's VPC before the mount
+	// target exists, the way RDS refuses an instance in an unlaunchable VPC:
+	// failing the create is honest, minting a mount target nothing in the VPC
+	// can reach is not.
+	if aerr := s.refuseUnlaunchableVPC(ctx, req.SubnetId); aerr != nil {
+		return nil, aerr
+	}
 
 	rec := &mountTargetRecord{
 		MountTargetId:        newEFSID("fsmt-"),
@@ -660,7 +667,7 @@ func (s *Service) createMountTargetTyped(ctx context.Context, req *createMountTa
 		// available once its export answers (or once the readiness retries run
 		// out). Starting the container can involve an image pull, so it never
 		// runs on the request path.
-		s.startExportAsync(region, mtID, fs.FileSystemId)
+		s.startExportAsync(region, mtID, fs.FileSystemId, rec.SubnetId)
 	} else {
 		s.scheduler.AfterScoped(region, mtID, stateAvailable, 0, func(ctx context.Context) {
 			mt, found, err := s.getMountTarget(ctx, region, mtID)

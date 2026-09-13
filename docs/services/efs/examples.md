@@ -56,7 +56,7 @@ export costs a container and a port per mount target.
 | `OVERCAST_EFS_NFS` | `false` | Opt into exports (live mode, which is the default) |
 | `EFS_NFS_PORT_BASE` | `22049` | First host port considered for publishing 2049 |
 | `EFS_NFS_IMAGE` | digest-pinned NFS-Ganesha | Override the export image |
-| `OVERCAST_NETWORK` | `overcast` | Docker network the export containers join |
+| `OVERCAST_NETWORK` | `overcast` | Docker network an export joins when its subnet is not in a VPC Overcast knows |
 
 Ganesha runs entirely in userspace — no `--privileged`, no kernel modules — so
 the export works on Linux, macOS and Windows Docker hosts alike. The container
@@ -69,7 +69,14 @@ gates on it. Mounting the export needs `CAP_SYS_ADMIN` on the *client*.
 | Client | Address |
 | --- | --- |
 | The Docker host | `localhost:<published port>` — read it from `docker ps`, since `DescribeMountTargets` does not report it |
-| A sibling container | The mount target's DNS name on the shared data plane (`OVERCAST_NETWORK`), or the export container's address there |
+| A sibling container | The mount target's DNS name, on the network the export joined — see below |
+
+An export joins the Docker network of the VPC its subnet is in, the same
+network a Lambda function or ECS task placed in that VPC is on, so
+`<FileSystemId>.efs.<region>.<hostname>` resolves there. A mount target whose
+subnet is not one the EC2 emulation knows joins the shared data plane
+(`OVERCAST_NETWORK`) instead. A subnet in a VPC that has no Docker network
+behind it is refused at `CreateMountTarget` with a `BadRequest` naming the VPC.
 
 ### Pseudo-paths
 
