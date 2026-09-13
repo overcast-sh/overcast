@@ -2,6 +2,7 @@ package elasticache
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -38,6 +39,23 @@ type fakeDockerDaemon struct {
 	stopped    bool
 	removed    bool
 	failCreate bool
+	// connects records every network the daemon was asked to attach a
+	// container to, with the aliases it was asked to advertise there — the
+	// placement decision, as the daemon sees it.
+	connects []networkConnect
+}
+
+// networkConnect is one POST /networks/{id}/connect as the fake daemon saw it.
+type networkConnect struct {
+	Network string
+	Aliases []string
+}
+
+// connections returns a copy of every connect recorded so far.
+func (fd *fakeDockerDaemon) connections() []networkConnect {
+	fd.mu.Lock()
+	defer fd.mu.Unlock()
+	return append([]networkConnect(nil), fd.connects...)
 }
 
 func (fd *fakeDockerDaemon) stoppedOrRemoved() bool {
@@ -80,6 +98,19 @@ func newFakeDockerDaemon(t *testing.T) *fakeDockerDaemon {
 			w.Write([]byte(`{"Id":"net-1"}`)) //nolint:errcheck
 
 		case strings.HasSuffix(p, "/connect"):
+			var body struct {
+				EndpointConfig *struct {
+					Aliases []string `json:"Aliases"`
+				} `json:"EndpointConfig"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			nc := networkConnect{Network: strings.TrimSuffix(p[strings.LastIndex(p, "/networks/")+len("/networks/"):], "/connect")}
+			if body.EndpointConfig != nil {
+				nc.Aliases = body.EndpointConfig.Aliases
+			}
+			fd.mu.Lock()
+			fd.connects = append(fd.connects, nc)
+			fd.mu.Unlock()
 			w.WriteHeader(http.StatusOK)
 
 		case strings.HasSuffix(p, "/containers/create"):

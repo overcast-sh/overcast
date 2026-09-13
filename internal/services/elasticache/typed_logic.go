@@ -475,6 +475,9 @@ func (h *Handler) createCacheClusterTyped(ctx context.Context, req *ecCreateCach
 	if _, aerr := h.store.getCacheCluster(ctx, req.CacheClusterId); aerr == nil {
 		return nil, errClusterAlreadyExists(req.CacheClusterId)
 	}
+	if aerr := h.requireCacheSubnetGroup(ctx, req.CacheSubnetGroupName); aerr != nil {
+		return nil, aerr
+	}
 	engine := req.Engine
 	if engine == "" {
 		engine = "redis"
@@ -560,7 +563,7 @@ func (h *Handler) createCacheClusterTyped(ctx context.Context, req *ecCreateCach
 				}
 				stored.DockerContainerID = got.DockerContainerID
 				stored.HostPort = got.HostPort
-				stored.ConfigurationEndpoint = got.ConfigurationEndpoint
+				stored.DialAddress, stored.DialPort = got.DialAddress, got.DialPort
 				return nil
 			})
 			if aerr != nil {
@@ -571,7 +574,7 @@ func (h *Handler) createCacheClusterTyped(ctx context.Context, req *ecCreateCach
 				h.teardownOrphanedContainer(bgCtx, "cache cluster", clusterID, got.DockerContainerID, got.HostPort)
 				return
 			}
-			h.scheduleHealthCheck(region, clusterID, fresh.ConfigurationEndpoint.Address, fresh.ConfigurationEndpoint.Port)
+			h.scheduleClusterHealthCheck(region, clusterID, fresh)
 		}()
 	} else {
 		// No container is coming, so nothing else will ever move this cluster
@@ -581,7 +584,7 @@ func (h *Handler) createCacheClusterTyped(ctx context.Context, req *ecCreateCach
 	if h.bus != nil {
 		h.bus.Publish(ctx, events.Event{Type: events.ElastiCacheClusterCreated, Time: h.clk.Now(), Source: "elasticache", Payload: events.ResourcePayload{Name: req.CacheClusterId, ARN: arn}})
 	}
-	return &ecCreateCacheClusterResp{Xmlns: cacheXMLNS, Result: ecCreateCacheClusterResult{CacheCluster: ecToXMLCacheCluster(cluster)}, Meta: ecMetaFromCtx(ctx)}, nil
+	return &ecCreateCacheClusterResp{Xmlns: cacheXMLNS, Result: ecCreateCacheClusterResult{CacheCluster: ecToXMLCacheCluster(h.cacheClusterForCaller(ctx, cluster))}, Meta: ecMetaFromCtx(ctx)}, nil
 }
 
 func (h *Handler) describeCacheClustersTyped(ctx context.Context, req *ecDescribeCacheClustersReq) (*ecDescribeCacheClustersResp, *protocol.AWSError) {
@@ -590,7 +593,7 @@ func (h *Handler) describeCacheClustersTyped(ctx context.Context, req *ecDescrib
 		if aerr != nil {
 			return nil, aerr
 		}
-		return &ecDescribeCacheClustersResp{Xmlns: cacheXMLNS, Result: ecDescribeCacheClustersResult{CacheClusters: ecXMLCacheClusters{Items: []ecXMLCacheCluster{ecToXMLCacheCluster(cluster)}}}, Meta: ecMetaFromCtx(ctx)}, nil
+		return &ecDescribeCacheClustersResp{Xmlns: cacheXMLNS, Result: ecDescribeCacheClustersResult{CacheClusters: ecXMLCacheClusters{Items: []ecXMLCacheCluster{ecToXMLCacheCluster(h.cacheClusterForCaller(ctx, cluster))}}}, Meta: ecMetaFromCtx(ctx)}, nil
 	}
 	all, aerr := h.store.listCacheClusters(ctx)
 	if aerr != nil {
@@ -598,7 +601,7 @@ func (h *Handler) describeCacheClustersTyped(ctx context.Context, req *ecDescrib
 	}
 	items := make([]ecXMLCacheCluster, 0, len(all))
 	for _, c := range all {
-		items = append(items, ecToXMLCacheCluster(c))
+		items = append(items, ecToXMLCacheCluster(h.cacheClusterForCaller(ctx, c)))
 	}
 	return &ecDescribeCacheClustersResp{Xmlns: cacheXMLNS, Result: ecDescribeCacheClustersResult{CacheClusters: ecXMLCacheClusters{Items: items}}, Meta: ecMetaFromCtx(ctx)}, nil
 }
@@ -636,7 +639,7 @@ func (h *Handler) deleteCacheClusterTyped(ctx context.Context, req *ecDeleteCach
 			h.log.Warn("failed to delete cache cluster record", zap.String("cluster", req.CacheClusterId), zap.Error(aerr))
 		}
 	})
-	return &ecDeleteCacheClusterResp{Xmlns: cacheXMLNS, Result: ecDeleteCacheClusterResult{CacheCluster: ecToXMLCacheCluster(cluster)}, Meta: ecMetaFromCtx(ctx)}, nil
+	return &ecDeleteCacheClusterResp{Xmlns: cacheXMLNS, Result: ecDeleteCacheClusterResult{CacheCluster: ecToXMLCacheCluster(h.cacheClusterForCaller(ctx, cluster))}, Meta: ecMetaFromCtx(ctx)}, nil
 }
 
 func (h *Handler) createReplicationGroupTyped(ctx context.Context, req *ecCreateReplicationGroupReq) (*ecCreateReplicationGroupResp, *protocol.AWSError) {
@@ -645,6 +648,9 @@ func (h *Handler) createReplicationGroupTyped(ctx context.Context, req *ecCreate
 	}
 	if _, aerr := h.store.getReplicationGroup(ctx, req.ReplicationGroupId); aerr == nil {
 		return nil, errReplicationGroupAlreadyExists(req.ReplicationGroupId)
+	}
+	if aerr := h.requireCacheSubnetGroup(ctx, req.CacheSubnetGroupName); aerr != nil {
+		return nil, aerr
 	}
 	nodeType := req.CacheNodeType
 	if nodeType == "" {
@@ -736,7 +742,7 @@ func (h *Handler) createReplicationGroupTyped(ctx context.Context, req *ecCreate
 				}
 				stored.DockerContainerID = got.DockerContainerID
 				stored.HostPort = got.HostPort
-				stored.ConfigurationEndpoint = got.ConfigurationEndpoint
+				stored.DialAddress, stored.DialPort = got.DialAddress, got.DialPort
 				return nil
 			})
 			if aerr != nil {
@@ -747,7 +753,7 @@ func (h *Handler) createReplicationGroupTyped(ctx context.Context, req *ecCreate
 				h.teardownOrphanedContainer(bgCtx, "replication group", rgID, got.DockerContainerID, got.HostPort)
 				return
 			}
-			h.scheduleReplicationGroupHealthCheck(region, rgID, fresh.ConfigurationEndpoint.Address, fresh.ConfigurationEndpoint.Port)
+			h.scheduleGroupHealthCheck(region, rgID, fresh)
 		}()
 	} else {
 		// No container is coming, so nothing else will ever move this group out
@@ -757,7 +763,7 @@ func (h *Handler) createReplicationGroupTyped(ctx context.Context, req *ecCreate
 	if h.bus != nil {
 		h.bus.Publish(ctx, events.Event{Type: events.ElastiCacheReplicationGroupCreated, Time: h.clk.Now(), Source: "elasticache", Payload: events.ResourcePayload{Name: req.ReplicationGroupId, ARN: arn}})
 	}
-	return &ecCreateReplicationGroupResp{Xmlns: cacheXMLNS, Result: ecCreateReplicationGroupResult{ReplicationGroup: ecToXMLReplicationGroup(rg)}, Meta: ecMetaFromCtx(ctx)}, nil
+	return &ecCreateReplicationGroupResp{Xmlns: cacheXMLNS, Result: ecCreateReplicationGroupResult{ReplicationGroup: ecToXMLReplicationGroup(h.replicationGroupForCaller(ctx, rg))}, Meta: ecMetaFromCtx(ctx)}, nil
 }
 
 func (h *Handler) describeReplicationGroupsTyped(ctx context.Context, req *ecDescribeReplicationGroupsReq) (*ecDescribeReplicationGroupsResp, *protocol.AWSError) {
@@ -766,7 +772,7 @@ func (h *Handler) describeReplicationGroupsTyped(ctx context.Context, req *ecDes
 		if aerr != nil {
 			return nil, aerr
 		}
-		return &ecDescribeReplicationGroupsResp{Xmlns: cacheXMLNS, Result: ecDescribeReplicationGroupsResult{ReplicationGroups: ecXMLReplicationGroups{Items: []ecXMLReplicationGroup{ecToXMLReplicationGroup(rg)}}}, Meta: ecMetaFromCtx(ctx)}, nil
+		return &ecDescribeReplicationGroupsResp{Xmlns: cacheXMLNS, Result: ecDescribeReplicationGroupsResult{ReplicationGroups: ecXMLReplicationGroups{Items: []ecXMLReplicationGroup{ecToXMLReplicationGroup(h.replicationGroupForCaller(ctx, rg))}}}, Meta: ecMetaFromCtx(ctx)}, nil
 	}
 	all, aerr := h.store.listReplicationGroups(ctx)
 	if aerr != nil {
@@ -774,7 +780,7 @@ func (h *Handler) describeReplicationGroupsTyped(ctx context.Context, req *ecDes
 	}
 	items := make([]ecXMLReplicationGroup, 0, len(all))
 	for _, rg := range all {
-		items = append(items, ecToXMLReplicationGroup(rg))
+		items = append(items, ecToXMLReplicationGroup(h.replicationGroupForCaller(ctx, rg)))
 	}
 	return &ecDescribeReplicationGroupsResp{Xmlns: cacheXMLNS, Result: ecDescribeReplicationGroupsResult{ReplicationGroups: ecXMLReplicationGroups{Items: items}}, Meta: ecMetaFromCtx(ctx)}, nil
 }
@@ -812,7 +818,7 @@ func (h *Handler) deleteReplicationGroupTyped(ctx context.Context, req *ecDelete
 			h.log.Warn("failed to delete replication group record", zap.String("rg", req.ReplicationGroupId), zap.Error(aerr))
 		}
 	})
-	return &ecDeleteReplicationGroupResp{Xmlns: cacheXMLNS, Result: ecDeleteReplicationGroupResult{ReplicationGroup: ecToXMLReplicationGroup(rg)}, Meta: ecMetaFromCtx(ctx)}, nil
+	return &ecDeleteReplicationGroupResp{Xmlns: cacheXMLNS, Result: ecDeleteReplicationGroupResult{ReplicationGroup: ecToXMLReplicationGroup(h.replicationGroupForCaller(ctx, rg))}, Meta: ecMetaFromCtx(ctx)}, nil
 }
 
 func (h *Handler) createCacheSubnetGroupTyped(ctx context.Context, req *ecCreateCacheSubnetGroupReq) (*ecCreateCacheSubnetGroupResp, *protocol.AWSError) {
@@ -1002,7 +1008,7 @@ func (h *Handler) modifyCacheClusterTyped(ctx context.Context, req *ecModifyCach
 	h.scheduler.AfterScoped(h.store.region(ctx), id, "available", 0, func(bgCtx context.Context) {
 		h.transitionCacheCluster(bgCtx, id, "available", "modifying")
 	})
-	return &ecModifyCacheClusterResp{Xmlns: cacheXMLNS, Result: ecModifyCacheClusterResult{CacheCluster: ecToXMLCacheCluster(cluster)}, Meta: ecMetaFromCtx(ctx)}, nil
+	return &ecModifyCacheClusterResp{Xmlns: cacheXMLNS, Result: ecModifyCacheClusterResult{CacheCluster: ecToXMLCacheCluster(h.cacheClusterForCaller(ctx, cluster))}, Meta: ecMetaFromCtx(ctx)}, nil
 }
 
 func (h *Handler) modifyReplicationGroupTyped(ctx context.Context, req *ecModifyReplicationGroupReq) (*ecModifyReplicationGroupResp, *protocol.AWSError) {
@@ -1043,5 +1049,5 @@ func (h *Handler) modifyReplicationGroupTyped(ctx context.Context, req *ecModify
 	h.scheduler.AfterScoped(h.store.region(ctx), id, "rg-available", 0, func(bgCtx context.Context) {
 		h.transitionReplicationGroup(bgCtx, id, "available", "modifying")
 	})
-	return &ecModifyReplicationGroupResp{Xmlns: cacheXMLNS, Result: ecModifyReplicationGroupResult{ReplicationGroup: ecToXMLReplicationGroup(rg)}, Meta: ecMetaFromCtx(ctx)}, nil
+	return &ecModifyReplicationGroupResp{Xmlns: cacheXMLNS, Result: ecModifyReplicationGroupResult{ReplicationGroup: ecToXMLReplicationGroup(h.replicationGroupForCaller(ctx, rg))}, Meta: ecMetaFromCtx(ctx)}, nil
 }

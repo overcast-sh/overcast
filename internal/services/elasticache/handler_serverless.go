@@ -213,8 +213,7 @@ func (h *Handler) CreateServerlessCache(w http.ResponseWriter, r *http.Request) 
 				}
 				stored.DockerContainerID = got.DockerContainerID
 				stored.HostPort = got.HostPort
-				stored.Endpoint = got.Endpoint
-				stored.ReaderEndpoint = got.ReaderEndpoint
+				stored.DialAddress, stored.DialPort = got.DialAddress, got.DialPort
 				return nil
 			}); aerr != nil {
 				if aerr != errRecordMovedOn {
@@ -224,7 +223,7 @@ func (h *Handler) CreateServerlessCache(w http.ResponseWriter, r *http.Request) 
 				h.teardownOrphanedContainer(bgCtx, "serverless cache", cacheName, got.DockerContainerID, got.HostPort)
 				return
 			}
-			h.scheduleServerlessHealthCheck(region, cacheName, got.Endpoint.Address, got.Endpoint.Port)
+			h.scheduleServerlessCacheHealthCheck(region, cacheName, got)
 		}(name)
 	} else {
 		// No container is coming, so nothing else will ever move this cache out
@@ -234,7 +233,7 @@ func (h *Handler) CreateServerlessCache(w http.ResponseWriter, r *http.Request) 
 
 	protocol.WriteQueryXML(w, r, http.StatusOK, &xmlCreateServerlessCacheResponse{
 		Xmlns:            cacheXMLNS,
-		Result:           xmlCreateServerlessCacheResult{ServerlessCache: toXMLServerlessCache(cache)},
+		Result:           xmlCreateServerlessCacheResult{ServerlessCache: toXMLServerlessCache(h.serverlessCacheForCaller(r.Context(), cache))},
 		ResponseMetadata: protocol.QueryResponseMetadata(r),
 	})
 }
@@ -250,7 +249,7 @@ func (h *Handler) DescribeServerlessCaches(w http.ResponseWriter, r *http.Reques
 		protocol.WriteQueryXML(w, r, http.StatusOK, &xmlDescribeServerlessCachesResponse{
 			Xmlns: cacheXMLNS,
 			Result: xmlDescribeServerlessCachesResult{
-				ServerlessCaches: xmlServerlessCaches{Items: []xmlServerlessCache{toXMLServerlessCache(cache)}},
+				ServerlessCaches: xmlServerlessCaches{Items: []xmlServerlessCache{toXMLServerlessCache(h.serverlessCacheForCaller(r.Context(), cache))}},
 			},
 			ResponseMetadata: protocol.QueryResponseMetadata(r),
 		})
@@ -288,7 +287,7 @@ func (h *Handler) DescribeServerlessCaches(w http.ResponseWriter, r *http.Reques
 	}
 	items := make([]xmlServerlessCache, 0, end-start)
 	for _, cache := range caches[start:end] {
-		items = append(items, toXMLServerlessCache(cache))
+		items = append(items, toXMLServerlessCache(h.serverlessCacheForCaller(r.Context(), cache)))
 	}
 	protocol.WriteQueryXML(w, r, http.StatusOK, &xmlDescribeServerlessCachesResponse{
 		Xmlns:            cacheXMLNS,
@@ -350,7 +349,7 @@ func (h *Handler) ModifyServerlessCache(w http.ResponseWriter, r *http.Request) 
 	})
 	protocol.WriteQueryXML(w, r, http.StatusOK, &xmlModifyServerlessCacheResponse{
 		Xmlns:            cacheXMLNS,
-		Result:           xmlModifyServerlessCacheResult{ServerlessCache: toXMLServerlessCache(cache)},
+		Result:           xmlModifyServerlessCacheResult{ServerlessCache: toXMLServerlessCache(h.serverlessCacheForCaller(r.Context(), cache))},
 		ResponseMetadata: protocol.QueryResponseMetadata(r),
 	})
 }
@@ -376,7 +375,7 @@ func (h *Handler) DeleteServerlessCache(w http.ResponseWriter, r *http.Request) 
 
 	protocol.WriteQueryXML(w, r, http.StatusOK, &xmlDeleteServerlessCacheResponse{
 		Xmlns:            cacheXMLNS,
-		Result:           xmlDeleteServerlessCacheResult{ServerlessCache: toXMLServerlessCache(cache)},
+		Result:           xmlDeleteServerlessCacheResult{ServerlessCache: toXMLServerlessCache(h.serverlessCacheForCaller(r.Context(), cache))},
 		ResponseMetadata: protocol.QueryResponseMetadata(r),
 	})
 
@@ -439,7 +438,7 @@ func (h *Handler) startServerlessCacheContainer(ctx context.Context, c *Serverle
 				"its endpoint name will not resolve for sibling containers",
 				zap.String("cache", c.ServerlessCacheName), zap.Error(err))
 		}
-		h.setServerlessEndpoint(ctx, c)
+		h.setServerlessDialTarget(ctx, c)
 		return nil
 	}
 
@@ -488,7 +487,7 @@ func (h *Handler) startServerlessCacheContainer(ctx context.Context, c *Serverle
 	}
 	c.DockerContainerID = containerID
 	c.HostPort = hostPort
-	h.setServerlessEndpoint(ctx, c)
+	h.setServerlessDialTarget(ctx, c)
 	return nil
 }
 
@@ -504,17 +503,29 @@ func (h *Handler) serverlessEndpointAliases(c *ServerlessCache) []string {
 		advertised = append(advertised, c.ReaderEndpoint.Address)
 	}
 	return dataplane.Hostnames(h.cfg, func(base string) string {
-		return fmt.Sprintf("%s.%s.serverless.%s", c.ServerlessCacheName, h.region(), base)
+		return serverlessEndpointHostname(c.ServerlessCacheName, h.region(), base)
 	}, advertised...)
 }
 
-func (h *Handler) setServerlessEndpoint(ctx context.Context, c *ServerlessCache) {
-	// Writer and reader are the same container here: there is one node, and a
-	// serverless cache's reader endpoint is an addressing convenience on AWS
-	// rather than a second engine.
-	endpoint := h.endpointFor(ctx, c.DockerContainerID, c.Engine, c.HostPort)
-	c.Endpoint = endpoint
-	c.ReaderEndpoint = endpoint
+// setServerlessDialTarget records how Overcast reaches the cache's container
+// for its health check — see setContainerDialTarget. Writer and reader are the
+// same container here: there is one node, and a serverless cache's reader
+// endpoint is an addressing convenience on AWS rather than a second engine.
+func (h *Handler) setServerlessDialTarget(ctx context.Context, c *ServerlessCache) {
+	c.DialAddress, c.DialPort = h.containerDialTarget(ctx, c.DockerContainerID, c.Engine, c.HostPort)
+}
+
+// scheduleServerlessCacheHealthCheck is scheduleServerlessHealthCheck aimed at
+// c's dial target.
+func (h *Handler) scheduleServerlessCacheHealthCheck(region, name string, c *ServerlessCache) {
+	host, port := c.dialTarget()
+	h.scheduleServerlessHealthCheck(region, name, host, port)
+}
+
+// serverlessEndpointHostname builds the endpoint name for a serverless cache
+// on base: `{name}.{region}.serverless.{base}`.
+func serverlessEndpointHostname(name, region, base string) string {
+	return fmt.Sprintf("%s.%s.serverless.%s", name, region, base)
 }
 
 // scheduleServerlessHealthCheck waits for the cache engine to answer and

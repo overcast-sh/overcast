@@ -269,6 +269,10 @@ func (h *Handler) CreateCacheCluster(w http.ResponseWriter, r *http.Request) {
 	numNodes := formInt(r, "NumCacheNodes", 1)
 	replicationGroupID := r.FormValue("ReplicationGroupId")
 	subnetGroupName := r.FormValue("CacheSubnetGroupName")
+	if aerr := h.requireCacheSubnetGroup(r.Context(), subnetGroupName); aerr != nil {
+		protocol.WriteQueryXMLError(w, r, aerr)
+		return
+	}
 	az := r.FormValue("PreferredAvailabilityZone")
 	parameterGroupName := r.FormValue("CacheParameterGroupName")
 
@@ -355,7 +359,7 @@ func (h *Handler) CreateCacheCluster(w http.ResponseWriter, r *http.Request) {
 				}
 				stored.DockerContainerID = got.DockerContainerID
 				stored.HostPort = got.HostPort
-				stored.ConfigurationEndpoint = got.ConfigurationEndpoint
+				stored.DialAddress, stored.DialPort = got.DialAddress, got.DialPort
 				return nil
 			}); aerr != nil {
 				if aerr != errRecordMovedOn {
@@ -365,7 +369,7 @@ func (h *Handler) CreateCacheCluster(w http.ResponseWriter, r *http.Request) {
 				h.teardownOrphanedContainer(bgCtx, "cache cluster", clusterID, got.DockerContainerID, got.HostPort)
 				return
 			}
-			h.scheduleHealthCheck(region, clusterID, got.ConfigurationEndpoint.Address, got.ConfigurationEndpoint.Port)
+			h.scheduleClusterHealthCheck(region, clusterID, got)
 		}()
 	} else {
 		// No container is coming, so nothing else will ever move this cluster
@@ -377,7 +381,7 @@ func (h *Handler) CreateCacheCluster(w http.ResponseWriter, r *http.Request) {
 
 	protocol.WriteQueryXML(w, r, http.StatusOK, &xmlCreateCacheClusterResponse{
 		Xmlns:            cacheXMLNS,
-		Result:           xmlCreateCacheClusterResult{CacheCluster: toXMLCacheCluster(cluster)},
+		Result:           xmlCreateCacheClusterResult{CacheCluster: toXMLCacheCluster(h.cacheClusterForCaller(r.Context(), cluster))},
 		ResponseMetadata: protocol.QueryResponseMetadata(r),
 	})
 }
@@ -397,7 +401,7 @@ func (h *Handler) DescribeCacheClusters(w http.ResponseWriter, r *http.Request) 
 		protocol.WriteQueryXML(w, r, http.StatusOK, &xmlDescribeCacheClustersResponse{
 			Xmlns: cacheXMLNS,
 			Result: xmlDescribeCacheClustersResult{
-				CacheClusters: xmlCacheClusters{Items: []xmlCacheCluster{toXMLCacheCluster(cluster)}},
+				CacheClusters: xmlCacheClusters{Items: []xmlCacheCluster{toXMLCacheCluster(h.cacheClusterForCaller(r.Context(), cluster))}},
 			},
 			ResponseMetadata: protocol.QueryResponseMetadata(r),
 		})
@@ -411,7 +415,7 @@ func (h *Handler) DescribeCacheClusters(w http.ResponseWriter, r *http.Request) 
 	}
 	items := make([]xmlCacheCluster, 0, len(all))
 	for _, c := range all {
-		items = append(items, toXMLCacheCluster(c))
+		items = append(items, toXMLCacheCluster(h.cacheClusterForCaller(r.Context(), c)))
 	}
 	docker.SetBackingHeaders(w, h.dockerReady.Load(), docker.ContainerHealthUnknown)
 	protocol.WriteQueryXML(w, r, http.StatusOK, &xmlDescribeCacheClustersResponse{
@@ -447,7 +451,7 @@ func (h *Handler) DeleteCacheCluster(w http.ResponseWriter, r *http.Request) {
 
 	protocol.WriteQueryXML(w, r, http.StatusOK, &xmlDeleteCacheClusterResponse{
 		Xmlns:            cacheXMLNS,
-		Result:           xmlDeleteCacheClusterResult{CacheCluster: toXMLCacheCluster(cluster)},
+		Result:           xmlDeleteCacheClusterResult{CacheCluster: toXMLCacheCluster(h.cacheClusterForCaller(r.Context(), cluster))},
 		ResponseMetadata: protocol.QueryResponseMetadata(r),
 	})
 
@@ -651,7 +655,7 @@ func (h *Handler) startCacheContainer(ctx context.Context, c *CacheCluster) erro
 				"its endpoint name will not resolve for sibling containers",
 				zap.String("cluster", c.CacheClusterId), zap.Error(err))
 		}
-		h.setContainerEndpoint(ctx, c)
+		h.setContainerDialTarget(ctx, c)
 		return nil
 	}
 
@@ -712,7 +716,7 @@ func (h *Handler) startCacheContainer(ctx context.Context, c *CacheCluster) erro
 
 	c.DockerContainerID = containerID
 	c.HostPort = hostPort
-	h.setContainerEndpoint(ctx, c)
+	h.setContainerDialTarget(ctx, c)
 	return nil
 }
 
@@ -769,27 +773,31 @@ func (h *Handler) subnetGroupSubnets(ctx context.Context, name string) []string 
 	return sg.SubnetIds
 }
 
-// setContainerEndpoint updates the cluster's ConfigurationEndpoint to reflect
-// the actual container address: the container's own address when Overcast runs
-// beside it, 127.0.0.1 + host-port when running natively.
-func (h *Handler) setContainerEndpoint(ctx context.Context, c *CacheCluster) {
-	c.ConfigurationEndpoint = h.endpointFor(ctx, c.DockerContainerID, c.Engine, c.HostPort)
+// setContainerDialTarget records how Overcast reaches the cluster's container
+// for its health check. It deliberately leaves ConfigurationEndpoint alone:
+// that is what callers are told, and it is rendered per caller on the way out
+// (endpoint.go).
+func (h *Handler) setContainerDialTarget(ctx context.Context, c *CacheCluster) {
+	c.DialAddress, c.DialPort = h.containerDialTarget(ctx, c.DockerContainerID, c.Engine, c.HostPort)
 }
 
-// setReplicationGroupEndpoint updates a replication group's ConfigurationEndpoint
-// using the same Docker-vs-native logic as setContainerEndpoint.
-func (h *Handler) setReplicationGroupEndpoint(ctx context.Context, rg *ReplicationGroup) {
-	rg.ConfigurationEndpoint = h.endpointFor(ctx, rg.DockerContainerID, rg.Engine, rg.HostPort)
+// setReplicationGroupDialTarget is setContainerDialTarget for a replication
+// group.
+func (h *Handler) setReplicationGroupDialTarget(ctx context.Context, rg *ReplicationGroup) {
+	rg.DialAddress, rg.DialPort = h.containerDialTarget(ctx, rg.DockerContainerID, rg.Engine, rg.HostPort)
 }
 
-// endpointFor is the address/port pair the two setters above share: the engine
-// port on the container's own address when Overcast is containerised beside
-// it, else the published port on loopback.
-func (h *Handler) endpointFor(ctx context.Context, containerID, engine string, hostPort int) *ClusterEndpoint {
-	if addr := dataplane.ContainerAddr(ctx, h.docker, h.cfg, containerID); addr != "" {
-		return &ClusterEndpoint{Address: addr, Port: enginePort(engine)}
-	}
-	return &ClusterEndpoint{Address: "127.0.0.1", Port: hostPort}
+// scheduleClusterHealthCheck is scheduleHealthCheck aimed at c's dial target.
+func (h *Handler) scheduleClusterHealthCheck(region, clusterID string, c *CacheCluster) {
+	host, port := c.dialTarget()
+	h.scheduleHealthCheck(region, clusterID, host, port)
+}
+
+// scheduleGroupHealthCheck is scheduleReplicationGroupHealthCheck aimed at
+// rg's dial target.
+func (h *Handler) scheduleGroupHealthCheck(region, rgID string, rg *ReplicationGroup) {
+	host, port := rg.dialTarget()
+	h.scheduleReplicationGroupHealthCheck(region, rgID, host, port)
 }
 
 // cleanupCacheContainer releases the port reservation for a cache cluster.
@@ -911,12 +919,19 @@ func (h *Handler) startReplicationGroupContainer(ctx context.Context, rg *Replic
 		}
 		rg.DockerContainerID = existing.ID
 		rg.HostPort = hostPort
-		if err := h.attachAdoptedToDataPlane(ctx, existing.ID, "", nil, h.replicationGroupEndpointAliases(rg)); err != nil {
+		// Re-attach with the group's own placement, as the cache-cluster path
+		// does: an adopted container predates the current alias set and may
+		// predate VPC placement entirely, and one rejoined without its VPC
+		// lands on the default plane where the group's own consumers cannot
+		// see it.
+		if err := h.attachAdoptedToDataPlane(ctx, existing.ID,
+			h.vpcForSubnetGroup(ctx, rg.CacheSubnetGroupName), h.subnetGroupSubnets(ctx, rg.CacheSubnetGroupName),
+			h.replicationGroupEndpointAliases(rg)); err != nil {
 			h.log.Warn("ElastiCache: reused container could not join the data plane — "+
 				"its endpoint name will not resolve for sibling containers",
 				zap.String("rg", rg.ReplicationGroupId), zap.Error(err))
 		}
-		h.setReplicationGroupEndpoint(ctx, rg)
+		h.setReplicationGroupDialTarget(ctx, rg)
 		return nil
 	}
 
@@ -974,7 +989,7 @@ func (h *Handler) startReplicationGroupContainer(ctx context.Context, rg *Replic
 
 	rg.DockerContainerID = containerID
 	rg.HostPort = hostPort
-	h.setReplicationGroupEndpoint(ctx, rg)
+	h.setReplicationGroupDialTarget(ctx, rg)
 	return nil
 }
 
@@ -1019,6 +1034,25 @@ func advertisedAddress(ep *ClusterEndpoint) string {
 		return ""
 	}
 	return ep.Address
+}
+
+// requireCacheSubnetGroup refuses a create that names a subnet group Overcast
+// has no record of, with AWS's CacheSubnetGroupNotFoundFault.
+//
+// It used to be accepted and ignored, which put the cache on the default plane
+// with nothing said. That is the worst place for a typo to land: the cache
+// runs, DescribeCacheClusters echoes the name that was asked for, and the
+// first sign anything is wrong is a consumer in the intended VPC that cannot
+// resolve the endpoint. An empty name is fine — that is the default VPC, on
+// AWS and here.
+func (h *Handler) requireCacheSubnetGroup(ctx context.Context, name string) *protocol.AWSError {
+	if name == "" {
+		return nil
+	}
+	if _, aerr := h.store.getCacheSubnetGroup(ctx, name); aerr != nil {
+		return errSubnetGroupNotFound(name)
+	}
+	return nil
 }
 
 // vpcForSubnetGroup returns the VPC a cache subnet group belongs to, or "" for
@@ -1187,7 +1221,7 @@ func (h *Handler) ModifyCacheCluster(w http.ResponseWriter, r *http.Request) {
 
 	protocol.WriteQueryXML(w, r, http.StatusOK, &xmlModifyCacheClusterResponse{
 		Xmlns:            cacheXMLNS,
-		Result:           xmlModifyCacheClusterResult{CacheCluster: toXMLCacheCluster(cluster)},
+		Result:           xmlModifyCacheClusterResult{CacheCluster: toXMLCacheCluster(h.cacheClusterForCaller(r.Context(), cluster))},
 		ResponseMetadata: protocol.QueryResponseMetadata(r),
 	})
 }
