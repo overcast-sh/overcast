@@ -1,6 +1,6 @@
 ---
 title: "CloudWatch Logs operations"
-description: "Every CloudWatch Logs operation Overcast declares — 19 of 23 implemented — with status, behaviour notes and a link to the AWS API reference for each."
+description: "Every CloudWatch Logs operation Overcast declares — 23 of 26 implemented — with status, behaviour notes and a link to the AWS API reference for each."
 section: "Service Reference"
 tags:
   - cloudwatch
@@ -14,18 +14,19 @@ tags:
 
 # CloudWatch Logs operations
 
-19 of 23 listed operations are implemented. Back to [CloudWatch Logs](../cloudwatch-logs.md).
+23 of 26 listed operations are implemented. Back to [CloudWatch Logs](../cloudwatch-logs.md).
 
 ## Summary
 
-| Category    | ✅ Supported | ⚠️ Partial | ❌ Unsupported |
-| ----------- | ------------ | ---------- | -------------- |
-| Log groups  | 3            |            |                |
-| Log streams | 3            |            |                |
-| Log events  | 4            | 1          |                |
-| Insights    |              |            | 3              |
-| Retention   | 2            |            | 1              |
-| Tagging     | 6            |            |                |
+| Category       | ✅ Supported | ⚠️ Partial | ❌ Unsupported |
+| -------------- | ------------ | ---------- | -------------- |
+| Log groups     | 3            |            |                |
+| Log streams    | 3            |            |                |
+| Log events     | 4            | 1          |                |
+| Insights       |              |            | 2              |
+| Metric filters | 4            |            |                |
+| Retention      | 2            |            | 1              |
+| Tagging        | 6            |            |                |
 
 ---
 
@@ -63,7 +64,15 @@ tags:
 | ----------------- | -------------- | ----------------- | ----------------------------------------------------------------------------------------------------- |
 | `StartQuery`      | ❌ Unsupported | stub; returns 501 | [docs](https://docs.aws.amazon.com/AmazonCloudWatchLogs/latest/APIReference/API_StartQuery.html)      |
 | `GetQueryResults` | ❌ Unsupported | stub; returns 501 | [docs](https://docs.aws.amazon.com/AmazonCloudWatchLogs/latest/APIReference/API_GetQueryResults.html) |
-| `PutMetricFilter` | ❌ Unsupported | stub; returns 501 | [docs](https://docs.aws.amazon.com/AmazonCloudWatchLogs/latest/APIReference/API_PutMetricFilter.html) |
+
+### Metric filters
+
+| Operation               | Status       | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | AWS Docs                                                                                                    |
+| ----------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `PutMetricFilter`       | ✅ Supported | Creates or replaces a filter (100 per group); every accepted log event, from `PutLogEvents` or a Lambda function's output, that matches the pattern publishes a CloudWatch datapoint with the transformation's namespace, name, `metricValue` (a number or a `$field`/`$.field` reference), `dimensions` and `unit`, at the event's timestamp; `defaultValue` is published once per one-minute period that ingested events but none that matched, decided per batch; `applyOnTransformedLogs` is stored and ignored (no log transformers); nothing is published while service metrics are disabled | [docs](https://docs.aws.amazon.com/AmazonCloudWatchLogs/latest/APIReference/API_PutMetricFilter.html)       |
+| `DescribeMetricFilters` | ✅ Supported | Optional `logGroupName`, `filterNamePrefix` (honoured only with `logGroupName`), and `metricName` + `metricNamespace` (required together); `limit` (default and maximum 50) and `nextToken` page the name-sorted result                                                                                                                                                                                                                                                                                                                                                                            | [docs](https://docs.aws.amazon.com/AmazonCloudWatchLogs/latest/APIReference/API_DescribeMetricFilters.html) |
+| `DeleteMetricFilter`    | ✅ Supported | Deletes one filter; deleting a log group deletes its filters                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | [docs](https://docs.aws.amazon.com/AmazonCloudWatchLogs/latest/APIReference/API_DeleteMetricFilter.html)    |
+| `TestMetricFilter`      | ✅ Supported | Runs a pattern over 1–50 sample messages; `matches` carries the zero-based `eventNumber`, the message and `extractedValues` — every column of a space-delimited pattern (unnamed ones as `$1`…), the properties a JSON pattern selects (AWS documents no JSON example; this mirrors the space-delimited rule), or `{}` for a text pattern                                                                                                                                                                                                                                                          | [docs](https://docs.aws.amazon.com/AmazonCloudWatchLogs/latest/APIReference/API_TestMetricFilter.html)      |
 
 ### Retention
 

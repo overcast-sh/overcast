@@ -68,7 +68,18 @@ func (h *Handler) typedOps() map[string]op.Operation {
 		"PutSubscriptionFilter": unsupportedOperation("PutSubscriptionFilter"),
 		"StartQuery":            unsupportedOperation("StartQuery"),
 		"GetQueryResults":       unsupportedOperation("GetQueryResults"),
-		"PutMetricFilter":       unsupportedOperation("PutMetricFilter"),
+		"PutMetricFilter": op.NewTyped[putMetricFilterRequest, struct{}](
+			"PutMetricFilter", h.putMetricFilterTyped,
+		),
+		"DescribeMetricFilters": op.NewTyped[describeMetricFiltersRequest, describeMetricFiltersResponse](
+			"DescribeMetricFilters", h.describeMetricFiltersTyped,
+		),
+		"DeleteMetricFilter": op.NewTyped[deleteMetricFilterRequest, struct{}](
+			"DeleteMetricFilter", h.deleteMetricFilterTyped,
+		),
+		"TestMetricFilter": op.NewTyped[testMetricFilterRequest, testMetricFilterResponse](
+			"TestMetricFilter", h.testMetricFilterTyped,
+		),
 	}
 }
 

@@ -45,6 +45,8 @@ const (
 		"Properties": {"UserPoolName": "dep-pool"}},`
 	depLaunchConfig = `"DepLaunchConfig": {"Type": "AWS::AutoScaling::LaunchConfiguration", "Properties": {
 		"LaunchConfigurationName": "dep-lc", "ImageId": "ami-123", "InstanceType": "t3.micro"}},`
+	depLogGroup = `"DepLogGroup": {"Type": "AWS::Logs::LogGroup",
+		"Properties": {"LogGroupName": "/dep/metric-filter"}},`
 )
 
 // nameConstraint is a service's documented rule for the name CloudFormation
@@ -196,6 +198,21 @@ func TestCreateStack_resourcesWithoutNames_areNamedByCloudFormation(t *testing.T
         "Type": "AWS::Logs::LogGroup",
         "Properties": {"RetentionInDays": 7}
       }`,
+		},
+		{
+			name:      "AWS::Logs::MetricFilter",
+			logicalID: "Filter",
+			deps:      depLogGroup,
+			properties: `{
+        "Type": "AWS::Logs::MetricFilter",
+        "Properties": {
+          "LogGroupName": {"Ref": "DepLogGroup"},
+          "FilterPattern": "ERROR",
+          "MetricTransformations": [{"MetricName": "Errors", "MetricNamespace": "App", "MetricValue": "1"}]
+        }
+      }`,
+			// FilterName: 1–512 characters, no ':' or '*'.
+			constraint: &nameConstraint{maxLen: 512, charset: `^[^:*]+$`},
 		},
 		{
 			name:      "AWS::IAM::Role",
@@ -592,6 +609,9 @@ func TestCreateStack_twoUnnamedResourcesOfOneType_doNotCollide(t *testing.T) {
 		{name: "AWS::SQS::Queue", resource: `{"Type": "AWS::SQS::Queue", "Properties": {}}`},
 		{name: "AWS::SNS::Topic", resource: `{"Type": "AWS::SNS::Topic", "Properties": {}}`},
 		{name: "AWS::Logs::LogGroup", resource: `{"Type": "AWS::Logs::LogGroup", "Properties": {}}`},
+		{name: "AWS::Logs::MetricFilter", deps: depLogGroup, resource: `{"Type": "AWS::Logs::MetricFilter", "Properties": {
+			"LogGroupName": {"Ref": "DepLogGroup"}, "FilterPattern": "ERROR",
+			"MetricTransformations": [{"MetricName": "Errors", "MetricNamespace": "App", "MetricValue": "1"}]}}`},
 		{name: "AWS::Events::Rule", resource: `{"Type": "AWS::Events::Rule", "Properties": {"EventPattern": {"source": ["com.example"]}}}`},
 		{name: "AWS::Scheduler::ScheduleGroup", resource: `{"Type": "AWS::Scheduler::ScheduleGroup", "Properties": {}}`},
 		{name: "AWS::Scheduler::Schedule", resource: `{"Type": "AWS::Scheduler::Schedule", "Properties": {

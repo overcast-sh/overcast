@@ -620,6 +620,7 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 		snsSvc.InitMetrics(svcMetrics)
 		ddbSvc.InitMetrics(svcMetrics)
 		apigwSvc.InitMetrics(svcMetrics)
+		logsSvc.InitMetrics(svcMetrics)
 		prof.mark("  new: metrics")
 	}
 

@@ -915,6 +915,31 @@
       ]
     },
     {
+      "service": "cloudwatch-logs",
+      "name": "logs-metric-filters",
+      "scenario": "compat/model/authored/logs-metric-filters.json",
+      "tests": [
+        {
+          "name": "PutMetricFilter"
+        },
+        {
+          "name": "DescribeMetricFilters",
+          "depends": [
+            "PutMetricFilter"
+          ]
+        },
+        {
+          "name": "TestMetricFilter"
+        },
+        {
+          "name": "DeleteMetricFilter",
+          "depends": [
+            "DescribeMetricFilters"
+          ]
+        }
+      ]
+    },
+    {
       "service": "ses",
       "name": "ses-send",
       "tests": [

@@ -15,6 +15,7 @@ import (
 	"github.com/overcast-sh/overcast/internal/clock"
 	"github.com/overcast-sh/overcast/internal/config"
 	"github.com/overcast-sh/overcast/internal/events"
+	"github.com/overcast-sh/overcast/internal/metrics"
 	"github.com/overcast-sh/overcast/internal/middleware"
 	"github.com/overcast-sh/overcast/internal/protocol"
 	"github.com/overcast-sh/overcast/internal/protocol/codec"
@@ -52,6 +53,18 @@ func (s *Service) TargetPrefix() string { return "Logs_20140328." }
 // InitBus wires the event bus so that log group lifecycle events appear on the topology map.
 func (s *Service) InitBus(b *events.Bus) {
 	s.handler.bus = b
+}
+
+// InitMetrics wires the shared service-metrics recorder so metric filters
+// (metric_filter.go) can publish the datapoints matching log events produce.
+// Called once from router.New, after metrics.NewRecorder, only while
+// collection is enabled; a Service without it stores, describes and tests
+// metric filters but publishes nothing — matching SQS's InitMetrics contract.
+// No I/O: the filters themselves are loaded lazily on the first batch that
+// reaches their log group.
+func (s *Service) InitMetrics(r metrics.Recorder) {
+	s.handler.store.metrics = r
+	s.handler.store.log = s.log
 }
 
 // RegisterRoutes is a no-op — CloudWatch Logs uses POST / which is handled

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/overcast-sh/overcast/internal/clock"
+	"github.com/overcast-sh/overcast/internal/metrics"
 	"github.com/overcast-sh/overcast/internal/middleware"
 	"github.com/overcast-sh/overcast/internal/protocol"
 	"github.com/overcast-sh/overcast/internal/serviceutil"
@@ -19,8 +20,9 @@ import (
 )
 
 const (
-	nsLogGroups = "logs:groups"
-	nsStreams   = "logs:streams" // key: <groupName>/<streamName>
+	nsLogGroups     = "logs:groups"
+	nsStreams       = "logs:streams"       // key: <groupName>/<streamName>
+	nsMetricFilters = "logs:metricfilters" // key: <groupName>:<filterName>
 
 	// nsEvents is the legacy generic-kv namespace event blobs used to live
 	// under. Event storage moved to the dedicated logs_events SQL table
@@ -90,6 +92,26 @@ type logsStore struct {
 	// pointer; no iteration required outside Stop) and avoids a single
 	// coarse lock across unrelated streams.
 	streamCaches sync.Map
+
+	// metrics is the shared service-metrics recorder metric filters publish
+	// through (metric_filter.go). nil until Service.InitMetrics runs — and
+	// permanently when collection is disabled — in which case filters are
+	// stored and described but publish nothing.
+	metrics metrics.Recorder
+	// log reports ingest-side metric filter problems; nil in unit tests
+	// that construct the store directly.
+	log *serviceutil.ServiceLogger
+	// metricFilterCache is a sync.Map of region-scoped group key →
+	// []*compiledMetricFilter, the group's filters compiled once for the
+	// ingest hot path (see compiledMetricFilters). A cache hit is lock-free;
+	// a miss loads under metricFilterMu.
+	metricFilterCache sync.Map
+	// metricFilterMu orders every write to a group's filter set (store
+	// write + cache invalidation) against a cache miss's load (scan +
+	// cache store), so an invalidation can never land between a loader's
+	// scan and its store and leave a stale set cached — the race a Lambda
+	// writing logs while cdk deploy creates the filter would otherwise hit.
+	metricFilterMu sync.Mutex
 
 	// flushBg is the context for background flush operations. Cancelled by
 	// Stop so any in-flight debounce timers exit promptly.
@@ -305,6 +327,122 @@ func (s *logsStore) deleteLogGroup(ctx context.Context, name string) *protocol.A
 	if err := s.backend.deleteGroup(ctx, region, name); err != nil {
 		return protocol.Wrap(protocol.ErrInternalError, err)
 	}
+	// A log group's metric filters go with it: the filter is a property of
+	// the group, and a DescribeMetricFilters after the delete must not list
+	// it (nor could it, since the group it names is gone). Deleted by
+	// scanned key rather than by decoded record, so a persisted record that
+	// no longer decodes — which every read skips — is removed too instead of
+	// outliving its group.
+	return s.deleteMetricFiltersOfGroup(ctx, region, name)
+}
+
+// ---- Metric filter operations ----------------------------------------------
+
+// metricFilterKey joins a log group name and a filter name with ":". Both
+// names may contain "/" (a group is commonly "/aws/lambda/fn"), so "/" would
+// make group "a" + filter "b/c" and group "a/b" + filter "c" one key; ":" is
+// excluded by both modeled patterns — LogGroupName `[\.\-_/#A-Za-z0-9]+`,
+// FilterName `[^:*]*` — so the join is unambiguous and a prefix scan on
+// `<group>:` is exact. serviceutil.RegionKey's own "/" prefix sits before it
+// and is stripped by SplitRegionKey on the first "/" only.
+func metricFilterKey(groupName, filterName string) string {
+	return groupName + ":" + filterName
+}
+
+// metricFilterGroupPrefix is the key prefix every filter of a group shares.
+func metricFilterGroupPrefix(groupName string) string {
+	return groupName + ":"
+}
+
+func (s *logsStore) getMetricFilter(ctx context.Context, groupName, filterName string) (*MetricFilter, *protocol.AWSError) {
+	raw, found, err := s.store.Get(ctx, nsMetricFilters, serviceutil.RegionKey(s.region(ctx), metricFilterKey(groupName, filterName)))
+	if err != nil {
+		return nil, protocol.Wrap(protocol.ErrInternalError, err)
+	}
+	if !found {
+		return nil, errMetricFilterNotFound()
+	}
+	var f MetricFilter
+	if err := json.Unmarshal([]byte(raw), &f); err != nil {
+		// One corrupt record reads as the modeled not-found, never a 500
+		// (the malformed-persisted-state rule).
+		return nil, errMetricFilterNotFound()
+	}
+	return &f, nil
+}
+
+// putMetricFilter writes a filter and invalidates its group's compiled
+// set, under metricFilterMu so an in-flight cache load cannot store a set
+// that predates the write.
+func (s *logsStore) putMetricFilter(ctx context.Context, f *MetricFilter) *protocol.AWSError {
+	raw, err := json.Marshal(f)
+	if err != nil {
+		return protocol.Wrap(protocol.ErrInternalError, err)
+	}
+	region := s.region(ctx)
+	s.metricFilterMu.Lock()
+	defer s.metricFilterMu.Unlock()
+	if err := s.store.Set(ctx, nsMetricFilters, serviceutil.RegionKey(region, metricFilterKey(f.LogGroupName, f.Name)), string(raw)); err != nil {
+		return protocol.Wrap(protocol.ErrInternalError, err)
+	}
+	s.invalidateMetricFilters(region, f.LogGroupName)
+	return nil
+}
+
+// listMetricFilters returns the region's metric filters, ASCII-sorted by
+// filter name — every group's when groupName is empty. The `<group>:` key
+// prefix is exact (see metricFilterKey), so the scan is the selection.
+func (s *logsStore) listMetricFilters(ctx context.Context, groupName string) ([]*MetricFilter, *protocol.AWSError) {
+	prefix := ""
+	if groupName != "" {
+		prefix = metricFilterGroupPrefix(groupName)
+	}
+	pairs, err := s.store.Scan(ctx, nsMetricFilters, serviceutil.RegionKey(s.region(ctx), prefix))
+	if err != nil {
+		return nil, protocol.Wrap(protocol.ErrInternalError, err)
+	}
+	filters := make([]*MetricFilter, 0, len(pairs))
+	for _, kv := range pairs {
+		var f MetricFilter
+		if err := json.Unmarshal([]byte(kv.Value), &f); err != nil {
+			// One malformed persisted record must not fail the whole list.
+			continue
+		}
+		filters = append(filters, &f)
+	}
+	sortMetricFilters(filters)
+	return filters, nil
+}
+
+// deleteMetricFilter removes one filter; locked the same way putMetricFilter
+// is, for the same reason.
+func (s *logsStore) deleteMetricFilter(ctx context.Context, groupName, filterName string) *protocol.AWSError {
+	region := s.region(ctx)
+	s.metricFilterMu.Lock()
+	defer s.metricFilterMu.Unlock()
+	if err := s.store.Delete(ctx, nsMetricFilters, serviceutil.RegionKey(region, metricFilterKey(groupName, filterName))); err != nil {
+		return protocol.Wrap(protocol.ErrInternalError, err)
+	}
+	s.invalidateMetricFilters(region, groupName)
+	return nil
+}
+
+// deleteMetricFiltersOfGroup removes every persisted filter record of a
+// group by its scanned key — decodable or not — and invalidates the group's
+// compiled set. The deleteLogGroup cascade.
+func (s *logsStore) deleteMetricFiltersOfGroup(ctx context.Context, region, groupName string) *protocol.AWSError {
+	s.metricFilterMu.Lock()
+	defer s.metricFilterMu.Unlock()
+	pairs, err := s.store.Scan(ctx, nsMetricFilters, serviceutil.RegionKey(region, metricFilterGroupPrefix(groupName)))
+	if err != nil {
+		return protocol.Wrap(protocol.ErrInternalError, err)
+	}
+	for _, kv := range pairs {
+		if err := s.store.Delete(ctx, nsMetricFilters, kv.Key); err != nil {
+			return protocol.Wrap(protocol.ErrInternalError, err)
+		}
+	}
+	s.invalidateMetricFilters(region, groupName)
 	return nil
 }
 
@@ -648,7 +786,7 @@ func (s *logsStore) appendEvents(ctx context.Context, groupName, streamName stri
 		// Use the request ctx for the inline flush so failures propagate.
 		aerr := s.flushLocked(ctx, c)
 		c.mu.Unlock()
-		return aerr
+		return s.afterAppend(ctx, groupName, newEvents, aerr)
 	}
 
 	// After Stop, debounce goroutines are no longer scheduled and Stop's
@@ -658,7 +796,7 @@ func (s *logsStore) appendEvents(ctx context.Context, groupName, streamName stri
 	if s.stopped.Load() {
 		aerr := s.flushLocked(ctx, c)
 		c.mu.Unlock()
-		return aerr
+		return s.afterAppend(ctx, groupName, newEvents, aerr)
 	}
 
 	// Schedule a debounced flush if one isn't already pending.
@@ -668,6 +806,19 @@ func (s *logsStore) appendEvents(ctx context.Context, groupName, streamName stri
 		go s.debouncedFlush(c)
 	}
 	c.mu.Unlock()
+	return s.afterAppend(ctx, groupName, newEvents, nil)
+}
+
+// afterAppend is appendEvents' single exit: once the write buffer's lock is
+// released and the events are accepted, the group's metric filters see them
+// (metric_filter.go). It runs outside c.mu so the per-stream buffer lock
+// never nests with the filter cache, and skips a batch whose inline flush
+// failed, since those events were not accepted.
+func (s *logsStore) afterAppend(ctx context.Context, groupName string, events []LogEvent, aerr *protocol.AWSError) *protocol.AWSError {
+	if aerr != nil {
+		return aerr
+	}
+	s.publishMetricFilterObservations(ctx, groupName, events)
 	return nil
 }
 

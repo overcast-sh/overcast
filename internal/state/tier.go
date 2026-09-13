@@ -115,9 +115,10 @@ var namespaceTiers = map[string]Tier{
 	"lambda:test-events":      TierCached,
 
 	// ── CloudWatch Logs ─────────────────────────────────────────────────
-	"logs:groups":  TierHot,
-	"logs:streams": TierHot,
-	"logs:events":  TierCached,
+	"logs:groups":        TierHot,
+	"logs:streams":       TierHot,
+	"logs:metricfilters": TierHot,
+	"logs:events":        TierCached,
 
 	// ── Kinesis ─────────────────────────────────────────────────────────
 	"kinesis:streams": TierHot,

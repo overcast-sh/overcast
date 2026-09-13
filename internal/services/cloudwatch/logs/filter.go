@@ -24,9 +24,55 @@ type Matcher func(message string) bool
 //   - Space-delimited patterns: [col1, col2 = value, col3 = 4*, ...]
 //     with wildcard glob, numeric comparison, and ellipsis
 func CompileFilter(pattern string) (Matcher, error) {
+	f, err := compileFilterPattern(pattern)
+	if err != nil {
+		return nil, err
+	}
+	return f.matcher(), nil
+}
+
+// compiledFilter is CompileFilter's extraction-aware form, shared by
+// FilterLogEvents (which only needs the match) and metric filters (which also
+// need the fields a `metricValue` or dimension names). One evaluation does
+// both, so a metric filter never parses a JSON event or splits a
+// space-delimited one twice.
+type compiledFilter struct {
+	// eval reports whether msg matches. On a match, fields is the message's
+	// extracted fields for a JSON or space-delimited pattern and nil for a
+	// text pattern, which names no fields.
+	eval func(msg string) (fields matchedFields, ok bool)
+	// extractsFields is true for the pattern kinds that can name fields —
+	// JSON and space-delimited — and false for text patterns.
+	extractsFields bool
+}
+
+func (f *compiledFilter) matcher() Matcher {
+	return func(msg string) bool {
+		_, ok := f.eval(msg)
+		return ok
+	}
+}
+
+// matchedFields is what one matched message exposes to a metric filter.
+type matchedFields interface {
+	// lookup resolves one field reference as a metric filter writes it —
+	// `$name` for a space-delimited column, `$.path` for a JSON property —
+	// to its string value. ok is false for a reference the message does not
+	// carry, and for a JSON value that is not a scalar (an object, an array
+	// or null), since none of those can be a metric value or a dimension.
+	lookup(ref string) (value string, ok bool)
+	// named returns the fields TestMetricFilter reports as extractedValues:
+	// every column of a space-delimited pattern (unnamed ones as `$<position>`,
+	// 1-based), or the properties a JSON pattern's selectors name.
+	named() map[string]string
+}
+
+// compileFilterPattern parses a filter pattern into its match-and-extract
+// form. An empty pattern matches every message and extracts nothing.
+func compileFilterPattern(pattern string) (*compiledFilter, error) {
 	pattern = strings.TrimSpace(pattern)
 	if pattern == "" {
-		return matchAll, nil
+		return matchAllFilter, nil
 	}
 	if len(pattern) >= 2 && pattern[0] == '{' && pattern[len(pattern)-1] == '}' {
 		return compileJSONFilter(pattern)
@@ -34,10 +80,21 @@ func CompileFilter(pattern string) (Matcher, error) {
 	if len(pattern) >= 2 && pattern[0] == '[' && pattern[len(pattern)-1] == ']' {
 		return compileColumnarFilter(pattern)
 	}
-	return compileTextFilter(pattern), nil
+	return matcherFilter(compileTextFilter(pattern)), nil
 }
 
 func matchAll(string) bool { return true }
+
+// matchAllFilter is the compiled form of the empty pattern.
+var matchAllFilter = matcherFilter(matchAll)
+
+// matcherFilter wraps a plain Matcher — a text pattern, or match-all — as a
+// compiledFilter that extracts nothing.
+func matcherFilter(m Matcher) *compiledFilter {
+	return &compiledFilter{eval: func(msg string) (matchedFields, bool) {
+		return nil, m(msg)
+	}}
+}
 
 // ---------- Text filter ------------------------------------------------------
 
@@ -116,6 +173,9 @@ func tokenizeText(pattern string) []string {
 // jsonExpr is a node in the parsed JSON filter expression tree.
 type jsonExpr interface {
 	eval(data any) bool
+	// selectors appends every $.path the node names, in pattern order —
+	// the set TestMetricFilter reports for a JSON pattern.
+	selectors(acc [][]string) [][]string
 }
 
 type cmpOp int8
@@ -144,12 +204,22 @@ func (c *jsonCmp) eval(data any) bool {
 	return cmpValues(v, c.val, c.op)
 }
 
+func (c *jsonCmp) selectors(acc [][]string) [][]string { return append(acc, c.path) }
+
 // jsonAnd / jsonOr: boolean combinators.
 type jsonAnd struct{ left, right jsonExpr }
 type jsonOr struct{ left, right jsonExpr }
 
 func (e *jsonAnd) eval(data any) bool { return e.left.eval(data) && e.right.eval(data) }
 func (e *jsonOr) eval(data any) bool  { return e.left.eval(data) || e.right.eval(data) }
+
+func (e *jsonAnd) selectors(acc [][]string) [][]string {
+	return e.right.selectors(e.left.selectors(acc))
+}
+
+func (e *jsonOr) selectors(acc [][]string) [][]string {
+	return e.right.selectors(e.left.selectors(acc))
+}
 
 // jsonExists: $.path EXISTS / NOT EXISTS.
 type jsonExists struct {
@@ -164,6 +234,8 @@ func (e *jsonExists) eval(data any) bool {
 	}
 	return ok
 }
+
+func (e *jsonExists) selectors(acc [][]string) [][]string { return append(acc, e.path) }
 
 // jsonIsNull: $.path IS NULL / IS NOT NULL.
 type jsonIsNull struct {
@@ -183,12 +255,14 @@ func (e *jsonIsNull) eval(data any) bool {
 	return v == nil
 }
 
+func (e *jsonIsNull) selectors(acc [][]string) [][]string { return append(acc, e.path) }
+
 // ---------- JSON parser (recursive descent) ----------------------------------
 
-func compileJSONFilter(pattern string) (Matcher, error) {
+func compileJSONFilter(pattern string) (*compiledFilter, error) {
 	inner := strings.TrimSpace(pattern[1 : len(pattern)-1])
 	if inner == "" {
-		return matchAll, nil
+		return matchAllFilter, nil
 	}
 	expr, rest, err := parseOr(inner)
 	if err != nil {
@@ -197,16 +271,77 @@ func compileJSONFilter(pattern string) (Matcher, error) {
 	if rest = strings.TrimSpace(rest); rest != "" {
 		return nil, fmt.Errorf("unexpected trailing text: %q", truncStr(rest, 30))
 	}
-	return func(msg string) bool {
-		if len(msg) == 0 || msg[0] != '{' {
-			return false
-		}
-		var data any
-		if err := json.Unmarshal([]byte(msg), &data); err != nil {
-			return false
-		}
-		return expr.eval(data)
+	selectors := expr.selectors(nil)
+	return &compiledFilter{
+		extractsFields: true,
+		eval: func(msg string) (matchedFields, bool) {
+			if len(msg) == 0 || msg[0] != '{' {
+				return nil, false
+			}
+			var data any
+			if err := json.Unmarshal([]byte(msg), &data); err != nil {
+				return nil, false
+			}
+			if !expr.eval(data) {
+				return nil, false
+			}
+			return &jsonFields{data: data, selectors: selectors}, true
+		},
 	}, nil
+}
+
+// jsonFields is a matched JSON event: lookup walks the parsed document with
+// the same resolvePath the pattern evaluated with, so `$.a.b` in a metricValue
+// means exactly what it means in a pattern.
+type jsonFields struct {
+	data      any
+	selectors [][]string
+}
+
+func (f *jsonFields) lookup(ref string) (string, bool) {
+	if !strings.HasPrefix(ref, "$.") || len(ref) == 2 {
+		return "", false
+	}
+	v, ok := resolvePath(f.data, strings.Split(ref[2:], "."))
+	if !ok {
+		return "", false
+	}
+	return jsonScalarString(v)
+}
+
+// named reports the properties the pattern's own selectors name, in the
+// pattern's order, omitting any the event does not carry. The AWS reference
+// documents extractedValues by example only for space-delimited and text
+// patterns (API_TestMetricFilter.html); this is the JSON analogue of the
+// space-delimited rule — the fields the pattern declares, with their values.
+func (f *jsonFields) named() map[string]string {
+	out := make(map[string]string, len(f.selectors))
+	for _, path := range f.selectors {
+		v, ok := resolvePath(f.data, path)
+		if !ok {
+			continue
+		}
+		if s, ok := jsonScalarString(v); ok {
+			out["$."+strings.Join(path, ".")] = s
+		}
+	}
+	return out
+}
+
+// jsonScalarString renders a JSON scalar the way a log field reads: numbers
+// in their shortest exact form, booleans as true/false. Objects, arrays and
+// null are not values a metric filter can use.
+func jsonScalarString(v any) (string, bool) {
+	switch t := v.(type) {
+	case string:
+		return t, true
+	case float64:
+		return strconv.FormatFloat(t, 'f', -1, 64), true
+	case bool:
+		return strconv.FormatBool(t), true
+	default:
+		return "", false
+	}
 }
 
 // parseOr: andExpr ("||" andExpr)* .
@@ -478,13 +613,16 @@ func truncStr(s string, n int) string {
 // A nil colMatcher means the column is unconstrained (matches anything).
 type colMatcher func(field string) bool
 
-func compileColumnarFilter(pattern string) (Matcher, error) {
+// compileColumnarFilter compiles a space-delimited pattern. An empty `[]`
+// matches every message and still names each field by position, which is
+// what AWS's third TestMetricFilter example reports for it.
+func compileColumnarFilter(pattern string) (*compiledFilter, error) {
 	inner := strings.TrimSpace(pattern[1 : len(pattern)-1])
-	if inner == "" {
-		return matchAll, nil
-	}
 
-	parts := splitColumns(inner)
+	var parts []string
+	if inner != "" {
+		parts = splitColumns(inner)
+	}
 
 	// Detect leading ellipsis.
 	hasEllipsis := false
@@ -494,29 +632,90 @@ func compileColumnarFilter(pattern string) (Matcher, error) {
 	}
 
 	cols := make([]colMatcher, 0, len(parts))
+	names := make([]string, 0, len(parts))
 	for _, p := range parts {
-		cm, err := compileColumnDef(strings.TrimSpace(p))
+		name, cm, err := compileColumnDef(strings.TrimSpace(p))
 		if err != nil {
 			return nil, err
 		}
 		cols = append(cols, cm)
+		names = append(names, name)
 	}
 
-	return func(msg string) bool {
-		fields := splitLogFields(msg)
-		if hasEllipsis {
-			return matchColumnsEllipsis(fields, cols)
-		}
-		if len(fields) < len(cols) {
-			return false
-		}
-		for i, cm := range cols {
-			if cm != nil && !cm(fields[i]) {
-				return false
+	return &compiledFilter{
+		extractsFields: true,
+		eval: func(msg string) (matchedFields, bool) {
+			fields := splitLogFields(msg)
+			if len(fields) < len(cols) {
+				return nil, false
 			}
-		}
-		return true
+			// With an ellipsis the columns align to the tail of the fields
+			// (the last column matches the last field); without one, to the
+			// head.
+			offset := 0
+			if hasEllipsis {
+				offset = len(fields) - len(cols)
+			}
+			for i, cm := range cols {
+				if cm != nil && !cm(fields[offset+i]) {
+					return nil, false
+				}
+			}
+			return &columnFields{fields: fields, names: names, offset: offset}, true
+		},
 	}, nil
+}
+
+// columnFields is a matched space-delimited event: the split fields plus the
+// pattern's column names, aligned at offset.
+type columnFields struct {
+	fields []string
+	names  []string // "" for an unnamed column
+	offset int
+}
+
+// nameOf is the key AWS reports a field under: `$<name>` for a column the
+// pattern names, else `$<position>`, 1-based — including every field an
+// ellipsis absorbed (API_TestMetricFilter.html, examples 2, 3 and 5).
+func (f *columnFields) nameOf(i int) string {
+	if col := i - f.offset; col >= 0 && col < len(f.names) && f.names[col] != "" {
+		return "$" + f.names[col]
+	}
+	return "$" + strconv.Itoa(i+1)
+}
+
+func (f *columnFields) lookup(ref string) (string, bool) {
+	if len(ref) < 2 || ref[0] != '$' {
+		return "", false
+	}
+	for i := range f.fields {
+		if f.nameOf(i) == ref {
+			return unwrapLogField(f.fields[i]), true
+		}
+	}
+	return "", false
+}
+
+func (f *columnFields) named() map[string]string {
+	out := make(map[string]string, len(f.fields))
+	for i, v := range f.fields {
+		out[f.nameOf(i)] = unwrapLogField(v)
+	}
+	return out
+}
+
+// unwrapLogField strips the brackets or quotes splitLogFields keeps around a
+// bracketed or quoted field: the extracted value AWS reports is the text
+// inside them (`$timestamp` is `10/Oct/2000:13:25:15 -0700`, not the
+// bracketed form — API_TestMetricFilter.html, example 1).
+func unwrapLogField(field string) string {
+	if n := len(field); n >= 2 {
+		switch {
+		case field[0] == '[' && field[n-1] == ']', field[0] == '"' && field[n-1] == '"':
+			return field[1 : n-1]
+		}
+	}
+	return field
 }
 
 // splitColumns splits on commas, but respects quoted strings.
@@ -582,50 +781,47 @@ func splitLogFields(s string) []string {
 	return fields
 }
 
-// compileColumnDef compiles a single column definition into a colMatcher.
-// Supports:
+// compileColumnDef compiles a single column definition into its name and a
+// colMatcher. Supports:
 //
-//	(empty)                     → nil (unconstrained)
-//	name                        → nil (bare name, no constraint)
+//	(empty)                     → "", nil (unnamed, unconstrained)
+//	name                        → name, nil (bare name, no constraint)
 //	name = value                → equality (string/glob/regex)
 //	name != value               → not-equals
 //	name > 100                  → numeric comparison
 //	name = 404 || name = 410    → compound OR
 //	name != X && name != Y      → compound AND
-func compileColumnDef(s string) (colMatcher, error) {
+//
+// The name is what a metric filter's `$name` reference and TestMetricFilter's
+// extractedValues key on; a compound definition takes the name of its first
+// term, which is the column every term constrains.
+func compileColumnDef(s string) (string, colMatcher, error) {
 	if s == "" {
-		return nil, nil
+		return "", nil, nil
 	}
 
 	// Check for compound expressions (|| then &&).
-	if cm, ok, err := tryCompoundColumn(s); ok {
-		return cm, err
+	if name, cm, ok, err := tryCompoundColumn(s); ok {
+		return name, cm, err
 	}
 
 	return compileSingleColumn(s)
 }
 
 // tryCompoundColumn checks for || or && in the column definition.
-// Returns (matcher, true, nil/err) if a compound expression was found,
-// or (nil, false, nil) if no compound operator exists.
-func tryCompoundColumn(s string) (colMatcher, bool, error) {
+// Returns (name, matcher, true, nil/err) if a compound expression was found,
+// or ("", nil, false, nil) if no compound operator exists.
+func tryCompoundColumn(s string) (string, colMatcher, bool, error) {
 	// Check for || first (lower precedence).
 	if parts := splitCompound(s, "||"); len(parts) > 1 {
-		var matchers []colMatcher
-		for _, part := range parts {
-			cm, err := compileSingleColumn(strings.TrimSpace(part))
-			if err != nil {
-				return nil, true, err
-			}
-			if cm == nil {
-				continue
-			}
-			matchers = append(matchers, cm)
+		name, matchers, err := compileCompoundTerms(parts)
+		if err != nil {
+			return "", nil, true, err
 		}
 		if len(matchers) == 0 {
-			return nil, true, nil
+			return name, nil, true, nil
 		}
-		return func(field string) bool {
+		return name, func(field string) bool {
 			for _, m := range matchers {
 				if m(field) {
 					return true
@@ -636,20 +832,14 @@ func tryCompoundColumn(s string) (colMatcher, bool, error) {
 	}
 	// Check for &&.
 	if parts := splitCompound(s, "&&"); len(parts) > 1 {
-		var matchers []colMatcher
-		for _, part := range parts {
-			cm, err := compileSingleColumn(strings.TrimSpace(part))
-			if err != nil {
-				return nil, true, err
-			}
-			if cm != nil {
-				matchers = append(matchers, cm)
-			}
+		name, matchers, err := compileCompoundTerms(parts)
+		if err != nil {
+			return "", nil, true, err
 		}
 		if len(matchers) == 0 {
-			return nil, true, nil
+			return name, nil, true, nil
 		}
-		return func(field string) bool {
+		return name, func(field string) bool {
 			for _, m := range matchers {
 				if !m(field) {
 					return false
@@ -658,7 +848,27 @@ func tryCompoundColumn(s string) (colMatcher, bool, error) {
 			return true
 		}, true, nil
 	}
-	return nil, false, nil
+	return "", nil, false, nil
+}
+
+// compileCompoundTerms compiles each term of a compound column definition,
+// keeping the constrained ones and the first term's column name.
+func compileCompoundTerms(parts []string) (string, []colMatcher, error) {
+	var name string
+	var matchers []colMatcher
+	for i, part := range parts {
+		termName, cm, err := compileSingleColumn(strings.TrimSpace(part))
+		if err != nil {
+			return "", nil, err
+		}
+		if i == 0 {
+			name = termName
+		}
+		if cm != nil {
+			matchers = append(matchers, cm)
+		}
+	}
+	return name, matchers, nil
 }
 
 // splitCompound splits s on a compound operator, respecting quoted strings.
@@ -687,23 +897,33 @@ func splitCompound(s, op string) []string {
 	return parts
 }
 
-// compileSingleColumn compiles one simple constraint: "name op value" or bare "name".
-func compileSingleColumn(s string) (colMatcher, error) {
+// compileSingleColumn compiles one simple constraint: "name op value" or bare
+// "name", returning the column's name alongside its matcher.
+func compileSingleColumn(s string) (string, colMatcher, error) {
 	if s == "" {
-		return nil, nil
+		return "", nil, nil
 	}
 
 	op, nameRaw, valRaw, found := splitColumnOp(s)
 	if !found {
 		// Bare name — no constraint.
-		return nil, nil
+		return s, nil, nil
 	}
 
 	name := strings.TrimSpace(nameRaw)
 	val := strings.TrimSpace(valRaw)
 	if name == "" || val == "" {
-		return nil, fmt.Errorf("invalid column definition: %q", s)
+		return "", nil, fmt.Errorf("invalid column definition: %q", s)
 	}
+	cm, err := compileColumnConstraint(name, op, val)
+	if err != nil {
+		return "", nil, err
+	}
+	return name, cm, nil
+}
+
+// compileColumnConstraint compiles one `name op value` constraint's matcher.
+func compileColumnConstraint(name string, op cmpOp, val string) (colMatcher, error) {
 
 	// Strip quotes from value.
 	if len(val) >= 2 && val[0] == '"' && val[len(val)-1] == '"' {
@@ -821,22 +1041,6 @@ func splitColumnOp(s string) (cmpOp, string, string, bool) {
 		}
 	}
 	return best.op, s[:best.idx], s[best.idx+best.len:], true
-}
-
-// matchColumnsEllipsis handles the [..., col1, col2] pattern by trying to
-// align the constrained columns against the tail of the fields slice.
-func matchColumnsEllipsis(fields []string, cols []colMatcher) bool {
-	if len(fields) < len(cols) {
-		return false
-	}
-	// Align from the right: the last column matches the last field, etc.
-	offset := len(fields) - len(cols)
-	for i, cm := range cols {
-		if cm != nil && !cm(fields[offset+i]) {
-			return false
-		}
-	}
-	return true
 }
 
 // compileGlob returns a match function for a '*' wildcard pattern.

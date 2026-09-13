@@ -7,8 +7,8 @@ protocols: [aws_json_1_1, aws_json_1_0, rpcv2_cbor]
 implementation: [internal/services/cloudwatch/logs]
 integration_tests: [tests/integration/cloudwatch/logs]
 capability_docs: docs/services/cloudwatch-logs.md
-operation_count_estimate: 14 supported, 4 unsupported
-current_support_level: Log groups, streams, events, retention, tagging, and filtering supported; Insights/subscriptions/metric filters stubbed.
+operation_count_estimate: 23 supported, 3 unsupported
+current_support_level: Log groups, streams, events, retention, tagging, filtering, and metric filters (published to CloudWatch through the service-metrics recorder) supported; Insights/subscriptions stubbed.
 operations: {}
 findings:
   fixed:
@@ -19,6 +19,9 @@ findings:
       CreateLogGroup and TagLogGroup share serviceutil.ValidateTags for AWS's 50-tag limit,
       key/value lengths, empty keys and the reserved aws: prefix, checked before any mutation
       (#676).
+    - PutMetricFilter, DescribeMetricFilters, DeleteMetricFilter and TestMetricFilter are
+      implemented over AWS JSON and RPC v2 CBOR; every accepted log event runs through its
+      group's filters and publishes CloudWatch datapoints the alarm evaluator reads (#1949).
   remaining_gaps:
     - Review PutLogEvents sequence token behavior.
     - Review FilterLogEvents syntax and pagination fidelity.
