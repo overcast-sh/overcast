@@ -698,6 +698,7 @@ func (h *Handler) modifyDBInstanceTyped(ctx context.Context, req *modifyDBInstan
 	}
 
 	var settledStatus string
+	var placementChanged bool
 	inst, aerr := h.mutateInstance(ctx, id, func(inst *DBInstance) *protocol.AWSError {
 		if req.MasterUserPassword != "" {
 			inst.MasterUserPassword = req.MasterUserPassword
@@ -722,6 +723,7 @@ func (h *Handler) modifyDBInstanceTyped(ctx context.Context, req *modifyDBInstan
 			// Copied, not aliased: a record must not share a pointer with the
 			// request that set it.
 			pa := *req.PubliclyAccessible
+			placementChanged = pa != inst.PubliclyAccessibleOrDefault()
 			inst.PubliclyAccessible = &pa
 		}
 		if req.StorageType != "" {
@@ -737,6 +739,12 @@ func (h *Handler) modifyDBInstanceTyped(ctx context.Context, req *modifyDBInstan
 	})
 	if aerr != nil {
 		return nil, aerr
+	}
+
+	// The wiring follows the record: a flag that only changed the response
+	// would leave a "public" instance unreachable from outside its VPC.
+	if placementChanged {
+		h.reattachInstance(ctx, inst)
 	}
 
 	instID := id

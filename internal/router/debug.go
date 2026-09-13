@@ -90,13 +90,13 @@ type DebugStateProvider interface {
 //   - Capturing traces and profiles
 //
 // A web UI for these endpoints is planned. For now they return JSON.
-func debugHandlers(cfg *config.Config, store state.Store, ec2Svc debugEC2Provider, lambdaSvc debugLambdaProvider, providers []DebugStateProvider, traceBuf *trace.Buffer, dockerStatus func() *docker.Status) func(chi.Router) {
+func debugHandlers(cfg *config.Config, store state.Store, ec2Svc debugEC2Provider, lambdaSvc debugLambdaProvider, providers []DebugStateProvider, traceBuf *trace.Buffer, dockerStatus func() *docker.Status, dnsRefusals func() []dataplane.Refusal) func(chi.Router) {
 	return func(r chi.Router) {
 		r.Get("/health", debugHealth(cfg, store))
 		r.Get("/config", debugConfig(cfg))
 		r.Get("/state", debugState(store, providers))
 		r.Get("/state/{namespace}", debugStateNamespace(store, providers))
-		r.Get("/metrics", debugMetrics(cfg, store, ec2Svc, lambdaSvc, dockerStatus))
+		r.Get("/metrics", debugMetrics(cfg, store, ec2Svc, lambdaSvc, dockerStatus, dnsRefusals))
 
 		// ---- Request tracing --------------------------------------------------
 		r.Get("/trace/{requestId}", debugTraceGet(traceBuf))
@@ -499,11 +499,15 @@ type debugMetricsResponse struct {
 	Advisories []Advisory           `json:"advisories"`
 }
 
-func debugMetrics(cfg *config.Config, store state.Store, vpcs debugEC2Provider, lambdaSvc debugLambdaProvider, dockerStatus func() *docker.Status) http.HandlerFunc {
+func debugMetrics(cfg *config.Config, store state.Store, vpcs debugEC2Provider, lambdaSvc debugLambdaProvider, dockerStatus func() *docker.Status, dnsRefusals func() []dataplane.Refusal) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var networkProblems []dataplane.VPCNetworkProblem
 		if vpcs != nil {
 			networkProblems = vpcs.NetworkProblems()
+		}
+		var refusals []dataplane.Refusal
+		if dnsRefusals != nil {
+			refusals = dnsRefusals()
 		}
 		var initVolumeProblems []docker.VolumeOwnershipProblem
 		var runtimeAPI containerendpoint.Listen
@@ -529,6 +533,7 @@ func debugMetrics(cfg *config.Config, store state.Store, vpcs debugEC2Provider, 
 			ExistingDatabase:         config.HasExistingDatabase(cfg.DataDir),
 			Networks:                 dockerNetworkStatuses(dockerStatus),
 			VPCNetworkProblems:       networkProblems,
+			DNSRefusals:              refusals,
 			LambdaInitVolumeProblems: initVolumeProblems,
 			RuntimeAPI:               runtimeAPI,
 			VPCEgress:                dataplane.EgressMode(cfg),

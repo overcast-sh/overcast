@@ -338,7 +338,12 @@ err = dataplane.Attach(ctx, h.docker, h.cfg, containerID, placement)
 Note the **set**, not the one name. Endpoint names are minted on the hostname
 the caller reached Overcast on (`docs/networking/data-plane-endpoints.md`), so
 the same instance is `db.us-east-1.rds.localhost.overcast.sh` to one caller and
-`db.us-east-1.rds.localhost` to another. Docker aliases are exact-match: a name
+`db.us-east-1.rds.localhost` to another. RDS and ElastiCache each have an
+`endpoint.go` doing exactly that, and a `DialAddress`/`DialPort` pair on the
+record for the address *Overcast* uses to health-check the container. Keep
+them apart: the record's endpoint is never overwritten with the dial target,
+because an address is dialable by one party only, and `127.0.0.1` inside a
+sibling container is the sibling. Docker aliases are exact-match: a name
 that was not registered does not resolve — and under a split-horizon domain it
 is worse than that, because the query then reaches Overcast's own resolver,
 which answers *any* subdomain of those domains with Overcast's address. The
@@ -379,6 +384,16 @@ Three more things worth knowing:
   listening on.
 - **Overcast attaches itself** to the control plane, and for VPC work to the VPC
   networks, which is why the fallback answer is reachable at all.
+- **A refused name is reported twice.** `dataplane.Guard` logs it at WARN and
+  keeps the last few (`Guard.Recent`) for the `data-plane-name-refused`
+  advisory on `/_overcast/health`, which names both containers and their
+  networks. From inside the application the same event is only ever
+  `Temporary failure in name resolution`, so the advisory is what makes a
+  misplacement diagnosable without reading Overcast's log at the right moment.
+- **A subnet group that does not exist is refused at create**, for RDS and
+  ElastiCache alike (`DBSubnetGroupNotFoundFault`,
+  `CacheSubnetGroupNotFoundFault`). Accepting it silently put the resource on
+  the default plane and turned a typo into the failure above.
 
 ## 3. VPC networks
 

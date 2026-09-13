@@ -46,7 +46,7 @@ func TestDebugMetrics_hybridStoreReportsFlushAndSeed(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/_overcast/debug/metrics", nil)
 	rec := httptest.NewRecorder()
 	cfg := &config.Config{State: config.StateBackendHybrid}
-	debugMetrics(cfg, store, nil, nil, nil).ServeHTTP(rec, req)
+	debugMetrics(cfg, store, nil, nil, nil, nil).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())

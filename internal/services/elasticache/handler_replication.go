@@ -138,6 +138,11 @@ func (h *Handler) CreateReplicationGroup(w http.ResponseWriter, r *http.Request)
 		Port:    port,
 	}
 
+	if aerr := h.requireCacheSubnetGroup(r.Context(), r.FormValue("CacheSubnetGroupName")); aerr != nil {
+		protocol.WriteQueryXMLError(w, r, aerr)
+		return
+	}
+
 	rg := &ReplicationGroup{
 		ReplicationGroupId:     id,
 		Description:            description,
@@ -210,7 +215,7 @@ func (h *Handler) CreateReplicationGroup(w http.ResponseWriter, r *http.Request)
 				}
 				stored.DockerContainerID = got.DockerContainerID
 				stored.HostPort = got.HostPort
-				stored.ConfigurationEndpoint = got.ConfigurationEndpoint
+				stored.DialAddress, stored.DialPort = got.DialAddress, got.DialPort
 				return nil
 			}); aerr != nil {
 				if aerr != errRecordMovedOn {
@@ -220,7 +225,7 @@ func (h *Handler) CreateReplicationGroup(w http.ResponseWriter, r *http.Request)
 				h.teardownOrphanedContainer(bgCtx, "replication group", rgID, got.DockerContainerID, got.HostPort)
 				return
 			}
-			h.scheduleReplicationGroupHealthCheck(region, rgID, got.ConfigurationEndpoint.Address, got.ConfigurationEndpoint.Port)
+			h.scheduleGroupHealthCheck(region, rgID, got)
 		}()
 	} else {
 		// No container is coming, so nothing else will ever move this group out
@@ -232,7 +237,7 @@ func (h *Handler) CreateReplicationGroup(w http.ResponseWriter, r *http.Request)
 
 	protocol.WriteQueryXML(w, r, http.StatusOK, &xmlCreateReplicationGroupResponse{
 		Xmlns:            cacheXMLNS,
-		Result:           xmlCreateReplicationGroupResult{ReplicationGroup: toXMLReplicationGroup(rg)},
+		Result:           xmlCreateReplicationGroupResult{ReplicationGroup: toXMLReplicationGroup(h.replicationGroupForCaller(r.Context(), rg))},
 		ResponseMetadata: protocol.QueryResponseMetadata(r),
 	})
 }
@@ -251,7 +256,7 @@ func (h *Handler) DescribeReplicationGroups(w http.ResponseWriter, r *http.Reque
 		protocol.WriteQueryXML(w, r, http.StatusOK, &xmlDescribeReplicationGroupsResponse{
 			Xmlns: cacheXMLNS,
 			Result: xmlDescribeReplicationGroupsResult{
-				ReplicationGroups: xmlReplicationGroups{Items: []xmlReplicationGroup{toXMLReplicationGroup(rg)}},
+				ReplicationGroups: xmlReplicationGroups{Items: []xmlReplicationGroup{toXMLReplicationGroup(h.replicationGroupForCaller(r.Context(), rg))}},
 			},
 			ResponseMetadata: protocol.QueryResponseMetadata(r),
 		})
@@ -265,7 +270,7 @@ func (h *Handler) DescribeReplicationGroups(w http.ResponseWriter, r *http.Reque
 	}
 	items := make([]xmlReplicationGroup, 0, len(all))
 	for _, rg := range all {
-		items = append(items, toXMLReplicationGroup(rg))
+		items = append(items, toXMLReplicationGroup(h.replicationGroupForCaller(r.Context(), rg)))
 	}
 	protocol.WriteQueryXML(w, r, http.StatusOK, &xmlDescribeReplicationGroupsResponse{
 		Xmlns:            cacheXMLNS,
@@ -300,7 +305,7 @@ func (h *Handler) DeleteReplicationGroup(w http.ResponseWriter, r *http.Request)
 
 	protocol.WriteQueryXML(w, r, http.StatusOK, &xmlDeleteReplicationGroupResponse{
 		Xmlns:            cacheXMLNS,
-		Result:           xmlDeleteReplicationGroupResult{ReplicationGroup: toXMLReplicationGroup(rg)},
+		Result:           xmlDeleteReplicationGroupResult{ReplicationGroup: toXMLReplicationGroup(h.replicationGroupForCaller(r.Context(), rg))},
 		ResponseMetadata: protocol.QueryResponseMetadata(r),
 	})
 
@@ -373,7 +378,7 @@ func (h *Handler) ModifyReplicationGroup(w http.ResponseWriter, r *http.Request)
 
 	protocol.WriteQueryXML(w, r, http.StatusOK, &xmlModifyReplicationGroupResponse{
 		Xmlns:            cacheXMLNS,
-		Result:           xmlModifyReplicationGroupResult{ReplicationGroup: toXMLReplicationGroup(rg)},
+		Result:           xmlModifyReplicationGroupResult{ReplicationGroup: toXMLReplicationGroup(h.replicationGroupForCaller(r.Context(), rg))},
 		ResponseMetadata: protocol.QueryResponseMetadata(r),
 	})
 }

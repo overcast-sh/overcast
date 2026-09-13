@@ -40,6 +40,12 @@ refusing a data-plane name the caller cannot reach
   caller_networks: [overcast_control overcast]
 ```
 
+The same refusal is reported as the `data-plane-name-refused` advisory on
+`/_overcast/health` and the console's health page, so you do not need to be
+watching the log at the moment the lookup fails. From inside the application
+it looks like an ordinary DNS failure — `Temporary failure in name resolution`,
+`getaddrinfo` returning nothing — because the resolver answers `REFUSED`.
+
 Your stack is describing something that would not work deployed either, so the
 three ways out are AWS's own fields rather than Overcast settings — the fix that
 works here is the fix that works on AWS.

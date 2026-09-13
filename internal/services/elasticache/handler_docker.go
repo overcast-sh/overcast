@@ -122,7 +122,7 @@ func (h *Handler) handleContainerStarted(_ context.Context, e events.Event) {
 		// undo would trade one wrong answer for another.
 		switch rg.Status {
 		case "stopped", "starting", "creating", statusCreateFailed:
-			h.scheduleReplicationGroupHealthCheck(region, rgID, rg.ConfigurationEndpoint.Address, rg.ConfigurationEndpoint.Port)
+			h.scheduleGroupHealthCheck(region, rgID, rg)
 		}
 		return
 	}
@@ -136,7 +136,7 @@ func (h *Handler) handleContainerStarted(_ context.Context, e events.Event) {
 		}
 		switch cache.Status {
 		case "stopped", "starting", "creating", statusCreateFailed:
-			h.scheduleServerlessHealthCheck(region, name, cache.Endpoint.Address, cache.Endpoint.Port)
+			h.scheduleServerlessCacheHealthCheck(region, name, cache)
 		}
 		return
 	}
@@ -150,7 +150,7 @@ func (h *Handler) handleContainerStarted(_ context.Context, e events.Event) {
 	}
 	switch cluster.CacheClusterStatus {
 	case "stopped", "starting", "creating", statusClusterUnreachable:
-		h.scheduleHealthCheck(region, cluster.CacheClusterId, cluster.ConfigurationEndpoint.Address, cluster.ConfigurationEndpoint.Port)
+		h.scheduleClusterHealthCheck(region, cluster.CacheClusterId, cluster)
 	}
 }
 
@@ -190,17 +190,17 @@ func (h *Handler) reconcileContainers(ctx context.Context, containers []docker.C
 				// The Docker inspect stays outside the record's lock; only the
 				// endpoint it decides is written back, onto a fresh read.
 				cluster.DockerContainerID = c.ID
-				h.setContainerEndpoint(rctx, cluster)
+				h.setContainerDialTarget(rctx, cluster)
 				if _, aerr := h.mutateCacheCluster(rctx, cluster.CacheClusterId, func(stored *CacheCluster) *protocol.AWSError {
 					stored.DockerContainerID = cluster.DockerContainerID
-					stored.ConfigurationEndpoint = cluster.ConfigurationEndpoint
+					stored.DialAddress, stored.DialPort = cluster.DialAddress, cluster.DialPort
 					return nil
 				}); aerr != nil {
 					log.Warn("reconcile: persist cluster endpoint",
 						zap.String("cluster", cluster.CacheClusterId), zap.String("error", aerr.Message))
 				}
 				if cacheRuntimeExpected(cluster.CacheClusterStatus) {
-					h.scheduleHealthCheck(rc.Region, cluster.CacheClusterId, cluster.ConfigurationEndpoint.Address, cluster.ConfigurationEndpoint.Port)
+					h.scheduleClusterHealthCheck(rc.Region, cluster.CacheClusterId, cluster)
 					log.Info("reconcile: container running — scheduling health check",
 						zap.String("cluster", cluster.CacheClusterId))
 				}
@@ -236,17 +236,17 @@ func (h *Handler) reconcileContainers(ctx context.Context, containers []docker.C
 				}
 			case c.State == "running":
 				rg.DockerContainerID = c.ID
-				h.setReplicationGroupEndpoint(rctx, rg)
+				h.setReplicationGroupDialTarget(rctx, rg)
 				if _, aerr := h.mutateReplicationGroup(rctx, rg.ReplicationGroupId, func(stored *ReplicationGroup) *protocol.AWSError {
 					stored.DockerContainerID = rg.DockerContainerID
-					stored.ConfigurationEndpoint = rg.ConfigurationEndpoint
+					stored.DialAddress, stored.DialPort = rg.DialAddress, rg.DialPort
 					return nil
 				}); aerr != nil {
 					log.Warn("reconcile: persist RG endpoint",
 						zap.String("rg", rg.ReplicationGroupId), zap.String("error", aerr.Message))
 				}
 				if cacheRuntimeExpected(rg.Status) {
-					h.scheduleReplicationGroupHealthCheck(rr.Region, rg.ReplicationGroupId, rg.ConfigurationEndpoint.Address, rg.ConfigurationEndpoint.Port)
+					h.scheduleGroupHealthCheck(rr.Region, rg.ReplicationGroupId, rg)
 					log.Info("reconcile: RG container running — scheduling health check",
 						zap.String("rg", rg.ReplicationGroupId))
 				}
@@ -282,18 +282,17 @@ func (h *Handler) reconcileContainers(ctx context.Context, containers []docker.C
 			}
 		case c.State == "running":
 			cache.DockerContainerID = c.ID
-			h.setServerlessEndpoint(rctx, cache)
+			h.setServerlessDialTarget(rctx, cache)
 			if _, aerr := h.mutateServerlessCache(rctx, cache.ServerlessCacheName, func(stored *ServerlessCache) *protocol.AWSError {
 				stored.DockerContainerID = cache.DockerContainerID
-				stored.Endpoint = cache.Endpoint
-				stored.ReaderEndpoint = cache.ReaderEndpoint
+				stored.DialAddress, stored.DialPort = cache.DialAddress, cache.DialPort
 				return nil
 			}); aerr != nil {
 				log.Warn("reconcile: persist serverless cache endpoint",
 					zap.String("cache", cache.ServerlessCacheName), zap.String("error", aerr.Message))
 			}
 			if cacheRuntimeExpected(cache.Status) {
-				h.scheduleServerlessHealthCheck(rs.Region, cache.ServerlessCacheName, cache.Endpoint.Address, cache.Endpoint.Port)
+				h.scheduleServerlessCacheHealthCheck(rs.Region, cache.ServerlessCacheName, cache)
 				log.Info("reconcile: serverless cache container running — scheduling health check",
 					zap.String("cache", cache.ServerlessCacheName))
 			}
@@ -357,13 +356,13 @@ func (h *Handler) recoverCacheCluster(region, id string) {
 			}
 			stored.DockerContainerID = cluster.DockerContainerID
 			stored.HostPort = cluster.HostPort
-			stored.ConfigurationEndpoint = cluster.ConfigurationEndpoint
+			stored.DialAddress, stored.DialPort = cluster.DialAddress, cluster.DialPort
 			return nil
 		}); aerr != nil {
 			h.teardownOrphanedContainer(ctx, "cache cluster", id, cluster.DockerContainerID, cluster.HostPort)
 			return
 		}
-		h.scheduleHealthCheck(region, id, cluster.ConfigurationEndpoint.Address, cluster.ConfigurationEndpoint.Port)
+		h.scheduleClusterHealthCheck(region, id, cluster)
 	})
 }
 
@@ -384,13 +383,13 @@ func (h *Handler) recoverReplicationGroup(region, id string) {
 			}
 			stored.DockerContainerID = group.DockerContainerID
 			stored.HostPort = group.HostPort
-			stored.ConfigurationEndpoint = group.ConfigurationEndpoint
+			stored.DialAddress, stored.DialPort = group.DialAddress, group.DialPort
 			return nil
 		}); aerr != nil {
 			h.teardownOrphanedContainer(ctx, "replication group", id, group.DockerContainerID, group.HostPort)
 			return
 		}
-		h.scheduleReplicationGroupHealthCheck(region, id, group.ConfigurationEndpoint.Address, group.ConfigurationEndpoint.Port)
+		h.scheduleGroupHealthCheck(region, id, group)
 	})
 }
 
@@ -411,14 +410,13 @@ func (h *Handler) recoverServerlessCache(region, name string) {
 			}
 			stored.DockerContainerID = cache.DockerContainerID
 			stored.HostPort = cache.HostPort
-			stored.Endpoint = cache.Endpoint
-			stored.ReaderEndpoint = cache.ReaderEndpoint
+			stored.DialAddress, stored.DialPort = cache.DialAddress, cache.DialPort
 			return nil
 		}); aerr != nil {
 			h.teardownOrphanedContainer(ctx, "serverless cache", name, cache.DockerContainerID, cache.HostPort)
 			return
 		}
-		h.scheduleServerlessHealthCheck(region, name, cache.Endpoint.Address, cache.Endpoint.Port)
+		h.scheduleServerlessCacheHealthCheck(region, name, cache)
 	})
 }
 

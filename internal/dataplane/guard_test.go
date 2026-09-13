@@ -3,7 +3,9 @@ package dataplane
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/netip"
+	"strings"
 	"testing"
 	"time"
 
@@ -238,5 +240,75 @@ func TestGuard_isInertWithoutADaemon(t *testing.T) {
 	g := NewGuard(nil, zap.NewNop())
 	if g.Refuse(context.Background(), cacheName, netip.MustParseAddr(callerIP)) {
 		t.Fatal("refused with no Docker client")
+	}
+}
+
+// A refusal is kept for the health advisory, with both sides named, so the
+// reader learns which resource to move without opening Overcast's log.
+func TestGuard_recordsRefusalsForTheAdvisory(t *testing.T) {
+	g := guardWith(&fakeSurveyor{containers: []fakeContainer{
+		{
+			id: "cache", service: "elasticache", resource: "cache-1",
+			networks: map[string]string{"overcast": "10.0.0.4"},
+			aliases:  map[string][]string{"overcast": {cacheName}},
+		},
+		{
+			id: "task", service: "ecs", resource: "app/9f2",
+			networks: map[string]string{"overcast-vpc-def": callerIP},
+		},
+	}})
+	if g.Recent() != nil {
+		t.Fatal("a fresh guard reports refusals")
+	}
+
+	g.Refuse(context.Background(), cacheName, netip.MustParseAddr(callerIP))
+
+	got := g.Recent()
+	if len(got) != 1 {
+		t.Fatalf("Recent() = %+v, want one refusal", got)
+	}
+	r := got[0]
+	if r.Name != cacheName || r.Target != "elasticache cache-1" || r.Caller != "ecs app/9f2" {
+		t.Errorf("refusal = %+v", r)
+	}
+	if len(r.TargetNetworks) != 1 || r.TargetNetworks[0] != "overcast" {
+		t.Errorf("TargetNetworks = %v, want [overcast]", r.TargetNetworks)
+	}
+	if len(r.CallerNetworks) != 1 || r.CallerNetworks[0] != "overcast-vpc-def" {
+		t.Errorf("CallerNetworks = %v, want [overcast-vpc-def]", r.CallerNetworks)
+	}
+}
+
+// A name refused again replaces its earlier entry, and the list is bounded,
+// so one broken caller retrying cannot crowd out the others.
+func TestGuard_recentIsDedupedByNameAndBounded(t *testing.T) {
+	g := guardWith(&fakeSurveyor{})
+	for i := 0; i < maxRecentRefusals+5; i++ {
+		g.record(Refusal{Name: fmt.Sprintf("name-%d", i)})
+	}
+	g.record(Refusal{Name: "NAME-7", Caller: "again"})
+
+	got := g.Recent()
+	if len(got) != maxRecentRefusals {
+		t.Fatalf("len(Recent()) = %d, want %d", len(got), maxRecentRefusals)
+	}
+	if last := got[len(got)-1]; last.Name != "NAME-7" || last.Caller != "again" {
+		t.Errorf("newest = %+v, want the re-refused name, once, at the end", last)
+	}
+	seen := map[string]int{}
+	for _, r := range got {
+		seen[strings.ToLower(r.Name)]++
+	}
+	if seen["name-7"] != 1 {
+		t.Errorf("name-7 appears %d times, want once", seen["name-7"])
+	}
+}
+
+// A guard that was never wired — no daemon yet — has nothing to report and
+// must not be dereferenced to find that out.
+func TestGuard_nilRecentIsEmpty(t *testing.T) {
+	var g *Guard
+	if got := g.Recent(); got != nil {
+		t.Errorf("Recent() on a nil guard = %v, want nil", got)
 	}
 }

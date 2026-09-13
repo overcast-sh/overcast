@@ -151,7 +151,7 @@ func TestPlacementFor_usesTheVPCNetwork(t *testing.T) {
 	}
 
 	// When: the control-plane container is placed.
-	placement, err := svc.placementFor(context.Background(), "vpc-abc", nil, aliases)
+	placement, err := svc.placementFor(context.Background(), "vpc-abc", nil, aliases, true)
 	if err != nil {
 		t.Fatalf("placementFor: %v", err)
 	}
@@ -173,7 +173,7 @@ func TestPlacementFor_unlaunchableVPCIsAnError(t *testing.T) {
 
 	// When/Then: placing into it fails rather than quietly starting a control
 	// plane nothing in the VPC can reach.
-	if _, err := svc.placementFor(context.Background(), "vpc-abc", nil, nil); err == nil {
+	if _, err := svc.placementFor(context.Background(), "vpc-abc", nil, nil, true); err == nil {
 		t.Fatal("placementFor into an unbacked VPC: want an error, got nil")
 	}
 }
@@ -182,7 +182,7 @@ func TestPlacementFor_noVPCKeepsTheDefaultPlane(t *testing.T) {
 	svc := newPlacementService(fakePlacementResolver{})
 	aliases := svc.clusterEndpointAliases(liveModeTestRegion, "web")
 
-	placement, err := svc.placementFor(context.Background(), "", nil, aliases)
+	placement, err := svc.placementFor(context.Background(), "", nil, aliases, true)
 	if err != nil {
 		t.Fatalf("placementFor: %v", err)
 	}
@@ -200,7 +200,7 @@ func TestPlacementFor_noVPCKeepsTheDefaultPlane(t *testing.T) {
 func TestPlacementFor_withoutAResolver(t *testing.T) {
 	svc := newPlacementService(nil)
 
-	placement, err := svc.placementFor(context.Background(), "vpc-abc", nil, nil)
+	placement, err := svc.placementFor(context.Background(), "vpc-abc", nil, nil, true)
 	if err != nil {
 		t.Fatalf("placementFor: %v", err)
 	}

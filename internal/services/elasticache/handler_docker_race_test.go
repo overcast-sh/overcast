@@ -2,6 +2,7 @@ package elasticache
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -38,6 +39,36 @@ type fakeDockerDaemon struct {
 	stopped    bool
 	removed    bool
 	failCreate bool
+	// connects records every network the daemon was asked to attach a
+	// container to, with the aliases it was asked to advertise there — the
+	// placement decision, as the daemon sees it.
+	connects []networkConnect
+
+	// adoptable, when set, is the resource label of a running container the
+	// daemon already holds under the name Overcast would create, so the
+	// start path takes its reuse branch rather than creating one.
+	adoptable string
+}
+
+// adopt makes the daemon report an existing, running, Overcast-labelled
+// container for resourceLabel on the next lookup by name.
+func (fd *fakeDockerDaemon) adopt(resourceLabel string) {
+	fd.mu.Lock()
+	defer fd.mu.Unlock()
+	fd.adoptable = resourceLabel
+}
+
+// networkConnect is one POST /networks/{id}/connect as the fake daemon saw it.
+type networkConnect struct {
+	Network string
+	Aliases []string
+}
+
+// connections returns a copy of every connect recorded so far.
+func (fd *fakeDockerDaemon) connections() []networkConnect {
+	fd.mu.Lock()
+	defer fd.mu.Unlock()
+	return append([]networkConnect(nil), fd.connects...)
 }
 
 func (fd *fakeDockerDaemon) stoppedOrRemoved() bool {
@@ -72,14 +103,46 @@ func newFakeDockerDaemon(t *testing.T) *fakeDockerDaemon {
 		case strings.HasSuffix(p, "/images/create"), strings.HasSuffix(p, "/images/prune"):
 			w.WriteHeader(http.StatusOK)
 
-		// GetContainerByName lookup before create — no existing container.
+		// GetContainerByName lookup before create — no existing container,
+		// unless the test seeded one to be adopted.
 		case strings.Contains(p, "/containers/overcast-elasticache") && strings.HasSuffix(p, "/json"):
-			w.WriteHeader(http.StatusNotFound)
+			fd.mu.Lock()
+			adoptable := fd.adoptable
+			fd.mu.Unlock()
+			if adoptable == "" {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			body, _ := json.Marshal(map[string]any{
+				"Id":   containerID,
+				"Name": p[strings.Index(p, "/containers/")+len("/containers/") : strings.LastIndex(p, "/json")],
+				"Config": map[string]any{"Labels": map[string]string{
+					docker.LabelManaged:    "true",
+					docker.LabelService:    serviceName,
+					docker.LabelResourceID: adoptable,
+				}},
+				"State":           map[string]any{"Status": "running", "Running": true},
+				"NetworkSettings": map[string]any{"Networks": map[string]any{}, "Ports": map[string]any{}},
+			})
+			w.Write(body) //nolint:errcheck
 
 		case strings.HasSuffix(p, "/networks/create"):
 			w.Write([]byte(`{"Id":"net-1"}`)) //nolint:errcheck
 
 		case strings.HasSuffix(p, "/connect"):
+			var body struct {
+				EndpointConfig *struct {
+					Aliases []string `json:"Aliases"`
+				} `json:"EndpointConfig"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			nc := networkConnect{Network: strings.TrimSuffix(p[strings.LastIndex(p, "/networks/")+len("/networks/"):], "/connect")}
+			if body.EndpointConfig != nil {
+				nc.Aliases = body.EndpointConfig.Aliases
+			}
+			fd.mu.Lock()
+			fd.connects = append(fd.connects, nc)
+			fd.mu.Unlock()
 			w.WriteHeader(http.StatusOK)
 
 		case strings.HasSuffix(p, "/containers/create"):

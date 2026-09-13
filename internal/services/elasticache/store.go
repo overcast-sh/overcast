@@ -49,6 +49,12 @@ type CacheCluster struct {
 	// Docker fields — internal only, not returned in API responses.
 	DockerContainerID string `json:"DockerContainerID,omitempty"`
 	HostPort          int    `json:"HostPort,omitempty"`
+	// DialAddress/DialPort are how *Overcast* reaches the engine container —
+	// the health check's target, never the caller's. ConfigurationEndpoint is
+	// what callers are told, and it stays the AWS-shaped hostname, rendered
+	// per caller on the way out (endpoint.go); see setContainerDialTarget.
+	DialAddress string `json:"DialAddress,omitempty"`
+	DialPort    int    `json:"DialPort,omitempty"`
 }
 
 // ClusterEndpoint is the endpoint for a cache cluster or replication group.
@@ -82,6 +88,9 @@ type ReplicationGroup struct {
 	// Docker fields — internal only, not returned in API responses.
 	DockerContainerID string `json:"DockerContainerID,omitempty"`
 	HostPort          int    `json:"HostPort,omitempty"`
+	// DialAddress/DialPort — see CacheCluster.
+	DialAddress string `json:"DialAddress,omitempty"`
+	DialPort    int    `json:"DialPort,omitempty"`
 }
 
 // ServerlessCache represents a stored ElastiCache serverless cache.
@@ -110,6 +119,9 @@ type ServerlessCache struct {
 	StatusReason      string `json:"StatusReason,omitempty"`
 	DockerContainerID string `json:"DockerContainerID,omitempty"`
 	HostPort          int    `json:"HostPort,omitempty"`
+	// DialAddress/DialPort — see CacheCluster.
+	DialAddress string `json:"DialAddress,omitempty"`
+	DialPort    int    `json:"DialPort,omitempty"`
 }
 
 type CacheUsageLimits struct {
