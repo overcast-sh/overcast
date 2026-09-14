@@ -44,7 +44,7 @@
 | AppConfigData   | 2   | StartConfigurationSession, GetLatestConfiguration; poll-based delivery with "unchanged" detection                                                                                                          |
 | Secrets Manager | 22  | Secret CRUD, versioning, tags, real rotation (invokes the configured Lambda, all four steps), resource policies (stored, not evaluated — #496)                                                            |
 | SSM             | 18  | Parameter Store: put, get, get-by-path, history, tags                                                                                                                                                      |
-| CloudWatch Logs | 23  | Log groups, streams, events, FilterLogEvents, DeleteLogStream                                                                                                                                              |
+| CloudWatch Logs | 26  | Log groups, streams, events, FilterLogEvents, DeleteLogStream, metric filters                                                                                                                                           |
 | SES             | 45  | v1 + v2: SendEmail, SendRawEmail, identities, mail capture                                                                                                                                                 |
 | STS             | 11  | GetCallerIdentity, AssumeRole, GetSessionToken, temp credentials                                                                                                                                           |
 | Route 53        | 25  | Hosted zones (default NS/SOA, delegation sets), validated change batches, DNS-order pagination, tags, health checks (never probed); Overcast's own resolver now answers real DNS queries from a zone's records (A/AAAA/CNAME/MX/TXT/NS/SOA, wildcards, ALIAS — #1189)              |
@@ -91,7 +91,7 @@
 | AppConfigData   | 2   |
 | Secrets Manager | 22  |
 | SSM             | 18  |
-| CloudWatch Logs | 23  |
+| CloudWatch Logs | 26  |
 | SES             | 45  |
 | STS             | 11  |
 | Route 53        | 25  |

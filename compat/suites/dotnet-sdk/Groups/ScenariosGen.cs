@@ -18,6 +18,7 @@ internal static class ScenarioGroups
         new ScenariosAuthoredEventbridgeRules(clients),
         new ScenariosAuthoredKinesisStreams(clients),
         new ScenariosAuthoredLogsGroups(clients),
+        new ScenariosAuthoredLogsMetricFilters(clients),
         new ScenariosAuthoredSqsQueues(clients),
         new ScenariosBatch(clients),
         new ScenariosElasticLoadBalancing(clients),

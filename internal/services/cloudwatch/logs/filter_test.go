@@ -624,3 +624,137 @@ func TestColumnarFilter_awsDocPatternMatching(t *testing.T) {
 	assert.False(t, m("INFO 09/25/2014"))
 	assert.False(t, m("WARNING 09/25/2014"))
 }
+
+// ---- Field extraction (metric filters) --------------------------------------
+//
+// compileFilterPattern is CompileFilter's extraction-aware form: one evaluation
+// both matches a message and exposes the fields a metric filter's metricValue
+// and dimensions name — `$name` for a space-delimited column, `$.path` for a
+// JSON property. The reported field sets are AWS's own, from the
+// TestMetricFilter reference examples:
+// https://docs.aws.amazon.com/AmazonCloudWatchLogs/latest/APIReference/API_TestMetricFilter.html
+
+func TestCompileFilterPattern_textPatternExtractsNothing(t *testing.T) {
+	f, err := compileFilterPattern(`"[ERROR]"`)
+	require.NoError(t, err)
+	fields, ok := f.eval("02 May 2014 00:34:16,142 [ERROR] Terminating the application")
+	require.True(t, ok)
+	assert.Nil(t, fields)
+	_, ok = f.eval("02 May 2014 00:34:12,525 [INFO] Starting the application")
+	assert.False(t, ok)
+}
+
+func TestCompileFilterPattern_columnarNamedColumns(t *testing.T) {
+	f, err := compileFilterPattern("[ip, identity, user_id, timestamp, request, status_code, size]")
+	require.NoError(t, err)
+	fields, ok := f.eval(`127.0.0.1 - frank [10/Oct/2000:13:25:15 -0700] "GET /apache_pb.gif HTTP/1.0" 200 1534`)
+	require.True(t, ok)
+	require.NotNil(t, fields)
+	assert.Equal(t, map[string]string{
+		"$ip":          "127.0.0.1",
+		"$identity":    "-",
+		"$user_id":     "frank",
+		"$timestamp":   "10/Oct/2000:13:25:15 -0700",
+		"$request":     "GET /apache_pb.gif HTTP/1.0",
+		"$status_code": "200",
+		"$size":        "1534",
+	}, fields.named())
+	v, found := fields.lookup("$size")
+	assert.True(t, found)
+	assert.Equal(t, "1534", v)
+	_, found = fields.lookup("$missing")
+	assert.False(t, found)
+}
+
+func TestCompileFilterPattern_columnarEllipsisNamesUnnamedByPosition(t *testing.T) {
+	// AWS's second TestMetricFilter example: [..., size] reports $size for the
+	// last field and $1..$6 for the fields the ellipsis absorbed.
+	f, err := compileFilterPattern("[..., size]")
+	require.NoError(t, err)
+	fields, ok := f.eval(`127.0.0.1 - frank [10/Oct/2000:13:25:15 -0700] "GET /apache_pb.gif HTTP/1.0" 200 1534`)
+	require.True(t, ok)
+	assert.Equal(t, map[string]string{
+		"$1": "127.0.0.1", "$2": "-", "$3": "frank", "$4": "10/Oct/2000:13:25:15 -0700",
+		"$5": "GET /apache_pb.gif HTTP/1.0", "$6": "200", "$size": "1534",
+	}, fields.named())
+}
+
+func TestCompileFilterPattern_columnarEmptyPatternNamesEveryFieldByPosition(t *testing.T) {
+	// AWS's third example: [] matches everything and reports $1..$N.
+	f, err := compileFilterPattern("[]")
+	require.NoError(t, err)
+	fields, ok := f.eval(`127.0.0.1 - frank [10/Oct/2000:13:25:15 -0700] "GET /apache_pb.gif HTTP/1.0" 200 1534`)
+	require.True(t, ok)
+	assert.Equal(t, map[string]string{
+		"$1": "127.0.0.1", "$2": "-", "$3": "frank", "$4": "10/Oct/2000:13:25:15 -0700",
+		"$5": "GET /apache_pb.gif HTTP/1.0", "$6": "200", "$7": "1534",
+	}, fields.named())
+}
+
+func TestCompileFilterPattern_columnarConstrainedAndTrailingUnnamedColumn(t *testing.T) {
+	// AWS's fifth example: a constrained column keeps its name and a trailing
+	// unnamed column is reported by position.
+	f, err := compileFilterPattern("[..., request=*.html*, status_code=4*,]")
+	require.NoError(t, err)
+	fields, ok := f.eval(`127.0.0.1 - frank [10/Oct/2000:13:25:15 -0700] "GET /index.html HTTP/1.0" 404 1534`)
+	require.True(t, ok)
+	assert.Equal(t, map[string]string{
+		"$1": "127.0.0.1", "$2": "-", "$3": "frank", "$4": "10/Oct/2000:13:25:15 -0700",
+		"$request": "GET /index.html HTTP/1.0", "$status_code": "404", "$7": "1534",
+	}, fields.named())
+	_, ok = f.eval(`127.0.0.1 - frank [10/Oct/2000:13:35:22 -0700] "GET /about-us/index.html HTTP/1.0" 200 5324`)
+	assert.False(t, ok)
+}
+
+func TestCompileFilterPattern_columnarCompoundColumnKeepsName(t *testing.T) {
+	f, err := compileFilterPattern("[level = ERROR || level = WARN, rest]")
+	require.NoError(t, err)
+	fields, ok := f.eval("WARN disk almost full")
+	require.True(t, ok)
+	v, found := fields.lookup("$level")
+	assert.True(t, found)
+	assert.Equal(t, "WARN", v)
+}
+
+func TestCompileFilterPattern_jsonLookupResolvesAnyPath(t *testing.T) {
+	// metricValue and dimensions may name properties the pattern never
+	// mentions, so the lookup walks the parsed document, not the selectors.
+	f, err := compileFilterPattern(`{ $.level = "ERROR" }`)
+	require.NoError(t, err)
+	fields, ok := f.eval(`{"level":"ERROR","latency":12.5,"http":{"status":500},"ok":false,"nothing":null,"tags":["a"]}`)
+	require.True(t, ok)
+	require.NotNil(t, fields)
+	for ref, want := range map[string]string{
+		"$.level":       "ERROR",
+		"$.latency":     "12.5",
+		"$.http.status": "500",
+		"$.ok":          "false",
+	} {
+		v, found := fields.lookup(ref)
+		assert.True(t, found, ref)
+		assert.Equal(t, want, v, ref)
+	}
+	for _, ref := range []string{"$.missing", "$.nothing", "$.tags", "$.http", "$level", "$.", ""} {
+		_, found := fields.lookup(ref)
+		assert.False(t, found, ref)
+	}
+	// TestMetricFilter reports the selectors the pattern itself names.
+	assert.Equal(t, map[string]string{"$.level": "ERROR"}, fields.named())
+}
+
+func TestCompileFilterPattern_jsonNamedOmitsUnresolvedSelectors(t *testing.T) {
+	f, err := compileFilterPattern(`{ $.a = 1 || $.b NOT EXISTS }`)
+	require.NoError(t, err)
+	fields, ok := f.eval(`{"a":1}`)
+	require.True(t, ok)
+	assert.Equal(t, map[string]string{"$.a": "1"}, fields.named())
+}
+
+func TestCompileFilterPattern_jsonNonMatchExtractsNothing(t *testing.T) {
+	f, err := compileFilterPattern(`{ $.level = "ERROR" }`)
+	require.NoError(t, err)
+	_, ok := f.eval(`{"level":"INFO"}`)
+	assert.False(t, ok)
+	_, ok = f.eval(`not json`)
+	assert.False(t, ok)
+}

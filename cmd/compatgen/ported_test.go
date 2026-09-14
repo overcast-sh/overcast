@@ -215,10 +215,12 @@ func TestBuildRegistryStillDeclaresAShadowAsAGroup(t *testing.T) {
 
 // TestCommittedRegistryPortsSqsQueues is the corpus half of #1903 after the
 // flip: the hand-written sqs-queues entry names the authored scenario that
-// replaced its seven native implementations, and it is the only ported group
-// so far. Every consequence of the field — the group leaving the generated
-// groups list, the ported index, the emitted source — follows from the pair
-// of names, and the generator refuses either half without the other.
+// replaced its seven native implementations. logs-metric-filters (#1949)
+// joined it as a group authored from the start — never native anywhere, so
+// no shadow ever soaked — and no other hand-written group is ported. Every
+// consequence of the field — the group leaving the generated groups list,
+// the ported index, the emitted source — follows from the pair of names, and
+// the generator refuses either half without the other.
 func TestCommittedRegistryPortsSqsQueues(t *testing.T) {
 	hand, err := loadHandRegistry(filepath.Join(repoRoot, filepath.FromSlash(handRegistryPath)))
 	if err != nil {
@@ -230,7 +232,10 @@ func TestCommittedRegistryPortsSqsQueues(t *testing.T) {
 			ported[g.Name] = g.Scenario
 		}
 	}
-	want := map[string]string{"sqs-queues": "compat/model/authored/sqs-queues.json"}
+	want := map[string]string{
+		"sqs-queues":          "compat/model/authored/sqs-queues.json",
+		"logs-metric-filters": "compat/model/authored/logs-metric-filters.json",
+	}
 	if !reflect.DeepEqual(ported, want) {
 		t.Errorf("ported hand-written groups = %#v, want %#v", ported, want)
 	}

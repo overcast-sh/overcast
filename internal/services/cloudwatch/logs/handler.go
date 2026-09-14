@@ -66,7 +66,11 @@ func (h *Handler) initOps() {
 		"TagResource":           h.TagResource,
 		"UntagResource":         h.UntagResource,
 		"ListTagsForResource":   h.ListTagsForResource,
+		// Metric filters — implemented (handler.go, metric_filter.go)
 		"PutMetricFilter":       h.PutMetricFilter,
+		"DescribeMetricFilters": h.DescribeMetricFilters,
+		"DeleteMetricFilter":    h.DeleteMetricFilter,
+		"TestMetricFilter":      h.TestMetricFilter,
 	}
 	h.typedOp = h.typedOps()
 }
@@ -464,6 +468,71 @@ func (h *Handler) ListTagsForResource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resp, aerr := h.listTagsForResourceTyped(r.Context(), &req)
+	if aerr != nil {
+		protocol.WriteJSONError(w, r, aerr)
+		return
+	}
+	protocol.WriteJSON(w, r, http.StatusOK, resp)
+}
+
+// ---- Metric filters ---------------------------------------------------------
+//
+// Each delegates to its typed function (metric_filter.go) so the JSON and
+// CBOR/typed-operation paths share one implementation — the same shape as
+// PutRetentionPolicy above.
+
+// PutMetricFilter creates or replaces a metric filter on a log group.
+// AWS docs: https://docs.aws.amazon.com/AmazonCloudWatchLogs/latest/APIReference/API_PutMetricFilter.html
+func (h *Handler) PutMetricFilter(w http.ResponseWriter, r *http.Request) {
+	var req putMetricFilterRequest
+	if !serviceutil.DecodeJSON(w, r, &req) {
+		return
+	}
+	if _, aerr := h.putMetricFilterTyped(r.Context(), &req); aerr != nil {
+		protocol.WriteJSONError(w, r, aerr)
+		return
+	}
+	protocol.WriteJSON(w, r, http.StatusOK, struct{}{})
+}
+
+// DescribeMetricFilters lists metric filters, optionally by log group, name
+// prefix, or the metric they publish.
+// AWS docs: https://docs.aws.amazon.com/AmazonCloudWatchLogs/latest/APIReference/API_DescribeMetricFilters.html
+func (h *Handler) DescribeMetricFilters(w http.ResponseWriter, r *http.Request) {
+	var req describeMetricFiltersRequest
+	if !serviceutil.DecodeJSON(w, r, &req) {
+		return
+	}
+	resp, aerr := h.describeMetricFiltersTyped(r.Context(), &req)
+	if aerr != nil {
+		protocol.WriteJSONError(w, r, aerr)
+		return
+	}
+	protocol.WriteJSON(w, r, http.StatusOK, resp)
+}
+
+// DeleteMetricFilter removes a metric filter from a log group.
+// AWS docs: https://docs.aws.amazon.com/AmazonCloudWatchLogs/latest/APIReference/API_DeleteMetricFilter.html
+func (h *Handler) DeleteMetricFilter(w http.ResponseWriter, r *http.Request) {
+	var req deleteMetricFilterRequest
+	if !serviceutil.DecodeJSON(w, r, &req) {
+		return
+	}
+	if _, aerr := h.deleteMetricFilterTyped(r.Context(), &req); aerr != nil {
+		protocol.WriteJSONError(w, r, aerr)
+		return
+	}
+	protocol.WriteJSON(w, r, http.StatusOK, struct{}{})
+}
+
+// TestMetricFilter runs a filter pattern over sample messages.
+// AWS docs: https://docs.aws.amazon.com/AmazonCloudWatchLogs/latest/APIReference/API_TestMetricFilter.html
+func (h *Handler) TestMetricFilter(w http.ResponseWriter, r *http.Request) {
+	var req testMetricFilterRequest
+	if !serviceutil.DecodeJSON(w, r, &req) {
+		return
+	}
+	resp, aerr := h.testMetricFilterTyped(r.Context(), &req)
 	if aerr != nil {
 		protocol.WriteJSONError(w, r, aerr)
 		return

@@ -1907,6 +1907,174 @@ func (h *logsLogStreamHandler) Delete(ctx context.Context, router http.Handler, 
 	return nil
 }
 
+// ── AWS::Logs::MetricFilter ────────────────────────────────────────────────
+//
+// https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-logs-metricfilter.html
+//
+// Ref returns the filter name. FilterName and LogGroupName are "Update
+// requires: Replacement"; every other property applies in place, which for
+// this resource is one more PutMetricFilter, since the service's put is a
+// create-or-replace. The handler translates shapes only — MetricTransformations
+// carries PascalCase members and a `[{Key, Value}]` Dimensions list where the
+// API takes lowerCamel members and a map — and leaves every rule about what a
+// transformation may say to the Logs service.
+
+type logsMetricFilterHandler struct{}
+
+// logsMetricFilterConsumed is every property the handler acts on. Anything
+// else the template carries — ApplyOnTransformedLogs, EmitSystemFieldDimensions,
+// FieldSelectionCriteria, all of which presuppose log transformers or
+// centralised logging Overcast does not model — is reported as an emulation
+// limitation on the resource rather than dropped in silence.
+var logsMetricFilterConsumed = []string{"FilterName", "FilterPattern", "LogGroupName", "MetricTransformations"}
+
+func (h *logsMetricFilterHandler) Create(ctx context.Context, router http.Handler, _ *config.Config, props map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
+	name, _ := props["FilterName"].(string)
+	if name == "" {
+		name = rCtx.generatedName()
+	}
+	body, err := logsMetricFilterBody(name, props)
+	if err != nil {
+		return "", nil, err
+	}
+	noteUnconsumedProperties(ctx, "AWS::Logs::MetricFilter", props, logsMetricFilterConsumed...)
+	if _, err := internalJSON(ctx, router, rCtx.Region, "Logs_20140328.PutMetricFilter", body); err != nil {
+		return "", nil, fmt.Errorf("logs PutMetricFilter: %w", err)
+	}
+	return name, nil, nil
+}
+
+func (h *logsMetricFilterHandler) Update(ctx context.Context, router http.Handler, _ *config.Config, physicalID string, props map[string]any, oldProps map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
+	if n, ok := props["FilterName"].(string); ok && n != "" && n != physicalID {
+		return "", nil, errReplacementRequired
+	}
+	groupChanged, err := cfnPropertyChanged(props, oldProps, "LogGroupName")
+	if err != nil {
+		return "", nil, failUpdate(err)
+	}
+	if groupChanged {
+		return "", nil, errReplacementRequired
+	}
+	body, err := logsMetricFilterBody(physicalID, props)
+	if err != nil {
+		return "", nil, failUpdate(err)
+	}
+	// A rejected replacement definition must fail the resource in place: the
+	// old filter is still there, exactly as it was, and replacing it would
+	// not make the new definition any more valid.
+	if _, err := internalJSON(ctx, router, rCtx.Region, "Logs_20140328.PutMetricFilter", body); err != nil {
+		return "", nil, failUpdate(fmt.Errorf("logs PutMetricFilter: %w", err))
+	}
+	return physicalID, nil, nil
+}
+
+// Delete cannot act alone: the physical ID is the filter name, and
+// DeleteMetricFilter also needs the log group, which only the stored
+// properties record — see DeleteWithProperties, which every delete path
+// prefers (invokeDelete).
+func (h *logsMetricFilterHandler) Delete(_ context.Context, _ http.Handler, _ *config.Config, physicalID string, _ *resolveContext) error {
+	return fmt.Errorf("logs DeleteMetricFilter %s: the log group is only known from the resource's properties", physicalID)
+}
+
+// DeleteWithProperties removes the filter, tolerating one already gone — with
+// its log group, which deletes its filters, or by hand.
+func (h *logsMetricFilterHandler) DeleteWithProperties(ctx context.Context, router http.Handler, _ *config.Config, physicalID string, props map[string]any, rCtx *resolveContext) error {
+	logGroupName, _ := props["LogGroupName"].(string)
+	rec, err := internalJSON(ctx, router, rCtx.Region, "Logs_20140328.DeleteMetricFilter", map[string]any{
+		"logGroupName": logGroupName,
+		"filterName":   physicalID,
+	})
+	return teardownError("DeleteMetricFilter", rec, err)
+}
+
+// logsMetricFilterBody translates the template's properties into a
+// PutMetricFilter request. FilterPattern is "Required: Yes" in the resource
+// reference, so a template without it is refused here as AWS refuses it —
+// forwarding the empty pattern would deploy a match-everything filter that
+// the same template fails to create on AWS. An explicit "" is a valid
+// "match everything" and is forwarded as such.
+func logsMetricFilterBody(name string, props map[string]any) (map[string]any, error) {
+	logGroupName, _ := props["LogGroupName"].(string)
+	rawPattern, ok := props["FilterPattern"]
+	if !ok || rawPattern == nil {
+		return nil, fmt.Errorf("Logs::MetricFilter FilterPattern is required")
+	}
+	pattern, _ := rawPattern.(string)
+	transformations, err := logsMetricTransformations(props["MetricTransformations"])
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"logGroupName":          logGroupName,
+		"filterName":            name,
+		"filterPattern":         pattern,
+		"metricTransformations": transformations,
+	}, nil
+}
+
+// logsMetricTransformations reshapes the MetricTransformations list: member
+// names to lowerCamel, DefaultValue coerced the way CloudFormation coerces a
+// String-typed Ref, and the `[{Key, Value}]` Dimensions list folded into the
+// map the API models. Whether the result is acceptable is the service's call.
+func logsMetricTransformations(raw any) ([]map[string]any, error) {
+	items, ok := raw.([]any)
+	if !ok {
+		return nil, fmt.Errorf("Logs::MetricFilter MetricTransformations must be an array")
+	}
+	out := make([]map[string]any, 0, len(items))
+	for i, item := range items {
+		t, ok := item.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("Logs::MetricFilter MetricTransformations[%d] must be an object", i)
+		}
+		body := map[string]any{}
+		forwardProperties(t, body, "MetricName", "MetricNamespace", "MetricValue", "Unit")
+		if v, ok := t["DefaultValue"]; ok && v != nil {
+			f, err := cfnFloat64(v)
+			if err != nil {
+				return nil, fmt.Errorf("Logs::MetricFilter MetricTransformations[%d].DefaultValue: %w", i, err)
+			}
+			body["defaultValue"] = f
+		}
+		if v, ok := t["Dimensions"]; ok && v != nil {
+			dims, err := logsMetricFilterDimensions(v)
+			if err != nil {
+				return nil, fmt.Errorf("Logs::MetricFilter MetricTransformations[%d].%w", i, err)
+			}
+			body["dimensions"] = dims
+		}
+		out = append(out, body)
+	}
+	return out, nil
+}
+
+// logsMetricFilterDimensions folds the template's `[{Key, Value}]` list into
+// the API's map. A duplicate key is refused: the template said two things and
+// picking one would not be what it asked for.
+func logsMetricFilterDimensions(raw any) (map[string]string, error) {
+	items, ok := raw.([]any)
+	if !ok {
+		return nil, fmt.Errorf("Dimensions must be an array")
+	}
+	dims := make(map[string]string, len(items))
+	for i, item := range items {
+		d, ok := item.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("Dimensions[%d] must be an object", i)
+		}
+		key, _ := d["Key"].(string)
+		value, _ := d["Value"].(string)
+		if key == "" || value == "" {
+			return nil, fmt.Errorf("Dimensions[%d] must carry Key and Value", i)
+		}
+		if _, duplicate := dims[key]; duplicate {
+			return nil, fmt.Errorf("Dimensions contains duplicate key %q", key)
+		}
+		dims[key] = value
+	}
+	return dims, nil
+}
+
 // ── Helper: extract XML tag value ──────────────────────────────────────────
 
 // extractXMLTag does a simple extraction of a tag value from raw XML.

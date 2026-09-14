@@ -106,7 +106,7 @@ Shorter overview: the [service reference index](./services/README.md).
 | AppConfigData    | [appconfigdata.md](./services/appconfigdata.md)     | 2   | Core CRUD + common workflows  |
 | Secrets Manager  | [secretsmanager.md](./services/secretsmanager.md)   | 22  | Core CRUD + common workflows  |
 | SSM              | [ssm.md](./services/ssm.md)                         | 18  | Core CRUD + common workflows  |
-| CloudWatch Logs  | [cloudwatch-logs.md](./services/cloudwatch-logs.md) | 23  | Core CRUD + common workflows  |
+| CloudWatch Logs  | [cloudwatch-logs.md](./services/cloudwatch-logs.md) | 26  | Core CRUD + common workflows  |
 | SES              | [ses.md](./services/ses.md)                         | 45  | Core CRUD + common workflows  |
 | STS              | [sts.md](./services/sts.md)                         | 11  | Core CRUD + common workflows  |
 | Route 53         | [route53.md](./services/route53.md)                 | 25  | Core CRUD + common workflows  |

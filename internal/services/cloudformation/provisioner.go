@@ -2713,8 +2713,9 @@ var resourceHandlers = map[string]resourceHandler{
 	"AWS::IAM::InstanceProfile":   &iamInstanceProfileHandler{},
 	"AWS::IAM::ServiceLinkedRole": &iamServiceLinkedRoleHandler{},
 	// CloudWatch Logs
-	"AWS::Logs::LogGroup":  &logsLogGroupHandler{},
-	"AWS::Logs::LogStream": &logsLogStreamHandler{},
+	"AWS::Logs::LogGroup":     &logsLogGroupHandler{},
+	"AWS::Logs::LogStream":    &logsLogStreamHandler{},
+	"AWS::Logs::MetricFilter": &logsMetricFilterHandler{},
 	// SSM
 	"AWS::SSM::Parameter": &ssmParameterHandler{},
 	// Secrets Manager
@@ -6399,6 +6400,29 @@ func cfnInt64(value any) (int64, error) {
 		return typed.Int64()
 	case string:
 		return strconv.ParseInt(typed, 10, 64)
+	default:
+		return 0, fmt.Errorf("got %T", value)
+	}
+}
+
+// cfnFloat64 is cfnInt64's counterpart for a Number property that may carry
+// a fraction — AWS::Logs::MetricFilter's DefaultValue — accepting the string
+// form a String-typed Ref or Parameter produces.
+func cfnFloat64(value any) (float64, error) {
+	switch typed := value.(type) {
+	case int:
+		return float64(typed), nil
+	case int64:
+		return float64(typed), nil
+	case float64:
+		if math.IsNaN(typed) || math.IsInf(typed, 0) {
+			return 0, fmt.Errorf("got %v", typed)
+		}
+		return typed, nil
+	case json.Number:
+		return typed.Float64()
+	case string:
+		return strconv.ParseFloat(typed, 64)
 	default:
 		return 0, fmt.Errorf("got %T", value)
 	}

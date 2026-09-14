@@ -17,6 +17,9 @@ mod scenarios_authored_kinesis_streams_gen;
 #[path = "scenarios_authored_logs_groups_gen.rs"]
 mod scenarios_authored_logs_groups_gen;
 
+#[path = "scenarios_authored_logs_metric_filters_gen.rs"]
+mod scenarios_authored_logs_metric_filters_gen;
+
 #[path = "scenarios_authored_sqs_queues_gen.rs"]
 mod scenarios_authored_sqs_queues_gen;
 
@@ -52,6 +55,7 @@ pub fn scenario_groups(clients: &Arc<AwsClients>) -> Vec<Box<dyn ServiceGroup>> 
         Box::new(scenarios_authored_eventbridge_rules_gen::ScenariosAuthoredEventbridgeRules::new(clients)),
         Box::new(scenarios_authored_kinesis_streams_gen::ScenariosAuthoredKinesisStreams::new(clients)),
         Box::new(scenarios_authored_logs_groups_gen::ScenariosAuthoredLogsGroups::new(clients)),
+        Box::new(scenarios_authored_logs_metric_filters_gen::ScenariosAuthoredLogsMetricFilters::new(clients)),
         Box::new(scenarios_authored_sqs_queues_gen::ScenariosAuthoredSqsQueues::new(clients)),
         Box::new(scenarios_batch_gen::ScenariosBatch::new(clients)),
         Box::new(scenarios_elastic_load_balancing_gen::ScenariosElasticLoadBalancing::new(clients)),

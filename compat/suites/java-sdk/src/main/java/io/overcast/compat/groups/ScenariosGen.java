@@ -23,6 +23,7 @@ public final class ScenariosGen {
                 new ScenariosAuthoredEventbridgeRulesGen(clients),
                 new ScenariosAuthoredKinesisStreamsGen(clients),
                 new ScenariosAuthoredLogsGroupsGen(clients),
+                new ScenariosAuthoredLogsMetricFiltersGen(clients),
                 new ScenariosAuthoredSqsQueuesGen(clients),
                 new ScenariosBatchGen(clients),
                 new ScenariosElasticLoadBalancingGen(clients),

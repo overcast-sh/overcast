@@ -1,0 +1,143 @@
+{
+  "$comment": "Authored scenario for the hand-written registry group logs-metric-filters (#1949): CloudWatch Logs metric filters, from PutMetricFilter through DescribeMetricFilters and TestMetricFilter to DeleteMetricFilter. Written as an authored scenario from the start — there were never per-language implementations to port, so the registry entry names this file directly and no shadow soak applies (compat/model/README.md § Authored scenarios). The publishing side (a matching event becoming a CloudWatch datapoint) needs a clock the IR cannot drive and is covered by the emulator's own integration tests.",
+  "version": 1,
+  "service": "cloudwatch-logs",
+  "client": {
+    "sdkId": "CloudWatch Logs",
+    "endpointPrefix": "logs",
+    "signingName": "logs",
+    "protocol": "awsJson1_1",
+    "apiVersion": "2014-03-28",
+    "targetPrefix": "Logs_20140328",
+    "awsQueryCompatible": false
+  },
+  "groups": [
+    {
+      "$comment": "One log group, created in setup and removed in teardown, carrying one metric filter the tests put, describe and delete. PutMetricFilter returns smithy.api#Unit, so nothing exports: `$name` is what names the group, the filter and the metric, deterministic within a run. The metric namespace is a literal because MetricTransformation.metricNamespace forbids ':' and '*' but nothing else a run id could carry, and a fixed namespace is what a reader expects to find in CloudWatch. TestMetricFilter reads no state and depends on nothing.",
+      "name": "logs-metric-filters",
+      "kind": "lifecycle",
+      "setup": [
+        {
+          "op": "CreateLogGroup",
+          "params": { "logGroupName": { "$name": "group" } }
+        }
+      ],
+      "tests": [
+        {
+          "$comment": "The put itself answers with an empty body, so the assertion is the read-back: DescribeMetricFilters scoped to the group and the filter's own name prefix reports the filter with the pattern and transformation it was given. The prefix is the filter's full name, so metricFilters[0] is that filter.",
+          "name": "PutMetricFilter",
+          "op": "PutMetricFilter",
+          "call": {
+            "op": "PutMetricFilter",
+            "params": {
+              "logGroupName": { "$name": "group" },
+              "filterName": { "$name": "filter" },
+              "filterPattern": "ERROR",
+              "metricTransformations": [
+                {
+                  "metricName": { "$name": "metric" },
+                  "metricNamespace": "Overcast/Compat",
+                  "metricValue": "1"
+                }
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "readback",
+              "call": {
+                "op": "DescribeMetricFilters",
+                "params": {
+                  "logGroupName": { "$name": "group" },
+                  "filterNamePrefix": { "$name": "filter" }
+                }
+              },
+              "checks": {
+                "$.metricFilters[0].filterName": { "equals": { "$name": "filter" } },
+                "$.metricFilters[0].logGroupName": { "equals": { "$name": "group" } },
+                "$.metricFilters[0].filterPattern": { "equals": "ERROR" },
+                "$.metricFilters[0].creationTime": { "nonEmpty": true },
+                "$.metricFilters[0].metricTransformations[0].metricName": { "equals": { "$name": "metric" } },
+                "$.metricFilters[0].metricTransformations[0].metricNamespace": { "equals": "Overcast/Compat" },
+                "$.metricFilters[0].metricTransformations[0].metricValue": { "equals": "1" }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "The group-wide listing carries the filter. Listed by group rather than by metric so the test exercises the plain DescribeMetricFilters shape a console or CLI issues.",
+          "name": "DescribeMetricFilters",
+          "op": "DescribeMetricFilters",
+          "call": {
+            "op": "DescribeMetricFilters",
+            "params": { "logGroupName": { "$name": "group" } }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.metricFilters",
+              "where": { "$.filterName": { "$name": "filter" } }
+            }
+          ],
+          "depends": ["PutMetricFilter"]
+        },
+        {
+          "$comment": "AWS's own TestMetricFilter contract, from the API reference examples: eventNumber is the message's zero-based index, and a text pattern reports an empty extractedValues. The non-matching message must be absent from matches.",
+          "name": "TestMetricFilter",
+          "op": "TestMetricFilter",
+          "call": {
+            "op": "TestMetricFilter",
+            "params": {
+              "filterPattern": "ERROR",
+              "logEventMessages": ["INFO all fine", "ERROR something broke"]
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.matches[0].eventNumber": { "equals": 1 },
+                "$.matches[0].eventMessage": { "equals": "ERROR something broke" }
+              }
+            },
+            {
+              "kind": "absent",
+              "itemsPath": "$.matches",
+              "where": { "$.eventMessage": "INFO all fine" }
+            }
+          ]
+        },
+        {
+          "$comment": "The delete takes effect: the group's listing no longer carries the filter. Runs after DescribeMetricFilters, which needs the filter present.",
+          "name": "DeleteMetricFilter",
+          "op": "DeleteMetricFilter",
+          "call": {
+            "op": "DeleteMetricFilter",
+            "params": {
+              "logGroupName": { "$name": "group" },
+              "filterName": { "$name": "filter" }
+            }
+          },
+          "assert": [
+            {
+              "kind": "absent",
+              "call": {
+                "op": "DescribeMetricFilters",
+                "params": { "logGroupName": { "$name": "group" } }
+              },
+              "itemsPath": "$.metricFilters",
+              "where": { "$.filterName": { "$name": "filter" } }
+            }
+          ],
+          "depends": ["DescribeMetricFilters"]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "DeleteLogGroup",
+          "params": { "logGroupName": { "$name": "group" } }
+        }
+      ]
+    }
+  ]
+}

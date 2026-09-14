@@ -34,10 +34,3 @@ func (h *Handler) StartQuery(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetQueryResults(w http.ResponseWriter, r *http.Request) {
 	protocol.NotImplementedJSON(w, r)
 }
-
-// PutMetricFilter creates or updates a metric filter for the specified log group.
-// TODO(priority:P3): implement PutMetricFilter
-// AWS docs: https://docs.aws.amazon.com/AmazonCloudWatchLogs/latest/APIReference/API_PutMetricFilter.html
-func (h *Handler) PutMetricFilter(w http.ResponseWriter, r *http.Request) {
-	protocol.NotImplementedJSON(w, r)
-}
