@@ -4371,6 +4371,34 @@
     },
     {
       "suite": "rust-sdk",
+      "service": "cloudwatch-logs",
+      "group": "logs-metric-filters",
+      "test": "DeleteMetricFilter",
+      "status": "pass"
+    },
+    {
+      "suite": "rust-sdk",
+      "service": "cloudwatch-logs",
+      "group": "logs-metric-filters",
+      "test": "DescribeMetricFilters",
+      "status": "pass"
+    },
+    {
+      "suite": "rust-sdk",
+      "service": "cloudwatch-logs",
+      "group": "logs-metric-filters",
+      "test": "PutMetricFilter",
+      "status": "pass"
+    },
+    {
+      "suite": "rust-sdk",
+      "service": "cloudwatch-logs",
+      "group": "logs-metric-filters",
+      "test": "TestMetricFilter",
+      "status": "pass"
+    },
+    {
+      "suite": "rust-sdk",
       "service": "msk",
       "group": "msk-clusters-v2",
       "test": "CreateClusterV2NeitherType",
