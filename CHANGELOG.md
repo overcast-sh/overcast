@@ -66,6 +66,69 @@ can be applied mechanically rather than reconstructed from memory.
 
 ## [Unreleased]
 
+## [0.0.1-alpha.42] - 2026-09-14
+
+### Added
+
+- [lambda/ecs] step debugging of user code inside emulated Lambda functions and ECS tasks: `OVERCAST_DEBUGGER=true` plus an `overcast:debug=true` tag.
+  Node.js and Java get the inspector or JDWP flag injected; Python reads `OVERCAST_DEBUG_PORT` for `debugpy`; images and custom runtimes name a protocol with `overcast:debug-protocol`.
+  the function timeout clock stops while a debugger is attached (`OVERCAST_DEBUGGER_TIMEOUT=attached|paused|strict`), and the port survives hot reload replacing the container.
+  `overcast:debug-wait=true` holds an invocation until a debugger attaches, so the invocation that starts the container pauses at its breakpoints too; bounded by `OVERCAST_DEBUGGER_WAIT_TIMEOUT` (default 120s), after which it runs with a `WARN`, and the function's own clock starts when the event is dispatched rather than while it waits.
+  a tagged function is registered with the debugger when created or tagged, and after a restart, so a session is offered before it first runs.
+  the listener follows `OVERCAST_LISTEN`, so `-p 9229-9329:9229-9329` reaches it when Overcast runs in Docker.
+
+- [web/lambda] step debugging inside the console: breakpoints, stepping and a paused view in the function page's Code tab, for Node.js functions.
+  Locals, Watch, Call stack and Breakpoints beside the code, logs and a debug console with a REPL below; panels and drawer resize, and a session left open is restored on return.
+  source maps beside or inline in the deployment show the original TypeScript, translated both ways, with a per-function switch to debug the compiled output instead.
+  a Debug tab on the function and task pages carries a ready-made attach configuration for VS Code, JetBrains, Chrome DevTools and the command line, reads `attached`/`paused` while a session holds the port, and offers a *Wait for a debugger* switch that holds the first invocation.
+  behind it, a WebSocket bridge onto the function's debug port and a source endpoint that reads every deployment file by path, so a hot-reloaded function's mounted directory is listed and read live — `.map` files and nested paths included.
+
+- [cloudwatch-logs/cloudwatch/cloudformation] CloudWatch Logs metric filters, and `AWS::Logs::MetricFilter` to provision them.
+  `PutMetricFilter`, `DescribeMetricFilters`, `DeleteMetricFilter` and `TestMetricFilter`, over AWS JSON and RPC v2 CBOR
+  a log event that matches a filter publishes a CloudWatch datapoint, so `GetMetricStatistics` reports it and an alarm on the metric fires from log lines alone
+  nothing is published while `OVERCAST_SERVICE_METRICS=disabled`; the filters are still stored, described and tested
+
+- [cloudformation] `Fn::GetStackOutput` resolves a stack output in any region without an export — the weak cross-stack reference CDK now emits.
+  the resource that made a dangling reference fails, naming the stack or output that was not found; `RoleArn` is accepted but not assumed, since Overcast emulates one account.
+
+- [router] 29 operations newly modeled by AWS are recognised.
+  a signed request to one reaches a protocol-correct `501` in that service's own error envelope, instead of the S3 fallback's bucket-or-object answer
+
+- [router] the `data-plane-name-refused` health advisory names each endpoint the resolver refused, and both containers involved.
+  the refusal is the placement the template asked for — the two resources are in different VPCs — but from inside the application it is only `Temporary failure in name resolution`. The WARN line carries the fix too.
+
+### Changed
+
+- [cloudwatch/web] the system map's log peek renders rows through the stream viewer's pipeline instead of as raw text.
+  level tint and badge, Format/Syntax/Wrap/Collapse, ANSI colour, a filter over the loaded events, and an "Open in Logs" link to the full view
+
+- [cloudwatch/web] the CloudWatch Metrics page groups metrics by namespace, adds a filter, and draws the Monitor tab's chart.
+  long metric names and dimension values now truncate or wrap inside their column instead of spilling past it; the range presets extend to 7 and 30 days
+
+### Fixed
+
+- **BREAKING** [elasticache] `CreateCacheCluster` and `CreateReplicationGroup` refuse an unknown `CacheSubnetGroupName` with `CacheSubnetGroupNotFoundFault`.
+  the name used to be accepted and ignored, which placed the cache on the default plane with nothing said, and the first symptom was a consumer in the intended VPC that could not resolve the endpoint.
+  an empty name is still fine — that is the default VPC, on AWS and here.
+  migration: create the cache subnet group before the cluster or replication group that names it, or correct the name; a create that names a group Overcast has no record of now fails instead of silently landing outside its VPC.
+
+- [cloudwatch/web] the stream viewer's Tail toggle now catches up on events logged between the last fetch and the session opening.
+  one FilterLogEvents read per opened session, from the newest event on screen up to now, reconciled with the page and the live buffer by count
+  syntax highlighting also applies to collapsed log rows, on their single-line form
+
+- [efs] a mount target's NFS export joins its subnet's VPC network, on create and on adoption after a restart.
+  it carried the file system's endpoint names on the default plane only, so a task or function in the mount target's VPC could not resolve them.
+
+- [eks] a live cluster joins its VPC network before it starts, rejoins it after a restart, and honours `endpointPublicAccess`.
+  `DescribeCluster` and `UpdateKubeconfig` also hand a sibling container the cluster's endpoint name on the API port, rather than a host port nothing inside the network listens on.
+
+- [elasticache] cache endpoints are minted for whoever asks, on every read, instead of overwritten with the address Overcast itself dials.
+  a Lambda function or ECS task gets the endpoint hostname and the engine port, the host the published port. The record used to be rewritten after the container started with the address Overcast itself dials, so a function reading the endpoint at runtime was given `127.0.0.1` and connected to itself.
+  a replication-group container adopted after a restart also rejoins its subnet group's VPC network; it used to be re-attached with no VPC at all and landed on the default plane, where the tasks in its VPC could not resolve it, while a freshly created group was placed correctly.
+
+- [rds] `PubliclyAccessible` decides placement as well as the response.
+  a public instance in a subnet group joins the shared data plane as well as its VPC network, and `ModifyDBInstance` re-attaches a running container when the flag changes. It was stored and echoed but never reached the wiring.
+
 ## [0.0.1-alpha.41] - 2026-09-06
 
 ### Added
@@ -3000,7 +3063,8 @@ can be applied mechanically rather than reconstructed from memory.
 [x.y.z]: https://github.com/overcast-sh/overcast/compare/vA.B.C...vx.y.z
 -->
 
-[Unreleased]: https://github.com/overcast-sh/overcast/compare/v0.0.1-alpha.41...HEAD
+[Unreleased]: https://github.com/overcast-sh/overcast/compare/v0.0.1-alpha.42...HEAD
+[0.0.1-alpha.42]: https://github.com/overcast-sh/overcast/compare/v0.0.1-alpha.41...v0.0.1-alpha.42
 [0.0.1-alpha.41]: https://github.com/overcast-sh/overcast/compare/v0.0.1-alpha.40...v0.0.1-alpha.41
 [0.0.1-alpha.40]: https://github.com/overcast-sh/overcast/compare/v0.0.1-alpha.39...v0.0.1-alpha.40
 [0.0.1-alpha.39]: https://github.com/overcast-sh/overcast/compare/v0.0.1-alpha.38...v0.0.1-alpha.39
