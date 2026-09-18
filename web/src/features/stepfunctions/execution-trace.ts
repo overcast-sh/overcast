@@ -144,6 +144,10 @@ const isFailure = (type: string) =>
 
 const SCHEDULE_EVENTS = /Scheduled$/
 
+function samePath(a: IterationFrame[], b: IterationFrame[]): boolean {
+  return a.length === b.length && a.every((f, i) => f.map === b[i].map && f.index === b[i].index)
+}
+
 /** Sorts the events by id; GetExecutionHistory pages may arrive in reverse order. */
 export function sortEvents(events: HistoryEvent[]): HistoryEvent[] {
   return [...events].sort((a, b) => Number(a.id ?? 0) - Number(b.id ?? 0))
@@ -275,7 +279,7 @@ export function buildTrace(events: HistoryEvent[], model?: AslModel): ExecutionT
         attributed = run.key
         unwindTo(stack, index, at, "aborted", "aborted")
       }
-    } else if (type === "MapRunStarted") {
+    } else if (type === "MapRunStarted" || type === "MapRunRedriven") {
       const run = runOf(stack[findFrame(stack, (r) => r.type === "Map")])
       if (run) {
         attributed = run.key
@@ -370,6 +374,15 @@ export function buildTrace(events: HistoryEvent[], model?: AslModel): ExecutionT
         run.itemCount = details?.length
         run.iterations ??= new Map()
         attributed = run.key
+        // A redriven Map re-runs only the iterations that did not succeed and
+        // records nothing for the rest; carry those over from the attempt
+        // before, so the Map still reads as N of N rather than a partial run.
+        const earlier = (trace.runsByName.get(run.name) ?? []).filter(
+          (r) => r !== run && r.iterations && samePath(r.iterationPath, run.iterationPath),
+        )
+        for (const info of earlier.at(-1)?.iterations?.values() ?? []) {
+          if (info.status === "succeeded") run.iterations.set(info.index, { ...info })
+        }
       }
     } else if (type.startsWith("MapIteration")) {
       const mapIndex = findFrame(stack, (run) => run.type === "Map" && run.status === "running")

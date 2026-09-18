@@ -332,6 +332,53 @@ describe("buildTrace", () => {
     expect(trace.runsByName.get("Call")?.map((r) => r.status)).toEqual(["failed", "running"])
   })
 
+  it("keeps the iterations a redrive skipped as succeeded on the redriven Map", () => {
+    // Given: iteration 1 of 2 failed, and the redrive re-ran only that one
+    const m = model({
+      StartAt: "M",
+      States: {
+        M: {
+          Type: "Map",
+          ItemProcessor: {
+            StartAt: "X",
+            States: { X: { Type: "Task", Resource: "r", End: true } },
+          },
+          End: true,
+        },
+      },
+    })
+    const trace = buildTrace(
+      linear([
+        ["ExecutionStarted", { input: "[1,2]" }],
+        ["MapStateEntered", { name: "M" }],
+        ["MapStateStarted", { length: 2 }],
+        ["MapIterationStarted", { name: "M", index: 0 }],
+        ["MapIterationSucceeded", { name: "M", index: 0 }],
+        ["MapIterationStarted", { name: "M", index: 1 }],
+        ["MapIterationFailed", { name: "M", index: 1 }],
+        ["MapStateFailed", {}],
+        ["ExecutionFailed", { error: "Boom" }],
+        ["ExecutionRedriven", { redriveCount: 1 }],
+        ["MapStateEntered", { name: "M" }],
+        ["MapStateStarted", { length: 2 }],
+        ["MapIterationStarted", { name: "M", index: 1 }],
+        ["MapIterationSucceeded", { name: "M", index: 1 }],
+        ["MapStateSucceeded", {}],
+        ["MapStateExited", { name: "M" }],
+        ["ExecutionSucceeded", {}],
+      ]),
+      m,
+    )
+    const redriven = trace.runsByName.get("M")?.[1]
+    expect(
+      [...(redriven?.iterations?.values() ?? [])].map((i) => [i.index, i.status]).sort(),
+    ).toEqual([
+      [0, "succeeded"],
+      [1, "succeeded"],
+    ])
+    expect(trace.status).toBe("SUCCEEDED")
+  })
+
   it("sorts events that arrive out of order before walking them", () => {
     const events = linear([
       ["ExecutionStarted", { input: "{}" }],
