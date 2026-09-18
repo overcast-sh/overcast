@@ -1,6 +1,6 @@
 {
   "generated_by": "go run -tags dev ./cmd/capgen --write-docs",
-  "total_ops": 1491,
+  "total_ops": 1513,
   "services": [
     {
       "service": "s3",
@@ -7190,70 +7190,126 @@
     {
       "service": "stepfunctions",
       "display_name": "Step Functions",
-      "total_ops": 15,
-      "implemented_ops": 15,
+      "total_ops": 37,
+      "implemented_ops": 37,
       "operations": [
         {
           "operation": "CreateStateMachine",
           "category": "State machines",
           "status": "✅ Supported",
-          "notes": "Validates the ASL; idempotent — returns existing if name+def match"
+          "notes": "Validates the ASL; idempotent — returns existing if name+def match; publish/versionDescription publish version 1"
         },
         {
           "operation": "DescribeStateMachine",
           "category": "State machines",
-          "status": "✅ Supported"
+          "status": "✅ Supported",
+          "notes": "Returns revisionId once the state machine has been updated; a version ARN describes that version (its definition, role, description and revisionId)"
         },
         {
           "operation": "ListStateMachines",
           "category": "State machines",
-          "status": "✅ Supported"
+          "status": "✅ Supported",
+          "notes": "Sorted by name; maxResults/nextToken pagination"
         },
         {
           "operation": "DeleteStateMachine",
           "category": "State machines",
-          "status": "✅ Supported"
+          "status": "✅ Supported",
+          "notes": "Also deletes the state machine's versions and aliases"
         },
         {
           "operation": "UpdateStateMachine",
           "category": "State machines",
           "status": "✅ Supported",
-          "notes": "Definition/roleArn/loggingConfiguration/tracingConfiguration; no versioning (publish)"
+          "notes": "Definition/roleArn/loggingConfiguration/tracingConfiguration; a change starts a new revision (revisionId); publish/versionDescription publish it as a version"
         },
         {
           "operation": "DescribeStateMachineForExecution",
           "category": "State machines",
+          "status": "✅ Supported",
+          "notes": "Reports the version's definition for an execution that ran a version (the current definition if that version was since deleted)"
+        },
+        {
+          "operation": "ValidateStateMachineDefinition",
+          "category": "State machines",
+          "status": "✅ Supported",
+          "notes": "The same structural validation CreateStateMachine applies, as OK/FAIL with one ERROR diagnostic (code, message, location where known); no WARNING-level static analysis"
+        },
+        {
+          "operation": "PublishStateMachineVersion",
+          "category": "Versions and aliases",
+          "status": "✅ Supported",
+          "notes": "Version ARN is \u003cstateMachineArn\u003e:\u003cn\u003e, numbers never reused; idempotent per revision; revisionId (or INITIAL) mismatch is ConflictException"
+        },
+        {
+          "operation": "ListStateMachineVersions",
+          "category": "Versions and aliases",
+          "status": "✅ Supported",
+          "notes": "Newest first; maxResults/nextToken pagination"
+        },
+        {
+          "operation": "DeleteStateMachineVersion",
+          "category": "Versions and aliases",
+          "status": "✅ Supported",
+          "notes": "ConflictException while an alias routes to the version; deleting a missing version succeeds"
+        },
+        {
+          "operation": "CreateStateMachineAlias",
+          "category": "Versions and aliases",
+          "status": "✅ Supported",
+          "notes": "Alias ARN is \u003cstateMachineArn\u003e:\u003cname\u003e; 1–2 versions with weights summing to 100; idempotent on name+description+routing"
+        },
+        {
+          "operation": "DescribeStateMachineAlias",
+          "category": "Versions and aliases",
           "status": "✅ Supported"
+        },
+        {
+          "operation": "UpdateStateMachineAlias",
+          "category": "Versions and aliases",
+          "status": "✅ Supported",
+          "notes": "description and/or routingConfiguration; takes effect immediately (no eventual-consistency window)"
+        },
+        {
+          "operation": "DeleteStateMachineAlias",
+          "category": "Versions and aliases",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "ListStateMachineAliases",
+          "category": "Versions and aliases",
+          "status": "✅ Supported",
+          "notes": "Most recent first; a version ARN lists the aliases routing to it; maxResults/nextToken pagination"
         },
         {
           "operation": "StartExecution",
           "category": "Executions",
           "status": "✅ Supported",
-          "notes": "Interprets the ASL; returns while the execution is RUNNING, as AWS does; a standard workflow's RUNNING and terminal status transitions each emit a Step Functions Execution Status Change event to the default EventBridge bus"
+          "notes": "Interprets the ASL; returns while the execution is RUNNING, as AWS does; accepts a version or alias ARN (an alias picks a version at random by weight); a standard workflow's RUNNING and terminal status transitions each emit a Step Functions Execution Status Change event to the default EventBridge bus"
         },
         {
           "operation": "StartSyncExecution",
           "category": "Executions",
           "status": "✅ Supported",
-          "notes": "EXPRESS only — same interpreter, run to completion before returning; EXPRESS executions do not emit EventBridge events, matching AWS"
+          "notes": "EXPRESS only — same interpreter, run to completion before returning; accepts a version or alias ARN; EXPRESS executions do not emit EventBridge events, matching AWS"
         },
         {
           "operation": "DescribeExecution",
           "category": "Executions",
           "status": "✅ Supported",
-          "notes": "Real status, output, error and cause"
+          "notes": "Real status, output, error and cause; redriveCount/redriveStatus; mapRunArn for a distributed Map child; stateMachineVersionArn/stateMachineAliasArn for an execution started through a version or alias"
         },
         {
           "operation": "ListExecutions",
           "category": "Executions",
           "status": "✅ Supported",
-          "notes": "statusFilter (validated against the ExecutionStatus enum) and maxResults honoured; no pagination token"
+          "notes": "statusFilter, redriveFilter, mapRunArn (a distributed Map's child executions) and maxResults/nextToken pagination; a version or alias ARN lists the executions that ran through it"
         },
         {
           "operation": "GetExecutionHistory",
           "category": "Executions",
           "status": "✅ Supported",
-          "notes": "Real state-transition events in AWS's vocabulary; readable while RUNNING"
+          "notes": "AWS's event vocabulary for every state type, with causal previousEventId linkage (each Parallel branch and Map iteration chains back to its own start event); readable while RUNNING; reverseOrder, includeExecutionData, maxResults/nextToken"
         },
         {
           "operation": "StopExecution",
@@ -7262,9 +7318,84 @@
           "notes": "Interrupts a running execution; it reaches ABORTED asynchronously; a standard workflow's ABORTED transition emits a Step Functions Execution Status Change event to the default EventBridge bus"
         },
         {
+          "operation": "RedriveExecution",
+          "category": "Executions",
+          "status": "✅ Supported",
+          "notes": "Standard executions that FAILED, TIMED_OUT or were ABORTED within 14 days; resumes at the top-level state that did not succeed, with the input and variables it was entered with; history continues after ExecutionRedriven"
+        },
+        {
+          "operation": "TestState",
+          "category": "Executions",
+          "status": "✅ Supported",
+          "notes": "One state, alone or named from a whole definition; a single attempt (RETRIABLE / CAUGHT_ERROR); mock result or errorOutput; variables and context; DEBUG inspectionData"
+        },
+        {
+          "operation": "ListMapRuns",
+          "category": "Map runs",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "DescribeMapRun",
+          "category": "Map runs",
+          "status": "✅ Supported",
+          "notes": "Live item and child-execution counts while the run is in progress"
+        },
+        {
+          "operation": "UpdateMapRun",
+          "category": "Map runs",
+          "status": "✅ Supported",
+          "notes": "maxConcurrency and the failure tolerances; applies to children not yet started on a running Map Run"
+        },
+        {
+          "operation": "CreateActivity",
+          "category": "Activities and task tokens",
+          "status": "✅ Supported",
+          "notes": "Idempotent on the name, as AWS documents"
+        },
+        {
+          "operation": "DescribeActivity",
+          "category": "Activities and task tokens",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "DeleteActivity",
+          "category": "Activities and task tokens",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "ListActivities",
+          "category": "Activities and task tokens",
+          "status": "✅ Supported",
+          "notes": "maxResults/nextToken pagination"
+        },
+        {
+          "operation": "GetActivityTask",
+          "category": "Activities and task tokens",
+          "status": "✅ Supported",
+          "notes": "Long-polls up to 60 seconds for a scheduled task"
+        },
+        {
+          "operation": "SendTaskSuccess",
+          "category": "Activities and task tokens",
+          "status": "✅ Supported",
+          "notes": "Completes an activity task or a .waitForTaskToken task; tokens live while their execution does"
+        },
+        {
+          "operation": "SendTaskFailure",
+          "category": "Activities and task tokens",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "SendTaskHeartbeat",
+          "category": "Activities and task tokens",
+          "status": "✅ Supported",
+          "notes": "Resets HeartbeatSeconds; a missed heartbeat is States.HeartbeatTimeout"
+        },
+        {
           "operation": "TagResource",
           "category": "Tags",
-          "status": "✅ Supported"
+          "status": "✅ Supported",
+          "notes": "State machines and activities; a version or alias ARN is InvalidArn, as on AWS"
         },
         {
           "operation": "UntagResource",

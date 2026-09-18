@@ -3,16 +3,14 @@ package stepfunctions
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 )
 
-// This file implements the Amazon States Language data-flow primitives:
-// reference paths (`$.a.b[0]`), the context object (`$$`) and payload templates
-// (objects whose keys end in `.$`). The intrinsic functions those templates may
-// call live in intrinsics.go. Anything outside the interpreted subset raises a
-// runtime error so the execution fails loudly rather than quietly producing
-// wrong data.
+// This file implements the Amazon States Language data-flow primitives: paths
+// (`$.a.b[0]`, `$..x`, `$.l[?(@.n > 1)]`), the context object (`$$`),
+// workflow variables (`$name`) and payload templates (objects whose keys end
+// in `.$`). The JSONPath engine lives in jsonpath.go and the intrinsic
+// functions templates may call live in intrinsics.go.
 
 // pathError is a data-flow failure. It maps to States.Runtime, which is what
 // AWS raises when a path cannot be resolved against the effective input.
@@ -24,109 +22,26 @@ func pathErrorf(format string, args ...any) error {
 	return &pathError{msg: fmt.Sprintf(format, args...)}
 }
 
-// pathSegment is one step of a reference path: a field name or an array index.
-type pathSegment struct {
-	field string
-	index int
-	isIdx bool
-}
+// variablesContextKey is the reserved context-object key under which the
+// interpreter keeps workflow variables (a map[string]any of name to value).
+// `$name` paths resolve against it; `$$` paths never see it.
+const variablesContextKey = "__overcast_variables"
 
-// parseReferencePath splits an ASL reference path into segments.
+// selectPath resolves an ASL path against the effective input (doc), the
+// execution context object (`$$`, ctxObj) or a workflow variable (`$name`).
 //
-// Supported: `$`, `$$`, `$.a.b`, `$['a']['b']`, `$.a[0]`, and the same forms
-// rooted at `$$` for the context object. Wildcards, descendants, slices and
-// filter expressions are rejected — they are valid JSONPath but Overcast does
-// not evaluate them, and silently returning the wrong node would be worse than
-// failing.
-func parseReferencePath(path string) (context bool, segments []pathSegment, err error) {
-	raw := strings.TrimSpace(path)
-	switch {
-	case raw == "":
-		return false, nil, pathErrorf("path is empty")
-	case strings.HasPrefix(raw, "$$"):
-		context = true
-		raw = raw[2:]
-	case strings.HasPrefix(raw, "$"):
-		raw = raw[1:]
-	default:
-		return false, nil, pathErrorf("path %q must start with $ or $$", path)
-	}
-	if strings.ContainsAny(raw, "*?@,") || strings.Contains(raw, "..") {
-		return false, nil, pathErrorf("path %q uses a JSONPath feature Overcast does not evaluate (wildcards, descendants, slices and filters are unsupported)", path)
-	}
-
-	for raw != "" {
-		switch {
-		case strings.HasPrefix(raw, "."):
-			raw = raw[1:]
-			end := strings.IndexAny(raw, ".[")
-			if end < 0 {
-				end = len(raw)
-			}
-			name := raw[:end]
-			if name == "" {
-				return false, nil, pathErrorf("path %q has an empty field name", path)
-			}
-			segments = append(segments, pathSegment{field: name})
-			raw = raw[end:]
-		case strings.HasPrefix(raw, "["):
-			end := strings.Index(raw, "]")
-			if end < 0 {
-				return false, nil, pathErrorf("path %q has an unterminated [", path)
-			}
-			inner := strings.TrimSpace(raw[1:end])
-			raw = raw[end+1:]
-			if len(inner) >= 2 && (inner[0] == '\'' || inner[0] == '"') && inner[len(inner)-1] == inner[0] {
-				segments = append(segments, pathSegment{field: inner[1 : len(inner)-1]})
-				continue
-			}
-			idx, convErr := strconv.Atoi(inner)
-			if convErr != nil {
-				return false, nil, pathErrorf("path %q has an unsupported subscript %q", path, inner)
-			}
-			segments = append(segments, pathSegment{index: idx, isIdx: true})
-		default:
-			return false, nil, pathErrorf("path %q is malformed at %q", path, raw)
-		}
-	}
-	return context, segments, nil
-}
-
-// selectPath resolves a reference path against the effective input (doc) and
-// the execution context object (ctxObj). A path that does not resolve is an
-// error, matching AWS's behaviour for InputPath/ItemsPath and for `.$` fields.
+// A definite path returns the node it names and fails when that node does not
+// exist, matching AWS's behaviour for InputPath/ItemsPath and for `.$`
+// fields. An indefinite path (wildcards, `..`, slices, unions, filters)
+// returns a JSON array of its matches — empty when nothing matches — which is
+// how AWS's Jayway-based evaluator behaves.
 func selectPath(doc any, ctxObj map[string]any, path string) (any, error) {
-	isContext, segments, err := parseReferencePath(path)
+	parsed, err := parseJSONPath(path)
 	if err != nil {
 		return nil, err
 	}
-	var current any = doc
-	if isContext {
-		current = ctxObj
-	}
-	for i, seg := range segments {
-		if seg.isIdx {
-			arr, ok := current.([]any)
-			if !ok {
-				return nil, pathErrorf("path %q: %s is not an array", path, pathPrefix(segments, i))
-			}
-			if seg.index < 0 || seg.index >= len(arr) {
-				return nil, pathErrorf("path %q: index %d is out of range", path, seg.index)
-			}
-			current = arr[seg.index]
-			continue
-		}
-		obj, ok := current.(map[string]any)
-		if !ok {
-			return nil, pathErrorf("path %q: %s is not an object", path, pathPrefix(segments, i))
-		}
-		value, ok := obj[seg.field]
-		if !ok {
-			return nil, pathErrorf("path %q: field %q is not present", path, seg.field)
-		}
-		current = value
-	}
-	return current, nil
+	env := &pathEnv{doc: doc, ctxObj: ctxObj}
+	return env.evaluate(parsed)
 }
 
 // selectPathOptional is selectPath but reports absence instead of erroring.
@@ -139,35 +54,38 @@ func selectPathOptional(doc any, ctxObj map[string]any, path string) (any, bool)
 	return value, true
 }
 
-func pathPrefix(segments []pathSegment, upto int) string {
-	var b strings.Builder
-	b.WriteString("$")
-	for _, seg := range segments[:upto] {
-		if seg.isIdx {
-			fmt.Fprintf(&b, "[%d]", seg.index)
-			continue
-		}
-		b.WriteString("." + seg.field)
-	}
-	return b.String()
+// isDefinitePath reports whether path is a valid ASL "Reference Path": one
+// that names a single node (no wildcards, descent, slices, unions or
+// filters). ResultPath and a Choice rule's Variable must be definite.
+func isDefinitePath(path string) bool {
+	parsed, err := parseJSONPath(path)
+	return err == nil && parsed.definite()
 }
 
 // insertPath returns doc with value placed at the reference path. A `$` path
 // replaces the document outright; missing intermediate objects are created,
-// which is what ResultPath does on AWS.
+// which is what ResultPath does on AWS. Only definite, field-only paths rooted
+// at `$` can be written.
 func insertPath(doc any, path string, value any) (any, error) {
-	isContext, segments, err := parseReferencePath(path)
+	parsed, err := parseJSONPath(path)
 	if err != nil {
 		return nil, err
 	}
-	if isContext {
+	switch parsed.root {
+	case rootContext:
 		return nil, pathErrorf("path %q: the context object is read-only", path)
+	case rootVariable:
+		return nil, pathErrorf("path %q: variables can only be written by Assign", path)
+	case rootInput, rootCurrent:
 	}
-	if len(segments) == 0 {
+	if !parsed.definite() {
+		return nil, pathErrorf("path %q is not a reference path: wildcards, descendants, slices, unions and filters cannot be written to", path)
+	}
+	if len(parsed.steps) == 0 {
 		return value, nil
 	}
-	for _, seg := range segments {
-		if seg.isIdx {
+	for _, step := range parsed.steps {
+		if step.kind == stepIndex {
 			return nil, pathErrorf("path %q: array subscripts are not supported when writing a result", path)
 		}
 	}
@@ -181,15 +99,16 @@ func insertPath(doc any, path string, value any) (any, error) {
 	}
 	cloned := cloneJSON(root).(map[string]any)
 	cursor := cloned
-	for _, seg := range segments[:len(segments)-1] {
-		next, ok := cursor[seg.field].(map[string]any)
+	last := len(parsed.steps) - 1
+	for _, step := range parsed.steps[:last] {
+		next, ok := cursor[step.names[0]].(map[string]any)
 		if !ok {
 			next = map[string]any{}
-			cursor[seg.field] = next
+			cursor[step.names[0]] = next
 		}
 		cursor = next
 	}
-	cursor[segments[len(segments)-1].field] = value
+	cursor[parsed.steps[last].names[0]] = value
 	return cloned, nil
 }
 

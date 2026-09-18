@@ -32,6 +32,43 @@ type executionRun struct {
 	stoppedAt time.Time
 	errName   string
 	cause     string
+
+	// failedState and failedInput are the top-level state whose failure
+	// ended the run and the raw input it was entered with — the point a
+	// RedriveExecution resumes from.
+	failedState     string
+	failedInput     string
+	failedVariables string
+
+	// resumeState and resumeInput, when set, make the interpreter start at
+	// that top-level state with that raw input instead of at StartAt — a
+	// redrive.
+	resumeState     string
+	resumeInput     string
+	resumeVariables string
+
+	// queryLanguage is the default query language when the definition run
+	// does not name one: a distributed Map child inherits its Map state's.
+	queryLanguage string
+}
+
+// noteFailure records the top-level state a failure ended the run in. The
+// first one wins; a later unwind cannot overwrite it.
+func (r *executionRun) noteFailure(state, input, variables string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.failedState == "" {
+		r.failedState = state
+		r.failedInput = input
+		r.failedVariables = variables
+	}
+}
+
+// failurePoint returns what noteFailure recorded.
+func (r *executionRun) failurePoint() (state, input, variables string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.failedState, r.failedInput, r.failedVariables
 }
 
 // stop asks the execution to unwind as ABORTED, recording the error and cause

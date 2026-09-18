@@ -111,7 +111,7 @@ Shorter overview: the [service reference index](./services/README.md).
 | STS              | [sts.md](./services/sts.md)                         | 11  | Core CRUD + common workflows  |
 | Route 53         | [route53.md](./services/route53.md)                 | 25  | Core CRUD + common workflows  |
 | Auto Scaling     | [autoscaling.md](./services/autoscaling.md)         | 25  | Core CRUD + common workflows  |
-| Step Functions   | [stepfunctions.md](./services/stepfunctions.md)     | 15  | Minimal / targeted support    |
+| Step Functions   | [stepfunctions.md](./services/stepfunctions.md)     | 37  | Minimal / targeted support    |
 | Pipes            | [pipes.md](./services/pipes.md)                     | 8   | Minimal / targeted support    |
 | WAF v2           | [waf.md](./services/waf.md)                         | 7   | Minimal / targeted support    |
 | Shield           | [shield.md](./services/shield.md)                   | 8   | Minimal / targeted support    |

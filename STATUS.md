@@ -48,7 +48,7 @@
 | SES             | 45  | v1 + v2: SendEmail, SendRawEmail, identities, mail capture                                                                                                                                                 |
 | STS             | 11  | GetCallerIdentity, AssumeRole, GetSessionToken, temp credentials                                                                                                                                           |
 | Route 53        | 25  | Hosted zones (default NS/SOA, delegation sets), validated change batches, DNS-order pagination, tags, health checks (never probed); Overcast's own resolver now answers real DNS queries from a zone's records (A/AAAA/CNAME/MX/TXT/NS/SOA, wildcards, ALIAS — #1189)              |
-| Step Functions  | 15  | State machine CRUD plus a real ASL interpreter: all eight state types, Retry/Catch, Lambda/SQS/SNS/DynamoDB/nested-execution Task integrations, real GetExecutionHistory. Executions run synchronously; unsupported ASL fails loudly |
+| Step Functions  | 37  | Whole API plus a real ASL interpreter for JSONPath and JSONata: all eight state types, concurrent Parallel/Map, distributed Map with map runs, variables, Retry/Catch, callbacks and activities, redrive, TestState, optimized and aws-sdk integrations |
 
 ### Minimal / Stub
 
@@ -96,7 +96,7 @@
 | STS             | 11  |
 | Route 53        | 25  |
 | Auto Scaling    | 25  |
-| Step Functions  | 15  |
+| Step Functions  | 37  |
 | Pipes           | 8   |
 | WAF v2          | 7   |
 | Shield          | 8   |
@@ -142,6 +142,6 @@ prioritized Tier 2 full-emulation backlog itself.
 Tracked in [GitHub Issues](https://github.com/overcast-sh/overcast/issues).
 `// TODO(priority:Pn):` comments in code are auto-converted to issues.
 
-- Step Functions `.waitForTaskToken`, activity tasks and distributed Map (the ASL interpreter landed; these are what it still refuses)
+- Step Functions aws-sdk integrations for Query and REST services other than S3, and the optimized integrations beyond Lambda, SQS, SNS, DynamoDB, EventBridge and Step Functions
 - API Gateway cache settings (`CacheClusterEnabled`/`Size`, `ClientCertificateId`, `DocumentationVersion`); usage-plan throttle/quota enforcement itself shipped and is opt-in via `OVERCAST_ENFORCE_APIGATEWAY_THROTTLE`
 - Topology graph enhancements (`internal/router/topology.go`) — e.g. S3 → SNS notification edges via `TopicConfigurations`

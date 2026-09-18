@@ -1619,30 +1619,36 @@ func applySFNDefinitionSubstitutions(definition string, rawSubstitutions any) st
 	})
 }
 
-// sfnDefinitionFromProps resolves DefinitionString/Definition into the ASL
-// text CreateStateMachine/UpdateStateMachine expect, with
-// DefinitionSubstitutions already applied. Returns "", false when neither
-// property is set.
-func sfnDefinitionFromProps(props map[string]any) (string, bool) {
+// sfnDefinitionFromProps resolves DefinitionString, Definition or
+// DefinitionS3Location into the ASL text CreateStateMachine/UpdateStateMachine
+// expect, with DefinitionSubstitutions already applied. Returns "", false when
+// none of them is set, and an error when DefinitionS3Location cannot be read.
+func sfnDefinitionFromProps(ctx context.Context, router http.Handler, region string, props map[string]any) (string, bool, error) {
 	var definition string
 	switch {
 	case props["DefinitionString"] != nil:
 		v, _ := props["DefinitionString"].(string)
 		if v == "" {
-			return "", false
+			return "", false, nil
 		}
 		definition = v
 	case props["Definition"] != nil:
 		v, ok := props["Definition"].(map[string]any)
 		if !ok {
-			return "", false
+			return "", false, nil
 		}
 		j, _ := json.Marshal(v)
 		definition = string(j)
+	case props["DefinitionS3Location"] != nil:
+		fetched, err := sfnDefinitionS3Location(ctx, router, region, props["DefinitionS3Location"])
+		if err != nil {
+			return "", false, err
+		}
+		definition = fetched
 	default:
-		return "", false
+		return "", false, nil
 	}
-	return applySFNDefinitionSubstitutions(definition, props["DefinitionSubstitutions"]), true
+	return applySFNDefinitionSubstitutions(definition, props["DefinitionSubstitutions"]), true, nil
 }
 
 // sfnTagsWire converts a plain tag map into the lower-camel {key,value} shape
@@ -1713,7 +1719,11 @@ func (h *sfnStateMachineHandler) Create(ctx context.Context, router http.Handler
 	} else {
 		body["name"] = rCtx.generatedNameWithin(maxNameLenSFN)
 	}
-	if definition, ok := sfnDefinitionFromProps(props); ok {
+	definition, ok, err := sfnDefinitionFromProps(ctx, router, rCtx.Region, props)
+	if err != nil {
+		return "", nil, err
+	}
+	if ok {
 		body["definition"] = definition
 	}
 	if v, _ := props["RoleArn"].(string); v != "" {
@@ -1728,6 +1738,9 @@ func (h *sfnStateMachineHandler) Create(ctx context.Context, router http.Handler
 	if v, ok := props["TracingConfiguration"]; ok {
 		body["tracingConfiguration"] = v
 	}
+	noteUnconsumedProperties(ctx, "AWS::StepFunctions::StateMachine", props,
+		"StateMachineName", "DefinitionString", "Definition", "DefinitionS3Location", "DefinitionSubstitutions",
+		"RoleArn", "StateMachineType", "LoggingConfiguration", "TracingConfiguration", "Tags")
 
 	rec, err := internalJSON(ctx, router, rCtx.Region, "AWSStepFunctions.CreateStateMachine", body)
 	if err != nil {
@@ -1756,9 +1769,14 @@ func (h *sfnStateMachineHandler) Create(ctx context.Context, router http.Handler
 		}
 	}
 
+	revision, err := sfnRevisionAttr(ctx, router, rCtx.Region, arn)
+	if err != nil {
+		return arn, nil, err
+	}
 	attrs := map[string]string{
-		"Arn":  arn,
-		"Name": name,
+		"Arn":                    arn,
+		"Name":                   name,
+		"StateMachineRevisionId": revision,
 	}
 	return arn, attrs, nil
 }
@@ -1795,7 +1813,11 @@ func (h *sfnStateMachineHandler) Update(ctx context.Context, router http.Handler
 
 	body := map[string]any{"stateMachineArn": physicalID}
 	haveMutable := false
-	if definition, ok := sfnDefinitionFromProps(props); ok {
+	definition, ok, err := sfnDefinitionFromProps(ctx, router, rCtx.Region, props)
+	if err != nil {
+		return "", nil, failUpdate(err)
+	}
+	if ok {
 		body["definition"] = definition
 		haveMutable = true
 	}
@@ -1830,7 +1852,18 @@ func (h *sfnStateMachineHandler) Update(ctx context.Context, router http.Handler
 		}
 	}
 
-	return physicalID, map[string]string{"Arn": physicalID}, nil
+	// The attributes replace the create-time set, so all three are returned;
+	// StateMachineRevisionId moves on whenever the update changed the
+	// definition, role, logging or tracing configuration.
+	revision, err := sfnRevisionAttr(ctx, router, rCtx.Region, physicalID)
+	if err != nil {
+		return "", nil, failUpdate(err)
+	}
+	return physicalID, map[string]string{
+		"Arn":                    physicalID,
+		"Name":                   physicalID[strings.LastIndex(physicalID, ":")+1:],
+		"StateMachineRevisionId": revision,
+	}, nil
 }
 
 // ── AWS::S3::BucketPolicy ──────────────────────────────────────────────────

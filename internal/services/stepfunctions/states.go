@@ -4,133 +4,109 @@ import (
 	"context"
 	"encoding/json"
 	"math"
+	"math/rand/v2"
 	"strings"
+	"sync"
 	"time"
 )
 
 // Per-state-type execution, and the Retry/Catch machinery that wraps the three
-// state types that can fail. The driver that sequences states, the ASL error
-// model and the input/output pipeline live in interpreter.go.
+// state types that can fail. The driver that sequences states and the ASL
+// error model live in interpreter.go; how a state reads its input and shapes
+// its output in each query language lives in dataflow.go.
 
 // ─── Individual state types ───────────────────────────────────────────────────
 
-func (in *interpreter) runFail(state *aslState, effective any, ctxObj map[string]any) *stateError {
-	errName := state.Error
-	cause := state.Cause
-	if state.ErrorPath != "" {
-		value, err := evaluateTemplateExpression(state.ErrorPath, effective, ctxObj)
-		if err != nil {
-			return newStateError(errRuntime, "%s", err.Error())
-		}
-		text, ok := value.(string)
-		if !ok {
-			return newStateError(errRuntime, "ErrorPath must resolve to a string")
-		}
-		errName = text
+// runFail raises the Fail state's error. Error and Cause are both optional in
+// ASL; an absent Error leaves the error name empty, as on AWS — it must not
+// turn into States.Runtime, which no Catch can handle.
+func (in *interpreter) runFail(f *flow) *stateError {
+	errName, serr := f.text(f.state.Error, f.state.ErrorPath, "Error")
+	if serr != nil {
+		return serr
 	}
-	if state.CausePath != "" {
-		value, err := evaluateTemplateExpression(state.CausePath, effective, ctxObj)
-		if err != nil {
-			return newStateError(errRuntime, "%s", err.Error())
-		}
-		text, ok := value.(string)
-		if !ok {
-			return newStateError(errRuntime, "CausePath must resolve to a string")
-		}
-		cause = text
-	}
-	if errName == "" {
-		errName = errRuntime
+	cause, serr := f.text(f.state.Cause, f.state.CausePath, "Cause")
+	if serr != nil {
+		return serr
 	}
 	return &stateError{name: errName, cause: cause}
 }
 
-func (in *interpreter) runChoice(name string, state *aslState, effective any, ctxObj map[string]any) (any, string, bool, *stateError) {
-	for _, rule := range state.Choices {
-		matched, err := evaluateChoiceRule(rule, effective, ctxObj)
-		if err != nil {
-			return nil, "", false, newStateError(errRuntime, "%s", err.Error())
-		}
-		if matched {
-			output, serr := applyOutputPath(state, effective, ctxObj)
-			if serr != nil {
-				return nil, "", false, serr
-			}
-			in.recordExit(name, state.Type, output)
-			return output, rule.Next, false, nil
-		}
-	}
-	if state.Default == "" {
-		return nil, "", false, newStateError(errNoChoiceMatched, "no choice rule matched and the state has no Default transition")
-	}
-	output, serr := applyOutputPath(state, effective, ctxObj)
+func (in *interpreter) runSucceed(f *flow) (any, string, bool, *stateError) {
+	output, assigned, serr := f.finishPassthrough(f.state.Assign, f.state.Output)
 	if serr != nil {
 		return nil, "", false, serr
 	}
-	in.recordExit(name, state.Type, output)
-	return output, state.Default, false, nil
+	in.exitState(f, output, assigned)
+	return output, "", true, nil
 }
 
-func (in *interpreter) runWait(ctx context.Context, name string, state *aslState, effective any, ctxObj map[string]any) (any, string, bool, *stateError) {
-	delay, serr := in.waitDuration(state, effective, ctxObj)
+func (in *interpreter) runChoice(f *flow) (any, string, bool, *stateError) {
+	for _, rule := range f.state.Choices {
+		matched, serr := in.choiceMatches(f, rule)
+		if serr != nil {
+			return nil, "", false, serr
+		}
+		if matched {
+			return in.leaveChoice(f, rule.Next, rule.Assign, rule.Output)
+		}
+	}
+	if f.state.Default == "" {
+		return nil, "", false, newStateError(errNoChoiceMatched, "no choice rule matched and the state has no Default transition")
+	}
+	return in.leaveChoice(f, f.state.Default, f.state.Assign, f.state.Output)
+}
+
+// choiceMatches evaluates one top-level Choice rule: a JSONPath comparison
+// tree, or a JSONata Condition.
+func (in *interpreter) choiceMatches(f *flow, rule *aslChoiceRule) (bool, *stateError) {
+	if !f.jsonata {
+		matched, err := evaluateChoiceRule(rule, f.effective, f.ctxObj)
+		if err != nil {
+			return false, newStateError(errRuntime, "%s", err.Error())
+		}
+		return matched, nil
+	}
+	expr, _ := isJSONataExpression(rule.Condition)
+	value, defined, serr := in.evalJSONata(expr, f.scope("Condition"))
+	if serr != nil {
+		return false, serr
+	}
+	matched, ok := value.(bool)
+	if !defined || !ok {
+		return false, in.queryError(f.scope("Condition"), "a Choice Condition must evaluate to a boolean")
+	}
+	return matched, nil
+}
+
+func (in *interpreter) leaveChoice(f *flow, next string, assign, output json.RawMessage) (any, string, bool, *stateError) {
+	out, assigned, serr := f.finishPassthrough(assign, output)
+	if serr != nil {
+		return nil, "", false, serr
+	}
+	in.exitState(f, out, assigned)
+	return out, next, false, nil
+}
+
+func (in *interpreter) runWait(ctx context.Context, f *flow) (any, string, bool, *stateError) {
+	delay, serr := f.waitDuration(in.handler.clk.Now())
 	if serr != nil {
 		return nil, "", false, serr
 	}
 	if !in.pause(ctx, delay) {
-		return nil, "", false, in.unwindReason(name)
+		return nil, "", false, in.unwindReason(ctx, f.name)
 	}
-	output, serr := applyOutputPath(state, effective, ctxObj)
+	output, assigned, serr := f.finishPassthrough(f.state.Assign, f.state.Output)
 	if serr != nil {
 		return nil, "", false, serr
 	}
-	in.recordExit(name, state.Type, output)
-	return output, state.Next, state.End, nil
+	in.exitState(f, output, assigned)
+	return output, f.state.Next, f.state.End, nil
 }
 
-// waitDuration resolves a Wait state's Seconds/SecondsPath/Timestamp/
-// TimestampPath into a delay measured against the injected clock.
-func (in *interpreter) waitDuration(state *aslState, effective any, ctxObj map[string]any) (time.Duration, *stateError) {
-	now := in.handler.clk.Now()
-	switch {
-	case state.Seconds != nil:
-		return time.Duration(*state.Seconds) * time.Second, nil
-	case state.SecondsPath != "":
-		value, err := selectPath(effective, ctxObj, state.SecondsPath)
-		if err != nil {
-			return 0, newStateError(errRuntime, "%s", err.Error())
-		}
-		seconds, ok := toNumber(value)
-		if !ok {
-			return 0, newStateError(errRuntime, "SecondsPath %q did not resolve to a number", state.SecondsPath)
-		}
-		return time.Duration(seconds * float64(time.Second)), nil
-	case state.Timestamp != "":
-		target, err := parseASLTimestamp(state.Timestamp)
-		if err != nil {
-			return 0, newStateError(errRuntime, "%s", err.Error())
-		}
-		return maxDuration(target.Sub(now), 0), nil
-	case state.TimestampPath != "":
-		value, err := selectPath(effective, ctxObj, state.TimestampPath)
-		if err != nil {
-			return 0, newStateError(errRuntime, "%s", err.Error())
-		}
-		text, ok := value.(string)
-		if !ok {
-			return 0, newStateError(errRuntime, "TimestampPath %q did not resolve to a string", state.TimestampPath)
-		}
-		target, err := parseASLTimestamp(text)
-		if err != nil {
-			return 0, newStateError(errRuntime, "%s", err.Error())
-		}
-		return maxDuration(target.Sub(now), 0), nil
-	}
-	return 0, nil
-}
-
-// pause blocks for d on the injected clock, or until the execution budget
-// runs out. It reports whether the full pause elapsed. The timer is always
-// stopped, so a wait cut short by the deadline leaves nothing pending.
+// pause blocks for d on the injected clock, or until the context is done. It
+// reports whether the full pause elapsed. The timer is always stopped, so a
+// wait cut short leaves nothing pending.
 func (in *interpreter) pause(ctx context.Context, d time.Duration) bool {
 	if d <= 0 {
 		return ctx.Err() == nil
@@ -152,28 +128,45 @@ func maxDuration(d, floor time.Duration) time.Duration {
 	return d
 }
 
-func (in *interpreter) runPass(name string, state *aslState, raw, effective any, ctxObj map[string]any) (any, string, bool, *stateError) {
-	result := effective
-	if len(state.Parameters) > 0 {
-		rendered, err := renderPayloadTemplate(state.Parameters, effective, ctxObj)
-		if err != nil {
-			return nil, "", false, newStateError(errParameterPathFailure, "%s", err.Error())
+// runPass produces its result without doing any work: Result, else
+// Parameters, else the effective input (JSONPath); the input (JSONata), which
+// Output then reshapes.
+func (in *interpreter) runPass(f *flow) (any, string, bool, *stateError) {
+	var (
+		output   any
+		assigned map[string]any
+		serr     *stateError
+	)
+	if f.jsonata {
+		output, assigned, serr = f.jsonataOutput(f.state.Output, f.state.Assign, f.scope("Output"), f.raw)
+	} else {
+		result, renderErr := f.arguments()
+		if renderErr != nil {
+			return nil, "", false, renderErr
 		}
-		result = rendered
-	}
-	if len(state.Result) > 0 {
-		var decoded any
-		if err := json.Unmarshal(state.Result, &decoded); err != nil {
-			return nil, "", false, newStateError(errRuntime, "Result is not valid JSON: %v", err)
+		if len(f.state.Result) > 0 {
+			var decoded any
+			if err := json.Unmarshal(f.state.Result, &decoded); err != nil {
+				return nil, "", false, newStateError(errRuntime, "Result is not valid JSON: %v", err)
+			}
+			result = decoded
 		}
-		result = decoded
+		output, assigned, serr = f.finishResult(result)
 	}
-	output, serr := in.applyResult(state, raw, result, ctxObj)
 	if serr != nil {
 		return nil, "", false, serr
 	}
-	in.recordExit(name, state.Type, output)
-	return output, state.Next, state.End, nil
+	in.exitState(f, output, assigned)
+	return output, f.state.Next, f.state.End, nil
+}
+
+// exitState applies a state's variable assignments and records its
+// `<Type>StateExited` event.
+func (in *interpreter) exitState(f *flow, output any, assigned map[string]any) {
+	if len(assigned) > 0 {
+		in.vars.assign(assigned)
+	}
+	in.recordExit(f.name, f.state.Type, output, assigned)
 }
 
 // ─── Retry / Catch ────────────────────────────────────────────────────────────
@@ -181,34 +174,54 @@ func (in *interpreter) runPass(name string, state *aslState, raw, effective any,
 // runRetryable executes a Task, Parallel or Map state under its Retry and
 // Catch policies. States.Runtime is never retried or caught — AWS documents it
 // that way, and it is also what keeps an Overcast "not supported" failure from
-// being swallowed by a `Catch` on States.ALL.
-func (in *interpreter) runRetryable(ctx context.Context, name string, state *aslState, raw, effective any) (any, string, bool, *stateError) {
+// being swallowed by a `Catch` on States.ALL. An unwind (stop, budget, failed
+// sibling) is never retried or caught either.
+func (in *interpreter) runRetryable(ctx context.Context, f *flow) (any, string, bool, *stateError) {
+	state := f.state
 	attempts := make([]int, len(state.Retry))
 	retryCount := 0
 
 	for {
-		entered := in.handler.clk.Now()
-		ctxObj := in.stateContext(name, entered, retryCount, in.mapItemFromContext())
+		attempt := f.withContext(in.stateContext(f.name, in.handler.clk.Now(), retryCount))
 
-		result, serr := in.runRetryableOnce(ctx, name, state, effective, ctxObj)
+		result, serr := in.runRetryableOnce(ctx, attempt)
 		if serr == nil {
-			output, applyErr := in.applyResult(state, raw, result, ctxObj)
-			if applyErr != nil {
-				return nil, "", false, applyErr
+			// Shaping the result can fail too (a ResultPath that does not
+			// match, a JSONata Output that errors); that is the state failing,
+			// so Retry and Catch see it like any other error.
+			var (
+				output   any
+				assigned map[string]any
+			)
+			output, assigned, serr = attempt.finishResult(result)
+			if serr == nil {
+				in.exitState(attempt, output, assigned)
+				return output, state.Next, state.End, nil
 			}
-			in.recordExit(name, state.Type, output)
-			return output, state.Next, state.End, nil
+		}
+		if serr.unwound || ctx.Err() != nil {
+			if !serr.unwound {
+				serr = in.unwindReason(ctx, f.name)
+			}
+			return nil, "", false, serr
 		}
 		if serr.name == errRuntime {
 			return nil, "", false, serr
 		}
 
-		if idx := matchRetrier(state.Retry, attempts, serr); idx >= 0 {
+		idx := matchRetrier(state.Retry, attempts, serr)
+		if idx >= 0 && in.testState != nil && in.topLevel {
+			// TestState runs one attempt and reports that a retrier would
+			// have taken over.
+			in.testState.status = testStateRetriable
+			return nil, "", false, serr
+		}
+		if idx >= 0 {
 			delay := retryDelay(state.Retry[idx], attempts[idx])
 			attempts[idx]++
 			retryCount++
 			if !in.pause(ctx, delay) {
-				return nil, "", false, in.unwindReason(name)
+				return nil, "", false, in.unwindReason(ctx, f.name)
 			}
 			continue
 		}
@@ -217,30 +230,30 @@ func (in *interpreter) runRetryable(ctx context.Context, name string, state *asl
 		if catcher == nil {
 			return nil, "", false, serr
 		}
-		if unsupported := unsupportedCatcherFields(name, catcher); unsupported != nil {
-			return nil, "", false, unsupported
-		}
 		errorOutput := map[string]any{"Error": serr.name, "Cause": serr.cause}
-		output, applyErr := applyResultPath(catcher.ResultPath, raw, errorOutput)
-		if applyErr != nil {
-			return nil, "", false, applyErr
+		output, assigned, catchErr := attempt.finishCatch(catcher, errorOutput)
+		if catchErr != nil {
+			return nil, "", false, catchErr
 		}
-		in.recordExit(name, state.Type, output)
+		if in.testState != nil && in.topLevel {
+			in.testState.status = testStateCaughtError
+		}
+		in.exitState(attempt, output, assigned)
 		return output, catcher.Next, false, nil
 	}
 }
 
 // runRetryableOnce runs one attempt of a Task, Parallel or Map state.
-func (in *interpreter) runRetryableOnce(ctx context.Context, name string, state *aslState, effective any, ctxObj map[string]any) (any, *stateError) {
-	switch state.Type {
+func (in *interpreter) runRetryableOnce(ctx context.Context, f *flow) (any, *stateError) {
+	switch f.state.Type {
 	case stateTypeTask:
-		return in.runTask(ctx, name, state, effective, ctxObj)
+		return in.runTask(ctx, f)
 	case stateTypeParallel:
-		return in.runParallel(ctx, state, effective, ctxObj)
+		return in.runParallel(ctx, f)
 	case stateTypeMap:
-		return in.runMap(ctx, state, effective, ctxObj)
+		return in.runMap(ctx, f)
 	}
-	return nil, unsupportedError("state type %q", state.Type)
+	return nil, unsupportedError("state type %q", f.state.Type)
 }
 
 // matchRetrier returns the index of the first retrier that matches the error
@@ -256,19 +269,6 @@ func matchRetrier(retriers []aslRetrier, attempts []int, serr *stateError) int {
 		return i
 	}
 	return -1
-}
-
-// unsupportedCatcherFields is unsupportedStateFields for the catcher that
-// matched. It is checked at the point the catcher fires rather than up front,
-// because a Catch that never runs changes nothing about the execution.
-func unsupportedCatcherFields(name string, catcher *aslCatcher) *stateError {
-	if len(catcher.Output) > 0 {
-		return unsupportedError("the JSONata Output field on a Catch of state %q", name)
-	}
-	if len(catcher.Assign) > 0 {
-		return unsupportedError("Assign (variables) on a Catch of state %q", name)
-	}
-	return nil
 }
 
 func matchCatcher(catchers []aslCatcher, serr *stateError) *aslCatcher {
@@ -288,16 +288,11 @@ func matchCatcher(catchers []aslCatcher, serr *stateError) *aslCatcher {
 // wildcard that matches any known error name except for States.Runtime" — and
 // it is the matcher real state machines reach for first, because it is what
 // catches a Lambda function error whose name the workflow does not know in
-// advance (`Lambda.ResourceNotFoundException`, a custom `errorType`, …).
-// Comparing it as a literal string made every `Retry`/`Catch` written the
-// normal way do nothing at all.
+// advance.
 //
-// Every other predefined name matches literally, which is what the spec asks
-// for: States.Timeout, States.Permissions, States.ResultPathMatchFailure,
-// States.ParameterPathFailure, States.BranchFailed, States.NoChoiceMatched,
-// States.IntrinsicFailure, States.ExceedToleratedFailureThreshold and
-// States.DataLimitExceeded are error names a state raises, not wildcards over
-// other names — as are service and Lambda error names.
+// Every other predefined name matches literally, with one documented
+// exception: States.Timeout also matches States.HeartbeatTimeout, because a
+// missed heartbeat is a kind of task timeout.
 var wildcardErrorEquals = map[string]bool{errAll: true, errTaskFailed: true}
 
 // errorMatches implements ASL's ErrorEquals matching. Neither wildcard reaches
@@ -309,6 +304,9 @@ func errorMatches(errorEquals []string, serr *stateError) bool {
 		if want == serr.name {
 			return true
 		}
+		if want == errTimeout && serr.name == errHeartbeatTimeout {
+			return true
+		}
 		if wildcardErrorEquals[want] && serr.name != errRuntime {
 			return true
 		}
@@ -316,11 +314,21 @@ func errorMatches(errorEquals []string, serr *stateError) bool {
 	return false
 }
 
-// retryDelay computes the backoff for the next attempt of a retrier.
+// retryJitter returns a multiplier in [0, 1) for JitterStrategy FULL. It is a
+// variable so tests can pin it.
+var retryJitter = rand.Float64
+
+// retryDelay computes the backoff for the next attempt of a retrier:
+// IntervalSeconds × BackoffRate^attempt, capped by MaxDelaySeconds, then —
+// with JitterStrategy FULL — scaled by a random factor in [0, 1), which is
+// AWS's "full jitter".
 func retryDelay(retrier aslRetrier, priorAttempts int) time.Duration {
 	seconds := retrier.interval() * math.Pow(retrier.backoffRate(), float64(priorAttempts))
 	if retrier.MaxDelaySeconds != nil && *retrier.MaxDelaySeconds > 0 && seconds > *retrier.MaxDelaySeconds {
 		seconds = *retrier.MaxDelaySeconds
+	}
+	if strings.EqualFold(retrier.JitterStrategy, "FULL") {
+		seconds *= retryJitter()
 	}
 	if seconds <= 0 {
 		return 0
@@ -328,122 +336,263 @@ func retryDelay(retrier aslRetrier, priorAttempts int) time.Duration {
 	return time.Duration(seconds * float64(time.Second))
 }
 
-// ─── Parallel and Map ─────────────────────────────────────────────────────────
+// ─── Parallel ─────────────────────────────────────────────────────────────────
 
-// runParallel runs every branch against the same effective input and returns
-// their outputs as an array. Branches run sequentially: the interpreter is
-// synchronous by design and a local emulator gains nothing from real
-// concurrency here, while deterministic ordering makes assertions stable.
-func (in *interpreter) runParallel(ctx context.Context, state *aslState, effective any, _ map[string]any) (any, *stateError) {
-	in.hist.add(in.handler.clk.Now(), HistoryEvent{Type: evtParallelStateStarted})
-	results := make([]any, 0, len(state.Branches))
-	for i, branch := range state.Branches {
-		output, serr := in.runBranch(ctx, branch, cloneJSON(effective))
-		if serr != nil {
-			in.hist.add(in.handler.clk.Now(), HistoryEvent{Type: evtParallelStateFailed})
-			if serr.name == errRuntime {
-				return nil, serr
-			}
-			return nil, newStateError(errBranchFailed, "branch %d failed with %s: %s", i, serr.name, serr.cause)
-		}
-		results = append(results, output)
+// runParallel runs every branch concurrently against the same input and
+// returns their outputs as an array, in branch order.
+//
+// History follows AWS's causal linkage: each branch's first event links to
+// ParallelStateStarted and later events chain through that branch only, so a
+// reader can attribute every event to its branch by walking previousEventId.
+//
+// The first branch to fail fails the whole state with the branch's own error
+// and cause — a Catch on the Parallel matches the name the branch raised — and
+// the other branches are stopped, recording their `<Type>StateAborted` events.
+func (in *interpreter) runParallel(ctx context.Context, f *flow) (any, *stateError) {
+	input, serr := f.arguments()
+	if serr != nil {
+		return nil, serr
 	}
-	in.hist.add(in.handler.clk.Now(), HistoryEvent{Type: evtParallelStateSucceeded})
+	startedID := in.record(HistoryEvent{Type: evtParallelStateStarted})
+
+	branchCtx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+
+	results := make([]any, len(f.state.Branches))
+	var (
+		mu       sync.Mutex
+		firstErr *stateError
+		wg       sync.WaitGroup
+	)
+	for i, branch := range f.state.Branches {
+		child := in.forkFor(f, startedID)
+		wg.Add(1)
+		go func(i int, branch *aslBranch) {
+			defer wg.Done()
+			output, serr := child.runChild(func() (any, *stateError) {
+				return child.runBranch(branchCtx, branch, cloneJSON(input))
+			})
+			if serr != nil {
+				mu.Lock()
+				if firstErr == nil && !serr.unwound {
+					firstErr = serr
+					cancel(errSiblingFailed)
+				}
+				mu.Unlock()
+				return
+			}
+			results[i] = output
+		}(i, branch)
+	}
+	wg.Wait()
+	in.rejoin()
+
+	if ctx.Err() != nil {
+		return nil, in.unwindReason(ctx, f.name)
+	}
+	if firstErr != nil {
+		in.record(HistoryEvent{Type: evtParallelStateFailed})
+		return nil, firstErr
+	}
+	in.record(HistoryEvent{Type: evtParallelStateSucceeded})
 	return results, nil
 }
 
-// runMap iterates an inline ItemProcessor over the array selected by ItemsPath.
-func (in *interpreter) runMap(ctx context.Context, state *aslState, effective any, ctxObj map[string]any) (any, *stateError) {
-	if len(state.ItemReader) > 0 {
-		return nil, unsupportedError("Map ItemReader (reading items from S3)")
+// forkFor is fork for the children of the state f runs: they default to that
+// state's query language and read its variables through a scope of their own.
+func (in *interpreter) forkFor(f *flow, after int64) *interpreter {
+	child := in.fork(after)
+	if f.jsonata {
+		child.queryLanguage = queryLanguageJSONata
 	}
-	if len(state.ItemBatcher) > 0 {
-		return nil, unsupportedError("Map ItemBatcher")
-	}
-	if len(state.ResultWriter) > 0 {
-		return nil, unsupportedError("Map ResultWriter")
-	}
-	processor := state.processor()
-	if mode := processorMode(processor); mode != "" && !strings.EqualFold(mode, "INLINE") {
-		return nil, unsupportedError("distributed Map (ProcessorConfig.Mode %q) — only inline Map is interpreted", mode)
-	}
+	return child
+}
 
-	source := effective
-	if state.ItemsPath != "" {
-		selected, err := selectPath(effective, ctxObj, state.ItemsPath)
-		if err != nil {
-			return nil, newStateError(errRuntime, "%s", err.Error())
+// runChild runs fn and turns a panic into a States.Runtime failure. The
+// recovery middleware covers neither a request's own goroutines nor these, and
+// a panic in one branch must not take the process down.
+func (in *interpreter) runChild(fn func() (any, *stateError)) (output any, serr *stateError) {
+	defer func() {
+		if r := recover(); r != nil {
+			output = nil
+			serr = newStateError(errRuntime, "a Parallel branch or Map iteration panicked inside Overcast's interpreter: %v", r)
 		}
-		source = selected
+	}()
+	return fn()
+}
+
+// ─── Map ──────────────────────────────────────────────────────────────────────
+
+// defaultInlineMapConcurrency is how many inline Map iterations run at once
+// when MaxConcurrency is 0 (unbounded). AWS documents an inline Map as running
+// up to 40 iterations concurrently.
+const defaultInlineMapConcurrency = 40
+
+// runMap runs a Map state: inline iteration here, distributed mode in
+// distributed_map.go.
+func (in *interpreter) runMap(ctx context.Context, f *flow) (any, *stateError) {
+	state := f.state
+	processor := state.processor()
+	if mode := processorMode(processor); strings.EqualFold(mode, "DISTRIBUTED") {
+		return in.runDistributedMap(ctx, f)
+	} else if mode != "" && !strings.EqualFold(mode, "INLINE") {
+		return nil, newStateError(errRuntime, "unknown Map ProcessorConfig.Mode %q", mode)
 	}
-	items, ok := source.([]any)
-	if !ok {
-		return nil, newStateError(errRuntime, "Map state input is not an array (ItemsPath %q)", state.ItemsPath)
+	if len(state.ItemReader) > 0 || len(state.ItemBatcher) > 0 || len(state.ResultWriter) > 0 {
+		return nil, newStateError(errRuntime, "ItemReader, ItemBatcher and ResultWriter are only valid on a distributed Map (state %q)", f.name)
 	}
 
-	in.hist.add(in.handler.clk.Now(), HistoryEvent{
+	items, serr := f.mapItems()
+	if serr != nil {
+		return nil, serr
+	}
+	concurrency, _, serr := f.nonNegativeInt(state.MaxConcurrency, state.MaxConcurrencyPath, "MaxConcurrency")
+	if serr != nil {
+		return nil, serr
+	}
+	if concurrency == 0 || concurrency > defaultInlineMapConcurrency {
+		concurrency = defaultInlineMapConcurrency
+	}
+
+	startedID := in.record(HistoryEvent{
 		Type:            evtMapStateStarted,
 		MapStateStarted: &mapStateStartedDetails{Length: int64(len(items))},
 	})
 
-	results := make([]any, 0, len(items))
-	for index, item := range items {
-		in.hist.add(in.handler.clk.Now(), HistoryEvent{
-			Type:                evtMapIterationStarted,
-			MapIterationStarted: &mapIterationDetails{Index: int64(index)},
-		})
+	results, firstErr := in.iterate(ctx, f, items, concurrency, startedID)
+	in.rejoin()
 
-		iterationInput := item
-		itemCtx := map[string]any{"Index": float64(index), "Value": item}
-		if selector := mapItemSelector(state); len(selector) > 0 {
-			scoped := in.stateContext("", in.handler.clk.Now(), 0, itemCtx)
-			rendered, err := renderPayloadTemplate(selector, item, scoped)
-			if err != nil {
-				in.hist.add(in.handler.clk.Now(), HistoryEvent{
-					Type:               evtMapIterationFailed,
-					MapIterationFailed: &mapIterationDetails{Index: int64(index)},
-				})
-				return nil, newStateError(errParameterPathFailure, "%s", err.Error())
-			}
-			iterationInput = rendered
-		}
-
-		output, serr := in.runMapIteration(ctx, processor, iterationInput, itemCtx)
-		if serr != nil {
-			in.hist.add(in.handler.clk.Now(), HistoryEvent{
-				Type:               evtMapIterationFailed,
-				MapIterationFailed: &mapIterationDetails{Index: int64(index)},
-			})
-			in.hist.add(in.handler.clk.Now(), HistoryEvent{Type: evtMapStateFailed})
-			if serr.name == errRuntime {
-				return nil, serr
-			}
-			return nil, newStateError(errTaskFailed, "Map iteration %d failed with %s: %s", index, serr.name, serr.cause)
-		}
-		in.hist.add(in.handler.clk.Now(), HistoryEvent{
-			Type:                  evtMapIterationSucceeded,
-			MapIterationSucceeded: &mapIterationDetails{Index: int64(index)},
-		})
-		results = append(results, output)
+	if ctx.Err() != nil {
+		return nil, in.unwindReason(ctx, f.name)
 	}
-
-	in.hist.add(in.handler.clk.Now(), HistoryEvent{Type: evtMapStateSucceeded})
+	if firstErr != nil {
+		in.record(HistoryEvent{Type: evtMapStateFailed})
+		return nil, firstErr
+	}
+	in.record(HistoryEvent{Type: evtMapStateSucceeded})
 	return results, nil
 }
 
-// runMapIteration installs Map.Item on the context object for the duration of
-// one iteration and restores it afterwards, so nested states see $$.Map.Item.
-func (in *interpreter) runMapIteration(ctx context.Context, processor *aslBranch, input any, itemCtx map[string]any) (any, *stateError) {
-	previous, had := in.baseCtx["Map"]
-	in.baseCtx["Map"] = map[string]any{"Item": itemCtx}
-	defer func() {
-		if had {
-			in.baseCtx["Map"] = previous
-			return
+// iterate runs the Map's processor over items, at most concurrency at a time,
+// and returns the outputs in item order. The first iteration to fail stops
+// the rest: iterations already running record MapIterationAborted and
+// iterations not yet started never start.
+func (in *interpreter) iterate(ctx context.Context, f *flow, items []any, concurrency int, startedID int64) ([]any, *stateError) {
+	iterCtx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+
+	results := make([]any, len(items))
+	var (
+		mu       sync.Mutex
+		firstErr *stateError
+		wg       sync.WaitGroup
+	)
+	slots := make(chan struct{}, concurrency)
+	for index, item := range items {
+		select {
+		case slots <- struct{}{}:
+		case <-iterCtx.Done():
 		}
-		delete(in.baseCtx, "Map")
-	}()
-	return in.runBranch(ctx, processor, input)
+		if iterCtx.Err() != nil {
+			break
+		}
+		child := in.forkFor(f, startedID)
+		child.mapItem = map[string]any{"Index": float64(index), "Value": item}
+		wg.Add(1)
+		go func(index int, item any) {
+			defer wg.Done()
+			defer func() { <-slots }()
+			output, serr := child.runChild(func() (any, *stateError) {
+				return child.runIteration(iterCtx, f, index, item)
+			})
+			if serr != nil {
+				mu.Lock()
+				if firstErr == nil && !serr.unwound {
+					firstErr = serr
+					cancel(errSiblingFailed)
+				}
+				mu.Unlock()
+				return
+			}
+			results[index] = output
+		}(index, item)
+	}
+	wg.Wait()
+	return results, firstErr
+}
+
+// runIteration runs one inline Map iteration on its own frame, recording the
+// MapIteration* events that attribute everything inside it to its index.
+func (in *interpreter) runIteration(ctx context.Context, f *flow, index int, item any) (any, *stateError) {
+	details := func() *mapIterationDetails { return &mapIterationDetails{Name: f.name, Index: int64(index)} }
+	in.record(HistoryEvent{Type: evtMapIterationStarted, MapIterationStarted: details()})
+
+	input, serr := in.iterationInput(f, item)
+	if serr == nil {
+		var output any
+		output, serr = in.runBranch(ctx, f.state.processor(), input)
+		if serr == nil {
+			in.record(HistoryEvent{Type: evtMapIterationSucceeded, MapIterationSucceeded: details()})
+			return output, nil
+		}
+	}
+	if serr.unwound || ctx.Err() != nil {
+		in.record(HistoryEvent{Type: evtMapIterationAborted, MapIterationAborted: details()})
+		if !serr.unwound {
+			serr = in.unwindReason(ctx, f.name)
+		}
+		return nil, serr
+	}
+	in.record(HistoryEvent{Type: evtMapIterationFailed, MapIterationFailed: details()})
+	return nil, serr
+}
+
+// iterationInput builds one item's input: the item itself, or the
+// ItemSelector (legacy: Parameters) evaluated with $$.Map.Item set. In an
+// ItemSelector `$` (JSONPath) and $states.input (JSONata) are the Map state's
+// own input, not the item. in must be the item's frame (mapItem set).
+func (in *interpreter) iterationInput(f *flow, item any) (any, *stateError) {
+	selector := mapItemSelector(f.state)
+	if len(selector) == 0 {
+		return cloneJSON(item), nil
+	}
+	scoped := f.withContext(in.stateContext(f.name, in.handler.clk.Now(), 0))
+	scoped.in = in
+	return scoped.render("ItemSelector", selector, f.effective, nil)
+}
+
+// mapItems selects the array a Map iterates: ItemsPath (default `$`) over the
+// effective input in JSONPath, Items (default the input) in JSONata.
+func (f *flow) mapItems() ([]any, *stateError) {
+	var source any
+	if f.jsonata {
+		value, serr := f.render("Items", f.state.Items, nil, f.raw)
+		if serr != nil {
+			return nil, serr
+		}
+		source = value
+	} else {
+		source = f.effective
+		if f.state.ItemsPath != "" {
+			selected, err := selectPath(f.effective, f.ctxObj, f.state.ItemsPath)
+			if err != nil {
+				return nil, newStateError(errRuntime, "%s", err.Error())
+			}
+			source = selected
+		}
+	}
+	items, ok := source.([]any)
+	if !ok {
+		if f.jsonata {
+			return nil, f.in.queryError(f.scope("Items"), "the Map state's Items did not evaluate to an array")
+		}
+		path := f.state.ItemsPath
+		if path == "" {
+			path = "$"
+		}
+		return nil, newStateError(errRuntime, "the Map state's items (ItemsPath %q) are not an array", path)
+	}
+	return items, nil
 }
 
 // mapItemSelector returns the per-item payload template: ItemSelector, or the
@@ -460,14 +609,20 @@ func mapItemSelector(state *aslState) json.RawMessage {
 
 // processorMode reads ProcessorConfig.Mode from a Map's ItemProcessor.
 func processorMode(processor *aslBranch) string {
+	return processorConfig(processor).Mode
+}
+
+// mapProcessorConfig is a Map ItemProcessor's ProcessorConfig.
+type mapProcessorConfig struct {
+	Mode          string `json:"Mode"`
+	ExecutionType string `json:"ExecutionType"`
+}
+
+func processorConfig(processor *aslBranch) mapProcessorConfig {
+	var config mapProcessorConfig
 	if processor == nil || len(processor.ProcessorConfig) == 0 {
-		return ""
+		return config
 	}
-	var config struct {
-		Mode string `json:"Mode"`
-	}
-	if json.Unmarshal(processor.ProcessorConfig, &config) != nil {
-		return ""
-	}
-	return config.Mode
+	_ = json.Unmarshal(processor.ProcessorConfig, &config)
+	return config
 }

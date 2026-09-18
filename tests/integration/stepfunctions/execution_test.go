@@ -282,42 +282,6 @@ func TestStartExecution_failStateFailsExecution(t *testing.T) {
 
 // ─── The §2.1 fidelity rule: unsupported features fail loudly ─────────────────
 
-func TestStartExecution_waitForTaskTokenFailsLoudly(t *testing.T) {
-	// Given: a Task using the .waitForTaskToken pattern, which Overcast does not implement
-	srv := helpers.NewTestServer(t)
-	def := `{
-	  "StartAt": "T",
-	  "States": {
-	    "T": {
-	      "Type": "Task",
-	      "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
-	      "Parameters": {"FunctionName": "f", "Payload": {"token.$": "$$.Task.Token"}},
-	      "End": true
-	    }
-	  }
-	}`
-	smARN := createSM(t, srv, "token-sm", def)
-
-	// When: we run it
-	execARN := startExec(t, srv, smARN, `{}`)
-
-	// Then: the execution FAILS loudly — never a silent pass-through to SUCCEEDED
-	got := waitForTerminal(t, srv, execARN)
-	if got.Status != "FAILED" {
-		t.Fatalf("status = %q, want FAILED for an unsupported integration pattern", got.Status)
-	}
-	if got.Error != "States.Runtime" {
-		t.Errorf("error = %q, want States.Runtime", got.Error)
-	}
-	if got.Cause == "" {
-		t.Error("cause is empty; an unsupported integration must say what is unsupported")
-	}
-	types := eventTypes(execHistory(t, srv, execARN))
-	if len(types) == 0 || types[len(types)-1] != "ExecutionFailed" {
-		t.Errorf("history = %v, want it to end with ExecutionFailed", types)
-	}
-}
-
 func TestStartExecution_unsupportedResourceFailsLoudly(t *testing.T) {
 	// Given: a Task against a service integration Overcast does not interpret
 	srv := helpers.NewTestServer(t)

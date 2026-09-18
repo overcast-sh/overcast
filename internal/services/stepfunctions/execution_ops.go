@@ -53,16 +53,14 @@ const (
 //
 // depth is the nesting level for `states:startExecution` children.
 func (h *Handler) startExecution(ctx context.Context, smARN, execName, input string, depth int, mode executionMode) (*Execution, *protocol.AWSError) {
-	log := h.log.WithRecorder(ctx)
 	region := middleware.RegionFromContext(ctx, h.cfg.Region)
-	smName := extractSMName(smARN)
-	sm, err := h.store.GetStateMachine(ctx, smName)
-	if err != nil {
-		return nil, protocol.Wrap(protocol.ErrInternalError, err)
+	// smARN may be a version or alias ARN; sm then carries the version's
+	// definition and role, under the base state machine's ARN and name.
+	sm, target, aerr := h.resolveExecutionTarget(ctx, smARN)
+	if aerr != nil {
+		return nil, aerr
 	}
-	if sm == nil {
-		return nil, errSMNotFound(smARN)
-	}
+	smName := sm.Name
 	if input != "" && !json.Valid([]byte(input)) {
 		return nil, &protocol.AWSError{
 			Code:       "InvalidExecutionInput",
@@ -88,12 +86,14 @@ func (h *Handler) startExecution(ctx context.Context, smARN, execName, input str
 
 	started := h.clk.Now()
 	exec := &Execution{
-		ExecutionArn:    execARN,
-		StateMachineArn: sm.ARN,
-		Name:            execName,
-		Input:           input,
-		Status:          statusRunning,
-		StartDate:       started,
+		ExecutionArn:           execARN,
+		StateMachineArn:        sm.ARN,
+		Name:                   execName,
+		Input:                  input,
+		Status:                 statusRunning,
+		StartDate:              started,
+		StateMachineVersionArn: target.versionArn,
+		StateMachineAliasArn:   target.aliasArn,
 	}
 	// Persist the RUNNING record before interpreting so the execution is
 	// visible from the moment StartExecution answers.
@@ -130,7 +130,18 @@ func (h *Handler) startExecution(ctx context.Context, smARN, execName, input str
 		return exec, nil
 	}
 
-	// Async: the run outlives this request, so it hangs off the service's own
+	if aerr := h.launchAsync(ctx, sm, exec, region, depth, run); aerr != nil {
+		return nil, aerr
+	}
+	return exec, nil
+}
+
+// launchAsync runs an execution on a tracked goroutine and returns at once.
+// StartExecution and RedriveExecution both come through here.
+func (h *Handler) launchAsync(ctx context.Context, sm *StateMachine, exec *Execution, region string, depth int, run *executionRun) *protocol.AWSError {
+	log := h.log.WithRecorder(ctx)
+	execARN := exec.ExecutionArn
+	// The run outlives this request, so it hangs off the service's own
 	// context rather than the caller's, and carries the region the request
 	// resolved (the store is region-scoped and the background context has no
 	// request to read it from).
@@ -146,7 +157,7 @@ func (h *Handler) startExecution(ctx context.Context, smARN, execName, input str
 	// Refused, no goroutine is launched and wg is never touched.
 	if !h.reserveRun(execARN, run, true) {
 		cancel()
-		return nil, h.refuseStartAfterShutdown(ctx, exec, run)
+		return h.refuseStartAfterShutdown(ctx, exec, run)
 	}
 	go func() {
 		defer h.wg.Done()
@@ -158,14 +169,19 @@ func (h *Handler) startExecution(ctx context.Context, smARN, execName, input str
 				zap.String("execution", execARN), zap.Error(err))
 		}
 	}()
-	return exec, nil
+	return nil
 }
 
 // completeExecution runs the interpreter and persists the terminal state and
 // history. It is the body of both the async goroutine and the synchronous
 // path, so the two can never drift.
 func (h *Handler) completeExecution(ctx context.Context, sm *StateMachine, exec *Execution, region string, depth int, run *executionRun) error {
-	outcome := h.interpret(ctx, sm, exec, region, depth, run)
+	return h.persistOutcome(ctx, exec, run, h.interpret(ctx, sm, exec, region, depth, run))
+}
+
+// persistOutcome applies a run's terminal outcome to its execution record and
+// writes the history and the record.
+func (h *Handler) persistOutcome(ctx context.Context, exec *Execution, run *executionRun, outcome executionOutcome) error {
 	exec.Status = outcome.status
 	exec.Output = outcome.output
 	// An aborted execution reports the stop time StopExecution already handed
@@ -175,9 +191,16 @@ func (h *Handler) completeExecution(ctx context.Context, sm *StateMachine, exec 
 		stopped = h.clk.Now()
 	}
 	exec.StopDate = &stopped
+	exec.Error, exec.Cause = "", ""
 	if outcome.err != nil {
 		exec.Error = outcome.err.name
 		exec.Cause = outcome.err.cause
+	}
+	// Where a redrive would resume. Cleared on success, so only an
+	// unsuccessful run is redrivable.
+	exec.RedriveState, exec.RedriveInput, exec.RedriveVariables = "", "", ""
+	if outcome.status != statusSucceeded {
+		exec.RedriveState, exec.RedriveInput, exec.RedriveVariables = run.failurePoint()
 	}
 	if err := h.store.PutHistory(ctx, exec.ExecutionArn, outcome.events); err != nil {
 		return err
@@ -264,12 +287,9 @@ type startSyncExecutionResponse struct {
 }
 
 func (h *Handler) startSyncExecutionTyped(ctx context.Context, req *startSyncExecutionRequest) (*startSyncExecutionResponse, *protocol.AWSError) {
-	sm, err := h.store.GetStateMachine(ctx, extractSMName(req.StateMachineArn))
-	if err != nil {
-		return nil, protocol.Wrap(protocol.ErrInternalError, err)
-	}
-	if sm == nil {
-		return nil, errSMNotFound(req.StateMachineArn)
+	sm, _, aerr := h.resolveExecutionTarget(ctx, req.StateMachineArn)
+	if aerr != nil {
+		return nil, aerr
 	}
 	// AWS serves StartSyncExecution only for EXPRESS state machines.
 	if !strings.EqualFold(sm.Type, "EXPRESS") {
@@ -323,6 +343,15 @@ type describeExecutionResponse struct {
 	OutputDetails   *executionDataDetails `json:"outputDetails,omitempty" cbor:"outputDetails,omitempty"`
 	Error           string                `json:"error,omitempty" cbor:"error,omitempty"`
 	Cause           string                `json:"cause,omitempty" cbor:"cause,omitempty"`
+
+	MapRunArn           string  `json:"mapRunArn,omitempty" cbor:"mapRunArn,omitempty"`
+	RedriveCount        int     `json:"redriveCount" cbor:"redriveCount"`
+	RedriveDate         float64 `json:"redriveDate,omitempty" cbor:"redriveDate,omitempty"`
+	RedriveStatus       string  `json:"redriveStatus,omitempty" cbor:"redriveStatus,omitempty"`
+	RedriveStatusReason string  `json:"redriveStatusReason,omitempty" cbor:"redriveStatusReason,omitempty"`
+	// Set when the execution was started through a version or alias ARN.
+	StateMachineVersionArn string `json:"stateMachineVersionArn,omitempty" cbor:"stateMachineVersionArn,omitempty"`
+	StateMachineAliasArn   string `json:"stateMachineAliasArn,omitempty" cbor:"stateMachineAliasArn,omitempty"`
 }
 
 func (h *Handler) describeExecutionTyped(ctx context.Context, req *describeExecutionRequest) (*describeExecutionResponse, *protocol.AWSError) {
@@ -341,6 +370,9 @@ func (h *Handler) describeExecutionTyped(ctx context.Context, req *describeExecu
 		Output:          exec.Output,
 		Error:           exec.Error,
 		Cause:           exec.Cause,
+
+		StateMachineVersionArn: exec.StateMachineVersionArn,
+		StateMachineAliasArn:   exec.StateMachineAliasArn,
 	}
 	if exec.StopDate != nil {
 		resp.StopDate = epochSeconds(*exec.StopDate)
@@ -348,6 +380,16 @@ func (h *Handler) describeExecutionTyped(ctx context.Context, req *describeExecu
 	if exec.Output != "" {
 		resp.OutputDetails = &executionDataDetails{}
 	}
+	resp.MapRunArn = exec.MapRunArn
+	resp.RedriveCount = exec.RedriveCount
+	if exec.RedriveDate != nil {
+		resp.RedriveDate = epochSeconds(*exec.RedriveDate)
+	}
+	sm, err := h.store.GetStateMachine(ctx, extractSMName(exec.StateMachineArn))
+	if err != nil {
+		return nil, protocol.Wrap(protocol.ErrInternalError, err)
+	}
+	resp.RedriveStatus, resp.RedriveStatusReason = h.redriveStatus(exec, sm)
 	return resp, nil
 }
 
@@ -395,38 +437,74 @@ func (h *Handler) getExecutionHistoryTyped(ctx context.Context, req *getExecutio
 			events[i], events[j] = events[j], events[i]
 		}
 	}
-	if req.MaxResults > 0 && len(events) > req.MaxResults {
-		events = events[:req.MaxResults]
+	page, pageErr := paginate(events, req.MaxResults, req.NextToken)
+	if pageErr != nil {
+		return nil, pageErr
 	}
-	return &getExecutionHistoryResponse{Events: events}, nil
+	return &getExecutionHistoryResponse{Events: page.Items, NextToken: page.NextToken}, nil
 }
 
 // stripExecutionData blanks the payload fields GetExecutionHistory omits when
 // includeExecutionData is false.
 func stripExecutionData(event *HistoryEvent) {
-	if event.ExecutionStarted != nil {
-		event.ExecutionStarted.Input = ""
+	// Every details block is copied before it is blanked: the events share
+	// their details with the live recorder (and the store's decoded copy), so
+	// blanking in place would erase the payloads from the history itself.
+	if d := event.ExecutionStarted; d != nil {
+		c := *d
+		c.Input = ""
+		event.ExecutionStarted = &c
 	}
-	if event.ExecutionSucceeded != nil {
-		event.ExecutionSucceeded.Output = ""
+	if d := event.ExecutionSucceeded; d != nil {
+		c := *d
+		c.Output = ""
+		event.ExecutionSucceeded = &c
 	}
-	if event.StateEntered != nil {
-		event.StateEntered.Input = ""
+	if d := event.StateEntered; d != nil {
+		c := *d
+		c.Input = ""
+		event.StateEntered = &c
 	}
-	if event.StateExited != nil {
-		event.StateExited.Output = ""
+	if d := event.StateExited; d != nil {
+		c := *d
+		c.Output = ""
+		c.AssignedVariables = nil
+		event.StateExited = &c
 	}
-	if event.TaskScheduled != nil {
-		event.TaskScheduled.Parameters = ""
+	if d := event.TaskScheduled; d != nil {
+		c := *d
+		c.Parameters = ""
+		event.TaskScheduled = &c
 	}
-	if event.TaskSucceeded != nil {
-		event.TaskSucceeded.Output = ""
+	if d := event.TaskSucceeded; d != nil {
+		c := *d
+		c.Output = ""
+		event.TaskSucceeded = &c
 	}
-	if event.LambdaFunctionScheduled != nil {
-		event.LambdaFunctionScheduled.Input = ""
+	if d := event.TaskSubmitted; d != nil {
+		c := *d
+		c.Output = ""
+		event.TaskSubmitted = &c
 	}
-	if event.LambdaFunctionSucceeded != nil {
-		event.LambdaFunctionSucceeded.Output = ""
+	if d := event.LambdaFunctionScheduled; d != nil {
+		c := *d
+		c.Input = ""
+		event.LambdaFunctionScheduled = &c
+	}
+	if d := event.LambdaFunctionSucceeded; d != nil {
+		c := *d
+		c.Output = ""
+		event.LambdaFunctionSucceeded = &c
+	}
+	if d := event.ActivityScheduled; d != nil {
+		c := *d
+		c.Input = ""
+		event.ActivityScheduled = &c
+	}
+	if d := event.ActivitySucceeded; d != nil {
+		c := *d
+		c.Output = ""
+		event.ActivitySucceeded = &c
 	}
 }
 
@@ -434,7 +512,9 @@ func stripExecutionData(event *HistoryEvent) {
 
 type listExecutionsRequest struct {
 	StateMachineArn string `json:"stateMachineArn" cbor:"stateMachineArn"`
+	MapRunArn       string `json:"mapRunArn" cbor:"mapRunArn"`
 	StatusFilter    string `json:"statusFilter" cbor:"statusFilter"`
+	RedriveFilter   string `json:"redriveFilter" cbor:"redriveFilter"`
 	MaxResults      int    `json:"maxResults" cbor:"maxResults"`
 	NextToken       string `json:"nextToken" cbor:"nextToken"`
 }
@@ -446,6 +526,12 @@ type executionListItem struct {
 	Status          string  `json:"status" cbor:"status"`
 	StartDate       float64 `json:"startDate" cbor:"startDate"`
 	StopDate        float64 `json:"stopDate,omitempty" cbor:"stopDate,omitempty"`
+	MapRunArn       string  `json:"mapRunArn,omitempty" cbor:"mapRunArn,omitempty"`
+	RedriveCount    int     `json:"redriveCount,omitempty" cbor:"redriveCount,omitempty"`
+	RedriveDate     float64 `json:"redriveDate,omitempty" cbor:"redriveDate,omitempty"`
+
+	StateMachineVersionArn string `json:"stateMachineVersionArn,omitempty" cbor:"stateMachineVersionArn,omitempty"`
+	StateMachineAliasArn   string `json:"stateMachineAliasArn,omitempty" cbor:"stateMachineAliasArn,omitempty"`
 }
 
 type listExecutionsResponse struct {
@@ -487,38 +573,79 @@ func (h *Handler) listExecutionsTyped(ctx context.Context, req *listExecutionsRe
 	if req.StatusFilter != "" && !executionStatusSet[req.StatusFilter] {
 		return nil, errInvalidStatusFilter(req.StatusFilter)
 	}
-	sm, err := h.store.GetStateMachine(ctx, extractSMName(req.StateMachineArn))
-	if err != nil {
-		return nil, protocol.Wrap(protocol.ErrInternalError, err)
+	switch req.RedriveFilter {
+	case "", "REDRIVEN", "NOT_REDRIVEN":
+	default:
+		return nil, &protocol.AWSError{
+			Code:       "ValidationException",
+			Message:    fmt.Sprintf("1 validation error detected: Value '%s' at 'redriveFilter' failed to satisfy constraint: Member must satisfy enum value set: [REDRIVEN, NOT_REDRIVEN]", req.RedriveFilter),
+			HTTPStatus: http.StatusBadRequest,
+		}
 	}
-	if sm == nil {
-		return nil, errSMNotFound(req.StateMachineArn)
+	var (
+		execs   []*Execution
+		err     error
+		matches = func(*Execution) bool { return true }
+	)
+	if req.MapRunArn != "" {
+		// A distributed Map's child executions, which do not belong to the
+		// state machine's own listing.
+		if _, aerr := h.getMapRun(ctx, req.MapRunArn); aerr != nil {
+			return nil, aerr
+		}
+		execs, err = h.store.ListExecutionsWithPrefix(ctx, mapRunExecutionPrefix(req.MapRunArn))
+		kept := execs[:0]
+		for _, exec := range execs {
+			if exec.MapRunArn == req.MapRunArn {
+				kept = append(kept, exec)
+			}
+		}
+		execs = kept
+	} else {
+		// stateMachineArn may be a version or alias ARN, which narrows the
+		// list to the executions started through it (execution_target.go).
+		sm, filter, aerr := h.executionFilter(ctx, req.StateMachineArn)
+		if aerr != nil {
+			return nil, aerr
+		}
+		matches = filter
+		execs, err = h.store.ListExecutions(ctx, sm.ARN)
 	}
-	execs, err := h.store.ListExecutions(ctx, sm.ARN)
 	if err != nil {
 		return nil, protocol.Wrap(protocol.ErrInternalError, err)
 	}
 	items := make([]executionListItem, 0, len(execs))
 	for _, exec := range execs {
-		if req.StatusFilter != "" && exec.Status != req.StatusFilter {
+		if (req.StatusFilter != "" && exec.Status != req.StatusFilter) || !matches(exec) {
+			continue
+		}
+		if (req.RedriveFilter == "REDRIVEN" && exec.RedriveCount == 0) || (req.RedriveFilter == "NOT_REDRIVEN" && exec.RedriveCount > 0) {
 			continue
 		}
 		item := executionListItem{
-			ExecutionArn:    exec.ExecutionArn,
-			StateMachineArn: exec.StateMachineArn,
-			Name:            exec.Name,
-			Status:          exec.Status,
-			StartDate:       epochSeconds(exec.StartDate),
+			ExecutionArn:           exec.ExecutionArn,
+			StateMachineArn:        exec.StateMachineArn,
+			Name:                   exec.Name,
+			Status:                 exec.Status,
+			StartDate:              epochSeconds(exec.StartDate),
+			StateMachineVersionArn: exec.StateMachineVersionArn,
+			StateMachineAliasArn:   exec.StateMachineAliasArn,
+			MapRunArn:              exec.MapRunArn,
+			RedriveCount:           exec.RedriveCount,
 		}
 		if exec.StopDate != nil {
 			item.StopDate = epochSeconds(*exec.StopDate)
 		}
-		items = append(items, item)
-		if req.MaxResults > 0 && len(items) >= req.MaxResults {
-			break
+		if exec.RedriveDate != nil {
+			item.RedriveDate = epochSeconds(*exec.RedriveDate)
 		}
+		items = append(items, item)
 	}
-	return &listExecutionsResponse{Executions: items}, nil
+	page, pageErr := paginate(items, req.MaxResults, req.NextToken)
+	if pageErr != nil {
+		return nil, pageErr
+	}
+	return &listExecutionsResponse{Executions: page.Items, NextToken: page.NextToken}, nil
 }
 
 // ─── StopExecution ────────────────────────────────────────────────────────────
@@ -592,12 +719,10 @@ func (h *Handler) describeStateMachineForExecutionTyped(ctx context.Context, req
 	if aerr != nil {
 		return nil, aerr
 	}
-	sm, err := h.store.GetStateMachine(ctx, extractSMName(exec.StateMachineArn))
-	if err != nil {
-		return nil, protocol.Wrap(protocol.ErrInternalError, err)
-	}
-	if sm == nil {
-		return nil, errSMNotFound(exec.StateMachineArn)
+	// The definition the execution ran: its version's, when it ran one.
+	sm, aerr := h.stateMachineForExecution(ctx, exec)
+	if aerr != nil {
+		return nil, aerr
 	}
 	return &describeStateMachineForExecutionResponse{
 		StateMachineArn: sm.ARN,

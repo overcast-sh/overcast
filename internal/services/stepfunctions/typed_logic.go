@@ -4,6 +4,10 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"reflect"
+	"sort"
+
+	"github.com/google/uuid"
 
 	"github.com/overcast-sh/overcast/internal/events"
 	"github.com/overcast-sh/overcast/internal/middleware"
@@ -19,6 +23,8 @@ type createStateMachineRequest struct {
 	LoggingConfiguration map[string]any `json:"loggingConfiguration" cbor:"loggingConfiguration"`
 	TracingConfiguration map[string]any `json:"tracingConfiguration" cbor:"tracingConfiguration"`
 	Tags                 []sfnTag       `json:"tags" cbor:"tags"`
+	Publish              bool           `json:"publish" cbor:"publish"`
+	VersionDescription   string         `json:"versionDescription" cbor:"versionDescription"`
 }
 
 // sfnTag is the wire shape of Step Functions' tag list, shared by
@@ -29,8 +35,9 @@ type sfnTag struct {
 }
 
 type createStateMachineResponse struct {
-	StateMachineArn string  `json:"stateMachineArn" cbor:"stateMachineArn"`
-	CreationDate    float64 `json:"creationDate" cbor:"creationDate"`
+	StateMachineArn        string  `json:"stateMachineArn" cbor:"stateMachineArn"`
+	CreationDate           float64 `json:"creationDate" cbor:"creationDate"`
+	StateMachineVersionArn string  `json:"stateMachineVersionArn,omitempty" cbor:"stateMachineVersionArn,omitempty"`
 }
 
 type describeStateMachineRequest struct {
@@ -47,6 +54,11 @@ type describeStateMachineResponse struct {
 	CreationDate         float64        `json:"creationDate" cbor:"creationDate"`
 	LoggingConfiguration map[string]any `json:"loggingConfiguration" cbor:"loggingConfiguration"`
 	TracingConfiguration map[string]any `json:"tracingConfiguration" cbor:"tracingConfiguration"`
+	// RevisionID is absent until the state machine is first updated.
+	// Description is a version's, present only when a version ARN was
+	// described.
+	RevisionID  string `json:"revisionId,omitempty" cbor:"revisionId,omitempty"`
+	Description string `json:"description,omitempty" cbor:"description,omitempty"`
 }
 
 type updateStateMachineRequest struct {
@@ -55,13 +67,20 @@ type updateStateMachineRequest struct {
 	RoleArn              string         `json:"roleArn" cbor:"roleArn"`
 	LoggingConfiguration map[string]any `json:"loggingConfiguration" cbor:"loggingConfiguration"`
 	TracingConfiguration map[string]any `json:"tracingConfiguration" cbor:"tracingConfiguration"`
+	Publish              bool           `json:"publish" cbor:"publish"`
+	VersionDescription   string         `json:"versionDescription" cbor:"versionDescription"`
 }
 
 type updateStateMachineResponse struct {
-	UpdateDate float64 `json:"updateDate" cbor:"updateDate"`
+	UpdateDate             float64 `json:"updateDate" cbor:"updateDate"`
+	RevisionID             string  `json:"revisionId,omitempty" cbor:"revisionId,omitempty"`
+	StateMachineVersionArn string  `json:"stateMachineVersionArn,omitempty" cbor:"stateMachineVersionArn,omitempty"`
 }
 
-type listStateMachinesRequest struct{}
+type listStateMachinesRequest struct {
+	MaxResults int    `json:"maxResults" cbor:"maxResults"`
+	NextToken  string `json:"nextToken" cbor:"nextToken"`
+}
 
 type stateMachineListItem struct {
 	StateMachineArn string  `json:"stateMachineArn" cbor:"stateMachineArn"`
@@ -72,6 +91,7 @@ type stateMachineListItem struct {
 
 type listStateMachinesResponse struct {
 	StateMachines []stateMachineListItem `json:"stateMachines" cbor:"stateMachines"`
+	NextToken     string                 `json:"nextToken,omitempty" cbor:"nextToken,omitempty"`
 }
 
 type startExecutionRequest struct {
@@ -97,7 +117,13 @@ func (h *Handler) createStateMachineTyped(ctx context.Context, req *createStateM
 			HTTPStatus: http.StatusBadRequest,
 		}
 	}
-	if aerr := validateDefinitionForCreate(req.Definition); aerr != nil {
+	if req.VersionDescription != "" && !req.Publish {
+		return nil, errVersionDescriptionWithoutPublish()
+	}
+	if aerr := validateDescription("versionDescription", req.VersionDescription); aerr != nil {
+		return nil, aerr
+	}
+	if aerr := validateDefinitionForType(req.Definition, req.Type); aerr != nil {
 		return nil, aerr
 	}
 	existing, err := h.store.GetStateMachine(ctx, req.Name)
@@ -110,10 +136,21 @@ func (h *Handler) createStateMachineTyped(ctx context.Context, req *createStateM
 			smType = "STANDARD"
 		}
 		if existing.Definition == req.Definition && existing.RoleArn == req.RoleArn && existing.Type == smType {
-			return &createStateMachineResponse{
+			resp := &createStateMachineResponse{
 				StateMachineArn: existing.ARN,
 				CreationDate:    float64(existing.CreatedAt.UnixMilli()) / 1000.0,
-			}, nil
+			}
+			// An idempotent repeat with publish=true answers with the version
+			// already published for this revision (publishVersion is itself
+			// idempotent on the revision).
+			if req.Publish {
+				v, aerr := h.publishVersion(ctx, existing, req.VersionDescription)
+				if aerr != nil {
+					return nil, aerr
+				}
+				resp.StateMachineVersionArn = v.ARN
+			}
+			return resp, nil
 		}
 		return nil, &protocol.AWSError{
 			Code:       "StateMachineAlreadyExists",
@@ -159,13 +196,32 @@ func (h *Handler) createStateMachineTyped(ctx context.Context, req *createStateM
 		return nil, protocol.Wrap(protocol.ErrInternalError, err)
 	}
 	h.publishCtx(ctx, events.SFNStateMachineCreated, events.ResourcePayload{Name: req.Name})
-	return &createStateMachineResponse{
+	resp := &createStateMachineResponse{
 		StateMachineArn: arn,
 		CreationDate:    float64(now.UnixMilli()) / 1000.0,
-	}, nil
+	}
+	if req.Publish {
+		v, aerr := h.publishVersion(ctx, sm, req.VersionDescription)
+		if aerr != nil {
+			return nil, aerr
+		}
+		resp.StateMachineVersionArn = v.ARN
+	}
+	return resp, nil
 }
 
+// describeStateMachineTyped describes a state machine, or — given a version
+// ARN — that version's snapshot. An alias ARN is not a state machine
+// DescribeStateMachine can describe; DescribeStateMachineAlias does that.
 func (h *Handler) describeStateMachineTyped(ctx context.Context, req *describeStateMachineRequest) (*describeStateMachineResponse, *protocol.AWSError) {
+	if arn, ok := parseSMARN(req.StateMachineArn); ok {
+		switch {
+		case arn.isVersion():
+			return h.describeVersion(ctx, arn, req.StateMachineArn)
+		case arn.isAlias():
+			return nil, errInvalidArn(req.StateMachineArn)
+		}
+	}
 	name := extractSMName(req.StateMachineArn)
 	sm, err := h.store.GetStateMachine(ctx, name)
 	if err != nil {
@@ -184,6 +240,7 @@ func (h *Handler) describeStateMachineTyped(ctx context.Context, req *describeSt
 		CreationDate:         float64(sm.CreatedAt.UnixMilli()) / 1000.0,
 		LoggingConfiguration: sfnLoggingConfigOrDefault(sm.LoggingConfiguration),
 		TracingConfiguration: sfnTracingConfigOrDefault(sm.TracingConfiguration),
+		RevisionID:           sm.RevisionID,
 	}, nil
 }
 
@@ -191,10 +248,17 @@ func (h *Handler) describeStateMachineTyped(ctx context.Context, req *describeSt
 // StateMachineArn is optional and left unchanged when omitted, matching real
 // AWS: an update supplies only the properties it wants to change.
 //
-// Versioning (publish/versionDescription, stateMachineVersionArn in the
-// response) is out of scope — Overcast does not model state machine
-// versions or aliases anywhere else either.
+// An update that changes the definition, role, logging or tracing
+// configuration starts a new revision (a fresh revisionId). publish=true then
+// publishes that revision as a version — or returns the version already
+// published for it when nothing changed.
 func (h *Handler) updateStateMachineTyped(ctx context.Context, req *updateStateMachineRequest) (*updateStateMachineResponse, *protocol.AWSError) {
+	if req.VersionDescription != "" && !req.Publish {
+		return nil, errVersionDescriptionWithoutPublish()
+	}
+	if aerr := validateDescription("versionDescription", req.VersionDescription); aerr != nil {
+		return nil, aerr
+	}
 	name := extractSMName(req.StateMachineArn)
 	sm, err := h.store.GetStateMachine(ctx, name)
 	if err != nil {
@@ -203,35 +267,60 @@ func (h *Handler) updateStateMachineTyped(ctx context.Context, req *updateStateM
 	if sm == nil {
 		return nil, errSMNotFound(req.StateMachineArn)
 	}
+	changed := false
 	if req.Definition != "" {
-		if aerr := validateDefinitionForCreate(req.Definition); aerr != nil {
+		if aerr := validateDefinitionForType(req.Definition, sm.Type); aerr != nil {
 			return nil, aerr
 		}
+		changed = changed || sm.Definition != req.Definition
 		sm.Definition = req.Definition
 	}
 	if req.RoleArn != "" {
+		changed = changed || sm.RoleArn != req.RoleArn
 		sm.RoleArn = req.RoleArn
 	}
 	if req.LoggingConfiguration != nil {
+		changed = changed || !reflect.DeepEqual(sm.LoggingConfiguration, req.LoggingConfiguration)
 		sm.LoggingConfiguration = req.LoggingConfiguration
 	}
 	if req.TracingConfiguration != nil {
+		changed = changed || !reflect.DeepEqual(sm.TracingConfiguration, req.TracingConfiguration)
 		sm.TracingConfiguration = req.TracingConfiguration
+	}
+	if changed {
+		sm.RevisionID = uuid.NewString()
 	}
 	if err := h.store.PutStateMachine(ctx, sm); err != nil {
 		return nil, protocol.Wrap(protocol.ErrInternalError, err)
 	}
 	h.publishCtx(ctx, events.SFNStateMachineUpdated, events.ResourcePayload{Name: name})
-	return &updateStateMachineResponse{UpdateDate: float64(h.clk.Now().UnixMilli()) / 1000.0}, nil
+	resp := &updateStateMachineResponse{
+		UpdateDate: float64(h.clk.Now().UnixMilli()) / 1000.0,
+		RevisionID: sm.RevisionID,
+	}
+	if req.Publish {
+		v, aerr := h.publishVersion(ctx, sm, req.VersionDescription)
+		if aerr != nil {
+			return nil, aerr
+		}
+		resp.StateMachineVersionArn = v.ARN
+	}
+	return resp, nil
 }
 
-func (h *Handler) listStateMachinesTyped(ctx context.Context, _ *listStateMachinesRequest) (*listStateMachinesResponse, *protocol.AWSError) {
+// listStateMachinesTyped lists state machines by name, a page at a time.
+func (h *Handler) listStateMachinesTyped(ctx context.Context, req *listStateMachinesRequest) (*listStateMachinesResponse, *protocol.AWSError) {
 	sms, err := h.store.ListStateMachines(ctx)
 	if err != nil {
 		return nil, protocol.Wrap(protocol.ErrInternalError, err)
 	}
-	items := make([]stateMachineListItem, 0, len(sms))
-	for _, sm := range sms {
+	sort.Slice(sms, func(i, j int) bool { return sms[i].Name < sms[j].Name })
+	page, aerr := paginate(sms, req.MaxResults, req.NextToken)
+	if aerr != nil {
+		return nil, aerr
+	}
+	items := make([]stateMachineListItem, 0, len(page.Items))
+	for _, sm := range page.Items {
 		items = append(items, stateMachineListItem{
 			StateMachineArn: sm.ARN,
 			Name:            sm.Name,
@@ -239,11 +328,16 @@ func (h *Handler) listStateMachinesTyped(ctx context.Context, _ *listStateMachin
 			CreationDate:    float64(sm.CreatedAt.UnixMilli()) / 1000.0,
 		})
 	}
-	return &listStateMachinesResponse{StateMachines: items}, nil
+	return &listStateMachinesResponse{StateMachines: items, NextToken: page.NextToken}, nil
 }
 
+// deleteStateMachineTyped deletes a state machine together with every version
+// and alias published under it.
 func (h *Handler) deleteStateMachineTyped(ctx context.Context, req *deleteStateMachineRequest) (*struct{}, *protocol.AWSError) {
 	name := extractSMName(req.StateMachineArn)
+	if err := h.deleteVersionsAndAliases(ctx, name); err != nil {
+		return nil, protocol.Wrap(protocol.ErrInternalError, err)
+	}
 	if err := h.store.DeleteStateMachine(ctx, name); err != nil {
 		return nil, protocol.Wrap(protocol.ErrInternalError, err)
 	}
@@ -258,73 +352,79 @@ func (h *Handler) publishCtx(ctx context.Context, t events.Type, payload any) {
 }
 
 type listTagsForResourceTypedResponse struct {
-	Tags []map[string]string `json:"tags"`
+	Tags []sfnTag `json:"tags" cbor:"tags"`
+}
+
+// taggedResource resolves a TagResource/UntagResource/ListTagsForResource ARN
+// to load and save functions for its record: a state machine or an activity,
+// the two resource types Step Functions tags.
+func (h *Handler) taggedResource(arn string) (
+	load func(ctx context.Context, key string) (serviceutil.Taggable, *protocol.AWSError),
+	save func(ctx context.Context, resource serviceutil.Taggable) *protocol.AWSError,
+	key string,
+) {
+	if isActivityARN(arn) {
+		load = func(ctx context.Context, _ string) (serviceutil.Taggable, *protocol.AWSError) {
+			return h.loadActivity(ctx, arn)
+		}
+		save = func(ctx context.Context, resource serviceutil.Taggable) *protocol.AWSError {
+			if err := h.store.PutActivity(ctx, resource.(*Activity)); err != nil {
+				return protocol.Wrap(protocol.ErrInternalError, err)
+			}
+			return nil
+		}
+		return load, save, activityNameFromARN(arn)
+	}
+	load = func(ctx context.Context, key string) (serviceutil.Taggable, *protocol.AWSError) {
+		// A version or alias ARN is not taggable on AWS.
+		if parsed, ok := parseSMARN(arn); ok && parsed.qualifier != "" {
+			return nil, errInvalidArn(arn)
+		}
+		sm, err := h.store.GetStateMachine(ctx, key)
+		if err != nil {
+			return nil, protocol.Wrap(protocol.ErrInternalError, err)
+		}
+		if sm == nil {
+			return nil, errSMNotFound(arn)
+		}
+		return sm, nil
+	}
+	save = func(ctx context.Context, resource serviceutil.Taggable) *protocol.AWSError {
+		if err := h.store.PutStateMachine(ctx, resource.(*StateMachine)); err != nil {
+			return protocol.Wrap(protocol.ErrInternalError, err)
+		}
+		return nil
+	}
+	return load, save, extractSMName(arn)
 }
 
 func (h *Handler) tagResourceTyped(ctx context.Context, req *tagResourceRequest) (*struct{}, *protocol.AWSError) {
-	name := extractSMName(req.ResourceArn)
-
 	incoming := make(map[string]string, len(req.Tags))
 	for _, t := range req.Tags {
 		incoming[t.Key] = t.Value
 	}
-
-	if aerr := serviceutil.ApplyInlineTags(ctx, name, incoming, sfnTagCfg,
-		func(ctx context.Context, key string) (*StateMachine, *protocol.AWSError) {
-			sm, err := h.store.GetStateMachine(ctx, key)
-			if err != nil {
-				return nil, protocol.Wrap(protocol.ErrInternalError, err)
-			}
-			if sm == nil {
-				return nil, errSMNotFound(req.ResourceArn)
-			}
-			return sm, nil
-		},
-		func(ctx context.Context, sm *StateMachine) *protocol.AWSError {
-			if err := h.store.PutStateMachine(ctx, sm); err != nil {
-				return protocol.Wrap(protocol.ErrInternalError, err)
-			}
-			return nil
-		},
-	); aerr != nil {
+	load, save, key := h.taggedResource(req.ResourceArn)
+	if aerr := serviceutil.ApplyInlineTags(ctx, key, incoming, sfnTagCfg, load, save); aerr != nil {
 		return nil, aerr
 	}
 	return &struct{}{}, nil
 }
 
 func (h *Handler) untagResourceTyped(ctx context.Context, req *untagResourceRequest) (*struct{}, *protocol.AWSError) {
-	name := extractSMName(req.ResourceArn)
-	sm, err := h.store.GetStateMachine(ctx, name)
-	if err != nil {
-		return nil, protocol.Wrap(protocol.ErrInternalError, err)
-	}
-	if sm == nil {
-		return nil, errSMNotFound(req.ResourceArn)
-	}
-
-	for _, k := range req.TagKeys {
-		delete(sm.Tags, k)
-	}
-
-	if err := h.store.PutStateMachine(ctx, sm); err != nil {
-		return nil, protocol.Wrap(protocol.ErrInternalError, err)
+	load, save, key := h.taggedResource(req.ResourceArn)
+	if aerr := serviceutil.RemoveInlineTags(ctx, key, req.TagKeys, load, save); aerr != nil {
+		return nil, aerr
 	}
 	return &struct{}{}, nil
 }
 
 func (h *Handler) listTagsForResourceTyped(ctx context.Context, req *listTagsForResourceRequest) (*listTagsForResourceTypedResponse, *protocol.AWSError) {
-	name := extractSMName(req.ResourceArn)
-	sm, err := h.store.GetStateMachine(ctx, name)
-	if err != nil {
-		return nil, protocol.Wrap(protocol.ErrInternalError, err)
+	load, _, key := h.taggedResource(req.ResourceArn)
+	tags, aerr := serviceutil.ListInlineTags(ctx, key, load)
+	if aerr != nil {
+		return nil, aerr
 	}
-	if sm == nil {
-		return nil, errSMNotFound(req.ResourceArn)
-	}
-
-	tags := make([]map[string]string, 0, len(sm.Tags))
-	for k, v := range sm.Tags {
-		tags = append(tags, map[string]string{"key": k, "value": v})
-	}
-	return &listTagsForResourceTypedResponse{Tags: tags}, nil
+	return &listTagsForResourceTypedResponse{
+		Tags: serviceutil.TagElements(tags, func(k, v string) sfnTag { return sfnTag{Key: k, Value: v} }),
+	}, nil
 }

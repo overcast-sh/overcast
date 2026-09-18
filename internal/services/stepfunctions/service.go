@@ -1,9 +1,8 @@
-// Package stepfunctions provides emulation of AWS Step Functions.
-// See docs/services/stepfunctions.md for the support matrix (when available).
+// Package stepfunctions provides emulation of AWS Step Functions: the whole
+// control-plane API and an Amazon States Language interpreter for both query
+// languages. See docs/services/stepfunctions.md for the support matrix.
 //
 // Wire protocol: JSON 1.0 (X-Amz-Target: AWSStepFunctions.*) and RPC v2 CBOR.
-// Implements: CreateStateMachine, DescribeStateMachine, ListStateMachines,
-// StartExecution, DeleteStateMachine.
 package stepfunctions
 
 import (

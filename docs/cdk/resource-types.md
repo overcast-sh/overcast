@@ -11,8 +11,8 @@ tags:
 
 # CDK resource type coverage
 
-Overcast's CloudFormation provisioner handles **138 resource types**, and a
-[`cdk deploy`](../cdk.md) succeeds for a stack built from them: 129 have real
+Overcast's CloudFormation provisioner handles **141 resource types**, and a
+[`cdk deploy`](../cdk.md) succeeds for a stack built from them: 132 have real
 handlers, 9 are recognised as stubs, and custom resources and nested stacks are
 resolved dynamically on top of those.
 
@@ -47,7 +47,7 @@ that uses one still deploys.
 | EventBridge | `AWS::Events::EventBus`, `AWS::Events::Rule` |
 | Scheduler | `AWS::Scheduler::Schedule`, `AWS::Scheduler::ScheduleGroup` |
 | Pipes | `AWS::Pipes::Pipe` |
-| Step Functions | `AWS::StepFunctions::StateMachine` |
+| Step Functions | `AWS::StepFunctions::StateMachine`, `AWS::StepFunctions::StateMachineVersion`, `AWS::StepFunctions::StateMachineAlias`, `AWS::StepFunctions::Activity` |
 | Kinesis | `AWS::Kinesis::Stream` |
 | Firehose | `AWS::KinesisFirehose::DeliveryStream` |
 | CloudWatch | `AWS::CloudWatch::Alarm` |

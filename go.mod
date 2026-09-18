@@ -13,6 +13,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.100.1
 	github.com/aws/smithy-go v1.27.8
 	github.com/benbjohnson/clock v1.3.5
+	github.com/blues/jsonata-go v1.5.4
 	github.com/coder/websocket v1.8.15
 	github.com/dop251/goja v0.0.0-20260311135729-065cd970411c
 	github.com/fxamacker/cbor/v2 v2.9.3

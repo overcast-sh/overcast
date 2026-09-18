@@ -1,0 +1,84 @@
+---
+title: "Step Functions limitations"
+description: "Every known difference between Overcast's Step Functions and AWS's, and what each one means for a workflow."
+section: "Service Reference"
+tags:
+  - docs
+  - services
+  - stepfunctions
+---
+
+# Step Functions limitations
+
+Where Overcast's Step Functions behaves differently from AWS's. Anything not
+listed here is meant to behave as AWS documents it; a difference that is not
+listed is a bug.
+
+## Integrations
+
+| Area                     | On AWS                                   | Overcast                                                                  |
+| ------------------------ | ---------------------------------------- | ------------------------------------------------------------------------- |
+| Optimized integrations   | About 200 services                       | Lambda, SQS `sendMessage`, SNS `publish`, DynamoDB item actions, EventBridge `putEvents`, Step Functions `startExecution` |
+| `aws-sdk:` integrations  | Every service and action                 | AWS JSON services, and S3 `getObject`, `putObject`, `headObject`, `deleteObject`, `listObjectsV2` |
+| `.sync` pattern          | Many integrations                        | `states:startExecution` only                                              |
+| `Credentials`            | Assumes the named role                   | Ignored: Overcast has one account                                         |
+
+An `aws-sdk:` call against a service whose JSON members are camelCase (Step
+Functions, ECS, …) has its result converted to PascalCase, as AWS does. The
+conversion does not know which members are maps of user data, so map keys in
+those responses are capitalised too. Services that already answer in PascalCase
+— DynamoDB, SQS, Kinesis — are passed through untouched.
+
+## Query languages
+
+JSONata is evaluated by a JSONata 1.5 engine. AWS runs JSONata 2.x: the 1.x
+function library behaves the same, and AWS's own additions (`$partition`,
+`$range`, `$hash`, `$random`, `$uuid`, `$parse`) are provided, but functions
+that only exist in 2.x (`$formatInteger`, `$parseInteger`, `$eval`, …) fail
+the state with `States.QueryEvaluationError`.
+
+JSONPath filters support comparisons, `&&`, `||`, `!` and existence tests, not
+the regex (`=~`) or `in`/`nin` operators. A multi-name union (`$['a','b']`)
+returns an array of the values rather than an object. `States.JsonToString`
+sorts object keys, where AWS keeps the input's order.
+
+An unknown intrinsic function fails at run time with `States.IntrinsicFailure`;
+AWS rejects it when the state machine is created.
+
+## Map
+
+| Area                      | On AWS                                   | Overcast                                      |
+| ------------------------- | ---------------------------------------- | --------------------------------------------- |
+| `ItemReader` input types  | JSON, JSONL, CSV, S3 inventory manifests, Parquet | JSON, JSONL, CSV, and S3 listings     |
+| Distributed concurrency   | Up to 10,000 child executions            | Up to 1,000 at once                           |
+| Child execution type      | `EXPRESS` children keep no history       | Both types keep a history, so they can be read |
+| Map run redrive           | Redrives failed children                 | A redrive re-runs the whole Map state         |
+
+## Executions
+
+| Area                       | On AWS                                            | Overcast                                                   |
+| -------------------------- | ------------------------------------------------- | ---------------------------------------------------------- |
+| Express executions         | No `DescribeExecution`, history in CloudWatch Logs | Described, listed and recorded like Standard executions   |
+| Redrive of Parallel / Map  | Re-runs only the branches or iterations that failed | Re-runs the whole Parallel or Map state                  |
+| Task tokens                | Survive for a year                                | Live as long as the execution's process                    |
+| Definition an execution ran | Kept with the execution                          | Kept for a version; an unversioned execution reports and redrives the current definition |
+| Logging and tracing        | Delivered to CloudWatch Logs and X-Ray             | Configuration is stored and echoed, nothing is delivered   |
+| `TestState` inspection     | `TRACE` adds the HTTP request and response        | `TRACE` reports what `DEBUG` does                          |
+
+## Versions, aliases and validation
+
+| Area                                  | On AWS                                        | Overcast                                          |
+| ------------------------------------- | --------------------------------------------- | ------------------------------------------------- |
+| `ValidateStateMachineDefinition`      | Every error, plus WARNING-level analysis      | The first ERROR only; `truncated` is never true   |
+| Alias updates                         | Eventually consistent                         | Take effect immediately                           |
+| CloudFormation `DeploymentPreference` | Linear or canary shifting with alarm rollback | An immediate, all-at-once shift                   |
+
+`GetExecutionHistory` for a Standard execution caps at AWS's 25,000 events, and
+an execution also stops at `OVERCAST_STEPFUNCTIONS_EXECUTION_TIMEOUT`
+(default 15 minutes) — see the [landing page's gotchas](../stepfunctions.md#gotchas).
+
+## Related
+
+- [Step Functions](../stepfunctions.md)
+- [Step Functions execution history](./execution-history.md)
+- [Step Functions operations](./operations.md)
