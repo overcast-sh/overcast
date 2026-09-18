@@ -31,11 +31,14 @@ those responses are capitalised too. Services that already answer in PascalCase
 
 ## Query languages
 
-JSONata is evaluated by a JSONata 1.5 engine. AWS runs JSONata 2.x: the 1.x
-function library behaves the same, and AWS's own additions (`$partition`,
-`$range`, `$hash`, `$random`, `$uuid`, `$parse`) are provided, but functions
-that only exist in 2.x (`$formatInteger`, `$parseInteger`, `$eval`, …) fail
-the state with `States.QueryEvaluationError`.
+JSONata is evaluated by a JSONata 2.2 engine; AWS runs JSONata 2.0.6. The
+whole 2.x function library and syntax behave as on AWS, AWS's own functions
+(`$partition`, `$range`, `$hash`, `$random`, `$uuid`, `$parse`) are provided,
+and `$eval` fails the state with `States.QueryEvaluationError`, as AWS does not
+offer it. `$now()` and `$millis()` read Overcast's clock. The `??` and `?:`
+operators arrived in JSONata 2.1, so Overcast accepts them where AWS may not.
+Regular expressions use Go's syntax, which has no lookahead, lookbehind or
+backreferences inside the pattern.
 
 JSONPath filters support comparisons, `&&`, `||`, `!` and existence tests, not
 the regex (`=~`) or `in`/`nin` operators. A multi-name union (`$['a','b']`)

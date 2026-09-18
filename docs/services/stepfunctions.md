@@ -67,7 +67,7 @@ drift from the service it targets.
 
 | Area                 | On AWS                        | Overcast                                                                                  |
 | -------------------- | ----------------------------- | ----------------------------------------------------------------------------------------- |
-| JSONata engine       | JSONata 2.x                   | JSONata 1.5 plus AWS's added functions; 2.x-only functions fail with `States.QueryEvaluationError` |
+| JSONata engine       | JSONata 2.0.6                 | JSONata 2.2 plus AWS's added functions; `??` and `?:` are also accepted                   |
 | `aws-sdk:` integrations | Every service              | Services that speak AWS JSON, and S3's object actions; Query and REST services fail       |
 | Optimized integrations | ~200 services               | Lambda, SQS, SNS, DynamoDB, EventBridge and Step Functions                                |
 | `ItemReader`         | JSON, JSONL, CSV, manifests, Parquet | JSON, JSONL, CSV and S3 listings                                                   |

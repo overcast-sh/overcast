@@ -1,22 +1,22 @@
 package stepfunctions
 
 import (
+	"context"
 	"crypto/md5"  //nolint:gosec // $hash offers MD5 because AWS does; it is not used for security.
 	"crypto/sha1" //nolint:gosec // $hash offers SHA-1 because AWS does; it is not used for security.
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"hash"
 	"math"
 	"math/rand/v2"
 	"strings"
+	"time"
 
-	jsonata "github.com/blues/jsonata-go"
-	"github.com/blues/jsonata-go/jtypes"
 	"github.com/google/uuid"
+	"github.com/recolabs/gnata"
 )
 
 // JSONata: `"QueryLanguage": "JSONata"` on the definition or on one state.
@@ -30,11 +30,19 @@ import (
 // $states.input, $states.context, and $states.result or $states.errorOutput
 // where they exist — plus the workflow's variables.
 //
-// The engine is github.com/blues/jsonata-go, which implements JSONata 1.5.
-// AWS runs JSONata 2.x: the 1.x function library is all there, and the
-// functions AWS adds ($partition, $range, $hash, $random, $uuid, $parse) are
-// registered below, but JSONata-2-only functions such as $formatInteger,
-// $parseInteger and $eval fail the evaluation with States.QueryEvaluationError.
+// The engine is github.com/recolabs/gnata, a JSONata 2.x implementation that
+// passes the jsonata-js 2.2 test suite. AWS runs JSONata 2.0.6, so the whole
+// 2.x function library and language (parent operator, @/# bindings,
+// transforms, regex functions, date pictures) is available. On top of it:
+//
+//   - the functions AWS adds — $partition, $range, $hash, $random (with an
+//     optional seed), $uuid and $parse — are registered below;
+//   - $now and $millis read the injected clock, fixed for one evaluation;
+//   - $eval is removed, because Step Functions does not offer it;
+//   - an evaluation is cut off after one second, AWS's expression timeout.
+
+// jsonataTimeout is AWS's limit on one expression's evaluation.
+const jsonataTimeout = time.Second
 
 // isJSONataExpression reports whether s is a "{% … %}" expression and returns
 // the expression inside.
@@ -110,10 +118,6 @@ func (in *interpreter) queryError(scope jsonataScope, format string, args ...any
 // evalJSONata evaluates one expression. defined is false when the expression
 // produced no value (JSONata's undefined).
 func (in *interpreter) evalJSONata(expr string, scope jsonataScope) (value any, defined bool, serr *stateError) {
-	compiled, err := jsonata.Compile(expr)
-	if err != nil {
-		return nil, false, in.queryError(scope, "the JSONata expression %q in %s is not valid: %v", expr, scope.field, err)
-	}
 	vars := map[string]any{}
 	if all, ok := scope.ctxObj[variablesContextKey].(map[string]any); ok {
 		for k, v := range all {
@@ -121,24 +125,57 @@ func (in *interpreter) evalJSONata(expr string, scope jsonataScope) (value any, 
 		}
 	}
 	vars["states"] = scope.statesVariable()
-	if err := compiled.RegisterVars(vars); err != nil {
-		return nil, false, in.queryError(scope, "the variables for %s could not be bound: %v", scope.field, err)
-	}
-	if err := compiled.RegisterExts(in.jsonataFunctions()); err != nil {
-		return nil, false, in.queryError(scope, "%v", err)
-	}
-	result, err := compiled.Eval(scope.input)
-	if errors.Is(err, jsonata.ErrUndefined) {
-		return nil, false, nil
-	}
+	value, defined, err := evaluateJSONata(expr, scope.input, vars, in.handler.clk.Now())
 	if err != nil {
 		return nil, false, in.queryError(scope, "the JSONata expression %q in %s failed: %v", expr, scope.field, err)
 	}
-	normalized, err := normalizeJSON(result)
+	return value, defined, nil
+}
+
+// evaluateJSONata evaluates expr against input with vars bound as $name
+// variables and $now/$millis reading now. The result has the types
+// json.Unmarshal produces; defined is false for JSONata's undefined.
+func evaluateJSONata(expr string, input any, vars map[string]any, now time.Time) (value any, defined bool, err error) {
+	compiled, err := gnata.Compile(expr, gnata.WithTimeout(jsonataTimeout))
 	if err != nil {
-		return nil, false, in.queryError(scope, "the JSONata expression %q in %s returned a value that is not JSON: %v", expr, scope.field, err)
+		return nil, false, fmt.Errorf("the expression is not valid: %w", err)
+	}
+	data, err := toJSONataValue(input)
+	if err != nil {
+		return nil, false, err
+	}
+	bound := make(map[string]any, len(vars))
+	for name, v := range vars {
+		if bound[name], err = toJSONataValue(v); err != nil {
+			return nil, false, fmt.Errorf("variable $%s: %w", name, err)
+		}
+	}
+	env := gnata.NewCustomEnvironment(jsonataFunctions(now))
+	result, err := compiled.EvalWithCustomEnvironmentAndVars(context.Background(), data, env, bound)
+	if err != nil {
+		return nil, false, err
+	}
+	if gnata.IsNull(result) {
+		return nil, true, nil
+	}
+	if result == nil {
+		return nil, false, nil
+	}
+	normalized, err := normalizeJSON(gnata.NormalizeValue(result))
+	if err != nil {
+		return nil, false, fmt.Errorf("the result is not JSON: %w", err)
 	}
 	return normalized, true, nil
+}
+
+// toJSONataValue converts a decoded JSON value to the evaluator's own
+// representation, which keeps JSON null distinct from undefined.
+func toJSONataValue(v any) (any, error) {
+	encoded, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	return gnata.DecodeJSON(encoded)
 }
 
 // normalizeJSON round-trips a value through encoding/json so the rest of the
@@ -204,27 +241,91 @@ func (in *interpreter) renderJSONataValue(node any, scope jsonataScope) (any, bo
 
 // ─── AWS's JSONata functions ──────────────────────────────────────────────────
 
-// jsonataFunctions are the functions Step Functions adds to JSONata, plus
-// $now and $millis read from the injected clock rather than the host's.
-func (in *interpreter) jsonataFunctions() map[string]jsonata.Extension {
-	now := in.handler.clk.Now()
-	return map[string]jsonata.Extension{
-		"partition": {Func: jsonataPartition},
-		"range":     {Func: jsonataRange},
-		"hash":      {Func: jsonataHash},
-		"random":    {Func: jsonataRandom},
-		"uuid":      {Func: func() string { return uuid.NewString() }},
-		"parse":     {Func: jsonataParse},
-		"millis":    {Func: func() float64 { return float64(now.UnixMilli()) }},
-		"now":       {Func: func() string { return now.UTC().Format("2006-01-02T15:04:05.000Z") }},
+// jsonataFromMillis formats $now's picture and timezone with the standard
+// library's $fromMillis, so $now(picture, tz) formats exactly as it does.
+var jsonataFromMillis = func() *gnata.Expression {
+	expr, err := gnata.Compile(`$fromMillis($ms, $picture, $tz)`)
+	if err != nil {
+		panic(err)
+	}
+	return expr
+}()
+
+// jsonataFunctions are the functions Step Functions adds to or changes in
+// JSONata: AWS's additions, $random with a seed, $now and $millis read from
+// the injected clock rather than the host's, and $eval withdrawn.
+func jsonataFunctions(now time.Time) map[string]gnata.CustomFunc {
+	millis := float64(now.UnixMilli())
+	return map[string]gnata.CustomFunc{
+		"partition": jsonataPartition,
+		"range":     jsonataRange,
+		"hash":      jsonataHash,
+		"random":    jsonataRandom,
+		"uuid":      func([]any, any) (any, error) { return uuid.NewString(), nil },
+		"parse":     jsonataParse,
+		"millis":    func([]any, any) (any, error) { return millis, nil },
+		"now": func(args []any, _ any) (any, error) {
+			if len(args) == 0 || args[0] == nil {
+				return now.UTC().Format("2006-01-02T15:04:05.000Z"), nil
+			}
+			vars := map[string]any{"ms": millis, "picture": args[0]}
+			if len(args) > 1 {
+				vars["tz"] = args[1]
+			}
+			return jsonataFromMillis.EvalWithVars(context.Background(), nil, vars)
+		},
+		"eval": func([]any, any) (any, error) {
+			return nil, fmt.Errorf("$eval is not available in Step Functions; use $parse to read JSON text")
+		},
 	}
 }
 
-func jsonataPartition(array []any, size float64) ([]any, error) {
-	if size < 1 || size != math.Trunc(size) {
+// jsonataNumber reads a numeric argument.
+func jsonataNumber(fn string, args []any, i int) (float64, error) {
+	if i >= len(args) || args[i] == nil {
+		return 0, fmt.Errorf("%s: argument %d is required", fn, i+1)
+	}
+	switch v := args[i].(type) {
+	case float64:
+		return v, nil
+	case int:
+		return float64(v), nil
+	case int64:
+		return float64(v), nil
+	case json.Number:
+		return v.Float64()
+	}
+	return 0, fmt.Errorf("%s: argument %d must be a number", fn, i+1)
+}
+
+// jsonataInteger reads an integer argument, rounding down as AWS does for
+// the functions it adds.
+func jsonataInteger(fn string, args []any, i int) (int, error) {
+	f, err := jsonataNumber(fn, args, i)
+	if err != nil {
+		return 0, err
+	}
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return 0, fmt.Errorf("%s: argument %d must be finite", fn, i+1)
+	}
+	return int(math.Floor(f)), nil
+}
+
+func jsonataPartition(args []any, _ any) (any, error) {
+	if len(args) == 0 || args[0] == nil {
+		return nil, fmt.Errorf("$partition: the array to partition is required")
+	}
+	array, ok := args[0].([]any)
+	if !ok {
+		array = []any{args[0]}
+	}
+	n, err := jsonataInteger("$partition", args, 1)
+	if err != nil {
+		return nil, err
+	}
+	if n < 1 {
 		return nil, fmt.Errorf("$partition: the chunk size must be a positive integer")
 	}
-	n := int(size)
 	out := make([]any, 0, (len(array)+n-1)/n)
 	for i := 0; i < len(array); i += n {
 		end := min(i+n, len(array))
@@ -233,35 +334,45 @@ func jsonataPartition(array []any, size float64) ([]any, error) {
 	return out, nil
 }
 
-func jsonataRange(start, end, step float64) ([]any, error) {
+func jsonataRange(args []any, _ any) (any, error) {
+	var bounds [3]int
+	for i := range bounds {
+		v, err := jsonataInteger("$range", args, i)
+		if err != nil {
+			return nil, err
+		}
+		bounds[i] = v
+	}
+	start, end, step := bounds[0], bounds[1], bounds[2]
 	if step == 0 {
 		return nil, fmt.Errorf("$range: the step must not be zero")
 	}
-	var out []any
+	out := []any{}
 	for v := start; (step > 0 && v <= end) || (step < 0 && v >= end); v += step {
-		out = append(out, v)
+		out = append(out, float64(v))
 		if len(out) > 1000 {
 			return nil, fmt.Errorf("$range: the result exceeds 1000 items")
 		}
 	}
-	if out == nil {
-		out = []any{}
-	}
 	return out, nil
 }
 
-func jsonataHash(value any, algorithm string) (string, error) {
+func jsonataHash(args []any, _ any) (any, error) {
+	if len(args) < 2 || args[0] == nil {
+		return nil, fmt.Errorf("$hash: the value and the algorithm are required")
+	}
 	var text string
-	switch v := value.(type) {
+	switch v := args[0].(type) {
 	case string:
 		text = v
 	default:
 		encoded, err := json.Marshal(v)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		text = string(encoded)
 	}
+	algorithm, _ := args[1].(string)
 	var h hash.Hash
 	switch algorithm {
 	case "MD5":
@@ -275,7 +386,7 @@ func jsonataHash(value any, algorithm string) (string, error) {
 	case "SHA-512":
 		h = sha512.New()
 	default:
-		return "", fmt.Errorf("$hash: algorithm %q is not one of MD5, SHA-1, SHA-256, SHA-384, SHA-512", algorithm)
+		return nil, fmt.Errorf("$hash: algorithm %v is not one of MD5, SHA-1, SHA-256, SHA-384, SHA-512", args[1])
 	}
 	h.Write([]byte(text))
 	return hex.EncodeToString(h.Sum(nil)), nil
@@ -283,18 +394,30 @@ func jsonataHash(value any, algorithm string) (string, error) {
 
 // jsonataRandom is $random([seed]): a number in [0, 1), deterministic for a
 // given seed.
-func jsonataRandom(seed jtypes.OptionalFloat64) float64 {
-	if seed.IsSet() {
-		s := uint64(int64(seed.Float64))
-		return rand.New(rand.NewPCG(s, s^0x9e3779b97f4a7c15)).Float64() //nolint:gosec // not for security
+func jsonataRandom(args []any, _ any) (any, error) {
+	if len(args) == 0 || args[0] == nil {
+		return rand.Float64(), nil //nolint:gosec // not for security
 	}
-	return rand.Float64() //nolint:gosec // not for security
+	seed, err := jsonataInteger("$random", args, 0)
+	if err != nil {
+		return nil, err
+	}
+	s := uint64(int64(seed))
+	return rand.New(rand.NewPCG(s, s^0x9e3779b97f4a7c15)).Float64(), nil //nolint:gosec // not for security
 }
 
-func jsonataParse(text string) (any, error) {
-	var out any
-	if err := json.Unmarshal([]byte(text), &out); err != nil {
+func jsonataParse(args []any, _ any) (any, error) {
+	if len(args) == 0 || args[0] == nil {
+		return nil, fmt.Errorf("$parse: the JSON text is required")
+	}
+	text, ok := args[0].(string)
+	if !ok {
+		return nil, fmt.Errorf("$parse: the argument must be a string")
+	}
+	if !json.Valid([]byte(text)) {
+		var probe any
+		err := json.Unmarshal([]byte(text), &probe)
 		return nil, fmt.Errorf("$parse: %v", err)
 	}
-	return out, nil
+	return gnata.DecodeJSON(json.RawMessage(text))
 }
