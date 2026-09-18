@@ -203,6 +203,55 @@ func TestRedriveExecution_inlineMapRerunsOnlyUnsuccessfulIterations(t *testing.T
 	}
 }
 
+func TestRedriveExecution_historyBeyondOnePageKeepsTheRedrivenEvents(t *testing.T) {
+	// Given: an inline Map whose 40 succeeded iterations fill more than one
+	// GetExecutionHistory page before its last item fails — the shape a
+	// busy branch produces on a loaded machine, made deterministic
+	srv := helpers.NewTestServer(t)
+	createTable(t, srv, "tbl-ok")
+	var items []string
+	for i := 0; i < 40; i++ {
+		items = append(items, `{"id":"ok","table":"tbl-ok"}`)
+	}
+	items = append(items, `{"id":"late","table":"tbl-late"}`)
+	def := `{
+	  "StartAt": "Each",
+	  "States": {
+	    "Each": {"Type": "Map", "ItemsPath": "$.items", "MaxConcurrency": 1, "End": true,
+	      "ItemProcessor": {"StartAt": "Read", "States": {
+	        "Read": {"Type": "Task", "Resource": "arn:aws:states:::dynamodb:getItem",
+	          "Parameters": {"TableName.$": "$.table", "Key": {"id": {"S": "g"}}}, "ResultPath": null, "OutputPath": "$.id", "End": true}
+	      }}
+	    }
+	  }
+	}`
+	got, execARN := runToEnd(t, srv, "redrive-long", def, `{"items":[`+strings.Join(items, ",")+`]}`)
+	if got.Status != "FAILED" {
+		t.Fatalf("first run: status=%q (%s: %s)", got.Status, got.Error, got.Cause)
+	}
+	if n := len(rawHistory(t, srv, execARN)); n <= 100 {
+		t.Fatalf("first run recorded %d events; the test needs more than one page", n)
+	}
+
+	// When: the table appears and the execution is redriven
+	createTable(t, srv, "tbl-late")
+	got = redriveAndWait(t, srv, execARN)
+
+	// Then: the whole history, across pages, holds the redrive — the Map
+	// re-entered and only the last iteration run again
+	if got.Status != "SUCCEEDED" {
+		t.Fatalf("after redrive: status=%q (%s: %s)", got.Status, got.Error, got.Cause)
+	}
+	tail := afterRedrive(t, rawHistory(t, srv, execARN))
+	iterations := findEvents(tail, "MapIterationStarted")
+	if len(iterations) != 1 || iterations[0].detail("mapIterationStartedEventDetails")["index"] != float64(40) {
+		t.Fatalf("after redrive: %v", rawTypes(tail))
+	}
+	if last := tail[len(tail)-1]; last.typ() != "ExecutionSucceeded" {
+		t.Errorf("history ends with %s, want ExecutionSucceeded", last.typ())
+	}
+}
+
 func TestRedriveExecution_parallelInsideMapResumesRecursively(t *testing.T) {
 	// Given: a Map whose iterations each run a Parallel; the second
 	// iteration's gate branch fails

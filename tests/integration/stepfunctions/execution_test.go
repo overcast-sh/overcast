@@ -125,14 +125,7 @@ type historyEvent struct {
 
 func execHistory(t *testing.T, srv *helpers.TestServer, execARN string) []historyEvent {
 	t.Helper()
-	resp := sfnCall(t, srv, "GetExecutionHistory", map[string]any{"executionArn": execARN})
-	defer resp.Body.Close()
-	helpers.AssertStatus(t, resp, http.StatusOK)
-	var out struct {
-		Events []historyEvent `json:"events"`
-	}
-	helpers.DecodeJSON(t, resp, &out)
-	return out.Events
+	return historyPages[historyEvent](t, srv, execARN)
 }
 
 func eventTypes(events []historyEvent) []string {

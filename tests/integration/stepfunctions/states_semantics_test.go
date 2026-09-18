@@ -40,16 +40,38 @@ func (e rawEvent) stateName() string {
 	return ""
 }
 
+// rawHistory returns an execution's whole history, following nextToken:
+// GetExecutionHistory pages at 100 events by default, and a history that
+// grows past that — a redriven one, or one with a busy branch — would
+// otherwise be silently cut off at the page boundary.
 func rawHistory(t *testing.T, srv *helpers.TestServer, execARN string) []rawEvent {
 	t.Helper()
-	resp := sfnCall(t, srv, "GetExecutionHistory", map[string]any{"executionArn": execARN})
-	defer resp.Body.Close()
-	helpers.AssertStatus(t, resp, http.StatusOK)
-	var out struct {
-		Events []rawEvent `json:"events"`
+	return historyPages[rawEvent](t, srv, execARN)
+}
+
+// historyPages reads every page of an execution's history.
+func historyPages[E any](t *testing.T, srv *helpers.TestServer, execARN string) []E {
+	t.Helper()
+	var events []E
+	token := ""
+	for {
+		body := map[string]any{"executionArn": execARN, "maxResults": 1000}
+		if token != "" {
+			body["nextToken"] = token
+		}
+		resp := sfnCall(t, srv, "GetExecutionHistory", body)
+		helpers.AssertStatus(t, resp, http.StatusOK)
+		var out struct {
+			Events    []E    `json:"events"`
+			NextToken string `json:"nextToken"`
+		}
+		helpers.DecodeJSON(t, resp, &out) // closes the body
+		events = append(events, out.Events...)
+		if out.NextToken == "" {
+			return events
+		}
+		token = out.NextToken
 	}
-	helpers.DecodeJSON(t, resp, &out)
-	return out.Events
 }
 
 func findEvents(events []rawEvent, typ string) []rawEvent {
