@@ -822,6 +822,37 @@
   animation: oc-retry-drain linear forwards;
 }
 
+/* ─── Step Functions flow diagram — live execution motion ──────────────
+   A running state breathes a ring in the accent colour, and the edge leading
+   into it marches, so the eye finds "where is it now" on a large diagram
+   without reading a single label. Both are status, not decoration, but both
+   are redundant with the state's spinner and badge — so the reduced-motion
+   rule below may collapse them to a still frame without losing meaning.
+   ──────────────────────────────────────────────────────────────────────── */
+@keyframes oc-sfn-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 45%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 10px color-mix(in oklab, var(--accent) 0%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 0%, transparent);
+  }
+}
+.oc-sfn-pulse {
+  animation: oc-sfn-pulse 1.6s ease-out infinite;
+}
+@keyframes oc-sfn-march {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+.oc-sfn-march {
+  stroke-dasharray: 6 4;
+  animation: oc-sfn-march 0.6s linear infinite;
+}
+
 /* ─── Reduced motion ─────────────────────────────────────────────────────
    Everything the app animates other than the caret is decoration: hover and
    focus colour transitions, the dialog and toast entrances, the sidebar

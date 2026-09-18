@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { formatAge, formatCount, formatPreciseTimeOfDay } from "./format"
+import { formatAge, formatCount, formatDuration, formatPreciseTimeOfDay } from "./format"
 
 describe("formatPreciseTimeOfDay", () => {
   it("includes milliseconds so closely spaced scheduler events remain distinguishable", () => {
@@ -37,5 +37,20 @@ describe("formatAge", () => {
 
   it("never reports a negative age", () => {
     expect(formatAge(-2_000)).toBe("0s ago")
+  })
+})
+
+describe("formatDuration", () => {
+  it("keeps the precision that still means something at each scale", () => {
+    expect(formatDuration(340)).toBe("340 ms")
+    expect(formatDuration(2_400)).toBe("2.40 s")
+    expect(formatDuration(42_000)).toBe("42.0 s")
+    expect(formatDuration(192_000)).toBe("3 m 12 s")
+    expect(formatDuration(3_840_000)).toBe("1 h 4 m")
+  })
+
+  it("renders a missing span as an em dash", () => {
+    expect(formatDuration(undefined)).toBe("—")
+    expect(formatDuration(Number.NaN)).toBe("—")
   })
 })

@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest"
 import {
   executionStatusVariant,
   historyEventVariant,
-  historyEventStateName,
+  eventCategory,
+  humanizeEventType,
   historyEventFailure,
   formatTimestamp,
   prettyJSON,
@@ -27,14 +28,6 @@ describe("historyEventVariant", () => {
     expect(historyEventVariant("TaskScheduled")).toBe("info")
     expect(historyEventVariant("PassStateEntered")).toBe("default")
     expect(historyEventVariant(undefined)).toBe("default")
-  })
-})
-
-describe("historyEventStateName", () => {
-  it("reads the state name from either entered or exited details", () => {
-    expect(historyEventStateName({ stateEnteredEventDetails: { name: "Start" } })).toBe("Start")
-    expect(historyEventStateName({ stateExitedEventDetails: { name: "End" } })).toBe("End")
-    expect(historyEventStateName({})).toBe("")
   })
 })
 
@@ -83,5 +76,27 @@ describe("prettyJSON", () => {
   it("leaves non-JSON text alone", () => {
     expect(prettyJSON("not json")).toBe("not json")
     expect(prettyJSON(undefined)).toBe("")
+  })
+})
+
+describe("humanizeEventType", () => {
+  it("splits a camel-cased event type into readable words", () => {
+    expect(humanizeEventType("TaskStateEntered")).toBe("Task state entered")
+    expect(humanizeEventType("MapIterationSucceeded")).toBe("Map iteration succeeded")
+    expect(humanizeEventType("ExecutionTimedOut")).toBe("Execution timed out")
+    expect(humanizeEventType(undefined)).toBe("")
+  })
+})
+
+describe("eventCategory", () => {
+  it("sorts events into what a reader filters by", () => {
+    expect(eventCategory("PassStateEntered")).toBe("states")
+    expect(eventCategory("ExecutionStarted")).toBe("states")
+    expect(eventCategory("TaskScheduled")).toBe("tasks")
+    expect(eventCategory("LambdaFunctionSucceeded")).toBe("tasks")
+    expect(eventCategory("MapIterationStarted")).toBe("flow")
+    // A failure is an error first, whatever emitted it.
+    expect(eventCategory("MapIterationFailed")).toBe("errors")
+    expect(eventCategory("TaskTimedOut")).toBe("errors")
   })
 })

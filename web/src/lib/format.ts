@@ -71,6 +71,21 @@ export function formatAge(ms: number): string {
   return `${Math.floor(m / 60)}h ago`
 }
 
+/**
+ * A span of time at the precision a reader wants for it: "340 ms", "2.40 s",
+ * "3 m 12 s", "1 h 4 m" — sub-second work stays in milliseconds, long runs
+ * drop the digits that stopped meaning anything. "—" when there is no span.
+ */
+export function formatDuration(ms: number | undefined): string {
+  if (ms === undefined || !Number.isFinite(ms)) return "—"
+  if (ms < 1000) return `${Math.round(ms)} ms`
+  const s = ms / 1000
+  if (s < 60) return `${s < 10 ? s.toFixed(2) : s.toFixed(1)} s`
+  const m = Math.floor(s / 60)
+  if (m < 60) return `${m} m ${Math.round(s % 60)} s`
+  return `${Math.floor(m / 60)} h ${m % 60} m`
+}
+
 export function formatStorageClass(sc: string): string {
   return sc
     .replace(/_/g, " ")
