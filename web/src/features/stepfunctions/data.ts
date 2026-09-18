@@ -11,6 +11,7 @@ export const sfnKeys = {
   executions: (stateMachineArn: string) =>
     [...sfnKeys.all(), "executions", stateMachineArn] as const,
   execution: (executionArn: string) => [...sfnKeys.all(), "execution", executionArn] as const,
+  mapRunExecutions: (mapRunArn: string) => [...sfnKeys.all(), "mapRun", mapRunArn] as const,
   executionDefinition: (executionArn: string) =>
     [...sfnKeys.execution(executionArn), "definition"] as const,
   executionHistory: (executionArn: string) =>
@@ -64,6 +65,17 @@ export function sfnExecutionQueryOptions(executionArn: string) {
   })
 }
 
+/** The child executions of a distributed Map run; polls while any is running. */
+export function sfnMapRunExecutionsQueryOptions(mapRunArn: string) {
+  return queryOptions({
+    queryKey: sfnKeys.mapRunExecutions(mapRunArn),
+    queryFn: () => stepfunctions.listExecutions({ mapRunArn }),
+    enabled: mapRunArn !== "",
+    refetchInterval: (query) =>
+      query.state.data?.some((e) => isRunning(e.status)) ? LIVE_POLL_MS * 2 : false,
+  })
+}
+
 export function sfnExecutionDefinitionQueryOptions(executionArn: string) {
   return queryOptions({
     queryKey: sfnKeys.executionDefinition(executionArn),
@@ -114,6 +126,13 @@ export function startExecutionMutationOptions() {
   return mutationOptions({
     mutationKey: [...sfnKeys.all(), "startExecution"] as const,
     mutationFn: stepfunctions.startExecution,
+  })
+}
+
+export function redriveExecutionMutationOptions() {
+  return mutationOptions({
+    mutationKey: [...sfnKeys.all(), "redriveExecution"] as const,
+    mutationFn: (executionArn: string) => stepfunctions.redriveExecution(executionArn),
   })
 }
 

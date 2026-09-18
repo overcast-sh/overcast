@@ -8,6 +8,8 @@
  * the event history.
  */
 import { useMemo, useState } from "react"
+import { useQuery } from "@tanstack/react-query"
+import { Link } from "@tanstack/react-router"
 import { ArrowRight, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -26,6 +28,7 @@ import {
   type IterationSelection,
   type StateRun,
 } from "../execution-trace"
+import { sfnMapRunExecutionsQueryOptions } from "../data"
 import { EventType } from "./event-type"
 import { STATUS_THEME, stateTypeTheme } from "../state-theme"
 import { JsonPane } from "./json-pane"
@@ -39,6 +42,8 @@ interface Props {
   onClose: () => void
   /** Moves the selection to another state, e.g. from a "Next" link. */
   onSelectState: (name: string) => void
+  /** The state machine's name, for links to a distributed Map's child executions. */
+  machineName?: string
 }
 
 export function StateInspector({
@@ -49,6 +54,7 @@ export function StateInspector({
   now,
   onClose,
   onSelectState,
+  machineName,
 }: Props) {
   const state = model.states.get(stateName)
   const runs = useMemo(
@@ -119,6 +125,10 @@ export function StateInspector({
 
         {run && <RunSummary run={run} now={now} />}
 
+        {run?.mapRunArn && machineName && (
+          <MapRunChildren mapRunArn={run.mapRunArn} machineName={machineName} />
+        )}
+
         <Tabs selectedKey={tab} onSelectionChange={setTab}>
           <TabList aria-label="State details">
             {trace && <Tab id="io">Input &amp; output</Tab>}
@@ -154,6 +164,58 @@ export function StateInspector({
       </div>
     </aside>
   )
+}
+
+/** A distributed Map's work happens in child executions; list them, each linking to its own live view. */
+function MapRunChildren({ mapRunArn, machineName }: { mapRunArn: string; machineName: string }) {
+  const { data: children = [], isLoading } = useQuery(sfnMapRunExecutionsQueryOptions(mapRunArn))
+  const counts = children.reduce<Record<string, number>>((acc, c) => {
+    acc[c.status ?? "?"] = (acc[c.status ?? "?"] ?? 0) + 1
+    return acc
+  }, {})
+  return (
+    <div className="flex flex-col gap-1.5">
+      <SectionLabel>
+        Child executions
+        {children.length > 0 &&
+          ` · ${Object.entries(counts)
+            .map(([status, n]) => `${n} ${status.toLowerCase()}`)
+            .join(", ")}`}
+      </SectionLabel>
+      {isLoading ? (
+        <p className="text-xs text-fg-muted">Loading…</p>
+      ) : children.length === 0 ? (
+        <p className="text-xs text-fg-muted">No child executions yet.</p>
+      ) : (
+        <ul className="flex max-h-48 flex-col gap-px overflow-y-auto rounded-md border border-border bg-bg-muted p-1">
+          {children.map((child) => (
+            <li key={child.executionArn}>
+              <Link
+                to="/stepfunctions/execution/$name/$execution"
+                params={{ name: machineName, execution: child.name ?? "" }}
+                search={{ arn: child.executionArn }}
+                className="flex items-center gap-2 rounded px-2 py-1 font-mono text-2xs text-fg-muted hover:bg-bg-elevated hover:text-accent"
+              >
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ background: executionStatusColor(child.status) }}
+                />
+                <span className="min-w-0 flex-1 truncate">{child.name}</span>
+                <span className="shrink-0">{child.status}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function executionStatusColor(status: string | undefined): string {
+  if (status === "SUCCEEDED") return STATUS_THEME.succeeded.color
+  if (status === "RUNNING") return STATUS_THEME.running.color
+  if (status === "FAILED" || status === "TIMED_OUT") return STATUS_THEME.failed.color
+  return STATUS_THEME.aborted.color
 }
 
 function RunPicker({

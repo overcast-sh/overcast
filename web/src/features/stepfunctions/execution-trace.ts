@@ -52,6 +52,8 @@ export interface StateRun {
   eventIds: number[]
   /** For a Map run: items it was given, and its iterations by index. */
   itemCount?: number
+  /** For a distributed Map run: the map run whose child executions did the work. */
+  mapRunArn?: string
   iterations?: Map<number, MapIterationInfo>
   /** Resource the task called, when it is a Task. */
   resource?: string
@@ -106,6 +108,7 @@ interface Frame {
 }
 
 type Details = {
+  mapRunArn?: string
   name?: string
   input?: string
   output?: string
@@ -251,6 +254,33 @@ export function buildTrace(events: HistoryEvent[], model?: AslModel): ExecutionT
       trace.start = at
       trace.status = "RUNNING"
       trace.input = details?.input
+    } else if (type === "ExecutionRedriven") {
+      // A redrive resumes a finished execution: it is running again, and the
+      // runs that failed stay in the record as they ended.
+      trace.status = "RUNNING"
+      trace.end = undefined
+      trace.error = undefined
+      trace.cause = undefined
+      trace.output = undefined
+      trace.failedRunKey = undefined
+      unwindTo(stack, 0, at)
+    } else if (/^[A-Za-z]+StateAborted$/.test(type)) {
+      // A Task, Wait, Parallel or Map interrupted by StopExecution, a timeout or
+      // a failed sibling. It links to the state's own last event, so the state
+      // is the innermost open run of that type on this thread.
+      const stateType = type.slice(0, -"StateAborted".length)
+      const index = findFrame(stack, (run) => run.type === stateType && run.status === "running")
+      const run = runOf(stack[index])
+      if (run) {
+        attributed = run.key
+        unwindTo(stack, index, at, "aborted", "aborted")
+      }
+    } else if (type === "MapRunStarted") {
+      const run = runOf(stack[findFrame(stack, (r) => r.type === "Map")])
+      if (run) {
+        attributed = run.key
+        run.mapRunArn = details?.mapRunArn
+      }
     } else if (type.endsWith("StateEntered")) {
       const name = details?.name ?? ""
       const stateType = type.slice(0, -"StateEntered".length)

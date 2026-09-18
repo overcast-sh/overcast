@@ -11,6 +11,7 @@ import {
   GetExecutionHistoryCommand,
   StartExecutionCommand,
   StopExecutionCommand,
+  RedriveExecutionCommand,
   type ExecutionListItem,
   type HistoryEvent,
   type StateMachineType,
@@ -80,13 +81,15 @@ export const stepfunctions = {
     await awsClients.sfn().send(new DeleteStateMachineCommand({ stateMachineArn: arn }))
   },
 
-  listExecutions: async (stateMachineArn: string) => {
+  /** Executions of a state machine, or — given `{ mapRunArn }` — the child executions of a distributed Map run. */
+  listExecutions: async (source: string | { mapRunArn: string }) => {
     const all: ExecutionListItem[] = []
     let nextToken: string | undefined
+    const filter = typeof source === "string" ? { stateMachineArn: source } : source
     for (let page = 0; page < MAX_PAGES; page++) {
       const res = await awsClients
         .sfn()
-        .send(new ListExecutionsCommand({ stateMachineArn, nextToken, maxResults: 1000 }))
+        .send(new ListExecutionsCommand({ ...filter, nextToken, maxResults: 1000 }))
       all.push(...(res.executions ?? []))
       nextToken = res.nextToken
       if (!nextToken) break
@@ -129,15 +132,17 @@ export const stepfunctions = {
     input: string
     name?: string
   }) =>
-    awsClients
-      .sfn()
-      .send(
-        new StartExecutionCommand({
-          stateMachineArn,
-          input: input || "{}",
-          name: name || undefined,
-        }),
-      ),
+    awsClients.sfn().send(
+      new StartExecutionCommand({
+        stateMachineArn,
+        input: input || "{}",
+        name: name || undefined,
+      }),
+    ),
+
+  /** Resumes a failed, timed-out or aborted Standard execution from where it stopped. */
+  redriveExecution: async (executionArn: string) =>
+    awsClients.sfn().send(new RedriveExecutionCommand({ executionArn })),
 
   stopExecution: async ({
     executionArn,

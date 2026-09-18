@@ -235,6 +235,103 @@ describe("buildTrace", () => {
     expect(summarizeNode(trace, "W", {}).focusRun?.end).toBeUndefined()
   })
 
+  it("keeps concurrent Map iterations apart, each chaining from MapStateStarted", () => {
+    // Given: two iterations that run at once, their events interleaved
+    const m = model({
+      StartAt: "Each",
+      States: {
+        Each: {
+          Type: "Map",
+          ItemProcessor: { StartAt: "Work", States: { Work: { Type: "Pass", End: true } } },
+          End: true,
+        },
+      },
+    })
+    const trace = buildTrace(
+      [
+        ev(1, 0, "ExecutionStarted", { input: "[1,2]" }),
+        ev(2, 1, "MapStateEntered", { name: "Each" }),
+        ev(3, 2, "MapStateStarted", { length: 2 }),
+        ev(4, 3, "MapIterationStarted", { name: "Each", index: 0 }),
+        ev(5, 3, "MapIterationStarted", { name: "Each", index: 1 }),
+        ev(6, 4, "PassStateEntered", { name: "Work", input: "1" }),
+        ev(7, 5, "PassStateEntered", { name: "Work", input: "2" }),
+        ev(8, 6, "PassStateExited", { name: "Work", output: "1" }),
+        ev(9, 8, "MapIterationSucceeded", { name: "Each", index: 0 }),
+        ev(10, 7, "PassStateExited", { name: "Work", output: "2" }),
+        ev(11, 10, "MapIterationSucceeded", { name: "Each", index: 1 }),
+        ev(12, 11, "MapStateSucceeded"),
+        ev(13, 12, "MapStateExited", { name: "Each" }),
+        ev(14, 13, "ExecutionSucceeded", {}),
+      ],
+      m,
+    )
+
+    // Then: each run knows its own iteration, and each iteration's run finished
+    const work = trace.runsByName.get("Work") ?? []
+    expect(work.map((r) => [r.input, r.iterationPath[0]?.index, r.status])).toEqual([
+      ["1", 0, "succeeded"],
+      ["2", 1, "succeeded"],
+    ])
+    expect(summarizeNode(trace, "Work", { Each: 1 }).focusRun?.output).toBe("2")
+  })
+
+  it("marks a state interrupted by a failed sibling branch as aborted", () => {
+    // Given: branch B fails while branch A's Wait is still running
+    const m = model({
+      StartAt: "P",
+      States: {
+        P: {
+          Type: "Parallel",
+          Branches: [
+            { StartAt: "A", States: { A: { Type: "Wait", Seconds: 60, End: true } } },
+            { StartAt: "B", States: { B: { Type: "Fail", Error: "Boom" } } },
+          ],
+          End: true,
+        },
+      },
+    })
+    const trace = buildTrace(
+      [
+        ev(1, 0, "ExecutionStarted", {}),
+        ev(2, 1, "ParallelStateEntered", { name: "P" }),
+        ev(3, 2, "ParallelStateStarted"),
+        ev(4, 3, "WaitStateEntered", { name: "A" }),
+        ev(5, 3, "FailStateEntered", { name: "B" }),
+        ev(6, 4, "WaitStateAborted"),
+        ev(7, 5, "ParallelStateFailed"),
+        ev(8, 7, "ExecutionFailed", { error: "Boom", cause: "" }),
+      ],
+      m,
+    )
+    expect(trace.runsByName.get("A")?.[0].status).toBe("aborted")
+    expect(trace.runsByName.get("B")?.[0].status).toBe("failed")
+    expect(trace.status).toBe("FAILED")
+  })
+
+  it("reopens a failed execution when it is redriven", () => {
+    const m = model({
+      StartAt: "Call",
+      States: { Call: { Type: "Task", Resource: "r", End: true } },
+    })
+    const trace = buildTrace(
+      linear([
+        ["ExecutionStarted", { input: "{}" }],
+        ["TaskStateEntered", { name: "Call" }],
+        ["TaskScheduled", {}],
+        ["TaskFailed", { error: "Boom", cause: "" }],
+        ["ExecutionFailed", { error: "Boom", cause: "" }],
+        ["ExecutionRedriven", { redriveCount: 1 }],
+        ["TaskStateEntered", { name: "Call" }],
+      ]),
+      m,
+    )
+    // The first attempt stays failed in the record; the redrive runs it again.
+    expect(trace.status).toBe("RUNNING")
+    expect(trace.error).toBeUndefined()
+    expect(trace.runsByName.get("Call")?.map((r) => r.status)).toEqual(["failed", "running"])
+  })
+
   it("sorts events that arrive out of order before walking them", () => {
     const events = linear([
       ["ExecutionStarted", { input: "{}" }],

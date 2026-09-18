@@ -51,6 +51,8 @@ export interface AslState {
   childScopes: string[]
   /** One-line summary of what the state does, e.g. "Lambda · resize-image". */
   summary: string
+  /** A Map whose items run as child executions (`ProcessorConfig.Mode: DISTRIBUTED`). */
+  distributed: boolean
 }
 
 export interface AslScope {
@@ -217,7 +219,15 @@ function readState(
     transitions,
     childScopes,
     summary: summarizeState(type, raw),
+    distributed: type === "Map" && isDistributed(raw),
   }
+}
+
+function isDistributed(raw: Json): boolean {
+  const processor = isObject(raw.ItemProcessor) ? raw.ItemProcessor : undefined
+  const config =
+    processor && isObject(processor.ProcessorConfig) ? processor.ProcessorConfig : undefined
+  return config?.Mode === "DISTRIBUTED"
 }
 
 /** Flags transitions that leave their scope or name no state, and states with nowhere to go. */
@@ -408,11 +418,12 @@ function summarizeState(type: string, raw: Json): string {
             : isObject(raw.ItemReader)
               ? "items from S3"
               : "$"
+      const mode = isDistributed(raw) ? "Distributed · " : ""
       const concurrency =
         typeof raw.MaxConcurrency === "number" && raw.MaxConcurrency > 0
           ? ` · max ${raw.MaxConcurrency}`
           : ""
-      return `For each in ${items}${concurrency}`
+      return `${mode}for each in ${items}${concurrency}`
     }
     case "Pass":
       return raw.Result !== undefined ? "Inject result" : "Pass input through"

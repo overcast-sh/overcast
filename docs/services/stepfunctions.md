@@ -99,6 +99,26 @@ State names must be unique across the whole state machine, nested Parallel
 branches and Map processors included — `CreateStateMachine` rejects a duplicate
 with `InvalidDefinition`, as AWS does.
 
+## In the console
+
+Each state machine is drawn as a flow diagram laid out from its definition:
+Parallel branches and a Map's item processor sit in lanes inside their state,
+Choice edges carry their conditions, and Catch edges are dashed. A state
+machine that has never run opens on its diagram; select a state to see what it
+calls, where it goes next, and how it retries and catches.
+
+An execution plays on the same diagram while it runs. The running state pulses,
+the paths taken light up, retries and repeated runs are badged, and a Map's
+progress strip lets you view one iteration at a time. Selecting a state shows
+each of its runs with input, output, error and events. Below the diagram the
+history also reads as a timeline of state runs by branch and iteration, and as
+an event list you can filter by category and search. For a distributed Map, the
+Map state lists its child executions, each with its own live view.
+
+The diagram exports as SVG or PNG, with the execution's statuses when one is on
+screen. Executions can be stopped, redriven after a failure, or run again with
+the same input.
+
 <!-- BEGIN overcast:capabilities -->
 
 ## Operations

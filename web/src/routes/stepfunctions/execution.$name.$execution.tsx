@@ -7,6 +7,8 @@ type ExecutionSearch = {
   state?: string
   /** Lower panel: timeline (default), events, io or definition. */
   tab?: ExecutionTab
+  /** The full execution ARN, for executions whose ARN the names cannot rebuild (distributed Map children). */
+  arn?: string
 }
 
 export const Route = createFileRoute("/stepfunctions/execution/$name/$execution")({
@@ -16,15 +18,17 @@ export const Route = createFileRoute("/stepfunctions/execution/$name/$execution"
   validateSearch: (search: Record<string, unknown>): ExecutionSearch => ({
     state: typeof search.state === "string" && search.state !== "" ? search.state : undefined,
     tab: isExecutionTab(search.tab) ? search.tab : undefined,
+    arn: typeof search.arn === "string" && search.arn.startsWith("arn:") ? search.arn : undefined,
   }),
   component: function ExecutionDetailRoute() {
     const { name, execution } = Route.useParams()
-    const { state, tab } = Route.useSearch()
+    const { state, tab, arn } = Route.useSearch()
     const navigate = Route.useNavigate()
     return (
       <ExecutionDetail
         name={name}
         execution={execution}
+        executionArn={arn}
         state={state}
         // Selecting a state is a view change, not a destination: replace the
         // history entry so Back leaves the execution instead of undoing clicks.

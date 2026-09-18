@@ -1,13 +1,22 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Link, useNavigate } from "@tanstack/react-router"
-import { AlertTriangle, Crosshair, ListTree, Play, RefreshCw, Square } from "lucide-react"
+import {
+  AlertTriangle,
+  Crosshair,
+  ListTree,
+  Play,
+  RefreshCw,
+  RotateCcw,
+  Square,
+} from "lucide-react"
 import {
   sfnExecutionDefinitionQueryOptions,
   sfnExecutionHistoryQueryOptions,
   sfnExecutionQueryOptions,
   sfnKeys,
   sfnStateMachinesQueryOptions,
+  redriveExecutionMutationOptions,
   startExecutionMutationOptions,
   stopExecutionMutationOptions,
 } from "@/features/stepfunctions/data"
@@ -43,6 +52,12 @@ interface Props {
   name: string
   /** Execution name, from the route. */
   execution: string
+  /**
+   * The execution's full ARN, when it cannot be derived from the machine and
+   * execution names — a distributed Map's child executions carry the map run's
+   * label in theirs.
+   */
+  executionArn?: string
   /** Selected state, deep-linkable. */
   state?: string
   onStateChange: (state: string | undefined) => void
@@ -71,6 +86,7 @@ function useNow(active: boolean, intervalMs = 250): number {
 export function ExecutionDetail({
   name,
   execution,
+  executionArn: explicitArn,
   state: selectedState,
   onStateChange,
   tab,
@@ -83,7 +99,8 @@ export function ExecutionDetail({
     () => machines.find((m) => m.name === name)?.stateMachineArn ?? "",
     [machines, name],
   )
-  const executionArn = stateMachineArn ? executionArnFor(stateMachineArn, execution) : ""
+  const executionArn =
+    explicitArn ?? (stateMachineArn ? executionArnFor(stateMachineArn, execution) : "")
 
   const {
     data: detail,
@@ -115,12 +132,23 @@ export function ExecutionDetail({
 
   const [showStop, setShowStop] = useState(false)
   const [showRerun, setShowRerun] = useState(false)
+  const [showRedrive, setShowRedrive] = useState(false)
 
   const stopMut = useResourceMutation({
     options: stopExecutionMutationOptions(),
     invalidateKeys: [sfnKeys.execution(executionArn), sfnKeys.executions(stateMachineArn)],
     successTitle: "Execution stopped",
     onSuccess: () => setShowStop(false),
+  })
+  const redriveMut = useResourceMutation({
+    options: redriveExecutionMutationOptions(),
+    invalidateKeys: [sfnKeys.execution(executionArn), sfnKeys.executions(stateMachineArn)],
+    successTitle: "Execution redriven",
+    successDescription: () => "It resumes from the state that stopped it.",
+    onSuccess: () => {
+      setShowRedrive(false)
+      void refetchHistory()
+    },
   })
   const startMut = useResourceMutation({
     options: startExecutionMutationOptions(),
@@ -155,7 +183,7 @@ export function ExecutionDetail({
     ...new Set(trace.runs.filter((r) => r.status === "running").map((r) => r.name)),
   ]
 
-  if (listLoading || (executionArn && detailLoading)) {
+  if ((listLoading && !explicitArn) || (executionArn && detailLoading)) {
     return (
       <div className="flex justify-center py-16">
         <Spinner className="h-6 w-6" />
@@ -181,6 +209,12 @@ export function ExecutionDetail({
   }
 
   const duration = detail.startDate ? clock - detail.startDate.getTime() : undefined
+  // Redrive resumes a Standard execution that failed, timed out or was
+  // aborted; the API refuses anything else, so the button is not offered.
+  const canRedrive =
+    ["FAILED", "TIMED_OUT", "ABORTED"].includes(detail.status ?? "") &&
+    definition?.stateMachineArn !== undefined &&
+    machines.find((m) => m.stateMachineArn === stateMachineArn)?.type !== "EXPRESS"
   const diagram = model ? (
     <FlowDiagram
       model={model}
@@ -211,6 +245,7 @@ export function ExecutionDetail({
         now={clock}
         onClose={() => onStateChange(undefined)}
         onSelectState={onStateChange}
+        machineName={name}
       />
     ) : (
       <ExecutionOverview
@@ -242,6 +277,12 @@ export function ExecutionDetail({
               <Play className="mr-1.5 h-3.5 w-3.5" />
               Run again
             </Button>
+            {canRedrive && (
+              <Button size="sm" variant="secondary" onClick={() => setShowRedrive(true)}>
+                <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                Redrive
+              </Button>
+            )}
             {live && (
               <Button size="sm" variant="danger" onClick={() => setShowStop(true)}>
                 <Square className="mr-1.5 h-3.5 w-3.5" />
@@ -391,6 +432,21 @@ export function ExecutionDetail({
         variant="danger"
         isPending={stopMut.isPending}
         onConfirm={() => stopMut.mutate({ executionArn })}
+      />
+
+      <ConfirmDialog
+        open={showRedrive}
+        onOpenChange={setShowRedrive}
+        title="Redrive execution"
+        description={
+          <>
+            Resume <span className="font-mono font-semibold">{execution}</span> from the state that
+            stopped it? States that already succeeded are not run again.
+          </>
+        }
+        confirmLabel="Redrive"
+        isPending={redriveMut.isPending}
+        onConfirm={() => redriveMut.mutate(executionArn)}
       />
 
       <StartExecutionDialog

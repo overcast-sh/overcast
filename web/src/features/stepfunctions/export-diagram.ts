@@ -167,7 +167,7 @@ export function diagramToSvg(
       const laneStatus = view.laneStatus(lane.scopeId)
       out.push(
         `<rect x="${lane.x + ox}" y="${lane.y + oy}" width="${lane.width}" height="${lane.height}" rx="8" fill="${p.bg}" fill-opacity="0.4" stroke="${laneStatus === "idle" ? p.border : statusColor(laneStatus, p)}" stroke-opacity="0.6"/>`,
-        `<text x="${lane.x + ox + 10}" y="${lane.y + oy + 4}" font-size="9" letter-spacing="1" fill="${p.fgSubtle}" font-family='${MONO}' paint-order="stroke" stroke="${p.surface}" stroke-width="4">${escapeXml(laneLabel(state.type, i).toUpperCase())}</text>`,
+        `<text x="${lane.x + ox + 10}" y="${lane.y + oy + 4}" font-size="9" letter-spacing="1" fill="${p.fgSubtle}" font-family='${MONO}' paint-order="stroke" stroke="${p.surface}" stroke-width="4">${escapeXml(laneLabel(state, i).toUpperCase())}</text>`,
       )
     })
     out.push(`</g>`)

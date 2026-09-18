@@ -652,7 +652,7 @@ function FlowCanvas({
         const lanes = (n.lanes ?? []).map((lane, i) => ({
           ...lane,
           status: view.laneStatus(lane.scopeId),
-          label: laneLabel(state.type, i),
+          label: laneLabel(state, i),
         }))
         out.push({
           ...base,
