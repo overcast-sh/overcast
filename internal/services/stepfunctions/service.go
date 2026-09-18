@@ -76,6 +76,9 @@ func (s *Service) TargetPrefix() string { return "AWSStepFunctions." }
 
 // Dispatch satisfies router.TargetDispatcher.
 func (s *Service) Dispatch(w http.ResponseWriter, r *http.Request) {
+	// Executions parked by a previous process resume before the first
+	// request is answered, so their tokens and activity tasks are live again.
+	s.handler.ensureRehydrated()
 	if c, opName := codec.FromContext(r.Context()); c != nil && opName != "" {
 		if !codec.Supports(s.SupportedProtocols(), c) {
 			w.Header().Set("x-emulator-unsupported-protocol", c.Name())

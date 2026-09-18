@@ -55,6 +55,29 @@ type executionRun struct {
 	// queryLanguage is the default query language when the definition run
 	// does not name one: a distributed Map child inherits its Map state's.
 	queryLanguage string
+
+	// durable marks a run that checkpoints where it parks and survives a
+	// restart (durable.go): one launched asynchronously, not EXPRESS.
+	// parkResume is the park checkpoint a rehydrated run resumes inside (its
+	// starting point is resume, above), and resumeTask the task
+	// registered again for its token. parked is true while the top-level
+	// frame is waiting at a checkpointed park point.
+	durable    bool
+	parkResume *executionCheckpoint
+	resumeTask *pendingTask
+	parked     bool
+}
+
+func (r *executionRun) setParked(parked bool) {
+	r.mu.Lock()
+	r.parked = parked
+	r.mu.Unlock()
+}
+
+func (r *executionRun) isParked() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.parked
 }
 
 // noteFailure records the top-level state a failure ended the run in. The

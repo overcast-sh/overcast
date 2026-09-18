@@ -91,9 +91,11 @@ an uncaught task timeout is a `FAILED` execution rather than a `TIMED_OUT` one, 
 on AWS. A local cold start can be slower than AWS's, so a tight
 `TimeoutSeconds` may fire here where it would not in the cloud.
 
-Task tokens and activity tasks live in memory with the execution waiting on
-them: restarting Overcast ends that execution, so a token issued before the
-restart is `TaskDoesNotExist` afterwards.
+With a persistent store, an execution parked on a task token, an activity
+task or a `Wait` at the top level of its definition survives a restart: its
+token keeps working and it resumes where it waited. An execution caught
+anywhere else by a restart ends `FAILED` with `States.Runtime` and can be
+redriven — see [Limitations](stepfunctions/limitations.md#executions).
 
 State names must be unique across the whole state machine, nested Parallel
 branches and Map processors included — `CreateStateMachine` rejects a duplicate

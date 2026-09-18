@@ -18,9 +18,11 @@ import (
 // SendTaskFailure with the token Step Functions issued, optionally keeping it
 // alive with SendTaskHeartbeat.
 //
-// Tokens live only as long as the execution that is waiting on them, which is
-// in memory — executions themselves are in-process goroutines, so a token that
-// outlived its process would name nothing that could resume.
+// The registry below is in memory, but a token outlives the process that
+// issued it: a top-level Task parked on its token writes a checkpoint
+// (durable.go), and after a restart the execution is rehydrated and its token
+// registered again with restore, so SendTaskSuccess/SendTaskFailure/
+// SendTaskHeartbeat and GetActivityTask keep working.
 
 // taskCallback is what a worker reported for a token.
 type taskCallback struct {
@@ -78,8 +80,14 @@ func newTaskToken() string {
 
 // register issues a token for a Task and makes it answerable.
 func (r *taskRegistry) register(activityArn, input string) *pendingTask {
+	return r.restore(newTaskToken(), activityArn, input)
+}
+
+// restore makes a token issued before a restart answerable again. It is
+// register with the token supplied rather than minted.
+func (r *taskRegistry) restore(token, activityArn, input string) *pendingTask {
 	task := &pendingTask{
-		token:       newTaskToken(),
+		token:       token,
 		activityArn: activityArn,
 		input:       input,
 		result:      make(chan taskCallback, 1),
@@ -256,43 +264,66 @@ func (h *Handler) sendTaskHeartbeatTyped(_ context.Context, req *sendTaskHeartbe
 // lapses, or ctx ends. heartbeat is HeartbeatSeconds, nil when the state set
 // none. A lapsed heartbeat is States.HeartbeatTimeout; a successful answer
 // returns the worker's output decoded.
-func (in *interpreter) awaitCallback(ctx context.Context, task *pendingTask, heartbeat *int64) (any, *stateError) {
+//
+// park is the task's durable checkpoint, nil when the execution is not
+// durable. A resumed task's first heartbeat window runs to the deadline the
+// checkpoint recorded rather than a fresh HeartbeatSeconds, and each
+// heartbeat moves that deadline (see parkHandle.noteHeartbeat).
+func (in *interpreter) awaitCallback(ctx context.Context, task *pendingTask, heartbeat *int64, park *parkHandle) (any, *stateError) {
 	var (
 		timer   interface{ Stop() bool }
 		expired <-chan time.Time
 	)
-	arm := func() {
-		if heartbeat == nil {
-			return
-		}
+	arm := func(d time.Duration) {
 		if timer != nil {
 			timer.Stop()
 		}
-		t := in.handler.clk.Timer(time.Duration(*heartbeat) * time.Second)
+		t := in.handler.clk.Timer(max(d, 0))
 		timer, expired = t, t.C
 	}
-	arm()
+	if heartbeat != nil {
+		window := time.Duration(*heartbeat) * time.Second
+		if deadline := park.heartbeatDeadline(); deadline != nil {
+			window = deadline.Sub(in.handler.clk.Now())
+		}
+		arm(window)
+	}
 	defer func() {
 		if timer != nil {
 			timer.Stop()
 		}
 	}()
+	answer := func(cb taskCallback) (any, *stateError) {
+		if cb.failed {
+			return nil, &stateError{name: cb.errName, cause: cb.cause}
+		}
+		var decoded any
+		if err := json.Unmarshal([]byte(cb.output), &decoded); err != nil {
+			return nil, newStateError(errRuntime, "the task output is not valid JSON: %v", err)
+		}
+		return decoded, nil
+	}
 	for {
 		select {
 		case cb := <-task.result:
-			if cb.failed {
-				return nil, &stateError{name: cb.errName, cause: cb.cause}
-			}
-			var decoded any
-			if err := json.Unmarshal([]byte(cb.output), &decoded); err != nil {
-				return nil, newStateError(errRuntime, "the task output is not valid JSON: %v", err)
-			}
-			return decoded, nil
+			return answer(cb)
 		case <-task.heartbeat:
-			arm()
+			if heartbeat == nil {
+				continue
+			}
+			window := time.Duration(*heartbeat) * time.Second
+			park.noteHeartbeat(ctx, in.handler.clk.Now().Add(window))
+			arm(window)
 		case <-expired:
 			return nil, newStateError(errHeartbeatTimeout, "the task did not send a heartbeat within HeartbeatSeconds (%d)", *heartbeat)
 		case <-ctx.Done():
+			// An answer that raced the unwind has already been accepted —
+			// complete forgot the token — so it must not be dropped.
+			select {
+			case cb := <-task.result:
+				return answer(cb)
+			default:
+			}
 			return nil, newStateError(errTimeout, "the task was interrupted while waiting for its token")
 		}
 	}
@@ -359,17 +390,39 @@ func (in *interpreter) runActivity(ctx context.Context, f *flow, activityArn str
 
 	task := in.handler.tasks.register(activityArn, input)
 	defer in.handler.tasks.release(task)
+	park := in.park(ctx, f, &executionCheckpoint{
+		Kind:             parkActivity,
+		Token:            task.token,
+		ActivityArn:      activityArn,
+		ActivityInput:    input,
+		HeartbeatSeconds: heartbeat,
+		TimeoutSeconds:   timeout,
+		TimeoutDeadline:  deadlineAfter(in.handler.clk.Now(), timeout),
+	})
 	in.handler.tasks.enqueue(task)
 
-	var result any
-	select {
-	case worker := <-task.picked:
-		in.record(HistoryEvent{Type: evtActivityStarted, ActivityStarted: &activityStartedDetails{WorkerName: worker}})
-		result, serr = in.awaitCallback(taskCtx, task, heartbeat)
-	case <-taskCtx.Done():
-		serr = newStateError(errTimeout, "the activity task was not completed in time")
-	}
+	result, serr := in.awaitActivity(ctx, taskCtx, task, heartbeat, park)
+	in.unpark(ctx, park, serr != nil && ctx.Err() != nil)
+	return in.finishActivity(ctx, taskCtx, name, timeout, result, serr)
+}
 
+// awaitActivity waits for a worker to pick the activity task up — unless the
+// checkpoint it resumes from says one already has — and then for its answer.
+func (in *interpreter) awaitActivity(ctx, taskCtx context.Context, task *pendingTask, heartbeat *int64, park *parkHandle) (any, *stateError) {
+	if !park.pickedUp() {
+		select {
+		case worker := <-task.picked:
+			in.record(HistoryEvent{Type: evtActivityStarted, ActivityStarted: &activityStartedDetails{WorkerName: worker}})
+			park.notePickedUp(ctx, worker, deadlineAfter(in.handler.clk.Now(), heartbeat))
+		case <-taskCtx.Done():
+			return nil, newStateError(errTimeout, "the activity task was not completed in time")
+		}
+	}
+	return in.awaitCallback(taskCtx, task, heartbeat, park)
+}
+
+// finishActivity records how an activity attempt ended and returns its result.
+func (in *interpreter) finishActivity(ctx, taskCtx context.Context, name string, timeout *int64, result any, serr *stateError) (any, *stateError) {
 	if serr != nil {
 		if ctx.Err() != nil {
 			return nil, in.unwindReason(ctx, name)

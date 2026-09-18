@@ -111,6 +111,11 @@ func (in *interpreter) runTask(ctx context.Context, f *flow) (any, *stateError) 
 	if serr != nil {
 		return nil, serr
 	}
+	// A Task resumed after a restart continues waiting on the token it was
+	// parked on; it is never dispatched a second time.
+	if cp := in.takeResumed(parkCallback, parkActivity); cp != nil {
+		return in.resumeParkedTask(ctx, name, integration, cp)
+	}
 	if integration.activityArn != "" {
 		return in.runActivity(ctx, f, integration.activityArn)
 	}
@@ -169,13 +174,52 @@ func (in *interpreter) runTask(ctx context.Context, f *flow) (any, *stateError) 
 		var submitted any
 		if submitted, serr = in.dispatchTask(taskCtx, submit, payload); serr == nil {
 			in.recordTaskSubmitted(integration, submitted)
-			result, serr = in.awaitCallback(taskCtx, callback, heartbeat)
+			now := in.handler.clk.Now()
+			park := in.park(ctx, f, &executionCheckpoint{
+				Kind:              parkCallback,
+				Token:             callback.token,
+				HeartbeatSeconds:  heartbeat,
+				HeartbeatDeadline: deadlineAfter(now, heartbeat),
+				TimeoutSeconds:    timeout,
+				TimeoutDeadline:   deadlineAfter(now, timeout),
+			})
+			result, serr = in.awaitCallback(taskCtx, callback, heartbeat, park)
+			in.unpark(ctx, park, serr != nil && ctx.Err() != nil)
 		}
 	} else if mock := in.taskMock(); mock != nil {
 		result, serr = mockedResult(mock)
 	} else {
 		result, serr = in.dispatchTask(taskCtx, integration, payload)
 	}
+	return in.finishTask(ctx, taskCtx, name, integration, timeout, result, serr)
+}
+
+// resumeParkedTask continues a Task that was waiting on its token when
+// Overcast last shut down (durable.go). The token was registered again during
+// rehydration; its heartbeat and TimeoutSeconds run to the deadlines the
+// checkpoint recorded, on the injected clock.
+func (in *interpreter) resumeParkedTask(ctx context.Context, name string, integration taskIntegration, cp *executionCheckpoint) (any, *stateError) {
+	task := in.run.resumeTask
+	defer in.handler.tasks.release(task)
+	taskCtx := ctx
+	if cp.TimeoutDeadline != nil {
+		var cancel context.CancelFunc
+		taskCtx, cancel = in.handler.clk.WithDeadline(ctx, *cp.TimeoutDeadline)
+		defer cancel()
+	}
+	park := in.resumePark(cp)
+	if cp.Kind == parkActivity {
+		result, serr := in.awaitActivity(ctx, taskCtx, task, cp.HeartbeatSeconds, park)
+		in.unpark(ctx, park, serr != nil && ctx.Err() != nil)
+		return in.finishActivity(ctx, taskCtx, name, cp.TimeoutSeconds, result, serr)
+	}
+	result, serr := in.awaitCallback(taskCtx, task, cp.HeartbeatSeconds, park)
+	in.unpark(ctx, park, serr != nil && ctx.Err() != nil)
+	return in.finishTask(ctx, taskCtx, name, integration, cp.TimeoutSeconds, result, serr)
+}
+
+// finishTask records how a Task attempt ended and returns its result.
+func (in *interpreter) finishTask(ctx, taskCtx context.Context, name string, integration taskIntegration, timeout *int64, result any, serr *stateError) (any, *stateError) {
 	if serr != nil {
 		// Whatever the interrupted integration reported, a failure after the
 		// Task's own deadline is States.Timeout — the error name AWS raises,

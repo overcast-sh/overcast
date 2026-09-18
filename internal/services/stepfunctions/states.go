@@ -89,11 +89,28 @@ func (in *interpreter) leaveChoice(f *flow, next string, assign, output json.Raw
 }
 
 func (in *interpreter) runWait(ctx context.Context, f *flow) (any, string, bool, *stateError) {
-	delay, serr := f.waitDuration(in.handler.clk.Now())
-	if serr != nil {
-		return nil, "", false, serr
+	now := in.handler.clk.Now()
+	var (
+		delay time.Duration
+		park  *parkHandle
+	)
+	if cp := in.takeResumed(parkWait); cp != nil && cp.WaitUntil != nil {
+		// Resumed after a restart: only what is left of the wait remains.
+		delay = max(cp.WaitUntil.Sub(now), 0)
+		park = in.resumePark(cp)
+	} else {
+		var serr *stateError
+		if delay, serr = f.waitDuration(now); serr != nil {
+			return nil, "", false, serr
+		}
+		if delay >= durableWaitThreshold {
+			until := now.Add(delay)
+			park = in.park(ctx, f, &executionCheckpoint{Kind: parkWait, WaitUntil: &until})
+		}
 	}
-	if !in.pause(ctx, delay) {
+	elapsed := in.pause(ctx, delay)
+	in.unpark(ctx, park, !elapsed)
+	if !elapsed {
 		return nil, "", false, in.unwindReason(ctx, f.name)
 	}
 	output, assigned, serr := f.finishPassthrough(f.state.Assign, f.state.Output)
@@ -180,9 +197,16 @@ func (in *interpreter) runRetryable(ctx context.Context, f *flow) (any, string, 
 	state := f.state
 	attempts := make([]int, len(state.Retry))
 	retryCount := 0
+	// A Task resumed after a restart carries on from the Retry position it
+	// was parked at.
+	if cp := in.parkResumed; cp != nil && len(cp.RetryAttempts) == len(attempts) {
+		copy(attempts, cp.RetryAttempts)
+		retryCount = cp.RetryCount
+	}
 
 	for {
 		attempt := f.withContext(in.stateContext(f.name, in.handler.clk.Now(), retryCount))
+		in.retryAttempts, in.retryCount = attempts, retryCount
 
 		result, serr := in.runRetryableOnce(ctx, attempt)
 		if serr == nil {

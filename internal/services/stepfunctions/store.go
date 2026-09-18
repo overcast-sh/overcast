@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/overcast-sh/overcast/internal/events"
 	"github.com/overcast-sh/overcast/internal/middleware"
 	"github.com/overcast-sh/overcast/internal/serviceutil"
@@ -131,6 +133,10 @@ type Execution struct {
 	// for an execution started against the unqualified state machine ARN.
 	StateMachineVersionArn string `json:"StateMachineVersionArn,omitempty"`
 	StateMachineAliasArn   string `json:"StateMachineAliasArn,omitempty"`
+	// RunnerID identifies the process running a RUNNING execution; PutExecution
+	// stamps it. A RUNNING record from another process that nothing here is
+	// running was cut off by a crash (Handler.reapIfOrphaned, durable.go).
+	RunnerID string `json:"RunnerID,omitempty"`
 }
 
 // Store wraps state.Store with Step Functions-specific helpers.
@@ -143,10 +149,13 @@ type Store struct {
 	// itself exists. Nil in most unit tests, which makes
 	// notifyExecutionStatusChange a no-op — see its doc comment.
 	eventBridge events.BusPublisher
+
+	// runnerID is this process's identity on the RUNNING records it writes.
+	runnerID string
 }
 
 func newStore(s state.Store, defaultRegion string) *Store {
-	return &Store{s: s, defaultRegion: defaultRegion}
+	return &Store{s: s, defaultRegion: defaultRegion, runnerID: uuid.NewString()}
 }
 
 // region extracts the per-request region from context, falling back to the default.
@@ -217,6 +226,10 @@ func (st *Store) PutExecution(ctx context.Context, exec *Execution) error {
 	// just means prev is nil; it is not fatal to the put itself.
 	prev, _ := st.GetExecution(ctx, exec.ExecutionArn)
 
+	exec.RunnerID = ""
+	if exec.Status == statusRunning {
+		exec.RunnerID = st.runnerID
+	}
 	raw, err := json.Marshal(exec)
 	if err != nil {
 		return fmt.Errorf("stepfunctions: marshal exec %q: %w", exec.ExecutionArn, err)

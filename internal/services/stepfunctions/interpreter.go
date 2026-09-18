@@ -82,6 +82,10 @@ type stateError struct {
 	// Retry and Catch never act on it, and runState records the state's
 	// `<Type>StateAborted` event for it.
 	unwound bool
+	// suspended marks the unwind of a parked, durable execution at shutdown:
+	// no aborted event, no terminal event and no terminal write — its
+	// checkpoint resumes it after the restart (durable.go).
+	suspended bool
 }
 
 func (e *stateError) Error() string { return e.name + ": " + e.cause }
@@ -147,6 +151,18 @@ type interpreter struct {
 	container       *redriveContainer
 	resume          *redrivePoint
 	resumeContainer *redrivePoint
+
+	// Durable parking (durable.go). enteredAt is when the state this frame is
+	// running was entered, retryAttempts/retryCount its Retry position — what
+	// a checkpoint records. parkResume is the park checkpoint a run rehydrated
+	// after a restart resumes inside, until its state is reached; parkResumed
+	// is that checkpoint while the state is dispatched, until the Task or
+	// Wait consumes it.
+	enteredAt     time.Time
+	retryAttempts []int
+	retryCount    int
+	parkResume    *executionCheckpoint
+	parkResumed   *executionCheckpoint
 }
 
 // fork returns a frame for a Parallel branch or Map iteration whose first
@@ -156,6 +172,7 @@ func (in *interpreter) fork(after int64) *interpreter {
 	cursor := after
 	child.cursor = &cursor
 	child.topLevel = false
+	child.parkResume, child.parkResumed = nil, nil
 	child.vars = newVarScope(in.vars)
 	child.point, child.container, child.resume, child.resumeContainer = nil, nil, nil, nil
 	return &child
@@ -183,6 +200,9 @@ type executionOutcome struct {
 	output string
 	err    *stateError
 	events []HistoryEvent
+	// suspended means the execution was parked when Overcast shut down and
+	// nothing terminal is to be written (durable.go).
+	suspended bool
 }
 
 // executionTimeout returns the wall-clock budget for one execution: the
@@ -228,10 +248,14 @@ func (h *Handler) runExecution(ctx context.Context, sm *StateMachine, exec *Exec
 	// runs, and only the synchronous callers still hold a request open. The
 	// cancel is deferred so no timer outlives the execution.
 	budget := h.executionTimeout(def)
+	if run.parkResume != nil {
+		budget = h.resumedBudget(def, exec)
+	}
 	runCtx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 
 	in := h.newInterpreter(sm, exec, region, depth, run)
+	in.parkResume = run.parkResume
 	in.queryLanguage = def.QueryLanguage
 	if in.queryLanguage == "" {
 		in.queryLanguage = run.queryLanguage
@@ -249,6 +273,9 @@ func (h *Handler) runExecution(ctx context.Context, sm *StateMachine, exec *Exec
 
 	output, serr := in.runBranchFrom(runCtx, def, start, input)
 	run.checkpoint = in.point
+	if serr != nil && serr.suspended {
+		return executionOutcome{suspended: true}
+	}
 	if serr != nil {
 		return in.finish(statusForError(serr), "", serr)
 	}
@@ -417,6 +444,14 @@ func (in *interpreter) unwindReason(ctx context.Context, state string) *stateErr
 		if stopped, errName, cause := in.run.abortReason(); stopped {
 			return &stateError{name: errName, cause: cause, aborted: true, unwound: true}
 		}
+		// A shutdown: a parked durable execution is suspended to resume
+		// after the restart; anything else ends now, loudly (durable.go).
+		if in.handler.shuttingDown() {
+			if in.run.isParked() {
+				return errSuspended()
+			}
+			return errInterruptedByShutdown(state)
+		}
 	}
 	if ctx != nil && errors.Is(context.Cause(ctx), errSiblingFailed) {
 		return &stateError{name: errRuntime, cause: errSiblingFailed.Error(), unwound: true}
@@ -436,28 +471,42 @@ func (in *interpreter) unwindReason(ctx context.Context, state string) *stateErr
 // runState interprets one state and reports the next transition. done means
 // the branch ends here (End: true, or a Succeed state).
 func (in *interpreter) runState(ctx context.Context, name string, state *aslState, raw any) (any, string, bool, *stateError) {
-	entered := in.handler.clk.Now()
+	entered, retryCount := in.handler.clk.Now(), 0
 	in.beginState(name)
-	f, serr := in.newFlow(name, state, raw, in.stateContext(name, entered, 0))
+	// A run rehydrated after a restart re-enters the state it was parked in
+	// without recording it as entered a second time.
+	resumed := in.takeResumeFor(name)
+	if resumed != nil {
+		entered, retryCount = resumed.EnteredTime, resumed.RetryCount
+	}
+	in.enteredAt = entered
+	f, serr := in.newFlow(name, state, raw, in.stateContext(name, entered, retryCount))
 	if serr != nil {
 		in.noteFailure(name, raw, serr)
 		return nil, "", false, serr
 	}
 
-	enteredJSON, encErr := encodeJSON(f.effective)
-	if encErr != nil {
-		return nil, "", false, newStateError(errRuntime, "%s", encErr.Error())
+	if resumed == nil {
+		enteredJSON, encErr := encodeJSON(f.effective)
+		if encErr != nil {
+			return nil, "", false, newStateError(errRuntime, "%s", encErr.Error())
+		}
+		in.recordAt(entered, HistoryEvent{
+			Type: stateEnteredEventType(state.Type),
+			StateEntered: &stateEnteredDetails{
+				Name:         name,
+				Input:        enteredJSON,
+				InputDetails: &executionDataDetails{},
+			},
+		})
 	}
-	in.recordAt(entered, HistoryEvent{
-		Type: stateEnteredEventType(state.Type),
-		StateEntered: &stateEnteredDetails{
-			Name:         name,
-			Input:        enteredJSON,
-			InputDetails: &executionDataDetails{},
-		},
-	})
 
+	in.parkResumed = resumed
 	output, next, done, serr := in.dispatchState(ctx, f)
+	in.parkResumed = nil
+	if serr != nil && serr.suspended {
+		return nil, "", false, serr
+	}
 	if serr != nil && serr.unwound {
 		if aborted := stateAbortedEventType(state.Type); aborted != "" {
 			in.record(HistoryEvent{Type: aborted})

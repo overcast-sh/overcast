@@ -137,7 +137,8 @@ func (h *Handler) startExecution(ctx context.Context, smARN, execName, input str
 }
 
 // launchAsync runs an execution on a tracked goroutine and returns at once.
-// StartExecution and RedriveExecution both come through here.
+// StartExecution, RedriveExecution and restart rehydration (durable.go) all
+// come through here.
 func (h *Handler) launchAsync(ctx context.Context, sm *StateMachine, exec *Execution, region string, depth int, run *executionRun) *protocol.AWSError {
 	log := h.log.WithRecorder(ctx)
 	execARN := exec.ExecutionArn
@@ -147,6 +148,10 @@ func (h *Handler) launchAsync(ctx context.Context, sm *StateMachine, exec *Execu
 	// request to read it from).
 	runCtx, cancel := context.WithCancel(middleware.ContextWithRegion(h.shutdown, region))
 	run.cancel = cancel
+	// Nothing waits on an asynchronous run but the store, so it can park
+	// durably and survive a restart (durable.go) — unless it is EXPRESS,
+	// which AWS never makes durable.
+	run.durable = !isExpress(sm)
 
 	// The goroutine mutates its own copy: the caller still holds exec for the
 	// response body.
@@ -182,6 +187,15 @@ func (h *Handler) completeExecution(ctx context.Context, sm *StateMachine, exec 
 // persistOutcome applies a run's terminal outcome to its execution record and
 // writes the history and the record.
 func (h *Handler) persistOutcome(ctx context.Context, exec *Execution, run *executionRun, outcome executionOutcome) error {
+	// A run suspended at shutdown ends nothing: its checkpoint resumes it
+	// after the restart (durable.go).
+	if outcome.suspended {
+		return nil
+	}
+	// The run's own context is usually cancelled by now — by StopExecution,
+	// the budget or shutdown — and a store that honours cancellation would
+	// otherwise drop the terminal write and leave the execution RUNNING.
+	ctx = context.WithoutCancel(ctx)
 	exec.Status = outcome.status
 	exec.Output = outcome.output
 	// An aborted execution reports the stop time StopExecution already handed
@@ -230,7 +244,7 @@ func (h *Handler) recoverExecution(ctx context.Context, exec *Execution) {
 	exec.StopDate = &stopped
 	exec.Error = errRuntime
 	exec.Cause = fmt.Sprintf("the execution panicked inside Overcast's interpreter: %v", r)
-	if err := h.store.PutExecution(ctx, exec); err != nil {
+	if err := h.store.PutExecution(context.WithoutCancel(ctx), exec); err != nil {
 		log.Logger().Error("stepfunctions: could not persist panicked execution",
 			zap.String("execution", exec.ExecutionArn), zap.Error(err))
 	}
@@ -620,6 +634,7 @@ func (h *Handler) listExecutionsTyped(ctx context.Context, req *listExecutionsRe
 	}
 	items := make([]executionListItem, 0, len(execs))
 	for _, exec := range execs {
+		exec = h.reapIfOrphaned(ctx, exec)
 		if (req.StatusFilter != "" && exec.Status != req.StatusFilter) || !matches(exec) {
 			continue
 		}
@@ -673,8 +688,9 @@ type stopExecutionResponse struct {
 // reaches ABORTED a moment later.
 //
 // An execution that is already terminal reports its recorded stop time
-// unchanged, and a RUNNING record with no live run (left behind by a process
-// that exited mid-execution) is transitioned here directly.
+// unchanged. A RUNNING record a crashed process left behind has already been
+// failed by getExecution (reapIfOrphaned, durable.go); one with no live run
+// that is not yet known to be orphaned is transitioned here directly.
 func (h *Handler) stopExecutionTyped(ctx context.Context, req *stopExecutionRequest) (*stopExecutionResponse, *protocol.AWSError) {
 	exec, aerr := h.getExecution(ctx, req.ExecutionArn)
 	if aerr != nil {
@@ -758,7 +774,9 @@ func (h *Handler) getExecution(ctx context.Context, arn string) (*Execution, *pr
 			HTTPStatus: http.StatusBadRequest,
 		}
 	}
-	return exec, nil
+	// A RUNNING record a crashed process left behind is failed rather than
+	// reported RUNNING forever (durable.go).
+	return h.reapIfOrphaned(ctx, exec), nil
 }
 
 // epochSeconds renders a timestamp the way the Step Functions wire protocol

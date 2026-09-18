@@ -62,7 +62,8 @@ AWS rejects it when the state machine is created.
 | Area                       | On AWS                                            | Overcast                                                   |
 | -------------------------- | ------------------------------------------------- | ---------------------------------------------------------- |
 | Express executions         | No `DescribeExecution`, history in CloudWatch Logs | Described, listed and recorded like Standard executions   |
-| Task tokens                | Survive for a year                                | Live as long as the execution's process                    |
+| Task tokens                | Survive for a year                                | Survive a restart when waited on by a top-level `Task`; inside a `Parallel` or `Map` they end with the process |
+| Executions across a restart | Never interrupted                               | Resume from a token, activity or `Wait` they were parked at; anything else ends `FAILED` (`States.Runtime`), redrivable |
 | Definition an execution ran | Kept with the execution                          | Kept for a version; an unversioned execution reports and redrives the current definition |
 | Logging and tracing        | Delivered to CloudWatch Logs and X-Ray             | Configuration is stored and echoed, nothing is delivered   |
 | `TestState` inspection     | `TRACE` adds the HTTP request and response        | `TRACE` reports what `DEBUG` does                          |
@@ -75,6 +76,28 @@ an `Items` expression using `$random` or `$uuid`, say — the whole Map runs
 again. A distributed Map's child executions are redriven by redriving the
 parent; `RedriveExecution` on a child itself is refused with
 `ExecutionNotRedrivable`.
+
+With a persistent store (`OVERCAST_STATE` other than `memory`), an execution
+survives an Overcast restart when it is parked where AWS itself waits on the
+outside world: a top-level `Task` waiting on its `.waitForTaskToken` token or on
+an activity worker, or a top-level `Wait` of a second or more. Its token
+answers `SendTaskSuccess`, `SendTaskFailure` and `SendTaskHeartbeat` again, an
+activity task no worker had taken is handed out by `GetActivityTask` again (one
+already taken stays with its worker), and the execution continues from that
+state with its history, `Retry` position, `Catch` and `ResultPath` intact.
+Heartbeat, `TimeoutSeconds` and `Wait` deadlines keep counting while Overcast
+is down, as they would on AWS. The first Step Functions request after the
+restart resumes them, so a deadline that passed while Overcast was down fires
+then.
+
+An execution caught anywhere else is not resumed. That covers a synchronous
+`Task` in flight, a token waited on inside a `Parallel` branch or `Map`
+iteration, a distributed Map, an `EXPRESS` workflow, and the child a `.sync`
+parent is blocked on. Such an execution ends `FAILED` with `States.Runtime` and
+a cause naming the restart, and `RedriveExecution` runs the interrupted state
+again. If Overcast was killed rather than shut down, this happens the first
+time the execution is read afterwards. Only the in-memory store loses
+executions outright on a restart.
 
 ## Versions, aliases and validation
 

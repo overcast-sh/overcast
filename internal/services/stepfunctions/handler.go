@@ -66,6 +66,12 @@ type Handler struct {
 	// reads live counts and UpdateMapRun reaches a running Map.
 	mapRuns   map[string]*liveMapRun
 	mapRunsMu sync.Mutex
+
+	// rehydrated resumes executions a previous process left parked, on the
+	// first request rather than at construction (durable.go); reapMu
+	// serialises failing the ones no restart can resume.
+	rehydrated serviceutil.LazyInit
+	reapMu     sync.Mutex
 }
 
 func newHandler(cfg *config.Config, store *Store, log *serviceutil.ServiceLogger, clk clock.Clock) *Handler {
