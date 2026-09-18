@@ -1,9 +1,14 @@
-+ [stepfunctions] JSONata query language and workflow variables (`Assign`) in both query languages, with AWS's added JSONata functions.
-  JSONata runs on a JSONata 1.5 engine; functions that exist only in JSONata 2.x fail with `States.QueryEvaluationError`
++ [stepfunctions] JSONata query language on a JSONata 2.x engine, and workflow variables (`Assign`) in both query languages.
+  AWS's added functions (`$partition`, `$range`, `$hash`, `$uuid`, `$parse`) work, `$now`/`$millis` read Overcast's clock, and `$eval` is withdrawn as on AWS
 + [stepfunctions] `.waitForTaskToken`, activities and `SendTaskSuccess`/`SendTaskFailure`/`SendTaskHeartbeat`, with `HeartbeatSeconds` enforced.
++ [stepfunctions] Executions parked on a task token, activity or Wait survive a restart on a persistent store, deadlines included.
+  any other execution a restart interrupts ends FAILED with `States.Runtime` and can be redriven, instead of staying RUNNING forever
 + [stepfunctions] Distributed Map: child executions, S3 `ItemReader`, `ItemBatcher`, failure tolerance, `ResultWriter`, and the map-run API.
 + [stepfunctions] `RedriveExecution`, `TestState`, `ValidateStateMachineDefinition`, state machine versions and aliases, and paginated list operations.
-+ [stepfunctions] `aws-sdk:` integrations for AWS JSON services and S3, plus `dynamodb:deleteItem` and `events:putEvents`.
+  a redrive re-runs only the failed Parallel branches, Map iterations and map-run children, from the state each stopped in
++ [stepfunctions] `aws-sdk:` Tasks call every modeled action of every service Overcast implements, over all six AWS wire protocols.
+  results keep user-data map keys as written and errors are named as the AWS SDK names them (`S3.NoSuchKeyException`)
++ [stepfunctions] `dynamodb:deleteItem` and `events:putEvents` optimized integrations.
 + [stepfunctions] all 18 intrinsic functions and full JSONPath paths — wildcards, descent, slices, unions and filters.
 ~ [stepfunctions] Parallel branches and Map iterations run concurrently, honouring `MaxConcurrency`; a failure aborts the siblings.
   history links each branch and iteration causally through `previousEventId`, and Map iteration events carry the Map state's `name`
