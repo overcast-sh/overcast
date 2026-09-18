@@ -40,6 +40,8 @@ import { cn } from "@/lib/utils"
 import { Tooltip } from "@/components/ui/tooltip"
 import type { AslModel, AslState } from "../asl"
 import {
+  END_ID,
+  START_ID,
   arrowHead,
   layoutModel,
   roundedPath,
@@ -543,6 +545,19 @@ const FlowEdge = memo(function FlowEdge({ data }: EdgeProps<Edge<FlowEdgeData>>)
 })
 
 const NODE_TYPES = { state: StateNode, container: ContainerNode, pill: PillNode }
+
+const FIT_OPTIONS = { padding: 0.12, maxZoom: 1 }
+
+/**
+ * React Flow's stock node hint tells a screen-reader user they can move and
+ * delete nodes. This diagram is a read-only view of the definition, so say
+ * what Enter actually does here instead.
+ */
+const ARIA_LABELS = {
+  "node.a11yDescription.default": "Press enter or space to show this state's details.",
+  "node.a11yDescription.keyboardDisabled": "Press enter or space to show this state's details.",
+  "edge.a11yDescription.default": "A transition between two states.",
+}
 const EDGE_TYPES = { flow: FlowEdge }
 
 // ─── Canvas ──────────────────────────────────────────────────────────────────
@@ -598,9 +613,15 @@ function FlowCanvas({
   )
   const { hasTrace, summaries } = view
 
-  // A new layout (the definition changed, e.g. while editing) re-frames the view.
+  // A new layout (the definition changed, e.g. while editing) re-frames the
+  // view. Not on mount: `onInit` below frames the first render, and fitting
+  // again a frame later would undo follow mode's centring on the running
+  // state.
+  const framedLayout = useRef(layout)
   useEffect(() => {
-    const id = window.requestAnimationFrame(() => void fitView({ padding: 0.12, maxZoom: 1 }))
+    if (framedLayout.current === layout) return
+    framedLayout.current = layout
+    const id = window.requestAnimationFrame(() => void fitView(FIT_OPTIONS))
     return () => window.cancelAnimationFrame(id)
   }, [layout, fitView])
 
@@ -727,13 +748,35 @@ function FlowCanvas({
     return running.sort((a, b) => b.depth - a.depth)[0]
   }, [live, layout, summaries])
 
+  const centreOn = (
+    node: { x: number; y: number; width: number; height: number },
+    duration: number,
+  ) =>
+    void setCenter(node.x + node.width / 2, node.y + node.height / 2, {
+      zoom: Math.max(getZoom(), 0.75),
+      duration,
+    })
+
+  // The first framing happens in `onInit`, once React Flow's pan and zoom
+  // exist — earlier, a fit or a centre is silently dropped — and here rather
+  // than through the `fitView` prop, whose fit would land after follow mode's
+  // centring and undo it. A live execution opens on its running state.
+  const framed = useRef(false)
+  const latest = useRef({ follow, runningLeaf })
+  latest.current = { follow, runningLeaf }
+  const onInit = useCallback(() => {
+    framed.current = true
+    const { follow: following, runningLeaf: leaf } = latest.current
+    if (following && leaf) centreOn(leaf, 0)
+    else void fitView(FIT_OPTIONS)
+    // centreOn reads the viewport through stable React Flow accessors.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fitView])
+
   const followKey = runningLeaf?.id
   useEffect(() => {
-    if (!follow || !runningLeaf) return
-    void setCenter(runningLeaf.x + runningLeaf.width / 2, runningLeaf.y + runningLeaf.height / 2, {
-      zoom: Math.max(getZoom(), 0.75),
-      duration: 450,
-    })
+    if (!framed.current || !follow || !runningLeaf) return
+    centreOn(runningLeaf, 450)
     // Re-centre only when the running state changes, not on every poll.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [followKey, follow])
@@ -747,7 +790,14 @@ function FlowCanvas({
   )
 
   const onKeyDown = (event: KeyboardEvent) => {
-    if (event.key === "Escape") onSelectState?.(undefined)
+    if (event.key === "Escape") return onSelectState?.(undefined)
+    // Nodes are focusable for keyboard users; Enter or Space on one opens its
+    // details, as a click does.
+    if (event.key !== "Enter" && event.key !== " ") return
+    const id = (event.target as HTMLElement).closest(".react-flow__node")?.getAttribute("data-id")
+    if (!id || id === START_ID || id === END_ID) return
+    event.preventDefault()
+    onSelectState?.(id === selectedState ? undefined : id)
   }
 
   const showMiniMap = !compact && layout.nodes.length > 14
@@ -759,8 +809,6 @@ function FlowCanvas({
         edges={edges}
         nodeTypes={NODE_TYPES}
         edgeTypes={EDGE_TYPES}
-        fitView
-        fitViewOptions={{ padding: 0.12, maxZoom: 1 }}
         minZoom={0.15}
         maxZoom={2}
         nodesDraggable={false}
@@ -773,7 +821,9 @@ function FlowCanvas({
           // A pan or zoom by the reader, not by follow mode: stop following.
           if (event && live) setFollow(false)
         }}
+        onInit={onInit}
         proOptions={{ hideAttribution: true }}
+        ariaLabelConfig={ARIA_LABELS}
         className="bg-bg"
       >
         <Background variant={BackgroundVariant.Dots} gap={18} size={1} className="opacity-30" />
