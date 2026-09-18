@@ -50,6 +50,13 @@ tasks:
       - task: lambda-init-arch
         vars: { GOARCH: arm64 }
 
+  aws-sdk-shapes:
+    desc: Pack the committed aws-sdk shape tables into the dist/ internal/awsshapes embeds
+    # Committed as readable text so a model refresh reviews as a diff; the
+    # binary carries them compressed. Every build task depends on this.
+    cmds:
+      - go run ./cmd/awsshapes-pack
+
   lambda-init-arch:
     internal: true
     env:
@@ -61,7 +68,7 @@ tasks:
 
   build:
     desc: Compile the binary for the current platform (includes embedded web UI)
-    deps: [lambda-init]
+    deps: [lambda-init, aws-sdk-shapes]
     cmds:
       - cmd: mkdir -p {{.BUILD_DIR}}
         platforms: [darwin, linux]
@@ -86,7 +93,7 @@ tasks:
   build-slim:
     desc: Compile the slim binary (no web UI) for the current platform
     # -tags slim does not drop the Lambda init: slim images run Lambda.
-    deps: [lambda-init]
+    deps: [lambda-init, aws-sdk-shapes]
     cmds:
       - cmd: mkdir -p {{.BUILD_DIR}}
         platforms: [darwin, linux]

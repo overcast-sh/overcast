@@ -296,6 +296,11 @@ jobs:
       # when its inputs moved (see .github/actions/lambda-init).
       - uses: ./.github/actions/lambda-init
         if: needs.changes.outputs.code == 'true'
+      # The aws-sdk shape tables internal/awsshapes embeds: build output, like
+      # the Lambda init above, packed from the committed text tables.
+      - name: Pack the aws-sdk shape tables
+        shell: bash
+        run: go run ./cmd/awsshapes-pack
 
       # The suite pulls images (registry:2, alpine, postgres, redis, …) for the
       # Docker-backed services. Mirror them so the pulls do not compete for the
@@ -405,6 +410,11 @@ jobs:
       # -tags slim does not drop the Lambda init: slim images run Lambda.
       - uses: ./.github/actions/lambda-init
         if: needs.changes.outputs.code == 'true'
+      # The aws-sdk shape tables internal/awsshapes embeds: build output, like
+      # the Lambda init above, packed from the committed text tables.
+      - name: Pack the aws-sdk shape tables
+        shell: bash
+        run: go run ./cmd/awsshapes-pack
 
       - uses: ./.github/actions/docker-hub-mirror
         if: needs.changes.outputs.code == 'true'
@@ -475,6 +485,11 @@ jobs:
       # below embeds it, and this job exists to invoke a function that needs it.
       - uses: ./.github/actions/lambda-init
         if: needs.changes.outputs.code == 'true'
+      # The aws-sdk shape tables internal/awsshapes embeds: build output, like
+      # the Lambda init above, packed from the committed text tables.
+      - name: Pack the aws-sdk shape tables
+        shell: bash
+        run: go run ./cmd/awsshapes-pack
 
       # Built here rather than in a container, and with the tags the released
       # overcastd binary carries, so this is the artifact a user runs.

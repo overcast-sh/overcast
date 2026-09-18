@@ -40,15 +40,15 @@ func TestBuildSDKShapes_rendersTheTranslatorsFacts(t *testing.T) {
 		t.Fatalf("build sdk shapes: %v", err)
 	}
 
-	// Then: there is one table and an index naming it.
-	table := string(files["shapes_box.gen.go"])
-	if !strings.Contains(string(files["index.gen.go"]), `{service: "box", encoded: shapesBox}`) {
+	// Then: there is one text table and an index naming its file.
+	table := string(files["tables/box.txt"])
+	if !strings.Contains(string(files["index.gen.go"]), `{service: "box", file: "box.txt"}`) {
 		t.Errorf("index:\n%s", files["index.gen.go"])
 	}
 	// ... carrying the header, the bindings, the list member's element name,
 	// streaming and the error's Query code, with prelude targets shortened.
 	for _, want := range []string{
-		"const shapesBox = `service RESTXML version=2026-03-03 ns=https://box.example/doc/\n",
+		"service RESTXML version=2026-03-03 ns=https://box.example/doc/\n",
 		"PutBox operation in=PutBoxRequest out=~Unit err=NoSuchBox method=PUT uri=/{Name}?box code=200\n",
 		".Name ~String label\n",
 		".Labels LabelList header=x-box-labels\n",
@@ -72,14 +72,22 @@ func TestBuildSDKShapes_rendersTheTranslatorsFacts(t *testing.T) {
 }
 
 func TestWriteOrCheckSDKShapes_leavesHandWrittenFilesAlone(t *testing.T) {
-	// Given: a package directory holding a hand-written file and a stale table.
+	// Given: a package directory holding a hand-written file, a legacy Go table
+	// from before the tables moved to text, and a stale text table.
 	dir := t.TempDir()
-	for name, contents := range map[string]string{"awsshapes.go": "package awsshapes\n", "shapes_gone.gen.go": "stale"} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(contents), 0o600); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "tables"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, contents := range map[string]string{
+		"awsshapes.go":       "package awsshapes\n",
+		"shapes_gone.gen.go": "stale",
+		"tables/gone.txt":    "stale",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, filepath.FromSlash(name)), []byte(contents), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	files := map[string][]byte{"index.gen.go": []byte("new")}
+	files := map[string][]byte{"index.gen.go": []byte("new"), "tables/box.txt": []byte("service X\n")}
 
 	// When: check mode runs, then write mode.
 	checkErr := writeOrCheckSDKShapes(dir, files, true)
@@ -93,8 +101,13 @@ func TestWriteOrCheckSDKShapes_leavesHandWrittenFilesAlone(t *testing.T) {
 	if writeErr != nil {
 		t.Fatal(writeErr)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "shapes_gone.gen.go")); !os.IsNotExist(err) {
-		t.Errorf("stale table survived: %v", err)
+	for _, stale := range []string{"shapes_gone.gen.go", "tables/gone.txt"} {
+		if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(stale))); !os.IsNotExist(err) {
+			t.Errorf("stale %s survived: %v", stale, err)
+		}
+	}
+	if b, err := os.ReadFile(filepath.Join(dir, "tables", "box.txt")); err != nil || string(b) != "service X\n" {
+		t.Errorf("tables/box.txt = %q, %v", b, err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "awsshapes.go")); err != nil {
 		t.Errorf("hand-written file removed: %v", err)

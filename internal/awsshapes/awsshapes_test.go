@@ -123,56 +123,78 @@ func TestGeneratedTables_matchRecordedDigest(t *testing.T) {
 
 	// Then: the digest matches.
 	if got := hex.EncodeToString(digest[:]); got != recorded {
-		t.Fatalf("internal/awsshapes/*.gen.go do not match sdk-shapes-sha256 in models/aws/VERSION.\n"+
+		t.Fatalf("internal/awsshapes/index.gen.go and tables/ do not match sdk-shapes-sha256 in models/aws/VERSION.\n"+
 			"  recorded: %s\n  actual:   %s\n"+
 			"Regenerate with `make generate-aws-operations` against the pinned AWS model checkout "+
 			"rather than editing the generated files.", recorded, got)
 	}
 }
 
-// maxSDKShapeTableBytes caps the generated tables, which are compiled into
-// every binary. Measured at 3,899,170 bytes across 54 services at revision
-// 8153df4c — EC2 alone is ~800 KB — and capped at 5 MiB, ~1.34x that, which
-// leaves room for model growth and a few more services. Raising it is a
-// reviewer's decision about binary size, never a reflex to turn a model
-// refresh green.
+// maxSDKShapeTableBytes caps the committed text tables — repository weight,
+// and what a model refresh asks a reviewer to read. Measured at 3,899,170
+// bytes across 54 services at revision 8153df4c (EC2 alone is ~800 KB) and
+// capped at 5 MiB, ~1.34x that, leaving room for model growth and a few more
+// services.
 const maxSDKShapeTableBytes = 5 * 1024 * 1024
+
+// maxSDKShapePackedBytes caps what the tables cost every binary: their
+// compressed copies in dist/, which are what the package embeds. Measured at
+// 521,717 bytes at revision 8153df4c and capped at 1 MiB. Raising either cap
+// is a reviewer's decision about size, never a reflex to turn a model refresh
+// green.
+const maxSDKShapePackedBytes = 1024 * 1024
 
 func TestGeneratedTables_withinSizeBudget(t *testing.T) {
 	// Given: the committed tables.
 	files := generatedTables(t)
 
-	// When: they are totalled.
-	total := 0
+	// When: they are totalled as text and as the binary will carry them.
+	text, packed := 0, 0
 	for _, contents := range files {
-		total += len(contents)
-	}
-
-	// Then: the total is inside the reviewed budget.
-	if total > maxSDKShapeTableBytes {
-		t.Fatalf("internal/awsshapes/*.gen.go total %d bytes, over the %d-byte budget in maxSDKShapeTableBytes",
-			total, maxSDKShapeTableBytes)
-	}
-}
-
-func generatedTables(t *testing.T) map[string][]byte {
-	t.Helper()
-	entries, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatal(err)
-	}
-	files := make(map[string][]byte)
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".gen.go") {
-			continue
-		}
-		contents, err := os.ReadFile(entry.Name())
+		text += len(contents)
+		p, err := Pack(contents)
 		if err != nil {
 			t.Fatal(err)
 		}
-		files[entry.Name()] = contents
+		packed += len(p)
 	}
-	if len(files) == 0 {
+
+	// Then: both totals are inside the reviewed budgets.
+	if text > maxSDKShapeTableBytes {
+		t.Errorf("internal/awsshapes/tables total %d bytes, over the %d-byte budget in maxSDKShapeTableBytes",
+			text, maxSDKShapeTableBytes)
+	}
+	if packed > maxSDKShapePackedBytes {
+		t.Errorf("the packed tables total %d bytes, over the %d-byte budget in maxSDKShapePackedBytes",
+			packed, maxSDKShapePackedBytes)
+	}
+}
+
+// generatedTables reads every generated file — the index and each text table —
+// keyed by slash-separated path as cmd/awsmodelgen digests them.
+func generatedTables(t *testing.T) map[string][]byte {
+	t.Helper()
+	files := make(map[string][]byte)
+	index, err := os.ReadFile("index.gen.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	files["index.gen.go"] = index
+	entries, err := os.ReadDir("tables")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".txt") {
+			continue
+		}
+		contents, err := os.ReadFile(filepath.Join("tables", entry.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		files["tables/"+entry.Name()] = contents
+	}
+	if len(files) == 1 {
 		t.Fatal("no generated tables found")
 	}
 	return files

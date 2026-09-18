@@ -16,6 +16,9 @@
 # could be stale. The committed dist/.gitkeep still arrives with !internal/,
 # which is what the embed pattern needs.
 internal/services/lambda/initbin/dist/lambda-init-linux-*
+# Likewise the packed aws-sdk shape tables: the image packs its own from the
+# committed text (Dockerfile), never a host copy that might be stale.
+internal/awsshapes/dist/*.gz
 !docs/
 !docs/*.md
 !docs/cdk/

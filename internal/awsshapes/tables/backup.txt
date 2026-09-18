@@ -1,0 +1,1830 @@
+service RESTJSON version=2018-11-15
+ARN string
+AccessPointArn string
+AccessPointMetadataMap map k=AccessPointMetadataMapKeyString v=AccessPointMetadataMapValueString
+AccessPointMetadataMapKeyString string
+AccessPointMetadataMapValueString string
+AccessPointName string
+AccessPointPolicy string
+AccessPointStatus enum
+AccountId string
+AdvancedBackupSetting structure
+.BackupOptions BackupOptions
+.ResourceType ResourceType
+AdvancedBackupSettings list m=AdvancedBackupSetting
+AggregatedScanResult structure
+.FailedScan Boolean
+.Findings ScanFindings
+.LastComputed timestamp
+AggregationPeriod enum
+AlreadyExistsException structure error=client
+.Arn string
+.Code string
+.Context string
+.CreatorRequestId string
+.Message string
+.Type string
+AssociateBackupVaultMpaApprovalTeam operation in=AssociateBackupVaultMpaApprovalTeamInput out=~Unit err=InvalidParameterValueException,InvalidRequestException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=PUT uri=/backup-vaults/{BackupVaultName}/mpaApprovalTeam code=204
+AssociateBackupVaultMpaApprovalTeamInput structure
+.BackupVaultName BackupVaultName label
+.MpaApprovalTeamArn ARN
+.RequesterComment RequesterComment
+BackupAccessPoints list m=ListAccessPointsMember
+BackupJob structure
+.AccountId AccountId
+.BackupJobId string
+.BackupOptions BackupOptions
+.BackupSizeInBytes Long
+.BackupType string
+.BackupVaultArn ARN
+.BackupVaultName BackupVaultName
+.BytesTransferred Long
+.CompletionDate timestamp
+.CreatedBy RecoveryPointCreator
+.CreationDate timestamp
+.EncryptionKeyArn ARN
+.ExpectedCompletionDate timestamp
+.IamRoleArn IAMRoleArn
+.InitiationDate timestamp
+.IsEncrypted Boolean2
+.IsParent Boolean2
+.MessageCategory string
+.ParentJobId string
+.PercentDone string
+.RecoveryPointArn ARN
+.RecoveryPointLifecycle Lifecycle
+.ResourceArn ARN
+.ResourceName string
+.ResourceType ResourceType
+.StartBy timestamp
+.State BackupJobState
+.StatusMessage string
+.VaultLockState string
+.VaultType string
+BackupJobChildJobsInState map k=BackupJobState v=Long
+BackupJobState enum
+BackupJobStatus enum
+BackupJobSummary structure
+.AccountId AccountId
+.Count integer
+.EndTime timestamp
+.MessageCategory MessageCategory
+.Region Region
+.ResourceType ResourceType
+.StartTime timestamp
+.State BackupJobStatus
+BackupJobSummaryList list m=BackupJobSummary
+BackupJobsList list m=BackupJob
+BackupOptionKey string
+BackupOptionValue string
+BackupOptions map k=BackupOptionKey v=BackupOptionValue
+BackupPlan structure
+.AdvancedBackupSettings AdvancedBackupSettings
+.BackupPlanName BackupPlanName
+.Rules BackupRules
+.ScanSettings ScanSettings
+BackupPlanInput structure
+.AdvancedBackupSettings AdvancedBackupSettings
+.BackupPlanName BackupPlanName
+.Rules BackupRulesInput
+.ScanSettings ScanSettings
+BackupPlanName string
+BackupPlanTemplatesList list m=BackupPlanTemplatesListMember
+BackupPlanTemplatesListMember structure
+.BackupPlanTemplateId string
+.BackupPlanTemplateName string
+BackupPlanVersionsList list m=BackupPlansListMember
+BackupPlansList list m=BackupPlansListMember
+BackupPlansListMember structure
+.AdvancedBackupSettings AdvancedBackupSettings
+.BackupPlanArn ARN
+.BackupPlanId string
+.BackupPlanName BackupPlanName
+.CreationDate timestamp
+.CreatorRequestId string
+.DeletionDate timestamp
+.LastExecutionDate timestamp
+.VersionId string
+BackupRule structure
+.CompletionWindowMinutes WindowMinutes
+.CopyActions CopyActions
+.EnableContinuousBackup Boolean
+.IndexActions IndexActions
+.Lifecycle Lifecycle
+.RecoveryPointTags Tags
+.RuleId string
+.RuleName BackupRuleName
+.ScanActions ScanActions
+.ScheduleExpression CronExpression
+.ScheduleExpressionTimezone Timezone
+.StartWindowMinutes WindowMinutes
+.TargetBackupVaultName BackupVaultName
+.TargetLogicallyAirGappedBackupVaultArn ARN
+BackupRuleInput structure
+.CompletionWindowMinutes WindowMinutes
+.CopyActions CopyActions
+.EnableContinuousBackup Boolean
+.IndexActions IndexActions
+.Lifecycle Lifecycle
+.RecoveryPointTags Tags
+.RuleName BackupRuleName
+.ScanActions ScanActions
+.ScheduleExpression CronExpression
+.ScheduleExpressionTimezone Timezone
+.StartWindowMinutes WindowMinutes
+.TargetBackupVaultName BackupVaultName
+.TargetLogicallyAirGappedBackupVaultArn ARN
+BackupRuleName string
+BackupRules list m=BackupRule
+BackupRulesInput list m=BackupRuleInput
+BackupSelection structure
+.Conditions Conditions
+.IamRoleArn IAMRoleArn
+.ListOfTags ListOfTags
+.NotResources ResourceArns
+.Resources ResourceArns
+.SelectionName BackupSelectionName
+BackupSelectionName string
+BackupSelectionsList list m=BackupSelectionsListMember
+BackupSelectionsListMember structure
+.BackupPlanId string
+.CreationDate timestamp
+.CreatorRequestId string
+.IamRoleArn IAMRoleArn
+.SelectionId string
+.SelectionName BackupSelectionName
+BackupVaultArn string
+BackupVaultEvent enum
+BackupVaultEvents list m=BackupVaultEvent
+BackupVaultList list m=BackupVaultListMember
+BackupVaultListMember structure
+.BackupVaultArn ARN
+.BackupVaultName BackupVaultName
+.CreationDate timestamp
+.CreatorRequestId string
+.EncryptionKeyArn ARN
+.EncryptionKeyType EncryptionKeyType
+.LockDate timestamp
+.Locked Boolean
+.MaxRetentionDays Long
+.MinRetentionDays Long
+.NumberOfRecoveryPoints Long2
+.VaultState VaultState
+.VaultType VaultType
+BackupVaultName string
+BackupVaultNameOrWildcard string
+Boolean boolean
+Boolean2 boolean
+CalculatedLifecycle structure
+.DeleteAt timestamp
+.MoveToColdStorageAt timestamp
+CancelLegalHold operation in=CancelLegalHoldInput out=CancelLegalHoldOutput err=InvalidParameterValueException,InvalidResourceStateException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=DELETE uri=/legal-holds/{LegalHoldId} code=201
+CancelLegalHoldInput structure
+.CancelDescription string query=cancelDescription
+.LegalHoldId string label
+.RetainRecordInDays Long query=retainRecordInDays
+CancelLegalHoldOutput structure
+ComplianceResourceIdList list m=string
+Condition structure
+.ConditionKey ConditionKey
+.ConditionType ConditionType
+.ConditionValue ConditionValue
+ConditionKey string
+ConditionParameter structure
+.ConditionKey ConditionKey
+.ConditionValue ConditionValue
+ConditionParameters list m=ConditionParameter
+ConditionType enum
+ConditionValue string
+Conditions structure
+.StringEquals ConditionParameters
+.StringLike ConditionParameters
+.StringNotEquals ConditionParameters
+.StringNotLike ConditionParameters
+ConflictException structure qerr=ConflictException error=client code=409
+.Code string
+.Context string
+.Message string
+.Type string
+ControlInputParameter structure
+.ParameterName ParameterName
+.ParameterValue ParameterValue
+ControlInputParameters list m=ControlInputParameter
+ControlName string
+ControlScope structure
+.ComplianceResourceIds ComplianceResourceIdList
+.ComplianceResourceTypes ResourceTypeList
+.Tags stringMap
+CopyAction structure
+.DestinationBackupVaultArn ARN
+.Lifecycle Lifecycle
+CopyActions list m=CopyAction
+CopyJob structure
+.AccountId AccountId
+.BackupSizeInBytes Long
+.ChildJobsInState CopyJobChildJobsInState
+.CompletionDate timestamp
+.CompositeMemberIdentifier string
+.CopyJobId string
+.CreatedBy RecoveryPointCreator
+.CreatedByBackupJobId string
+.CreationDate timestamp
+.DestinationBackupVaultArn ARN
+.DestinationEncryptionKeyArn ARN
+.DestinationRecoveryPointArn ARN
+.DestinationRecoveryPointLifecycle Lifecycle
+.DestinationVaultLockState string
+.DestinationVaultType string
+.IamRoleArn IAMRoleArn
+.IsParent Boolean2
+.MessageCategory string
+.NumberOfChildJobs Long
+.ParentJobId string
+.ResourceArn ARN
+.ResourceName string
+.ResourceType ResourceType
+.SourceBackupVaultArn ARN
+.SourceRecoveryPointArn ARN
+.State CopyJobState
+.StatusMessage string
+CopyJobChildJobsInState map k=CopyJobState v=Long
+CopyJobState enum
+CopyJobStatus enum
+CopyJobSummary structure
+.AccountId AccountId
+.Count integer
+.EndTime timestamp
+.MessageCategory MessageCategory
+.Region Region
+.ResourceType ResourceType
+.StartTime timestamp
+.State CopyJobStatus
+CopyJobSummaryList list m=CopyJobSummary
+CopyJobsList list m=CopyJob
+CreateBackupAccessPoint operation in=CreateBackupAccessPointRequest out=CreateBackupAccessPointResponse err=AlreadyExistsException,ConflictException,InvalidParameterValueException,InvalidRequestException,LimitExceededException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=PUT uri=/backup-access-point/create code=201
+CreateBackupAccessPointRequest structure
+.AccessPointMetadata AccessPointMetadataMap
+.AccessPointPolicy AccessPointPolicy
+.Name AccessPointName
+.RecoveryPointArn RecoveryPointArn
+.Tags TagMap
+CreateBackupAccessPointResponse structure
+.AccessPointArn AccessPointArn
+.Status AccessPointStatus
+CreateBackupPlan operation in=CreateBackupPlanInput out=CreateBackupPlanOutput err=AlreadyExistsException,InvalidParameterValueException,LimitExceededException,MissingParameterValueException,ServiceUnavailableException method=PUT uri=/backup/plans code=200
+CreateBackupPlanInput structure
+.BackupPlan BackupPlanInput
+.BackupPlanTags Tags
+.CreatorRequestId string
+CreateBackupPlanOutput structure
+.AdvancedBackupSettings AdvancedBackupSettings
+.BackupPlanArn ARN
+.BackupPlanId string
+.CreationDate timestamp
+.VersionId string
+CreateBackupSelection operation in=CreateBackupSelectionInput out=CreateBackupSelectionOutput err=AlreadyExistsException,InvalidParameterValueException,LimitExceededException,MissingParameterValueException,ServiceUnavailableException method=PUT uri=/backup/plans/{BackupPlanId}/selections code=200
+CreateBackupSelectionInput structure
+.BackupPlanId string label
+.BackupSelection BackupSelection
+.CreatorRequestId string
+CreateBackupSelectionOutput structure
+.BackupPlanId string
+.CreationDate timestamp
+.SelectionId string
+CreateBackupVault operation in=CreateBackupVaultInput out=CreateBackupVaultOutput err=AlreadyExistsException,InvalidParameterValueException,LimitExceededException,MissingParameterValueException,ServiceUnavailableException method=PUT uri=/backup-vaults/{BackupVaultName} code=200
+CreateBackupVaultInput structure
+.BackupVaultName BackupVaultName label
+.BackupVaultTags Tags
+.CreatorRequestId string
+.EncryptionKeyArn ARN
+CreateBackupVaultOutput structure
+.BackupVaultArn ARN
+.BackupVaultName BackupVaultName
+.CreationDate timestamp
+CreateFramework operation in=CreateFrameworkInput out=CreateFrameworkOutput err=AlreadyExistsException,InvalidParameterValueException,LimitExceededException,MissingParameterValueException,ServiceUnavailableException method=POST uri=/audit/frameworks code=200
+CreateFrameworkInput structure
+.FrameworkControls FrameworkControls
+.FrameworkDescription FrameworkDescription
+.FrameworkName FrameworkName
+.FrameworkTags stringMap
+.IdempotencyToken string
+CreateFrameworkOutput structure
+.FrameworkArn ARN
+.FrameworkName FrameworkName
+CreateLegalHold operation in=CreateLegalHoldInput out=CreateLegalHoldOutput err=InvalidParameterValueException,LimitExceededException,MissingParameterValueException,ServiceUnavailableException method=POST uri=/legal-holds code=200
+CreateLegalHoldInput structure
+.Description string
+.IdempotencyToken string
+.RecoveryPointSelection RecoveryPointSelection
+.Tags Tags
+.Title string
+CreateLegalHoldOutput structure
+.CreationDate timestamp
+.Description string
+.LegalHoldArn ARN
+.LegalHoldId string
+.RecoveryPointSelection RecoveryPointSelection
+.Status LegalHoldStatus
+.Title string
+CreateLogicallyAirGappedBackupVault operation in=CreateLogicallyAirGappedBackupVaultInput out=CreateLogicallyAirGappedBackupVaultOutput err=AlreadyExistsException,InvalidParameterValueException,InvalidRequestException,LimitExceededException,MissingParameterValueException,ServiceUnavailableException method=PUT uri=/logically-air-gapped-backup-vaults/{BackupVaultName} code=200
+CreateLogicallyAirGappedBackupVaultInput structure
+.BackupVaultName BackupVaultName label
+.BackupVaultTags Tags
+.CreatorRequestId string
+.EncryptionKeyArn ARN
+.MaxRetentionDays Long
+.MinRetentionDays Long
+CreateLogicallyAirGappedBackupVaultOutput structure
+.BackupVaultArn ARN
+.BackupVaultName BackupVaultName
+.CreationDate timestamp
+.VaultState VaultState
+CreateReportPlan operation in=CreateReportPlanInput out=CreateReportPlanOutput err=AlreadyExistsException,InvalidParameterValueException,LimitExceededException,MissingParameterValueException,ServiceUnavailableException method=POST uri=/audit/report-plans code=200
+CreateReportPlanInput structure
+.IdempotencyToken string
+.ReportDeliveryChannel ReportDeliveryChannel
+.ReportPlanDescription ReportPlanDescription
+.ReportPlanName ReportPlanName
+.ReportPlanTags stringMap
+.ReportSetting ReportSetting
+CreateReportPlanOutput structure
+.CreationTime timestamp
+.ReportPlanArn ARN
+.ReportPlanName ReportPlanName
+CreateRestoreAccessBackupVault operation in=CreateRestoreAccessBackupVaultInput out=CreateRestoreAccessBackupVaultOutput err=AlreadyExistsException,InvalidParameterValueException,InvalidRequestException,LimitExceededException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=PUT uri=/restore-access-backup-vaults code=200
+CreateRestoreAccessBackupVaultInput structure
+.BackupVaultName BackupVaultName
+.BackupVaultTags Tags
+.CreatorRequestId string
+.RequesterComment RequesterComment
+.SourceBackupVaultArn ARN
+CreateRestoreAccessBackupVaultOutput structure
+.CreationDate timestamp
+.RestoreAccessBackupVaultArn ARN
+.RestoreAccessBackupVaultName BackupVaultName
+.VaultState VaultState
+CreateRestoreTestingPlan operation in=CreateRestoreTestingPlanInput out=CreateRestoreTestingPlanOutput err=AlreadyExistsException,ConflictException,InvalidParameterValueException,LimitExceededException,MissingParameterValueException,ServiceUnavailableException method=PUT uri=/restore-testing/plans code=201
+CreateRestoreTestingPlanInput structure
+.CreatorRequestId ~String
+.RestoreTestingPlan RestoreTestingPlanForCreate
+.Tags SensitiveStringMap
+CreateRestoreTestingPlanOutput structure
+.CreationTime ~Timestamp
+.RestoreTestingPlanArn ~String
+.RestoreTestingPlanName ~String
+CreateRestoreTestingSelection operation in=CreateRestoreTestingSelectionInput out=CreateRestoreTestingSelectionOutput err=AlreadyExistsException,InvalidParameterValueException,LimitExceededException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=PUT uri=/restore-testing/plans/{RestoreTestingPlanName}/selections code=201
+CreateRestoreTestingSelectionInput structure
+.CreatorRequestId ~String
+.RestoreTestingPlanName ~String label
+.RestoreTestingSelection RestoreTestingSelectionForCreate
+CreateRestoreTestingSelectionOutput structure
+.CreationTime ~Timestamp
+.RestoreTestingPlanArn ~String
+.RestoreTestingPlanName ~String
+.RestoreTestingSelectionName ~String
+CreateTieringConfiguration operation in=CreateTieringConfigurationInput out=CreateTieringConfigurationOutput err=AlreadyExistsException,ConflictException,InvalidParameterValueException,LimitExceededException,MissingParameterValueException,ServiceUnavailableException method=PUT uri=/tiering-configurations code=200
+CreateTieringConfigurationInput structure
+.CreatorRequestId CreatorRequestId
+.TieringConfiguration TieringConfigurationInputForCreate
+.TieringConfigurationTags Tags
+CreateTieringConfigurationOutput structure
+.CreationTime timestamp
+.TieringConfigurationArn ARN
+.TieringConfigurationName string
+CreatorRequestId string
+CronExpression string
+DateRange structure
+.FromDate timestamp
+.ToDate timestamp
+DeleteBackupAccessPoint operation in=DeleteBackupAccessPointInput out=~Unit err=InvalidParameterValueException,InvalidRequestException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=DELETE uri=/backup-access-point/delete/{AccessPointArn} code=204
+DeleteBackupAccessPointInput structure
+.AccessPointArn AccessPointArn label
+DeleteBackupPlan operation in=DeleteBackupPlanInput out=DeleteBackupPlanOutput err=InvalidParameterValueException,InvalidRequestException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=DELETE uri=/backup/plans/{BackupPlanId} code=200
+DeleteBackupPlanInput structure
+.BackupPlanId string label
+DeleteBackupPlanOutput structure
+.BackupPlanArn ARN
+.BackupPlanId string
+.DeletionDate timestamp
+.VersionId string
+DeleteBackupSelection operation in=DeleteBackupSelectionInput out=~Unit err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=DELETE uri=/backup/plans/{BackupPlanId}/selections/{SelectionId} code=200
+DeleteBackupSelectionInput structure
+.BackupPlanId string label
+.SelectionId string label
+DeleteBackupVault operation in=DeleteBackupVaultInput out=~Unit err=InvalidParameterValueException,InvalidRequestException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=DELETE uri=/backup-vaults/{BackupVaultName} code=200
+DeleteBackupVaultAccessPolicy operation in=DeleteBackupVaultAccessPolicyInput out=~Unit err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=DELETE uri=/backup-vaults/{BackupVaultName}/access-policy code=200
+DeleteBackupVaultAccessPolicyInput structure
+.BackupVaultName BackupVaultName label
+DeleteBackupVaultInput structure
+.BackupVaultName string label
+DeleteBackupVaultLockConfiguration operation in=DeleteBackupVaultLockConfigurationInput out=~Unit err=InvalidParameterValueException,InvalidRequestException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=DELETE uri=/backup-vaults/{BackupVaultName}/vault-lock code=200
+DeleteBackupVaultLockConfigurationInput structure
+.BackupVaultName BackupVaultName label
+DeleteBackupVaultNotifications operation in=DeleteBackupVaultNotificationsInput out=~Unit err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=DELETE uri=/backup-vaults/{BackupVaultName}/notification-configuration code=200
+DeleteBackupVaultNotificationsInput structure
+.BackupVaultName BackupVaultName label
+DeleteFramework operation in=DeleteFrameworkInput out=~Unit err=ConflictException,InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=DELETE uri=/audit/frameworks/{FrameworkName} code=200
+DeleteFrameworkInput structure
+.FrameworkName FrameworkName label
+DeleteRecoveryPoint operation in=DeleteRecoveryPointInput out=~Unit err=InvalidParameterValueException,InvalidRequestException,InvalidResourceStateException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=DELETE uri=/backup-vaults/{BackupVaultName}/recovery-points/{RecoveryPointArn} code=200
+DeleteRecoveryPointInput structure
+.BackupVaultName BackupVaultName label
+.RecoveryPointArn ARN label
+DeleteReportPlan operation in=DeleteReportPlanInput out=~Unit err=ConflictException,InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=DELETE uri=/audit/report-plans/{ReportPlanName} code=200
+DeleteReportPlanInput structure
+.ReportPlanName ReportPlanName label
+DeleteRestoreTestingPlan operation in=DeleteRestoreTestingPlanInput out=~Unit err=InvalidRequestException,ServiceUnavailableException method=DELETE uri=/restore-testing/plans/{RestoreTestingPlanName} code=204
+DeleteRestoreTestingPlanInput structure
+.RestoreTestingPlanName ~String label
+DeleteRestoreTestingSelection operation in=DeleteRestoreTestingSelectionInput out=~Unit err=ResourceNotFoundException,ServiceUnavailableException method=DELETE uri=/restore-testing/plans/{RestoreTestingPlanName}/selections/{RestoreTestingSelectionName} code=204
+DeleteRestoreTestingSelectionInput structure
+.RestoreTestingPlanName ~String label
+.RestoreTestingSelectionName ~String label
+DeleteTieringConfiguration operation in=DeleteTieringConfigurationInput out=DeleteTieringConfigurationOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=DELETE uri=/tiering-configurations/{TieringConfigurationName} code=200
+DeleteTieringConfigurationInput structure
+.TieringConfigurationName TieringConfigurationName label
+DeleteTieringConfigurationOutput structure
+DependencyFailureException structure error=server
+.Code string
+.Context string
+.Message string
+.Type string
+DescribeBackupAccessPoint operation in=DescribeBackupAccessPointInput out=DescribeBackupAccessPointResponse err=InvalidParameterValueException,InvalidRequestException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/backup-access-point/{AccessPointArn} code=200
+DescribeBackupAccessPointInput structure
+.AccessPointArn AccessPointArn label
+DescribeBackupAccessPointResponse structure
+.AccessPointArn AccessPointArn
+.AccessPointMetadata AccessPointMetadataMap
+.BackupVaultArn BackupVaultArn
+.BackupVaultName BackupVaultName
+.CreationTime ~Timestamp
+.Name AccessPointName
+.RecoveryPointArn RecoveryPointArn
+.ResourceArn ResourceArn
+.ResourceType ~String
+.Status AccessPointStatus
+.StatusMessage ~String
+DescribeBackupJob operation in=DescribeBackupJobInput out=DescribeBackupJobOutput err=DependencyFailureException,InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/backup-jobs/{BackupJobId} code=200
+DescribeBackupJobInput structure
+.BackupJobId string label
+DescribeBackupJobOutput structure
+.AccountId AccountId
+.BackupJobId string
+.BackupOptions BackupOptions
+.BackupSizeInBytes Long
+.BackupType string
+.BackupVaultArn ARN
+.BackupVaultName BackupVaultName
+.BytesTransferred Long
+.ChildJobsInState BackupJobChildJobsInState
+.CompletionDate timestamp
+.CreatedBy RecoveryPointCreator
+.CreationDate timestamp
+.EncryptionKeyArn ARN
+.ExpectedCompletionDate timestamp
+.IamRoleArn IAMRoleArn
+.InitiationDate timestamp
+.IsEncrypted Boolean2
+.IsParent Boolean2
+.MessageCategory string
+.NumberOfChildJobs Long
+.ParentJobId string
+.PercentDone string
+.RecoveryPointArn ARN
+.RecoveryPointLifecycle Lifecycle
+.ResourceArn ARN
+.ResourceName string
+.ResourceType ResourceType
+.StartBy timestamp
+.State BackupJobState
+.StatusMessage string
+.VaultLockState string
+.VaultType string
+DescribeBackupVault operation in=DescribeBackupVaultInput out=DescribeBackupVaultOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/backup-vaults/{BackupVaultName} code=200
+DescribeBackupVaultInput structure
+.BackupVaultAccountId string query=backupVaultAccountId
+.BackupVaultName string label
+DescribeBackupVaultOutput structure
+.BackupVaultArn ARN
+.BackupVaultName string
+.CreationDate timestamp
+.CreatorRequestId string
+.EncryptionKeyArn ARN
+.EncryptionKeyType EncryptionKeyType
+.LatestMpaApprovalTeamUpdate LatestMpaApprovalTeamUpdate
+.LockDate timestamp
+.Locked Boolean
+.MaxRetentionDays Long
+.MinRetentionDays Long
+.MpaApprovalTeamArn ARN
+.MpaSessionArn ARN
+.NumberOfRecoveryPoints Long2
+.SourceBackupVaultArn ARN
+.VaultState VaultState
+.VaultType VaultType
+DescribeCopyJob operation in=DescribeCopyJobInput out=DescribeCopyJobOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/copy-jobs/{CopyJobId} code=200
+DescribeCopyJobInput structure
+.CopyJobId string label
+DescribeCopyJobOutput structure
+.CopyJob CopyJob
+DescribeFramework operation in=DescribeFrameworkInput out=DescribeFrameworkOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/audit/frameworks/{FrameworkName} code=200
+DescribeFrameworkInput structure
+.FrameworkName FrameworkName label
+DescribeFrameworkOutput structure
+.CreationTime timestamp
+.DeploymentStatus string
+.FrameworkArn ARN
+.FrameworkControls FrameworkControls
+.FrameworkDescription FrameworkDescription
+.FrameworkName FrameworkName
+.FrameworkStatus string
+.IdempotencyToken string
+DescribeGlobalSettings operation in=DescribeGlobalSettingsInput out=DescribeGlobalSettingsOutput err=InvalidRequestException,ServiceUnavailableException method=GET uri=/global-settings code=200
+DescribeGlobalSettingsInput structure
+DescribeGlobalSettingsOutput structure
+.GlobalSettings GlobalSettings
+.LastUpdateTime timestamp
+DescribeProtectedResource operation in=DescribeProtectedResourceInput out=DescribeProtectedResourceOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/resources/{ResourceArn} code=200
+DescribeProtectedResourceInput structure
+.ResourceArn ARN label
+DescribeProtectedResourceOutput structure
+.LastBackupTime timestamp
+.LastBackupVaultArn ARN
+.LastRecoveryPointArn ARN
+.LatestRestoreExecutionTimeMinutes Long
+.LatestRestoreJobCreationDate timestamp
+.LatestRestoreRecoveryPointCreationDate timestamp
+.ResourceArn ARN
+.ResourceName string
+.ResourceType ResourceType
+DescribeRecoveryPoint operation in=DescribeRecoveryPointInput out=DescribeRecoveryPointOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/backup-vaults/{BackupVaultName}/recovery-points/{RecoveryPointArn} code=200
+DescribeRecoveryPointInput structure
+.BackupVaultAccountId AccountId query=backupVaultAccountId
+.BackupVaultName BackupVaultName label
+.RecoveryPointArn ARN label
+DescribeRecoveryPointOutput structure
+.BackupSizeInBytes Long
+.BackupVaultArn ARN
+.BackupVaultName BackupVaultName
+.CalculatedLifecycle CalculatedLifecycle
+.CompletionDate timestamp
+.CompositeMemberIdentifier string
+.CreatedBy RecoveryPointCreator
+.CreationDate timestamp
+.EncryptionKeyArn ARN
+.EncryptionKeyType EncryptionKeyType
+.IamRoleArn IAMRoleArn
+.IndexStatus IndexStatus
+.IndexStatusMessage string
+.InitiationDate timestamp
+.IsEncrypted Boolean2
+.IsParent Boolean2
+.LastRestoreTime timestamp
+.Lifecycle Lifecycle
+.ParentRecoveryPointArn ARN
+.RecoveryPointArn ARN
+.ResourceArn ARN
+.ResourceName string
+.ResourceType ResourceType
+.ScanResults ScanResults
+.SourceBackupVaultArn ARN
+.Status RecoveryPointStatus
+.StatusMessage string
+.StorageClass StorageClass
+.VaultType VaultType
+DescribeRegionSettings operation in=DescribeRegionSettingsInput out=DescribeRegionSettingsOutput err=ServiceUnavailableException method=GET uri=/account-settings code=200
+DescribeRegionSettingsInput structure
+DescribeRegionSettingsOutput structure
+.ResourceTypeManagementPreference ResourceTypeManagementPreference
+.ResourceTypeOptInPreference ResourceTypeOptInPreference
+DescribeReportJob operation in=DescribeReportJobInput out=DescribeReportJobOutput err=MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/audit/report-jobs/{ReportJobId} code=200
+DescribeReportJobInput structure
+.ReportJobId ReportJobId label
+DescribeReportJobOutput structure
+.ReportJob ReportJob
+DescribeReportPlan operation in=DescribeReportPlanInput out=DescribeReportPlanOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/audit/report-plans/{ReportPlanName} code=200
+DescribeReportPlanInput structure
+.ReportPlanName ReportPlanName label
+DescribeReportPlanOutput structure
+.ReportPlan ReportPlan
+DescribeRestoreJob operation in=DescribeRestoreJobInput out=DescribeRestoreJobOutput err=DependencyFailureException,InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/restore-jobs/{RestoreJobId} code=200
+DescribeRestoreJobInput structure
+.RestoreJobId RestoreJobId label
+DescribeRestoreJobOutput structure
+.AccountId AccountId
+.BackupSizeInBytes Long
+.BackupVaultArn ARN
+.CompletionDate timestamp
+.CreatedBy RestoreJobCreator
+.CreatedResourceArn ARN
+.CreationDate timestamp
+.DeletionStatus RestoreDeletionStatus
+.DeletionStatusMessage string
+.ExpectedCompletionTimeMinutes Long
+.IamRoleArn IAMRoleArn
+.IsParent Boolean2
+.ParentJobId string
+.PercentDone string
+.RecoveryPointArn ARN
+.RecoveryPointCreationDate timestamp
+.ResourceType ResourceType
+.RestoreJobId string
+.SourceResourceArn ARN
+.Status RestoreJobStatus
+.StatusMessage string
+.ValidationStatus RestoreValidationStatus
+.ValidationStatusMessage string
+DescribeScanJob operation in=DescribeScanJobInput out=DescribeScanJobOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/scan/jobs/{ScanJobId} code=200
+DescribeScanJobInput structure
+.ScanJobId ~String label
+DescribeScanJobOutput structure
+.AccountId ~String
+.BackupVaultArn ~String
+.BackupVaultName ~String
+.CompletionDate ~Timestamp
+.ContinuousScanEndTime ~Timestamp
+.ContinuousScanStartTime ~Timestamp
+.CreatedBy ScanJobCreator
+.CreationDate ~Timestamp
+.IamRoleArn ~String
+.MalwareScanner MalwareScanner
+.RecoveryPointArn ~String
+.ResourceArn ~String
+.ResourceName ~String
+.ResourceType ScanResourceType
+.ScanBaseRecoveryPointArn ~String
+.ScanId ~String
+.ScanJobId ~String
+.ScanMode ScanMode
+.ScanResult ScanResultInfo
+.ScannerRoleArn ~String
+.State ScanState
+.StatusMessage ~String
+DisassociateBackupVaultMpaApprovalTeam operation in=DisassociateBackupVaultMpaApprovalTeamInput out=~Unit err=InvalidParameterValueException,InvalidRequestException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=POST uri=/backup-vaults/{BackupVaultName}/mpaApprovalTeam?delete code=204
+DisassociateBackupVaultMpaApprovalTeamInput structure
+.BackupVaultName BackupVaultName label
+.RequesterComment RequesterComment
+DisassociateRecoveryPoint operation in=DisassociateRecoveryPointInput out=~Unit err=InvalidParameterValueException,InvalidRequestException,InvalidResourceStateException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=POST uri=/backup-vaults/{BackupVaultName}/recovery-points/{RecoveryPointArn}/disassociate code=200
+DisassociateRecoveryPointFromParent operation in=DisassociateRecoveryPointFromParentInput out=~Unit err=InvalidParameterValueException,InvalidRequestException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=DELETE uri=/backup-vaults/{BackupVaultName}/recovery-points/{RecoveryPointArn}/parentAssociation code=204
+DisassociateRecoveryPointFromParentInput structure
+.BackupVaultName BackupVaultName label
+.RecoveryPointArn ARN label
+DisassociateRecoveryPointInput structure
+.BackupVaultName BackupVaultName label
+.RecoveryPointArn ARN label
+EncryptionKeyType enum
+ExportBackupPlanTemplate operation in=ExportBackupPlanTemplateInput out=ExportBackupPlanTemplateOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/backup/plans/{BackupPlanId}/toTemplate code=200
+ExportBackupPlanTemplateInput structure
+.BackupPlanId string label
+ExportBackupPlanTemplateOutput structure
+.BackupPlanTemplateJson string
+FormatList list m=string
+Framework structure
+.CreationTime timestamp
+.DeploymentStatus string
+.FrameworkArn ARN
+.FrameworkDescription FrameworkDescription
+.FrameworkName FrameworkName
+.NumberOfControls integer
+FrameworkControl structure
+.ControlInputParameters ControlInputParameters
+.ControlName ControlName
+.ControlScope ControlScope
+FrameworkControls list m=FrameworkControl
+FrameworkDescription string
+FrameworkList list m=Framework
+FrameworkName string
+GetBackupPlan operation in=GetBackupPlanInput out=GetBackupPlanOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/backup/plans/{BackupPlanId} code=200
+GetBackupPlanFromJSON operation in=GetBackupPlanFromJSONInput out=GetBackupPlanFromJSONOutput err=InvalidParameterValueException,InvalidRequestException,LimitExceededException,MissingParameterValueException,ServiceUnavailableException method=POST uri=/backup/template/json/toPlan code=200
+GetBackupPlanFromJSONInput structure
+.BackupPlanTemplateJson string
+GetBackupPlanFromJSONOutput structure
+.BackupPlan BackupPlan
+GetBackupPlanFromTemplate operation in=GetBackupPlanFromTemplateInput out=GetBackupPlanFromTemplateOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/backup/template/plans/{BackupPlanTemplateId}/toPlan code=200
+GetBackupPlanFromTemplateInput structure
+.BackupPlanTemplateId string label
+GetBackupPlanFromTemplateOutput structure
+.BackupPlanDocument BackupPlan
+GetBackupPlanInput structure
+.BackupPlanId string label
+.MaxScheduledRunsPreview MaxScheduledRunsPreview query=MaxScheduledRunsPreview
+.VersionId string query=versionId
+GetBackupPlanOutput structure
+.AdvancedBackupSettings AdvancedBackupSettings
+.BackupPlan BackupPlan
+.BackupPlanArn ARN
+.BackupPlanId string
+.CreationDate timestamp
+.CreatorRequestId string
+.DeletionDate timestamp
+.LastExecutionDate timestamp
+.ScheduledRunsPreview ScheduledRunsPreview
+.VersionId string
+GetBackupSelection operation in=GetBackupSelectionInput out=GetBackupSelectionOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/backup/plans/{BackupPlanId}/selections/{SelectionId} code=200
+GetBackupSelectionInput structure
+.BackupPlanId string label
+.SelectionId string label
+GetBackupSelectionOutput structure
+.BackupPlanId string
+.BackupSelection BackupSelection
+.CreationDate timestamp
+.CreatorRequestId string
+.SelectionId string
+GetBackupVaultAccessPolicy operation in=GetBackupVaultAccessPolicyInput out=GetBackupVaultAccessPolicyOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/backup-vaults/{BackupVaultName}/access-policy code=200
+GetBackupVaultAccessPolicyInput structure
+.BackupVaultName BackupVaultName label
+GetBackupVaultAccessPolicyOutput structure
+.BackupVaultArn ARN
+.BackupVaultName BackupVaultName
+.Policy IAMPolicy
+GetBackupVaultNotifications operation in=GetBackupVaultNotificationsInput out=GetBackupVaultNotificationsOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/backup-vaults/{BackupVaultName}/notification-configuration code=200
+GetBackupVaultNotificationsInput structure
+.BackupVaultName BackupVaultName label
+GetBackupVaultNotificationsOutput structure
+.BackupVaultArn ARN
+.BackupVaultEvents BackupVaultEvents
+.BackupVaultName BackupVaultName
+.SNSTopicArn ARN
+GetLegalHold operation in=GetLegalHoldInput out=GetLegalHoldOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/legal-holds/{LegalHoldId} code=200
+GetLegalHoldInput structure
+.LegalHoldId string label
+GetLegalHoldOutput structure
+.CancelDescription string
+.CancellationDate timestamp
+.CreationDate timestamp
+.Description string
+.LegalHoldArn ARN
+.LegalHoldId string
+.RecoveryPointSelection RecoveryPointSelection
+.RetainRecordUntil timestamp
+.Status LegalHoldStatus
+.Title string
+GetPITRMalwareScanResults operation in=GetPITRMalwareScanResultsInput out=GetPITRMalwareScanResultsOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/scan/pitr-malware-scan-results code=200
+GetPITRMalwareScanResultsInput structure
+.BackupVaultName ~String query=BackupVaultName
+.MalwareScanner MalwareScanner query=MalwareScanner
+.RecoveryPointArn ~String query=RecoveryPointArn
+.ScanEndTime ~Timestamp query=ScanEndTime
+GetPITRMalwareScanResultsOutput structure
+.LastScanJobTime ~Timestamp
+.ScanEndTime ~Timestamp
+.ScanId ~String
+.ScanMode ScanMode
+.ScanResult ScanResultInfo
+GetRecoveryPointIndexDetails operation in=GetRecoveryPointIndexDetailsInput out=GetRecoveryPointIndexDetailsOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/backup-vaults/{BackupVaultName}/recovery-points/{RecoveryPointArn}/index code=200
+GetRecoveryPointIndexDetailsInput structure
+.BackupVaultName BackupVaultName label
+.RecoveryPointArn ARN label
+GetRecoveryPointIndexDetailsOutput structure
+.BackupVaultArn ARN
+.IndexCompletionDate timestamp
+.IndexCreationDate timestamp
+.IndexDeletionDate timestamp
+.IndexStatus IndexStatus
+.IndexStatusMessage string
+.RecoveryPointArn ARN
+.SourceResourceArn ARN
+.TotalItemsIndexed Long
+GetRecoveryPointRestoreMetadata operation in=GetRecoveryPointRestoreMetadataInput out=GetRecoveryPointRestoreMetadataOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/backup-vaults/{BackupVaultName}/recovery-points/{RecoveryPointArn}/restore-metadata code=200
+GetRecoveryPointRestoreMetadataInput structure
+.BackupVaultAccountId AccountId query=backupVaultAccountId
+.BackupVaultName BackupVaultName label
+.RecoveryPointArn ARN label
+GetRecoveryPointRestoreMetadataOutput structure
+.BackupVaultArn ARN
+.RecoveryPointArn ARN
+.ResourceType ResourceType
+.RestoreMetadata Metadata
+GetRestoreJobMetadata operation in=GetRestoreJobMetadataInput out=GetRestoreJobMetadataOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/restore-jobs/{RestoreJobId}/metadata code=200
+GetRestoreJobMetadataInput structure
+.RestoreJobId RestoreJobId label
+GetRestoreJobMetadataOutput structure
+.Metadata Metadata
+.RestoreJobId RestoreJobId
+GetRestoreTestingInferredMetadata operation in=GetRestoreTestingInferredMetadataInput out=GetRestoreTestingInferredMetadataOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/restore-testing/inferred-metadata code=200
+GetRestoreTestingInferredMetadataInput structure
+.BackupVaultAccountId ~String query=BackupVaultAccountId
+.BackupVaultName ~String query=BackupVaultName
+.RecoveryPointArn ~String query=RecoveryPointArn
+GetRestoreTestingInferredMetadataOutput structure
+.InferredMetadata stringMap
+GetRestoreTestingPlan operation in=GetRestoreTestingPlanInput out=GetRestoreTestingPlanOutput err=ResourceNotFoundException,ServiceUnavailableException method=GET uri=/restore-testing/plans/{RestoreTestingPlanName} code=200
+GetRestoreTestingPlanInput structure
+.RestoreTestingPlanName ~String label
+GetRestoreTestingPlanOutput structure
+.RestoreTestingPlan RestoreTestingPlanForGet
+GetRestoreTestingSelection operation in=GetRestoreTestingSelectionInput out=GetRestoreTestingSelectionOutput err=ResourceNotFoundException,ServiceUnavailableException method=GET uri=/restore-testing/plans/{RestoreTestingPlanName}/selections/{RestoreTestingSelectionName} code=200
+GetRestoreTestingSelectionInput structure
+.RestoreTestingPlanName ~String label
+.RestoreTestingSelectionName ~String label
+GetRestoreTestingSelectionOutput structure
+.RestoreTestingSelection RestoreTestingSelectionForGet
+GetSupportedResourceTypes operation in=~Unit out=GetSupportedResourceTypesOutput err=ServiceUnavailableException method=GET uri=/supported-resource-types code=200
+GetSupportedResourceTypesOutput structure
+.ResourceTypes ResourceTypes
+GetTieringConfiguration operation in=GetTieringConfigurationInput out=GetTieringConfigurationOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/tiering-configurations/{TieringConfigurationName} code=200
+GetTieringConfigurationInput structure
+.TieringConfigurationName TieringConfigurationName label
+GetTieringConfigurationOutput structure
+.TieringConfiguration TieringConfiguration
+GlobalSettings map k=GlobalSettingsName v=GlobalSettingsValue
+GlobalSettingsName string
+GlobalSettingsValue string
+IAMPolicy string
+IAMRoleArn string
+Index enum
+IndexAction structure
+.ResourceTypes ResourceTypes
+IndexActions list m=IndexAction
+IndexStatus enum
+IndexedRecoveryPoint structure
+.BackupCreationDate timestamp
+.BackupVaultArn ARN
+.IamRoleArn ARN
+.IndexCreationDate timestamp
+.IndexStatus IndexStatus
+.IndexStatusMessage string
+.RecoveryPointArn ARN
+.ResourceType ResourceType
+.SourceResourceArn ARN
+IndexedRecoveryPointList list m=IndexedRecoveryPoint
+InvalidParameterValueException structure error=client
+.Code string
+.Context string
+.Message string
+.Type string
+InvalidRequestException structure error=client
+.Code string
+.Context string
+.Message string
+.Type string
+InvalidResourceStateException structure error=client
+.Code string
+.Context string
+.Message string
+.Type string
+IsEnabled boolean
+KeyValue structure
+.Key ~String
+.Value ~String
+KeyValueList list m=KeyValue
+LatestMpaApprovalTeamUpdate structure
+.ExpiryDate timestamp
+.InitiationDate timestamp
+.MpaSessionArn ARN
+.Status MpaSessionStatus
+.StatusMessage string
+LatestRevokeRequest structure
+.ExpiryDate timestamp
+.InitiationDate timestamp
+.MpaSessionArn string
+.Status MpaRevokeSessionStatus
+.StatusMessage string
+LegalHold structure
+.CancellationDate timestamp
+.CreationDate timestamp
+.Description string
+.LegalHoldArn ARN
+.LegalHoldId string
+.Status LegalHoldStatus
+.Title string
+LegalHoldStatus enum
+LegalHoldsList list m=LegalHold
+Lifecycle structure
+.DeleteAfterDays Long
+.DeleteAfterEvent LifecycleDeleteAfterEvent
+.MoveToColdStorageAfterDays Long
+.OptInToArchiveForSupportedResources Boolean
+LifecycleDeleteAfterEvent enum
+LimitExceededException structure error=client
+.Code string
+.Context string
+.Message string
+.Type string
+ListAccessPointsMember structure
+.AccessPointArn AccessPointArn
+.AccessPointMetadata AccessPointMetadataMap
+.BackupVaultArn BackupVaultArn
+.BackupVaultName BackupVaultName
+.CreationTime ~Timestamp
+.Name AccessPointName
+.RecoveryPointArn RecoveryPointArn
+.ResourceArn ResourceArn
+.ResourceType ~String
+.Status AccessPointStatus
+.StatusMessage ~String
+ListBackupAccessPoints operation in=ListBackupAccessPointsRequest out=ListBackupAccessPointsResponse err=InvalidParameterValueException,ServiceUnavailableException method=GET uri=/backup-access-point code=200
+ListBackupAccessPointsByRecoveryPoint operation in=ListBackupAccessPointsByRecoveryPointRequest out=ListBackupAccessPointsByRecoveryPointResponse err=InvalidParameterValueException,ServiceUnavailableException method=POST uri=/backup-access-point/recovery-point/{RecoveryPointArn} code=200
+ListBackupAccessPointsByRecoveryPointRequest structure
+.MaxResults ListBackupAccessPointsByRecoveryPointRequestMaxResultsInteger query=MaxResults
+.NextToken ~String query=NextToken
+.RecoveryPointArn RecoveryPointArn label
+ListBackupAccessPointsByRecoveryPointRequestMaxResultsInteger integer
+ListBackupAccessPointsByRecoveryPointResponse structure
+.BackupAccessPoints BackupAccessPoints
+.NextToken ~String
+ListBackupAccessPointsByResource operation in=ListBackupAccessPointsByResourceRequest out=ListBackupAccessPointsByResourceResponse err=InvalidParameterValueException,ServiceUnavailableException method=POST uri=/backup-access-point/resource/{ResourceArn} code=200
+ListBackupAccessPointsByResourceRequest structure
+.MaxResults ListBackupAccessPointsByResourceRequestMaxResultsInteger query=MaxResults
+.NextToken ~String query=NextToken
+.ResourceArn ResourceArn label
+ListBackupAccessPointsByResourceRequestMaxResultsInteger integer
+ListBackupAccessPointsByResourceResponse structure
+.BackupAccessPoints BackupAccessPoints
+.NextToken ~String
+ListBackupAccessPointsRequest structure
+.MaxResults ListBackupAccessPointsRequestMaxResultsInteger query=MaxResults
+.NextToken ~String query=NextToken
+ListBackupAccessPointsRequestMaxResultsInteger integer
+ListBackupAccessPointsResponse structure
+.BackupAccessPoints BackupAccessPoints
+.NextToken ~String
+ListBackupJobSummaries operation in=ListBackupJobSummariesInput out=ListBackupJobSummariesOutput err=InvalidParameterValueException,ServiceUnavailableException method=GET uri=/audit/backup-job-summaries code=200
+ListBackupJobSummariesInput structure
+.AccountId AccountId query=AccountId
+.AggregationPeriod AggregationPeriod query=AggregationPeriod
+.MaxResults MaxResults query=MaxResults
+.MessageCategory MessageCategory query=MessageCategory
+.NextToken string query=NextToken
+.ResourceType ResourceType query=ResourceType
+.State BackupJobStatus query=State
+ListBackupJobSummariesOutput structure
+.AggregationPeriod string
+.BackupJobSummaries BackupJobSummaryList
+.NextToken string
+ListBackupJobs operation in=ListBackupJobsInput out=ListBackupJobsOutput err=InvalidParameterValueException,ServiceUnavailableException method=GET uri=/backup-jobs code=200
+ListBackupJobsInput structure
+.ByAccountId AccountId query=accountId
+.ByBackupVaultName BackupVaultName query=backupVaultName
+.ByCompleteAfter timestamp query=completeAfter
+.ByCompleteBefore timestamp query=completeBefore
+.ByCreatedAfter timestamp query=createdAfter
+.ByCreatedBefore timestamp query=createdBefore
+.ByMessageCategory string query=messageCategory
+.ByParentJobId string query=parentJobId
+.ByResourceArn ARN query=resourceArn
+.ByResourceType ResourceType query=resourceType
+.ByState BackupJobState query=state
+.MaxResults MaxResults query=maxResults
+.NextToken string query=nextToken
+ListBackupJobsOutput structure
+.BackupJobs BackupJobsList
+.NextToken string
+ListBackupPlanTemplates operation in=ListBackupPlanTemplatesInput out=ListBackupPlanTemplatesOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/backup/template/plans code=200
+ListBackupPlanTemplatesInput structure
+.MaxResults MaxResults query=maxResults
+.NextToken string query=nextToken
+ListBackupPlanTemplatesOutput structure
+.BackupPlanTemplatesList BackupPlanTemplatesList
+.NextToken string
+ListBackupPlanVersions operation in=ListBackupPlanVersionsInput out=ListBackupPlanVersionsOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/backup/plans/{BackupPlanId}/versions code=200
+ListBackupPlanVersionsInput structure
+.BackupPlanId string label
+.MaxResults MaxResults query=maxResults
+.NextToken string query=nextToken
+ListBackupPlanVersionsOutput structure
+.BackupPlanVersionsList BackupPlanVersionsList
+.NextToken string
+ListBackupPlans operation in=ListBackupPlansInput out=ListBackupPlansOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/backup/plans code=200
+ListBackupPlansInput structure
+.IncludeDeleted Boolean query=includeDeleted
+.MaxResults MaxResults query=maxResults
+.NextToken string query=nextToken
+ListBackupPlansOutput structure
+.BackupPlansList BackupPlansList
+.NextToken string
+ListBackupSelections operation in=ListBackupSelectionsInput out=ListBackupSelectionsOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/backup/plans/{BackupPlanId}/selections code=200
+ListBackupSelectionsInput structure
+.BackupPlanId string label
+.MaxResults MaxResults query=maxResults
+.NextToken string query=nextToken
+ListBackupSelectionsOutput structure
+.BackupSelectionsList BackupSelectionsList
+.NextToken string
+ListBackupVaults operation in=ListBackupVaultsInput out=ListBackupVaultsOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/backup-vaults code=200
+ListBackupVaultsInput structure
+.ByShared Boolean2 query=shared
+.ByVaultType VaultType query=vaultType
+.MaxResults MaxResults query=maxResults
+.NextToken string query=nextToken
+ListBackupVaultsOutput structure
+.BackupVaultList BackupVaultList
+.NextToken string
+ListCopyJobSummaries operation in=ListCopyJobSummariesInput out=ListCopyJobSummariesOutput err=InvalidParameterValueException,ServiceUnavailableException method=GET uri=/audit/copy-job-summaries code=200
+ListCopyJobSummariesInput structure
+.AccountId AccountId query=AccountId
+.AggregationPeriod AggregationPeriod query=AggregationPeriod
+.MaxResults MaxResults query=MaxResults
+.MessageCategory MessageCategory query=MessageCategory
+.NextToken string query=NextToken
+.ResourceType ResourceType query=ResourceType
+.State CopyJobStatus query=State
+ListCopyJobSummariesOutput structure
+.AggregationPeriod string
+.CopyJobSummaries CopyJobSummaryList
+.NextToken string
+ListCopyJobs operation in=ListCopyJobsInput out=ListCopyJobsOutput err=InvalidParameterValueException,ServiceUnavailableException method=GET uri=/copy-jobs code=200
+ListCopyJobsInput structure
+.ByAccountId AccountId query=accountId
+.ByCompleteAfter timestamp query=completeAfter
+.ByCompleteBefore timestamp query=completeBefore
+.ByCreatedAfter timestamp query=createdAfter
+.ByCreatedBefore timestamp query=createdBefore
+.ByDestinationVaultArn string query=destinationVaultArn
+.ByMessageCategory string query=messageCategory
+.ByParentJobId string query=parentJobId
+.ByResourceArn ARN query=resourceArn
+.ByResourceType ResourceType query=resourceType
+.BySourceRecoveryPointArn string query=sourceRecoveryPointArn
+.ByState CopyJobState query=state
+.MaxResults MaxResults query=maxResults
+.NextToken string query=nextToken
+ListCopyJobsOutput structure
+.CopyJobs CopyJobsList
+.NextToken string
+ListFrameworks operation in=ListFrameworksInput out=ListFrameworksOutput err=InvalidParameterValueException,ServiceUnavailableException method=GET uri=/audit/frameworks code=200
+ListFrameworksInput structure
+.MaxResults MaxFrameworkInputs query=MaxResults
+.NextToken string query=NextToken
+ListFrameworksOutput structure
+.Frameworks FrameworkList
+.NextToken string
+ListIndexedRecoveryPoints operation in=ListIndexedRecoveryPointsInput out=ListIndexedRecoveryPointsOutput err=InvalidParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/indexes/recovery-point code=200
+ListIndexedRecoveryPointsInput structure
+.CreatedAfter timestamp query=createdAfter
+.CreatedBefore timestamp query=createdBefore
+.IndexStatus IndexStatus query=indexStatus
+.MaxResults MaxResults query=maxResults
+.NextToken string query=nextToken
+.ResourceType ResourceType query=resourceType
+.SourceResourceArn ARN query=sourceResourceArn
+ListIndexedRecoveryPointsOutput structure
+.IndexedRecoveryPoints IndexedRecoveryPointList
+.NextToken string
+ListLegalHolds operation in=ListLegalHoldsInput out=ListLegalHoldsOutput err=InvalidParameterValueException,ServiceUnavailableException method=GET uri=/legal-holds code=200
+ListLegalHoldsInput structure
+.MaxResults MaxResults query=maxResults
+.NextToken string query=nextToken
+ListLegalHoldsOutput structure
+.LegalHolds LegalHoldsList
+.NextToken string
+ListOfTags list m=Condition
+ListProtectedResources operation in=ListProtectedResourcesInput out=ListProtectedResourcesOutput err=InvalidParameterValueException,ServiceUnavailableException method=GET uri=/resources code=200
+ListProtectedResourcesByBackupVault operation in=ListProtectedResourcesByBackupVaultInput out=ListProtectedResourcesByBackupVaultOutput err=InvalidParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/backup-vaults/{BackupVaultName}/resources code=200
+ListProtectedResourcesByBackupVaultInput structure
+.BackupVaultAccountId AccountId query=backupVaultAccountId
+.BackupVaultName BackupVaultName label
+.MaxResults MaxResults query=maxResults
+.NextToken string query=nextToken
+ListProtectedResourcesByBackupVaultOutput structure
+.NextToken string
+.Results ProtectedResourcesList
+ListProtectedResourcesInput structure
+.MaxResults MaxResults query=maxResults
+.NextToken string query=nextToken
+ListProtectedResourcesOutput structure
+.NextToken string
+.Results ProtectedResourcesList
+ListRecoveryPointsByBackupVault operation in=ListRecoveryPointsByBackupVaultInput out=ListRecoveryPointsByBackupVaultOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/backup-vaults/{BackupVaultName}/recovery-points code=200
+ListRecoveryPointsByBackupVaultInput structure
+.BackupVaultAccountId AccountId query=backupVaultAccountId
+.BackupVaultName BackupVaultName label
+.ByBackupPlanId string query=backupPlanId
+.ByCreatedAfter timestamp query=createdAfter
+.ByCreatedBefore timestamp query=createdBefore
+.ByParentRecoveryPointArn ARN query=parentRecoveryPointArn
+.ByResourceArn ARN query=resourceArn
+.ByResourceType ResourceType query=resourceType
+.MaxResults MaxResults query=maxResults
+.NextToken string query=nextToken
+ListRecoveryPointsByBackupVaultOutput structure
+.NextToken string
+.RecoveryPoints RecoveryPointByBackupVaultList
+ListRecoveryPointsByLegalHold operation in=ListRecoveryPointsByLegalHoldInput out=ListRecoveryPointsByLegalHoldOutput err=InvalidParameterValueException,MissingParameterValueException,ServiceUnavailableException method=GET uri=/legal-holds/{LegalHoldId}/recovery-points code=200
+ListRecoveryPointsByLegalHoldInput structure
+.LegalHoldId string label
+.MaxResults MaxResults query=maxResults
+.NextToken string query=nextToken
+ListRecoveryPointsByLegalHoldOutput structure
+.NextToken string
+.RecoveryPoints RecoveryPointsList
+ListRecoveryPointsByResource operation in=ListRecoveryPointsByResourceInput out=ListRecoveryPointsByResourceOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/resources/{ResourceArn}/recovery-points code=200
+ListRecoveryPointsByResourceInput structure
+.ManagedByAWSBackupOnly Boolean2 query=managedByAWSBackupOnly
+.MaxResults MaxResults query=maxResults
+.NextToken string query=nextToken
+.ResourceArn ARN label
+ListRecoveryPointsByResourceOutput structure
+.NextToken string
+.RecoveryPoints RecoveryPointByResourceList
+ListReportJobs operation in=ListReportJobsInput out=ListReportJobsOutput err=InvalidParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/audit/report-jobs code=200
+ListReportJobsInput structure
+.ByCreationAfter timestamp query=CreationAfter
+.ByCreationBefore timestamp query=CreationBefore
+.ByReportPlanName ReportPlanName query=ReportPlanName
+.ByStatus string query=Status
+.MaxResults MaxResults query=MaxResults
+.NextToken string query=NextToken
+ListReportJobsOutput structure
+.NextToken string
+.ReportJobs ReportJobList
+ListReportPlans operation in=ListReportPlansInput out=ListReportPlansOutput err=InvalidParameterValueException,ServiceUnavailableException method=GET uri=/audit/report-plans code=200
+ListReportPlansInput structure
+.MaxResults MaxResults query=MaxResults
+.NextToken string query=NextToken
+ListReportPlansOutput structure
+.NextToken string
+.ReportPlans ReportPlanList
+ListRestoreAccessBackupVaults operation in=ListRestoreAccessBackupVaultsInput out=ListRestoreAccessBackupVaultsOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/logically-air-gapped-backup-vaults/{BackupVaultName}/restore-access-backup-vaults code=200
+ListRestoreAccessBackupVaultsInput structure
+.BackupVaultName BackupVaultName label
+.MaxResults MaxResults query=maxResults
+.NextToken string query=nextToken
+ListRestoreAccessBackupVaultsOutput structure
+.NextToken string
+.RestoreAccessBackupVaults RestoreAccessBackupVaultList
+ListRestoreJobSummaries operation in=ListRestoreJobSummariesInput out=ListRestoreJobSummariesOutput err=InvalidParameterValueException,ServiceUnavailableException method=GET uri=/audit/restore-job-summaries code=200
+ListRestoreJobSummariesInput structure
+.AccountId AccountId query=AccountId
+.AggregationPeriod AggregationPeriod query=AggregationPeriod
+.MaxResults MaxResults query=MaxResults
+.NextToken string query=NextToken
+.ResourceType ResourceType query=ResourceType
+.State RestoreJobState query=State
+ListRestoreJobSummariesOutput structure
+.AggregationPeriod string
+.NextToken string
+.RestoreJobSummaries RestoreJobSummaryList
+ListRestoreJobs operation in=ListRestoreJobsInput out=ListRestoreJobsOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/restore-jobs code=200
+ListRestoreJobsByProtectedResource operation in=ListRestoreJobsByProtectedResourceInput out=ListRestoreJobsByProtectedResourceOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/resources/{ResourceArn}/restore-jobs code=200
+ListRestoreJobsByProtectedResourceInput structure
+.ByRecoveryPointCreationDateAfter timestamp query=recoveryPointCreationDateAfter
+.ByRecoveryPointCreationDateBefore timestamp query=recoveryPointCreationDateBefore
+.ByStatus RestoreJobStatus query=status
+.MaxResults MaxResults query=maxResults
+.NextToken string query=nextToken
+.ResourceArn ARN label
+ListRestoreJobsByProtectedResourceOutput structure
+.NextToken string
+.RestoreJobs RestoreJobsList
+ListRestoreJobsInput structure
+.ByAccountId AccountId query=accountId
+.ByCompleteAfter timestamp query=completeAfter
+.ByCompleteBefore timestamp query=completeBefore
+.ByCreatedAfter timestamp query=createdAfter
+.ByCreatedBefore timestamp query=createdBefore
+.ByParentJobId string query=parentJobId
+.ByResourceType ResourceType query=resourceType
+.ByRestoreTestingPlanArn ARN query=restoreTestingPlanArn
+.ByStatus RestoreJobStatus query=status
+.MaxResults MaxResults query=maxResults
+.NextToken string query=nextToken
+ListRestoreJobsOutput structure
+.NextToken string
+.RestoreJobs RestoreJobsList
+ListRestoreTestingPlans operation in=ListRestoreTestingPlansInput out=ListRestoreTestingPlansOutput err=InvalidParameterValueException,ServiceUnavailableException method=GET uri=/restore-testing/plans code=200
+ListRestoreTestingPlansInput structure
+.MaxResults ListRestoreTestingPlansInputMaxResultsInteger query=MaxResults
+.NextToken ~String query=NextToken
+ListRestoreTestingPlansInputMaxResultsInteger integer
+ListRestoreTestingPlansOutput structure
+.NextToken ~String
+.RestoreTestingPlans RestoreTestingPlans
+ListRestoreTestingSelections operation in=ListRestoreTestingSelectionsInput out=ListRestoreTestingSelectionsOutput err=InvalidParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/restore-testing/plans/{RestoreTestingPlanName}/selections code=200
+ListRestoreTestingSelectionsInput structure
+.MaxResults ListRestoreTestingSelectionsInputMaxResultsInteger query=MaxResults
+.NextToken ~String query=NextToken
+.RestoreTestingPlanName ~String label
+ListRestoreTestingSelectionsInputMaxResultsInteger integer
+ListRestoreTestingSelectionsOutput structure
+.NextToken ~String
+.RestoreTestingSelections RestoreTestingSelections
+ListScanJobSummaries operation in=ListScanJobSummariesInput out=ListScanJobSummariesOutput err=InvalidParameterValueException,ServiceUnavailableException method=GET uri=/audit/scan-job-summaries code=200
+ListScanJobSummariesInput structure
+.AccountId AccountId query=AccountId
+.AggregationPeriod AggregationPeriod query=AggregationPeriod
+.MalwareScanner MalwareScanner query=MalwareScanner
+.MaxResults MaxResults query=MaxResults
+.NextToken string query=NextToken
+.ResourceType ResourceType query=ResourceType
+.ScanResultStatus ScanResultStatus query=ScanResultStatus
+.State ScanJobStatus query=State
+ListScanJobSummariesOutput structure
+.AggregationPeriod string
+.NextToken string
+.ScanJobSummaries ScanJobSummaryList
+ListScanJobs operation in=ListScanJobsInput out=ListScanJobsOutput err=InvalidParameterValueException,ServiceUnavailableException method=GET uri=/scan/jobs code=200
+ListScanJobsInput structure
+.ByAccountId ~String query=ByAccountId
+.ByBackupVaultName ~String query=ByBackupVaultName
+.ByCompleteAfter ~Timestamp query=ByCompleteAfter
+.ByCompleteBefore ~Timestamp query=ByCompleteBefore
+.ByMalwareScanner MalwareScanner query=ByMalwareScanner
+.ByRecoveryPointArn ~String query=ByRecoveryPointArn
+.ByResourceArn ~String query=ByResourceArn
+.ByResourceType ScanResourceType query=ByResourceType
+.ByScanResultStatus ScanResultStatus query=ByScanResultStatus
+.ByState ScanState query=ByState
+.MaxResults ListScanJobsInputMaxResultsInteger query=MaxResults
+.NextToken ~String query=NextToken
+ListScanJobsInputMaxResultsInteger integer
+ListScanJobsOutput structure
+.NextToken ~String
+.ScanJobs ScanJobs
+ListTags operation in=ListTagsInput out=ListTagsOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=GET uri=/tags/{ResourceArn} code=200
+ListTagsInput structure
+.MaxResults MaxResults query=maxResults
+.NextToken string query=nextToken
+.ResourceArn ARN label
+ListTagsOutput structure
+.NextToken string
+.Tags Tags
+ListTieringConfigurations operation in=ListTieringConfigurationsInput out=ListTieringConfigurationsOutput err=InvalidParameterValueException,ServiceUnavailableException method=GET uri=/tiering-configurations code=200
+ListTieringConfigurationsInput structure
+.MaxResults MaxResults query=maxResults
+.NextToken string query=nextToken
+ListTieringConfigurationsOutput structure
+.NextToken string
+.TieringConfigurations TieringConfigurationsList
+Long long
+Long2 long
+MalwareScanner enum
+MaxFrameworkInputs integer
+MaxResults integer
+MaxScheduledRunsPreview integer
+MessageCategory string
+Metadata map k=MetadataKey v=MetadataValue
+MetadataKey string
+MetadataValue string
+MissingParameterValueException structure error=client
+.Code string
+.Context string
+.Message string
+.Type string
+MpaRevokeSessionStatus enum
+MpaSessionStatus enum
+ParameterName string
+ParameterValue string
+ProtectedResource structure
+.LastBackupTime timestamp
+.LastBackupVaultArn ARN
+.LastRecoveryPointArn ARN
+.ResourceArn ARN
+.ResourceName string
+.ResourceType ResourceType
+ProtectedResourceConditions structure
+.StringEquals KeyValueList
+.StringNotEquals KeyValueList
+ProtectedResourcesList list m=ProtectedResource
+PutBackupVaultAccessPolicy operation in=PutBackupVaultAccessPolicyInput out=~Unit err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=PUT uri=/backup-vaults/{BackupVaultName}/access-policy code=200
+PutBackupVaultAccessPolicyInput structure
+.BackupVaultName BackupVaultName label
+.Policy IAMPolicy
+PutBackupVaultLockConfiguration operation in=PutBackupVaultLockConfigurationInput out=~Unit err=InvalidParameterValueException,InvalidRequestException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=PUT uri=/backup-vaults/{BackupVaultName}/vault-lock code=200
+PutBackupVaultLockConfigurationInput structure
+.BackupVaultName BackupVaultName label
+.ChangeableForDays Long
+.MaxRetentionDays Long
+.MinRetentionDays Long
+PutBackupVaultNotifications operation in=PutBackupVaultNotificationsInput out=~Unit err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=PUT uri=/backup-vaults/{BackupVaultName}/notification-configuration code=200
+PutBackupVaultNotificationsInput structure
+.BackupVaultEvents BackupVaultEvents
+.BackupVaultName BackupVaultName label
+.SNSTopicArn ARN
+PutRestoreValidationResult operation in=PutRestoreValidationResultInput out=~Unit err=InvalidParameterValueException,InvalidRequestException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=PUT uri=/restore-jobs/{RestoreJobId}/validations code=204
+PutRestoreValidationResultInput structure
+.RestoreJobId RestoreJobId label
+.ValidationStatus RestoreValidationStatus
+.ValidationStatusMessage string
+RecoveryPointArn string
+RecoveryPointByBackupVault structure
+.AggregatedScanResult AggregatedScanResult
+.BackupSizeInBytes Long
+.BackupVaultArn ARN
+.BackupVaultName BackupVaultName
+.CalculatedLifecycle CalculatedLifecycle
+.CompletionDate timestamp
+.CompositeMemberIdentifier string
+.CreatedBy RecoveryPointCreator
+.CreationDate timestamp
+.EncryptionKeyArn ARN
+.EncryptionKeyType EncryptionKeyType
+.IamRoleArn IAMRoleArn
+.IndexStatus IndexStatus
+.IndexStatusMessage string
+.InitiationDate timestamp
+.IsEncrypted Boolean2
+.IsParent Boolean2
+.LastRestoreTime timestamp
+.Lifecycle Lifecycle
+.ParentRecoveryPointArn ARN
+.RecoveryPointArn ARN
+.ResourceArn ARN
+.ResourceName string
+.ResourceType ResourceType
+.SourceBackupVaultArn ARN
+.Status RecoveryPointStatus
+.StatusMessage string
+.VaultType VaultType
+RecoveryPointByBackupVaultList list m=RecoveryPointByBackupVault
+RecoveryPointByResource structure
+.AggregatedScanResult AggregatedScanResult
+.BackupSizeBytes Long
+.BackupVaultName BackupVaultName
+.CreationDate timestamp
+.EncryptionKeyArn ARN
+.EncryptionKeyType EncryptionKeyType
+.IndexStatus IndexStatus
+.IndexStatusMessage string
+.IsParent Boolean2
+.ParentRecoveryPointArn ARN
+.RecoveryPointArn ARN
+.ResourceName string
+.Status RecoveryPointStatus
+.StatusMessage string
+.VaultType VaultType
+RecoveryPointByResourceList list m=RecoveryPointByResource
+RecoveryPointCreator structure
+.BackupPlanArn ARN
+.BackupPlanId string
+.BackupPlanName string
+.BackupPlanVersion string
+.BackupRuleCron string
+.BackupRuleId string
+.BackupRuleName string
+.BackupRuleTimezone string
+RecoveryPointMember structure
+.BackupVaultName BackupVaultName
+.RecoveryPointArn ARN
+.ResourceArn ARN
+.ResourceType ResourceType
+RecoveryPointSelection structure
+.DateRange DateRange
+.ResourceIdentifiers ResourceIdentifiers
+.VaultNames VaultNames
+RecoveryPointStatus enum
+RecoveryPointsList list m=RecoveryPointMember
+Region string
+ReportDeliveryChannel structure
+.Formats FormatList
+.S3BucketName string
+.S3KeyPrefix string
+ReportDestination structure
+.S3BucketName string
+.S3Keys stringList
+ReportJob structure
+.CompletionTime timestamp
+.CreationTime timestamp
+.ReportDestination ReportDestination
+.ReportJobId ReportJobId
+.ReportPlanArn ARN
+.ReportTemplate string
+.Status string
+.StatusMessage string
+ReportJobId string
+ReportJobList list m=ReportJob
+ReportPlan structure
+.CreationTime timestamp
+.DeploymentStatus string
+.LastAttemptedExecutionTime timestamp
+.LastSuccessfulExecutionTime timestamp
+.ReportDeliveryChannel ReportDeliveryChannel
+.ReportPlanArn ARN
+.ReportPlanDescription ReportPlanDescription
+.ReportPlanName ReportPlanName
+.ReportSetting ReportSetting
+ReportPlanDescription string
+ReportPlanList list m=ReportPlan
+ReportPlanName string
+ReportSetting structure
+.Accounts stringList
+.FrameworkArns stringList
+.NumberOfFrameworks integer
+.OrganizationUnits stringList
+.Regions stringList
+.ReportTemplate string
+RequesterComment string
+ResourceArn string
+ResourceArns list m=ARN
+ResourceIdentifiers list m=string
+ResourceNotFoundException structure error=client
+.Code string
+.Context string
+.Message string
+.Type string
+ResourceSelection structure
+.ResourceType ResourceType
+.Resources ResourceArns
+.TieringDownSettingsInDays TieringDownSettingsInDays
+ResourceSelections list m=ResourceSelection
+ResourceType string
+ResourceTypeList list m=ARN
+ResourceTypeManagementPreference map k=ResourceType v=IsEnabled
+ResourceTypeOptInPreference map k=ResourceType v=IsEnabled
+ResourceTypes list m=ResourceType
+RestoreAccessBackupVaultList list m=RestoreAccessBackupVaultListMember
+RestoreAccessBackupVaultListMember structure
+.ApprovalDate timestamp
+.CreationDate timestamp
+.LatestRevokeRequest LatestRevokeRequest
+.RestoreAccessBackupVaultArn ARN
+.VaultState VaultState
+RestoreDeletionStatus enum
+RestoreJobCreator structure
+.RestoreTestingPlanArn ARN
+RestoreJobId string
+RestoreJobState enum
+RestoreJobStatus enum
+RestoreJobSummary structure
+.AccountId AccountId
+.Count integer
+.EndTime timestamp
+.Region Region
+.ResourceType ResourceType
+.StartTime timestamp
+.State RestoreJobState
+RestoreJobSummaryList list m=RestoreJobSummary
+RestoreJobsList list m=RestoreJobsListMember
+RestoreJobsListMember structure
+.AccountId AccountId
+.BackupSizeInBytes Long
+.BackupVaultArn ARN
+.CompletionDate timestamp
+.CreatedBy RestoreJobCreator
+.CreatedResourceArn ARN
+.CreationDate timestamp
+.DeletionStatus RestoreDeletionStatus
+.DeletionStatusMessage string
+.ExpectedCompletionTimeMinutes Long
+.IamRoleArn IAMRoleArn
+.IsParent Boolean2
+.ParentJobId string
+.PercentDone string
+.RecoveryPointArn ARN
+.RecoveryPointCreationDate timestamp
+.ResourceType ResourceType
+.RestoreJobId string
+.SourceResourceArn ARN
+.Status RestoreJobStatus
+.StatusMessage string
+.ValidationStatus RestoreValidationStatus
+.ValidationStatusMessage string
+RestoreTestingPlanForCreate structure
+.RecoveryPointSelection RestoreTestingRecoveryPointSelection
+.RestoreTestingPlanName ~String
+.ScheduleExpression ~String
+.ScheduleExpressionTimezone ~String
+.StartWindowHours integer
+RestoreTestingPlanForGet structure
+.CreationTime ~Timestamp
+.CreatorRequestId ~String
+.LastExecutionTime ~Timestamp
+.LastUpdateTime ~Timestamp
+.RecoveryPointSelection RestoreTestingRecoveryPointSelection
+.RestoreTestingPlanArn ~String
+.RestoreTestingPlanName ~String
+.ScheduleExpression ~String
+.ScheduleExpressionTimezone ~String
+.StartWindowHours integer
+RestoreTestingPlanForList structure
+.CreationTime ~Timestamp
+.LastExecutionTime ~Timestamp
+.LastUpdateTime ~Timestamp
+.RestoreTestingPlanArn ~String
+.RestoreTestingPlanName ~String
+.ScheduleExpression ~String
+.ScheduleExpressionTimezone ~String
+.StartWindowHours integer
+RestoreTestingPlanForUpdate structure
+.RecoveryPointSelection RestoreTestingRecoveryPointSelection
+.ScheduleExpression ~String
+.ScheduleExpressionTimezone ~String
+.StartWindowHours integer
+RestoreTestingPlans list m=RestoreTestingPlanForList
+RestoreTestingRecoveryPointSelection structure
+.Algorithm RestoreTestingRecoveryPointSelectionAlgorithm
+.ExcludeVaults stringList
+.IncludeVaults stringList
+.RecoveryPointTypes RestoreTestingRecoveryPointTypeList
+.SelectionWindowDays integer
+RestoreTestingRecoveryPointSelectionAlgorithm enum
+RestoreTestingRecoveryPointType enum
+RestoreTestingRecoveryPointTypeList list m=RestoreTestingRecoveryPointType
+RestoreTestingSelectionForCreate structure
+.IamRoleArn ~String
+.ProtectedResourceArns stringList
+.ProtectedResourceConditions ProtectedResourceConditions
+.ProtectedResourceType ~String
+.RestoreMetadataOverrides SensitiveStringMap
+.RestoreTestingSelectionName ~String
+.ValidationWindowHours integer
+RestoreTestingSelectionForGet structure
+.CreationTime ~Timestamp
+.CreatorRequestId ~String
+.IamRoleArn ~String
+.ProtectedResourceArns stringList
+.ProtectedResourceConditions ProtectedResourceConditions
+.ProtectedResourceType ~String
+.RestoreMetadataOverrides SensitiveStringMap
+.RestoreTestingPlanName ~String
+.RestoreTestingSelectionName ~String
+.ValidationWindowHours integer
+RestoreTestingSelectionForList structure
+.CreationTime ~Timestamp
+.IamRoleArn ~String
+.ProtectedResourceType ~String
+.RestoreTestingPlanName ~String
+.RestoreTestingSelectionName ~String
+.ValidationWindowHours integer
+RestoreTestingSelectionForUpdate structure
+.IamRoleArn ~String
+.ProtectedResourceArns stringList
+.ProtectedResourceConditions ProtectedResourceConditions
+.RestoreMetadataOverrides SensitiveStringMap
+.ValidationWindowHours integer
+RestoreTestingSelections list m=RestoreTestingSelectionForList
+RestoreValidationStatus enum
+RevokeRestoreAccessBackupVault operation in=RevokeRestoreAccessBackupVaultInput out=~Unit err=InvalidParameterValueException,InvalidRequestException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=DELETE uri=/logically-air-gapped-backup-vaults/{BackupVaultName}/restore-access-backup-vaults/{RestoreAccessBackupVaultArn} code=200
+RevokeRestoreAccessBackupVaultInput structure
+.BackupVaultName BackupVaultName label
+.RequesterComment RequesterComment query=requesterComment
+.RestoreAccessBackupVaultArn ARN label
+RuleExecutionType enum
+ScanAction structure
+.MalwareScanner MalwareScanner
+.ScanMode ScanMode
+ScanActions list m=ScanAction
+ScanFinding enum
+ScanFindings list m=ScanFinding
+ScanJob structure
+.AccountId ~String
+.BackupVaultArn ~String
+.BackupVaultName ~String
+.CompletionDate ~Timestamp
+.ContinuousScanEndTime ~Timestamp
+.ContinuousScanStartTime ~Timestamp
+.CreatedBy ScanJobCreator
+.CreationDate ~Timestamp
+.IamRoleArn ~String
+.MalwareScanner MalwareScanner
+.RecoveryPointArn ~String
+.ResourceArn ~String
+.ResourceName ~String
+.ResourceType ScanResourceType
+.ScanBaseRecoveryPointArn ~String
+.ScanId ~String
+.ScanJobId ~String
+.ScanMode ScanMode
+.ScanResult ScanResultInfo
+.ScannerRoleArn ~String
+.State ScanState
+.StatusMessage ~String
+ScanJobCreator structure
+.BackupPlanArn ~String
+.BackupPlanId ~String
+.BackupPlanVersion ~String
+.BackupRuleId ~String
+ScanJobState enum
+ScanJobStatus enum
+ScanJobSummary structure
+.AccountId AccountId
+.Count integer
+.EndTime timestamp
+.MalwareScanner MalwareScanner
+.Region Region
+.ResourceType ResourceType
+.ScanResultStatus ScanResultStatus
+.StartTime timestamp
+.State ScanJobStatus
+ScanJobSummaryList list m=ScanJobSummary
+ScanJobs list m=ScanJob
+ScanMode enum
+ScanResourceType enum
+ScanResult structure
+.Findings ScanFindings
+.LastScanTimestamp timestamp
+.MalwareScanner MalwareScanner
+.ScanJobState ScanJobState
+ScanResultInfo structure
+.ScanResultStatus ScanResultStatus
+ScanResultStatus enum
+ScanResults list m=ScanResult
+ScanSetting structure
+.MalwareScanner MalwareScanner
+.ResourceTypes ResourceTypes
+.ScannerRoleArn IAMRoleArn
+ScanSettings list m=ScanSetting
+ScanState enum
+ScheduledPlanExecutionMember structure
+.ExecutionTime timestamp
+.RuleExecutionType RuleExecutionType
+.RuleId string
+ScheduledRunsPreview list m=ScheduledPlanExecutionMember
+SensitiveStringMap map k=~String v=~String
+ServiceUnavailableException structure error=server
+.Code string
+.Context string
+.Message string
+.Type string
+StartBackupJob operation in=StartBackupJobInput out=StartBackupJobOutput err=InvalidParameterValueException,InvalidRequestException,LimitExceededException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=PUT uri=/backup-jobs code=200
+StartBackupJobInput structure
+.BackupOptions BackupOptions
+.BackupVaultName BackupVaultName
+.CompleteWindowMinutes WindowMinutes
+.IamRoleArn IAMRoleArn
+.IdempotencyToken string
+.Index Index
+.Lifecycle Lifecycle
+.LogicallyAirGappedBackupVaultArn ARN
+.RecoveryPointTags Tags
+.ResourceArn ARN
+.StartWindowMinutes WindowMinutes
+StartBackupJobOutput structure
+.BackupJobId string
+.CreationDate timestamp
+.IsParent Boolean2
+.RecoveryPointArn ARN
+StartCopyJob operation in=StartCopyJobInput out=StartCopyJobOutput err=InvalidParameterValueException,InvalidRequestException,LimitExceededException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=PUT uri=/copy-jobs code=200
+StartCopyJobInput structure
+.DestinationBackupVaultArn ARN
+.IamRoleArn IAMRoleArn
+.IdempotencyToken string
+.Lifecycle Lifecycle
+.RecoveryPointArn ARN
+.SourceBackupVaultName BackupVaultName
+StartCopyJobOutput structure
+.CopyJobId string
+.CreationDate timestamp
+.IsParent Boolean2
+StartReportJob operation in=StartReportJobInput out=StartReportJobOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=POST uri=/audit/report-jobs/{ReportPlanName} code=200
+StartReportJobInput structure
+.IdempotencyToken string
+.ReportPlanName ReportPlanName label
+StartReportJobOutput structure
+.ReportJobId ReportJobId
+StartRestoreJob operation in=StartRestoreJobInput out=StartRestoreJobOutput err=InvalidParameterValueException,InvalidRequestException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=PUT uri=/restore-jobs code=200
+StartRestoreJobInput structure
+.CopySourceTagsToRestoredResource Boolean2
+.IamRoleArn IAMRoleArn
+.IdempotencyToken string
+.Metadata Metadata
+.RecoveryPointArn ARN
+.ResourceType ResourceType
+StartRestoreJobOutput structure
+.RestoreJobId RestoreJobId
+StartScanJob operation in=StartScanJobInput out=StartScanJobOutput err=InvalidParameterValueException,InvalidRequestException,LimitExceededException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=PUT uri=/scan/job code=201
+StartScanJobInput structure
+.BackupVaultName ~String
+.ContinuousScanEndTime ~Timestamp
+.IamRoleArn ~String
+.IdempotencyToken ~String
+.MalwareScanner MalwareScanner
+.RecoveryPointArn ~String
+.ScanBaseRecoveryPointArn ~String
+.ScanMode ScanMode
+.ScannerRoleArn ~String
+StartScanJobOutput structure
+.CreationDate ~Timestamp
+.ScanJobId ~String
+StopBackupJob operation in=StopBackupJobInput out=~Unit err=InvalidParameterValueException,InvalidRequestException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=POST uri=/backup-jobs/{BackupJobId} code=200
+StopBackupJobInput structure
+.BackupJobId string label
+StorageClass enum
+TagKey string
+TagKeyList list m=string
+TagMap map k=TagMapKeyString v=TagMapValueString
+TagMapKeyString string
+TagMapValueString string
+TagResource operation in=TagResourceInput out=~Unit err=InvalidParameterValueException,LimitExceededException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=POST uri=/tags/{ResourceArn} code=200
+TagResourceInput structure
+.ResourceArn ARN label
+.Tags Tags
+TagValue string
+Tags map k=TagKey v=TagValue
+TieringConfiguration structure
+.BackupVaultName BackupVaultNameOrWildcard
+.CreationTime timestamp
+.CreatorRequestId CreatorRequestId
+.LastUpdatedTime timestamp
+.ResourceSelection ResourceSelections
+.TieringConfigurationArn ARN
+.TieringConfigurationName TieringConfigurationName
+TieringConfigurationInputForCreate structure
+.BackupVaultName BackupVaultNameOrWildcard
+.ResourceSelection ResourceSelections
+.TieringConfigurationName TieringConfigurationName
+TieringConfigurationInputForUpdate structure
+.BackupVaultName BackupVaultNameOrWildcard
+.ResourceSelection ResourceSelections
+TieringConfigurationName string
+TieringConfigurationsList list m=TieringConfigurationsListMember
+TieringConfigurationsListMember structure
+.BackupVaultName BackupVaultNameOrWildcard
+.CreationTime timestamp
+.LastUpdatedTime timestamp
+.TieringConfigurationArn ARN
+.TieringConfigurationName TieringConfigurationName
+TieringDownSettingsInDays integer
+Timezone string
+UntagResource operation in=UntagResourceInput out=~Unit err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=POST uri=/untag/{ResourceArn} code=200
+UntagResourceInput structure
+.ResourceArn ARN label
+.TagKeyList TagKeyList
+UpdateBackupPlan operation in=UpdateBackupPlanInput out=UpdateBackupPlanOutput err=InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=POST uri=/backup/plans/{BackupPlanId} code=200
+UpdateBackupPlanInput structure
+.BackupPlan BackupPlanInput
+.BackupPlanId string label
+UpdateBackupPlanOutput structure
+.AdvancedBackupSettings AdvancedBackupSettings
+.BackupPlanArn ARN
+.BackupPlanId string
+.CreationDate timestamp
+.ScanSettings ScanSettings
+.VersionId string
+UpdateFramework operation in=UpdateFrameworkInput out=UpdateFrameworkOutput err=AlreadyExistsException,ConflictException,InvalidParameterValueException,LimitExceededException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=PUT uri=/audit/frameworks/{FrameworkName} code=200
+UpdateFrameworkInput structure
+.FrameworkControls FrameworkControls
+.FrameworkDescription FrameworkDescription
+.FrameworkName FrameworkName label
+.IdempotencyToken string
+UpdateFrameworkOutput structure
+.CreationTime timestamp
+.FrameworkArn ARN
+.FrameworkName FrameworkName
+UpdateGlobalSettings operation in=UpdateGlobalSettingsInput out=~Unit err=InvalidParameterValueException,InvalidRequestException,MissingParameterValueException,ServiceUnavailableException method=PUT uri=/global-settings code=200
+UpdateGlobalSettingsInput structure
+.GlobalSettings GlobalSettings
+UpdateRecoveryPointIndexSettings operation in=UpdateRecoveryPointIndexSettingsInput out=UpdateRecoveryPointIndexSettingsOutput err=InvalidParameterValueException,InvalidRequestException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=POST uri=/backup-vaults/{BackupVaultName}/recovery-points/{RecoveryPointArn}/index code=200
+UpdateRecoveryPointIndexSettingsInput structure
+.BackupVaultName BackupVaultName label
+.IamRoleArn IAMRoleArn
+.Index Index
+.RecoveryPointArn ARN label
+UpdateRecoveryPointIndexSettingsOutput structure
+.BackupVaultName BackupVaultName
+.Index Index
+.IndexStatus IndexStatus
+.RecoveryPointArn ARN
+UpdateRecoveryPointLifecycle operation in=UpdateRecoveryPointLifecycleInput out=UpdateRecoveryPointLifecycleOutput err=InvalidParameterValueException,InvalidRequestException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=POST uri=/backup-vaults/{BackupVaultName}/recovery-points/{RecoveryPointArn} code=200
+UpdateRecoveryPointLifecycleInput structure
+.BackupVaultName BackupVaultName label
+.Lifecycle Lifecycle
+.RecoveryPointArn ARN label
+UpdateRecoveryPointLifecycleOutput structure
+.BackupVaultArn ARN
+.CalculatedLifecycle CalculatedLifecycle
+.Lifecycle Lifecycle
+.RecoveryPointArn ARN
+UpdateRegionSettings operation in=UpdateRegionSettingsInput out=~Unit err=InvalidParameterValueException,MissingParameterValueException,ServiceUnavailableException method=PUT uri=/account-settings code=200
+UpdateRegionSettingsInput structure
+.ResourceTypeManagementPreference ResourceTypeManagementPreference
+.ResourceTypeOptInPreference ResourceTypeOptInPreference
+UpdateReportPlan operation in=UpdateReportPlanInput out=UpdateReportPlanOutput err=ConflictException,InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=PUT uri=/audit/report-plans/{ReportPlanName} code=200
+UpdateReportPlanInput structure
+.IdempotencyToken string
+.ReportDeliveryChannel ReportDeliveryChannel
+.ReportPlanDescription ReportPlanDescription
+.ReportPlanName ReportPlanName label
+.ReportSetting ReportSetting
+UpdateReportPlanOutput structure
+.CreationTime timestamp
+.ReportPlanArn ARN
+.ReportPlanName ReportPlanName
+UpdateRestoreTestingPlan operation in=UpdateRestoreTestingPlanInput out=UpdateRestoreTestingPlanOutput err=ConflictException,InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=PUT uri=/restore-testing/plans/{RestoreTestingPlanName} code=200
+UpdateRestoreTestingPlanInput structure
+.RestoreTestingPlan RestoreTestingPlanForUpdate
+.RestoreTestingPlanName ~String label
+UpdateRestoreTestingPlanOutput structure
+.CreationTime ~Timestamp
+.RestoreTestingPlanArn ~String
+.RestoreTestingPlanName ~String
+.UpdateTime ~Timestamp
+UpdateRestoreTestingSelection operation in=UpdateRestoreTestingSelectionInput out=UpdateRestoreTestingSelectionOutput err=ConflictException,InvalidParameterValueException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=PUT uri=/restore-testing/plans/{RestoreTestingPlanName}/selections/{RestoreTestingSelectionName} code=200
+UpdateRestoreTestingSelectionInput structure
+.RestoreTestingPlanName ~String label
+.RestoreTestingSelection RestoreTestingSelectionForUpdate
+.RestoreTestingSelectionName ~String label
+UpdateRestoreTestingSelectionOutput structure
+.CreationTime ~Timestamp
+.RestoreTestingPlanArn ~String
+.RestoreTestingPlanName ~String
+.RestoreTestingSelectionName ~String
+.UpdateTime ~Timestamp
+UpdateTieringConfiguration operation in=UpdateTieringConfigurationInput out=UpdateTieringConfigurationOutput err=AlreadyExistsException,ConflictException,InvalidParameterValueException,LimitExceededException,MissingParameterValueException,ResourceNotFoundException,ServiceUnavailableException method=PUT uri=/tiering-configurations/{TieringConfigurationName} code=200
+UpdateTieringConfigurationInput structure
+.TieringConfiguration TieringConfigurationInputForUpdate
+.TieringConfigurationName TieringConfigurationName label
+UpdateTieringConfigurationOutput structure
+.CreationTime timestamp
+.LastUpdatedTime timestamp
+.TieringConfigurationArn ARN
+.TieringConfigurationName TieringConfigurationName
+VaultNames list m=string
+VaultState enum
+VaultType enum
+WindowMinutes long
+integer integer
+string string
+stringList list m=string
+stringMap map k=string v=string
+timestamp timestamp

@@ -1,0 +1,297 @@
+service AWSJSON10 version=2012-11-05 querycompat
+AWSAccountIdList list m=String
+ActionNameList list m=String
+AddPermission operation in=AddPermissionRequest out=~Unit err=InvalidAddress,InvalidSecurity,OverLimit,QueueDoesNotExist,RequestThrottled,UnsupportedOperation
+AddPermissionRequest structure
+.AWSAccountIds AWSAccountIdList flat xml=AWSAccountId
+.Actions ActionNameList flat xml=ActionName
+.Label String
+.QueueUrl String
+AttributeNameList list m=QueueAttributeName
+BatchEntryIdsNotDistinct structure qerr=AWS.SimpleQueueService.BatchEntryIdsNotDistinct error=client code=400
+.message ExceptionMessage
+BatchRequestTooLong structure qerr=AWS.SimpleQueueService.BatchRequestTooLong error=client code=400
+.message ExceptionMessage
+BatchResultErrorEntry structure
+.Code String
+.Id String
+.Message String
+.SenderFault Boolean
+BatchResultErrorEntryList list m=BatchResultErrorEntry
+Binary blob
+BinaryList list m=Binary mxml=BinaryListValue
+Boolean boolean
+BoxedInteger integer
+CancelMessageMoveTask operation in=CancelMessageMoveTaskRequest out=CancelMessageMoveTaskResult err=InvalidAddress,InvalidSecurity,RequestThrottled,ResourceNotFoundException,UnsupportedOperation
+CancelMessageMoveTaskRequest structure
+.TaskHandle String
+CancelMessageMoveTaskResult structure
+.ApproximateNumberOfMessagesMoved Long
+ChangeMessageVisibility operation in=ChangeMessageVisibilityRequest out=~Unit err=InvalidAddress,InvalidSecurity,MessageNotInflight,QueueDoesNotExist,ReceiptHandleIsInvalid,RequestThrottled,UnsupportedOperation
+ChangeMessageVisibilityBatch operation in=ChangeMessageVisibilityBatchRequest out=ChangeMessageVisibilityBatchResult err=BatchEntryIdsNotDistinct,EmptyBatchRequest,InvalidAddress,InvalidBatchEntryId,InvalidSecurity,QueueDoesNotExist,RequestThrottled,TooManyEntriesInBatchRequest,UnsupportedOperation
+ChangeMessageVisibilityBatchRequest structure
+.Entries ChangeMessageVisibilityBatchRequestEntryList flat xml=ChangeMessageVisibilityBatchRequestEntry
+.QueueUrl String
+ChangeMessageVisibilityBatchRequestEntry structure
+.Id String
+.ReceiptHandle String
+.VisibilityTimeout NullableInteger
+ChangeMessageVisibilityBatchRequestEntryList list m=ChangeMessageVisibilityBatchRequestEntry
+ChangeMessageVisibilityBatchResult structure
+.Failed BatchResultErrorEntryList flat xml=BatchResultErrorEntry
+.Successful ChangeMessageVisibilityBatchResultEntryList flat xml=ChangeMessageVisibilityBatchResultEntry
+ChangeMessageVisibilityBatchResultEntry structure
+.Id String
+ChangeMessageVisibilityBatchResultEntryList list m=ChangeMessageVisibilityBatchResultEntry
+ChangeMessageVisibilityRequest structure
+.QueueUrl String
+.ReceiptHandle String
+.VisibilityTimeout NullableInteger
+CreateQueue operation in=CreateQueueRequest out=CreateQueueResult err=InvalidAddress,InvalidAttributeName,InvalidAttributeValue,InvalidSecurity,QueueDeletedRecently,QueueNameExists,RequestThrottled,UnsupportedOperation
+CreateQueueRequest structure
+.Attributes QueueAttributeMap flat xml=Attribute
+.QueueName String
+.tags TagMap flat xml=Tag
+CreateQueueResult structure
+.QueueUrl String
+DeleteMessage operation in=DeleteMessageRequest out=~Unit err=InvalidAddress,InvalidIdFormat,InvalidSecurity,QueueDoesNotExist,ReceiptHandleIsInvalid,RequestThrottled,UnsupportedOperation
+DeleteMessageBatch operation in=DeleteMessageBatchRequest out=DeleteMessageBatchResult err=BatchEntryIdsNotDistinct,EmptyBatchRequest,InvalidAddress,InvalidBatchEntryId,InvalidSecurity,QueueDoesNotExist,RequestThrottled,TooManyEntriesInBatchRequest,UnsupportedOperation
+DeleteMessageBatchRequest structure
+.Entries DeleteMessageBatchRequestEntryList flat xml=DeleteMessageBatchRequestEntry
+.QueueUrl String
+DeleteMessageBatchRequestEntry structure
+.Id String
+.ReceiptHandle String
+DeleteMessageBatchRequestEntryList list m=DeleteMessageBatchRequestEntry
+DeleteMessageBatchResult structure
+.Failed BatchResultErrorEntryList flat xml=BatchResultErrorEntry
+.Successful DeleteMessageBatchResultEntryList flat xml=DeleteMessageBatchResultEntry
+DeleteMessageBatchResultEntry structure
+.Id String
+DeleteMessageBatchResultEntryList list m=DeleteMessageBatchResultEntry
+DeleteMessageRequest structure
+.QueueUrl String
+.ReceiptHandle String
+DeleteQueue operation in=DeleteQueueRequest out=~Unit err=InvalidAddress,InvalidSecurity,QueueDoesNotExist,RequestThrottled,UnsupportedOperation
+DeleteQueueRequest structure
+.QueueUrl String
+EmptyBatchRequest structure qerr=AWS.SimpleQueueService.EmptyBatchRequest error=client code=400
+.message ExceptionMessage
+ExceptionMessage string
+GetQueueAttributes operation in=GetQueueAttributesRequest out=GetQueueAttributesResult err=InvalidAddress,InvalidAttributeName,InvalidSecurity,QueueDoesNotExist,RequestThrottled,UnsupportedOperation
+GetQueueAttributesRequest structure
+.AttributeNames AttributeNameList flat xml=AttributeName
+.QueueUrl String
+GetQueueAttributesResult structure
+.Attributes QueueAttributeMap flat xml=Attribute
+GetQueueUrl operation in=GetQueueUrlRequest out=GetQueueUrlResult err=InvalidAddress,InvalidSecurity,QueueDoesNotExist,RequestThrottled,UnsupportedOperation
+GetQueueUrlRequest structure
+.QueueName String
+.QueueOwnerAWSAccountId String
+GetQueueUrlResult structure
+.QueueUrl String
+InvalidAddress structure qerr=InvalidAddress error=client code=404
+.message ExceptionMessage
+InvalidAttributeName structure error=client
+.message ExceptionMessage
+InvalidAttributeValue structure error=client
+.message ExceptionMessage
+InvalidBatchEntryId structure qerr=AWS.SimpleQueueService.InvalidBatchEntryId error=client code=400
+.message ExceptionMessage
+InvalidIdFormat structure error=client
+InvalidMessageContents structure error=client
+.message ExceptionMessage
+InvalidSecurity structure qerr=InvalidSecurity error=client code=403
+.message ExceptionMessage
+KmsAccessDenied structure qerr=KMS.AccessDeniedException error=client code=400
+.message ExceptionMessage
+KmsDisabled structure qerr=KMS.DisabledException error=client code=400
+.message ExceptionMessage
+KmsInvalidKeyUsage structure qerr=KMS.InvalidKeyUsageException error=client code=400
+.message ExceptionMessage
+KmsInvalidState structure qerr=KMS.InvalidStateException error=client code=400
+.message ExceptionMessage
+KmsNotFound structure qerr=KMS.NotFoundException error=client code=400
+.message ExceptionMessage
+KmsOptInRequired structure qerr=KMS.OptInRequired error=client code=403
+.message ExceptionMessage
+KmsThrottled structure qerr=KMS.ThrottlingException error=client code=400
+.message ExceptionMessage
+ListDeadLetterSourceQueues operation in=ListDeadLetterSourceQueuesRequest out=ListDeadLetterSourceQueuesResult err=InvalidAddress,InvalidSecurity,QueueDoesNotExist,RequestThrottled,UnsupportedOperation
+ListDeadLetterSourceQueuesRequest structure
+.MaxResults BoxedInteger
+.NextToken Token
+.QueueUrl String
+ListDeadLetterSourceQueuesResult structure
+.NextToken Token
+.queueUrls QueueUrlList flat xml=QueueUrl
+ListMessageMoveTasks operation in=ListMessageMoveTasksRequest out=ListMessageMoveTasksResult err=InvalidAddress,InvalidSecurity,RequestThrottled,ResourceNotFoundException,UnsupportedOperation
+ListMessageMoveTasksRequest structure
+.MaxResults NullableInteger
+.SourceArn String
+ListMessageMoveTasksResult structure xml=ListMessageMoveTasksResult
+.Results ListMessageMoveTasksResultEntryList flat xml=ListMessageMoveTasksResultEntry
+ListMessageMoveTasksResultEntry structure
+.ApproximateNumberOfMessagesMoved Long
+.ApproximateNumberOfMessagesToMove NullableLong
+.DestinationArn String
+.FailureReason String
+.MaxNumberOfMessagesPerSecond NullableInteger
+.SourceArn String
+.StartedTimestamp Long
+.Status String
+.TaskHandle String
+ListMessageMoveTasksResultEntryList list m=ListMessageMoveTasksResultEntry
+ListQueueTags operation in=ListQueueTagsRequest out=ListQueueTagsResult err=InvalidAddress,InvalidSecurity,QueueDoesNotExist,RequestThrottled,UnsupportedOperation
+ListQueueTagsRequest structure
+.QueueUrl String
+ListQueueTagsResult structure
+.Tags TagMap flat xml=Tag
+ListQueues operation in=ListQueuesRequest out=ListQueuesResult err=InvalidAddress,InvalidSecurity,RequestThrottled,UnsupportedOperation
+ListQueuesRequest structure
+.MaxResults BoxedInteger
+.NextToken Token
+.QueueNamePrefix String
+ListQueuesResult structure
+.NextToken Token
+.QueueUrls QueueUrlList flat xml=QueueUrl
+Long long
+Message structure
+.Attributes MessageSystemAttributeMap flat xml=Attribute
+.Body String
+.MD5OfBody String
+.MD5OfMessageAttributes String
+.MessageAttributes MessageBodyAttributeMap flat xml=MessageAttribute
+.MessageId String
+.ReceiptHandle String
+MessageAttributeName string
+MessageAttributeNameList list m=MessageAttributeName
+MessageAttributeValue structure
+.BinaryListValues BinaryList flat xml=BinaryListValue
+.BinaryValue Binary
+.DataType String
+.StringListValues StringList flat xml=StringListValue
+.StringValue String
+MessageBodyAttributeMap map k=String v=MessageAttributeValue kxml=Name vxml=Value
+MessageBodySystemAttributeMap map k=MessageSystemAttributeNameForSends v=MessageSystemAttributeValue kxml=Name vxml=Value
+MessageList list m=Message
+MessageNotInflight structure qerr=AWS.SimpleQueueService.MessageNotInflight error=client code=400
+MessageSystemAttributeList list m=MessageSystemAttributeName
+MessageSystemAttributeMap map k=MessageSystemAttributeName v=String kxml=Name vxml=Value
+MessageSystemAttributeName enum
+MessageSystemAttributeNameForSends enum
+MessageSystemAttributeValue structure
+.BinaryListValues BinaryList flat xml=BinaryListValue
+.BinaryValue Binary
+.DataType String
+.StringListValues StringList flat xml=StringListValue
+.StringValue String
+NullableInteger integer
+NullableLong long
+OverLimit structure qerr=OverLimit error=client code=403
+.message ExceptionMessage
+PurgeQueue operation in=PurgeQueueRequest out=~Unit err=InvalidAddress,InvalidSecurity,PurgeQueueInProgress,QueueDoesNotExist,RequestThrottled,UnsupportedOperation
+PurgeQueueInProgress structure qerr=AWS.SimpleQueueService.PurgeQueueInProgress error=client code=403
+.message ExceptionMessage
+PurgeQueueRequest structure
+.QueueUrl String
+QueueAttributeMap map k=QueueAttributeName v=String kxml=Name vxml=Value
+QueueAttributeName enum
+QueueDeletedRecently structure qerr=AWS.SimpleQueueService.QueueDeletedRecently error=client code=400
+.message ExceptionMessage
+QueueDoesNotExist structure qerr=AWS.SimpleQueueService.NonExistentQueue error=client code=400
+.message ExceptionMessage
+QueueNameExists structure qerr=QueueAlreadyExists error=client code=400
+.message ExceptionMessage
+QueueUrlList list m=String
+ReceiptHandleIsInvalid structure qerr=ReceiptHandleIsInvalid error=client code=404
+.message ExceptionMessage
+ReceiveMessage operation in=ReceiveMessageRequest out=ReceiveMessageResult err=InvalidAddress,InvalidSecurity,KmsAccessDenied,KmsDisabled,KmsInvalidKeyUsage,KmsInvalidState,KmsNotFound,KmsOptInRequired,KmsThrottled,OverLimit,QueueDoesNotExist,RequestThrottled,UnsupportedOperation
+ReceiveMessageRequest structure
+.AttributeNames AttributeNameList flat xml=AttributeName
+.MaxNumberOfMessages NullableInteger
+.MessageAttributeNames MessageAttributeNameList flat xml=MessageAttributeName
+.MessageSystemAttributeNames MessageSystemAttributeList flat xml=AttributeName
+.QueueUrl String
+.ReceiveRequestAttemptId String
+.VisibilityTimeout NullableInteger
+.WaitTimeSeconds NullableInteger
+ReceiveMessageResult structure
+.Messages MessageList flat xml=Message
+RemovePermission operation in=RemovePermissionRequest out=~Unit err=InvalidAddress,InvalidSecurity,QueueDoesNotExist,RequestThrottled,UnsupportedOperation
+RemovePermissionRequest structure
+.Label String
+.QueueUrl String
+RequestThrottled structure qerr=RequestThrottled error=client code=403
+.message ExceptionMessage
+ResourceNotFoundException structure qerr=ResourceNotFoundException error=client code=404
+.message ExceptionMessage
+SendMessage operation in=SendMessageRequest out=SendMessageResult err=InvalidAddress,InvalidMessageContents,InvalidSecurity,KmsAccessDenied,KmsDisabled,KmsInvalidKeyUsage,KmsInvalidState,KmsNotFound,KmsOptInRequired,KmsThrottled,QueueDoesNotExist,RequestThrottled,UnsupportedOperation
+SendMessageBatch operation in=SendMessageBatchRequest out=SendMessageBatchResult err=BatchEntryIdsNotDistinct,BatchRequestTooLong,EmptyBatchRequest,InvalidAddress,InvalidBatchEntryId,InvalidSecurity,KmsAccessDenied,KmsDisabled,KmsInvalidKeyUsage,KmsInvalidState,KmsNotFound,KmsOptInRequired,KmsThrottled,QueueDoesNotExist,RequestThrottled,TooManyEntriesInBatchRequest,UnsupportedOperation
+SendMessageBatchRequest structure
+.Entries SendMessageBatchRequestEntryList flat xml=SendMessageBatchRequestEntry
+.QueueUrl String
+SendMessageBatchRequestEntry structure
+.DelaySeconds NullableInteger
+.Id String
+.MessageAttributes MessageBodyAttributeMap flat xml=MessageAttribute
+.MessageBody String
+.MessageDeduplicationId String
+.MessageGroupId String
+.MessageSystemAttributes MessageBodySystemAttributeMap flat xml=MessageSystemAttribute
+SendMessageBatchRequestEntryList list m=SendMessageBatchRequestEntry
+SendMessageBatchResult structure
+.Failed BatchResultErrorEntryList flat xml=BatchResultErrorEntry
+.Successful SendMessageBatchResultEntryList flat xml=SendMessageBatchResultEntry
+SendMessageBatchResultEntry structure
+.Id String
+.MD5OfMessageAttributes String
+.MD5OfMessageBody String
+.MD5OfMessageSystemAttributes String
+.MessageId String
+.SequenceNumber String
+SendMessageBatchResultEntryList list m=SendMessageBatchResultEntry
+SendMessageRequest structure
+.DelaySeconds NullableInteger
+.MessageAttributes MessageBodyAttributeMap flat xml=MessageAttribute
+.MessageBody String
+.MessageDeduplicationId String
+.MessageGroupId String
+.MessageSystemAttributes MessageBodySystemAttributeMap flat xml=MessageSystemAttribute
+.QueueUrl String
+SendMessageResult structure
+.MD5OfMessageAttributes String
+.MD5OfMessageBody String
+.MD5OfMessageSystemAttributes String
+.MessageId String
+.SequenceNumber String
+SetQueueAttributes operation in=SetQueueAttributesRequest out=~Unit err=InvalidAddress,InvalidAttributeName,InvalidAttributeValue,InvalidSecurity,OverLimit,QueueDoesNotExist,RequestThrottled,UnsupportedOperation
+SetQueueAttributesRequest structure
+.Attributes QueueAttributeMap flat xml=Attribute
+.QueueUrl String
+StartMessageMoveTask operation in=StartMessageMoveTaskRequest out=StartMessageMoveTaskResult err=InvalidAddress,InvalidSecurity,RequestThrottled,ResourceNotFoundException,UnsupportedOperation
+StartMessageMoveTaskRequest structure
+.DestinationArn String
+.MaxNumberOfMessagesPerSecond NullableInteger
+.SourceArn String
+StartMessageMoveTaskResult structure
+.TaskHandle String
+String string
+StringList list m=String mxml=StringListValue
+TagKey string
+TagKeyList list m=TagKey
+TagMap map k=TagKey v=TagValue kxml=Key vxml=Value
+TagQueue operation in=TagQueueRequest out=~Unit err=InvalidAddress,InvalidSecurity,QueueDoesNotExist,RequestThrottled,UnsupportedOperation
+TagQueueRequest structure
+.QueueUrl String
+.Tags TagMap flat xml=Tag
+TagValue string
+Token string
+TooManyEntriesInBatchRequest structure qerr=AWS.SimpleQueueService.TooManyEntriesInBatchRequest error=client code=400
+.message ExceptionMessage
+UnsupportedOperation structure qerr=AWS.SimpleQueueService.UnsupportedOperation error=client code=400
+.message ExceptionMessage
+UntagQueue operation in=UntagQueueRequest out=~Unit err=InvalidAddress,InvalidSecurity,QueueDoesNotExist,RequestThrottled,UnsupportedOperation
+UntagQueueRequest structure
+.QueueUrl String
+.TagKeys TagKeyList flat xml=TagKey

@@ -24,6 +24,7 @@ scripts/*.ps1 text eol=crlf
 web/src/types/api.gen.ts linguist-generated=true
 internal/capabilities/all.gen.go linguist-generated=true
 internal/awsshapes/*.gen.go linguist-generated=true
+internal/awsshapes/tables/*.txt linguist-generated=true
 web/src/routeTree.gen.ts linguist-generated=true
 internal/services/dynamodb/reserved_words.txt linguist-generated=true
 compat/model/scenarios/*.json linguist-generated=true

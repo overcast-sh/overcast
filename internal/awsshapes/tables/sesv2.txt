@@ -1,0 +1,1564 @@
+service RESTJSON version=2019-09-27
+AccountDetails structure
+.AdditionalContactEmailAddresses AdditionalContactEmailAddresses
+.ContactLanguage ContactLanguage
+.MailType MailType
+.ReviewDetails ReviewDetails
+.UseCaseDescription UseCaseDescription
+.WebsiteURL WebsiteURL
+AccountSuspendedException structure error=client code=400
+.message ErrorMessage
+AdditionalContactEmailAddress string
+AdditionalContactEmailAddresses list m=AdditionalContactEmailAddress
+AdminEmail string
+AlreadyExistsException structure error=client code=400
+.message ErrorMessage
+AmazonResourceName string
+ArchiveArn string
+ArchivingOptions structure
+.ArchiveArn ArchiveArn
+AssociateEmailIdentityCertificate operation in=AssociateEmailIdentityCertificateRequest out=AssociateEmailIdentityCertificateResponse err=AlreadyExistsException,BadRequestException,NotFoundException,TooManyRequestsException method=POST uri=/v2/email/identity/certificates code=200
+AssociateEmailIdentityCertificateRequest structure
+.CertificateArn CertificateArn
+.EmailIdentity Identity
+.FromAddress EmailAddress
+AssociateEmailIdentityCertificateResponse structure
+Attachment structure
+.ContentDescription AttachmentContentDescription
+.ContentDisposition AttachmentContentDisposition
+.ContentId AttachmentContentId
+.ContentTransferEncoding AttachmentContentTransferEncoding
+.ContentType AttachmentContentType
+.FileName AttachmentFileName
+.RawContent RawAttachmentData
+AttachmentContentDescription string
+AttachmentContentDisposition enum
+AttachmentContentId string
+AttachmentContentTransferEncoding enum
+AttachmentContentType string
+AttachmentFileName string
+AttachmentList list m=Attachment
+AttributesData string
+BadRequestException structure error=client code=400
+.message ErrorMessage
+BatchGetMetricData operation in=BatchGetMetricDataRequest out=BatchGetMetricDataResponse err=BadRequestException,InternalServiceErrorException,NotFoundException,TooManyRequestsException method=POST uri=/v2/email/metrics/batch code=200
+BatchGetMetricDataQueries list m=BatchGetMetricDataQuery
+BatchGetMetricDataQuery structure
+.Dimensions Dimensions
+.EndDate Timestamp
+.Id QueryIdentifier
+.Metric Metric
+.Namespace MetricNamespace
+.StartDate Timestamp
+BatchGetMetricDataRequest structure
+.Queries BatchGetMetricDataQueries
+BatchGetMetricDataResponse structure
+.Errors MetricDataErrorList
+.Results MetricDataResultList
+BehaviorOnMxFailure enum
+BlacklistEntries list m=BlacklistEntry
+BlacklistEntry structure
+.Description BlacklistingDescription
+.ListingTime Timestamp
+.RblName RblName
+BlacklistItemName string
+BlacklistItemNames list m=BlacklistItemName
+BlacklistReport map k=BlacklistItemName v=BlacklistEntries
+BlacklistingDescription string
+Body structure
+.Html Content
+.Text Content
+Bounce structure
+.BounceSubType BounceSubType
+.BounceType BounceType
+.DiagnosticCode DiagnosticCode
+BounceSubType string
+BounceType enum
+BulkEmailContent structure
+.Template Template
+BulkEmailEntry structure
+.Destination Destination
+.ReplacementEmailContent ReplacementEmailContent
+.ReplacementHeaders MessageHeaderList
+.ReplacementTags MessageTagList
+BulkEmailEntryList list m=BulkEmailEntry
+BulkEmailEntryResult structure
+.Error ErrorMessage
+.MessageId OutboundMessageId
+.Status BulkEmailStatus
+BulkEmailEntryResultList list m=BulkEmailEntryResult
+BulkEmailStatus enum
+CampaignId string
+CancelExportJob operation in=CancelExportJobRequest out=CancelExportJobResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=PUT uri=/v2/email/export-jobs/{JobId}/cancel code=200
+CancelExportJobRequest structure
+.JobId JobId label
+CancelExportJobResponse structure
+CaseId string
+CertificateArn string
+Charset string
+CloudWatchDestination structure
+.DimensionConfigurations CloudWatchDimensionConfigurations
+CloudWatchDimensionConfiguration structure
+.DefaultDimensionValue DefaultDimensionValue
+.DimensionName DimensionName
+.DimensionValueSource DimensionValueSource
+CloudWatchDimensionConfigurations list m=CloudWatchDimensionConfiguration
+Complaint structure
+.ComplaintFeedbackType ComplaintFeedbackType
+.ComplaintSubType ComplaintSubType
+ComplaintFeedbackType string
+ComplaintSubType string
+ConcurrentModificationException structure error=server code=500
+.message ErrorMessage
+ConfigurationOverrides structure
+.Tracking TrackingConfigurationOverrides
+ConfigurationSetName string
+ConfigurationSetNameList list m=ConfigurationSetName
+ConflictException structure error=client code=409
+.message ErrorMessage
+Contact structure
+.EmailAddress EmailAddress
+.LastUpdatedTimestamp Timestamp
+.TopicDefaultPreferences TopicPreferenceList
+.TopicPreferences TopicPreferenceList
+.UnsubscribeAll UnsubscribeAll
+ContactLanguage enum
+ContactList structure
+.ContactListName ContactListName
+.LastUpdatedTimestamp Timestamp
+ContactListDestination structure
+.ContactListImportAction ContactListImportAction
+.ContactListName ContactListName
+ContactListImportAction enum
+ContactListName string
+Content structure
+.Charset Charset
+.Data MessageData
+Counter long
+CreateConfigurationSet operation in=CreateConfigurationSetRequest out=CreateConfigurationSetResponse err=AlreadyExistsException,BadRequestException,ConcurrentModificationException,LimitExceededException,NotFoundException,TooManyRequestsException method=POST uri=/v2/email/configuration-sets code=200
+CreateConfigurationSetEventDestination operation in=CreateConfigurationSetEventDestinationRequest out=CreateConfigurationSetEventDestinationResponse err=AlreadyExistsException,BadRequestException,LimitExceededException,NotFoundException,TooManyRequestsException method=POST uri=/v2/email/configuration-sets/{ConfigurationSetName}/event-destinations code=200
+CreateConfigurationSetEventDestinationRequest structure
+.ConfigurationSetName ConfigurationSetName label
+.EventDestination EventDestinationDefinition
+.EventDestinationName EventDestinationName
+CreateConfigurationSetEventDestinationResponse structure
+CreateConfigurationSetRequest structure
+.ArchivingOptions ArchivingOptions
+.ConfigurationSetName ConfigurationSetName
+.DeliveryOptions DeliveryOptions
+.MessageSecurityOptions MessageSecurityOptions
+.ReputationOptions ReputationOptions
+.SendingOptions SendingOptions
+.SuppressionOptions SuppressionOptions
+.Tags TagList
+.TrackingOptions TrackingOptions
+.VdmOptions VdmOptions
+CreateConfigurationSetResponse structure
+CreateContact operation in=CreateContactRequest out=CreateContactResponse err=AlreadyExistsException,BadRequestException,NotFoundException,TooManyRequestsException method=POST uri=/v2/email/contact-lists/{ContactListName}/contacts code=200
+CreateContactList operation in=CreateContactListRequest out=CreateContactListResponse err=AlreadyExistsException,BadRequestException,LimitExceededException,TooManyRequestsException method=POST uri=/v2/email/contact-lists code=200
+CreateContactListRequest structure
+.ContactListName ContactListName
+.Description Description
+.Tags TagList
+.Topics Topics
+CreateContactListResponse structure
+CreateContactRequest structure
+.AttributesData AttributesData
+.ContactListName ContactListName label
+.EmailAddress EmailAddress
+.TopicPreferences TopicPreferenceList
+.UnsubscribeAll UnsubscribeAll
+CreateContactResponse structure
+CreateCustomVerificationEmailTemplate operation in=CreateCustomVerificationEmailTemplateRequest out=CreateCustomVerificationEmailTemplateResponse err=AlreadyExistsException,BadRequestException,LimitExceededException,NotFoundException,TooManyRequestsException method=POST uri=/v2/email/custom-verification-email-templates code=200
+CreateCustomVerificationEmailTemplateRequest structure
+.FailureRedirectionURL FailureRedirectionURL
+.FromEmailAddress EmailAddress
+.SuccessRedirectionURL SuccessRedirectionURL
+.Tags TagList
+.TemplateContent TemplateContent
+.TemplateName EmailTemplateName
+.TemplateSubject EmailTemplateSubject
+CreateCustomVerificationEmailTemplateResponse structure
+CreateDedicatedIpPool operation in=CreateDedicatedIpPoolRequest out=CreateDedicatedIpPoolResponse err=AlreadyExistsException,BadRequestException,ConcurrentModificationException,LimitExceededException,TooManyRequestsException method=POST uri=/v2/email/dedicated-ip-pools code=200
+CreateDedicatedIpPoolRequest structure
+.PoolName PoolName
+.ScalingMode ScalingMode
+.Tags TagList
+CreateDedicatedIpPoolResponse structure
+CreateDeliverabilityTestReport operation in=CreateDeliverabilityTestReportRequest out=CreateDeliverabilityTestReportResponse err=AccountSuspendedException,BadRequestException,ConcurrentModificationException,LimitExceededException,MailFromDomainNotVerifiedException,MessageRejected,NotFoundException,SendingPausedException,TooManyRequestsException method=POST uri=/v2/email/deliverability-dashboard/test code=200
+CreateDeliverabilityTestReportRequest structure
+.Content EmailContent
+.FromEmailAddress EmailAddress
+.ReportName ReportName
+.Tags TagList
+CreateDeliverabilityTestReportResponse structure
+.DeliverabilityTestStatus DeliverabilityTestStatus
+.ReportId ReportId
+CreateEmailIdentity operation in=CreateEmailIdentityRequest out=CreateEmailIdentityResponse err=AlreadyExistsException,BadRequestException,ConcurrentModificationException,LimitExceededException,NotFoundException,TooManyRequestsException method=POST uri=/v2/email/identities code=200
+CreateEmailIdentityPolicy operation in=CreateEmailIdentityPolicyRequest out=CreateEmailIdentityPolicyResponse err=AlreadyExistsException,BadRequestException,LimitExceededException,NotFoundException,TooManyRequestsException method=POST uri=/v2/email/identities/{EmailIdentity}/policies/{PolicyName} code=200
+CreateEmailIdentityPolicyRequest structure
+.EmailIdentity Identity label
+.Policy Policy
+.PolicyName PolicyName label
+CreateEmailIdentityPolicyResponse structure
+CreateEmailIdentityRequest structure
+.ConfigurationSetName ConfigurationSetName
+.DkimSigningAttributes DkimSigningAttributes
+.EmailIdentity Identity
+.Tags TagList
+CreateEmailIdentityResponse structure
+.DkimAttributes DkimAttributes
+.IdentityType IdentityType
+.VerifiedForSendingStatus Enabled
+CreateEmailTemplate operation in=CreateEmailTemplateRequest out=CreateEmailTemplateResponse err=AlreadyExistsException,BadRequestException,LimitExceededException,TooManyRequestsException method=POST uri=/v2/email/templates code=200
+CreateEmailTemplateRequest structure
+.Tags TagList
+.TemplateContent EmailTemplateContent
+.TemplateName EmailTemplateName
+CreateEmailTemplateResponse structure
+CreateExportJob operation in=CreateExportJobRequest out=CreateExportJobResponse err=BadRequestException,LimitExceededException,NotFoundException,TooManyRequestsException method=POST uri=/v2/email/export-jobs code=200
+CreateExportJobRequest structure
+.ExportDataSource ExportDataSource
+.ExportDestination ExportDestination
+CreateExportJobResponse structure
+.JobId JobId
+CreateImportJob operation in=CreateImportJobRequest out=CreateImportJobResponse err=BadRequestException,LimitExceededException,TooManyRequestsException method=POST uri=/v2/email/import-jobs code=200
+CreateImportJobRequest structure
+.ImportDataSource ImportDataSource
+.ImportDestination ImportDestination
+CreateImportJobResponse structure
+.JobId JobId
+CreateMultiRegionEndpoint operation in=CreateMultiRegionEndpointRequest out=CreateMultiRegionEndpointResponse err=AlreadyExistsException,BadRequestException,LimitExceededException,TooManyRequestsException method=POST uri=/v2/email/multi-region-endpoints code=200
+CreateMultiRegionEndpointRequest structure
+.Details Details
+.EndpointName EndpointName
+.Tags TagList
+CreateMultiRegionEndpointResponse structure
+.EndpointId EndpointId
+.Status Status
+CreateTenant operation in=CreateTenantRequest out=CreateTenantResponse err=AlreadyExistsException,BadRequestException,LimitExceededException,TooManyRequestsException method=POST uri=/v2/email/tenants code=200
+CreateTenantRequest structure
+.SuppressionAttributes TenantSuppressionAttributes
+.Tags TagList
+.TenantName TenantName
+CreateTenantResourceAssociation operation in=CreateTenantResourceAssociationRequest out=CreateTenantResourceAssociationResponse err=AlreadyExistsException,BadRequestException,NotFoundException,TooManyRequestsException method=POST uri=/v2/email/tenants/resources code=200
+CreateTenantResourceAssociationRequest structure
+.ResourceArn AmazonResourceName
+.TenantName TenantName
+CreateTenantResourceAssociationResponse structure
+CreateTenantResponse structure
+.CreatedTimestamp Timestamp
+.SendingStatus SendingStatus
+.SuppressionAttributes TenantSuppressionAttributes
+.Tags TagList
+.TenantArn AmazonResourceName
+.TenantId TenantId
+.TenantName TenantName
+CustomRedirectDomain string
+CustomVerificationEmailTemplateMetadata structure
+.FailureRedirectionURL FailureRedirectionURL
+.FromEmailAddress EmailAddress
+.SuccessRedirectionURL SuccessRedirectionURL
+.TemplateName EmailTemplateName
+.TemplateSubject EmailTemplateSubject
+CustomVerificationEmailTemplatesList list m=CustomVerificationEmailTemplateMetadata
+DailyVolume structure
+.DomainIspPlacements DomainIspPlacements
+.StartDate Timestamp
+.VolumeStatistics VolumeStatistics
+DailyVolumes list m=DailyVolume
+DashboardAttributes structure
+.EngagementMetrics FeatureStatus
+DashboardOptions structure
+.EngagementMetrics FeatureStatus
+DataFormat enum
+DedicatedIp structure
+.Ip Ip
+.PoolName PoolName
+.WarmupPercentage Percentage100Wrapper
+.WarmupStatus WarmupStatus
+DedicatedIpList list m=DedicatedIp
+DedicatedIpPool structure
+.PoolName PoolName
+.ScalingMode ScalingMode
+DefaultDimensionValue string
+DefaultSigningScheme structure
+DeleteConfigurationSet operation in=DeleteConfigurationSetRequest out=DeleteConfigurationSetResponse err=BadRequestException,ConcurrentModificationException,NotFoundException,TooManyRequestsException method=DELETE uri=/v2/email/configuration-sets/{ConfigurationSetName} code=200
+DeleteConfigurationSetEventDestination operation in=DeleteConfigurationSetEventDestinationRequest out=DeleteConfigurationSetEventDestinationResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=DELETE uri=/v2/email/configuration-sets/{ConfigurationSetName}/event-destinations/{EventDestinationName} code=200
+DeleteConfigurationSetEventDestinationRequest structure
+.ConfigurationSetName ConfigurationSetName label
+.EventDestinationName EventDestinationName label
+DeleteConfigurationSetEventDestinationResponse structure
+DeleteConfigurationSetRequest structure
+.ConfigurationSetName ConfigurationSetName label
+DeleteConfigurationSetResponse structure
+DeleteContact operation in=DeleteContactRequest out=DeleteContactResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=DELETE uri=/v2/email/contact-lists/{ContactListName}/contacts/{EmailAddress} code=200
+DeleteContactList operation in=DeleteContactListRequest out=DeleteContactListResponse err=BadRequestException,ConcurrentModificationException,NotFoundException,TooManyRequestsException method=DELETE uri=/v2/email/contact-lists/{ContactListName} code=200
+DeleteContactListRequest structure
+.ContactListName ContactListName label
+DeleteContactListResponse structure
+DeleteContactRequest structure
+.ContactListName ContactListName label
+.EmailAddress EmailAddress label
+DeleteContactResponse structure
+DeleteCustomVerificationEmailTemplate operation in=DeleteCustomVerificationEmailTemplateRequest out=DeleteCustomVerificationEmailTemplateResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=DELETE uri=/v2/email/custom-verification-email-templates/{TemplateName} code=200
+DeleteCustomVerificationEmailTemplateRequest structure
+.TemplateName EmailTemplateName label
+DeleteCustomVerificationEmailTemplateResponse structure
+DeleteDedicatedIpPool operation in=DeleteDedicatedIpPoolRequest out=DeleteDedicatedIpPoolResponse err=BadRequestException,ConcurrentModificationException,NotFoundException,TooManyRequestsException method=DELETE uri=/v2/email/dedicated-ip-pools/{PoolName} code=200
+DeleteDedicatedIpPoolRequest structure
+.PoolName PoolName label
+DeleteDedicatedIpPoolResponse structure
+DeleteEmailIdentity operation in=DeleteEmailIdentityRequest out=DeleteEmailIdentityResponse err=BadRequestException,ConcurrentModificationException,NotFoundException,TooManyRequestsException method=DELETE uri=/v2/email/identities/{EmailIdentity} code=200
+DeleteEmailIdentityPolicy operation in=DeleteEmailIdentityPolicyRequest out=DeleteEmailIdentityPolicyResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=DELETE uri=/v2/email/identities/{EmailIdentity}/policies/{PolicyName} code=200
+DeleteEmailIdentityPolicyRequest structure
+.EmailIdentity Identity label
+.PolicyName PolicyName label
+DeleteEmailIdentityPolicyResponse structure
+DeleteEmailIdentityRequest structure
+.EmailIdentity Identity label
+DeleteEmailIdentityResponse structure
+DeleteEmailTemplate operation in=DeleteEmailTemplateRequest out=DeleteEmailTemplateResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=DELETE uri=/v2/email/templates/{TemplateName} code=200
+DeleteEmailTemplateRequest structure
+.TemplateName EmailTemplateName label
+DeleteEmailTemplateResponse structure
+DeleteMultiRegionEndpoint operation in=DeleteMultiRegionEndpointRequest out=DeleteMultiRegionEndpointResponse err=BadRequestException,ConcurrentModificationException,NotFoundException,TooManyRequestsException method=DELETE uri=/v2/email/multi-region-endpoints/{EndpointName} code=200
+DeleteMultiRegionEndpointRequest structure
+.EndpointName EndpointName label
+DeleteMultiRegionEndpointResponse structure
+.Status Status
+DeleteSuppressedDestination operation in=DeleteSuppressedDestinationRequest out=DeleteSuppressedDestinationResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=DELETE uri=/v2/email/suppression/addresses/{EmailAddress} code=200
+DeleteSuppressedDestinationRequest structure
+.EmailAddress EmailAddress label
+.TenantName TenantName query=TenantName
+DeleteSuppressedDestinationResponse structure
+DeleteTenant operation in=DeleteTenantRequest out=DeleteTenantResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=POST uri=/v2/email/tenants/delete code=200
+DeleteTenantRequest structure
+.TenantName TenantName
+DeleteTenantResourceAssociation operation in=DeleteTenantResourceAssociationRequest out=DeleteTenantResourceAssociationResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=POST uri=/v2/email/tenants/resources/delete code=200
+DeleteTenantResourceAssociationRequest structure
+.ResourceArn AmazonResourceName
+.TenantName TenantName
+DeleteTenantResourceAssociationResponse structure
+DeleteTenantResponse structure
+DeliverabilityDashboardAccountStatus enum
+DeliverabilityTestReport structure
+.CreateDate Timestamp
+.DeliverabilityTestStatus DeliverabilityTestStatus
+.FromEmailAddress EmailAddress
+.ReportId ReportId
+.ReportName ReportName
+.Subject DeliverabilityTestSubject
+DeliverabilityTestReports list m=DeliverabilityTestReport
+DeliverabilityTestStatus enum
+DeliverabilityTestSubject string
+DeliveryEventType enum
+DeliveryOptions structure
+.MaxDeliverySeconds MaxDeliverySeconds
+.SendingPoolName PoolName
+.TlsPolicy TlsPolicy
+Description string
+Destination structure
+.BccAddresses EmailAddressList
+.CcAddresses EmailAddressList
+.ToAddresses EmailAddressList
+Details structure
+.RoutesDetails RoutesDetails
+DiagnosticCode string
+DimensionName string
+DimensionValueSource enum
+Dimensions map k=MetricDimensionName v=MetricDimensionValue
+DisassociateEmailIdentityCertificate operation in=DisassociateEmailIdentityCertificateRequest out=DisassociateEmailIdentityCertificateResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=POST uri=/v2/email/identity/certificates/delete code=200
+DisassociateEmailIdentityCertificateRequest structure
+.EmailIdentity Identity
+.FromAddress EmailAddress
+DisassociateEmailIdentityCertificateResponse structure
+DisplayName string
+DkimAttributes structure
+.CurrentSigningKeyLength DkimSigningKeyLength
+.LastKeyGenerationTimestamp Timestamp
+.NextSigningKeyLength DkimSigningKeyLength
+.SigningAttributesOrigin DkimSigningAttributesOrigin
+.SigningEnabled Enabled
+.SigningHostedZone HostedZone
+.Status DkimStatus
+.Tokens DnsTokenList
+DkimSigningAttributes structure
+.DomainSigningAttributesOrigin DkimSigningAttributesOrigin
+.DomainSigningPrivateKey PrivateKey
+.DomainSigningSelector Selector
+.NextSigningKeyLength DkimSigningKeyLength
+DkimSigningAttributesOrigin enum
+DkimSigningKeyLength enum
+DkimStatus enum
+DnsToken string
+DnsTokenList list m=DnsToken
+Domain string
+DomainDeliverabilityCampaign structure
+.CampaignId CampaignId
+.DeleteRate Percentage
+.Esps Esps
+.FirstSeenDateTime Timestamp
+.FromAddress Identity
+.ImageUrl ImageUrl
+.InboxCount Volume
+.LastSeenDateTime Timestamp
+.ProjectedVolume Volume
+.ReadDeleteRate Percentage
+.ReadRate Percentage
+.SendingIps IpList
+.SpamCount Volume
+.Subject Subject
+DomainDeliverabilityCampaignList list m=DomainDeliverabilityCampaign
+DomainDeliverabilityTrackingOption structure
+.Domain Domain
+.InboxPlacementTrackingOption InboxPlacementTrackingOption
+.SubscriptionStartDate Timestamp
+DomainDeliverabilityTrackingOptions list m=DomainDeliverabilityTrackingOption
+DomainIspPlacement structure
+.InboxPercentage Percentage
+.InboxRawCount Volume
+.IspName IspName
+.SpamPercentage Percentage
+.SpamRawCount Volume
+DomainIspPlacements list m=DomainIspPlacement
+EmailAddress string
+EmailAddressFilterList list m=InsightsEmailAddress
+EmailAddressInsightsConfidenceVerdict enum
+EmailAddressInsightsMailboxEvaluations structure
+.HasValidDnsRecords EmailAddressInsightsVerdict
+.HasValidSyntax EmailAddressInsightsVerdict
+.IsDisposable EmailAddressInsightsVerdict
+.IsRandomInput EmailAddressInsightsVerdict
+.IsRoleAddress EmailAddressInsightsVerdict
+.MailboxExists EmailAddressInsightsVerdict
+EmailAddressInsightsVerdict structure
+.ConfidenceVerdict EmailAddressInsightsConfidenceVerdict
+EmailAddressList list m=EmailAddress
+EmailContent structure
+.Raw RawMessage
+.Simple Message
+.Template Template
+EmailInsights structure
+.Destination InsightsEmailAddress
+.Events InsightsEvents
+.Isp Isp
+EmailInsightsList list m=EmailInsights
+EmailSubject string
+EmailSubjectFilterList list m=EmailSubject
+EmailTemplateContent structure
+.Html EmailTemplateHtml
+.Subject EmailTemplateSubject
+.Text EmailTemplateText
+EmailTemplateData string
+EmailTemplateHtml string
+EmailTemplateMetadata structure
+.CreatedTimestamp Timestamp
+.TemplateName EmailTemplateName
+EmailTemplateMetadataList list m=EmailTemplateMetadata
+EmailTemplateName string
+EmailTemplateSubject string
+EmailTemplateText string
+Enabled boolean
+EnabledWrapper boolean
+EndpointId string
+EndpointName string
+EngagementEventType enum
+ErrorMessage string
+Esp string
+Esps list m=Esp
+EventBridgeDestination structure
+.EventBusArn AmazonResourceName
+EventDestination structure
+.CloudWatchDestination CloudWatchDestination
+.Enabled Enabled
+.EventBridgeDestination EventBridgeDestination
+.KinesisFirehoseDestination KinesisFirehoseDestination
+.MatchingEventTypes EventTypes
+.Name EventDestinationName
+.PinpointDestination PinpointDestination
+.SnsDestination SnsDestination
+EventDestinationDefinition structure
+.CloudWatchDestination CloudWatchDestination
+.Enabled Enabled
+.EventBridgeDestination EventBridgeDestination
+.KinesisFirehoseDestination KinesisFirehoseDestination
+.MatchingEventTypes EventTypes
+.PinpointDestination PinpointDestination
+.SnsDestination SnsDestination
+EventDestinationName string
+EventDestinations list m=EventDestination
+EventDetails structure
+.Bounce Bounce
+.Complaint Complaint
+EventType enum
+EventTypes list m=EventType
+ExportDataSource structure
+.MessageInsightsDataSource MessageInsightsDataSource
+.MetricsDataSource MetricsDataSource
+ExportDestination structure
+.DataFormat DataFormat
+.S3Url S3Url
+ExportDimensionValue list m=MetricDimensionValue
+ExportDimensions map k=MetricDimensionName v=ExportDimensionValue
+ExportJobSummary structure
+.CompletedTimestamp Timestamp
+.CreatedTimestamp Timestamp
+.ExportSourceType ExportSourceType
+.JobId JobId
+.JobStatus JobStatus
+ExportJobSummaryList list m=ExportJobSummary
+ExportMetric structure
+.Aggregation MetricAggregation
+.Name Metric
+ExportMetrics list m=ExportMetric
+ExportSourceType enum
+ExportStatistics structure
+.ExportedRecordsCount ExportedRecordsCount
+.ProcessedRecordsCount ProcessedRecordsCount
+ExportedRecordsCount integer
+FailedRecordsCount integer
+FailedRecordsS3Url string
+FailureInfo structure
+.ErrorMessage ErrorMessage
+.FailedRecordsS3Url FailedRecordsS3Url
+FailureRedirectionURL string
+FeatureStatus enum
+FeedbackId string
+GeneralEnforcementStatus string
+GetAccount operation in=GetAccountRequest out=GetAccountResponse err=BadRequestException,TooManyRequestsException method=GET uri=/v2/email/account code=200
+GetAccountRequest structure
+GetAccountResponse structure
+.DedicatedIpAutoWarmupEnabled Enabled
+.Details AccountDetails
+.EnforcementStatus GeneralEnforcementStatus
+.PricingAttributes PricingAttributes
+.ProductionAccessEnabled Enabled
+.SendQuota SendQuota
+.SendingEnabled Enabled
+.SuppressionAttributes SuppressionAttributes
+.VdmAttributes VdmAttributes
+GetBlacklistReports operation in=GetBlacklistReportsRequest out=GetBlacklistReportsResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=GET uri=/v2/email/deliverability-dashboard/blacklist-report code=200
+GetBlacklistReportsRequest structure
+.BlacklistItemNames BlacklistItemNames query=BlacklistItemNames
+GetBlacklistReportsResponse structure
+.BlacklistReport BlacklistReport
+GetConfigurationSet operation in=GetConfigurationSetRequest out=GetConfigurationSetResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=GET uri=/v2/email/configuration-sets/{ConfigurationSetName} code=200
+GetConfigurationSetEventDestinations operation in=GetConfigurationSetEventDestinationsRequest out=GetConfigurationSetEventDestinationsResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=GET uri=/v2/email/configuration-sets/{ConfigurationSetName}/event-destinations code=200
+GetConfigurationSetEventDestinationsRequest structure
+.ConfigurationSetName ConfigurationSetName label
+GetConfigurationSetEventDestinationsResponse structure
+.EventDestinations EventDestinations
+GetConfigurationSetRequest structure
+.ConfigurationSetName ConfigurationSetName label
+GetConfigurationSetResponse structure
+.ArchivingOptions ArchivingOptions
+.ConfigurationSetName ConfigurationSetName
+.DeliveryOptions DeliveryOptions
+.MessageSecurityOptions MessageSecurityOptions
+.ReputationOptions ReputationOptions
+.SendingOptions SendingOptions
+.SuppressionOptions SuppressionOptions
+.Tags TagList
+.TrackingOptions TrackingOptions
+.VdmOptions VdmOptions
+GetContact operation in=GetContactRequest out=GetContactResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=GET uri=/v2/email/contact-lists/{ContactListName}/contacts/{EmailAddress} code=200
+GetContactList operation in=GetContactListRequest out=GetContactListResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=GET uri=/v2/email/contact-lists/{ContactListName} code=200
+GetContactListRequest structure
+.ContactListName ContactListName label
+GetContactListResponse structure
+.ContactListName ContactListName
+.CreatedTimestamp Timestamp
+.Description Description
+.LastUpdatedTimestamp Timestamp
+.Tags TagList
+.Topics Topics
+GetContactRequest structure
+.ContactListName ContactListName label
+.EmailAddress EmailAddress label
+GetContactResponse structure
+.AttributesData AttributesData
+.ContactListName ContactListName
+.CreatedTimestamp Timestamp
+.EmailAddress EmailAddress
+.LastUpdatedTimestamp Timestamp
+.TopicDefaultPreferences TopicPreferenceList
+.TopicPreferences TopicPreferenceList
+.UnsubscribeAll UnsubscribeAll
+GetCustomVerificationEmailTemplate operation in=GetCustomVerificationEmailTemplateRequest out=GetCustomVerificationEmailTemplateResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=GET uri=/v2/email/custom-verification-email-templates/{TemplateName} code=200
+GetCustomVerificationEmailTemplateRequest structure
+.TemplateName EmailTemplateName label
+GetCustomVerificationEmailTemplateResponse structure
+.FailureRedirectionURL FailureRedirectionURL
+.FromEmailAddress EmailAddress
+.SuccessRedirectionURL SuccessRedirectionURL
+.Tags TagList
+.TemplateContent TemplateContent
+.TemplateName EmailTemplateName
+.TemplateSubject EmailTemplateSubject
+GetDedicatedIp operation in=GetDedicatedIpRequest out=GetDedicatedIpResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=GET uri=/v2/email/dedicated-ips/{Ip} code=200
+GetDedicatedIpPool operation in=GetDedicatedIpPoolRequest out=GetDedicatedIpPoolResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=GET uri=/v2/email/dedicated-ip-pools/{PoolName} code=200
+GetDedicatedIpPoolRequest structure
+.PoolName PoolName label
+GetDedicatedIpPoolResponse structure
+.DedicatedIpPool DedicatedIpPool
+GetDedicatedIpRequest structure
+.Ip Ip label
+GetDedicatedIpResponse structure
+.DedicatedIp DedicatedIp
+GetDedicatedIps operation in=GetDedicatedIpsRequest out=GetDedicatedIpsResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=GET uri=/v2/email/dedicated-ips code=200
+GetDedicatedIpsRequest structure
+.NextToken NextToken query=NextToken
+.PageSize MaxItems query=PageSize
+.PoolName PoolName query=PoolName
+GetDedicatedIpsResponse structure
+.DedicatedIps DedicatedIpList
+.NextToken NextToken
+GetDeliverabilityDashboardOptions operation in=GetDeliverabilityDashboardOptionsRequest out=GetDeliverabilityDashboardOptionsResponse err=BadRequestException,LimitExceededException,TooManyRequestsException method=GET uri=/v2/email/deliverability-dashboard code=200
+GetDeliverabilityDashboardOptionsRequest structure
+GetDeliverabilityDashboardOptionsResponse structure
+.AccountStatus DeliverabilityDashboardAccountStatus
+.ActiveSubscribedDomains DomainDeliverabilityTrackingOptions
+.DashboardEnabled Enabled
+.PendingExpirationSubscribedDomains DomainDeliverabilityTrackingOptions
+.SubscriptionExpiryDate Timestamp
+GetDeliverabilityTestReport operation in=GetDeliverabilityTestReportRequest out=GetDeliverabilityTestReportResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=GET uri=/v2/email/deliverability-dashboard/test-reports/{ReportId} code=200
+GetDeliverabilityTestReportRequest structure
+.ReportId ReportId label
+GetDeliverabilityTestReportResponse structure
+.DeliverabilityTestReport DeliverabilityTestReport
+.IspPlacements IspPlacements
+.Message MessageContent
+.OverallPlacement PlacementStatistics
+.Tags TagList
+GetDomainDeliverabilityCampaign operation in=GetDomainDeliverabilityCampaignRequest out=GetDomainDeliverabilityCampaignResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=GET uri=/v2/email/deliverability-dashboard/campaigns/{CampaignId} code=200
+GetDomainDeliverabilityCampaignRequest structure
+.CampaignId CampaignId label
+GetDomainDeliverabilityCampaignResponse structure
+.DomainDeliverabilityCampaign DomainDeliverabilityCampaign
+GetDomainStatisticsReport operation in=GetDomainStatisticsReportRequest out=GetDomainStatisticsReportResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=GET uri=/v2/email/deliverability-dashboard/statistics-report/{Domain} code=200
+GetDomainStatisticsReportRequest structure
+.Domain Identity label
+.EndDate Timestamp query=EndDate
+.StartDate Timestamp query=StartDate
+GetDomainStatisticsReportResponse structure
+.DailyVolumes DailyVolumes
+.OverallVolume OverallVolume
+GetEmailAddressInsights operation in=GetEmailAddressInsightsRequest out=GetEmailAddressInsightsResponse err=BadRequestException,TooManyRequestsException method=POST uri=/v2/email/email-address-insights code=200
+GetEmailAddressInsightsRequest structure
+.EmailAddress EmailAddress
+GetEmailAddressInsightsResponse structure
+.MailboxValidation MailboxValidation
+GetEmailIdentity operation in=GetEmailIdentityRequest out=GetEmailIdentityResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=GET uri=/v2/email/identities/{EmailIdentity} code=200
+GetEmailIdentityPolicies operation in=GetEmailIdentityPoliciesRequest out=GetEmailIdentityPoliciesResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=GET uri=/v2/email/identities/{EmailIdentity}/policies code=200
+GetEmailIdentityPoliciesRequest structure
+.EmailIdentity Identity label
+GetEmailIdentityPoliciesResponse structure
+.Policies PolicyMap
+GetEmailIdentityRequest structure
+.EmailIdentity Identity label
+GetEmailIdentityResponse structure
+.ConfigurationSetName ConfigurationSetName
+.DkimAttributes DkimAttributes
+.FeedbackForwardingStatus Enabled
+.IdentityType IdentityType
+.MailFromAttributes MailFromAttributes
+.Policies PolicyMap
+.Tags TagList
+.VerificationInfo VerificationInfo
+.VerificationStatus VerificationStatus
+.VerifiedForSendingStatus Enabled
+GetEmailTemplate operation in=GetEmailTemplateRequest out=GetEmailTemplateResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=GET uri=/v2/email/templates/{TemplateName} code=200
+GetEmailTemplateRequest structure
+.TemplateName EmailTemplateName label
+GetEmailTemplateResponse structure
+.Tags TagList
+.TemplateContent EmailTemplateContent
+.TemplateName EmailTemplateName
+GetExportJob operation in=GetExportJobRequest out=GetExportJobResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=GET uri=/v2/email/export-jobs/{JobId} code=200
+GetExportJobRequest structure
+.JobId JobId label
+GetExportJobResponse structure
+.CompletedTimestamp Timestamp
+.CreatedTimestamp Timestamp
+.ExportDataSource ExportDataSource
+.ExportDestination ExportDestination
+.ExportSourceType ExportSourceType
+.FailureInfo FailureInfo
+.JobId JobId
+.JobStatus JobStatus
+.Statistics ExportStatistics
+GetImportJob operation in=GetImportJobRequest out=GetImportJobResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=GET uri=/v2/email/import-jobs/{JobId} code=200
+GetImportJobRequest structure
+.JobId JobId label
+GetImportJobResponse structure
+.CompletedTimestamp Timestamp
+.CreatedTimestamp Timestamp
+.FailedRecordsCount FailedRecordsCount
+.FailureInfo FailureInfo
+.ImportDataSource ImportDataSource
+.ImportDestination ImportDestination
+.JobId JobId
+.JobStatus JobStatus
+.ProcessedRecordsCount ProcessedRecordsCount
+GetMessageInsights operation in=GetMessageInsightsRequest out=GetMessageInsightsResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=GET uri=/v2/email/insights/{MessageId} code=200
+GetMessageInsightsRequest structure
+.MessageId OutboundMessageId label
+GetMessageInsightsResponse structure
+.EmailTags MessageTagList
+.FromEmailAddress InsightsEmailAddress
+.Insights EmailInsightsList
+.MessageId OutboundMessageId
+.Subject EmailSubject
+GetMultiRegionEndpoint operation in=GetMultiRegionEndpointRequest out=GetMultiRegionEndpointResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=GET uri=/v2/email/multi-region-endpoints/{EndpointName} code=200
+GetMultiRegionEndpointRequest structure
+.EndpointName EndpointName label
+GetMultiRegionEndpointResponse structure
+.CreatedTimestamp Timestamp
+.EndpointId EndpointId
+.EndpointName EndpointName
+.LastUpdatedTimestamp Timestamp
+.Routes Routes
+.Status Status
+GetReputationEntity operation in=GetReputationEntityRequest out=GetReputationEntityResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=GET uri=/v2/email/reputation/entities/{ReputationEntityType}/{ReputationEntityReference} code=200
+GetReputationEntityRequest structure
+.ReputationEntityReference ReputationEntityReference label
+.ReputationEntityType ReputationEntityType label
+GetReputationEntityResponse structure
+.ReputationEntity ReputationEntity
+GetSuppressedDestination operation in=GetSuppressedDestinationRequest out=GetSuppressedDestinationResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=GET uri=/v2/email/suppression/addresses/{EmailAddress} code=200
+GetSuppressedDestinationRequest structure
+.EmailAddress EmailAddress label
+.TenantName TenantName query=TenantName
+GetSuppressedDestinationResponse structure
+.SuppressedDestination SuppressedDestination
+GetTenant operation in=GetTenantRequest out=GetTenantResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=POST uri=/v2/email/tenants/get code=200
+GetTenantRequest structure
+.TenantName TenantName
+GetTenantResponse structure
+.Tenant Tenant
+GuardianAttributes structure
+.OptimizedSharedDelivery FeatureStatus
+GuardianOptions structure
+.OptimizedSharedDelivery FeatureStatus
+HostedZone string
+HttpsPolicy enum
+Identity string
+IdentityCertificate structure
+.CertificateArn CertificateArn
+.CertificateExpiryTime Timestamp
+.FromAddress EmailAddress
+.Status IdentityCertificateStatus
+IdentityCertificateList list m=IdentityCertificate
+IdentityCertificateStatus enum
+IdentityInfo structure
+.IdentityName Identity
+.IdentityType IdentityType
+.SendingEnabled Enabled
+.VerificationStatus VerificationStatus
+IdentityInfoList list m=IdentityInfo
+IdentityType enum
+ImageUrl string
+ImportDataSource structure
+.DataFormat DataFormat
+.S3Url S3Url
+ImportDestination structure
+.ContactListDestination ContactListDestination
+.SuppressionListDestination SuppressionListDestination
+ImportDestinationType enum
+ImportJobSummary structure
+.CreatedTimestamp Timestamp
+.FailedRecordsCount FailedRecordsCount
+.ImportDestination ImportDestination
+.JobId JobId
+.JobStatus JobStatus
+.ProcessedRecordsCount ProcessedRecordsCount
+ImportJobSummaryList list m=ImportJobSummary
+InboxPlacementTrackingOption structure
+.Global Enabled
+.TrackedIsps IspNameList
+InsightsEmailAddress string
+InsightsEvent structure
+.Details EventDetails
+.Timestamp Timestamp
+.Type EventType
+InsightsEvents list m=InsightsEvent
+InternalServiceErrorException structure error=server code=500
+.message ErrorMessage
+InvalidNextTokenException structure error=client code=400
+.message ErrorMessage
+Ip string
+IpList list m=Ip
+Isp string
+IspFilterList list m=Isp
+IspName string
+IspNameList list m=IspName
+IspPlacement structure
+.IspName IspName
+.PlacementStatistics PlacementStatistics
+IspPlacements list m=IspPlacement
+JobId string
+JobStatus enum
+KinesisFirehoseDestination structure
+.DeliveryStreamArn AmazonResourceName
+.IamRoleArn AmazonResourceName
+LastDeliveryEventList list m=DeliveryEventType
+LastEngagementEventList list m=EngagementEventType
+LastFreshStart timestamp
+LimitExceededException structure error=client code=400
+.message ErrorMessage
+ListConfigurationSets operation in=ListConfigurationSetsRequest out=ListConfigurationSetsResponse err=BadRequestException,TooManyRequestsException method=GET uri=/v2/email/configuration-sets code=200
+ListConfigurationSetsRequest structure
+.NextToken NextToken query=NextToken
+.PageSize MaxItems query=PageSize
+ListConfigurationSetsResponse structure
+.ConfigurationSets ConfigurationSetNameList
+.NextToken NextToken
+ListContactLists operation in=ListContactListsRequest out=ListContactListsResponse err=BadRequestException,TooManyRequestsException method=GET uri=/v2/email/contact-lists code=200
+ListContactListsRequest structure
+.NextToken NextToken query=NextToken
+.PageSize MaxItems query=PageSize
+ListContactListsResponse structure
+.ContactLists ListOfContactLists
+.NextToken NextToken
+ListContacts operation in=ListContactsRequest out=ListContactsResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=POST uri=/v2/email/contact-lists/{ContactListName}/contacts/list code=200
+ListContactsFilter structure
+.FilteredStatus SubscriptionStatus
+.TopicFilter TopicFilter
+ListContactsRequest structure
+.ContactListName ContactListName label
+.Filter ListContactsFilter
+.NextToken NextToken
+.PageSize MaxItems
+ListContactsResponse structure
+.Contacts ListOfContacts
+.NextToken NextToken
+ListCustomVerificationEmailTemplates operation in=ListCustomVerificationEmailTemplatesRequest out=ListCustomVerificationEmailTemplatesResponse err=BadRequestException,TooManyRequestsException method=GET uri=/v2/email/custom-verification-email-templates code=200
+ListCustomVerificationEmailTemplatesRequest structure
+.NextToken NextToken query=NextToken
+.PageSize MaxItems query=PageSize
+ListCustomVerificationEmailTemplatesResponse structure
+.CustomVerificationEmailTemplates CustomVerificationEmailTemplatesList
+.NextToken NextToken
+ListDedicatedIpPools operation in=ListDedicatedIpPoolsRequest out=ListDedicatedIpPoolsResponse err=BadRequestException,TooManyRequestsException method=GET uri=/v2/email/dedicated-ip-pools code=200
+ListDedicatedIpPoolsRequest structure
+.NextToken NextToken query=NextToken
+.PageSize MaxItems query=PageSize
+ListDedicatedIpPoolsResponse structure
+.DedicatedIpPools ListOfDedicatedIpPools
+.NextToken NextToken
+ListDeliverabilityTestReports operation in=ListDeliverabilityTestReportsRequest out=ListDeliverabilityTestReportsResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=GET uri=/v2/email/deliverability-dashboard/test-reports code=200
+ListDeliverabilityTestReportsRequest structure
+.NextToken NextToken query=NextToken
+.PageSize MaxItems query=PageSize
+ListDeliverabilityTestReportsResponse structure
+.DeliverabilityTestReports DeliverabilityTestReports
+.NextToken NextToken
+ListDomainDeliverabilityCampaigns operation in=ListDomainDeliverabilityCampaignsRequest out=ListDomainDeliverabilityCampaignsResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=GET uri=/v2/email/deliverability-dashboard/domains/{SubscribedDomain}/campaigns code=200
+ListDomainDeliverabilityCampaignsRequest structure
+.EndDate Timestamp query=EndDate
+.NextToken NextToken query=NextToken
+.PageSize MaxItems query=PageSize
+.StartDate Timestamp query=StartDate
+.SubscribedDomain Domain label
+ListDomainDeliverabilityCampaignsResponse structure
+.DomainDeliverabilityCampaigns DomainDeliverabilityCampaignList
+.NextToken NextToken
+ListEmailIdentities operation in=ListEmailIdentitiesRequest out=ListEmailIdentitiesResponse err=BadRequestException,TooManyRequestsException method=GET uri=/v2/email/identities code=200
+ListEmailIdentitiesRequest structure
+.NextToken NextToken query=NextToken
+.PageSize MaxItems query=PageSize
+ListEmailIdentitiesResponse structure
+.EmailIdentities IdentityInfoList
+.NextToken NextToken
+ListEmailIdentityCertificates operation in=ListEmailIdentityCertificatesRequest out=ListEmailIdentityCertificatesResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=POST uri=/v2/email/identity/certificates/list code=200
+ListEmailIdentityCertificatesRequest structure
+.EmailIdentity Identity
+.NextToken NextToken
+.PageSize MaxItems
+ListEmailIdentityCertificatesResponse structure
+.Certificates IdentityCertificateList
+.NextToken NextToken
+ListEmailTemplates operation in=ListEmailTemplatesRequest out=ListEmailTemplatesResponse err=BadRequestException,TooManyRequestsException method=GET uri=/v2/email/templates code=200
+ListEmailTemplatesRequest structure
+.NextToken NextToken query=NextToken
+.PageSize MaxItems query=PageSize
+ListEmailTemplatesResponse structure
+.NextToken NextToken
+.TemplatesMetadata EmailTemplateMetadataList
+ListExportJobs operation in=ListExportJobsRequest out=ListExportJobsResponse err=BadRequestException,TooManyRequestsException method=POST uri=/v2/email/list-export-jobs code=200
+ListExportJobsRequest structure
+.ExportSourceType ExportSourceType
+.JobStatus JobStatus
+.NextToken NextToken
+.PageSize MaxItems
+ListExportJobsResponse structure
+.ExportJobs ExportJobSummaryList
+.NextToken NextToken
+ListImportJobs operation in=ListImportJobsRequest out=ListImportJobsResponse err=BadRequestException,TooManyRequestsException method=POST uri=/v2/email/import-jobs/list code=200
+ListImportJobsRequest structure
+.ImportDestinationType ImportDestinationType
+.NextToken NextToken
+.PageSize MaxItems
+ListImportJobsResponse structure
+.ImportJobs ImportJobSummaryList
+.NextToken NextToken
+ListManagementOptions structure
+.ContactListName ContactListName
+.TopicName TopicName
+ListMultiRegionEndpoints operation in=ListMultiRegionEndpointsRequest out=ListMultiRegionEndpointsResponse err=BadRequestException,TooManyRequestsException method=GET uri=/v2/email/multi-region-endpoints code=200
+ListMultiRegionEndpointsRequest structure
+.NextToken NextTokenV2 query=NextToken
+.PageSize PageSizeV2 query=PageSize
+ListMultiRegionEndpointsResponse structure
+.MultiRegionEndpoints MultiRegionEndpoints
+.NextToken NextTokenV2
+ListOfContactLists list m=ContactList
+ListOfContacts list m=Contact
+ListOfDedicatedIpPools list m=PoolName
+ListRecommendationFilterValue string
+ListRecommendations operation in=ListRecommendationsRequest out=ListRecommendationsResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=POST uri=/v2/email/vdm/recommendations code=200
+ListRecommendationsFilter map k=ListRecommendationsFilterKey v=ListRecommendationFilterValue
+ListRecommendationsFilterKey enum
+ListRecommendationsRequest structure
+.Filter ListRecommendationsFilter
+.NextToken NextToken
+.PageSize MaxItems
+ListRecommendationsResponse structure
+.NextToken NextToken
+.Recommendations RecommendationsList
+ListReputationEntities operation in=ListReputationEntitiesRequest out=ListReputationEntitiesResponse err=BadRequestException,TooManyRequestsException method=POST uri=/v2/email/reputation/entities code=200
+ListReputationEntitiesRequest structure
+.Filter ReputationEntityFilter
+.NextToken NextToken
+.PageSize MaxItems
+ListReputationEntitiesResponse structure
+.NextToken NextToken
+.ReputationEntities ReputationEntitiesList
+ListResourceTenants operation in=ListResourceTenantsRequest out=ListResourceTenantsResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=POST uri=/v2/email/resources/tenants/list code=200
+ListResourceTenantsRequest structure
+.NextToken NextToken
+.PageSize MaxItems
+.ResourceArn AmazonResourceName
+ListResourceTenantsResponse structure
+.NextToken NextToken
+.ResourceTenants ResourceTenantMetadataList
+ListSuppressedDestinations operation in=ListSuppressedDestinationsRequest out=ListSuppressedDestinationsResponse err=BadRequestException,InvalidNextTokenException,NotFoundException,TooManyRequestsException method=GET uri=/v2/email/suppression/addresses code=200
+ListSuppressedDestinationsRequest structure
+.EndDate Timestamp query=EndDate
+.NextToken NextToken query=NextToken
+.PageSize MaxItems query=PageSize
+.Reasons SuppressionListReasons query=Reason
+.StartDate Timestamp query=StartDate
+.TenantName TenantName query=TenantName
+ListSuppressedDestinationsResponse structure
+.NextToken NextToken
+.SuppressedDestinationSummaries SuppressedDestinationSummaries
+ListTagsForResource operation in=ListTagsForResourceRequest out=ListTagsForResourceResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=GET uri=/v2/email/tags code=200
+ListTagsForResourceRequest structure
+.ResourceArn AmazonResourceName query=ResourceArn
+ListTagsForResourceResponse structure
+.Tags TagList
+ListTenantResources operation in=ListTenantResourcesRequest out=ListTenantResourcesResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=POST uri=/v2/email/tenants/resources/list code=200
+ListTenantResourcesFilter map k=ListTenantResourcesFilterKey v=ListTenantResourcesFilterValue
+ListTenantResourcesFilterKey enum
+ListTenantResourcesFilterValue string
+ListTenantResourcesRequest structure
+.Filter ListTenantResourcesFilter
+.NextToken NextToken
+.PageSize MaxItems
+.TenantName TenantName
+ListTenantResourcesResponse structure
+.NextToken NextToken
+.TenantResources TenantResourceList
+ListTenants operation in=ListTenantsRequest out=ListTenantsResponse err=BadRequestException,TooManyRequestsException method=POST uri=/v2/email/tenants/list code=200
+ListTenantsRequest structure
+.NextToken NextToken
+.PageSize MaxItems
+ListTenantsResponse structure
+.NextToken NextToken
+.Tenants TenantInfoList
+MailFromAttributes structure
+.BehaviorOnMxFailure BehaviorOnMxFailure
+.MailFromDomain MailFromDomainName
+.MailFromDomainStatus MailFromDomainStatus
+MailFromDomainName string
+MailFromDomainNotVerifiedException structure error=client code=400
+.message ErrorMessage
+MailFromDomainStatus enum
+MailType enum
+MailboxValidation structure
+.Evaluations EmailAddressInsightsMailboxEvaluations
+.IsValid EmailAddressInsightsVerdict
+Max24HourSend double
+MaxDeliverySeconds long
+MaxItems integer
+MaxSendRate double
+Message structure
+.Attachments AttachmentList
+.Body Body
+.Headers MessageHeaderList
+.Subject Content
+MessageContent string
+MessageData string
+MessageHeader structure
+.Name MessageHeaderName
+.Value MessageHeaderValue
+MessageHeaderList list m=MessageHeader
+MessageHeaderName string
+MessageHeaderValue string
+MessageInsightsDataSource structure
+.EndDate Timestamp
+.Exclude MessageInsightsFilters
+.Include MessageInsightsFilters
+.MaxResults MessageInsightsExportMaxResults
+.StartDate Timestamp
+MessageInsightsExportMaxResults integer
+MessageInsightsFilters structure
+.Destination EmailAddressFilterList
+.FromEmailAddress EmailAddressFilterList
+.Isp IspFilterList
+.LastDeliveryEvent LastDeliveryEventList
+.LastEngagementEvent LastEngagementEventList
+.Subject EmailSubjectFilterList
+MessageRejected structure error=client code=400
+.message ErrorMessage
+MessageSecurityOptions structure
+.SigningScheme SigningScheme
+MessageTag structure
+.Name MessageTagName
+.Value MessageTagValue
+MessageTagList list m=MessageTag
+MessageTagName string
+MessageTagValue string
+Metric enum
+MetricAggregation enum
+MetricDataError structure
+.Code QueryErrorCode
+.Id QueryIdentifier
+.Message QueryErrorMessage
+MetricDataErrorList list m=MetricDataError
+MetricDataResult structure
+.Id QueryIdentifier
+.Timestamps TimestampList
+.Values MetricValueList
+MetricDataResultList list m=MetricDataResult
+MetricDimensionName enum
+MetricDimensionValue string
+MetricNamespace enum
+MetricValueList list m=Counter
+MetricsDataSource structure
+.Dimensions ExportDimensions
+.EndDate Timestamp
+.Metrics ExportMetrics
+.Namespace MetricNamespace
+.StartDate Timestamp
+MultiRegionEndpoint structure
+.CreatedTimestamp Timestamp
+.EndpointId EndpointId
+.EndpointName EndpointName
+.LastUpdatedTimestamp Timestamp
+.Regions Regions
+.Status Status
+MultiRegionEndpoints list m=MultiRegionEndpoint
+NextToken string
+NextTokenV2 string
+NotFoundException structure error=client code=404
+.message ErrorMessage
+OutboundMessageId string
+OverallVolume structure
+.DomainIspPlacements DomainIspPlacements
+.ReadRatePercent Percentage
+.VolumeStatistics VolumeStatistics
+PageSizeV2 integer
+Percentage double
+Percentage100Wrapper integer
+PinpointDestination structure
+.ApplicationArn AmazonResourceName
+PlacementStatistics structure
+.DkimPercentage Percentage
+.InboxPercentage Percentage
+.MissingPercentage Percentage
+.SpamPercentage Percentage
+.SpfPercentage Percentage
+Policy string
+PolicyMap map k=PolicyName v=Policy
+PolicyName string
+PoolName string
+PricingAttributes structure
+.CurrentPlan PricingPlan
+.NextPlan PricingPlan
+PricingPlan enum
+PrimaryNameServer string
+PrivateKey string
+ProcessedRecordsCount integer
+PutAccountDedicatedIpWarmupAttributes operation in=PutAccountDedicatedIpWarmupAttributesRequest out=PutAccountDedicatedIpWarmupAttributesResponse err=BadRequestException,TooManyRequestsException method=PUT uri=/v2/email/account/dedicated-ips/warmup code=200
+PutAccountDedicatedIpWarmupAttributesRequest structure
+.AutoWarmupEnabled Enabled
+PutAccountDedicatedIpWarmupAttributesResponse structure
+PutAccountDetails operation in=PutAccountDetailsRequest out=PutAccountDetailsResponse err=BadRequestException,ConflictException,TooManyRequestsException method=POST uri=/v2/email/account/details code=200
+PutAccountDetailsRequest structure
+.AdditionalContactEmailAddresses AdditionalContactEmailAddresses
+.ContactLanguage ContactLanguage
+.MailType MailType
+.ProductionAccessEnabled EnabledWrapper
+.UseCaseDescription UseCaseDescription
+.WebsiteURL WebsiteURL
+PutAccountDetailsResponse structure
+PutAccountPricingAttributes operation in=PutAccountPricingAttributesRequest out=PutAccountPricingAttributesResponse err=BadRequestException,ConflictException,TooManyRequestsException method=PUT uri=/v2/email/account/pricing-attributes code=200
+PutAccountPricingAttributesRequest structure
+.Plan PricingPlan
+PutAccountPricingAttributesResponse structure
+PutAccountSendingAttributes operation in=PutAccountSendingAttributesRequest out=PutAccountSendingAttributesResponse err=BadRequestException,TooManyRequestsException method=PUT uri=/v2/email/account/sending code=200
+PutAccountSendingAttributesRequest structure
+.SendingEnabled Enabled
+PutAccountSendingAttributesResponse structure
+PutAccountSuppressionAttributes operation in=PutAccountSuppressionAttributesRequest out=PutAccountSuppressionAttributesResponse err=BadRequestException,TooManyRequestsException method=PUT uri=/v2/email/account/suppression code=200
+PutAccountSuppressionAttributesRequest structure
+.SuppressedReasons SuppressionListReasons
+.ValidationAttributes SuppressionValidationAttributes
+PutAccountSuppressionAttributesResponse structure
+PutAccountVdmAttributes operation in=PutAccountVdmAttributesRequest out=PutAccountVdmAttributesResponse err=BadRequestException,TooManyRequestsException method=PUT uri=/v2/email/account/vdm code=200
+PutAccountVdmAttributesRequest structure
+.VdmAttributes VdmAttributes
+PutAccountVdmAttributesResponse structure
+PutConfigurationSetArchivingOptions operation in=PutConfigurationSetArchivingOptionsRequest out=PutConfigurationSetArchivingOptionsResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=PUT uri=/v2/email/configuration-sets/{ConfigurationSetName}/archiving-options code=200
+PutConfigurationSetArchivingOptionsRequest structure
+.ArchiveArn ArchiveArn
+.ConfigurationSetName ConfigurationSetName label
+PutConfigurationSetArchivingOptionsResponse structure
+PutConfigurationSetDeliveryOptions operation in=PutConfigurationSetDeliveryOptionsRequest out=PutConfigurationSetDeliveryOptionsResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=PUT uri=/v2/email/configuration-sets/{ConfigurationSetName}/delivery-options code=200
+PutConfigurationSetDeliveryOptionsRequest structure
+.ConfigurationSetName ConfigurationSetName label
+.MaxDeliverySeconds MaxDeliverySeconds
+.SendingPoolName SendingPoolName
+.TlsPolicy TlsPolicy
+PutConfigurationSetDeliveryOptionsResponse structure
+PutConfigurationSetReputationOptions operation in=PutConfigurationSetReputationOptionsRequest out=PutConfigurationSetReputationOptionsResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=PUT uri=/v2/email/configuration-sets/{ConfigurationSetName}/reputation-options code=200
+PutConfigurationSetReputationOptionsRequest structure
+.ConfigurationSetName ConfigurationSetName label
+.ReputationMetricsEnabled Enabled
+PutConfigurationSetReputationOptionsResponse structure
+PutConfigurationSetSendingOptions operation in=PutConfigurationSetSendingOptionsRequest out=PutConfigurationSetSendingOptionsResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=PUT uri=/v2/email/configuration-sets/{ConfigurationSetName}/sending code=200
+PutConfigurationSetSendingOptionsRequest structure
+.ConfigurationSetName ConfigurationSetName label
+.SendingEnabled Enabled
+PutConfigurationSetSendingOptionsResponse structure
+PutConfigurationSetSuppressionOptions operation in=PutConfigurationSetSuppressionOptionsRequest out=PutConfigurationSetSuppressionOptionsResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=PUT uri=/v2/email/configuration-sets/{ConfigurationSetName}/suppression-options code=200
+PutConfigurationSetSuppressionOptionsRequest structure
+.ConfigurationSetName ConfigurationSetName label
+.SuppressedReasons SuppressionListReasons
+.SuppressionScope SuppressionListScope
+.ValidationOptions SuppressionValidationOptions
+PutConfigurationSetSuppressionOptionsResponse structure
+PutConfigurationSetTrackingOptions operation in=PutConfigurationSetTrackingOptionsRequest out=PutConfigurationSetTrackingOptionsResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=PUT uri=/v2/email/configuration-sets/{ConfigurationSetName}/tracking-options code=200
+PutConfigurationSetTrackingOptionsRequest structure
+.ConfigurationSetName ConfigurationSetName label
+.CustomRedirectDomain CustomRedirectDomain
+.HttpsPolicy HttpsPolicy
+PutConfigurationSetTrackingOptionsResponse structure
+PutConfigurationSetVdmOptions operation in=PutConfigurationSetVdmOptionsRequest out=PutConfigurationSetVdmOptionsResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=PUT uri=/v2/email/configuration-sets/{ConfigurationSetName}/vdm-options code=200
+PutConfigurationSetVdmOptionsRequest structure
+.ConfigurationSetName ConfigurationSetName label
+.VdmOptions VdmOptions
+PutConfigurationSetVdmOptionsResponse structure
+PutDedicatedIpInPool operation in=PutDedicatedIpInPoolRequest out=PutDedicatedIpInPoolResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=PUT uri=/v2/email/dedicated-ips/{Ip}/pool code=200
+PutDedicatedIpInPoolRequest structure
+.DestinationPoolName PoolName
+.Ip Ip label
+PutDedicatedIpInPoolResponse structure
+PutDedicatedIpPoolScalingAttributes operation in=PutDedicatedIpPoolScalingAttributesRequest out=PutDedicatedIpPoolScalingAttributesResponse err=BadRequestException,ConcurrentModificationException,NotFoundException,TooManyRequestsException method=PUT uri=/v2/email/dedicated-ip-pools/{PoolName}/scaling code=200
+PutDedicatedIpPoolScalingAttributesRequest structure
+.PoolName PoolName label
+.ScalingMode ScalingMode
+PutDedicatedIpPoolScalingAttributesResponse structure
+PutDedicatedIpWarmupAttributes operation in=PutDedicatedIpWarmupAttributesRequest out=PutDedicatedIpWarmupAttributesResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=PUT uri=/v2/email/dedicated-ips/{Ip}/warmup code=200
+PutDedicatedIpWarmupAttributesRequest structure
+.Ip Ip label
+.WarmupPercentage Percentage100Wrapper
+PutDedicatedIpWarmupAttributesResponse structure
+PutDeliverabilityDashboardOption operation in=PutDeliverabilityDashboardOptionRequest out=PutDeliverabilityDashboardOptionResponse err=AlreadyExistsException,BadRequestException,LimitExceededException,NotFoundException,TooManyRequestsException method=PUT uri=/v2/email/deliverability-dashboard code=200
+PutDeliverabilityDashboardOptionRequest structure
+.DashboardEnabled Enabled
+.SubscribedDomains DomainDeliverabilityTrackingOptions
+PutDeliverabilityDashboardOptionResponse structure
+PutEmailIdentityConfigurationSetAttributes operation in=PutEmailIdentityConfigurationSetAttributesRequest out=PutEmailIdentityConfigurationSetAttributesResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=PUT uri=/v2/email/identities/{EmailIdentity}/configuration-set code=200
+PutEmailIdentityConfigurationSetAttributesRequest structure
+.ConfigurationSetName ConfigurationSetName
+.EmailIdentity Identity label
+PutEmailIdentityConfigurationSetAttributesResponse structure
+PutEmailIdentityDkimAttributes operation in=PutEmailIdentityDkimAttributesRequest out=PutEmailIdentityDkimAttributesResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=PUT uri=/v2/email/identities/{EmailIdentity}/dkim code=200
+PutEmailIdentityDkimAttributesRequest structure
+.EmailIdentity Identity label
+.SigningEnabled Enabled
+PutEmailIdentityDkimAttributesResponse structure
+PutEmailIdentityDkimSigningAttributes operation in=PutEmailIdentityDkimSigningAttributesRequest out=PutEmailIdentityDkimSigningAttributesResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=PUT uri=/v2/email/identities/{EmailIdentity}/dkim/signing code=200
+PutEmailIdentityDkimSigningAttributesRequest structure
+.EmailIdentity Identity label
+.SigningAttributes DkimSigningAttributes
+.SigningAttributesOrigin DkimSigningAttributesOrigin
+PutEmailIdentityDkimSigningAttributesResponse structure
+.DkimStatus DkimStatus
+.DkimTokens DnsTokenList
+.SigningHostedZone HostedZone
+PutEmailIdentityFeedbackAttributes operation in=PutEmailIdentityFeedbackAttributesRequest out=PutEmailIdentityFeedbackAttributesResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=PUT uri=/v2/email/identities/{EmailIdentity}/feedback code=200
+PutEmailIdentityFeedbackAttributesRequest structure
+.EmailForwardingEnabled Enabled
+.EmailIdentity Identity label
+PutEmailIdentityFeedbackAttributesResponse structure
+PutEmailIdentityMailFromAttributes operation in=PutEmailIdentityMailFromAttributesRequest out=PutEmailIdentityMailFromAttributesResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=PUT uri=/v2/email/identities/{EmailIdentity}/mail-from code=200
+PutEmailIdentityMailFromAttributesRequest structure
+.BehaviorOnMxFailure BehaviorOnMxFailure
+.EmailIdentity Identity label
+.MailFromDomain MailFromDomainName
+PutEmailIdentityMailFromAttributesResponse structure
+PutSuppressedDestination operation in=PutSuppressedDestinationRequest out=PutSuppressedDestinationResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=PUT uri=/v2/email/suppression/addresses code=200
+PutSuppressedDestinationRequest structure
+.EmailAddress EmailAddress
+.Reason SuppressionListReason
+.TenantName TenantName
+PutSuppressedDestinationResponse structure
+PutTenantSuppressionAttributes operation in=PutTenantSuppressionAttributesRequest out=PutTenantSuppressionAttributesResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=POST uri=/v2/email/tenant/suppression code=200
+PutTenantSuppressionAttributesRequest structure
+.SuppressedReasons SuppressionListReasons
+.SuppressionScope SuppressionListScope
+.TenantName TenantName
+PutTenantSuppressionAttributesResponse structure
+QueryErrorCode enum
+QueryErrorMessage string
+QueryIdentifier string
+RawAttachmentData blob
+RawMessage structure
+.Data RawMessageData
+RawMessageData blob
+RblName string
+Recommendation structure
+.CreatedTimestamp Timestamp
+.Description RecommendationDescription
+.Impact RecommendationImpact
+.LastUpdatedTimestamp Timestamp
+.ResourceArn AmazonResourceName
+.Status RecommendationStatus
+.Type RecommendationType
+RecommendationDescription string
+RecommendationImpact enum
+RecommendationStatus enum
+RecommendationType enum
+RecommendationsList list m=Recommendation
+Region string
+Regions list m=Region
+RenderedEmailTemplate string
+ReplacementEmailContent structure
+.ReplacementTemplate ReplacementTemplate
+ReplacementTemplate structure
+.ReplacementTemplateData EmailTemplateData
+ReportId string
+ReportName string
+ReputationEntitiesList list m=ReputationEntity
+ReputationEntity structure
+.AwsSesManagedStatus StatusRecord
+.CustomerManagedStatus StatusRecord
+.ReputationEntityReference ReputationEntityReference
+.ReputationEntityType ReputationEntityType
+.ReputationImpact RecommendationImpact
+.ReputationManagementPolicy AmazonResourceName
+.SendingStatusAggregate SendingStatus
+ReputationEntityFilter map k=ReputationEntityFilterKey v=ReputationEntityFilterValue
+ReputationEntityFilterKey enum
+ReputationEntityFilterValue string
+ReputationEntityReference string
+ReputationEntityType enum
+ReputationOptions structure
+.LastFreshStart LastFreshStart
+.ReputationMetricsEnabled Enabled
+ResourceTenantMetadata structure
+.AssociatedTimestamp Timestamp
+.ResourceArn AmazonResourceName
+.TenantId TenantId
+.TenantName TenantName
+ResourceTenantMetadataList list m=ResourceTenantMetadata
+ResourceType enum
+ReviewDetails structure
+.CaseId CaseId
+.Status ReviewStatus
+ReviewStatus enum
+Route structure
+.Region Region
+RouteDetails structure
+.Region Region
+Routes list m=Route
+RoutesDetails list m=RouteDetails
+S3Url string
+SOARecord structure
+.AdminEmail AdminEmail
+.PrimaryNameServer PrimaryNameServer
+.SerialNumber SerialNumber
+ScalingMode enum
+Selector string
+SendBulkEmail operation in=SendBulkEmailRequest out=SendBulkEmailResponse err=AccountSuspendedException,BadRequestException,LimitExceededException,MailFromDomainNotVerifiedException,MessageRejected,NotFoundException,SendingPausedException,TooManyRequestsException method=POST uri=/v2/email/outbound-bulk-emails code=200
+SendBulkEmailRequest structure
+.BulkEmailEntries BulkEmailEntryList
+.ConfigurationOverrides ConfigurationOverrides
+.ConfigurationSetName ConfigurationSetName
+.DefaultContent BulkEmailContent
+.DefaultEmailTags MessageTagList
+.EndpointId EndpointId
+.FeedbackForwardingEmailAddress EmailAddress
+.FeedbackForwardingEmailAddressIdentityArn AmazonResourceName
+.FromEmailAddress EmailAddress
+.FromEmailAddressIdentityArn AmazonResourceName
+.ReplyToAddresses EmailAddressList
+.TenantName TenantName
+SendBulkEmailResponse structure
+.BulkEmailEntryResults BulkEmailEntryResultList
+SendCustomVerificationEmail operation in=SendCustomVerificationEmailRequest out=SendCustomVerificationEmailResponse err=BadRequestException,LimitExceededException,MailFromDomainNotVerifiedException,MessageRejected,NotFoundException,SendingPausedException,TooManyRequestsException method=POST uri=/v2/email/outbound-custom-verification-emails code=200
+SendCustomVerificationEmailRequest structure
+.ConfigurationSetName ConfigurationSetName
+.EmailAddress EmailAddress
+.TemplateName EmailTemplateName
+SendCustomVerificationEmailResponse structure
+.MessageId OutboundMessageId
+SendEmail operation in=SendEmailRequest out=SendEmailResponse err=AccountSuspendedException,BadRequestException,LimitExceededException,MailFromDomainNotVerifiedException,MessageRejected,NotFoundException,SendingPausedException,TooManyRequestsException method=POST uri=/v2/email/outbound-emails code=200
+SendEmailRequest structure
+.ConfigurationOverrides ConfigurationOverrides
+.ConfigurationSetName ConfigurationSetName
+.Content EmailContent
+.Destination Destination
+.EmailTags MessageTagList
+.EndpointId EndpointId
+.FeedbackForwardingEmailAddress EmailAddress
+.FeedbackForwardingEmailAddressIdentityArn AmazonResourceName
+.FromEmailAddress EmailAddress
+.FromEmailAddressIdentityArn AmazonResourceName
+.ListManagementOptions ListManagementOptions
+.ReplyToAddresses EmailAddressList
+.TenantName TenantName
+SendEmailResponse structure
+.MessageId OutboundMessageId
+SendQuota structure
+.Max24HourSend Max24HourSend
+.MaxSendRate MaxSendRate
+.SentLast24Hours SentLast24Hours
+SendingOptions structure
+.SendingEnabled Enabled
+SendingPausedException structure error=client code=400
+.message ErrorMessage
+SendingPoolName string
+SendingStatus enum
+SentLast24Hours double
+SerialNumber long
+SignatureFormat enum
+SigningScheme union
+.DefaultScheme DefaultSigningScheme
+.SmimeScheme SmimeSigningScheme
+SmimeSigningScheme structure
+.SignatureFormat SignatureFormat
+SnsDestination structure
+.TopicArn AmazonResourceName
+Status enum
+StatusCause string
+StatusRecord structure
+.Cause StatusCause
+.LastUpdatedTimestamp Timestamp
+.Status SendingStatus
+Subject string
+SubscriptionStatus enum
+SuccessRedirectionURL string
+SuppressedDestination structure
+.Attributes SuppressedDestinationAttributes
+.EmailAddress EmailAddress
+.LastUpdateTime Timestamp
+.Reason SuppressionListReason
+.TenantName TenantName
+SuppressedDestinationAttributes structure
+.FeedbackId FeedbackId
+.MessageId OutboundMessageId
+SuppressedDestinationSummaries list m=SuppressedDestinationSummary
+SuppressedDestinationSummary structure
+.EmailAddress EmailAddress
+.LastUpdateTime Timestamp
+.Reason SuppressionListReason
+SuppressionAttributes structure
+.SuppressedReasons SuppressionListReasons
+.ValidationAttributes SuppressionValidationAttributes
+SuppressionConditionThreshold structure
+.ConditionThresholdEnabled FeatureStatus
+.OverallConfidenceThreshold SuppressionConfidenceThreshold
+SuppressionConfidenceThreshold structure
+.ConfidenceVerdictThreshold SuppressionConfidenceVerdictThreshold
+SuppressionConfidenceVerdictThreshold enum
+SuppressionListDestination structure
+.SuppressionListImportAction SuppressionListImportAction
+SuppressionListImportAction enum
+SuppressionListReason enum
+SuppressionListReasons list m=SuppressionListReason
+SuppressionListScope enum
+SuppressionOptions structure
+.SuppressedReasons SuppressionListReasons
+.SuppressionScope SuppressionListScope
+.ValidationOptions SuppressionValidationOptions
+SuppressionValidationAttributes structure
+.ConditionThreshold SuppressionConditionThreshold
+SuppressionValidationOptions structure
+.ConditionThreshold SuppressionConditionThreshold
+Tag structure
+.Key TagKey
+.Value TagValue
+TagKey string
+TagKeyList list m=TagKey
+TagList list m=Tag
+TagResource operation in=TagResourceRequest out=TagResourceResponse err=BadRequestException,ConcurrentModificationException,NotFoundException,TooManyRequestsException method=POST uri=/v2/email/tags code=200
+TagResourceRequest structure
+.ResourceArn AmazonResourceName
+.Tags TagList
+TagResourceResponse structure
+TagValue string
+Template structure
+.Attachments AttachmentList
+.Headers MessageHeaderList
+.TemplateArn AmazonResourceName
+.TemplateContent EmailTemplateContent
+.TemplateData EmailTemplateData
+.TemplateName EmailTemplateName
+TemplateContent string
+Tenant structure
+.CreatedTimestamp Timestamp
+.SendingStatus SendingStatus
+.SuppressionAttributes TenantSuppressionAttributes
+.Tags TagList
+.TenantArn AmazonResourceName
+.TenantId TenantId
+.TenantName TenantName
+TenantId string
+TenantInfo structure
+.CreatedTimestamp Timestamp
+.TenantArn AmazonResourceName
+.TenantId TenantId
+.TenantName TenantName
+TenantInfoList list m=TenantInfo
+TenantName string
+TenantResource structure
+.ResourceArn AmazonResourceName
+.ResourceType ResourceType
+TenantResourceList list m=TenantResource
+TenantSuppressionAttributes structure
+.SuppressedReasons SuppressionListReasons
+.SuppressionScope SuppressionListScope
+TestRenderEmailTemplate operation in=TestRenderEmailTemplateRequest out=TestRenderEmailTemplateResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=POST uri=/v2/email/templates/{TemplateName}/render code=200
+TestRenderEmailTemplateRequest structure
+.TemplateData EmailTemplateData
+.TemplateName EmailTemplateName label
+TestRenderEmailTemplateResponse structure
+.RenderedTemplate RenderedEmailTemplate
+Timestamp timestamp
+TimestampList list m=Timestamp
+TlsPolicy enum
+TooManyRequestsException structure error=client code=429
+.message ErrorMessage
+Topic structure
+.DefaultSubscriptionStatus SubscriptionStatus
+.Description Description
+.DisplayName DisplayName
+.TopicName TopicName
+TopicFilter structure
+.TopicName TopicName
+.UseDefaultIfPreferenceUnavailable UseDefaultIfPreferenceUnavailable
+TopicName string
+TopicPreference structure
+.SubscriptionStatus SubscriptionStatus
+.TopicName TopicName
+TopicPreferenceList list m=TopicPreference
+Topics list m=Topic
+TrackingConfigurationOverrides structure
+.ClickTrackingEnabled FeatureStatus
+.OpenTrackingEnabled FeatureStatus
+TrackingOptions structure
+.CustomRedirectDomain CustomRedirectDomain
+.HttpsPolicy HttpsPolicy
+UnsubscribeAll boolean
+UntagResource operation in=UntagResourceRequest out=UntagResourceResponse err=BadRequestException,ConcurrentModificationException,NotFoundException,TooManyRequestsException method=DELETE uri=/v2/email/tags code=200
+UntagResourceRequest structure
+.ResourceArn AmazonResourceName query=ResourceArn
+.TagKeys TagKeyList query=TagKeys
+UntagResourceResponse structure
+UpdateConfigurationSet operation in=UpdateConfigurationSetRequest out=UpdateConfigurationSetResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=POST uri=/v2/email/update-configuration-sets code=200
+UpdateConfigurationSetEventDestination operation in=UpdateConfigurationSetEventDestinationRequest out=UpdateConfigurationSetEventDestinationResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=PUT uri=/v2/email/configuration-sets/{ConfigurationSetName}/event-destinations/{EventDestinationName} code=200
+UpdateConfigurationSetEventDestinationRequest structure
+.ConfigurationSetName ConfigurationSetName label
+.EventDestination EventDestinationDefinition
+.EventDestinationName EventDestinationName label
+UpdateConfigurationSetEventDestinationResponse structure
+UpdateConfigurationSetRequest structure
+.ConfigurationSetName ConfigurationSetName
+.MessageSecurityOptions MessageSecurityOptions
+UpdateConfigurationSetResponse structure
+UpdateContact operation in=UpdateContactRequest out=UpdateContactResponse err=BadRequestException,ConcurrentModificationException,NotFoundException,TooManyRequestsException method=PUT uri=/v2/email/contact-lists/{ContactListName}/contacts/{EmailAddress} code=200
+UpdateContactList operation in=UpdateContactListRequest out=UpdateContactListResponse err=BadRequestException,ConcurrentModificationException,NotFoundException,TooManyRequestsException method=PUT uri=/v2/email/contact-lists/{ContactListName} code=200
+UpdateContactListRequest structure
+.ContactListName ContactListName label
+.Description Description
+.Topics Topics
+UpdateContactListResponse structure
+UpdateContactRequest structure
+.AttributesData AttributesData
+.ContactListName ContactListName label
+.EmailAddress EmailAddress label
+.TopicPreferences TopicPreferenceList
+.UnsubscribeAll UnsubscribeAll
+UpdateContactResponse structure
+UpdateCustomVerificationEmailTemplate operation in=UpdateCustomVerificationEmailTemplateRequest out=UpdateCustomVerificationEmailTemplateResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=PUT uri=/v2/email/custom-verification-email-templates/{TemplateName} code=200
+UpdateCustomVerificationEmailTemplateRequest structure
+.FailureRedirectionURL FailureRedirectionURL
+.FromEmailAddress EmailAddress
+.SuccessRedirectionURL SuccessRedirectionURL
+.TemplateContent TemplateContent
+.TemplateName EmailTemplateName label
+.TemplateSubject EmailTemplateSubject
+UpdateCustomVerificationEmailTemplateResponse structure
+UpdateEmailIdentityPolicy operation in=UpdateEmailIdentityPolicyRequest out=UpdateEmailIdentityPolicyResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=PUT uri=/v2/email/identities/{EmailIdentity}/policies/{PolicyName} code=200
+UpdateEmailIdentityPolicyRequest structure
+.EmailIdentity Identity label
+.Policy Policy
+.PolicyName PolicyName label
+UpdateEmailIdentityPolicyResponse structure
+UpdateEmailTemplate operation in=UpdateEmailTemplateRequest out=UpdateEmailTemplateResponse err=BadRequestException,NotFoundException,TooManyRequestsException method=PUT uri=/v2/email/templates/{TemplateName} code=200
+UpdateEmailTemplateRequest structure
+.TemplateContent EmailTemplateContent
+.TemplateName EmailTemplateName label
+UpdateEmailTemplateResponse structure
+UpdateReputationEntityCustomerManagedStatus operation in=UpdateReputationEntityCustomerManagedStatusRequest out=UpdateReputationEntityCustomerManagedStatusResponse err=BadRequestException,ConflictException,TooManyRequestsException method=PUT uri=/v2/email/reputation/entities/{ReputationEntityType}/{ReputationEntityReference}/customer-managed-status code=200
+UpdateReputationEntityCustomerManagedStatusRequest structure
+.ReputationEntityReference ReputationEntityReference label
+.ReputationEntityType ReputationEntityType label
+.SendingStatus SendingStatus
+UpdateReputationEntityCustomerManagedStatusResponse structure
+UpdateReputationEntityPolicy operation in=UpdateReputationEntityPolicyRequest out=UpdateReputationEntityPolicyResponse err=BadRequestException,ConflictException,TooManyRequestsException method=PUT uri=/v2/email/reputation/entities/{ReputationEntityType}/{ReputationEntityReference}/policy code=200
+UpdateReputationEntityPolicyRequest structure
+.ReputationEntityPolicy AmazonResourceName
+.ReputationEntityReference ReputationEntityReference label
+.ReputationEntityType ReputationEntityType label
+UpdateReputationEntityPolicyResponse structure
+UseCaseDescription string
+UseDefaultIfPreferenceUnavailable boolean
+VdmAttributes structure
+.DashboardAttributes DashboardAttributes
+.GuardianAttributes GuardianAttributes
+.VdmEnabled FeatureStatus
+VdmOptions structure
+.DashboardOptions DashboardOptions
+.GuardianOptions GuardianOptions
+VerificationError enum
+VerificationInfo structure
+.ErrorType VerificationError
+.LastCheckedTimestamp Timestamp
+.LastSuccessTimestamp Timestamp
+.SOARecord SOARecord
+VerificationStatus enum
+Volume long
+VolumeStatistics structure
+.InboxRawCount Volume
+.ProjectedInbox Volume
+.ProjectedSpam Volume
+.SpamRawCount Volume
+WarmupStatus enum
+WebsiteURL string

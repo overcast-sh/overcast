@@ -1,0 +1,214 @@
+service AWSQuery version=2011-06-15 ns=https://sts.amazonaws.com/doc/2011-06-15/
+AssumeRole operation in=AssumeRoleRequest out=AssumeRoleResponse err=ExpiredTokenException,MalformedPolicyDocumentException,PackedPolicyTooLargeException,RegionDisabledException
+AssumeRoleRequest structure
+.DurationSeconds roleDurationSecondsType
+.ExternalId externalIdType
+.Policy unrestrictedSessionPolicyDocumentType
+.PolicyArns policyDescriptorListType
+.ProvidedContexts ProvidedContextsListType
+.RoleArn arnType
+.RoleSessionName roleSessionNameType
+.SerialNumber serialNumberType
+.SourceIdentity sourceIdentityType
+.Tags tagListType
+.TokenCode tokenCodeType
+.TransitiveTagKeys tagKeyListType
+AssumeRoleResponse structure
+.AssumedRoleUser AssumedRoleUser
+.Credentials Credentials
+.PackedPolicySize nonNegativeIntegerType
+.SourceIdentity sourceIdentityType
+AssumeRoleWithSAML operation in=AssumeRoleWithSAMLRequest out=AssumeRoleWithSAMLResponse err=ExpiredTokenException,IDPRejectedClaimException,InvalidIdentityTokenException,MalformedPolicyDocumentException,PackedPolicyTooLargeException,RegionDisabledException
+AssumeRoleWithSAMLRequest structure
+.DurationSeconds roleDurationSecondsType
+.Policy sessionPolicyDocumentType
+.PolicyArns policyDescriptorListType
+.PrincipalArn arnType
+.RoleArn arnType
+.SAMLAssertion SAMLAssertionType
+AssumeRoleWithSAMLResponse structure
+.AssumedRoleUser AssumedRoleUser
+.Audience Audience
+.Credentials Credentials
+.Issuer Issuer
+.NameQualifier NameQualifier
+.PackedPolicySize nonNegativeIntegerType
+.SourceIdentity sourceIdentityType
+.Subject Subject
+.SubjectType SubjectType
+AssumeRoleWithWebIdentity operation in=AssumeRoleWithWebIdentityRequest out=AssumeRoleWithWebIdentityResponse err=ExpiredTokenException,IDPCommunicationErrorException,IDPRejectedClaimException,InvalidIdentityTokenException,MalformedPolicyDocumentException,PackedPolicyTooLargeException,RegionDisabledException
+AssumeRoleWithWebIdentityRequest structure
+.DurationSeconds roleDurationSecondsType
+.Policy sessionPolicyDocumentType
+.PolicyArns policyDescriptorListType
+.ProviderId urlType
+.RoleArn arnType
+.RoleSessionName roleSessionNameType
+.WebIdentityToken clientTokenType
+AssumeRoleWithWebIdentityResponse structure
+.AssumedRoleUser AssumedRoleUser
+.Audience Audience
+.Credentials Credentials
+.PackedPolicySize nonNegativeIntegerType
+.Provider Issuer
+.SourceIdentity sourceIdentityType
+.SubjectFromWebIdentityToken webIdentitySubjectType
+AssumeRoot operation in=AssumeRootRequest out=AssumeRootResponse err=ExpiredTokenException,RegionDisabledException
+AssumeRootRequest structure
+.DurationSeconds RootDurationSecondsType
+.TargetPrincipal TargetPrincipalType
+.TaskPolicyArn PolicyDescriptorType
+AssumeRootResponse structure
+.Credentials Credentials
+.SourceIdentity sourceIdentityType
+AssumedRoleUser structure
+.Arn arnType
+.AssumedRoleId assumedRoleIdType
+Audience string
+Credentials structure
+.AccessKeyId accessKeyIdType
+.Expiration dateType
+.SecretAccessKey accessKeySecretType
+.SessionToken tokenType
+DecodeAuthorizationMessage operation in=DecodeAuthorizationMessageRequest out=DecodeAuthorizationMessageResponse err=InvalidAuthorizationMessageException
+DecodeAuthorizationMessageRequest structure
+.EncodedMessage encodedMessageType
+DecodeAuthorizationMessageResponse structure
+.DecodedMessage decodedMessageType
+ExpiredTokenException structure qerr=ExpiredTokenException error=client code=400
+.message expiredIdentityTokenMessage
+ExpiredTradeInTokenException structure qerr=ExpiredTradeInTokenException error=client code=400
+.message expiredTradeInTokenExceptionMessage
+FederatedUser structure
+.Arn arnType
+.FederatedUserId federatedIdType
+GetAccessKeyInfo operation in=GetAccessKeyInfoRequest out=GetAccessKeyInfoResponse
+GetAccessKeyInfoRequest structure
+.AccessKeyId accessKeyIdType
+GetAccessKeyInfoResponse structure
+.Account accountType
+GetCallerIdentity operation in=GetCallerIdentityRequest out=GetCallerIdentityResponse
+GetCallerIdentityRequest structure
+GetCallerIdentityResponse structure
+.Account accountType
+.Arn arnType
+.UserId userIdType
+GetDelegatedAccessToken operation in=GetDelegatedAccessTokenRequest out=GetDelegatedAccessTokenResponse err=ExpiredTradeInTokenException,PackedPolicyTooLargeException,RegionDisabledException
+GetDelegatedAccessTokenRequest structure
+.TradeInToken tradeInTokenType
+GetDelegatedAccessTokenResponse structure
+.AssumedPrincipal arnType
+.Credentials Credentials
+.PackedPolicySize nonNegativeIntegerType
+GetFederationToken operation in=GetFederationTokenRequest out=GetFederationTokenResponse err=MalformedPolicyDocumentException,PackedPolicyTooLargeException,RegionDisabledException
+GetFederationTokenRequest structure
+.DurationSeconds durationSecondsType
+.Name userNameType
+.Policy sessionPolicyDocumentType
+.PolicyArns policyDescriptorListType
+.Tags tagListType
+GetFederationTokenResponse structure
+.Credentials Credentials
+.FederatedUser FederatedUser
+.PackedPolicySize nonNegativeIntegerType
+GetSessionToken operation in=GetSessionTokenRequest out=GetSessionTokenResponse err=RegionDisabledException
+GetSessionTokenRequest structure
+.DurationSeconds durationSecondsType
+.SerialNumber serialNumberType
+.TokenCode tokenCodeType
+GetSessionTokenResponse structure
+.Credentials Credentials
+GetWebIdentityToken operation in=GetWebIdentityTokenRequest out=GetWebIdentityTokenResponse err=JWTPayloadSizeExceededException,OutboundWebIdentityFederationDisabledException,SessionDurationEscalationException
+GetWebIdentityTokenRequest structure
+.Audience webIdentityTokenAudienceListType
+.DurationSeconds webIdentityTokenDurationSecondsType
+.SigningAlgorithm jwtAlgorithmType
+.Tags tagListType
+GetWebIdentityTokenResponse structure
+.Expiration dateType
+.WebIdentityToken webIdentityTokenType
+IDPCommunicationErrorException structure qerr=IDPCommunicationError error=client code=400
+.message idpCommunicationErrorMessage
+IDPRejectedClaimException structure qerr=IDPRejectedClaim error=client code=403
+.message idpRejectedClaimMessage
+InvalidAuthorizationMessageException structure qerr=InvalidAuthorizationMessageException error=client code=400
+.message invalidAuthorizationMessage
+InvalidIdentityTokenException structure qerr=InvalidIdentityToken error=client code=400
+.message invalidIdentityTokenMessage
+Issuer string
+JWTPayloadSizeExceededException structure qerr=JWTPayloadSizeExceededException error=client code=400
+.message JWTPayloadSizeExceededException2
+JWTPayloadSizeExceededException2 string
+MalformedPolicyDocumentException structure qerr=MalformedPolicyDocument error=client code=400
+.message malformedPolicyDocumentMessage
+NameQualifier string
+OutboundWebIdentityFederationDisabledException structure qerr=OutboundWebIdentityFederationDisabledException error=client code=403
+.message OutboundWebIdentityFederationDisabledException2
+OutboundWebIdentityFederationDisabledException2 string
+PackedPolicyTooLargeException structure qerr=PackedPolicyTooLarge error=client code=400
+.message packedPolicyTooLargeMessage
+PolicyDescriptorType structure
+.arn arnType
+ProvidedContext structure
+.ContextAssertion contextAssertionType
+.ProviderArn arnType
+ProvidedContextsListType list m=ProvidedContext
+RegionDisabledException structure qerr=RegionDisabledException error=client code=403
+.message regionDisabledMessage
+RootDurationSecondsType integer
+SAMLAssertionType string
+SessionDurationEscalationException structure qerr=SessionDurationEscalationException error=client code=403
+.message SessionDurationEscalationException2
+SessionDurationEscalationException2 string
+Subject string
+SubjectType string
+Tag structure
+.Key tagKeyType
+.Value tagValueType
+TargetPrincipalType string
+accessKeyIdType string
+accessKeySecretType string
+accountType string
+arnType string
+assumedRoleIdType string
+clientTokenType string
+contextAssertionType string
+dateType timestamp
+decodedMessageType string
+durationSecondsType integer
+encodedMessageType string
+expiredIdentityTokenMessage string
+expiredTradeInTokenExceptionMessage string
+externalIdType string
+federatedIdType string
+idpCommunicationErrorMessage string
+idpRejectedClaimMessage string
+invalidAuthorizationMessage string
+invalidIdentityTokenMessage string
+jwtAlgorithmType string
+malformedPolicyDocumentMessage string
+nonNegativeIntegerType integer
+packedPolicyTooLargeMessage string
+policyDescriptorListType list m=PolicyDescriptorType
+regionDisabledMessage string
+roleDurationSecondsType integer
+roleSessionNameType string
+serialNumberType string
+sessionPolicyDocumentType string
+sourceIdentityType string
+tagKeyListType list m=tagKeyType
+tagKeyType string
+tagListType list m=Tag
+tagValueType string
+tokenCodeType string
+tokenType string
+tradeInTokenType string
+unrestrictedSessionPolicyDocumentType string
+urlType string
+userIdType string
+userNameType string
+webIdentitySubjectType string
+webIdentityTokenAudienceListType list m=webIdentityTokenAudienceStringType
+webIdentityTokenAudienceStringType string
+webIdentityTokenDurationSecondsType integer
+webIdentityTokenType string

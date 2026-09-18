@@ -128,6 +128,11 @@ jobs:
       # so this needs it as much as the console build does. Eight matrix legs,
       # one content hash between them.
       - uses: ./.github/actions/lambda-init
+      # The aws-sdk shape tables internal/awsshapes embeds: build output, like
+      # the Lambda init above, packed from the committed text tables.
+      - name: Pack the aws-sdk shape tables
+        shell: bash
+        run: go run ./cmd/awsshapes-pack
 
       - name: Build binaries
         run: |

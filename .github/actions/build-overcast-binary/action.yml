@@ -39,6 +39,11 @@ runs:
     # incomplete fails here rather than shipping an asset with a placeholder in
     # it.
     - uses: ./.github/actions/lambda-init
+    # The aws-sdk shape tables internal/awsshapes embeds: build output, like
+    # the Lambda init above, packed from the committed text tables.
+    - name: Pack the aws-sdk shape tables
+      shell: bash
+      run: go run ./cmd/awsshapes-pack
 
     - name: Build binary
       shell: bash

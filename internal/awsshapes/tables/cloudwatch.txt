@@ -1,0 +1,948 @@
+service AWSJSON10,AWSQuery,RPCV2CBOR version=2010-08-01 ns=http://monitoring.amazonaws.com/doc/2010-08-01/ querycompat
+AccountId string
+ActionLogLineCount integer
+ActionLogLineRoleArn string
+ActionPrefix string
+ActionsEnabled boolean
+ActionsSuppressedBy enum
+ActionsSuppressedReason string
+AggregationExpression string
+AlarmArn string
+AlarmContributor structure
+.ContributorAttributes ContributorAttributes
+.ContributorId ContributorId
+.StateReason StateReason
+.StateTransitionedTimestamp Timestamp
+AlarmContributors list m=AlarmContributor
+AlarmDescription string
+AlarmHistoryItem structure
+.AlarmContributorAttributes ContributorAttributes
+.AlarmContributorId ContributorId
+.AlarmName AlarmName
+.AlarmType AlarmType
+.HistoryData HistoryData
+.HistoryItemType HistoryItemType
+.HistorySummary HistorySummary
+.Timestamp Timestamp
+AlarmHistoryItems list m=AlarmHistoryItem
+AlarmMuteRuleStatus enum
+AlarmMuteRuleStatuses list m=AlarmMuteRuleStatus
+AlarmMuteRuleSummaries list m=AlarmMuteRuleSummary
+AlarmMuteRuleSummary structure
+.AlarmMuteRuleArn Arn
+.ExpireDate Timestamp
+.LastUpdatedTimestamp Timestamp
+.MuteType MuteType
+.Status AlarmMuteRuleStatus
+AlarmName string
+AlarmNamePrefix string
+AlarmNames list m=AlarmName
+AlarmPromQLCriteria structure
+.PendingPeriod PendingPeriod
+.Query Query
+.RecoveryPeriod RecoveryPeriod
+AlarmRule string
+AlarmType enum
+AlarmTypes list m=AlarmType
+AmazonResourceName string
+AnomalyDetector structure
+.AnomalyDetectorId AnomalyDetectorId
+.Configuration AnomalyDetectorConfiguration
+.Dimensions Dimensions
+.MetricCharacteristics MetricCharacteristics
+.MetricMathAnomalyDetector MetricMathAnomalyDetector
+.MetricName MetricName
+.Namespace Namespace
+.SingleMetricAnomalyDetector SingleMetricAnomalyDetector
+.Stat AnomalyDetectorMetricStat
+.StateValue AnomalyDetectorStateValue
+AnomalyDetectorConfiguration structure
+.ExcludedTimeRanges AnomalyDetectorExcludedTimeRanges
+.MetricTimezone AnomalyDetectorMetricTimezone
+AnomalyDetectorExcludedTimeRanges list m=Range
+AnomalyDetectorId string
+AnomalyDetectorIds list m=AnomalyDetectorId
+AnomalyDetectorMetricStat string
+AnomalyDetectorMetricTimezone string
+AnomalyDetectorStateValue enum
+AnomalyDetectorType enum
+AnomalyDetectorTypes list m=AnomalyDetectorType
+AnomalyDetectors list m=AnomalyDetector
+Arn string
+AssociateDatasetKmsKey operation in=AssociateDatasetKmsKeyInput out=AssociateDatasetKmsKeyOutput err=ConflictException,KmsAccessDeniedException,KmsKeyDisabledException,KmsKeyNotFoundException,ResourceNotFoundException
+AssociateDatasetKmsKeyInput structure
+.DatasetIdentifier DatasetIdentifier
+.KmsKeyArn KmsKeyArn
+AssociateDatasetKmsKeyOutput structure
+AttributeName string
+AttributeValue string
+AwsQueryErrorMessage string
+BatchFailures list m=PartialFailure
+ComparisonOperator enum
+CompositeAlarm structure
+.ActionsEnabled ActionsEnabled
+.ActionsSuppressedBy ActionsSuppressedBy
+.ActionsSuppressedReason ActionsSuppressedReason
+.ActionsSuppressor AlarmArn
+.ActionsSuppressorExtensionPeriod SuppressorPeriod
+.ActionsSuppressorWaitPeriod SuppressorPeriod
+.AlarmActions ResourceList
+.AlarmArn AlarmArn
+.AlarmConfigurationUpdatedTimestamp Timestamp
+.AlarmDescription AlarmDescription
+.AlarmName AlarmName
+.AlarmRule AlarmRule
+.InsufficientDataActions ResourceList
+.OKActions ResourceList
+.StateReason StateReason
+.StateReasonData StateReasonData
+.StateTransitionedTimestamp Timestamp
+.StateUpdatedTimestamp Timestamp
+.StateValue StateValue
+CompositeAlarms list m=CompositeAlarm
+ConcurrentModificationException structure qerr=ConcurrentModificationException error=client code=429
+.Message FaultDescription
+ConflictException structure error=client code=409
+.Message ErrorMessage
+ContributorAttributes map k=AttributeName v=AttributeValue
+ContributorId string
+Counts list m=DatapointValue
+DashboardArn string
+DashboardBody string
+DashboardEntries list m=DashboardEntry
+DashboardEntry structure
+.DashboardArn DashboardArn
+.DashboardName DashboardName
+.LastModified LastModified
+.Size Size
+DashboardErrorMessage string
+DashboardInvalidInputError structure qerr=InvalidParameterInput error=client code=400
+.dashboardValidationMessages DashboardValidationMessages
+.message DashboardErrorMessage
+DashboardName string
+DashboardNamePrefix string
+DashboardNames list m=DashboardName
+DashboardNotFoundError structure qerr=ResourceNotFound error=client code=404
+.message DashboardErrorMessage
+DashboardValidationMessage structure
+.DataPath DataPath
+.Message Message
+DashboardValidationMessages list m=DashboardValidationMessage
+DataPath string
+Datapoint structure
+.Average DatapointValue
+.ExtendedStatistics DatapointValueMap
+.Maximum DatapointValue
+.Minimum DatapointValue
+.SampleCount DatapointValue
+.Sum DatapointValue
+.Timestamp Timestamp
+.Unit StandardUnit
+DatapointValue double
+DatapointValueMap map k=ExtendedStatistic v=DatapointValue
+DatapointValues list m=DatapointValue
+Datapoints list m=Datapoint
+DatapointsToAlarm integer
+DatasetArn string
+DatasetId string
+DatasetIdentifier string
+DeleteAlarmMuteRule operation in=DeleteAlarmMuteRuleInput out=~Unit
+DeleteAlarmMuteRuleInput structure
+.AlarmMuteRuleName Name
+DeleteAlarms operation in=DeleteAlarmsInput out=~Unit err=ResourceConflict,ResourceNotFound
+DeleteAlarmsInput structure
+.AlarmNames AlarmNames
+DeleteAnomalyDetector operation in=DeleteAnomalyDetectorInput out=DeleteAnomalyDetectorOutput err=InternalServiceFault,InvalidParameterCombinationException,InvalidParameterValueException,MissingRequiredParameterException,ResourceNotFoundException
+DeleteAnomalyDetectorInput structure
+.AnomalyDetectorId AnomalyDetectorId
+.Dimensions Dimensions
+.MetricMathAnomalyDetector MetricMathAnomalyDetector
+.MetricName MetricName
+.Namespace Namespace
+.SingleMetricAnomalyDetector SingleMetricAnomalyDetector
+.Stat AnomalyDetectorMetricStat
+DeleteAnomalyDetectorOutput structure
+DeleteDashboards operation in=DeleteDashboardsInput out=DeleteDashboardsOutput err=ConflictException,InternalServiceFault,InvalidParameterValueException
+DeleteDashboardsInput structure
+.DashboardNames DashboardNames
+DeleteDashboardsOutput structure
+DeleteInsightRules operation in=DeleteInsightRulesInput out=DeleteInsightRulesOutput err=InvalidParameterValueException,MissingRequiredParameterException
+DeleteInsightRulesInput structure
+.RuleNames InsightRuleNames
+DeleteInsightRulesOutput structure
+.Failures BatchFailures
+DeleteMetricStream operation in=DeleteMetricStreamInput out=DeleteMetricStreamOutput err=InternalServiceFault,InvalidParameterValueException,MissingRequiredParameterException
+DeleteMetricStreamInput structure
+.Name MetricStreamName
+DeleteMetricStreamOutput structure
+DescribeAlarmContributors operation in=DescribeAlarmContributorsInput out=DescribeAlarmContributorsOutput err=InvalidNextToken,ResourceNotFoundException
+DescribeAlarmContributorsInput structure
+.AlarmName AlarmName
+.NextToken NextToken
+DescribeAlarmContributorsOutput structure
+.AlarmContributors AlarmContributors
+.NextToken NextToken
+DescribeAlarmHistory operation in=DescribeAlarmHistoryInput out=DescribeAlarmHistoryOutput err=InvalidNextToken
+DescribeAlarmHistoryInput structure
+.AlarmContributorId ContributorId
+.AlarmName AlarmName
+.AlarmTypes AlarmTypes
+.EndDate Timestamp
+.HistoryItemType HistoryItemType
+.MaxRecords MaxRecords
+.NextToken NextToken
+.ScanBy ScanBy
+.StartDate Timestamp
+DescribeAlarmHistoryOutput structure
+.AlarmHistoryItems AlarmHistoryItems
+.NextToken NextToken
+DescribeAlarms operation in=DescribeAlarmsInput out=DescribeAlarmsOutput err=InvalidNextToken
+DescribeAlarmsForMetric operation in=DescribeAlarmsForMetricInput out=DescribeAlarmsForMetricOutput
+DescribeAlarmsForMetricInput structure
+.Dimensions Dimensions
+.ExtendedStatistic ExtendedStatistic
+.MetricName MetricName
+.Namespace Namespace
+.Period Period
+.Statistic Statistic
+.Unit StandardUnit
+DescribeAlarmsForMetricOutput structure
+.MetricAlarms MetricAlarms
+DescribeAlarmsInput structure
+.ActionPrefix ActionPrefix
+.AlarmNamePrefix AlarmNamePrefix
+.AlarmNames AlarmNames
+.AlarmTypes AlarmTypes
+.ChildrenOfAlarmName AlarmName
+.MaxRecords MaxRecords
+.NextToken NextToken
+.ParentsOfAlarmName AlarmName
+.StateValue StateValue
+DescribeAlarmsOutput structure
+.CompositeAlarms CompositeAlarms
+.LogAlarms LogAlarms
+.MetricAlarms MetricAlarms
+.NextToken NextToken
+DescribeAnomalyDetectors operation in=DescribeAnomalyDetectorsInput out=DescribeAnomalyDetectorsOutput err=InternalServiceFault,InvalidNextToken,InvalidParameterCombinationException,InvalidParameterValueException
+DescribeAnomalyDetectorsInput structure
+.AnomalyDetectorIds AnomalyDetectorIds
+.AnomalyDetectorTypes AnomalyDetectorTypes
+.Dimensions Dimensions
+.MaxResults MaxReturnedResultsCount
+.MetricName MetricName
+.Namespace Namespace
+.NextToken NextToken
+DescribeAnomalyDetectorsOutput structure
+.AnomalyDetectors AnomalyDetectors
+.NextToken NextToken
+DescribeInsightRules operation in=DescribeInsightRulesInput out=DescribeInsightRulesOutput err=InvalidNextToken
+DescribeInsightRulesInput structure
+.MaxResults InsightRuleMaxResults
+.NextToken NextToken
+DescribeInsightRulesOutput structure
+.InsightRules InsightRules
+.NextToken NextToken
+Dimension structure
+.Name DimensionName
+.Value DimensionValue
+DimensionFilter structure
+.Name DimensionName
+.Value DimensionValue
+DimensionFilters list m=DimensionFilter
+DimensionName string
+DimensionValue string
+Dimensions list m=Dimension
+DisableAlarmActions operation in=DisableAlarmActionsInput out=~Unit
+DisableAlarmActionsInput structure
+.AlarmNames AlarmNames
+DisableInsightRules operation in=DisableInsightRulesInput out=DisableInsightRulesOutput err=InvalidParameterValueException,MissingRequiredParameterException
+DisableInsightRulesInput structure
+.RuleNames InsightRuleNames
+DisableInsightRulesOutput structure
+.Failures BatchFailures
+DisassociateDatasetKmsKey operation in=DisassociateDatasetKmsKeyInput out=DisassociateDatasetKmsKeyOutput err=ConflictException,ResourceNotFoundException
+DisassociateDatasetKmsKeyInput structure
+.DatasetIdentifier DatasetIdentifier
+DisassociateDatasetKmsKeyOutput structure
+Duration string
+EnableAlarmActions operation in=EnableAlarmActionsInput out=~Unit
+EnableAlarmActionsInput structure
+.AlarmNames AlarmNames
+EnableInsightRules operation in=EnableInsightRulesInput out=EnableInsightRulesOutput err=InvalidParameterValueException,LimitExceededException,MissingRequiredParameterException
+EnableInsightRulesInput structure
+.RuleNames InsightRuleNames
+EnableInsightRulesOutput structure
+.Failures BatchFailures
+EndTimeOffset long
+Entity structure
+.Attributes EntityAttributesMap
+.KeyAttributes EntityKeyAttributesMap
+EntityAttributesMap map k=EntityAttributesMapKeyString v=EntityAttributesMapValueString
+EntityAttributesMapKeyString string
+EntityAttributesMapValueString string
+EntityKeyAttributesMap map k=EntityKeyAttributesMapKeyString v=EntityKeyAttributesMapValueString
+EntityKeyAttributesMapKeyString string
+EntityKeyAttributesMapValueString string
+EntityMetricData structure
+.Entity Entity
+.MetricData MetricData
+EntityMetricDataList list m=EntityMetricData
+ErrorMessage string
+EvaluateLowSampleCountPercentile string
+EvaluationCriteria union
+.PromQLCriteria AlarmPromQLCriteria
+EvaluationInterval integer
+EvaluationPeriods integer
+EvaluationState enum
+EvaluationWindow union
+.SlidingWindow SlidingWindow
+.WallClockWindow WallClockWindow
+ExceptionType string
+Expression string
+ExtendedStatistic string
+ExtendedStatistics list m=ExtendedStatistic
+FailureCode string
+FailureDescription string
+FailureResource string
+FaultDescription string
+GetAlarmMuteRule operation in=GetAlarmMuteRuleInput out=GetAlarmMuteRuleOutput err=ResourceNotFoundException
+GetAlarmMuteRuleInput structure
+.AlarmMuteRuleName Name
+GetAlarmMuteRuleOutput structure
+.AlarmMuteRuleArn Arn
+.Description AlarmDescription
+.ExpireDate Timestamp
+.LastUpdatedTimestamp Timestamp
+.MuteTargets MuteTargets
+.MuteType MuteType
+.Name Name
+.Rule Rule
+.StartDate Timestamp
+.Status AlarmMuteRuleStatus
+GetDashboard operation in=GetDashboardInput out=GetDashboardOutput err=DashboardNotFoundError,InternalServiceFault,InvalidParameterValueException
+GetDashboardInput structure
+.DashboardName DashboardName
+GetDashboardOutput structure
+.DashboardArn DashboardArn
+.DashboardBody DashboardBody
+.DashboardName DashboardName
+GetDataset operation in=GetDatasetInput out=GetDatasetOutput err=ResourceNotFoundException
+GetDatasetInput structure
+.DatasetIdentifier DatasetIdentifier
+GetDatasetOutput structure
+.Arn DatasetArn
+.DatasetId DatasetId
+.KmsKeyArn KmsKeyArn
+GetInsightRuleReport operation in=GetInsightRuleReportInput out=GetInsightRuleReportOutput err=InvalidParameterValueException,MissingRequiredParameterException,ResourceNotFoundException
+GetInsightRuleReportInput structure
+.EndTime Timestamp
+.MaxContributorCount InsightRuleUnboundInteger
+.Metrics InsightRuleMetricList
+.OrderBy InsightRuleOrderBy
+.Period Period
+.RuleName InsightRuleName
+.StartTime Timestamp
+GetInsightRuleReportOutput structure
+.AggregateValue InsightRuleUnboundDouble
+.AggregationStatistic InsightRuleAggregationStatistic
+.ApproximateUniqueCount InsightRuleUnboundLong
+.Contributors InsightRuleContributors
+.KeyLabels InsightRuleContributorKeyLabels
+.MetricDatapoints InsightRuleMetricDatapoints
+GetMetricData operation in=GetMetricDataInput out=GetMetricDataOutput err=InvalidNextToken
+GetMetricDataInput structure
+.EndTime Timestamp
+.LabelOptions LabelOptions
+.MaxDatapoints GetMetricDataMaxDatapoints
+.MetricDataQueries MetricDataQueries
+.NextToken NextToken
+.ScanBy ScanBy
+.StartTime Timestamp
+GetMetricDataLabelTimezone string
+GetMetricDataMaxDatapoints integer
+GetMetricDataOutput structure
+.Messages MetricDataResultMessages
+.MetricDataResults MetricDataResults
+.NextToken NextToken
+GetMetricStatistics operation in=GetMetricStatisticsInput out=GetMetricStatisticsOutput err=InternalServiceFault,InvalidParameterCombinationException,InvalidParameterValueException,MissingRequiredParameterException
+GetMetricStatisticsInput structure
+.Dimensions Dimensions
+.EndTime Timestamp
+.ExtendedStatistics ExtendedStatistics
+.MetricName MetricName
+.Namespace Namespace
+.Period Period
+.StartTime Timestamp
+.Statistics Statistics
+.Unit StandardUnit
+GetMetricStatisticsOutput structure
+.Datapoints Datapoints
+.Label MetricLabel
+GetMetricStream operation in=GetMetricStreamInput out=GetMetricStreamOutput err=InternalServiceFault,InvalidParameterCombinationException,InvalidParameterValueException,MissingRequiredParameterException,ResourceNotFoundException
+GetMetricStreamInput structure
+.Name MetricStreamName
+GetMetricStreamOutput structure
+.Arn AmazonResourceName
+.CreationDate Timestamp
+.ExcludeFilters MetricStreamFilters
+.FirehoseArn AmazonResourceName
+.IncludeFilters MetricStreamFilters
+.IncludeLinkedAccountsMetrics IncludeLinkedAccountsMetrics
+.LastUpdateDate Timestamp
+.Name MetricStreamName
+.OutputFormat MetricStreamOutputFormat
+.RoleArn AmazonResourceName
+.State MetricStreamState
+.StatisticsConfigurations MetricStreamStatisticsConfigurations
+GetMetricWidgetImage operation in=GetMetricWidgetImageInput out=GetMetricWidgetImageOutput
+GetMetricWidgetImageInput structure
+.MetricWidget MetricWidget
+.OutputFormat OutputFormat
+GetMetricWidgetImageOutput structure
+.MetricWidgetImage MetricWidgetImage
+GetOTelEnrichment operation in=GetOTelEnrichmentInput out=GetOTelEnrichmentOutput
+GetOTelEnrichmentInput structure
+GetOTelEnrichmentOutput structure
+.Status OTelEnrichmentStatus
+HistoryData string
+HistoryItemType enum
+HistorySummary string
+IncludeLinkedAccounts boolean
+IncludeLinkedAccountsMetrics boolean
+InsightRule structure
+.ApplyOnTransformedLogs InsightRuleOnTransformedLogs
+.Definition InsightRuleDefinition
+.ManagedRule InsightRuleIsManaged
+.Name InsightRuleName
+.Schema InsightRuleSchema
+.State InsightRuleState
+InsightRuleAggregationStatistic string
+InsightRuleContributor structure
+.ApproximateAggregateValue InsightRuleUnboundDouble
+.Datapoints InsightRuleContributorDatapoints
+.Keys InsightRuleContributorKeys
+InsightRuleContributorDatapoint structure
+.ApproximateValue InsightRuleUnboundDouble
+.Timestamp Timestamp
+InsightRuleContributorDatapoints list m=InsightRuleContributorDatapoint
+InsightRuleContributorKey string
+InsightRuleContributorKeyLabel string
+InsightRuleContributorKeyLabels list m=InsightRuleContributorKeyLabel
+InsightRuleContributorKeys list m=InsightRuleContributorKey
+InsightRuleContributors list m=InsightRuleContributor
+InsightRuleDefinition string
+InsightRuleIsManaged boolean
+InsightRuleMaxResults integer
+InsightRuleMetricDatapoint structure
+.Average InsightRuleUnboundDouble
+.MaxContributorValue InsightRuleUnboundDouble
+.Maximum InsightRuleUnboundDouble
+.Minimum InsightRuleUnboundDouble
+.SampleCount InsightRuleUnboundDouble
+.Sum InsightRuleUnboundDouble
+.Timestamp Timestamp
+.UniqueContributors InsightRuleUnboundDouble
+InsightRuleMetricDatapoints list m=InsightRuleMetricDatapoint
+InsightRuleMetricList list m=InsightRuleMetricName
+InsightRuleMetricName string
+InsightRuleName string
+InsightRuleNames list m=InsightRuleName
+InsightRuleOnTransformedLogs boolean
+InsightRuleOrderBy string
+InsightRuleSchema string
+InsightRuleState string
+InsightRuleUnboundDouble double
+InsightRuleUnboundInteger integer
+InsightRuleUnboundLong long
+InsightRules list m=InsightRule
+InternalServiceFault structure qerr=InternalServiceError error=server code=500
+.Message FaultDescription
+InvalidFormatFault structure qerr=InvalidFormat error=client code=400
+.message ErrorMessage
+InvalidNextToken structure qerr=InvalidNextToken error=client code=400
+.message ErrorMessage
+InvalidParameterCombinationException structure qerr=InvalidParameterCombination error=client code=400
+.message AwsQueryErrorMessage
+InvalidParameterValueException structure qerr=InvalidParameterValue error=client code=400
+.message AwsQueryErrorMessage
+KmsAccessDeniedException structure error=client
+.Message String
+KmsKeyArn string
+KmsKeyDisabledException structure error=client
+.Message String
+KmsKeyNotFoundException structure error=client
+.Message String
+LabelOptions structure
+.Timezone GetMetricDataLabelTimezone
+LastModified timestamp
+LimitExceededException structure qerr=LimitExceededException error=client code=400
+.Message FaultDescription
+LimitExceededFault structure qerr=LimitExceeded error=client code=400
+.message ErrorMessage
+ListAlarmMuteRules operation in=ListAlarmMuteRulesInput out=ListAlarmMuteRulesOutput err=InvalidNextToken,ResourceNotFoundException
+ListAlarmMuteRulesInput structure
+.AlarmName Name
+.MaxRecords MaxRecords
+.NextToken NextToken
+.Statuses AlarmMuteRuleStatuses
+ListAlarmMuteRulesOutput structure
+.AlarmMuteRuleSummaries AlarmMuteRuleSummaries
+.NextToken NextToken
+ListDashboards operation in=ListDashboardsInput out=ListDashboardsOutput err=InternalServiceFault,InvalidParameterValueException
+ListDashboardsInput structure
+.DashboardNamePrefix DashboardNamePrefix
+.NextToken NextToken
+ListDashboardsOutput structure
+.DashboardEntries DashboardEntries
+.NextToken NextToken
+ListManagedInsightRules operation in=ListManagedInsightRulesInput out=ListManagedInsightRulesOutput err=InvalidNextToken,InvalidParameterValueException,MissingRequiredParameterException
+ListManagedInsightRulesInput structure
+.MaxResults InsightRuleMaxResults
+.NextToken NextToken
+.ResourceARN AmazonResourceName
+ListManagedInsightRulesOutput structure
+.ManagedRules ManagedRuleDescriptions
+.NextToken NextToken
+ListMetricStreams operation in=ListMetricStreamsInput out=ListMetricStreamsOutput err=InternalServiceFault,InvalidNextToken,InvalidParameterValueException,MissingRequiredParameterException
+ListMetricStreamsInput structure
+.MaxResults ListMetricStreamsMaxResults
+.NextToken NextToken
+ListMetricStreamsMaxResults integer
+ListMetricStreamsOutput structure
+.Entries MetricStreamEntries
+.NextToken NextToken
+ListMetrics operation in=ListMetricsInput out=ListMetricsOutput err=InternalServiceFault,InvalidParameterValueException
+ListMetricsInput structure
+.Dimensions DimensionFilters
+.IncludeLinkedAccounts IncludeLinkedAccounts
+.MetricName MetricName
+.Namespace Namespace
+.NextToken NextToken
+.OwningAccount AccountId
+.RecentlyActive RecentlyActive
+ListMetricsOutput structure
+.Metrics Metrics
+.NextToken NextToken
+.OwningAccounts OwningAccounts
+ListTagsForResource operation in=ListTagsForResourceInput out=ListTagsForResourceOutput err=InternalServiceFault,InvalidParameterValueException,ResourceNotFoundException
+ListTagsForResourceInput structure
+.ResourceARN AmazonResourceName
+ListTagsForResourceOutput structure
+.Tags TagList
+LogAlarm structure
+.ActionLogLineCount ActionLogLineCount
+.ActionLogLineRoleArn ActionLogLineRoleArn
+.ActionsEnabled ActionsEnabled
+.AlarmActions ResourceList
+.AlarmArn AlarmArn
+.AlarmConfigurationUpdatedTimestamp Timestamp
+.AlarmDescription AlarmDescription
+.AlarmName AlarmName
+.ComparisonOperator ComparisonOperator
+.EvaluationState EvaluationState
+.InsufficientDataActions ResourceList
+.OKActions ResourceList
+.QueryResultsToAlarm QueryResultsToAlarm
+.QueryResultsToEvaluate QueryResultsToEvaluate
+.ScheduledQueryConfiguration ScheduledQueryConfiguration
+.StateReason StateReason
+.StateReasonData StateReasonData
+.StateTransitionedTimestamp Timestamp
+.StateUpdatedTimestamp Timestamp
+.StateValue StateValue
+.Threshold Threshold
+.TreatMissingData TreatMissingData
+.WarmUpConfiguration WarmUpConfiguration
+LogAlarms list m=LogAlarm
+LogGroupIdentifiers list m=AmazonResourceName
+ManagedRule structure
+.ResourceARN AmazonResourceName
+.Tags TagList
+.TemplateName TemplateName
+ManagedRuleDescription structure
+.ResourceARN AmazonResourceName
+.RuleState ManagedRuleState
+.TemplateName TemplateName
+ManagedRuleDescriptions list m=ManagedRuleDescription
+ManagedRuleState structure
+.RuleName InsightRuleName
+.State InsightRuleState
+ManagedRules list m=ManagedRule
+MaxRecords integer
+MaxReturnedResultsCount integer
+Message string
+MessageData structure
+.Code MessageDataCode
+.Value MessageDataValue
+MessageDataCode string
+MessageDataValue string
+Metric structure
+.Dimensions Dimensions
+.MetricName MetricName
+.Namespace Namespace
+MetricAlarm structure
+.ActionsEnabled ActionsEnabled
+.AlarmActions ResourceList
+.AlarmArn AlarmArn
+.AlarmConfigurationUpdatedTimestamp Timestamp
+.AlarmDescription AlarmDescription
+.AlarmName AlarmName
+.ComparisonOperator ComparisonOperator
+.DatapointsToAlarm DatapointsToAlarm
+.Dimensions Dimensions
+.EvaluateLowSampleCountPercentile EvaluateLowSampleCountPercentile
+.EvaluationCriteria EvaluationCriteria
+.EvaluationInterval EvaluationInterval
+.EvaluationPeriods EvaluationPeriods
+.EvaluationState EvaluationState
+.EvaluationWindow EvaluationWindow
+.ExtendedStatistic ExtendedStatistic
+.InsufficientDataActions ResourceList
+.MetricName MetricName
+.Metrics MetricDataQueries
+.Namespace Namespace
+.OKActions ResourceList
+.Period Period
+.StateReason StateReason
+.StateReasonData StateReasonData
+.StateTransitionedTimestamp Timestamp
+.StateUpdatedTimestamp Timestamp
+.StateValue StateValue
+.Statistic Statistic
+.Threshold Threshold
+.ThresholdMetricId MetricId
+.TreatMissingData TreatMissingData
+.Unit StandardUnit
+.WarmUpConfiguration WarmUpConfiguration
+MetricAlarms list m=MetricAlarm
+MetricCharacteristics structure
+.PeriodicSpikes PeriodicSpikes
+MetricData list m=MetricDatum
+MetricDataQueries list m=MetricDataQuery
+MetricDataQuery structure
+.AccountId AccountId
+.Expression MetricExpression
+.Id MetricId
+.Label MetricLabel
+.MetricStat MetricStat
+.Period Period
+.ReturnData ReturnData
+MetricDataResult structure
+.Id MetricId
+.Label MetricLabel
+.Messages MetricDataResultMessages
+.StatusCode StatusCode
+.Timestamps Timestamps
+.Values DatapointValues
+MetricDataResultMessages list m=MessageData
+MetricDataResults list m=MetricDataResult
+MetricDatum structure
+.Counts Counts
+.Dimensions Dimensions
+.MetricName MetricName
+.StatisticValues StatisticSet
+.StorageResolution StorageResolution
+.Timestamp Timestamp
+.Unit StandardUnit
+.Value DatapointValue
+.Values Values
+MetricExpression string
+MetricId string
+MetricLabel string
+MetricMathAnomalyDetector structure
+.MetricDataQueries MetricDataQueries
+MetricName string
+MetricStat structure
+.Metric Metric
+.Period Period
+.Stat Stat
+.Unit StandardUnit
+MetricStreamEntries list m=MetricStreamEntry
+MetricStreamEntry structure
+.Arn AmazonResourceName
+.CreationDate Timestamp
+.FirehoseArn AmazonResourceName
+.LastUpdateDate Timestamp
+.Name MetricStreamName
+.OutputFormat MetricStreamOutputFormat
+.State MetricStreamState
+MetricStreamFilter structure
+.MetricNames MetricStreamFilterMetricNames
+.Namespace Namespace
+MetricStreamFilterMetricNames list m=MetricName
+MetricStreamFilters list m=MetricStreamFilter
+MetricStreamName string
+MetricStreamNames list m=MetricStreamName
+MetricStreamOutputFormat enum
+MetricStreamState string
+MetricStreamStatistic string
+MetricStreamStatisticsAdditionalStatistics list m=MetricStreamStatistic
+MetricStreamStatisticsConfiguration structure
+.AdditionalStatistics MetricStreamStatisticsAdditionalStatistics
+.IncludeMetrics MetricStreamStatisticsIncludeMetrics
+MetricStreamStatisticsConfigurations list m=MetricStreamStatisticsConfiguration
+MetricStreamStatisticsIncludeMetrics list m=MetricStreamStatisticsMetric
+MetricStreamStatisticsMetric structure
+.MetricName MetricName
+.Namespace Namespace
+MetricWidget string
+MetricWidgetImage blob
+Metrics list m=Metric
+MissingRequiredParameterException structure qerr=MissingParameter error=client code=400
+.message AwsQueryErrorMessage
+MuteTargetAlarmNameList list m=Name
+MuteTargets structure
+.AlarmNames MuteTargetAlarmNameList
+MuteType string
+Name string
+Namespace string
+NextToken string
+OTelEnrichmentStatus enum
+OnlyStartEvaluatingAfterWarmUpPeriodEnds boolean
+OutputFormat string
+OwningAccounts list m=AccountId
+PartialFailure structure
+.ExceptionType ExceptionType
+.FailureCode FailureCode
+.FailureDescription FailureDescription
+.FailureResource FailureResource
+PendingPeriod integer
+Period integer
+PeriodicSpikes boolean
+PutAlarmMuteRule operation in=PutAlarmMuteRuleInput out=~Unit err=LimitExceededFault
+PutAlarmMuteRuleInput structure
+.Description AlarmDescription
+.ExpireDate Timestamp
+.MuteTargets MuteTargets
+.Name Name
+.Rule Rule
+.StartDate Timestamp
+.Tags TagList
+PutAnomalyDetector operation in=PutAnomalyDetectorInput out=PutAnomalyDetectorOutput err=InternalServiceFault,InvalidParameterCombinationException,InvalidParameterValueException,LimitExceededException,MissingRequiredParameterException
+PutAnomalyDetectorInput structure
+.Configuration AnomalyDetectorConfiguration
+.Dimensions Dimensions
+.MetricCharacteristics MetricCharacteristics
+.MetricMathAnomalyDetector MetricMathAnomalyDetector
+.MetricName MetricName
+.Namespace Namespace
+.SingleMetricAnomalyDetector SingleMetricAnomalyDetector
+.Stat AnomalyDetectorMetricStat
+PutAnomalyDetectorOutput structure
+.AnomalyDetectorId AnomalyDetectorId
+PutCompositeAlarm operation in=PutCompositeAlarmInput out=~Unit err=LimitExceededFault
+PutCompositeAlarmInput structure
+.ActionsEnabled ActionsEnabled
+.ActionsSuppressor AlarmArn
+.ActionsSuppressorExtensionPeriod SuppressorPeriod
+.ActionsSuppressorWaitPeriod SuppressorPeriod
+.AlarmActions ResourceList
+.AlarmDescription AlarmDescription
+.AlarmName AlarmName
+.AlarmRule AlarmRule
+.InsufficientDataActions ResourceList
+.OKActions ResourceList
+.Tags TagList
+PutDashboard operation in=PutDashboardInput out=PutDashboardOutput err=ConflictException,DashboardInvalidInputError,InternalServiceFault
+PutDashboardInput structure
+.DashboardBody DashboardBody
+.DashboardName DashboardName
+.Tags TagList
+PutDashboardOutput structure
+.DashboardValidationMessages DashboardValidationMessages
+PutInsightRule operation in=PutInsightRuleInput out=PutInsightRuleOutput err=InvalidParameterValueException,LimitExceededException,MissingRequiredParameterException
+PutInsightRuleInput structure
+.ApplyOnTransformedLogs InsightRuleOnTransformedLogs
+.RuleDefinition InsightRuleDefinition
+.RuleName InsightRuleName
+.RuleState InsightRuleState
+.Tags TagList
+PutInsightRuleOutput structure
+PutLogAlarm operation in=PutLogAlarmInput out=~Unit err=LimitExceededFault,ResourceConflict
+PutLogAlarmInput structure
+.ActionLogLineCount ActionLogLineCount
+.ActionLogLineRoleArn ActionLogLineRoleArn
+.ActionsEnabled ActionsEnabled
+.AlarmActions ResourceList
+.AlarmDescription AlarmDescription
+.AlarmName AlarmName
+.ComparisonOperator ComparisonOperator
+.InsufficientDataActions ResourceList
+.OKActions ResourceList
+.QueryResultsToAlarm QueryResultsToAlarm
+.QueryResultsToEvaluate QueryResultsToEvaluate
+.ScheduledQueryConfiguration ScheduledQueryConfiguration
+.Tags TagList
+.Threshold Threshold
+.TreatMissingData TreatMissingData
+.WarmUpConfiguration WarmUpConfiguration
+PutManagedInsightRules operation in=PutManagedInsightRulesInput out=PutManagedInsightRulesOutput err=InvalidParameterValueException,MissingRequiredParameterException
+PutManagedInsightRulesInput structure
+.ManagedRules ManagedRules
+PutManagedInsightRulesOutput structure
+.Failures BatchFailures
+PutMetricAlarm operation in=PutMetricAlarmInput out=~Unit err=LimitExceededFault
+PutMetricAlarmInput structure
+.ActionsEnabled ActionsEnabled
+.AlarmActions ResourceList
+.AlarmDescription AlarmDescription
+.AlarmName AlarmName
+.ComparisonOperator ComparisonOperator
+.DatapointsToAlarm DatapointsToAlarm
+.Dimensions Dimensions
+.EvaluateLowSampleCountPercentile EvaluateLowSampleCountPercentile
+.EvaluationCriteria EvaluationCriteria
+.EvaluationInterval EvaluationInterval
+.EvaluationPeriods EvaluationPeriods
+.EvaluationWindow EvaluationWindow
+.ExtendedStatistic ExtendedStatistic
+.InsufficientDataActions ResourceList
+.MetricName MetricName
+.Metrics MetricDataQueries
+.Namespace Namespace
+.OKActions ResourceList
+.Period Period
+.Statistic Statistic
+.Tags TagList
+.Threshold Threshold
+.ThresholdMetricId MetricId
+.TreatMissingData TreatMissingData
+.Unit StandardUnit
+.WarmUpConfiguration WarmUpConfiguration
+PutMetricData operation in=PutMetricDataInput out=~Unit err=InternalServiceFault,InvalidParameterCombinationException,InvalidParameterValueException,MissingRequiredParameterException
+PutMetricDataInput structure
+.EntityMetricData EntityMetricDataList
+.MetricData MetricData
+.Namespace Namespace
+.StrictEntityValidation StrictEntityValidation
+PutMetricStream operation in=PutMetricStreamInput out=PutMetricStreamOutput err=ConcurrentModificationException,InternalServiceFault,InvalidParameterCombinationException,InvalidParameterValueException,MissingRequiredParameterException
+PutMetricStreamInput structure
+.ExcludeFilters MetricStreamFilters
+.FirehoseArn AmazonResourceName
+.IncludeFilters MetricStreamFilters
+.IncludeLinkedAccountsMetrics IncludeLinkedAccountsMetrics
+.Name MetricStreamName
+.OutputFormat MetricStreamOutputFormat
+.RoleArn AmazonResourceName
+.StatisticsConfigurations MetricStreamStatisticsConfigurations
+.Tags TagList
+PutMetricStreamOutput structure
+.Arn AmazonResourceName
+Query string
+QueryResultsToAlarm integer
+QueryResultsToEvaluate integer
+QueryString string
+Range structure
+.EndTime Timestamp
+.StartTime Timestamp
+RecentlyActive enum
+RecoveryPeriod integer
+ResourceConflict structure qerr=ResourceConflict error=client code=409
+.message ErrorMessage
+ResourceId string
+ResourceList list m=ResourceName
+ResourceName string
+ResourceNotFound structure qerr=ResourceNotFound error=client code=404
+.message ErrorMessage
+ResourceNotFoundException structure qerr=ResourceNotFoundException error=client code=404
+.Message FaultDescription
+.ResourceId ResourceId
+.ResourceType ResourceType
+ResourceType string
+ReturnData boolean
+Rule structure
+.Schedule Schedule
+ScanBy enum
+Schedule structure
+.Duration Duration
+.Expression Expression
+.Timezone Timezone
+ScheduleConfiguration structure
+.EndTimeOffset EndTimeOffset
+.ScheduleExpression ScheduleExpression
+.StartTimeOffset StartTimeOffset
+ScheduleExpression string
+ScheduledQueryConfiguration structure
+.AggregationExpression AggregationExpression
+.LogGroupIdentifiers LogGroupIdentifiers
+.QueryARN AmazonResourceName
+.QueryString QueryString
+.ScheduleConfiguration ScheduleConfiguration
+.ScheduledQueryRoleARN AmazonResourceName
+.Tags TagList
+SetAlarmState operation in=SetAlarmStateInput out=~Unit err=InvalidFormatFault,ResourceNotFound
+SetAlarmStateInput structure
+.AlarmName AlarmName
+.StateReason StateReason
+.StateReasonData StateReasonData
+.StateValue StateValue
+SingleMetricAnomalyDetector structure
+.AccountId AccountId
+.Dimensions Dimensions
+.MetricName MetricName
+.Namespace Namespace
+.Stat AnomalyDetectorMetricStat
+Size long
+SlidingWindow structure
+StandardUnit enum
+StartMetricStreams operation in=StartMetricStreamsInput out=StartMetricStreamsOutput err=InternalServiceFault,InvalidParameterValueException,MissingRequiredParameterException
+StartMetricStreamsInput structure
+.Names MetricStreamNames
+StartMetricStreamsOutput structure
+StartOTelEnrichment operation in=StartOTelEnrichmentInput out=StartOTelEnrichmentOutput
+StartOTelEnrichmentInput structure
+StartOTelEnrichmentOutput structure
+StartTimeOffset long
+Stat string
+StateReason string
+StateReasonData string
+StateValue enum
+Statistic enum
+StatisticSet structure
+.Maximum DatapointValue
+.Minimum DatapointValue
+.SampleCount DatapointValue
+.Sum DatapointValue
+Statistics list m=Statistic
+StatusCode enum
+StopMetricStreams operation in=StopMetricStreamsInput out=StopMetricStreamsOutput err=InternalServiceFault,InvalidParameterValueException,MissingRequiredParameterException
+StopMetricStreamsInput structure
+.Names MetricStreamNames
+StopMetricStreamsOutput structure
+StopOTelEnrichment operation in=StopOTelEnrichmentInput out=StopOTelEnrichmentOutput
+StopOTelEnrichmentInput structure
+StopOTelEnrichmentOutput structure
+StorageResolution integer
+StrictEntityValidation boolean
+String string
+SuppressorPeriod integer
+Tag structure
+.Key TagKey
+.Value TagValue
+TagKey string
+TagKeyList list m=TagKey
+TagList list m=Tag
+TagResource operation in=TagResourceInput out=TagResourceOutput err=ConcurrentModificationException,ConflictException,InternalServiceFault,InvalidParameterValueException,ResourceNotFoundException
+TagResourceInput structure
+.ResourceARN AmazonResourceName
+.Tags TagList
+TagResourceOutput structure
+TagValue string
+TemplateName string
+Threshold double
+Timestamp timestamp
+Timestamps list m=Timestamp
+Timezone string
+TreatMissingData string
+UntagResource operation in=UntagResourceInput out=UntagResourceOutput err=ConcurrentModificationException,ConflictException,InternalServiceFault,InvalidParameterValueException,ResourceNotFoundException
+UntagResourceInput structure
+.ResourceARN AmazonResourceName
+.TagKeys TagKeyList
+UntagResourceOutput structure
+Values list m=DatapointValue
+WallClockWindow structure
+.Timezone Timezone
+WarmUpConfiguration structure
+.OnlyStartEvaluatingAfterWarmUpPeriodEnds OnlyStartEvaluatingAfterWarmUpPeriodEnds
+.WarmUpPeriodDurationInMinutes WarmUpPeriodDurationInMinutes
+WarmUpPeriodDurationInMinutes integer

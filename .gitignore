@@ -19,6 +19,10 @@ bin/
 # so it is not committed — the committed dist/.gitkeep beside it is what keeps
 # `//go:embed all:dist` resolving in a bare checkout. See AGENTS.md.
 internal/services/lambda/initbin/dist/lambda-init-linux-*
+# The compressed aws-sdk shape tables internal/awsshapes embeds, built from the
+# committed internal/awsshapes/tables by `make aws-sdk-shapes`. Build output, so
+# not committed; dist/.gitkeep keeps `//go:embed all:dist` resolving.
+internal/awsshapes/dist/*.gz
 
 # go test binaries (from `go test -c`) and profiler outputs
 *.test

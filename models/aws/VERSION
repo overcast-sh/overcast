@@ -3,7 +3,7 @@ revision=8153df4cc89b6e6f18f05e3403aa9f971c612525
 model-date=2026-09-04
 manifest-sha256=dd788e78cbaf4b101183f362e2098d0549b0e60752d4bbd4904f73086181a664
 shapes-sha256=223625ed828ed5d0193678c98a57bca1f851bd438b74a970d6a3c67cbfe48ef7
-sdk-shapes-sha256=5625acb1933691518aac56625d42c89ef532910e5323c2aa61e800ab963d97d2
+sdk-shapes-sha256=771bffdaa912ba17679c05acbe24e2a5d693cf260d48517bca2175b33e8b9936
 license=Apache-2.0
 format=Smithy JSON AST
 
@@ -19,8 +19,9 @@ format=Smithy JSON AST
 # only, never read at runtime — see cmd/awsmodelgen/README.md and
 # docs/plans/inert-tier-rollout.md §4.6.
 #
-# sdk-shapes-sha256 covers the generated tables in internal/awsshapes/ (every
-# *.gen.go there) with the same definition: reproduce it with
-# `cd internal/awsshapes && sha256sum -t *.gen.go | LC_ALL=C sort | sha256sum -t`.
-# Those tables are compiled in and decoded lazily for Step Functions' aws-sdk
-# integrations; models/aws/sdk-shapes-services.txt lists their services.
+# sdk-shapes-sha256 covers the generated tables in internal/awsshapes/ (its
+# index.gen.go and every tables/*.txt) with the same definition: reproduce it with
+# `cd internal/awsshapes && sha256sum -t index.gen.go tables/*.txt | LC_ALL=C sort | sha256sum -t`.
+# Those tables are packed into the binary by `make aws-sdk-shapes` and decoded
+# lazily for Step Functions' aws-sdk integrations; models/aws/sdk-shapes-services.txt
+# lists their services.
