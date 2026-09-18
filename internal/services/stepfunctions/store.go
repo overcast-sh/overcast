@@ -121,6 +121,10 @@ type Execution struct {
 	RedriveVariables string `json:"RedriveVariables,omitempty"`
 	// MapRunArn is set on a child execution a distributed Map started.
 	MapRunArn string `json:"MapRunArn,omitempty"`
+	// ExecutionType is set on such a child: its ItemProcessor's
+	// ProcessorConfig.ExecutionType. A redrive of the map run redrives a
+	// STANDARD child and starts an EXPRESS one again from the top.
+	ExecutionType string `json:"ExecutionType,omitempty"`
 	// StateMachineVersionArn and StateMachineAliasArn record the qualified
 	// ARN an execution was started through: the version that ran (directly,
 	// or the one an alias routed to) and the alias, if any. Both are empty

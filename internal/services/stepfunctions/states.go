@@ -348,7 +348,15 @@ func retryDelay(retrier aslRetrier, priorAttempts int) time.Duration {
 // The first branch to fail fails the whole state with the branch's own error
 // and cause — a Catch on the Parallel matches the name the branch raised — and
 // the other branches are stopped, recording their `<Type>StateAborted` events.
+//
+// On the first attempt after a redrive only the branches that did not
+// succeed run — each from the state it stopped in — and the others contribute
+// the output they recorded, as on AWS; they record no events.
 func (in *interpreter) runParallel(ctx context.Context, f *flow) (any, *stateError) {
+	resume := in.takeResume()
+	if resume != nil && len(resume.Branches) != len(f.state.Branches) {
+		resume = nil
+	}
 	input, serr := f.arguments()
 	if serr != nil {
 		return nil, serr
@@ -359,19 +367,29 @@ func (in *interpreter) runParallel(ctx context.Context, f *flow) (any, *stateErr
 	defer cancel(nil)
 
 	results := make([]any, len(f.state.Branches))
+	outcomes := make([]redriveChild, len(f.state.Branches))
 	var (
 		mu       sync.Mutex
 		firstErr *stateError
 		wg       sync.WaitGroup
 	)
 	for i, branch := range f.state.Branches {
+		if output, ok := resume.succeededOutput(i); ok {
+			results[i], outcomes[i] = output, resume.Branches[i]
+			continue
+		}
 		child := in.forkFor(f, startedID)
+		start, branchInput, resumed := child.resumeAt(resume.childPoint(i))
+		if !resumed {
+			start, branchInput = branch.StartAt, cloneJSON(input)
+		}
 		wg.Add(1)
 		go func(i int, branch *aslBranch) {
 			defer wg.Done()
 			output, serr := child.runChild(func() (any, *stateError) {
-				return child.runBranch(branchCtx, branch, cloneJSON(input))
+				return child.runBranchFrom(branchCtx, branch, start, branchInput)
 			})
+			outcomes[i] = childOutcome(child, output, serr)
 			if serr != nil {
 				mu.Lock()
 				if firstErr == nil && !serr.unwound {
@@ -386,6 +404,7 @@ func (in *interpreter) runParallel(ctx context.Context, f *flow) (any, *stateErr
 	}
 	wg.Wait()
 	in.rejoin()
+	in.container = &redriveContainer{state: f.name, branches: outcomes}
 
 	if ctx.Err() != nil {
 		return nil, in.unwindReason(ctx, f.name)
@@ -454,13 +473,19 @@ func (in *interpreter) runMap(ctx context.Context, f *flow) (any, *stateError) {
 		concurrency = defaultInlineMapConcurrency
 	}
 
+	resume := in.takeResume()
+	if resume != nil && len(resume.Branches) != len(items) {
+		resume = nil
+	}
+
 	startedID := in.record(HistoryEvent{
 		Type:            evtMapStateStarted,
 		MapStateStarted: &mapStateStartedDetails{Length: int64(len(items))},
 	})
 
-	results, firstErr := in.iterate(ctx, f, items, concurrency, startedID)
+	results, outcomes, firstErr := in.iterate(ctx, f, items, concurrency, startedID, resume)
 	in.rejoin()
+	in.container = &redriveContainer{state: f.name, branches: outcomes}
 
 	if ctx.Err() != nil {
 		return nil, in.unwindReason(ctx, f.name)
@@ -477,18 +502,35 @@ func (in *interpreter) runMap(ctx context.Context, f *flow) (any, *stateError) {
 // and returns the outputs in item order. The first iteration to fail stops
 // the rest: iterations already running record MapIterationAborted and
 // iterations not yet started never start.
-func (in *interpreter) iterate(ctx context.Context, f *flow, items []any, concurrency int, startedID int64) ([]any, *stateError) {
+//
+// After a redrive (resume set) an iteration that succeeded contributes its
+// recorded output without running or recording anything, and the others
+// resume at the state they stopped in, or start afresh if they never entered
+// one. It also returns each iteration's outcome, for the checkpoint.
+func (in *interpreter) iterate(ctx context.Context, f *flow, items []any, concurrency int, startedID int64, resume *redrivePoint) ([]any, []redriveChild, *stateError) {
 	iterCtx, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
 
 	results := make([]any, len(items))
+	outcomes := make([]redriveChild, len(items))
 	var (
 		mu       sync.Mutex
 		firstErr *stateError
 		wg       sync.WaitGroup
 	)
+	// Iterations that already succeeded are settled up front, so a failure
+	// that stops the launches below cannot drop them from the checkpoint.
+	done := make([]bool, len(items))
+	for index := range items {
+		if output, ok := resume.succeededOutput(index); ok {
+			results[index], outcomes[index], done[index] = output, resume.Branches[index], true
+		}
+	}
 	slots := make(chan struct{}, concurrency)
 	for index, item := range items {
+		if done[index] {
+			continue
+		}
 		select {
 		case slots <- struct{}{}:
 		case <-iterCtx.Done():
@@ -498,13 +540,15 @@ func (in *interpreter) iterate(ctx context.Context, f *flow, items []any, concur
 		}
 		child := in.forkFor(f, startedID)
 		child.mapItem = map[string]any{"Index": float64(index), "Value": item}
+		point := resume.childPoint(index)
 		wg.Add(1)
 		go func(index int, item any) {
 			defer wg.Done()
 			defer func() { <-slots }()
 			output, serr := child.runChild(func() (any, *stateError) {
-				return child.runIteration(iterCtx, f, index, item)
+				return child.runIteration(iterCtx, f, index, item, point)
 			})
+			outcomes[index] = childOutcome(child, output, serr)
 			if serr != nil {
 				mu.Lock()
 				if firstErr == nil && !serr.unwound {
@@ -518,19 +562,26 @@ func (in *interpreter) iterate(ctx context.Context, f *flow, items []any, concur
 		}(index, item)
 	}
 	wg.Wait()
-	return results, firstErr
+	return results, outcomes, firstErr
 }
 
 // runIteration runs one inline Map iteration on its own frame, recording the
-// MapIteration* events that attribute everything inside it to its index.
-func (in *interpreter) runIteration(ctx context.Context, f *flow, index int, item any) (any, *stateError) {
+// MapIteration* events that attribute everything inside it to its index. A
+// redriven iteration (point set) resumes at the state it stopped in.
+func (in *interpreter) runIteration(ctx context.Context, f *flow, index int, item any, point *redrivePoint) (any, *stateError) {
 	details := func() *mapIterationDetails { return &mapIterationDetails{Name: f.name, Index: int64(index)} }
 	in.record(HistoryEvent{Type: evtMapIterationStarted, MapIterationStarted: details()})
 
-	input, serr := in.iterationInput(f, item)
+	processor := f.state.processor()
+	start, input, resumed := in.resumeAt(point)
+	var serr *stateError
+	if !resumed {
+		start = processor.StartAt
+		input, serr = in.iterationInput(f, item)
+	}
 	if serr == nil {
 		var output any
-		output, serr = in.runBranch(ctx, f.state.processor(), input)
+		output, serr = in.runBranchFrom(ctx, processor, start, input)
 		if serr == nil {
 			in.record(HistoryEvent{Type: evtMapIterationSucceeded, MapIterationSucceeded: details()})
 			return output, nil

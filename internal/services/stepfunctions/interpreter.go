@@ -130,7 +130,7 @@ type interpreter struct {
 	// mapItem is $$.Map.Item inside a Map iteration, nil elsewhere.
 	mapItem map[string]any
 	// topLevel is true only for the frame running the definition's own
-	// States, which is the only frame a redrive can resume in.
+	// States, whose redrive point is also recorded on the Execution.
 	topLevel bool
 	// queryLanguage is what this frame's states default to.
 	queryLanguage string
@@ -138,6 +138,15 @@ type interpreter struct {
 	vars *varScope
 	// testState is set when TestState is running a single state.
 	testState *testStateRun
+
+	// Redrive bookkeeping (redrive_checkpoint.go). point is where this frame
+	// stopped without succeeding; container is what the Parallel or Map it
+	// ran last left behind; resume is where a redrive resumes this frame, and
+	// resumeContainer the inside of the Parallel or Map it resumes at.
+	point           *redrivePoint
+	container       *redriveContainer
+	resume          *redrivePoint
+	resumeContainer *redrivePoint
 }
 
 // fork returns a frame for a Parallel branch or Map iteration whose first
@@ -148,6 +157,7 @@ func (in *interpreter) fork(after int64) *interpreter {
 	child.cursor = &cursor
 	child.topLevel = false
 	child.vars = newVarScope(in.vars)
+	child.point, child.container, child.resume, child.resumeContainer = nil, nil, nil, nil
 	return &child
 }
 
@@ -226,13 +236,11 @@ func (h *Handler) runExecution(ctx context.Context, sm *StateMachine, exec *Exec
 	if in.queryLanguage == "" {
 		in.queryLanguage = run.queryLanguage
 	}
-	if run.resumeState != "" {
-		in.vars = restoreVarScope(run.resumeVariables)
-	}
-
 	start, rawInput := def.StartAt, exec.Input
-	if run.resumeState != "" {
-		start, rawInput = run.resumeState, run.resumeInput
+	if r := run.resume; r != nil {
+		start, rawInput = r.State, r.Input
+		in.vars = restoreVarScope(r.Variables)
+		in.resume = r
 	}
 	input, err := decodeExecutionInput(rawInput)
 	if err != nil {
@@ -240,6 +248,7 @@ func (h *Handler) runExecution(ctx context.Context, sm *StateMachine, exec *Exec
 	}
 
 	output, serr := in.runBranchFrom(runCtx, def, start, input)
+	run.checkpoint = in.point
 	if serr != nil {
 		return in.finish(statusForError(serr), "", serr)
 	}
@@ -365,15 +374,10 @@ func (in *interpreter) stateContext(name string, entered time.Time, retryCount i
 
 // ─── Branch execution ─────────────────────────────────────────────────────────
 
-// runBranch interprets one state machine body from its StartAt state until a
-// state ends the branch. It is used for the top-level definition, for every
-// Parallel branch and for every Map iteration.
-func (in *interpreter) runBranch(ctx context.Context, branch *aslBranch, input any) (any, *stateError) {
-	return in.runBranchFrom(ctx, branch, branch.StartAt, input)
-}
-
-// runBranchFrom is runBranch starting at a named state — which is how a
-// redriven execution resumes at the state that failed.
+// runBranchFrom interprets one state machine body from the named state until
+// a state ends the branch. It is used for the top-level definition, for every
+// Parallel branch and for every Map iteration — normally from its StartAt,
+// and on a redrive from the state it stopped in.
 func (in *interpreter) runBranchFrom(ctx context.Context, branch *aslBranch, start string, input any) (any, *stateError) {
 	current := start
 	data := input
@@ -433,9 +437,10 @@ func (in *interpreter) unwindReason(ctx context.Context, state string) *stateErr
 // the branch ends here (End: true, or a Succeed state).
 func (in *interpreter) runState(ctx context.Context, name string, state *aslState, raw any) (any, string, bool, *stateError) {
 	entered := in.handler.clk.Now()
+	in.beginState(name)
 	f, serr := in.newFlow(name, state, raw, in.stateContext(name, entered, 0))
 	if serr != nil {
-		in.noteFailure(name, raw)
+		in.noteFailure(name, raw, serr)
 		return nil, "", false, serr
 	}
 
@@ -459,7 +464,7 @@ func (in *interpreter) runState(ctx context.Context, name string, state *aslStat
 		}
 	}
 	if serr != nil {
-		in.noteFailure(name, raw)
+		in.noteFailure(name, raw, serr)
 	}
 	return output, next, done, serr
 }
@@ -483,22 +488,6 @@ func (in *interpreter) dispatchState(ctx context.Context, f *flow) (any, string,
 	// parseDefinition rejects unknown state types, so this is unreachable in
 	// practice; keeping it loud rather than falling through is the point.
 	return nil, "", false, unsupportedError("state type %q", f.state.Type)
-}
-
-// noteFailure remembers the top-level state the run ended in without
-// succeeding — failed, timed out or stopped — and the raw input it was
-// entered with, so RedriveExecution can resume there. Only the top-level frame
-// records it: a failing Parallel branch or Map iteration is redriven by
-// re-running the Parallel or Map state that contains it.
-func (in *interpreter) noteFailure(name string, raw any) {
-	if in.run == nil || !in.topLevel {
-		return
-	}
-	encoded, err := encodeJSON(raw)
-	if err != nil {
-		return
-	}
-	in.run.noteFailure(name, encoded, in.vars.snapshot())
 }
 
 // recordExit emits the `<Type>StateExited` event for a state.

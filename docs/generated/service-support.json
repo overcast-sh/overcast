@@ -7321,7 +7321,7 @@
           "operation": "RedriveExecution",
           "category": "Executions",
           "status": "✅ Supported",
-          "notes": "Standard executions that FAILED, TIMED_OUT or were ABORTED within 14 days; resumes at the top-level state that did not succeed, with the input and variables it was entered with; history continues after ExecutionRedriven"
+          "notes": "Standard executions that FAILED, TIMED_OUT or were ABORTED within 14 days; resumes at the state that did not succeed, and inside a Parallel or Map re-runs only the branches, iterations or map-run children that did not succeed; history continues after ExecutionRedriven"
         },
         {
           "operation": "TestState",
@@ -7338,7 +7338,7 @@
           "operation": "DescribeMapRun",
           "category": "Map runs",
           "status": "✅ Supported",
-          "notes": "Live item and child-execution counts while the run is in progress"
+          "notes": "Live item and child-execution counts while the run is in progress; redriveCount and redriveDate once the parent is redriven"
         },
         {
           "operation": "UpdateMapRun",

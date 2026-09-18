@@ -40,12 +40,17 @@ type executionRun struct {
 	failedInput     string
 	failedVariables string
 
-	// resumeState and resumeInput, when set, make the interpreter start at
-	// that top-level state with that raw input instead of at StartAt — a
-	// redrive.
-	resumeState     string
-	resumeInput     string
-	resumeVariables string
+	// resume, when set, makes the interpreter start at that top-level state
+	// with that raw input and those variables instead of at StartAt, and
+	// resume inside the Parallel or Map there — a redrive
+	// (redrive_checkpoint.go).
+	resume *redrivePoint
+	// checkpoint is where the top-level frame stopped without succeeding,
+	// with everything below it; persistOutcome stores it.
+	checkpoint *redrivePoint
+	// restarted marks a distributed Map's EXPRESS child being started again
+	// from the top under its old ARN, so any checkpoint it left is cleared.
+	restarted bool
 
 	// queryLanguage is the default query language when the definition run
 	// does not name one: a distributed Map child inherits its Map state's.

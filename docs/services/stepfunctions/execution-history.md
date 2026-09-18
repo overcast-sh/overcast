@@ -32,7 +32,7 @@ Between entry and exit a state records its own work:
 | Activity     | `ActivityScheduled`, `ActivityStarted` (`workerName`), then `ActivitySucceeded`, `…Failed` or `…TimedOut` |
 | Parallel     | `ParallelStateStarted`, the branches' events, `ParallelStateSucceeded` or `ParallelStateFailed`     |
 | Inline Map   | `MapStateStarted` (`length`), the iterations' events, `MapStateSucceeded` or `MapStateFailed`       |
-| Distributed Map | `MapStateStarted`, `MapRunStarted` (`mapRunArn`), `MapRunSucceeded` or `MapRunFailed`, then `MapStateSucceeded` or `MapStateFailed` |
+| Distributed Map | `MapStateStarted`, `MapRunStarted` (`mapRunArn`) — or `MapRunRedriven` on a redrive — `MapRunSucceeded` or `MapRunFailed`, then `MapStateSucceeded` or `MapStateFailed` |
 
 A retried Task repeats its scheduled-to-failed events inside one entered/exited
 pair. A JSONata expression that fails records `EvaluationFailed` with the
@@ -86,6 +86,43 @@ id  type                   previousEventId  details
 A distributed Map runs each item (or batch) as a child execution with its own
 history. The parent records only the map run; list the children with
 `ListExecutions` and the `mapRunArn` from `MapRunStarted`.
+
+## Redriven executions
+
+`RedriveExecution` appends to the history rather than starting a new one. It
+records `ExecutionRedriven` (`executionRedrivenEventDetails.redriveCount`),
+linked to the run's terminal event, and the state the run stopped in is
+entered again with `<Type>StateEntered` linked to `ExecutionRedriven`. States
+that had succeeded record nothing more.
+
+When that state is a Parallel or an inline Map, it records its
+`ParallelStateStarted` or `MapStateStarted` (with the full `length`) again,
+and then only the branches and iterations that had not succeeded record
+events: each one's first event is the state it stopped in, entered again, and
+a redriven iteration opens with `MapIterationStarted` carrying its original
+`index`. The rest contribute their earlier output silently. The same applies
+inside them, so a Parallel in a Map iteration resumes only its failed branch.
+
+```text
+id  type                    previousEventId  details
+9   ExecutionFailed         8
+10  ExecutionRedriven       9                redriveCount: 1
+11  ParallelStateEntered    10               name: Fan
+12  ParallelStateStarted    11
+13  TaskStateEntered        12               name: Gate   (branch 1 only)
+…
+17  ParallelStateSucceeded  16
+18  ParallelStateExited     17               name: Fan
+```
+
+A distributed Map redrives its map run instead of starting another:
+`MapStateStarted` is followed by `MapRunRedriven`
+(`mapRunRedrivenEventDetails` `{"mapRunArn", "redriveCount"}`) where a first
+run records `MapRunStarted`. In the map run, a `STANDARD` child that failed,
+timed out or was aborted is redriven under its own ARN — its own history gains
+an `ExecutionRedriven` — and an `EXPRESS` child is started again from its first
+state under the same ARN with a fresh history. Children that succeeded are
+left as they were.
 
 ## Related
 

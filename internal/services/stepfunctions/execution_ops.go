@@ -197,10 +197,14 @@ func (h *Handler) persistOutcome(ctx context.Context, exec *Execution, run *exec
 		exec.Cause = outcome.err.cause
 	}
 	// Where a redrive would resume. Cleared on success, so only an
-	// unsuccessful run is redrivable.
+	// unsuccessful run is redrivable. What happened inside a Parallel or Map
+	// there is stored beside it (saveCheckpoint).
 	exec.RedriveState, exec.RedriveInput, exec.RedriveVariables = "", "", ""
 	if outcome.status != statusSucceeded {
 		exec.RedriveState, exec.RedriveInput, exec.RedriveVariables = run.failurePoint()
+	}
+	if err := h.saveCheckpoint(ctx, exec, run, outcome.status == statusSucceeded); err != nil {
+		return err
 	}
 	if err := h.store.PutHistory(ctx, exec.ExecutionArn, outcome.events); err != nil {
 		return err
@@ -389,7 +393,7 @@ func (h *Handler) describeExecutionTyped(ctx context.Context, req *describeExecu
 	if err != nil {
 		return nil, protocol.Wrap(protocol.ErrInternalError, err)
 	}
-	resp.RedriveStatus, resp.RedriveStatusReason = h.redriveStatus(exec, sm)
+	resp.RedriveStatus, resp.RedriveStatusReason = h.redriveStatus(ctx, exec, sm)
 	return resp, nil
 }
 

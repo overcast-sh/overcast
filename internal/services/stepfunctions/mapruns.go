@@ -49,6 +49,10 @@ type MapRun struct {
 	ToleratedFailureCount      int64        `json:"ToleratedFailureCount"`
 	ItemCounts                 mapRunCounts `json:"ItemCounts"`
 	ExecutionCounts            mapRunCounts `json:"ExecutionCounts"`
+	// RedriveCount and RedriveDate record redrives of the map run, which
+	// happen when its parent execution is redriven (redriveMapRun).
+	RedriveCount int        `json:"RedriveCount,omitempty"`
+	RedriveDate  *time.Time `json:"RedriveDate,omitempty"`
 }
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -267,6 +271,7 @@ type describeMapRunResponse struct {
 	ItemCounts                 mapRunCounts `json:"itemCounts" cbor:"itemCounts"`
 	ExecutionCounts            mapRunCounts `json:"executionCounts" cbor:"executionCounts"`
 	RedriveCount               int          `json:"redriveCount" cbor:"redriveCount"`
+	RedriveDate                float64      `json:"redriveDate,omitempty" cbor:"redriveDate,omitempty"`
 }
 
 func (h *Handler) describeMapRunTyped(ctx context.Context, req *mapRunArnRequest) (*describeMapRunResponse, *protocol.AWSError) {
@@ -284,9 +289,13 @@ func (h *Handler) describeMapRunTyped(ctx context.Context, req *mapRunArnRequest
 		ToleratedFailureCount:      run.ToleratedFailureCount,
 		ItemCounts:                 run.ItemCounts,
 		ExecutionCounts:            run.ExecutionCounts,
+		RedriveCount:               run.RedriveCount,
 	}
 	if run.StopDate != nil {
 		resp.StopDate = epochSeconds(*run.StopDate)
+	}
+	if run.RedriveDate != nil {
+		resp.RedriveDate = epochSeconds(*run.RedriveDate)
 	}
 	return resp, nil
 }

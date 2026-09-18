@@ -55,18 +55,26 @@ AWS rejects it when the state machine is created.
 | `ItemReader` input types  | JSON, JSONL, CSV, S3 inventory manifests, Parquet | JSON, JSONL, CSV, and S3 listings     |
 | Distributed concurrency   | Up to 10,000 child executions            | Up to 1,000 at once                           |
 | Child execution type      | `EXPRESS` children keep no history       | Both types keep a history, so they can be read |
-| Map run redrive           | Redrives failed children                 | A redrive re-runs the whole Map state         |
+| Children awaiting a map run redrive | Report `PENDING_REDRIVE`       | Keep their last status until relaunched; the map run's `pendingRedrive` counts them |
 
 ## Executions
 
 | Area                       | On AWS                                            | Overcast                                                   |
 | -------------------------- | ------------------------------------------------- | ---------------------------------------------------------- |
 | Express executions         | No `DescribeExecution`, history in CloudWatch Logs | Described, listed and recorded like Standard executions   |
-| Redrive of Parallel / Map  | Re-runs only the branches or iterations that failed | Re-runs the whole Parallel or Map state                  |
 | Task tokens                | Survive for a year                                | Live as long as the execution's process                    |
 | Definition an execution ran | Kept with the execution                          | Kept for a version; an unversioned execution reports and redrives the current definition |
 | Logging and tracing        | Delivered to CloudWatch Logs and X-Ray             | Configuration is stored and echoed, nothing is delivered   |
 | `TestState` inspection     | `TRACE` adds the HTTP request and response        | `TRACE` reports what `DEBUG` does                          |
+
+A redrive resumes inside a failed Parallel or Map as AWS does: branches and
+iterations that succeeded keep their outputs and are not run again, and the
+rest resume at the state they stopped in. An inline Map works out its items
+again from the input it was entered with; if they now number differently —
+an `Items` expression using `$random` or `$uuid`, say — the whole Map runs
+again. A distributed Map's child executions are redriven by redriving the
+parent; `RedriveExecution` on a child itself is refused with
+`ExecutionNotRedrivable`.
 
 ## Versions, aliases and validation
 

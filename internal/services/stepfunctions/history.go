@@ -56,6 +56,7 @@ const (
 	evtMapRunStarted   = "MapRunStarted"
 	evtMapRunSucceeded = "MapRunSucceeded"
 	evtMapRunFailed    = "MapRunFailed"
+	evtMapRunRedriven  = "MapRunRedriven"
 )
 
 // stateAbortedEventType returns the `<Type>StateAborted` event AWS records
@@ -191,6 +192,11 @@ type mapRunStartedDetails struct {
 	MapRunArn string `json:"mapRunArn" cbor:"mapRunArn"`
 }
 
+type mapRunRedrivenDetails struct {
+	MapRunArn    string `json:"mapRunArn" cbor:"mapRunArn"`
+	RedriveCount int    `json:"redriveCount" cbor:"redriveCount"`
+}
+
 type mapIterationDetails struct {
 	Name  string `json:"name,omitempty" cbor:"name,omitempty"`
 	Index int64  `json:"index" cbor:"index"`
@@ -241,11 +247,12 @@ type HistoryEvent struct {
 
 	MapStateStarted *mapStateStartedDetails `json:"mapStateStartedEventDetails,omitempty" cbor:"mapStateStartedEventDetails,omitempty"`
 
-	MapIterationStarted   *mapIterationDetails  `json:"mapIterationStartedEventDetails,omitempty" cbor:"mapIterationStartedEventDetails,omitempty"`
-	MapIterationSucceeded *mapIterationDetails  `json:"mapIterationSucceededEventDetails,omitempty" cbor:"mapIterationSucceededEventDetails,omitempty"`
-	MapIterationFailed    *mapIterationDetails  `json:"mapIterationFailedEventDetails,omitempty" cbor:"mapIterationFailedEventDetails,omitempty"`
-	MapRunStarted         *mapRunStartedDetails `json:"mapRunStartedEventDetails,omitempty" cbor:"mapRunStartedEventDetails,omitempty"`
-	MapRunFailed          *errorCauseDetails    `json:"mapRunFailedEventDetails,omitempty" cbor:"mapRunFailedEventDetails,omitempty"`
+	MapIterationStarted   *mapIterationDetails   `json:"mapIterationStartedEventDetails,omitempty" cbor:"mapIterationStartedEventDetails,omitempty"`
+	MapIterationSucceeded *mapIterationDetails   `json:"mapIterationSucceededEventDetails,omitempty" cbor:"mapIterationSucceededEventDetails,omitempty"`
+	MapIterationFailed    *mapIterationDetails   `json:"mapIterationFailedEventDetails,omitempty" cbor:"mapIterationFailedEventDetails,omitempty"`
+	MapRunStarted         *mapRunStartedDetails  `json:"mapRunStartedEventDetails,omitempty" cbor:"mapRunStartedEventDetails,omitempty"`
+	MapRunFailed          *errorCauseDetails     `json:"mapRunFailedEventDetails,omitempty" cbor:"mapRunFailedEventDetails,omitempty"`
+	MapRunRedriven        *mapRunRedrivenDetails `json:"mapRunRedrivenEventDetails,omitempty" cbor:"mapRunRedrivenEventDetails,omitempty"`
 
 	MapIterationAborted *mapIterationDetails `json:"mapIterationAbortedEventDetails,omitempty" cbor:"mapIterationAbortedEventDetails,omitempty"`
 }

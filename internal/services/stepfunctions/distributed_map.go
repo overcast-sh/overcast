@@ -21,7 +21,8 @@ import (
 // run as a whole is a map run that ListMapRuns / DescribeMapRun report and
 // UpdateMapRun adjusts. The parent's history records MapRunStarted and
 // MapRunSucceeded/MapRunFailed rather than the children's events — as on AWS,
-// where a reader follows the mapRunArn to the children.
+// where a reader follows the mapRunArn to the children. Redriving the parent
+// redrives the map run (redriveMapRun), which records MapRunRedriven instead.
 //
 // Items come from ItemsPath or from an ItemReader over S3 (a JSON, JSON Lines
 // or CSV object, or a ListObjectsV2 listing); ItemBatcher groups them;
@@ -76,9 +77,33 @@ type childResult struct {
 	items  int
 }
 
-// runDistributedMap runs a Map in DISTRIBUTED mode.
+// childPlan is what a map run does with one input. A fresh run starts a new
+// child for every input; a redrive keeps the children that succeeded (and
+// those it cannot redrive), redrives or re-starts the rest, and starts the
+// children that never ran.
+type childPlan struct {
+	// input is a new child's input.
+	input any
+	// existing is the child a redrive runs again: redriven from where it
+	// stopped, or — restart set, for an EXPRESS child — started again from
+	// the top under the same ARN.
+	existing *Execution
+	restart  bool
+	// keep leaves the child's earlier outcome as it is.
+	keep  bool
+	items int
+}
+
+// runDistributedMap runs a Map in DISTRIBUTED mode. On the first attempt
+// after a redrive whose checkpoint names the map run, the map run is
+// redriven instead of a new one started.
 func (in *interpreter) runDistributedMap(ctx context.Context, f *flow) (any, *stateError) {
-	name, state := f.name, f.state
+	if resume := in.takeResume(); resume != nil && resume.MapRun != nil {
+		if output, serr, redriven := in.redriveMapRun(ctx, f, resume.MapRun); redriven {
+			return output, serr
+		}
+	}
+	state := f.state
 	items, serr := in.readItems(ctx, f)
 	if serr != nil {
 		return nil, serr
@@ -96,10 +121,7 @@ func (in *interpreter) runDistributedMap(ctx context.Context, f *flow) (any, *st
 		return nil, serr
 	}
 
-	label := state.Label
-	if label == "" {
-		label = name
-	}
+	label := mapRunLabel(f)
 	runID := uuid.NewString()
 	record := MapRun{
 		MapRunArn:                  mapRunARN(in.exec.ExecutionArn, label, runID),
@@ -117,8 +139,7 @@ func (in *interpreter) runDistributedMap(ctx context.Context, f *flow) (any, *st
 	live.countSet, live.percentageSet = tolerance.countSet, tolerance.percentageSet
 	in.handler.registerMapRun(live)
 	defer in.handler.releaseMapRun(record.MapRunArn)
-	persistCtx := context.WithoutCancel(ctx)
-	_ = in.handler.store.putMapRun(persistCtx, &record)
+	_ = in.handler.store.putMapRun(context.WithoutCancel(ctx), &record)
 
 	in.record(HistoryEvent{
 		Type:            evtMapStateStarted,
@@ -126,7 +147,154 @@ func (in *interpreter) runDistributedMap(ctx context.Context, f *flow) (any, *st
 	})
 	in.record(HistoryEvent{Type: evtMapRunStarted, MapRunStarted: &mapRunStartedDetails{MapRunArn: record.MapRunArn}})
 
-	results, exceeded := in.runChildren(ctx, live, state.processor(), label, inputs, itemsPer, f.jsonata)
+	plans := make([]childPlan, len(inputs))
+	for i, input := range inputs {
+		plans[i] = childPlan{input: input, items: itemsPer[i]}
+	}
+	return in.driveMapRun(ctx, f, live, runID, label, plans, make([]childResult, len(plans)))
+}
+
+// mapRunLabel is the Map's Label, or its state name.
+func mapRunLabel(f *flow) string {
+	if f.state.Label != "" {
+		return f.state.Label
+	}
+	return f.name
+}
+
+// redriveMapRun redrives the map run a failed distributed Map left behind,
+// as AWS does when its parent execution is redriven: the same map run (and
+// ARN) runs again, its redrive count advanced and a MapRunRedriven event
+// recorded where a fresh run records MapRunStarted. Children that succeeded
+// keep their output; a STANDARD child that failed, timed out or was aborted
+// is redriven under its own ARN, from the state it stopped in; an EXPRESS
+// child is started again from the top under its old ARN; children that
+// never started start with the input they would have had. A STANDARD child
+// that can no longer be redriven keeps its failure and is counted in
+// failuresNotRedrivable.
+//
+// redriven is false when the checkpoint cannot be followed — the map run
+// record or a child is gone — and the caller then starts a new map run, which
+// is also what AWS does for a map run that never started.
+func (in *interpreter) redriveMapRun(ctx context.Context, f *flow, cp *redriveMapRun) (output any, serr *stateError, redriven bool) {
+	h := in.handler
+	persistCtx := context.WithoutCancel(ctx)
+	record, err := h.store.getMapRun(persistCtx, cp.MapRunArn)
+	if err != nil || record == nil || len(cp.Children) != len(cp.ItemsPer) {
+		return nil, nil, false
+	}
+	if record.RedriveCount >= maxMapRunRedrives {
+		return nil, newStateError(errRuntime, "the Map Run %s has been redriven %d times, the maximum", cp.MapRunArn, maxMapRunRedrives), true
+	}
+	express := strings.EqualFold(processorConfig(f.state.processor()).ExecutionType, "EXPRESS")
+
+	now := h.clk.Now()
+	record.Status = statusRunning
+	record.StopDate = nil
+	record.RedriveCount++
+	record.RedriveDate = &now
+	for _, counts := range []*mapRunCounts{&record.ExecutionCounts, &record.ItemCounts} {
+		counts.PendingRedrive, counts.FailuresNotRedrivable, counts.ResultsWritten = 0, 0, 0
+	}
+	plans := make([]childPlan, len(cp.Children))
+	results := make([]childResult, len(cp.Children))
+	for i, arn := range cp.Children {
+		items := cp.ItemsPer[i]
+		plans[i].items = items
+		if arn == "" {
+			raw, ok := cp.Pending[i]
+			if !ok {
+				return nil, nil, false
+			}
+			input, err := decodeExecutionInput(raw)
+			if err != nil {
+				return nil, nil, false
+			}
+			plans[i].input = input
+			continue
+		}
+		child, err := h.store.GetExecution(persistCtx, arn)
+		if err != nil || child == nil {
+			return nil, nil, false
+		}
+		switch {
+		case child.Status == statusSucceeded:
+			plans[i].keep = true
+			results[i] = succeededChild(child, items)
+			continue
+		case express:
+			plans[i].existing, plans[i].restart = child, true
+		default:
+			if status, _ := h.redriveStatus(persistCtx, child, nil); status != redriveStatusRedrivable {
+				plans[i].keep = true
+				results[i] = childResult{exec: child, items: items}
+				record.ExecutionCounts.FailuresNotRedrivable++
+				record.ItemCounts.FailuresNotRedrivable += int64(items)
+				continue
+			}
+			plans[i].existing = child
+		}
+		// A child about to run again leaves its terminal count for
+		// pendingRedrive until it is launched.
+		*record.ExecutionCounts.bucket(child.Status)--
+		*record.ItemCounts.bucket(child.Status) -= int64(items)
+		record.ExecutionCounts.PendingRedrive++
+		record.ItemCounts.PendingRedrive += int64(items)
+	}
+
+	tolerance, _ := resolveTolerance(f)
+	live := newLiveMapRun(*record)
+	live.countSet = tolerance.countSet || record.ToleratedFailureCount > 0
+	live.percentageSet = tolerance.percentageSet || record.ToleratedFailurePercentage > 0
+	h.registerMapRun(live)
+	defer h.releaseMapRun(record.MapRunArn)
+	_ = h.store.putMapRun(persistCtx, record)
+
+	in.record(HistoryEvent{
+		Type:            evtMapStateStarted,
+		MapStateStarted: &mapStateStartedDetails{Length: record.ItemCounts.Total},
+	})
+	in.record(HistoryEvent{
+		Type:           evtMapRunRedriven,
+		MapRunRedriven: &mapRunRedrivenDetails{MapRunArn: record.MapRunArn, RedriveCount: record.RedriveCount},
+	})
+	runID := record.MapRunArn[strings.LastIndex(record.MapRunArn, ":")+1:]
+	output, serr = in.driveMapRun(ctx, f, live, runID, mapRunLabel(f), plans, results)
+	return output, serr, true
+}
+
+// succeededChild is the result of a child that already succeeded.
+func succeededChild(exec *Execution, items int) childResult {
+	result := childResult{exec: exec, items: items}
+	if exec.Output != "" {
+		_ = json.Unmarshal([]byte(exec.Output), &result.output)
+	}
+	return result
+}
+
+// bucket returns the count a child execution with this terminal status is
+// counted in.
+func (c *mapRunCounts) bucket(status string) *int64 {
+	switch status {
+	case statusSucceeded:
+		return &c.Succeeded
+	case statusTimedOut:
+		return &c.TimedOut
+	case statusAborted:
+		return &c.Aborted
+	default:
+		return &c.Failed
+	}
+}
+
+// driveMapRun runs a map run's children to the end, writes its results and
+// records how it ended — the part a fresh run and a redrive share. It leaves
+// the run's checkpoint on the frame, for a redrive should the Map fail.
+func (in *interpreter) driveMapRun(ctx context.Context, f *flow, live *liveMapRun, runID, label string, plans []childPlan, results []childResult) (any, *stateError) {
+	name, state := f.name, f.state
+	persistCtx := context.WithoutCancel(ctx)
+
+	exceeded := in.runChildren(ctx, live, state.processor(), label, plans, results, f.jsonata)
 
 	final := live.update(func(run *MapRun) {
 		stopped := in.handler.clk.Now()
@@ -140,6 +308,7 @@ func (in *interpreter) runDistributedMap(ctx context.Context, f *flow) (any, *st
 			run.Status = statusSucceeded
 		}
 	})
+	in.container = &redriveContainer{state: name, mapRun: mapRunCheckpoint(final.MapRunArn, plans, results)}
 
 	var output any
 	var writeErr *stateError
@@ -173,27 +342,57 @@ func (in *interpreter) runDistributedMap(ctx context.Context, f *flow) (any, *st
 	return output, nil
 }
 
+// mapRunCheckpoint records which child ran each input, and the inputs of the
+// children that never started.
+func mapRunCheckpoint(mapRunArn string, plans []childPlan, results []childResult) *redriveMapRun {
+	cp := &redriveMapRun{MapRunArn: mapRunArn, Children: make([]string, len(plans)), ItemsPer: make([]int, len(plans))}
+	for i, plan := range plans {
+		cp.ItemsPer[i] = plan.items
+		if exec := results[i].exec; exec != nil {
+			cp.Children[i] = exec.ExecutionArn
+			continue
+		}
+		encoded, err := encodeJSON(plan.input)
+		if err != nil {
+			continue
+		}
+		if cp.Pending == nil {
+			cp.Pending = map[int]string{}
+		}
+		cp.Pending[i] = encoded
+	}
+	return cp
+}
+
 // recordCopy returns the current record.
 func (l *liveMapRun) recordCopy() MapRun {
 	record, _ := l.snapshot()
 	return record
 }
 
-// runChildren starts one child execution per input under the run's live
-// concurrency limit and failure tolerance, and waits for them all. It reports
-// whether the tolerance was exceeded, which also stops the children still
-// running and leaves the rest unstarted.
-func (in *interpreter) runChildren(ctx context.Context, live *liveMapRun, processor *aslBranch, label string, inputs []any, itemsPer []int, jsonataMode bool) ([]childResult, bool) {
+// runChildren runs the children plans call for under the run's live
+// concurrency limit and failure tolerance, and waits for them all. results
+// arrives holding the outcome of the children plans keep, and leaves holding
+// every child's. It reports whether the tolerance was exceeded, which also
+// stops the children still running and leaves the rest unstarted.
+func (in *interpreter) runChildren(ctx context.Context, live *liveMapRun, processor *aslBranch, label string, plans []childPlan, results []childResult, jsonataMode bool) bool {
 	childCtx, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
-	results := make([]childResult, len(inputs))
 	var (
 		wg       sync.WaitGroup
 		mu       sync.Mutex
 		exceeded bool
 	)
+	// Failures a redrive keeps can already be past the tolerance.
+	if live.toleranceExceeded(live.recordCopy()) {
+		exceeded = true
+		cancel(errToleranceExceeded)
+	}
 launch:
-	for i, input := range inputs {
+	for i, plan := range plans {
+		if plan.keep {
+			continue
+		}
 		for {
 			record, changed := live.snapshot()
 			limit := record.MaxConcurrency
@@ -212,36 +411,29 @@ launch:
 		if childCtx.Err() != nil {
 			break
 		}
+		n := int64(plan.items)
 		live.update(func(run *MapRun) {
-			run.ExecutionCounts.Pending--
+			if plan.existing != nil {
+				run.ExecutionCounts.PendingRedrive--
+				run.ItemCounts.PendingRedrive -= n
+			} else {
+				run.ExecutionCounts.Pending--
+				run.ItemCounts.Pending -= n
+			}
 			run.ExecutionCounts.Running++
-			run.ItemCounts.Pending -= int64(itemsPer[i])
-			run.ItemCounts.Running += int64(itemsPer[i])
+			run.ItemCounts.Running += n
 		})
 		wg.Add(1)
-		go func(i int, input any) {
+		go func(i int, plan childPlan) {
 			defer wg.Done()
-			result := in.runChildExecution(childCtx, processor, live.recordCopy().MapRunArn, label, input, jsonataMode)
-			result.items = itemsPer[i]
+			result := in.runChildExecution(childCtx, processor, live.recordCopy().MapRunArn, label, plan, jsonataMode)
+			result.items = plan.items
 			results[i] = result
 			record := live.update(func(run *MapRun) {
-				n := int64(result.items)
 				run.ExecutionCounts.Running--
 				run.ItemCounts.Running -= n
-				switch result.exec.Status {
-				case statusSucceeded:
-					run.ExecutionCounts.Succeeded++
-					run.ItemCounts.Succeeded += n
-				case statusTimedOut:
-					run.ExecutionCounts.TimedOut++
-					run.ItemCounts.TimedOut += n
-				case statusAborted:
-					run.ExecutionCounts.Aborted++
-					run.ItemCounts.Aborted += n
-				default:
-					run.ExecutionCounts.Failed++
-					run.ItemCounts.Failed += n
-				}
+				*run.ExecutionCounts.bucket(result.exec.Status)++
+				*run.ItemCounts.bucket(result.exec.Status) += n
 			})
 			if live.toleranceExceeded(record) {
 				mu.Lock()
@@ -249,10 +441,25 @@ launch:
 				mu.Unlock()
 				cancel(errToleranceExceeded)
 			}
-		}(i, input)
+		}(i, plan)
 	}
 	wg.Wait()
-	return results, exceeded
+	// A child the redrive meant to run again but never launched keeps its
+	// earlier outcome; pendingRedrive ends at zero, as on AWS.
+	for i, plan := range plans {
+		if plan.existing == nil || results[i].exec != nil {
+			continue
+		}
+		results[i] = childResult{exec: plan.existing, items: plan.items}
+		n := int64(plan.items)
+		live.update(func(run *MapRun) {
+			run.ExecutionCounts.PendingRedrive--
+			run.ItemCounts.PendingRedrive -= n
+			*run.ExecutionCounts.bucket(plan.existing.Status)++
+			*run.ItemCounts.bucket(plan.existing.Status) += n
+		})
+	}
+	return exceeded
 }
 
 // toleranceExceeded applies ToleratedFailureCount and ToleratedFailurePercentage
@@ -278,34 +485,68 @@ func (l *liveMapRun) toleranceExceeded(record MapRun) bool {
 }
 
 // runChildExecution runs one child workflow execution of a map run to
-// completion and persists it with its own history.
-func (in *interpreter) runChildExecution(ctx context.Context, processor *aslBranch, mapRunArn, label string, input any, jsonataMode bool) childResult {
+// completion and persists it with its own history: a new child, or on a
+// redrive an existing one — redriven (STANDARD), its history continuing after
+// ExecutionRedriven, or started again from the top (EXPRESS) with a fresh
+// history under the same ARN.
+func (in *interpreter) runChildExecution(ctx context.Context, processor *aslBranch, mapRunArn, label string, plan childPlan, jsonataMode bool) childResult {
 	h := in.handler
-	name := uuid.NewString()
-	inputJSON, _ := encodeJSON(input)
-	started := h.clk.Now()
+	persistCtx := context.WithoutCancel(ctx)
 	childSM := *in.sm
 	childSM.ARN = in.sm.ARN + "/" + label
 	childSM.Name = in.sm.Name + "/" + label
-	exec := &Execution{
-		ExecutionArn:    mapRunChildARN(mapRunArn, name),
-		StateMachineArn: childSM.ARN,
-		Name:            name,
-		Input:           inputJSON,
-		Status:          statusRunning,
-		StartDate:       started,
-		MapRunArn:       mapRunArn,
+	executionType := strings.ToUpper(processorConfig(processor).ExecutionType)
+	if executionType == "" {
+		executionType = "STANDARD"
 	}
-	persistCtx := context.WithoutCancel(ctx)
+
+	var (
+		exec *Execution
+		run  *executionRun
+	)
+	switch {
+	case plan.existing != nil && !plan.restart:
+		redrive := *plan.existing
+		exec = &redrive
+		resumed, err := h.beginRedrive(persistCtx, exec)
+		if err != nil {
+			return childResult{exec: plan.existing}
+		}
+		run = resumed
+	case plan.existing != nil:
+		restart := *plan.existing
+		exec = &restart
+		exec.Status = statusRunning
+		exec.StartDate = h.clk.Now()
+		exec.StopDate = nil
+		exec.Error, exec.Cause, exec.Output = "", "", ""
+		exec.ExecutionType = executionType
+		run = &executionRun{hist: newHistoryRecorder(maxHistoryEvents), restarted: true}
+		run.hist.add(exec.StartDate, executionStartedEvent(&childSM, exec))
+	default:
+		name := uuid.NewString()
+		inputJSON, _ := encodeJSON(plan.input)
+		exec = &Execution{
+			ExecutionArn:    mapRunChildARN(mapRunArn, name),
+			StateMachineArn: childSM.ARN,
+			Name:            name,
+			Input:           inputJSON,
+			Status:          statusRunning,
+			StartDate:       h.clk.Now(),
+			MapRunArn:       mapRunArn,
+			ExecutionType:   executionType,
+		}
+		run = &executionRun{hist: newHistoryRecorder(maxHistoryEvents)}
+		run.hist.add(exec.StartDate, executionStartedEvent(&childSM, exec))
+	}
 	_ = h.store.PutExecution(persistCtx, exec)
 
 	runCtx, cancel := context.WithCancel(persistCtx)
 	defer cancel()
-	run := &executionRun{hist: newHistoryRecorder(maxHistoryEvents), cancel: cancel}
+	run.cancel = cancel
 	if jsonataMode {
 		run.queryLanguage = queryLanguageJSONata
 	}
-	run.hist.add(started, executionStartedEvent(&childSM, exec))
 	// The parent stopping, timing out or exceeding its failure tolerance
 	// aborts the child, exactly as a StopExecution on the child would.
 	stopWatch := context.AfterFunc(ctx, func() {
@@ -745,8 +986,11 @@ func childResultEntry(exec *Execution) map[string]any {
 		"Input":           exec.Input,
 		"InputDetails":    map[string]any{"Included": true},
 		"StartDate":       exec.StartDate.UTC().Format(time.RFC3339Nano),
-		"RedriveCount":    float64(0),
-		"RedriveStatus":   redriveStatusNotRedrivable,
+		"RedriveCount":    float64(exec.RedriveCount),
+		"RedriveStatus":   childRedriveStatus(exec),
+	}
+	if exec.RedriveDate != nil {
+		entry["RedriveDate"] = exec.RedriveDate.UTC().Format(time.RFC3339Nano)
 	}
 	if exec.StopDate != nil {
 		entry["StopDate"] = exec.StopDate.UTC().Format(time.RFC3339Nano)
@@ -760,4 +1004,16 @@ func childResultEntry(exec *Execution) map[string]any {
 		entry["Cause"] = exec.Cause
 	}
 	return entry
+}
+
+// childRedriveStatus is how a ResultWriter file reports whether a child can
+// be re-run by redriving its map run.
+func childRedriveStatus(exec *Execution) string {
+	switch {
+	case exec.Status == statusSucceeded || exec.Status == statusRunning:
+		return redriveStatusNotRedrivable
+	case strings.EqualFold(exec.ExecutionType, "EXPRESS"):
+		return redriveStatusByMapRun
+	}
+	return redriveStatusRedrivable
 }
