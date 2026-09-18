@@ -471,6 +471,7 @@ These generated sources are **committed** and must be regenerated through their 
 | `web/src/types/api.gen.ts` | `make generate-ts` |
 | `web/src/routeTree.gen.ts` | `pnpm dev` / `pnpm build` (the TanStack Router vite plugin writes it) |
 | `internal/awsapi/manifest.gen.go` | `make generate-aws-operations` |
+| `internal/awsshapes/*.gen.go` (runtime SDK shape tables) | `make generate-aws-operations` |
 | `docs/README.md` service index, `docs/services/<key>/operations.md`, `docs/generated/service-support.json` | `make docs` |
 | `internal/services/dynamodb/reserved_words.txt` | `make generate-ddb-reserved-words` (needs network; no CI gate on its freshness) |
 

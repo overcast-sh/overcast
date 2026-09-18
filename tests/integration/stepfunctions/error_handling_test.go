@@ -101,7 +101,7 @@ func TestStartExecution_catchStatesTaskFailedDoesNotCatchStatesRuntime(t *testin
 	  "States": {
 	    "T": {
 	      "Type": "Task",
-	      "Resource": "arn:aws:states:::aws-sdk:iam:listRoles",
+	      "Resource": "arn:aws:states:::codebuild:startBuild",
 	      "Catch": [{"ErrorEquals": ["States.TaskFailed"], "Next": "Handled"}],
 	      "End": true
 	    },

@@ -1,0 +1,70 @@
+# Services whose runtime SDK-integration shape tables are generated into
+# internal/awsshapes/.
+#
+# Step Functions' `arn:aws:states:::aws-sdk:<service>:<action>` integrations
+# translate a Task's parameters into a real wire request, and the response back
+# into JSON, from these tables. The list is every modeled service identity that
+# resolves to a service Overcast implements; internal/awsshapes'
+# TestSDKShapeTables_coverEveryImplementedService (-tags dev) fails when a
+# service gains capabilities without an entry here.
+#
+# One canonical service key per line — the same key the routing manifest uses
+# (the SDK ID lowercased with spaces replaced by hyphens), '#' starts a comment.
+# Regenerate after editing:
+#
+#   make generate-aws-operations AWS_MODELS_DIR=... AWS_MODELS_REVISION=...
+
+acm
+api-gateway
+apigatewayv2
+appconfig
+appconfigdata
+appsync
+athena
+auto-scaling
+backup
+bedrock
+bedrock-runtime
+cloudformation
+cloudfront
+cloudtrail
+cloudwatch
+cloudwatch-events
+cloudwatch-logs
+cognito-identity-provider
+dynamodb
+dynamodb-streams
+ec2
+ecr
+ecs
+efs
+eks
+elastic-load-balancing-v2
+elasticache
+eventbridge
+firehose
+glue
+iam
+kafka
+kinesis
+kms
+lambda
+opensearch
+organizations
+pipes
+rds
+route-53
+s3
+scheduler
+secrets-manager
+service-catalog-appregistry
+ses
+sesv2
+sfn
+shield
+sns
+sqs
+ssm
+sts
+transfer
+wafv2

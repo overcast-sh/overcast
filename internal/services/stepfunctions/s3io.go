@@ -7,14 +7,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"strconv"
 	"strings"
 )
 
-// S3 access for the aws-sdk:s3 integration and for a distributed Map's
-// ItemReader and ResultWriter. Every call goes through Overcast's own router
-// as a path-style REST request, so it reaches exactly the S3 handler an SDK
-// call would.
+// S3 access for a distributed Map's ItemReader and ResultWriter. Every call
+// goes through Overcast's own router as a path-style REST request, so it
+// reaches exactly the S3 handler an SDK call would. (The aws-sdk:s3
+// integration is the generic, shape-driven one in sdk_integration.go.)
 
 // s3Object is one ListObjectsV2 entry, in the shape Step Functions hands a
 // state (and a distributed Map iteration).
@@ -153,105 +152,4 @@ func (in *interpreter) s3ListAll(ctx context.Context, bucket, prefix string) ([]
 		}
 		token = page.NextContinuationToken
 	}
-}
-
-// ─── aws-sdk:s3 ───────────────────────────────────────────────────────────────
-
-// invokeS3SDK runs the aws-sdk:s3 actions workflows reach for: reading,
-// writing, listing, inspecting and deleting objects. Parameters and results
-// use the SDK's PascalCase member names.
-func (in *interpreter) invokeS3SDK(ctx context.Context, action string, params map[string]any) (any, *stateError) {
-	bucket, _ := params["Bucket"].(string)
-	key, _ := params["Key"].(string)
-	if bucket == "" {
-		return nil, newStateError(errParameterPathFailure, "aws-sdk:s3:%s requires Parameters.Bucket", action)
-	}
-	switch action {
-	case "getObject":
-		body, header, serr := in.s3GetObject(ctx, bucket, key)
-		if serr != nil {
-			return nil, serr
-		}
-		return s3ObjectMetadata(header, map[string]any{"Body": string(body)}), nil
-	case "headObject":
-		rec, serr := in.s3Call(ctx, http.MethodHead, s3Path(bucket, key), "", nil)
-		if serr != nil {
-			return nil, serr
-		}
-		return s3ObjectMetadata(rec.Header(), map[string]any{}), nil
-	case "putObject":
-		var body []byte
-		switch v := params["Body"].(type) {
-		case nil:
-		case string:
-			body = []byte(v)
-		default:
-			encoded, err := encodeJSON(v)
-			if err != nil {
-				return nil, newStateError(errRuntime, "%s", err.Error())
-			}
-			body = []byte(encoded)
-		}
-		contentType, _ := params["ContentType"].(string)
-		etag, serr := in.s3PutObject(ctx, bucket, key, body, contentType)
-		if serr != nil {
-			return nil, serr
-		}
-		return map[string]any{"ETag": etag}, nil
-	case "deleteObject":
-		if _, serr := in.s3Call(ctx, http.MethodDelete, s3Path(bucket, key), "", nil); serr != nil {
-			return nil, serr
-		}
-		return map[string]any{}, nil
-	case "listObjectsV2":
-		query := url.Values{}
-		for param, name := range map[string]string{"Prefix": "prefix", "Delimiter": "delimiter", "ContinuationToken": "continuation-token", "StartAfter": "start-after"} {
-			if v, _ := params[param].(string); v != "" {
-				query.Set(name, v)
-			}
-		}
-		if n, ok := toNumber(params["MaxKeys"]); ok {
-			query.Set("max-keys", strconv.Itoa(int(n)))
-		}
-		page, serr := in.s3ListObjectsV2(ctx, bucket, query)
-		if serr != nil {
-			return nil, serr
-		}
-		contents := make([]any, 0, len(page.Contents))
-		for _, obj := range page.Contents {
-			item := obj.toJSON()
-			item["ETag"] = item["Etag"]
-			delete(item, "Etag")
-			contents = append(contents, item)
-		}
-		out := map[string]any{
-			"Name":        page.Name,
-			"Prefix":      page.Prefix,
-			"KeyCount":    float64(page.KeyCount),
-			"MaxKeys":     float64(page.MaxKeys),
-			"IsTruncated": page.IsTruncated,
-			"Contents":    contents,
-		}
-		if page.NextContinuationToken != "" {
-			out["NextContinuationToken"] = page.NextContinuationToken
-		}
-		return out, nil
-	}
-	return nil, unsupportedError("the aws-sdk:s3:%s integration — Overcast interprets getObject, headObject, putObject, deleteObject and listObjectsV2", action)
-}
-
-func s3ObjectMetadata(header http.Header, out map[string]any) map[string]any {
-	if v := header.Get("Content-Type"); v != "" {
-		out["ContentType"] = v
-	}
-	if v := header.Get("ETag"); v != "" {
-		out["ETag"] = v
-	}
-	if v := header.Get("Last-Modified"); v != "" {
-		out["LastModified"] = v
-	}
-	if v, err := strconv.ParseInt(header.Get("Content-Length"), 10, 64); err == nil {
-		out["ContentLength"] = float64(v)
-	}
-	return out
 }

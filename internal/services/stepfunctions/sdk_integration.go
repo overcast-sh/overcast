@@ -2,59 +2,70 @@ package stepfunctions
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/overcast-sh/overcast/internal/awsapi"
+	"github.com/overcast-sh/overcast/internal/awsshapes"
 )
 
 // AWS SDK service integrations: `arn:aws:states:::aws-sdk:<service>:<action>`.
 //
-// Overcast interprets them for every service that speaks AWS JSON 1.0 or 1.1
-// (DynamoDB, SQS, Step Functions, EventBridge, Secrets Manager, SSM, KMS,
-// CloudWatch Logs, Kinesis, ECS, …) by dispatching the action to that
-// service's X-Amz-Target through the router, and for the common S3 object
-// actions (s3io.go). Other protocols — Query, REST-JSON, REST-XML beyond S3 —
-// fail the execution loudly naming the integration.
+// Every modeled action of every service Overcast implements is reachable, over
+// whichever protocol the service speaks. The operation's Smithy shapes
+// (internal/awsshapes) drive a real wire request — an X-Amz-Target JSON body,
+// a Query form, a REST call with its labels, query string, headers and
+// payload, or a Smithy RPC v2 CBOR body — which goes through Overcast's own
+// router, exactly as an SDK call would (sdk_request.go). The response is read
+// back through the output shape (sdk_response.go).
 //
-// Two conventions from AWS's SDK integrations apply: results use PascalCase
-// member names whatever the service's own wire casing, and errors are named
-// `<Service>.<ErrorCode>` (for example DynamoDb.ResourceNotFoundException).
+// The conventions are AWS's own for SDK integrations, which run on the AWS SDK
+// for Java v2:
+//
+//   - parameter and result member names are PascalCase whatever the
+//     service's wire casing, while map keys — user data such as tags, S3
+//     metadata or DynamoDB attribute names — are left exactly as written;
+//   - timestamps come back as ISO-8601 strings, blobs as base64 strings, and a
+//     payload blob (an S3 object's Body, a Lambda Payload) as its text;
+//   - errors are named `<Service>.<Exception>`, the SDK's exception class for
+//     the modeled error (S3.NoSuchKeyException, Iam.NoSuchEntityException), or
+//     `<Service>.<Service>Exception` for an error the model does not declare
+//     (Ec2.Ec2Exception);
+//   - a Resource naming an action AWS does not have is rejected by
+//     CreateStateMachine, as are Parameters naming a member it does not take.
 
-// sdkErrorPrefixes are the error-name prefixes AWS uses for SDK integrations
-// whose prefix is not simply the service name with a capital first letter.
-var sdkErrorPrefixes = map[string]string{
-	"dynamodb":       "DynamoDb",
-	"secretsmanager": "SecretsManager",
-	"eventbridge":    "EventBridge",
-	"cloudwatchlogs": "CloudWatchLogs",
-	"cloudwatch":     "CloudWatch",
+// sdkCall is one resolved aws-sdk integration.
+type sdkCall struct {
+	service  string // as written in the Resource ("s3", "cloudwatchlogs")
+	action   string // as written ("getObject")
+	op       awsapi.Operation
+	svc      *awsshapes.Service
+	shape    *awsshapes.Shape // the operation
+	protocol awsapi.Protocol
+	prefix   string // error-name prefix ("S3", "DynamoDb")
 }
 
-func sdkErrorPrefix(service string) string {
-	if prefix, ok := sdkErrorPrefixes[service]; ok {
-		return prefix
-	}
-	return capitalize(service)
-}
-
-// sdkJSONContentTypes are the protocols the generic SDK integration speaks.
-var sdkJSONContentTypes = map[awsapi.Protocol]string{
-	awsapi.ProtocolAWSJSON10: "application/x-amz-json-1.0",
-	awsapi.ProtocolAWSJSON11: "application/x-amz-json-1.1",
-}
-
-// sdkOperations caches the model lookup for each service/action pair a
+// sdkOperations caches the manifest lookup for each service/action pair a
 // workflow has used, so the corpus is scanned once per pair.
 var sdkOperations sync.Map
 
 // findSDKOperation resolves an aws-sdk service name and camelCase action to
 // its modeled operation. The service name is the SDK's own identifier with
-// spaces removed and lower-cased — `sfn`, `dynamodb`, `secretsmanager`,
-// `cloudwatchlogs` — which is how AWS spells it in the Resource ARN.
+// spaces and hyphens removed and lower-cased — `sfn`, `dynamodb`,
+// `secretsmanager`, `cloudwatchlogs` — which is how AWS spells it in the
+// Resource ARN; the action is the operation name with a lower-case first
+// letter, and AWS rejects any other spelling.
 func findSDKOperation(service, action string) (awsapi.Operation, bool) {
+	if r, _ := utf8.DecodeRuneInString(action); !unicode.IsLower(r) {
+		return awsapi.Operation{}, false
+	}
 	key := service + ":" + action
 	if cached, ok := sdkOperations.Load(key); ok {
 		op, found := cached.(awsapi.Operation)
@@ -82,6 +93,55 @@ func normalizeSDKID(id string) string {
 	return strings.ToLower(strings.NewReplacer(" ", "", "-", "").Replace(id))
 }
 
+// sdkProtocolPreference is the order AWS SDKs choose among the protocols a
+// service declares — the Smithy protocol-selection order, most efficient
+// first. CloudWatch, which declares CBOR, JSON and Query, is called over CBOR.
+var sdkProtocolPreference = []awsapi.Protocol{
+	awsapi.ProtocolRPCV2CBOR,
+	awsapi.ProtocolAWSJSON10,
+	awsapi.ProtocolAWSJSON11,
+	awsapi.ProtocolRESTJSON,
+	awsapi.ProtocolRESTXML,
+	awsapi.ProtocolAWSQuery,
+	awsapi.ProtocolEC2Query,
+}
+
+// resolveSDKCall finds the operation and its shapes. A service/action AWS does
+// not model is a definition error, reported here as States.Runtime for a
+// state machine that predates the check; a modeled one Overcast has no shape
+// table for is an Overcast gap and fails loudly.
+func resolveSDKCall(service, action string) (*sdkCall, *stateError) {
+	op, found := findSDKOperation(service, action)
+	if !found {
+		return nil, newStateError(errRuntime, "aws-sdk:%s:%s does not name an AWS API action", service, action)
+	}
+	svc, ok, err := awsshapes.Lookup(op.Service)
+	if err != nil {
+		return nil, newStateError(errRuntime, "the %s shape table could not be read: %v", op.SDKID, err)
+	}
+	if !ok {
+		return nil, unsupportedError("the aws-sdk:%s:%s integration — %s is not a service Overcast implements", service, action, op.SDKID)
+	}
+	shape, ok := svc.Operation(op.Name)
+	if !ok {
+		return nil, unsupportedError("the aws-sdk:%s:%s integration — its shapes are missing from Overcast's %s table", service, action, op.SDKID)
+	}
+	if shape.HasEventStream() {
+		return nil, unsupportedError("the aws-sdk:%s:%s integration — it streams events, which AWS does not offer as an SDK integration", service, action)
+	}
+	call := &sdkCall{service: service, action: action, op: op, svc: svc, shape: shape, prefix: sdkErrorPrefix(op.SDKID)}
+	for _, p := range sdkProtocolPreference {
+		if svc.Supports(p) {
+			call.protocol = p
+			break
+		}
+	}
+	if call.protocol == awsapi.ProtocolUnknown {
+		return nil, unsupportedError("the aws-sdk:%s:%s integration — %s speaks no protocol Overcast can call", service, action, op.SDKID)
+	}
+	return call, nil
+}
+
 // invokeAWSSDK runs one aws-sdk integration.
 func (in *interpreter) invokeAWSSDK(ctx context.Context, service, action string, payload any) (any, *stateError) {
 	params, ok := payload.(map[string]any)
@@ -91,58 +151,169 @@ func (in *interpreter) invokeAWSSDK(ctx context.Context, service, action string,
 		}
 		params = map[string]any{}
 	}
-	if service == "s3" {
-		return in.invokeS3SDK(ctx, action, params)
-	}
-	op, found := findSDKOperation(service, action)
-	if !found {
-		return nil, newStateError(errRuntime, "aws-sdk:%s:%s does not name an AWS API action", service, action)
-	}
-	contentType, ok := sdkJSONContentTypes[op.Protocol]
-	if !ok {
-		return nil, unsupportedError("the aws-sdk:%s:%s integration — %s speaks the %s protocol, and Overcast interprets SDK integrations for AWS JSON services and S3 only", service, action, op.SDKID, op.Protocol)
-	}
-	result, serr := in.invokeTargetAs(ctx, op.TargetPrefix+op.Name, contentType, params, sdkErrorPrefix(service))
+	call, serr := resolveSDKCall(service, action)
 	if serr != nil {
 		return nil, serr
 	}
-	return pascalCaseMembers(result), nil
+	req, err := call.buildRequest(ctx, params)
+	if err != nil {
+		return nil, newStateError(errRuntime, "aws-sdk:%s:%s: %v", service, action, err)
+	}
+	req.Header.Set("X-Overcast-Region", in.region)
+	rec := httptest.NewRecorder()
+	in.handler.router.ServeHTTP(rec, req)
+	if rec.Code >= 300 {
+		return nil, call.wireError(rec)
+	}
+	result, err := call.decodeResponse(rec)
+	if err != nil {
+		return nil, newStateError(errTaskFailed, "the %s %s response could not be decoded: %v", call.op.SDKID, call.op.Name, err)
+	}
+	return result, nil
 }
 
-// pascalCaseMembers gives a response the PascalCase member names AWS SDK
-// integrations use. Services whose JSON is already PascalCase (DynamoDB, SQS,
-// Kinesis, …) are left exactly as they are — their nested maps hold user data
-// such as item attribute names that must not be rewritten. Only a response
-// whose top-level members are camelCase (Step Functions, ECS, …) is converted.
-func pascalCaseMembers(v any) any {
-	obj, ok := v.(map[string]any)
+// wireError turns a failed response into the Step Functions error AWS raises:
+// the SDK exception for the modeled error, else the service's base exception.
+func (c *sdkCall) wireError(rec *httptest.ResponseRecorder) *stateError {
+	code, message, requestID := c.errorDetails(rec)
+	exception := c.prefix + "Exception"
+	if shape, ok := c.svc.ErrorShape(code); ok {
+		exception = sdkExceptionName(shape.Name)
+	}
+	cause := message
+	if cause == "" {
+		cause = http.StatusText(rec.Code)
+	}
+	cause += " (Service: " + c.prefix + ", Status Code: " + strconv.Itoa(rec.Code) + ", Request ID: " + requestID
+	if code != "" {
+		cause += ", Error Code: " + code
+	}
+	cause += ")"
+	return &stateError{name: c.prefix + "." + exception, cause: cause}
+}
+
+// sdkErrorPrefix is the AWS SDK for Java v2 client name for a service — the
+// first half of every SDK integration error name.
+func sdkErrorPrefix(sdkID string) string { return javaPascalCase(sdkID) }
+
+// sdkExceptionName is the Java v2 exception class for a modeled error shape:
+// a "Fault" suffix becomes "Exception", any other name gains it.
+func sdkExceptionName(shape string) string {
+	base := strings.TrimSuffix(shape, "Fault")
+	if !strings.HasSuffix(base, "Exception") {
+		base += "Exception"
+	}
+	return javaPascalCase(base)
+}
+
+// versionSuffix splits a trailing lower-case version marker off an acronym
+// ("SESv2" → "SES V2"), which the Java code generator treats as its own word.
+var versionSuffix = regexp.MustCompile(`([A-Z])v(\d+)$`)
+
+// javaPascalCase reproduces the Java v2 code generator's class naming: split
+// into words at spaces, hyphens and case boundaries, then capitalise each word
+// and lower-case the rest of it — "DynamoDB" → "DynamoDb", "EC2" → "Ec2",
+// "CloudWatch Logs" → "CloudWatchLogs", "DBInstanceNotFound" →
+// "DbInstanceNotFound".
+func javaPascalCase(s string) string {
+	var out strings.Builder
+	for _, word := range strings.FieldsFunc(s, func(r rune) bool { return r == ' ' || r == '-' || r == '_' }) {
+		word = versionSuffix.ReplaceAllString(word, "$1 V$2")
+		for _, part := range strings.Fields(word) {
+			for _, token := range splitWordBoundaries(part) {
+				out.WriteString(strings.ToUpper(token[:1]) + strings.ToLower(token[1:]))
+			}
+		}
+	}
+	return out.String()
+}
+
+// splitWordBoundaries splits "DBInstanceNotFound" into DB, Instance, Not,
+// Found: a new word starts at a lower→upper transition, and before the last
+// capital of an acronym that runs into a lower-case word. Digits stay with
+// the word they follow.
+func splitWordBoundaries(s string) []string {
+	runes := []rune(s)
+	var words []string
+	start := 0
+	for i := 1; i < len(runes); i++ {
+		prev, cur := runes[i-1], runes[i]
+		boundary := unicode.IsLower(prev) && unicode.IsUpper(cur)
+		if !boundary && unicode.IsUpper(prev) && unicode.IsUpper(cur) && i+1 < len(runes) && unicode.IsLower(runes[i+1]) {
+			boundary = true
+		}
+		if unicode.IsDigit(prev) && unicode.IsUpper(cur) {
+			boundary = true
+		}
+		if boundary {
+			words = append(words, string(runes[start:i]))
+			start = i
+		}
+	}
+	return append(words, string(runes[start:]))
+}
+
+// ─── Definition-time validation ───────────────────────────────────────────────
+
+// validateSDKTask rejects, at CreateStateMachine, what AWS rejects there for an
+// aws-sdk Task: a Resource naming no AWS action (or a pattern SDK integrations
+// do not offer), and static Parameters/Arguments naming a member the action
+// does not take. Anything valid that Overcast cannot run still provisions and
+// fails at run time, like every other gap.
+func validateSDKTask(state *aslState, loc string) error {
+	integration, serr := parseTaskResource(state.Resource)
+	if serr != nil {
+		return nil
+	}
+	service, ok := strings.CutPrefix(integration.service, "aws-sdk:")
 	if !ok {
-		return v
+		return nil
 	}
-	for key := range obj {
-		if r, _ := utf8.DecodeRuneInString(key); unicode.IsLower(r) {
-			return capitalizeKeys(v)
+	notRecognised := invalidDefinitionf("%s: The resource provided %s is not recognized. The value is not a valid resource ARN, or the resource is not available in this region.", loc, state.Resource)
+	if integration.pattern != "" && integration.pattern != patternWaitForTaskToken {
+		return notRecognised
+	}
+	op, found := findSDKOperation(service, integration.action)
+	if !found {
+		return notRecognised
+	}
+	svc, ok, err := awsshapes.Lookup(op.Service)
+	if err != nil || !ok {
+		return nil
+	}
+	shape, ok := svc.Operation(op.Name)
+	if !ok {
+		return nil
+	}
+	if shape.HasEventStream() {
+		return notRecognised
+	}
+	for _, raw := range []json.RawMessage{state.Parameters, state.Arguments} {
+		var fields map[string]json.RawMessage
+		if len(raw) == 0 || json.Unmarshal(raw, &fields) != nil {
+			continue
+		}
+		for field := range fields {
+			name := strings.TrimSuffix(field, ".$")
+			if sdkMember(shape.Input, name) == nil {
+				return invalidDefinitionf("%s: The field %q is not supported by Step Functions", loc, name)
+			}
 		}
 	}
-	return v
+	return nil
 }
 
-func capitalizeKeys(v any) any {
-	switch x := v.(type) {
-	case map[string]any:
-		out := make(map[string]any, len(x))
-		for key, value := range x {
-			out[capitalize(key)] = capitalizeKeys(value)
-		}
-		return out
-	case []any:
-		out := make([]any, len(x))
-		for i, value := range x {
-			out[i] = capitalizeKeys(value)
-		}
-		return out
+// sdkMember finds the input member a PascalCase parameter names.
+func sdkMember(structure *awsshapes.Shape, param string) *awsshapes.Member {
+	if structure == nil {
+		return nil
 	}
-	return v
+	for _, m := range structure.Members {
+		if capitalize(m.Name) == param {
+			return m
+		}
+	}
+	return nil
 }
 
 func capitalize(s string) string {

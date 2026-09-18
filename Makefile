@@ -261,13 +261,13 @@ check-ts:
 generate-ddb-reserved-words:
 	$(GO) run ./scripts/dynamodb-reserved-words.go
 
-## generate-aws-operations: regenerate the AWS operation manifest and pruned shape snapshot from a pinned local api-models-aws checkout
+## generate-aws-operations: regenerate the AWS operation manifest, pruned shape snapshot and runtime SDK shape tables from a pinned local api-models-aws checkout
 ## Set AWS_MODELS_DIR to its models directory. The checked-out commit must match models/aws/VERSION.
 generate-aws-operations:
 	@test -n "$(AWS_MODELS_DIR)" || (echo "ERROR: set AWS_MODELS_DIR to api-models-aws/models" && exit 1)
 	@test -n "$(AWS_MODELS_REVISION)" || (echo "ERROR: set AWS_MODELS_REVISION to the api-models-aws commit" && exit 1)
 	$(GO) run ./cmd/awsmodelgen -models "$(AWS_MODELS_DIR)" -output internal/awsapi/manifest.gen.go -source-revision "$(AWS_MODELS_REVISION)" \
-		-shapes-out models/aws/shapes -shapes-services models/aws/shapes-services.txt
+		-shapes-out models/aws/shapes -shapes-services models/aws/shapes-services.txt -sdk-shapes-out internal/awsshapes -sdk-shapes-services models/aws/sdk-shapes-services.txt
 
 ## aws-models-check-ci: CI-only subset of aws-models-check
 ## `./cmd/awsmodelgen ./internal/awsapi ./internal/protocol/codec ./tests/integration/router` are inside `./...` and
@@ -285,10 +285,10 @@ aws-models-check-ci:
 ## This is the full, developer-facing target. CI's aws-operation-coverage job runs aws-models-check-ci instead (see
 ## above) because the first line below duplicates packages that job's sibling coverage job already tests.
 aws-models-check: aws-models-check-ci
-	$(GO) test -count=1 ./cmd/awsmodelgen ./internal/awsapi ./internal/protocol/codec ./tests/integration/router
+	$(GO) test -count=1 ./cmd/awsmodelgen ./internal/awsapi ./internal/awsshapes ./internal/protocol/codec ./tests/integration/router
 	@if [ -n "$(AWS_MODELS_DIR)" ]; then \
 		$(GO) run ./cmd/awsmodelgen -models "$(AWS_MODELS_DIR)" -output internal/awsapi/manifest.gen.go -source-revision "$(AWS_MODELS_REVISION)" \
-			-shapes-out models/aws/shapes -shapes-services models/aws/shapes-services.txt -check; \
+			-shapes-out models/aws/shapes -shapes-services models/aws/shapes-services.txt -sdk-shapes-out internal/awsshapes -sdk-shapes-services models/aws/sdk-shapes-services.txt -check; \
 	fi
 
 ## generate-compat-model: regenerate the compat scenario IR, gaps.json and registry.generated.json from compat/model/recipes/

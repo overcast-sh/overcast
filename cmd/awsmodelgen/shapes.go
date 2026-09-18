@@ -118,9 +118,9 @@ type rawShape struct {
 	Input                *awsmodel.Reference           `json:"input"`
 	Output               *awsmodel.Reference           `json:"output"`
 	Errors               []awsmodel.Reference          `json:"errors"`
-	Member               *awsmodel.Reference           `json:"member"`
-	Key                  *awsmodel.Reference           `json:"key"`
-	Value                *awsmodel.Reference           `json:"value"`
+	Member               *rawMember                    `json:"member"`
+	Key                  *rawMember                    `json:"key"`
+	Value                *rawMember                    `json:"value"`
 	Members              map[string]rawMember          `json:"members"`
 	Identifiers          map[string]awsmodel.Reference `json:"identifiers"`
 	Properties           map[string]awsmodel.Reference `json:"properties"`
@@ -139,6 +139,15 @@ type rawShape struct {
 type rawMember struct {
 	Target string                     `json:"target"`
 	Traits map[string]json.RawMessage `json:"traits"`
+}
+
+// reference is the member's target as a plain reference, nil for an absent
+// member.
+func (m *rawMember) reference() *awsmodel.Reference {
+	if m == nil {
+		return nil
+	}
+	return &awsmodel.Reference{Target: m.Target}
 }
 
 type rawModel struct {
@@ -181,11 +190,31 @@ func readShapeServices(path string) ([]string, error) {
 // listed service the corpus does not contain: a silently missing snapshot would
 // be read by the inert generator as "this service has no operations".
 func buildShapeSnapshots(modelsDir string, services []string) (map[string][]byte, error) {
+	snapshots, err := pruneServices(modelsDir, services, shapeTraitAllowlist)
+	if err != nil {
+		return nil, err
+	}
+	rendered := make(map[string][]byte, len(snapshots))
+	for service, snapshot := range snapshots {
+		contents, err := renderShapeSnapshot(snapshot)
+		if err != nil {
+			return nil, err
+		}
+		rendered[service] = contents
+	}
+	return rendered, nil
+}
+
+// pruneServices walks the corpus once and prunes every listed service with the
+// given trait allowlist. It is the one pruner both committed shape artifacts are
+// cut from: the snapshot here, and the runtime SDK shape tables in
+// sdkshapes.go, which differ only in the traits they keep and how they render.
+func pruneServices(modelsDir string, services []string, allow map[string]struct{}) (map[string]awsmodel.Snapshot, error) {
 	wanted := make(map[string]struct{}, len(services))
 	for _, service := range services {
 		wanted[service] = struct{}{}
 	}
-	rendered := make(map[string][]byte, len(services))
+	pruned := make(map[string]awsmodel.Snapshot, len(services))
 	err := filepath.WalkDir(modelsDir, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -193,16 +222,12 @@ func buildShapeSnapshots(modelsDir string, services []string) (map[string][]byte
 		if entry.IsDir() || filepath.Ext(path) != ".json" || len(wanted) == 0 {
 			return nil
 		}
-		snapshots, err := pruneModel(path, wanted)
+		snapshots, err := pruneModel(path, wanted, allow)
 		if err != nil {
 			return err
 		}
 		for _, snapshot := range snapshots {
-			contents, err := renderShapeSnapshot(snapshot)
-			if err != nil {
-				return err
-			}
-			rendered[snapshot.Service] = contents
+			pruned[snapshot.Service] = snapshot
 			delete(wanted, snapshot.Service)
 		}
 		return nil
@@ -218,11 +243,11 @@ func buildShapeSnapshots(modelsDir string, services []string) (map[string][]byte
 		sort.Strings(missing)
 		return nil, fmt.Errorf("prune shapes: no model defines service(s) %s", strings.Join(missing, ", "))
 	}
-	return rendered, nil
+	return pruned, nil
 }
 
 // pruneModel returns a snapshot for each in-scope service the file defines.
-func pruneModel(path string, wanted map[string]struct{}) ([]awsmodel.Snapshot, error) {
+func pruneModel(path string, wanted map[string]struct{}, allow map[string]struct{}) ([]awsmodel.Snapshot, error) {
 	contents, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
@@ -253,7 +278,7 @@ func pruneModel(path string, wanted map[string]struct{}) ([]awsmodel.Snapshot, e
 		if _, in := wanted[service]; !in {
 			continue
 		}
-		snapshot, err := pruneService(parsed, shapeID, service, trait.SDKID)
+		snapshot, err := pruneService(parsed, shapeID, service, trait.SDKID, allow)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", path, err)
 		}
@@ -263,7 +288,7 @@ func pruneModel(path string, wanted map[string]struct{}) ([]awsmodel.Snapshot, e
 }
 
 // pruneService walks everything reachable from the service shape.
-func pruneService(parsed rawModel, serviceID, service, sdkID string) (awsmodel.Snapshot, error) {
+func pruneService(parsed rawModel, serviceID, service, sdkID string, allow map[string]struct{}) (awsmodel.Snapshot, error) {
 	namespace := serviceID[:strings.LastIndex(serviceID, "#")]
 	snapshot := awsmodel.Snapshot{
 		Service:      service,
@@ -345,7 +370,7 @@ func pruneService(parsed rawModel, serviceID, service, sdkID string) (awsmodel.S
 			dest *string
 		}{
 			{raw.Input, &out.Input}, {raw.Output, &out.Output},
-			{raw.Member, &out.Member}, {raw.Key, &out.Key}, {raw.Value, &out.Value},
+			{raw.Member.reference(), &out.Member}, {raw.Key.reference(), &out.Key}, {raw.Value.reference(), &out.Value},
 			{raw.Create, &out.Create}, {raw.Put, &out.Put}, {raw.Read, &out.Read},
 			{raw.Update, &out.Update}, {raw.Delete, &out.Delete}, {raw.List, &out.List},
 		} {
@@ -364,6 +389,23 @@ func pruneService(parsed rawModel, serviceID, service, sdkID string) (awsmodel.S
 				return err
 			}
 		}
+		// A list's or map's member can carry traits of its own (@xmlName on a
+		// list member names each element). The snapshot has no field for them,
+		// so they are held on the in-memory shape only — see
+		// awsmodel.SnapshotShape.MemberTraits.
+		for _, link := range []struct {
+			member *rawMember
+			dest   *map[string]json.RawMessage
+		}{
+			{raw.Member, &out.MemberTraits}, {raw.Key, &out.KeyTraits}, {raw.Value, &out.ValueTraits},
+		} {
+			if link.member == nil {
+				continue
+			}
+			if *link.dest, err = filterTraits(link.member.Traits, allow); err != nil {
+				return fmt.Errorf("shape %s: %w", id, err)
+			}
+		}
 		if out.Identifiers, err = visitMap(raw.Identifiers); err != nil {
 			return err
 		}
@@ -376,14 +418,14 @@ func pruneService(parsed rawModel, serviceID, service, sdkID string) (awsmodel.S
 				if err := visit(member.Target); err != nil {
 					return err
 				}
-				traits, err := filterTraits(member.Traits)
+				traits, err := filterTraits(member.Traits, allow)
 				if err != nil {
 					return fmt.Errorf("member %s of %s: %w", name, id, err)
 				}
 				out.Members[name] = awsmodel.SnapshotMember{Target: relative(member.Target), Traits: traits}
 			}
 		}
-		if out.Traits, err = filterTraits(raw.Traits); err != nil {
+		if out.Traits, err = filterTraits(raw.Traits, allow); err != nil {
 			return fmt.Errorf("shape %s: %w", id, err)
 		}
 		snapshot.Shapes[relative(id)] = out
@@ -401,13 +443,13 @@ func pruneService(parsed rawModel, serviceID, service, sdkID string) (awsmodel.S
 // trait come out sorted and whitespace comes out uniform regardless of how the
 // upstream file was formatted. json.Number preserves each numeric literal
 // exactly, so no precision or notation is invented.
-func filterTraits(traits map[string]json.RawMessage) (map[string]json.RawMessage, error) {
+func filterTraits(traits map[string]json.RawMessage, allow map[string]struct{}) (map[string]json.RawMessage, error) {
 	if len(traits) == 0 {
 		return nil, nil
 	}
 	var kept map[string]json.RawMessage
 	for name, value := range traits {
-		if _, allowed := shapeTraitAllowlist[name]; !allowed {
+		if _, allowed := allow[name]; !allowed {
 			continue
 		}
 		normalized, err := normalizeJSON(value)

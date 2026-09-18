@@ -55,7 +55,7 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | Timeouts          | `TimeoutSeconds` and `HeartbeatSeconds` really bound a Task and raise `States.Timeout` / `States.HeartbeatTimeout` |
 | Callbacks         | `.waitForTaskToken`, activities, `SendTaskSuccess` / `SendTaskFailure` / `SendTaskHeartbeat`                      |
 | Distributed Map   | Child executions, `ItemReader` (S3 JSON, JSONL, CSV, listing), `ItemBatcher`, failure tolerance, `ResultWriter`, map runs |
-| Integrations      | Lambda, SQS, SNS, DynamoDB, EventBridge, nested executions, and `aws-sdk:` for JSON-protocol services and S3        |
+| Integrations      | Lambda, SQS, SNS, DynamoDB, EventBridge, nested executions, and `aws-sdk:` for every service Overcast implements   |
 | Executions        | `StartExecution` returns while `RUNNING`; `StopExecution`, `RedriveExecution`, `TestState`, versions and aliases  |
 | History           | AWS's event vocabulary with causal `previousEventId` links — see [Execution history](stepfunctions/execution-history.md) |
 
@@ -68,7 +68,7 @@ drift from the service it targets.
 | Area                 | On AWS                        | Overcast                                                                                  |
 | -------------------- | ----------------------------- | ----------------------------------------------------------------------------------------- |
 | JSONata engine       | JSONata 2.0.6                 | JSONata 2.2 plus AWS's added functions; `??` and `?:` are also accepted                   |
-| `aws-sdk:` integrations | Every service              | Services that speak AWS JSON, and S3's object actions; Query and REST services fail       |
+| `aws-sdk:` integrations | Every service              | Every service Overcast implements; any other fails the execution with `States.Runtime`    |
 | Optimized integrations | ~200 services               | Lambda, SQS, SNS, DynamoDB, EventBridge and Step Functions                                |
 | `ItemReader`         | JSON, JSONL, CSV, manifests, Parquet | JSON, JSONL, CSV and S3 listings                                                   |
 | Express workflows    | No history, no `ListExecutions` | Recorded like Standard ones, so they can be inspected                                   |

@@ -19,15 +19,30 @@ listed is a bug.
 | Area                     | On AWS                                   | Overcast                                                                  |
 | ------------------------ | ---------------------------------------- | ------------------------------------------------------------------------- |
 | Optimized integrations   | About 200 services                       | Lambda, SQS `sendMessage`, SNS `publish`, DynamoDB item actions, EventBridge `putEvents`, Step Functions `startExecution` |
-| `aws-sdk:` integrations  | Every service and action                 | AWS JSON services, and S3 `getObject`, `putObject`, `headObject`, `deleteObject`, `listObjectsV2` |
+| `aws-sdk:` integrations  | Every service and action                 | Every action of every service Overcast implements                        |
 | `.sync` pattern          | Many integrations                        | `states:startExecution` only                                              |
 | `Credentials`            | Assumes the named role                   | Ignored: Overcast has one account                                         |
 
-An `aws-sdk:` call against a service whose JSON members are camelCase (Step
-Functions, ECS, …) has its result converted to PascalCase, as AWS does. The
-conversion does not know which members are maps of user data, so map keys in
-those responses are capitalised too. Services that already answer in PascalCase
-— DynamoDB, SQS, Kinesis — are passed through untouched.
+An `aws-sdk:` Task reaches its service over the protocol that service speaks —
+AWS JSON, Query, EC2 Query, REST-JSON, REST-XML or Smithy RPC v2 CBOR — with
+AWS's conventions: PascalCase parameter and result names, map keys left as
+written, timestamps as ISO-8601 strings, and errors named like
+`S3.NoSuchKeyException` or, for an error the service does not model,
+`Ec2.Ec2Exception`. A service Overcast does not implement is accepted by
+`CreateStateMachine` and fails the execution with `States.Runtime`.
+
+Where it still differs:
+
+- **Two shared paths.** AppSync's Events API (`/v2/apis`) and AppConfig's
+  `/applications` actions reach API Gateway v2 and Service Catalog AppRegistry
+  instead, because Overcast tells those services apart by the request's
+  signature, which an internal call does not carry.
+- **Blob parameters** other than a payload (`Body`, `Payload`) are read as
+  base64, and as plain text when they are not valid base64.
+- **Fields outside the action's members** are dropped when they come from the
+  state input of a Task with no `Parameters`; a static `Parameters` field is
+  rejected when the state machine is created, as on AWS.
+- **An error's `Cause`** ends with the wire error code, which AWS leaves out.
 
 ## Query languages
 

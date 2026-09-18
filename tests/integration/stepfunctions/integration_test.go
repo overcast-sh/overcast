@@ -386,8 +386,8 @@ func TestStartExecution_unsupportedAslFeaturesFailLoudly(t *testing.T) {
 				`"ItemProcessor":{"ProcessorConfig":{"Mode":"DISTRIBUTED"},"StartAt":"I","States":{"I":{"Type":"Pass","End":true}}},"End":true}}}`,
 		},
 		{
-			name: "AWS SDK integration over the Query protocol",
-			definition: `{"StartAt":"T","States":{"T":{"Type":"Task","Resource":"arn:aws:states:::aws-sdk:iam:listRoles",` +
+			name: "AWS SDK integration for a service Overcast does not implement",
+			definition: `{"StartAt":"T","States":{"T":{"Type":"Task","Resource":"arn:aws:states:::aws-sdk:codebuild:listProjects",` +
 				`"End":true}}}`,
 		},
 		{

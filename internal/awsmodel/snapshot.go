@@ -68,6 +68,15 @@ type SnapshotShape struct {
 	Resources            []string                   `json:"resources,omitempty"`
 	Members              map[string]SnapshotMember  `json:"members,omitempty"`
 	Traits               map[string]json.RawMessage `json:"traits,omitempty"`
+
+	// MemberTraits, KeyTraits and ValueTraits are the allowlisted traits on a
+	// list's member and a map's key and value. They are carried for in-process
+	// consumers of the pruner — the runtime SDK shape tables need a list
+	// member's @xmlName — and are never rendered into the committed snapshot,
+	// whose format has no place for them.
+	MemberTraits map[string]json.RawMessage `json:"-"`
+	KeyTraits    map[string]json.RawMessage `json:"-"`
+	ValueTraits  map[string]json.RawMessage `json:"-"`
 }
 
 // SnapshotMember is one structure or union member: the shape it targets, and

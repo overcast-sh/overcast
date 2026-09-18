@@ -29,6 +29,8 @@ func main() {
 	modelDate := flag.String("model-date", "", "upstream commit date, read by -version-file and -changelog-output")
 	shapesOut := flag.String("shapes-out", "", "optional directory for the pruned Smithy shape snapshot")
 	shapesServices := flag.String("shapes-services", "", "reviewed in-scope service list required with -shapes-out")
+	sdkShapesOut := flag.String("sdk-shapes-out", "", "optional package directory for the runtime SDK-integration shape tables")
+	sdkShapesServices := flag.String("sdk-shapes-services", "", "reviewed service list required with -sdk-shapes-out")
 	flag.Parse()
 	if *modelsDir == "" || *revision == "" {
 		fmt.Fprintln(os.Stderr, "awsmodelgen: -models and -source-revision are required")
@@ -65,6 +67,15 @@ func main() {
 	// digest exists to make impossible.
 	if *versionFile != "" && *shapesOut == "" {
 		fmt.Fprintf(os.Stderr, "awsmodelgen: -version-file requires -shapes-out so %s cannot go stale\n", ShapesDigestField)
+		os.Exit(2)
+	}
+	// The same holds for the runtime SDK shape tables and their digest.
+	if (*sdkShapesOut == "") != (*sdkShapesServices == "") {
+		fmt.Fprintln(os.Stderr, "awsmodelgen: -sdk-shapes-out and -sdk-shapes-services must be used together")
+		os.Exit(2)
+	}
+	if *versionFile != "" && *sdkShapesOut == "" {
+		fmt.Fprintf(os.Stderr, "awsmodelgen: -version-file requires -sdk-shapes-out so %s cannot go stale\n", SDKShapesDigestField)
 		os.Exit(2)
 	}
 	if err := awsmodel.VerifyRevision(*modelsDir, *revision); err != nil {
@@ -108,6 +119,24 @@ func main() {
 			os.Exit(1)
 		}
 	}
+	sdkShapesDigest := ""
+	if *sdkShapesOut != "" {
+		services, err := readShapeServices(*sdkShapesServices)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "awsmodelgen: %v\n", err)
+			os.Exit(1)
+		}
+		files, err := buildSDKShapes(*modelsDir, services)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "awsmodelgen: %v\n", err)
+			os.Exit(1)
+		}
+		sdkShapesDigest = ShapesDigest(files)
+		if err := writeOrCheckSDKShapes(*sdkShapesOut, files, *check); err != nil {
+			fmt.Fprintf(os.Stderr, "awsmodelgen: %v\n", err)
+			os.Exit(1)
+		}
+	}
 	if *inventoryOutput != "" || *baselineInventory != "" {
 		inventory := buildModelInventory(*revision, operations)
 		if *inventoryOutput != "" {
@@ -144,7 +173,7 @@ func main() {
 		}
 	}
 	if *versionFile != "" {
-		if err := updateModelVersion(*versionFile, *revision, *modelDate, ManifestDigest(contents), shapesDigest); err != nil {
+		if err := updateModelVersion(*versionFile, *revision, *modelDate, ManifestDigest(contents), shapesDigest, sdkShapesDigest); err != nil {
 			fmt.Fprintf(os.Stderr, "awsmodelgen: %v\n", err)
 			os.Exit(1)
 		}
