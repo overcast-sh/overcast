@@ -330,6 +330,35 @@ describe("buildTrace", () => {
     expect(trace.status).toBe("RUNNING")
     expect(trace.error).toBeUndefined()
     expect(trace.runsByName.get("Call")?.map((r) => r.status)).toEqual(["failed", "running"])
+    // And the node reads as its latest run, not as the failure before it.
+    expect(summarizeNode(trace, "Call", {}).status).toBe("running")
+  })
+
+  it("names the state that failed, not the Parallel its failure went through", () => {
+    const m = model({
+      StartAt: "P",
+      States: {
+        P: {
+          Type: "Parallel",
+          Branches: [{ StartAt: "T", States: { T: { Type: "Task", Resource: "r", End: true } } }],
+          End: true,
+        },
+      },
+    })
+    const trace = buildTrace(
+      linear([
+        ["ExecutionStarted", {}],
+        ["ParallelStateEntered", { name: "P" }],
+        ["ParallelStateStarted"],
+        ["TaskStateEntered", { name: "T" }],
+        ["TaskScheduled", {}],
+        ["TaskFailed", { error: "Db.Missing", cause: "no table" }],
+        ["ParallelStateFailed"],
+        ["ExecutionFailed", { error: "Db.Missing", cause: "no table" }],
+      ]),
+      m,
+    )
+    expect(trace.failedRunKey && trace.runsByKey.get(trace.failedRunKey)?.name).toBe("T")
   })
 
   it("keeps the iterations a redrive skipped as succeeded on the redriven Map", () => {

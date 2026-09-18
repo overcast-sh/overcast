@@ -486,7 +486,18 @@ export function buildTrace(events: HistoryEvent[], model?: AslModel): ExecutionT
         if (innermost && !aborted) {
           innermost.error ??= details?.error
           innermost.cause ??= details?.cause
-          trace.failedRunKey = innermost.key
+          // Name the state whose error failed the execution — the Task inside
+          // a Parallel, not the Parallel its failure propagated through.
+          const origin = [...trace.runs]
+            .reverse()
+            .find(
+              (r) =>
+                r.error !== undefined &&
+                r.error === details?.error &&
+                r.type !== "Parallel" &&
+                r.type !== "Map",
+            )
+          trace.failedRunKey = (origin ?? innermost).key
         }
         // Every run still open anywhere ends with the execution, not just the
         // ones on this thread.
@@ -583,9 +594,16 @@ export function summarizeNode(
     matchesSelection(r.iterationPath, selection),
   )
   if (runs.length === 0) return { status: "idle", runs, succeeded: 0, failed: 0, running: 0 }
+  // A state's colour is the worst outcome across Map iterations, but within
+  // one iteration (or the top level) only its latest run counts: a state
+  // that failed and then succeeded on a redrive, or went round a loop, is
+  // where its last run left it.
+  const latest = new Map<string, StateRun>()
+  for (const r of runs) latest.set(r.iterationPath.map((f) => `${f.map}[${f.index}]`).join("/"), r)
+  const current = [...latest.values()]
   let status: RunStatus = "succeeded"
   for (const candidate of STATUS_PRIORITY) {
-    if (runs.some((r) => r.status === candidate)) {
+    if (current.some((r) => r.status === candidate)) {
       status = candidate
       break
     }
@@ -594,8 +612,8 @@ export function summarizeNode(
   const failed = runs.filter((r) => r.status === "failed").length
   const succeeded = runs.filter((r) => r.status === "succeeded" || r.status === "caught").length
   const focusRun =
-    runs.find((r) => r.status === "running") ??
-    runs.find((r) => r.status === "failed") ??
+    current.find((r) => r.status === "running") ??
+    current.find((r) => r.status === "failed") ??
     runs.at(-1)
   return { status, runs, succeeded, failed, running, focusRun }
 }

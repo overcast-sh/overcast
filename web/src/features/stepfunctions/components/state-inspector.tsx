@@ -64,13 +64,7 @@ export function StateInspector({
       ),
     [trace, stateName, iterationSelection],
   )
-  const defaultRun = useMemo(
-    () =>
-      runs.find((r) => r.status === "running") ??
-      runs.find((r) => r.status === "failed") ??
-      runs.at(-1),
-    [runs],
-  )
+  const defaultRun = useMemo(() => runs.find((r) => r.status === "running") ?? runs.at(-1), [runs])
   // The caller keys this component on the state name, so a different state
   // starts fresh on its own default run and tab.
   const [runKey, setRunKey] = useState<string | undefined>()
