@@ -299,6 +299,7 @@ jobs:
       # The aws-sdk shape tables internal/awsshapes embeds: build output, like
       # the Lambda init above, packed from the committed text tables.
       - name: Pack the aws-sdk shape tables
+        if: needs.changes.outputs.code == 'true'
         shell: bash
         run: go run ./cmd/awsshapes-pack
 
@@ -413,6 +414,7 @@ jobs:
       # The aws-sdk shape tables internal/awsshapes embeds: build output, like
       # the Lambda init above, packed from the committed text tables.
       - name: Pack the aws-sdk shape tables
+        if: needs.changes.outputs.code == 'true'
         shell: bash
         run: go run ./cmd/awsshapes-pack
 
@@ -488,6 +490,7 @@ jobs:
       # The aws-sdk shape tables internal/awsshapes embeds: build output, like
       # the Lambda init above, packed from the committed text tables.
       - name: Pack the aws-sdk shape tables
+        if: needs.changes.outputs.code == 'true'
         shell: bash
         run: go run ./cmd/awsshapes-pack
 
