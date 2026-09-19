@@ -163,12 +163,25 @@ jobs:
       # main. The script never fails (errors degrade to rc=false with a
       # warning), so the jobs that hang off this output cannot be
       # skip-cascaded by an infrastructure hiccup.
+      #
+      # And only when the change can alter an image (ci-scope.py `image`). An
+      # RC is named for the version it is a candidate of, and during the window
+      # between a release PR merging and its tag every other PR would otherwise
+      # be named a candidate of that version too: a baseline promotion or a
+      # test-only change built bit-identical images and published them as
+      # `<version>-rc.<n>`. Only this output is narrowed.
+      # release-candidate-check.sh stays the one shared predicate, because
+      # release.yml and changelog-required.yml use it to keep the changelog
+      # releasable, which is a question about the window rather than the image.
+      # Anything but an explicit `false` counts as changed: a release PR that
+      # missed its candidate is the failure to avoid.
       - id: rc
         env:
           IS_SAME_REPO_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+          IMAGE_CHANGED: ${{ steps.scope.outputs.image }}
         run: |
           rc=false
-          if [ "$IS_SAME_REPO_PR" = "true" ]; then
+          if [ "$IS_SAME_REPO_PR" = "true" ] && [ "$IMAGE_CHANGED" != "false" ]; then
             rc=$(bash scripts/release-candidate-check.sh)
           fi
           echo "rc=$rc" >> "$GITHUB_OUTPUT"
@@ -1468,6 +1481,10 @@ jobs:
           # These narrowings guard themselves. Building another cmd would
           # change the Dockerfile; embedding more docs would change embed.go;
           # both are hashed, so widening the image's inputs forces a rebuild.
+          #
+          # scripts/ci-scope.py `reaches_image` restates this path list to
+          # decide whether a PR gets a candidate at all. Change one, change the
+          # other: ci_scope_test.py fails if they drift.
           hash=$(
             {
               git ls-tree -r HEAD -- go.mod go.sum embed.go embed_slim.go \

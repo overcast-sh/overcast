@@ -2,7 +2,9 @@
 """ci-scope.py — decide whether a pull request needs the expensive CI jobs.
 
 Reads the changed paths on stdin, one per line, and prints `code=true` or
-`code=false` for a workflow to gate jobs on.
+`code=false` for a workflow to gate jobs on, followed by `image=true` or
+`image=false`: whether the change can alter a published image (see
+`reaches_image`), which decides whether a release candidate is worth building.
 
 A pull request that only edits prose cannot change what the emulator does, and
 the Go suite, the SPA build and the image builds are the bulk of a CI run.
@@ -95,16 +97,72 @@ def needs_code_jobs(changed: list[str]) -> bool:
     return any(not is_prose(p) for p in changed)
 
 
+# What can reach a published image: the build context's content-address inputs
+# from test.yml's "Name the release candidate" step, restated as a predicate.
+# That step's own comment holds the reasoning (the four routes from the context
+# into the image, and why each narrowing is safe), so it is not repeated here.
+# Keep the two in step: ci_scope_test.py fails when they drift.
+#
+# VERSION is on this list although it is not part of the context: the hash
+# takes it as a literal line, because it names the candidate, and a change to
+# it is the release PR itself.
+IMAGE_FILES = (
+    "go.mod",
+    "go.sum",
+    "embed.go",
+    "embed_slim.go",
+    "Dockerfile",
+    ".dockerignore",
+    "VERSION",
+)
+IMAGE_PREFIXES = (
+    "cmd/overcast/",
+    "internal/",
+    "web/",
+    "docker/",
+    "docs/cdk/",
+    "docs/services/",
+)
+
+
+def reaches_image(path: str) -> bool:
+    """Can this file change the bytes of a published image?"""
+    # The toolchain drops both from `go build`, and non-test code cannot
+    # reference them, so neither can reach the binary.
+    if path.endswith("_test.go") or "/testdata/" in path:
+        return False
+    if path in IMAGE_FILES or path.startswith(IMAGE_PREFIXES):
+        return True
+    # `docs/*.md`: the shell glob in the hash, one level deep.
+    return path.startswith("docs/") and path.count("/") == 1 and path.endswith(".md")
+
+
+def changes_image(changed: list[str]) -> bool:
+    """Does this change set alter what an image would contain?
+
+    A pull request that does not builds bit-identical images to main, so a
+    release candidate for it says nothing. The bias is the same as
+    `needs_code_jobs`, for the same reason: a candidate built for nothing costs
+    a run, but a release PR that failed to get one ships untested. An empty
+    list is therefore `True`.
+    """
+    if not changed:
+        return True
+    return any(reaches_image(p) for p in changed)
+
+
 def main() -> int:
     # Anything that is not a pull request — a push to main, a release, a manual
     # dispatch — runs the lot. This exists to make review cheaper, not to
     # decide what main is allowed to skip.
     if os.environ.get("EVENT_NAME") != "pull_request":
         print("code=true")
+        print("image=true")
         return 0
 
     paths = [line.strip() for line in sys.stdin if line.strip()]
     print(f"code={'true' if needs_code_jobs(paths) else 'false'}")
+    print(f"image={'true' if changes_image(paths) else 'false'}")
     return 0
 
 
