@@ -49,13 +49,14 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 
 ## Differences from AWS
 
-| Area                           | On AWS                                     | Overcast                                                                            |
-| ------------------------------ | ------------------------------------------ | ----------------------------------------------------------------------------------- |
-| Repository URI host            | `{account}.dkr.ecr.{region}.amazonaws.com` | `localhost:<registryPort>` — the address startup proved the Docker daemon can reach |
-| Transport                      | HTTPS                                      | Plain HTTP                                                                          |
-| Image scanning                 | Real findings                              | `DescribeImageScanFindings` always reports scanner-unavailable with empty findings  |
-| Replication, public registries | Supported                                  | Not implemented                                                                     |
-| Image storage                  | Managed by AWS                             | A Docker volume, reclaimed by Docker rather than by `OVERCAST_DATA_DIR`             |
+| Area                           | On AWS                                     | Overcast                                                                                                        |
+| ------------------------------ | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| Repository URI host            | `{account}.dkr.ecr.{region}.amazonaws.com` | `localhost:<registryPort>` — the address startup proved the Docker daemon can reach                             |
+| Transport                      | HTTPS                                      | Plain HTTP                                                                                                       |
+| Image scanning                 | Real findings                              | No scan engine at all: `DescribeImageScanFindings` always reports scanner-unavailable, `PutImageScanningConfiguration` stores a setting nothing acts on, and `StartImageScan`/`Get`/`PutRegistryScanningConfiguration` are not implemented |
+| Image deletion                 | Durable                                    | `BatchDeleteImage` removes the record only — an image the registry still serves reappears on the next reconciling read |
+| Replication, public registries | Supported                                  | Not implemented                                                                                                  |
+| Image storage                  | Managed by AWS                             | A Docker volume, reclaimed by Docker rather than by `OVERCAST_DATA_DIR`                                          |
 
 Why the URI is re-minted on every read, why it says `localhost` rather than
 `OVERCAST_HOSTNAME`, and what happens when the fixed port is taken:
@@ -78,7 +79,7 @@ nothing to rebuild them from — see
 
 ## Operations
 
-All 22 listed operations are implemented.
+22 of 25 listed operations are implemented.
 Per-operation status, notes and AWS API links: [ECR operations](ecr/operations.md).
 
 <!-- END overcast:capabilities -->

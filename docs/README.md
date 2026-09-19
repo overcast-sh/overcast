@@ -94,7 +94,7 @@ Shorter overview: the [service reference index](./services/README.md).
 | Step Functions   | [stepfunctions.md](./services/stepfunctions.md)     | 37  | Comprehensive / broad support |
 | IAM              | [iam.md](./services/iam.md)                         | 74  | Core CRUD + common workflows  |
 | ECS              | [ecs.md](./services/ecs.md)                         | 48  | Core CRUD + common workflows  |
-| ECR              | [ecr.md](./services/ecr.md)                         | 22  | Core CRUD + common workflows  |
+| ECR              | [ecr.md](./services/ecr.md)                         | 25  | Core CRUD + common workflows  |
 | KMS              | [kms.md](./services/kms.md)                         | 34  | Core CRUD + common workflows  |
 | Kinesis          | [kinesis.md](./services/kinesis.md)                 | 23  | Core CRUD + common workflows  |
 | EventBridge      | [eventbridge.md](./services/eventbridge.md)         | 29  | Core CRUD + common workflows  |
