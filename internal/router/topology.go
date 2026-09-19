@@ -1652,7 +1652,10 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 		}
 	}
 
-	// Pipes edges (DynamoDB → SQS)
+	// Pipes edges. Both endpoints are resolved from the pipe's Source and
+	// Target ARNs (SQS, SNS, DynamoDB stream, Lambda, ...). Legacy records
+	// that carry only SourceName/TargetName keep the historical
+	// DynamoDB → SQS interpretation.
 	for _, kv := range byNS[tNsPipes] {
 		var p tPipe
 		if json.Unmarshal([]byte(kv.Value), &p) != nil {
@@ -1660,8 +1663,23 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 		}
 		srcRegion := regionFromARN(p.SourceArn, defaultRegion)
 		tgtRegion := regionFromARN(p.TargetArn, defaultRegion)
-		srcID := srcRegion + "::dynamodb::" + p.SourceName
-		tgtID := tgtRegion + "::sqs::" + p.TargetName
+		srcID := pipeEndpointNodeID(p.SourceArn, defaultRegion)
+		if srcID == "" && p.SourceArn == "" && p.SourceName != "" {
+			srcID = srcRegion + "::dynamodb::" + p.SourceName
+		}
+		tgtID := pipeEndpointNodeID(p.TargetArn, defaultRegion)
+		if tgtID == "" && p.TargetArn == "" && p.TargetName != "" {
+			tgtID = tgtRegion + "::sqs::" + p.TargetName
+		}
+		if srcID == "" || tgtID == "" {
+			continue
+		}
+		if srcID = resolveNodeID(srcID); srcID == "" {
+			continue
+		}
+		if tgtID = resolveNodeID(tgtID); tgtID == "" {
+			continue
+		}
 		addEdge(topologyEdge{
 			ID:     "pipe::" + srcRegion + "::" + p.Name,
 			Source: srcID,
@@ -2132,6 +2150,38 @@ func isNumeric(s string) bool {
 		}
 	}
 	return len(s) > 0
+}
+
+// pipeEndpointNodeID maps an EventBridge Pipes source or target ARN to the
+// topology node ID that represents it, keyed on the ARN's service segment.
+// Returns "" for an empty ARN or a service the graph has no node type for.
+func pipeEndpointNodeID(arn, defaultRegion string) string {
+	parts := strings.SplitN(arn, ":", 6)
+	if len(parts) < 6 || parts[0] != "arn" {
+		return ""
+	}
+	region := regionFromARN(arn, defaultRegion)
+	switch parts[2] {
+	case "sqs":
+		return region + "::sqs::" + nameFromARNSuffix(arn)
+	case "sns":
+		return region + "::sns::" + nameFromARNSuffix(arn)
+	case "dynamodb":
+		// Either a table ARN or a stream ARN; both map to the table node.
+		return region + "::dynamodb::" + tableNameFromStreamARN(arn)
+	case "lambda":
+		return region + "::lambda::" + lambdaNameFromARN(arn)
+	case "kinesis":
+		// arn:aws:kinesis:region:acct:stream/<name>
+		return region + "::kinesis::" + nameFromSlashSuffix(arn)
+	case "states":
+		// arn:aws:states:region:acct:stateMachine:<name>
+		return region + "::states::" + nameFromARNSuffix(arn)
+	case "events":
+		// arn:aws:events:region:acct:event-bus/<name>
+		return region + "::events::" + nameFromSlashSuffix(arn)
+	}
+	return ""
 }
 
 // cfnResourceNodeID maps a CloudFormation resource to the topology node ID
