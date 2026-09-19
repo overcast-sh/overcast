@@ -658,3 +658,177 @@ func TestBuildTopology_ec2InstanceDecodesStoreShape(t *testing.T) {
 		t.Errorf("expected vpc-member edge %q, got edges: %v", wantEdge, resp.Edges)
 	}
 }
+
+// pipeEdges returns the edges of type "pipe" keyed by ID.
+func pipeEdges(resp topologyResponse) map[string]topologyEdge {
+	out := map[string]topologyEdge{}
+	for _, e := range resp.Edges {
+		if e.Type == "pipe" {
+			out[e.ID] = e
+		}
+	}
+	return out
+}
+
+// assertPipeEdge checks that exactly one pipe edge exists and that it carries
+// the expected endpoints, label and state.
+func assertPipeEdge(t *testing.T, resp topologyResponse, wantID, wantSrc, wantTgt, wantLabel, wantState string) {
+	t.Helper()
+	edges := pipeEdges(resp)
+	if len(edges) != 1 {
+		t.Fatalf("expected exactly one pipe edge, got %d: %v", len(edges), keys(edges))
+	}
+	edge, ok := edges[wantID]
+	if !ok {
+		t.Fatalf("expected pipe edge %q, got: %v", wantID, keys(edges))
+	}
+	if edge.Source != wantSrc || edge.Target != wantTgt {
+		t.Errorf("pipe edge endpoints: got %s → %s, want %s → %s", edge.Source, edge.Target, wantSrc, wantTgt)
+	}
+	if edge.Type != "pipe" {
+		t.Errorf("pipe edge type: got %q, want %q", edge.Type, "pipe")
+	}
+	if edge.Label != wantLabel {
+		t.Errorf("pipe edge label: got %q, want %q", edge.Label, wantLabel)
+	}
+	if edge.State != wantState {
+		t.Errorf("pipe edge state: got %q, want %q", edge.State, wantState)
+	}
+}
+
+func TestBuildTopology_pipeSQSToLambda(t *testing.T) {
+	// Given: an SQS queue, a Lambda function, and a RUNNING pipe whose
+	// Source and Target are their ARNs (as AWS::Pipes::Pipe stores them).
+	queuePayload, _ := json.Marshal(map[string]any{
+		"name": "orders",
+		"arn":  "arn:aws:sqs:us-east-1:000000000000:orders",
+	})
+	functionPayload, _ := json.Marshal(map[string]any{
+		"name": "process-orders",
+		"arn":  "arn:aws:lambda:us-east-1:000000000000:function:process-orders",
+	})
+	pipePayload, _ := json.Marshal(map[string]any{
+		"Name":         "orders-to-lambda",
+		"Source":       "arn:aws:sqs:us-east-1:000000000000:orders",
+		"Target":       "arn:aws:lambda:us-east-1:000000000000:function:process-orders",
+		"CurrentState": "RUNNING",
+	})
+
+	// When: topology is built.
+	resp := buildTopology(&config.Config{Region: "us-east-1"}, map[string][]state.KV{
+		tNsQueues:    {{Key: "us-east-1/orders", Value: string(queuePayload)}},
+		tNsFunctions: {{Key: "us-east-1/process-orders", Value: string(functionPayload)}},
+		tNsPipes:     {{Key: "us-east-1/orders-to-lambda", Value: string(pipePayload)}},
+	}, "")
+
+	// Then: a pipe edge links the queue node to the function node.
+	assertPipeEdge(t, resp,
+		"pipe::us-east-1::orders-to-lambda",
+		"us-east-1::sqs::orders",
+		"us-east-1::lambda::process-orders",
+		"orders-to-lambda", "RUNNING")
+}
+
+func TestBuildTopology_pipeDynamoDBStreamToSQS(t *testing.T) {
+	// Given: a stream-enabled DynamoDB table, an SQS queue, and a pipe whose
+	// Source is the table's stream ARN.
+	tablePayload, _ := json.Marshal(map[string]any{
+		"TableName": "events",
+		"TableArn":  "arn:aws:dynamodb:us-east-1:000000000000:table/events",
+		"StreamSpecification": map[string]any{
+			"StreamEnabled":  true,
+			"StreamViewType": "NEW_AND_OLD_IMAGES",
+		},
+	})
+	queuePayload, _ := json.Marshal(map[string]any{
+		"name": "event-fanout",
+		"arn":  "arn:aws:sqs:us-east-1:000000000000:event-fanout",
+	})
+	pipePayload, _ := json.Marshal(map[string]any{
+		"Name":         "events-to-queue",
+		"Source":       "arn:aws:dynamodb:us-east-1:000000000000:table/events/stream/2026-01-01T00:00:00.000",
+		"Target":       "arn:aws:sqs:us-east-1:000000000000:event-fanout",
+		"CurrentState": "STOPPED",
+	})
+
+	// When: topology is built.
+	resp := buildTopology(&config.Config{Region: "us-east-1"}, map[string][]state.KV{
+		tNsTables: {{Key: "us-east-1/events", Value: string(tablePayload)}},
+		tNsQueues: {{Key: "us-east-1/event-fanout", Value: string(queuePayload)}},
+		tNsPipes:  {{Key: "us-east-1/events-to-queue", Value: string(pipePayload)}},
+	}, "")
+
+	// Then: a pipe edge links the table node to the queue node, carrying the
+	// pipe's (non-RUNNING) state.
+	assertPipeEdge(t, resp,
+		"pipe::us-east-1::events-to-queue",
+		"us-east-1::dynamodb::events",
+		"us-east-1::sqs::event-fanout",
+		"events-to-queue", "STOPPED")
+}
+
+func TestBuildTopology_pipeSQSToSNS(t *testing.T) {
+	// Given: an SQS queue, an SNS topic, and a pipe from the queue to the topic.
+	queuePayload, _ := json.Marshal(map[string]any{
+		"name": "inbound",
+		"arn":  "arn:aws:sqs:eu-west-1:000000000000:inbound",
+	})
+	topicPayload, _ := json.Marshal(map[string]any{
+		"name": "broadcast",
+		"arn":  "arn:aws:sns:eu-west-1:000000000000:broadcast",
+	})
+	pipePayload, _ := json.Marshal(map[string]any{
+		"Name":         "inbound-to-broadcast",
+		"Source":       "arn:aws:sqs:eu-west-1:000000000000:inbound",
+		"Target":       "arn:aws:sns:eu-west-1:000000000000:broadcast",
+		"CurrentState": "RUNNING",
+	})
+
+	// When: topology is built with a default region that differs from the
+	// resources' region, so endpoints must come from the ARNs.
+	resp := buildTopology(&config.Config{Region: "us-east-1"}, map[string][]state.KV{
+		tNsQueues: {{Key: "eu-west-1/inbound", Value: string(queuePayload)}},
+		tNsTopics: {{Key: "eu-west-1/broadcast", Value: string(topicPayload)}},
+		tNsPipes:  {{Key: "eu-west-1/inbound-to-broadcast", Value: string(pipePayload)}},
+	}, "")
+
+	// Then: a pipe edge links the queue node to the topic node in eu-west-1.
+	assertPipeEdge(t, resp,
+		"pipe::eu-west-1::inbound-to-broadcast",
+		"eu-west-1::sqs::inbound",
+		"eu-west-1::sns::broadcast",
+		"inbound-to-broadcast", "RUNNING")
+}
+
+func TestBuildTopology_pipeLegacyRecordWithoutARNs(t *testing.T) {
+	// Given: a DynamoDB table, an SQS queue, and a legacy pipe record that
+	// carries only SourceName/TargetName and no ARNs.
+	tablePayload, _ := json.Marshal(map[string]any{
+		"TableName": "legacy-table",
+		"TableArn":  "arn:aws:dynamodb:us-east-1:000000000000:table/legacy-table",
+	})
+	queuePayload, _ := json.Marshal(map[string]any{
+		"name": "legacy-queue",
+		"arn":  "arn:aws:sqs:us-east-1:000000000000:legacy-queue",
+	})
+	pipePayload, _ := json.Marshal(map[string]any{
+		"Name":         "legacy-pipe",
+		"SourceName":   "legacy-table",
+		"TargetName":   "legacy-queue",
+		"CurrentState": "RUNNING",
+	})
+
+	// When: topology is built.
+	resp := buildTopology(&config.Config{Region: "us-east-1"}, map[string][]state.KV{
+		tNsTables: {{Key: "us-east-1/legacy-table", Value: string(tablePayload)}},
+		tNsQueues: {{Key: "us-east-1/legacy-queue", Value: string(queuePayload)}},
+		tNsPipes:  {{Key: "us-east-1/legacy-pipe", Value: string(pipePayload)}},
+	}, "")
+
+	// Then: the DynamoDB → SQS fallback still produces the edge.
+	assertPipeEdge(t, resp,
+		"pipe::us-east-1::legacy-pipe",
+		"us-east-1::dynamodb::legacy-table",
+		"us-east-1::sqs::legacy-queue",
+		"legacy-pipe", "RUNNING")
+}
