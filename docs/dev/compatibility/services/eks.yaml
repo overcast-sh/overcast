@@ -2,32 +2,674 @@ service: eks
 status: in_progress
 priority: p2
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-08-14
+last_updated: 2026-09-20
 protocols: [rest_json]
 implementation: [internal/services/eks]
 integration_tests: [tests/integration/eks]
 capability_docs: docs/services/eks.md
-operation_count_estimate: unknown from initial subagent inventory
-current_support_level: EKS implementation present; compatibility inventory still needs service-specific audit.
+operation_count_estimate: >-
+  50 operations declared in internal/services/eks/capabilities_dev.go, all StatusSupported: 29
+  Clusters (cluster CRUD/updates/insights plus access entries, access policy associations,
+  identity provider configs and pod identity associations, which capabilities_dev.go groups
+  under the "Clusters" category), 1 Helpers (UpdateKubeconfig), 6 Nodegroups, 4 Fargate, 3 Tags,
+  7 Addons. This inventory (#143): 46 reviewed, 4 tests_missing (CreateCluster,
+  UpdateClusterConfig, CreateFargateProfile, UpdateAddon), 0 intentionally_partial at the
+  operation level (the echoed-but-not-enforced design applies broadly and is recorded once in
+  findings.intentionally_partial and docs/services/eks/limitations.md rather than per operation).
+current_support_level: >-
+  All 50 registered operations are implemented and have at least one integration test exercising
+  their primary request/response shape, live-mode 501 boundary (where applicable), and
+  cluster-delete cascade cleanup (where applicable). 46 of 50 have test evidence for every
+  distinct behavior their capabilities_dev.go note claims; 4 have a specific claimed field or
+  error path with no test anywhere in the suite (see their entries below).
 operations:
+  # ─── Clusters ────────────────────────────────────────────────────────────
   CreateCluster:
-    status: in_progress
-    docs:
-      - https://docs.aws.amazon.com/eks/latest/userguide/disaster-recovery-resiliency.html
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_CreateCluster.html
+    implementation: internal/services/eks/handler_cluster.go (createCluster), internal/services/eks/typed_logic.go (createClusterTyped)
+    tests:
+      - tests/integration/eks/eks_test.go#TestEKSClusterLifecycle
+      - tests/integration/eks/eks_test.go#TestEKSCreateClusterPreservesNetworkAndEncryptionConfig
+      - tests/integration/eks/eks_test.go#TestEKSInlineTagsOnCreate
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeCreateClusterRequiresDocker
+      - internal/services/eks/container_reconcile_test.go
+    status: tests_missing
     scenarios:
+      metadata_round_trip:
+        status: reviewed
+        evidence: roleArn is required and accepted by every test helper; version, resourcesVpcConfig, kubernetesNetworkConfig, and encryptionConfig round-trip through DescribeCluster in TestEKSCreateClusterPreservesNetworkAndEncryptionConfig; inline create-time tags are visible via both the create response and DescribeCluster in TestEKSInlineTagsOnCreate and TestEKSDescribeResourcesReturnInlineTags.
+      access_config_and_logging_on_create:
+        status: tests_missing
+        gap: "accessConfig is decoded and stored by createClusterTyped (typed_logic.go) but no test ever sends it or asserts it back from DescribeCluster. logging is a CreateCluster member too, but is only ever exercised indirectly via a later UpdateClusterConfig call (TestEKSUpdateClusterConfig), never as part of the CreateCluster request itself."
+      duplicate_cluster_name:
+        status: tests_missing
+        gap: "createClusterTyped returns ResourceInUseException for an already-existing cluster name (typed_logic.go), but no test calls CreateCluster twice for the same name. CreateAccessEntry and CreatePodIdentityAssociation both test their equivalent duplicate-name path; CreateCluster does not."
+      echoed_not_enforced:
+        status: intentionally_partial
+        gap: "logging, accessConfig and encryptionConfig are recorded and echoed only; the k3s control plane (live mode) enforces none of them. This is a documented design boundary, not a coverage gap — see docs/services/eks/limitations.md § Non-goals."
       live_control_plane_recovery:
         status: fixed
         evidence:
           - internal/services/eks/container_reconcile_test.go
           - internal/router/docker_reconcile_test.go
         notes: In live mode, persisted CREATING or ACTIVE clusters re-adopt a running k3s control plane or coalesce a replacement after a live exit, initial Docker connection, or event-stream reconnect.
+
+  DescribeCluster:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_DescribeCluster.html
+    implementation: internal/services/eks/handler_cluster.go (describeCluster)
+    tests:
+      - tests/integration/eks/eks_test.go#TestEKSClusterLifecycle
+      - tests/integration/eks/eks_test.go#TestEKSDescribeResourcesReturnInlineTags
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeDescribeClusterReturnsNotImplemented
+    status: reviewed
+
+  DescribeClusterVersions:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_DescribeClusterVersions.html
+    implementation: internal/services/eks/handler_cluster.go (describeClusterVersions)
+    tests:
+      - tests/integration/eks/eks_test.go#TestEKSDescribeClusterVersions
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeDescribeClusterVersionsStillWorks
+    status: reviewed
+    scenarios:
+      synthetic_catalog:
+        status: reviewed
+        evidence: The synthetic supported-version catalog is returned unconditionally, including in live mode after the cluster-scope 501 rules take effect (TestEKSLiveModeDescribeClusterVersionsStillWorks) — it is not cluster-scoped, so the mock-cluster refusal rules do not apply to it.
+
+  ListClusters:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_ListClusters.html
+    implementation: internal/services/eks/handler_cluster.go (listClusters)
+    tests:
+      - tests/integration/eks/eks_test.go#TestEKSClusterLifecycle
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeListClustersFiltersLegacyMockRecords
+    status: reviewed
+
+  ListUpdates:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_ListUpdates.html
+    implementation: internal/services/eks/handler_cluster.go (listUpdates)
+    tests:
+      - tests/integration/eks/eks_test.go#TestEKSListUpdates
+      - tests/integration/eks/eks_test.go#TestEKSDeleteClusterClearsUpdateHistory
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeListUpdatesReturnsNotImplemented
+    status: reviewed
+
+  ListInsights:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_ListInsights.html
+    implementation: internal/services/eks/handler_cluster.go (listInsights)
+    tests:
+      - tests/integration/eks/eks_test.go#TestEKSInsights
+      - tests/integration/eks/eks_modeled_bindings_test.go#TestEKSListInsights_modeledBinding
+      - tests/integration/eks/eks_modeled_bindings_test.go#TestEKSListInsights_honoursTheModeledFilter
+      - tests/integration/eks/eks_modeled_bindings_test.go#TestEKSListInsights_rejectsAnUndecodableNextToken
+      - tests/integration/eks/eks_modeled_bindings_test.go#TestEKSListInsights_inventedGetMethodDoesNotAnswer
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeListInsightsReturnsNotImplemented
+    status: reviewed
+
+  DescribeInsight:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_DescribeInsight.html
+    implementation: internal/services/eks/handler_cluster.go (describeInsight)
+    tests:
+      - tests/integration/eks/eks_test.go#TestEKSInsights
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeDescribeInsightReturnsNotImplemented
+    status: reviewed
+
+  UpdateClusterConfig:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_UpdateClusterConfig.html
+    implementation: internal/services/eks/handler_cluster.go (updateClusterConfig)
+    tests:
+      - tests/integration/eks/eks_test.go#TestEKSUpdateClusterConfig
+      - tests/integration/eks/eks_test.go#TestEKSUpdateClusterConfigPreservesKubernetesNetworkConfig
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeUpdateClusterConfigReturnsNotImplemented
+    status: tests_missing
+    scenarios:
+      logging_and_network_config_update:
+        status: reviewed
+        evidence: A logging update is reflected on the next DescribeCluster and reports update type LoggingUpdate (TestEKSUpdateClusterConfig); a kubernetesNetworkConfig update round-trips the same way (TestEKSUpdateClusterConfigPreservesKubernetesNetworkConfig).
+      resources_vpc_config_update:
+        status: tests_missing
+        gap: "resourcesVpcConfig is a recognized update member that sets the update type to VpcConfigUpdate (handler_cluster.go), but no test ever sends it to /update-config."
+      no_changes_requested_error:
+        status: tests_missing
+        gap: "A call with none of logging/resourcesVpcConfig/kubernetesNetworkConfig set returns InvalidParameterException \"No configuration changes requested\" (handler_cluster.go), and nothing exercises this path."
+      live_mode_boundary:
+        status: reviewed
+        evidence: tests/integration/eks/eks_test.go#TestEKSLiveModeUpdateClusterConfigReturnsNotImplemented
+
+  UpdateClusterVersion:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_UpdateClusterVersion.html
+    implementation: internal/services/eks/handler_cluster.go (updateClusterVersion)
+    tests:
+      - tests/integration/eks/eks_test.go#TestEKSUpdateClusterVersion
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeUpdateClusterVersionReturnsNotImplemented
+    status: reviewed
+
+  DescribeUpdate:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_DescribeUpdate.html
+    implementation: internal/services/eks/handler_cluster.go (describeUpdate)
+    tests:
+      - tests/integration/eks/eks_test.go#TestEKSDescribeUpdate
+      - tests/integration/eks/eks_test.go#TestEKSDescribeUpdate_afterNodegroupUpdate
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeDescribeUpdateReturnsNotImplemented
+    status: reviewed
+
+  DeleteCluster:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_DeleteCluster.html
+    implementation: internal/services/eks/handler_cluster.go (deleteCluster)
+    tests:
+      - tests/integration/eks/eks_test.go#TestEKSClusterLifecycle
+      - tests/integration/eks/eks_test.go#TestEKSDeleteClusterClearsClusterTags
+      - tests/integration/eks/eks_test.go#TestEKSDeleteClusterClearsChildResourceTags
+      - tests/integration/eks/eks_test.go#TestEKSDeleteClusterClearsUpdateHistory
+      - tests/integration/eks/eks_access_test.go#TestEKSDeleteClusterCleansAccessMetadata
+      - tests/integration/eks/eks_addons_test.go#TestEKSDeleteClusterClearsAddonAndFargateMetadata
+      - tests/integration/eks/eks_identity_test.go#TestEKSDeleteClusterClearsIdentityProviderConfigs
+      - tests/integration/eks/eks_pod_identity_test.go#TestEKSDeleteClusterClearsPodIdentityAssociations
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeDeleteLegacyMockClusterAllowed
+    status: reviewed
+    scenarios:
+      cascade_cleanup:
+        status: reviewed
+        evidence: Deleting a cluster clears its nodegroups, tags (own and every child resource's), update history, access entries and policy associations, identity provider configs, and pod identity associations, each verified by recreating the cluster/child and asserting nothing leaked.
+      legacy_mock_cluster_is_the_one_live_mode_exception:
+        status: reviewed
+        evidence: tests/integration/eks/eks_test.go#TestEKSLiveModeDeleteLegacyMockClusterAllowed — DeleteCluster is the one operation live mode still permits against a *.mock.eks.local record, matching docs/services/eks/limitations.md's stated exception.
+
+  # ─── Helpers (emulator-only, not an AWS API) ────────────────────────────
+  UpdateKubeconfig:
+    aws_docs:
+      - "[cli] https://docs.aws.amazon.com/cli/latest/reference/eks/update-kubeconfig.html"
+    implementation: internal/services/eks/handler_cluster.go (updateKubeconfig)
+    tests:
+      - tests/integration/eks/eks_test.go#TestEKSUpdateKubeconfig
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeUpdateKubeconfigReturnsNotImplemented
+      - internal/services/eks/service_runtime_kubeconfig_test.go
+    status: reviewed
+    scenarios:
+      not_an_aws_api_operation:
+        status: reviewed
+        evidence: "aws eks update-kubeconfig is a CLI-side command backed by DescribeCluster plus a local file write; no SDK ever calls this endpoint. Overcast exposes it as POST /_overcast/eks/clusters/{name}/kubeconfig, an emulator extension, matching the capabilities_dev.go note and the CLI reference cited above rather than an APIReference page."
+      "503_boundary":
+        status: reviewed
+        evidence: internal/services/eks/service_runtime_kubeconfig_test.go covers both documented 503 causes (not-yet-ACTIVE/no-endpoint, and CA still missing after reconcile) per docs/services/eks/limitations.md § UpdateKubeconfig and 503.
+
+  # ─── Nodegroups ──────────────────────────────────────────────────────────
+  CreateNodegroup:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_CreateNodegroup.html
+    implementation: internal/services/eks/handler_nodegroup.go (createNodegroup)
+    tests:
+      - tests/integration/eks/eks_test.go#TestEKSNodegroupLifecycle
+      - tests/integration/eks/eks_test.go#TestEKSCreateNodegroupPreservesFullShape
+      - tests/integration/eks/eks_test.go#TestEKSInlineTagsOnCreate
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeCreateNodegroupReturnsNotImplemented
+    status: reviewed
+    scenarios:
+      full_shape_round_trip:
+        status: reviewed
+        evidence: instanceTypes, amiType, capacityType, diskSize, releaseVersion, taints, updateConfig and launchTemplate all round-trip through DescribeNodegroup in TestEKSCreateNodegroupPreservesFullShape. labels and scalingConfig are sent on create in the same test but not independently asserted there; both are asserted round-tripping through the identical struct fields via UpdateNodegroupConfig in TestEKSUpdateNodegroupConfig, which exercises the same storage path.
+
+  UpdateNodegroupVersion:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_UpdateNodegroupVersion.html
+    implementation: internal/services/eks/handler_nodegroup.go (updateNodegroupVersion)
+    tests:
+      - tests/integration/eks/eks_test.go#TestEKSUpdateNodegroupVersion
+      - tests/integration/eks/eks_modeled_bindings_test.go#TestEKSUpdateNodegroupVersion_modeledBinding
+      - tests/integration/eks/eks_modeled_bindings_test.go#TestEKSUpdateNodegroupVersion_acceptsReleaseVersionWithoutVersion
+      - tests/integration/eks/eks_modeled_bindings_test.go#TestEKSUpdateNodegroupVersion_inventedPluralPathDoesNotAnswer
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeUpdateNodegroupVersionReturnsNotImplemented
+    status: reviewed
+
+  UpdateNodegroupConfig:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_UpdateNodegroupConfig.html
+    implementation: internal/services/eks/handler_nodegroup.go (updateNodegroupConfig)
+    tests:
+      - tests/integration/eks/eks_test.go#TestEKSUpdateNodegroupConfig
+      - tests/integration/eks/eks_test.go#TestEKSUpdateNodegroupConfigPreservesTaintsAndUpdateConfig
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeUpdateNodegroupConfigReturnsNotImplemented
+    status: reviewed
+    scenarios:
+      labels_scaling_taints_update_config:
+        status: reviewed
+        evidence: labels and scalingConfig round-trip in TestEKSUpdateNodegroupConfig; taints and updateConfig round-trip in TestEKSUpdateNodegroupConfigPreservesTaintsAndUpdateConfig.
+
+  DescribeNodegroup:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_DescribeNodegroup.html
+    implementation: internal/services/eks/handler_nodegroup.go (describeNodegroup)
+    tests:
+      - tests/integration/eks/eks_test.go#TestEKSDescribeNodegroup
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeDescribeNodegroupReturnsNotImplemented
+    status: reviewed
+
+  ListNodegroups:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_ListNodegroups.html
+    implementation: internal/services/eks/handler_nodegroup.go (listNodegroups)
+    tests:
+      - tests/integration/eks/eks_test.go#TestEKSNodegroupLifecycle
+      - tests/integration/eks/eks_test.go#TestEKSDeleteNodegroup
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeListNodegroupsReturnsNotImplemented
+    status: reviewed
+
+  DeleteNodegroup:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_DeleteNodegroup.html
+    implementation: internal/services/eks/handler_nodegroup.go (deleteNodegroup)
+    tests:
+      - tests/integration/eks/eks_test.go#TestEKSDeleteNodegroup
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeDeleteNodegroupReturnsNotImplemented
+    status: reviewed
+
+  # ─── Fargate profiles ────────────────────────────────────────────────────
+  ListFargateProfiles:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_ListFargateProfiles.html
+    implementation: internal/services/eks/handler_fargate.go (listFargateProfiles)
+    tests:
+      - tests/integration/eks/eks_test.go#TestEKSListFargateProfiles
+      - tests/integration/eks/eks_addons_test.go#TestEKSFargateProfileLifecycle
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeListFargateProfilesReturnsNotImplemented
+    status: reviewed
+    scenarios:
+      synthetic_default_profile:
+        status: reviewed
+        evidence: capabilities_dev.go's note that ListFargateProfiles "always includes synthetic \"default\" profile" matches DescribeFargateProfile's equivalent claim, exercised together by TestEKSDescribeFargateProfile.
+
+  DescribeFargateProfile:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_DescribeFargateProfile.html
+    implementation: internal/services/eks/handler_fargate.go (describeFargateProfile)
+    tests:
+      - tests/integration/eks/eks_test.go#TestEKSDescribeFargateProfile
+      - tests/integration/eks/eks_addons_test.go#TestEKSFargateProfileLifecycle
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeDescribeFargateProfileReturnsNotImplemented
+    status: reviewed
+
+  CreateFargateProfile:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_CreateFargateProfile.html
+    implementation: internal/services/eks/handler_fargate.go (createFargateProfile)
+    tests:
+      - tests/integration/eks/eks_addons_test.go#TestEKSFargateProfileLifecycle
+      - tests/integration/eks/eks_test.go#TestEKSCreateFargateProfilePreservesSubnets
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeCreateFargateProfileReturnsNotImplemented
+    status: tests_missing
+    scenarios:
+      subnets_round_trip:
+        status: reviewed
+        evidence: tests/integration/eks/eks_test.go#TestEKSCreateFargateProfilePreservesSubnets
+      pod_execution_role_and_selectors_round_trip:
+        status: tests_missing
+        gap: "podExecutionRoleArn and selectors are required create inputs and are stored (handler_fargate.go createFargateProfile), but every test that sends them (TestEKSFargateProfileLifecycle, TestEKSCreateFargateProfilePreservesSubnets, TestEKSInlineTagsOnCreate, TestEKSDescribeResourcesReturnInlineTags) only asserts other fields — neither podExecutionRoleArn nor selectors is ever read back and compared in a create or describe response."
+      lifecycle_and_tags:
+        status: reviewed
+        evidence: List/Describe/Create/Delete lifecycle and inline tags are covered by TestEKSFargateProfileLifecycle, TestEKSInlineTagsOnCreate, TestEKSDescribeResourcesReturnInlineTags.
+
+  DeleteFargateProfile:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_DeleteFargateProfile.html
+    implementation: internal/services/eks/handler_fargate.go (deleteFargateProfile)
+    tests:
+      - tests/integration/eks/eks_addons_test.go#TestEKSFargateProfileLifecycle
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeDeleteFargateProfileReturnsNotImplemented
+    status: reviewed
+
+  # ─── Tags ────────────────────────────────────────────────────────────────
+  ListTagsForResource:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_ListTagsForResource.html
+    implementation: internal/services/eks/handler_tags.go (listTagsForResource)
+    tests:
+      - tests/integration/eks/eks_test.go#TestEKSTagOperations
+      - tests/integration/eks/eks_test.go#TestEKSDescribeResourcesReturnInlineTags
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeListTagsForNonEKSArnStillAllowed
+      - "tests/integration/eks/eks_test.go (TestEKSLiveModeListTagsForLegacyMock* — cluster, nodegroup, addon, Fargate profile, pod identity association, identity provider config, and access entry ARN variants)"
+    status: reviewed
+
+  TagResource:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_TagResource.html
+    implementation: internal/services/eks/handler_tags.go (tagResource)
+    tests:
+      - tests/integration/eks/eks_test.go#TestEKSTagOperations
+      - tests/integration/eks/eks_test.go#TestEKSTagResourceRejectsEmptyTagsMap
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeTagNonEKSArnStillAllowed
+      - "tests/integration/eks/eks_test.go (TestEKSLiveModeTagLegacyMock* — same ARN-kind variants as ListTagsForResource, including malformed-request variants)"
+    status: reviewed
+
+  UntagResource:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_UntagResource.html
+    implementation: internal/services/eks/handler_tags.go (untagResource)
+    tests:
+      - tests/integration/eks/eks_test.go#TestEKSTagOperations
+      - tests/integration/eks/eks_test.go#TestEKSUntagResourceRejectsMissingTagKeys
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeUntagNonEKSArnStillAllowed
+      - "tests/integration/eks/eks_test.go (TestEKSLiveModeUntagLegacyMock* — same ARN-kind variants, including missing-tagKeys variants)"
+    status: reviewed
+
+  # ─── Access entries and access policies ─────────────────────────────────
+  CreateAccessEntry:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_CreateAccessEntry.html
+    implementation: internal/services/eks/handler_access.go (createAccessEntry)
+    tests:
+      - tests/integration/eks/eks_access_test.go#TestEKSCreateAccessEntry
+      - tests/integration/eks/eks_access_test.go#TestEKSCreateAccessEntryPersistsInlineTags
+      - tests/integration/eks/eks_access_test.go#TestEKSAccessEntryTagsDoNotLeakAcrossClusterDeleteRecreate
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeCreateAccessEntryReturnsNotImplemented
+    status: reviewed
+    scenarios:
+      duplicate_and_missing_principal:
+        status: reviewed
+        evidence: TestEKSCreateAccessEntry covers the duplicate-principal 409 ResourceInUseException and the missing-principalArn 400 MissingParameter path.
+
+  DescribeAccessEntry:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_DescribeAccessEntry.html
+    implementation: internal/services/eks/handler_access.go (describeAccessEntry)
+    tests:
+      - tests/integration/eks/eks_access_test.go#TestEKSDescribeAccessEntry
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeDescribeAccessEntryReturnsNotImplemented
+    status: reviewed
+
+  UpdateAccessEntry:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_UpdateAccessEntry.html
+    implementation: internal/services/eks/handler_access.go (updateAccessEntry)
+    tests:
+      - tests/integration/eks/eks_access_test.go#TestEKSUpdateAccessEntry
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeUpdateAccessEntryReturnsNotImplemented
+    status: reviewed
+
+  DeleteAccessEntry:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_DeleteAccessEntry.html
+    implementation: internal/services/eks/handler_access.go (deleteAccessEntry)
+    tests:
+      - tests/integration/eks/eks_access_test.go#TestEKSDeleteAccessEntry
+      - tests/integration/eks/eks_access_test.go#TestEKSDeleteClusterCleansAccessMetadata
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeDeleteAccessEntryReturnsNotImplemented
+    status: reviewed
+
+  ListAccessEntries:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_ListAccessEntries.html
+    implementation: internal/services/eks/handler_access.go (listAccessEntries)
+    tests:
+      - tests/integration/eks/eks_access_test.go#TestEKSListAccessEntries
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeListAccessEntriesReturnsNotImplemented
+    status: reviewed
+
+  AssociateAccessPolicy:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_AssociateAccessPolicy.html
+    implementation: internal/services/eks/handler_access.go (associateAccessPolicy)
+    tests:
+      - tests/integration/eks/eks_access_test.go#TestEKSAssociateAndListAssociatedAccessPolicies
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeAssociateAccessPolicyReturnsNotImplemented
+    status: reviewed
+    scenarios:
+      duplicate_and_missing_policy:
+        status: reviewed
+        evidence: TestEKSAssociateAndListAssociatedAccessPolicies covers the duplicate-association 409 ResourceInUseException and the missing-policyArn 400 MissingParameter path, plus an accessScope payload with a namespace filter.
+
+  ListAccessPolicies:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_ListAccessPolicies.html
+    implementation: internal/services/eks/handler_access.go (listAccessPolicies)
+    tests:
+      - tests/integration/eks/eks_access_test.go#TestEKSListAccessPolicies
+      - tests/integration/eks/eks_access_test.go#TestEKSListAccessPoliciesReturnsTheWholePolicy
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeListAccessPoliciesStillWorks
+    status: reviewed
+
+  ListAssociatedAccessPolicies:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_ListAssociatedAccessPolicies.html
+    implementation: internal/services/eks/handler_access.go (listAssociatedAccessPolicies)
+    tests:
+      - tests/integration/eks/eks_access_test.go#TestEKSAssociateAndListAssociatedAccessPolicies
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeListAssociatedAccessPoliciesReturnsNotImplemented
+    status: reviewed
+
+  DisassociateAccessPolicy:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_DisassociateAccessPolicy.html
+    implementation: internal/services/eks/handler_access.go (disassociateAccessPolicy)
+    tests:
+      - tests/integration/eks/eks_access_test.go#TestEKSDisassociateAccessPolicy
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeDisassociateAccessPolicyReturnsNotImplemented
+    status: reviewed
+
+  # ─── Identity provider configs ──────────────────────────────────────────
+  ListIdentityProviderConfigs:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_ListIdentityProviderConfigs.html
+    implementation: internal/services/eks/handler_identity.go (listIdentityProviderConfigs)
+    tests:
+      - tests/integration/eks/eks_identity_test.go#TestEKSListIdentityProviderConfigs
+      - tests/integration/eks/eks_identity_test.go#TestEKSDeleteClusterClearsIdentityProviderConfigs
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeListIdentityProviderConfigsReturnsNotImplemented
+    status: reviewed
+
+  DescribeIdentityProviderConfig:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_DescribeIdentityProviderConfig.html
+    implementation: internal/services/eks/handler_identity.go (describeIdentityProviderConfig)
+    tests:
+      - tests/integration/eks/eks_identity_test.go#TestEKSDescribeIdentityProviderConfig
+      - tests/integration/eks/eks_modeled_bindings_test.go#TestEKSDescribeIdentityProviderConfig_modeledBinding
+      - tests/integration/eks/eks_modeled_bindings_test.go#TestEKSDescribeIdentityProviderConfig_requiresTypeAndName
+      - tests/integration/eks/eks_modeled_bindings_test.go#TestEKSDescribeIdentityProviderConfig_unknownConfigIsNotFound
+      - tests/integration/eks/eks_modeled_bindings_test.go#TestEKSDescribeIdentityProviderConfig_inventedGetPathDoesNotAnswer
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeDescribeIdentityProviderConfigReturnsNotImplemented
+    status: reviewed
+
+  AssociateIdentityProviderConfig:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_AssociateIdentityProviderConfig.html
+    implementation: internal/services/eks/handler_identity.go (associateIdentityProviderConfig)
+    tests:
+      - tests/integration/eks/eks_identity_test.go#TestEKSAssociateIdentityProviderConfig
+      - tests/integration/eks/eks_identity_test.go#TestEKSAssociateIdentityProviderConfigPersistsInlineTags
+      - tests/integration/eks/eks_identity_test.go#TestEKSIdentityProviderTagsDoNotLeakAcrossClusterDeleteRecreate
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeAssociateIdentityProviderConfigReturnsNotImplemented
+    status: reviewed
+
+  DisassociateIdentityProviderConfig:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_DisassociateIdentityProviderConfig.html
+    implementation: internal/services/eks/handler_identity.go (disassociateIdentityProviderConfig)
+    tests:
+      - tests/integration/eks/eks_identity_test.go#TestEKSDisassociateIdentityProviderConfig
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeDisassociateIdentityProviderConfigReturnsNotImplemented
+    status: reviewed
+
+  # ─── Pod identity associations ──────────────────────────────────────────
+  CreatePodIdentityAssociation:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_CreatePodIdentityAssociation.html
+    implementation: internal/services/eks/handler_identity.go (createPodIdentityAssociation)
+    tests:
+      - tests/integration/eks/eks_pod_identity_test.go#TestEKSPodIdentityAssociationLifecycle
+      - tests/integration/eks/eks_pod_identity_test.go#TestEKSCreatePodIdentityAssociationRejectsDuplicateServiceAccountBinding
+      - tests/integration/eks/eks_pod_identity_test.go#TestEKSCreatePodIdentityAssociationPersistsInlineTags
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeCreatePodIdentityAssociationReturnsNotImplemented
+    status: reviewed
+
+  ListPodIdentityAssociations:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_ListPodIdentityAssociations.html
+    implementation: internal/services/eks/handler_identity.go (listPodIdentityAssociations)
+    tests:
+      - tests/integration/eks/eks_pod_identity_test.go#TestEKSListPodIdentityAssociations
+      - tests/integration/eks/eks_pod_identity_test.go#TestEKSPodIdentityAssociationLifecycle
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeListPodIdentityAssociationsReturnsNotImplemented
+    status: reviewed
+
+  DescribePodIdentityAssociation:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_DescribePodIdentityAssociation.html
+    implementation: internal/services/eks/handler_identity.go (describePodIdentityAssociation)
+    tests:
+      - tests/integration/eks/eks_pod_identity_test.go#TestEKSPodIdentityAssociationLifecycle
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeDescribePodIdentityAssociationReturnsNotImplemented
+    status: reviewed
+
+  UpdatePodIdentityAssociation:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_UpdatePodIdentityAssociation.html
+    implementation: internal/services/eks/handler_identity.go (updatePodIdentityAssociation)
+    tests:
+      - tests/integration/eks/eks_pod_identity_test.go#TestEKSUpdatePodIdentityAssociation
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeUpdatePodIdentityAssociationReturnsNotImplemented
+    status: reviewed
+
+  DeletePodIdentityAssociation:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_DeletePodIdentityAssociation.html
+    implementation: internal/services/eks/handler_identity.go (deletePodIdentityAssociation)
+    tests:
+      - tests/integration/eks/eks_pod_identity_test.go#TestEKSPodIdentityAssociationLifecycle
+      - tests/integration/eks/eks_pod_identity_test.go#TestEKSDeleteClusterClearsPodIdentityAssociations
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeDeletePodIdentityAssociationReturnsNotImplemented
+    status: reviewed
+
+  # ─── Add-ons ─────────────────────────────────────────────────────────────
+  CreateAddon:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_CreateAddon.html
+    implementation: internal/services/eks/handler_addon.go (createAddon)
+    tests:
+      - tests/integration/eks/eks_addons_test.go#TestEKSAddonLifecycle
+      - tests/integration/eks/eks_addons_test.go#TestEKSCreateAddonRejectsUnknownName
+      - tests/integration/eks/eks_addons_test.go#TestEKSCreateAddonRejectsMissingName
+      - tests/integration/eks/eks_addons_test.go#TestEKSCreateAddonAcceptsEveryPublishedName
+      - tests/integration/eks/eks_addons_test.go#TestEKSCreateAddonPreservesFullShape
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeCreateAddonReturnsNotImplemented
+    status: reviewed
+    scenarios:
+      addon_name_catalog_validation:
+        status: reviewed
+        evidence: "#1692 — an unpublished addonName is rejected as InvalidParameterException (TestEKSCreateAddonRejectsUnknownName); a missing addonName is rejected the same way (TestEKSCreateAddonRejectsMissingName); every name DescribeAddonVersions actually publishes is independently proven acceptable (TestEKSCreateAddonAcceptsEveryPublishedName)."
+      full_shape_round_trip:
+        status: reviewed
+        evidence: addonVersion, configurationValues and serviceAccountRoleArn round-trip through DescribeAddon (TestEKSCreateAddonPreservesFullShape).
+
+  DescribeAddon:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_DescribeAddon.html
+    implementation: internal/services/eks/handler_addon.go (describeAddon)
+    tests:
+      - tests/integration/eks/eks_addons_test.go#TestEKSAddonLifecycle
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeDescribeAddonReturnsNotImplemented
+    status: reviewed
+
+  ListAddons:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_ListAddons.html
+    implementation: internal/services/eks/handler_addon.go (listAddons)
+    tests:
+      - tests/integration/eks/eks_addons_test.go#TestEKSAddonLifecycle
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeListAddonsReturnsNotImplemented
+    status: reviewed
+
+  UpdateAddon:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_UpdateAddon.html
+    implementation: internal/services/eks/handler_addon.go (updateAddon)
+    tests:
+      - tests/integration/eks/eks_addons_test.go#TestEKSUpdateAddon
+      - tests/integration/eks/eks_modeled_bindings_test.go#TestEKSUpdateAddon_modeledBinding
+      - tests/integration/eks/eks_modeled_bindings_test.go#TestEKSUpdateAddon_inventedPluralPathDoesNotAnswer
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeUpdateAddonReturnsNotImplemented
+    status: tests_missing
+    scenarios:
+      version_and_configuration_round_trip:
+        status: reviewed
+        evidence: addonVersion and configurationValues round-trip through DescribeAddon after an update (TestEKSUpdateAddon); the modeled POST binding and its distinct-from-plural-path shape are covered separately (TestEKSUpdateAddon_modeledBinding, TestEKSUpdateAddon_inventedPluralPathDoesNotAnswer).
+      resolve_conflicts_echo:
+        status: tests_missing
+        gap: "resolveConflicts is appended to the recorded update's params (typed_logic.go, ~line 961, the same mechanism capabilities_dev.go's note describes as \"echoed into the update's params but not enforced\"), but no test ever sends resolveConflicts or inspects the update's params to confirm it is actually there."
+
+  DeleteAddon:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_DeleteAddon.html
+    implementation: internal/services/eks/handler_addon.go (deleteAddon)
+    tests:
+      - tests/integration/eks/eks_addons_test.go#TestEKSAddonLifecycle
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeDeleteAddonReturnsNotImplemented
+    status: reviewed
+
+  DescribeAddonConfiguration:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_DescribeAddonConfiguration.html
+    implementation: internal/services/eks/handler_addon.go (describeAddonConfiguration)
+    tests:
+      - tests/integration/eks/eks_addons_test.go#TestEKSDescribeAddonConfiguration
+      - tests/integration/eks/eks_modeled_bindings_test.go#TestEKSDescribeAddonConfiguration_modeledBinding
+      - tests/integration/eks/eks_modeled_bindings_test.go#TestEKSDescribeAddonConfiguration_requiresBothQueryMembers
+      - tests/integration/eks/eks_modeled_bindings_test.go#TestEKSDescribeAddonConfiguration_unknownVersionIsNotFound
+      - tests/integration/eks/eks_modeled_bindings_test.go#TestEKSDescribeAddonConfiguration_inventedPathDoesNotAnswer
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeDescribeAddonConfigurationStillWorks
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeDescribeAddonConfigurationMissingStillReturnsNotFound
+    status: reviewed
+
+  DescribeAddonVersions:
+    aws_docs:
+      - https://docs.aws.amazon.com/eks/latest/APIReference/API_DescribeAddonVersions.html
+    implementation: internal/services/eks/handler_addon.go (describeAddonVersions)
+    tests:
+      - tests/integration/eks/eks_addons_test.go#TestEKSDescribeAddonVersions
+      - tests/integration/eks/eks_modeled_bindings_test.go#TestEKSDescribeAddonVersions_modeledBinding
+      - tests/integration/eks/eks_modeled_bindings_test.go#TestEKSDescribeAddonVersions_omittedAddonNameReturnsTheWholeCatalog
+      - tests/integration/eks/eks_modeled_bindings_test.go#TestEKSDescribeAddonVersions_kubernetesVersionFiltersTheCatalog
+      - tests/integration/eks/eks_modeled_bindings_test.go#TestEKSDescribeAddonVersions_paginatesWithMaxResultsAndNextToken
+      - tests/integration/eks/eks_modeled_bindings_test.go#TestEKSDescribeAddonVersions_rejectsAnUndecodableNextToken
+      - tests/integration/eks/eks_modeled_bindings_test.go#TestEKSDescribeAddonVersions_inventedPathDoesNotAnswer
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeDescribeAddonVersionsStillWorks
+      - tests/integration/eks/eks_test.go#TestEKSLiveModeDescribeAddonVersionsUnknownStillReturnsEmpty
+    status: reviewed
+
 findings:
   fixed:
     - Live-mode EKS clusters no longer retain ACTIVE metadata after their control-plane container exits or disappears while Overcast is not observing Docker events.
+    - "#143: completed a full operation-by-operation compatibility inventory for all 50 registered EKS operations, mapping each to its AWS API Reference page (or the CLI reference for the emulator-only UpdateKubeconfig), its handler file, and the integration tests that exercise it. 46 of 50 operations have test evidence for every distinct claim in their capabilities_dev.go note; the remaining 4 are recorded as tests_missing below with the specific untested claim named."
   remaining_gaps:
-    - Run a focused EKS inventory and AWS docs mapping.
-  intentionally_partial: []
+    - "Clusters: CreateCluster's accessConfig field and logging-on-create are never round-tripped through DescribeCluster by any test, and CreateCluster never tests the duplicate-name ResourceInUseException path that CreateAccessEntry and CreatePodIdentityAssociation both test for their own resources. UpdateClusterConfig's resourcesVpcConfig update path (update type VpcConfigUpdate) and its \"No configuration changes requested\" 400 error are also untested."
+    - "Fargate: CreateFargateProfile's podExecutionRoleArn and selectors are required inputs that are stored but never asserted back from any create or describe response."
+    - "Addons: UpdateAddon's resolveConflicts is echoed into the update's params (typed_logic.go) but no test sends it or inspects the params to confirm the echo actually happens."
+  intentionally_partial:
+    - "CreateCluster's (and the equivalent UpdateClusterConfig/UpdateClusterVersion) logging, accessConfig and encryptionConfig are recorded and echoed only; nothing enforces them against a live k3s control plane. This is a stated design boundary (docs/services/eks/limitations.md § Non-goals), not a fixable gap."
+    - "Nodegroup and Fargate profile capacity is metadata only in both modes — Overcast never provisions worker compute, so scalingConfig/desiredSize and similar fields describe intent that nothing acts on (docs/services/eks/limitations.md § Non-goals)."
+    - "IAM enforcement, access policies and pod identity are stored, never enforced (docs/services/eks.md § Differences from AWS)."
 handoff:
-  start_with: [service-specific inventory]
-  do_not_redo: []
+  start_with: [CreateCluster, UpdateClusterConfig, CreateFargateProfile, UpdateAddon]
+  do_not_redo:
+    [
+      DescribeCluster, DescribeClusterVersions, ListClusters, ListUpdates, ListInsights, DescribeInsight,
+      UpdateClusterVersion, DescribeUpdate, DeleteCluster, UpdateKubeconfig, CreateNodegroup,
+      UpdateNodegroupVersion, UpdateNodegroupConfig, DescribeNodegroup, ListNodegroups, DeleteNodegroup,
+      ListFargateProfiles, DescribeFargateProfile, DeleteFargateProfile, ListTagsForResource, TagResource,
+      UntagResource, CreateAccessEntry, DescribeAccessEntry, UpdateAccessEntry, DeleteAccessEntry,
+      ListAccessEntries, AssociateAccessPolicy, ListAccessPolicies, ListAssociatedAccessPolicies,
+      DisassociateAccessPolicy, ListIdentityProviderConfigs, DescribeIdentityProviderConfig,
+      AssociateIdentityProviderConfig, DisassociateIdentityProviderConfig, CreatePodIdentityAssociation,
+      ListPodIdentityAssociations, DescribePodIdentityAssociation, UpdatePodIdentityAssociation,
+      DeletePodIdentityAssociation, CreateAddon, DescribeAddon, ListAddons, DeleteAddon,
+      DescribeAddonConfiguration, DescribeAddonVersions,
+    ]
   commands: [go test -count=1 ./internal/services/eks/... ./tests/integration/eks/...]
