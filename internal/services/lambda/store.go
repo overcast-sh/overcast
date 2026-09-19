@@ -210,6 +210,18 @@ func (s *lambdaStore) pruneFunctionPackages(ctx context.Context, region, name, k
 // validation and external lookups happen after it; this locked recheck is the
 // authority that prevents two concurrent creates from both succeeding.
 func (s *lambdaStore) createFunction(ctx context.Context, fn *Function) (bool, *protocol.AWSError) {
+	return s.createFunctionPublishing(ctx, fn, nil)
+}
+
+// createFunctionPublishing is createFunction for a Publish=true create:
+// initial is the version 1 snapshot, committed in the same critical section
+// as the function, with its number allocated here. No reader sees the
+// function without its version, no racing create on the same name can
+// publish on top of a function it did not create, and a snapshot that cannot
+// be stored takes the function record down with it, so the create persists
+// nothing — as every other failed create does. A nil initial is a plain
+// createFunction.
+func (s *lambdaStore) createFunctionPublishing(ctx context.Context, fn *Function, initial *FunctionVersion) (bool, *protocol.AWSError) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -218,6 +230,18 @@ func (s *lambdaStore) createFunction(ctx context.Context, fn *Function) (bool, *
 		return false, aerr
 	}
 	if aerr := s.putFunction(ctx, fn); aerr != nil {
+		return false, aerr
+	}
+	if initial == nil {
+		return true, nil
+	}
+	if aerr := s.publishVersionLocked(ctx, initial); aerr != nil {
+		// Best effort, like discardUnreferencedPackage: the record is what a
+		// reader would find, so it goes; a package left behind is
+		// unreferenced and the next successful write collects it.
+		region := s.region(ctx)
+		_ = s.pruneFunctionPackages(ctx, region, fn.Name, "")
+		_ = s.store.Delete(ctx, nsFunctions, serviceutil.RegionKey(region, fn.Name))
 		return false, aerr
 	}
 	return true, nil
@@ -587,11 +611,31 @@ func versionKey(functionName string, version int) string {
 	return fmt.Sprintf("%s:%010d", functionName, version)
 }
 
-// nextVersion atomically increments and returns the next version number for a
-// function. Version numbers start at 1.
-func (s *lambdaStore) nextVersion(ctx context.Context, functionName string) (int, error) {
+// publishVersion allocates the next version number for v's function, stamps
+// it on v and stores the snapshot, in one critical section. It is the one
+// path a numbered version is written through — PublishVersion directly, and
+// CreateFunction with Publish=true via createFunctionPublishing, which holds
+// the lock already and calls publishVersionLocked.
+func (s *lambdaStore) publishVersion(ctx context.Context, v *FunctionVersion) *protocol.AWSError {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.publishVersionLocked(ctx, v)
+}
+
+// publishVersionLocked is publishVersion for a caller that holds s.mu.
+func (s *lambdaStore) publishVersionLocked(ctx context.Context, v *FunctionVersion) *protocol.AWSError {
+	versionNum, err := s.nextVersionLocked(ctx, v.Name)
+	if err != nil {
+		return protocol.Wrap(protocol.ErrInternalError, err)
+	}
+	v.Version = versionNum
+	return s.putVersion(ctx, v)
+}
+
+// nextVersionLocked increments and returns the next version number for a
+// function. Version numbers start at 1. The caller holds s.mu, which is what
+// makes the read-increment-write atomic.
+func (s *lambdaStore) nextVersionLocked(ctx context.Context, functionName string) (int, error) {
 	key := serviceutil.RegionKey(s.region(ctx), functionName)
 	raw, found, err := s.store.Get(ctx, nsVersionCounters, key)
 	if err != nil {

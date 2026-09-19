@@ -2,7 +2,7 @@ service: lambda
 status: fixed
 priority: p0
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-08-14
+last_updated: 2026-09-19
 protocols: [rest_json, event_stream]
 implementation: [internal/services/lambda]
 integration_tests: [tests/integration/lambda, tests/integration/lambdadocker]
@@ -11,9 +11,14 @@ operation_count_estimate: 51 tracked; 49 supported, 2 unsupported
 current_support_level: Broad control plane plus Docker-backed invoke; InvokeAsync unsupported.
 operations:
   CreateFunction:
-    status: fixed
+    # reviewed: every scenario below is tested for the behaviour Overcast
+    # claims, and every documented partiality names its gap and its issue.
+    status: reviewed
     aws_docs:
       - https://docs.aws.amazon.com/lambda/latest/api/API_CreateFunction.html
+      - https://docs.aws.amazon.com/lambda/latest/api/API_PublishVersion.html
+      - https://docs.aws.amazon.com/lambda/latest/api/API_FunctionConfiguration.html
+      - https://docs.aws.amazon.com/lambda/latest/dg/lambda-managed-instances-version-publishing.html
     protocol: REST JSON; POST /2015-03-31/functions; application/json request and response
     tests:
       - go test -count=1 -run 'TestCreateFunction_' ./tests/integration/lambda/...
@@ -38,11 +43,78 @@ operations:
         status: reviewed
         evidence: Existing test verifies deprecated runtime rejection.
       publish_on_create:
-        status: tests_missing
-        gap: Publish=true should publish initial version 1; not reviewed in this pass.
+        status: fixed
+        evidence: Publish=true creates the function and publishes version 1 from its initial configuration in one store critical section (createFunctionPublishing), and answers 201 with the version's FunctionConfiguration — Version "1", FunctionArn suffixed ":1", the snapshot's own RevisionId and CodeSha256 — while $LATEST stays readable unqualified and ListVersionsByFunction lists $LATEST then 1; the next PublishVersion is 2. Publish false or absent is unchanged and reports Version "$LATEST", which every FunctionConfiguration now carries as AWS does. A refused create (duplicate name, or a version write that fails) persists no function and no version. The snapshot is the same newFunctionVersion PublishVersion stores. Previously returned 501.
+        tests:
+          - tests/integration/lambda/create_function_publish_test.go::TestCreateFunction_publishTrue_returnsPublishedVersionOne
+          - tests/integration/lambda/create_function_publish_test.go::TestCreateFunction_publishTrue_latestStaysReadable
+          - tests/integration/lambda/create_function_publish_test.go::TestCreateFunction_publishTrue_listVersionsShowsLatestAndOne
+          - tests/integration/lambda/create_function_publish_test.go::TestCreateFunction_publishTrue_nextPublishedVersionIsTwo
+          - tests/integration/lambda/create_function_publish_test.go::TestCreateFunction_publishFalseOrAbsent_publishesNothing
+          - tests/integration/lambda/create_function_publish_test.go::TestCreateFunction_publishTrue_duplicateNamePublishesNothing
+          - internal/services/lambda/store_publish_on_create_test.go::TestCreateFunctionPublishing_commitsVersionOneWithTheFunction
+          - internal/services/lambda/store_publish_on_create_test.go::TestCreateFunction_publishTrueRollsBackWhenTheVersionCannotBeStored
+      publish_to_latest_published:
+        status: unsupported
+        gap: PublishTo's one value, LATEST_PUBLISHED, asks for the $LATEST.PUBLISHED version of a Lambda Managed Instances function — the qualifier unqualified invokes of such a function resolve to instead of $LATEST (https://docs.aws.amazon.com/lambda/latest/dg/lambda-managed-instances-version-publishing.html). Managed instances are not emulated and nothing resolves that qualifier, so the member returns 501 before mutation, alone or alongside Publish=true, rather than handing back a function whose unqualified ARN would behave differently from what was asked for.
+        tests:
+          - tests/integration/lambda/create_function_publish_test.go::TestCreateFunction_publishToLatestPublished_stillUnsupported
+          - tests/integration/lambda/validation_review_test.go::TestUnsupportedFields_RealRequestsStill501
       advanced_configuration:
-        status: intentionally_partial
-        gap: SnapStart, CapacityProviderConfig, DurableConfig, TenancyConfig, Publish/PublishTo, RuntimeManagementConfig, RecursiveLoop, and empty-object LoggingConfig updates are rejected before mutation rather than silently discarded. DeadLetterConfig is validated, stored, returned and honoured: a failed asynchronous invocation reaches its SQS queue or SNS topic with AWS's documented RequestID/ErrorCode/ErrorMessage message attributes, and the invocation is attempted three times as on AWS (the initial attempt plus two retries, 1s then 2s) (tests in internal/services/lambda/dead_letter_test.go, tests/integration/lambda/dead_letter_config_test.go and tests/integration/cloudformation/lambda_dead_letter_test.go). TracingConfig, EphemeralStorage and KMSKeyArn are validated against AWS's modeled constraints, stored and returned, but honoured by nothing — X-Ray is not emulated, the ephemeral storage size is not enforced on the container, and environment variables are not encrypted at rest. LoggingConfig with explicit members is stored, returned and honoured for both Text and JSON LogFormat — Text keeps the plain-text START/END/REPORT lines, JSON emits Telemetry-API-shaped platform.start, platform.runtimeDone and platform.report records and filters CloudWatch Logs and the invoke tail by SystemLogLevel and ApplicationLogLevel — alongside default or custom log groups, Architectures, VpcConfig (including Ipv6AllowedForDualStack), ImageConfig, FileSystemConfigs, and code-signing association. The init-phase platform.initStart/platform.initReport records and exact empty-object/cross-field captures are tracked in #660.
+        status: reviewed
+        evidence: Each optional configuration member of API_CreateFunction is one of three things, and every one has a test that pins which. Stored and echoed, honoured by the runtime — DeadLetterConfig, FileSystemConfigs (EFS, in live mode). Stored and echoed, honoured by nothing — TracingConfig, EphemeralStorage, KMSKeyArn, CodeSigningConfigArn (an association only). Refused with 501 before anything is persisted — SnapStart, DurableConfig, TenancyConfig, CapacityProviderConfig, PublishTo, Code.S3ObjectStorageMode, Code.SourceKMSKeyArn. A published version snapshot (PublishVersion or Publish=true) carries the stored members, so they read back identically on $LATEST and on the version. Exact empty-object/cross-field captures remain tracked in #660.
+        members:
+          DeadLetterConfig:
+            status: fixed
+            evidence: TargetArn validated against AWS's SQS/SNS ARN pattern, stored, reported only when set (as on AWS), and honoured — a failed asynchronous invocation reaches the queue or topic with the RequestID/ErrorCode/ErrorMessage attributes after AWS's three attempts (initial plus two retries, 1s then 2s); an empty TargetArn on update clears it.
+            tests: [tests/integration/lambda/dead_letter_config_test.go, internal/services/lambda/dead_letter_test.go, tests/integration/cloudformation/lambda_dead_letter_test.go]
+          FileSystemConfigs:
+            status: intentionally_partial
+            evidence: At most one config; EFS or S3 Files access-point ARN and a /mnt/<name> LocalMountPath are validated against the modeled patterns; stored and echoed on every read path; an EFS access point is bound as a Docker volume in live mode (container_runtime.go efsMounts). S3 Files execution-environment mounts are #647.
+            tests: [tests/integration/lambda/efs_mounts_test.go::TestCreateFunction_fileSystemConfigsRoundTrip, tests/integration/lambda/efs_mounts_test.go::TestCreateFunction_s3FilesConfigRoundTrip, tests/integration/lambda/efs_mounts_test.go::TestCreateFunction_fileSystemConfigsValidation]
+          TracingConfig:
+            status: intentionally_partial
+            evidence: Mode validated against the Active|PassThrough enum, stored, and always reported (PassThrough when unset, as on AWS); no X-Ray segment is ever recorded.
+            tests: [tests/integration/lambda/tracing_storage_kms_test.go::TestFunctionAdvancedConfiguration_roundTripsThroughEveryReadPath, tests/integration/lambda/tracing_storage_kms_test.go::TestFunctionAdvancedConfiguration_defaultsMatchAWS, tests/integration/lambda/tracing_storage_kms_test.go::TestFunctionAdvancedConfiguration_invalidValuesRejectedBeforeMutation]
+          EphemeralStorage:
+            status: intentionally_partial
+            evidence: Size validated against the modeled 512..10240 range and required-member rule, stored, and always reported (512 when unset, as on AWS); the container's /tmp is whatever the Docker host gives it.
+            tests: [tests/integration/lambda/tracing_storage_kms_test.go::TestFunctionAdvancedConfiguration_roundTripsThroughEveryReadPath, tests/integration/lambda/tracing_storage_kms_test.go::TestFunctionAdvancedConfiguration_defaultsMatchAWS, tests/integration/lambda/tracing_storage_kms_test.go::TestFunctionAdvancedConfiguration_survivesRestart]
+          KMSKeyArn:
+            status: intentionally_partial
+            evidence: Validated against the modeled ARN-or-empty pattern, stored and echoed; an explicit empty string clears it. Environment variables are stored in plaintext — no KMS call is made.
+            tests: [tests/integration/lambda/tracing_storage_kms_test.go::TestFunctionAdvancedConfiguration_roundTripsThroughEveryReadPath, tests/integration/lambda/tracing_storage_kms_test.go::TestFunctionAdvancedConfiguration_invalidValuesRejectedBeforeMutation]
+          CodeSigningConfigArn:
+            status: intentionally_partial
+            evidence: Validated against the modeled code-signing-config ARN pattern and must name an existing configuration (CodeSigningConfigNotFoundException 404 otherwise); stored, reported by GetFunctionCodeSigningConfig and ListFunctionsByCodeSigningConfig, kept off FunctionConfiguration as on AWS, and blocks DeleteCodeSigningConfig while referenced. No signature is verified — SigningJobArn/SigningProfileVersionArn are never reported and UntrustedArtifactOnDeployment=Enforce rejects nothing.
+            tests: [tests/integration/lambda/lambda_test.go::TestCreateFunction_storesCodeSigningConfigArn, tests/integration/lambda/lambda_test.go::TestGetFunction_doesNotExposeCodeSigningConfigArn, tests/integration/lambda/code_signing_config_test.go::TestCreateFunction_unknownCodeSigningConfigIsRejected, tests/integration/lambda/code_signing_config_test.go::TestListFunctionsByCodeSigningConfig_andDeleteConflict]
+          SnapStart:
+            status: unsupported
+            gap: 501 before mutation; ApplyOn=None (AWS's default) is accepted as a no-op. Accepting PublishedVersions would promise a restored snapshot and init-phase semantics that execution environments here never have — they always cold start.
+            tests: [tests/integration/lambda/lambda_test.go::TestUnsupportedFunctionAndEventSourceConfigurationFailsBeforeMutation, tests/integration/lambda/validation_review_test.go::TestUnsupportedFields_ExplicitNoOpValuesAreNotRequests]
+          DurableConfig:
+            status: unsupported
+            gap: 501 before mutation ({} accepted as a no-op); durable execution is not emulated.
+            tests: [tests/integration/lambda/lambda_test.go::TestUnsupportedFunctionAndEventSourceConfigurationFailsBeforeMutation, tests/integration/lambda/validation_review_test.go::TestUnsupportedFields_ExplicitNoOpValuesAreNotRequests]
+          TenancyConfig:
+            status: unsupported
+            gap: 501 before mutation; per-tenant isolation selects an execution substrate Overcast has no equivalent of.
+            tests: [tests/integration/lambda/lambda_test.go::TestUnsupportedFunctionAndEventSourceConfigurationFailsBeforeMutation]
+          CapacityProviderConfig:
+            status: unsupported
+            gap: 501 before mutation; Lambda Managed Instances are not emulated.
+            tests: [tests/integration/lambda/lambda_test.go::TestUnsupportedFunctionAndEventSourceConfigurationFailsBeforeMutation]
+          PublishTo:
+            status: unsupported
+            gap: See publish_to_latest_published.
+          Code.S3ObjectStorageMode:
+            status: unsupported
+            gap: 501 before mutation; the storage mode of the deployment package is not emulated.
+            tests: [tests/integration/lambda/lambda_test.go::TestUnsupportedFunctionAndEventSourceConfigurationFailsBeforeMutation]
+          Code.SourceKMSKeyArn:
+            status: unsupported
+            gap: 501 before mutation; deployment-package encryption is not emulated.
+            tests: [tests/integration/lambda/lambda_test.go::TestUnsupportedFunctionAndEventSourceConfigurationFailsBeforeMutation]
       lifecycle_state:
         status: intentionally_partial
         gap: Overcast can return Pending during Docker image prewarm and Active immediately otherwise; real Lambda provisioning state timing is not fully emulated.
@@ -57,8 +129,9 @@ operations:
         - Zip CreateFunction requests without Code, Runtime, or Handler were accepted; now rejected as AWS InvalidParameterValueException.
         - Invalid PackageType, invalid Architectures, Timeout > 900, and MemorySize outside 128..32768 were accepted; now rejected.
         - Image CreateFunction requests with Runtime were accepted; now rejected.
+        - Publish=true returned 501; it now publishes version 1 with the create and answers with that version's configuration, and every FunctionConfiguration carries Version.
       remaining_gaps:
-        - Review Publish=true version creation and additional optional configuration fields before marking CreateFunction reviewed.
+        - PublishTo=LATEST_PUBLISHED ($LATEST.PUBLISHED, Lambda Managed Instances) stays 501 with the rest of managed instances.
         - S3 Files FileSystemConfigs validate and round-trip, but execution-environment mounts require #647.
         - Real-AWS captures for exact collection validation values and empty ImageConfigResponse omission semantics are tracked in #648.
   AddPermission:
@@ -184,7 +257,7 @@ findings:
     - GetFunctionConcurrency answers 200 with an empty body for a function that has no reservation, as AWS does, rather than 404 ResourceNotFoundException; a reservation of 0 is still reported, so "switched off" stays distinguishable from "unset". Tests in tests/integration/lambda/reserved_concurrency_test.go.
     - DeadLetterConfig is accepted by CreateFunction and UpdateFunctionConfiguration and acted on: a failed asynchronous invocation is delivered to the target SQS queue or SNS topic with the original event as the body and AWS's RequestID/ErrorCode/ErrorMessage message attributes.
   remaining_gaps:
-    - Finish CreateFunction Publish=true and advanced optional configuration review.
+    - UpdateFunctionCode's Publish/PublishTo still return 501; the version snapshot CreateFunction and PublishVersion share (newFunctionVersion, publishVersion) makes Publish there a small follow-up.
     - Review runtime invocation fidelity, error shapes, layers, and event source mappings.
     - Review Docker-unavailable fallback compatibility.
     - PutFunctionEventInvokeConfig is not implemented, so MaximumRetryAttempts and MaximumEventAgeInSeconds cannot be changed from AWS's defaults and an async event is never aged out; its on-failure/on-success destinations are still not applied outside event source mappings.
@@ -192,8 +265,8 @@ findings:
   intentionally_partial:
     - Resource policies are stored and observable but are not an authorization boundary for invocation.
 handoff:
-  start_with: [CreateFunction Publish=true, Invoke, event source mappings]
-  do_not_redo: [CreateFunction required fields, CreateFunction PackageType/Image Runtime validation, CreateFunction Timeout/MemorySize/Architectures/VpcConfig/ImageConfig/FileSystemConfigs validation and storage, AddPermission/GetPolicy/RemovePermission basic policy lifecycle]
+  start_with: [UpdateFunctionCode Publish=true, Invoke, event source mappings]
+  do_not_redo: [CreateFunction required fields, CreateFunction PackageType/Image Runtime validation, CreateFunction Timeout/MemorySize/Architectures/VpcConfig/ImageConfig/FileSystemConfigs validation and storage, CreateFunction Publish=true, CreateFunction advanced optional configuration member review, AddPermission/GetPolicy/RemovePermission basic policy lifecycle]
   commands:
     - go test -count=1 -run 'TestCreateFunction_' ./tests/integration/lambda/...
     - go test -count=1 ./internal/services/lambda/...

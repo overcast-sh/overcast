@@ -2946,7 +2946,8 @@ func TestUnsupportedFunctionAndEventSourceConfigurationFailsBeforeMutation(t *te
 	// TracingConfig, EphemeralStorage and KMSKeyArn are deliberately absent:
 	// they are stored and echoed now, and covered by
 	// tracing_storage_kms_test.go. DeadLetterConfig is absent for a stronger
-	// reason — it is implemented, and dead_letter_config_test.go owns it.
+	// reason — it is implemented, and dead_letter_config_test.go owns it. So
+	// is Publish, which create_function_publish_test.go owns.
 	// Everything still listed here would promise behaviour Overcast does not
 	// deliver — see CreateFunction's gate.
 	createFunctionFields := map[string]any{
@@ -2956,7 +2957,6 @@ func TestUnsupportedFunctionAndEventSourceConfigurationFailsBeforeMutation(t *te
 		// Every value here has to be one that actually asks for the feature:
 		// an explicit falsy value means "do nothing" and is accepted (see
 		// TestUnsupportedFields_ExplicitNoOpValuesAreNotRequests).
-		"Publish":       true,
 		"PublishTo":     "LATEST_PUBLISHED",
 		"TenancyConfig": map[string]any{"TenantIsolationMode": "PER_TENANT"},
 	}
