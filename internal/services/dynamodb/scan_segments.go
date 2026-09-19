@@ -2,6 +2,7 @@ package dynamodb
 
 import (
 	"context"
+	"fmt"
 	"hash/fnv"
 
 	"github.com/overcast-sh/overcast/internal/protocol"
@@ -74,14 +75,9 @@ func segmentWalkChunk(limit, totalSegments int) int {
 // structure is keyed by — one representation, one segment, whichever call
 // site asks.
 //
-// The result is always in [0, totalSegments), so a request whose Segment
-// falls outside that range matches nothing and returns an empty page. AWS
-// rejects such a request with a ValidationException instead; returning
-// nothing is the closer of the two available behaviours, and notably closer
-// than what this replaced — a negative Segment used to be clamped to 0, so a
-// client bug silently read segment 0's items believing they were another
-// segment's. Adding the validation itself is a separate request-validation
-// item, not this one.
+// The result is always in [0, totalSegments); validateScanSegments has
+// already rejected a request whose Segment falls outside that range, so a
+// segment that matches nothing here is genuinely empty.
 func segmentForKey(encodedHashKey string, totalSegments int) int {
 	if totalSegments <= 1 {
 		return 0
@@ -89,6 +85,27 @@ func segmentForKey(encodedHashKey string, totalSegments int) int {
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(encodedHashKey)) // hash.Hash.Write never returns an error
 	return int(h.Sum64() % uint64(totalSegments))
+}
+
+// validateScanSegments rejects a parallel-scan request whose Segment is not
+// below its TotalSegments (issue #1707, rule 9). The API reference states
+// the constraint — "The value for Segment must be greater than or equal to
+// 0, and less than the value provided for TotalSegments" — and the message
+// is the one moto's scan raises for it. Segment IDs are zero-based, so
+// Segment == TotalSegments names a segment that does not exist and used to
+// be answered with an empty page (see segmentForKey).
+//
+// Only the relationship is checked. A TotalSegments of zero is what an
+// omitted parameter decodes to and means a sequential scan; the lower and
+// upper bounds of each parameter on its own, and the rule that the two must
+// be supplied together, are separate constraints not modeled here.
+func validateScanSegments(segment, totalSegments int) *protocol.AWSError {
+	if totalSegments >= 1 && segment >= totalSegments {
+		return errValidation(fmt.Sprintf(
+			"The Segment parameter is zero-based and must be less than parameter TotalSegments: Segment: %d is not less than TotalSegments: %d",
+			segment, totalSegments))
+	}
+	return nil
 }
 
 // scanItemsSegmentPage returns up to limit items from the table that belong

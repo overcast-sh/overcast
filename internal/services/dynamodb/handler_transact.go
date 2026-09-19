@@ -96,6 +96,10 @@ func (h *Handler) transactWriteItemsTypedCore(ctx context.Context, req *transact
 	resolved := make([]resolvedAction, len(req.TransactItems))
 	cancellationReasons := make([]string, len(req.TransactItems))
 	cancelled := false
+	// Every item the transaction has touched so far, by table and primary
+	// key: "no two actions can target the same item" (API reference), and
+	// the fault is answered before anything is applied.
+	targeted := make(map[string]bool, len(req.TransactItems))
 
 	for i, txItem := range req.TransactItems {
 		var tableName string
@@ -169,6 +173,29 @@ func (h *Handler) transactWriteItemsTypedCore(ctx context.Context, req *transact
 		// all-or-nothing: phase 2 has not written anything yet.
 		if aerr := validateKeySchema(table, key, operand); aerr != nil {
 			return nil, aerr
+		}
+
+		// Two operations on one item are the same kind of static fault as a
+		// key-schema mismatch, and AWS answers them the same way: a plain
+		// ValidationException with this message (moto's
+		// MultipleTransactionsException), not a cancellation.
+		id, aerr := itemIdentity(table, key)
+		if aerr != nil {
+			return nil, aerr
+		}
+		id = tableName + "\x00" + id
+		if targeted[id] {
+			return nil, errValidation("Transaction request cannot include multiple operations on one item")
+		}
+		targeted[id] = true
+
+		// An oversized Put is different: the API reference lists "An item
+		// size becomes too large (larger than 400 KB)" among the reasons a
+		// transaction is *cancelled*, with a ValidationError reason at that
+		// position, so it is recorded as one rather than raised outright.
+		if txItem.Put != nil && itemSizeBytes(txItem.Put.Item) > maxItemSizeBytes {
+			cancellationReasons[i] = "ValidationError"
+			cancelled = true
 		}
 
 		// Load existing item for condition checks and stream records.

@@ -2,7 +2,7 @@ service: dynamodb
 status: not_started
 priority: p0
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-09-05
+last_updated: 2026-09-19
 protocols: [aws_json_1_0, rpcv2_cbor]
 implementation: [internal/services/dynamodb]
 integration_tests: [tests/integration/dynamodb]
@@ -148,6 +148,40 @@ findings:
         tests:
           - tests/integration/dynamodb/reserved_words_test.go
           - internal/services/dynamodb/expr_reserved_test.go
+    - scenario: >-
+        Nine documented request-validation rules are enforced with AWS's wording (issue #1707).
+        CreateTable rejects AttributeDefinitions that do not match the key attributes of the table
+        and its indexes exactly, choosing between AWS's four messages by list size and by whether
+        the request declares an index; a definition used only by a GSI or LSI stays legal. Every
+        operation taking an Item or a Key rejects an empty String or Binary key attribute. Query
+        rejects a KeyConditionExpression that does not constrain the partition key of the table or
+        index queried ("Query condition missed key schema element: <name>"), and accepts the two
+        equalities in either order. BatchWriteItem rejects two operations on one item ("Provided
+        list of item keys contains duplicates") and any item over 400 KB; BatchGetItem rejects more
+        than 100 keys across tables; TransactWriteItems rejects two operations on one item as a
+        ValidationException and cancels on a Put over 400 KB with a ValidationError reason; PutItem
+        and UpdateItem reject an item over 400 KB, measured by the Developer Guide's item-size rules
+        (attribute-name bytes plus per-type value sizes; numbers at one byte per two significant
+        digits plus one) rather than by JSON length; Scan rejects Segment >= TotalSegments.
+      evidence:
+        aws_docs:
+          - https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_CreateTable.html
+          - https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_BatchWriteItem.html
+          - https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_BatchGetItem.html
+          - https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TransactWriteItems.html
+          - https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_Scan.html
+          - https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/CapacityUnitCalculations.html
+          - https://aws.amazon.com/about-aws/whats-new/2020/05/amazon-dynamodb-now-supports-empty-values-for-non-key-string-and-binary-attributes-in-dynamodb-tables
+        community:
+          - https://github.com/aws-cloudformation/cfn-lint/issues/1037
+          - https://github.com/getmoto/moto/issues/2445
+          - https://rory.horse/posts/dynamo-dissected-schema/
+          - https://dynobase.dev/dynamodb-errors/dynamodb-query-condition-missed/
+          - https://github.com/getmoto/moto/blob/master/moto/dynamodb/responses.py
+        tests:
+          - tests/integration/dynamodb/request_validation_test.go
+          - internal/services/dynamodb/attribute_definitions_test.go
+          - internal/services/dynamodb/item_size_test.go
   remaining_gaps:
     - Review expression edge cases, pagination semantics, and GSI/LSI behavior.
     - The TTL transition window is 30 seconds rather than AWS's "up to one hour", so code that assumes an hour-long rejection window sees a shorter one here. Two behaviours in that lifecycle are documented-but-unverified against a real account, both taken from the AWS error messages the community reports rather than from a live call: that DescribeTimeToLive still names AttributeName while DISABLING, and the exact service-side validation text for a TimeToLiveSpecification missing a required member (the SDKs reject that client-side, so the service message is not observable through one).
