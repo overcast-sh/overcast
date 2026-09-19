@@ -305,3 +305,35 @@ func addSkip(report *compat.RunReport, suite, service, group, test, reason strin
 	sr.Groups = append(sr.Groups, gr)
 	report.Suites = append(report.Suites, sr)
 }
+
+// TestParityCountsGroupTimeoutSkipsAsCascades is the aggregate half of #1966:
+// the cli harness reports the tests a group ran out of budget before reaching
+// as skips with this prefix, and they are cascades of whatever consumed the
+// budget, never parity debt. Before the harness reported them at all, they
+// were Missing here, and the gate failed a pull request that had touched
+// nothing near KMS for four tests of unrecorded debt.
+func TestParityCountsGroupTimeoutSkipsAsCascades(t *testing.T) {
+	// Given: a group whose budget ran out under CreateBucket, leaving
+	// DeleteBucket reported as a timed-out skip
+	report := reportWithResults(
+		resultSpec{suite: "cli", service: "s3", group: "s3-crud", test: "CreateBucket", status: compat.StatusFail},
+	)
+	addSkip(report, "cli", "s3", "s3-crud", "DeleteBucket", "group timed out after 16m3s before this test ran (last test to run: CreateBucket)")
+
+	// When: parity is computed
+	got := computeParity(testRegistry(), report, []string{"cli"})
+
+	// Then: no debt, nothing missing, nothing unclassified — one cascade
+	if len(got.Debt) != 0 {
+		t.Fatalf("debt = %#v, want none for a timed-out skip", got.Debt)
+	}
+	if got.Missing != 0 {
+		t.Errorf("missing = %d, want 0: the test was reported", got.Missing)
+	}
+	if len(got.Unclassified) != 0 {
+		t.Errorf("unclassified = %#v, want none", got.Unclassified)
+	}
+	if got.Cascades != 1 {
+		t.Errorf("cascades = %d, want 1", got.Cascades)
+	}
+}

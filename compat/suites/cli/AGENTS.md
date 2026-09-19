@@ -47,6 +47,18 @@ The `docker` capability is likewise probed (`docker info`) rather than
 configured: tests the registry marks `requires: [docker]` are skipped when no
 daemon answers, and there is no `OVERCAST_COMPAT_SKIP_DOCKER` here.
 
+**Every group runs under a wall-clock budget**, `harness.GroupBudget`: five
+minutes plus twenty seconds per test, applied by `RunSuite` and by the
+interactive runner alike. It scales with the group because every call here
+spawns the AWS CLI, so a 33-test generated group costs an order of magnitude
+more than its go-sdk twin, and a flat cap was reached on a loaded runner
+(#1966). When a group does outrun it, the test that was running fails with
+`group timed out … during this test` and every test after it is reported as a
+`group timed out … before this test ran` skip — the aggregate counts those as
+cascades, never as parity debt. A `cancelled` event is reserved for a
+dashboard cancel or a signal; the aggregate does not read it, so a deadline
+must never produce one.
+
 **On Windows, check `aws --version` before believing an argument-parsing
 failure**: a pip-installed CLI **v1** leaves an `aws.cmd` shim whose argument
 and quoting rules differ from the v2 `aws.exe` this suite expects, so a call
