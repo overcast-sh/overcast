@@ -335,6 +335,7 @@ jobs:
       # The aws-sdk shape tables internal/awsshapes embeds: build output, like
       # the Lambda init above, packed from the committed text tables.
       - name: Pack the aws-sdk shape tables
+        if: env.RUN_SUITES == 'true'
         shell: bash
         run: go run ./cmd/awsshapes-pack
 
