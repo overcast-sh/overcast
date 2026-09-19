@@ -291,7 +291,7 @@ func main() {
 							defer func() { <-sem }()
 
 							baseCtx := harness.NewRunContext(context.Background(), endpoint, region, runID)
-							groupCtx, groupCancel := context.WithTimeout(baseCtx, 5*time.Minute)
+							groupCtx, groupCancel := context.WithTimeout(baseCtx, harness.GroupBudget(g))
 							defer groupCancel()
 
 							cancelMu.Lock()

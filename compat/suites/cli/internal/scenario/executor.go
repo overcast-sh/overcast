@@ -28,10 +28,11 @@ type runner interface {
 type awscliRunner struct{}
 
 // run uses the context-aware variant so an `aws` that never answers dies with
-// the group's five-minute timeout or with a dashboard cancellation, instead of
-// holding a parallel slot open until the whole suite is killed. A generated
-// group makes far more calls than a hand-written one, so it is likelier to be
-// the group sitting on a hung process.
+// the group's budget (harness.GroupBudget) or with a dashboard cancellation,
+// instead of holding a parallel slot open until the whole suite is killed. A
+// generated group makes far more calls than a hand-written one, so it is
+// likelier to be the group sitting on a hung process — and, every call being
+// a process, it is why that budget scales with the number of tests.
 //
 // It is the *signed* variant because a generated call has to carry its own
 // service's credential scope: unsigned, an operation Overcast has not

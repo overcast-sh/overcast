@@ -732,9 +732,15 @@ The baseline records no `fail` and CI asserts it stays that way, so a failing
 test is a bug to fix or a change to revert — there is no longer a "record it and
 move on" path.
 
-**Cascades are not gaps.** A skip reading `setup failed: …` or
-`dependency failed: X` is a symptom of another failure in the same group. Fix
-the root cause; never grandfather a cascade on its own.
+**Cascades are not gaps.** A skip reading `setup failed: …`,
+`dependency failed: X` or `group timed out … before this test ran` is a
+symptom of another failure in the same group. Fix the root cause; never
+grandfather a cascade on its own. The third form is the cli harness running a
+group out of its wall-clock budget (`harness.GroupBudget`: five minutes plus
+twenty seconds per test, because every cli call spawns the AWS CLI): the test
+that was running fails with `group timed out … during this test`, and every
+test after it is reported this way rather than left out of the run — a test
+the harness never reports is what the parity gate counts as unrecorded debt.
 
 **Flaky tests are quarantined, not tolerated.** A test that gives different
 answers on identical input cannot be ratcheted: baseline it as passing and the
@@ -1435,6 +1441,7 @@ Full field reference for each `test` entry:
   | -------------------------------------------------------------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------- |
   | `"ResourceAlreadyExists"`, `"BucketAlreadyOwnedByYou"`, `"Table already exists"` | Orphan from a previous run; teardown failed | Fix teardown in the suite group; run `make -C compat ci` (which rebuilds from scratch) |
   | `"no <resource> from <PreviousOp>"`                                              | Cascade — earlier step failed               | Fix the root cause (the operation listed in `GENUINE FAILURES`)                        |
+  | `"group timed out after <elapsed> during this test"`                             | The cli group outran `harness.GroupBudget`  | Find what made the group slow (a loaded runner, a poll loop, a hung `aws`); the tests after it are `group timed out … before this test ran` skips, which are cascades, not debt |
   | `"Error parsing parameter '--body'"`                                             | CLI group passes a file path incorrectly    | Fix in `compat/suites/cli/internal/groups/<service>.go`                                |
   | AWS error on a supposedly implemented op                                         | Emulator bug                                | Investigate `internal/services/<service>/handler*.go`                                  |
 

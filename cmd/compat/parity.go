@@ -194,9 +194,17 @@ func isEnvironmentalSkip(reason string) bool {
 // isCascadeSkip matches skips caused by an earlier failure in the same group.
 // Not parity debt, but worth counting: cascades mask real results and should
 // disappear when their root cause is fixed.
+//
+// "group timed out" is the third form: the suite's harness ran the group out
+// of its wall-clock budget, failed the test that was running, and reported
+// every test after it with this prefix (compat/suites/cli/internal/harness).
+// Before the harness did that, those tests were simply absent from the run and
+// counted here as Missing — unrecorded debt on a pull request that had touched
+// nothing near them (#1966).
 func isCascadeSkip(reason string) bool {
 	return strings.HasPrefix(reason, "setup failed") ||
-		strings.HasPrefix(reason, "dependency failed")
+		strings.HasPrefix(reason, "dependency failed") ||
+		strings.HasPrefix(reason, "group timed out")
 }
 
 // parityResult is the outcome of a parity computation.

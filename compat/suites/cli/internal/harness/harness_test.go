@@ -474,3 +474,191 @@ func TestMarkerOutranksTheDependencyGate(t *testing.T) {
 }
 
 func _noopTest(context.Context, *TestContext) error { return nil }
+
+// blockUntilDone is a test that waits for the group context to expire and
+// returns its error, the way a real test does when the CLI it spawned is
+// killed with the context.
+func blockUntilDone(ctx context.Context, _ *TestContext) error {
+	<-ctx.Done()
+	return fmt.Errorf("DescribeKey: readback: %w", ctx.Err())
+}
+
+func passing(context.Context, *TestContext) error { return nil }
+
+// reasons returns the error field of every test_result, keyed by test name.
+func reasons(events []map[string]any) map[string]string {
+	out := map[string]string{}
+	for _, ev := range events {
+		if ev["event"] == "test_result" {
+			out[fmt.Sprint(ev["test"])] = fmt.Sprint(ev["error"])
+		}
+	}
+	return out
+}
+
+func countEvents(events []map[string]any, kind string) int {
+	n := 0
+	for _, ev := range events {
+		if ev["event"] == kind {
+			n++
+		}
+	}
+	return n
+}
+
+// TestGroupBudget_scalesWithTheTestCount pins the shape of the budget: a base
+// for setup, teardown and a hung process, plus an allowance per test. The
+// numbers are the ones the comment on the constants justifies; a change to
+// either is a change to how much a loaded runner is allowed to slow down.
+func TestGroupBudget_scalesWithTheTestCount(t *testing.T) {
+	// Given: an empty group and the 33-test group that overran the flat cap
+	empty := TestGroup{}
+	kms := TestGroup{Tests: make([]TestCase, 33)}
+
+	// When/Then: the base is the old flat cap, and the per-test allowance is
+	// what lifts a large group clear of it
+	if got := GroupBudget(empty); got != 5*time.Minute {
+		t.Errorf("GroupBudget(empty) = %s, want the 5m base", got)
+	}
+	if got := GroupBudget(kms); got != 5*time.Minute+33*20*time.Second {
+		t.Errorf("GroupBudget(33 tests) = %s, want 5m + 33x20s = 16m", got)
+	}
+	if GroupBudget(kms) <= 5*time.Minute {
+		t.Error("a 33-test group must get more than the flat cap it overran")
+	}
+}
+
+// TestGroupDeadline_reportsEveryUnrunTestAsACascadeSkip is the reporting half
+// of #1966. cli/kms-gen-key ran out of its budget on DisableKey; the harness
+// emitted `cancelled` for the four tests after it, an event the aggregate
+// drops, so the parity gate saw four registry tests nobody had reported and
+// failed the pull request for unrecorded debt. A deadline is this harness's
+// own decision, so every test it left unrun gets a test_result naming that,
+// worded as the cascade it is.
+func TestGroupDeadline_reportsEveryUnrunTestAsACascadeSkip(t *testing.T) {
+	// Given: a serial group whose second test outlives the group budget
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	group := TestGroup{
+		Suite: "cli", Service: "kms", Name: "kms-gen-key",
+		Tests: []TestCase{
+			{Name: "CreateKey", Fn: passing},
+			{Name: "DisableKey", Fn: blockUntilDone, Depends: []string{"CreateKey"}},
+			{Name: "EnableKey", Fn: passing, Depends: []string{"CreateKey"}},
+			{Name: "ScheduleKeyDeletion", Fn: passing, Depends: []string{"CreateKey"}},
+			{Name: "GenerateRandomNA", Fn: passing, NA: "the CLI has no such command"},
+		},
+	}
+
+	// When: the group runs
+	var counts GroupCounts
+	events := captureEvents(t, func() { counts = RunGroup(ctx, group) })
+
+	// Then: one row per test, none of them a cancelled event
+	if got := countEvents(events, "test_result"); got != len(group.Tests) {
+		t.Fatalf("%d test_result events, want one per test (%d): %v", got, len(group.Tests), events)
+	}
+	if got := countEvents(events, "cancelled"); got != 0 {
+		t.Errorf("%d cancelled events, want none: the aggregate never reads them", got)
+	}
+	if counts.Passed != 1 || counts.Failed != 1 || counts.Skipped != 2 || counts.Cancelled != 0 {
+		t.Errorf("counts = %+v, want 1 pass, 1 fail, 2 skips, 0 cancelled", counts)
+	}
+
+	// And: the test that was running fails, saying the budget ran out under it
+	got, why := statuses(events), reasons(events)
+	if got["DisableKey"] != "fail" {
+		t.Errorf("DisableKey = %s, want fail", got["DisableKey"])
+	}
+	if !strings.HasPrefix(why["DisableKey"], "group timed out after ") || !strings.Contains(why["DisableKey"], " during this test: DescribeKey: readback: context deadline exceeded") {
+		t.Errorf("DisableKey reason = %q, want the budget named and the original error kept", why["DisableKey"])
+	}
+
+	// And: every test after it is a skip the parity checker reads as a cascade
+	for _, name := range []string{"EnableKey", "ScheduleKeyDeletion"} {
+		if got[name] != "skip" {
+			t.Errorf("%s = %s, want skip", name, got[name])
+		}
+		if !strings.HasPrefix(why[name], "group timed out after ") || !strings.Contains(why[name], " before this test ran (last test to run: DisableKey)") {
+			t.Errorf("%s reason = %q, want the cascade wording naming DisableKey", name, why[name])
+		}
+	}
+
+	// And: a marker still outranks the deadline
+	if got["GenerateRandomNA"] != "na" || why["GenerateRandomNA"] != "the CLI has no such command" {
+		t.Errorf("GenerateRandomNA = %s %q, want its na marker", got["GenerateRandomNA"], why["GenerateRandomNA"])
+	}
+}
+
+// TestGroupCancel_stillEmitsCancelledEvents keeps the dashboard protocol
+// intact: a cancel is the orchestrator's doing and it consumes the
+// acknowledgements, so only a deadline is turned into results.
+func TestGroupCancel_stillEmitsCancelledEvents(t *testing.T) {
+	// Given: a serial group whose first test cancels the run, as a dashboard
+	// cancel would from outside
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	group := TestGroup{
+		Suite: "cli", Service: "kms", Name: "kms-gen-key",
+		Tests: []TestCase{
+			{Name: "CreateKey", Fn: func(context.Context, *TestContext) error { cancel(); return nil }},
+			{Name: "DisableKey", Fn: passing},
+		},
+	}
+
+	// When: the group runs
+	var counts GroupCounts
+	events := captureEvents(t, func() { counts = RunGroup(ctx, group) })
+
+	// Then: the unrun test is acknowledged as cancelled, not reported as a skip
+	if got := countEvents(events, "cancelled"); got != 1 {
+		t.Errorf("%d cancelled events, want 1", got)
+	}
+	if got := countEvents(events, "test_result"); got != 1 {
+		t.Errorf("%d test_result events, want only CreateKey", got)
+	}
+	if counts.Cancelled != 1 || counts.Skipped != 0 {
+		t.Errorf("counts = %+v, want 1 cancelled and no skips", counts)
+	}
+}
+
+// TestParallelGroupDeadline_reportsUndispatchedTestsAsSkips is the concurrent
+// path: a probe group whose budget is already gone reports every test rather
+// than none.
+func TestParallelGroupDeadline_reportsUndispatchedTestsAsSkips(t *testing.T) {
+	// Given: an expired budget and a parallel group with an na marker in it
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+	group := TestGroup{
+		Suite: "cli", Service: "kms", Name: "kms-gen-probe", Parallel: true,
+		Tests: []TestCase{
+			{Name: "DescribeKey", Fn: passing},
+			{Name: "ListKeys", Fn: passing},
+			{Name: "Sign", Fn: passing, NA: "the CLI has no such command"},
+		},
+	}
+
+	// When: the group runs
+	var counts GroupCounts
+	events := captureEvents(t, func() { counts = RunGroup(ctx, group) })
+
+	// Then: three rows, two of them timed-out skips, no cancelled events
+	if got := countEvents(events, "test_result"); got != 3 {
+		t.Fatalf("%d test_result events, want 3: %v", got, events)
+	}
+	if got := countEvents(events, "cancelled"); got != 0 {
+		t.Errorf("%d cancelled events, want none", got)
+	}
+	if counts.Skipped != 2 || counts.Cancelled != 0 {
+		t.Errorf("counts = %+v, want 2 skips and nothing cancelled", counts)
+	}
+	got, why := statuses(events), reasons(events)
+	for _, name := range []string{"DescribeKey", "ListKeys"} {
+		if got[name] != "skip" || !strings.HasPrefix(why[name], "group timed out after ") {
+			t.Errorf("%s = %s %q, want a group timed out skip", name, got[name], why[name])
+		}
+	}
+	if got["Sign"] != "na" {
+		t.Errorf("Sign = %s, want its na marker to outrank the deadline", got["Sign"])
+	}
+}

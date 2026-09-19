@@ -61,6 +61,11 @@ type TestContext struct {
 	Region   string
 	RunID    string
 
+	// started is when RunGroup began this group, so a result reported after
+	// the group's budget ran out can say how long the group had been running.
+	// Zero for a TestContext built outside RunGroup.
+	started time.Time
+
 	mu    sync.Mutex
 	state map[string]any
 }
@@ -272,6 +277,7 @@ type GroupCounts struct {
 // It returns the aggregate counts for the caller to roll up into run_end.
 func RunGroup(ctx context.Context, g TestGroup) GroupCounts {
 	t := NewTestContext("", "", "")
+	t.started = time.Now()
 
 	// Extract endpoint/region/runID from context values if present.
 	if v, ok := ctx.Value(ctxEndpoint{}).(string); ok {
@@ -359,28 +365,72 @@ func hasDependencies(tests []TestCase) bool {
 // order, each result emitted as it completes.
 func runTestsInOrder(ctx context.Context, g TestGroup, t *TestContext, counts *GroupCounts) {
 	failedOrSkipped := map[string]bool{}
+	lastRun := ""
 
 	for _, tc := range g.Tests {
-		if ctx.Err() != nil {
+		if cancelled(ctx) {
 			emit(cancelledEvent{Event: "cancelled", Suite: g.Suite, Group: g.Name, Test: tc.Name})
 			counts.Cancelled++
 			continue
 		}
-		// An na/skip marker outranks the dependency gate: a test the suite
-		// never intended to run here reports why it was marked, not what
-		// happened to something it does not depend on.
+		// An na/skip marker outranks the dependency gate and the group's
+		// budget: a test the suite never intended to run here reports why it
+		// was marked, not what happened to something it does not depend on.
 		res, done := marker(g, tc)
 		if !done {
-			// Dependency gate — skip if any declared dependency failed or was skipped.
-			if gated, applies := dependencyGate(g, tc, failedOrSkipped); applies {
+			switch gated, applies := dependencyGate(g, tc, failedOrSkipped); {
+			case ctx.Err() != nil:
+				// The budget ran out. Every test that has not run gets a row
+				// naming that, so the group reports as many results as the
+				// registry declares and the reader is told which test the
+				// budget was spent on — see timedOut.
+				res = timedOut(g, t, tc, lastRun)
+			case applies:
 				res = gated
-			} else {
+			default:
 				res = execute(ctx, g, t, tc)
+				lastRun = tc.Name
 			}
 		}
 		record(res, tc.Name, counts, failedOrSkipped)
 		emit(res.event)
 	}
+}
+
+// cancelled reports whether ctx was cancelled by a caller — a dashboard
+// cancel, a signal — as opposed to running out the group's budget. The two
+// are reported differently: a cancel is the orchestrator's own doing and it
+// consumes the `cancelled` acknowledgements; a deadline is this harness's
+// decision, and the aggregate never hears of a `cancelled` event, so the
+// tests it left unrun have to be reported as results or they vanish from the
+// matrix. That happened on #1966: cli/kms-gen-key ran out of its budget four
+// tests from the end, and the parity gate counted the four the harness never
+// reported as unrecorded debt.
+func cancelled(ctx context.Context) bool {
+	err := ctx.Err()
+	return err != nil && !errors.Is(err, context.DeadlineExceeded)
+}
+
+// timedOut is the result for a test the group's budget ran out before it
+// could run: a skip, worded as a cascade of whatever consumed the budget, so
+// the aggregate's parity check classes it beside `dependency failed` rather
+// than as a gap (cmd/compat/parity.go isCascadeSkip). Keep the "group timed
+// out" prefix in step with that classifier.
+func timedOut(g TestGroup, t *TestContext, tc TestCase, lastRun string) testResult {
+	message := fmt.Sprintf("group timed out%s before this test ran", elapsedSuffix(t))
+	if lastRun != "" {
+		message += " (last test to run: " + lastRun + ")"
+	}
+	return testResult{event: resultEvent(g, tc.Name, statusSkip, 0, message), status: statusSkip}
+}
+
+// elapsedSuffix renders how long the group had been running, for a message
+// about its budget; empty for a TestContext RunGroup did not start.
+func elapsedSuffix(t *TestContext) string {
+	if t.started.IsZero() {
+		return ""
+	}
+	return " after " + time.Since(t.started).Round(time.Second).String()
 }
 
 // runTestsConcurrently runs the group's tests through a bounded worker pool and
@@ -396,10 +446,18 @@ func runTestsConcurrently(ctx context.Context, g TestGroup, t *TestContext, coun
 	sem := make(chan struct{}, parallelSlots())
 	var wg sync.WaitGroup
 	for i, tc := range g.Tests {
-		if ctx.Err() != nil {
+		if cancelled(ctx) {
 			results[i] = testResult{
 				event:  cancelledEvent{Event: "cancelled", Suite: g.Suite, Group: g.Name, Test: tc.Name},
 				status: statusCancelled,
+			}
+			continue
+		}
+		if ctx.Err() != nil {
+			if res, done := marker(g, tc); done {
+				results[i] = res
+			} else {
+				results[i] = timedOut(g, t, tc, "")
 			}
 			continue
 		}
@@ -504,7 +562,15 @@ func execute(ctx context.Context, g TestGroup, t *TestContext, tc TestCase) test
 	case IsUnimplemented(err):
 		return testResult{event: resultEvent(g, tc.Name, statusUnimplemented, durMs, ""), status: statusUnimplemented}
 	default:
-		return testResult{event: resultEvent(g, tc.Name, statusFail, durMs, err.Error()), status: statusFail}
+		message := err.Error()
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			// The group's budget ran out under this test. Bare, the error is
+			// whatever the CLI or the interpreter said when its context died
+			// — "readback: context deadline exceeded", "signal: killed" —
+			// which reads as the operation misbehaving. Say what happened.
+			message = fmt.Sprintf("group timed out%s during this test: %s", elapsedSuffix(t), message)
+		}
+		return testResult{event: resultEvent(g, tc.Name, statusFail, durMs, message), status: statusFail}
 	}
 }
 
@@ -532,6 +598,33 @@ func record(res testResult, name string, counts *GroupCounts, failedOrSkipped ma
 	if failedOrSkipped != nil {
 		failedOrSkipped[name] = true
 	}
+}
+
+// The wall-clock budget a group runs under: a base that covers setup,
+// teardown and a hung process, plus an allowance per test.
+//
+// Every call this suite makes spawns the AWS CLI — a Python interpreter start
+// and import, a second or more on an idle machine and far more on a loaded
+// one — so a group's cost is proportional to its size in a way no SDK suite's
+// is, and a flat cap is wrong at both ends: too long for a three-test group
+// holding a slot on a hung `aws`, too short for a generated lifecycle group
+// with three dozen calls. The flat five minutes this replaced was measured
+// against: on a healthy CI run, kms-gen-key's 33 tests already summed to 114 s
+// at 16 slots on a 4-vCPU runner, and a run 1.5× slower end to end put the
+// group over the cap with four tests unrun (#1966). Twenty seconds per test
+// gives that group sixteen minutes, about eight times its healthy cost; the
+// largest group in the registry stays under the runner's 25-minute suite-level
+// kill.
+const (
+	groupBudgetBase    = 5 * time.Minute
+	groupBudgetPerTest = 20 * time.Second
+)
+
+// GroupBudget is how long RunSuite lets one group run before its context
+// expires. The interactive runner in cmd/runner applies the same budget, so a
+// dashboard re-run of a group is bounded the way a batch run is.
+func GroupBudget(g TestGroup) time.Duration {
+	return groupBudgetBase + time.Duration(len(g.Tests))*groupBudgetPerTest
 }
 
 // parallelSlots is how many things this suite may do at once — groups in
@@ -582,9 +675,10 @@ func RunSuite(suite string, groups []TestGroup, endpoint, region, runID string) 
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			// Per-group timeout: prevents a single hung CLI call from
-			// blocking this semaphore slot (and thus the whole suite) forever.
-			groupCtx, groupCancel := context.WithTimeout(ctx, 5*time.Minute)
+			// Per-group budget: a hung `aws` cannot hold this semaphore slot
+			// (and so the whole suite) forever, and a group cannot outrun the
+			// runner's own suite-level timeout unnoticed.
+			groupCtx, groupCancel := context.WithTimeout(ctx, GroupBudget(g))
 			defer groupCancel()
 			groupResults[i] = RunGroup(groupCtx, g)
 		}(i, g)
