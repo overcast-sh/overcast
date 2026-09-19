@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -99,6 +100,105 @@ class NeedsCodeJobs(unittest.TestCase):
 		# docs/ is a prefix match, not a substring one.
 		self.assertFalse(scope.is_prose("docs_search.go"))
 		self.assertFalse(scope.is_prose("internal/docssearch/index.gen.go"))
+
+
+class ChangesImage(unittest.TestCase):
+	"""Whether a pull request is worth a release candidate.
+
+	The bias mirrors NeedsCodeJobs: a wrong `True` builds a candidate for
+	nothing, a wrong `False` leaves a release PR without one, so every ambiguous
+	case asserts `True`.
+	"""
+
+	def test_changes_that_cannot_reach_an_image_do_not_get_one(self) -> None:
+		for files in (
+			# The case that motivated it: a baseline promotion.
+			["compat/baseline/cli.json", "compat/baseline/go-sdk.json"],
+			# Tests never reach the binary, whatever tree they sit in.
+			["internal/services/sqs/queue_test.go"],
+			["internal/services/sqs/testdata/queue.json"],
+			["tests/integration/sqs/queue_test.go"],
+			["compat/suites/go-sdk/main.go"],
+			["cmd/compat/main.go"],
+			# Other binaries cannot be imported into cmd/overcast.
+			["cmd/overcast-mcp/main.go"],
+			[".github/workflows/test.yml"],
+			["scripts/verify-changed.sh"],
+			["docs/plans/ci-streamlining.md"],
+			["docs/dev/testing.md"],
+			["docs/generated/service-support.json"],
+			["README.md", "RELEASE.md", "CHANGELOG.md", ".changelog/20260914-x.md"],
+			["Makefile"],
+		):
+			with self.subTest(files=files):
+				self.assertFalse(scope.changes_image(files))
+
+	def test_an_input_of_the_image_gets_one(self) -> None:
+		for files in (
+			["cmd/overcast/main.go"],
+			["internal/services/sqs/queue.go"],
+			["web/src/main.tsx"],
+			["web/src/main.test.tsx"],  # web tests are deliberately not excluded
+			["docker/entrypoint.sh"],
+			["Dockerfile"],
+			[".dockerignore"],
+			["go.mod"],
+			["go.sum"],
+			["embed.go"],
+			["embed_slim.go"],
+			["docs/README.md"],  # docs/*.md is embedded
+			["docs/services/rds.md"],
+			["docs/cdk/local-vpc.md"],
+		):
+			with self.subTest(files=files):
+				self.assertTrue(scope.changes_image(files))
+
+	def test_the_release_pr_always_gets_one(self) -> None:
+		# VERSION names the candidate, and the release PR is the one thing that
+		# must never miss it, whatever else it carries.
+		self.assertTrue(scope.changes_image(["VERSION", "CHANGELOG.md", ".changelog/a.md", ".changelog/b.md"]))
+
+	def test_a_mixed_change_gets_one(self) -> None:
+		self.assertTrue(scope.changes_image(["compat/baseline/cli.json", "internal/router/router.go"]))
+
+	def test_empty_change_set_gets_one(self) -> None:
+		self.assertTrue(scope.changes_image([]))
+
+	def test_docs_markdown_is_matched_one_level_deep_only(self) -> None:
+		# The hash's `docs/*.md` is a shell glob, not a recursive one.
+		self.assertTrue(scope.reaches_image("docs/README.md"))
+		self.assertFalse(scope.reaches_image("docs/plans/x.md"))
+		self.assertFalse(scope.reaches_image("docs/dev/x.md"))
+		self.assertFalse(scope.reaches_image("docs/notes.txt"))
+
+	def test_prefixes_are_not_substring_matches(self) -> None:
+		self.assertFalse(scope.reaches_image("cmd/overcast-mcp/main.go"))
+		self.assertFalse(scope.reaches_image("internalx/y.go"))
+		self.assertFalse(scope.reaches_image("website/index.html"))
+
+
+class ImageListMatchesTheHash(unittest.TestCase):
+	"""`reaches_image` restates the paths test.yml hashes; fail if they drift.
+
+	The hash is what decides whether two builds are the same image, so a path
+	added there but not here would let a PR change an image and be told it has
+	nothing to build a candidate for.
+	"""
+
+	def test_the_pathspecs_are_the_same(self) -> None:
+		workflow = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "test.yml"
+		text = workflow.read_text(encoding="utf-8")
+		# The pathspecs run from `git ls-tree -r HEAD --` to the `| grep -vE`
+		# that drops tests, with `\` line continuations between them.
+		match = re.search(r"git ls-tree -r HEAD --([^|]*)\|\s*grep -vE", text)
+		self.assertIsNotNone(match, "the hash step in test.yml no longer has the shape this test reads")
+		assert match is not None
+		hashed = set(match.group(1).replace("\\", " ").split())
+
+		restated = {p.rstrip("/") for p in scope.IMAGE_PREFIXES}
+		restated |= {f for f in scope.IMAGE_FILES if f != "VERSION"}
+		restated.add("docs/*.md")
+		self.assertEqual(hashed, restated)
 
 
 class IsProse(unittest.TestCase):

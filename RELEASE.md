@@ -42,7 +42,8 @@ When a release is wanted:
    delete every fragment file.
 3. **Open the PR, then test the candidate.** CI treats any same-repo PR whose
    `VERSION` carries no tag as a **release candidate** — **RC** throughout this
-   document: it publishes RC images and the native binaries and maintains one
+   document (when it changes something an image is built from): it publishes RC
+   images and the native binaries and maintains one
    bot comment linking them. Test those bits — they are what CI built, not a
    local rebuild. **Whoever prepares the release runs that testing and posts the
    evidence on the PR**, rather than handing a checklist to the approver; green
@@ -341,7 +342,8 @@ For an alpha release:
    python3 scripts/check-release-changelog.py x.y.z-alpha.n
    ```
 6. Commit the release-prep changes on the release branch and open a PR.
-   CI treats any same-repo PR whose `VERSION` has no `v<VERSION>` tag yet as
+   CI treats any same-repo PR that changes what an image is built from
+   (`scripts/ci-scope.py`) and whose `VERSION` has no `v<VERSION>` tag yet as
    a **release candidate** (`scripts/release-candidate-check.sh` — this also
    covers follow-up PRs after a failed release workflow, when the unreleased
    version already sits on `main`). Each candidate build publishes
@@ -1012,7 +1014,11 @@ Do not reuse a published tag for a different commit.
 While a release is pending or failed — that is, while `VERSION` on `main`
 has no `v<VERSION>` tag — every same-repo PR is treated as a release
 candidate (`scripts/release-candidate-check.sh`): changelog validation runs,
-RC images publish, and the merge discipline in AGENTS.md applies. Re-running
+RC images publish, and the merge discipline in AGENTS.md applies. A PR that
+changes nothing an image is built from (a compat baseline promotion, tests, CI,
+contributor docs) gets no RC images or summary comment, since they would be
+bit-identical to main's and named for a version they are not a candidate of;
+the changelog validation still applies to it. Re-running
 the release workflow pauses at the `release` environment for approval again,
 like any other publish.
 
