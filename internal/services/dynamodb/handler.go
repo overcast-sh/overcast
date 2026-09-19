@@ -268,6 +268,11 @@ func (h *Handler) createTableTyped(ctx context.Context, req *createTableRequest)
 			return nil, aerr
 		}
 	}
+	// AttributeDefinitions must describe exactly the key attributes of the
+	// table and its indexes (attribute_definitions.go).
+	if aerr := validateAttributeDefinitions(req); aerr != nil {
+		return nil, aerr
+	}
 	// Request-shape validation before the existence check resolves against
 	// the store — the same ordering createLogGroupTyped uses
 	// (internal/services/cloudwatch/logs/typed_logic.go) — so a rejected

@@ -255,7 +255,17 @@ const dynamodbByStatusGSI = `"GlobalSecondaryIndexes": [{
           "Projection": {"ProjectionType": "ALL"}
         }],`
 
+// dynamodbGSITemplate renders the table with or without the by-status GSI.
+// The "status" attribute is defined only alongside the index that keys on
+// it: DynamoDB rejects an AttributeDefinition no key or index uses
+// ("Some AttributeDefinitions are not used"), so a template that always
+// declared it could never have created the index-less table on AWS.
 func dynamodbGSITemplate(tableName, gsi string) string {
+	statusDef := ""
+	if gsi != "" {
+		statusDef = `,
+          {"AttributeName": "status", "AttributeType": "S"}`
+	}
 	return `{
   "Resources": {
     "Sessions": {
@@ -263,8 +273,7 @@ func dynamodbGSITemplate(tableName, gsi string) string {
       "Properties": {
         "TableName": "` + tableName + `",
         "AttributeDefinitions": [
-          {"AttributeName": "id", "AttributeType": "S"},
-          {"AttributeName": "status", "AttributeType": "S"}
+          {"AttributeName": "id", "AttributeType": "S"}` + statusDef + `
         ],
         "KeySchema": [{"AttributeName": "id", "KeyType": "HASH"}],
         ` + gsi + `
