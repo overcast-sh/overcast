@@ -125,6 +125,28 @@ func freeLoopbackPort(t *testing.T) int {
 	return ln.Addr().(*net.TCPAddr).Port
 }
 
+// freeLoopbackPortPair reserves two distinct free ports — for the API and
+// the web console — by holding two ephemeral listeners open at once, then
+// releases both so the code under test can bind them. Both come from the
+// OS, never arithmetic: a derived port like port+1 is not reserved by
+// anything, so another test binary running in parallel (go test -p N) can
+// already hold it — that flake happened ("startDocker: ui-port N is already
+// in use") — and port+1 overflows 65535 when the draw is the last port.
+func freeLoopbackPortPair(t *testing.T) (port, uiPort int) {
+	t.Helper()
+	ln1, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("reserve a free port: %v", err)
+	}
+	defer ln1.Close()
+	ln2, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("reserve a second free port: %v", err)
+	}
+	defer ln2.Close()
+	return ln1.Addr().(*net.TCPAddr).Port, ln2.Addr().(*net.TCPAddr).Port
+}
+
 func TestPortFree_TrueForAnUnboundPort(t *testing.T) {
 	port := freeLoopbackPort(t)
 	if !portFree(port) {
@@ -148,26 +170,10 @@ func TestPortFree_FalseForABoundPort(t *testing.T) {
 // for these ports" path: both must be free, and the pair returned is exactly
 // what was given, no scanning.
 func TestResolveDockerPorts_ExplicitUsesAsIs(t *testing.T) {
-	// Reserve two free ports via ephemeral binds held simultaneously (so
-	// they are distinct), then release both so resolveDockerPorts can bind.
-	// Both come from the OS, never arithmetic: a derived port like port+1000
-	// can exceed 65535 or belong to another process — that exact flake
-	// happened (ephemeral draw 65506 → "ui-port 66506 already in use").
-	// Explicit mode does not require adjacency, which two ephemeral draws
-	// also exercise.
-	ln1, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
-	ln2, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		ln1.Close()
-		t.Fatalf("listen: %v", err)
-	}
-	port := ln1.Addr().(*net.TCPAddr).Port
-	uiPort := ln2.Addr().(*net.TCPAddr).Port
-	ln1.Close()
-	ln2.Close()
+	// Explicit mode does not require adjacency, which two independent
+	// ephemeral draws also exercise. (A derived port like port+1000 once
+	// flaked here too: ephemeral draw 65506 → "ui-port 66506 already in use".)
+	port, uiPort := freeLoopbackPortPair(t)
 
 	gotPort, gotUI, err := resolveDockerPorts(port, uiPort, true)
 	if err != nil {
@@ -352,8 +358,7 @@ func TestStartDocker_RequiresResolvedImage(t *testing.T) {
 // argv the brief actually specifies? No real docker involved — dockerRun is
 // faked to capture the argv and hand back a fixed container id.
 func TestStartDocker_AssemblesRunArgs(t *testing.T) {
-	port := freeLoopbackPort(t)
-	uiPort := port + 1
+	port, uiPort := freeLoopbackPortPair(t)
 
 	var calls [][]string
 	withFakeDockerRun(t, recordingDockerRun(&calls, "abcdef0123456789\n", nil))
@@ -435,14 +440,14 @@ func TestStartDocker_AssemblesRunArgs(t *testing.T) {
 // optional flags set, the argv must not contain any of the mount/env flags
 // they would have added — the allow-list philosophy cuts both ways.
 func TestStartDocker_NoVolumeNoSocketNoExtraFlags(t *testing.T) {
-	port := freeLoopbackPort(t)
+	port, uiPort := freeLoopbackPortPair(t)
 	var calls [][]string
 	withFakeDockerRun(t, recordingDockerRun(&calls, "cid123\n", nil))
 
 	if _, err := startDocker(startOptions{
 		name:          "bare",
 		port:          port,
-		uiPort:        port + 1,
+		uiPort:        uiPort,
 		portsExplicit: true,
 		image:         "ghcr.io/overcast-sh/overcast:alpha",
 	}); err != nil {
@@ -464,7 +469,7 @@ func TestStartDocker_NoVolumeNoSocketNoExtraFlags(t *testing.T) {
 // "container id" — this pins the fix (lastNonEmptyLine): only the last line
 // is kept.
 func TestStartDocker_ContainerIDIgnoresPullProgress(t *testing.T) {
-	port := freeLoopbackPort(t)
+	port, uiPort := freeLoopbackPortPair(t)
 	pullOutput := "Unable to find image 'ghcr.io/overcast-sh/overcast:alpha' locally\n" +
 		"alpha: Pulling from overcast-sh/overcast\n" +
 		"Digest: sha256:deadbeef\n" +
@@ -475,7 +480,7 @@ func TestStartDocker_ContainerIDIgnoresPullProgress(t *testing.T) {
 	})
 
 	rec, err := startDocker(startOptions{
-		name: "pulltest", port: port, uiPort: port + 1, portsExplicit: true,
+		name: "pulltest", port: port, uiPort: uiPort, portsExplicit: true,
 		image: "ghcr.io/overcast-sh/overcast:alpha",
 	})
 	if err != nil {
@@ -487,15 +492,24 @@ func TestStartDocker_ContainerIDIgnoresPullProgress(t *testing.T) {
 	}
 }
 
+// TestStartDocker_RunFailurePropagates asserts the `docker run` error itself
+// comes back, not merely some error: only `run` fails here, so the daemon
+// probe (`docker version`) and the port checks pass and the error can only
+// have come from the run step.
 func TestStartDocker_RunFailurePropagates(t *testing.T) {
-	port := freeLoopbackPort(t)
+	port, uiPort := freeLoopbackPortPair(t)
+	runErr := errors.New("Unable to find image 'ghcr.io/overcast-sh/overcast:alpha' locally")
 	withFakeDockerRun(t, func(args ...string) (string, error) {
-		return "", errors.New("Unable to find image 'ghcr.io/overcast-sh/overcast:alpha' locally")
+		if len(args) > 0 && args[0] == "run" {
+			return "", runErr
+		}
+		return "", nil
 	})
-	if _, err := startDocker(startOptions{
-		name: "x", port: port, uiPort: port + 1, portsExplicit: true, image: "ghcr.io/overcast-sh/overcast:alpha",
-	}); err == nil {
-		t.Fatal("startDocker succeeded despite a failing docker run, want an error")
+	_, err := startDocker(startOptions{
+		name: "x", port: port, uiPort: uiPort, portsExplicit: true, image: "ghcr.io/overcast-sh/overcast:alpha",
+	})
+	if !errors.Is(err, runErr) {
+		t.Fatalf("startDocker error = %v, want it to wrap the docker run failure %q", err, runErr)
 	}
 }
 
