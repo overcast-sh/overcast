@@ -969,9 +969,16 @@ jobs:
         if: steps.app-check.outputs.available == 'true'
         env:
           GH_TOKEN: ${{ steps.promotion-token.outputs.token }}
+          APP_SLUG: ${{ steps.promotion-token.outputs.app-slug }}
         run: |
-          git config user.name "overcast-compat-promotion[bot]"
-          git config user.email "overcast-compat-promotion[bot]@users.noreply.github.com"
+          # The App's own identity, as every other App-authored commit here
+          # does. This used to be a name that is no GitHub account
+          # (`overcast-compat-promotion[bot]`), so GitHub linked the branch
+          # commit to nobody. The main ruleset requires an extra approval for
+          # unattributed changes, and the flake-detection promotion, which
+          # already authors as the App, merges without one.
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${APP_SLUG}[bot]@users.noreply.github.com"
           remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           # Non-fatal from here down: promotion is an optimisation, not a gate,
           # and a dropped one is recomputed by the next improved main run.
