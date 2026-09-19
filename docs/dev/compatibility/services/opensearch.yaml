@@ -1,21 +1,267 @@
 service: opensearch
-status: not_started
+status: reviewed
 priority: p2
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-05-17
-protocols: [rest_json, aws_json_1_0, aws_json_1_1, rpcv2_cbor]
+last_updated: 2026-09-20
+protocols: [rest_json]
 implementation: [internal/services/opensearch]
 integration_tests: [tests/integration/opensearch]
+compat_suites: [compat/suites/cli/internal/groups/opensearch.go]
 capability_docs: docs/services/opensearch.md
-operation_count_estimate: 8 supported
-current_support_level: Basic domain CRUD, batch describe, and tagging; no real OpenSearch cluster.
-operations: {}
+operation_count_estimate: 8 supported of the ~96 operations AWS binds under /2021-01-01
+current_support_level: >-
+  Control-plane only, and reviewed against the pinned model
+  (opensearch-2021-01-01) at that level. Domain CRUD (CreateDomain,
+  DescribeDomain, DescribeDomains, ListDomainNames, DeleteDomain) and tagging
+  (AddTags, ListTags, RemoveTags) answer at their modeled restJson1 bindings
+  with modeled error codes and statuses. No search cluster runs: a domain is a
+  record, and DomainStatus.Endpoint is an AWS-shaped hostname that answers
+  nothing. Every other modeled operation returns a protocol-correct 501.
+protocol_note: >-
+  restJson1 only. The model gives every operation an empty target prefix and no
+  second protocol, so there is no X-Amz-Target dispatch and no Query or CBOR
+  surface. The earlier rest_json/aws_json_1_0/aws_json_1_1/rpcv2_cbor list in
+  this file described the invented wire contract #856 removed. Requests are
+  signed for the "es" signing name, which is also the ARN partition service
+  name.
+operations:
+  CreateDomain:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/opensearch-service/latest/APIReference/API_CreateDomain.html
+    protocol: restJson1; POST /2021-01-01/opensearch/domain, every member bound to the body
+    tests:
+      - tests/integration/opensearch/opensearch_test.go
+      - compat/suites/cli/internal/groups/opensearch.go
+    scenarios:
+      minimal_request:
+        status: reviewed
+        evidence: DomainName alone creates a domain reported Created=true and Processing=false, with EngineVersion defaulted to OpenSearch_2.11 and an ARN of arn:aws:es:<region>:<account>:domain/<name>.
+      engine_version_variants:
+        status: reviewed
+        evidence: Both spellings VersionString admits round-trip, at the boundaries the pattern can produce — OpenSearch_1.0 (14 characters, the modeled minimum), OpenSearch_10.11 and Elasticsearch_7.10 (18, the maximum).
+      inline_tag_list:
+        status: reviewed
+        evidence: TagList supplied on create is applied before the response, so a ListTags immediately afterwards sees it without a second call, as on AWS.
+      cluster_config_echo:
+        status: fixed
+        evidence: ClusterConfig is one of DomainStatus's four @required members and was absent from every response. It is now always present — the object the create asked for, or {} when it asked for none, which the model admits because ClusterConfig has no required members of its own.
+      duplicate_name:
+        status: reviewed
+        evidence: A repeat name in the same region returns ResourceAlreadyExistsException with HTTP 409, the status the model declares; the same name in another region is a different domain.
+      missing_domain_name:
+        status: reviewed
+        evidence: An absent DomainName returns ValidationException with HTTP 400.
+      malformed_domain_name:
+        status: fixed
+        evidence: "DomainName's modeled @length(3, 28) and @pattern ^[a-z][a-z0-9\\-]+$ were unenforced, so ab, Logs, 1logs, logs_1 and a 31-character name all created domains — and the ARN and endpoint hostname built from them were malformed too (Endpoint came back as search-logs.1.us-east-1.es.localhost). Each now returns ValidationException/400 in AWS's constraint-violation sentence. botocore does not check patterns client-side, so these requests really do reach the service."
+      malformed_engine_version:
+        status: fixed
+        evidence: "VersionString's modeled @pattern was unenforced, so 2.11, Solr_9.4 and Opensearch_2.11 were accepted. The prefix is what EngineType is derived from, so an unchecked version left ListDomainNames' engineType filter answering from a string AWS would never have stored. Now ValidationException/400."
+      unmodeled_cluster_members:
+        status: intentionally_partial
+        evidence: EBSOptions, VPCOptions, AccessPolicies, AdvancedSecurityOptions, AutoTuneOptions and the other ~25 CreateDomain members are accepted and ignored — they configure a cluster that does not exist. Documented in docs/services/opensearch.md.
+    gaps: []
+  DescribeDomain:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/opensearch-service/latest/APIReference/API_DescribeDomain.html
+    protocol: restJson1; GET /2021-01-01/opensearch/domain/{DomainName}, the name bound as a path label
+    tests:
+      - tests/integration/opensearch/opensearch_test.go
+      - compat/suites/cli/internal/groups/opensearch.go
+    scenarios:
+      existing_domain:
+        status: reviewed
+        evidence: Returns the stored DomainStatus, including the ARN and EngineVersion the create reported.
+      required_members:
+        status: fixed
+        evidence: All four @required members (DomainId, DomainName, ARN, ClusterConfig) are now present on every response; ClusterConfig was missing before.
+      unknown_domain:
+        status: reviewed
+        evidence: ResourceNotFoundException with HTTP 409 — OpenSearch's not-found status is 409, not 404, and the compat suite asserts the status off the CLI's own wire log rather than the error code alone.
+      other_region:
+        status: reviewed
+        evidence: Domain names are unique per account per region, so a domain created in us-east-1 is not found in eu-west-1.
+      malformed_domain_name:
+        status: fixed
+        evidence: A name outside DomainName's constraints returned ResourceNotFoundException/409, treating a bad request as a missing resource. AWS validates input before it looks anything up, so it now returns ValidationException/400.
+      endpoint_shape:
+        status: reviewed
+        evidence: "Endpoint is a bare hostname in AWS's search-<domain>.<region>.es.<suffix> shape — no scheme, no port, no path — matching ServiceUrl, whose modeled example is search-imdb-movies-oopcnjfn6ugo.eu-west-1.es.amazonaws.com. Pinned by TestDescribeDomain_endpointIsABareHostname."
+      corrupt_persisted_record:
+        status: reviewed
+        evidence: An undecodable record reads as absent and answers ResourceNotFoundException rather than a 500; listDomains skips it rather than failing the whole listing.
+    gaps: []
+  DescribeDomains:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/opensearch-service/latest/APIReference/API_DescribeDomains.html
+    protocol: restJson1; POST /2021-01-01/opensearch/domain-info — a different URI from DescribeDomain's
+    tests:
+      - tests/integration/opensearch/opensearch_test.go
+      - compat/suites/cli/internal/groups/opensearch.go
+    scenarios:
+      mixed_known_and_unknown:
+        status: reviewed
+        evidence: A name matching nothing is omitted from DomainStatusList rather than raised — the model declares no not-found error on this operation and DomainStatusList is a required response member, so the answer is always a list.
+      empty_domain_names:
+        status: reviewed
+        evidence: An empty or absent DomainNames returns ValidationException with HTTP 400.
+      malformed_element:
+        status: fixed
+        evidence: DomainNameList's members are DomainName-shaped, so each element carries the same constraints. A malformed element was silently treated as an unknown name and dropped; it now fails the request with ValidationException/400, which keeps malformed and unknown distinguishable.
+    gaps: []
+  ListDomainNames:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/opensearch-service/latest/APIReference/API_ListDomainNames.html
+    protocol: restJson1; GET /2021-01-01/domain — directly under the version prefix, not under /opensearch
+    tests:
+      - tests/integration/opensearch/opensearch_test.go
+      - compat/suites/cli/internal/groups/opensearch.go
+    scenarios:
+      binding_is_not_the_create_uri:
+        status: reviewed
+        evidence: The list URI is GET /2021-01-01/domain while the create URI is POST /2021-01-01/opensearch/domain. Collapsing the two is the #856 mistake; the CLI suite asserts the HTTP status off the wire log so a route bound at a spelling no client sends fails there.
+      engine_type_filter:
+        status: reviewed
+        evidence: engineType is an httpQuery member — ListDomainNames is a GET with no body — and the filter is applied against each domain's EngineType, derived from its EngineVersion prefix.
+      invalid_engine_type:
+        status: reviewed
+        evidence: A value outside the EngineType enum (OpenSearch, Elasticsearch) returns ValidationException with HTTP 400.
+      empty_region:
+        status: reviewed
+        evidence: A region with no domains returns an empty DomainNames list, not null.
+    gaps: []
+  DeleteDomain:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/opensearch-service/latest/APIReference/API_DeleteDomain.html
+    protocol: restJson1; DELETE /2021-01-01/opensearch/domain/{DomainName}
+    tests:
+      - tests/integration/opensearch/opensearch_test.go
+      - compat/suites/cli/internal/groups/opensearch.go
+    scenarios:
+      existing_domain:
+        status: reviewed
+        evidence: Returns the domain with Deleted=true, and a describe afterwards no longer finds it.
+      tags_are_dropped:
+        status: reviewed
+        evidence: The tag blob is keyed by ARN and deleted with the domain, so a new domain of the same name does not inherit the old one's tags.
+      unknown_domain:
+        status: reviewed
+        evidence: ResourceNotFoundException with HTTP 409, asserted on the delete path separately from the describe path because they are different handlers.
+      malformed_domain_name:
+        status: fixed
+        evidence: Same fix as DescribeDomain's — a name outside the modeled constraints is now ValidationException/400 rather than ResourceNotFoundException/409.
+      asynchronous_deletion:
+        status: intentionally_partial
+        evidence: AWS reports Deleted=true while the domain drains and keeps answering DescribeDomain for a while. Overcast deletes synchronously, so the domain is gone on the next call. The CLI suite polls rather than asserting the first answer, so modelling the drain later would not turn that test into a flake.
+    gaps: []
+  AddTags:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/opensearch-service/latest/APIReference/API_AddTags.html
+    protocol: restJson1; POST /2021-01-01/tags, with ARN and TagList both bound to the body
+    tests:
+      - tests/integration/opensearch/opensearch_test.go
+      - compat/suites/cli/internal/groups/opensearch.go
+    scenarios:
+      add_and_read_back:
+        status: reviewed
+        evidence: Tags addressed by ARN in the body are stored against that ARN and visible to ListTags. The operation returns an empty body, as the model does — its output is smithy.api#Unit.
+      missing_arn:
+        status: reviewed
+        evidence: An absent ARN returns ValidationException with HTTP 400.
+      tag_limits_and_shape:
+        status: reviewed
+        evidence: serviceutil's shared tag validator is configured with OpenSearch's own codes — LimitExceededException for exceeding the tag limit, ValidationException for a malformed key or value — which is the pair the model declares for this operation.
+      unknown_resource:
+        status: blocked
+        evidence: See the remaining_gaps entry on tag-ARN existence. AddTags models no ResourceNotFoundException, so AWS must answer something else for an ARN that names nothing, and which error that is cannot be settled from the docs alone.
+    gaps:
+      - Tagging an ARN that names no existing resource succeeds.
+  ListTags:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/opensearch-service/latest/APIReference/API_ListTags.html
+    protocol: restJson1; GET /2021-01-01/tags with the ARN bound to the arn query member, registered at both URI spellings
+    tests:
+      - tests/integration/opensearch/opensearch_test.go
+      - compat/suites/cli/internal/groups/opensearch.go
+    scenarios:
+      arn_is_a_query_member:
+        status: reviewed
+        evidence: ARN is an httpQuery member named arn — not a path segment and not a body member. ListTags is a GET and has no body to carry it in.
+      both_uri_spellings:
+        status: reviewed
+        evidence: "AWS's two models of this service disagree. The pinned Smithy model binds GET /2021-01-01/tags, and no operation in it carries a trailing slash; botocore's model spells the same operation /2021-01-01/tags/, verified against the AWS CLI's bundled botocore/data/opensearch/2021-01-01/service-2.json.gz. Both are registered, so Smithy SDKs and the CLI both reach the handler. The code comments that attributed the trailing slash to the Smithy model were corrected in this review."
+      untagged_resource:
+        status: reviewed
+        evidence: A resource with no tags returns an empty TagList, not an error.
+      missing_arn:
+        status: reviewed
+        evidence: An absent arn parameter returns ValidationException with HTTP 400.
+      unknown_resource:
+        status: blocked
+        evidence: See the remaining_gaps entry on tag-ARN existence. ListTags is the only one of the three tag operations that models ResourceNotFoundException, which suggests AWS raises it here, but the docs do not say when each modeled error fires.
+    gaps:
+      - An ARN that names no existing resource returns an empty TagList rather than an error.
+  RemoveTags:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/opensearch-service/latest/APIReference/API_RemoveTags.html
+    protocol: restJson1; POST /2021-01-01/tags-removal, with ARN and TagKeys bound to the body
+    tests:
+      - tests/integration/opensearch/opensearch_test.go
+      - compat/suites/cli/internal/groups/opensearch.go
+    scenarios:
+      removes_only_the_named_keys:
+        status: reviewed
+        evidence: Removing one key leaves the others in place — a handler that cleared the whole tag set would pass a no-error assertion and fails this one.
+      missing_arn:
+        status: reviewed
+        evidence: An absent ARN returns ValidationException with HTTP 400.
+      unknown_resource:
+        status: blocked
+        evidence: See the remaining_gaps entry on tag-ARN existence. Like AddTags, RemoveTags models no ResourceNotFoundException.
+    gaps:
+      - Removing tags from an ARN that names no existing resource succeeds.
 findings:
-  fixed: []
+  fixed:
+    - "#856, before this review: the whole service was served under an Overcast-invented /_opensearch prefix and an invented OpenSearch. X-Amz-Target namespace, so no AWS SDK could reach any operation. All eight now answer at their modeled restJson1 bindings, and internal/router's model-binding gate compares registered routes against the manifest's HTTPMethod and URI so the fault cannot return unnoticed. This is the defect #165 was filed about; it was fixed before this review and is recorded here because the tracker still claimed it."
+    - "#963/#966, before this review: ListTags was registered only at the slash-less URI, so the AWS CLI could not reach it — signed it got a 501, unsigned it fell past OpenSearch into S3's wildcard object route and came back 404 NoSuchKey. Both spellings are registered."
+    - "DomainName's modeled @length and @pattern were unenforced on CreateDomain, DescribeDomain, DeleteDomain and DescribeDomains. A malformed name created a domain whose ARN and endpoint hostname were malformed too. All four now return ValidationException/400."
+    - "EngineVersion's modeled @pattern was unenforced, leaving EngineType — and therefore ListDomainNames' engineType filter — derived from a string AWS would never have stored. Now ValidationException/400."
+    - "DomainStatus.ClusterConfig, one of the shape's four @required members, was missing from every response. It now always comes back: the object the create asked for, or {}."
   remaining_gaps:
-    - Review AWS wire compatibility because custom /_opensearch prefix likely diverges from real OpenSearch Service REST paths.
-  intentionally_partial: []
+    - "Tag-ARN existence is not checked by any of AddTags, ListTags or RemoveTags: an ARN naming no domain is tagged, listed as untagged, or untagged without error. The model is suggestive but not decisive — ListTags declares ResourceNotFoundException and the other two do not, so AWS must answer differently across the three — and the AWS docs do not state when each modeled error fires. Settling it needs an approved real-AWS check under reference_policy. Resolve all three together: fixing one alone makes the set incoherent."
+    - "The ~88 modeled operations Overcast does not implement (UpdateDomainConfig, the package, connection, VPC-endpoint, application and data-source surfaces) return a protocol-correct 501 and are not tracked here operation by operation."
+  intentionally_partial:
+    - "The data plane is unsupported, and #165 asked whether it should be served under a path prefix. It should not. DomainStatus.Endpoint is a ServiceUrl — a bare hostname, no scheme, no port, no path — so a domain's index, search and bulk traffic goes to that host on 443, never to a path beneath the control-plane endpoint. A path prefix cannot express it, which is what the removed /_opensearch was attempting, and a hostname alone cannot carry the port an emulator listens on, so no client-facing URL minting rule would make the endpoint reachable either. Overcast keeps the endpoint AWS-shaped and serves nothing on it; a test that must index documents runs a real OpenSearch container beside Overcast. Stated in docs/services/opensearch.md and in the package comment."
+    - "DomainStatus carries the four required members plus EngineVersion, Endpoint and the Created/Deleted/Processing flags. The other ~30 members describe a cluster, its storage, its VPC and its software updates, none of which exist here."
+    - "Domains are active the moment they are created: Processing is always false and there is no create-to-active transition to wait on. AWS takes minutes."
+    - "CreateDomain's cluster-shaped members are accepted and ignored. ClusterConfig alone is echoed back, because it is required on the response."
+verification:
+  commands:
+    - gofmt -l ./internal/services/opensearch/ ./tests/integration/opensearch/
+    - go vet ./internal/services/opensearch/... ./tests/integration/opensearch/...
+    - go vet -tags slim,dev ./internal/services/opensearch/... ./tests/integration/opensearch/...
+    - go test -count=1 ./internal/services/opensearch/... ./tests/integration/opensearch/...
+    - go test -count=1 -tags slim,dev ./tests/integration/router/...
+    - go run -tags dev ./cmd/capgen --check-model
 handoff:
-  start_with: [CreateDomain, DescribeDomain, tagging]
-  do_not_redo: []
+  start_with: [AddTags, ListTags, RemoveTags]
+  do_not_redo:
+    - Route bindings. All eight operations are at the URIs and methods the pinned manifest declares, and the router's model-binding gate plus the CLI compat suite both assert it.
+    - DomainName and EngineVersion constraint validation, and DomainStatus's required members.
+    - Whether the data plane should be served under a path prefix. It should not; the reasoning is under intentionally_partial.
+  next_action: >-
+    Settle the tag-ARN existence question for AddTags, ListTags and RemoveTags
+    together, which needs an approved real-AWS check because the docs do not say
+    when each modeled error fires. After that, the next operation worth
+    implementing is UpdateDomainConfig (POST
+    /2021-01-01/opensearch/domain/{DomainName}/config), the only unimplemented
+    operation a control-plane-only user is likely to reach for.
   commands: [go test -count=1 ./internal/services/opensearch/... ./tests/integration/opensearch/...]
