@@ -8026,13 +8026,13 @@
           "operation": "CreateDomain",
           "category": "Domains",
           "status": "✅ Supported",
-          "notes": "creates a domain, immediately active; inline `TagList` applied at creation; a repeat name in the same region is rejected"
+          "notes": "creates a domain, immediately active; `DomainName` and `EngineVersion` are checked against their modeled patterns; inline `TagList` applied at creation; a repeat name in the same region is rejected"
         },
         {
           "operation": "DescribeDomain",
           "category": "Domains",
           "status": "✅ Supported",
-          "notes": "returns the stored domain; only the members an inert domain can populate honestly"
+          "notes": "returns the stored domain: every required member plus the others an inert domain can populate honestly; `Endpoint` is an AWS-shaped hostname that serves nothing"
         },
         {
           "operation": "DescribeDomains",

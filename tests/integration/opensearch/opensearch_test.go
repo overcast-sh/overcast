@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/overcast-sh/overcast/tests/helpers"
@@ -333,16 +334,15 @@ func TestListTags_arnIsAQueryParameter(t *testing.T) {
 	}
 }
 
-// AWS binds ListTags to GET /2021-01-01/tags/ — with a trailing slash, the
-// only URI in the whole OpenSearch model that carries one — and that is what
-// an unmodified AWS client sends. Overcast registered only the slash-less
-// spelling, so the operation was unreachable: signed, it answered 501;
-// unsigned, it fell past OpenSearch into S3's wildcard object route and
-// returned HTTP 404 with <Error><Code>NoSuchKey</Code>…</Error>, an S3 error
-// for an OpenSearch call. Same fault as #963, same fix as #966.
-//
-// The slash-less spelling stays registered — it is what the callers that
-// worked before this fix send — so both are asserted here.
+// AWS's two models of this service disagree about ListTags' URI, so both
+// spellings have to answer. The pinned Smithy model binds GET
+// /2021-01-01/tags, and no operation in it carries a trailing slash; botocore
+// spells the same operation "/2021-01-01/tags/", so the AWS CLI and boto3 send
+// the slash. Overcast registered only the slash-less spelling, so the CLI
+// could not reach the operation: signed, it answered 501; unsigned, it fell
+// past OpenSearch into S3's wildcard object route and returned HTTP 404 with
+// <Error><Code>NoSuchKey</Code>…</Error>, an S3 error for an OpenSearch call.
+// Same fault as #963, same fix as #966. Both spellings are asserted here.
 func TestListTags_trailingSlashBinding(t *testing.T) {
 	// Given: a tagged domain
 	srv := helpers.NewTestServer(t)
@@ -508,5 +508,239 @@ func TestDeleteDomain_dropsItsTags(t *testing.T) {
 	helpers.DecodeJSON(t, resp, &body)
 	if len(body.TagList) != 0 {
 		t.Fatalf("TagList = %v, want none", body.TagList)
+	}
+}
+
+// ─── Input constraints ────────────────────────────────────────────────────────
+
+// AWS constrains DomainName in the model itself: @length(min: 3, max: 28) and
+// @pattern("^[a-z][a-z0-9\\-]+$") on com.amazonaws.opensearch#DomainName, the
+// shape every operation that names a domain shares. Neither constraint is
+// checked client-side — botocore validates types and required members, not
+// patterns — so a name AWS rejects reaches the service and comes back as
+// ValidationException, HTTP 400.
+func TestCreateDomain_invalidDomainName(t *testing.T) {
+	// Given: a running emulator
+	srv := helpers.NewTestServer(t)
+
+	for name, why := range map[string]string{
+		"ab":                              "shorter than the modeled minimum of 3",
+		"this-domain-name-is-way-too-lon": "longer than the modeled maximum of 28",
+		"Logs":                            "uppercase, which the pattern excludes",
+		"1logs":                           "starts with a digit, not [a-z]",
+		"-logs":                           "starts with a hyphen, not [a-z]",
+		"logs_1":                          "underscore is outside [a-z0-9-]",
+		"logs.1":                          "dot is outside [a-z0-9-], and lands in the endpoint hostname",
+	} {
+		t.Run(name, func(t *testing.T) {
+			// When: a name that violates the modeled constraint is created
+			resp := osDo(t, srv, http.MethodPost, pathDomains, defaultRegion, map[string]any{
+				"DomainName": name,
+			})
+			defer resp.Body.Close()
+
+			// Then: the modeled ValidationException, not a domain
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Errorf("status = %d, want 400 — %q is %s", resp.StatusCode, name, why)
+			}
+			helpers.AssertJSONError(t, resp, "ValidationException")
+		})
+	}
+}
+
+// A malformed name is a bad request, not a missing resource: AWS validates the
+// input before it looks anything up, so DescribeDomain and DeleteDomain answer
+// ValidationException (400) rather than ResourceNotFoundException (409).
+func TestDescribeDomain_invalidDomainName(t *testing.T) {
+	// Given: a running emulator
+	srv := helpers.NewTestServer(t)
+
+	// When: a name that cannot name a domain is described
+	resp := osDo(t, srv, http.MethodGet, pathDomains+"/Logs", defaultRegion, nil)
+	defer resp.Body.Close()
+
+	// Then: ValidationException, not ResourceNotFoundException
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertJSONError(t, resp, "ValidationException")
+}
+
+func TestDeleteDomain_invalidDomainName(t *testing.T) {
+	// Given: a running emulator
+	srv := helpers.NewTestServer(t)
+
+	// When: a name that cannot name a domain is deleted
+	resp := osDo(t, srv, http.MethodDelete, pathDomains+"/ab", defaultRegion, nil)
+	defer resp.Body.Close()
+
+	// Then: ValidationException, not ResourceNotFoundException
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertJSONError(t, resp, "ValidationException")
+}
+
+// DescribeDomains' DomainNames members are DomainName-shaped too, so the same
+// constraint applies to each element. A malformed element is a bad request —
+// it must not be quietly omitted the way a well-formed but unknown name is.
+func TestDescribeDomains_invalidDomainName(t *testing.T) {
+	// Given: one real domain
+	srv := helpers.NewTestServer(t)
+	createDomain(t, srv, "test-domain", "")
+
+	// When: the batch names it alongside a malformed name
+	resp := osDo(t, srv, http.MethodPost, pathDomainInfo, defaultRegion, map[string]any{
+		"DomainNames": []string{"test-domain", "Not_A_Name"},
+	})
+	defer resp.Body.Close()
+
+	// Then: the whole request is rejected
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertJSONError(t, resp, "ValidationException")
+}
+
+// EngineVersion carries its own modeled constraint:
+// com.amazonaws.opensearch#VersionString is
+// @pattern("^Elasticsearch_[0-9]{1}\\.[0-9]{1,2}$|^OpenSearch_[0-9]{1,2}\\.[0-9]{1,2}$").
+// That spelling is also what decides a domain's EngineType, so a version
+// outside the pattern leaves ListDomainNames' engineType filter deriving an
+// answer from a string AWS would never have stored.
+func TestCreateDomain_invalidEngineVersion(t *testing.T) {
+	// Given: a running emulator
+	srv := helpers.NewTestServer(t)
+
+	for _, version := range []string{
+		"2.11",             // no engine name
+		"OpenSearch-2.11",  // hyphen where the pattern wants an underscore
+		"Opensearch_2.11",  // wrong case
+		"OpenSearch_2",     // no minor version
+		"Elasticsearch_12", // no minor version, and a two-digit major
+		"Solr_9.4",         // an engine AWS does not run
+	} {
+		t.Run(version, func(t *testing.T) {
+			// When: an engine version outside the modeled pattern is requested
+			resp := osDo(t, srv, http.MethodPost, pathDomains, defaultRegion, map[string]any{
+				"DomainName":    "test-domain",
+				"EngineVersion": version,
+			})
+			defer resp.Body.Close()
+
+			// Then: the modeled ValidationException
+			helpers.AssertStatus(t, resp, http.StatusBadRequest)
+			helpers.AssertJSONError(t, resp, "ValidationException")
+		})
+	}
+}
+
+// Both spellings the pattern admits must still work, at the shortest and
+// longest strings it can produce.
+func TestCreateDomain_engineVersionBoundaries(t *testing.T) {
+	// Given: a running emulator
+	srv := helpers.NewTestServer(t)
+
+	cases := []struct{ domain, version string }{
+		{"shortest-opensearch", "OpenSearch_1.0"},
+		{"longest-elastic", "Elasticsearch_7.10"},
+		{"two-digit-major", "OpenSearch_10.11"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.version, func(t *testing.T) {
+			// When: each boundary spelling is created
+			// Then: it is accepted and echoed back
+			if got := createDomain(t, srv, tc.domain, tc.version)["EngineVersion"]; got != tc.version {
+				t.Errorf("EngineVersion = %v, want %q", got, tc.version)
+			}
+		})
+	}
+}
+
+// ─── Response shape ───────────────────────────────────────────────────────────
+
+// DomainStatus declares four required members: DomainId, DomainName, ARN and
+// ClusterConfig. AWS always sends all four, so a client is entitled to read
+// ClusterConfig without testing for it first. Overcast runs no cluster, so the
+// honest value is the configuration the caller asked for — and an empty object
+// when it asked for none, which the model permits because ClusterConfig has no
+// required members of its own.
+func TestDomainStatus_carriesEveryRequiredMember(t *testing.T) {
+	// Given: a domain created with a ClusterConfig, as CreateDomain accepts
+	srv := helpers.NewTestServer(t)
+	resp := osDo(t, srv, http.MethodPost, pathDomains, defaultRegion, map[string]any{
+		"DomainName":    "test-domain",
+		"ClusterConfig": map[string]any{"InstanceType": "r6g.large.search", "InstanceCount": 2},
+	})
+	defer resp.Body.Close()
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	created := domainStatusOf(t, resp)
+
+	// When: the describe that follows is read as well
+	described := osDo(t, srv, http.MethodGet, pathDomains+"/test-domain", defaultRegion, nil)
+	defer described.Body.Close()
+	helpers.AssertStatus(t, described, http.StatusOK)
+
+	for label, status := range map[string]map[string]any{
+		"CreateDomain":   created,
+		"DescribeDomain": domainStatusOf(t, described),
+	} {
+		t.Run(label, func(t *testing.T) {
+			// Then: every required member is present
+			for _, member := range []string{"DomainId", "DomainName", "ARN", "ClusterConfig"} {
+				if _, ok := status[member]; !ok {
+					t.Errorf("required member %s is missing from DomainStatus: %v", member, status)
+				}
+			}
+			cluster, ok := status["ClusterConfig"].(map[string]any)
+			if !ok {
+				t.Fatalf("ClusterConfig = %#v, want the requested object", status["ClusterConfig"])
+			}
+			if cluster["InstanceType"] != "r6g.large.search" {
+				t.Errorf("ClusterConfig = %v, want the InstanceType the create asked for", cluster)
+			}
+		})
+	}
+}
+
+// A domain created without a ClusterConfig still carries the member, because
+// it is required — an empty object, not a null and not an absence.
+func TestDomainStatus_clusterConfigDefaultsToAnEmptyObject(t *testing.T) {
+	// Given: a domain created with no cluster configuration
+	srv := helpers.NewTestServer(t)
+
+	// When: its DomainStatus is read
+	status := createDomain(t, srv, "test-domain", "")
+
+	// Then: ClusterConfig is an object rather than null or absent
+	cluster, ok := status["ClusterConfig"].(map[string]any)
+	if !ok {
+		t.Fatalf("ClusterConfig = %#v, want an empty object", status["ClusterConfig"])
+	}
+	if len(cluster) != 0 {
+		t.Errorf("ClusterConfig = %v, want no members — Overcast configures no cluster", cluster)
+	}
+}
+
+// DomainStatus.Endpoint is a ServiceUrl, and the model's own example is
+// "search-imdb-movies-oopcnjfn6ugo.eu-west-1.es.amazonaws.com": a bare
+// hostname, with no scheme, no port and no path. A domain's data plane is a
+// host of its own — index, search and bulk requests go to that host, never to
+// a path beneath the control-plane endpoint. That is the shape issue #165 was
+// filed about, and this test is the guard against a data-plane prefix being
+// invented on the control-plane host again.
+func TestDescribeDomain_endpointIsABareHostname(t *testing.T) {
+	// Given: a domain
+	srv := helpers.NewTestServer(t)
+
+	// When: its endpoint is read
+	endpoint, _ := createDomain(t, srv, "test-domain", "")["Endpoint"].(string)
+
+	// Then: it is a hostname in AWS's search-<domain>.<region>.es.<suffix> shape
+	if endpoint == "" {
+		t.Fatal("Endpoint is empty")
+	}
+	if strings.ContainsAny(endpoint, "/:") {
+		t.Errorf("Endpoint = %q, want a bare hostname with no scheme, port or path", endpoint)
+	}
+	if !strings.HasPrefix(endpoint, "search-test-domain.") {
+		t.Errorf("Endpoint = %q, want it to start with search-<domain-name>.", endpoint)
+	}
+	if !strings.Contains(endpoint, ".us-east-1.es.") {
+		t.Errorf("Endpoint = %q, want the region and the es. suffix AWS uses", endpoint)
 	}
 }

@@ -38,19 +38,21 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | --- | --- |
 | Domains | Create, describe, batch-describe, list and delete; active the moment they are created |
 | Name collisions | A repeat domain name in the same region is rejected |
+| Input validation | `DomainName` (3-28 characters of `[a-z][a-z0-9-]`) and `EngineVersion` (`OpenSearch_X.Y` or `Elasticsearch_X.Y`) are checked, as AWS checks them |
 | Regions | Domains are per-region — the same name in two regions is two domains |
 | Filtering | `ListDomainNames --engine-type` is honoured, derived from each domain's `EngineVersion` |
 | Tags | Inline `TagList` at creation, plus `AddTags`, `ListTags` and `RemoveTags`; deleting a domain deletes its tags |
 
 ## Differences from AWS
 
-| Area                  | On AWS                                                            | Overcast                                                                                                                       |
-| --------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| The cluster           | Indexes documents and serves queries                              | Nothing is indexed or queried; the domain endpoint is a name, not a service                                                    |
-| `DomainStatus`        | The full shape                                                    | Only `DomainId`, `DomainName`, `ARN`, `EngineVersion`, `Endpoint` and the `Created`/`Deleted`/`Processing` flags come back     |
-| Cluster settings      | Configure the cluster                                             | `ClusterConfig`, `EBSOptions`, `VPCOptions`, access policies and the other ~25 `CreateDomain` members are accepted and ignored |
-| Configuration changes | `UpdateDomainConfig`, upgrades, package association and auto-tune | Not implemented                                                                                                                |
-| Cross-cluster search  | Outbound and inbound connections                                  | Not modelled                                                                                                                   |
+| Area                  | On AWS                                                            | Overcast                                                                                                                                                |
+| --------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The cluster           | Indexes documents and serves queries                              | Nothing is indexed or queried; the domain endpoint is a name, not a service                                                                             |
+| `DomainStatus`        | The full shape                                                    | The four required members plus `EngineVersion`, `Endpoint` and the `Created`/`Deleted`/`Processing` flags; the rest is omitted                          |
+| Cluster settings      | Configure the cluster                                             | `ClusterConfig` is echoed back unchanged; `EBSOptions`, `VPCOptions`, access policies and the other ~25 `CreateDomain` members are accepted and ignored |
+| `Endpoint`            | A live domain host on port 443                                    | An AWS-shaped hostname that nothing answers on                                                                                                          |
+| Configuration changes | `UpdateDomainConfig`, upgrades, package association and auto-tune | Not implemented                                                                                                                                         |
+| Cross-cluster search  | Outbound and inbound connections                                  | Not modelled                                                                                                                                            |
 
 ## Gotchas
 
@@ -59,6 +61,11 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 > address the domain endpoint directly, not this control plane. Those calls
 > reach nothing here — run a real OpenSearch container alongside Overcast if
 > your test needs to index documents.
+
+`DomainStatus.Endpoint` is a bare hostname, the way AWS reports one, and a
+domain's data plane lives on that host rather than on a path beneath the
+control-plane endpoint. There is no prefix to point a search client at: the
+management operations above are the whole of what Overcast serves.
 
 <!-- BEGIN overcast:capabilities -->
 

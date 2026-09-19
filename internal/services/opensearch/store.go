@@ -62,6 +62,10 @@ func (s *osStore) getDomain(ctx context.Context, region, name string) (*DomainSt
 		s.log.Warn("skipping undecodable domain record", zap.String("domain", name), zap.Error(err))
 		return nil, false, nil
 	}
+	// Both read paths fill DomainStatus's required members here rather than in
+	// each of the four handlers, so a record written before ClusterConfig was
+	// one of them still answers with the whole modeled shape.
+	d.ensureClusterConfig()
 	return &d, true, nil
 }
 
@@ -79,6 +83,7 @@ func (s *osStore) listDomains(ctx context.Context, region string) ([]DomainStatu
 			s.log.Warn("skipping undecodable domain record", zap.String("key", kv.Key), zap.Error(err))
 			continue
 		}
+		d.ensureClusterConfig()
 		out = append(out, d)
 	}
 	return out, nil
