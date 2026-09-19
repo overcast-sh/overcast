@@ -44,7 +44,7 @@ func init() {
 		capabilities.Capability{Service: "appconfig", Operation: "GetHostedConfigurationVersion", Category: "Hosted Configuration Versions",
 			Status: capabilities.StatusSupported, Notes: "Returns the raw content as the response payload with the metadata in headers"},
 		capabilities.Capability{Service: "appconfig", Operation: "ListHostedConfigurationVersions", Category: "Hosted Configuration Versions",
-			Status: capabilities.StatusSupported, Notes: "Returns version summaries newest first, filtered by the `version_label` query parameter and paginated by `max_results`/`next_token`"},
+			Status: capabilities.StatusSupported, Notes: "Returns version summaries newest first, filtered by the `version_label` query parameter (exact match, or prefix match with a trailing `*`) and paginated by `max_results`/`next_token`"},
 		capabilities.Capability{Service: "appconfig", Operation: "DeleteHostedConfigurationVersion", Category: "Hosted Configuration Versions",
 			Status: capabilities.StatusSupported, Notes: "Deletes a single version; other versions of the profile are untouched and version numbers are not reused"},
 

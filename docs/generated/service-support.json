@@ -6327,7 +6327,7 @@
           "operation": "ListHostedConfigurationVersions",
           "category": "Hosted Configuration Versions",
           "status": "✅ Supported",
-          "notes": "Returns version summaries newest first, filtered by the `version_label` query parameter and paginated by `max_results`/`next_token`"
+          "notes": "Returns version summaries newest first, filtered by the `version_label` query parameter (exact match, or prefix match with a trailing `*`) and paginated by `max_results`/`next_token`"
         },
         {
           "operation": "DeleteHostedConfigurationVersion",
