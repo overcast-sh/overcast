@@ -447,7 +447,7 @@
           "operation": "CreateTable",
           "category": "Table management",
           "status": "✅ Supported",
-          "notes": "Includes GSI/LSI definitions; an omitted `BillingMode` defaults to `PROVISIONED`, which requires `ProvisionedThroughput` on the table and on every GSI, while `PAY_PER_REQUEST` rejects it"
+          "notes": "Includes GSI/LSI definitions; `AttributeDefinitions` must name exactly the key attributes of the table and its indexes — an unused definition or an undefined key attribute is a `ValidationException` with AWS's wording; an omitted `BillingMode` defaults to `PROVISIONED`, which requires `ProvisionedThroughput` on the table and on every GSI, while `PAY_PER_REQUEST` rejects it"
         },
         {
           "operation": "DeleteTable",
@@ -487,49 +487,49 @@
           "operation": "PutItem",
           "category": "Item operations",
           "status": "✅ Supported",
-          "notes": "Includes `ConditionExpression`, `ReturnValues` (`ALL_OLD`); key attributes must be present and carry their declared `AttributeDefinitions` type, while non-key attributes stay schemaless; records AWS/DynamoDB CloudWatch metrics SuccessfulRequestLatency, ConsumedWriteCapacityUnits, UserErrors/SystemErrors; a reserved word used as a bare attribute name in an expression is rejected, as AWS does — reach it through `ExpressionAttributeNames`"
+          "notes": "Includes `ConditionExpression`, `ReturnValues` (`ALL_OLD`); key attributes must be present, non-empty and carry their declared `AttributeDefinitions` type, while non-key attributes stay schemaless; an item over 400 KB by AWS's size accounting is rejected; records AWS/DynamoDB CloudWatch metrics SuccessfulRequestLatency, ConsumedWriteCapacityUnits, UserErrors/SystemErrors; a reserved word used as a bare attribute name in an expression is rejected, as AWS does — reach it through `ExpressionAttributeNames`"
         },
         {
           "operation": "GetItem",
           "category": "Item operations",
           "status": "✅ Supported",
-          "notes": "Includes `ProjectionExpression`; a `Key` must name exactly the key schema's attributes with their declared types; records SuccessfulRequestLatency, ConsumedReadCapacityUnits, UserErrors/SystemErrors; a reserved word used as a bare attribute name in an expression is rejected, as AWS does — reach it through `ExpressionAttributeNames`"
+          "notes": "Includes `ProjectionExpression`; a `Key` must name exactly the key schema's attributes with their declared types and no empty values; records SuccessfulRequestLatency, ConsumedReadCapacityUnits, UserErrors/SystemErrors; a reserved word used as a bare attribute name in an expression is rejected, as AWS does — reach it through `ExpressionAttributeNames`"
         },
         {
           "operation": "UpdateItem",
           "category": "Item operations",
           "status": "✅ Supported",
-          "notes": "SET/REMOVE/ADD/DELETE clauses; all `ReturnValues` variants; upsert; a `Key` must name exactly the key schema's attributes with their declared types; records SuccessfulRequestLatency, ConsumedWriteCapacityUnits, UserErrors/SystemErrors; a reserved word used as a bare attribute name in an expression is rejected, as AWS does — reach it through `ExpressionAttributeNames`"
+          "notes": "SET/REMOVE/ADD/DELETE clauses; all `ReturnValues` variants; upsert; a `Key` must name exactly the key schema's attributes with their declared types and no empty values; an update whose result would exceed 400 KB is rejected; records SuccessfulRequestLatency, ConsumedWriteCapacityUnits, UserErrors/SystemErrors; a reserved word used as a bare attribute name in an expression is rejected, as AWS does — reach it through `ExpressionAttributeNames`"
         },
         {
           "operation": "DeleteItem",
           "category": "Item operations",
           "status": "✅ Supported",
-          "notes": "`ConditionExpression`, `ReturnValues` (`ALL_OLD`); a `Key` must name exactly the key schema's attributes with their declared types; records SuccessfulRequestLatency, ConsumedWriteCapacityUnits, UserErrors/SystemErrors; a reserved word used as a bare attribute name in an expression is rejected, as AWS does — reach it through `ExpressionAttributeNames`"
+          "notes": "`ConditionExpression`, `ReturnValues` (`ALL_OLD`); a `Key` must name exactly the key schema's attributes with their declared types and no empty values; records SuccessfulRequestLatency, ConsumedWriteCapacityUnits, UserErrors/SystemErrors; a reserved word used as a bare attribute name in an expression is rejected, as AWS does — reach it through `ExpressionAttributeNames`"
         },
         {
           "operation": "BatchGetItem",
           "category": "Item operations",
           "status": "✅ Supported",
-          "notes": "Up to 100 items across tables; every key is checked against its table's key schema before any read; records SuccessfulRequestLatency/ConsumedReadCapacityUnits per table touched"
+          "notes": "Up to 100 keys across tables — more is a `ValidationException`; every key is checked against its table's key schema before any read; records SuccessfulRequestLatency/ConsumedReadCapacityUnits per table touched"
         },
         {
           "operation": "BatchWriteItem",
           "category": "Item operations",
           "status": "✅ Supported",
-          "notes": "Up to 25 put/delete operations; every item and key is checked against its table's key schema before any write is applied; records SuccessfulRequestLatency/ConsumedWriteCapacityUnits per table touched"
+          "notes": "Up to 25 put/delete operations; every item and key is checked against its table's key schema before any write is applied, and two operations on one item or an item over 400 KB reject the whole batch; records SuccessfulRequestLatency/ConsumedWriteCapacityUnits per table touched"
         },
         {
           "operation": "Query",
           "category": "Query \u0026 scan",
           "status": "✅ Supported",
-          "notes": "`KeyConditionExpression` (values type-checked against the declared key types), `FilterExpression`, `Limit` (applied before `FilterExpression` per AWS semantics), `ExclusiveStartKey`/`LastEvaluatedKey` pagination, `ScanIndexForward`, `Select=COUNT`; `ConsistentRead=true` on a GSI is rejected as AWS does; records SuccessfulRequestLatency and ConsumedReadCapacityUnits (with GlobalSecondaryIndexName when IndexName names a real GSI); a reserved word used as a bare attribute name in an expression is rejected, as AWS does — reach it through `ExpressionAttributeNames`"
+          "notes": "`KeyConditionExpression` (must constrain the partition key of the table or index queried — a sort-key-only condition is rejected as AWS rejects it; values type-checked against the declared key types), `FilterExpression`, `Limit` (applied before `FilterExpression` per AWS semantics), `ExclusiveStartKey`/`LastEvaluatedKey` pagination, `ScanIndexForward`, `Select=COUNT`; `ConsistentRead=true` on a GSI is rejected as AWS does; records SuccessfulRequestLatency and ConsumedReadCapacityUnits (with GlobalSecondaryIndexName when IndexName names a real GSI); a reserved word used as a bare attribute name in an expression is rejected, as AWS does — reach it through `ExpressionAttributeNames`"
         },
         {
           "operation": "Scan",
           "category": "Query \u0026 scan",
           "status": "✅ Supported",
-          "notes": "`FilterExpression`, `Limit` (applied before `FilterExpression` per AWS semantics), `ExclusiveStartKey`/`LastEvaluatedKey` pagination, parallel scan (`Segment`/`TotalSegments`), `Select=COUNT`; `ConsistentRead=true` on a GSI is rejected as AWS does; records SuccessfulRequestLatency and ConsumedReadCapacityUnits (with GlobalSecondaryIndexName when IndexName names a real GSI); a reserved word used as a bare attribute name in an expression is rejected, as AWS does — reach it through `ExpressionAttributeNames`"
+          "notes": "`FilterExpression`, `Limit` (applied before `FilterExpression` per AWS semantics), `ExclusiveStartKey`/`LastEvaluatedKey` pagination, parallel scan (`Segment`/`TotalSegments`, with `Segment` \u003e= `TotalSegments` rejected), `Select=COUNT`; `ConsistentRead=true` on a GSI is rejected as AWS does; records SuccessfulRequestLatency and ConsumedReadCapacityUnits (with GlobalSecondaryIndexName when IndexName names a real GSI); a reserved word used as a bare attribute name in an expression is rejected, as AWS does — reach it through `ExpressionAttributeNames`"
         },
         {
           "operation": "TransactGetItems",
@@ -541,7 +541,7 @@
           "operation": "TransactWriteItems",
           "category": "Transactions",
           "status": "✅ Supported",
-          "notes": "Put, Update, Delete, ConditionCheck; all-or-nothing; a key-schema mismatch is a `ValidationException` raised before anything is applied, not a cancellation reason; records SuccessfulRequestLatency/ConsumedWriteCapacityUnits per table (2x weighted, matching AWS's transactional-write capacity accounting)"
+          "notes": "Put, Update, Delete, ConditionCheck; all-or-nothing; a key-schema mismatch or two operations on one item is a `ValidationException` raised before anything is applied, not a cancellation reason, while a Put over 400 KB cancels the transaction with a `ValidationError` reason; records SuccessfulRequestLatency/ConsumedWriteCapacityUnits per table (2x weighted, matching AWS's transactional-write capacity accounting)"
         },
         {
           "operation": "TagResource",

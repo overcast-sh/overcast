@@ -139,7 +139,64 @@ func validateKeySchema(table *Table, keyOrItem Item, operand keyOperand) *protoc
 			invalidParameterPrefix, name, declared, actual))
 	}
 
+	// A key attribute may not be empty (issue #1707, rule 3). Since May 2020
+	// AWS accepts empty String and Binary values everywhere except in the
+	// key attributes of the table and its indexes
+	// (https://aws.amazon.com/about-aws/whats-new/2020/05/amazon-dynamodb-now-supports-empty-values-for-non-key-string-and-binary-attributes-in-dynamodb-tables),
+	// and answers an empty key with the message below, which moto raises
+	// from put_item, update_item and batch_write_item. Overcast applies it
+	// to a supplied Key as well as to an Item: an empty key value can never
+	// name an item, so a read by one is the same fault as a write of one.
+	// Index key attributes are not checked here, for the reason the file
+	// header gives.
+	for _, name := range keyNames[:n] {
+		if isEmptyScalar(keyOrItem[name]) {
+			return errValidation("One or more parameter values are not valid. " +
+				"The AttributeValue for a key attribute cannot contain an empty string value. Key: " + name)
+		}
+	}
+
 	return nil
+}
+
+// isEmptyScalar reports whether v is a String or Binary value of length
+// zero — the two types whose emptiness AWS constrains.
+func isEmptyScalar(v attrValue) bool {
+	if len(v) != 1 {
+		return false
+	}
+	switch attrType(v) {
+	case "S", "B":
+		return extractScalar(v) == ""
+	}
+	return false
+}
+
+// validateKeyConditionSchema checks that a compiled KeyConditionExpression
+// constrains the partition key actually in play — the table's for a
+// base-table Query, the index's when IndexName is set — returning AWS's
+// "Query condition missed key schema element: <name>" ValidationException
+// otherwise (issue #1707, rule 4). Without it a condition on the sort key
+// alone, or on a non-key attribute, was compiled as if its attribute were
+// the partition key and answered with whatever that lookup found, teaching
+// a data model DynamoDB cannot serve.
+//
+// The parser reads the first equality as the partition-key condition, but
+// AWS accepts the two conditions in either order, so a "sk = :s AND pk =
+// :p" is recognised here and its halves swapped in place before the check.
+//
+// Message source: https://dynobase.dev/dynamodb-errors/dynamodb-query-condition-missed/,
+// moto's query validation and floci-io/floci#3360 all carry it verbatim.
+func validateKeyConditionSchema(hashAttrName, sortAttrName string, kc *keyCond) *protocol.AWSError {
+	if kc == nil || kc.hashAttr == hashAttrName {
+		return nil
+	}
+	if sc := kc.sortCond; sc != nil && sc.kind == sortKeyEq && sc.attr == hashAttrName && kc.hashAttr == sortAttrName {
+		kc.hashAttr, sc.attr = sc.attr, kc.hashAttr
+		kc.hashVal, sc.val = sc.val, kc.hashVal
+		return nil
+	}
+	return errValidation("Query condition missed key schema element: " + hashAttrName)
 }
 
 // validateKeyConditionTypes checks every value a compiled

@@ -268,6 +268,11 @@ func (h *Handler) createTableTyped(ctx context.Context, req *createTableRequest)
 			return nil, aerr
 		}
 	}
+	// AttributeDefinitions must describe exactly the key attributes of the
+	// table and its indexes (attribute_definitions.go).
+	if aerr := validateAttributeDefinitions(req); aerr != nil {
+		return nil, aerr
+	}
 	// Request-shape validation before the existence check resolves against
 	// the store — the same ordering createLogGroupTyped uses
 	// (internal/services/cloudwatch/logs/typed_logic.go) — so a rejected
@@ -489,6 +494,9 @@ func (h *Handler) putItemTypedCore(ctx context.Context, req *putItemRequest) (*p
 	}
 	if aerr := validateKeySchema(table, req.Item, operandItem); aerr != nil {
 		return nil, aerr
+	}
+	if itemSizeBytes(req.Item) > maxItemSizeBytes {
+		return nil, errItemSizeExceeded()
 	}
 
 	// Evaluate ConditionExpression against the existing item, if any.
@@ -716,6 +724,9 @@ func (h *Handler) Scan(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) scanTypedCore(ctx context.Context, req *scanRequest) (any, *protocol.AWSError) {
 	if req.TableName == "" {
 		return nil, protocol.ErrMissingParameter("TableName")
+	}
+	if aerr := validateScanSegments(req.Segment, req.TotalSegments); aerr != nil {
+		return nil, aerr
 	}
 
 	table, aerr := h.store.getTable(ctx, req.TableName)
@@ -1067,8 +1078,6 @@ func (h *Handler) queryTypedCore(ctx context.Context, req *queryRequest) (any, *
 		}
 	}
 
-	hashVal := extractKeyValue(kc.hashVal)
-
 	// Determine which attribute names to use for matching.
 	hashAttrName := table.hashKeyName()
 	sortAttrName := table.sortKeyName()
@@ -1076,6 +1085,15 @@ func (h *Handler) queryTypedCore(ctx context.Context, req *queryRequest) (any, *
 		hashAttrName = idxHashKeyName
 		sortAttrName = idxSortKeyName
 	}
+
+	// The condition must constrain that partition key (key_schema.go); this
+	// may swap a sort-key-first expression into canonical order, so it runs
+	// before the partition-key value is read out.
+	if aerr := validateKeyConditionSchema(hashAttrName, sortAttrName, kc); aerr != nil {
+		return nil, aerr
+	}
+
+	hashVal := extractKeyValue(kc.hashVal)
 
 	// A key condition comparing a key against the wrong type is rejected, not
 	// answered with an empty page: the stored key encoding is type-dependent
@@ -1719,6 +1737,18 @@ func (h *Handler) BatchGetItem(w http.ResponseWriter, r *http.Request) {
 // batchGetItemTypedCore is BatchGetItem's business logic. See
 // batchGetItemTyped (metrics_dynamodb.go) for the metrics-recording wrapper.
 func (h *Handler) batchGetItemTypedCore(ctx context.Context, req *batchGetItemRequest) (*batchGetItemResponse, *protocol.AWSError) {
+	// At most 100 keys across every table in the request. The API reference
+	// documents both the limit and this exact message: "If you request more
+	// than 100 items, BatchGetItem returns a ValidationException with the
+	// message 'Too many items requested for the BatchGetItem call.'"
+	var totalKeys int
+	for _, tableReq := range req.RequestItems {
+		totalKeys += len(tableReq.Keys)
+	}
+	if totalKeys > 100 {
+		return nil, errValidation("Too many items requested for the BatchGetItem call")
+	}
+
 	responses := make(map[string][]Item, len(req.RequestItems))
 
 	for tableName, tableReq := range req.RequestItems {
@@ -1808,6 +1838,13 @@ func (h *Handler) batchWriteItemTypedCore(ctx context.Context, req *batchWriteIt
 	// the whole call rather than reported per item — so none of the batch's
 	// writes may have landed by the time it is raised. The resolved tables are
 	// carried into the apply pass so this costs no extra store reads.
+	//
+	// The same pass enforces two more of the API reference's whole-batch
+	// rejections: "Any individual item in a batch exceeds 400 KB" and "You
+	// try to perform multiple operations on the same item in the same
+	// BatchWriteItem request" — a put and a delete of one key as much as two
+	// puts of it. Duplicates are found per table by primary key, which is the
+	// only identity a put and a delete share.
 	tables := make(map[string]*Table, len(req.RequestItems))
 	for tableName, ops := range req.RequestItems {
 		table, aerr := h.store.getTable(ctx, tableName)
@@ -1815,17 +1852,34 @@ func (h *Handler) batchWriteItemTypedCore(ctx context.Context, req *batchWriteIt
 			return nil, aerr
 		}
 		tables[tableName] = table
+		seen := make(map[string]bool, len(ops))
 		for _, op := range ops {
+			var keyOrItem Item
 			switch {
 			case op.PutRequest != nil:
 				if aerr := validateKeySchema(table, op.PutRequest.Item, operandItem); aerr != nil {
 					return nil, aerr
 				}
+				if itemSizeBytes(op.PutRequest.Item) > maxItemSizeBytes {
+					return nil, errItemSizeExceeded()
+				}
+				keyOrItem = op.PutRequest.Item
 			case op.DeleteRequest != nil:
 				if aerr := validateKeySchema(table, op.DeleteRequest.Key, operandKey); aerr != nil {
 					return nil, aerr
 				}
+				keyOrItem = op.DeleteRequest.Key
+			default:
+				continue
 			}
+			id, aerr := itemIdentity(table, keyOrItem)
+			if aerr != nil {
+				return nil, aerr
+			}
+			if seen[id] {
+				return nil, errValidation("Provided list of item keys contains duplicates")
+			}
+			seen[id] = true
 		}
 	}
 
@@ -1875,6 +1929,20 @@ func (h *Handler) batchWriteItemTypedCore(ctx context.Context, req *batchWriteIt
 	return &batchWriteItemResponse{
 		UnprocessedItems: map[string][]writeRequest{},
 	}, nil
+}
+
+// itemIdentity returns a string that is equal for two keys or items naming
+// the same item of table and different otherwise — the storage-encoded key
+// pair, joined by a byte no encoded component contains. It is what the
+// batch and transaction paths use to find two operations on one item; the
+// caller has already run validateKeySchema, so the key attributes are
+// present and correctly typed.
+func itemIdentity(table *Table, keyOrItem Item) (string, *protocol.AWSError) {
+	hashKey, sortKey, aerr := resolveStorageKeys(table, keyOrItem)
+	if aerr != nil {
+		return "", aerr
+	}
+	return hashKey + "\x00" + sortKey, nil
 }
 
 // dynamoDefaultPageLimit is the implicit cap on the number of items a single

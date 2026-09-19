@@ -117,6 +117,13 @@ func (h *Handler) updateItemTypedCore(ctx context.Context, req *updateItemReques
 		}
 	}
 
+	// The item as it would be stored must fit the 400 KB ceiling
+	// (item_size.go); item is a clone, so a rejected update leaves the
+	// stored item untouched.
+	if itemSizeBytes(item) > maxItemSizeBytes {
+		return nil, errItemSizeToUpdateExceeded()
+	}
+
 	// existing was already fetched unconditionally above (upsert semantics
 	// require it regardless of streams/GSIs) — GSI index-row maintenance
 	// (dynamodb-gsi-design.md section 3) rides that same read at zero extra
