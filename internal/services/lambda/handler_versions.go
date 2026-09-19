@@ -38,17 +38,12 @@ type publishVersionRequest struct {
 	RevisionId  string `json:"RevisionId,omitempty"`
 }
 
-// versionConfigurationResponse is the FunctionConfiguration response shape
-// for a published version. It extends the base config with Version.
-type versionConfigurationResponse struct {
-	functionConfiguration
-	Version string `json:"Version"`
-}
-
-// listVersionsResponse is the ListVersionsByFunction response envelope.
+// listVersionsResponse is the ListVersionsByFunction response envelope. Each
+// entry is an ordinary FunctionConfiguration; Version tells $LATEST from the
+// published snapshots.
 type listVersionsResponse struct {
-	Versions   []versionConfigurationResponse `json:"Versions"`
-	NextMarker string                         `json:"NextMarker,omitempty"`
+	Versions   []*functionConfiguration `json:"Versions"`
+	NextMarker string                   `json:"NextMarker,omitempty"`
 }
 
 // aliasResponse mirrors the AWS AliasConfiguration wire shape.
@@ -131,10 +126,12 @@ func aliasARN(baseARN, aliasName string) string {
 	return fmt.Sprintf("%s:%s", baseARN, aliasName)
 }
 
-// versionToResponse converts a FunctionVersion to the wire response shape.
-func versionToResponse(v *FunctionVersion) versionConfigurationResponse {
+// versionToResponse converts a FunctionVersion to the wire response shape:
+// the snapshot's configuration under the qualified ARN and numeric Version.
+func versionToResponse(v *FunctionVersion) *functionConfiguration {
 	cfg := functionToConfig(&v.Function)
 	cfg.FunctionArn = versionARN(v.ARN, v.Version)
+	cfg.Version = strconv.Itoa(v.Version)
 	// Use the version-level description when set, else the function's.
 	if v.Description != "" {
 		cfg.Description = v.Description
@@ -143,10 +140,36 @@ func versionToResponse(v *FunctionVersion) versionConfigurationResponse {
 	if v.CodeSha256 != "" {
 		cfg.CodeSha256 = v.CodeSha256
 	}
-	return versionConfigurationResponse{
-		functionConfiguration: *cfg,
-		Version:               strconv.Itoa(v.Version),
+	return cfg
+}
+
+// newFunctionVersion freezes fn into the immutable snapshot a published
+// version is. PublishVersion stores one for an existing function; a
+// CreateFunction with Publish=true stores one alongside the function it is
+// creating. The version number is not assigned here: the store allocates it
+// when the snapshot is committed, so a number is never handed out for a
+// snapshot that then fails to land.
+func (h *Handler) newFunctionVersion(fn *Function, description string) *FunctionVersion {
+	v := &FunctionVersion{
+		Function:    *fn,
+		Description: description,
+		CodeSha256:  codeSha256(fn),
 	}
+	// The deployment package lives under its own store key, named by
+	// CodeHash, and is never embedded in a record — see putFunction. A
+	// function read back from the store carries no bytes; one being created
+	// still does, and they must not be frozen into the version record.
+	v.CodeZip = nil
+	// Stamp the publish time and a fresh revision ID for this version.
+	v.LastModified = h.clk.Now().UTC().Format(time.RFC3339)
+	v.RevisionId = uuid.NewString()
+	// A published version is finished by definition — nothing can update it —
+	// so it reports Successful even when $LATEST was created without ever
+	// carrying the field.
+	v.LastUpdateStatus = lastUpdateSuccessful
+	v.LastUpdateStatusReason = ""
+	v.LastUpdateStatusReasonCode = ""
+	return v
 }
 
 // aliasToResponse converts a FunctionAlias to the wire response shape.
@@ -157,16 +180,6 @@ func aliasToResponse(a *FunctionAlias) aliasResponse {
 		FunctionVersion: a.FunctionVersion,
 		Description:     a.Description,
 		RevisionId:      a.RevisionId,
-	}
-}
-
-// latestVersionResponse builds the synthetic "$LATEST" entry always included in
-// ListVersionsByFunction results.
-func (h *Handler) latestVersionResponse(fn *Function) versionConfigurationResponse {
-	cfg := functionToConfig(fn)
-	return versionConfigurationResponse{
-		functionConfiguration: *cfg,
-		Version:               "$LATEST",
 	}
 }
 
@@ -215,37 +228,14 @@ func (h *Handler) PublishVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	versionNum, err := h.ls.nextVersion(ctx, name)
-	if err != nil {
-		log.Error("publish version: next version", zap.String("function", name), zap.Error(err))
-		protocol.WriteJSONError(w, r, protocol.Wrap(protocol.ErrInternalError, err))
-		return
-	}
-
-	sha := codeSha256(fn)
-	v := &FunctionVersion{
-		Function:    *fn,
-		Version:     versionNum,
-		Description: req.Description,
-		CodeSha256:  sha,
-	}
-	// Stamp the publish time and a fresh revision ID for this version.
-	v.LastModified = h.clk.Now().UTC().Format(time.RFC3339)
-	v.RevisionId = uuid.NewString()
-	// A published version is finished by definition — nothing can update it —
-	// so it reports Successful even when $LATEST was created without ever
-	// carrying the field.
-	v.LastUpdateStatus = lastUpdateSuccessful
-	v.LastUpdateStatusReason = ""
-	v.LastUpdateStatusReasonCode = ""
-
-	if aerr := h.ls.putVersion(ctx, v); aerr != nil {
+	v := h.newFunctionVersion(fn, req.Description)
+	if aerr := h.ls.publishVersion(ctx, v); aerr != nil {
+		log.Error("publish version", zap.String("function", name), zap.Error(aerr.Unwrap()))
 		protocol.WriteJSONError(w, r, aerr)
 		return
 	}
 
-	resp := versionToResponse(v)
-	protocol.WriteRESTJSON(w, r, http.StatusCreated, resp)
+	protocol.WriteRESTJSON(w, r, http.StatusCreated, versionToResponse(v))
 }
 
 // ListVersionsByFunction handles GET /2015-03-31/functions/{name}/versions.
@@ -277,8 +267,8 @@ func (h *Handler) ListVersionsByFunction(w http.ResponseWriter, r *http.Request)
 	}
 
 	// AWS always includes $LATEST as the first entry.
-	out := make([]versionConfigurationResponse, 0, len(versions)+1)
-	out = append(out, h.latestVersionResponse(fn))
+	out := make([]*functionConfiguration, 0, len(versions)+1)
+	out = append(out, functionToConfig(fn))
 	for _, v := range versions {
 		out = append(out, versionToResponse(v))
 	}

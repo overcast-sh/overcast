@@ -48,7 +48,7 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | Environment reuse | Containers are reused for sequential invocations and scaled out one per concurrent invocation. Surplus stays warm until a 15-minute idle sweep. |
 | Provisioned concurrency | `PutProvisionedConcurrencyConfig` really pre-initialises environments: held open regardless of the sweep, replenished when one is lost, rebuilt against a new code or config revision. |
 | Proactive init | Ten seconds after a function's configuration settles, one environment is created in the background so the next request lands warm. |
-| Versions, aliases, function URLs, layers | Full CRUD. Layers are expanded into `/opt` before the runtime starts, later layers overriding earlier ones. |
+| Versions, aliases, function URLs, layers | Full CRUD, including `create-function --publish`, which publishes version 1 in the same call. Layers are expanded into `/opt` before the runtime starts, later layers overriding earlier ones. |
 | Event source mappings | SQS, Kinesis and DynamoDB Streams pollers, including `FunctionResponseTypes: ["ReportBatchItemFailures"]`. |
 | Async invocation | `MaximumRetryAttempts` (0–2), `MaximumEventAgeInSeconds` (60–21600), on-success and on-failure destinations, and `DeadLetterConfig` — for HTTP `Event` invokes and for S3, EventBridge, Scheduler and SNS alike. |
 | Extensions | Executables under `/opt/extensions` start before the runtime, with `register`, `event/next`, the Logs API and the Telemetry API. |
@@ -69,6 +69,7 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | Concurrency        | Account-wide quotas and RPS limits | Per-function reserved concurrency only. The instance and memory limits protect your machine; they are not AWS's account quota |
 | Cold-start latency | Real                               | Not simulated                                                                                                                 |
 | SnapStart          | Supported                          | Not emulated; no restore records                                                                                              |
+| Managed instances  | Supported                          | Not emulated; `PublishTo`, `CapacityProviderConfig` and `TenancyConfig` return `501`                                          |
 | Tagging            | All taggable resources             | Functions and event source mappings only; other taggable resources return `501`                                               |
 
 The full list is in [Limitations](./lambda/limitations.md), one table with a

@@ -254,9 +254,11 @@ func TestUnsupportedFields_RealRequestsStill501(t *testing.T) {
 	t.Run("CreateFunction", func(t *testing.T) {
 		resp := doJSON(t, http.MethodPost, lambdaURL(srv, "/functions"), map[string]any{
 			"FunctionName": "real-request-create", "Runtime": "python3.12", "Handler": "index.handler",
-			"Role":    "arn:aws:iam::000000000000:role/lambda-role",
-			"Code":    map[string]any{"ZipFile": "UEsFBgAAAAAAAAAAAAAAAAAAAAAAAA=="},
-			"Publish": true,
+			"Role": "arn:aws:iam::000000000000:role/lambda-role",
+			"Code": map[string]any{"ZipFile": "UEsFBgAAAAAAAAAAAAAAAAAAAAAAAA=="},
+			// Publish itself is implemented now; PublishTo is the member of
+			// the pair that still asks for something Overcast does not have.
+			"PublishTo": "LATEST_PUBLISHED",
 		})
 		assertLambdaUnsupported(t, resp)
 	})

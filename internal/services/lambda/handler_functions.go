@@ -49,8 +49,13 @@ import (
 //
 // https://docs.aws.amazon.com/lambda/latest/api/API_FunctionConfiguration.html
 type functionConfiguration struct {
-	FunctionName    string   `json:"FunctionName"`
-	FunctionArn     string   `json:"FunctionArn"`
+	FunctionName string `json:"FunctionName"`
+	FunctionArn  string `json:"FunctionArn"`
+	// Version is "$LATEST" for the unpublished function and the number of a
+	// published snapshot, whose FunctionArn carries the same qualifier. AWS
+	// reports it on every FunctionConfiguration; PublishVersion and a
+	// CreateFunction with Publish=true are where it is not $LATEST.
+	Version         string   `json:"Version"`
 	Runtime         string   `json:"Runtime,omitempty"`
 	Handler         string   `json:"Handler,omitempty"`
 	Role            string   `json:"Role,omitempty"`
@@ -191,12 +196,14 @@ type createFunctionRequest struct {
 	EphemeralStorage *ephemeralStorageRequest `json:"EphemeralStorage,omitempty"`
 	KMSKeyArn        *string                  `json:"KMSKeyArn"`
 	DeadLetterConfig *deadLetterConfigWire    `json:"DeadLetterConfig,omitempty"`
-	// Each of these still answers 501 rather than being stored and echoed like
-	// the four above; the reason for each is at CreateFunction's gate.
+	// Publish publishes version 1 from the initial configuration in the same
+	// create, and the response is that version's configuration.
+	Publish bool `json:"Publish"`
+	// Each of these still answers 501 rather than being honoured like the
+	// members above; the reason for each is at CreateFunction's gate.
 	SnapStart              json.RawMessage `json:"SnapStart"`
 	CapacityProviderConfig json.RawMessage `json:"CapacityProviderConfig"`
 	DurableConfig          json.RawMessage `json:"DurableConfig"`
-	Publish                json.RawMessage `json:"Publish"`
 	PublishTo              json.RawMessage `json:"PublishTo"`
 	TenancyConfig          json.RawMessage `json:"TenancyConfig"`
 }
@@ -795,10 +802,15 @@ func UnsupportedRequestMembers() map[string][]string {
 //     that come with it; execution environments here always cold start.
 //   - CapacityProviderConfig, DurableConfig, TenancyConfig — each selects an
 //     execution substrate Overcast has no equivalent of.
-//   - Publish and PublishTo — publishing on create must report the resulting
-//     version, and functionConfiguration has no Version member to report it
-//     in. PublishVersion exists, so this is implementable; adding Version to
-//     the shared response shape is the work.
+//   - PublishTo — its one value, LATEST_PUBLISHED, asks for the
+//     $LATEST.PUBLISHED version of a Lambda Managed Instances function: a
+//     qualifier that unqualified invokes of such a function resolve to instead
+//     of $LATEST. Managed instances are not emulated (CapacityProviderConfig
+//     above), nothing here resolves that qualifier, and accepting the member
+//     would hand back a function whose unqualified ARN behaves differently
+//     from what the caller asked for. Publish is *not* here: it publishes
+//     version 1 in the same create, as PublishVersion would.
+//     https://docs.aws.amazon.com/lambda/latest/dg/lambda-managed-instances-version-publishing.html
 //   - Code.S3ObjectStorageMode and Code.SourceKMSKeyArn — the storage mode and
 //     encryption of the deployment package are not emulated. Code.S3ObjectVersion
 //     is *not* here: it selects a real object version and is honoured.
@@ -807,7 +819,6 @@ func (req *createFunctionRequest) unsupportedMembers() unsupportedRequestMembers
 		"SnapStart":              rawRequestField(req.SnapStart),
 		"CapacityProviderConfig": rawRequestField(req.CapacityProviderConfig),
 		"DurableConfig":          rawRequestField(req.DurableConfig),
-		"Publish":                rawRequestField(req.Publish),
 		"PublishTo":              rawRequestField(req.PublishTo),
 		"TenancyConfig":          rawRequestField(req.TenancyConfig),
 	}
@@ -882,6 +893,7 @@ func functionToConfig(fn *Function) *functionConfiguration {
 	cfg := &functionConfiguration{
 		FunctionName:    fn.Name,
 		FunctionArn:     fn.ARN,
+		Version:         "$LATEST",
 		Runtime:         runtime,
 		Handler:         fn.Handler,
 		Role:            fn.Role,
@@ -1291,7 +1303,26 @@ func (h *Handler) CreateFunction(w http.ResponseWriter, r *http.Request) {
 		protocol.WriteJSONError(w, r, protocol.Wrap(protocol.ErrInternalError, err))
 		return
 	}
-	created, aerr := h.ls.createFunction(ctx, fn)
+	// Publish=true is "create, then PublishVersion" as one operation: the
+	// snapshot is taken from the configuration being created and committed
+	// with it, so no caller can observe the function without its version 1.
+	// A snapshot is finished by definition — nothing updates it, and the
+	// image pull $LATEST may still be waiting on is $LATEST's own lifecycle —
+	// so it reports Active where $LATEST reports Pending, as PublishVersion's
+	// snapshots report Successful whatever $LATEST carried.
+	var (
+		initial *FunctionVersion
+		created bool
+	)
+	if req.Publish {
+		initial = h.newFunctionVersion(fn, "")
+		initial.State = "Active"
+		initial.StateReason = ""
+		initial.StateReasonCode = ""
+		created, aerr = h.ls.createFunctionPublishing(ctx, fn, initial)
+	} else {
+		created, aerr = h.ls.createFunction(ctx, fn)
+	}
 	if aerr != nil {
 		protocol.WriteJSONError(w, r, aerr)
 		return
@@ -1352,6 +1383,12 @@ func (h *Handler) CreateFunction(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	// AWS answers a Publish=true create with the published version's
+	// configuration — Version "1" and the qualified ARN — not $LATEST's.
+	if initial != nil {
+		protocol.WriteRESTJSON(w, r, http.StatusCreated, versionToResponse(initial))
+		return
+	}
 	protocol.WriteRESTJSON(w, r, http.StatusCreated, functionToConfig(fn))
 }
 
