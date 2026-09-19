@@ -65,6 +65,9 @@ function sqsMapPeekQueryOptions(queueName: string) {
   return queryOptions({
     queryKey: [...sqsKeys.mapPeek(), queueName, "initial"],
     queryFn: () => sqs.receiveMessages(queueName),
+    // Every ServiceNode calls this hook; only queue nodes pass a name. The
+    // others must not each fire a request for a queue called "".
+    enabled: queueName !== "",
     staleTime: Infinity, // never re-fetch automatically
     gcTime: 5 * 60_000,
     refetchOnMount: false,

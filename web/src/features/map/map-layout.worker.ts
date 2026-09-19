@@ -1,20 +1,20 @@
 /// <reference lib="webworker" />
 
-import { buildLayoutNodes } from "./map-layout"
+import { buildLayout } from "./map-layout"
 
 self.onmessage = (e: MessageEvent) => {
   const { id, topologyNodes, topologyEdges, nodeSizeOverrides, activeRegion, collapsedStacks } =
     e.data
   try {
-    const result = buildLayoutNodes(
+    const layout = buildLayout(
       topologyNodes,
       topologyEdges,
       nodeSizeOverrides ?? {},
       activeRegion,
       new Set(collapsedStacks ?? []),
     )
-    self.postMessage({ id, nodes: result, error: null })
+    self.postMessage({ id, layout, error: null })
   } catch (err) {
-    self.postMessage({ id, nodes: null, error: String(err) })
+    self.postMessage({ id, layout: null, error: String(err) })
   }
 }

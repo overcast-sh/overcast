@@ -1,0 +1,303 @@
+{
+ "regions": [
+  "us-east-1",
+  "eu-west-1"
+ ],
+ "nodes": [
+  {
+   "id": "us-east-1::s3::backups-archive",
+   "service": "s3",
+   "label": "backups-archive",
+   "region": "us-east-1"
+  },
+  {
+   "id": "eu-west-1::s3::eu-reports",
+   "service": "s3",
+   "label": "eu-reports",
+   "region": "eu-west-1"
+  },
+  {
+   "id": "us-east-1::s3::orders-uploads",
+   "service": "s3",
+   "label": "orders-uploads",
+   "region": "us-east-1",
+   "stackName": "orders-app"
+  },
+  {
+   "id": "us-east-1::s3::raw-events",
+   "service": "s3",
+   "label": "raw-events",
+   "region": "us-east-1"
+  },
+  {
+   "id": "us-east-1::s3::web-assets",
+   "service": "s3",
+   "label": "web-assets",
+   "region": "us-east-1"
+  },
+  {
+   "id": "eu-west-1::sqs::eu-report-jobs",
+   "service": "sqs",
+   "label": "eu-report-jobs",
+   "region": "eu-west-1",
+   "approximateNumberOfMessages": 0,
+   "approximateNumberOfMessagesNotVisible": 0
+  },
+  {
+   "id": "us-east-1::sqs::email-outbox",
+   "service": "sqs",
+   "label": "email-outbox",
+   "region": "us-east-1",
+   "approximateNumberOfMessages": 0,
+   "approximateNumberOfMessagesNotVisible": 0
+  },
+  {
+   "id": "us-east-1::sqs::image-resize-jobs",
+   "service": "sqs",
+   "label": "image-resize-jobs",
+   "region": "us-east-1",
+   "approximateNumberOfMessages": 0,
+   "approximateNumberOfMessagesNotVisible": 0
+  },
+  {
+   "id": "us-east-1::sqs::order-notifications",
+   "service": "sqs",
+   "label": "order-notifications",
+   "region": "us-east-1",
+   "approximateNumberOfMessages": 0,
+   "approximateNumberOfMessagesNotVisible": 0,
+   "stackName": "orders-app"
+  },
+  {
+   "id": "us-east-1::sqs::orders-ingest",
+   "service": "sqs",
+   "label": "orders-ingest",
+   "region": "us-east-1",
+   "approximateNumberOfMessages": 0,
+   "approximateNumberOfMessagesNotVisible": 0,
+   "stackName": "orders-app"
+  },
+  {
+   "id": "us-east-1::sqs::orders-ingest-dlq",
+   "service": "sqs",
+   "label": "orders-ingest-dlq",
+   "region": "us-east-1",
+   "approximateNumberOfMessages": 0,
+   "approximateNumberOfMessagesNotVisible": 0,
+   "stackName": "orders-app"
+  },
+  {
+   "id": "us-east-1::sns::alerts",
+   "service": "sns",
+   "label": "alerts",
+   "region": "us-east-1"
+  },
+  {
+   "id": "us-east-1::sns::order-events",
+   "service": "sns",
+   "label": "order-events",
+   "region": "us-east-1",
+   "stackName": "orders-app"
+  },
+  {
+   "id": "us-east-1::dynamodb::orders",
+   "service": "dynamodb",
+   "label": "orders",
+   "region": "us-east-1",
+   "streamEnabled": true,
+   "stackName": "orders-app"
+  },
+  {
+   "id": "us-east-1::dynamodb::sessions",
+   "service": "dynamodb",
+   "label": "sessions",
+   "region": "us-east-1",
+   "streamEnabled": false
+  },
+  {
+   "id": "us-east-1::lambda::orders-audit",
+   "service": "lambda",
+   "label": "orders-audit",
+   "region": "us-east-1",
+   "stackName": "orders-app"
+  },
+  {
+   "id": "us-east-1::lambda::process-orders",
+   "service": "lambda",
+   "label": "process-orders",
+   "region": "us-east-1",
+   "stackName": "orders-app"
+  },
+  {
+   "id": "us-east-1::lambda::send-notifications",
+   "service": "lambda",
+   "label": "send-notifications",
+   "region": "us-east-1",
+   "stackName": "orders-app"
+  },
+  {
+   "id": "us-east-1::logs::/app/web",
+   "service": "logs",
+   "label": "/app/web",
+   "region": "us-east-1"
+  },
+  {
+   "id": "us-east-1::logs::/aws/lambda/orders-audit",
+   "service": "logs",
+   "label": "/aws/lambda/orders-audit",
+   "region": "us-east-1"
+  },
+  {
+   "id": "us-east-1::logs::/aws/lambda/process-orders",
+   "service": "logs",
+   "label": "/aws/lambda/process-orders",
+   "region": "us-east-1"
+  },
+  {
+   "id": "us-east-1::logs::/aws/lambda/send-notifications",
+   "service": "logs",
+   "label": "/aws/lambda/send-notifications",
+   "region": "us-east-1"
+  },
+  {
+   "id": "us-east-1::vpc::vpc-7066c1eb",
+   "service": "vpc",
+   "label": "vpc-7066c1eb",
+   "region": "us-east-1",
+   "status": "available",
+   "cidrBlock": "10.0.0.0/16",
+   "subnetCount": 1,
+   "hasInternetGateway": true
+  },
+  {
+   "id": "us-east-1::igw::igw-69e8d9d1",
+   "service": "igw",
+   "label": "igw-69e8d9d1",
+   "region": "us-east-1",
+   "attachedVpcId": "vpc-7066c1eb"
+  },
+  {
+   "id": "us-east-1::ecr::web-frontend",
+   "service": "ecr",
+   "label": "web-frontend",
+   "region": "us-east-1",
+   "repositoryUri": "localhost:4510/000000000000/web-frontend"
+  },
+  {
+   "id": "us-east-1::apigateway::71fe8d6b22",
+   "service": "apigateway",
+   "label": "orders-api",
+   "region": "us-east-1",
+   "stackName": "orders-app",
+   "protocolType": "HTTP",
+   "routeCount": 1,
+   "stageCount": 1
+  },
+  {
+   "id": "us-east-1::esm-filter::35b6a4b5-87ce-4b8e-9a29-92bce6b553fd",
+   "service": "esm-filter",
+   "label": "ESM filter",
+   "region": "us-east-1",
+   "esmId": "35b6a4b5-87ce-4b8e-9a29-92bce6b553fd",
+   "functionName": "orders-audit",
+   "eventSource": "orders",
+   "sourceType": "dynamodb",
+   "filterPatterns": [
+    "{\"eventName\": [\"INSERT\"]}"
+   ]
+  }
+ ],
+ "edges": [
+  {
+   "id": "notif::us-east-1::s3::orders-uploads\u00e2\u2020\u2019us-east-1::sqs::orders-ingest",
+   "source": "us-east-1::s3::orders-uploads",
+   "target": "us-east-1::sqs::orders-ingest",
+   "type": "notification",
+   "sourceRegion": "us-east-1",
+   "targetRegion": "us-east-1"
+  },
+  {
+   "id": "dlq::us-east-1::sqs::orders-ingest\u00e2\u2020\u2019us-east-1::sqs::orders-ingest-dlq",
+   "source": "us-east-1::sqs::orders-ingest",
+   "target": "us-east-1::sqs::orders-ingest-dlq",
+   "type": "dlq",
+   "label": "DLQ (max 3)",
+   "sourceRegion": "us-east-1",
+   "targetRegion": "us-east-1"
+  },
+  {
+   "id": "logs::us-east-1::lambda::send-notifications\u00e2\u2020\u2019us-east-1::logs::/aws/lambda/send-notifications",
+   "source": "us-east-1::lambda::send-notifications",
+   "target": "us-east-1::logs::/aws/lambda/send-notifications",
+   "type": "logs",
+   "sourceRegion": "us-east-1",
+   "targetRegion": "us-east-1"
+  },
+  {
+   "id": "logs::us-east-1::lambda::orders-audit\u00e2\u2020\u2019us-east-1::logs::/aws/lambda/orders-audit",
+   "source": "us-east-1::lambda::orders-audit",
+   "target": "us-east-1::logs::/aws/lambda/orders-audit",
+   "type": "logs",
+   "sourceRegion": "us-east-1",
+   "targetRegion": "us-east-1"
+  },
+  {
+   "id": "logs::us-east-1::lambda::process-orders\u00e2\u2020\u2019us-east-1::logs::/aws/lambda/process-orders",
+   "source": "us-east-1::lambda::process-orders",
+   "target": "us-east-1::logs::/aws/lambda/process-orders",
+   "type": "logs",
+   "sourceRegion": "us-east-1",
+   "targetRegion": "us-east-1"
+  },
+  {
+   "id": "sub::us-east-1::sns::order-events\u00e2\u2020\u2019us-east-1::sqs::order-notifications",
+   "source": "us-east-1::sns::order-events",
+   "target": "us-east-1::sqs::order-notifications",
+   "type": "subscription",
+   "sourceRegion": "us-east-1",
+   "targetRegion": "us-east-1"
+  },
+  {
+   "id": "esm-filter-in::35b6a4b5-87ce-4b8e-9a29-92bce6b553fd",
+   "source": "us-east-1::dynamodb::orders",
+   "target": "us-east-1::esm-filter::35b6a4b5-87ce-4b8e-9a29-92bce6b553fd",
+   "type": "esm-filter",
+   "label": "filter",
+   "sourceRegion": "us-east-1",
+   "targetRegion": "us-east-1"
+  },
+  {
+   "id": "esm-filter-out::35b6a4b5-87ce-4b8e-9a29-92bce6b553fd",
+   "source": "us-east-1::esm-filter::35b6a4b5-87ce-4b8e-9a29-92bce6b553fd",
+   "target": "us-east-1::lambda::orders-audit",
+   "type": "esm",
+   "label": "matched",
+   "sourceRegion": "us-east-1",
+   "targetRegion": "us-east-1"
+  },
+  {
+   "id": "esm::us-east-1::sqs::orders-ingest\u00e2\u2020\u2019us-east-1::lambda::process-orders",
+   "source": "us-east-1::sqs::orders-ingest",
+   "target": "us-east-1::lambda::process-orders",
+   "type": "esm",
+   "sourceRegion": "us-east-1",
+   "targetRegion": "us-east-1"
+  },
+  {
+   "id": "igw-attach::us-east-1::igw::igw-69e8d9d1\u00e2\u2020\u2019us-east-1::vpc::vpc-7066c1eb",
+   "source": "us-east-1::igw::igw-69e8d9d1",
+   "target": "us-east-1::vpc::vpc-7066c1eb",
+   "type": "vpc-attachment",
+   "sourceRegion": "us-east-1",
+   "targetRegion": "us-east-1"
+  },
+  {
+   "id": "apigw::us-east-1::apigateway::71fe8d6b22\u00e2\u2020\u2019us-east-1::lambda::process-orders",
+   "source": "us-east-1::apigateway::71fe8d6b22",
+   "target": "us-east-1::lambda::process-orders",
+   "type": "apigw-integration",
+   "sourceRegion": "us-east-1",
+   "targetRegion": "us-east-1"
+  }
+ ]
+}

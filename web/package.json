@@ -16,7 +16,9 @@
     "format:check": "prettier --check .",
     "preview": "vite preview",
     "a11y": "node scripts/a11y-audit.mjs",
-    "type-audit": "node scripts/type-audit.mjs"
+    "type-audit": "node scripts/type-audit.mjs",
+    "layout:bench": "vitest run src/features/map/map-layout.bench.test.ts --mode bench",
+    "layout:tune": "vitest run src/features/map/map-layout.tune.test.ts --mode tune"
   },
   "dependencies": {
     "@aws-sdk/client-api-gateway": "^3.1028.0",

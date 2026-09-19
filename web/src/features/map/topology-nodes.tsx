@@ -240,9 +240,16 @@ const SQS_NODE_LIST_H = 128
 const SQS_MSG_ROW_H = 28
 /**
  * Total node height (px) when the message list is visible.
- * Exported so map-page.tsx can pass this as a size override to dagre.
+ * Exported so map-page.tsx can pass this as a size override to the layout.
  */
-export const SQS_NODE_EXPANDED_H = 242
+export const SQS_NODE_EXPANDED_H = 202
+/**
+ * Height (px) of an SQS node with no messages: header row plus the stats bar.
+ * The layout reserves exactly this so the handles sit on the card's midline.
+ */
+export const SQS_NODE_IDLE_H = 66
+/** Height (px) of a node whose second line is a status pill (RDS). */
+export const STATUS_NODE_H = 58
 
 /** Height (px) of the scrollable stream list inside a CloudWatch Logs node. */
 const LOGS_NODE_LIST_H = 112
@@ -250,9 +257,9 @@ const LOGS_NODE_LIST_H = 112
 const LOGS_STREAM_ROW_H = 28
 /**
  * Total height (px) for expanded CloudWatch Logs nodes.
- * Exported so map-page.tsx can pass this as a size override to dagre.
+ * Exported so map-page.tsx can pass this as a size override to the layout.
  */
-export const LOGS_NODE_EXPANDED_H = 212
+export const LOGS_NODE_EXPANDED_H = 175
 
 /** How recently a stream must have been written to show the active dot (ms). */
 const LOGS_ACTIVITY_TTL = 30_000
@@ -466,7 +473,7 @@ const SqsMessageList = memo(function SqsMessageList({
       ref={containerRef}
       onWheel={stopWheel}
       onClick={stopClick}
-      className="mt-2 overflow-y-auto rounded border border-border/40"
+      className="map-detail mt-2 overflow-y-auto rounded border border-border/40"
       style={{ height: SQS_NODE_LIST_H }}
     >
       <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
@@ -605,7 +612,19 @@ const LogStreamList = memo(function LogStreamList({
   const stopWheel = useCallback((e: React.WheelEvent) => e.stopPropagation(), [])
   const stopClick = useCallback((e: React.MouseEvent) => e.stopPropagation(), [])
 
-  if (sorted.length === 0) return null
+  // The layout reserves the list's height whether or not streams exist yet
+  // (the topology does not know), so an empty group shows the space it will
+  // fill rather than a short card floating in a tall slot.
+  if (sorted.length === 0) {
+    return (
+      <div
+        className="map-detail mt-2 flex items-center justify-center rounded border border-dashed border-border/40 text-2xs text-fg-subtle"
+        style={{ height: LOGS_NODE_LIST_H }}
+      >
+        no streams yet
+      </div>
+    )
+  }
 
   const now = Date.now()
 
@@ -614,7 +633,7 @@ const LogStreamList = memo(function LogStreamList({
       ref={containerRef}
       onWheel={stopWheel}
       onClick={stopClick}
-      className="mt-2 overflow-y-auto rounded border border-border/40"
+      className="map-detail mt-2 overflow-y-auto rounded border border-border/40"
       style={{ height: LOGS_NODE_LIST_H }}
     >
       <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
@@ -1976,7 +1995,7 @@ export const LambdaGroupNode = memo(function LambdaGroupNode({ data }: NodeProps
           LAMBDA_GROUP_MAX_VISIBLE instances are running/fading out. The
           `nowheel` class stops scroll wheel input here from also zooming
           the canvas. */}
-      <div className="nowheel min-h-0 flex-1 overflow-y-auto px-2">
+      <div className="map-detail nowheel min-h-0 flex-1 overflow-y-auto px-2">
         {allInstances.map(({ instance, isGhost, deletedAt }) => (
           <LambdaInstanceCard
             key={instance.instanceId}
@@ -1989,7 +2008,7 @@ export const LambdaGroupNode = memo(function LambdaGroupNode({ data }: NodeProps
         ))}
       </div>
       {allInstances.length > LAMBDA_GROUP_MAX_VISIBLE && (
-        <div className="pointer-events-none absolute right-2 bottom-1 rounded bg-bg-elevated/90 px-1 font-mono text-2xs text-fg-muted">
+        <div className="map-detail pointer-events-none absolute right-2 bottom-1 rounded bg-bg-elevated/90 px-1 font-mono text-2xs text-fg-muted">
           +{allInstances.length - LAMBDA_GROUP_MAX_VISIBLE} more · scroll
         </div>
       )}

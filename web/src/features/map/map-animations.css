@@ -1,10 +1,36 @@
 /**
- * Keyframe animations for topology map nodes.
+ * Keyframe animations for topology map nodes, plus the two map-wide states
+ * that are cheaper to express as CSS than as React props on every node:
+ *
+ *   - `data-zoom="far"` on the canvas wrapper (set by map-page.tsx below
+ *     FAR_ZOOM): the message, stream and instance lists inside nodes are
+ *     unreadable at that scale, so they and the edge labels are hidden and
+ *     the map reads as boxes and wires. Node sizes do not change, so the
+ *     layout is untouched and nothing re-renders.
+ *   - `.map-dim` on a node wrapper: something else has focus (a hovered node
+ *     and its neighbours, or one connection type from the legend) and this
+ *     node is not part of it.
  *
  * Previously injected at runtime via document.createElement("style").
  * Keeping them in a static CSS file avoids the runtime injection and
  * lets the browser cache them.
  */
+
+/* Faded, not removed: the card keeps its height, so the handles (and
+   therefore the edge endpoints React Flow measured) stay where they are,
+   and a faint list still says "there is more here when you zoom in". */
+.map-canvas[data-zoom="far"] .map-detail {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+.map-canvas[data-zoom="far"] .map-edge-label {
+  display: none;
+}
+
+.map-canvas .react-flow__node.map-dim {
+  opacity: 0.18;
+}
 
 @keyframes overcastSweep {
   0% {
