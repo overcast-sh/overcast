@@ -966,6 +966,11 @@ func TestCreateStack_generatedNameOverflow_capsAtServiceLimit(t *testing.T) {
 		// "{StackName}-{name}" rather than the name itself, so the name under
 		// test has to be recovered before it is measured.
 		stackQualified bool
+		// extraResources are sibling resources the case's own resource needs
+		// to provision at all, as a JSON fragment of `"Logical": {...}` pairs
+		// appended after it. AWS::IAM::Policy is the case this exists for: it
+		// has to name a principal, and that principal has to exist.
+		extraResources string
 		// physicalName extracts the service-visible name from the
 		// PhysicalResourceId DescribeStackResources reports.
 		physicalName func(physicalID string) string
@@ -1054,10 +1059,12 @@ func TestCreateStack_generatedNameOverflow_capsAtServiceLimit(t *testing.T) {
           "PolicyDocument": {
             "Version": "2012-10-17",
             "Statement": [{"Effect": "Allow", "Action": "s3:GetObject", "Resource": "*"}]
-          }
+          },
+          "Users": [{"Ref": "PolicyHolder"}]
         }
       }`,
-			maxLen: 128,
+			extraResources: `"PolicyHolder": {"Type": "AWS::IAM::User", "Properties": {"UserName": "generated-name-policy-holder"}}`,
+			maxLen:         128,
 			// The handler mints "{StackName}-{PolicyName}" as the physical ID;
 			// IAM only ever sees the second half.
 			stackQualified: true,
@@ -1080,12 +1087,14 @@ func TestCreateStack_generatedNameOverflow_capsAtServiceLimit(t *testing.T) {
 			physicalName: iamARNName,
 		},
 		{
-			name:         "AWS::IAM::InstanceProfile",
-			slug:         "iam-instance-profile",
-			logicalID:    longLogical,
-			properties:   `{"Type": "AWS::IAM::InstanceProfile", "Properties": {}}`,
-			maxLen:       128,
-			physicalName: iamARNName,
+			name:       "AWS::IAM::InstanceProfile",
+			slug:       "iam-instance-profile",
+			logicalID:  longLogical,
+			properties: `{"Type": "AWS::IAM::InstanceProfile", "Properties": {}}`,
+			maxLen:     128,
+			// Ref on AWS::IAM::InstanceProfile is the profile name, so the
+			// physical ID is already the name — the ARN is GetAtt "Arn".
+			physicalName: physicalIDIsName,
 		},
 		{
 			name:         "AWS::IAM::Group",
@@ -1107,7 +1116,11 @@ func TestCreateStack_generatedNameOverflow_capsAtServiceLimit(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			srv := helpers.NewTestServer(t)
 			stackName := longStack + "-" + tc.slug
-			template := fmt.Sprintf(`{"Resources": {%q: %s}}`, tc.logicalID, tc.properties)
+			resources := fmt.Sprintf("%q: %s", tc.logicalID, tc.properties)
+			if tc.extraResources != "" {
+				resources += ", " + tc.extraResources
+			}
+			template := fmt.Sprintf(`{"Resources": {%s}}`, resources)
 
 			create := cfnQuery(t, srv, "CreateStack", url.Values{
 				"StackName":    {stackName},

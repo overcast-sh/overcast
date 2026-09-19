@@ -72,11 +72,11 @@ All 74 listed operations are implemented. Back to [IAM](../iam.md).
 
 ### User managed policies
 
-| Operation                  | Status       | Notes | AWS Docs                                                                                      |
-| -------------------------- | ------------ | ----- | --------------------------------------------------------------------------------------------- |
-| `AttachUserPolicy`         | ✅ Supported |       | [docs](https://docs.aws.amazon.com/IAM/latest/APIReference/API_AttachUserPolicy.html)         |
-| `DetachUserPolicy`         | ✅ Supported |       | [docs](https://docs.aws.amazon.com/IAM/latest/APIReference/API_DetachUserPolicy.html)         |
-| `ListAttachedUserPolicies` | ✅ Supported |       | [docs](https://docs.aws.amazon.com/IAM/latest/APIReference/API_ListAttachedUserPolicies.html) |
+| Operation                  | Status       | Notes                                                                                                                                                                                                                                                                  | AWS Docs                                                                                      |
+| -------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `AttachUserPolicy`         | ✅ Supported | A `PolicyArn` that names no stored policy — an AWS managed policy such as `arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole` — is accepted and listed back under that ARN, where AWS answers `NoSuchEntity`: the AWS managed policies are not modelled | [docs](https://docs.aws.amazon.com/IAM/latest/APIReference/API_AttachUserPolicy.html)         |
+| `DetachUserPolicy`         | ✅ Supported |                                                                                                                                                                                                                                                                        | [docs](https://docs.aws.amazon.com/IAM/latest/APIReference/API_DetachUserPolicy.html)         |
+| `ListAttachedUserPolicies` | ✅ Supported |                                                                                                                                                                                                                                                                        | [docs](https://docs.aws.amazon.com/IAM/latest/APIReference/API_ListAttachedUserPolicies.html) |
 
 ### Permissions boundaries
 
@@ -118,11 +118,11 @@ All 74 listed operations are implemented. Back to [IAM](../iam.md).
 
 ### Role managed policies
 
-| Operation                  | Status       | Notes | AWS Docs                                                                                      |
-| -------------------------- | ------------ | ----- | --------------------------------------------------------------------------------------------- |
-| `AttachRolePolicy`         | ✅ Supported |       | [docs](https://docs.aws.amazon.com/IAM/latest/APIReference/API_AttachRolePolicy.html)         |
-| `DetachRolePolicy`         | ✅ Supported |       | [docs](https://docs.aws.amazon.com/IAM/latest/APIReference/API_DetachRolePolicy.html)         |
-| `ListAttachedRolePolicies` | ✅ Supported |       | [docs](https://docs.aws.amazon.com/IAM/latest/APIReference/API_ListAttachedRolePolicies.html) |
+| Operation                  | Status       | Notes                                                                                                                                                                                                                                                                  | AWS Docs                                                                                      |
+| -------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `AttachRolePolicy`         | ✅ Supported | A `PolicyArn` that names no stored policy — an AWS managed policy such as `arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole` — is accepted and listed back under that ARN, where AWS answers `NoSuchEntity`: the AWS managed policies are not modelled | [docs](https://docs.aws.amazon.com/IAM/latest/APIReference/API_AttachRolePolicy.html)         |
+| `DetachRolePolicy`         | ✅ Supported |                                                                                                                                                                                                                                                                        | [docs](https://docs.aws.amazon.com/IAM/latest/APIReference/API_DetachRolePolicy.html)         |
+| `ListAttachedRolePolicies` | ✅ Supported |                                                                                                                                                                                                                                                                        | [docs](https://docs.aws.amazon.com/IAM/latest/APIReference/API_ListAttachedRolePolicies.html) |
 
 ### Role tagging
 
@@ -150,15 +150,15 @@ All 74 listed operations are implemented. Back to [IAM](../iam.md).
 
 ### Instance profiles
 
-| Operation                       | Status       | Notes                                                                       | AWS Docs                                                                                           |
-| ------------------------------- | ------------ | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `CreateInstanceProfile`         | ✅ Supported | Inline `Tags` applied at creation and returned on the resource              | [docs](https://docs.aws.amazon.com/IAM/latest/APIReference/API_CreateInstanceProfile.html)         |
-| `GetInstanceProfile`            | ✅ Supported | Returns the resource's `Tags`                                               | [docs](https://docs.aws.amazon.com/IAM/latest/APIReference/API_GetInstanceProfile.html)            |
-| `DeleteInstanceProfile`         | ✅ Supported |                                                                             | [docs](https://docs.aws.amazon.com/IAM/latest/APIReference/API_DeleteInstanceProfile.html)         |
-| `AddRoleToInstanceProfile`      | ✅ Supported |                                                                             | [docs](https://docs.aws.amazon.com/IAM/latest/APIReference/API_AddRoleToInstanceProfile.html)      |
-| `RemoveRoleFromInstanceProfile` | ✅ Supported |                                                                             | [docs](https://docs.aws.amazon.com/IAM/latest/APIReference/API_RemoveRoleFromInstanceProfile.html) |
-| `ListInstanceProfiles`          | ✅ Supported | Returns AWS's listing subset: no `Tags` — call the matching `Get` for those | [docs](https://docs.aws.amazon.com/IAM/latest/APIReference/API_ListInstanceProfiles.html)          |
-| `ListInstanceProfilesForRole`   | ✅ Supported |                                                                             | [docs](https://docs.aws.amazon.com/IAM/latest/APIReference/API_ListInstanceProfilesForRole.html)   |
+| Operation                       | Status       | Notes                                                                                                                                                                                                                          | AWS Docs                                                                                           |
+| ------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| `CreateInstanceProfile`         | ✅ Supported | Inline `Tags` applied at creation and returned on the resource                                                                                                                                                                 | [docs](https://docs.aws.amazon.com/IAM/latest/APIReference/API_CreateInstanceProfile.html)         |
+| `GetInstanceProfile`            | ✅ Supported | Returns the resource's `Tags`                                                                                                                                                                                                  | [docs](https://docs.aws.amazon.com/IAM/latest/APIReference/API_GetInstanceProfile.html)            |
+| `DeleteInstanceProfile`         | ✅ Supported | DeleteConflict (409) while a role association remains — `RemoveRoleFromInstanceProfile` first                                                                                                                                  | [docs](https://docs.aws.amazon.com/IAM/latest/APIReference/API_DeleteInstanceProfile.html)         |
+| `AddRoleToInstanceProfile`      | ✅ Supported | An instance profile holds at most one role, AWS's quota: a second, different role is refused with `LimitExceeded` (409). Re-adding the role already there is a no-op; replacing it means `RemoveRoleFromInstanceProfile` first | [docs](https://docs.aws.amazon.com/IAM/latest/APIReference/API_AddRoleToInstanceProfile.html)      |
+| `RemoveRoleFromInstanceProfile` | ✅ Supported |                                                                                                                                                                                                                                | [docs](https://docs.aws.amazon.com/IAM/latest/APIReference/API_RemoveRoleFromInstanceProfile.html) |
+| `ListInstanceProfiles`          | ✅ Supported | Returns AWS's listing subset: no `Tags` — call the matching `Get` for those                                                                                                                                                    | [docs](https://docs.aws.amazon.com/IAM/latest/APIReference/API_ListInstanceProfiles.html)          |
+| `ListInstanceProfilesForRole`   | ✅ Supported |                                                                                                                                                                                                                                | [docs](https://docs.aws.amazon.com/IAM/latest/APIReference/API_ListInstanceProfilesForRole.html)   |
 
 ### Managed policies
 
@@ -193,11 +193,11 @@ All 74 listed operations are implemented. Back to [IAM](../iam.md).
 
 ### Group managed policies
 
-| Operation                   | Status       | Notes | AWS Docs                                                                                       |
-| --------------------------- | ------------ | ----- | ---------------------------------------------------------------------------------------------- |
-| `AttachGroupPolicy`         | ✅ Supported |       | [docs](https://docs.aws.amazon.com/IAM/latest/APIReference/API_AttachGroupPolicy.html)         |
-| `DetachGroupPolicy`         | ✅ Supported |       | [docs](https://docs.aws.amazon.com/IAM/latest/APIReference/API_DetachGroupPolicy.html)         |
-| `ListAttachedGroupPolicies` | ✅ Supported |       | [docs](https://docs.aws.amazon.com/IAM/latest/APIReference/API_ListAttachedGroupPolicies.html) |
+| Operation                   | Status       | Notes                                                                                                                                                                                                                                                                  | AWS Docs                                                                                       |
+| --------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `AttachGroupPolicy`         | ✅ Supported | A `PolicyArn` that names no stored policy — an AWS managed policy such as `arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole` — is accepted and listed back under that ARN, where AWS answers `NoSuchEntity`: the AWS managed policies are not modelled | [docs](https://docs.aws.amazon.com/IAM/latest/APIReference/API_AttachGroupPolicy.html)         |
+| `DetachGroupPolicy`         | ✅ Supported |                                                                                                                                                                                                                                                                        | [docs](https://docs.aws.amazon.com/IAM/latest/APIReference/API_DetachGroupPolicy.html)         |
+| `ListAttachedGroupPolicies` | ✅ Supported |                                                                                                                                                                                                                                                                        | [docs](https://docs.aws.amazon.com/IAM/latest/APIReference/API_ListAttachedGroupPolicies.html) |
 
 ### Policy simulation
 

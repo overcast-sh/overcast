@@ -4,6 +4,14 @@ package iam
 
 import "github.com/overcast-sh/overcast/internal/capabilities"
 
+// attachPolicyUnknownARNNote records the one place the Attach*Policy operations
+// are deliberately more permissive than AWS. AWS answers NoSuchEntity when
+// `PolicyArn` names a policy that does not exist; the AWS managed policies
+// (`arn:aws:iam::aws:policy/…`) are not modelled here and nearly every CDK or
+// Terraform stack attaches at least one, so the ARN is stored and listed back
+// instead of refused.
+const attachPolicyUnknownARNNote = "A `PolicyArn` that names no stored policy — an AWS managed policy such as `arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole` — is accepted and listed back under that ARN, where AWS answers `NoSuchEntity`: the AWS managed policies are not modelled"
+
 func init() {
 	capabilities.Default.Register(
 		// Users
@@ -22,7 +30,7 @@ func init() {
 		capabilities.Capability{Service: "iam", Operation: "DeleteUserPolicy", Category: "User inline policies", Status: capabilities.StatusSupported},
 		capabilities.Capability{Service: "iam", Operation: "ListUserPolicies", Category: "User inline policies", Status: capabilities.StatusSupported},
 		// User managed policies
-		capabilities.Capability{Service: "iam", Operation: "AttachUserPolicy", Category: "User managed policies", Status: capabilities.StatusSupported},
+		capabilities.Capability{Service: "iam", Operation: "AttachUserPolicy", Category: "User managed policies", Status: capabilities.StatusSupported, Notes: attachPolicyUnknownARNNote},
 		capabilities.Capability{Service: "iam", Operation: "DetachUserPolicy", Category: "User managed policies", Status: capabilities.StatusSupported},
 		capabilities.Capability{Service: "iam", Operation: "ListAttachedUserPolicies", Category: "User managed policies", Status: capabilities.StatusSupported},
 		// Permissions boundaries
@@ -48,7 +56,7 @@ func init() {
 		capabilities.Capability{Service: "iam", Operation: "ListRolePolicies", Category: "Role inline policies", Status: capabilities.StatusSupported},
 		capabilities.Capability{Service: "iam", Operation: "DeleteRolePolicy", Category: "Role inline policies", Status: capabilities.StatusSupported},
 		// Role managed policies
-		capabilities.Capability{Service: "iam", Operation: "AttachRolePolicy", Category: "Role managed policies", Status: capabilities.StatusSupported},
+		capabilities.Capability{Service: "iam", Operation: "AttachRolePolicy", Category: "Role managed policies", Status: capabilities.StatusSupported, Notes: attachPolicyUnknownARNNote},
 		capabilities.Capability{Service: "iam", Operation: "DetachRolePolicy", Category: "Role managed policies", Status: capabilities.StatusSupported},
 		capabilities.Capability{Service: "iam", Operation: "ListAttachedRolePolicies", Category: "Role managed policies", Status: capabilities.StatusSupported},
 		// Role tagging
@@ -66,8 +74,8 @@ func init() {
 		// Instance profiles
 		capabilities.Capability{Service: "iam", Operation: "CreateInstanceProfile", Category: "Instance profiles", Status: capabilities.StatusSupported, Notes: "Inline `Tags` applied at creation and returned on the resource"},
 		capabilities.Capability{Service: "iam", Operation: "GetInstanceProfile", Category: "Instance profiles", Status: capabilities.StatusSupported, Notes: "Returns the resource's `Tags`"},
-		capabilities.Capability{Service: "iam", Operation: "DeleteInstanceProfile", Category: "Instance profiles", Status: capabilities.StatusSupported},
-		capabilities.Capability{Service: "iam", Operation: "AddRoleToInstanceProfile", Category: "Instance profiles", Status: capabilities.StatusSupported},
+		capabilities.Capability{Service: "iam", Operation: "DeleteInstanceProfile", Category: "Instance profiles", Status: capabilities.StatusSupported, Notes: "DeleteConflict (409) while a role association remains — `RemoveRoleFromInstanceProfile` first"},
+		capabilities.Capability{Service: "iam", Operation: "AddRoleToInstanceProfile", Category: "Instance profiles", Status: capabilities.StatusSupported, Notes: "An instance profile holds at most one role, AWS's quota: a second, different role is refused with `LimitExceeded` (409). Re-adding the role already there is a no-op; replacing it means `RemoveRoleFromInstanceProfile` first"},
 		capabilities.Capability{Service: "iam", Operation: "RemoveRoleFromInstanceProfile", Category: "Instance profiles", Status: capabilities.StatusSupported},
 		capabilities.Capability{Service: "iam", Operation: "ListInstanceProfiles", Category: "Instance profiles", Status: capabilities.StatusSupported, Notes: "Returns AWS's listing subset: no `Tags` — call the matching `Get` for those"},
 		capabilities.Capability{Service: "iam", Operation: "ListInstanceProfilesForRole", Category: "Instance profiles", Status: capabilities.StatusSupported},
@@ -91,7 +99,7 @@ func init() {
 		capabilities.Capability{Service: "iam", Operation: "DeleteGroupPolicy", Category: "Group inline policies", Status: capabilities.StatusSupported},
 		capabilities.Capability{Service: "iam", Operation: "ListGroupPolicies", Category: "Group inline policies", Status: capabilities.StatusSupported},
 		// Group managed policies
-		capabilities.Capability{Service: "iam", Operation: "AttachGroupPolicy", Category: "Group managed policies", Status: capabilities.StatusSupported},
+		capabilities.Capability{Service: "iam", Operation: "AttachGroupPolicy", Category: "Group managed policies", Status: capabilities.StatusSupported, Notes: attachPolicyUnknownARNNote},
 		capabilities.Capability{Service: "iam", Operation: "DetachGroupPolicy", Category: "Group managed policies", Status: capabilities.StatusSupported},
 		capabilities.Capability{Service: "iam", Operation: "ListAttachedGroupPolicies", Category: "Group managed policies", Status: capabilities.StatusSupported},
 		// Policy simulation

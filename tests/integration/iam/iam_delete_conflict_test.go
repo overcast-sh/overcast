@@ -199,6 +199,30 @@ func deleteConflictCases() []deleteConflictCase {
 			wantMessage:  "Cannot delete entity, must detach all policies first.",
 		},
 
+		// ── Instance profiles ──────────────────────────────────────────────
+		//
+		// "Deletes the specified instance profile. The instance profile must
+		// not have an associated role."
+		// https://docs.aws.amazon.com/IAM/latest/APIReference/API_DeleteInstanceProfile.html
+		{
+			name:   "instance profile holding a role",
+			action: "DeleteInstanceProfile",
+			setup: func(t *testing.T, srv *helpers.TestServer) {
+				createRole(t, srv, "app-role")
+				iamOK(t, srv, "CreateInstanceProfile", url.Values{"InstanceProfileName": {"app-profile"}})
+				iamOK(t, srv, "AddRoleToInstanceProfile", url.Values{
+					"InstanceProfileName": {"app-profile"}, "RoleName": {"app-role"},
+				})
+			},
+			remove: func(t *testing.T, srv *helpers.TestServer) {
+				iamOK(t, srv, "RemoveRoleFromInstanceProfile", url.Values{
+					"InstanceProfileName": {"app-profile"}, "RoleName": {"app-role"},
+				})
+			},
+			deleteParams: url.Values{"InstanceProfileName": {"app-profile"}},
+			wantMessage:  "Cannot delete entity, must remove roles from instance profile first.",
+		},
+
 		// ── Managed policies ───────────────────────────────────────────────
 		{
 			name:   "managed policy attached to a role",
