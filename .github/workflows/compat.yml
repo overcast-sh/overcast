@@ -903,6 +903,18 @@ jobs:
       # this job's checkout runs with persist-credentials: false — see the
       # comment on that step. Do not re-enable persisted credentials here.
       #
+      # The promotion is rebuilt on the live tip of main just before it is
+      # published, not on the commit this run tested. A compat run takes
+      # twenty-odd minutes and a promotion can sit merged-or-not for far
+      # longer, so by the time the job gets here main has often merged the very
+      # promotion these results imply. Publishing the run's own diff then
+      # opens a PR that changes nothing (#1964: the run began 20 s before #1943
+      # merged the same baselines). `--update-baseline` only ever keeps the
+      # better status, so re-running it against main's baseline yields exactly
+      # the improvements main still lacks, and none at all when it has them.
+      # It runs in a separate worktree so the checkout the gates read is left
+      # as the earlier steps saw it.
+      #
       # Identify the App by its Client ID, not its App ID: `app-id` carries a
       # deprecationMessage as of the action's v3, and GitHub recommends the
       # client ID as the JWT `iss` claim. A client ID is not sensitive and could
@@ -960,14 +972,31 @@ jobs:
         run: |
           git config user.name "overcast-compat-promotion[bot]"
           git config user.email "overcast-compat-promotion[bot]@users.noreply.github.com"
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          # Non-fatal from here down: promotion is an optimisation, not a gate,
+          # and a dropped one is recomputed by the next improved main run.
+          if ! git fetch --no-tags --depth=1 "$remote" main; then
+            echo "::warning title=Compat baseline::Could not fetch main to build the promotion on — the next improved main run will recompute it."
+            exit 0
+          fi
+          promo="${RUNNER_TEMP}/baseline-promotion"
+          git worktree add --detach "$promo" FETCH_HEAD
+          cd "$promo"
+          if ! go run ./cmd/compat \
+              --update-baseline \
+              --baseline-file compat/baseline \
+              --results-file "${GITHUB_WORKSPACE}/compat-results.json"; then
+            echo "::warning title=Compat baseline::Could not recompute the promotion on the tip of main — the next improved main run will recompute it."
+            exit 0
+          fi
+          if [[ -z "$(git status --porcelain -- compat/baseline)" ]]; then
+            echo "::notice title=Compat baseline::Main already carries every improvement in this run's results — nothing to promote."
+            exit 0
+          fi
           git add compat/baseline
           git commit -m "chore(compat): promote baseline improvements" \
             -m "Automated: compat results on main run ${GITHUB_RUN_ID} (commit ${GITHUB_SHA}) improved on the recorded baseline."
-          # Non-fatal from here down: promotion is an optimisation, not a gate,
-          # and a dropped one is recomputed by the next improved main run.
-          if ! git push --force \
-              "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
-              HEAD:automation/baseline-promotion; then
+          if ! git push --force "$remote" HEAD:automation/baseline-promotion; then
             echo "::warning title=Compat baseline::Could not push the promotion branch — the next improved main run will recompute it."
             exit 0
           fi
