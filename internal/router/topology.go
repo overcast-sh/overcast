@@ -19,6 +19,7 @@ import (
 	"sync"
 
 	"github.com/overcast-sh/overcast/internal/config"
+	"github.com/overcast-sh/overcast/internal/serviceutil"
 	"github.com/overcast-sh/overcast/internal/state"
 )
 
@@ -260,14 +261,17 @@ type tPipe struct {
 	CurrentState string `json:"CurrentState"`
 }
 
-// EC2 instances.
+// EC2 instances. Mirrors the PascalCase shape the EC2 store persists
+// (ec2.Instance); the region is not in the record but in the region-scoped
+// key ("us-east-1/i-abc").
 type tInstance struct {
-	InstanceID   string `json:"instance_id"`
-	State        string `json:"state"` // pending, running, stopped, terminated, etc.
-	InstanceType string `json:"instance_type"`
-	VpcID        string `json:"vpc_id"`
-	SubnetID     string `json:"subnet_id"`
-	Region       string `json:"region"`
+	InstanceID   string `json:"InstanceId"`
+	InstanceType string `json:"InstanceType"`
+	State        struct {
+		Name string `json:"Name"` // pending, running, stopped, terminated, etc.
+	} `json:"State"`
+	VpcID    string `json:"VpcId"`
+	SubnetID string `json:"SubnetId"`
 }
 
 // EC2 VPCs.
@@ -674,9 +678,9 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 		if json.Unmarshal([]byte(kv.Value), &inst) != nil {
 			continue
 		}
-		region := inst.Region
-		if region == "" {
-			region = defaultRegion
+		region := defaultRegion
+		if r, _ := serviceutil.SplitRegionKey(kv.Key); r != "" {
+			region = r
 		}
 		addNode(topologyNode{
 			ID:      region + "::ec2::" + inst.InstanceID,
@@ -684,6 +688,7 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 			Label:   inst.InstanceID,
 			Region:  region,
 			VpcID:   inst.VpcID,
+			Status:  inst.State.Name,
 		})
 	}
 
@@ -1765,9 +1770,9 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 		if json.Unmarshal([]byte(kv.Value), &inst) != nil || inst.VpcID == "" {
 			continue
 		}
-		region := inst.Region
-		if region == "" {
-			region = defaultRegion
+		region := defaultRegion
+		if r, _ := serviceutil.SplitRegionKey(kv.Key); r != "" {
+			region = r
 		}
 		srcID := region + "::vpc::" + inst.VpcID
 		tgtID := region + "::ec2::" + inst.InstanceID

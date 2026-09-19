@@ -602,3 +602,59 @@ func keys[V any](m map[string]V) []string {
 	}
 	return ks
 }
+
+func TestBuildTopology_ec2InstanceDecodesStoreShape(t *testing.T) {
+	// Given: a VPC and one instance persisted in the EC2 store's PascalCase
+	// shape, both under region-scoped keys.
+	vpcPayload, _ := json.Marshal(map[string]any{
+		"VpcId":     "vpc-0abc",
+		"CidrBlock": "10.0.0.0/16",
+		"State":     "available",
+	})
+	instancePayload, _ := json.Marshal(map[string]any{
+		"InstanceId":   "i-0123456789abcdef0",
+		"ImageId":      "ami-12345678",
+		"InstanceType": "t3.micro",
+		"State":        map[string]any{"Code": 16, "Name": "running"},
+		"SubnetId":     "subnet-0def",
+		"VpcId":        "vpc-0abc",
+	})
+
+	// When: topology is built from the EC2 namespaces.
+	resp := buildTopology(&config.Config{Region: "us-east-1"}, map[string][]state.KV{
+		tNsVPCs:      {{Key: "us-west-2/vpc-0abc", Value: string(vpcPayload)}},
+		tNsInstances: {{Key: "us-west-2/i-0123456789abcdef0", Value: string(instancePayload)}},
+	}, "")
+
+	// Then: the instance appears as an ec2 node grouped inside its VPC.
+	nodes := map[string]topologyNode{}
+	for _, n := range resp.Nodes {
+		nodes[n.ID] = n
+	}
+	inst, ok := nodes["us-west-2::ec2::i-0123456789abcdef0"]
+	if !ok {
+		t.Fatalf("expected an ec2 node for the instance, got nodes: %v", keys(nodes))
+	}
+	if inst.Service != "ec2" || inst.Label != "i-0123456789abcdef0" || inst.Region != "us-west-2" {
+		t.Fatalf("unexpected ec2 node identity: %#v", inst)
+	}
+	if inst.VpcID != "vpc-0abc" {
+		t.Errorf("ec2 node vpcId: got %q, want %q", inst.VpcID, "vpc-0abc")
+	}
+	if inst.Status != "running" {
+		t.Errorf("ec2 node status: got %q, want %q", inst.Status, "running")
+	}
+
+	// And: a vpc-member edge links the VPC to the instance in the same region.
+	wantEdge := "vpc-member::us-west-2::vpc::vpc-0abc→us-west-2::ec2::i-0123456789abcdef0"
+	found := false
+	for _, e := range resp.Edges {
+		if e.ID == wantEdge {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected vpc-member edge %q, got edges: %v", wantEdge, resp.Edges)
+	}
+}
