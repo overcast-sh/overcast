@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -227,39 +228,23 @@ func (h *Handler) CompleteMultipartUpload(w http.ResponseWriter, r *http.Request
 	// Parse the list of parts from the request body.
 	var req xmlCompleteMultipartUpload
 	if decodeErr := xml.NewDecoder(r.Body).Decode(&req); decodeErr != nil {
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
-			Code:       "MalformedXML",
-			Message:    "The XML you provided was not well-formed",
-			HTTPStatus: http.StatusBadRequest,
-		})
+		protocol.WriteXMLError(w, r, errMalformedMultipartXML())
 		return
 	}
 
-	// Retrieve stored parts in request order (parts must be in ascending order).
 	storedParts, aerr := h.store.listParts(r.Context(), uploadID)
 	if aerr != nil {
 		protocol.WriteXMLError(w, r, aerr)
 		return
 	}
 
-	// Index stored parts by part number.
-	partByNum := make(map[int]*Part, len(storedParts))
-	for _, p := range storedParts {
-		partByNum[p.PartNumber] = p
-	}
-
-	orderedParts := make([]*Part, 0, len(req.Parts))
-	for _, rp := range req.Parts {
-		found, ok := partByNum[rp.PartNumber]
-		if !ok {
-			protocol.WriteXMLError(w, r, &protocol.AWSError{
-				Code:       "InvalidPart",
-				Message:    fmt.Sprintf("One or more of the specified parts could not be found: %d", rp.PartNumber),
-				HTTPStatus: http.StatusBadRequest,
-			})
-			return
-		}
-		orderedParts = append(orderedParts, found)
+	// Every validation runs before anything is assembled or deleted: a
+	// refused completion must leave the upload and its parts exactly as they
+	// were, so the client can correct its list and retry, or abort.
+	orderedParts, aerr := resolveCompletedParts(req.Parts, storedParts)
+	if aerr != nil {
+		protocol.WriteXMLError(w, r, aerr)
+		return
 	}
 
 	// The finished object is a new version of the key, so its identity has to
@@ -363,6 +348,89 @@ func (h *Handler) CompleteMultipartUpload(w http.ResponseWriter, r *http.Request
 		Key:      key,
 		ETag:     etag,
 	})
+}
+
+// minMultipartPartSize is AWS's floor for every part except the last: 5 MiB.
+// It is enforced at completion, not at UploadPart — S3 accepts a small part
+// at upload time and only refuses when the list is assembled.
+const minMultipartPartSize = 5 * 1024 * 1024
+
+// resolveCompletedParts checks the parts list a CompleteMultipartUpload names
+// against the parts actually uploaded, and returns the stored parts in the
+// requested order. The rules and their codes are the "Special errors" of
+// https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html:
+//
+//   - the list must not be empty ("If you do not supply a valid Part with your
+//     request, the service sends back an HTTP 400 response" — MalformedXML,
+//     which is also what LocalStack and moto answer);
+//   - part numbers must be strictly ascending (InvalidPartOrder);
+//   - each PartNumber/ETag pair must name an uploaded part with that ETag
+//     (InvalidPart) — ETags compare with their surrounding quotes stripped,
+//     since S3 accepts either form and SDKs differ in what they send;
+//   - every part but the last must be at least 5 MiB (EntityTooSmall).
+//
+// The checks run in that order: the whole list's ordering is settled before
+// any ETag is looked at, and each part is matched before it is measured.
+func resolveCompletedParts(requested []xmlCompletePart, stored []*Part) ([]*Part, *protocol.AWSError) {
+	if len(requested) == 0 {
+		return nil, errMalformedMultipartXML()
+	}
+	for i := 1; i < len(requested); i++ {
+		if requested[i].PartNumber <= requested[i-1].PartNumber {
+			return nil, errInvalidPartOrder()
+		}
+	}
+
+	partByNum := make(map[int]*Part, len(stored))
+	for _, p := range stored {
+		partByNum[p.PartNumber] = p
+	}
+
+	ordered := make([]*Part, 0, len(requested))
+	last := len(requested) - 1
+	for i, rp := range requested {
+		found, ok := partByNum[rp.PartNumber]
+		if !ok || strings.Trim(found.ETag, `"`) != strings.Trim(rp.ETag, `"`) {
+			return nil, errInvalidPart(rp.PartNumber)
+		}
+		if i != last && found.Size < minMultipartPartSize {
+			return nil, errEntityTooSmall(found)
+		}
+		ordered = append(ordered, found)
+	}
+	return ordered, nil
+}
+
+func errMalformedMultipartXML() *protocol.AWSError {
+	return &protocol.AWSError{
+		Code:       "MalformedXML",
+		Message:    "The XML you provided was not well-formed or did not validate against our published schema",
+		HTTPStatus: http.StatusBadRequest,
+	}
+}
+
+func errInvalidPartOrder() *protocol.AWSError {
+	return &protocol.AWSError{
+		Code:       "InvalidPartOrder",
+		Message:    "The list of parts was not in ascending order. The parts list must be specified in order by part number.",
+		HTTPStatus: http.StatusBadRequest,
+	}
+}
+
+func errInvalidPart(partNumber int) *protocol.AWSError {
+	return &protocol.AWSError{
+		Code:       "InvalidPart",
+		Message:    fmt.Sprintf("One or more of the specified parts could not be found. The part might not have been uploaded, or the specified ETag might not have matched the uploaded part's ETag: part %d", partNumber),
+		HTTPStatus: http.StatusBadRequest,
+	}
+}
+
+func errEntityTooSmall(p *Part) *protocol.AWSError {
+	return &protocol.AWSError{
+		Code:       "EntityTooSmall",
+		Message:    fmt.Sprintf("Your proposed upload is smaller than the minimum allowed size: part %d is %d bytes, minimum is %d", p.PartNumber, p.Size, minMultipartPartSize),
+		HTTPStatus: http.StatusBadRequest,
+	}
 }
 
 // ---- AbortMultipartUpload --------------------------------------------------

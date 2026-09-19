@@ -2,7 +2,7 @@ service: s3
 status: in_progress
 priority: p0
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-09-06
+last_updated: 2026-09-19
 protocols: [rest_xml]
 implementation: [internal/services/s3]
 integration_tests: [tests/integration/s3]
@@ -591,6 +591,70 @@ operations:
         gap: >-
           AWS accepts If-None-Match and If-Match on CopyObject too; only PutObject
           and CompleteMultipartUpload are covered here (#1678).
+  CompleteMultipartUpload:
+    status: fixed
+    aws_docs:
+      - https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html
+    implementation:
+      - internal/services/s3/handler_multipart.go
+    tests:
+      - tests/integration/s3/multipart_validation_test.go
+      - tests/integration/s3/s3_test.go::TestMultipartUpload_fullCycle
+    scenarios:
+      - name: part ETag does not match the uploaded part
+        status: fixed
+        notes: 400 InvalidPart, no object is created and the upload's parts stay staged (#1706).
+      - name: part number that was never uploaded
+        status: fixed
+        notes: 400 InvalidPart.
+      - name: parts listed out of ascending order, or a part number repeated
+        status: fixed
+        notes: 400 InvalidPartOrder, checked over the whole list before any ETag is matched.
+      - name: non-final part under 5 MiB
+        status: fixed
+        notes: >-
+          400 EntityTooSmall, enforced at completion rather than UploadPart, which
+          is where S3 enforces it. The last part may be any size, so a single
+          small part still completes (#1706).
+      - name: ETag supplied without its surrounding quotes
+        status: fixed
+        notes: Matches; ETags are compared with quotes stripped from both sides.
+      - name: empty Parts list
+        status: fixed
+        notes: >-
+          400 MalformedXML. The API reference only says "the service sends back an
+          HTTP 400 response"; the code is what LocalStack and moto both answer.
+      - name: completing an already-completed upload id
+        status: fixed
+        notes: 404 NoSuchUpload, which the reference documents for an upload that "might have been aborted or completed".
+      - name: parts uploaded but omitted from the list
+        status: fixed
+        notes: Discarded with the rest of the upload's storage once the completion succeeds.
+      - name: error document detail elements
+        status: intentionally_partial
+        gap: >-
+          Real S3 adds ETag, PartNumber and UploadId to InvalidPart, and
+          MinSizeAllowed and ProposedSize to EntityTooSmall; protocol.AWSError
+          has no fields for them, so the detail lives in Message instead.
+  UploadPart:
+    status: fixed
+    aws_docs:
+      - https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPart.html
+    implementation:
+      - internal/services/s3/handler_multipart.go
+    tests:
+      - tests/integration/s3/multipart_validation_test.go::TestUploadPart_partNumberOutOfRange
+      - tests/integration/s3/multipart_validation_test.go::TestUploadPart_partNumberBoundsAreInclusive
+    scenarios:
+      - name: partNumber outside 1-10000, or not an integer
+        status: fixed
+        notes: >-
+          400 InvalidArgument. The reference states the range but names no error;
+          the code is what LocalStack answers, and the ArgumentName/ArgumentValue
+          elements it adds are absent here (see remaining_gaps).
+      - name: part under 5 MiB
+        status: fixed
+        notes: Accepted, as S3 does; the minimum is enforced at CompleteMultipartUpload.
   PutBucketLifecycleConfiguration:
     status: fixed
     aws_docs:
@@ -736,6 +800,7 @@ findings:
     - Object version history, delete markers, version-targeted reads/deletes, ListObjectVersions ordering/pagination, and sweeper execution of NoncurrentVersionExpiration, NoncurrentVersionTransition and ExpiredObjectDeleteMarker (#645).
     - DeleteBucketCors and DeleteBucketWebsite now clear stored configurations and return 204.
     - PutObject and CompleteMultipartUpload honour If-None-Match and If-Match, so a conditional write no longer silently overwrites (#1636).
+    - CompleteMultipartUpload validates the parts list — InvalidPart for a wrong or unknown ETag, InvalidPartOrder for an out-of-order list, EntityTooSmall for a non-final part under 5 MiB, MalformedXML for an empty list — and leaves a refused upload intact (#1706).
     - CloudFormation AWS::S3::Bucket uses the S3 handlers for lifecycle, versioning, notifications, encryption, tags, CORS, and website configuration.
     - GetObject, GetObjectTagging and CopyObject's source lookup now answer NoSuchBucket for a bucket that does not exist, instead of NoSuchKey (#1635); HeadObject is wire-identical either way per AWS's own documented HEAD limitation.
   remaining_gaps:
@@ -755,5 +820,5 @@ findings:
     - GetObjectAttributes, RestoreObject and SelectObjectContent remain unimplemented, so no version-aware behaviour is claimed for them.
 handoff:
   start_with: [ListObjects v1 per-object Owner, per-object ChecksumAlgorithm/ChecksumType on both listings, bucket policy document validation and evaluation, PublicAccessBlock, ListObjectVersions and ListMultipartUploads encoding-type, ListParts/ListMultipartUploads max-parts and max-uploads validation, issue 635, issue 636, issue 637]
-  do_not_redo: [ListObjectsV2 optional-parameter review, ListObjectsV2 max-keys validation, ListObjectsV2/ListObjects encoding-type, ListObjectsV2 fetch-owner, ListObjectsV2 start-after, ListObjectsV2 continuation-token, bucket and object tag-set limits, CDK bootstrap bucket flow, DeleteBucketCors, DeleteBucketWebsite, PutBucketVersioning status validation, CloudFormation S3 bucket seven-property dispatch, object version history and noncurrent lifecycle execution]
+  do_not_redo: [CompleteMultipartUpload parts-list validation, ListObjectsV2 optional-parameter review, ListObjectsV2 max-keys validation, ListObjectsV2/ListObjects encoding-type, ListObjectsV2 fetch-owner, ListObjectsV2 start-after, ListObjectsV2 continuation-token, bucket and object tag-set limits, CDK bootstrap bucket flow, DeleteBucketCors, DeleteBucketWebsite, PutBucketVersioning status validation, CloudFormation S3 bucket seven-property dispatch, object version history and noncurrent lifecycle execution]
   commands: [go test -count=1 ./internal/services/s3/... ./tests/integration/s3/...]
