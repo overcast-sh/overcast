@@ -91,6 +91,7 @@ Shorter overview: the [service reference index](./services/README.md).
 | Cognito          | [cognito.md](./services/cognito.md)                 | 70  | Comprehensive / broad support |
 | EC2 / VPC        | [ec2.md](./services/ec2.md)                         | 79  | Comprehensive / broad support |
 | SNS              | [sns.md](./services/sns.md)                         | 30  | Comprehensive / broad support |
+| Step Functions   | [stepfunctions.md](./services/stepfunctions.md)     | 37  | Comprehensive / broad support |
 | IAM              | [iam.md](./services/iam.md)                         | 74  | Core CRUD + common workflows  |
 | ECS              | [ecs.md](./services/ecs.md)                         | 48  | Core CRUD + common workflows  |
 | ECR              | [ecr.md](./services/ecr.md)                         | 22  | Core CRUD + common workflows  |
@@ -111,7 +112,6 @@ Shorter overview: the [service reference index](./services/README.md).
 | STS              | [sts.md](./services/sts.md)                         | 11  | Core CRUD + common workflows  |
 | Route 53         | [route53.md](./services/route53.md)                 | 25  | Core CRUD + common workflows  |
 | Auto Scaling     | [autoscaling.md](./services/autoscaling.md)         | 25  | Core CRUD + common workflows  |
-| Step Functions   | [stepfunctions.md](./services/stepfunctions.md)     | 37  | Minimal / targeted support    |
 | Pipes            | [pipes.md](./services/pipes.md)                     | 8   | Minimal / targeted support    |
 | WAF v2           | [waf.md](./services/waf.md)                         | 7   | Minimal / targeted support    |
 | Shield           | [shield.md](./services/shield.md)                   | 8   | Minimal / targeted support    |
