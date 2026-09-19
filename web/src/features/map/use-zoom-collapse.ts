@@ -6,7 +6,7 @@
  * then applies a depth-based zoom threshold: deeper stacks require more
  * zoom to expand. Returns a referentially-stable Set that only changes
  * when the actual collapsed/expanded state flips — avoiding unnecessary
- * dagre layout re-runs.
+ * layout re-runs.
  */
 
 import { useMemo, useState } from "react"
@@ -82,7 +82,7 @@ export function useZoomCollapse(edges: TopologyEdge[], zoom: number): Set<string
   }, [edges, zoom, prev])
 
   // Update state only when the set contents actually changed — keeps the
-  // returned reference stable and avoids unnecessary dagre layout re-runs.
+  // returned reference stable and avoids unnecessary layout re-runs.
   if (next.size !== prev.size || ![...next].every((s) => prev.has(s))) {
     setPrev(next)
   }

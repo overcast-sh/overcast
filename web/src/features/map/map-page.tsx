@@ -33,17 +33,23 @@ import {
   requestLayoutAsync,
   subscribeToLayout,
   getLayoutSnapshot,
+  isLayoutLoading,
   NODE_WIDTH,
   IGW_NODE_WIDTH,
   IGW_NODE_HEIGHT,
+  VPC_NODE_HEIGHT,
+  ESM_FILTER_NODE_SIZE,
   lambdaGroupHeight,
 } from "./map-layout"
 import {
   ServiceNode,
   LambdaGroupNode,
   SQS_NODE_EXPANDED_H,
+  SQS_NODE_IDLE_H,
   LOGS_NODE_EXPANDED_H,
+  STATUS_NODE_H,
 } from "./topology-nodes"
+import "./map-animations.css"
 import { TopologyEdge } from "./topology-edges"
 import { LAMBDA_GHOST_TTL } from "./lambda-instance-node"
 import { useLambdaInstances, type InstancesByFunction } from "@/hooks/use-lambda-instances"
@@ -72,6 +78,22 @@ const NODE_TYPES = {
   igwNode: IgwNode,
 }
 const EDGE_TYPES = { topologyEdge: TopologyEdge }
+
+/** Group containers: never dimmed, never a hover target. */
+const CONTAINER_TYPES = new Set(["regionGroup", "stackGroup", "vpcGroup"])
+
+/**
+ * Below this zoom the text inside a node's message, stream and instance lists
+ * is too small to read, so CSS hides those lists (and edge labels) and the
+ * map reads as boxes and wires. See map-animations.css.
+ */
+const FAR_ZOOM = 0.6
+
+/** Hover has to rest on a node this long before the rest of the map dims. */
+const FOCUS_DELAY_MS = 140
+
+/** What the map is focused on: a node and its neighbours, or one kind of connection. */
+type Focus = { node: string } | { edgeType: string } | null
 
 /** Calls fitView whenever the ReactFlow container element resizes. */
 function FitViewOnResize() {
@@ -241,21 +263,35 @@ function computeSizeOverrides(
       if (totalCount > 0) {
         overrides[n.id] = { width: NODE_WIDTH, height: lambdaGroupHeight(totalCount) }
       }
-    } else if (
-      n.service === "sqs" &&
-      (n.approximateNumberOfMessages ?? 0) + (n.approximateNumberOfMessagesNotVisible ?? 0) > 0
-    ) {
-      overrides[n.id] = { width: NODE_WIDTH, height: SQS_NODE_EXPANDED_H }
+    } else if (n.service === "sqs") {
+      const hasMessages =
+        (n.approximateNumberOfMessages ?? 0) + (n.approximateNumberOfMessagesNotVisible ?? 0) > 0
+      overrides[n.id] = {
+        width: NODE_WIDTH,
+        height: hasMessages ? SQS_NODE_EXPANDED_H : SQS_NODE_IDLE_H,
+      }
+    } else if (n.service === "rds" && n.status) {
+      overrides[n.id] = { width: NODE_WIDTH, height: STATUS_NODE_H }
     } else if (n.service === "logs") {
       overrides[n.id] = { width: NODE_WIDTH, height: LOGS_NODE_EXPANDED_H }
     } else if (n.service === "esm-filter") {
-      overrides[n.id] = { width: 56, height: 56 }
+      overrides[n.id] = { width: ESM_FILTER_NODE_SIZE, height: ESM_FILTER_NODE_SIZE }
     } else if (n.service === "igw") {
       overrides[n.id] = { width: IGW_NODE_WIDTH, height: IGW_NODE_HEIGHT }
+    } else if (n.service === "vpc") {
+      overrides[n.id] = { width: NODE_WIDTH, height: VPC_NODE_HEIGHT }
     }
   }
   return overrides
 }
+
+/**
+ * Node wrapper transition: a re-layout glides boxes to their new place, and a
+ * focus change fades the unrelated ones. Set inline because React Flow puts
+ * `style` on the wrapper, where an inline `transition` would otherwise
+ * replace any stylesheet one.
+ */
+const NODE_TRANSITION = "transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.15s"
 
 /** Expand positioned layout nodes into final React Flow nodes with event counts and lambda children. */
 function expandFlowNodes(
@@ -307,7 +343,7 @@ function expandFlowNodes(
     if (isLambda && allInstances.length > 0) {
       // Instance rendering itself lives inside LambdaGroupNode (it fetches its
       // own instances/ghosts) — this only needs the identical capped height
-      // formula so dagre reserves the exact space the node will render at.
+      // formula so the layout reserves the exact space the node will render at.
       const groupH = lambdaGroupHeight(allInstances.length)
       result.push({
         ...n,
@@ -317,7 +353,7 @@ function expandFlowNodes(
         style: {
           width: NODE_WIDTH,
           height: groupH,
-          transition: "transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1)",
+          transition: NODE_TRANSITION,
         },
         data: {
           ...n.data,
@@ -330,7 +366,7 @@ function expandFlowNodes(
         ...n,
         style: {
           ...n.style,
-          transition: "transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1)",
+          transition: NODE_TRANSITION,
         },
         data: {
           ...n.data,
@@ -365,13 +401,8 @@ function CustomMiniMap() {
   // Show service/resource nodes only — exclude region/stack/VPC group containers.
   // (Lambda instances are no longer separate React Flow nodes — see
   // LambdaGroupNode, which renders its own instance list internally.)
-  const topNodes = useMemo(
-    () =>
-      nodes.filter(
-        (n) => n.type !== "regionGroup" && n.type !== "stackGroup" && n.type !== "vpcGroup",
-      ),
-    [nodes],
-  )
+  const topNodes = useMemo(() => nodes.filter((n) => !CONTAINER_TYPES.has(n.type ?? "")), [nodes])
+  const topNodeById = useMemo(() => new Map(topNodes.map((n) => [n.id, n])), [topNodes])
 
   // Build a map from node ID → absolute position for the minimap.
   // Children of group nodes have relative positions — we walk up the
@@ -477,8 +508,8 @@ function CustomMiniMap() {
         >
           {/* Edges — drawn to circle edge (not center) so they don't bleed through nodes */}
           {edges.map((e) => {
-            const src = topNodes.find((n) => n.id === e.source)
-            const tgt = topNodes.find((n) => n.id === e.target)
+            const src = topNodeById.get(e.source)
+            const tgt = topNodeById.get(e.target)
             if (!src || !tgt) return null
             const edgeType = (e.data as { edgeType?: string }).edgeType ?? ""
             const et = EDGE_THEME[edgeType]
@@ -589,7 +620,7 @@ export function MapPage({ focusRegion }: { focusRegion?: string }) {
   // ghost for LAMBDA_GHOST_TTL ms so the developer can still see it on the
   // map before it fades out. This must use the same TTL LambdaGroupNode uses
   // for its own (independent) ghost tracking, so the box height computed
-  // here for dagre matches what the node actually renders.
+  // here for the layout matches what the node actually renders.
   const allInstances = useMemo(
     () => Object.values(instancesByFunction).flatMap((arr) => arr ?? []),
     [instancesByFunction],
@@ -623,7 +654,9 @@ export function MapPage({ focusRegion }: { focusRegion?: string }) {
   // ── Async layout via Web Worker ──────────────────────────────────────
   // useSyncExternalStore gives us a reactive subscription to the module-level
   // worker result — no tearing, no effects needed on the read side.
-  const positionedNodes = useSyncExternalStore(subscribeToLayout, getLayoutSnapshot)
+  const layout = useSyncExternalStore(subscribeToLayout, getLayoutSnapshot)
+  const layoutPending = useSyncExternalStore(subscribeToLayout, isLayoutLoading)
+  const positionedNodes = layout.nodes
 
   // Trigger layout when the inputs change.  requestLayoutAsync deduplicates
   // internally — skips when the content hash matches the previous request.
@@ -690,7 +723,67 @@ export function MapPage({ focusRegion }: { focusRegion?: string }) {
     }
   }, [topologyNodes])
 
-  // Build React Flow edges with glow state injected.
+  // ── Focus: hover a node to see only its neighbourhood; hover a legend
+  // entry to see only that kind of connection. Everything else dims.
+  const [focus, setFocus] = useState<Focus>(null)
+  const focusTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const clearFocusTimer = () => {
+    if (focusTimer.current) {
+      clearTimeout(focusTimer.current)
+      focusTimer.current = null
+    }
+  }
+  const onNodeMouseEnter = useCallback((_: React.MouseEvent, node: Node) => {
+    if (CONTAINER_TYPES.has(node.type ?? "")) return
+    clearFocusTimer()
+    // A short rest before dimming: sweeping the pointer across the map must
+    // not strobe every box on the way.
+    focusTimer.current = setTimeout(() => setFocus({ node: node.id }), FOCUS_DELAY_MS)
+  }, [])
+  const onNodeMouseLeave = useCallback(() => {
+    clearFocusTimer()
+    setFocus(null)
+  }, [])
+  useEffect(() => clearFocusTimer, [])
+
+  // Neighbourhood of the focused node, or the edges of the focused type.
+  const { focusNodes, focusEdges } = useMemo(() => {
+    const nodes = new Set<string>()
+    const edges = new Set<string>()
+    if (focus && "node" in focus) {
+      nodes.add(focus.node)
+      for (const e of topologyEdges) {
+        if (e.source === focus.node || e.target === focus.node) {
+          edges.add(e.id)
+          nodes.add(e.source)
+          nodes.add(e.target)
+        }
+      }
+    } else if (focus && "edgeType" in focus) {
+      for (const e of topologyEdges) {
+        if (e.type === focus.edgeType) {
+          edges.add(e.id)
+          nodes.add(e.source)
+          nodes.add(e.target)
+        }
+      }
+    }
+    return { focusNodes: nodes, focusEdges: edges }
+  }, [focus, topologyEdges])
+
+  // Dimming is a class on the React Flow wrapper, so a hover never re-renders
+  // the (heavy) node components themselves — their `data` is unchanged.
+  const displayNodes = useMemo(() => {
+    if (!focus) return rfNodes
+    return rfNodes.map((n) =>
+      CONTAINER_TYPES.has(n.type ?? "") || focusNodes.has(n.id)
+        ? n
+        : { ...n, className: cn(n.className, "map-dim") },
+    )
+  }, [rfNodes, focus, focusNodes])
+
+  // Build React Flow edges with glow state, the layout's route and the
+  // focus state injected.
   // Filter out any edge whose source or target node isn't present — a missing
   // node causes React Flow to render a dangling line going nowhere.
   const rfEdges: Edge[] = useMemo(() => {
@@ -711,20 +804,34 @@ export function MapPage({ focusRegion }: { focusRegion?: string }) {
             label: e.label,
             state: e.state,
             burstCount: edgeBurstCounts[e.id] ?? 0,
+            route: layout.routes[e.id],
+            dimmed: focus !== null && !focusEdges.has(e.id),
           },
           markerEnd: {
             type: MarkerType.ArrowClosed,
-            width: 12,
-            height: 12,
+            width: 9,
+            height: 9,
             color: edgeColor,
           },
         }
       })
-  }, [rfNodes, topologyEdges, glowingEdges, edgeBurstCounts])
+  }, [rfNodes, topologyEdges, glowingEdges, edgeBurstCounts, layout.routes, focus, focusEdges])
+
+  // Only the connection types actually on the map belong in the legend.
+  const legendTypes = useMemo(() => {
+    const present = new Set(topologyEdges.map((e) => e.type))
+    return Object.entries(EDGE_THEME).filter(
+      (entry): entry is [string, NonNullable<(typeof EDGE_THEME)[string]>] =>
+        entry[1] != null && present.has(entry[0]),
+    )
+  }, [topologyEdges])
 
   const hasRealResources = topologyNodes.length > 0
   const isEmpty = !isLoading && !isError && topologyNodes.length === 0 && rfNodes.length === 0
   const hasRegionGroups = rfNodes.some((n) => n.type === "regionGroup")
+  // The first layout runs in the worker after the data arrives: that gap is
+  // still "loading" to the person waiting for the map.
+  const showSpinner = isLoading || (hasRealResources && rfNodes.length === 0 && layoutPending)
 
   return (
     <div className="flex h-full flex-col" style={{ viewTransitionName: "system-map" }}>
@@ -735,8 +842,11 @@ export function MapPage({ focusRegion }: { focusRegion?: string }) {
         />
       </div>
 
-      <div className="relative min-h-0 flex-1 overflow-hidden">
-        {isLoading && (
+      <div
+        className="map-canvas relative min-h-0 flex-1 overflow-hidden"
+        data-zoom={zoom < FAR_ZOOM ? "far" : "near"}
+      >
+        {showSpinner && (
           <div className="absolute inset-0 flex items-center justify-center">
             <Spinner className="h-6 w-6" />
           </div>
@@ -757,16 +867,21 @@ export function MapPage({ focusRegion }: { focusRegion?: string }) {
         {!isLoading && !isError && rfNodes.length > 0 && (
           <ReactFlow
             onlyRenderVisibleElements
-            nodes={rfNodes}
+            nodes={displayNodes}
             edges={rfEdges}
             nodeTypes={NODE_TYPES}
             edgeTypes={EDGE_TYPES}
             fitView
             fitViewOptions={{ padding: 0.2, maxZoom: 1.2 }}
+            // React Flow's default floor of 0.5 stops a map of any real size
+            // from ever fitting a laptop viewport.
+            minZoom={0.1}
             nodesDraggable
             nodesConnectable={false}
             edgesFocusable={false}
             onViewportChange={handleViewportChange}
+            onNodeMouseEnter={onNodeMouseEnter}
+            onNodeMouseLeave={onNodeMouseLeave}
             className="bg-bg"
           >
             <FitViewOnResize />
@@ -779,30 +894,45 @@ export function MapPage({ focusRegion }: { focusRegion?: string }) {
           </ReactFlow>
         )}
 
-        {/* Legend */}
-        {!isLoading && hasRealResources && (
-          <div className="absolute bottom-24 left-3 rounded-lg border border-border bg-bg-elevated/90 p-3 text-2xs backdrop-blur-sm">
-            <p className={cn(sectionLabel, "mb-2 text-fg-muted")}>Connection type</p>
-            <div className="flex flex-col gap-1.5">
-              {Object.values(EDGE_THEME)
-                .filter((v): v is NonNullable<typeof v> => v != null)
-                .map((item) => (
-                  <div key={item.label} className="flex items-center gap-2">
-                    <svg width="24" height="8" className="shrink-0">
-                      <line
-                        x1="0"
-                        y1="4"
-                        x2="24"
-                        y2="4"
-                        stroke={item.color}
-                        strokeWidth="2"
-                        strokeDasharray={item.dash ? "4 2" : undefined}
-                      />
-                    </svg>
-                    <span className="text-fg-muted">{item.label}</span>
-                  </div>
-                ))}
-            </div>
+        {/* Legend — only the connection types on this map; hover one to pick it out */}
+        {!showSpinner && hasRealResources && legendTypes.length > 0 && (
+          <div
+            className="absolute top-3 right-3 rounded-lg border border-border bg-bg-elevated/90 p-3 text-2xs backdrop-blur-sm"
+            onMouseLeave={() => setFocus(null)}
+          >
+            <p className={cn(sectionLabel, "mb-2 text-fg-muted")}>Connections</p>
+            <ul className="flex flex-col gap-1">
+              {legendTypes.map(([type, item]) => {
+                const selected = focus !== null && "edgeType" in focus && focus.edgeType === type
+                return (
+                  <li key={type}>
+                    <button
+                      type="button"
+                      onMouseEnter={() => setFocus({ edgeType: type })}
+                      onFocus={() => setFocus({ edgeType: type })}
+                      onBlur={() => setFocus(null)}
+                      className={cn(
+                        "-mx-1.5 flex w-[calc(100%+0.75rem)] items-center gap-2 rounded px-1.5 py-0.5 text-left transition-colors",
+                        selected ? "bg-bg-muted text-fg" : "text-fg-muted hover:text-fg",
+                      )}
+                    >
+                      <svg width="24" height="8" className="shrink-0" aria-hidden="true">
+                        <line
+                          x1="0"
+                          y1="4"
+                          x2="24"
+                          y2="4"
+                          stroke={item.color}
+                          strokeWidth="2"
+                          strokeDasharray={item.dash ? "4 2" : undefined}
+                        />
+                      </svg>
+                      <span>{item.label}</span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
           </div>
         )}
 

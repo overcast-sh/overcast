@@ -5,6 +5,11 @@
  *   - "solid"  — direct wiring (S3 notification, SNS subscription, Lambda ESM)
  *   - "dashed" — EventBridge Pipe (labeled with pipe name)
  *
+ * An edge that the layout routed around other nodes carries its waypoints in
+ * `data.route`; the path is one smooth curve through them, leaving the source
+ * and entering the target horizontally like a plain Bézier would. Without a
+ * route it is React Flow's ordinary Bézier.
+ *
  * When an animation is active (triggered via the `animated` + `data.glowing`
  * props set by use-event-animations), the edge glows and a particle travels
  * along the path.
@@ -14,6 +19,8 @@ import { memo } from "react"
 import { BaseEdge, EdgeLabelRenderer, getBezierPath, type EdgeProps } from "@xyflow/react"
 import { cn } from "@/lib/utils"
 import { EDGE_THEME, FALLBACK_COLOR } from "./map-theme"
+import { routedPath } from "./map-edge-routing"
+import type { Pt } from "./map-edge-routing"
 
 export interface TopologyEdgeData extends Record<string, unknown> {
   /** true while an event is animating along this edge */
@@ -37,6 +44,10 @@ export interface TopologyEdgeData extends Record<string, unknown> {
    * Shown as a small badge so bursts of fast events remain visible after the glow fades.
    */
   burstCount?: number
+  /** Waypoints strictly between the two handles, absolute canvas coordinates. */
+  route?: Pt[]
+  /** true when something else on the map has focus and this edge is not part of it */
+  dimmed?: boolean
 }
 
 function areEdgePropsEqual(prev: EdgeProps, next: EdgeProps): boolean {
@@ -49,6 +60,8 @@ function areEdgePropsEqual(prev: EdgeProps, next: EdgeProps): boolean {
     pd.label === nd.label &&
     pd.state === nd.state &&
     pd.burstCount === nd.burstCount &&
+    pd.route === nd.route &&
+    pd.dimmed === nd.dimmed &&
     prev.sourceX === next.sourceX &&
     prev.sourceY === next.sourceY &&
     prev.targetX === next.targetX &&
@@ -67,7 +80,8 @@ export const TopologyEdge = memo(function TopologyEdge({
   data,
   markerEnd,
 }: EdgeProps) {
-  const { glowing, edgeType, label, state, burstCount } = (data ?? {}) as TopologyEdgeData
+  const { glowing, edgeType, label, state, burstCount, route, dimmed } = (data ??
+    {}) as TopologyEdgeData
   const isPipe = edgeType === "pipe"
   const isDlq = edgeType === "dlq"
   const isESMFilter = edgeType === "esm-filter"
@@ -75,19 +89,31 @@ export const TopologyEdge = memo(function TopologyEdge({
   const isStopped = isPipe && state === "STOPPED"
   const color = isStopped ? FALLBACK_COLOR : (EDGE_THEME[edgeType ?? ""]?.color ?? FALLBACK_COLOR)
 
-  const [edgePath, labelX, labelY] = getBezierPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
-  })
+  const [edgePath, labelX, labelY] =
+    route && route.length > 0
+      ? routedPath([{ x: sourceX, y: sourceY }, ...route, { x: targetX, y: targetY }])
+      : getBezierPath({
+          sourceX,
+          sourceY,
+          sourcePosition,
+          targetX,
+          targetY,
+          targetPosition,
+        })
 
+  const active = glowing && !isStopped && !dimmed
+
+  // An idle wire sits back behind the cards; a wire carrying an event, or one
+  // picked out by hover focus, comes forward at full strength.
   return (
-    <>
+    <g
+      className={cn(
+        "transition-opacity duration-150",
+        dimmed ? "opacity-15" : active ? "opacity-100" : "opacity-70",
+      )}
+    >
       {/* Glow layer — rendered behind the main stroke when active */}
-      {glowing && !isStopped && (
+      {active && (
         <path
           d={edgePath}
           fill="none"
@@ -105,7 +131,9 @@ export const TopologyEdge = memo(function TopologyEdge({
         markerEnd={markerEnd}
         style={{
           stroke: color,
-          strokeWidth: glowing && !isStopped ? 2 : 1.5,
+          strokeWidth: active ? 2 : 1.5,
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
           strokeDasharray: isDashed ? "6 3" : undefined,
           opacity: isStopped ? 0.4 : 1,
           transition: "stroke-width 0.15s, opacity 0.2s",
@@ -113,7 +141,7 @@ export const TopologyEdge = memo(function TopologyEdge({
       />
 
       {/* Travelling particle */}
-      {glowing && !isStopped && (
+      {active && (
         <circle r={4} fill={color} style={{ filter: `drop-shadow(0 0 3px ${color})` }}>
           <animateMotion dur="0.8s" repeatCount="1" path={edgePath} />
         </circle>
@@ -124,8 +152,9 @@ export const TopologyEdge = memo(function TopologyEdge({
         <EdgeLabelRenderer>
           <div
             className={cn(
-              "nodrag nopan pointer-events-none absolute rounded border px-1.5 py-0.5",
-              "text-2xs leading-tight font-medium",
+              "map-edge-label nodrag nopan pointer-events-none absolute rounded border px-1.5 py-0.5",
+              "text-2xs leading-tight font-medium transition-opacity duration-150",
+              dimmed && "opacity-15",
               isStopped
                 ? "border-transparent bg-bg-muted text-fg-subtle"
                 : isDlq
@@ -144,7 +173,7 @@ export const TopologyEdge = memo(function TopologyEdge({
       )}
 
       {/* Burst counter badge — shown when > 1 to avoid interfering with type labels */}
-      {(burstCount ?? 0) > 1 && !isStopped && !isESMFilter && (
+      {(burstCount ?? 0) > 1 && !isStopped && !isESMFilter && !dimmed && (
         <EdgeLabelRenderer>
           <div
             className="nodrag nopan pointer-events-none absolute flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-mono text-2xs font-bold tabular-nums"
@@ -160,6 +189,6 @@ export const TopologyEdge = memo(function TopologyEdge({
           </div>
         </EdgeLabelRenderer>
       )}
-    </>
+    </g>
   )
 }, areEdgePropsEqual)

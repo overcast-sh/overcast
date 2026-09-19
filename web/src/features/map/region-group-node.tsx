@@ -1,8 +1,10 @@
 /**
  * RegionGroupNode — React Flow group node that wraps all resources in a region.
  *
- * Renders a subtle dashed border with the region name as a badge that stays
- * pinned to the visible bottom-centre of the box as the user pans/zooms.
+ * Renders a subtle dashed border with the region name as a badge that sits on
+ * the box's top edge and, like a sticky section header, slides down to stay
+ * in view while the box is scrolled past — never into the middle of the
+ * contents, where it would read as a border cutting through the cards.
  * pointer-events are disabled on the container so child nodes remain interactive.
  */
 
@@ -52,12 +54,10 @@ export const RegionGroupNode = memo(function RegionGroupNode({
     const vpLeft = -viewport.x / zoom
     const vpTop = -viewport.y / zoom
     const vpRight = vpLeft + containerW / zoom
-    const vpBottom = vpTop + containerH / zoom
 
     // Group box bounds in flow coordinates
     const boxLeft = positionAbsoluteX
     const boxRight = positionAbsoluteX + w
-    const boxBottom = positionAbsoluteY + h
 
     // Badge X: centre of the visible horizontal overlap, clamped so the
     // pill doesn't overflow the viewport or the box.
@@ -69,24 +69,14 @@ export const RegionGroupNode = memo(function RegionGroupNode({
     // Box bounds are the hard constraint — badge must stay inside the box.
     const badgeX = clamp(clamp(rawX, vpMinX, vpMaxX), 0, w)
 
-    // Badge Y: bottom of visible vertical overlap, clamped inside both
-    // the viewport and the box.
-    const visBottom = Math.min(boxBottom, vpBottom)
-    const rawY = visBottom - positionAbsoluteY
+    // Badge Y: on the top edge, pushed down only as far as needed to stay in
+    // view, and never past the bottom of the box.
     const vpMinY = vpTop + BADGE_HALF_H + MARGIN - positionAbsoluteY
-    const vpMaxY = vpBottom - BADGE_HALF_H - MARGIN - positionAbsoluteY
-    // Box bounds are the hard constraint.
-    const badgeY = clamp(clamp(rawY, vpMinY, vpMaxY), 0, h)
+    const badgeY = clamp(Math.max(0, vpMinY), 0, Math.max(0, h - BADGE_HALF_H))
 
-    // Badge opacity — fully opaque when hugging an edge, fading to 0.55
-    // as it floats toward the centre of the box.
-    const distFromLeft = badgeX
-    const distFromRight = w - badgeX
-    const distFromTop = badgeY
-    const distFromBottom = h - badgeY
-    const minEdgeDist = Math.min(distFromLeft, distFromRight, distFromTop, distFromBottom)
-    // Start fading after 30px from edge, fully transparent-ish at 120px+
-    const opacity = 1 - clamp(minEdgeDist / 120, 0, 1) * 0.45
+    // Badge opacity — solid on the box's own edge, quieter once it has slid
+    // down over the contents.
+    const opacity = badgeY === 0 ? 1 : 0.7
 
     // Absolute flow-coordinate position for the portal-rendered badge.
     const absX = positionAbsoluteX + badgeX
@@ -106,8 +96,8 @@ export const RegionGroupNode = memo(function RegionGroupNode({
   return (
     <div
       className={cn(
-        "pointer-events-none relative rounded-xl border-2 border-dashed bg-bg-elevated/30",
-        active ? "border-accent/40" : "border-border/50",
+        "pointer-events-none relative rounded-xl border border-dashed bg-bg-elevated/30",
+        active ? "border-accent/40" : "border-border/60",
       )}
       style={{ width: w, height: h }}
     >
