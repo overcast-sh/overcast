@@ -64,6 +64,7 @@ the console having to expand the parent stack.
 | Enforcement                                                       | Integrated with Service Catalog governance | Associations are records. Nothing about an application governs, restricts or provisions anything |
 | `awsApplication` tag scan                                         | Continuous                                 | Runs on resource **create** only, and a failure is logged rather than failing the stack          |
 | Application-scoped cost, resource groups, attribute-group syncing | Supported                                  | Not modelled                                                                                     |
+| Pagination on `ListApplications`, `ListAssociatedResources`, `ListAttributeGroups`, `ListAssociatedAttributeGroups` | Results are paginated | `maxResults`/`nextToken` are accepted but ignored; every call returns the full result set in one page and `nextToken` is never set |
 
 ## Gotchas
 
