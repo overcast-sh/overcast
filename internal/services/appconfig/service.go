@@ -709,7 +709,7 @@ func (s *Service) listHostedConfigurationVersions(w http.ResponseWriter, r *http
 	wantLabel := r.URL.Query().Get("version_label")
 	items := make([]hostedConfigurationVersionSummary, 0, len(versions))
 	for _, v := range versions {
-		if wantLabel != "" && v.VersionLabel != wantLabel {
+		if wantLabel != "" && !matchesVersionLabelFilter(v.VersionLabel, wantLabel) {
 			continue
 		}
 		items = append(items, hostedConfigurationVersionSummary{
@@ -722,6 +722,17 @@ func (s *Service) listHostedConfigurationVersions(w http.ResponseWriter, r *http
 		})
 	}
 	writePage(w, r, items)
+}
+
+// matchesVersionLabelFilter applies AWS's documented version_label matching:
+// a filter ending in "*" matches by prefix (the model's wildcard), and any
+// other filter matches only an exact VersionLabel
+// (API_ListHostedConfigurationVersions.html).
+func matchesVersionLabelFilter(label, filter string) bool {
+	if prefix, ok := strings.CutSuffix(filter, "*"); ok {
+		return strings.HasPrefix(label, prefix)
+	}
+	return label == filter
 }
 
 func (s *Service) deleteHostedConfigurationVersion(w http.ResponseWriter, r *http.Request) {

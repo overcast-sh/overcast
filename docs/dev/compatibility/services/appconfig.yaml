@@ -1,21 +1,136 @@
 service: appconfig
-status: not_started
+status: reviewed
 priority: p3
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-05-17
+last_updated: 2026-09-20
 protocols: [rest_json, aws_json_1_0, aws_json_1_1, rpcv2_cbor]
 implementation: [internal/services/appconfig]
 integration_tests: [tests/integration/appconfig]
 capability_docs: docs/services/appconfig.md
-operation_count_estimate: docs/capabilities 12; implementation 16
-current_support_level: Configuration resources supported; hosted configuration version operations appear implemented but not fully tracked.
-operations: {}
+operation_count_estimate: 20 tracked; 20 supported (control plane only — the data plane is appconfigdata.yaml)
+current_support_level: >-
+  All 20 modeled control-plane operations are implemented, registered in
+  capabilities_dev.go as Supported, and documented in
+  docs/services/appconfig/operations.md — applications, environments,
+  configuration profiles, hosted configuration versions (CRUD, VersionNumber
+  auto-increment, Latest-Version-Number optimistic concurrency), and the
+  shared tag surface. The #58 finding (hosted configuration version
+  operations implemented but not tracked in capabilities/docs) no longer
+  reflects the code: RegisterRoutes/ApplicationsRouter, capabilities_dev.go
+  and the generated docs already agree, and this session closes the
+  remaining test-coverage and known-divergence gaps against the AWS API
+  Reference.
+operations:
+  CreateHostedConfigurationVersion:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/appconfig/2019-10-09/APIReference/API_CreateHostedConfigurationVersion.html
+    protocol: REST-JSON; POST /applications/{ApplicationId}/configurationprofiles/{ConfigurationProfileId}/hostedconfigurationversions, Content as the @httpPayload blob, Content-Type/Description/Latest-Version-Number/VersionLabel as headers
+    tests:
+      - tests/integration/appconfig/appconfig_test.go::TestCreateHostedConfigurationVersion_returnsContentAndModeledHeaders
+      - tests/integration/appconfig/appconfig_test.go::TestCreateHostedConfigurationVersion_incrementsVersionNumber
+      - tests/integration/appconfig/appconfig_test.go::TestCreateHostedConfigurationVersion_unknownProfileIsNotFound
+      - tests/integration/appconfig/appconfig_test.go::TestCreateHostedConfigurationVersion_missingContentTypeIsRejected
+      - tests/integration/appconfig/appconfig_test.go::TestCreateHostedConfigurationVersion_staleLatestVersionNumberConflicts
+    scenarios:
+      version_number_counter:
+        status: reviewed
+        evidence: VersionNumber starts at 1 and auto-increments per configuration profile (nextVersionNumber in internal/services/appconfig/store.go), matching AWS's documented VersionNumber response header; pinned by TestCreateHostedConfigurationVersion_incrementsVersionNumber.
+      content_and_content_type:
+        status: reviewed
+        evidence: Content travels as the httpPayload and is echoed verbatim; Content-Type is required (BadRequestException when absent) and echoed as both a response header and Content-Type, matching the modeled request/response syntax.
+      latest_version_number_precondition:
+        status: reviewed
+        evidence: An optional Latest-Version-Number header is AWS's documented optimistic-concurrency lock; a value that is not the profile's current latest answers ConflictException (409) rather than silently overwriting, matching "The request could not be processed because of conflict in the current state of the resource."
+      payload_too_large:
+        status: intentionally_partial
+        evidence: Content over 1 MB answers PayloadTooLargeException, matching AWS's documented cap, but the exact AWS byte limit (which may differ by content type) is not independently re-verified beyond the pinned 1 MB documented in the model.
+      unknown_profile:
+        status: reviewed
+        evidence: An ApplicationId/ConfigurationProfileId naming no profile answers ResourceNotFoundException before any content is read.
+      kms_key_arn:
+        status: intentionally_partial
+        evidence: AWS's response includes an optional KmsKeyArn header when the hosted version is encrypted with a customer KMS key. Overcast does not emulate hosted-configuration KMS encryption, so the header is never set; no caller-visible KmsKeyId request member exists on this operation to accept in the first place.
+      version_label_pattern:
+        status: unsupported
+        evidence: AWS's model constrains VersionLabel to `.*[^0-9].*` (at least one non-numeric character) and 1-64 characters; a purely numeric label is not rejected here. Narrow input-shape validation (VersionLabel pattern, Description's 1024-char/ASCII-only limit, ContentType's 255-char limit) is not enforced anywhere in this operation and is out of this issue's scope — tracked as a remaining gap below rather than fixed, since it needs its own scenario pass across every AppConfig create/update operation, not just this one.
+  GetHostedConfigurationVersion:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/appconfig/2019-10-09/APIReference/API_GetHostedConfigurationVersion.html
+    protocol: REST-JSON; GET /applications/{ApplicationId}/configurationprofiles/{ConfigurationProfileId}/hostedconfigurationversions/{VersionNumber}, metadata in response headers, Content as the response payload
+    tests:
+      - tests/integration/appconfig/appconfig_test.go::TestGetHostedConfigurationVersion_returnsContent
+      - tests/integration/appconfig/appconfig_test.go::TestGetHostedConfigurationVersion_unknownVersionIsNotFound
+    scenarios:
+      content_and_headers:
+        status: reviewed
+        evidence: Version-Number, VersionLabel and the content body round-trip exactly as stored; matches the modeled response syntax.
+      unknown_version:
+        status: reviewed
+        evidence: A VersionNumber that was never created already answered ResourceNotFoundException (notFound() in the handler, unchanged this session); it now has a dedicated test (TestGetHostedConfigurationVersion_unknownVersionIsNotFound) asserting the JSON error code, where previously this path was only exercised indirectly (get-after-delete) without asserting it.
+  ListHostedConfigurationVersions:
+    status: fixed
+    aws_docs:
+      - https://docs.aws.amazon.com/appconfig/2019-10-09/APIReference/API_ListHostedConfigurationVersions.html
+    protocol: REST-JSON; GET .../hostedconfigurationversions?max_results=&next_token=&version_label=
+    tests:
+      - tests/integration/appconfig/appconfig_test.go::TestListHostedConfigurationVersions_filtersByVersionLabel
+      - tests/integration/appconfig/appconfig_test.go::TestListHostedConfigurationVersions_filtersByVersionLabelPrefix
+    scenarios:
+      ordering:
+        status: reviewed
+        evidence: listHCVs (internal/services/appconfig/store.go) sorts numerically by VersionNumber descending, i.e. newest first, matching the behaviour documented in docs/services/appconfig.md and the AWS console/CLI presentation order.
+      pagination:
+        status: reviewed
+        evidence: max_results/next_token follow AWS's documented range (1-50, default 50 when omitted) via the shared serviceutil.Paginate helper, same as every other AppConfig list operation.
+      version_label_exact_match:
+        status: reviewed
+        evidence: A version_label with no trailing "*" matches only an exact VersionLabel, as AWS documents ("If you don't specify an asterisk at the end of the value, only an exact match is returned").
+      version_label_wildcard_prefix:
+        status: fixed
+        evidence: >-
+          AWS documents version_label as supporting prefix filtering with a trailing wildcard
+          (e.g. "v2*"). Overcast's filter previously did a plain string-equality check, so a
+          caller-supplied wildcard filter matched nothing (no VersionLabel literally ends in
+          "*"). Reproduced with a failing test (TestListHostedConfigurationVersions_filtersByVersionLabelPrefix,
+          asserting v2.1.0/v2.2.0 come back for version_label=v2* while v3.0.0 is excluded) before
+          the fix; matchesVersionLabelFilter in internal/services/appconfig/service.go now strips a
+          trailing "*" and does a prefix match, falling back to exact match otherwise.
+  DeleteHostedConfigurationVersion:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/appconfig/2019-10-09/APIReference/API_DeleteHostedConfigurationVersion.html
+    protocol: REST-JSON; DELETE /applications/{ApplicationId}/configurationprofiles/{ConfigurationProfileId}/hostedconfigurationversions/{VersionNumber}
+    tests:
+      - tests/integration/appconfig/appconfig_test.go::TestDeleteHostedConfigurationVersion_success
+      - tests/integration/appconfig/appconfig_test.go::TestDeleteHostedConfigurationVersion_unknownVersionIsNotFound
+    scenarios:
+      success:
+        status: reviewed
+        evidence: Deletes exactly the named version and answers 204 with an empty body, matching the modeled response; sibling versions are untouched and version numbers are never reused (the counter never decrements).
+      unknown_version:
+        status: reviewed
+        evidence: A VersionNumber that was never created already answered ResourceNotFoundException (unchanged this session); it now has a dedicated test (TestDeleteHostedConfigurationVersion_unknownVersionIsNotFound) asserting the JSON error code, matching AWS's documented error for the operation.
 findings:
-  fixed: []
+  fixed:
+    - ListHostedConfigurationVersions' version_label filter did plain string equality only; AWS documents a trailing "*" as a prefix wildcard ("v2*" matches every label starting with "v2"). Fixed via matchesVersionLabelFilter in internal/services/appconfig/service.go, with a failing-test-first regression (TestListHostedConfigurationVersions_filtersByVersionLabelPrefix).
+    - Add hosted configuration version operations to capabilities/docs or document omission (#58). The four hosted-version operations were already registered as Supported in capabilities_dev.go and documented in docs/services/appconfig/operations.md — the compatibility tracker was the only place still describing them as untracked; this file, matrix.yaml and STATUS.md's next_action are now reconciled with the code.
   remaining_gaps:
-    - Add hosted configuration version operations to capabilities/docs or document omission.
-  intentionally_partial: []
+    - CreateHostedConfigurationVersion does not enforce VersionLabel's modeled pattern (`.*[^0-9].*`, i.e. must contain a non-numeric character) or length (1-64), Description's length (0-1024, ASCII-only) or ContentType's length (1-255). This is a shape-validation gap shared with the rest of the service (Application/Environment/ConfigurationProfile Name and Description have no length enforcement either) rather than specific to hosted versions, so it is left as a follow-up rather than fixed piecemeal here.
+    - UpdateEnvironment and UpdateConfigurationProfile are modeled by AWS but not implemented (only UpdateApplication exists); both answer 501, which is documented in docs/services/appconfig.md's Differences from AWS table.
+  intentionally_partial:
+    - Hosted configuration version content is never encrypted with a customer KMS key, so KmsKeyArn is never present on Create/Get/List responses; AWS AppConfig treats this as optional and its absence is valid on the wire.
+    - ServiceQuotaExceededException (e.g. the documented 100-application cap) is never returned — Overcast does not emulate per-account resource quotas anywhere (see AGENTS.md § Non-goals — not a performance testing tool).
+    - Resources are not region-scoped, so an application created in one region is visible from another; documented in docs/services/appconfig.md's Differences from AWS table.
 handoff:
-  start_with: [CreateHostedConfigurationVersion, GetHostedConfigurationVersion]
-  do_not_redo: []
+  start_with: []
+  do_not_redo:
+    [
+      CreateApplication, GetApplication, ListApplications, UpdateApplication, DeleteApplication,
+      CreateEnvironment, GetEnvironment, ListEnvironments, DeleteEnvironment,
+      CreateConfigurationProfile, GetConfigurationProfile, ListConfigurationProfiles, DeleteConfigurationProfile,
+      CreateHostedConfigurationVersion, GetHostedConfigurationVersion, ListHostedConfigurationVersions, DeleteHostedConfigurationVersion,
+      TagResource, UntagResource, ListTagsForResource,
+    ]
   commands: [go test -count=1 ./internal/services/appconfig/... ./tests/integration/appconfig/...]

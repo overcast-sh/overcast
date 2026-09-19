@@ -745,6 +745,23 @@ func TestGetHostedConfigurationVersion_returnsContent(t *testing.T) {
 	}
 }
 
+func TestGetHostedConfigurationVersion_unknownVersionIsNotFound(t *testing.T) {
+	// Given: a configuration profile with no hosted versions.
+	srv := helpers.NewTestServer(t)
+	appID := createApplication(t, srv, "my-app")
+	profID := createProfile(t, srv, appID, "cfg")
+
+	// When: a version number that was never created is requested.
+	resp := acDo(t, srv, http.MethodGet,
+		fmt.Sprintf("/applications/%s/configurationprofiles/%s/hostedconfigurationversions/1", appID, profID), nil)
+	defer resp.Body.Close()
+
+	// Then: ResourceNotFoundException, matching AWS's documented error for the
+	// operation (API_GetHostedConfigurationVersion.html).
+	helpers.AssertStatus(t, resp, http.StatusNotFound)
+	helpers.AssertJSONError(t, resp, "ResourceNotFoundException")
+}
+
 func TestListHostedConfigurationVersions_filtersByVersionLabel(t *testing.T) {
 	// Given: two versions, one labelled.
 	srv := helpers.NewTestServer(t)
@@ -778,6 +795,45 @@ func TestListHostedConfigurationVersions_filtersByVersionLabel(t *testing.T) {
 	}
 }
 
+// TestListHostedConfigurationVersions_filtersByVersionLabelPrefix pins the
+// wildcard behaviour AWS documents for version_label: "This parameter
+// supports filtering by prefix using a wildcard, for example 'v2*'. If you
+// don't specify an asterisk at the end of the value, only an exact match is
+// returned." (API_ListHostedConfigurationVersions.html).
+func TestListHostedConfigurationVersions_filtersByVersionLabelPrefix(t *testing.T) {
+	// Given: versions labelled v2.1.0, v2.2.0 and v3.0.0.
+	srv := helpers.NewTestServer(t)
+	appID := createApplication(t, srv, "my-app")
+	profID := createProfile(t, srv, appID, "cfg")
+	path := fmt.Sprintf("/applications/%s/configurationprofiles/%s/hostedconfigurationversions", appID, profID)
+	for _, label := range []string{"v2.1.0", "v2.2.0", "v3.0.0"} {
+		resp := acRaw(t, srv, http.MethodPost, path, []byte("x"),
+			map[string]string{"Content-Type": "text/plain", "VersionLabel": label})
+		resp.Body.Close()
+	}
+
+	// When: version_label carries a trailing wildcard.
+	resp := acDo(t, srv, http.MethodGet, path+"?version_label="+url.QueryEscape("v2*"), nil)
+	defer resp.Body.Close()
+
+	// Then: every label with that prefix comes back, and the v3 version is
+	// excluded.
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	var result struct {
+		Items []struct {
+			VersionLabel string `json:"VersionLabel"`
+		} `json:"Items"`
+	}
+	helpers.DecodeJSON(t, resp, &result)
+	got := map[string]bool{}
+	for _, item := range result.Items {
+		got[item.VersionLabel] = true
+	}
+	if len(result.Items) != 2 || !got["v2.1.0"] || !got["v2.2.0"] {
+		t.Errorf("expected only the v2.* labels for a trailing wildcard, got %+v", result.Items)
+	}
+}
+
 func TestDeleteHostedConfigurationVersion_success(t *testing.T) {
 	// Given: a hosted configuration version exists.
 	srv := helpers.NewTestServer(t)
@@ -797,6 +853,23 @@ func TestDeleteHostedConfigurationVersion_success(t *testing.T) {
 	resp := acDo(t, srv, http.MethodGet, path+"/1", nil)
 	defer resp.Body.Close()
 	helpers.AssertStatus(t, resp, http.StatusNotFound)
+}
+
+func TestDeleteHostedConfigurationVersion_unknownVersionIsNotFound(t *testing.T) {
+	// Given: a configuration profile with no hosted versions.
+	srv := helpers.NewTestServer(t)
+	appID := createApplication(t, srv, "my-app")
+	profID := createProfile(t, srv, appID, "cfg")
+
+	// When: a version number that was never created is deleted.
+	resp := acDo(t, srv, http.MethodDelete,
+		fmt.Sprintf("/applications/%s/configurationprofiles/%s/hostedconfigurationversions/1", appID, profID), nil)
+	defer resp.Body.Close()
+
+	// Then: ResourceNotFoundException, matching AWS's documented error for the
+	// operation (API_DeleteHostedConfigurationVersion.html).
+	helpers.AssertStatus(t, resp, http.StatusNotFound)
+	helpers.AssertJSONError(t, resp, "ResourceNotFoundException")
 }
 
 // ─── Tags ─────────────────────────────────────────────────────────────────────
