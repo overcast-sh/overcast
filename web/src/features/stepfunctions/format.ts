@@ -32,6 +32,26 @@ export function historyEventVariant(type: string | undefined): BadgeVariant {
   return "default"
 }
 
+export type EventCategory = "states" | "tasks" | "errors" | "flow"
+
+/**
+ * Sorts a history event type into what a reader filters by: a state moving,
+ * a task call, Map/Parallel control flow, or something going wrong.
+ */
+export function eventCategory(type: string): EventCategory {
+  if (/(Failed|TimedOut|Aborted)$/.test(type)) return "errors"
+  if (/State(Entered|Exited)$/.test(type) || type.startsWith("Execution")) return "states"
+  if (/^(Map|Parallel)/.test(type)) return "flow"
+  return "tasks"
+}
+
+/** "TaskStateEntered" → "Task state entered", so a column of event types reads as words. */
+export function humanizeEventType(type: string | undefined): string {
+  if (!type) return ""
+  const words = type.replace(/([a-z0-9])([A-Z])/g, "$1 $2").split(" ")
+  return words.map((w, i) => (i === 0 ? w : w.toLowerCase())).join(" ")
+}
+
 /** Formats an SDK timestamp for a table cell, or an em dash when absent. */
 export function formatTimestamp(value: Date | undefined): string {
   if (!value) return "—"
@@ -46,18 +66,6 @@ export function prettyJSON(value: string | undefined): string {
   } catch {
     return value
   }
-}
-
-/**
- * Extracts the state name a history event refers to, so the history table can
- * show which state each event belongs to without the caller reaching into
- * every per-type detail field.
- */
-export function historyEventStateName(event: {
-  stateEnteredEventDetails?: { name?: string }
-  stateExitedEventDetails?: { name?: string }
-}): string {
-  return event.stateEnteredEventDetails?.name ?? event.stateExitedEventDetails?.name ?? ""
 }
 
 /**

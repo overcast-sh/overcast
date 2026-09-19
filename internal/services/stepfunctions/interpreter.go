@@ -3,6 +3,7 @@ package stepfunctions
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -15,22 +16,26 @@ import (
 // the RUNNING record is persisted and interprets on a tracked goroutine, as
 // AWS does; only StartSyncExecution and a `states:startExecution.sync` child
 // wait for the terminal state (see executionMode in execution_ops.go). All
-// eight ASL state types are interpreted. Everything Overcast cannot interpret
-// — an unsupported Task resource, `.waitForTaskToken`, distributed Map, the
-// JSONata query language — fails the execution loudly with an AWS-shaped error
-// surfaced through DescribeExecution and GetExecutionHistory. There is no
-// silent pass-through; see docs/plans/full-emulation-priority.md §2.1.
+// eight ASL state types are interpreted, Parallel branches and Map iterations
+// concurrently. Everything Overcast cannot interpret fails the execution
+// loudly with an AWS-shaped error surfaced through DescribeExecution and
+// GetExecutionHistory. There is no silent pass-through; see
+// docs/plans/full-emulation-priority.md §2.1.
 
 // Standard ASL error names.
 const (
 	errAll                    = "States.ALL"
 	errTimeout                = "States.Timeout"
+	errHeartbeatTimeout       = "States.HeartbeatTimeout"
 	errTaskFailed             = "States.TaskFailed"
 	errRuntime                = "States.Runtime"
-	errBranchFailed           = "States.BranchFailed"
 	errNoChoiceMatched        = "States.NoChoiceMatched"
 	errParameterPathFailure   = "States.ParameterPathFailure"
 	errResultPathMatchFailure = "States.ResultPathMatchFailure"
+	errExceedToleratedFailure = "States.ExceedToleratedFailureThreshold"
+	errItemReaderFailed       = "States.ItemReaderFailed"
+	errResultWriterFailed     = "States.ResultWriterFailed"
+	errQueryEvaluationError   = "States.QueryEvaluationError"
 )
 
 // Execution status values, as DescribeExecution reports them.
@@ -72,6 +77,15 @@ type stateError struct {
 	// Task's TimeoutSeconds and a Fail state spelling States.Timeout are both
 	// ordinary failures of a still-healthy execution, exactly as on AWS.
 	budgetExpired bool
+	// unwound marks an error produced because the context was cancelled — a
+	// stop, the budget, or a failed sibling — rather than by the state itself.
+	// Retry and Catch never act on it, and runState records the state's
+	// `<Type>StateAborted` event for it.
+	unwound bool
+	// suspended marks the unwind of a parked, durable execution at shutdown:
+	// no aborted event, no terminal event and no terminal write — its
+	// checkpoint resumes it after the restart (durable.go).
+	suspended bool
 }
 
 func (e *stateError) Error() string { return e.name + ": " + e.cause }
@@ -88,57 +102,97 @@ func unsupportedError(format string, args ...any) *stateError {
 	return &stateError{name: errRuntime, cause: "Overcast does not support " + fmt.Sprintf(format, args...)}
 }
 
-// isJSONPath reports whether a QueryLanguage field names the only query
-// language Overcast evaluates. An absent field inherits JSONPath, which is
-// also ASL's own default.
-func isJSONPath(queryLanguage string) bool {
-	return queryLanguage == "" || strings.EqualFold(queryLanguage, "JSONPath")
-}
-
-// unsupportedStateFields reports the first field on a state that Overcast
-// accepts structurally but cannot evaluate.
-//
-// QueryLanguage is a per-state field as well as a top-level one, so a JSONata
-// state inside a JSONPath state machine is legal ASL that the definition-level
-// check in runBranch never sees. Left unread it was accepted, ignored, and its
-// Output dropped — the execution then answered SUCCEEDED with the state's
-// input, which is exactly the silent pass-through §2.1 forbids and worse than
-// the stub this engine replaced. The same applies to Output on its own and to
-// Assign (variables), whose consumers otherwise fail later with a confusing
-// States.ParameterPathFailure about a path that was never assigned.
-//
-// This is a run-time refusal rather than a CreateStateMachine one on purpose:
-// all three are valid ASL, and validateDefinitionForCreate deliberately admits
-// valid ASL that Overcast cannot interpret so CDK and CloudFormation deploys
-// keep working. It is the same contract top-level JSONata already had.
-func unsupportedStateFields(name string, state *aslState) *stateError {
-	if !isJSONPath(state.QueryLanguage) {
-		return unsupportedError("the %s query language on state %q — only JSONPath states are interpreted", state.QueryLanguage, name)
-	}
-	if len(state.Output) > 0 {
-		return unsupportedError("the JSONata Output field on state %q", name)
-	}
-	if len(state.Assign) > 0 {
-		return unsupportedError("Assign (variables) on state %q", name)
-	}
-	return nil
-}
-
 // interpreter carries everything one execution needs. One is built per
 // execution (and per nested `.sync` child execution); it owns no goroutines,
 // timers or tickers of its own.
+//
+// It is also a frame: fork returns a shallow copy for one Parallel branch or
+// Map iteration that shares the execution-wide fields but carries its own
+// history cursor and Map item. Frames never share mutable state, which is
+// what lets branches and iterations run concurrently.
 type interpreter struct {
 	handler *Handler
 	region  string
 	hist    *historyRecorder
 	// run is the live registration for this execution. It is how an unwind
 	// caused by StopExecution is told apart from the budget running out.
-	run     *executionRun
+	run *executionRun
+	// exec is the execution being interpreted, and sm the state machine it
+	// belongs to.
+	exec *Execution
+	sm   *StateMachine
+	// baseCtx is the part of the context object ($$) that does not change
+	// during the execution. It is never mutated after buildBaseContext.
 	baseCtx map[string]any
 	// depth counts nested `states:startExecution.sync` levels so recursion
 	// terminates with an honest error rather than a stack overflow.
 	depth int
+
+	// cursor is this frame's causal predecessor: the id the next recorded
+	// event links to through previousEventId.
+	cursor *int64
+	// mapItem is $$.Map.Item inside a Map iteration, nil elsewhere.
+	mapItem map[string]any
+	// topLevel is true only for the frame running the definition's own
+	// States, whose redrive point is also recorded on the Execution.
+	topLevel bool
+	// queryLanguage is what this frame's states default to.
+	queryLanguage string
+	// vars is this frame's variable scope.
+	vars *varScope
+	// testState is set when TestState is running a single state.
+	testState *testStateRun
+
+	// Redrive bookkeeping (redrive_checkpoint.go). point is where this frame
+	// stopped without succeeding; container is what the Parallel or Map it
+	// ran last left behind; resume is where a redrive resumes this frame, and
+	// resumeContainer the inside of the Parallel or Map it resumes at.
+	point           *redrivePoint
+	container       *redriveContainer
+	resume          *redrivePoint
+	resumeContainer *redrivePoint
+
+	// Durable parking (durable.go). enteredAt is when the state this frame is
+	// running was entered, retryAttempts/retryCount its Retry position — what
+	// a checkpoint records. parkResume is the park checkpoint a run rehydrated
+	// after a restart resumes inside, until its state is reached; parkResumed
+	// is that checkpoint while the state is dispatched, until the Task or
+	// Wait consumes it.
+	enteredAt     time.Time
+	retryAttempts []int
+	retryCount    int
+	parkResume    *executionCheckpoint
+	parkResumed   *executionCheckpoint
 }
+
+// fork returns a frame for a Parallel branch or Map iteration whose first
+// event links to after.
+func (in *interpreter) fork(after int64) *interpreter {
+	child := *in
+	cursor := after
+	child.cursor = &cursor
+	child.topLevel = false
+	child.parkResume, child.parkResumed = nil, nil
+	child.vars = newVarScope(in.vars)
+	child.point, child.container, child.resume, child.resumeContainer = nil, nil, nil, nil
+	return &child
+}
+
+// record appends an event linked to this frame's previous event and advances
+// the frame's cursor to it.
+func (in *interpreter) record(event HistoryEvent) int64 {
+	return in.recordAt(in.handler.clk.Now(), event)
+}
+
+func (in *interpreter) recordAt(now time.Time, event HistoryEvent) int64 {
+	id := in.hist.addAfter(now, event, *in.cursor)
+	*in.cursor = id
+	return id
+}
+
+// rejoin moves this frame's cursor to the latest event in the history, which
+// is where a Parallel or Map continues once all its children have finished.
+func (in *interpreter) rejoin() { *in.cursor = in.hist.lastID() }
 
 // executionOutcome is the terminal result of one execution.
 type executionOutcome struct {
@@ -146,6 +200,9 @@ type executionOutcome struct {
 	output string
 	err    *stateError
 	events []HistoryEvent
+	// suspended means the execution was parked when Overcast shut down and
+	// nothing terminal is to be written (durable.go).
+	suspended bool
 }
 
 // executionTimeout returns the wall-clock budget for one execution: the
@@ -164,33 +221,61 @@ func (h *Handler) executionTimeout(def *aslBranch) time.Duration {
 	return budget
 }
 
+// newInterpreter builds the top-level frame for one execution.
+func (h *Handler) newInterpreter(sm *StateMachine, exec *Execution, region string, depth int, run *executionRun) *interpreter {
+	cursor := run.hist.lastID()
+	in := &interpreter{
+		handler:  h,
+		region:   region,
+		hist:     run.hist,
+		run:      run,
+		exec:     exec,
+		sm:       sm,
+		depth:    depth,
+		cursor:   &cursor,
+		topLevel: true,
+		vars:     newVarScope(nil),
+	}
+	in.baseCtx = in.buildBaseContext(sm, exec)
+	return in
+}
+
 // runExecution interprets one state machine to completion and returns the
 // terminal status, output and history. The caller persists them.
 func (h *Handler) runExecution(ctx context.Context, sm *StateMachine, exec *Execution, def *aslBranch, region string, depth int, run *executionRun) executionOutcome {
 	// A hard wall-clock bound on the run. It is a runaway guard rather than a
 	// request timeout: StartExecution has already answered by the time this
-	// runs, and only the synchronous callers still hold a request open. It
-	// holds whatever clock is injected. The cancel is deferred so no timer
-	// outlives the execution.
+	// runs, and only the synchronous callers still hold a request open. The
+	// cancel is deferred so no timer outlives the execution.
 	budget := h.executionTimeout(def)
+	if run.parkResume != nil {
+		budget = h.resumedBudget(def, exec)
+	}
 	runCtx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 
-	in := &interpreter{
-		handler: h,
-		region:  region,
-		hist:    run.hist,
-		run:     run,
-		depth:   depth,
+	in := h.newInterpreter(sm, exec, region, depth, run)
+	in.parkResume = run.parkResume
+	in.queryLanguage = def.QueryLanguage
+	if in.queryLanguage == "" {
+		in.queryLanguage = run.queryLanguage
 	}
-	in.baseCtx = in.buildBaseContext(sm, exec)
-
-	input, err := decodeExecutionInput(exec.Input)
+	start, rawInput := def.StartAt, exec.Input
+	if r := run.resume; r != nil {
+		start, rawInput = r.State, r.Input
+		in.vars = restoreVarScope(r.Variables)
+		in.resume = r
+	}
+	input, err := decodeExecutionInput(rawInput)
 	if err != nil {
 		return in.finish(statusFailed, "", newStateError(errRuntime, "%s", err.Error()))
 	}
 
-	output, serr := in.runBranch(runCtx, def, input)
+	output, serr := in.runBranchFrom(runCtx, def, start, input)
+	run.checkpoint = in.point
+	if serr != nil && serr.suspended {
+		return executionOutcome{suspended: true}
+	}
 	if serr != nil {
 		return in.finish(statusForError(serr), "", serr)
 	}
@@ -212,6 +297,9 @@ func executionStartedEvent(sm *StateMachine, exec *Execution) HistoryEvent {
 			Input:        exec.Input,
 			InputDetails: &executionDataDetails{},
 			RoleArn:      sm.RoleArn,
+
+			StateMachineVersionArn: exec.StateMachineVersionArn,
+			StateMachineAliasArn:   exec.StateMachineAliasArn,
 		},
 	}
 }
@@ -232,10 +320,9 @@ func statusForError(serr *stateError) string {
 
 // finish records the terminal history event and returns the outcome.
 func (in *interpreter) finish(status, output string, serr *stateError) executionOutcome {
-	now := in.handler.clk.Now()
 	switch status {
 	case statusSucceeded:
-		in.hist.add(now, HistoryEvent{
+		in.record(HistoryEvent{
 			Type: evtExecutionSucceeded,
 			ExecutionSucceeded: &executionSucceededDetails{
 				Output:        output,
@@ -243,12 +330,12 @@ func (in *interpreter) finish(status, output string, serr *stateError) execution
 			},
 		})
 	case statusTimedOut:
-		in.hist.add(now, HistoryEvent{
+		in.record(HistoryEvent{
 			Type:              evtExecutionTimedOut,
 			ExecutionTimedOut: &errorCauseDetails{Error: serr.name, Cause: serr.cause},
 		})
 	case statusAborted:
-		in.hist.add(now, HistoryEvent{
+		in.record(HistoryEvent{
 			Type:             evtExecutionAborted,
 			ExecutionAborted: &errorCauseDetails{Error: serr.name, Cause: serr.cause},
 		})
@@ -258,7 +345,7 @@ func (in *interpreter) finish(status, output string, serr *stateError) execution
 			details.Error = serr.name
 			details.Cause = serr.cause
 		}
-		in.hist.add(now, HistoryEvent{Type: evtExecutionFailed, ExecutionFailed: details})
+		in.record(HistoryEvent{Type: evtExecutionFailed, ExecutionFailed: details})
 	}
 	return executionOutcome{status: status, output: output, err: serr, events: in.hist.snapshot()}
 }
@@ -270,14 +357,21 @@ func (in *interpreter) buildBaseContext(sm *StateMachine, exec *Execution) map[s
 	if exec.Input != "" {
 		_ = json.Unmarshal([]byte(exec.Input), &parsedInput)
 	}
+	execCtx := map[string]any{
+		"Id":        exec.ExecutionArn,
+		"Name":      exec.Name,
+		"Input":     parsedInput,
+		"RoleArn":   sm.RoleArn,
+		"StartTime": exec.StartDate.UTC().Format(time.RFC3339Nano),
+	}
+	if exec.RedriveCount > 0 {
+		execCtx["RedriveCount"] = float64(exec.RedriveCount)
+		if exec.RedriveDate != nil {
+			execCtx["RedriveTime"] = exec.RedriveDate.UTC().Format(time.RFC3339Nano)
+		}
+	}
 	return map[string]any{
-		"Execution": map[string]any{
-			"Id":        exec.ExecutionArn,
-			"Name":      exec.Name,
-			"Input":     parsedInput,
-			"RoleArn":   sm.RoleArn,
-			"StartTime": exec.StartDate.UTC().Format(time.RFC3339Nano),
-		},
+		"Execution": execCtx,
 		"StateMachine": map[string]any{
 			"Id":   sm.ARN,
 			"Name": sm.Name,
@@ -286,8 +380,8 @@ func (in *interpreter) buildBaseContext(sm *StateMachine, exec *Execution) map[s
 }
 
 // stateContext returns the context object for one state evaluation.
-func (in *interpreter) stateContext(name string, entered time.Time, retryCount int, mapItem map[string]any) map[string]any {
-	ctxObj := make(map[string]any, len(in.baseCtx)+2)
+func (in *interpreter) stateContext(name string, entered time.Time, retryCount int) map[string]any {
+	ctxObj := make(map[string]any, len(in.baseCtx)+3)
 	for key, value := range in.baseCtx {
 		ctxObj[key] = value
 	}
@@ -296,26 +390,27 @@ func (in *interpreter) stateContext(name string, entered time.Time, retryCount i
 		"EnteredTime": entered.UTC().Format(time.RFC3339Nano),
 		"RetryCount":  float64(retryCount),
 	}
-	if mapItem != nil {
-		ctxObj["Map"] = map[string]any{"Item": mapItem}
+	if in.mapItem != nil {
+		ctxObj["Map"] = map[string]any{"Item": in.mapItem}
+	}
+	if vars := in.vars.all(); len(vars) > 0 {
+		ctxObj[variablesContextKey] = vars
 	}
 	return ctxObj
 }
 
 // ─── Branch execution ─────────────────────────────────────────────────────────
 
-// runBranch interprets one state machine body from its StartAt state until a
-// state ends the branch. It is used for the top-level definition, for every
-// Parallel branch and for every Map iteration.
-func (in *interpreter) runBranch(ctx context.Context, branch *aslBranch, input any) (any, *stateError) {
-	if !isJSONPath(branch.QueryLanguage) {
-		return nil, unsupportedError("the %s query language — only JSONPath state machines are interpreted", branch.QueryLanguage)
-	}
-	current := branch.StartAt
+// runBranchFrom interprets one state machine body from the named state until
+// a state ends the branch. It is used for the top-level definition, for every
+// Parallel branch and for every Map iteration — normally from its StartAt,
+// and on a redrive from the state it stopped in.
+func (in *interpreter) runBranchFrom(ctx context.Context, branch *aslBranch, start string, input any) (any, *stateError) {
+	current := start
 	data := input
 	for {
 		if ctx.Err() != nil {
-			return nil, in.unwindReason("")
+			return nil, in.unwindReason(ctx, "")
 		}
 		if in.hist.full() {
 			return nil, newStateError(errRuntime, "the execution exceeded the maximum of %d history events", maxHistoryEvents)
@@ -336,14 +431,30 @@ func (in *interpreter) runBranch(ctx context.Context, branch *aslBranch, input a
 	}
 }
 
+// errSiblingFailed is the cancellation cause a Parallel or Map puts on its
+// children's context when one of them fails, so the others unwind.
+var errSiblingFailed = errors.New("a sibling Parallel branch or Map iteration failed")
+
 // unwindReason explains why the interpreter is unwinding after its context was
-// cancelled: StopExecution asked for it, or the runaway guard fired. state
-// names the state it was in, when known.
-func (in *interpreter) unwindReason(state string) *stateError {
+// cancelled: StopExecution asked for it, a sibling Parallel branch or Map
+// iteration failed, or the runaway guard fired. state names the state it was
+// in, when known. The result is always marked unwound.
+func (in *interpreter) unwindReason(ctx context.Context, state string) *stateError {
 	if in.run != nil {
 		if stopped, errName, cause := in.run.abortReason(); stopped {
-			return &stateError{name: errName, cause: cause, aborted: true}
+			return &stateError{name: errName, cause: cause, aborted: true, unwound: true}
 		}
+		// A shutdown: a parked durable execution is suspended to resume
+		// after the restart; anything else ends now, loudly (durable.go).
+		if in.handler.shuttingDown() {
+			if in.run.isParked() {
+				return errSuspended()
+			}
+			return errInterruptedByShutdown(state)
+		}
+	}
+	if ctx != nil && errors.Is(context.Cause(ctx), errSiblingFailed) {
+		return &stateError{name: errRuntime, cause: errSiblingFailed.Error(), unwound: true}
 	}
 	where := ""
 	if state != "" {
@@ -353,85 +464,97 @@ func (in *interpreter) unwindReason(state string) *stateError {
 		"the execution exceeded Overcast's execution budget%s — raise OVERCAST_STEPFUNCTIONS_EXECUTION_TIMEOUT (currently %s) if the workflow legitimately takes this long",
 		where, in.handler.executionTimeout(nil))
 	budget.budgetExpired = true
+	budget.unwound = true
 	return budget
 }
 
 // runState interprets one state and reports the next transition. done means
 // the branch ends here (End: true, or a Succeed state).
 func (in *interpreter) runState(ctx context.Context, name string, state *aslState, raw any) (any, string, bool, *stateError) {
-	if serr := unsupportedStateFields(name, state); serr != nil {
-		return nil, "", false, serr
+	entered, retryCount := in.handler.clk.Now(), 0
+	in.beginState(name)
+	// A run rehydrated after a restart re-enters the state it was parked in
+	// without recording it as entered a second time.
+	resumed := in.takeResumeFor(name)
+	if resumed != nil {
+		entered, retryCount = resumed.EnteredTime, resumed.RetryCount
 	}
-	entered := in.handler.clk.Now()
-	ctxObj := in.stateContext(name, entered, 0, in.mapItemFromContext())
-
-	effective, serr := applyInputPath(state, raw, ctxObj)
+	in.enteredAt = entered
+	f, serr := in.newFlow(name, state, raw, in.stateContext(name, entered, retryCount))
 	if serr != nil {
+		in.noteFailure(name, raw, serr)
 		return nil, "", false, serr
 	}
 
-	enteredJSON, encErr := encodeJSON(effective)
-	if encErr != nil {
-		return nil, "", false, newStateError(errRuntime, "%s", encErr.Error())
-	}
-	in.hist.add(entered, HistoryEvent{
-		Type: stateEnteredEventType(state.Type),
-		StateEntered: &stateEnteredDetails{
-			Name:         name,
-			Input:        enteredJSON,
-			InputDetails: &executionDataDetails{},
-		},
-	})
-
-	switch state.Type {
-	case stateTypeFail:
-		return nil, "", false, in.runFail(state, effective, ctxObj)
-	case stateTypeSucceed:
-		output, serr := applyOutputPath(state, effective, ctxObj)
-		if serr != nil {
-			return nil, "", false, serr
+	if resumed == nil {
+		enteredJSON, encErr := encodeJSON(f.effective)
+		if encErr != nil {
+			return nil, "", false, newStateError(errRuntime, "%s", encErr.Error())
 		}
-		in.recordExit(name, state.Type, output)
-		return output, "", true, nil
+		in.recordAt(entered, HistoryEvent{
+			Type: stateEnteredEventType(state.Type),
+			StateEntered: &stateEnteredDetails{
+				Name:         name,
+				Input:        enteredJSON,
+				InputDetails: &executionDataDetails{},
+			},
+		})
+	}
+
+	in.parkResumed = resumed
+	output, next, done, serr := in.dispatchState(ctx, f)
+	in.parkResumed = nil
+	if serr != nil && serr.suspended {
+		return nil, "", false, serr
+	}
+	if serr != nil && serr.unwound {
+		if aborted := stateAbortedEventType(state.Type); aborted != "" {
+			in.record(HistoryEvent{Type: aborted})
+		}
+	}
+	if serr != nil {
+		in.noteFailure(name, raw, serr)
+	}
+	return output, next, done, serr
+}
+
+// dispatchState runs the type-specific part of a state once it is entered.
+func (in *interpreter) dispatchState(ctx context.Context, f *flow) (any, string, bool, *stateError) {
+	switch f.state.Type {
+	case stateTypeFail:
+		return nil, "", false, in.runFail(f)
+	case stateTypeSucceed:
+		return in.runSucceed(f)
 	case stateTypeChoice:
-		return in.runChoice(name, state, effective, ctxObj)
+		return in.runChoice(f)
 	case stateTypeWait:
-		return in.runWait(ctx, name, state, effective, ctxObj)
+		return in.runWait(ctx, f)
 	case stateTypePass:
-		return in.runPass(name, state, raw, effective, ctxObj)
+		return in.runPass(f)
 	case stateTypeTask, stateTypeParallel, stateTypeMap:
-		return in.runRetryable(ctx, name, state, raw, effective)
+		return in.runRetryable(ctx, f)
 	}
 	// parseDefinition rejects unknown state types, so this is unreachable in
 	// practice; keeping it loud rather than falling through is the point.
-	return nil, "", false, unsupportedError("state type %q", state.Type)
+	return nil, "", false, unsupportedError("state type %q", f.state.Type)
 }
 
 // recordExit emits the `<Type>StateExited` event for a state.
-func (in *interpreter) recordExit(name, stateType string, output any) {
+func (in *interpreter) recordExit(name, stateType string, output any, assigned map[string]any) {
 	encoded, err := encodeJSON(output)
 	if err != nil {
 		encoded = ""
 	}
-	in.hist.add(in.handler.clk.Now(), HistoryEvent{
-		Type: stateExitedEventType(stateType),
-		StateExited: &stateExitedDetails{
-			Name:          name,
-			Output:        encoded,
-			OutputDetails: &executionDataDetails{},
-		},
-	})
-}
-
-// mapItemFromContext returns the Map.Item entry already installed on the base
-// context, so nested states inside a Map iteration keep seeing it.
-func (in *interpreter) mapItemFromContext() map[string]any {
-	mapCtx, ok := in.baseCtx["Map"].(map[string]any)
-	if !ok {
-		return nil
+	details := &stateExitedDetails{
+		Name:          name,
+		Output:        encoded,
+		OutputDetails: &executionDataDetails{},
 	}
-	item, _ := mapCtx["Item"].(map[string]any)
-	return item
+	if vars := assignedVariables(assigned); vars != nil {
+		details.AssignedVariables = vars
+		details.AssignedVariablesDetails = &executionDataDetails{}
+	}
+	in.record(HistoryEvent{Type: stateExitedEventType(stateType), StateExited: details})
 }
 
 // ─── Input / output processing ────────────────────────────────────────────────
@@ -468,21 +591,9 @@ func applyOutputPath(state *aslState, value any, ctxObj map[string]any) (any, *s
 	return selected, nil
 }
 
-// applyResult runs the ResultSelector → ResultPath → OutputPath pipeline that
-// turns a state's result into its output.
-func (in *interpreter) applyResult(state *aslState, raw, result any, ctxObj map[string]any) (any, *stateError) {
-	if len(state.ResultSelector) > 0 {
-		selected, err := renderPayloadTemplate(state.ResultSelector, result, ctxObj)
-		if err != nil {
-			return nil, newStateError(errParameterPathFailure, "%s", err.Error())
-		}
-		result = selected
-	}
-	combined, serr := applyResultPath(state.ResultPath, raw, result)
-	if serr != nil {
-		return nil, serr
-	}
-	return applyOutputPath(state, combined, ctxObj)
+// templateStateError turns a payload-template failure into its ASL error.
+func templateStateError(err error) *stateError {
+	return newStateError(templateErrorName(err), "%s", err.Error())
 }
 
 // applyResultPath places a result into the raw state input. An absent

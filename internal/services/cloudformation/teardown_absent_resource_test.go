@@ -164,6 +164,8 @@ func TestResourceDelete_absentResourceIsASuccessfulTeardown(t *testing.T) {
 		{"AWS::KMS::Alias", "alias/absent", gone(400, `{"__type":"NotFoundException","message":"Alias does not exist"}`)},
 		{"AWS::StepFunctions::StateMachine", "arn:aws:states:us-east-1:000000000000:stateMachine:absent",
 			gone(400, `{"__type":"StateMachineDoesNotExist","message":"State machine does not exist"}`)},
+		{"AWS::StepFunctions::StateMachineAlias", "arn:aws:states:us-east-1:000000000000:stateMachine:absent:PROD",
+			gone(400, `{"__type":"ResourceNotFound","message":"Resource not found: 'arn:aws:states:us-east-1:000000000000:stateMachine:absent:PROD'"}`)},
 
 		// Lambda and S3.
 		{"AWS::Lambda::Function", "absent-fn",

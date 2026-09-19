@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/overcast-sh/overcast/internal/events"
 	"github.com/overcast-sh/overcast/internal/middleware"
@@ -15,10 +18,12 @@ import (
 )
 
 const (
-	storeNS    = "stepfunctions"
-	smPrefix   = "sm:"
-	execPrefix = "exec:"
-	histPrefix = "hist:"
+	storeNS     = "stepfunctions"
+	smPrefix    = "sm:"
+	execPrefix  = "exec:"
+	histPrefix  = "hist:"
+	verPrefix   = "ver:"
+	aliasPrefix = "alias:"
 )
 
 // StateMachine represents a Step Functions state machine.
@@ -43,6 +48,52 @@ type StateMachine struct {
 	// unimplemented-behavior config blocks get elsewhere in the emulator.
 	LoggingConfiguration map[string]any `json:"LoggingConfiguration,omitempty"`
 	TracingConfiguration map[string]any `json:"TracingConfiguration,omitempty"`
+	// RevisionID identifies the current revision of the definition, role,
+	// logging and tracing configuration. Empty for a state machine that has
+	// never been updated — AWS reports no revisionId for the initial
+	// revision, and PublishStateMachineVersion matches it as "INITIAL".
+	RevisionID string `json:"RevisionId,omitempty"`
+	// LastVersion is the highest version number ever published. Version
+	// numbers are never reused, even after DeleteStateMachineVersion, so the
+	// counter lives here rather than being derived from the versions left.
+	LastVersion int `json:"LastVersion,omitempty"`
+}
+
+// StateMachineVersion is an immutable snapshot of a state machine revision,
+// published by PublishStateMachineVersion (or CreateStateMachine /
+// UpdateStateMachine with publish=true). Its ARN is the state machine ARN
+// qualified with the version number.
+type StateMachineVersion struct {
+	StateMachineName     string         `json:"StateMachineName"`
+	ARN                  string         `json:"ARN"`
+	Version              int            `json:"Version"`
+	Definition           string         `json:"Definition"`
+	RoleArn              string         `json:"RoleArn"`
+	Type                 string         `json:"Type"`
+	Description          string         `json:"Description,omitempty"`
+	RevisionID           string         `json:"RevisionId,omitempty"`
+	LoggingConfiguration map[string]any `json:"LoggingConfiguration,omitempty"`
+	TracingConfiguration map[string]any `json:"TracingConfiguration,omitempty"`
+	CreatedAt            time.Time      `json:"CreatedAt"`
+}
+
+// StateMachineAlias routes executions to one or two versions of a state
+// machine by weight. Its ARN is the state machine ARN qualified with the
+// alias name.
+type StateMachineAlias struct {
+	StateMachineName     string             `json:"StateMachineName"`
+	Name                 string             `json:"Name"`
+	ARN                  string             `json:"ARN"`
+	Description          string             `json:"Description,omitempty"`
+	RoutingConfiguration []aliasRouteRecord `json:"RoutingConfiguration"`
+	CreatedAt            time.Time          `json:"CreatedAt"`
+	UpdatedAt            time.Time          `json:"UpdatedAt"`
+}
+
+// aliasRouteRecord is one persisted RoutingConfigurationListItem.
+type aliasRouteRecord struct {
+	StateMachineVersionArn string `json:"StateMachineVersionArn"`
+	Weight                 int    `json:"Weight"`
 }
 
 // Execution represents a Step Functions execution.
@@ -60,6 +111,32 @@ type Execution struct {
 	// failures Overcast raises for ASL features it does not interpret.
 	Error string `json:"Error,omitempty"`
 	Cause string `json:"Cause,omitempty"`
+
+	// Redrive bookkeeping. RedriveState/RedriveInput are the top-level state
+	// the last run failed in and the raw input it was entered with; they are
+	// what RedriveExecution resumes from.
+	RedriveCount int        `json:"RedriveCount,omitempty"`
+	RedriveDate  *time.Time `json:"RedriveDate,omitempty"`
+	RedriveState string     `json:"RedriveState,omitempty"`
+	RedriveInput string     `json:"RedriveInput,omitempty"`
+	// RedriveVariables is the variables in scope when that state was entered.
+	RedriveVariables string `json:"RedriveVariables,omitempty"`
+	// MapRunArn is set on a child execution a distributed Map started.
+	MapRunArn string `json:"MapRunArn,omitempty"`
+	// ExecutionType is set on such a child: its ItemProcessor's
+	// ProcessorConfig.ExecutionType. A redrive of the map run redrives a
+	// STANDARD child and starts an EXPRESS one again from the top.
+	ExecutionType string `json:"ExecutionType,omitempty"`
+	// StateMachineVersionArn and StateMachineAliasArn record the qualified
+	// ARN an execution was started through: the version that ran (directly,
+	// or the one an alias routed to) and the alias, if any. Both are empty
+	// for an execution started against the unqualified state machine ARN.
+	StateMachineVersionArn string `json:"StateMachineVersionArn,omitempty"`
+	StateMachineAliasArn   string `json:"StateMachineAliasArn,omitempty"`
+	// RunnerID identifies the process running a RUNNING execution; PutExecution
+	// stamps it. A RUNNING record from another process that nothing here is
+	// running was cut off by a crash (Handler.reapIfOrphaned, durable.go).
+	RunnerID string `json:"RunnerID,omitempty"`
 }
 
 // Store wraps state.Store with Step Functions-specific helpers.
@@ -72,10 +149,13 @@ type Store struct {
 	// itself exists. Nil in most unit tests, which makes
 	// notifyExecutionStatusChange a no-op — see its doc comment.
 	eventBridge events.BusPublisher
+
+	// runnerID is this process's identity on the RUNNING records it writes.
+	runnerID string
 }
 
 func newStore(s state.Store, defaultRegion string) *Store {
-	return &Store{s: s, defaultRegion: defaultRegion}
+	return &Store{s: s, defaultRegion: defaultRegion, runnerID: uuid.NewString()}
 }
 
 // region extracts the per-request region from context, falling back to the default.
@@ -146,6 +226,10 @@ func (st *Store) PutExecution(ctx context.Context, exec *Execution) error {
 	// just means prev is nil; it is not fatal to the put itself.
 	prev, _ := st.GetExecution(ctx, exec.ExecutionArn)
 
+	exec.RunnerID = ""
+	if exec.Status == statusRunning {
+		exec.RunnerID = st.runnerID
+	}
 	raw, err := json.Marshal(exec)
 	if err != nil {
 		return fmt.Errorf("stepfunctions: marshal exec %q: %w", exec.ExecutionArn, err)
@@ -180,7 +264,13 @@ func (st *Store) GetExecution(ctx context.Context, arn string) (*Execution, erro
 // A record that cannot be decoded is skipped rather than failing the whole
 // list — one corrupt row must not take out the page.
 func (st *Store) ListExecutions(ctx context.Context, smARN string) ([]*Execution, error) {
-	prefix := execPrefix + executionARNPrefix(smARN)
+	return st.ListExecutionsWithPrefix(ctx, executionARNPrefix(smARN))
+}
+
+// ListExecutionsWithPrefix returns every execution whose ARN starts with
+// arnPrefix, newest first.
+func (st *Store) ListExecutionsWithPrefix(ctx context.Context, arnPrefix string) ([]*Execution, error) {
+	prefix := execPrefix + arnPrefix
 	pairs, err := st.s.Scan(ctx, storeNS, serviceutil.RegionKey(st.region(ctx), prefix))
 	if err != nil {
 		return nil, fmt.Errorf("stepfunctions: scan executions: %w", err)
@@ -222,6 +312,122 @@ func (st *Store) GetHistory(ctx context.Context, execARN string) ([]HistoryEvent
 		return nil, fmt.Errorf("stepfunctions: unmarshal history %q: %w", execARN, err)
 	}
 	return events, nil
+}
+
+// versionKey and aliasKey scope a state machine's versions and aliases under
+// its name, so one prefix scan lists them and DeleteStateMachine can sweep
+// them. State machine names cannot contain ':', so the prefixes of two
+// different state machines never overlap.
+func versionKey(smName string, version int) string {
+	return verPrefix + smName + ":" + strconv.Itoa(version)
+}
+
+func aliasKey(smName, aliasName string) string {
+	return aliasPrefix + smName + ":" + aliasName
+}
+
+// PutVersion saves a state machine version.
+func (st *Store) PutVersion(ctx context.Context, v *StateMachineVersion) error {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Errorf("stepfunctions: marshal version %q: %w", v.ARN, err)
+	}
+	return st.s.Set(ctx, storeNS, serviceutil.RegionKey(st.region(ctx), versionKey(v.StateMachineName, v.Version)), string(raw))
+}
+
+// GetVersion retrieves one version. Returns nil, nil if not found.
+func (st *Store) GetVersion(ctx context.Context, smName string, version int) (*StateMachineVersion, error) {
+	raw, found, err := st.s.Get(ctx, storeNS, serviceutil.RegionKey(st.region(ctx), versionKey(smName, version)))
+	if err != nil {
+		return nil, fmt.Errorf("stepfunctions: get version %s:%d: %w", smName, version, err)
+	}
+	if !found {
+		return nil, nil
+	}
+	var v StateMachineVersion
+	if err := json.Unmarshal([]byte(raw), &v); err != nil {
+		return nil, fmt.Errorf("stepfunctions: unmarshal version %s:%d: %w", smName, version, err)
+	}
+	return &v, nil
+}
+
+// DeleteVersion removes one version.
+func (st *Store) DeleteVersion(ctx context.Context, smName string, version int) error {
+	return st.s.Delete(ctx, storeNS, serviceutil.RegionKey(st.region(ctx), versionKey(smName, version)))
+}
+
+// ListVersions returns every version of a state machine, newest first. A
+// record that cannot be decoded is skipped rather than failing the list.
+func (st *Store) ListVersions(ctx context.Context, smName string) ([]*StateMachineVersion, error) {
+	pairs, err := st.s.Scan(ctx, storeNS, serviceutil.RegionKey(st.region(ctx), verPrefix+smName+":"))
+	if err != nil {
+		return nil, fmt.Errorf("stepfunctions: scan versions of %q: %w", smName, err)
+	}
+	versions := make([]*StateMachineVersion, 0, len(pairs))
+	for _, p := range pairs {
+		var v StateMachineVersion
+		if json.Unmarshal([]byte(p.Value), &v) != nil {
+			continue
+		}
+		versions = append(versions, &v)
+	}
+	sort.Slice(versions, func(i, j int) bool { return versions[i].Version > versions[j].Version })
+	return versions, nil
+}
+
+// PutAlias saves a state machine alias.
+func (st *Store) PutAlias(ctx context.Context, a *StateMachineAlias) error {
+	raw, err := json.Marshal(a)
+	if err != nil {
+		return fmt.Errorf("stepfunctions: marshal alias %q: %w", a.ARN, err)
+	}
+	return st.s.Set(ctx, storeNS, serviceutil.RegionKey(st.region(ctx), aliasKey(a.StateMachineName, a.Name)), string(raw))
+}
+
+// GetAlias retrieves one alias. Returns nil, nil if not found.
+func (st *Store) GetAlias(ctx context.Context, smName, aliasName string) (*StateMachineAlias, error) {
+	raw, found, err := st.s.Get(ctx, storeNS, serviceutil.RegionKey(st.region(ctx), aliasKey(smName, aliasName)))
+	if err != nil {
+		return nil, fmt.Errorf("stepfunctions: get alias %s:%s: %w", smName, aliasName, err)
+	}
+	if !found {
+		return nil, nil
+	}
+	var a StateMachineAlias
+	if err := json.Unmarshal([]byte(raw), &a); err != nil {
+		return nil, fmt.Errorf("stepfunctions: unmarshal alias %s:%s: %w", smName, aliasName, err)
+	}
+	return &a, nil
+}
+
+// DeleteAlias removes one alias.
+func (st *Store) DeleteAlias(ctx context.Context, smName, aliasName string) error {
+	return st.s.Delete(ctx, storeNS, serviceutil.RegionKey(st.region(ctx), aliasKey(smName, aliasName)))
+}
+
+// ListAliases returns every alias of a state machine, most recently created
+// first (ties broken by name, descending, so the order is stable). A record
+// that cannot be decoded is skipped rather than failing the list.
+func (st *Store) ListAliases(ctx context.Context, smName string) ([]*StateMachineAlias, error) {
+	pairs, err := st.s.Scan(ctx, storeNS, serviceutil.RegionKey(st.region(ctx), aliasPrefix+smName+":"))
+	if err != nil {
+		return nil, fmt.Errorf("stepfunctions: scan aliases of %q: %w", smName, err)
+	}
+	aliases := make([]*StateMachineAlias, 0, len(pairs))
+	for _, p := range pairs {
+		var a StateMachineAlias
+		if json.Unmarshal([]byte(p.Value), &a) != nil {
+			continue
+		}
+		aliases = append(aliases, &a)
+	}
+	sort.Slice(aliases, func(i, j int) bool {
+		if !aliases[i].CreatedAt.Equal(aliases[j].CreatedAt) {
+			return aliases[i].CreatedAt.After(aliases[j].CreatedAt)
+		}
+		return aliases[i].Name > aliases[j].Name
+	})
+	return aliases, nil
 }
 
 // executionARNPrefix turns a state machine ARN into the prefix every one of

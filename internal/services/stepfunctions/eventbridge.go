@@ -45,14 +45,13 @@ package stepfunctions
 //	   }
 //	}
 //
-// Overcast does not implement execution redrive or state machine
-// versions/aliases (no RedriveExecution, PublishStateMachineVersion or
-// CreateStateMachineAlias operation), so stateMachineVersionArn,
-// stateMachineAliasArn and the redrive* fields are omitted rather than
-// fabricated — the same trade-off ecsTaskStateChangeDetail makes for the
-// ECS fields Overcast has no truthful value for. AWS's own docs tell
-// consumers de-serializing this event to tolerate unknown or absent
-// properties, which is exactly what an omission is from the other side.
+// stateMachineVersionArn and stateMachineAliasArn are present when the
+// execution was started through a version or alias ARN, and omitted
+// otherwise. redriveCount is always present; redriveStatus, redriveDate and
+// redriveStatusReason are omitted — DescribeExecution reports them — rather
+// than computed here from a state machine lookup on every status change. AWS's
+// own docs tell consumers de-serializing this event to tolerate unknown or
+// absent properties, which is exactly what an omission is from the other side.
 //
 // version, id, account, time and region are filled in by the EventBridge
 // service itself (internal/services/eventbridge/delivery.go putEventsEnvelope) —
@@ -98,6 +97,10 @@ type sfnExecutionStatusChangeDetail struct {
 	Status          string                   `json:"status"`
 	Error           *string                  `json:"error"`
 	Cause           *string                  `json:"cause"`
+	// Present only for an execution started through a version or alias ARN.
+	StateMachineVersionArn string `json:"stateMachineVersionArn,omitempty"`
+	StateMachineAliasArn   string `json:"stateMachineAliasArn,omitempty"`
+	RedriveCount           int    `json:"redriveCount"`
 }
 
 // InitEventBridge wires the EventBridge bus publisher so Step Functions
@@ -124,6 +127,10 @@ func buildExecutionStatusChangeEntry(exec *Execution) (events.BusEntry, bool) {
 		StartDate:       exec.StartDate.UnixMilli(),
 		StateMachineArn: exec.StateMachineArn,
 		Status:          exec.Status,
+
+		StateMachineVersionArn: exec.StateMachineVersionArn,
+		StateMachineAliasArn:   exec.StateMachineAliasArn,
+		RedriveCount:           exec.RedriveCount,
 	}
 	if exec.StopDate != nil {
 		stopMillis := exec.StopDate.UnixMilli()

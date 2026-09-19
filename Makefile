@@ -12,6 +12,9 @@ GO        := go
 # output and gitignored; the committed dist/.gitkeep beside them is what keeps
 # the embed pattern resolving in a bare checkout. See AGENTS.md.
 LAMBDA_INIT_DIR := internal/services/lambda/initbin/dist
+# Where the aws-sdk-shapes target packs the aws-sdk shape tables, and where
+# internal/awsshapes embeds them from. Build output, not committed.
+AWS_SDK_SHAPES_DIR := internal/awsshapes/dist
 AWS_MODELS_REVISION ?= $(shell sed -n 's/^revision=//p' models/aws/VERSION)
 GOFLAGS   := -trimpath
 VERSION   := $(shell cat VERSION)
@@ -44,7 +47,7 @@ IMAGE_TAG     ?= $(shell sh scripts/image-tag.sh)
 CONSOLE_IMAGE ?= overcast:$(IMAGE_TAG)
 SLIM_IMAGE    ?= overcast-slim:$(IMAGE_TAG)
 
-.PHONY: help setup build build-web build-slim build-cross lambda-init \
+.PHONY: help setup build build-web build-slim build-cross lambda-init aws-sdk-shapes \
         build-linux-amd64 build-linux-arm64 \
         build-darwin-amd64 build-darwin-arm64 \
         build-windows-amd64 \
@@ -80,8 +83,16 @@ lambda-init:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build $(GOFLAGS) -ldflags "-s -w" -o $(LAMBDA_INIT_DIR)/lambda-init-linux-amd64 ./cmd/lambda-init
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GO) build $(GOFLAGS) -ldflags "-s -w" -o $(LAMBDA_INIT_DIR)/lambda-init-linux-arm64 ./cmd/lambda-init
 
+## aws-sdk-shapes: pack the committed aws-sdk shape tables into the dist/ internal/awsshapes embeds
+# The tables are committed as readable text (internal/awsshapes/tables) so a
+# model refresh reviews as a diff; the binary carries them compressed (~0.5 MB
+# instead of ~4 MB). The build targets depend on this rather than leaving it
+# as a step to remember; it is under a second of pure Go.
+aws-sdk-shapes:
+	$(GO) run ./cmd/awsshapes-pack
+
 ## build: compile the overcast binary for the current platform (includes embedded web UI)
-build: lambda-init
+build: lambda-init aws-sdk-shapes
 	@mkdir -p $(BUILD_DIR)
 	$(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY) ./cmd/overcast
 
@@ -91,61 +102,61 @@ build-web:
 
 ## build-slim: compile the slim binary (no web UI, no SQLite) for the current platform
 # -tags slim does NOT drop the Lambda init: slim images run Lambda.
-build-slim: lambda-init
+build-slim: lambda-init aws-sdk-shapes
 	@mkdir -p $(BUILD_DIR)
 	$(GO) build $(GOFLAGS) -tags slim,nosqlite -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/overcastd ./cmd/overcast
 
 ## build-cross: compile release binaries for all supported platforms
-build-cross: lambda-init build-linux-amd64 build-linux-arm64 build-darwin-amd64 build-darwin-arm64 build-windows-amd64 \
+build-cross: lambda-init aws-sdk-shapes build-linux-amd64 build-linux-arm64 build-darwin-amd64 build-darwin-arm64 build-windows-amd64 \
              build-slim-linux-amd64 build-slim-linux-arm64 build-slim-darwin-amd64 build-slim-darwin-arm64 build-slim-windows-amd64
 
 ## build-linux-amd64: compile overcast for Linux x86-64
-build-linux-amd64: lambda-init
+build-linux-amd64: lambda-init aws-sdk-shapes
 	@mkdir -p $(BUILD_DIR)
 	GOOS=linux  GOARCH=amd64 $(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY)-linux-amd64        ./cmd/overcast
 
 ## build-linux-arm64: compile overcast for Linux ARM64 (Raspberry Pi, AWS Graviton, etc.)
-build-linux-arm64: lambda-init
+build-linux-arm64: lambda-init aws-sdk-shapes
 	@mkdir -p $(BUILD_DIR)
 	GOOS=linux  GOARCH=arm64 $(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY)-linux-arm64        ./cmd/overcast
 
 ## build-darwin-amd64: compile overcast for macOS Intel
-build-darwin-amd64: lambda-init
+build-darwin-amd64: lambda-init aws-sdk-shapes
 	@mkdir -p $(BUILD_DIR)
 	GOOS=darwin GOARCH=amd64 $(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY)-darwin-amd64       ./cmd/overcast
 
 ## build-darwin-arm64: compile overcast for macOS Apple Silicon
-build-darwin-arm64: lambda-init
+build-darwin-arm64: lambda-init aws-sdk-shapes
 	@mkdir -p $(BUILD_DIR)
 	GOOS=darwin GOARCH=arm64 $(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY)-darwin-arm64       ./cmd/overcast
 
 ## build-windows-amd64: compile overcast for Windows x86-64 (console .exe)
-build-windows-amd64: lambda-init
+build-windows-amd64: lambda-init aws-sdk-shapes
 	@mkdir -p $(BUILD_DIR)
 	GOOS=windows GOARCH=amd64 $(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY)-windows-amd64.exe ./cmd/overcast
 
 ## build-slim-linux-amd64: compile slim overcastd for Linux x86-64
-build-slim-linux-amd64: lambda-init
+build-slim-linux-amd64: lambda-init aws-sdk-shapes
 	@mkdir -p $(BUILD_DIR)
 	GOOS=linux  GOARCH=amd64 $(GO) build $(GOFLAGS) -tags slim,nosqlite -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/overcastd-linux-amd64        ./cmd/overcast
 
 ## build-slim-linux-arm64: compile slim overcastd for Linux ARM64
-build-slim-linux-arm64: lambda-init
+build-slim-linux-arm64: lambda-init aws-sdk-shapes
 	@mkdir -p $(BUILD_DIR)
 	GOOS=linux  GOARCH=arm64 $(GO) build $(GOFLAGS) -tags slim,nosqlite -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/overcastd-linux-arm64        ./cmd/overcast
 
 ## build-slim-darwin-amd64: compile slim overcastd for macOS Intel
-build-slim-darwin-amd64: lambda-init
+build-slim-darwin-amd64: lambda-init aws-sdk-shapes
 	@mkdir -p $(BUILD_DIR)
 	GOOS=darwin GOARCH=amd64 $(GO) build $(GOFLAGS) -tags slim,nosqlite -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/overcastd-darwin-amd64       ./cmd/overcast
 
 ## build-slim-darwin-arm64: compile slim overcastd for macOS Apple Silicon
-build-slim-darwin-arm64: lambda-init
+build-slim-darwin-arm64: lambda-init aws-sdk-shapes
 	@mkdir -p $(BUILD_DIR)
 	GOOS=darwin GOARCH=arm64 $(GO) build $(GOFLAGS) -tags slim,nosqlite -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/overcastd-darwin-arm64       ./cmd/overcast
 
 ## build-slim-windows-amd64: compile slim overcastd for Windows x86-64
-build-slim-windows-amd64: lambda-init
+build-slim-windows-amd64: lambda-init aws-sdk-shapes
 	@mkdir -p $(BUILD_DIR)
 	GOOS=windows GOARCH=amd64 $(GO) build $(GOFLAGS) -tags slim,nosqlite -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/overcastd-windows-amd64.exe ./cmd/overcast
 
@@ -261,13 +272,13 @@ check-ts:
 generate-ddb-reserved-words:
 	$(GO) run ./scripts/dynamodb-reserved-words.go
 
-## generate-aws-operations: regenerate the AWS operation manifest and pruned shape snapshot from a pinned local api-models-aws checkout
+## generate-aws-operations: regenerate the AWS operation manifest, pruned shape snapshot and runtime SDK shape tables from a pinned local api-models-aws checkout
 ## Set AWS_MODELS_DIR to its models directory. The checked-out commit must match models/aws/VERSION.
 generate-aws-operations:
 	@test -n "$(AWS_MODELS_DIR)" || (echo "ERROR: set AWS_MODELS_DIR to api-models-aws/models" && exit 1)
 	@test -n "$(AWS_MODELS_REVISION)" || (echo "ERROR: set AWS_MODELS_REVISION to the api-models-aws commit" && exit 1)
 	$(GO) run ./cmd/awsmodelgen -models "$(AWS_MODELS_DIR)" -output internal/awsapi/manifest.gen.go -source-revision "$(AWS_MODELS_REVISION)" \
-		-shapes-out models/aws/shapes -shapes-services models/aws/shapes-services.txt
+		-shapes-out models/aws/shapes -shapes-services models/aws/shapes-services.txt -sdk-shapes-out internal/awsshapes -sdk-shapes-services models/aws/sdk-shapes-services.txt
 
 ## aws-models-check-ci: CI-only subset of aws-models-check
 ## `./cmd/awsmodelgen ./internal/awsapi ./internal/protocol/codec ./tests/integration/router` are inside `./...` and
@@ -285,10 +296,10 @@ aws-models-check-ci:
 ## This is the full, developer-facing target. CI's aws-operation-coverage job runs aws-models-check-ci instead (see
 ## above) because the first line below duplicates packages that job's sibling coverage job already tests.
 aws-models-check: aws-models-check-ci
-	$(GO) test -count=1 ./cmd/awsmodelgen ./internal/awsapi ./internal/protocol/codec ./tests/integration/router
+	$(GO) test -count=1 ./cmd/awsmodelgen ./internal/awsapi ./internal/awsshapes ./internal/protocol/codec ./tests/integration/router
 	@if [ -n "$(AWS_MODELS_DIR)" ]; then \
 		$(GO) run ./cmd/awsmodelgen -models "$(AWS_MODELS_DIR)" -output internal/awsapi/manifest.gen.go -source-revision "$(AWS_MODELS_REVISION)" \
-			-shapes-out models/aws/shapes -shapes-services models/aws/shapes-services.txt -check; \
+			-shapes-out models/aws/shapes -shapes-services models/aws/shapes-services.txt -sdk-shapes-out internal/awsshapes -sdk-shapes-services models/aws/sdk-shapes-services.txt -check; \
 	fi
 
 ## generate-compat-model: regenerate the compat scenario IR, gaps.json and registry.generated.json from compat/model/recipes/
@@ -363,6 +374,7 @@ clean:
 	$(GO) clean ./...
 	@rm -rf $(BUILD_DIR) coverage.out coverage.html
 	@rm -f $(LAMBDA_INIT_DIR)/lambda-init-linux-amd64 $(LAMBDA_INIT_DIR)/lambda-init-linux-arm64
+	@rm -f $(AWS_SDK_SHAPES_DIR)/*.gz
 
 # ---- Compat dashboard -------------------------------------------------------
 # Every target manages its own throwaway Overcast instance on free ports —

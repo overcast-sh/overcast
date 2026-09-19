@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { Link } from "@tanstack/react-router"
+import { Link, useNavigate } from "@tanstack/react-router"
 import { Shuffle } from "lucide-react"
 import {
   sfnStateMachinesQueryOptions,
@@ -18,8 +18,9 @@ import {
 import { ResourceTable, type ResourceTableSort } from "@/components/ui/resource-table"
 import { Badge } from "@/components/ui/badge"
 import { ServiceDocsButton, useDocsFromHash } from "@/features/docs/service-docs-modal"
-import { CreateResourceDialog } from "@/components/create-resource-dialog"
 import { ArnText } from "@/components/ui/arn-link"
+import { formatTimestamp } from "@/features/stepfunctions/format"
+import { DefinitionEditorDialog } from "./definition-editor-dialog"
 
 interface StepFunctionsPageProps {
   /** Current filter text — owned by the route's `q` search param, see `useFilterSearchParam`. */
@@ -37,6 +38,7 @@ export function StepFunctionsPage({
   onSortChange,
 }: StepFunctionsPageProps) {
   const [showCreate, setShowCreate] = useState(false)
+  const navigate = useNavigate()
   const [docsOpen, openDocs, closeDocs] = useDocsFromHash()
 
   const {
@@ -54,6 +56,20 @@ export function StepFunctionsPage({
     invalidateKeys: [sfnKeys.stateMachines()],
     successTitle: "State machine deleted",
     onSuccess: () => setDeleteTarget(undefined),
+  })
+
+  const createMut = useResourceMutation({
+    options: createStateMachineMutationOptions(),
+    invalidateKeys: [sfnKeys.stateMachines()],
+    successTitle: "State machine created",
+    onSuccess: (_, vars) => {
+      setShowCreate(false)
+      void navigate({
+        to: "/stepfunctions/$name",
+        params: { name: vars.name },
+        search: { tab: "diagram" },
+      })
+    },
   })
 
   const filtered = useMemo(
@@ -116,7 +132,18 @@ export function StepFunctionsPage({
               </Link>
             ),
           },
-          { header: "Type", cell: (sm) => <Badge variant="default">{sm.type}</Badge> },
+          {
+            header: "Type",
+            sortValue: (sm) => sm.type,
+            cell: (sm) => <Badge variant="default">{sm.type}</Badge>,
+          },
+          {
+            id: "created",
+            header: "Created",
+            cellClassName: "text-fg-muted",
+            sortValue: (sm) => sm.creationDate,
+            cell: (sm) => formatTimestamp(sm.creationDate),
+          },
           {
             header: "ARN",
             cellClassName: "text-fg-muted",
@@ -141,15 +168,20 @@ export function StepFunctionsPage({
         }}
       />
 
-      <CreateResourceDialog
+      <DefinitionEditorDialog
         open={showCreate}
         onOpenChange={setShowCreate}
-        title="Create State Machine"
-        label="Name"
-        placeholder="my-state-machine"
-        mutationOptions={createStateMachineMutationOptions}
-        invalidateKeys={[sfnKeys.stateMachines()]}
-        successTitle="State machine created"
+        mode="create"
+        pending={createMut.isPending}
+        onSubmit={(result) => {
+          if (result.mode === "create") {
+            createMut.mutate({
+              name: result.name,
+              definition: result.definition,
+              type: result.type,
+            })
+          }
+        }}
       />
     </ResourceListPage>
   )

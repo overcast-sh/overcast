@@ -101,7 +101,7 @@ func TestStartExecution_catchStatesTaskFailedDoesNotCatchStatesRuntime(t *testin
 	  "States": {
 	    "T": {
 	      "Type": "Task",
-	      "Resource": "arn:aws:states:::aws-sdk:s3:listBuckets",
+	      "Resource": "arn:aws:states:::codebuild:startBuild",
 	      "Catch": [{"ErrorEquals": ["States.TaskFailed"], "Next": "Handled"}],
 	      "End": true
 	    },
@@ -121,93 +121,6 @@ func TestStartExecution_catchStatesTaskFailedDoesNotCatchStatesRuntime(t *testin
 	if got.Error != "States.Runtime" {
 		t.Errorf("error = %q, want States.Runtime", got.Error)
 	}
-}
-
-// ─── Per-state JSONata and variables fail loudly ──────────────────────────────
-
-func TestStartExecution_perStateJSONataFailsLoudly(t *testing.T) {
-	cases := []struct {
-		name       string
-		definition string
-	}{
-		{
-			// The state machine has no top-level QueryLanguage, so the
-			// definition-level check never sees this — the state is JSONata on
-			// its own. Left unread, its Output was dropped and the execution
-			// answered SUCCEEDED with {} instead of 2.
-			name:       "state only",
-			definition: `{"StartAt":"P","States":{"P":{"Type":"Pass","QueryLanguage":"JSONata","Output":"{% 1+1 %}","End":true}}}`,
-		},
-		{
-			// Mixed: a JSONPath state machine with one JSONata state, which is
-			// legal ASL and the shape a partial migration produces.
-			name: "mixed with a JSONPath machine",
-			definition: `{"QueryLanguage":"JSONPath","StartAt":"First","States":{
-			  "First": {"Type":"Pass","Result":{"n":1},"Next":"P"},
-			  "P":     {"Type":"Pass","QueryLanguage":"JSONata","Output":"{% $states.input.n + 1 %}","End":true}
-			}}`,
-		},
-		{
-			// Output with no QueryLanguage at all: still a JSONata-only field
-			// Overcast cannot evaluate.
-			name:       "Output without QueryLanguage",
-			definition: `{"StartAt":"P","States":{"P":{"Type":"Pass","Output":"{% 1+1 %}","End":true}}}`,
-		},
-		{
-			// Assign (variables) is valid in both query languages and was
-			// accepted and discarded, leaving the consumer to fail later with
-			// a confusing States.ParameterPathFailure about $total.
-			name:       "Assign",
-			definition: `{"StartAt":"P","States":{"P":{"Type":"Pass","Assign":{"total":1},"End":true}}}`,
-		},
-		{
-			// The same fields on a Catch that actually fires.
-			name: "Assign on a Catch",
-			definition: `{"StartAt":"T","States":{
-			  "T": {"Type":"Task","Resource":"arn:aws:states:::lambda:invoke",
-			        "Parameters":{"FunctionName":"does-not-exist"},
-			        "Catch":[{"ErrorEquals":["States.TaskFailed"],"Assign":{"failed":true},"Next":"Handled"}],
-			        "End":true},
-			  "Handled": {"Type":"Pass","Result":"caught","End":true}
-			}}`,
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Given: a definition using a per-state feature Overcast cannot evaluate
-			srv := helpers.NewTestServer(t)
-			smARN := createSM(t, srv, "jsonata-sm", tc.definition)
-
-			// When: we run it
-			execARN := startExec(t, srv, smARN, `{}`)
-
-			// Then: it fails loudly rather than dropping the field and
-			// answering SUCCEEDED with the wrong data
-			got := waitForTerminal(t, srv, execARN)
-			if got.Status != "FAILED" {
-				t.Fatalf("status = %q (output=%s), want FAILED — a field Overcast cannot evaluate must never be silently dropped",
-					got.Status, got.Output)
-			}
-			if got.Error != "States.Runtime" {
-				t.Errorf("error = %q, want States.Runtime", got.Error)
-			}
-			if got.Cause == "" {
-				t.Error("cause is empty; the failure must name the feature")
-			}
-		})
-	}
-}
-
-func TestCreateStateMachine_perStateJSONataStillProvisions(t *testing.T) {
-	// Given: a JSONata state, which is valid ASL
-	srv := helpers.NewTestServer(t)
-
-	// When/Then: CreateStateMachine accepts it, the same way top-level JSONata
-	// is accepted — CDK and CloudFormation deploys must keep working, and the
-	// refusal belongs at run time where AWS's own error model can carry it.
-	createSM(t, srv, "jsonata-provisions-sm",
-		`{"StartAt":"P","States":{"P":{"Type":"Pass","QueryLanguage":"JSONata","Output":"{% 1+1 %}","End":true}}}`)
 }
 
 // ─── Task TimeoutSeconds is enforced, not just recorded ───────────────────────

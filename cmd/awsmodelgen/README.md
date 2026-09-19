@@ -160,6 +160,30 @@ acceptance gate made mechanical: raising it is a reviewer's decision about how
 much of the fleet budget to spend, never an automatic consequence of adding a
 service. §4.6 carries the measurement and the fleet projection it rests on.
 
+## The runtime SDK shape tables
+
+`-sdk-shapes-out internal/awsshapes -sdk-shapes-services models/aws/sdk-shapes-services.txt`
+cuts a third artifact from the same pruner: one line-per-shape text table per
+listed service under `internal/awsshapes/tables/`, plus an `index.gen.go` naming
+them, which `internal/awsshapes` decodes lazily, the first time a Step Functions
+`aws-sdk:` integration calls that service. It keeps only what a wire translator reads —
+shape kinds, member names and targets, and the HTTP-binding and serialisation
+traits (`sdkShapeTraitAllowlist` in [sdkshapes.go](./sdkshapes.go)) — and drops
+enum values, documentation and constraints. Unlike the snapshot above it *is*
+carried by the binary; that is the point of it, and why it is so narrow. The
+committed text is not what the binary embeds, though: `make aws-sdk-shapes`
+([cmd/awsshapes-pack](../awsshapes-pack)) gzips it into the untracked
+`internal/awsshapes/dist/`, so a refresh still reviews as a readable diff while
+each binary pays ~0.5 MB rather than ~4 MB.
+
+The list is every modeled service that resolves to a service Overcast
+implements; `internal/awsshapes`' `-tags dev` coverage test fails when a
+service gains capabilities without an entry. `sdk-shapes-sha256` in
+`models/aws/VERSION` digests `index.gen.go` and the text tables with the
+`shapes-sha256` definition, `-check` compares them byte-for-byte, and
+`internal/awsshapes/awsshapes_test.go` holds them to two size budgets: the
+committed text, and the packed bytes every binary carries.
+
 ## Validation
 
 Normal pull requests run the no-network checks against the committed corpus,

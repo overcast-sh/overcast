@@ -52,6 +52,74 @@ func (h *Handler) typedOps() map[string]op.Operation {
 		"ListTagsForResource": op.NewTyped[listTagsForResourceRequest, listTagsForResourceTypedResponse](
 			"ListTagsForResource", h.listTagsForResourceTyped,
 		),
+		"CreateActivity": op.NewTyped[createActivityRequest, createActivityResponse](
+			"CreateActivity", h.createActivityTyped,
+		),
+		"DescribeActivity": op.NewTyped[activityArnRequest, describeActivityResponse](
+			"DescribeActivity", h.describeActivityTyped,
+		),
+		"DeleteActivity": op.NewTyped[activityArnRequest, struct{}](
+			"DeleteActivity", h.deleteActivityTyped,
+		),
+		"ListActivities": op.NewTyped[listActivitiesRequest, listActivitiesResponse](
+			"ListActivities", h.listActivitiesTyped,
+		),
+		"GetActivityTask": op.NewTyped[getActivityTaskRequest, getActivityTaskResponse](
+			"GetActivityTask", h.getActivityTaskTyped,
+		),
+		"SendTaskSuccess": op.NewTyped[sendTaskSuccessRequest, struct{}](
+			"SendTaskSuccess", h.sendTaskSuccessTyped,
+		),
+		"SendTaskFailure": op.NewTyped[sendTaskFailureRequest, struct{}](
+			"SendTaskFailure", h.sendTaskFailureTyped,
+		),
+		"SendTaskHeartbeat": op.NewTyped[sendTaskHeartbeatRequest, struct{}](
+			"SendTaskHeartbeat", h.sendTaskHeartbeatTyped,
+		),
+		"ListMapRuns": op.NewTyped[listMapRunsRequest, listMapRunsResponse](
+			"ListMapRuns", h.listMapRunsTyped,
+		),
+		"DescribeMapRun": op.NewTyped[mapRunArnRequest, describeMapRunResponse](
+			"DescribeMapRun", h.describeMapRunTyped,
+		),
+		"UpdateMapRun": op.NewTyped[updateMapRunRequest, struct{}](
+			"UpdateMapRun", h.updateMapRunTyped,
+		),
+		"TestState": op.NewTyped[testStateRequest, testStateResponse](
+			"TestState", h.testStateTyped,
+		),
+		"RedriveExecution": op.NewTyped[redriveExecutionRequest, redriveExecutionResponse](
+			"RedriveExecution", h.redriveExecutionTyped,
+		),
+		"ValidateStateMachineDefinition": op.NewTyped[validateStateMachineDefinitionRequest, validateStateMachineDefinitionResponse](
+			"ValidateStateMachineDefinition", h.validateStateMachineDefinitionTyped,
+		),
+		// Versions (versions.go)
+		"PublishStateMachineVersion": op.NewTyped[publishStateMachineVersionRequest, publishStateMachineVersionResponse](
+			"PublishStateMachineVersion", h.publishStateMachineVersionTyped,
+		),
+		"ListStateMachineVersions": op.NewTyped[listStateMachineVersionsRequest, listStateMachineVersionsResponse](
+			"ListStateMachineVersions", h.listStateMachineVersionsTyped,
+		),
+		"DeleteStateMachineVersion": op.NewTyped[deleteStateMachineVersionRequest, struct{}](
+			"DeleteStateMachineVersion", h.deleteStateMachineVersionTyped,
+		),
+		// Aliases (aliases.go)
+		"CreateStateMachineAlias": op.NewTyped[createStateMachineAliasRequest, createStateMachineAliasResponse](
+			"CreateStateMachineAlias", h.createStateMachineAliasTyped,
+		),
+		"DescribeStateMachineAlias": op.NewTyped[describeStateMachineAliasRequest, describeStateMachineAliasResponse](
+			"DescribeStateMachineAlias", h.describeStateMachineAliasTyped,
+		),
+		"UpdateStateMachineAlias": op.NewTyped[updateStateMachineAliasRequest, updateStateMachineAliasResponse](
+			"UpdateStateMachineAlias", h.updateStateMachineAliasTyped,
+		),
+		"DeleteStateMachineAlias": op.NewTyped[deleteStateMachineAliasRequest, struct{}](
+			"DeleteStateMachineAlias", h.deleteStateMachineAliasTyped,
+		),
+		"ListStateMachineAliases": op.NewTyped[listStateMachineAliasesRequest, listStateMachineAliasesResponse](
+			"ListStateMachineAliases", h.listStateMachineAliasesTyped,
+		),
 	}
 }
 

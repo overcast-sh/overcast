@@ -1213,6 +1213,7 @@ var stackTagPropagationResourceTypes = map[string]bool{
 	"AWS::DynamoDB::Table":             true,
 	"AWS::SSM::Parameter":              true,
 	"AWS::StepFunctions::StateMachine": true,
+	"AWS::StepFunctions::Activity":     true,
 	// Gained Tags support in #1308/#1310; stack-tag propagation added
 	// alongside so there is no parallel, resource-tags-only mechanism (#1310).
 	"AWS::CloudTrail::Trail":    true,
@@ -2741,7 +2742,10 @@ var resourceHandlers = map[string]resourceHandler{
 	"AWS::EC2::EIP":                         &ec2EIPHandler{},
 	"AWS::EC2::LaunchTemplate":              &ec2LaunchTemplateHandler{},
 	// Step Functions
-	"AWS::StepFunctions::StateMachine": &sfnStateMachineHandler{},
+	"AWS::StepFunctions::StateMachine":        &sfnStateMachineHandler{},
+	"AWS::StepFunctions::StateMachineVersion": &sfnStateMachineVersionHandler{},
+	"AWS::StepFunctions::StateMachineAlias":   &sfnStateMachineAliasHandler{},
+	"AWS::StepFunctions::Activity":            &sfnActivityHandler{},
 	// EventBridge
 	"AWS::Events::Rule":     &eventsRuleHandler{},
 	"AWS::Events::EventBus": &eventsEventBusHandler{},

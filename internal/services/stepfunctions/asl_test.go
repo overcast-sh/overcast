@@ -126,9 +126,9 @@ func TestSelectPath(t *testing.T) {
 		{"context object", "$$.Execution.Name", `"run-1"`, false},
 		{"missing field", "$.nope", "", true},
 		{"index out of range", "$.a.b[9]", "", true},
-		{"wildcard rejected", "$.a.b[*]", "", true},
-		{"descendant rejected", "$..b", "", true},
-		{"filter rejected", "$.a.b[?(@.x)]", "", true},
+		{"wildcard", "$.a.b[*]", `[10,20]`, false},
+		{"descendant", "$..b", `[[10,20]]`, false},
+		{"filter", "$.a.b[?(@.x)]", `[]`, false},
 		{"no root", "a.b", "", true},
 	}
 
@@ -195,7 +195,8 @@ func TestRenderPayloadTemplate(t *testing.T) {
 		{"States.JsonToString", `{"s.$":"States.JsonToString($.nested)"}`, `{"s":"{\"v\":true}"}`, false},
 		{"States.StringToJson", `{"o.$":"States.StringToJson('{\"k\":1}')"}`, `{"o":{"k":1}}`, false},
 		{"States.ArrayLength", `{"n.$":"States.ArrayLength(States.Array($.name))"}`, `{"n":1}`, false},
-		{"unsupported intrinsic", `{"u.$":"States.Hash($.name, 'MD5')"}`, "", true},
+		{"States.Hash", `{"u.$":"States.Hash($.name, 'MD5')"}`, `{"u":"8c8d357b5e872bbacd45197626bd5759"}`, false},
+		{"unknown intrinsic", `{"u.$":"States.NoSuchFunction($.name)"}`, "", true},
 		{"missing path", `{"x.$":"$.nope"}`, "", true},
 	}
 
@@ -411,68 +412,34 @@ func TestMatchCatcher_statesTaskFailedCatchesAServiceError(t *testing.T) {
 	}
 }
 
-// ─── Per-state fields Overcast cannot evaluate ────────────────────────────────
-
-func TestUnsupportedStateFields_refusesJSONataAndVariables(t *testing.T) {
-	cases := []struct {
-		name  string
-		state string
-		want  bool
-	}{
-		{name: "plain JSONPath Pass", state: `{"Type": "Pass", "End": true}`, want: false},
-		{name: "explicit JSONPath", state: `{"Type": "Pass", "QueryLanguage": "JSONPath", "End": true}`, want: false},
-		{name: "per-state JSONata", state: `{"Type": "Pass", "QueryLanguage": "JSONata", "Output": "{% 1+1 %}", "End": true}`, want: true},
-		{name: "per-state JSONata without Output", state: `{"Type": "Pass", "QueryLanguage": "JSONata", "End": true}`, want: true},
-		{name: "Output alone", state: `{"Type": "Pass", "Output": "{% 1+1 %}", "End": true}`, want: true},
-		{name: "Assign", state: `{"Type": "Pass", "Assign": {"total": 1}, "End": true}`, want: true},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Given: one state as written in a definition
-			var state aslState
-			if err := json.Unmarshal([]byte(tc.state), &state); err != nil {
-				t.Fatalf("unmarshal state: %v", err)
-			}
-
-			// When: the interpreter checks what it can evaluate
-			serr := unsupportedStateFields("S", &state)
-
-			// Then: anything it cannot evaluate is a loud States.Runtime, never
-			// a field quietly dropped
-			if tc.want != (serr != nil) {
-				t.Fatalf("unsupportedStateFields = %v, want refusal = %v", serr, tc.want)
-			}
-			if serr != nil && serr.name != errRuntime {
-				t.Errorf("error name = %q, want %s", serr.name, errRuntime)
-			}
-		})
-	}
-}
-
-func TestTaskTimeout_resolvesSecondsAndPath(t *testing.T) {
+func TestPositiveSeconds_resolvesSecondsAndPath(t *testing.T) {
 	input := map[string]any{"budget": float64(7)}
+	timeout := func(state aslState) (*int64, *stateError) {
+		f := &flow{state: &state, raw: input, effective: input}
+		return f.positiveSeconds(state.TimeoutSeconds, state.TimeoutSecondsPath, "TimeoutSeconds")
+	}
 
 	// Given: no timeout declared — AWS leaves only the execution's own
-	got, serr := taskTimeout(&aslState{}, input, nil)
+	got, serr := timeout(aslState{})
 	if serr != nil || got != nil {
-		t.Fatalf("taskTimeout(no fields) = %v, %v; want nil, nil", got, serr)
+		t.Fatalf("no fields = %v, %v; want nil, nil", got, serr)
 	}
 
 	// Given: a literal TimeoutSeconds
-	got, serr = taskTimeout(&aslState{TimeoutSeconds: 3}, input, nil)
+	three := aslNumber{Set: true, Value: 3}
+	got, serr = timeout(aslState{TimeoutSeconds: three})
 	if serr != nil || got == nil || *got != 3 {
-		t.Fatalf("taskTimeout(TimeoutSeconds: 3) = %v, %v", got, serr)
+		t.Fatalf("TimeoutSeconds: 3 = %v, %v", got, serr)
 	}
 
 	// Given: a TimeoutSecondsPath, which takes precedence
-	got, serr = taskTimeout(&aslState{TimeoutSeconds: 3, TimeoutSecondsPath: "$.budget"}, input, nil)
+	got, serr = timeout(aslState{TimeoutSeconds: three, TimeoutSecondsPath: "$.budget"})
 	if serr != nil || got == nil || *got != 7 {
-		t.Fatalf("taskTimeout(TimeoutSecondsPath) = %v, %v", got, serr)
+		t.Fatalf("TimeoutSecondsPath = %v, %v", got, serr)
 	}
 
 	// Given: a path that does not resolve to a positive number
-	if _, serr = taskTimeout(&aslState{TimeoutSecondsPath: "$.missing"}, input, nil); serr == nil {
+	if _, serr = timeout(aslState{TimeoutSecondsPath: "$.missing"}); serr == nil {
 		t.Fatal("an unresolvable TimeoutSecondsPath should fail the state, not be ignored")
 	}
 }
@@ -534,8 +501,8 @@ func TestParseTaskResource(t *testing.T) {
 		{name: "dynamodb", resource: "arn:aws:states:::dynamodb:putItem", wantService: "dynamodb", wantAction: "putItem"},
 		{name: "nested sync", resource: "arn:aws:states:::states:startExecution.sync", wantService: "states", wantAction: "startExecution", wantPattern: "sync"},
 		{name: "nested sync 2", resource: "arn:aws:states:::states:startExecution.sync:2", wantService: "states", wantAction: "startExecution", wantPattern: "sync:2"},
-		{name: "aws-sdk integration", resource: "arn:aws:states:::aws-sdk:s3:getObject", wantErr: true},
-		{name: "activity", resource: "arn:aws:states:us-east-1:000000000000:activity:my-activity", wantErr: true},
+		{name: "aws-sdk integration", resource: "arn:aws:states:::aws-sdk:s3:getObject", wantService: "aws-sdk:s3", wantAction: "getObject"},
+		{name: "activity", resource: "arn:aws:states:us-east-1:000000000000:activity:my-activity", wantService: "activity"},
 		{name: "not an ARN", resource: "hello", wantErr: true},
 		{name: "unrelated service", resource: "arn:aws:ecs:us-east-1:000000000000:task-definition/x", wantErr: true},
 	}

@@ -285,8 +285,8 @@ func TestStartExecution_dynamoDBUnsupportedActionFailsLoudly(t *testing.T) {
 	  "States": {
 	    "Del": {
 	      "Type": "Task",
-	      "Resource": "arn:aws:states:::dynamodb:deleteItem",
-	      "Parameters": {"TableName": "t", "Key": {}},
+	      "Resource": "arn:aws:states:::dynamodb:query",
+	      "Parameters": {"TableName": "t"},
 	      "Catch": [{"ErrorEquals": ["States.ALL"], "Next": "Swallowed"}],
 	      "End": true
 	    },
@@ -380,32 +380,19 @@ func TestStartExecution_unsupportedAslFeaturesFailLoudly(t *testing.T) {
 		definition string
 	}{
 		{
-			name:       "JSONata query language",
-			definition: `{"QueryLanguage":"JSONata","StartAt":"P","States":{"P":{"Type":"Pass","End":true}}}`,
+			name: "Map ItemReader over an S3 inventory manifest",
+			definition: `{"StartAt":"M","States":{"M":{"Type":"Map","ItemReader":{"Resource":"arn:aws:states:::s3:getObject",` +
+				`"ReaderConfig":{"InputType":"MANIFEST"},"Parameters":{"Bucket":"b","Key":"k"}},` +
+				`"ItemProcessor":{"ProcessorConfig":{"Mode":"DISTRIBUTED"},"StartAt":"I","States":{"I":{"Type":"Pass","End":true}}},"End":true}}}`,
 		},
 		{
-			name: "distributed Map",
-			definition: `{"StartAt":"M","States":{"M":{"Type":"Map","ItemProcessor":{"ProcessorConfig":{"Mode":"DISTRIBUTED"},` +
-				`"StartAt":"I","States":{"I":{"Type":"Pass","End":true}}},"End":true}}}`,
-		},
-		{
-			name: "Map ItemReader",
-			definition: `{"StartAt":"M","States":{"M":{"Type":"Map","ItemReader":{"Resource":"arn:aws:states:::s3:listObjectsV2"},` +
-				`"ItemProcessor":{"StartAt":"I","States":{"I":{"Type":"Pass","End":true}}},"End":true}}}`,
-		},
-		{
-			name: "AWS SDK service integration",
-			definition: `{"StartAt":"T","States":{"T":{"Type":"Task","Resource":"arn:aws:states:::aws-sdk:s3:listBuckets",` +
+			name: "AWS SDK integration for a service Overcast does not implement",
+			definition: `{"StartAt":"T","States":{"T":{"Type":"Task","Resource":"arn:aws:states:::aws-sdk:codebuild:listProjects",` +
 				`"End":true}}}`,
 		},
 		{
-			name: "Activity task",
-			definition: `{"StartAt":"T","States":{"T":{"Type":"Task",` +
-				`"Resource":"arn:aws:states:us-east-1:000000000000:activity:my-activity","End":true}}}`,
-		},
-		{
-			name: "unsupported intrinsic",
-			definition: `{"StartAt":"P","States":{"P":{"Type":"Pass","Parameters":{"h.$":"States.Hash($.x, 'MD5')"},` +
+			name: "unknown intrinsic",
+			definition: `{"StartAt":"P","States":{"P":{"Type":"Pass","Parameters":{"h.$":"States.NoSuchFunction($.x)"},` +
 				`"End":true}}}`,
 		},
 	}

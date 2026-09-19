@@ -17,7 +17,9 @@ import (
 //
 // Every integration is dispatched through Overcast's own router, so a Task
 // state exercises exactly the same handler an SDK call would — no second,
-// divergent code path. What is not in the table below fails the execution with
+// divergent code path. The optimized integrations are below, AWS SDK
+// integrations in sdk_integration.go, activities and .waitForTaskToken in
+// callbacks.go. What none of them covers fails the execution with
 // States.Runtime naming the resource, which is neither retriable nor catchable
 // (see errorMatches): a workflow can never silently skip a step Overcast
 // cannot run.
@@ -35,7 +37,12 @@ type taskIntegration struct {
 	// functionName is set for a Task whose Resource is a Lambda function ARN
 	// rather than an optimized `arn:aws:states:::lambda:invoke` integration.
 	functionName string
+	// activityArn is set for a Task whose Resource is an activity ARN.
+	activityArn string
 }
+
+// patternWaitForTaskToken is the callback service-integration pattern.
+const patternWaitForTaskToken = "waitForTaskToken"
 
 // direct reports whether the Resource named a Lambda function ARN directly,
 // which AWS records with LambdaFunction* history events rather than Task*.
@@ -66,7 +73,7 @@ func parseTaskResource(resource string) (taskIntegration, *stateError) {
 		// arn:aws:states:::<service>:<action>[.<pattern>]
 		if parts[3] != "" || parts[4] != "" {
 			if parts[5] == "activity" {
-				return taskIntegration{}, unsupportedError("Activity tasks (%q) — they need GetActivityTask/SendTaskSuccess, which Overcast does not register", resource)
+				return taskIntegration{service: "activity", activityArn: trimmed}, nil
 			}
 			return taskIntegration{}, unsupportedError("Task Resource %q", resource)
 		}
@@ -76,7 +83,12 @@ func parseTaskResource(resource string) (taskIntegration, *stateError) {
 		service := parts[5]
 		action := parts[6]
 		if service == "aws-sdk" {
-			return taskIntegration{}, unsupportedError("AWS SDK service integrations (%q) — only the optimized lambda/sqs/sns/dynamodb/states integrations are interpreted", resource)
+			// arn:aws:states:::aws-sdk:<service>:<action>[.waitForTaskToken]
+			if len(parts) < 8 {
+				return taskIntegration{}, newStateError(errRuntime, "Task Resource %q names no aws-sdk action", resource)
+			}
+			service = "aws-sdk:" + parts[6]
+			action = parts[7]
 		}
 		pattern := ""
 		if dot := strings.Index(action, "."); dot >= 0 {
@@ -84,7 +96,7 @@ func parseTaskResource(resource string) (taskIntegration, *stateError) {
 			action = action[:dot]
 		}
 		// `.sync:2` arrives as a trailing ARN segment because of the colon.
-		if len(parts) > 7 && pattern != "" {
+		if len(parts) > 7 && pattern != "" && !strings.HasPrefix(service, "aws-sdk:") {
 			pattern = pattern + ":" + strings.Join(parts[7:], ":")
 		}
 		return taskIntegration{service: service, action: action, pattern: pattern}, nil
@@ -93,34 +105,50 @@ func parseTaskResource(resource string) (taskIntegration, *stateError) {
 }
 
 // runTask executes one attempt of a Task state.
-func (in *interpreter) runTask(ctx context.Context, name string, state *aslState, effective any, ctxObj map[string]any) (any, *stateError) {
+func (in *interpreter) runTask(ctx context.Context, f *flow) (any, *stateError) {
+	name, state := f.name, f.state
 	integration, serr := parseTaskResource(state.Resource)
 	if serr != nil {
 		return nil, serr
 	}
-	if integration.pattern == "waitForTaskToken" {
-		return nil, unsupportedError(
-			"the .waitForTaskToken service-integration pattern — it needs SendTaskSuccess/SendTaskFailure/SendTaskHeartbeat, which Overcast does not register (state %q)", name)
+	// A Task resumed after a restart continues waiting on the token it was
+	// parked on; it is never dispatched a second time.
+	if cp := in.takeResumed(parkCallback, parkActivity); cp != nil {
+		return in.resumeParkedTask(ctx, name, integration, cp)
+	}
+	if integration.activityArn != "" {
+		return in.runActivity(ctx, f, integration.activityArn)
 	}
 
-	payload := effective
-	if len(state.Parameters) > 0 {
-		rendered, err := renderPayloadTemplate(state.Parameters, effective, ctxObj)
-		if err != nil {
-			return nil, newStateError(errParameterPathFailure, "%s", err.Error())
-		}
-		payload = rendered
+	// A callback task issues its token before its arguments are evaluated,
+	// so $$.Task.Token (JSONata: $states.context.Task.Token) resolves in them.
+	var callback *pendingTask
+	if integration.pattern == patternWaitForTaskToken {
+		callback = in.handler.tasks.register("", "")
+		defer in.handler.tasks.release(callback)
+		f = f.withContext(withTaskToken(f.ctxObj, callback.token))
+	}
+
+	payload, serr := f.arguments()
+	if serr != nil {
+		return nil, serr
 	}
 	payloadJSON, encErr := encodeJSON(payload)
 	if encErr != nil {
 		return nil, newStateError(errRuntime, "%s", encErr.Error())
 	}
 
-	timeout, serr := taskTimeout(state, effective, ctxObj)
+	timeout, serr := f.positiveSeconds(state.TimeoutSeconds, state.TimeoutSecondsPath, "TimeoutSeconds")
 	if serr != nil {
 		return nil, serr
 	}
-	in.recordTaskScheduled(integration, state.Resource, payloadJSON, timeout)
+	var heartbeat *int64
+	if callback != nil {
+		if heartbeat, serr = f.positiveSeconds(state.HeartbeatSeconds, state.HeartbeatSecondsPath, "HeartbeatSeconds"); serr != nil {
+			return nil, serr
+		}
+	}
+	in.recordTaskScheduled(integration, state.Resource, payloadJSON, timeout, heartbeat)
 	in.recordTaskStarted(integration)
 
 	// The Task's own budget, on top of the execution's. Deriving a context is
@@ -136,14 +164,74 @@ func (in *interpreter) runTask(ctx context.Context, name string, state *aslState
 		defer cancel()
 	}
 
-	result, serr := in.dispatchTask(taskCtx, integration, payload)
+	var result any
+	if callback != nil {
+		// The call itself is the request-response form of the integration;
+		// its answer is TaskSubmitted, and the Task's result is whatever a
+		// worker later reports with the token.
+		submit := integration
+		submit.pattern = ""
+		var submitted any
+		if submitted, serr = in.dispatchTask(taskCtx, submit, payload); serr == nil {
+			in.recordTaskSubmitted(integration, submitted)
+			now := in.handler.clk.Now()
+			park := in.park(ctx, f, &executionCheckpoint{
+				Kind:              parkCallback,
+				Token:             callback.token,
+				HeartbeatSeconds:  heartbeat,
+				HeartbeatDeadline: deadlineAfter(now, heartbeat),
+				TimeoutSeconds:    timeout,
+				TimeoutDeadline:   deadlineAfter(now, timeout),
+			})
+			result, serr = in.awaitCallback(taskCtx, callback, heartbeat, park)
+			in.unpark(ctx, park, serr != nil && ctx.Err() != nil)
+		}
+	} else if mock := in.taskMock(); mock != nil {
+		result, serr = mockedResult(mock)
+	} else {
+		result, serr = in.dispatchTask(taskCtx, integration, payload)
+	}
+	return in.finishTask(ctx, taskCtx, name, integration, timeout, result, serr)
+}
+
+// resumeParkedTask continues a Task that was waiting on its token when
+// Overcast last shut down (durable.go). The token was registered again during
+// rehydration; its heartbeat and TimeoutSeconds run to the deadlines the
+// checkpoint recorded, on the injected clock.
+func (in *interpreter) resumeParkedTask(ctx context.Context, name string, integration taskIntegration, cp *executionCheckpoint) (any, *stateError) {
+	task := in.run.resumeTask
+	defer in.handler.tasks.release(task)
+	taskCtx := ctx
+	if cp.TimeoutDeadline != nil {
+		var cancel context.CancelFunc
+		taskCtx, cancel = in.handler.clk.WithDeadline(ctx, *cp.TimeoutDeadline)
+		defer cancel()
+	}
+	park := in.resumePark(cp)
+	if cp.Kind == parkActivity {
+		result, serr := in.awaitActivity(ctx, taskCtx, task, cp.HeartbeatSeconds, park)
+		in.unpark(ctx, park, serr != nil && ctx.Err() != nil)
+		return in.finishActivity(ctx, taskCtx, name, cp.TimeoutSeconds, result, serr)
+	}
+	result, serr := in.awaitCallback(taskCtx, task, cp.HeartbeatSeconds, park)
+	in.unpark(ctx, park, serr != nil && ctx.Err() != nil)
+	return in.finishTask(ctx, taskCtx, name, integration, cp.TimeoutSeconds, result, serr)
+}
+
+// finishTask records how a Task attempt ended and returns its result.
+func (in *interpreter) finishTask(ctx, taskCtx context.Context, name string, integration taskIntegration, timeout *int64, result any, serr *stateError) (any, *stateError) {
 	if serr != nil {
 		// Whatever the interrupted integration reported, a failure after the
 		// Task's own deadline is States.Timeout — the error name AWS raises,
 		// which Retry/Catch can match and which recordTaskFailed turns into a
 		// TaskTimedOut event. The parent context is checked first so an
 		// execution-budget unwind or a StopExecution is not relabelled.
-		if timeout != nil && ctx.Err() == nil && taskCtx.Err() != nil {
+		if ctx.Err() != nil {
+			// The execution (or a sibling branch) is unwinding: the state is
+			// aborted, not failed, and runState records TaskStateAborted.
+			return nil, in.unwindReason(ctx, name)
+		}
+		if timeout != nil && taskCtx.Err() != nil {
 			serr = newStateError(errTimeout, "the Task state %q exceeded its TimeoutSeconds of %d", name, *timeout)
 		}
 		in.recordTaskFailed(integration, serr)
@@ -151,30 +239,6 @@ func (in *interpreter) runTask(ctx context.Context, name string, state *aslState
 	}
 	in.recordTaskSucceeded(integration, result)
 	return result, nil
-}
-
-// taskTimeout resolves a Task state's per-attempt budget from TimeoutSeconds
-// or TimeoutSecondsPath, in seconds. nil means the state declared none, which
-// on AWS leaves only the execution's own timeout — Overcast reads it as the
-// same thing rather than inventing a default.
-func taskTimeout(state *aslState, effective any, ctxObj map[string]any) (*int64, *stateError) {
-	if state.TimeoutSecondsPath != "" {
-		value, err := selectPath(effective, ctxObj, state.TimeoutSecondsPath)
-		if err != nil {
-			return nil, newStateError(errRuntime, "%s", err.Error())
-		}
-		seconds, ok := toNumber(value)
-		if !ok || seconds <= 0 {
-			return nil, newStateError(errRuntime, "TimeoutSecondsPath %q did not resolve to a positive number", state.TimeoutSecondsPath)
-		}
-		resolved := int64(seconds)
-		return &resolved, nil
-	}
-	if state.TimeoutSeconds > 0 {
-		seconds := int64(state.TimeoutSeconds)
-		return &seconds, nil
-	}
-	return nil, nil
 }
 
 // dispatchTask routes a Task to the integration that runs it.
@@ -207,13 +271,76 @@ func (in *interpreter) dispatchTask(ctx context.Context, integration taskIntegra
 		return in.publishSNS(ctx, payload)
 	case "dynamodb":
 		return in.invokeDynamoDB(ctx, integration, payload)
+	case "events":
+		if integration.action != "putEvents" || integration.pattern != "" {
+			return nil, unsupportedError("the events:%s%s integration — only events:putEvents is interpreted", integration.action, patternSuffix(integration.pattern))
+		}
+		return in.putEvents(ctx, payload)
 	case "states":
 		if integration.action != "startExecution" {
 			return nil, unsupportedError("the states:%s integration — only states:startExecution is interpreted", integration.action)
 		}
 		return in.startNestedExecution(ctx, integration, payload)
 	}
+	if sdkService, ok := strings.CutPrefix(integration.service, "aws-sdk:"); ok {
+		if integration.pattern != "" {
+			return nil, unsupportedError("the .%s pattern on an aws-sdk integration — AWS offers only request-response and .waitForTaskToken there", integration.pattern)
+		}
+		return in.invokeAWSSDK(ctx, sdkService, integration.action, payload)
+	}
 	return nil, unsupportedError("the %s:%s%s service integration", integration.service, integration.action, patternSuffix(integration.pattern))
+}
+
+// ─── EventBridge ──────────────────────────────────────────────────────────────
+
+// putEvents runs events:putEvents. ASL lets an entry's Detail be a JSON
+// object; the API takes it as a string. As on AWS, a response reporting any
+// failed entry fails the task with EventBridge.FailedEntry.
+func (in *interpreter) putEvents(ctx context.Context, payload any) (any, *stateError) {
+	params, ok := payload.(map[string]any)
+	if !ok {
+		return nil, newStateError(errParameterPathFailure, "events:putEvents requires Parameters with Entries")
+	}
+	entries, _ := params["Entries"].([]any)
+	if len(entries) == 0 {
+		return nil, newStateError(errParameterPathFailure, "events:putEvents requires a non-empty Parameters.Entries")
+	}
+	body := map[string]any{}
+	for key, value := range params {
+		body[key] = value
+	}
+	encoded := make([]any, 0, len(entries))
+	for _, raw := range entries {
+		entry, isObject := raw.(map[string]any)
+		if !isObject {
+			return nil, newStateError(errParameterPathFailure, "events:putEvents Entries must be objects")
+		}
+		copied := map[string]any{}
+		for key, value := range entry {
+			copied[key] = value
+		}
+		if detail, present := copied["Detail"]; present {
+			if _, isString := detail.(string); !isString {
+				text, err := encodeJSON(detail)
+				if err != nil {
+					return nil, newStateError(errRuntime, "%s", err.Error())
+				}
+				copied["Detail"] = text
+			}
+		}
+		encoded = append(encoded, copied)
+	}
+	body["Entries"] = encoded
+	result, serr := in.invokeTargetAs(ctx, "AWSEvents.PutEvents", "application/x-amz-json-1.1", body, "EventBridge")
+	if serr != nil {
+		return nil, serr
+	}
+	if response, isObject := result.(map[string]any); isObject {
+		if failed, _ := toNumber(response["FailedEntryCount"]); failed > 0 {
+			return nil, newStateError("EventBridge.FailedEntry", "%v of the events could not be put: %v", failed, response["Entries"])
+		}
+	}
+	return result, nil
 }
 
 func patternSuffix(pattern string) string {
@@ -317,12 +444,13 @@ var dynamoDBActions = map[string]string{
 	"putItem":    "PutItem",
 	"getItem":    "GetItem",
 	"updateItem": "UpdateItem",
+	"deleteItem": "DeleteItem",
 }
 
 func (in *interpreter) invokeDynamoDB(ctx context.Context, integration taskIntegration, payload any) (any, *stateError) {
 	operation, known := dynamoDBActions[integration.action]
 	if !known || integration.pattern != "" {
-		return nil, unsupportedError("the dynamodb:%s%s integration — Overcast interprets dynamodb:putItem, dynamodb:getItem and dynamodb:updateItem", integration.action, patternSuffix(integration.pattern))
+		return nil, unsupportedError("the dynamodb:%s%s integration — Overcast interprets dynamodb:putItem, getItem, updateItem and deleteItem", integration.action, patternSuffix(integration.pattern))
 	}
 	params, ok := payload.(map[string]any)
 	if !ok {
@@ -428,6 +556,12 @@ func nestedFailureCause(child *Execution) string {
 // invokeTarget performs an AWS JSON 1.0 target-dispatch call against
 // Overcast's own router and returns the decoded response body.
 func (in *interpreter) invokeTarget(ctx context.Context, target string, body map[string]any, errorPrefix string) (any, *stateError) {
+	return in.invokeTargetAs(ctx, target, "application/x-amz-json-1.0", body, errorPrefix)
+}
+
+// invokeTargetAs is invokeTarget for a service that speaks a specific AWS
+// JSON version.
+func (in *interpreter) invokeTargetAs(ctx context.Context, target, contentType string, body map[string]any, errorPrefix string) (any, *stateError) {
 	encoded, err := json.Marshal(body)
 	if err != nil {
 		return nil, newStateError(errRuntime, "the %s request could not be encoded: %v", target, err)
@@ -436,7 +570,7 @@ func (in *interpreter) invokeTarget(ctx context.Context, target string, body map
 	if err != nil {
 		return nil, newStateError(errRuntime, "%v", err)
 	}
-	req.Header.Set("Content-Type", "application/x-amz-json-1.0")
+	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("X-Amz-Target", target)
 	req.Header.Set("X-Overcast-Region", in.region)
 	rec := httptest.NewRecorder()

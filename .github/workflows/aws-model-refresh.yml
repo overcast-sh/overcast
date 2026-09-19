@@ -185,7 +185,7 @@ jobs:
             -source-revision "$PINNED_REVISION" \
             -inventory-output "$RUNNER_TEMP/baseline-inventory.json"
 
-          # The committed manifest and pruned shape snapshot must already be
+          # The committed manifest, pruned shape snapshot and SDK shape tables must already be
           # faithful to the revision they record, or this refresh would carry
           # that drift silently forward. This is the only genuine staleness
           # check in the run: the -check that aws-models-check performs below
@@ -197,6 +197,8 @@ jobs:
             -source-revision "$PINNED_REVISION" \
             -shapes-out models/aws/shapes \
             -shapes-services models/aws/shapes-services.txt \
+            -sdk-shapes-out internal/awsshapes \
+            -sdk-shapes-services models/aws/sdk-shapes-services.txt \
             -check
 
           git -C "$MODEL_CHECKOUT" checkout --detach "$LATEST_REVISION"
@@ -215,6 +217,8 @@ jobs:
             -changelog-output "$fragment" \
             -shapes-out models/aws/shapes \
             -shapes-services models/aws/shapes-services.txt \
+            -sdk-shapes-out internal/awsshapes \
+            -sdk-shapes-services models/aws/sdk-shapes-services.txt \
             -version-file models/aws/VERSION \
             -model-date "$model_date"
           echo "model_date=$model_date" >> "$GITHUB_OUTPUT"
@@ -279,7 +283,7 @@ jobs:
           # commit carrying one without the other would misdescribe itself.
           # .changelog/ is added as a directory because the fragment is written
           # only for a refresh that warrants one.
-          git add internal/awsapi/manifest.gen.go models/aws/VERSION models/aws/shapes .changelog
+          git add internal/awsapi/manifest.gen.go models/aws/VERSION models/aws/shapes internal/awsshapes .changelog
           git commit -m "chore(aws-models): refresh pinned API models"
           if [[ -n "$EXPECTED_REVISION" ]]; then
             git push \

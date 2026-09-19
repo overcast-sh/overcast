@@ -1,0 +1,1172 @@
+service AWSJSON11 version=2018-11-05
+AccessDeniedException structure qerr=AccessDenied error=client code=403
+.Message ServiceErrorMessage
+AddressAllocationId string
+AddressAllocationIds list m=AddressAllocationId
+AgreementId string
+AgreementStatusType enum
+Arn string
+As2AsyncMdnConnectorConfig structure
+.ServerIds As2AsyncMdnServerIds
+.Url Url
+As2AsyncMdnServerIds list m=ServerId
+As2ConnectorConfig structure
+.AsyncMdnConfig As2AsyncMdnConnectorConfig
+.BasicAuthSecretId As2ConnectorSecretId
+.Compression CompressionEnum
+.EncryptionAlgorithm EncryptionAlg
+.LocalProfileId ProfileId
+.MdnResponse MdnResponse
+.MdnSigningAlgorithm MdnSigningAlg
+.MessageSubject MessageSubject
+.PartnerProfileId ProfileId
+.PreserveContentType PreserveContentType
+.SigningAlgorithm SigningAlg
+As2ConnectorSecretId string
+As2Id string
+As2Transport enum
+As2Transports list m=As2Transport
+CallbackToken string
+CertDate timestamp
+CertSerial string
+Certificate string
+CertificateBodyType string
+CertificateChainType string
+CertificateId string
+CertificateIds list m=CertificateId
+CertificateStatusType enum
+CertificateType enum
+CertificateUsageType enum
+CompressionEnum enum
+ConflictException structure error=client code=409
+.Message Message
+ConnectorEgressConfig union
+.VpcLattice ConnectorVpcLatticeEgressConfig
+ConnectorEgressType enum
+ConnectorErrorMessage string
+ConnectorFileTransferResult structure
+.FailureCode FailureCode
+.FailureMessage Message
+.FilePath FilePath
+.StatusCode TransferTableStatus
+ConnectorFileTransferResults list m=ConnectorFileTransferResult
+ConnectorId string
+ConnectorSecurityPolicyName string
+ConnectorStatus enum
+ConnectorVpcLatticeEgressConfig structure
+.PortNumber SftpPort
+.ResourceConfigurationArn VpcLatticeResourceConfigurationArn
+ConnectorsIpAddressType enum
+CopyStepDetails structure
+.DestinationFileLocation InputFileLocation
+.Name WorkflowStepName
+.OverwriteExisting OverwriteExisting
+.SourceFileLocation SourceFileLocation
+CreateAccess operation in=CreateAccessRequest out=CreateAccessResponse err=InternalServiceError,InvalidRequestException,ResourceExistsException,ResourceNotFoundException,ServiceUnavailableException
+CreateAccessRequest structure
+.ExternalId ExternalId
+.HomeDirectory HomeDirectory
+.HomeDirectoryMappings HomeDirectoryMappings
+.HomeDirectoryType HomeDirectoryType
+.Policy Policy
+.PosixProfile PosixProfile
+.Role Role
+.ServerId ServerId
+CreateAccessResponse structure
+.ExternalId ExternalId
+.ServerId ServerId
+CreateAgreement operation in=CreateAgreementRequest out=CreateAgreementResponse err=InternalServiceError,InvalidRequestException,ResourceExistsException,ResourceNotFoundException,ServiceUnavailableException,ThrottlingException
+CreateAgreementRequest structure
+.AccessRole Role
+.BaseDirectory HomeDirectory
+.CustomDirectories CustomDirectoriesType
+.Description Description
+.EnforceMessageSigning EnforceMessageSigningType
+.LocalProfileId ProfileId
+.PartnerProfileId ProfileId
+.PreserveFilename PreserveFilenameType
+.ServerId ServerId
+.Status AgreementStatusType
+.Tags Tags
+CreateAgreementResponse structure
+.AgreementId AgreementId
+CreateConnector operation in=CreateConnectorRequest out=CreateConnectorResponse err=InternalServiceError,InvalidRequestException,ResourceExistsException,ResourceNotFoundException,ServiceUnavailableException,ThrottlingException
+CreateConnectorRequest structure
+.AccessRole Role
+.As2Config As2ConnectorConfig
+.EgressConfig ConnectorEgressConfig
+.IpAddressType ConnectorsIpAddressType
+.LoggingRole Role
+.SecurityPolicyName ConnectorSecurityPolicyName
+.SftpConfig SftpConnectorConfig
+.Tags Tags
+.Url Url
+CreateConnectorResponse structure
+.ConnectorId ConnectorId
+CreateProfile operation in=CreateProfileRequest out=CreateProfileResponse err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException,ThrottlingException
+CreateProfileRequest structure
+.As2Id As2Id
+.CertificateIds CertificateIds
+.ProfileType ProfileType
+.Tags Tags
+CreateProfileResponse structure
+.ProfileId ProfileId
+CreateServer operation in=CreateServerRequest out=CreateServerResponse err=AccessDeniedException,InternalServiceError,InvalidRequestException,ResourceExistsException,ResourceNotFoundException,ServiceUnavailableException,ThrottlingException
+CreateServerRequest structure
+.Certificate Certificate
+.Domain Domain
+.EndpointDetails EndpointDetails
+.EndpointType EndpointType
+.HostKey HostKey
+.IdentityProviderDetails IdentityProviderDetails
+.IdentityProviderType IdentityProviderType
+.IpAddressType IpAddressType
+.LoggingRole NullableRole
+.PostAuthenticationLoginBanner PostAuthenticationLoginBanner
+.PreAuthenticationLoginBanner PreAuthenticationLoginBanner
+.ProtocolDetails ProtocolDetails
+.Protocols Protocols
+.S3StorageOptions S3StorageOptions
+.SecurityPolicyName SecurityPolicyName
+.StructuredLogDestinations StructuredLogDestinations
+.Tags Tags
+.WorkflowDetails WorkflowDetails
+CreateServerResponse structure
+.ServerId ServerId
+CreateUser operation in=CreateUserRequest out=CreateUserResponse err=InternalServiceError,InvalidRequestException,ResourceExistsException,ResourceNotFoundException,ServiceUnavailableException
+CreateUserRequest structure
+.HomeDirectory HomeDirectory
+.HomeDirectoryMappings HomeDirectoryMappings
+.HomeDirectoryType HomeDirectoryType
+.Policy Policy
+.PosixProfile PosixProfile
+.Role Role
+.ServerId ServerId
+.SshPublicKeyBody SshPublicKeyBody
+.Tags Tags
+.UserName UserName
+CreateUserResponse structure
+.ServerId ServerId
+.UserName UserName
+CreateWebApp operation in=CreateWebAppRequest out=CreateWebAppResponse err=AccessDeniedException,InternalServiceError,InvalidRequestException,ResourceNotFoundException,ThrottlingException method=POST uri=/createWebApp
+CreateWebAppRequest structure
+.AccessEndpoint WebAppAccessEndpoint
+.EndpointDetails WebAppEndpointDetails
+.IdentityProviderDetails WebAppIdentityProviderDetails
+.Tags Tags
+.WebAppEndpointPolicy WebAppEndpointPolicy
+.WebAppUnits WebAppUnits
+CreateWebAppResponse structure
+.WebAppId WebAppId
+CreateWorkflow operation in=CreateWorkflowRequest out=CreateWorkflowResponse err=AccessDeniedException,InternalServiceError,InvalidRequestException,ResourceExistsException,ServiceUnavailableException,ThrottlingException
+CreateWorkflowRequest structure
+.Description WorkflowDescription
+.OnExceptionSteps WorkflowSteps
+.Steps WorkflowSteps
+.Tags Tags
+CreateWorkflowResponse structure
+.WorkflowId WorkflowId
+CustomDirectoriesType structure
+.FailedFilesDirectory HomeDirectory
+.MdnFilesDirectory HomeDirectory
+.PayloadFilesDirectory HomeDirectory
+.StatusFilesDirectory HomeDirectory
+.TemporaryFilesDirectory HomeDirectory
+CustomHttpHeader structure
+.Key CustomHttpHeaderKeyType
+.Value CustomHttpHeaderValueType
+CustomHttpHeaderKeyType string
+CustomHttpHeaderValueType string
+CustomHttpHeaders list m=CustomHttpHeader
+CustomStepDetails structure
+.Name WorkflowStepName
+.SourceFileLocation SourceFileLocation
+.Target CustomStepTarget
+.TimeoutSeconds CustomStepTimeoutSeconds
+CustomStepStatus enum
+CustomStepTarget string
+CustomStepTimeoutSeconds integer
+DateImported timestamp
+DecryptStepDetails structure
+.DestinationFileLocation InputFileLocation
+.Name WorkflowStepName
+.OverwriteExisting OverwriteExisting
+.SourceFileLocation SourceFileLocation
+.Type EncryptionType
+DeleteAccess operation in=DeleteAccessRequest out=~Unit err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
+DeleteAccessRequest structure
+.ExternalId ExternalId
+.ServerId ServerId
+DeleteAgreement operation in=DeleteAgreementRequest out=~Unit err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
+DeleteAgreementRequest structure
+.AgreementId AgreementId
+.ServerId ServerId
+DeleteCertificate operation in=DeleteCertificateRequest out=~Unit err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
+DeleteCertificateRequest structure
+.CertificateId CertificateId
+DeleteConnector operation in=DeleteConnectorRequest out=~Unit err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
+DeleteConnectorRequest structure
+.ConnectorId ConnectorId
+DeleteHostKey operation in=DeleteHostKeyRequest out=~Unit err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException,ThrottlingException
+DeleteHostKeyRequest structure
+.HostKeyId HostKeyId
+.ServerId ServerId
+DeleteId string
+DeleteProfile operation in=DeleteProfileRequest out=~Unit err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
+DeleteProfileRequest structure
+.ProfileId ProfileId
+DeleteServer operation in=DeleteServerRequest out=~Unit err=AccessDeniedException,InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
+DeleteServerRequest structure
+.ServerId ServerId
+DeleteSshPublicKey operation in=DeleteSshPublicKeyRequest out=~Unit err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException,ThrottlingException
+DeleteSshPublicKeyRequest structure
+.ServerId ServerId
+.SshPublicKeyId SshPublicKeyId
+.UserName UserName
+DeleteStepDetails structure
+.Name WorkflowStepName
+.SourceFileLocation SourceFileLocation
+DeleteUser operation in=DeleteUserRequest out=~Unit err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
+DeleteUserRequest structure
+.ServerId ServerId
+.UserName UserName
+DeleteWebApp operation in=DeleteWebAppRequest out=~Unit err=AccessDeniedException,InternalServiceError,InvalidRequestException,ResourceNotFoundException,ThrottlingException method=POST uri=/deleteWebApp
+DeleteWebAppCustomization operation in=DeleteWebAppCustomizationRequest out=~Unit err=AccessDeniedException,ConflictException,InternalServiceError,InvalidRequestException,ResourceNotFoundException,ThrottlingException method=POST uri=/deleteWebAppCustomization
+DeleteWebAppCustomizationRequest structure
+.WebAppId WebAppId
+DeleteWebAppRequest structure
+.WebAppId WebAppId
+DeleteWorkflow operation in=DeleteWorkflowRequest out=~Unit err=AccessDeniedException,InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
+DeleteWorkflowRequest structure
+.WorkflowId WorkflowId
+DescribeAccess operation in=DescribeAccessRequest out=DescribeAccessResponse err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
+DescribeAccessRequest structure
+.ExternalId ExternalId
+.ServerId ServerId
+DescribeAccessResponse structure
+.Access DescribedAccess
+.ServerId ServerId
+DescribeAgreement operation in=DescribeAgreementRequest out=DescribeAgreementResponse err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
+DescribeAgreementRequest structure
+.AgreementId AgreementId
+.ServerId ServerId
+DescribeAgreementResponse structure
+.Agreement DescribedAgreement
+DescribeCertificate operation in=DescribeCertificateRequest out=DescribeCertificateResponse err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
+DescribeCertificateRequest structure
+.CertificateId CertificateId
+DescribeCertificateResponse structure
+.Certificate DescribedCertificate
+DescribeConnector operation in=DescribeConnectorRequest out=DescribeConnectorResponse err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
+DescribeConnectorRequest structure
+.ConnectorId ConnectorId
+DescribeConnectorResponse structure
+.Connector DescribedConnector
+DescribeExecution operation in=DescribeExecutionRequest out=DescribeExecutionResponse err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
+DescribeExecutionRequest structure
+.ExecutionId ExecutionId
+.WorkflowId WorkflowId
+DescribeExecutionResponse structure
+.Execution DescribedExecution
+.WorkflowId WorkflowId
+DescribeHostKey operation in=DescribeHostKeyRequest out=DescribeHostKeyResponse err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
+DescribeHostKeyRequest structure
+.HostKeyId HostKeyId
+.ServerId ServerId
+DescribeHostKeyResponse structure
+.HostKey DescribedHostKey
+DescribeProfile operation in=DescribeProfileRequest out=DescribeProfileResponse err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
+DescribeProfileRequest structure
+.ProfileId ProfileId
+DescribeProfileResponse structure
+.Profile DescribedProfile
+DescribeSecurityPolicy operation in=DescribeSecurityPolicyRequest out=DescribeSecurityPolicyResponse err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
+DescribeSecurityPolicyRequest structure
+.SecurityPolicyName SecurityPolicyName
+DescribeSecurityPolicyResponse structure
+.SecurityPolicy DescribedSecurityPolicy
+DescribeServer operation in=DescribeServerRequest out=DescribeServerResponse err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
+DescribeServerRequest structure
+.ServerId ServerId
+DescribeServerResponse structure
+.Server DescribedServer
+DescribeUser operation in=DescribeUserRequest out=DescribeUserResponse err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
+DescribeUserRequest structure
+.ServerId ServerId
+.UserName UserName
+DescribeUserResponse structure
+.ServerId ServerId
+.User DescribedUser
+DescribeWebApp operation in=DescribeWebAppRequest out=DescribeWebAppResponse err=AccessDeniedException,InternalServiceError,InvalidRequestException,ResourceNotFoundException,ThrottlingException method=POST uri=/describeWebApp
+DescribeWebAppCustomization operation in=DescribeWebAppCustomizationRequest out=DescribeWebAppCustomizationResponse err=AccessDeniedException,InternalServiceError,InvalidRequestException,ResourceNotFoundException,ThrottlingException method=POST uri=/describeWebAppCustomization
+DescribeWebAppCustomizationRequest structure
+.WebAppId WebAppId
+DescribeWebAppCustomizationResponse structure
+.WebAppCustomization DescribedWebAppCustomization
+DescribeWebAppRequest structure
+.WebAppId WebAppId
+DescribeWebAppResponse structure
+.WebApp DescribedWebApp
+DescribeWorkflow operation in=DescribeWorkflowRequest out=DescribeWorkflowResponse err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
+DescribeWorkflowRequest structure
+.WorkflowId WorkflowId
+DescribeWorkflowResponse structure
+.Workflow DescribedWorkflow
+DescribedAccess structure
+.ExternalId ExternalId
+.HomeDirectory HomeDirectory
+.HomeDirectoryMappings HomeDirectoryMappings
+.HomeDirectoryType HomeDirectoryType
+.Policy Policy
+.PosixProfile PosixProfile
+.Role Role
+DescribedAgreement structure
+.AccessRole Role
+.AgreementId AgreementId
+.Arn Arn
+.BaseDirectory HomeDirectory
+.CustomDirectories CustomDirectoriesType
+.Description Description
+.EnforceMessageSigning EnforceMessageSigningType
+.LocalProfileId ProfileId
+.PartnerProfileId ProfileId
+.PreserveFilename PreserveFilenameType
+.ServerId ServerId
+.Status AgreementStatusType
+.Tags Tags
+DescribedCertificate structure
+.ActiveDate CertDate
+.Arn Arn
+.Certificate CertificateBodyType
+.CertificateChain CertificateChainType
+.CertificateId CertificateId
+.Description Description
+.InactiveDate CertDate
+.NotAfterDate CertDate
+.NotBeforeDate CertDate
+.Serial CertSerial
+.Status CertificateStatusType
+.Tags Tags
+.Type CertificateType
+.Usage CertificateUsageType
+DescribedConnector structure
+.AccessRole Role
+.Arn Arn
+.As2Config As2ConnectorConfig
+.ConnectorId ConnectorId
+.EgressConfig DescribedConnectorEgressConfig
+.EgressType ConnectorEgressType
+.ErrorMessage ConnectorErrorMessage
+.IpAddressType ConnectorsIpAddressType
+.LoggingRole Role
+.SecurityPolicyName ConnectorSecurityPolicyName
+.ServiceManagedEgressIpAddresses ServiceManagedEgressIpAddresses
+.SftpConfig SftpConnectorConfig
+.Status ConnectorStatus
+.Tags Tags
+.Url Url
+DescribedConnectorEgressConfig union
+.VpcLattice DescribedConnectorVpcLatticeEgressConfig
+DescribedConnectorVpcLatticeEgressConfig structure
+.PortNumber SftpPort
+.ResourceConfigurationArn VpcLatticeResourceConfigurationArn
+DescribedExecution structure
+.ExecutionId ExecutionId
+.ExecutionRole Role
+.InitialFileLocation FileLocation
+.LoggingConfiguration LoggingConfiguration
+.PosixProfile PosixProfile
+.Results ExecutionResults
+.ServiceMetadata ServiceMetadata
+.Status ExecutionStatus
+DescribedHostKey structure
+.Arn Arn
+.DateImported DateImported
+.Description HostKeyDescription
+.HostKeyFingerprint HostKeyFingerprint
+.HostKeyId HostKeyId
+.Tags Tags
+.Type HostKeyType
+DescribedIdentityCenterConfig structure
+.ApplicationArn IdentityCenterApplicationArn
+.InstanceArn IdentityCenterInstanceArn
+.Role Role
+DescribedProfile structure
+.Arn Arn
+.As2Id As2Id
+.CertificateIds CertificateIds
+.ProfileId ProfileId
+.ProfileType ProfileType
+.Tags Tags
+DescribedSecurityPolicy structure
+.Fips Fips
+.Protocols SecurityPolicyProtocols
+.SecurityPolicyName SecurityPolicyName
+.SshCiphers SecurityPolicyOptions
+.SshHostKeyAlgorithms SecurityPolicyOptions
+.SshKexs SecurityPolicyOptions
+.SshMacs SecurityPolicyOptions
+.TlsCiphers SecurityPolicyOptions
+.Type SecurityPolicyResourceType
+DescribedServer structure
+.Arn Arn
+.As2ServiceManagedEgressIpAddresses ServiceManagedEgressIpAddresses
+.Certificate Certificate
+.Domain Domain
+.EndpointDetails EndpointDetails
+.EndpointType EndpointType
+.HostKeyFingerprint HostKeyFingerprint
+.IdentityProviderDetails IdentityProviderDetails
+.IdentityProviderType IdentityProviderType
+.IpAddressType IpAddressType
+.LoggingRole NullableRole
+.PostAuthenticationLoginBanner PostAuthenticationLoginBanner
+.PreAuthenticationLoginBanner PreAuthenticationLoginBanner
+.ProtocolDetails ProtocolDetails
+.Protocols Protocols
+.S3StorageOptions S3StorageOptions
+.SecurityPolicyName SecurityPolicyName
+.ServerId ServerId
+.State State
+.StructuredLogDestinations StructuredLogDestinations
+.Tags Tags
+.UserCount UserCount
+.WorkflowDetails WorkflowDetails
+DescribedUser structure
+.Arn Arn
+.HomeDirectory HomeDirectory
+.HomeDirectoryMappings HomeDirectoryMappings
+.HomeDirectoryType HomeDirectoryType
+.Policy Policy
+.PosixProfile PosixProfile
+.Role Role
+.SshPublicKeys SshPublicKeys
+.Tags Tags
+.UserName UserName
+DescribedWebApp structure
+.AccessEndpoint WebAppAccessEndpoint
+.Arn Arn
+.DescribedEndpointDetails DescribedWebAppEndpointDetails
+.DescribedIdentityProviderDetails DescribedWebAppIdentityProviderDetails
+.EndpointType WebAppEndpointType
+.Tags Tags
+.WebAppEndpoint WebAppEndpoint
+.WebAppEndpointPolicy WebAppEndpointPolicy
+.WebAppId WebAppId
+.WebAppUnits WebAppUnits
+DescribedWebAppCustomization structure
+.Arn Arn
+.FaviconFile WebAppFaviconFile
+.LogoFile WebAppLogoFile
+.Title WebAppTitle
+.WebAppId WebAppId
+DescribedWebAppEndpointDetails union
+.Vpc DescribedWebAppVpcConfig
+DescribedWebAppIdentityProviderDetails union
+.IdentityCenterConfig DescribedIdentityCenterConfig
+DescribedWebAppVpcConfig structure
+.SubnetIds SubnetIds
+.VpcEndpointId VpcEndpointId
+.VpcId VpcId
+DescribedWorkflow structure
+.Arn Arn
+.Description WorkflowDescription
+.OnExceptionSteps WorkflowSteps
+.Steps WorkflowSteps
+.Tags Tags
+.WorkflowId WorkflowId
+Description string
+DirectoryId string
+DirectoryListingOptimization enum
+Domain enum
+EfsFileLocation structure
+.FileSystemId EfsFileSystemId
+.Path EfsPath
+EfsFileSystemId string
+EfsPath string
+EncryptionAlg enum
+EncryptionType enum
+EndpointDetails structure
+.AddressAllocationIds AddressAllocationIds
+.SecurityGroupIds SecurityGroupIds
+.SubnetIds SubnetIds
+.VpcEndpointId VpcEndpointId
+.VpcId VpcId
+EndpointType enum
+EnforceMessageSigningType enum
+ExecutionError structure
+.Message ExecutionErrorMessage
+.Type ExecutionErrorType
+ExecutionErrorMessage string
+ExecutionErrorType enum
+ExecutionId string
+ExecutionResults structure
+.OnExceptionSteps ExecutionStepResults
+.Steps ExecutionStepResults
+ExecutionStatus enum
+ExecutionStepResult structure
+.Error ExecutionError
+.Outputs StepResultOutputsJson
+.StepType WorkflowStepType
+ExecutionStepResults list m=ExecutionStepResult
+ExternalId string
+FailureCode string
+FileLocation structure
+.EfsFileLocation EfsFileLocation
+.S3FileLocation S3FileLocation
+FilePath string
+FilePaths list m=FilePath
+Fips boolean
+Function string
+HomeDirectory string
+HomeDirectoryMapEntry structure
+.Entry MapEntry
+.Target MapTarget
+.Type MapType
+HomeDirectoryMappings list m=HomeDirectoryMapEntry
+HomeDirectoryType enum
+HostKey string
+HostKeyDescription string
+HostKeyFingerprint string
+HostKeyId string
+HostKeyType string
+IdentityCenterApplicationArn string
+IdentityCenterConfig structure
+.InstanceArn IdentityCenterInstanceArn
+.Role Role
+IdentityCenterInstanceArn string
+IdentityProviderDetails structure
+.DirectoryId DirectoryId
+.Function Function
+.InvocationRole Role
+.SftpAuthenticationMethods SftpAuthenticationMethods
+.Url Url
+IdentityProviderType enum
+ImportCertificate operation in=ImportCertificateRequest out=ImportCertificateResponse err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
+ImportCertificateRequest structure
+.ActiveDate CertDate
+.Certificate CertificateBodyType
+.CertificateChain CertificateChainType
+.Description Description
+.InactiveDate CertDate
+.PrivateKey PrivateKeyType
+.Tags Tags
+.Usage CertificateUsageType
+ImportCertificateResponse structure
+.CertificateId CertificateId
+ImportHostKey operation in=ImportHostKeyRequest out=ImportHostKeyResponse err=InternalServiceError,InvalidRequestException,ResourceExistsException,ResourceNotFoundException,ServiceUnavailableException,ThrottlingException
+ImportHostKeyRequest structure
+.Description HostKeyDescription
+.HostKeyBody HostKey
+.ServerId ServerId
+.Tags Tags
+ImportHostKeyResponse structure
+.HostKeyId HostKeyId
+.ServerId ServerId
+ImportSshPublicKey operation in=ImportSshPublicKeyRequest out=ImportSshPublicKeyResponse err=InternalServiceError,InvalidRequestException,ResourceExistsException,ResourceNotFoundException,ServiceUnavailableException,ThrottlingException
+ImportSshPublicKeyRequest structure
+.ServerId ServerId
+.SshPublicKeyBody SshPublicKeyBody
+.UserName UserName
+ImportSshPublicKeyResponse structure
+.ServerId ServerId
+.SshPublicKeyId SshPublicKeyId
+.UserName UserName
+InputFileLocation structure
+.EfsFileLocation EfsFileLocation
+.S3FileLocation S3InputFileLocation
+InternalServiceError structure error=server code=503
+.Message Message
+InvalidNextTokenException structure error=client code=400
+.Message Message
+InvalidRequestException structure error=client code=400
+.Message Message
+IpAddressType enum
+ListAccesses operation in=ListAccessesRequest out=ListAccessesResponse err=InternalServiceError,InvalidNextTokenException,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
+ListAccessesRequest structure
+.MaxResults MaxResults
+.NextToken NextToken
+.ServerId ServerId
+ListAccessesResponse structure
+.Accesses ListedAccesses
+.NextToken NextToken
+.ServerId ServerId
+ListAgreements operation in=ListAgreementsRequest out=ListAgreementsResponse err=InternalServiceError,InvalidNextTokenException,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
+ListAgreementsRequest structure
+.MaxResults MaxResults
+.NextToken NextToken
+.ServerId ServerId
+ListAgreementsResponse structure
+.Agreements ListedAgreements
+.NextToken NextToken
+ListCertificates operation in=ListCertificatesRequest out=ListCertificatesResponse err=InternalServiceError,InvalidNextTokenException,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
+ListCertificatesRequest structure
+.MaxResults MaxResults
+.NextToken NextToken
+ListCertificatesResponse structure
+.Certificates ListedCertificates
+.NextToken NextToken
+ListConnectors operation in=ListConnectorsRequest out=ListConnectorsResponse err=InternalServiceError,InvalidNextTokenException,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
+ListConnectorsRequest structure
+.MaxResults MaxResults
+.NextToken NextToken
+ListConnectorsResponse structure
+.Connectors ListedConnectors
+.NextToken NextToken
+ListExecutions operation in=ListExecutionsRequest out=ListExecutionsResponse err=InternalServiceError,InvalidNextTokenException,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
+ListExecutionsRequest structure
+.MaxResults MaxResults
+.NextToken NextToken
+.WorkflowId WorkflowId
+ListExecutionsResponse structure
+.Executions ListedExecutions
+.NextToken NextToken
+.WorkflowId WorkflowId
+ListFileTransferResults operation in=ListFileTransferResultsRequest out=ListFileTransferResultsResponse err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException method=POST uri=/listFileTransferResults
+ListFileTransferResultsRequest structure
+.ConnectorId ConnectorId
+.MaxResults MaxResults
+.NextToken NextToken
+.TransferId TransferId
+ListFileTransferResultsResponse structure
+.FileTransferResults ConnectorFileTransferResults
+.NextToken NextToken
+ListHostKeys operation in=ListHostKeysRequest out=ListHostKeysResponse err=InternalServiceError,InvalidNextTokenException,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
+ListHostKeysRequest structure
+.MaxResults MaxResults
+.NextToken NextToken
+.ServerId ServerId
+ListHostKeysResponse structure
+.HostKeys ListedHostKeys
+.NextToken NextToken
+.ServerId ServerId
+ListProfiles operation in=ListProfilesRequest out=ListProfilesResponse err=InternalServiceError,InvalidNextTokenException,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
+ListProfilesRequest structure
+.MaxResults MaxResults
+.NextToken NextToken
+.ProfileType ProfileType
+ListProfilesResponse structure
+.NextToken NextToken
+.Profiles ListedProfiles
+ListSecurityPolicies operation in=ListSecurityPoliciesRequest out=ListSecurityPoliciesResponse err=InternalServiceError,InvalidNextTokenException,InvalidRequestException,ServiceUnavailableException
+ListSecurityPoliciesRequest structure
+.MaxResults MaxResults
+.NextToken NextToken
+ListSecurityPoliciesResponse structure
+.NextToken NextToken
+.SecurityPolicyNames SecurityPolicyNames
+ListServers operation in=ListServersRequest out=ListServersResponse err=InternalServiceError,InvalidNextTokenException,InvalidRequestException,ServiceUnavailableException
+ListServersRequest structure
+.MaxResults MaxResults
+.NextToken NextToken
+ListServersResponse structure
+.NextToken NextToken
+.Servers ListedServers
+ListTagsForResource operation in=ListTagsForResourceRequest out=ListTagsForResourceResponse err=InternalServiceError,InvalidNextTokenException,InvalidRequestException,ServiceUnavailableException
+ListTagsForResourceRequest structure
+.Arn Arn
+.MaxResults MaxResults
+.NextToken NextToken
+ListTagsForResourceResponse structure
+.Arn Arn
+.NextToken NextToken
+.Tags Tags
+ListUsers operation in=ListUsersRequest out=ListUsersResponse err=InternalServiceError,InvalidNextTokenException,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
+ListUsersRequest structure
+.MaxResults MaxResults
+.NextToken NextToken
+.ServerId ServerId
+ListUsersResponse structure
+.NextToken NextToken
+.ServerId ServerId
+.Users ListedUsers
+ListWebApps operation in=ListWebAppsRequest out=ListWebAppsResponse err=InternalServiceError,InvalidNextTokenException,InvalidRequestException,ThrottlingException method=POST uri=/listWebApps
+ListWebAppsRequest structure
+.MaxResults MaxResults
+.NextToken NextToken
+ListWebAppsResponse structure
+.NextToken NextToken
+.WebApps ListedWebApps
+ListWorkflows operation in=ListWorkflowsRequest out=ListWorkflowsResponse err=InternalServiceError,InvalidNextTokenException,InvalidRequestException,ServiceUnavailableException
+ListWorkflowsRequest structure
+.MaxResults MaxResults
+.NextToken NextToken
+ListWorkflowsResponse structure
+.NextToken NextToken
+.Workflows ListedWorkflows
+ListedAccess structure
+.ExternalId ExternalId
+.HomeDirectory HomeDirectory
+.HomeDirectoryType HomeDirectoryType
+.Role Role
+ListedAccesses list m=ListedAccess
+ListedAgreement structure
+.AgreementId AgreementId
+.Arn Arn
+.Description Description
+.LocalProfileId ProfileId
+.PartnerProfileId ProfileId
+.ServerId ServerId
+.Status AgreementStatusType
+ListedAgreements list m=ListedAgreement
+ListedCertificate structure
+.ActiveDate CertDate
+.Arn Arn
+.CertificateId CertificateId
+.Description Description
+.InactiveDate CertDate
+.Status CertificateStatusType
+.Type CertificateType
+.Usage CertificateUsageType
+ListedCertificates list m=ListedCertificate
+ListedConnector structure
+.Arn Arn
+.ConnectorId ConnectorId
+.Url Url
+ListedConnectors list m=ListedConnector
+ListedExecution structure
+.ExecutionId ExecutionId
+.InitialFileLocation FileLocation
+.ServiceMetadata ServiceMetadata
+.Status ExecutionStatus
+ListedExecutions list m=ListedExecution
+ListedHostKey structure
+.Arn Arn
+.DateImported DateImported
+.Description HostKeyDescription
+.Fingerprint HostKeyFingerprint
+.HostKeyId HostKeyId
+.Type HostKeyType
+ListedHostKeys list m=ListedHostKey
+ListedProfile structure
+.Arn Arn
+.As2Id As2Id
+.ProfileId ProfileId
+.ProfileType ProfileType
+ListedProfiles list m=ListedProfile
+ListedServer structure
+.Arn Arn
+.Domain Domain
+.EndpointType EndpointType
+.IdentityProviderType IdentityProviderType
+.LoggingRole Role
+.ServerId ServerId
+.State State
+.UserCount UserCount
+ListedServers list m=ListedServer
+ListedUser structure
+.Arn Arn
+.HomeDirectory HomeDirectory
+.HomeDirectoryType HomeDirectoryType
+.Role Role
+.SshPublicKeyCount SshPublicKeyCount
+.UserName UserName
+ListedUsers list m=ListedUser
+ListedWebApp structure
+.AccessEndpoint WebAppAccessEndpoint
+.Arn Arn
+.EndpointType WebAppEndpointType
+.WebAppEndpoint WebAppEndpoint
+.WebAppId WebAppId
+ListedWebApps list m=ListedWebApp
+ListedWorkflow structure
+.Arn Arn
+.Description WorkflowDescription
+.WorkflowId WorkflowId
+ListedWorkflows list m=ListedWorkflow
+ListingId string
+LogGroupName string
+LoggingConfiguration structure
+.LogGroupName LogGroupName
+.LoggingRole Role
+MapEntry string
+MapTarget string
+MapType enum
+MaxConcurrentConnections integer
+MaxItems integer
+MaxResults integer
+MdnResponse enum
+MdnSigningAlg enum
+Message string
+MessageSubject string
+MoveId string
+NextToken string
+NullableRole string
+OnPartialUploadWorkflowDetails list m=WorkflowDetail
+OnUploadWorkflowDetails list m=WorkflowDetail
+OutputFileName string
+OverwriteExisting enum
+PassiveIp string
+Policy string
+PosixId long
+PosixProfile structure
+.Gid PosixId
+.SecondaryGids SecondaryGids
+.Uid PosixId
+PostAuthenticationLoginBanner string
+PreAuthenticationLoginBanner string
+PreserveContentType enum
+PreserveFilenameType enum
+PrivateKeyType string
+ProfileId string
+ProfileType enum
+Protocol enum
+ProtocolDetails structure
+.As2Transports As2Transports
+.PassiveIp PassiveIp
+.SetStatOption SetStatOption
+.TlsSessionResumptionMode TlsSessionResumptionMode
+Protocols list m=Protocol
+Resource string
+ResourceExistsException structure error=client code=409
+.Message Message
+.Resource Resource
+.ResourceType ResourceType
+ResourceNotFoundException structure error=client code=404
+.Message Message
+.Resource Resource
+.ResourceType ResourceType
+ResourceType string
+Response string
+RetryAfterSeconds string
+Role string
+S3Bucket string
+S3Etag string
+S3FileLocation structure
+.Bucket S3Bucket
+.Etag S3Etag
+.Key S3Key
+.VersionId S3VersionId
+S3InputFileLocation structure
+.Bucket S3Bucket
+.Key S3Key
+S3Key string
+S3StorageOptions structure
+.DirectoryListingOptimization DirectoryListingOptimization
+S3Tag structure
+.Key S3TagKey
+.Value S3TagValue
+S3TagKey string
+S3TagValue string
+S3Tags list m=S3Tag
+S3VersionId string
+SecondaryGids list m=PosixId
+SecretId string
+SecretVersionStage string
+SecretVersionStageList list m=SecretVersionStage
+SecurityGroupId string
+SecurityGroupIds list m=SecurityGroupId
+SecurityPolicyName string
+SecurityPolicyNames list m=SecurityPolicyName
+SecurityPolicyOption string
+SecurityPolicyOptions list m=SecurityPolicyOption
+SecurityPolicyProtocol enum
+SecurityPolicyProtocols list m=SecurityPolicyProtocol
+SecurityPolicyResourceType enum
+SendWorkflowStepState operation in=SendWorkflowStepStateRequest out=SendWorkflowStepStateResponse err=AccessDeniedException,InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException,ThrottlingException
+SendWorkflowStepStateRequest structure
+.ExecutionId ExecutionId
+.Status CustomStepStatus
+.Token CallbackToken
+.WorkflowId WorkflowId
+SendWorkflowStepStateResponse structure
+ServerId string
+ServiceErrorMessage string
+ServiceManagedEgressIpAddress string
+ServiceManagedEgressIpAddresses list m=ServiceManagedEgressIpAddress
+ServiceMetadata structure
+.UserDetails UserDetails
+ServiceUnavailableException structure qerr=ServiceUnavailable error=server code=503
+.Message ServiceErrorMessage
+SessionId string
+SetStatOption enum
+SftpAuthenticationMethods enum
+SftpConnectorConfig structure
+.MaxConcurrentConnections MaxConcurrentConnections
+.OrderedUserSecretVersionStages SecretVersionStageList
+.TrustedHostKeys SftpConnectorTrustedHostKeyList
+.UserSecretId SecretId
+SftpConnectorConnectionDetails structure
+.HostKey SftpConnectorHostKey
+SftpConnectorHostKey string
+SftpConnectorTrustedHostKey string
+SftpConnectorTrustedHostKeyList list m=SftpConnectorTrustedHostKey
+SftpPort integer
+SigningAlg enum
+SourceFileLocation string
+SourceIp string
+SshPublicKey structure
+.DateImported DateImported
+.SshPublicKeyBody SshPublicKeyBody
+.SshPublicKeyId SshPublicKeyId
+SshPublicKeyBody string
+SshPublicKeyCount integer
+SshPublicKeyId string
+SshPublicKeys list m=SshPublicKey
+StartDirectoryListing operation in=StartDirectoryListingRequest out=StartDirectoryListingResponse err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException,ThrottlingException
+StartDirectoryListingRequest structure
+.ConnectorId ConnectorId
+.MaxItems MaxItems
+.OutputDirectoryPath FilePath
+.RemoteDirectoryPath FilePath
+StartDirectoryListingResponse structure
+.ListingId ListingId
+.OutputFileName OutputFileName
+StartFileTransfer operation in=StartFileTransferRequest out=StartFileTransferResponse err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException,ThrottlingException
+StartFileTransferRequest structure
+.ConnectorId ConnectorId
+.CustomHttpHeaders CustomHttpHeaders
+.LocalDirectoryPath FilePath
+.RemoteDirectoryPath FilePath
+.RetrieveFilePaths FilePaths
+.SendFilePaths FilePaths
+StartFileTransferResponse structure
+.TransferId TransferId
+StartRemoteDelete operation in=StartRemoteDeleteRequest out=StartRemoteDeleteResponse err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException,ThrottlingException method=POST uri=/startRemoteDelete
+StartRemoteDeleteRequest structure
+.ConnectorId ConnectorId
+.DeletePath FilePath
+StartRemoteDeleteResponse structure
+.DeleteId DeleteId
+StartRemoteMove operation in=StartRemoteMoveRequest out=StartRemoteMoveResponse err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException,ThrottlingException method=POST uri=/startRemoteMove
+StartRemoteMoveRequest structure
+.ConnectorId ConnectorId
+.SourcePath FilePath
+.TargetPath FilePath
+StartRemoteMoveResponse structure
+.MoveId MoveId
+StartServer operation in=StartServerRequest out=~Unit err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException,ThrottlingException
+StartServerRequest structure
+.ServerId ServerId
+State enum
+Status string
+StatusCode integer
+StepResultOutputsJson string
+StopServer operation in=StopServerRequest out=~Unit err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException,ThrottlingException
+StopServerRequest structure
+.ServerId ServerId
+StructuredLogDestinations list m=Arn
+SubnetId string
+SubnetIds list m=SubnetId
+Tag structure
+.Key TagKey
+.Value TagValue
+TagKey string
+TagKeys list m=TagKey
+TagResource operation in=TagResourceRequest out=~Unit err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
+TagResourceRequest structure
+.Arn Arn
+.Tags Tags
+TagStepDetails structure
+.Name WorkflowStepName
+.SourceFileLocation SourceFileLocation
+.Tags S3Tags
+TagValue string
+Tags list m=Tag
+TestConnection operation in=TestConnectionRequest out=TestConnectionResponse err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
+TestConnectionRequest structure
+.ConnectorId ConnectorId
+TestConnectionResponse structure
+.ConnectorId ConnectorId
+.SftpConnectionDetails SftpConnectorConnectionDetails
+.Status Status
+.StatusMessage Message
+TestIdentityProvider operation in=TestIdentityProviderRequest out=TestIdentityProviderResponse err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
+TestIdentityProviderRequest structure
+.ServerId ServerId
+.ServerProtocol Protocol
+.SourceIp SourceIp
+.UserName UserName
+.UserPassword UserPassword
+TestIdentityProviderResponse structure
+.Message Message
+.Response Response
+.StatusCode StatusCode
+.Url Url
+ThrottlingException structure error=client code=429
+.RetryAfterSeconds RetryAfterSeconds header=Retry-After
+TlsSessionResumptionMode enum
+TransferId string
+TransferTableStatus enum
+UntagResource operation in=UntagResourceRequest out=~Unit err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
+UntagResourceRequest structure
+.Arn Arn
+.TagKeys TagKeys
+UpdateAccess operation in=UpdateAccessRequest out=UpdateAccessResponse err=InternalServiceError,InvalidRequestException,ResourceExistsException,ResourceNotFoundException,ServiceUnavailableException,ThrottlingException
+UpdateAccessRequest structure
+.ExternalId ExternalId
+.HomeDirectory HomeDirectory
+.HomeDirectoryMappings HomeDirectoryMappings
+.HomeDirectoryType HomeDirectoryType
+.Policy Policy
+.PosixProfile PosixProfile
+.Role Role
+.ServerId ServerId
+UpdateAccessResponse structure
+.ExternalId ExternalId
+.ServerId ServerId
+UpdateAgreement operation in=UpdateAgreementRequest out=UpdateAgreementResponse err=InternalServiceError,InvalidRequestException,ResourceExistsException,ResourceNotFoundException,ServiceUnavailableException,ThrottlingException
+UpdateAgreementRequest structure
+.AccessRole Role
+.AgreementId AgreementId
+.BaseDirectory HomeDirectory
+.CustomDirectories CustomDirectoriesType
+.Description Description
+.EnforceMessageSigning EnforceMessageSigningType
+.LocalProfileId ProfileId
+.PartnerProfileId ProfileId
+.PreserveFilename PreserveFilenameType
+.ServerId ServerId
+.Status AgreementStatusType
+UpdateAgreementResponse structure
+.AgreementId AgreementId
+UpdateCertificate operation in=UpdateCertificateRequest out=UpdateCertificateResponse err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException,ThrottlingException
+UpdateCertificateRequest structure
+.ActiveDate CertDate
+.CertificateId CertificateId
+.Description Description
+.InactiveDate CertDate
+UpdateCertificateResponse structure
+.CertificateId CertificateId
+UpdateConnector operation in=UpdateConnectorRequest out=UpdateConnectorResponse err=InternalServiceError,InvalidRequestException,ResourceExistsException,ResourceNotFoundException,ServiceUnavailableException,ThrottlingException
+UpdateConnectorEgressConfig union
+.VpcLattice UpdateConnectorVpcLatticeEgressConfig
+UpdateConnectorRequest structure
+.AccessRole Role
+.As2Config As2ConnectorConfig
+.ConnectorId ConnectorId
+.EgressConfig UpdateConnectorEgressConfig
+.IpAddressType ConnectorsIpAddressType
+.LoggingRole Role
+.SecurityPolicyName ConnectorSecurityPolicyName
+.SftpConfig SftpConnectorConfig
+.Url Url
+UpdateConnectorResponse structure
+.ConnectorId ConnectorId
+UpdateConnectorVpcLatticeEgressConfig structure
+.PortNumber SftpPort
+.ResourceConfigurationArn VpcLatticeResourceConfigurationArn
+UpdateHostKey operation in=UpdateHostKeyRequest out=UpdateHostKeyResponse err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException,ThrottlingException
+UpdateHostKeyRequest structure
+.Description HostKeyDescription
+.HostKeyId HostKeyId
+.ServerId ServerId
+UpdateHostKeyResponse structure
+.HostKeyId HostKeyId
+.ServerId ServerId
+UpdateProfile operation in=UpdateProfileRequest out=UpdateProfileResponse err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException,ThrottlingException
+UpdateProfileRequest structure
+.CertificateIds CertificateIds
+.ProfileId ProfileId
+UpdateProfileResponse structure
+.ProfileId ProfileId
+UpdateServer operation in=UpdateServerRequest out=UpdateServerResponse err=AccessDeniedException,ConflictException,InternalServiceError,InvalidRequestException,ResourceExistsException,ResourceNotFoundException,ServiceUnavailableException,ThrottlingException
+UpdateServerRequest structure
+.Certificate Certificate
+.EndpointDetails EndpointDetails
+.EndpointType EndpointType
+.HostKey HostKey
+.IdentityProviderDetails IdentityProviderDetails
+.IdentityProviderType IdentityProviderType
+.IpAddressType IpAddressType
+.LoggingRole NullableRole
+.PostAuthenticationLoginBanner PostAuthenticationLoginBanner
+.PreAuthenticationLoginBanner PreAuthenticationLoginBanner
+.ProtocolDetails ProtocolDetails
+.Protocols Protocols
+.S3StorageOptions S3StorageOptions
+.SecurityPolicyName SecurityPolicyName
+.ServerId ServerId
+.StructuredLogDestinations StructuredLogDestinations
+.WorkflowDetails WorkflowDetails
+UpdateServerResponse structure
+.ServerId ServerId
+UpdateUser operation in=UpdateUserRequest out=UpdateUserResponse err=InternalServiceError,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException,ThrottlingException
+UpdateUserRequest structure
+.HomeDirectory HomeDirectory
+.HomeDirectoryMappings HomeDirectoryMappings
+.HomeDirectoryType HomeDirectoryType
+.Policy Policy
+.PosixProfile PosixProfile
+.Role Role
+.ServerId ServerId
+.UserName UserName
+UpdateUserResponse structure
+.ServerId ServerId
+.UserName UserName
+UpdateWebApp operation in=UpdateWebAppRequest out=UpdateWebAppResponse err=AccessDeniedException,ConflictException,InternalServiceError,InvalidRequestException,ResourceNotFoundException,ThrottlingException method=POST uri=/updateWebApp
+UpdateWebAppCustomization operation in=UpdateWebAppCustomizationRequest out=UpdateWebAppCustomizationResponse err=AccessDeniedException,ConflictException,InternalServiceError,InvalidRequestException,ResourceNotFoundException,ThrottlingException method=POST uri=/updateWebAppCustomization
+UpdateWebAppCustomizationRequest structure
+.FaviconFile WebAppFaviconFile
+.LogoFile WebAppLogoFile
+.Title WebAppTitle
+.WebAppId WebAppId
+UpdateWebAppCustomizationResponse structure
+.WebAppId WebAppId
+UpdateWebAppEndpointDetails union
+.Vpc UpdateWebAppVpcConfig
+UpdateWebAppIdentityCenterConfig structure
+.Role Role
+UpdateWebAppIdentityProviderDetails union
+.IdentityCenterConfig UpdateWebAppIdentityCenterConfig
+UpdateWebAppRequest structure
+.AccessEndpoint WebAppAccessEndpoint
+.EndpointDetails UpdateWebAppEndpointDetails
+.IdentityProviderDetails UpdateWebAppIdentityProviderDetails
+.WebAppId WebAppId
+.WebAppUnits WebAppUnits
+UpdateWebAppResponse structure
+.WebAppId WebAppId
+UpdateWebAppVpcConfig structure
+.IpAddressType WebAppVpcEndpointIpAddressType
+.SubnetIds SubnetIds
+Url string
+UserCount integer
+UserDetails structure
+.ServerId ServerId
+.SessionId SessionId
+.UserName UserName
+UserName string
+UserPassword string
+VpcEndpointId string
+VpcId string
+VpcLatticeResourceConfigurationArn string
+WebAppAccessEndpoint string
+WebAppEndpoint string
+WebAppEndpointDetails union
+.Vpc WebAppVpcConfig
+WebAppEndpointPolicy enum
+WebAppEndpointType enum
+WebAppFaviconFile blob
+WebAppId string
+WebAppIdentityProviderDetails union
+.IdentityCenterConfig IdentityCenterConfig
+WebAppLogoFile blob
+WebAppTitle string
+WebAppUnitCount integer
+WebAppUnits union
+.Provisioned WebAppUnitCount
+WebAppVpcConfig structure
+.IpAddressType WebAppVpcEndpointIpAddressType
+.SecurityGroupIds SecurityGroupIds
+.SubnetIds SubnetIds
+.VpcId VpcId
+WebAppVpcEndpointIpAddressType enum
+WorkflowDescription string
+WorkflowDetail structure
+.ExecutionRole Role
+.WorkflowId WorkflowId
+WorkflowDetails structure
+.OnPartialUpload OnPartialUploadWorkflowDetails
+.OnUpload OnUploadWorkflowDetails
+WorkflowId string
+WorkflowStep structure
+.CopyStepDetails CopyStepDetails
+.CustomStepDetails CustomStepDetails
+.DecryptStepDetails DecryptStepDetails
+.DeleteStepDetails DeleteStepDetails
+.TagStepDetails TagStepDetails
+.Type WorkflowStepType
+WorkflowStepName string
+WorkflowStepType enum
+WorkflowSteps list m=WorkflowStep

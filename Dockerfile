@@ -118,6 +118,12 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" \
     && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" \
         -o internal/services/lambda/initbin/dist/lambda-init-linux-arm64 ./cmd/lambda-init
 
+# The aws-sdk shape tables internal/awsshapes embeds (`make aws-sdk-shapes` runs
+# the same command): packed here, in the shared stage, from the committed text
+# tables, for the same reason as the init above — //go:embed reads the tree at
+# compile time.
+RUN go run ./cmd/awsshapes-pack
+
 # ---- Stage 3: Go build, slim flavour ---------------------------------------
 # No SPA overlay and no dependency on web-builder at all: `-tags slim` compiles
 # embed_slim.go, whose WebDistFS is an empty embed.FS. BuildKit therefore skips

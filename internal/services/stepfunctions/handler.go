@@ -31,6 +31,11 @@ type Handler struct {
 	ops     map[string]http.HandlerFunc
 	typedOp map[string]op.Operation
 
+	// pickWeight draws the random number in [0, n) that routes an alias
+	// execution to one of its versions by weight (pickRoute,
+	// execution_target.go). Nil means math/rand/v2's IntN; tests pin it.
+	pickWeight func(n int) int
+
 	// Executions run on their own goroutines so StartExecution can accept and
 	// return while the execution is still RUNNING, as AWS does. runs tracks
 	// the live ones (for DescribeExecution, GetExecutionHistory and
@@ -52,10 +57,25 @@ type Handler struct {
 	wg             sync.WaitGroup
 	shutdown       context.Context
 	shutdownCancel context.CancelFunc
+
+	// tasks holds the task tokens of every Task waiting on a callback
+	// (.waitForTaskToken or an activity).
+	tasks *taskRegistry
+
+	// mapRuns holds the distributed Map runs in progress, so DescribeMapRun
+	// reads live counts and UpdateMapRun reaches a running Map.
+	mapRuns   map[string]*liveMapRun
+	mapRunsMu sync.Mutex
+
+	// rehydrated resumes executions a previous process left parked, on the
+	// first request rather than at construction (durable.go); reapMu
+	// serialises failing the ones no restart can resume.
+	rehydrated serviceutil.LazyInit
+	reapMu     sync.Mutex
 }
 
 func newHandler(cfg *config.Config, store *Store, log *serviceutil.ServiceLogger, clk clock.Clock) *Handler {
-	h := &Handler{cfg: cfg, store: store, log: log, clk: clk, runs: map[string]*executionRun{}}
+	h := &Handler{cfg: cfg, store: store, log: log, clk: clk, runs: map[string]*executionRun{}, tasks: newTaskRegistry()}
 	// Parent of every execution context. Creating it does no I/O, so this is
 	// safe in a constructor called from router.New.
 	h.shutdown, h.shutdownCancel = context.WithCancel(context.Background())
@@ -68,24 +88,41 @@ func newHandler(cfg *config.Config, store *Store, log *serviceutil.ServiceLogger
 func (h *Handler) initOps() {
 	h.typedOp = h.typedOps()
 	h.ops = map[string]http.HandlerFunc{
-		"CreateStateMachine":   h.CreateStateMachine,
-		"DescribeStateMachine": h.DescribeStateMachine,
-		"ListStateMachines":    h.ListStateMachines,
-		"StartExecution":       h.StartExecution,
-		"DeleteStateMachine":   h.DeleteStateMachine,
-		"UpdateStateMachine":   h.typedJSONHandler("UpdateStateMachine"),
-		"TagResource":          h.TagResource,
-		"UntagResource":        h.UntagResource,
-		"ListTagsForResource":  h.ListTagsForResource,
-		// The execution plane has a single, typed implementation. These entries
-		// route the legacy X-Amz-Target path to it rather than duplicating the
-		// logic in a second handler that could drift.
+		"StartExecution": h.StartExecution,
+		// The state machine control plane, its versions and aliases, tagging
+		// and the execution plane each have a single, typed implementation.
+		// These entries route the legacy X-Amz-Target path to it rather than
+		// duplicating the logic in a second handler that could drift.
+		"CreateStateMachine":               h.typedJSONHandler("CreateStateMachine"),
+		"DescribeStateMachine":             h.typedJSONHandler("DescribeStateMachine"),
+		"ListStateMachines":                h.typedJSONHandler("ListStateMachines"),
+		"DeleteStateMachine":               h.typedJSONHandler("DeleteStateMachine"),
+		"UpdateStateMachine":               h.typedJSONHandler("UpdateStateMachine"),
+		"ValidateStateMachineDefinition":   h.typedJSONHandler("ValidateStateMachineDefinition"),
+		"TagResource":                      h.typedJSONHandler("TagResource"),
+		"UntagResource":                    h.typedJSONHandler("UntagResource"),
+		"ListTagsForResource":              h.typedJSONHandler("ListTagsForResource"),
+		"PublishStateMachineVersion":       h.typedJSONHandler("PublishStateMachineVersion"),
+		"ListStateMachineVersions":         h.typedJSONHandler("ListStateMachineVersions"),
+		"DeleteStateMachineVersion":        h.typedJSONHandler("DeleteStateMachineVersion"),
+		"CreateStateMachineAlias":          h.typedJSONHandler("CreateStateMachineAlias"),
+		"DescribeStateMachineAlias":        h.typedJSONHandler("DescribeStateMachineAlias"),
+		"UpdateStateMachineAlias":          h.typedJSONHandler("UpdateStateMachineAlias"),
+		"DeleteStateMachineAlias":          h.typedJSONHandler("DeleteStateMachineAlias"),
+		"ListStateMachineAliases":          h.typedJSONHandler("ListStateMachineAliases"),
 		"StartSyncExecution":               h.typedJSONHandler("StartSyncExecution"),
 		"DescribeExecution":                h.typedJSONHandler("DescribeExecution"),
 		"GetExecutionHistory":              h.typedJSONHandler("GetExecutionHistory"),
 		"ListExecutions":                   h.typedJSONHandler("ListExecutions"),
 		"StopExecution":                    h.typedJSONHandler("StopExecution"),
 		"DescribeStateMachineForExecution": h.typedJSONHandler("DescribeStateMachineForExecution"),
+	}
+	// Every operation added since the typed path became the single
+	// implementation reaches it the same way on the legacy X-Amz-Target path.
+	for name := range h.typedOp {
+		if _, ok := h.ops[name]; !ok {
+			h.ops[name] = h.typedJSONHandler(name)
+		}
 	}
 }
 
@@ -109,67 +146,6 @@ func (h *Handler) typedJSONHandler(name string) http.HandlerFunc {
 	}
 }
 
-// publish emits an event if the bus is wired.
-func (h *Handler) publish(r *http.Request, t events.Type, payload any) {
-	if h.bus != nil {
-		h.bus.Publish(r.Context(), events.Event{Type: t, Payload: payload})
-	}
-}
-
-func (h *Handler) CreateStateMachine(w http.ResponseWriter, r *http.Request) {
-	// Delegates to createStateMachineTyped (typed_logic.go) so the legacy
-	// JSON1.0/1.1 path and the CBOR typed path share one implementation —
-	// the legacy copy previously re-implemented this inline and silently
-	// ignored tags (#1196).
-	var req createStateMachineRequest
-	if !serviceutil.DecodeJSON(w, r, &req) {
-		return
-	}
-	resp, aerr := h.createStateMachineTyped(r.Context(), &req)
-	if aerr != nil {
-		protocol.WriteJSONError(w, r, aerr)
-		return
-	}
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{
-		"stateMachineArn": resp.StateMachineArn,
-		"creationDate":    resp.CreationDate,
-	})
-}
-
-// ── DescribeStateMachine ──────────────────────────────────────────────────────
-
-func (h *Handler) DescribeStateMachine(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		StateMachineArn string `json:"stateMachineArn"`
-	}
-	if !serviceutil.DecodeJSON(w, r, &req) {
-		return
-	}
-
-	name := extractSMName(req.StateMachineArn)
-	sm, err := h.store.GetStateMachine(r.Context(), name)
-	if err != nil {
-		protocol.WriteJSONError(w, r, protocol.Wrap(protocol.ErrInternalError, err))
-		return
-	}
-	if sm == nil {
-		protocol.WriteJSONError(w, r, errSMNotFound(req.StateMachineArn))
-		return
-	}
-
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{
-		"stateMachineArn":      sm.ARN,
-		"name":                 sm.Name,
-		"definition":           sm.Definition,
-		"roleArn":              sm.RoleArn,
-		"type":                 sm.Type,
-		"status":               sm.Status,
-		"creationDate":         float64(sm.CreatedAt.UnixMilli()) / 1000.0,
-		"loggingConfiguration": sfnLoggingConfigOrDefault(sm.LoggingConfiguration),
-		"tracingConfiguration": sfnTracingConfigOrDefault(sm.TracingConfiguration),
-	})
-}
-
 // sfnLoggingConfigOrDefault and sfnTracingConfigOrDefault return AWS's
 // documented defaults — logging OFF, tracing disabled — when the state
 // machine did not configure either, so DescribeStateMachine always echoes
@@ -190,30 +166,6 @@ func sfnTracingConfigOrDefault(v map[string]any) map[string]any {
 		return v
 	}
 	return map[string]any{"enabled": false}
-}
-
-// ── ListStateMachines ─────────────────────────────────────────────────────────
-
-func (h *Handler) ListStateMachines(w http.ResponseWriter, r *http.Request) {
-	sms, err := h.store.ListStateMachines(r.Context())
-	if err != nil {
-		protocol.WriteJSONError(w, r, protocol.Wrap(protocol.ErrInternalError, err))
-		return
-	}
-
-	items := make([]map[string]any, 0, len(sms))
-	for _, sm := range sms {
-		items = append(items, map[string]any{
-			"stateMachineArn": sm.ARN,
-			"name":            sm.Name,
-			"type":            sm.Type,
-			"creationDate":    float64(sm.CreatedAt.UnixMilli()) / 1000.0,
-		})
-	}
-
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{
-		"stateMachines": items,
-	})
 }
 
 // ── StartExecution ────────────────────────────────────────────────────────────
@@ -240,27 +192,6 @@ func (h *Handler) StartExecution(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ── DeleteStateMachine ────────────────────────────────────────────────────────
-
-func (h *Handler) DeleteStateMachine(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		StateMachineArn string `json:"stateMachineArn"`
-	}
-	if !serviceutil.DecodeJSON(w, r, &req) {
-		return
-	}
-
-	name := extractSMName(req.StateMachineArn)
-	if err := h.store.DeleteStateMachine(r.Context(), name); err != nil {
-		protocol.WriteJSONError(w, r, protocol.Wrap(protocol.ErrInternalError, err))
-		return
-	}
-
-	h.publish(r, events.SFNStateMachineDeleted, events.ResourcePayload{Name: name})
-
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{})
-}
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 // extractSMName extracts the state machine name from an ARN.
@@ -278,13 +209,19 @@ func extractSMName(arn string) string {
 	return arn
 }
 
-// validateDefinitionForCreate rejects a definition that is not valid Amazon
+// validateDefinitionForType rejects a definition that is not valid Amazon
 // States Language, the way AWS's CreateStateMachine does. Definitions that are
 // valid ASL but use features Overcast cannot interpret are accepted here — so
 // CDK and CloudFormation deploys keep working — and fail the execution loudly
 // when they actually run.
-func validateDefinitionForCreate(definition string) *protocol.AWSError {
-	if _, err := parseDefinition(definition); err != nil {
+//
+// smType adds the rules an EXPRESS state machine carries on top.
+func validateDefinitionForType(definition, smType string) *protocol.AWSError {
+	def, err := parseDefinition(definition)
+	if err == nil && strings.EqualFold(smType, "EXPRESS") {
+		err = checkExpressDefinition(def)
+	}
+	if err != nil {
 		return &protocol.AWSError{
 			Code:       "InvalidDefinition",
 			Message:    fmt.Sprintf("Invalid State Machine Definition: '%s'", err.Error()),
@@ -325,107 +262,4 @@ type untagResourceRequest struct {
 
 type listTagsForResourceRequest struct {
 	ResourceArn string `json:"resourceArn"`
-}
-
-func (h *Handler) TagResource(w http.ResponseWriter, r *http.Request) {
-	var req tagResourceRequest
-	if !serviceutil.DecodeJSON(w, r, &req) {
-		return
-	}
-
-	name := extractSMName(req.ResourceArn)
-
-	incoming := make(map[string]string, len(req.Tags))
-	for _, t := range req.Tags {
-		incoming[t.Key] = t.Value
-	}
-
-	if aerr := serviceutil.ApplyInlineTags(r.Context(), name, incoming, sfnTagCfg,
-		func(ctx context.Context, name string) (*StateMachine, *protocol.AWSError) {
-			sm, err := h.store.GetStateMachine(ctx, name)
-			if err != nil {
-				return nil, protocol.Wrap(protocol.ErrInternalError, err)
-			}
-			if sm == nil {
-				return nil, errSMNotFound(req.ResourceArn)
-			}
-			return sm, nil
-		},
-		func(ctx context.Context, sm *StateMachine) *protocol.AWSError {
-			if err := h.store.PutStateMachine(ctx, sm); err != nil {
-				return protocol.Wrap(protocol.ErrInternalError, err)
-			}
-			return nil
-		},
-	); aerr != nil {
-		protocol.WriteJSONError(w, r, aerr)
-		return
-	}
-
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{})
-}
-
-func (h *Handler) UntagResource(w http.ResponseWriter, r *http.Request) {
-	var req untagResourceRequest
-	if !serviceutil.DecodeJSON(w, r, &req) {
-		return
-	}
-
-	name := extractSMName(req.ResourceArn)
-
-	if aerr := serviceutil.RemoveInlineTags(r.Context(), name, req.TagKeys,
-		func(ctx context.Context, name string) (*StateMachine, *protocol.AWSError) {
-			sm, err := h.store.GetStateMachine(ctx, name)
-			if err != nil {
-				return nil, protocol.Wrap(protocol.ErrInternalError, err)
-			}
-			if sm == nil {
-				return nil, errSMNotFound(req.ResourceArn)
-			}
-			return sm, nil
-		},
-		func(ctx context.Context, sm *StateMachine) *protocol.AWSError {
-			if err := h.store.PutStateMachine(ctx, sm); err != nil {
-				return protocol.Wrap(protocol.ErrInternalError, err)
-			}
-			return nil
-		},
-	); aerr != nil {
-		protocol.WriteJSONError(w, r, aerr)
-		return
-	}
-
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{})
-}
-
-func (h *Handler) ListTagsForResource(w http.ResponseWriter, r *http.Request) {
-	var req listTagsForResourceRequest
-	if !serviceutil.DecodeJSON(w, r, &req) {
-		return
-	}
-
-	name := extractSMName(req.ResourceArn)
-
-	tags, aerr := serviceutil.ListInlineTags(r.Context(), name,
-		func(ctx context.Context, name string) (*StateMachine, *protocol.AWSError) {
-			sm, err := h.store.GetStateMachine(ctx, name)
-			if err != nil {
-				return nil, protocol.Wrap(protocol.ErrInternalError, err)
-			}
-			if sm == nil {
-				return nil, errSMNotFound(req.ResourceArn)
-			}
-			return sm, nil
-		},
-	)
-	if aerr != nil {
-		protocol.WriteJSONError(w, r, aerr)
-		return
-	}
-
-	tagList := serviceutil.TagElements(tags, func(k, v string) map[string]string {
-		return map[string]string{"key": k, "value": v}
-	})
-
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{"tags": tagList})
 }

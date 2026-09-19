@@ -1,0 +1,2267 @@
+service AWSJSON11 version=2014-11-13 ns=http://ecs.amazonaws.com/doc/2014-11-13/
+AcceleratorCountRequest structure
+.max BoxedInteger
+.min BoxedInteger
+AcceleratorManufacturer enum
+AcceleratorManufacturerSet list m=AcceleratorManufacturer mxml=item
+AcceleratorName enum
+AcceleratorNameSet list m=AcceleratorName mxml=item
+AcceleratorTotalMemoryMiBRequest structure
+.max BoxedInteger
+.min BoxedInteger
+AcceleratorType enum
+AcceleratorTypeSet list m=AcceleratorType mxml=item
+AccessDeniedException structure error=client code=403
+.message String
+AccessType enum
+AdvancedConfiguration structure
+.alternateTargetGroupArn String
+.productionListenerRule String
+.roleArn String
+.testListenerRule String
+AgentUpdateStatus enum
+AllowedInstanceType string
+AllowedInstanceTypeSet list m=AllowedInstanceType mxml=item
+ApplicationProtocol enum
+AssignPublicIp enum
+Attachment structure
+.details AttachmentDetails
+.id String
+.status String
+.type String
+AttachmentDetails list m=KeyValuePair
+AttachmentStateChange structure
+.attachmentArn String
+.status String
+AttachmentStateChanges list m=AttachmentStateChange
+Attachments list m=Attachment
+Attribute structure
+.name String
+.targetId String
+.targetType TargetType
+.value String
+AttributeLimitExceededException structure error=client
+.message String
+Attributes list m=Attribute
+AutoRepairActionsStatus enum
+AutoRepairConfiguration structure
+.actionsStatus AutoRepairActionsStatus
+AutoScalingGroupProvider structure
+.autoScalingGroupArn String
+.managedDraining ManagedDraining
+.managedScaling ManagedScaling
+.managedTerminationProtection ManagedTerminationProtection
+AutoScalingGroupProviderUpdate structure
+.managedDraining ManagedDraining
+.managedScaling ManagedScaling
+.managedTerminationProtection ManagedTerminationProtection
+AvailabilityZoneRebalancing enum
+AwsVpcConfiguration structure
+.assignPublicIp AssignPublicIp
+.securityGroups StringList
+.subnets StringList
+BareMetal enum
+BaselineEbsBandwidthMbpsRequest structure
+.max BoxedInteger
+.min BoxedInteger
+BlockedException structure error=client
+.message String
+Boolean boolean
+BoxedBoolean boolean
+BoxedDouble double
+BoxedInteger integer
+BurstablePerformance enum
+CPUArchitecture enum
+CanaryConfiguration structure
+.canaryBakeTimeInMinutes Integer
+.canaryPercent Double
+CapacityOptionType enum
+CapacityProvider structure
+.autoScalingGroupProvider AutoScalingGroupProvider
+.capacityProviderArn String
+.cluster String
+.managedInstancesProvider ManagedInstancesProvider
+.name String
+.status CapacityProviderStatus
+.tags Tags
+.type CapacityProviderType
+.updateStatus CapacityProviderUpdateStatus
+.updateStatusReason String
+CapacityProviderField enum
+CapacityProviderFieldList list m=CapacityProviderField
+CapacityProviderStatus enum
+CapacityProviderStrategy list m=CapacityProviderStrategyItem
+CapacityProviderStrategyItem structure
+.base CapacityProviderStrategyItemBase
+.capacityProvider String
+.weight CapacityProviderStrategyItemWeight
+CapacityProviderStrategyItemBase integer
+CapacityProviderStrategyItemWeight integer
+CapacityProviderType enum
+CapacityProviderUpdateStatus enum
+CapacityProviders list m=CapacityProvider
+CapacityReservationPreference enum
+CapacityReservationRequest structure
+.reservationGroupArn String
+.reservationPreference CapacityReservationPreference
+ClientException structure error=client
+.message String
+Cluster structure
+.activeServicesCount Integer
+.attachments Attachments
+.attachmentsStatus String
+.capacityProviders StringList
+.clusterArn String
+.clusterName String
+.configuration ClusterConfiguration
+.defaultCapacityProviderStrategy CapacityProviderStrategy
+.pendingTasksCount Integer
+.registeredContainerInstancesCount Integer
+.runningTasksCount Integer
+.serviceConnectDefaults ClusterServiceConnectDefaults
+.settings ClusterSettings
+.statistics Statistics
+.status String
+.tags Tags
+ClusterConfiguration structure
+.executeCommandConfiguration ExecuteCommandConfiguration
+.managedStorageConfiguration ManagedStorageConfiguration
+ClusterContainsCapacityProviderException structure error=client
+.message String
+ClusterContainsContainerInstancesException structure error=client
+.message String
+ClusterContainsServicesException structure error=client
+.message String
+ClusterContainsTasksException structure error=client
+.message String
+ClusterField enum
+ClusterFieldList list m=ClusterField
+ClusterNotFoundException structure error=client
+.message String
+ClusterServiceConnectDefaults structure
+.namespace String
+ClusterServiceConnectDefaultsRequest structure
+.namespace String
+ClusterSetting structure
+.name ClusterSettingName
+.value String
+ClusterSettingName enum
+ClusterSettings list m=ClusterSetting
+Clusters list m=Cluster
+Compatibility enum
+CompatibilityList list m=Compatibility
+ConflictException structure error=client
+.message String
+.resourceIds ResourceIds
+Connectivity enum
+Container structure
+.containerArn String
+.cpu String
+.exitCode BoxedInteger
+.gpuIds GpuIds
+.healthStatus HealthStatus
+.image String
+.imageDigest String
+.lastStatus String
+.managedAgents ManagedAgents
+.memory String
+.memoryReservation String
+.name String
+.networkBindings NetworkBindings
+.networkInterfaces NetworkInterfaces
+.neuronDeviceIds NeuronDeviceIds
+.reason String
+.runtimeId String
+.taskArn String
+ContainerCondition enum
+ContainerDefinition structure
+.command StringList
+.cpu Integer
+.credentialSpecs StringList
+.dependsOn ContainerDependencies
+.disableNetworking BoxedBoolean
+.dnsSearchDomains StringList
+.dnsServers StringList
+.dockerLabels DockerLabelsMap
+.dockerSecurityOptions StringList
+.entryPoint StringList
+.environment EnvironmentVariables
+.environmentFiles EnvironmentFiles
+.essential BoxedBoolean
+.extraHosts HostEntryList
+.firelensConfiguration FirelensConfiguration
+.healthCheck HealthCheck
+.hostname String
+.image String
+.interactive BoxedBoolean
+.links StringList
+.linuxParameters LinuxParameters
+.logConfiguration LogConfiguration
+.memory BoxedInteger
+.memoryReservation BoxedInteger
+.mountPoints MountPointList
+.name String
+.portMappings PortMappingList
+.privileged BoxedBoolean
+.pseudoTerminal BoxedBoolean
+.readonlyRootFilesystem BoxedBoolean
+.repositoryCredentials RepositoryCredentials
+.resourceRequirements ResourceRequirements
+.restartPolicy ContainerRestartPolicy
+.secrets SecretList
+.startTimeout BoxedInteger
+.stopTimeout BoxedInteger
+.systemControls SystemControls
+.ulimits UlimitList
+.user String
+.versionConsistency VersionConsistency
+.volumesFrom VolumeFromList
+.workingDirectory String
+ContainerDefinitions list m=ContainerDefinition
+ContainerDependencies list m=ContainerDependency
+ContainerDependency structure
+.condition ContainerCondition
+.containerName String
+ContainerImage structure
+.containerName String
+.image String
+.imageDigest String
+ContainerImages list m=ContainerImage
+ContainerInstance structure
+.agentConnected Boolean
+.agentUpdateStatus AgentUpdateStatus
+.attachments Attachments
+.attributes Attributes
+.capacityProviderName String
+.containerInstanceArn String
+.ec2InstanceId String
+.healthStatus ContainerInstanceHealthStatus
+.pendingTasksCount Integer
+.registeredAt Timestamp
+.registeredResources Resources
+.remainingResources Resources
+.runningTasksCount Integer
+.status String
+.statusReason String
+.tags Tags
+.version Long
+.versionInfo VersionInfo
+ContainerInstanceField enum
+ContainerInstanceFieldList list m=ContainerInstanceField
+ContainerInstanceHealthStatus structure
+.details InstanceHealthCheckResultList
+.overallStatus InstanceHealthCheckState
+ContainerInstanceStatus enum
+ContainerInstances list m=ContainerInstance
+ContainerOverride structure
+.command StringList
+.cpu BoxedInteger
+.environment EnvironmentVariables
+.environmentFiles EnvironmentFiles
+.memory BoxedInteger
+.memoryReservation BoxedInteger
+.name String
+.resourceRequirements ResourceRequirements
+ContainerOverrides list m=ContainerOverride
+ContainerRestartPolicy structure
+.enabled BoxedBoolean
+.ignoredExitCodes IntegerList
+.restartAttemptPeriod BoxedInteger
+ContainerStateChange structure
+.containerName String
+.exitCode BoxedInteger
+.imageDigest String
+.networkBindings NetworkBindings
+.reason String
+.runtimeId String
+.status String
+ContainerStateChanges list m=ContainerStateChange
+Containers list m=Container
+ContinueServiceDeployment operation in=ContinueServiceDeploymentRequest out=ContinueServiceDeploymentResponse err=AccessDeniedException,ClientException,InvalidParameterException,ServerException,ServiceDeploymentNotFoundException,UnsupportedFeatureException
+ContinueServiceDeploymentRequest structure
+.action DeploymentLifecycleHookAction
+.hookId String
+.serviceDeploymentArn String
+ContinueServiceDeploymentResponse structure
+.serviceDeploymentArn String
+CpuManufacturer enum
+CpuManufacturerSet list m=CpuManufacturer mxml=item
+CreateCapacityProvider operation in=CreateCapacityProviderRequest out=CreateCapacityProviderResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,LimitExceededException,ServerException,UnsupportedFeatureException,UpdateInProgressException
+CreateCapacityProviderRequest structure
+.autoScalingGroupProvider AutoScalingGroupProvider
+.cluster String
+.managedInstancesProvider CreateManagedInstancesProviderConfiguration
+.name String
+.tags Tags
+CreateCapacityProviderResponse structure
+.capacityProvider CapacityProvider
+CreateCluster operation in=CreateClusterRequest out=CreateClusterResponse err=AccessDeniedException,ClientException,InvalidParameterException,NamespaceNotFoundException,ServerException
+CreateClusterRequest structure
+.capacityProviders StringList
+.clusterName String
+.configuration ClusterConfiguration
+.defaultCapacityProviderStrategy CapacityProviderStrategy
+.serviceConnectDefaults ClusterServiceConnectDefaultsRequest
+.settings ClusterSettings
+.tags Tags
+CreateClusterResponse structure
+.cluster Cluster
+CreateDaemon operation in=CreateDaemonRequest out=CreateDaemonResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,PlatformUnknownException,ServerException,UnsupportedFeatureException
+CreateDaemonRequest structure
+.capacityProviderArns StringList
+.clientToken String
+.clusterArn String
+.critical BoxedBoolean
+.daemonName String
+.daemonTaskDefinitionArn String
+.deploymentConfiguration DaemonDeploymentConfiguration
+.enableECSManagedTags Boolean
+.enableExecuteCommand Boolean
+.propagateTags DaemonPropagateTags
+.tags Tags
+CreateDaemonResponse structure
+.createdAt Timestamp
+.daemonArn String
+.deploymentArn String
+.status DaemonStatus
+CreateExpressGatewayService operation in=CreateExpressGatewayServiceRequest out=CreateExpressGatewayServiceResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,PlatformTaskDefinitionIncompatibilityException,PlatformUnknownException,ServerException,UnsupportedFeatureException
+CreateExpressGatewayServiceRequest structure
+.cluster String
+.cpu String
+.executionRoleArn String
+.healthCheckPath String
+.infrastructureRoleArn String
+.memory String
+.networkConfiguration ExpressGatewayServiceNetworkConfiguration
+.primaryContainer ExpressGatewayContainer
+.scalingTarget ExpressGatewayScalingTarget
+.serviceName String
+.tags Tags
+.taskDefinitionArn String
+.taskRoleArn String
+CreateExpressGatewayServiceResponse structure
+.service ECSExpressGatewayService
+CreateManagedInstancesProviderConfiguration structure
+.autoRepairConfiguration AutoRepairConfiguration
+.infrastructureOptimization InfrastructureOptimization
+.infrastructureRoleArn String
+.instanceLaunchTemplate InstanceLaunchTemplate
+.propagateTags PropagateMITags
+CreateService operation in=CreateServiceRequest out=CreateServiceResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,NamespaceNotFoundException,PlatformTaskDefinitionIncompatibilityException,PlatformUnknownException,ServerException,UnsupportedFeatureException
+CreateServiceRequest structure
+.availabilityZoneRebalancing AvailabilityZoneRebalancing
+.capacityProviderStrategy CapacityProviderStrategy
+.clientToken String
+.cluster String
+.deploymentConfiguration DeploymentConfiguration
+.deploymentController DeploymentController
+.desiredCount BoxedInteger
+.enableECSManagedTags Boolean
+.enableExecuteCommand Boolean
+.healthCheckGracePeriodSeconds BoxedInteger
+.launchType LaunchType
+.loadBalancers LoadBalancers
+.monitoring MonitoringConfiguration
+.networkConfiguration NetworkConfiguration
+.placementConstraints PlacementConstraints
+.placementStrategy PlacementStrategies
+.platformVersion String
+.propagateTags PropagateTags
+.role String
+.schedulingStrategy SchedulingStrategy
+.serviceConnectConfiguration ServiceConnectConfiguration
+.serviceName String
+.serviceRegistries ServiceRegistries
+.tags Tags
+.taskDefinition String
+.volumeConfigurations ServiceVolumeConfigurations
+.vpcLatticeConfigurations VpcLatticeConfigurations
+CreateServiceResponse structure
+.service Service
+CreateTaskSet operation in=CreateTaskSetRequest out=CreateTaskSetResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,LimitExceededException,NamespaceNotFoundException,PlatformTaskDefinitionIncompatibilityException,PlatformUnknownException,ServerException,ServiceNotActiveException,ServiceNotFoundException,UnsupportedFeatureException
+CreateTaskSetRequest structure
+.capacityProviderStrategy CapacityProviderStrategy
+.clientToken String
+.cluster String
+.externalId String
+.launchType LaunchType
+.loadBalancers LoadBalancers
+.networkConfiguration NetworkConfiguration
+.platformVersion String
+.scale Scale
+.service String
+.serviceRegistries ServiceRegistries
+.tags Tags
+.taskDefinition String
+CreateTaskSetResponse structure
+.taskSet TaskSet
+CreatedAt structure
+.after Timestamp
+.before Timestamp
+DaemonAlarmConfiguration structure
+.alarmNames StringList
+.enable Boolean
+DaemonCapacityProvider structure
+.arn String
+.runningCount Integer
+.withoutDaemonCount Integer
+DaemonCapacityProviderList list m=DaemonCapacityProvider
+DaemonCircuitBreaker structure
+.failureCount Integer
+.status DaemonDeploymentRollbackMonitorsStatus
+.threshold Integer
+DaemonContainerDefinition structure
+.command StringList
+.cpu Integer
+.dependsOn ContainerDependencies
+.entryPoint StringList
+.environment EnvironmentVariables
+.environmentFiles EnvironmentFiles
+.essential BoxedBoolean
+.firelensConfiguration FirelensConfiguration
+.healthCheck HealthCheck
+.image String
+.interactive BoxedBoolean
+.linuxParameters DaemonLinuxParameters
+.logConfiguration LogConfiguration
+.memory BoxedInteger
+.memoryReservation BoxedInteger
+.mountPoints MountPointList
+.name String
+.privileged BoxedBoolean
+.pseudoTerminal BoxedBoolean
+.readonlyRootFilesystem BoxedBoolean
+.repositoryCredentials RepositoryCredentials
+.restartPolicy ContainerRestartPolicy
+.secrets SecretList
+.startTimeout BoxedInteger
+.stopTimeout BoxedInteger
+.systemControls SystemControls
+.ulimits UlimitList
+.user String
+.workingDirectory String
+DaemonContainerDefinitionList list m=DaemonContainerDefinition
+DaemonContainerImage structure
+.containerName String
+.image String
+.imageDigest String
+DaemonContainerImages list m=DaemonContainerImage
+DaemonDeployment structure
+.alarms DaemonDeploymentAlarms
+.circuitBreaker DaemonCircuitBreaker
+.clusterArn String
+.createdAt Timestamp
+.daemonDeploymentArn String
+.deploymentConfiguration DaemonDeploymentConfiguration
+.finishedAt Timestamp
+.rollback DaemonRollback
+.sourceDaemonRevisions DaemonDeploymentRevisionDetailList
+.startedAt Timestamp
+.status DaemonDeploymentStatus
+.statusReason String
+.stoppedAt Timestamp
+.targetDaemonRevision DaemonDeploymentRevisionDetail
+DaemonDeploymentAlarms structure
+.alarmNames StringList
+.status DaemonDeploymentRollbackMonitorsStatus
+.triggeredAlarmNames StringList
+DaemonDeploymentCapacityProvider structure
+.arn String
+.drainingInstanceCount BoxedInteger
+.runningInstanceCount BoxedInteger
+.withoutDaemonInstanceCount BoxedInteger
+DaemonDeploymentCapacityProviderList list m=DaemonDeploymentCapacityProvider
+DaemonDeploymentConfiguration structure
+.alarms DaemonAlarmConfiguration
+.bakeTimeInMinutes Integer
+.drainPercent DaemonDrainPercent
+DaemonDeploymentList list m=DaemonDeployment
+DaemonDeploymentRevisionDetail structure
+.arn String
+.capacityProviders DaemonDeploymentCapacityProviderList
+.totalDrainingInstanceCount BoxedInteger
+.totalRunningInstanceCount BoxedInteger
+.totalWithoutDaemonInstanceCount BoxedInteger
+DaemonDeploymentRevisionDetailList list m=DaemonDeploymentRevisionDetail
+DaemonDeploymentRollbackMonitorsStatus enum
+DaemonDeploymentStatus enum
+DaemonDeploymentStatusList list m=DaemonDeploymentStatus
+DaemonDeploymentSummary structure
+.clusterArn String
+.createdAt Timestamp
+.daemonArn String
+.daemonDeploymentArn String
+.finishedAt Timestamp
+.startedAt Timestamp
+.status DaemonDeploymentStatus
+.statusReason String
+.stoppedAt Timestamp
+.targetDaemonRevisionArn String
+DaemonDeploymentSummaryList list m=DaemonDeploymentSummary
+DaemonDetail structure
+.clusterArn String
+.createdAt Timestamp
+.currentRevisions DaemonRevisionDetailList
+.daemonArn String
+.deploymentArn String
+.status DaemonStatus
+.updatedAt Timestamp
+DaemonDrainPercent double
+DaemonIpcMode enum
+DaemonLinuxParameters structure
+.capabilities KernelCapabilities
+.devices DevicesList
+.initProcessEnabled BoxedBoolean
+.tmpfs TmpfsList
+DaemonNotActiveException structure error=client
+.message String
+DaemonNotFoundException structure error=client
+.message String
+DaemonPidMode enum
+DaemonPropagateTags enum
+DaemonRevision structure
+.clusterArn String
+.containerImages DaemonContainerImages
+.createdAt Timestamp
+.critical BoxedBoolean
+.daemonArn String
+.daemonRevisionArn String
+.daemonTaskDefinitionArn String
+.enableECSManagedTags BoxedBoolean
+.enableExecuteCommand BoxedBoolean
+.propagateTags DaemonPropagateTags
+DaemonRevisionDetail structure
+.arn String
+.capacityProviders DaemonCapacityProviderList
+.totalRunningCount Integer
+.totalWithoutDaemonCount Integer
+DaemonRevisionDetailList list m=DaemonRevisionDetail
+DaemonRevisions list m=DaemonRevision
+DaemonRollback structure
+.reason String
+.rollbackCapacityProviders StringList
+.rollbackTargetDaemonRevisionArn String
+.startedAt Timestamp
+DaemonStatus enum
+DaemonSummariesList list m=DaemonSummary
+DaemonSummary structure
+.createdAt Timestamp
+.daemonArn String
+.status DaemonStatus
+.updatedAt Timestamp
+DaemonTaskDefinition structure
+.containerDefinitions DaemonContainerDefinitionList
+.cpu String
+.daemonTaskDefinitionArn String
+.deleteRequestedAt Timestamp
+.executionRoleArn String
+.family String
+.ipcMode DaemonIpcMode
+.memory String
+.pidMode DaemonPidMode
+.registeredAt Timestamp
+.registeredBy String
+.revision Integer
+.status DaemonTaskDefinitionStatus
+.taskRoleArn String
+.volumes DaemonVolumeList
+DaemonTaskDefinitionRevisionFilter enum
+DaemonTaskDefinitionStatus enum
+DaemonTaskDefinitionStatusFilter enum
+DaemonTaskDefinitionSummaries list m=DaemonTaskDefinitionSummary
+DaemonTaskDefinitionSummary structure
+.arn String
+.deleteRequestedAt Timestamp
+.registeredAt Timestamp
+.registeredBy String
+.status DaemonTaskDefinitionStatus
+DaemonVolume structure
+.host HostVolumeProperties
+.name String
+DaemonVolumeList list m=DaemonVolume
+DeleteAccountSetting operation in=DeleteAccountSettingRequest out=DeleteAccountSettingResponse err=AccessDeniedException,ClientException,InvalidParameterException,ServerException
+DeleteAccountSettingRequest structure
+.name SettingName
+.principalArn String
+DeleteAccountSettingResponse structure
+.setting Setting
+DeleteAttributes operation in=DeleteAttributesRequest out=DeleteAttributesResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException,TargetNotFoundException
+DeleteAttributesRequest structure
+.attributes Attributes
+.cluster String
+DeleteAttributesResponse structure
+.attributes Attributes
+DeleteCapacityProvider operation in=DeleteCapacityProviderRequest out=DeleteCapacityProviderResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException,UnsupportedFeatureException,UpdateInProgressException
+DeleteCapacityProviderRequest structure
+.capacityProvider String
+.cluster String
+DeleteCapacityProviderResponse structure
+.capacityProvider CapacityProvider
+DeleteCluster operation in=DeleteClusterRequest out=DeleteClusterResponse err=AccessDeniedException,ClientException,ClusterContainsCapacityProviderException,ClusterContainsContainerInstancesException,ClusterContainsServicesException,ClusterContainsTasksException,ClusterNotFoundException,InvalidParameterException,ServerException,UpdateInProgressException
+DeleteClusterRequest structure
+.cluster String
+DeleteClusterResponse structure
+.cluster Cluster
+DeleteDaemon operation in=DeleteDaemonRequest out=DeleteDaemonResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,DaemonNotActiveException,DaemonNotFoundException,InvalidParameterException,ServerException,UnsupportedFeatureException
+DeleteDaemonRequest structure
+.daemonArn String
+DeleteDaemonResponse structure
+.createdAt Timestamp
+.daemonArn String
+.deploymentArn String
+.status DaemonStatus
+.updatedAt Timestamp
+DeleteDaemonTaskDefinition operation in=DeleteDaemonTaskDefinitionRequest out=DeleteDaemonTaskDefinitionResponse err=AccessDeniedException,ClientException,InvalidParameterException,ServerException
+DeleteDaemonTaskDefinitionRequest structure
+.daemonTaskDefinition String
+DeleteDaemonTaskDefinitionResponse structure
+.daemonTaskDefinitionArn String
+DeleteExpressGatewayService operation in=DeleteExpressGatewayServiceRequest out=DeleteExpressGatewayServiceResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException,ServiceNotActiveException,ServiceNotFoundException,UnsupportedFeatureException
+DeleteExpressGatewayServiceRequest structure
+.serviceArn String
+DeleteExpressGatewayServiceResponse structure
+.service ECSExpressGatewayService
+DeleteService operation in=DeleteServiceRequest out=DeleteServiceResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException,ServiceNotFoundException
+DeleteServiceRequest structure
+.cluster String
+.force BoxedBoolean
+.service String
+DeleteServiceResponse structure
+.service Service
+DeleteTaskDefinitions operation in=DeleteTaskDefinitionsRequest out=DeleteTaskDefinitionsResponse err=AccessDeniedException,ClientException,InvalidParameterException,ServerException
+DeleteTaskDefinitionsRequest structure
+.taskDefinitions StringList
+DeleteTaskDefinitionsResponse structure
+.failures Failures
+.taskDefinitions TaskDefinitionList
+DeleteTaskSet operation in=DeleteTaskSetRequest out=DeleteTaskSetResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,LimitExceededException,ServerException,ServiceNotActiveException,ServiceNotFoundException,TaskSetNotFoundException,UnsupportedFeatureException
+DeleteTaskSetRequest structure
+.cluster String
+.force BoxedBoolean
+.service String
+.taskSet String
+DeleteTaskSetResponse structure
+.taskSet TaskSet
+Deployment structure
+.capacityProviderStrategy CapacityProviderStrategy
+.createdAt Timestamp
+.desiredCount Integer
+.failedTasks Integer
+.fargateEphemeralStorage DeploymentEphemeralStorage
+.id String
+.launchType LaunchType
+.networkConfiguration NetworkConfiguration
+.pendingCount Integer
+.platformFamily String
+.platformVersion String
+.rolloutState DeploymentRolloutState
+.rolloutStateReason String
+.runningCount Integer
+.serviceConnectConfiguration ServiceConnectConfiguration
+.serviceConnectResources ServiceConnectServiceResourceList
+.status String
+.taskDefinition String
+.updatedAt Timestamp
+.volumeConfigurations ServiceVolumeConfigurations
+.vpcLatticeConfigurations VpcLatticeConfigurations
+DeploymentAlarms structure
+.alarmNames StringList
+.enable Boolean
+.rollback Boolean
+DeploymentCircuitBreaker structure
+.enable Boolean
+.resetOnHealthyTask BoxedBoolean
+.rollback Boolean
+.thresholdConfiguration ThresholdConfiguration
+DeploymentConfiguration structure
+.alarms DeploymentAlarms
+.bakeTimeInMinutes BoxedInteger
+.canaryConfiguration CanaryConfiguration
+.deploymentCircuitBreaker DeploymentCircuitBreaker
+.earlySuccessCriteria DeploymentEarlySuccessCriteria
+.lifecycleHooks DeploymentLifecycleHookList
+.linearConfiguration LinearConfiguration
+.maximumPercent BoxedInteger
+.minimumHealthyPercent BoxedInteger
+.strategy DeploymentStrategy
+DeploymentController structure
+.type DeploymentControllerType
+DeploymentControllerType enum
+DeploymentEarlySuccessCriteria structure
+.enable Boolean
+.healthyPercent HealthyPercentInteger
+.sourceServiceRevisionCleanup ServiceRevisionCleanup
+DeploymentEphemeralStorage structure
+.kmsKeyId String
+DeploymentLifecycleHook structure
+.hookDetails HookDetails
+.hookTargetArn String
+.lifecycleStages DeploymentLifecycleHookStageList
+.roleArn IAMRoleArn
+.targetType DeploymentLifecycleHookTargetType
+.timeoutConfiguration DeploymentLifecycleHookTimeoutConfiguration
+DeploymentLifecycleHookAction enum
+DeploymentLifecycleHookDetail structure
+.expiresAt Timestamp
+.hookId String
+.status DeploymentLifecycleHookStatus
+.targetArn String
+.targetType DeploymentLifecycleHookTargetType
+.timeoutAction DeploymentLifecycleHookAction
+DeploymentLifecycleHookDetailList list m=DeploymentLifecycleHookDetail
+DeploymentLifecycleHookDuration integer
+DeploymentLifecycleHookList list m=DeploymentLifecycleHook
+DeploymentLifecycleHookStage enum
+DeploymentLifecycleHookStageList list m=DeploymentLifecycleHookStage
+DeploymentLifecycleHookStatus enum
+DeploymentLifecycleHookTargetType enum
+DeploymentLifecycleHookTimeoutConfiguration structure
+.action DeploymentLifecycleHookAction
+.timeoutInMinutes DeploymentLifecycleHookDuration
+DeploymentRolloutState enum
+DeploymentStrategy enum
+Deployments list m=Deployment
+DeregisterContainerInstance operation in=DeregisterContainerInstanceRequest out=DeregisterContainerInstanceResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException
+DeregisterContainerInstanceRequest structure
+.cluster String
+.containerInstance String
+.force BoxedBoolean
+DeregisterContainerInstanceResponse structure
+.containerInstance ContainerInstance
+DeregisterTaskDefinition operation in=DeregisterTaskDefinitionRequest out=DeregisterTaskDefinitionResponse err=AccessDeniedException,ClientException,InvalidParameterException,ServerException
+DeregisterTaskDefinitionRequest structure
+.taskDefinition String
+DeregisterTaskDefinitionResponse structure
+.taskDefinition TaskDefinition
+DescribeCapacityProviders operation in=DescribeCapacityProvidersRequest out=DescribeCapacityProvidersResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException,UnsupportedFeatureException
+DescribeCapacityProvidersRequest structure
+.capacityProviders StringList
+.cluster String
+.include CapacityProviderFieldList
+.maxResults BoxedInteger
+.nextToken String
+DescribeCapacityProvidersResponse structure
+.capacityProviders CapacityProviders
+.failures Failures
+.nextToken String
+DescribeClusters operation in=DescribeClustersRequest out=DescribeClustersResponse err=AccessDeniedException,ClientException,InvalidParameterException,ServerException
+DescribeClustersRequest structure
+.clusters StringList
+.include ClusterFieldList
+DescribeClustersResponse structure
+.clusters Clusters
+.failures Failures
+DescribeContainerInstances operation in=DescribeContainerInstancesRequest out=DescribeContainerInstancesResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException
+DescribeContainerInstancesRequest structure
+.cluster String
+.containerInstances StringList
+.include ContainerInstanceFieldList
+DescribeContainerInstancesResponse structure
+.containerInstances ContainerInstances
+.failures Failures
+DescribeDaemon operation in=DescribeDaemonRequest out=DescribeDaemonResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,DaemonNotFoundException,InvalidParameterException,ServerException,UnsupportedFeatureException
+DescribeDaemonDeployments operation in=DescribeDaemonDeploymentsRequest out=DescribeDaemonDeploymentsResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException,UnsupportedFeatureException
+DescribeDaemonDeploymentsRequest structure
+.daemonDeploymentArns StringList
+DescribeDaemonDeploymentsResponse structure
+.daemonDeployments DaemonDeploymentList
+.failures Failures
+DescribeDaemonRequest structure
+.daemonArn String
+DescribeDaemonResponse structure
+.daemon DaemonDetail
+DescribeDaemonRevisions operation in=DescribeDaemonRevisionsRequest out=DescribeDaemonRevisionsResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException,UnsupportedFeatureException
+DescribeDaemonRevisionsRequest structure
+.daemonRevisionArns StringList
+DescribeDaemonRevisionsResponse structure
+.daemonRevisions DaemonRevisions
+.failures Failures
+DescribeDaemonTaskDefinition operation in=DescribeDaemonTaskDefinitionRequest out=DescribeDaemonTaskDefinitionResponse err=AccessDeniedException,ClientException,InvalidParameterException,ServerException
+DescribeDaemonTaskDefinitionRequest structure
+.daemonTaskDefinition String
+DescribeDaemonTaskDefinitionResponse structure
+.daemonTaskDefinition DaemonTaskDefinition
+DescribeExpressGatewayService operation in=DescribeExpressGatewayServiceRequest out=DescribeExpressGatewayServiceResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ResourceNotFoundException,ServerException,UnsupportedFeatureException
+DescribeExpressGatewayServiceRequest structure
+.include ExpressGatewayServiceIncludeList
+.serviceArn String
+DescribeExpressGatewayServiceResponse structure
+.service ECSExpressGatewayService
+DescribeServiceDeployments operation in=DescribeServiceDeploymentsRequest out=DescribeServiceDeploymentsResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException,ServiceNotFoundException,UnsupportedFeatureException
+DescribeServiceDeploymentsRequest structure
+.serviceDeploymentArns StringList
+DescribeServiceDeploymentsResponse structure
+.failures Failures
+.serviceDeployments ServiceDeployments
+DescribeServiceRevisions operation in=DescribeServiceRevisionsRequest out=DescribeServiceRevisionsResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException,ServiceNotFoundException,UnsupportedFeatureException
+DescribeServiceRevisionsRequest structure
+.serviceRevisionArns StringList
+DescribeServiceRevisionsResponse structure
+.failures Failures
+.serviceRevisions ServiceRevisions
+DescribeServices operation in=DescribeServicesRequest out=DescribeServicesResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException
+DescribeServicesRequest structure
+.cluster String
+.include ServiceFieldList
+.services StringList
+DescribeServicesResponse structure
+.failures Failures
+.services Services
+DescribeTaskDefinition operation in=DescribeTaskDefinitionRequest out=DescribeTaskDefinitionResponse err=AccessDeniedException,ClientException,InvalidParameterException,ServerException
+DescribeTaskDefinitionRequest structure
+.include TaskDefinitionFieldList
+.taskDefinition String
+DescribeTaskDefinitionResponse structure
+.tags Tags
+.taskDefinition TaskDefinition
+DescribeTaskSets operation in=DescribeTaskSetsRequest out=DescribeTaskSetsResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException,ServiceNotActiveException,ServiceNotFoundException,UnsupportedFeatureException
+DescribeTaskSetsRequest structure
+.cluster String
+.include TaskSetFieldList
+.service String
+.taskSets StringList
+DescribeTaskSetsResponse structure
+.failures Failures
+.taskSets TaskSets
+DescribeTasks operation in=DescribeTasksRequest out=DescribeTasksResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException
+DescribeTasksRequest structure
+.cluster String
+.include TaskFieldList
+.tasks StringList
+DescribeTasksResponse structure
+.failures Failures
+.tasks Tasks
+DesiredStatus enum
+Device structure
+.containerPath String
+.hostPath String
+.permissions DeviceCgroupPermissions
+DeviceCgroupPermission enum
+DeviceCgroupPermissions list m=DeviceCgroupPermission
+DevicesList list m=Device
+DiscoverPollEndpoint operation in=DiscoverPollEndpointRequest out=DiscoverPollEndpointResponse err=AccessDeniedException,ClientException,InvalidParameterException,ServerException
+DiscoverPollEndpointRequest structure
+.cluster String
+.containerInstance String
+DiscoverPollEndpointResponse structure
+.endpoint String
+.serviceConnectEndpoint String
+.telemetryEndpoint String
+DockerLabelsMap map k=String v=String
+DockerVolumeConfiguration structure
+.autoprovision BoxedBoolean
+.driver String
+.driverOpts StringMap
+.labels StringMap
+.scope Scope
+Double double
+Duration integer
+EBSKMSKeyId string
+EBSResourceType enum
+EBSSnapshotId string
+EBSTagSpecification structure
+.propagateTags PropagateTags
+.resourceType EBSResourceType
+.tags Tags
+EBSTagSpecifications list m=EBSTagSpecification
+EBSVolumeType string
+ECSExpressGatewayService structure
+.activeConfigurations ExpressGatewayServiceConfigurations
+.cluster String
+.createdAt Timestamp
+.currentDeployment String
+.infrastructureRoleArn String
+.serviceArn String
+.serviceName String
+.status ExpressGatewayServiceStatus
+.tags Tags
+.updatedAt Timestamp
+ECSManagedResources structure
+.autoScaling ManagedAutoScaling
+.ingressPaths ManagedIngressPaths
+.logGroups ManagedLogGroups
+.metricAlarms ManagedMetricAlarms
+.serviceSecurityGroups ManagedSecurityGroups
+ECSVolumeName string
+EFSAuthorizationConfig structure
+.accessPointId String
+.iam EFSAuthorizationConfigIAM
+EFSAuthorizationConfigIAM enum
+EFSTransitEncryption enum
+EFSVolumeConfiguration structure
+.authorizationConfig EFSAuthorizationConfig
+.fileSystemId String
+.rootDirectory String
+.transitEncryption EFSTransitEncryption
+.transitEncryptionPort BoxedInteger
+EnvironmentFile structure
+.type EnvironmentFileType
+.value String
+EnvironmentFileType enum
+EnvironmentFiles list m=EnvironmentFile
+EnvironmentVariables list m=KeyValuePair
+EphemeralStorage structure
+.sizeInGiB Integer
+ExcludedInstanceType string
+ExcludedInstanceTypeSet list m=ExcludedInstanceType mxml=item
+ExecuteCommand operation in=ExecuteCommandRequest out=ExecuteCommandResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException,TargetNotConnectedException
+ExecuteCommandConfiguration structure
+.kmsKeyId String
+.logConfiguration ExecuteCommandLogConfiguration
+.logging ExecuteCommandLogging
+ExecuteCommandLogConfiguration structure
+.cloudWatchEncryptionEnabled Boolean
+.cloudWatchLogGroupName String
+.s3BucketName String
+.s3EncryptionEnabled Boolean
+.s3KeyPrefix String
+ExecuteCommandLogging enum
+ExecuteCommandRequest structure
+.cluster String
+.command String
+.container String
+.interactive Boolean
+.task String
+ExecuteCommandResponse structure
+.clusterArn String
+.containerArn String
+.containerName String
+.interactive Boolean
+.session Session
+.taskArn String
+ExpressGatewayContainer structure
+.awsLogsConfiguration ExpressGatewayServiceAwsLogsConfiguration
+.command StringList
+.containerPort BoxedInteger
+.environment EnvironmentVariables
+.image String
+.repositoryCredentials ExpressGatewayRepositoryCredentials
+.secrets SecretList
+ExpressGatewayRepositoryCredentials structure
+.credentialsParameter String
+ExpressGatewayScalingTarget structure
+.autoScalingMetric ExpressGatewayServiceScalingMetric
+.autoScalingTargetValue BoxedInteger
+.maxTaskCount BoxedInteger
+.minTaskCount BoxedInteger
+ExpressGatewayServiceAwsLogsConfiguration structure
+.logGroup String
+.logStreamPrefix String
+ExpressGatewayServiceConfiguration structure
+.cpu String
+.createdAt Timestamp
+.executionRoleArn String
+.healthCheckPath String
+.ingressPaths IngressPathSummaries
+.memory String
+.networkConfiguration ExpressGatewayServiceNetworkConfiguration
+.primaryContainer ExpressGatewayContainer
+.scalingTarget ExpressGatewayScalingTarget
+.serviceRevisionArn String
+.taskDefinitionArn String
+.taskRoleArn String
+ExpressGatewayServiceConfigurations list m=ExpressGatewayServiceConfiguration
+ExpressGatewayServiceInclude enum
+ExpressGatewayServiceIncludeList list m=ExpressGatewayServiceInclude
+ExpressGatewayServiceNetworkConfiguration structure
+.securityGroups StringList
+.subnets StringList
+ExpressGatewayServiceScalingMetric enum
+ExpressGatewayServiceStatus structure
+.statusCode ExpressGatewayServiceStatusCode
+.statusReason String
+ExpressGatewayServiceStatusCode enum
+FSxWindowsFileServerAuthorizationConfig structure
+.credentialsParameter String
+.domain String
+FSxWindowsFileServerVolumeConfiguration structure
+.authorizationConfig FSxWindowsFileServerAuthorizationConfig
+.fileSystemId String
+.rootDirectory String
+Failure structure
+.arn String
+.detail String
+.reason String
+Failures list m=Failure
+FirelensConfiguration structure
+.options FirelensConfigurationOptionsMap
+.type FirelensConfigurationType
+FirelensConfigurationOptionsMap map k=String v=String
+FirelensConfigurationType enum
+GetTaskProtection operation in=GetTaskProtectionRequest out=GetTaskProtectionResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ResourceNotFoundException,ServerException,UnsupportedFeatureException
+GetTaskProtectionRequest structure
+.cluster String
+.tasks StringList
+GetTaskProtectionResponse structure
+.failures Failures
+.protectedTasks ProtectedTasks
+GpuIds list m=String
+HealthCheck structure
+.command StringList
+.interval BoxedInteger
+.retries BoxedInteger
+.startPeriod BoxedInteger
+.timeout BoxedInteger
+HealthStatus enum
+HealthyPercentInteger integer
+HookDetails document
+HostEntry structure
+.hostname String
+.ipAddress String
+HostEntryList list m=HostEntry
+HostVolumeProperties structure
+.sourcePath String
+IAMRoleArn string
+InferenceAccelerator structure
+.deviceName String
+.deviceType String
+InferenceAcceleratorOverride structure
+.deviceName String
+.deviceType String
+InferenceAcceleratorOverrides list m=InferenceAcceleratorOverride
+InferenceAccelerators list m=InferenceAccelerator
+InfrastructureOptimization structure
+.scaleInAfter BoxedInteger
+IngressPathSummaries list m=IngressPathSummary
+IngressPathSummary structure
+.accessType AccessType
+.endpoint String
+InstanceGeneration enum
+InstanceGenerationSet list m=InstanceGeneration mxml=item
+InstanceHealthCheckResult structure
+.lastStatusChange Timestamp
+.lastUpdated Timestamp
+.status InstanceHealthCheckState
+.statusReason String
+.type InstanceHealthCheckType
+InstanceHealthCheckResultList list m=InstanceHealthCheckResult
+InstanceHealthCheckState enum
+InstanceHealthCheckType enum
+InstanceLaunchTemplate structure
+.capacityOptionType CapacityOptionType
+.capacityReservations CapacityReservationRequest
+.ec2InstanceProfileArn String
+.fipsEnabled BoxedBoolean
+.instanceMetadataTagsPropagation BoxedBoolean
+.instanceRequirements InstanceRequirementsRequest
+.localStorageConfiguration ManagedInstancesLocalStorageConfiguration
+.monitoring ManagedInstancesMonitoringOptions
+.networkConfiguration ManagedInstancesNetworkConfiguration
+.storageConfiguration ManagedInstancesStorageConfiguration
+InstanceLaunchTemplateUpdate structure
+.capacityReservations CapacityReservationRequest
+.ec2InstanceProfileArn String
+.instanceMetadataTagsPropagation BoxedBoolean
+.instanceRequirements InstanceRequirementsRequest
+.localStorageConfiguration ManagedInstancesLocalStorageConfiguration
+.monitoring ManagedInstancesMonitoringOptions
+.networkConfiguration ManagedInstancesNetworkConfiguration
+.storageConfiguration ManagedInstancesStorageConfiguration
+InstanceRequirementsRequest structure
+.acceleratorCount AcceleratorCountRequest
+.acceleratorManufacturers AcceleratorManufacturerSet xml=AcceleratorManufacturer
+.acceleratorNames AcceleratorNameSet xml=AcceleratorName
+.acceleratorTotalMemoryMiB AcceleratorTotalMemoryMiBRequest
+.acceleratorTypes AcceleratorTypeSet xml=AcceleratorType
+.allowedInstanceTypes AllowedInstanceTypeSet xml=AllowedInstanceType
+.bareMetal BareMetal
+.baselineEbsBandwidthMbps BaselineEbsBandwidthMbpsRequest
+.burstablePerformance BurstablePerformance
+.cpuManufacturers CpuManufacturerSet xml=CpuManufacturer
+.excludedInstanceTypes ExcludedInstanceTypeSet xml=ExcludedInstanceType
+.instanceGenerations InstanceGenerationSet xml=InstanceGeneration
+.localStorage LocalStorage
+.localStorageTypes LocalStorageTypeSet xml=LocalStorageType
+.maxSpotPriceAsPercentageOfOptimalOnDemandPrice BoxedInteger
+.memoryGiBPerVCpu MemoryGiBPerVCpuRequest
+.memoryMiB MemoryMiBRequest
+.networkBandwidthGbps NetworkBandwidthGbpsRequest
+.networkInterfaceCount NetworkInterfaceCountRequest
+.onDemandMaxPricePercentageOverLowestPrice BoxedInteger
+.requireHibernateSupport BoxedBoolean
+.spotMaxPricePercentageOverLowestPrice BoxedInteger
+.totalLocalStorageGB TotalLocalStorageGBRequest
+.vCpuCount VCpuCountRangeRequest
+Integer integer
+IntegerList list m=BoxedInteger
+InvalidParameterException structure error=client
+.message String
+IpcMode enum
+KernelCapabilities structure
+.add StringList
+.drop StringList
+KeyValuePair structure
+.name String
+.value String
+LaunchType enum
+LimitExceededException structure error=client
+.message String
+LinearConfiguration structure
+.stepBakeTimeInMinutes Integer
+.stepPercent Double
+LinuxParameters structure
+.capabilities KernelCapabilities
+.devices DevicesList
+.initProcessEnabled BoxedBoolean
+.maxSwap BoxedInteger
+.sharedMemorySize BoxedInteger
+.swappiness BoxedInteger
+.tmpfs TmpfsList
+ListAccountSettings operation in=ListAccountSettingsRequest out=ListAccountSettingsResponse err=AccessDeniedException,ClientException,InvalidParameterException,ServerException
+ListAccountSettingsRequest structure
+.effectiveSettings Boolean
+.maxResults Integer
+.name SettingName
+.nextToken String
+.principalArn String
+.value String
+ListAccountSettingsResponse structure
+.nextToken String
+.settings Settings
+ListAttributes operation in=ListAttributesRequest out=ListAttributesResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException
+ListAttributesRequest structure
+.attributeName String
+.attributeValue String
+.cluster String
+.maxResults BoxedInteger
+.nextToken String
+.targetType TargetType
+ListAttributesResponse structure
+.attributes Attributes
+.nextToken String
+ListClusters operation in=ListClustersRequest out=ListClustersResponse err=AccessDeniedException,ClientException,InvalidParameterException,ServerException
+ListClustersRequest structure
+.maxResults BoxedInteger
+.nextToken String
+ListClustersResponse structure
+.clusterArns StringList
+.nextToken String
+ListContainerInstances operation in=ListContainerInstancesRequest out=ListContainerInstancesResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException
+ListContainerInstancesRequest structure
+.cluster String
+.filter String
+.maxResults BoxedInteger
+.nextToken String
+.status ContainerInstanceStatus
+ListContainerInstancesResponse structure
+.containerInstanceArns StringList
+.nextToken String
+ListDaemonDeployments operation in=ListDaemonDeploymentsRequest out=ListDaemonDeploymentsResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException,UnsupportedFeatureException
+ListDaemonDeploymentsRequest structure
+.createdAt CreatedAt
+.daemonArn String
+.maxResults BoxedInteger
+.nextToken String
+.status DaemonDeploymentStatusList
+ListDaemonDeploymentsResponse structure
+.daemonDeployments DaemonDeploymentSummaryList
+.nextToken String
+ListDaemonTaskDefinitions operation in=ListDaemonTaskDefinitionsRequest out=ListDaemonTaskDefinitionsResponse err=AccessDeniedException,ClientException,InvalidParameterException,ServerException
+ListDaemonTaskDefinitionsRequest structure
+.family String
+.familyPrefix String
+.maxResults BoxedInteger
+.nextToken String
+.revision DaemonTaskDefinitionRevisionFilter
+.sort SortOrder
+.status DaemonTaskDefinitionStatusFilter
+ListDaemonTaskDefinitionsResponse structure
+.daemonTaskDefinitions DaemonTaskDefinitionSummaries
+.nextToken String
+ListDaemons operation in=ListDaemonsRequest out=ListDaemonsResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException,UnsupportedFeatureException
+ListDaemonsRequest structure
+.capacityProviderArns StringList
+.clusterArn String
+.maxResults BoxedInteger
+.nextToken String
+ListDaemonsResponse structure
+.daemonSummariesList DaemonSummariesList
+.nextToken String
+ListServiceDeployments operation in=ListServiceDeploymentsRequest out=ListServiceDeploymentsResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException,ServiceNotFoundException,UnsupportedFeatureException
+ListServiceDeploymentsRequest structure
+.cluster String
+.createdAt CreatedAt
+.maxResults BoxedInteger
+.nextToken String
+.service String
+.status ServiceDeploymentStatusList
+ListServiceDeploymentsResponse structure
+.nextToken String
+.serviceDeployments ServiceDeploymentsBrief
+ListServices operation in=ListServicesRequest out=ListServicesResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException
+ListServicesByNamespace operation in=ListServicesByNamespaceRequest out=ListServicesByNamespaceResponse err=AccessDeniedException,ClientException,InvalidParameterException,NamespaceNotFoundException,ServerException
+ListServicesByNamespaceRequest structure
+.maxResults BoxedInteger
+.namespace String
+.nextToken String
+ListServicesByNamespaceResponse structure
+.nextToken String
+.serviceArns StringList
+ListServicesRequest structure
+.cluster String
+.launchType LaunchType
+.maxResults BoxedInteger
+.nextToken String
+.resourceManagementType ResourceManagementType
+.schedulingStrategy SchedulingStrategy
+ListServicesResponse structure
+.nextToken String
+.serviceArns StringList
+ListTagsForResource operation in=ListTagsForResourceRequest out=ListTagsForResourceResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException
+ListTagsForResourceRequest structure
+.resourceArn String
+ListTagsForResourceResponse structure
+.tags Tags
+ListTaskDefinitionFamilies operation in=ListTaskDefinitionFamiliesRequest out=ListTaskDefinitionFamiliesResponse err=AccessDeniedException,ClientException,InvalidParameterException,ServerException
+ListTaskDefinitionFamiliesRequest structure
+.familyPrefix String
+.maxResults BoxedInteger
+.nextToken String
+.status TaskDefinitionFamilyStatus
+ListTaskDefinitionFamiliesResponse structure
+.families StringList
+.nextToken String
+ListTaskDefinitions operation in=ListTaskDefinitionsRequest out=ListTaskDefinitionsResponse err=AccessDeniedException,ClientException,InvalidParameterException,ServerException
+ListTaskDefinitionsRequest structure
+.familyPrefix String
+.maxResults BoxedInteger
+.nextToken String
+.sort SortOrder
+.status TaskDefinitionStatus
+ListTaskDefinitionsResponse structure
+.nextToken String
+.taskDefinitionArns StringList
+ListTasks operation in=ListTasksRequest out=ListTasksResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException,ServiceNotFoundException
+ListTasksRequest structure
+.cluster String
+.containerInstance String
+.daemonName String
+.desiredStatus DesiredStatus
+.family String
+.launchType LaunchType
+.maxResults BoxedInteger
+.nextToken String
+.serviceName String
+.startedBy String
+ListTasksResponse structure
+.nextToken String
+.taskArns StringList
+LoadBalancer structure
+.advancedConfiguration AdvancedConfiguration
+.containerName String
+.containerPort BoxedInteger
+.loadBalancerName String
+.targetGroupArn String
+LoadBalancers list m=LoadBalancer
+LocalStorage enum
+LocalStorageType enum
+LocalStorageTypeSet list m=LocalStorageType mxml=item
+LogConfiguration structure
+.logDriver LogDriver
+.options LogConfigurationOptionsMap
+.secretOptions SecretList
+LogConfigurationOptionsMap map k=String v=String
+LogDriver enum
+Long long
+ManagedAgent structure
+.lastStartedAt Timestamp
+.lastStatus String
+.name ManagedAgentName
+.reason String
+ManagedAgentName enum
+ManagedAgentStateChange structure
+.containerName String
+.managedAgentName ManagedAgentName
+.reason String
+.status String
+ManagedAgentStateChanges list m=ManagedAgentStateChange
+ManagedAgents list m=ManagedAgent
+ManagedApplicationAutoScalingPolicies list m=ManagedApplicationAutoScalingPolicy
+ManagedApplicationAutoScalingPolicy structure
+.arn String
+.metric String
+.policyType String
+.status ManagedResourceStatus
+.statusReason String
+.targetValue Double
+.updatedAt Timestamp
+ManagedAutoScaling structure
+.applicationAutoScalingPolicies ManagedApplicationAutoScalingPolicies
+.scalableTarget ManagedScalableTarget
+ManagedCertificate structure
+.arn String
+.domainName String
+.status ManagedResourceStatus
+.statusReason String
+.updatedAt Timestamp
+ManagedDraining enum
+ManagedIngressPath structure
+.accessType AccessType
+.certificate ManagedCertificate
+.endpoint String
+.listener ManagedListener
+.loadBalancer ManagedLoadBalancer
+.loadBalancerSecurityGroups ManagedSecurityGroups
+.rule ManagedListenerRule
+.targetGroups ManagedTargetGroups
+ManagedIngressPaths list m=ManagedIngressPath
+ManagedInstancesLocalStorageConfiguration structure
+.useLocalStorage Boolean
+ManagedInstancesMonitoringOptions enum
+ManagedInstancesNetworkConfiguration structure
+.securityGroups StringList
+.subnets StringList
+ManagedInstancesProvider structure
+.autoRepairConfiguration AutoRepairConfiguration
+.infrastructureOptimization InfrastructureOptimization
+.infrastructureRoleArn String
+.instanceLaunchTemplate InstanceLaunchTemplate
+.propagateTags PropagateMITags
+ManagedInstancesStorageConfiguration structure
+.storageSizeGiB TaskVolumeStorageGiB
+ManagedListener structure
+.arn String
+.status ManagedResourceStatus
+.statusReason String
+.updatedAt Timestamp
+ManagedListenerRule structure
+.arn String
+.status ManagedResourceStatus
+.statusReason String
+.updatedAt Timestamp
+ManagedLoadBalancer structure
+.arn String
+.scheme String
+.securityGroupIds StringList
+.status ManagedResourceStatus
+.statusReason String
+.subnetIds StringList
+.updatedAt Timestamp
+ManagedLogGroup structure
+.arn String
+.logGroupName String
+.status ManagedResourceStatus
+.statusReason String
+.updatedAt Timestamp
+ManagedLogGroups list m=ManagedLogGroup
+ManagedMetricAlarm structure
+.arn String
+.status ManagedResourceStatus
+.statusReason String
+.updatedAt Timestamp
+ManagedMetricAlarms list m=ManagedMetricAlarm
+ManagedResourceStatus enum
+ManagedScalableTarget structure
+.arn String
+.maxCapacity Integer
+.minCapacity Integer
+.status ManagedResourceStatus
+.statusReason String
+.updatedAt Timestamp
+ManagedScaling structure
+.instanceWarmupPeriod ManagedScalingInstanceWarmupPeriod
+.maximumScalingStepSize ManagedScalingStepSize
+.minimumScalingStepSize ManagedScalingStepSize
+.status ManagedScalingStatus
+.targetCapacity ManagedScalingTargetCapacity
+ManagedScalingInstanceWarmupPeriod integer
+ManagedScalingStatus enum
+ManagedScalingStepSize integer
+ManagedScalingTargetCapacity integer
+ManagedSecurityGroup structure
+.arn String
+.status ManagedResourceStatus
+.statusReason String
+.updatedAt Timestamp
+ManagedSecurityGroups list m=ManagedSecurityGroup
+ManagedStorageConfiguration structure
+.fargateEphemeralStorageKmsKeyId String
+.kmsKeyId String
+ManagedTargetGroup structure
+.arn String
+.healthCheckPath String
+.healthCheckPort Integer
+.port Integer
+.status ManagedResourceStatus
+.statusReason String
+.updatedAt Timestamp
+ManagedTargetGroups list m=ManagedTargetGroup
+ManagedTerminationProtection enum
+MemoryGiBPerVCpuRequest structure
+.max BoxedDouble
+.min BoxedDouble
+MemoryMiBRequest structure
+.max BoxedInteger
+.min BoxedInteger
+MetricConfiguration structure
+.metricNames MetricNamesList
+.resolutionSeconds MetricResolutionSeconds
+MetricConfigurationList list m=MetricConfiguration
+MetricName string
+MetricNamesList list m=MetricName
+MetricResolutionSeconds integer
+MissingVersionException structure error=client
+.message String
+MonitoringConfiguration structure
+.metricConfigurations MetricConfigurationList
+MountPoint structure
+.containerPath String
+.readOnly BoxedBoolean
+.sourceVolume String
+MountPointList list m=MountPoint
+NamespaceNotFoundException structure error=client
+.message String
+NetworkBandwidthGbpsRequest structure
+.max BoxedDouble
+.min BoxedDouble
+NetworkBinding structure
+.bindIP String
+.containerPort BoxedInteger
+.containerPortRange String
+.hostPort BoxedInteger
+.hostPortRange String
+.protocol TransportProtocol
+NetworkBindings list m=NetworkBinding
+NetworkConfiguration structure
+.awsvpcConfiguration AwsVpcConfiguration
+NetworkInterface structure
+.attachmentId String
+.ipv6Address String
+.privateIpv4Address String
+NetworkInterfaceCountRequest structure
+.max BoxedInteger
+.min BoxedInteger
+NetworkInterfaces list m=NetworkInterface
+NetworkMode enum
+NeuronDeviceIds list m=String
+NoUpdateAvailableException structure error=client
+.message String
+OSFamily enum
+PidMode enum
+PlacementConstraint structure
+.expression String
+.type PlacementConstraintType
+PlacementConstraintType enum
+PlacementConstraints list m=PlacementConstraint
+PlacementStrategies list m=PlacementStrategy
+PlacementStrategy structure
+.field String
+.type PlacementStrategyType
+PlacementStrategyType enum
+PlatformDevice structure
+.id String
+.type PlatformDeviceType
+PlatformDeviceType enum
+PlatformDevices list m=PlatformDevice
+PlatformTaskDefinitionIncompatibilityException structure error=client
+.message String
+PlatformUnknownException structure error=client
+.message String
+PortMapping structure
+.appProtocol ApplicationProtocol
+.containerPort BoxedInteger
+.containerPortRange String
+.hostPort BoxedInteger
+.name String
+.protocol TransportProtocol
+PortMappingList list m=PortMapping
+PortNumber integer
+PropagateMITags enum
+PropagateTags enum
+ProtectedTask structure
+.expirationDate Timestamp
+.protectionEnabled Boolean
+.taskArn String
+ProtectedTasks list m=ProtectedTask
+ProxyConfiguration structure
+.containerName String
+.properties ProxyConfigurationProperties
+.type ProxyConfigurationType
+ProxyConfigurationProperties list m=KeyValuePair
+ProxyConfigurationType enum
+PutAccountSetting operation in=PutAccountSettingRequest out=PutAccountSettingResponse err=AccessDeniedException,ClientException,InvalidParameterException,ServerException
+PutAccountSettingDefault operation in=PutAccountSettingDefaultRequest out=PutAccountSettingDefaultResponse err=AccessDeniedException,ClientException,InvalidParameterException,ServerException
+PutAccountSettingDefaultRequest structure
+.name SettingName
+.value String
+PutAccountSettingDefaultResponse structure
+.setting Setting
+PutAccountSettingRequest structure
+.name SettingName
+.principalArn String
+.value String
+PutAccountSettingResponse structure
+.setting Setting
+PutAttributes operation in=PutAttributesRequest out=PutAttributesResponse err=AccessDeniedException,AttributeLimitExceededException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException,TargetNotFoundException
+PutAttributesRequest structure
+.attributes Attributes
+.cluster String
+PutAttributesResponse structure
+.attributes Attributes
+PutClusterCapacityProviders operation in=PutClusterCapacityProvidersRequest out=PutClusterCapacityProvidersResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ResourceInUseException,ServerException,UpdateInProgressException
+PutClusterCapacityProvidersRequest structure
+.capacityProviders StringList
+.cluster String
+.defaultCapacityProviderStrategy CapacityProviderStrategy
+PutClusterCapacityProvidersResponse structure
+.cluster Cluster
+RegisterContainerInstance operation in=RegisterContainerInstanceRequest out=RegisterContainerInstanceResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException
+RegisterContainerInstanceRequest structure
+.attributes Attributes
+.cluster String
+.containerInstanceArn String
+.instanceIdentityDocument String
+.instanceIdentityDocumentSignature String
+.platformDevices PlatformDevices
+.tags Tags
+.totalResources Resources
+.versionInfo VersionInfo
+RegisterContainerInstanceResponse structure
+.containerInstance ContainerInstance
+RegisterDaemonTaskDefinition operation in=RegisterDaemonTaskDefinitionRequest out=RegisterDaemonTaskDefinitionResponse err=AccessDeniedException,ClientException,InvalidParameterException,LimitExceededException,ServerException
+RegisterDaemonTaskDefinitionRequest structure
+.containerDefinitions DaemonContainerDefinitionList
+.cpu String
+.executionRoleArn String
+.family String
+.ipcMode DaemonIpcMode
+.memory String
+.pidMode DaemonPidMode
+.tags Tags
+.taskRoleArn String
+.volumes DaemonVolumeList
+RegisterDaemonTaskDefinitionResponse structure
+.daemonTaskDefinitionArn String
+RegisterTaskDefinition operation in=RegisterTaskDefinitionRequest out=RegisterTaskDefinitionResponse err=AccessDeniedException,ClientException,InvalidParameterException,LimitExceededException,ServerException
+RegisterTaskDefinitionRequest structure
+.containerDefinitions ContainerDefinitions
+.cpu String
+.enableFaultInjection BoxedBoolean
+.ephemeralStorage EphemeralStorage
+.executionRoleArn String
+.family String
+.inferenceAccelerators InferenceAccelerators
+.ipcMode IpcMode
+.memory String
+.networkMode NetworkMode
+.pidMode PidMode
+.placementConstraints TaskDefinitionPlacementConstraints
+.proxyConfiguration ProxyConfiguration
+.requiresCompatibilities CompatibilityList
+.runtimePlatform RuntimePlatform
+.tags Tags
+.taskRoleArn String
+.volumes VolumeList
+RegisterTaskDefinitionResponse structure
+.tags Tags
+.taskDefinition TaskDefinition
+RepositoryCredentials structure
+.credentialsParameter String
+RequiresAttributes list m=Attribute
+ResolvedConfiguration structure
+.loadBalancers ServiceRevisionLoadBalancers
+Resource structure
+.doubleValue Double
+.integerValue Integer
+.longValue Long
+.name String
+.stringSetValue StringList
+.type String
+ResourceIds list m=String
+ResourceInUseException structure error=client
+.message String
+ResourceManagementType enum
+ResourceNotFoundException structure error=client
+.message String
+ResourceRequirement structure
+.type ResourceType
+.value String
+ResourceRequirements list m=ResourceRequirement
+ResourceType enum
+Resources list m=Resource
+Rollback structure
+.reason String
+.serviceRevisionArn String
+.startedAt Timestamp
+RunTask operation in=RunTaskRequest out=RunTaskResponse err=AccessDeniedException,BlockedException,ClientException,ClusterNotFoundException,ConflictException,InvalidParameterException,PlatformTaskDefinitionIncompatibilityException,PlatformUnknownException,ServerException,UnsupportedFeatureException
+RunTaskRequest structure
+.capacityProviderStrategy CapacityProviderStrategy
+.clientToken String
+.cluster String
+.count BoxedInteger
+.enableECSManagedTags Boolean
+.enableExecuteCommand Boolean
+.group String
+.launchType LaunchType
+.networkConfiguration NetworkConfiguration
+.overrides TaskOverride
+.placementConstraints PlacementConstraints
+.placementStrategy PlacementStrategies
+.platformVersion String
+.propagateTags PropagateTags
+.referenceId String
+.startedBy String
+.tags Tags
+.taskDefinition String
+.volumeConfigurations TaskVolumeConfigurations
+RunTaskResponse structure
+.failures Failures
+.tasks Tasks
+RuntimePlatform structure
+.cpuArchitecture CPUArchitecture
+.operatingSystemFamily OSFamily
+RuntimePlatformOverride structure
+.cpuArchitecture String
+S3FilesVolumeConfiguration structure
+.accessPointArn String
+.fileSystemArn String
+.rootDirectory String
+.transitEncryptionPort BoxedInteger
+Scale structure
+.unit ScaleUnit
+.value Double
+ScaleUnit enum
+SchedulingStrategy enum
+Scope enum
+Secret structure
+.name String
+.valueFrom String
+SecretList list m=Secret
+SensitiveString string
+ServerException structure error=server
+.message String
+Service structure
+.availabilityZoneRebalancing AvailabilityZoneRebalancing
+.capacityProviderStrategy CapacityProviderStrategy
+.clusterArn String
+.createdAt Timestamp
+.createdBy String
+.currentServiceDeployment String
+.currentServiceRevisions ServiceCurrentRevisionSummaryList
+.deploymentConfiguration DeploymentConfiguration
+.deploymentController DeploymentController
+.deployments Deployments
+.desiredCount Integer
+.enableECSManagedTags Boolean
+.enableExecuteCommand Boolean
+.events ServiceEvents
+.healthCheckGracePeriodSeconds BoxedInteger
+.launchType LaunchType
+.loadBalancers LoadBalancers
+.networkConfiguration NetworkConfiguration
+.pendingCount Integer
+.placementConstraints PlacementConstraints
+.placementStrategy PlacementStrategies
+.platformFamily String
+.platformVersion String
+.propagateTags PropagateTags
+.resourceManagementType ResourceManagementType
+.roleArn String
+.runningCount Integer
+.schedulingStrategy SchedulingStrategy
+.serviceArn String
+.serviceName String
+.serviceRegistries ServiceRegistries
+.status String
+.tags Tags
+.taskDefinition String
+.taskSets TaskSets
+ServiceConnectAccessLogConfiguration structure
+.format ServiceConnectAccessLoggingFormat
+.includeQueryParameters ServiceConnectIncludeQueryParameters
+ServiceConnectAccessLoggingFormat enum
+ServiceConnectClientAlias structure
+.dnsName String
+.port PortNumber
+.testTrafficRules ServiceConnectTestTrafficRules
+ServiceConnectClientAliasList list m=ServiceConnectClientAlias
+ServiceConnectConfiguration structure
+.accessLogConfiguration ServiceConnectAccessLogConfiguration
+.enabled Boolean
+.logConfiguration LogConfiguration
+.namespace String
+.services ServiceConnectServiceList
+ServiceConnectIncludeQueryParameters enum
+ServiceConnectService structure
+.clientAliases ServiceConnectClientAliasList
+.discoveryName String
+.ingressPortOverride PortNumber
+.portName String
+.timeout TimeoutConfiguration
+.tls ServiceConnectTlsConfiguration
+ServiceConnectServiceList list m=ServiceConnectService
+ServiceConnectServiceResource structure
+.discoveryArn String
+.discoveryName String
+ServiceConnectServiceResourceList list m=ServiceConnectServiceResource
+ServiceConnectTestTrafficHeaderMatchRules structure
+.exact String
+ServiceConnectTestTrafficHeaderRules structure
+.name String
+.value ServiceConnectTestTrafficHeaderMatchRules
+ServiceConnectTestTrafficRules structure
+.header ServiceConnectTestTrafficHeaderRules
+ServiceConnectTlsCertificateAuthority structure
+.awsPcaAuthorityArn String
+ServiceConnectTlsConfiguration structure
+.issuerCertificateAuthority ServiceConnectTlsCertificateAuthority
+.kmsKey String
+.roleArn String
+ServiceCurrentRevisionSummary structure
+.arn String
+.pendingTaskCount Integer
+.requestedTaskCount Integer
+.runningTaskCount Integer
+ServiceCurrentRevisionSummaryList list m=ServiceCurrentRevisionSummary
+ServiceDeployment structure
+.alarms ServiceDeploymentAlarms
+.clusterArn String
+.createdAt Timestamp
+.deploymentCircuitBreaker ServiceDeploymentCircuitBreaker
+.deploymentConfiguration DeploymentConfiguration
+.finishedAt Timestamp
+.lifecycleHookDetails DeploymentLifecycleHookDetailList
+.lifecycleStage ServiceDeploymentLifecycleStage
+.rollback Rollback
+.serviceArn String
+.serviceDeploymentArn String
+.sourceServiceRevisions ServiceRevisionsSummaryList
+.startedAt Timestamp
+.status ServiceDeploymentStatus
+.statusReason String
+.stoppedAt Timestamp
+.targetServiceRevision ServiceRevisionSummary
+.updatedAt Timestamp
+ServiceDeploymentAlarms structure
+.alarmNames StringList
+.status ServiceDeploymentRollbackMonitorsStatus
+.triggeredAlarmNames StringList
+ServiceDeploymentBrief structure
+.clusterArn String
+.createdAt Timestamp
+.finishedAt Timestamp
+.serviceArn String
+.serviceDeploymentArn String
+.startedAt Timestamp
+.status ServiceDeploymentStatus
+.statusReason String
+.targetServiceRevisionArn String
+ServiceDeploymentCircuitBreaker structure
+.failureCount Integer
+.status ServiceDeploymentRollbackMonitorsStatus
+.threshold Integer
+ServiceDeploymentLifecycleStage enum
+ServiceDeploymentNotFoundException structure error=client
+.message String
+ServiceDeploymentRollbackMonitorsStatus enum
+ServiceDeploymentStatus enum
+ServiceDeploymentStatusList list m=ServiceDeploymentStatus
+ServiceDeployments list m=ServiceDeployment
+ServiceDeploymentsBrief list m=ServiceDeploymentBrief
+ServiceEvent structure
+.createdAt Timestamp
+.id String
+.message String
+ServiceEvents list m=ServiceEvent
+ServiceField enum
+ServiceFieldList list m=ServiceField
+ServiceManagedEBSVolumeConfiguration structure
+.encrypted BoxedBoolean
+.filesystemType TaskFilesystemType
+.iops BoxedInteger
+.kmsKeyId EBSKMSKeyId
+.roleArn IAMRoleArn
+.sizeInGiB BoxedInteger
+.snapshotId EBSSnapshotId
+.tagSpecifications EBSTagSpecifications
+.throughput BoxedInteger
+.volumeInitializationRate BoxedInteger
+.volumeType EBSVolumeType
+ServiceNotActiveException structure error=client
+.message String
+ServiceNotFoundException structure error=client
+.message String
+ServiceRegistries list m=ServiceRegistry
+ServiceRegistry structure
+.containerName String
+.containerPort BoxedInteger
+.port BoxedInteger
+.registryArn String
+ServiceRevision structure
+.capacityProviderStrategy CapacityProviderStrategy
+.clusterArn String
+.containerImages ContainerImages
+.createdAt Timestamp
+.ecsManagedResources ECSManagedResources
+.fargateEphemeralStorage DeploymentEphemeralStorage
+.guardDutyEnabled Boolean
+.launchType LaunchType
+.loadBalancers LoadBalancers
+.monitoring MonitoringConfiguration
+.networkConfiguration NetworkConfiguration
+.overrides ServiceRevisionOverrides
+.platformFamily String
+.platformVersion String
+.resolvedConfiguration ResolvedConfiguration
+.serviceArn String
+.serviceConnectConfiguration ServiceConnectConfiguration
+.serviceRegistries ServiceRegistries
+.serviceRevisionArn String
+.taskDefinition String
+.volumeConfigurations ServiceVolumeConfigurations
+.vpcLatticeConfigurations VpcLatticeConfigurations
+ServiceRevisionCleanup enum
+ServiceRevisionLoadBalancer structure
+.productionListenerRule String
+.targetGroupArn String
+ServiceRevisionLoadBalancers list m=ServiceRevisionLoadBalancer
+ServiceRevisionOverrides structure
+.runtimePlatform RuntimePlatformOverride
+ServiceRevisionSummary structure
+.arn String
+.pendingTaskCount Integer
+.requestedProductionTrafficWeight Double
+.requestedTaskCount Integer
+.requestedTestTrafficWeight Double
+.runningTaskCount Integer
+ServiceRevisions list m=ServiceRevision
+ServiceRevisionsSummaryList list m=ServiceRevisionSummary
+ServiceVolumeConfiguration structure
+.managedEBSVolume ServiceManagedEBSVolumeConfiguration
+.name ECSVolumeName
+ServiceVolumeConfigurations list m=ServiceVolumeConfiguration
+Services list m=Service
+Session structure
+.sessionId String
+.streamUrl String
+.tokenValue SensitiveString
+Setting structure
+.name SettingName
+.principalArn String
+.type SettingType
+.value String
+SettingName enum
+SettingType enum
+Settings list m=Setting
+SortOrder enum
+StabilityStatus enum
+StartTask operation in=StartTaskRequest out=StartTaskResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,NamespaceNotFoundException,ServerException,UnsupportedFeatureException
+StartTaskRequest structure
+.cluster String
+.containerInstances StringList
+.enableECSManagedTags Boolean
+.enableExecuteCommand Boolean
+.group String
+.networkConfiguration NetworkConfiguration
+.overrides TaskOverride
+.propagateTags PropagateTags
+.referenceId String
+.startedBy String
+.tags Tags
+.taskDefinition String
+.volumeConfigurations TaskVolumeConfigurations
+StartTaskResponse structure
+.failures Failures
+.tasks Tasks
+Statistics list m=KeyValuePair
+StopServiceDeployment operation in=StopServiceDeploymentRequest out=StopServiceDeploymentResponse err=AccessDeniedException,ClientException,ConflictException,InvalidParameterException,ServerException,ServiceDeploymentNotFoundException,UnsupportedFeatureException
+StopServiceDeploymentRequest structure
+.serviceDeploymentArn String
+.stopType StopServiceDeploymentStopType
+StopServiceDeploymentResponse structure
+.serviceDeploymentArn String
+StopServiceDeploymentStopType enum
+StopTask operation in=StopTaskRequest out=StopTaskResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException
+StopTaskRequest structure
+.cluster String
+.reason String
+.task String
+StopTaskResponse structure
+.task Task
+String string
+StringList list m=String
+StringMap map k=String v=String
+SubmitAttachmentStateChanges operation in=SubmitAttachmentStateChangesRequest out=SubmitAttachmentStateChangesResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException
+SubmitAttachmentStateChangesRequest structure
+.attachments AttachmentStateChanges
+.cluster String
+SubmitAttachmentStateChangesResponse structure
+.acknowledgment String
+SubmitContainerStateChange operation in=SubmitContainerStateChangeRequest out=SubmitContainerStateChangeResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException
+SubmitContainerStateChangeRequest structure
+.cluster String
+.containerName String
+.exitCode BoxedInteger
+.networkBindings NetworkBindings
+.reason String
+.runtimeId String
+.status String
+.task String
+SubmitContainerStateChangeResponse structure
+.acknowledgment String
+SubmitTaskStateChange operation in=SubmitTaskStateChangeRequest out=SubmitTaskStateChangeResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException
+SubmitTaskStateChangeRequest structure
+.attachments AttachmentStateChanges
+.cluster String
+.containers ContainerStateChanges
+.executionStoppedAt Timestamp
+.managedAgents ManagedAgentStateChanges
+.pullStartedAt Timestamp
+.pullStoppedAt Timestamp
+.reason String
+.status String
+.task String
+SubmitTaskStateChangeResponse structure
+.acknowledgment String
+SystemControl structure
+.namespace String
+.value String
+SystemControls list m=SystemControl
+Tag structure
+.key TagKey
+.value TagValue
+TagKey string
+TagKeys list m=TagKey
+TagResource operation in=TagResourceRequest out=TagResourceResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,LimitExceededException,ResourceNotFoundException,ServerException
+TagResourceRequest structure
+.resourceArn String
+.tags Tags
+TagResourceResponse structure
+TagValue string
+Tags list m=Tag
+TargetNotConnectedException structure error=client
+.message String
+TargetNotFoundException structure error=client
+.message String
+TargetType enum
+Task structure
+.attachments Attachments
+.attributes Attributes
+.availabilityZone String
+.capacityProviderName String
+.clusterArn String
+.connectivity Connectivity
+.connectivityAt Timestamp
+.containerInstanceArn String
+.containers Containers
+.cpu String
+.createdAt Timestamp
+.desiredStatus String
+.enableExecuteCommand Boolean
+.ephemeralStorage EphemeralStorage
+.executionStoppedAt Timestamp
+.fargateEphemeralStorage TaskEphemeralStorage
+.group String
+.healthStatus HealthStatus
+.inferenceAccelerators InferenceAccelerators
+.lastStatus String
+.launchType LaunchType
+.memory String
+.overrides TaskOverride
+.platformFamily String
+.platformVersion String
+.pullStartedAt Timestamp
+.pullStoppedAt Timestamp
+.startedAt Timestamp
+.startedBy String
+.stopCode TaskStopCode
+.stoppedAt Timestamp
+.stoppedReason String
+.stoppingAt Timestamp
+.tags Tags
+.taskArn String
+.taskDefinitionArn String
+.version Long
+TaskDefinition structure
+.compatibilities CompatibilityList
+.containerDefinitions ContainerDefinitions
+.cpu String
+.deleteRequestedAt Timestamp
+.deregisteredAt Timestamp
+.enableFaultInjection BoxedBoolean
+.ephemeralStorage EphemeralStorage
+.executionRoleArn String
+.family String
+.inferenceAccelerators InferenceAccelerators
+.ipcMode IpcMode
+.memory String
+.networkMode NetworkMode
+.pidMode PidMode
+.placementConstraints TaskDefinitionPlacementConstraints
+.proxyConfiguration ProxyConfiguration
+.registeredAt Timestamp
+.registeredBy String
+.requiresAttributes RequiresAttributes
+.requiresCompatibilities CompatibilityList
+.revision Integer
+.runtimePlatform RuntimePlatform
+.status TaskDefinitionStatus
+.taskDefinitionArn String
+.taskRoleArn String
+.volumes VolumeList
+TaskDefinitionFamilyStatus enum
+TaskDefinitionField enum
+TaskDefinitionFieldList list m=TaskDefinitionField
+TaskDefinitionList list m=TaskDefinition
+TaskDefinitionPlacementConstraint structure
+.expression String
+.type TaskDefinitionPlacementConstraintType
+TaskDefinitionPlacementConstraintType enum
+TaskDefinitionPlacementConstraints list m=TaskDefinitionPlacementConstraint
+TaskDefinitionStatus enum
+TaskEphemeralStorage structure
+.kmsKeyId String
+.sizeInGiB Integer
+TaskField enum
+TaskFieldList list m=TaskField
+TaskFilesystemType enum
+TaskManagedEBSVolumeConfiguration structure
+.encrypted BoxedBoolean
+.filesystemType TaskFilesystemType
+.iops BoxedInteger
+.kmsKeyId EBSKMSKeyId
+.roleArn IAMRoleArn
+.sizeInGiB BoxedInteger
+.snapshotId EBSSnapshotId
+.tagSpecifications EBSTagSpecifications
+.terminationPolicy TaskManagedEBSVolumeTerminationPolicy
+.throughput BoxedInteger
+.volumeInitializationRate BoxedInteger
+.volumeType EBSVolumeType
+TaskManagedEBSVolumeTerminationPolicy structure
+.deleteOnTermination BoxedBoolean
+TaskOverride structure
+.containerOverrides ContainerOverrides
+.cpu String
+.ephemeralStorage EphemeralStorage
+.executionRoleArn String
+.inferenceAcceleratorOverrides InferenceAcceleratorOverrides
+.memory String
+.taskRoleArn String
+TaskSet structure
+.capacityProviderStrategy CapacityProviderStrategy
+.clusterArn String
+.computedDesiredCount Integer
+.createdAt Timestamp
+.externalId String
+.fargateEphemeralStorage DeploymentEphemeralStorage
+.id String
+.launchType LaunchType
+.loadBalancers LoadBalancers
+.networkConfiguration NetworkConfiguration
+.pendingCount Integer
+.platformFamily String
+.platformVersion String
+.runningCount Integer
+.scale Scale
+.serviceArn String
+.serviceRegistries ServiceRegistries
+.stabilityStatus StabilityStatus
+.stabilityStatusAt Timestamp
+.startedBy String
+.status String
+.tags Tags
+.taskDefinition String
+.taskSetArn String
+.updatedAt Timestamp
+TaskSetField enum
+TaskSetFieldList list m=TaskSetField
+TaskSetNotFoundException structure error=client
+.message String
+TaskSets list m=TaskSet
+TaskStopCode enum
+TaskVolumeConfiguration structure
+.managedEBSVolume TaskManagedEBSVolumeConfiguration
+.name ECSVolumeName
+TaskVolumeConfigurations list m=TaskVolumeConfiguration
+TaskVolumeStorageGiB integer
+Tasks list m=Task
+ThresholdConfiguration structure
+.type ThresholdType
+.value Integer
+ThresholdType enum
+TimeoutConfiguration structure
+.idleTimeoutSeconds Duration
+.perRequestTimeoutSeconds Duration
+Timestamp timestamp
+Tmpfs structure
+.containerPath String
+.mountOptions StringList
+.size Integer
+TmpfsList list m=Tmpfs
+TotalLocalStorageGBRequest structure
+.max BoxedDouble
+.min BoxedDouble
+TransportProtocol enum
+Ulimit structure
+.hardLimit Integer
+.name UlimitName
+.softLimit Integer
+UlimitList list m=Ulimit
+UlimitName enum
+UnsupportedFeatureException structure error=client
+.message String
+UntagResource operation in=UntagResourceRequest out=UntagResourceResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ResourceNotFoundException,ServerException
+UntagResourceRequest structure
+.resourceArn String
+.tagKeys TagKeys
+UntagResourceResponse structure
+UpdateCapacityProvider operation in=UpdateCapacityProviderRequest out=UpdateCapacityProviderResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException,UnsupportedFeatureException
+UpdateCapacityProviderRequest structure
+.autoScalingGroupProvider AutoScalingGroupProviderUpdate
+.cluster String
+.managedInstancesProvider UpdateManagedInstancesProviderConfiguration
+.name String
+UpdateCapacityProviderResponse structure
+.capacityProvider CapacityProvider
+UpdateCluster operation in=UpdateClusterRequest out=UpdateClusterResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,NamespaceNotFoundException,ServerException
+UpdateClusterRequest structure
+.cluster String
+.configuration ClusterConfiguration
+.serviceConnectDefaults ClusterServiceConnectDefaultsRequest
+.settings ClusterSettings
+UpdateClusterResponse structure
+.cluster Cluster
+UpdateClusterSettings operation in=UpdateClusterSettingsRequest out=UpdateClusterSettingsResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException,UpdateInProgressException
+UpdateClusterSettingsRequest structure
+.cluster String
+.settings ClusterSettings
+UpdateClusterSettingsResponse structure
+.cluster Cluster
+UpdateContainerAgent operation in=UpdateContainerAgentRequest out=UpdateContainerAgentResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,MissingVersionException,NoUpdateAvailableException,ServerException,UpdateInProgressException
+UpdateContainerAgentRequest structure
+.cluster String
+.containerInstance String
+UpdateContainerAgentResponse structure
+.containerInstance ContainerInstance
+UpdateContainerInstancesState operation in=UpdateContainerInstancesStateRequest out=UpdateContainerInstancesStateResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException
+UpdateContainerInstancesStateRequest structure
+.cluster String
+.containerInstances StringList
+.status ContainerInstanceStatus
+UpdateContainerInstancesStateResponse structure
+.containerInstances ContainerInstances
+.failures Failures
+UpdateDaemon operation in=UpdateDaemonRequest out=UpdateDaemonResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,DaemonNotActiveException,DaemonNotFoundException,InvalidParameterException,PlatformUnknownException,ServerException,UnsupportedFeatureException
+UpdateDaemonRequest structure
+.capacityProviderArns StringList
+.critical BoxedBoolean
+.daemonArn String
+.daemonTaskDefinitionArn String
+.deploymentConfiguration DaemonDeploymentConfiguration
+.enableECSManagedTags Boolean
+.enableExecuteCommand Boolean
+.propagateTags DaemonPropagateTags
+UpdateDaemonResponse structure
+.createdAt Timestamp
+.daemonArn String
+.deploymentArn String
+.status DaemonStatus
+.updatedAt Timestamp
+UpdateExpressGatewayService operation in=UpdateExpressGatewayServiceRequest out=UpdateExpressGatewayServiceResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException,ServiceNotActiveException,ServiceNotFoundException,UnsupportedFeatureException
+UpdateExpressGatewayServiceRequest structure
+.cpu String
+.executionRoleArn String
+.healthCheckPath String
+.memory String
+.networkConfiguration ExpressGatewayServiceNetworkConfiguration
+.primaryContainer ExpressGatewayContainer
+.scalingTarget ExpressGatewayScalingTarget
+.serviceArn String
+.taskDefinitionArn String
+.taskRoleArn String
+UpdateExpressGatewayServiceResponse structure
+.service UpdatedExpressGatewayService
+UpdateInProgressException structure error=client
+.message String
+UpdateManagedInstancesProviderConfiguration structure
+.autoRepairConfiguration AutoRepairConfiguration
+.infrastructureOptimization InfrastructureOptimization
+.infrastructureRoleArn String
+.instanceLaunchTemplate InstanceLaunchTemplateUpdate
+.propagateTags PropagateMITags
+UpdateService operation in=UpdateServiceRequest out=UpdateServiceResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,NamespaceNotFoundException,PlatformTaskDefinitionIncompatibilityException,PlatformUnknownException,ServerException,ServiceNotActiveException,ServiceNotFoundException,UnsupportedFeatureException
+UpdateServicePrimaryTaskSet operation in=UpdateServicePrimaryTaskSetRequest out=UpdateServicePrimaryTaskSetResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException,ServiceNotActiveException,ServiceNotFoundException,TaskSetNotFoundException,UnsupportedFeatureException
+UpdateServicePrimaryTaskSetRequest structure
+.cluster String
+.primaryTaskSet String
+.service String
+UpdateServicePrimaryTaskSetResponse structure
+.taskSet TaskSet
+UpdateServiceRequest structure
+.availabilityZoneRebalancing AvailabilityZoneRebalancing
+.capacityProviderStrategy CapacityProviderStrategy
+.cluster String
+.deploymentConfiguration DeploymentConfiguration
+.deploymentController DeploymentController
+.desiredCount BoxedInteger
+.enableECSManagedTags BoxedBoolean
+.enableExecuteCommand BoxedBoolean
+.forceNewDeployment Boolean
+.healthCheckGracePeriodSeconds BoxedInteger
+.loadBalancers LoadBalancers
+.monitoring MonitoringConfiguration
+.networkConfiguration NetworkConfiguration
+.placementConstraints PlacementConstraints
+.placementStrategy PlacementStrategies
+.platformVersion String
+.propagateTags PropagateTags
+.service String
+.serviceConnectConfiguration ServiceConnectConfiguration
+.serviceRegistries ServiceRegistries
+.taskDefinition String
+.volumeConfigurations ServiceVolumeConfigurations
+.vpcLatticeConfigurations VpcLatticeConfigurations
+UpdateServiceResponse structure
+.service Service
+UpdateTaskProtection operation in=UpdateTaskProtectionRequest out=UpdateTaskProtectionResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ResourceNotFoundException,ServerException,UnsupportedFeatureException
+UpdateTaskProtectionRequest structure
+.cluster String
+.expiresInMinutes BoxedInteger
+.protectionEnabled Boolean
+.tasks StringList
+UpdateTaskProtectionResponse structure
+.failures Failures
+.protectedTasks ProtectedTasks
+UpdateTaskSet operation in=UpdateTaskSetRequest out=UpdateTaskSetResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,LimitExceededException,ServerException,ServiceNotActiveException,ServiceNotFoundException,TaskSetNotFoundException,UnsupportedFeatureException
+UpdateTaskSetRequest structure
+.cluster String
+.scale Scale
+.service String
+.taskSet String
+UpdateTaskSetResponse structure
+.taskSet TaskSet
+UpdatedExpressGatewayService structure
+.cluster String
+.createdAt Timestamp
+.serviceArn String
+.serviceName String
+.status ExpressGatewayServiceStatus
+.targetConfiguration ExpressGatewayServiceConfiguration
+.updatedAt Timestamp
+VCpuCountRangeRequest structure
+.max BoxedInteger
+.min BoxedInteger
+VersionConsistency enum
+VersionInfo structure
+.agentHash String
+.agentVersion String
+.dockerVersion String
+Volume structure
+.configuredAtLaunch BoxedBoolean
+.dockerVolumeConfiguration DockerVolumeConfiguration
+.efsVolumeConfiguration EFSVolumeConfiguration
+.fsxWindowsFileServerVolumeConfiguration FSxWindowsFileServerVolumeConfiguration
+.host HostVolumeProperties
+.name String
+.s3filesVolumeConfiguration S3FilesVolumeConfiguration
+VolumeFrom structure
+.readOnly BoxedBoolean
+.sourceContainer String
+VolumeFromList list m=VolumeFrom
+VolumeList list m=Volume
+VpcLatticeConfiguration structure
+.portName String
+.roleArn IAMRoleArn
+.targetGroupArn String
+VpcLatticeConfigurations list m=VpcLatticeConfiguration

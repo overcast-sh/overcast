@@ -74,6 +74,7 @@ Services](./README.md#services).
 | `cognito`         | Cognito          | `aws-cognito`                                      |
 | `ec2`             | EC2 / VPC        | `aws-ec2`                                          |
 | `sns`             | SNS              | `aws-sns`                                          |
+| `stepfunctions`   | Step Functions   | `aws-stepfunctions`, `aws-stepfunctions-tasks`     |
 | `iam`             | IAM              | `aws-iam`                                          |
 | `ecs`             | ECS              | `aws-ecs`                                          |
 | `ecr`             | ECR              | `aws-ecr`, `aws-ecr-assets`                        |
@@ -94,7 +95,6 @@ Services](./README.md#services).
 | `sts`             | STS              | — (used by the CDK CLI itself)                     |
 | `route53`         | Route 53         | `aws-route53`, `aws-route53-targets`               |
 | `autoscaling`     | Auto Scaling     | `aws-autoscaling`, `aws-applicationautoscaling`    |
-| `stepfunctions`   | Step Functions   | `aws-stepfunctions`, `aws-stepfunctions-tasks`     |
 | `pipes`           | Pipes            | `aws-pipes`                                        |
 | `waf`             | WAF v2           | `aws-wafv2`                                        |
 | `shield`          | Shield           | `aws-shield`                                       |

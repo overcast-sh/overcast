@@ -1,0 +1,1244 @@
+service RESTJSON version=2018-11-14
+AmazonMskCluster structure
+.MskClusterArn __string json=mskClusterArn
+ApacheKafkaCluster structure
+.ApacheKafkaClusterId __string json=apacheKafkaClusterId
+.BootstrapBrokerString __string json=bootstrapBrokerString
+AuthorizerLogs structure
+.CloudWatchLogs CloudWatchLogs json=cloudWatchLogs
+.Firehose Firehose json=firehose
+.S3 S3 json=s3
+BadRequestException structure error=client code=400
+.InvalidParameter __string json=invalidParameter
+.Message __string json=message
+BatchAssociateScramSecret operation in=BatchAssociateScramSecretRequest out=BatchAssociateScramSecretResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,ServiceUnavailableException,TooManyRequestsException,UnauthorizedException method=POST uri=/v1/clusters/{ClusterArn}/scram-secrets code=200
+BatchAssociateScramSecretRequest structure
+.ClusterArn __string label
+.SecretArnList __listOf__string json=secretArnList
+BatchAssociateScramSecretResponse structure
+.ClusterArn __string json=clusterArn
+.UnprocessedScramSecrets __listOfUnprocessedScramSecret json=unprocessedScramSecrets
+BatchDisassociateScramSecret operation in=BatchDisassociateScramSecretRequest out=BatchDisassociateScramSecretResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,ServiceUnavailableException,TooManyRequestsException,UnauthorizedException method=PATCH uri=/v1/clusters/{ClusterArn}/scram-secrets code=200
+BatchDisassociateScramSecretRequest structure
+.ClusterArn __string label
+.SecretArnList __listOf__string json=secretArnList
+BatchDisassociateScramSecretResponse structure
+.ClusterArn __string json=clusterArn
+.UnprocessedScramSecrets __listOfUnprocessedScramSecret json=unprocessedScramSecrets
+BrokerAZDistribution enum
+BrokerCountUpdateInfo structure
+.CreatedBrokerIds __listOf__double json=createdBrokerIds
+.DeletedBrokerIds __listOf__double json=deletedBrokerIds
+BrokerEBSVolumeInfo structure
+.KafkaBrokerNodeId __string json=kafkaBrokerNodeId
+.ProvisionedThroughput ProvisionedThroughput json=provisionedThroughput
+.VolumeSizeGB __integer json=volumeSizeGB
+BrokerLogs structure
+.CloudWatchLogs CloudWatchLogs json=cloudWatchLogs
+.Firehose Firehose json=firehose
+.S3 S3 json=s3
+BrokerNodeGroupInfo structure
+.BrokerAZDistribution BrokerAZDistribution json=brokerAZDistribution
+.ClientSubnets __listOf__string json=clientSubnets
+.ConnectivityInfo ConnectivityInfo json=connectivityInfo
+.InstanceType __stringMin5Max32 json=instanceType
+.SecurityGroups __listOf__string json=securityGroups
+.StorageInfo StorageInfo json=storageInfo
+.ZoneIds __listOf__string json=zoneIds
+BrokerNodeInfo structure
+.AttachedENIId __string json=attachedENIId
+.BrokerId __double json=brokerId
+.ClientSubnet __string json=clientSubnet
+.ClientVpcIpAddress __string json=clientVpcIpAddress
+.CurrentBrokerSoftwareInfo BrokerSoftwareInfo json=currentBrokerSoftwareInfo
+.Endpoints __listOf__string json=endpoints
+BrokerSoftwareInfo structure
+.ConfigurationArn __string json=configurationArn
+.ConfigurationRevision __long json=configurationRevision
+.KafkaVersion __string json=kafkaVersion
+Catalog structure
+.CatalogArn __string json=catalogArn
+.WarehouseLocation __string json=warehouseLocation
+ChannelDestinationType enum
+ChannelInfo structure
+.ChannelArn __string json=channelArn
+.ChannelName __string json=channelName
+.ClusterOperationArn __string json=clusterOperationArn
+.CreationTime __timestampIso8601 json=creationTime
+.DestinationType ChannelDestinationType json=destinationType
+.Status ChannelStatus json=status
+ChannelLoggingInfo structure
+.CloudWatchLogs CloudWatchLogs json=cloudWatchLogs
+.Firehose Firehose json=firehose
+.S3 S3 json=s3
+ChannelStateInfo structure
+.Code __string json=code
+.Message __string json=message
+ChannelStatus enum
+ClientAuthentication structure
+.Sasl Sasl json=sasl
+.Tls Tls json=tls
+.Unauthenticated Unauthenticated json=unauthenticated
+ClientBroker enum
+ClientVpcConnection structure
+.Authentication __string json=authentication
+.CreationTime __timestampIso8601 json=creationTime
+.Owner __string json=owner
+.State VpcConnectionState json=state
+.VpcConnectionArn __string json=vpcConnectionArn
+CloudWatchLogs structure
+.Enabled __boolean json=enabled
+.LogGroup __string json=logGroup
+Cluster structure
+.ActiveOperationArn __string json=activeOperationArn
+.ClusterArn __string json=clusterArn
+.ClusterName __string json=clusterName
+.ClusterType ClusterType json=clusterType
+.CreationTime __timestampIso8601 json=creationTime
+.CurrentVersion __string json=currentVersion
+.Provisioned Provisioned json=provisioned
+.Serverless Serverless json=serverless
+.State ClusterState json=state
+.StateInfo StateInfo json=stateInfo
+.Tags __mapOf__string json=tags
+ClusterConnectivityException structure error=client code=409
+.InvalidParameter __string json=invalidParameter
+.Message __string json=message
+ClusterInfo structure
+.ActiveOperationArn __string json=activeOperationArn
+.BrokerNodeGroupInfo BrokerNodeGroupInfo json=brokerNodeGroupInfo
+.ClientAuthentication ClientAuthentication json=clientAuthentication
+.ClusterArn __string json=clusterArn
+.ClusterName __string json=clusterName
+.CreationTime __timestampIso8601 json=creationTime
+.CurrentBrokerSoftwareInfo BrokerSoftwareInfo json=currentBrokerSoftwareInfo
+.CurrentVersion __string json=currentVersion
+.CustomerActionStatus CustomerActionStatus json=customerActionStatus
+.EncryptionInfo EncryptionInfo json=encryptionInfo
+.EnhancedMonitoring EnhancedMonitoring json=enhancedMonitoring
+.LoggingInfo LoggingInfo json=loggingInfo
+.NumberOfBrokerNodes __integer json=numberOfBrokerNodes
+.OpenMonitoring OpenMonitoring json=openMonitoring
+.Rebalancing Rebalancing json=rebalancing
+.State ClusterState json=state
+.StateInfo StateInfo json=stateInfo
+.StorageMode StorageMode json=storageMode
+.Tags __mapOf__string json=tags
+.ZookeeperConnectString __string json=zookeeperConnectString
+.ZookeeperConnectStringTls __string json=zookeeperConnectStringTls
+ClusterOperationInfo structure
+.ClientRequestId __string json=clientRequestId
+.ClusterArn __string json=clusterArn
+.CreationTime __timestampIso8601 json=creationTime
+.EndTime __timestampIso8601 json=endTime
+.ErrorInfo ErrorInfo json=errorInfo
+.OperationArn __string json=operationArn
+.OperationState __string json=operationState
+.OperationSteps __listOfClusterOperationStep json=operationSteps
+.OperationType __string json=operationType
+.SourceClusterInfo MutableClusterInfo json=sourceClusterInfo
+.TargetClusterInfo MutableClusterInfo json=targetClusterInfo
+.VpcConnectionInfo VpcConnectionInfo json=vpcConnectionInfo
+ClusterOperationStep structure
+.StepInfo ClusterOperationStepInfo json=stepInfo
+.StepName __string json=stepName
+ClusterOperationStepInfo structure
+.StepStatus __string json=stepStatus
+ClusterOperationV2 structure
+.ClusterArn __string json=clusterArn
+.ClusterType ClusterType json=clusterType
+.EndTime __timestampIso8601 json=endTime
+.ErrorInfo ErrorInfo json=errorInfo
+.OperationArn __string json=operationArn
+.OperationState __string json=operationState
+.OperationType __string json=operationType
+.Provisioned ClusterOperationV2Provisioned json=provisioned
+.Serverless ClusterOperationV2Serverless json=serverless
+.StartTime __timestampIso8601 json=startTime
+ClusterOperationV2Provisioned structure
+.OperationSteps __listOfClusterOperationStep json=operationSteps
+.SourceClusterInfo MutableClusterInfo json=sourceClusterInfo
+.TargetClusterInfo MutableClusterInfo json=targetClusterInfo
+.VpcConnectionInfo VpcConnectionInfo json=vpcConnectionInfo
+ClusterOperationV2Serverless structure
+.SourceClusterInfo ServerlessConnectivityInfo json=sourceClusterInfo
+.TargetClusterInfo ServerlessConnectivityInfo json=targetClusterInfo
+.VpcConnectionInfo VpcConnectionInfoServerless json=vpcConnectionInfo
+ClusterOperationV2Summary structure
+.ClusterArn __string json=clusterArn
+.ClusterType ClusterType json=clusterType
+.EndTime __timestampIso8601 json=endTime
+.OperationArn __string json=operationArn
+.OperationState __string json=operationState
+.OperationType __string json=operationType
+.StartTime __timestampIso8601 json=startTime
+ClusterState enum
+ClusterType enum
+CompatibleKafkaVersion structure
+.SourceVersion __string json=sourceVersion
+.TargetVersions __listOf__string json=targetVersions
+Configuration structure
+.Arn __string json=arn
+.CreationTime __timestampIso8601 json=creationTime
+.Description __string json=description
+.KafkaVersions __listOf__string json=kafkaVersions
+.LatestRevision ConfigurationRevision json=latestRevision
+.Name __string json=name
+.State ConfigurationState json=state
+ConfigurationInfo structure
+.Arn __string json=arn
+.Revision __long json=revision
+ConfigurationRevision structure
+.CreationTime __timestampIso8601 json=creationTime
+.Description __string json=description
+.Revision __long json=revision
+ConfigurationState enum
+ConflictException structure error=client code=409
+.InvalidParameter __string json=invalidParameter
+.Message __string json=message
+ConnectivityInfo structure
+.NetworkType NetworkType json=networkType
+.PublicAccess PublicAccess json=publicAccess
+.VpcConnectivity VpcConnectivity json=vpcConnectivity
+ConsumerGroupOffsetSyncMode enum
+ConsumerGroupReplication structure
+.ConsumerGroupOffsetSyncMode ConsumerGroupOffsetSyncMode json=consumerGroupOffsetSyncMode
+.ConsumerGroupsToExclude __listOf__stringMax256 json=consumerGroupsToExclude
+.ConsumerGroupsToReplicate __listOf__stringMax256 json=consumerGroupsToReplicate
+.DetectAndCopyNewConsumerGroups __boolean json=detectAndCopyNewConsumerGroups
+.SynchroniseConsumerGroupOffsets __boolean json=synchroniseConsumerGroupOffsets
+ConsumerGroupReplicationUpdate structure
+.ConsumerGroupsToExclude __listOf__stringMax256 json=consumerGroupsToExclude
+.ConsumerGroupsToReplicate __listOf__stringMax256 json=consumerGroupsToReplicate
+.DetectAndCopyNewConsumerGroups __boolean json=detectAndCopyNewConsumerGroups
+.SynchroniseConsumerGroupOffsets __boolean json=synchroniseConsumerGroupOffsets
+ControllerMovedException structure error=client code=409
+.InvalidParameter __string json=invalidParameter
+.Message __string json=message
+ControllerNodeInfo structure
+.Endpoints __listOf__string json=endpoints
+CreateChannel operation in=CreateChannelRequest out=CreateChannelResponse err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,ServiceUnavailableException,TooManyRequestsException,UnauthorizedException method=POST uri=/v1/clusters/{ClusterArn}/channels code=200
+CreateChannelRequest structure
+.ChannelName __string json=channelName
+.ClusterArn __string label
+.EncryptionConfiguration EncryptionConfiguration json=encryptionConfiguration
+.IcebergDestinationConfiguration IcebergDestinationConfiguration json=icebergDestinationConfiguration
+.LoggingInfo ChannelLoggingInfo json=loggingInfo
+.S3DestinationConfiguration S3DestinationConfiguration json=s3DestinationConfiguration
+.Tags __mapOf__string json=tags
+.TopicConfigurationList __listOfTopicConfiguration json=topicConfigurationList
+CreateChannelResponse structure
+.ChannelArn __string json=channelArn
+.ClusterOperationArn __string json=clusterOperationArn
+CreateCluster operation in=CreateClusterRequest out=CreateClusterResponse err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,ServiceUnavailableException,TooManyRequestsException,UnauthorizedException method=POST uri=/v1/clusters code=200
+CreateClusterRequest structure
+.BrokerNodeGroupInfo BrokerNodeGroupInfo json=brokerNodeGroupInfo
+.ClientAuthentication ClientAuthentication json=clientAuthentication
+.ClusterName __stringMin1Max64 json=clusterName
+.ConfigurationInfo ConfigurationInfo json=configurationInfo
+.EncryptionInfo EncryptionInfo json=encryptionInfo
+.EnhancedMonitoring EnhancedMonitoring json=enhancedMonitoring
+.KafkaVersion __stringMin1Max128 json=kafkaVersion
+.LoggingInfo LoggingInfo json=loggingInfo
+.NumberOfBrokerNodes __integerMin1Max15 json=numberOfBrokerNodes
+.OpenMonitoring OpenMonitoringInfo json=openMonitoring
+.Rebalancing Rebalancing json=rebalancing
+.StorageMode StorageMode json=storageMode
+.Tags __mapOf__string json=tags
+CreateClusterResponse structure
+.ClusterArn __string json=clusterArn
+.ClusterName __string json=clusterName
+.State ClusterState json=state
+CreateClusterV2 operation in=CreateClusterV2Request out=CreateClusterV2Response err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,ServiceUnavailableException,TooManyRequestsException,UnauthorizedException method=POST uri=/api/v2/clusters code=200
+CreateClusterV2Request structure
+.ClusterName __stringMin1Max64 json=clusterName
+.Provisioned ProvisionedRequest json=provisioned
+.Serverless ServerlessRequest json=serverless
+.Tags __mapOf__string json=tags
+CreateClusterV2Response structure
+.ClusterArn __string json=clusterArn
+.ClusterName __string json=clusterName
+.ClusterType ClusterType json=clusterType
+.State ClusterState json=state
+CreateConfiguration operation in=CreateConfigurationRequest out=CreateConfigurationResponse err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,ServiceUnavailableException,TooManyRequestsException,UnauthorizedException method=POST uri=/v1/configurations code=200
+CreateConfigurationRequest structure
+.Description __string json=description
+.KafkaVersions __listOf__string json=kafkaVersions
+.Name __string json=name
+.ServerProperties __blob json=serverProperties
+CreateConfigurationResponse structure
+.Arn __string json=arn
+.CreationTime __timestampIso8601 json=creationTime
+.LatestRevision ConfigurationRevision json=latestRevision
+.Name __string json=name
+.State ConfigurationState json=state
+CreateReplicator operation in=CreateReplicatorRequest out=CreateReplicatorResponse err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,ServiceUnavailableException,TooManyRequestsException,UnauthorizedException method=POST uri=/replication/v1/replicators code=200
+CreateReplicatorRequest structure
+.Description __stringMax1024 json=description
+.KafkaClusters __listOfKafkaCluster json=kafkaClusters
+.LogDelivery LogDelivery json=logDelivery
+.ReplicationInfoList __listOfReplicationInfo json=replicationInfoList
+.ReplicatorName __stringMin1Max128Pattern09AZaZ09AZaZ0 json=replicatorName
+.ServiceExecutionRoleArn __string json=serviceExecutionRoleArn
+.Tags __mapOf__string json=tags
+CreateReplicatorResponse structure
+.ReplicatorArn __string json=replicatorArn
+.ReplicatorName __string json=replicatorName
+.ReplicatorState ReplicatorState json=replicatorState
+CreateTopic operation in=CreateTopicRequest out=CreateTopicResponse err=BadRequestException,ClusterConnectivityException,ConflictException,ControllerMovedException,ForbiddenException,GroupSubscribedToTopicException,InternalServerErrorException,KafkaRequestException,KafkaTimeoutException,NotControllerException,ReassignmentInProgressException,ServiceUnavailableException,TooManyRequestsException,TopicExistsException,UnauthorizedException,UnknownTopicOrPartitionException method=POST uri=/v1/clusters/{ClusterArn}/topics code=200
+CreateTopicRequest structure
+.ClusterArn __string label
+.Configs __string json=configs
+.PartitionCount __integerMin1 json=partitionCount
+.ReplicationFactor __integerMin1 json=replicationFactor
+.TopicName __string json=topicName
+CreateTopicResponse structure
+.Status TopicState json=status
+.TopicArn __string json=topicArn
+.TopicName __string json=topicName
+CreateVpcConnection operation in=CreateVpcConnectionRequest out=CreateVpcConnectionResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,ServiceUnavailableException,TooManyRequestsException,UnauthorizedException method=POST uri=/v1/vpc-connection code=200
+CreateVpcConnectionRequest structure
+.Authentication __string json=authentication
+.ClientSubnets __listOf__string json=clientSubnets
+.SecurityGroups __listOf__string json=securityGroups
+.Tags __mapOf__string json=tags
+.TargetClusterArn __string json=targetClusterArn
+.VpcId __string json=vpcId
+CreateVpcConnectionResponse structure
+.Authentication __string json=authentication
+.ClientSubnets __listOf__string json=clientSubnets
+.CreationTime __timestampIso8601 json=creationTime
+.SecurityGroups __listOf__string json=securityGroups
+.State VpcConnectionState json=state
+.Tags __mapOf__string json=tags
+.VpcConnectionArn __string json=vpcConnectionArn
+.VpcId __string json=vpcId
+CustomerActionStatus enum
+DeadLetterQueueS3 structure
+.BucketArn __string json=bucketArn
+.ErrorOutputPrefix __string json=errorOutputPrefix
+.ExpectedBucketOwner __string json=expectedBucketOwner
+DeleteChannel operation in=DeleteChannelRequest out=DeleteChannelResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,ServiceUnavailableException,TooManyRequestsException,UnauthorizedException method=DELETE uri=/v1/clusters/{ClusterArn}/channels/{ChannelArn} code=200
+DeleteChannelRequest structure
+.ChannelArn __string label
+.ClusterArn __string label
+DeleteChannelResponse structure
+.ChannelArn __string json=channelArn
+.ClusterOperationArn __string json=clusterOperationArn
+DeleteCluster operation in=DeleteClusterRequest out=DeleteClusterResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException method=DELETE uri=/v1/clusters/{ClusterArn} code=200
+DeleteClusterPolicy operation in=DeleteClusterPolicyRequest out=DeleteClusterPolicyResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException method=DELETE uri=/v1/clusters/{ClusterArn}/policy code=200
+DeleteClusterPolicyRequest structure
+.ClusterArn __string label
+DeleteClusterPolicyResponse structure
+DeleteClusterRequest structure
+.ClusterArn __string label
+.CurrentVersion __string query=currentVersion
+DeleteClusterResponse structure
+.ClusterArn __string json=clusterArn
+.State ClusterState json=state
+DeleteConfiguration operation in=DeleteConfigurationRequest out=DeleteConfigurationResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException method=DELETE uri=/v1/configurations/{Arn} code=200
+DeleteConfigurationRequest structure
+.Arn __string label
+DeleteConfigurationResponse structure
+.Arn __string json=arn
+.State ConfigurationState json=state
+DeleteReplicator operation in=DeleteReplicatorRequest out=DeleteReplicatorResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,ServiceUnavailableException,TooManyRequestsException,UnauthorizedException method=DELETE uri=/replication/v1/replicators/{ReplicatorArn} code=200
+DeleteReplicatorRequest structure
+.CurrentVersion __string query=currentVersion
+.ReplicatorArn __string label
+DeleteReplicatorResponse structure
+.ReplicatorArn __string json=replicatorArn
+.ReplicatorState ReplicatorState json=replicatorState
+DeleteTopic operation in=DeleteTopicRequest out=DeleteTopicResponse err=BadRequestException,ClusterConnectivityException,ControllerMovedException,ForbiddenException,GroupSubscribedToTopicException,InternalServerErrorException,KafkaRequestException,KafkaTimeoutException,NotControllerException,NotFoundException,ReassignmentInProgressException,UnknownTopicOrPartitionException method=DELETE uri=/v1/clusters/{ClusterArn}/topics/{TopicName} code=200
+DeleteTopicRequest structure
+.ClusterArn __string label
+.TopicName __string label
+DeleteTopicResponse structure
+.Status TopicState json=status
+.TopicArn __string json=topicArn
+.TopicName __string json=topicName
+DeleteVpcConnection operation in=DeleteVpcConnectionRequest out=DeleteVpcConnectionResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException method=DELETE uri=/v1/vpc-connection/{Arn} code=200
+DeleteVpcConnectionRequest structure
+.Arn __string label
+DeleteVpcConnectionResponse structure
+.State VpcConnectionState json=state
+.VpcConnectionArn __string json=vpcConnectionArn
+DescribeChannel operation in=DescribeChannelRequest out=DescribeChannelResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,ServiceUnavailableException,TooManyRequestsException,UnauthorizedException method=GET uri=/v1/clusters/{ClusterArn}/channels/{ChannelArn} code=200
+DescribeChannelRequest structure
+.ChannelArn __string label
+.ClusterArn __string label
+DescribeChannelResponse structure
+.ChannelArn __string json=channelArn
+.ChannelName __string json=channelName
+.ClusterOperationArn __string json=clusterOperationArn
+.CreationTime __timestampIso8601 json=creationTime
+.DestinationType ChannelDestinationType json=destinationType
+.EncryptionConfiguration EncryptionConfiguration json=encryptionConfiguration
+.IcebergDestinationConfiguration IcebergDestinationConfiguration json=icebergDestinationConfiguration
+.LoggingInfo ChannelLoggingInfo json=loggingInfo
+.S3DestinationConfiguration S3DestinationConfiguration json=s3DestinationConfiguration
+.StateInfo ChannelStateInfo json=stateInfo
+.Status ChannelStatus json=status
+.Tags __mapOf__string json=tags
+.TopicConfigurationList __listOfTopicConfiguration json=topicConfigurationList
+DescribeCluster operation in=DescribeClusterRequest out=DescribeClusterResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,UnauthorizedException method=GET uri=/v1/clusters/{ClusterArn} code=200
+DescribeClusterOperation operation in=DescribeClusterOperationRequest out=DescribeClusterOperationResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,UnauthorizedException method=GET uri=/v1/operations/{ClusterOperationArn} code=200
+DescribeClusterOperationRequest structure
+.ClusterOperationArn __string label
+DescribeClusterOperationResponse structure
+.ClusterOperationInfo ClusterOperationInfo json=clusterOperationInfo
+DescribeClusterOperationV2 operation in=DescribeClusterOperationV2Request out=DescribeClusterOperationV2Response err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,ServiceUnavailableException,TooManyRequestsException,UnauthorizedException method=GET uri=/api/v2/operations/{ClusterOperationArn} code=200
+DescribeClusterOperationV2Request structure
+.ClusterOperationArn __string label
+DescribeClusterOperationV2Response structure
+.ClusterOperationInfo ClusterOperationV2 json=clusterOperationInfo
+DescribeClusterRequest structure
+.ClusterArn __string label
+DescribeClusterResponse structure
+.ClusterInfo ClusterInfo json=clusterInfo
+DescribeClusterV2 operation in=DescribeClusterV2Request out=DescribeClusterV2Response err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,UnauthorizedException method=GET uri=/api/v2/clusters/{ClusterArn} code=200
+DescribeClusterV2Request structure
+.ClusterArn __string label
+DescribeClusterV2Response structure
+.ClusterInfo Cluster json=clusterInfo
+DescribeConfiguration operation in=DescribeConfigurationRequest out=DescribeConfigurationResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,ServiceUnavailableException,UnauthorizedException method=GET uri=/v1/configurations/{Arn} code=200
+DescribeConfigurationRequest structure
+.Arn __string label
+DescribeConfigurationResponse structure
+.Arn __string json=arn
+.CreationTime __timestampIso8601 json=creationTime
+.Description __string json=description
+.KafkaVersions __listOf__string json=kafkaVersions
+.LatestRevision ConfigurationRevision json=latestRevision
+.Name __string json=name
+.State ConfigurationState json=state
+DescribeConfigurationRevision operation in=DescribeConfigurationRevisionRequest out=DescribeConfigurationRevisionResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,ServiceUnavailableException,UnauthorizedException method=GET uri=/v1/configurations/{Arn}/revisions/{Revision} code=200
+DescribeConfigurationRevisionRequest structure
+.Arn __string label
+.Revision __long label
+DescribeConfigurationRevisionResponse structure
+.Arn __string json=arn
+.CreationTime __timestampIso8601 json=creationTime
+.Description __string json=description
+.Revision __long json=revision
+.ServerProperties __blob json=serverProperties
+DescribeReplicator operation in=DescribeReplicatorRequest out=DescribeReplicatorResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,ServiceUnavailableException,TooManyRequestsException,UnauthorizedException method=GET uri=/replication/v1/replicators/{ReplicatorArn} code=200
+DescribeReplicatorRequest structure
+.ReplicatorArn __string label
+DescribeReplicatorResponse structure
+.CreationTime __timestampIso8601 json=creationTime
+.CurrentVersion __string json=currentVersion
+.IsReplicatorReference __boolean json=isReplicatorReference
+.KafkaClusters __listOfKafkaClusterDescription json=kafkaClusters
+.LogDelivery LogDelivery json=logDelivery
+.ReplicationInfoList __listOfReplicationInfoDescription json=replicationInfoList
+.ReplicatorArn __string json=replicatorArn
+.ReplicatorDescription __string json=replicatorDescription
+.ReplicatorName __string json=replicatorName
+.ReplicatorResourceArn __string json=replicatorResourceArn
+.ReplicatorState ReplicatorState json=replicatorState
+.ServiceExecutionRoleArn __string json=serviceExecutionRoleArn
+.StateInfo ReplicationStateInfo json=stateInfo
+.Tags __mapOf__string json=tags
+DescribeTopic operation in=DescribeTopicRequest out=DescribeTopicResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,UnauthorizedException method=GET uri=/v1/clusters/{ClusterArn}/topics/{TopicName} code=200
+DescribeTopicPartitions operation in=DescribeTopicPartitionsRequest out=DescribeTopicPartitionsResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,UnauthorizedException method=GET uri=/v1/clusters/{ClusterArn}/topics/{TopicName}/partitions code=200
+DescribeTopicPartitionsRequest structure
+.ClusterArn __string label
+.MaxResults MaxResults query=maxResults
+.NextToken __string query=nextToken
+.TopicName __string label
+DescribeTopicPartitionsResponse structure
+.NextToken __string json=nextToken
+.Partitions __listOfTopicPartitionInfo json=partitions
+DescribeTopicRequest structure
+.ClusterArn __string label
+.TopicName __string label
+DescribeTopicResponse structure
+.Configs __string json=configs
+.PartitionCount __integer json=partitionCount
+.ReplicationFactor __integer json=replicationFactor
+.Status TopicState json=status
+.TopicArn __string json=topicArn
+.TopicName __string json=topicName
+DescribeVpcConnection operation in=DescribeVpcConnectionRequest out=DescribeVpcConnectionResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,ServiceUnavailableException,UnauthorizedException method=GET uri=/v1/vpc-connection/{Arn} code=200
+DescribeVpcConnectionRequest structure
+.Arn __string label
+DescribeVpcConnectionResponse structure
+.Authentication __string json=authentication
+.CreationTime __timestampIso8601 json=creationTime
+.SecurityGroups __listOf__string json=securityGroups
+.State VpcConnectionState json=state
+.Subnets __listOf__string json=subnets
+.Tags __mapOf__string json=tags
+.TargetClusterArn __string json=targetClusterArn
+.VpcConnectionArn __string json=vpcConnectionArn
+.VpcId __string json=vpcId
+DestinationTable structure
+.DestinationDatabaseName __string json=destinationDatabaseName
+.DestinationTableName __string json=destinationTableName
+.PartitionSpec PartitionSpec json=partitionSpec
+EBSStorageInfo structure
+.ProvisionedThroughput ProvisionedThroughput json=provisionedThroughput
+.VolumeSize __integerMin1Max16384 json=volumeSize
+EncryptionAtRest structure
+.DataVolumeKMSKeyId __string json=dataVolumeKMSKeyId
+EncryptionConfiguration structure
+.KmsKeyArn __string json=kmsKeyArn
+EncryptionInTransit structure
+.ClientBroker ClientBroker json=clientBroker
+.InCluster __boolean json=inCluster
+EncryptionInfo structure
+.EncryptionAtRest EncryptionAtRest json=encryptionAtRest
+.EncryptionInTransit EncryptionInTransit json=encryptionInTransit
+EnhancedMonitoring enum
+ErrorInfo structure
+.ErrorCode __string json=errorCode
+.ErrorString __string json=errorString
+Firehose structure
+.DeliveryStream __string json=deliveryStream
+.Enabled __boolean json=enabled
+ForbiddenException structure error=client code=403
+.InvalidParameter __string json=invalidParameter
+.Message __string json=message
+GetBootstrapBrokers operation in=GetBootstrapBrokersRequest out=GetBootstrapBrokersResponse err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,UnauthorizedException method=GET uri=/v1/clusters/{ClusterArn}/bootstrap-brokers code=200
+GetBootstrapBrokersRequest structure
+.ClusterArn __string label
+GetBootstrapBrokersResponse structure
+.BootstrapBrokerString __string json=bootstrapBrokerString
+.BootstrapBrokerStringIpv6 __string json=bootstrapBrokerStringIpv6
+.BootstrapBrokerStringPublicSaslIam __string json=bootstrapBrokerStringPublicSaslIam
+.BootstrapBrokerStringPublicSaslScram __string json=bootstrapBrokerStringPublicSaslScram
+.BootstrapBrokerStringPublicTls __string json=bootstrapBrokerStringPublicTls
+.BootstrapBrokerStringSaslIam __string json=bootstrapBrokerStringSaslIam
+.BootstrapBrokerStringSaslIamIpv6 __string json=bootstrapBrokerStringSaslIamIpv6
+.BootstrapBrokerStringSaslScram __string json=bootstrapBrokerStringSaslScram
+.BootstrapBrokerStringSaslScramIpv6 __string json=bootstrapBrokerStringSaslScramIpv6
+.BootstrapBrokerStringTls __string json=bootstrapBrokerStringTls
+.BootstrapBrokerStringTlsIpv6 __string json=bootstrapBrokerStringTlsIpv6
+.BootstrapBrokerStringVpcConnectivitySaslIam __string json=bootstrapBrokerStringVpcConnectivitySaslIam
+.BootstrapBrokerStringVpcConnectivitySaslScram __string json=bootstrapBrokerStringVpcConnectivitySaslScram
+.BootstrapBrokerStringVpcConnectivityTls __string json=bootstrapBrokerStringVpcConnectivityTls
+GetClusterPolicy operation in=GetClusterPolicyRequest out=GetClusterPolicyResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException method=GET uri=/v1/clusters/{ClusterArn}/policy code=200
+GetClusterPolicyRequest structure
+.ClusterArn __string label
+GetClusterPolicyResponse structure
+.CurrentVersion __string json=currentVersion
+.Policy __string json=policy
+GetCompatibleKafkaVersions operation in=GetCompatibleKafkaVersionsRequest out=GetCompatibleKafkaVersionsResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,ServiceUnavailableException,TooManyRequestsException,UnauthorizedException method=GET uri=/v1/compatible-kafka-versions code=200
+GetCompatibleKafkaVersionsRequest structure
+.ClusterArn __string query=clusterArn
+GetCompatibleKafkaVersionsResponse structure
+.CompatibleKafkaVersions __listOfCompatibleKafkaVersion json=compatibleKafkaVersions
+GroupSubscribedToTopicException structure error=client code=409
+.InvalidParameter __string json=invalidParameter
+.Message __string json=message
+Iam structure
+.Enabled __boolean json=enabled
+IcebergCompressionType enum
+IcebergDestinationConfiguration structure
+.AppendOnly __boolean json=appendOnly
+.Catalog Catalog json=catalog
+.CompressionType IcebergCompressionType json=compressionType
+.DataFreshnessInSeconds __integer json=dataFreshnessInSeconds
+.DeadLetterQueueS3 DeadLetterQueueS3 json=deadLetterQueueS3
+.DestinationTableList __listOfDestinationTable json=destinationTableList
+.SchemaEvolution SchemaEvolution json=schemaEvolution
+.ServiceExecutionRoleArn __string json=serviceExecutionRoleArn
+.TableCreation TableCreation json=tableCreation
+IcebergDestinationUpdate structure
+.DataFreshnessInSeconds __integer json=dataFreshnessInSeconds
+InternalServerErrorException structure error=server code=500
+.InvalidParameter __string json=invalidParameter
+.Message __string json=message
+JmxExporter structure
+.EnabledInBroker __boolean json=enabledInBroker
+JmxExporterInfo structure
+.EnabledInBroker __boolean json=enabledInBroker
+JwtSigningAlgorithm enum
+KafkaCluster structure
+.AmazonMskCluster AmazonMskCluster json=amazonMskCluster
+.ApacheKafkaCluster ApacheKafkaCluster json=apacheKafkaCluster
+.ClientAuthentication KafkaClusterClientAuthentication json=clientAuthentication
+.EncryptionInTransit KafkaClusterEncryptionInTransit json=encryptionInTransit
+.VpcConfig KafkaClusterClientVpcConfig json=vpcConfig
+KafkaClusterClientAuthentication structure
+.MTLS KafkaClusterMTLSAuthentication json=mTLS
+.SaslOAuthBearer KafkaClusterSaslOAuthBearerAuthentication json=saslOAuthBearer
+.SaslScram KafkaClusterSaslScramAuthentication json=saslScram
+KafkaClusterClientVpcConfig structure
+.SecurityGroupIds __listOf__string json=securityGroupIds
+.SubnetIds __listOf__string json=subnetIds
+KafkaClusterDescription structure
+.AmazonMskCluster AmazonMskCluster json=amazonMskCluster
+.ApacheKafkaCluster ApacheKafkaCluster json=apacheKafkaCluster
+.ClientAuthentication KafkaClusterClientAuthentication json=clientAuthentication
+.EncryptionInTransit KafkaClusterEncryptionInTransit json=encryptionInTransit
+.KafkaClusterAlias __string json=kafkaClusterAlias
+.VpcConfig KafkaClusterClientVpcConfig json=vpcConfig
+KafkaClusterEncryptionInTransit structure
+.EncryptionType KafkaClusterEncryptionInTransitType json=encryptionType
+.RootCaCertificate __string json=rootCaCertificate
+KafkaClusterEncryptionInTransitType enum
+KafkaClusterMTLSAuthentication structure
+.SecretArn __string json=secretArn
+KafkaClusterOAuthClientCredentials structure
+.TokenRequestSecretArn __string json=tokenRequestSecretArn
+KafkaClusterOAuthClientCredentialsAssertion structure
+.Audience __string json=audience
+.SigningAlgorithm JwtSigningAlgorithm json=signingAlgorithm
+.TokenRequestSecretArn __string json=tokenRequestSecretArn
+KafkaClusterOAuthIamJwtBearer structure
+.Audience __string json=audience
+.SigningAlgorithm JwtSigningAlgorithm json=signingAlgorithm
+.TokenRequestSecretArn __string json=tokenRequestSecretArn
+KafkaClusterSaslOAuthBearerAuthentication structure
+.ClientCredentials KafkaClusterOAuthClientCredentials json=clientCredentials
+.ClientCredentialsAssertion KafkaClusterOAuthClientCredentialsAssertion json=clientCredentialsAssertion
+.IamJwtBearer KafkaClusterOAuthIamJwtBearer json=iamJwtBearer
+.Scope __string json=scope
+.TokenEndpointAuthenticationMethod TokenEndpointAuthenticationMethod json=tokenEndpointAuthenticationMethod
+.TokenEndpointTlsCertificateArn __string json=tokenEndpointTlsCertificateArn
+.TokenEndpointUrl __string json=tokenEndpointUrl
+KafkaClusterSaslScramAuthentication structure
+.Mechanism KafkaClusterSaslScramMechanism json=mechanism
+.SecretArn __string json=secretArn
+KafkaClusterSaslScramMechanism enum
+KafkaClusterSummary structure
+.AmazonMskCluster AmazonMskCluster json=amazonMskCluster
+.ApacheKafkaCluster ApacheKafkaCluster json=apacheKafkaCluster
+.KafkaClusterAlias __string json=kafkaClusterAlias
+KafkaRequestException structure error=client code=400
+.InvalidParameter __string json=invalidParameter
+.Message __string json=message
+KafkaTimeoutException structure error=client code=409
+.InvalidParameter __string json=invalidParameter
+.Message __string json=message
+KafkaVersion structure
+.Status KafkaVersionStatus json=status
+.Version __string json=version
+KafkaVersionStatus enum
+ListChannels operation in=ListChannelsRequest out=ListChannelsResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,ServiceUnavailableException,TooManyRequestsException,UnauthorizedException method=GET uri=/v1/clusters/{ClusterArn}/channels code=200
+ListChannelsRequest structure
+.ClusterArn __string label
+.MaxResults MaxResults query=maxResults
+.NextToken __string query=nextToken
+.TopicNameFilter __string query=topicNameFilter
+ListChannelsResponse structure
+.Channels __listOfChannelInfo json=channels
+.NextToken __string json=nextToken
+ListClientVpcConnections operation in=ListClientVpcConnectionsRequest out=ListClientVpcConnectionsResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,ServiceUnavailableException,UnauthorizedException method=GET uri=/v1/clusters/{ClusterArn}/client-vpc-connections code=200
+ListClientVpcConnectionsRequest structure
+.ClusterArn __string label
+.MaxResults MaxResults query=maxResults
+.NextToken __string query=nextToken
+ListClientVpcConnectionsResponse structure
+.ClientVpcConnections __listOfClientVpcConnection json=clientVpcConnections
+.NextToken __string json=nextToken
+ListClusterOperations operation in=ListClusterOperationsRequest out=ListClusterOperationsResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,UnauthorizedException method=GET uri=/v1/clusters/{ClusterArn}/operations code=200
+ListClusterOperationsRequest structure
+.ClusterArn __string label
+.MaxResults MaxResults query=maxResults
+.NextToken __string query=nextToken
+ListClusterOperationsResponse structure
+.ClusterOperationInfoList __listOfClusterOperationInfo json=clusterOperationInfoList
+.NextToken __string json=nextToken
+ListClusterOperationsV2 operation in=ListClusterOperationsV2Request out=ListClusterOperationsV2Response err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,ServiceUnavailableException,TooManyRequestsException,UnauthorizedException method=GET uri=/api/v2/clusters/{ClusterArn}/operations code=200
+ListClusterOperationsV2Request structure
+.ClusterArn __string label
+.MaxResults MaxResults query=maxResults
+.NextToken __string query=nextToken
+ListClusterOperationsV2Response structure
+.ClusterOperationInfoList __listOfClusterOperationV2Summary json=clusterOperationInfoList
+.NextToken __string json=nextToken
+ListClusters operation in=ListClustersRequest out=ListClustersResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,UnauthorizedException method=GET uri=/v1/clusters code=200
+ListClustersRequest structure
+.ClusterNameFilter __string query=clusterNameFilter
+.MaxResults MaxResults query=maxResults
+.NextToken __string query=nextToken
+ListClustersResponse structure
+.ClusterInfoList __listOfClusterInfo json=clusterInfoList
+.NextToken __string json=nextToken
+ListClustersV2 operation in=ListClustersV2Request out=ListClustersV2Response err=BadRequestException,ForbiddenException,InternalServerErrorException,UnauthorizedException method=GET uri=/api/v2/clusters code=200
+ListClustersV2Request structure
+.ClusterNameFilter __string query=clusterNameFilter
+.ClusterTypeFilter __string query=clusterTypeFilter
+.MaxResults MaxResults query=maxResults
+.NextToken __string query=nextToken
+ListClustersV2Response structure
+.ClusterInfoList __listOfCluster json=clusterInfoList
+.NextToken __string json=nextToken
+ListConfigurationRevisions operation in=ListConfigurationRevisionsRequest out=ListConfigurationRevisionsResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,ServiceUnavailableException,UnauthorizedException method=GET uri=/v1/configurations/{Arn}/revisions code=200
+ListConfigurationRevisionsRequest structure
+.Arn __string label
+.MaxResults MaxResults query=maxResults
+.NextToken __string query=nextToken
+ListConfigurationRevisionsResponse structure
+.NextToken __string json=nextToken
+.Revisions __listOfConfigurationRevision json=revisions
+ListConfigurations operation in=ListConfigurationsRequest out=ListConfigurationsResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,ServiceUnavailableException,UnauthorizedException method=GET uri=/v1/configurations code=200
+ListConfigurationsRequest structure
+.MaxResults MaxResults query=maxResults
+.NextToken __string query=nextToken
+ListConfigurationsResponse structure
+.Configurations __listOfConfiguration json=configurations
+.NextToken __string json=nextToken
+ListKafkaVersions operation in=ListKafkaVersionsRequest out=ListKafkaVersionsResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,UnauthorizedException method=GET uri=/v1/kafka-versions code=200
+ListKafkaVersionsRequest structure
+.MaxResults MaxResults query=maxResults
+.NextToken __string query=nextToken
+ListKafkaVersionsResponse structure
+.KafkaVersions __listOfKafkaVersion json=kafkaVersions
+.NextToken __string json=nextToken
+ListNodes operation in=ListNodesRequest out=ListNodesResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException method=GET uri=/v1/clusters/{ClusterArn}/nodes code=200
+ListNodesRequest structure
+.ClusterArn __string label
+.MaxResults MaxResults query=maxResults
+.NextToken __string query=nextToken
+ListNodesResponse structure
+.NextToken __string json=nextToken
+.NodeInfoList __listOfNodeInfo json=nodeInfoList
+ListReplicators operation in=ListReplicatorsRequest out=ListReplicatorsResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,ServiceUnavailableException,TooManyRequestsException,UnauthorizedException method=GET uri=/replication/v1/replicators code=200
+ListReplicatorsRequest structure
+.MaxResults MaxResults query=maxResults
+.NextToken __string query=nextToken
+.ReplicatorNameFilter __string query=replicatorNameFilter
+ListReplicatorsResponse structure
+.NextToken __string json=nextToken
+.Replicators __listOfReplicatorSummary json=replicators
+ListScramSecrets operation in=ListScramSecretsRequest out=ListScramSecretsResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,ServiceUnavailableException,TooManyRequestsException,UnauthorizedException method=GET uri=/v1/clusters/{ClusterArn}/scram-secrets code=200
+ListScramSecretsRequest structure
+.ClusterArn __string label
+.MaxResults MaxResults query=maxResults
+.NextToken __string query=nextToken
+ListScramSecretsResponse structure
+.NextToken __string json=nextToken
+.SecretArnList __listOf__string json=secretArnList
+ListTagsForResource operation in=ListTagsForResourceRequest out=ListTagsForResourceResponse err=BadRequestException,InternalServerErrorException,NotFoundException method=GET uri=/v1/tags/{ResourceArn} code=200
+ListTagsForResourceRequest structure
+.ResourceArn __string label
+ListTagsForResourceResponse structure
+.Tags __mapOf__string json=tags
+ListTopics operation in=ListTopicsRequest out=ListTopicsResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,ServiceUnavailableException,UnauthorizedException method=GET uri=/v1/clusters/{ClusterArn}/topics code=200
+ListTopicsRequest structure
+.ClusterArn __string label
+.MaxResults MaxResults query=maxResults
+.NextToken __string query=nextToken
+.TopicNameFilter __string query=topicNameFilter
+ListTopicsResponse structure
+.NextToken __string json=nextToken
+.Topics __listOfTopicInfo json=topics
+ListVpcConnections operation in=ListVpcConnectionsRequest out=ListVpcConnectionsResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,ServiceUnavailableException,UnauthorizedException method=GET uri=/v1/vpc-connections code=200
+ListVpcConnectionsRequest structure
+.MaxResults MaxResults query=maxResults
+.NextToken __string query=nextToken
+ListVpcConnectionsResponse structure
+.NextToken __string json=nextToken
+.VpcConnections __listOfVpcConnection json=vpcConnections
+LogDelivery structure
+.ReplicatorLogDelivery ReplicatorLogDelivery json=replicatorLogDelivery
+LoggingInfo structure
+.AuthorizerLogs AuthorizerLogs json=authorizerLogs
+.BrokerLogs BrokerLogs json=brokerLogs
+MaxResults integer
+MutableClusterInfo structure
+.BrokerCountUpdateInfo BrokerCountUpdateInfo json=brokerCountUpdateInfo
+.BrokerEBSVolumeInfo __listOfBrokerEBSVolumeInfo json=brokerEBSVolumeInfo
+.ClientAuthentication ClientAuthentication json=clientAuthentication
+.ConfigurationInfo ConfigurationInfo json=configurationInfo
+.ConnectivityInfo ConnectivityInfo json=connectivityInfo
+.EncryptionInfo EncryptionInfo json=encryptionInfo
+.EnhancedMonitoring EnhancedMonitoring json=enhancedMonitoring
+.InstanceType __stringMin5Max32 json=instanceType
+.KafkaVersion __string json=kafkaVersion
+.LoggingInfo LoggingInfo json=loggingInfo
+.NumberOfBrokerNodes __integer json=numberOfBrokerNodes
+.OpenMonitoring OpenMonitoring json=openMonitoring
+.Rebalancing Rebalancing json=rebalancing
+.StorageMode StorageMode json=storageMode
+.ZookeeperAccess ZookeeperAccess json=zookeeperAccess
+NetworkType enum
+NodeExporter structure
+.EnabledInBroker __boolean json=enabledInBroker
+NodeExporterInfo structure
+.EnabledInBroker __boolean json=enabledInBroker
+NodeInfo structure
+.AddedToClusterTime __string json=addedToClusterTime
+.BrokerNodeInfo BrokerNodeInfo json=brokerNodeInfo
+.ControllerNodeInfo ControllerNodeInfo json=controllerNodeInfo
+.InstanceType __string json=instanceType
+.NodeARN __string json=nodeARN
+.NodeType NodeType json=nodeType
+.ZookeeperNodeInfo ZookeeperNodeInfo json=zookeeperNodeInfo
+NodeType enum
+NotControllerException structure error=client code=409
+.InvalidParameter __string json=invalidParameter
+.Message __string json=message
+NotFoundException structure error=client code=404
+.InvalidParameter __string json=invalidParameter
+.Message __string json=message
+OpenMonitoring structure
+.Prometheus Prometheus json=prometheus
+OpenMonitoringInfo structure
+.Prometheus PrometheusInfo json=prometheus
+PartitionSource structure
+.SourceName __string json=sourceName
+PartitionSpec structure
+.PartitionStrategy PartitionStrategy json=partitionStrategy
+.SourceList __listOfPartitionSource json=sourceList
+PartitionStrategy enum
+Prometheus structure
+.JmxExporter JmxExporter json=jmxExporter
+.NodeExporter NodeExporter json=nodeExporter
+PrometheusInfo structure
+.JmxExporter JmxExporterInfo json=jmxExporter
+.NodeExporter NodeExporterInfo json=nodeExporter
+Provisioned structure
+.BrokerNodeGroupInfo BrokerNodeGroupInfo json=brokerNodeGroupInfo
+.ClientAuthentication ClientAuthentication json=clientAuthentication
+.CurrentBrokerSoftwareInfo BrokerSoftwareInfo json=currentBrokerSoftwareInfo
+.CustomerActionStatus CustomerActionStatus json=customerActionStatus
+.EncryptionInfo EncryptionInfo json=encryptionInfo
+.EnhancedMonitoring EnhancedMonitoring json=enhancedMonitoring
+.LoggingInfo LoggingInfo json=loggingInfo
+.NumberOfBrokerNodes __integerMin1Max15 json=numberOfBrokerNodes
+.OpenMonitoring OpenMonitoringInfo json=openMonitoring
+.Rebalancing Rebalancing json=rebalancing
+.StorageMode StorageMode json=storageMode
+.ZookeeperConnectString __string json=zookeeperConnectString
+.ZookeeperConnectStringTls __string json=zookeeperConnectStringTls
+ProvisionedRequest structure
+.BrokerNodeGroupInfo BrokerNodeGroupInfo json=brokerNodeGroupInfo
+.ClientAuthentication ClientAuthentication json=clientAuthentication
+.ConfigurationInfo ConfigurationInfo json=configurationInfo
+.EncryptionInfo EncryptionInfo json=encryptionInfo
+.EnhancedMonitoring EnhancedMonitoring json=enhancedMonitoring
+.KafkaVersion __stringMin1Max128 json=kafkaVersion
+.LoggingInfo LoggingInfo json=loggingInfo
+.NumberOfBrokerNodes __integerMin1Max15 json=numberOfBrokerNodes
+.OpenMonitoring OpenMonitoringInfo json=openMonitoring
+.Rebalancing Rebalancing json=rebalancing
+.StorageMode StorageMode json=storageMode
+ProvisionedThroughput structure
+.Enabled __boolean json=enabled
+.VolumeThroughput __integer json=volumeThroughput
+PublicAccess structure
+.Type __string json=type
+PutClusterPolicy operation in=PutClusterPolicyRequest out=PutClusterPolicyResponse err=BadRequestException,ForbiddenException,InternalServerErrorException method=PUT uri=/v1/clusters/{ClusterArn}/policy code=200
+PutClusterPolicyRequest structure
+.ClusterArn __string label
+.CurrentVersion __string json=currentVersion
+.Policy __string json=policy
+PutClusterPolicyResponse structure
+.CurrentVersion __string json=currentVersion
+ReassignmentInProgressException structure error=client code=409
+.InvalidParameter __string json=invalidParameter
+.Message __string json=message
+Rebalancing structure
+.Status RebalancingStatus json=status
+RebalancingStatus enum
+RebootBroker operation in=RebootBrokerRequest out=RebootBrokerResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,ServiceUnavailableException,TooManyRequestsException,UnauthorizedException method=PUT uri=/v1/clusters/{ClusterArn}/reboot-broker code=200
+RebootBrokerRequest structure
+.BrokerIds __listOf__string json=brokerIds
+.ClusterArn __string label
+RebootBrokerResponse structure
+.ClusterArn __string json=clusterArn
+.ClusterOperationArn __string json=clusterOperationArn
+RecordConverter structure
+.ValueConverter ValueConverter json=valueConverter
+RecordSchema structure
+.GsrArn __string json=gsrArn
+RejectClientVpcConnection operation in=RejectClientVpcConnectionRequest out=RejectClientVpcConnectionResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,ServiceUnavailableException,UnauthorizedException method=PUT uri=/v1/clusters/{ClusterArn}/client-vpc-connection code=200
+RejectClientVpcConnectionRequest structure
+.ClusterArn __string label
+.VpcConnectionArn __string json=vpcConnectionArn
+RejectClientVpcConnectionResponse structure
+ReplicationInfo structure
+.ConsumerGroupReplication ConsumerGroupReplication json=consumerGroupReplication
+.SourceKafkaClusterArn __string json=sourceKafkaClusterArn
+.SourceKafkaClusterId __string json=sourceKafkaClusterId
+.TargetCompressionType TargetCompressionType json=targetCompressionType
+.TargetKafkaClusterArn __string json=targetKafkaClusterArn
+.TargetKafkaClusterId __string json=targetKafkaClusterId
+.TopicReplication TopicReplication json=topicReplication
+ReplicationInfoDescription structure
+.ConsumerGroupReplication ConsumerGroupReplication json=consumerGroupReplication
+.SourceKafkaClusterAlias __string json=sourceKafkaClusterAlias
+.TargetCompressionType TargetCompressionType json=targetCompressionType
+.TargetKafkaClusterAlias __string json=targetKafkaClusterAlias
+.TopicReplication TopicReplication json=topicReplication
+ReplicationInfoSummary structure
+.SourceKafkaClusterAlias __string json=sourceKafkaClusterAlias
+.TargetKafkaClusterAlias __string json=targetKafkaClusterAlias
+ReplicationStartingPosition structure
+.Type ReplicationStartingPositionType json=type
+ReplicationStartingPositionType enum
+ReplicationStateInfo structure
+.Code __string json=code
+.Message __string json=message
+ReplicationTopicNameConfiguration structure
+.Type ReplicationTopicNameConfigurationType json=type
+ReplicationTopicNameConfigurationType enum
+ReplicatorCloudWatchLogs structure
+.Enabled __boolean json=enabled
+.LogGroup __string json=logGroup
+ReplicatorFirehose structure
+.DeliveryStream __string json=deliveryStream
+.Enabled __boolean json=enabled
+ReplicatorLogDelivery structure
+.CloudWatchLogs ReplicatorCloudWatchLogs json=cloudWatchLogs
+.Firehose ReplicatorFirehose json=firehose
+.S3 ReplicatorS3 json=s3
+ReplicatorS3 structure
+.Bucket __string json=bucket
+.Enabled __boolean json=enabled
+.Prefix __string json=prefix
+ReplicatorState enum
+ReplicatorSummary structure
+.CreationTime __timestampIso8601 json=creationTime
+.CurrentVersion __string json=currentVersion
+.IsReplicatorReference __boolean json=isReplicatorReference
+.KafkaClustersSummary __listOfKafkaClusterSummary json=kafkaClustersSummary
+.ReplicationInfoSummaryList __listOfReplicationInfoSummary json=replicationInfoSummaryList
+.ReplicatorArn __string json=replicatorArn
+.ReplicatorName __string json=replicatorName
+.ReplicatorResourceArn __string json=replicatorResourceArn
+.ReplicatorState ReplicatorState json=replicatorState
+S3 structure
+.Bucket __string json=bucket
+.Enabled __boolean json=enabled
+.Prefix __string json=prefix
+S3CompressionType enum
+S3DestinationConfiguration structure
+.DataFreshnessInSeconds __integer json=dataFreshnessInSeconds
+.DeadLetterQueueS3 DeadLetterQueueS3 json=deadLetterQueueS3
+.ServiceExecutionRoleArn __string json=serviceExecutionRoleArn
+.Storage S3Storage json=storage
+S3DestinationUpdate structure
+.DataFreshnessInSeconds __integer json=dataFreshnessInSeconds
+S3Storage structure
+.BucketArn __string json=bucketArn
+.CompressionType S3CompressionType json=compressionType
+.ExpectedBucketOwner __string json=expectedBucketOwner
+.OutputKeyTemplate __string json=outputKeyTemplate
+.OutputPrefix __string json=outputPrefix
+.StorageClass S3StorageClass json=storageClass
+S3StorageClass enum
+Sasl structure
+.Iam Iam json=iam
+.Scram Scram json=scram
+SchemaEvolution structure
+.EnableSchemaEvolution __boolean json=enableSchemaEvolution
+Scram structure
+.Enabled __boolean json=enabled
+Serverless structure
+.ClientAuthentication ServerlessClientAuthentication json=clientAuthentication
+.ConnectivityInfo ServerlessConnectivityInfo json=connectivityInfo
+.VpcConfigs __listOfVpcConfig json=vpcConfigs
+ServerlessClientAuthentication structure
+.Sasl ServerlessSasl json=sasl
+ServerlessConnectivityInfo structure
+.NetworkType NetworkType json=networkType
+ServerlessRequest structure
+.ClientAuthentication ServerlessClientAuthentication json=clientAuthentication
+.VpcConfigs __listOfVpcConfig json=vpcConfigs
+ServerlessSasl structure
+.Iam Iam json=iam
+ServiceUnavailableException structure error=server code=503
+.InvalidParameter __string json=invalidParameter
+.Message __string json=message
+StateInfo structure
+.Code __string json=code
+.Message __string json=message
+StorageInfo structure
+.EbsStorageInfo EBSStorageInfo json=ebsStorageInfo
+StorageMode enum
+TableCreation structure
+.EnableTableCreation __boolean json=enableTableCreation
+TagResource operation in=TagResourceRequest out=~Unit err=BadRequestException,InternalServerErrorException,NotFoundException method=POST uri=/v1/tags/{ResourceArn} code=204
+TagResourceRequest structure
+.ResourceArn __string label
+.Tags __mapOf__string json=tags
+TargetCompressionType enum
+Tls structure
+.CertificateAuthorityArnList __listOf__string json=certificateAuthorityArnList
+.Enabled __boolean json=enabled
+TokenEndpointAuthenticationMethod enum
+TooManyRequestsException structure error=client code=429
+.InvalidParameter __string json=invalidParameter
+.Message __string json=message
+TopicConfiguration structure
+.RecordConverter RecordConverter json=recordConverter
+.RecordSchema RecordSchema json=recordSchema
+.TopicArn __string json=topicArn
+TopicExistsException structure error=client code=409
+.InvalidParameter __string json=invalidParameter
+.Message __string json=message
+TopicInfo structure
+.OutOfSyncReplicaCount __integer json=outOfSyncReplicaCount
+.PartitionCount __integer json=partitionCount
+.ReplicationFactor __integer json=replicationFactor
+.TopicArn __string json=topicArn
+.TopicName __string json=topicName
+TopicPartitionInfo structure
+.Isr __listOf__integer json=isr
+.Leader __integer json=leader
+.Partition __integer json=partition
+.Replicas __listOf__integer json=replicas
+TopicReplication structure
+.CopyAccessControlListsForTopics __boolean json=copyAccessControlListsForTopics
+.CopyTopicConfigurations __boolean json=copyTopicConfigurations
+.DetectAndCopyNewTopics __boolean json=detectAndCopyNewTopics
+.StartingPosition ReplicationStartingPosition json=startingPosition
+.TopicNameConfiguration ReplicationTopicNameConfiguration json=topicNameConfiguration
+.TopicsToExclude __listOf__stringMax249 json=topicsToExclude
+.TopicsToReplicate __listOf__stringMax249 json=topicsToReplicate
+TopicReplicationUpdate structure
+.CopyAccessControlListsForTopics __boolean json=copyAccessControlListsForTopics
+.CopyTopicConfigurations __boolean json=copyTopicConfigurations
+.DetectAndCopyNewTopics __boolean json=detectAndCopyNewTopics
+.TopicsToExclude __listOf__stringMax249 json=topicsToExclude
+.TopicsToReplicate __listOf__stringMax249 json=topicsToReplicate
+TopicState enum
+Unauthenticated structure
+.Enabled __boolean json=enabled
+UnauthorizedException structure error=client code=401
+.InvalidParameter __string json=invalidParameter
+.Message __string json=message
+UnknownTopicOrPartitionException structure error=client code=404
+.InvalidParameter __string json=invalidParameter
+.Message __string json=message
+UnprocessedScramSecret structure
+.ErrorCode __string json=errorCode
+.ErrorMessage __string json=errorMessage
+.SecretArn __string json=secretArn
+UntagResource operation in=UntagResourceRequest out=~Unit err=BadRequestException,InternalServerErrorException,NotFoundException method=DELETE uri=/v1/tags/{ResourceArn} code=204
+UntagResourceRequest structure
+.ResourceArn __string label
+.TagKeys __listOf__string query=tagKeys
+UpdateBrokerCount operation in=UpdateBrokerCountRequest out=UpdateBrokerCountResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,ServiceUnavailableException,UnauthorizedException method=PUT uri=/v1/clusters/{ClusterArn}/nodes/count code=200
+UpdateBrokerCountRequest structure
+.ClusterArn __string label
+.CurrentVersion __string json=currentVersion
+.TargetNumberOfBrokerNodes __integerMin1Max15 json=targetNumberOfBrokerNodes
+UpdateBrokerCountResponse structure
+.ClusterArn __string json=clusterArn
+.ClusterOperationArn __string json=clusterOperationArn
+UpdateBrokerStorage operation in=UpdateBrokerStorageRequest out=UpdateBrokerStorageResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,ServiceUnavailableException,UnauthorizedException method=PUT uri=/v1/clusters/{ClusterArn}/nodes/storage code=200
+UpdateBrokerStorageRequest structure
+.ClusterArn __string label
+.CurrentVersion __string json=currentVersion
+.TargetBrokerEBSVolumeInfo __listOfBrokerEBSVolumeInfo json=targetBrokerEBSVolumeInfo
+UpdateBrokerStorageResponse structure
+.ClusterArn __string json=clusterArn
+.ClusterOperationArn __string json=clusterOperationArn
+UpdateBrokerType operation in=UpdateBrokerTypeRequest out=UpdateBrokerTypeResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,ServiceUnavailableException,TooManyRequestsException,UnauthorizedException method=PUT uri=/v1/clusters/{ClusterArn}/nodes/type code=200
+UpdateBrokerTypeRequest structure
+.ClusterArn __string label
+.CurrentVersion __string json=currentVersion
+.TargetInstanceType __string json=targetInstanceType
+UpdateBrokerTypeResponse structure
+.ClusterArn __string json=clusterArn
+.ClusterOperationArn __string json=clusterOperationArn
+UpdateChannel operation in=UpdateChannelRequest out=UpdateChannelResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,ServiceUnavailableException,TooManyRequestsException,UnauthorizedException method=PUT uri=/v1/clusters/{ClusterArn}/channels/{ChannelArn} code=200
+UpdateChannelRequest structure
+.ChannelArn __string label
+.ClusterArn __string label
+.IcebergDestinationUpdate IcebergDestinationUpdate json=icebergDestinationUpdate
+.S3DestinationUpdate S3DestinationUpdate json=s3DestinationUpdate
+UpdateChannelResponse structure
+.ChannelArn __string json=channelArn
+.ClusterOperationArn __string json=clusterOperationArn
+UpdateClusterConfiguration operation in=UpdateClusterConfigurationRequest out=UpdateClusterConfigurationResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,ServiceUnavailableException,UnauthorizedException method=PUT uri=/v1/clusters/{ClusterArn}/configuration code=200
+UpdateClusterConfigurationRequest structure
+.ClusterArn __string label
+.ConfigurationInfo ConfigurationInfo json=configurationInfo
+.CurrentVersion __string json=currentVersion
+UpdateClusterConfigurationResponse structure
+.ClusterArn __string json=clusterArn
+.ClusterOperationArn __string json=clusterOperationArn
+UpdateClusterKafkaVersion operation in=UpdateClusterKafkaVersionRequest out=UpdateClusterKafkaVersionResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,ServiceUnavailableException,TooManyRequestsException,UnauthorizedException method=PUT uri=/v1/clusters/{ClusterArn}/version code=200
+UpdateClusterKafkaVersionRequest structure
+.ClusterArn __string label
+.ConfigurationInfo ConfigurationInfo json=configurationInfo
+.CurrentVersion __string json=currentVersion
+.TargetKafkaVersion __string json=targetKafkaVersion
+UpdateClusterKafkaVersionResponse structure
+.ClusterArn __string json=clusterArn
+.ClusterOperationArn __string json=clusterOperationArn
+UpdateConfiguration operation in=UpdateConfigurationRequest out=UpdateConfigurationResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,ServiceUnavailableException,UnauthorizedException method=PUT uri=/v1/configurations/{Arn} code=200
+UpdateConfigurationRequest structure
+.Arn __string label
+.Description __string json=description
+.ServerProperties __blob json=serverProperties
+UpdateConfigurationResponse structure
+.Arn __string json=arn
+.LatestRevision ConfigurationRevision json=latestRevision
+UpdateConnectivity operation in=UpdateConnectivityRequest out=UpdateConnectivityResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,ServiceUnavailableException,UnauthorizedException method=PUT uri=/v1/clusters/{ClusterArn}/connectivity code=200
+UpdateConnectivityRequest structure
+.ClusterArn __string label
+.ConnectivityInfo ConnectivityInfo json=connectivityInfo
+.CurrentVersion __string json=currentVersion
+.ZookeeperAccess ZookeeperAccess json=zookeeperAccess
+UpdateConnectivityResponse structure
+.ClusterArn __string json=clusterArn
+.ClusterOperationArn __string json=clusterOperationArn
+UpdateMonitoring operation in=UpdateMonitoringRequest out=UpdateMonitoringResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,ServiceUnavailableException,UnauthorizedException method=PUT uri=/v1/clusters/{ClusterArn}/monitoring code=200
+UpdateMonitoringRequest structure
+.ClusterArn __string label
+.CurrentVersion __string json=currentVersion
+.EnhancedMonitoring EnhancedMonitoring json=enhancedMonitoring
+.LoggingInfo LoggingInfo json=loggingInfo
+.OpenMonitoring OpenMonitoringInfo json=openMonitoring
+UpdateMonitoringResponse structure
+.ClusterArn __string json=clusterArn
+.ClusterOperationArn __string json=clusterOperationArn
+UpdateRebalancing operation in=UpdateRebalancingRequest out=UpdateRebalancingResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,ServiceUnavailableException,TooManyRequestsException,UnauthorizedException method=PUT uri=/v1/clusters/{ClusterArn}/rebalancing code=200
+UpdateRebalancingRequest structure
+.ClusterArn __string label
+.CurrentVersion __string json=currentVersion
+.Rebalancing Rebalancing json=rebalancing
+UpdateRebalancingResponse structure
+.ClusterArn __string json=clusterArn
+.ClusterOperationArn __string json=clusterOperationArn
+UpdateReplicationInfo operation in=UpdateReplicationInfoRequest out=UpdateReplicationInfoResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,ServiceUnavailableException,TooManyRequestsException,UnauthorizedException method=PUT uri=/replication/v1/replicators/{ReplicatorArn}/replication-info code=200
+UpdateReplicationInfoRequest structure
+.ConsumerGroupReplication ConsumerGroupReplicationUpdate json=consumerGroupReplication
+.CurrentVersion __string json=currentVersion
+.LogDelivery LogDelivery json=logDelivery
+.ReplicatorArn __string label
+.SourceKafkaClusterArn __string json=sourceKafkaClusterArn
+.SourceKafkaClusterId __string json=sourceKafkaClusterId
+.TargetKafkaClusterArn __string json=targetKafkaClusterArn
+.TargetKafkaClusterId __string json=targetKafkaClusterId
+.TopicReplication TopicReplicationUpdate json=topicReplication
+UpdateReplicationInfoResponse structure
+.ReplicatorArn __string json=replicatorArn
+.ReplicatorState ReplicatorState json=replicatorState
+UpdateSecurity operation in=UpdateSecurityRequest out=UpdateSecurityResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,ServiceUnavailableException,TooManyRequestsException,UnauthorizedException method=PATCH uri=/v1/clusters/{ClusterArn}/security code=200
+UpdateSecurityRequest structure
+.ClientAuthentication ClientAuthentication json=clientAuthentication
+.ClusterArn __string label
+.CurrentVersion __string json=currentVersion
+.EncryptionInfo EncryptionInfo json=encryptionInfo
+UpdateSecurityResponse structure
+.ClusterArn __string json=clusterArn
+.ClusterOperationArn __string json=clusterOperationArn
+UpdateStorage operation in=UpdateStorageRequest out=UpdateStorageResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,ServiceUnavailableException,TooManyRequestsException,UnauthorizedException method=PUT uri=/v1/clusters/{ClusterArn}/storage code=200
+UpdateStorageRequest structure
+.ClusterArn __string label
+.CurrentVersion __string json=currentVersion
+.ProvisionedThroughput ProvisionedThroughput json=provisionedThroughput
+.StorageMode StorageMode json=storageMode
+.VolumeSizeGB __integer json=volumeSizeGB
+UpdateStorageResponse structure
+.ClusterArn __string json=clusterArn
+.ClusterOperationArn __string json=clusterOperationArn
+UpdateTopic operation in=UpdateTopicRequest out=UpdateTopicResponse err=BadRequestException,ClusterConnectivityException,ControllerMovedException,ForbiddenException,GroupSubscribedToTopicException,InternalServerErrorException,KafkaRequestException,KafkaTimeoutException,NotControllerException,NotFoundException,ReassignmentInProgressException,ServiceUnavailableException,UnauthorizedException,UnknownTopicOrPartitionException method=PUT uri=/v1/clusters/{ClusterArn}/topics/{TopicName} code=200
+UpdateTopicRequest structure
+.ClusterArn __string label
+.Configs __string json=configs
+.PartitionCount __integer json=partitionCount
+.TopicName __string label
+UpdateTopicResponse structure
+.Status TopicState json=status
+.TopicArn __string json=topicArn
+.TopicName __string json=topicName
+UserIdentity structure
+.PrincipalId __string json=principalId
+.Type UserIdentityType json=type
+UserIdentityType enum
+ValueConverter enum
+VpcConfig structure
+.SecurityGroupIds __listOf__string json=securityGroupIds
+.SubnetIds __listOf__string json=subnetIds
+VpcConnection structure
+.Authentication __string json=authentication
+.CreationTime __timestampIso8601 json=creationTime
+.State VpcConnectionState json=state
+.TargetClusterArn __string json=targetClusterArn
+.VpcConnectionArn __string json=vpcConnectionArn
+.VpcId __string json=vpcId
+VpcConnectionInfo structure
+.CreationTime __timestampIso8601 json=creationTime
+.Owner __string json=owner
+.UserIdentity UserIdentity json=userIdentity
+.VpcConnectionArn __string json=vpcConnectionArn
+VpcConnectionInfoServerless structure
+.CreationTime __timestampIso8601 json=creationTime
+.Owner __string json=owner
+.UserIdentity UserIdentity json=userIdentity
+.VpcConnectionArn __string json=vpcConnectionArn
+VpcConnectionState enum
+VpcConnectivity structure
+.ClientAuthentication VpcConnectivityClientAuthentication json=clientAuthentication
+VpcConnectivityClientAuthentication structure
+.Sasl VpcConnectivitySasl json=sasl
+.Tls VpcConnectivityTls json=tls
+VpcConnectivityIam structure
+.Enabled __boolean json=enabled
+VpcConnectivitySasl structure
+.Iam VpcConnectivityIam json=iam
+.Scram VpcConnectivityScram json=scram
+VpcConnectivityScram structure
+.Enabled __boolean json=enabled
+VpcConnectivityTls structure
+.Enabled __boolean json=enabled
+ZookeeperAccess structure
+.Enabled __boolean json=enabled
+ZookeeperNodeInfo structure
+.AttachedENIId __string json=attachedENIId
+.ClientVpcIpAddress __string json=clientVpcIpAddress
+.Endpoints __listOf__string json=endpoints
+.ZookeeperId __double json=zookeeperId
+.ZookeeperVersion __string json=zookeeperVersion
+__blob blob
+__boolean boolean
+__double double
+__integer integer
+__integerMin1 integer
+__integerMin1Max15 integer
+__integerMin1Max16384 integer
+__listOfBrokerEBSVolumeInfo list m=BrokerEBSVolumeInfo
+__listOfChannelInfo list m=ChannelInfo
+__listOfClientVpcConnection list m=ClientVpcConnection
+__listOfCluster list m=Cluster
+__listOfClusterInfo list m=ClusterInfo
+__listOfClusterOperationInfo list m=ClusterOperationInfo
+__listOfClusterOperationStep list m=ClusterOperationStep
+__listOfClusterOperationV2Summary list m=ClusterOperationV2Summary
+__listOfCompatibleKafkaVersion list m=CompatibleKafkaVersion
+__listOfConfiguration list m=Configuration
+__listOfConfigurationRevision list m=ConfigurationRevision
+__listOfDestinationTable list m=DestinationTable
+__listOfKafkaCluster list m=KafkaCluster
+__listOfKafkaClusterDescription list m=KafkaClusterDescription
+__listOfKafkaClusterSummary list m=KafkaClusterSummary
+__listOfKafkaVersion list m=KafkaVersion
+__listOfNodeInfo list m=NodeInfo
+__listOfPartitionSource list m=PartitionSource
+__listOfReplicationInfo list m=ReplicationInfo
+__listOfReplicationInfoDescription list m=ReplicationInfoDescription
+__listOfReplicationInfoSummary list m=ReplicationInfoSummary
+__listOfReplicatorSummary list m=ReplicatorSummary
+__listOfTopicConfiguration list m=TopicConfiguration
+__listOfTopicInfo list m=TopicInfo
+__listOfTopicPartitionInfo list m=TopicPartitionInfo
+__listOfUnprocessedScramSecret list m=UnprocessedScramSecret
+__listOfVpcConfig list m=VpcConfig
+__listOfVpcConnection list m=VpcConnection
+__listOf__double list m=__double
+__listOf__integer list m=__integer
+__listOf__string list m=__string
+__listOf__stringMax249 list m=__stringMax249
+__listOf__stringMax256 list m=__stringMax256
+__long long
+__mapOf__string map k=__string v=__string
+__string string
+__stringMax1024 string
+__stringMax249 string
+__stringMax256 string
+__stringMin1Max128 string
+__stringMin1Max128Pattern09AZaZ09AZaZ0 string
+__stringMin1Max64 string
+__stringMin5Max32 string
+__timestampIso8601 timestamp ts=date-time

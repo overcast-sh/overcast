@@ -50,6 +50,13 @@ tasks:
       - task: lambda-init-arch
         vars: { GOARCH: arm64 }
 
+  aws-sdk-shapes:
+    desc: Pack the committed aws-sdk shape tables into the dist/ internal/awsshapes embeds
+    # Committed as readable text so a model refresh reviews as a diff; the
+    # binary carries them compressed. Every build task depends on this.
+    cmds:
+      - go run ./cmd/awsshapes-pack
+
   lambda-init-arch:
     internal: true
     env:
@@ -61,7 +68,7 @@ tasks:
 
   build:
     desc: Compile the binary for the current platform (includes embedded web UI)
-    deps: [lambda-init]
+    deps: [lambda-init, aws-sdk-shapes]
     cmds:
       - cmd: mkdir -p {{.BUILD_DIR}}
         platforms: [darwin, linux]
@@ -86,7 +93,7 @@ tasks:
   build-slim:
     desc: Compile the slim binary (no web UI) for the current platform
     # -tags slim does not drop the Lambda init: slim images run Lambda.
-    deps: [lambda-init]
+    deps: [lambda-init, aws-sdk-shapes]
     cmds:
       - cmd: mkdir -p {{.BUILD_DIR}}
         platforms: [darwin, linux]
@@ -165,15 +172,15 @@ tasks:
   generate-aws-operations:
     desc: Regenerate the AWS operation manifest (requires AWS_MODELS_DIR and AWS_MODELS_REVISION)
     cmds:
-      - go run ./cmd/awsmodelgen -models "{{.AWS_MODELS_DIR}}" -output internal/awsapi/manifest.gen.go -source-revision "{{.AWS_MODELS_REVISION}}"
+      - go run ./cmd/awsmodelgen -models "{{.AWS_MODELS_DIR}}" -output internal/awsapi/manifest.gen.go -source-revision "{{.AWS_MODELS_REVISION}}" -shapes-out models/aws/shapes -shapes-services models/aws/shapes-services.txt -sdk-shapes-out internal/awsshapes -sdk-shapes-services models/aws/sdk-shapes-services.txt
 
   aws-models-check:
     desc: Validate the AWS operation corpus; set AWS_MODELS_DIR for a full regeneration diff
     cmds:
-      - go test -count=1 ./cmd/awsmodelgen ./internal/awsapi ./internal/protocol/codec ./tests/integration/router
+      - go test -count=1 ./cmd/awsmodelgen ./internal/awsapi ./internal/awsshapes ./internal/protocol/codec ./tests/integration/router
       - go test -count=1 -tags dev ./internal/router
       - go run -tags dev ./cmd/capgen --check-model
-      - '{{if .AWS_MODELS_DIR}}go run ./cmd/awsmodelgen -models "{{.AWS_MODELS_DIR}}" -output internal/awsapi/manifest.gen.go -source-revision "{{.AWS_MODELS_REVISION}}" -check{{else}}echo "AWS_MODELS_DIR not set; skipping full regeneration diff"{{end}}'
+      - '{{if .AWS_MODELS_DIR}}go run ./cmd/awsmodelgen -models "{{.AWS_MODELS_DIR}}" -output internal/awsapi/manifest.gen.go -source-revision "{{.AWS_MODELS_REVISION}}" -shapes-out models/aws/shapes -shapes-services models/aws/shapes-services.txt -sdk-shapes-out internal/awsshapes -sdk-shapes-services models/aws/sdk-shapes-services.txt -check{{else}}echo "AWS_MODELS_DIR not set; skipping full regeneration diff"{{end}}'
 
   generate-compat-model:
     desc: Regenerate the compat scenario IR, gaps.json and registry.generated.json from compat/model/recipes/

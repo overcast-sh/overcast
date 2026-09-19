@@ -20,7 +20,7 @@ func ManifestDigest(contents []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func updateModelVersion(path, revision, modelDate, manifestDigest, shapesDigest string) error {
+func updateModelVersion(path, revision, modelDate, manifestDigest, shapesDigest, sdkShapesDigest string) error {
 	if strings.TrimSpace(revision) == "" {
 		return fmt.Errorf("model revision must not be empty")
 	}
@@ -33,6 +33,9 @@ func updateModelVersion(path, revision, modelDate, manifestDigest, shapesDigest 
 	if strings.TrimSpace(shapesDigest) == "" {
 		return fmt.Errorf("shape snapshot digest must not be empty")
 	}
+	if strings.TrimSpace(sdkShapesDigest) == "" {
+		return fmt.Errorf("SDK shape table digest must not be empty")
+	}
 	contents, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("read model version %s: %w", path, err)
@@ -42,8 +45,9 @@ func updateModelVersion(path, revision, modelDate, manifestDigest, shapesDigest 
 	dateFound := replaceVersionField(lines, "model-date", modelDate)
 	digestFound := replaceVersionField(lines, ManifestDigestField, manifestDigest)
 	shapesFound := replaceVersionField(lines, ShapesDigestField, shapesDigest)
-	if !revisionFound || !dateFound || !digestFound || !shapesFound {
-		return fmt.Errorf("model version %s must contain revision, model-date, %s and %s fields", path, ManifestDigestField, ShapesDigestField)
+	sdkShapesFound := replaceVersionField(lines, SDKShapesDigestField, sdkShapesDigest)
+	if !revisionFound || !dateFound || !digestFound || !shapesFound || !sdkShapesFound {
+		return fmt.Errorf("model version %s must contain revision, model-date, %s, %s and %s fields", path, ManifestDigestField, ShapesDigestField, SDKShapesDigestField)
 	}
 	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
 		return fmt.Errorf("write model version %s: %w", path, err)

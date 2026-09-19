@@ -1,0 +1,858 @@
+service AWSJSON11 version=2015-10-07 ns=http://events.amazonaws.com/doc/2015-10-07
+AccountId string
+Action string
+ActivateEventSource operation in=ActivateEventSourceRequest out=~Unit err=ConcurrentModificationException,InternalException,InvalidStateException,OperationDisabledException,ResourceNotFoundException
+ActivateEventSourceRequest structure
+.Name EventSourceName
+ApiDestination structure
+.ApiDestinationArn ApiDestinationArn
+.ApiDestinationState ApiDestinationState
+.ConnectionArn ConnectionArn
+.CreationTime Timestamp
+.HttpMethod ApiDestinationHttpMethod
+.InvocationEndpoint HttpsEndpoint
+.InvocationRateLimitPerSecond ApiDestinationInvocationRateLimitPerSecond
+.LastModifiedTime Timestamp
+.Name ApiDestinationName
+ApiDestinationArn string
+ApiDestinationDescription string
+ApiDestinationHttpMethod enum
+ApiDestinationInvocationRateLimitPerSecond integer
+ApiDestinationName string
+ApiDestinationResponseList list m=ApiDestination
+ApiDestinationState enum
+Archive structure
+.ArchiveName ArchiveName
+.CreationTime Timestamp
+.EventCount Long
+.EventSourceArn Arn
+.RetentionDays RetentionDays
+.SizeBytes Long
+.State ArchiveState
+.StateReason ArchiveStateReason
+ArchiveArn string
+ArchiveDescription string
+ArchiveName string
+ArchiveResponseList list m=Archive
+ArchiveState enum
+ArchiveStateReason string
+Arn string
+AssignPublicIp enum
+AuthHeaderParameters string
+AuthHeaderParametersSensitive string
+AwsVpcConfiguration structure
+.AssignPublicIp AssignPublicIp
+.SecurityGroups StringList
+.Subnets StringList
+BatchArrayProperties structure
+.Size Integer
+BatchParameters structure
+.ArrayProperties BatchArrayProperties
+.JobDefinition String
+.JobName String
+.RetryStrategy BatchRetryStrategy
+BatchRetryStrategy structure
+.Attempts Integer
+Boolean boolean
+CancelReplay operation in=CancelReplayRequest out=CancelReplayResponse err=ConcurrentModificationException,IllegalStatusException,InternalException,ResourceNotFoundException
+CancelReplayRequest structure
+.ReplayName ReplayName
+CancelReplayResponse structure
+.ReplayArn ReplayArn
+.State ReplayState
+.StateReason ReplayStateReason
+CapacityProvider string
+CapacityProviderStrategy list m=CapacityProviderStrategyItem
+CapacityProviderStrategyItem structure
+.base CapacityProviderStrategyItemBase
+.capacityProvider CapacityProvider
+.weight CapacityProviderStrategyItemWeight
+CapacityProviderStrategyItemBase integer
+CapacityProviderStrategyItemWeight integer
+ConcurrentModificationException structure error=client
+.message ErrorMessage
+Condition structure
+.Key String
+.Type String
+.Value String
+Connection structure
+.AuthorizationType ConnectionAuthorizationType
+.ConnectionArn ConnectionArn
+.ConnectionState ConnectionState
+.CreationTime Timestamp
+.LastAuthorizedTime Timestamp
+.LastModifiedTime Timestamp
+.Name ConnectionName
+.StateReason ConnectionStateReason
+ConnectionApiKeyAuthResponseParameters structure
+.ApiKeyName AuthHeaderParameters
+ConnectionArn string
+ConnectionAuthResponseParameters structure
+.ApiKeyAuthParameters ConnectionApiKeyAuthResponseParameters
+.BasicAuthParameters ConnectionBasicAuthResponseParameters
+.InvocationHttpParameters ConnectionHttpParameters
+.OAuthParameters ConnectionOAuthResponseParameters
+ConnectionAuthorizationType enum
+ConnectionBasicAuthResponseParameters structure
+.Username AuthHeaderParameters
+ConnectionBodyParameter structure
+.IsValueSecret Boolean
+.Key String
+.Value SensitiveString
+ConnectionBodyParametersList list m=ConnectionBodyParameter
+ConnectionDescription string
+ConnectionHeaderParameter structure
+.IsValueSecret Boolean
+.Key HeaderKey
+.Value HeaderValueSensitive
+ConnectionHeaderParametersList list m=ConnectionHeaderParameter
+ConnectionHttpParameters structure
+.BodyParameters ConnectionBodyParametersList
+.HeaderParameters ConnectionHeaderParametersList
+.QueryStringParameters ConnectionQueryStringParametersList
+ConnectionName string
+ConnectionOAuthClientResponseParameters structure
+.ClientID AuthHeaderParameters
+ConnectionOAuthHttpMethod enum
+ConnectionOAuthResponseParameters structure
+.AuthorizationEndpoint HttpsEndpoint
+.ClientParameters ConnectionOAuthClientResponseParameters
+.HttpMethod ConnectionOAuthHttpMethod
+.OAuthHttpParameters ConnectionHttpParameters
+ConnectionQueryStringParameter structure
+.IsValueSecret Boolean
+.Key QueryStringKey
+.Value QueryStringValueSensitive
+ConnectionQueryStringParametersList list m=ConnectionQueryStringParameter
+ConnectionResponseList list m=Connection
+ConnectionState enum
+ConnectionStateReason string
+CreateApiDestination operation in=CreateApiDestinationRequest out=CreateApiDestinationResponse err=InternalException,LimitExceededException,ResourceAlreadyExistsException,ResourceNotFoundException
+CreateApiDestinationRequest structure
+.ConnectionArn ConnectionArn
+.Description ApiDestinationDescription
+.HttpMethod ApiDestinationHttpMethod
+.InvocationEndpoint HttpsEndpoint
+.InvocationRateLimitPerSecond ApiDestinationInvocationRateLimitPerSecond
+.Name ApiDestinationName
+CreateApiDestinationResponse structure
+.ApiDestinationArn ApiDestinationArn
+.ApiDestinationState ApiDestinationState
+.CreationTime Timestamp
+.LastModifiedTime Timestamp
+CreateArchive operation in=CreateArchiveRequest out=CreateArchiveResponse err=ConcurrentModificationException,InternalException,InvalidEventPatternException,LimitExceededException,ResourceAlreadyExistsException,ResourceNotFoundException
+CreateArchiveRequest structure
+.ArchiveName ArchiveName
+.Description ArchiveDescription
+.EventPattern EventPattern
+.EventSourceArn Arn
+.RetentionDays RetentionDays
+CreateArchiveResponse structure
+.ArchiveArn ArchiveArn
+.CreationTime Timestamp
+.State ArchiveState
+.StateReason ArchiveStateReason
+CreateConnection operation in=CreateConnectionRequest out=CreateConnectionResponse err=InternalException,LimitExceededException,ResourceAlreadyExistsException
+CreateConnectionApiKeyAuthRequestParameters structure
+.ApiKeyName AuthHeaderParameters
+.ApiKeyValue AuthHeaderParametersSensitive
+CreateConnectionAuthRequestParameters structure
+.ApiKeyAuthParameters CreateConnectionApiKeyAuthRequestParameters
+.BasicAuthParameters CreateConnectionBasicAuthRequestParameters
+.InvocationHttpParameters ConnectionHttpParameters
+.OAuthParameters CreateConnectionOAuthRequestParameters
+CreateConnectionBasicAuthRequestParameters structure
+.Password AuthHeaderParametersSensitive
+.Username AuthHeaderParameters
+CreateConnectionOAuthClientRequestParameters structure
+.ClientID AuthHeaderParameters
+.ClientSecret AuthHeaderParametersSensitive
+CreateConnectionOAuthRequestParameters structure
+.AuthorizationEndpoint HttpsEndpoint
+.ClientParameters CreateConnectionOAuthClientRequestParameters
+.HttpMethod ConnectionOAuthHttpMethod
+.OAuthHttpParameters ConnectionHttpParameters
+CreateConnectionRequest structure
+.AuthParameters CreateConnectionAuthRequestParameters
+.AuthorizationType ConnectionAuthorizationType
+.Description ConnectionDescription
+.Name ConnectionName
+CreateConnectionResponse structure
+.ConnectionArn ConnectionArn
+.ConnectionState ConnectionState
+.CreationTime Timestamp
+.LastModifiedTime Timestamp
+CreateEventBus operation in=CreateEventBusRequest out=CreateEventBusResponse err=ConcurrentModificationException,InternalException,InvalidStateException,LimitExceededException,OperationDisabledException,ResourceAlreadyExistsException,ResourceNotFoundException
+CreateEventBusRequest structure
+.EventSourceName EventSourceName
+.Name EventBusName
+.Tags TagList
+CreateEventBusResponse structure
+.EventBusArn String
+CreatePartnerEventSource operation in=CreatePartnerEventSourceRequest out=CreatePartnerEventSourceResponse err=ConcurrentModificationException,InternalException,LimitExceededException,OperationDisabledException,ResourceAlreadyExistsException
+CreatePartnerEventSourceRequest structure
+.Account AccountId
+.Name EventSourceName
+CreatePartnerEventSourceResponse structure
+.EventSourceArn String
+CreatedBy string
+Database string
+DbUser string
+DeactivateEventSource operation in=DeactivateEventSourceRequest out=~Unit err=ConcurrentModificationException,InternalException,InvalidStateException,OperationDisabledException,ResourceNotFoundException
+DeactivateEventSourceRequest structure
+.Name EventSourceName
+DeadLetterConfig structure
+.Arn ResourceArn
+DeauthorizeConnection operation in=DeauthorizeConnectionRequest out=DeauthorizeConnectionResponse err=ConcurrentModificationException,InternalException,ResourceNotFoundException
+DeauthorizeConnectionRequest structure
+.Name ConnectionName
+DeauthorizeConnectionResponse structure
+.ConnectionArn ConnectionArn
+.ConnectionState ConnectionState
+.CreationTime Timestamp
+.LastAuthorizedTime Timestamp
+.LastModifiedTime Timestamp
+DeleteApiDestination operation in=DeleteApiDestinationRequest out=DeleteApiDestinationResponse err=ConcurrentModificationException,InternalException,ResourceNotFoundException
+DeleteApiDestinationRequest structure
+.Name ApiDestinationName
+DeleteApiDestinationResponse structure
+DeleteArchive operation in=DeleteArchiveRequest out=DeleteArchiveResponse err=ConcurrentModificationException,InternalException,ResourceNotFoundException
+DeleteArchiveRequest structure
+.ArchiveName ArchiveName
+DeleteArchiveResponse structure
+DeleteConnection operation in=DeleteConnectionRequest out=DeleteConnectionResponse err=ConcurrentModificationException,InternalException,ResourceNotFoundException
+DeleteConnectionRequest structure
+.Name ConnectionName
+DeleteConnectionResponse structure
+.ConnectionArn ConnectionArn
+.ConnectionState ConnectionState
+.CreationTime Timestamp
+.LastAuthorizedTime Timestamp
+.LastModifiedTime Timestamp
+DeleteEventBus operation in=DeleteEventBusRequest out=~Unit err=ConcurrentModificationException,InternalException
+DeleteEventBusRequest structure
+.Name EventBusName
+DeletePartnerEventSource operation in=DeletePartnerEventSourceRequest out=~Unit err=ConcurrentModificationException,InternalException,OperationDisabledException
+DeletePartnerEventSourceRequest structure
+.Account AccountId
+.Name EventSourceName
+DeleteRule operation in=DeleteRuleRequest out=~Unit err=ConcurrentModificationException,InternalException,ManagedRuleException,ResourceNotFoundException
+DeleteRuleRequest structure
+.EventBusName EventBusNameOrArn
+.Force Boolean
+.Name RuleName
+DescribeApiDestination operation in=DescribeApiDestinationRequest out=DescribeApiDestinationResponse err=InternalException,ResourceNotFoundException
+DescribeApiDestinationRequest structure
+.Name ApiDestinationName
+DescribeApiDestinationResponse structure
+.ApiDestinationArn ApiDestinationArn
+.ApiDestinationState ApiDestinationState
+.ConnectionArn ConnectionArn
+.CreationTime Timestamp
+.Description ApiDestinationDescription
+.HttpMethod ApiDestinationHttpMethod
+.InvocationEndpoint HttpsEndpoint
+.InvocationRateLimitPerSecond ApiDestinationInvocationRateLimitPerSecond
+.LastModifiedTime Timestamp
+.Name ApiDestinationName
+DescribeArchive operation in=DescribeArchiveRequest out=DescribeArchiveResponse err=InternalException,ResourceAlreadyExistsException,ResourceNotFoundException
+DescribeArchiveRequest structure
+.ArchiveName ArchiveName
+DescribeArchiveResponse structure
+.ArchiveArn ArchiveArn
+.ArchiveName ArchiveName
+.CreationTime Timestamp
+.Description ArchiveDescription
+.EventCount Long
+.EventPattern EventPattern
+.EventSourceArn Arn
+.RetentionDays RetentionDays
+.SizeBytes Long
+.State ArchiveState
+.StateReason ArchiveStateReason
+DescribeConnection operation in=DescribeConnectionRequest out=DescribeConnectionResponse err=InternalException,ResourceNotFoundException
+DescribeConnectionRequest structure
+.Name ConnectionName
+DescribeConnectionResponse structure
+.AuthParameters ConnectionAuthResponseParameters
+.AuthorizationType ConnectionAuthorizationType
+.ConnectionArn ConnectionArn
+.ConnectionState ConnectionState
+.CreationTime Timestamp
+.Description ConnectionDescription
+.LastAuthorizedTime Timestamp
+.LastModifiedTime Timestamp
+.Name ConnectionName
+.SecretArn SecretsManagerSecretArn
+.StateReason ConnectionStateReason
+DescribeEventBus operation in=DescribeEventBusRequest out=DescribeEventBusResponse err=InternalException,ResourceNotFoundException
+DescribeEventBusRequest structure
+.Name EventBusNameOrArn
+DescribeEventBusResponse structure
+.Arn String
+.Name String
+.Policy String
+DescribeEventSource operation in=DescribeEventSourceRequest out=DescribeEventSourceResponse err=InternalException,OperationDisabledException,ResourceNotFoundException
+DescribeEventSourceRequest structure
+.Name EventSourceName
+DescribeEventSourceResponse structure
+.Arn String
+.CreatedBy String
+.CreationTime Timestamp
+.ExpirationTime Timestamp
+.Name String
+.State EventSourceState
+DescribePartnerEventSource operation in=DescribePartnerEventSourceRequest out=DescribePartnerEventSourceResponse err=InternalException,OperationDisabledException,ResourceNotFoundException
+DescribePartnerEventSourceRequest structure
+.Name EventSourceName
+DescribePartnerEventSourceResponse structure
+.Arn String
+.Name String
+DescribeReplay operation in=DescribeReplayRequest out=DescribeReplayResponse err=InternalException,ResourceNotFoundException
+DescribeReplayRequest structure
+.ReplayName ReplayName
+DescribeReplayResponse structure
+.Description ReplayDescription
+.Destination ReplayDestination
+.EventEndTime Timestamp
+.EventLastReplayedTime Timestamp
+.EventSourceArn Arn
+.EventStartTime Timestamp
+.ReplayArn ReplayArn
+.ReplayEndTime Timestamp
+.ReplayName ReplayName
+.ReplayStartTime Timestamp
+.State ReplayState
+.StateReason ReplayStateReason
+DescribeRule operation in=DescribeRuleRequest out=DescribeRuleResponse err=InternalException,ResourceNotFoundException
+DescribeRuleRequest structure
+.EventBusName EventBusNameOrArn
+.Name RuleName
+DescribeRuleResponse structure
+.Arn RuleArn
+.CreatedBy CreatedBy
+.Description RuleDescription
+.EventBusName EventBusName
+.EventPattern EventPattern
+.ManagedBy ManagedBy
+.Name RuleName
+.RoleArn RoleArn
+.ScheduleExpression ScheduleExpression
+.State RuleState
+DisableRule operation in=DisableRuleRequest out=~Unit err=ConcurrentModificationException,InternalException,ManagedRuleException,ResourceNotFoundException
+DisableRuleRequest structure
+.EventBusName EventBusNameOrArn
+.Name RuleName
+EcsParameters structure
+.CapacityProviderStrategy CapacityProviderStrategy
+.EnableECSManagedTags Boolean
+.EnableExecuteCommand Boolean
+.Group String
+.LaunchType LaunchType
+.NetworkConfiguration NetworkConfiguration
+.PlacementConstraints PlacementConstraints
+.PlacementStrategy PlacementStrategies
+.PlatformVersion String
+.PropagateTags PropagateTags
+.ReferenceId ReferenceId
+.Tags TagList
+.TaskCount LimitMin1
+.TaskDefinitionArn Arn
+EnableRule operation in=EnableRuleRequest out=~Unit err=ConcurrentModificationException,InternalException,ManagedRuleException,ResourceNotFoundException
+EnableRuleRequest structure
+.EventBusName EventBusNameOrArn
+.Name RuleName
+ErrorCode string
+ErrorMessage string
+EventBus structure
+.Arn String
+.Name String
+.Policy String
+EventBusList list m=EventBus
+EventBusName string
+EventBusNameOrArn string
+EventId string
+EventPattern string
+EventResource string
+EventResourceList list m=EventResource
+EventSource structure
+.Arn String
+.CreatedBy String
+.CreationTime Timestamp
+.ExpirationTime Timestamp
+.Name String
+.State EventSourceState
+EventSourceList list m=EventSource
+EventSourceName string
+EventSourceNamePrefix string
+EventSourceState enum
+EventTime timestamp
+HeaderKey string
+HeaderParametersMap map k=HeaderKey v=HeaderValue
+HeaderValue string
+HeaderValueSensitive string
+HttpParameters structure
+.HeaderParameters HeaderParametersMap
+.PathParameterValues PathParameterList
+.QueryStringParameters QueryStringParametersMap
+HttpsEndpoint string
+IllegalStatusException structure error=client
+.message ErrorMessage
+InputTransformer structure
+.InputPathsMap TransformerPaths
+.InputTemplate TransformerInput
+InputTransformerPathKey string
+Integer integer
+InternalException structure error=server
+.message ErrorMessage
+InvalidEventPatternException structure error=client
+.message ErrorMessage
+InvalidStateException structure error=client
+.message ErrorMessage
+KinesisParameters structure
+.PartitionKeyPath TargetPartitionKeyPath
+LaunchType enum
+LimitExceededException structure error=client
+.message ErrorMessage
+LimitMax100 integer
+LimitMin1 integer
+ListApiDestinations operation in=ListApiDestinationsRequest out=ListApiDestinationsResponse err=InternalException
+ListApiDestinationsRequest structure
+.ConnectionArn ConnectionArn
+.Limit LimitMax100
+.NamePrefix ApiDestinationName
+.NextToken NextToken
+ListApiDestinationsResponse structure
+.ApiDestinations ApiDestinationResponseList
+.NextToken NextToken
+ListArchives operation in=ListArchivesRequest out=ListArchivesResponse err=InternalException,ResourceNotFoundException
+ListArchivesRequest structure
+.EventSourceArn Arn
+.Limit LimitMax100
+.NamePrefix ArchiveName
+.NextToken NextToken
+.State ArchiveState
+ListArchivesResponse structure
+.Archives ArchiveResponseList
+.NextToken NextToken
+ListConnections operation in=ListConnectionsRequest out=ListConnectionsResponse err=InternalException
+ListConnectionsRequest structure
+.ConnectionState ConnectionState
+.Limit LimitMax100
+.NamePrefix ConnectionName
+.NextToken NextToken
+ListConnectionsResponse structure
+.Connections ConnectionResponseList
+.NextToken NextToken
+ListEventBuses operation in=ListEventBusesRequest out=ListEventBusesResponse err=InternalException
+ListEventBusesRequest structure
+.Limit LimitMax100
+.NamePrefix EventBusName
+.NextToken NextToken
+ListEventBusesResponse structure
+.EventBuses EventBusList
+.NextToken NextToken
+ListEventSources operation in=ListEventSourcesRequest out=ListEventSourcesResponse err=InternalException,OperationDisabledException
+ListEventSourcesRequest structure
+.Limit LimitMax100
+.NamePrefix EventSourceNamePrefix
+.NextToken NextToken
+ListEventSourcesResponse structure
+.EventSources EventSourceList
+.NextToken NextToken
+ListPartnerEventSourceAccounts operation in=ListPartnerEventSourceAccountsRequest out=ListPartnerEventSourceAccountsResponse err=InternalException,OperationDisabledException,ResourceNotFoundException
+ListPartnerEventSourceAccountsRequest structure
+.EventSourceName EventSourceName
+.Limit LimitMax100
+.NextToken NextToken
+ListPartnerEventSourceAccountsResponse structure
+.NextToken NextToken
+.PartnerEventSourceAccounts PartnerEventSourceAccountList
+ListPartnerEventSources operation in=ListPartnerEventSourcesRequest out=ListPartnerEventSourcesResponse err=InternalException,OperationDisabledException
+ListPartnerEventSourcesRequest structure
+.Limit LimitMax100
+.NamePrefix PartnerEventSourceNamePrefix
+.NextToken NextToken
+ListPartnerEventSourcesResponse structure
+.NextToken NextToken
+.PartnerEventSources PartnerEventSourceList
+ListReplays operation in=ListReplaysRequest out=ListReplaysResponse err=InternalException
+ListReplaysRequest structure
+.EventSourceArn Arn
+.Limit LimitMax100
+.NamePrefix ReplayName
+.NextToken NextToken
+.State ReplayState
+ListReplaysResponse structure
+.NextToken NextToken
+.Replays ReplayList
+ListRuleNamesByTarget operation in=ListRuleNamesByTargetRequest out=ListRuleNamesByTargetResponse err=InternalException,ResourceNotFoundException
+ListRuleNamesByTargetRequest structure
+.EventBusName EventBusNameOrArn
+.Limit LimitMax100
+.NextToken NextToken
+.TargetArn TargetArn
+ListRuleNamesByTargetResponse structure
+.NextToken NextToken
+.RuleNames RuleNameList
+ListRules operation in=ListRulesRequest out=ListRulesResponse err=InternalException,ResourceNotFoundException
+ListRulesRequest structure
+.EventBusName EventBusNameOrArn
+.Limit LimitMax100
+.NamePrefix RuleName
+.NextToken NextToken
+ListRulesResponse structure
+.NextToken NextToken
+.Rules RuleResponseList
+ListTagsForResource operation in=ListTagsForResourceRequest out=ListTagsForResourceResponse err=InternalException,ResourceNotFoundException
+ListTagsForResourceRequest structure
+.ResourceARN Arn
+ListTagsForResourceResponse structure
+.Tags TagList
+ListTargetsByRule operation in=ListTargetsByRuleRequest out=ListTargetsByRuleResponse err=InternalException,ResourceNotFoundException
+ListTargetsByRuleRequest structure
+.EventBusName EventBusNameOrArn
+.Limit LimitMax100
+.NextToken NextToken
+.Rule RuleName
+ListTargetsByRuleResponse structure
+.NextToken NextToken
+.Targets TargetList
+Long long
+ManagedBy string
+ManagedRuleException structure error=client
+.message ErrorMessage
+MaximumEventAgeInSeconds integer
+MaximumRetryAttempts integer
+MessageGroupId string
+NetworkConfiguration structure
+.awsvpcConfiguration AwsVpcConfiguration
+NextToken string
+NonPartnerEventBusName string
+NonPartnerEventBusNameOrArn string
+OperationDisabledException structure error=client
+.message ErrorMessage
+PartnerEventSource structure
+.Arn String
+.Name String
+PartnerEventSourceAccount structure
+.Account AccountId
+.CreationTime Timestamp
+.ExpirationTime Timestamp
+.State EventSourceState
+PartnerEventSourceAccountList list m=PartnerEventSourceAccount
+PartnerEventSourceList list m=PartnerEventSource
+PartnerEventSourceNamePrefix string
+PathParameter string
+PathParameterList list m=PathParameter
+PlacementConstraint structure
+.expression PlacementConstraintExpression
+.type PlacementConstraintType
+PlacementConstraintExpression string
+PlacementConstraintType enum
+PlacementConstraints list m=PlacementConstraint
+PlacementStrategies list m=PlacementStrategy
+PlacementStrategy structure
+.field PlacementStrategyField
+.type PlacementStrategyType
+PlacementStrategyField string
+PlacementStrategyType enum
+PolicyLengthExceededException structure error=client
+.message ErrorMessage
+Principal string
+PropagateTags enum
+PutEvents operation in=PutEventsRequest out=PutEventsResponse err=InternalException
+PutEventsRequest structure
+.Entries PutEventsRequestEntryList
+PutEventsRequestEntry structure
+.Detail String
+.DetailType String
+.EventBusName NonPartnerEventBusNameOrArn
+.Resources EventResourceList
+.Source String
+.Time EventTime
+.TraceHeader TraceHeader
+PutEventsRequestEntryList list m=PutEventsRequestEntry
+PutEventsResponse structure
+.Entries PutEventsResultEntryList
+.FailedEntryCount Integer
+PutEventsResultEntry structure
+.ErrorCode ErrorCode
+.ErrorMessage ErrorMessage
+.EventId EventId
+PutEventsResultEntryList list m=PutEventsResultEntry
+PutPartnerEvents operation in=PutPartnerEventsRequest out=PutPartnerEventsResponse err=InternalException,OperationDisabledException
+PutPartnerEventsRequest structure
+.Entries PutPartnerEventsRequestEntryList
+PutPartnerEventsRequestEntry structure
+.Detail String
+.DetailType String
+.Resources EventResourceList
+.Source EventSourceName
+.Time EventTime
+PutPartnerEventsRequestEntryList list m=PutPartnerEventsRequestEntry
+PutPartnerEventsResponse structure
+.Entries PutPartnerEventsResultEntryList
+.FailedEntryCount Integer
+PutPartnerEventsResultEntry structure
+.ErrorCode ErrorCode
+.ErrorMessage ErrorMessage
+.EventId EventId
+PutPartnerEventsResultEntryList list m=PutPartnerEventsResultEntry
+PutPermission operation in=PutPermissionRequest out=~Unit err=ConcurrentModificationException,InternalException,OperationDisabledException,PolicyLengthExceededException,ResourceNotFoundException
+PutPermissionRequest structure
+.Action Action
+.Condition Condition
+.EventBusName NonPartnerEventBusName
+.Policy String
+.Principal Principal
+.StatementId StatementId
+PutRule operation in=PutRuleRequest out=PutRuleResponse err=ConcurrentModificationException,InternalException,InvalidEventPatternException,LimitExceededException,ManagedRuleException,ResourceNotFoundException
+PutRuleRequest structure
+.Description RuleDescription
+.EventBusName EventBusNameOrArn
+.EventPattern EventPattern
+.Name RuleName
+.RoleArn RoleArn
+.ScheduleExpression ScheduleExpression
+.State RuleState
+.Tags TagList
+PutRuleResponse structure
+.RuleArn RuleArn
+PutTargets operation in=PutTargetsRequest out=PutTargetsResponse err=ConcurrentModificationException,InternalException,LimitExceededException,ManagedRuleException,ResourceNotFoundException
+PutTargetsRequest structure
+.EventBusName EventBusNameOrArn
+.Rule RuleName
+.Targets TargetList
+PutTargetsResponse structure
+.FailedEntries PutTargetsResultEntryList
+.FailedEntryCount Integer
+PutTargetsResultEntry structure
+.ErrorCode ErrorCode
+.ErrorMessage ErrorMessage
+.TargetId TargetId
+PutTargetsResultEntryList list m=PutTargetsResultEntry
+QueryStringKey string
+QueryStringParametersMap map k=QueryStringKey v=QueryStringValue
+QueryStringValue string
+QueryStringValueSensitive string
+RedshiftDataParameters structure
+.Database Database
+.DbUser DbUser
+.SecretManagerArn RedshiftSecretManagerArn
+.Sql Sql
+.StatementName StatementName
+.WithEvent Boolean
+RedshiftSecretManagerArn string
+ReferenceId string
+RemovePermission operation in=RemovePermissionRequest out=~Unit err=ConcurrentModificationException,InternalException,OperationDisabledException,ResourceNotFoundException
+RemovePermissionRequest structure
+.EventBusName NonPartnerEventBusName
+.RemoveAllPermissions Boolean
+.StatementId StatementId
+RemoveTargets operation in=RemoveTargetsRequest out=RemoveTargetsResponse err=ConcurrentModificationException,InternalException,ManagedRuleException,ResourceNotFoundException
+RemoveTargetsRequest structure
+.EventBusName EventBusNameOrArn
+.Force Boolean
+.Ids TargetIdList
+.Rule RuleName
+RemoveTargetsResponse structure
+.FailedEntries RemoveTargetsResultEntryList
+.FailedEntryCount Integer
+RemoveTargetsResultEntry structure
+.ErrorCode ErrorCode
+.ErrorMessage ErrorMessage
+.TargetId TargetId
+RemoveTargetsResultEntryList list m=RemoveTargetsResultEntry
+Replay structure
+.EventEndTime Timestamp
+.EventLastReplayedTime Timestamp
+.EventSourceArn Arn
+.EventStartTime Timestamp
+.ReplayEndTime Timestamp
+.ReplayName ReplayName
+.ReplayStartTime Timestamp
+.State ReplayState
+.StateReason ReplayStateReason
+ReplayArn string
+ReplayDescription string
+ReplayDestination structure
+.Arn Arn
+.FilterArns ReplayDestinationFilters
+ReplayDestinationFilters list m=Arn
+ReplayList list m=Replay
+ReplayName string
+ReplayState enum
+ReplayStateReason string
+ResourceAlreadyExistsException structure error=client
+.message ErrorMessage
+ResourceArn string
+ResourceNotFoundException structure error=client
+.message ErrorMessage
+RetentionDays integer
+RetryPolicy structure
+.MaximumEventAgeInSeconds MaximumEventAgeInSeconds
+.MaximumRetryAttempts MaximumRetryAttempts
+RoleArn string
+Rule structure
+.Arn RuleArn
+.Description RuleDescription
+.EventBusName EventBusName
+.EventPattern EventPattern
+.ManagedBy ManagedBy
+.Name RuleName
+.RoleArn RoleArn
+.ScheduleExpression ScheduleExpression
+.State RuleState
+RuleArn string
+RuleDescription string
+RuleName string
+RuleNameList list m=RuleName
+RuleResponseList list m=Rule
+RuleState enum
+RunCommandParameters structure
+.RunCommandTargets RunCommandTargets
+RunCommandTarget structure
+.Key RunCommandTargetKey
+.Values RunCommandTargetValues
+RunCommandTargetKey string
+RunCommandTargetValue string
+RunCommandTargetValues list m=RunCommandTargetValue
+RunCommandTargets list m=RunCommandTarget
+SageMakerPipelineParameter structure
+.Name SageMakerPipelineParameterName
+.Value SageMakerPipelineParameterValue
+SageMakerPipelineParameterList list m=SageMakerPipelineParameter
+SageMakerPipelineParameterName string
+SageMakerPipelineParameterValue string
+SageMakerPipelineParameters structure
+.PipelineParameterList SageMakerPipelineParameterList
+ScheduleExpression string
+SecretsManagerSecretArn string
+SensitiveString string
+Sql string
+SqsParameters structure
+.MessageGroupId MessageGroupId
+StartReplay operation in=StartReplayRequest out=StartReplayResponse err=InternalException,InvalidEventPatternException,LimitExceededException,ResourceAlreadyExistsException,ResourceNotFoundException
+StartReplayRequest structure
+.Description ReplayDescription
+.Destination ReplayDestination
+.EventEndTime Timestamp
+.EventSourceArn Arn
+.EventStartTime Timestamp
+.ReplayName ReplayName
+StartReplayResponse structure
+.ReplayArn ReplayArn
+.ReplayStartTime Timestamp
+.State ReplayState
+.StateReason ReplayStateReason
+StatementId string
+StatementName string
+String string
+StringList list m=String
+Tag structure
+.Key TagKey
+.Value TagValue
+TagKey string
+TagKeyList list m=TagKey
+TagList list m=Tag
+TagResource operation in=TagResourceRequest out=TagResourceResponse err=ConcurrentModificationException,InternalException,ManagedRuleException,ResourceNotFoundException
+TagResourceRequest structure
+.ResourceARN Arn
+.Tags TagList
+TagResourceResponse structure
+TagValue string
+Target structure
+.Arn TargetArn
+.BatchParameters BatchParameters
+.DeadLetterConfig DeadLetterConfig
+.EcsParameters EcsParameters
+.HttpParameters HttpParameters
+.Id TargetId
+.Input TargetInput
+.InputPath TargetInputPath
+.InputTransformer InputTransformer
+.KinesisParameters KinesisParameters
+.RedshiftDataParameters RedshiftDataParameters
+.RetryPolicy RetryPolicy
+.RoleArn RoleArn
+.RunCommandParameters RunCommandParameters
+.SageMakerPipelineParameters SageMakerPipelineParameters
+.SqsParameters SqsParameters
+TargetArn string
+TargetId string
+TargetIdList list m=TargetId
+TargetInput string
+TargetInputPath string
+TargetList list m=Target
+TargetPartitionKeyPath string
+TestEventPattern operation in=TestEventPatternRequest out=TestEventPatternResponse err=InternalException,InvalidEventPatternException
+TestEventPatternRequest structure
+.Event String
+.EventPattern EventPattern
+TestEventPatternResponse structure
+.Result Boolean
+Timestamp timestamp
+TraceHeader string
+TransformerInput string
+TransformerPaths map k=InputTransformerPathKey v=TargetInputPath
+UntagResource operation in=UntagResourceRequest out=UntagResourceResponse err=ConcurrentModificationException,InternalException,ManagedRuleException,ResourceNotFoundException
+UntagResourceRequest structure
+.ResourceARN Arn
+.TagKeys TagKeyList
+UntagResourceResponse structure
+UpdateApiDestination operation in=UpdateApiDestinationRequest out=UpdateApiDestinationResponse err=ConcurrentModificationException,InternalException,LimitExceededException,ResourceNotFoundException
+UpdateApiDestinationRequest structure
+.ConnectionArn ConnectionArn
+.Description ApiDestinationDescription
+.HttpMethod ApiDestinationHttpMethod
+.InvocationEndpoint HttpsEndpoint
+.InvocationRateLimitPerSecond ApiDestinationInvocationRateLimitPerSecond
+.Name ApiDestinationName
+UpdateApiDestinationResponse structure
+.ApiDestinationArn ApiDestinationArn
+.ApiDestinationState ApiDestinationState
+.CreationTime Timestamp
+.LastModifiedTime Timestamp
+UpdateArchive operation in=UpdateArchiveRequest out=UpdateArchiveResponse err=ConcurrentModificationException,InternalException,InvalidEventPatternException,LimitExceededException,ResourceNotFoundException
+UpdateArchiveRequest structure
+.ArchiveName ArchiveName
+.Description ArchiveDescription
+.EventPattern EventPattern
+.RetentionDays RetentionDays
+UpdateArchiveResponse structure
+.ArchiveArn ArchiveArn
+.CreationTime Timestamp
+.State ArchiveState
+.StateReason ArchiveStateReason
+UpdateConnection operation in=UpdateConnectionRequest out=UpdateConnectionResponse err=ConcurrentModificationException,InternalException,LimitExceededException,ResourceNotFoundException
+UpdateConnectionApiKeyAuthRequestParameters structure
+.ApiKeyName AuthHeaderParameters
+.ApiKeyValue AuthHeaderParametersSensitive
+UpdateConnectionAuthRequestParameters structure
+.ApiKeyAuthParameters UpdateConnectionApiKeyAuthRequestParameters
+.BasicAuthParameters UpdateConnectionBasicAuthRequestParameters
+.InvocationHttpParameters ConnectionHttpParameters
+.OAuthParameters UpdateConnectionOAuthRequestParameters
+UpdateConnectionBasicAuthRequestParameters structure
+.Password AuthHeaderParametersSensitive
+.Username AuthHeaderParameters
+UpdateConnectionOAuthClientRequestParameters structure
+.ClientID AuthHeaderParameters
+.ClientSecret AuthHeaderParametersSensitive
+UpdateConnectionOAuthRequestParameters structure
+.AuthorizationEndpoint HttpsEndpoint
+.ClientParameters UpdateConnectionOAuthClientRequestParameters
+.HttpMethod ConnectionOAuthHttpMethod
+.OAuthHttpParameters ConnectionHttpParameters
+UpdateConnectionRequest structure
+.AuthParameters UpdateConnectionAuthRequestParameters
+.AuthorizationType ConnectionAuthorizationType
+.Description ConnectionDescription
+.Name ConnectionName
+UpdateConnectionResponse structure
+.ConnectionArn ConnectionArn
+.ConnectionState ConnectionState
+.CreationTime Timestamp
+.LastAuthorizedTime Timestamp
+.LastModifiedTime Timestamp

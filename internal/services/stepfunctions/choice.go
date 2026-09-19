@@ -20,6 +20,12 @@ type aslChoiceRule struct {
 	Or       []*aslChoiceRule
 	Not      *aslChoiceRule
 
+	// Condition is a JSONata rule's "{% boolean expression %}".
+	Condition string
+	// Assign and Output apply when this top-level rule matches.
+	Assign json.RawMessage
+	Output json.RawMessage
+
 	comparisons []choiceComparison
 }
 
@@ -60,6 +66,7 @@ var choiceOperators = map[string]bool{
 // choiceStructuralKeys are the rule fields that are not comparison operators.
 var choiceStructuralKeys = map[string]bool{
 	"Variable": true, "Next": true, "And": true, "Or": true, "Not": true, "Comment": true,
+	"Condition": true, "Assign": true, "Output": true,
 }
 
 // UnmarshalJSON decodes a choice rule, keeping unknown keys so validation can
@@ -89,6 +96,14 @@ func (r *aslChoiceRule) UnmarshalJSON(data []byte) error {
 			}
 		case "Comment":
 			// Ignored, as on AWS.
+		case "Condition":
+			if err := json.Unmarshal(raw, &r.Condition); err != nil {
+				return err
+			}
+		case "Assign":
+			r.Assign = raw
+		case "Output":
+			r.Output = raw
 		case "And":
 			if err := json.Unmarshal(raw, &r.And); err != nil {
 				return err
@@ -110,7 +125,19 @@ func (r *aslChoiceRule) UnmarshalJSON(data []byte) error {
 
 // validateChoiceRule rejects rule shapes AWS rejects and, separately, names
 // any comparison operator that is not part of the language.
-func validateChoiceRule(rule *aslChoiceRule, loc, field string) error {
+func validateChoiceRule(rule *aslChoiceRule, loc, field string, jsonataMode bool) error {
+	if jsonataMode {
+		if _, ok := isJSONataExpression(rule.Condition); !ok {
+			return invalidDefinitionf("%s: %s in a JSONata Choice needs a Condition of the form {%% expression %%}", loc, field)
+		}
+		if rule.Variable != "" || len(rule.comparisons) > 0 || len(rule.And)+len(rule.Or) > 0 || rule.Not != nil {
+			return invalidDefinitionf("%s: %s — a JSONata Choice rule takes only Condition, Next, Assign and Output", loc, field)
+		}
+		return nil
+	}
+	if rule.Condition != "" || len(rule.Output) > 0 {
+		return invalidDefinitionf("%s: %s — Condition and Output are only valid in a JSONata Choice", loc, field)
+	}
 	nested := len(rule.And) + len(rule.Or)
 	if rule.Not != nil {
 		nested++
@@ -139,7 +166,7 @@ func validateChoiceRule(rule *aslChoiceRule, loc, field string) error {
 		if sub == nil {
 			return invalidDefinitionf("%s: %s.And[%d] is null", loc, field, i)
 		}
-		if err := validateChoiceRule(sub, loc, fmt.Sprintf("%s.And[%d]", field, i)); err != nil {
+		if err := validateChoiceRule(sub, loc, fmt.Sprintf("%s.And[%d]", field, i), false); err != nil {
 			return err
 		}
 	}
@@ -147,12 +174,12 @@ func validateChoiceRule(rule *aslChoiceRule, loc, field string) error {
 		if sub == nil {
 			return invalidDefinitionf("%s: %s.Or[%d] is null", loc, field, i)
 		}
-		if err := validateChoiceRule(sub, loc, fmt.Sprintf("%s.Or[%d]", field, i)); err != nil {
+		if err := validateChoiceRule(sub, loc, fmt.Sprintf("%s.Or[%d]", field, i), false); err != nil {
 			return err
 		}
 	}
 	if rule.Not != nil {
-		if err := validateChoiceRule(rule.Not, loc, field+".Not"); err != nil {
+		if err := validateChoiceRule(rule.Not, loc, field+".Not", false); err != nil {
 			return err
 		}
 	}
@@ -195,6 +222,10 @@ func evaluateChoiceRule(rule *aslChoiceRule, doc any, ctxObj map[string]any) (bo
 	return evaluateComparison(rule.Variable, rule.comparisons[0], doc, ctxObj)
 }
 
+// evaluateComparison applies one comparison operator. The spec is explicit
+// that a type mismatch is not an error: "if the values are not both of the
+// appropriate type, the comparison will return false". A Variable that does
+// not resolve at all still fails the state with States.Runtime, as on AWS.
 func evaluateComparison(variable string, cmp choiceComparison, doc any, ctxObj map[string]any) (bool, error) {
 	if !choiceOperators[cmp.op] {
 		return false, pathErrorf("comparison operator %q is not supported", cmp.op)
@@ -243,7 +274,7 @@ func evaluateComparison(variable string, cmp choiceComparison, doc any, ctxObj m
 		lb, lok := left.(bool)
 		rb, rok := right.(bool)
 		if !lok || !rok {
-			return false, pathErrorf("BooleanEquals requires boolean operands")
+			return false, nil
 		}
 		return lb == rb, nil
 	case strings.HasPrefix(op, "Timestamp"):
@@ -282,7 +313,7 @@ func compareStrings(op string, left, right any) (bool, error) {
 	ls, lok := left.(string)
 	rs, rok := right.(string)
 	if !lok || !rok {
-		return false, pathErrorf("%s requires string operands", op)
+		return false, nil
 	}
 	switch op {
 	case "StringEquals":
@@ -305,7 +336,7 @@ func compareNumbers(op string, left, right any) (bool, error) {
 	ln, lok := toNumber(left)
 	rn, rok := toNumber(right)
 	if !lok || !rok {
-		return false, pathErrorf("%s requires numeric operands", op)
+		return false, nil
 	}
 	switch op {
 	case "NumericEquals":
@@ -326,15 +357,12 @@ func compareTimestamps(op string, left, right any) (bool, error) {
 	ls, lok := left.(string)
 	rs, rok := right.(string)
 	if !lok || !rok {
-		return false, pathErrorf("%s requires RFC3339 timestamp operands", op)
+		return false, nil
 	}
-	lt, err := parseASLTimestamp(ls)
-	if err != nil {
-		return false, err
-	}
-	rt, err := parseASLTimestamp(rs)
-	if err != nil {
-		return false, err
+	lt, lerr := parseASLTimestamp(ls)
+	rt, rerr := parseASLTimestamp(rs)
+	if lerr != nil || rerr != nil {
+		return false, nil
 	}
 	switch op {
 	case "TimestampEquals":

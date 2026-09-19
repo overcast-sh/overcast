@@ -32,6 +32,71 @@ type executionRun struct {
 	stoppedAt time.Time
 	errName   string
 	cause     string
+
+	// failedState and failedInput are the top-level state whose failure
+	// ended the run and the raw input it was entered with — the point a
+	// RedriveExecution resumes from.
+	failedState     string
+	failedInput     string
+	failedVariables string
+
+	// resume, when set, makes the interpreter start at that top-level state
+	// with that raw input and those variables instead of at StartAt, and
+	// resume inside the Parallel or Map there — a redrive
+	// (redrive_checkpoint.go).
+	resume *redrivePoint
+	// checkpoint is where the top-level frame stopped without succeeding,
+	// with everything below it; persistOutcome stores it.
+	checkpoint *redrivePoint
+	// restarted marks a distributed Map's EXPRESS child being started again
+	// from the top under its old ARN, so any checkpoint it left is cleared.
+	restarted bool
+
+	// queryLanguage is the default query language when the definition run
+	// does not name one: a distributed Map child inherits its Map state's.
+	queryLanguage string
+
+	// durable marks a run that checkpoints where it parks and survives a
+	// restart (durable.go): one launched asynchronously, not EXPRESS.
+	// parkResume is the park checkpoint a rehydrated run resumes inside (its
+	// starting point is resume, above), and resumeTask the task
+	// registered again for its token. parked is true while the top-level
+	// frame is waiting at a checkpointed park point.
+	durable    bool
+	parkResume *executionCheckpoint
+	resumeTask *pendingTask
+	parked     bool
+}
+
+func (r *executionRun) setParked(parked bool) {
+	r.mu.Lock()
+	r.parked = parked
+	r.mu.Unlock()
+}
+
+func (r *executionRun) isParked() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.parked
+}
+
+// noteFailure records the top-level state a failure ended the run in. The
+// first one wins; a later unwind cannot overwrite it.
+func (r *executionRun) noteFailure(state, input, variables string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.failedState == "" {
+		r.failedState = state
+		r.failedInput = input
+		r.failedVariables = variables
+	}
+}
+
+// failurePoint returns what noteFailure recorded.
+func (r *executionRun) failurePoint() (state, input, variables string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.failedState, r.failedInput, r.failedVariables
 }
 
 // stop asks the execution to unwind as ABORTED, recording the error and cause

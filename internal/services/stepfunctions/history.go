@@ -17,12 +17,22 @@ const (
 	evtExecutionFailed    = "ExecutionFailed"
 	evtExecutionAborted   = "ExecutionAborted"
 	evtExecutionTimedOut  = "ExecutionTimedOut"
+	evtExecutionRedriven  = "ExecutionRedriven"
+	evtEvaluationFailed   = "EvaluationFailed"
 
 	evtTaskScheduled = "TaskScheduled"
 	evtTaskStarted   = "TaskStarted"
 	evtTaskSucceeded = "TaskSucceeded"
 	evtTaskFailed    = "TaskFailed"
 	evtTaskTimedOut  = "TaskTimedOut"
+	evtTaskSubmitted = "TaskSubmitted"
+
+	evtActivityScheduled      = "ActivityScheduled"
+	evtActivityScheduleFailed = "ActivityScheduleFailed"
+	evtActivityStarted        = "ActivityStarted"
+	evtActivitySucceeded      = "ActivitySucceeded"
+	evtActivityFailed         = "ActivityFailed"
+	evtActivityTimedOut       = "ActivityTimedOut"
 
 	evtLambdaFunctionScheduled = "LambdaFunctionScheduled"
 	evtLambdaFunctionStarted   = "LambdaFunctionStarted"
@@ -41,7 +51,25 @@ const (
 	evtMapIterationStarted   = "MapIterationStarted"
 	evtMapIterationSucceeded = "MapIterationSucceeded"
 	evtMapIterationFailed    = "MapIterationFailed"
+	evtMapIterationAborted   = "MapIterationAborted"
+
+	evtMapRunStarted   = "MapRunStarted"
+	evtMapRunSucceeded = "MapRunSucceeded"
+	evtMapRunFailed    = "MapRunFailed"
+	evtMapRunRedriven  = "MapRunRedriven"
 )
+
+// stateAbortedEventType returns the `<Type>StateAborted` event AWS records
+// when a state is interrupted mid-flight — by StopExecution, by the execution
+// timing out, or by a sibling Parallel branch or Map iteration failing. Only
+// the four state types that can be in flight have one.
+func stateAbortedEventType(stateType string) string {
+	switch stateType {
+	case stateTypeTask, stateTypeWait, stateTypeParallel, stateTypeMap:
+		return stateType + "StateAborted"
+	}
+	return ""
+}
 
 // stateEnteredEventType returns the `<Type>StateEntered` event name for a
 // state type, e.g. Task → TaskStateEntered.
@@ -62,11 +90,18 @@ type executionStartedDetails struct {
 	Input        string                `json:"input,omitempty" cbor:"input,omitempty"`
 	InputDetails *executionDataDetails `json:"inputDetails,omitempty" cbor:"inputDetails,omitempty"`
 	RoleArn      string                `json:"roleArn,omitempty" cbor:"roleArn,omitempty"`
+
+	StateMachineVersionArn string `json:"stateMachineVersionArn,omitempty" cbor:"stateMachineVersionArn,omitempty"`
+	StateMachineAliasArn   string `json:"stateMachineAliasArn,omitempty" cbor:"stateMachineAliasArn,omitempty"`
 }
 
 type executionSucceededDetails struct {
 	Output        string                `json:"output,omitempty" cbor:"output,omitempty"`
 	OutputDetails *executionDataDetails `json:"outputDetails,omitempty" cbor:"outputDetails,omitempty"`
+}
+
+type executionRedrivenDetails struct {
+	RedriveCount int `json:"redriveCount" cbor:"redriveCount"`
 }
 
 type errorCauseDetails struct {
@@ -84,14 +119,38 @@ type stateExitedDetails struct {
 	Name          string                `json:"name" cbor:"name"`
 	Output        string                `json:"output,omitempty" cbor:"output,omitempty"`
 	OutputDetails *executionDataDetails `json:"outputDetails,omitempty" cbor:"outputDetails,omitempty"`
+	// AssignedVariables maps each variable the state assigned to its new
+	// value, serialized as JSON.
+	AssignedVariables        map[string]string     `json:"assignedVariables,omitempty" cbor:"assignedVariables,omitempty"`
+	AssignedVariablesDetails *executionDataDetails `json:"assignedVariablesDetails,omitempty" cbor:"assignedVariablesDetails,omitempty"`
+}
+
+type evaluationFailedDetails struct {
+	Error    string `json:"error,omitempty" cbor:"error,omitempty"`
+	Cause    string `json:"cause,omitempty" cbor:"cause,omitempty"`
+	Location string `json:"location,omitempty" cbor:"location,omitempty"`
+	State    string `json:"state" cbor:"state"`
 }
 
 type taskScheduledDetails struct {
-	ResourceType     string `json:"resourceType" cbor:"resourceType"`
-	Resource         string `json:"resource" cbor:"resource"`
-	Region           string `json:"region,omitempty" cbor:"region,omitempty"`
-	Parameters       string `json:"parameters,omitempty" cbor:"parameters,omitempty"`
-	TimeoutInSeconds *int64 `json:"timeoutInSeconds,omitempty" cbor:"timeoutInSeconds,omitempty"`
+	ResourceType       string `json:"resourceType" cbor:"resourceType"`
+	Resource           string `json:"resource" cbor:"resource"`
+	Region             string `json:"region,omitempty" cbor:"region,omitempty"`
+	Parameters         string `json:"parameters,omitempty" cbor:"parameters,omitempty"`
+	TimeoutInSeconds   *int64 `json:"timeoutInSeconds,omitempty" cbor:"timeoutInSeconds,omitempty"`
+	HeartbeatInSeconds *int64 `json:"heartbeatInSeconds,omitempty" cbor:"heartbeatInSeconds,omitempty"`
+}
+
+type activityScheduledDetails struct {
+	Resource           string                `json:"resource" cbor:"resource"`
+	Input              string                `json:"input,omitempty" cbor:"input,omitempty"`
+	InputDetails       *executionDataDetails `json:"inputDetails,omitempty" cbor:"inputDetails,omitempty"`
+	TimeoutInSeconds   *int64                `json:"timeoutInSeconds,omitempty" cbor:"timeoutInSeconds,omitempty"`
+	HeartbeatInSeconds *int64                `json:"heartbeatInSeconds,omitempty" cbor:"heartbeatInSeconds,omitempty"`
+}
+
+type activityStartedDetails struct {
+	WorkerName string `json:"workerName,omitempty" cbor:"workerName,omitempty"`
 }
 
 type taskStartedDetails struct {
@@ -129,6 +188,15 @@ type mapStateStartedDetails struct {
 	Length int64 `json:"length" cbor:"length"`
 }
 
+type mapRunStartedDetails struct {
+	MapRunArn string `json:"mapRunArn" cbor:"mapRunArn"`
+}
+
+type mapRunRedrivenDetails struct {
+	MapRunArn    string `json:"mapRunArn" cbor:"mapRunArn"`
+	RedriveCount int    `json:"redriveCount" cbor:"redriveCount"`
+}
+
 type mapIterationDetails struct {
 	Name  string `json:"name,omitempty" cbor:"name,omitempty"`
 	Index int64  `json:"index" cbor:"index"`
@@ -151,15 +219,26 @@ type HistoryEvent struct {
 	ExecutionFailed    *errorCauseDetails         `json:"executionFailedEventDetails,omitempty" cbor:"executionFailedEventDetails,omitempty"`
 	ExecutionAborted   *errorCauseDetails         `json:"executionAbortedEventDetails,omitempty" cbor:"executionAbortedEventDetails,omitempty"`
 	ExecutionTimedOut  *errorCauseDetails         `json:"executionTimedOutEventDetails,omitempty" cbor:"executionTimedOutEventDetails,omitempty"`
+	ExecutionRedriven  *executionRedrivenDetails  `json:"executionRedrivenEventDetails,omitempty" cbor:"executionRedrivenEventDetails,omitempty"`
 
 	StateEntered *stateEnteredDetails `json:"stateEnteredEventDetails,omitempty" cbor:"stateEnteredEventDetails,omitempty"`
 	StateExited  *stateExitedDetails  `json:"stateExitedEventDetails,omitempty" cbor:"stateExitedEventDetails,omitempty"`
+
+	EvaluationFailed *evaluationFailedDetails `json:"evaluationFailedEventDetails,omitempty" cbor:"evaluationFailedEventDetails,omitempty"`
 
 	TaskScheduled *taskScheduledDetails `json:"taskScheduledEventDetails,omitempty" cbor:"taskScheduledEventDetails,omitempty"`
 	TaskStarted   *taskStartedDetails   `json:"taskStartedEventDetails,omitempty" cbor:"taskStartedEventDetails,omitempty"`
 	TaskSucceeded *taskSucceededDetails `json:"taskSucceededEventDetails,omitempty" cbor:"taskSucceededEventDetails,omitempty"`
 	TaskFailed    *taskErrorDetails     `json:"taskFailedEventDetails,omitempty" cbor:"taskFailedEventDetails,omitempty"`
 	TaskTimedOut  *taskErrorDetails     `json:"taskTimedOutEventDetails,omitempty" cbor:"taskTimedOutEventDetails,omitempty"`
+	TaskSubmitted *taskSucceededDetails `json:"taskSubmittedEventDetails,omitempty" cbor:"taskSubmittedEventDetails,omitempty"`
+
+	ActivityScheduled      *activityScheduledDetails `json:"activityScheduledEventDetails,omitempty" cbor:"activityScheduledEventDetails,omitempty"`
+	ActivityScheduleFailed *errorCauseDetails        `json:"activityScheduleFailedEventDetails,omitempty" cbor:"activityScheduleFailedEventDetails,omitempty"`
+	ActivityStarted        *activityStartedDetails   `json:"activityStartedEventDetails,omitempty" cbor:"activityStartedEventDetails,omitempty"`
+	ActivitySucceeded      *lambdaSucceededDetails   `json:"activitySucceededEventDetails,omitempty" cbor:"activitySucceededEventDetails,omitempty"`
+	ActivityFailed         *errorCauseDetails        `json:"activityFailedEventDetails,omitempty" cbor:"activityFailedEventDetails,omitempty"`
+	ActivityTimedOut       *errorCauseDetails        `json:"activityTimedOutEventDetails,omitempty" cbor:"activityTimedOutEventDetails,omitempty"`
 
 	LambdaFunctionScheduled *lambdaScheduledDetails `json:"lambdaFunctionScheduledEventDetails,omitempty" cbor:"lambdaFunctionScheduledEventDetails,omitempty"`
 	LambdaFunctionSucceeded *lambdaSucceededDetails `json:"lambdaFunctionSucceededEventDetails,omitempty" cbor:"lambdaFunctionSucceededEventDetails,omitempty"`
@@ -168,9 +247,14 @@ type HistoryEvent struct {
 
 	MapStateStarted *mapStateStartedDetails `json:"mapStateStartedEventDetails,omitempty" cbor:"mapStateStartedEventDetails,omitempty"`
 
-	MapIterationStarted   *mapIterationDetails `json:"mapIterationStartedEventDetails,omitempty" cbor:"mapIterationStartedEventDetails,omitempty"`
-	MapIterationSucceeded *mapIterationDetails `json:"mapIterationSucceededEventDetails,omitempty" cbor:"mapIterationSucceededEventDetails,omitempty"`
-	MapIterationFailed    *mapIterationDetails `json:"mapIterationFailedEventDetails,omitempty" cbor:"mapIterationFailedEventDetails,omitempty"`
+	MapIterationStarted   *mapIterationDetails   `json:"mapIterationStartedEventDetails,omitempty" cbor:"mapIterationStartedEventDetails,omitempty"`
+	MapIterationSucceeded *mapIterationDetails   `json:"mapIterationSucceededEventDetails,omitempty" cbor:"mapIterationSucceededEventDetails,omitempty"`
+	MapIterationFailed    *mapIterationDetails   `json:"mapIterationFailedEventDetails,omitempty" cbor:"mapIterationFailedEventDetails,omitempty"`
+	MapRunStarted         *mapRunStartedDetails  `json:"mapRunStartedEventDetails,omitempty" cbor:"mapRunStartedEventDetails,omitempty"`
+	MapRunFailed          *errorCauseDetails     `json:"mapRunFailedEventDetails,omitempty" cbor:"mapRunFailedEventDetails,omitempty"`
+	MapRunRedriven        *mapRunRedrivenDetails `json:"mapRunRedrivenEventDetails,omitempty" cbor:"mapRunRedrivenEventDetails,omitempty"`
+
+	MapIterationAborted *mapIterationDetails `json:"mapIterationAbortedEventDetails,omitempty" cbor:"mapIterationAbortedEventDetails,omitempty"`
 }
 
 // historyRecorder accumulates the events of one execution in memory and hands
@@ -193,18 +277,53 @@ func newHistoryRecorder(limit int) *historyRecorder {
 	return &historyRecorder{limit: limit}
 }
 
-// add appends an event, links it to the previous one, stamps it and returns
-// its id. The caller supplies the timestamp so it always comes from the
-// injected clock.
+// resumeHistoryRecorder continues an existing history — a redriven execution
+// appends to the events of the run it resumes.
+func resumeHistoryRecorder(events []HistoryEvent, limit int) *historyRecorder {
+	h := &historyRecorder{limit: limit, events: append([]HistoryEvent(nil), events...)}
+	if n := len(events); n > 0 {
+		h.previous = events[n-1].ID
+	}
+	return h
+}
+
+// add appends an event, links it to the most recently recorded one, stamps
+// it and returns its id. The caller supplies the timestamp so it always comes
+// from the injected clock. Execution-level events (ExecutionStarted, the
+// terminal event of an execution that never reached the interpreter) use
+// this; everything the interpreter records goes through addAfter so that a
+// Parallel branch or Map iteration links to its own causal predecessor.
 func (h *historyRecorder) add(now time.Time, event HistoryEvent) int64 {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	return h.appendLocked(now, event, h.previous)
+}
+
+// addAfter appends an event whose previousEventId is prev rather than the
+// last event recorded. This is AWS's causal linkage: events inside a Parallel
+// branch or Map iteration chain back through that branch to its
+// ParallelStateStarted / MapIterationStarted event, even though concurrent
+// branches interleave in id order.
+func (h *historyRecorder) addAfter(now time.Time, event HistoryEvent, prev int64) int64 {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.appendLocked(now, event, prev)
+}
+
+func (h *historyRecorder) appendLocked(now time.Time, event HistoryEvent, prev int64) int64 {
 	event.ID = int64(len(h.events)) + 1
-	event.PreviousEventID = h.previous
+	event.PreviousEventID = prev
 	event.Timestamp = float64(now.UnixMilli()) / 1000.0
 	h.previous = event.ID
 	h.events = append(h.events, event)
 	return event.ID
+}
+
+// lastID returns the id of the most recently recorded event.
+func (h *historyRecorder) lastID() int64 {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.previous
 }
 
 // snapshot returns a copy of the events recorded so far, safe to hand to a
@@ -229,10 +348,10 @@ func (h *historyRecorder) full() bool {
 
 // ─── Task history events ──────────────────────────────────────────────────────
 
-func (in *interpreter) recordTaskScheduled(integration taskIntegration, resource, parameters string, timeout *int64) {
+func (in *interpreter) recordTaskScheduled(integration taskIntegration, resource, parameters string, timeout, heartbeat *int64) {
 	now := in.handler.clk.Now()
 	if integration.direct() {
-		in.hist.add(now, HistoryEvent{
+		in.recordAt(now, HistoryEvent{
 			Type: evtLambdaFunctionScheduled,
 			LambdaFunctionScheduled: &lambdaScheduledDetails{
 				Resource:         resource,
@@ -243,14 +362,33 @@ func (in *interpreter) recordTaskScheduled(integration taskIntegration, resource
 		})
 		return
 	}
-	in.hist.add(now, HistoryEvent{
+	in.recordAt(now, HistoryEvent{
 		Type: evtTaskScheduled,
 		TaskScheduled: &taskScheduledDetails{
-			ResourceType:     integration.service,
-			Resource:         integration.action + patternSuffix(integration.pattern),
-			Region:           in.region,
-			Parameters:       parameters,
-			TimeoutInSeconds: timeout,
+			ResourceType:       integration.service,
+			Resource:           integration.action + patternSuffix(integration.pattern),
+			Region:             in.region,
+			Parameters:         parameters,
+			TimeoutInSeconds:   timeout,
+			HeartbeatInSeconds: heartbeat,
+		},
+	})
+}
+
+// recordTaskSubmitted records the answer of the call that started a callback
+// (.waitForTaskToken) task, before the Task waits for its token.
+func (in *interpreter) recordTaskSubmitted(integration taskIntegration, output any) {
+	encoded, err := encodeJSON(output)
+	if err != nil {
+		encoded = ""
+	}
+	in.record(HistoryEvent{
+		Type: evtTaskSubmitted,
+		TaskSubmitted: &taskSucceededDetails{
+			ResourceType:  integration.service,
+			Resource:      integration.action + patternSuffix(integration.pattern),
+			Output:        encoded,
+			OutputDetails: &executionDataDetails{},
 		},
 	})
 }
@@ -258,10 +396,10 @@ func (in *interpreter) recordTaskScheduled(integration taskIntegration, resource
 func (in *interpreter) recordTaskStarted(integration taskIntegration) {
 	now := in.handler.clk.Now()
 	if integration.direct() {
-		in.hist.add(now, HistoryEvent{Type: evtLambdaFunctionStarted})
+		in.recordAt(now, HistoryEvent{Type: evtLambdaFunctionStarted})
 		return
 	}
-	in.hist.add(now, HistoryEvent{
+	in.recordAt(now, HistoryEvent{
 		Type: evtTaskStarted,
 		TaskStarted: &taskStartedDetails{
 			ResourceType: integration.service,
@@ -277,7 +415,7 @@ func (in *interpreter) recordTaskSucceeded(integration taskIntegration, result a
 	}
 	now := in.handler.clk.Now()
 	if integration.direct() {
-		in.hist.add(now, HistoryEvent{
+		in.recordAt(now, HistoryEvent{
 			Type: evtLambdaFunctionSucceeded,
 			LambdaFunctionSucceeded: &lambdaSucceededDetails{
 				Output:        encoded,
@@ -286,7 +424,7 @@ func (in *interpreter) recordTaskSucceeded(integration taskIntegration, result a
 		})
 		return
 	}
-	in.hist.add(now, HistoryEvent{
+	in.recordAt(now, HistoryEvent{
 		Type: evtTaskSucceeded,
 		TaskSucceeded: &taskSucceededDetails{
 			ResourceType:  integration.service,
@@ -299,7 +437,7 @@ func (in *interpreter) recordTaskSucceeded(integration taskIntegration, result a
 
 func (in *interpreter) recordTaskFailed(integration taskIntegration, serr *stateError) {
 	now := in.handler.clk.Now()
-	timedOut := serr.name == errTimeout
+	timedOut := serr.name == errTimeout || serr.name == errHeartbeatTimeout
 	if integration.direct() {
 		eventType := evtLambdaFunctionFailed
 		if timedOut {
@@ -312,7 +450,7 @@ func (in *interpreter) recordTaskFailed(integration taskIntegration, serr *state
 		} else {
 			event.LambdaFunctionFailed = details
 		}
-		in.hist.add(now, event)
+		in.recordAt(now, event)
 		return
 	}
 	details := &taskErrorDetails{
@@ -322,8 +460,8 @@ func (in *interpreter) recordTaskFailed(integration taskIntegration, serr *state
 		Cause:        serr.cause,
 	}
 	if timedOut {
-		in.hist.add(now, HistoryEvent{Type: evtTaskTimedOut, TaskTimedOut: details})
+		in.recordAt(now, HistoryEvent{Type: evtTaskTimedOut, TaskTimedOut: details})
 		return
 	}
-	in.hist.add(now, HistoryEvent{Type: evtTaskFailed, TaskFailed: details})
+	in.recordAt(now, HistoryEvent{Type: evtTaskFailed, TaskFailed: details})
 }

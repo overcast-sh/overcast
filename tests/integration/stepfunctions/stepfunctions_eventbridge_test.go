@@ -2,12 +2,11 @@
 // EventBridge bus the way real Step Functions does. See:
 // https://docs.aws.amazon.com/step-functions/latest/dg/eventbridge-integration.html#event-detail-execution-status-change
 //
-// AWS's own detail also carries stateMachineVersionArn, stateMachineAliasArn
-// and the redrive* fields — omitted here rather than invented, per
-// internal/services/stepfunctions/eventbridge.go's doc comment, since
-// Overcast does not implement execution redrive or state machine
-// versions/aliases. These tests only assert on the fields Overcast does
-// track. This is the remainder of #758 (#1221) after EC2 and ECS shipped in
+// AWS's own detail also carries the redrive* fields — omitted here rather
+// than invented, per internal/services/stepfunctions/eventbridge.go's doc
+// comment, since Overcast does not implement execution redrive. These tests
+// only assert on the fields Overcast does track; stateMachineVersionArn and
+// stateMachineAliasArn are covered by that package's unit tests. This is the remainder of #758 (#1221) after EC2 and ECS shipped in
 // #1225.
 package stepfunctions_test
 

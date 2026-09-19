@@ -1,0 +1,3730 @@
+service AWSJSON11 version=2014-11-06 ns=http://ssm.amazonaws.com/doc/2014-11-06/
+AccessDeniedException structure error=client
+.Message String
+AccessKeyIdType string
+AccessKeySecretType string
+AccessRequestId string
+AccessRequestStatus enum
+AccessType enum
+Account string
+AccountId string
+AccountIdList list m=AccountId mxml=AccountId
+AccountSharingInfo structure
+.AccountId AccountId
+.SharedDocumentVersion SharedDocumentVersion
+AccountSharingInfoList list m=AccountSharingInfo mxml=AccountSharingInfo
+Accounts list m=Account
+Activation structure
+.ActivationId ActivationId
+.CreatedDate CreatedDate
+.DefaultInstanceName DefaultInstanceName
+.Description ActivationDescription
+.ExpirationDate ExpirationDate
+.Expired Boolean
+.IamRole IamRole
+.RegistrationLimit RegistrationLimit
+.RegistrationsCount RegistrationsCount
+.Tags TagList
+ActivationCode string
+ActivationDescription string
+ActivationId string
+ActivationList list m=Activation
+AddTagsToResource operation in=AddTagsToResourceRequest out=AddTagsToResourceResult err=InternalServerError,InvalidResourceId,InvalidResourceType,TooManyTagsError,TooManyUpdates
+AddTagsToResourceRequest structure
+.ResourceId ResourceId
+.ResourceType ResourceTypeForTagging
+.Tags TagList
+AddTagsToResourceResult structure
+AgentErrorCode string
+AgentType string
+AgentVersion string
+AggregatorSchemaOnly boolean
+Alarm structure
+.Name AlarmName
+AlarmConfiguration structure
+.Alarms AlarmList
+.IgnorePollAlarmFailure Boolean
+AlarmList list m=Alarm
+AlarmName string
+AlarmStateInformation structure
+.Name AlarmName
+.State ExternalAlarmState
+AlarmStateInformationList list m=AlarmStateInformation
+AllowedPattern string
+AlreadyExistsException structure qerr=AlreadyExistsException error=client
+.Message String
+ApplyOnlyAtCronInterval boolean
+ApproveAfterDays integer
+Architecture string
+AssociateOpsItemRelatedItem operation in=AssociateOpsItemRelatedItemRequest out=AssociateOpsItemRelatedItemResponse err=InternalServerError,OpsItemConflictException,OpsItemInvalidParameterException,OpsItemLimitExceededException,OpsItemNotFoundException,OpsItemRelatedItemAlreadyExistsException
+AssociateOpsItemRelatedItemRequest structure
+.AssociationType OpsItemRelatedItemAssociationType
+.OpsItemId OpsItemId
+.ResourceType OpsItemRelatedItemAssociationResourceType
+.ResourceUri OpsItemRelatedItemAssociationResourceUri
+AssociateOpsItemRelatedItemResponse structure
+.AssociationId OpsItemRelatedItemAssociationId
+AssociatedInstances structure qerr=AssociatedInstances error=client
+Association structure
+.AssociationId AssociationId
+.AssociationName AssociationName
+.AssociationVersion AssociationVersion
+.DocumentVersion DocumentVersion
+.Duration Duration
+.InstanceId InstanceId
+.LastExecutionDate DateTime
+.Name DocumentARN
+.Overview AssociationOverview
+.ScheduleExpression ScheduleExpression
+.ScheduleOffset ScheduleOffset
+.TargetMaps TargetMaps
+.Targets Targets
+AssociationAlreadyExists structure qerr=AssociationAlreadyExists error=client
+AssociationComplianceSeverity enum
+AssociationDescription structure
+.AlarmConfiguration AlarmConfiguration
+.ApplyOnlyAtCronInterval ApplyOnlyAtCronInterval
+.AssociationDispatchAssumeRole AssociationDispatchAssumeRoleArn
+.AssociationId AssociationId
+.AssociationName AssociationName
+.AssociationVersion AssociationVersion
+.AutomationTargetParameterName AutomationTargetParameterName
+.CalendarNames CalendarNameOrARNList
+.ComplianceSeverity AssociationComplianceSeverity
+.Date DateTime
+.DocumentVersion DocumentVersion
+.Duration Duration
+.InstanceId InstanceId
+.LastExecutionDate DateTime
+.LastSuccessfulExecutionDate DateTime
+.LastUpdateAssociationDate DateTime
+.MaxConcurrency MaxConcurrency
+.MaxErrors MaxErrors
+.Name DocumentARN
+.OutputLocation InstanceAssociationOutputLocation
+.Overview AssociationOverview
+.Parameters Parameters
+.ScheduleExpression ScheduleExpression
+.ScheduleOffset ScheduleOffset
+.Status AssociationStatus
+.SyncCompliance AssociationSyncCompliance
+.TargetLocations TargetLocations
+.TargetMaps TargetMaps
+.Targets Targets
+.TriggeredAlarms AlarmStateInformationList
+AssociationDescriptionList list m=AssociationDescription mxml=AssociationDescription
+AssociationDispatchAssumeRoleArn string
+AssociationDoesNotExist structure qerr=AssociationDoesNotExist error=client
+.Message String
+AssociationExecution structure
+.AlarmConfiguration AlarmConfiguration
+.AssociationId AssociationId
+.AssociationVersion AssociationVersion
+.CreatedTime DateTime
+.DetailedStatus StatusName
+.ExecutionId AssociationExecutionId
+.LastExecutionDate DateTime
+.ResourceCountByStatus ResourceCountByStatus
+.Status StatusName
+.TriggeredAlarms AlarmStateInformationList
+AssociationExecutionDoesNotExist structure qerr=AssociationExecutionDoesNotExist error=client
+.Message String
+AssociationExecutionFilter structure
+.Key AssociationExecutionFilterKey
+.Type AssociationFilterOperatorType
+.Value AssociationExecutionFilterValue
+AssociationExecutionFilterKey enum
+AssociationExecutionFilterList list m=AssociationExecutionFilter mxml=AssociationExecutionFilter
+AssociationExecutionFilterValue string
+AssociationExecutionId string
+AssociationExecutionTarget structure
+.AssociationId AssociationId
+.AssociationVersion AssociationVersion
+.DetailedStatus StatusName
+.ExecutionId AssociationExecutionId
+.LastExecutionDate DateTime
+.OutputSource OutputSource
+.ResourceId AssociationResourceId
+.ResourceType AssociationResourceType
+.Status StatusName
+AssociationExecutionTargetsFilter structure
+.Key AssociationExecutionTargetsFilterKey
+.Value AssociationExecutionTargetsFilterValue
+AssociationExecutionTargetsFilterKey enum
+AssociationExecutionTargetsFilterList list m=AssociationExecutionTargetsFilter mxml=AssociationExecutionTargetsFilter
+AssociationExecutionTargetsFilterValue string
+AssociationExecutionTargetsList list m=AssociationExecutionTarget mxml=AssociationExecutionTarget
+AssociationExecutionsList list m=AssociationExecution mxml=AssociationExecution
+AssociationFilter structure
+.key AssociationFilterKey
+.value AssociationFilterValue
+AssociationFilterKey enum
+AssociationFilterList list m=AssociationFilter mxml=AssociationFilter
+AssociationFilterOperatorType enum
+AssociationFilterValue string
+AssociationId string
+AssociationIdList list m=AssociationId
+AssociationLimitExceeded structure qerr=AssociationLimitExceeded error=client
+AssociationList list m=Association mxml=Association
+AssociationName string
+AssociationOverview structure
+.AssociationStatusAggregatedCount AssociationStatusAggregatedCount
+.DetailedStatus StatusName
+.Status StatusName
+AssociationResourceId string
+AssociationResourceType string
+AssociationStatus structure
+.AdditionalInfo StatusAdditionalInfo
+.Date DateTime
+.Message StatusMessage
+.Name AssociationStatusName
+AssociationStatusAggregatedCount map k=StatusName v=InstanceCount
+AssociationStatusName enum
+AssociationSyncCompliance enum
+AssociationVersion string
+AssociationVersionInfo structure
+.ApplyOnlyAtCronInterval ApplyOnlyAtCronInterval
+.AssociationDispatchAssumeRole AssociationDispatchAssumeRoleArn
+.AssociationId AssociationId
+.AssociationName AssociationName
+.AssociationVersion AssociationVersion
+.CalendarNames CalendarNameOrARNList
+.ComplianceSeverity AssociationComplianceSeverity
+.CreatedDate DateTime
+.DocumentVersion DocumentVersion
+.Duration Duration
+.MaxConcurrency MaxConcurrency
+.MaxErrors MaxErrors
+.Name DocumentARN
+.OutputLocation InstanceAssociationOutputLocation
+.Parameters Parameters
+.ScheduleExpression ScheduleExpression
+.ScheduleOffset ScheduleOffset
+.SyncCompliance AssociationSyncCompliance
+.TargetLocations TargetLocations
+.TargetMaps TargetMaps
+.Targets Targets
+AssociationVersionLimitExceeded structure qerr=AssociationVersionLimitExceeded error=client
+.Message String
+AssociationVersionList list m=AssociationVersionInfo
+AttachmentContent structure
+.Hash AttachmentHash
+.HashType AttachmentHashType
+.Name AttachmentName
+.Size ContentLength
+.Url AttachmentUrl
+AttachmentContentList list m=AttachmentContent mxml=AttachmentContent
+AttachmentHash string
+AttachmentHashType enum
+AttachmentIdentifier string
+AttachmentInformation structure
+.Name AttachmentName
+AttachmentInformationList list m=AttachmentInformation mxml=AttachmentInformation
+AttachmentName string
+AttachmentUrl string
+AttachmentsSource structure
+.Key AttachmentsSourceKey
+.Name AttachmentIdentifier
+.Values AttachmentsSourceValues
+AttachmentsSourceKey enum
+AttachmentsSourceList list m=AttachmentsSource
+AttachmentsSourceValue string
+AttachmentsSourceValues list m=AttachmentsSourceValue
+AttributeName string
+AttributeValue string
+AutomationActionName string
+AutomationDefinitionNotApprovedException structure qerr=AutomationDefinitionNotApproved error=client
+.Message String
+AutomationDefinitionNotFoundException structure qerr=AutomationDefinitionNotFound error=client
+.Message String
+AutomationDefinitionVersionNotFoundException structure qerr=AutomationDefinitionVersionNotFound error=client
+.Message String
+AutomationExecution structure
+.AlarmConfiguration AlarmConfiguration
+.AssociationId String
+.AutomationExecutionId AutomationExecutionId
+.AutomationExecutionStatus AutomationExecutionStatus
+.AutomationSubtype AutomationSubtype
+.ChangeRequestName ChangeRequestName
+.CurrentAction String
+.CurrentStepName String
+.DocumentName DocumentName
+.DocumentVersion DocumentVersion
+.ExecutedBy String
+.ExecutionEndTime DateTime
+.ExecutionStartTime DateTime
+.FailureMessage String
+.MaxConcurrency MaxConcurrency
+.MaxErrors MaxErrors
+.Mode ExecutionMode
+.OpsItemId String
+.Outputs AutomationParameterMap
+.Parameters AutomationParameterMap
+.ParentAutomationExecutionId AutomationExecutionId
+.ProgressCounters ProgressCounters
+.ResolvedTargets ResolvedTargets
+.Runbooks Runbooks
+.ScheduledTime DateTime
+.StepExecutions StepExecutionList
+.StepExecutionsTruncated Boolean
+.Target String
+.TargetLocations TargetLocations
+.TargetLocationsURL TargetLocationsURL
+.TargetMaps TargetMaps
+.TargetParameterName AutomationParameterKey
+.Targets Targets
+.TriggeredAlarms AlarmStateInformationList
+.Variables AutomationParameterMap
+.WarningMessage String
+AutomationExecutionFilter structure
+.Key AutomationExecutionFilterKey
+.Values AutomationExecutionFilterValueList
+AutomationExecutionFilterKey enum
+AutomationExecutionFilterList list m=AutomationExecutionFilter
+AutomationExecutionFilterValue string
+AutomationExecutionFilterValueList list m=AutomationExecutionFilterValue
+AutomationExecutionId string
+AutomationExecutionInputs structure
+.Parameters AutomationParameterMap
+.TargetLocations TargetLocations
+.TargetLocationsURL TargetLocationsURL
+.TargetMaps TargetMaps
+.TargetParameterName AutomationParameterKey
+.Targets AutomationTargets
+AutomationExecutionLimitExceededException structure qerr=AutomationExecutionLimitExceeded error=client
+.Message String
+AutomationExecutionMetadata structure
+.AlarmConfiguration AlarmConfiguration
+.AssociationId String
+.AutomationExecutionId AutomationExecutionId
+.AutomationExecutionStatus AutomationExecutionStatus
+.AutomationSubtype AutomationSubtype
+.AutomationType AutomationType
+.ChangeRequestName ChangeRequestName
+.CurrentAction String
+.CurrentStepName String
+.DocumentName DocumentName
+.DocumentVersion DocumentVersion
+.ExecutedBy String
+.ExecutionEndTime DateTime
+.ExecutionStartTime DateTime
+.FailureMessage String
+.LogFile String
+.MaxConcurrency MaxConcurrency
+.MaxErrors MaxErrors
+.Mode ExecutionMode
+.OpsItemId String
+.Outputs AutomationParameterMap
+.ParentAutomationExecutionId AutomationExecutionId
+.ResolvedTargets ResolvedTargets
+.Runbooks Runbooks
+.ScheduledTime DateTime
+.Target String
+.TargetLocationsURL TargetLocationsURL
+.TargetMaps TargetMaps
+.TargetParameterName AutomationParameterKey
+.Targets Targets
+.TriggeredAlarms AlarmStateInformationList
+.WarningMessage String
+AutomationExecutionMetadataList list m=AutomationExecutionMetadata
+AutomationExecutionNotFoundException structure qerr=AutomationExecutionNotFound error=client
+.Message String
+AutomationExecutionPreview structure
+.Regions RegionList
+.StepPreviews StepPreviewMap
+.TargetPreviews TargetPreviewList
+.TotalAccounts Integer
+AutomationExecutionStatus enum
+AutomationParameterKey string
+AutomationParameterMap map k=AutomationParameterKey v=AutomationParameterValueList
+AutomationParameterValue string
+AutomationParameterValueList list m=AutomationParameterValue
+AutomationStepNotFoundException structure qerr=AutomationStepNotFoundException error=client
+.Message String
+AutomationSubtype enum
+AutomationTargetParameterName string
+AutomationTargets list m=Target
+AutomationType enum
+AvailabilityZone string
+AvailabilityZoneId string
+AzureApplicationDisplayName string
+AzureApplicationId string
+AzureConfiguration structure
+.ApplicationDisplayName AzureApplicationDisplayName
+.ApplicationId AzureApplicationId
+.Targets ConfigurationTargets
+.TenantDisplayName AzureTenantDisplayName
+.TenantId AzureTenantId
+AzureSubscription structure
+.DisplayName AzureSubscriptionDisplayName
+.Id AzureSubscriptionId
+AzureSubscriptionDisplayName string
+AzureSubscriptionId string
+AzureSubscriptionList list m=AzureSubscription
+AzureTenantDisplayName string
+AzureTenantId string
+BaselineDescription string
+BaselineId string
+BaselineName string
+BaselineOverride structure
+.ApprovalRules PatchRuleGroup
+.ApprovedPatches PatchIdList
+.ApprovedPatchesComplianceLevel PatchComplianceLevel
+.ApprovedPatchesEnableNonSecurity Boolean
+.AvailableSecurityUpdatesComplianceStatus PatchComplianceStatus
+.GlobalFilters PatchFilterGroup
+.OperatingSystem OperatingSystem
+.RejectedPatches PatchIdList
+.RejectedPatchesAction PatchAction
+.Sources PatchSourceList
+BatchErrorMessage string
+Boolean boolean
+CalendarNameOrARN string
+CalendarNameOrARNList list m=CalendarNameOrARN
+CalendarState enum
+CancelCommand operation in=CancelCommandRequest out=CancelCommandResult err=DuplicateInstanceId,InternalServerError,InvalidCommandId,InvalidInstanceId
+CancelCommandRequest structure
+.CommandId CommandId
+.InstanceIds InstanceIdList
+CancelCommandResult structure
+CancelMaintenanceWindowExecution operation in=CancelMaintenanceWindowExecutionRequest out=CancelMaintenanceWindowExecutionResult err=DoesNotExistException,InternalServerError
+CancelMaintenanceWindowExecutionRequest structure
+.WindowExecutionId MaintenanceWindowExecutionId
+CancelMaintenanceWindowExecutionResult structure
+.WindowExecutionId MaintenanceWindowExecutionId
+Category string
+CategoryEnumList list m=Category
+CategoryList list m=Category
+ChangeDetailsValue string
+ChangeRequestName string
+ClientToken string
+CloudConnectorArn string
+CloudConnectorConfiguration union
+.AzureConfiguration AzureConfiguration
+CloudConnectorDescription string
+CloudConnectorFilter structure
+.FilterKey CloudConnectorFilterKey
+.FilterValues CloudConnectorFilterValues
+CloudConnectorFilterKey enum
+CloudConnectorFilterList list m=CloudConnectorFilter
+CloudConnectorFilterValue string
+CloudConnectorFilterValues list m=CloudConnectorFilterValue
+CloudConnectorIamRoleArn string
+CloudConnectorId string
+CloudConnectorMaxResults integer
+CloudConnectorSummary structure
+.CloudConnectorId CloudConnectorId
+.CreatedAt DateTime
+.Description CloudConnectorDescription
+.DisplayName DisplayName
+.RoleArn CloudConnectorIamRoleArn
+.UpdatedAt DateTime
+CloudConnectorSummaryList list m=CloudConnectorSummary
+CloudWatchLogGroupName string
+CloudWatchOutputConfig structure
+.CloudWatchLogGroupName CloudWatchLogGroupName
+.CloudWatchOutputEnabled CloudWatchOutputEnabled
+CloudWatchOutputEnabled boolean
+Command structure
+.AlarmConfiguration AlarmConfiguration
+.CloudWatchOutputConfig CloudWatchOutputConfig
+.CommandId CommandId
+.Comment Comment
+.CompletedCount CompletedCount
+.DeliveryTimedOutCount DeliveryTimedOutCount
+.DocumentName DocumentName
+.DocumentVersion DocumentVersion
+.ErrorCount ErrorCount
+.ExpiresAfter DateTime
+.InstanceIds InstanceIdList
+.MaxConcurrency MaxConcurrency
+.MaxErrors MaxErrors
+.NotificationConfig NotificationConfig
+.OutputS3BucketName S3BucketName
+.OutputS3KeyPrefix S3KeyPrefix
+.OutputS3Region S3Region
+.Parameters Parameters
+.RequestedDateTime DateTime
+.ServiceRole ServiceRole
+.Status CommandStatus
+.StatusDetails StatusDetails
+.TargetCount TargetCount
+.Targets Targets
+.TimeoutSeconds TimeoutSeconds
+.TriggeredAlarms AlarmStateInformationList
+CommandFilter structure
+.key CommandFilterKey
+.value CommandFilterValue
+CommandFilterKey enum
+CommandFilterList list m=CommandFilter
+CommandFilterValue string
+CommandId string
+CommandInvocation structure
+.CloudWatchOutputConfig CloudWatchOutputConfig
+.CommandId CommandId
+.CommandPlugins CommandPluginList
+.Comment Comment
+.DocumentName DocumentName
+.DocumentVersion DocumentVersion
+.InstanceId InstanceId
+.InstanceName InstanceTagName
+.NotificationConfig NotificationConfig
+.RequestedDateTime DateTime
+.ServiceRole ServiceRole
+.StandardErrorUrl Url
+.StandardOutputUrl Url
+.Status CommandInvocationStatus
+.StatusDetails StatusDetails
+.TraceOutput InvocationTraceOutput
+CommandInvocationList list m=CommandInvocation
+CommandInvocationStatus enum
+CommandList list m=Command
+CommandMaxResults integer
+CommandPlugin structure
+.Name CommandPluginName
+.Output CommandPluginOutput
+.OutputS3BucketName S3BucketName
+.OutputS3KeyPrefix S3KeyPrefix
+.OutputS3Region S3Region
+.ResponseCode ResponseCode
+.ResponseFinishDateTime DateTime
+.ResponseStartDateTime DateTime
+.StandardErrorUrl Url
+.StandardOutputUrl Url
+.Status CommandPluginStatus
+.StatusDetails StatusDetails
+CommandPluginList list m=CommandPlugin
+CommandPluginName string
+CommandPluginOutput string
+CommandPluginStatus enum
+CommandStatus enum
+Comment string
+CompletedCount integer
+ComplianceExecutionId string
+ComplianceExecutionSummary structure
+.ExecutionId ComplianceExecutionId
+.ExecutionTime DateTime
+.ExecutionType ComplianceExecutionType
+ComplianceExecutionType string
+ComplianceFilterValue string
+ComplianceItem structure
+.ComplianceType ComplianceTypeName
+.Details ComplianceItemDetails
+.ExecutionSummary ComplianceExecutionSummary
+.Id ComplianceItemId
+.ResourceId ComplianceResourceId
+.ResourceType ComplianceResourceType
+.Severity ComplianceSeverity
+.Status ComplianceStatus
+.Title ComplianceItemTitle
+ComplianceItemContentHash string
+ComplianceItemDetails map k=AttributeName v=AttributeValue
+ComplianceItemEntry structure
+.Details ComplianceItemDetails
+.Id ComplianceItemId
+.Severity ComplianceSeverity
+.Status ComplianceStatus
+.Title ComplianceItemTitle
+ComplianceItemEntryList list m=ComplianceItemEntry
+ComplianceItemId string
+ComplianceItemList list m=ComplianceItem mxml=Item
+ComplianceItemTitle string
+ComplianceQueryOperatorType enum
+ComplianceResourceId string
+ComplianceResourceIdList list m=ComplianceResourceId
+ComplianceResourceType string
+ComplianceResourceTypeList list m=ComplianceResourceType
+ComplianceSeverity enum
+ComplianceStatus enum
+ComplianceStringFilter structure
+.Key ComplianceStringFilterKey
+.Type ComplianceQueryOperatorType
+.Values ComplianceStringFilterValueList
+ComplianceStringFilterKey string
+ComplianceStringFilterList list m=ComplianceStringFilter mxml=ComplianceFilter
+ComplianceStringFilterValueList list m=ComplianceFilterValue mxml=FilterValue
+ComplianceSummaryCount integer
+ComplianceSummaryItem structure
+.ComplianceType ComplianceTypeName
+.CompliantSummary CompliantSummary
+.NonCompliantSummary NonCompliantSummary
+ComplianceSummaryItemList list m=ComplianceSummaryItem mxml=Item
+ComplianceTypeCountLimitExceededException structure qerr=ComplianceTypeCountLimitExceeded error=client
+.Message String
+ComplianceTypeName string
+ComplianceUploadType enum
+CompliantSummary structure
+.CompliantCount ComplianceSummaryCount
+.SeveritySummary SeveritySummary
+ComputerName string
+ConfigConnectorArn string
+ConfigurationTargets union
+.Subscriptions AzureSubscriptionList
+ConflictException structure qerr=ConflictException error=client
+.Message String
+ConnectionStatus enum
+ContentLength long
+CreateActivation operation in=CreateActivationRequest out=CreateActivationResult err=InternalServerError,InvalidParameters
+CreateActivationRequest structure
+.DefaultInstanceName DefaultInstanceName
+.Description ActivationDescription
+.ExpirationDate ExpirationDate
+.IamRole IamRole
+.RegistrationLimit RegistrationLimit
+.RegistrationMetadata RegistrationMetadataList
+.Tags TagList
+CreateActivationResult structure
+.ActivationCode ActivationCode
+.ActivationId ActivationId
+CreateAssociation operation in=CreateAssociationRequest out=CreateAssociationResult err=AssociationAlreadyExists,AssociationLimitExceeded,InternalServerError,InvalidDocument,InvalidDocumentVersion,InvalidInstanceId,InvalidOutputLocation,InvalidParameters,InvalidSchedule,InvalidTag,InvalidTarget,InvalidTargetMaps,UnsupportedPlatformType
+CreateAssociationBatch operation in=CreateAssociationBatchRequest out=CreateAssociationBatchResult err=AssociationLimitExceeded,DuplicateInstanceId,InternalServerError,InvalidDocument,InvalidDocumentVersion,InvalidInstanceId,InvalidOutputLocation,InvalidParameters,InvalidSchedule,InvalidTarget,InvalidTargetMaps,UnsupportedPlatformType
+CreateAssociationBatchRequest structure
+.AssociationDispatchAssumeRole AssociationDispatchAssumeRoleArn
+.Entries CreateAssociationBatchRequestEntries
+CreateAssociationBatchRequestEntries list m=CreateAssociationBatchRequestEntry mxml=entries
+CreateAssociationBatchRequestEntry structure
+.AlarmConfiguration AlarmConfiguration
+.ApplyOnlyAtCronInterval ApplyOnlyAtCronInterval
+.AssociationName AssociationName
+.AutomationTargetParameterName AutomationTargetParameterName
+.CalendarNames CalendarNameOrARNList
+.ComplianceSeverity AssociationComplianceSeverity
+.DocumentVersion DocumentVersion
+.Duration Duration
+.InstanceId InstanceId
+.MaxConcurrency MaxConcurrency
+.MaxErrors MaxErrors
+.Name DocumentARN
+.OutputLocation InstanceAssociationOutputLocation
+.Parameters Parameters
+.ScheduleExpression ScheduleExpression
+.ScheduleOffset ScheduleOffset
+.SyncCompliance AssociationSyncCompliance
+.TargetLocations TargetLocations
+.TargetMaps TargetMaps
+.Targets Targets
+CreateAssociationBatchResult structure
+.Failed FailedCreateAssociationList
+.Successful AssociationDescriptionList
+CreateAssociationRequest structure
+.AlarmConfiguration AlarmConfiguration
+.ApplyOnlyAtCronInterval ApplyOnlyAtCronInterval
+.AssociationDispatchAssumeRole AssociationDispatchAssumeRoleArn
+.AssociationName AssociationName
+.AutomationTargetParameterName AutomationTargetParameterName
+.CalendarNames CalendarNameOrARNList
+.ComplianceSeverity AssociationComplianceSeverity
+.DocumentVersion DocumentVersion
+.Duration Duration
+.InstanceId InstanceId
+.MaxConcurrency MaxConcurrency
+.MaxErrors MaxErrors
+.Name DocumentARN
+.OutputLocation InstanceAssociationOutputLocation
+.Parameters Parameters
+.ScheduleExpression ScheduleExpression
+.ScheduleOffset ScheduleOffset
+.SyncCompliance AssociationSyncCompliance
+.Tags TagList
+.TargetLocations TargetLocations
+.TargetMaps TargetMaps
+.Targets Targets
+CreateAssociationResult structure
+.AssociationDescription AssociationDescription
+CreateCloudConnector operation in=CreateCloudConnectorRequest out=CreateCloudConnectorResult err=ConflictException,InternalServerError,ServiceQuotaExceededException
+CreateCloudConnectorRequest structure
+.ConfigConnectorArn ConfigConnectorArn
+.Configuration CloudConnectorConfiguration
+.Description CloudConnectorDescription
+.DisplayName DisplayName
+.RoleArn CloudConnectorIamRoleArn
+.Tags TagList
+CreateCloudConnectorResult structure
+.CloudConnectorId CloudConnectorId
+CreateDocument operation in=CreateDocumentRequest out=CreateDocumentResult err=DocumentAlreadyExists,DocumentLimitExceeded,InternalServerError,InvalidDocumentContent,InvalidDocumentSchemaVersion,MaxDocumentSizeExceeded,NoLongerSupportedException,TooManyUpdates
+CreateDocumentRequest structure
+.Attachments AttachmentsSourceList
+.Content DocumentContent
+.DisplayName DocumentDisplayName
+.DocumentFormat DocumentFormat
+.DocumentType DocumentType
+.Name DocumentName
+.Requires DocumentRequiresList
+.Tags TagList
+.TargetType TargetType
+.VersionName DocumentVersionName
+CreateDocumentResult structure
+.DocumentDescription DocumentDescription
+CreateMaintenanceWindow operation in=CreateMaintenanceWindowRequest out=CreateMaintenanceWindowResult err=IdempotentParameterMismatch,InternalServerError,ResourceLimitExceededException
+CreateMaintenanceWindowRequest structure
+.AllowUnassociatedTargets MaintenanceWindowAllowUnassociatedTargets
+.ClientToken ClientToken
+.Cutoff MaintenanceWindowCutoff
+.Description MaintenanceWindowDescription
+.Duration MaintenanceWindowDurationHours
+.EndDate MaintenanceWindowStringDateTime
+.Name MaintenanceWindowName
+.Schedule MaintenanceWindowSchedule
+.ScheduleOffset MaintenanceWindowOffset
+.ScheduleTimezone MaintenanceWindowTimezone
+.StartDate MaintenanceWindowStringDateTime
+.Tags TagList
+CreateMaintenanceWindowResult structure
+.WindowId MaintenanceWindowId
+CreateOpsItem operation in=CreateOpsItemRequest out=CreateOpsItemResponse err=InternalServerError,OpsItemAccessDeniedException,OpsItemAlreadyExistsException,OpsItemInvalidParameterException,OpsItemLimitExceededException
+CreateOpsItemRequest structure
+.AccountId OpsItemAccountId
+.ActualEndTime DateTime
+.ActualStartTime DateTime
+.Category OpsItemCategory
+.Description OpsItemDescription
+.Notifications OpsItemNotifications
+.OperationalData OpsItemOperationalData
+.OpsItemType OpsItemType
+.PlannedEndTime DateTime
+.PlannedStartTime DateTime
+.Priority OpsItemPriority
+.RelatedOpsItems RelatedOpsItems
+.Severity OpsItemSeverity
+.Source OpsItemSource
+.Tags TagList
+.Title OpsItemTitle
+CreateOpsItemResponse structure
+.OpsItemArn OpsItemArn
+.OpsItemId String
+CreateOpsMetadata operation in=CreateOpsMetadataRequest out=CreateOpsMetadataResult err=InternalServerError,OpsMetadataAlreadyExistsException,OpsMetadataInvalidArgumentException,OpsMetadataLimitExceededException,OpsMetadataTooManyUpdatesException
+CreateOpsMetadataRequest structure
+.Metadata MetadataMap
+.ResourceId OpsMetadataResourceId
+.Tags TagList
+CreateOpsMetadataResult structure
+.OpsMetadataArn OpsMetadataArn
+CreatePatchBaseline operation in=CreatePatchBaselineRequest out=CreatePatchBaselineResult err=IdempotentParameterMismatch,InternalServerError,ResourceLimitExceededException
+CreatePatchBaselineRequest structure
+.ApprovalRules PatchRuleGroup
+.ApprovedPatches PatchIdList
+.ApprovedPatchesComplianceLevel PatchComplianceLevel
+.ApprovedPatchesEnableNonSecurity Boolean
+.AvailableSecurityUpdatesComplianceStatus PatchComplianceStatus
+.ClientToken ClientToken
+.Description BaselineDescription
+.GlobalFilters PatchFilterGroup
+.Name BaselineName
+.OperatingSystem OperatingSystem
+.RejectedPatches PatchIdList
+.RejectedPatchesAction PatchAction
+.Sources PatchSourceList
+.Tags TagList
+CreatePatchBaselineResult structure
+.BaselineId BaselineId
+CreateResourceDataSync operation in=CreateResourceDataSyncRequest out=CreateResourceDataSyncResult err=InternalServerError,ResourceDataSyncAlreadyExistsException,ResourceDataSyncCountExceededException,ResourceDataSyncInvalidConfigurationException
+CreateResourceDataSyncRequest structure
+.S3Destination ResourceDataSyncS3Destination
+.SyncName ResourceDataSyncName
+.SyncSource ResourceDataSyncSource
+.SyncType ResourceDataSyncType
+CreateResourceDataSyncResult structure
+CreatedDate timestamp
+Credentials structure
+.AccessKeyId AccessKeyIdType
+.ExpirationTime DateTime
+.SecretAccessKey AccessKeySecretType
+.SessionToken SessionTokenType
+CustomSchemaCountLimitExceededException structure qerr=CustomSchemaCountLimitExceeded error=client
+.Message String
+DateTime timestamp
+DefaultBaseline boolean
+DefaultInstanceName string
+DeleteActivation operation in=DeleteActivationRequest out=DeleteActivationResult err=InternalServerError,InvalidActivation,InvalidActivationId,TooManyUpdates
+DeleteActivationRequest structure
+.ActivationId ActivationId
+DeleteActivationResult structure
+DeleteAssociation operation in=DeleteAssociationRequest out=DeleteAssociationResult err=AssociationDoesNotExist,InternalServerError,InvalidDocument,InvalidInstanceId,TooManyUpdates
+DeleteAssociationRequest structure
+.AssociationId AssociationId
+.InstanceId InstanceId
+.Name DocumentARN
+DeleteAssociationResult structure
+DeleteCloudConnector operation in=DeleteCloudConnectorRequest out=DeleteCloudConnectorResult err=ConflictException,InternalServerError,ResourceNotFoundException
+DeleteCloudConnectorRequest structure
+.CloudConnectorId CloudConnectorId
+DeleteCloudConnectorResult structure
+.CloudConnectorId CloudConnectorId
+DeleteDocument operation in=DeleteDocumentRequest out=DeleteDocumentResult err=AssociatedInstances,InternalServerError,InvalidDocument,InvalidDocumentOperation,TooManyUpdates
+DeleteDocumentRequest structure
+.DocumentVersion DocumentVersion
+.Force Boolean
+.Name DocumentName
+.VersionName DocumentVersionName
+DeleteDocumentResult structure
+DeleteInventory operation in=DeleteInventoryRequest out=DeleteInventoryResult err=InternalServerError,InvalidDeleteInventoryParametersException,InvalidInventoryRequestException,InvalidOptionException,InvalidTypeNameException
+DeleteInventoryRequest structure
+.ClientToken UUID
+.DryRun DryRun
+.SchemaDeleteOption InventorySchemaDeleteOption
+.TypeName InventoryItemTypeName
+DeleteInventoryResult structure
+.DeletionId UUID
+.DeletionSummary InventoryDeletionSummary
+.TypeName InventoryItemTypeName
+DeleteMaintenanceWindow operation in=DeleteMaintenanceWindowRequest out=DeleteMaintenanceWindowResult err=InternalServerError
+DeleteMaintenanceWindowRequest structure
+.WindowId MaintenanceWindowId
+DeleteMaintenanceWindowResult structure
+.WindowId MaintenanceWindowId
+DeleteOpsItem operation in=DeleteOpsItemRequest out=DeleteOpsItemResponse err=InternalServerError,OpsItemInvalidParameterException
+DeleteOpsItemRequest structure
+.OpsItemId OpsItemId
+DeleteOpsItemResponse structure
+DeleteOpsMetadata operation in=DeleteOpsMetadataRequest out=DeleteOpsMetadataResult err=InternalServerError,OpsMetadataInvalidArgumentException,OpsMetadataNotFoundException
+DeleteOpsMetadataRequest structure
+.OpsMetadataArn OpsMetadataArn
+DeleteOpsMetadataResult structure
+DeleteParameter operation in=DeleteParameterRequest out=DeleteParameterResult err=InternalServerError,ParameterNotFound
+DeleteParameterRequest structure
+.Name PSParameterName
+DeleteParameterResult structure
+DeleteParameters operation in=DeleteParametersRequest out=DeleteParametersResult err=InternalServerError
+DeleteParametersRequest structure
+.Names ParameterNameList
+DeleteParametersResult structure
+.DeletedParameters ParameterNameList
+.InvalidParameters ParameterNameList
+DeletePatchBaseline operation in=DeletePatchBaselineRequest out=DeletePatchBaselineResult err=InternalServerError,ResourceInUseException
+DeletePatchBaselineRequest structure
+.BaselineId BaselineId
+DeletePatchBaselineResult structure
+.BaselineId BaselineId
+DeleteResourceDataSync operation in=DeleteResourceDataSyncRequest out=DeleteResourceDataSyncResult err=InternalServerError,ResourceDataSyncInvalidConfigurationException,ResourceDataSyncNotFoundException
+DeleteResourceDataSyncRequest structure
+.SyncName ResourceDataSyncName
+.SyncType ResourceDataSyncType
+DeleteResourceDataSyncResult structure
+DeleteResourcePolicy operation in=DeleteResourcePolicyRequest out=DeleteResourcePolicyResponse err=InternalServerError,MalformedResourcePolicyDocumentException,ResourceNotFoundException,ResourcePolicyConflictException,ResourcePolicyInvalidParameterException,ResourcePolicyNotFoundException
+DeleteResourcePolicyRequest structure
+.PolicyHash PolicyHash
+.PolicyId PolicyId
+.ResourceArn ResourceArnString
+DeleteResourcePolicyResponse structure
+DeliveryTimedOutCount integer
+DeregisterManagedInstance operation in=DeregisterManagedInstanceRequest out=DeregisterManagedInstanceResult err=InternalServerError,InvalidInstanceId
+DeregisterManagedInstanceRequest structure
+.InstanceId ManagedInstanceId
+DeregisterManagedInstanceResult structure
+DeregisterPatchBaselineForPatchGroup operation in=DeregisterPatchBaselineForPatchGroupRequest out=DeregisterPatchBaselineForPatchGroupResult err=InternalServerError,InvalidResourceId
+DeregisterPatchBaselineForPatchGroupRequest structure
+.BaselineId BaselineId
+.PatchGroup PatchGroup
+DeregisterPatchBaselineForPatchGroupResult structure
+.BaselineId BaselineId
+.PatchGroup PatchGroup
+DeregisterTargetFromMaintenanceWindow operation in=DeregisterTargetFromMaintenanceWindowRequest out=DeregisterTargetFromMaintenanceWindowResult err=DoesNotExistException,InternalServerError,TargetInUseException
+DeregisterTargetFromMaintenanceWindowRequest structure
+.Safe Boolean
+.WindowId MaintenanceWindowId
+.WindowTargetId MaintenanceWindowTargetId
+DeregisterTargetFromMaintenanceWindowResult structure
+.WindowId MaintenanceWindowId
+.WindowTargetId MaintenanceWindowTargetId
+DeregisterTaskFromMaintenanceWindow operation in=DeregisterTaskFromMaintenanceWindowRequest out=DeregisterTaskFromMaintenanceWindowResult err=DoesNotExistException,InternalServerError
+DeregisterTaskFromMaintenanceWindowRequest structure
+.WindowId MaintenanceWindowId
+.WindowTaskId MaintenanceWindowTaskId
+DeregisterTaskFromMaintenanceWindowResult structure
+.WindowId MaintenanceWindowId
+.WindowTaskId MaintenanceWindowTaskId
+DescribeActivations operation in=DescribeActivationsRequest out=DescribeActivationsResult err=InternalServerError,InvalidFilter,InvalidNextToken
+DescribeActivationsFilter structure
+.FilterKey DescribeActivationsFilterKeys
+.FilterValues StringList
+DescribeActivationsFilterKeys enum
+DescribeActivationsFilterList list m=DescribeActivationsFilter
+DescribeActivationsRequest structure
+.Filters DescribeActivationsFilterList
+.MaxResults MaxResults
+.NextToken NextToken
+DescribeActivationsResult structure
+.ActivationList ActivationList
+.NextToken NextToken
+DescribeAssociation operation in=DescribeAssociationRequest out=DescribeAssociationResult err=AssociationDoesNotExist,InternalServerError,InvalidAssociationVersion,InvalidDocument,InvalidInstanceId
+DescribeAssociationExecutionTargets operation in=DescribeAssociationExecutionTargetsRequest out=DescribeAssociationExecutionTargetsResult err=AssociationDoesNotExist,AssociationExecutionDoesNotExist,InternalServerError,InvalidNextToken
+DescribeAssociationExecutionTargetsRequest structure
+.AssociationId AssociationId
+.ExecutionId AssociationExecutionId
+.Filters AssociationExecutionTargetsFilterList
+.MaxResults MaxResults
+.NextToken NextToken
+DescribeAssociationExecutionTargetsResult structure
+.AssociationExecutionTargets AssociationExecutionTargetsList
+.NextToken NextToken
+DescribeAssociationExecutions operation in=DescribeAssociationExecutionsRequest out=DescribeAssociationExecutionsResult err=AssociationDoesNotExist,InternalServerError,InvalidNextToken
+DescribeAssociationExecutionsRequest structure
+.AssociationId AssociationId
+.Filters AssociationExecutionFilterList
+.MaxResults MaxResults
+.NextToken NextToken
+DescribeAssociationExecutionsResult structure
+.AssociationExecutions AssociationExecutionsList
+.NextToken NextToken
+DescribeAssociationRequest structure
+.AssociationId AssociationId
+.AssociationVersion AssociationVersion
+.InstanceId InstanceId
+.Name DocumentARN
+DescribeAssociationResult structure
+.AssociationDescription AssociationDescription
+DescribeAutomationExecutions operation in=DescribeAutomationExecutionsRequest out=DescribeAutomationExecutionsResult err=InternalServerError,InvalidFilterKey,InvalidFilterValue,InvalidNextToken
+DescribeAutomationExecutionsRequest structure
+.Filters AutomationExecutionFilterList
+.MaxResults MaxResults
+.NextToken NextToken
+DescribeAutomationExecutionsResult structure
+.AutomationExecutionMetadataList AutomationExecutionMetadataList
+.NextToken NextToken
+DescribeAutomationStepExecutions operation in=DescribeAutomationStepExecutionsRequest out=DescribeAutomationStepExecutionsResult err=AutomationExecutionNotFoundException,InternalServerError,InvalidFilterKey,InvalidFilterValue,InvalidNextToken
+DescribeAutomationStepExecutionsRequest structure
+.AutomationExecutionId AutomationExecutionId
+.Filters StepExecutionFilterList
+.MaxResults MaxResults
+.NextToken NextToken
+.ReverseOrder Boolean
+DescribeAutomationStepExecutionsResult structure
+.NextToken NextToken
+.StepExecutions StepExecutionList
+DescribeAvailablePatches operation in=DescribeAvailablePatchesRequest out=DescribeAvailablePatchesResult err=InternalServerError
+DescribeAvailablePatchesRequest structure
+.Filters PatchOrchestratorFilterList
+.MaxResults PatchBaselineMaxResults
+.NextToken NextToken
+DescribeAvailablePatchesResult structure
+.NextToken NextToken
+.Patches PatchList
+DescribeDocument operation in=DescribeDocumentRequest out=DescribeDocumentResult err=InternalServerError,InvalidDocument,InvalidDocumentVersion
+DescribeDocumentPermission operation in=DescribeDocumentPermissionRequest out=DescribeDocumentPermissionResponse err=InternalServerError,InvalidDocument,InvalidDocumentOperation,InvalidNextToken,InvalidPermissionType
+DescribeDocumentPermissionRequest structure
+.MaxResults DocumentPermissionMaxResults
+.Name DocumentName
+.NextToken NextToken
+.PermissionType DocumentPermissionType
+DescribeDocumentPermissionResponse structure
+.AccountIds AccountIdList
+.AccountSharingInfoList AccountSharingInfoList
+.NextToken NextToken
+DescribeDocumentRequest structure
+.DocumentVersion DocumentVersion
+.Name DocumentARN
+.VersionName DocumentVersionName
+DescribeDocumentResult structure
+.Document DocumentDescription
+DescribeEffectiveInstanceAssociations operation in=DescribeEffectiveInstanceAssociationsRequest out=DescribeEffectiveInstanceAssociationsResult err=InternalServerError,InvalidInstanceId,InvalidNextToken
+DescribeEffectiveInstanceAssociationsRequest structure
+.InstanceId InstanceId
+.MaxResults EffectiveInstanceAssociationMaxResults
+.NextToken NextToken
+DescribeEffectiveInstanceAssociationsResult structure
+.Associations InstanceAssociationList
+.NextToken NextToken
+DescribeEffectivePatchesForPatchBaseline operation in=DescribeEffectivePatchesForPatchBaselineRequest out=DescribeEffectivePatchesForPatchBaselineResult err=DoesNotExistException,InternalServerError,InvalidResourceId,UnsupportedOperatingSystem
+DescribeEffectivePatchesForPatchBaselineRequest structure
+.BaselineId BaselineId
+.MaxResults PatchBaselineMaxResults
+.NextToken NextToken
+DescribeEffectivePatchesForPatchBaselineResult structure
+.EffectivePatches EffectivePatchList
+.NextToken NextToken
+DescribeInstanceAssociationsStatus operation in=DescribeInstanceAssociationsStatusRequest out=DescribeInstanceAssociationsStatusResult err=InternalServerError,InvalidInstanceId,InvalidNextToken
+DescribeInstanceAssociationsStatusRequest structure
+.InstanceId InstanceId
+.MaxResults MaxResults
+.NextToken NextToken
+DescribeInstanceAssociationsStatusResult structure
+.InstanceAssociationStatusInfos InstanceAssociationStatusInfos
+.NextToken NextToken
+DescribeInstanceInformation operation in=DescribeInstanceInformationRequest out=DescribeInstanceInformationResult err=InternalServerError,InvalidFilterKey,InvalidInstanceId,InvalidInstanceInformationFilterValue,InvalidNextToken
+DescribeInstanceInformationRequest structure
+.Filters InstanceInformationStringFilterList
+.InstanceInformationFilterList InstanceInformationFilterList
+.MaxResults MaxResultsEC2Compatible
+.NextToken NextToken
+DescribeInstanceInformationResult structure
+.InstanceInformationList InstanceInformationList
+.NextToken NextToken
+DescribeInstancePatchStates operation in=DescribeInstancePatchStatesRequest out=DescribeInstancePatchStatesResult err=InternalServerError,InvalidNextToken
+DescribeInstancePatchStatesForPatchGroup operation in=DescribeInstancePatchStatesForPatchGroupRequest out=DescribeInstancePatchStatesForPatchGroupResult err=InternalServerError,InvalidFilter,InvalidNextToken
+DescribeInstancePatchStatesForPatchGroupRequest structure
+.Filters InstancePatchStateFilterList
+.MaxResults PatchComplianceMaxResults
+.NextToken NextToken
+.PatchGroup PatchGroup
+DescribeInstancePatchStatesForPatchGroupResult structure
+.InstancePatchStates InstancePatchStatesList
+.NextToken NextToken
+DescribeInstancePatchStatesRequest structure
+.InstanceIds InstanceIdList
+.MaxResults PatchComplianceMaxResults
+.NextToken NextToken
+DescribeInstancePatchStatesResult structure
+.InstancePatchStates InstancePatchStateList
+.NextToken NextToken
+DescribeInstancePatches operation in=DescribeInstancePatchesRequest out=DescribeInstancePatchesResult err=InternalServerError,InvalidFilter,InvalidInstanceId,InvalidNextToken
+DescribeInstancePatchesRequest structure
+.Filters PatchOrchestratorFilterList
+.InstanceId InstanceId
+.MaxResults PatchComplianceMaxResults
+.NextToken NextToken
+DescribeInstancePatchesResult structure
+.NextToken NextToken
+.Patches PatchComplianceDataList
+DescribeInstanceProperties operation in=DescribeInstancePropertiesRequest out=DescribeInstancePropertiesResult err=InternalServerError,InvalidActivationId,InvalidDocument,InvalidFilterKey,InvalidInstanceId,InvalidInstancePropertyFilterValue,InvalidNextToken
+DescribeInstancePropertiesMaxResults integer
+DescribeInstancePropertiesRequest structure
+.FiltersWithOperator InstancePropertyStringFilterList
+.InstancePropertyFilterList InstancePropertyFilterList
+.MaxResults DescribeInstancePropertiesMaxResults
+.NextToken NextToken
+DescribeInstancePropertiesResult structure
+.InstanceProperties InstanceProperties
+.NextToken NextToken
+DescribeInventoryDeletions operation in=DescribeInventoryDeletionsRequest out=DescribeInventoryDeletionsResult err=InternalServerError,InvalidDeletionIdException,InvalidNextToken
+DescribeInventoryDeletionsRequest structure
+.DeletionId UUID
+.MaxResults MaxResults
+.NextToken NextToken
+DescribeInventoryDeletionsResult structure
+.InventoryDeletions InventoryDeletionsList
+.NextToken NextToken
+DescribeMaintenanceWindowExecutionTaskInvocations operation in=DescribeMaintenanceWindowExecutionTaskInvocationsRequest out=DescribeMaintenanceWindowExecutionTaskInvocationsResult err=DoesNotExistException,InternalServerError
+DescribeMaintenanceWindowExecutionTaskInvocationsRequest structure
+.Filters MaintenanceWindowFilterList
+.MaxResults MaintenanceWindowMaxResults
+.NextToken NextToken
+.TaskId MaintenanceWindowExecutionTaskId
+.WindowExecutionId MaintenanceWindowExecutionId
+DescribeMaintenanceWindowExecutionTaskInvocationsResult structure
+.NextToken NextToken
+.WindowExecutionTaskInvocationIdentities MaintenanceWindowExecutionTaskInvocationIdentityList
+DescribeMaintenanceWindowExecutionTasks operation in=DescribeMaintenanceWindowExecutionTasksRequest out=DescribeMaintenanceWindowExecutionTasksResult err=DoesNotExistException,InternalServerError
+DescribeMaintenanceWindowExecutionTasksRequest structure
+.Filters MaintenanceWindowFilterList
+.MaxResults MaintenanceWindowMaxResults
+.NextToken NextToken
+.WindowExecutionId MaintenanceWindowExecutionId
+DescribeMaintenanceWindowExecutionTasksResult structure
+.NextToken NextToken
+.WindowExecutionTaskIdentities MaintenanceWindowExecutionTaskIdentityList
+DescribeMaintenanceWindowExecutions operation in=DescribeMaintenanceWindowExecutionsRequest out=DescribeMaintenanceWindowExecutionsResult err=InternalServerError
+DescribeMaintenanceWindowExecutionsRequest structure
+.Filters MaintenanceWindowFilterList
+.MaxResults MaintenanceWindowMaxResults
+.NextToken NextToken
+.WindowId MaintenanceWindowId
+DescribeMaintenanceWindowExecutionsResult structure
+.NextToken NextToken
+.WindowExecutions MaintenanceWindowExecutionList
+DescribeMaintenanceWindowSchedule operation in=DescribeMaintenanceWindowScheduleRequest out=DescribeMaintenanceWindowScheduleResult err=DoesNotExistException,InternalServerError
+DescribeMaintenanceWindowScheduleRequest structure
+.Filters PatchOrchestratorFilterList
+.MaxResults MaintenanceWindowSearchMaxResults
+.NextToken NextToken
+.ResourceType MaintenanceWindowResourceType
+.Targets Targets
+.WindowId MaintenanceWindowId
+DescribeMaintenanceWindowScheduleResult structure
+.NextToken NextToken
+.ScheduledWindowExecutions ScheduledWindowExecutionList
+DescribeMaintenanceWindowTargets operation in=DescribeMaintenanceWindowTargetsRequest out=DescribeMaintenanceWindowTargetsResult err=DoesNotExistException,InternalServerError
+DescribeMaintenanceWindowTargetsRequest structure
+.Filters MaintenanceWindowFilterList
+.MaxResults MaintenanceWindowMaxResults
+.NextToken NextToken
+.WindowId MaintenanceWindowId
+DescribeMaintenanceWindowTargetsResult structure
+.NextToken NextToken
+.Targets MaintenanceWindowTargetList
+DescribeMaintenanceWindowTasks operation in=DescribeMaintenanceWindowTasksRequest out=DescribeMaintenanceWindowTasksResult err=DoesNotExistException,InternalServerError
+DescribeMaintenanceWindowTasksRequest structure
+.Filters MaintenanceWindowFilterList
+.MaxResults MaintenanceWindowMaxResults
+.NextToken NextToken
+.WindowId MaintenanceWindowId
+DescribeMaintenanceWindowTasksResult structure
+.NextToken NextToken
+.Tasks MaintenanceWindowTaskList
+DescribeMaintenanceWindows operation in=DescribeMaintenanceWindowsRequest out=DescribeMaintenanceWindowsResult err=InternalServerError
+DescribeMaintenanceWindowsForTarget operation in=DescribeMaintenanceWindowsForTargetRequest out=DescribeMaintenanceWindowsForTargetResult err=InternalServerError
+DescribeMaintenanceWindowsForTargetRequest structure
+.MaxResults MaintenanceWindowSearchMaxResults
+.NextToken NextToken
+.ResourceType MaintenanceWindowResourceType
+.Targets Targets
+DescribeMaintenanceWindowsForTargetResult structure
+.NextToken NextToken
+.WindowIdentities MaintenanceWindowsForTargetList
+DescribeMaintenanceWindowsRequest structure
+.Filters MaintenanceWindowFilterList
+.MaxResults MaintenanceWindowMaxResults
+.NextToken NextToken
+DescribeMaintenanceWindowsResult structure
+.NextToken NextToken
+.WindowIdentities MaintenanceWindowIdentityList
+DescribeOpsItems operation in=DescribeOpsItemsRequest out=DescribeOpsItemsResponse err=InternalServerError
+DescribeOpsItemsRequest structure
+.MaxResults OpsItemMaxResults
+.NextToken String
+.OpsItemFilters OpsItemFilters
+DescribeOpsItemsResponse structure
+.NextToken String
+.OpsItemSummaries OpsItemSummaries
+DescribeParameters operation in=DescribeParametersRequest out=DescribeParametersResult err=InternalServerError,InvalidFilterKey,InvalidFilterOption,InvalidFilterValue,InvalidNextToken
+DescribeParametersRequest structure
+.Filters ParametersFilterList
+.MaxResults MaxResults
+.NextToken NextToken
+.ParameterFilters ParameterStringFilterList
+.Shared Boolean
+DescribeParametersResult structure
+.NextToken NextToken
+.Parameters ParameterMetadataList
+DescribePatchBaselines operation in=DescribePatchBaselinesRequest out=DescribePatchBaselinesResult err=InternalServerError
+DescribePatchBaselinesRequest structure
+.Filters PatchOrchestratorFilterList
+.MaxResults PatchBaselineMaxResults
+.NextToken NextToken
+DescribePatchBaselinesResult structure
+.BaselineIdentities PatchBaselineIdentityList
+.NextToken NextToken
+DescribePatchGroupState operation in=DescribePatchGroupStateRequest out=DescribePatchGroupStateResult err=InternalServerError,InvalidNextToken
+DescribePatchGroupStateRequest structure
+.PatchGroup PatchGroup
+DescribePatchGroupStateResult structure
+.Instances Integer
+.InstancesWithAvailableSecurityUpdates Integer
+.InstancesWithCriticalNonCompliantPatches InstancesCount
+.InstancesWithFailedPatches Integer
+.InstancesWithInstalledOtherPatches Integer
+.InstancesWithInstalledPatches Integer
+.InstancesWithInstalledPendingRebootPatches InstancesCount
+.InstancesWithInstalledRejectedPatches InstancesCount
+.InstancesWithMissingPatches Integer
+.InstancesWithNotApplicablePatches Integer
+.InstancesWithOtherNonCompliantPatches InstancesCount
+.InstancesWithSecurityNonCompliantPatches InstancesCount
+.InstancesWithUnreportedNotApplicablePatches Integer
+DescribePatchGroups operation in=DescribePatchGroupsRequest out=DescribePatchGroupsResult err=InternalServerError
+DescribePatchGroupsRequest structure
+.Filters PatchOrchestratorFilterList
+.MaxResults PatchBaselineMaxResults
+.NextToken NextToken
+DescribePatchGroupsResult structure
+.Mappings PatchGroupPatchBaselineMappingList
+.NextToken NextToken
+DescribePatchProperties operation in=DescribePatchPropertiesRequest out=DescribePatchPropertiesResult err=InternalServerError
+DescribePatchPropertiesRequest structure
+.MaxResults MaxResults
+.NextToken NextToken
+.OperatingSystem OperatingSystem
+.PatchSet PatchSet
+.Property PatchProperty
+DescribePatchPropertiesResult structure
+.NextToken NextToken
+.Properties PatchPropertiesList
+DescribeSessions operation in=DescribeSessionsRequest out=DescribeSessionsResponse err=InternalServerError,InvalidFilterKey,InvalidNextToken
+DescribeSessionsRequest structure
+.Filters SessionFilterList
+.MaxResults SessionMaxResults
+.NextToken NextToken
+.State SessionState
+DescribeSessionsResponse structure
+.NextToken NextToken
+.Sessions SessionList
+DescriptionInDocument string
+DisassociateOpsItemRelatedItem operation in=DisassociateOpsItemRelatedItemRequest out=DisassociateOpsItemRelatedItemResponse err=InternalServerError,OpsItemConflictException,OpsItemInvalidParameterException,OpsItemNotFoundException,OpsItemRelatedItemAssociationNotFoundException
+DisassociateOpsItemRelatedItemRequest structure
+.AssociationId OpsItemRelatedItemAssociationId
+.OpsItemId OpsItemId
+DisassociateOpsItemRelatedItemResponse structure
+DisplayName string
+DocumentARN string
+DocumentAlreadyExists structure qerr=DocumentAlreadyExists error=client
+.Message String
+DocumentAuthor string
+DocumentContent string
+DocumentDefaultVersionDescription structure
+.DefaultVersion DocumentVersion
+.DefaultVersionName DocumentVersionName
+.Name DocumentName
+DocumentDescription structure
+.ApprovedVersion DocumentVersion
+.AttachmentsInformation AttachmentInformationList
+.Author DocumentAuthor
+.Category CategoryList
+.CategoryEnum CategoryEnumList
+.CreatedDate DateTime
+.DefaultVersion DocumentVersion
+.Description DescriptionInDocument
+.DisplayName DocumentDisplayName
+.DocumentFormat DocumentFormat
+.DocumentType DocumentType
+.DocumentVersion DocumentVersion
+.Hash DocumentHash
+.HashType DocumentHashType
+.LatestVersion DocumentVersion
+.Name DocumentARN
+.Owner DocumentOwner
+.Parameters DocumentParameterList
+.PendingReviewVersion DocumentVersion
+.PlatformTypes PlatformTypeList
+.Requires DocumentRequiresList
+.ReviewInformation ReviewInformationList
+.ReviewStatus ReviewStatus
+.SchemaVersion DocumentSchemaVersion
+.Sha1 DocumentSha1
+.Status DocumentStatus
+.StatusInformation DocumentStatusInformation
+.Tags TagList
+.TargetType TargetType
+.VersionName DocumentVersionName
+DocumentDisplayName string
+DocumentFilter structure
+.key DocumentFilterKey
+.value DocumentFilterValue
+DocumentFilterKey enum
+DocumentFilterList list m=DocumentFilter mxml=DocumentFilter
+DocumentFilterValue string
+DocumentFormat enum
+DocumentHash string
+DocumentHashType enum
+DocumentIdentifier structure
+.Author DocumentAuthor
+.CreatedDate DateTime
+.DisplayName DocumentDisplayName
+.DocumentFormat DocumentFormat
+.DocumentType DocumentType
+.DocumentVersion DocumentVersion
+.Name DocumentARN
+.Owner DocumentOwner
+.PlatformTypes PlatformTypeList
+.Requires DocumentRequiresList
+.ReviewStatus ReviewStatus
+.SchemaVersion DocumentSchemaVersion
+.Tags TagList
+.TargetType TargetType
+.VersionName DocumentVersionName
+DocumentIdentifierList list m=DocumentIdentifier mxml=DocumentIdentifier
+DocumentKeyValuesFilter structure
+.Key DocumentKeyValuesFilterKey
+.Values DocumentKeyValuesFilterValues
+DocumentKeyValuesFilterKey string
+DocumentKeyValuesFilterList list m=DocumentKeyValuesFilter
+DocumentKeyValuesFilterValue string
+DocumentKeyValuesFilterValues list m=DocumentKeyValuesFilterValue
+DocumentLimitExceeded structure qerr=DocumentLimitExceeded error=client
+.Message String
+DocumentMetadataEnum enum
+DocumentMetadataResponseInfo structure
+.ReviewerResponse DocumentReviewerResponseList
+DocumentName string
+DocumentOwner string
+DocumentParameter structure
+.DefaultValue DocumentParameterDefaultValue
+.Description DocumentParameterDescrption
+.Name DocumentParameterName
+.Type DocumentParameterType
+DocumentParameterDefaultValue string
+DocumentParameterDescrption string
+DocumentParameterList list m=DocumentParameter mxml=DocumentParameter
+DocumentParameterName string
+DocumentParameterType enum
+DocumentPermissionLimit structure qerr=DocumentPermissionLimit error=client
+.Message String
+DocumentPermissionMaxResults integer
+DocumentPermissionType enum
+DocumentRequires structure
+.Name DocumentARN
+.RequireType RequireType
+.Version DocumentVersion
+.VersionName DocumentVersionName
+DocumentRequiresList list m=DocumentRequires
+DocumentReviewAction enum
+DocumentReviewComment string
+DocumentReviewCommentList list m=DocumentReviewCommentSource
+DocumentReviewCommentSource structure
+.Content DocumentReviewComment
+.Type DocumentReviewCommentType
+DocumentReviewCommentType enum
+DocumentReviewerResponseList list m=DocumentReviewerResponseSource
+DocumentReviewerResponseSource structure
+.Comment DocumentReviewCommentList
+.CreateTime DateTime
+.ReviewStatus ReviewStatus
+.Reviewer Reviewer
+.UpdatedTime DateTime
+DocumentReviews structure
+.Action DocumentReviewAction
+.Comment DocumentReviewCommentList
+DocumentSchemaVersion string
+DocumentSha1 string
+DocumentStatus enum
+DocumentStatusInformation string
+DocumentType enum
+DocumentVersion string
+DocumentVersionInfo structure
+.CreatedDate DateTime
+.DisplayName DocumentDisplayName
+.DocumentFormat DocumentFormat
+.DocumentVersion DocumentVersion
+.IsDefaultVersion Boolean
+.Name DocumentName
+.ReviewStatus ReviewStatus
+.Status DocumentStatus
+.StatusInformation DocumentStatusInformation
+.VersionName DocumentVersionName
+DocumentVersionLimitExceeded structure qerr=DocumentVersionLimitExceeded error=client
+.Message String
+DocumentVersionList list m=DocumentVersionInfo
+DocumentVersionName string
+DocumentVersionNumber string
+DoesNotExistException structure qerr=DoesNotExistException error=client
+.Message String
+DryRun boolean
+DuplicateDocumentContent structure qerr=DuplicateDocumentContent error=client
+.Message String
+DuplicateDocumentVersionName structure qerr=DuplicateDocumentVersionName error=client
+.Message String
+DuplicateInstanceId structure qerr=DuplicateInstanceId error=client
+Duration integer
+EffectiveInstanceAssociationMaxResults integer
+EffectivePatch structure
+.Patch Patch
+.PatchStatus PatchStatus
+EffectivePatchList list m=EffectivePatch
+ErrorCount integer
+ExcludeAccount string
+ExcludeAccounts list m=ExcludeAccount
+ExecutionInputs union
+.Automation AutomationExecutionInputs
+ExecutionMode enum
+ExecutionPreview union
+.Automation AutomationExecutionPreview
+ExecutionPreviewId string
+ExecutionPreviewStatus enum
+ExecutionRoleName string
+ExpirationDate timestamp
+ExternalAlarmState enum
+FailedCreateAssociation structure
+.Entry CreateAssociationBatchRequestEntry
+.Fault Fault
+.Message BatchErrorMessage
+FailedCreateAssociationList list m=FailedCreateAssociation mxml=FailedCreateAssociationEntry
+FailureDetails structure
+.Details AutomationParameterMap
+.FailureStage String
+.FailureType String
+Fault enum
+FeatureNotAvailableException structure qerr=FeatureNotAvailableException error=client
+.Message String
+GetAccessToken operation in=GetAccessTokenRequest out=GetAccessTokenResponse err=AccessDeniedException,InternalServerError,ResourceNotFoundException,ThrottlingException,ValidationException
+GetAccessTokenRequest structure
+.AccessRequestId AccessRequestId
+GetAccessTokenResponse structure
+.AccessRequestStatus AccessRequestStatus
+.Credentials Credentials
+GetAutomationExecution operation in=GetAutomationExecutionRequest out=GetAutomationExecutionResult err=AutomationExecutionNotFoundException,InternalServerError
+GetAutomationExecutionRequest structure
+.AutomationExecutionId AutomationExecutionId
+GetAutomationExecutionResult structure
+.AutomationExecution AutomationExecution
+GetCalendarState operation in=GetCalendarStateRequest out=GetCalendarStateResponse err=InternalServerError,InvalidDocument,InvalidDocumentType,UnsupportedCalendarException
+GetCalendarStateRequest structure
+.AtTime ISO8601String
+.CalendarNames CalendarNameOrARNList
+GetCalendarStateResponse structure
+.AtTime ISO8601String
+.NextTransitionTime ISO8601String
+.State CalendarState
+GetCloudConnector operation in=GetCloudConnectorRequest out=GetCloudConnectorResult err=InternalServerError,ResourceNotFoundException
+GetCloudConnectorRequest structure
+.CloudConnectorId CloudConnectorId
+GetCloudConnectorResult structure
+.CloudConnectorArn CloudConnectorArn
+.ConfigConnectorArn ConfigConnectorArn
+.Configuration CloudConnectorConfiguration
+.CreatedAt DateTime
+.Description CloudConnectorDescription
+.DisplayName DisplayName
+.RoleArn CloudConnectorIamRoleArn
+.UpdatedAt DateTime
+GetCommandInvocation operation in=GetCommandInvocationRequest out=GetCommandInvocationResult err=InternalServerError,InvalidCommandId,InvalidInstanceId,InvalidPluginName,InvocationDoesNotExist
+GetCommandInvocationRequest structure
+.CommandId CommandId
+.InstanceId InstanceId
+.PluginName CommandPluginName
+GetCommandInvocationResult structure
+.CloudWatchOutputConfig CloudWatchOutputConfig
+.CommandId CommandId
+.Comment Comment
+.DocumentName DocumentName
+.DocumentVersion DocumentVersion
+.ExecutionElapsedTime StringDateTime
+.ExecutionEndDateTime StringDateTime
+.ExecutionStartDateTime StringDateTime
+.InstanceId InstanceId
+.PluginName CommandPluginName
+.ResponseCode ResponseCode
+.StandardErrorContent StandardErrorContent
+.StandardErrorUrl Url
+.StandardOutputContent StandardOutputContent
+.StandardOutputUrl Url
+.Status CommandInvocationStatus
+.StatusDetails StatusDetails
+GetConnectionStatus operation in=GetConnectionStatusRequest out=GetConnectionStatusResponse err=InternalServerError
+GetConnectionStatusRequest structure
+.Target SessionTarget
+GetConnectionStatusResponse structure
+.Status ConnectionStatus
+.Target SessionTarget
+GetDefaultPatchBaseline operation in=GetDefaultPatchBaselineRequest out=GetDefaultPatchBaselineResult err=InternalServerError
+GetDefaultPatchBaselineRequest structure
+.OperatingSystem OperatingSystem
+GetDefaultPatchBaselineResult structure
+.BaselineId BaselineId
+.OperatingSystem OperatingSystem
+GetDeployablePatchSnapshotForInstance operation in=GetDeployablePatchSnapshotForInstanceRequest out=GetDeployablePatchSnapshotForInstanceResult err=InternalServerError,UnsupportedFeatureRequiredException,UnsupportedOperatingSystem
+GetDeployablePatchSnapshotForInstanceRequest structure
+.BaselineOverride BaselineOverride
+.InstanceId InstanceId
+.SnapshotId SnapshotId
+.UseS3DualStackEndpoint Boolean
+GetDeployablePatchSnapshotForInstanceResult structure
+.InstanceId InstanceId
+.Product Product
+.SnapshotDownloadUrl SnapshotDownloadUrl
+.SnapshotId SnapshotId
+GetDocument operation in=GetDocumentRequest out=GetDocumentResult err=InternalServerError,InvalidDocument,InvalidDocumentVersion
+GetDocumentRequest structure
+.DocumentFormat DocumentFormat
+.DocumentVersion DocumentVersion
+.Name DocumentARN
+.VersionName DocumentVersionName
+GetDocumentResult structure
+.AttachmentsContent AttachmentContentList
+.Content DocumentContent
+.CreatedDate DateTime
+.DisplayName DocumentDisplayName
+.DocumentFormat DocumentFormat
+.DocumentType DocumentType
+.DocumentVersion DocumentVersion
+.Name DocumentARN
+.Requires DocumentRequiresList
+.ReviewStatus ReviewStatus
+.Status DocumentStatus
+.StatusInformation DocumentStatusInformation
+.VersionName DocumentVersionName
+GetExecutionPreview operation in=GetExecutionPreviewRequest out=GetExecutionPreviewResponse err=InternalServerError,ResourceNotFoundException
+GetExecutionPreviewRequest structure
+.ExecutionPreviewId ExecutionPreviewId
+GetExecutionPreviewResponse structure
+.EndedAt DateTime
+.ExecutionPreview ExecutionPreview
+.ExecutionPreviewId ExecutionPreviewId
+.Status ExecutionPreviewStatus
+.StatusMessage String
+GetInventory operation in=GetInventoryRequest out=GetInventoryResult err=InternalServerError,InvalidAggregatorException,InvalidFilter,InvalidInventoryGroupException,InvalidNextToken,InvalidResultAttributeException,InvalidTypeNameException
+GetInventoryRequest structure
+.Aggregators InventoryAggregatorList
+.Filters InventoryFilterList
+.MaxResults MaxResults
+.NextToken NextToken
+.ResultAttributes ResultAttributeList
+GetInventoryResult structure
+.Entities InventoryResultEntityList
+.NextToken NextToken
+GetInventorySchema operation in=GetInventorySchemaRequest out=GetInventorySchemaResult err=InternalServerError,InvalidNextToken,InvalidTypeNameException
+GetInventorySchemaMaxResults integer
+GetInventorySchemaRequest structure
+.Aggregator AggregatorSchemaOnly
+.MaxResults GetInventorySchemaMaxResults
+.NextToken NextToken
+.SubType IsSubTypeSchema
+.TypeName InventoryItemTypeNameFilter
+GetInventorySchemaResult structure
+.NextToken NextToken
+.Schemas InventoryItemSchemaResultList
+GetMaintenanceWindow operation in=GetMaintenanceWindowRequest out=GetMaintenanceWindowResult err=DoesNotExistException,InternalServerError
+GetMaintenanceWindowExecution operation in=GetMaintenanceWindowExecutionRequest out=GetMaintenanceWindowExecutionResult err=DoesNotExistException,InternalServerError
+GetMaintenanceWindowExecutionRequest structure
+.WindowExecutionId MaintenanceWindowExecutionId
+GetMaintenanceWindowExecutionResult structure
+.EndTime DateTime
+.StartTime DateTime
+.Status MaintenanceWindowExecutionStatus
+.StatusDetails MaintenanceWindowExecutionStatusDetails
+.TaskIds MaintenanceWindowExecutionTaskIdList
+.WindowExecutionId MaintenanceWindowExecutionId
+GetMaintenanceWindowExecutionTask operation in=GetMaintenanceWindowExecutionTaskRequest out=GetMaintenanceWindowExecutionTaskResult err=DoesNotExistException,InternalServerError
+GetMaintenanceWindowExecutionTaskInvocation operation in=GetMaintenanceWindowExecutionTaskInvocationRequest out=GetMaintenanceWindowExecutionTaskInvocationResult err=DoesNotExistException,InternalServerError
+GetMaintenanceWindowExecutionTaskInvocationRequest structure
+.InvocationId MaintenanceWindowExecutionTaskInvocationId
+.TaskId MaintenanceWindowExecutionTaskId
+.WindowExecutionId MaintenanceWindowExecutionId
+GetMaintenanceWindowExecutionTaskInvocationResult structure
+.EndTime DateTime
+.ExecutionId MaintenanceWindowExecutionTaskExecutionId
+.InvocationId MaintenanceWindowExecutionTaskInvocationId
+.OwnerInformation OwnerInformation
+.Parameters MaintenanceWindowExecutionTaskInvocationParameters
+.StartTime DateTime
+.Status MaintenanceWindowExecutionStatus
+.StatusDetails MaintenanceWindowExecutionStatusDetails
+.TaskExecutionId MaintenanceWindowExecutionTaskId
+.TaskType MaintenanceWindowTaskType
+.WindowExecutionId MaintenanceWindowExecutionId
+.WindowTargetId MaintenanceWindowTaskTargetId
+GetMaintenanceWindowExecutionTaskRequest structure
+.TaskId MaintenanceWindowExecutionTaskId
+.WindowExecutionId MaintenanceWindowExecutionId
+GetMaintenanceWindowExecutionTaskResult structure
+.AlarmConfiguration AlarmConfiguration
+.EndTime DateTime
+.MaxConcurrency MaxConcurrency
+.MaxErrors MaxErrors
+.Priority MaintenanceWindowTaskPriority
+.ServiceRole ServiceRole
+.StartTime DateTime
+.Status MaintenanceWindowExecutionStatus
+.StatusDetails MaintenanceWindowExecutionStatusDetails
+.TaskArn MaintenanceWindowTaskArn
+.TaskExecutionId MaintenanceWindowExecutionTaskId
+.TaskParameters MaintenanceWindowTaskParametersList
+.TriggeredAlarms AlarmStateInformationList
+.Type MaintenanceWindowTaskType
+.WindowExecutionId MaintenanceWindowExecutionId
+GetMaintenanceWindowRequest structure
+.WindowId MaintenanceWindowId
+GetMaintenanceWindowResult structure
+.AllowUnassociatedTargets MaintenanceWindowAllowUnassociatedTargets
+.CreatedDate DateTime
+.Cutoff MaintenanceWindowCutoff
+.Description MaintenanceWindowDescription
+.Duration MaintenanceWindowDurationHours
+.Enabled MaintenanceWindowEnabled
+.EndDate MaintenanceWindowStringDateTime
+.ModifiedDate DateTime
+.Name MaintenanceWindowName
+.NextExecutionTime MaintenanceWindowStringDateTime
+.Schedule MaintenanceWindowSchedule
+.ScheduleOffset MaintenanceWindowOffset
+.ScheduleTimezone MaintenanceWindowTimezone
+.StartDate MaintenanceWindowStringDateTime
+.WindowId MaintenanceWindowId
+GetMaintenanceWindowTask operation in=GetMaintenanceWindowTaskRequest out=GetMaintenanceWindowTaskResult err=DoesNotExistException,InternalServerError
+GetMaintenanceWindowTaskRequest structure
+.WindowId MaintenanceWindowId
+.WindowTaskId MaintenanceWindowTaskId
+GetMaintenanceWindowTaskResult structure
+.AlarmConfiguration AlarmConfiguration
+.CutoffBehavior MaintenanceWindowTaskCutoffBehavior
+.Description MaintenanceWindowDescription
+.LoggingInfo LoggingInfo
+.MaxConcurrency MaxConcurrency
+.MaxErrors MaxErrors
+.Name MaintenanceWindowName
+.Priority MaintenanceWindowTaskPriority
+.ServiceRoleArn ServiceRole
+.Targets Targets
+.TaskArn MaintenanceWindowTaskArn
+.TaskInvocationParameters MaintenanceWindowTaskInvocationParameters
+.TaskParameters MaintenanceWindowTaskParameters
+.TaskType MaintenanceWindowTaskType
+.WindowId MaintenanceWindowId
+.WindowTaskId MaintenanceWindowTaskId
+GetOpsItem operation in=GetOpsItemRequest out=GetOpsItemResponse err=InternalServerError,OpsItemAccessDeniedException,OpsItemNotFoundException
+GetOpsItemRequest structure
+.OpsItemArn OpsItemArn
+.OpsItemId OpsItemId
+GetOpsItemResponse structure
+.OpsItem OpsItem
+GetOpsMetadata operation in=GetOpsMetadataRequest out=GetOpsMetadataResult err=InternalServerError,OpsMetadataInvalidArgumentException,OpsMetadataNotFoundException
+GetOpsMetadataMaxResults integer
+GetOpsMetadataRequest structure
+.MaxResults GetOpsMetadataMaxResults
+.NextToken NextToken
+.OpsMetadataArn OpsMetadataArn
+GetOpsMetadataResult structure
+.Metadata MetadataMap
+.NextToken NextToken
+.ResourceId OpsMetadataResourceId
+GetOpsSummary operation in=GetOpsSummaryRequest out=GetOpsSummaryResult err=InternalServerError,InvalidAggregatorException,InvalidFilter,InvalidNextToken,InvalidTypeNameException,ResourceDataSyncNotFoundException
+GetOpsSummaryRequest structure
+.Aggregators OpsAggregatorList
+.Filters OpsFilterList
+.MaxResults MaxResults
+.NextToken NextToken
+.ResultAttributes OpsResultAttributeList
+.SyncName ResourceDataSyncName
+GetOpsSummaryResult structure
+.Entities OpsEntityList
+.NextToken NextToken
+GetParameter operation in=GetParameterRequest out=GetParameterResult err=InternalServerError,InvalidKeyId,ParameterNotFound,ParameterVersionNotFound
+GetParameterHistory operation in=GetParameterHistoryRequest out=GetParameterHistoryResult err=InternalServerError,InvalidKeyId,InvalidNextToken,ParameterNotFound
+GetParameterHistoryRequest structure
+.MaxResults MaxResults
+.Name PSParameterName
+.NextToken NextToken
+.WithDecryption Boolean
+GetParameterHistoryResult structure
+.NextToken NextToken
+.Parameters ParameterHistoryList
+GetParameterRequest structure
+.Name PSParameterName
+.WithDecryption Boolean
+GetParameterResult structure
+.Parameter Parameter
+GetParameters operation in=GetParametersRequest out=GetParametersResult err=InternalServerError,InvalidKeyId
+GetParametersByPath operation in=GetParametersByPathRequest out=GetParametersByPathResult err=InternalServerError,InvalidFilterKey,InvalidFilterOption,InvalidFilterValue,InvalidKeyId,InvalidNextToken
+GetParametersByPathMaxResults integer
+GetParametersByPathRequest structure
+.MaxResults GetParametersByPathMaxResults
+.NextToken NextToken
+.ParameterFilters ParameterStringFilterList
+.Path PSParameterName
+.Recursive Boolean
+.WithDecryption Boolean
+GetParametersByPathResult structure
+.NextToken NextToken
+.Parameters ParameterList
+GetParametersRequest structure
+.Names ParameterNameList
+.WithDecryption Boolean
+GetParametersResult structure
+.InvalidParameters ParameterNameList
+.Parameters ParameterList
+GetPatchBaseline operation in=GetPatchBaselineRequest out=GetPatchBaselineResult err=DoesNotExistException,InternalServerError,InvalidResourceId
+GetPatchBaselineForPatchGroup operation in=GetPatchBaselineForPatchGroupRequest out=GetPatchBaselineForPatchGroupResult err=InternalServerError
+GetPatchBaselineForPatchGroupRequest structure
+.OperatingSystem OperatingSystem
+.PatchGroup PatchGroup
+GetPatchBaselineForPatchGroupResult structure
+.BaselineId BaselineId
+.OperatingSystem OperatingSystem
+.PatchGroup PatchGroup
+GetPatchBaselineRequest structure
+.BaselineId BaselineId
+GetPatchBaselineResult structure
+.ApprovalRules PatchRuleGroup
+.ApprovedPatches PatchIdList
+.ApprovedPatchesComplianceLevel PatchComplianceLevel
+.ApprovedPatchesEnableNonSecurity Boolean
+.AvailableSecurityUpdatesComplianceStatus PatchComplianceStatus
+.BaselineId BaselineId
+.CreatedDate DateTime
+.Description BaselineDescription
+.GlobalFilters PatchFilterGroup
+.ModifiedDate DateTime
+.Name BaselineName
+.OperatingSystem OperatingSystem
+.PatchGroups PatchGroupList
+.RejectedPatches PatchIdList
+.RejectedPatchesAction PatchAction
+.Sources PatchSourceList
+GetResourcePolicies operation in=GetResourcePoliciesRequest out=GetResourcePoliciesResponse err=InternalServerError,ResourceNotFoundException,ResourcePolicyInvalidParameterException
+GetResourcePoliciesRequest structure
+.MaxResults ResourcePolicyMaxResults
+.NextToken String
+.ResourceArn ResourceArnString
+GetResourcePoliciesResponse structure
+.NextToken String
+.Policies GetResourcePoliciesResponseEntries
+GetResourcePoliciesResponseEntries list m=GetResourcePoliciesResponseEntry
+GetResourcePoliciesResponseEntry structure
+.Policy Policy
+.PolicyHash PolicyHash
+.PolicyId PolicyId
+GetServiceSetting operation in=GetServiceSettingRequest out=GetServiceSettingResult err=InternalServerError,ServiceSettingNotFound
+GetServiceSettingRequest structure
+.SettingId ServiceSettingId
+GetServiceSettingResult structure
+.ServiceSetting ServiceSetting
+HierarchyLevelLimitExceededException structure qerr=HierarchyLevelLimitExceededException error=client
+.message String
+HierarchyTypeMismatchException structure qerr=HierarchyTypeMismatchException error=client
+.message String
+IPAddress string
+ISO8601String string
+IamRole string
+IdempotencyToken string
+IdempotentParameterMismatch structure qerr=IdempotentParameterMismatch error=client
+.Message String
+ImpactType enum
+IncompatiblePolicyException structure qerr=IncompatiblePolicyException error=client
+.message String
+InstallOverrideList string
+InstanceAggregatedAssociationOverview structure
+.DetailedStatus StatusName
+.InstanceAssociationStatusAggregatedCount InstanceAssociationStatusAggregatedCount
+InstanceAssociation structure
+.AssociationId AssociationId
+.AssociationVersion AssociationVersion
+.Content DocumentContent
+.InstanceId InstanceId
+InstanceAssociationExecutionSummary string
+InstanceAssociationList list m=InstanceAssociation
+InstanceAssociationOutputLocation structure
+.S3Location S3OutputLocation
+InstanceAssociationOutputUrl structure
+.S3OutputUrl S3OutputUrl
+InstanceAssociationStatusAggregatedCount map k=StatusName v=InstanceCount
+InstanceAssociationStatusInfo structure
+.AssociationId AssociationId
+.AssociationName AssociationName
+.AssociationVersion AssociationVersion
+.DetailedStatus StatusName
+.DocumentVersion DocumentVersion
+.ErrorCode AgentErrorCode
+.ExecutionDate DateTime
+.ExecutionSummary InstanceAssociationExecutionSummary
+.InstanceId InstanceId
+.Name DocumentARN
+.OutputUrl InstanceAssociationOutputUrl
+.Status StatusName
+InstanceAssociationStatusInfos list m=InstanceAssociationStatusInfo
+InstanceCount integer
+InstanceId string
+InstanceIdList list m=InstanceId
+InstanceInfo structure
+.AgentType AgentType
+.AgentVersion AgentVersion
+.AvailabilityZone AvailabilityZone
+.AvailabilityZoneId AvailabilityZoneId
+.ComputerName ComputerName
+.InstanceStatus InstanceStatus
+.IpAddress IPAddress
+.ManagedStatus ManagedStatus
+.Name NodeName
+.PlatformName PlatformName
+.PlatformType PlatformType
+.PlatformVersion PlatformVersion
+.ResourceType ResourceType
+.SourceId SourceId
+.SourceLocation SourceLocation
+.SourceType SourceType
+InstanceInformation structure
+.ActivationId ActivationId
+.AgentVersion Version
+.AssociationOverview InstanceAggregatedAssociationOverview
+.AssociationStatus StatusName
+.ComputerName ComputerName
+.IPAddress IPAddress
+.IamRole IamRole
+.InstanceId InstanceId
+.IsLatestVersion Boolean
+.LastAssociationExecutionDate DateTime
+.LastPingDateTime DateTime
+.LastSuccessfulAssociationExecutionDate DateTime
+.Name String
+.PingStatus PingStatus
+.PlatformName String
+.PlatformType PlatformType
+.PlatformVersion String
+.RegistrationDate DateTime
+.ResourceType ResourceType
+.SourceId SourceId
+.SourceLocation SourceLocation
+.SourceType SourceType
+InstanceInformationFilter structure
+.key InstanceInformationFilterKey
+.valueSet InstanceInformationFilterValueSet
+InstanceInformationFilterKey enum
+InstanceInformationFilterList list m=InstanceInformationFilter mxml=InstanceInformationFilter
+InstanceInformationFilterValue string
+InstanceInformationFilterValueSet list m=InstanceInformationFilterValue mxml=InstanceInformationFilterValue
+InstanceInformationList list m=InstanceInformation mxml=InstanceInformation
+InstanceInformationStringFilter structure
+.Key InstanceInformationStringFilterKey
+.Values InstanceInformationFilterValueSet
+InstanceInformationStringFilterKey string
+InstanceInformationStringFilterList list m=InstanceInformationStringFilter mxml=InstanceInformationStringFilter
+InstanceName string
+InstancePatchState structure
+.AvailableSecurityUpdateCount PatchAvailableSecurityUpdateCount
+.BaselineId BaselineId
+.CriticalNonCompliantCount PatchCriticalNonCompliantCount
+.FailedCount PatchFailedCount
+.InstallOverrideList InstallOverrideList
+.InstalledCount PatchInstalledCount
+.InstalledOtherCount PatchInstalledOtherCount
+.InstalledPendingRebootCount PatchInstalledPendingRebootCount
+.InstalledRejectedCount PatchInstalledRejectedCount
+.InstanceId InstanceId
+.LastNoRebootInstallOperationTime DateTime
+.MissingCount PatchMissingCount
+.NotApplicableCount PatchNotApplicableCount
+.Operation PatchOperationType
+.OperationEndTime DateTime
+.OperationStartTime DateTime
+.OtherNonCompliantCount PatchOtherNonCompliantCount
+.OwnerInformation OwnerInformation
+.PatchGroup PatchGroup
+.RebootOption RebootOption
+.SecurityNonCompliantCount PatchSecurityNonCompliantCount
+.SnapshotId SnapshotId
+.UnreportedNotApplicableCount PatchUnreportedNotApplicableCount
+InstancePatchStateFilter structure
+.Key InstancePatchStateFilterKey
+.Type InstancePatchStateOperatorType
+.Values InstancePatchStateFilterValues
+InstancePatchStateFilterKey string
+InstancePatchStateFilterList list m=InstancePatchStateFilter
+InstancePatchStateFilterValue string
+InstancePatchStateFilterValues list m=InstancePatchStateFilterValue
+InstancePatchStateList list m=InstancePatchState
+InstancePatchStateOperatorType enum
+InstancePatchStatesList list m=InstancePatchState
+InstanceProperties list m=InstanceProperty mxml=InstanceProperty
+InstanceProperty structure
+.ActivationId ActivationId
+.AgentVersion Version
+.Architecture Architecture
+.AssociationOverview InstanceAggregatedAssociationOverview
+.AssociationStatus StatusName
+.AvailabilityZone AvailabilityZone
+.ComputerName ComputerName
+.IPAddress IPAddress
+.IamRole IamRole
+.InstanceId InstanceId
+.InstanceRole InstanceRole
+.InstanceState InstanceState
+.InstanceType InstanceType
+.KeyName KeyName
+.LastAssociationExecutionDate DateTime
+.LastPingDateTime DateTime
+.LastSuccessfulAssociationExecutionDate DateTime
+.LaunchTime DateTime
+.Name InstanceName
+.PingStatus PingStatus
+.PlatformName PlatformName
+.PlatformType PlatformType
+.PlatformVersion PlatformVersion
+.RegistrationDate DateTime
+.ResourceType String
+.SourceId SourceId
+.SourceLocation SourceLocation
+.SourceType SourceType
+InstancePropertyFilter structure
+.key InstancePropertyFilterKey
+.valueSet InstancePropertyFilterValueSet
+InstancePropertyFilterKey enum
+InstancePropertyFilterList list m=InstancePropertyFilter mxml=InstancePropertyFilter
+InstancePropertyFilterOperator enum
+InstancePropertyFilterValue string
+InstancePropertyFilterValueSet list m=InstancePropertyFilterValue mxml=InstancePropertyFilterValue
+InstancePropertyStringFilter structure
+.Key InstancePropertyStringFilterKey
+.Operator InstancePropertyFilterOperator
+.Values InstancePropertyFilterValueSet
+InstancePropertyStringFilterKey string
+InstancePropertyStringFilterList list m=InstancePropertyStringFilter mxml=InstancePropertyStringFilter
+InstanceRole string
+InstanceState string
+InstanceStatus string
+InstanceTagName string
+InstanceType string
+InstancesCount integer
+Integer integer
+InternalServerError structure qerr=InternalServerError error=server
+.Message String
+InvalidActivation structure qerr=InvalidActivation error=client
+.Message String
+InvalidActivationId structure qerr=InvalidActivationId error=client
+.Message String
+InvalidAggregatorException structure qerr=InvalidAggregator error=client
+.Message String
+InvalidAllowedPatternException structure qerr=InvalidAllowedPatternException error=client
+.message String
+InvalidAssociation structure qerr=InvalidAssociation error=client
+.Message String
+InvalidAssociationVersion structure qerr=InvalidAssociationVersion error=client
+.Message String
+InvalidAutomationExecutionParametersException structure qerr=InvalidAutomationExecutionParameters error=client
+.Message String
+InvalidAutomationSignalException structure qerr=InvalidAutomationSignalException error=client
+.Message String
+InvalidAutomationStatusUpdateException structure qerr=InvalidAutomationStatusUpdateException error=client
+.Message String
+InvalidCommandId structure qerr=InvalidCommandId error=client
+InvalidDeleteInventoryParametersException structure qerr=InvalidDeleteInventoryParameters error=client
+.Message String
+InvalidDeletionIdException structure qerr=InvalidDeletionId error=client
+.Message String
+InvalidDocument structure qerr=InvalidDocument error=client
+.Message String
+InvalidDocumentContent structure qerr=InvalidDocumentContent error=client
+.Message String
+InvalidDocumentOperation structure qerr=InvalidDocumentOperation error=client
+.Message String
+InvalidDocumentSchemaVersion structure qerr=InvalidDocumentSchemaVersion error=client
+.Message String
+InvalidDocumentType structure qerr=InvalidDocumentType error=client
+.Message String
+InvalidDocumentVersion structure qerr=InvalidDocumentVersion error=client
+.Message String
+InvalidFilter structure qerr=InvalidFilter error=client
+.Message String
+InvalidFilterKey structure qerr=InvalidFilterKey error=client
+InvalidFilterOption structure qerr=InvalidFilterOption error=client
+.message String
+InvalidFilterValue structure qerr=InvalidFilterValue error=client
+.Message String
+InvalidInstanceId structure qerr=InvalidInstanceId error=client
+.Message String
+InvalidInstanceInformationFilterValue structure qerr=InvalidInstanceInformationFilterValue error=client
+.message String
+InvalidInstancePropertyFilterValue structure qerr=InvalidInstancePropertyFilterValue error=client
+.message String
+InvalidInventoryGroupException structure qerr=InvalidInventoryGroup error=client
+.Message String
+InvalidInventoryItemContextException structure qerr=InvalidInventoryItemContext error=client
+.Message String
+InvalidInventoryRequestException structure qerr=InvalidInventoryRequest error=client
+.Message String
+InvalidItemContentException structure qerr=InvalidItemContent error=client
+.Message String
+.TypeName InventoryItemTypeName
+InvalidKeyId structure qerr=InvalidKeyId error=client
+.message String
+InvalidNextToken structure qerr=InvalidNextToken error=client
+.Message String
+InvalidNotificationConfig structure qerr=InvalidNotificationConfig error=client
+.Message String
+InvalidOptionException structure qerr=InvalidOption error=client
+.Message String
+InvalidOutputFolder structure qerr=InvalidOutputFolder error=client
+InvalidOutputLocation structure qerr=InvalidOutputLocation error=client
+InvalidParameters structure qerr=InvalidParameters error=client
+.Message String
+InvalidPermissionType structure qerr=InvalidPermissionType error=client
+.Message String
+InvalidPluginName structure qerr=InvalidPluginName error=client
+InvalidPolicyAttributeException structure qerr=InvalidPolicyAttributeException error=client
+.message String
+InvalidPolicyTypeException structure qerr=InvalidPolicyTypeException error=client
+.message String
+InvalidResourceId structure qerr=InvalidResourceId error=client
+InvalidResourceType structure qerr=InvalidResourceType error=client
+InvalidResultAttributeException structure qerr=InvalidResultAttribute error=client
+.Message String
+InvalidRole structure qerr=InvalidRole error=client
+.Message String
+InvalidSchedule structure qerr=InvalidSchedule error=client
+.Message String
+InvalidTag structure qerr=InvalidTag error=client
+.Message String
+InvalidTarget structure qerr=InvalidTarget error=client
+.Message String
+InvalidTargetMaps structure qerr=InvalidTargetMaps error=client
+.Message String
+InvalidTypeNameException structure qerr=InvalidTypeName error=client
+.Message String
+InvalidUpdate structure qerr=InvalidUpdate error=client
+.Message String
+InventoryAggregator structure
+.Aggregators InventoryAggregatorList
+.Expression InventoryAggregatorExpression
+.Groups InventoryGroupList
+InventoryAggregatorExpression string
+InventoryAggregatorList list m=InventoryAggregator mxml=Aggregator
+InventoryAttributeDataType enum
+InventoryDeletionLastStatusMessage string
+InventoryDeletionLastStatusUpdateTime timestamp
+InventoryDeletionStartTime timestamp
+InventoryDeletionStatus enum
+InventoryDeletionStatusItem structure
+.DeletionId UUID
+.DeletionStartTime InventoryDeletionStartTime
+.DeletionSummary InventoryDeletionSummary
+.LastStatus InventoryDeletionStatus
+.LastStatusMessage InventoryDeletionLastStatusMessage
+.LastStatusUpdateTime InventoryDeletionLastStatusUpdateTime
+.TypeName InventoryItemTypeName
+InventoryDeletionSummary structure
+.RemainingCount RemainingCount
+.SummaryItems InventoryDeletionSummaryItems
+.TotalCount TotalCount
+InventoryDeletionSummaryItem structure
+.Count ResourceCount
+.RemainingCount RemainingCount
+.Version InventoryItemSchemaVersion
+InventoryDeletionSummaryItems list m=InventoryDeletionSummaryItem
+InventoryDeletionsList list m=InventoryDeletionStatusItem
+InventoryFilter structure
+.Key InventoryFilterKey
+.Type InventoryQueryOperatorType
+.Values InventoryFilterValueList
+InventoryFilterKey string
+InventoryFilterList list m=InventoryFilter mxml=InventoryFilter
+InventoryFilterValue string
+InventoryFilterValueList list m=InventoryFilterValue mxml=FilterValue
+InventoryGroup structure
+.Filters InventoryFilterList
+.Name InventoryGroupName
+InventoryGroupList list m=InventoryGroup mxml=InventoryGroup
+InventoryGroupName string
+InventoryItem structure
+.CaptureTime InventoryItemCaptureTime
+.Content InventoryItemEntryList
+.ContentHash InventoryItemContentHash
+.Context InventoryItemContentContext
+.SchemaVersion InventoryItemSchemaVersion
+.TypeName InventoryItemTypeName
+InventoryItemAttribute structure
+.DataType InventoryAttributeDataType
+.Name InventoryItemAttributeName
+InventoryItemAttributeList list m=InventoryItemAttribute mxml=Attribute
+InventoryItemAttributeName string
+InventoryItemCaptureTime string
+InventoryItemContentContext map k=AttributeName v=AttributeValue
+InventoryItemContentHash string
+InventoryItemEntry map k=AttributeName v=AttributeValue
+InventoryItemEntryList list m=InventoryItemEntry
+InventoryItemList list m=InventoryItem mxml=Item
+InventoryItemSchema structure
+.Attributes InventoryItemAttributeList
+.DisplayName InventoryTypeDisplayName
+.TypeName InventoryItemTypeName
+.Version InventoryItemSchemaVersion
+InventoryItemSchemaResultList list m=InventoryItemSchema
+InventoryItemSchemaVersion string
+InventoryItemTypeName string
+InventoryItemTypeNameFilter string
+InventoryQueryOperatorType enum
+InventoryResultEntity structure
+.Data InventoryResultItemMap
+.Id InventoryResultEntityId
+InventoryResultEntityId string
+InventoryResultEntityList list m=InventoryResultEntity mxml=Entity
+InventoryResultItem structure
+.CaptureTime InventoryItemCaptureTime
+.Content InventoryItemEntryList
+.ContentHash InventoryItemContentHash
+.SchemaVersion InventoryItemSchemaVersion
+.TypeName InventoryItemTypeName
+InventoryResultItemKey string
+InventoryResultItemMap map k=InventoryResultItemKey v=InventoryResultItem
+InventorySchemaDeleteOption enum
+InventoryTypeDisplayName string
+InvocationDoesNotExist structure qerr=InvocationDoesNotExist error=client
+InvocationTraceOutput string
+IsSubTypeSchema boolean
+ItemContentMismatchException structure qerr=ItemContentMismatch error=client
+.Message String
+.TypeName InventoryItemTypeName
+ItemSizeLimitExceededException structure qerr=ItemSizeLimitExceeded error=client
+.Message String
+.TypeName InventoryItemTypeName
+KeyList list m=TagKey
+KeyName string
+LabelParameterVersion operation in=LabelParameterVersionRequest out=LabelParameterVersionResult err=InternalServerError,ParameterNotFound,ParameterVersionLabelLimitExceeded,ParameterVersionNotFound,TooManyUpdates
+LabelParameterVersionRequest structure
+.Labels ParameterLabelList
+.Name PSParameterName
+.ParameterVersion PSParameterVersion
+LabelParameterVersionResult structure
+.InvalidLabels ParameterLabelList
+.ParameterVersion PSParameterVersion
+LastResourceDataSyncMessage string
+LastResourceDataSyncStatus enum
+LastResourceDataSyncTime timestamp
+LastSuccessfulResourceDataSyncTime timestamp
+ListAssociationVersions operation in=ListAssociationVersionsRequest out=ListAssociationVersionsResult err=AssociationDoesNotExist,InternalServerError,InvalidNextToken
+ListAssociationVersionsRequest structure
+.AssociationId AssociationId
+.MaxResults MaxResults
+.NextToken NextToken
+ListAssociationVersionsResult structure
+.AssociationVersions AssociationVersionList
+.NextToken NextToken
+ListAssociations operation in=ListAssociationsRequest out=ListAssociationsResult err=InternalServerError,InvalidNextToken
+ListAssociationsRequest structure
+.AssociationFilterList AssociationFilterList
+.MaxResults MaxResults
+.NextToken NextToken
+ListAssociationsResult structure
+.Associations AssociationList
+.NextToken NextToken
+ListCloudConnectors operation in=ListCloudConnectorsRequest out=ListCloudConnectorsResult err=InternalServerError
+ListCloudConnectorsRequest structure
+.Filters CloudConnectorFilterList
+.MaxResults CloudConnectorMaxResults
+.NextToken NextToken
+ListCloudConnectorsResult structure
+.CloudConnectors CloudConnectorSummaryList
+.NextToken NextToken
+ListCommandInvocations operation in=ListCommandInvocationsRequest out=ListCommandInvocationsResult err=InternalServerError,InvalidCommandId,InvalidFilterKey,InvalidInstanceId,InvalidNextToken
+ListCommandInvocationsRequest structure
+.CommandId CommandId
+.Details Boolean
+.Filters CommandFilterList
+.InstanceId InstanceId
+.MaxResults CommandMaxResults
+.NextToken NextToken
+ListCommandInvocationsResult structure
+.CommandInvocations CommandInvocationList
+.NextToken NextToken
+ListCommands operation in=ListCommandsRequest out=ListCommandsResult err=InternalServerError,InvalidCommandId,InvalidFilterKey,InvalidInstanceId,InvalidNextToken
+ListCommandsRequest structure
+.CommandId CommandId
+.Filters CommandFilterList
+.InstanceId InstanceId
+.MaxResults CommandMaxResults
+.NextToken NextToken
+ListCommandsResult structure
+.Commands CommandList
+.NextToken NextToken
+ListComplianceItems operation in=ListComplianceItemsRequest out=ListComplianceItemsResult err=InternalServerError,InvalidFilter,InvalidNextToken,InvalidResourceId,InvalidResourceType
+ListComplianceItemsRequest structure
+.Filters ComplianceStringFilterList
+.MaxResults MaxResults
+.NextToken NextToken
+.ResourceIds ComplianceResourceIdList
+.ResourceTypes ComplianceResourceTypeList
+ListComplianceItemsResult structure
+.ComplianceItems ComplianceItemList
+.NextToken NextToken
+ListComplianceSummaries operation in=ListComplianceSummariesRequest out=ListComplianceSummariesResult err=InternalServerError,InvalidFilter,InvalidNextToken
+ListComplianceSummariesRequest structure
+.Filters ComplianceStringFilterList
+.MaxResults MaxResults
+.NextToken NextToken
+ListComplianceSummariesResult structure
+.ComplianceSummaryItems ComplianceSummaryItemList
+.NextToken NextToken
+ListDocumentMetadataHistory operation in=ListDocumentMetadataHistoryRequest out=ListDocumentMetadataHistoryResponse err=InternalServerError,InvalidDocument,InvalidDocumentVersion,InvalidNextToken
+ListDocumentMetadataHistoryRequest structure
+.DocumentVersion DocumentVersion
+.MaxResults MaxResults
+.Metadata DocumentMetadataEnum
+.Name DocumentName
+.NextToken NextToken
+ListDocumentMetadataHistoryResponse structure
+.Author DocumentAuthor
+.DocumentVersion DocumentVersion
+.Metadata DocumentMetadataResponseInfo
+.Name DocumentName
+.NextToken NextToken
+ListDocumentVersions operation in=ListDocumentVersionsRequest out=ListDocumentVersionsResult err=InternalServerError,InvalidDocument,InvalidNextToken
+ListDocumentVersionsRequest structure
+.MaxResults MaxResults
+.Name DocumentARN
+.NextToken NextToken
+ListDocumentVersionsResult structure
+.DocumentVersions DocumentVersionList
+.NextToken NextToken
+ListDocuments operation in=ListDocumentsRequest out=ListDocumentsResult err=InternalServerError,InvalidFilterKey,InvalidNextToken
+ListDocumentsRequest structure
+.DocumentFilterList DocumentFilterList
+.Filters DocumentKeyValuesFilterList
+.MaxResults MaxResults
+.NextToken NextToken
+ListDocumentsResult structure
+.DocumentIdentifiers DocumentIdentifierList
+.NextToken NextToken
+ListInventoryEntries operation in=ListInventoryEntriesRequest out=ListInventoryEntriesResult err=InternalServerError,InvalidFilter,InvalidInstanceId,InvalidNextToken,InvalidTypeNameException
+ListInventoryEntriesRequest structure
+.Filters InventoryFilterList
+.InstanceId InstanceId
+.MaxResults MaxResults
+.NextToken NextToken
+.TypeName InventoryItemTypeName
+ListInventoryEntriesResult structure
+.CaptureTime InventoryItemCaptureTime
+.Entries InventoryItemEntryList
+.InstanceId InstanceId
+.NextToken NextToken
+.SchemaVersion InventoryItemSchemaVersion
+.TypeName InventoryItemTypeName
+ListNodes operation in=ListNodesRequest out=ListNodesResult err=InternalServerError,InvalidFilter,InvalidNextToken,ResourceDataSyncNotFoundException,UnsupportedOperationException
+ListNodesRequest structure
+.Filters NodeFilterList
+.MaxResults MaxResults
+.NextToken NextToken
+.SyncName ResourceDataSyncName
+ListNodesResult structure
+.NextToken NextToken
+.Nodes NodeList
+ListNodesSummary operation in=ListNodesSummaryRequest out=ListNodesSummaryResult err=InternalServerError,InvalidAggregatorException,InvalidFilter,InvalidNextToken,ResourceDataSyncNotFoundException,UnsupportedOperationException
+ListNodesSummaryRequest structure
+.Aggregators NodeAggregatorList
+.Filters NodeFilterList
+.MaxResults MaxResults
+.NextToken NextToken
+.SyncName ResourceDataSyncName
+ListNodesSummaryResult structure
+.NextToken NextToken
+.Summary NodeSummaryList
+ListOpsItemEvents operation in=ListOpsItemEventsRequest out=ListOpsItemEventsResponse err=InternalServerError,OpsItemInvalidParameterException,OpsItemLimitExceededException,OpsItemNotFoundException
+ListOpsItemEventsRequest structure
+.Filters OpsItemEventFilters
+.MaxResults OpsItemEventMaxResults
+.NextToken String
+ListOpsItemEventsResponse structure
+.NextToken String
+.Summaries OpsItemEventSummaries
+ListOpsItemRelatedItems operation in=ListOpsItemRelatedItemsRequest out=ListOpsItemRelatedItemsResponse err=InternalServerError,OpsItemInvalidParameterException
+ListOpsItemRelatedItemsRequest structure
+.Filters OpsItemRelatedItemsFilters
+.MaxResults OpsItemRelatedItemsMaxResults
+.NextToken String
+.OpsItemId OpsItemId
+ListOpsItemRelatedItemsResponse structure
+.NextToken String
+.Summaries OpsItemRelatedItemSummaries
+ListOpsMetadata operation in=ListOpsMetadataRequest out=ListOpsMetadataResult err=InternalServerError,OpsMetadataInvalidArgumentException
+ListOpsMetadataMaxResults integer
+ListOpsMetadataRequest structure
+.Filters OpsMetadataFilterList
+.MaxResults ListOpsMetadataMaxResults
+.NextToken NextToken
+ListOpsMetadataResult structure
+.NextToken NextToken
+.OpsMetadataList OpsMetadataList
+ListResourceComplianceSummaries operation in=ListResourceComplianceSummariesRequest out=ListResourceComplianceSummariesResult err=InternalServerError,InvalidFilter,InvalidNextToken
+ListResourceComplianceSummariesRequest structure
+.Filters ComplianceStringFilterList
+.MaxResults MaxResults
+.NextToken NextToken
+ListResourceComplianceSummariesResult structure
+.NextToken NextToken
+.ResourceComplianceSummaryItems ResourceComplianceSummaryItemList
+ListResourceDataSync operation in=ListResourceDataSyncRequest out=ListResourceDataSyncResult err=InternalServerError,InvalidNextToken,ResourceDataSyncInvalidConfigurationException
+ListResourceDataSyncRequest structure
+.MaxResults MaxResults
+.NextToken NextToken
+.SyncType ResourceDataSyncType
+ListResourceDataSyncResult structure
+.NextToken NextToken
+.ResourceDataSyncItems ResourceDataSyncItemList
+ListTagsForResource operation in=ListTagsForResourceRequest out=ListTagsForResourceResult err=InternalServerError,InvalidResourceId,InvalidResourceType
+ListTagsForResourceRequest structure
+.ResourceId ResourceId
+.ResourceType ResourceTypeForTagging
+ListTagsForResourceResult structure
+.TagList TagList
+LoggingInfo structure
+.S3BucketName S3BucketName
+.S3KeyPrefix S3KeyPrefix
+.S3Region S3Region
+Long long
+MaintenanceWindowAllowUnassociatedTargets boolean
+MaintenanceWindowAutomationParameters structure
+.DocumentVersion DocumentVersion
+.Parameters AutomationParameterMap
+MaintenanceWindowCutoff integer
+MaintenanceWindowDescription string
+MaintenanceWindowDurationHours integer
+MaintenanceWindowEnabled boolean
+MaintenanceWindowExecution structure
+.EndTime DateTime
+.StartTime DateTime
+.Status MaintenanceWindowExecutionStatus
+.StatusDetails MaintenanceWindowExecutionStatusDetails
+.WindowExecutionId MaintenanceWindowExecutionId
+.WindowId MaintenanceWindowId
+MaintenanceWindowExecutionId string
+MaintenanceWindowExecutionList list m=MaintenanceWindowExecution
+MaintenanceWindowExecutionStatus enum
+MaintenanceWindowExecutionStatusDetails string
+MaintenanceWindowExecutionTaskExecutionId string
+MaintenanceWindowExecutionTaskId string
+MaintenanceWindowExecutionTaskIdList list m=MaintenanceWindowExecutionTaskId
+MaintenanceWindowExecutionTaskIdentity structure
+.AlarmConfiguration AlarmConfiguration
+.EndTime DateTime
+.StartTime DateTime
+.Status MaintenanceWindowExecutionStatus
+.StatusDetails MaintenanceWindowExecutionStatusDetails
+.TaskArn MaintenanceWindowTaskArn
+.TaskExecutionId MaintenanceWindowExecutionTaskId
+.TaskType MaintenanceWindowTaskType
+.TriggeredAlarms AlarmStateInformationList
+.WindowExecutionId MaintenanceWindowExecutionId
+MaintenanceWindowExecutionTaskIdentityList list m=MaintenanceWindowExecutionTaskIdentity
+MaintenanceWindowExecutionTaskInvocationId string
+MaintenanceWindowExecutionTaskInvocationIdentity structure
+.EndTime DateTime
+.ExecutionId MaintenanceWindowExecutionTaskExecutionId
+.InvocationId MaintenanceWindowExecutionTaskInvocationId
+.OwnerInformation OwnerInformation
+.Parameters MaintenanceWindowExecutionTaskInvocationParameters
+.StartTime DateTime
+.Status MaintenanceWindowExecutionStatus
+.StatusDetails MaintenanceWindowExecutionStatusDetails
+.TaskExecutionId MaintenanceWindowExecutionTaskId
+.TaskType MaintenanceWindowTaskType
+.WindowExecutionId MaintenanceWindowExecutionId
+.WindowTargetId MaintenanceWindowTaskTargetId
+MaintenanceWindowExecutionTaskInvocationIdentityList list m=MaintenanceWindowExecutionTaskInvocationIdentity
+MaintenanceWindowExecutionTaskInvocationParameters string
+MaintenanceWindowFilter structure
+.Key MaintenanceWindowFilterKey
+.Values MaintenanceWindowFilterValues
+MaintenanceWindowFilterKey string
+MaintenanceWindowFilterList list m=MaintenanceWindowFilter
+MaintenanceWindowFilterValue string
+MaintenanceWindowFilterValues list m=MaintenanceWindowFilterValue
+MaintenanceWindowId string
+MaintenanceWindowIdentity structure
+.Cutoff MaintenanceWindowCutoff
+.Description MaintenanceWindowDescription
+.Duration MaintenanceWindowDurationHours
+.Enabled MaintenanceWindowEnabled
+.EndDate MaintenanceWindowStringDateTime
+.Name MaintenanceWindowName
+.NextExecutionTime MaintenanceWindowStringDateTime
+.Schedule MaintenanceWindowSchedule
+.ScheduleOffset MaintenanceWindowOffset
+.ScheduleTimezone MaintenanceWindowTimezone
+.StartDate MaintenanceWindowStringDateTime
+.WindowId MaintenanceWindowId
+MaintenanceWindowIdentityForTarget structure
+.Name MaintenanceWindowName
+.WindowId MaintenanceWindowId
+MaintenanceWindowIdentityList list m=MaintenanceWindowIdentity
+MaintenanceWindowLambdaClientContext string
+MaintenanceWindowLambdaParameters structure
+.ClientContext MaintenanceWindowLambdaClientContext
+.Payload MaintenanceWindowLambdaPayload
+.Qualifier MaintenanceWindowLambdaQualifier
+MaintenanceWindowLambdaPayload blob
+MaintenanceWindowLambdaQualifier string
+MaintenanceWindowMaxResults integer
+MaintenanceWindowName string
+MaintenanceWindowOffset integer
+MaintenanceWindowResourceType enum
+MaintenanceWindowRunCommandParameters structure
+.CloudWatchOutputConfig CloudWatchOutputConfig
+.Comment Comment
+.DocumentHash DocumentHash
+.DocumentHashType DocumentHashType
+.DocumentVersion DocumentVersion
+.NotificationConfig NotificationConfig
+.OutputS3BucketName S3BucketName
+.OutputS3KeyPrefix S3KeyPrefix
+.Parameters Parameters
+.ServiceRoleArn ServiceRole
+.TimeoutSeconds TimeoutSeconds
+MaintenanceWindowSchedule string
+MaintenanceWindowSearchMaxResults integer
+MaintenanceWindowStepFunctionsInput string
+MaintenanceWindowStepFunctionsName string
+MaintenanceWindowStepFunctionsParameters structure
+.Input MaintenanceWindowStepFunctionsInput
+.Name MaintenanceWindowStepFunctionsName
+MaintenanceWindowStringDateTime string
+MaintenanceWindowTarget structure
+.Description MaintenanceWindowDescription
+.Name MaintenanceWindowName
+.OwnerInformation OwnerInformation
+.ResourceType MaintenanceWindowResourceType
+.Targets Targets
+.WindowId MaintenanceWindowId
+.WindowTargetId MaintenanceWindowTargetId
+MaintenanceWindowTargetId string
+MaintenanceWindowTargetList list m=MaintenanceWindowTarget
+MaintenanceWindowTask structure
+.AlarmConfiguration AlarmConfiguration
+.CutoffBehavior MaintenanceWindowTaskCutoffBehavior
+.Description MaintenanceWindowDescription
+.LoggingInfo LoggingInfo
+.MaxConcurrency MaxConcurrency
+.MaxErrors MaxErrors
+.Name MaintenanceWindowName
+.Priority MaintenanceWindowTaskPriority
+.ServiceRoleArn ServiceRole
+.Targets Targets
+.TaskArn MaintenanceWindowTaskArn
+.TaskParameters MaintenanceWindowTaskParameters
+.Type MaintenanceWindowTaskType
+.WindowId MaintenanceWindowId
+.WindowTaskId MaintenanceWindowTaskId
+MaintenanceWindowTaskArn string
+MaintenanceWindowTaskCutoffBehavior enum
+MaintenanceWindowTaskId string
+MaintenanceWindowTaskInvocationParameters structure
+.Automation MaintenanceWindowAutomationParameters
+.Lambda MaintenanceWindowLambdaParameters
+.RunCommand MaintenanceWindowRunCommandParameters
+.StepFunctions MaintenanceWindowStepFunctionsParameters
+MaintenanceWindowTaskList list m=MaintenanceWindowTask
+MaintenanceWindowTaskParameterName string
+MaintenanceWindowTaskParameterValue string
+MaintenanceWindowTaskParameterValueExpression structure
+.Values MaintenanceWindowTaskParameterValueList
+MaintenanceWindowTaskParameterValueList list m=MaintenanceWindowTaskParameterValue
+MaintenanceWindowTaskParameters map k=MaintenanceWindowTaskParameterName v=MaintenanceWindowTaskParameterValueExpression
+MaintenanceWindowTaskParametersList list m=MaintenanceWindowTaskParameters
+MaintenanceWindowTaskPriority integer
+MaintenanceWindowTaskTargetId string
+MaintenanceWindowTaskType enum
+MaintenanceWindowTimezone string
+MaintenanceWindowsForTargetList list m=MaintenanceWindowIdentityForTarget
+MalformedResourcePolicyDocumentException structure qerr=MalformedResourcePolicyDocumentException error=client
+.Message String
+ManagedInstanceId string
+ManagedStatus enum
+MaxConcurrency string
+MaxDocumentSizeExceeded structure qerr=MaxDocumentSizeExceeded error=client
+.Message String
+MaxErrors string
+MaxResults integer
+MaxResultsEC2Compatible integer
+MaxSessionDuration string
+MetadataKey string
+MetadataKeysToDeleteList list m=MetadataKey
+MetadataMap map k=MetadataKey v=MetadataValue
+MetadataValue structure
+.Value MetadataValueString
+MetadataValueString string
+ModifyDocumentPermission operation in=ModifyDocumentPermissionRequest out=ModifyDocumentPermissionResponse err=DocumentLimitExceeded,DocumentPermissionLimit,InternalServerError,InvalidDocument,InvalidPermissionType
+ModifyDocumentPermissionRequest structure
+.AccountIdsToAdd AccountIdList
+.AccountIdsToRemove AccountIdList
+.Name DocumentName
+.PermissionType DocumentPermissionType
+.SharedDocumentVersion SharedDocumentVersion
+ModifyDocumentPermissionResponse structure
+NextToken string
+NoLongerSupportedException structure qerr=NoLongerSupported error=client
+.Message String
+Node structure
+.CaptureTime NodeCaptureTime
+.Id NodeId
+.NodeType NodeType
+.Owner NodeOwnerInfo
+.Region NodeRegion
+NodeAccountId string
+NodeAggregator structure
+.AggregatorType NodeAggregatorType
+.Aggregators NodeAggregatorList
+.AttributeName NodeAttributeName
+.TypeName NodeTypeName
+NodeAggregatorList list m=NodeAggregator mxml=NodeAggregator
+NodeAggregatorType enum
+NodeAttributeName enum
+NodeCaptureTime timestamp
+NodeFilter structure
+.Key NodeFilterKey
+.Type NodeFilterOperatorType
+.Values NodeFilterValueList
+NodeFilterKey enum
+NodeFilterList list m=NodeFilter mxml=NodeFilter
+NodeFilterOperatorType enum
+NodeFilterValue string
+NodeFilterValueList list m=NodeFilterValue mxml=FilterValue
+NodeId string
+NodeList list m=Node
+NodeName string
+NodeOrganizationalUnitId string
+NodeOrganizationalUnitPath string
+NodeOwnerInfo structure
+.AccountId NodeAccountId
+.OrganizationalUnitId NodeOrganizationalUnitId
+.OrganizationalUnitPath NodeOrganizationalUnitPath
+NodeRegion string
+NodeSummary map k=AttributeName v=AttributeValue
+NodeSummaryList list m=NodeSummary
+NodeType union
+.Instance InstanceInfo
+NodeTypeName enum
+NonCompliantSummary structure
+.NonCompliantCount ComplianceSummaryCount
+.SeveritySummary SeveritySummary
+NormalStringMap map k=String v=String
+NotificationArn string
+NotificationConfig structure
+.NotificationArn NotificationArn
+.NotificationEvents NotificationEventList
+.NotificationType NotificationType
+NotificationEvent enum
+NotificationEventList list m=NotificationEvent
+NotificationType enum
+OperatingSystem enum
+OpsAggregator structure
+.AggregatorType OpsAggregatorType
+.Aggregators OpsAggregatorList
+.AttributeName OpsDataAttributeName
+.Filters OpsFilterList
+.TypeName OpsDataTypeName
+.Values OpsAggregatorValueMap
+OpsAggregatorList list m=OpsAggregator mxml=Aggregator
+OpsAggregatorType string
+OpsAggregatorValue string
+OpsAggregatorValueKey string
+OpsAggregatorValueMap map k=OpsAggregatorValueKey v=OpsAggregatorValue
+OpsDataAttributeName string
+OpsDataTypeName string
+OpsEntity structure
+.Data OpsEntityItemMap
+.Id OpsEntityId
+OpsEntityId string
+OpsEntityItem structure
+.CaptureTime OpsEntityItemCaptureTime
+.Content OpsEntityItemEntryList
+OpsEntityItemCaptureTime string
+OpsEntityItemEntry map k=AttributeName v=AttributeValue
+OpsEntityItemEntryList list m=OpsEntityItemEntry
+OpsEntityItemKey string
+OpsEntityItemMap map k=OpsEntityItemKey v=OpsEntityItem
+OpsEntityList list m=OpsEntity mxml=Entity
+OpsFilter structure
+.Key OpsFilterKey
+.Type OpsFilterOperatorType
+.Values OpsFilterValueList
+OpsFilterKey string
+OpsFilterList list m=OpsFilter mxml=OpsFilter
+OpsFilterOperatorType enum
+OpsFilterValue string
+OpsFilterValueList list m=OpsFilterValue mxml=FilterValue
+OpsItem structure
+.ActualEndTime DateTime
+.ActualStartTime DateTime
+.Category OpsItemCategory
+.CreatedBy String
+.CreatedTime DateTime
+.Description OpsItemDescription
+.LastModifiedBy String
+.LastModifiedTime DateTime
+.Notifications OpsItemNotifications
+.OperationalData OpsItemOperationalData
+.OpsItemArn OpsItemArn
+.OpsItemId OpsItemId
+.OpsItemType OpsItemType
+.PlannedEndTime DateTime
+.PlannedStartTime DateTime
+.Priority OpsItemPriority
+.RelatedOpsItems RelatedOpsItems
+.Severity OpsItemSeverity
+.Source OpsItemSource
+.Status OpsItemStatus
+.Title OpsItemTitle
+.Version String
+OpsItemAccessDeniedException structure qerr=OpsItemAccessDeniedException error=client
+.Message String
+OpsItemAccountId string
+OpsItemAlreadyExistsException structure qerr=OpsItemAlreadyExistsException error=client
+.Message String
+.OpsItemId String
+OpsItemArn string
+OpsItemCategory string
+OpsItemConflictException structure qerr=OpsItemConflictException error=client
+.Message String
+OpsItemDataKey string
+OpsItemDataType enum
+OpsItemDataValue structure
+.Type OpsItemDataType
+.Value OpsItemDataValueString
+OpsItemDataValueString string
+OpsItemDescription string
+OpsItemEventFilter structure
+.Key OpsItemEventFilterKey
+.Operator OpsItemEventFilterOperator
+.Values OpsItemEventFilterValues
+OpsItemEventFilterKey enum
+OpsItemEventFilterOperator enum
+OpsItemEventFilterValue string
+OpsItemEventFilterValues list m=OpsItemEventFilterValue
+OpsItemEventFilters list m=OpsItemEventFilter
+OpsItemEventMaxResults integer
+OpsItemEventSummaries list m=OpsItemEventSummary
+OpsItemEventSummary structure
+.CreatedBy OpsItemIdentity
+.CreatedTime DateTime
+.Detail String
+.DetailType String
+.EventId String
+.OpsItemId String
+.Source String
+OpsItemFilter structure
+.Key OpsItemFilterKey
+.Operator OpsItemFilterOperator
+.Values OpsItemFilterValues
+OpsItemFilterKey enum
+OpsItemFilterOperator enum
+OpsItemFilterValue string
+OpsItemFilterValues list m=OpsItemFilterValue
+OpsItemFilters list m=OpsItemFilter
+OpsItemId string
+OpsItemIdentity structure
+.Arn String
+OpsItemInvalidParameterException structure qerr=OpsItemInvalidParameterException error=client
+.Message String
+.ParameterNames OpsItemParameterNamesList
+OpsItemLimitExceededException structure qerr=OpsItemLimitExceededException error=client
+.Limit Integer
+.LimitType String
+.Message String
+.ResourceTypes OpsItemParameterNamesList
+OpsItemMaxResults integer
+OpsItemNotFoundException structure qerr=OpsItemNotFoundException error=client
+.Message String
+OpsItemNotification structure
+.Arn String
+OpsItemNotifications list m=OpsItemNotification
+OpsItemOperationalData map k=OpsItemDataKey v=OpsItemDataValue
+OpsItemOpsDataKeysList list m=String
+OpsItemParameterNamesList list m=String
+OpsItemPriority integer
+OpsItemRelatedItemAlreadyExistsException structure qerr=OpsItemRelatedItemAlreadyExistsException error=client
+.Message String
+.OpsItemId OpsItemId
+.ResourceUri OpsItemRelatedItemAssociationResourceUri
+OpsItemRelatedItemAssociationId string
+OpsItemRelatedItemAssociationNotFoundException structure qerr=OpsItemRelatedItemAssociationNotFoundException error=client
+.Message String
+OpsItemRelatedItemAssociationResourceType string
+OpsItemRelatedItemAssociationResourceUri string
+OpsItemRelatedItemAssociationType string
+OpsItemRelatedItemSummaries list m=OpsItemRelatedItemSummary
+OpsItemRelatedItemSummary structure
+.AssociationId OpsItemRelatedItemAssociationId
+.AssociationType OpsItemRelatedItemAssociationType
+.CreatedBy OpsItemIdentity
+.CreatedTime DateTime
+.LastModifiedBy OpsItemIdentity
+.LastModifiedTime DateTime
+.OpsItemId OpsItemId
+.ResourceType OpsItemRelatedItemAssociationResourceType
+.ResourceUri OpsItemRelatedItemAssociationResourceUri
+OpsItemRelatedItemsFilter structure
+.Key OpsItemRelatedItemsFilterKey
+.Operator OpsItemRelatedItemsFilterOperator
+.Values OpsItemRelatedItemsFilterValues
+OpsItemRelatedItemsFilterKey enum
+OpsItemRelatedItemsFilterOperator enum
+OpsItemRelatedItemsFilterValue string
+OpsItemRelatedItemsFilterValues list m=OpsItemRelatedItemsFilterValue
+OpsItemRelatedItemsFilters list m=OpsItemRelatedItemsFilter
+OpsItemRelatedItemsMaxResults integer
+OpsItemSeverity string
+OpsItemSource string
+OpsItemStatus enum
+OpsItemSummaries list m=OpsItemSummary
+OpsItemSummary structure
+.ActualEndTime DateTime
+.ActualStartTime DateTime
+.Category OpsItemCategory
+.CreatedBy String
+.CreatedTime DateTime
+.LastModifiedBy String
+.LastModifiedTime DateTime
+.OperationalData OpsItemOperationalData
+.OpsItemId OpsItemId
+.OpsItemType OpsItemType
+.PlannedEndTime DateTime
+.PlannedStartTime DateTime
+.Priority OpsItemPriority
+.Severity OpsItemSeverity
+.Source OpsItemSource
+.Status OpsItemStatus
+.Title OpsItemTitle
+OpsItemTitle string
+OpsItemType string
+OpsMetadata structure
+.CreationDate DateTime
+.LastModifiedDate DateTime
+.LastModifiedUser String
+.OpsMetadataArn OpsMetadataArn
+.ResourceId OpsMetadataResourceId
+OpsMetadataAlreadyExistsException structure qerr=OpsMetadataAlreadyExistsException error=client
+.message String
+OpsMetadataArn string
+OpsMetadataFilter structure
+.Key OpsMetadataFilterKey
+.Values OpsMetadataFilterValueList
+OpsMetadataFilterKey string
+OpsMetadataFilterList list m=OpsMetadataFilter
+OpsMetadataFilterValue string
+OpsMetadataFilterValueList list m=OpsMetadataFilterValue
+OpsMetadataInvalidArgumentException structure qerr=OpsMetadataInvalidArgumentException error=client
+.message String
+OpsMetadataKeyLimitExceededException structure qerr=OpsMetadataKeyLimitExceededException error=client
+.message String
+OpsMetadataLimitExceededException structure qerr=OpsMetadataLimitExceededException error=client
+.message String
+OpsMetadataList list m=OpsMetadata
+OpsMetadataNotFoundException structure qerr=OpsMetadataNotFoundException error=client
+.message String
+OpsMetadataResourceId string
+OpsMetadataTooManyUpdatesException structure qerr=OpsMetadataTooManyUpdatesException error=client
+.message String
+OpsResultAttribute structure
+.TypeName OpsDataTypeName
+OpsResultAttributeList list m=OpsResultAttribute mxml=OpsResultAttribute
+OutputSource structure
+.OutputSourceId OutputSourceId
+.OutputSourceType OutputSourceType
+OutputSourceId string
+OutputSourceType string
+OwnerInformation string
+PSParameterName string
+PSParameterSelector string
+PSParameterValue string
+PSParameterVersion long
+Parameter structure
+.ARN String
+.DataType ParameterDataType
+.LastModifiedDate DateTime
+.Name PSParameterName
+.Selector PSParameterSelector
+.SourceResult String
+.Type ParameterType
+.Value PSParameterValue
+.Version PSParameterVersion
+ParameterAlreadyExists structure qerr=ParameterAlreadyExists error=client
+.message String
+ParameterDataType string
+ParameterDescription string
+ParameterHistory structure
+.AllowedPattern AllowedPattern
+.DataType ParameterDataType
+.Description ParameterDescription
+.KeyId ParameterKeyId
+.Labels ParameterLabelList
+.LastModifiedDate DateTime
+.LastModifiedUser String
+.Name PSParameterName
+.Policies ParameterPolicyList
+.Tier ParameterTier
+.Type ParameterType
+.Value PSParameterValue
+.Version PSParameterVersion
+ParameterHistoryList list m=ParameterHistory
+ParameterInlinePolicy structure
+.PolicyStatus String
+.PolicyText String
+.PolicyType String
+ParameterKeyId string
+ParameterLabel string
+ParameterLabelList list m=ParameterLabel
+ParameterLimitExceeded structure qerr=ParameterLimitExceeded error=client
+.message String
+ParameterList list m=Parameter
+ParameterMaxVersionLimitExceeded structure qerr=ParameterMaxVersionLimitExceeded error=client
+.message String
+ParameterMetadata structure
+.ARN String
+.AllowedPattern AllowedPattern
+.DataType ParameterDataType
+.Description ParameterDescription
+.KeyId ParameterKeyId
+.LastModifiedDate DateTime
+.LastModifiedUser String
+.Name PSParameterName
+.Policies ParameterPolicyList
+.Tier ParameterTier
+.Type ParameterType
+.Version PSParameterVersion
+ParameterMetadataList list m=ParameterMetadata
+ParameterName string
+ParameterNameList list m=PSParameterName
+ParameterNotFound structure qerr=ParameterNotFound error=client
+.message String
+ParameterPatternMismatchException structure qerr=ParameterPatternMismatchException error=client
+.message String
+ParameterPolicies string
+ParameterPolicyList list m=ParameterInlinePolicy
+ParameterStringFilter structure
+.Key ParameterStringFilterKey
+.Option ParameterStringQueryOption
+.Values ParameterStringFilterValueList
+ParameterStringFilterKey string
+ParameterStringFilterList list m=ParameterStringFilter
+ParameterStringFilterValue string
+ParameterStringFilterValueList list m=ParameterStringFilterValue
+ParameterStringQueryOption string
+ParameterTier enum
+ParameterType enum
+ParameterValue string
+ParameterValueList list m=ParameterValue
+ParameterVersionLabelLimitExceeded structure qerr=ParameterVersionLabelLimitExceeded error=client
+.message String
+ParameterVersionNotFound structure qerr=ParameterVersionNotFound error=client
+.message String
+Parameters map k=ParameterName v=ParameterValueList
+ParametersFilter structure
+.Key ParametersFilterKey
+.Values ParametersFilterValueList
+ParametersFilterKey enum
+ParametersFilterList list m=ParametersFilter
+ParametersFilterValue string
+ParametersFilterValueList list m=ParametersFilterValue
+ParentStepDetails structure
+.Action AutomationActionName
+.Iteration Integer
+.IteratorValue String
+.StepExecutionId String
+.StepName String
+Patch structure
+.AdvisoryIds PatchAdvisoryIdList
+.Arch PatchArch
+.BugzillaIds PatchBugzillaIdList
+.CVEIds PatchCVEIdList
+.Classification PatchClassification
+.ContentUrl PatchContentUrl
+.Description PatchDescription
+.Epoch PatchEpoch
+.Id PatchId
+.KbNumber PatchKbNumber
+.Language PatchLanguage
+.MsrcNumber PatchMsrcNumber
+.MsrcSeverity PatchMsrcSeverity
+.Name PatchName
+.Product PatchProduct
+.ProductFamily PatchProductFamily
+.Release PatchRelease
+.ReleaseDate DateTime
+.Repository PatchRepository
+.Severity PatchSeverity
+.Title PatchTitle
+.Vendor PatchVendor
+.Version PatchVersion
+PatchAction enum
+PatchAdvisoryId string
+PatchAdvisoryIdList list m=PatchAdvisoryId
+PatchArch string
+PatchAvailableSecurityUpdateCount integer
+PatchBaselineIdentity structure
+.BaselineDescription BaselineDescription
+.BaselineId BaselineId
+.BaselineName BaselineName
+.DefaultBaseline DefaultBaseline
+.OperatingSystem OperatingSystem
+PatchBaselineIdentityList list m=PatchBaselineIdentity
+PatchBaselineMaxResults integer
+PatchBugzillaId string
+PatchBugzillaIdList list m=PatchBugzillaId
+PatchCVEId string
+PatchCVEIdList list m=PatchCVEId
+PatchCVEIds string
+PatchClassification string
+PatchComplianceData structure
+.CVEIds PatchCVEIds
+.Classification PatchClassification
+.InstalledTime DateTime
+.KBId PatchKbNumber
+.Severity PatchSeverity
+.State PatchComplianceDataState
+.Title PatchTitle
+PatchComplianceDataList list m=PatchComplianceData
+PatchComplianceDataState enum
+PatchComplianceLevel enum
+PatchComplianceMaxResults integer
+PatchComplianceStatus enum
+PatchContentUrl string
+PatchCriticalNonCompliantCount integer
+PatchDeploymentStatus enum
+PatchDescription string
+PatchEpoch integer
+PatchFailedCount integer
+PatchFilter structure
+.Key PatchFilterKey
+.Values PatchFilterValueList
+PatchFilterGroup structure
+.PatchFilters PatchFilterList
+PatchFilterKey enum
+PatchFilterList list m=PatchFilter
+PatchFilterValue string
+PatchFilterValueList list m=PatchFilterValue
+PatchGroup string
+PatchGroupList list m=PatchGroup
+PatchGroupPatchBaselineMapping structure
+.BaselineIdentity PatchBaselineIdentity
+.PatchGroup PatchGroup
+PatchGroupPatchBaselineMappingList list m=PatchGroupPatchBaselineMapping
+PatchId string
+PatchIdList list m=PatchId
+PatchInstalledCount integer
+PatchInstalledOtherCount integer
+PatchInstalledPendingRebootCount integer
+PatchInstalledRejectedCount integer
+PatchKbNumber string
+PatchLanguage string
+PatchList list m=Patch
+PatchMissingCount integer
+PatchMsrcNumber string
+PatchMsrcSeverity string
+PatchName string
+PatchNotApplicableCount integer
+PatchOperationType enum
+PatchOrchestratorFilter structure
+.Key PatchOrchestratorFilterKey
+.Values PatchOrchestratorFilterValues
+PatchOrchestratorFilterKey string
+PatchOrchestratorFilterList list m=PatchOrchestratorFilter
+PatchOrchestratorFilterValue string
+PatchOrchestratorFilterValues list m=PatchOrchestratorFilterValue
+PatchOtherNonCompliantCount integer
+PatchProduct string
+PatchProductFamily string
+PatchPropertiesList list m=PatchPropertyEntry
+PatchProperty enum
+PatchPropertyEntry map k=AttributeName v=AttributeValue
+PatchRelease string
+PatchRepository string
+PatchRule structure
+.ApproveAfterDays ApproveAfterDays
+.ApproveUntilDate PatchStringDateTime
+.ComplianceLevel PatchComplianceLevel
+.EnableNonSecurity Boolean
+.PatchFilterGroup PatchFilterGroup
+PatchRuleGroup structure
+.PatchRules PatchRuleList
+PatchRuleList list m=PatchRule
+PatchSecurityNonCompliantCount integer
+PatchSet enum
+PatchSeverity string
+PatchSource structure
+.Configuration PatchSourceConfiguration
+.Name PatchSourceName
+.Products PatchSourceProductList
+PatchSourceConfiguration string
+PatchSourceList list m=PatchSource
+PatchSourceName string
+PatchSourceProduct string
+PatchSourceProductList list m=PatchSourceProduct
+PatchStatus structure
+.ApprovalDate DateTime
+.ComplianceLevel PatchComplianceLevel
+.DeploymentStatus PatchDeploymentStatus
+PatchStringDateTime string
+PatchTitle string
+PatchUnreportedNotApplicableCount integer
+PatchVendor string
+PatchVersion string
+PingStatus enum
+PlatformName string
+PlatformType enum
+PlatformTypeList list m=PlatformType mxml=PlatformType
+PlatformVersion string
+PoliciesLimitExceededException structure qerr=PoliciesLimitExceededException error=client
+.message String
+Policy string
+PolicyHash string
+PolicyId string
+Product string
+ProgressCounters structure
+.CancelledSteps Integer
+.FailedSteps Integer
+.SuccessSteps Integer
+.TimedOutSteps Integer
+.TotalSteps Integer
+PutComplianceItems operation in=PutComplianceItemsRequest out=PutComplianceItemsResult err=ComplianceTypeCountLimitExceededException,InternalServerError,InvalidItemContentException,InvalidResourceId,InvalidResourceType,ItemSizeLimitExceededException,TotalSizeLimitExceededException
+PutComplianceItemsRequest structure
+.ComplianceType ComplianceTypeName
+.ExecutionSummary ComplianceExecutionSummary
+.ItemContentHash ComplianceItemContentHash
+.Items ComplianceItemEntryList
+.ResourceId ComplianceResourceId
+.ResourceType ComplianceResourceType
+.UploadType ComplianceUploadType
+PutComplianceItemsResult structure
+PutInventory operation in=PutInventoryRequest out=PutInventoryResult err=CustomSchemaCountLimitExceededException,InternalServerError,InvalidInstanceId,InvalidInventoryItemContextException,InvalidItemContentException,InvalidTypeNameException,ItemContentMismatchException,ItemSizeLimitExceededException,SubTypeCountLimitExceededException,TotalSizeLimitExceededException,UnsupportedInventoryItemContextException,UnsupportedInventorySchemaVersionException
+PutInventoryMessage string
+PutInventoryRequest structure
+.InstanceId InstanceId
+.Items InventoryItemList
+PutInventoryResult structure
+.Message PutInventoryMessage
+PutParameter operation in=PutParameterRequest out=PutParameterResult err=HierarchyLevelLimitExceededException,HierarchyTypeMismatchException,IncompatiblePolicyException,InternalServerError,InvalidAllowedPatternException,InvalidKeyId,InvalidPolicyAttributeException,InvalidPolicyTypeException,ParameterAlreadyExists,ParameterLimitExceeded,ParameterMaxVersionLimitExceeded,ParameterPatternMismatchException,PoliciesLimitExceededException,TooManyUpdates,UnsupportedParameterType
+PutParameterRequest structure
+.AllowedPattern AllowedPattern
+.DataType ParameterDataType
+.Description ParameterDescription
+.KeyId ParameterKeyId
+.Name PSParameterName
+.Overwrite Boolean
+.Policies ParameterPolicies
+.Tags TagList
+.Tier ParameterTier
+.Type ParameterType
+.Value PSParameterValue
+PutParameterResult structure
+.Tier ParameterTier
+.Version PSParameterVersion
+PutResourcePolicy operation in=PutResourcePolicyRequest out=PutResourcePolicyResponse err=InternalServerError,MalformedResourcePolicyDocumentException,ResourceNotFoundException,ResourcePolicyConflictException,ResourcePolicyInvalidParameterException,ResourcePolicyLimitExceededException,ResourcePolicyNotFoundException
+PutResourcePolicyRequest structure
+.Policy Policy
+.PolicyHash PolicyHash
+.PolicyId PolicyId
+.ResourceArn ResourceArnString
+PutResourcePolicyResponse structure
+.PolicyHash PolicyHash
+.PolicyId PolicyId
+RebootOption enum
+Region string
+RegionList list m=Region
+Regions list m=Region
+RegisterDefaultPatchBaseline operation in=RegisterDefaultPatchBaselineRequest out=RegisterDefaultPatchBaselineResult err=DoesNotExistException,InternalServerError,InvalidResourceId
+RegisterDefaultPatchBaselineRequest structure
+.BaselineId BaselineId
+RegisterDefaultPatchBaselineResult structure
+.BaselineId BaselineId
+RegisterPatchBaselineForPatchGroup operation in=RegisterPatchBaselineForPatchGroupRequest out=RegisterPatchBaselineForPatchGroupResult err=AlreadyExistsException,DoesNotExistException,InternalServerError,InvalidResourceId,ResourceLimitExceededException
+RegisterPatchBaselineForPatchGroupRequest structure
+.BaselineId BaselineId
+.PatchGroup PatchGroup
+RegisterPatchBaselineForPatchGroupResult structure
+.BaselineId BaselineId
+.PatchGroup PatchGroup
+RegisterTargetWithMaintenanceWindow operation in=RegisterTargetWithMaintenanceWindowRequest out=RegisterTargetWithMaintenanceWindowResult err=DoesNotExistException,IdempotentParameterMismatch,InternalServerError,ResourceLimitExceededException
+RegisterTargetWithMaintenanceWindowRequest structure
+.ClientToken ClientToken
+.Description MaintenanceWindowDescription
+.Name MaintenanceWindowName
+.OwnerInformation OwnerInformation
+.ResourceType MaintenanceWindowResourceType
+.Targets Targets
+.WindowId MaintenanceWindowId
+RegisterTargetWithMaintenanceWindowResult structure
+.WindowTargetId MaintenanceWindowTargetId
+RegisterTaskWithMaintenanceWindow operation in=RegisterTaskWithMaintenanceWindowRequest out=RegisterTaskWithMaintenanceWindowResult err=DoesNotExistException,FeatureNotAvailableException,IdempotentParameterMismatch,InternalServerError,ResourceLimitExceededException
+RegisterTaskWithMaintenanceWindowRequest structure
+.AlarmConfiguration AlarmConfiguration
+.ClientToken ClientToken
+.CutoffBehavior MaintenanceWindowTaskCutoffBehavior
+.Description MaintenanceWindowDescription
+.LoggingInfo LoggingInfo
+.MaxConcurrency MaxConcurrency
+.MaxErrors MaxErrors
+.Name MaintenanceWindowName
+.Priority MaintenanceWindowTaskPriority
+.ServiceRoleArn ServiceRole
+.Targets Targets
+.TaskArn MaintenanceWindowTaskArn
+.TaskInvocationParameters MaintenanceWindowTaskInvocationParameters
+.TaskParameters MaintenanceWindowTaskParameters
+.TaskType MaintenanceWindowTaskType
+.WindowId MaintenanceWindowId
+RegisterTaskWithMaintenanceWindowResult structure
+.WindowTaskId MaintenanceWindowTaskId
+RegistrationLimit integer
+RegistrationMetadataItem structure
+.Key RegistrationMetadataKey
+.Value RegistrationMetadataValue
+RegistrationMetadataKey string
+RegistrationMetadataList list m=RegistrationMetadataItem
+RegistrationMetadataValue string
+RegistrationsCount integer
+RelatedOpsItem structure
+.OpsItemId String
+RelatedOpsItems list m=RelatedOpsItem
+RemainingCount integer
+RemoveTagsFromResource operation in=RemoveTagsFromResourceRequest out=RemoveTagsFromResourceResult err=InternalServerError,InvalidResourceId,InvalidResourceType,TooManyUpdates
+RemoveTagsFromResourceRequest structure
+.ResourceId ResourceId
+.ResourceType ResourceTypeForTagging
+.TagKeys KeyList
+RemoveTagsFromResourceResult structure
+RequireType string
+ResetServiceSetting operation in=ResetServiceSettingRequest out=ResetServiceSettingResult err=InternalServerError,ServiceSettingNotFound,TooManyUpdates
+ResetServiceSettingRequest structure
+.SettingId ServiceSettingId
+ResetServiceSettingResult structure
+.ServiceSetting ServiceSetting
+ResolvedTargets structure
+.ParameterValues TargetParameterList
+.Truncated Boolean
+ResourceArnString string
+ResourceComplianceSummaryItem structure
+.ComplianceType ComplianceTypeName
+.CompliantSummary CompliantSummary
+.ExecutionSummary ComplianceExecutionSummary
+.NonCompliantSummary NonCompliantSummary
+.OverallSeverity ComplianceSeverity
+.ResourceId ComplianceResourceId
+.ResourceType ComplianceResourceType
+.Status ComplianceStatus
+ResourceComplianceSummaryItemList list m=ResourceComplianceSummaryItem mxml=Item
+ResourceCount integer
+ResourceCountByStatus string
+ResourceDataSyncAWSKMSKeyARN string
+ResourceDataSyncAlreadyExistsException structure qerr=ResourceDataSyncAlreadyExists error=client
+.SyncName ResourceDataSyncName
+ResourceDataSyncAwsOrganizationsSource structure
+.OrganizationSourceType ResourceDataSyncOrganizationSourceType
+.OrganizationalUnits ResourceDataSyncOrganizationalUnitList
+ResourceDataSyncConflictException structure qerr=ResourceDataSyncConflictException error=client
+.Message String
+ResourceDataSyncCountExceededException structure qerr=ResourceDataSyncCountExceeded error=client
+.Message String
+ResourceDataSyncCreatedTime timestamp
+ResourceDataSyncDestinationDataSharing structure
+.DestinationDataSharingType ResourceDataSyncDestinationDataSharingType
+ResourceDataSyncDestinationDataSharingType string
+ResourceDataSyncEnableAllOpsDataSources boolean
+ResourceDataSyncIncludeFutureRegions boolean
+ResourceDataSyncInvalidConfigurationException structure qerr=ResourceDataSyncInvalidConfiguration error=client
+.Message String
+ResourceDataSyncItem structure
+.LastStatus LastResourceDataSyncStatus
+.LastSuccessfulSyncTime LastSuccessfulResourceDataSyncTime
+.LastSyncStatusMessage LastResourceDataSyncMessage
+.LastSyncTime LastResourceDataSyncTime
+.S3Destination ResourceDataSyncS3Destination
+.SyncCreatedTime ResourceDataSyncCreatedTime
+.SyncLastModifiedTime ResourceDataSyncLastModifiedTime
+.SyncName ResourceDataSyncName
+.SyncSource ResourceDataSyncSourceWithState
+.SyncType ResourceDataSyncType
+ResourceDataSyncItemList list m=ResourceDataSyncItem
+ResourceDataSyncLastModifiedTime timestamp
+ResourceDataSyncName string
+ResourceDataSyncNotFoundException structure qerr=ResourceDataSyncNotFound error=client
+.Message String
+.SyncName ResourceDataSyncName
+.SyncType ResourceDataSyncType
+ResourceDataSyncOrganizationSourceType string
+ResourceDataSyncOrganizationalUnit structure
+.OrganizationalUnitId ResourceDataSyncOrganizationalUnitId
+ResourceDataSyncOrganizationalUnitId string
+ResourceDataSyncOrganizationalUnitList list m=ResourceDataSyncOrganizationalUnit
+ResourceDataSyncS3BucketName string
+ResourceDataSyncS3Destination structure
+.AWSKMSKeyARN ResourceDataSyncAWSKMSKeyARN
+.BucketName ResourceDataSyncS3BucketName
+.DestinationDataSharing ResourceDataSyncDestinationDataSharing
+.Prefix ResourceDataSyncS3Prefix
+.Region ResourceDataSyncS3Region
+.SyncFormat ResourceDataSyncS3Format
+ResourceDataSyncS3Format enum
+ResourceDataSyncS3Prefix string
+ResourceDataSyncS3Region string
+ResourceDataSyncSource structure
+.AwsOrganizationsSource ResourceDataSyncAwsOrganizationsSource
+.EnableAllOpsDataSources ResourceDataSyncEnableAllOpsDataSources
+.IncludeFutureRegions ResourceDataSyncIncludeFutureRegions
+.SourceRegions ResourceDataSyncSourceRegionList
+.SourceType ResourceDataSyncSourceType
+ResourceDataSyncSourceRegion string
+ResourceDataSyncSourceRegionList list m=ResourceDataSyncSourceRegion
+ResourceDataSyncSourceType string
+ResourceDataSyncSourceWithState structure
+.AwsOrganizationsSource ResourceDataSyncAwsOrganizationsSource
+.EnableAllOpsDataSources ResourceDataSyncEnableAllOpsDataSources
+.IncludeFutureRegions ResourceDataSyncIncludeFutureRegions
+.SourceRegions ResourceDataSyncSourceRegionList
+.SourceType ResourceDataSyncSourceType
+.State ResourceDataSyncState
+ResourceDataSyncState string
+ResourceDataSyncType string
+ResourceId string
+ResourceInUseException structure qerr=ResourceInUseException error=client
+.Message String
+ResourceLimitExceededException structure qerr=ResourceLimitExceededException error=client
+.Message String
+ResourceNotFoundException structure qerr=ResourceNotFoundException error=client
+.Message String
+ResourcePolicyConflictException structure qerr=ResourcePolicyConflictException error=client
+.Message String
+ResourcePolicyInvalidParameterException structure qerr=ResourcePolicyInvalidParameterException error=client
+.Message String
+.ParameterNames ResourcePolicyParameterNamesList
+ResourcePolicyLimitExceededException structure qerr=ResourcePolicyLimitExceededException error=client
+.Limit Integer
+.LimitType String
+.Message String
+ResourcePolicyMaxResults integer
+ResourcePolicyNotFoundException structure qerr=ResourcePolicyNotFoundException error=client
+.Message String
+ResourcePolicyParameterNamesList list m=String
+ResourceType enum
+ResourceTypeForTagging enum
+ResponseCode integer
+ResultAttribute structure
+.TypeName InventoryItemTypeName
+ResultAttributeList list m=ResultAttribute mxml=ResultAttribute
+ResumeSession operation in=ResumeSessionRequest out=ResumeSessionResponse err=DoesNotExistException,InternalServerError
+ResumeSessionRequest structure
+.SessionId SessionId
+ResumeSessionResponse structure
+.SessionId SessionId
+.StreamUrl StreamUrl
+.TokenValue TokenValue
+ReviewInformation structure
+.ReviewedTime DateTime
+.Reviewer Reviewer
+.Status ReviewStatus
+ReviewInformationList list m=ReviewInformation mxml=ReviewInformation
+ReviewStatus enum
+Reviewer string
+Runbook structure
+.DocumentName DocumentARN
+.DocumentVersion DocumentVersion
+.MaxConcurrency MaxConcurrency
+.MaxErrors MaxErrors
+.Parameters AutomationParameterMap
+.TargetLocations TargetLocations
+.TargetMaps TargetMaps
+.TargetParameterName AutomationParameterKey
+.Targets Targets
+Runbooks list m=Runbook
+S3BucketName string
+S3KeyPrefix string
+S3OutputLocation structure
+.OutputS3BucketName S3BucketName
+.OutputS3KeyPrefix S3KeyPrefix
+.OutputS3Region S3Region
+S3OutputUrl structure
+.OutputUrl Url
+S3Region string
+ScheduleExpression string
+ScheduleOffset integer
+ScheduledWindowExecution structure
+.ExecutionTime MaintenanceWindowStringDateTime
+.Name MaintenanceWindowName
+.WindowId MaintenanceWindowId
+ScheduledWindowExecutionList list m=ScheduledWindowExecution
+SendAutomationSignal operation in=SendAutomationSignalRequest out=SendAutomationSignalResult err=AutomationExecutionNotFoundException,AutomationStepNotFoundException,InternalServerError,InvalidAutomationSignalException
+SendAutomationSignalRequest structure
+.AutomationExecutionId AutomationExecutionId
+.Payload AutomationParameterMap
+.SignalType SignalType
+SendAutomationSignalResult structure
+SendCommand operation in=SendCommandRequest out=SendCommandResult err=DuplicateInstanceId,InternalServerError,InvalidDocument,InvalidDocumentVersion,InvalidInstanceId,InvalidNotificationConfig,InvalidOutputFolder,InvalidParameters,InvalidRole,MaxDocumentSizeExceeded,UnsupportedPlatformType
+SendCommandRequest structure
+.AlarmConfiguration AlarmConfiguration
+.CloudWatchOutputConfig CloudWatchOutputConfig
+.Comment Comment
+.DocumentHash DocumentHash
+.DocumentHashType DocumentHashType
+.DocumentName DocumentARN
+.DocumentVersion DocumentVersion
+.InstanceIds InstanceIdList
+.MaxConcurrency MaxConcurrency
+.MaxErrors MaxErrors
+.NotificationConfig NotificationConfig
+.OutputS3BucketName S3BucketName
+.OutputS3KeyPrefix S3KeyPrefix
+.OutputS3Region S3Region
+.Parameters Parameters
+.ServiceRoleArn ServiceRole
+.Targets Targets
+.TimeoutSeconds TimeoutSeconds
+SendCommandResult structure
+.Command Command
+ServiceQuotaExceededException structure error=client
+.Message String
+.QuotaCode String
+.ResourceId String
+.ResourceType String
+.ServiceCode String
+ServiceRole string
+ServiceSetting structure
+.ARN String
+.LastModifiedDate DateTime
+.LastModifiedUser String
+.SettingId ServiceSettingId
+.SettingValue ServiceSettingValue
+.Status String
+ServiceSettingId string
+ServiceSettingNotFound structure qerr=ServiceSettingNotFound error=client
+.Message String
+ServiceSettingValue string
+Session structure
+.AccessType AccessType
+.Details SessionDetails
+.DocumentName DocumentName
+.EndDate DateTime
+.MaxSessionDuration MaxSessionDuration
+.OutputUrl SessionManagerOutputUrl
+.Owner SessionOwner
+.Reason SessionReason
+.SessionId SessionId
+.StartDate DateTime
+.Status SessionStatus
+.Target SessionTarget
+SessionDetails string
+SessionFilter structure
+.key SessionFilterKey
+.value SessionFilterValue
+SessionFilterKey enum
+SessionFilterList list m=SessionFilter
+SessionFilterValue string
+SessionId string
+SessionList list m=Session
+SessionManagerCloudWatchOutputUrl string
+SessionManagerOutputUrl structure
+.CloudWatchOutputUrl SessionManagerCloudWatchOutputUrl
+.S3OutputUrl SessionManagerS3OutputUrl
+SessionManagerParameterName string
+SessionManagerParameterValue string
+SessionManagerParameterValueList list m=SessionManagerParameterValue
+SessionManagerParameters map k=SessionManagerParameterName v=SessionManagerParameterValueList
+SessionManagerS3OutputUrl string
+SessionMaxResults integer
+SessionOwner string
+SessionReason string
+SessionState enum
+SessionStatus enum
+SessionTarget string
+SessionTokenType string
+SeveritySummary structure
+.CriticalCount ComplianceSummaryCount
+.HighCount ComplianceSummaryCount
+.InformationalCount ComplianceSummaryCount
+.LowCount ComplianceSummaryCount
+.MediumCount ComplianceSummaryCount
+.UnspecifiedCount ComplianceSummaryCount
+SharedDocumentVersion string
+SignalType enum
+SnapshotDownloadUrl string
+SnapshotId string
+SourceId string
+SourceLocation string
+SourceType enum
+StandardErrorContent string
+StandardOutputContent string
+StartAccessRequest operation in=StartAccessRequestRequest out=StartAccessRequestResponse err=AccessDeniedException,InternalServerError,ResourceNotFoundException,ServiceQuotaExceededException,ThrottlingException,ValidationException
+StartAccessRequestRequest structure
+.Reason String1to256
+.Tags TagList
+.Targets Targets
+StartAccessRequestResponse structure
+.AccessRequestId AccessRequestId
+StartAssociationsOnce operation in=StartAssociationsOnceRequest out=StartAssociationsOnceResult err=AssociationDoesNotExist,InvalidAssociation
+StartAssociationsOnceRequest structure
+.AssociationIds AssociationIdList
+StartAssociationsOnceResult structure
+StartAutomationExecution operation in=StartAutomationExecutionRequest out=StartAutomationExecutionResult err=AutomationDefinitionNotFoundException,AutomationDefinitionVersionNotFoundException,AutomationExecutionLimitExceededException,IdempotentParameterMismatch,InternalServerError,InvalidAutomationExecutionParametersException,InvalidTarget
+StartAutomationExecutionRequest structure
+.AlarmConfiguration AlarmConfiguration
+.ClientToken IdempotencyToken
+.DocumentName DocumentARN
+.DocumentVersion DocumentVersion
+.MaxConcurrency MaxConcurrency
+.MaxErrors MaxErrors
+.Mode ExecutionMode
+.Parameters AutomationParameterMap
+.Tags TagList
+.TargetLocations TargetLocations
+.TargetLocationsURL TargetLocationsURL
+.TargetMaps TargetMaps
+.TargetParameterName AutomationParameterKey
+.Targets AutomationTargets
+StartAutomationExecutionResult structure
+.AutomationExecutionId AutomationExecutionId
+StartChangeRequestExecution operation in=StartChangeRequestExecutionRequest out=StartChangeRequestExecutionResult err=AutomationDefinitionNotApprovedException,AutomationDefinitionNotFoundException,AutomationDefinitionVersionNotFoundException,AutomationExecutionLimitExceededException,IdempotentParameterMismatch,InternalServerError,InvalidAutomationExecutionParametersException,NoLongerSupportedException
+StartChangeRequestExecutionRequest structure
+.AutoApprove Boolean
+.ChangeDetails ChangeDetailsValue
+.ChangeRequestName ChangeRequestName
+.ClientToken IdempotencyToken
+.DocumentName DocumentARN
+.DocumentVersion DocumentVersion
+.Parameters AutomationParameterMap
+.Runbooks Runbooks
+.ScheduledEndTime DateTime
+.ScheduledTime DateTime
+.Tags TagList
+StartChangeRequestExecutionResult structure
+.AutomationExecutionId AutomationExecutionId
+StartExecutionPreview operation in=StartExecutionPreviewRequest out=StartExecutionPreviewResponse err=InternalServerError,ValidationException
+StartExecutionPreviewRequest structure
+.DocumentName DocumentName
+.DocumentVersion DocumentVersion
+.ExecutionInputs ExecutionInputs
+StartExecutionPreviewResponse structure
+.ExecutionPreviewId ExecutionPreviewId
+StartSession operation in=StartSessionRequest out=StartSessionResponse err=InternalServerError,InvalidDocument,TargetNotConnected
+StartSessionRequest structure
+.DocumentName DocumentARN
+.Parameters SessionManagerParameters
+.Reason SessionReason
+.Target SessionTarget
+StartSessionResponse structure
+.SessionId SessionId
+.StreamUrl StreamUrl
+.TokenValue TokenValue
+StatusAdditionalInfo string
+StatusDetails string
+StatusMessage string
+StatusName string
+StatusUnchanged structure qerr=StatusUnchanged error=client
+StepExecution structure
+.Action AutomationActionName
+.ExecutionEndTime DateTime
+.ExecutionStartTime DateTime
+.FailureDetails FailureDetails
+.FailureMessage String
+.Inputs NormalStringMap
+.IsCritical Boolean
+.IsEnd Boolean
+.MaxAttempts Integer
+.NextStep String
+.OnFailure String
+.Outputs AutomationParameterMap
+.OverriddenParameters AutomationParameterMap
+.ParentStepDetails ParentStepDetails
+.Response String
+.ResponseCode String
+.StepExecutionId String
+.StepName String
+.StepStatus AutomationExecutionStatus
+.TargetLocation TargetLocation
+.Targets Targets
+.TimeoutSeconds Long
+.TriggeredAlarms AlarmStateInformationList
+.ValidNextSteps ValidNextStepList
+.WarningMessage String
+StepExecutionFilter structure
+.Key StepExecutionFilterKey
+.Values StepExecutionFilterValueList
+StepExecutionFilterKey enum
+StepExecutionFilterList list m=StepExecutionFilter
+StepExecutionFilterValue string
+StepExecutionFilterValueList list m=StepExecutionFilterValue
+StepExecutionList list m=StepExecution
+StepPreviewMap map k=ImpactType v=Integer
+StopAutomationExecution operation in=StopAutomationExecutionRequest out=StopAutomationExecutionResult err=AutomationExecutionNotFoundException,InternalServerError,InvalidAutomationStatusUpdateException
+StopAutomationExecutionRequest structure
+.AutomationExecutionId AutomationExecutionId
+.Type StopType
+StopAutomationExecutionResult structure
+StopType enum
+StreamUrl string
+String string
+String1to256 string
+StringDateTime string
+StringList list m=String
+SubTypeCountLimitExceededException structure qerr=SubTypeCountLimitExceeded error=client
+.Message String
+Tag structure
+.Key TagKey
+.Value TagValue
+TagKey string
+TagList list m=Tag
+TagValue string
+Target structure
+.Key TargetKey
+.Values TargetValues
+TargetCount integer
+TargetInUseException structure qerr=TargetInUseException error=client
+.Message String
+TargetKey string
+TargetLocation structure
+.Accounts Accounts
+.ExcludeAccounts ExcludeAccounts
+.ExecutionRoleName ExecutionRoleName
+.IncludeChildOrganizationUnits Boolean
+.Regions Regions
+.TargetLocationAlarmConfiguration AlarmConfiguration
+.TargetLocationMaxConcurrency MaxConcurrency
+.TargetLocationMaxErrors MaxErrors
+.Targets AutomationTargets
+.TargetsMaxConcurrency MaxConcurrency
+.TargetsMaxErrors MaxErrors
+TargetLocations list m=TargetLocation
+TargetLocationsURL string
+TargetMap map k=TargetMapKey v=TargetMapValueList
+TargetMapKey string
+TargetMapValue string
+TargetMapValueList list m=TargetMapValue
+TargetMaps list m=TargetMap
+TargetNotConnected structure qerr=TargetNotConnected error=client
+.Message String
+TargetParameterList list m=ParameterValue
+TargetPreview structure
+.Count Integer
+.TargetType String
+TargetPreviewList list m=TargetPreview
+TargetType string
+TargetValue string
+TargetValues list m=TargetValue
+Targets list m=Target
+TerminateSession operation in=TerminateSessionRequest out=TerminateSessionResponse err=InternalServerError
+TerminateSessionRequest structure
+.SessionId SessionId
+TerminateSessionResponse structure
+.SessionId SessionId
+ThrottlingException structure error=client
+.Message String
+.QuotaCode String
+.ServiceCode String
+TimeoutSeconds integer
+TokenValue string
+TooManyTagsError structure qerr=TooManyTagsError error=client
+TooManyUpdates structure qerr=TooManyUpdates error=client
+.Message String
+TotalCount integer
+TotalSizeLimitExceededException structure qerr=TotalSizeLimitExceeded error=client
+.Message String
+UUID string
+UnlabelParameterVersion operation in=UnlabelParameterVersionRequest out=UnlabelParameterVersionResult err=InternalServerError,ParameterNotFound,ParameterVersionNotFound,TooManyUpdates
+UnlabelParameterVersionRequest structure
+.Labels ParameterLabelList
+.Name PSParameterName
+.ParameterVersion PSParameterVersion
+UnlabelParameterVersionResult structure
+.InvalidLabels ParameterLabelList
+.RemovedLabels ParameterLabelList
+UnsupportedCalendarException structure qerr=UnsupportedCalendarException error=client
+.Message String
+UnsupportedFeatureRequiredException structure qerr=UnsupportedFeatureRequiredException error=client
+.Message String
+UnsupportedInventoryItemContextException structure qerr=UnsupportedInventoryItemContext error=client
+.Message String
+.TypeName InventoryItemTypeName
+UnsupportedInventorySchemaVersionException structure qerr=UnsupportedInventorySchemaVersion error=client
+.Message String
+UnsupportedOperatingSystem structure qerr=UnsupportedOperatingSystem error=client
+.Message String
+UnsupportedOperationException structure qerr=UnsupportedOperation error=client
+.Message String
+UnsupportedParameterType structure qerr=UnsupportedParameterType error=client
+.message String
+UnsupportedPlatformType structure qerr=UnsupportedPlatformType error=client
+.Message String
+UpdateAssociation operation in=UpdateAssociationRequest out=UpdateAssociationResult err=AssociationDoesNotExist,AssociationVersionLimitExceeded,InternalServerError,InvalidAssociationVersion,InvalidDocument,InvalidDocumentVersion,InvalidOutputLocation,InvalidParameters,InvalidSchedule,InvalidTarget,InvalidTargetMaps,InvalidUpdate,TooManyUpdates
+UpdateAssociationRequest structure
+.AlarmConfiguration AlarmConfiguration
+.ApplyOnlyAtCronInterval ApplyOnlyAtCronInterval
+.AssociationDispatchAssumeRole AssociationDispatchAssumeRoleArn
+.AssociationId AssociationId
+.AssociationName AssociationName
+.AssociationVersion AssociationVersion
+.AutomationTargetParameterName AutomationTargetParameterName
+.CalendarNames CalendarNameOrARNList
+.ComplianceSeverity AssociationComplianceSeverity
+.DocumentVersion DocumentVersion
+.Duration Duration
+.MaxConcurrency MaxConcurrency
+.MaxErrors MaxErrors
+.Name DocumentARN
+.OutputLocation InstanceAssociationOutputLocation
+.Parameters Parameters
+.ScheduleExpression ScheduleExpression
+.ScheduleOffset ScheduleOffset
+.SyncCompliance AssociationSyncCompliance
+.TargetLocations TargetLocations
+.TargetMaps TargetMaps
+.Targets Targets
+UpdateAssociationResult structure
+.AssociationDescription AssociationDescription
+UpdateAssociationStatus operation in=UpdateAssociationStatusRequest out=UpdateAssociationStatusResult err=AssociationDoesNotExist,InternalServerError,InvalidDocument,InvalidInstanceId,StatusUnchanged,TooManyUpdates
+UpdateAssociationStatusRequest structure
+.AssociationStatus AssociationStatus
+.InstanceId InstanceId
+.Name DocumentARN
+UpdateAssociationStatusResult structure
+.AssociationDescription AssociationDescription
+UpdateCloudConnector operation in=UpdateCloudConnectorRequest out=UpdateCloudConnectorResult err=ConflictException,InternalServerError,ResourceNotFoundException
+UpdateCloudConnectorRequest structure
+.CloudConnectorId CloudConnectorId
+.Configuration CloudConnectorConfiguration
+.Description CloudConnectorDescription
+.DisplayName DisplayName
+UpdateCloudConnectorResult structure
+.CloudConnectorId CloudConnectorId
+UpdateDocument operation in=UpdateDocumentRequest out=UpdateDocumentResult err=DocumentVersionLimitExceeded,DuplicateDocumentContent,DuplicateDocumentVersionName,InternalServerError,InvalidDocument,InvalidDocumentContent,InvalidDocumentOperation,InvalidDocumentSchemaVersion,InvalidDocumentVersion,MaxDocumentSizeExceeded
+UpdateDocumentDefaultVersion operation in=UpdateDocumentDefaultVersionRequest out=UpdateDocumentDefaultVersionResult err=InternalServerError,InvalidDocument,InvalidDocumentSchemaVersion,InvalidDocumentVersion
+UpdateDocumentDefaultVersionRequest structure
+.DocumentVersion DocumentVersionNumber
+.Name DocumentName
+UpdateDocumentDefaultVersionResult structure
+.Description DocumentDefaultVersionDescription
+UpdateDocumentMetadata operation in=UpdateDocumentMetadataRequest out=UpdateDocumentMetadataResponse err=InternalServerError,InvalidDocument,InvalidDocumentOperation,InvalidDocumentVersion,TooManyUpdates
+UpdateDocumentMetadataRequest structure
+.DocumentReviews DocumentReviews
+.DocumentVersion DocumentVersion
+.Name DocumentName
+UpdateDocumentMetadataResponse structure
+UpdateDocumentRequest structure
+.Attachments AttachmentsSourceList
+.Content DocumentContent
+.DisplayName DocumentDisplayName
+.DocumentFormat DocumentFormat
+.DocumentVersion DocumentVersion
+.Name DocumentName
+.TargetType TargetType
+.VersionName DocumentVersionName
+UpdateDocumentResult structure
+.DocumentDescription DocumentDescription
+UpdateMaintenanceWindow operation in=UpdateMaintenanceWindowRequest out=UpdateMaintenanceWindowResult err=DoesNotExistException,InternalServerError
+UpdateMaintenanceWindowRequest structure
+.AllowUnassociatedTargets MaintenanceWindowAllowUnassociatedTargets
+.Cutoff MaintenanceWindowCutoff
+.Description MaintenanceWindowDescription
+.Duration MaintenanceWindowDurationHours
+.Enabled MaintenanceWindowEnabled
+.EndDate MaintenanceWindowStringDateTime
+.Name MaintenanceWindowName
+.Replace Boolean
+.Schedule MaintenanceWindowSchedule
+.ScheduleOffset MaintenanceWindowOffset
+.ScheduleTimezone MaintenanceWindowTimezone
+.StartDate MaintenanceWindowStringDateTime
+.WindowId MaintenanceWindowId
+UpdateMaintenanceWindowResult structure
+.AllowUnassociatedTargets MaintenanceWindowAllowUnassociatedTargets
+.Cutoff MaintenanceWindowCutoff
+.Description MaintenanceWindowDescription
+.Duration MaintenanceWindowDurationHours
+.Enabled MaintenanceWindowEnabled
+.EndDate MaintenanceWindowStringDateTime
+.Name MaintenanceWindowName
+.Schedule MaintenanceWindowSchedule
+.ScheduleOffset MaintenanceWindowOffset
+.ScheduleTimezone MaintenanceWindowTimezone
+.StartDate MaintenanceWindowStringDateTime
+.WindowId MaintenanceWindowId
+UpdateMaintenanceWindowTarget operation in=UpdateMaintenanceWindowTargetRequest out=UpdateMaintenanceWindowTargetResult err=DoesNotExistException,InternalServerError
+UpdateMaintenanceWindowTargetRequest structure
+.Description MaintenanceWindowDescription
+.Name MaintenanceWindowName
+.OwnerInformation OwnerInformation
+.Replace Boolean
+.Targets Targets
+.WindowId MaintenanceWindowId
+.WindowTargetId MaintenanceWindowTargetId
+UpdateMaintenanceWindowTargetResult structure
+.Description MaintenanceWindowDescription
+.Name MaintenanceWindowName
+.OwnerInformation OwnerInformation
+.Targets Targets
+.WindowId MaintenanceWindowId
+.WindowTargetId MaintenanceWindowTargetId
+UpdateMaintenanceWindowTask operation in=UpdateMaintenanceWindowTaskRequest out=UpdateMaintenanceWindowTaskResult err=DoesNotExistException,InternalServerError
+UpdateMaintenanceWindowTaskRequest structure
+.AlarmConfiguration AlarmConfiguration
+.CutoffBehavior MaintenanceWindowTaskCutoffBehavior
+.Description MaintenanceWindowDescription
+.LoggingInfo LoggingInfo
+.MaxConcurrency MaxConcurrency
+.MaxErrors MaxErrors
+.Name MaintenanceWindowName
+.Priority MaintenanceWindowTaskPriority
+.Replace Boolean
+.ServiceRoleArn ServiceRole
+.Targets Targets
+.TaskArn MaintenanceWindowTaskArn
+.TaskInvocationParameters MaintenanceWindowTaskInvocationParameters
+.TaskParameters MaintenanceWindowTaskParameters
+.WindowId MaintenanceWindowId
+.WindowTaskId MaintenanceWindowTaskId
+UpdateMaintenanceWindowTaskResult structure
+.AlarmConfiguration AlarmConfiguration
+.CutoffBehavior MaintenanceWindowTaskCutoffBehavior
+.Description MaintenanceWindowDescription
+.LoggingInfo LoggingInfo
+.MaxConcurrency MaxConcurrency
+.MaxErrors MaxErrors
+.Name MaintenanceWindowName
+.Priority MaintenanceWindowTaskPriority
+.ServiceRoleArn ServiceRole
+.Targets Targets
+.TaskArn MaintenanceWindowTaskArn
+.TaskInvocationParameters MaintenanceWindowTaskInvocationParameters
+.TaskParameters MaintenanceWindowTaskParameters
+.WindowId MaintenanceWindowId
+.WindowTaskId MaintenanceWindowTaskId
+UpdateManagedInstanceRole operation in=UpdateManagedInstanceRoleRequest out=UpdateManagedInstanceRoleResult err=InternalServerError,InvalidInstanceId
+UpdateManagedInstanceRoleRequest structure
+.IamRole IamRole
+.InstanceId ManagedInstanceId
+UpdateManagedInstanceRoleResult structure
+UpdateOpsItem operation in=UpdateOpsItemRequest out=UpdateOpsItemResponse err=InternalServerError,OpsItemAccessDeniedException,OpsItemAlreadyExistsException,OpsItemConflictException,OpsItemInvalidParameterException,OpsItemLimitExceededException,OpsItemNotFoundException
+UpdateOpsItemRequest structure
+.ActualEndTime DateTime
+.ActualStartTime DateTime
+.Category OpsItemCategory
+.Description OpsItemDescription
+.Notifications OpsItemNotifications
+.OperationalData OpsItemOperationalData
+.OperationalDataToDelete OpsItemOpsDataKeysList
+.OpsItemArn OpsItemArn
+.OpsItemId OpsItemId
+.PlannedEndTime DateTime
+.PlannedStartTime DateTime
+.Priority OpsItemPriority
+.RelatedOpsItems RelatedOpsItems
+.Severity OpsItemSeverity
+.Status OpsItemStatus
+.Title OpsItemTitle
+UpdateOpsItemResponse structure
+UpdateOpsMetadata operation in=UpdateOpsMetadataRequest out=UpdateOpsMetadataResult err=InternalServerError,OpsMetadataInvalidArgumentException,OpsMetadataKeyLimitExceededException,OpsMetadataNotFoundException,OpsMetadataTooManyUpdatesException
+UpdateOpsMetadataRequest structure
+.KeysToDelete MetadataKeysToDeleteList
+.MetadataToUpdate MetadataMap
+.OpsMetadataArn OpsMetadataArn
+UpdateOpsMetadataResult structure
+.OpsMetadataArn OpsMetadataArn
+UpdatePatchBaseline operation in=UpdatePatchBaselineRequest out=UpdatePatchBaselineResult err=DoesNotExistException,InternalServerError
+UpdatePatchBaselineRequest structure
+.ApprovalRules PatchRuleGroup
+.ApprovedPatches PatchIdList
+.ApprovedPatchesComplianceLevel PatchComplianceLevel
+.ApprovedPatchesEnableNonSecurity Boolean
+.AvailableSecurityUpdatesComplianceStatus PatchComplianceStatus
+.BaselineId BaselineId
+.Description BaselineDescription
+.GlobalFilters PatchFilterGroup
+.Name BaselineName
+.RejectedPatches PatchIdList
+.RejectedPatchesAction PatchAction
+.Replace Boolean
+.Sources PatchSourceList
+UpdatePatchBaselineResult structure
+.ApprovalRules PatchRuleGroup
+.ApprovedPatches PatchIdList
+.ApprovedPatchesComplianceLevel PatchComplianceLevel
+.ApprovedPatchesEnableNonSecurity Boolean
+.AvailableSecurityUpdatesComplianceStatus PatchComplianceStatus
+.BaselineId BaselineId
+.CreatedDate DateTime
+.Description BaselineDescription
+.GlobalFilters PatchFilterGroup
+.ModifiedDate DateTime
+.Name BaselineName
+.OperatingSystem OperatingSystem
+.RejectedPatches PatchIdList
+.RejectedPatchesAction PatchAction
+.Sources PatchSourceList
+UpdateResourceDataSync operation in=UpdateResourceDataSyncRequest out=UpdateResourceDataSyncResult err=InternalServerError,ResourceDataSyncConflictException,ResourceDataSyncInvalidConfigurationException,ResourceDataSyncNotFoundException
+UpdateResourceDataSyncRequest structure
+.SyncName ResourceDataSyncName
+.SyncSource ResourceDataSyncSource
+.SyncType ResourceDataSyncType
+UpdateResourceDataSyncResult structure
+UpdateServiceSetting operation in=UpdateServiceSettingRequest out=UpdateServiceSettingResult err=InternalServerError,ServiceSettingNotFound,TooManyUpdates
+UpdateServiceSettingRequest structure
+.SettingId ServiceSettingId
+.SettingValue ServiceSettingValue
+UpdateServiceSettingResult structure
+Url string
+ValidNextStep string
+ValidNextStepList list m=ValidNextStep
+ValidateCloudConnector operation in=ValidateCloudConnectorRequest out=ValidateCloudConnectorResult err=InternalServerError,ResourceNotFoundException
+ValidateCloudConnectorMaxResults integer
+ValidateCloudConnectorRequest structure
+.CloudConnectorId CloudConnectorId
+.MaxResults ValidateCloudConnectorMaxResults
+.NextToken NextToken
+ValidateCloudConnectorResult structure
+.NextToken NextToken
+.ValidationFindings ValidationFindingList
+ValidationException structure qerr=ValidationException error=client
+.Message String
+.ReasonCode String
+ValidationFinding structure
+.Code ValidationFindingCode
+.Message String
+.ProviderMessage String
+.Scope ValidationFindingScope
+.Type ValidationFindingType
+ValidationFindingCode enum
+ValidationFindingList list m=ValidationFinding
+ValidationFindingScope structure
+.Id String
+.Type ValidationFindingScopeType
+ValidationFindingScopeType enum
+ValidationFindingType enum
+Version string
