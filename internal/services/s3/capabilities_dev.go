@@ -78,7 +78,7 @@ func init() {
 		capabilities.Capability{Service: "s3", Operation: "UploadPartCopy", Category: "Multipart uploads",
 			Status: capabilities.StatusUnsupported, Notes: "stub; returns 501"},
 		capabilities.Capability{Service: "s3", Operation: "CompleteMultipartUpload", Category: "Multipart uploads",
-			Status: capabilities.StatusSupported, Notes: "Honours the same If-None-Match: * and If-Match conditional writes as PutObject, evaluated at completion time"},
+			Status: capabilities.StatusSupported, Notes: "Validates the parts list as AWS does: a wrong or unknown ETag is InvalidPart, out-of-order parts InvalidPartOrder, a non-final part under 5 MiB EntityTooSmall, an empty list MalformedXML; a refused completion leaves the upload intact. Honours the same If-None-Match: * and If-Match conditional writes as PutObject, evaluated at completion time"},
 		capabilities.Capability{Service: "s3", Operation: "AbortMultipartUpload", Category: "Multipart uploads",
 			Status: capabilities.StatusSupported},
 		capabilities.Capability{Service: "s3", Operation: "ListMultipartUploads", Category: "Multipart uploads",

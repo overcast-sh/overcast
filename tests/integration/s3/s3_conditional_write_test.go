@@ -279,7 +279,7 @@ func TestCompleteMultipartUpload_ifNoneMatchStarOnAbsentKey(t *testing.T) {
 	// Given: an upload whose parts are in place and no object at the key
 	srv := helpers.NewTestServer(t)
 	createBucket(t, srv, "cond-mp")
-	uploadID, parts := stagedUpload(t, srv, "cond-mp", "big.bin", []byte("hello, "), []byte("world!"))
+	uploadID, parts := stagedUpload(t, srv, "cond-mp", "big.bin", []byte("hello, world!"))
 
 	// When: it completes guarded by If-None-Match: *
 	resp := completeConditional(t, srv, "cond-mp", "big.bin", uploadID, parts, map[string]string{
@@ -296,7 +296,7 @@ func TestCompleteMultipartUpload_ifNoneMatchStarOnExistingKey(t *testing.T) {
 	// Given: an upload whose key was claimed by a plain PutObject meanwhile
 	srv := helpers.NewTestServer(t)
 	createBucket(t, srv, "cond-mp")
-	uploadID, parts := stagedUpload(t, srv, "cond-mp", "big.bin", []byte("hello, "), []byte("world!"))
+	uploadID, parts := stagedUpload(t, srv, "cond-mp", "big.bin", []byte("hello, world!"))
 	putObject(t, srv, "cond-mp", "big.bin", []byte("claimed"), "text/plain")
 
 	// When: it completes guarded by If-None-Match: *
@@ -317,7 +317,7 @@ func TestCompleteMultipartUpload_ifMatchOnStaleETag(t *testing.T) {
 	createBucket(t, srv, "cond-mp")
 	putObject(t, srv, "cond-mp", "big.bin", []byte("first"), "text/plain")
 	stale := objectETag(t, srv, "cond-mp", "big.bin")
-	uploadID, parts := stagedUpload(t, srv, "cond-mp", "big.bin", []byte("hello, "), []byte("world!"))
+	uploadID, parts := stagedUpload(t, srv, "cond-mp", "big.bin", []byte("hello, world!"))
 	putObject(t, srv, "cond-mp", "big.bin", []byte("second"), "text/plain")
 
 	// When: it completes guarded by the stale ETag
@@ -336,7 +336,7 @@ func TestCompleteMultipartUpload_ifMatchOnAbsentKey(t *testing.T) {
 	// Given: an upload over a key that holds no object
 	srv := helpers.NewTestServer(t)
 	createBucket(t, srv, "cond-mp")
-	uploadID, parts := stagedUpload(t, srv, "cond-mp", "big.bin", []byte("hello, "), []byte("world!"))
+	uploadID, parts := stagedUpload(t, srv, "cond-mp", "big.bin", []byte("hello, world!"))
 
 	// When: it completes guarded by an ETag
 	resp := completeConditional(t, srv, "cond-mp", "big.bin", uploadID, parts, map[string]string{
@@ -353,7 +353,7 @@ func TestCompleteMultipartUpload_ifNoneMatchWithAnETagValue(t *testing.T) {
 	// Given: a staged upload
 	srv := helpers.NewTestServer(t)
 	createBucket(t, srv, "cond-mp")
-	uploadID, parts := stagedUpload(t, srv, "cond-mp", "big.bin", []byte("hello, "), []byte("world!"))
+	uploadID, parts := stagedUpload(t, srv, "cond-mp", "big.bin", []byte("hello, world!"))
 
 	// When: it completes with an ETag rather than the '*' AWS documents
 	resp := completeConditional(t, srv, "cond-mp", "big.bin", uploadID, parts, map[string]string{

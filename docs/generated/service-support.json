@@ -187,7 +187,7 @@
           "operation": "CompleteMultipartUpload",
           "category": "Multipart uploads",
           "status": "✅ Supported",
-          "notes": "Honours the same If-None-Match: * and If-Match conditional writes as PutObject, evaluated at completion time"
+          "notes": "Validates the parts list as AWS does: a wrong or unknown ETag is InvalidPart, out-of-order parts InvalidPartOrder, a non-final part under 5 MiB EntityTooSmall, an empty list MalformedXML; a refused completion leaves the upload intact. Honours the same If-None-Match: * and If-Match conditional writes as PutObject, evaluated at completion time"
         },
         {
           "operation": "AbortMultipartUpload",

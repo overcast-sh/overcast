@@ -1930,7 +1930,9 @@ func TestMultipartUpload_fullCycle(t *testing.T) {
 	srv := helpers.NewTestServer(t)
 	createBucket(t, srv, "mp-bucket")
 
-	part1 := []byte("hello, ")
+	// Every part but the last must be at least 5 MiB (#1706), so part 1 is
+	// exactly that and part 2 is the short tail.
+	part1 := bytes.Repeat([]byte("h"), 5*1024*1024)
 	part2 := []byte("world!")
 
 	// When: create, upload two parts, complete
@@ -2522,14 +2524,11 @@ func TestMultipartUpload_bodyStoredOnDisk(t *testing.T) {
 
 	// When: complete a multipart upload
 	uploadID := createMultipartUpload(t, srv, "disk-bucket", "disk-obj.bin")
-	uploadPart(t, srv, "disk-bucket", "disk-obj.bin", uploadID, 1, []byte("hello"))
-	uploadPart(t, srv, "disk-bucket", "disk-obj.bin", uploadID, 2, []byte(" world"))
-
-	req := mustReq(http.MethodPost, srv.URL+"/disk-bucket/disk-obj.bin?uploadId="+uploadID,
-		strings.NewReader(`<CompleteMultipartUpload><Part><PartNumber>1</PartNumber><ETag>"a"</ETag></Part><Part><PartNumber>2</PartNumber><ETag>"b"</ETag></Part></CompleteMultipartUpload>`),
-		map[string]string{"Content-Type": "application/xml"})
-	resp, _ := http.DefaultClient.Do(req)
-	resp.Body.Close()
+	etag := uploadPart(t, srv, "disk-bucket", "disk-obj.bin", uploadID, 1, []byte("hello"))
+	completeMultipartUpload(t, srv, "disk-bucket", "disk-obj.bin", uploadID, []struct {
+		PartNumber int
+		ETag       string
+	}{{1, etag}})
 
 	// Then: a body file exists
 	if files := findFiles(t, dataDir); len(files) == 0 {
