@@ -110,12 +110,11 @@ type deleteStateMachineRequest struct {
 }
 
 func (h *Handler) createStateMachineTyped(ctx context.Context, req *createStateMachineRequest) (*createStateMachineResponse, *protocol.AWSError) {
-	if req.Name == "" {
-		return nil, &protocol.AWSError{
-			Code:       "InvalidName",
-			Message:    "Value null at 'name' failed to satisfy constraint",
-			HTTPStatus: http.StatusBadRequest,
-		}
+	if aerr := validateStateMachineName(req.Name); aerr != nil {
+		return nil, aerr
+	}
+	if aerr := validateRoleARN(req.RoleArn); aerr != nil {
+		return nil, aerr
 	}
 	if req.VersionDescription != "" && !req.Publish {
 		return nil, errVersionDescriptionWithoutPublish()
@@ -214,16 +213,17 @@ func (h *Handler) createStateMachineTyped(ctx context.Context, req *createStateM
 // ARN — that version's snapshot. An alias ARN is not a state machine
 // DescribeStateMachine can describe; DescribeStateMachineAlias does that.
 func (h *Handler) describeStateMachineTyped(ctx context.Context, req *describeStateMachineRequest) (*describeStateMachineResponse, *protocol.AWSError) {
-	if arn, ok := parseSMARN(req.StateMachineArn); ok {
-		switch {
-		case arn.isVersion():
-			return h.describeVersion(ctx, arn, req.StateMachineArn)
-		case arn.isAlias():
-			return nil, errInvalidArn(req.StateMachineArn)
-		}
+	arn, aerr := requireStateMachineARN(req.StateMachineArn)
+	if aerr != nil {
+		return nil, aerr
 	}
-	name := extractSMName(req.StateMachineArn)
-	sm, err := h.store.GetStateMachine(ctx, name)
+	switch {
+	case arn.isVersion():
+		return h.describeVersion(ctx, arn, req.StateMachineArn)
+	case arn.isAlias():
+		return nil, errInvalidArn(req.StateMachineArn)
+	}
+	sm, err := h.store.GetStateMachine(ctx, arn.name)
 	if err != nil {
 		return nil, protocol.Wrap(protocol.ErrInternalError, err)
 	}
@@ -259,6 +259,12 @@ func (h *Handler) updateStateMachineTyped(ctx context.Context, req *updateStateM
 	if aerr := validateDescription("versionDescription", req.VersionDescription); aerr != nil {
 		return nil, aerr
 	}
+	if _, aerr := requireStateMachineARN(req.StateMachineArn); aerr != nil {
+		return nil, aerr
+	}
+	// A qualified ARN still misses: UpdateStateMachine edits the state
+	// machine itself, never a version or alias, and extractSMName keeps the
+	// qualifier so the lookup cannot reach the base record by accident.
 	name := extractSMName(req.StateMachineArn)
 	sm, err := h.store.GetStateMachine(ctx, name)
 	if err != nil {
@@ -334,6 +340,9 @@ func (h *Handler) listStateMachinesTyped(ctx context.Context, req *listStateMach
 // deleteStateMachineTyped deletes a state machine together with every version
 // and alias published under it.
 func (h *Handler) deleteStateMachineTyped(ctx context.Context, req *deleteStateMachineRequest) (*struct{}, *protocol.AWSError) {
+	if _, aerr := requireStateMachineARN(req.StateMachineArn); aerr != nil {
+		return nil, aerr
+	}
 	name := extractSMName(req.StateMachineArn)
 	if err := h.deleteVersionsAndAliases(ctx, name); err != nil {
 		return nil, protocol.Wrap(protocol.ErrInternalError, err)

@@ -24,9 +24,12 @@ type executionTarget struct {
 // keeps the base ARN and name — executions of a version or alias are
 // executions of the state machine, named under it, as on AWS.
 func (h *Handler) resolveExecutionTarget(ctx context.Context, arn string) (*StateMachine, *executionTarget, *protocol.AWSError) {
-	parsed, ok := parseSMARN(arn)
-	if !ok || parsed.qualifier == "" {
-		sm, err := h.store.GetStateMachine(ctx, extractSMName(arn))
+	parsed, aerr := requireStateMachineARN(arn)
+	if aerr != nil {
+		return nil, nil, aerr
+	}
+	if parsed.qualifier == "" {
+		sm, err := h.store.GetStateMachine(ctx, parsed.name)
 		if err != nil {
 			return nil, nil, protocol.Wrap(protocol.ErrInternalError, err)
 		}
@@ -51,10 +54,11 @@ func (h *Handler) resolveExecutionTarget(ctx context.Context, arn string) (*Stat
 			return nil, nil, errSMNotFound(arn)
 		}
 		target.aliasArn = alias.ARN
-		picked := h.pickRoute(alias.RoutingConfiguration)
-		if versionARN, ok = parseSMARN(picked); !ok || !versionARN.isVersion() {
+		picked, ok := parseSMARN(h.pickRoute(alias.RoutingConfiguration))
+		if !ok || !picked.isVersion() {
 			return nil, nil, errSMNotFound(arn)
 		}
+		versionARN = picked
 	}
 	v, aerr := h.getVersion(ctx, versionARN)
 	if aerr != nil {
@@ -91,9 +95,12 @@ func (h *Handler) pickRoute(routes []aliasRouteRecord) string {
 // executions that ran that version (started through it, or routed to it by an
 // alias); an alias ARN lists the executions started through the alias.
 func (h *Handler) executionFilter(ctx context.Context, arn string) (*StateMachine, func(*Execution) bool, *protocol.AWSError) {
-	parsed, ok := parseSMARN(arn)
-	if !ok || parsed.qualifier == "" {
-		sm, err := h.store.GetStateMachine(ctx, extractSMName(arn))
+	parsed, aerr := requireStateMachineARN(arn)
+	if aerr != nil {
+		return nil, nil, aerr
+	}
+	if parsed.qualifier == "" {
+		sm, err := h.store.GetStateMachine(ctx, parsed.name)
 		if err != nil {
 			return nil, nil, protocol.Wrap(protocol.ErrInternalError, err)
 		}
