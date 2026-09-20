@@ -2,16 +2,20 @@ service: eventbridge
 status: fixed
 priority: p1
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-07-16
+last_updated: 2026-09-20
 protocols: [aws_json_1_1, rpcv2_cbor]
 implementation: [internal/services/eventbridge]
 integration_tests: [tests/integration/eventbridge]
 capability_docs: docs/services/eventbridge.md
-operation_count_estimate: 28 tracked; 16 supported, 12 unsupported
-current_support_level: Management-plane/CDK-compatible with partial routing; PutEvents exact-match rules can deliver to SQS targets, and scheduled rules can invoke ECS/Fargate RunTask targets.
+operation_count_estimate: 29 tracked; 18 supported, 11 unsupported
+current_support_level: Management-plane/CDK-compatible with real routing — PutEvents evaluates every rule on a bus and delivers matches to Lambda, SQS, SNS, Step Functions, Kinesis, Firehose, ECS RunTask and another event bus, applying InputPath/InputTransformer precedence and RetryPolicy/DeadLetterConfig (#467, PR #494). Archives, replay, and API destinations remain unimplemented.
 operations:
   PutTargets:
     status: fixed
+    priority: p1
+    aws_docs:
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_PutTargets.html
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_Target.html
     scenarios:
       ecs_fargate_target_round_trip:
         status: fixed
@@ -19,8 +23,28 @@ operations:
           - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_Target.html
           - tests/integration/eventbridge/eventbridge_test.go::TestPutTargets_ecsFargateTargetRoundTrip
         notes: PutTargets/ListTargetsByRule preserve RoleArn, Input, and EcsParameters used by CDK scheduled Fargate task targets.
+      rejects_unsupported_target_type:
+        status: fixed
+        evidence:
+          - tests/integration/eventbridge/target_fanout_test.go::TestPutTargets_rejectsUnsupportedTargetType
+        notes: A well-formed ARN naming a service with no delivery sink (CloudWatch Logs, cross-bus events, API destinations) comes back in FailedEntries with ErrorCode UnsupportedTargetType and is not stored, instead of provisioning a rule that silently never fires.
+      rejects_malformed_target_arn:
+        status: fixed
+        evidence:
+          - tests/integration/eventbridge/target_fanout_test.go::TestPutTargets_rejectsMalformedTargetARN
+        notes: A malformed ARN fails the whole PutTargets call with ValidationException (400), matching AWS's synchronous ARN-shape check.
+      rejects_multiple_input_specifications:
+        status: fixed
+        evidence:
+          - tests/integration/eventbridge/target_fanout_test.go::TestPutTargets_rejectsMultipleInputSpecifications
+        notes: More than one of Input/InputPath/InputTransformer on a target is a ValidationException, as on AWS.
   PutEvents:
     status: fixed
+    priority: p1
+    aws_docs:
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_PutEvents.html
+      - https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-event-patterns.html
+      - https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-transform-target-input.html
     scenarios:
       matching_rule_sqs_target_delivery:
         status: fixed
@@ -29,8 +53,61 @@ operations:
           - https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-event-patterns.html
           - tests/integration/eventbridge/eventbridge_test.go::TestPutEvents_matchingRuleDeliversToSQSTarget
         notes: Exact-match event patterns are evaluated and matching events are delivered to SQS targets with an EventBridge event envelope.
+      lambda_target_delivery:
+        status: fixed
+        evidence:
+          - tests/integration/eventbridge/target_fanout_test.go::TestPutEvents_deliversToLambdaTarget
+          - tests/integration/eventbridge/lambda_permission_test.go::TestPutEvents_lambdaTargetWithPermissionDelivers
+          - tests/integration/eventbridge/lambda_permission_test.go::TestPutEvents_lambdaTargetWithoutPermissionIsDropped
+          - tests/integration/eventbridge/lambda_permission_test.go::TestPutEvents_lambdaTargetPermissionForAnotherRuleIsDropped
+          - tests/integration/eventbridge/lambda_permission_test.go::TestPutEvents_lambdaTargetWithRoleARNSkipsThePolicyCheck
+          - tests/integration/eventbridge/lambda_permission_test.go::TestPutEvents_lambdaTargetEnforcementOffNeedsNoPermission
+        notes: A matching rule invokes a Lambda target asynchronously; delivery additionally respects Lambda resource-policy enforcement (a rule-scoped statement, RoleArn bypass, and the enforcement-off configuration).
+      sns_target_delivery:
+        status: fixed
+        evidence:
+          - tests/integration/eventbridge/target_fanout_test.go::TestPutEvents_deliversToSNSTarget
+      step_functions_target_delivery:
+        status: fixed
+        evidence:
+          - tests/integration/eventbridge/target_fanout_test.go::TestPutEvents_deliversToStepFunctionsTarget
+      kinesis_target_delivery:
+        status: fixed
+        evidence:
+          - tests/integration/eventbridge/target_fanout_test.go::TestPutEvents_deliversToKinesisTarget
+      firehose_target_delivery:
+        status: fixed
+        evidence:
+          - tests/integration/eventbridge/target_fanout_test.go::TestPutEvents_deliversToFirehoseTarget
+      input_shaping_precedence:
+        status: fixed
+        evidence:
+          - tests/integration/eventbridge/target_fanout_test.go::TestPutEvents_inputPathAppliesBeforeDelivery
+          - tests/integration/eventbridge/target_fanout_test.go::TestPutEvents_inputTransformerAppliesBeforeDelivery
+        notes: Input > InputPath > InputTransformer precedence, over the JSONPath subset AWS accepts.
+      retry_and_dead_letter_queue:
+        status: fixed
+        evidence:
+          - tests/integration/eventbridge/target_fanout_test.go::TestPutEvents_failedDeliveryGoesToDeadLetterQueue
+          - tests/integration/eventbridge/target_fanout_test.go::TestPutEvents_failedDeliveryWithoutDLQIsDropped
+        notes: A failed delivery retries 1+RetryPolicy.MaximumRetryAttempts times (capped at 6 total), then dead-letters to DeadLetterConfig.Arn if set, otherwise drops with a logged warning; retries are immediate rather than AWS's exponential backoff over 24 hours (recorded as a difference in docs/services/eventbridge.md).
+      delivery_outcome_reporting:
+        status: fixed
+        evidence:
+          - tests/integration/eventbridge/target_fanout_test.go::TestDeliveriesEndpoint_reportsResolvedTargetTypes
+        notes: GET /_overcast/eventbridge/deliveries (emulator-only) reports each target's resolved type and last outcome from an in-memory ring.
+      event_bus_forwarding:
+        status: fixed
+        evidence:
+          - tests/integration/eventbridge/bus_target_test.go::TestPutEvents_busTargetRepublishesSourceAndDetailType
+          - tests/integration/eventbridge/bus_target_test.go::TestPutEvents_busCycleTerminatesAtTheHopBudget
+          - tests/integration/eventbridge/bus_target_test.go::TestPutEvents_busTargetAppliesInputTransformerToTheDetail
+        notes: An event-bus target republishes Source/DetailType onto the target bus and applies its own InputTransformer; forwarding is a capped in-process nested call (4 hops) rather than AWS's independent, unbounded delivery — recorded as a difference in docs/services/eventbridge.md.
   scheduled_rules:
     status: fixed
+    priority: p2
+    aws_docs:
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_EcsParameters.html
     scenarios:
       ecs_fargate_run_task:
         status: fixed
@@ -43,15 +120,31 @@ findings:
     - PutTargets/ListTargetsByRule preserve ECS/Fargate target metadata needed by CDK scheduled task management.
     - PutEvents exact-match rule delivery to SQS targets is covered.
     - Scheduled ECS/Fargate RunTask target invocation is covered.
+    - >-
+      #147/#467 (PR #494) — "Decide whether inert routing is acceptable" is answered
+      by the code, not a decision to leave it inert: PutEvents fan-out was rewritten
+      from SQS-and-scheduled-ECS-only to deliver matching events to Lambda, SQS, SNS,
+      Step Functions, Kinesis, Firehose, ECS RunTask and another event bus, applying
+      Input/InputPath/InputTransformer precedence and RetryPolicy/DeadLetterConfig —
+      internal/services/eventbridge/capabilities_dev.go:27, internal/eventtarget
+      (dispatch package). PutTargets independently validates every target at add
+      time (malformed ARN, unsupported target type, multiple input specifications)
+      rather than accepting and silently dropping at delivery. See the PutEvents and
+      PutTargets operation entries above for the full test list. docs/services/eventbridge.md
+      already documents the eight target types and no longer calls routing "partial".
   remaining_gaps:
-    - Review advanced EventBridge pattern operators, input transformers, retry/DLQ behavior, and additional target types.
+    - Review advanced EventBridge pattern operators (prefix, suffix, numeric, anything-but, exists, cidr, wildcard) — PutEvents/TestEventPattern still match on exact values only.
     - Review target validation, rule validation, and tag protocol fidelity.
   intentionally_partial:
-    - Target delivery is limited to SQS and ECS/Fargate RunTask paths; other targets may be skipped.
+    - Target delivery covers eight target types (Lambda, SQS, SNS, Step Functions, Kinesis, Firehose, ECS RunTask, event bus); the remaining ~12 AWS target types (CloudWatch Logs, API destinations, Redshift, SageMaker Pipeline, and others) are refused at PutTargets with UnsupportedTargetType rather than accepted and dropped.
+    - Archives, replay, and API destinations (Connections) are not implemented — 501, per docs/services/eventbridge.md.
+    - Retry timing is immediate and capped at 5-6 total attempts rather than AWS's exponential backoff over up to 24 hours.
+    - Bus-to-bus forwarding is a nested in-process call capped at 4 hops rather than AWS's independent, unbounded delivery.
 handoff:
-  start_with: [advanced event patterns, input transformers, target validation]
+  start_with: ["advanced event pattern operators, target/rule/tag protocol fidelity (#148, in progress elsewhere)"]
   do_not_redo:
     - ECS/Fargate target metadata round-trip for PutTargets/ListTargetsByRule; covered by TestPutTargets_ecsFargateTargetRoundTrip.
     - SQS target delivery for matching PutEvents; covered by TestPutEvents_matchingRuleDeliversToSQSTarget.
     - Scheduled ECS/Fargate RunTask invocation; covered by TestScheduledRule_ecsFargateTargetRunsTask.
+    - "PutEvents fan-out to Lambda/SNS/Step Functions/Kinesis/Firehose/event-bus, PutTargets validation (unsupported type, malformed ARN, multiple input specs), input shaping precedence, retry/DLQ, and Lambda permission enforcement (#147, #467, PR #494) from 2026-09-20."
   commands: [go test -count=1 ./internal/services/eventbridge/... ./tests/integration/eventbridge/...]

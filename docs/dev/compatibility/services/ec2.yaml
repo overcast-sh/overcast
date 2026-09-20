@@ -49,21 +49,79 @@ operations:
           - https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_Route.html
           - tests/integration/cloudformation/cloudformation_test.go::TestCreateStack_VPCPrivateSubnetLookupMetadata
         notes: CloudFormation-created EC2 resources now preserve tags, DescribeSubnets returns subnet tagSet, and NAT gateway default routes are exposed in DescribeRouteTables so CDK VPC lookups can classify private subnet groups.
+  DescribeExplicitIDResolution:
+    status: fixed
+    priority: p1
+    aws_docs:
+      - https://docs.aws.amazon.com/AWSEC2/latest/APIReference/errors-overview.html
+    implementation:
+      - internal/services/ec2/describe_ids.go:189 (resolveIDs)
+      - internal/services/ec2/describe_ids.go:372 (describeIDScopes)
+    tests:
+      present:
+        - tests/integration/ec2/ec2_describe_ids_test.go::TestDescribe_unknownExplicitIDIsNotFound
+        - tests/integration/ec2/ec2_describe_ids_test.go::TestDescribe_malformedExplicitIDIsMalformed
+        - tests/integration/ec2/ec2_describe_ids_test.go::TestDescribe_selectorsWithNoMalformedCodeAnswerNotFound
+        - tests/integration/ec2/ec2_describe_ids_test.go::TestDescribeAddresses_malformedAddressBeatsAnUnknownAllocation
+        - tests/integration/ec2/ec2_describe_ids_test.go::TestDescribeAddresses_bothSelectorsResolveTheirOwnList
+        - tests/integration/ec2/ec2_describe_ids_test.go::TestDescribeVpcs_wrongLengthIDIsMalformed
+        - tests/integration/ec2/ec2_describe_ids_test.go::TestDescribeVpcs_mixedKnownAndUnknownIDsFails
+        - tests/integration/ec2/ec2_describe_ids_test.go::TestDescribeVpcs_malformedIDWinsOverAnUnknownOne
+        - tests/integration/ec2/ec2_describe_ids_test.go::TestDescribe_filterMatchingNothingIsStillAnEmpty200
+        - tests/integration/ec2/ec2_describe_ids_test.go::TestDescribeVpcs_noSelectorsStillListsTheRegion
+        - tests/integration/ec2/ec2_describe_ids_test.go::TestReleaseAddress_unknownAllocationIsInvalidAllocationID
+        - tests/integration/ec2/ec2_not_found_codes_test.go::TestOperation_unknownResourceAnswersItsOwnAWSCode
+        - tests/integration/ec2/ec2_not_found_codes_test.go::TestOperation_noResourceAnswersTheGenericCode
+    scenario_matrix:
+      - scenario: An explicit <Resource>Id.N naming a well-formed id the region does not hold, across DescribeVpcs, DescribeSubnets, DescribeSecurityGroups, DescribeRouteTables, DescribeInternetGateways, DescribeNetworkInterfaces, DescribeInstances, DescribeAddresses, DescribeNatGateways, DescribeVpnGateways, DescribeVpcEndpoints and DescribeVpcPeeringConnections.
+        status: fixed
+        evidence: "TestDescribe_unknownExplicitIDIsNotFound and TestOperation_unknownResourceAnswersItsOwnAWSCode return Invalid<Resource>ID.NotFound (400) instead of a legitimate empty 200 — Terraform's and CloudFormation's refresh logic reads Invalid*.NotFound to mean \"gone, drop it from state\"."
+      - scenario: A badly shaped explicit id.
+        status: fixed
+        evidence: "TestDescribe_malformedExplicitIDIsMalformed, TestDescribeVpcs_wrongLengthIDIsMalformed return Invalid<Resource>Id.Malformed (400), each casing copied verbatim from the EC2 API reference's error table (e.g. InvalidVpcID.Malformed vs InvalidGroupId.Malformed)."
+      - scenario: A request naming both an unknown-but-well-formed id and a malformed one.
+        status: fixed
+        evidence: "TestDescribeVpcs_malformedIDWinsOverAnUnknownOne, TestDescribeAddresses_malformedAddressBeatsAnUnknownAllocation — shape is checked before existence, matching where AWS validates request parsing."
+      - scenario: A filter (not an explicit id list) matching nothing.
+        status: tested and matching AWS docs
+        evidence: "TestDescribe_filterMatchingNothingIsStillAnEmpty200, TestDescribeVpcs_noSelectorsStillListsTheRegion — a filter that matches nothing stays a legitimate empty 200, only an explicit id list resolves to NotFound/Malformed."
+      - scenario: DescribeAddresses's two independent selectors (AllocationId.N and PublicIp.N).
+        status: fixed
+        evidence: TestDescribeAddresses_bothSelectorsResolveTheirOwnList — each selector answers its own NotFound/Malformed pair rather than sharing one.
+      - scenario: ReleaseAddress with an unknown allocation.
+        status: fixed
+        evidence: "TestReleaseAddress_unknownAllocationIsInvalidAllocationID answers InvalidAllocationID.NotFound rather than InvalidAddressID.NotFound."
+    findings:
+      - Fixed — a Describe* given an explicit resource-id list now resolves the ids (NotFound/Malformed) instead of treating them as a filter that can legitimately match nothing; wired once into the shared describe body so both legacy and typed dispatch are covered by construction (#1708, PR #1846).
 findings:
   fixed:
     - CreateVpc creates the AWS-documented main route table for VPC lookups.
     - CreateSubnet preserves explicit AvailabilityZone values for multi-AZ VPC lookup scenarios.
     - EC2 Query errors use the EC2-specific error envelope expected by aws-sdk-js v3.
     - CloudFormation-created private subnet group metadata is visible to CDK VPC lookup paths through subnet tags and NAT gateway route entries.
+    - >-
+      #1708 (PR #1846) — an EC2 Describe* given an explicit id list (VpcId.N, SubnetId.N,
+      GroupId.N, RouteTableId.N, InternetGatewayId.N, NetworkInterfaceId.N,
+      InstanceId.N, AllocationId.N/PublicIp.N, NatGatewayId.N, VpnGatewayId.N,
+      VpcEndpointId.N, VpcPeeringConnectionId.N) previously applied filter semantics
+      to it, so an id the region does not hold answered a legitimate-looking empty
+      200 instead of Invalid<Resource>ID.NotFound — the AWS contract Terraform's and
+      CloudFormation's refresh logic, and waiters, read to mean the resource is gone.
+      resolveIDs (internal/services/ec2/describe_ids.go:189) now resolves the
+      selection once, shape (.Malformed) before existence (.NotFound), across the
+      whole id list, for every describe in describeIDScopes
+      (internal/services/ec2/describe_ids.go:372). See the
+      DescribeExplicitIDResolution operation entry above for the full test list.
   remaining_gaps:
     - Focus VPC, subnet, security group, route table, and ENI behavior.
     - Review AWS Query XML shapes.
   intentionally_partial: []
 handoff:
-  start_with: [CreateVpc, CreateSubnet, security groups, route tables]
+  start_with: ["security groups, route tables, ENI behavior (#139)", "AWS Query XML shape review (#140)"]
   do_not_redo:
     - Main route table creation for CreateVpc; covered by TestCreateVpc_mainRouteTable.
     - CreateSubnet explicit AvailabilityZone preservation; covered by TestCreateSubnet_requestedAvailabilityZones.
     - EC2 Query error envelope; covered by TestEC2QueryError_unsupportedAction and TestEC2QueryError_implementedActionErrors.
     - CloudFormation private subnet lookup metadata; covered by TestCreateStack_VPCPrivateSubnetLookupMetadata.
+    - "Describe* explicit-id resolution to Invalid<Resource>ID.NotFound/.Malformed, and ReleaseAddress's InvalidAllocationID.NotFound (#1708, PR #1846) from 2026-09-20."
   commands: [go test -count=1 ./internal/services/ec2/... ./tests/integration/ec2/...]

@@ -1,15 +1,226 @@
 service: kms
-status: in_progress
+status: fixed
 priority: p1
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-08-08
+last_updated: 2026-09-20
 protocols: [aws_json_1_1, aws_json_1_0, rpcv2_cbor]
 implementation: [internal/services/kms]
 integration_tests: [tests/integration/kms, tests/integration/cloudformation]
 capability_docs: docs/services/kms.md
-operation_count_estimate: 33 tracked, 33 supported
-current_support_level: Broad local-dev KMS coverage for keys, aliases, tags, policies, grants, and crypto.
-operations: {}
+operation_count_estimate: 34 tracked; 32 supported, 2 partial (CreateKey, GenerateRandom)
+current_support_level: Broad local-dev KMS coverage for keys, aliases, tags, policies, grants, and crypto; key material length, key-binding, alias validation, and ARN-shaped responses were reviewed against AWS docs and fixed (#1710, #1844).
+operations:
+  GenerateDataKey:
+    status: fixed
+    priority: p1
+    aws_docs:
+      - https://docs.aws.amazon.com/kms/latest/APIReference/API_GenerateDataKey.html
+    implementation:
+      - internal/services/kms/typed_logic.go:523 (generateDataKeyTyped)
+      - internal/services/kms/typed_logic.go:681 (generateDataKeyParts, dataKeyLength)
+    tests:
+      present:
+        - tests/integration/kms/key_material_test.go::TestGenerateDataKey_numberOfBytes
+        - tests/integration/kms/key_material_test.go::TestGenerateDataKey_keySpecLengths
+        - tests/integration/kms/key_material_test.go::TestGenerateDataKey_bothKeySpecAndNumberOfBytes
+        - tests/integration/kms/key_material_test.go::TestGenerateDataKey_neitherKeySpecNorNumberOfBytes
+        - tests/integration/kms/key_material_test.go::TestGenerateDataKey_numberOfBytesOutOfRange
+        - tests/integration/kms/key_material_test.go::TestRPCv2CBOR_GenerateDataKey_numberOfBytes
+        - tests/integration/kms/kms_test.go::TestGenerateDataKey_returnsPlaintextAndCiphertext
+    scenario_matrix:
+      - scenario: NumberOfBytes (1-1024) requested instead of KeySpec.
+        status: fixed
+        evidence: dataKeyLength honours the requested byte count instead of always returning 32 bytes — TestGenerateDataKey_numberOfBytes asserts Plaintext length equals NumberOfBytes for 1, 16, 64, 128 and 1024.
+      - scenario: KeySpec (AES_256/AES_128) requested instead of NumberOfBytes.
+        status: tested and matching AWS docs
+        evidence: TestGenerateDataKey_keySpecLengths.
+      - scenario: Both KeySpec and NumberOfBytes supplied, or neither.
+        status: fixed
+        evidence: "AWS docs: \"You must specify either the KeySpec or the NumberOfBytes parameter (but not both)\" — TestGenerateDataKey_bothKeySpecAndNumberOfBytes, TestGenerateDataKey_neitherKeySpecNorNumberOfBytes return ValidationException."
+      - scenario: NumberOfBytes outside 1-1024.
+        status: fixed
+        evidence: TestGenerateDataKey_numberOfBytesOutOfRange.
+    findings:
+      - Fixed — NumberOfBytes now determines Plaintext length instead of a hard-coded 32 bytes, and the KeySpec/NumberOfBytes exclusivity rule is enforced before key resolution (#1710, PR #1845).
+  GenerateDataKeyWithoutPlaintext:
+    status: fixed
+    priority: p2
+    aws_docs:
+      - https://docs.aws.amazon.com/kms/latest/APIReference/API_GenerateDataKeyWithoutPlaintext.html
+    implementation:
+      - internal/services/kms/typed_logic.go:531 (generateDataKeyWithoutPlaintextTyped)
+    tests:
+      present:
+        - tests/integration/kms/key_material_test.go::TestGenerateDataKeyWithoutPlaintext_numberOfBytes
+        - tests/integration/kms/key_material_test.go::TestGenerateDataKeyWithoutPlaintext_bothKeySpecAndNumberOfBytes
+        - tests/integration/kms/kms_test.go::TestGenerateDataKeyWithoutPlaintext_returnsCiphertextOnly
+    scenario_matrix:
+      - scenario: Same KeySpec/NumberOfBytes rules as GenerateDataKey.
+        status: fixed
+        evidence: Shares dataKeyLength with GenerateDataKey — TestGenerateDataKeyWithoutPlaintext_numberOfBytes, TestGenerateDataKeyWithoutPlaintext_bothKeySpecAndNumberOfBytes.
+    findings:
+      - Fixed alongside GenerateDataKey (#1710, PR #1845).
+  GenerateRandom:
+    status: fixed
+    priority: p3
+    aws_docs:
+      - https://docs.aws.amazon.com/kms/latest/APIReference/API_GenerateRandom.html
+    implementation:
+      - internal/services/kms/typed_logic.go:544 (generateRandomTyped)
+      - internal/services/kms/capabilities_dev.go:27
+    tests:
+      present:
+        - tests/integration/kms/key_material_test.go::TestGenerateRandom_numberOfBytes
+        - tests/integration/kms/key_material_test.go::TestGenerateRandom_numberOfBytesOutOfRange
+    scenario_matrix:
+      - scenario: NumberOfBytes (1-1024), no default per the API reference.
+        status: fixed
+        evidence: Was a 501; now implemented with validateNumberOfBytes and no default — TestGenerateRandom_numberOfBytes, TestGenerateRandom_numberOfBytesOutOfRange.
+    findings:
+      - Added — GenerateRandom moves from 501 to implemented, taking KMS from 33 to 34 tracked operations (#1710, PR #1845).
+    intentionally_partial:
+      - CustomKeyStoreId and Recipient are accepted but ignored — no custom key store or asymmetric-recipient encryption is emulated (internal/services/kms/capabilities_dev.go:27).
+  Decrypt:
+    status: fixed
+    priority: p1
+    aws_docs:
+      - https://docs.aws.amazon.com/kms/latest/APIReference/API_Decrypt.html
+    implementation:
+      - internal/services/kms/typed_logic.go:499 (comment citing the IncorrectKeyException rule)
+    tests:
+      present:
+        - tests/integration/kms/crypto_validation_test.go::TestDecrypt_keyIdMatchesProducingKey
+        - tests/integration/kms/crypto_validation_test.go::TestDecrypt_keyIdFromDifferentKey
+        - tests/integration/kms/crypto_validation_test.go::TestDecrypt_keyIdAliasForProducingKey
+        - tests/integration/kms/crypto_validation_test.go::TestDecrypt_withoutKeyIdStillResolvesFromCiphertext
+        - tests/integration/kms/crypto_validation_test.go::TestRPCv2CBOR_Decrypt_keyIdFromDifferentKey
+    scenario_matrix:
+      - scenario: KeyId supplied but names a key that did not produce the ciphertext.
+        status: fixed
+        evidence: "AWS docs: a KeyId that does not identify the CMK that encrypted the ciphertext throws IncorrectKeyException — TestDecrypt_keyIdFromDifferentKey, TestRPCv2CBOR_Decrypt_keyIdFromDifferentKey."
+      - scenario: KeyId supplied and matches, or an alias of, the producing key.
+        status: tested and matching AWS docs
+        evidence: TestDecrypt_keyIdMatchesProducingKey, TestDecrypt_keyIdAliasForProducingKey.
+      - scenario: KeyId omitted entirely.
+        status: tested and matching AWS docs
+        evidence: The ciphertext envelope alone resolves the key — TestDecrypt_withoutKeyIdStillResolvesFromCiphertext.
+    findings:
+      - Fixed — a mismatched KeyId now returns IncorrectKeyException (400) instead of silently decrypting (#1710, PR #1845).
+  ReEncrypt:
+    status: fixed
+    priority: p2
+    aws_docs:
+      - https://docs.aws.amazon.com/kms/latest/APIReference/API_ReEncrypt.html
+    implementation:
+      - internal/services/kms/typed_logic.go:809 (reEncryptTyped)
+      - internal/services/kms/typed_logic.go:822 (comment citing the IncorrectKeyException rule)
+    tests:
+      present:
+        - tests/integration/kms/reencrypt_source_key_test.go::TestReEncrypt_sourceKeyIdMatchesProducingKey
+        - tests/integration/kms/reencrypt_source_key_test.go::TestReEncrypt_sourceKeyIdFromDifferentKey
+        - tests/integration/kms/reencrypt_source_key_test.go::TestReEncrypt_sourceKeyIdAliasForProducingKey
+        - tests/integration/kms/reencrypt_source_key_test.go::TestReEncrypt_withoutSourceKeyIdStillResolvesFromCiphertext
+        - tests/integration/kms/reencrypt_source_key_test.go::TestReEncrypt_sourceKeyIdUnknownKey
+        - tests/integration/kms/reencrypt_source_key_test.go::TestRPCv2CBOR_ReEncrypt_sourceKeyIdFromDifferentKey
+    scenario_matrix:
+      - scenario: SourceKeyId supplied but names a key other than the one that produced CiphertextBlob.
+        status: fixed
+        evidence: TestReEncrypt_sourceKeyIdFromDifferentKey, TestRPCv2CBOR_ReEncrypt_sourceKeyIdFromDifferentKey return IncorrectKeyException, mirroring Decrypt's rule.
+      - scenario: SourceKeyId omitted, or matching/aliasing the producing key.
+        status: tested and matching AWS docs
+        evidence: TestReEncrypt_withoutSourceKeyIdStillResolvesFromCiphertext, TestReEncrypt_sourceKeyIdMatchesProducingKey, TestReEncrypt_sourceKeyIdAliasForProducingKey.
+      - scenario: SourceKeyId names a key that does not exist at all.
+        status: tested and matching AWS docs
+        evidence: TestReEncrypt_sourceKeyIdUnknownKey.
+    findings:
+      - Fixed — #1844 identified that ReEncrypt did not apply the same SourceKeyId binding check #1710 added to Decrypt; PR #1867 closed it.
+  Encrypt:
+    status: fixed
+    priority: p2
+    aws_docs:
+      - https://docs.aws.amazon.com/kms/latest/APIReference/API_Encrypt.html
+    implementation:
+      - internal/services/kms/capabilities_dev.go:23
+    tests:
+      present:
+        - tests/integration/kms/crypto_validation_test.go::TestEncrypt_plaintextAtLimit
+        - tests/integration/kms/crypto_validation_test.go::TestEncrypt_plaintextOverLimit
+    scenario_matrix:
+      - scenario: Plaintext at, and over, the 4096-byte symmetric limit.
+        status: fixed
+        evidence: TestEncrypt_plaintextAtLimit accepts exactly 4096 bytes, TestEncrypt_plaintextOverLimit rejects 4097 with ValidationException.
+    findings:
+      - Fixed — the documented 4096-byte Plaintext cap is now enforced (#1710, PR #1845).
+  ScheduleKeyDeletion:
+    status: fixed
+    priority: p2
+    aws_docs:
+      - https://docs.aws.amazon.com/kms/latest/APIReference/API_ScheduleKeyDeletion.html
+    implementation:
+      - internal/services/kms/typed_logic.go:343 (scheduleKeyDeletionTyped)
+      - internal/services/kms/capabilities_dev.go:15
+    tests:
+      present:
+        - tests/integration/kms/schedule_key_deletion_test.go::TestScheduleKeyDeletion_returnsKeyArn
+        - tests/integration/kms/crypto_validation_test.go::TestScheduleKeyDeletion_pendingWindowOutOfRange
+        - tests/integration/kms/crypto_validation_test.go::TestScheduleKeyDeletion_pendingWindowAtBounds
+        - tests/integration/kms/crypto_validation_test.go::TestScheduleKeyDeletion_pendingWindowOmittedDefaultsTo30
+        - tests/integration/kms/schedule_key_deletion_test.go::TestScheduleKeyDeletion_returnsPendingWindowInDays
+        - tests/integration/kms/schedule_key_deletion_test.go::TestScheduleKeyDeletion_omittedWindowReportsThe30DayDefault
+        - tests/integration/kms/schedule_key_deletion_test.go::TestRPCv2CBOR_ScheduleKeyDeletion_returnsPendingWindowInDays
+    scenario_matrix:
+      - scenario: PendingWindowInDays outside 7-30.
+        status: fixed
+        evidence: TestScheduleKeyDeletion_pendingWindowOutOfRange, TestScheduleKeyDeletion_pendingWindowAtBounds.
+      - scenario: PendingWindowInDays omitted.
+        status: fixed
+        evidence: Defaults to 30 and is told apart from an explicit bad value via a pointer field — TestScheduleKeyDeletion_pendingWindowOmittedDefaultsTo30, TestScheduleKeyDeletion_omittedWindowReportsThe30DayDefault.
+      - scenario: Response KeyId and PendingWindowInDays shape.
+        status: fixed
+        evidence: "AWS's example response returns the key ARN in KeyId; response now also includes PendingWindowInDays — TestScheduleKeyDeletion_returnsKeyArn, TestScheduleKeyDeletion_returnsPendingWindowInDays, TestRPCv2CBOR_ScheduleKeyDeletion_returnsPendingWindowInDays."
+    findings:
+      - Fixed — window validation and the ARN-shaped KeyId landed in PR #1845 (#1710); the missing PendingWindowInDays response field was found in the same audit and closed by PR #1867 (#1844).
+  CancelKeyDeletion:
+    status: fixed
+    priority: p3
+    aws_docs:
+      - https://docs.aws.amazon.com/kms/latest/APIReference/API_CancelKeyDeletion.html
+    implementation:
+      - internal/services/kms/typed_logic.go:375 (cancelKeyDeletionTyped)
+      - internal/services/kms/capabilities_dev.go:16
+    tests:
+      present:
+        - tests/integration/kms/cancel_key_deletion_test.go::TestCancelKeyDeletion_returnsKeyArn
+    scenario_matrix:
+      - scenario: Response KeyId shape.
+        status: fixed
+        evidence: "AWS docs: KeyId is \"The Amazon Resource Name (key ARN) of the KMS key whose deletion is canceled\"; Overcast returned the bare key id — TestCancelKeyDeletion_returnsKeyArn."
+    findings:
+      - Fixed — an audit while closing #1710 found CancelKeyDeletion returning the bare key id where AWS returns the ARN (#1844); closed by PR #1867. The audit also checked Encrypt, Decrypt, GenerateDataKey*, Sign, Verify, GetPublicKey, ReEncrypt, GenerateDataKeyPair, VerifyMac and grants, all already ARN-correct.
+  CreateAlias:
+    status: fixed
+    priority: p2
+    aws_docs:
+      - https://docs.aws.amazon.com/kms/latest/APIReference/API_CreateAlias.html
+    implementation:
+      - internal/services/kms/typed_logic.go:395 (createAliasTyped)
+      - internal/services/kms/capabilities_dev.go:18
+    tests:
+      present:
+        - tests/integration/kms/alias_validation_test.go::TestCreateAlias_withoutAliasPrefix
+        - tests/integration/kms/alias_validation_test.go::TestCreateAlias_reservedAwsPrefix
+        - tests/integration/kms/alias_validation_test.go::TestCreateAlias_duplicateName
+        - tests/integration/kms/alias_validation_test.go::TestUpdateAlias_stillRepointsExistingAlias
+        - tests/integration/kms/alias_validation_test.go::TestRPCv2CBOR_CreateAlias_withoutAliasPrefix
+    scenario_matrix:
+      - scenario: Alias name missing the alias/ prefix, or the reserved alias/aws/ prefix.
+        status: fixed
+        evidence: TestCreateAlias_withoutAliasPrefix, TestCreateAlias_reservedAwsPrefix, TestRPCv2CBOR_CreateAlias_withoutAliasPrefix return InvalidAliasNameException.
+      - scenario: Alias name already in use.
+        status: fixed
+        evidence: "TestCreateAlias_duplicateName returns AlreadyExistsException and leaves the existing alias where it pointed; TestUpdateAlias_stillRepointsExistingAlias confirms UpdateAlias is unaffected and still re-points."
+    findings:
+      - Fixed — CreateAlias now enforces the documented prefix, reserved-prefix, pattern/256-character-cap and duplicate-name rules (#1710, PR #1845).
 findings:
   fixed:
     - operation: AWS::KMS::Key
@@ -37,13 +248,47 @@ findings:
           - https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-kms-key.html
           - https://docs.aws.amazon.com/kms/latest/APIReference/API_UpdateKeyDescription.html
         tests: [tests/integration/cloudformation/kms_policy_test.go, internal/services/cloudformation/provisioner_resources_test.go, tests/integration/kms/update_key_description_test.go]
+    - >-
+      #157/#1710 (PR #1845) — GenerateDataKey/GenerateDataKeyWithoutPlaintext now honour
+      NumberOfBytes instead of a hard-coded 32 bytes and enforce the documented
+      KeySpec/NumberOfBytes mutual-exclusivity rule; GenerateRandom moved from a 501 to
+      implemented (Partial: CustomKeyStoreId/Recipient ignored); Decrypt returns
+      IncorrectKeyException for a KeyId that did not produce the ciphertext; Encrypt
+      enforces the 4096-byte Plaintext cap; ScheduleKeyDeletion validates
+      PendingWindowInDays (7-30, defaulting to 30) and returns the key ARN in KeyId;
+      CreateAlias enforces the alias/ prefix, the reserved alias/aws/ prefix, the
+      pattern/256-character cap, and duplicate-name rejection. See the operations above
+      for the full disposition and test evidence.
+    - >-
+      #157/#1844 (PR #1867) — a follow-up audit of #1710 found three further shape
+      gaps: CancelKeyDeletion returned the bare key id instead of the ARN in KeyId,
+      ReEncrypt did not apply Decrypt's SourceKeyId-binding check to its own source
+      side, and ScheduleKeyDeletion's response omitted the documented
+      PendingWindowInDays field. All three are fixed and tested; see the CancelKeyDeletion,
+      ReEncrypt, and ScheduleKeyDeletion operation entries above.
+    - >-
+      #158 — the tracker's "Align docs note for JSON 1.0 if intentional" gap is
+      resolved by documentation, not code: SupportedProtocols() in
+      internal/services/kms/typed_ops.go:127 accepts JSON 1.0, JSON 1.1, and RPC v2
+      CBOR, and codec.Supports (internal/protocol/codec/codec.go:83-100) treats JSON
+      1.0 and 1.1 as equivalent for every JSON-tier service by design, documented at
+      docs/dev/smithy.md:25. Real KMS serves JSON 1.1 only; accepting 1.0 too is the
+      framework-wide rule, not a KMS-specific gap. docs/services/kms.md now states this
+      under "What works". No code change was needed.
   remaining_gaps:
-    - Align docs note for JSON 1.0 if intentional.
     - Principal existence is not checked against remote AWS accounts; syntactically valid cross-account principals are accepted.
     - AWS::KMS::Key Tags are not applied by CloudFormation (create or update); KMS TagResource exists but the provisioner never dispatches it.
     - AWS::KMS::Key EnableKeyRotation is not applied by CloudFormation; KMS has no rotation-state operations yet.
-  intentionally_partial: []
+  intentionally_partial:
+    - EncryptionContext is not bound into the ciphertext envelope — a Decrypt/ReEncrypt with a different context than Encrypt used still succeeds (docs/services/kms.md "Differences from AWS").
+    - Key policies are validated and stored but never evaluated on Encrypt/Decrypt/grant calls (docs/services/kms.md "Differences from AWS").
+    - Grants are stored and listed but never evaluated to constrain what a grantee may do (docs/services/kms.md "Differences from AWS").
 handoff:
-  start_with: [Encrypt, Decrypt, CreateGrant, key policies]
-  do_not_redo: [CreateKey and PutKeyPolicy lockout-safety validation (#669), CloudFormation KeyPolicy forwarding]
+  start_with: [CreateGrant/grant evaluation, principal existence validation, CloudFormation Tags/EnableKeyRotation]
+  do_not_redo:
+    [
+      CreateKey and PutKeyPolicy lockout-safety validation (#669), CloudFormation KeyPolicy forwarding,
+      "Key material length, key-binding (Decrypt/ReEncrypt IncorrectKeyException), Encrypt size cap, ScheduleKeyDeletion window/ARN/PendingWindowInDays, CancelKeyDeletion ARN, CreateAlias validation, and GenerateRandom implementation (#157, #1710, #1844) from 2026-09-20",
+      "JSON 1.0/1.1/RPCv2 CBOR protocol acceptance is the framework-wide rule, not a KMS gap (#158) from 2026-09-20",
+    ]
   commands: [go test -count=1 ./internal/services/kms/... ./tests/integration/kms/...]

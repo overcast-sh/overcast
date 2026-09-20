@@ -1,22 +1,160 @@
 service: acm
-status: not_started
+status: fixed
 priority: p2
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-05-17
+last_updated: 2026-09-20
 protocols: [aws_json_1_1, aws_json_1_0, rpcv2_cbor]
 implementation: [internal/services/acm]
 integration_tests: [tests/integration/acm]
 capability_docs: docs/services/acm.md
-operation_count_estimate: 7 tracked, 7 supported
-current_support_level: Minimal certificate lifecycle and tags; certificates immediately ISSUED.
-operations: {}
+operation_count_estimate: 11 tracked; 10 supported, 1 partial (ListCertificateDomainValidations)
+current_support_level: Minimal certificate lifecycle; certificates immediately ISSUED. Both tag-operation spellings share one tag set, round-trip, validate AWS's reserved-prefix/length/merged-set-limit constraints, and are covered by integration tests (#814, #1275, #1739).
+operations:
+  TagResource:
+    status: fixed
+    priority: p2
+    aws_docs:
+      - https://docs.aws.amazon.com/acm/latest/APIReference/API_TagResource.html
+    implementation:
+      - internal/services/acm/typed_logic.go:366 (tagResourceTyped)
+    tests:
+      present:
+        - tests/integration/acm/acm_tagging_test.go::TestACMTagResource_roundTrips
+        - tests/integration/acm/acm_tagging_test.go::TestACMTagResource_sharesTagsWithTheCertificateSpelling
+        - tests/integration/acm/acm_tagging_test.go::TestACMTagResource_reservedPrefixRejected
+        - tests/integration/acm/acm_tagging_test.go::TestACMTagResource_tagLimitEnforcedOnMergedSet
+    scenario_matrix:
+      - scenario: Tag a certificate by ResourceArn and read it back.
+        status: fixed
+        evidence: TestACMTagResource_roundTrips.
+      - scenario: TagResource and the legacy AddTagsToCertificate address one shared tag set.
+        status: fixed
+        evidence: TestACMTagResource_sharesTagsWithTheCertificateSpelling — a tag written through either spelling is visible through ListTagsForResource.
+      - scenario: "A reserved aws: key prefix."
+        status: fixed
+        evidence: "TestACMTagResource_reservedPrefixRejected returns InvalidParameterException and stores nothing (#1052)."
+      - scenario: The 50-tag limit checked against the existing plus incoming set, not just the incoming call.
+        status: fixed
+        evidence: TestACMTagResource_tagLimitEnforcedOnMergedSet seeds 50 tags then rejects a 51st.
+    findings:
+      - Fixed — routed through the shared tag validator so reserved-prefix and merged-set-limit rules apply the same way as every other tagging service (#1275); AWS-shaped tag auditing landed in #814.
+  UntagResource:
+    status: fixed
+    priority: p2
+    aws_docs:
+      - https://docs.aws.amazon.com/acm/latest/APIReference/API_UntagResource.html
+    implementation:
+      - internal/services/acm/typed_logic.go:374 (untagResourceTyped)
+    tests:
+      present:
+        - tests/integration/acm/acm_tagging_test.go::TestACMUntagResource_removesNamedKeysOnly
+    scenario_matrix:
+      - scenario: UntagResource takes TagKeys and removes only the named keys, unlike RemoveTagsFromCertificate's Tags list.
+        status: fixed
+        evidence: TestACMUntagResource_removesNamedKeysOnly removes one key and leaves an unrelated tag in place.
+    findings:
+      - Fixed alongside TagResource (#814, #1275).
+  ListTagsForResource:
+    status: fixed
+    priority: p3
+    aws_docs:
+      - https://docs.aws.amazon.com/acm/latest/APIReference/API_ListTagsForResource.html
+    implementation:
+      - internal/services/acm/typed_logic.go:388 (listTagsForResourceTyped)
+    tests:
+      present:
+        - tests/integration/acm/acm_tagging_test.go::TestACMDeleteCertificate_dropsItsTags
+    scenario_matrix:
+      - scenario: Certificate deletion drops its tags with it.
+        status: fixed
+        evidence: TestACMDeleteCertificate_dropsItsTags — ListTagsForResource after DeleteCertificate returns ResourceNotFoundException, not an empty tag list.
+    findings:
+      - Fixed alongside TagResource (#814, #1275).
+  RequestCertificate:
+    status: fixed
+    priority: p2
+    aws_docs:
+      - https://docs.aws.amazon.com/acm/latest/APIReference/API_RequestCertificate.html
+    implementation:
+      - internal/services/acm/typed_logic.go:136 (requestCertificateTyped)
+    tests:
+      present:
+        - tests/integration/acm/acm_tagging_test.go::TestACMRequestCertificate_appliesTagsAtCreation
+        - tests/integration/acm/acm_tagging_test.go::TestACMRequestCertificate_reservedPrefixRejected
+    scenario_matrix:
+      - scenario: Inline Tags supplied on RequestCertificate are applied at creation.
+        status: fixed
+        evidence: TestACMRequestCertificate_appliesTagsAtCreation.
+      - scenario: "Inline Tags with a reserved aws: prefix reject the whole create — no certificate is stranded."
+        status: fixed
+        evidence: TestACMRequestCertificate_reservedPrefixRejected asserts the 400 and that ListCertificates shows no certificate for the rejected domain.
+    findings:
+      - Fixed — inline-tag validation and creation-rollback-on-rejection now match the shared tag validator (#814, #1275).
+  AddTagsToCertificate:
+    status: fixed
+    priority: p3
+    aws_docs:
+      - https://docs.aws.amazon.com/acm/latest/APIReference/API_AddTagsToCertificate.html
+    implementation:
+      - internal/services/acm/typed_logic.go:293 (addTagsToCertificateTyped)
+    tests:
+      present:
+        - tests/integration/acm/acm_tagging_test.go::TestACMAddTagsToCertificate_reservedPrefixRejected
+    scenario_matrix:
+      - scenario: The legacy spelling enforces the same reserved-prefix rule as TagResource.
+        status: fixed
+        evidence: TestACMAddTagsToCertificate_reservedPrefixRejected.
+    findings:
+      - Fixed alongside TagResource (#814, #1275).
+  ACMTagging_unknownCertificate:
+    status: fixed
+    priority: p2
+    aws_docs:
+      - https://docs.aws.amazon.com/acm/latest/APIReference/API_AddTagsToCertificate.html#API_AddTagsToCertificate_Errors
+    implementation:
+      - internal/services/acm/typed_logic.go (shared tag validation across all six tag-accepting operations)
+    tests:
+      present:
+        - tests/integration/acm/acm_tagging_test.go::TestACMTagging_unknownCertificate
+    scenario_matrix:
+      - scenario: TagResource, UntagResource, ListTagsForResource, AddTagsToCertificate, RemoveTagsFromCertificate and ListTagsForCertificate against a well-formed but non-existent ARN.
+        status: fixed
+        evidence: "AWS documents ResourceNotFoundException as HTTP 400 (not 404) for all six operations; TestACMTagging_unknownCertificate asserts 400 + ResourceNotFoundException for every one (#1729)."
+    findings:
+      - Fixed — all six tag-accepting operations answer a missing certificate with the documented 400 ResourceNotFoundException rather than a bare 404 (#1729).
 findings:
-  fixed: []
+  fixed:
+    - >-
+      #52 — tag round-trip, the shared tag set between the legacy and modern
+      spellings, selective UntagResource removal, inline Tags on
+      RequestCertificate, the unknown-certificate ResourceNotFoundException
+      contract, the reserved aws: prefix rejection (create and both tag
+      spellings), the 50-tag limit enforced against the merged set, and tags
+      being dropped on DeleteCertificate are all covered by
+      tests/integration/acm/acm_tagging_test.go (9 tests, from #814, #1275 and
+      #1739). See the TagResource, UntagResource, ListTagsForResource,
+      RequestCertificate, AddTagsToCertificate and
+      ACMTagging_unknownCertificate operation entries above for the specific
+      test names and assertions.
+    - >-
+      #53 — the tracker's "Document JSON 1.0 and CBOR support if intentional"
+      gap is resolved by documentation, not code: SupportedProtocols() in
+      internal/services/acm/typed_ops.go:55 accepts JSON 1.0, JSON 1.1, and
+      RPC v2 CBOR, and codec.Supports (internal/protocol/codec/codec.go:83-100)
+      treats JSON 1.0 and 1.1 as equivalent for every JSON-tier service by
+      design, documented at docs/dev/smithy.md:25. Real ACM serves JSON 1.1
+      only; accepting 1.0 too is the framework-wide rule, not an ACM-specific
+      gap. docs/services/acm.md now states this under "What works". No code
+      change was needed.
   remaining_gaps:
-    - Expand integration coverage for tags.
-    - Document JSON 1.0 and CBOR support if intentional.
-  intentionally_partial: []
+    - "RequestCertificate accepts a malformed DomainName instead of validating format/wildcard placement (tracked in #1994)."
+    - "DescribeCertificate omits the modeled DomainValidationOptions member (tracked in #1994)."
+    - "ListCertificates ignores CertificateStatuses/Includes filters (tracked in #1994)."
+  intentionally_partial:
+    - ListCertificateDomainValidations synthesizes one SUCCESS entry per DomainName/SAN with no ValidationMethod or DNS/email challenge data, since Overcast issues certificates without ever validating them (docs/services/acm.md "Differences from AWS").
 handoff:
-  start_with: [RequestCertificate, DescribeCertificate, tag operations]
-  do_not_redo: []
+  start_with: ["the three #1994 divergences — malformed DomainName, DescribeCertificate DomainValidationOptions, ListCertificates filters"]
+  do_not_redo:
+    - "Tag round-trip, spelling parity, selective untag, inline-create tags, unknown-certificate errors, reserved-prefix rejection, and merged-set tag limit (#52, #814, #1275, #1739) from 2026-09-20."
+    - "JSON 1.0/1.1/RPCv2 CBOR protocol acceptance is the framework-wide rule, not an ACM gap (#53) from 2026-09-20."
   commands: [go test -count=1 ./internal/services/acm/... ./tests/integration/acm/...]
