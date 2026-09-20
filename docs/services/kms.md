@@ -43,6 +43,7 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | Asymmetric crypto | `Sign` / `Verify` (RSA-2048, `RSASSA_PKCS1_V1_5_SHA_256`), `GetPublicKey` (DER), `VerifyMac` (HMAC-SHA-256/384/512) |
 | Key policies      | `PutKeyPolicy` validates structure, principals and caller-lockout safety before it mutates      |
 | Grants and tags   | Full CRUD, including `ListRetirableGrants`                                                     |
+| Protocols         | AWS JSON 1.1, plus AWS JSON 1.0 and Smithy RPC v2 CBOR — accepting 1.0 alongside 1.1 is a framework-wide rule applied to every JSON-tier service, not a KMS-specific relaxation |
 
 The ciphertext envelope carries the key ID, so `Decrypt` resolves the key
 without being told which one to use — as on AWS. Passing `KeyId` anyway is
