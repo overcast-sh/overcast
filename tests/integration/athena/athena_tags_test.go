@@ -60,7 +60,9 @@ func TestAthenaCreateWorkGroup_invalidTagRejected(t *testing.T) {
 
 	get := athenaCall(t, srv, "GetWorkGroup", map[string]any{"WorkGroup": "tagged-wg"})
 	defer get.Body.Close()
-	helpers.AssertStatus(t, get, http.StatusNotFound)
+	// 400, not 404: Athena's InvalidRequestException carries no @httpError, so
+	// awsJson1_1's client-error default applies (#2009).
+	helpers.AssertStatus(t, get, http.StatusBadRequest)
 }
 
 // TestAthenaTagResource_invalidTagRejected: reserved aws: tag keys must be

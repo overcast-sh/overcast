@@ -101,7 +101,7 @@
 | WAF v2          | 7   |
 | Shield          | 8   |
 | ACM             | 11  |
-| Athena          | 11  |
+| Athena          | 12  |
 | Bedrock         | 2   |
 | CloudWatch      | 17  |
 | DynamoDB Streams | 4   |

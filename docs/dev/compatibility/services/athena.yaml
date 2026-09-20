@@ -1,5 +1,5 @@
 service: athena
-status: in_progress
+status: reviewed
 priority: p2
 reference_policy: aws_docs_only_unless_user_approves_real_aws
 last_updated: 2026-09-20
@@ -8,12 +8,13 @@ implementation: [internal/services/athena]
 integration_tests: [tests/integration/athena]
 capability_docs: docs/services/athena.md
 operation_count_estimate: >-
-  11 tracked in internal/services/athena/capabilities_dev.go, all StatusSupported: 4 Queries
-  (StartQueryExecution, GetQueryExecution, GetQueryResults, ListQueryExecutions), 4 WorkGroups
-  (CreateWorkGroup, GetWorkGroup, ListWorkGroups, DeleteWorkGroup) and 3 Tags (TagResource,
-  UntagResource, ListTagsForResource). docs/services/athena.md confirms "All 11 listed
-  operations are implemented." (previously recorded as "8 supported", which predates
-  ListQueryExecutions and the three tag operations.)
+  12 tracked in internal/services/athena/capabilities_dev.go, all StatusSupported: 5 Queries
+  (StartQueryExecution, GetQueryExecution, GetQueryResults, StopQueryExecution,
+  ListQueryExecutions), 4 WorkGroups (CreateWorkGroup, GetWorkGroup, ListWorkGroups,
+  DeleteWorkGroup) and 3 Tags (TagResource, UntagResource, ListTagsForResource).
+  docs/services/athena.md confirms "All 12 listed operations are implemented." (was 11 before
+  #2009 added StopQueryExecution; the older "8 supported" figure predates ListQueryExecutions
+  and the three tag operations.)
 current_support_level: Basic queries and workgroups; queries immediately succeed with empty results.
 operations: {}
 findings:
@@ -21,13 +22,19 @@ findings:
     - "#66: reviewed. tests/integration/athena/athena_test.go now pins the not-found error code and
       message for GetQueryExecution, GetQueryResults, GetWorkGroup and DeleteWorkGroup, the empty
       ResultSet shape (ResultSetMetadata.ColumnInfo and Rows present, UpdateCount absent per the
-      model), and StopQueryExecution's current 501. The two divergences the review found are
-      tracked as #2009."
-  remaining_gaps:
-    - "#2009: GetQueryExecution, GetQueryResults, GetWorkGroup and DeleteWorkGroup answer
-      InvalidRequestException with HTTP 404 for an unknown id or name; the pinned model gives
-      InvalidRequestException no @httpError, so AWS JSON 1.1 answers 400. StopQueryExecution is
-      not registered at all (501). Found by the #66 shape tests."
+      model), and StopQueryExecution (which answered 501 at the time). The two divergences the
+      review found were tracked as #2009 and are fixed below."
+    - "#2009: fixed. Every Athena not-found now answers HTTP 400, the awsJson1_1 default for
+      InvalidRequestException (no @httpError in the pinned model), through the shared
+      errQueryNotFound/errWorkGroupNotFound constructors in internal/services/athena/typed_logic.go.
+      StopQueryExecution is registered on both the legacy and typed paths and declared Supported:
+      an unknown id is InvalidRequestException/400, a known one an empty StopQueryExecutionOutput,
+      and state is unchanged because every Overcast query is already SUCCEEDED (the model marks the
+      operation @idempotent and declares no wrong-state error). Tests:
+      TestGetQueryExecution_unknownId, TestGetQueryResults_unknownId, TestGetWorkGroup_unknownName,
+      TestDeleteWorkGroup_unknownName, TestAthenaCreateWorkGroup_invalidTagRejected,
+      TestStopQueryExecution_alreadyFinished, TestStopQueryExecution_unknownId."
+  remaining_gaps: []
   intentionally_partial:
     - "#67: the inert query engine is already documented. docs/services/athena.md's subtitle
       ('no SQL is executed, so every query succeeds immediately with an empty result set'), its
@@ -38,5 +45,5 @@ findings:
       boundary this issue asked to have recorded."
 handoff:
   start_with: []
-  do_not_redo: [StartQueryExecution, GetQueryExecution, GetQueryResults, ListQueryExecutions, CreateWorkGroup, GetWorkGroup, ListWorkGroups, DeleteWorkGroup, TagResource, UntagResource, ListTagsForResource]
+  do_not_redo: [StartQueryExecution, GetQueryExecution, GetQueryResults, StopQueryExecution, ListQueryExecutions, CreateWorkGroup, GetWorkGroup, ListWorkGroups, DeleteWorkGroup, TagResource, UntagResource, ListTagsForResource]
   commands: [go test -count=1 ./internal/services/athena/... ./tests/integration/athena/...]

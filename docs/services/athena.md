@@ -42,6 +42,7 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | Query executions | `StartQueryExecution` records the SQL, workgroup and `OutputLocation` and returns an id |
 | Polling | `GetQueryExecution` reports `SUCCEEDED`, with submission and completion timestamps |
 | Results | `GetQueryResults` returns a well-formed but empty `ResultSet` |
+| Stopping | `StopQueryExecution` accepts a known query id and rejects an unknown one |
 | Tags | `TagResource`, `UntagResource` and `ListTagsForResource` on workgroup ARNs |
 
 ## Differences from AWS
@@ -51,6 +52,7 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | Query execution         | The SQL is parsed and run                                        | The string is stored, never parsed or run — a query over a Glue table returns nothing, not that table's rows |
 | Results                 | Written to `OutputLocation`                                      | Nothing is written; the bucket stays empty                                                                   |
 | Execution states        | `QUEUED`, `RUNNING`, `FAILED` and `CANCELLED`                    | None of them is ever observed                                                                                |
+| Stopping a query        | `StopQueryExecution` interrupts a running query                  | Every query has already finished, so a stop is accepted and changes nothing                                  |
 | Statistics              | `Statistics`, `EngineVersion` and data-scanned figures           | Absent                                                                                                       |
 | Workgroup configuration | Result-location overrides and bytes-scanned cutoffs are enforced | Echoed, not enforced                                                                                         |
 
@@ -65,7 +67,7 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 
 ## Operations
 
-All 11 listed operations are implemented.
+All 12 listed operations are implemented.
 Per-operation status, notes and AWS API links: [Athena operations](athena/operations.md).
 
 <!-- END overcast:capabilities -->
