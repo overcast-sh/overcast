@@ -1,38 +1,77 @@
 service: cloudwatch-logs
-status: not_started
+status: in_progress
 priority: p0
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-08-08
+last_updated: 2026-09-20
 protocols: [aws_json_1_1, aws_json_1_0, rpcv2_cbor]
 implementation: [internal/services/cloudwatch/logs]
 integration_tests: [tests/integration/cloudwatch/logs]
 capability_docs: docs/services/cloudwatch-logs.md
 operation_count_estimate: 23 supported, 3 unsupported
 current_support_level: Log groups, streams, events, retention, tagging, filtering, and metric filters (published to CloudWatch through the service-metrics recorder) supported; Insights/subscriptions stubbed.
-operations: {}
+operations:
+  PutLogEvents:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/AmazonCloudWatchLogs/latest/APIReference/API_PutLogEvents.html
+    protocol: AWS JSON 1.1/1.0 and RPC v2 CBOR; POST / with X-Amz-Target Logs_20140328.PutLogEvents.
+    tests:
+      - tests/integration/cloudwatch/logs/logs_test.go::TestPutLogEvents_success
+      - tests/integration/cloudwatch/logs/logs_test.go::TestPutLogEvents_sequenceTokenIsIgnored
+      - tests/integration/cloudwatch/logs/logs_test.go::TestPutLogEvents_groupNotFound
+    scenarios:
+      sequence_token:
+        status: reviewed
+        evidence: >-
+          AWS's current documentation states plainly: "The sequenceToken parameter is
+          now ignored in PutLogEvents actions. PutLogEvents actions are always accepted
+          and never return InvalidSequenceTokenException or
+          DataAlreadyAcceptedException even if the sequence token is not valid" — this
+          is a 2023 AWS behavior change, not a gap. putLogEventsRequest
+          (internal/services/cloudwatch/logs/typed_logic.go:101-105) has no
+          sequenceToken field at all, so nothing decodes or validates it; the response's
+          nextSequenceToken is generated as an internal per-stream counter
+          (internal/services/cloudwatch/logs/typed_logic.go:504,531,550) that increments
+          on every batch that writes at least one event and is returned unconditionally
+          — no InvalidSequenceTokenException or DataAlreadyAcceptedException is ever
+          raised anywhere in the handler. Previously only pinned by
+          TestPutLogEvents_success asserting nextSequenceToken is non-empty; this
+          session adds TestPutLogEvents_sequenceTokenIsIgnored, which sends a garbage
+          sequenceToken on a second batch and asserts the call still succeeds (200)
+          with a populated nextSequenceToken, directly pinning the "always accepted,
+          never rejected for an invalid token" behavior the fields' absence implies.
 findings:
   fixed:
     - PutRetentionPolicy rejects retentionInDays outside AWS's documented value set with
       InvalidParameterException before mutating state, over AWS JSON and RPC v2 CBOR, and
       AWS::Logs::LogGroup inherits the check instead of duplicating it (#666).
-    - CreateLogGroup accepts the modeled tags field and persists it atomically with the group;
+    - >-
+      CreateLogGroup accepts the modeled tags field and persists it atomically with the group;
       CreateLogGroup and TagLogGroup share serviceutil.ValidateTags for AWS's 50-tag limit,
-      key/value lengths, empty keys and the reserved aws: prefix, checked before any mutation
+      key/value lengths, empty keys and the reserved "aws:" prefix, checked before any mutation
       (#676).
     - PutMetricFilter, DescribeMetricFilters, DeleteMetricFilter and TestMetricFilter are
       implemented over AWS JSON and RPC v2 CBOR; every accepted log event runs through its
       group's filters and publishes CloudWatch datapoints the alarm evaluator reads (#1949).
+    - >-
+      #79 — PutLogEvents' sequenceToken behavior is reviewed against current AWS docs:
+      AWS ignores the parameter entirely and never raises
+      InvalidSequenceTokenException/DataAlreadyAcceptedException (a 2023 behavior
+      change), which is exactly what this implementation already does (no
+      sequenceToken field on the request type, no rejection path). Added
+      TestPutLogEvents_sequenceTokenIsIgnored to pin the garbage-token-still-accepted
+      case, which no existing test asserted.
   remaining_gaps:
-    - Review PutLogEvents sequence token behavior.
     - Review FilterLogEvents syntax and pagination fidelity.
     - CreateLogGroup accepts kmsKeyId, logGroupClass and deletionProtectionEnabled but ignores
       them; DescribeLogGroups does not report logGroupClass or storedBytes.
-    - Tag key/value character patterns from the model (TagKey/TagValue @pattern) are not
-      enforced; only length, emptiness, count and the reserved aws: prefix are.
+    - >-
+      Tag key/value character patterns from the model (TagKey/TagValue @pattern) are not
+      enforced; only length, emptiness, count and the reserved "aws:" prefix are.
     - Tag key/value lengths are measured in bytes by the shared validator, not Unicode code
       points as the model's @length traits specify.
   intentionally_partial: []
 handoff:
-  start_with: [PutLogEvents, FilterLogEvents]
-  do_not_redo: []
+  start_with: [FilterLogEvents]
+  do_not_redo: [PutLogEvents sequence_token behavior (#79, 2026-09-20)]
   commands: [go test -count=1 ./internal/services/cloudwatch/... ./tests/integration/cloudwatch/logs/...]

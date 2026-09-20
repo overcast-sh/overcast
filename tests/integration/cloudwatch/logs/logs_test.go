@@ -789,6 +789,56 @@ func TestPutLogEvents_success(t *testing.T) {
 	}
 }
 
+// TestPutLogEvents_sequenceTokenIsIgnored pins the 2023 AWS behavior change
+// documented on PutLogEvents: "The sequenceToken parameter is now ignored in
+// PutLogEvents actions. PutLogEvents actions are always accepted and never
+// return InvalidSequenceTokenException or DataAlreadyAcceptedException even
+// if the sequence token is not valid." A stale or entirely garbage
+// sequenceToken must not raise either exception, and nextSequenceToken must
+// still come back so a caller that still threads the (now-vestigial) token
+// through keeps working.
+func TestPutLogEvents_sequenceTokenIsIgnored(t *testing.T) {
+	// Given: a group and stream exist, and one batch has already advanced the
+	// stream's internal sequence counter past its initial value.
+	srv := helpers.NewTestServer(t)
+	createLogGroup(t, srv, "/aws/lambda/seq-token-fn")
+	createLogStream(t, srv, "/aws/lambda/seq-token-fn", "seq-stream")
+
+	first := logsCall(t, srv, "PutLogEvents", map[string]any{
+		"logGroupName":  "/aws/lambda/seq-token-fn",
+		"logStreamName": "seq-stream",
+		"logEvents": []map[string]any{
+			{"timestamp": evtTS(0), "message": "first batch"},
+		},
+	})
+	defer first.Body.Close()
+	helpers.AssertStatus(t, first, http.StatusOK)
+
+	// When: a second batch is sent with a sequenceToken that is neither the
+	// value PutLogEvents just returned nor anything derived from it — just
+	// garbage a caller might have cached from a stale client.
+	resp := logsCall(t, srv, "PutLogEvents", map[string]any{
+		"logGroupName":  "/aws/lambda/seq-token-fn",
+		"logStreamName": "seq-stream",
+		"sequenceToken": "not-a-real-token",
+		"logEvents": []map[string]any{
+			{"timestamp": evtTS(1000), "message": "second batch"},
+		},
+	})
+	defer resp.Body.Close()
+
+	// Then: the call still succeeds — no InvalidSequenceTokenException, no
+	// DataAlreadyAcceptedException — and nextSequenceToken is still populated.
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	var result struct {
+		NextSequenceToken string `json:"nextSequenceToken"`
+	}
+	helpers.DecodeJSON(t, resp, &result)
+	if result.NextSequenceToken == "" {
+		t.Error("expected nextSequenceToken to still be set when sequenceToken is garbage")
+	}
+}
+
 func TestPutLogEvents_groupNotFound(t *testing.T) {
 	// Given: no group exists
 	srv := helpers.NewTestServer(t)
