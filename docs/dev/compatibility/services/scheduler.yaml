@@ -8,70 +8,145 @@ implementation: [internal/services/scheduler]
 integration_tests: [tests/integration/scheduler]
 capability_docs: docs/services/scheduler.md
 operation_count_estimate: 12 tracked, 12 supported
-current_support_level: Schedule groups, schedules, and tags supported. A 1-second ticker hands each due schedule to a pool of delivery workers, firing into eight target types (Lambda, SQS, SNS, Step Functions, Kinesis, Firehose, ECS RunTask, event buses) through the same dispatcher EventBridge rules and Pipes use, with target parameters, retries, and dead-lettering (#734, PR #787, PR #816).
+current_support_level: Schedule groups, schedules, and tags supported. A 1-second ticker hands each due schedule
+  to a pool of delivery workers, firing into eight target types (Lambda, SQS, SNS, Step Functions, Kinesis, Firehose,
+  ECS RunTask, event buses) through the same dispatcher EventBridge rules and Pipes use, with target parameters,
+  retries, and dead-lettering (#734, PR
 operations:
   CreateSchedule:
     status: fixed
     priority: p1
     aws_docs:
-      - https://docs.aws.amazon.com/scheduler/latest/APIReference/API_CreateSchedule.html
-      - https://docs.aws.amazon.com/scheduler/latest/APIReference/API_Target.html
+    - https://docs.aws.amazon.com/scheduler/latest/APIReference/API_CreateSchedule.html
+    - https://docs.aws.amazon.com/scheduler/latest/APIReference/API_Target.html
+    - https://docs.aws.amazon.com/scheduler/latest/APIReference/API_FlexibleTimeWindow.html
+    - https://docs.aws.amazon.com/scheduler/latest/UserGuide/managing-schedule-flexible-time-windows.html
     tests:
       present:
-        - tests/integration/scheduler/targets_test.go::TestSchedule_deliversToSNSTarget
-        - tests/integration/scheduler/targets_test.go::TestSchedule_deliversToStepFunctionsTarget
-        - tests/integration/scheduler/targets_test.go::TestSchedule_deliversToKinesisTarget
-        - tests/integration/scheduler/targets_test.go::TestSchedule_deliversToEventBusTarget
-        - tests/integration/scheduler/scheduler_test.go::TestSchedule_rateFiresTarget
-        - tests/integration/scheduler/targets_test.go::TestCreateSchedule_unsupportedTargetType
-        - tests/integration/scheduler/targets_test.go::TestCreateSchedule_malformedTargetARN
-        - tests/integration/scheduler/targets_test.go::TestUpdateSchedule_unsupportedTargetType
-        - tests/integration/scheduler/targets_test.go::TestSchedule_failedDeliveryGoesToDeadLetterQueue
+      - tests/integration/scheduler/targets_test.go::TestSchedule_deliversToSNSTarget
+      - tests/integration/scheduler/targets_test.go::TestSchedule_deliversToStepFunctionsTarget
+      - tests/integration/scheduler/targets_test.go::TestSchedule_deliversToKinesisTarget
+      - tests/integration/scheduler/targets_test.go::TestSchedule_deliversToEventBusTarget
+      - tests/integration/scheduler/scheduler_test.go::TestSchedule_rateFiresTarget
+      - tests/integration/scheduler/targets_test.go::TestCreateSchedule_unsupportedTargetType
+      - tests/integration/scheduler/targets_test.go::TestCreateSchedule_malformedTargetARN
+      - tests/integration/scheduler/targets_test.go::TestUpdateSchedule_unsupportedTargetType
+      - tests/integration/scheduler/targets_test.go::TestSchedule_failedDeliveryGoesToDeadLetterQueue
+      - tests/integration/scheduler/scheduler_test.go::TestCreateSchedule_duplicateName
+      - tests/integration/scheduler/scheduler_test.go::TestCreateSchedule_duplicateNameDifferentGroupAllowed
+      - tests/integration/scheduler/scheduler_test.go::TestCreateSchedule_flexibleWindowMissingMaximum
+      - tests/integration/scheduler/scheduler_test.go::TestCreateSchedule_flexibleWindowOutOfRangeTooLow
+      - tests/integration/scheduler/scheduler_test.go::TestCreateSchedule_flexibleWindowOutOfRangeTooHigh
+      - tests/integration/scheduler/scheduler_test.go::TestCreateSchedule_offWindowWithMaximumSet
     scenario_matrix:
-      - scenario: Target dispatch to SQS via a rate(...) schedule.
-        status: fixed
-        evidence: TestSchedule_rateFiresTarget — was previously the only fireable target kind.
-      - scenario: Target dispatch to SNS, Step Functions, Kinesis, and another event bus.
-        status: fixed
-        evidence: TestSchedule_deliversToSNSTarget, TestSchedule_deliversToStepFunctionsTarget, TestSchedule_deliversToKinesisTarget, TestSchedule_deliversToEventBusTarget — all previously silently dropped at fire time.
-      - scenario: A target type the engine cannot fire, at CreateSchedule and UpdateSchedule.
-        status: fixed
-        evidence: "TestCreateSchedule_unsupportedTargetType, TestUpdateSchedule_unsupportedTargetType — rejected with ValidationException at create/update time rather than accepted and dropped when due, per docs/services/scheduler.md."
-      - scenario: A malformed target ARN.
-        status: fixed
-        evidence: TestCreateSchedule_malformedTargetARN.
-      - scenario: A failed delivery with a DeadLetterConfig queue configured.
-        status: fixed
-        evidence: TestSchedule_failedDeliveryGoesToDeadLetterQueue.
+    - scenario: Target dispatch to SQS via a rate(...) schedule.
+      status: fixed
+      evidence: TestSchedule_rateFiresTarget — was previously the only fireable target kind.
+    - scenario: Target dispatch to SNS, Step Functions, Kinesis, and another event bus.
+      status: fixed
+      evidence: TestSchedule_deliversToSNSTarget, TestSchedule_deliversToStepFunctionsTarget, TestSchedule_deliversToKinesisTarget,
+        TestSchedule_deliversToEventBusTarget — all previously silently dropped at fire time.
+    - scenario: A target type the engine cannot fire, at CreateSchedule and UpdateSchedule.
+      status: fixed
+      evidence: TestCreateSchedule_unsupportedTargetType, TestUpdateSchedule_unsupportedTargetType — rejected with
+        ValidationException at create/update time rather than accepted and dropped when due, per docs/services/scheduler.md.
+    - scenario: A malformed target ARN.
+      status: fixed
+      evidence: TestCreateSchedule_malformedTargetARN.
+    - scenario: A failed delivery with a DeadLetterConfig queue configured.
+      status: fixed
+      evidence: TestSchedule_failedDeliveryGoesToDeadLetterQueue.
     findings:
-      - Fixed — CreateSchedule/UpdateSchedule validate the target ARN and reject an unfirable type synchronously instead of accepting a schedule that can never fire (#734, PR #787).
+    - Fixed — CreateSchedule/UpdateSchedule validate the target ARN and reject an unfirable type synchronously instead
+      of accepting a schedule that can never fire (#734, PR
+    - Fixed — CreateSchedule rejects a duplicate name in the same group (ConflictException) and validates FlexibleTimeWindow
+      (MaximumWindowInMinutes required and 1-1440 for FLEXIBLE, forbidden for OFF) (#177).
+    protocol: REST-JSON; POST /schedules/{Name}, GroupName/ScheduleExpression/FlexibleTimeWindow/Target etc. bound
+      to the JSON body.
+    scenarios:
+      duplicate_name:
+        status: fixed
+        evidence: CreateSchedule accepted a name already in use within the same group, silently overwriting the
+          existing schedule's ARN identity — unlike CreateScheduleGroup, which already raised ConflictException
+          ("Schedule group %s already exists.") for the same shape of collision. createScheduleTyped (internal/services/scheduler/typed_logic.go)
+          now loads the (region, group, name) record before writing and answers ConflictException ("Schedule %s
+          already exists.", 409) when found, mirroring the group's own message and status code. A name reused in
+          a *different* group is unaffected, since AWS scopes schedule names to their group — pinned by TestCreateSchedule_duplicateName
+          (409) and TestCreateSchedule_duplicateNameDifferentGroupAllowed (200).
+      flexible_time_window:
+        status: fixed
+        evidence: 'validateFlexibleTimeWindow only checked FlexibleTimeWindow.Mode against the OFF|FLEXIBLE enum
+          and ignored MaximumWindowInMinutes entirely, so a FLEXIBLE window with no maximum, one outside the documented
+          range, or an OFF window carrying a maximum were all accepted. The API Reference lists MaximumWindowInMinutes
+          as "Required: No" only because it is optional on the shape as a whole; the User Guide states the conditional
+          rule in prose — "If you do set the value to FLEXIBLE, you must then specify a maximum window of time during
+          which you schedule will run" — and both the API Reference and the CloudFormation FlexibleTimeWindow property
+          document Valid Range "Minimum value of 1. Maximum value of 1440." validateFlexibleTimeWindow (internal/services/scheduler/typed_logic.go)
+          now requires MaximumWindowInMinutes when Mode is FLEXIBLE, enforces the 1-1440 range with AWS''s "Member
+          must have value {greater,less} than or equal to N" wording, and rejects a nonzero MaximumWindowInMinutes
+          when Mode is OFF — pinned by TestCreateSchedule_flexibleWindowMissingMaximum, TestCreateSchedule_flexibleWindowOutOfRangeTooLow,
+          TestCreateSchedule_flexibleWindowOutOfRangeTooHigh and TestCreateSchedule_offWindowWithMaximumSet.'
+      target_coverage:
+        status: intentionally_partial
+        evidence: AWS reaches ~270 services via templated and universal (`aws-sdk:`) targets; Overcast fires eight
+          target types (Lambda, SQS, SNS, Step Functions, Kinesis, Firehose, ECS RunTask, EventBridge event buses)
+          and rejects any other target ARN at CreateSchedule/UpdateSchedule with a ValidationException, documented
+          in docs/services/scheduler.md's "Differences from AWS" table (Target types row) and enforced by validateTarget
+          (internal/services/scheduler/delivery.go).
+      retries:
+        status: intentionally_partial
+        evidence: AWS retries a failed delivery up to 185 times with backoff; Overcast retries `RetryPolicy.MaximumRetryAttempts`
+          back to back with no backoff, capped at 6 total attempts (maxDeliveryAttempts, internal/services/scheduler/delivery.go),
+          as documented in docs/services/scheduler.md's "Differences from AWS" table (Retries row).
+      flexible_time_window_jitter:
+        status: intentionally_partial
+        evidence: On AWS, a FLEXIBLE window's invocation is jittered somewhere inside `MaximumWindowInMinutes`.
+          Overcast stores and returns the FlexibleTimeWindow member (now validated, see the flexible_time_window
+          scenario above) but always fires a schedule at its exact due tick, never delayed into the window, as documented
+          in docs/services/scheduler.md's "Differences from AWS" table (FlexibleTimeWindow row).
+      schedule_expression_timezone:
+        status: intentionally_partial
+        evidence: AWS evaluates a schedule's expression in the named ScheduleExpressionTimezone. Overcast stores
+          and returns the member but evaluates every expression against the emulator's own clock, as documented
+          in docs/services/scheduler.md's "Differences from AWS" table (ScheduleExpressionTimezone row).
+      kms_key_arn:
+        status: intentionally_partial
+        evidence: AWS encrypts schedule data with the customer-managed KMS key named by KmsKeyArn. Overcast stores
+          the association only; schedule data is held in plaintext, as documented in docs/services/scheduler.md's
+          "Differences from AWS" table (KmsKeyArn row).
   DeliveryEngine:
     status: fixed
     priority: p1
     aws_docs:
-      - https://docs.aws.amazon.com/scheduler/latest/UserGuide/managing-schedule.html
+    - https://docs.aws.amazon.com/scheduler/latest/UserGuide/managing-schedule.html
     implementation:
-      - internal/services/scheduler (worker-pool tick/delivery engine, per-field cron evaluation)
+    - internal/services/scheduler (worker-pool tick/delivery engine, per-field cron evaluation)
     tests:
       present:
-        - internal/services/scheduler/engine_test.go::TestTick_oneSlowTargetDoesNotStallTheOtherSchedules
-        - internal/services/scheduler/engine_test.go::TestTick_doesNotQueueAFiringBehindAnInFlightOne
-        - internal/services/scheduler/engine_test.go::TestTick_recordsTheFireTimeBeforeDelivering
-        - internal/services/scheduler/cron_test.go::TestNextFireTime
-        - tests/integration/scheduler/scheduler_test.go::TestUpdateSchedule_replacesRatherThanMerges
-        - tests/integration/scheduler/scheduler_test.go::TestUpdateSchedule_keepsTheIdentityItWasCreatedWith
+      - internal/services/scheduler/engine_test.go::TestTick_oneSlowTargetDoesNotStallTheOtherSchedules
+      - internal/services/scheduler/engine_test.go::TestTick_doesNotQueueAFiringBehindAnInFlightOne
+      - internal/services/scheduler/engine_test.go::TestTick_recordsTheFireTimeBeforeDelivering
+      - internal/services/scheduler/cron_test.go::TestNextFireTime
+      - tests/integration/scheduler/scheduler_test.go::TestUpdateSchedule_replacesRatherThanMerges
+      - tests/integration/scheduler/scheduler_test.go::TestUpdateSchedule_keepsTheIdentityItWasCreatedWith
     scenario_matrix:
-      - scenario: A slow or retrying target should not delay other schedules' own firing.
-        status: fixed
-        evidence: "tick() now hands each due schedule to a pool of delivery workers instead of firing serially; TestTick_oneSlowTargetDoesNotStallTheOtherSchedules pins this. A schedule is never in flight twice (TestTick_doesNotQueueAFiringBehindAnInFlightOne), and the last-fire time is written before delivery so cadence anchors to when the schedule became due, not to target latency (TestTick_recordsTheFireTimeBeforeDelivering)."
-      - scenario: rate/at/cron next-fire-time computation, including per-field cron advancement.
-        status: fixed
-        evidence: TestNextFireTime pins next-fire-time equivalence against the prior implementation for 25 cases.
-      - scenario: UpdateSchedule replaces the whole schedule rather than merging.
-        status: fixed
-        evidence: "TestUpdateSchedule_replacesRatherThanMerges — an omitted optional member is unset, matching AWS's documented replace semantics; TestUpdateSchedule_keepsTheIdentityItWasCreatedWith confirms name/group/ARN/CreationDate still survive."
+    - scenario: A slow or retrying target should not delay other schedules' own firing.
+      status: fixed
+      evidence: tick() now hands each due schedule to a pool of delivery workers instead of firing serially; TestTick_oneSlowTargetDoesNotStallTheOtherSchedules
+        pins this. A schedule is never in flight twice (TestTick_doesNotQueueAFiringBehindAnInFlightOne), and the
+        last-fire time is written before delivery so cadence anchors to when the schedule became due, not to target
+        latency (TestTick_recordsTheFireTimeBeforeDelivering).
+    - scenario: rate/at/cron next-fire-time computation, including per-field cron advancement.
+      status: fixed
+      evidence: TestNextFireTime pins next-fire-time equivalence against the prior implementation for 25 cases.
+    - scenario: UpdateSchedule replaces the whole schedule rather than merging.
+      status: fixed
+      evidence: TestUpdateSchedule_replacesRatherThanMerges — an omitted optional member is unset, matching AWS's
+        documented replace semantics; TestUpdateSchedule_keepsTheIdentityItWasCreatedWith confirms name/group/ARN/CreationDate
+        still survive.
     findings:
-      - Fixed — delivery moved from a single-threaded tick loop to a worker-pool engine, cron next-fire-time computation moved to per-field evaluation, and UpdateSchedule was corrected to replace rather than merge (PR #816).
+    - Fixed — delivery moved from a single-threaded tick loop to a worker-pool engine, cron next-fire-time computation
+      moved to per-field evaluation, and UpdateSchedule was corrected to replace rather than merge (PR
 findings:
   fixed:
     - >-

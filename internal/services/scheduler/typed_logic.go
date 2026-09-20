@@ -64,12 +64,52 @@ func validateState(state string) *protocol.AWSError {
 	}
 }
 
-// validateFlexibleTimeWindow checks the member AWS marks required on both write
-// operations. Mode is the only part the emulator can act on — see the service
-// doc for why the window itself is not honoured.
+// minFlexibleWindowMinutes/maxFlexibleWindowMinutes are FlexibleTimeWindow's
+// documented MaximumWindowInMinutes range ("Minimum value of 1. Maximum value
+// of 1440").
+// https://docs.aws.amazon.com/scheduler/latest/APIReference/API_FlexibleTimeWindow.html
+const (
+	minFlexibleWindowMinutes = 1
+	maxFlexibleWindowMinutes = 1440
+)
+
+// validateFlexibleTimeWindow checks the members AWS marks required on both
+// write operations. Mode is the only part the emulator acts on for delivery —
+// see the service doc for why the window itself is not honoured — but
+// MaximumWindowInMinutes still has to be present exactly when AWS requires it,
+// or a caller relying on CreateSchedule to reject a malformed window would see
+// it accepted here and rejected on real AWS.
+//
+// The API Reference lists MaximumWindowInMinutes as "Required: No" because the
+// member is optional on the shape as a whole — the conditional requirement is
+// documented in prose instead: "If you do set the value to FLEXIBLE, you must
+// then specify a maximum window of time during which you schedule will run."
+// https://docs.aws.amazon.com/scheduler/latest/UserGuide/managing-schedule-flexible-time-windows.html
+// The field carries `omitempty`, so 0 and "absent" are indistinguishable — the
+// same reading the valid range already gives it, since 0 is always out of
+// range.
 func validateFlexibleTimeWindow(w flexibleTimeWindow) *protocol.AWSError {
 	switch w.Mode {
-	case "OFF", "FLEXIBLE":
+	case "OFF":
+		if w.MaximumWindowInMinutes != 0 {
+			return validationError(
+				"FlexibleTimeWindow.MaximumWindowInMinutes must not be specified when FlexibleTimeWindow.Mode is OFF.")
+		}
+		return nil
+	case "FLEXIBLE":
+		if w.MaximumWindowInMinutes == 0 {
+			return validationError(
+				"FlexibleTimeWindow.MaximumWindowInMinutes must be specified when FlexibleTimeWindow.Mode is FLEXIBLE.")
+		}
+		if w.MaximumWindowInMinutes < minFlexibleWindowMinutes || w.MaximumWindowInMinutes > maxFlexibleWindowMinutes {
+			bound := fmt.Sprintf("Member must have value greater than or equal to %d", minFlexibleWindowMinutes)
+			if w.MaximumWindowInMinutes > maxFlexibleWindowMinutes {
+				bound = fmt.Sprintf("Member must have value less than or equal to %d", maxFlexibleWindowMinutes)
+			}
+			return validationError(fmt.Sprintf(
+				"1 validation error detected: Value '%d' at 'flexibleTimeWindow.maximumWindowInMinutes' failed to satisfy constraint: %s",
+				w.MaximumWindowInMinutes, bound))
+		}
 		return nil
 	case "":
 		return validationError("FlexibleTimeWindow.Mode is required.")
@@ -346,6 +386,19 @@ func (s *Service) createScheduleTyped(ctx context.Context, req *createScheduleRe
 	group := groupOrDefault(req.GroupName)
 	if aerr := s.requireGroup(ctx, region, group); aerr != nil {
 		return nil, aerr
+	}
+	// A name is unique within its group, not across the account — mirrors
+	// createScheduleGroupTyped's own existence check earlier in this file, and
+	// the ConflictException CreateSchedule documents.
+	_, found, aerr := s.loadSchedule(ctx, region, group, req.Name)
+	if aerr != nil {
+		return nil, aerr
+	}
+	if found {
+		return nil, &protocol.AWSError{
+			Code: "ConflictException", Message: fmt.Sprintf("Schedule %s already exists.", req.Name),
+			HTTPStatus: http.StatusConflict,
+		}
 	}
 
 	state := req.State
