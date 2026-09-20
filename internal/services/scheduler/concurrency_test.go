@@ -42,16 +42,19 @@ func (p *pausingStore) Get(ctx context.Context, namespace, key string) (string, 
 
 // newPausedService returns a service over a pausing store, holding one schedule
 // named "s1" in the default group.
+//
+// The seed schedule is created against a plain store, before the pausing
+// wrapper goes on: CreateSchedule now reads a schedule's own record to check
+// for a duplicate name (see typed_logic.go), which is itself a Get against
+// nsSchedules. Installing the pausing store first would arm and block on that
+// existence check instead of on the read this test means to catch — the
+// update/delete race below — hanging setup itself rather than exercising it.
 func newPausedService(t *testing.T) (*Service, *pausingStore) {
 	t.Helper()
-	st := &pausingStore{
-		Store:   state.NewMemoryStore(),
-		armed:   make(chan struct{}),
-		release: make(chan struct{}),
-	}
+	mem := state.NewMemoryStore()
 	clk := clock.NewMock()
 	clk.Set(time.Date(2026, 8, 9, 12, 0, 0, 0, time.UTC))
-	s := New(&config.Config{Region: "us-east-1", AccountID: "000000000000"}, st, zap.NewNop(), clk)
+	s := New(&config.Config{Region: "us-east-1", AccountID: "000000000000"}, mem, zap.NewNop(), clk)
 
 	if _, aerr := s.createScheduleTyped(context.Background(), &createScheduleRequest{
 		Name:               "s1",
@@ -61,6 +64,13 @@ func newPausedService(t *testing.T) (*Service, *pausingStore) {
 	}); aerr != nil {
 		t.Fatalf("create schedule: %v", aerr)
 	}
+
+	st := &pausingStore{
+		Store:   mem,
+		armed:   make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	s.store = st
 	return s, st
 }
 

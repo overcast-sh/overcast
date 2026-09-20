@@ -250,6 +250,143 @@ func TestCreateSchedule_defaultGroup(t *testing.T) {
 	helpers.AssertStatus(t, resp, http.StatusOK)
 }
 
+func TestCreateSchedule_duplicateName(t *testing.T) {
+	// Given: a schedule already exists in a group
+	srv := helpers.NewTestServer(t)
+	createGroup(t, srv, "dup-sched-group")
+	createSchedule(t, srv, "dup-sched-group", "dup-schedule", "rate(5 minutes)")
+
+	// When: CreateSchedule is called again with the same name in the same group
+	resp := schDo(t, srv, http.MethodPost, "/schedules/dup-schedule", map[string]any{
+		"GroupName":          "dup-sched-group",
+		"ScheduleExpression": "rate(10 minutes)",
+		"FlexibleTimeWindow": map[string]any{"Mode": "OFF"},
+		"Target": map[string]any{
+			"Arn":     "arn:aws:lambda:us-east-1:000000000000:function:my-fn",
+			"RoleArn": "arn:aws:iam::000000000000:role/scheduler-role",
+		},
+	})
+	defer resp.Body.Close()
+
+	// Then: 409 Conflict, mirroring CreateScheduleGroup's duplicate handling
+	helpers.AssertStatus(t, resp, http.StatusConflict)
+	helpers.AssertJSONError(t, resp, "ConflictException")
+}
+
+func TestCreateSchedule_duplicateNameDifferentGroupAllowed(t *testing.T) {
+	// Given: a schedule exists in one group
+	srv := helpers.NewTestServer(t)
+	createGroup(t, srv, "group-one")
+	createGroup(t, srv, "group-two")
+	createSchedule(t, srv, "group-one", "shared-name", "rate(5 minutes)")
+
+	// When: a schedule with the same name is created in a different group
+	resp := schDo(t, srv, http.MethodPost, "/schedules/shared-name", map[string]any{
+		"GroupName":          "group-two",
+		"ScheduleExpression": "rate(10 minutes)",
+		"FlexibleTimeWindow": map[string]any{"Mode": "OFF"},
+		"Target": map[string]any{
+			"Arn":     "arn:aws:lambda:us-east-1:000000000000:function:my-fn",
+			"RoleArn": "arn:aws:iam::000000000000:role/scheduler-role",
+		},
+	})
+	defer resp.Body.Close()
+
+	// Then: 200 — group scopes the name, so this is not a duplicate
+	helpers.AssertStatus(t, resp, http.StatusOK)
+}
+
+func TestCreateSchedule_flexibleWindowMissingMaximum(t *testing.T) {
+	// Given: a schedule group exists
+	srv := helpers.NewTestServer(t)
+	createGroup(t, srv, "flex-group")
+
+	// When: CreateSchedule is called with Mode=FLEXIBLE and no MaximumWindowInMinutes
+	resp := schDo(t, srv, http.MethodPost, "/schedules/flex-missing-max", map[string]any{
+		"GroupName":          "flex-group",
+		"ScheduleExpression": "rate(5 minutes)",
+		"FlexibleTimeWindow": map[string]any{"Mode": "FLEXIBLE"},
+		"Target": map[string]any{
+			"Arn":     "arn:aws:lambda:us-east-1:000000000000:function:my-fn",
+			"RoleArn": "arn:aws:iam::000000000000:role/scheduler-role",
+		},
+	})
+	defer resp.Body.Close()
+
+	// Then: 400 ValidationException — AWS's user guide documents that
+	// MaximumWindowInMinutes must be set once Mode is FLEXIBLE.
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertJSONError(t, resp, "ValidationException")
+}
+
+func TestCreateSchedule_flexibleWindowOutOfRangeTooLow(t *testing.T) {
+	// Given: a schedule group exists
+	srv := helpers.NewTestServer(t)
+	createGroup(t, srv, "flex-range-group")
+
+	// When: CreateSchedule is called with MaximumWindowInMinutes below the
+	// documented range (Minimum value of 1)
+	resp := schDo(t, srv, http.MethodPost, "/schedules/flex-too-low", map[string]any{
+		"GroupName":          "flex-range-group",
+		"ScheduleExpression": "rate(5 minutes)",
+		"FlexibleTimeWindow": map[string]any{"Mode": "FLEXIBLE", "MaximumWindowInMinutes": 0},
+		"Target": map[string]any{
+			"Arn":     "arn:aws:lambda:us-east-1:000000000000:function:my-fn",
+			"RoleArn": "arn:aws:iam::000000000000:role/scheduler-role",
+		},
+	})
+	defer resp.Body.Close()
+
+	// Then: 400 ValidationException
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertJSONError(t, resp, "ValidationException")
+}
+
+func TestCreateSchedule_flexibleWindowOutOfRangeTooHigh(t *testing.T) {
+	// Given: a schedule group exists
+	srv := helpers.NewTestServer(t)
+	createGroup(t, srv, "flex-range-group-high")
+
+	// When: CreateSchedule is called with MaximumWindowInMinutes above the
+	// documented range (Maximum value of 1440)
+	resp := schDo(t, srv, http.MethodPost, "/schedules/flex-too-high", map[string]any{
+		"GroupName":          "flex-range-group-high",
+		"ScheduleExpression": "rate(5 minutes)",
+		"FlexibleTimeWindow": map[string]any{"Mode": "FLEXIBLE", "MaximumWindowInMinutes": 1441},
+		"Target": map[string]any{
+			"Arn":     "arn:aws:lambda:us-east-1:000000000000:function:my-fn",
+			"RoleArn": "arn:aws:iam::000000000000:role/scheduler-role",
+		},
+	})
+	defer resp.Body.Close()
+
+	// Then: 400 ValidationException
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertJSONError(t, resp, "ValidationException")
+}
+
+func TestCreateSchedule_offWindowWithMaximumSet(t *testing.T) {
+	// Given: a schedule group exists
+	srv := helpers.NewTestServer(t)
+	createGroup(t, srv, "off-with-max-group")
+
+	// When: CreateSchedule is called with Mode=OFF but MaximumWindowInMinutes set
+	resp := schDo(t, srv, http.MethodPost, "/schedules/off-with-max", map[string]any{
+		"GroupName":          "off-with-max-group",
+		"ScheduleExpression": "rate(5 minutes)",
+		"FlexibleTimeWindow": map[string]any{"Mode": "OFF", "MaximumWindowInMinutes": 15},
+		"Target": map[string]any{
+			"Arn":     "arn:aws:lambda:us-east-1:000000000000:function:my-fn",
+			"RoleArn": "arn:aws:iam::000000000000:role/scheduler-role",
+		},
+	})
+	defer resp.Body.Close()
+
+	// Then: 400 ValidationException — an OFF window carries no window size
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertJSONError(t, resp, "ValidationException")
+}
+
 func TestGetSchedule_success(t *testing.T) {
 	// Given: a schedule exists
 	srv := helpers.NewTestServer(t)
