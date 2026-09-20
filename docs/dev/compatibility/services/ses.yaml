@@ -1,5 +1,5 @@
 service: ses
-status: in_progress
+status: reviewed
 priority: p2
 reference_policy: aws_docs_only_unless_user_approves_real_aws
 last_updated: 2026-09-20
@@ -28,15 +28,15 @@ findings:
       catch-all `NotImplemented` response for every other v2 operation) is DocOnly today, which
       is correct — see internal/services/ses/capabilities_dev.go:52-69 for the full explanation
       left in place by #864."
-  remaining_gaps:
-    - "#181: verify that the unsupported v1 stubs (GetIdentityDkimAttributes,
-      GetIdentityMailFromDomainAttributes, GetIdentityNotificationAttributes,
-      SetIdentityDkimEnabled, SetIdentityMailFromDomain, SetIdentityNotificationTopic,
-      VerifyDomainDkim, CreateConfigurationSet, DeleteConfigurationSet, ListConfigurationSets,
-      and the receipt-rule family) answer with AWS's documented error shape rather than a bare
-      generic 501 body. Tests for this are in flight on branch
-      claude/compat-tests-ses-stubs-athena-shapes-cloudfront-xml."
-  intentionally_partial: []
+  remaining_gaps: []
+  intentionally_partial:
+    - "#181: verified. Every unsupported v1 operation routes through
+      protocol.NotImplementedQueryXML (internal/services/ses/handler_stubs.go), answering 501
+      with x-emulator-unsupported: true, a request ID, and the awsQuery ErrorResponse envelope
+      (Error/Type, Code, Message; RequestId) the pinned SES model prescribes.
+      tests/integration/ses/ses_test.go pins it for GetIdentityDkimAttributes,
+      SetIdentityDkimEnabled and CreateConfigurationSet, and proves a supported operation on the
+      same endpoint still answers 200."
 handoff:
   start_with: [SendEmail, SendRawEmail, SES v2 routes]
   do_not_redo: []

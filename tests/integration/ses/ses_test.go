@@ -316,6 +316,97 @@ func TestSES_GetSendQuota(t *testing.T) {
 	}
 }
 
+// ─── SES v1 — Unsupported stub operations (issue #181 / tracker #42) ─────────
+//
+// internal/services/ses/handler_stubs.go routes every SES v1 Query-protocol
+// operation Overcast has not implemented through h.stub, which calls
+// protocol.NotImplementedQueryXML. That helper (internal/protocol/errors.go)
+// writes the same AWS Query-protocol error envelope SNS and EC2 use:
+//
+//	<?xml version="1.0" encoding="UTF-8"?>
+//	<ErrorResponse><Error><Type>Sender</Type><Code>NotImplemented</Code><Message>...</Message></Error><RequestId>...</RequestId></ErrorResponse>
+//
+// SES v1 is modeled with aws.protocols#awsQuery (confirmed against the pinned
+// model, models/ses/service/2010-12-01/ses-2010-12-01.json — the service
+// shape carries "aws.protocols#awsQuery": {}), the same protocol trait SNS
+// and EC2 carry, so this is the correct wire shape for any SES v1 error, not
+// an emulator invention. NotImplemented itself is an Overcast-only signal
+// (real AWS would never return it), which is why the 501 status and the
+// x-emulator-unsupported header — rather than the exact error Code — are
+// what these tests pin.
+//
+// The representative stubs below are drawn from the StatusUnsupported rows
+// in internal/services/ses/capabilities_dev.go.
+
+// sesStubQueryXMLError is the AWS Query-protocol ErrorResponse envelope.
+type sesStubQueryXMLError struct {
+	XMLName xml.Name `xml:"ErrorResponse"`
+	Error   struct {
+		Type    string `xml:"Type"`
+		Code    string `xml:"Code"`
+		Message string `xml:"Message"`
+	} `xml:"Error"`
+	RequestID string `xml:"RequestId"`
+}
+
+func TestSES_UnsupportedV1Stub_returnsQueryProtocolNotImplemented(t *testing.T) {
+	// Given a running server, for each SES v1 operation Overcast has not
+	// implemented (routed to h.stub in internal/services/ses/handler.go)
+	stubs := []string{
+		"GetIdentityDkimAttributes",
+		"SetIdentityDkimEnabled",
+		"CreateConfigurationSet",
+	}
+	for _, action := range stubs {
+		t.Run(action, func(t *testing.T) {
+			srv := helpers.NewTestServer(t)
+
+			// When the stubbed action is called
+			resp := sesCall(t, srv, action, url.Values{})
+			defer resp.Body.Close()
+
+			// Then it answers 501 with the emulator-unsupported marker, a
+			// request ID header, and the Query-protocol ErrorResponse envelope
+			helpers.AssertStatus(t, resp, http.StatusNotImplemented)
+			helpers.AssertHeader(t, resp, "x-emulator-unsupported", "true")
+			helpers.AssertRequestID(t, resp)
+
+			var errResp sesStubQueryXMLError
+			decodeXML(t, resp, &errResp)
+			if errResp.Error.Type != "Sender" {
+				t.Errorf("Error.Type = %q, want %q", errResp.Error.Type, "Sender")
+			}
+			if errResp.Error.Code != "NotImplemented" {
+				t.Errorf("Error.Code = %q, want %q", errResp.Error.Code, "NotImplemented")
+			}
+			if errResp.Error.Message == "" {
+				t.Error("expected Error.Message to be set")
+			}
+			if errResp.RequestID == "" {
+				t.Error("expected RequestId to be set")
+			}
+		})
+	}
+}
+
+// TestSES_UnsupportedV1Stub_supportedOperationStillWorks proves the 501s above
+// come from per-action stub routing, not from a server that answers every SES
+// v1 request with 501 regardless of Action.
+func TestSES_UnsupportedV1Stub_supportedOperationStillWorks(t *testing.T) {
+	// Given the same kind of server the stub tests above use
+	srv := helpers.NewTestServer(t)
+
+	// When a supported v1 operation is called on it
+	resp := sesCall(t, srv, "VerifyEmailIdentity", url.Values{
+		"EmailAddress": {"stub-routing-check@example.com"},
+	})
+	defer resp.Body.Close()
+
+	// Then it succeeds normally
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	helpers.AssertRequestID(t, resp)
+}
+
 // ─── SES v2 — POST /v2/email/identities ──────────────────────────────────────
 
 // CreateEmailIdentity is modeled as POST /v2/email/identities, so that is the
