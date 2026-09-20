@@ -1,21 +1,158 @@
 service: appconfigdata
-status: not_started
+status: reviewed
 priority: p3
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-05-17
+last_updated: 2026-09-20
 protocols: [rest_json, aws_json_1_0, aws_json_1_1, rpcv2_cbor]
 implementation: [internal/services/appconfigdata]
 integration_tests: [tests/integration/appconfigdata]
 capability_docs: docs/services/appconfigdata.md
 operation_count_estimate: 2 API operations plus response header tracking
-current_support_level: Data-plane sessions supported; depends on AppConfig hosted versions.
-operations: {}
+current_support_level: >-
+  Both data-plane operations (StartConfigurationSession, GetLatestConfiguration)
+  are implemented in internal/services/appconfigdata/service.go with the
+  control-plane/data-plane split and token rotation semantics AWS documents:
+  single-use configuration tokens, a fresh NextPollConfigurationToken minted
+  per GetLatestConfiguration call, a 24-hour token lifetime, and an unchanged
+  version answering an empty 200 body.
+operations:
+  StartConfigurationSession:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/appconfig/2019-10-09/APIReference/API_appconfigdata_StartConfigurationSession.html
+    protocol: REST-JSON; POST /configurationsessions, all members bound to the JSON body, 201 response
+    tests:
+      - tests/integration/appconfigdata/appconfigdata_test.go::TestStartConfigurationSession_success
+      - tests/integration/appconfigdata/appconfigdata_test.go::TestStartConfigurationSession_unknownApp
+      - tests/integration/appconfigdata/appconfigdata_test.go::TestStartConfigurationSession_unknownEnvironment
+      - tests/integration/appconfigdata/appconfigdata_test.go::TestStartConfigurationSession_missingApplicationIdentifier
+      - tests/integration/appconfigdata/appconfigdata_test.go::TestStartConfigurationSession_pollIntervalOutOfRange
+    scenarios:
+      initial_token_minted:
+        status: reviewed
+        evidence: >-
+          startConfigurationSession (internal/services/appconfigdata/service.go:195-262)
+          resolves Application/Environment/ConfigurationProfile by identifier and, on
+          success, mints an opaque InitialConfigurationToken (newToken(), a UUID
+          satisfying the model's Token pattern ^\S{1,8192}$) and returns it in a 201
+          JSON body, matching the modeled request/response syntax exactly —
+          TestStartConfigurationSession_success.
+      required_identifiers_and_not_found:
+        status: reviewed
+        evidence: >-
+          ApplicationIdentifier/EnvironmentIdentifier/ConfigurationProfileIdentifier are
+          validated for presence and the modeled Identifier @length max (128) via
+          validateIdentifier (service.go:397-405); an unresolvable identifier answers
+          ResourceNotFoundException naming the resource type, matching the model's
+          ResourceType error member — TestStartConfigurationSession_unknownApp,
+          _unknownEnvironment, _missingApplicationIdentifier.
+      required_minimum_poll_interval_range:
+        status: reviewed
+        evidence: >-
+          RequiredMinimumPollIntervalInSeconds is optional (a *int so an omitted member
+          is distinguishable from an explicit 0) and, when present, is checked against
+          the model's OptionalPollSeconds @range(min: 15, max: 86400)
+          (service.go:219-228) — TestStartConfigurationSession_pollIntervalOutOfRange.
+  GetLatestConfiguration:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/appconfig/2019-10-09/APIReference/API_appconfigdata_GetLatestConfiguration.html
+    protocol: >-
+      REST-JSON; GET /configuration?configuration_token={ConfigurationToken}, response
+      metadata as headers (Next-Poll-Configuration-Token, Next-Poll-Interval-In-Seconds,
+      Content-Type, Version-Label), Configuration as the response payload
+    tests:
+      - tests/integration/appconfigdata/appconfigdata_test.go::TestGetLatestConfiguration_returnsContent
+      - tests/integration/appconfigdata/appconfigdata_test.go::TestGetLatestConfiguration_emptyWhenNoVersions
+      - tests/integration/appconfigdata/appconfigdata_test.go::TestGetLatestConfiguration_unchangedReturnsEmpty
+      - tests/integration/appconfigdata/appconfigdata_test.go::TestGetLatestConfiguration_newVersionDelivered
+      - tests/integration/appconfigdata/appconfigdata_test.go::TestGetLatestConfiguration_invalidToken
+      - tests/integration/appconfigdata/appconfigdata_test.go::TestGetLatestConfiguration_spentTokenIsRejected
+      - tests/integration/appconfigdata/appconfigdata_test.go::TestGetLatestConfiguration_reportsTheRequestedPollInterval
+      - internal/services/appconfigdata/service_test.go::TestGetLatestConfiguration_expiredToken
+      - internal/services/appconfigdata/service_test.go::TestGetLatestConfiguration_requiredMinimumPollInterval
+      - internal/services/appconfigdata/service_test.go::TestGetLatestConfiguration_versionLabelHeader
+    scenarios:
+      token_single_use_and_rotation:
+        status: reviewed
+        evidence: >-
+          Each call mints a fresh session keyed by a new NextPollConfigurationToken
+          (getLatestConfiguration, service.go:317-330) and deletes the token it was
+          given (service.go:333-335) before responding, matching AWS's documented
+          "[e]ach configuration token is only valid for one call" and "must always
+          replace the token used for the just-completed call". A replayed token answers
+          BadRequestException rather than being served again —
+          TestGetLatestConfiguration_spentTokenIsRejected.
+      unchanged_version_empty_body:
+        status: reviewed
+        evidence: >-
+          When latestVersion == 0 or equals the session's LastVersionSeen, the handler
+          writes 200 with no body and no Content-Type/Version-Label headers
+          (service.go:345-348), matching AWS's documented "[t]his API may return empty
+          configuration data if the client already has the latest version" and that
+          VersionLabel "is empty" in that case — TestGetLatestConfiguration_unchangedReturnsEmpty.
+      new_version_delivered:
+        status: reviewed
+        evidence: >-
+          A changed LatestVersionNumber fetches the hosted configuration version and
+          returns its Content as the response body with Content-Type and (when set)
+          Version-Label headers (service.go:349-368) —
+          TestGetLatestConfiguration_newVersionDelivered,
+          internal/services/appconfigdata/service_test.go::TestGetLatestConfiguration_versionLabelHeader.
+      expired_token:
+        status: reviewed
+        evidence: >-
+          tokenLifetime is 24 hours (service.go:60-63), matching AWS's documented "the
+          token is valid for up to 24 hours. If a GetLatestConfiguration call uses an
+          expired token, the system returns BadRequestException" on both
+          StartConfigurationSession's and GetLatestConfiguration's docs; the check at
+          service.go:292-298 deletes the expired session and answers
+          BadRequestException — internal/services/appconfigdata/service_test.go::TestGetLatestConfiguration_expiredToken.
+      invalid_token:
+        status: reviewed
+        evidence: >-
+          A token naming no stored session answers BadRequestException
+          ("Invalid or expired configuration token.", service.go:284-287) rather than a
+          500 or a not-found — TestGetLatestConfiguration_invalidToken.
+      poll_interval_not_satisfied:
+        status: reviewed
+        evidence: >-
+          A poll-derived token presented before its session's
+          RequiredMinimumPollIntervalInSeconds has elapsed answers BadRequestException
+          without spending the token, so the same token succeeds once the interval has
+          passed (service.go:303-309) — this is AWS's documented
+          RequiredMinimumPollIntervalInSeconds constraint ("the client that established
+          the session can't call GetLatestConfiguration more frequently than every N
+          seconds"), modeled as InvalidParameterProblem.PollIntervalNotSatisfied —
+          internal/services/appconfigdata/service_test.go::TestGetLatestConfiguration_requiredMinimumPollInterval.
+      reported_poll_interval:
+        status: reviewed
+        evidence: >-
+          Next-Poll-Interval-In-Seconds reports the session's requested minimum when
+          set, defaulting to 60 seconds otherwise (session.pollIntervalSeconds(),
+          service.go:90-96), matching AWS's documented "default value is 60 seconds...
+          If you specify a value for RequiredMinimumPollIntervalInSeconds, the service
+          uses the specified value" — TestGetLatestConfiguration_reportsTheRequestedPollInterval.
 findings:
-  fixed: []
+  fixed:
+    - >-
+      #59 asked to verify the control-plane/data-plane split and token rotation
+      semantics. Both were already implemented matching AWS's documented behavior —
+      single-use tokens with a 24-hour lifetime, per-call token rotation
+      (NextPollConfigurationToken), an empty 200 body on an unchanged version, and
+      RequiredMinimumPollIntervalInSeconds enforced without spending the token on
+      refusal — and are covered by the tests listed above. No code change was needed;
+      the tracker was stale (not_started with an empty operations map) against
+      already-implemented and already-tested behavior.
   remaining_gaps:
-    - Verify control-plane/data-plane split and token rotation semantics.
+    - >-
+      notFound()'s ResourceNotFoundException (service.go:387-393) carries the resource
+      type only in the message string, not in the modeled ReferencedBy/ResourceType
+      error members — protocol.AWSError has no room for them. Low priority since the
+      message already names the resource.
   intentionally_partial: []
 handoff:
-  start_with: [StartConfigurationSession, GetLatestConfiguration]
-  do_not_redo: []
+  start_with: [ReferencedBy/ResourceType structured error members]
+  do_not_redo:
+    [StartConfigurationSession, "GetLatestConfiguration - token rotation, expiry, poll interval, unchanged-version empty body"]
   commands: [go test -count=1 ./internal/services/appconfigdata/... ./tests/integration/appconfigdata/...]
