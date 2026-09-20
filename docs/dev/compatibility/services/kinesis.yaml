@@ -2,7 +2,7 @@ service: kinesis
 status: not_started
 priority: p1
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-05-17
+last_updated: 2026-09-20
 protocols: [aws_json_1_1, aws_json_1_0, rpcv2_cbor]
 implementation: [internal/services/kinesis]
 integration_tests: [tests/integration/kinesis]
@@ -11,10 +11,22 @@ operation_count_estimate: 17 supported
 current_support_level: Core Data Streams support for lifecycle, records, shards, retention, and tagging; some pagination gaps noted.
 operations: {}
 findings:
-  fixed: []
+  fixed:
+    - >-
+      #156 — the pinned model (internal/awsapi/manifest.gen.go) pins Kinesis as AWS
+      JSON 1.1, and Kinesis's SupportedProtocols() (internal/services/kinesis/typed_ops.go:93-95)
+      accepts JSON10, JSON11, and RPCv2CBOR. This is not Kinesis-specific
+      accommodation: any JSON-tier service accepts both JSON 1.0 and JSON 1.1 requests
+      interchangeably by framework rule (codec.Supports in
+      internal/protocol/codec/codec.go:83-100, "the emulator accepts either for any
+      JSON-tier service"; documented in docs/dev/smithy.md:25 — "The emulator also
+      accepts both JSON 1.0 and 1.1 for any JSON-tier service regardless of which
+      variant the real AWS service uses"). No code change was needed; the tracker's
+      header already correctly listed all three protocols — the stale part was the
+      remaining_gaps sentence questioning whether JSON 1.0 support was a divergence
+      from AWS, when it is deliberate, documented, framework-wide behavior.
   remaining_gaps:
-    - Review pagination and error-shape fidelity.
-    - Reconcile JSON 1.0 support versus docs claiming JSON 1.1.
+    - Review pagination and error-shape fidelity (#155, in progress in a separate worktree).
   intentionally_partial: []
 handoff:
   start_with: [PutRecord, GetRecords, ListShards]
