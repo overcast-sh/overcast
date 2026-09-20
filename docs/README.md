@@ -85,8 +85,8 @@ Shorter overview: the [service reference index](./services/README.md).
 | SQS              | [sqs.md](./services/sqs.md)                         | 21  | Comprehensive / broad support |
 | DynamoDB         | [dynamodb.md](./services/dynamodb.md)               | 28  | Comprehensive / broad support |
 | Lambda           | [lambda.md](./services/lambda.md)                   | 62  | Comprehensive / broad support |
-| API Gateway      | [apigateway.md](./services/apigateway.md)           | 106 | Comprehensive / broad support |
-| AppSync          | [appsync.md](./services/appsync.md)                 | 82  | Comprehensive / broad support |
+| API Gateway      | [apigateway.md](./services/apigateway.md)           | 104 | Comprehensive / broad support |
+| AppSync          | [appsync.md](./services/appsync.md)                 | 81  | Comprehensive / broad support |
 | CloudFront       | [cloudfront.md](./services/cloudfront.md)           | 88  | Comprehensive / broad support |
 | Cognito          | [cognito.md](./services/cognito.md)                 | 70  | Comprehensive / broad support |
 | EC2 / VPC        | [ec2.md](./services/ec2.md)                         | 79  | Comprehensive / broad support |
@@ -126,7 +126,7 @@ Shorter overview: the [service reference index](./services/README.md).
 | AppRegistry      | [appregistry.md](./services/appregistry.md)         | 22  | IaC/discovery-oriented stub   |
 | Backup           | [backup.md](./services/backup.md)                   | 18  | IaC/discovery-oriented stub   |
 | CloudTrail       | [cloudtrail.md](./services/cloudtrail.md)           | 12  | IaC/discovery-oriented stub   |
-| EKS              | [eks.md](./services/eks.md)                         | 50  | IaC/discovery-oriented stub   |
+| EKS              | [eks.md](./services/eks.md)                         | 49  | IaC/discovery-oriented stub   |
 | ELBv2            | [elb.md](./services/elb.md)                         | 22  | IaC/discovery-oriented stub   |
 | MSK              | [msk.md](./services/msk.md)                         | 30  | IaC/discovery-oriented stub   |
 | Organizations    | [organizations.md](./services/organizations.md)     | 15  | IaC/discovery-oriented stub   |

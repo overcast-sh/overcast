@@ -226,8 +226,10 @@ func init() {
 		capabilities.Capability{Service: "apigateway", Operation: "GetV2Tags", Category: "HTTP API v2 other",
 			Status: capabilities.StatusSupported},
 		capabilities.Capability{Service: "apigateway", Operation: "ExecuteRestAPI", Category: "REST API v1 execution",
-			Status: capabilities.StatusSupported, Notes: "Lambda proxy/non-proxy, HTTP_PROXY, HTTP, and MOCK integrations; stage variable substitution; base64 Lambda responses decoded before write; records AWS/ApiGateway CloudWatch metrics Count, 4XXError, 5XXError, Latency, and IntegrationLatency once per dispatched request under all three AWS-documented REST dimension combinations — ApiName, ApiName+Stage, and ApiName+Stage+Method+Resource (#1307) — an unresolvable restApiId records nothing, since there is no ApiName to dimension a series with"},
+			EmulatorOnly: true,
+			Status:       capabilities.StatusSupported, Notes: "Lambda proxy/non-proxy, HTTP_PROXY, HTTP, and MOCK integrations; stage variable substitution; base64 Lambda responses decoded before write; records AWS/ApiGateway CloudWatch metrics Count, 4XXError, 5XXError, Latency, and IntegrationLatency once per dispatched request under all three AWS-documented REST dimension combinations — ApiName, ApiName+Stage, and ApiName+Stage+Method+Resource (#1307) — an unresolvable restApiId records nothing, since there is no ApiName to dimension a series with"},
 		capabilities.Capability{Service: "apigateway", Operation: "ExecuteV2API", Category: "HTTP API v2 other",
-			Status: capabilities.StatusSupported, Notes: "AWS_PROXY and HTTP_PROXY integration types; records the same Count/4xx/5xx/Latency/IntegrationLatency metrics (HTTP APIs use AWS's lowercase 4xx/5xx metric names, not REST's 4XXError/5XXError) under all three AWS-documented HTTP dimension combinations — ApiId, ApiId+Stage, and ApiId+Stage+HttpMethod+RouteKey"},
+			EmulatorOnly: true,
+			Status:       capabilities.StatusSupported, Notes: "AWS_PROXY and HTTP_PROXY integration types; records the same Count/4xx/5xx/Latency/IntegrationLatency metrics (HTTP APIs use AWS's lowercase 4xx/5xx metric names, not REST's 4XXError/5XXError) under all three AWS-documented HTTP dimension combinations — ApiId, ApiId+Stage, and ApiId+Stage+HttpMethod+RouteKey"},
 	)
 }

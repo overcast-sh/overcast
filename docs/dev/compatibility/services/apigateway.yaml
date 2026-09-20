@@ -7,7 +7,7 @@ protocols: [rest_json]
 implementation: [internal/services/apigateway]
 integration_tests: [tests/integration/apigateway]
 capability_docs: docs/services/apigateway.md
-operation_count_estimate: 105 tracked; 103 supported, 2 unsupported
+operation_count_estimate: 103 AWS operations tracked; 101 supported, 2 unsupported; 2 emulator extensions (ExecuteRestAPI, ExecuteV2API) counted separately
 current_support_level: Broad REST API v1 and HTTP API v2 management and execution support; some enforcement features are partial.
 operations:
   ExecuteRestAPI:

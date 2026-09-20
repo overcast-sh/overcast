@@ -18,8 +18,8 @@
 | SQS         | 21  | Queue + message CRUD, batches, purge, attributes, visibility, DLQ, FIFO, long polling                            |
 | DynamoDB    | 28  | Table/item CRUD, Scan, Query, Streams, TTL, batch ops, transactions                                              |
 | Lambda      | 62  | Function CRUD, Invoke (Docker), versions, aliases, layers, event source mappings, function URLs (Host-routed invoke); resource policies stored always, **opt-in** enforcement for service-originated invokes (`OVERCAST_ENFORCE_LAMBDA_RESOURCE_POLICY`, default off) |
-| API Gateway | 106 | REST v1 + HTTP v2: full CRUD, stages, deployments, Lambda/MOCK/HTTP proxy execution, authorizers, API keys       |
-| AppSync     | 82  | Full CRUD, GraphQL execution (NONE/HTTP/Lambda/DynamoDB), CloudFormation/CDK provisioning, merged APIs, Events API, channel namespaces |
+| API Gateway | 104 | REST v1 + HTTP v2: full CRUD, stages, deployments, Lambda/MOCK/HTTP proxy execution, authorizers, API keys       |
+| AppSync     | 81  | Full CRUD, GraphQL execution (NONE/HTTP/Lambda/DynamoDB), CloudFormation/CDK provisioning, merged APIs, Events API, channel namespaces |
 | CloudFront  | 88  | Distribution CRUD, invalidations, OAC/OAI, cache policies, CloudFront Functions, key groups, field-level encrypt |
 | Cognito     | 70  | User Pools + Clients, Users, Auth flows, TOTP MFA, Groups, RS256 JWT + JWKS endpoint                             |
 | EC2 / VPC   | 79  | Instances, VPCs, subnets, security groups, key pairs, route tables, IGWs, VPC peering                            |
@@ -70,8 +70,8 @@
 | SQS             | 21  |
 | DynamoDB        | 28  |
 | Lambda          | 62  |
-| API Gateway     | 106 |
-| AppSync         | 82  |
+| API Gateway     | 104 |
+| AppSync         | 81  |
 | CloudFront      | 88  |
 | Cognito         | 70  |
 | EC2 / VPC       | 79  |
@@ -111,7 +111,7 @@
 | AppRegistry     | 22  |
 | Backup          | 18  |
 | CloudTrail      | 12  |
-| EKS             | 50  |
+| EKS             | 49  |
 | ELBv2           | 22  |
 | MSK             | 30  |
 | Organizations   | 15  |

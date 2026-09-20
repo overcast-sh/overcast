@@ -7,7 +7,7 @@ protocols: [rest_json, graphql_execution, websocket_realtime, aws_json_1_0, aws_
 implementation: [internal/services/appsync]
 integration_tests: [tests/integration/appsync]
 capability_docs: docs/services/appsync.md
-operation_count_estimate: 82 tracked items
+operation_count_estimate: 81 AWS operations tracked; 1 emulator extension (ExecuteGraphQL) counted separately
 current_support_level: Large AppSync surface with config, execution, auth, domains, functions, resolvers, and realtime support; some behaviors are config-only/inert.
 operations:
   CreateGraphqlApi:

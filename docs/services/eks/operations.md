@@ -1,6 +1,6 @@
 ---
 title: "EKS operations"
-description: "Every EKS operation Overcast declares — 50 of 50 implemented — with status, behaviour notes and a link to the AWS API reference for each."
+description: "Every EKS operation Overcast declares — 49 of 49 implemented — with status, behaviour notes and a link to the AWS API reference for each."
 section: "Service Reference"
 tags:
   - docs
@@ -13,14 +13,13 @@ tags:
 
 # EKS operations
 
-All 50 listed operations are implemented. Back to [EKS](../eks.md).
+All 49 listed operations are implemented. Back to [EKS](../eks.md).
 
 ## Summary
 
 | Category   | ✅ Supported |
 | ---------- | ------------ |
 | Clusters   | 29           |
-| Helpers    | 1            |
 | Nodegroups | 6            |
 | Fargate    | 4            |
 | Tags       | 3            |
@@ -64,12 +63,6 @@ All 50 listed operations are implemented. Back to [EKS](../eks.md).
 | `DescribeUpdate`                     | ✅ Supported | Returns previously recorded cluster/nodegroup update status by update ID                                                                                                                                                                                                                         | [docs](https://docs.aws.amazon.com/eks/latest/APIReference/API_DescribeUpdate.html)                     |
 | `DeleteCluster`                      | ✅ Supported | Deletes cluster metadata and nodegroups                                                                                                                                                                                                                                                          | [docs](https://docs.aws.amazon.com/eks/latest/APIReference/API_DeleteCluster.html)                      |
 
-### Helpers
-
-| Operation          | Status       | Notes                                                                                                                                                                                                                                                                                    | AWS Docs                                                                           |
-| ------------------ | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `UpdateKubeconfig` | ✅ Supported | Emulator extension, not an AWS API operation — `aws eks update-kubeconfig` is a CLI-side command that calls DescribeCluster and writes the file locally, so no SDK calls this. Overcast returns the generated kubeconfig YAML instead (503 until a live cluster's endpoint/CA are ready) | [cli](https://docs.aws.amazon.com/cli/latest/reference/eks/update-kubeconfig.html) |
-
 ### Nodegroups
 
 | Operation                | Status       | Notes                                                                                                                                                                    | AWS Docs                                                                                    |
@@ -109,6 +102,16 @@ All 50 listed operations are implemented. Back to [EKS](../eks.md).
 | `DeleteAddon`                | ✅ Supported | Removes add-on metadata                                                                                                                                                                                                                                                                                      | [docs](https://docs.aws.amazon.com/eks/latest/APIReference/API_DeleteAddon.html)                |
 | `DescribeAddonConfiguration` | ✅ Supported | Returns the synthetic configuration schema for the requested add-on and version; both query members are required, and an uncatalogued version is a ResourceNotFoundException                                                                                                                                 | [docs](https://docs.aws.amazon.com/eks/latest/APIReference/API_DescribeAddonConfiguration.html) |
 | `DescribeAddonVersions`      | ✅ Supported | Returns the synthetic version catalog for vpc-cni, coredns, kube-proxy, aws-ebs-csi-driver and eks-pod-identity-agent, filtered by the addonName/kubernetesVersion/types/publishers/owners query members and paged by maxResults/nextToken. This is the same catalog CreateAddon validates addonName against | [docs](https://docs.aws.amazon.com/eks/latest/APIReference/API_DescribeAddonVersions.html)      |
+
+---
+
+## Emulator extensions
+
+Operations Overcast serves that appear in no AWS model, so no SDK calls them and no AWS reference page describes them. They sit outside the operation counts above.
+
+| Operation          | Status       | Notes                                                                                                                                                                                                                                     | Reference                                                                          |
+| ------------------ | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `UpdateKubeconfig` | ✅ Supported | `aws eks update-kubeconfig` is a CLI-side command that calls DescribeCluster and writes the file locally, so no SDK calls this. Overcast returns the generated kubeconfig YAML instead (503 until a live cluster's endpoint/CA are ready) | [cli](https://docs.aws.amazon.com/cli/latest/reference/eks/update-kubeconfig.html) |
 
 ## Related
 

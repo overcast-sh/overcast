@@ -1,6 +1,6 @@
 ---
 title: "AppSync operations"
-description: "Every AppSync operation Overcast declares — 82 of 82 implemented — with status, behaviour notes and a link to the AWS API reference for each."
+description: "Every AppSync operation Overcast declares — 81 of 81 implemented — with status, behaviour notes and a link to the AWS API reference for each."
 section: "Service Reference"
 tags:
   - appsync
@@ -13,7 +13,7 @@ tags:
 
 # AppSync operations
 
-All 82 listed operations are implemented. Back to [AppSync](../appsync.md).
+All 81 listed operations are implemented. Back to [AppSync](../appsync.md).
 
 ## Summary
 
@@ -34,7 +34,7 @@ All 82 listed operations are implemented. Back to [AppSync](../appsync.md).
 | Merged APIs                  | 7            |
 | Events API                   | 5            |
 | Channel Namespaces           | 5            |
-| Execution & Evaluation       | 3            |
+| Execution & Evaluation       | 2            |
 | DynamoDB Resolver Operations | 11           |
 
 ---
@@ -186,11 +186,10 @@ All 82 listed operations are implemented. Back to [AppSync](../appsync.md).
 
 ### Execution & Evaluation
 
-| Operation                 | Status       | Notes                                                                                                                                                                         | AWS Docs                                                                                         |
-| ------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `ExecuteGraphQL`          | ✅ Supported | Executes a GraphQL operation against the API; Cognito bearer tokens are decoded only, or verified against the local user pool when OVERCAST_ENFORCE_APPSYNC_COGNITO_AUTH=true | [docs](https://docs.aws.amazon.com/appsync/latest/APIReference/API_ExecuteGraphQL.html)          |
-| `EvaluateMappingTemplate` | ✅ Supported | Evaluates VTL mapping templates; logs and outErrors are not populated                                                                                                         | [docs](https://docs.aws.amazon.com/appsync/latest/APIReference/API_EvaluateMappingTemplate.html) |
-| `EvaluateCode`            | ✅ Supported | Evaluates APPSYNC_JS resolver code; outErrors is not populated                                                                                                                | [docs](https://docs.aws.amazon.com/appsync/latest/APIReference/API_EvaluateCode.html)            |
+| Operation                 | Status       | Notes                                                                 | AWS Docs                                                                                         |
+| ------------------------- | ------------ | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `EvaluateMappingTemplate` | ✅ Supported | Evaluates VTL mapping templates; logs and outErrors are not populated | [docs](https://docs.aws.amazon.com/appsync/latest/APIReference/API_EvaluateMappingTemplate.html) |
+| `EvaluateCode`            | ✅ Supported | Evaluates APPSYNC_JS resolver code; outErrors is not populated        | [docs](https://docs.aws.amazon.com/appsync/latest/APIReference/API_EvaluateCode.html)            |
 
 ### DynamoDB Resolver Operations
 
@@ -207,6 +206,16 @@ All 82 listed operations are implemented. Back to [AppSync](../appsync.md).
 | `TransactGetItems`   | ✅ Supported | DynamoDB data source resolver operation | [docs](https://docs.aws.amazon.com/appsync/latest/APIReference/API_TransactGetItems.html)   |
 | `TransactWriteItems` | ✅ Supported | DynamoDB data source resolver operation | [docs](https://docs.aws.amazon.com/appsync/latest/APIReference/API_TransactWriteItems.html) |
 | `ConditionCheck`     | ✅ Supported | DynamoDB transact-write condition check | [docs](https://docs.aws.amazon.com/appsync/latest/APIReference/API_ConditionCheck.html)     |
+
+---
+
+## Emulator extensions
+
+Operations Overcast serves that appear in no AWS model, so no SDK calls them and no AWS reference page describes them. They sit outside the operation counts above.
+
+| Operation        | Status       | Notes                                                                                                                                                                         |
+| ---------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ExecuteGraphQL` | ✅ Supported | Executes a GraphQL operation against the API; Cognito bearer tokens are decoded only, or verified against the local user pool when OVERCAST_ENFORCE_APPSYNC_COGNITO_AUTH=true |
 
 ## Related
 
