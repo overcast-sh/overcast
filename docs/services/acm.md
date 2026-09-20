@@ -42,6 +42,7 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | Certificates | `RequestCertificate`, `DescribeCertificate`, `ListCertificates`, `ListCertificateDomainValidations`, `DeleteCertificate` |
 | Tags         | The legacy `AddTagsToCertificate` family and the modern `TagResource` / `UntagResource` / `ListTagsForResource` aliases    |
 | Inline tags  | `Tags` supplied on `RequestCertificate` are applied at creation                                                            |
+| Protocols    | AWS JSON 1.1, plus AWS JSON 1.0 and Smithy RPC v2 CBOR — accepting 1.0 alongside 1.1 is a framework-wide rule applied to every JSON-tier service, not an ACM-specific relaxation |
 
 ## Differences from AWS
 
