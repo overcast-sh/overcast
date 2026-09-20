@@ -408,3 +408,161 @@ func TestRefreshToken_secretHash_missing(t *testing.T) {
 	// Then: InvalidParameterException
 	helpers.AssertJSONError(t, resp, "InvalidParameterException")
 }
+
+// ─── SECRET_HASH with username aliases ────────────────────────────────────────
+//
+// AWS computes SECRET_HASH over the literal value the caller sends as USERNAME,
+// not over the user's internally resolved username or sub — see "Computing
+// secret hash values" (https://docs.aws.amazon.com/cognito/latest/developerguide/signing-up-users-in-your-app.html#cognito-user-pools-computing-secret-hash)
+// and the AWS re:Post guidance that an email/phone/preferred-username alias
+// passed as USERNAME is the value that must be hashed. checkSecretHashTyped
+// (internal/services/cognito/typed_logic.go) hashes req.AuthParameters["USERNAME"]
+// exactly as received, before any alias/UsernameAttributes resolution happens.
+
+func TestInitiateAuth_secretHash_usernameAttributeEmailLiteral(t *testing.T) {
+	// Given: a UsernameAttributes:[email] pool, a secret client, and a user
+	// admin-created with the email as Username (Cognito assigns a UUID as the
+	// internal username for such pools).
+	srv := helpers.NewTestServer(t)
+	poolID := createPoolWithUsernameAttributes(t, srv, "email-secret-pool", []string{"email"})
+	clientID, clientSecret := createClientWithSecret(t, srv, poolID, "app")
+	internalUsername := createUserAndReturnSub(t, srv, poolID, "carol@example.com")
+	cognitoCall(t, srv, "AdminSetUserPassword", map[string]any{
+		"UserPoolId": poolID, "Username": "carol@example.com", "Password": "CarolPass1!", "Permanent": true,
+	}).Body.Close()
+
+	// When: InitiateAuth supplies the email as USERNAME and hashes SECRET_HASH
+	// over that same literal email value
+	resp := cognitoCall(t, srv, "InitiateAuth", map[string]any{
+		"ClientId": clientID, "AuthFlow": "USER_PASSWORD_AUTH",
+		"AuthParameters": map[string]string{
+			"USERNAME":    "carol@example.com",
+			"PASSWORD":    "CarolPass1!",
+			"SECRET_HASH": secretHash("carol@example.com", clientID, clientSecret),
+		},
+	})
+	defer resp.Body.Close()
+
+	// Then: authentication succeeds
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	var result struct {
+		AuthenticationResult struct {
+			AccessToken string `json:"AccessToken"`
+		} `json:"AuthenticationResult"`
+	}
+	helpers.DecodeJSON(t, resp, &result)
+	if result.AuthenticationResult.AccessToken == "" {
+		t.Error("expected AccessToken, got none")
+	}
+	if internalUsername == "" {
+		t.Fatal("expected a generated internal username/sub")
+	}
+}
+
+func TestInitiateAuth_secretHash_usernameAttributeRejectsInternalUsernameHash(t *testing.T) {
+	// Given: the same UsernameAttributes:[email] pool and user as above
+	srv := helpers.NewTestServer(t)
+	poolID := createPoolWithUsernameAttributes(t, srv, "email-secret-pool", []string{"email"})
+	clientID, clientSecret := createClientWithSecret(t, srv, poolID, "app")
+	internalUsername := createUserAndReturnSub(t, srv, poolID, "dana@example.com")
+	cognitoCall(t, srv, "AdminSetUserPassword", map[string]any{
+		"UserPoolId": poolID, "Username": "dana@example.com", "Password": "DanaPass1!", "Permanent": true,
+	}).Body.Close()
+
+	// When: InitiateAuth supplies the email as USERNAME but hashes SECRET_HASH
+	// over the internally resolved UUID username instead of the literal email
+	resp := cognitoCall(t, srv, "InitiateAuth", map[string]any{
+		"ClientId": clientID, "AuthFlow": "USER_PASSWORD_AUTH",
+		"AuthParameters": map[string]string{
+			"USERNAME":    "dana@example.com",
+			"PASSWORD":    "DanaPass1!",
+			"SECRET_HASH": secretHash(internalUsername, clientID, clientSecret),
+		},
+	})
+	defer resp.Body.Close()
+
+	// Then: the hash doesn't match what AWS expects (hashed over the literal
+	// USERNAME value), so authentication is rejected
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertJSONError(t, resp, "NotAuthorizedException")
+}
+
+func TestInitiateAuth_secretHash_aliasAttributeEmailLiteral(t *testing.T) {
+	// Given: an AliasAttributes:[email] pool where the user's fixed username is
+	// "erin" and a verified email alias is registered separately.
+	srv := helpers.NewTestServer(t)
+	poolID := createPoolWithAliasAttributes(t, srv, "alias-secret-pool", []string{"email"})
+	clientID, clientSecret := createClientWithSecret(t, srv, poolID, "app")
+	cognitoCall(t, srv, "AdminCreateUser", map[string]any{
+		"UserPoolId":    poolID,
+		"Username":      "erin",
+		"MessageAction": "SUPPRESS",
+		"UserAttributes": []map[string]string{
+			{"Name": "email", "Value": "erin@example.com"},
+			{"Name": "email_verified", "Value": "true"},
+		},
+	}).Body.Close()
+	cognitoCall(t, srv, "AdminSetUserPassword", map[string]any{
+		"UserPoolId": poolID, "Username": "erin", "Password": "ErinPass1!", "Permanent": true,
+	}).Body.Close()
+
+	// When: InitiateAuth signs in with the email alias as USERNAME and hashes
+	// SECRET_HASH over that same literal alias value, not the resolved "erin"
+	resp := cognitoCall(t, srv, "InitiateAuth", map[string]any{
+		"ClientId": clientID, "AuthFlow": "USER_PASSWORD_AUTH",
+		"AuthParameters": map[string]string{
+			"USERNAME":    "erin@example.com",
+			"PASSWORD":    "ErinPass1!",
+			"SECRET_HASH": secretHash("erin@example.com", clientID, clientSecret),
+		},
+	})
+	defer resp.Body.Close()
+
+	// Then: authentication succeeds
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	var result struct {
+		AuthenticationResult struct {
+			AccessToken string `json:"AccessToken"`
+		} `json:"AuthenticationResult"`
+	}
+	helpers.DecodeJSON(t, resp, &result)
+	if result.AuthenticationResult.AccessToken == "" {
+		t.Error("expected AccessToken, got none")
+	}
+}
+
+func TestInitiateAuth_secretHash_aliasAttributeRejectsResolvedUsernameHash(t *testing.T) {
+	// Given: the same AliasAttributes:[email] pool and user as above
+	srv := helpers.NewTestServer(t)
+	poolID := createPoolWithAliasAttributes(t, srv, "alias-secret-pool", []string{"email"})
+	clientID, clientSecret := createClientWithSecret(t, srv, poolID, "app")
+	cognitoCall(t, srv, "AdminCreateUser", map[string]any{
+		"UserPoolId":    poolID,
+		"Username":      "frank",
+		"MessageAction": "SUPPRESS",
+		"UserAttributes": []map[string]string{
+			{"Name": "email", "Value": "frank@example.com"},
+			{"Name": "email_verified", "Value": "true"},
+		},
+	}).Body.Close()
+	cognitoCall(t, srv, "AdminSetUserPassword", map[string]any{
+		"UserPoolId": poolID, "Username": "frank", "Password": "FrankPass1!", "Permanent": true,
+	}).Body.Close()
+
+	// When: InitiateAuth signs in with the email alias as USERNAME but hashes
+	// SECRET_HASH over the resolved fixed username "frank" instead
+	resp := cognitoCall(t, srv, "InitiateAuth", map[string]any{
+		"ClientId": clientID, "AuthFlow": "USER_PASSWORD_AUTH",
+		"AuthParameters": map[string]string{
+			"USERNAME":    "frank@example.com",
+			"PASSWORD":    "FrankPass1!",
+			"SECRET_HASH": secretHash("frank", clientID, clientSecret),
+		},
+	})
+	defer resp.Body.Close()
+
+	// Then: the hash doesn't match what AWS expects (hashed over the literal
+	// USERNAME value), so authentication is rejected
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertJSONError(t, resp, "NotAuthorizedException")
+}

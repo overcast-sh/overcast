@@ -178,6 +178,88 @@ func TestListUsers_attributesToGet(t *testing.T) {
 	}
 }
 
+// ─── Filter validation ─────────────────────────────────────────────────────
+//
+// AWS documents the Filter grammar as `"AttributeName Filter-Type "AttributeValue"`
+// with Filter-Type limited to "=" and "^=", over a fixed set of searchable
+// standard attributes (username, email, phone_number, name, given_name,
+// family_name, preferred_username, cognito:user_status, status, sub) — see
+// https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_ListUsers.html.
+// A filter outside that grammar answers InvalidParameterException; message
+// wording parity with AWS is out of scope for these tests.
+
+func TestListUsers_filterUnsupportedAttribute(t *testing.T) {
+	// Given: a pool with a user
+	srv := helpers.NewTestServer(t)
+	poolID := createPool(t, srv, "p")
+	createCognitoUserWithEmail(t, srv, poolID, "alice", "alice@example.com")
+
+	// When: ListUsers filters on an attribute name AWS doesn't allow searching by
+	resp := cognitoCall(t, srv, "ListUsers", map[string]any{
+		"UserPoolId": poolID,
+		"Filter":     `custom:role = "admin"`,
+	})
+	defer resp.Body.Close()
+
+	// Then: Cognito rejects the unsupported attribute
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertJSONError(t, resp, "InvalidParameterException")
+}
+
+func TestListUsers_filterMissingOperator(t *testing.T) {
+	// Given: a pool with a user
+	srv := helpers.NewTestServer(t)
+	poolID := createPool(t, srv, "p")
+	createCognitoUserWithEmail(t, srv, poolID, "alice", "alice@example.com")
+
+	// When: ListUsers supplies a filter with no "=" or "^=" operator at all
+	resp := cognitoCall(t, srv, "ListUsers", map[string]any{
+		"UserPoolId": poolID,
+		"Filter":     `username "alice"`,
+	})
+	defer resp.Body.Close()
+
+	// Then: Cognito rejects the malformed filter
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertJSONError(t, resp, "InvalidParameterException")
+}
+
+func TestListUsers_filterUnterminatedQuotedValue(t *testing.T) {
+	// Given: a pool with a user
+	srv := helpers.NewTestServer(t)
+	poolID := createPool(t, srv, "p")
+	createCognitoUserWithEmail(t, srv, poolID, "alice", "alice@example.com")
+
+	// When: ListUsers supplies a filter whose quoted value is never closed
+	resp := cognitoCall(t, srv, "ListUsers", map[string]any{
+		"UserPoolId": poolID,
+		"Filter":     `username = "alice`,
+	})
+	defer resp.Body.Close()
+
+	// Then: Cognito rejects the malformed filter
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertJSONError(t, resp, "InvalidParameterException")
+}
+
+func TestListUsers_filterUnsupportedOperator(t *testing.T) {
+	// Given: a pool with a user
+	srv := helpers.NewTestServer(t)
+	poolID := createPool(t, srv, "p")
+	createCognitoUserWithEmail(t, srv, poolID, "alice", "alice@example.com")
+
+	// When: ListUsers supplies a filter with an operator other than "=" or "^="
+	resp := cognitoCall(t, srv, "ListUsers", map[string]any{
+		"UserPoolId": poolID,
+		"Filter":     `username != "alice"`,
+	})
+	defer resp.Body.Close()
+
+	// Then: Cognito rejects the unsupported operator
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertJSONError(t, resp, "InvalidParameterException")
+}
+
 func TestListUsers_attributesToGetMissing(t *testing.T) {
 	// Given: one returned user is missing the requested attribute
 	srv := helpers.NewTestServer(t)
