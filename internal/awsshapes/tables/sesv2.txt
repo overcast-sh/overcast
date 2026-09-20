@@ -1021,6 +1021,7 @@ MessageInsightsFilters structure
 .LastDeliveryEvent LastDeliveryEventList
 .LastEngagementEvent LastEngagementEventList
 .Subject EmailSubjectFilterList
+.TenantName TenantNameFilterList
 MessageRejected structure error=client code=400
 .message ErrorMessage
 MessageSecurityOptions structure
@@ -1437,6 +1438,7 @@ TenantInfo structure
 .TenantName TenantName
 TenantInfoList list m=TenantInfo
 TenantName string
+TenantNameFilterList list m=TenantName
 TenantResource structure
 .ResourceArn AmazonResourceName
 .ResourceType ResourceType

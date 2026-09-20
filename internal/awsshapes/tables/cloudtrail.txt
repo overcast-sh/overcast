@@ -141,6 +141,7 @@ CreateTrailRequest structure
 .IsOrganizationTrail Boolean
 .KmsKeyId String
 .Name String
+.RecursiveLogging Boolean
 .S3BucketName String
 .S3KeyPrefix String
 .SnsTopicName String
@@ -154,6 +155,7 @@ CreateTrailResponse structure
 .KmsKeyId String
 .LogFileValidationEnabled Boolean
 .Name String
+.RecursiveLogging Boolean
 .S3BucketName String
 .S3KeyPrefix String
 .SnsTopicARN String
@@ -753,7 +755,7 @@ PutEventSelectorsResponse structure
 .AdvancedEventSelectors AdvancedEventSelectors
 .EventSelectors EventSelectors
 .TrailARN String
-PutInsightSelectors operation in=PutInsightSelectorsRequest out=PutInsightSelectorsResponse err=CloudTrailARNInvalidException,InsufficientEncryptionPolicyException,InsufficientS3BucketPolicyException,InvalidHomeRegionException,InvalidInsightSelectorsException,InvalidParameterCombinationException,InvalidParameterException,InvalidTrailNameException,KmsException,NoManagementAccountSLRExistsException,NotOrganizationMasterAccountException,OperationNotPermittedException,S3BucketDoesNotExistException,ThrottlingException,TrailNotFoundException,UnsupportedOperationException
+PutInsightSelectors operation in=PutInsightSelectorsRequest out=PutInsightSelectorsResponse err=CloudTrailARNInvalidException,ConflictException,InsufficientEncryptionPolicyException,InsufficientS3BucketPolicyException,InvalidHomeRegionException,InvalidInsightSelectorsException,InvalidParameterCombinationException,InvalidParameterException,InvalidTrailNameException,KmsException,NoManagementAccountSLRExistsException,NotOrganizationMasterAccountException,OperationNotPermittedException,S3BucketDoesNotExistException,ThrottlingException,TrailNotFoundException,UnsupportedOperationException
 PutInsightSelectorsRequest structure
 .EventDataStore EventDataStoreArn
 .InsightSelectors InsightSelectors
@@ -991,6 +993,7 @@ Trail structure
 .KmsKeyId String
 .LogFileValidationEnabled Boolean
 .Name String
+.RecursiveLogging Boolean
 .S3BucketName String
 .S3KeyPrefix String
 .SnsTopicARN String
@@ -1074,6 +1077,7 @@ UpdateTrailRequest structure
 .IsOrganizationTrail Boolean
 .KmsKeyId String
 .Name String
+.RecursiveLogging Boolean
 .S3BucketName String
 .S3KeyPrefix String
 .SnsTopicName String
@@ -1086,6 +1090,7 @@ UpdateTrailResponse structure
 .KmsKeyId String
 .LogFileValidationEnabled Boolean
 .Name String
+.RecursiveLogging Boolean
 .S3BucketName String
 .S3KeyPrefix String
 .SnsTopicARN String

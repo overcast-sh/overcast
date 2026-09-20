@@ -3,6 +3,7 @@ AssumeRole operation in=AssumeRoleRequest out=AssumeRoleResponse err=ExpiredToke
 AssumeRoleRequest structure
 .DurationSeconds roleDurationSecondsType
 .ExternalId externalIdType
+.MinimumSessionTokenSize minimumSessionTokenSizeType
 .Policy unrestrictedSessionPolicyDocumentType
 .PolicyArns policyDescriptorListType
 .ProvidedContexts ProvidedContextsListType
@@ -17,10 +18,13 @@ AssumeRoleResponse structure
 .AssumedRoleUser AssumedRoleUser
 .Credentials Credentials
 .PackedPolicySize nonNegativeIntegerType
+.SessionTokenSize sessionTokenSizeType
+.SessionTokenUtilization sessionTokenUtilizationType
 .SourceIdentity sourceIdentityType
 AssumeRoleWithSAML operation in=AssumeRoleWithSAMLRequest out=AssumeRoleWithSAMLResponse err=ExpiredTokenException,IDPRejectedClaimException,InvalidIdentityTokenException,MalformedPolicyDocumentException,PackedPolicyTooLargeException,RegionDisabledException
 AssumeRoleWithSAMLRequest structure
 .DurationSeconds roleDurationSecondsType
+.MinimumSessionTokenSize minimumSessionTokenSizeType
 .Policy sessionPolicyDocumentType
 .PolicyArns policyDescriptorListType
 .PrincipalArn arnType
@@ -33,12 +37,15 @@ AssumeRoleWithSAMLResponse structure
 .Issuer Issuer
 .NameQualifier NameQualifier
 .PackedPolicySize nonNegativeIntegerType
+.SessionTokenSize sessionTokenSizeType
+.SessionTokenUtilization sessionTokenUtilizationType
 .SourceIdentity sourceIdentityType
 .Subject Subject
 .SubjectType SubjectType
 AssumeRoleWithWebIdentity operation in=AssumeRoleWithWebIdentityRequest out=AssumeRoleWithWebIdentityResponse err=ExpiredTokenException,IDPCommunicationErrorException,IDPRejectedClaimException,InvalidIdentityTokenException,MalformedPolicyDocumentException,PackedPolicyTooLargeException,RegionDisabledException
 AssumeRoleWithWebIdentityRequest structure
 .DurationSeconds roleDurationSecondsType
+.MinimumSessionTokenSize minimumSessionTokenSizeType
 .Policy sessionPolicyDocumentType
 .PolicyArns policyDescriptorListType
 .ProviderId urlType
@@ -51,15 +58,20 @@ AssumeRoleWithWebIdentityResponse structure
 .Credentials Credentials
 .PackedPolicySize nonNegativeIntegerType
 .Provider Issuer
+.SessionTokenSize sessionTokenSizeType
+.SessionTokenUtilization sessionTokenUtilizationType
 .SourceIdentity sourceIdentityType
 .SubjectFromWebIdentityToken webIdentitySubjectType
 AssumeRoot operation in=AssumeRootRequest out=AssumeRootResponse err=ExpiredTokenException,RegionDisabledException
 AssumeRootRequest structure
 .DurationSeconds RootDurationSecondsType
+.MinimumSessionTokenSize minimumSessionTokenSizeType
 .TargetPrincipal TargetPrincipalType
 .TaskPolicyArn PolicyDescriptorType
 AssumeRootResponse structure
 .Credentials Credentials
+.SessionTokenSize sessionTokenSizeType
+.SessionTokenUtilization sessionTokenUtilizationType
 .SourceIdentity sourceIdentityType
 AssumedRoleUser structure
 .Arn arnType
@@ -103,6 +115,7 @@ GetDelegatedAccessTokenResponse structure
 GetFederationToken operation in=GetFederationTokenRequest out=GetFederationTokenResponse err=MalformedPolicyDocumentException,PackedPolicyTooLargeException,RegionDisabledException
 GetFederationTokenRequest structure
 .DurationSeconds durationSecondsType
+.MinimumSessionTokenSize minimumSessionTokenSizeType
 .Name userNameType
 .Policy sessionPolicyDocumentType
 .PolicyArns policyDescriptorListType
@@ -111,13 +124,18 @@ GetFederationTokenResponse structure
 .Credentials Credentials
 .FederatedUser FederatedUser
 .PackedPolicySize nonNegativeIntegerType
+.SessionTokenSize sessionTokenSizeType
+.SessionTokenUtilization sessionTokenUtilizationType
 GetSessionToken operation in=GetSessionTokenRequest out=GetSessionTokenResponse err=RegionDisabledException
 GetSessionTokenRequest structure
 .DurationSeconds durationSecondsType
+.MinimumSessionTokenSize minimumSessionTokenSizeType
 .SerialNumber serialNumberType
 .TokenCode tokenCodeType
 GetSessionTokenResponse structure
 .Credentials Credentials
+.SessionTokenSize sessionTokenSizeType
+.SessionTokenUtilization sessionTokenUtilizationType
 GetWebIdentityToken operation in=GetWebIdentityTokenRequest out=GetWebIdentityTokenResponse err=JWTPayloadSizeExceededException,OutboundWebIdentityFederationDisabledException,SessionDurationEscalationException
 GetWebIdentityTokenRequest structure
 .Audience webIdentityTokenAudienceListType
@@ -187,6 +205,7 @@ invalidAuthorizationMessage string
 invalidIdentityTokenMessage string
 jwtAlgorithmType string
 malformedPolicyDocumentMessage string
+minimumSessionTokenSizeType integer
 nonNegativeIntegerType integer
 packedPolicyTooLargeMessage string
 policyDescriptorListType list m=PolicyDescriptorType
@@ -195,6 +214,8 @@ roleDurationSecondsType integer
 roleSessionNameType string
 serialNumberType string
 sessionPolicyDocumentType string
+sessionTokenSizeType integer
+sessionTokenUtilizationType integer
 sourceIdentityType string
 tagKeyListType list m=tagKeyType
 tagKeyType string
