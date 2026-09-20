@@ -4,6 +4,7 @@
 package route53_test
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -224,6 +225,135 @@ func TestChangeRRSets_recordWithoutValuesOrAlias(t *testing.T) {
 	// Then: InvalidInput is returned
 	helpers.AssertStatus(t, resp, http.StatusBadRequest)
 	helpers.AssertQueryXMLError(t, resp, "InvalidInput")
+}
+
+// ── Per-type value validation ────────────────────────────────────────────────
+
+// record renders one <ResourceRecordSet> with the given values.
+func record(name, rrType string, values ...string) string {
+	rrs := ""
+	for _, v := range values {
+		rrs += `<ResourceRecord><Value>` + v + `</Value></ResourceRecord>`
+	}
+	return `<ResourceRecordSet><Name>` + name + `</Name><Type>` + rrType + `</Type><TTL>300</TTL>` +
+		`<ResourceRecords>` + rrs + `</ResourceRecords></ResourceRecordSet>`
+}
+
+func TestChangeRRSets_valueDoesNotMatchRecordType(t *testing.T) {
+	// Given: a zone
+	srv := helpers.NewTestServer(t)
+	zone := newZone(t, srv, "example.com.", "ref-ccb-rdata")
+
+	cases := []struct {
+		name   string
+		rrType string
+		value  string
+	}{
+		{"A with a hostname", "A", "www.example.net."},
+		{"A with an IPv6 address", "A", "2001:db8::1"},
+		{"A with a truncated quad", "A", "1.2.3"},
+		{"AAAA with an IPv4 address", "AAAA", "1.2.3.4"},
+		{"AAAA with rubbish", "AAAA", "not-an-address"},
+		{"CNAME with a space", "CNAME", "not a hostname"},
+		{"MX with no preference", "MX", "mail.example.net."},
+		{"MX with a non-numeric preference", "MX", "high mail.example.net."},
+		{"NS with an empty label", "NS", "ns1..example.net."},
+		{"PTR with a space", "PTR", "host name.example.net."},
+		{"SRV with three fields", "SRV", "1 2 target.example.net."},
+		{"SRV with a port out of range", "SRV", "1 2 70000 target.example.net."},
+		{"TXT without quotes", "TXT", "v=spf1 -all"},
+		{"TXT with an unterminated quote", "TXT", `"unterminated`},
+		{"TXT with a string over 255 characters", "TXT", `"` + strings.Repeat("a", 256) + `"`},
+		{"CAA with an unquoted value", "CAA", "0 issue letsencrypt.org"},
+		{"CAA with flags out of range", "CAA", `300 issue "letsencrypt.org"`},
+	}
+	for i, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// When: the record is created with a value its type does not allow
+			name := fmt.Sprintf("rec%d.example.com.", i)
+			resp := changeRRSets(t, srv, zone,
+				`<Change><Action>CREATE</Action>`+record(name, tc.rrType, tc.value)+`</Change>`)
+
+			// Then: InvalidChangeBatch names the offending value
+			helpers.AssertStatus(t, resp, http.StatusBadRequest)
+			code, msg := errMessage(t, resp)
+			if code != "InvalidChangeBatch" {
+				t.Fatalf("expected InvalidChangeBatch, got %q (%s)", code, msg)
+			}
+			if !strings.Contains(msg, "Invalid Resource Record") || !strings.Contains(msg, tc.value) {
+				t.Errorf("expected the message to name the bad value %q, got %q", tc.value, msg)
+			}
+		})
+	}
+
+	// And: nothing was written — the batch is rejected as a whole
+	out := listRRSets(t, srv, zone, "")
+	if len(out.ResourceRecordSets) != 2 {
+		t.Errorf("expected only the default NS+SOA to exist, got %d records", len(out.ResourceRecordSets))
+	}
+}
+
+func TestChangeRRSets_cnameWithMultipleValues(t *testing.T) {
+	// Given: a zone
+	srv := helpers.NewTestServer(t)
+	zone := newZone(t, srv, "example.com.", "ref-ccb-cname-multi")
+
+	// When: a CNAME record set carries two values
+	resp := changeRRSets(t, srv, zone,
+		`<Change><Action>CREATE</Action>`+
+			record("www.example.com.", "CNAME", "a.example.net.", "b.example.net.")+`</Change>`)
+
+	// Then: InvalidChangeBatch — AWS allows several values for every type but
+	// CNAME and SOA
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	code, msg := errMessage(t, resp)
+	if code != "InvalidChangeBatch" {
+		t.Fatalf("expected InvalidChangeBatch, got %q (%s)", code, msg)
+	}
+	if !strings.Contains(msg, "CNAME") {
+		t.Errorf("expected the message to name the record type, got %q", msg)
+	}
+}
+
+func TestChangeRRSets_acceptsWellFormedValuesForEveryValidatedType(t *testing.T) {
+	// Given: a zone
+	srv := helpers.NewTestServer(t)
+	zone := newZone(t, srv, "example.com.", "ref-ccb-rdata-ok")
+
+	cases := []struct {
+		rrType string
+		values []string
+	}{
+		{"A", []string{"192.0.2.1", "192.0.2.2"}},
+		{"AAAA", []string{"2001:db8::1", "::1"}},
+		{"CNAME", []string{"target.example.net."}},
+		{"MX", []string{"10 mail.example.net.", "20 backup.example.net."}},
+		{"NS", []string{"ns1.example.net.", "ns2.example.net."}},
+		{"PTR", []string{"host.example.net."}},
+		{"SRV", []string{"1 10 5269 xmpp.example.net."}},
+		{"TXT", []string{`"v=spf1 include:_spf.example.net ~all"`, `"one" "two"`, `"say \"hi\""`}},
+		{"SPF", []string{`"v=spf1 -all"`}},
+		{"CAA", []string{`0 issue "letsencrypt.org"`, `128 iodef "mailto:sec@example.net"`}},
+		// Types Overcast does not model a value grammar for keep the
+		// shape-only check, so a syntactically odd value is still accepted.
+		{"NAPTR", []string{`100 50 "s" "z3950+I2L+I2C" "" _z3950._tcp.example.net.`}},
+		{"SSHFP", []string{"2 1 123456789abcdef67890123456789abcdef67890"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.rrType, func(t *testing.T) {
+			// When: a record of that type is created with well-formed values
+			resp := changeRRSets(t, srv, zone,
+				`<Change><Action>CREATE</Action>`+
+					record(strings.ToLower(tc.rrType)+".example.com.", tc.rrType, tc.values...)+`</Change>`)
+			defer resp.Body.Close()
+
+			// Then: the change is applied
+			if resp.StatusCode != http.StatusOK {
+				_, msg := errMessage(t, resp)
+				t.Fatalf("expected 200 for a valid %s record, got %d (%s)", tc.rrType, resp.StatusCode, msg)
+			}
+		})
+	}
 }
 
 // ── Normalisation and routing metadata ───────────────────────────────────────

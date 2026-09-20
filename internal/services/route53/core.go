@@ -4,10 +4,13 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/netip"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/google/uuid"
 
@@ -581,7 +584,207 @@ func validateRecordData(change *rrsetChange) *protocol.AWSError {
 	if !hasValues || !change.HasTTL {
 		return errInvalidInput(fmt.Sprintf(expected, "none", changeWith(change.Action, rr)))
 	}
+	return validateRecordValues(rr)
+}
+
+// validateRecordValues checks a record set's values against the grammar its
+// type gives them, which is what stops `A` accepting a hostname.
+//
+// AWS reports each offending value on its own, in the aggregate InvalidChangeBatch
+// envelope: "Invalid Resource Record: FATAL problem: ARRDATAIllegalIPv4Address
+// (Value is not a valid IPv4 address) encountered with 'x'". The two IP codes are
+// AWS's own; the rest follow the same shape, which is the approximation
+// docs/services/route53/limitations.md already records for these messages.
+//
+// A type with no entry in rdataValidators keeps the shape-only check above —
+// NAPTR, DS, TLSA, SSHFP, SVCB and HTTPS carry parameter grammars a local
+// emulator gains nothing from policing, and SOA's RDATA is only ever minted by
+// Overcast itself.
+func validateRecordValues(rr *ResourceRecordSet) *protocol.AWSError {
+	// AWS: "You can specify more than one value for all record types except
+	// CNAME and SOA."
+	if (rr.Type == "CNAME" || rr.Type == "SOA") && len(rr.ResourceRecords) > 1 {
+		return errInvalidChangeBatch(fmt.Sprintf(
+			"Invalid Resource Record: FATAL problem: %sRRSetMultipleRecords (Only one value is allowed for %s records) encountered with %s",
+			rr.Type, rr.Type, rrsetLabel(rr)))
+	}
+	validate, modeled := rdataValidators[rr.Type]
+	if !modeled {
+		return nil
+	}
+	for _, value := range rr.ResourceRecords {
+		if code, reason := validate(value); code != "" {
+			return errInvalidChangeBatch(fmt.Sprintf(
+				"Invalid Resource Record: FATAL problem: %s (%s) encountered with '%s'", code, reason, value))
+		}
+	}
 	return nil
+}
+
+// rdataValidators maps a record type to the check its values must pass. Each
+// returns AWS's problem code and its parenthesised reason, or two empty strings
+// when the value is well formed.
+var rdataValidators = map[string]func(string) (code, reason string){
+	"A":     validateIPv4Value,
+	"AAAA":  validateIPv6Value,
+	"CNAME": hostnameValidator("CNAME"),
+	"NS":    hostnameValidator("NS"),
+	"PTR":   hostnameValidator("PTR"),
+	"MX":    validateMXValue,
+	"SRV":   validateSRVValue,
+	"CAA":   validateCAAValue,
+	"TXT":   characterStringValidator("TXT"),
+	"SPF":   characterStringValidator("SPF"),
+}
+
+func validateIPv4Value(value string) (string, string) {
+	// Is4 is false for the IPv4-in-IPv6 form (::ffff:1.2.3.4), which parses but
+	// is not the dotted quad an A record takes.
+	if ip, err := netip.ParseAddr(value); err != nil || !ip.Is4() {
+		return "ARRDATAIllegalIPv4Address", "Value is not a valid IPv4 address"
+	}
+	return "", ""
+}
+
+func validateIPv6Value(value string) (string, string) {
+	if ip, err := netip.ParseAddr(value); err != nil || ip.Is4() {
+		return "AAAARRDATAIllegalIPv6Address", "Value is not a valid IPv6 address"
+	}
+	return "", ""
+}
+
+// hostnameValidator checks a bare domain name, the whole RDATA of CNAME, NS and
+// PTR records.
+func hostnameValidator(rrType string) func(string) (string, string) {
+	return func(value string) (string, string) {
+		if !validDNSName(normalizeDNSName(value)) {
+			return rrType + "RRDATAIllegalHostName", "Value is not a valid host name"
+		}
+		return "", ""
+	}
+}
+
+// validateMXValue checks "<preference> <exchange>".
+func validateMXValue(value string) (string, string) {
+	fields := strings.Fields(value)
+	if len(fields) != 2 {
+		return "MXRRDATAIllegalFormat", "Value should be a number followed by a host name"
+	}
+	if !isUint16(fields[0]) {
+		return "MXRRDATAIllegalPreference", "Preference should be a number between 0 and 65535"
+	}
+	if !validDNSName(normalizeDNSName(fields[1])) {
+		return "MXRRDATAIllegalHostName", "Value is not a valid host name"
+	}
+	return "", ""
+}
+
+// validateSRVValue checks "<priority> <weight> <port> <target>".
+func validateSRVValue(value string) (string, string) {
+	fields := strings.Fields(value)
+	if len(fields) != 4 {
+		return "SRVRRDATAIllegalFormat", "Value should be three numbers followed by a host name"
+	}
+	for _, field := range fields[:3] {
+		if !isUint16(field) {
+			return "SRVRRDATAIllegalFormat", "Priority, weight and port should be numbers between 0 and 65535"
+		}
+	}
+	if !validDNSName(normalizeDNSName(fields[3])) {
+		return "SRVRRDATAIllegalHostName", "Value is not a valid host name"
+	}
+	return "", ""
+}
+
+// validateCAAValue checks `<flags> <tag> "<value>"`.
+func validateCAAValue(value string) (string, string) {
+	// The property value is a quoted string that may hold spaces, so it is
+	// everything after the tag rather than a third whitespace-delimited field.
+	flagsField, rest := cutField(value)
+	tag, property := cutField(rest)
+	if flagsField == "" || tag == "" || property == "" {
+		return "CAARRDATAIllegalFormat", "Value should be a number, a tag and a quoted string"
+	}
+	flags, err := strconv.Atoi(flagsField)
+	if err != nil || flags < 0 || flags > 255 {
+		return "CAARRDATAIllegalFlags", "Flags should be a number between 0 and 255"
+	}
+	if strings.IndexFunc(tag, func(r rune) bool {
+		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9')
+	}) >= 0 {
+		return "CAARRDATAIllegalTag", "Tag should be alphanumeric"
+	}
+	if code, reason := quotedStrings(property); code != "" {
+		return "CAARRDATAIllegalValue", reason
+	}
+	return "", ""
+}
+
+// cutField splits off the first whitespace-delimited field, returning it and
+// the remainder with the whitespace between them removed.
+func cutField(value string) (field, rest string) {
+	value = strings.TrimSpace(value)
+	end := strings.IndexFunc(value, unicode.IsSpace)
+	if end < 0 {
+		return value, ""
+	}
+	return value[:end], strings.TrimSpace(value[end:])
+}
+
+// characterStringValidator checks the quoted character-strings TXT and SPF
+// records are made of. AWS requires the quotes, and caps each string at 255
+// characters — the DNS wire limit for one character-string.
+func characterStringValidator(rrType string) func(string) (string, string) {
+	return func(value string) (string, string) {
+		if code, reason := quotedStrings(value); code != "" {
+			return rrType + code, reason
+		}
+		return "", ""
+	}
+}
+
+const unquoted = "Value should be enclosed in quotation marks"
+
+// quotedStrings walks a sequence of space-separated quoted strings, returning
+// the problem-code suffix and reason for the first thing wrong with it. A
+// backslash escapes the character after it, so an embedded \" does not end the
+// string — the escape AWS documents for TXT values.
+func quotedStrings(value string) (suffix, reason string) {
+	rest := strings.TrimSpace(value)
+	if rest == "" {
+		return "RRDATAIllegalCharacterString", unquoted
+	}
+	for rest != "" {
+		if !strings.HasPrefix(rest, `"`) {
+			return "RRDATAIllegalCharacterString", unquoted
+		}
+		length, end := 0, -1
+		for i := 1; i < len(rest); i++ {
+			if rest[i] == '\\' {
+				i++
+				length++
+				continue
+			}
+			if rest[i] == '"' {
+				end = i
+				break
+			}
+			length++
+		}
+		if end < 0 {
+			return "RRDATAIllegalCharacterString", unquoted
+		}
+		if length > 255 {
+			return "RRDATAIllegalCharacterString", "Each quoted string may hold at most 255 characters"
+		}
+		rest = strings.TrimSpace(rest[end+1:])
+	}
+	return "", ""
+}
+
+func isUint16(field string) bool {
+	n, err := strconv.Atoi(field)
+	return err == nil && n >= 0 && n <= 65535
 }
 
 // rrsetPage is one page of a zone's record sets.
