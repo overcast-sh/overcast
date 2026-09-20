@@ -40,6 +40,8 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | Stream type | `DeliveryStreamType` is honoured, defaulting to `DirectPut` |
 | Writes | `PutRecord` and `PutRecordBatch` return a record id per record and `FailedPutCount: 0` |
 | Tags | Inline `Tags` at creation, plus `TagDeliveryStream`, `UntagDeliveryStream` and `ListTagsForDeliveryStream` |
+| Limits | Stream names, the 1,000 KiB record cap and `PutRecordBatch`'s 1–500 records / 4 MiB per call are enforced |
+| Errors | A repeated stream name is `ResourceInUseException`; every exception is HTTP 400, as AWS documents |
 
 ## Differences from AWS
 

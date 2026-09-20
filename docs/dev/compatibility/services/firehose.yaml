@@ -1,22 +1,268 @@
 service: firehose
-status: not_started
+status: fixed
 priority: p2
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-05-17
+last_updated: 2026-09-20
 protocols: [aws_json_1_1, aws_json_1_0, rpcv2_cbor]
 implementation: [internal/services/firehose]
 integration_tests: [tests/integration/firehose]
 capability_docs: docs/services/firehose.md
-operation_count_estimate: 6 supported
-current_support_level: Basic delivery stream CRUD plus record accept/ack; records are discarded.
-operations: {}
+operation_count_estimate: >-
+  9 operations declared in internal/services/firehose/capabilities_dev.go, all StatusSupported:
+  4 Delivery Streams (Create/Describe/List/Delete), 2 Records (PutRecord, PutRecordBatch) and
+  3 Tags (Tag/Untag/ListTagsFor). The "6 supported" this file previously recorded predated the
+  tag surface (#1196).
+current_support_level: >-
+  Delivery streams are control-plane records: created ACTIVE, describable, listable, deletable
+  and taggable. Records are accepted, acknowledged with a real record id, and discarded — nothing
+  reaches a destination, and no destination configuration is stored. Request validation now
+  matches the model (#149): DeliveryStreamName length and pattern, Record.Data's 1,000 KiB cap,
+  the 1–500 record batch, the documented 4 MiB per-call batch limit, duplicate stream names, and
+  HTTP 400 on every exception. The inert-delivery half of the service is deliberate and is
+  recorded under intentionally_partial rather than as a gap (#150).
+operations:
+  CreateDeliveryStream:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/firehose/latest/APIReference/API_CreateDeliveryStream.html
+    implementation: internal/services/firehose/typed_logic.go (createDeliveryStreamTyped), internal/services/firehose/validation.go
+    protocol: AWS JSON 1.1/1.0 and RPCv2 CBOR; POST / with X-Amz-Target Firehose_20150804.CreateDeliveryStream
+    tests:
+      - tests/integration/firehose/firehose_test.go#TestCreateDeliveryStream_success
+      - tests/integration/firehose/firehose_validation_test.go#TestCreateDeliveryStream_duplicateName
+      - tests/integration/firehose/firehose_validation_test.go#TestCreateDeliveryStream_duplicateNameKeepsOriginal
+      - tests/integration/firehose/firehose_validation_test.go#TestCreateDeliveryStream_nameTooLong
+      - tests/integration/firehose/firehose_validation_test.go#TestCreateDeliveryStream_nameIllegalCharacter
+      - internal/services/firehose/validation_test.go#TestCreateDeliveryStreamTyped_duplicateName
+    scenarios:
+      name_constraints:
+        status: reviewed
+        evidence: DeliveryStreamName is checked against the model's @length(1, 64) and @pattern ^[a-zA-Z0-9_.-]+$ before anything is stored. A violation reports InvalidArgumentException (400) carrying AWS's constraint-violation message shape. Previously any name was accepted, including an empty one, which minted an ARN ending in a slash.
+      duplicate_name:
+        status: reviewed
+        evidence: A delivery stream name is unique per account per Region, and CreateDeliveryStream lists ResourceInUseException. Overcast's putStream was an unconditional store.Set, so a second create silently overwrote the first stream's record — its type, ARN and tags. It now reports ResourceInUseException (400) and leaves the stored stream untouched.
+      inline_tags:
+        status: reviewed
+        evidence: Tags arrive as a list of {Key,Value} structs and are validated before the stream is written, so a rejected create leaves nothing behind (#1196). Covered by tests/integration/firehose/firehose_tags_test.go.
+      delivery_stream_type:
+        status: reviewed
+        evidence: DeliveryStreamType is stored and echoed by DescribeDeliveryStream, defaulting to DirectPut when absent.
+      destination_configuration:
+        status: intentionally_partial
+        evidence: S3DestinationConfiguration and every sibling destination member decode without error and are discarded. See findings.intentionally_partial.
+  DescribeDeliveryStream:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/firehose/latest/APIReference/API_DescribeDeliveryStream.html
+    implementation: internal/services/firehose/typed_logic.go (describeDeliveryStreamTyped)
+    protocol: AWS JSON 1.1/1.0 and RPCv2 CBOR; POST / with X-Amz-Target Firehose_20150804.DescribeDeliveryStream
+    tests:
+      - tests/integration/firehose/firehose_test.go#TestDescribeDeliveryStream_success
+      - tests/integration/firehose/firehose_validation_test.go#TestDescribeDeliveryStream_unknownStream
+      - tests/integration/firehose/firehose_validation_test.go#TestDescribeDeliveryStream_illegalName
+    scenarios:
+      not_found:
+        status: reviewed
+        evidence: An unknown stream reports ResourceNotFoundException with HTTP 400. Previously 404 — every exception in the Firehose model is a client error with no httpError override, so the AWS JSON protocol default of 400 applies, and each operation's Errors section documents "HTTP Status Code 400". Kinesis's errNoSuchStream answers the same way for the same reason.
+      name_constraints:
+        status: reviewed
+        evidence: The name is validated before the lookup, as AWS validates request shape before resolving a resource, so an ARN or a name with illegal characters reports InvalidArgumentException rather than ResourceNotFoundException.
+      destinations_and_pagination:
+        status: intentionally_partial
+        evidence: Destinations is always empty and HasMoreDestinations always false, so Limit and ExclusiveStartDestinationId have nothing to page over. Both decode without error and are ignored.
+  ListDeliveryStreams:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/firehose/latest/APIReference/API_ListDeliveryStreams.html
+    implementation: internal/services/firehose/typed_logic.go (listDeliveryStreamsTyped)
+    protocol: AWS JSON 1.1/1.0 and RPCv2 CBOR; POST / with X-Amz-Target Firehose_20150804.ListDeliveryStreams
+    tests:
+      - tests/integration/firehose/firehose_test.go#TestListDeliveryStreams_success
+    scenarios:
+      list_all:
+        status: reviewed
+        evidence: Returns every stream's name; an empty account returns an empty list rather than an error.
+      filtering_and_pagination:
+        status: implementation_mismatch
+        evidence: listDeliveryStreamsTyped takes an empty struct, so Limit, ExclusiveStartDeliveryStreamName and DeliveryStreamType decode without error and have no effect. Every call returns every stream and HasMoreDeliveryStreams is always false. Recorded rather than fixed — outside #149's request-validation scope.
+  DeleteDeliveryStream:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/firehose/latest/APIReference/API_DeleteDeliveryStream.html
+    implementation: internal/services/firehose/typed_logic.go (deleteDeliveryStreamTyped)
+    protocol: AWS JSON 1.1/1.0 and RPCv2 CBOR; POST / with X-Amz-Target Firehose_20150804.DeleteDeliveryStream
+    tests:
+      - tests/integration/firehose/firehose_test.go#TestDeleteDeliveryStream_success
+      - tests/integration/firehose/firehose_validation_test.go#TestDeleteDeliveryStream_unknownStream
+      - tests/integration/firehose/firehose_validation_test.go#TestDeleteDeliveryStream_illegalName
+      - tests/integration/cloudformation/firehose_delivery_stream_test.go#TestDeleteStack_firehoseDeliveryStreamIsDeletedWithIt
+    scenarios:
+      not_found:
+        status: reviewed
+        evidence: Same fix as DescribeDeliveryStream's not_found scenario — ResourceNotFoundException with HTTP 400.
+      not_idempotent:
+        status: reviewed
+        evidence: Deleting an already-deleted stream reports ResourceNotFoundException rather than a second 200.
+      name_constraints:
+        status: reviewed
+        evidence: >-
+          Validated before the lookup, like the other operations. This one was blocked until
+          CloudFormation's AWS::KinesisFirehose::DeliveryStream handler stopped using the stream
+          ARN as the resource's physical ID, since that ARN came back as DeliveryStreamName on
+          teardown and cannot match the name pattern. Both were fixed together in #149 — see
+          findings.fixed and tests/integration/cloudformation/firehose_delivery_stream_test.go.
+      allow_force_delete:
+        status: intentionally_partial
+        evidence: AllowForceDelete concerns retiring a KMS grant. Overcast stores no encryption configuration, so the member decodes without error and has nothing to force.
+  PutRecord:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/firehose/latest/APIReference/API_PutRecord.html
+      - https://docs.aws.amazon.com/firehose/latest/APIReference/API_Record.html
+    implementation: internal/services/firehose/typed_logic.go (putRecordTyped), internal/services/firehose/validation.go
+    protocol: AWS JSON 1.1/1.0 and RPCv2 CBOR; POST / with X-Amz-Target Firehose_20150804.PutRecord
+    tests:
+      - tests/integration/firehose/firehose_test.go#TestPutRecord_success
+      - tests/integration/firehose/firehose_validation_test.go#TestPutRecord_missingRecord
+      - tests/integration/firehose/firehose_validation_test.go#TestPutRecord_dataTooLarge
+      - tests/integration/firehose/firehose_validation_test.go#TestPutRecord_dataAtLimit
+      - tests/integration/firehose/firehose_validation_test.go#TestPutRecord_unknownStream
+      - internal/services/firehose/validation_test.go#TestPutRecordTyped_recordConstraints
+    scenarios:
+      required_record:
+        status: reviewed
+        evidence: Record is @required. The request struct used to decode DeliveryStreamName alone, so a PutRecord with no Record at all was answered 200 with a fresh record id. It now reports InvalidArgumentException (400).
+      data_size:
+        status: reviewed
+        evidence: Record.Data targets the Data blob, @length(0, 1024000). 1,024,000 bytes is accepted and 1,024,001 refused with InvalidArgumentException (400). Data is typed []byte so the decoder enforces the wire form itself — base64 over JSON, a byte string over CBOR.
+      not_found:
+        status: reviewed
+        evidence: Same fix as DescribeDeliveryStream's not_found scenario — ResourceNotFoundException with HTTP 400.
+      response_shape:
+        status: reviewed
+        evidence: Returns RecordId (a fresh UUID) and Encrypted false, PutRecordOutput's two members.
+      delivery:
+        status: intentionally_partial
+        evidence: The record is acknowledged and discarded. See findings.intentionally_partial.
+  PutRecordBatch:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/firehose/latest/APIReference/API_PutRecordBatch.html
+      - https://docs.aws.amazon.com/firehose/latest/dev/limits.html
+    implementation: internal/services/firehose/typed_logic.go (putRecordBatchTyped), internal/services/firehose/validation.go
+    protocol: AWS JSON 1.1/1.0 and RPCv2 CBOR; POST / with X-Amz-Target Firehose_20150804.PutRecordBatch
+    tests:
+      - tests/integration/firehose/firehose_validation_test.go#TestPutRecordBatch_success
+      - tests/integration/firehose/firehose_validation_test.go#TestPutRecordBatch_emptyRecords
+      - tests/integration/firehose/firehose_validation_test.go#TestPutRecordBatch_tooManyRecords
+      - tests/integration/firehose/firehose_validation_test.go#TestPutRecordBatch_recordDataTooLarge
+      - tests/integration/firehose/firehose_validation_test.go#TestPutRecordBatch_batchTooLarge
+      - tests/integration/firehose/firehose_validation_test.go#TestPutRecordBatch_undecodableRecordData
+      - tests/integration/firehose/firehose_validation_test.go#TestPutRecordBatch_recordsNotAList
+      - tests/integration/firehose/firehose_validation_test.go#TestPutRecordBatch_unknownStream
+      - internal/services/firehose/validation_test.go#TestPutRecordBatchTyped_batchConstraints
+    scenarios:
+      records_list_length:
+        status: reviewed
+        evidence: PutRecordBatchRequestEntryList is @length(1, 500). An empty list and a 501-entry list both report InvalidArgumentException (400); 500 entries are accepted. Previously an empty Records list was answered 200 with FailedPutCount 0 and no results.
+      record_data_size:
+        status: reviewed
+        evidence: Each entry's Data is subject to the same @length(0, 1024000) cap as PutRecord's, and the message names the offending entry (records.<n>.member.data).
+      batch_payload_limit:
+        status: reviewed
+        evidence: The PutRecordBatch reference documents "up to 500 records, or 4 MiB per call, whichever is smaller". Five 1,000,000-byte records sit inside both model constraints and exceed the per-call limit; they are refused with InvalidArgumentException (400). This is a request-shape limit that client batching code is written against, not quota emulation — AGENTS.md's "no per-service quotas" non-goal is about rate and concurrency limits.
+      malformed_records:
+        status: reviewed
+        evidence: Records was decoded as json.RawMessage and the json.Unmarshal error discarded, so Records "nonsense" or a Data that is not base64 was answered 200 with FailedPutCount 0 and an empty RequestResponses list. Records is now a typed list of Record, so the decoder refuses both with SerializationException (400).
+      not_found:
+        status: reviewed
+        evidence: Same fix as DescribeDeliveryStream's not_found scenario — ResourceNotFoundException with HTTP 400.
+      response_shape:
+        status: reviewed
+        evidence: Returns FailedPutCount 0, Encrypted false and one RequestResponses entry carrying a fresh RecordId per input record.
+      partial_failure:
+        status: intentionally_partial
+        evidence: Nothing is delivered, so no entry can fail for a delivery reason. FailedPutCount is always 0 and no RequestResponses entry ever carries ErrorCode or ErrorMessage. A request that breaks a constraint above is refused whole, the way AWS's front-end validation refuses it, rather than reported per entry.
+  TagDeliveryStream:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/firehose/latest/APIReference/API_TagDeliveryStream.html
+    implementation: internal/services/firehose/typed_logic.go (tagDeliveryStreamTyped)
+    protocol: AWS JSON 1.1/1.0 and RPCv2 CBOR; POST / with X-Amz-Target Firehose_20150804.TagDeliveryStream
+    tests:
+      - tests/integration/firehose/firehose_tags_test.go
+    scenarios:
+      wire_shape:
+        status: reviewed
+        evidence: Tags round-trip as a list of {Key,Value} structs, matching the Tag object shape rather than the map shape some other services use (#1196).
+      unknown_stream:
+        status: reviewed
+        evidence: Same fix as DescribeDeliveryStream's not_found scenario — ResourceNotFoundException with HTTP 400. The three tag operations used to diverge by protocol — the typed CBOR path answered 400 while the legacy JSON handlers answered 404. Pinned by TestTagOperations_unknownStream.
+      tag_limit_and_charset:
+        status: reviewed
+        evidence: "The 50-tag limit, the reserved aws: key prefix and the shared tag charset are enforced through serviceutil.ValidateTags under InvalidArgumentException, the code Firehose documents for an input parameter whose value is not valid."
+      name_constraints:
+        status: implementation_mismatch
+        evidence: The three tag operations resolve the stream by name without validating DeliveryStreamName's length or pattern first, so an illegal name reports ResourceNotFoundException rather than InvalidArgumentException. Left outside #149's scope, which covered the create/describe/put surface.
+  UntagDeliveryStream:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/firehose/latest/APIReference/API_UntagDeliveryStream.html
+    implementation: internal/services/firehose/typed_logic.go (untagDeliveryStreamTyped)
+    protocol: AWS JSON 1.1/1.0 and RPCv2 CBOR; POST / with X-Amz-Target Firehose_20150804.UntagDeliveryStream
+    tests:
+      - tests/integration/firehose/firehose_tags_test.go
+    scenarios:
+      removes_key:
+        status: reviewed
+        evidence: Removing one of several keys leaves the rest intact, verified through ListTagsForDeliveryStream.
+      unknown_stream:
+        status: reviewed
+        evidence: Same fix as DescribeDeliveryStream's not_found scenario — ResourceNotFoundException with HTTP 400.
+  ListTagsForDeliveryStream:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/firehose/latest/APIReference/API_ListTagsForDeliveryStream.html
+    implementation: internal/services/firehose/typed_logic.go (listTagsForDeliveryStreamTyped)
+    protocol: AWS JSON 1.1/1.0 and RPCv2 CBOR; POST / with X-Amz-Target Firehose_20150804.ListTagsForDeliveryStream
+    tests:
+      - tests/integration/firehose/firehose_tags_test.go
+      - internal/services/firehose/validation_test.go#TestTypedOps_unknownStreamIs400
+    scenarios:
+      empty_for_untagged:
+        status: reviewed
+        evidence: An untagged stream returns an empty Tags list rather than null or an error.
+      unknown_stream:
+        status: reviewed
+        evidence: Same fix as DescribeDeliveryStream's not_found scenario — ResourceNotFoundException with HTTP 400.
+      pagination:
+        status: implementation_mismatch
+        evidence: HasMoreTags is always false and ExclusiveStartTagKey and Limit are ignored. Recorded rather than fixed.
 findings:
-  fixed: []
+  fixed:
+    - "CreateDeliveryStream overwrote an existing delivery stream of the same name. firehoseStore.putStream was an unconditional store.Set and createDeliveryStreamTyped never looked for an existing record, so a repeated create replaced the stream's type, ARN and tags and answered 200. It now reports ResourceInUseException (400) and leaves the stored stream alone. Fixed in this PR (#149)."
+    - "DeliveryStreamName was never validated. The model gives it @length(1, 64) and @pattern ^[a-zA-Z0-9_.-]+$; Overcast accepted any string, including an empty one, which minted an ARN ending in a slash. CreateDeliveryStream, DescribeDeliveryStream, PutRecord and PutRecordBatch now validate it before the store lookup and report InvalidArgumentException (400) with AWS's constraint-violation message shape. Fixed in this PR (#149)."
+    - "PutRecord ignored its required Record member entirely — putRecordReq decoded DeliveryStreamName alone — so a request with no record, or a record far above the 1,000 KiB Data cap, was answered 200 with a fresh record id. Record is now decoded and validated against the Data blob's @length(0, 1024000). Fixed in this PR (#149)."
+    - "PutRecordBatch applied no limits and discarded its decode error. Records was a json.RawMessage passed to json.Unmarshal with the error dropped, so an empty list, 501 records, an oversized record, a multi-megabyte batch, a non-base64 Data and a Records that was not a list at all were all answered 200 — the malformed shapes with FailedPutCount 0 and an empty RequestResponses. Records is now a typed list, validated against the list's @length(1, 500), each entry's Data cap and the documented 4 MiB per-call limit. Fixed in this PR (#149)."
+    - "ResourceNotFoundException carried HTTP 404 across DescribeDeliveryStream, DeleteDeliveryStream, PutRecord, PutRecordBatch and, on the legacy JSON path only, the three tag operations — where the CBOR path already answered 400 for those three. Every exception in the Firehose model is a client error with no httpError override, so the AWS JSON protocol default of 400 applies and each operation's Errors section documents it. All construction sites now use 400, through one errStreamNotFound helper. Fixed in this PR (#149)."
+    - "The legacy JSON 1.0/1.1 handlers re-implemented what the typed CBOR path already did, which is how the two drifted apart before (#1196, Tags silently dropped on create). All nine handlers in service.go now decode and delegate to the typed implementation, so the validation above is protocol-independent by construction rather than by copy. Fixed in this PR (#149)."
+    - "operation_count_estimate said \"6 supported\" and predated the tag surface; the true count is the 9 entries in internal/services/firehose/capabilities_dev.go. Corrected in this PR (#150)."
+    - "The inert delivery semantics documented on docs/services/firehose.md were not recorded in this tracker at all, so the file read as an unreviewed service with unknown partiality. They are now in findings.intentionally_partial and on the operations they belong to (#150)."
+    - "CloudFormation used the delivery stream ARN as the physical ID of an AWS::KinesisFirehose::DeliveryStream. AWS documents Ref for this resource type as the delivery stream NAME, so Ref handed consumers an ARN where they expected a name; and because the physical ID is what the handler passes back as DeliveryStreamName on teardown, every stack deletion dispatched a DeleteDeliveryStream naming an ARN, which matched no stream — so the stream outlived its stack, silently. The handler now returns the name and GetAtt Arn still carries the ARN, which is also what let DeleteDeliveryStream start validating its name like the other operations. Pinned by TestCreateStack_firehoseDeliveryStreamRefIsTheNameNotTheArn and TestDeleteStack_firehoseDeliveryStreamIsDeletedWithIt. Fixed in this PR (#149)."
   remaining_gaps:
-    - Review request/response shapes.
-    - Document inert delivery semantics explicitly.
-  intentionally_partial: []
+    - "The three tag operations resolve a stream by name without validating the name's length or pattern first, so an illegal name reports ResourceNotFoundException where AWS reports an invalid argument."
+    - "ListDeliveryStreams ignores Limit, ExclusiveStartDeliveryStreamName and DeliveryStreamType; ListTagsForDeliveryStream ignores Limit and ExclusiveStartTagKey. Both always report there is no more to fetch."
+    - "UpdateDestination, StartDeliveryStreamEncryption, StopDeliveryStreamEncryption and the rest of the Firehose surface are unimplemented and answer 501."
+    - "The exact AWS error for a PutRecordBatch above the 4 MiB per-call limit is not documented. Overcast reports InvalidArgumentException, the modeled client error PutRecordBatch lists for an input parameter whose value is not valid; ServiceUnavailableException, the other candidate, is the throttling error and carries 503."
+  intentionally_partial:
+    - "Delivery is inert: every record is acknowledged with a real record id and discarded. A bucket wired as a destination stays empty, and a test that writes to Firehose and then asserts on objects in that bucket cannot pass here — docs/services/firehose.md says so under Gotchas and points at S3 and Kinesis instead."
+    - "Destination configuration is not stored. S3DestinationConfiguration and every sibling (ExtendedS3, Redshift, OpenSearch, Splunk, HTTP endpoint, Snowflake, Iceberg) decode without error and are discarded, so DescribeDeliveryStream always reports an empty Destinations list and HasMoreDestinations false."
+    - "No transformation is applied: Lambda processors, dynamic partitioning, format conversion and compression are all absent."
+    - "There is no buffering. A destination's buffer interval and buffer size have nothing to govern, because nothing is ever flushed."
+    - "UpdateDestination is not implemented and answers 501 — there is no live destination to change."
+    - "Server-side encryption is not modelled. PutRecord and PutRecordBatch always report Encrypted false, and StartDeliveryStreamEncryption and StopDeliveryStreamEncryption answer 501."
 handoff:
-  start_with: [CreateDeliveryStream, PutRecord, PutRecordBatch]
-  do_not_redo: []
+  start_with: [ListDeliveryStreams pagination and filtering, then DeliveryStreamName validation on the three tag operations]
+  do_not_redo:
+    [CreateDeliveryStream, DescribeDeliveryStream, DeleteDeliveryStream, PutRecord, PutRecordBatch]
   commands: [go test -count=1 ./internal/services/firehose/... ./tests/integration/firehose/...]

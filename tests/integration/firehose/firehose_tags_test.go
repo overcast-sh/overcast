@@ -60,7 +60,8 @@ func TestCreateDeliveryStream_invalidTagRejected(t *testing.T) {
 		"DeliveryStreamName": "rejected-stream",
 	})
 	defer desc.Body.Close()
-	helpers.AssertStatus(t, desc, http.StatusNotFound)
+	helpers.AssertStatus(t, desc, http.StatusBadRequest)
+	helpers.AssertJSONError(t, desc, "ResourceNotFoundException")
 }
 
 // TestTagDeliveryStream_sdkListShape sends the exact JSON shape the Firehose
