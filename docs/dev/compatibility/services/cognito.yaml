@@ -1162,12 +1162,16 @@ operations:
         tests:
           - tests/integration/cognito/cognito_user_auth_test.go
         notes: Stores and returns WebAuthnConfiguration.RelyingPartyId/UserVerification for passkey sign-in.
+      - name: SMS, software-token and email MFA configuration
+        status: fixed
+        tests:
+          - tests/integration/cognito/cognito_mfa_config_test.go
+        notes: "Stores SmsMfaConfiguration, SoftwareTokenMfaConfiguration and EmailMfaConfiguration as a unit (an omitted factor is disabled, an omitted MfaConfiguration is OFF, per aws/aws-sdk-js#4186); validates the model's message constraints ({####}, lengths), the enum, ON/OPTIONAL with no factor enabled, OFF with a factor configured, and the Essentials tier for email MFA (issue #119)."
     evidence:
       - AWS SetUserPoolMfaConfig docs define WebAuthnConfiguration with RelyingPartyId, UserVerification, and FactorConfiguration.
       - "validateWebAuthnConfiguration (typed_logic.go:2776-2787) checks only the UserVerification and FactorConfiguration enum values; it performs no relying-party-ID/domain validation against the pool's configured domains."
-    gaps:
-      - "Email/SMS/software-token MFA config details in this operation are not fully reviewed. Tracked as issue #119, in progress on branch claude/issue-119-cognito-mfa-config-shapes."
-    next_action: Review complete MFA config validation and response shape (issue #119).
+    gaps: []
+    next_action: None — SmsMfaConfiguration, SoftwareTokenMfaConfiguration and EmailMfaConfiguration are stored, validated and returned (issue #119, this PR).
   GetUserPoolMfaConfig:
     status: fixed
     aws_docs:
@@ -1180,11 +1184,15 @@ operations:
         tests:
           - tests/integration/cognito/cognito_user_auth_test.go
         notes: Returns stored WebAuthnConfiguration and MfaConfiguration.
+      - name: Full MFA configuration response
+        status: fixed
+        tests:
+          - tests/integration/cognito/cognito_mfa_config_test.go
+        notes: Returns SmsMfaConfiguration, SoftwareTokenMfaConfiguration, EmailMfaConfiguration and WebAuthnConfiguration; an unconfigured pool reports OFF (issue #121).
     evidence:
       - AWS GetUserPoolMfaConfig docs define WebAuthnConfiguration in the response.
-    gaps:
-      - "Email/SMS/software-token MFA config response details are not fully reviewed. Tracked as issue #121, in progress on branch claude/issue-119-cognito-mfa-config-shapes."
-    next_action: Review complete MFA config response shape (issue #121).
+    gaps: []
+    next_action: None — the response carries all four members and normalises an unset mode to OFF (issue #121, this PR).
   StartWebAuthnRegistration:
     status: fixed
     aws_docs:
@@ -1221,6 +1229,7 @@ operations:
     next_action: Review WebAuthn registration error parity.
 findings:
   fixed:
+    - "SetUserPoolMfaConfig/GetUserPoolMfaConfig carry the full AWS shape — SmsMfaConfiguration, SoftwareTokenMfaConfiguration, EmailMfaConfiguration alongside WebAuthnConfiguration — with replace semantics and the documented combination rules (issues #119, #121; tests/integration/cognito/cognito_mfa_config_test.go)."
     - Username-attribute pools now resolve email/phone sign-in identifiers through the shared user lookup path for admin, auth, challenge, MFA, group, and self-service operations that call the shared helpers.
     - Shared user lookup now resolves local user sub values for Username parameters in plain username pools.
     - AdminDeleteUser now deletes the resolved internal UUID username instead of attempting to delete by email/phone identifier.
@@ -1253,7 +1262,6 @@ findings:
     - "Review SECRET_HASH expectations when username aliases are used. Tracked as issue #132, in progress on branch claude/compat-cognito-tests-tier-devices-filters-secrethash."
     - "Review every admin user operation that accepts Username for validation, errors, and response shape. Tracked as issue #134, in progress on branch claude/compat-cognito-tests-tier-devices-filters-secrethash."
     - "Essentials-tier SignInPolicy rejection for UpdateUserPool is implemented (handler_pools.go:146-157) but not yet covered by a dedicated compat test. Tracked as issue #116, in progress on branch claude/compat-cognito-tests-tier-devices-filters-secrethash."
-    - "Email/SMS/software-token MFA config details for SetUserPoolMfaConfig and GetUserPoolMfaConfig are not fully reviewed. Tracked as issues #119 and #121, in progress on branch claude/issue-119-cognito-mfa-config-shapes."
     - AutoVerifiedAttributes and Schema are threaded onto the CreateUserPool wire call by the CloudFormation UserPool handler (they always were) but the Cognito service itself does not yet store either, so both still round-trip as dropped.
   intentionally_partial:
     - SRP proof validation is not cryptographically verified; verifier responses are shape-checked and complete authentication for SDK-compatible local testing (typed_logic.go:1249-1250 completeSRPVerifierChallengeTyped checks only that PASSWORD_CLAIM_SIGNATURE/PASSWORD_CLAIM_SECRET_BLOCK/TIMESTAMP are present; issue #124).
@@ -1275,7 +1283,6 @@ handoff:
     - SECRET_HASH expectations when username aliases are used (issue #132).
     - Every admin user operation that accepts Username, for validation, errors, and response shape (issue #134).
     - A dedicated LITE-tier SignInPolicy rejection test for UpdateUserPool (issue #116).
-    - Email/SMS/software-token MFA config details for SetUserPoolMfaConfig/GetUserPoolMfaConfig (issues #119, #121).
   do_not_redo:
     - Username-attribute email lookup fix for AdminGetUser.
     - Username-attribute email lookup fix for AdminSetUserPassword.
