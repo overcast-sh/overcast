@@ -260,11 +260,65 @@ findings:
           - tests/integration/dynamodb/lsi_read_path_test.go
           - tests/integration/dynamodb/consistent_read_test.go
           - tests/integration/dynamodb/key_condition_test.go::TestQuery_GSI_tableSortKeyIsNotTheIndexSortKey
+  cbor_coverage:
+    - scenario: >-
+        Issue #136: DynamoDB's item operations and their AttributeValue encodings are exercised over
+        Smithy RPC v2 CBOR (Smithy-Protocol: rpc-v2-cbor, Content-Type: application/cbor), each as the
+        identical request answered over rpcv2Cbor and over awsJson1_0, compared field by field. Covered:
+        PutItem/GetItem round-tripping every AttributeValue type (S; N as integer, negative, decimal and
+        a value wider than int64; B; BOOL; NULL; L; nested M; SS; NS; BS); UpdateItem SET/ADD on a Number
+        and a String Set with ReturnValues=ALL_NEW; Query with KeyConditionExpression, the
+        LastEvaluatedKey shape, and a second page fetched with the first page's own (CBOR-decoded)
+        LastEvaluatedKey as ExclusiveStartKey; a GSI Query; BatchWriteItem plus BatchGetItem;
+        TransactWriteItems pairing a ConditionCheck with a Put, including the cancellation envelope when
+        the check fails; and the ValidationException and ResourceNotFoundException error envelopes
+        (__type/message and HTTP status) against their awsJson1_0 twins. Binary round-trips as a genuine
+        CBOR byte string (raw bytes decode straight to []byte, no base64 step) rather than base64 text,
+        confirmed by decoding the raw CBOR response before any JSON-comparison normalisation touches it.
+      evidence:
+        aws_docs:
+          - https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html
+        tests:
+          - tests/integration/dynamodb/cbor_test.go::TestRPCv2CBOR_PutGetItem_AttributeTypes
+          - tests/integration/dynamodb/cbor_test.go::TestRPCv2CBOR_UpdateItem_SetAddReturnValues
+          - tests/integration/dynamodb/cbor_test.go::TestRPCv2CBOR_Query_KeyConditionAndPagination
+          - tests/integration/dynamodb/cbor_test.go::TestRPCv2CBOR_Query_GSI
+          - tests/integration/dynamodb/cbor_test.go::TestRPCv2CBOR_BatchWriteAndBatchGetItem
+          - tests/integration/dynamodb/cbor_test.go::TestRPCv2CBOR_TransactWriteItems_ConditionCheck
+          - tests/integration/dynamodb/cbor_test.go::TestRPCv2CBOR_ValidationException_MatchesJSON
+          - tests/integration/dynamodb/cbor_test.go::TestRPCv2CBOR_ResourceNotFoundException_MatchesJSON
+    - scenario: >-
+        Divergence found while reviewing CBOR coverage (#136), not fixed here: a table whose hash or
+        range key is Binary (AttributeType "B") answers every PutItem, GetItem, DeleteItem, UpdateItem
+        and BatchWriteItem/BatchGetItem call with a 400 ValidationException — "The AttributeValue for a
+        key attribute cannot contain an empty string value" — over rpcv2Cbor, where the byte-identical
+        request succeeds over awsJson1_0. Root cause: extractKeyValue and extractScalar
+        (internal/services/dynamodb/store.go, expr.go) recognise a scalar attribute's value only when it
+        arrives as a Go string. JSON always decodes a "B" value as a string (base64 text), so this holds
+        for every JSON request; RPC v2 CBOR decodes a byte-string AttributeValue payload as []byte (the
+        correct, intended CBOR representation — see the cbor_coverage entry above), so
+        isEmptyScalar/extractKeyValue see a value of the wrong Go type, read it as empty, and
+        key_schema.go's empty-key-value rule (issue #1707, rule 3) rejects it before the table is ever
+        looked up. The same raw.(string) pattern in item_size.go's attrValueSizeBytes silently sizes a
+        CBOR-decoded Binary (or Binary Set) attribute as 0 bytes rather than failing, so the 400 KB item
+        cap also undercounts a Binary attribute's true size when the request arrives over CBOR — narrower
+        in effect than the key-attribute case (it never blocks a request, it only fails to catch an
+        oversized one), and not separately reproduced here. Reproduced empirically against this build: a
+        table with a Binary hash key "id"; PutItem over rpcv2Cbor with Item {"id": {"B":
+        <two-byte string>}, "label": {"S": "first"}} answers 400 ValidationException naming Key: id; the
+        identical request shape succeeds over awsJson1_0. Not included as a passing test in
+        cbor_test.go per this review's scope (fixing the codec/handler is out of scope) — this file's
+        Binary coverage is restricted to Binary as a non-key attribute, where the round trip is correct.
+      evidence:
+        aws_docs:
+          - https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_AttributeValue.html
+          - https://aws.amazon.com/about-aws/whats-new/2020/05/amazon-dynamodb-now-supports-empty-values-for-non-key-string-and-binary-attributes-in-dynamodb-tables
+        tests: []
   remaining_gaps:
     - A malformed ExclusiveStartKey is not validated against the key schema, where AWS answers ValidationException "The provided starting key is invalid". Query resolves the cursor positionally and never rejects it, so a cursor naming no key attribute at all silently restarts the walk from the beginning; a base-table Scan does reject a cursor missing the partition key, but with Overcast's own wording ("The provided key element does not match the schema: missing hash key ...") rather than AWS's, and accepts one missing the sort key.
     - A KeyConditionExpression of three or more conditions is rejected as "Query key condition not supported" unless two of them name the same attribute, in which case it is "KeyConditionExpressions must only contain one condition per key". AWS instead reports the sort key as missed when the third condition is on a non-key attribute and the sort key itself is absent. Two conditions is the legal maximum either way, so only the wording of an already-correct rejection differs, and only in that sub-case.
     - The TTL transition window is 30 seconds rather than AWS's "up to one hour", so code that assumes an hour-long rejection window sees a shorter one here. Two behaviours in that lifecycle are documented-but-unverified against a real account, both taken from the AWS error messages the community reports rather than from a live call: that DescribeTimeToLive still names AttributeName while DISABLING, and the exact service-side validation text for a TimeToLiveSpecification missing a required member (the SDKs reject that client-side, so the service message is not observable through one).
-    - Review CBOR coverage against SDK expectations.
+    - A table keyed (hash or range) on a Binary attribute answers every item operation with a 400 ValidationException over Smithy RPC v2 CBOR, where the identical request succeeds over AWS JSON 1.0 — see the cbor_coverage divergence finding above for the root cause (extractKeyValue/extractScalar do not recognise a CBOR-decoded []byte) and the exact reproducing request.
     - UpdateTable applies BillingMode without the throughput validation CreateTable now enforces, so switching a table to PROVISIONED without ProvisionedThroughput is accepted where AWS answers "One or more parameter values were invalid: ProvisionedThroughput must be specified when BillingMode is PROVISIONED".
     - AWS::DynamoDB::Table/GlobalTable SSESpecification, PointInTimeRecoverySpecification, DeletionProtectionEnabled, TableClass, KinesisStreamSpecification, ContributorInsightsSpecification, ImportSourceSpecification, ResourcePolicy, and OnDemandThroughput are not applied — DynamoDB itself has no support for any of them, so CloudFormation cannot honestly forward them either.
     - AWS::DynamoDB::GlobalTable offers no real cross-region replication; Overcast emulates a single region and provisions only the Replica naming the stack's own region.
