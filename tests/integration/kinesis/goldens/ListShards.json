@@ -3,5 +3,5 @@
   "headers": {
     "Content-Type": "application/x-amz-json-1.1"
   },
-  "body": "{\"NextToken\":null,\"Shards\":[{\"HashKeyRange\":{\"EndingHashKey\":\"170141183460469231731687303715884105726\",\"StartingHashKey\":\"0\"},\"SequenceNumberRange\":{\"StartingSequenceNumber\":\"490000000000000000000\"},\"ShardId\":\"shardId-000000000000\"},{\"HashKeyRange\":{\"EndingHashKey\":\"340282366920938463463374607431768211455\",\"StartingHashKey\":\"170141183460469231731687303715884105727\"},\"SequenceNumberRange\":{\"StartingSequenceNumber\":\"490000000000000000001\"},\"ShardId\":\"shardId-000000000001\"}]}"
+  "body": "{\"Shards\":[{\"HashKeyRange\":{\"EndingHashKey\":\"170141183460469231731687303715884105726\",\"StartingHashKey\":\"0\"},\"SequenceNumberRange\":{\"StartingSequenceNumber\":\"490000000000000000000\"},\"ShardId\":\"shardId-000000000000\"},{\"HashKeyRange\":{\"EndingHashKey\":\"340282366920938463463374607431768211455\",\"StartingHashKey\":\"170141183460469231731687303715884105727\"},\"SequenceNumberRange\":{\"StartingSequenceNumber\":\"490000000000000000001\"},\"ShardId\":\"shardId-000000000001\"}]}"
 }

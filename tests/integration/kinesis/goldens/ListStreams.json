@@ -3,5 +3,5 @@
   "headers": {
     "Content-Type": "application/x-amz-json-1.1"
   },
-  "body": "{\"HasMoreStreams\":false,\"StreamNames\":[\"golden-stream-a\",\"golden-stream-b\"]}"
+  "body": "{\"StreamNames\":[\"golden-stream-a\",\"golden-stream-b\"],\"HasMoreStreams\":false,\"StreamSummaries\":[{\"StreamName\":\"golden-stream-a\",\"StreamARN\":\"arn:aws:kinesis:us-east-1:000000000000:stream/golden-stream-a\",\"StreamStatus\":\"ACTIVE\",\"StreamModeDetails\":{\"StreamMode\":\"PROVISIONED\"},\"StreamCreationTimestamp\":0},{\"StreamName\":\"golden-stream-b\",\"StreamARN\":\"arn:aws:kinesis:us-east-1:000000000000:stream/golden-stream-b\",\"StreamStatus\":\"ACTIVE\",\"StreamModeDetails\":{\"StreamMode\":\"PROVISIONED\"},\"StreamCreationTimestamp\":0}]}"
 }

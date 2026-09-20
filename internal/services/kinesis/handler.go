@@ -120,7 +120,7 @@ func (h *Handler) DeleteStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.StreamName == "" {
-		protocol.WriteJSONError(w, r, protocol.ErrMissingParameter("StreamName"))
+		protocol.WriteJSONError(w, r, errMissingParameter("StreamName"))
 		return
 	}
 	if _, aerr := h.store.getStream(r.Context(), req.StreamName); aerr != nil {
@@ -138,25 +138,22 @@ func (h *Handler) DeleteStream(w http.ResponseWriter, r *http.Request) {
 
 // DescribeStream handles Kinesis_20131202.DescribeStream.
 // AWS docs: https://docs.aws.amazon.com/kinesis/latest/APIReference/API_DescribeStream.html
+//
+// Delegates to describeStreamTyped (typed_logic.go) — see PutRecord's doc
+// comment. Its Shards list is paginated (Limit/ExclusiveStartShardId, with
+// HasMoreShards in the description), so the two wire paths must not keep
+// separate copies of that arithmetic.
 func (h *Handler) DescribeStream(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		StreamName string `json:"StreamName"`
-	}
+	var req describeStreamRequest
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	if req.StreamName == "" {
-		protocol.WriteJSONError(w, r, protocol.ErrMissingParameter("StreamName"))
-		return
-	}
-	st, aerr := h.store.getStream(r.Context(), req.StreamName)
+	out, aerr := h.describeStreamTyped(r.Context(), &req)
 	if aerr != nil {
 		protocol.WriteJSONError(w, r, aerr)
 		return
 	}
-	protocol.WriteAWSJSON(w, r, http.StatusOK, map[string]any{
-		"StreamDescription": toStreamDescription(st),
-	}, "application/x-amz-json-1.1")
+	protocol.WriteAWSJSON(w, r, http.StatusOK, out, "application/x-amz-json-1.1")
 }
 
 // DescribeStreamSummary handles Kinesis_20131202.DescribeStreamSummary.
@@ -169,7 +166,7 @@ func (h *Handler) DescribeStreamSummary(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if req.StreamName == "" {
-		protocol.WriteJSONError(w, r, protocol.ErrMissingParameter("StreamName"))
+		protocol.WriteJSONError(w, r, errMissingParameter("StreamName"))
 		return
 	}
 	st, aerr := h.store.getStream(r.Context(), req.StreamName)
@@ -184,26 +181,21 @@ func (h *Handler) DescribeStreamSummary(w http.ResponseWriter, r *http.Request) 
 
 // ListStreams handles Kinesis_20131202.ListStreams.
 // AWS docs: https://docs.aws.amazon.com/kinesis/latest/APIReference/API_ListStreams.html
+//
+// Delegates to listStreamsTyped (typed_logic.go) — see PutRecord's doc
+// comment. ListStreams takes no required member, so an entirely empty body
+// is a legitimate request and a decode failure is not reported here.
 func (h *Handler) ListStreams(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Limit int `json:"Limit"`
-	}
+	var req listStreamsRequest
 	// Body may be empty — ignore decode errors here.
 	_ = json.NewDecoder(r.Body).Decode(&req)
 
-	streams, aerr := h.store.listStreams(r.Context())
+	out, aerr := h.listStreamsTyped(r.Context(), &req)
 	if aerr != nil {
 		protocol.WriteJSONError(w, r, aerr)
 		return
 	}
-	names := make([]string, len(streams))
-	for i, st := range streams {
-		names[i] = st.StreamName
-	}
-	protocol.WriteAWSJSON(w, r, http.StatusOK, map[string]any{
-		"StreamNames":    names,
-		"HasMoreStreams": false,
-	}, "application/x-amz-json-1.1")
+	protocol.WriteAWSJSON(w, r, http.StatusOK, out, "application/x-amz-json-1.1")
 }
 
 // ---- Records -----------------------------------------------------------------
@@ -259,7 +251,7 @@ func (h *Handler) GetShardIterator(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.StreamName == "" {
-		protocol.WriteJSONError(w, r, protocol.ErrMissingParameter("StreamName"))
+		protocol.WriteJSONError(w, r, errMissingParameter("StreamName"))
 		return
 	}
 	if _, aerr := h.store.getStream(r.Context(), req.StreamName); aerr != nil {
@@ -313,33 +305,20 @@ func (h *Handler) GetRecords(w http.ResponseWriter, r *http.Request) {
 
 // ListShards handles Kinesis_20131202.ListShards.
 // AWS docs: https://docs.aws.amazon.com/kinesis/latest/APIReference/API_ListShards.html
+//
+// Delegates to listShardsTyped (typed_logic.go) — see PutRecord's doc
+// comment. NextToken minting, its exclusions and its expiry all live there.
 func (h *Handler) ListShards(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		StreamName string `json:"StreamName"`
-	}
+	var req listShardsRequest
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	if req.StreamName == "" {
-		protocol.WriteJSONError(w, r, protocol.ErrMissingParameter("StreamName"))
-		return
-	}
-	st, aerr := h.store.getStream(r.Context(), req.StreamName)
+	out, aerr := h.listShardsTyped(r.Context(), &req)
 	if aerr != nil {
 		protocol.WriteJSONError(w, r, aerr)
 		return
 	}
-	shards := make([]map[string]any, 0, len(st.Shards))
-	for _, shard := range st.Shards {
-		if shard.SequenceNumberRange.EndingSequenceNumber != "" {
-			continue // closed shard — omit from active listing
-		}
-		shards = append(shards, shardToMap(shard))
-	}
-	protocol.WriteAWSJSON(w, r, http.StatusOK, map[string]any{
-		"Shards":    shards,
-		"NextToken": nil,
-	}, "application/x-amz-json-1.1")
+	protocol.WriteAWSJSON(w, r, http.StatusOK, out, "application/x-amz-json-1.1")
 }
 
 // SplitShard handles Kinesis_20131202.SplitShard.
@@ -401,26 +380,20 @@ func (h *Handler) AddTagsToStream(w http.ResponseWriter, r *http.Request) {
 
 // ListTagsForStream handles Kinesis_20131202.ListTagsForStream.
 // AWS docs: https://docs.aws.amazon.com/kinesis/latest/APIReference/API_ListTagsForStream.html
+//
+// Delegates to listTagsForStreamTyped (typed_logic.go) — see PutRecord's doc
+// comment; the tag list pages on ExclusiveStartTagKey/Limit.
 func (h *Handler) ListTagsForStream(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		StreamName string `json:"StreamName"`
-	}
+	var req listTagsForStreamRequest
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	if req.StreamName == "" {
-		protocol.WriteJSONError(w, r, protocol.ErrMissingParameter("StreamName"))
-		return
-	}
-	st, aerr := h.store.getStream(r.Context(), req.StreamName)
+	out, aerr := h.listTagsForStreamTyped(r.Context(), &req)
 	if aerr != nil {
 		protocol.WriteJSONError(w, r, aerr)
 		return
 	}
-	protocol.WriteAWSJSON(w, r, http.StatusOK, map[string]any{
-		"Tags":        sortedTagEntries(st.Tags),
-		"HasMoreTags": false,
-	}, "application/x-amz-json-1.1")
+	protocol.WriteAWSJSON(w, r, http.StatusOK, out, "application/x-amz-json-1.1")
 }
 
 // RemoveTagsFromStream handles Kinesis_20131202.RemoveTagsFromStream.
@@ -433,7 +406,7 @@ func (h *Handler) RemoveTagsFromStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.StreamName == "" {
-		protocol.WriteJSONError(w, r, protocol.ErrMissingParameter("StreamName"))
+		protocol.WriteJSONError(w, r, errMissingParameter("StreamName"))
 		return
 	}
 	st, aerr := h.store.getStream(r.Context(), req.StreamName)
@@ -512,7 +485,7 @@ func (h *Handler) IncreaseStreamRetentionPeriod(w http.ResponseWriter, r *http.R
 		return
 	}
 	if req.StreamName == "" {
-		protocol.WriteJSONError(w, r, protocol.ErrMissingParameter("StreamName"))
+		protocol.WriteJSONError(w, r, errMissingParameter("StreamName"))
 		return
 	}
 	st, aerr := h.store.getStream(r.Context(), req.StreamName)
@@ -538,7 +511,7 @@ func (h *Handler) DecreaseStreamRetentionPeriod(w http.ResponseWriter, r *http.R
 		return
 	}
 	if req.StreamName == "" {
-		protocol.WriteJSONError(w, r, protocol.ErrMissingParameter("StreamName"))
+		protocol.WriteJSONError(w, r, errMissingParameter("StreamName"))
 		return
 	}
 	st, aerr := h.store.getStream(r.Context(), req.StreamName)
@@ -607,17 +580,17 @@ func (h *Handler) StopStreamEncryption(w http.ResponseWriter, r *http.Request) {
 
 // ---- Response helpers --------------------------------------------------------
 
-func toStreamDescription(st *Stream) map[string]any {
-	shards := make([]map[string]any, 0, len(st.Shards))
-	for _, shard := range st.Shards {
-		shards = append(shards, shardToMap(shard))
-	}
+// toStreamDescription renders DescribeStream's response around one page of
+// shards. The page and its HasMoreShards flag are computed by the caller
+// (describeStreamTyped), which owns the Limit/ExclusiveStartShardId
+// arithmetic.
+func toStreamDescription(st *Stream, shards []map[string]any, hasMoreShards bool) map[string]any {
 	return map[string]any{
 		"StreamName":              st.StreamName,
 		"StreamARN":               st.StreamARN,
 		"StreamStatus":            st.StreamStatus,
 		"Shards":                  shards,
-		"HasMoreShards":           false,
+		"HasMoreShards":           hasMoreShards,
 		"RetentionPeriodHours":    st.RetentionPeriodHours,
 		"StreamCreationTimestamp": st.CreatedAt.Unix(),
 		"EnhancedMonitoring":      []any{},
@@ -665,6 +638,47 @@ func shardToMap(shard Shard) map[string]any {
 		m["SequenceNumberRange"].(map[string]any)["EndingSequenceNumber"] = shard.SequenceNumberRange.EndingSequenceNumber
 	}
 	return m
+}
+
+// allShards renders every shard of the stream, open or closed, in shard-ID
+// order (Shards is append-only and IDs are fixed-width, so slice order is ID
+// order). DescribeStream answers from this: a split or merge parent stays in
+// its response, carrying the EndingSequenceNumber that closed it, which is
+// how a consumer follows shard lineage.
+func allShards(st *Stream) []map[string]any {
+	shards := make([]map[string]any, 0, len(st.Shards))
+	for _, shard := range st.Shards {
+		shards = append(shards, shardToMap(shard))
+	}
+	return shards
+}
+
+// openShards is allShards without the closed ones, which is what ListShards
+// answers from — see the "Closed shards" row in docs/services/kinesis.md for
+// the divergence that leaves.
+func openShards(st *Stream) []map[string]any {
+	shards := make([]map[string]any, 0, len(st.Shards))
+	for _, shard := range st.Shards {
+		if shard.SequenceNumberRange.EndingSequenceNumber != "" {
+			continue
+		}
+		shards = append(shards, shardToMap(shard))
+	}
+	return shards
+}
+
+// shardIDOf reads a rendered shard back, for minting a cursor from the last
+// shard on a page.
+func shardIDOf(shard map[string]any) string {
+	id, _ := shard["ShardId"].(string)
+	return id
+}
+
+// shardsAfter drops the shards up to and including afterID. An afterID that
+// names no shard is not an error: the listing simply resumes at the first
+// shard whose ID sorts after it, which is what an exclusive cursor means.
+func shardsAfter(shards []map[string]any, afterID string) []map[string]any {
+	return itemsAfter(shards, afterID, shardIDOf)
 }
 
 func activeShardCount(st *Stream) int {

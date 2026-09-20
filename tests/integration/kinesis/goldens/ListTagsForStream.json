@@ -3,5 +3,5 @@
   "headers": {
     "Content-Type": "application/x-amz-json-1.1"
   },
-  "body": "{\"HasMoreTags\":false,\"Tags\":[{\"Key\":\"env\",\"Value\":\"test\"},{\"Key\":\"owner\",\"Value\":\"platform\"},{\"Key\":\"team\",\"Value\":\"data\"}]}"
+  "body": "{\"Tags\":[{\"Key\":\"env\",\"Value\":\"test\"},{\"Key\":\"owner\",\"Value\":\"platform\"},{\"Key\":\"team\",\"Value\":\"data\"}],\"HasMoreTags\":false}"
 }

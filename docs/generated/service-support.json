@@ -4986,7 +4986,7 @@
           "operation": "DescribeStream",
           "category": "General",
           "status": "✅ Supported",
-          "notes": "Returns full Shards list"
+          "notes": "Pages the Shards list on Limit/ExclusiveStartShardId and reports HasMoreShards"
         },
         {
           "operation": "DescribeStreamSummary",
@@ -5015,14 +5015,14 @@
         {
           "operation": "ListShards",
           "category": "General",
-          "status": "✅ Supported",
-          "notes": "Returns active (open) shards only; no pagination"
+          "status": "⚠️ Partial",
+          "notes": "Paginates on MaxResults/NextToken/ExclusiveStartShardId, addressable by StreamName or StreamARN; returns active (open) shards only and ignores ShardFilter"
         },
         {
           "operation": "ListStreams",
           "category": "General",
           "status": "✅ Supported",
-          "notes": "Returns all stream names; no pagination"
+          "notes": "Paginates on Limit/NextToken/ExclusiveStartStreamName and returns StreamSummaries alongside StreamNames"
         },
         {
           "operation": "ListTagsForResource",
@@ -5033,7 +5033,8 @@
         {
           "operation": "ListTagsForStream",
           "category": "General",
-          "status": "✅ Supported"
+          "status": "✅ Supported",
+          "notes": "Pages on Limit/ExclusiveStartTagKey and reports HasMoreTags"
         },
         {
           "operation": "MergeShards",
