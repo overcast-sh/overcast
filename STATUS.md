@@ -32,7 +32,7 @@
 | --------------- | --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | IAM             | 74  | Users, roles, groups, policies, instance profiles; real policy simulation, **opt-in** request-time enforcement (`OVERCAST_ENFORCE_IAM`, default off)                                                                                                                                    |
 | ECS             | 48  | Clusters, task definitions, tasks (Docker), services with reconciler                                                                                                                                       |
-| ECR             | 22  | Repository CRUD + registry metadata (DescribeRegistry), image metadata (PutImage/DescribeImages/BatchGetImage/BatchDeleteImage/DescribeImageScanFindings), auth token, repository+lifecycle policies, tags |
+| ECR             | 25  | Repository CRUD + registry metadata (DescribeRegistry), image metadata (PutImage/DescribeImages/BatchGetImage/BatchDeleteImage/DescribeImageScanFindings), auth token, repository+lifecycle policies, tags |
 | KMS             | 34  | Keys, aliases, symmetric AES-256-GCM + RSA-2048 signing                                                                                                                                                    |
 | Kinesis         | 23  | Streams, records, shards, tags, retention                                                                                                                                                                  |
 | EventBridge     | 29  | Event buses, rules, targets, PutEvents, tags                                                                                                                                                               |
@@ -79,7 +79,7 @@
 | Step Functions  | 37  |
 | IAM             | 74  |
 | ECS             | 48  |
-| ECR             | 22  |
+| ECR             | 25  |
 | KMS             | 34  |
 | Kinesis         | 23  |
 | EventBridge     | 29  |

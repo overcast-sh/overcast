@@ -101,6 +101,17 @@ So a restart that keeps the registry's storage but loses the in-memory records
 rediscovers them, and one that keeps the records but loses the storage drops
 them.
 
+`ListImages` reconciles the same way but, unlike `DescribeImages` and
+`BatchGetImage`, never reports the sweep failing: a registry that is
+momentarily unreachable still answers with whatever the store currently holds
+rather than an error, because an empty or stale list names no specific image
+to be wrong about.
+
+`BatchDeleteImage` only ever removes the store's record. It never asks the
+registry to delete the manifest, so when Docker backs the repository, deleting
+an image the registry still serves does not stick — the next reconciling read
+writes the record straight back.
+
 ## Related
 
 - [ECR](../ecr.md) — quick start and what works

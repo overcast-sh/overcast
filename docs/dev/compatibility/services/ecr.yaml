@@ -2,13 +2,13 @@ service: ecr
 status: in_progress
 priority: p1
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-08-14
+last_updated: 2026-09-20
 protocols: [aws_json_1_1, aws_json_1_0, rpcv2_cbor]
 implementation: [internal/services/ecr]
 integration_tests: [tests/integration/ecr]
 capability_docs: docs/services/ecr.md
-operation_count_estimate: 20 supported
-current_support_level: Repository and image metadata control plane supported; Docker registry integration optional; scanning inert/not-scanned.
+operation_count_estimate: 25 declared (19 supported, 2 inert, 4 partial, 3 unsupported/not implemented — see internal/capabilities/all.gen.go)
+current_support_level: Repository and image metadata control plane supported; Docker registry integration optional, and every operation whose fidelity depends on it (CreateRepository/DescribeRepositories/DeleteRepository's repositoryUri, GetAuthorizationToken, ListImages, BatchDeleteImage) is declared Partial with the exact without-Docker or unreachable-registry behavior; scanning is Inert (DescribeImageScanFindings, PutImageScanningConfiguration) or Unsupported/501 (StartImageScan, Get/PutRegistryScanningConfiguration) — no scan engine is emulated.
 operations:
   GetAuthorizationToken:
     status: fixed
@@ -67,15 +67,77 @@ operations:
           Records built from the local registry's manifests are dropped when the registry
           answers 404 for them — the state after a restart, since the registry container
           keeps no volume. Records written by PutImage are not the registry's to revoke.
+  ListImages:
+    status: fixed
+    docs:
+      - https://docs.aws.amazon.com/AmazonECR/latest/APIReference/API_ListImages.html
+    scenarios:
+      registry_unreachable_is_silent:
+        status: fixed
+        evidence:
+          - internal/services/ecr/registry_reconciliation_scope_test.go#TestListImages_silentlyServesTheStoreWhenTheRegistryIsUnreachable
+        notes: >-
+          Deliberate, and now pinned rather than merely documented in a code comment:
+          unlike DescribeImages/BatchGetImage, a transiently unreachable registry does not
+          turn into ServerException here — the caller gets whatever the store currently
+          holds. Declared Partial because the sweep's outcome is not surfaced to the caller.
+  BatchGetImage:
+    status: fixed
+    docs:
+      - https://docs.aws.amazon.com/AmazonECR/latest/APIReference/API_BatchGetImage.html
+    scenarios:
+      registry_unreachable_is_serverexception:
+        status: fixed
+        evidence:
+          - internal/services/ecr/registry_reconciliation_scope_test.go#TestBatchGetImage_answersServerExceptionWhenTheRegistryIsUnreachable
+          - internal/services/ecr/registry_reconciliation_scope_test.go#TestBatchGetImage_stillAnswersPerImageFailuresWhenTheRegistryIsReachable
+        notes: >-
+          Already mirrored DescribeImages' sweep-state check; only the test coverage was
+          missing. Now pinned: an unreachable registry answers ServerException rather than
+          reporting an image falsely missing, and a reachable registry that genuinely lacks
+          the image still reports it as a per-image failure.
+  BatchDeleteImage:
+    status: implementation_mismatch
+    docs:
+      - https://docs.aws.amazon.com/AmazonECR/latest/APIReference/API_BatchDeleteImage.html
+    scenarios:
+      deletion_not_forwarded_to_the_registry:
+        status: implementation_mismatch
+        evidence:
+          - internal/services/ecr/registry_reconciliation_scope_test.go#TestBatchDeleteImage_deletedImageReappearsWhenTheRegistryStillServesIt
+        notes: >-
+          BatchDeleteImage only ever deletes the store's record; it never asks the registry
+          to delete the manifest. When Docker backs the repository, an image the registry
+          still serves reappears on the very next reconciling read (ListImages/
+          DescribeImages/BatchGetImage), unlike real ECR where the deletion is durable.
+          Declared Partial rather than fixed here — reaching the registry from
+          BatchDeleteImage is registry-lifecycle work, out of scope for #141.
 findings:
   fixed:
     - DescribeImages answered an absent imageId with 200 and an empty list rather than ImageNotFoundException.
     - Image records survived the registry that held the images, so absent images were reported present.
     - A registry container exit no longer leaves repository URIs and authorization responses pointing at its dead published port; live events and daemon reconnect reconciliation start a replacement.
-  remaining_gaps:
-    - Downgrade or annotate Docker-dependent and scanner-unavailable behavior as partial/inert.
-    - ListImages and BatchGetImage are reconciled with the registry but have no equivalent scenario coverage.
-  intentionally_partial: []
+    - >-
+      Docker-dependent and scanner-unavailable behavior is now honestly declared rather than
+      claimed Supported (#141): CreateRepository/DescribeRepositories/DeleteRepository/
+      GetAuthorizationToken/ListImages/BatchDeleteImage downgraded to Partial with the exact
+      without-Docker or unreachable-registry gap in their Notes; DescribeImageScanFindings and
+      PutImageScanningConfiguration downgraded to Inert (accepted, stored/echoed, but no scan
+      engine ever runs); StartImageScan, GetRegistryScanningConfiguration and
+      PutRegistryScanningConfiguration — previously undeclared, silently falling through to a
+      generic 501 — are now declared Unsupported so the scanning surface is fully accounted
+      for. See internal/services/ecr/capabilities_dev.go.
+    - >-
+      ListImages and BatchGetImage now have scenario coverage for their registry-reconciliation
+      behavior (internal/services/ecr/registry_reconciliation_scope_test.go), closing the second
+      remaining_gaps entry alongside the first.
+  remaining_gaps: []
+  intentionally_partial:
+    - >-
+      BatchDeleteImage does not reach the registry, so a Docker-backed deletion is not durable
+      (see the BatchDeleteImage operation entry above). Fixing this is registry-lifecycle work
+      and belongs with the reconciliation code in service.go, not with this issue's
+      capability-annotation scope.
 handoff:
   start_with: [CreateRepository, PutImage, GetAuthorizationToken]
   do_not_redo: [DescribeImages]

@@ -1,6 +1,6 @@
 {
   "generated_by": "go run -tags dev ./cmd/capgen --write-docs",
-  "total_ops": 1513,
+  "total_ops": 1516,
   "services": [
     {
       "service": "s3",
@@ -4587,32 +4587,32 @@
     {
       "service": "ecr",
       "display_name": "ECR",
-      "total_ops": 22,
+      "total_ops": 25,
       "implemented_ops": 22,
       "operations": [
         {
           "operation": "CreateRepository",
           "category": "General",
-          "status": "✅ Supported",
-          "notes": "Returns ARN, URI, createdAt, imageTagMutability, imageScanningConfiguration, and encryptionConfiguration"
+          "status": "⚠️ Partial",
+          "notes": "Returns ARN, URI, createdAt, imageTagMutability, imageScanningConfiguration, and encryptionConfiguration; repositoryUri and push readiness depend on a reachable Docker daemon — without one, repositoryUri falls back to Overcast's own API port and the response carries the emulation-limitation header (`docker push` there answers 405)"
         },
         {
           "operation": "DescribeRepositories",
           "category": "General",
-          "status": "✅ Supported",
-          "notes": "Lists all repos or filters by name"
+          "status": "⚠️ Partial",
+          "notes": "Lists all repos or filters by name; repositoryUri is re-minted from the currently running registry on every read, so it reflects the same Docker-availability fallback as CreateRepository"
         },
         {
           "operation": "DeleteRepository",
           "category": "General",
-          "status": "✅ Supported",
-          "notes": "Deletes the repository and all its image records; a repository still holding images raises RepositoryNotEmptyException unless `force` is set"
+          "status": "⚠️ Partial",
+          "notes": "Deletes the repository and all its image records; a repository still holding images raises RepositoryNotEmptyException unless `force` is set. The not-empty check and the echoed repositoryUri both depend on the registry: an unreachable registry falls back to the store's own image records rather than refusing the delete"
         },
         {
           "operation": "GetAuthorizationToken",
           "category": "Auth",
-          "status": "✅ Supported",
-          "notes": "Returns `base64(\"AWS:\u003cpassword\u003e\")` and the registry proxy endpoint; token expiry is 12 hours"
+          "status": "⚠️ Partial",
+          "notes": "Returns `base64(\"AWS:\u003cpassword\u003e\")` and the registry proxy endpoint; token expiry is 12 hours. Without a reachable Docker daemon no registry ever starts, so proxyEndpoint falls back to Overcast's own API port and the token authenticates nothing there — `docker login` succeeds but a subsequent push/pull answers 405"
         },
         {
           "operation": "DescribeRegistry",
@@ -4623,8 +4623,8 @@
         {
           "operation": "ListImages",
           "category": "Images",
-          "status": "✅ Supported",
-          "notes": "Returns image IDs (tag + digest); reconciles local registry tags when Docker is available"
+          "status": "⚠️ Partial",
+          "notes": "Returns image IDs (tag + digest); reconciles local registry tags into the store when Docker is available. Deliberately does not fail when the registry is transiently unreachable, unlike DescribeImages/BatchGetImage — it answers with whatever the store currently holds rather than ServerException, since an empty or stale list names no specific image to be wrong about"
         },
         {
           "operation": "DescribeImages",
@@ -4642,19 +4642,19 @@
           "operation": "BatchGetImage",
           "category": "Images",
           "status": "✅ Supported",
-          "notes": "Fetches manifests by tag or digest"
+          "notes": "Fetches manifests by tag or digest; reconciles local registry manifests when Docker is available, and an unreachable registry answers ServerException rather than reporting an image falsely missing, mirroring DescribeImages"
         },
         {
           "operation": "DescribeImageScanFindings",
           "category": "Images",
-          "status": "✅ Supported",
-          "notes": "Returns empty/not-scanned findings; no scan engine is emulated"
+          "status": "🧊 Inert",
+          "notes": "Always reports imageScanStatus UNSUPPORTED_IMAGE with empty findings/enhancedFindings; no scan engine is emulated, regardless of scanOnPush or any registry/repository scanning configuration"
         },
         {
           "operation": "BatchDeleteImage",
           "category": "Images",
-          "status": "✅ Supported",
-          "notes": "Deletes images by tag or digest"
+          "status": "⚠️ Partial",
+          "notes": "Deletes images by tag or digest from the store; when Docker backs the repository, the registry itself is never asked to delete anything, so an image it still serves reappears on the next reconciling read (ListImages/DescribeImages/BatchGetImage) — unlike real ECR, where the deletion is durable"
         },
         {
           "operation": "PutImageTagMutability",
@@ -4665,8 +4665,26 @@
         {
           "operation": "PutImageScanningConfiguration",
           "category": "Images",
-          "status": "✅ Supported",
-          "notes": "Stores scanOnPush and DescribeRepositories echoes it; no scan engine is emulated"
+          "status": "🧊 Inert",
+          "notes": "Stores scanOnPush and DescribeRepositories echoes it; no scan engine is emulated, so enabling it never makes DescribeImageScanFindings report anything but scanner-unavailable"
+        },
+        {
+          "operation": "StartImageScan",
+          "category": "Images",
+          "status": "❌ Unsupported",
+          "notes": "Not implemented, returns 501; no scan engine is emulated (see DescribeImageScanFindings)"
+        },
+        {
+          "operation": "GetRegistryScanningConfiguration",
+          "category": "Images",
+          "status": "❌ Unsupported",
+          "notes": "Not implemented, returns 501; registry-wide scanning configuration is not stored"
+        },
+        {
+          "operation": "PutRegistryScanningConfiguration",
+          "category": "Images",
+          "status": "❌ Unsupported",
+          "notes": "Not implemented, returns 501; registry-wide scanning configuration is not stored"
         },
         {
           "operation": "SetRepositoryPolicy",
