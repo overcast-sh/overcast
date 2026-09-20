@@ -66,6 +66,202 @@ can be applied mechanically rather than reconstructed from memory.
 
 ## [Unreleased]
 
+## [0.0.1-alpha.43] - 2026-09-20
+
+### Added
+
+- [stepfunctions] a complete Amazon States Language interpreter: JSONata on a JSONata 2.x engine, workflow variables (`Assign`) in both query languages, all 18 intrinsic functions, and full JSONPath paths (wildcards, descent, slices, unions, filters).
+  AWS's added functions (`$partition`, `$range`, `$hash`, `$uuid`, `$parse`) work, `$now`/`$millis` read Overcast's clock, and `$eval` is withdrawn as on AWS
+  Parallel branches and Map iterations run concurrently, honouring `MaxConcurrency`; a failure aborts the siblings, and history links each branch and iteration through `previousEventId`
+
+- [stepfunctions] callbacks, activities and distributed Map: `.waitForTaskToken`, `SendTaskSuccess`/`SendTaskFailure`/`SendTaskHeartbeat` with `HeartbeatSeconds` enforced, child executions, S3 `ItemReader`, `ItemBatcher`, failure tolerance, `ResultWriter`, and the map-run API.
+  `aws-sdk:` Tasks call every modeled action of every service Overcast implements, over all six AWS wire protocols; results keep user-data map keys as written and errors are named as the SDK names them (`S3.NoSuchKeyException`)
+  `dynamodb:deleteItem` and `events:putEvents` optimized integrations
+
+- [stepfunctions] executions parked on a task token, activity or Wait survive a restart on a persistent store, deadlines included.
+  any other execution a restart interrupts ends FAILED with `States.Runtime` and can be redriven, instead of staying RUNNING forever
+
+- [stepfunctions] `RedriveExecution`, `TestState`, `ValidateStateMachineDefinition`, state machine versions and aliases, and paginated list operations.
+  a redrive re-runs only the failed Parallel branches, Map iterations and map-run children, from the state each stopped in
+
+- [stepfunctions/cloudformation] `AWS::StepFunctions::Activity`, `StateMachineVersion` and `StateMachineAlias`, and `DefinitionS3Location`.
+
+- [web/stepfunctions] Step Functions pages draw each state machine as a flow diagram, with Parallel branches and Map item processors as nested lanes.
+  executions play live on it: running states pulse, taken paths light up, and each Map iteration can be viewed on its own; click a state for its runs, input, output, retries and errors; export the diagram as SVG or PNG
+  execution history reads as a timeline of state runs by branch and iteration, or a filterable, searchable event list
+  create or edit a definition beside a live diagram preview, from ready-to-run templates, and stop, redrive or re-run executions
+
+- [secretsmanager] `DeleteSecret` now schedules the delete behind a recovery window, and `RestoreSecret` cancels it
+  the window is 7 to 30 days, 30 by default; `ForceDeleteWithoutRecovery` still deletes at once, and supplying both parameters is `InvalidParameterException` as on AWS
+  a secret inside its window keeps its record with `DeletedDate`, is hidden from `ListSecrets` unless `IncludePlannedDeletion` is set, and refuses value operations with `InvalidRequestException`
+
+- [eventbridge] event patterns match on `prefix`, `suffix`, `exists`, `equals-ignore-case`, `numeric` and `anything-but`, not only exact values (#148)
+  `anything-but` covers a single value, a list, and a nested `prefix`, `suffix` or `equals-ignore-case` clause
+  `cidr`, `wildcard` and `$or` stay unimplemented, and `PutRule` and `TestEventPattern` answer `InvalidEventPatternException` naming the match type rather than storing a rule that never matches
+
+- [lambda] `CreateFunction` with `Publish: true` publishes version 1 in the same call and answers with that version, as on AWS
+  every FunctionConfiguration now carries `Version` (`$LATEST` for the unpublished function), which the SDKs model and AWS always returns
+  `PublishTo: LATEST_PUBLISHED` (the `$LATEST.PUBLISHED` version of Lambda Managed Instances) still returns 501
+
+- [cognito] Cognito issues and completes `SMS_MFA`, `SELECT_MFA_TYPE` and `MFA_SETUP` challenges, alongside the existing software-token MFA.
+  `SetUserMFAPreference` and `AdminSetUserMFAPreference` accept `SMSMfaSettings`, and `GetUser`/`AdminGetUser` report `UserMFASettingList` and `PreferredMfaSetting`
+  `AssociateSoftwareToken` and `VerifySoftwareToken` accept an `MFA_SETUP` challenge `Session`, so a user can enrol a software token mid-sign-in
+
+- [athena] `StopQueryExecution` is implemented: it answers an empty document for a known query id and `InvalidRequestException` for an unknown one
+
+- [router] 33 operations newly modeled by AWS are recognised.
+  a signed request to one reaches a protocol-correct `501` in that service's own error envelope, instead of the S3 fallback's bucket-or-object answer
+
+- [web] hovering a node on the system map dims everything except that node, its connections and its neighbours
+  hovering a legend entry does the same for one connection type
+
+### Changed
+
+- **BREAKING** [cloudformation/iam] `Ref` on an `AWS::IAM::InstanceProfile` is the profile name, as AWS documents it; the ARN is `Fn::GetAtt "Arn"`
+  migration: a template passing the `Ref` somewhere an ARN was wanted needs `Fn::GetAtt` instead — the reverse of what it needed before
+
+- [web] the system map has its own layout engine, built and tuned against a written objective instead of dagre
+  each connected flow is laid out on its own, the flows are packed into a wide canvas, and unconnected resources are tiled by service beneath them; every connection is routed around the nodes it is not attached to and drawn as one smooth curve
+  a resource card's box matches its rendered height, a function's log group and stream filter are drawn inside the function's stack, and the map can zoom out far enough to fit a large topology
+  the legend lists only the connection types present; below 0.6× zoom the lists inside nodes fade and edge labels hide, so the map reads as boxes and wires
+  the objective (no overlaps, no wires through cards, fewest crossings, shortest wires, straight rows), its weights and its fixtures are in docs/plans/map-layout-objective.md; a test fails if any fixture's score regresses, and the engine handles 1,000 resources in under a second
+
+- [capabilities] emulator-only operations are counted separately from AWS API operations.
+  CloudFront's `ProxyRequest`, API Gateway's `ExecuteRestAPI`/`ExecuteV2API`, AppSync's `ExecuteGraphQL` and EKS's `UpdateKubeconfig` carry an `EmulatorOnly` flag and list under an "Emulator extensions" heading on their operations pages, without an invented AWS docs link
+  CloudFront reads 88 AWS operations rather than 89, API Gateway 102 of 104, AppSync 81 of 81 and EKS 49 of 49 in STATUS.md, the docs service index and `service-support.json`; `capgen --check-model` rejects the flag on an operation AWS does model
+
+- [ecr] Docker-dependent ECR operations are declared Partial and the scanning operations Inert or Unsupported, matching what they do
+
+- [acm/kms/backup/appregistry/cognito] service documentation reconciled with behaviour: ACM and KMS accept JSON 1.0 alongside JSON 1.1 and RPC v2 CBOR as the framework-wide rule; Backup answers only Smithy restJson1 at its modeled paths; AppRegistry's List operations accept but ignore pagination (#60)
+  the Cognito pages describe `UserPoolTier` gating (`SignInPolicy`, `ALLOW_USER_AUTH`, WebAuthn), the SRP and WebAuthn verification boundary, and `AdminGetDevice`/`AdminListDevices` IAM and pagination-token behaviour
+
+### Fixed
+
+- **BREAKING** [cloudformation/iam] an `AWS::IAM::Policy` naming no `Groups`, `Roles` or `Users` fails the stack instead of writing its document to nobody
+  AWS requires at least one of the three, and the resource does nothing at all without one
+  migration: name the principal the policy is for; a stack that reported CREATE_COMPLETE without one was granting nothing
+
+- **BREAKING** [iam] an instance profile holds one role, AWS's quota, and one still holding a role refuses to delete
+  `AddRoleToInstanceProfile` answers `LimitExceeded` for a second, different role; `DeleteInstanceProfile` answers `DeleteConflict`
+  migration: `RemoveRoleFromInstanceProfile` before replacing a profile's role or deleting the profile, as against real AWS
+
+- **BREAKING** [stepfunctions] a Parallel or Map failure keeps the branch's own error name instead of `States.BranchFailed`/`States.TaskFailed`.
+  migration: a `Catch` or `Retry` naming `States.BranchFailed` should name the branch's error, or use `States.ALL`
+
+- **BREAKING** [stepfunctions] `CreateStateMachine` rejects duplicate state names across branches and `States.ALL` outside the last `Retry`/`Catch`.
+  it also rejects fields of the other query language (a JSONPath `Output`, a JSONata `InputPath`), matching AWS
+  and, for EXPRESS, `.sync`, `.waitForTaskToken`, activities and distributed Map, which AWS also refuses there
+  migration: rename nested states so every name is unique, and move `States.ALL` into its own final entry
+
+- [stepfunctions] malformed state machine input is refused as AWS refuses it, rather than reported as a state machine that does not exist (#2003).
+  `CreateStateMachine` answers `InvalidName` for a name outside AWS's charset — whitespace, brackets, wildcards, reserved specials, control characters, over 80 characters
+  it answers `InvalidArn` for a `roleArn` that is not an IAM role ARN, as do the six operations taking a `stateMachineArn` when given something that is not a state machine ARN; a well-formed ARN naming a state machine that does not exist still answers `StateMachineDoesNotExist`
+
+- [stepfunctions] an execution resumed after a restart is no longer failed as unresumable while it is finishing, and `RedriveExecution` is accepted the instant an execution reads terminal instead of sometimes refusing it as already being redriven.
+  a resumed execution kept the previous process's runner ID for its whole life, so a read arriving as it finished could end it FAILED with `States.Runtime`
+  a distributed Map also starts no further child once a failure has passed its tolerance, rather than racing the child that ended the run
+
+- [stepfunctions] Choice type mismatches evaluate false, a Fail state without `Error` is catchable, `ItemSelector` reads the Map input, `JitterStrategy: FULL` is applied, and `States.Timeout` also matches `States.HeartbeatTimeout`.
+  `GetExecutionHistory` with `includeExecutionData: false` no longer blanks the payloads out of the stored history
+
+- [dynamodb] nine request-validation rules AWS documents are now enforced with AWS's wording, where each request used to succeed with `200` (#1707).
+  items over 400 KB by AWS's size accounting, a `Query` that does not constrain the partition key, and empty-string key attributes are refused with a `ValidationException`
+  `BatchWriteItem` and `TransactWriteItems` refuse two operations on one item, `BatchGetItem` refuses more than 100 keys, and `Scan` refuses a `Segment` at or past `TotalSegments`
+  `CreateTable` refuses `AttributeDefinitions` that do not match the table and index key schemas exactly, choosing between AWS's four wordings as AWS does
+
+- [dynamodb] Query key conditions are checked against the key schema in play, and may be written in either order and in parentheses (#135).
+  a second condition on a non-key attribute used to be answered as if it named the sort key; a sort-key condition written before the partition key, and any parentheses, used to be rejected outright
+  two conditions on one key are now AWS's "KeyConditionExpressions must only contain one condition per key"
+
+- [dynamodb] a TTL transition accepted while Overcast is starting up settles as it should, instead of being cancelled by the start-up re-arm
+  the re-arm read the table list once and armed what that snapshot said, so an `UpdateTimeToLive` accepted in between lost the settle for its own deadline
+  the table kept a transition marker that outlived its window, and a completed disable never dropped its TTL configuration
+
+- [cognito] `SetUserPoolMfaConfig` stores and returns `SmsMfaConfiguration`, `SoftwareTokenMfaConfiguration` and `EmailMfaConfiguration`.
+  the three factor configurations were parsed and dropped, so `GetUserPoolMfaConfig` answered with `MfaConfiguration` alone
+  the request now replaces the MFA configuration as a unit, and is rejected when it enables MFA with no factor or turns MFA off while configuring one
+
+- [cognito] `UpdateUserAttributes` now sends a code for an attribute in the pool's `AutoVerifiedAttributes`, and `ForgetDevice`/`AdminForgetDevice` answer `ResourceNotFoundException` for a device key the user never registered instead of a silent HTTP 200.
+  `CreateUserPool`, `UpdateUserPool` and `DescribeUserPool` store and return `AutoVerifiedAttributes`, which the service previously dropped, and `SignUp` returns `CodeDeliveryDetails`
+  `CodeDeliveryDetails` destinations are now masked the way AWS masks them
+
+- [eventbridge] `PutRule` now validates the rule trigger, the event bus and the event pattern, and `DeleteRule` holds a rule to AWS's ordering (#148)
+  AWS requires at least an `EventPattern` or a `ScheduleExpression`; a rule with neither is a `ValidationException` instead of a rule that can never fire, a rule naming an event bus that was never created is a `ResourceNotFoundException`, and a pattern whose shape or match type EventBridge does not define is an `InvalidEventPatternException`
+  a rule with targets attached refuses `DeleteRule` with `ValidationException`; `Force` is the managed-rule escape AWS documents, not a way around the check; deleting an `AWS::Events::Rule` through CloudFormation needs no change, as the stack detaches the targets it attached
+
+- [firehose] the request validation AWS documents is enforced, where `CreateDeliveryStream`, `PutRecord` and `PutRecordBatch` used to answer `200` (#149).
+  a second `CreateDeliveryStream` for a name in use reports `ResourceInUseException` instead of silently overwriting the stream's type, ARN and tags
+  `PutRecordBatch` enforces 1-500 records, the 1,000 KiB per-record cap and the documented 4 MiB per call, and no longer acknowledges records it never decoded
+  every exception carries HTTP 400, the status the Firehose model gives them, where a missing delivery stream answered 404
+
+- [cloudformation/firehose] `Ref` for a delivery stream is its name, and deleting a stack now deletes the stream (#149).
+  the physical ID was the ARN, so teardown asked Firehose to delete a stream named by an ARN, which matched nothing and left the stream behind
+
+- [cloudformation/iam] `Fn::GetAtt "Arn"` keeps a role's or instance profile's `Path` across a stack update
+
+- [kinesis] `ListStreams`, `ListShards`, `DescribeStream` and `ListTagsForStream` paginate, instead of returning everything in one page
+  each honours its documented cursor, page size and truncation flag: `Limit`/`MaxResults`, `ExclusiveStart{StreamName,ShardId,TagKey}`, `NextToken`, `HasMore{Streams,Shards,Tags}`
+  a `ListShards` `NextToken` identifies its own stream and expires after 300 seconds with `ExpiredNextTokenException`, and combining one with `StreamName` or `ExclusiveStartShardId` is refused, as on AWS
+  `ListStreams` also returns the modeled `StreamSummaries` alongside `StreamNames`, and `ListShards` accepts `StreamARN` in place of `StreamName`
+
+- [kinesis] errors match the AWS model: every exception is HTTP 400, and a missing parameter is `InvalidArgumentException`
+  `ResourceNotFoundException` answered 404 where all Kinesis exceptions are 400, and a missing required member answered `MissingParameter`, a code no Kinesis operation models and no SDK error type matches
+
+- [elasticache] `CreateCacheCluster` and `CreateReplicationGroup` validate their inputs and return the `CacheNodes` and `NodeGroups` shapes AWS models
+  identifiers follow AWS's grammar (1-50 for a cluster, 1-40 for a group, letter-led, no trailing or doubled hyphen) and are stored lowercase
+  `NumCacheNodes` is bounded per engine, `AZMode` and `PreferredAvailabilityZones` are Memcached-only, and a `ReplicationGroupId` must name a group that exists
+  `ConfigurationEndpoint` is now Memcached-only on a cluster and absent on a cluster-mode-disabled group, matching AWS; the address moved to the node and node group
+
+- [elasticache] the cluster, replication-group and parameter-group not-found faults answer HTTP 404 rather than 400.
+  `CacheClusterNotFound`, `ReplicationGroupNotFoundFault` and `CacheParameterGroupNotFound` each bind `httpResponseCode: 404` in the model; the wire codes and messages are unchanged, and `CacheSubnetGroupNotFoundFault` keeps the 400 its own trait declares
+
+- [acm] domain names are validated, `DescribeCertificate` returns `DomainValidationOptions`, and `ListCertificates` honours `CertificateStatuses` (#1994).
+  a `DomainName` or SAN outside AWS's domain pattern, or an over-long one, is refused with a `ValidationException` naming the member — any non-empty string used to be issued a certificate
+  `DescribeCertificate` reports one entry per domain — `SUCCESS`, the requested method, and for `DNS` a CNAME that stays the same across calls, so publish-then-wait flows have something to act on
+  the status filter used to be ignored, so a `PENDING_VALIDATION` poll saw its own issued certificate; an unknown status is now refused rather than matching everything
+
+- [cloudfront] responses now carry the 2020-05-31 XML namespace and errors use the restXml `ErrorResponse` envelope.
+  every response root declares `xmlns="http://cloudfront.amazonaws.com/doc/2020-05-31/"`, the namespace CloudFront's API has always specified
+  errors move from S3's bare `<Error>` body to `<ErrorResponse><Error><Type>…</Type><Code>…</Code><Message>…</Message></Error><RequestId>…</RequestId></ErrorResponse>`; codes and statuses are unchanged
+  `Distribution`, `DistributionConfig` and `DistributionSummary` emit their members in the order AWS documents
+
+- [opensearch] `DomainName` and `EngineVersion` are checked against the constraints AWS declares, where a malformed value used to create a domain, and `DomainStatus` carries `ClusterConfig` (#165)
+  a name outside 3-28 characters of `[a-z][a-z0-9-]` produced a malformed ARN and endpoint hostname, and an engine version outside `OpenSearch_X.Y`/`Elasticsearch_X.Y` produced a wrong `EngineType`
+  `DescribeDomain` and `DeleteDomain` answer `ValidationException` for such a name rather than `ResourceNotFoundException`, because AWS validates input before it looks anything up
+  `ClusterConfig` echoes the configuration the create asked for, or an empty object when it asked for none — Overcast runs no cluster to describe
+
+- [route53] `ChangeResourceRecordSets` rejects a record value that does not fit its record type
+  an `A` whose value is not a dotted quad, an `AAAA` holding an IPv4 address or a `CNAME` with two values answers `InvalidChangeBatch`, as on AWS, instead of being stored
+  `NS`, `PTR`, `MX`, `SRV`, `CAA`, `TXT` and `SPF` are checked too; `NAPTR`, `DS`, `TLSA`, `SSHFP`, `SVCB` and `HTTPS` values are still stored as given
+
+- [s3] `CompleteMultipartUpload` checks part ETags, ordering and the 5 MiB minimum, answering `InvalidPart`, `InvalidPartOrder` or `EntityTooSmall` (#1706)
+  an empty parts list is `MalformedXML`, and a refused completion leaves the upload intact to retry or abort
+
+- [shield] protections refuse a duplicate resource, carry their own ARN, `ListProtections` filters and paginates, and `ResourceNotFoundException` answers HTTP 400 as the API Reference documents rather than 404.
+  a second `CreateProtection` for a `ResourceArn` that already has a protection reports `ResourceAlreadyExistsException` instead of creating a second record
+  `Protection` carries `ProtectionArn` (`arn:aws:shield::<account>:protection/<id>`) on `DescribeProtection` and `ListProtections`, as real Shield always does
+  `ListProtections` honours `InclusionFilters`, `MaxResults` and `NextToken`, rejecting an unrecognised token with `InvalidPaginationTokenException`
+
+- [waf] `Scope` is validated as AWS's `CLOUDFRONT | REGIONAL` enum, where any string used to be accepted and create an unreachable namespace (#197).
+  `CreateWebACL`, `GetWebACL`, `ListWebACLs` and `DeleteWebACL` answer `WAFInvalidParameterException` (400) for a value outside the enum, on both the JSON and RPC v2 CBOR paths
+
+- [athena] not-found errors answer HTTP 400, the status AWS JSON 1.1 gives `InvalidRequestException`, instead of 404
+
+- [appconfig] `ListHostedConfigurationVersions`' `version_label` filter now matches a trailing `*` as a prefix, per AWS docs
+
+- [eks] `CreateFargateProfile` rejects a request with no `podExecutionRoleArn` as `MissingParameter` instead of silently storing an empty one (#1979)
+
+- [iam] `ListRolePolicies`, `ListUserPolicies` and `ListGroupPolicies` return inline-policy names in a stable order
+
+- [scheduler] `CreateSchedule` rejects duplicate names within a group and an invalid `FlexibleTimeWindow.MaximumWindowInMinutes`
+
+- [router/web] the topology graph shows EC2 instances again, grouped inside their VPC, and draws a `pipe` edge for any EventBridge pipe whose `Source` and `Target` name SQS, SNS, DynamoDB stream or Lambda resources
+  `GET /_overcast/topology` decoded instance records with the wrong field names and never emitted an `ec2` node, and assumed every pipe was DynamoDB → SQS, so a pipe such as SQS → Lambda produced no edge
+
+- [web] the system map no longer sends an SQS peek request for every non-queue node, and shows its spinner until the first layout is ready
+
+- [ci] prose-only pull requests no longer fail every test job: the aws-sdk shape-table pack step is skipped, like the checkout it needs, when no code changed
+
 ## [0.0.1-alpha.42] - 2026-09-14
 
 ### Added
@@ -3063,7 +3259,8 @@ can be applied mechanically rather than reconstructed from memory.
 [x.y.z]: https://github.com/overcast-sh/overcast/compare/vA.B.C...vx.y.z
 -->
 
-[Unreleased]: https://github.com/overcast-sh/overcast/compare/v0.0.1-alpha.42...HEAD
+[Unreleased]: https://github.com/overcast-sh/overcast/compare/v0.0.1-alpha.43...HEAD
+[0.0.1-alpha.43]: https://github.com/overcast-sh/overcast/compare/v0.0.1-alpha.42...v0.0.1-alpha.43
 [0.0.1-alpha.42]: https://github.com/overcast-sh/overcast/compare/v0.0.1-alpha.41...v0.0.1-alpha.42
 [0.0.1-alpha.41]: https://github.com/overcast-sh/overcast/compare/v0.0.1-alpha.40...v0.0.1-alpha.41
 [0.0.1-alpha.40]: https://github.com/overcast-sh/overcast/compare/v0.0.1-alpha.39...v0.0.1-alpha.40
