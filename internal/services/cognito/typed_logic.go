@@ -97,6 +97,7 @@ type CreateUserPoolReq struct {
 	AdminCreateUserConfig       *adminCreateUserConfigWire       `json:"AdminCreateUserConfig" cbor:"AdminCreateUserConfig"`
 	EmailConfiguration          *emailConfigurationWire          `json:"EmailConfiguration" cbor:"EmailConfiguration"`
 	UserAttributeUpdateSettings *userAttributeUpdateSettingsWire `json:"UserAttributeUpdateSettings" cbor:"UserAttributeUpdateSettings"`
+	AutoVerifiedAttributes      []string                         `json:"AutoVerifiedAttributes" cbor:"AutoVerifiedAttributes"`
 	DeviceConfiguration         *DeviceConfiguration             `json:"DeviceConfiguration" cbor:"DeviceConfiguration"`
 	UsernameAttributes          []string                         `json:"UsernameAttributes" cbor:"UsernameAttributes"`
 	AliasAttributes             []string                         `json:"AliasAttributes" cbor:"AliasAttributes"`
@@ -118,6 +119,7 @@ type UpdateUserPoolReq struct {
 	AdminCreateUserConfig       *adminCreateUserConfigWire       `json:"AdminCreateUserConfig" cbor:"AdminCreateUserConfig"`
 	EmailConfiguration          *emailConfigurationWire          `json:"EmailConfiguration" cbor:"EmailConfiguration"`
 	UserAttributeUpdateSettings *userAttributeUpdateSettingsWire `json:"UserAttributeUpdateSettings" cbor:"UserAttributeUpdateSettings"`
+	AutoVerifiedAttributes      []string                         `json:"AutoVerifiedAttributes" cbor:"AutoVerifiedAttributes"`
 	DeviceConfiguration         *DeviceConfiguration             `json:"DeviceConfiguration" cbor:"DeviceConfiguration"`
 	UsernameAttributes          []string                         `json:"UsernameAttributes" cbor:"UsernameAttributes"`
 	AliasAttributes             []string                         `json:"AliasAttributes" cbor:"AliasAttributes"`
@@ -514,8 +516,9 @@ type ListUsersResp struct {
 }
 
 type SignUpResp struct {
-	UserConfirmed bool   `json:"UserConfirmed" cbor:"UserConfirmed"`
-	UserSub       string `json:"UserSub" cbor:"UserSub"`
+	UserConfirmed       bool                 `json:"UserConfirmed" cbor:"UserConfirmed"`
+	CodeDeliveryDetails *codeDeliveryDetails `json:"CodeDeliveryDetails,omitempty" cbor:"CodeDeliveryDetails,omitempty"`
+	UserSub             string               `json:"UserSub" cbor:"UserSub"`
 }
 
 type ConfirmSignUpResp struct {
@@ -1570,6 +1573,9 @@ func (s *Service) CreateUserPoolTyped(ctx context.Context, req *CreateUserPoolRe
 	if aerr := applyUserAttributeUpdateSettings(pool, req.UserAttributeUpdateSettings); aerr != nil {
 		return nil, aerr
 	}
+	if aerr := applyAutoVerifiedAttributes(pool, req.AutoVerifiedAttributes); aerr != nil {
+		return nil, aerr
+	}
 	if req.DeviceConfiguration != nil {
 		pool.DeviceConfiguration = req.DeviceConfiguration
 	}
@@ -1730,6 +1736,9 @@ func (s *Service) UpdateUserPoolTyped(ctx context.Context, req *UpdateUserPoolRe
 		}
 	}
 	if aerr := applyUserAttributeUpdateSettings(pool, req.UserAttributeUpdateSettings); aerr != nil {
+		return nil, aerr
+	}
+	if aerr := applyAutoVerifiedAttributes(pool, req.AutoVerifiedAttributes); aerr != nil {
 		return nil, aerr
 	}
 	if req.DeviceConfiguration != nil {
@@ -2479,7 +2488,7 @@ func (s *Service) SignUpTyped(ctx context.Context, req *SignUpReq) (*SignUpResp,
 	log.Info("user signed up",
 		zap.String("poolId", c.UserPoolID), zap.String("username", req.Username))
 	s.publishTyped(ctx, events.CognitoUserCreated, events.ResourcePayload{Name: req.Username})
-	return &SignUpResp{UserConfirmed: false, UserSub: u.Sub}, nil
+	return &SignUpResp{UserConfirmed: false, CodeDeliveryDetails: signUpCodeDeliveryDetails(pool, u), UserSub: u.Sub}, nil
 }
 
 func (s *Service) ConfirmSignUpTyped(ctx context.Context, req *ConfirmSignUpReq) (*ConfirmSignUpResp, *protocol.AWSError) {

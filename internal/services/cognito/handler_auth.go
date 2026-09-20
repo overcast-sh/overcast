@@ -218,10 +218,18 @@ func (s *Service) signUp(w http.ResponseWriter, r *http.Request) {
 	if status == StatusConfirmed {
 		s.publish(r, events.CognitoUserConfirmed, events.ResourcePayload{Name: req.Username})
 	}
-	s.writeJSON(w, r, http.StatusOK, map[string]any{
+	resp := map[string]any{
 		"UserConfirmed": status == StatusConfirmed,
 		"UserSub":       u.Sub,
-	})
+	}
+	// An auto-confirmed user was sent nothing, so there is no delivery to
+	// report.
+	if status != StatusConfirmed {
+		if delivery := signUpCodeDeliveryDetails(pool, u); delivery != nil {
+			resp["CodeDeliveryDetails"] = delivery
+		}
+	}
+	s.writeJSON(w, r, http.StatusOK, resp)
 }
 
 // confirmSignUp — ConfirmSignUp.

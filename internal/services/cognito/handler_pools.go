@@ -117,6 +117,7 @@ func (s *Service) updateUserPool(w http.ResponseWriter, r *http.Request) {
 		AdminCreateUserConfig       *adminCreateUserConfigWire       `json:"AdminCreateUserConfig"`
 		EmailConfiguration          *emailConfigurationWire          `json:"EmailConfiguration"`
 		UserAttributeUpdateSettings *userAttributeUpdateSettingsWire `json:"UserAttributeUpdateSettings"`
+		AutoVerifiedAttributes      []string                         `json:"AutoVerifiedAttributes"`
 		DeviceConfiguration         *DeviceConfiguration             `json:"DeviceConfiguration"`
 		UsernameAttributes          []string                         `json:"UsernameAttributes"`
 		AliasAttributes             []string                         `json:"AliasAttributes"`
@@ -197,6 +198,10 @@ func (s *Service) updateUserPool(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if aerr := applyUserAttributeUpdateSettings(pool, req.UserAttributeUpdateSettings); aerr != nil {
+		protocol.WriteJSONError(w, r, aerr)
+		return
+	}
+	if aerr := applyAutoVerifiedAttributes(pool, req.AutoVerifiedAttributes); aerr != nil {
 		protocol.WriteJSONError(w, r, aerr)
 		return
 	}

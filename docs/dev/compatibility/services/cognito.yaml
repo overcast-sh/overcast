@@ -231,11 +231,26 @@ operations:
         tests:
           - tests/integration/cognito/cognito_attributes_test.go
         notes: Email changes in pools requiring verification return CodeDeliveryDetailsList, store a pending update, and leave the current value active until verification.
+      - name: auto-verified attribute change without verification-before-update
+        status: fixed
+        tests:
+          - tests/integration/cognito/cognito_auto_verified_attributes_test.go
+        notes: An email or phone_number change in the pool's AutoVerifiedAttributes applies the new value immediately, sets email_verified/phone_number_verified to false, sends a code and returns CodeDeliveryDetailsList with the destination masked; VerifyUserAttribute with that code marks it verified again (issue #84).
+      - name: no auto-verified attribute configured
+        status: fixed
+        tests:
+          - tests/integration/cognito/cognito_auto_verified_attributes_test.go
+        notes: A pool with no AutoVerifiedAttributes applies the change and returns an empty CodeDeliveryDetailsList.
+      - name: verification-before-update takes precedence
+        status: fixed
+        tests:
+          - tests/integration/cognito/cognito_auto_verified_attributes_test.go
+        notes: A pool that both auto-verifies and gates an attribute keeps the gated behaviour — the stored value is unchanged until the code is verified.
     evidence:
       - AWS UpdateUserAttributes docs state gated email/phone changes don't immediately update the stored value and return CodeDeliveryDetailsList for verification messages.
-    gaps:
-      - AutoVerifiedAttributes-specific CodeDeliveryDetails behavior when verification-before-update is disabled is not fully reviewed.
-    next_action: Review AutoVerifiedAttributes and GetUserAttributeVerificationCode behavior.
+      - "AWS UpdateUserAttributes docs state the value is otherwise updated and a code sent: \"If you have set an attribute to require verification before Amazon Cognito updates its value, this request doesn't immediately update the value ... Otherwise Amazon Cognito updates the value and sends a code.\""
+    gaps: []
+    next_action: Review GetUserAttributeVerificationCode behavior.
   VerifyUserAttribute:
     status: fixed
     aws_docs:
@@ -1102,6 +1117,11 @@ operations:
         tests:
           - tests/integration/cognito/cognito_user_auth_test.go
         notes: Empty factor lists, overlong factor lists, duplicate factors, and unknown factor values return InvalidParameterException.
+      - name: AutoVerifiedAttributes response shape and validation
+        status: fixed
+        tests:
+          - tests/integration/cognito/cognito_auto_verified_attributes_test.go
+        notes: CreateUserPool and UpdateUserPool store AutoVerifiedAttributes and DescribeUserPool returns it; a value outside the VerifiedAttributeType enum (email, phone_number) or a duplicate returns InvalidParameterException (issue #84).
       - name: UserAttributeUpdateSettings response shape
         status: fixed
         tests:
@@ -1123,8 +1143,8 @@ operations:
       - AWS CreateUserPoolRequest docs include AliasAttributes, DeviceConfiguration, AccountRecoverySetting, SmsConfiguration, SmsAuthenticationMessage, SmsVerificationMessage, EmailVerificationMessage, EmailVerificationSubject, and LambdaConfig.
       - AWS user pool feature plan docs state choice-based sign-in (SignInPolicy) requires the Essentials plan or higher.
     gaps:
-      - AutoVerifiedAttributes and Schema are threaded onto the CreateUserPool wire call by the CloudFormation UserPool handler but the Cognito service does not yet store either.
-    next_action: Review AutoVerifiedAttributes/Schema persistence.
+      - Schema is threaded onto the CreateUserPool wire call by the CloudFormation UserPool handler but the Cognito service does not store it (AutoVerifiedAttributes is stored since issue #84).
+    next_action: Review Schema persistence (AutoVerifiedAttributes is stored since issue #84).
   UpdateUserPool:
     status: fixed
     aws_docs:
@@ -1353,9 +1373,10 @@ findings:
     - "CreateUserPool/CreateUserPoolClient/UpdateUserPoolClient now reject a LITE-tier pool's SignInPolicy/ALLOW_USER_AUTH with FeatureUnavailableInTierException (typed_logic.go:2674-2721: validateExplicitAuthFlowsForTier, validateUserPoolTier, validateTierForSignInPolicy, validateTierForWebAuthn; wired in handler_pools.go:146-157 and handler_clients.go:54,291), matching AWS's requirement that choice-based sign-in and passkeys need the Essentials plan or higher, confirmed by TestCreateUserPool_liteTierSignInPolicy/TestCreateUserPoolClient_liteTierUserAuth/TestUpdateUserPoolClient_liteTierUserAuth. UpdateUserPool enforces the identical SignInPolicy gate but lacks a dedicated test (issue #116, tracked separately). Closes issues #115, #117, #118, #128 (review app-tier restrictions for ALLOW_USER_AUTH), and #129 (review app-tier restrictions for SignInPolicy and ALLOW_USER_AUTH)."
     - "Issue #133 (review all challenge flows, including MFA and NEW_PASSWORD_REQUIRED, against AWS docs) is subsumed by the more specific SRP/WebAuthn verification-boundary findings below (#124, #125, #127) and by the existing NEW_PASSWORD_REQUIRED/SOFTWARE_TOKEN_MFA/challenge-flow test coverage in cognito_user_auth_test.go; closed as-is with no separate action needed."
     - "ForgetDevice and AdminForgetDevice answer ResourceNotFoundException for a device key the user never registered (device_auth.go), instead of the silent HTTP 200 the loop fell through to, matching the operations' modeled error sets and GetDevice/UpdateDeviceStatus in the same file (TestForgetDevice_unknownDeviceKey, TestAdminForgetDevice_unknownDeviceKey). The device, SignUp and challenge review items are asserted rather than assumed: ConfirmDevice duplicate-key and opt-in confirmation (the first coverage of DeviceOnlyRememberedOnUserPrompt=true), UpdateDeviceStatus/AdminUpdateDeviceStatus enum and not-found validation, RespondToAuthChallenge SECRET_HASH over the literal ChallengeResponses.USERNAME, and SignUp's own UserSub and duplicate handling (issues #110, #114, #106, #109, #113, #107, #108, #86, #93, #97, #98, #90, #103; tests/integration/cognito/cognito_device_review_test.go)."
+    - "SMS_MFA and MFA_SETUP are issued by InitiateAuth/AdminInitiateAuth and completed by RespondToAuthChallenge/AdminRespondToAuthChallenge, with SELECT_MFA_TYPE when a user has both SMS and TOTP active; SetUserMFAPreference/AdminSetUserMFAPreference accept SMSMfaSettings and GetUser/AdminGetUser report UserMFASettingList and PreferredMfaSetting; AssociateSoftwareToken/VerifySoftwareToken accept an MFA_SETUP challenge Session (internal/services/cognito/mfa_challenges.go; tests/integration/cognito/cognito_sms_mfa_test.go). Email MFA is still not challenged. Closes issues #87 and #96."
+    - "AutoVerifiedAttributes is stored by CreateUserPool/UpdateUserPool and returned by DescribeUserPool; UpdateUserAttributes applies an auto-verified, ungated attribute change immediately, clears its *_verified flag, sends a code and returns a masked CodeDeliveryDetailsList; SignUp returns CodeDeliveryDetails (attribute_updates.go; tests/integration/cognito/cognito_auto_verified_attributes_test.go). Closes issue #84."
   remaining_gaps:
-    - "RespondToAuthChallenge's MFA challenge behavior (issue #87) and AdminRespondToAuthChallenge's MFA challenge behavior (issue #96) are not fully reviewed: SMS_MFA and MFA_SETUP challenges are not implemented."
-    - AutoVerifiedAttributes and Schema are threaded onto the CreateUserPool wire call by the CloudFormation UserPool handler (they always were) but the Cognito service itself does not yet store either, so both still round-trip as dropped (issue #84).
+    - Schema is threaded onto the CreateUserPool wire call by the CloudFormation UserPool handler but the Cognito service does not store it, so it still round-trips as dropped. AutoVerifiedAttributes is stored as of issue #84.
   intentionally_partial:
     - SRP proof validation is not cryptographically verified; verifier responses are shape-checked and complete authentication for SDK-compatible local testing (typed_logic.go:1249-1250 completeSRPVerifierChallengeTyped checks only that PASSWORD_CLAIM_SIGNATURE/PASSWORD_CLAIM_SECRET_BLOCK/TIMESTAMP are present; issue #124).
     - Device SRP proof validation is not cryptographically verified; DEVICE_PASSWORD_VERIFIER responses are shape-checked and complete authentication for SDK-compatible local testing (device_auth.go:99-100 completeDevicePasswordVerifierTyped checks only that the same claim fields are present; issue #125).

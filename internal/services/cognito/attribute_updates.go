@@ -27,6 +27,75 @@ func applyUserAttributeUpdateSettings(pool *UserPool, settings *userAttributeUpd
 	return nil
 }
 
+// applyAutoVerifiedAttributes validates and stores AutoVerifiedAttributes.
+// The pinned VerifiedAttributeType enum has exactly two members, email and
+// phone_number.
+func applyAutoVerifiedAttributes(pool *UserPool, attrs []string) *protocol.AWSError {
+	if attrs == nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	for _, attr := range attrs {
+		if attr != "email" && attr != "phone_number" {
+			return errAttributeInvalidParameter("Invalid AutoVerifiedAttributes value.")
+		}
+		if seen[attr] {
+			return errAttributeInvalidParameter("Duplicate AutoVerifiedAttributes value.")
+		}
+		seen[attr] = true
+	}
+	pool.AutoVerifiedAttributes = attrs
+	return nil
+}
+
+// autoVerified reports whether the pool verifies this attribute for itself by
+// sending the user a code.
+func autoVerified(pool *UserPool, attrName string) bool {
+	if pool == nil {
+		return false
+	}
+	for _, configured := range pool.AutoVerifiedAttributes {
+		if configured == attrName {
+			return true
+		}
+	}
+	return false
+}
+
+// signUpCodeDeliveryDetails describes where a sign-up confirmation code went,
+// for the SignUp response. It names the auto-verified attribute the message was
+// addressed to, preferring email when the pool auto-verifies both. A pool that
+// configures no AutoVerifiedAttributes reports whichever contact attribute the
+// new user carries, which is where the emulator sends the code; a pool that
+// configures one the user does not have reports nothing, as AWS does.
+func signUpCodeDeliveryDetails(pool *UserPool, u *User) *codeDeliveryDetails {
+	for _, attr := range []string{"email", "phone_number"} {
+		if autoVerified(pool, attr) {
+			if value := u.getAttr(attr); value != "" {
+				return attributeCodeDelivery(attr, value)
+			}
+		}
+	}
+	if len(pool.AutoVerifiedAttributes) > 0 {
+		return nil
+	}
+	for _, attr := range []string{"email", "phone_number"} {
+		if value := u.getAttr(attr); value != "" {
+			return attributeCodeDelivery(attr, value)
+		}
+	}
+	return nil
+}
+
+// attributeCodeDelivery builds the CodeDeliveryDetails for one attribute, with
+// the destination masked as AWS masks it.
+func attributeCodeDelivery(attrName, value string) *codeDeliveryDetails {
+	if attrName == "phone_number" {
+		return &codeDeliveryDetails{AttributeName: attrName, DeliveryMedium: "SMS", Destination: maskPhoneNumber(value)}
+	}
+	return &codeDeliveryDetails{AttributeName: attrName, DeliveryMedium: "EMAIL", Destination: maskEmailAddress(value)}
+}
+
 func errAttributeInvalidParameter(message string) *protocol.AWSError {
 	return &protocol.AWSError{Code: "InvalidParameterException", Message: message, HTTPStatus: 400}
 }
@@ -108,6 +177,18 @@ func (s *Service) updateAttributesWithVerification(ctx context.Context, pool *Us
 		if verifiedName != "" && hasVerificationBypass(attrs, attr.Name) {
 			removePendingAttributeUpdate(u, attr.Name)
 		}
+		// An auto-verified attribute the pool does not gate takes its new value
+		// straight away, loses its verified flag, and gets a code — AWS's
+		// "Otherwise Amazon Cognito updates the value and sends a code".
+		if verifiedName != "" && !requiresVerificationBeforeUpdate(pool, attr.Name) &&
+			autoVerified(pool, attr.Name) && !hasVerificationBypass(attrs, attr.Name) {
+			code := generateCode()
+			u.setAttr(attr.Name, attr.Value)
+			u.setAttr(verifiedName, "false")
+			setPendingAttributeUpdate(u, attr.Name, attr.Value, code, s.clk.Now().Add(attributeVerificationCodeTTL))
+			details = append(details, s.sendAttributeVerification(pool, u.Username, attr.Name, attr.Value, code))
+			continue
+		}
 
 		if attr.Value == "true" && (attr.Name == "email_verified" || attr.Name == "phone_number_verified") {
 			pendingName := "email"
@@ -129,10 +210,10 @@ func (s *Service) sendAttributeVerification(pool *UserPool, username, attrName, 
 	// not wired yet — see triggers.go's deferred-scope note.
 	if attrName == "phone_number" {
 		s.sendVerificationSMS(pool, value, username, code, nil)
-		return codeDeliveryDetails{AttributeName: attrName, DeliveryMedium: "SMS", Destination: value}
+	} else {
+		s.sendVerificationEmail(pool, value, username, code, nil)
 	}
-	s.sendVerificationEmail(pool, value, username, code, nil)
-	return codeDeliveryDetails{AttributeName: attrName, DeliveryMedium: "EMAIL", Destination: value}
+	return *attributeCodeDelivery(attrName, value)
 }
 
 func (s *Service) verifyPendingAttribute(ctx context.Context, pool *UserPool, u *User, attrName, code string) *protocol.AWSError {

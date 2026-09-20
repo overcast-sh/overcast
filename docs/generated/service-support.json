@@ -2572,7 +2572,7 @@
           "operation": "CreateUserPool",
           "category": "User Pool operations",
           "status": "✅ Supported",
-          "notes": "Returns Id and Arn; Id format {region}_{8-char-hex}; accepts SignInPolicy, email templates, UserAttributeUpdateSettings, DeviceConfiguration, AliasAttributes, AccountRecoverySetting, SmsConfiguration, SmsAuthenticationMessage, SmsVerificationMessage, EmailVerificationMessage, EmailVerificationSubject, and LambdaConfig; LambdaConfig's PreSignUp, PostConfirmation, PreTokenGeneration, PostAuthentication, and CustomMessage are invoked on the classic X-Amz-Target API (issue #1171); PreAuthentication, UserMigration, the CUSTOM_AUTH challenge triggers (#88/#94/#101), and the Smithy RPC v2 duplicate dispatch path are not; a LITE-tier UserPoolTier rejects a SignInPolicy with FeatureUnavailableInTierException, matching AWS's Essentials-tier gate on choice-based sign-in"
+          "notes": "Returns Id and Arn; Id format {region}_{8-char-hex}; accepts SignInPolicy, email templates, UserAttributeUpdateSettings, AutoVerifiedAttributes (email/phone_number, rejecting any other value with InvalidParameterException), DeviceConfiguration, AliasAttributes, AccountRecoverySetting, SmsConfiguration, SmsAuthenticationMessage, SmsVerificationMessage, EmailVerificationMessage, EmailVerificationSubject, and LambdaConfig; LambdaConfig's PreSignUp, PostConfirmation, PreTokenGeneration, PostAuthentication, and CustomMessage are invoked on the classic X-Amz-Target API (issue #1171); PreAuthentication, UserMigration, the CUSTOM_AUTH challenge triggers (#88/#94/#101), and the Smithy RPC v2 duplicate dispatch path are not; a LITE-tier UserPoolTier rejects a SignInPolicy with FeatureUnavailableInTierException, matching AWS's Essentials-tier gate on choice-based sign-in"
         },
         {
           "operation": "DescribeUserPool",
@@ -2590,7 +2590,7 @@
           "operation": "UpdateUserPool",
           "category": "User Pool operations",
           "status": "✅ Supported",
-          "notes": "Updates SignInPolicy, VerificationMessageTemplate, AdminCreateUserConfig, EmailConfiguration, UserAttributeUpdateSettings, DeviceConfiguration, AccountRecoverySetting, SmsConfiguration, SmsAuthenticationMessage, SmsVerificationMessage, EmailVerificationMessage, EmailVerificationSubject, and LambdaConfig; the CloudFormation UserPool handler treats an AliasAttributes/UsernameAttributes change as requiring replacement, matching real Cognito's UpdateUserPoolRequest (neither is a member there); rejects an invalid UserPoolTier value, and rejects a LITE-tier pool's SignInPolicy update with FeatureUnavailableInTierException"
+          "notes": "Updates SignInPolicy, VerificationMessageTemplate, AdminCreateUserConfig, EmailConfiguration, UserAttributeUpdateSettings, AutoVerifiedAttributes, DeviceConfiguration, AccountRecoverySetting, SmsConfiguration, SmsAuthenticationMessage, SmsVerificationMessage, EmailVerificationMessage, EmailVerificationSubject, and LambdaConfig; the CloudFormation UserPool handler treats an AliasAttributes/UsernameAttributes change as requiring replacement, matching real Cognito's UpdateUserPoolRequest (neither is a member there); rejects an invalid UserPoolTier value, and rejects a LITE-tier pool's SignInPolicy update with FeatureUnavailableInTierException"
         },
         {
           "operation": "ListUserPools",
@@ -2824,7 +2824,7 @@
           "operation": "UpdateUserAttributes",
           "category": "Auth / Token operations",
           "status": "✅ Supported",
-          "notes": "Self-service; validates AccessToken; merges attributes or creates pending email/phone updates with CodeDeliveryDetailsList"
+          "notes": "Self-service; validates AccessToken; merges attributes, creates pending email/phone updates where AttributesRequireVerificationBeforeUpdate gates them, or — for an attribute in the pool's AutoVerifiedAttributes that is not gated — applies the new value, clears email_verified/phone_number_verified and sends a code; either way the response carries CodeDeliveryDetailsList with the destination masked"
         },
         {
           "operation": "VerifyUserAttribute",
