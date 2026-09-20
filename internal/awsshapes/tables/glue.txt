@@ -1604,6 +1604,7 @@ DataQualityRuleRecommendationRunAdditionalRunOptions structure
 DataQualityRuleRecommendationRunDescription structure
 .CreatedRulesetName NameString
 .DataSource DataSource
+.RecommendationMode RecommendationMode
 .RunId HashString
 .StartedOn Timestamp
 .Status TaskStatusType
@@ -2597,6 +2598,7 @@ GetDataQualityRuleRecommendationRunResponse structure
 .ExecutionTime ExecutionTime
 .LastModifiedOn Timestamp
 .NumberOfWorkers NullableInteger
+.RecommendationMode RecommendationMode
 .RecommendedRuleset DataQualityRulesetString
 .Role RoleString
 .RunId HashString
@@ -3466,6 +3468,17 @@ IntegrationResourcePropertyList list m=IntegrationResourceProperty
 IntegrationSourcePropertiesMap map k=IntegrationString v=IntegrationString
 IntegrationStatus enum
 IntegrationString string
+IntegrationTableProperties structure
+.ResourceArn String512
+.SourceTableConfig SourceTableConfig
+.TableName String128
+.TargetTableConfig TargetTableConfig
+IntegrationTablePropertiesFilter structure
+.Name String128
+.Values IntegrationTablePropertiesFilterValues
+IntegrationTablePropertiesFilterList list m=IntegrationTablePropertiesFilter
+IntegrationTablePropertiesFilterValues list m=String128
+IntegrationTablePropertiesList list m=IntegrationTableProperties
 IntegrationTagsList list m=Tag
 IntegrationTimestamp timestamp
 IntegrationType enum
@@ -3918,11 +3931,19 @@ ListGlossaryTermsResponse structure
 ListIntegrationResourceProperties operation in=ListIntegrationResourcePropertiesRequest out=ListIntegrationResourcePropertiesResponse err=AccessDeniedException,EntityNotFoundException,InternalServerException,InternalServiceException,InvalidInputException,ResourceNotFoundException,ValidationException
 ListIntegrationResourcePropertiesRequest structure
 .Filters IntegrationResourcePropertyFilterList
-.Marker String1024
+.Marker String4096
 .MaxRecords IntegrationInteger
 ListIntegrationResourcePropertiesResponse structure
 .IntegrationResourcePropertyList IntegrationResourcePropertyList
-.Marker String1024
+.Marker String4096
+ListIntegrationTableProperties operation in=ListIntegrationTablePropertiesRequest out=ListIntegrationTablePropertiesResponse err=AccessDeniedException,EntityNotFoundException,InternalServerException,InternalServiceException,InvalidInputException,ResourceNotFoundException,ValidationException
+ListIntegrationTablePropertiesRequest structure
+.Filters IntegrationTablePropertiesFilterList
+.Marker String4096
+.MaxRecords IntegrationInteger
+ListIntegrationTablePropertiesResponse structure
+.IntegrationTablePropertiesList IntegrationTablePropertiesList
+.Marker String4096
 ListIterableForms operation in=ListIterableFormsRequest out=ListIterableFormsResponse err=AccessDeniedException,EntityNotFoundException,InternalServiceException,InvalidInputException,ThrottlingException method=GET uri=/assets/{AssetIdentifier}/iterable-forms/{IterableFormName} code=200
 ListIterableFormsRequest structure
 .AssetIdentifier AssetId label
@@ -4595,6 +4616,7 @@ RecipeStep structure
 .ConditionExpressions ConditionExpressionList
 RecipeSteps list m=RecipeStep
 RecipeVersion string
+RecommendationMode enum
 Record document
 Records list m=Record
 RecordsCount long
@@ -5299,6 +5321,7 @@ StartDataQualityRuleRecommendationRunRequest structure
 .DataQualitySecurityConfiguration NameString
 .DataSource DataSource
 .NumberOfWorkers NullableInteger
+.RecommendationMode RecommendationMode
 .Role RoleString
 .Timeout Timeout
 StartDataQualityRuleRecommendationRunResponse structure
@@ -5489,9 +5512,9 @@ StorageDescriptor structure
 StreamingDataPreviewOptions structure
 .PollingTime PollingTime
 .RecordPollingLimit PositiveLong
-String1024 string
 String128 string
 String2048 string
+String4096 string
 String512 string
 StringColumnStatisticsData structure
 .AverageLength NonNegativeDouble
@@ -5631,6 +5654,7 @@ TargetRedshiftCatalog structure
 TargetResourceNotFound structure error=client code=404
 .Message IntegrationErrorMessage
 TargetTableConfig structure
+.IntegrationArn String128
 .PartitionSpec IntegrationPartitionSpecList
 .TargetTableName String128
 .UnnestSpec UnnestSpec

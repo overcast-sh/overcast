@@ -298,6 +298,9 @@ CopyObjectRequest structure
 .Key ObjectKey label
 .Metadata Metadata prefix=x-amz-meta-
 .MetadataDirective MetadataDirective header=x-amz-metadata-directive
+.ObjectLockEventHold ObjectLockEventHold header=x-amz-object-lock-event-hold
+.ObjectLockEventHoldDurationDays ObjectLockEventHoldDurationDays header=x-amz-object-lock-event-hold-duration-days
+.ObjectLockEventHoldDurationYears ObjectLockEventHoldDurationYears header=x-amz-object-lock-event-hold-duration-years
 .ObjectLockLegalHoldStatus ObjectLockLegalHoldStatus header=x-amz-object-lock-legal-hold
 .ObjectLockMode ObjectLockMode header=x-amz-object-lock-mode
 .ObjectLockRetainUntilDate ObjectLockRetainUntilDate header=x-amz-object-lock-retain-until-date
@@ -419,6 +422,9 @@ CreateMultipartUploadRequest structure
 .GrantWriteACP GrantWriteACP header=x-amz-grant-write-acp
 .Key ObjectKey label
 .Metadata Metadata prefix=x-amz-meta-
+.ObjectLockEventHold ObjectLockEventHold header=x-amz-object-lock-event-hold
+.ObjectLockEventHoldDurationDays ObjectLockEventHoldDurationDays header=x-amz-object-lock-event-hold-duration-days
+.ObjectLockEventHoldDurationYears ObjectLockEventHoldDurationYears header=x-amz-object-lock-event-hold-duration-years
 .ObjectLockLegalHoldStatus ObjectLockLegalHoldStatus header=x-amz-object-lock-legal-hold
 .ObjectLockMode ObjectLockMode header=x-amz-object-lock-mode
 .ObjectLockRetainUntilDate ObjectLockRetainUntilDate header=x-amz-object-lock-retain-until-date
@@ -453,6 +459,7 @@ Days integer
 DaysAfterInitiation integer
 DefaultRetention structure
 .Days Days
+.DefaultEventHold EventHoldDuration
 .Mode ObjectLockRetentionMode
 .Years Years
 Delete structure
@@ -639,6 +646,9 @@ ErrorMessage string
 Errors list m=Error
 Event enum
 EventBridgeConfiguration structure
+EventHoldDuration structure
+.Days Days
+.Years Years
 EventList list m=Event
 ExistingObjectReplication structure
 .Status ExistingObjectReplicationStatus
@@ -930,6 +940,9 @@ GetObjectOutput structure
 .LastModified LastModified header=Last-Modified
 .Metadata Metadata prefix=x-amz-meta-
 .MissingMeta MissingMeta header=x-amz-missing-meta
+.ObjectLockEventHold ObjectLockEventHold header=x-amz-object-lock-event-hold
+.ObjectLockEventHoldDurationDays ObjectLockEventHoldDurationDays header=x-amz-object-lock-event-hold-duration-days
+.ObjectLockEventHoldDurationYears ObjectLockEventHoldDurationYears header=x-amz-object-lock-event-hold-duration-years
 .ObjectLockLegalHoldStatus ObjectLockLegalHoldStatus header=x-amz-object-lock-legal-hold
 .ObjectLockMode ObjectLockMode header=x-amz-object-lock-mode
 .ObjectLockRetainUntilDate ObjectLockRetainUntilDate header=x-amz-object-lock-retain-until-date
@@ -1059,6 +1072,9 @@ HeadObjectOutput structure
 .LastModified LastModified header=Last-Modified
 .Metadata Metadata prefix=x-amz-meta-
 .MissingMeta MissingMeta header=x-amz-missing-meta
+.ObjectLockEventHold ObjectLockEventHold header=x-amz-object-lock-event-hold
+.ObjectLockEventHoldDurationDays ObjectLockEventHoldDurationDays header=x-amz-object-lock-event-hold-duration-days
+.ObjectLockEventHoldDurationYears ObjectLockEventHoldDurationYears header=x-amz-object-lock-event-hold-duration-years
 .ObjectLockLegalHoldStatus ObjectLockLegalHoldStatus header=x-amz-object-lock-legal-hold
 .ObjectLockMode ObjectLockMode header=x-amz-object-lock-mode
 .ObjectLockRetainUntilDate ObjectLockRetainUntilDate header=x-amz-object-lock-retain-until-date
@@ -1596,12 +1612,17 @@ ObjectLockConfiguration structure
 .Rule ObjectLockRule
 ObjectLockEnabled enum
 ObjectLockEnabledForBucket boolean
+ObjectLockEventHold enum
+ObjectLockEventHoldDurationDays integer
+ObjectLockEventHoldDurationYears integer
 ObjectLockLegalHold structure
 .Status ObjectLockLegalHoldStatus
 ObjectLockLegalHoldStatus enum
 ObjectLockMode enum
 ObjectLockRetainUntilDate timestamp ts=date-time
 ObjectLockRetention structure
+.EventHold ObjectLockEventHold
+.EventHoldDuration EventHoldDuration
 .Mode ObjectLockRetentionMode
 .RetainUntilDate Date
 ObjectLockRetentionMode enum
@@ -1977,6 +1998,9 @@ PutObjectRequest structure
 .IfNoneMatch IfNoneMatch header=If-None-Match
 .Key ObjectKey label
 .Metadata Metadata prefix=x-amz-meta-
+.ObjectLockEventHold ObjectLockEventHold header=x-amz-object-lock-event-hold
+.ObjectLockEventHoldDurationDays ObjectLockEventHoldDurationDays header=x-amz-object-lock-event-hold-duration-days
+.ObjectLockEventHoldDurationYears ObjectLockEventHoldDurationYears header=x-amz-object-lock-event-hold-duration-years
 .ObjectLockLegalHoldStatus ObjectLockLegalHoldStatus header=x-amz-object-lock-legal-hold
 .ObjectLockMode ObjectLockMode header=x-amz-object-lock-mode
 .ObjectLockRetainUntilDate ObjectLockRetainUntilDate header=x-amz-object-lock-retain-until-date

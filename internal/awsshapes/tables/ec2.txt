@@ -872,6 +872,7 @@ BlockPublicAccessMode enum
 BlockPublicAccessStates structure
 .InternetGatewayBlockMode BlockPublicAccessMode ec2=InternetGatewayBlockMode xml=internetGatewayBlockMode
 Boolean boolean
+BootModeOverrideValues enum
 BootModeType enum
 BootModeTypeList list m=BootModeType mxml=item
 BootModeValues enum
@@ -1605,7 +1606,9 @@ CopyVolumes operation in=CopyVolumesRequest out=CopyVolumesResult
 CopyVolumesRequest structure
 .ClientToken String
 .DryRun Boolean
+.Encrypted Boolean
 .Iops Integer
+.KmsKeyId KmsKeyId
 .MultiAttachEnabled Boolean
 .Size Integer
 .SourceVolumeId VolumeId
@@ -1916,6 +1919,7 @@ CreateFpgaImageResult structure
 CreateImage operation in=CreateImageRequest out=CreateImageResult
 CreateImageRequest structure
 .BlockDeviceMappings BlockDeviceMappingRequestList ec2=BlockDeviceMapping xml=blockDeviceMapping
+.BootModeOverride BootModeOverrideValues
 .Description ImageDescriptionRequest ec2=Description xml=description
 .DryRun Boolean ec2=DryRun xml=dryRun
 .InstanceId InstanceId ec2=InstanceId xml=instanceId
@@ -11128,6 +11132,7 @@ NetworkCardInfo structure
 .AdditionalFlexibleNetworkInterfaces AdditionalFlexibleNetworkInterfaces ec2=AdditionalFlexibleNetworkInterfaces xml=additionalFlexibleNetworkInterfaces
 .BaselineBandwidthInGbps BaselineBandwidthInGbps ec2=BaselineBandwidthInGbps xml=baselineBandwidthInGbps
 .DefaultEnaQueueCountPerInterface DefaultEnaQueueCountPerInterface ec2=DefaultEnaQueueCountPerInterface xml=defaultEnaQueueCountPerInterface
+.InterfaceTypes NetworkCardInterfaceTypeList ec2=InterfaceTypeSet xml=interfaceTypeSet
 .MaximumEnaQueueCount MaximumEnaQueueCount ec2=MaximumEnaQueueCount xml=maximumEnaQueueCount
 .MaximumEnaQueueCountPerInterface MaximumEnaQueueCountPerInterface ec2=MaximumEnaQueueCountPerInterface xml=maximumEnaQueueCountPerInterface
 .MaximumNetworkInterfaces MaxNetworkInterfaces ec2=MaximumNetworkInterfaces xml=maximumNetworkInterfaces
@@ -11135,6 +11140,8 @@ NetworkCardInfo structure
 .NetworkPerformance NetworkPerformance ec2=NetworkPerformance xml=networkPerformance
 .PeakBandwidthInGbps PeakBandwidthInGbps ec2=PeakBandwidthInGbps xml=peakBandwidthInGbps
 NetworkCardInfoList list m=NetworkCardInfo mxml=item
+NetworkCardInterfaceType enum
+NetworkCardInterfaceTypeList list m=NetworkCardInterfaceType mxml=item
 NetworkInfo structure
 .BandwidthWeightings BandwidthWeightingTypeList ec2=BandwidthWeightings xml=bandwidthWeightings
 .ConnectionTrackingConfiguration DefaultConnectionTrackingConfiguration ec2=ConnectionTrackingConfiguration xml=connectionTrackingConfiguration
@@ -14564,6 +14571,7 @@ Volume structure
 .MultiAttachEnabled Boolean ec2=MultiAttachEnabled xml=multiAttachEnabled
 .Operator OperatorResponse ec2=Operator xml=operator
 .OutpostArn String ec2=OutpostArn xml=outpostArn
+.OwnerId String ec2=OwnerId xml=ownerId
 .Size Integer ec2=Size xml=size
 .SnapshotId String ec2=SnapshotId xml=snapshotId
 .SourceVolumeId String ec2=SourceVolumeId xml=sourceVolumeId
@@ -14571,6 +14579,7 @@ Volume structure
 .State VolumeState ec2=Status xml=status
 .Tags TagList ec2=TagSet xml=tagSet
 .Throughput Integer ec2=Throughput xml=throughput
+.VolumeArn String ec2=VolumeArn xml=volumeArn
 .VolumeId String ec2=VolumeId xml=volumeId
 .VolumeInitializationRate Integer ec2=VolumeInitializationRate xml=volumeInitializationRate
 .VolumeType VolumeType ec2=VolumeType xml=volumeType

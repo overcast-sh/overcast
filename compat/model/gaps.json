@@ -10,6 +10,13 @@
     },
     {
       "service": "batch",
+      "operation": "CancelJobs",
+      "group": "batch-gen-probe",
+      "reason": "never-probe",
+      "detail": "CancelJobs is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "batch",
       "operation": "CreateQuotaShare",
       "group": "batch-gen-probe",
       "reason": "never-probe",
@@ -59,10 +66,24 @@
     },
     {
       "service": "batch",
+      "operation": "TerminateJobs",
+      "group": "batch-gen-probe",
+      "reason": "never-probe",
+      "detail": "TerminateJobs is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "batch",
       "operation": "TerminateServiceJob",
       "group": "batch-gen-probe",
       "reason": "never-probe",
       "detail": "Terminates a running SageMaker training service job, discarding whatever the training run had done so far."
+    },
+    {
+      "service": "batch",
+      "operation": "TerminateServiceJobs",
+      "group": "batch-gen-probe",
+      "reason": "never-probe",
+      "detail": "TerminateServiceJobs is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
     },
     {
       "service": "batch",

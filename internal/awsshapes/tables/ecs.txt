@@ -328,6 +328,7 @@ CreateExpressGatewayService operation in=CreateExpressGatewayServiceRequest out=
 CreateExpressGatewayServiceRequest structure
 .cluster String
 .cpu String
+.cpuArchitecture ExpressCpuArchitecture
 .executionRoleArn String
 .healthCheckPath String
 .infrastructureRoleArn String
@@ -929,6 +930,7 @@ ExecuteCommandResponse structure
 .interactive Boolean
 .session Session
 .taskArn String
+ExpressCpuArchitecture enum
 ExpressGatewayContainer structure
 .awsLogsConfiguration ExpressGatewayServiceAwsLogsConfiguration
 .command StringList
@@ -949,6 +951,7 @@ ExpressGatewayServiceAwsLogsConfiguration structure
 .logStreamPrefix String
 ExpressGatewayServiceConfiguration structure
 .cpu String
+.cpuArchitecture ExpressCpuArchitecture
 .createdAt Timestamp
 .executionRoleArn String
 .healthCheckPath String
@@ -2161,6 +2164,7 @@ UpdateDaemonResponse structure
 UpdateExpressGatewayService operation in=UpdateExpressGatewayServiceRequest out=UpdateExpressGatewayServiceResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException,ServiceNotActiveException,ServiceNotFoundException,UnsupportedFeatureException
 UpdateExpressGatewayServiceRequest structure
 .cpu String
+.cpuArchitecture ExpressCpuArchitecture
 .executionRoleArn String
 .healthCheckPath String
 .memory String

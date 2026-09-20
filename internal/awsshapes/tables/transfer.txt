@@ -814,9 +814,13 @@ Protocol enum
 ProtocolDetails structure
 .As2Transports As2Transports
 .PassiveIp PassiveIp
+.ProxyConfig ProxyConfig
 .SetStatOption SetStatOption
 .TlsSessionResumptionMode TlsSessionResumptionMode
 Protocols list m=Protocol
+ProxyConfig structure
+.SftpMode ProxyMode
+ProxyMode enum
 Resource string
 ResourceExistsException structure error=client code=409
 .Message Message
