@@ -7,7 +7,8 @@ on:
   # Keeps an *open* refresh PR current when main moves under it. The PR is one
   # generated commit, and a change to what it is generated from or written
   # over (#1955 added a line to models/aws/VERSION) makes it conflict or go
-  # stale until the next weekly run, which can be six days. Only those paths:
+  # stale until the next weekly run, which can be six days. That includes the
+  # compat model it now regenerates (see the step below). Only those paths:
   # unrelated merges leave it mergeable, since the ruleset does not require the
   # branch to be up to date. A push only refreshes a PR that is already open
   # and never opens one, so the weekly cadence stays what starts a refresh.
@@ -18,6 +19,8 @@ on:
       - internal/awsapi/**
       - internal/awsshapes/**
       - cmd/awsmodelgen/**
+      - cmd/compatgen/**
+      - compat/model/**
       - scripts/aws-models.go
       - .github/workflows/aws-model-refresh.yml
 
@@ -263,6 +266,23 @@ jobs:
           fi
           cat "$RUNNER_TEMP/aws-model-summary.md" >> "$GITHUB_STEP_SUMMARY"
 
+      # The compat model is derived from the manifest and shape snapshot the
+      # step above just rewrote: a refresh that adds an operation adds a row to
+      # compat/model/gaps.json (the Batch Cancel/Terminate operations in the
+      # 56df161 refresh, recorded as never-probe refusals), and `compatgen
+      # -check` in CI fails on any drift between the two. Nothing else
+      # regenerated it, so a refresh that added an operation in a service the
+      # compat model covers opened a PR that could not go green until someone
+      # ran `make generate-compat-model` by hand and pushed over the bot's
+      # branch. It is the same generator, run on the same tree, and its output
+      # lands in the same commit for the same reason the shape snapshot does.
+      - name: Regenerate the compat model
+        if: steps.upstream.outputs.changed == 'true' && steps.branch.outputs.refresh_needed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          go run -tags dev ./cmd/compatgen
+
       - name: Validate generated ownership and full regeneration
         if: steps.upstream.outputs.changed == 'true' && steps.branch.outputs.refresh_needed == 'true'
         id: validate
@@ -305,7 +325,12 @@ jobs:
           # commit carrying one without the other would misdescribe itself.
           # .changelog/ is added as a directory because the fragment is written
           # only for a refresh that warrants one.
-          git add internal/awsapi/manifest.gen.go models/aws/VERSION models/aws/shapes internal/awsshapes .changelog
+          #
+          # compat/ is added whole because compatgen writes scenarios, the gap
+          # report, the registry and the emitted suites across it; nothing else
+          # in this run writes there, so it stages exactly the generator's
+          # output and, on a refresh that moves no operation, nothing.
+          git add internal/awsapi/manifest.gen.go models/aws/VERSION models/aws/shapes internal/awsshapes compat .changelog
           git commit -m "chore(aws-models): refresh pinned API models"
           if [[ -n "$EXPECTED_REVISION" ]]; then
             git push \

@@ -262,7 +262,7 @@ Output is deterministic for a given source revision.
 `.github/workflows/aws-model-refresh.yml` checks upstream weekly and on manual
 dispatch. It also re-runs when a push to `main` touches what the refresh is
 generated from (`models/aws/`, `internal/awsapi/`, `internal/awsshapes/`,
-`cmd/awsmodelgen/`, `scripts/aws-models.go`), but only to bring an already open
+`cmd/awsmodelgen/`, `cmd/compatgen/`, `compat/model/`, `scripts/aws-models.go`), but only to bring an already open
 refresh PR up to date: a push never opens one. When AWS publishes a new
 revision, it:
 
@@ -271,7 +271,8 @@ revision, it:
    *pinned* revision, so already-stale generated output cannot be carried
    forward silently;
 3. generates old and new inventories, the manifest, and the shape snapshot —
-   all in the same commit as the revision bump, so the two cannot drift;
+   all in the same commit as the revision bump, so the two cannot drift — and
+   regenerates the compat model (`cmd/compatgen`), which is derived from them;
 4. runs `make aws-models-check` with full regeneration enabled, which at that
    point asserts determinism rather than staleness;
 5. force-with-lease updates only `automation/aws-api-models`; and

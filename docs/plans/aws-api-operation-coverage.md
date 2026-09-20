@@ -385,11 +385,18 @@ group serializes runs. It never updates contributor branches and never merges.
 
 Besides the weekly schedule and manual dispatch it runs on a push to `main` that
 touches the refresh's inputs (`models/aws/`, `internal/awsapi/`,
-`internal/awsshapes/`, `cmd/awsmodelgen/`, `scripts/aws-models.go`). Such a push
+`internal/awsshapes/`, `cmd/awsmodelgen/`, `cmd/compatgen/`, `compat/model/`,
+`scripts/aws-models.go`). Such a push
 only refreshes a PR that is already open, regenerating it on the new `main` and
 at the latest upstream revision; with no PR open it stops, so opening a refresh
 stays the weekly run's job. The changelog waiver is posted once per PR rather
 than on every run.
+
+The compat model (`compat/model/`, and the suites `cmd/compatgen` emits) is
+derived from the manifest and shape snapshot, and its CI gate fails on any
+drift, so the workflow runs `cmd/compatgen` after the models and commits its
+output with them. A refresh that adds an operation adds a row to
+`compat/model/gaps.json`; without regenerating it the PR could not pass CI.
 
 The upstream repository is cached as a Git mirror keyed by the observed commit.
 Every run still fetches from the configured official source, verifies that both
