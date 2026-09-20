@@ -41,12 +41,22 @@ findings:
           cmd/capgen/main_test.go::TestCoverage_excludesEmulatorOnlyRowsFromTheAWSCount,
           cmd/capgen/main_test.go::TestBuildDocSection_emulatorOnlyRowIsSeparatedAndUnlinked,
           internal/capabilities/registry_test.go::TestAllCapabilitiesEmulatorOnlySurvivesGeneration
-      fixed_in: this PR
+      fixed_in: "#2007"
+    - >-
+      #76 (XML half): reviewed. tests/integration/cloudfront/cloudfront_test.go pins GetDistribution's
+      root element, the documented top-level members and their order relative to DistributionConfig,
+      and the not-found error's Code/Message/RequestId. The three divergences the review found are
+      tracked as #2010.
+      tests:
+        - tests/integration/cloudfront/cloudfront_test.go::TestGetDistribution_xmlShape
+        - tests/integration/cloudfront/cloudfront_test.go::TestGetDistribution_notFound_errorShape
   remaining_gaps:
     - >-
-      Review XML response-shape fidelity against the CloudFront API Reference (#76). Compatibility tests
-      for this are in flight on branch claude/compat-tests-ses-stubs-athena-shapes-cloudfront-xml; check
-      that branch before starting a second pass.
+      #2010: responses carry no xmlns="http://cloudfront.amazonaws.com/doc/2020-05-31/" although the
+      pinned model's service shape declares that namespace; errors use S3's bare <Error> body through
+      protocol.WriteXMLError instead of the restXml <ErrorResponse> envelope (Route 53's
+      WriteQueryXMLError shape); and Distribution emits DomainName before LastModifiedTime where the
+      model orders them the other way. Found by the #76 shape tests.
   intentionally_partial:
     - >-
       ETags are a quoted version counter ("1", "2", …) rather than a content hash or an opaque token

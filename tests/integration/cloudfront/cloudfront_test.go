@@ -434,6 +434,168 @@ func TestGetDistribution_notFound(t *testing.T) {
 	helpers.AssertStatus(t, resp, http.StatusNotFound)
 }
 
+// ─── XML response fidelity (issue #76 / tracker #14, XML half only) ──────────
+//
+// AWS ground truth, established against the pinned CloudFront Smithy model
+// (models/cloudfront/service/2020-05-31/cloudfront-2020-05-31.json) and the
+// API reference before writing these tests:
+//
+//   - The service shape carries "aws.protocols#restXml": {} with no
+//     noErrorWrapping — the plain (non-S3) rest-xml protocol, which wraps
+//     errors as <ErrorResponse><Error><Type>…<Code>…<Message>…</Error><RequestId>…</RequestId></ErrorResponse>.
+//     Route53 — the other non-S3 REST-XML service in this codebase — already
+//     models this: internal/services/route53's handlers use
+//     protocol.WriteQueryXMLError (the wrapped envelope), per the error
+//     format table in CONTRIBUTING.md. CloudFront's handlers
+//     (internal/services/cloudfront/handler.go) use protocol.WriteXMLError
+//     instead — S3's bare, unwrapped <Error> format — for every error,
+//     confirmed against a live GetDistribution 404 response, which comes
+//     back as `<Error><Code>NoSuchDistribution</Code><Message>…</Message><RequestId>…</RequestId></Error>`
+//     with no <ErrorResponse> wrapper and no <Type> element.
+//   - The service shape also carries "smithy.api#xmlNamespace":
+//     {"uri": "http://cloudfront.amazonaws.com/doc/2020-05-31/"}. Route53
+//     models the equivalent for itself: every Route53 response struct in
+//     this codebase carries an `Xmlns string `xml:"xmlns,attr"`` field set
+//     to its own doc namespace constant. CloudFront's response structs
+//     (internal/services/cloudfront/types.go's Distribution,
+//     DistributionConfig, …) carry no such field, confirmed against the same
+//     live response: neither the success `<Distribution>` root nor the error
+//     root carries an `xmlns` attribute anywhere.
+//
+// Both are confirmed divergences from the AWS model and from this
+// codebase's own Route53 precedent, reported separately (not fixed here, and
+// not pinned as correct below) — production code is out of scope for this
+// test-only pass. The assertions below stick to what is true today: the
+// error Code/Message/RequestId values themselves are correct, and the
+// success response's root element name and its documented top-level
+// elements are present, just not namespaced or (for one pair) not in the
+// AWS-modeled relative order — see the order comment inline below.
+
+// topLevelElementNames walks xmlBody and returns the local names of the
+// direct children of the document's root element, in document order. Used to
+// check element presence/order without depending on Go's encoding/xml
+// (which is name-addressed and does not expose sibling order).
+func topLevelElementNames(t *testing.T, xmlBody []byte) []string {
+	t.Helper()
+	dec := xml.NewDecoder(bytes.NewReader(xmlBody))
+	var names []string
+	depth := 0
+	for {
+		tok, err := dec.Token()
+		if err != nil {
+			break
+		}
+		switch se := tok.(type) {
+		case xml.StartElement:
+			depth++
+			if depth == 2 {
+				names = append(names, se.Name.Local)
+			}
+		case xml.EndElement:
+			depth--
+		}
+	}
+	return names
+}
+
+// indexOf returns the index of name in names, or -1.
+func indexOf(names []string, name string) int {
+	for i, n := range names {
+		if n == name {
+			return i
+		}
+	}
+	return -1
+}
+
+func TestGetDistribution_xmlShape(t *testing.T) {
+	// Given: an existing distribution
+	srv := helpers.NewTestServer(t)
+	created, _ := cfCreateAndParse(t, srv, "xml-shape-test-1")
+
+	// When: GetDistribution is called
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/2020-05-31/distribution/"+created.ID, nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GetDistribution: %v", err)
+	}
+	defer resp.Body.Close()
+	b := readBody(t, resp)
+
+	// Then: the root element is named Distribution (per
+	// API_GetDistribution.html's Response Syntax: "Root level tag for the
+	// Distribution parameters")
+	var root struct {
+		XMLName xml.Name
+	}
+	if err := xml.Unmarshal(b, &root); err != nil {
+		t.Fatalf("unmarshal root: %v\nbody: %s", err, b)
+	}
+	if root.XMLName.Local != "Distribution" {
+		t.Errorf("root element = %q, want %q", root.XMLName.Local, "Distribution")
+	}
+
+	// And: the documented top-level elements are present
+	names := topLevelElementNames(t, b)
+	for _, want := range []string{"Id", "ARN", "Status", "DomainName", "LastModifiedTime", "DistributionConfig"} {
+		if indexOf(names, want) < 0 {
+			t.Errorf("expected top-level element %q, got elements: %v", want, names)
+		}
+	}
+
+	// And: elements the AWS model orders before DistributionConfig do appear
+	// before it here too. LastModifiedTime and DomainName are deliberately
+	// not checked against each other: the pinned model declares
+	// Id, ARN, Status, LastModifiedTime, InProgressInvalidationBatches,
+	// DomainName, …, DistributionConfig (in that relative order), but
+	// Overcast's Distribution struct (types.go) places DomainName before
+	// LastModifiedTime — a real, minor element-order divergence, reported
+	// separately rather than pinned here.
+	for _, name := range []string{"Id", "ARN", "Status", "LastModifiedTime", "DomainName"} {
+		if idx, dcIdx := indexOf(names, name), indexOf(names, "DistributionConfig"); idx >= dcIdx {
+			t.Errorf("expected %q to appear before DistributionConfig, order was: %v", name, names)
+		}
+	}
+}
+
+func TestGetDistribution_notFound_errorShape(t *testing.T) {
+	// Given: no distributions
+	srv := helpers.NewTestServer(t)
+
+	// When: GetDistribution is called with a non-existent ID
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/2020-05-31/distribution/ENONEXISTENT", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GetDistribution: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Then: 404 with a request ID header and a NoSuchDistribution error
+	// naming the unknown ID (the envelope shape itself — <ErrorResponse>
+	// wrapping and the xmlns attribute AWS documents — is a confirmed
+	// divergence, reported separately; see the package comment above)
+	helpers.AssertStatus(t, resp, http.StatusNotFound)
+	helpers.AssertRequestID(t, resp)
+	b := readBody(t, resp)
+	var errResp struct {
+		Code      string `xml:"Code"`
+		Message   string `xml:"Message"`
+		RequestID string `xml:"RequestId"`
+	}
+	if err := xml.Unmarshal(b, &errResp); err != nil {
+		t.Fatalf("unmarshal error: %v\nbody: %s", err, b)
+	}
+	if errResp.Code != "NoSuchDistribution" {
+		t.Errorf("Code = %q, want %q", errResp.Code, "NoSuchDistribution")
+	}
+	if !strings.Contains(errResp.Message, "ENONEXISTENT") {
+		t.Errorf("expected Message to name the unknown ID, got: %q", errResp.Message)
+	}
+	if errResp.RequestID == "" {
+		t.Error("expected RequestId to be set in the error body")
+	}
+}
+
 // ─── GetDistributionConfig ────────────────────────────────────────────────────
 
 func TestGetDistributionConfig_success(t *testing.T) {

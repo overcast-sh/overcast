@@ -17,12 +17,17 @@ operation_count_estimate: >-
 current_support_level: Basic queries and workgroups; queries immediately succeed with empty results.
 operations: {}
 findings:
-  fixed: []
+  fixed:
+    - "#66: reviewed. tests/integration/athena/athena_test.go now pins the not-found error code and
+      message for GetQueryExecution, GetQueryResults, GetWorkGroup and DeleteWorkGroup, the empty
+      ResultSet shape (ResultSetMetadata.ColumnInfo and Rows present, UpdateCount absent per the
+      model), and StopQueryExecution's current 501. The two divergences the review found are
+      tracked as #2009."
   remaining_gaps:
-    - "#66: review query execution and result response shapes in more depth (Statistics,
-      EngineVersion, data-scanned figures, and whether GetQueryResults' ResultSet shape matches
-      AWS's column-metadata format exactly). Shape tests for this are in flight on branch
-      claude/compat-tests-ses-stubs-athena-shapes-cloudfront-xml."
+    - "#2009: GetQueryExecution, GetQueryResults, GetWorkGroup and DeleteWorkGroup answer
+      InvalidRequestException with HTTP 404 for an unknown id or name; the pinned model gives
+      InvalidRequestException no @httpError, so AWS JSON 1.1 answers 400. StopQueryExecution is
+      not registered at all (501). Found by the #66 shape tests."
   intentionally_partial:
     - "#67: the inert query engine is already documented. docs/services/athena.md's subtitle
       ('no SQL is executed, so every query succeeds immediately with an empty result set'), its
