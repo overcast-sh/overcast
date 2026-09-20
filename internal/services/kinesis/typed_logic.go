@@ -26,8 +26,13 @@ type deleteStreamRequest struct {
 	StreamName string `json:"StreamName"`
 }
 
+// describeStreamRequest pages its Shards list the same way ListShards does,
+// with its own documented default and cap (100) and HasMoreShards in place
+// of a NextToken.
 type describeStreamRequest struct {
-	StreamName string `json:"StreamName"`
+	StreamName            string `json:"StreamName"`
+	Limit                 *int   `json:"Limit"`
+	ExclusiveStartShardId string `json:"ExclusiveStartShardId"`
 }
 
 type describeStreamResponse struct {
@@ -42,13 +47,33 @@ type describeStreamSummaryResponse struct {
 	StreamDescriptionSummary map[string]any `json:"StreamDescriptionSummary"`
 }
 
+// listStreamsRequest carries ListStreams' two interchangeable cursors.
+// ExclusiveStartStreamName is the one the reference describes in prose ("you
+// can request more streams by using the name of the last stream returned ...
+// in the ExclusiveStartStreamName parameter"); NextToken is the modeled
+// member that means the same thing, and wins when both are given because it
+// is the one this service minted.
 type listStreamsRequest struct {
-	Limit int `json:"Limit"`
+	Limit                    *int   `json:"Limit"`
+	ExclusiveStartStreamName string `json:"ExclusiveStartStreamName"`
+	NextToken                string `json:"NextToken"`
+}
+
+// streamSummary is ListStreamsOutput's StreamSummaries element. AWS returns
+// it alongside the older StreamNames list, not instead of it.
+type streamSummary struct {
+	StreamName              string             `json:"StreamName"`
+	StreamARN               string             `json:"StreamARN"`
+	StreamStatus            string             `json:"StreamStatus"`
+	StreamModeDetails       *StreamModeDetails `json:"StreamModeDetails"`
+	StreamCreationTimestamp int64              `json:"StreamCreationTimestamp"`
 }
 
 type listStreamsResponse struct {
-	StreamNames    []string `json:"StreamNames"`
-	HasMoreStreams bool     `json:"HasMoreStreams"`
+	StreamNames     []string        `json:"StreamNames"`
+	HasMoreStreams  bool            `json:"HasMoreStreams"`
+	StreamSummaries []streamSummary `json:"StreamSummaries"`
+	NextToken       string          `json:"NextToken,omitempty"`
 }
 
 type putRecordRequest struct {
@@ -111,13 +136,28 @@ type getRecordsResponse struct {
 	MillisBehindLatest int              `json:"MillisBehindLatest"`
 }
 
+// listShardsRequest is the one operation here whose NextToken excludes other
+// members: "Don't specify StreamName or StreamCreationTimestamp if you
+// specify NextToken because the latter unambiguously identifies the stream",
+// and ExclusiveStartShardId carries the same restriction.
+//
+// StreamARN is accepted because the reference requires one of the two ("you
+// must use either the StreamARN or the StreamName parameter, or both"), so
+// the error for naming neither would otherwise be a lie. The other
+// operations in this package still take StreamName only — see the remaining
+// gaps in docs/dev/compatibility/services/kinesis.yaml.
 type listShardsRequest struct {
-	StreamName string `json:"StreamName"`
+	StreamName              string   `json:"StreamName"`
+	StreamARN               string   `json:"StreamARN"`
+	NextToken               string   `json:"NextToken"`
+	ExclusiveStartShardId   string   `json:"ExclusiveStartShardId"`
+	MaxResults              *int     `json:"MaxResults"`
+	StreamCreationTimestamp *float64 `json:"StreamCreationTimestamp"`
 }
 
 type listShardsResponse struct {
 	Shards    []map[string]any `json:"Shards"`
-	NextToken any              `json:"NextToken"`
+	NextToken string           `json:"NextToken,omitempty"`
 }
 
 type splitShardRequest struct {
@@ -137,8 +177,12 @@ type addTagsToStreamRequest struct {
 	Tags       map[string]string `json:"Tags"`
 }
 
+// listTagsForStreamRequest pages tags by key — AWS: "To list additional tags,
+// set ExclusiveStartTagKey to the last key in the response".
 type listTagsForStreamRequest struct {
-	StreamName string `json:"StreamName"`
+	StreamName           string `json:"StreamName"`
+	ExclusiveStartTagKey string `json:"ExclusiveStartTagKey"`
+	Limit                *int   `json:"Limit"`
 }
 
 type tagEntry struct {
@@ -215,11 +259,7 @@ type listTagsForResourceResponse struct {
 // Kinesis' ARN-addressed tag operations accept only stream ARNs here: consumers
 // are the other taggable Kinesis resource and Overcast does not implement them.
 func streamNameFromARN(arn string) (string, *protocol.AWSError) {
-	invalid := &protocol.AWSError{
-		Code:       "InvalidArgumentException",
-		Message:    fmt.Sprintf("Invalid stream ARN: %s", arn),
-		HTTPStatus: http.StatusBadRequest,
-	}
+	invalid := invalidArgument(fmt.Sprintf("Invalid stream ARN: %s", arn))
 	parts := strings.SplitN(arn, ":", 6)
 	if len(parts) < 6 || !strings.HasPrefix(parts[5], "stream/") {
 		return "", invalid
@@ -234,7 +274,7 @@ func streamNameFromARN(arn string) (string, *protocol.AWSError) {
 // streamForResourceARN resolves an ARN-addressed tag request to its stream.
 func (h *Handler) streamForResourceARN(ctx context.Context, arn string) (*Stream, *protocol.AWSError) {
 	if arn == "" {
-		return nil, protocol.ErrMissingParameter("ResourceARN")
+		return nil, errMissingParameter("ResourceARN")
 	}
 	name, aerr := streamNameFromARN(arn)
 	if aerr != nil {
@@ -250,7 +290,7 @@ type retentionPeriodRequest struct {
 
 func (h *Handler) createStreamTyped(ctx context.Context, req *createStreamRequest) (*struct{}, *protocol.AWSError) {
 	if req.StreamName == "" {
-		return nil, protocol.ErrMissingParameter("StreamName")
+		return nil, errMissingParameter("StreamName")
 	}
 	shardCount := req.ShardCount
 	if shardCount <= 0 {
@@ -288,7 +328,7 @@ func (h *Handler) createStreamTyped(ctx context.Context, req *createStreamReques
 
 func (h *Handler) deleteStreamTyped(ctx context.Context, req *deleteStreamRequest) (*struct{}, *protocol.AWSError) {
 	if req.StreamName == "" {
-		return nil, protocol.ErrMissingParameter("StreamName")
+		return nil, errMissingParameter("StreamName")
 	}
 	if _, aerr := h.store.getStream(ctx, req.StreamName); aerr != nil {
 		return nil, aerr
@@ -302,18 +342,26 @@ func (h *Handler) deleteStreamTyped(ctx context.Context, req *deleteStreamReques
 
 func (h *Handler) describeStreamTyped(ctx context.Context, req *describeStreamRequest) (*describeStreamResponse, *protocol.AWSError) {
 	if req.StreamName == "" {
-		return nil, protocol.ErrMissingParameter("StreamName")
+		return nil, errMissingParameter("StreamName")
+	}
+	if aerr := validateLimit(req.Limit, "Limit", describeStreamModelMax); aerr != nil {
+		return nil, aerr
 	}
 	st, aerr := h.store.getStream(ctx, req.StreamName)
 	if aerr != nil {
 		return nil, aerr
 	}
-	return &describeStreamResponse{StreamDescription: toStreamDescription(st)}, nil
+	// Every shard, not just the open ones: AWS DescribeStream reports a
+	// closed parent alongside its children (ListShards is the one that
+	// omits them here).
+	shards := shardsAfter(allShards(st), req.ExclusiveStartShardId)
+	page, hasMore := pageOf(shards, req.Limit, describeStreamDefaultLimit, describeStreamMaxLimit)
+	return &describeStreamResponse{StreamDescription: toStreamDescription(st, page, hasMore)}, nil
 }
 
 func (h *Handler) describeStreamSummaryTyped(ctx context.Context, req *describeStreamSummaryRequest) (*describeStreamSummaryResponse, *protocol.AWSError) {
 	if req.StreamName == "" {
-		return nil, protocol.ErrMissingParameter("StreamName")
+		return nil, errMissingParameter("StreamName")
 	}
 	st, aerr := h.store.getStream(ctx, req.StreamName)
 	if aerr != nil {
@@ -322,21 +370,50 @@ func (h *Handler) describeStreamSummaryTyped(ctx context.Context, req *describeS
 	return &describeStreamSummaryResponse{StreamDescriptionSummary: toStreamDescriptionSummary(st)}, nil
 }
 
-func (h *Handler) listStreamsTyped(ctx context.Context, _ *listStreamsRequest) (*listStreamsResponse, *protocol.AWSError) {
+func (h *Handler) listStreamsTyped(ctx context.Context, req *listStreamsRequest) (*listStreamsResponse, *protocol.AWSError) {
+	if aerr := validateLimit(req.Limit, "Limit", listStreamsModelMax); aerr != nil {
+		return nil, aerr
+	}
+	after := req.ExclusiveStartStreamName
+	if req.NextToken != "" {
+		cur, aerr := h.openPageToken(req.NextToken)
+		if aerr != nil {
+			return nil, aerr
+		}
+		after = cur.After
+	}
 	streams, aerr := h.store.listStreams(ctx)
 	if aerr != nil {
 		return nil, aerr
 	}
-	names := make([]string, len(streams))
-	for i, st := range streams {
-		names[i] = st.StreamName
+	// listStreams sorts by name, which is the order the cursor walks.
+	if after != "" {
+		streams = itemsAfter(streams, after, func(st Stream) string { return st.StreamName })
 	}
-	return &listStreamsResponse{StreamNames: names, HasMoreStreams: false}, nil
+	page, hasMore := pageOf(streams, req.Limit, listStreamsDefaultLimit, listStreamsMaxLimit)
+
+	names := make([]string, len(page))
+	summaries := make([]streamSummary, len(page))
+	for i, st := range page {
+		names[i] = st.StreamName
+		summaries[i] = streamSummary{
+			StreamName:              st.StreamName,
+			StreamARN:               st.StreamARN,
+			StreamStatus:            st.StreamStatus,
+			StreamModeDetails:       st.effectiveStreamModeDetails(),
+			StreamCreationTimestamp: st.CreatedAt.Unix(),
+		}
+	}
+	out := &listStreamsResponse{StreamNames: names, HasMoreStreams: hasMore, StreamSummaries: summaries}
+	if hasMore {
+		out.NextToken = h.sealPageToken("", names[len(names)-1])
+	}
+	return out, nil
 }
 
 func (h *Handler) putRecordTyped(ctx context.Context, req *putRecordRequest) (*putRecordResponse, *protocol.AWSError) {
 	if req.StreamName == "" {
-		return nil, protocol.ErrMissingParameter("StreamName")
+		return nil, errMissingParameter("StreamName")
 	}
 	st, aerr := h.store.getStream(ctx, req.StreamName)
 	if aerr != nil {
@@ -366,7 +443,7 @@ func (h *Handler) putRecordTyped(ctx context.Context, req *putRecordRequest) (*p
 
 func (h *Handler) putRecordsTyped(ctx context.Context, req *putRecordsRequest) (*putRecordsResponse, *protocol.AWSError) {
 	if req.StreamName == "" {
-		return nil, protocol.ErrMissingParameter("StreamName")
+		return nil, errMissingParameter("StreamName")
 	}
 	st, aerr := h.store.getStream(ctx, req.StreamName)
 	if aerr != nil {
@@ -415,7 +492,7 @@ func (h *Handler) putRecordsTyped(ctx context.Context, req *putRecordsRequest) (
 
 func (h *Handler) getShardIteratorTyped(ctx context.Context, req *getShardIteratorRequest) (*getShardIteratorResponse, *protocol.AWSError) {
 	if req.StreamName == "" {
-		return nil, protocol.ErrMissingParameter("StreamName")
+		return nil, errMissingParameter("StreamName")
 	}
 	if _, aerr := h.store.getStream(ctx, req.StreamName); aerr != nil {
 		return nil, aerr
@@ -437,15 +514,15 @@ func (h *Handler) getShardIteratorTyped(ctx context.Context, req *getShardIterat
 
 func (h *Handler) getRecordsTyped(ctx context.Context, req *getRecordsRequest) (*getRecordsResponse, *protocol.AWSError) {
 	if req.ShardIterator == "" {
-		return nil, protocol.ErrMissingParameter("ShardIterator")
+		return nil, errMissingParameter("ShardIterator")
 	}
 	raw, err := base64.StdEncoding.DecodeString(req.ShardIterator)
 	if err != nil {
-		return nil, invalidShardIterator("Invalid ShardIterator")
+		return nil, invalidArgument("Invalid ShardIterator")
 	}
 	streamName, shardID, afterSeqNo, ok := decodeShardIterator(string(raw))
 	if !ok {
-		return nil, invalidShardIterator("Invalid ShardIterator format")
+		return nil, invalidArgument("Invalid ShardIterator format")
 	}
 	limit := req.Limit
 	if limit <= 0 {
@@ -531,26 +608,61 @@ func (h *Handler) getRecordsTyped(ctx context.Context, req *getRecordsRequest) (
 }
 
 func (h *Handler) listShardsTyped(ctx context.Context, req *listShardsRequest) (*listShardsResponse, *protocol.AWSError) {
-	if req.StreamName == "" {
-		return nil, protocol.ErrMissingParameter("StreamName")
+	if aerr := validateLimit(req.MaxResults, "MaxResults", listShardsModelMax); aerr != nil {
+		return nil, aerr
 	}
-	st, aerr := h.store.getStream(ctx, req.StreamName)
+	streamName, after, aerr := h.listShardsCursor(req)
 	if aerr != nil {
 		return nil, aerr
 	}
-	shards := make([]map[string]any, 0, len(st.Shards))
-	for _, shard := range st.Shards {
-		if shard.SequenceNumberRange.EndingSequenceNumber != "" {
-			continue
-		}
-		shards = append(shards, shardToMap(shard))
+	st, aerr := h.store.getStream(ctx, streamName)
+	if aerr != nil {
+		return nil, aerr
 	}
-	return &listShardsResponse{Shards: shards, NextToken: nil}, nil
+	shards := shardsAfter(openShards(st), after)
+	page, hasMore := pageOf(shards, req.MaxResults, listShardsDefaultLimit, listShardsMaxLimit)
+
+	out := &listShardsResponse{Shards: page}
+	if hasMore {
+		out.NextToken = h.sealPageToken(st.StreamName, shardIDOf(page[len(page)-1]))
+	}
+	return out, nil
+}
+
+// listShardsCursor resolves which stream to list and where to resume, and
+// enforces the members NextToken excludes.
+func (h *Handler) listShardsCursor(req *listShardsRequest) (streamName, after string, aerr *protocol.AWSError) {
+	if req.NextToken != "" {
+		switch {
+		case req.StreamName != "":
+			return "", "", invalidArgument("NextToken and StreamName cannot be provided together.")
+		case req.ExclusiveStartShardId != "":
+			return "", "", invalidArgument("NextToken and ExclusiveStartShardId cannot be provided together.")
+		case req.StreamCreationTimestamp != nil:
+			return "", "", invalidArgument("NextToken and StreamCreationTimestamp cannot be provided together.")
+		}
+		cur, tokenErr := h.openPageToken(req.NextToken)
+		if tokenErr != nil {
+			return "", "", tokenErr
+		}
+		return cur.Stream, cur.After, nil
+	}
+	if req.StreamName != "" {
+		return req.StreamName, req.ExclusiveStartShardId, nil
+	}
+	if req.StreamARN == "" {
+		return "", "", invalidArgument("Either StreamName or StreamARN must be provided.")
+	}
+	name, arnErr := streamNameFromARN(req.StreamARN)
+	if arnErr != nil {
+		return "", "", arnErr
+	}
+	return name, req.ExclusiveStartShardId, nil
 }
 
 func (h *Handler) splitShardTyped(ctx context.Context, req *splitShardRequest) (*struct{}, *protocol.AWSError) {
 	if req.StreamName == "" {
-		return nil, protocol.ErrMissingParameter("StreamName")
+		return nil, errMissingParameter("StreamName")
 	}
 	st, aerr := h.store.getStream(ctx, req.StreamName)
 	if aerr != nil {
@@ -595,7 +707,7 @@ func (h *Handler) splitShardTyped(ctx context.Context, req *splitShardRequest) (
 
 func (h *Handler) mergeShardsTyped(ctx context.Context, req *mergeShardsRequest) (*struct{}, *protocol.AWSError) {
 	if req.StreamName == "" {
-		return nil, protocol.ErrMissingParameter("StreamName")
+		return nil, errMissingParameter("StreamName")
 	}
 	st, aerr := h.store.getStream(ctx, req.StreamName)
 	if aerr != nil {
@@ -650,7 +762,7 @@ func (h *Handler) mergeShardsTyped(ctx context.Context, req *mergeShardsRequest)
 
 func (h *Handler) addTagsToStreamTyped(ctx context.Context, req *addTagsToStreamRequest) (*struct{}, *protocol.AWSError) {
 	if req.StreamName == "" {
-		return nil, protocol.ErrMissingParameter("StreamName")
+		return nil, errMissingParameter("StreamName")
 	}
 	st, aerr := h.store.getStream(ctx, req.StreamName)
 	if aerr != nil {
@@ -677,18 +789,25 @@ func (h *Handler) addTagsToStreamTyped(ctx context.Context, req *addTagsToStream
 
 func (h *Handler) listTagsForStreamTyped(ctx context.Context, req *listTagsForStreamRequest) (*listTagsForStreamResponse, *protocol.AWSError) {
 	if req.StreamName == "" {
-		return nil, protocol.ErrMissingParameter("StreamName")
+		return nil, errMissingParameter("StreamName")
+	}
+	if aerr := validateLimit(req.Limit, "Limit", listTagsModelMax); aerr != nil {
+		return nil, aerr
 	}
 	st, aerr := h.store.getStream(ctx, req.StreamName)
 	if aerr != nil {
 		return nil, aerr
 	}
-	return &listTagsForStreamResponse{Tags: sortedTagEntries(st.Tags), HasMoreTags: false}, nil
+	// sortedTagEntries is key-ordered, which is the order ExclusiveStartTagKey
+	// walks.
+	tags := itemsAfter(sortedTagEntries(st.Tags), req.ExclusiveStartTagKey, func(t tagEntry) string { return t.Key })
+	page, hasMore := pageOf(tags, req.Limit, listTagsDefaultLimit, listTagsMaxLimit)
+	return &listTagsForStreamResponse{Tags: page, HasMoreTags: hasMore}, nil
 }
 
 func (h *Handler) removeTagsFromStreamTyped(ctx context.Context, req *removeTagsFromStreamRequest) (*struct{}, *protocol.AWSError) {
 	if req.StreamName == "" {
-		return nil, protocol.ErrMissingParameter("StreamName")
+		return nil, errMissingParameter("StreamName")
 	}
 	st, aerr := h.store.getStream(ctx, req.StreamName)
 	if aerr != nil {
@@ -760,7 +879,7 @@ func (h *Handler) decreaseStreamRetentionPeriodTyped(ctx context.Context, req *r
 
 func (h *Handler) updateRetentionPeriod(ctx context.Context, req *retentionPeriodRequest) (*struct{}, *protocol.AWSError) {
 	if req.StreamName == "" {
-		return nil, protocol.ErrMissingParameter("StreamName")
+		return nil, errMissingParameter("StreamName")
 	}
 	st, aerr := h.store.getStream(ctx, req.StreamName)
 	if aerr != nil {
@@ -783,7 +902,7 @@ type updateStreamModeRequest struct {
 // alternative), unlike StartStreamEncryption/StopStreamEncryption below.
 func (h *Handler) updateStreamModeTyped(ctx context.Context, req *updateStreamModeRequest) (*struct{}, *protocol.AWSError) {
 	if req.StreamModeDetails == nil || req.StreamModeDetails.StreamMode == "" {
-		return nil, protocol.ErrMissingParameter("StreamModeDetails")
+		return nil, errMissingParameter("StreamModeDetails")
 	}
 	st, aerr := h.streamForResourceARN(ctx, req.StreamARN)
 	if aerr != nil {
@@ -815,7 +934,7 @@ func (h *Handler) resolveStream(ctx context.Context, streamName, arn string) (*S
 	if arn != "" {
 		return h.streamForResourceARN(ctx, arn)
 	}
-	return nil, protocol.ErrMissingParameter("StreamName")
+	return nil, errMissingParameter("StreamName")
 }
 
 func (h *Handler) startStreamEncryptionTyped(ctx context.Context, req *streamEncryptionRequest) (*struct{}, *protocol.AWSError) {
@@ -854,18 +973,14 @@ func (h *Handler) publishCtx(ctx context.Context, t events.Type, payload any) {
 	}
 }
 
-func invalidShardIterator(message string) *protocol.AWSError {
-	return &protocol.AWSError{
-		Code:       "InvalidArgumentException",
-		Message:    message,
-		HTTPStatus: http.StatusBadRequest,
-	}
-}
-
+// shardNotFound answers 400, not 404: every exception in the Kinesis model is
+// a client error with no httpError override, and each operation Errors
+// section says the same ("ResourceNotFoundException ... HTTP Status Code:
+// 400"). See errNoSuchStream in store.go.
 func shardNotFound(shardID, streamName string) *protocol.AWSError {
 	return &protocol.AWSError{
 		Code:       "ResourceNotFoundException",
 		Message:    fmt.Sprintf("Could not find shard %s in stream %s", shardID, streamName),
-		HTTPStatus: http.StatusNotFound,
+		HTTPStatus: http.StatusBadRequest,
 	}
 }

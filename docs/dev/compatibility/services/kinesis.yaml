@@ -1,5 +1,5 @@
 service: kinesis
-status: not_started
+status: fixed
 priority: p1
 reference_policy: aws_docs_only_unless_user_approves_real_aws
 last_updated: 2026-09-20
@@ -7,9 +7,180 @@ protocols: [aws_json_1_1, aws_json_1_0, rpcv2_cbor]
 implementation: [internal/services/kinesis]
 integration_tests: [tests/integration/kinesis]
 capability_docs: docs/services/kinesis.md
-operation_count_estimate: 17 supported
-current_support_level: Core Data Streams support for lifecycle, records, shards, retention, and tagging; some pagination gaps noted.
-operations: {}
+operation_count_estimate: 23 implemented (22 Supported, 1 Partial)
+current_support_level: >-
+  Core Data Streams support for lifecycle, records, shards, retention and
+  tagging. The four operations AWS documents as paginated — ListStreams,
+  ListShards, DescribeStream and ListTagsForStream — now honour their cursor,
+  page-size and truncation members instead of answering every call with the
+  whole set (#155), and the error codes and HTTP statuses of every
+  implemented operation were audited against the pinned Smithy model.
+  Record ingestion, shard iterators and resharding were not re-reviewed by
+  this pass beyond the error codes they raise.
+operations:
+  ListStreams:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/kinesis/latest/APIReference/API_ListStreams.html
+    protocol: aws_json_1_1 (X-Amz-Target Kinesis_20131202.ListStreams) and rpcv2_cbor
+    tests:
+      - tests/integration/kinesis/pagination_test.go::TestListStreams_pageWalkDeliversEveryStreamExactlyOnce
+      - tests/integration/kinesis/pagination_test.go::TestListStreams_exclusiveStartStreamNameResumesAfterThatName
+      - tests/integration/kinesis/pagination_test.go::TestListStreams_returnsStreamSummariesAlongsideNames
+      - tests/integration/kinesis/pagination_test.go::TestListStreams_malformedNextTokenIsInvalidArgument
+      - tests/integration/kinesis/pagination_test.go::TestListStreams_outOfRangeLimitIsInvalidArgument
+      - internal/services/kinesis/pagination_test.go::TestPageToken_expiresAfterTheDocumentedLifetime
+      - tests/integration/kinesis/golden_test.go::TestGolden_ListStreams
+    scenarios:
+      page_walk:
+        status: reviewed
+        evidence: Limit caps the page, HasMoreStreams reports truncation and NextToken continues it; a five-stream walk at Limit 2 delivers every name exactly once in name order and the terminal page carries neither flag nor token.
+      exclusive_start_stream_name:
+        status: reviewed
+        evidence: "AWS describes continuation in prose as ExclusiveStartStreamName (\"you can request more streams by using the name of the last stream returned ... in the ExclusiveStartStreamName parameter\"); it and NextToken resolve to the same exclusive cursor, and NextToken wins when both are given because it is the token this service minted."
+      stream_summaries:
+        status: reviewed
+        evidence: StreamSummaries is a modeled ListStreamsOutput member and is now returned alongside StreamNames, carrying StreamName, StreamARN, StreamStatus, StreamModeDetails and StreamCreationTimestamp.
+      limit_bounds:
+        status: reviewed
+        evidence: "Default 100, and a value above 100 returns at most 100 (\"If you specify a value greater than 100, at most 100 results are returned\"). A value outside the modeled @range of 1..10000 is refused with InvalidArgumentException rather than clamped."
+      invalid_token:
+        status: reviewed
+        evidence: A NextToken that does not decode answers InvalidArgumentException; one older than 300 seconds answers ExpiredNextTokenException. Both are modeled errors of this operation.
+    evidence:
+      - Pinned model (models/kinesis/service/2013-12-02) — ListStreamsInput {Limit, ExclusiveStartStreamName, NextToken}, ListStreamsOutput {StreamNames, HasMoreStreams, NextToken, StreamSummaries}, ListStreamsInputLimit @range 1..10000.
+    gaps: []
+    next_action: none
+  ListShards:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/kinesis/latest/APIReference/API_ListShards.html
+    protocol: aws_json_1_1 (X-Amz-Target Kinesis_20131202.ListShards) and rpcv2_cbor
+    tests:
+      - tests/integration/kinesis/pagination_test.go::TestListShards_pageWalkDeliversEveryShardExactlyOnce
+      - tests/integration/kinesis/pagination_test.go::TestListShards_exclusiveStartShardIdResumesAfterThatShard
+      - tests/integration/kinesis/pagination_test.go::TestListShards_nextTokenCombinedWithOtherParametersIsRejected
+      - tests/integration/kinesis/pagination_test.go::TestListShards_withoutStreamIdentifierIsInvalidArgument
+      - tests/integration/kinesis/pagination_test.go::TestListShards_byStreamARN
+      - tests/integration/kinesis/pagination_test.go::TestListShards_malformedNextTokenIsInvalidArgument
+      - tests/integration/kinesis/pagination_test.go::TestRPCv2CBOR_ListShards_paginates
+      - internal/services/kinesis/pagination_test.go::TestListShards_expiredNextTokenIsRejected
+      - tests/integration/kinesis/golden_test.go::TestGolden_ListShards
+    scenarios:
+      page_walk:
+        status: reviewed
+        evidence: MaxResults caps the page and NextToken continues it; five shards at MaxResults 2 take three pages and deliver every shard exactly once in shard-ID order. Proven over both wire protocols.
+      next_token_exclusions:
+        status: reviewed
+        evidence: "\"Don't specify StreamName or StreamCreationTimestamp if you specify NextToken because the latter unambiguously identifies the stream\", and ExclusiveStartShardId carries the same restriction — all three combinations answer InvalidArgumentException. The token therefore carries the stream name itself."
+      stream_identifier:
+        status: reviewed
+        evidence: "\"When invoking this API, you must use either the StreamARN or the StreamName parameter, or both.\" Both are accepted, and naming neither answers InvalidArgumentException rather than the unmodeled MissingParameter it used to."
+      max_results_bounds:
+        status: reviewed
+        evidence: "Default 1000, capped at 1000 (\"If you specify a value greater than 1000, at most 1000 results are returned\"); outside the modeled @range of 1..10000 it is refused with InvalidArgumentException."
+      token_expiry:
+        status: reviewed
+        evidence: "\"Tokens expire after 300 seconds ... If you specify an expired token in a call to ListShards, you get ExpiredNextTokenException.\" nextTokenTTL implements it off the injected clock; a malformed token stays InvalidArgumentException so a client can tell the two apart."
+      shard_filter:
+        status: unsupported
+        evidence: ShardFilter (AT_TRIM_HORIZON, FROM_TRIM_HORIZON, AT_LATEST, AFTER_SHARD_ID, AT_TIMESTAMP, FROM_TIMESTAMP) is not implemented and is ignored, so a filtered call returns the unfiltered open-shard list. Recorded in the ListShards capability note and in the Differences table of docs/services/kinesis.md; the operation is declared Partial for it.
+      closed_shards:
+        status: intentionally_partial
+        evidence: Only open shards are listed, so a split or merge parent disappears rather than being returned with its EndingSequenceNumber. Pre-existing behaviour, unchanged by this pass and already documented.
+    evidence:
+      - Pinned model — ListShardsInput {StreamName, NextToken, ExclusiveStartShardId, MaxResults, StreamCreationTimestamp, ShardFilter, StreamARN, StreamId}, ListShardsOutput {Shards, NextToken}, ListShardsInputLimit @range 1..10000.
+    gaps:
+      - ShardFilter is accepted and ignored.
+      - StreamCreationTimestamp is only used to reject the NextToken combination; it does not disambiguate a recreated stream.
+    next_action: implement ShardFilter, or refuse it explicitly, if a consumer needs it
+  DescribeStream:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/kinesis/latest/APIReference/API_DescribeStream.html
+    protocol: aws_json_1_1 and rpcv2_cbor
+    tests:
+      - tests/integration/kinesis/pagination_test.go::TestDescribeStream_limitPagesShardsAndSetsHasMoreShards
+      - tests/integration/kinesis/errors_test.go::TestKinesis_unknownStreamIsResourceNotFoundWith400
+      - tests/integration/kinesis/golden_test.go::TestGolden_DescribeStream
+    scenarios:
+      shard_pagination:
+        status: reviewed
+        evidence: "Limit and ExclusiveStartShardId page the Shards list and StreamDescription.HasMoreShards (a required output member) reports truncation, where it was previously hardcoded false. Default and cap are 100 (\"The default value is 100. If you specify a value greater than 100, at most 100 results are returned\")."
+      unknown_stream:
+        status: reviewed
+        evidence: ResourceNotFoundException at HTTP 400.
+      stream_arn:
+        status: intentionally_partial
+        evidence: The modeled input also accepts StreamARN; only StreamName is honoured here. ListShards is the one operation this pass taught to accept either, because its documented "StreamARN or StreamName" rule is part of the error behaviour under review.
+    evidence:
+      - Pinned model — DescribeStreamInput {StreamName, Limit, ExclusiveStartShardId, StreamARN, StreamId}; StreamDescription.HasMoreShards is @required.
+    gaps:
+      - StreamARN is not accepted as an alternative to StreamName.
+    next_action: none
+  ListTagsForStream:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/kinesis/latest/APIReference/API_ListTagsForStream.html
+    protocol: aws_json_1_1 and rpcv2_cbor
+    tests:
+      - tests/integration/kinesis/pagination_test.go::TestListTagsForStream_limitPagesTagsAndSetsHasMoreTags
+      - tests/integration/kinesis/golden_test.go::TestGolden_ListTagsForStream
+    scenarios:
+      tag_pagination:
+        status: reviewed
+        evidence: "\"To list additional tags, set ExclusiveStartTagKey to the last key in the response.\" Tags are key-sorted, ExclusiveStartTagKey resumes after a key and HasMoreTags reports truncation; the modeled @range for Limit is 1..50, which is also the default and the cap."
+    evidence:
+      - Pinned model — ListTagsForStreamInput {StreamName, ExclusiveStartTagKey, Limit, StreamARN, StreamId}; ListTagsForStreamOutput {Tags, HasMoreTags}, both @required; ListTagsForStreamInputLimit @range 1..50.
+    gaps:
+      - StreamARN is not accepted as an alternative to StreamName.
+    next_action: none
+  ErrorShapes:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/kinesis/latest/APIReference/CommonErrors.html
+      - https://docs.aws.amazon.com/kinesis/latest/APIReference/API_DescribeStream.html
+    protocol: aws_json_1_1 and rpcv2_cbor (both write through protocol.WriteJSONError / the codec)
+    tests:
+      - tests/integration/kinesis/errors_test.go::TestKinesis_unknownStreamIsResourceNotFoundWith400
+      - tests/integration/kinesis/errors_test.go::TestKinesis_missingStreamIdentifierIsInvalidArgument
+      - tests/integration/kinesis/errors_test.go::TestSplitShard_unknownShardIsResourceNotFoundWith400
+      - tests/integration/kinesis/errors_test.go::TestMergeShards_unknownShardIsResourceNotFoundWith400
+      - tests/integration/kinesis/errors_test.go::TestCreateStream_duplicateIsResourceInUse
+      - tests/integration/kinesis/errors_test.go::TestGetRecords_malformedShardIteratorIsInvalidArgument
+      - tests/integration/kinesis/errors_test.go::TestGetRecords_missingShardIteratorIsInvalidArgument
+      - tests/integration/kinesis/kinesis_test.go::TestTagResource_unknownStreamARN
+    scenarios:
+      http_status:
+        status: fixed
+        evidence: 'Every Kinesis exception is @error("client") with no @httpError override, so all of them are HTTP 400, and each operation Errors section says so ("ResourceNotFoundException ... HTTP Status Code: 400"). Overcast answered 404 for a missing stream and a missing shard; both are 400 now.'
+      missing_parameter_code:
+        status: fixed
+        evidence: A missing required member answered MissingParameter, a code no Kinesis operation models, so no SDK error type matches it. It is InvalidArgumentException now — modeled on every operation this package implements and already what the package used for a bad ARN and a rejected tag set.
+      resource_in_use:
+        status: reviewed
+        evidence: CreateStream against an existing name answers ResourceInUseException at 400, which the model declares for that operation.
+      invalid_shard_iterator:
+        status: reviewed
+        evidence: A GetRecords ShardIterator that is not base64, or that decodes to something other than the expected three-part cursor, answers InvalidArgumentException at 400 — already correct before this pass.
+      expired_iterator:
+        status: unsupported
+        evidence: ExpiredIteratorException is modeled on GetRecords, but a shard iterator never expires here (records are never trimmed either), so it is never raised. Nothing was added; a caller sees a permanently valid iterator.
+      provisioned_throughput:
+        status: intentionally_partial
+        evidence: ProvisionedThroughputExceededException is modeled on PutRecord/PutRecords/GetRecords/GetShardIterator and is deliberately never raised — Overcast is not a performance-testing tool, so no throughput throttling is simulated (AGENTS.md non-goals, and the Throttling row of docs/services/kinesis.md).
+      kms_and_access_denied:
+        status: unsupported
+        evidence: The KMS* exceptions and AccessDeniedException are modeled across the service but are not raised — encryption is recorded rather than performed, and credentials are accepted without validation.
+      internal_failure:
+        status: intentionally_partial
+        evidence: An infrastructure failure (store unavailable, marshal failure) is reported as the house-standard InternalError rather than the modeled InternalFailureException. This is protocol.ErrInternalError, shared by every service, so changing it is not a Kinesis-local decision.
+    evidence:
+      - Operation-by-operation error lists taken from the pinned Smithy model; no real AWS call was made.
+    gaps:
+      - InternalError is returned where the model declares InternalFailureException.
+      - Modeled errors that depend on unemulated behaviour (KMS*, AccessDenied*, throughput, iterator expiry) are never raised.
+    next_action: none
 findings:
   fixed:
     - >-
@@ -25,10 +196,28 @@ findings:
       header already correctly listed all three protocols — the stale part was the
       remaining_gaps sentence questioning whether JSON 1.0 support was a divergence
       from AWS, when it is deliberate, documented, framework-wide behavior.
+    - "#155: ListStreams, ListShards, DescribeStream and ListTagsForStream ignored every cursor, page-size and truncation member and answered each call with the whole set; all four now paginate, with a 300-second NextToken lifetime and ExpiredNextTokenException past it."
+    - "#155: ResourceNotFoundException answered HTTP 404 where every Kinesis exception is a 400."
+    - "#155: a missing required member answered the unmodeled MissingParameter; it is InvalidArgumentException now."
+    - "#155: ListShards accepts StreamARN as well as StreamName, which its reference requires."
   remaining_gaps:
-    - Review pagination and error-shape fidelity (#155, in progress in a separate worktree).
-  intentionally_partial: []
+    - ListShards ignores ShardFilter.
+    - Only ListShards accepts StreamARN; the other operations still require StreamName.
+    - ListStreamConsumers and the rest of the enhanced fan-out surface are not implemented, so their pagination was not reviewed.
+    - UpdateShardCount and DescribeLimits are unimplemented (#1096).
+  intentionally_partial:
+    - No throughput throttling, so ProvisionedThroughputExceededException is never raised.
+    - Shard iterators never expire, so ExpiredIteratorException is never raised.
+    - Closed shards are omitted from ListShards.
+    - Infrastructure failures use the shared InternalError rather than InternalFailureException.
+verification:
+  commands:
+    - go test -count=1 -p 2 ./internal/services/kinesis/... ./tests/integration/kinesis/...
+    - go vet -tags slim,dev ./internal/services/kinesis/... ./tests/integration/kinesis/...
+    - go run -tags dev ./cmd/capgen --check --check-model
 handoff:
-  start_with: [PutRecord, GetRecords, ListShards]
-  do_not_redo: []
-  commands: [go test -count=1 ./internal/services/kinesis/... ./tests/integration/kinesis/...]
+  start_with: [PutRecord, PutRecords, GetRecords, GetShardIterator]
+  do_not_redo:
+    - Pagination of ListStreams, ListShards, DescribeStream and ListTagsForStream.
+    - Error codes and HTTP statuses of the implemented operations.
+  commands: [go test -count=1 -p 2 ./internal/services/kinesis/... ./tests/integration/kinesis/...]

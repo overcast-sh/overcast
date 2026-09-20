@@ -42,6 +42,7 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | Streams | `CreateStream` is `ACTIVE` immediately; inline `Tags` and `StreamModeDetails` apply at creation, defaulting to `PROVISIONED` |
 | Writes | `PutRecord` and `PutRecords` route by partition-key hash into the owning shard |
 | Reads | `GetShardIterator` supports `TRIM_HORIZON`, `LATEST`, `AT_SEQUENCE_NUMBER` and `AFTER_SEQUENCE_NUMBER`; `GetRecords` returns a usable `NextShardIterator` |
+| Pagination | `ListStreams`, `ListShards`, `DescribeStream` and `ListTagsForStream` page on their documented cursors and limits; a `NextToken` expires after 300 seconds |
 | Resharding | `SplitShard` and `MergeShards` close the parents and create real children with correct hash-key ranges |
 | Consumers | Lambda event source mappings and EventBridge Pipes poll Kinesis streams |
 | Tags | `AddTagsToStream`/`RemoveTagsFromStream` and the ARN-addressed `TagResource`/`UntagResource`/`ListTagsForResource` |
@@ -54,7 +55,7 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | Throttling       | `ProvisionedThroughputExceededException` past the provisioned rate | `PutRecords` always reports `FailedRecordCount: 0`; throughput throttling is not simulated                                                                                       |
 | Encryption       | Records are encrypted with the named key                           | `StartStreamEncryption` stores `EncryptionType` and `KeyId` and `Describe*` echoes them; records are stored unencrypted                                                          |
 | Capacity modes   | On-demand capacity is enforced                                     | `UpdateStreamMode` is recorded; nothing is enforced                                                                                                                              |
-| Pagination       | `ListStreams` and `ListShards` paginate                            | Each returns everything in one page — every stream name, every open shard                                                                                                        |
+| Shard filtering  | `ListShards` narrows its answer with `ShardFilter`                 | `ShardFilter` is ignored, so every open shard comes back whatever filter was asked for                                                                                    |
 | Enhanced fan-out | `SubscribeToShard` and the consumer registration APIs              | Not emulated, and a consumer ARN is refused by `TagResource`                                                                                                                     |
 | Closed shards    | `ListShards` includes them                                         | Open shards only, so a split parent disappears from the list                                                                                                                     |
 

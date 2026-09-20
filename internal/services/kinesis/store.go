@@ -397,11 +397,16 @@ func streamARN(accountID, region, name string) string {
 }
 
 // errNoSuchStream returns an AWS-flavoured error for a missing stream.
+//
+// 400, not 404. Every exception in the Kinesis model is a client error with
+// no httpError override, so the protocol default applies, and each
+// operation Errors section states it outright:
+// "ResourceNotFoundException ... HTTP Status Code: 400".
 func errNoSuchStream(name string) *protocol.AWSError {
 	return &protocol.AWSError{
 		Code:       "ResourceNotFoundException",
 		Message:    fmt.Sprintf("Stream %s under account not found.", name),
-		HTTPStatus: http.StatusNotFound,
+		HTTPStatus: http.StatusBadRequest,
 	}
 }
 

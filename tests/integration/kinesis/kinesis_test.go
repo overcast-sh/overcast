@@ -788,6 +788,9 @@ func TestUntagResource_removesByARN(t *testing.T) {
 
 // A well-formed ARN naming a stream that does not exist is a not-found, the
 // same answer the stream-name spellings give.
+// 400 rather than 404: Kinesis models every exception as a client error with
+// no httpError override, and the API Reference Errors sections agree
+// ("ResourceNotFoundException ... HTTP Status Code: 400"). See errors_test.go.
 func TestTagResource_unknownStreamARN(t *testing.T) {
 	srv := helpers.NewTestServer(t)
 	resp := kinesisCall(t, srv, "TagResource", map[string]any{
@@ -795,7 +798,8 @@ func TestTagResource_unknownStreamARN(t *testing.T) {
 		"Tags":        map[string]string{"env": "test"},
 	})
 	defer resp.Body.Close()
-	helpers.AssertStatus(t, resp, http.StatusNotFound)
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertJSONError(t, resp, "ResourceNotFoundException")
 }
 
 // An ARN that names no stream at all is a bad argument rather than a
