@@ -105,7 +105,7 @@ func (h *Handler) deleteProtectionTyped(ctx context.Context, req *deleteProtecti
 		return nil, &protocol.AWSError{
 			Code:       "ResourceNotFoundException",
 			Message:    fmt.Sprintf("Protection %s not found", req.ProtectionId),
-			HTTPStatus: http.StatusNotFound,
+			HTTPStatus: http.StatusBadRequest,
 		}
 	}
 	if err := h.store.deleteProtection(ctx, req.ProtectionId); err != nil {
@@ -121,7 +121,7 @@ func (h *Handler) describeProtectionTyped(ctx context.Context, req *describeProt
 			return nil, &protocol.AWSError{
 				Code:       "ResourceNotFoundException",
 				Message:    fmt.Sprintf("Protection %s not found", req.ProtectionId),
-				HTTPStatus: http.StatusNotFound,
+				HTTPStatus: http.StatusBadRequest,
 			}
 		}
 		return &describeProtectionResponse{Protection: &p.Protection}, nil
@@ -140,7 +140,7 @@ func (h *Handler) describeProtectionTyped(ctx context.Context, req *describeProt
 	return nil, &protocol.AWSError{
 		Code:       "ResourceNotFoundException",
 		Message:    "Protection not found",
-		HTTPStatus: http.StatusNotFound,
+		HTTPStatus: http.StatusBadRequest,
 	}
 }
 
@@ -175,7 +175,7 @@ func (h *Handler) tagResourceTyped(ctx context.Context, req *tagResourceRequest)
 	p, found := h.store.getProtection(ctx, pid)
 	if !found {
 		return nil, &protocol.AWSError{
-			Code: "ResourceNotFoundException", Message: fmt.Sprintf("Protection %s not found", pid), HTTPStatus: http.StatusNotFound,
+			Code: "ResourceNotFoundException", Message: fmt.Sprintf("Protection %s not found", pid), HTTPStatus: http.StatusBadRequest,
 		}
 	}
 	tags := p.GetTags()
@@ -208,7 +208,7 @@ func (h *Handler) untagResourceTyped(ctx context.Context, req *untagResourceRequ
 	p, found := h.store.getProtection(ctx, pid)
 	if !found {
 		return nil, &protocol.AWSError{
-			Code: "ResourceNotFoundException", Message: fmt.Sprintf("Protection %s not found", pid), HTTPStatus: http.StatusNotFound,
+			Code: "ResourceNotFoundException", Message: fmt.Sprintf("Protection %s not found", pid), HTTPStatus: http.StatusBadRequest,
 		}
 	}
 	tags := p.GetTags()
@@ -237,7 +237,7 @@ func (h *Handler) listTagsForResourceTyped(ctx context.Context, req *listTagsFor
 	p, found := h.store.getProtection(ctx, pid)
 	if !found {
 		return nil, &protocol.AWSError{
-			Code: "ResourceNotFoundException", Message: fmt.Sprintf("Protection %s not found", pid), HTTPStatus: http.StatusNotFound,
+			Code: "ResourceNotFoundException", Message: fmt.Sprintf("Protection %s not found", pid), HTTPStatus: http.StatusBadRequest,
 		}
 	}
 	return &listTagsForResourceResponse{Tags: serviceutil.TagsToList(p.GetTags())}, nil

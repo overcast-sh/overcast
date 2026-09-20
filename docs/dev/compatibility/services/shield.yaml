@@ -1,21 +1,179 @@
 service: shield
-status: not_started
+status: implementation_mismatch
 priority: p3
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-05-17
+last_updated: 2026-09-20
 protocols: [aws_json_1_1, aws_json_1_0, rpcv2_cbor]
 implementation: [internal/services/shield]
-integration_tests: []
+integration_tests: [tests/integration/shield]
 capability_docs: docs/services/shield.md
-operation_count_estimate: 5 tracked, all supported
-current_support_level: Basic subscription stub and protection metadata CRUD.
-operations: {}
+operation_count_estimate: 8 tracked, all supported
+current_support_level: >-
+  Protection records and a minimal subscription stub. CreateProtection,
+  DescribeProtection (by ProtectionId or ResourceArn), ListProtections,
+  DeleteProtection, DescribeSubscription, and the TagResource/UntagResource/
+  ListTagsForResource surface on a protection are all covered by integration
+  tests through tests/integration/shield. Reviewing against the Shield API
+  Reference surfaced four confirmed mismatches; the ResourceNotFoundException
+  HTTP status was a one-line fix and has been corrected (400, matching AWS),
+  and the remaining three are recorded rather than fixed, per the issue's
+  scope.
+operations:
+  DescribeSubscription:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/waf/latest/DDOSAPIReference/API_DescribeSubscription.html
+      - https://docs.aws.amazon.com/waf/latest/DDOSAPIReference/API_Subscription.html
+    protocol: AWS JSON 1.1/1.0 and RPCv2 CBOR; POST / with X-Amz-Target AWSShield_20160616.DescribeSubscription
+    tests:
+      - tests/integration/shield/shield_test.go
+    scenarios:
+      minimal_subscription_shape:
+        status: intentionally_partial
+        evidence: Returns AutoRenew=ENABLED, a fixed StartTime, and TimeCommitmentInSeconds=31536000. Real Subscription also carries SubscriptionArn, EndTime, Limits, ProactiveEngagementStatus and SubscriptionLimits, none of which Overcast populates — already documented in docs/services/shield.md's capability table ("DescribeSubscription returns a minimal active subscription").
+  CreateProtection:
+    status: implementation_mismatch
+    aws_docs:
+      - https://docs.aws.amazon.com/waf/latest/DDOSAPIReference/API_CreateProtection.html
+    protocol: AWS JSON 1.1/1.0 and RPCv2 CBOR; POST / with X-Amz-Target AWSShield_20160616.CreateProtection
+    tests:
+      - tests/integration/shield/shield_test.go
+    scenarios:
+      required_members:
+        status: reviewed
+        evidence: A missing Name or ResourceArn reports InvalidParameterException (400), a documented CreateProtection error.
+      response_shape:
+        status: reviewed
+        evidence: Response carries only ProtectionId, matching CreateProtectionResponse's single documented member.
+      duplicate_resource_arn:
+        status: implementation_mismatch
+        evidence: Real Shield allows only one Protection per ResourceArn and reports ResourceAlreadyExistsException on a second CreateProtection for the same ARN. Overcast's createProtectionTyped/createProtection never check for an existing ResourceArn — a second call succeeds and creates a second, independent Protection record for the same resource. No test asserts this as correct; it is recorded here instead per the issue's "do not fix, record" scope.
+  DescribeProtection:
+    status: implementation_mismatch
+    aws_docs:
+      - https://docs.aws.amazon.com/waf/latest/DDOSAPIReference/API_DescribeProtection.html
+    protocol: AWS JSON 1.1/1.0 and RPCv2 CBOR; POST / with X-Amz-Target AWSShield_20160616.DescribeProtection
+    tests:
+      - tests/integration/shield/shield_test.go
+    scenarios:
+      lookup_by_protection_id:
+        status: reviewed
+        evidence: Returns the matching Protection (Id, Name, ResourceArn).
+      lookup_by_resource_arn:
+        status: reviewed
+        evidence: Same Protection resolved when ResourceArn is provided instead of ProtectionId.
+      not_found:
+        status: reviewed
+        evidence: An unknown ProtectionId or ResourceArn reports ResourceNotFoundException with HTTP 400, matching the Shield API Reference. Previously answered with HTTP 404; fixed and pinned by shield_test.go's assertResourceNotFound.
+      protection_arn_field:
+        status: implementation_mismatch
+        evidence: Real Shield's Protection object always carries ProtectionArn (https://docs.aws.amazon.com/waf/latest/DDOSAPIReference/API_Protection.html). Overcast's Protection wire type (internal/services/shield/service.go) has no ProtectionArn member, so it is entirely absent from DescribeProtection/ListProtections responses rather than merely empty. Pinned by TestDescribeProtection_protectionArnFieldOmitted.
+      both_identifiers_provided:
+        status: blocked
+        evidence: AWS docs say the caller must provide ProtectionId or ResourceArn "but not both"; Overcast does not validate mutual exclusivity (it prefers ProtectionId silently). Not tested — AWS's exact error for this case is not documented and would need real-AWS verification.
+  ListProtections:
+    status: implementation_mismatch
+    aws_docs:
+      - https://docs.aws.amazon.com/waf/latest/DDOSAPIReference/API_ListProtections.html
+    protocol: AWS JSON 1.1/1.0 and RPCv2 CBOR; POST / with X-Amz-Target AWSShield_20160616.ListProtections
+    tests:
+      - tests/integration/shield/shield_test.go
+    scenarios:
+      list_all:
+        status: reviewed
+        evidence: Returns every created Protection; an empty account returns an empty list rather than an error.
+      filtering_and_pagination:
+        status: implementation_mismatch
+        evidence: listProtectionsRequest is an empty struct — InclusionFilters, MaxResults and NextToken all decode without error (extra JSON fields are ignored) but have no effect. Every call returns every protection, NextToken is never set, and a garbage NextToken is never rejected with InvalidPaginationTokenException. Pinned by TestListProtections_filtersAndPaginationIgnored.
+  DeleteProtection:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/waf/latest/DDOSAPIReference/API_DeleteProtection.html
+    protocol: AWS JSON 1.1/1.0 and RPCv2 CBOR; POST / with X-Amz-Target AWSShield_20160616.DeleteProtection
+    tests:
+      - tests/integration/shield/shield_test.go
+      - tests/integration/shield/shield_tags_test.go
+    scenarios:
+      required_member:
+        status: reviewed
+        evidence: A missing ProtectionId reports InvalidParameterException, though DeleteProtection's own documented error list names only InternalErrorException/OptimisticLockException/ResourceNotFoundException — the same required-field validation shape is used consistently across all eight operations.
+      not_found:
+        status: reviewed
+        evidence: Same fix as DescribeProtection's not_found scenario — HTTP 400, matching the Shield API Reference.
+      not_idempotent:
+        status: reviewed
+        evidence: Deleting an already-deleted ProtectionId reports ResourceNotFoundException rather than a second 200, matching real Shield (the Protection object is gone).
+      cascade_deletes_tags:
+        status: reviewed
+        evidence: Tags are stored inline on the protection record (protectionRecord.Tags), so deleting the record removes its tags with it; ListTagsForResource against the same ARN afterward reports the protection itself as not found.
+  TagResource:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/waf/latest/DDOSAPIReference/API_TagResource.html
+      - https://docs.aws.amazon.com/waf/latest/DDOSAPIReference/API_Tag.html
+    protocol: AWS JSON 1.1/1.0 and RPCv2 CBOR; POST / with X-Amz-Target AWSShield_20160616.TagResource
+    tests:
+      - tests/integration/shield/shield_tags_test.go
+    scenarios:
+      wire_shape:
+        status: reviewed
+        evidence: Tags round-trip as a list of {Key,Value} structs, matching the Tag object shape (not the map shape some other services use).
+      required_member:
+        status: reviewed
+        evidence: A missing ResourceARN reports InvalidParameterException.
+      malformed_or_non_protection_arn:
+        status: reviewed
+        evidence: An ARN that is not shaped arn:...:protection/<id> (e.g. the resource's own ARN rather than the protection's) reports InvalidParameterException — Overcast's tag surface only resolves protection ARNs.
+      unknown_protection:
+        status: reviewed
+        evidence: Same fix as DescribeProtection's not_found scenario — HTTP 400, matching the Shield API Reference.
+      tag_limit:
+        status: reviewed
+        evidence: 51 tags on one protection reports InvalidParameterException. The 50-tag limit matches the Tag object's documented prose ("up to 50 tags for a resource"), distinct from the Tags array's own 200-item wire cap — not a mismatch.
+      reserved_key_prefix:
+        status: reviewed
+        evidence: "A tag key starting with aws: is rejected with InvalidParameterException, matching the reserved-prefix convention AWS uses across services (shared serviceutil.ValidateTags)."
+  UntagResource:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/waf/latest/DDOSAPIReference/API_UntagResource.html
+    protocol: AWS JSON 1.1/1.0 and RPCv2 CBOR; POST / with X-Amz-Target AWSShield_20160616.UntagResource
+    tests:
+      - tests/integration/shield/shield_tags_test.go
+    scenarios:
+      removes_key:
+        status: reviewed
+        evidence: Removing one of several tag keys leaves the rest intact, verified through ListTagsForResource.
+      unknown_protection:
+        status: reviewed
+        evidence: Same fix as DescribeProtection's not_found scenario — HTTP 400, matching the Shield API Reference.
+  ListTagsForResource:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/waf/latest/DDOSAPIReference/API_ListTagsForResource.html
+    protocol: AWS JSON 1.1/1.0 and RPCv2 CBOR; POST / with X-Amz-Target AWSShield_20160616.ListTagsForResource
+    tests:
+      - tests/integration/shield/shield_tags_test.go
+    scenarios:
+      empty_for_untagged:
+        status: reviewed
+        evidence: An untagged protection returns an empty Tags list rather than an error.
+      unknown_protection:
+        status: reviewed
+        evidence: Same fix as DescribeProtection's not_found scenario — HTTP 400, matching the Shield API Reference.
 findings:
-  fixed: []
+  fixed:
+    - ResourceNotFoundException was answered with HTTP 404 across DescribeProtection, DeleteProtection, TagResource, UntagResource and ListTagsForResource; the Shield API Reference documents HTTP 400 for this exception on every one of those operations. Every HTTPStatus construction site for this exception, in both internal/services/shield/handler.go (the legacy JSON path) and internal/services/shield/typed_logic.go (the typed JSON10/11/RPCv2CBOR path), now uses http.StatusBadRequest.
   remaining_gaps:
-    - Add integration tests for tracked operations before expanding compatibility review.
-  intentionally_partial: []
+    - CreateProtection never checks for an existing Protection on the same ResourceArn, so it never reports ResourceAlreadyExistsException; a resource can end up with multiple independent Protection records where real Shield allows exactly one.
+    - Protection (internal/services/shield/service.go) has no ProtectionArn member, so DescribeProtection and ListProtections responses omit a field real Shield always returns.
+    - ListProtections implements no filtering (InclusionFilters) or pagination (MaxResults/NextToken) — listProtectionsRequest is an empty struct, so these documented parameters are silently accepted and ignored.
+    - DescribeProtection does not reject a request that supplies both ProtectionId and ResourceArn, which AWS's docs say is invalid ("but not both") — left unverified since the exact AWS error for this case is not documented (see the both_identifiers_provided scenario).
+  intentionally_partial:
+    - DescribeSubscription returns a fixed minimal Subscription (AutoRenew, StartTime, TimeCommitmentInSeconds only); SubscriptionArn, EndTime, Limits, ProactiveEngagementStatus and SubscriptionLimits are not modelled, matching the "Basic subscription stub" scope already documented in docs/services/shield.md.
+    - No traffic is inspected and no attack is ever mitigated or reported — DescribeAttack, ListAttacks, attack metrics and every Shield Advanced-only surface (health-based detection, proactive engagement, response team access) return 501 Not Implemented, per docs/services/shield.md's "Differences from AWS" table.
 handoff:
-  start_with: [CreateProtection, DescribeSubscription]
-  do_not_redo: []
-  commands: [go test -count=1 ./internal/services/shield/...]
+  start_with: [Fix CreateProtection duplicate-ResourceArn detection, or add ProtectionArn to the Protection wire type]
+  do_not_redo:
+    [DescribeSubscription, CreateProtection, DescribeProtection, ListProtections, DeleteProtection, TagResource, UntagResource, ListTagsForResource]
+  commands: [go test -count=1 ./internal/services/shield/... ./tests/integration/shield/...]

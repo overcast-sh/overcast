@@ -117,7 +117,7 @@ func (h *Handler) deleteProtection(w http.ResponseWriter, r *http.Request) {
 		protocol.WriteJSONError(w, r, &protocol.AWSError{
 			Code:       "ResourceNotFoundException",
 			Message:    fmt.Sprintf("Protection %s not found", req.ProtectionId),
-			HTTPStatus: http.StatusNotFound,
+			HTTPStatus: http.StatusBadRequest,
 		})
 		return
 	}
@@ -142,7 +142,7 @@ func (h *Handler) describeProtection(w http.ResponseWriter, r *http.Request) {
 			protocol.WriteJSONError(w, r, &protocol.AWSError{
 				Code:       "ResourceNotFoundException",
 				Message:    fmt.Sprintf("Protection %s not found", req.ProtectionId),
-				HTTPStatus: http.StatusNotFound,
+				HTTPStatus: http.StatusBadRequest,
 			})
 			return
 		}
@@ -165,7 +165,7 @@ func (h *Handler) describeProtection(w http.ResponseWriter, r *http.Request) {
 	protocol.WriteJSONError(w, r, &protocol.AWSError{
 		Code:       "ResourceNotFoundException",
 		Message:    "Protection not found",
-		HTTPStatus: http.StatusNotFound,
+		HTTPStatus: http.StatusBadRequest,
 	})
 }
 
@@ -200,7 +200,7 @@ func (h *Handler) tagResource(w http.ResponseWriter, r *http.Request) {
 	if !found {
 		protocol.WriteJSONError(w, r, &protocol.AWSError{
 			Code: "ResourceNotFoundException", Message: fmt.Sprintf("Protection %s not found", pid),
-			HTTPStatus: http.StatusNotFound,
+			HTTPStatus: http.StatusBadRequest,
 		})
 		return
 	}
@@ -248,7 +248,7 @@ func (h *Handler) untagResource(w http.ResponseWriter, r *http.Request) {
 	if !found {
 		protocol.WriteJSONError(w, r, &protocol.AWSError{
 			Code: "ResourceNotFoundException", Message: fmt.Sprintf("Protection %s not found", pid),
-			HTTPStatus: http.StatusNotFound,
+			HTTPStatus: http.StatusBadRequest,
 		})
 		return
 	}
@@ -290,7 +290,7 @@ func (h *Handler) listTagsForResource(w http.ResponseWriter, r *http.Request) {
 	if !found {
 		protocol.WriteJSONError(w, r, &protocol.AWSError{
 			Code: "ResourceNotFoundException", Message: fmt.Sprintf("Protection %s not found", pid),
-			HTTPStatus: http.StatusNotFound,
+			HTTPStatus: http.StatusBadRequest,
 		})
 		return
 	}
