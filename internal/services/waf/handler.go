@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/overcast-sh/overcast/internal/clock"
@@ -87,6 +88,39 @@ func (h *Handler) wafARN(ctx context.Context, scope, id string) string {
 	return fmt.Sprintf("arn:aws:wafv2:%s:%s:%s/%s", middleware.RegionFromContext(ctx, h.cfg.Region), h.cfg.AccountID, rtype, id)
 }
 
+// wafScopeValues is WAFv2's Scope enum, as the pinned model declares it
+// (com.amazonaws.wafv2#Scope, 2019-07-29: CLOUDFRONT | REGIONAL). The two
+// values are separate namespaces whose ARNs differ — :global/webacl/... for
+// CLOUDFRONT against :regional/webacl/... for REGIONAL — so a value outside
+// the enum names no namespace at all and cannot be stored or looked up.
+var wafScopeValues = []string{"CLOUDFRONT", "REGIONAL"}
+
+// validateScope refuses a Scope outside that enum.
+//
+// The violation is WAFInvalidParameterException rather than the front-end
+// validator's ValidationException, which is what most JSON services answer
+// for an out-of-enum member: WAFv2 models no ValidationException shape at
+// all, it lists WAFInvalidParameterException on every operation that takes a
+// Scope, and that exception's Field member (ParameterExceptionField) carries
+// a SCOPE_VALUE value for exactly this case.
+//
+// An empty Scope is a *missing* required parameter, not an enum violation, and
+// is left alone here so each operation keeps answering it the way it already
+// does — CreateWebACL with MissingParameter, the read paths by finding nothing.
+func validateScope(scope string) *protocol.AWSError {
+	if scope == "" || slices.Contains(wafScopeValues, scope) {
+		return nil
+	}
+	// The message names the model's Field value for this case (SCOPE_VALUE)
+	// and the value that was rejected. Only the code and the 400 are the wire
+	// contract; WAF's own message wording is not asserted on.
+	return &protocol.AWSError{
+		Code:       "WAFInvalidParameterException",
+		Message:    fmt.Sprintf("Error reason: The scope is not valid., field: SCOPE_VALUE, parameter: %s", scope),
+		HTTPStatus: http.StatusBadRequest,
+	}
+}
+
 func (h *Handler) getACL(ctx context.Context, scope, id string) (*WebACL, *protocol.AWSError) {
 	raw, found, err := h.store.Get(ctx, nsWebACLs, h.storeKey(scope, id))
 	if err != nil {
@@ -124,6 +158,10 @@ func (h *Handler) createWebACL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !serviceutil.RequireString(w, r, req.Scope, "Scope") {
+		return
+	}
+	if aerr := validateScope(req.Scope); aerr != nil {
+		protocol.WriteJSONError(w, r, aerr)
 		return
 	}
 	tags := serviceutil.TagsFromList(req.Tags)
@@ -176,6 +214,11 @@ func (h *Handler) getWebACL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if aerr := validateScope(req.Scope); aerr != nil {
+		protocol.WriteJSONError(w, r, aerr)
+		return
+	}
+
 	acl, aerr := h.getACL(r.Context(), req.Scope, req.ID)
 	if aerr != nil {
 		protocol.WriteJSONError(w, r, aerr)
@@ -201,6 +244,11 @@ func (h *Handler) listWebACLs(w http.ResponseWriter, r *http.Request) {
 		Scope string `json:"Scope"`
 	}
 	if !serviceutil.DecodeJSON(w, r, &req) {
+		return
+	}
+
+	if aerr := validateScope(req.Scope); aerr != nil {
+		protocol.WriteJSONError(w, r, aerr)
 		return
 	}
 
@@ -237,6 +285,11 @@ func (h *Handler) deleteWebACL(w http.ResponseWriter, r *http.Request) {
 		LockToken string `json:"LockToken"`
 	}
 	if !serviceutil.DecodeJSON(w, r, &req) {
+		return
+	}
+
+	if aerr := validateScope(req.Scope); aerr != nil {
+		protocol.WriteJSONError(w, r, aerr)
 		return
 	}
 

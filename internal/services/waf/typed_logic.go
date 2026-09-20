@@ -104,6 +104,9 @@ func (h *Handler) createWebACLTyped(ctx context.Context, req *createWebACLReques
 	if req.Scope == "" {
 		return nil, protocol.ErrMissingParameter("Scope")
 	}
+	if aerr := validateScope(req.Scope); aerr != nil {
+		return nil, aerr
+	}
 	tags := serviceutil.TagsFromList(req.Tags)
 	if aerr := serviceutil.ValidateTags(wafTagCfg, tags); aerr != nil {
 		return nil, aerr
@@ -143,6 +146,9 @@ func (h *Handler) createWebACLTyped(ctx context.Context, req *createWebACLReques
 }
 
 func (h *Handler) getWebACLTyped(ctx context.Context, req *getWebACLRequest) (*getWebACLResponse, *protocol.AWSError) {
+	if aerr := validateScope(req.Scope); aerr != nil {
+		return nil, aerr
+	}
 	acl, aerr := h.getACL(ctx, req.Scope, req.ID)
 	if aerr != nil {
 		return nil, aerr
@@ -163,6 +169,9 @@ func (h *Handler) getWebACLTyped(ctx context.Context, req *getWebACLRequest) (*g
 }
 
 func (h *Handler) listWebACLsTyped(ctx context.Context, req *listWebACLsRequest) (*listWebACLsResponse, *protocol.AWSError) {
+	if aerr := validateScope(req.Scope); aerr != nil {
+		return nil, aerr
+	}
 	prefix := serviceutil.RegionKey(h.cfg.Region, req.Scope+"/")
 	pairs, err := h.store.Scan(ctx, nsWebACLs, prefix)
 	if err != nil {
@@ -188,6 +197,9 @@ func (h *Handler) listWebACLsTyped(ctx context.Context, req *listWebACLsRequest)
 }
 
 func (h *Handler) deleteWebACLTyped(ctx context.Context, req *deleteWebACLRequest) (*struct{}, *protocol.AWSError) {
+	if aerr := validateScope(req.Scope); aerr != nil {
+		return nil, aerr
+	}
 	acl, aerr := h.getACL(ctx, req.Scope, req.ID)
 	if aerr != nil {
 		return nil, aerr
