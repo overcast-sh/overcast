@@ -20,6 +20,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/overcast-sh/overcast/tests/helpers"
 )
@@ -150,4 +151,75 @@ func TestCreateStack_ElastiCacheCacheCluster_propertiesThreaded(t *testing.T) {
 	if !strings.Contains(tagBody, "<Key>env</Key>") || !strings.Contains(tagBody, "<Value>prod</Value>") {
 		t.Fatalf("expected the env=prod tag supplied at Create to be stored, got: %s", tagBody)
 	}
+}
+
+const elastiCacheTeardownTemplate = `{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Resources": {
+    "GoneCluster": {
+      "Type": "AWS::ElastiCache::CacheCluster",
+      "Properties": {
+        "ClusterName": "cfn-teardown-cluster",
+        "Engine": "redis",
+        "CacheNodeType": "cache.t3.micro",
+        "NumCacheNodes": 1
+      }
+    }
+  }
+}`
+
+// TestDeleteStack_ElastiCacheCacheClusterAlreadyGone pins the teardown half of
+// issue #1991. A resource that is already absent must never fail a stack
+// delete, and the provisioner decides that from what the service answers:
+// resourceAlreadyGone treats HTTP 404, or absence named in the error body, as
+// "it is gone". CacheClusterNotFound used to satisfy only the second of those
+// and now satisfies both, which is exactly the kind of move that goes
+// unnoticed until a stack strands in DELETE_FAILED.
+//
+// The cluster is removed out of band first so that the stack delete meets the
+// not-found answer rather than a successful DeleteCacheCluster.
+func TestDeleteStack_ElastiCacheCacheClusterAlreadyGone(t *testing.T) {
+	// Given: a stack holding a cache cluster
+	srv := helpers.NewTestServer(t)
+	cr := cfnQuery(t, srv, "CreateStack", url.Values{
+		"StackName":    []string{"elasticache-teardown-stack"},
+		"TemplateBody": []string{elastiCacheTeardownTemplate},
+	})
+	defer cr.Body.Close()
+	helpers.AssertStatus(t, cr, http.StatusOK)
+	waitForStackStatus(t, srv, "elasticache-teardown-stack", "CREATE_COMPLETE")
+
+	// And: the cluster deleted out from under it, so that the stack delete
+	// meets the not-found fault
+	dc := elasticacheQuery(t, srv, "DeleteCacheCluster", url.Values{
+		"CacheClusterId": []string{"cfn-teardown-cluster"},
+	})
+	defer dc.Body.Close()
+	helpers.AssertStatus(t, dc, http.StatusOK)
+	helpers.Eventually(t, 30*time.Second, 20*time.Millisecond, func() bool {
+		resp := elasticacheQuery(t, srv, "DescribeCacheClusters", url.Values{
+			"CacheClusterId": []string{"cfn-teardown-cluster"},
+		})
+		defer resp.Body.Close()
+		return strings.Contains(string(readBody(t, resp)), "CacheClusterNotFound")
+	}, "timed out waiting for the cache cluster to be gone")
+
+	// And: the fault it answers with is the 404 its awsQueryError trait binds,
+	// which is the signal resourceAlreadyGone reads first
+	missing := elasticacheQuery(t, srv, "DescribeCacheClusters", url.Values{
+		"CacheClusterId": []string{"cfn-teardown-cluster"},
+	})
+	defer missing.Body.Close()
+	helpers.AssertStatus(t, missing, http.StatusNotFound)
+
+	// When: the stack is deleted
+	del := cfnQuery(t, srv, "DeleteStack", url.Values{
+		"StackName": []string{"elasticache-teardown-stack"},
+	})
+	defer del.Body.Close()
+	helpers.AssertStatus(t, del, http.StatusOK)
+
+	// Then: the teardown reads the fault as "already gone" and completes,
+	// rather than reporting a resource still standing
+	waitForStackStatus(t, srv, "elasticache-teardown-stack", "DELETE_COMPLETE")
 }
