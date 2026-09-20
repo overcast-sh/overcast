@@ -23,18 +23,18 @@ func (h *Handler) CreateMonitoringSubscription(w http.ResponseWriter, r *http.Re
 	dist, err := h.store.GetDistribution(r.Context(), distID)
 	if err != nil {
 		log.LogStateError(r, "get distribution", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if dist == nil {
-		protocol.WriteXMLError(w, r, errDistributionNotFound(distID))
+		writeError(w, r, errDistributionNotFound(distID))
 		return
 	}
 
 	var input monitoringSubscriptionXML
 	if err := xml.NewDecoder(r.Body).Decode(&input); err != nil {
 		log.Debug("decode error", zap.Error(err))
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
@@ -46,12 +46,12 @@ func (h *Handler) CreateMonitoringSubscription(w http.ResponseWriter, r *http.Re
 
 	if storeErr := h.store.PutMonitoringSubscription(r.Context(), distID, ms); storeErr != nil {
 		log.LogStateError(r, "put monitoring subscription", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
 	log.Info("monitoring subscription created", zap.String("distId", distID))
-	protocol.WriteXML(w, r, http.StatusOK, &input)
+	writeXML(w, r, http.StatusOK, &input)
 }
 
 // ─── Monitoring Subscription: Get ───────────────────────────────────────────
@@ -63,18 +63,18 @@ func (h *Handler) GetMonitoringSubscription(w http.ResponseWriter, r *http.Reque
 	ms, err := h.store.GetMonitoringSubscription(r.Context(), distID)
 	if err != nil {
 		h.log.WithOperation("GetMonitoringSubscription").LogStateError(r, "get monitoring subscription", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if ms == nil {
-		protocol.WriteXMLError(w, r, errNoSuchMonitoringSubscription(distID))
+		writeError(w, r, errNoSuchMonitoringSubscription(distID))
 		return
 	}
 
 	resp := monitoringSubscriptionXML{
 		RealtimeMetricsSubscriptionConfig: ms.RealtimeMetricsSubscriptionConfig,
 	}
-	protocol.WriteXML(w, r, http.StatusOK, &resp)
+	writeXML(w, r, http.StatusOK, &resp)
 }
 
 // ─── Monitoring Subscription: Delete ────────────────────────────────────────
@@ -87,17 +87,17 @@ func (h *Handler) DeleteMonitoringSubscription(w http.ResponseWriter, r *http.Re
 	ms, err := h.store.GetMonitoringSubscription(r.Context(), distID)
 	if err != nil {
 		log.LogStateError(r, "get monitoring subscription", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if ms == nil {
-		protocol.WriteXMLError(w, r, errNoSuchMonitoringSubscription(distID))
+		writeError(w, r, errNoSuchMonitoringSubscription(distID))
 		return
 	}
 
 	if storeErr := h.store.DeleteMonitoringSubscription(r.Context(), distID); storeErr != nil {
 		log.LogStateError(r, "delete monitoring subscription", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -122,14 +122,14 @@ func (h *Handler) CreateRealtimeLogConfig(w http.ResponseWriter, r *http.Request
 	var input realtimeLogConfigInput
 	if err := xml.NewDecoder(r.Body).Decode(&input); err != nil {
 		log.Debug("decode error", zap.Error(err))
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
 	}
 
 	if input.Name == "" {
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "InvalidArgument", Message: "Name is required.", HTTPStatus: 400,
 		})
 		return
@@ -138,7 +138,7 @@ func (h *Handler) CreateRealtimeLogConfig(w http.ResponseWriter, r *http.Request
 	// Check for duplicate name.
 	existing, _ := h.store.GetRealtimeLogConfig(r.Context(), input.Name)
 	if existing != nil {
-		protocol.WriteXMLError(w, r, errRealtimeLogConfigAlreadyExists(input.Name))
+		writeError(w, r, errRealtimeLogConfigAlreadyExists(input.Name))
 		return
 	}
 
@@ -155,7 +155,7 @@ func (h *Handler) CreateRealtimeLogConfig(w http.ResponseWriter, r *http.Request
 
 	if storeErr := h.store.PutRealtimeLogConfig(r.Context(), rlc); storeErr != nil {
 		log.LogStateError(r, "put realtime log config", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -165,7 +165,7 @@ func (h *Handler) CreateRealtimeLogConfig(w http.ResponseWriter, r *http.Request
 		XMLName xml.Name              `xml:"CreateRealtimeLogConfigResult"`
 		RLC     *realtimeLogConfigXML `xml:"RealtimeLogConfig"`
 	}
-	protocol.WriteXML(w, r, http.StatusCreated, &result{RLC: rlcToXML(rlc)})
+	writeXML(w, r, http.StatusCreated, &result{RLC: rlcToXML(rlc)})
 }
 
 // ─── Realtime Log Config: Get ───────────────────────────────────────────────
@@ -181,7 +181,7 @@ type realtimeLogConfigGetInput struct {
 func (h *Handler) GetRealtimeLogConfig(w http.ResponseWriter, r *http.Request) {
 	var input realtimeLogConfigGetInput
 	if err := xml.NewDecoder(r.Body).Decode(&input); err != nil {
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
@@ -200,18 +200,18 @@ func (h *Handler) GetRealtimeLogConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if name == "" {
-		protocol.WriteXMLError(w, r, errNoSuchRealtimeLogConfig(""))
+		writeError(w, r, errNoSuchRealtimeLogConfig(""))
 		return
 	}
 
 	rlc, err := h.store.GetRealtimeLogConfig(r.Context(), name)
 	if err != nil {
 		h.log.WithOperation("GetRealtimeLogConfig").LogStateError(r, "get realtime log config", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if rlc == nil {
-		protocol.WriteXMLError(w, r, errNoSuchRealtimeLogConfig(name))
+		writeError(w, r, errNoSuchRealtimeLogConfig(name))
 		return
 	}
 
@@ -219,7 +219,7 @@ func (h *Handler) GetRealtimeLogConfig(w http.ResponseWriter, r *http.Request) {
 		XMLName xml.Name              `xml:"GetRealtimeLogConfigResult"`
 		RLC     *realtimeLogConfigXML `xml:"RealtimeLogConfig"`
 	}
-	protocol.WriteXML(w, r, http.StatusOK, &result{RLC: rlcToXML(rlc)})
+	writeXML(w, r, http.StatusOK, &result{RLC: rlcToXML(rlc)})
 }
 
 // ─── Realtime Log Config: Update ────────────────────────────────────────────
@@ -231,14 +231,14 @@ func (h *Handler) UpdateRealtimeLogConfig(w http.ResponseWriter, r *http.Request
 	var input realtimeLogConfigInput
 	if err := xml.NewDecoder(r.Body).Decode(&input); err != nil {
 		log.Debug("decode error", zap.Error(err))
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
 	}
 
 	if input.Name == "" {
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "InvalidArgument", Message: "Name is required.", HTTPStatus: 400,
 		})
 		return
@@ -247,11 +247,11 @@ func (h *Handler) UpdateRealtimeLogConfig(w http.ResponseWriter, r *http.Request
 	rlc, err := h.store.GetRealtimeLogConfig(r.Context(), input.Name)
 	if err != nil {
 		log.LogStateError(r, "get realtime log config", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if rlc == nil {
-		protocol.WriteXMLError(w, r, errNoSuchRealtimeLogConfig(input.Name))
+		writeError(w, r, errNoSuchRealtimeLogConfig(input.Name))
 		return
 	}
 
@@ -263,7 +263,7 @@ func (h *Handler) UpdateRealtimeLogConfig(w http.ResponseWriter, r *http.Request
 
 	if storeErr := h.store.PutRealtimeLogConfig(r.Context(), rlc); storeErr != nil {
 		log.LogStateError(r, "put realtime log config", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -273,7 +273,7 @@ func (h *Handler) UpdateRealtimeLogConfig(w http.ResponseWriter, r *http.Request
 		XMLName xml.Name              `xml:"UpdateRealtimeLogConfigResult"`
 		RLC     *realtimeLogConfigXML `xml:"RealtimeLogConfig"`
 	}
-	protocol.WriteXML(w, r, http.StatusOK, &result{RLC: rlcToXML(rlc)})
+	writeXML(w, r, http.StatusOK, &result{RLC: rlcToXML(rlc)})
 }
 
 // ─── Realtime Log Config: Delete ────────────────────────────────────────────
@@ -291,7 +291,7 @@ func (h *Handler) DeleteRealtimeLogConfig(w http.ResponseWriter, r *http.Request
 
 	var input realtimeLogConfigDeleteInput
 	if err := xml.NewDecoder(r.Body).Decode(&input); err != nil {
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
@@ -309,24 +309,24 @@ func (h *Handler) DeleteRealtimeLogConfig(w http.ResponseWriter, r *http.Request
 	}
 
 	if name == "" {
-		protocol.WriteXMLError(w, r, errNoSuchRealtimeLogConfig(""))
+		writeError(w, r, errNoSuchRealtimeLogConfig(""))
 		return
 	}
 
 	rlc, err := h.store.GetRealtimeLogConfig(r.Context(), name)
 	if err != nil {
 		log.LogStateError(r, "get realtime log config", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if rlc == nil {
-		protocol.WriteXMLError(w, r, errNoSuchRealtimeLogConfig(name))
+		writeError(w, r, errNoSuchRealtimeLogConfig(name))
 		return
 	}
 
 	if storeErr := h.store.DeleteRealtimeLogConfig(r.Context(), name); storeErr != nil {
 		log.LogStateError(r, "delete realtime log config", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -343,7 +343,7 @@ func (h *Handler) ListRealtimeLogConfigs(w http.ResponseWriter, r *http.Request)
 	all, err := h.store.ListRealtimeLogConfigs(r.Context())
 	if err != nil {
 		log.LogStateError(r, "list realtime log configs", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -359,7 +359,7 @@ func (h *Handler) ListRealtimeLogConfigs(w http.ResponseWriter, r *http.Request)
 		Items:    items,
 	}
 
-	protocol.WriteXML(w, r, http.StatusOK, &result)
+	writeXML(w, r, http.StatusOK, &result)
 }
 
 // rlcToXML converts a RealtimeLogConfig to its XML representation.

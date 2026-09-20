@@ -735,3 +735,125 @@ func TestWriteXMLError_detailsAreOptionalAndOrdered(t *testing.T) {
 		t.Errorf("details must render in order between Message and RequestId\n got: %s\nwant: %s", detailed, wantDetailed)
 	}
 }
+
+// ---- rest-xml wrapped errors (CloudFront) ---------------------------------
+
+// captureResponse runs write against a recorder carrying request ID "rid" and
+// returns the response together with its body.
+func captureResponse(t *testing.T, write func(w http.ResponseWriter, r *http.Request)) (*http.Response, string) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req = req.WithContext(protocol.ContextWithRequestID(req.Context(), "rid"))
+	w := httptest.NewRecorder()
+	write(w, req)
+	resp := w.Result()
+	body, _ := io.ReadAll(resp.Body)
+	return resp, string(body)
+}
+
+// TestWriteQueryXMLError_declaresNoNamespace holds the Query-protocol
+// envelope byte-identical. WriteRESTXMLError shares its response struct, and
+// the xmlns attribute it adds is omitempty precisely so that Route 53, SNS,
+// STS and IAM keep sending exactly what they always have.
+func TestWriteQueryXMLError_declaresNoNamespace(t *testing.T) {
+	// Given: an error written through the Query-protocol writer
+	_, body := captureResponse(t, func(w http.ResponseWriter, r *http.Request) {
+		protocol.WriteQueryXMLError(w, r, &protocol.AWSError{
+			Code:       "NoSuchHostedZone",
+			Message:    "No hosted zone found with ID: Z1",
+			HTTPStatus: http.StatusNotFound,
+		})
+	})
+
+	// Then: the envelope is unchanged, and carries no xmlns
+	want := xml.Header + "<ErrorResponse><Error><Type>Sender</Type>" +
+		"<Code>NoSuchHostedZone</Code>" +
+		"<Message>No hosted zone found with ID: Z1</Message></Error>" +
+		"<RequestId>rid</RequestId></ErrorResponse>"
+	if body != want {
+		t.Errorf("Query error envelope changed\n got: %s\nwant: %s", body, want)
+	}
+}
+
+func TestWriteRESTXMLError_wrapsWithServiceNamespace(t *testing.T) {
+	// Given: an error written through the rest-xml writer with a namespace
+	const ns = "http://cloudfront.amazonaws.com/doc/2020-05-31/"
+	resp, body := captureResponse(t, func(w http.ResponseWriter, r *http.Request) {
+		protocol.WriteRESTXMLError(w, r, ns, &protocol.AWSError{
+			Code:       "NoSuchDistribution",
+			Message:    "The specified distribution does not exist: E1",
+			HTTPStatus: http.StatusNotFound,
+		})
+	})
+
+	// Then: the wrapped envelope carries the namespace on its root, and the
+	// headers are the ones the service's success responses use
+	want := xml.Header + `<ErrorResponse xmlns="` + ns + `"><Error><Type>Sender</Type>` +
+		"<Code>NoSuchDistribution</Code>" +
+		"<Message>The specified distribution does not exist: E1</Message></Error>" +
+		"<RequestId>rid</RequestId></ErrorResponse>"
+	if body != want {
+		t.Errorf("rest-xml error envelope\n got: %s\nwant: %s", body, want)
+	}
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("status: expected 404, got %d", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); ct != "application/xml" {
+		t.Errorf("Content-Type: expected application/xml, got %q", ct)
+	}
+	if rid := resp.Header.Get("x-amz-request-id"); rid != "rid" {
+		t.Errorf("x-amz-request-id: expected rid, got %q", rid)
+	}
+}
+
+// TestWriteRESTXMLError_serverErrorIsReceiver covers the other value of Type:
+// AWS blames the receiver for a 5xx and the sender for everything below it.
+func TestWriteRESTXMLError_serverErrorIsReceiver(t *testing.T) {
+	// Given: a server-side failure written through the rest-xml writer
+	_, body := captureResponse(t, func(w http.ResponseWriter, r *http.Request) {
+		protocol.WriteRESTXMLError(w, r, "urn:test", protocol.ErrInternalError)
+	})
+
+	// Then: Type reports Receiver
+	if !strings.Contains(body, "<Type>Receiver</Type>") {
+		t.Errorf("expected <Type>Receiver</Type> for a 5xx, got: %s", body)
+	}
+}
+
+// TestWriteXMLNS_stampsTheRootOnly covers the success half: the namespace is
+// a property of the response, so it lands on the root element and nowhere
+// else, however deeply the payload nests.
+func TestWriteXMLNS_stampsTheRootOnly(t *testing.T) {
+	type inner struct {
+		XMLName xml.Name `xml:"Inner"`
+		Value   string   `xml:"Value"`
+	}
+	type outer struct {
+		XMLName xml.Name `xml:"Outer"`
+		ID      string   `xml:"Id"`
+		Inner   inner    `xml:"Inner"`
+	}
+	payload := &outer{ID: "E1", Inner: inner{Value: "v & w"}}
+	const ns = "http://cloudfront.amazonaws.com/doc/2020-05-31/"
+
+	// Given: a nested payload written with a namespace
+	_, namespaced := captureResponse(t, func(w http.ResponseWriter, r *http.Request) {
+		protocol.WriteXMLNS(w, r, http.StatusOK, ns, payload)
+	})
+
+	// Then: only the root declares it, and nothing else about the document
+	// changed — escaping included
+	want := xml.Header + `<Outer xmlns="` + ns + `"><Id>E1</Id>` +
+		"<Inner><Value>v &amp; w</Value></Inner></Outer>"
+	if namespaced != want {
+		t.Errorf("namespaced response\n got: %s\nwant: %s", namespaced, want)
+	}
+
+	// And: the same payload without a namespace is what WriteXML writes
+	_, plain := captureResponse(t, func(w http.ResponseWriter, r *http.Request) {
+		protocol.WriteXML(w, r, http.StatusOK, payload)
+	})
+	if wantPlain := strings.Replace(want, ` xmlns="`+ns+`"`, "", 1); plain != wantPlain {
+		t.Errorf("un-namespaced response changed\n got: %s\nwant: %s", plain, wantPlain)
+	}
+}

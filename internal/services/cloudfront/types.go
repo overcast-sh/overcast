@@ -3,24 +3,51 @@ package cloudfront
 import (
 	"encoding/xml"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/overcast-sh/overcast/internal/protocol"
 )
+
+// ─── Wire format ─────────────────────────────────────────────────────────────
+
+// xmlNamespace is the namespace the pinned model declares on the CloudFront
+// service shape (smithy.api#xmlNamespace). Every response root carries it as
+// its default xmlns; nested elements inherit it.
+const xmlNamespace = "http://cloudfront.amazonaws.com/doc/2020-05-31/"
+
+// writeXML writes a successful CloudFront response, namespaced. Handlers call
+// this rather than protocol.WriteXML so that no response can be added without
+// the namespace.
+func writeXML(w http.ResponseWriter, r *http.Request, status int, v any) {
+	protocol.WriteXMLNS(w, r, status, xmlNamespace, v)
+}
+
+// writeError writes a CloudFront error. The service's protocol trait is
+// "aws.protocols#restXml": {} with no noErrorWrapping, so errors go in the
+// wrapped <ErrorResponse> envelope — not S3's bare <Error>, which every
+// handler here used to reach for because protocol.WriteXMLError was the only
+// REST-XML error writer (#2010).
+func writeError(w http.ResponseWriter, r *http.Request, aerr *protocol.AWSError) {
+	protocol.WriteRESTXMLError(w, r, xmlNamespace, aerr)
+}
 
 // ─── Distribution ────────────────────────────────────────────────────────────
 
 // Distribution is the top-level response wrapper returned by CreateDistribution
 // and GetDistribution. Dual xml+json tags allow the same type to be used for
 // both REST-XML wire format and JSON state persistence.
+//
+// Field order is element order on the wire, so it follows the pinned model's
+// member order for the Distribution shape.
 type Distribution struct {
 	XMLName                       xml.Name           `xml:"Distribution" json:"-"`
 	ID                            string             `xml:"Id" json:"id"`
 	ARN                           string             `xml:"ARN" json:"arn"`
 	Status                        string             `xml:"Status" json:"status"`
-	DomainName                    string             `xml:"DomainName" json:"domain_name"`
 	LastModifiedTime              time.Time          `xml:"LastModifiedTime" json:"last_modified_time"`
 	InProgressInvalidationBatches int                `xml:"InProgressInvalidationBatches" json:"in_progress_invalidation_batches"`
+	DomainName                    string             `xml:"DomainName" json:"domain_name"`
 	ActiveTrustedSigners          *ActiveTrustedList `xml:"ActiveTrustedSigners,omitempty" json:"active_trusted_signers,omitempty"`
 	ActiveTrustedKeyGroups        *ActiveTrustedList `xml:"ActiveTrustedKeyGroups,omitempty" json:"active_trusted_key_groups,omitempty"`
 	DistributionConfig            DistributionConfig `xml:"DistributionConfig" json:"distribution_config"`
@@ -41,26 +68,31 @@ type ActiveTrustedList struct {
 // DistributionConfig holds the full configuration for a distribution.
 // Every field the SDKs commonly send is modelled so that round-trip
 // (decode → store → encode) preserves the caller's intent.
+//
+// Field order is element order on the wire, so it follows the pinned model's
+// member order for the DistributionConfig shape. The members Overcast does
+// not model yet (AnycastIpListId, TenantConfig, ConnectionMode,
+// ViewerMtlsConfig, ConnectionFunctionAssociation) sit between Staging and
+// CacheTagConfig there.
 type DistributionConfig struct {
 	XMLName              xml.Name              `xml:"DistributionConfig" json:"-"`
 	CallerReference      string                `xml:"CallerReference" json:"caller_reference"`
-	Comment              string                `xml:"Comment" json:"comment"`
-	Enabled              bool                  `xml:"Enabled" json:"enabled"`
-	Origins              Origins               `xml:"Origins" json:"origins"`
-	DefaultCacheBehavior DefaultCacheBehavior  `xml:"DefaultCacheBehavior" json:"default_cache_behavior"`
-	CacheBehaviors       *CacheBehaviors       `xml:"CacheBehaviors,omitempty" json:"cache_behaviors,omitempty"`
 	Aliases              *StringList           `xml:"Aliases,omitempty" json:"aliases,omitempty"`
 	DefaultRootObject    string                `xml:"DefaultRootObject,omitempty" json:"default_root_object,omitempty"`
+	Origins              Origins               `xml:"Origins" json:"origins"`
+	OriginGroups         *OriginGroups         `xml:"OriginGroups,omitempty" json:"origin_groups,omitempty"`
+	DefaultCacheBehavior DefaultCacheBehavior  `xml:"DefaultCacheBehavior" json:"default_cache_behavior"`
+	CacheBehaviors       *CacheBehaviors       `xml:"CacheBehaviors,omitempty" json:"cache_behaviors,omitempty"`
+	CustomErrorResponses *CustomErrorResponses `xml:"CustomErrorResponses,omitempty" json:"custom_error_responses,omitempty"`
+	Comment              string                `xml:"Comment" json:"comment"`
+	Logging              *LoggingConfig        `xml:"Logging,omitempty" json:"logging,omitempty"`
 	PriceClass           string                `xml:"PriceClass,omitempty" json:"price_class,omitempty"`
+	Enabled              bool                  `xml:"Enabled" json:"enabled"`
+	ViewerCertificate    *ViewerCertificate    `xml:"ViewerCertificate,omitempty" json:"viewer_certificate,omitempty"`
+	Restrictions         *Restrictions         `xml:"Restrictions,omitempty" json:"restrictions,omitempty"`
+	WebACLId             string                `xml:"WebACLId,omitempty" json:"web_acl_id,omitempty"`
 	HttpVersion          string                `xml:"HttpVersion,omitempty" json:"http_version,omitempty"`
 	IsIPV6Enabled        *bool                 `xml:"IsIPV6Enabled,omitempty" json:"is_ipv6_enabled,omitempty"`
-	WebACLId             string                `xml:"WebACLId,omitempty" json:"web_acl_id,omitempty"`
-	Restrictions         *Restrictions         `xml:"Restrictions,omitempty" json:"restrictions,omitempty"`
-	ViewerCertificate    *ViewerCertificate    `xml:"ViewerCertificate,omitempty" json:"viewer_certificate,omitempty"`
-	CustomErrorResponses *CustomErrorResponses `xml:"CustomErrorResponses,omitempty" json:"custom_error_responses,omitempty"`
-	Logging              *LoggingConfig        `xml:"Logging,omitempty" json:"logging,omitempty"`
-
-	OriginGroups *OriginGroups `xml:"OriginGroups,omitempty" json:"origin_groups,omitempty"`
 
 	// ContinuousDeploymentPolicyId links this distribution to a continuous
 	// deployment policy that routes a portion of traffic to a staging distribution.
@@ -360,19 +392,22 @@ type DistributionList struct {
 }
 
 // DistributionSummary is the per-item element within a DistributionList.
+//
+// Field order is element order on the wire, so it follows the pinned model's
+// member order for the DistributionSummary shape.
 type DistributionSummary struct {
 	ID                   string               `xml:"Id" json:"id"`
 	ARN                  string               `xml:"ARN" json:"arn"`
 	Status               string               `xml:"Status" json:"status"`
-	DomainName           string               `xml:"DomainName" json:"domain_name"`
 	LastModifiedTime     time.Time            `xml:"LastModifiedTime" json:"last_modified_time"`
-	Comment              string               `xml:"Comment" json:"comment"`
-	Enabled              bool                 `xml:"Enabled" json:"enabled"`
+	DomainName           string               `xml:"DomainName" json:"domain_name"`
+	Aliases              *StringList          `xml:"Aliases,omitempty" json:"aliases,omitempty"`
 	Origins              Origins              `xml:"Origins" json:"origins"`
 	DefaultCacheBehavior DefaultCacheBehavior `xml:"DefaultCacheBehavior" json:"default_cache_behavior"`
 	CacheBehaviors       *CacheBehaviors      `xml:"CacheBehaviors,omitempty" json:"cache_behaviors,omitempty"`
-	Aliases              *StringList          `xml:"Aliases,omitempty" json:"aliases,omitempty"`
+	Comment              string               `xml:"Comment" json:"comment"`
 	PriceClass           string               `xml:"PriceClass,omitempty" json:"price_class,omitempty"`
+	Enabled              bool                 `xml:"Enabled" json:"enabled"`
 	ViewerCertificate    *ViewerCertificate   `xml:"ViewerCertificate,omitempty" json:"viewer_certificate,omitempty"`
 	Restrictions         *Restrictions        `xml:"Restrictions,omitempty" json:"restrictions,omitempty"`
 	WebACLId             string               `xml:"WebACLId,omitempty" json:"web_acl_id,omitempty"`

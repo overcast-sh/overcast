@@ -21,14 +21,14 @@ func (h *Handler) CreateFieldLevelEncryptionConfig(w http.ResponseWriter, r *htt
 	var cfg FLEConfigData
 	if err := xml.NewDecoder(r.Body).Decode(&cfg); err != nil {
 		log.Debug("decode error", zap.Error(err))
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
 	}
 
 	if cfg.CallerReference == "" {
-		protocol.WriteXMLError(w, r, errMissingCallerReference())
+		writeError(w, r, errMissingCallerReference())
 		return
 	}
 
@@ -44,7 +44,7 @@ func (h *Handler) CreateFieldLevelEncryptionConfig(w http.ResponseWriter, r *htt
 
 	if storeErr := h.store.PutFLEConfig(r.Context(), c); storeErr != nil {
 		log.LogStateError(r, "put fle config", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -57,7 +57,7 @@ func (h *Handler) CreateFieldLevelEncryptionConfig(w http.ResponseWriter, r *htt
 	}
 	w.Header().Set("ETag", computeETag(c.Version))
 	w.Header().Set("Location", fmt.Sprintf("/2020-05-31/field-level-encryption/%s", id))
-	protocol.WriteXML(w, r, http.StatusCreated, &resp)
+	writeXML(w, r, http.StatusCreated, &resp)
 }
 
 // ─── FLE Config: Get ────────────────────────────────────────────────────────
@@ -69,11 +69,11 @@ func (h *Handler) GetFieldLevelEncryption(w http.ResponseWriter, r *http.Request
 	c, err := h.store.GetFLEConfig(r.Context(), id)
 	if err != nil {
 		h.log.WithOperation("GetFieldLevelEncryption").LogStateError(r, "get fle config", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if c == nil {
-		protocol.WriteXMLError(w, r, errNoSuchFieldLevelEncryptionConfig(id))
+		writeError(w, r, errNoSuchFieldLevelEncryptionConfig(id))
 		return
 	}
 
@@ -83,7 +83,7 @@ func (h *Handler) GetFieldLevelEncryption(w http.ResponseWriter, r *http.Request
 		FieldLevelEncryptionConfig: c.FLEConfigData,
 	}
 	w.Header().Set("ETag", computeETag(c.Version))
-	protocol.WriteXML(w, r, http.StatusOK, &resp)
+	writeXML(w, r, http.StatusOK, &resp)
 }
 
 // ─── FLE Config: GetConfig ──────────────────────────────────────────────────
@@ -95,11 +95,11 @@ func (h *Handler) GetFieldLevelEncryptionConfig(w http.ResponseWriter, r *http.R
 	c, err := h.store.GetFLEConfig(r.Context(), id)
 	if err != nil {
 		h.log.WithOperation("GetFieldLevelEncryptionConfig").LogStateError(r, "get fle config", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if c == nil {
-		protocol.WriteXMLError(w, r, errNoSuchFieldLevelEncryptionConfig(id))
+		writeError(w, r, errNoSuchFieldLevelEncryptionConfig(id))
 		return
 	}
 
@@ -108,7 +108,7 @@ func (h *Handler) GetFieldLevelEncryptionConfig(w http.ResponseWriter, r *http.R
 		Comment:         c.FLEConfigData.Comment,
 	}
 	w.Header().Set("ETag", computeETag(c.Version))
-	protocol.WriteXML(w, r, http.StatusOK, &resp)
+	writeXML(w, r, http.StatusOK, &resp)
 }
 
 // ─── FLE Config: Update ─────────────────────────────────────────────────────
@@ -120,30 +120,30 @@ func (h *Handler) UpdateFieldLevelEncryptionConfig(w http.ResponseWriter, r *htt
 	id := chi.URLParam(r, "id")
 	ifMatch := r.Header.Get("If-Match")
 	if ifMatch == "" {
-		protocol.WriteXMLError(w, r, errInvalidIfMatch())
+		writeError(w, r, errInvalidIfMatch())
 		return
 	}
 
 	c, err := h.store.GetFLEConfig(r.Context(), id)
 	if err != nil {
 		log.LogStateError(r, "get fle config", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if c == nil {
-		protocol.WriteXMLError(w, r, errNoSuchFieldLevelEncryptionConfig(id))
+		writeError(w, r, errNoSuchFieldLevelEncryptionConfig(id))
 		return
 	}
 
 	if ifMatch != computeETag(c.Version) {
-		protocol.WriteXMLError(w, r, errPreconditionFailed())
+		writeError(w, r, errPreconditionFailed())
 		return
 	}
 
 	var cfg FLEConfigData
 	if err := xml.NewDecoder(r.Body).Decode(&cfg); err != nil {
 		log.Debug("decode error", zap.Error(err))
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
@@ -155,7 +155,7 @@ func (h *Handler) UpdateFieldLevelEncryptionConfig(w http.ResponseWriter, r *htt
 
 	if storeErr := h.store.PutFLEConfig(r.Context(), c); storeErr != nil {
 		log.LogStateError(r, "put fle config", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -167,7 +167,7 @@ func (h *Handler) UpdateFieldLevelEncryptionConfig(w http.ResponseWriter, r *htt
 		FieldLevelEncryptionConfig: c.FLEConfigData,
 	}
 	w.Header().Set("ETag", computeETag(c.Version))
-	protocol.WriteXML(w, r, http.StatusOK, &resp)
+	writeXML(w, r, http.StatusOK, &resp)
 }
 
 // ─── FLE Config: Delete ─────────────────────────────────────────────────────
@@ -179,29 +179,29 @@ func (h *Handler) DeleteFieldLevelEncryption(w http.ResponseWriter, r *http.Requ
 	id := chi.URLParam(r, "id")
 	ifMatch := r.Header.Get("If-Match")
 	if ifMatch == "" {
-		protocol.WriteXMLError(w, r, errInvalidIfMatch())
+		writeError(w, r, errInvalidIfMatch())
 		return
 	}
 
 	c, err := h.store.GetFLEConfig(r.Context(), id)
 	if err != nil {
 		log.LogStateError(r, "get fle config", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if c == nil {
-		protocol.WriteXMLError(w, r, errNoSuchFieldLevelEncryptionConfig(id))
+		writeError(w, r, errNoSuchFieldLevelEncryptionConfig(id))
 		return
 	}
 
 	if ifMatch != computeETag(c.Version) {
-		protocol.WriteXMLError(w, r, errPreconditionFailed())
+		writeError(w, r, errPreconditionFailed())
 		return
 	}
 
 	if storeErr := h.store.DeleteFLEConfig(r.Context(), id); storeErr != nil {
 		log.LogStateError(r, "delete fle config", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -218,7 +218,7 @@ func (h *Handler) ListFieldLevelEncryptionConfigs(w http.ResponseWriter, r *http
 	all, err := h.store.ListFLEConfigs(r.Context())
 	if err != nil {
 		log.LogStateError(r, "list fle configs", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -238,7 +238,7 @@ func (h *Handler) ListFieldLevelEncryptionConfigs(w http.ResponseWriter, r *http
 		Quantity: len(summaries),
 		Items:    summaries,
 	}
-	protocol.WriteXML(w, r, http.StatusOK, &result)
+	writeXML(w, r, http.StatusOK, &result)
 }
 
 // ─── FLE Profile: Create ────────────────────────────────────────────────────
@@ -250,14 +250,14 @@ func (h *Handler) CreateFieldLevelEncryptionProfile(w http.ResponseWriter, r *ht
 	var cfg FLEProfileData
 	if err := xml.NewDecoder(r.Body).Decode(&cfg); err != nil {
 		log.Debug("decode error", zap.Error(err))
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
 	}
 
 	if cfg.CallerReference == "" {
-		protocol.WriteXMLError(w, r, errMissingCallerReference())
+		writeError(w, r, errMissingCallerReference())
 		return
 	}
 
@@ -273,7 +273,7 @@ func (h *Handler) CreateFieldLevelEncryptionProfile(w http.ResponseWriter, r *ht
 
 	if storeErr := h.store.PutFLEProfile(r.Context(), p); storeErr != nil {
 		log.LogStateError(r, "put fle profile", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -286,7 +286,7 @@ func (h *Handler) CreateFieldLevelEncryptionProfile(w http.ResponseWriter, r *ht
 	}
 	w.Header().Set("ETag", computeETag(p.Version))
 	w.Header().Set("Location", fmt.Sprintf("/2020-05-31/field-level-encryption-profile/%s", id))
-	protocol.WriteXML(w, r, http.StatusCreated, &resp)
+	writeXML(w, r, http.StatusCreated, &resp)
 }
 
 // ─── FLE Profile: Get ───────────────────────────────────────────────────────
@@ -298,11 +298,11 @@ func (h *Handler) GetFieldLevelEncryptionProfile(w http.ResponseWriter, r *http.
 	p, err := h.store.GetFLEProfile(r.Context(), id)
 	if err != nil {
 		h.log.WithOperation("GetFieldLevelEncryptionProfile").LogStateError(r, "get fle profile", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if p == nil {
-		protocol.WriteXMLError(w, r, errNoSuchFieldLevelEncryptionProfile(id))
+		writeError(w, r, errNoSuchFieldLevelEncryptionProfile(id))
 		return
 	}
 
@@ -312,7 +312,7 @@ func (h *Handler) GetFieldLevelEncryptionProfile(w http.ResponseWriter, r *http.
 		FieldLevelEncryptionProfileConfig: p.FLEProfileData,
 	}
 	w.Header().Set("ETag", computeETag(p.Version))
-	protocol.WriteXML(w, r, http.StatusOK, &resp)
+	writeXML(w, r, http.StatusOK, &resp)
 }
 
 // ─── FLE Profile: GetConfig ─────────────────────────────────────────────────
@@ -324,11 +324,11 @@ func (h *Handler) GetFieldLevelEncryptionProfileConfig(w http.ResponseWriter, r 
 	p, err := h.store.GetFLEProfile(r.Context(), id)
 	if err != nil {
 		h.log.WithOperation("GetFieldLevelEncryptionProfileConfig").LogStateError(r, "get fle profile", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if p == nil {
-		protocol.WriteXMLError(w, r, errNoSuchFieldLevelEncryptionProfile(id))
+		writeError(w, r, errNoSuchFieldLevelEncryptionProfile(id))
 		return
 	}
 
@@ -338,7 +338,7 @@ func (h *Handler) GetFieldLevelEncryptionProfileConfig(w http.ResponseWriter, r 
 		Comment:         p.FLEProfileData.Comment,
 	}
 	w.Header().Set("ETag", computeETag(p.Version))
-	protocol.WriteXML(w, r, http.StatusOK, &resp)
+	writeXML(w, r, http.StatusOK, &resp)
 }
 
 // ─── FLE Profile: Update ────────────────────────────────────────────────────
@@ -350,30 +350,30 @@ func (h *Handler) UpdateFieldLevelEncryptionProfile(w http.ResponseWriter, r *ht
 	id := chi.URLParam(r, "id")
 	ifMatch := r.Header.Get("If-Match")
 	if ifMatch == "" {
-		protocol.WriteXMLError(w, r, errInvalidIfMatch())
+		writeError(w, r, errInvalidIfMatch())
 		return
 	}
 
 	p, err := h.store.GetFLEProfile(r.Context(), id)
 	if err != nil {
 		log.LogStateError(r, "get fle profile", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if p == nil {
-		protocol.WriteXMLError(w, r, errNoSuchFieldLevelEncryptionProfile(id))
+		writeError(w, r, errNoSuchFieldLevelEncryptionProfile(id))
 		return
 	}
 
 	if ifMatch != computeETag(p.Version) {
-		protocol.WriteXMLError(w, r, errPreconditionFailed())
+		writeError(w, r, errPreconditionFailed())
 		return
 	}
 
 	var cfg FLEProfileData
 	if err := xml.NewDecoder(r.Body).Decode(&cfg); err != nil {
 		log.Debug("decode error", zap.Error(err))
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
@@ -385,7 +385,7 @@ func (h *Handler) UpdateFieldLevelEncryptionProfile(w http.ResponseWriter, r *ht
 
 	if storeErr := h.store.PutFLEProfile(r.Context(), p); storeErr != nil {
 		log.LogStateError(r, "put fle profile", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -397,7 +397,7 @@ func (h *Handler) UpdateFieldLevelEncryptionProfile(w http.ResponseWriter, r *ht
 		FieldLevelEncryptionProfileConfig: p.FLEProfileData,
 	}
 	w.Header().Set("ETag", computeETag(p.Version))
-	protocol.WriteXML(w, r, http.StatusOK, &resp)
+	writeXML(w, r, http.StatusOK, &resp)
 }
 
 // ─── FLE Profile: Delete ────────────────────────────────────────────────────
@@ -409,29 +409,29 @@ func (h *Handler) DeleteFieldLevelEncryptionProfile(w http.ResponseWriter, r *ht
 	id := chi.URLParam(r, "id")
 	ifMatch := r.Header.Get("If-Match")
 	if ifMatch == "" {
-		protocol.WriteXMLError(w, r, errInvalidIfMatch())
+		writeError(w, r, errInvalidIfMatch())
 		return
 	}
 
 	p, err := h.store.GetFLEProfile(r.Context(), id)
 	if err != nil {
 		log.LogStateError(r, "get fle profile", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if p == nil {
-		protocol.WriteXMLError(w, r, errNoSuchFieldLevelEncryptionProfile(id))
+		writeError(w, r, errNoSuchFieldLevelEncryptionProfile(id))
 		return
 	}
 
 	if ifMatch != computeETag(p.Version) {
-		protocol.WriteXMLError(w, r, errPreconditionFailed())
+		writeError(w, r, errPreconditionFailed())
 		return
 	}
 
 	if storeErr := h.store.DeleteFLEProfile(r.Context(), id); storeErr != nil {
 		log.LogStateError(r, "delete fle profile", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -448,7 +448,7 @@ func (h *Handler) ListFieldLevelEncryptionProfiles(w http.ResponseWriter, r *htt
 	all, err := h.store.ListFLEProfiles(r.Context())
 	if err != nil {
 		log.LogStateError(r, "list fle profiles", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -469,5 +469,5 @@ func (h *Handler) ListFieldLevelEncryptionProfiles(w http.ResponseWriter, r *htt
 		Quantity: len(summaries),
 		Items:    summaries,
 	}
-	protocol.WriteXML(w, r, http.StatusOK, &result)
+	writeXML(w, r, http.StatusOK, &result)
 }

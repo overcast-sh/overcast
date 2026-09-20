@@ -470,9 +470,16 @@ func NotImplementedJSON(w http.ResponseWriter, r *http.Request) {
 
 // ---- Query-protocol XML error format (SNS) ---------------------------------
 
-// queryXMLErrorResponse is the wire envelope used by AWS Query-protocol services (SNS).
+// queryXMLErrorResponse is the wire envelope used by AWS Query-protocol
+// services (SNS), and by the rest-xml services that do not set
+// noErrorWrapping (CloudFront) — the two protocols wrap errors identically.
+//
+// Xmlns is omitted when empty, so a caller that passes no namespace writes
+// the same bytes this envelope has always produced. WriteQueryXMLError never
+// sets it; TestWriteQueryXMLError_declaresNoNamespace holds that.
 type queryXMLErrorResponse struct {
 	XMLName   xml.Name      `xml:"ErrorResponse"`
+	Xmlns     string        `xml:"xmlns,attr,omitempty"`
 	Error     queryXMLError `xml:"Error"`
 	RequestID string        `xml:"RequestId"`
 }
@@ -518,6 +525,65 @@ func WriteQueryXMLError(w http.ResponseWriter, r *http.Request, aerr *AWSError) 
 	w.Header().Set("Content-Type", "text/xml")
 	w.Header().Set("Content-Length", strconv.Itoa(len(full)))
 	w.Header().Set("x-amzn-requestid", reqID)
+	if aerr.HTTPStatus == http.StatusNotImplemented {
+		w.Header().Set("x-emulator-unsupported", "true")
+	}
+	w.WriteHeader(aerr.HTTPStatus)
+	w.Write(full)
+}
+
+// WriteRESTXMLError writes an error in the envelope the rest-xml protocol
+// wraps errors in when the service's protocol trait does not set
+// noErrorWrapping:
+//
+//	<ErrorResponse xmlns="…">
+//	  <Error><Type>Sender</Type><Code>…</Code><Message>…</Message></Error>
+//	  <RequestId>…</RequestId>
+//	</ErrorResponse>
+//
+// That is WriteQueryXMLError's envelope plus the service's xmlNamespace on
+// the root. The headers are WriteXMLError's rather than WriteQueryXMLError's
+// (application/xml, x-amz-request-id), so an error and a 200 from the same
+// REST-XML operation agree on both; only the body shape changes.
+//
+// Type says who the model blames. AWS answers Sender for a client error and
+// Receiver for a server one, from the error shape's smithy.api#error trait;
+// AWSError records the HTTP status rather than the trait, which stands in
+// for it exactly on every modeled error (4xx client, 5xx server).
+//
+// Store pressure maps to SlowDown, as it does for every other REST-XML
+// service — these callers came from WriteXMLError and this is not a change
+// of behaviour under load.
+func WriteRESTXMLError(w http.ResponseWriter, r *http.Request, namespace string, aerr *AWSError) {
+	aerr = remapStorePressure(aerr, errSlowDown)
+	recordAWSError(w, aerr)
+	reqID := RequestIDFromContext(r.Context())
+
+	errType := "Sender"
+	if aerr.HTTPStatus >= http.StatusInternalServerError {
+		errType = "Receiver"
+	}
+	body, _ := xml.Marshal(&queryXMLErrorResponse{
+		Xmlns: namespace,
+		Error: queryXMLError{
+			Type:    errType,
+			Code:    aerr.Code,
+			Message: aerr.Message,
+		},
+		RequestID: reqID,
+	})
+
+	// Drain the request body so the HTTP/1.1 connection can be reused by the
+	// SDK client.
+	if r.Body != nil {
+		io.Copy(io.Discard, r.Body) //nolint:errcheck
+		r.Body.Close()              //nolint:errcheck
+	}
+
+	full := append([]byte(xml.Header), body...)
+	w.Header().Set("Content-Type", "application/xml")
+	w.Header().Set("Content-Length", strconv.Itoa(len(full)))
+	w.Header().Set("x-amz-request-id", reqID)
 	if aerr.HTTPStatus == http.StatusNotImplemented {
 		w.Header().Set("x-emulator-unsupported", "true")
 	}

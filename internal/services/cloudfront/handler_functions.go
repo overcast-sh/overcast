@@ -21,14 +21,14 @@ func (h *Handler) CreateFunction(w http.ResponseWriter, r *http.Request) {
 	var req functionConfigWrapper
 	if err := xml.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Debug("decode error", zap.Error(err))
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
 	}
 
 	if req.Name == "" {
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "InvalidArgument", Message: "Function name is required.", HTTPStatus: 400,
 		})
 		return
@@ -37,7 +37,7 @@ func (h *Handler) CreateFunction(w http.ResponseWriter, r *http.Request) {
 	// Check for duplicate name.
 	existing, _ := h.store.GetFunction(r.Context(), req.Name)
 	if existing != nil {
-		protocol.WriteXMLError(w, r, errFunctionAlreadyExists(req.Name))
+		writeError(w, r, errFunctionAlreadyExists(req.Name))
 		return
 	}
 
@@ -63,7 +63,7 @@ func (h *Handler) CreateFunction(w http.ResponseWriter, r *http.Request) {
 
 	if storeErr := h.store.PutFunction(r.Context(), fn); storeErr != nil {
 		log.LogStateError(r, "put function", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -72,7 +72,7 @@ func (h *Handler) CreateFunction(w http.ResponseWriter, r *http.Request) {
 	resp := functionSummaryXML(h.buildFunctionSummary(fn))
 	w.Header().Set("ETag", computeETag(fn.Version))
 	w.Header().Set("Location", fmt.Sprintf("/2020-05-31/function/%s", req.Name))
-	protocol.WriteXML(w, r, http.StatusCreated, &resp)
+	writeXML(w, r, http.StatusCreated, &resp)
 }
 
 // ─── CloudFront Functions: Describe ─────────────────────────────────────────
@@ -84,11 +84,11 @@ func (h *Handler) DescribeFunction(w http.ResponseWriter, r *http.Request) {
 	fn, err := h.store.GetFunction(r.Context(), name)
 	if err != nil {
 		h.log.WithOperation("DescribeFunction").LogStateError(r, "get function", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if fn == nil {
-		protocol.WriteXMLError(w, r, errNoSuchFunction(name))
+		writeError(w, r, errNoSuchFunction(name))
 		return
 	}
 
@@ -99,7 +99,7 @@ func (h *Handler) DescribeFunction(w http.ResponseWriter, r *http.Request) {
 		FunctionMetadata: fn.FunctionMetadata,
 	}
 	w.Header().Set("ETag", computeETag(fn.Version))
-	protocol.WriteXML(w, r, http.StatusOK, &resp)
+	writeXML(w, r, http.StatusOK, &resp)
 }
 
 // ─── CloudFront Functions: Get ──────────────────────────────────────────────
@@ -112,11 +112,11 @@ func (h *Handler) GetFunction(w http.ResponseWriter, r *http.Request) {
 	fn, err := h.store.GetFunction(r.Context(), name)
 	if err != nil {
 		h.log.WithOperation("GetFunction").LogStateError(r, "get function", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if fn == nil {
-		protocol.WriteXMLError(w, r, errNoSuchFunction(name))
+		writeError(w, r, errNoSuchFunction(name))
 		return
 	}
 
@@ -136,30 +136,30 @@ func (h *Handler) UpdateFunction(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 	ifMatch := r.Header.Get("If-Match")
 	if ifMatch == "" {
-		protocol.WriteXMLError(w, r, errInvalidIfMatch())
+		writeError(w, r, errInvalidIfMatch())
 		return
 	}
 
 	fn, err := h.store.GetFunction(r.Context(), name)
 	if err != nil {
 		log.LogStateError(r, "get function", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if fn == nil {
-		protocol.WriteXMLError(w, r, errNoSuchFunction(name))
+		writeError(w, r, errNoSuchFunction(name))
 		return
 	}
 
 	if ifMatch != computeETag(fn.Version) {
-		protocol.WriteXMLError(w, r, errPreconditionFailed())
+		writeError(w, r, errPreconditionFailed())
 		return
 	}
 
 	var req functionUpdateWrapper
 	if err := xml.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Debug("decode error", zap.Error(err))
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
@@ -172,7 +172,7 @@ func (h *Handler) UpdateFunction(w http.ResponseWriter, r *http.Request) {
 
 	if storeErr := h.store.PutFunction(r.Context(), fn); storeErr != nil {
 		log.LogStateError(r, "put function", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -180,7 +180,7 @@ func (h *Handler) UpdateFunction(w http.ResponseWriter, r *http.Request) {
 
 	resp := functionSummaryXML(h.buildFunctionSummary(fn))
 	w.Header().Set("ETag", computeETag(fn.Version))
-	protocol.WriteXML(w, r, http.StatusOK, &resp)
+	writeXML(w, r, http.StatusOK, &resp)
 }
 
 // ─── CloudFront Functions: Delete ───────────────────────────────────────────
@@ -192,29 +192,29 @@ func (h *Handler) DeleteFunction(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 	ifMatch := r.Header.Get("If-Match")
 	if ifMatch == "" {
-		protocol.WriteXMLError(w, r, errInvalidIfMatch())
+		writeError(w, r, errInvalidIfMatch())
 		return
 	}
 
 	fn, err := h.store.GetFunction(r.Context(), name)
 	if err != nil {
 		log.LogStateError(r, "get function", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if fn == nil {
-		protocol.WriteXMLError(w, r, errNoSuchFunction(name))
+		writeError(w, r, errNoSuchFunction(name))
 		return
 	}
 
 	if ifMatch != computeETag(fn.Version) {
-		protocol.WriteXMLError(w, r, errPreconditionFailed())
+		writeError(w, r, errPreconditionFailed())
 		return
 	}
 
 	if storeErr := h.store.DeleteFunction(r.Context(), name); storeErr != nil {
 		log.LogStateError(r, "delete function", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -231,7 +231,7 @@ func (h *Handler) ListFunctions(w http.ResponseWriter, r *http.Request) {
 	all, err := h.store.ListFunctions(r.Context())
 	if err != nil {
 		log.LogStateError(r, "list functions", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -253,7 +253,7 @@ func (h *Handler) ListFunctions(w http.ResponseWriter, r *http.Request) {
 		Items:    summaries,
 	}
 
-	protocol.WriteXML(w, r, http.StatusOK, &result)
+	writeXML(w, r, http.StatusOK, &result)
 }
 
 // ─── CloudFront Functions: Test ─────────────────────────────────────────────
@@ -266,11 +266,11 @@ func (h *Handler) TestFunction(w http.ResponseWriter, r *http.Request) {
 	fn, err := h.store.GetFunction(r.Context(), name)
 	if err != nil {
 		h.log.WithOperation("TestFunction").LogStateError(r, "get function", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if fn == nil {
-		protocol.WriteXMLError(w, r, errNoSuchFunction(name))
+		writeError(w, r, errNoSuchFunction(name))
 		return
 	}
 
@@ -280,7 +280,7 @@ func (h *Handler) TestFunction(w http.ResponseWriter, r *http.Request) {
 		FunctionOutput:     "",
 	}
 
-	protocol.WriteXML(w, r, http.StatusOK, &result)
+	writeXML(w, r, http.StatusOK, &result)
 }
 
 // ─── CloudFront Functions: Publish ──────────────────────────────────────────
@@ -293,23 +293,23 @@ func (h *Handler) PublishFunction(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 	ifMatch := r.Header.Get("If-Match")
 	if ifMatch == "" {
-		protocol.WriteXMLError(w, r, errInvalidIfMatch())
+		writeError(w, r, errInvalidIfMatch())
 		return
 	}
 
 	fn, err := h.store.GetFunction(r.Context(), name)
 	if err != nil {
 		log.LogStateError(r, "get function", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if fn == nil {
-		protocol.WriteXMLError(w, r, errNoSuchFunction(name))
+		writeError(w, r, errNoSuchFunction(name))
 		return
 	}
 
 	if ifMatch != computeETag(fn.Version) {
-		protocol.WriteXMLError(w, r, errPreconditionFailed())
+		writeError(w, r, errPreconditionFailed())
 		return
 	}
 
@@ -320,14 +320,14 @@ func (h *Handler) PublishFunction(w http.ResponseWriter, r *http.Request) {
 
 	if storeErr := h.store.PutFunction(r.Context(), fn); storeErr != nil {
 		log.LogStateError(r, "put function", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
 	log.Info("function published", zap.String("name", name))
 
 	resp := functionSummaryXML(h.buildFunctionSummary(fn))
-	protocol.WriteXML(w, r, http.StatusOK, &resp)
+	writeXML(w, r, http.StatusOK, &resp)
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

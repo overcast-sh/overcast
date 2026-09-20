@@ -71,7 +71,7 @@ func TestTagResource_reservedTagPrefixRejected(t *testing.T) {
 	defer resp.Body.Close()
 
 	helpers.AssertStatus(t, resp, http.StatusBadRequest)
-	helpers.AssertXMLError(t, resp, "InvalidArgument")
+	assertErrorEnvelope(t, readBody(t, resp), "InvalidArgument")
 
 	if got := cfListTagsMap(t, srv, dist.ARN); len(got) != 0 {
 		t.Fatalf("tags = %#v after a rejected TagResource, want none stored", got)
@@ -94,7 +94,7 @@ func TestCreateDistributionWithTags_reservedTagPrefixRejected(t *testing.T) {
 	defer resp.Body.Close()
 
 	helpers.AssertStatus(t, resp, http.StatusBadRequest)
-	helpers.AssertXMLError(t, resp, "InvalidArgument")
+	assertErrorEnvelope(t, readBody(t, resp), "InvalidArgument")
 }
 
 func TestTagResource_validTagsStillWork(t *testing.T) {
@@ -153,5 +153,5 @@ func TestTagResource_tagLimitEnforcedOnMergedSet(t *testing.T) {
 	defer resp.Body.Close()
 
 	helpers.AssertStatus(t, resp, http.StatusBadRequest)
-	helpers.AssertXMLError(t, resp, "InvalidArgument")
+	assertErrorEnvelope(t, readBody(t, resp), "InvalidArgument")
 }

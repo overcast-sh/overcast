@@ -82,13 +82,17 @@ func TestListDistributions_paginationContract(t *testing.T) {
 		}
 		defer resp.Body.Close()
 		b := readBody(t, resp)
+		// CloudFront is rest-xml without noErrorWrapping, so the code sits
+		// inside the <ErrorResponse><Error> envelope (#2010).
 		var errResp struct {
-			Code string `xml:"Code"`
+			Error struct {
+				Code string `xml:"Code"`
+			} `xml:"Error"`
 		}
 		if err := xml.Unmarshal(b, &errResp); err != nil {
 			t.Fatalf("unmarshal error response: %v\nbody: %s", err, b)
 		}
-		return resp.StatusCode, errResp.Code
+		return resp.StatusCode, errResp.Error.Code
 	}
 
 	// Then: exactly-once + order + termination for the valid walk, and the

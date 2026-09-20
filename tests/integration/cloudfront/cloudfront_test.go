@@ -444,32 +444,113 @@ func TestGetDistribution_notFound(t *testing.T) {
 //     noErrorWrapping — the plain (non-S3) rest-xml protocol, which wraps
 //     errors as <ErrorResponse><Error><Type>…<Code>…<Message>…</Error><RequestId>…</RequestId></ErrorResponse>.
 //     Route53 — the other non-S3 REST-XML service in this codebase — already
-//     models this: internal/services/route53's handlers use
-//     protocol.WriteQueryXMLError (the wrapped envelope), per the error
-//     format table in CONTRIBUTING.md. CloudFront's handlers
-//     (internal/services/cloudfront/handler.go) use protocol.WriteXMLError
-//     instead — S3's bare, unwrapped <Error> format — for every error,
-//     confirmed against a live GetDistribution 404 response, which comes
-//     back as `<Error><Code>NoSuchDistribution</Code><Message>…</Message><RequestId>…</RequestId></Error>`
-//     with no <ErrorResponse> wrapper and no <Type> element.
+//     models this, per the error format table in CONTRIBUTING.md.
 //   - The service shape also carries "smithy.api#xmlNamespace":
-//     {"uri": "http://cloudfront.amazonaws.com/doc/2020-05-31/"}. Route53
-//     models the equivalent for itself: every Route53 response struct in
-//     this codebase carries an `Xmlns string `xml:"xmlns,attr"`` field set
-//     to its own doc namespace constant. CloudFront's response structs
-//     (internal/services/cloudfront/types.go's Distribution,
-//     DistributionConfig, …) carry no such field, confirmed against the same
-//     live response: neither the success `<Distribution>` root nor the error
-//     root carries an `xmlns` attribute anywhere.
+//     {"uri": "http://cloudfront.amazonaws.com/doc/2020-05-31/"}, so every
+//     response root — success and error alike — carries that namespace as
+//     its default xmlns. Nested elements inherit it and never repeat it.
+//   - Distribution's members are modeled in the order Id, ARN, Status,
+//     LastModifiedTime, InProgressInvalidationBatches, DomainName,
+//     ActiveTrustedSigners, ActiveTrustedKeyGroups, DistributionConfig,
+//     AliasICPRecordals, and rest-xml emits a structure's members in model
+//     order.
 //
-// Both are confirmed divergences from the AWS model and from this
-// codebase's own Route53 precedent, reported separately (not fixed here, and
-// not pinned as correct below) — production code is out of scope for this
-// test-only pass. The assertions below stick to what is true today: the
-// error Code/Message/RequestId values themselves are correct, and the
-// success response's root element name and its documented top-level
-// elements are present, just not namespaced or (for one pair) not in the
-// AWS-modeled relative order — see the order comment inline below.
+// All three were divergences when these tests were first written: no root
+// carried the namespace, every error came back in S3's bare <Error> format,
+// and Distribution emitted DomainName before LastModifiedTime. #2010 fixed
+// all three; the assertions below pin the fixed shape.
+
+// cfXMLNS is the namespace the pinned model's service shape declares in
+// smithy.api#xmlNamespace.
+const cfXMLNS = "http://cloudfront.amazonaws.com/doc/2020-05-31/"
+
+// rootElement returns the document's root start element, so a test can assert
+// on its name and on the attributes declared on it.
+func rootElement(t *testing.T, xmlBody []byte) xml.StartElement {
+	t.Helper()
+	dec := xml.NewDecoder(bytes.NewReader(xmlBody))
+	for {
+		tok, err := dec.Token()
+		if err != nil {
+			t.Fatalf("no root element in body: %s", xmlBody)
+		}
+		if se, ok := tok.(xml.StartElement); ok {
+			return se
+		}
+	}
+}
+
+// assertRootNamespace fails unless the document root declares the CloudFront
+// service namespace as its default xmlns.
+func assertRootNamespace(t *testing.T, xmlBody []byte) {
+	t.Helper()
+	root := rootElement(t, xmlBody)
+	for _, a := range root.Attr {
+		if a.Name.Space == "" && a.Name.Local == "xmlns" {
+			if a.Value != cfXMLNS {
+				t.Errorf("root <%s> xmlns = %q, want %q", root.Name.Local, a.Value, cfXMLNS)
+			}
+			return
+		}
+	}
+	t.Errorf("root <%s> declares no xmlns attribute; body: %s", root.Name.Local, xmlBody)
+}
+
+// assertModelOrder fails unless every name in want appears in names, in that
+// relative order. names comes from topLevelElementNames, so this is an
+// assertion about the order the service emitted its members in.
+func assertModelOrder(t *testing.T, names, want []string) {
+	t.Helper()
+	prev := -1
+	for _, name := range want {
+		idx := indexOf(names, name)
+		if idx < 0 {
+			t.Errorf("expected element %q, got elements: %v", name, names)
+			continue
+		}
+		if idx < prev {
+			t.Errorf("element %q is out of model order, order was: %v (want %v)", name, names, want)
+		}
+		prev = idx
+	}
+}
+
+// assertErrorEnvelope fails unless body is the rest-xml wrapped error
+// envelope the model's protocol declares, carrying wantCode. It returns the
+// Message so a caller can assert on its content.
+func assertErrorEnvelope(t *testing.T, body []byte, wantCode string) string {
+	t.Helper()
+	if root := rootElement(t, body); root.Name.Local != "ErrorResponse" {
+		t.Fatalf("error root = <%s>, want <ErrorResponse>; body: %s", root.Name.Local, body)
+	}
+	assertRootNamespace(t, body)
+	assertModelOrder(t, topLevelElementNames(t, body), []string{"Error", "RequestId"})
+
+	var env struct {
+		XMLName xml.Name `xml:"ErrorResponse"`
+		Error   struct {
+			Type    string `xml:"Type"`
+			Code    string `xml:"Code"`
+			Message string `xml:"Message"`
+		} `xml:"Error"`
+		RequestID string `xml:"RequestId"`
+	}
+	if err := xml.Unmarshal(body, &env); err != nil {
+		t.Fatalf("unmarshal error envelope: %v\nbody: %s", err, body)
+	}
+	// Every CloudFront error shape in the pinned model carries
+	// "smithy.api#error": "client", which rest-xml reports as Sender.
+	if env.Error.Type != "Sender" {
+		t.Errorf("Error/Type = %q, want %q", env.Error.Type, "Sender")
+	}
+	if env.Error.Code != wantCode {
+		t.Errorf("Error/Code = %q, want %q", env.Error.Code, wantCode)
+	}
+	if env.RequestID == "" {
+		t.Error("expected RequestId to be set in the error body")
+	}
+	return env.Error.Message
+}
 
 // topLevelElementNames walks xmlBody and returns the local names of the
 // direct children of the document's root element, in document order. Used to
@@ -535,26 +616,66 @@ func TestGetDistribution_xmlShape(t *testing.T) {
 		t.Errorf("root element = %q, want %q", root.XMLName.Local, "Distribution")
 	}
 
-	// And: the documented top-level elements are present
-	names := topLevelElementNames(t, b)
-	for _, want := range []string{"Id", "ARN", "Status", "DomainName", "LastModifiedTime", "DistributionConfig"} {
-		if indexOf(names, want) < 0 {
-			t.Errorf("expected top-level element %q, got elements: %v", want, names)
-		}
-	}
+	// And: the root declares the service namespace
+	assertRootNamespace(t, b)
 
-	// And: elements the AWS model orders before DistributionConfig do appear
-	// before it here too. LastModifiedTime and DomainName are deliberately
-	// not checked against each other: the pinned model declares
-	// Id, ARN, Status, LastModifiedTime, InProgressInvalidationBatches,
-	// DomainName, …, DistributionConfig (in that relative order), but
-	// Overcast's Distribution struct (types.go) places DomainName before
-	// LastModifiedTime — a real, minor element-order divergence, reported
-	// separately rather than pinned here.
-	for _, name := range []string{"Id", "ARN", "Status", "LastModifiedTime", "DomainName"} {
-		if idx, dcIdx := indexOf(names, name), indexOf(names, "DistributionConfig"); idx >= dcIdx {
-			t.Errorf("expected %q to appear before DistributionConfig, order was: %v", name, names)
-		}
+	// And: the documented top-level elements are present, in the order the
+	// pinned model declares Distribution's members
+	names := topLevelElementNames(t, b)
+	assertModelOrder(t, names, []string{
+		"Id", "ARN", "Status", "LastModifiedTime",
+		"InProgressInvalidationBatches", "DomainName", "DistributionConfig",
+	})
+
+	// And: the nested DistributionConfig inherits the namespace rather than
+	// redeclaring it — only the root carries the attribute.
+	if bytes.Count(b, []byte(cfXMLNS)) != 1 {
+		t.Errorf("expected the namespace to be declared once, on the root; body: %s", b)
+	}
+}
+
+// TestResponseRoots_carryServiceNamespace covers one operation per resource
+// family, because the namespace is a property of the service shape rather
+// than of any one response: a fix applied per-struct would leave the
+// families nobody happened to test behind.
+func TestResponseRoots_carryServiceNamespace(t *testing.T) {
+	// Given: one distribution, one origin access control and one cache policy
+	srv := helpers.NewTestServer(t)
+	dist, _ := cfCreateAndParse(t, srv, "xmlns-test-1")
+	oac, _ := cfCreateOAC(t, srv, "xmlns-test-oac")
+	policy, _ := cfCreateCachePolicy(t, srv, "xmlns-test-policy")
+
+	tests := []struct {
+		op       string
+		path     string
+		wantRoot string
+	}{
+		{"GetDistribution", "/2020-05-31/distribution/" + dist.ID, "Distribution"},
+		{"GetDistributionConfig", "/2020-05-31/distribution/" + dist.ID + "/config", "DistributionConfig"},
+		{"ListDistributions", "/2020-05-31/distribution", "DistributionList"},
+		{"GetOriginAccessControl", "/2020-05-31/origin-access-control/" + oac.ID, "OriginAccessControl"},
+		{"ListOriginAccessControls", "/2020-05-31/origin-access-control", "OriginAccessControlList"},
+		{"GetCachePolicy", "/2020-05-31/cache-policy/" + policy.ID, "CachePolicy"},
+		{"ListCachePolicies", "/2020-05-31/cache-policy", "CachePolicyList"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.op, func(t *testing.T) {
+			// When: the operation is called
+			req, _ := http.NewRequest(http.MethodGet, srv.URL+tc.path, nil)
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatalf("%s: %v", tc.op, err)
+			}
+			defer resp.Body.Close()
+			helpers.AssertStatus(t, resp, http.StatusOK)
+			b := readBody(t, resp)
+
+			// Then: the root is the modeled element, carrying the namespace
+			if root := rootElement(t, b); root.Name.Local != tc.wantRoot {
+				t.Errorf("root element = %q, want %q", root.Name.Local, tc.wantRoot)
+			}
+			assertRootNamespace(t, b)
+		})
 	}
 }
 
@@ -570,30 +691,43 @@ func TestGetDistribution_notFound_errorShape(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	// Then: 404 with a request ID header and a NoSuchDistribution error
-	// naming the unknown ID (the envelope shape itself — <ErrorResponse>
-	// wrapping and the xmlns attribute AWS documents — is a confirmed
-	// divergence, reported separately; see the package comment above)
+	// Then: 404 (NoSuchDistribution carries "smithy.api#httpError": 404) with
+	// a request ID header and the wrapped rest-xml error envelope naming the
+	// unknown ID
 	helpers.AssertStatus(t, resp, http.StatusNotFound)
 	helpers.AssertRequestID(t, resp)
 	b := readBody(t, resp)
-	var errResp struct {
-		Code      string `xml:"Code"`
-		Message   string `xml:"Message"`
-		RequestID string `xml:"RequestId"`
+	msg := assertErrorEnvelope(t, b, "NoSuchDistribution")
+	if !strings.Contains(msg, "ENONEXISTENT") {
+		t.Errorf("expected Message to name the unknown ID, got: %q", msg)
 	}
-	if err := xml.Unmarshal(b, &errResp); err != nil {
-		t.Fatalf("unmarshal error: %v\nbody: %s", err, b)
+}
+
+// TestUpdateDistribution_missingIfMatch_errorShape pins the envelope on a
+// validation error as well as on a not-found: the two travel different
+// paths through the handlers, and only the writer they share makes the
+// shape uniform.
+func TestUpdateDistribution_missingIfMatch_errorShape(t *testing.T) {
+	// Given: an existing distribution
+	srv := helpers.NewTestServer(t)
+	created, _ := cfCreateAndParse(t, srv, "errshape-nomatch-1")
+
+	// When: UpdateDistribution is called without the required If-Match header
+	req, _ := http.NewRequest(http.MethodPut,
+		srv.URL+"/2020-05-31/distribution/"+created.ID+"/config",
+		bytes.NewReader([]byte(disabledDistributionConfigXML("errshape-nomatch-1"))))
+	req.Header.Set("Content-Type", "application/xml")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("UpdateDistribution: %v", err)
 	}
-	if errResp.Code != "NoSuchDistribution" {
-		t.Errorf("Code = %q, want %q", errResp.Code, "NoSuchDistribution")
-	}
-	if !strings.Contains(errResp.Message, "ENONEXISTENT") {
-		t.Errorf("expected Message to name the unknown ID, got: %q", errResp.Message)
-	}
-	if errResp.RequestID == "" {
-		t.Error("expected RequestId to be set in the error body")
-	}
+	defer resp.Body.Close()
+
+	// Then: 400 (InvalidIfMatchVersion carries "smithy.api#httpError": 400)
+	// in the same wrapped envelope
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertRequestID(t, resp)
+	assertErrorEnvelope(t, readBody(t, resp), "InvalidIfMatchVersion")
 }
 
 // ─── GetDistributionConfig ────────────────────────────────────────────────────
@@ -1082,7 +1216,7 @@ func TestCreateInvalidation_invalidTag(t *testing.T) {
 
 	// Then: 400 InvalidArgument
 	helpers.AssertStatus(t, resp, http.StatusBadRequest)
-	helpers.AssertXMLError(t, resp, "InvalidArgument")
+	assertErrorEnvelope(t, readBody(t, resp), "InvalidArgument")
 }
 
 // ─── Tagging ──────────────────────────────────────────────────────────────────
