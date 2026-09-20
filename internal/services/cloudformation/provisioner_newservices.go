@@ -1,11 +1,14 @@
 package cloudformation
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -2457,20 +2460,34 @@ func (h *cloudfrontDistributionHandler) Delete(ctx context.Context, router http.
 	etag := rec.Header().Get("ETag")
 
 	// Step 2: If distribution is enabled, disable it first.
-	if strings.Contains(rec.Body.String(), "<Enabled>true</Enabled>") {
+	//
+	// "Is it enabled" reads the distribution's own DistributionConfig/Enabled
+	// rather than looking for the first "<Enabled>true</Enabled>" anywhere in
+	// the document: Logging, TrustedSigners, TrustedKeyGroups and OriginShield
+	// each carry an Enabled of their own.
+	var dist struct {
+		Config struct {
+			Enabled bool `xml:"Enabled"`
+		} `xml:"DistributionConfig"`
+	}
+	if err := xml.Unmarshal(rec.Body.Bytes(), &dist); err != nil {
+		return fmt.Errorf("GetDistribution: parse response: %w", err)
+	}
+	if dist.Config.Enabled {
 		// Get config to modify.
 		cfgRec, err := cfInternalRequest(ctx, router, rCtx.Region, http.MethodGet, basePath+"/config", "", nil, nil)
 		if err != nil {
 			return fmt.Errorf("GetDistributionConfig: %w", err)
 		}
 		cfgEtag := cfgRec.Header().Get("ETag")
-		cfgBody := cfgRec.Body.String()
 
-		// Replace Enabled=true with Enabled=false.
-		cfgBody = strings.Replace(cfgBody, "<Enabled>true</Enabled>", "<Enabled>false</Enabled>", 1)
+		cfgBody, err := setCloudFrontConfigEnabled(cfgRec.Body.Bytes(), false)
+		if err != nil {
+			return fmt.Errorf("UpdateDistribution (disable): rewrite config: %w", err)
+		}
 
 		// PUT updated config.
-		putRec, err := cfInternalRequest(ctx, router, rCtx.Region, http.MethodPut, basePath+"/config", "application/xml", []byte(cfgBody), map[string]string{"If-Match": cfgEtag})
+		putRec, err := cfInternalRequest(ctx, router, rCtx.Region, http.MethodPut, basePath+"/config", "application/xml", cfgBody, map[string]string{"If-Match": cfgEtag})
 		if err != nil {
 			return fmt.Errorf("UpdateDistribution (disable): %w", err)
 		}
@@ -2484,6 +2501,60 @@ func (h *cloudfrontDistributionHandler) Delete(ctx context.Context, router http.
 
 func (h *cloudfrontDistributionHandler) Update(ctx context.Context, router http.Handler, _ *config.Config, physicalID string, props map[string]any, oldProps map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
 	return "", nil, errReplacementRequired
+}
+
+// setCloudFrontConfigEnabled rewrites a DistributionConfig document's own
+// <Enabled> element — the one directly under the root — and leaves the
+// Enabled elements nested inside Logging, TrustedSigners, TrustedKeyGroups
+// and OriginShield alone. Everything else is re-emitted unchanged, so the
+// result is the config the caller just read, with one value flipped.
+//
+// It replaced a strings.Replace of the first "<Enabled>true</Enabled>", which
+// was only ever right because DistributionConfig happened to emit its own
+// Enabled third. #2010 put its members in AWS's modeled order, where Logging
+// and DefaultCacheBehavior come first.
+func setCloudFrontConfigEnabled(doc []byte, enabled bool) ([]byte, error) {
+	dec := xml.NewDecoder(bytes.NewReader(doc))
+	var buf bytes.Buffer
+	enc := xml.NewEncoder(&buf)
+	depth := 0
+	inTopLevelEnabled := false
+	for {
+		tok, err := dec.Token()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		// The decoder resolves the document's default xmlns onto every
+		// element's Name.Space, and the encoder would then re-declare it on
+		// each one. Clearing Space leaves the root's own xmlns attribute —
+		// which the decoder keeps in Attr — as the single declaration.
+		switch t := tok.(type) {
+		case xml.StartElement:
+			depth++
+			inTopLevelEnabled = depth == 2 && t.Name.Local == "Enabled"
+			t.Name.Space = ""
+			tok = t
+		case xml.EndElement:
+			depth--
+			inTopLevelEnabled = false
+			t.Name.Space = ""
+			tok = t
+		case xml.CharData:
+			if inTopLevelEnabled {
+				tok = xml.CharData(strconv.FormatBool(enabled))
+			}
+		}
+		if err := enc.EncodeToken(tok); err != nil {
+			return nil, err
+		}
+	}
+	if err := enc.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 // cfInternalRequest dispatches a CloudFront request carrying the If-Match /

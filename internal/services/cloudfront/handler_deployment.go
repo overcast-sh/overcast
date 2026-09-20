@@ -21,7 +21,7 @@ func (h *Handler) CreateContinuousDeploymentPolicy(w http.ResponseWriter, r *htt
 	var cfg CDPConfig
 	if err := xml.NewDecoder(r.Body).Decode(&cfg); err != nil {
 		log.Debug("decode error", zap.Error(err))
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
@@ -39,7 +39,7 @@ func (h *Handler) CreateContinuousDeploymentPolicy(w http.ResponseWriter, r *htt
 
 	if storeErr := h.store.PutContinuousDeploymentPolicy(r.Context(), p); storeErr != nil {
 		log.LogStateError(r, "put continuous deployment policy", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -52,7 +52,7 @@ func (h *Handler) CreateContinuousDeploymentPolicy(w http.ResponseWriter, r *htt
 	}
 	w.Header().Set("ETag", computeETag(p.Version))
 	w.Header().Set("Location", fmt.Sprintf("/2020-05-31/continuous-deployment-policy/%s", id))
-	protocol.WriteXML(w, r, http.StatusCreated, &resp)
+	writeXML(w, r, http.StatusCreated, &resp)
 }
 
 // ─── Continuous Deployment Policy: Get ──────────────────────────────────────
@@ -64,11 +64,11 @@ func (h *Handler) GetContinuousDeploymentPolicy(w http.ResponseWriter, r *http.R
 	p, err := h.store.GetContinuousDeploymentPolicy(r.Context(), id)
 	if err != nil {
 		h.log.WithOperation("GetContinuousDeploymentPolicy").LogStateError(r, "get continuous deployment policy", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if p == nil {
-		protocol.WriteXMLError(w, r, errNoSuchContinuousDeploymentPolicy(id))
+		writeError(w, r, errNoSuchContinuousDeploymentPolicy(id))
 		return
 	}
 
@@ -78,7 +78,7 @@ func (h *Handler) GetContinuousDeploymentPolicy(w http.ResponseWriter, r *http.R
 		ContinuousDeploymentPolicyConfig: p.ContinuousDeploymentPolicyConfig,
 	}
 	w.Header().Set("ETag", computeETag(p.Version))
-	protocol.WriteXML(w, r, http.StatusOK, &resp)
+	writeXML(w, r, http.StatusOK, &resp)
 }
 
 // ─── Continuous Deployment Policy: GetConfig ────────────────────────────────
@@ -90,11 +90,11 @@ func (h *Handler) GetContinuousDeploymentPolicyConfig(w http.ResponseWriter, r *
 	p, err := h.store.GetContinuousDeploymentPolicy(r.Context(), id)
 	if err != nil {
 		h.log.WithOperation("GetContinuousDeploymentPolicyConfig").LogStateError(r, "get continuous deployment policy", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if p == nil {
-		protocol.WriteXMLError(w, r, errNoSuchContinuousDeploymentPolicy(id))
+		writeError(w, r, errNoSuchContinuousDeploymentPolicy(id))
 		return
 	}
 
@@ -103,7 +103,7 @@ func (h *Handler) GetContinuousDeploymentPolicyConfig(w http.ResponseWriter, r *
 		Enabled:                     p.ContinuousDeploymentPolicyConfig.Enabled,
 	}
 	w.Header().Set("ETag", computeETag(p.Version))
-	protocol.WriteXML(w, r, http.StatusOK, &resp)
+	writeXML(w, r, http.StatusOK, &resp)
 }
 
 // ─── Continuous Deployment Policy: Update ───────────────────────────────────
@@ -115,30 +115,30 @@ func (h *Handler) UpdateContinuousDeploymentPolicy(w http.ResponseWriter, r *htt
 	id := chi.URLParam(r, "id")
 	ifMatch := r.Header.Get("If-Match")
 	if ifMatch == "" {
-		protocol.WriteXMLError(w, r, errInvalidIfMatch())
+		writeError(w, r, errInvalidIfMatch())
 		return
 	}
 
 	p, err := h.store.GetContinuousDeploymentPolicy(r.Context(), id)
 	if err != nil {
 		log.LogStateError(r, "get continuous deployment policy", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if p == nil {
-		protocol.WriteXMLError(w, r, errNoSuchContinuousDeploymentPolicy(id))
+		writeError(w, r, errNoSuchContinuousDeploymentPolicy(id))
 		return
 	}
 
 	if ifMatch != computeETag(p.Version) {
-		protocol.WriteXMLError(w, r, errPreconditionFailed())
+		writeError(w, r, errPreconditionFailed())
 		return
 	}
 
 	var cfg CDPConfig
 	if err := xml.NewDecoder(r.Body).Decode(&cfg); err != nil {
 		log.Debug("decode error", zap.Error(err))
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
@@ -150,7 +150,7 @@ func (h *Handler) UpdateContinuousDeploymentPolicy(w http.ResponseWriter, r *htt
 
 	if storeErr := h.store.PutContinuousDeploymentPolicy(r.Context(), p); storeErr != nil {
 		log.LogStateError(r, "put continuous deployment policy", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -162,7 +162,7 @@ func (h *Handler) UpdateContinuousDeploymentPolicy(w http.ResponseWriter, r *htt
 		ContinuousDeploymentPolicyConfig: p.ContinuousDeploymentPolicyConfig,
 	}
 	w.Header().Set("ETag", computeETag(p.Version))
-	protocol.WriteXML(w, r, http.StatusOK, &resp)
+	writeXML(w, r, http.StatusOK, &resp)
 }
 
 // ─── Continuous Deployment Policy: Delete ───────────────────────────────────
@@ -174,29 +174,29 @@ func (h *Handler) DeleteContinuousDeploymentPolicy(w http.ResponseWriter, r *htt
 	id := chi.URLParam(r, "id")
 	ifMatch := r.Header.Get("If-Match")
 	if ifMatch == "" {
-		protocol.WriteXMLError(w, r, errInvalidIfMatch())
+		writeError(w, r, errInvalidIfMatch())
 		return
 	}
 
 	p, err := h.store.GetContinuousDeploymentPolicy(r.Context(), id)
 	if err != nil {
 		log.LogStateError(r, "get continuous deployment policy", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if p == nil {
-		protocol.WriteXMLError(w, r, errNoSuchContinuousDeploymentPolicy(id))
+		writeError(w, r, errNoSuchContinuousDeploymentPolicy(id))
 		return
 	}
 
 	if ifMatch != computeETag(p.Version) {
-		protocol.WriteXMLError(w, r, errPreconditionFailed())
+		writeError(w, r, errPreconditionFailed())
 		return
 	}
 
 	if storeErr := h.store.DeleteContinuousDeploymentPolicy(r.Context(), id); storeErr != nil {
 		log.LogStateError(r, "delete continuous deployment policy", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -213,7 +213,7 @@ func (h *Handler) ListContinuousDeploymentPolicies(w http.ResponseWriter, r *htt
 	all, err := h.store.ListContinuousDeploymentPolicies(r.Context())
 	if err != nil {
 		log.LogStateError(r, "list continuous deployment policies", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -235,5 +235,5 @@ func (h *Handler) ListContinuousDeploymentPolicies(w http.ResponseWriter, r *htt
 		Quantity: len(summaries),
 		Items:    summaries,
 	}
-	protocol.WriteXML(w, r, http.StatusOK, &result)
+	writeXML(w, r, http.StatusOK, &result)
 }

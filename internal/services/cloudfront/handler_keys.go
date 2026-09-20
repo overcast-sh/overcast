@@ -21,14 +21,14 @@ func (h *Handler) CreateKeyGroup(w http.ResponseWriter, r *http.Request) {
 	var cfg KeyGroupConfig
 	if err := xml.NewDecoder(r.Body).Decode(&cfg); err != nil {
 		log.Debug("decode error", zap.Error(err))
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
 	}
 
 	if cfg.Name == "" {
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "InvalidArgument", Message: "Key group name is required.", HTTPStatus: 400,
 		})
 		return
@@ -46,7 +46,7 @@ func (h *Handler) CreateKeyGroup(w http.ResponseWriter, r *http.Request) {
 
 	if storeErr := h.store.PutKeyGroup(r.Context(), kg); storeErr != nil {
 		log.LogStateError(r, "put key group", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -59,7 +59,7 @@ func (h *Handler) CreateKeyGroup(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("ETag", computeETag(kg.Version))
 	w.Header().Set("Location", fmt.Sprintf("/2020-05-31/key-group/%s", id))
-	protocol.WriteXML(w, r, http.StatusCreated, &resp)
+	writeXML(w, r, http.StatusCreated, &resp)
 }
 
 // ─── Key Group: Get ─────────────────────────────────────────────────────────
@@ -71,11 +71,11 @@ func (h *Handler) GetKeyGroup(w http.ResponseWriter, r *http.Request) {
 	kg, err := h.store.GetKeyGroup(r.Context(), id)
 	if err != nil {
 		h.log.WithOperation("GetKeyGroup").LogStateError(r, "get key group", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if kg == nil {
-		protocol.WriteXMLError(w, r, errNoSuchKeyGroup(id))
+		writeError(w, r, errNoSuchKeyGroup(id))
 		return
 	}
 
@@ -85,7 +85,7 @@ func (h *Handler) GetKeyGroup(w http.ResponseWriter, r *http.Request) {
 		KeyGroupConfig:   kg.KeyGroupConfig,
 	}
 	w.Header().Set("ETag", computeETag(kg.Version))
-	protocol.WriteXML(w, r, http.StatusOK, &resp)
+	writeXML(w, r, http.StatusOK, &resp)
 }
 
 // ─── Key Group: GetConfig ───────────────────────────────────────────────────
@@ -97,11 +97,11 @@ func (h *Handler) GetKeyGroupConfig(w http.ResponseWriter, r *http.Request) {
 	kg, err := h.store.GetKeyGroup(r.Context(), id)
 	if err != nil {
 		h.log.WithOperation("GetKeyGroupConfig").LogStateError(r, "get key group", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if kg == nil {
-		protocol.WriteXMLError(w, r, errNoSuchKeyGroup(id))
+		writeError(w, r, errNoSuchKeyGroup(id))
 		return
 	}
 
@@ -111,7 +111,7 @@ func (h *Handler) GetKeyGroupConfig(w http.ResponseWriter, r *http.Request) {
 		Items:   kg.KeyGroupConfig.Items,
 	}
 	w.Header().Set("ETag", computeETag(kg.Version))
-	protocol.WriteXML(w, r, http.StatusOK, &resp)
+	writeXML(w, r, http.StatusOK, &resp)
 }
 
 // ─── Key Group: Update ──────────────────────────────────────────────────────
@@ -123,30 +123,30 @@ func (h *Handler) UpdateKeyGroup(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	ifMatch := r.Header.Get("If-Match")
 	if ifMatch == "" {
-		protocol.WriteXMLError(w, r, errInvalidIfMatch())
+		writeError(w, r, errInvalidIfMatch())
 		return
 	}
 
 	kg, err := h.store.GetKeyGroup(r.Context(), id)
 	if err != nil {
 		log.LogStateError(r, "get key group", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if kg == nil {
-		protocol.WriteXMLError(w, r, errNoSuchKeyGroup(id))
+		writeError(w, r, errNoSuchKeyGroup(id))
 		return
 	}
 
 	if ifMatch != computeETag(kg.Version) {
-		protocol.WriteXMLError(w, r, errPreconditionFailed())
+		writeError(w, r, errPreconditionFailed())
 		return
 	}
 
 	var cfg KeyGroupConfig
 	if err := xml.NewDecoder(r.Body).Decode(&cfg); err != nil {
 		log.Debug("decode error", zap.Error(err))
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
@@ -158,7 +158,7 @@ func (h *Handler) UpdateKeyGroup(w http.ResponseWriter, r *http.Request) {
 
 	if storeErr := h.store.PutKeyGroup(r.Context(), kg); storeErr != nil {
 		log.LogStateError(r, "put key group", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -169,7 +169,7 @@ func (h *Handler) UpdateKeyGroup(w http.ResponseWriter, r *http.Request) {
 		KeyGroupConfig:   kg.KeyGroupConfig,
 	}
 	w.Header().Set("ETag", computeETag(kg.Version))
-	protocol.WriteXML(w, r, http.StatusOK, &resp)
+	writeXML(w, r, http.StatusOK, &resp)
 }
 
 // ─── Key Group: Delete ──────────────────────────────────────────────────────
@@ -181,29 +181,29 @@ func (h *Handler) DeleteKeyGroup(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	ifMatch := r.Header.Get("If-Match")
 	if ifMatch == "" {
-		protocol.WriteXMLError(w, r, errInvalidIfMatch())
+		writeError(w, r, errInvalidIfMatch())
 		return
 	}
 
 	kg, err := h.store.GetKeyGroup(r.Context(), id)
 	if err != nil {
 		log.LogStateError(r, "get key group", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if kg == nil {
-		protocol.WriteXMLError(w, r, errNoSuchKeyGroup(id))
+		writeError(w, r, errNoSuchKeyGroup(id))
 		return
 	}
 
 	if ifMatch != computeETag(kg.Version) {
-		protocol.WriteXMLError(w, r, errPreconditionFailed())
+		writeError(w, r, errPreconditionFailed())
 		return
 	}
 
 	if storeErr := h.store.DeleteKeyGroup(r.Context(), id); storeErr != nil {
 		log.LogStateError(r, "delete key group", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -220,7 +220,7 @@ func (h *Handler) ListKeyGroups(w http.ResponseWriter, r *http.Request) {
 	all, err := h.store.ListKeyGroups(r.Context())
 	if err != nil {
 		log.LogStateError(r, "list key groups", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -243,7 +243,7 @@ func (h *Handler) ListKeyGroups(w http.ResponseWriter, r *http.Request) {
 		Items:    summaries,
 	}
 
-	protocol.WriteXML(w, r, http.StatusOK, &result)
+	writeXML(w, r, http.StatusOK, &result)
 }
 
 // ─── Public Key: Create ─────────────────────────────────────────────────────
@@ -255,14 +255,14 @@ func (h *Handler) CreatePublicKey(w http.ResponseWriter, r *http.Request) {
 	var cfg PublicKeyConfig
 	if err := xml.NewDecoder(r.Body).Decode(&cfg); err != nil {
 		log.Debug("decode error", zap.Error(err))
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
 	}
 
 	if cfg.CallerReference == "" {
-		protocol.WriteXMLError(w, r, errMissingCallerReference())
+		writeError(w, r, errMissingCallerReference())
 		return
 	}
 
@@ -270,7 +270,7 @@ func (h *Handler) CreatePublicKey(w http.ResponseWriter, r *http.Request) {
 	existing, _ := h.store.ListPublicKeys(r.Context())
 	for _, pk := range existing {
 		if pk.PublicKeyConfig.CallerReference == cfg.CallerReference {
-			protocol.WriteXMLError(w, r, errPublicKeyAlreadyExists(cfg.CallerReference))
+			writeError(w, r, errPublicKeyAlreadyExists(cfg.CallerReference))
 			return
 		}
 	}
@@ -287,7 +287,7 @@ func (h *Handler) CreatePublicKey(w http.ResponseWriter, r *http.Request) {
 
 	if storeErr := h.store.PutPublicKey(r.Context(), pk); storeErr != nil {
 		log.LogStateError(r, "put public key", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -300,7 +300,7 @@ func (h *Handler) CreatePublicKey(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("ETag", computeETag(pk.Version))
 	w.Header().Set("Location", fmt.Sprintf("/2020-05-31/public-key/%s", id))
-	protocol.WriteXML(w, r, http.StatusCreated, &resp)
+	writeXML(w, r, http.StatusCreated, &resp)
 }
 
 // ─── Public Key: Get ────────────────────────────────────────────────────────
@@ -312,11 +312,11 @@ func (h *Handler) GetPublicKey(w http.ResponseWriter, r *http.Request) {
 	pk, err := h.store.GetPublicKey(r.Context(), id)
 	if err != nil {
 		h.log.WithOperation("GetPublicKey").LogStateError(r, "get public key", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if pk == nil {
-		protocol.WriteXMLError(w, r, errNoSuchPublicKey(id))
+		writeError(w, r, errNoSuchPublicKey(id))
 		return
 	}
 
@@ -326,7 +326,7 @@ func (h *Handler) GetPublicKey(w http.ResponseWriter, r *http.Request) {
 		PublicKeyConfig: pk.PublicKeyConfig,
 	}
 	w.Header().Set("ETag", computeETag(pk.Version))
-	protocol.WriteXML(w, r, http.StatusOK, &resp)
+	writeXML(w, r, http.StatusOK, &resp)
 }
 
 // ─── Public Key: GetConfig ──────────────────────────────────────────────────
@@ -338,11 +338,11 @@ func (h *Handler) GetPublicKeyConfig(w http.ResponseWriter, r *http.Request) {
 	pk, err := h.store.GetPublicKey(r.Context(), id)
 	if err != nil {
 		h.log.WithOperation("GetPublicKeyConfig").LogStateError(r, "get public key", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if pk == nil {
-		protocol.WriteXMLError(w, r, errNoSuchPublicKey(id))
+		writeError(w, r, errNoSuchPublicKey(id))
 		return
 	}
 
@@ -353,7 +353,7 @@ func (h *Handler) GetPublicKeyConfig(w http.ResponseWriter, r *http.Request) {
 		EncodedKey:      pk.PublicKeyConfig.EncodedKey,
 	}
 	w.Header().Set("ETag", computeETag(pk.Version))
-	protocol.WriteXML(w, r, http.StatusOK, &resp)
+	writeXML(w, r, http.StatusOK, &resp)
 }
 
 // ─── Public Key: Update ─────────────────────────────────────────────────────
@@ -365,30 +365,30 @@ func (h *Handler) UpdatePublicKey(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	ifMatch := r.Header.Get("If-Match")
 	if ifMatch == "" {
-		protocol.WriteXMLError(w, r, errInvalidIfMatch())
+		writeError(w, r, errInvalidIfMatch())
 		return
 	}
 
 	pk, err := h.store.GetPublicKey(r.Context(), id)
 	if err != nil {
 		log.LogStateError(r, "get public key", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if pk == nil {
-		protocol.WriteXMLError(w, r, errNoSuchPublicKey(id))
+		writeError(w, r, errNoSuchPublicKey(id))
 		return
 	}
 
 	if ifMatch != computeETag(pk.Version) {
-		protocol.WriteXMLError(w, r, errPreconditionFailed())
+		writeError(w, r, errPreconditionFailed())
 		return
 	}
 
 	var cfg PublicKeyConfig
 	if err := xml.NewDecoder(r.Body).Decode(&cfg); err != nil {
 		log.Debug("decode error", zap.Error(err))
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
@@ -400,7 +400,7 @@ func (h *Handler) UpdatePublicKey(w http.ResponseWriter, r *http.Request) {
 
 	if storeErr := h.store.PutPublicKey(r.Context(), pk); storeErr != nil {
 		log.LogStateError(r, "put public key", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -411,7 +411,7 @@ func (h *Handler) UpdatePublicKey(w http.ResponseWriter, r *http.Request) {
 		PublicKeyConfig: pk.PublicKeyConfig,
 	}
 	w.Header().Set("ETag", computeETag(pk.Version))
-	protocol.WriteXML(w, r, http.StatusOK, &resp)
+	writeXML(w, r, http.StatusOK, &resp)
 }
 
 // ─── Public Key: Delete ─────────────────────────────────────────────────────
@@ -423,29 +423,29 @@ func (h *Handler) DeletePublicKey(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	ifMatch := r.Header.Get("If-Match")
 	if ifMatch == "" {
-		protocol.WriteXMLError(w, r, errInvalidIfMatch())
+		writeError(w, r, errInvalidIfMatch())
 		return
 	}
 
 	pk, err := h.store.GetPublicKey(r.Context(), id)
 	if err != nil {
 		log.LogStateError(r, "get public key", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if pk == nil {
-		protocol.WriteXMLError(w, r, errNoSuchPublicKey(id))
+		writeError(w, r, errNoSuchPublicKey(id))
 		return
 	}
 
 	if ifMatch != computeETag(pk.Version) {
-		protocol.WriteXMLError(w, r, errPreconditionFailed())
+		writeError(w, r, errPreconditionFailed())
 		return
 	}
 
 	if storeErr := h.store.DeletePublicKey(r.Context(), id); storeErr != nil {
 		log.LogStateError(r, "delete public key", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -462,7 +462,7 @@ func (h *Handler) ListPublicKeys(w http.ResponseWriter, r *http.Request) {
 	all, err := h.store.ListPublicKeys(r.Context())
 	if err != nil {
 		log.LogStateError(r, "list public keys", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -485,5 +485,5 @@ func (h *Handler) ListPublicKeys(w http.ResponseWriter, r *http.Request) {
 		Items:    summaries,
 	}
 
-	protocol.WriteXML(w, r, http.StatusOK, &result)
+	writeXML(w, r, http.StatusOK, &result)
 }

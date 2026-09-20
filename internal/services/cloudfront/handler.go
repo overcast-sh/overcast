@@ -77,14 +77,14 @@ func (h *Handler) CreateDistribution(w http.ResponseWriter, r *http.Request) {
 	cfg, err := decodeDistributionConfig(r)
 	if err != nil {
 		log.Debug("decode error", zap.Error(err))
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
 	}
 
 	if cfg.CallerReference == "" {
-		protocol.WriteXMLError(w, r, errMissingCallerReference())
+		writeError(w, r, errMissingCallerReference())
 		return
 	}
 
@@ -94,7 +94,7 @@ func (h *Handler) CreateDistribution(w http.ResponseWriter, r *http.Request) {
 	existing, storeErr := h.store.FindByCallerRef(ctx, cfg.CallerReference)
 	if storeErr != nil {
 		log.LogStateError(r, "find by caller ref", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if existing != nil {
@@ -102,16 +102,16 @@ func (h *Handler) CreateDistribution(w http.ResponseWriter, r *http.Request) {
 			// Idempotent — return the existing distribution.
 			w.Header().Set("ETag", computeETag(existing.Version))
 			w.Header().Set("Location", fmt.Sprintf("/2020-05-31/distribution/%s", existing.ID))
-			protocol.WriteXML(w, r, http.StatusCreated, existing)
+			writeXML(w, r, http.StatusCreated, existing)
 			return
 		}
-		protocol.WriteXMLError(w, r, errDistributionAlreadyExists(cfg.CallerReference))
+		writeError(w, r, errDistributionAlreadyExists(cfg.CallerReference))
 		return
 	}
 
 	validateAndNormalizeConfig(cfg)
 	if aerr := validateOriginRefs(cfg); aerr != nil {
-		protocol.WriteXMLError(w, r, aerr)
+		writeError(w, r, aerr)
 		return
 	}
 
@@ -133,7 +133,7 @@ func (h *Handler) CreateDistribution(w http.ResponseWriter, r *http.Request) {
 
 	if storeErr := h.store.PutDistribution(ctx, dist); storeErr != nil {
 		log.LogStateError(r, "put distribution", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -142,7 +142,7 @@ func (h *Handler) CreateDistribution(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("ETag", computeETag(dist.Version))
 	w.Header().Set("Location", fmt.Sprintf("/2020-05-31/distribution/%s", id))
-	protocol.WriteXML(w, r, http.StatusCreated, dist)
+	writeXML(w, r, http.StatusCreated, dist)
 }
 
 // ─── GetDistribution ────────────────────────────────────────────────────────
@@ -152,11 +152,11 @@ func (h *Handler) GetDistribution(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	dist, aerr := h.requireDistribution(r, id)
 	if aerr != nil {
-		protocol.WriteXMLError(w, r, aerr)
+		writeError(w, r, aerr)
 		return
 	}
 	w.Header().Set("ETag", computeETag(dist.Version))
-	protocol.WriteXML(w, r, http.StatusOK, dist)
+	writeXML(w, r, http.StatusOK, dist)
 }
 
 // ─── GetDistributionConfig ──────────────────────────────────────────────────
@@ -166,11 +166,11 @@ func (h *Handler) GetDistributionConfig(w http.ResponseWriter, r *http.Request) 
 	id := chi.URLParam(r, "id")
 	dist, aerr := h.requireDistribution(r, id)
 	if aerr != nil {
-		protocol.WriteXMLError(w, r, aerr)
+		writeError(w, r, aerr)
 		return
 	}
 	w.Header().Set("ETag", computeETag(dist.Version))
-	protocol.WriteXML(w, r, http.StatusOK, &dist.DistributionConfig)
+	writeXML(w, r, http.StatusOK, &dist.DistributionConfig)
 }
 
 // ─── UpdateDistribution ─────────────────────────────────────────────────────
@@ -182,32 +182,32 @@ func (h *Handler) UpdateDistribution(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	ifMatch := r.Header.Get("If-Match")
 	if ifMatch == "" {
-		protocol.WriteXMLError(w, r, errInvalidIfMatch())
+		writeError(w, r, errInvalidIfMatch())
 		return
 	}
 
 	dist, aerr := h.requireDistribution(r, id)
 	if aerr != nil {
-		protocol.WriteXMLError(w, r, aerr)
+		writeError(w, r, aerr)
 		return
 	}
 
 	if ifMatch != computeETag(dist.Version) {
-		protocol.WriteXMLError(w, r, errPreconditionFailed())
+		writeError(w, r, errPreconditionFailed())
 		return
 	}
 
 	cfg, err := decodeDistributionConfig(r)
 	if err != nil {
 		log.Debug("decode error", zap.Error(err))
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
 	}
 
 	if cfg.CallerReference != "" && cfg.CallerReference != dist.DistributionConfig.CallerReference {
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code:       "InvalidArgument",
 			Message:    "The CallerReference cannot be changed after a distribution is created",
 			HTTPStatus: 400,
@@ -217,7 +217,7 @@ func (h *Handler) UpdateDistribution(w http.ResponseWriter, r *http.Request) {
 
 	validateAndNormalizeConfig(cfg)
 	if aerr := validateOriginRefs(cfg); aerr != nil {
-		protocol.WriteXMLError(w, r, aerr)
+		writeError(w, r, aerr)
 		return
 	}
 
@@ -227,7 +227,7 @@ func (h *Handler) UpdateDistribution(w http.ResponseWriter, r *http.Request) {
 
 	if storeErr := h.store.PutDistribution(r.Context(), dist); storeErr != nil {
 		log.LogStateError(r, "update distribution", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -235,7 +235,7 @@ func (h *Handler) UpdateDistribution(w http.ResponseWriter, r *http.Request) {
 	h.publish(r, events.CloudFrontDistributionUpdated, events.ResourcePayload{Name: id, ARN: dist.ARN})
 
 	w.Header().Set("ETag", computeETag(dist.Version))
-	protocol.WriteXML(w, r, http.StatusOK, dist)
+	writeXML(w, r, http.StatusOK, dist)
 }
 
 // ─── DeleteDistribution ─────────────────────────────────────────────────────
@@ -247,36 +247,36 @@ func (h *Handler) DeleteDistribution(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	ifMatch := r.Header.Get("If-Match")
 	if ifMatch == "" {
-		protocol.WriteXMLError(w, r, errInvalidIfMatch())
+		writeError(w, r, errInvalidIfMatch())
 		return
 	}
 
 	dist, aerr := h.requireDistribution(r, id)
 	if aerr != nil {
-		protocol.WriteXMLError(w, r, aerr)
+		writeError(w, r, aerr)
 		return
 	}
 
 	if ifMatch != computeETag(dist.Version) {
-		protocol.WriteXMLError(w, r, errPreconditionFailed())
+		writeError(w, r, errPreconditionFailed())
 		return
 	}
 
 	if dist.DistributionConfig.Enabled {
-		protocol.WriteXMLError(w, r, errDistributionNotDisabled(id))
+		writeError(w, r, errDistributionNotDisabled(id))
 		return
 	}
 
 	ctx := r.Context()
 	if storeErr := h.store.DeleteAllInvalidations(ctx, id); storeErr != nil {
 		log.LogStateError(r, "delete invalidations", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
 	if storeErr := h.store.DeleteDistribution(ctx, id); storeErr != nil {
 		log.LogStateError(r, "delete distribution", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	// Clear all cached proxy responses for this distribution.
@@ -296,7 +296,7 @@ func (h *Handler) ListDistributions(w http.ResponseWriter, r *http.Request) {
 	all, err := h.store.ListDistributions(r.Context())
 	if err != nil {
 		log.LogStateError(r, "list distributions", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -304,7 +304,7 @@ func (h *Handler) ListDistributions(w http.ResponseWriter, r *http.Request) {
 	maxItems := serviceutil.QueryInt(r, "MaxItems", 100)
 	page, err := serviceutil.Paginate(all, maxItems, marker, serviceutil.PaginateOptions{DefaultLimit: 100})
 	if err != nil {
-		protocol.WriteXMLError(w, r, errInvalidMarker())
+		writeError(w, r, errInvalidMarker())
 		return
 	}
 
@@ -322,7 +322,7 @@ func (h *Handler) ListDistributions(w http.ResponseWriter, r *http.Request) {
 		Items:       summaries,
 	}
 
-	protocol.WriteXML(w, r, http.StatusOK, &result)
+	writeXML(w, r, http.StatusOK, &result)
 }
 
 // ─── CreateInvalidation ─────────────────────────────────────────────────────
@@ -333,21 +333,21 @@ func (h *Handler) CreateInvalidation(w http.ResponseWriter, r *http.Request) {
 
 	distID := chi.URLParam(r, "id")
 	if _, aerr := h.requireDistribution(r, distID); aerr != nil {
-		protocol.WriteXMLError(w, r, aerr)
+		writeError(w, r, aerr)
 		return
 	}
 
 	var batch InvalidationBatch
 	if err := xml.NewDecoder(r.Body).Decode(&batch); err != nil {
 		log.Debug("decode error", zap.Error(err))
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
 	}
 
 	if batch.CallerReference == "" {
-		protocol.WriteXMLError(w, r, errMissingCallerReference())
+		writeError(w, r, errMissingCallerReference())
 		return
 	}
 
@@ -356,7 +356,7 @@ func (h *Handler) CreateInvalidation(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(p, "#") {
 			tag := p[1:]
 			if !isValidCacheTag(tag) {
-				protocol.WriteXMLError(w, r, &protocol.AWSError{
+				writeError(w, r, &protocol.AWSError{
 					Code:       "InvalidArgument",
 					Message:    fmt.Sprintf("Invalid cache tag: %s", tag),
 					HTTPStatus: 400,
@@ -378,7 +378,7 @@ func (h *Handler) CreateInvalidation(w http.ResponseWriter, r *http.Request) {
 
 	if storeErr := h.store.PutInvalidation(r.Context(), distID, inv); storeErr != nil {
 		log.LogStateError(r, "put invalidation", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -392,7 +392,7 @@ func (h *Handler) CreateInvalidation(w http.ResponseWriter, r *http.Request) {
 	h.publish(r, events.CloudFrontInvalidationCreated, events.ResourcePayload{Name: id, ARN: distID})
 
 	w.Header().Set("Location", fmt.Sprintf("/2020-05-31/distribution/%s/invalidation/%s", distID, id))
-	protocol.WriteXML(w, r, http.StatusCreated, inv)
+	writeXML(w, r, http.StatusCreated, inv)
 }
 
 // ─── GetInvalidation ────────────────────────────────────────────────────────
@@ -403,22 +403,22 @@ func (h *Handler) GetInvalidation(w http.ResponseWriter, r *http.Request) {
 	invID := chi.URLParam(r, "invalidationId")
 
 	if _, aerr := h.requireDistribution(r, distID); aerr != nil {
-		protocol.WriteXMLError(w, r, aerr)
+		writeError(w, r, aerr)
 		return
 	}
 
 	inv, err := h.store.GetInvalidation(r.Context(), distID, invID)
 	if err != nil {
 		h.log.WithOperation("GetInvalidation").LogStateError(r, "get invalidation", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if inv == nil {
-		protocol.WriteXMLError(w, r, errNoSuchInvalidation(invID))
+		writeError(w, r, errNoSuchInvalidation(invID))
 		return
 	}
 
-	protocol.WriteXML(w, r, http.StatusOK, inv)
+	writeXML(w, r, http.StatusOK, inv)
 }
 
 // ─── ListInvalidations ──────────────────────────────────────────────────────
@@ -429,14 +429,14 @@ func (h *Handler) ListInvalidations(w http.ResponseWriter, r *http.Request) {
 
 	distID := chi.URLParam(r, "id")
 	if _, aerr := h.requireDistribution(r, distID); aerr != nil {
-		protocol.WriteXMLError(w, r, aerr)
+		writeError(w, r, aerr)
 		return
 	}
 
 	all, err := h.store.ListInvalidations(r.Context(), distID)
 	if err != nil {
 		log.LogStateError(r, "list invalidations", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -444,7 +444,7 @@ func (h *Handler) ListInvalidations(w http.ResponseWriter, r *http.Request) {
 	maxItems := serviceutil.QueryInt(r, "MaxItems", 100)
 	page, err := serviceutil.Paginate(all, maxItems, marker, serviceutil.PaginateOptions{DefaultLimit: 100})
 	if err != nil {
-		protocol.WriteXMLError(w, r, errInvalidMarker())
+		writeError(w, r, errInvalidMarker())
 		return
 	}
 
@@ -466,7 +466,7 @@ func (h *Handler) ListInvalidations(w http.ResponseWriter, r *http.Request) {
 		Items:       summaries,
 	}
 
-	protocol.WriteXML(w, r, http.StatusOK, &result)
+	writeXML(w, r, http.StatusOK, &result)
 }
 
 // ─── TagResource ────────────────────────────────────────────────────────────
@@ -496,7 +496,7 @@ func (h *Handler) TagResource(w http.ResponseWriter, r *http.Request) {
 
 	arn := r.URL.Query().Get("Resource")
 	if arn == "" {
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "InvalidArgument", Message: "Resource ARN is required.", HTTPStatus: 400,
 		})
 		return
@@ -505,7 +505,7 @@ func (h *Handler) TagResource(w http.ResponseWriter, r *http.Request) {
 	var body Tags
 	if err := xml.NewDecoder(r.Body).Decode(&body); err != nil {
 		log.Debug("decode error", zap.Error(err))
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
@@ -517,7 +517,7 @@ func (h *Handler) TagResource(w http.ResponseWriter, r *http.Request) {
 	existing, err := h.store.GetTags(ctx, arn)
 	if err != nil {
 		log.LogStateError(r, "get tags", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if existing == nil {
@@ -536,7 +536,7 @@ func (h *Handler) TagResource(w http.ResponseWriter, r *http.Request) {
 	// Validated against the merged set, not just the incoming delta, so the
 	// 50-tag limit holds across repeated TagResource calls (#1052).
 	if aerr := serviceutil.ValidateTags(cloudfrontTagCfg, tagMap); aerr != nil {
-		protocol.WriteXMLError(w, r, aerr)
+		writeError(w, r, aerr)
 		return
 	}
 
@@ -548,7 +548,7 @@ func (h *Handler) TagResource(w http.ResponseWriter, r *http.Request) {
 
 	if storeErr := h.store.PutTags(ctx, arn, existing); storeErr != nil {
 		log.LogStateError(r, "put tags", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -563,7 +563,7 @@ func (h *Handler) UntagResource(w http.ResponseWriter, r *http.Request) {
 
 	arn := r.URL.Query().Get("Resource")
 	if arn == "" {
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "InvalidArgument", Message: "Resource ARN is required.", HTTPStatus: 400,
 		})
 		return
@@ -572,7 +572,7 @@ func (h *Handler) UntagResource(w http.ResponseWriter, r *http.Request) {
 	var keys TagKeys
 	if err := xml.NewDecoder(r.Body).Decode(&keys); err != nil {
 		log.Debug("decode error", zap.Error(err))
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
@@ -583,7 +583,7 @@ func (h *Handler) UntagResource(w http.ResponseWriter, r *http.Request) {
 	existing, err := h.store.GetTags(ctx, arn)
 	if err != nil {
 		log.LogStateError(r, "get tags", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if existing == nil {
@@ -607,7 +607,7 @@ func (h *Handler) UntagResource(w http.ResponseWriter, r *http.Request) {
 
 	if storeErr := h.store.PutTags(ctx, arn, existing); storeErr != nil {
 		log.LogStateError(r, "put tags", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -620,7 +620,7 @@ func (h *Handler) UntagResource(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ListTagsForResource(w http.ResponseWriter, r *http.Request) {
 	arn := r.URL.Query().Get("Resource")
 	if arn == "" {
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "InvalidArgument", Message: "Resource ARN is required.", HTTPStatus: 400,
 		})
 		return
@@ -629,14 +629,14 @@ func (h *Handler) ListTagsForResource(w http.ResponseWriter, r *http.Request) {
 	tags, err := h.store.GetTags(r.Context(), arn)
 	if err != nil {
 		h.log.WithOperation("ListTagsForResource").LogStateError(r, "get tags", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if tags == nil {
 		tags = &Tags{}
 	}
 
-	protocol.WriteXML(w, r, http.StatusOK, &Tagging{Tags: *tags})
+	writeXML(w, r, http.StatusOK, &Tagging{Tags: *tags})
 }
 
 // ─── CreateDistributionWithTags ─────────────────────────────────────────────
@@ -648,7 +648,7 @@ func (h *Handler) CreateDistributionWithTags(w http.ResponseWriter, r *http.Requ
 	var body DistributionConfigWithTags
 	if err := xml.NewDecoder(r.Body).Decode(&body); err != nil {
 		log.Debug("decode error", zap.Error(err))
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
@@ -656,7 +656,7 @@ func (h *Handler) CreateDistributionWithTags(w http.ResponseWriter, r *http.Requ
 
 	cfg := &body.DistributionConfig
 	if cfg.CallerReference == "" {
-		protocol.WriteXMLError(w, r, errMissingCallerReference())
+		writeError(w, r, errMissingCallerReference())
 		return
 	}
 	// Request-shape validation before the distribution is created — the
@@ -665,7 +665,7 @@ func (h *Handler) CreateDistributionWithTags(w http.ResponseWriter, r *http.Requ
 	// create leaves no distribution behind with nothing able to fix its
 	// tags (#1052).
 	if aerr := serviceutil.ValidateTags(cloudfrontTagCfg, cloudfrontTagsToMap(body.Tags.Items)); aerr != nil {
-		protocol.WriteXMLError(w, r, aerr)
+		writeError(w, r, aerr)
 		return
 	}
 
@@ -675,17 +675,17 @@ func (h *Handler) CreateDistributionWithTags(w http.ResponseWriter, r *http.Requ
 	existing, storeErr := h.store.FindByCallerRef(ctx, cfg.CallerReference)
 	if storeErr != nil {
 		log.LogStateError(r, "find by caller ref", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if existing != nil {
 		if distributionConfigsEqual(&existing.DistributionConfig, cfg) {
 			w.Header().Set("ETag", computeETag(existing.Version))
 			w.Header().Set("Location", fmt.Sprintf("/2020-05-31/distribution/%s", existing.ID))
-			protocol.WriteXML(w, r, http.StatusCreated, existing)
+			writeXML(w, r, http.StatusCreated, existing)
 			return
 		}
-		protocol.WriteXMLError(w, r, errDistributionAlreadyExists(cfg.CallerReference))
+		writeError(w, r, errDistributionAlreadyExists(cfg.CallerReference))
 		return
 	}
 
@@ -718,7 +718,7 @@ func (h *Handler) CreateDistributionWithTags(w http.ResponseWriter, r *http.Requ
 
 	if storeErr := h.store.PutDistribution(ctx, dist); storeErr != nil {
 		log.LogStateError(r, "put distribution", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -735,7 +735,7 @@ func (h *Handler) CreateDistributionWithTags(w http.ResponseWriter, r *http.Requ
 
 	w.Header().Set("ETag", computeETag(dist.Version))
 	w.Header().Set("Location", fmt.Sprintf("/2020-05-31/distribution/%s", id))
-	protocol.WriteXML(w, r, http.StatusCreated, dist)
+	writeXML(w, r, http.StatusCreated, dist)
 }
 
 // ─── OAC: CreateOriginAccessControl ─────────────────────────────────────────
@@ -747,7 +747,7 @@ func (h *Handler) CreateOriginAccessControl(w http.ResponseWriter, r *http.Reque
 	var body OriginAccessControlConfig
 	if err := xml.NewDecoder(r.Body).Decode(&body); err != nil {
 		log.Debug("decode error", zap.Error(err))
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
@@ -763,7 +763,7 @@ func (h *Handler) CreateOriginAccessControl(w http.ResponseWriter, r *http.Reque
 
 	if storeErr := h.store.PutOAC(r.Context(), oac); storeErr != nil {
 		log.LogStateError(r, "put oac", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -771,7 +771,7 @@ func (h *Handler) CreateOriginAccessControl(w http.ResponseWriter, r *http.Reque
 
 	w.Header().Set("ETag", computeETag(oac.Version))
 	w.Header().Set("Location", fmt.Sprintf("/2020-05-31/origin-access-control/%s", id))
-	protocol.WriteXML(w, r, http.StatusCreated, oac)
+	writeXML(w, r, http.StatusCreated, oac)
 }
 
 // ─── OAC: GetOriginAccessControl ────────────────────────────────────────────
@@ -783,16 +783,16 @@ func (h *Handler) GetOriginAccessControl(w http.ResponseWriter, r *http.Request)
 	oac, err := h.store.GetOAC(r.Context(), id)
 	if err != nil {
 		h.log.WithOperation("GetOriginAccessControl").LogStateError(r, "get oac", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if oac == nil {
-		protocol.WriteXMLError(w, r, errNoSuchOriginAccessControl(id))
+		writeError(w, r, errNoSuchOriginAccessControl(id))
 		return
 	}
 
 	w.Header().Set("ETag", computeETag(oac.Version))
-	protocol.WriteXML(w, r, http.StatusOK, oac)
+	writeXML(w, r, http.StatusOK, oac)
 }
 
 // ─── OAC: UpdateOriginAccessControl ─────────────────────────────────────────
@@ -804,30 +804,30 @@ func (h *Handler) UpdateOriginAccessControl(w http.ResponseWriter, r *http.Reque
 	id := chi.URLParam(r, "id")
 	ifMatch := r.Header.Get("If-Match")
 	if ifMatch == "" {
-		protocol.WriteXMLError(w, r, errInvalidIfMatch())
+		writeError(w, r, errInvalidIfMatch())
 		return
 	}
 
 	oac, err := h.store.GetOAC(r.Context(), id)
 	if err != nil {
 		log.LogStateError(r, "get oac", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if oac == nil {
-		protocol.WriteXMLError(w, r, errNoSuchOriginAccessControl(id))
+		writeError(w, r, errNoSuchOriginAccessControl(id))
 		return
 	}
 
 	if ifMatch != computeETag(oac.Version) {
-		protocol.WriteXMLError(w, r, errPreconditionFailed())
+		writeError(w, r, errPreconditionFailed())
 		return
 	}
 
 	var body OriginAccessControlConfig
 	if err := xml.NewDecoder(r.Body).Decode(&body); err != nil {
 		log.Debug("decode error", zap.Error(err))
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
@@ -838,13 +838,13 @@ func (h *Handler) UpdateOriginAccessControl(w http.ResponseWriter, r *http.Reque
 
 	if storeErr := h.store.PutOAC(r.Context(), oac); storeErr != nil {
 		log.LogStateError(r, "put oac", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
 	log.Info("origin access control updated", zap.String("id", id))
 	w.Header().Set("ETag", computeETag(oac.Version))
-	protocol.WriteXML(w, r, http.StatusOK, oac)
+	writeXML(w, r, http.StatusOK, oac)
 }
 
 // ─── OAC: DeleteOriginAccessControl ─────────────────────────────────────────
@@ -856,29 +856,29 @@ func (h *Handler) DeleteOriginAccessControl(w http.ResponseWriter, r *http.Reque
 	id := chi.URLParam(r, "id")
 	ifMatch := r.Header.Get("If-Match")
 	if ifMatch == "" {
-		protocol.WriteXMLError(w, r, errInvalidIfMatch())
+		writeError(w, r, errInvalidIfMatch())
 		return
 	}
 
 	oac, err := h.store.GetOAC(r.Context(), id)
 	if err != nil {
 		log.LogStateError(r, "get oac", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if oac == nil {
-		protocol.WriteXMLError(w, r, errNoSuchOriginAccessControl(id))
+		writeError(w, r, errNoSuchOriginAccessControl(id))
 		return
 	}
 
 	if ifMatch != computeETag(oac.Version) {
-		protocol.WriteXMLError(w, r, errPreconditionFailed())
+		writeError(w, r, errPreconditionFailed())
 		return
 	}
 
 	if storeErr := h.store.DeleteOAC(r.Context(), id); storeErr != nil {
 		log.LogStateError(r, "delete oac", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -895,7 +895,7 @@ func (h *Handler) ListOriginAccessControls(w http.ResponseWriter, r *http.Reques
 	all, err := h.store.ListOACs(r.Context())
 	if err != nil {
 		log.LogStateError(r, "list oacs", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -903,7 +903,7 @@ func (h *Handler) ListOriginAccessControls(w http.ResponseWriter, r *http.Reques
 	maxItems := serviceutil.QueryInt(r, "MaxItems", 100)
 	page, err := serviceutil.Paginate(all, maxItems, marker, serviceutil.PaginateOptions{DefaultLimit: 100})
 	if err != nil {
-		protocol.WriteXMLError(w, r, errInvalidMarker())
+		writeError(w, r, errInvalidMarker())
 		return
 	}
 
@@ -928,7 +928,7 @@ func (h *Handler) ListOriginAccessControls(w http.ResponseWriter, r *http.Reques
 		Items:       summaries,
 	}
 
-	protocol.WriteXML(w, r, http.StatusOK, &result)
+	writeXML(w, r, http.StatusOK, &result)
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

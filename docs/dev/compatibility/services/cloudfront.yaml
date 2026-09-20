@@ -1,5 +1,5 @@
 service: cloudfront
-status: in_progress
+status: reviewed
 priority: p1
 reference_policy: aws_docs_only_unless_user_approves_real_aws
 last_updated: 2026-09-20
@@ -50,13 +50,52 @@ findings:
       tests:
         - tests/integration/cloudfront/cloudfront_test.go::TestGetDistribution_xmlShape
         - tests/integration/cloudfront/cloudfront_test.go::TestGetDistribution_notFound_errorShape
+    - scenario: >-
+        #2010: every response root now declares xmlns="http://cloudfront.amazonaws.com/doc/2020-05-31/",
+        the namespace the pinned model's service shape carries in smithy.api#xmlNamespace, and nested
+        elements inherit it rather than repeating it. protocol.WriteXMLNS stamps it on the root at write
+        time, so it cannot be missed on a response whose struct nobody remembered to annotate — and the
+        same struct can be a root in one operation and a nested member in another, which a field on the
+        type could not have told apart.
+      evidence:
+        aws_model: models/cloudfront/service/2020-05-31/cloudfront-2020-05-31.json (service shape Cloudfront2020_05_31)
+        tests: >-
+          tests/integration/cloudfront/cloudfront_test.go::TestResponseRoots_carryServiceNamespace,
+          tests/integration/cloudfront/cloudfront_test.go::TestGetDistribution_xmlShape,
+          internal/protocol/errors_test.go::TestWriteXMLNS_stampsTheRootOnly
+      fixed_in: "#2010"
+    - scenario: >-
+        #2010: errors are wrapped in the restXml <ErrorResponse xmlns=…><Error><Type>Sender</Type>…
+        </Error><RequestId>…</RequestId></ErrorResponse> envelope. The service shape's protocol trait is
+        "aws.protocols#restXml": {} with no noErrorWrapping, so S3's bare <Error> — which every handler
+        reached for because protocol.WriteXMLError was the only REST-XML error writer — was the wrong
+        shape. Statuses are unchanged and still come from each error shape's smithy.api#httpError.
+      evidence:
+        aws_model: models/cloudfront/service/2020-05-31/cloudfront-2020-05-31.json (NoSuchDistribution httpError 404, InvalidIfMatchVersion httpError 400)
+        tests: >-
+          tests/integration/cloudfront/cloudfront_test.go::TestGetDistribution_notFound_errorShape,
+          tests/integration/cloudfront/cloudfront_test.go::TestUpdateDistribution_missingIfMatch_errorShape,
+          internal/protocol/errors_test.go::TestWriteRESTXMLError_wrapsWithServiceNamespace,
+          internal/protocol/errors_test.go::TestWriteQueryXMLError_declaresNoNamespace
+      fixed_in: "#2010"
+    - scenario: >-
+        #2010: Distribution, DistributionConfig and DistributionSummary emit their members in the order
+        the model declares them. Distribution had DomainName before LastModifiedTime; DistributionConfig
+        and DistributionSummary were checked at the same time and were further out (Comment and Enabled
+        near the front rather than after CustomErrorResponses and PriceClass).
+      evidence:
+        aws_model: models/cloudfront/service/2020-05-31/cloudfront-2020-05-31.json (Distribution, DistributionConfig, DistributionSummary member order)
+        tests: tests/integration/cloudfront/cloudfront_test.go::TestGetDistribution_xmlShape
+      fixed_in: "#2010"
   remaining_gaps:
     - >-
-      #2010: responses carry no xmlns="http://cloudfront.amazonaws.com/doc/2020-05-31/" although the
-      pinned model's service shape declares that namespace; errors use S3's bare <Error> body through
-      protocol.WriteXMLError instead of the restXml <ErrorResponse> envelope (Route 53's
-      WriteQueryXMLError shape); and Distribution emits DomainName before LastModifiedTime where the
-      model orders them the other way. Found by the #76 shape tests.
+      Member order below the top level still follows the order the structs happened to be written in
+      rather than the model's. Distribution, DistributionConfig and DistributionSummary were reordered
+      in #2010; Origin, DefaultCacheBehavior and CacheBehavior were checked against the pinned model at
+      the same time and diverge — the model puts TrustedSigners/TrustedKeyGroups before
+      ViewerProtocolPolicy and ForwardedValues/MinTTL/DefaultTTL/MaxTTL last on both behavior shapes,
+      and CustomHeaders before S3OriginConfig on Origin. SDKs address members by name, so this is a
+      wire-shape divergence rather than a functional one, and nothing pins it yet.
   intentionally_partial:
     - >-
       ETags are a quoted version counter ("1", "2", …) rather than a content hash or an opaque token

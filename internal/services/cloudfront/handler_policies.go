@@ -22,14 +22,14 @@ func (h *Handler) CreateCachePolicy(w http.ResponseWriter, r *http.Request) {
 	var cfg CachePolicyConfig
 	if err := xml.NewDecoder(r.Body).Decode(&cfg); err != nil {
 		log.Debug("decode error", zap.Error(err))
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
 	}
 
 	if cfg.Name == "" {
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "InvalidArgument", Message: "Cache policy name is required.", HTTPStatus: 400,
 		})
 		return
@@ -47,7 +47,7 @@ func (h *Handler) CreateCachePolicy(w http.ResponseWriter, r *http.Request) {
 
 	if storeErr := h.store.PutCachePolicy(r.Context(), cp); storeErr != nil {
 		log.LogStateError(r, "put cache policy", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -55,7 +55,7 @@ func (h *Handler) CreateCachePolicy(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("ETag", computeETag(cp.Version))
 	w.Header().Set("Location", fmt.Sprintf("/2020-05-31/cache-policy/%s", id))
-	protocol.WriteXML(w, r, http.StatusCreated, cp)
+	writeXML(w, r, http.StatusCreated, cp)
 }
 
 // ─── Cache Policy: Get ──────────────────────────────────────────────────────
@@ -67,16 +67,16 @@ func (h *Handler) GetCachePolicy(w http.ResponseWriter, r *http.Request) {
 	cp, err := h.store.GetCachePolicy(r.Context(), id)
 	if err != nil {
 		h.log.WithOperation("GetCachePolicy").LogStateError(r, "get cache policy", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if cp == nil {
-		protocol.WriteXMLError(w, r, errNoSuchCachePolicy(id))
+		writeError(w, r, errNoSuchCachePolicy(id))
 		return
 	}
 
 	w.Header().Set("ETag", computeETag(cp.Version))
-	protocol.WriteXML(w, r, http.StatusOK, cp)
+	writeXML(w, r, http.StatusOK, cp)
 }
 
 // ─── Cache Policy: GetConfig ────────────────────────────────────────────────
@@ -88,16 +88,16 @@ func (h *Handler) GetCachePolicyConfig(w http.ResponseWriter, r *http.Request) {
 	cp, err := h.store.GetCachePolicy(r.Context(), id)
 	if err != nil {
 		h.log.WithOperation("GetCachePolicyConfig").LogStateError(r, "get cache policy", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if cp == nil {
-		protocol.WriteXMLError(w, r, errNoSuchCachePolicy(id))
+		writeError(w, r, errNoSuchCachePolicy(id))
 		return
 	}
 
 	w.Header().Set("ETag", computeETag(cp.Version))
-	protocol.WriteXML(w, r, http.StatusOK, &cp.CachePolicyConfig)
+	writeXML(w, r, http.StatusOK, &cp.CachePolicyConfig)
 }
 
 // ─── Cache Policy: Update ───────────────────────────────────────────────────
@@ -109,30 +109,30 @@ func (h *Handler) UpdateCachePolicy(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	ifMatch := r.Header.Get("If-Match")
 	if ifMatch == "" {
-		protocol.WriteXMLError(w, r, errInvalidIfMatch())
+		writeError(w, r, errInvalidIfMatch())
 		return
 	}
 
 	cp, err := h.store.GetCachePolicy(r.Context(), id)
 	if err != nil {
 		log.LogStateError(r, "get cache policy", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if cp == nil {
-		protocol.WriteXMLError(w, r, errNoSuchCachePolicy(id))
+		writeError(w, r, errNoSuchCachePolicy(id))
 		return
 	}
 
 	if ifMatch != computeETag(cp.Version) {
-		protocol.WriteXMLError(w, r, errPreconditionFailed())
+		writeError(w, r, errPreconditionFailed())
 		return
 	}
 
 	var cfg CachePolicyConfig
 	if err := xml.NewDecoder(r.Body).Decode(&cfg); err != nil {
 		log.Debug("decode error", zap.Error(err))
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
@@ -144,13 +144,13 @@ func (h *Handler) UpdateCachePolicy(w http.ResponseWriter, r *http.Request) {
 
 	if storeErr := h.store.PutCachePolicy(r.Context(), cp); storeErr != nil {
 		log.LogStateError(r, "put cache policy", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
 	log.Info("cache policy updated", zap.String("id", id))
 	w.Header().Set("ETag", computeETag(cp.Version))
-	protocol.WriteXML(w, r, http.StatusOK, cp)
+	writeXML(w, r, http.StatusOK, cp)
 }
 
 // ─── Cache Policy: Delete ───────────────────────────────────────────────────
@@ -162,29 +162,29 @@ func (h *Handler) DeleteCachePolicy(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	ifMatch := r.Header.Get("If-Match")
 	if ifMatch == "" {
-		protocol.WriteXMLError(w, r, errInvalidIfMatch())
+		writeError(w, r, errInvalidIfMatch())
 		return
 	}
 
 	cp, err := h.store.GetCachePolicy(r.Context(), id)
 	if err != nil {
 		log.LogStateError(r, "get cache policy", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if cp == nil {
-		protocol.WriteXMLError(w, r, errNoSuchCachePolicy(id))
+		writeError(w, r, errNoSuchCachePolicy(id))
 		return
 	}
 
 	if ifMatch != computeETag(cp.Version) {
-		protocol.WriteXMLError(w, r, errPreconditionFailed())
+		writeError(w, r, errPreconditionFailed())
 		return
 	}
 
 	if storeErr := h.store.DeleteCachePolicy(r.Context(), id); storeErr != nil {
 		log.LogStateError(r, "delete cache policy", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -201,7 +201,7 @@ func (h *Handler) ListCachePolicies(w http.ResponseWriter, r *http.Request) {
 	all, err := h.store.ListCachePolicies(r.Context())
 	if err != nil {
 		log.LogStateError(r, "list cache policies", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -221,7 +221,7 @@ func (h *Handler) ListCachePolicies(w http.ResponseWriter, r *http.Request) {
 		Items:    summaries,
 	}
 
-	protocol.WriteXML(w, r, http.StatusOK, &result)
+	writeXML(w, r, http.StatusOK, &result)
 }
 
 // ─── Origin Request Policy: Create ──────────────────────────────────────────
@@ -233,14 +233,14 @@ func (h *Handler) CreateOriginRequestPolicy(w http.ResponseWriter, r *http.Reque
 	var cfg OriginRequestPolicyConfig
 	if err := xml.NewDecoder(r.Body).Decode(&cfg); err != nil {
 		log.Debug("decode error", zap.Error(err))
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
 	}
 
 	if cfg.Name == "" {
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "InvalidArgument", Message: "Origin request policy name is required.", HTTPStatus: 400,
 		})
 		return
@@ -258,7 +258,7 @@ func (h *Handler) CreateOriginRequestPolicy(w http.ResponseWriter, r *http.Reque
 
 	if storeErr := h.store.PutOriginRequestPolicy(r.Context(), p); storeErr != nil {
 		log.LogStateError(r, "put origin request policy", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -266,7 +266,7 @@ func (h *Handler) CreateOriginRequestPolicy(w http.ResponseWriter, r *http.Reque
 
 	w.Header().Set("ETag", computeETag(p.Version))
 	w.Header().Set("Location", fmt.Sprintf("/2020-05-31/origin-request-policy/%s", id))
-	protocol.WriteXML(w, r, http.StatusCreated, p)
+	writeXML(w, r, http.StatusCreated, p)
 }
 
 // ─── Origin Request Policy: Get ─────────────────────────────────────────────
@@ -278,16 +278,16 @@ func (h *Handler) GetOriginRequestPolicy(w http.ResponseWriter, r *http.Request)
 	p, err := h.store.GetOriginRequestPolicy(r.Context(), id)
 	if err != nil {
 		h.log.WithOperation("GetOriginRequestPolicy").LogStateError(r, "get origin request policy", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if p == nil {
-		protocol.WriteXMLError(w, r, errNoSuchOriginRequestPolicy(id))
+		writeError(w, r, errNoSuchOriginRequestPolicy(id))
 		return
 	}
 
 	w.Header().Set("ETag", computeETag(p.Version))
-	protocol.WriteXML(w, r, http.StatusOK, p)
+	writeXML(w, r, http.StatusOK, p)
 }
 
 // ─── Origin Request Policy: GetConfig ───────────────────────────────────────
@@ -299,16 +299,16 @@ func (h *Handler) GetOriginRequestPolicyConfig(w http.ResponseWriter, r *http.Re
 	p, err := h.store.GetOriginRequestPolicy(r.Context(), id)
 	if err != nil {
 		h.log.WithOperation("GetOriginRequestPolicyConfig").LogStateError(r, "get origin request policy", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if p == nil {
-		protocol.WriteXMLError(w, r, errNoSuchOriginRequestPolicy(id))
+		writeError(w, r, errNoSuchOriginRequestPolicy(id))
 		return
 	}
 
 	w.Header().Set("ETag", computeETag(p.Version))
-	protocol.WriteXML(w, r, http.StatusOK, &p.OriginRequestPolicyConfig)
+	writeXML(w, r, http.StatusOK, &p.OriginRequestPolicyConfig)
 }
 
 // ─── Origin Request Policy: Update ──────────────────────────────────────────
@@ -320,30 +320,30 @@ func (h *Handler) UpdateOriginRequestPolicy(w http.ResponseWriter, r *http.Reque
 	id := chi.URLParam(r, "id")
 	ifMatch := r.Header.Get("If-Match")
 	if ifMatch == "" {
-		protocol.WriteXMLError(w, r, errInvalidIfMatch())
+		writeError(w, r, errInvalidIfMatch())
 		return
 	}
 
 	p, err := h.store.GetOriginRequestPolicy(r.Context(), id)
 	if err != nil {
 		log.LogStateError(r, "get origin request policy", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if p == nil {
-		protocol.WriteXMLError(w, r, errNoSuchOriginRequestPolicy(id))
+		writeError(w, r, errNoSuchOriginRequestPolicy(id))
 		return
 	}
 
 	if ifMatch != computeETag(p.Version) {
-		protocol.WriteXMLError(w, r, errPreconditionFailed())
+		writeError(w, r, errPreconditionFailed())
 		return
 	}
 
 	var cfg OriginRequestPolicyConfig
 	if err := xml.NewDecoder(r.Body).Decode(&cfg); err != nil {
 		log.Debug("decode error", zap.Error(err))
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
@@ -355,13 +355,13 @@ func (h *Handler) UpdateOriginRequestPolicy(w http.ResponseWriter, r *http.Reque
 
 	if storeErr := h.store.PutOriginRequestPolicy(r.Context(), p); storeErr != nil {
 		log.LogStateError(r, "put origin request policy", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
 	log.Info("origin request policy updated", zap.String("id", id))
 	w.Header().Set("ETag", computeETag(p.Version))
-	protocol.WriteXML(w, r, http.StatusOK, p)
+	writeXML(w, r, http.StatusOK, p)
 }
 
 // ─── Origin Request Policy: Delete ──────────────────────────────────────────
@@ -373,29 +373,29 @@ func (h *Handler) DeleteOriginRequestPolicy(w http.ResponseWriter, r *http.Reque
 	id := chi.URLParam(r, "id")
 	ifMatch := r.Header.Get("If-Match")
 	if ifMatch == "" {
-		protocol.WriteXMLError(w, r, errInvalidIfMatch())
+		writeError(w, r, errInvalidIfMatch())
 		return
 	}
 
 	p, err := h.store.GetOriginRequestPolicy(r.Context(), id)
 	if err != nil {
 		log.LogStateError(r, "get origin request policy", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if p == nil {
-		protocol.WriteXMLError(w, r, errNoSuchOriginRequestPolicy(id))
+		writeError(w, r, errNoSuchOriginRequestPolicy(id))
 		return
 	}
 
 	if ifMatch != computeETag(p.Version) {
-		protocol.WriteXMLError(w, r, errPreconditionFailed())
+		writeError(w, r, errPreconditionFailed())
 		return
 	}
 
 	if storeErr := h.store.DeleteOriginRequestPolicy(r.Context(), id); storeErr != nil {
 		log.LogStateError(r, "delete origin request policy", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -412,7 +412,7 @@ func (h *Handler) ListOriginRequestPolicies(w http.ResponseWriter, r *http.Reque
 	all, err := h.store.ListOriginRequestPolicies(r.Context())
 	if err != nil {
 		log.LogStateError(r, "list origin request policies", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -432,7 +432,7 @@ func (h *Handler) ListOriginRequestPolicies(w http.ResponseWriter, r *http.Reque
 		Items:    summaries,
 	}
 
-	protocol.WriteXML(w, r, http.StatusOK, &result)
+	writeXML(w, r, http.StatusOK, &result)
 }
 
 // ─── Response Headers Policy: Create ────────────────────────────────────────
@@ -444,14 +444,14 @@ func (h *Handler) CreateResponseHeadersPolicy(w http.ResponseWriter, r *http.Req
 	var cfg ResponseHeadersPolicyConfig
 	if err := xml.NewDecoder(r.Body).Decode(&cfg); err != nil {
 		log.Debug("decode error", zap.Error(err))
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
 	}
 
 	if cfg.Name == "" {
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "InvalidArgument", Message: "Response headers policy name is required.", HTTPStatus: 400,
 		})
 		return
@@ -469,7 +469,7 @@ func (h *Handler) CreateResponseHeadersPolicy(w http.ResponseWriter, r *http.Req
 
 	if storeErr := h.store.PutResponseHeadersPolicy(r.Context(), p); storeErr != nil {
 		log.LogStateError(r, "put response headers policy", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -477,7 +477,7 @@ func (h *Handler) CreateResponseHeadersPolicy(w http.ResponseWriter, r *http.Req
 
 	w.Header().Set("ETag", computeETag(p.Version))
 	w.Header().Set("Location", fmt.Sprintf("/2020-05-31/response-headers-policy/%s", id))
-	protocol.WriteXML(w, r, http.StatusCreated, p)
+	writeXML(w, r, http.StatusCreated, p)
 }
 
 // ─── Response Headers Policy: Get ───────────────────────────────────────────
@@ -489,16 +489,16 @@ func (h *Handler) GetResponseHeadersPolicy(w http.ResponseWriter, r *http.Reques
 	p, err := h.store.GetResponseHeadersPolicy(r.Context(), id)
 	if err != nil {
 		h.log.WithOperation("GetResponseHeadersPolicy").LogStateError(r, "get response headers policy", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if p == nil {
-		protocol.WriteXMLError(w, r, errNoSuchResponseHeadersPolicy(id))
+		writeError(w, r, errNoSuchResponseHeadersPolicy(id))
 		return
 	}
 
 	w.Header().Set("ETag", computeETag(p.Version))
-	protocol.WriteXML(w, r, http.StatusOK, p)
+	writeXML(w, r, http.StatusOK, p)
 }
 
 // ─── Response Headers Policy: GetConfig ─────────────────────────────────────
@@ -510,16 +510,16 @@ func (h *Handler) GetResponseHeadersPolicyConfig(w http.ResponseWriter, r *http.
 	p, err := h.store.GetResponseHeadersPolicy(r.Context(), id)
 	if err != nil {
 		h.log.WithOperation("GetResponseHeadersPolicyConfig").LogStateError(r, "get response headers policy", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if p == nil {
-		protocol.WriteXMLError(w, r, errNoSuchResponseHeadersPolicy(id))
+		writeError(w, r, errNoSuchResponseHeadersPolicy(id))
 		return
 	}
 
 	w.Header().Set("ETag", computeETag(p.Version))
-	protocol.WriteXML(w, r, http.StatusOK, &p.ResponseHeadersPolicyConfig)
+	writeXML(w, r, http.StatusOK, &p.ResponseHeadersPolicyConfig)
 }
 
 // ─── Response Headers Policy: Update ────────────────────────────────────────
@@ -531,30 +531,30 @@ func (h *Handler) UpdateResponseHeadersPolicy(w http.ResponseWriter, r *http.Req
 	id := chi.URLParam(r, "id")
 	ifMatch := r.Header.Get("If-Match")
 	if ifMatch == "" {
-		protocol.WriteXMLError(w, r, errInvalidIfMatch())
+		writeError(w, r, errInvalidIfMatch())
 		return
 	}
 
 	p, err := h.store.GetResponseHeadersPolicy(r.Context(), id)
 	if err != nil {
 		log.LogStateError(r, "get response headers policy", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if p == nil {
-		protocol.WriteXMLError(w, r, errNoSuchResponseHeadersPolicy(id))
+		writeError(w, r, errNoSuchResponseHeadersPolicy(id))
 		return
 	}
 
 	if ifMatch != computeETag(p.Version) {
-		protocol.WriteXMLError(w, r, errPreconditionFailed())
+		writeError(w, r, errPreconditionFailed())
 		return
 	}
 
 	var cfg ResponseHeadersPolicyConfig
 	if err := xml.NewDecoder(r.Body).Decode(&cfg); err != nil {
 		log.Debug("decode error", zap.Error(err))
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
@@ -566,13 +566,13 @@ func (h *Handler) UpdateResponseHeadersPolicy(w http.ResponseWriter, r *http.Req
 
 	if storeErr := h.store.PutResponseHeadersPolicy(r.Context(), p); storeErr != nil {
 		log.LogStateError(r, "put response headers policy", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
 	log.Info("response headers policy updated", zap.String("id", id))
 	w.Header().Set("ETag", computeETag(p.Version))
-	protocol.WriteXML(w, r, http.StatusOK, p)
+	writeXML(w, r, http.StatusOK, p)
 }
 
 // ─── Response Headers Policy: Delete ────────────────────────────────────────
@@ -584,29 +584,29 @@ func (h *Handler) DeleteResponseHeadersPolicy(w http.ResponseWriter, r *http.Req
 	id := chi.URLParam(r, "id")
 	ifMatch := r.Header.Get("If-Match")
 	if ifMatch == "" {
-		protocol.WriteXMLError(w, r, errInvalidIfMatch())
+		writeError(w, r, errInvalidIfMatch())
 		return
 	}
 
 	p, err := h.store.GetResponseHeadersPolicy(r.Context(), id)
 	if err != nil {
 		log.LogStateError(r, "get response headers policy", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if p == nil {
-		protocol.WriteXMLError(w, r, errNoSuchResponseHeadersPolicy(id))
+		writeError(w, r, errNoSuchResponseHeadersPolicy(id))
 		return
 	}
 
 	if ifMatch != computeETag(p.Version) {
-		protocol.WriteXMLError(w, r, errPreconditionFailed())
+		writeError(w, r, errPreconditionFailed())
 		return
 	}
 
 	if storeErr := h.store.DeleteResponseHeadersPolicy(r.Context(), id); storeErr != nil {
 		log.LogStateError(r, "delete response headers policy", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -623,7 +623,7 @@ func (h *Handler) ListResponseHeadersPolicies(w http.ResponseWriter, r *http.Req
 	all, err := h.store.ListResponseHeadersPolicies(r.Context())
 	if err != nil {
 		log.LogStateError(r, "list response headers policies", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -643,7 +643,7 @@ func (h *Handler) ListResponseHeadersPolicies(w http.ResponseWriter, r *http.Req
 		Items:    summaries,
 	}
 
-	protocol.WriteXML(w, r, http.StatusOK, &result)
+	writeXML(w, r, http.StatusOK, &result)
 }
 
 // ─── Legacy OAI: Create ─────────────────────────────────────────────────────
@@ -655,14 +655,14 @@ func (h *Handler) CreateCloudFrontOriginAccessIdentity(w http.ResponseWriter, r 
 	var cfg CloudFrontOriginAccessIdentityConfig
 	if err := xml.NewDecoder(r.Body).Decode(&cfg); err != nil {
 		log.Debug("decode error", zap.Error(err))
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
 	}
 
 	if cfg.CallerReference == "" {
-		protocol.WriteXMLError(w, r, errMissingCallerReference())
+		writeError(w, r, errMissingCallerReference())
 		return
 	}
 
@@ -679,7 +679,7 @@ func (h *Handler) CreateCloudFrontOriginAccessIdentity(w http.ResponseWriter, r 
 
 	if storeErr := h.store.PutOAI(r.Context(), oai); storeErr != nil {
 		log.LogStateError(r, "put oai", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -687,7 +687,7 @@ func (h *Handler) CreateCloudFrontOriginAccessIdentity(w http.ResponseWriter, r 
 
 	w.Header().Set("ETag", computeETag(oai.Version))
 	w.Header().Set("Location", fmt.Sprintf("/2020-05-31/origin-access-identity/cloudfront/%s", id))
-	protocol.WriteXML(w, r, http.StatusCreated, oai)
+	writeXML(w, r, http.StatusCreated, oai)
 }
 
 // ─── Legacy OAI: Get ────────────────────────────────────────────────────────
@@ -699,16 +699,16 @@ func (h *Handler) GetCloudFrontOriginAccessIdentity(w http.ResponseWriter, r *ht
 	oai, err := h.store.GetOAI(r.Context(), id)
 	if err != nil {
 		h.log.WithOperation("GetCloudFrontOriginAccessIdentity").LogStateError(r, "get oai", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if oai == nil {
-		protocol.WriteXMLError(w, r, errNoSuchCloudFrontOAI(id))
+		writeError(w, r, errNoSuchCloudFrontOAI(id))
 		return
 	}
 
 	w.Header().Set("ETag", computeETag(oai.Version))
-	protocol.WriteXML(w, r, http.StatusOK, oai)
+	writeXML(w, r, http.StatusOK, oai)
 }
 
 // ─── Legacy OAI: GetConfig ──────────────────────────────────────────────────
@@ -720,16 +720,16 @@ func (h *Handler) GetCloudFrontOriginAccessIdentityConfig(w http.ResponseWriter,
 	oai, err := h.store.GetOAI(r.Context(), id)
 	if err != nil {
 		h.log.WithOperation("GetCloudFrontOriginAccessIdentityConfig").LogStateError(r, "get oai", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if oai == nil {
-		protocol.WriteXMLError(w, r, errNoSuchCloudFrontOAI(id))
+		writeError(w, r, errNoSuchCloudFrontOAI(id))
 		return
 	}
 
 	w.Header().Set("ETag", computeETag(oai.Version))
-	protocol.WriteXML(w, r, http.StatusOK, &oai.CloudFrontOriginAccessIdentityConfig)
+	writeXML(w, r, http.StatusOK, &oai.CloudFrontOriginAccessIdentityConfig)
 }
 
 // ─── Legacy OAI: Update ─────────────────────────────────────────────────────
@@ -741,30 +741,30 @@ func (h *Handler) UpdateCloudFrontOriginAccessIdentity(w http.ResponseWriter, r 
 	id := chi.URLParam(r, "id")
 	ifMatch := r.Header.Get("If-Match")
 	if ifMatch == "" {
-		protocol.WriteXMLError(w, r, errInvalidIfMatch())
+		writeError(w, r, errInvalidIfMatch())
 		return
 	}
 
 	oai, err := h.store.GetOAI(r.Context(), id)
 	if err != nil {
 		log.LogStateError(r, "get oai", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if oai == nil {
-		protocol.WriteXMLError(w, r, errNoSuchCloudFrontOAI(id))
+		writeError(w, r, errNoSuchCloudFrontOAI(id))
 		return
 	}
 
 	if ifMatch != computeETag(oai.Version) {
-		protocol.WriteXMLError(w, r, errPreconditionFailed())
+		writeError(w, r, errPreconditionFailed())
 		return
 	}
 
 	var cfg CloudFrontOriginAccessIdentityConfig
 	if err := xml.NewDecoder(r.Body).Decode(&cfg); err != nil {
 		log.Debug("decode error", zap.Error(err))
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
+		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
 		return
@@ -775,13 +775,13 @@ func (h *Handler) UpdateCloudFrontOriginAccessIdentity(w http.ResponseWriter, r 
 
 	if storeErr := h.store.PutOAI(r.Context(), oai); storeErr != nil {
 		log.LogStateError(r, "put oai", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
 	log.Info("origin access identity updated", zap.String("id", id))
 	w.Header().Set("ETag", computeETag(oai.Version))
-	protocol.WriteXML(w, r, http.StatusOK, oai)
+	writeXML(w, r, http.StatusOK, oai)
 }
 
 // ─── Legacy OAI: Delete ─────────────────────────────────────────────────────
@@ -793,29 +793,29 @@ func (h *Handler) DeleteCloudFrontOriginAccessIdentity(w http.ResponseWriter, r 
 	id := chi.URLParam(r, "id")
 	ifMatch := r.Header.Get("If-Match")
 	if ifMatch == "" {
-		protocol.WriteXMLError(w, r, errInvalidIfMatch())
+		writeError(w, r, errInvalidIfMatch())
 		return
 	}
 
 	oai, err := h.store.GetOAI(r.Context(), id)
 	if err != nil {
 		log.LogStateError(r, "get oai", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 	if oai == nil {
-		protocol.WriteXMLError(w, r, errNoSuchCloudFrontOAI(id))
+		writeError(w, r, errNoSuchCloudFrontOAI(id))
 		return
 	}
 
 	if ifMatch != computeETag(oai.Version) {
-		protocol.WriteXMLError(w, r, errPreconditionFailed())
+		writeError(w, r, errPreconditionFailed())
 		return
 	}
 
 	if storeErr := h.store.DeleteOAI(r.Context(), id); storeErr != nil {
 		log.LogStateError(r, "delete oai", protocol.Wrap(protocol.ErrInternalError, storeErr))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -832,7 +832,7 @@ func (h *Handler) ListCloudFrontOriginAccessIdentities(w http.ResponseWriter, r 
 	all, err := h.store.ListOAIs(r.Context())
 	if err != nil {
 		log.LogStateError(r, "list oais", protocol.Wrap(protocol.ErrInternalError, err))
-		protocol.WriteXMLError(w, r, protocol.ErrInternalError)
+		writeError(w, r, protocol.ErrInternalError)
 		return
 	}
 
@@ -840,7 +840,7 @@ func (h *Handler) ListCloudFrontOriginAccessIdentities(w http.ResponseWriter, r 
 	maxItems := serviceutil.QueryInt(r, "MaxItems", 100)
 	page, err := serviceutil.Paginate(all, maxItems, marker, serviceutil.PaginateOptions{DefaultLimit: 100})
 	if err != nil {
-		protocol.WriteXMLError(w, r, errInvalidMarker())
+		writeError(w, r, errInvalidMarker())
 		return
 	}
 
@@ -862,7 +862,7 @@ func (h *Handler) ListCloudFrontOriginAccessIdentities(w http.ResponseWriter, r 
 		Items:       summaries,
 	}
 
-	protocol.WriteXML(w, r, http.StatusOK, &result)
+	writeXML(w, r, http.StatusOK, &result)
 }
 
 // generateHexID returns n hex characters via crypto/rand.
