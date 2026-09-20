@@ -36,6 +36,10 @@ type Protection struct {
 	ID          string `json:"Id"`
 	Name        string `json:"Name"`
 	ResourceArn string `json:"ResourceArn"`
+	// ProtectionArn is the protection's own ARN, which real Shield always
+	// returns on DescribeProtection and ListProtections (but not on
+	// CreateProtection, whose response carries ProtectionId alone).
+	ProtectionArn string `json:"ProtectionArn,omitempty"`
 }
 
 // protectionRecord is a Protection as persisted: the wire shape plus its
@@ -111,7 +115,7 @@ type Service struct {
 func New(cfg *config.Config, st state.Store, logger *zap.Logger, _ clock.Clock) *Service {
 	return &Service{
 		log:     serviceutil.NewServiceLogger(logger, serviceName),
-		handler: newHandler(st),
+		handler: newHandler(cfg, st),
 	}
 }
 

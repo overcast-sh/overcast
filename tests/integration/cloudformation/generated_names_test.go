@@ -602,6 +602,14 @@ func TestCreateStack_twoUnnamedResourcesOfOneType_doNotCollide(t *testing.T) {
 		// deps are extra resources the row needs, as raw template entries
 		// ending in a comma. Both copies of the resource under test share them.
 		deps string
+		// second replaces the second copy, for a type whose two copies cannot
+		// be byte-identical because the service refuses the duplicate. Shield
+		// is the case: AWS allows one Protection per protected resource, so
+		// two protections on one ResourceArn is a stack real AWS also fails.
+		// The naming question this test asks is still live for such a type —
+		// two unnamed resources of it still need two names — so the row varies
+		// only the property that forces the collision. Defaults to resource.
+		second string
 		// names lists the resource names the service reports, for the types
 		// whose physical ID is not the name and so cannot show a duplicate.
 		names func(t *testing.T, srv *helpers.TestServer) []string
@@ -654,6 +662,11 @@ func TestCreateStack_twoUnnamedResourcesOfOneType_doNotCollide(t *testing.T) {
 			name: "AWS::Shield::Protection",
 			resource: `{"Type": "AWS::Shield::Protection", "Properties": {
 				"ResourceArn": "arn:aws:elasticloadbalancing:us-east-1:000000000000:loadbalancer/app/x/1"}}`,
+			// A second protection on the same ResourceArn is
+			// ResourceAlreadyExistsException on AWS and now here too
+			// (#1983), so the twin protects a different load balancer.
+			second: `{"Type": "AWS::Shield::Protection", "Properties": {
+				"ResourceArn": "arn:aws:elasticloadbalancing:us-east-1:000000000000:loadbalancer/app/x/2"}}`,
 			names: func(t *testing.T, srv *helpers.TestServer) []string {
 				return responseFieldValues(t,
 					awsJSONCall(t, srv, "AWSShield_20160616.", "ListProtections", "application/x-amz-json-1.1", map[string]any{}),
@@ -815,7 +828,11 @@ func TestCreateStack_twoUnnamedResourcesOfOneType_doNotCollide(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			srv := helpers.NewTestServer(t)
 			stackName := "twin-" + strings.ToLower(strings.ReplaceAll(strings.TrimPrefix(tc.name, "AWS::"), "::", "-"))
-			template := fmt.Sprintf(`{"Resources": {%s"First": %s, "Second": %s}}`, tc.deps, tc.resource, tc.resource)
+			second := tc.second
+			if second == "" {
+				second = tc.resource
+			}
+			template := fmt.Sprintf(`{"Resources": {%s"First": %s, "Second": %s}}`, tc.deps, tc.resource, second)
 
 			create := cfnQuery(t, srv, "CreateStack", url.Values{
 				"StackName":    {stackName},

@@ -73,6 +73,31 @@ func createTestProtection(t *testing.T, srv *helpers.TestServer, name, resourceA
 	return out.ProtectionId
 }
 
+// listProtectionsOut is the ListProtectionsResponse shape these tests read:
+// the Protection members Overcast populates, plus the NextToken the
+// @paginated trait names as the continuation token.
+type listProtectionsOut struct {
+	Protections []struct {
+		Id            string `json:"Id"`
+		Name          string `json:"Name"`
+		ResourceArn   string `json:"ResourceArn"`
+		ProtectionArn string `json:"ProtectionArn"`
+	} `json:"Protections"`
+	NextToken string `json:"NextToken"`
+}
+
+// listProtections calls ListProtections with the given request members and
+// decodes a successful response.
+func listProtections(t *testing.T, srv *helpers.TestServer, body map[string]any) listProtectionsOut {
+	t.Helper()
+	resp := shieldCall(t, srv, "ListProtections", body)
+	defer resp.Body.Close()
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	var out listProtectionsOut
+	helpers.DecodeJSON(t, resp, &out)
+	return out
+}
+
 // assertResourceNotFound asserts the shape of a Shield ResourceNotFoundException
 // response: HTTP 400, matching the Shield API Reference, which documents HTTP
 // 400 for ResourceNotFoundException on every operation that raises it
@@ -135,16 +160,75 @@ func TestCreateProtection_success(t *testing.T) {
 	defer resp.Body.Close()
 
 	// Then: 200 with a non-empty ProtectionId — CreateProtectionResponse's
-	// only documented member
+	// only member in the pinned model (shield-2016-06-02.json). In
+	// particular it does not carry ProtectionArn, even though Protection
+	// itself does: the ARN comes back from DescribeProtection and
+	// ListProtections, not from the create call.
 	helpers.AssertStatus(t, resp, http.StatusOK)
 	helpers.AssertRequestID(t, resp)
-	var out struct {
-		ProtectionId string `json:"ProtectionId"`
-	}
+	var out map[string]any
 	helpers.DecodeJSON(t, resp, &out)
-	if out.ProtectionId == "" {
+	if id, _ := out["ProtectionId"].(string); id == "" {
 		t.Error("expected a non-empty ProtectionId")
 	}
+	if _, present := out["ProtectionArn"]; present {
+		t.Error("CreateProtectionResponse carries ProtectionId only; ProtectionArn is a Protection member")
+	}
+}
+
+// TestCreateProtection_duplicateResourceArn pins AWS's one-protection-per-
+// resource rule. CreateProtection models ResourceAlreadyExistsException
+// (shield-2016-06-02.json, CreateProtection.errors), a client error with no
+// @httpError trait, so it is answered with HTTP 400 like every other Shield
+// client error.
+func TestCreateProtection_duplicateResourceArn(t *testing.T) {
+	// Given: a protection on a resource
+	srv := helpers.NewTestServer(t)
+	resourceArn := "arn:aws:elasticloadbalancing:us-east-1:000000000000:loadbalancer/app/web/abc"
+	id := createTestProtection(t, srv, "web-alb", resourceArn)
+
+	// When: CreateProtection is called again for the same ResourceArn
+	resp := shieldCall(t, srv, "CreateProtection", map[string]any{
+		"Name":        "web-alb-again",
+		"ResourceArn": resourceArn,
+	})
+	defer resp.Body.Close()
+
+	// Then: ResourceAlreadyExistsException
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertJSONError(t, resp, "ResourceAlreadyExistsException")
+	helpers.AssertRequestID(t, resp)
+
+	// And: the original protection is untouched — one record, original name
+	out := listProtections(t, srv, map[string]any{})
+	if len(out.Protections) != 1 {
+		t.Fatalf("expected the duplicate to be refused, got %d protections", len(out.Protections))
+	}
+	if out.Protections[0].Id != id || out.Protections[0].Name != "web-alb" {
+		t.Errorf("original protection changed: got Id %q Name %q, want Id %q Name web-alb",
+			out.Protections[0].Id, out.Protections[0].Name, id)
+	}
+}
+
+// TestCreateProtection_duplicateNameDifferentResource proves the duplicate
+// check keys on ResourceArn and nothing else: the model puts no uniqueness
+// constraint on Name, and the docs describe a protection as covering one
+// resource ("You can add protection to only a single resource with each
+// CreateProtection request").
+func TestCreateProtection_duplicateNameDifferentResource(t *testing.T) {
+	// Given: a protection on one resource
+	srv := helpers.NewTestServer(t)
+	createTestProtection(t, srv, "web-alb", "arn:aws:elasticloadbalancing:us-east-1:000000000000:loadbalancer/app/one/aaa")
+
+	// When: a second protection reuses the name on a different resource
+	resp := shieldCall(t, srv, "CreateProtection", map[string]any{
+		"Name":        "web-alb",
+		"ResourceArn": "arn:aws:elasticloadbalancing:us-east-1:000000000000:loadbalancer/app/two/bbb",
+	})
+	defer resp.Body.Close()
+
+	// Then: it is created
+	helpers.AssertStatus(t, resp, http.StatusOK)
 }
 
 func TestCreateProtection_missingName(t *testing.T) {
@@ -264,14 +348,13 @@ func TestDescribeProtection_unknownResourceArn(t *testing.T) {
 	assertResourceNotFound(t, resp)
 }
 
-// TestDescribeProtection_protectionArnFieldOmitted documents a confirmed gap:
-// real Shield's Protection object always carries a ProtectionArn member
-// (https://docs.aws.amazon.com/waf/latest/DDOSAPIReference/API_Protection.html),
-// but Overcast's Protection wire type has no such field, so it is absent from
-// every response rather than merely empty. If this starts failing, the field
-// has been added — update this test and the compat gap record together
-// (docs/dev/compatibility/services/shield.yaml).
-func TestDescribeProtection_protectionArnFieldOmitted(t *testing.T) {
+// TestDescribeProtection_protectionArn pins the ProtectionArn member the
+// pinned model gives Protection (shield-2016-06-02.json, Protection
+// .ProtectionArn, typed ResourceArn so it must match ^arn:aws). Shield is a
+// global service, so the protection ARN carries an empty region —
+// arn:aws:shield::<account>:protection/<id>, the same shape TagResource,
+// UntagResource and ListTagsForResource already parse.
+func TestDescribeProtection_protectionArn(t *testing.T) {
 	// Given: an existing protection
 	srv := helpers.NewTestServer(t)
 	id := createTestProtection(t, srv, "web-alb", "arn:aws:elasticloadbalancing:us-east-1:000000000000:loadbalancer/app/web/abc")
@@ -281,14 +364,46 @@ func TestDescribeProtection_protectionArnFieldOmitted(t *testing.T) {
 	defer resp.Body.Close()
 	helpers.AssertStatus(t, resp, http.StatusOK)
 
-	// Then: the Protection object carries no ProtectionArn member
+	// Then: the Protection object carries the protection's own ARN
 	var out struct {
-		Protection map[string]any `json:"Protection"`
+		Protection struct {
+			ProtectionArn string `json:"ProtectionArn"`
+		} `json:"Protection"`
 	}
 	helpers.DecodeJSON(t, resp, &out)
-	if _, present := out.Protection["ProtectionArn"]; present {
-		t.Error("ProtectionArn is now present on Protection — this gap appears to be fixed; update the compat record")
+	if want := protectionARN(id); out.Protection.ProtectionArn != want {
+		t.Errorf("ProtectionArn: got %q, want %q", out.Protection.ProtectionArn, want)
 	}
+}
+
+// TestDescribeProtection_bothIdentifiers covers the model's "but not both"
+// wording on DescribeProtectionRequest's ProtectionId and ResourceArn members.
+//
+// Fork: AWS does not document which error this produces. DescribeProtection
+// models exactly three — InternalErrorException, InvalidParameterException and
+// ResourceNotFoundException (shield-2016-06-02.json) — and of those only
+// InvalidParameterException ("the parameters passed to the API are invalid")
+// fits a request supplying a mutually exclusive pair, so that is what Overcast
+// answers. Recorded in docs/dev/compatibility/services/shield.yaml.
+func TestDescribeProtection_bothIdentifiers(t *testing.T) {
+	// Given: an existing protection
+	srv := helpers.NewTestServer(t)
+	resourceArn := "arn:aws:elasticloadbalancing:us-east-1:000000000000:loadbalancer/app/web/abc"
+	id := createTestProtection(t, srv, "web-alb", resourceArn)
+
+	// When: DescribeProtection is called with both identifiers, both of
+	// which name that same protection
+	resp := shieldCall(t, srv, "DescribeProtection", map[string]any{
+		"ProtectionId": id,
+		"ResourceArn":  resourceArn,
+	})
+	defer resp.Body.Close()
+
+	// Then: InvalidParameterException rather than a silent preference for
+	// one of the two
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertJSONError(t, resp, "InvalidParameterException")
+	helpers.AssertRequestID(t, resp)
 }
 
 // ─── ListProtections ─────────────────────────────────────────────────────────
@@ -342,42 +457,178 @@ func TestListProtections_success(t *testing.T) {
 	}
 }
 
-// TestListProtections_filtersAndPaginationIgnored documents a confirmed gap:
-// ListProtections accepts InclusionFilters, MaxResults and NextToken (they
-// decode without error, since Overcast's ListProtections request type has no
-// members at all) but implements none of them — every call returns every
-// protection and NextToken is never set, regardless of how many exist or
-// what is asked for. Tracked in docs/dev/compatibility/services/shield.yaml.
-func TestListProtections_filtersAndPaginationIgnored(t *testing.T) {
+// TestListProtections_returnsProtectionArn pins ProtectionArn on the list
+// surface too — Protections is a list of the same Protection shape
+// DescribeProtection returns (shield-2016-06-02.json).
+func TestListProtections_returnsProtectionArn(t *testing.T) {
+	// Given: one protection
+	srv := helpers.NewTestServer(t)
+	id := createTestProtection(t, srv, "p1", "arn:aws:elasticloadbalancing:us-east-1:000000000000:loadbalancer/app/one/aaa")
+
+	// When: ListProtections is called
+	out := listProtections(t, srv, map[string]any{})
+
+	// Then: the listed Protection carries its own ARN
+	if len(out.Protections) != 1 {
+		t.Fatalf("expected 1 protection, got %d", len(out.Protections))
+	}
+	if want := protectionARN(id); out.Protections[0].ProtectionArn != want {
+		t.Errorf("ProtectionArn: got %q, want %q", out.Protections[0].ProtectionArn, want)
+	}
+}
+
+// TestListProtections_maxResultsPaginates pins MaxResults and NextToken, which
+// ListProtections declares through @paginated{inputToken: NextToken,
+// outputToken: NextToken, items: Protections, pageSize: MaxResults}.
+func TestListProtections_maxResultsPaginates(t *testing.T) {
 	// Given: two protections
 	srv := helpers.NewTestServer(t)
-	createTestProtection(t, srv, "p1", "arn:aws:elasticloadbalancing:us-east-1:000000000000:loadbalancer/app/one/aaa")
-	createTestProtection(t, srv, "p2", "arn:aws:elasticloadbalancing:us-east-1:000000000000:loadbalancer/app/two/bbb")
+	id1 := createTestProtection(t, srv, "p1", "arn:aws:elasticloadbalancing:us-east-1:000000000000:loadbalancer/app/one/aaa")
+	id2 := createTestProtection(t, srv, "p2", "arn:aws:elasticloadbalancing:us-east-1:000000000000:loadbalancer/app/two/bbb")
 
-	// When: ListProtections is called with a name filter, MaxResults=1, and
-	// a garbage NextToken — real Shield would apply the filter, cap the
-	// page at 1 result, and reject the NextToken with
-	// InvalidPaginationTokenException
-	resp := shieldCall(t, srv, "ListProtections", map[string]any{
-		"InclusionFilters": map[string]any{"ProtectionNames": []string{"p1"}},
-		"MaxResults":       1,
-		"NextToken":        "not-a-real-token",
-	})
+	// When: the list is walked one protection at a time
+	first := listProtections(t, srv, map[string]any{"MaxResults": 1})
+
+	// Then: the first page holds one protection and a continuation token
+	if len(first.Protections) != 1 {
+		t.Fatalf("first page: got %d protections, want 1", len(first.Protections))
+	}
+	if first.NextToken == "" {
+		t.Fatal("first page: expected a NextToken, got none")
+	}
+
+	// And: that token fetches the second and final page
+	second := listProtections(t, srv, map[string]any{"MaxResults": 1, "NextToken": first.NextToken})
+	if len(second.Protections) != 1 {
+		t.Fatalf("second page: got %d protections, want 1", len(second.Protections))
+	}
+	if second.NextToken != "" {
+		t.Errorf("second page: expected no NextToken, got %q", second.NextToken)
+	}
+
+	// And: the two pages together are the whole set, with no repeats
+	got := map[string]bool{first.Protections[0].Id: true, second.Protections[0].Id: true}
+	if !got[id1] || !got[id2] {
+		t.Errorf("pages covered %v, want both %q and %q", got, id1, id2)
+	}
+}
+
+// TestListProtections_invalidNextToken pins InvalidPaginationTokenException,
+// one of ListProtections' three modeled errors. Silently restarting from the
+// first page on a token the service never minted is the divergence
+// serviceutil.ErrInvalidPageToken exists to prevent.
+func TestListProtections_invalidNextToken(t *testing.T) {
+	// Given: a protection exists, so the list is non-empty
+	srv := helpers.NewTestServer(t)
+	createTestProtection(t, srv, "p1", "arn:aws:elasticloadbalancing:us-east-1:000000000000:loadbalancer/app/one/aaa")
+
+	// When: ListProtections is called with a token Overcast never minted
+	resp := shieldCall(t, srv, "ListProtections", map[string]any{"NextToken": "not-a-real-token"})
 	defer resp.Body.Close()
 
-	// Then: the call still succeeds and returns every protection unfiltered
-	// and unpaginated, with no NextToken in the response
-	helpers.AssertStatus(t, resp, http.StatusOK)
-	var out struct {
-		Protections []any   `json:"Protections"`
-		NextToken   *string `json:"NextToken"`
+	// Then: InvalidPaginationTokenException, not the whole list again
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertJSONError(t, resp, "InvalidPaginationTokenException")
+	helpers.AssertRequestID(t, resp)
+}
+
+// TestListProtections_inclusionFilters pins the three InclusionProtectionFilters
+// members — ResourceArns, ProtectionNames and ResourceTypes — and the model's
+// rule that a protection must match every filter type supplied ("Shield
+// Advanced returns protections that exactly match all of the filter criteria
+// that you provide").
+//
+// ResourceTypes is matched against the ProtectedResourceType derived from each
+// protection's ResourceArn: Protection carries no resource-type member of its
+// own, so there is nothing stored to compare against.
+func TestListProtections_inclusionFilters(t *testing.T) {
+	// Given: three protections on three kinds of resource
+	srv := helpers.NewTestServer(t)
+	albArn := "arn:aws:elasticloadbalancing:us-east-1:000000000000:loadbalancer/app/web/abc"
+	clbArn := "arn:aws:elasticloadbalancing:us-east-1:000000000000:loadbalancer/classic-web"
+	cfArn := "arn:aws:cloudfront::000000000000:distribution/E1234567890ABC"
+	albID := createTestProtection(t, srv, "alb", albArn)
+	clbID := createTestProtection(t, srv, "clb", clbArn)
+	cfID := createTestProtection(t, srv, "cdn", cfArn)
+
+	tests := []struct {
+		name    string
+		filters map[string]any
+		want    []string
+	}{
+		{"by ProtectionNames", map[string]any{"ProtectionNames": []string{"cdn"}}, []string{cfID}},
+		{"by ResourceArns", map[string]any{"ResourceArns": []string{clbArn}}, []string{clbID}},
+		{"by ResourceTypes APPLICATION_LOAD_BALANCER", map[string]any{"ResourceTypes": []string{"APPLICATION_LOAD_BALANCER"}}, []string{albID}},
+		{"by ResourceTypes CLASSIC_LOAD_BALANCER", map[string]any{"ResourceTypes": []string{"CLASSIC_LOAD_BALANCER"}}, []string{clbID}},
+		{"by ResourceTypes CLOUDFRONT_DISTRIBUTION", map[string]any{"ResourceTypes": []string{"CLOUDFRONT_DISTRIBUTION"}}, []string{cfID}},
+		{"every filter type at once", map[string]any{
+			"ProtectionNames": []string{"alb"},
+			"ResourceArns":    []string{albArn},
+			"ResourceTypes":   []string{"APPLICATION_LOAD_BALANCER"},
+		}, []string{albID}},
+		{"criteria that cannot all match", map[string]any{
+			"ProtectionNames": []string{"alb"},
+			"ResourceTypes":   []string{"CLOUDFRONT_DISTRIBUTION"},
+		}, nil},
+		{"a name nothing carries", map[string]any{"ProtectionNames": []string{"absent"}}, nil},
 	}
-	helpers.DecodeJSON(t, resp, &out)
-	if len(out.Protections) != 2 {
-		t.Errorf("expected both protections despite the filter and MaxResults=1, got %d", len(out.Protections))
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// When: ListProtections is called with those InclusionFilters
+			out := listProtections(t, srv, map[string]any{"InclusionFilters": tc.filters})
+
+			// Then: exactly the matching protections come back
+			got := make([]string, 0, len(out.Protections))
+			for _, p := range out.Protections {
+				got = append(got, p.Id)
+			}
+			if len(got) != len(tc.want) {
+				t.Fatalf("got %d protections %v, want %d %v", len(got), got, len(tc.want), tc.want)
+			}
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Errorf("protection %d: got %q, want %q", i, got[i], tc.want[i])
+				}
+			}
+		})
 	}
-	if out.NextToken != nil {
-		t.Errorf("expected no NextToken since pagination is not implemented, got %q", *out.NextToken)
+}
+
+// TestListProtections_filtersApplyBeforePagination pins the ordering the
+// @paginated trait implies: MaxResults caps the filtered set, not the raw one,
+// so a page is never short because a filter emptied part of it.
+func TestListProtections_filtersApplyBeforePagination(t *testing.T) {
+	// Given: two protections that match a name filter and one that does not
+	srv := helpers.NewTestServer(t)
+	createTestProtection(t, srv, "keep", "arn:aws:elasticloadbalancing:us-east-1:000000000000:loadbalancer/app/one/aaa")
+	createTestProtection(t, srv, "drop", "arn:aws:elasticloadbalancing:us-east-1:000000000000:loadbalancer/app/two/bbb")
+	createTestProtection(t, srv, "keep", "arn:aws:elasticloadbalancing:us-east-1:000000000000:loadbalancer/app/three/ccc")
+
+	filters := map[string]any{"ProtectionNames": []string{"keep"}}
+
+	// When: the filtered list is walked one at a time
+	first := listProtections(t, srv, map[string]any{"InclusionFilters": filters, "MaxResults": 1})
+
+	// Then: a full page of one matching protection, and more to come
+	if len(first.Protections) != 1 || first.Protections[0].Name != "keep" {
+		t.Fatalf("first page: got %d protections %+v, want 1 named keep", len(first.Protections), first.Protections)
+	}
+	if first.NextToken == "" {
+		t.Fatal("first page: expected a NextToken, got none")
+	}
+
+	// And: the second page holds the other match and ends the walk — the
+	// unmatched protection never appears
+	second := listProtections(t, srv, map[string]any{
+		"InclusionFilters": filters,
+		"MaxResults":       1,
+		"NextToken":        first.NextToken,
+	})
+	if len(second.Protections) != 1 || second.Protections[0].Name != "keep" {
+		t.Fatalf("second page: got %d protections %+v, want 1 named keep", len(second.Protections), second.Protections)
+	}
+	if second.NextToken != "" {
+		t.Errorf("second page: expected no NextToken, got %q", second.NextToken)
 	}
 }
 
