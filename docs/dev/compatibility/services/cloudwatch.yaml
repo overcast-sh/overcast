@@ -1,22 +1,326 @@
 service: cloudwatch
-status: not_started
+status: reviewed
 priority: p1
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-05-17
-protocols: [query, aws_json_inferred]
+last_updated: 2026-09-20
+protocols: [query, aws_json_1_0, rpcv2_cbor]
 implementation: [internal/services/cloudwatch]
 integration_tests: [tests/integration/cloudwatch]
 capability_docs: docs/services/cloudwatch.md
-operation_count_estimate: 12 supported
+operation_count_estimate: 12 tracked and reviewed here; 15 operations implemented in typedOps (DescribeAlarmsForMetric, EnableAlarmActions, DisableAlarmActions are reachable but not individually reviewed below)
 current_support_level: Alarms, metrics, metric retrieval, state setting, and alarm tagging supported; no real metric evaluation.
-operations: {}
+operations:
+  PutMetricData:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/AmazonCloudWatch/latest/APIReference/API_PutMetricData.html
+    protocol: Query, AWS JSON 1.0, and RPC v2 CBOR; one implementation (putMetricDataCore) shared by all three.
+    tests:
+      - internal/services/cloudwatch/metric_same_timestamp_test.go::TestPutMetricDataPoint_sameTimestampMergesStatistics
+      - internal/services/cloudwatch/metric_same_timestamp_test.go::TestPutMetricDataPoint_sameTimestampMergesStatisticSets
+      - internal/services/cloudwatch/metric_same_timestamp_test.go::TestPutMetricDataPoint_differentTimestampsStaySeparate
+      - internal/services/cloudwatch/metric_same_timestamp_test.go::TestPutMetricDataPoint_concurrentSameTimestampLosesNothing
+      - tests/integration/cloudwatch/cloudwatch_test.go::TestGetMetricStatistics_afterPutMetricData
+      - tests/integration/cloudwatch/cloudwatch_test.go::TestGetMetricData_afterPutMetricData
+      - tests/integration/cloudwatch/cloudwatch_test.go::TestListMetrics_includesDimensions
+    scenarios:
+      same_timestamp_statistic_merge:
+        status: reviewed
+        evidence: Two data points published for the same metric/timestamp merge their StatisticValues (SampleCount/Sum/Minimum/Maximum) rather than overwriting, including under concurrent writes — TestPutMetricDataPoint_sameTimestampMergesStatistics, _sameTimestampMergesStatisticSets, _concurrentSameTimestampLosesNothing.
+      value_and_dimension_storage:
+        status: reviewed
+        evidence: Values and dimension sets published via PutMetricData are retrievable unchanged through GetMetricStatistics, GetMetricData, and ListMetrics — TestGetMetricStatistics_afterPutMetricData, TestGetMetricData_afterPutMetricData, TestListMetrics_includesDimensions.
+      value_range_and_dimension_count_validation:
+        status: tests_missing
+        evidence: >-
+          #1720 found PutMetricData accepts a Value outside AWS's supported range and
+          more than 30 Dimensions on one datum, both of which AWS rejects with a 4xx;
+          neither is validated here and no test in this repository asserts either
+          rejection. Tracked as a remaining gap below (#1720), not fixed by this
+          session.
+  GetMetricData:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/AmazonCloudWatch/latest/APIReference/API_GetMetricData.html
+    protocol: Query, AWS JSON 1.0 (X-Amz-Target GraniteServiceVersion20100801.GetMetricData), and RPC v2 CBOR.
+    tests:
+      - tests/integration/cloudwatch/cloudwatch_test.go::TestGetMetricData_afterPutMetricData
+      - tests/integration/cloudwatch/cloudwatch_test.go::TestGetMetricData_multipleQueries
+      - tests/integration/cloudwatch/cloudwatch_test.go::TestGetMetricData_expressionBinary
+      - tests/integration/cloudwatch/cloudwatch_test.go::TestGetMetricData_expressionFunctions
+      - tests/integration/cloudwatch/cloudwatch_test.go::TestGetMetricData_jsonTargetCompatibility
+      - tests/integration/cloudwatch/cloudwatch_cbor_test.go::TestCBOR_MatchesJSON
+    scenarios:
+      multiple_queries_and_expressions:
+        status: reviewed
+        evidence: Multiple MetricDataQueries in one request, and binary/function metric-math expressions over their results, are computed correctly — TestGetMetricData_multipleQueries, TestGetMetricData_expressionBinary, TestGetMetricData_expressionFunctions.
+      cross_protocol_parity:
+        status: reviewed
+        evidence: >-
+          #886 — GetMetricData is reachable and gives the same aggregated result over
+          Query/XML and AWS JSON 1.0 (X-Amz-Target), which is the primary protocol the
+          pinned model gives this operation — TestGetMetricData_jsonTargetCompatibility.
+          RPC v2 CBOR is checked byte-for-byte equivalent to JSON (shape-normalised) by
+          TestCBOR_MatchesJSON, using GetMetricStatistics as the exercised operation but
+          running through the same dispatch path GetMetricData uses.
+  GetMetricStatistics:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/AmazonCloudWatch/latest/APIReference/API_GetMetricStatistics.html
+    protocol: Query, AWS JSON 1.0, and RPC v2 CBOR.
+    tests:
+      - tests/integration/cloudwatch/cloudwatch_test.go::TestGetMetricStatistics_afterPutMetricData
+      - tests/integration/cloudwatch/cloudwatch_test.go::TestGetMetricStatistics_dimensionOrderInsensitive
+      - tests/integration/cloudwatch/cloudwatch_test.go::TestGetMetricStatistics_sameTimestampDatumsAggregate
+      - tests/integration/cloudwatch/cloudwatch_test.go::TestGetMetricStatistics_memoryRetentionWindow
+      - tests/integration/cloudwatch/cloudwatch_test.go::TestGetMetricStatistics_persistentEnforcesRetention
+      - tests/integration/cloudwatch/cloudwatch_cbor_test.go::TestCBOR_MatchesJSON
+    scenarios:
+      dimension_order_and_aggregation:
+        status: reviewed
+        evidence: Dimension sets match regardless of member order, and multiple datapoints at the same timestamp aggregate into one bucket — TestGetMetricStatistics_dimensionOrderInsensitive, TestGetMetricStatistics_sameTimestampDatumsAggregate.
+      retention_window:
+        status: intentionally_partial
+        evidence: Overcast retains raw metric data for about one hour in every storage backend rather than AWS's 15-months-at-declining-resolution, documented in docs/services/cloudwatch.md's Differences-from-AWS table — TestGetMetricStatistics_memoryRetentionWindow, TestGetMetricStatistics_persistentEnforcesRetention pin the shorter window itself, not AWS's retention schedule.
+      cbor_json_parity:
+        status: reviewed
+        evidence: The exact operation TestCBOR_MatchesJSON exercises — same Namespace/MetricName/Dimensions/Period/Statistics request answered identically (shape-normalised) over rpcv2Cbor and awsJson1_0.
+      period_and_statistics_validation:
+        status: tests_missing
+        evidence: >-
+          #1720 found a Period that is not a multiple of 60 and a request naming
+          neither Statistics nor ExtendedStatistics are both accepted (200, empty
+          Datapoints) where AWS rejects them with a 4xx; no test here asserts either
+          rejection. Tracked as a remaining gap below (#1720).
+  ListMetrics:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/AmazonCloudWatch/latest/APIReference/API_ListMetrics.html
+    protocol: Query, AWS JSON 1.0, and RPC v2 CBOR.
+    tests:
+      - tests/integration/cloudwatch/cloudwatch_test.go::TestListMetrics_includesDimensions
+      - tests/integration/cloudwatch/cloudwatch_test.go::TestListMetrics_jsonTargetCompatibility
+    scenarios:
+      dimensions_and_cross_protocol:
+        status: reviewed
+        evidence: Published dimensions are echoed back in ListMetrics, over both Query and the AWS JSON target protocol — TestListMetrics_includesDimensions, TestListMetrics_jsonTargetCompatibility.
+  PutMetricAlarm:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/AmazonCloudWatch/latest/APIReference/API_PutMetricAlarm.html
+    protocol: Query, AWS JSON 1.0, and RPC v2 CBOR.
+    tests:
+      - tests/integration/cloudwatch/cloudwatch_test.go::TestPutMetricAlarm_success
+      - tests/integration/cloudwatch/alarm_evaluation_test.go::TestPutMetricAlarm_rejectsInvalidEnums
+      - tests/integration/cloudwatch/alarm_evaluation_test.go::TestPutMetricAlarm_roundTripsFullConfiguration
+      - tests/integration/cloudwatch/alarm_evaluation_test.go::TestPutMetricAlarm_JSON_createsMetricMath
+      - tests/integration/cloudwatch/alarm_evaluation_test.go::TestPutMetricAlarm_createsConfigurationsItCannotEvaluate
+      - tests/integration/cloudwatch/alarm_limitation_test.go::TestPutMetricAlarm_metricMathIsCreatedAndDeclaresItself
+      - tests/integration/cloudwatch/alarm_limitation_test.go::TestPutMetricAlarm_singleMetricAlarmSaysNothing
+      - tests/integration/cloudwatch/alarm_limitation_test.go::TestPutMetricAlarm_stillRefusesWhatAWSRefuses
+      - tests/integration/cloudwatch/cloudwatch_tags_audit_test.go::TestPutMetricAlarm_tagsAppliedAtCreation
+      - tests/integration/cloudwatch/cloudwatch_tags_audit_test.go::TestPutMetricAlarm_tagsIgnoredOnUpdate
+      - tests/integration/cloudwatch/cloudwatch_tag_limits_test.go::TestPutMetricAlarm_rejectsInvalidTagSets
+    scenarios:
+      full_configuration_round_trip:
+        status: reviewed
+        evidence: A fully-configured alarm (comparison operator, evaluation periods, datapoints-to-alarm, treat-missing-data, unit, actions) round-trips through DescribeAlarms unchanged — TestPutMetricAlarm_roundTripsFullConfiguration.
+      invalid_enum_rejection:
+        status: reviewed
+        evidence: An unrecognized ComparisonOperator/Statistic/TreatMissingData value is rejected before the alarm is stored — TestPutMetricAlarm_rejectsInvalidEnums.
+      metric_math_anomaly_extended_statistic_created_unevaluated:
+        status: intentionally_partial
+        evidence: >-
+          Metric-math (Metrics/Expression), anomaly-detection comparison operators
+          (LessThanLowerOrGreaterThanUpperThreshold, GreaterThanUpperThreshold,
+          LessThanLowerThreshold) with ThresholdMetricId, and ExtendedStatistic
+          (percentile) alarms are all accepted and created — CDK emits exactly this
+          shape for MathExpression-based alarms, and refusing them broke whole CDK
+          deploys — but never evaluated; the response carries
+          protocol.EmulationLimitationHeader naming the specific limitation, and the
+          alarm's own StateReason says so too. Matches
+          docs/services/cloudwatch.md:61 ("Metric math, anomaly detection,
+          percentiles | Evaluated | The alarm is created and says so, but never
+          evaluated") — TestPutMetricAlarm_createsConfigurationsItCannotEvaluate (all
+          four shapes in one table test), TestPutMetricAlarm_metricMathIsCreatedAndDeclaresItself,
+          TestPutMetricAlarm_singleMetricAlarmSaysNothing (the negative case — an
+          ordinary alarm gets no limitation header).
+      tags_at_creation_ignored_on_update:
+        status: reviewed
+        evidence: Tags supplied on PutMetricAlarm are applied when the alarm is created but ignored on a subsequent update (matching AWS's documented behavior that PutMetricAlarm does not modify tags after creation) — TestPutMetricAlarm_tagsAppliedAtCreation, TestPutMetricAlarm_tagsIgnoredOnUpdate.
+      tag_set_limits:
+        status: reviewed
+        evidence: "Invalid tag sets (over the 50-tag limit, reserved aws: prefix, etc.) are rejected on PutMetricAlarm — TestPutMetricAlarm_rejectsInvalidTagSets."
+  DescribeAlarms:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/AmazonCloudWatch/latest/APIReference/API_DescribeAlarms.html
+    protocol: Query, AWS JSON 1.0, and RPC v2 CBOR.
+    tests:
+      - tests/integration/cloudwatch/cloudwatch_test.go::TestDescribeAlarms_afterPut
+      - tests/integration/cloudwatch/cloudwatch_tags_audit_test.go::TestDescribeAlarms_omitsTags
+    scenarios:
+      basic_listing:
+        status: reviewed
+        evidence: Alarms created via PutMetricAlarm are listed back with their configuration — TestDescribeAlarms_afterPut.
+      tags_not_echoed:
+        status: reviewed
+        evidence: DescribeAlarms' response does not include the alarm's tags (matching AWS, which serves tags only through ListTagsForResource) — TestDescribeAlarms_omitsTags.
+      metrics_definition_not_echoed:
+        status: tests_missing
+        evidence: >-
+          A metric-math alarm's Metrics definition is stored but DescribeAlarms
+          returns a hand-built projection that does not echo it back — documented as a
+          known gap in a comment in TestPutMetricAlarm_metricMathIsCreatedAndDeclaresItself
+          (alarm_limitation_test.go), not asserted by a dedicated test.
+  DescribeAlarmHistory:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/AmazonCloudWatch/latest/APIReference/API_DescribeAlarmHistory.html
+    protocol: Query, AWS JSON 1.0, and RPC v2 CBOR.
+    tests:
+      - tests/integration/cloudwatch/alarm_evaluation_test.go::TestDescribeAlarmHistory_JSON
+      - tests/integration/cloudwatch/alarm_evaluation_test.go::TestSetAlarmState_recordsHistoryAndSurvivesEvaluation
+      - tests/integration/cloudwatch/alarm_evaluation_test.go::TestDeleteAlarms_removesHistory
+    scenarios:
+      state_transition_history:
+        status: reviewed
+        evidence: A SetAlarmState transition is recorded as a StateUpdate history item and survives a later automatic evaluation over the JSON protocol — TestDescribeAlarmHistory_JSON, TestSetAlarmState_recordsHistoryAndSurvivesEvaluation.
+      retention_window:
+        status: intentionally_partial
+        evidence: Overcast retains the most recent 100 history items per alarm rather than AWS's 14-day window, per docs/services/cloudwatch.md's Differences-from-AWS table; no test pins the 100-item cap specifically.
+  SetAlarmState:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/AmazonCloudWatch/latest/APIReference/API_SetAlarmState.html
+    protocol: Query, AWS JSON 1.0, and RPC v2 CBOR.
+    tests:
+      - tests/integration/cloudwatch/alarm_evaluation_test.go::TestSetAlarmState_recordsHistoryAndSurvivesEvaluation
+      - tests/integration/cloudwatch/alarm_evaluation_test.go::TestSetAlarmState_rejectsUnknownState
+    scenarios:
+      manual_state_transition:
+        status: reviewed
+        evidence: A manual state set is recorded in history and the alarm's actions fire on the transition, matching AWS's on-transition-only firing — TestSetAlarmState_recordsHistoryAndSurvivesEvaluation.
+      invalid_state_value:
+        status: reviewed
+        evidence: An unrecognized StateValue is rejected — TestSetAlarmState_rejectsUnknownState.
+  DeleteAlarms:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/AmazonCloudWatch/latest/APIReference/API_DeleteAlarms.html
+    protocol: Query, AWS JSON 1.0, and RPC v2 CBOR.
+    tests:
+      - tests/integration/cloudwatch/cloudwatch_test.go::TestDeleteAlarms_success
+      - tests/integration/cloudwatch/alarm_evaluation_test.go::TestDeleteAlarms_removesHistory
+      - tests/integration/cloudwatch/cloudwatch_tags_audit_test.go::TestDeleteAlarms_dropsTags
+    scenarios:
+      deletion_removes_alarm_history_and_tags:
+        status: reviewed
+        evidence: Deleting an alarm removes it from DescribeAlarms, drops its DescribeAlarmHistory entries, and drops its tags — TestDeleteAlarms_success, TestDeleteAlarms_removesHistory, TestDeleteAlarms_dropsTags.
+      unknown_alarm_name:
+        status: tests_missing
+        evidence: >-
+          #1720 found DeleteAlarms naming an alarm that does not exist is silently
+          accepted (200) where AWS documents ResourceNotFound; no test here asserts
+          the unknown-alarm case. Tracked as a remaining gap below (#1720).
+  TagResource:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/AmazonCloudWatch/latest/APIReference/API_TagResource.html
+    protocol: Query and AWS JSON 1.0 (cross-protocol parity is explicitly tested).
+    tests:
+      - tests/integration/cloudwatch/cloudwatch_tags_test.go::TestTagResource_jsonTarget
+      - tests/integration/cloudwatch/cloudwatch_tags_test.go::TestTagOperations_crossProtocol
+      - tests/integration/cloudwatch/cloudwatch_tags_audit_test.go::TestTagOperations_unknownResource
+      - tests/integration/cloudwatch/cloudwatch_tags_audit_test.go::TestTagOperations_invalidResourceARN
+      - tests/integration/cloudwatch/cloudwatch_tag_limits_test.go::TestTagResource_rejectsInvalidTagSets
+    scenarios:
+      cross_protocol_parity:
+        status: reviewed
+        evidence: >-
+          #794 — one dispatch table being right while the other was not hid a real bug,
+          so every tag case is run over both Query and JSON; TagOperations_crossProtocol
+          and the _jsonTarget tests both exercise TagResource.
+      unknown_and_malformed_arn:
+        status: reviewed
+        evidence: An ARN naming no known alarm, and a malformed ARN, are both rejected distinctly — TestTagOperations_unknownResource, TestTagOperations_invalidResourceARN.
+      tag_set_limits:
+        status: reviewed
+        evidence: "The shared tag-limit validation (50 tags, reserved aws: prefix, etc.) applies to TagResource too — TestTagResource_rejectsInvalidTagSets."
+  UntagResource:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/AmazonCloudWatch/latest/APIReference/API_UntagResource.html
+    protocol: Query and AWS JSON 1.0.
+    tests:
+      - tests/integration/cloudwatch/cloudwatch_tags_test.go::TestUntagResource_jsonTarget
+      - tests/integration/cloudwatch/cloudwatch_tags_test.go::TestTagOperations_crossProtocol
+    scenarios:
+      cross_protocol_parity:
+        status: reviewed
+        evidence: Same cross-protocol coverage as TagResource — TestUntagResource_jsonTarget, TestTagOperations_crossProtocol.
+  ListTagsForResource:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/AmazonCloudWatch/latest/APIReference/API_ListTagsForResource.html
+    protocol: Query and AWS JSON 1.0.
+    tests:
+      - tests/integration/cloudwatch/cloudwatch_tags_test.go::TestListTagsForResource_jsonTarget
+      - tests/integration/cloudwatch/cloudwatch_tags_test.go::TestTagOperations_crossProtocol
+    scenarios:
+      cross_protocol_parity:
+        status: reviewed
+        evidence: Same cross-protocol coverage as TagResource — TestListTagsForResource_jsonTarget, TestTagOperations_crossProtocol.
 findings:
-  fixed: []
+  fixed:
+    - >-
+      #81 — the tracker header claimed [query, aws_json_inferred] against a service
+      whose model (internal/awsapi/manifest.gen.go, Service: "cloudwatch") binds
+      Protocols: ProtocolsAWSQuery | ProtocolsAWSJSON10 | ProtocolsRPCV2CBOR on every
+      operation. docs/services/cloudwatch.md:53 already states "Query, AWS JSON, and
+      Smithy RPC v2 CBOR, from one implementation per operation", and
+      TestCBOR_EveryDispatchedOperationIsReachable /
+      TestSupportedProtocols_ClaimsRPCv2CBOR
+      (internal/services/cloudwatch/typed_ops_test.go) plus the JSON-target
+      compatibility tests (TestListMetrics_jsonTargetCompatibility,
+      TestGetMetricData_jsonTargetCompatibility) and TestCBOR_MatchesJSON prove all
+      three are reachable and agree. The header is corrected to
+      [query, aws_json_1_0, rpcv2_cbor]; no code change was needed, the tracker header
+      was wrong.
+    - >-
+      #82 — populated the empty operations map with all core metric and alarm
+      operations (PutMetricData, GetMetricData, GetMetricStatistics, ListMetrics,
+      PutMetricAlarm, DescribeAlarms, DescribeAlarmHistory, SetAlarmState,
+      DeleteAlarms, TagResource, UntagResource, ListTagsForResource), each with AWS
+      docs, tests, and scenario evidence. Metric math, anomaly detection and
+      percentile (ExtendedStatistic) alarms are confirmed intentionally_partial
+      (created, never evaluated, self-declaring via the emulation-limitation header
+      and StateReason) per docs/services/cloudwatch.md:61 and
+      TestPutMetricAlarm_createsConfigurationsItCannotEvaluate. Value/dimension-count
+      validation on PutMetricData, Period/Statistics validation on
+      GetMetricStatistics, and unknown-alarm handling on DeleteAlarms are
+      tests_missing/unimplemented, tracked under #1720 rather than fixed here.
   remaining_gaps:
-    - Reconcile docs saying Query-only with implementation JSON target path.
-    - Review alarm and metric wire parity.
-  intentionally_partial: []
+    - >-
+      #1720 (open, not fixed here) — PutMetricData accepts a Value outside AWS's
+      supported range and more than 30 Dimensions on one datum; GetMetricStatistics
+      accepts a Period that is not a multiple of 60 and a request with neither
+      Statistics nor ExtendedStatistics; DeleteAlarms does not raise for an unknown
+      alarm name. All five are accepted (200) here where AWS answers a 4xx (or
+      ResourceNotFound for DeleteAlarms).
+    - DescribeAlarms does not echo a metric-math alarm's Metrics definition back (hand-built projection rather than the stored alarm).
+    - DescribeAlarmsForMetric, EnableAlarmActions and DisableAlarmActions are dispatched and reachable (proven only by TestCBOR_EveryDispatchedOperationIsReachable's reachability sweep) but have no operation entry or correctness test in this review.
+  intentionally_partial:
+    - Metric math, anomaly detection and percentile (ExtendedStatistic) alarms are created but never evaluated, and self-declare this via the emulation-limitation header and StateReason — docs/services/cloudwatch.md:61.
+    - Metric retention is about one hour rather than AWS's 15 months at declining resolution; alarm history keeps the most recent 100 items rather than AWS's 14 days — docs/services/cloudwatch.md's Differences-from-AWS table.
 handoff:
-  start_with: [PutMetricAlarm, GetMetricData, PutMetricData]
-  do_not_redo: []
+  start_with:
+    - "PutMetricData/GetMetricStatistics/DeleteAlarms validation gaps tracked in #1720"
+    - DescribeAlarmsForMetric/EnableAlarmActions/DisableAlarmActions correctness review
+  do_not_redo:
+    [
+      PutMetricData, GetMetricData, GetMetricStatistics, ListMetrics, PutMetricAlarm, DescribeAlarms,
+      DescribeAlarmHistory, SetAlarmState, DeleteAlarms, TagResource, UntagResource, ListTagsForResource,
+      "protocol header (#81) and cross-protocol reachability",
+    ]
   commands: [go test -count=1 ./internal/services/cloudwatch/... ./tests/integration/cloudwatch/...]
