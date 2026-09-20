@@ -352,7 +352,9 @@ func TestPutEvents_deliversToFirehoseTarget(t *testing.T) {
 func TestPutTargets_rejectsUnsupportedTargetType(t *testing.T) {
 	// Given: a rule
 	srv := helpers.NewTestServer(t)
-	resp := ebCall(t, srv, "PutRule", map[string]any{"Name": "unsupported-target"})
+	resp := ebCall(t, srv, "PutRule", map[string]any{
+		"Name": "unsupported-target", "EventPattern": `{"source":["com.example.targets"]}`,
+	})
 	resp.Body.Close()
 	helpers.AssertStatus(t, resp, http.StatusOK)
 
@@ -402,7 +404,9 @@ func TestPutTargets_rejectsUnsupportedTargetType(t *testing.T) {
 func TestPutTargets_rejectsMalformedTargetARN(t *testing.T) {
 	// Given: a rule
 	srv := helpers.NewTestServer(t)
-	resp := ebCall(t, srv, "PutRule", map[string]any{"Name": "bad-arn"})
+	resp := ebCall(t, srv, "PutRule", map[string]any{
+		"Name": "bad-arn", "EventPattern": `{"source":["com.example.targets"]}`,
+	})
 	resp.Body.Close()
 	helpers.AssertStatus(t, resp, http.StatusOK)
 
@@ -428,7 +432,9 @@ func TestPutTargets_rejectsMalformedTargetARN(t *testing.T) {
 func TestPutTargets_rejectsMultipleInputSpecifications(t *testing.T) {
 	// Given: a rule
 	srv := helpers.NewTestServer(t)
-	resp := ebCall(t, srv, "PutRule", map[string]any{"Name": "double-input"})
+	resp := ebCall(t, srv, "PutRule", map[string]any{
+		"Name": "double-input", "EventPattern": `{"source":["com.example.targets"]}`,
+	})
 	resp.Body.Close()
 	helpers.AssertStatus(t, resp, http.StatusOK)
 

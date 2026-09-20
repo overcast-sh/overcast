@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -127,6 +128,7 @@ type setRuleStateRequest struct {
 type deleteRuleRequest struct {
 	Name         string `json:"Name" cbor:"Name"`
 	EventBusName string `json:"EventBusName" cbor:"EventBusName"`
+	Force        bool   `json:"Force" cbor:"Force"`
 }
 
 type putEventsRequest struct {
@@ -243,6 +245,118 @@ func (s *Service) deleteEventBusTyped(ctx context.Context, req *deleteEventBusRe
 	return &struct{}{}, nil
 }
 
+// validatePutRuleTrigger checks what a rule must carry before anything is
+// stored. AWS documents both constraints on PutRule: "A rule must contain at
+// least an EventPattern or ScheduleExpression", and EventPattern's "Length
+// Constraints: Maximum length of 4096".
+//
+// The API reference publishes no message text for either, so the wording is
+// Overcast's; the error code and the 400 status are the contractual part. AWS
+// does not list ValidationException among PutRule's modeled errors either — it
+// is the undeclared error real EventBridge answers a malformed request with,
+// and the same one this package already returns for a schedule expression it
+// cannot parse.
+func validatePutRuleTrigger(req *putRuleRequest) *protocol.AWSError {
+	if req.EventPattern == "" && req.ScheduleExpr == "" {
+		return &protocol.AWSError{
+			Code:       "ValidationException",
+			Message:    "Parameter(s) EventPattern or ScheduleExpression must be specified.",
+			HTTPStatus: http.StatusBadRequest,
+		}
+	}
+	if req.EventPattern == "" {
+		return nil
+	}
+	if len(req.EventPattern) > maxEventPatternLength {
+		return eventPatternTooLongError()
+	}
+	if err := validateEventPatternDocument(req.EventPattern); err != nil {
+		return invalidEventPatternError(err)
+	}
+	return nil
+}
+
+// requireEventBus refuses a rule aimed at an event bus that does not exist,
+// and returns the bus name the rule is stored under. Such a rule used to
+// provision cleanly and then sit on a bus no PutEvents call could ever
+// address. AWS answers ResourceNotFoundException ("An entity that you
+// specified does not exist"); it publishes no message text, so the wording
+// follows what this package already returns for a missing rule.
+//
+// The default bus is never written to the store — DescribeEventBus answers for
+// it whether or not it was created — so it is always reachable. EventBusName
+// may also be the bus ARN, which the API's own parameter pattern admits as an
+// optional prefix; the name is returned either way, because every other rule
+// path keys off the name.
+func (s *Service) requireEventBus(ctx context.Context, ref string) (string, *protocol.AWSError) {
+	name := eventBusNameFromRef(ref)
+	if name == "" {
+		name = "default"
+	}
+	if name == "default" {
+		return name, nil
+	}
+	_, found, err := s.store.Get(ctx, nsBuses, serviceutil.RegionKey(s.region(ctx), name))
+	if err != nil {
+		return "", protocol.ErrInternalError
+	}
+	if !found {
+		return "", &protocol.AWSError{
+			Code:       "ResourceNotFoundException",
+			Message:    fmt.Sprintf("Event bus %s does not exist.", name),
+			HTTPStatus: http.StatusBadRequest,
+		}
+	}
+	return name, nil
+}
+
+// requireRuleHasNoTargets refuses to delete a rule that still has targets.
+// AWS states the ordering on DeleteRule — "Before you can delete the rule, you
+// must remove all targets, using RemoveTargets" — and answers
+// ValidationException for it. Deleting the rule anyway used to strand its
+// targets, and hid the ordering mistake until the same code ran against AWS.
+//
+// Force is deliberately not a way around this. The API reference scopes it to
+// managed rules ("If this is a managed rule, created by an AWS service on your
+// behalf, you must specify Force as True to delete the rule. This parameter is
+// ignored for rules that are not managed rules"), and Overcast has no managed
+// rules, so it is a no-op here rather than an escape hatch.
+//
+// A rule that does not exist has no targets, which keeps DeleteRule idempotent:
+// AWS documents that "If you call delete rule multiple times for the same rule,
+// all calls will succeed."
+//
+// The API reference publishes no message text, so the wording is the one real
+// EventBridge returns; the ValidationException code and 400 status are the
+// contractual part.
+func (s *Service) requireRuleHasNoTargets(ctx context.Context, busName, name string) *protocol.AWSError {
+	if busName == "" {
+		busName = "default"
+	}
+	targets, err := s.loadTargets(ctx, busName, name)
+	if err != nil {
+		return protocol.ErrInternalError
+	}
+	if len(targets) == 0 {
+		return nil
+	}
+	return &protocol.AWSError{
+		Code:       "ValidationException",
+		Message:    "Rule can't be deleted since it has targets.",
+		HTTPStatus: http.StatusBadRequest,
+	}
+}
+
+// eventBusNameFromRef resolves the bus name from either spelling the API's
+// EventBusName parameter accepts — the name itself, or the bus ARN.
+func eventBusNameFromRef(ref string) string {
+	const marker = ":event-bus/"
+	if idx := strings.Index(ref, marker); idx >= 0 {
+		return ref[idx+len(marker):]
+	}
+	return ref
+}
+
 func (s *Service) putRuleTyped(ctx context.Context, req *putRuleRequest) (*putRuleResponse, *protocol.AWSError) {
 	if req.EventBusName == "" {
 		req.EventBusName = "default"
@@ -250,11 +364,27 @@ func (s *Service) putRuleTyped(ctx context.Context, req *putRuleRequest) (*putRu
 	if req.State == "" {
 		req.State = "ENABLED"
 	}
+	// Everything a rule can be wrong about is checked before anything is
+	// written, the same ordering CreateEventBus uses for tags (#1196), so a
+	// refused PutRule leaves neither a new rule nor a half-updated one behind.
+	if aerr := validatePutRuleTrigger(req); aerr != nil {
+		return nil, aerr
+	}
 	if req.ScheduleExpr != "" {
 		if _, err := nextRuleFire(req.ScheduleExpr, s.clk.Now(), s.clk.Now()); err != nil {
 			return nil, scheduleValidationError(err)
 		}
 	}
+	// The rule is stored under the bus *name* whichever of the two spellings
+	// the caller used, because DescribeRule, ListRules, PutTargets and
+	// delivery all key off the name. Keeping the ARN would file the rule
+	// somewhere none of them look — the stranded rule this check exists to
+	// prevent, arrived at by a different route.
+	resolvedBus, aerr := s.requireEventBus(ctx, req.EventBusName)
+	if aerr != nil {
+		return nil, aerr
+	}
+	req.EventBusName = resolvedBus
 	arn := s.ruleARN(ctx, req.EventBusName, req.Name)
 	// PutRule's tags merge with whatever the rule already carries (AWS: "the
 	// tags you specify ... are merged with any existing tags"), the same
@@ -413,6 +543,9 @@ func (s *Service) setRuleStateTyped(ctx context.Context, req *setRuleStateReques
 }
 
 func (s *Service) deleteRuleTyped(ctx context.Context, req *deleteRuleRequest) (*struct{}, *protocol.AWSError) {
+	if aerr := s.requireRuleHasNoTargets(ctx, req.EventBusName, req.Name); aerr != nil {
+		return nil, aerr
+	}
 	arn, aerr := s.deleteRuleRecord(ctx, req.EventBusName, req.Name)
 	if aerr != nil {
 		return nil, aerr
@@ -469,22 +602,25 @@ const maxEventPatternLength = 4096
 
 // testEventPatternTyped evaluates req.Event against req.EventPattern with the
 // same matcher PutEvents uses to select rules, so a pattern that passes here
-// is one a rule would fire on. An unparseable pattern is the documented
-// InvalidEventPatternException rather than a silent Result=false; the event
-// must be a JSON object. AWS also lists id/account/source/time/region/
-// resources/detail-type as mandatory envelope fields but documents no error
-// for their absence, so they are not enforced here.
+// is one a rule would fire on. A pattern PutRule would refuse — unparseable,
+// the wrong shape, or naming a match type this emulator does not evaluate — is
+// the documented InvalidEventPatternException rather than a silent
+// Result=false; the event must be a JSON object. AWS also lists id, account,
+// source, time, region, resources and detail-type as mandatory envelope fields
+// but documents no error for their absence, so they are not enforced here.
 func (s *Service) testEventPatternTyped(_ context.Context, req *testEventPatternRequest) (*testEventPatternResponse, *protocol.AWSError) {
 	if len(req.EventPattern) > maxEventPatternLength {
-		return nil, &protocol.AWSError{
-			Code: "ValidationException",
-			Message: fmt.Sprintf("1 validation error detected: Value at 'eventPattern' failed to satisfy constraint: "+
-				"Member must have length less than or equal to %d", maxEventPatternLength),
-			HTTPStatus: http.StatusBadRequest,
-		}
+		return nil, eventPatternTooLongError()
 	}
 	pattern, err := parseEventPattern(req.EventPattern)
 	if err != nil {
+		return nil, invalidEventPatternError(err)
+	}
+	// TestEventPattern exists to tell a caller whether a pattern would work on
+	// a rule, so it answers the same way PutRule does about the pattern
+	// itself: a shape or match type PutRule refuses is an error here too, not
+	// a Result=false that reads as "valid, just did not match".
+	if err := validateEventPattern(pattern); err != nil {
 		return nil, invalidEventPatternError(err)
 	}
 	var event map[string]any
@@ -496,6 +632,17 @@ func (s *Service) testEventPatternTyped(_ context.Context, req *testEventPattern
 		}
 	}
 	return &testEventPatternResponse{Result: matchPatternMap(pattern, event)}, nil
+}
+
+// eventPatternTooLongError is the documented EventPattern length constraint,
+// shared by PutRule and TestEventPattern so both refuse the same input.
+func eventPatternTooLongError() *protocol.AWSError {
+	return &protocol.AWSError{
+		Code: "ValidationException",
+		Message: fmt.Sprintf("1 validation error detected: Value at 'eventPattern' failed to satisfy constraint: "+
+			"Member must have length less than or equal to %d", maxEventPatternLength),
+		HTTPStatus: http.StatusBadRequest,
+	}
 }
 
 func invalidEventPatternError(err error) *protocol.AWSError {

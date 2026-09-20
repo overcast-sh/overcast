@@ -647,19 +647,17 @@ func (s *Service) setRuleState(w http.ResponseWriter, r *http.Request, state str
 }
 
 func (s *Service) deleteRule(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Name         string `json:"Name"`
-		EventBusName string `json:"EventBusName"`
-	}
+	// Delegates to deleteRuleTyped (typed_logic.go) so the legacy JSON1.0/1.1
+	// path and the CBOR typed path share one implementation, and in
+	// particular one copy of the targets-attached check.
+	var req deleteRuleRequest
 	if !serviceutil.DecodeJSON(w, r, &req) {
 		return
 	}
-	arn, aerr := s.deleteRuleRecord(r.Context(), req.EventBusName, req.Name)
-	if aerr != nil {
+	if _, aerr := s.deleteRuleTyped(r.Context(), &req); aerr != nil {
 		protocol.WriteJSONError(w, r, aerr)
 		return
 	}
-	s.publish(r, events.EventBridgeRuleDeleted, events.ResourcePayload{Name: req.Name, ARN: arn})
 	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{})
 }
 
