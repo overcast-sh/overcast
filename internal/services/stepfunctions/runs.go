@@ -160,19 +160,31 @@ func (h *Handler) reserveRun(execARN string, run *executionRun, trackWG bool) bo
 }
 
 // lookupRun returns the in-flight run for an execution, or nil once it has
-// finished and its terminal state is in the store.
+// finished and its terminal state is in the store. persistOutcome
+// (execution_ops.go) is what keeps the second half of that true: it releases
+// the run before it writes the terminal record, so an execution that reads
+// as FAILED to any caller is never still registered here.
 func (h *Handler) lookupRun(execARN string) *executionRun {
 	h.runsMu.Lock()
 	defer h.runsMu.Unlock()
 	return h.runs[execARN]
 }
 
-// releaseRun forgets a run once its terminal state has been persisted, so
-// readers fall through to the store.
-func (h *Handler) releaseRun(execARN string) {
+// releaseRun forgets run, so readers fall through to the store. It is called
+// from persistOutcome just before the terminal write and again, as a
+// backstop, from the deferred cleanup of every launcher — a run suspended at
+// shutdown, or one whose terminal write failed, never reaches the first.
+//
+// Only the named run is forgotten. An execution's ARN can carry a second run
+// while the first is still unwinding: a redrive accepted the instant the
+// terminal record lands (issue #1973) registers its own run under the same
+// ARN, and the finished run's deferred release must not forget it.
+func (h *Handler) releaseRun(execARN string, run *executionRun) {
 	h.runsMu.Lock()
 	defer h.runsMu.Unlock()
-	delete(h.runs, execARN)
+	if h.runs[execARN] == run {
+		delete(h.runs, execARN)
+	}
 }
 
 // Stop drains in-flight executions. It first marks the service stopping —

@@ -123,7 +123,7 @@ func (h *Handler) startExecution(ctx context.Context, smARN, execName, input str
 		if !h.reserveRun(execARN, run, false) {
 			return nil, h.refuseStartAfterShutdown(ctx, exec, run)
 		}
-		defer h.releaseRun(execARN)
+		defer h.releaseRun(execARN, run)
 		if err := h.completeExecution(runCtx, sm, exec, region, depth, run); err != nil {
 			return nil, protocol.Wrap(protocol.ErrInternalError, err)
 		}
@@ -167,8 +167,12 @@ func (h *Handler) launchAsync(ctx context.Context, sm *StateMachine, exec *Execu
 	go func() {
 		defer h.wg.Done()
 		defer cancel()
-		defer h.releaseRun(execARN)
+		// recoverExecution persists a terminal record of its own, so it runs
+		// after the release rather than before it — defers unwind last-first
+		// — keeping the "terminal record implies no run in flight" ordering
+		// persistOutcome establishes on the path that does not panic.
 		defer h.recoverExecution(runCtx, &running)
+		defer h.releaseRun(execARN, run)
 		if err := h.completeExecution(runCtx, sm, &running, region, depth, run); err != nil {
 			log.Logger().Error("stepfunctions: could not persist execution result",
 				zap.String("execution", execARN), zap.Error(err))
@@ -223,6 +227,16 @@ func (h *Handler) persistOutcome(ctx context.Context, exec *Execution, run *exec
 	if err := h.store.PutHistory(ctx, exec.ExecutionArn, outcome.events); err != nil {
 		return err
 	}
+	// The run stops being in-flight before the record that says so lands, so
+	// that every caller who can see the terminal status sees a finished
+	// execution and not one still being run. Released the other way round —
+	// the deferred cleanup of the goroutine, which is where this used to
+	// happen — a RedriveExecution arriving on the FAILED an application had
+	// just polled for was refused as "already being redriven" (issue #1973),
+	// because the finished run was still registered. The history is already
+	// stored by now, so a reader that falls through to the store in the
+	// moment between the two gets the whole of it.
+	h.releaseRun(exec.ExecutionArn, run)
 	// The execution record lands after the history, so an execution that reads
 	// as terminal always has its history alongside it.
 	return h.store.PutExecution(ctx, exec)
