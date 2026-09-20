@@ -8,14 +8,8 @@ import (
 
 // ─── Stubs (not implemented) ───────────────────────────────────────────────
 //
-// RestoreSecret needs DeleteSecret's recovery window, which Overcast does not
-// emulate (deletion is always immediate). Replication is inherently
-// multi-region and out of scope for a single-node emulator — see
-// docs/plans/full-emulation-priority.md §7.
-
-func (h *Handler) RestoreSecret(w http.ResponseWriter, r *http.Request) {
-	protocol.NotImplementedJSON(w, r)
-}
+// Replication is inherently multi-region and out of scope for a single-node
+// emulator — see docs/plans/full-emulation-priority.md §7.
 
 func (h *Handler) ReplicateSecretToRegions(w http.ResponseWriter, r *http.Request) {
 	protocol.NotImplementedJSON(w, r)

@@ -78,7 +78,7 @@ func (s *Service) InitLambdaInvoker(invoker events.FunctionSyncInvoker) {
 // how a task receives credentials without them being written into the task
 // definition. ok is false for an unknown secret or one holding only binary.
 func (s *Service) SecretValue(ctx context.Context, secretID string) (string, bool) {
-	sec, aerr := s.handler.store.resolveSecret(ctx, secretID)
+	sec, aerr := s.handler.resolveLiveSecret(ctx, secretID)
 	if aerr != nil || sec == nil {
 		return "", false
 	}

@@ -6407,7 +6407,7 @@
       "service": "secretsmanager",
       "display_name": "Secrets Manager",
       "total_ops": 22,
-      "implemented_ops": 19,
+      "implemented_ops": 20,
       "operations": [
         {
           "operation": "CreateSecret",
@@ -6455,7 +6455,7 @@
           "operation": "DeleteSecret",
           "category": "Secret CRUD",
           "status": "✅ Supported",
-          "notes": "Immediate (ForceDelete) only"
+          "notes": "Recovery window 7-30 days (default 30) or ForceDeleteWithoutRecovery"
         },
         {
           "operation": "BatchGetSecretValue",
@@ -6525,9 +6525,9 @@
         },
         {
           "operation": "RestoreSecret",
-          "category": "Policy/Misc",
-          "status": "❌ Unsupported",
-          "notes": "stub; returns 501"
+          "category": "Secret CRUD",
+          "status": "✅ Supported",
+          "notes": "Cancels a scheduled deletion inside the recovery window"
         },
         {
           "operation": "ReplicateSecretToRegions",
