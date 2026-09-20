@@ -46,6 +46,7 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | Access points | Create, describe, list, delete; the two filtered listings match on stored metadata |
 | Tags | `BackupVaultTags`, `BackupPlanTags` and an access point's `Tags` at creation, plus `TagResource`, `ListTags` and `UntagResource` |
 | Bindings | AWS's own routes — vaults under `/backup-vaults`, plans under `/backup/plans`, access points under `/backup-access-point` — so SDKs, CDK and `aws backup …` work unmodified |
+| Protocols | AWS REST JSON (Smithy `restJson1`), dispatched by each operation's modeled method and path |
 
 ## Differences from AWS
 

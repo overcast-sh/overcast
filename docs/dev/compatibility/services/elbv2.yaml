@@ -1,22 +1,59 @@
 service: elbv2
-status: not_started
+status: reviewed
 priority: p1
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-05-17
+last_updated: 2026-09-20
 protocols: [query]
 implementation: [internal/services/elbv2]
 integration_tests: [tests/integration/elbv2]
 capability_docs: docs/services/elb.md
-operation_count_estimate: 15 tracked; 12 supported, 3 unsupported
-current_support_level: Metadata-only ALB/NLB resources; no traffic proxying.
+operation_count_estimate: >-
+  22 tracked in internal/services/elbv2/capabilities_dev.go; 20 supported, 2 unsupported
+  (CreateRule, DescribeRules). docs/services/elb.md confirms "20 of 22 listed operations are
+  implemented." (previously recorded as 15 tracked/12 supported/3 unsupported, which
+  undercounted the operation set and mis-stated the unsupported count.)
+current_support_level: >-
+  Real forwarding, not metadata-only: a request whose Host header matches a load balancer's
+  DNSName is proxied round-robin to a registered target of the target group its listener
+  forwards to (PRs #579 and #556, merged 2026-08-03), including automatic
+  registration/deregistration of ECS tasks as a service with a loadBalancers configuration
+  scales (docs/services/elb.md#what-works, tests/integration/elbv2/forwarding_test.go).
+  Target groups, listeners and tags are full CRUD. Listener rules (CreateRule/DescribeRules),
+  weighted ForwardConfig, redirect/fixed-response actions, and Cognito/OIDC auth actions are
+  not modelled — only a listener's DefaultActions route.
 operations: {}
 findings:
-  fixed: []
-  remaining_gaps:
-    - Check docs naming/path consistency between elb.md and service elbv2.
-    - Verify unsupported listener rule and attribute operations are intentionally tracked.
-  intentionally_partial: []
+  fixed:
+    - "#1718 (ten ELBv2 divergences from the #1670 sweep — Describe* returning an empty 200
+      instead of *NotFound for an unknown ARN/name, CreateTargetGroup accepting any
+      Protocol/Port, CreateLoadBalancer accepting zero subnets, and truncated-UUID ARN shapes)
+      is fixed by #1857 (fix(elbv2): resolve a Describe*'s explicit ARN and Name lists instead
+      of filtering with them). A Describe* given an explicit ARN/Name list now asserts
+      existence (LoadBalancerNotFound/TargetGroupNotFound/ListenerNotFound, HTTP 400, matching
+      the ELBv2 API Reference) instead of silently filtering to an empty list; CreateLoadBalancer
+      requires at least one Subnets/SubnetMappings member; CreateTargetGroup validates Protocol
+      against the documented enum and Port against 1-65535; and load balancer/target
+      group/listener ARNs now end in sixteen lowercase hex characters, matching AWS's shape.
+      Test evidence: tests/integration/elbv2/describe_identifiers_test.go."
+    - "The current_support_level claim of \"Metadata-only ALB/NLB resources; no traffic
+      proxying\" was false as of #579 (fix(elbv2/ecs): make a load balancer reach the Fargate
+      service behind it) and #556 (merged 2026-08-03), which added real round-robin Host-header
+      forwarding to registered targets plus ECS target registration/deregistration. Corrected
+      above; documented in docs/services/elb.md#what-works and tested in
+      tests/integration/elbv2/forwarding_test.go."
+  remaining_gaps: []
+  intentionally_partial:
+    - "#145: the package is internal/services/elbv2 but the capability doc is
+      docs/services/elb.md, titled \"ELBv2 — Elastic Load Balancing v2 (ALB/NLB)\". This is
+      intentional — elb.md is the historical/user-facing name (matching AWS's own \"Elastic
+      Load Balancing\" product name and the CLI's `aws elbv2` vs service page naming elsewhere
+      in docs/services/), and the title line disambiguates the version. No action needed."
+    - "#146: CreateRule and DescribeRules are StatusUnsupported (internal/services/elbv2/capabilities_dev.go:24-25)
+      and return 501; docs/services/elb.md's \"Differences from AWS\" table documents \"CreateRule
+      and DescribeRules return 501; only the listener's DefaultActions route.\" This is a
+      deliberate, already-documented scope boundary, not an oversight — listener-rule routing
+      (path/host/header conditions) is a materially larger feature than default-action forwarding."
 handoff:
-  start_with: [CreateLoadBalancer, CreateTargetGroup, listeners]
-  do_not_redo: []
+  start_with: []
+  do_not_redo: [CreateLoadBalancer, DescribeLoadBalancers, DeleteLoadBalancer, CreateTargetGroup, DescribeTargetGroups, DeleteTargetGroup, ModifyTargetGroup, ModifyTargetGroupAttributes, DescribeTargetGroupAttributes, CreateListener, DescribeListeners, DeleteListener, RegisterTargets, DeregisterTargets, DescribeTargetHealth, ModifyLoadBalancerAttributes, DescribeLoadBalancerAttributes, AddTags, RemoveTags, DescribeTags]
   commands: [go test -count=1 ./internal/services/elbv2/... ./tests/integration/elbv2/...]
