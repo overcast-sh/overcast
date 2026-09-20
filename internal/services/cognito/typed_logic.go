@@ -73,9 +73,12 @@ type CompleteWebAuthnRegistrationReq struct {
 }
 
 type UserPoolMfaConfigReq struct {
-	UserPoolID            string                     `json:"UserPoolId" cbor:"UserPoolId"`
-	MfaConfiguration      string                     `json:"MfaConfiguration" cbor:"MfaConfiguration"`
-	WebAuthnConfiguration *webAuthnConfigurationWire `json:"WebAuthnConfiguration" cbor:"WebAuthnConfiguration"`
+	UserPoolID                    string                     `json:"UserPoolId" cbor:"UserPoolId"`
+	MfaConfiguration              string                     `json:"MfaConfiguration" cbor:"MfaConfiguration"`
+	SmsMfaConfiguration           *SmsMfaConfig              `json:"SmsMfaConfiguration" cbor:"SmsMfaConfiguration"`
+	SoftwareTokenMfaConfiguration *SoftwareTokenMfaConfig    `json:"SoftwareTokenMfaConfiguration" cbor:"SoftwareTokenMfaConfiguration"`
+	EmailMfaConfiguration         *EmailMfaConfig            `json:"EmailMfaConfiguration" cbor:"EmailMfaConfiguration"`
+	WebAuthnConfiguration         *webAuthnConfigurationWire `json:"WebAuthnConfiguration" cbor:"WebAuthnConfiguration"`
 }
 
 // ClientUserSecretReq is shared by ForgotPassword, ResendConfirmationCode.
@@ -425,8 +428,11 @@ type DescribeUserPoolResp struct {
 }
 
 type UserPoolMfaConfigResp struct {
-	MfaConfiguration      string                     `json:"MfaConfiguration,omitempty" cbor:"MfaConfiguration,omitempty"`
-	WebAuthnConfiguration *webAuthnConfigurationWire `json:"WebAuthnConfiguration,omitempty" cbor:"WebAuthnConfiguration,omitempty"`
+	MfaConfiguration              string                     `json:"MfaConfiguration,omitempty" cbor:"MfaConfiguration,omitempty"`
+	SmsMfaConfiguration           *SmsMfaConfig              `json:"SmsMfaConfiguration,omitempty" cbor:"SmsMfaConfiguration,omitempty"`
+	SoftwareTokenMfaConfiguration *SoftwareTokenMfaConfig    `json:"SoftwareTokenMfaConfiguration,omitempty" cbor:"SoftwareTokenMfaConfiguration,omitempty"`
+	EmailMfaConfiguration         *EmailMfaConfig            `json:"EmailMfaConfiguration,omitempty" cbor:"EmailMfaConfiguration,omitempty"`
+	WebAuthnConfiguration         *webAuthnConfigurationWire `json:"WebAuthnConfiguration,omitempty" cbor:"WebAuthnConfiguration,omitempty"`
 }
 
 type StartWebAuthnRegistrationResp struct {
@@ -1604,22 +1610,23 @@ func (s *Service) SetUserPoolMfaConfigTyped(ctx context.Context, req *UserPoolMf
 	if aerr != nil {
 		return nil, aerr
 	}
+	if aerr := validateSetUserPoolMfaConfig(pool, req); aerr != nil {
+		return nil, aerr
+	}
 	if req.WebAuthnConfiguration != nil {
-		if aerr := validateTierForWebAuthn(pool.UserPoolTier); aerr != nil {
-			return nil, aerr
-		}
-		if aerr := validateWebAuthnConfiguration(req.WebAuthnConfiguration); aerr != nil {
-			return nil, aerr
-		}
 		pool.WebAuthnConfiguration = &WebAuthnConfiguration{
 			FactorConfiguration: req.WebAuthnConfiguration.FactorConfiguration,
 			RelyingPartyID:      req.WebAuthnConfiguration.RelyingPartyID,
 			UserVerification:    req.WebAuthnConfiguration.UserVerification,
 		}
 	}
-	if req.MfaConfiguration != "" {
-		pool.MfaConfiguration = req.MfaConfiguration
-	}
+	// SetUserPoolMfaConfig replaces the MFA configuration wholesale: a factor
+	// the request omits is disabled, and an omitted MfaConfiguration is OFF.
+	// See the AWS fork note on validateSetUserPoolMfaConfig.
+	pool.MfaConfiguration = effectiveMfaConfiguration(req.MfaConfiguration)
+	pool.SmsMfaConfiguration = req.SmsMfaConfiguration.clone()
+	pool.SoftwareTokenMfaConfiguration = req.SoftwareTokenMfaConfiguration.clone()
+	pool.EmailMfaConfiguration = req.EmailMfaConfiguration.clone()
 	if err := s.savePool(ctx, pool); err != nil {
 		return nil, protocol.Wrap(protocol.ErrInternalError, err)
 	}
@@ -2786,8 +2793,168 @@ func validateWebAuthnConfiguration(wire *webAuthnConfigurationWire) *protocol.AW
 	return nil
 }
 
+// mfaCodePlaceholder is the substitution token every Cognito message template
+// that carries a one-time code must contain.
+const mfaCodePlaceholder = "{####}"
+
+// Model-pinned constraints from cognito-identity-provider-2016-04-18:
+// SmsVerificationMessageType (@length 6..140, @pattern \{####\}) backs
+// SmsMfaConfigType.SmsAuthenticationMessage, and EmailMfaMessageType
+// (@length 6..20000, @pattern ...\{####\}...) backs EmailMfaConfigType.Message.
+const (
+	smsMfaMessageMinLen   = 6
+	smsMfaMessageMaxLen   = 140
+	emailMfaMessageMinLen = 6
+	emailMfaMessageMaxLen = 20000
+
+	smsMfaMessagePattern   = `\{####\}`
+	emailMfaMessagePattern = `^[\p{L}\p{M}\p{S}\p{N}\p{P}\s*]*\{####\}[\p{L}\p{M}\p{S}\p{N}\p{P}\s*]*$`
+)
+
+// effectiveMfaConfiguration resolves an omitted MfaConfiguration to OFF, which
+// is both what a pool that has never been configured reports and what a
+// SetUserPoolMfaConfig request that omits the member means.
+func effectiveMfaConfiguration(value string) string {
+	if value == "" {
+		return "OFF"
+	}
+	return value
+}
+
+// mfaFactorEnabled reports whether a SetUserPoolMfaConfig request turns on at
+// least one MFA factor. SmsMfaConfigType and EmailMfaConfigType have no Enabled
+// member, so their presence is the switch; SoftwareTokenMfaConfigType has one.
+// A passkey configuration counts only when it is set to satisfy MFA, per
+// "passkeys with user verification can satisfy MFA requirements ... when you
+// set FactorConfiguration to MULTI_FACTOR_WITH_USER_VERIFICATION" in the
+// Cognito Developer Guide (Adding MFA to a user pool).
+func mfaFactorEnabled(req *UserPoolMfaConfigReq) bool {
+	if req.SmsMfaConfiguration != nil || req.EmailMfaConfiguration != nil {
+		return true
+	}
+	if c := req.SoftwareTokenMfaConfiguration; c != nil && c.Enabled {
+		return true
+	}
+	if w := req.WebAuthnConfiguration; w != nil && w.FactorConfiguration == "MULTI_FACTOR_WITH_USER_VERIFICATION" {
+		return true
+	}
+	return false
+}
+
+// validateSetUserPoolMfaConfig applies the request-level rules real Cognito
+// enforces on SetUserPoolMfaConfig.
+//
+// The two combination rules and their message text come from AWS responses
+// reported verbatim against the live API: requesting ON or OPTIONAL with no
+// factor enabled is rejected even when the pool already has one stored
+// (aws/aws-sdk-js#4186), which is also the evidence that the request replaces
+// the stored factor configuration rather than merging with it; and turning MFA
+// off while configuring a factor is rejected
+// (lgallard/terraform-aws-cognito-user-pool#74).
+func validateSetUserPoolMfaConfig(pool *UserPool, req *UserPoolMfaConfigReq) *protocol.AWSError {
+	switch req.MfaConfiguration {
+	case "", "OFF", "ON", "OPTIONAL":
+	default:
+		return errCognitoConstraint(req.MfaConfiguration, "mfaConfiguration",
+			"Member must satisfy enum value set: [OFF, ON, OPTIONAL]")
+	}
+	if req.WebAuthnConfiguration != nil {
+		if aerr := validateTierForWebAuthn(pool.UserPoolTier); aerr != nil {
+			return aerr
+		}
+		if aerr := validateWebAuthnConfiguration(req.WebAuthnConfiguration); aerr != nil {
+			return aerr
+		}
+	}
+	if aerr := validateSmsMfaConfiguration(req.SmsMfaConfiguration); aerr != nil {
+		return aerr
+	}
+	if req.EmailMfaConfiguration != nil {
+		if aerr := validateTierForEmailMfa(pool.UserPoolTier); aerr != nil {
+			return aerr
+		}
+		if aerr := validateEmailMfaConfiguration(req.EmailMfaConfiguration); aerr != nil {
+			return aerr
+		}
+	}
+	enabled := mfaFactorEnabled(req)
+	if effectiveMfaConfiguration(req.MfaConfiguration) == "OFF" {
+		if enabled {
+			return errInvalidMfaConfiguration("can't turn off MFA and configure an MFA together.")
+		}
+		return nil
+	}
+	if !enabled {
+		return errInvalidMfaConfiguration("can't disable all MFAs with a required or optional configuration.")
+	}
+	return nil
+}
+
+func validateSmsMfaConfiguration(c *SmsMfaConfig) *protocol.AWSError {
+	if c == nil || c.SmsAuthenticationMessage == "" {
+		return nil
+	}
+	return validateMfaMessageTemplate(c.SmsAuthenticationMessage,
+		"smsMfaConfiguration.smsAuthenticationMessage",
+		smsMfaMessageMinLen, smsMfaMessageMaxLen, smsMfaMessagePattern)
+}
+
+func validateEmailMfaConfiguration(c *EmailMfaConfig) *protocol.AWSError {
+	if c == nil || c.Message == "" {
+		return nil
+	}
+	return validateMfaMessageTemplate(c.Message, "emailMfaConfiguration.message",
+		emailMfaMessageMinLen, emailMfaMessageMaxLen, emailMfaMessagePattern)
+}
+
+// validateMfaMessageTemplate applies the modeled @length and @pattern
+// constraints to a message template. The pattern check is the {####}
+// requirement the pattern exists to express; the allowed character classes are
+// not enforced.
+func validateMfaMessageTemplate(value, member string, minLen, maxLen int, pattern string) *protocol.AWSError {
+	if n := len([]rune(value)); n < minLen || n > maxLen {
+		return errCognitoConstraint(value, member, fmt.Sprintf(
+			"Member must have length greater than or equal to %d, Member must have length less than or equal to %d",
+			minLen, maxLen))
+	}
+	if !strings.Contains(value, mfaCodePlaceholder) {
+		return errCognitoConstraint(value, member,
+			"Member must satisfy regular expression pattern: "+pattern)
+	}
+	return nil
+}
+
+func errCognitoConstraint(value, member, constraint string) *protocol.AWSError {
+	return &protocol.AWSError{
+		Code: "InvalidParameterException",
+		Message: fmt.Sprintf("1 validation error detected: Value '%s' at '%s' failed to satisfy constraint: %s",
+			value, member, constraint),
+		HTTPStatus: 400,
+	}
+}
+
+func errInvalidMfaConfiguration(reason string) *protocol.AWSError {
+	return &protocol.AWSError{
+		Code:       "InvalidParameterException",
+		Message:    "Invalid MFA configuration given, " + reason,
+		HTTPStatus: 400,
+	}
+}
+
+func validateTierForEmailMfa(tier string) *protocol.AWSError {
+	if effectiveTierValue(tier) == "LITE" {
+		return errFeatureUnavailableInTier("EmailMfaConfiguration requires the Essentials tier or higher.")
+	}
+	return nil
+}
+
 func mfaConfigResponse(pool *UserPool) *UserPoolMfaConfigResp {
-	resp := &UserPoolMfaConfigResp{MfaConfiguration: pool.MfaConfiguration}
+	resp := &UserPoolMfaConfigResp{
+		MfaConfiguration:              effectiveMfaConfiguration(pool.MfaConfiguration),
+		SmsMfaConfiguration:           pool.SmsMfaConfiguration.clone(),
+		SoftwareTokenMfaConfiguration: pool.SoftwareTokenMfaConfiguration.clone(),
+		EmailMfaConfiguration:         pool.EmailMfaConfiguration.clone(),
+	}
 	if w := pool.WebAuthnConfiguration; w != nil {
 		resp.WebAuthnConfiguration = &webAuthnConfigurationWire{FactorConfiguration: w.FactorConfiguration, RelyingPartyID: w.RelyingPartyID, UserVerification: w.UserVerification}
 	}

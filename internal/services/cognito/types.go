@@ -55,9 +55,15 @@ type UserPool struct {
 	UserAttributeUpdateSettings *UserAttributeUpdateSettings `json:"UserAttributeUpdateSettings,omitempty"`
 
 	// MFA and WebAuthn configuration configured through SetUserPoolMfaConfig.
-	MfaConfiguration      string                 `json:"MfaConfiguration,omitempty"`
-	WebAuthnConfiguration *WebAuthnConfiguration `json:"WebAuthnConfiguration,omitempty"`
-	DeviceConfiguration   *DeviceConfiguration   `json:"DeviceConfiguration,omitempty"`
+	// SetUserPoolMfaConfig replaces MfaConfiguration and all three factor
+	// configurations as a unit: a member the request omits is cleared here, not
+	// carried over. WebAuthnConfiguration is the exception and is merged.
+	MfaConfiguration              string                  `json:"MfaConfiguration,omitempty"`
+	SmsMfaConfiguration           *SmsMfaConfig           `json:"SmsMfaConfiguration,omitempty"`
+	SoftwareTokenMfaConfiguration *SoftwareTokenMfaConfig `json:"SoftwareTokenMfaConfiguration,omitempty"`
+	EmailMfaConfiguration         *EmailMfaConfig         `json:"EmailMfaConfiguration,omitempty"`
+	WebAuthnConfiguration         *WebAuthnConfiguration  `json:"WebAuthnConfiguration,omitempty"`
+	DeviceConfiguration           *DeviceConfiguration    `json:"DeviceConfiguration,omitempty"`
 
 	// UsernameAttributes lists the user pool attributes that can be used as
 	// the username when signing in. Valid values: "email", "phone_number".
@@ -129,6 +135,71 @@ type SmsConfiguration struct {
 	SnsCallerArn string `json:"SnsCallerArn,omitempty"`
 	ExternalId   string `json:"ExternalId,omitempty"`
 	SnsRegion    string `json:"SnsRegion,omitempty"`
+}
+
+// clone returns a deep copy, or nil for a nil receiver.
+func (c *SmsConfiguration) clone() *SmsConfiguration {
+	if c == nil {
+		return nil
+	}
+	dup := *c
+	return &dup
+}
+
+// SmsMfaConfig is the AWS SmsMfaConfigType: on AWS, the message template used
+// for SMS_MFA challenges and the SNS sending configuration behind it. Its
+// presence is what makes SMS an available MFA factor — SmsMfaConfigType has no
+// Enabled flag. Overcast stores and echoes it but issues no SMS_MFA challenge,
+// so the template is never expanded.
+type SmsMfaConfig struct {
+	// SmsAuthenticationMessage must contain {####}, the code placeholder.
+	SmsAuthenticationMessage string            `json:"SmsAuthenticationMessage,omitempty"`
+	SmsConfiguration         *SmsConfiguration `json:"SmsConfiguration,omitempty"`
+}
+
+// clone returns a deep copy, or nil for a nil receiver.
+func (c *SmsMfaConfig) clone() *SmsMfaConfig {
+	if c == nil {
+		return nil
+	}
+	return &SmsMfaConfig{
+		SmsAuthenticationMessage: c.SmsAuthenticationMessage,
+		SmsConfiguration:         c.SmsConfiguration.clone(),
+	}
+}
+
+// SoftwareTokenMfaConfig is the AWS SoftwareTokenMfaConfigType: whether TOTP
+// authenticator apps are an available MFA factor.
+type SoftwareTokenMfaConfig struct {
+	Enabled bool `json:"Enabled"`
+}
+
+// clone returns a deep copy, or nil for a nil receiver.
+func (c *SoftwareTokenMfaConfig) clone() *SoftwareTokenMfaConfig {
+	if c == nil {
+		return nil
+	}
+	dup := *c
+	return &dup
+}
+
+// EmailMfaConfig is the AWS EmailMfaConfigType: on AWS, the subject and body of
+// the email message sent for email MFA, which requires the Essentials feature
+// plan or higher. Overcast stores and echoes it but issues no email MFA
+// challenge, so the template is never expanded.
+type EmailMfaConfig struct {
+	// Message must contain {####}, the code placeholder.
+	Message string `json:"Message,omitempty"`
+	Subject string `json:"Subject,omitempty"`
+}
+
+// clone returns a deep copy, or nil for a nil receiver.
+func (c *EmailMfaConfig) clone() *EmailMfaConfig {
+	if c == nil {
+		return nil
+	}
+	dup := *c
+	return &dup
 }
 
 // LambdaConfig lists the Lambda trigger ARNs configured for a user pool. Every
@@ -453,12 +524,6 @@ type webAuthnConfigurationWire struct {
 	FactorConfiguration string `json:"FactorConfiguration,omitempty"`
 	RelyingPartyID      string `json:"RelyingPartyId,omitempty"`
 	UserVerification    string `json:"UserVerification,omitempty"`
-}
-
-//nolint:unused // Kept for AWS wire compatibility when serialising MFA config fragments.
-type mfaConfigWire struct {
-	MfaConfiguration      string                     `json:"MfaConfiguration,omitempty"`
-	WebAuthnConfiguration *webAuthnConfigurationWire `json:"WebAuthnConfiguration,omitempty"`
 }
 
 type userAttributeUpdateSettingsWire struct {
