@@ -6,8 +6,14 @@ import (
 	"fmt"
 	"net"
 	"slices"
+	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 // startupSANs is the enumerable set the daemon asks for at startup, trimmed to
@@ -21,11 +27,37 @@ var startupBases = []string{"localhost.overcast.sh", "localhost"}
 
 func newTestCertSource(t *testing.T) (*CertSource, *x509.CertPool) {
 	t.Helper()
-	src, pool, err := NewCertSource(DirFor(t.TempDir()), startupSANs, startupBases)
+	src, pool, _ := newLoggingCertSource(t)
+	return src, pool
+}
+
+// newLoggingCertSource also returns the log the source writes to, for the
+// tests that assert a refusal is explained rather than silent.
+func newLoggingCertSource(t *testing.T) (*CertSource, *x509.CertPool, *observer.ObservedLogs) {
+	t.Helper()
+	core, logs := observer.New(zap.DebugLevel)
+	src, pool, err := NewCertSource(DirFor(t.TempDir()), startupSANs, startupBases, zap.New(core))
 	if err != nil {
 		t.Fatalf("NewCertSource: %v", err)
 	}
-	return src, pool
+	return src, pool, logs
+}
+
+// familyName is a host-routed name in the i-th wildcard family.
+func familyName(i int) string {
+	return fmt.Sprintf("id.execute-api.us-east-%d.localhost.overcast.sh", i)
+}
+
+// deepName is a name under one of the test bases carrying labels leading
+// labels, which is past anything a hostname may legitimately be.
+func deepName(labels int) string {
+	return strings.Repeat("a.", labels) + "localhost.overcast.sh"
+}
+
+// wildcardOf is the cache key a name is stored under.
+func wildcardOf(name string) string {
+	_, parent, _ := strings.Cut(name, ".")
+	return "*." + parent
 }
 
 // certFor runs the certificate selection one handshake would.
@@ -100,13 +132,13 @@ func TestCertSource_refusesNamesOutsideItsBases(t *testing.T) {
 	// the client fails on a name mismatch it can read, rather than on an
 	// internal_error alert, and nothing is cached.
 	for _, name := range []string{
-		"api.execute-api.us-east-1.amazonaws.com",       // real AWS
-		"login.example.com",                             // somebody else entirely
-		"localhost.overcast.sh.evil.test",               // our name as a prefix, not a suffix
-		"notlocalhost.overcast.sh",                      // a suffix that is not a label boundary
-		"a.b.c.d.e.f.g.h.i.j.k.l.localhost.overcast.sh", // deeper than maxNameLabels
-		"*.evil.localhost.overcast.sh",                  // a wildcard smuggled in through SNI
-		"..localhost.overcast.sh",                       // an empty label
+		"api.execute-api.us-east-1.amazonaws.com", // real AWS
+		"login.example.com",                       // somebody else entirely
+		"localhost.overcast.sh.evil.test",         // our name as a prefix, not a suffix
+		"notlocalhost.overcast.sh",                // a suffix that is not a label boundary
+		deepName(maxNameLabels),                   // deeper than a hostname is allowed to be
+		"*.evil.localhost.overcast.sh",            // a wildcard smuggled in through SNI
+		"..localhost.overcast.sh",                 // an empty label
 	} {
 		if got := certFor(t, src, name); got != src.static {
 			t.Errorf("SNI %q was minted for, want the startup leaf", name)
@@ -114,6 +146,61 @@ func TestCertSource_refusesNamesOutsideItsBases(t *testing.T) {
 	}
 	if len(src.dynamic) != 0 {
 		t.Errorf("foreign names minted %d leaves, want 0", len(src.dynamic))
+	}
+}
+
+// An S3 bucket may be 63 characters with dots inside, so a virtual-hosted
+// bucket can be far deeper than any invoke URL. Those are real, addressable
+// names and must be minted for, not filtered out as implausible.
+func TestCertSource_mintsForADeeplyDottedBucket(t *testing.T) {
+	// Given: a 32-label bucket — the most a 63-character name can carry
+	labels := make([]string, 32)
+	for i := range labels {
+		labels[i] = string(rune('a' + i%26))
+	}
+	bucket := strings.Join(labels, ".")
+	name := bucket + ".s3.localhost.overcast.sh"
+
+	// When: it is addressed over TLS
+	src, pool := newTestCertSource(t)
+	cert := certFor(t, src, name)
+
+	// Then: the leaf served covers it
+	if _, err := cert.Leaf.Verify(x509.VerifyOptions{
+		Roots:     pool,
+		DNSName:   name,
+		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}); err != nil {
+		t.Errorf("a %d-label bucket was not minted for: %v", len(labels), err)
+	}
+}
+
+// A refused name reaches the client as a bare certificate name mismatch, so
+// the daemon has to say why on its own side. A name below one of our domains
+// that cannot be signed is a WARN — something Overcast advertises has become
+// unreachable; anything else is ordinary traffic and stays at DEBUG.
+func TestCertSource_explainsARefusal(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		sni   string
+		level zapcore.Level
+	}{
+		{"unsignable name below one of our domains", "*.evil.localhost.overcast.sh", zapcore.WarnLevel},
+		{"a name that is not ours at all", "login.example.com", zapcore.DebugLevel},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src, _, logs := newLoggingCertSource(t)
+
+			certFor(t, src, tc.sni)
+
+			entries := logs.FilterField(zap.String("server_name", tc.sni)).All()
+			if len(entries) != 1 {
+				t.Fatalf("logged %d lines naming %s, want 1", len(entries), tc.sni)
+			}
+			if got := entries[0].Level; got != tc.level {
+				t.Errorf("refusal logged at %s, want %s", got, tc.level)
+			}
+		})
 	}
 }
 
@@ -145,16 +232,113 @@ func TestCertSource_boundsTheDynamicCache(t *testing.T) {
 
 	// When: each one is served
 	for i := range maxDynamicLeaves * 2 {
-		certFor(t, src, fmt.Sprintf("id.execute-api.us-east-%d.localhost.overcast.sh", i))
+		certFor(t, src, familyName(i))
 	}
 
 	// Then: the map stayed bounded — an unbounded name space cannot grow it
 	if len(src.dynamic) > maxDynamicLeaves {
 		t.Errorf("cache holds %d leaves, want at most %d", len(src.dynamic), maxDynamicLeaves)
 	}
-	// And: a name evicted along the way is still served, by minting again
-	if cert := certFor(t, src, "id.execute-api.us-east-0.localhost.overcast.sh"); cert == nil {
-		t.Error("an evicted family was not re-minted")
+	// And: a family evicted along the way is served again by minting again,
+	// with a leaf that really covers the name asked for
+	evicted := familyName(0)
+	if err := certFor(t, src, evicted).Leaf.VerifyHostname(evicted); err != nil {
+		t.Errorf("an evicted family was not re-minted for %s: %v", evicted, err)
+	}
+}
+
+func TestCertSource_evictsLeastRecentlyUsed(t *testing.T) {
+	// Given: a full cache whose oldest entry has since been used again
+	src, _ := newTestCertSource(t)
+	for i := range maxDynamicLeaves {
+		certFor(t, src, familyName(i))
+	}
+	kept := certFor(t, src, familyName(0)) // now the most recently used
+
+	// When: a new family needs a slot
+	certFor(t, src, familyName(maxDynamicLeaves))
+
+	// Then: the entry evicted is the least recently used, not the oldest by
+	// insertion — the one re-used a moment ago survives, and unchanged
+	if entry, ok := src.dynamic[wildcardOf(familyName(0))]; !ok || entry.cert != kept {
+		t.Error("the most recently used family was evicted")
+	}
+	if _, ok := src.dynamic[wildcardOf(familyName(1))]; ok {
+		t.Error("the least recently used family survived eviction")
+	}
+}
+
+// A leaf is replaced in place when it nears expiry. Replacing a key needs no
+// room, so the eviction that makes room for a NEW key must not run: it would
+// drop an unrelated, still-valid family for nothing.
+func TestCertSource_remintingAFullCacheEvictsNothing(t *testing.T) {
+	// Given: a full cache
+	src, _ := newTestCertSource(t)
+	for i := range maxDynamicLeaves {
+		certFor(t, src, familyName(i))
+	}
+	// The family re-minted below is the most recently used, so the entry an
+	// eviction would pick is a different, still-valid one.
+	survivor := wildcardOf(familyName(0))
+
+	// When: that family is re-minted because it is expiring
+	restore := now
+	now = func() time.Time { return restore().Add(leafValidity - leafRenewalMargin/2) }
+	t.Cleanup(func() { now = restore })
+	certFor(t, src, familyName(maxDynamicLeaves-1))
+
+	// Then: the cache is still full — nothing was displaced to make room for a
+	// key that was already there
+	if len(src.dynamic) != maxDynamicLeaves {
+		t.Errorf("cache holds %d leaves after a re-mint, want %d", len(src.dynamic), maxDynamicLeaves)
+	}
+	if _, ok := src.dynamic[survivor]; !ok {
+		t.Errorf("re-minting one family evicted an unrelated one (%s)", survivor)
+	}
+}
+
+// Minting happens outside the cache lock, so concurrent handshakes for the
+// same new family can both sign. What must hold is that they converge: one
+// cache entry per family, and every caller served a leaf that covers the name
+// it asked for.
+func TestCertSource_concurrentHandshakes(t *testing.T) {
+	// Given: several names spread over a few families
+	src, pool := newTestCertSource(t)
+	const families, callers = 4, 8
+
+	// When: they are all served at once
+	var wg sync.WaitGroup
+	errs := make(chan error, families*callers)
+	for f := range families {
+		for c := range callers {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				name := fmt.Sprintf("api%d.execute-api.us-east-%d.localhost.overcast.sh", c, f)
+				cert, err := src.GetCertificate(&tls.ClientHelloInfo{ServerName: name})
+				if err != nil {
+					errs <- err
+					return
+				}
+				if _, err := cert.Leaf.Verify(x509.VerifyOptions{
+					Roots:     pool,
+					DNSName:   name,
+					KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+				}); err != nil {
+					errs <- fmt.Errorf("%s: %w", name, err)
+				}
+			}()
+		}
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Error(err)
+	}
+
+	// Then: the cache settled on exactly one entry per family
+	if len(src.dynamic) != families {
+		t.Errorf("cache holds %d entries for %d families", len(src.dynamic), families)
 	}
 }
 

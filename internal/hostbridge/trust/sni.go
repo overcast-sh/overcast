@@ -40,6 +40,8 @@ import (
 	"math"
 	"strings"
 	"sync"
+
+	"go.uber.org/zap"
 )
 
 const (
@@ -50,11 +52,13 @@ const (
 	// without limit; eviction is least-recently-used, and an evicted family
 	// costs one mint to come back.
 	maxDynamicLeaves = 64
-	// maxNameLabels rejects absurdly deep SNI values before they reach the
-	// signer. The deepest shape Overcast itself advertises is
-	// {id}.{label}.{region}.{base} with a four-label base, and a dotted S3
-	// bucket adds a couple more.
-	maxNameLabels = 12
+	// maxNameLabels rejects a pathological SNI value before it reaches the
+	// signer. It sits well above anything addressable: an S3 bucket may be 63
+	// characters and dots are legal inside one, so a bucket of single-character
+	// labels is 32 labels on its own, and virtual-hosted addressing adds "s3",
+	// a region and a base domain on top of that. The real bounds are the
+	// 253-character total and the 63-character label below.
+	maxNameLabels = 48
 )
 
 // CertSource chooses the certificate for each TLS handshake: the leaf minted
@@ -74,6 +78,9 @@ type CertSource struct {
 	// the wildcard DNS domains, the split-horizon hosts and OVERCAST_HOSTNAME.
 	// A name outside all of them is not ours to certify.
 	bases []string
+	// logger explains a refusal, which the client otherwise sees only as a
+	// bare certificate name mismatch. Optional; nil logs nothing.
+	logger *zap.Logger
 
 	mu      sync.Mutex
 	dynamic map[string]*cachedLeaf
@@ -94,7 +101,13 @@ type cachedLeaf struct {
 // and returns a source that additionally mints leaves on demand for names
 // under bases. The returned pool contains the CA, for clients that need to
 // dial the resulting server.
-func NewCertSource(dir string, sans, bases []string) (*CertSource, *x509.CertPool, error) {
+//
+// bases must already be lower-cased, non-empty domain names, which is what
+// config.TLSWildcardBases produces: they are matched verbatim on the handshake
+// path, and normalising them again here would be a second copy of rules free
+// to drift from the ones that build the SAN list beside them. logger may be
+// nil.
+func NewCertSource(dir string, sans, bases []string, logger *zap.Logger) (*CertSource, *x509.CertPool, error) {
 	ca, err := LoadOrCreateCA(dir)
 	if err != nil {
 		return nil, nil, err
@@ -106,7 +119,8 @@ func NewCertSource(dir string, sans, bases []string) (*CertSource, *x509.CertPoo
 	s := &CertSource{
 		ca:      ca,
 		static:  static,
-		bases:   normaliseBases(bases),
+		bases:   bases,
+		logger:  logger,
 		dynamic: make(map[string]*cachedLeaf),
 	}
 	return s, ca.pool(), nil
@@ -130,7 +144,10 @@ func (s *CertSource) TLSConfig() *tls.Config {
 // GetCertificate answers one ClientHello. See the file comment for the three
 // outcomes.
 func (s *CertSource) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
-	name := strings.TrimSuffix(strings.ToLower(hello.ServerName), ".")
+	// crypto/tls rejects a ClientHello whose SNI carries a trailing dot before
+	// it ever reaches here, but it does not case-fold: the name arrives
+	// spelled however the client spelled it.
+	name := strings.ToLower(hello.ServerName)
 	if name == "" || s.static.Leaf.VerifyHostname(name) == nil {
 		// Asking the leaf itself is the same question the client will ask of
 		// it, so the two can never disagree about what "covered" means.
@@ -138,36 +155,94 @@ func (s *CertSource) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificat
 	}
 	wildcard, ok := wildcardParent(name, s.bases)
 	if !ok {
+		s.logRefusal(name)
 		return s.static, nil
 	}
 	return s.leafFor(wildcard)
 }
 
-// leafFor returns the cached leaf for a wildcard name, minting one when the
-// cache has none or the cached one is near expiry.
+// logRefusal records why a name was not minted for. On the client side the
+// only evidence is a certificate name mismatch, with nothing on this side
+// saying the daemon declined rather than failed.
 //
-// The mint happens under the lock. It costs about a millisecond and only the
-// first handshake of a family pays it; letting concurrent handshakes race to
-// mint would trade that for duplicate keys and a torn cache.
+// A name below one of the domains Overcast advertises that still cannot be
+// signed is a WARN: something the daemon hands out has become unreachable over
+// TLS, and the cause is here rather than in the caller. Any other name is
+// ordinary traffic asking for somebody else, and stays at DEBUG.
+func (s *CertSource) logRefusal(name string) {
+	if s.logger == nil {
+		return
+	}
+	if underBase(name, s.bases) {
+		s.logger.Warn("refusing to mint a TLS certificate for a name below a domain Overcast advertises: "+
+			"it is not a signable hostname (label length, character set or depth) — the client will see a "+
+			"certificate name mismatch",
+			zap.String("server_name", name))
+		return
+	}
+	s.logger.Debug("TLS handshake asked for a name this daemon does not serve; answering with the startup certificate",
+		zap.String("server_name", name))
+}
+
+// leafFor returns the leaf for a wildcard name, minting one when the cache
+// has none or the cached one is near expiry.
+//
+// The mint deliberately happens OUTSIDE the lock. It is the one slow step here
+// — a key generation and a signature — and holding the lock across it would
+// stall every other handshake, including ones the cache could have answered
+// outright, behind the first request for an unrelated family. The cost is that
+// two handshakes for the same new family can both sign; storeLeaf settles that
+// on one entry, so the duplicate is wasted work rather than a wrong answer.
 func (s *CertSource) leafFor(wildcard string) (*tls.Certificate, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.uses++
-	if entry, ok := s.dynamic[wildcard]; ok && !expiringSoon(entry.cert.Leaf) {
-		entry.lastUsed = s.uses
-		return entry.cert, nil
+	if cert, ok := s.lookupLeaf(wildcard); ok {
+		return cert, nil
 	}
 	cert, err := s.ca.issueTLSCertificate([]string{wildcard})
 	if err != nil {
 		return nil, err
 	}
+	return s.storeLeaf(wildcard, cert), nil
+}
+
+// lookupLeaf returns a cached leaf that is still fit to serve, marking it most
+// recently used.
+func (s *CertSource) lookupLeaf(wildcard string) (*tls.Certificate, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	entry, ok := s.dynamic[wildcard]
+	if !ok || expiringSoon(entry.cert.Leaf) {
+		return nil, false
+	}
+	s.uses++
+	entry.lastUsed = s.uses
+	return entry.cert, true
+}
+
+// storeLeaf stores a freshly-minted leaf and returns the one to serve — which
+// is another goroutine's if it got here first, so concurrent handshakes for a
+// family converge on a single cached leaf.
+func (s *CertSource) storeLeaf(wildcard string, cert *tls.Certificate) *tls.Certificate {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.uses++
+	if entry, ok := s.dynamic[wildcard]; ok {
+		if !expiringSoon(entry.cert.Leaf) {
+			return entry.cert // somebody else minted this family already
+		}
+		// Replacing an expiring leaf in place. Deliberately no eviction: the
+		// key is already present, so making room would drop an unrelated and
+		// perfectly good family for nothing.
+		entry.cert, entry.lastUsed = cert, s.uses
+		return cert
+	}
 	s.evictLocked()
 	s.dynamic[wildcard] = &cachedLeaf{cert: cert, lastUsed: s.uses}
-	return cert, nil
+	return cert
 }
 
 // evictLocked drops least-recently-used entries until there is room for one
-// more. Called with s.mu held.
+// more KEY. Called with s.mu held, and only from the insert path — replacing
+// an existing key needs no room.
 func (s *CertSource) evictLocked() {
 	for len(s.dynamic) >= maxDynamicLeaves {
 		oldestKey, oldest := "", uint64(math.MaxUint64)
@@ -191,17 +266,7 @@ func (s *CertSource) evictLocked() {
 // instead of one per ID. The wildcard is still single-label, so it certifies
 // no more than the name that asked for it and its siblings.
 func wildcardParent(name string, bases []string) (string, bool) {
-	if !plausibleDNSName(name) {
-		return "", false
-	}
-	under := false
-	for _, base := range bases {
-		if strings.HasSuffix(name, "."+base) {
-			under = true
-			break
-		}
-	}
-	if !under {
+	if !underBase(name, bases) || !plausibleDNSName(name) {
 		return "", false
 	}
 	_, parent, found := strings.Cut(name, ".")
@@ -209,6 +274,17 @@ func wildcardParent(name string, bases []string) (string, bool) {
 		return "", false
 	}
 	return "*." + parent, true
+}
+
+// underBase reports whether name sits at least one label below one of bases:
+// the test for whether this is a name Overcast routes to itself at all.
+func underBase(name string, bases []string) bool {
+	for _, base := range bases {
+		if strings.HasSuffix(name, "."+base) {
+			return true
+		}
+	}
+	return false
 }
 
 // plausibleDNSName reports whether name is a lower-cased hostname worth
@@ -238,22 +314,4 @@ func plausibleDNSName(name string) bool {
 		}
 	}
 	return true
-}
-
-// normaliseBases lower-cases, trims and de-duplicates the mintable base
-// domains, dropping anything empty so a stray separator in
-// OVERCAST_SPLIT_HORIZON_HOSTS cannot turn into a base that matches every
-// name ending in a dot.
-func normaliseBases(bases []string) []string {
-	out := make([]string, 0, len(bases))
-	seen := make(map[string]bool, len(bases))
-	for _, base := range bases {
-		base = strings.ToLower(strings.Trim(strings.TrimSpace(base), "."))
-		if base == "" || seen[base] {
-			continue
-		}
-		seen[base] = true
-		out = append(out, base)
-	}
-	return out
 }

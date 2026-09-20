@@ -1690,6 +1690,10 @@ func (c *Config) TLSAutoSANs() []string {
 // split-horizon host, and OVERCAST_HOSTNAME — each lower-cased, with IP
 // literals and blanks dropped.
 //
+// The list is normalised here rather than in trust.CertSource, which matches
+// against it verbatim: one set of rules, next to the SAN list built from the
+// same domains.
+//
 // This is the "names we own" test the handshake applies (see
 // trust.CertSource). A name at least one label below one of these is one
 // Overcast routes to itself — a host-routed invoke URL, a virtual-hosted

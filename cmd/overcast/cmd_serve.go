@@ -905,7 +905,7 @@ func serverTLSConfig(cfg *config.Config, logger *zap.Logger) (*tls.Config, []byt
 	switch {
 	case cfg.TLSAuto():
 		caDir := cfg.CACertDir()
-		certs, _, err := trust.NewCertSource(caDir, cfg.TLSAutoSANs(), cfg.TLSWildcardBases())
+		certs, _, err := trust.NewCertSource(caDir, cfg.TLSAutoSANs(), cfg.TLSWildcardBases(), logger)
 		if err != nil {
 			return nil, nil, fmt.Errorf("mint TLS certificate: %w", err)
 		}
