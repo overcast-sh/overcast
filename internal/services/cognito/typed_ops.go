@@ -60,7 +60,7 @@ func (s *Service) typedOps() map[string]op.Operation {
 		"ConfirmForgotPassword": op.NewTyped[ConfirmForgotPasswordReq, struct{}]("ConfirmForgotPassword", s.ConfirmForgotPasswordTyped),
 		"ChangePassword":        op.NewTyped[ChangePasswordReq, struct{}]("ChangePassword", s.ChangePasswordTyped),
 		// MFA
-		"AssociateSoftwareToken":       op.NewTyped[AccessTokenReq, AssociateSoftwareTokenResp]("AssociateSoftwareToken", s.AssociateSoftwareTokenTyped),
+		"AssociateSoftwareToken":       op.NewTyped[AssociateSoftwareTokenReq, AssociateSoftwareTokenResp]("AssociateSoftwareToken", s.AssociateSoftwareTokenTyped),
 		"VerifySoftwareToken":          op.NewTyped[VerifySoftwareTokenReq, VerifySoftwareTokenResp]("VerifySoftwareToken", s.VerifySoftwareTokenTyped),
 		"StartWebAuthnRegistration":    op.NewTyped[AccessTokenReq, StartWebAuthnRegistrationResp]("StartWebAuthnRegistration", s.StartWebAuthnRegistrationTyped),
 		"CompleteWebAuthnRegistration": op.NewTyped[CompleteWebAuthnRegistrationReq, struct{}]("CompleteWebAuthnRegistration", s.CompleteWebAuthnRegistrationTyped),

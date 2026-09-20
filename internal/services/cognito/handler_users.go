@@ -228,7 +228,8 @@ func (s *Service) adminGetUser(w http.ResponseWriter, r *http.Request) {
 	if !serviceutil.RequireString(w, r, req.Username, "Username") {
 		return
 	}
-	if _, ok := s.requirePool(r.Context(), w, r, req.UserPoolID); !ok {
+	pool, ok := s.requirePool(r.Context(), w, r, req.UserPoolID)
+	if !ok {
 		return
 	}
 	u, ok := s.requireUser(r.Context(), w, r, req.UserPoolID, req.Username)
@@ -243,6 +244,8 @@ func (s *Service) adminGetUser(w http.ResponseWriter, r *http.Request) {
 		"UserLastModifiedDate": uw.UserLastModifiedDate,
 		"Enabled":              uw.Enabled,
 		"UserStatus":           uw.UserStatus,
+		"PreferredMfaSetting":  preferredMfaSetting(pool, u),
+		"UserMFASettingList":   userMfaFactors(pool, u),
 	})
 }
 

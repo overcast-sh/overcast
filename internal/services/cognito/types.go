@@ -54,6 +54,10 @@ type UserPool struct {
 	// pending until the user verifies the new value.
 	UserAttributeUpdateSettings *UserAttributeUpdateSettings `json:"UserAttributeUpdateSettings,omitempty"`
 
+	// AutoVerifiedAttributes lists the attributes the pool verifies for itself
+	// by sending the user a code. Valid values: "email", "phone_number".
+	AutoVerifiedAttributes []string `json:"AutoVerifiedAttributes,omitempty"`
+
 	// MFA and WebAuthn configuration configured through SetUserPoolMfaConfig.
 	// SetUserPoolMfaConfig replaces MfaConfiguration and all three factor
 	// configurations as a unit: a member the request omits is cleared here, not
@@ -401,10 +405,15 @@ type User struct {
 	// and copy user passwords for testing managed login flows.
 	PlaintextPassword string `json:"PlaintextPassword,omitempty"`
 
-	// TOTP / MFA fields
-	TOTPSecret   string `json:"TOTPSecret,omitempty"`
-	TOTPVerified bool   `json:"TOTPVerified,omitempty"`
-	MFAEnabled   bool   `json:"MFAEnabled,omitempty"`
+	// TOTP / MFA fields. MFAEnabled is the software-token (TOTP) preference and
+	// SMSMfaEnabled the SMS one, both set through SetUserMFAPreference;
+	// PreferredMfa names the factor to challenge with when several are active
+	// and carries a ChallengeNameType value, or "".
+	TOTPSecret    string `json:"TOTPSecret,omitempty"`
+	TOTPVerified  bool   `json:"TOTPVerified,omitempty"`
+	MFAEnabled    bool   `json:"MFAEnabled,omitempty"`
+	SMSMfaEnabled bool   `json:"SMSMfaEnabled,omitempty"`
+	PreferredMfa  string `json:"PreferredMfa,omitempty"`
 
 	// GlobalSignOutAt is set when GlobalSignOut is called; any token with
 	// iat before this time is considered revoked.
@@ -510,6 +519,7 @@ type userPoolWire struct {
 	AdminCreateUserConfig       *adminCreateUserConfigWire       `json:"AdminCreateUserConfig,omitempty"`
 	EmailConfiguration          *emailConfigurationWire          `json:"EmailConfiguration,omitempty"`
 	UserAttributeUpdateSettings *userAttributeUpdateSettingsWire `json:"UserAttributeUpdateSettings,omitempty"`
+	AutoVerifiedAttributes      []string                         `json:"AutoVerifiedAttributes,omitempty"`
 	DeviceConfiguration         *DeviceConfiguration             `json:"DeviceConfiguration,omitempty"`
 	AccountRecoverySetting      *AccountRecoverySetting          `json:"AccountRecoverySetting,omitempty"`
 	SmsConfiguration            *SmsConfiguration                `json:"SmsConfiguration,omitempty"`
@@ -649,6 +659,7 @@ func toUserPoolWire(p *UserPool) userPoolWire {
 	if s := p.UserAttributeUpdateSettings; s != nil {
 		w.UserAttributeUpdateSettings = &userAttributeUpdateSettingsWire{AttributesRequireVerificationBeforeUpdate: s.AttributesRequireVerificationBeforeUpdate}
 	}
+	w.AutoVerifiedAttributes = p.AutoVerifiedAttributes
 	if d := p.DeviceConfiguration; d != nil {
 		w.DeviceConfiguration = d
 	}

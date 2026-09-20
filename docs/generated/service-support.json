@@ -2575,7 +2575,7 @@
           "operation": "CreateUserPool",
           "category": "User Pool operations",
           "status": "✅ Supported",
-          "notes": "Returns Id and Arn; Id format {region}_{8-char-hex}; accepts SignInPolicy, email templates, UserAttributeUpdateSettings, DeviceConfiguration, AliasAttributes, AccountRecoverySetting, SmsConfiguration, SmsAuthenticationMessage, SmsVerificationMessage, EmailVerificationMessage, EmailVerificationSubject, and LambdaConfig; LambdaConfig's PreSignUp, PostConfirmation, PreTokenGeneration, PostAuthentication, and CustomMessage are invoked on the classic X-Amz-Target API (issue #1171); PreAuthentication, UserMigration, the CUSTOM_AUTH challenge triggers (#88/#94/#101), and the Smithy RPC v2 duplicate dispatch path are not; a LITE-tier UserPoolTier rejects a SignInPolicy with FeatureUnavailableInTierException, matching AWS's Essentials-tier gate on choice-based sign-in"
+          "notes": "Returns Id and Arn; Id format {region}_{8-char-hex}; accepts SignInPolicy, email templates, UserAttributeUpdateSettings, AutoVerifiedAttributes (email/phone_number, rejecting any other value with InvalidParameterException), DeviceConfiguration, AliasAttributes, AccountRecoverySetting, SmsConfiguration, SmsAuthenticationMessage, SmsVerificationMessage, EmailVerificationMessage, EmailVerificationSubject, and LambdaConfig; LambdaConfig's PreSignUp, PostConfirmation, PreTokenGeneration, PostAuthentication, and CustomMessage are invoked on the classic X-Amz-Target API (issue #1171); PreAuthentication, UserMigration, the CUSTOM_AUTH challenge triggers (#88/#94/#101), and the Smithy RPC v2 duplicate dispatch path are not; a LITE-tier UserPoolTier rejects a SignInPolicy with FeatureUnavailableInTierException, matching AWS's Essentials-tier gate on choice-based sign-in"
         },
         {
           "operation": "DescribeUserPool",
@@ -2593,7 +2593,7 @@
           "operation": "UpdateUserPool",
           "category": "User Pool operations",
           "status": "✅ Supported",
-          "notes": "Updates SignInPolicy, VerificationMessageTemplate, AdminCreateUserConfig, EmailConfiguration, UserAttributeUpdateSettings, DeviceConfiguration, AccountRecoverySetting, SmsConfiguration, SmsAuthenticationMessage, SmsVerificationMessage, EmailVerificationMessage, EmailVerificationSubject, and LambdaConfig; the CloudFormation UserPool handler treats an AliasAttributes/UsernameAttributes change as requiring replacement, matching real Cognito's UpdateUserPoolRequest (neither is a member there); rejects an invalid UserPoolTier value, and rejects a LITE-tier pool's SignInPolicy update with FeatureUnavailableInTierException"
+          "notes": "Updates SignInPolicy, VerificationMessageTemplate, AdminCreateUserConfig, EmailConfiguration, UserAttributeUpdateSettings, AutoVerifiedAttributes, DeviceConfiguration, AccountRecoverySetting, SmsConfiguration, SmsAuthenticationMessage, SmsVerificationMessage, EmailVerificationMessage, EmailVerificationSubject, and LambdaConfig; the CloudFormation UserPool handler treats an AliasAttributes/UsernameAttributes change as requiring replacement, matching real Cognito's UpdateUserPoolRequest (neither is a member there); rejects an invalid UserPoolTier value, and rejects a LITE-tier pool's SignInPolicy update with FeatureUnavailableInTierException"
         },
         {
           "operation": "ListUserPools",
@@ -2605,7 +2605,7 @@
           "operation": "SetUserPoolMfaConfig",
           "category": "User Pool operations",
           "status": "✅ Supported",
-          "notes": "Stores and echoes MfaConfiguration, SmsMfaConfiguration, SoftwareTokenMfaConfiguration, EmailMfaConfiguration and WebAuthnConfiguration; replaces the MFA configuration as a unit, so a factor the request omits is cleared and an omitted MfaConfiguration means OFF; rejects ON/OPTIONAL with no factor enabled and OFF with a factor configured, and validates the {####} message templates and the Essentials tier for email MFA; the stored factors are not enforced at sign-in — no SMS_MFA or email MFA challenge is issued and the templates are never used to deliver a code; passkey cryptographic validation is intentionally partial"
+          "notes": "Stores and echoes MfaConfiguration, SmsMfaConfiguration, SoftwareTokenMfaConfiguration, EmailMfaConfiguration and WebAuthnConfiguration; replaces the MFA configuration as a unit, so a factor the request omits is cleared and an omitted MfaConfiguration means OFF; rejects ON/OPTIONAL with no factor enabled and OFF with a factor configured, and validates the {####} message templates and the Essentials tier for email MFA; MfaConfiguration and SmsMfaConfiguration/SoftwareTokenMfaConfiguration are enforced at sign-in (SMS_MFA, SELECT_MFA_TYPE and MFA_SETUP challenges, with SmsAuthenticationMessage expanded for the delivered code); EmailMfaConfiguration stays configuration-only and issues no challenge; passkey cryptographic validation is intentionally partial"
         },
         {
           "operation": "GetUserPoolMfaConfig",
@@ -2725,7 +2725,7 @@
           "operation": "InitiateAuth",
           "category": "Auth / Token operations",
           "status": "✅ Supported",
-          "notes": "USER_PASSWORD_AUTH + USER_SRP_AUTH + REFRESH_TOKEN_AUTH + CUSTOM_AUTH; USER_AUTH with ConfirmSignUp Session, SELECT_CHALLENGE/PASSWORD/PASSWORD_SRP/WEB_AUTHN/EMAIL_OTP/SMS_OTP, or preferred PASSWORD/WEB_AUTHN/EMAIL_OTP/SMS_OTP; returns NEW_PASSWORD_REQUIRED, SOFTWARE_TOKEN_MFA, or DEVICE_SRP_AUTH; a completed authentication invokes PostAuthentication_Authentication then PreTokenGeneration (TokenGeneration_Authentication/_RefreshTokens/_NewPasswordChallenge/_AuthenticateDevice as appropriate), each able to fail the call (issue #1171); USER_SRP_AUTH/PASSWORD_SRP proofs are accepted once the SRP claim fields are present and are not cryptographically verified; WebAuthn assertion signature validation is intentionally partial"
+          "notes": "USER_PASSWORD_AUTH + USER_SRP_AUTH + REFRESH_TOKEN_AUTH + CUSTOM_AUTH; USER_AUTH with ConfirmSignUp Session, SELECT_CHALLENGE/PASSWORD/PASSWORD_SRP/WEB_AUTHN/EMAIL_OTP/SMS_OTP, or preferred PASSWORD/WEB_AUTHN/EMAIL_OTP/SMS_OTP; returns NEW_PASSWORD_REQUIRED, DEVICE_SRP_AUTH, or an MFA challenge — SMS_MFA (code stored on the user, masked CODE_DELIVERY_DESTINATION), SOFTWARE_TOKEN_MFA, SELECT_MFA_TYPE with MFAS_CAN_CHOOSE when both are active, or MFA_SETUP with MFAS_CAN_SETUP when MfaConfiguration is ON and the user has no factor; email MFA is never challenged; a completed authentication invokes PostAuthentication_Authentication then PreTokenGeneration (TokenGeneration_Authentication/_RefreshTokens/_NewPasswordChallenge/_AuthenticateDevice as appropriate), each able to fail the call (issue #1171); USER_SRP_AUTH/PASSWORD_SRP proofs are accepted once the SRP claim fields are present and are not cryptographically verified; WebAuthn assertion signature validation is intentionally partial"
         },
         {
           "operation": "AdminInitiateAuth",
@@ -2737,7 +2737,7 @@
           "operation": "RespondToAuthChallenge",
           "category": "Auth / Token operations",
           "status": "✅ Supported",
-          "notes": "SELECT_CHALLENGE/PASSWORD/PASSWORD_SRP/WEB_AUTHN/EMAIL_OTP/SMS_OTP, PASSWORD, PASSWORD_VERIFIER, CUSTOM_CHALLENGE, DEVICE_SRP_AUTH, DEVICE_PASSWORD_VERIFIER, WEB_AUTHN, EMAIL_OTP, SMS_OTP, NEW_PASSWORD_REQUIRED, and SOFTWARE_TOKEN_MFA challenges; a challenge completion that issues tokens invokes PostAuthentication_Authentication (skipped for NEW_PASSWORD_REQUIRED) then PreTokenGeneration, each able to fail the call (issue #1171); PASSWORD_VERIFIER/DEVICE_PASSWORD_VERIFIER accept the SRP claim fields without cryptographic proof verification, and WEB_AUTHN accepts the credential response without cryptographic assertion signature verification"
+          "notes": "SELECT_CHALLENGE/PASSWORD/PASSWORD_SRP/WEB_AUTHN/EMAIL_OTP/SMS_OTP, PASSWORD, PASSWORD_VERIFIER, CUSTOM_CHALLENGE, DEVICE_SRP_AUTH, DEVICE_PASSWORD_VERIFIER, WEB_AUTHN, EMAIL_OTP, SMS_OTP, NEW_PASSWORD_REQUIRED, SOFTWARE_TOKEN_MFA, SMS_MFA, SELECT_MFA_TYPE, and MFA_SETUP challenges; SMS_MFA takes SMS_MFA_CODE and answers a wrong code with CodeMismatchException, SELECT_MFA_TYPE takes ANSWER and rejects an inactive factor with MFAMethodNotFoundException, and MFA_SETUP completes once AssociateSoftwareToken/VerifySoftwareToken have verified a software token against the challenge Session; a challenge completion that issues tokens invokes PostAuthentication_Authentication (skipped for NEW_PASSWORD_REQUIRED) then PreTokenGeneration, each able to fail the call (issue #1171); PASSWORD_VERIFIER/DEVICE_PASSWORD_VERIFIER accept the SRP claim fields without cryptographic proof verification, and WEB_AUTHN accepts the credential response without cryptographic assertion signature verification"
         },
         {
           "operation": "AdminRespondToAuthChallenge",
@@ -2827,7 +2827,7 @@
           "operation": "UpdateUserAttributes",
           "category": "Auth / Token operations",
           "status": "✅ Supported",
-          "notes": "Self-service; validates AccessToken; merges attributes or creates pending email/phone updates with CodeDeliveryDetailsList"
+          "notes": "Self-service; validates AccessToken; merges attributes, creates pending email/phone updates where AttributesRequireVerificationBeforeUpdate gates them, or — for an attribute in the pool's AutoVerifiedAttributes that is not gated — applies the new value, clears email_verified/phone_number_verified and sends a code; either way the response carries CodeDeliveryDetailsList with the destination masked"
         },
         {
           "operation": "VerifyUserAttribute",
@@ -2887,13 +2887,13 @@
           "operation": "SetUserMFAPreference",
           "category": "Auth / Token operations",
           "status": "✅ Supported",
-          "notes": "Enables/disables TOTP MFA for the calling user"
+          "notes": "Enables/disables TOTP MFA (SoftwareTokenMfaSettings) and SMS MFA (SMSMfaSettings) for the calling user, records PreferredMfa, and reports both through GetUser/AdminGetUser as UserMFASettingList and PreferredMfaSetting; enabling SMS MFA for a user with no phone_number is rejected with InvalidParameterException; EmailMfaSettings is accepted by the wire shape and dropped, because no email MFA challenge is issued"
         },
         {
           "operation": "AdminSetUserMFAPreference",
           "category": "Auth / Token operations",
           "status": "✅ Supported",
-          "notes": "Same as above, admin version"
+          "notes": "Same as above, admin version, identified by UserPoolId and Username"
         },
         {
           "operation": "CreateGroup",

@@ -97,6 +97,7 @@ type CreateUserPoolReq struct {
 	AdminCreateUserConfig       *adminCreateUserConfigWire       `json:"AdminCreateUserConfig" cbor:"AdminCreateUserConfig"`
 	EmailConfiguration          *emailConfigurationWire          `json:"EmailConfiguration" cbor:"EmailConfiguration"`
 	UserAttributeUpdateSettings *userAttributeUpdateSettingsWire `json:"UserAttributeUpdateSettings" cbor:"UserAttributeUpdateSettings"`
+	AutoVerifiedAttributes      []string                         `json:"AutoVerifiedAttributes" cbor:"AutoVerifiedAttributes"`
 	DeviceConfiguration         *DeviceConfiguration             `json:"DeviceConfiguration" cbor:"DeviceConfiguration"`
 	UsernameAttributes          []string                         `json:"UsernameAttributes" cbor:"UsernameAttributes"`
 	AliasAttributes             []string                         `json:"AliasAttributes" cbor:"AliasAttributes"`
@@ -118,6 +119,7 @@ type UpdateUserPoolReq struct {
 	AdminCreateUserConfig       *adminCreateUserConfigWire       `json:"AdminCreateUserConfig" cbor:"AdminCreateUserConfig"`
 	EmailConfiguration          *emailConfigurationWire          `json:"EmailConfiguration" cbor:"EmailConfiguration"`
 	UserAttributeUpdateSettings *userAttributeUpdateSettingsWire `json:"UserAttributeUpdateSettings" cbor:"UserAttributeUpdateSettings"`
+	AutoVerifiedAttributes      []string                         `json:"AutoVerifiedAttributes" cbor:"AutoVerifiedAttributes"`
 	DeviceConfiguration         *DeviceConfiguration             `json:"DeviceConfiguration" cbor:"DeviceConfiguration"`
 	UsernameAttributes          []string                         `json:"UsernameAttributes" cbor:"UsernameAttributes"`
 	AliasAttributes             []string                         `json:"AliasAttributes" cbor:"AliasAttributes"`
@@ -274,8 +276,17 @@ type ChangePasswordReq struct {
 
 // ─── MFA request types ────────────────────────────────────────────────────────
 
+// AssociateSoftwareTokenReq carries either an AccessToken (a signed-in user
+// enrolling a factor) or the Session from an MFA_SETUP challenge (a user
+// enrolling one mid-sign-in).
+type AssociateSoftwareTokenReq struct {
+	AccessToken string `json:"AccessToken" cbor:"AccessToken"`
+	Session     string `json:"Session" cbor:"Session"`
+}
+
 type VerifySoftwareTokenReq struct {
 	AccessToken  string `json:"AccessToken" cbor:"AccessToken"`
+	Session      string `json:"Session" cbor:"Session"`
 	UserCode     string `json:"UserCode" cbor:"UserCode"`
 	FriendlyName string `json:"FriendlyDeviceName" cbor:"FriendlyDeviceName"`
 }
@@ -288,12 +299,14 @@ type MfaSettings struct {
 type SetUserMFAPreferenceReq struct {
 	AccessToken              string       `json:"AccessToken" cbor:"AccessToken"`
 	SoftwareTokenMfaSettings *MfaSettings `json:"SoftwareTokenMfaSettings" cbor:"SoftwareTokenMfaSettings"`
+	SMSMfaSettings           *MfaSettings `json:"SMSMfaSettings" cbor:"SMSMfaSettings"`
 }
 
 type AdminSetUserMFAPreferenceReq struct {
 	UserPoolID               string       `json:"UserPoolId" cbor:"UserPoolId"`
 	Username                 string       `json:"Username" cbor:"Username"`
 	SoftwareTokenMfaSettings *MfaSettings `json:"SoftwareTokenMfaSettings" cbor:"SoftwareTokenMfaSettings"`
+	SMSMfaSettings           *MfaSettings `json:"SMSMfaSettings" cbor:"SMSMfaSettings"`
 }
 
 // ─── group request types ──────────────────────────────────────────────────────
@@ -493,6 +506,8 @@ type AdminGetUserResp struct {
 	UserLastModifiedDate float64         `json:"UserLastModifiedDate" cbor:"UserLastModifiedDate"`
 	Enabled              bool            `json:"Enabled" cbor:"Enabled"`
 	UserStatus           string          `json:"UserStatus" cbor:"UserStatus"`
+	PreferredMfaSetting  string          `json:"PreferredMfaSetting,omitempty" cbor:"PreferredMfaSetting,omitempty"`
+	UserMFASettingList   []string        `json:"UserMFASettingList,omitempty" cbor:"UserMFASettingList,omitempty"`
 }
 
 type ListUsersResp struct {
@@ -501,8 +516,9 @@ type ListUsersResp struct {
 }
 
 type SignUpResp struct {
-	UserConfirmed bool   `json:"UserConfirmed" cbor:"UserConfirmed"`
-	UserSub       string `json:"UserSub" cbor:"UserSub"`
+	UserConfirmed       bool                 `json:"UserConfirmed" cbor:"UserConfirmed"`
+	CodeDeliveryDetails *codeDeliveryDetails `json:"CodeDeliveryDetails,omitempty" cbor:"CodeDeliveryDetails,omitempty"`
+	UserSub             string               `json:"UserSub" cbor:"UserSub"`
 }
 
 type ConfirmSignUpResp struct {
@@ -550,10 +566,12 @@ type codeDeliveryDetails struct {
 
 type AssociateSoftwareTokenResp struct {
 	SecretCode string `json:"SecretCode" cbor:"SecretCode"`
+	Session    string `json:"Session,omitempty" cbor:"Session,omitempty"`
 }
 
 type VerifySoftwareTokenResp struct {
-	Status string `json:"Status" cbor:"Status"`
+	Status  string `json:"Status" cbor:"Status"`
+	Session string `json:"Session,omitempty" cbor:"Session,omitempty"`
 }
 
 type CreateGroupResp struct {
@@ -575,8 +593,10 @@ type ListUsersInGroupResp struct {
 }
 
 type GetUserResp struct {
-	Username       string          `json:"Username" cbor:"Username"`
-	UserAttributes []UserAttribute `json:"UserAttributes" cbor:"UserAttributes"`
+	Username            string          `json:"Username" cbor:"Username"`
+	UserAttributes      []UserAttribute `json:"UserAttributes" cbor:"UserAttributes"`
+	PreferredMfaSetting string          `json:"PreferredMfaSetting,omitempty" cbor:"PreferredMfaSetting,omitempty"`
+	UserMFASettingList  []string        `json:"UserMFASettingList,omitempty" cbor:"UserMFASettingList,omitempty"`
 }
 
 // ─── typed helpers ────────────────────────────────────────────────────────────
@@ -828,16 +848,8 @@ func (s *Service) handlePasswordAuthTyped(ctx context.Context, client *UserPoolC
 	if resp, aerr := s.maybeStartDeviceAuthChallenge(ctx, pool, u, params); aerr != nil || resp != nil {
 		return resp, aerr
 	}
-	if u.MFAEnabled && u.TOTPVerified {
-		session, err := s.issueOpaqueToken(ctx, poolID, username, "mfa", 3*time.Minute)
-		if err != nil {
-			return nil, protocol.Wrap(protocol.ErrInternalError, err)
-		}
-		return &InitiateAuthResp{
-			ChallengeName:       "SOFTWARE_TOKEN_MFA",
-			Session:             session,
-			ChallengeParameters: map[string]string{},
-		}, nil
+	if mfaResp, aerr := s.startMfaChallenge(ctx, pool, u); aerr != nil || mfaResp != nil {
+		return mfaResp, aerr
 	}
 	issuer := s.issuerURLTyped(ctx, poolID)
 	result, aerr := s.issueTokens(ctx, u, client, issuer, "", "", triggerSourceTokenGenAuthentication)
@@ -1277,6 +1289,14 @@ func (s *Service) completeSRPVerifierChallengeTyped(ctx context.Context, client 
 		}
 		return &RespondToAuthChallengeResp{ChallengeName: "CUSTOM_CHALLENGE", ChallengeParameters: map[string]string{"USERNAME": u.Username}, Session: customSession}, nil
 	}
+	pool, aerr := s.requirePoolTyped(ctx, client.UserPoolID)
+	if aerr != nil {
+		return nil, aerr
+	}
+	if mfaResp, aerr := s.startMfaChallenge(ctx, pool, u); aerr != nil || mfaResp != nil {
+		_ = s.removeToken(ctx, session)
+		return asRespondResp(mfaResp), aerr
+	}
 	issuer := s.issuerURLTyped(ctx, client.UserPoolID)
 	result, aerr := s.issueTokens(ctx, u, client, issuer, "", "", triggerSourceTokenGenAuthentication)
 	if aerr != nil {
@@ -1553,6 +1573,9 @@ func (s *Service) CreateUserPoolTyped(ctx context.Context, req *CreateUserPoolRe
 	if aerr := applyUserAttributeUpdateSettings(pool, req.UserAttributeUpdateSettings); aerr != nil {
 		return nil, aerr
 	}
+	if aerr := applyAutoVerifiedAttributes(pool, req.AutoVerifiedAttributes); aerr != nil {
+		return nil, aerr
+	}
 	if req.DeviceConfiguration != nil {
 		pool.DeviceConfiguration = req.DeviceConfiguration
 	}
@@ -1713,6 +1736,9 @@ func (s *Service) UpdateUserPoolTyped(ctx context.Context, req *UpdateUserPoolRe
 		}
 	}
 	if aerr := applyUserAttributeUpdateSettings(pool, req.UserAttributeUpdateSettings); aerr != nil {
+		return nil, aerr
+	}
+	if aerr := applyAutoVerifiedAttributes(pool, req.AutoVerifiedAttributes); aerr != nil {
 		return nil, aerr
 	}
 	if req.DeviceConfiguration != nil {
@@ -2109,7 +2135,8 @@ func (s *Service) AdminDeleteUserTyped(ctx context.Context, req *PoolAndUserReq)
 }
 
 func (s *Service) AdminGetUserTyped(ctx context.Context, req *PoolAndUserReq) (*AdminGetUserResp, *protocol.AWSError) {
-	if _, aerr := s.requirePoolTyped(ctx, req.UserPoolID); aerr != nil {
+	pool, aerr := s.requirePoolTyped(ctx, req.UserPoolID)
+	if aerr != nil {
 		return nil, aerr
 	}
 	u, aerr := s.requireUserTyped(ctx, req.UserPoolID, req.Username)
@@ -2124,6 +2151,8 @@ func (s *Service) AdminGetUserTyped(ctx context.Context, req *PoolAndUserReq) (*
 		UserLastModifiedDate: uw.UserLastModifiedDate,
 		Enabled:              uw.Enabled,
 		UserStatus:           uw.UserStatus,
+		PreferredMfaSetting:  preferredMfaSetting(pool, u),
+		UserMFASettingList:   userMfaFactors(pool, u),
 	}, nil
 }
 
@@ -2369,6 +2398,12 @@ func (s *Service) AdminRespondToAuthChallengeTyped(ctx context.Context, req *Adm
 		return s.handleNewPasswordChallengeTyped(ctx, adminClient, req.Session, req.ChallengeResponses)
 	case "SOFTWARE_TOKEN_MFA":
 		return s.handleMFAChallengeTyped(ctx, adminClient, req.Session, req.ChallengeResponses)
+	case "SMS_MFA":
+		return s.completeSmsMfaChallengeTyped(ctx, adminClient, req.Session, req.ChallengeResponses)
+	case "SELECT_MFA_TYPE":
+		return s.handleSelectMfaTypeChallengeTyped(ctx, adminClient, req.Session, req.ChallengeResponses)
+	case "MFA_SETUP":
+		return s.completeMfaSetupChallengeTyped(ctx, adminClient, req.Session, req.ChallengeResponses)
 	default:
 		return nil, &protocol.AWSError{
 			Code:       "InvalidParameterException",
@@ -2453,7 +2488,7 @@ func (s *Service) SignUpTyped(ctx context.Context, req *SignUpReq) (*SignUpResp,
 	log.Info("user signed up",
 		zap.String("poolId", c.UserPoolID), zap.String("username", req.Username))
 	s.publishTyped(ctx, events.CognitoUserCreated, events.ResourcePayload{Name: req.Username})
-	return &SignUpResp{UserConfirmed: false, UserSub: u.Sub}, nil
+	return &SignUpResp{UserConfirmed: false, CodeDeliveryDetails: signUpCodeDeliveryDetails(pool, u), UserSub: u.Sub}, nil
 }
 
 func (s *Service) ConfirmSignUpTyped(ctx context.Context, req *ConfirmSignUpReq) (*ConfirmSignUpResp, *protocol.AWSError) {
@@ -2621,6 +2656,12 @@ func (s *Service) RespondToAuthChallengeTyped(ctx context.Context, req *RespondT
 		return s.handleNewPasswordChallengeTyped(ctx, c, req.Session, req.ChallengeResponses)
 	case "SOFTWARE_TOKEN_MFA":
 		return s.handleMFAChallengeTyped(ctx, c, req.Session, req.ChallengeResponses)
+	case "SMS_MFA":
+		return s.completeSmsMfaChallengeTyped(ctx, c, req.Session, req.ChallengeResponses)
+	case "SELECT_MFA_TYPE":
+		return s.handleSelectMfaTypeChallengeTyped(ctx, c, req.Session, req.ChallengeResponses)
+	case "MFA_SETUP":
+		return s.completeMfaSetupChallengeTyped(ctx, c, req.Session, req.ChallengeResponses)
 	default:
 		return nil, &protocol.AWSError{
 			Code:       "InvalidParameterException",
@@ -3007,26 +3048,10 @@ func (s *Service) ForgotPasswordTyped(ctx context.Context, req *ClientUserSecret
 			s.sendPasswordResetSMS(pool, phone, u.Username, code, nil)
 		}
 	}
-	emailAddr := u.email()
-	maskedEmail := ""
-	if emailAddr != "" {
-		at := -1
-		for i, ch := range emailAddr {
-			if ch == '@' {
-				at = i
-				break
-			}
-		}
-		if at > 1 {
-			maskedEmail = emailAddr[:1] + "***" + emailAddr[at:]
-		} else {
-			maskedEmail = "***" + emailAddr[at:]
-		}
-	}
 	return &ForgotPasswordResp{
 		CodeDeliveryDetails: codeDeliveryDetails{
 			DeliveryMedium: "EMAIL",
-			Destination:    maskedEmail,
+			Destination:    maskEmailAddress(u.email()),
 			AttributeName:  "email",
 		},
 	}, nil
@@ -3113,13 +3138,9 @@ func (s *Service) ChangePasswordTyped(ctx context.Context, req *ChangePasswordRe
 
 // ─── MFA handlers ─────────────────────────────────────────────────────────────
 
-func (s *Service) AssociateSoftwareTokenTyped(ctx context.Context, req *AccessTokenReq) (*AssociateSoftwareTokenResp, *protocol.AWSError) {
+func (s *Service) AssociateSoftwareTokenTyped(ctx context.Context, req *AssociateSoftwareTokenReq) (*AssociateSoftwareTokenResp, *protocol.AWSError) {
 	log := s.log.WithRecorder(ctx)
-	t, aerr := s.validateAccessTokenTyped(ctx, req.AccessToken)
-	if aerr != nil {
-		return nil, aerr
-	}
-	u, aerr := s.requireUserTyped(ctx, t.UserPoolID, t.Username)
+	u, session, aerr := s.softwareTokenEnrolment(ctx, req.AccessToken, req.Session)
 	if aerr != nil {
 		return nil, aerr
 	}
@@ -3130,18 +3151,14 @@ func (s *Service) AssociateSoftwareTokenTyped(ctx context.Context, req *AccessTo
 		return nil, protocol.Wrap(protocol.ErrInternalError, err)
 	}
 	log.Info("TOTP secret generated",
-		zap.String("poolId", t.UserPoolID), zap.String("username", t.Username))
-	s.publishTyped(ctx, events.CognitoUserUpdated, events.ResourcePayload{Name: t.Username})
-	return &AssociateSoftwareTokenResp{SecretCode: secret}, nil
+		zap.String("poolId", u.UserPoolID), zap.String("username", u.Username))
+	s.publishTyped(ctx, events.CognitoUserUpdated, events.ResourcePayload{Name: u.Username})
+	return &AssociateSoftwareTokenResp{SecretCode: secret, Session: session}, nil
 }
 
 func (s *Service) VerifySoftwareTokenTyped(ctx context.Context, req *VerifySoftwareTokenReq) (*VerifySoftwareTokenResp, *protocol.AWSError) {
 	log := s.log.WithRecorder(ctx)
-	t, aerr := s.validateAccessTokenTyped(ctx, req.AccessToken)
-	if aerr != nil {
-		return nil, aerr
-	}
-	u, aerr := s.requireUserTyped(ctx, t.UserPoolID, t.Username)
+	u, session, aerr := s.softwareTokenEnrolment(ctx, req.AccessToken, req.Session)
 	if aerr != nil {
 		return nil, aerr
 	}
@@ -3164,9 +3181,9 @@ func (s *Service) VerifySoftwareTokenTyped(ctx context.Context, req *VerifySoftw
 		return nil, protocol.Wrap(protocol.ErrInternalError, err)
 	}
 	log.Info("TOTP verified",
-		zap.String("poolId", t.UserPoolID), zap.String("username", t.Username))
-	s.publishTyped(ctx, events.CognitoUserUpdated, events.ResourcePayload{Name: t.Username})
-	return &VerifySoftwareTokenResp{Status: "SUCCESS"}, nil
+		zap.String("poolId", u.UserPoolID), zap.String("username", u.Username))
+	s.publishTyped(ctx, events.CognitoUserUpdated, events.ResourcePayload{Name: u.Username})
+	return &VerifySoftwareTokenResp{Status: "SUCCESS", Session: session}, nil
 }
 
 func (s *Service) StartWebAuthnRegistrationTyped(ctx context.Context, req *AccessTokenReq) (*StartWebAuthnRegistrationResp, *protocol.AWSError) {
@@ -3243,15 +3260,8 @@ func (s *Service) SetUserMFAPreferenceTyped(ctx context.Context, req *SetUserMFA
 	if aerr != nil {
 		return nil, aerr
 	}
-	if req.SoftwareTokenMfaSettings != nil {
-		if req.SoftwareTokenMfaSettings.Enabled && !u.TOTPVerified {
-			return nil, &protocol.AWSError{
-				Code:       "InvalidParameterException",
-				Message:    "You must verify your software token before enabling MFA.",
-				HTTPStatus: 400,
-			}
-		}
-		u.MFAEnabled = req.SoftwareTokenMfaSettings.Enabled
+	if aerr := applyMfaPreferences(u, req.SMSMfaSettings, req.SoftwareTokenMfaSettings); aerr != nil {
+		return nil, aerr
 	}
 	if err := s.saveUser(ctx, u); err != nil {
 		return nil, protocol.Wrap(protocol.ErrInternalError, err)
@@ -3268,15 +3278,8 @@ func (s *Service) AdminSetUserMFAPreferenceTyped(ctx context.Context, req *Admin
 	if aerr != nil {
 		return nil, aerr
 	}
-	if req.SoftwareTokenMfaSettings != nil {
-		if req.SoftwareTokenMfaSettings.Enabled && !u.TOTPVerified {
-			return nil, &protocol.AWSError{
-				Code:       "InvalidParameterException",
-				Message:    "You must verify your software token before enabling MFA.",
-				HTTPStatus: 400,
-			}
-		}
-		u.MFAEnabled = req.SoftwareTokenMfaSettings.Enabled
+	if aerr := applyMfaPreferences(u, req.SMSMfaSettings, req.SoftwareTokenMfaSettings); aerr != nil {
+		return nil, aerr
 	}
 	if err := s.saveUser(ctx, u); err != nil {
 		return nil, protocol.Wrap(protocol.ErrInternalError, err)
@@ -3464,10 +3467,16 @@ func (s *Service) GetUserTyped(ctx context.Context, req *AccessTokenReq) (*GetUs
 	if aerr != nil {
 		return nil, aerr
 	}
+	pool, aerr := s.requirePoolTyped(ctx, t.UserPoolID)
+	if aerr != nil {
+		return nil, aerr
+	}
 	uw := toUserWire(u)
 	return &GetUserResp{
-		Username:       uw.Username,
-		UserAttributes: uw.Attributes,
+		Username:            uw.Username,
+		UserAttributes:      uw.Attributes,
+		PreferredMfaSetting: preferredMfaSetting(pool, u),
+		UserMFASettingList:  userMfaFactors(pool, u),
 	}, nil
 }
 

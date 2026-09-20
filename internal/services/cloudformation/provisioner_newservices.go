@@ -1066,10 +1066,10 @@ func (h *cognitoUserPoolHandler) Create(ctx context.Context, router http.Handler
 	if v, ok := props["AliasAttributes"]; ok {
 		body["AliasAttributes"] = v
 	}
-	// AutoVerifiedAttributes and Schema are threaded onto the wire for
-	// forward-compatibility, but the Cognito service does not yet store them
-	// (see issue #536 disposition notes in capabilities_dev.go); they still
-	// round-trip as dropped today.
+	// AutoVerifiedAttributes is stored and enforced by the Cognito service as
+	// of issue #84. Schema is still threaded onto the wire for
+	// forward-compatibility only (see issue #536 disposition notes in
+	// capabilities_dev.go) and round-trips as dropped.
 	if v, ok := props["AutoVerifiedAttributes"]; ok {
 		body["AutoVerifiedAttributes"] = v
 	}

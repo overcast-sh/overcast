@@ -191,7 +191,29 @@ const (
 	defaultSMSVerificationBody = "Your confirmation code is {####}"
 	defaultSMSInviteBody       = "Your username is {username} and temporary password is {####}."
 	defaultSMSResetBody        = "Your password reset code is {####}."
+	defaultSMSMfaBody          = "Your authentication code is {####}."
 )
+
+// sendMfaSMS delivers an SMS_MFA challenge code. The body comes from the MFA
+// configuration's SmsAuthenticationMessage where SetUserPoolMfaConfig set one,
+// then from the pool's own SmsAuthenticationMessage, then from the default —
+// the same precedence AWS documents for the SMS MFA message.
+func (s *Service) sendMfaSMS(pool *UserPool, to, username, code string) {
+	if s.smsSender == nil {
+		return
+	}
+	body := defaultSMSMfaBody
+	if pool != nil && pool.SmsAuthenticationMessage != "" {
+		body = pool.SmsAuthenticationMessage
+	}
+	if pool != nil && pool.SmsMfaConfiguration != nil && pool.SmsMfaConfiguration.SmsAuthenticationMessage != "" {
+		body = pool.SmsMfaConfiguration.SmsAuthenticationMessage
+	}
+	body = expandTemplate(body, username, code)
+	if err := s.smsSender.SendSMS("cognito", "", to, body, "", ""); err != nil {
+		s.log.Warn("failed to capture MFA SMS", zap.String("to", to), zap.Error(err))
+	}
+}
 
 // sendVerificationSMS sends a sign-up verification code to the user's phone.
 // Uses the pool's VerificationMessageTemplate.SmsMessage when set. See
