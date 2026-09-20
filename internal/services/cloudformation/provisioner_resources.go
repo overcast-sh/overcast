@@ -36,7 +36,33 @@ func policyDocumentJSON(v any) []byte {
 	return b
 }
 
+// iamValidateInlinePolicyPrincipals enforces AWS::IAM::Policy's one documented
+// cross-property rule: "The Groups, Roles, and Users properties are optional.
+// However, you must specify at least one of these properties."
+// https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-iam-policy.html
+//
+// Without it the resource reports CREATE_COMPLETE having written its document
+// to nobody, so a template missing its `Roles:` line surfaces much later as a
+// permission that silently does not exist.
+func iamValidateInlinePolicyPrincipals(props map[string]any) error {
+	total := 0
+	for _, property := range []string{"Groups", "Roles", "Users"} {
+		entities, err := iamStringSet(props, property)
+		if err != nil {
+			return err
+		}
+		total += len(entities)
+	}
+	if total == 0 {
+		return fmt.Errorf("Policy: at least one of Groups, Roles or Users is required")
+	}
+	return nil
+}
+
 func (h *iamPolicyHandler) Create(ctx context.Context, router http.Handler, cfg *config.Config, props map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
+	if err := iamValidateInlinePolicyPrincipals(props); err != nil {
+		return "", nil, err
+	}
 	policyName, _ := props["PolicyName"].(string)
 	if policyName == "" {
 		policyName = rCtx.generatedNameWithin(maxNameLenIAMPolicy)
@@ -142,6 +168,9 @@ func (h *iamPolicyHandler) DeleteWithProperties(ctx context.Context, router http
 }
 
 func (h *iamPolicyHandler) Update(ctx context.Context, router http.Handler, _ *config.Config, physicalID string, props map[string]any, _ map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
+	if err := iamValidateInlinePolicyPrincipals(props); err != nil {
+		return "", nil, failUpdate(err)
+	}
 	policyName, _ := props["PolicyName"].(string)
 
 	oldPolicyName := physicalID
@@ -384,6 +413,11 @@ func iamValidateManagedPolicyPrincipals(props map[string]any) error {
 type iamInstanceProfileHandler struct{}
 
 func (h *iamInstanceProfileHandler) Create(ctx context.Context, router http.Handler, cfg *config.Config, props map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
+	// A malformed Roles list fails before anything is created, so a bad
+	// template fails whole rather than half-applied.
+	if _, err := iamStringSet(props, "Roles"); err != nil {
+		return "", nil, err
+	}
 	profileName, _ := props["InstanceProfileName"].(string)
 	if profileName == "" {
 		profileName = rCtx.generatedNameWithin(maxNameLenIAMPolicy)
@@ -414,36 +448,44 @@ func (h *iamInstanceProfileHandler) Create(ctx context.Context, router http.Hand
 		arn = fmt.Sprintf("arn:aws:iam::%s:instance-profile%s%s", rCtx.AccountID, path, profileName)
 	}
 
-	// Add roles.
-	if roles, ok := props["Roles"].([]any); ok {
-		for _, r := range roles {
-			roleName, _ := r.(string)
-			if roleName == "" {
-				continue
-			}
-			p := map[string]string{
-				"Action":              "AddRoleToInstanceProfile",
-				"Version":             "2010-05-08",
-				"RoleName":            roleName,
-				"InstanceProfileName": profileName,
-			}
-			if _, err := internalQuery(ctx, router, rCtx.Region, p); err != nil {
-				return "", nil, fmt.Errorf("AddRoleToInstanceProfile: %w", err)
-			}
+	// Add the roles the template names. A failure here leaves no half-built
+	// profile behind, the same cleanup the role and group handlers do.
+	roles, err := iamInstanceProfileRoleMutations(profileName, props, nil)
+	if err != nil {
+		return "", nil, err
+	}
+	if err := newIAMTransaction(ctx, router, rCtx.Region).apply(roles); err != nil {
+		if cleanupErr := iamQuery(ctx, router, rCtx.Region, "DeleteInstanceProfile", map[string]string{"InstanceProfileName": profileName}); cleanupErr != nil {
+			return "", nil, fmt.Errorf("%w; cleanup newly-created instance profile: %v", err, cleanupErr)
 		}
+		return "", nil, err
 	}
 
 	attrs := map[string]string{
 		"Arn": arn,
 	}
-	return arn, attrs, nil
+	// "Ref returns the resource name ... Ref returns the name of the instance
+	// profile"; the ARN is GetAtt "Arn" and only that. Returning the ARN as the
+	// physical ID put one into every template that feeds this Ref to a property
+	// AWS documents as a name — AWS::EC2::Instance's IamInstanceProfile, a
+	// launch template's IamInstanceProfile.Name — which is how CDK's own
+	// ec2.Instance wires it.
+	// https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-iam-instanceprofile.html
+	return profileName, attrs, nil
+}
+
+// instanceProfileNameFromPhysicalID reads the profile name out of a stored
+// physical ID. Records written before the Create above returned the name carry
+// the ARN, whose last segment is the name.
+func instanceProfileNameFromPhysicalID(physicalID string) string {
+	if idx := strings.LastIndex(physicalID, "/"); idx >= 0 {
+		return physicalID[idx+1:]
+	}
+	return physicalID
 }
 
 func (h *iamInstanceProfileHandler) Delete(ctx context.Context, router http.Handler, cfg *config.Config, physicalID string, rCtx *resolveContext) error {
-	name := physicalID
-	if idx := strings.LastIndex(physicalID, "/"); idx >= 0 {
-		name = physicalID[idx+1:]
-	}
+	name := instanceProfileNameFromPhysicalID(physicalID)
 	params := map[string]string{
 		"Action":              "DeleteInstanceProfile",
 		"Version":             "2010-05-08",
@@ -454,10 +496,7 @@ func (h *iamInstanceProfileHandler) Delete(ctx context.Context, router http.Hand
 }
 
 func (h *iamInstanceProfileHandler) Update(ctx context.Context, router http.Handler, _ *config.Config, physicalID string, props map[string]any, oldProps map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
-	name := physicalID
-	if idx := strings.LastIndex(physicalID, "/"); idx >= 0 {
-		name = physicalID[idx+1:]
-	}
+	name := instanceProfileNameFromPhysicalID(physicalID)
 
 	if oldProps != nil {
 		if newProfileName, _ := props["InstanceProfileName"].(string); newProfileName != "" {
@@ -472,65 +511,88 @@ func (h *iamInstanceProfileHandler) Update(ctx context.Context, router http.Hand
 		}
 	}
 
-	newRoles, _ := props["Roles"].([]any)
-	var oldRoleList []string
-	if raw, ok := oldProps["Roles"].([]any); ok {
-		for _, r := range raw {
-			if s, _ := r.(string); s != "" {
-				oldRoleList = append(oldRoleList, s)
-			}
-		}
+	roles, err := iamInstanceProfileRoleMutations(name, props, oldProps)
+	if err != nil {
+		return "", nil, failUpdate(err)
 	}
-
-	oldSet := make(map[string]bool, len(oldRoleList))
-	for _, r := range oldRoleList {
-		oldSet[r] = true
-	}
-	newSet := make(map[string]bool)
-	for _, r := range newRoles {
-		if s, _ := r.(string); s != "" {
-			newSet[s] = true
-		}
-	}
-
-	for _, r := range oldRoleList {
-		if !newSet[r] {
-			p := map[string]string{
-				"Action":              "RemoveRoleFromInstanceProfile",
-				"Version":             "2010-05-08",
-				"RoleName":            r,
-				"InstanceProfileName": name,
-			}
-			if _, err := internalQuery(ctx, router, rCtx.Region, p); err != nil {
-				return "", nil, fmt.Errorf("RemoveRoleFromInstanceProfile: %w", err)
-			}
-		}
-	}
-
-	for _, r := range newRoles {
-		if s, _ := r.(string); s != "" && !oldSet[s] {
-			p := map[string]string{
-				"Action":              "AddRoleToInstanceProfile",
-				"Version":             "2010-05-08",
-				"RoleName":            s,
-				"InstanceProfileName": name,
-			}
-			if _, err := internalQuery(ctx, router, rCtx.Region, p); err != nil {
-				return "", nil, fmt.Errorf("AddRoleToInstanceProfile: %w", err)
-			}
-		}
-	}
-
 	tags, err := iamTagMutations("InstanceProfile", name, props, oldProps, rCtx.StackTags, rCtx.PreviousStackTags)
 	if err != nil {
 		return "", nil, failUpdate(err)
 	}
-	if err := newIAMTransaction(ctx, router, rCtx.Region).apply(tags); err != nil {
+	if err := newIAMTransaction(ctx, router, rCtx.Region).apply(append(roles, tags...)); err != nil {
 		return "", nil, classifyIAMTransactionFailure(err)
 	}
 
-	attrs := map[string]string{"Arn": physicalID}
-	return physicalID, attrs, nil
+	// The physical ID is the profile name, so GetAtt "Arn" has to be rebuilt
+	// rather than echoed. Path is create-only (a change forced a replacement
+	// above), so the template's current value is the one the profile was made
+	// with.
+	attrs := map[string]string{"Arn": iamPathedARN(rCtx.AccountID, "instance-profile", props, name)}
+	return name, attrs, nil
+}
+
+// iamPathedARN renders an IAM ARN for an entity whose Path is a create-only
+// property, so an update can restate it without another round trip. An absent
+// Path is AWS's "/" default.
+func iamPathedARN(accountID, resourceType string, props map[string]any, name string) string {
+	path := "/"
+	if v, _ := props["Path"].(string); v != "" {
+		path = v
+	}
+	return fmt.Sprintf("arn:aws:iam::%s:%s%s%s", accountID, resourceType, path, name)
+}
+
+// DeleteWithProperties takes the profile's roles back out before deleting it,
+// as real CloudFormation's provider does: IAM refuses DeleteInstanceProfile
+// while an association remains, and the Roles list is the only record of what
+// this resource put there. A role that is already gone took the association
+// with it, so NoSuchEntity is not an error here.
+func (h *iamInstanceProfileHandler) DeleteWithProperties(ctx context.Context, router http.Handler, cfg *config.Config, physicalID string, props map[string]any, rCtx *resolveContext) error {
+	name := instanceProfileNameFromPhysicalID(physicalID)
+	return iamPrincipalTeardown(ctx, router, rCtx, func() error {
+		return h.Delete(ctx, router, cfg, physicalID, rCtx)
+	}, func() ([]iamMutation, error) {
+		return iamInstanceProfileRoleMutations(name, nil, props)
+	})
+}
+
+// iamInstanceProfileRoleMutations reconciles the Roles property via
+// AddRoleToInstanceProfile / RemoveRoleFromInstanceProfile. Create passes
+// oldProps == nil (everything is an add); teardown passes props == nil
+// (everything is a remove).
+func iamInstanceProfileRoleMutations(profileName string, props, oldProps map[string]any) ([]iamMutation, error) {
+	desired, err := iamStringSet(props, "Roles")
+	if err != nil {
+		return nil, err
+	}
+	previous, err := iamStringSet(oldProps, "Roles")
+	if err != nil {
+		return nil, err
+	}
+	mutations := make([]iamMutation, 0, len(desired)+len(previous))
+	// Removals come first: an instance profile holds at most one role, so a
+	// swap that added before removing would be refused by the quota.
+	for role := range previous {
+		if _, remains := desired[role]; remains {
+			continue
+		}
+		params := map[string]string{"InstanceProfileName": profileName, "RoleName": role}
+		mutations = append(mutations, iamMutation{
+			action: "RemoveRoleFromInstanceProfile", params: params,
+			undoAction: "AddRoleToInstanceProfile", undoParams: params,
+		})
+	}
+	for role := range desired {
+		if _, existed := previous[role]; existed {
+			continue
+		}
+		params := map[string]string{"InstanceProfileName": profileName, "RoleName": role}
+		mutations = append(mutations, iamMutation{
+			action: "AddRoleToInstanceProfile", params: params,
+			undoAction: "RemoveRoleFromInstanceProfile", undoParams: params,
+		})
+	}
+	return mutations, nil
 }
 
 // ── AWS::IAM::ServiceLinkedRole ────────────────────────────────────────────

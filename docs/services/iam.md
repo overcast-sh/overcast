@@ -49,7 +49,7 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | Group membership  | `GetGroup` resolves members into `Users`, paginated with `Marker` / `MaxItems` (default 100, cap 1000) |
 | Permissions boundaries | Attached at create or later, reported as `AttachedPermissionsBoundary`, and read by both the simulator and enforcement |
 | Policy simulation | `SimulateCustomPolicy` and `SimulatePrincipalPolicy` run a real evaluation and return AWS's `allowed` / `explicitDeny` / `implicitDeny` vocabulary |
-| Delete safety     | `DeleteUser`, `DeleteRole`, `DeleteGroup` and `DeletePolicy` refuse with `DeleteConflict` (409) while dependencies remain |
+| Delete safety     | `DeleteUser`, `DeleteRole`, `DeleteGroup`, `DeletePolicy` and `DeleteInstanceProfile` refuse with `DeleteConflict` (409) while dependencies remain |
 | Account details   | `GetAccountAuthorizationDetails`                                                              |
 
 Simulation reads nothing else and changes nothing, and it works whether or not

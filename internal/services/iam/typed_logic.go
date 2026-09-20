@@ -3,6 +3,8 @@ package iam
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/overcast-sh/overcast/internal/events"
@@ -1257,6 +1259,23 @@ func (h *Handler) deleteRoleTyped(ctx context.Context, req *deleteRoleReq) (*del
 	return &deleteRoleResp{Xmlns: iamXMLNS, Meta: metaFromCtx(ctx)}, nil
 }
 
+// sortedPolicyNames renders an entity's inline-policy names for a List*Policies
+// response.
+//
+// The names are stored in a map, whose iteration order Go randomises on
+// purpose, so building the list from a range gave a different order on every
+// call. Sorting matches what every other IAM listing does —
+// listUsers/listRoles/listPolicies/listGroups all sort by name in store.go —
+// and gives a caller that diffs two responses nothing spurious to see.
+func sortedPolicyNames(policies map[string]string) []string {
+	names := make([]string, 0, len(policies))
+	for name := range policies {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
 // --- Inline Role Policies ---
 
 func (h *Handler) putRolePolicyTyped(ctx context.Context, req *putRolePolicyReq) (*putRolePolicyResp, *protocol.AWSError) {
@@ -1296,12 +1315,8 @@ func (h *Handler) listRolePoliciesTyped(ctx context.Context, req *listRolePolici
 	if aerr != nil {
 		return nil, aerr
 	}
-	names := make([]string, 0, len(role.InlinePolicies))
-	for name := range role.InlinePolicies {
-		names = append(names, name)
-	}
 	return &listRolePoliciesResp{Xmlns: iamXMLNS, Result: listRolePoliciesResult{
-		PolicyNames: listMembersXML[string]{Members: names, Tag: "member"}, IsTruncated: false,
+		PolicyNames: listMembersXML[string]{Members: sortedPolicyNames(role.InlinePolicies), Tag: "member"}, IsTruncated: false,
 	}, Meta: metaFromCtx(ctx)}, nil
 }
 
@@ -1385,7 +1400,11 @@ func (h *Handler) createInstanceProfileTyped(ctx context.Context, req *createIns
 }
 
 func (h *Handler) deleteInstanceProfileTyped(ctx context.Context, req *deleteInstanceProfileReq) (*deleteInstanceProfileResp, *protocol.AWSError) {
-	if _, aerr := h.store.getProfile(ctx, req.InstanceProfileName); aerr != nil {
+	profile, aerr := h.store.getProfile(ctx, req.InstanceProfileName)
+	if aerr != nil {
+		return nil, aerr
+	}
+	if aerr := h.checkInstanceProfileDeletable(ctx, profile); aerr != nil {
 		return nil, aerr
 	}
 	if aerr := h.store.deleteProfile(ctx, req.InstanceProfileName); aerr != nil {
@@ -1424,6 +1443,24 @@ func (h *Handler) getInstanceProfileTyped(ctx context.Context, req *getInstanceP
 	}, Meta: metaFromCtx(ctx)}, nil
 }
 
+// maxRolesPerInstanceProfile is AWS's hard quota: "An instance profile can
+// contain only one role, and this quota cannot be increased."
+// https://docs.aws.amazon.com/IAM/latest/APIReference/API_AddRoleToInstanceProfile.html
+const maxRolesPerInstanceProfile = 1
+
+// errInstanceProfileRoleQuota is AWS's refusal of a second role on an instance
+// profile: LimitExceeded (409), naming the quota as AWS spells it. The wording
+// is AWS's own, reproduced verbatim for the same reason delete_conflict.go's
+// messages are — tooling reads it.
+// https://github.com/hashicorp/terraform/issues/3851
+func errInstanceProfileRoleQuota() *protocol.AWSError {
+	return &protocol.AWSError{
+		Code:       "LimitExceeded",
+		Message:    "Cannot exceed quota for InstanceSessionsPerInstanceProfile: 1",
+		HTTPStatus: http.StatusConflict,
+	}
+}
+
 func (h *Handler) addRoleToInstanceProfileTyped(ctx context.Context, req *addRoleToInstanceProfileReq) (*addRoleToInstanceProfileResp, *protocol.AWSError) {
 	profile, aerr := h.store.getProfile(ctx, req.InstanceProfileName)
 	if aerr != nil {
@@ -1436,6 +1473,9 @@ func (h *Handler) addRoleToInstanceProfileTyped(ctx context.Context, req *addRol
 		if rn == req.RoleName {
 			return &addRoleToInstanceProfileResp{Xmlns: iamXMLNS, Meta: metaFromCtx(ctx)}, nil
 		}
+	}
+	if len(profile.Roles) >= maxRolesPerInstanceProfile {
+		return nil, errInstanceProfileRoleQuota()
 	}
 	profile.Roles = append(profile.Roles, req.RoleName)
 	if aerr := h.store.putProfile(ctx, profile); aerr != nil {
@@ -1705,12 +1745,8 @@ func (h *Handler) listGroupPoliciesTyped(ctx context.Context, req *listGroupPoli
 	if aerr != nil {
 		return nil, aerr
 	}
-	names := make([]string, 0, len(g.InlinePolicies))
-	for name := range g.InlinePolicies {
-		names = append(names, name)
-	}
 	return &listGroupPoliciesResp{Xmlns: iamXMLNS, Result: listGroupPoliciesResult{
-		PolicyNames: listMembersXML[string]{Members: names, Tag: "member"}, IsTruncated: false,
+		PolicyNames: listMembersXML[string]{Members: sortedPolicyNames(g.InlinePolicies), Tag: "member"}, IsTruncated: false,
 	}, Meta: metaFromCtx(ctx)}, nil
 }
 
@@ -1801,12 +1837,8 @@ func (h *Handler) listUserPoliciesTyped(ctx context.Context, req *listUserPolici
 	if aerr != nil {
 		return nil, aerr
 	}
-	names := make([]string, 0, len(u.InlinePolicies))
-	for name := range u.InlinePolicies {
-		names = append(names, name)
-	}
 	return &listUserPoliciesResp{Xmlns: iamXMLNS, Result: listUserPoliciesResult{
-		PolicyNames: listMembersXML[string]{Members: names, Tag: "member"}, IsTruncated: false,
+		PolicyNames: listMembersXML[string]{Members: sortedPolicyNames(u.InlinePolicies), Tag: "member"}, IsTruncated: false,
 	}, Meta: metaFromCtx(ctx)}, nil
 }
 

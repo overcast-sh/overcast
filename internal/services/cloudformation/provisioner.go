@@ -5687,7 +5687,12 @@ func (h *iamRoleHandler) Update(ctx context.Context, router http.Handler, _ *con
 	if err := newIAMTransaction(ctx, router, rCtx.Region).apply(mutations); err != nil {
 		return "", nil, classifyIAMTransactionFailure(err)
 	}
-	arn := fmt.Sprintf("arn:aws:iam::%s:role/%s", rCtx.AccountID, name)
+	// Path is create-only (a change forced a replacement above), so restating
+	// the ARN from the template's current value reproduces the one Create
+	// returned — including the path, which a bare "role/{name}" dropped, so
+	// GetAtt "Arn" changed shape on a role at a non-default path the moment
+	// anything else about it was updated.
+	arn := iamPathedARN(rCtx.AccountID, "role", props, name)
 	return name, map[string]string{"Arn": arn, "RoleName": name}, nil
 }
 

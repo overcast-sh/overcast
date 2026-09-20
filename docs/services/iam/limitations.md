@@ -74,6 +74,12 @@ condition keys the call did not supply.
 | An unparseable policy document              | `InvalidInput`                             |
 | AWS-managed policy documents                | Not stored, so an attached `arn:aws:iam::aws:policy/…` grants nothing under enforcement |
 
+Because those policies are not stored, `AttachRolePolicy`, `AttachUserPolicy`
+and `AttachGroupPolicy` take any `PolicyArn` and list it back rather than
+answering `NoSuchEntity` as AWS would for an ARN that names nothing. Every CDK
+and Terraform stack attaches at least one AWS managed policy, so refusing them
+would refuse the common case.
+
 `StartPosition` / `EndPosition` are Overcast's own byte-accurate computation
 against the document text it was given. They are not copied from any upstream
 source, and will not match real AWS byte for byte.

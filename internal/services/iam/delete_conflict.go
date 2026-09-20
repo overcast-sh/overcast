@@ -112,6 +112,17 @@ func (h *Handler) checkRoleDeletable(ctx context.Context, r *Role) *protocol.AWS
 	)
 }
 
+// checkInstanceProfileDeletable reports AWS's DeleteConflict when an instance
+// profile still holds a role: "Deletes the specified instance profile. The
+// instance profile must not have an associated role."
+// https://docs.aws.amazon.com/IAM/latest/APIReference/API_DeleteInstanceProfile.html
+//
+// AWS's message is the same one DeleteRole gives for the other end of the same
+// association — what it names is the membership, not which side asked.
+func (h *Handler) checkInstanceProfileDeletable(_ context.Context, p *InstanceProfile) *protocol.AWSError {
+	return firstBlocker(dependency{len(p.Roles) > 0, msgRemoveFromProfileFirst})
+}
+
 // checkGroupDeletable reports AWS's DeleteConflict when a group still has
 // members or policies.
 func (h *Handler) checkGroupDeletable(_ context.Context, g *Group) *protocol.AWSError {

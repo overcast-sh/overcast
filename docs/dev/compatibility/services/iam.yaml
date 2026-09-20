@@ -1,22 +1,300 @@
 service: iam
-status: in_progress
+status: reviewed
 priority: p0
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-08-22
+last_updated: 2026-09-20
 protocols: [query]
-implementation: [internal/services/iam]
-integration_tests: [tests/integration/iam]
+implementation: [internal/services/iam, internal/services/cloudformation]
+integration_tests: [tests/integration/iam, tests/integration/cloudformation]
 capability_docs: docs/services/iam.md
-operation_count_estimate: 61 tracked, 61 supported
-current_support_level: Broad IAM resource-management support; request-time enforcement (OVERCAST_ENFORCE_IAM) docs now match tested behavior.
-operations: {}
+operation_count_estimate: 74 tracked, 74 supported
+current_support_level: >-
+  Broad IAM resource-management support; request-time enforcement
+  (OVERCAST_ENFORCE_IAM) docs match tested behavior. The role, policy and
+  instance-profile surface a `cdk deploy` reaches — directly and through the
+  AWS::IAM::* CloudFormation resource types — is reviewed against the API
+  Reference and the CloudFormation resource reference (#154).
+operations:
+  CreateRole:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/IAM/latest/APIReference/API_CreateRole.html
+      - https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-iam-role.html
+    protocol: Query; POST / with Action=CreateRole&Version=2010-05-08
+    tests:
+      - tests/integration/iam/iam_cdk_role_profile_test.go
+      - tests/integration/iam/iam_policy_validation_test.go
+      - tests/integration/iam/iam_tagging_test.go
+      - tests/integration/cloudformation/iam_properties_test.go
+      - tests/integration/cloudformation/iam_return_values_test.go
+    scenarios:
+      minimal_role:
+        status: reviewed
+        evidence: RoleName plus AssumeRolePolicyDocument returns Role with an AROA-prefixed RoleId, an arn:aws:iam::{account}:role/{name} Arn, Path "/" and MaxSessionDuration 3600.
+      path:
+        status: reviewed
+        evidence: A non-default Path is stored and appears between "role" and the name in the ARN (arn:aws:iam::…:role/service-role/app-role).
+      duplicate_name:
+        status: reviewed
+        evidence: A second CreateRole for an existing name returns EntityAlreadyExists (409) rather than overwriting.
+      malformed_trust_policy:
+        status: reviewed
+        evidence: AssumeRolePolicyDocument is parsed and a malformed one refused with MalformedPolicyDocument (400) — covered by iam_policy_validation_test.go since #1717.
+      cfn_generated_name:
+        status: reviewed
+        evidence: "AWS::IAM::Role without RoleName takes CloudFormation's generated name, capped at IAM's 64-character limit (tests/integration/cloudformation/generated_names_test.go)."
+      cfn_required_trust_policy:
+        status: reviewed
+        evidence: "AssumeRolePolicyDocument is Required: Yes on AWS::IAM::Role; a template omitting it fails on the property name rather than surfacing a MalformedPolicyDocument about a document nobody wrote."
+      cfn_ref_and_getatt:
+        status: reviewed
+        evidence: Ref returns the role name; GetAtt Arn returns the ARN and GetAtt RoleId the AROA id, as the resource reference documents. Pinned by TestCreateStack_IAMReturnValues.
+      cfn_arn_after_update:
+        status: fixed
+        evidence: GetAtt "Arn" after an update restated the ARN as "role/{name}", dropping a non-default Path — so a role at /service-role/ changed ARN shape on any unrelated property change. Path is create-only, so the update now rebuilds the ARN from the template's Path (iamPathedARN). Pinned by TestUpdateStack_IAMPathedEntities_keepThePathInTheirARNs.
+      cfn_replacement_properties:
+        status: reviewed
+        evidence: RoleName and Path changes return errReplacementRequired; Description, MaxSessionDuration, PermissionsBoundary, ManagedPolicyArns, Policies and Tags reconcile in place, matching each property's documented Update requires.
+  GetRole:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/IAM/latest/APIReference/API_GetRole.html
+    protocol: Query; POST / with Action=GetRole&Version=2010-05-08
+    tests:
+      - tests/integration/iam/golden_test.go
+      - tests/integration/iam/iam_test.go
+      - tests/integration/iam/iam_resource_tags_test.go
+    scenarios:
+      existing_role:
+        status: reviewed
+        evidence: Returns the role with its Tags and, when set, AttachedPermissionsBoundary; golden_test.go pins the wire shape.
+      missing_role:
+        status: reviewed
+        evidence: NoSuchEntity (404) inside AWS's Query XML ErrorResponse envelope.
+  DeleteRole:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/IAM/latest/APIReference/API_DeleteRole.html
+    protocol: Query; POST / with Action=DeleteRole&Version=2010-05-08
+    tests:
+      - tests/integration/iam/iam_delete_conflict_test.go
+      - tests/integration/cloudformation/iam_teardown_test.go
+    scenarios:
+      instance_profile_membership:
+        status: reviewed
+        evidence: 'DeleteConflict (409), "Cannot delete entity, must remove roles from instance profile first."'
+      inline_policies:
+        status: reviewed
+        evidence: 'DeleteConflict (409), "Cannot delete entity, must delete policies first."'
+      attached_managed_policies:
+        status: reviewed
+        evidence: 'DeleteConflict (409), "Cannot delete entity, must detach all policies first."'
+      missing_role:
+        status: reviewed
+        evidence: NoSuchEntity beats DeleteConflict — TestDelete_notFoundBeatsConflict pins the order.
+      refusal_is_not_partial:
+        status: reviewed
+        evidence: A refused delete leaves both the entity and its dependency intact (TestDelete_conflictLeavesEntityIntact).
+  PutRolePolicy:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/IAM/latest/APIReference/API_PutRolePolicy.html
+    protocol: Query; POST / with Action=PutRolePolicy&Version=2010-05-08
+    tests:
+      - tests/integration/iam/iam_cdk_role_profile_test.go
+      - tests/integration/iam/iam_policy_validation_test.go
+      - tests/integration/cloudformation/iam_properties_test.go
+    scenarios:
+      new_document:
+        status: reviewed
+        evidence: Stored against the role and returned URL-encoded by GetRolePolicy, percent-encoding spaces per RFC 3986 rather than form-encoding them.
+      overwrite:
+        status: reviewed
+        evidence: A second PutRolePolicy under the same PolicyName replaces the document, as AWS's "adds or updates" contract says.
+      missing_role:
+        status: reviewed
+        evidence: NoSuchEntity (404); a stack whose role failed to create cannot land its policies silently.
+      malformed_document:
+        status: reviewed
+        evidence: MalformedPolicyDocument (400), and nothing is stored (TestPutRolePolicy_rejectionStoresNothing).
+      cfn_policies_property:
+        status: reviewed
+        evidence: "AWS::IAM::Role's Policies list reconciles to PutRolePolicy/DeleteRolePolicy, diffed against the previous property set, with compensating undos when a later mutation fails."
+  ListRolePolicies:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/IAM/latest/APIReference/API_ListRolePolicies.html
+    protocol: Query; POST / with Action=ListRolePolicies&Version=2010-05-08
+    tests:
+      - tests/integration/iam/iam_cdk_role_profile_test.go
+      - tests/integration/iam/iam_test.go
+    scenarios:
+      ordering:
+        status: fixed
+        evidence: The names were built by ranging a Go map, whose iteration order is randomised, so two identical calls disagreed. They are sorted now, matching every other IAM listing (store.go sorts users, roles, policies, groups and profiles by name). ListUserPolicies and ListGroupPolicies had the same fault and the same fix.
+      empty:
+        status: reviewed
+        evidence: An empty PolicyNames list with IsTruncated false, not an error.
+      missing_role:
+        status: reviewed
+        evidence: NoSuchEntity (404).
+  AttachRolePolicy:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/IAM/latest/APIReference/API_AttachRolePolicy.html
+    protocol: Query; POST / with Action=AttachRolePolicy&Version=2010-05-08
+    tests:
+      - tests/integration/iam/iam_cdk_role_profile_test.go
+      - tests/integration/iam/iam_attachment_count_test.go
+      - tests/integration/cloudformation/iam_properties_test.go
+    scenarios:
+      customer_managed_policy:
+        status: reviewed
+        evidence: Listed back by ListAttachedRolePolicies and counted in the policy's AttachmentCount.
+      idempotent_reattach:
+        status: reviewed
+        evidence: Attaching the same ARN twice is a no-op, leaving one entry.
+      missing_role:
+        status: reviewed
+        evidence: NoSuchEntity (404).
+      unknown_policy_arn:
+        status: intentionally_partial
+        evidence: AWS answers NoSuchEntity when PolicyArn names no policy. Overcast stores and lists the ARN instead, because the AWS managed policies (arn:aws:iam::aws:policy/…) are not modelled and nearly every CDK or Terraform stack attaches at least one — an existence check here would refuse the common case. Recorded in the Attach{Role,User,Group}Policy capability notes and in docs/services/iam/limitations.md, and pinned by TestAttachRolePolicy_awsManagedARNIsAccepted so the divergence is deliberate rather than incidental.
+      policy_not_attachable:
+        status: unsupported
+        evidence: PolicyNotAttachable and UnmodifiableEntity depend on AWS service-role policies and service-linked-role protection, neither of which is modelled.
+  CreateInstanceProfile:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/IAM/latest/APIReference/API_CreateInstanceProfile.html
+      - https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-iam-instanceprofile.html
+    protocol: Query; POST / with Action=CreateInstanceProfile&Version=2010-05-08
+    tests:
+      - tests/integration/iam/iam_cdk_role_profile_test.go
+      - tests/integration/iam/iam_tagging_test.go
+      - tests/integration/cloudformation/iam_return_values_test.go
+    scenarios:
+      minimal_profile:
+        status: reviewed
+        evidence: Returns InstanceProfile with an AIPA-prefixed InstanceProfileId, Path "/" and no roles.
+      path:
+        status: reviewed
+        evidence: A non-default Path appears in the ARN (arn:aws:iam::…:instance-profile/app/app-profile).
+      duplicate_name:
+        status: reviewed
+        evidence: EntityAlreadyExists (409).
+      cfn_ref_and_getatt:
+        status: fixed
+        evidence: 'Ref must return the instance profile name ("Ref returns the resource name … Ref returns the name of the instance profile"); the ARN is GetAtt "Arn" alone. The handler returned the ARN as the physical ID, so Ref handed an ARN to every property AWS documents as a name — AWS::EC2::Instance''s IamInstanceProfile and a launch template''s IamInstanceProfile.Name, which is how CDK''s own ec2.Instance wires it. Physical IDs stored before the fix carry the ARN and are still read (instanceProfileNameFromPhysicalID). Pinned by TestCreateStack_IAMReturnValues.'
+      cfn_roles_required:
+        status: intentionally_partial
+        evidence: "Roles is Required: Yes on AWS::IAM::InstanceProfile, but a profile with no role is a legal IAM resource that CreateInstanceProfile accepts and AddRoleToInstanceProfile can fill later, so the emptiness is not enforced — unlike AWS::IAM::Policy's at-least-one-principal rule, where the resource would otherwise do nothing at all."
+  AddRoleToInstanceProfile:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/IAM/latest/APIReference/API_AddRoleToInstanceProfile.html
+    protocol: Query; POST / with Action=AddRoleToInstanceProfile&Version=2010-05-08
+    tests:
+      - tests/integration/iam/iam_cdk_role_profile_test.go
+      - tests/integration/cloudformation/iam_return_values_test.go
+    scenarios:
+      first_role:
+        status: reviewed
+        evidence: Listed back by GetInstanceProfile and ListInstanceProfilesForRole.
+      idempotent_readd:
+        status: reviewed
+        evidence: Re-adding the role already held is a no-op, not a quota failure.
+      second_role:
+        status: fixed
+        evidence: '"An instance profile can contain only one role, and this quota cannot be increased." Overcast appended without limit; a second, different role is now LimitExceeded (409) with AWS''s own message, "Cannot exceed quota for InstanceSessionsPerInstanceProfile: 1", and the role already held is untouched.'
+      role_swap:
+        status: reviewed
+        evidence: AWS's prescribed sequence — remove the existing role, then add a different one — succeeds. CloudFormation's Roles diff emits removals before additions for exactly that reason (iamInstanceProfileRoleMutations), pinned by TestUpdateStack_IAMInstanceProfile_roleSwap.
+      missing_entity:
+        status: reviewed
+        evidence: NoSuchEntity (404) for an unknown profile and for an unknown role.
+  DeleteInstanceProfile:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/IAM/latest/APIReference/API_DeleteInstanceProfile.html
+    protocol: Query; POST / with Action=DeleteInstanceProfile&Version=2010-05-08
+    tests:
+      - tests/integration/iam/iam_delete_conflict_test.go
+      - tests/integration/cloudformation/iam_return_values_test.go
+      - tests/integration/cloudformation/iam_teardown_test.go
+    scenarios:
+      role_still_associated:
+        status: fixed
+        evidence: '"Deletes the specified instance profile. The instance profile must not have an associated role." Overcast deleted it anyway, silently dropping the association. It now answers DeleteConflict (409) with "Cannot delete entity, must remove roles from instance profile first.", the message AWS gives for the other end of the same association.'
+      empty_profile:
+        status: reviewed
+        evidence: Deleted, and GetInstanceProfile then answers NoSuchEntity.
+      missing_profile:
+        status: reviewed
+        evidence: NoSuchEntity (404) — checked before the conflict, as for every other IAM delete.
+      cfn_teardown:
+        status: fixed
+        evidence: CloudFormation's AWS::IAM::InstanceProfile had no DeleteWithProperties, so stack teardown relied on the lax delete above. It now removes the roles its own Roles property added before deleting the profile, tolerating a role that is already gone — the same detach-then-delete shape the role, group and managed-policy handlers use.
+  AWS::IAM::Policy:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-iam-policy.html
+    protocol: CloudFormation resource type, dispatched to Put/Delete{Role,User,Group}Policy
+    tests:
+      - tests/integration/cloudformation/iam_return_values_test.go
+      - tests/integration/cloudformation/iam_document_forms_test.go
+      - tests/integration/cloudformation/iam_teardown_test.go
+      - tests/integration/cloudformation/generated_names_test.go
+    scenarios:
+      principals_required:
+        status: fixed
+        evidence: '"The Groups, Roles, and Users properties are optional. However, you must specify at least one of these properties." A template naming none reported CREATE_COMPLETE for a resource whose document reached nobody, so a missing Roles line surfaced much later as a permission that silently did not exist. Create and Update now fail naming all three properties.'
+      all_three_principal_kinds:
+        status: reviewed
+        evidence: Roles, Groups and Users each dispatch their own Put*Policy; Create used to stop at Roles (#710).
+      document_as_object_or_string:
+        status: reviewed
+        evidence: "CloudFormation's Json type accepts either, and a string is passed through unchanged so IAM sees what the author wrote (#1717)."
+      update_rename:
+        status: reviewed
+        evidence: A PolicyName change is a replacement; an unnamed policy keeps its generated name rather than regenerating one and forcing a needless replacement.
+      delete_semantics:
+        status: reviewed
+        evidence: DeleteWithProperties removes the document from every entity the resource wrote it to, attempting all of them before reporting, so one refusal cannot leave the policy on the others. An entity that is already gone took its inline policy with it.
+  AWS::IAM::ManagedPolicy:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-iam-managedpolicy.html
+    protocol: CloudFormation resource type, dispatched to CreatePolicy/CreatePolicyVersion/DeletePolicy and Attach/Detach*Policy
+    tests:
+      - tests/integration/cloudformation/iam_return_values_test.go
+      - tests/integration/cloudformation/iam_properties_test.go
+      - tests/integration/cloudformation/iam_managedpolicy_instanceprofile_stack_tags_test.go
+    scenarios:
+      ref_is_the_arn:
+        status: reviewed
+        evidence: Ref returns the policy ARN, which is what a role's ManagedPolicyArns entry needs. Pinned by TestCreateStack_IAMReturnValues.
+      principal_attachments:
+        status: reviewed
+        evidence: Roles/Users/Groups attach at create and reconcile on update; an out-of-band attachment the template does not own survives an update and correctly blocks the delete.
+      document_update_in_place:
+        status: reviewed
+        evidence: A PolicyDocument change becomes CreatePolicyVersion with SetAsDefault=true under the same ARN, as AWS's provider does.
+      create_only_properties:
+        status: reviewed
+        evidence: Path and Description changes force a replacement, matching the resource reference.
 findings:
   fixed:
     - Reconcile docs/capability wording with IAM enforcement tests. README.md's "What Overcast is NOT" table claimed opt-in enforcement "evaluates identity, resource, and boundary policies" — resource-based policies (bucket/queue/topic policies) are not consulted at request time; only identity policies and the permissions boundary are, per internal/middleware/iam_enforce.go's evaluateIAMDecision and docs/services/iam.md's own "Resource-based policies ... are not consulted at request time yet" note, both of which the internal/middleware/iam_enforce_resources_test.go suite exercises (those "ResourcePolicy" test names cover identity-policy Resource-ARN scoping, not attached resource-based policies). Also completed docs/services/iam.md's action-prefix exception list, which named 8 of the 10 services whose IAM action prefix differs from Overcast's service key — DynamoDB Streams (authorizes under dynamodb:) and AppConfig Data (authorizes under appconfig:) were implemented in internal/middleware/serviceidentity.go's iamActionPrefix but undocumented and untested; pinned with two new cases in internal/middleware/serviceidentity_test.go's TestRequestIAMActionUsesTheAWSActionPrefix.
+    - CDK role, policy and instance profile review (#154). Five divergences, each with a failing test first. (1) AWS::IAM::InstanceProfile's Ref returned the ARN where AWS documents the name, so an ARN reached every property that takes an InstanceProfileName. (2) DeleteInstanceProfile deleted a profile that still held a role, where AWS answers DeleteConflict; CloudFormation's handler gained the DeleteWithProperties that removes the roles first. (3) AddRoleToInstanceProfile ignored AWS's one-role-per-profile quota. (4) AWS::IAM::Policy provisioned successfully with no Groups, Roles or Users, writing its document to nobody. (5) Role and instance-profile updates restated GetAtt "Arn" without the entity's Path, changing the ARN shape of any entity at a non-default path on an unrelated update. ListRolePolicies, ListUserPolicies and ListGroupPolicies also returned map-iteration order, so two identical calls disagreed; they are sorted now.
   remaining_gaps:
-    - Review CDK role, policy, and instance profile compatibility.
-  intentionally_partial: []
+    - "Detach{Role,User,Group}Policy, Delete{Role,User,Group}Policy and RemoveRoleFromInstanceProfile succeed silently when the attachment or inline policy is not there; AWS answers NoSuchEntity. Deliberately out of scope for #154: CloudFormation's teardown and update-compensation paths dispatch all of these, so tightening them needs its own review of internal/services/cloudformation's mutation machinery rather than riding along with a resource-type review."
+  intentionally_partial:
+    - "Attach{Role,User,Group}Policy accept a PolicyArn naming no stored policy, where AWS answers NoSuchEntity — the AWS managed policies are not modelled and every CDK stack attaches several. Documented in docs/services/iam/limitations.md and in the three capability notes; pinned by TestAttachRolePolicy_awsManagedARNIsAccepted."
+    - "AWS::IAM::InstanceProfile does not enforce Roles being Required: Yes; an instance profile with no role is a legal IAM resource that a later AddRoleToInstanceProfile can fill."
 handoff:
-  start_with: [CreateRole, PutRolePolicy, AttachRolePolicy, instance profiles]
-  do_not_redo: []
-  commands: [go test -count=1 ./internal/services/iam/... ./tests/integration/iam/...]
+  start_with: []
+  do_not_redo:
+    - CreateRole, GetRole, DeleteRole, PutRolePolicy, ListRolePolicies, AttachRolePolicy, CreateInstanceProfile, AddRoleToInstanceProfile and DeleteInstanceProfile, plus the AWS::IAM::Role/Policy/ManagedPolicy/InstanceProfile resource types, are reviewed against the API Reference and the CloudFormation resource reference with the scenario matrices above.
+  commands:
+    - go test -count=1 -p 2 ./internal/services/iam/... ./tests/integration/iam/... ./tests/integration/cloudformation/... ./internal/services/cloudformation/...
