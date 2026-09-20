@@ -70,6 +70,11 @@ may also be created without a VPC, which real AWS refuses; the VPC passed to
 wording. Codes and HTTP statuses match, so error handling that switches on the
 code behaves the same.
 
+Record values are checked against their type for `A`, `AAAA`, `CNAME`, `NS`,
+`PTR`, `MX`, `SRV`, `CAA`, `TXT` and `SPF`. `NAPTR`, `DS`, `TLSA`, `SSHFP`,
+`SVCB` and `HTTPS` values are stored as given — only the record's shape is
+checked, so AWS may reject a batch Overcast accepts.
+
 ## Related
 
 - [Route 53](../route53.md) — quick start and DNS serving

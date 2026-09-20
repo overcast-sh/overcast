@@ -47,8 +47,8 @@ operations:
         status: fixed
         evidence: "#171: NextRecordName/NextRecordType/NextRecordIdentifier are implemented (handler_rrsets.go ~144-181) and pinned by TestListRRSets_dnsOrderAndPagination."
       record_value_shape_validation:
-        status: remaining_gaps
-        gap: "#1670: validateRecordData (core.go, ~line 571) enforces the alias-vs-TTL+values contract but never validates a record's value shape per its Type — an invalid A-record value (not a dotted-quad) is accepted. Tracked as #2004."
+        status: fixed
+        evidence: "#2004: validateRecordData now calls validateRecordValues (core.go), which checks each value against its record type before anything is applied."
   CreateHostedZone:
     status: reviewed
     aws_docs: [https://docs.aws.amazon.com/Route53/latest/APIReference/API_CreateHostedZone.html]
@@ -91,10 +91,13 @@ operations:
       - tests/integration/route53/rrsets_validation_test.go#TestChangeRRSets_aliasAndValuesMutuallyExclusive
       - tests/integration/route53/rrsets_validation_test.go#TestChangeRRSets_recordWithoutValuesOrAlias
       - tests/integration/route53/rrsets_validation_test.go#TestChangeRRSets_weightedRecordsWithSetIdentifier
+      - tests/integration/route53/rrsets_validation_test.go#TestChangeRRSets_valueDoesNotMatchRecordType
+      - tests/integration/route53/rrsets_validation_test.go#TestChangeRRSets_cnameWithMultipleValues
+      - tests/integration/route53/rrsets_validation_test.go#TestChangeRRSets_acceptsWellFormedValuesForEveryValidatedType
     scenarios:
       record_value_shape_validation:
-        status: remaining_gaps
-        gap: See ListResourceRecordSets — the same validateRecordData path backs ChangeResourceRecordSets.
+        status: fixed
+        evidence: "#2004: A, AAAA, CNAME, NS, PTR, MX, SRV, CAA, TXT and SPF values are validated against their type and rejected with InvalidChangeBatch (400, REST XML ErrorResponse) naming the offending value; CNAME and SOA are held to the single value AWS allows them. NAPTR, DS, TLSA, SSHFP, SVCB and HTTPS keep the shape-only check, stated in a comment at rdataValidators and in docs/services/route53/limitations.md."
   GetChange:
     status: intentionally_partial
     aws_docs: [https://docs.aws.amazon.com/Route53/latest/APIReference/API_GetChange.html]
@@ -177,14 +180,14 @@ findings:
         tests: tests/integration/cloudformation/cloudformation_test.go::TestCreateStack_Route53RecordSetAliasTarget
       fixed_in: 0.0.1-alpha.8
     - "#170 (protocol): every Route 53 operation in internal/awsapi/manifest.gen.go is ProtocolRESTXML; the tracker's protocols: [rest_xml, query] was wrong to include query. Route 53 has no Query-API wire binding — removed. The WriteQueryXMLError helper name (internal/services/route53/handler_zones.go) names the error envelope shape, not a second protocol; the operations themselves are all REST XML."
+    - "#2004 (record value validation): ChangeResourceRecordSets accepted any value for any record type — an A record whose value was not a dotted quad, an AAAA holding an IPv4 address, a CNAME with two values. validateRecordValues (core.go) now checks each value against its type and answers InvalidChangeBatch in AWS's \"Invalid Resource Record: FATAL problem: <code> (<reason>) encountered with '<value>'\" form. The ARRDATAIllegalIPv4Address and AAAARRDATAIllegalIPv6Address codes are AWS's own; the rest follow its shape, which is the approximation docs/services/route53/limitations.md already records."
     - "#171 (pagination): ListHostedZones and ListHealthChecks implement Marker/NextMarker/IsTruncated (handler_zones.go ~192-213, handler_health.go ~91-114); ListResourceRecordSets implements NextRecordName/NextRecordType/NextRecordIdentifier (handler_rrsets.go ~144-181). All three are covered by tests/integration/route53/zones_lifecycle_test.go, healthchecks_test.go and rrsets_validation_test.go. The tracker's \"Review pagination and marker semantics\" gap is resolved; markers already work."
-  remaining_gaps:
-    - "#1670: validateRecordData (core.go, ~line 571) never validates a record's value shape per its Type, so an invalid A-record value (not a dotted-quad IPv4 address) is accepted by ChangeResourceRecordSets. Tracked as #2004."
+  remaining_gaps: []
   intentionally_partial:
     - "GetChange on an unknown change ID answers INSYNC rather than NoSuchChange — intentional, documented in docs/services/route53/limitations.md, so CDK and CLI waiters converge even across a store reset."
     - GetHealthCheckStatus, GetHealthCheckLastFailureReason, CreateTrafficPolicy, AssociateVPCWithHostedZone, DisassociateVPCFromHostedZone and ListHostedZonesByVPC are not implemented; health checks are metadata-only (nothing is ever probed) and traffic policies/VPC associations are out of scope.
 handoff:
-  start_with: [Record value shape validation per Type in validateRecordData (#2004)]
+  start_with: [Value grammars for the unmodeled types (NAPTR, DS, TLSA, SSHFP, SVCB, HTTPS), if a caller ever needs them]
   do_not_redo:
     [CreateHostedZone, ListHostedZones, ListHostedZonesByName, GetHostedZone, GetHostedZoneCount,
      UpdateHostedZoneComment, DeleteHostedZone, ChangeResourceRecordSets, ListResourceRecordSets,

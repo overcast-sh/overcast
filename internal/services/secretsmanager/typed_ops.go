@@ -67,8 +67,8 @@ func (h *Handler) typedOps() map[string]op.Operation {
 		"ValidateResourcePolicy": op.NewTyped[validateResourcePolicyRequest, validateResourcePolicyResponse](
 			"ValidateResourcePolicy", h.validateResourcePolicyTyped,
 		),
-		"RestoreSecret": op.NewTyped[struct{}, struct{}](
-			"RestoreSecret", unsupportedOperation,
+		"RestoreSecret": op.NewTyped[secretIDRequest, restoreSecretResponse](
+			"RestoreSecret", h.restoreSecretTyped,
 		),
 		"ReplicateSecretToRegions": op.NewTyped[struct{}, struct{}](
 			"ReplicateSecretToRegions", unsupportedOperation,

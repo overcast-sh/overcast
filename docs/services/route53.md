@@ -72,7 +72,7 @@ before either authority is reached, so it is unaffected either way.
 | Area | Behaviour |
 | --- | --- |
 | Hosted zones | `CreateHostedZone` requires a `CallerReference` and rejects a reused one with `HostedZoneAlreadyExists`. Each zone gets default apex `NS` and `SOA` records and a four-server delegation set derived from the zone ID, and the new zone's URL comes back in `Location` |
-| Record changes | `ChangeResourceRecordSets` validates the whole batch atomically before applying anything — `InvalidChangeBatch` for creating an existing record, deleting a missing one or one whose values do not match, records outside the zone, a CNAME at the apex, and deleting the default apex records |
+| Record changes | `ChangeResourceRecordSets` validates the whole batch atomically before applying anything — `InvalidChangeBatch` for creating an existing record, deleting a missing one or one whose values do not match, records outside the zone, a CNAME at the apex, deleting the default apex records, and a value that does not fit its record type |
 | Listing | `ListResourceRecordSets` returns records in DNS order (names compared with labels reversed) and paginates on `name`/`type`/`identifier`/`maxitems` |
 | Deletion | `DeleteHostedZone` returns `HostedZoneNotEmpty` while non-default records exist; a successful delete cascades the default records and the zone's tags |
 | Identifiers | Zone and change IDs are stored and returned in AWS's path format — `/hostedzone/Z123…`, `/change/C123…` |

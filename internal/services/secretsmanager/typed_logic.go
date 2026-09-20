@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
+	"time"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
@@ -82,6 +83,7 @@ type describeSecretResponse struct {
 	RotationLambdaARN  string              `json:"RotationLambdaARN,omitempty" cbor:"RotationLambdaARN,omitempty"`
 	LastRotatedDate    float64             `json:"LastRotatedDate,omitempty" cbor:"LastRotatedDate,omitempty"`
 	NextRotationDate   float64             `json:"NextRotationDate,omitempty" cbor:"NextRotationDate,omitempty"`
+	DeletedDate        float64             `json:"DeletedDate,omitempty" cbor:"DeletedDate,omitempty"`
 }
 
 type putSecretValueRequest struct {
@@ -115,6 +117,9 @@ type updateSecretResponse struct {
 
 type listSecretsRequest struct {
 	Filters []secretFilter `json:"Filters" cbor:"Filters"`
+	// IncludePlannedDeletion asks for secrets inside their recovery window,
+	// which ListSecrets otherwise leaves out.
+	IncludePlannedDeletion bool `json:"IncludePlannedDeletion" cbor:"IncludePlannedDeletion"`
 }
 
 type secretListEntry struct {
@@ -130,6 +135,7 @@ type secretListEntry struct {
 	RotationLambdaARN string         `json:"RotationLambdaARN,omitempty" cbor:"RotationLambdaARN,omitempty"`
 	LastRotatedDate   float64        `json:"LastRotatedDate,omitempty" cbor:"LastRotatedDate,omitempty"`
 	NextRotationDate  float64        `json:"NextRotationDate,omitempty" cbor:"NextRotationDate,omitempty"`
+	DeletedDate       float64        `json:"DeletedDate,omitempty" cbor:"DeletedDate,omitempty"`
 }
 
 type listSecretsResponse struct {
@@ -148,16 +154,26 @@ type listSecretVersionIdsResponse struct {
 	Versions []secretVersionEntry `json:"Versions" cbor:"Versions"`
 }
 
+// deleteSecretRequest takes both optional parameters as pointers because AWS
+// rejects a call that *specifies* both, whatever their values. The model gives
+// each `smithy.api#default: null`, so every SDK omits the one the caller left
+// alone, and an explicit ForceDeleteWithoutRecovery=false is a different
+// request from an absent one.
 type deleteSecretRequest struct {
 	SecretId                   string `json:"SecretId" cbor:"SecretId"`
-	ForceDeleteWithoutRecovery bool   `json:"ForceDeleteWithoutRecovery" cbor:"ForceDeleteWithoutRecovery"`
-	RecoveryWindowInDays       int64  `json:"RecoveryWindowInDays" cbor:"RecoveryWindowInDays"`
+	ForceDeleteWithoutRecovery *bool  `json:"ForceDeleteWithoutRecovery" cbor:"ForceDeleteWithoutRecovery"`
+	RecoveryWindowInDays       *int64 `json:"RecoveryWindowInDays" cbor:"RecoveryWindowInDays"`
 }
 
 type deleteSecretResponse struct {
 	ARN          string  `json:"ARN" cbor:"ARN"`
 	Name         string  `json:"Name" cbor:"Name"`
 	DeletionDate float64 `json:"DeletionDate" cbor:"DeletionDate"`
+}
+
+type restoreSecretResponse struct {
+	ARN  string `json:"ARN" cbor:"ARN"`
+	Name string `json:"Name" cbor:"Name"`
 }
 
 type tagResourceRequest struct {
@@ -241,6 +257,22 @@ func (h *Handler) publishCtx(ctx context.Context, t events.Type, payload any) {
 	}
 }
 
+// resolveLiveSecret resolves a secret that must not be inside a recovery
+// window. Every operation on a secret's value goes through it: AWS answers
+// InvalidRequestException for those while the secret is marked for deletion,
+// and keeps DescribeSecret, RestoreSecret and a forced DeleteSecret working,
+// which is why those three call resolveSecret directly.
+func (h *Handler) resolveLiveSecret(ctx context.Context, secretID string) (*Secret, *protocol.AWSError) {
+	sec, aerr := h.store.resolveSecret(ctx, secretID)
+	if aerr != nil {
+		return nil, aerr
+	}
+	if sec.markedForDeletion(h.store.now()) {
+		return nil, errMarkedForDeletion()
+	}
+	return sec, nil
+}
+
 func (h *Handler) createSecretTyped(ctx context.Context, req *createSecretRequest) (*createSecretResponse, *protocol.AWSError) {
 	log := h.log.WithRecorder(ctx)
 	if req.Name == "" {
@@ -249,7 +281,13 @@ func (h *Handler) createSecretTyped(ctx context.Context, req *createSecretReques
 	if utf8.RuneCountInString(req.KmsKeyId) > 2048 {
 		return nil, errInvalidParameter("KmsKeyId exceeds the maximum length of 2048 characters.")
 	}
-	if _, aerr := h.store.getSecret(ctx, req.Name); aerr == nil {
+	if existing, aerr := h.store.getSecret(ctx, req.Name); aerr == nil {
+		// A secret inside its recovery window still holds the name: AWS refuses
+		// the create and tells the caller to restore it or force-delete it.
+		if existing.markedForDeletion(h.store.now()) {
+			return nil, errInvalidRequest(
+				"You can't create this secret because a secret with this name is already scheduled for deletion.")
+		}
 		return nil, errResourceExists(req.Name)
 	}
 	// Request-shape validation before the secret is created — the same
@@ -291,7 +329,7 @@ func (h *Handler) createSecretTyped(ctx context.Context, req *createSecretReques
 }
 
 func (h *Handler) getSecretValueTyped(ctx context.Context, req *getSecretValueRequest) (*secretValueResponse, *protocol.AWSError) {
-	sec, aerr := h.store.resolveSecret(ctx, req.SecretId)
+	sec, aerr := h.resolveLiveSecret(ctx, req.SecretId)
 	if aerr != nil {
 		return nil, aerr
 	}
@@ -369,11 +407,12 @@ func (h *Handler) describeSecretTyped(ctx context.Context, req *secretIDRequest)
 		RotationLambdaARN:  sec.RotationLambdaARN,
 		LastRotatedDate:    sec.LastRotatedDate,
 		NextRotationDate:   sec.NextRotationDate,
+		DeletedDate:        sec.DeletedDate,
 	}, nil
 }
 
 func (h *Handler) putSecretValueTyped(ctx context.Context, req *putSecretValueRequest) (*putSecretValueResponse, *protocol.AWSError) {
-	sec, aerr := h.store.resolveSecret(ctx, req.SecretId)
+	sec, aerr := h.resolveLiveSecret(ctx, req.SecretId)
 	if aerr != nil {
 		return nil, aerr
 	}
@@ -463,7 +502,7 @@ func (h *Handler) updateSecretVersionStageTyped(ctx context.Context, req *update
 		return nil, errInvalidParameter("You must specify either MoveToVersionId, RemoveFromVersionId, or both.")
 	}
 
-	sec, aerr := h.store.resolveSecret(ctx, req.SecretId)
+	sec, aerr := h.resolveLiveSecret(ctx, req.SecretId)
 	if aerr != nil {
 		return nil, aerr
 	}
@@ -506,7 +545,7 @@ func containsString(haystack []string, needle string) bool {
 }
 
 func (h *Handler) updateSecretTyped(ctx context.Context, req *updateSecretRequest) (*updateSecretResponse, *protocol.AWSError) {
-	sec, aerr := h.store.resolveSecret(ctx, req.SecretId)
+	sec, aerr := h.resolveLiveSecret(ctx, req.SecretId)
 	if aerr != nil {
 		return nil, aerr
 	}
@@ -544,9 +583,13 @@ func (h *Handler) listSecretsTyped(ctx context.Context, req *listSecretsRequest)
 	if aerr != nil {
 		return nil, aerr
 	}
+	now := h.store.now()
 	out := make([]secretListEntry, 0, len(secrets))
 	for _, sec := range secrets {
 		if len(req.Filters) > 0 && !secretMatchesFilters(sec, req.Filters) {
+			continue
+		}
+		if sec.markedForDeletion(now) && !req.IncludePlannedDeletion {
 			continue
 		}
 		out = append(out, secretListEntry{
@@ -562,6 +605,7 @@ func (h *Handler) listSecretsTyped(ctx context.Context, req *listSecretsRequest)
 			RotationLambdaARN: sec.RotationLambdaARN,
 			LastRotatedDate:   sec.LastRotatedDate,
 			NextRotationDate:  sec.NextRotationDate,
+			DeletedDate:       sec.DeletedDate,
 		})
 	}
 	return &listSecretsResponse{SecretList: out}, nil
@@ -583,22 +627,85 @@ func (h *Handler) listSecretVersionIdsTyped(ctx context.Context, req *secretIDRe
 	return &listSecretVersionIdsResponse{ARN: sec.ARN, Name: sec.Name, Versions: versions}, nil
 }
 
+// deleteSecretTyped schedules a deletion rather than performing one, which is
+// what AWS does: the secret keeps its record with a DeletedDate marking the end
+// of the recovery window, and RestoreSecret can cancel it until then. Nothing
+// sweeps the store when the window closes — the window is enforced on read (see
+// smStore.getSecret) — so no background work outlives the request.
+//
+// ForceDeleteWithoutRecovery is the opt-out, and the only path that removes the
+// record here and now.
 func (h *Handler) deleteSecretTyped(ctx context.Context, req *deleteSecretRequest) (*deleteSecretResponse, *protocol.AWSError) {
 	log := h.log.WithRecorder(ctx)
+	force := req.ForceDeleteWithoutRecovery != nil && *req.ForceDeleteWithoutRecovery
+	if req.ForceDeleteWithoutRecovery != nil && req.RecoveryWindowInDays != nil {
+		return nil, errInvalidParameter(
+			"You can't use ForceDeleteWithoutRecovery in conjunction with RecoveryWindowInDays.")
+	}
+	window := int64(defaultRecoveryWindowDays)
+	if req.RecoveryWindowInDays != nil {
+		window = *req.RecoveryWindowInDays
+		if window < minRecoveryWindowDays || window > maxRecoveryWindowDays {
+			return nil, errInvalidParameter(fmt.Sprintf(
+				"The RecoveryWindowInDays value must be between %d and %d days, inclusive.",
+				minRecoveryWindowDays, maxRecoveryWindowDays))
+		}
+	}
+
 	sec, aerr := h.store.resolveSecret(ctx, req.SecretId)
 	if aerr != nil {
 		return nil, aerr
 	}
-	if aerr := h.store.deleteSecret(ctx, sec.Name); aerr != nil {
-		return nil, aerr
+	now := h.store.now()
+	if !force && sec.markedForDeletion(now) {
+		// A second scheduled delete would silently move the deadline. AWS
+		// refuses it; a forced one still goes through, and is how a caller gets
+		// the name back before the window closes.
+		return nil, errMarkedForDeletion()
 	}
+
+	deletionDate := float64(now.Unix())
+	if force {
+		if aerr := h.store.deleteSecret(ctx, sec.Name); aerr != nil {
+			return nil, aerr
+		}
+	} else {
+		deletionDate = float64(now.Add(time.Duration(window) * 24 * time.Hour).Unix())
+		sec.DeletedDate = deletionDate
+		sec.LastChangedDate = float64(now.Unix())
+		if aerr := h.store.putSecret(ctx, sec); aerr != nil {
+			return nil, aerr
+		}
+	}
+
 	h.publishCtx(ctx, events.SecretDeleted, events.ResourcePayload{Name: sec.Name, ARN: sec.ARN})
-	log.Info("secret deleted", zap.String("name", sec.Name))
+	log.Info("secret deleted", zap.String("name", sec.Name), zap.Bool("forced", force))
 	return &deleteSecretResponse{
 		ARN:          sec.ARN,
 		Name:         sec.Name,
-		DeletionDate: float64(h.store.now().Unix()),
+		DeletionDate: deletionDate,
 	}, nil
+}
+
+// restoreSecretTyped cancels a scheduled deletion by clearing DeletedDate. AWS
+// accepts it for a secret that was never scheduled too, and answers with the
+// secret's identity either way; only a secret whose window has already closed
+// is gone, and that one is a ResourceNotFoundException.
+func (h *Handler) restoreSecretTyped(ctx context.Context, req *secretIDRequest) (*restoreSecretResponse, *protocol.AWSError) {
+	sec, aerr := h.store.resolveSecret(ctx, req.SecretId)
+	if aerr != nil {
+		return nil, aerr
+	}
+	if sec.DeletedDate != 0 {
+		sec.DeletedDate = 0
+		sec.LastChangedDate = float64(h.store.now().Unix())
+		if aerr := h.store.putSecret(ctx, sec); aerr != nil {
+			return nil, aerr
+		}
+		h.publishCtx(ctx, events.SecretUpdated, events.ResourcePayload{Name: sec.Name, ARN: sec.ARN})
+		h.log.WithRecorder(ctx).Info("secret restored", zap.String("name", sec.Name))
+	}
+	return &restoreSecretResponse{ARN: sec.ARN, Name: sec.Name}, nil
 }
 
 // tagResourceTyped merges tags through serviceutil.ApplyInlineTags, which
@@ -608,14 +715,14 @@ func (h *Handler) deleteSecretTyped(ctx context.Context, req *deleteSecretReques
 // change here versus the hand-rolled merge this replaces (#1052).
 func (h *Handler) tagResourceTyped(ctx context.Context, req *tagResourceRequest) (*struct{}, *protocol.AWSError) {
 	if aerr := serviceutil.ApplyInlineTags(ctx, req.SecretId, smTagsToMap(req.Tags), smTagCfg,
-		h.store.resolveSecret, h.store.putSecret); aerr != nil {
+		h.resolveLiveSecret, h.store.putSecret); aerr != nil {
 		return nil, aerr
 	}
 	return &struct{}{}, nil
 }
 
 func (h *Handler) cancelRotateSecretTyped(ctx context.Context, req *secretIDRequest) (*cancelRotateSecretResponse, *protocol.AWSError) {
-	sec, aerr := h.store.resolveSecret(ctx, req.SecretId)
+	sec, aerr := h.resolveLiveSecret(ctx, req.SecretId)
 	if aerr != nil {
 		return nil, aerr
 	}
@@ -637,7 +744,7 @@ func (h *Handler) cancelRotateSecretTyped(ctx context.Context, req *secretIDRequ
 }
 
 func (h *Handler) untagResourceTyped(ctx context.Context, req *untagResourceRequest) (*struct{}, *protocol.AWSError) {
-	sec, aerr := h.store.resolveSecret(ctx, req.SecretId)
+	sec, aerr := h.resolveLiveSecret(ctx, req.SecretId)
 	if aerr != nil {
 		return nil, aerr
 	}
@@ -794,8 +901,9 @@ func (h *Handler) batchGetSecretValueTyped(ctx context.Context, req *batchGetSec
 		if aerr != nil {
 			return nil, aerr
 		}
+		now := h.store.now()
 		for _, sec := range secrets {
-			if secretMatchesFilters(sec, req.Filters) {
+			if secretMatchesFilters(sec, req.Filters) && !sec.markedForDeletion(now) {
 				ids = append(ids, sec.Name)
 			}
 		}
@@ -806,7 +914,7 @@ func (h *Handler) batchGetSecretValueTyped(ctx context.Context, req *batchGetSec
 		Errors:       make([]batchSecretError, 0),
 	}
 	for _, id := range ids {
-		sec, aerr := h.store.resolveSecret(ctx, id)
+		sec, aerr := h.resolveLiveSecret(ctx, id)
 		if aerr != nil {
 			out.Errors = append(out.Errors, batchSecretError{
 				SecretId:  id,

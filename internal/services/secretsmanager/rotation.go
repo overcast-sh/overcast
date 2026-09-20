@@ -84,7 +84,7 @@ type rotationEvent struct {
 // ─── RotateSecret ──────────────────────────────────────────────────────────
 
 func (h *Handler) rotateSecretTyped(ctx context.Context, req *rotateSecretRequest) (*rotateSecretResponse, *protocol.AWSError) {
-	sec, aerr := h.store.resolveSecret(ctx, req.SecretId)
+	sec, aerr := h.resolveLiveSecret(ctx, req.SecretId)
 	if aerr != nil {
 		return nil, aerr
 	}

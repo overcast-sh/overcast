@@ -1,6 +1,6 @@
 ---
 title: "Secrets Manager operations"
-description: "Every Secrets Manager operation Overcast declares — 19 of 22 implemented — with status, behaviour notes and a link to the AWS API reference for each."
+description: "Every Secrets Manager operation Overcast declares — 20 of 22 implemented — with status, behaviour notes and a link to the AWS API reference for each."
 section: "Service Reference"
 tags:
   - docs
@@ -13,17 +13,17 @@ tags:
 
 # Secrets Manager operations
 
-19 of 22 listed operations are implemented. Back to [Secrets Manager](../secretsmanager.md).
+20 of 22 listed operations are implemented. Back to [Secrets Manager](../secretsmanager.md).
 
 ## Summary
 
 | Category    | ✅ Supported | ❌ Unsupported |
 | ----------- | ------------ | -------------- |
-| Secret CRUD | 9            |                |
+| Secret CRUD | 10           |                |
 | Rotation    | 3            |                |
 | Tags        | 2            |                |
 | Password    | 1            |                |
-| Policy/Misc | 4            | 3              |
+| Policy/Misc | 4            | 2              |
 
 ---
 
@@ -40,8 +40,9 @@ tags:
 | `UpdateSecret`         | ✅ Supported | Description, KMS key + optional new value                                                | [docs](https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_UpdateSecret.html)         |
 | `ListSecrets`          | ✅ Supported | Sorted by name, KMS metadata, optional filters — Filter.Key validated against AWS's enum | [docs](https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_ListSecrets.html)          |
 | `ListSecretVersionIds` | ✅ Supported | All versions with staging labels                                                         | [docs](https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_ListSecretVersionIds.html) |
-| `DeleteSecret`         | ✅ Supported | Immediate (ForceDelete) only                                                             | [docs](https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_DeleteSecret.html)         |
+| `DeleteSecret`         | ✅ Supported | Recovery window 7-30 days (default 30) or ForceDeleteWithoutRecovery                     | [docs](https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_DeleteSecret.html)         |
 | `BatchGetSecretValue`  | ✅ Supported | Partial results on missing secrets; Filter.Key validated against AWS's enum              | [docs](https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_BatchGetSecretValue.html)  |
+| `RestoreSecret`        | ✅ Supported | Cancels a scheduled deletion inside the recovery window                                  | [docs](https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_RestoreSecret.html)        |
 
 ### Rotation
 
@@ -72,7 +73,6 @@ tags:
 | `PutResourcePolicy`            | ✅ Supported   | Validated + stored; not evaluated (#496) | [docs](https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_PutResourcePolicy.html)            |
 | `DeleteResourcePolicy`         | ✅ Supported   | Removes the stored policy                | [docs](https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_DeleteResourcePolicy.html)         |
 | `ValidateResourcePolicy`       | ✅ Supported   | Syntax + schema checks, no evaluation    | [docs](https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_ValidateResourcePolicy.html)       |
-| `RestoreSecret`                | ❌ Unsupported | stub; returns 501                        | [docs](https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_RestoreSecret.html)                |
 | `ReplicateSecretToRegions`     | ❌ Unsupported | stub; returns 501                        | [docs](https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_ReplicateSecretToRegions.html)     |
 | `RemoveRegionsFromReplication` | ❌ Unsupported | stub; returns 501                        | [docs](https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_RemoveRegionsFromReplication.html) |
 

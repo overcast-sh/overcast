@@ -1006,8 +1006,8 @@
       "service": "secretsmanager",
       "operation": "RestoreSecret",
       "group": "secretsmanager-gen-probe",
-      "reason": "never-probe",
-      "detail": "Cancels a scheduled deletion. Aimed at a stranger's secret it un-deletes something the owner deliberately scheduled for removal, and the recovery window is the only notice that owner gets before the secret goes for good."
+      "reason": "probe-of-implemented-op",
+      "detail": "RestoreSecret is implemented (Supported), so it may not be probed, and no recipe resource gives it a role"
     },
     {
       "service": "secretsmanager",

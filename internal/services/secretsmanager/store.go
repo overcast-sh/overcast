@@ -29,6 +29,13 @@ const (
 	// secret by the "partial ARN" that omits it, which resolveSecret honours.
 	arnSuffixLen = 6
 
+	// Recovery window bounds for DeleteSecret. AWS's API reference gives the
+	// range as 7 to 30 days, and 30 days when the caller names neither
+	// RecoveryWindowInDays nor ForceDeleteWithoutRecovery.
+	minRecoveryWindowDays     = 7
+	maxRecoveryWindowDays     = 30
+	defaultRecoveryWindowDays = 30
+
 	// maxUnlabeledVersions caps how many staging-label-free versions are kept.
 	// AWS deprecates unlabelled versions once a secret exceeds 100 of them and
 	// never removes a labelled one; the cap here is smaller because a local
@@ -95,6 +102,24 @@ type Secret struct {
 	NextRotationDate    float64          `json:"NextRotationDate,omitempty"`
 	LastRotationAttempt *RotationAttempt `json:"LastRotationAttempt,omitempty"`
 	ResourcePolicy      string           `json:"ResourcePolicy,omitempty"`
+
+	// DeletedDate is the end of the recovery window DeleteSecret opened: the
+	// instant after which the secret is gone for good. Zero means the secret is
+	// live. AWS names the same value DeletionDate in DeleteSecret's response and
+	// DeletedDate everywhere it is read back, and so does Overcast.
+	DeletedDate float64 `json:"DeletedDate,omitempty"`
+}
+
+// markedForDeletion reports whether the secret is inside a recovery window:
+// scheduled for deletion, still restorable, and refusing value operations.
+func (s *Secret) markedForDeletion(now time.Time) bool {
+	return s.DeletedDate != 0 && float64(now.Unix()) < s.DeletedDate
+}
+
+// recoveryWindowElapsed reports whether the secret's recovery window has run
+// out, which is the moment AWS deletes it permanently.
+func (s *Secret) recoveryWindowElapsed(now time.Time) bool {
+	return s.DeletedDate != 0 && float64(now.Unix()) >= s.DeletedDate
 }
 
 func (s *Secret) GetTags() map[string]string {
@@ -227,6 +252,13 @@ func (s *smStore) getSecret(ctx context.Context, name string) (*Secret, *protoco
 	if err := json.Unmarshal([]byte(raw), &sec); err != nil {
 		return nil, protocol.Wrap(protocol.ErrInternalError, err)
 	}
+	if sec.recoveryWindowElapsed(s.now()) {
+		// The recovery window ran out, so AWS has already deleted the secret.
+		// Overcast enforces that lazily rather than running a sweeper: the
+		// record stays in the store, invisible to every operation, until a
+		// CreateSecret for the same name overwrites it.
+		return nil, errResourceNotFound(name)
+	}
 	return &sec, nil
 }
 
@@ -253,10 +285,14 @@ func (s *smStore) listSecrets(ctx context.Context) ([]Secret, *protocol.AWSError
 	if err != nil {
 		return nil, protocol.Wrap(protocol.ErrInternalError, err)
 	}
+	now := s.now()
 	out := make([]Secret, 0, len(pairs))
 	for _, p := range pairs {
 		var sec Secret
 		if err := json.Unmarshal([]byte(p.Value), &sec); err != nil {
+			continue
+		}
+		if sec.recoveryWindowElapsed(now) {
 			continue
 		}
 		out = append(out, sec)
@@ -284,6 +320,12 @@ func (s *smStore) listSecretsAllRegions(ctx context.Context) ([]regionalSecret, 
 		var sec Secret
 		if json.Unmarshal([]byte(p.Value), &sec) != nil {
 			// A single corrupt record must not blind the sweep to the rest.
+			continue
+		}
+		if sec.DeletedDate != 0 {
+			// Scheduled for deletion, or already past its window. AWS does not
+			// rotate either, and a rotation would resurrect a secret the caller
+			// asked to be rid of.
 			continue
 		}
 		region, _ := serviceutil.SplitRegionKey(p.Key)
@@ -441,6 +483,13 @@ func errInvalidParameter(msg string) *protocol.AWSError {
 		Message:    msg,
 		HTTPStatus: 400,
 	}
+}
+
+// errMarkedForDeletion is what AWS answers for every value operation on a
+// secret inside its recovery window. The model lists "The secret is scheduled
+// for deletion" first among InvalidRequestException's causes.
+func errMarkedForDeletion() *protocol.AWSError {
+	return errInvalidRequest("You can't perform this operation on the secret because it was marked for deletion.")
 }
 
 // errInvalidRequest is AWS's "valid parameters, wrong state" error — the one

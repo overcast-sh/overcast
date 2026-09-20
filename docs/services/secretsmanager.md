@@ -1,6 +1,6 @@
 ---
 title: "Secrets Manager — AWS Secrets Manager"
-description: "Quick start, versions and staging labels, the four rotation steps run against your Lambda, and the encryption, deletion window and resource policies that are not real."
+description: "Quick start, versions and staging labels, the four rotation steps run against your Lambda, the deletion recovery window, and the encryption and resource policies that are not real."
 section: "Service Reference"
 tags:
   - docs
@@ -43,6 +43,7 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | Password generation | `GetRandomPassword` honours `PasswordLength`, the `Exclude*` settings, `IncludeSpace` and `RequireEachIncludedType` |
 | Resource policies | Put, get, delete and syntactic validation, with `BlockPublicPolicy` honoured                            |
 | Batch reads     | `BatchGetSecretValue`, with partial results when a secret is missing                                     |
+| Deletion        | `DeleteSecret` schedules a delete 7-30 days out (30 by default); the secret is hidden, refuses value operations, and `RestoreSecret` cancels it until the window closes |
 
 ## Rotation
 
@@ -68,7 +69,7 @@ already on the secret — is `InvalidRequestException`, as on AWS.
 | Area               | On AWS                                         | Overcast                                                                                                |
 | ------------------ | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | Encryption at rest | Envelope-encrypted under the named KMS key     | `KmsKeyId` is recorded as metadata; the value is stored in plaintext                                    |
-| Deletion           | A recovery window, then `RestoreSecret`        | Always immediate; `RestoreSecret` returns `501 Not Implemented`                                         |
+| Permanent deletion | A background task clears the secret some time after the window closes | The record stays until something reads it, so a name frees up the instant the window closes |
 | Resource policies  | Evaluated on every call                        | Stored and syntax-checked; never evaluated ([#496](https://github.com/overcast-sh/overcast/issues/496)) |
 | Replication        | `ReplicateSecretToRegions` and its counterpart | Not implemented — `501 Not Implemented`                                                                 |
 
@@ -85,7 +86,7 @@ already on the secret — is `InvalidRequestException`, as on AWS.
 
 ## Operations
 
-19 of 22 listed operations are implemented.
+20 of 22 listed operations are implemented.
 Per-operation status, notes and AWS API links: [Secrets Manager operations](secretsmanager/operations.md).
 
 <!-- END overcast:capabilities -->

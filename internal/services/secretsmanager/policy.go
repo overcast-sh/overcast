@@ -66,7 +66,7 @@ func (h *Handler) putResourcePolicyTyped(ctx context.Context, req *putResourcePo
 	if req.ResourcePolicy == "" {
 		return nil, errInvalidParameter("You must provide a value for the ResourcePolicy parameter.")
 	}
-	sec, aerr := h.store.resolveSecret(ctx, req.SecretId)
+	sec, aerr := h.resolveLiveSecret(ctx, req.SecretId)
 	if aerr != nil {
 		return nil, aerr
 	}
@@ -97,7 +97,7 @@ func (h *Handler) getResourcePolicyTyped(ctx context.Context, req *secretIDReque
 }
 
 func (h *Handler) deleteResourcePolicyTyped(ctx context.Context, req *secretIDRequest) (*resourcePolicyIdentityResponse, *protocol.AWSError) {
-	sec, aerr := h.store.resolveSecret(ctx, req.SecretId)
+	sec, aerr := h.resolveLiveSecret(ctx, req.SecretId)
 	if aerr != nil {
 		return nil, aerr
 	}

@@ -106,8 +106,9 @@ func (h *Handler) initOps() {
 		"PutResourcePolicy":      jsonOp(h.putResourcePolicyTyped),
 		"DeleteResourcePolicy":   jsonOp(h.deleteResourcePolicyTyped),
 		"ValidateResourcePolicy": jsonOp(h.validateResourcePolicyTyped),
+		// Deletion recovery
+		"RestoreSecret": jsonOp(h.restoreSecretTyped),
 		// Stubs (handler_stubs.go)
-		"RestoreSecret":                h.RestoreSecret,
 		"ReplicateSecretToRegions":     h.ReplicateSecretToRegions,
 		"RemoveRegionsFromReplication": h.RemoveRegionsFromReplication,
 	}
