@@ -27,14 +27,15 @@ func newHandler(cfg *config.Config, store *acmStore, clk clock.Clock) *Handler {
 }
 
 func (h *Handler) initOps() {
+	// Every operation is implemented once, as a typed function, and reached
+	// from the JSON path through an adapter. Keeping two copies is how the tag
+	// handlers drifted into not checking that the certificate exists — and how
+	// DescribeCertificate, ListCertificates and DeleteCertificate kept a
+	// second, filter-blind copy of the read path until #1994 removed it.
 	h.ops = map[string]http.HandlerFunc{
-		"DescribeCertificate": h.describeCertificate,
-		"ListCertificates":    h.listCertificates,
-		"DeleteCertificate":   h.deleteCertificate,
-		// RequestCertificate and every tag operation are implemented once, as
-		// typed functions, and reached from the JSON path through an adapter.
-		// Keeping two copies is how the tag handlers drifted into not checking
-		// that the certificate exists.
+		"DescribeCertificate":              serveTyped(h.describeCertificateTyped),
+		"ListCertificates":                 serveTyped(h.listCertificatesTyped),
+		"DeleteCertificate":                serveTyped(h.deleteCertificateTyped),
 		"RequestCertificate":               serveTyped(h.requestCertificateTyped),
 		"ListCertificateDomainValidations": serveTyped(h.listCertificateDomainValidationsTyped),
 		"ListTagsForCertificate":           serveTyped(h.listTagsForCertificateTyped),
@@ -65,55 +66,4 @@ func serveTyped[In any, Out any](fn func(context.Context, *In) (*Out, *protocol.
 		}
 		protocol.WriteJSON(w, r, http.StatusOK, out)
 	}
-}
-
-func (h *Handler) describeCertificate(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		CertificateArn string `json:"CertificateArn"`
-	}
-	if !serviceutil.DecodeJSON(w, r, &req) {
-		return
-	}
-	cert, found := h.store.getCert(r.Context(), req.CertificateArn)
-	if !found {
-		protocol.WriteJSONError(w, r, errCertificateNotFound(req.CertificateArn))
-		return
-	}
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{"Certificate": cert})
-}
-
-func (h *Handler) listCertificates(w http.ResponseWriter, r *http.Request) {
-	certs, err := h.store.listCerts(r.Context())
-	if err != nil {
-		protocol.WriteJSONError(w, r, protocol.ErrInternalError)
-		return
-	}
-	summaries := make([]map[string]any, 0, len(certs))
-	for _, c := range certs {
-		summaries = append(summaries, map[string]any{
-			"CertificateArn": c.CertificateArn,
-			"DomainName":     c.DomainName,
-			"Status":         c.Status,
-			"Type":           c.Type,
-		})
-	}
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{"CertificateSummaryList": summaries})
-}
-
-func (h *Handler) deleteCertificate(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		CertificateArn string `json:"CertificateArn"`
-	}
-	if !serviceutil.DecodeJSON(w, r, &req) {
-		return
-	}
-	if _, found := h.store.getCert(r.Context(), req.CertificateArn); !found {
-		protocol.WriteJSONError(w, r, errCertificateNotFound(req.CertificateArn))
-		return
-	}
-	if err := h.store.deleteCert(r.Context(), req.CertificateArn); err != nil {
-		protocol.WriteJSONError(w, r, protocol.ErrInternalError)
-		return
-	}
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{})
 }
