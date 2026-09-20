@@ -1,25 +1,87 @@
 service: waf
-status: not_started
+status: in_progress
 priority: p3
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-08-05
+last_updated: 2026-09-20
 protocols: [aws_json_1_1, aws_json_1_0, rpcv2_cbor]
 implementation: [internal/services/waf]
 integration_tests: [tests/integration/waf]
 capability_docs: docs/services/waf.md
-operation_count_estimate: 4 supported
-current_support_level: Metadata-only WAFv2 WebACL Create/Get/List/Delete; no rule evaluation or request enforcement.
-operations: {}
+operation_count_estimate: >-
+  7 tracked, all supported (#198): CreateWebACL, GetWebACL, ListWebACLs, DeleteWebACL,
+  TagResource, UntagResource and ListTagsForResource, added across PRs #688, #689, #698 and
+  #701. The tracker previously said "4 supported" and never counted the tag surface.
+current_support_level: >-
+  WAFv2 WebACL CRUD plus its tag surface (TagResource/UntagResource/ListTagsForResource) are
+  implemented and covered by integration tests. Every other WAFv2 operation and all of WAF
+  Classic (AWSWAF_20150824) return 501 Not Implemented, matching docs/services/waf.md.
+operations:
+  CreateWebACL:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/waf/latest/APIReference/API_CreateWebACL.html
+    implementation: internal/services/waf/typed_logic.go (createWebACLTyped)
+    tests:
+      - tests/integration/waf/waf_test.go#TestCreateWebACL_success
+      - tests/integration/waf/waf_tags_test.go#TestWAFCreateWebACL_sdkTagListShape
+      - tests/integration/waf/waf_tags_test.go#TestWAFCreateWebACL_invalidTagRejected
+  GetWebACL:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/waf/latest/APIReference/API_GetWebACL.html
+    implementation: internal/services/waf/typed_logic.go (getWebACLTyped)
+    tests:
+      - tests/integration/waf/waf_test.go#TestGetWebACL_success
+      - tests/integration/waf/waf_test.go#TestGetWebACL_notFound
+  ListWebACLs:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/waf/latest/APIReference/API_ListWebACLs.html
+    implementation: internal/services/waf/typed_logic.go (listWebACLsTyped)
+    tests:
+      - tests/integration/waf/waf_test.go#TestListWebACLs_success
+  DeleteWebACL:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/waf/latest/APIReference/API_DeleteWebACL.html
+    implementation: internal/services/waf/typed_logic.go (deleteWebACLTyped)
+    tests:
+      - tests/integration/waf/waf_test.go#TestDeleteWebACL_success
+    scenarios:
+      lock_token:
+        status: intentionally_partial
+        gap: LockToken is accepted but never checked against the stored WebACL's own token, so a stale token deletes anyway rather than reporting WAFOptimisticLockException — documented in docs/services/waf.md's Differences table.
+  TagResource:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/waf/latest/APIReference/API_TagResource.html
+    implementation: internal/services/waf/typed_logic.go (tagResourceTyped)
+    tests:
+      - tests/integration/waf/waf_tags_test.go#TestWAFCreateWebACL_sdkTagListShape
+      - tests/integration/waf/waf_tags_test.go#TestWAFCreateWebACL_invalidTagRejected
+  UntagResource:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/waf/latest/APIReference/API_UntagResource.html
+    implementation: internal/services/waf/typed_logic.go (untagResourceTyped)
+    tests:
+      - tests/integration/waf/waf_tags_test.go#TestWAFUntagResource_removesKey
+  ListTagsForResource:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/waf/latest/APIReference/API_ListTagsForResource.html
+    tests:
+      - tests/integration/waf/waf_tags_test.go#TestWAFTagResource_sdkListShape
 findings:
-  fixed: []
+  fixed:
+    - "#198: the tracker said \"4 supported\" and never mentioned the tag surface; capabilities_dev.go registers 7 Supported operations (WebACL CRUD plus TagResource/UntagResource/ListTagsForResource, added in PRs #688, #689, #698, #701), all covered by tests/integration/waf/waf_test.go and waf_tags_test.go, and docs/services/waf.md already states all 7 are implemented."
   remaining_gaps:
-    - Review service naming and scope compatibility for WAFv2.
-    - Expand tracking beyond WebACL basics if SDK coverage is desired.
+    - "#197 (Scope validation): CreateWebACL does not validate that Scope is REGIONAL or CLOUDFRONT before storing the WebACL; handler work is in flight on branch claude/issue-197-waf-scope-validation."
   intentionally_partial:
     - Web ACL default actions and rules are persisted and returned as metadata, but are not evaluated or enforced against API Gateway, CloudFront, or Application Load Balancer requests.
-    - All WAFv2 operations outside CreateWebACL, GetWebACL, ListWebACLs, and DeleteWebACL return 501 Not Implemented.
+    - "UpdateWebACL, LockToken enforcement, and AssociateWebACL are unsupported by design and listed in docs/services/waf.md's Differences table; every WAFv2 operation outside the 7 supported ones returns 501 Not Implemented."
     - WAF Classic (AWSWAF_20150824) is unsupported and returns 501 Not Implemented.
 handoff:
-  start_with: [CreateWebACL, GetWebACL, ListWebACLs, DeleteWebACL]
-  do_not_redo: []
+  start_with: [Scope validation on CreateWebACL (#197)]
+  do_not_redo: [CreateWebACL, GetWebACL, ListWebACLs, DeleteWebACL, TagResource, UntagResource, ListTagsForResource]
   commands: [go test -count=1 ./internal/services/waf/... ./tests/integration/waf/...]

@@ -2,12 +2,16 @@ service: lambda
 status: fixed
 priority: p0
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-09-19
+last_updated: 2026-09-20
 protocols: [rest_json, event_stream]
 implementation: [internal/services/lambda]
 integration_tests: [tests/integration/lambda, tests/integration/lambdadocker]
 capability_docs: docs/services/lambda.md
-operation_count_estimate: 51 tracked; 49 supported, 2 unsupported
+operation_count_estimate: >-
+  62 tracked (internal/services/lambda/capabilities_dev.go): 59 StatusSupported,
+  2 StatusPartial, 1 StatusUnsupported — matching docs/services/lambda.md's "61 of 62 listed
+  operations are implemented". The tracker previously said "51 tracked; 49 supported,
+  2 unsupported", undercounting by 11.
 current_support_level: Broad control plane plus Docker-backed invoke; InvokeAsync unsupported.
 operations:
   CreateFunction:
@@ -249,6 +253,9 @@ operations:
       parameters_and_secrets_extension_cache:
         status: reviewed
         evidence: internal/services/lambda/container_runtime_test.go verifies that Lambda containers receive AWS_ENDPOINT_URL_SECRETS_MANAGER and local session credentials. The AWS extension binary owns its process-local cache and SECRETS_MANAGER_TTL; Overcast adds no cache in front of GetSecretValue, and a new Lambda container starts a new extension process.
+      docker_unavailable_fallback:
+        status: fixed
+        evidence: "#162: when Docker is unavailable, nodeRuntimeInstance.Invoke (node_runtime.go ~99-112) answers 200 with X-Amz-Function-Error: Unhandled and a body of {\"errorMessage\":\"...\",\"errorType\":\"Runtime.DockerUnavailable\"}, matching AWS's shape for a runtime error rather than a bare 5xx. Pinned by internal/services/lambda/docker_verdict_test.go and documented at docs/services/lambda.md's \"Real execution requires Docker\" callout."
 findings:
   fixed:
     - Lambda resource-policy AddPermission, GetPolicy, and RemovePermission support race-safe AWS::Lambda::Permission create/delete orchestration; AddPermission remains reported unsupported until invocation authorization is enforced (#629).
@@ -256,10 +263,10 @@ findings:
     - PutFunctionConcurrency rejects negative ReservedConcurrentExecutions with InvalidParameterValueException instead of storing an invalid throttle limit.
     - GetFunctionConcurrency answers 200 with an empty body for a function that has no reservation, as AWS does, rather than 404 ResourceNotFoundException; a reservation of 0 is still reported, so "switched off" stays distinguishable from "unset". Tests in tests/integration/lambda/reserved_concurrency_test.go.
     - DeadLetterConfig is accepted by CreateFunction and UpdateFunctionConfiguration and acted on: a failed asynchronous invocation is delivered to the target SQS queue or SNS topic with the original event as the body and AWS's RequestID/ErrorCode/ErrorMessage message attributes.
+    - "#162: when Docker is unavailable, Invoke answers 200 with X-Amz-Function-Error: Unhandled and a Runtime.DockerUnavailable error body instead of an unmodeled failure, pinned by docker_verdict_test.go and documented on the service page. The operation_count_estimate was also corrected from \"51 tracked; 49 supported, 2 unsupported\" to the actual 62 tracked (59 supported, 2 partial, 1 unsupported)."
   remaining_gaps:
     - UpdateFunctionCode's Publish/PublishTo still return 501; the version snapshot CreateFunction and PublishVersion share (newFunctionVersion, publishVersion) makes Publish there a small follow-up.
-    - Review runtime invocation fidelity, error shapes, layers, and event source mappings.
-    - Review Docker-unavailable fallback compatibility.
+    - "#161: review runtime invocation fidelity, error shapes, layers, and event source mappings (medium-sized audit, not currently in flight)."
     - PutFunctionEventInvokeConfig is not implemented, so MaximumRetryAttempts and MaximumEventAgeInSeconds cannot be changed from AWS's defaults and an async event is never aged out; its on-failure/on-success destinations are still not applied outside event source mappings.
     - Implement S3 Files execution-environment mounts (#647) and close the remaining exact-wire capture questions (#648).
   intentionally_partial:
