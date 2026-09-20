@@ -902,6 +902,42 @@ func TestSignUp_and_ConfirmSignUp(t *testing.T) {
 	}
 }
 
+func TestSignUp_plainPool_duplicateUsername(t *testing.T) {
+	// Given: a plain username pool where "mallory" has already signed up
+	srv := helpers.NewTestServer(t)
+	poolID := createPool(t, srv, "p")
+	clientID := createClient(t, srv, poolID, "app")
+	resp := cognitoCall(t, srv, "SignUp", map[string]any{
+		"ClientId": clientID, "Username": "mallory", "Password": "Secure123!",
+	})
+	resp.Body.Close()
+	helpers.AssertStatus(t, resp, http.StatusOK)
+
+	// When: the same username signs up again
+	resp = cognitoCall(t, srv, "SignUp", map[string]any{
+		"ClientId": clientID, "Username": "mallory", "Password": "Different123!",
+	})
+
+	// Then: AWS's UsernameExistsException is returned
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertJSONError(t, resp, "UsernameExistsException")
+	resp.Body.Close()
+
+	// And: only the first sign-up exists
+	resp = cognitoCall(t, srv, "ListUsers", map[string]any{"UserPoolId": poolID})
+	defer resp.Body.Close()
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	var listResult struct {
+		Users []struct {
+			Username string `json:"Username"`
+		} `json:"Users"`
+	}
+	helpers.DecodeJSON(t, resp, &listResult)
+	if len(listResult.Users) != 1 || listResult.Users[0].Username != "mallory" {
+		t.Fatalf("expected the single original user, got %#v", listResult.Users)
+	}
+}
+
 // ─── InitiateAuth USER_PASSWORD_AUTH ─────────────────────────────────────────
 
 func TestInitiateAuth_confirmedUser(t *testing.T) {

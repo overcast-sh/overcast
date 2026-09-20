@@ -240,6 +240,93 @@ func TestSignUp_emailPool_generatesUUIDUsername(t *testing.T) {
 	}
 }
 
+func TestSignUp_emailPool_userSubMatchesGeneratedUsername(t *testing.T) {
+	// Given: a pool using email as the sign-in identifier
+	srv := helpers.NewTestServer(t)
+	poolID := createPoolWithUsernameAttributes(t, srv, "email-pool", []string{"email"})
+	clientID := createClient(t, srv, poolID, "app")
+
+	// When: SignUp is called with an email as Username
+	resp := cognitoCall(t, srv, "SignUp", map[string]any{
+		"ClientId": clientID,
+		"Username": "judy@example.com",
+		"Password": "TestPass1!",
+	})
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	var signUpResult struct {
+		UserSub string `json:"UserSub"`
+	}
+	helpers.DecodeJSON(t, resp, &signUpResult)
+	resp.Body.Close()
+
+	// Then: the SignUp response's own UserSub is a UUID
+	if !isUUID(signUpResult.UserSub) {
+		t.Fatalf("expected a UUID UserSub, got %q", signUpResult.UserSub)
+	}
+
+	// And: it equals both the generated username and the stored sub attribute
+	resp = cognitoCall(t, srv, "ListUsers", map[string]any{"UserPoolId": poolID})
+	defer resp.Body.Close()
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	var listResult struct {
+		Users []struct {
+			Username   string              `json:"Username"`
+			Attributes []map[string]string `json:"Attributes"`
+		} `json:"Users"`
+	}
+	helpers.DecodeJSON(t, resp, &listResult)
+	if len(listResult.Users) != 1 {
+		t.Fatalf("expected 1 user, got %d", len(listResult.Users))
+	}
+	if listResult.Users[0].Username != signUpResult.UserSub {
+		t.Errorf("expected generated username %q to equal UserSub %q", listResult.Users[0].Username, signUpResult.UserSub)
+	}
+	if !hasAttr(listResult.Users[0].Attributes, "sub", signUpResult.UserSub) {
+		t.Errorf("expected sub attribute to equal UserSub %q, got %v", signUpResult.UserSub, listResult.Users[0].Attributes)
+	}
+}
+
+func TestSignUp_emailPool_duplicateEmail(t *testing.T) {
+	// Given: a pool using email as the sign-in identifier and one sign-up
+	srv := helpers.NewTestServer(t)
+	poolID := createPoolWithUsernameAttributes(t, srv, "email-pool", []string{"email"})
+	clientID := createClient(t, srv, poolID, "app")
+	resp := cognitoCall(t, srv, "SignUp", map[string]any{
+		"ClientId": clientID,
+		"Username": "kim@example.com",
+		"Password": "TestPass1!",
+	})
+	resp.Body.Close()
+	helpers.AssertStatus(t, resp, http.StatusOK)
+
+	// When: the same email signs up again
+	resp = cognitoCall(t, srv, "SignUp", map[string]any{
+		"ClientId": clientID,
+		"Username": "kim@example.com",
+		"Password": "Different1!",
+	})
+
+	// Then: AWS's UsernameExistsException is returned, even though the stored
+	// username is a generated UUID rather than the email itself
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertJSONError(t, resp, "UsernameExistsException")
+	resp.Body.Close()
+
+	// And: no second user was created
+	resp = cognitoCall(t, srv, "ListUsers", map[string]any{"UserPoolId": poolID})
+	defer resp.Body.Close()
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	var listResult struct {
+		Users []struct {
+			Username string `json:"Username"`
+		} `json:"Users"`
+	}
+	helpers.DecodeJSON(t, resp, &listResult)
+	if len(listResult.Users) != 1 {
+		t.Fatalf("expected 1 user after the duplicate sign-up, got %d", len(listResult.Users))
+	}
+}
+
 func TestAdminConfirmSignUp_emailPool_usernameAttribute(t *testing.T) {
 	// Given: a pool using email as the sign-in identifier and an unconfirmed sign-up.
 	srv := helpers.NewTestServer(t)

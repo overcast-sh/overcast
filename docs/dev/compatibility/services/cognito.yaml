@@ -303,15 +303,20 @@ operations:
         tests:
           - tests/integration/cognito/cognito_secrethash_test.go
         notes: Missing SECRET_HASH in ChallengeResponses returns InvalidParameterException.
+      - name: secret client SECRET_HASH over the literal ChallengeResponses USERNAME
+        status: fixed
+        tests:
+          - tests/integration/cognito/cognito_secrethash_test.go
+        notes: On a UsernameAttributes [email] pool, a SECRET_HASH computed over the literal email sent as ChallengeResponses.USERNAME completes NEW_PASSWORD_REQUIRED, while one computed over the internally generated UUID username is rejected with NotAuthorizedException (TestRespondToAuthChallenge_secretHash_usernameAttributeEmailLiteral, TestRespondToAuthChallenge_secretHash_usernameAttributeRejectsInternalUsernameHash).
     evidence:
       - AWS RespondToAuthChallenge docs state SELECT_CHALLENGE can complete PASSWORD authentication with ANSWER, USERNAME, and PASSWORD.
       - AWS RespondToAuthChallenge docs state PASSWORD challenges use USERNAME and PASSWORD responses.
       - NEW_PASSWORD_REQUIRED flow succeeds when initial auth used email as USERNAME.
       - AWS API docs state all challenge responses require SECRET_HASH when the app client has a client secret.
+      - AWS "Computing secret hash values" guidance states the secret hash is computed over the username the client sends, which for a challenge response is ChallengeResponses.USERNAME rather than any resolved internal username.
     gaps:
-      - ChallengeResponses USERNAME edge cases not fully reviewed.
       - MFA challenge behavior not fully reviewed.
-    next_action: Review all challenge flows against AWS docs.
+    next_action: Review MFA challenge response shapes against AWS docs.
   AdminInitiateAuth:
     status: fixed
     aws_docs:
@@ -400,8 +405,7 @@ operations:
       - AWS SignInPolicy docs state AllowedFirstAuthFactors controls permitted first factors for a user pool.
     gaps:
       - CUSTOM_AUTH Lambda Define/Create/Verify trigger execution, multiple custom-challenge loops, and answer verification are intentionally partial.
-      - Device opt-in confirmation edge cases, exact validation errors, and user ListDevices pagination are not fully reviewed.
-    next_action: "Review exact device validation errors and opt-in confirmation edge cases. Device SRP (#89), plain SRP (#91), and WebAuthn (#92) cryptographic proof validation are duplicates of the consolidated findings.intentionally_partial entries for issues #124, #125, and #127; closed as such."
+    next_action: "Device validation errors and opt-in confirmation are covered by tests (issues #90, #106). Device SRP (#89), plain SRP (#91), and WebAuthn (#92) cryptographic proof validation are duplicates of the consolidated findings.intentionally_partial entries for issues #124, #125, and #127; closed as such."
   AdminRespondToAuthChallenge:
     status: fixed
     aws_docs:
@@ -440,6 +444,11 @@ operations:
         tests:
           - tests/integration/cognito/cognito_user_auth_test.go
         notes: Accepts DEVICE_KEY and SRP_A for remembered-device sessions, returns DEVICE_PASSWORD_VERIFIER, and accepts PASSWORD_CLAIM_SIGNATURE/PASSWORD_CLAIM_SECRET_BLOCK/TIMESTAMP to issue tokens. Device SRP cryptographic validation is intentionally partial.
+      - name: ChallengeResponses USERNAME alias and sub resolution
+        status: fixed
+        tests:
+          - tests/integration/cognito/cognito_admin_username_sweep_test.go
+        notes: A SELECT_CHALLENGE response whose ChallengeResponses.USERNAME is a verified email alias or the user's sub resolves to the same user and returns tokens (TestAdminRespondToAuthChallenge_aliasPool_emailAlias, TestAdminRespondToAuthChallenge_plainPool_subUsername). An unresolvable USERNAME is masked as NotAuthorizedException by the session-identity check rather than UserNotFoundException, consistent with how AWS treats a second auth-challenge step.
     evidence:
       - AWS AdminRespondToAuthChallenge docs state SELECT_CHALLENGE can complete PASSWORD authentication with ANSWER, USERNAME, and PASSWORD.
       - AWS AdminRespondToAuthChallenge docs state PASSWORD challenges use USERNAME and PASSWORD responses.
@@ -447,8 +456,8 @@ operations:
       - AWS AdminRespondToAuthChallenge docs state CUSTOM_CHALLENGE responses include USERNAME and ANSWER.
       - AWS AdminRespondToAuthChallenge docs include DEVICE_SRP_AUTH and DEVICE_PASSWORD_VERIFIER as device-auth challenge responses.
       - AWS API docs state all admin challenge responses require SECRET_HASH when the app client has a client secret.
+      - AWS AdminRespondToAuthChallenge docs state ChallengeResponses.USERNAME is the user's username, which for alias and username-attribute pools is the sign-in identifier the client holds.
     gaps:
-      - "ChallengeResponses USERNAME edge cases not fully reviewed: an unresolved or mismatched USERNAME in a SELECT_CHALLENGE/PASSWORD response answers NotAuthorizedException (\"Invalid session.\") through the session-identity check in completeChoicePasswordChallengeTyped (typed_logic.go:1181-1183), deliberately masking the difference between an invalid session and an unknown user; AWS's exact behavior here is unverified (issue #93, left open)."
       - CUSTOM_AUTH Lambda trigger execution and repeated custom-challenge loops are intentionally partial.
       - MFA challenge behavior not fully reviewed.
     next_action: "Review all admin challenge flows against AWS docs. Device SRP (#95) cryptographic proof validation is a duplicate of the consolidated findings.intentionally_partial entry for issue #125; closed as such."
@@ -533,17 +542,23 @@ operations:
         status: fixed
         tests:
           - tests/integration/cognito/cognito_username_attributes_test.go
-        notes: Stored username generation covered; sub equality still needs assertion.
+        notes: The stored username is a generated UUID, the email attribute is auto-populated, and the SignUp response's own UserSub equals both that generated username and the stored sub attribute (TestSignUp_emailPool_generatesUUIDUsername, TestSignUp_emailPool_userSubMatchesGeneratedUsername).
+      - name: duplicate sign-up
+        status: fixed
+        tests:
+          - tests/integration/cognito/cognito_username_attributes_test.go
+          - tests/integration/cognito/cognito_test.go
+        notes: A second SignUp for the same email on a UsernameAttributes [email] pool, and for the same username on a plain pool, both return UsernameExistsException and create no second user (TestSignUp_emailPool_duplicateEmail, TestSignUp_plainPool_duplicateUsername).
       - name: ListUsers username filter for username-attribute pool
         status: not_started
         tests: []
         notes: Username filter should use stored UUID; email should use email filter.
     evidence:
       - AWS Developer Guide states SignUp with username attributes populates email/phone and stores UUID username with same value as sub claim.
+      - AWS models UsernameExistsException on SignUp and documents it as thrown when Amazon Cognito encounters a user name that already exists in the user pool.
     gaps:
-      - UUID equals sub behavior needs dedicated assertion.
-      - Duplicate username-attribute validation needs review.
-    next_action: Add sub equality assertion and review duplicate username-attribute validation.
+      - ListUsers username filter semantics for username-attribute pools are not yet asserted.
+    next_action: Review the ListUsers username filter for username-attribute pools.
   ConfirmSignUp:
     status: fixed
     aws_docs:
@@ -807,6 +822,11 @@ operations:
         tests:
           - tests/integration/cognito/cognito_user_auth_test.go
         notes: With DeviceConfiguration enabled, password sign-in without DEVICE_KEY returns NewDeviceMetadata; after ConfirmDevice stores a remembered device, password sign-in with DEVICE_KEY returns DEVICE_SRP_AUTH. Device SRP cryptographic proof validation is intentionally partial.
+      - name: opt-in device sign-in before the user opts in
+        status: fixed
+        tests:
+          - tests/integration/cognito/cognito_device_review_test.go
+        notes: On a DeviceOnlyRememberedOnUserPrompt pool, a confirmed but not-yet-remembered DEVICE_KEY returns tokens directly; once UpdateDeviceStatus marks it remembered the same sign-in returns DEVICE_SRP_AUTH (TestConfirmDevice_optInPoolRequiresUserConfirmation).
     evidence:
       - AWS InitiateAuth docs state Session from ConfirmSignUp can be used with USER_AUTH for direct sign-in.
       - AWS InitiateAuth docs state USER_AUTH with USERNAME returns choice-based authentication challenges.
@@ -820,8 +840,7 @@ operations:
       - AWS SignInPolicy docs state AllowedFirstAuthFactors controls permitted first factors for a user pool.
     gaps:
       - CUSTOM_AUTH Lambda Define/Create/Verify trigger execution, multiple custom-challenge loops, and answer verification are intentionally partial.
-      - Device opt-in confirmation edge cases, exact validation errors, and user ListDevices pagination are not fully reviewed.
-    next_action: "Review exact device validation errors, opt-in confirmation edge cases, and app-tier restrictions for ALLOW_USER_AUTH. Device SRP (#102), plain SRP (#104), and WebAuthn (#105) cryptographic proof validation are duplicates of the consolidated findings.intentionally_partial entries for issues #124, #125, and #127; closed as such."
+    next_action: "Device validation errors and opt-in confirmation are covered by tests (issues #103, #106); app-tier restrictions for ALLOW_USER_AUTH are recorded (issue #129). Device SRP (#102), plain SRP (#104), and WebAuthn (#105) cryptographic proof validation are duplicates of the consolidated findings.intentionally_partial entries for issues #124, #125, and #127; closed as such."
   ConfirmDevice:
     status: fixed
     aws_docs:
@@ -835,11 +854,23 @@ operations:
         tests:
           - tests/integration/cognito/cognito_user_auth_test.go
         notes: Confirms a NewDeviceMetadata device key with verifier config, stores the device as remembered, and returns UserConfirmationNecessary=false when DeviceOnlyRememberedOnUserPrompt=false.
+      - name: opt-in device configuration
+        status: fixed
+        tests:
+          - tests/integration/cognito/cognito_device_review_test.go
+        notes: On a DeviceOnlyRememberedOnUserPrompt pool, ConfirmDevice returns UserConfirmationNecessary=true and the device lists with dev:device_remembered_status=not_remembered until UpdateDeviceStatus marks it remembered (TestConfirmDevice_optInPoolRequiresUserConfirmation).
+      - name: duplicate device confirmation
+        status: fixed
+        tests:
+          - tests/integration/cognito/cognito_device_review_test.go
+        notes: Confirming the same DeviceKey twice returns DeviceKeyExistsException and leaves the original device as the only registered one (TestConfirmDevice_duplicateDeviceKey).
     evidence:
       - AWS ConfirmDevice docs state AccessToken and DeviceKey confirm a device and UserConfirmationNecessary is false for always-remember pools.
+      - AWS ConfirmDevice docs state UserConfirmationNecessary is true when the pool is configured for users to opt in to remembering a device.
+      - AWS models DeviceKeyExistsException on ConfirmDevice and documents it as thrown when a user attempts to confirm a device with a device key that already exists.
     gaps:
-      - Device verifier cryptographic validation, duplicate-device edge cases, opt-in confirmation edge cases, and exact validation errors are not fully reviewed.
-    next_action: Review opt-in device configuration edge cases.
+      - Device verifier cryptographic validation is intentionally partial; PasswordVerifier and Salt are stored but never checked.
+    next_action: None outstanding; revisit if device verifier validation is ever implemented.
   GetDevice:
     status: fixed
     aws_docs:
@@ -852,11 +883,17 @@ operations:
         tests:
           - tests/integration/cognito/cognito_user_auth_test.go
         notes: Returns Device with DeviceKey and device attributes for the access-token user.
+      - name: unknown device key
+        status: fixed
+        tests:
+          - tests/integration/cognito/cognito_user_auth_test.go
+        notes: A DeviceKey the signed-in user never registered returns ResourceNotFoundException (TestGetDevice_unknownDeviceKey).
     evidence:
       - AWS GetDevice docs state the operation returns details for the requested signed-in user's device.
+      - AWS models ResourceNotFoundException on GetDevice for a device key that does not exist.
     gaps:
-      - Exact not-found and malformed-device-key validation messages are not reviewed.
-    next_action: Review exact GetDevice validation errors.
+      - 'Accepted permissiveness: the DeviceKeyType pattern ^[\w-]+_[0-9a-f-]+$ and its 55-character length limit are not validated, so a syntactically invalid key falls through to ResourceNotFoundException rather than InvalidParameterException. Device keys are emulator-minted and clients echo them back, so a malformed key only arrives from a caller that invented one.'
+    next_action: None outstanding; revisit if device key format validation is ever needed.
   ListDevices:
     status: fixed
     aws_docs:
@@ -869,11 +906,22 @@ operations:
         tests:
           - tests/integration/cognito/cognito_user_auth_test.go
         notes: Returns confirmed devices with DeviceKey and device_status/device_name attributes for the access-token user.
+      - name: Limit and PaginationToken validation
+        status: fixed
+        tests:
+          - tests/integration/cognito/cognito_user_auth_test.go
+        notes: A Limit above the documented maximum of 60, and a PaginationToken that is not a valid offset, both return InvalidParameterException (TestListDevices_limitAboveMaximum, TestListDevices_malformedPaginationToken).
+      - name: pagination with Limit=1
+        status: fixed
+        tests:
+          - tests/integration/cognito/cognito_user_auth_test.go
+        notes: Two devices page one at a time, the first page carries a PaginationToken, the final page omits it, and both devices appear exactly once across the pages (TestListDevices_pagesWithLimitOne).
     evidence:
       - AWS ListDevices docs state the operation lists registered devices for the signed-in user and includes device attributes and timestamps.
+      - AWS ListDevices docs state Limit accepts 0 to 60 and PaginationToken continues a previous listing.
     gaps:
-      - User ListDevices pagination and exact Limit validation messages are not fully reviewed.
-    next_action: Review user ListDevices pagination edge cases.
+      - The PaginationToken is an emulator-specific integer offset rather than AWS's opaque token, so a token minted by real AWS is not interchangeable.
+    next_action: None outstanding; the token encoding is deliberately emulator-specific.
   UpdateDeviceStatus:
     status: fixed
     aws_docs:
@@ -886,11 +934,22 @@ operations:
         tests:
           - tests/integration/cognito/cognito_user_auth_test.go
         notes: Updates DeviceRememberedStatus to not_remembered and subsequent DEVICE_KEY password sign-in returns tokens directly instead of DEVICE_SRP_AUTH.
+      - name: invalid DeviceRememberedStatus
+        status: fixed
+        tests:
+          - tests/integration/cognito/cognito_device_review_test.go
+        notes: A value outside DeviceRememberedStatusType returns InvalidParameterException and leaves the stored status untouched (TestUpdateDeviceStatus_invalidRememberedStatus).
+      - name: unknown device key
+        status: fixed
+        tests:
+          - tests/integration/cognito/cognito_user_auth_test.go
+        notes: A DeviceKey the signed-in user never registered returns ResourceNotFoundException (TestUpdateDeviceStatus_unknownDeviceKey).
     evidence:
       - AWS UpdateDeviceStatus docs state remembered enables device authentication and not_remembered disables it without deleting the device.
+      - AWS models DeviceRememberedStatusType as a closed enum of remembered and not_remembered, and ResourceNotFoundException on UpdateDeviceStatus.
     gaps:
-      - Exact invalid status and missing-device validation messages are not fully reviewed.
-    next_action: Review exact UpdateDeviceStatus validation errors.
+      - AWS's exact validation message text is not reproduced; the modeled error code and HTTP status are.
+    next_action: None outstanding.
   ForgetDevice:
     status: fixed
     aws_docs:
@@ -903,11 +962,17 @@ operations:
         tests:
           - tests/integration/cognito/cognito_user_auth_test.go
         notes: Removes a confirmed device for the access-token user and subsequent ListDevices omits it.
+      - name: unknown device key
+        status: fixed
+        tests:
+          - tests/integration/cognito/cognito_device_review_test.go
+        notes: A DeviceKey the signed-in user never registered now returns ResourceNotFoundException instead of a silent HTTP 200 (TestForgetDevice_unknownDeviceKey, issue #110).
     evidence:
       - AWS ForgetDevice docs state the operation deletes a remembered device by DeviceKey for the signed-in user.
+      - AWS models ResourceNotFoundException on ForgetDevice, so an unrecognised device key is an error rather than a no-op.
     gaps:
-      - Exact not-found semantics are not reviewed.
-    next_action: Review exact ForgetDevice not-found behavior.
+      - AWS's exact not-found message text is not reproduced; the modeled error code and HTTP status are.
+    next_action: None outstanding.
   AdminGetDevice:
     status: fixed
     aws_docs:
@@ -954,11 +1019,22 @@ operations:
         tests:
           - tests/integration/cognito/cognito_user_auth_test.go
         notes: Updates DeviceRememberedStatus for a user's confirmed device.
+      - name: invalid DeviceRememberedStatus
+        status: fixed
+        tests:
+          - tests/integration/cognito/cognito_device_review_test.go
+        notes: A value outside DeviceRememberedStatusType returns InvalidParameterException (TestAdminUpdateDeviceStatus_invalidRememberedStatus).
+      - name: unknown device key on an existing user
+        status: fixed
+        tests:
+          - tests/integration/cognito/cognito_device_review_test.go
+        notes: A DeviceKey a real user never registered returns ResourceNotFoundException rather than the UserNotFoundException an unresolvable Username gets (TestAdminUpdateDeviceStatus_unknownDeviceKey, TestAdminDeviceOperations_userNotFound).
     evidence:
       - AWS AdminUpdateDeviceStatus docs state DeviceRememberedStatus can be remembered or not_remembered.
+      - AWS models DeviceRememberedStatusType as a closed enum and ResourceNotFoundException on AdminUpdateDeviceStatus.
     gaps:
-      - Exact invalid status and not-found validation messages are not fully reviewed.
-    next_action: Review exact AdminUpdateDeviceStatus validation errors.
+      - AWS's exact validation message text is not reproduced; the modeled error code and HTTP status are.
+    next_action: None outstanding.
   AdminForgetDevice:
     status: fixed
     aws_docs:
@@ -971,11 +1047,17 @@ operations:
         tests:
           - tests/integration/cognito/cognito_user_auth_test.go
         notes: Removes a confirmed device from the resolved user and subsequent AdminListDevices omits it.
+      - name: unknown device key on an existing user
+        status: fixed
+        tests:
+          - tests/integration/cognito/cognito_device_review_test.go
+        notes: A DeviceKey a real user never registered now returns ResourceNotFoundException instead of a silent HTTP 200; an unresolvable Username still returns UserNotFoundException (TestAdminForgetDevice_unknownDeviceKey, TestAdminDeviceOperations_userNotFound, issue #114).
     evidence:
       - AWS AdminForgetDevice docs state UserPoolId, Username, and DeviceKey delete a user's remembered device.
+      - AWS models ResourceNotFoundException on AdminForgetDevice, so an unrecognised device key is an error rather than a no-op.
     gaps:
-      - Exact not-found semantics are not reviewed.
-    next_action: Review exact AdminForgetDevice not-found behavior.
+      - AWS's exact not-found message text is not reproduced; the modeled error code and HTTP status are.
+    next_action: None outstanding.
   CreateUserPool:
     status: fixed
     aws_docs:
@@ -1246,22 +1328,10 @@ findings:
     - CreateUserPoolClient/UpdateUserPoolClient now store and return PreventUserExistenceErrors, ReadAttributes, and WriteAttributes; the AWS::Cognito::UserPoolClient CloudFormation handler threads and reconciles them, and now has an Update handler at all (previously every template change replaced the client) (issue #536).
     - "CreateUserPool/CreateUserPoolClient/UpdateUserPoolClient now reject a LITE-tier pool's SignInPolicy/ALLOW_USER_AUTH with FeatureUnavailableInTierException (typed_logic.go:2674-2721: validateExplicitAuthFlowsForTier, validateUserPoolTier, validateTierForSignInPolicy, validateTierForWebAuthn; wired in handler_pools.go:146-157 and handler_clients.go:54,291), matching AWS's requirement that choice-based sign-in and passkeys need the Essentials plan or higher, confirmed by TestCreateUserPool_liteTierSignInPolicy/TestCreateUserPoolClient_liteTierUserAuth/TestUpdateUserPoolClient_liteTierUserAuth. UpdateUserPool enforces the identical SignInPolicy gate but lacks a dedicated test (issue #116, tracked separately). Closes issues #115, #117, #118, #128 (review app-tier restrictions for ALLOW_USER_AUTH), and #129 (review app-tier restrictions for SignInPolicy and ALLOW_USER_AUTH)."
     - "Issue #133 (review all challenge flows, including MFA and NEW_PASSWORD_REQUIRED, against AWS docs) is subsumed by the more specific SRP/WebAuthn verification-boundary findings below (#124, #125, #127) and by the existing NEW_PASSWORD_REQUIRED/SOFTWARE_TOKEN_MFA/challenge-flow test coverage in cognito_user_auth_test.go; closed as-is with no separate action needed."
+    - "ForgetDevice and AdminForgetDevice answer ResourceNotFoundException for a device key the user never registered (device_auth.go), instead of the silent HTTP 200 the loop fell through to, matching the operations' modeled error sets and GetDevice/UpdateDeviceStatus in the same file (TestForgetDevice_unknownDeviceKey, TestAdminForgetDevice_unknownDeviceKey). The device, SignUp and challenge review items are asserted rather than assumed: ConfirmDevice duplicate-key and opt-in confirmation (the first coverage of DeviceOnlyRememberedOnUserPrompt=true), UpdateDeviceStatus/AdminUpdateDeviceStatus enum and not-found validation, RespondToAuthChallenge SECRET_HASH over the literal ChallengeResponses.USERNAME, and SignUp's own UserSub and duplicate handling (issues #110, #114, #106, #109, #113, #107, #108, #86, #93, #97, #98, #90, #103; tests/integration/cognito/cognito_device_review_test.go)."
   remaining_gaps:
-    - "Review exact device validation errors, user ListDevices pagination edge cases, and opt-in confirmation behavior. Tracked as issue #126, in progress on branch claude/compat-cognito-tests-tier-devices-filters-secrethash."
-    - "AdminInitiateAuth's and InitiateAuth's device opt-in confirmation edge cases remain open individually as issues #90 and #103 (the same gap issue #126 tracks at the ListDevices/validation-error level)."
-    - "RespondToAuthChallenge's ChallengeResponses USERNAME edge cases (issue #86) and MFA challenge behavior (issue #87), and AdminRespondToAuthChallenge's MFA challenge behavior (issue #96), are not fully reviewed."
-    - "SignUp's UUID-equals-sub dedicated assertion (issue #97) and duplicate username-attribute validation (issue #98) need review."
-    - "ConfirmDevice's device-verifier/duplicate-device/opt-in edge cases (issue #106), GetDevice's not-found/malformed-key messages (issue #107), ListDevices' pagination/Limit messages (issue #108), UpdateDeviceStatus's invalid-status/missing-device messages (issue #109), and AdminUpdateDeviceStatus's invalid-status/not-found messages (issue #113) are not fully reviewed; ForgetDevice and AdminForgetDevice answer 200 on an unknown DeviceKey where AWS answers ResourceNotFoundException (issues #110, #114)."
+    - "RespondToAuthChallenge's MFA challenge behavior (issue #87) and AdminRespondToAuthChallenge's MFA challenge behavior (issue #96) are not fully reviewed: SMS_MFA and MFA_SETUP challenges are not implemented."
     - AutoVerifiedAttributes and Schema are threaded onto the CreateUserPool wire call by the CloudFormation UserPool handler (they always were) but the Cognito service itself does not yet store either, so both still round-trip as dropped (issue #84).
-    - "Review exact ListUsers invalid-filter validation parity. Tracked as issue #131, in progress on branch claude/compat-cognito-tests-tier-devices-filters-secrethash."
-    - "Review SECRET_HASH expectations when username aliases are used. Tracked as issue #132, in progress on branch claude/compat-cognito-tests-tier-devices-filters-secrethash."
-    - "Review every admin user operation that accepts Username for validation, errors, and response shape. Tracked as issue #134, in progress on branch claude/compat-cognito-tests-tier-devices-filters-secrethash."
-    - "Essentials-tier SignInPolicy rejection for UpdateUserPool is implemented (handler_pools.go:146-157) but not yet covered by a dedicated compat test. Tracked as issue #116, in progress on branch claude/compat-cognito-tests-tier-devices-filters-secrethash."
-<<<<<<< HEAD
-    - AutoVerifiedAttributes and Schema are threaded onto the CreateUserPool wire call by the CloudFormation UserPool handler (they always were) but the Cognito service itself does not yet store either, so both still round-trip as dropped.
-=======
-    - "Email/SMS/software-token MFA config details for SetUserPoolMfaConfig and GetUserPoolMfaConfig are not fully reviewed. Tracked as issues #119 and #121, in progress on branch claude/issue-119-cognito-mfa-config-shapes."
->>>>>>> 84154a889 (docs(cognito): reconcile the baseline tracker for the auth, device and trigger review items)
   intentionally_partial:
     - SRP proof validation is not cryptographically verified; verifier responses are shape-checked and complete authentication for SDK-compatible local testing (typed_logic.go:1249-1250 completeSRPVerifierChallengeTyped checks only that PASSWORD_CLAIM_SIGNATURE/PASSWORD_CLAIM_SECRET_BLOCK/TIMESTAMP are present; issue #124).
     - Device SRP proof validation is not cryptographically verified; DEVICE_PASSWORD_VERIFIER responses are shape-checked and complete authentication for SDK-compatible local testing (device_auth.go:99-100 completeDevicePasswordVerifierTyped checks only that the same claim fields are present; issue #125).
