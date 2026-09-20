@@ -906,6 +906,153 @@ func TestDeviceManagement_adminOperations(t *testing.T) {
 	}
 }
 
+func TestListDevices_limitAboveMaximum(t *testing.T) {
+	// Given: a signed-in user with a confirmed device
+	srv := helpers.NewTestServer(t)
+	poolID := createPoolWithDeviceConfiguration(t, srv, "p", map[string]any{
+		"ChallengeRequiredOnNewDevice":     true,
+		"DeviceOnlyRememberedOnUserPrompt": false,
+	})
+	clientID := createClientWithExplicitAuthFlows(t, srv, poolID, "app", []string{"ALLOW_USER_PASSWORD_AUTH", "ALLOW_REFRESH_TOKEN_AUTH"})
+	createConfirmedUser(t, srv, poolID, "limit-device-user", "ChoicePass1!")
+	accessToken, _ := signInAndConfirmDevice(t, srv, clientID, "limit-device-user", "ChoicePass1!", "device")
+
+	// When: ListDevices is called with a Limit above the documented maximum of 60
+	resp := cognitoCall(t, srv, "ListDevices", map[string]any{
+		"AccessToken": accessToken,
+		"Limit":       61,
+	})
+	defer resp.Body.Close()
+
+	// Then: Cognito rejects the out-of-range limit
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertJSONError(t, resp, "InvalidParameterException")
+}
+
+func TestListDevices_malformedPaginationToken(t *testing.T) {
+	// Given: a signed-in user with a confirmed device
+	srv := helpers.NewTestServer(t)
+	poolID := createPoolWithDeviceConfiguration(t, srv, "p", map[string]any{
+		"ChallengeRequiredOnNewDevice":     true,
+		"DeviceOnlyRememberedOnUserPrompt": false,
+	})
+	clientID := createClientWithExplicitAuthFlows(t, srv, poolID, "app", []string{"ALLOW_USER_PASSWORD_AUTH", "ALLOW_REFRESH_TOKEN_AUTH"})
+	createConfirmedUser(t, srv, poolID, "token-device-user", "ChoicePass1!")
+	accessToken, _ := signInAndConfirmDevice(t, srv, clientID, "token-device-user", "ChoicePass1!", "device")
+
+	// When: ListDevices is called with a PaginationToken that isn't the internal offset format
+	resp := cognitoCall(t, srv, "ListDevices", map[string]any{
+		"AccessToken":     accessToken,
+		"PaginationToken": "not-a-token",
+	})
+	defer resp.Body.Close()
+
+	// Then: Cognito rejects the malformed token
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertJSONError(t, resp, "InvalidParameterException")
+}
+
+func TestListDevices_pagesWithLimitOne(t *testing.T) {
+	// Given: a user with two confirmed devices
+	srv := helpers.NewTestServer(t)
+	poolID := createPoolWithDeviceConfiguration(t, srv, "p", map[string]any{
+		"ChallengeRequiredOnNewDevice":     true,
+		"DeviceOnlyRememberedOnUserPrompt": false,
+	})
+	clientID := createClientWithExplicitAuthFlows(t, srv, poolID, "app", []string{"ALLOW_USER_PASSWORD_AUTH", "ALLOW_REFRESH_TOKEN_AUTH"})
+	createConfirmedUser(t, srv, poolID, "paging-device-user", "ChoicePass1!")
+	accessToken, firstDeviceKey := signInAndConfirmDevice(t, srv, clientID, "paging-device-user", "ChoicePass1!", "first device")
+	_, secondDeviceKey := signInAndConfirmDevice(t, srv, clientID, "paging-device-user", "ChoicePass1!", "second device")
+
+	// When: ListDevices requests the first page with Limit=1
+	resp := cognitoCall(t, srv, "ListDevices", map[string]any{
+		"AccessToken": accessToken,
+		"Limit":       1,
+	})
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	var firstPage struct {
+		Devices []struct {
+			DeviceKey string `json:"DeviceKey"`
+		} `json:"Devices"`
+		PaginationToken string `json:"PaginationToken"`
+	}
+	helpers.DecodeJSON(t, resp, &firstPage)
+	resp.Body.Close()
+	if len(firstPage.Devices) != 1 || firstPage.PaginationToken == "" {
+		t.Fatalf("expected one device and a pagination token, got %#v", firstPage)
+	}
+
+	// Then: the second page returns the other device with no further token
+	resp = cognitoCall(t, srv, "ListDevices", map[string]any{
+		"AccessToken":     accessToken,
+		"Limit":           1,
+		"PaginationToken": firstPage.PaginationToken,
+	})
+	defer resp.Body.Close()
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	var secondPage struct {
+		Devices []struct {
+			DeviceKey string `json:"DeviceKey"`
+		} `json:"Devices"`
+		PaginationToken string `json:"PaginationToken"`
+	}
+	helpers.DecodeJSON(t, resp, &secondPage)
+	if len(secondPage.Devices) != 1 || secondPage.PaginationToken != "" {
+		t.Fatalf("expected final page with 1 device and no token, got %#v", secondPage)
+	}
+	seen := map[string]bool{firstPage.Devices[0].DeviceKey: true, secondPage.Devices[0].DeviceKey: true}
+	if !seen[firstDeviceKey] || !seen[secondDeviceKey] {
+		t.Fatalf("expected to see both devices across pages, got %#v then %#v", firstPage, secondPage)
+	}
+}
+
+func TestGetDevice_unknownDeviceKey(t *testing.T) {
+	// Given: a signed-in user with no matching device
+	srv := helpers.NewTestServer(t)
+	poolID := createPoolWithDeviceConfiguration(t, srv, "p", map[string]any{
+		"ChallengeRequiredOnNewDevice":     true,
+		"DeviceOnlyRememberedOnUserPrompt": false,
+	})
+	clientID := createClientWithExplicitAuthFlows(t, srv, poolID, "app", []string{"ALLOW_USER_PASSWORD_AUTH", "ALLOW_REFRESH_TOKEN_AUTH"})
+	createConfirmedUser(t, srv, poolID, "get-device-user", "ChoicePass1!")
+	accessToken := signInForAccessToken(t, srv, clientID, "get-device-user", "ChoicePass1!")
+
+	// When: GetDevice is called with a device key the user never registered
+	resp := cognitoCall(t, srv, "GetDevice", map[string]any{
+		"AccessToken": accessToken,
+		"DeviceKey":   "us-east-1_11111111-1111-1111-1111-111111111111",
+	})
+	defer resp.Body.Close()
+
+	// Then: Cognito reports the device as not found
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertJSONError(t, resp, "ResourceNotFoundException")
+}
+
+func TestUpdateDeviceStatus_unknownDeviceKey(t *testing.T) {
+	// Given: a signed-in user with no matching device
+	srv := helpers.NewTestServer(t)
+	poolID := createPoolWithDeviceConfiguration(t, srv, "p", map[string]any{
+		"ChallengeRequiredOnNewDevice":     true,
+		"DeviceOnlyRememberedOnUserPrompt": false,
+	})
+	clientID := createClientWithExplicitAuthFlows(t, srv, poolID, "app", []string{"ALLOW_USER_PASSWORD_AUTH", "ALLOW_REFRESH_TOKEN_AUTH"})
+	createConfirmedUser(t, srv, poolID, "update-device-user", "ChoicePass1!")
+	accessToken := signInForAccessToken(t, srv, clientID, "update-device-user", "ChoicePass1!")
+
+	// When: UpdateDeviceStatus targets a device key the user never registered
+	resp := cognitoCall(t, srv, "UpdateDeviceStatus", map[string]any{
+		"AccessToken":            accessToken,
+		"DeviceKey":              "us-east-1_11111111-1111-1111-1111-111111111111",
+		"DeviceRememberedStatus": "remembered",
+	})
+	defer resp.Body.Close()
+
+	// Then: Cognito reports the device as not found
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertJSONError(t, resp, "ResourceNotFoundException")
+}
+
 func TestRespondToAuthChallenge_webAuthn(t *testing.T) {
 	// Given: a user pool with passkey sign-in enabled and a user with a registered credential
 	srv := helpers.NewTestServer(t)
@@ -1642,6 +1789,71 @@ func TestUpdateUserPoolClient_liteTierUserAuth(t *testing.T) {
 	helpers.AssertJSONError(t, resp, "FeatureUnavailableInTierException")
 }
 
+func TestUpdateUserPool_liteTierSignInPolicyRejected(t *testing.T) {
+	// Given: a LITE-tier user pool
+	srv := helpers.NewTestServer(t)
+	poolID := createPoolWithTier(t, srv, "lite-update-signin-pool", "LITE")
+
+	// When: UpdateUserPool tries to set a choice-auth SignInPolicy
+	resp := cognitoCall(t, srv, "UpdateUserPool", map[string]any{
+		"UserPoolId": poolID,
+		"Policies": map[string]any{
+			"SignInPolicy": map[string]any{
+				"AllowedFirstAuthFactors": []string{"PASSWORD", "EMAIL_OTP"},
+			},
+		},
+	})
+	defer resp.Body.Close()
+
+	// Then: Cognito rejects the feature as unavailable in the LITE tier. The AWS
+	// model documents SignInPolicyType as requiring "the Essentials tier or
+	// higher" to "activate this setting" at all, so this mirrors
+	// TestCreateUserPool_liteTierSignInPolicy for the update path.
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertJSONError(t, resp, "FeatureUnavailableInTierException")
+}
+
+func TestUpdateUserPool_liteTierUpgradeAllowsSignInPolicy(t *testing.T) {
+	// Given: a LITE-tier user pool
+	srv := helpers.NewTestServer(t)
+	poolID := createPoolWithTier(t, srv, "lite-upgrade-signin-pool", "LITE")
+
+	// When: the same request upgrades the tier to ESSENTIALS and sets a SignInPolicy
+	resp := cognitoCall(t, srv, "UpdateUserPool", map[string]any{
+		"UserPoolId":   poolID,
+		"UserPoolTier": "ESSENTIALS",
+		"Policies": map[string]any{
+			"SignInPolicy": map[string]any{
+				"AllowedFirstAuthFactors": []string{"PASSWORD", "EMAIL_OTP"},
+			},
+		},
+	})
+	resp.Body.Close()
+	helpers.AssertStatus(t, resp, http.StatusOK)
+
+	// Then: DescribeUserPool reflects both the new tier and the sign-in policy
+	resp = cognitoCall(t, srv, "DescribeUserPool", map[string]any{"UserPoolId": poolID})
+	defer resp.Body.Close()
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	var result struct {
+		UserPool struct {
+			UserPoolTier string `json:"UserPoolTier"`
+			Policies     struct {
+				SignInPolicy struct {
+					AllowedFirstAuthFactors []string `json:"AllowedFirstAuthFactors"`
+				} `json:"SignInPolicy"`
+			} `json:"Policies"`
+		} `json:"UserPool"`
+	}
+	helpers.DecodeJSON(t, resp, &result)
+	if result.UserPool.UserPoolTier != "ESSENTIALS" {
+		t.Fatalf("expected ESSENTIALS tier, got %q", result.UserPool.UserPoolTier)
+	}
+	if !containsString(result.UserPool.Policies.SignInPolicy.AllowedFirstAuthFactors, "EMAIL_OTP") {
+		t.Fatalf("expected EMAIL_OTP in sign-in factors, got %#v", result.UserPool.Policies.SignInPolicy.AllowedFirstAuthFactors)
+	}
+}
+
 func TestUpdateUserPool_signInPolicyAllowedFirstAuthFactors(t *testing.T) {
 	// Given: a user pool with default sign-in policy
 	srv := helpers.NewTestServer(t)
@@ -1985,6 +2197,26 @@ func signInForAccessToken(t *testing.T, srv *helpers.TestServer, clientID, usern
 		t.Fatal("expected access token")
 	}
 	return result.AuthenticationResult.AccessToken
+}
+
+func createPoolWithTier(t *testing.T, srv *helpers.TestServer, name, tier string) string {
+	t.Helper()
+	resp := cognitoCall(t, srv, "CreateUserPool", map[string]any{
+		"PoolName":     name,
+		"UserPoolTier": tier,
+	})
+	defer resp.Body.Close()
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	var result struct {
+		UserPool struct {
+			Id string `json:"Id"`
+		} `json:"UserPool"`
+	}
+	helpers.DecodeJSON(t, resp, &result)
+	if result.UserPool.Id == "" {
+		t.Fatal("CreateUserPool returned empty Id")
+	}
+	return result.UserPool.Id
 }
 
 func createPoolWithAllowedFirstAuthFactors(t *testing.T, srv *helpers.TestServer, name string, factors []string) string {
