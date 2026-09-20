@@ -2694,6 +2694,76 @@ func TestEKSCreateClusterPreservesNetworkAndEncryptionConfig(t *testing.T) {
 	}
 }
 
+// TestEKSCreateClusterPreservesAccessConfigAndLogging proves the #1979 claim
+// that accessConfig and logging, sent on CreateCluster itself (not via a
+// later UpdateClusterConfig call), round-trip through both the create
+// response and DescribeCluster.
+// https://docs.aws.amazon.com/eks/latest/APIReference/API_CreateCluster.html
+func TestEKSCreateClusterPreservesAccessConfigAndLogging(t *testing.T) {
+	srv := newEKSServer(t)
+
+	created := mustCreateCluster(t, srv.URL, "access-logging-cluster", map[string]any{
+		"accessConfig": map[string]any{
+			"authenticationMode": "API_AND_CONFIG_MAP",
+		},
+		"logging": map[string]any{
+			"clusterLogging": []map[string]any{
+				{"types": []string{"api", "audit"}, "enabled": true},
+			},
+		},
+	})
+	createdAccessCfg, _ := created["accessConfig"].(map[string]any)
+	if createdAccessCfg == nil || createdAccessCfg["authenticationMode"] != "API_AND_CONFIG_MAP" {
+		t.Fatalf("expected accessConfig.authenticationMode=API_AND_CONFIG_MAP in create response, got %#v", created["accessConfig"])
+	}
+	createdLogging, _ := created["logging"].(map[string]any)
+	if createdLogging == nil {
+		t.Fatalf("expected logging in create response, got %#v", created["logging"])
+	}
+
+	descResp := eksCall(t, http.MethodGet, srv.URL+"/clusters/access-logging-cluster", nil)
+	if descResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", descResp.StatusCode)
+	}
+	body := decodeBody(t, descResp)
+	cluster, _ := body["cluster"].(map[string]any)
+
+	accessCfg, _ := cluster["accessConfig"].(map[string]any)
+	if accessCfg == nil || accessCfg["authenticationMode"] != "API_AND_CONFIG_MAP" {
+		t.Fatalf("expected DescribeCluster accessConfig.authenticationMode=API_AND_CONFIG_MAP, got %#v", cluster["accessConfig"])
+	}
+	logging, _ := cluster["logging"].(map[string]any)
+	if logging == nil {
+		t.Fatalf("expected DescribeCluster logging to round-trip, got %#v", cluster["logging"])
+	}
+	clusterLogging, _ := logging["clusterLogging"].([]any)
+	if len(clusterLogging) != 1 {
+		t.Fatalf("expected 1 clusterLogging entry, got %#v", logging["clusterLogging"])
+	}
+}
+
+// TestEKSCreateClusterRejectsDuplicateName proves the #1979 claim that
+// CreateCluster rejects an already-existing cluster name with
+// ResourceInUseException, mirroring the equivalent duplicate-name paths
+// CreateAccessEntry and CreatePodIdentityAssociation both already test.
+// https://docs.aws.amazon.com/eks/latest/APIReference/API_CreateCluster.html#API_CreateCluster_Errors
+func TestEKSCreateClusterRejectsDuplicateName(t *testing.T) {
+	srv := newEKSServer(t)
+	_ = mustCreateCluster(t, srv.URL, "dup-cluster", nil)
+
+	dupResp := eksCall(t, http.MethodPost, srv.URL+"/clusters", map[string]any{
+		"name":    "dup-cluster",
+		"roleArn": "arn:aws:iam::000000000000:role/eks-role",
+	})
+	if dupResp.StatusCode != http.StatusConflict {
+		t.Fatalf("expected 409 for duplicate cluster name, got %d", dupResp.StatusCode)
+	}
+	dupBody := decodeBody(t, dupResp)
+	if dupBody["__type"] != "ResourceInUseException" {
+		t.Fatalf("expected ResourceInUseException for duplicate cluster name, got %#v", dupBody)
+	}
+}
+
 func TestEKSCreateFargateProfilePreservesSubnets(t *testing.T) {
 	srv := newEKSServer(t)
 	_ = mustCreateCluster(t, srv.URL, "fargate-subnets-cluster", nil)
@@ -2717,6 +2787,84 @@ func TestEKSCreateFargateProfilePreservesSubnets(t *testing.T) {
 	subnets, _ := fp["subnets"].([]any)
 	if len(subnets) != 2 || subnets[0] != "subnet-aaa" {
 		t.Fatalf("expected subnets [subnet-aaa, subnet-bbb], got %#v", fp["subnets"])
+	}
+}
+
+// TestEKSCreateFargateProfileRequiresPodExecutionRoleArn proves the #1979
+// claim that podExecutionRoleArn is a required CreateFargateProfile input.
+// The pinned model marks it smithy.api#required (selectors is not — the
+// model leaves selectors optional despite the surrounding prose describing
+// how selectors are used), matching
+// https://docs.aws.amazon.com/eks/latest/APIReference/API_CreateFargateProfile.html
+// ("podExecutionRoleArn ... Required: Yes"; "selectors ... Required: No").
+func TestEKSCreateFargateProfileRequiresPodExecutionRoleArn(t *testing.T) {
+	srv := newEKSServer(t)
+	_ = mustCreateCluster(t, srv.URL, "fargate-required-cluster", nil)
+
+	resp := eksCall(t, http.MethodPost, srv.URL+"/clusters/fargate-required-cluster/fargate-profiles", map[string]any{
+		"fargateProfileName": "fp-missing-role",
+	})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 for missing podExecutionRoleArn, got %d", resp.StatusCode)
+	}
+	body := decodeBody(t, resp)
+	if body["__type"] != "MissingParameter" {
+		t.Fatalf("expected MissingParameter for missing podExecutionRoleArn, got %#v", body)
+	}
+}
+
+// TestEKSCreateFargateProfilePreservesPodExecutionRoleAndSelectors proves
+// the #1979 claim that podExecutionRoleArn and selectors are stored and
+// returned by both the create and DescribeFargateProfile responses.
+// https://docs.aws.amazon.com/eks/latest/APIReference/API_CreateFargateProfile.html
+func TestEKSCreateFargateProfilePreservesPodExecutionRoleAndSelectors(t *testing.T) {
+	srv := newEKSServer(t)
+	_ = mustCreateCluster(t, srv.URL, "fargate-role-selectors-cluster", nil)
+
+	createResp := eksCall(t, http.MethodPost, srv.URL+"/clusters/fargate-role-selectors-cluster/fargate-profiles", map[string]any{
+		"fargateProfileName":  "fp-role-selectors",
+		"podExecutionRoleArn": "arn:aws:iam::000000000000:role/fargate-pod-exec-custom",
+		"selectors": []map[string]any{
+			{"namespace": "kube-system", "labels": map[string]any{"compute": "fargate"}},
+		},
+	})
+	if createResp.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", createResp.StatusCode)
+	}
+	createBody := decodeBody(t, createResp)
+	createdFP, _ := createBody["fargateProfile"].(map[string]any)
+	if createdFP["podExecutionRoleArn"] != "arn:aws:iam::000000000000:role/fargate-pod-exec-custom" {
+		t.Fatalf("expected podExecutionRoleArn in create response, got %v", createdFP["podExecutionRoleArn"])
+	}
+	createdSelectors, _ := createdFP["selectors"].([]any)
+	if len(createdSelectors) != 1 {
+		t.Fatalf("expected 1 selector in create response, got %#v", createdFP["selectors"])
+	}
+	createdSelector, _ := createdSelectors[0].(map[string]any)
+	if createdSelector["namespace"] != "kube-system" {
+		t.Fatalf("expected selector namespace kube-system in create response, got %#v", createdSelector)
+	}
+
+	descResp := eksCall(t, http.MethodGet, srv.URL+"/clusters/fargate-role-selectors-cluster/fargate-profiles/fp-role-selectors", nil)
+	if descResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", descResp.StatusCode)
+	}
+	descBody := decodeBody(t, descResp)
+	fp, _ := descBody["fargateProfile"].(map[string]any)
+	if fp["podExecutionRoleArn"] != "arn:aws:iam::000000000000:role/fargate-pod-exec-custom" {
+		t.Fatalf("expected podExecutionRoleArn in describe response, got %v", fp["podExecutionRoleArn"])
+	}
+	selectors, _ := fp["selectors"].([]any)
+	if len(selectors) != 1 {
+		t.Fatalf("expected 1 selector in describe response, got %#v", fp["selectors"])
+	}
+	selector, _ := selectors[0].(map[string]any)
+	if selector["namespace"] != "kube-system" {
+		t.Fatalf("expected selector namespace kube-system in describe response, got %#v", selector)
+	}
+	labels, _ := selector["labels"].(map[string]any)
+	if labels["compute"] != "fargate" {
+		t.Fatalf("expected selector labels.compute=fargate in describe response, got %#v", selector["labels"])
 	}
 }
 
@@ -2776,6 +2924,96 @@ func TestEKSUpdateClusterConfigPreservesKubernetesNetworkConfig(t *testing.T) {
 	netCfg, _ := cluster["kubernetesNetworkConfig"].(map[string]any)
 	if netCfg == nil || netCfg["serviceIpv4Cidr"] != "10.100.0.0/16" {
 		t.Fatalf("expected kubernetesNetworkConfig.serviceIpv4Cidr=10.100.0.0/16, got %#v", cluster["kubernetesNetworkConfig"])
+	}
+}
+
+// TestEKSUpdateClusterConfigVpcConfigUpdate proves the #1979 claim that a
+// resourcesVpcConfig-only UpdateClusterConfig request creates an Update of
+// type VpcConfigUpdate, whose params are reflected by both DescribeUpdate
+// and the next DescribeCluster.
+// https://docs.aws.amazon.com/eks/latest/APIReference/API_UpdateClusterConfig.html
+func TestEKSUpdateClusterConfigVpcConfigUpdate(t *testing.T) {
+	srv := newEKSServer(t)
+	_ = mustCreateCluster(t, srv.URL, "vpc-cfg-cluster", map[string]any{
+		"resourcesVpcConfig": map[string]any{
+			"subnetIds": []string{"subnet-abc"},
+		},
+	})
+
+	updateResp := eksCall(t, http.MethodPost, srv.URL+"/clusters/vpc-cfg-cluster/update-config", map[string]any{
+		"resourcesVpcConfig": map[string]any{
+			"subnetIds":             []string{"subnet-abc", "subnet-def"},
+			"endpointPrivateAccess": true,
+		},
+	})
+	if updateResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", updateResp.StatusCode)
+	}
+	body := decodeBody(t, updateResp)
+	update, _ := body["update"].(map[string]any)
+	if update["type"] != "VpcConfigUpdate" {
+		t.Fatalf("expected update type VpcConfigUpdate, got %v", update["type"])
+	}
+	params, _ := update["params"].([]any)
+	if len(params) != 1 {
+		t.Fatalf("expected 1 update param, got %#v", update["params"])
+	}
+	param, _ := params[0].(map[string]any)
+	if param["type"] != "VpcConfig" {
+		t.Fatalf("expected update param type VpcConfig, got %#v", param)
+	}
+	updateID, _ := update["id"].(string)
+	if updateID == "" {
+		t.Fatalf("expected non-empty update id")
+	}
+
+	descUpdateResp := eksCall(t, http.MethodGet, srv.URL+"/clusters/vpc-cfg-cluster/updates/"+updateID, nil)
+	if descUpdateResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 for describe update, got %d", descUpdateResp.StatusCode)
+	}
+	descUpdateBody := decodeBody(t, descUpdateResp)
+	descUpdate, _ := descUpdateBody["update"].(map[string]any)
+	if descUpdate["type"] != "VpcConfigUpdate" {
+		t.Fatalf("expected DescribeUpdate type VpcConfigUpdate, got %v", descUpdate["type"])
+	}
+
+	descResp := eksCall(t, http.MethodGet, srv.URL+"/clusters/vpc-cfg-cluster", nil)
+	if descResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", descResp.StatusCode)
+	}
+	descBody := decodeBody(t, descResp)
+	cluster, _ := descBody["cluster"].(map[string]any)
+	vpcCfg, _ := cluster["resourcesVpcConfig"].(map[string]any)
+	subnetIDs, _ := vpcCfg["subnetIds"].([]any)
+	if len(subnetIDs) != 2 || subnetIDs[1] != "subnet-def" {
+		t.Fatalf("expected resourcesVpcConfig.subnetIds [subnet-abc, subnet-def], got %#v", vpcCfg["subnetIds"])
+	}
+	if vpcCfg["endpointPrivateAccess"] != true {
+		t.Fatalf("expected resourcesVpcConfig.endpointPrivateAccess=true, got %#v", vpcCfg["endpointPrivateAccess"])
+	}
+}
+
+// TestEKSUpdateClusterConfigRejectsNoChanges proves the #1979 claim that a
+// request with none of logging/resourcesVpcConfig/kubernetesNetworkConfig
+// set is rejected with InvalidParameterException, since AWS documents that
+// error as one UpdateClusterConfig can return but does not publish an exact
+// runtime message for it — only the code and status are asserted here.
+// https://docs.aws.amazon.com/eks/latest/APIReference/API_UpdateClusterConfig.html#API_UpdateClusterConfig_Errors
+func TestEKSUpdateClusterConfigRejectsNoChanges(t *testing.T) {
+	srv := newEKSServer(t)
+	_ = mustCreateCluster(t, srv.URL, "no-changes-cluster", nil)
+
+	resp := eksCall(t, http.MethodPost, srv.URL+"/clusters/no-changes-cluster/update-config", map[string]any{})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 for no configuration changes, got %d", resp.StatusCode)
+	}
+	body := decodeBody(t, resp)
+	if body["__type"] != "InvalidParameterException" {
+		t.Fatalf("expected InvalidParameterException for no configuration changes, got %#v", body)
+	}
+	msg, _ := body["message"].(string)
+	if strings.TrimSpace(msg) == "" {
+		t.Fatalf("expected non-empty message for no configuration changes, got %#v", body)
 	}
 }
 

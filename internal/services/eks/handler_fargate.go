@@ -113,6 +113,9 @@ func (s *Service) createFargateProfile(w http.ResponseWriter, r *http.Request) {
 	if !serviceutil.RequireString(w, r, req.FargateProfileName, "fargateProfileName") {
 		return
 	}
+	if !serviceutil.RequireString(w, r, req.PodExecutionRoleArn, "podExecutionRoleArn") {
+		return
+	}
 
 	fp := &FargateProfile{
 		ClusterName:         clusterName,
