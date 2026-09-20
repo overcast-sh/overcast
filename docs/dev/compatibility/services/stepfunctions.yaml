@@ -1,5 +1,5 @@
 service: stepfunctions
-status: in_progress
+status: fixed
 priority: p1
 reference_policy: aws_docs_only_unless_user_approves_real_aws
 last_updated: 2026-09-20
@@ -33,10 +33,17 @@ operations:
       - tests/integration/stepfunctions/stepfunctions_test.go#TestCreateStateMachine_alreadyExists_differentDefinition
       - tests/integration/stepfunctions/stepfunctions_test.go#TestCreateStateMachine_tagsAppliedAtCreate
       - tests/integration/stepfunctions/stepfunctions_test.go#TestRPCv2CBOR_StateMachineLifecycle
+      - tests/integration/stepfunctions/validation_test.go#TestCreateStateMachine_nameOutsideAWSCharset
+      - tests/integration/stepfunctions/validation_test.go#TestCreateStateMachine_nameWithinAWSCharset
+      - tests/integration/stepfunctions/validation_test.go#TestCreateStateMachine_roleArnNotAnIAMRole
+      - tests/integration/stepfunctions/validation_test.go#TestCreateStateMachine_roleArnIsAnIAMRole
     scenarios:
       arn_and_name_validation:
-        status: remaining_gaps
-        gap: "#1670: createStateMachineTyped (typed_logic.go) only rejects an empty Name; it does not validate RoleArn's shape, so a malformed role ARN is accepted, and it does not reject a Name containing a space (AWS's InvalidName)."
+        status: reviewed
+        note: "#2003: name is checked against AWS's documented charset (1-80 characters, no whitespace, brackets, wildcards, reserved special characters or control characters) and refused with InvalidName (400), reusing the resourceNamePattern CreateActivity already applies; a non-empty roleArn that is not an IAM role ARN is refused with InvalidArn (400)."
+      missing_role_arn:
+        status: intentionally_partial
+        gap: "An omitted roleArn is still accepted, although AWS marks it @required. AWS reports a missing required member through the front-end validator, whose error shape Step Functions does not model, so refusing it needs its own evidence."
   DescribeStateMachine:
     status: reviewed
     aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_DescribeStateMachine.html]
@@ -44,10 +51,12 @@ operations:
       - tests/integration/stepfunctions/stepfunctions_test.go#TestDescribeStateMachine_success
       - tests/integration/stepfunctions/stepfunctions_test.go#TestDescribeStateMachine_notFound
       - tests/integration/stepfunctions/stepfunctions_test.go#TestDescribeStateMachine_loggingAndTracingDefaults
+      - tests/integration/stepfunctions/validation_test.go#TestStateMachineOperations_malformedArn
+      - tests/integration/stepfunctions/validation_test.go#TestStateMachineOperations_wellFormedArnForAbsentStateMachine
     scenarios:
       execution_target_arn_resolution:
-        status: remaining_gaps
-        gap: "#1670: resolveExecutionTarget (execution_target.go) falls through to a name-lookup path for any ARN parseSMARN cannot parse, so a malformed state-machine ARN answers StateMachineDoesNotExist instead of AWS's InvalidArn."
+        status: reviewed
+        note: "#2003: every operation taking a caller-supplied stateMachineArn parses it first (requireStateMachineARN, handler.go) and answers InvalidArn (400) for anything that is not a state machine ARN. A well-formed ARN naming a state machine that does not exist still answers StateMachineDoesNotExist, which is the lookup genuinely finding nothing."
   ListStateMachines:
     status: reviewed
     aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_ListStateMachines.html]
@@ -127,8 +136,8 @@ operations:
       - tests/integration/stepfunctions/stepfunctions_eventbridge_test.go
     scenarios:
       state_machine_arn_resolution:
-        status: remaining_gaps
-        gap: See DescribeStateMachine's execution_target_arn_resolution — the same resolveExecutionTarget path backs StartExecution.
+        status: reviewed
+        note: See DescribeStateMachine's execution_target_arn_resolution — the same resolveExecutionTarget path backs StartExecution and StartSyncExecution, and executionFilter backs ListExecutions.
   StartSyncExecution:
     status: reviewed
     aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_StartSyncExecution.html]
@@ -237,11 +246,13 @@ operations:
 findings:
   fixed:
     - "#193: the tracker said \"5 supported\" with \"executions are inert/no-op\"; PR #1955 (\"complete ASL implementation\") and PR #1993 (redrive) landed a real interpreter with 37 StatusSupported operations, all covered by tests/integration/stepfunctions, and docs/services/stepfunctions.md already states Step Functions is \"✅ Supported\". This entry is a full rewrite reflecting that state."
+    - "#2003 (a #1670 follow-up): CreateStateMachine accepted any name and any roleArn, and every operation taking a caller-supplied stateMachineArn fell through parseSMARN's failure into a name lookup, so malformed input answered StateMachineDoesNotExist. Now: the name is checked against AWS's documented charset and refused with InvalidName (400), reusing the resourceNamePattern CreateActivity already applies; a non-empty roleArn that is not an IAM role ARN is InvalidArn (400); and StartExecution, StartSyncExecution, DescribeStateMachine, UpdateStateMachine, DeleteStateMachine and ListExecutions all parse the ARN first (requireStateMachineARN, handler.go) and answer InvalidArn. The name-lookup fallback was removed rather than kept: every internal caller — CloudFormation's provisioner, EventBridge and Scheduler targets, the ASL interpreter's states:startExecution Task — passes an ARN, and nothing passes a bare name. Tests: tests/integration/stepfunctions/validation_test.go."
   remaining_gaps:
-    - "CreateStateMachine's role/name validation and resolveExecutionTarget's ARN handling accept malformed input where AWS rejects it — createStateMachineTyped (typed_logic.go) only checks Name==\"\" (no RoleArn shape check, no rejection of a Name containing a space, AWS's InvalidName), and resolveExecutionTarget (execution_target.go) falls through to a name lookup for any ARN parseSMARN cannot parse, answering StateMachineDoesNotExist instead of InvalidArn. Tracked as #2003."
+    - "An omitted roleArn on CreateStateMachine, and an empty stateMachineArn, are still not reported the way AWS's front-end validator reports a missing or zero-length required member; Step Functions does not model that error shape, so each needs its own evidence."
+    - "UpdateStateMachine given a version or alias ARN answers StateMachineDoesNotExist rather than refusing the qualifier outright; AWS accepts only an unqualified state machine ARN there."
   intentionally_partial: []
 handoff:
-  start_with: [CreateStateMachine RoleArn/Name validation, resolveExecutionTarget malformed-ARN handling]
+  start_with: [Missing or empty required-member handling on CreateStateMachine and the execution operations, UpdateStateMachine given a qualified ARN]
   do_not_redo:
     [CreateStateMachine, DescribeStateMachine, ListStateMachines, DeleteStateMachine, UpdateStateMachine,
      DescribeStateMachineForExecution, ValidateStateMachineDefinition, PublishStateMachineVersion,

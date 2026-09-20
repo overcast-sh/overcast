@@ -1,5 +1,5 @@
 service: waf
-status: in_progress
+status: fixed
 priority: p3
 reference_policy: aws_docs_only_unless_user_approves_real_aws
 last_updated: 2026-09-20
@@ -25,6 +25,12 @@ operations:
       - tests/integration/waf/waf_test.go#TestCreateWebACL_success
       - tests/integration/waf/waf_tags_test.go#TestWAFCreateWebACL_sdkTagListShape
       - tests/integration/waf/waf_tags_test.go#TestWAFCreateWebACL_invalidTagRejected
+      - tests/integration/waf/waf_scope_test.go#TestCreateWebACL_scopeOutsideEnum
+      - internal/services/waf/scope_test.go#TestTypedWebACLOps_scopeOutsideEnum
+    scenarios:
+      scope_enum:
+        status: reviewed
+        note: "Scope is checked against com.amazonaws.wafv2#Scope (CLOUDFRONT | REGIONAL); a value outside it is WAFInvalidParameterException (400) rather than a stored WebACL in an unreachable namespace (#197)."
   GetWebACL:
     status: reviewed
     aws_docs:
@@ -33,6 +39,8 @@ operations:
     tests:
       - tests/integration/waf/waf_test.go#TestGetWebACL_success
       - tests/integration/waf/waf_test.go#TestGetWebACL_notFound
+      - tests/integration/waf/waf_scope_test.go#TestGetWebACL_scopeOutsideEnum
+      - tests/integration/waf/waf_scope_test.go#TestWebACL_scopesAreSeparateNamespaces
   ListWebACLs:
     status: reviewed
     aws_docs:
@@ -40,6 +48,8 @@ operations:
     implementation: internal/services/waf/typed_logic.go (listWebACLsTyped)
     tests:
       - tests/integration/waf/waf_test.go#TestListWebACLs_success
+      - tests/integration/waf/waf_scope_test.go#TestListWebACLs_scopeOutsideEnum
+      - tests/integration/waf/waf_scope_test.go#TestWebACL_cloudfrontScopeRoundTrips
   DeleteWebACL:
     status: reviewed
     aws_docs:
@@ -47,6 +57,7 @@ operations:
     implementation: internal/services/waf/typed_logic.go (deleteWebACLTyped)
     tests:
       - tests/integration/waf/waf_test.go#TestDeleteWebACL_success
+      - tests/integration/waf/waf_scope_test.go#TestDeleteWebACL_scopeOutsideEnum
     scenarios:
       lock_token:
         status: intentionally_partial
@@ -75,13 +86,16 @@ operations:
 findings:
   fixed:
     - "#198: the tracker said \"4 supported\" and never mentioned the tag surface; capabilities_dev.go registers 7 Supported operations (WebACL CRUD plus TagResource/UntagResource/ListTagsForResource, added in PRs #688, #689, #698, #701), all covered by tests/integration/waf/waf_test.go and waf_tags_test.go, and docs/services/waf.md already states all 7 are implemented."
+    - "#197 (naming): the service answers X-Amz-Target prefix AWSWAF_20190729., which is exactly the pinned model's service shape (com.amazonaws.wafv2#AWSWAF_20190729, aws.protocols#awsJson1_1). make aws-models-check compares a service's TargetPrefix() against the model, so this stays true rather than needing re-review."
+    - "#197 (Scope validation): Scope was accepted as a free string, so any value created a private namespace nothing else could list or get — the store key and the ARN are both built from it. It is now checked against the model's Scope enum (com.amazonaws.wafv2#Scope: CLOUDFRONT | REGIONAL) on CreateWebACL, GetWebACL, ListWebACLs and DeleteWebACL, on both the legacy JSON and the typed RPC v2 CBOR paths; a value outside it is WAFInvalidParameterException (400). That code rather than the front-end validator's ValidationException because WAFv2 models no ValidationException shape, lists WAFInvalidParameterException on every operation taking a Scope, and gives that exception's Field member (ParameterExceptionField) a SCOPE_VALUE value. CLOUDFRONT round-trip and namespace-separation coverage added too: its ARN is :global/webacl/<id> against REGIONAL's :regional/webacl/<id>, and a REGIONAL read cannot reach a CLOUDFRONT WebACL."
   remaining_gaps:
-    - "#197 (Scope validation): CreateWebACL does not validate that Scope is REGIONAL or CLOUDFRONT before storing the WebACL; handler work is in flight on branch claude/issue-197-waf-scope-validation."
+    - "A *missing* required Scope is still not refused on ListWebACLs and DeleteWebACL (AWS marks it @required on both): ListWebACLs answers an empty page and DeleteWebACL answers WAFNonexistentItemException. Left out of #197 because AWS reports a missing required member through the front-end validator, whose error shape WAFv2 does not model — it needs its own evidence."
+    - "CLOUDFRONT-scope calls are accepted in any region; AWS requires them to be made against us-east-1."
   intentionally_partial:
     - Web ACL default actions and rules are persisted and returned as metadata, but are not evaluated or enforced against API Gateway, CloudFront, or Application Load Balancer requests.
     - "UpdateWebACL, LockToken enforcement, and AssociateWebACL are unsupported by design and listed in docs/services/waf.md's Differences table; every WAFv2 operation outside the 7 supported ones returns 501 Not Implemented."
     - WAF Classic (AWSWAF_20150824) is unsupported and returns 501 Not Implemented.
 handoff:
-  start_with: [Scope validation on CreateWebACL (#197)]
+  start_with: [Missing-required-Scope handling on ListWebACLs/DeleteWebACL, the us-east-1 requirement for CLOUDFRONT scope]
   do_not_redo: [CreateWebACL, GetWebACL, ListWebACLs, DeleteWebACL, TagResource, UntagResource, ListTagsForResource]
   commands: [go test -count=1 ./internal/services/waf/... ./tests/integration/waf/...]

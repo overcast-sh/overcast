@@ -231,6 +231,64 @@ func validateDefinitionForType(definition, smType string) *protocol.AWSError {
 	return nil
 }
 
+// ── Caller-supplied names and ARNs ────────────────────────────────────────────
+//
+// Step Functions refuses malformed input rather than looking it up and finding
+// nothing: a name outside AWS's charset is InvalidName, and a string that is
+// not a state machine ARN is InvalidArn. A well-formed ARN naming something
+// that does not exist stays StateMachineDoesNotExist — that is a lookup that
+// really did find nothing. See #2003.
+
+// validateStateMachineName applies AWS's documented CreateStateMachine name
+// rule — 1–80 characters, none of them whitespace, a bracket, a wildcard, one
+// of the reserved special characters, or a control character (pinned model
+// com.amazonaws.sfn#Name, smithy.api#length 1–80, plus the member's own
+// documentation on CreateStateMachineInput). It is the same rule
+// CreateActivity already applies, so it shares resourceNamePattern.
+func validateStateMachineName(name string) *protocol.AWSError {
+	if resourceNamePattern.MatchString(name) {
+		return nil
+	}
+	return &protocol.AWSError{
+		Code:       "InvalidName",
+		Message:    fmt.Sprintf("Invalid Name: '%s'", name),
+		HTTPStatus: http.StatusBadRequest,
+	}
+}
+
+// validateRoleARN refuses a roleArn that is not an IAM role ARN, which AWS
+// answers with InvalidArn. The region segment is not checked: an IAM ARN
+// carries none, but nothing here depends on that.
+//
+// An *omitted* roleArn is left alone. AWS marks it @required and would refuse
+// it through the front-end validator, whose error shape Step Functions does
+// not model; refusing it here is a separate change with its own evidence.
+func validateRoleARN(roleArn string) *protocol.AWSError {
+	if roleArn == "" || isIAMRoleARN(roleArn) {
+		return nil
+	}
+	return errInvalidArn(roleArn)
+}
+
+func isIAMRoleARN(arn string) bool {
+	parts := strings.SplitN(arn, ":", 6)
+	if len(parts) != 6 || parts[0] != "arn" || parts[1] == "" || parts[2] != "iam" || parts[4] == "" {
+		return false
+	}
+	return strings.HasPrefix(parts[5], "role/") && len(parts[5]) > len("role/")
+}
+
+// requireStateMachineARN parses a caller-supplied stateMachineArn, refusing
+// anything that is not one with InvalidArn. Every operation that takes a
+// stateMachineArn from the caller goes through it before any lookup.
+func requireStateMachineARN(arn string) (smARN, *protocol.AWSError) {
+	parsed, ok := parseSMARN(arn)
+	if !ok {
+		return smARN{}, errInvalidArn(arn)
+	}
+	return parsed, nil
+}
+
 func errSMNotFound(arn string) *protocol.AWSError {
 	return &protocol.AWSError{
 		Code:       "StateMachineDoesNotExist",
