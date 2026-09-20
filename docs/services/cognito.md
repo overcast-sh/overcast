@@ -46,8 +46,8 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | Pools and clients | Full CRUD, plus sign-in policy, alias attributes, account recovery, device configuration and token validity settings     |
 | Users             | Admin and self-service creation, attributes, enable/disable, confirmation, password set and reset                       |
 | Auth flows        | `USER_PASSWORD_AUTH`, `USER_SRP_AUTH`, `REFRESH_TOKEN_AUTH`, `CUSTOM_AUTH`, and `USER_AUTH` choice-based sign-in         |
-| Challenges        | `NEW_PASSWORD_REQUIRED`, `SOFTWARE_TOKEN_MFA`, `EMAIL_OTP`, `SMS_OTP`, `WEB_AUTHN`, `DEVICE_SRP_AUTH` and its verifier   |
-| MFA               | TOTP (RFC 6238, HMAC-SHA1, 30-second window, 6 digits) and WebAuthn registration                                        |
+| Challenges        | `NEW_PASSWORD_REQUIRED`, `SMS_MFA`, `SOFTWARE_TOKEN_MFA`, `SELECT_MFA_TYPE`, `MFA_SETUP`, `EMAIL_OTP`, `SMS_OTP`, `WEB_AUTHN`, `DEVICE_SRP_AUTH` and its verifier |
+| MFA               | SMS and TOTP (RFC 6238, HMAC-SHA1, 30-second window, 6 digits) second factors, plus WebAuthn registration; not email    |
 | Devices           | Confirm, list, forget and update status, in both the user and admin forms                                               |
 | Groups            | Full CRUD plus membership, with `Precedence` and `RoleArn`                                                              |
 | Domains           | Create, describe, update and delete a pool's hosted-UI domain                                                           |

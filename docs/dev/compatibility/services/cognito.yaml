@@ -308,15 +308,34 @@ operations:
         tests:
           - tests/integration/cognito/cognito_secrethash_test.go
         notes: On a UsernameAttributes [email] pool, a SECRET_HASH computed over the literal email sent as ChallengeResponses.USERNAME completes NEW_PASSWORD_REQUIRED, while one computed over the internally generated UUID username is rejected with NotAuthorizedException (TestRespondToAuthChallenge_secretHash_usernameAttributeEmailLiteral, TestRespondToAuthChallenge_secretHash_usernameAttributeRejectsInternalUsernameHash).
+      - name: SMS_MFA challenge response
+        status: fixed
+        tests:
+          - tests/integration/cognito/cognito_sms_mfa_test.go
+        notes: SMS_MFA accepts SMS_MFA_CODE and USERNAME, issues tokens, and returns CodeMismatchException for a wrong code (issue #87).
+      - name: SELECT_MFA_TYPE challenge response
+        status: fixed
+        tests:
+          - tests/integration/cognito/cognito_sms_mfa_test.go
+        notes: SELECT_MFA_TYPE accepts ANSWER=SMS_MFA or SOFTWARE_TOKEN_MFA, moves the same session to that challenge, and returns MFAMethodNotFoundException for a factor the user has not activated (issue #87).
+      - name: MFA_SETUP challenge response
+        status: fixed
+        tests:
+          - tests/integration/cognito/cognito_sms_mfa_test.go
+        notes: MFA_SETUP completes sign-in once AssociateSoftwareToken/VerifySoftwareToken have verified a software token with the challenge Session, and activates TOTP for the user; answering before verification returns SoftwareTokenMFANotFoundException (issue #96).
     evidence:
+      - AWS RespondToAuthChallenge docs state SMS_MFA responses carry SMS_MFA_CODE and USERNAME.
+      - AWS RespondToAuthChallenge docs state SELECT_MFA_TYPE responses carry USERNAME and ANSWER naming the MFA type.
+      - AWS RespondToAuthChallenge docs state MFA_SETUP is completed with the Session returned by VerifySoftwareToken, and that the pool MFA types available for setup are listed in MFAS_CAN_SETUP.
       - AWS RespondToAuthChallenge docs state SELECT_CHALLENGE can complete PASSWORD authentication with ANSWER, USERNAME, and PASSWORD.
       - AWS RespondToAuthChallenge docs state PASSWORD challenges use USERNAME and PASSWORD responses.
       - NEW_PASSWORD_REQUIRED flow succeeds when initial auth used email as USERNAME.
       - AWS API docs state all challenge responses require SECRET_HASH when the app client has a client secret.
       - AWS "Computing secret hash values" guidance states the secret hash is computed over the username the client sends, which for a challenge response is ChallengeResponses.USERNAME rather than any resolved internal username.
     gaps:
-      - MFA challenge behavior not fully reviewed.
-    next_action: Review MFA challenge response shapes against AWS docs.
+      - Email MFA is not issued or completed; the pool EmailMfaConfiguration stays configuration-only, because the pinned ChallengeNameType has no EMAIL_MFA member and no evidence was found for the UserMFASettingList value AWS uses for it.
+      - An SMS_MFA session and its delivered code share a three-minute lifetime, so an expired challenge reports NotAuthorizedException for the session rather than ExpiredCodeException.
+    next_action: Review email MFA challenge naming against a captured AWS response.
   AdminInitiateAuth:
     status: fixed
     aws_docs:
@@ -403,8 +422,10 @@ operations:
       - AWS device-tracking docs state sign-in without DEVICE_KEY returns NewDeviceMetadata and remembered DEVICE_KEY sign-in returns DEVICE_SRP_AUTH before token issuance.
       - AWS app-client docs state USER_AUTH requires ALLOW_USER_AUTH in ExplicitAuthFlows and defaults don't include it.
       - AWS SignInPolicy docs state AllowedFirstAuthFactors controls permitted first factors for a user pool.
+      - AWS MFA docs state a required-MFA pool challenges SMS_MFA with CODE_DELIVERY_DELIVERY_MEDIUM, CODE_DELIVERY_DESTINATION and USER_ID_FOR_SRP, SELECT_MFA_TYPE with MFAS_CAN_CHOOSE when several factors are active, and MFA_SETUP with MFAS_CAN_SETUP when the user has none.
     gaps:
       - CUSTOM_AUTH Lambda Define/Create/Verify trigger execution, multiple custom-challenge loops, and answer verification are intentionally partial.
+      - Email MFA is never issued as a second factor. A required-MFA pool whose only enabled factor is EmailMfaConfiguration signs the user straight in rather than challenging them, because MFAS_CAN_SETUP would otherwise be empty.
     next_action: "Device validation errors and opt-in confirmation are covered by tests (issues #90, #106). Device SRP (#89), plain SRP (#91), and WebAuthn (#92) cryptographic proof validation are duplicates of the consolidated findings.intentionally_partial entries for issues #124, #125, and #127; closed as such."
   AdminRespondToAuthChallenge:
     status: fixed
@@ -455,11 +476,12 @@ operations:
       - AWS AdminRespondToAuthChallenge docs state PASSWORD_VERIFIER responses include PASSWORD_CLAIM_SIGNATURE, PASSWORD_CLAIM_SECRET_BLOCK, TIMESTAMP, and USERNAME.
       - AWS AdminRespondToAuthChallenge docs state CUSTOM_CHALLENGE responses include USERNAME and ANSWER.
       - AWS AdminRespondToAuthChallenge docs include DEVICE_SRP_AUTH and DEVICE_PASSWORD_VERIFIER as device-auth challenge responses.
+      - AWS AdminRespondToAuthChallenge docs state SMS_MFA responses carry SMS_MFA_CODE, SELECT_MFA_TYPE responses carry ANSWER, and MFA_SETUP is completed with the VerifySoftwareToken Session.
       - AWS API docs state all admin challenge responses require SECRET_HASH when the app client has a client secret.
       - AWS AdminRespondToAuthChallenge docs state ChallengeResponses.USERNAME is the user's username, which for alias and username-attribute pools is the sign-in identifier the client holds.
     gaps:
       - CUSTOM_AUTH Lambda trigger execution and repeated custom-challenge loops are intentionally partial.
-      - MFA challenge behavior not fully reviewed.
+      - Email MFA is not issued or completed, as for RespondToAuthChallenge.
     next_action: "Review all admin challenge flows against AWS docs. Device SRP (#95) cryptographic proof validation is a duplicate of the consolidated findings.intentionally_partial entry for issue #125; closed as such."
   AdminDeleteUser:
     status: fixed
@@ -838,8 +860,10 @@ operations:
       - AWS device-tracking docs state sign-in without DEVICE_KEY returns NewDeviceMetadata and remembered DEVICE_KEY sign-in returns DEVICE_SRP_AUTH before token issuance.
       - AWS app-client docs state USER_AUTH requires ALLOW_USER_AUTH in ExplicitAuthFlows and defaults don't include it.
       - AWS SignInPolicy docs state AllowedFirstAuthFactors controls permitted first factors for a user pool.
+      - AWS MFA docs state a required-MFA pool challenges SMS_MFA with CODE_DELIVERY_DELIVERY_MEDIUM, CODE_DELIVERY_DESTINATION and USER_ID_FOR_SRP, SELECT_MFA_TYPE with MFAS_CAN_CHOOSE when several factors are active, and MFA_SETUP with MFAS_CAN_SETUP when the user has none.
     gaps:
       - CUSTOM_AUTH Lambda Define/Create/Verify trigger execution, multiple custom-challenge loops, and answer verification are intentionally partial.
+      - Email MFA is never issued as a second factor. A required-MFA pool whose only enabled factor is EmailMfaConfiguration signs the user straight in rather than challenging them, because MFAS_CAN_SETUP would otherwise be empty.
     next_action: "Device validation errors and opt-in confirmation are covered by tests (issues #103, #106); app-tier restrictions for ALLOW_USER_AUTH are recorded (issue #129). Device SRP (#102), plain SRP (#104), and WebAuthn (#105) cryptographic proof validation are duplicates of the consolidated findings.intentionally_partial entries for issues #124, #125, and #127; closed as such."
   ConfirmDevice:
     status: fixed

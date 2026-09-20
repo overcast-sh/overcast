@@ -1060,6 +1060,15 @@ func (s *Service) completeSRPVerifierChallenge(w http.ResponseWriter, r *http.Re
 		protocol.WriteJSONError(w, r, protocol.Wrap(protocol.ErrInternalError, err))
 		return
 	}
+	if mfaResp, aerr := s.startMfaChallenge(r.Context(), pool, u); aerr != nil || mfaResp != nil {
+		if aerr != nil {
+			protocol.WriteJSONError(w, r, aerr)
+			return
+		}
+		_ = s.removeToken(r.Context(), session)
+		s.writeJSON(w, r, http.StatusOK, mfaResp)
+		return
+	}
 	if aerr := s.runPostAuthentication(r.Context(), pool, client.ClientID, u); aerr != nil {
 		protocol.WriteJSONError(w, r, aerr)
 		return
@@ -1151,18 +1160,15 @@ func (s *Service) handlePasswordAuth(w http.ResponseWriter, r *http.Request, cli
 		return
 	}
 
-	// If the user has TOTP MFA enabled and verified, require the MFA challenge.
-	if u.MFAEnabled && u.TOTPVerified {
-		session, err := s.issueOpaqueToken(r.Context(), poolID, username, "mfa", 3*time.Minute)
-		if err != nil {
-			protocol.WriteJSONError(w, r, protocol.Wrap(protocol.ErrInternalError, err))
+	// An MFA factor active for this user stands between the password and the
+	// tokens: SMS_MFA, SOFTWARE_TOKEN_MFA, SELECT_MFA_TYPE when both are on,
+	// or MFA_SETUP when the pool requires MFA and the user has neither.
+	if mfaResp, aerr := s.startMfaChallenge(r.Context(), pool, u); aerr != nil || mfaResp != nil {
+		if aerr != nil {
+			protocol.WriteJSONError(w, r, aerr)
 			return
 		}
-		s.writeJSON(w, r, http.StatusOK, map[string]any{
-			"ChallengeName":       "SOFTWARE_TOKEN_MFA",
-			"Session":             session,
-			"ChallengeParameters": map[string]string{},
-		})
+		s.writeJSON(w, r, http.StatusOK, mfaResp)
 		return
 	}
 
@@ -1304,6 +1310,15 @@ func (s *Service) respondToAuthChallenge(w http.ResponseWriter, r *http.Request)
 		s.handleNewPasswordChallenge(w, r, c, req.Session, req.ChallengeResponses)
 	case "SOFTWARE_TOKEN_MFA":
 		s.handleMFAChallenge(w, r, c, req.Session, req.ChallengeResponses)
+	case "SMS_MFA":
+		resp, aerr := s.completeSmsMfaChallengeTyped(r.Context(), c, req.Session, req.ChallengeResponses)
+		s.writeChallengeResult(w, r, resp, aerr)
+	case "SELECT_MFA_TYPE":
+		resp, aerr := s.handleSelectMfaTypeChallengeTyped(r.Context(), c, req.Session, req.ChallengeResponses)
+		s.writeChallengeResult(w, r, resp, aerr)
+	case "MFA_SETUP":
+		resp, aerr := s.completeMfaSetupChallengeTyped(r.Context(), c, req.Session, req.ChallengeResponses)
+		s.writeChallengeResult(w, r, resp, aerr)
 	default:
 		protocol.WriteJSONError(w, r, &protocol.AWSError{
 			Code:       "InvalidParameterException",
@@ -1394,6 +1409,15 @@ func (s *Service) adminRespondToAuthChallenge(w http.ResponseWriter, r *http.Req
 		s.handleNewPasswordChallenge(w, r, adminClient, req.Session, req.ChallengeResponses)
 	case "SOFTWARE_TOKEN_MFA":
 		s.handleMFAChallenge(w, r, adminClient, req.Session, req.ChallengeResponses)
+	case "SMS_MFA":
+		resp, aerr := s.completeSmsMfaChallengeTyped(r.Context(), adminClient, req.Session, req.ChallengeResponses)
+		s.writeChallengeResult(w, r, resp, aerr)
+	case "SELECT_MFA_TYPE":
+		resp, aerr := s.handleSelectMfaTypeChallengeTyped(r.Context(), adminClient, req.Session, req.ChallengeResponses)
+		s.writeChallengeResult(w, r, resp, aerr)
+	case "MFA_SETUP":
+		resp, aerr := s.completeMfaSetupChallengeTyped(r.Context(), adminClient, req.Session, req.ChallengeResponses)
+		s.writeChallengeResult(w, r, resp, aerr)
 	default:
 		protocol.WriteJSONError(w, r, &protocol.AWSError{
 			Code:       "InvalidParameterException",
@@ -1480,6 +1504,20 @@ func (s *Service) handleNewPasswordChallenge(w http.ResponseWriter, r *http.Requ
 	s.publish(r, events.CognitoUserConfirmed, events.ResourcePayload{Name: u.Username})
 	s.publish(r, events.CognitoPasswordChanged, events.ResourcePayload{Name: u.Username})
 	s.writeJSON(w, r, http.StatusOK, map[string]any{"AuthenticationResult": result})
+}
+
+// writeChallengeResult writes the result of a challenge handler that already
+// returns the typed response shape. The SMS_MFA, SELECT_MFA_TYPE and MFA_SETUP
+// challenges are implemented once, in mfa_challenges.go, and the classic
+// X-Amz-Target API delegates to them the same way it already delegates
+// WEB_AUTHN, CUSTOM_CHALLENGE and the device challenges — which means, as on
+// those, that no PostAuthentication trigger runs for them.
+func (s *Service) writeChallengeResult(w http.ResponseWriter, r *http.Request, resp *RespondToAuthChallengeResp, aerr *protocol.AWSError) {
+	if aerr != nil {
+		protocol.WriteJSONError(w, r, aerr)
+		return
+	}
+	s.writeJSON(w, r, http.StatusOK, resp)
 }
 
 // handleMFAChallenge resolves a SOFTWARE_TOKEN_MFA challenge.
@@ -1606,27 +1644,10 @@ func (s *Service) forgotPassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Return delivery details matching AWS wire format.
-	emailAddr := u.email()
-	maskedEmail := ""
-	if emailAddr != "" {
-		// Mask the email address (e.g. j***@example.com).
-		at := -1
-		for i, ch := range emailAddr {
-			if ch == '@' {
-				at = i
-				break
-			}
-		}
-		if at > 1 {
-			maskedEmail = emailAddr[:1] + "***" + emailAddr[at:]
-		} else {
-			maskedEmail = "***" + emailAddr[at:]
-		}
-	}
 	s.writeJSON(w, r, http.StatusOK, map[string]any{
 		"CodeDeliveryDetails": map[string]string{
 			"DeliveryMedium": "EMAIL",
-			"Destination":    maskedEmail,
+			"Destination":    maskEmailAddress(u.email()),
 			"AttributeName":  "email",
 		},
 	})
@@ -1790,10 +1811,16 @@ func (s *Service) getUser(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	pool, ok := s.requirePool(r.Context(), w, r, t.UserPoolID)
+	if !ok {
+		return
+	}
 	uw := toUserWire(u)
 	s.writeJSON(w, r, http.StatusOK, map[string]any{
-		"Username":       uw.Username,
-		"UserAttributes": uw.Attributes,
+		"Username":            uw.Username,
+		"UserAttributes":      uw.Attributes,
+		"PreferredMfaSetting": preferredMfaSetting(pool, u),
+		"UserMFASettingList":  userMfaFactors(pool, u),
 	})
 }
 

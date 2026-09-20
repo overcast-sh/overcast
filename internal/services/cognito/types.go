@@ -401,10 +401,15 @@ type User struct {
 	// and copy user passwords for testing managed login flows.
 	PlaintextPassword string `json:"PlaintextPassword,omitempty"`
 
-	// TOTP / MFA fields
-	TOTPSecret   string `json:"TOTPSecret,omitempty"`
-	TOTPVerified bool   `json:"TOTPVerified,omitempty"`
-	MFAEnabled   bool   `json:"MFAEnabled,omitempty"`
+	// TOTP / MFA fields. MFAEnabled is the software-token (TOTP) preference and
+	// SMSMfaEnabled the SMS one, both set through SetUserMFAPreference;
+	// PreferredMfa names the factor to challenge with when several are active
+	// and carries a ChallengeNameType value, or "".
+	TOTPSecret    string `json:"TOTPSecret,omitempty"`
+	TOTPVerified  bool   `json:"TOTPVerified,omitempty"`
+	MFAEnabled    bool   `json:"MFAEnabled,omitempty"`
+	SMSMfaEnabled bool   `json:"SMSMfaEnabled,omitempty"`
+	PreferredMfa  string `json:"PreferredMfa,omitempty"`
 
 	// GlobalSignOutAt is set when GlobalSignOut is called; any token with
 	// iat before this time is considered revoked.

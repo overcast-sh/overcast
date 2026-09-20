@@ -3,166 +3,72 @@ package cognito
 import (
 	"net/http"
 
-	"go.uber.org/zap"
-
-	"github.com/overcast-sh/overcast/internal/events"
 	"github.com/overcast-sh/overcast/internal/protocol"
 	"github.com/overcast-sh/overcast/internal/serviceutil"
 )
 
+// The four MFA operations below are implemented once, in typed_logic.go, and
+// the classic X-Amz-Target API decodes the AWS request shape and delegates.
+// They used to be byte-for-byte copies of the typed versions, which is how SMS
+// MFA preferences came to be dropped on one path and not the other.
+
 // associateSoftwareToken — AssociateSoftwareToken
 // Generates a TOTP secret for the caller and stores it on the user record
-// (pending verification via VerifySoftwareToken). Supports AccessToken only;
-// session-based association (mid-flow MFA setup) is not yet implemented.
+// (pending verification via VerifySoftwareToken). Accepts either an AccessToken
+// or the Session of an MFA_SETUP challenge.
 func (s *Service) associateSoftwareToken(w http.ResponseWriter, r *http.Request) {
-	log := s.log.WithRecorder(r.Context())
-	var req struct {
-		AccessToken string `json:"AccessToken"`
-	}
+	var req AssociateSoftwareTokenReq
 	if !serviceutil.DecodeJSON(w, r, &req) {
 		return
 	}
-	if !serviceutil.RequireString(w, r, req.AccessToken, "AccessToken") {
+	resp, aerr := s.AssociateSoftwareTokenTyped(r.Context(), &req)
+	if aerr != nil {
+		protocol.WriteJSONError(w, r, aerr)
 		return
 	}
-
-	t, ok := s.validateAccessToken(r.Context(), w, r, req.AccessToken)
-	if !ok {
-		return
-	}
-	u, ok := s.requireUser(r.Context(), w, r, t.UserPoolID, t.Username)
-	if !ok {
-		return
-	}
-
-	secret := generateTOTPSecret()
-	u.TOTPSecret = secret
-	u.TOTPVerified = false // pending verification
-	if err := s.saveUser(r.Context(), u); err != nil {
-		protocol.WriteJSONError(w, r, protocol.Wrap(protocol.ErrInternalError, err))
-		return
-	}
-	log.Info("TOTP secret generated",
-		zap.String("poolId", t.UserPoolID), zap.String("username", t.Username))
-	s.publish(r, events.CognitoUserUpdated, events.ResourcePayload{Name: t.Username})
-	s.writeJSON(w, r, http.StatusOK, map[string]any{
-		"SecretCode": secret,
-	})
+	s.writeJSON(w, r, http.StatusOK, resp)
 }
 
 // verifySoftwareToken — VerifySoftwareToken
 // Verifies that the user can produce a valid TOTP code for their stored secret.
 // On success, marks TOTPVerified = true so MFA can be enabled.
 func (s *Service) verifySoftwareToken(w http.ResponseWriter, r *http.Request) {
-	log := s.log.WithRecorder(r.Context())
-	var req struct {
-		AccessToken  string `json:"AccessToken"`
-		UserCode     string `json:"UserCode"`
-		FriendlyName string `json:"FriendlyDeviceName"` // ignored, stored for completeness
-	}
+	var req VerifySoftwareTokenReq
 	if !serviceutil.DecodeJSON(w, r, &req) {
-		return
-	}
-	if !serviceutil.RequireString(w, r, req.AccessToken, "AccessToken") {
 		return
 	}
 	if !serviceutil.RequireString(w, r, req.UserCode, "UserCode") {
 		return
 	}
-
-	t, ok := s.validateAccessToken(r.Context(), w, r, req.AccessToken)
-	if !ok {
+	resp, aerr := s.VerifySoftwareTokenTyped(r.Context(), &req)
+	if aerr != nil {
+		protocol.WriteJSONError(w, r, aerr)
 		return
 	}
-	u, ok := s.requireUser(r.Context(), w, r, t.UserPoolID, t.Username)
-	if !ok {
-		return
-	}
-	if u.TOTPSecret == "" {
-		protocol.WriteJSONError(w, r, &protocol.AWSError{
-			Code:       "SoftwareTokenMFANotFoundException",
-			Message:    "Software token TOTP MFA not found.",
-			HTTPStatus: 400,
-		})
-		return
-	}
-	if !verifyTOTP(u.TOTPSecret, req.UserCode, s.clk.Now()) {
-		protocol.WriteJSONError(w, r, &protocol.AWSError{
-			Code:       "EnableSoftwareTokenMFAException",
-			Message:    "Code mismatch and fail enable Software Token MFA.",
-			HTTPStatus: 400,
-		})
-		return
-	}
-	u.TOTPVerified = true
-	if err := s.saveUser(r.Context(), u); err != nil {
-		protocol.WriteJSONError(w, r, protocol.Wrap(protocol.ErrInternalError, err))
-		return
-	}
-	log.Info("TOTP verified",
-		zap.String("poolId", t.UserPoolID), zap.String("username", t.Username))
-	s.publish(r, events.CognitoUserUpdated, events.ResourcePayload{Name: t.Username})
-	s.writeJSON(w, r, http.StatusOK, map[string]any{
-		"Status": "SUCCESS",
-	})
+	s.writeJSON(w, r, http.StatusOK, resp)
 }
 
 // setUserMFAPreference — SetUserMFAPreference
-// Enables or disables TOTP MFA for the calling user (identified by AccessToken).
+// Activates or deactivates the calling user's MFA factors.
 func (s *Service) setUserMFAPreference(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		AccessToken              string `json:"AccessToken"`
-		SoftwareTokenMfaSettings *struct {
-			Enabled      bool `json:"Enabled"`
-			PreferredMfa bool `json:"PreferredMfa"`
-		} `json:"SoftwareTokenMfaSettings"`
-	}
+	var req SetUserMFAPreferenceReq
 	if !serviceutil.DecodeJSON(w, r, &req) {
 		return
 	}
 	if !serviceutil.RequireString(w, r, req.AccessToken, "AccessToken") {
 		return
 	}
-
-	t, ok := s.validateAccessToken(r.Context(), w, r, req.AccessToken)
-	if !ok {
+	if _, aerr := s.SetUserMFAPreferenceTyped(r.Context(), &req); aerr != nil {
+		protocol.WriteJSONError(w, r, aerr)
 		return
 	}
-	u, ok := s.requireUser(r.Context(), w, r, t.UserPoolID, t.Username)
-	if !ok {
-		return
-	}
-
-	if req.SoftwareTokenMfaSettings != nil {
-		if req.SoftwareTokenMfaSettings.Enabled && !u.TOTPVerified {
-			protocol.WriteJSONError(w, r, &protocol.AWSError{
-				Code:       "InvalidParameterException",
-				Message:    "You must verify your software token before enabling MFA.",
-				HTTPStatus: 400,
-			})
-			return
-		}
-		u.MFAEnabled = req.SoftwareTokenMfaSettings.Enabled
-	}
-	if err := s.saveUser(r.Context(), u); err != nil {
-		protocol.WriteJSONError(w, r, protocol.Wrap(protocol.ErrInternalError, err))
-		return
-	}
-	s.publish(r, events.CognitoUserUpdated, events.ResourcePayload{Name: u.Username})
 	s.writeJSON(w, r, http.StatusOK, map[string]any{})
 }
 
 // adminSetUserMFAPreference — AdminSetUserMFAPreference
 // Like SetUserMFAPreference but identified by UserPoolId + Username.
 func (s *Service) adminSetUserMFAPreference(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		UserPoolID               string `json:"UserPoolId"`
-		Username                 string `json:"Username"`
-		SoftwareTokenMfaSettings *struct {
-			Enabled      bool `json:"Enabled"`
-			PreferredMfa bool `json:"PreferredMfa"`
-		} `json:"SoftwareTokenMfaSettings"`
-	}
+	var req AdminSetUserMFAPreferenceReq
 	if !serviceutil.DecodeJSON(w, r, &req) {
 		return
 	}
@@ -172,30 +78,9 @@ func (s *Service) adminSetUserMFAPreference(w http.ResponseWriter, r *http.Reque
 	if !serviceutil.RequireString(w, r, req.Username, "Username") {
 		return
 	}
-	if _, ok := s.requirePool(r.Context(), w, r, req.UserPoolID); !ok {
+	if _, aerr := s.AdminSetUserMFAPreferenceTyped(r.Context(), &req); aerr != nil {
+		protocol.WriteJSONError(w, r, aerr)
 		return
 	}
-
-	u, ok := s.requireUser(r.Context(), w, r, req.UserPoolID, req.Username)
-	if !ok {
-		return
-	}
-
-	if req.SoftwareTokenMfaSettings != nil {
-		if req.SoftwareTokenMfaSettings.Enabled && !u.TOTPVerified {
-			protocol.WriteJSONError(w, r, &protocol.AWSError{
-				Code:       "InvalidParameterException",
-				Message:    "You must verify your software token before enabling MFA.",
-				HTTPStatus: 400,
-			})
-			return
-		}
-		u.MFAEnabled = req.SoftwareTokenMfaSettings.Enabled
-	}
-	if err := s.saveUser(r.Context(), u); err != nil {
-		protocol.WriteJSONError(w, r, protocol.Wrap(protocol.ErrInternalError, err))
-		return
-	}
-	s.publish(r, events.CognitoUserUpdated, events.ResourcePayload{Name: u.Username})
 	s.writeJSON(w, r, http.StatusOK, map[string]any{})
 }
