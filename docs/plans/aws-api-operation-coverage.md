@@ -383,6 +383,14 @@ observed. If an open PR exists from that branch, the workflow updates its title
 and body; otherwise it creates one. The `aws-api-model-refresh` concurrency
 group serializes runs. It never updates contributor branches and never merges.
 
+Besides the weekly schedule and manual dispatch it runs on a push to `main` that
+touches the refresh's inputs (`models/aws/`, `internal/awsapi/`,
+`internal/awsshapes/`, `cmd/awsmodelgen/`, `scripts/aws-models.go`). Such a push
+only refreshes a PR that is already open, regenerating it on the new `main` and
+at the latest upstream revision; with no PR open it stops, so opening a refresh
+stays the weekly run's job. The changelog waiver is posted once per PR rather
+than on every run.
+
 The upstream repository is cached as a Git mirror keyed by the observed commit.
 Every run still fetches from the configured official source, verifies that both
 the old and new revisions are real commits, and verifies that the mirror's

@@ -4,6 +4,22 @@ on:
   schedule:
     - cron: "17 3 * * 1"
   workflow_dispatch:
+  # Keeps an *open* refresh PR current when main moves under it. The PR is one
+  # generated commit, and a change to what it is generated from or written
+  # over (#1955 added a line to models/aws/VERSION) makes it conflict or go
+  # stale until the next weekly run, which can be six days. Only those paths:
+  # unrelated merges leave it mergeable, since the ruleset does not require the
+  # branch to be up to date. A push only refreshes a PR that is already open
+  # and never opens one, so the weekly cadence stays what starts a refresh.
+  push:
+    branches: [main]
+    paths:
+      - models/aws/**
+      - internal/awsapi/**
+      - internal/awsshapes/**
+      - cmd/awsmodelgen/**
+      - scripts/aws-models.go
+      - .github/workflows/aws-model-refresh.yml
 
 permissions:
   contents: write
@@ -111,22 +127,28 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           LATEST_REVISION: ${{ steps.upstream.outputs.latest_revision }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
           expected_revision=""
           refresh_needed="true"
-          if git fetch origin "+refs/heads/$UPDATE_BRANCH:refs/remotes/origin/$UPDATE_BRANCH"; then
+          pr_number="$(gh pr list \
+            --state open \
+            --base main \
+            --head "$UPDATE_BRANCH" \
+            --json number \
+            --jq '.[0].number // empty')"
+          if [[ "$EVENT_NAME" == "push" && -z "$pr_number" ]]; then
+            # main moved, but there is no open PR for it to have gone stale.
+            # Opening one is the weekly run's job.
+            refresh_needed="false"
+            echo "A push to main touched the model inputs, but no refresh PR is open; the weekly run opens the next one." >> "$GITHUB_STEP_SUMMARY"
+          elif git fetch origin "+refs/heads/$UPDATE_BRANCH:refs/remotes/origin/$UPDATE_BRANCH"; then
             update_ref="refs/remotes/origin/$UPDATE_BRANCH"
             expected_revision="$(git rev-parse "$update_ref")"
             update_pin="$(git show "$update_ref:models/aws/VERSION" | sed -n 's/^revision=//p')"
             update_parent="$(git rev-parse "$update_ref^")"
             current_main="$(git rev-parse origin/main)"
-            pr_number="$(gh pr list \
-              --state open \
-              --base main \
-              --head "$UPDATE_BRANCH" \
-              --json number \
-              --jq '.[0].number // empty')"
             if [[ "$update_pin" == "$LATEST_REVISION" && "$update_parent" == "$current_main" && -n "$pr_number" ]]; then
               refresh_needed="false"
               echo "Open PR #$pr_number already contains $LATEST_REVISION on current main." >> "$GITHUB_STEP_SUMMARY"
@@ -404,7 +426,13 @@ jobs:
           # A waiver posted after `Changelog entry` has already run is picked up
           # by changelog-waiver.yml re-running it, so this does not race the
           # check that the PR creation above started.
-          if [[ -z "$CHANGELOG_FRAGMENT" ]]; then
+          #
+          # Said once per PR: a refresh of an open PR now also runs when main
+          # moves, and repeating an unchanged waiver each time only buries the
+          # thread. The check reads the latest command, so the first one stands
+          # (and so does a maintainer's later /needs-changelog).
+          existing_comments="$(gh api "repos/$GITHUB_REPOSITORY/issues/$pr_number/comments" --paginate --jq '.[].body' || true)"
+          if [[ -z "$CHANGELOG_FRAGMENT" ]] && ! grep -qF '/no-changelog awsmodelgen diffed this revision' <<<"$existing_comments"; then
             gh pr comment "$pr_number" --body \
               "/no-changelog awsmodelgen diffed this revision against the previous corpus and found no operation added or removed, no protocol-trait or HTTP/target-binding change, and no collision change — the categories that move a request between the S3 fallback, a protocol-correct 501 and a scoped-credential error. Nothing a caller can observe moved, so there is no entry to write. A refresh that does move one of those carries a generated fragment in the commit instead."
           fi

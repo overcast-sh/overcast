@@ -260,7 +260,11 @@ Output is deterministic for a given source revision.
 ## Automated refresh
 
 `.github/workflows/aws-model-refresh.yml` checks upstream weekly and on manual
-dispatch. When AWS publishes a new revision, it:
+dispatch. It also re-runs when a push to `main` touches what the refresh is
+generated from (`models/aws/`, `internal/awsapi/`, `internal/awsshapes/`,
+`cmd/awsmodelgen/`, `scripts/aws-models.go`), but only to bring an already open
+refresh PR up to date: a push never opens one. When AWS publishes a new
+revision, it:
 
 1. restores and verifies a cached upstream Git mirror;
 2. asserts the committed manifest **and shape snapshot** still match the
