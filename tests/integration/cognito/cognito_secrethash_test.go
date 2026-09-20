@@ -566,3 +566,132 @@ func TestInitiateAuth_secretHash_aliasAttributeRejectsResolvedUsernameHash(t *te
 	helpers.AssertStatus(t, resp, http.StatusBadRequest)
 	helpers.AssertJSONError(t, resp, "NotAuthorizedException")
 }
+
+// ─── RespondToAuthChallenge SECRET_HASH with username attributes ──────────────
+//
+// The same rule as InitiateAuth above applies to the challenge leg: AWS's
+// "Computing secret hash values" guidance is to hash the username value the
+// client sends, and RespondToAuthChallenge takes that value from
+// ChallengeResponses.USERNAME. checkSecretHashTyped hashes
+// req.ChallengeResponses["USERNAME"] exactly as received, before any
+// UsernameAttributes resolution, so a hash computed over the pool's internally
+// generated UUID username must be rejected.
+
+// createEmailPoolUserWithTempPassword admin-creates a user in a
+// UsernameAttributes:[email] pool with a temporary password and returns the
+// internally generated username (which equals the user's sub).
+func createEmailPoolUserWithTempPassword(t *testing.T, srv *helpers.TestServer, poolID, email, tempPassword string) string {
+	t.Helper()
+	resp := cognitoCall(t, srv, "AdminCreateUser", map[string]any{
+		"UserPoolId":        poolID,
+		"Username":          email,
+		"TemporaryPassword": tempPassword,
+		"MessageAction":     "SUPPRESS",
+		"UserAttributes":    []map[string]string{{"Name": "email_verified", "Value": "true"}},
+	})
+	defer resp.Body.Close()
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	var result struct {
+		User struct {
+			Username string `json:"Username"`
+		} `json:"User"`
+	}
+	helpers.DecodeJSON(t, resp, &result)
+	if result.User.Username == "" {
+		t.Fatal("AdminCreateUser returned an empty Username")
+	}
+	return result.User.Username
+}
+
+// newPasswordChallengeSession signs in with a temporary password and returns the
+// NEW_PASSWORD_REQUIRED session.
+func newPasswordChallengeSession(t *testing.T, srv *helpers.TestServer, clientID, username, tempPassword, hash string) string {
+	t.Helper()
+	resp := cognitoCall(t, srv, "InitiateAuth", map[string]any{
+		"ClientId": clientID,
+		"AuthFlow": "USER_PASSWORD_AUTH",
+		"AuthParameters": map[string]string{
+			"USERNAME":    username,
+			"PASSWORD":    tempPassword,
+			"SECRET_HASH": hash,
+		},
+	})
+	defer resp.Body.Close()
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	var challenge struct {
+		ChallengeName string `json:"ChallengeName"`
+		Session       string `json:"Session"`
+	}
+	helpers.DecodeJSON(t, resp, &challenge)
+	if challenge.ChallengeName != "NEW_PASSWORD_REQUIRED" || challenge.Session == "" {
+		t.Fatalf("expected a NEW_PASSWORD_REQUIRED session, got %#v", challenge)
+	}
+	return challenge.Session
+}
+
+func TestRespondToAuthChallenge_secretHash_usernameAttributeEmailLiteral(t *testing.T) {
+	// Given: a UsernameAttributes:[email] pool, a secret client, and a user in
+	// FORCE_CHANGE_PASSWORD reached by signing in with the email address
+	srv := helpers.NewTestServer(t)
+	poolID := createPoolWithUsernameAttributes(t, srv, "email-secret-challenge-pool", []string{"email"})
+	clientID, clientSecret := createClientWithSecret(t, srv, poolID, "app")
+	createEmailPoolUserWithTempPassword(t, srv, poolID, "gwen@example.com", "TempHash1!")
+	session := newPasswordChallengeSession(t, srv, clientID, "gwen@example.com", "TempHash1!",
+		secretHash("gwen@example.com", clientID, clientSecret))
+
+	// When: RespondToAuthChallenge hashes SECRET_HASH over the same literal
+	// email it puts in ChallengeResponses.USERNAME
+	resp := cognitoCall(t, srv, "RespondToAuthChallenge", map[string]any{
+		"ClientId":      clientID,
+		"ChallengeName": "NEW_PASSWORD_REQUIRED",
+		"Session":       session,
+		"ChallengeResponses": map[string]string{
+			"USERNAME":     "gwen@example.com",
+			"NEW_PASSWORD": "FinalHash1!",
+			"SECRET_HASH":  secretHash("gwen@example.com", clientID, clientSecret),
+		},
+	})
+	defer resp.Body.Close()
+
+	// Then: the challenge completes and returns tokens
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	var result struct {
+		AuthenticationResult struct {
+			AccessToken string `json:"AccessToken"`
+		} `json:"AuthenticationResult"`
+	}
+	helpers.DecodeJSON(t, resp, &result)
+	if result.AuthenticationResult.AccessToken == "" {
+		t.Error("expected AccessToken, got none")
+	}
+}
+
+func TestRespondToAuthChallenge_secretHash_usernameAttributeRejectsInternalUsernameHash(t *testing.T) {
+	// Given: the same UsernameAttributes:[email] pool, secret client, and
+	// FORCE_CHANGE_PASSWORD user
+	srv := helpers.NewTestServer(t)
+	poolID := createPoolWithUsernameAttributes(t, srv, "email-secret-challenge-pool", []string{"email"})
+	clientID, clientSecret := createClientWithSecret(t, srv, poolID, "app")
+	internalUsername := createEmailPoolUserWithTempPassword(t, srv, poolID, "hugo@example.com", "TempHash1!")
+	session := newPasswordChallengeSession(t, srv, clientID, "hugo@example.com", "TempHash1!",
+		secretHash("hugo@example.com", clientID, clientSecret))
+
+	// When: RespondToAuthChallenge sends the email as USERNAME but hashes
+	// SECRET_HASH over the internally generated UUID username instead
+	resp := cognitoCall(t, srv, "RespondToAuthChallenge", map[string]any{
+		"ClientId":      clientID,
+		"ChallengeName": "NEW_PASSWORD_REQUIRED",
+		"Session":       session,
+		"ChallengeResponses": map[string]string{
+			"USERNAME":     "hugo@example.com",
+			"NEW_PASSWORD": "FinalHash1!",
+			"SECRET_HASH":  secretHash(internalUsername, clientID, clientSecret),
+		},
+	})
+	defer resp.Body.Close()
+
+	// Then: the hash doesn't match what AWS expects (hashed over the literal
+	// USERNAME value), so the challenge is rejected
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertJSONError(t, resp, "NotAuthorizedException")
+}

@@ -244,7 +244,10 @@ func (s *Service) ForgetDeviceTyped(ctx context.Context, req *DeviceKeyAccessReq
 			return &struct{}{}, nil
 		}
 	}
-	return &struct{}{}, nil
+	// AWS models ResourceNotFoundException on ForgetDevice/AdminForgetDevice and
+	// reports an unrecognised device key rather than succeeding, so an unknown
+	// key is an error here too — not a silent no-op (issues #110, #114).
+	return nil, errDeviceNotFound()
 }
 
 func (s *Service) AdminGetDeviceTyped(ctx context.Context, req *AdminDeviceReq) (*GetDeviceResp, *protocol.AWSError) {
@@ -307,7 +310,10 @@ func (s *Service) AdminForgetDeviceTyped(ctx context.Context, req *AdminDeviceRe
 			return &struct{}{}, nil
 		}
 	}
-	return &struct{}{}, nil
+	// AWS models ResourceNotFoundException on ForgetDevice/AdminForgetDevice and
+	// reports an unrecognised device key rather than succeeding, so an unknown
+	// key is an error here too — not a silent no-op (issues #110, #114).
+	return nil, errDeviceNotFound()
 }
 
 func (s *Service) requireAdminDeviceUser(ctx context.Context, poolID, username string) (*User, *protocol.AWSError) {
