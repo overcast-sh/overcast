@@ -1,9 +1,9 @@
 service: sns
-status: implementation_mismatch
+status: fixed
 priority: p0
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-08-21
-protocols: [query, aws_json_typed]
+last_updated: 2026-09-20
+protocols: [query]
 implementation: [internal/services/sns]
 integration_tests: [tests/integration/sns]
 capability_docs: docs/services/sns.md
@@ -81,6 +81,27 @@ operations:
       - scenario: RawMessageDelivery for SQS subscriptions.
         status: tested and matching AWS docs
         evidence: SQS delivery enqueues the plain message body when RawMessageDelivery=true, now using the MessageStructure=json protocol-selected text rather than the raw JSON structure blob; the CloudFormation integration test also covers deployed FilterPolicyScope=MessageBody.
+      - scenario: Fan-out to multiple SQS subscribers on one topic.
+        status: tested and matching AWS docs
+        evidence: One Publish call asynchronously delivers to every subscribed queue — tests/integration/sns/sns_test.go::TestPublish_fanOutToMultipleQueues, TestPublish_deliversToSQSSubscriber.
+      - scenario: Fan-out to a lambda-protocol subscriber.
+        status: tested and matching AWS docs
+        evidence: A lambda subscription invokes the target function asynchronously on Publish — tests/integration/sns/sns_test.go::TestPublish_deliversToLambdaSubscriber.
+      - scenario: Fan-out to an email-protocol subscriber.
+        status: tested and matching AWS docs
+        evidence: An email subscription captures a message with the Publish Subject and body text via the SMTP mock — tests/integration/sns/sns_test.go::TestPublish_deliversToEmailSubscriber.
+      - scenario: Fan-out to an email-json-protocol subscriber.
+        status: tested and matching AWS docs
+        evidence: An email-json subscription captures the full SNS JSON notification envelope (Type=Notification, Message) rather than the raw text — tests/integration/sns/sns_test.go::TestPublish_deliversToEmailJSONSubscriber.
+      - scenario: Fan-out to an sms-protocol subscriber, and direct-to-PhoneNumber Publish.
+        status: tested and matching AWS docs
+        evidence: An sms subscription captures the message body addressed to the subscribed number — tests/integration/sns/sns_test.go::TestPublish_deliversToSMSSubscriber; a topic-less PhoneNumber-only Publish delivers the same way — TestPublish_phoneNumberDeliversDirectSMS (also listed under Publish's own tests above).
+      - scenario: Subscription FilterPolicy set/get round-trip via SetSubscriptionAttributes.
+        status: tested and matching AWS docs
+        evidence: A FilterPolicy attribute set via SetSubscriptionAttributes is returned verbatim by GetSubscriptionAttributes — tests/integration/sns/sns_test.go::TestSetSubscriptionAttributes_filterPolicy.
+      - scenario: FilterPolicy delivery semantics — match, no-match, and no-attribute-present.
+        status: tested and matching AWS docs
+        evidence: A matching MessageAttributes value delivers, a non-matching value is skipped, and a Publish carrying none of the filtered attributes is skipped when the policy requires one — tests/integration/sns/sns_test.go::TestPublish_filterPolicy_matchesDelivery, TestPublish_filterPolicy_noMatchSkipsDelivery, TestPublish_filterPolicy_noAttributeSkipsDelivery, TestPublish_noFilterPolicy_alwaysDelivers.
     findings:
       - Fixed — destination selection, MessageStructure=json, Message/Subject validation, TargetArn's explicit-unsupported response, and FIFO parameter validation (#183).
       - FIFO Publish parameter presence is now validated, but ordering/dedup/SequenceNumber generation remain unimplemented and are documented as such in docs/services/sns.md.
@@ -91,13 +112,32 @@ findings:
   fixed:
     - AWS::SNS::Topic now applies configured attributes during Create as well as Update, and AWS::SNS::Subscription forwards FilterPolicy, FilterPolicyScope, RawMessageDelivery, RedrivePolicy, DeliveryPolicy, SubscriptionRoleArn, and ReplayPolicy through SNS after Subscribe. The CloudFormation integration test proves attribute round-trip, MessageBody filtering, and raw SQS delivery.
     - Publish reviewed against AWS docs (#183) — destination selection (TopicArn/PhoneNumber/TargetArn), MessageStructure=json per-protocol payload selection, Message/Subject validation, an explicit TargetArn-unsupported response, and FIFO-parameter validation are now implemented and tested; see the Publish operation entry above for the full disposition.
+    - >-
+      #184 — the header claimed protocols [query, aws_json_typed], but SNS only ever
+      served QueryXML: SupportedProtocols() in internal/services/sns/typed_ops.go:39-41
+      returns []codec.Codec{codec.QueryXML} alone, and every SNS operation in the pinned
+      model (internal/awsapi/manifest.gen.go) is Protocol: ProtocolAWSQuery — SNS has no
+      JSON-typed wire protocol on AWS at all. The tracker header is corrected to
+      [query]; no code change was needed, the tracker was wrong.
+    - >-
+      #185 — async delivery and filter-policy fidelity were asked to be reviewed. Both
+      are implemented and tested: fan-out to SQS (single and multiple subscribers),
+      Lambda, email, email-json, and SMS/direct-PhoneNumber all deliver correctly, and
+      FilterPolicy match/no-match/no-attribute-present semantics are enforced on
+      delivery, with the policy itself round-tripping through
+      Set/GetSubscriptionAttributes. See the Publish operation's scenario_matrix above
+      for the specific tests. The two real gaps this uncovered (MessageAttributes not
+      forwarded in the SQS/HTTP/email envelope; FIFO ordering/dedup/SequenceNumber) are
+      kept below rather than closed.
   remaining_gaps:
-    - Review Query/JSON protocol parity; current service advertises QueryXML via SupportedProtocols despite tracker listing aws_json_typed.
-    - Review async delivery behavior, filter policy fidelity, and SQS/Lambda/email/SMS fan-out compatibility.
     - MessageAttributes are not delivered in the SQS/HTTP/email JSON notification envelope's MessageAttributes field.
   intentionally_partial:
     - FIFO topic Publish semantics (ordering, deduplication, SequenceNumber) — only the MessageGroupId/MessageDeduplicationId parameter presence is validated; see docs/services/sns.md.
 handoff:
   start_with: [MessageAttributes in the notification envelope, Subscribe, filter policies]
-  do_not_redo: [Publish AWS docs parameter/response overview from 2026-05-19; Publish destination selection, MessageStructure=json, validation, and FIFO parameter checks from 2026-08-21 (#183)]
+  do_not_redo:
+    [
+      Publish AWS docs parameter/response overview from 2026-05-19; Publish destination selection, MessageStructure=json, validation, and FIFO parameter checks from 2026-08-21 (#183),
+      "Protocol header (#184) and async delivery/filter-policy fidelity review (#185) from 2026-09-20",
+    ]
   commands: [go test -count=1 ./internal/services/sns/... ./tests/integration/sns/...]
