@@ -2,13 +2,19 @@ service: msk
 status: in_progress
 priority: p3
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-08-14
+last_updated: 2026-09-20
 protocols: [rest_json, aws_json_1_0, aws_json_1_1, rpcv2_cbor]
 implementation: [internal/services/msk]
 integration_tests: [tests/integration/msk]
 capability_docs: docs/services/msk.md
-operation_count_estimate: 16 supported, 13 unsupported
-current_support_level: MSK metadata API plus optional Docker-backed Redpanda clusters; several update, SCRAM, and VPC operations stubbed.
+operation_count_estimate: >-
+  30 tracked (internal/services/msk/capabilities_dev.go): 17 supported, 13 unsupported. The
+  tracker previously said "16 supported, 13 unsupported" (29 total), undercounting by one;
+  docs/services/msk.md's "17 of 30 listed operations are implemented" matches the corrected count.
+current_support_level: >-
+  MSK metadata API plus optional Docker-backed Redpanda clusters; several update, SCRAM, and VPC
+  operations stubbed with 501. Every unsupported operation carries a Notes field naming its
+  reason ("stub; returns 501" or the SCRAM-specific note) and is listed in docs/services/msk.md.
 operations:
   CreateCluster:
     status: in_progress
@@ -21,14 +27,31 @@ operations:
           - internal/services/msk/handler_docker_instance_scope_test.go
           - internal/router/docker_reconcile_test.go
         notes: A live broker exit or a startup/reconnect snapshot moves the cluster through HEALING and coalesces a replacement start. Reconciliation retains per-Overcast container ownership and re-adopts a running owned broker without repeating daemon-wide list calls.
+  routing:
+    status: fixed
+    scenarios:
+      arn_path_and_shape_fidelity:
+        status: fixed
+        evidence: tests/integration/msk/routing_test.go (PR #1000, 7 tests)
+        notes: >-
+          #163: covers percent-encoded ARN path segments (a non-greedy httpLabel, percent-encoded
+          whole into one path segment), v1/v2 sub-resource absorption guards
+          (TestClusterSubResourcesV1_areNotAbsorbedIntoTheARN,
+          TestClusterSubResourcesV2_doNotFallThroughToS3), signed-vs-unsigned MSK routing
+          (TestClusterSubResources_answerAsMSKWhenUnsigned), both ARN-in-path spellings
+          (TestARNInPathRoutes_answerBothSpellings), and the protocol-correct restJson1 501 shape
+          (__type: "NotImplemented", HTTP 501) for unimplemented neighbours
+          (TestUnimplementedNeighbours_stillReachTheGenerated501).
+        gap: "Small, tests-only gap: routing_test.go exercises ListVpcConnections as one of the unimplemented-neighbour cases, but does not exercise UpdateBrokerCount/UpdateBrokerStorage/UpdateBrokerType or CreateVpcConnection/DeleteVpcConnection/DescribeVpcConnection specifically."
 findings:
   fixed:
     - Missing and exited Docker-backed brokers are replaced after live events, startup, and Docker watcher reconnects instead of leaving an ACTIVE cluster backed by no broker.
+    - "#163: tests/integration/msk/routing_test.go (PR #1000) covers percent-encoded ARN paths, v1/v2 sub-resource absorption, both URL spellings for an ARN-in-path route, and the 501 __type: \"NotImplemented\" shape — 7 tests total."
+    - "#164: every one of the 13 unsupported operations in capabilities_dev.go carries a Notes field (\"stub; returns 501\" or the SCRAM-specific note), and docs/services/msk.md lists every unsupported family in its Differences table. The tracker's \"16 supported, 13 unsupported\" (29 total) undercounted supported by one; corrected to 17/30."
   remaining_gaps:
-    - Audit REST path, status, and header fidelity.
-    - Ensure unsupported operations are consistently tracked and tested.
+    - "#163 (small, tests-only): routing_test.go does not specifically exercise UpdateBrokerCount, UpdateBrokerStorage, UpdateBrokerType, CreateVpcConnection, DeleteVpcConnection or DescribeVpcConnection — only ListVpcConnections is covered among the VPC-connection family."
   intentionally_partial: []
 handoff:
-  start_with: [CreateCluster, DescribeCluster, DeleteCluster]
-  do_not_redo: []
+  start_with: [Add routing_test.go coverage for UpdateBroker*/VPC-connection create/delete/describe paths]
+  do_not_redo: [CreateCluster managed broker recovery, ARN path routing and 501 shape fidelity]
   commands: [go test -count=1 ./internal/services/msk/... ./tests/integration/msk/...]

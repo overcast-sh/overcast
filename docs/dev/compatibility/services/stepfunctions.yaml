@@ -1,21 +1,254 @@
 service: stepfunctions
-status: not_started
+status: in_progress
 priority: p1
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-05-17
+last_updated: 2026-09-20
 protocols: [aws_json_1_0, aws_json_1_1, rpcv2_cbor]
 implementation: [internal/services/stepfunctions]
 integration_tests: [tests/integration/stepfunctions]
 capability_docs: docs/services/stepfunctions.md
-operation_count_estimate: 5 supported
-current_support_level: State-machine CRUD supported; executions are inert/no-op but capabilities mark supported.
-operations: {}
+operation_count_estimate: >-
+  37 operations declared in internal/services/stepfunctions/capabilities_dev.go, all
+  StatusSupported: 6 State machines, 5 Versions and aliases, 9 Executions, 3 Map runs,
+  8 Activities and task tokens, 3 Tags, plus ValidateStateMachineDefinition. The tracker
+  previously said "5 supported" and "executions are inert/no-op", which PR #1955 ("complete ASL
+  implementation") and PR #1993 (redrive) made false.
+current_support_level: >-
+  A real Amazon States Language interpreter. StartExecution/StartSyncExecution run the
+  definition end to end — Pass/Task/Choice/Wait/Succeed/Fail/Parallel/Map states, error
+  handling (Retry/Catch), JSONPath and JSONata query languages, distributed Map with S3
+  item sources, task tokens (.waitForTaskToken) and activities, callbacks
+  (SendTaskSuccess/Failure/Heartbeat), state-machine versions and aliases with weighted
+  routing, RedriveExecution, TestState, and EventBridge execution-status events — matching
+  docs/services/stepfunctions.md's "✅ Supported" status. This is a full rewrite of a stale
+  entry that said the opposite.
+operations:
+  # ─── State machines ──────────────────────────────────────────────────────
+  CreateStateMachine:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_CreateStateMachine.html]
+    tests:
+      - tests/integration/stepfunctions/stepfunctions_test.go#TestCreateStateMachine_success
+      - tests/integration/stepfunctions/stepfunctions_test.go#TestCreateStateMachine_idempotent
+      - tests/integration/stepfunctions/stepfunctions_test.go#TestCreateStateMachine_alreadyExists_differentDefinition
+      - tests/integration/stepfunctions/stepfunctions_test.go#TestCreateStateMachine_tagsAppliedAtCreate
+      - tests/integration/stepfunctions/stepfunctions_test.go#TestRPCv2CBOR_StateMachineLifecycle
+    scenarios:
+      arn_and_name_validation:
+        status: remaining_gaps
+        gap: "#1670: createStateMachineTyped (typed_logic.go) only rejects an empty Name; it does not validate RoleArn's shape, so a malformed role ARN is accepted, and it does not reject a Name containing a space (AWS's InvalidName)."
+  DescribeStateMachine:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_DescribeStateMachine.html]
+    tests:
+      - tests/integration/stepfunctions/stepfunctions_test.go#TestDescribeStateMachine_success
+      - tests/integration/stepfunctions/stepfunctions_test.go#TestDescribeStateMachine_notFound
+      - tests/integration/stepfunctions/stepfunctions_test.go#TestDescribeStateMachine_loggingAndTracingDefaults
+    scenarios:
+      execution_target_arn_resolution:
+        status: remaining_gaps
+        gap: "#1670: resolveExecutionTarget (execution_target.go) falls through to a name-lookup path for any ARN parseSMARN cannot parse, so a malformed state-machine ARN answers StateMachineDoesNotExist instead of AWS's InvalidArn."
+  ListStateMachines:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_ListStateMachines.html]
+    tests: [tests/integration/stepfunctions/stepfunctions_test.go#TestListStateMachines_success]
+  DeleteStateMachine:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_DeleteStateMachine.html]
+    tests: [tests/integration/stepfunctions/stepfunctions_test.go#TestDeleteStateMachine_success]
+  UpdateStateMachine:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_UpdateStateMachine.html]
+    tests:
+      - tests/integration/stepfunctions/stepfunctions_test.go#TestUpdateStateMachine_success
+      - tests/integration/stepfunctions/stepfunctions_test.go#TestUpdateStateMachine_notFound
+      - tests/integration/stepfunctions/stepfunctions_test.go#TestUpdateStateMachine_invalidDefinition
+      - tests/integration/stepfunctions/stepfunctions_test.go#TestCreateStateMachine_loggingAndTracingRoundTrip
+  DescribeStateMachineForExecution:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_DescribeStateMachineForExecution.html]
+    tests: [tests/integration/stepfunctions/versions_aliases_test.go]
+  ValidateStateMachineDefinition:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_ValidateStateMachineDefinition.html]
+    tests: [tests/integration/stepfunctions/stepfunctions_test.go#TestUpdateStateMachine_invalidDefinition]
+  # ─── Versions and aliases ────────────────────────────────────────────────
+  PublishStateMachineVersion:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_PublishStateMachineVersion.html]
+    tests:
+      - tests/integration/stepfunctions/versions_aliases_test.go#TestPublishStateMachineVersion_firstVersionIsOne
+      - tests/integration/stepfunctions/versions_aliases_test.go#TestPublishStateMachineVersion_unchangedRevisionIsIdempotent
+      - tests/integration/stepfunctions/versions_aliases_test.go#TestPublishStateMachineVersion_newRevisionGetsNextNumber
+      - tests/integration/stepfunctions/versions_aliases_test.go#TestPublishStateMachineVersion_revisionIdMismatch
+      - tests/integration/stepfunctions/versions_aliases_test.go#TestPublishStateMachineVersion_stateMachineNotFound
+      - tests/integration/stepfunctions/versions_aliases_test.go#TestPublishStateMachineVersionCBOR_success
+  ListStateMachineVersions:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_ListStateMachineVersions.html]
+    tests: [tests/integration/stepfunctions/versions_aliases_test.go]
+  DeleteStateMachineVersion:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_DeleteStateMachineVersion.html]
+    tests: [tests/integration/stepfunctions/versions_aliases_test.go]
+  CreateStateMachineAlias:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_CreateStateMachineAlias.html]
+    tests: [tests/integration/stepfunctions/versions_aliases_test.go]
+  DescribeStateMachineAlias:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_DescribeStateMachineAlias.html]
+    tests: [tests/integration/stepfunctions/versions_aliases_test.go]
+  UpdateStateMachineAlias:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_UpdateStateMachineAlias.html]
+    tests: [tests/integration/stepfunctions/versions_aliases_test.go]
+  DeleteStateMachineAlias:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_DeleteStateMachineAlias.html]
+    tests: [tests/integration/stepfunctions/versions_aliases_test.go]
+  ListStateMachineAliases:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_ListStateMachineAliases.html]
+    tests: [tests/integration/stepfunctions/versions_aliases_test.go]
+  # ─── Executions ──────────────────────────────────────────────────────────
+  StartExecution:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_StartExecution.html]
+    tests:
+      - tests/integration/stepfunctions/execution_test.go#TestStartExecution_passStateProducesOutput
+      - tests/integration/stepfunctions/execution_test.go#TestStartExecution_choiceStateBranches
+      - tests/integration/stepfunctions/execution_test.go#TestStartExecution_failStateFailsExecution
+      - tests/integration/stepfunctions/execution_test.go#TestStartExecution_mapStateIteratesItems
+      - tests/integration/stepfunctions/execution_test.go#TestStartExecution_parallelStateRunsBranches
+      - tests/integration/stepfunctions/execution_test.go#TestStartExecution_catchRoutesTaskFailure
+      - tests/integration/stepfunctions/execution_test.go#TestStartExecution_unsupportedResourceFailsLoudly
+      - tests/integration/stepfunctions/map_distributed_test.go#TestStartExecution_distributedMapRunsChildExecutions
+      - tests/integration/stepfunctions/stepfunctions_eventbridge_test.go
+    scenarios:
+      state_machine_arn_resolution:
+        status: remaining_gaps
+        gap: See DescribeStateMachine's execution_target_arn_resolution — the same resolveExecutionTarget path backs StartExecution.
+  StartSyncExecution:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_StartSyncExecution.html]
+    tests: [tests/integration/stepfunctions/express_test.go]
+  DescribeExecution:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_DescribeExecution.html]
+    tests: [tests/integration/stepfunctions/execution_test.go, tests/integration/stepfunctions/redrive_test.go]
+  ListExecutions:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_ListExecutions.html]
+    tests: [tests/integration/stepfunctions/redrive_test.go#TestListExecutions_paginates]
+  GetExecutionHistory:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_GetExecutionHistory.html]
+    tests:
+      - tests/integration/stepfunctions/execution_test.go#TestGetExecutionHistory_passStateEmitsAWSEventVocabulary
+      - tests/integration/stepfunctions/redrive_test.go#TestGetExecutionHistory_paginates
+      - tests/integration/stepfunctions/history_data_test.go
+  StopExecution:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_StopExecution.html]
+    tests: [tests/integration/stepfunctions/stepfunctions_eventbridge_test.go]
+  RedriveExecution:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_RedriveExecution.html]
+    tests:
+      - tests/integration/stepfunctions/redrive_test.go#TestRedriveExecution_resumesAtTheFailedState
+      - tests/integration/stepfunctions/redrive_test.go#TestRedriveExecution_succeededExecutionIsNotRedrivable
+      - tests/integration/stepfunctions/redrive_containers_test.go
+  TestState:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_TestState.html]
+    tests:
+      - tests/integration/stepfunctions/teststate_test.go#TestTestState_passStateWithInspection
+      - tests/integration/stepfunctions/teststate_test.go#TestTestState_taskWithMockedResult
+      - tests/integration/stepfunctions/teststate_test.go#TestTestState_retriableAndCaughtErrors
+      - tests/integration/stepfunctions/teststate_test.go#TestTestState_jsonataStateInAWholeMachine
+      - tests/integration/stepfunctions/teststate_test.go#TestTestState_invalidDefinitionIsRejected
+  # ─── Map runs ────────────────────────────────────────────────────────────
+  ListMapRuns:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_ListMapRuns.html]
+    tests: [tests/integration/stepfunctions/map_distributed_test.go]
+  DescribeMapRun:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_DescribeMapRun.html]
+    tests: [tests/integration/stepfunctions/map_distributed_test.go]
+  UpdateMapRun:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_UpdateMapRun.html]
+    tests:
+      - tests/integration/stepfunctions/map_distributed_test.go#TestStartExecution_distributedMapToleratesFailures
+      - tests/integration/stepfunctions/map_distributed_test.go#TestStartExecution_distributedMapFailsPastTolerance
+  # ─── Activities and task tokens ──────────────────────────────────────────
+  CreateActivity:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_CreateActivity.html]
+    tests: [tests/integration/stepfunctions/callbacks_test.go#TestActivity_workerCompletesTask]
+  DescribeActivity:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_DescribeActivity.html]
+    tests: [tests/integration/stepfunctions/callbacks_test.go]
+  DeleteActivity:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_DeleteActivity.html]
+    tests: [tests/integration/stepfunctions/callbacks_test.go]
+  ListActivities:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_ListActivities.html]
+    tests: [tests/integration/stepfunctions/callbacks_test.go]
+  GetActivityTask:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_GetActivityTask.html]
+    tests:
+      - tests/integration/stepfunctions/callbacks_test.go#TestActivity_workerCompletesTask
+      - tests/integration/stepfunctions/callbacks_test.go#TestGetActivityTask_unknownActivityIsRefused
+  SendTaskSuccess:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_SendTaskSuccess.html]
+    tests:
+      - tests/integration/stepfunctions/callbacks_test.go#TestSendTaskSuccess_resumesWaitForTaskToken
+      - tests/integration/stepfunctions/callbacks_test.go#TestSendTaskSuccess_unknownTokenIsRejected
+      - tests/integration/stepfunctions/callbacks_test.go#TestSendTaskSuccess_invalidOutputIsRejected
+  SendTaskFailure:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_SendTaskFailure.html]
+    tests: [tests/integration/stepfunctions/callbacks_test.go#TestSendTaskFailure_failsTheWaitingTask]
+  SendTaskHeartbeat:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_SendTaskHeartbeat.html]
+    tests:
+      - tests/integration/stepfunctions/callbacks_test.go#TestSendTaskHeartbeat_keepsTheTaskAlive
+      - tests/integration/stepfunctions/callbacks_test.go#TestWaitForTaskToken_missedHeartbeatTimesOut
+  # ─── Tags ────────────────────────────────────────────────────────────────
+  TagResource:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_TagResource.html]
+    tests: [tests/integration/stepfunctions/stepfunctions_test.go#TestCreateStateMachine_tagsAppliedAtCreate]
+  UntagResource:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_UntagResource.html]
+  ListTagsForResource:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/step-functions/latest/apireference/API_ListTagsForResource.html]
 findings:
-  fixed: []
+  fixed:
+    - "#193: the tracker said \"5 supported\" with \"executions are inert/no-op\"; PR #1955 (\"complete ASL implementation\") and PR #1993 (redrive) landed a real interpreter with 37 StatusSupported operations, all covered by tests/integration/stepfunctions, and docs/services/stepfunctions.md already states Step Functions is \"✅ Supported\". This entry is a full rewrite reflecting that state."
   remaining_gaps:
-    - Change StartExecution/execution tracking to inert/partial or document why supported is acceptable.
+    - "CreateStateMachine's role/name validation and resolveExecutionTarget's ARN handling accept malformed input where AWS rejects it — createStateMachineTyped (typed_logic.go) only checks Name==\"\" (no RoleArn shape check, no rejection of a Name containing a space, AWS's InvalidName), and resolveExecutionTarget (execution_target.go) falls through to a name lookup for any ARN parseSMARN cannot parse, answering StateMachineDoesNotExist instead of InvalidArn. Tracked as #2003."
   intentionally_partial: []
 handoff:
-  start_with: [StartExecution, DescribeExecution, state machine CRUD]
-  do_not_redo: []
+  start_with: [CreateStateMachine RoleArn/Name validation, resolveExecutionTarget malformed-ARN handling]
+  do_not_redo:
+    [CreateStateMachine, DescribeStateMachine, ListStateMachines, DeleteStateMachine, UpdateStateMachine,
+     DescribeStateMachineForExecution, ValidateStateMachineDefinition, PublishStateMachineVersion,
+     ListStateMachineVersions, DeleteStateMachineVersion, CreateStateMachineAlias, DescribeStateMachineAlias,
+     UpdateStateMachineAlias, DeleteStateMachineAlias, ListStateMachineAliases, StartExecution,
+     StartSyncExecution, DescribeExecution, ListExecutions, GetExecutionHistory, StopExecution,
+     RedriveExecution, TestState, ListMapRuns, DescribeMapRun, UpdateMapRun, CreateActivity,
+     DescribeActivity, DeleteActivity, ListActivities, GetActivityTask, SendTaskSuccess, SendTaskFailure,
+     SendTaskHeartbeat, TagResource, UntagResource, ListTagsForResource]
   commands: [go test -count=1 ./internal/services/stepfunctions/... ./tests/integration/stepfunctions/...]

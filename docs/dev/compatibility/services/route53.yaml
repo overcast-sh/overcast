@@ -1,15 +1,174 @@
 service: route53
-status: not_started
+status: in_progress
 priority: p2
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-07-14
-protocols: [rest_xml, query]
+last_updated: 2026-09-20
+protocols: [rest_xml]
 implementation: [internal/services/route53]
 integration_tests: [tests/integration/route53]
 capability_docs: docs/services/route53.md
-operation_count_estimate: 10 tracked; 7 supported, 3 unsupported
-current_support_level: Hosted zones, record sets, and change status supported; traffic policy, health check, and name listing unsupported.
-operations: {}
+operation_count_estimate: >-
+  25 tracked (internal/services/route53/capabilities_dev.go): 19 supported, 6 unsupported
+  (GetHealthCheckStatus, GetHealthCheckLastFailureReason, CreateTrafficPolicy,
+  AssociateVPCWithHostedZone, DisassociateVPCFromHostedZone, ListHostedZonesByVPC). The tracker
+  previously said "10 tracked; 7 supported, 3 unsupported", which undercounted both halves; the
+  actual figure matches docs/services/route53.md's "19 of 25 listed operations are implemented".
+current_support_level: >-
+  Hosted zones, resource record sets, change status, tags and health checks are supported;
+  traffic policies and VPC associations are not. Pagination (Marker/NextMarker/IsTruncated for
+  ListHostedZones/ListHealthChecks, NextRecordName/NextRecordType/NextRecordIdentifier for
+  ListResourceRecordSets) is implemented and tested.
+operations:
+  ListHostedZones:
+    status: fixed
+    aws_docs: [https://docs.aws.amazon.com/Route53/latest/APIReference/API_ListHostedZones.html]
+    implementation: internal/services/route53/handler_zones.go (listHostedZones, ~192-213)
+    tests: [tests/integration/route53/zones_lifecycle_test.go#TestListHostedZones_pagination]
+    scenarios:
+      pagination:
+        status: fixed
+        evidence: "#171: Marker/NextMarker/IsTruncated are implemented (handler_zones.go ~192-213) and pinned by TestListHostedZones_pagination."
+  ListHealthChecks:
+    status: fixed
+    aws_docs: [https://docs.aws.amazon.com/Route53/latest/APIReference/API_ListHealthChecks.html]
+    implementation: internal/services/route53/handler_health.go (listHealthChecks, ~91-114)
+    tests: [tests/integration/route53/healthchecks_test.go#TestListHealthChecksAndCount]
+    scenarios:
+      pagination:
+        status: fixed
+        evidence: "#171: Marker/NextMarker/IsTruncated are implemented (handler_health.go ~91-114) and pinned by TestListHealthChecksAndCount."
+  ListResourceRecordSets:
+    status: fixed
+    aws_docs: [https://docs.aws.amazon.com/Route53/latest/APIReference/API_ListResourceRecordSets.html]
+    implementation: internal/services/route53/handler_rrsets.go (listResourceRecordSets, ~144-181)
+    tests: [tests/integration/route53/rrsets_validation_test.go#TestListRRSets_dnsOrderAndPagination]
+    scenarios:
+      pagination:
+        status: fixed
+        evidence: "#171: NextRecordName/NextRecordType/NextRecordIdentifier are implemented (handler_rrsets.go ~144-181) and pinned by TestListRRSets_dnsOrderAndPagination."
+      record_value_shape_validation:
+        status: remaining_gaps
+        gap: "#1670: validateRecordData (core.go, ~line 571) enforces the alias-vs-TTL+values contract but never validates a record's value shape per its Type — an invalid A-record value (not a dotted-quad) is accepted. Tracked as #2004."
+  CreateHostedZone:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/Route53/latest/APIReference/API_CreateHostedZone.html]
+    tests:
+      - tests/integration/route53/zones_lifecycle_test.go#TestCreateHostedZone_missingCallerReference
+      - tests/integration/route53/zones_lifecycle_test.go#TestCreateHostedZone_duplicateCallerReference
+      - tests/integration/route53/zones_lifecycle_test.go#TestCreateHostedZone_invalidDomainName
+      - tests/integration/route53/zones_lifecycle_test.go#TestCreateHostedZone_normalisesName
+      - tests/integration/route53/zones_lifecycle_test.go#TestCreateHostedZone_returnsDelegationSetAndLocation
+      - tests/integration/route53/zones_lifecycle_test.go#TestCreateHostedZone_createsDefaultNSAndSOA
+      - tests/integration/route53/zones_lifecycle_test.go#TestCreateHostedZone_privateZoneStoresVPC
+  GetHostedZone:
+    status: reviewed
+    tests: [tests/integration/route53/zones_lifecycle_test.go#TestGetHostedZone_includesDelegationSet]
+  ListHostedZonesByName:
+    status: reviewed
+    tests: [tests/integration/route53/zones_lifecycle_test.go#TestListHostedZonesByName_ordersAndFilters]
+  GetHostedZoneCount:
+    status: reviewed
+    tests: [tests/integration/route53/zones_lifecycle_test.go#TestGetHostedZoneCount]
+  UpdateHostedZoneComment:
+    status: reviewed
+    tests:
+      - tests/integration/route53/zones_lifecycle_test.go#TestUpdateHostedZoneComment
+      - tests/integration/route53/zones_lifecycle_test.go#TestUpdateHostedZoneComment_notFound
+  DeleteHostedZone:
+    status: reviewed
+    tests:
+      - tests/integration/route53/zones_lifecycle_test.go#TestDeleteHostedZone_notEmpty
+      - tests/integration/route53/zones_lifecycle_test.go#TestDeleteHostedZone_succeedsWithOnlyDefaultRecords
+  ChangeResourceRecordSets:
+    status: reviewed
+    tests:
+      - tests/integration/route53/rrsets_validation_test.go#TestChangeRRSets_createDuplicate
+      - tests/integration/route53/rrsets_validation_test.go#TestChangeRRSets_deleteMissing
+      - tests/integration/route53/rrsets_validation_test.go#TestChangeRRSets_deleteValueMismatch
+      - tests/integration/route53/rrsets_validation_test.go#TestChangeRRSets_outOfZoneName
+      - tests/integration/route53/rrsets_validation_test.go#TestChangeRRSets_apexNSAndSOADeleteRejected
+      - tests/integration/route53/rrsets_validation_test.go#TestChangeRRSets_cnameAtApexRejected
+      - tests/integration/route53/rrsets_validation_test.go#TestChangeRRSets_aliasAndValuesMutuallyExclusive
+      - tests/integration/route53/rrsets_validation_test.go#TestChangeRRSets_recordWithoutValuesOrAlias
+      - tests/integration/route53/rrsets_validation_test.go#TestChangeRRSets_weightedRecordsWithSetIdentifier
+    scenarios:
+      record_value_shape_validation:
+        status: remaining_gaps
+        gap: See ListResourceRecordSets — the same validateRecordData path backs ChangeResourceRecordSets.
+  GetChange:
+    status: intentionally_partial
+    aws_docs: [https://docs.aws.amazon.com/Route53/latest/APIReference/API_GetChange.html]
+    scenarios:
+      unknown_change_id:
+        status: intentionally_partial
+        evidence: An unknown change ID answers INSYNC rather than AWS's NoSuchChange, a documented divergence (docs/services/route53/limitations.md) that lets CDK/CLI waiters converge even across a store reset.
+  ChangeTagsForResource:
+    status: reviewed
+    tests: [tests/integration/route53/tags_test.go]
+  ListTagsForResource:
+    status: reviewed
+    tests: [tests/integration/route53/tags_test.go]
+  ListTagsForResources:
+    status: reviewed
+    tests: [tests/integration/route53/tags_test.go]
+  CreateHealthCheck:
+    status: reviewed
+    tests:
+      - tests/integration/route53/healthchecks_test.go#TestCreateHealthCheck_appliesDefaults
+      - tests/integration/route53/healthchecks_test.go#TestCreateHealthCheck_duplicateCallerReference
+      - tests/integration/route53/healthchecks_test.go#TestCreateHealthCheck_missingType
+  GetHealthCheck:
+    status: reviewed
+    tests:
+      - tests/integration/route53/healthchecks_test.go#TestGetHealthCheck_roundTrip
+      - tests/integration/route53/healthchecks_test.go#TestGetHealthCheck_notFound
+  GetHealthCheckCount:
+    status: reviewed
+    tests: [tests/integration/route53/healthchecks_test.go#TestListHealthChecksAndCount]
+  UpdateHealthCheck:
+    status: reviewed
+    tests:
+      - tests/integration/route53/healthchecks_test.go#TestUpdateHealthCheck_bumpsVersion
+      - tests/integration/route53/healthchecks_test.go#TestUpdateHealthCheck_versionMismatch
+  DeleteHealthCheck:
+    status: reviewed
+    tests: [tests/integration/route53/healthchecks_test.go#TestDeleteHealthCheck]
+  GetHealthCheckStatus:
+    status: unsupported
+    scenarios:
+      not_implemented:
+        status: intentionally_partial
+        evidence: Health checks are metadata-only; nothing probes an endpoint, so there is no status to report. 501 Not Implemented.
+  GetHealthCheckLastFailureReason:
+    status: unsupported
+    scenarios:
+      not_implemented:
+        status: intentionally_partial
+        evidence: Same as GetHealthCheckStatus — no probing occurs.
+  CreateTrafficPolicy:
+    status: unsupported
+    scenarios:
+      not_implemented:
+        status: intentionally_partial
+        evidence: Traffic policies are not modeled at all. 501 Not Implemented.
+  AssociateVPCWithHostedZone:
+    status: unsupported
+    scenarios:
+      not_implemented:
+        status: intentionally_partial
+        evidence: VPC associations beyond the private-zone create-time VPC are not modeled. 501 Not Implemented.
+  DisassociateVPCFromHostedZone:
+    status: unsupported
+    scenarios:
+      not_implemented:
+        status: intentionally_partial
+        evidence: Same as AssociateVPCWithHostedZone.
+  ListHostedZonesByVPC:
+    status: unsupported
+    scenarios:
+      not_implemented:
+        status: intentionally_partial
+        evidence: Same as AssociateVPCWithHostedZone.
 findings:
   fixed:
     - scenario: AWS::Route53::RecordSet preserves AliasTarget when provisioning through CloudFormation.
@@ -17,11 +176,18 @@ findings:
         aws_docs: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-route53-recordset.html
         tests: tests/integration/cloudformation/cloudformation_test.go::TestCreateStack_Route53RecordSetAliasTarget
       fixed_in: 0.0.1-alpha.8
+    - "#170 (protocol): every Route 53 operation in internal/awsapi/manifest.gen.go is ProtocolRESTXML; the tracker's protocols: [rest_xml, query] was wrong to include query. Route 53 has no Query-API wire binding — removed. The WriteQueryXMLError helper name (internal/services/route53/handler_zones.go) names the error envelope shape, not a second protocol; the operations themselves are all REST XML."
+    - "#171 (pagination): ListHostedZones and ListHealthChecks implement Marker/NextMarker/IsTruncated (handler_zones.go ~192-213, handler_health.go ~91-114); ListResourceRecordSets implements NextRecordName/NextRecordType/NextRecordIdentifier (handler_rrsets.go ~144-181). All three are covered by tests/integration/route53/zones_lifecycle_test.go, healthchecks_test.go and rrsets_validation_test.go. The tracker's \"Review pagination and marker semantics\" gap is resolved; markers already work."
   remaining_gaps:
-    - Clarify QueryXML compatibility in docs or remove if accidental.
-    - Review pagination and marker semantics.
-  intentionally_partial: []
+    - "#1670: validateRecordData (core.go, ~line 571) never validates a record's value shape per its Type, so an invalid A-record value (not a dotted-quad IPv4 address) is accepted by ChangeResourceRecordSets. Tracked as #2004."
+  intentionally_partial:
+    - "GetChange on an unknown change ID answers INSYNC rather than NoSuchChange — intentional, documented in docs/services/route53/limitations.md, so CDK and CLI waiters converge even across a store reset."
+    - GetHealthCheckStatus, GetHealthCheckLastFailureReason, CreateTrafficPolicy, AssociateVPCWithHostedZone, DisassociateVPCFromHostedZone and ListHostedZonesByVPC are not implemented; health checks are metadata-only (nothing is ever probed) and traffic policies/VPC associations are out of scope.
 handoff:
-  start_with: [CreateHostedZone, ChangeResourceRecordSets, ListResourceRecordSets]
-  do_not_redo: []
+  start_with: [Record value shape validation per Type in validateRecordData (#2004)]
+  do_not_redo:
+    [CreateHostedZone, ListHostedZones, ListHostedZonesByName, GetHostedZone, GetHostedZoneCount,
+     UpdateHostedZoneComment, DeleteHostedZone, ChangeResourceRecordSets, ListResourceRecordSets,
+     GetChange, ChangeTagsForResource, ListTagsForResource, ListTagsForResources, CreateHealthCheck,
+     GetHealthCheck, ListHealthChecks, GetHealthCheckCount, UpdateHealthCheck, DeleteHealthCheck]
   commands: [go test -count=1 ./internal/services/route53/... ./tests/integration/route53/...]

@@ -1,22 +1,107 @@
 service: glue
-status: not_started
+status: in_progress
 priority: p2
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-05-17
+last_updated: 2026-09-20
 protocols: [aws_json_1_1, aws_json_1_0, rpcv2_cbor]
 implementation: [internal/services/glue]
 integration_tests: [tests/integration/glue]
 capability_docs: docs/services/glue.md
-operation_count_estimate: 8 supported
-current_support_level: Data Catalog subset only; databases and tables supported; ETL/crawlers/workflows unsupported.
-operations: {}
+operation_count_estimate: >-
+  11 tracked (internal/services/glue/capabilities_dev.go), all StatusSupported: 4 Databases
+  (CreateDatabase, GetDatabase, GetDatabases, DeleteDatabase), 4 Tables (CreateTable, GetTable,
+  GetTables, DeleteTable), 3 Tags (TagResource, UntagResource, GetTags). The tracker previously
+  said "8 supported", undercounting by 3.
+current_support_level: >-
+  Data Catalog subset only: databases and tables are named records with tags; jobs, crawlers,
+  triggers, workflows, connections, schema registry and Data Quality are not implemented, and
+  every missing family is listed in docs/services/glue.md's Differences table.
+operations:
+  CreateDatabase:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/glue/latest/webapi/API_CreateDatabase.html]
+    tests: [tests/integration/glue/glue_test.go#TestCreateDatabase_success]
+  GetDatabase:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/glue/latest/webapi/API_GetDatabase.html]
+    tests: [tests/integration/glue/glue_test.go#TestGetDatabase_success]
+  GetDatabases:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/glue/latest/webapi/API_GetDatabases.html]
+    tests: [tests/integration/glue/glue_test.go#TestGetDatabases_success]
+  DeleteDatabase:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/glue/latest/webapi/API_DeleteDatabase.html]
+    tests: [tests/integration/glue/glue_test.go#TestDeleteDatabase_success]
+  CreateTable:
+    status: implementation_mismatch
+    aws_docs: [https://docs.aws.amazon.com/glue/latest/webapi/API_CreateTable.html]
+    tests: [tests/integration/glue/glue_test.go#TestCreateTable_success]
+    scenarios:
+      catalog_shape_round_trip:
+        status: remaining_gaps
+        gap: "#151: CreateTable accepts a full TableInput but stores only Name, TableType, Description and CatalogId; StorageDescriptor (columns, serde, Location), PartitionKeys and Parameters are discarded, so GetTable returns none of them. Documented in docs/services/glue.md's Differences table (\"Accepted and discarded\"). Not currently in flight."
+  GetTable:
+    status: implementation_mismatch
+    aws_docs: [https://docs.aws.amazon.com/glue/latest/webapi/API_GetTable.html]
+    tests: [tests/integration/glue/glue_test.go#TestGetTable_success]
+    scenarios:
+      catalog_shape_round_trip:
+        status: remaining_gaps
+        gap: "#151: see CreateTable — GetTable cannot return fields that were never stored."
+  GetTables:
+    status: tests_missing
+    aws_docs: [https://docs.aws.amazon.com/glue/latest/webapi/API_GetTables.html]
+    tests: [internal/services/glue/typed_ops_test.go#TestTypedOps_matchAllOperations]
+    scenarios:
+      behavioral_coverage:
+        status: tests_missing
+        gap: Only wiring is tested (the operation is dispatched and not a raw adapter); no integration test exercises listing tables in a database.
+  DeleteTable:
+    status: tests_missing
+    aws_docs: [https://docs.aws.amazon.com/glue/latest/webapi/API_DeleteTable.html]
+    tests: [internal/services/glue/typed_ops_test.go#TestTypedOps_matchAllOperations]
+    scenarios:
+      behavioral_coverage:
+        status: tests_missing
+        gap: Only wiring is tested; no integration test deletes a table and confirms it is gone.
+  TagResource:
+    status: tests_missing
+    aws_docs: [https://docs.aws.amazon.com/glue/latest/webapi/API_TagResource.html]
+    tests: [internal/services/glue/typed_ops_test.go#TestTypedOps_matchAllOperations]
+    scenarios:
+      behavioral_coverage:
+        status: tests_missing
+        gap: Only wiring is tested; no integration test exercises tagging a database or table.
+  UntagResource:
+    status: tests_missing
+    aws_docs: [https://docs.aws.amazon.com/glue/latest/webapi/API_UntagResource.html]
+    tests: [internal/services/glue/typed_ops_test.go#TestTypedOps_matchAllOperations]
+    scenarios:
+      behavioral_coverage:
+        status: tests_missing
+        gap: Only wiring is tested; no integration test exercises removing a tag.
+  GetTags:
+    status: tests_missing
+    aws_docs: [https://docs.aws.amazon.com/glue/latest/webapi/API_GetTags.html]
+    tests: [internal/services/glue/typed_ops_test.go#TestTypedOps_matchAllOperations]
+    scenarios:
+      behavioral_coverage:
+        status: tests_missing
+        gap: Only wiring is tested; no integration test reads tags back.
 findings:
-  fixed: []
+  fixed:
+    - "#152: docs/services/glue.md's Differences table already lists every missing family — jobs, crawlers, triggers, workflows, connections, schema registry and Data Quality — as \"Not implemented — the Data Catalog only\", and all 11 registered operations are StatusSupported (capabilities_dev.go). The tracker's \"8 supported\" undercounted by 3 (it missed the three tag operations); corrected to 11."
   remaining_gaps:
-    - Compare catalog shapes against AWS SDK expectations.
-    - Track unsupported Glue operation families.
-  intentionally_partial: []
+    - "#151: CreateTable/GetTable round-trip only Name, TableType, Description and CatalogId — StorageDescriptor, PartitionKeys and Parameters are accepted and discarded, so there is no partition API and UpdateDatabase/UpdateTable do not exist (re-create through CreateTable to change a definition). Not currently in flight."
+    - "GetTables, DeleteTable, TagResource, UntagResource and GetTags have no behavioral integration test — tests/integration/glue/glue_test.go covers only CreateDatabase/GetDatabase/GetDatabases/DeleteDatabase/CreateTable/GetTable (6 tests), and internal/services/glue/typed_ops_test.go's TestTypedOps_matchAllOperations checks only that all 11 operations are dispatched, not their behavior. Found during this reconciliation pass; not previously tracked."
+  intentionally_partial:
+    - "CatalogId is echoed but never used to separate catalogs, per docs/services/glue.md's Differences table."
 handoff:
-  start_with: [CreateDatabase, CreateTable, GetTable]
-  do_not_redo: []
+  start_with:
+    [
+      CreateTable/GetTable full TableInput round-trip (StorageDescriptor, PartitionKeys, Parameters) (#151),
+      Integration tests for GetTables, DeleteTable, TagResource, UntagResource, GetTags,
+    ]
+  do_not_redo: [CreateDatabase, GetDatabase, GetDatabases, DeleteDatabase]
   commands: [go test -count=1 ./internal/services/glue/... ./tests/integration/glue/...]

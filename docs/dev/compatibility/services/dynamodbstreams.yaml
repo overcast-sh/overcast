@@ -1,22 +1,71 @@
 service: dynamodbstreams
-status: not_started
+status: reviewed
 priority: p1
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-05-17
+last_updated: 2026-09-20
 protocols: [aws_json_1_0, aws_json_1_1, rpcv2_cbor]
 implementation: [internal/services/dynamodbstreams]
-integration_tests: []
+integration_tests: [tests/integration/dynamodb]
 capability_docs: docs/services/dynamodbstreams.md
-operation_count_estimate: 4 supported
-current_support_level: Focused DynamoDB Streams read API backed by DynamoDB stream-enabled tables.
-operations: {}
+operation_count_estimate: 4 tracked, all StatusSupported (ListStreams, DescribeStream, GetShardIterator, GetRecords).
+current_support_level: >-
+  Focused DynamoDB Streams read API backed by DynamoDB stream-enabled tables, with integration
+  coverage over both JSON and RPCv2 CBOR wire formats and dispatch-level pinning that every
+  modeled operation has a typed handler.
+operations:
+  ListStreams:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/streams/API_streams_ListStreams.html]
+    implementation: internal/services/dynamodbstreams/typed_ops.go
+    tests:
+      - tests/integration/dynamodb/streams_test.go#TestStream_ListStreams_Empty
+      - tests/integration/dynamodb/streams_test.go#TestStream_ListStreams_ReturnsEnabled
+      - tests/integration/dynamodb/streams_test.go#TestStream_ListStreams_FilterByTable
+      - tests/integration/dynamodb/streams_test.go#TestRPCv2CBOR_StreamListStreams
+    scenarios:
+      region_scoping:
+        status: reviewed
+        evidence: Reports only streams for tables in the request's region, per capabilities_dev.go's note.
+  DescribeStream:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/streams/API_streams_DescribeStream.html]
+    tests:
+      - tests/integration/dynamodb/streams_test.go#TestStream_DescribeStream
+      - tests/integration/dynamodb/streams_test.go#TestStream_DescribeStream_NotFound
+    scenarios:
+      cross_region_arn:
+        status: reviewed
+        evidence: A stream ARN from another region reports ResourceNotFoundException, matching AWS's regional endpoints (capabilities_dev.go).
+  GetShardIterator:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/streams/API_streams_GetShardIterator.html]
+    tests: [tests/integration/dynamodb/streams_test.go#TestStream_GetShardIterator]
+  GetRecords:
+    status: reviewed
+    aws_docs: [https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/streams/API_streams_GetRecords.html]
+    tests:
+      - tests/integration/dynamodb/streams_test.go#TestStream_GetRecords_AfterPut
+      - tests/integration/dynamodb/streams_test.go#TestStream_GetRecords_AfterDelete
+      - tests/integration/dynamodb/streams_test.go#TestStream_GetRecords_LATEST_SeesOnlyNewRecords
+      - tests/integration/dynamodb/streams_test.go#TestStream_GetRecords_KEYS_ONLY
+      - tests/integration/dynamodb/streams_test.go#TestStream_PutItem_ModifyGeneratesRecord
+      - tests/integration/dynamodb/streams_test.go#TestStream_BatchWriteItem_putsGenerateRecords
+      - tests/integration/dynamodb/streams_test.go#TestStream_TransactWriteItems_putsGenerateRecords
+      - tests/integration/dynamodb/streams_test.go#TestStream_recreatedTableStartsWithAnEmptyStream
+      - tests/integration/dynamodb/ddb_stream_esm_test.go#TestDDBStreamESM_invokesLambdaAfterPutItem
+    scenarios:
+      region_scoping:
+        status: reviewed
+        evidence: Reads the stream in the region its shard iterator names; each record carries awsRegion, per capabilities_dev.go's note.
 findings:
-  fixed: []
-  remaining_gaps:
-    - Add integration coverage.
-    - Review JSON target dispatch and CBOR compatibility.
+  fixed:
+    - "#137 (integration coverage): the tracker listed integration_tests: [] despite real coverage; tests/integration/dynamodb/streams_test.go (18 tests) exercises ListStreams, DescribeStream, GetShardIterator, and GetRecords after PutItem/DeleteItem/BatchWriteItem/TransactWriteItems, LATEST vs. TRIM_HORIZON history, KEYS_ONLY view type, and RPCv2 CBOR; tests/integration/dynamodb/ddb_stream_esm_test.go covers the Lambda event-source-mapping consumer path. integration_tests now points at tests/integration/dynamodb (the streams tests live alongside the rest of the DynamoDB integration suite, not in a separate tests/integration/dynamodbstreams directory)."
+    - "#138 (JSON target dispatch and CBOR compatibility): internal/services/dynamodbstreams/service_dispatch_test.go pins UnknownOperationException (HTTP 400) over JSON and RPCv2 CBOR for an unmodeled operation name (TestDispatch_unknownOperation), and TestDispatch_everyModeledOperationImplemented asserts every operation the pinned AWS models declare for DynamoDB Streams has a typed handler, so a model refresh that adds an operation fails loudly rather than silently 404ing. tests/integration/dynamodb/streams_test.go#TestRPCv2CBOR_StreamListStreams exercises the same dispatch end to end over RPCv2 CBOR."
+  remaining_gaps: []
   intentionally_partial: []
 handoff:
-  start_with: [ListStreams, DescribeStream, GetShardIterator, GetRecords]
-  do_not_redo: []
-  commands: [go test -count=1 ./internal/services/dynamodbstreams/...]
+  start_with: []
+  do_not_redo: [ListStreams, DescribeStream, GetShardIterator, GetRecords]
+  commands:
+    - go test -count=1 ./internal/services/dynamodbstreams/...
+    - go test -count=1 -run 'TestStream_|TestRPCv2CBOR_StreamListStreams|TestDDBStreamESM_' ./tests/integration/dynamodb/...

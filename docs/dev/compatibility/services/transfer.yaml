@@ -1,22 +1,92 @@
 service: transfer
-status: not_started
+status: reviewed
 priority: p3
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-05-17
+last_updated: 2026-09-20
 protocols: [aws_json_1_0, aws_json_1_1, rpcv2_cbor]
 implementation: [internal/services/transfer]
 integration_tests: [tests/integration/transfer]
 capability_docs: docs/services/transfer.md
-operation_count_estimate: 10 tracked, all inert
-current_support_level: Metadata-only server/user CRUD; no SFTP/FTPS/FTP daemon or auth data plane.
-operations: {}
+operation_count_estimate: >-
+  13 tracked, all StatusInert (internal/services/transfer/capabilities_dev.go): 10 server/user
+  CRUD operations plus TagResource/UntagResource/ListTagsForResource. The tracker previously said
+  "10 tracked, all inert" and did not count the tag surface.
+current_support_level: >-
+  Metadata-only server and user CRUD; no SFTP/FTPS/FTP daemon or auth data plane is served, so
+  every operation is StatusInert rather than Supported — nothing a client connects to actually
+  changes. docs/services/transfer.md documents this with an explicit "Data plane: no
+  file-transfer protocol is served" row and a full Differences-from-AWS table.
+operations:
+  CreateServer:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/transfer/latest/APIReference/API_CreateServer.html
+    tests:
+      - tests/integration/transfer/transfer_test.go#TestTransferServerAndUserLifecycle
+      - tests/integration/transfer/transfer_test.go#TestTransferCreateServer_appliesTagsAtCreation
+  DescribeServer:
+    status: reviewed
+    tests: [tests/integration/transfer/transfer_test.go#TestTransferServerAndUserLifecycle]
+  ListServers:
+    status: reviewed
+    tests: [tests/integration/transfer/transfer_test.go#TestTransferServerAndUserLifecycle]
+  UpdateServer:
+    status: reviewed
+    tests: [tests/integration/transfer/transfer_test.go#TestTransferServerAndUserLifecycle]
+  DeleteServer:
+    status: reviewed
+    tests: [tests/integration/transfer/transfer_test.go#TestTransferServerAndUserLifecycle]
+    scenarios:
+      cascade_delete:
+        status: reviewed
+        evidence: Deleting a server deletes its users, per docs/services/transfer.md's "Cascade delete" row.
+  CreateUser:
+    status: reviewed
+    tests:
+      - tests/integration/transfer/transfer_test.go#TestTransferServerAndUserLifecycle
+      - tests/integration/transfer/transfer_test.go#TestTransferCreateUser_appliesTagsAtCreation
+  DescribeUser:
+    status: reviewed
+    tests: [tests/integration/transfer/transfer_test.go#TestTransferServerAndUserLifecycle]
+  ListUsers:
+    status: reviewed
+    tests: [tests/integration/transfer/transfer_test.go#TestTransferServerAndUserLifecycle]
+  UpdateUser:
+    status: reviewed
+    tests: [tests/integration/transfer/transfer_test.go#TestTransferServerAndUserLifecycle]
+  DeleteUser:
+    status: reviewed
+    tests:
+      - tests/integration/transfer/transfer_test.go#TestTransferServerAndUserLifecycle
+      - tests/integration/transfer/transfer_test.go#TestTransferDeleteUser_dropsItsTags
+  TagResource:
+    status: reviewed
+    tests:
+      - tests/integration/transfer/transfer_test.go#TestTransferTagResource_roundTripsOnAServer
+      - tests/integration/transfer/transfer_test.go#TestTransferTagResource_unknownResource
+    scenarios:
+      taggable_resources:
+        status: intentionally_partial
+        evidence: Only server and user ARNs are taggable; Transfer's other resources (agreements, certificates, connectors, profiles, workflows) are not emulated and their ARNs are refused, per docs/services/transfer.md's Differences table.
+  UntagResource:
+    status: reviewed
+    tests: [tests/integration/transfer/transfer_test.go#TestTransferUntagResource_removesNamedKeysOnly]
+  ListTagsForResource:
+    status: reviewed
+    scenarios:
+      no_pagination:
+        status: intentionally_partial
+        evidence: Every tag is returned in one page; there is no NextToken.
 findings:
-  fixed: []
-  remaining_gaps:
-    - Add explicit protocol notes to docs.
-    - Review inert status versus supported status for SDK-facing CRUD compatibility.
-  intentionally_partial: []
+  fixed:
+    - "#195 (protocol notes): docs/services/transfer.md already documents the data plane gap explicitly (\"No file-transfer protocol is served, so no client can log in and no file moves\") and carries a full Differences-from-AWS table covering S3/EFS binding, discarded server/user fields, authentication, endpoint address and server-id shape. The tracker's own protocols field was already correct; nothing needed changing there."
+    - "#196 (inert vs supported): all 13 registered operations are intentionally StatusInert, not StatusSupported — Overcast stores server and user records but starts no SFTP/FTPS/FTP daemon, so nothing a client would notice actually happens. This is the correct classification for a service with a real data plane and no bytes moving; StatusSupported would overclaim client-visible effect."
+  remaining_gaps: []
+  intentionally_partial:
+    - Server fields Protocols, EndpointDetails, LoggingRole, Domain and SecurityPolicyName are discarded; only EndpointType and IdentityProviderType are kept.
+    - User fields HomeDirectoryType, HomeDirectoryMappings, PosixProfile and SshPublicKeyBody are discarded; only Role, HomeDirectory and Policy are kept.
+    - Agreements, certificates, connectors, profiles and workflows are not emulated, and their ARNs are refused by the tag operations.
 handoff:
-  start_with: [CreateServer, CreateUser, DescribeServer]
-  do_not_redo: []
+  start_with: []
+  do_not_redo: [CreateServer, DescribeServer, ListServers, UpdateServer, DeleteServer, CreateUser, DescribeUser, ListUsers, UpdateUser, DeleteUser, TagResource, UntagResource, ListTagsForResource]
   commands: [go test -count=1 ./internal/services/transfer/... ./tests/integration/transfer/...]
