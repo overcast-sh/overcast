@@ -23,9 +23,8 @@ import (
 
 func TestSettleTTLTransition_ignoresARecordReArmedForAnotherTransition(t *testing.T) {
 	// Given: a table whose enable has settled, and a disable now in flight
-	store := state.NewMemoryStore()
 	mock := newTTLTestClock()
-	svc := newTTLTestService(t, store, mock)
+	svc := newTTLTestService(t, newTTLScanGate(t, state.NewMemoryStore()), mock)
 	mustCreateTable(t, svc, "ttl-stale-settle")
 	mustUpdateTTL(t, svc, "ttl-stale-settle", true, "expiresAt")
 	enableDeadline := ttlDeadlineOf(t, svc, "ttl-stale-settle")
@@ -57,36 +56,64 @@ func TestSettleTTLTransition_ignoresARecordReArmedForAnotherTransition(t *testin
 }
 
 func TestSettleTTLTransition_waitsForTheTableLock(t *testing.T) {
-	// Given: a table whose enable is in flight, and the table's TTL lock held
-	// as UpdateTimeToLive holds it across its read and write
-	store := state.NewMemoryStore()
+	// Given: a table whose enable is in flight
 	mock := newTTLTestClock()
-	svc := newTTLTestService(t, store, mock)
+	svc := newTTLTestService(t, newTTLScanGate(t, state.NewMemoryStore()), mock)
 	mustCreateTable(t, svc, "ttl-locked-settle")
 	mustUpdateTTL(t, svc, "ttl-locked-settle", true, "expiresAt")
 	deadline := ttlDeadlineOf(t, svc, "ttl-locked-settle")
+
+	// And: the table's TTL lock held as UpdateTimeToLive holds it across its
+	// read and its write, with the scheduled settle re-armed through a wrapper
+	// the test can watch. The settle still runs on the scheduler's own
+	// goroutine when the window closes — that is the shape of the race — and
+	// the wrapper only reports where it has got to, which is what this test
+	// used to spend a 100 ms sleep and a 5 s completion budget guessing at
+	// (#1962).
+	//
+	// Arming under the lock is deliberate: it leaves the whole window in which
+	// the entry could still be replaced — which closes when the callback
+	// claims itself, just before `running` — inside a section any concurrent
+	// re-arm has to wait for.
 	unlock := svc.handler.ttlLocks.Lock(ttlLockKey("us-east-1", "ttl-locked-settle"))
+	running, settled := make(chan struct{}), make(chan struct{})
+	svc.handler.ttlSched.AfterScoped("us-east-1", "ttl-locked-settle", ttlTransitionKey,
+		ttlTransitionDuration, func(ctx context.Context) {
+			close(running)
+			svc.handler.settleTTLTransition(ctx, "ttl-locked-settle", deadline)
+			close(settled)
+		})
 
-	// When: the window closes, so the scheduled settle fires and finds the
-	// lock held. A bare Add is deliberate here: the settle must be left
-	// running on its own goroutine, which is exactly the shape of the race.
+	// When: the window closes, so the settle fires and finds the lock held. A
+	// bare Add is what the scheduler offers here: AdvanceAndSettle waits for
+	// the callback to finish, and this one cannot finish until the lock this
+	// goroutine holds is released.
 	mock.Add(ttlTransitionDuration + time.Second)
+	<-running
 
-	// Then: the settle has written nothing while the lock is held, however
-	// long it waits
-	time.Sleep(100 * time.Millisecond)
+	// Then: the settle is at the lock and has written nothing. Both checks are
+	// deliberately generous — `running` is reported just before the settle
+	// takes the lock, so a settle that ignored the lock might not have written
+	// yet either — but neither can fail an implementation that does take it,
+	// which is what makes them safe to make without a window to wait out.
+	select {
+	case <-settled:
+		t.Fatal("the settle completed while the table's TTL lock was held")
+	default:
+	}
 	if got := ttlDeadlineOf(t, svc, "ttl-locked-settle"); got != deadline {
 		t.Fatalf("TTLTransitionAt changed to %d under the lock, want %d untouched", got, deadline)
 	}
 
-	// And: it completes once the lock is released
+	// And: it completes once the lock is released. There is no budget on that
+	// wait on purpose: the settle is parked on a mutex the line above
+	// released, so a deadline here could only be a guess at how long a loaded
+	// runner takes to schedule a goroutine — the guess that failed two
+	// unrelated pull requests.
 	unlock()
-	settledBy := time.Now().Add(5 * time.Second)
-	for ttlDeadlineOf(t, svc, "ttl-locked-settle") != 0 {
-		if time.Now().After(settledBy) {
-			t.Fatal("the settle did not complete after the lock was released")
-		}
-		time.Sleep(5 * time.Millisecond)
+	<-settled
+	if got := ttlDeadlineOf(t, svc, "ttl-locked-settle"); got != 0 {
+		t.Errorf("TTLTransitionAt after the settle = %d, want it cleared", got)
 	}
 	if got := ttlStatusOf(t, svc, "ttl-locked-settle"); got != ttlStatusEnabled {
 		t.Errorf("status after the settle = %q, want %q", got, ttlStatusEnabled)

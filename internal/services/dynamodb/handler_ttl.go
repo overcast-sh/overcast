@@ -290,7 +290,6 @@ func (h *Handler) rearmTTLTransitions(ctx context.Context) {
 		h.log.Error("ttl: scan all tables for pending transitions", zap.Error(err))
 		return
 	}
-	now := h.clk.Now()
 	for _, kv := range pairs {
 		region, name := serviceutil.SplitRegionKey(kv.Key)
 		var table Table
@@ -298,15 +297,57 @@ func (h *Handler) rearmTTLTransitions(ctx context.Context) {
 			h.log.Warn("ttl: unmarshal table; skipping", zap.String("key", name), zap.Error(err))
 			continue
 		}
+		// The scan is a snapshot, and only a filter: which transition each of
+		// these tables is in, if any, is decided by the read under the lock.
 		if table.TTLTransitionAt == 0 {
 			continue
 		}
-		remaining := time.Unix(0, table.TTLTransitionAt).Sub(now)
-		if remaining <= 0 {
-			h.settleTTLTransition(middleware.ContextWithRegion(ctx, region), table.TableName, table.TTLTransitionAt)
-			continue
+		h.rearmTTLTransition(middleware.ContextWithRegion(ctx, region), region, table.TableName)
+	}
+}
+
+// rearmTTLTransition arms the settle for one table's in-flight transition, or
+// runs it now if the window has already closed.
+//
+// It reads the record itself, under the table's TTL lock, rather than trusting
+// the scan that found it. The scan is a snapshot taken at an unknown remove:
+// by the time this runs the transition may have settled, or an
+// UpdateTimeToLive may have replaced it with a different one — and arming a
+// transition the table no longer has is not merely stale, it is destructive.
+// The scheduler keys one pending transition per table, so arming from the
+// snapshot *replaces* the entry a newer update armed; and an entry replaced
+// after its callback has fired but before that callback claims it stands down
+// without running, so the newer transition then never settles at all
+// (#1962 — a table left carrying a TTLTransitionAt that outlived its window,
+// and a completed disable that never drops its TTL configuration).
+//
+// updateTimeToLiveTyped holds this same lock across its own write and its own
+// arming, so the two possible orders are the two serial ones, and whichever
+// arms second arms the deadline the record actually carries.
+//
+// The settle runs after the lock is released, because settleTTLTransition
+// takes the lock itself — and for the same reason it is not armed with a zero
+// delay instead, which Scheduler.After runs inline on a real clock.
+func (h *Handler) rearmTTLTransition(ctx context.Context, region, tableName string) {
+	// A non-zero deadline out of this is one whose window has already closed,
+	// so the settle is this call's to run. Zero means there was nothing to
+	// re-arm, or that it has been armed for later.
+	elapsedDeadline := func() int64 {
+		defer h.ttlLocks.Lock(ttlLockKey(region, tableName))()
+
+		table, aerr := h.store.getTable(ctx, tableName)
+		if aerr != nil || table.TTLTransitionAt == 0 {
+			// Deleted, unreadable, or settled since the scan.
+			return 0
 		}
-		h.scheduleTTLTransition(region, table.TableName, remaining, table.TTLTransitionAt)
+		if remaining := time.Unix(0, table.TTLTransitionAt).Sub(h.clk.Now()); remaining > 0 {
+			h.scheduleTTLTransition(region, table.TableName, remaining, table.TTLTransitionAt)
+			return 0
+		}
+		return table.TTLTransitionAt
+	}()
+	if elapsedDeadline != 0 {
+		h.settleTTLTransition(ctx, tableName, elapsedDeadline)
 	}
 }
 
