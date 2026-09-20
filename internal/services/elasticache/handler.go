@@ -19,7 +19,6 @@ import (
 	"github.com/overcast-sh/overcast/internal/docker"
 	"github.com/overcast-sh/overcast/internal/events"
 	"github.com/overcast-sh/overcast/internal/lifecycle"
-	"github.com/overcast-sh/overcast/internal/middleware"
 	"github.com/overcast-sh/overcast/internal/protocol"
 	"github.com/overcast-sh/overcast/internal/protocol/op"
 	"github.com/overcast-sh/overcast/internal/serviceutil"
@@ -161,17 +160,6 @@ func engineImage(engine, version string) string {
 
 // ── XML response types ───────────────────────────────────────────────────────
 
-type xmlCreateCacheClusterResponse struct {
-	XMLName          xml.Name                    `xml:"CreateCacheClusterResponse"`
-	Xmlns            string                      `xml:"xmlns,attr"`
-	Result           xmlCreateCacheClusterResult `xml:"CreateCacheClusterResult"`
-	ResponseMetadata protocol.ResponseMetadata   `xml:"ResponseMetadata"`
-}
-
-type xmlCreateCacheClusterResult struct {
-	CacheCluster xmlCacheCluster `xml:"CacheCluster"`
-}
-
 type xmlDeleteCacheClusterResponse struct {
 	XMLName          xml.Name                    `xml:"DeleteCacheClusterResponse"`
 	Xmlns            string                      `xml:"xmlns,attr"`
@@ -180,7 +168,7 @@ type xmlDeleteCacheClusterResponse struct {
 }
 
 type xmlDeleteCacheClusterResult struct {
-	CacheCluster xmlCacheCluster `xml:"CacheCluster"`
+	CacheCluster ecXMLCacheCluster `xml:"CacheCluster"`
 }
 
 type xmlDescribeCacheClustersResponse struct {
@@ -190,27 +178,12 @@ type xmlDescribeCacheClustersResponse struct {
 	ResponseMetadata protocol.ResponseMetadata      `xml:"ResponseMetadata"`
 }
 
+// The CacheCluster body itself is ecXMLCacheCluster, shared with the typed
+// path. It used to be declared a second time here, and the two copies had
+// already drifted; a wire shape stated twice is a wire shape that is right in
+// one protocol and stale in the other.
 type xmlDescribeCacheClustersResult struct {
-	CacheClusters xmlCacheClusters `xml:"CacheClusters"`
-}
-
-type xmlCacheClusters struct {
-	Items []xmlCacheCluster `xml:"CacheCluster"`
-}
-
-type xmlCacheCluster struct {
-	CacheClusterId            string       `xml:"CacheClusterId"`
-	CacheClusterStatus        string       `xml:"CacheClusterStatus"`
-	CacheNodeType             string       `xml:"CacheNodeType"`
-	Engine                    string       `xml:"Engine"`
-	EngineVersion             string       `xml:"EngineVersion"`
-	NumCacheNodes             int          `xml:"NumCacheNodes"`
-	PreferredAvailabilityZone string       `xml:"PreferredAvailabilityZone,omitempty"`
-	CacheSubnetGroupName      string       `xml:"CacheSubnetGroupName,omitempty"`
-	ReplicationGroupId        string       `xml:"ReplicationGroupId,omitempty"`
-	CacheParameterGroupName   string       `xml:"CacheParameterGroupName,omitempty"`
-	ARN                       string       `xml:"ARN"`
-	ConfigurationEndpoint     *xmlEndpoint `xml:"ConfigurationEndpoint,omitempty"`
+	CacheClusters ecXMLCacheClusters `xml:"CacheClusters"`
 }
 
 type xmlModifyCacheClusterResponse struct {
@@ -221,7 +194,7 @@ type xmlModifyCacheClusterResponse struct {
 }
 
 type xmlModifyCacheClusterResult struct {
-	CacheCluster xmlCacheCluster `xml:"CacheCluster"`
+	CacheCluster ecXMLCacheCluster `xml:"CacheCluster"`
 }
 
 type xmlEndpoint struct {
@@ -231,165 +204,40 @@ type xmlEndpoint struct {
 
 // ── CreateCacheCluster ───────────────────────────────────────────────────────
 
-// CreateCacheCluster creates a new cache cluster and (when Docker is available)
-// starts a real Redis container. The cluster transitions to "available" once
-// the TCP health check succeeds, matching AWS semantics.
+// CreateCacheCluster is the Query form entry point. It decodes the form and
+// hands straight to createCacheClusterTyped rather than repeating it: the two
+// used to be parallel implementations of the same operation, and every rule
+// added to one — the container-start merge, and now the whole of validate.go —
+// was a rule that lapsed the moment a caller arrived over the other protocol.
 func (h *Handler) CreateCacheCluster(w http.ResponseWriter, r *http.Request) {
-	id := r.FormValue("CacheClusterId")
-	if id == "" {
-		protocol.WriteQueryXMLError(w, r, errInvalidParameterValue("CacheClusterId is required"))
-		return
+	req := &ecCreateCacheClusterReq{
+		CacheClusterId:            r.FormValue("CacheClusterId"),
+		Engine:                    r.FormValue("Engine"),
+		EngineVersion:             r.FormValue("EngineVersion"),
+		CacheNodeType:             r.FormValue("CacheNodeType"),
+		NumCacheNodes:             formInt(r, "NumCacheNodes", 0),
+		ReplicationGroupId:        r.FormValue("ReplicationGroupId"),
+		CacheSubnetGroupName:      r.FormValue("CacheSubnetGroupName"),
+		AZMode:                    r.FormValue("AZMode"),
+		PreferredAvailabilityZone: r.FormValue("PreferredAvailabilityZone"),
+		// The Query key is <Name>.<memberXmlName>.N, never <Name>.member.N for
+		// this service — the typed path gets that from the codec.
+		PreferredAvailabilityZones: formStringList(r, "PreferredAvailabilityZones.PreferredAvailabilityZone"),
+		CacheParameterGroupName:    r.FormValue("CacheParameterGroupName"),
+		Tags:                       formTagList(r),
 	}
-
-	// Duplicate check.
-	if _, aerr := h.store.getCacheCluster(r.Context(), id); aerr == nil {
-		protocol.WriteQueryXMLError(w, r, errClusterAlreadyExists(id))
-		return
-	}
-
-	engine := r.FormValue("Engine")
-	if engine == "" {
-		engine = "redis"
-	}
-	if engine != "redis" && engine != "memcached" && engine != "valkey" {
-		protocol.WriteQueryXMLError(w, r, errInvalidParameterValue("Engine must be redis, valkey, or memcached"))
-		return
-	}
-
-	engineVersion := r.FormValue("EngineVersion")
-	if engineVersion == "" {
-		engineVersion = engineDefaultVersion(engine)
-	}
-
-	nodeType := r.FormValue("CacheNodeType")
-	if nodeType == "" {
-		nodeType = defaultNodeType
-	}
-
-	numNodes := formInt(r, "NumCacheNodes", 1)
-	replicationGroupID := r.FormValue("ReplicationGroupId")
-	subnetGroupName := r.FormValue("CacheSubnetGroupName")
-	if aerr := h.requireCacheSubnetGroup(r.Context(), subnetGroupName); aerr != nil {
+	resp, aerr := h.createCacheClusterTyped(r.Context(), req)
+	if aerr != nil {
 		protocol.WriteQueryXMLError(w, r, aerr)
 		return
 	}
-	az := r.FormValue("PreferredAvailabilityZone")
-	parameterGroupName := r.FormValue("CacheParameterGroupName")
-
-	region := h.store.region(r.Context())
-	arn := fmt.Sprintf("arn:aws:elasticache:%s:%s:cluster:%s", region, h.cfg.AccountID, id)
-
-	endpoint := &ClusterEndpoint{
-		Address: fmt.Sprintf("%s.%s.cfg.%s", id, region, h.cfg.ExternalHostname()),
-		Port:    enginePort(engine),
-	}
-
-	cluster := &CacheCluster{
-		CacheClusterId:            id,
-		CacheClusterStatus:        "creating",
-		CacheNodeType:             nodeType,
-		Engine:                    engine,
-		EngineVersion:             engineVersion,
-		NumCacheNodes:             numNodes,
-		PreferredAvailabilityZone: az,
-		CacheSubnetGroupName:      subnetGroupName,
-		ReplicationGroupId:        replicationGroupID,
-		CacheParameterGroupName:   parameterGroupName,
-		ARN:                       arn,
-		ConfigurationEndpoint:     endpoint,
-	}
-
-	// Create-time tags are validated before anything is written, so a
-	// rejected tag set fails the create rather than leaving a cluster that
-	// exists with the tags the caller asked for missing. Mirrors the
-	// serverless-cache create path (handler_serverless.go).
-	tags := formTags(r)
-	if aerr := serviceutil.ValidateTags(cacheTagCfg, tags); aerr != nil {
-		protocol.WriteQueryXMLError(w, r, aerr)
-		return
-	}
-
-	if aerr := h.store.putCacheCluster(r.Context(), cluster); aerr != nil {
-		protocol.WriteQueryXMLError(w, r, aerr)
-		return
-	}
-	if len(tags) > 0 {
-		if _, aerr := serviceutil.ApplyStoreTags(r.Context(), h.store.tags(), arn, tags, cacheTagCfg); aerr != nil {
-			protocol.WriteQueryXMLError(w, r, aerr)
-			return
-		}
-	}
-
-	clusterID := id
-	if h.dockerReady.Load() {
-		// Docker is available — start a real container. The health check will
-		// transition to "available" once the process is listening. We do NOT
-		// run the metadata transition here; that would mark the cluster "available"
-		// before the container is ready, making the health check a no-op.
-		if h.puller != nil {
-			h.puller.Prewarm(engineImage(engine, engineVersion))
-		}
-		h.dockerWg.Add(1)
-		go func() {
-			defer h.dockerWg.Done()
-			bgCtx := middleware.ContextWithRegion(h.bgCtx, region)
-			got, aerr := h.store.getCacheCluster(bgCtx, clusterID)
-			if aerr != nil || got == nil {
-				return
-			}
-			if err := h.startCacheContainer(bgCtx, got); err != nil {
-				// Not a fall back to metadata-only: Docker was wired when the
-				// cluster was created, so a container that cannot be built is
-				// a real failure. Leaving the cluster in "creating" parks it in
-				// a state nothing will ever change — the readiness watch that
-				// owns that transition is scheduled below, after the start
-				// succeeds, so a failure here leaves nothing behind at all.
-				h.failCacheCluster(bgCtx, clusterID, fmt.Sprintf("the cache container could not be created: %v", err))
-				return
-			}
-			// The start took real time; the cluster may have been deleted
-			// meanwhile. Delete could not stop this container — its ID was not
-			// persisted yet — so the start goroutine owns the teardown. Merge
-			// the container fields into a fresh read rather than persisting the
-			// pre-start snapshot, which would put the cluster back to
-			// "creating" and leave the delete undone. Same as the typed path.
-			if _, aerr := h.mutateCacheCluster(bgCtx, clusterID, func(stored *CacheCluster) *protocol.AWSError {
-				if stored.CacheClusterStatus == "deleting" {
-					return errRecordMovedOn
-				}
-				stored.DockerContainerID = got.DockerContainerID
-				stored.HostPort = got.HostPort
-				stored.DialAddress, stored.DialPort = got.DialAddress, got.DialPort
-				return nil
-			}); aerr != nil {
-				if aerr != errRecordMovedOn {
-					h.log.Warn("ElastiCache: persist post-start cluster",
-						zap.String("cluster", clusterID), zap.String("error", aerr.Message))
-				}
-				h.teardownOrphanedContainer(bgCtx, "cache cluster", clusterID, got.DockerContainerID, got.HostPort)
-				return
-			}
-			h.scheduleClusterHealthCheck(region, clusterID, got)
-		}()
-	} else {
-		// No container is coming, so nothing else will ever move this cluster
-		// out of "creating". See settleCacheClusterWithoutRuntime.
-		h.settleCacheClusterWithoutRuntime(region, clusterID)
-	}
-
-	h.publish(r, events.ElastiCacheClusterCreated, events.ResourcePayload{Name: id, ARN: arn})
-
-	protocol.WriteQueryXML(w, r, http.StatusOK, &xmlCreateCacheClusterResponse{
-		Xmlns:            cacheXMLNS,
-		Result:           xmlCreateCacheClusterResult{CacheCluster: toXMLCacheCluster(h.cacheClusterForCaller(r.Context(), cluster))},
-		ResponseMetadata: protocol.QueryResponseMetadata(r),
-	})
+	protocol.WriteQueryXML(w, r, http.StatusOK, resp)
 }
 
 // ── DescribeCacheClusters ────────────────────────────────────────────────────
 
 func (h *Handler) DescribeCacheClusters(w http.ResponseWriter, r *http.Request) {
-	filterID := r.FormValue("CacheClusterId")
+	filterID := ecCanonicalID(r.FormValue("CacheClusterId"))
 
 	if filterID != "" {
 		cluster, aerr := h.store.getCacheCluster(r.Context(), filterID)
@@ -401,7 +249,7 @@ func (h *Handler) DescribeCacheClusters(w http.ResponseWriter, r *http.Request) 
 		protocol.WriteQueryXML(w, r, http.StatusOK, &xmlDescribeCacheClustersResponse{
 			Xmlns: cacheXMLNS,
 			Result: xmlDescribeCacheClustersResult{
-				CacheClusters: xmlCacheClusters{Items: []xmlCacheCluster{toXMLCacheCluster(h.cacheClusterForCaller(r.Context(), cluster))}},
+				CacheClusters: ecXMLCacheClusters{Items: []ecXMLCacheCluster{ecToXMLCacheCluster(h.cacheClusterForCaller(r.Context(), cluster))}},
 			},
 			ResponseMetadata: protocol.QueryResponseMetadata(r),
 		})
@@ -413,14 +261,14 @@ func (h *Handler) DescribeCacheClusters(w http.ResponseWriter, r *http.Request) 
 		protocol.WriteQueryXMLError(w, r, aerr)
 		return
 	}
-	items := make([]xmlCacheCluster, 0, len(all))
+	items := make([]ecXMLCacheCluster, 0, len(all))
 	for _, c := range all {
-		items = append(items, toXMLCacheCluster(h.cacheClusterForCaller(r.Context(), c)))
+		items = append(items, ecToXMLCacheCluster(h.cacheClusterForCaller(r.Context(), c)))
 	}
 	docker.SetBackingHeaders(w, h.dockerReady.Load(), docker.ContainerHealthUnknown)
 	protocol.WriteQueryXML(w, r, http.StatusOK, &xmlDescribeCacheClustersResponse{
 		Xmlns:            cacheXMLNS,
-		Result:           xmlDescribeCacheClustersResult{CacheClusters: xmlCacheClusters{Items: items}},
+		Result:           xmlDescribeCacheClustersResult{CacheClusters: ecXMLCacheClusters{Items: items}},
 		ResponseMetadata: protocol.QueryResponseMetadata(r),
 	})
 }
@@ -428,7 +276,7 @@ func (h *Handler) DescribeCacheClusters(w http.ResponseWriter, r *http.Request) 
 // ── DeleteCacheCluster ───────────────────────────────────────────────────────
 
 func (h *Handler) DeleteCacheCluster(w http.ResponseWriter, r *http.Request) {
-	id := r.FormValue("CacheClusterId")
+	id := ecCanonicalID(r.FormValue("CacheClusterId"))
 	if id == "" {
 		protocol.WriteQueryXMLError(w, r, errInvalidParameterValue("CacheClusterId is required"))
 		return
@@ -451,7 +299,7 @@ func (h *Handler) DeleteCacheCluster(w http.ResponseWriter, r *http.Request) {
 
 	protocol.WriteQueryXML(w, r, http.StatusOK, &xmlDeleteCacheClusterResponse{
 		Xmlns:            cacheXMLNS,
-		Result:           xmlDeleteCacheClusterResult{CacheCluster: toXMLCacheCluster(h.cacheClusterForCaller(r.Context(), cluster))},
+		Result:           xmlDeleteCacheClusterResult{CacheCluster: ecToXMLCacheCluster(h.cacheClusterForCaller(r.Context(), cluster))},
 		ResponseMetadata: protocol.QueryResponseMetadata(r),
 	})
 
@@ -1174,7 +1022,7 @@ type VPCNetworkResolver interface {
 // ── ModifyCacheCluster ───────────────────────────────────────────────────────
 
 func (h *Handler) ModifyCacheCluster(w http.ResponseWriter, r *http.Request) {
-	id := r.FormValue("CacheClusterId")
+	id := ecCanonicalID(r.FormValue("CacheClusterId"))
 	if id == "" {
 		protocol.WriteQueryXMLError(w, r, errInvalidParameterValue("CacheClusterId is required"))
 		return
@@ -1221,32 +1069,21 @@ func (h *Handler) ModifyCacheCluster(w http.ResponseWriter, r *http.Request) {
 
 	protocol.WriteQueryXML(w, r, http.StatusOK, &xmlModifyCacheClusterResponse{
 		Xmlns:            cacheXMLNS,
-		Result:           xmlModifyCacheClusterResult{CacheCluster: toXMLCacheCluster(h.cacheClusterForCaller(r.Context(), cluster))},
+		Result:           xmlModifyCacheClusterResult{CacheCluster: ecToXMLCacheCluster(h.cacheClusterForCaller(r.Context(), cluster))},
 		ResponseMetadata: protocol.QueryResponseMetadata(r),
 	})
 }
 
-func toXMLCacheCluster(c *CacheCluster) xmlCacheCluster {
-	out := xmlCacheCluster{
-		CacheClusterId:            c.CacheClusterId,
-		CacheClusterStatus:        c.CacheClusterStatus,
-		CacheNodeType:             c.CacheNodeType,
-		Engine:                    c.Engine,
-		EngineVersion:             c.EngineVersion,
-		NumCacheNodes:             c.NumCacheNodes,
-		PreferredAvailabilityZone: c.PreferredAvailabilityZone,
-		CacheSubnetGroupName:      c.CacheSubnetGroupName,
-		ReplicationGroupId:        c.ReplicationGroupId,
-		CacheParameterGroupName:   c.CacheParameterGroupName,
-		ARN:                       c.ARN,
-	}
-	if c.ConfigurationEndpoint != nil {
-		out.ConfigurationEndpoint = &xmlEndpoint{
-			Address: c.ConfigurationEndpoint.Address,
-			Port:    c.ConfigurationEndpoint.Port,
+// formTagList is formTags in the shape the typed request takes.
+func formTagList(r *http.Request) []ecTag {
+	var out []ecTag
+	for i := 1; ; i++ {
+		key := r.FormValue(fmt.Sprintf("Tags.Tag.%d.Key", i))
+		if key == "" {
+			return out
 		}
+		out = append(out, ecTag{Key: key, Value: r.FormValue(fmt.Sprintf("Tags.Tag.%d.Value", i))})
 	}
-	return out
 }
 
 func formInt(r *http.Request, key string, def int) int {

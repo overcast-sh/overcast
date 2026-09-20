@@ -42,6 +42,16 @@ type CacheCluster struct {
 	CacheParameterGroupName   string           `json:"CacheParameterGroupName,omitempty"`
 	ARN                       string           `json:"ARN"`
 	ConfigurationEndpoint     *ClusterEndpoint `json:"ConfigurationEndpoint,omitempty"`
+	// CacheClusterCreateTime is the AWS member of the same name, stamped from
+	// the injected clock.
+	CacheClusterCreateTime string `json:"CacheClusterCreateTime,omitempty"`
+	// PreferredAvailabilityZones and AZMode are Memcached placement inputs.
+	// Neither is a member of the AWS CacheCluster shape: the zones surface one
+	// per node as CacheNode.CustomerAvailabilityZone, and AZMode surfaces only
+	// as the "Multiple" that PreferredAvailabilityZone carries when the nodes
+	// are spread. They are stored so a describe can rebuild both.
+	PreferredAvailabilityZones []string `json:"PreferredAvailabilityZones,omitempty"`
+	AZMode                     string   `json:"AZMode,omitempty"`
 	// StatusReason says why a cluster reached a failure status. Kept on the
 	// record and deliberately not in the DescribeCacheClusters wire shape: the
 	// real CacheCluster has no such field. Same call as DBInstance.StatusReason.
@@ -77,6 +87,8 @@ type ReplicationGroup struct {
 	SnapshotRetentionLimit int              `json:"SnapshotRetentionLimit"`
 	MemberClusters         []string         `json:"MemberClusters,omitempty"`
 	ConfigurationEndpoint  *ClusterEndpoint `json:"ConfigurationEndpoint,omitempty"`
+	// ReplicationGroupCreateTime is the AWS member of the same name.
+	ReplicationGroupCreateTime string `json:"ReplicationGroupCreateTime,omitempty"`
 	// CacheSubnetGroupName is what places the group's container in a VPC. AWS
 	// takes it on CreateReplicationGroup but does not return it on the
 	// ReplicationGroup shape — it belongs to the member cache clusters — so it
@@ -534,9 +546,16 @@ func errReplicationGroupNotFound(id string) *protocol.AWSError {
 	}
 }
 
+// errReplicationGroupAlreadyExists carries "ReplicationGroupAlreadyExists",
+// not the Smithy shape name. The model's awsQueryError trait on
+// ReplicationGroupAlreadyExistsFault gives that as the wire code, and an SDK
+// matches the modelled exception type on the wire code alone — the Fault
+// suffix this used to send matched nothing, so callers saw a bare APIError
+// where AWS gives them ReplicationGroupAlreadyExistsFault. (Its sibling
+// ReplicationGroupNotFoundFault really does keep the suffix on the wire.)
 func errReplicationGroupAlreadyExists(id string) *protocol.AWSError {
 	return &protocol.AWSError{
-		Code:       "ReplicationGroupAlreadyExistsFault",
+		Code:       "ReplicationGroupAlreadyExists",
 		Message:    fmt.Sprintf("Replication group %s already exists.", id),
 		HTTPStatus: http.StatusBadRequest,
 	}

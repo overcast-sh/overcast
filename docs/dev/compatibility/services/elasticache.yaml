@@ -1,24 +1,86 @@
 service: elasticache
-status: reviewed
+status: fixed
 priority: p2
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-08-14
+last_updated: 2026-09-20
 protocols: [query]
 implementation: [internal/services/elasticache]
 integration_tests: [tests/integration/elasticache]
 capability_docs: docs/services/elasticache.md
 operation_count_estimate: 24 supported
-current_support_level: Cache clusters, serverless caches, replication groups, subnet/parameter groups, engine metadata, and tagging supported; replication is single-primary only.
+current_support_level: Cache clusters, serverless caches, replication groups, subnet/parameter groups, engine metadata, and tagging supported, with the two classic create operations validated and shaped to the AWS model; replication is single-primary only.
 operations:
   CreateCacheCluster:
-    status: in_progress
+    status: fixed
     aws_docs:
+      - https://docs.aws.amazon.com/AmazonElastiCache/latest/APIReference/API_CreateCacheCluster.html
+      - https://docs.aws.amazon.com/AmazonElastiCache/latest/APIReference/API_CacheCluster.html
+      - https://docs.aws.amazon.com/AmazonElastiCache/latest/APIReference/API_CacheNode.html
       - https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/AutoDiscovery.HowAutoDiscoveryWorks.html
     scenarios:
       - name: managed node replacement after container exit
         status: fixed
         tests: [TestHandleContainerEvent_stillActsOnOwnCacheCluster, TestReconcileContainers_doesNotAdoptAnotherOvercastsCacheCluster]
         evidence: A live exit or a startup/reconnect snapshot moves an available cache through modifying, coalesces duplicate recovery work, and starts a replacement without adopting another Overcast instance's same-named container.
+      - name: CacheClusterId grammar and lowercase storage
+        status: fixed
+        tests: [TestCreateCacheCluster_identifierConstraints, TestCreateCacheCluster_identifierAtMaximumLength, TestCreateCacheCluster_identifierStoredLowercase]
+        evidence: The documented 1-50 grammar (letter-led, alphanumeric or hyphens, no trailing or doubled hyphen) is enforced with InvalidParameterValue; a mixed-case id is canonicalised to lowercase in the record, the ARN and every lookup, as the API reference says the parameter is stored.
+      - name: NumCacheNodes range per engine
+        status: fixed
+        tests: [TestCreateCacheCluster_redisNodeCountMustBeOne, TestCreateCacheCluster_memcachedNodeCountRange]
+        evidence: Valkey and Redis OSS clusters must ask for exactly 1 node and Memcached for 1-40, both InvalidParameterValue outside the range; 40 is accepted and renders 40 CacheNodes.
+      - name: AZMode and PreferredAvailabilityZones are Memcached-only
+        status: fixed
+        tests: [TestCreateCacheCluster_azModeInvalidValue, TestCreateCacheCluster_azModeRejectedForRedis, TestCreateCacheCluster_preferredAvailabilityZonesRejectedForRedis, TestCreateCacheCluster_preferredAvailabilityZonesMustMatchNodeCount, TestCreateCacheCluster_preferredAvailabilityZonesPlaceNodes, TestCreateCacheCluster_crossAZSpreadsWithoutAnExplicitZoneList, TestCreateCacheCluster_singleAZKeepsTheNamedZone]
+        evidence: An AZMode outside single-az/cross-az is InvalidParameterValue; either parameter on a non-Memcached engine, or a zone list whose length differs from NumCacheNodes, is InvalidParameterCombination. Accepted zones land on each node's CustomerAvailabilityZone, and PreferredAvailabilityZone becomes the "Multiple" AWS documents when the zones differ or AZMode is cross-az over more than one node.
+      - name: ReplicationGroupId names an existing group
+        status: fixed
+        tests: [TestCreateCacheCluster_unknownReplicationGroup, TestCreateCacheCluster_joinsExistingReplicationGroup, TestCreateCacheCluster_replicationGroupIdRejectedForMemcached]
+        evidence: An unknown group is ReplicationGroupNotFoundFault (one of the operation's modelled errors) and no cluster is written; a known one registers the cluster in MemberClusters; Memcached is InvalidParameterCombination.
+      - name: CacheCluster XML shape
+        status: fixed
+        tests: [TestCreateCacheCluster_redisXMLShape, TestCreateCacheCluster_memcachedXMLShape, TestCreateCacheCluster_firstAddressInTheBodyIsTheClusterEndpoint]
+        evidence: The response now carries CacheNodes (id, status, create time, Endpoint, ParameterGroupStatus, CustomerAvailabilityZone), CacheClusterCreateTime and the nested CacheParameterGroup, and drops the invented flat CacheParameterGroupName element AWS does not model. ConfigurationEndpoint is Memcached-only, as on AWS; Redis and Valkey carry the address on the node. CloudFormation's endpoint GetAtt reads the first Address/Port in the body, which a regression test pins.
+      - name: lifecycle statuses
+        status: tested
+        tests: [TestCreateCacheCluster_lifecycleStatuses]
+        evidence: Create answers creating, a cluster with no container runtime settles at available, and Delete answers deleting; each node reports its cluster's status, there being one container per cluster.
+    gaps:
+      - CacheNodeType is defaulted to cache.t3.micro rather than required, and no node type is rejected; AWS accepts only its published list.
+      - An explicit NumCacheNodes=0 is treated as omitted (the Query wire cannot distinguish it from an absent integer) and defaults to 1; AWS rejects it.
+      - CacheNodes is always returned; AWS omits it unless DescribeCacheClusters is called with ShowCacheNodeInfo. Overcast returning more than AWS keeps the node endpoint discoverable, but a caller must not read it as proof the flag was honoured.
+  CreateReplicationGroup:
+    status: fixed
+    aws_docs:
+      - https://docs.aws.amazon.com/AmazonElastiCache/latest/APIReference/API_CreateReplicationGroup.html
+      - https://docs.aws.amazon.com/AmazonElastiCache/latest/APIReference/API_ReplicationGroup.html
+      - https://docs.aws.amazon.com/AmazonElastiCache/latest/APIReference/API_NodeGroup.html
+    scenarios:
+      - name: ReplicationGroupId grammar and lowercase storage
+        status: fixed
+        tests: [TestCreateReplicationGroup_identifierConstraints, TestCreateReplicationGroup_identifierLongerThanClusterMaximum, TestCreateReplicationGroup_identifierStoredLowercase]
+        evidence: The documented 1-40 grammar is enforced with InvalidParameterValue — tighter than a cache cluster's 50, which a 45-character name proves — and a mixed-case id is canonicalised to lowercase.
+      - name: duplicate group error code
+        status: fixed
+        tests: [TestCreateReplicationGroup_duplicate]
+        evidence: The wire code is ReplicationGroupAlreadyExists, the model's awsQueryError code, rather than the ReplicationGroupAlreadyExistsFault shape name it sent before — which matched no modelled SDK exception type.
+      - name: engine must replicate
+        status: fixed
+        tests: [TestCreateReplicationGroup_engineValidation, TestCreateReplicationGroup_valkeyAccepted]
+        evidence: Engine is validated to redis or valkey with InvalidParameterValue; it was unvalidated, so memcached or any other string created a group that silently ran a redis container.
+      - name: ReplicationGroup XML shape
+        status: fixed
+        tests: [TestCreateReplicationGroup_xmlShape, TestCreateReplicationGroup_primaryClusterIdBecomesMember, TestCreateReplicationGroup_firstAddressInTheBodyIsThePrimaryEndpoint]
+        evidence: The response now carries one NodeGroup with NodeGroupId, Status, PrimaryEndpoint, ReaderEndpoint and NodeGroupMembers, plus ClusterEnabled false and ReplicationGroupCreateTime. ConfigurationEndpoint is null, which is what AWS returns for a cluster-mode-disabled group. MemberClusters always names the primary, either the given PrimaryClusterId or the <group>-001 AWS generates.
+      - name: lifecycle statuses
+        status: tested
+        tests: [TestCreateReplicationGroup_lifecycleStatuses]
+        evidence: Create answers creating, a group with no container runtime settles at available, and Delete answers deleting; the node group reports the group's status.
+    gaps:
+      - NumCacheClusters, NumNodeGroups, ReplicasPerNodeGroup and NodeGroupConfiguration are not read, so a group is always one shard with one member and AutomaticFailoverEnabled is not held to AWS's "at least 2 clusters" rule.
+      - ReplicationGroupDescription is modelled @required but not enforced server-side; the SDKs reject an empty one before it reaches the wire.
+      - MemberClusters names a <group>-001 primary but no CacheCluster record is created for it, so DescribeCacheClusters does not list it as AWS does. PrimaryClusterId is likewise not checked for existence or for an available status.
   CreateServerlessCache:
     status: reviewed
     aws_docs:
@@ -89,6 +151,8 @@ operations:
       - Snapshot data contents and final snapshot resources are metadata-only; Overcast does not provide durable cache snapshots.
 findings:
   fixed:
+    - CreateCacheCluster and CreateReplicationGroup validate their identifiers, engines, node counts and placement parameters, store identifiers lowercase, and return the modelled CacheNodes/NodeGroups shapes with AWS's own ConfigurationEndpoint/PrimaryEndpoint split.
+    - The Query form and typed paths for both create operations are one implementation; they were parallel copies whose rules had already drifted.
     - Added Query API support for CreateServerlessCache, DescribeServerlessCaches, and DeleteServerlessCache.
     - Added Query API support for ModifyServerlessCache.
     - Added CloudFormation support for AWS::ElastiCache::ServerlessCache including ARN and Endpoint.* attributes.
@@ -96,10 +160,11 @@ findings:
     - Docker-backed ElastiCache cache cluster, replication group, and serverless cache endpoint hostnames are registered as Docker DNS aliases on the Lambda network.
     - Missing or exited cache cluster, replication group, and serverless cache containers are replaced from live events and central startup/reconnect snapshots rather than being exposed as durable stopped resources.
   remaining_gaps:
-    - Review CreateCacheCluster/CreateReplicationGroup validation, lifecycle states, and XML shapes.
     - Serverless cache snapshots are metadata-only; no durable snapshot contents are emulated.
+    - CacheClusterNotFound, ReplicationGroupNotFoundFault and CacheParameterGroupNotFound answer HTTP 400 where the model's awsQueryError trait says 404; the codes are right and the status is not. Shared with Describe/Delete/Modify, so it wants its own pass.
+    - Multi-shard and multi-replica replication groups (NumCacheClusters, NumNodeGroups, ReplicasPerNodeGroup) are not modelled; every group is one shard with one primary.
   intentionally_partial: []
 handoff:
-  start_with: [CreateCacheCluster, CreateReplicationGroup, DescribeServerlessCaches]
-  do_not_redo: [CreateServerlessCache minimal and metadata paths, DescribeServerlessCaches pagination, ModifyServerlessCache metadata path, DeleteServerlessCache final snapshot parameter, CloudFormation ServerlessCache create/GetAtt/update path, Lambda container DNS for Docker-backed ElastiCache endpoint hostnames]
+  start_with: [DescribeCacheClusters, DescribeReplicationGroups, ModifyCacheCluster]
+  do_not_redo: [CreateCacheCluster and CreateReplicationGroup validation/lifecycle/XML shapes, CreateServerlessCache minimal and metadata paths, DescribeServerlessCaches pagination, ModifyServerlessCache metadata path, DeleteServerlessCache final snapshot parameter, CloudFormation ServerlessCache create/GetAtt/update path, Lambda container DNS for Docker-backed ElastiCache endpoint hostnames]
   commands: [go test -count=1 ./internal/services/elasticache/... ./tests/integration/elasticache/... ./tests/integration/cloudformation/...]

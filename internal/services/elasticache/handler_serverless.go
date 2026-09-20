@@ -622,16 +622,9 @@ func formStringList(r *http.Request, prefix string) []string {
 	return out
 }
 
+// formTags is formTagList in the map shape the tag store takes.
 func formTags(r *http.Request) map[string]string {
-	tags := map[string]string{}
-	for i := 1; ; i++ {
-		key := r.FormValue(fmt.Sprintf("Tags.Tag.%d.Key", i))
-		if key == "" {
-			break
-		}
-		tags[key] = r.FormValue(fmt.Sprintf("Tags.Tag.%d.Value", i))
-	}
-	return tags
+	return ecTagsToMap(formTagList(r))
 }
 
 func formCacheUsageLimits(r *http.Request) CacheUsageLimits {

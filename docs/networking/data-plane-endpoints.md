@@ -38,10 +38,12 @@ CDK stack bakes into an ECS task definition or a Secrets Manager secret.
 | Lambda function, ECS task, any sibling container | the endpoint hostname | the engine port (3306/5432, 6379/11211), as on AWS |
 | The host (CLI, SDK, `cdk deploy`) | the endpoint hostname, or `127.0.0.1` when `{base}` has no wildcard DNS | the published host port (`RDS_PORT_BASE`, 33060 upwards; `ELASTICACHE_PORT_BASE`, 63790 upwards) |
 
-The same table holds for ElastiCache's `ConfigurationEndpoint`, `RedisEndpoint`
-and a serverless cache's `Endpoint`, and it is applied on every read, not once
-at create: a function that discovers its cache through `DescribeCacheClusters`
-at runtime is given a name it can dial, not the address Overcast itself uses.
+The same table holds for every ElastiCache address — a cache node's `Endpoint`,
+a Memcached cluster's `ConfigurationEndpoint`, a node group's `PrimaryEndpoint`
+and `ReaderEndpoint`, `RedisEndpoint` in a stack, and a serverless cache's
+`Endpoint`. It is applied on every read, not once at create: a function that
+discovers its cache through `DescribeCacheClusters` at runtime is given a name
+it can dial, not the address Overcast itself uses.
 
 Both pairs connect. Which one you were given is decided by the source address of
 your request: a split-horizon hostname is used from both sides of the container
