@@ -87,7 +87,7 @@ Shorter overview: the [service reference index](./services/README.md).
 | Lambda           | [lambda.md](./services/lambda.md)                   | 62  | Comprehensive / broad support |
 | API Gateway      | [apigateway.md](./services/apigateway.md)           | 106 | Comprehensive / broad support |
 | AppSync          | [appsync.md](./services/appsync.md)                 | 82  | Comprehensive / broad support |
-| CloudFront       | [cloudfront.md](./services/cloudfront.md)           | 89  | Comprehensive / broad support |
+| CloudFront       | [cloudfront.md](./services/cloudfront.md)           | 88  | Comprehensive / broad support |
 | Cognito          | [cognito.md](./services/cognito.md)                 | 70  | Comprehensive / broad support |
 | EC2 / VPC        | [ec2.md](./services/ec2.md)                         | 79  | Comprehensive / broad support |
 | SNS              | [sns.md](./services/sns.md)                         | 30  | Comprehensive / broad support |

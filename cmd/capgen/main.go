@@ -42,15 +42,16 @@ import (
 
 // CapabilityDecl is a capability entry parsed from a capabilities_dev.go file.
 type CapabilityDecl struct {
-	Service     string
-	Operation   string
-	Category    string
-	Status      string // e.g. "StatusSupported"
-	Notes       string
-	DocsURL     string
-	DisplayName string
-	DocOnly     bool
-	Since       string
+	Service      string
+	Operation    string
+	Category     string
+	Status       string // e.g. "StatusSupported"
+	Notes        string
+	DocsURL      string
+	DisplayName  string
+	DocOnly      bool
+	EmulatorOnly bool
+	Since        string
 }
 
 // Operation is a handler operation extracted from service source files.
@@ -129,6 +130,7 @@ func main() {
 
 		if *checkModel {
 			failures += checkCapabilitiesInManifest(caps)
+			failures += checkEmulatorOnlyRowsAreNotModeled(caps)
 			failures += checkDocOnlyRowsAreNotDispatched(svc, svcDir, caps)
 			failures += checkNotesBindingsMatchTheModel(caps)
 		}
@@ -264,14 +266,40 @@ func main() {
 func checkCapabilitiesInManifest(caps []CapabilityDecl) int {
 	violations := 0
 	for _, cap := range caps {
-		if cap.DocOnly || capabilityManifestExemption(cap) != "" {
+		if cap.DocOnly || cap.EmulatorOnly || capabilityManifestExemption(cap) != "" {
 			continue
 		}
 		operation := modeledOperationName(cap)
 		if awsapi.HasOperation(cap.Service, operation) {
 			continue
 		}
-		fmt.Printf("UNKNOWN_MODEL_OPERATION %s/%s  (mark DocOnly, add an explicit exemption, or correct the AWS operation name)\n", cap.Service, cap.Operation)
+		fmt.Printf("UNKNOWN_MODEL_OPERATION %s/%s  (correct the AWS operation name, mark EmulatorOnly if Overcast invented this operation, or mark DocOnly)\n", cap.Service, cap.Operation)
+		violations++
+	}
+	return violations
+}
+
+// checkEmulatorOnlyRowsAreNotModeled is the other half of the EmulatorOnly
+// contract, and the reason the flag is safe to honour.
+//
+// EmulatorOnly takes a row out of every published AWS operation count and out
+// of the model check that would otherwise hold its name. Left unguarded that is
+// a way to make a failing gate green by typing one word, which is the move #864
+// was filed about. So the flag asserts something checkable: AWS models no
+// operation of this name for this service. If AWS later models one, the row has
+// stopped being an extension and the flag has to go, which is what this reports.
+func checkEmulatorOnlyRowsAreNotModeled(caps []CapabilityDecl) int {
+	violations := 0
+	for _, cap := range caps {
+		if !cap.EmulatorOnly {
+			continue
+		}
+		operation := modeledOperationName(cap)
+		if !awsapi.HasOperation(cap.Service, operation) {
+			continue
+		}
+		fmt.Printf("EMULATOR_ONLY_IS_MODELED %s/%s  (AWS models %s for this service; drop EmulatorOnly and implement the AWS operation, or rename the extension)\n",
+			cap.Service, cap.Operation, operation)
 		violations++
 	}
 	return violations
@@ -327,7 +355,6 @@ var capabilityManifestExemptions = map[string]string{
 	"apigateway/ExecuteRestAPI": "emulator invoke-route helper, not an AWS control-plane operation",
 	"apigateway/ExecuteV2API":   "emulator invoke-route helper, not an AWS control-plane operation",
 	"appsync/ExecuteGraphQL":    "emulator GraphQL execution helper, not an AWS SDK operation",
-	"cloudfront/ProxyRequest":   "emulator proxy helper, not an AWS control-plane operation",
 	"eks/UpdateKubeconfig":      "emulator convenience helper, not an AWS SDK operation",
 }
 
@@ -1293,6 +1320,8 @@ func parseCapabilitiesFile(svcDir, svc string) ([]CapabilityDecl, error) {
 				c.DisplayName = stringExpr(kv.Value, stringConsts)
 			case "DocOnly":
 				c.DocOnly = boolLit(kv.Value)
+			case "EmulatorOnly":
+				c.EmulatorOnly = boolLit(kv.Value)
 			case "Since":
 				c.Since = stringExpr(kv.Value, stringConsts)
 			}
@@ -1506,8 +1535,8 @@ func generateAllGenGo(root string, caps []CapabilityDecl) error {
 	buf.WriteString("// all service packages. Only included in dev builds.\n")
 	buf.WriteString("var AllCapabilities = []Capability{\n")
 	for _, c := range sorted {
-		buf.WriteString(fmt.Sprintf("\t{Service: %q, Operation: %q, Category: %q, Status: %s, Notes: %q, DocsURL: %q, DisplayName: %q, DocOnly: %t, Since: %q},\n",
-			c.Service, c.Operation, c.Category, c.Status, c.Notes, c.DocsURL, c.DisplayName, c.DocOnly, c.Since))
+		buf.WriteString(fmt.Sprintf("\t{Service: %q, Operation: %q, Category: %q, Status: %s, Notes: %q, DocsURL: %q, DisplayName: %q, DocOnly: %t, EmulatorOnly: %t, Since: %q},\n",
+			c.Service, c.Operation, c.Category, c.Status, c.Notes, c.DocsURL, c.DisplayName, c.DocOnly, c.EmulatorOnly, c.Since))
 	}
 	buf.WriteString("}\n")
 
@@ -1557,8 +1586,16 @@ func writeServiceDocs(root, service string, caps []CapabilityDecl) error {
 // same arithmetic docs/generated/service-support.json publishes as total_ops /
 // implemented_ops, so the two can never disagree: anything not explicitly
 // StatusUnsupported is something a caller can invoke.
+//
+// An EmulatorOnly row is counted in neither half. The sentence is read as a
+// statement about AWS coverage, and an operation AWS does not model cannot
+// raise or lower it; CloudFront's ProxyRequest made the service read "all 89
+// listed operations" when AWS has 88 of them (#75).
 func coverage(caps []CapabilityDecl) (implemented, total int) {
 	for _, c := range caps {
+		if c.EmulatorOnly {
+			continue
+		}
 		total++
 		if c.Status != "StatusUnsupported" {
 			implemented++
@@ -1810,7 +1847,12 @@ func buildDocSection(service string, caps []CapabilityDecl) string {
 	catOrder := []string{}
 	catSeen := map[string]struct{}{}
 	byCat := map[string][]CapabilityDecl{}
+	var extensions []CapabilityDecl
 	for _, c := range caps {
+		if c.EmulatorOnly {
+			extensions = append(extensions, c)
+			continue
+		}
 		cat := c.Category
 		if cat == "" {
 			cat = "Operations"
@@ -1893,7 +1935,60 @@ func buildDocSection(service string, caps []CapabilityDecl) string {
 		buf.WriteString(formatTable(endpointHeaders, rows))
 	}
 
+	buf.WriteString(buildEmulatorExtensions(extensions))
+
 	buf.WriteString("\n")
+	return buf.String()
+}
+
+// emulatorSectionHeading names the operations page's second table: the rows
+// that are Overcast's own rather than AWS's.
+const emulatorSectionHeading = "## Emulator extensions"
+
+// buildEmulatorExtensions renders the EmulatorOnly rows under their own
+// heading, or nothing when a service has none.
+//
+// They keep a table rather than being dropped, because they are behaviour a
+// reader of the service page has to be able to find — CloudFront's proxy is
+// most of what makes the service useful locally. What they lose is the AWS
+// Docs column: the default cell is built from the operation name, so this row
+// published a link to API_ProxyRequest.html, a page that has never existed. A
+// reference is rendered only when the declaration states one, as EKS's
+// UpdateKubeconfig states the CLI command's page.
+func buildEmulatorExtensions(extensions []CapabilityDecl) string {
+	if len(extensions) == 0 {
+		return ""
+	}
+
+	var buf bytes.Buffer
+	buf.WriteString("\n---\n\n" + emulatorSectionHeading + "\n\n")
+	buf.WriteString("Operations Overcast serves that appear in no AWS model, so no SDK calls them and no AWS reference page describes them. They sit outside the operation counts above.\n\n")
+
+	headers := []string{"Operation", "Status", "Notes"}
+	referenced := false
+	for _, c := range extensions {
+		if c.DocsURL != "" {
+			referenced = true
+			break
+		}
+	}
+	if referenced {
+		headers = append(headers, "Reference")
+	}
+
+	rows := make([][]string, 0, len(extensions))
+	for _, c := range extensions {
+		displayOp := c.Operation
+		if c.DisplayName != "" {
+			displayOp = c.DisplayName
+		}
+		row := []string{"`" + displayOp + "`", statusLabel(c.Status), c.Notes}
+		if referenced {
+			row = append(row, c.DocsURL)
+		}
+		rows = append(rows, row)
+	}
+	buf.WriteString(formatTable(headers, rows))
 	return buf.String()
 }
 
@@ -2176,6 +2271,27 @@ type serviceLink struct {
 	link string
 }
 
+// awsOperationCounts counts, per service, the AWS API operations it declares.
+//
+// It is what every published "Ops" figure is: STATUS.md's table, the docs
+// service index, and service-support.json. An EmulatorOnly row is Overcast's
+// own operation and is not one of them, but its service still belongs in the
+// list — so a service is keyed here whether or not any of its rows count,
+// rather than disappearing from the index if all of them are extensions.
+func awsOperationCounts(allCaps []CapabilityDecl) map[string]int {
+	counts := map[string]int{}
+	for _, c := range allCaps {
+		if _, seen := counts[c.Service]; !seen {
+			counts[c.Service] = 0
+		}
+		if c.EmulatorOnly {
+			continue
+		}
+		counts[c.Service]++
+	}
+	return counts
+}
+
 // updateStatusMd keeps STATUS.md op counts consistent with the capability
 // registry. It does two things:
 //
@@ -2191,11 +2307,7 @@ func updateStatusMd(root string, allCaps []CapabilityDecl) (bool, error) {
 	const beginMarker = "<!-- BEGIN overcast:status -->"
 	const endMarker = "<!-- END overcast:status -->"
 
-	// Count total ops per service.
-	opCounts := map[string]int{}
-	for _, c := range allCaps {
-		opCounts[c.Service]++
-	}
+	opCounts := awsOperationCounts(allCaps)
 
 	// Build reverse map: lower-cased display name → service ID.
 	nameToID := make(map[string]string, len(statusDisplayNames))
@@ -2316,10 +2428,7 @@ func regexpMustReplace(content, pattern, replacement string, changed *bool) stri
 }
 
 func updateDocsReadmeServiceIndex(root string, allCaps []CapabilityDecl) (bool, error) {
-	opCounts := map[string]int{}
-	for _, c := range allCaps {
-		opCounts[c.Service]++
-	}
+	opCounts := awsOperationCounts(allCaps)
 
 	rows := make([][]string, 0, len(opCounts))
 	for _, svc := range orderedServices(opCounts) {
@@ -2473,10 +2582,7 @@ func updateRootReadmeServiceList(root string, allCaps []CapabilityDecl) (bool, e
 	const beginMarker = "<!-- BEGIN overcast:root-service-list -->"
 	const endMarker = "<!-- END overcast:root-service-list -->"
 
-	opCounts := map[string]int{}
-	for _, c := range allCaps {
-		opCounts[c.Service]++
-	}
+	opCounts := awsOperationCounts(allCaps)
 
 	path := filepath.Join(root, "README.md")
 	raw, err := os.ReadFile(path)
@@ -2567,6 +2673,9 @@ func generateServiceSupportJSON(root string, allCaps []CapabilityDecl) error {
 		Notes     string `json:"notes,omitempty"`
 		DocsURL   string `json:"docs_url,omitempty"`
 		DocOnly   bool   `json:"doc_only,omitempty"`
+		// EmulatorOnly marks an Overcast extension. It is excluded from this
+		// service's total_ops and implemented_ops, which count AWS operations.
+		EmulatorOnly bool `json:"emulator_only,omitempty"`
 	}
 	type svcEntry struct {
 		Service        string    `json:"service"`
@@ -2611,20 +2720,25 @@ func generateServiceSupportJSON(root string, allCaps []CapabilityDecl) error {
 	svcs := make([]svcEntry, 0, len(ordered))
 	for _, svc := range ordered {
 		var ops []opEntry
-		implemented := 0
+		total, implemented := 0, 0
 		for _, c := range allCaps {
 			if c.Service != svc {
 				continue
 			}
 			status := statusLabel(c.Status)
 			ops = append(ops, opEntry{
-				Operation: c.Operation,
-				Category:  c.Category,
-				Status:    status,
-				Notes:     c.Notes,
-				DocsURL:   c.DocsURL,
-				DocOnly:   c.DocOnly,
+				Operation:    c.Operation,
+				Category:     c.Category,
+				Status:       status,
+				Notes:        c.Notes,
+				DocsURL:      c.DocsURL,
+				DocOnly:      c.DocOnly,
+				EmulatorOnly: c.EmulatorOnly,
 			})
+			if c.EmulatorOnly {
+				continue
+			}
+			total++
 			if c.Status != "StatusUnsupported" {
 				implemented++
 			}
@@ -2632,15 +2746,20 @@ func generateServiceSupportJSON(root string, allCaps []CapabilityDecl) error {
 		svcs = append(svcs, svcEntry{
 			Service:        svc,
 			DisplayName:    statusDisplayNames[svc],
-			TotalOps:       len(ops),
+			TotalOps:       total,
 			ImplementedOps: implemented,
 			Operations:     ops,
 		})
 	}
 
+	totalOps := 0
+	for _, svc := range svcs {
+		totalOps += svc.TotalOps
+	}
+
 	m := manifest{
 		GeneratedBy: "go run -tags dev ./cmd/capgen --write-docs",
-		TotalOps:    len(allCaps),
+		TotalOps:    totalOps,
 		Services:    svcs,
 	}
 

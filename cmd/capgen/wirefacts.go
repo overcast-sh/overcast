@@ -354,6 +354,10 @@ func checkModelExemptionsAreStillNeeded(root string, caps []CapabilityDecl) int 
 			fmt.Printf("MODEL_EXEMPTION_STALE %s  (%s — but AWS models %s for this service; delete the exemption and let the model check hold the row)\n",
 				key, capabilityManifestExemptions[key], modeledOperationName(cap))
 			violations++
+		case cap.EmulatorOnly:
+			fmt.Printf("MODEL_EXEMPTION_STALE %s  (%s — the row carries EmulatorOnly now, which states the same thing and is checked; delete the exemption)\n",
+				key, capabilityManifestExemptions[key])
+			violations++
 		}
 	}
 
