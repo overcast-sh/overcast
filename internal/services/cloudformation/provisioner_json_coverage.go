@@ -1208,7 +1208,14 @@ func (h *firehoseDeliveryStreamHandler) Create(ctx context.Context, router http.
 	attrs := map[string]string{
 		"Arn": arn,
 	}
-	return arn, attrs, nil
+	// The physical ID is the delivery stream NAME, which is what AWS documents
+	// Ref as returning for this resource type and what Delete below needs to
+	// name the stream. It used to be the ARN, so Ref handed consumers an ARN
+	// where they expected a name, and the teardown dispatched a
+	// DeleteDeliveryStream whose DeliveryStreamName was an ARN — which matches
+	// no stream, so every deleted stack left its delivery stream behind. The
+	// ARN stays available on GetAtt Arn, above.
+	return name, attrs, nil
 }
 
 func (h *firehoseDeliveryStreamHandler) Delete(ctx context.Context, router http.Handler, cfg *config.Config, physicalID string, rCtx *resolveContext) error {

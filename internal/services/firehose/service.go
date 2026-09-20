@@ -2,9 +2,11 @@
 // (formerly Kinesis Data Firehose).
 //
 // Implemented operations: CreateDeliveryStream, DescribeDeliveryStream,
-// ListDeliveryStreams, DeleteDeliveryStream, PutRecord, PutRecordBatch.
+// ListDeliveryStreams, DeleteDeliveryStream, PutRecord, PutRecordBatch,
+// TagDeliveryStream, UntagDeliveryStream, ListTagsForDeliveryStream.
 //
-// Records are accepted but silently discarded (no S3 buffering).
+// Records are validated as AWS validates them and then discarded: no
+// destination configuration is stored and nothing is ever delivered.
 package firehose
 
 import (
@@ -15,7 +17,6 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 	"go.uber.org/zap"
 
 	"github.com/overcast-sh/overcast/internal/clock"
@@ -171,141 +172,72 @@ func (s *Service) dispatchLegacy(w http.ResponseWriter, r *http.Request, opName 
 
 // ─── Handlers ─────────────────────────────────────────────────
 
+// The legacy JSON1.0/1.1 handlers below decode the request and hand it
+// straight to the typed implementation in typed_logic.go, which the CBOR path
+// also calls. Neither validation nor response shaping lives here: the legacy
+// copy used to re-implement both, which is how CreateDeliveryStream silently
+// dropped Tags (#1196) and how PutRecordBatch acknowledged records it had
+// never decoded (#149).
+
 func (s *Service) createDeliveryStream(w http.ResponseWriter, r *http.Request) {
-	// Delegates to createDeliveryStreamTyped (typed_logic.go) so the legacy
-	// JSON1.0/1.1 path and the CBOR typed path share one implementation —
-	// the legacy copy previously re-implemented this inline and silently
-	// ignored Tags (#1196).
 	var req createDeliveryStreamReq
 	if !serviceutil.DecodeJSON(w, r, &req) {
 		return
 	}
 	resp, aerr := s.createDeliveryStreamTyped(r.Context(), &req)
+	writeTyped(w, r, resp, aerr)
+}
+
+func (s *Service) describeDeliveryStream(w http.ResponseWriter, r *http.Request) {
+	var req describeDeliveryStreamReq
+	if !serviceutil.DecodeJSON(w, r, &req) {
+		return
+	}
+	resp, aerr := s.describeDeliveryStreamTyped(r.Context(), &req)
+	writeTyped(w, r, resp, aerr)
+}
+
+func (s *Service) listDeliveryStreams(w http.ResponseWriter, r *http.Request) {
+	resp, aerr := s.listDeliveryStreamsTyped(r.Context(), nil)
+	writeTyped(w, r, resp, aerr)
+}
+
+func (s *Service) deleteDeliveryStream(w http.ResponseWriter, r *http.Request) {
+	var req deleteDeliveryStreamReq
+	if !serviceutil.DecodeJSON(w, r, &req) {
+		return
+	}
+	resp, aerr := s.deleteDeliveryStreamTyped(r.Context(), &req)
+	writeTyped(w, r, resp, aerr)
+}
+
+func (s *Service) putRecord(w http.ResponseWriter, r *http.Request) {
+	var req putRecordReq
+	if !serviceutil.DecodeJSON(w, r, &req) {
+		return
+	}
+	resp, aerr := s.putRecordTyped(r.Context(), &req)
+	writeTyped(w, r, resp, aerr)
+}
+
+func (s *Service) putRecordBatch(w http.ResponseWriter, r *http.Request) {
+	var req putRecordBatchReq
+	if !serviceutil.DecodeJSON(w, r, &req) {
+		return
+	}
+	resp, aerr := s.putRecordBatchTyped(r.Context(), &req)
+	writeTyped(w, r, resp, aerr)
+}
+
+// writeTyped renders a typed operation's result on the legacy JSON path: the
+// modeled error, or the response body, which for an operation with an empty
+// output shape is the empty JSON object AWS returns.
+func writeTyped[T any](w http.ResponseWriter, r *http.Request, resp *T, aerr *protocol.AWSError) {
 	if aerr != nil {
 		protocol.WriteJSONError(w, r, aerr)
 		return
 	}
 	protocol.WriteJSON(w, r, http.StatusOK, resp)
-}
-
-func (s *Service) describeDeliveryStream(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		DeliveryStreamName string `json:"DeliveryStreamName"`
-	}
-	if !serviceutil.DecodeJSON(w, r, &req) {
-		return
-	}
-	ds, found := s.store.getStream(r.Context(), req.DeliveryStreamName)
-	if !found {
-		protocol.WriteJSONError(w, r, &protocol.AWSError{
-			Code:       "ResourceNotFoundException",
-			Message:    fmt.Sprintf("Delivery stream %s not found", req.DeliveryStreamName),
-			HTTPStatus: http.StatusNotFound,
-		})
-		return
-	}
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{
-		"DeliveryStreamDescription": map[string]any{
-			"DeliveryStreamName":   ds.DeliveryStreamName,
-			"DeliveryStreamARN":    ds.DeliveryStreamARN,
-			"DeliveryStreamStatus": ds.DeliveryStreamStatus,
-			"DeliveryStreamType":   ds.DeliveryStreamType,
-			"HasMoreDestinations":  false,
-			"Destinations":         []any{},
-		},
-	})
-}
-
-func (s *Service) listDeliveryStreams(w http.ResponseWriter, r *http.Request) {
-	streams, err := s.store.listStreams(r.Context())
-	if err != nil {
-		protocol.WriteJSONError(w, r, protocol.ErrInternalError)
-		return
-	}
-	names := make([]string, 0, len(streams))
-	for _, ds := range streams {
-		names = append(names, ds.DeliveryStreamName)
-	}
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{
-		"DeliveryStreamNames":    names,
-		"HasMoreDeliveryStreams": false,
-	})
-}
-
-func (s *Service) deleteDeliveryStream(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		DeliveryStreamName string `json:"DeliveryStreamName"`
-	}
-	if !serviceutil.DecodeJSON(w, r, &req) {
-		return
-	}
-	if _, found := s.store.getStream(r.Context(), req.DeliveryStreamName); !found {
-		protocol.WriteJSONError(w, r, &protocol.AWSError{
-			Code:       "ResourceNotFoundException",
-			Message:    fmt.Sprintf("Delivery stream %s not found", req.DeliveryStreamName),
-			HTTPStatus: http.StatusNotFound,
-		})
-		return
-	}
-	if err := s.store.deleteStream(r.Context(), req.DeliveryStreamName); err != nil {
-		protocol.WriteJSONError(w, r, protocol.ErrInternalError)
-		return
-	}
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{})
-}
-
-func (s *Service) putRecord(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		DeliveryStreamName string `json:"DeliveryStreamName"`
-	}
-	if !serviceutil.DecodeJSON(w, r, &req) {
-		return
-	}
-	if _, found := s.store.getStream(r.Context(), req.DeliveryStreamName); !found {
-		protocol.WriteJSONError(w, r, &protocol.AWSError{
-			Code:       "ResourceNotFoundException",
-			Message:    fmt.Sprintf("Delivery stream %s not found", req.DeliveryStreamName),
-			HTTPStatus: http.StatusNotFound,
-		})
-		return
-	}
-	// Accept and discard.
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{
-		"RecordId":  uuid.NewString(),
-		"Encrypted": false,
-	})
-}
-
-func (s *Service) putRecordBatch(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		DeliveryStreamName string          `json:"DeliveryStreamName"`
-		Records            json.RawMessage `json:"Records"`
-	}
-	if !serviceutil.DecodeJSON(w, r, &req) {
-		return
-	}
-	if _, found := s.store.getStream(r.Context(), req.DeliveryStreamName); !found {
-		protocol.WriteJSONError(w, r, &protocol.AWSError{
-			Code:       "ResourceNotFoundException",
-			Message:    fmt.Sprintf("Delivery stream %s not found", req.DeliveryStreamName),
-			HTTPStatus: http.StatusNotFound,
-		})
-		return
-	}
-	// Count records for the response.
-	var records []json.RawMessage
-	_ = json.Unmarshal(req.Records, &records)
-	results := make([]map[string]any, 0, len(records))
-	for range records {
-		results = append(results, map[string]any{
-			"RecordId": uuid.NewString(),
-		})
-	}
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{
-		"FailedPutCount":   0,
-		"Encrypted":        false,
-		"RequestResponses": results,
-	})
 }
 
 // ─── Tag handlers ───────────────────────────────────────────────
@@ -317,103 +249,28 @@ var firehoseTagCfg = serviceutil.TagValidationConfig{
 }
 
 func (s *Service) tagDeliveryStream(w http.ResponseWriter, r *http.Request) {
-	// Real Firehose sends Tags as a LIST of {Key,Value} structs, never a map.
-	var req struct {
-		DeliveryStreamName string                `json:"DeliveryStreamName"`
-		Tags               []serviceutil.TagPair `json:"Tags"`
-	}
+	var req tagDeliveryStreamReq
 	if !serviceutil.DecodeJSON(w, r, &req) {
 		return
 	}
-
-	if aerr := serviceutil.ApplyInlineTags(r.Context(), req.DeliveryStreamName, serviceutil.TagsFromList(req.Tags), firehoseTagCfg,
-		func(ctx context.Context, name string) (*DeliveryStream, *protocol.AWSError) {
-			ds, found := s.store.getStream(ctx, name)
-			if !found {
-				return nil, &protocol.AWSError{
-					Code: "ResourceNotFoundException", Message: fmt.Sprintf("Delivery stream %s not found", name),
-					HTTPStatus: http.StatusNotFound,
-				}
-			}
-			return ds, nil
-		},
-		func(ctx context.Context, ds *DeliveryStream) *protocol.AWSError {
-			if err := s.store.putStream(ctx, ds); err != nil {
-				return protocol.ErrInternalError
-			}
-			return nil
-		},
-	); aerr != nil {
-		protocol.WriteJSONError(w, r, aerr)
-		return
-	}
-
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{})
+	resp, aerr := s.tagDeliveryStreamTyped(r.Context(), &req)
+	writeTyped(w, r, resp, aerr)
 }
 
 func (s *Service) untagDeliveryStream(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		DeliveryStreamName string   `json:"DeliveryStreamName"`
-		TagKeys            []string `json:"TagKeys"`
-	}
+	var req untagDeliveryStreamReq
 	if !serviceutil.DecodeJSON(w, r, &req) {
 		return
 	}
-
-	if aerr := serviceutil.RemoveInlineTags(r.Context(), req.DeliveryStreamName, req.TagKeys,
-		func(ctx context.Context, name string) (*DeliveryStream, *protocol.AWSError) {
-			ds, found := s.store.getStream(ctx, name)
-			if !found {
-				return nil, &protocol.AWSError{
-					Code: "ResourceNotFoundException", Message: fmt.Sprintf("Delivery stream %s not found", name),
-					HTTPStatus: http.StatusNotFound,
-				}
-			}
-			return ds, nil
-		},
-		func(ctx context.Context, ds *DeliveryStream) *protocol.AWSError {
-			if err := s.store.putStream(ctx, ds); err != nil {
-				return protocol.ErrInternalError
-			}
-			return nil
-		},
-	); aerr != nil {
-		protocol.WriteJSONError(w, r, aerr)
-		return
-	}
-
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{})
+	resp, aerr := s.untagDeliveryStreamTyped(r.Context(), &req)
+	writeTyped(w, r, resp, aerr)
 }
 
 func (s *Service) listTagsForDeliveryStream(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		DeliveryStreamName string `json:"DeliveryStreamName"`
-	}
+	var req listTagsForDeliveryStreamReq
 	if !serviceutil.DecodeJSON(w, r, &req) {
 		return
 	}
-
-	tags, aerr := serviceutil.ListInlineTags(r.Context(), req.DeliveryStreamName,
-		func(ctx context.Context, name string) (*DeliveryStream, *protocol.AWSError) {
-			ds, found := s.store.getStream(ctx, name)
-			if !found {
-				return nil, &protocol.AWSError{
-					Code: "ResourceNotFoundException", Message: fmt.Sprintf("Delivery stream %s not found", name),
-					HTTPStatus: http.StatusNotFound,
-				}
-			}
-			return ds, nil
-		},
-	)
-	if aerr != nil {
-		protocol.WriteJSONError(w, r, aerr)
-		return
-	}
-
-	// serviceutil.TagsToList never returns nil, so an untagged stream
-	// serializes as "Tags":[] rather than null.
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{
-		"Tags":        serviceutil.TagsToList(tags),
-		"HasMoreTags": false,
-	})
+	resp, aerr := s.listTagsForDeliveryStreamTyped(r.Context(), &req)
+	writeTyped(w, r, resp, aerr)
 }

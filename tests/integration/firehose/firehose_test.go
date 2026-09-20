@@ -125,12 +125,12 @@ func TestDeleteDeliveryStream_success(t *testing.T) {
 	defer del.Body.Close()
 	helpers.AssertStatus(t, del, http.StatusOK)
 
-	// Then: DescribeDeliveryStream returns 404
+	// Then: DescribeDeliveryStream reports ResourceNotFoundException (HTTP 400)
 	resp := fhCall(t, srv, "DescribeDeliveryStream", map[string]any{
 		"DeliveryStreamName": "test-stream",
 	})
 	defer resp.Body.Close()
-	helpers.AssertStatus(t, resp, http.StatusNotFound)
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
 }
 
 // ─── PutRecord ────────────────────────────────────────────────────────────────

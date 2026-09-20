@@ -2,9 +2,7 @@ package firehose
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
 
 	"github.com/google/uuid"
 
@@ -27,13 +25,22 @@ type deleteDeliveryStreamReq struct {
 	DeliveryStreamName string `json:"DeliveryStreamName" cbor:"DeliveryStreamName"`
 }
 
+// firehoseRecord is the Record structure PutRecord and PutRecordBatch carry.
+// Data is typed []byte so the decoder enforces the wire form itself — base64
+// over JSON, a byte string over CBOR — instead of the raw message the batch
+// handler used to count without ever decoding.
+type firehoseRecord struct {
+	Data []byte `json:"Data" cbor:"Data"`
+}
+
 type putRecordReq struct {
-	DeliveryStreamName string `json:"DeliveryStreamName" cbor:"DeliveryStreamName"`
+	DeliveryStreamName string          `json:"DeliveryStreamName" cbor:"DeliveryStreamName"`
+	Record             *firehoseRecord `json:"Record" cbor:"Record"`
 }
 
 type putRecordBatchReq struct {
-	DeliveryStreamName string          `json:"DeliveryStreamName" cbor:"DeliveryStreamName"`
-	Records            json.RawMessage `json:"Records" cbor:"Records"`
+	DeliveryStreamName string           `json:"DeliveryStreamName" cbor:"DeliveryStreamName"`
+	Records            []firehoseRecord `json:"Records" cbor:"Records"`
 }
 
 type createDeliveryStreamResp struct {
@@ -74,11 +81,14 @@ type putRecordBatchResp struct {
 }
 
 func (s *Service) createDeliveryStreamTyped(ctx context.Context, req *createDeliveryStreamReq) (*createDeliveryStreamResp, *protocol.AWSError) {
-	if req.DeliveryStreamName == "" {
-		return nil, &protocol.AWSError{
-			Code: "InvalidArgumentException", Message: "DeliveryStreamName is required",
-			HTTPStatus: http.StatusBadRequest,
-		}
+	if aerr := validateDeliveryStreamName(req.DeliveryStreamName); aerr != nil {
+		return nil, aerr
+	}
+	// A delivery stream name is unique per account per Region, so a second
+	// create under the same name is ResourceInUseException — it used to
+	// overwrite the existing stream's record silently (#149).
+	if _, found := s.store.getStream(ctx, req.DeliveryStreamName); found {
+		return nil, errStreamInUse(req.DeliveryStreamName)
 	}
 	tags := serviceutil.TagsFromList(req.Tags)
 	// Validated before the stream is written (#1196) — a rejected create
@@ -106,13 +116,12 @@ func (s *Service) createDeliveryStreamTyped(ctx context.Context, req *createDeli
 }
 
 func (s *Service) describeDeliveryStreamTyped(ctx context.Context, req *describeDeliveryStreamReq) (*describeDeliveryStreamResp, *protocol.AWSError) {
+	if aerr := validateDeliveryStreamName(req.DeliveryStreamName); aerr != nil {
+		return nil, aerr
+	}
 	ds, found := s.store.getStream(ctx, req.DeliveryStreamName)
 	if !found {
-		return nil, &protocol.AWSError{
-			Code:       "ResourceNotFoundException",
-			Message:    fmt.Sprintf("Delivery stream %s not found", req.DeliveryStreamName),
-			HTTPStatus: http.StatusNotFound,
-		}
+		return nil, errStreamNotFound(req.DeliveryStreamName)
 	}
 	return &describeDeliveryStreamResp{
 		DeliveryStreamDescription: describeDeliveryStreamDescription{
@@ -142,12 +151,11 @@ func (s *Service) listDeliveryStreamsTyped(ctx context.Context, _ *struct{}) (*l
 }
 
 func (s *Service) deleteDeliveryStreamTyped(ctx context.Context, req *deleteDeliveryStreamReq) (*struct{}, *protocol.AWSError) {
+	if aerr := validateDeliveryStreamName(req.DeliveryStreamName); aerr != nil {
+		return nil, aerr
+	}
 	if _, found := s.store.getStream(ctx, req.DeliveryStreamName); !found {
-		return nil, &protocol.AWSError{
-			Code:       "ResourceNotFoundException",
-			Message:    fmt.Sprintf("Delivery stream %s not found", req.DeliveryStreamName),
-			HTTPStatus: http.StatusNotFound,
-		}
+		return nil, errStreamNotFound(req.DeliveryStreamName)
 	}
 	if err := s.store.deleteStream(ctx, req.DeliveryStreamName); err != nil {
 		return nil, protocol.ErrInternalError
@@ -156,28 +164,32 @@ func (s *Service) deleteDeliveryStreamTyped(ctx context.Context, req *deleteDeli
 }
 
 func (s *Service) putRecordTyped(ctx context.Context, req *putRecordReq) (*putRecordResp, *protocol.AWSError) {
-	if _, found := s.store.getStream(ctx, req.DeliveryStreamName); !found {
-		return nil, &protocol.AWSError{
-			Code:       "ResourceNotFoundException",
-			Message:    fmt.Sprintf("Delivery stream %s not found", req.DeliveryStreamName),
-			HTTPStatus: http.StatusNotFound,
-		}
+	if aerr := validateDeliveryStreamName(req.DeliveryStreamName); aerr != nil {
+		return nil, aerr
 	}
+	if aerr := validateRecord("record", req.Record); aerr != nil {
+		return nil, aerr
+	}
+	if _, found := s.store.getStream(ctx, req.DeliveryStreamName); !found {
+		return nil, errStreamNotFound(req.DeliveryStreamName)
+	}
+	// Accepted and discarded — nothing is delivered to a destination.
 	return &putRecordResp{RecordId: uuid.NewString(), Encrypted: false}, nil
 }
 
 func (s *Service) putRecordBatchTyped(ctx context.Context, req *putRecordBatchReq) (*putRecordBatchResp, *protocol.AWSError) {
-	if _, found := s.store.getStream(ctx, req.DeliveryStreamName); !found {
-		return nil, &protocol.AWSError{
-			Code:       "ResourceNotFoundException",
-			Message:    fmt.Sprintf("Delivery stream %s not found", req.DeliveryStreamName),
-			HTTPStatus: http.StatusNotFound,
-		}
+	if aerr := validateDeliveryStreamName(req.DeliveryStreamName); aerr != nil {
+		return nil, aerr
 	}
-	var records []json.RawMessage
-	_ = json.Unmarshal(req.Records, &records)
-	results := make([]putRecordBatchResult, 0, len(records))
-	for range records {
+	if aerr := validateRecordBatch(req.Records); aerr != nil {
+		return nil, aerr
+	}
+	if _, found := s.store.getStream(ctx, req.DeliveryStreamName); !found {
+		return nil, errStreamNotFound(req.DeliveryStreamName)
+	}
+	// Accepted and discarded — one record id per entry, nothing delivered.
+	results := make([]putRecordBatchResult, 0, len(req.Records))
+	for range req.Records {
 		results = append(results, putRecordBatchResult{RecordId: uuid.NewString()})
 	}
 	return &putRecordBatchResp{
@@ -223,10 +235,7 @@ func (s *Service) tagDeliveryStreamTyped(ctx context.Context, req *tagDeliverySt
 		func(ctx context.Context, name string) (*DeliveryStream, *protocol.AWSError) {
 			ds, found := s.store.getStream(ctx, name)
 			if !found {
-				return nil, &protocol.AWSError{
-					Code: "ResourceNotFoundException", Message: fmt.Sprintf("Delivery stream %s not found", name),
-					HTTPStatus: http.StatusNotFound,
-				}
+				return nil, errStreamNotFound(name)
 			}
 			return ds, nil
 		},
@@ -247,10 +256,7 @@ func (s *Service) untagDeliveryStreamTyped(ctx context.Context, req *untagDelive
 		func(ctx context.Context, name string) (*DeliveryStream, *protocol.AWSError) {
 			ds, found := s.store.getStream(ctx, name)
 			if !found {
-				return nil, &protocol.AWSError{
-					Code: "ResourceNotFoundException", Message: fmt.Sprintf("Delivery stream %s not found", name),
-					HTTPStatus: http.StatusNotFound,
-				}
+				return nil, errStreamNotFound(name)
 			}
 			return ds, nil
 		},
@@ -271,10 +277,7 @@ func (s *Service) listTagsForDeliveryStreamTyped(ctx context.Context, req *listT
 		func(ctx context.Context, name string) (*DeliveryStream, *protocol.AWSError) {
 			ds, found := s.store.getStream(ctx, name)
 			if !found {
-				return nil, &protocol.AWSError{
-					Code: "ResourceNotFoundException", Message: fmt.Sprintf("Delivery stream %s not found", name),
-					HTTPStatus: http.StatusNotFound,
-				}
+				return nil, errStreamNotFound(name)
 			}
 			return ds, nil
 		},
