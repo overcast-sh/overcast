@@ -1,22 +1,104 @@
 service: scheduler
-status: not_started
+status: fixed
 priority: p2
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-05-17
+last_updated: 2026-09-20
 protocols: [rest_json, aws_json_1_0, aws_json_1_1, rpcv2_cbor]
 implementation: [internal/services/scheduler]
 integration_tests: [tests/integration/scheduler]
 capability_docs: docs/services/scheduler.md
-operation_count_estimate: 12 supported
-current_support_level: Schedule groups, schedules, and tags supported; target dispatch limited.
-operations: {}
+operation_count_estimate: 12 tracked, 12 supported
+current_support_level: Schedule groups, schedules, and tags supported. A 1-second ticker hands each due schedule to a pool of delivery workers, firing into eight target types (Lambda, SQS, SNS, Step Functions, Kinesis, Firehose, ECS RunTask, event buses) through the same dispatcher EventBridge rules and Pipes use, with target parameters, retries, and dead-lettering (#734, PR #787, PR #816).
+operations:
+  CreateSchedule:
+    status: fixed
+    priority: p1
+    aws_docs:
+      - https://docs.aws.amazon.com/scheduler/latest/APIReference/API_CreateSchedule.html
+      - https://docs.aws.amazon.com/scheduler/latest/APIReference/API_Target.html
+    tests:
+      present:
+        - tests/integration/scheduler/targets_test.go::TestSchedule_deliversToSNSTarget
+        - tests/integration/scheduler/targets_test.go::TestSchedule_deliversToStepFunctionsTarget
+        - tests/integration/scheduler/targets_test.go::TestSchedule_deliversToKinesisTarget
+        - tests/integration/scheduler/targets_test.go::TestSchedule_deliversToEventBusTarget
+        - tests/integration/scheduler/scheduler_test.go::TestSchedule_rateFiresTarget
+        - tests/integration/scheduler/targets_test.go::TestCreateSchedule_unsupportedTargetType
+        - tests/integration/scheduler/targets_test.go::TestCreateSchedule_malformedTargetARN
+        - tests/integration/scheduler/targets_test.go::TestUpdateSchedule_unsupportedTargetType
+        - tests/integration/scheduler/targets_test.go::TestSchedule_failedDeliveryGoesToDeadLetterQueue
+    scenario_matrix:
+      - scenario: Target dispatch to SQS via a rate(...) schedule.
+        status: fixed
+        evidence: TestSchedule_rateFiresTarget — was previously the only fireable target kind.
+      - scenario: Target dispatch to SNS, Step Functions, Kinesis, and another event bus.
+        status: fixed
+        evidence: TestSchedule_deliversToSNSTarget, TestSchedule_deliversToStepFunctionsTarget, TestSchedule_deliversToKinesisTarget, TestSchedule_deliversToEventBusTarget — all previously silently dropped at fire time.
+      - scenario: A target type the engine cannot fire, at CreateSchedule and UpdateSchedule.
+        status: fixed
+        evidence: "TestCreateSchedule_unsupportedTargetType, TestUpdateSchedule_unsupportedTargetType — rejected with ValidationException at create/update time rather than accepted and dropped when due, per docs/services/scheduler.md."
+      - scenario: A malformed target ARN.
+        status: fixed
+        evidence: TestCreateSchedule_malformedTargetARN.
+      - scenario: A failed delivery with a DeadLetterConfig queue configured.
+        status: fixed
+        evidence: TestSchedule_failedDeliveryGoesToDeadLetterQueue.
+    findings:
+      - Fixed — CreateSchedule/UpdateSchedule validate the target ARN and reject an unfirable type synchronously instead of accepting a schedule that can never fire (#734, PR #787).
+  DeliveryEngine:
+    status: fixed
+    priority: p1
+    aws_docs:
+      - https://docs.aws.amazon.com/scheduler/latest/UserGuide/managing-schedule.html
+    implementation:
+      - internal/services/scheduler (worker-pool tick/delivery engine, per-field cron evaluation)
+    tests:
+      present:
+        - internal/services/scheduler/engine_test.go::TestTick_oneSlowTargetDoesNotStallTheOtherSchedules
+        - internal/services/scheduler/engine_test.go::TestTick_doesNotQueueAFiringBehindAnInFlightOne
+        - internal/services/scheduler/engine_test.go::TestTick_recordsTheFireTimeBeforeDelivering
+        - internal/services/scheduler/cron_test.go::TestNextFireTime
+        - tests/integration/scheduler/scheduler_test.go::TestUpdateSchedule_replacesRatherThanMerges
+        - tests/integration/scheduler/scheduler_test.go::TestUpdateSchedule_keepsTheIdentityItWasCreatedWith
+    scenario_matrix:
+      - scenario: A slow or retrying target should not delay other schedules' own firing.
+        status: fixed
+        evidence: "tick() now hands each due schedule to a pool of delivery workers instead of firing serially; TestTick_oneSlowTargetDoesNotStallTheOtherSchedules pins this. A schedule is never in flight twice (TestTick_doesNotQueueAFiringBehindAnInFlightOne), and the last-fire time is written before delivery so cadence anchors to when the schedule became due, not to target latency (TestTick_recordsTheFireTimeBeforeDelivering)."
+      - scenario: rate/at/cron next-fire-time computation, including per-field cron advancement.
+        status: fixed
+        evidence: TestNextFireTime pins next-fire-time equivalence against the prior implementation for 25 cases.
+      - scenario: UpdateSchedule replaces the whole schedule rather than merging.
+        status: fixed
+        evidence: "TestUpdateSchedule_replacesRatherThanMerges — an omitted optional member is unset, matching AWS's documented replace semantics; TestUpdateSchedule_keepsTheIdentityItWasCreatedWith confirms name/group/ARN/CreationDate still survive."
+    findings:
+      - Fixed — delivery moved from a single-threaded tick loop to a worker-pool engine, cron next-fire-time computation moved to per-field evaluation, and UpdateSchedule was corrected to replace rather than merge (PR #816).
 findings:
-  fixed: []
+  fixed:
+    - >-
+      #176/#734 (PR #787) — "Review target dispatch docs versus code" found the code
+      firing only Lambda and SQS while docs/services/scheduler.md's capability table
+      already claimed eight target types; the fix, not just the doc, closed the gap:
+      Scheduler now fires SNS, Step Functions, Kinesis, Firehose, ECS RunTask and
+      event-bus targets through the same internal/eventtarget dispatcher EventBridge
+      rules and Pipes use, and rejects an unfirable target type or malformed ARN at
+      CreateSchedule/UpdateSchedule instead of accepting it and silently dropping the
+      firing later. See the CreateSchedule operation entry above for the full test
+      list.
+    - >-
+      PR #816 — a 1-second ticker now hands each due schedule to a pool of delivery
+      workers instead of firing serially, so a slow or retrying target only delays
+      its own schedule; UpdateSchedule was corrected to replace the whole schedule
+      (AWS's documented behavior) rather than merge; cron expressions advance by
+      field instead of by brute-force minute stepping.
   remaining_gaps:
-    - Review target dispatch docs versus code.
     - Mark unsupported target types and advanced scheduler features as partial.
-  intentionally_partial: []
+  intentionally_partial:
+    - Target types are limited to the eight the dispatcher fires (Lambda, SQS, SNS, Step Functions, Kinesis, Firehose, ECS RunTask, event bus); AWS's ~270 templated/universal targets are rejected at create/update rather than accepted and dropped (docs/services/scheduler.md "Differences from AWS").
+    - Retries run back to back with no backoff, capped at 6 total attempts; AWS allows up to 185 attempts with backoff (docs/services/scheduler.md "Differences from AWS").
+    - FlexibleTimeWindow is stored and returned but a schedule always fires at its exact due tick rather than being jittered across the window (docs/services/scheduler.md "Differences from AWS").
 handoff:
-  start_with: [CreateSchedule, target dispatch, flexible windows]
-  do_not_redo: []
+  start_with: ["FlexibleTimeWindow jitter and duplicate-name handling (#177, in progress elsewhere)"]
+  do_not_redo:
+    - "Target dispatch to SNS/Step Functions/Kinesis/Firehose/ECS/event-bus, unsupported-target-type and malformed-ARN rejection at create/update, and DLQ delivery (#176, #734, PR #787) from 2026-09-20."
+    - "Worker-pool delivery engine, UpdateSchedule replace semantics, and per-field cron advancement (PR #816) from 2026-09-20."
   commands: [go test -count=1 ./internal/services/scheduler/... ./tests/integration/scheduler/...]
