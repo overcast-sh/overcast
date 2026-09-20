@@ -28,10 +28,15 @@ aws elasticache create-cache-cluster \
   --engine redis --cache-node-type cache.t3.micro --num-cache-nodes 1
 
 aws elasticache describe-cache-clusters --cache-cluster-id sessions \
-  --query 'CacheClusters[0].[CacheClusterStatus,ConfigurationEndpoint]'
+  --show-cache-node-info \
+  --query 'CacheClusters[0].[CacheClusterStatus,CacheNodes[0].Endpoint]'
 # once "available": ["127.0.0.1", 63790] on the host
 redis-cli -p 63790 ping
 ```
+
+A Redis or Valkey cluster carries its address on the node, not on
+`ConfigurationEndpoint` — that one is Memcached's auto-discovery endpoint and
+is null for the others, as on AWS.
 
 Any credentials work; with none configured, run `eval "$(overcast env)"` first
 — see [Using AWS SDKs and CLI](../sdk-cli.md#credentials).
@@ -56,8 +61,9 @@ Supported engines: **redis** (`redis:6`, `redis:7`), **valkey**
 
 | Area                                         | On AWS                                                  | Overcast                                                                                                                |
 | -------------------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Cluster size                                 | Replicas, cluster mode and failover                     | A replication group starts a single primary container, always                                                           |
-| Replication-group endpoints                  | `PrimaryEndPoint` and `ConfigurationEndPoint` differ    | Both carry the same endpoint — there is nothing to distinguish cluster-mode-enabled from disabled                       |
+| Cluster size                                 | Replicas, cluster mode and failover                     | A replication group starts a single primary container and reports one node group, always                                |
+| Replication-group endpoints                  | A reader endpoint load-balances the replicas            | `PrimaryEndpoint` and `ReaderEndpoint` are the same address: one container serves both roles                            |
+| Node-level detail                            | Each node has its own address, status and zone          | Every `CacheNodes` entry reports the one container's endpoint and the cluster's own status                              |
 | Parameter and security groups                | Applied to the engine                                   | `CacheParameterGroupName` is recorded and echoed, never pushed into the engine; `SecurityGroupIds` are dropped entirely |
 | Snapshots                                    | Snapshot, backup and restore                            | Not implemented                                                                                                         |
 | Scaling                                      | Node-count changes and `IncreaseReplicaCount` add nodes | `ModifyCacheCluster` node-count changes and `IncreaseReplicaCount` do not add containers                                |

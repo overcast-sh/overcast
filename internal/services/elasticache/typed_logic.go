@@ -18,16 +18,18 @@ import (
 // ---- Request types ----
 
 type ecCreateCacheClusterReq struct {
-	CacheClusterId            string  `json:"CacheClusterId"`
-	Engine                    string  `json:"Engine"`
-	EngineVersion             string  `json:"EngineVersion"`
-	CacheNodeType             string  `json:"CacheNodeType"`
-	NumCacheNodes             int     `json:"NumCacheNodes"`
-	ReplicationGroupId        string  `json:"ReplicationGroupId"`
-	CacheSubnetGroupName      string  `json:"CacheSubnetGroupName"`
-	PreferredAvailabilityZone string  `json:"PreferredAvailabilityZone"`
-	CacheParameterGroupName   string  `json:"CacheParameterGroupName"`
-	Tags                      []ecTag `json:"Tags"`
+	CacheClusterId             string   `json:"CacheClusterId"`
+	Engine                     string   `json:"Engine"`
+	EngineVersion              string   `json:"EngineVersion"`
+	CacheNodeType              string   `json:"CacheNodeType"`
+	NumCacheNodes              int      `json:"NumCacheNodes"`
+	ReplicationGroupId         string   `json:"ReplicationGroupId"`
+	CacheSubnetGroupName       string   `json:"CacheSubnetGroupName"`
+	AZMode                     string   `json:"AZMode"`
+	PreferredAvailabilityZone  string   `json:"PreferredAvailabilityZone"`
+	PreferredAvailabilityZones []string `json:"PreferredAvailabilityZones"`
+	CacheParameterGroupName    string   `json:"CacheParameterGroupName"`
+	Tags                       []ecTag  `json:"Tags"`
 }
 
 // ecTag is the Query-protocol Tags.Tag.N.Key/Value shape, shared by every
@@ -153,19 +155,52 @@ type ecXMLCacheClusters struct {
 	Items []ecXMLCacheCluster `xml:"CacheCluster"`
 }
 
+// ecXMLCacheCluster is the AWS CacheCluster shape, in the model's own member
+// order. Only members ElastiCache actually models appear: the flat
+// CacheParameterGroupName element this once carried is not one of them — AWS
+// nests it in CacheParameterGroup, alongside the apply status — and a caller
+// reading the modelled member got nothing back.
 type ecXMLCacheCluster struct {
-	CacheClusterId            string         `xml:"CacheClusterId"`
-	CacheClusterStatus        string         `xml:"CacheClusterStatus"`
-	CacheNodeType             string         `xml:"CacheNodeType"`
-	Engine                    string         `xml:"Engine"`
-	EngineVersion             string         `xml:"EngineVersion"`
-	NumCacheNodes             int            `xml:"NumCacheNodes"`
-	PreferredAvailabilityZone string         `xml:"PreferredAvailabilityZone,omitempty"`
-	CacheSubnetGroupName      string         `xml:"CacheSubnetGroupName,omitempty"`
-	ReplicationGroupId        string         `xml:"ReplicationGroupId,omitempty"`
-	CacheParameterGroupName   string         `xml:"CacheParameterGroupName,omitempty"`
-	ARN                       string         `xml:"ARN"`
-	ConfigurationEndpoint     *ecXMLEndpoint `xml:"ConfigurationEndpoint,omitempty"`
+	CacheClusterId string `xml:"CacheClusterId"`
+	// ConfigurationEndpoint is Memcached's auto-discovery endpoint. AWS leaves
+	// it null for Valkey and Redis OSS, where the node's own Endpoint is what a
+	// client dials — see ecToXMLCacheCluster.
+	ConfigurationEndpoint     *ecXMLEndpoint                  `xml:"ConfigurationEndpoint,omitempty"`
+	CacheNodeType             string                          `xml:"CacheNodeType"`
+	Engine                    string                          `xml:"Engine"`
+	EngineVersion             string                          `xml:"EngineVersion"`
+	CacheClusterStatus        string                          `xml:"CacheClusterStatus"`
+	NumCacheNodes             int                             `xml:"NumCacheNodes"`
+	PreferredAvailabilityZone string                          `xml:"PreferredAvailabilityZone,omitempty"`
+	CacheClusterCreateTime    string                          `xml:"CacheClusterCreateTime,omitempty"`
+	CacheParameterGroup       *ecXMLCacheParameterGroupStatus `xml:"CacheParameterGroup,omitempty"`
+	CacheSubnetGroupName      string                          `xml:"CacheSubnetGroupName,omitempty"`
+	CacheNodes                ecXMLCacheNodes                 `xml:"CacheNodes"`
+	ReplicationGroupId        string                          `xml:"ReplicationGroupId,omitempty"`
+	ARN                       string                          `xml:"ARN"`
+}
+
+type ecXMLCacheParameterGroupStatus struct {
+	CacheParameterGroupName string                    `xml:"CacheParameterGroupName"`
+	ParameterApplyStatus    string                    `xml:"ParameterApplyStatus"`
+	CacheNodeIdsToReboot    ecXMLCacheNodeIdsToReboot `xml:"CacheNodeIdsToReboot"`
+}
+
+type ecXMLCacheNodeIdsToReboot struct {
+	Items []string `xml:"CacheNodeId"`
+}
+
+type ecXMLCacheNodes struct {
+	Items []ecXMLCacheNode `xml:"CacheNode"`
+}
+
+type ecXMLCacheNode struct {
+	CacheNodeId              string         `xml:"CacheNodeId"`
+	CacheNodeStatus          string         `xml:"CacheNodeStatus"`
+	CacheNodeCreateTime      string         `xml:"CacheNodeCreateTime,omitempty"`
+	Endpoint                 *ecXMLEndpoint `xml:"Endpoint,omitempty"`
+	ParameterGroupStatus     string         `xml:"ParameterGroupStatus"`
+	CustomerAvailabilityZone string         `xml:"CustomerAvailabilityZone,omitempty"`
 }
 
 type ecXMLEndpoint struct {
@@ -206,18 +241,49 @@ type ecCreateReplicationGroupResult struct {
 	ReplicationGroup ecXMLReplicationGroup `xml:"ReplicationGroup"`
 }
 
+// ecXMLReplicationGroup is the AWS ReplicationGroup shape, in the model's own
+// member order. Overcast starts one primary and no shards, so every group here
+// is cluster-mode-disabled: AWS leaves ConfigurationEndpoint null for those and
+// puts the address on the node group's PrimaryEndpoint instead.
 type ecXMLReplicationGroup struct {
-	ReplicationGroupId     string              `xml:"ReplicationGroupId"`
-	Description            string              `xml:"Description"`
-	Status                 string              `xml:"Status"`
-	ARN                    string              `xml:"ARN"`
-	AutomaticFailover      string              `xml:"AutomaticFailover"`
-	MultiAZ                string              `xml:"MultiAZ"`
-	CacheNodeType          string              `xml:"CacheNodeType"`
-	Engine                 string              `xml:"Engine,omitempty"`
-	SnapshotRetentionLimit int                 `xml:"SnapshotRetentionLimit"`
-	MemberClusters         ecXMLMemberClusters `xml:"MemberClusters"`
-	ConfigurationEndpoint  *ecXMLEndpoint      `xml:"ConfigurationEndpoint,omitempty"`
+	ReplicationGroupId         string              `xml:"ReplicationGroupId"`
+	Description                string              `xml:"Description"`
+	Status                     string              `xml:"Status"`
+	MemberClusters             ecXMLMemberClusters `xml:"MemberClusters"`
+	NodeGroups                 ecXMLNodeGroups     `xml:"NodeGroups"`
+	AutomaticFailover          string              `xml:"AutomaticFailover"`
+	MultiAZ                    string              `xml:"MultiAZ"`
+	ConfigurationEndpoint      *ecXMLEndpoint      `xml:"ConfigurationEndpoint,omitempty"`
+	SnapshotRetentionLimit     int                 `xml:"SnapshotRetentionLimit"`
+	ClusterEnabled             bool                `xml:"ClusterEnabled"`
+	CacheNodeType              string              `xml:"CacheNodeType"`
+	ARN                        string              `xml:"ARN"`
+	ReplicationGroupCreateTime string              `xml:"ReplicationGroupCreateTime,omitempty"`
+	Engine                     string              `xml:"Engine,omitempty"`
+}
+
+type ecXMLNodeGroups struct {
+	Items []ecXMLNodeGroup `xml:"NodeGroup"`
+}
+
+type ecXMLNodeGroup struct {
+	NodeGroupId      string                `xml:"NodeGroupId"`
+	Status           string                `xml:"Status"`
+	PrimaryEndpoint  *ecXMLEndpoint        `xml:"PrimaryEndpoint,omitempty"`
+	ReaderEndpoint   *ecXMLEndpoint        `xml:"ReaderEndpoint,omitempty"`
+	NodeGroupMembers ecXMLNodeGroupMembers `xml:"NodeGroupMembers"`
+}
+
+type ecXMLNodeGroupMembers struct {
+	Items []ecXMLNodeGroupMember `xml:"NodeGroupMember"`
+}
+
+type ecXMLNodeGroupMember struct {
+	CacheClusterId            string         `xml:"CacheClusterId"`
+	CacheNodeId               string         `xml:"CacheNodeId"`
+	ReadEndpoint              *ecXMLEndpoint `xml:"ReadEndpoint,omitempty"`
+	PreferredAvailabilityZone string         `xml:"PreferredAvailabilityZone,omitempty"`
+	CurrentRole               string         `xml:"CurrentRole"`
 }
 
 type ecXMLMemberClusters struct {
@@ -408,16 +474,89 @@ func ecToXMLCacheCluster(c *CacheCluster) ecXMLCacheCluster {
 		Engine:                    c.Engine,
 		EngineVersion:             c.EngineVersion,
 		NumCacheNodes:             c.NumCacheNodes,
-		PreferredAvailabilityZone: c.PreferredAvailabilityZone,
+		PreferredAvailabilityZone: ecPreferredAvailabilityZone(c),
+		CacheClusterCreateTime:    c.CacheClusterCreateTime,
 		CacheSubnetGroupName:      c.CacheSubnetGroupName,
 		ReplicationGroupId:        c.ReplicationGroupId,
-		CacheParameterGroupName:   c.CacheParameterGroupName,
 		ARN:                       c.ARN,
+		CacheNodes:                ecXMLCacheNodes{Items: ecCacheNodes(c)},
 	}
-	if c.ConfigurationEndpoint != nil {
-		out.ConfigurationEndpoint = &ecXMLEndpoint{Address: c.ConfigurationEndpoint.Address, Port: c.ConfigurationEndpoint.Port}
+	if c.CacheParameterGroupName != "" {
+		// AWS has no flat CacheParameterGroupName on CacheCluster: the name
+		// arrives nested with the status of applying it, which is always
+		// in-sync here because Overcast records a parameter group and never
+		// pushes it into the engine.
+		out.CacheParameterGroup = &ecXMLCacheParameterGroupStatus{
+			CacheParameterGroupName: c.CacheParameterGroupName,
+			ParameterApplyStatus:    "in-sync",
+		}
+	}
+	// Memcached alone gets a ConfigurationEndpoint — it is the auto-discovery
+	// endpoint, and AWS leaves it null on a Valkey or Redis OSS cluster, where
+	// the single node's own Endpoint (above) is the address. Filling both in
+	// would deploy here and return nothing on AWS, which is the direction of
+	// divergence that costs a production incident rather than a local one.
+	if c.Engine == "memcached" && c.ConfigurationEndpoint != nil {
+		out.ConfigurationEndpoint = ecEndpoint(c.ConfigurationEndpoint)
 	}
 	return out
+}
+
+// ecEndpoint renders a stored endpoint, which the caller-facing rewrite in
+// endpoint.go has already pointed at whoever is asking.
+func ecEndpoint(e *ClusterEndpoint) *ecXMLEndpoint {
+	if e == nil {
+		return nil
+	}
+	return &ecXMLEndpoint{Address: e.Address, Port: e.Port}
+}
+
+// ecPreferredAvailabilityZone is the cluster's zone, or the literal "Multiple"
+// AWS documents for a cluster whose nodes are in different zones — which is
+// either an explicit zone list with more than one entry in it, or an AZMode of
+// cross-az over more than one node, where AWS picks the zones itself.
+func ecPreferredAvailabilityZone(c *CacheCluster) string {
+	distinct := map[string]struct{}{}
+	for _, z := range c.PreferredAvailabilityZones {
+		distinct[z] = struct{}{}
+	}
+	if len(distinct) > 1 {
+		return "Multiple"
+	}
+	if len(distinct) == 0 && c.AZMode == azModeCross && c.NumCacheNodes > 1 {
+		return "Multiple"
+	}
+	for z := range distinct {
+		return z
+	}
+	return c.PreferredAvailabilityZone
+}
+
+// ecCacheNodes renders one CacheNode per node the cluster was created with.
+// Overcast runs a single container per cluster, so every node reports that
+// container's endpoint and the cluster's own status — there is no per-node
+// lifecycle to report separately.
+func ecCacheNodes(c *CacheCluster) []ecXMLCacheNode {
+	count := c.NumCacheNodes
+	if count < 1 {
+		count = 1
+	}
+	nodes := make([]ecXMLCacheNode, 0, count)
+	for i := 0; i < count; i++ {
+		node := ecXMLCacheNode{
+			CacheNodeId:              fmt.Sprintf("%04d", i+1),
+			CacheNodeStatus:          c.CacheClusterStatus,
+			CacheNodeCreateTime:      c.CacheClusterCreateTime,
+			Endpoint:                 ecEndpoint(c.ConfigurationEndpoint),
+			ParameterGroupStatus:     "in-sync",
+			CustomerAvailabilityZone: c.PreferredAvailabilityZone,
+		}
+		if i < len(c.PreferredAvailabilityZones) {
+			node.CustomerAvailabilityZone = c.PreferredAvailabilityZones[i]
+		}
+		nodes = append(nodes, node)
+	}
+	return nodes
 }
 
 func ecToXMLReplicationGroup(rg *ReplicationGroup) ecXMLReplicationGroup {
@@ -425,23 +564,60 @@ func ecToXMLReplicationGroup(rg *ReplicationGroup) ecXMLReplicationGroup {
 	for _, id := range rg.MemberClusters {
 		members = append(members, ecXMLClusterIDMember{ClusterId: id})
 	}
-	out := ecXMLReplicationGroup{
-		ReplicationGroupId:     rg.ReplicationGroupId,
-		Description:            rg.Description,
-		Status:                 rg.Status,
-		ARN:                    rg.ARN,
-		AutomaticFailover:      rg.AutomaticFailover,
-		MultiAZ:                rg.MultiAZ,
-		CacheNodeType:          rg.CacheNodeType,
-		Engine:                 rg.Engine,
-		SnapshotRetentionLimit: rg.SnapshotRetentionLimit,
-		MemberClusters:         ecXMLMemberClusters{Items: members},
+	return ecXMLReplicationGroup{
+		ReplicationGroupId:         rg.ReplicationGroupId,
+		Description:                rg.Description,
+		Status:                     rg.Status,
+		ARN:                        rg.ARN,
+		AutomaticFailover:          rg.AutomaticFailover,
+		MultiAZ:                    rg.MultiAZ,
+		CacheNodeType:              rg.CacheNodeType,
+		Engine:                     rg.Engine,
+		SnapshotRetentionLimit:     rg.SnapshotRetentionLimit,
+		ReplicationGroupCreateTime: rg.ReplicationGroupCreateTime,
+		MemberClusters:             ecXMLMemberClusters{Items: members},
+		NodeGroups:                 ecXMLNodeGroups{Items: ecNodeGroups(rg)},
+		// ClusterEnabled is false and ConfigurationEndpoint stays nil for the
+		// same reason: Overcast models one shard, so every group is
+		// cluster-mode-disabled. See ecXMLReplicationGroup.
+		ClusterEnabled: false,
 	}
-	if rg.ConfigurationEndpoint != nil {
-		out.ConfigurationEndpoint = &ecXMLEndpoint{Address: rg.ConfigurationEndpoint.Address, Port: rg.ConfigurationEndpoint.Port}
-	}
-	return out
 }
+
+// ecNodeGroups renders the single shard a replication group has here. The
+// primary is MemberClusters[0] — ecPrimaryClusterID names it at create time —
+// and any later member is a read replica.
+func ecNodeGroups(rg *ReplicationGroup) []ecXMLNodeGroup {
+	endpoint := ecEndpoint(rg.ConfigurationEndpoint)
+	members := make([]ecXMLNodeGroupMember, 0, len(rg.MemberClusters))
+	for i, id := range rg.MemberClusters {
+		role := "replica"
+		if i == 0 {
+			role = "primary"
+		}
+		members = append(members, ecXMLNodeGroupMember{
+			CacheClusterId: id,
+			CacheNodeId:    "0001",
+			ReadEndpoint:   endpoint,
+			CurrentRole:    role,
+		})
+	}
+	return []ecXMLNodeGroup{{
+		NodeGroupId: "0001",
+		Status:      rg.Status,
+		// One container serves both roles, so the reader endpoint is the
+		// primary's. AWS would give a separate name that load-balances the
+		// replicas; there are none to balance.
+		PrimaryEndpoint:  endpoint,
+		ReaderEndpoint:   endpoint,
+		NodeGroupMembers: ecXMLNodeGroupMembers{Items: members},
+	}}
+}
+
+// ecPrimaryClusterID is the cache cluster AWS creates to hold a replication
+// group's primary when the caller named no existing one: the group id with a
+// node-index suffix.
+func ecPrimaryClusterID(rgID string) string { return rgID + "-001" }
 
 func ecToXMLCacheSubnetGroup(sg *CacheSubnetGroup) ecXMLCacheSubnetGroup {
 	subnets := make([]ecXMLSubnet, 0, len(sg.SubnetIds))
@@ -472,8 +648,15 @@ func (h *Handler) createCacheClusterTyped(ctx context.Context, req *ecCreateCach
 	if req.CacheClusterId == "" {
 		return nil, errInvalidParameterValue("CacheClusterId is required")
 	}
-	if _, aerr := h.store.getCacheCluster(ctx, req.CacheClusterId); aerr == nil {
-		return nil, errClusterAlreadyExists(req.CacheClusterId)
+	// Canonicalise before anything else keys off the id — the store, the
+	// record lock, the scheduler scope and the ARN all have to agree on one
+	// spelling. See ecCanonicalID.
+	clusterID := ecCanonicalID(req.CacheClusterId)
+	if aerr := validateCacheIdentifier("CacheClusterId", clusterID, maxCacheClusterIDLen); aerr != nil {
+		return nil, aerr
+	}
+	if _, aerr := h.store.getCacheCluster(ctx, clusterID); aerr == nil {
+		return nil, errClusterAlreadyExists(clusterID)
 	}
 	if aerr := h.requireCacheSubnetGroup(ctx, req.CacheSubnetGroupName); aerr != nil {
 		return nil, aerr
@@ -482,8 +665,8 @@ func (h *Handler) createCacheClusterTyped(ctx context.Context, req *ecCreateCach
 	if engine == "" {
 		engine = "redis"
 	}
-	if engine != "redis" && engine != "memcached" && engine != "valkey" {
-		return nil, errInvalidParameterValue("Engine must be redis, valkey, or memcached")
+	if aerr := validateCacheClusterEngine(engine); aerr != nil {
+		return nil, aerr
 	}
 	engineVersion := req.EngineVersion
 	if engineVersion == "" {
@@ -493,29 +676,54 @@ func (h *Handler) createCacheClusterTyped(ctx context.Context, req *ecCreateCach
 	if nodeType == "" {
 		nodeType = defaultNodeType
 	}
+	// A count of zero is an omitted NumCacheNodes rather than a request for no
+	// nodes: the Query wire has no way to tell the two apart on an integer,
+	// and AWS defaults the omitted case to one node.
 	numNodes := req.NumCacheNodes
 	if numNodes <= 0 {
 		numNodes = 1
 	}
+	if aerr := validateNumCacheNodes(engine, numNodes); aerr != nil {
+		return nil, aerr
+	}
+	if aerr := validateCachePlacement(engine, req.AZMode, req.PreferredAvailabilityZones, numNodes); aerr != nil {
+		return nil, aerr
+	}
+	// A cluster created into a replication group is one of its read replicas,
+	// so the group has to exist first — ReplicationGroupNotFoundFault is one
+	// of this operation's modelled errors — and Memcached does not replicate.
+	replicationGroupID := ecCanonicalID(req.ReplicationGroupId)
+	if replicationGroupID != "" {
+		if engine == "memcached" {
+			return nil, errInvalidParameterCombination(
+				"ReplicationGroupId is only valid for a Valkey or Redis OSS cluster.")
+		}
+		if _, aerr := h.store.getReplicationGroup(ctx, replicationGroupID); aerr != nil {
+			return nil, aerr
+		}
+	}
 	region := h.store.region(ctx)
-	arn := fmt.Sprintf("arn:aws:elasticache:%s:%s:cluster:%s", region, h.cfg.AccountID, req.CacheClusterId)
+	arn := fmt.Sprintf("arn:aws:elasticache:%s:%s:cluster:%s", region, h.cfg.AccountID, clusterID)
 	endpoint := &ClusterEndpoint{
-		Address: fmt.Sprintf("%s.%s.cfg.%s", req.CacheClusterId, region, h.cfg.ExternalHostname()),
+		Address: fmt.Sprintf("%s.%s.cfg.%s", clusterID, region, h.cfg.ExternalHostname()),
 		Port:    enginePort(engine),
 	}
 	cluster := &CacheCluster{
-		CacheClusterId:            req.CacheClusterId,
-		CacheClusterStatus:        "creating",
-		CacheNodeType:             nodeType,
-		Engine:                    engine,
-		EngineVersion:             engineVersion,
-		NumCacheNodes:             numNodes,
-		PreferredAvailabilityZone: req.PreferredAvailabilityZone,
-		CacheSubnetGroupName:      req.CacheSubnetGroupName,
-		ReplicationGroupId:        req.ReplicationGroupId,
-		CacheParameterGroupName:   req.CacheParameterGroupName,
-		ARN:                       arn,
-		ConfigurationEndpoint:     endpoint,
+		CacheClusterId:             clusterID,
+		CacheClusterStatus:         "creating",
+		CacheNodeType:              nodeType,
+		Engine:                     engine,
+		EngineVersion:              engineVersion,
+		NumCacheNodes:              numNodes,
+		PreferredAvailabilityZone:  req.PreferredAvailabilityZone,
+		PreferredAvailabilityZones: req.PreferredAvailabilityZones,
+		AZMode:                     req.AZMode,
+		CacheClusterCreateTime:     h.clk.Now().UTC().Format(time.RFC3339Nano),
+		CacheSubnetGroupName:       req.CacheSubnetGroupName,
+		ReplicationGroupId:         replicationGroupID,
+		CacheParameterGroupName:    req.CacheParameterGroupName,
+		ARN:                        arn,
+		ConfigurationEndpoint:      endpoint,
 	}
 	// Create-time tags are validated before anything is written, so a
 	// rejected tag set fails the create rather than leaving a cluster that
@@ -533,7 +741,21 @@ func (h *Handler) createCacheClusterTyped(ctx context.Context, req *ecCreateCach
 			return nil, aerr
 		}
 	}
-	clusterID := req.CacheClusterId
+	if replicationGroupID != "" {
+		// The group has to list its new replica, or DescribeReplicationGroups
+		// answers with a shard that does not mention a cluster pointing at it.
+		if _, aerr := h.mutateReplicationGroup(ctx, replicationGroupID, func(rg *ReplicationGroup) *protocol.AWSError {
+			for _, existing := range rg.MemberClusters {
+				if existing == clusterID {
+					return errRecordMovedOn
+				}
+			}
+			rg.MemberClusters = append(rg.MemberClusters, clusterID)
+			return nil
+		}); aerr != nil && aerr != errRecordMovedOn {
+			return nil, aerr
+		}
+	}
 	if h.dockerReady.Load() {
 		if h.puller != nil {
 			h.puller.Prewarm(engineImage(engine, engineVersion))
@@ -582,14 +804,14 @@ func (h *Handler) createCacheClusterTyped(ctx context.Context, req *ecCreateCach
 		h.settleCacheClusterWithoutRuntime(region, clusterID)
 	}
 	if h.bus != nil {
-		h.bus.Publish(ctx, events.Event{Type: events.ElastiCacheClusterCreated, Time: h.clk.Now(), Source: "elasticache", Payload: events.ResourcePayload{Name: req.CacheClusterId, ARN: arn}})
+		h.bus.Publish(ctx, events.Event{Type: events.ElastiCacheClusterCreated, Time: h.clk.Now(), Source: "elasticache", Payload: events.ResourcePayload{Name: clusterID, ARN: arn}})
 	}
 	return &ecCreateCacheClusterResp{Xmlns: cacheXMLNS, Result: ecCreateCacheClusterResult{CacheCluster: ecToXMLCacheCluster(h.cacheClusterForCaller(ctx, cluster))}, Meta: ecMetaFromCtx(ctx)}, nil
 }
 
 func (h *Handler) describeCacheClustersTyped(ctx context.Context, req *ecDescribeCacheClustersReq) (*ecDescribeCacheClustersResp, *protocol.AWSError) {
 	if req.CacheClusterId != "" {
-		cluster, aerr := h.store.getCacheCluster(ctx, req.CacheClusterId)
+		cluster, aerr := h.store.getCacheCluster(ctx, ecCanonicalID(req.CacheClusterId))
 		if aerr != nil {
 			return nil, aerr
 		}
@@ -610,9 +832,10 @@ func (h *Handler) deleteCacheClusterTyped(ctx context.Context, req *ecDeleteCach
 	if req.CacheClusterId == "" {
 		return nil, errInvalidParameterValue("CacheClusterId is required")
 	}
+	clusterID := ecCanonicalID(req.CacheClusterId)
 	var containerID string
 	var hostPort int
-	cluster, aerr := h.mutateCacheCluster(ctx, req.CacheClusterId, func(cluster *CacheCluster) *protocol.AWSError {
+	cluster, aerr := h.mutateCacheCluster(ctx, clusterID, func(cluster *CacheCluster) *protocol.AWSError {
 		containerID = cluster.DockerContainerID
 		hostPort = cluster.HostPort
 		cluster.CacheClusterStatus = "deleting"
@@ -622,9 +845,9 @@ func (h *Handler) deleteCacheClusterTyped(ctx context.Context, req *ecDeleteCach
 		return nil, aerr
 	}
 	if h.bus != nil {
-		h.bus.Publish(ctx, events.Event{Type: events.ElastiCacheClusterDeleted, Time: h.clk.Now(), Source: "elasticache", Payload: events.ResourcePayload{Name: req.CacheClusterId, ARN: cluster.ARN}})
+		h.bus.Publish(ctx, events.Event{Type: events.ElastiCacheClusterDeleted, Time: h.clk.Now(), Source: "elasticache", Payload: events.ResourcePayload{Name: clusterID, ARN: cluster.ARN}})
 	}
-	h.scheduler.CancelScoped(h.store.region(ctx), req.CacheClusterId, "health")
+	h.scheduler.CancelScoped(h.store.region(ctx), clusterID, "health")
 
 	if h.gc != nil && containerID != "" {
 		h.gc.StopNow(containerID)
@@ -634,9 +857,9 @@ func (h *Handler) deleteCacheClusterTyped(ctx context.Context, req *ecDeleteCach
 		_ = h.store.releasePort(ctx, hostPort) //nolint:errcheck
 	}
 
-	h.scheduler.AfterScoped(h.store.region(ctx), req.CacheClusterId, "delete", 50*time.Millisecond, func(bgCtx context.Context) {
-		if aerr := h.store.deleteCacheCluster(bgCtx, req.CacheClusterId); aerr != nil {
-			h.log.Warn("failed to delete cache cluster record", zap.String("cluster", req.CacheClusterId), zap.Error(aerr))
+	h.scheduler.AfterScoped(h.store.region(ctx), clusterID, "delete", 50*time.Millisecond, func(bgCtx context.Context) {
+		if aerr := h.store.deleteCacheCluster(bgCtx, clusterID); aerr != nil {
+			h.log.Warn("failed to delete cache cluster record", zap.String("cluster", clusterID), zap.Error(aerr))
 		}
 	})
 	return &ecDeleteCacheClusterResp{Xmlns: cacheXMLNS, Result: ecDeleteCacheClusterResult{CacheCluster: ecToXMLCacheCluster(h.cacheClusterForCaller(ctx, cluster))}, Meta: ecMetaFromCtx(ctx)}, nil
@@ -646,8 +869,14 @@ func (h *Handler) createReplicationGroupTyped(ctx context.Context, req *ecCreate
 	if req.ReplicationGroupId == "" {
 		return nil, errInvalidParameterValue("ReplicationGroupId is required")
 	}
-	if _, aerr := h.store.getReplicationGroup(ctx, req.ReplicationGroupId); aerr == nil {
-		return nil, errReplicationGroupAlreadyExists(req.ReplicationGroupId)
+	// Canonicalise first — see createCacheClusterTyped. The cap is 40 here,
+	// not the cluster's 50.
+	rgID := ecCanonicalID(req.ReplicationGroupId)
+	if aerr := validateCacheIdentifier("ReplicationGroupId", rgID, maxReplicationGroupIDLen); aerr != nil {
+		return nil, aerr
+	}
+	if _, aerr := h.store.getReplicationGroup(ctx, rgID); aerr == nil {
+		return nil, errReplicationGroupAlreadyExists(rgID)
 	}
 	if aerr := h.requireCacheSubnetGroup(ctx, req.CacheSubnetGroupName); aerr != nil {
 		return nil, aerr
@@ -660,12 +889,15 @@ func (h *Handler) createReplicationGroupTyped(ctx context.Context, req *ecCreate
 	if engine == "" {
 		engine = "redis"
 	}
+	if aerr := validateReplicationGroupEngine(engine); aerr != nil {
+		return nil, aerr
+	}
 	engineVersion := req.EngineVersion
 	if engineVersion == "" {
 		engineVersion = engineDefaultVersion(engine)
 	}
 	region := h.store.region(ctx)
-	arn := fmt.Sprintf("arn:aws:elasticache:%s:%s:replicationgroup:%s", region, h.cfg.AccountID, req.ReplicationGroupId)
+	arn := fmt.Sprintf("arn:aws:elasticache:%s:%s:replicationgroup:%s", region, h.cfg.AccountID, rgID)
 	autoFailover := "disabled"
 	if req.AutomaticFailoverEnabled == "true" {
 		autoFailover = "enabled"
@@ -677,25 +909,32 @@ func (h *Handler) createReplicationGroupTyped(ctx context.Context, req *ecCreate
 	snapshotRetention := req.SnapshotRetentionLimit
 	port := enginePort(engine)
 	endpoint := &ClusterEndpoint{
-		Address: fmt.Sprintf("%s.%s.ng.cfg.%s", req.ReplicationGroupId, region, h.cfg.ExternalHostname()),
+		Address: fmt.Sprintf("%s.%s.ng.cfg.%s", rgID, region, h.cfg.ExternalHostname()),
 		Port:    port,
 	}
-	rg := &ReplicationGroup{
-		ReplicationGroupId:     req.ReplicationGroupId,
-		Description:            req.ReplicationGroupDescription,
-		Status:                 "creating",
-		ARN:                    arn,
-		AutomaticFailover:      autoFailover,
-		MultiAZ:                multiAZ,
-		CacheNodeType:          nodeType,
-		Engine:                 engine,
-		EngineVersion:          engineVersion,
-		SnapshotRetentionLimit: snapshotRetention,
-		ConfigurationEndpoint:  endpoint,
-		CacheSubnetGroupName:   req.CacheSubnetGroupName,
+	// A group always has a primary. Naming an existing cluster makes that
+	// cluster the primary; naming none makes AWS create one called
+	// <group>-001, which is the name MemberClusters and the node group's
+	// members carry either way.
+	primaryClusterID := ecCanonicalID(req.PrimaryClusterId)
+	if primaryClusterID == "" {
+		primaryClusterID = ecPrimaryClusterID(rgID)
 	}
-	if req.PrimaryClusterId != "" {
-		rg.MemberClusters = []string{req.PrimaryClusterId}
+	rg := &ReplicationGroup{
+		ReplicationGroupId:         rgID,
+		Description:                req.ReplicationGroupDescription,
+		Status:                     "creating",
+		ARN:                        arn,
+		AutomaticFailover:          autoFailover,
+		MultiAZ:                    multiAZ,
+		CacheNodeType:              nodeType,
+		Engine:                     engine,
+		EngineVersion:              engineVersion,
+		SnapshotRetentionLimit:     snapshotRetention,
+		ReplicationGroupCreateTime: h.clk.Now().UTC().Format(time.RFC3339Nano),
+		MemberClusters:             []string{primaryClusterID},
+		ConfigurationEndpoint:      endpoint,
+		CacheSubnetGroupName:       req.CacheSubnetGroupName,
 	}
 	// Create-time tags are validated before anything is written, so a
 	// rejected tag set fails the create rather than leaving a replication
@@ -713,7 +952,6 @@ func (h *Handler) createReplicationGroupTyped(ctx context.Context, req *ecCreate
 			return nil, aerr
 		}
 	}
-	rgID := req.ReplicationGroupId
 	if h.dockerReady.Load() {
 		if h.puller != nil {
 			h.puller.Prewarm(engineImage(engine, engineVersion))
@@ -761,14 +999,14 @@ func (h *Handler) createReplicationGroupTyped(ctx context.Context, req *ecCreate
 		h.settleReplicationGroupWithoutRuntime(region, rgID)
 	}
 	if h.bus != nil {
-		h.bus.Publish(ctx, events.Event{Type: events.ElastiCacheReplicationGroupCreated, Time: h.clk.Now(), Source: "elasticache", Payload: events.ResourcePayload{Name: req.ReplicationGroupId, ARN: arn}})
+		h.bus.Publish(ctx, events.Event{Type: events.ElastiCacheReplicationGroupCreated, Time: h.clk.Now(), Source: "elasticache", Payload: events.ResourcePayload{Name: rgID, ARN: arn}})
 	}
 	return &ecCreateReplicationGroupResp{Xmlns: cacheXMLNS, Result: ecCreateReplicationGroupResult{ReplicationGroup: ecToXMLReplicationGroup(h.replicationGroupForCaller(ctx, rg))}, Meta: ecMetaFromCtx(ctx)}, nil
 }
 
 func (h *Handler) describeReplicationGroupsTyped(ctx context.Context, req *ecDescribeReplicationGroupsReq) (*ecDescribeReplicationGroupsResp, *protocol.AWSError) {
 	if req.ReplicationGroupId != "" {
-		rg, aerr := h.store.getReplicationGroup(ctx, req.ReplicationGroupId)
+		rg, aerr := h.store.getReplicationGroup(ctx, ecCanonicalID(req.ReplicationGroupId))
 		if aerr != nil {
 			return nil, aerr
 		}
@@ -789,9 +1027,10 @@ func (h *Handler) deleteReplicationGroupTyped(ctx context.Context, req *ecDelete
 	if req.ReplicationGroupId == "" {
 		return nil, errInvalidParameterValue("ReplicationGroupId is required")
 	}
+	rgID := ecCanonicalID(req.ReplicationGroupId)
 	var containerID string
 	var hostPort int
-	rg, aerr := h.mutateReplicationGroup(ctx, req.ReplicationGroupId, func(rg *ReplicationGroup) *protocol.AWSError {
+	rg, aerr := h.mutateReplicationGroup(ctx, rgID, func(rg *ReplicationGroup) *protocol.AWSError {
 		containerID = rg.DockerContainerID
 		hostPort = rg.HostPort
 		rg.Status = "deleting"
@@ -801,9 +1040,9 @@ func (h *Handler) deleteReplicationGroupTyped(ctx context.Context, req *ecDelete
 		return nil, aerr
 	}
 	if h.bus != nil {
-		h.bus.Publish(ctx, events.Event{Type: events.ElastiCacheReplicationGroupDeleted, Time: h.clk.Now(), Source: "elasticache", Payload: events.ResourcePayload{Name: req.ReplicationGroupId, ARN: rg.ARN}})
+		h.bus.Publish(ctx, events.Event{Type: events.ElastiCacheReplicationGroupDeleted, Time: h.clk.Now(), Source: "elasticache", Payload: events.ResourcePayload{Name: rgID, ARN: rg.ARN}})
 	}
-	h.scheduler.CancelScoped(h.store.region(ctx), req.ReplicationGroupId, "rg-health")
+	h.scheduler.CancelScoped(h.store.region(ctx), rgID, "rg-health")
 
 	if h.gc != nil && containerID != "" {
 		h.gc.StopNow(containerID)
@@ -813,9 +1052,9 @@ func (h *Handler) deleteReplicationGroupTyped(ctx context.Context, req *ecDelete
 		_ = h.store.releasePort(ctx, hostPort) //nolint:errcheck
 	}
 
-	h.scheduler.AfterScoped(h.store.region(ctx), req.ReplicationGroupId, "rg-delete", 50*time.Millisecond, func(bgCtx context.Context) {
-		if aerr := h.store.deleteReplicationGroup(bgCtx, req.ReplicationGroupId); aerr != nil {
-			h.log.Warn("failed to delete replication group record", zap.String("rg", req.ReplicationGroupId), zap.Error(aerr))
+	h.scheduler.AfterScoped(h.store.region(ctx), rgID, "rg-delete", 50*time.Millisecond, func(bgCtx context.Context) {
+		if aerr := h.store.deleteReplicationGroup(bgCtx, rgID); aerr != nil {
+			h.log.Warn("failed to delete replication group record", zap.String("rg", rgID), zap.Error(aerr))
 		}
 	})
 	return &ecDeleteReplicationGroupResp{Xmlns: cacheXMLNS, Result: ecDeleteReplicationGroupResult{ReplicationGroup: ecToXMLReplicationGroup(h.replicationGroupForCaller(ctx, rg))}, Meta: ecMetaFromCtx(ctx)}, nil
@@ -982,7 +1221,8 @@ func (h *Handler) modifyCacheClusterTyped(ctx context.Context, req *ecModifyCach
 	if req.CacheClusterId == "" {
 		return nil, errInvalidParameterValue("CacheClusterId is required")
 	}
-	cluster, aerr := h.mutateCacheCluster(ctx, req.CacheClusterId, func(cluster *CacheCluster) *protocol.AWSError {
+	id := ecCanonicalID(req.CacheClusterId)
+	cluster, aerr := h.mutateCacheCluster(ctx, id, func(cluster *CacheCluster) *protocol.AWSError {
 		if req.CacheNodeType != "" {
 			cluster.CacheNodeType = req.CacheNodeType
 		}
@@ -1002,9 +1242,8 @@ func (h *Handler) modifyCacheClusterTyped(ctx context.Context, req *ecModifyCach
 		return nil, aerr
 	}
 	if h.bus != nil {
-		h.bus.Publish(ctx, events.Event{Type: events.ElastiCacheClusterModified, Time: h.clk.Now(), Source: "elasticache", Payload: events.ResourcePayload{Name: req.CacheClusterId, ARN: cluster.ARN}})
+		h.bus.Publish(ctx, events.Event{Type: events.ElastiCacheClusterModified, Time: h.clk.Now(), Source: "elasticache", Payload: events.ResourcePayload{Name: id, ARN: cluster.ARN}})
 	}
-	id := req.CacheClusterId
 	h.scheduler.AfterScoped(h.store.region(ctx), id, "available", 0, func(bgCtx context.Context) {
 		h.transitionCacheCluster(bgCtx, id, "available", "modifying")
 	})
@@ -1015,7 +1254,8 @@ func (h *Handler) modifyReplicationGroupTyped(ctx context.Context, req *ecModify
 	if req.ReplicationGroupId == "" {
 		return nil, errInvalidParameterValue("ReplicationGroupId is required")
 	}
-	rg, aerr := h.mutateReplicationGroup(ctx, req.ReplicationGroupId, func(rg *ReplicationGroup) *protocol.AWSError {
+	id := ecCanonicalID(req.ReplicationGroupId)
+	rg, aerr := h.mutateReplicationGroup(ctx, id, func(rg *ReplicationGroup) *protocol.AWSError {
 		if req.ReplicationGroupDescription != "" {
 			rg.Description = req.ReplicationGroupDescription
 		}
@@ -1045,7 +1285,6 @@ func (h *Handler) modifyReplicationGroupTyped(ctx context.Context, req *ecModify
 	if aerr != nil {
 		return nil, aerr
 	}
-	id := req.ReplicationGroupId
 	h.scheduler.AfterScoped(h.store.region(ctx), id, "rg-available", 0, func(bgCtx context.Context) {
 		h.transitionReplicationGroup(bgCtx, id, "available", "modifying")
 	})
