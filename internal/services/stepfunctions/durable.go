@@ -464,6 +464,23 @@ func (h *Handler) resumeFromCheckpoint(ctx context.Context, cp *executionCheckpo
 	}
 	events = events[:cp.HistoryLength]
 
+	// The execution is this process's to run from here on, so its RUNNING
+	// record is stamped with this runner's ID before the run starts.
+	// Nothing else rewrites that record until the run ends, so a resumed
+	// execution would otherwise carry the dead process's ID for its whole
+	// life — and persistOutcome releases the run one store write before the
+	// terminal record lands (execution_ops.go). A read landing in that
+	// window would find a RUNNING record from another process with no live
+	// run and fail it as an orphan: issue #2022, where three restart tests
+	// saw their resumed execution end States.Runtime just as it finished.
+	// Stamping closes that window rather than narrowing it. A failure here
+	// is not fatal — the execution still resumes, and the record is
+	// rewritten when it ends.
+	if err := h.store.PutExecution(rctx, exec); err != nil {
+		h.logger().Warn("stepfunctions: could not record this process as the runner of a resumed execution",
+			zap.String("execution", cp.ExecutionArn), zap.Error(err))
+	}
+
 	run := &executionRun{
 		hist:          resumeHistoryRecorder(events, maxHistoryEvents),
 		resume:        &redrivePoint{State: cp.Point.State, Input: cp.Point.Input, Variables: cp.Point.Variables},
@@ -488,8 +505,10 @@ func (h *Handler) resumeFromCheckpoint(ctx context.Context, cp *executionCheckpo
 // no checkpoint to resume from. Such a record would otherwise read RUNNING
 // forever. It is recognised by the runner ID PutExecution stamps: a RUNNING
 // record from another process with no live run here. Parked executions are
-// never mistaken for one — rehydration has relaunched them before any request
-// can get here.
+// never mistaken for one: rehydration has relaunched them before any request
+// can get here, and it restamps their record with this process's runner ID,
+// so the moment between a resumed run being released and its terminal record
+// landing does not read as an orphan either (resumeFromCheckpoint, #2022).
 func (h *Handler) reapIfOrphaned(ctx context.Context, exec *Execution) *Execution {
 	if exec.Status != statusRunning || exec.RunnerID == h.store.runnerID || h.lookupRun(exec.ExecutionArn) != nil {
 		return exec

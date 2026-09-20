@@ -3,6 +3,7 @@ package stepfunctions
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -186,5 +187,131 @@ func TestRehydrate_checkpointOfFinishedExecutionIsDropped(t *testing.T) {
 	}
 	if _, found, _ := backend.Get(ctx, storeNS, parkPrefix+exec.ExecutionArn); found {
 		t.Error("the stale checkpoint was not removed")
+	}
+}
+
+// pausingStore holds open the first Set that matches, so a test can look at
+// what a concurrent request sees in the middle of one store write.
+type pausingStore struct {
+	state.Store
+	match   func(key, value string) bool
+	entered chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (p *pausingStore) Set(ctx context.Context, namespace, key, value string) error {
+	if p.match(key, value) {
+		p.once.Do(func() {
+			close(p.entered)
+			<-p.release
+		})
+	}
+	return p.Store.Set(ctx, namespace, key, value)
+}
+
+// parkedActivityExecution leaves one execution parked on an activity task the
+// way a process that has since shut down would have, and returns the
+// execution and the activity it is waiting on.
+func parkedActivityExecution(t *testing.T, backend state.Store, name string) (*Execution, string) {
+	t.Helper()
+	ctx := context.Background()
+	h, _ := newRedriveTestHandler(t, backend)
+	activity, aerr := h.createActivityTyped(ctx, &createActivityRequest{Name: name})
+	if aerr != nil {
+		t.Fatalf("createActivityTyped: %+v", aerr)
+	}
+	created, aerr := h.createStateMachineTyped(ctx, &createStateMachineRequest{
+		Name:       name,
+		Definition: `{"StartAt":"Approve","States":{"Approve":{"Type":"Task","Resource":"` + activity.ActivityArn + `","End":true}}}`,
+		RoleArn:    "arn:aws:iam::000000000000:role/r",
+	})
+	if aerr != nil {
+		t.Fatalf("createStateMachineTyped: %+v", aerr)
+	}
+	exec, aerr := h.startExecution(ctx, created.StateMachineArn, "run", `{"doc":"a"}`, 0, executionAsync)
+	if aerr != nil {
+		t.Fatalf("startExecution: %+v", aerr)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		checkpoints, _, err := h.store.ListCheckpoints(ctx)
+		if err != nil {
+			t.Fatalf("ListCheckpoints: %v", err)
+		}
+		if len(checkpoints) == 1 && checkpoints[0].ExecutionArn == exec.ExecutionArn {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the execution never parked on its activity task")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	stopCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	h.Stop(stopCtx)
+	return exec, activity.ActivityArn
+}
+
+func TestReapIfOrphaned_resumedExecutionSurvivesItsOwnTerminalWrite(t *testing.T) {
+	// Given: an execution parked on an activity task by a process that has
+	// since gone away, and a new process whose terminal write for it can be
+	// held open
+	backend := state.NewMemoryStore()
+	ctx := context.Background()
+	exec, activityARN := parkedActivityExecution(t, backend, "resumed-activity")
+	paused := &pausingStore{
+		Store:   backend,
+		entered: make(chan struct{}),
+		release: make(chan struct{}),
+		match: func(key, value string) bool {
+			return strings.Contains(key, exec.ExecutionArn) && strings.Contains(value, statusSucceeded)
+		},
+	}
+	second, _ := newRedriveTestHandler(t, paused)
+
+	// When: it is resumed, a worker answers it, and it is described in the
+	// window persistOutcome opens between releasing the run and writing the
+	// record that says it has finished
+	second.ensureRehydrated()
+	task, aerr := second.getActivityTaskTyped(ctx, &getActivityTaskRequest{ActivityArn: activityARN, WorkerName: "after-restart"})
+	if aerr != nil || task.TaskToken == "" || task.Input != `{"doc":"a"}` {
+		t.Fatalf("getActivityTaskTyped = %+v (%+v)", task, aerr)
+	}
+	if _, aerr := second.sendTaskSuccessTyped(ctx, &sendTaskSuccessRequest{TaskToken: task.TaskToken, Output: `{"ok":1}`}); aerr != nil {
+		t.Fatalf("sendTaskSuccessTyped: %+v", aerr)
+	}
+	select {
+	case <-paused.entered:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the resumed execution never reached its terminal write")
+	}
+	described, aerr := second.describeExecutionTyped(ctx, &describeExecutionRequest{ExecutionArn: exec.ExecutionArn})
+	close(paused.release)
+
+	// Then: the execution this process is running is not mistaken for one the
+	// previous process left orphaned, and it lands SUCCEEDED
+	if aerr != nil {
+		t.Fatalf("describeExecutionTyped: %+v", aerr)
+	}
+	if described.Status != statusRunning {
+		t.Fatalf("mid-write status=%s error=%s cause=%q, want RUNNING", described.Status, described.Error, described.Cause)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		final, aerr := second.describeExecutionTyped(ctx, &describeExecutionRequest{ExecutionArn: exec.ExecutionArn})
+		if aerr != nil {
+			t.Fatalf("describeExecutionTyped: %+v", aerr)
+		}
+		if final.Status != statusRunning {
+			if final.Status != statusSucceeded || final.Output != `{"ok":1}` {
+				t.Fatalf("final status=%s output=%q (%s: %s)", final.Status, final.Output, final.Error, final.Cause)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the resumed execution never finished")
+		}
+		time.Sleep(time.Millisecond)
 	}
 }
