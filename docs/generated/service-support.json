@@ -7558,19 +7558,19 @@
           "operation": "CreateProtection",
           "category": "Protections",
           "status": "✅ Supported",
-          "notes": "Creates a protection; requires Name and ARN"
+          "notes": "Creates a protection; refuses a ResourceArn that already has one"
         },
         {
           "operation": "DescribeProtection",
           "category": "Protections",
           "status": "✅ Supported",
-          "notes": "Lookup by ProtectionId or ResourceArn"
+          "notes": "Lookup by ProtectionId or ResourceArn, but not both"
         },
         {
           "operation": "ListProtections",
           "category": "Protections",
           "status": "✅ Supported",
-          "notes": "Lists all protections"
+          "notes": "Filters by InclusionFilters; paginates with MaxResults/NextToken"
         },
         {
           "operation": "DeleteProtection",

@@ -35,12 +35,12 @@ All 8 listed operations are implemented. Back to [Shield](../shield.md).
 
 ### Protections
 
-| Operation            | Status       | Notes                                       | AWS Docs                                                                                    |
-| -------------------- | ------------ | ------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `CreateProtection`   | ✅ Supported | Creates a protection; requires Name and ARN | [docs](https://docs.aws.amazon.com/waf/latest/DDOSAPIReference/API_CreateProtection.html)   |
-| `DescribeProtection` | ✅ Supported | Lookup by ProtectionId or ResourceArn       | [docs](https://docs.aws.amazon.com/waf/latest/DDOSAPIReference/API_DescribeProtection.html) |
-| `ListProtections`    | ✅ Supported | Lists all protections                       | [docs](https://docs.aws.amazon.com/waf/latest/DDOSAPIReference/API_ListProtections.html)    |
-| `DeleteProtection`   | ✅ Supported | Deletes a protection by ID                  | [docs](https://docs.aws.amazon.com/waf/latest/DDOSAPIReference/API_DeleteProtection.html)   |
+| Operation            | Status       | Notes                                                            | AWS Docs                                                                                    |
+| -------------------- | ------------ | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `CreateProtection`   | ✅ Supported | Creates a protection; refuses a ResourceArn that already has one | [docs](https://docs.aws.amazon.com/waf/latest/DDOSAPIReference/API_CreateProtection.html)   |
+| `DescribeProtection` | ✅ Supported | Lookup by ProtectionId or ResourceArn, but not both              | [docs](https://docs.aws.amazon.com/waf/latest/DDOSAPIReference/API_DescribeProtection.html) |
+| `ListProtections`    | ✅ Supported | Filters by InclusionFilters; paginates with MaxResults/NextToken | [docs](https://docs.aws.amazon.com/waf/latest/DDOSAPIReference/API_ListProtections.html)    |
+| `DeleteProtection`   | ✅ Supported | Deletes a protection by ID                                       | [docs](https://docs.aws.amazon.com/waf/latest/DDOSAPIReference/API_DeleteProtection.html)   |
 
 ### Tags
 
