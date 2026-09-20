@@ -1,6 +1,6 @@
 {
   "generated_by": "go run -tags dev ./cmd/capgen --write-docs",
-  "total_ops": 1516,
+  "total_ops": 1515,
   "services": [
     {
       "service": "s3",
@@ -2022,8 +2022,8 @@
     {
       "service": "cloudfront",
       "display_name": "CloudFront",
-      "total_ops": 89,
-      "implemented_ops": 89,
+      "total_ops": 88,
+      "implemented_ops": 88,
       "operations": [
         {
           "operation": "CreateDistribution",
@@ -2281,7 +2281,8 @@
           "operation": "ProxyRequest",
           "category": "Proxy",
           "status": "✅ Supported",
-          "notes": "Emulator extension: path-pattern matching, origin forwarding (dialled locally when Overcast answers for the origin), GET response caching, CloudFront Functions, origin-group failover, geo restriction and custom error responses"
+          "notes": "Path-pattern matching, origin forwarding (dialled locally when Overcast answers for the origin), GET response caching, CloudFront Functions, origin-group failover, geo restriction and custom error responses",
+          "emulator_only": true
         },
         {
           "operation": "CreateFunction",

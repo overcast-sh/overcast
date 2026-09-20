@@ -100,9 +100,12 @@ func init() {
 		capabilities.Capability{Service: "cloudfront", Operation: "ListResponseHeadersPolicies", Category: "Policies",
 			Status: capabilities.StatusSupported, Notes: "Marker/MaxItems pagination"},
 
-		// Proxy
+		// Proxy. EmulatorOnly: CloudFront's data plane is not an AWS API
+		// operation at all, so this row is documented but never counted as one
+		// of the AWS operations the service covers (#75).
 		capabilities.Capability{Service: "cloudfront", Operation: "ProxyRequest", Category: "Proxy",
-			Status: capabilities.StatusSupported, Notes: "Emulator extension: path-pattern matching, origin forwarding (dialled locally when Overcast answers for the origin), GET response caching, CloudFront Functions, origin-group failover, geo restriction and custom error responses"},
+			EmulatorOnly: true,
+			Status:       capabilities.StatusSupported, Notes: "Path-pattern matching, origin forwarding (dialled locally when Overcast answers for the origin), GET response caching, CloudFront Functions, origin-group failover, geo restriction and custom error responses"},
 
 		// Functions
 		capabilities.Capability{Service: "cloudfront", Operation: "CreateFunction", Category: "Functions",

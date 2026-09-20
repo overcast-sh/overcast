@@ -426,3 +426,92 @@ func writeCompatRegistry(t *testing.T, root, contents string) {
 		t.Fatal(err)
 	}
 }
+
+func TestCheckCapabilitiesInManifest_emulatorOnlyRowNeedsNoExemption(t *testing.T) {
+	// Given: an Overcast extension that AWS models nowhere, carrying the flag
+	// rather than an entry in capabilityManifestExemptions.
+	caps := []CapabilityDecl{
+		{Service: "cloudfront", Operation: "ProxyRequest", EmulatorOnly: true},
+	}
+
+	// When: capgen validates the declarations against the generated corpus.
+	violations := checkCapabilitiesInManifest(caps)
+
+	// Then: the flag carries it, as the deleted exemption used to.
+	if violations != 0 {
+		t.Errorf("checkCapabilitiesInManifest() = %d violations, want 0", violations)
+	}
+}
+
+func TestCheckEmulatorOnlyRowsAreNotModeled_rejectsAnOperationAWSModels(t *testing.T) {
+	// Given: one genuine extension and one real AWS operation wearing the flag.
+	caps := []CapabilityDecl{
+		{Service: "cloudfront", Operation: "ProxyRequest", EmulatorOnly: true},
+		{Service: "cloudfront", Operation: "CreateInvalidation", EmulatorOnly: true},
+		{Service: "cloudfront", Operation: "GetDistribution"},
+	}
+
+	// When: capgen checks that the flag never covers a modeled operation.
+	violations := checkEmulatorOnlyRowsAreNotModeled(caps)
+
+	// Then: only the modeled one is rejected — the flag may not hide an
+	// operation an SDK can call, which is the whole reason it excuses a row
+	// from the counts.
+	if violations != 1 {
+		t.Errorf("checkEmulatorOnlyRowsAreNotModeled() = %d violations, want 1", violations)
+	}
+}
+
+func TestCoverage_excludesEmulatorOnlyRowsFromTheAWSCount(t *testing.T) {
+	// Given: two AWS operations and one Overcast extension.
+	caps := []CapabilityDecl{
+		{Service: "cloudfront", Operation: "GetDistribution", Status: "StatusSupported"},
+		{Service: "cloudfront", Operation: "GetFunction", Status: "StatusSupported"},
+		{Service: "cloudfront", Operation: "ProxyRequest", Status: "StatusSupported", EmulatorOnly: true},
+	}
+
+	// When: the coverage arithmetic behind every published count runs.
+	implemented, total := coverage(caps)
+	sentence := coverageSentence(caps)
+
+	// Then: the extension is in neither half of "N of M AWS operations".
+	if implemented != 2 || total != 2 {
+		t.Errorf("coverage() = %d of %d, want 2 of 2", implemented, total)
+	}
+	if want := "All 2 listed operations are implemented."; sentence != want {
+		t.Errorf("coverageSentence() = %q, want %q", sentence, want)
+	}
+}
+
+func TestBuildDocSection_emulatorOnlyRowIsSeparatedAndUnlinked(t *testing.T) {
+	// Given: an AWS operation and an Overcast extension in the same category.
+	caps := []CapabilityDecl{
+		{Service: "cloudfront", Operation: "GetDistribution", Category: "Distributions", Status: "StatusSupported"},
+		{Service: "cloudfront", Operation: "ProxyRequest", Category: "Proxy", Status: "StatusSupported", EmulatorOnly: true},
+	}
+
+	// When: the operations page is rendered.
+	doc := buildDocSection("cloudfront", caps)
+
+	// Then: the extension is discoverable under its own heading, and never
+	// carries a fabricated AWS docs URL — there is no API_ProxyRequest.html.
+	if strings.Contains(doc, "API_ProxyRequest.html") {
+		t.Error("buildDocSection() links an AWS docs page for an emulator-only operation")
+	}
+	if !strings.Contains(doc, emulatorSectionHeading) {
+		t.Errorf("buildDocSection() has no %q section:\n%s", emulatorSectionHeading, doc)
+	}
+	if !strings.Contains(doc, "`ProxyRequest`") {
+		t.Error("buildDocSection() dropped the emulator-only row entirely")
+	}
+
+	// And: it is out of the Endpoints tables and the Summary counts, which are
+	// what "N of M AWS operations" is read off.
+	endpoints := doc[strings.Index(doc, "## Endpoints"):strings.Index(doc, emulatorSectionHeading)]
+	if strings.Contains(endpoints, "ProxyRequest") {
+		t.Error("buildDocSection() still lists the emulator-only row under ## Endpoints")
+	}
+	if strings.Contains(doc[:strings.Index(doc, "## Endpoints")], "Proxy") {
+		t.Error("buildDocSection() still counts the emulator-only row's category in ## Summary")
+	}
+}

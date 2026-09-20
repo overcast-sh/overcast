@@ -1,6 +1,6 @@
 ---
 title: "CloudFront operations"
-description: "Every CloudFront operation Overcast declares — 89 of 89 implemented — with status, behaviour notes and a link to the AWS API reference for each."
+description: "Every CloudFront operation Overcast declares — 88 of 88 implemented — with status, behaviour notes and a link to the AWS API reference for each."
 section: "Service Reference"
 tags:
   - cloudfront
@@ -13,7 +13,7 @@ tags:
 
 # CloudFront operations
 
-All 89 listed operations are implemented. Back to [CloudFront](../cloudfront.md).
+All 88 listed operations are implemented. Back to [CloudFront](../cloudfront.md).
 
 ## Summary
 
@@ -24,7 +24,6 @@ All 89 listed operations are implemented. Back to [CloudFront](../cloudfront.md)
 | OAC / OAI     | 11           |
 | Tagging       | 3            |
 | Policies      | 18           |
-| Proxy         | 1            |
 | Functions     | 8            |
 | Keys & Crypto | 12           |
 | Monitoring    | 8            |
@@ -102,12 +101,6 @@ All 89 listed operations are implemented. Back to [CloudFront](../cloudfront.md)
 | `DeleteResponseHeadersPolicy`    | ✅ Supported | Requires If-Match ETag                | [docs](https://docs.aws.amazon.com/cloudfront/latest/APIReference/API_DeleteResponseHeadersPolicy.html)    |
 | `ListResponseHeadersPolicies`    | ✅ Supported | Marker/MaxItems pagination            | [docs](https://docs.aws.amazon.com/cloudfront/latest/APIReference/API_ListResponseHeadersPolicies.html)    |
 
-### Proxy
-
-| Operation      | Status       | Notes                                                                                                                                                                                                                              | AWS Docs                                                                                 |
-| -------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `ProxyRequest` | ✅ Supported | Emulator extension: path-pattern matching, origin forwarding (dialled locally when Overcast answers for the origin), GET response caching, CloudFront Functions, origin-group failover, geo restriction and custom error responses | [docs](https://docs.aws.amazon.com/cloudfront/latest/APIReference/API_ProxyRequest.html) |
-
 ### Functions
 
 | Operation          | Status       | Notes                                                                                                                                         | AWS Docs                                                                                     |
@@ -178,6 +171,16 @@ All 89 listed operations are implemented. Back to [CloudFront](../cloudfront.md)
 | `UpdateContinuousDeploymentPolicy`    | ✅ Supported | Requires If-Match ETag; bumps version | [docs](https://docs.aws.amazon.com/cloudfront/latest/APIReference/API_UpdateContinuousDeploymentPolicy.html)    |
 | `DeleteContinuousDeploymentPolicy`    | ✅ Supported | Requires If-Match ETag                | [docs](https://docs.aws.amazon.com/cloudfront/latest/APIReference/API_DeleteContinuousDeploymentPolicy.html)    |
 | `ListContinuousDeploymentPolicies`    | ✅ Supported | MaxItems pagination                   | [docs](https://docs.aws.amazon.com/cloudfront/latest/APIReference/API_ListContinuousDeploymentPolicies.html)    |
+
+---
+
+## Emulator extensions
+
+Operations Overcast serves that appear in no AWS model, so no SDK calls them and no AWS reference page describes them. They sit outside the operation counts above.
+
+| Operation      | Status       | Notes                                                                                                                                                                                                          |
+| -------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ProxyRequest` | ✅ Supported | Path-pattern matching, origin forwarding (dialled locally when Overcast answers for the origin), GET response caching, CloudFront Functions, origin-group failover, geo restriction and custom error responses |
 
 ## Related
 

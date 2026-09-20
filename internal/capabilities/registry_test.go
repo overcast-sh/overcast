@@ -67,3 +67,27 @@ func TestRegistryForServiceEmpty(t *testing.T) {
 		t.Fatalf("expected empty for unknown service, got %v", got)
 	}
 }
+
+// TestAllCapabilitiesEmulatorOnlySurvivesGeneration pins the one property the
+// generated snapshot can lose silently: capgen parses EmulatorOnly out of a
+// capabilities_dev.go declaration and writes it back into all.gen.go, so a
+// missing case in either half would drop the flag and put the row back into
+// the AWS operation counts without failing a build.
+func TestAllCapabilitiesEmulatorOnlySurvivesGeneration(t *testing.T) {
+	var found bool
+	for _, c := range capabilities.AllCapabilities {
+		if c.Service != "cloudfront" || c.Operation != "ProxyRequest" {
+			continue
+		}
+		found = true
+		if !c.EmulatorOnly {
+			t.Error("cloudfront/ProxyRequest is not marked EmulatorOnly in all.gen.go; run: make generate-caps")
+		}
+		if c.DocsURL != "" {
+			t.Errorf("cloudfront/ProxyRequest declares DocsURL %q; an operation AWS does not model has no AWS docs page", c.DocsURL)
+		}
+	}
+	if !found {
+		t.Fatal("cloudfront/ProxyRequest is missing from AllCapabilities")
+	}
+}

@@ -94,6 +94,16 @@ type Capability struct {
 	// capgen handler cross-checks because they may document generic behavior,
 	// unsupported operations without explicit stubs, or other non-dispatched rows.
 	DocOnly bool
+	// EmulatorOnly marks an Overcast extension rather than an AWS API operation:
+	// a request Overcast serves that appears in no AWS model, so no SDK call can
+	// reach it and no AWS documentation page describes it.
+	//
+	// Such a row is still declared here, because it is real behaviour a reader
+	// needs to find, but it is excluded from every "N of M AWS operations" count
+	// Overcast publishes and never gets a generated AWS docs link. capgen's
+	// --check-model rejects the flag on an operation AWS does model, so it can
+	// only ever excuse a row that genuinely has no AWS counterpart.
+	EmulatorOnly bool
 	// Since is the semver tag when this operation was first implemented, e.g. "0.4.0".
 	// Leave empty if unknown or from the initial release.
 	Since string

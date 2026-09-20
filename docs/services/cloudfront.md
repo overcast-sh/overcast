@@ -104,7 +104,7 @@ The proxy is similarly relaxed about which version of a function it runs.
 
 ## Operations
 
-All 89 listed operations are implemented.
+All 88 listed operations are implemented.
 Per-operation status, notes and AWS API links: [CloudFront operations](cloudfront/operations.md).
 
 <!-- END overcast:capabilities -->

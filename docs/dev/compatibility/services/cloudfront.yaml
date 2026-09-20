@@ -1,14 +1,21 @@
 service: cloudfront
-status: not_started
+status: in_progress
 priority: p1
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-07-14
+last_updated: 2026-09-20
 protocols: [rest_xml]
 implementation: [internal/services/cloudfront]
 integration_tests: [tests/integration/cloudfront]
 capability_docs: docs/services/cloudfront.md
-operation_count_estimate: 89 tracked, all marked supported
-current_support_level: Broad metadata/control-plane support plus emulator-only proxy extension.
+operation_count_estimate: 88 AWS operations tracked, all supported; 1 emulator extension (ProxyRequest) counted separately
+current_support_level: >-
+  Broad metadata/control-plane support across all 88 AWS operations
+  internal/services/cloudfront/capabilities_dev.go declares, every one
+  StatusSupported. The data plane (ProxyRequest) is Overcast's own operation
+  rather than an AWS API one: its capability row carries the EmulatorOnly flag,
+  so it is documented under "Emulator extensions" on
+  docs/services/cloudfront/operations.md and excluded from every published AWS
+  operation count.
 operations: {}
 findings:
   fixed:
@@ -22,11 +29,33 @@ findings:
         aws_docs: https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/high_availability_origin_failover.html
         tests: tests/integration/cloudformation/cloudformation_test.go::TestCreateStack_CloudFrontDistributionOriginGroupTarget
       fixed_in: 0.0.1-alpha.8
+    - scenario: >-
+        ProxyRequest was counted as one of CloudFront's AWS operations, so the service claimed 89 of them
+        where AWS models 88, and the generated operations table linked a fabricated AWS reference page,
+        API_ProxyRequest.html. capabilities.Capability now carries an EmulatorOnly flag; the row sets it,
+        the capgen exemption that used to tolerate the unmodeled name is deleted, and --check-model rejects
+        the flag on any operation AWS does model so it can never hide a real one.
+      evidence:
+        tests: >-
+          cmd/capgen/main_test.go::TestCheckEmulatorOnlyRowsAreNotModeled_rejectsAnOperationAWSModels,
+          cmd/capgen/main_test.go::TestCoverage_excludesEmulatorOnlyRowsFromTheAWSCount,
+          cmd/capgen/main_test.go::TestBuildDocSection_emulatorOnlyRowIsSeparatedAndUnlinked,
+          internal/capabilities/registry_test.go::TestAllCapabilitiesEmulatorOnlySurvivesGeneration
+      fixed_in: this PR
   remaining_gaps:
-    - Separate emulator-only ProxyRequest from AWS compatibility counts.
-    - Review ETag and XML response fidelity.
-  intentionally_partial: []
+    - >-
+      Review XML response-shape fidelity against the CloudFront API Reference (#76). Compatibility tests
+      for this are in flight on branch claude/compat-tests-ses-stubs-athena-shapes-cloudfront-xml; check
+      that branch before starting a second pass.
+  intentionally_partial:
+    - >-
+      ETags are a quoted version counter ("1", "2", …) rather than a content hash or an opaque token
+      (#76). They increment on every update and are required by If-Match on update and delete, so the
+      concurrency contract an SDK depends on holds; what does not hold is any assumption that the same
+      configuration yields the same ETag, or that an ETag captured from real AWS is meaningful here.
+      Recorded on docs/services/cloudfront.md ("Differences from AWS") and
+      docs/services/cloudfront/limitations.md ("Distributions").
 handoff:
   start_with: [CreateDistribution, UpdateDistribution, invalidations]
-  do_not_redo: []
+  do_not_redo: [ProxyRequest counting (#75), ETag semantics (recorded as intentionally_partial)]
   commands: [go test -count=1 ./internal/services/cloudfront/... ./tests/integration/cloudfront/...]
