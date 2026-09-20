@@ -1,5 +1,5 @@
 service: eks
-status: in_progress
+status: reviewed
 priority: p2
 reference_policy: aws_docs_only_unless_user_approves_real_aws
 last_updated: 2026-09-20
@@ -12,16 +12,16 @@ operation_count_estimate: >-
   Clusters (cluster CRUD/updates/insights plus access entries, access policy associations,
   identity provider configs and pod identity associations, which capabilities_dev.go groups
   under the "Clusters" category), 1 Helpers (UpdateKubeconfig), 6 Nodegroups, 4 Fargate, 3 Tags,
-  7 Addons. This inventory (#143): 46 reviewed, 4 tests_missing (CreateCluster,
-  UpdateClusterConfig, CreateFargateProfile, UpdateAddon), 0 intentionally_partial at the
+  7 Addons. This inventory (#143): 50 reviewed, 0 tests_missing, 0 intentionally_partial at the
   operation level (the echoed-but-not-enforced design applies broadly and is recorded once in
   findings.intentionally_partial and docs/services/eks/limitations.md rather than per operation).
+  #1979 closed the last 4 tests_missing entries (CreateCluster, UpdateClusterConfig,
+  CreateFargateProfile, UpdateAddon).
 current_support_level: >-
   All 50 registered operations are implemented and have at least one integration test exercising
   their primary request/response shape, live-mode 501 boundary (where applicable), and
-  cluster-delete cascade cleanup (where applicable). 46 of 50 have test evidence for every
-  distinct behavior their capabilities_dev.go note claims; 4 have a specific claimed field or
-  error path with no test anywhere in the suite (see their entries below).
+  cluster-delete cascade cleanup (where applicable). All 50 now have test evidence for every
+  distinct behavior their capabilities_dev.go note claims.
 operations:
   # ─── Clusters ────────────────────────────────────────────────────────────
   CreateCluster:
@@ -33,18 +33,20 @@ operations:
       - tests/integration/eks/eks_test.go#TestEKSCreateClusterPreservesNetworkAndEncryptionConfig
       - tests/integration/eks/eks_test.go#TestEKSInlineTagsOnCreate
       - tests/integration/eks/eks_test.go#TestEKSLiveModeCreateClusterRequiresDocker
+      - tests/integration/eks/eks_test.go#TestEKSCreateClusterPreservesAccessConfigAndLogging
+      - tests/integration/eks/eks_test.go#TestEKSCreateClusterRejectsDuplicateName
       - internal/services/eks/container_reconcile_test.go
-    status: tests_missing
+    status: reviewed
     scenarios:
       metadata_round_trip:
         status: reviewed
         evidence: roleArn is required and accepted by every test helper; version, resourcesVpcConfig, kubernetesNetworkConfig, and encryptionConfig round-trip through DescribeCluster in TestEKSCreateClusterPreservesNetworkAndEncryptionConfig; inline create-time tags are visible via both the create response and DescribeCluster in TestEKSInlineTagsOnCreate and TestEKSDescribeResourcesReturnInlineTags.
       access_config_and_logging_on_create:
-        status: tests_missing
-        gap: "accessConfig is decoded and stored by createClusterTyped (typed_logic.go) but no test ever sends it or asserts it back from DescribeCluster. logging is a CreateCluster member too, but is only ever exercised indirectly via a later UpdateClusterConfig call (TestEKSUpdateClusterConfig), never as part of the CreateCluster request itself."
+        status: reviewed
+        evidence: "#1979 — accessConfig.authenticationMode and logging.clusterLogging, sent on CreateCluster itself, round-trip through both the create response and DescribeCluster (TestEKSCreateClusterPreservesAccessConfigAndLogging)."
       duplicate_cluster_name:
-        status: tests_missing
-        gap: "createClusterTyped returns ResourceInUseException for an already-existing cluster name (typed_logic.go), but no test calls CreateCluster twice for the same name. CreateAccessEntry and CreatePodIdentityAssociation both test their equivalent duplicate-name path; CreateCluster does not."
+        status: reviewed
+        evidence: "#1979 — a second CreateCluster call for an already-existing name returns 409 ResourceInUseException (TestEKSCreateClusterRejectsDuplicateName), matching the equivalent CreateAccessEntry/CreatePodIdentityAssociation duplicate-name paths."
       echoed_not_enforced:
         status: intentionally_partial
         gap: "logging, accessConfig and encryptionConfig are recorded and echoed only; the k3s control plane (live mode) enforces none of them. This is a documented design boundary, not a coverage gap — see docs/services/eks/limitations.md § Non-goals."
@@ -127,17 +129,19 @@ operations:
       - tests/integration/eks/eks_test.go#TestEKSUpdateClusterConfig
       - tests/integration/eks/eks_test.go#TestEKSUpdateClusterConfigPreservesKubernetesNetworkConfig
       - tests/integration/eks/eks_test.go#TestEKSLiveModeUpdateClusterConfigReturnsNotImplemented
-    status: tests_missing
+      - tests/integration/eks/eks_test.go#TestEKSUpdateClusterConfigVpcConfigUpdate
+      - tests/integration/eks/eks_test.go#TestEKSUpdateClusterConfigRejectsNoChanges
+    status: reviewed
     scenarios:
       logging_and_network_config_update:
         status: reviewed
         evidence: A logging update is reflected on the next DescribeCluster and reports update type LoggingUpdate (TestEKSUpdateClusterConfig); a kubernetesNetworkConfig update round-trips the same way (TestEKSUpdateClusterConfigPreservesKubernetesNetworkConfig).
       resources_vpc_config_update:
-        status: tests_missing
-        gap: "resourcesVpcConfig is a recognized update member that sets the update type to VpcConfigUpdate (handler_cluster.go), but no test ever sends it to /update-config."
+        status: reviewed
+        evidence: "#1979 — a resourcesVpcConfig-only /update-config request creates an Update of type VpcConfigUpdate with a VpcConfig param, and both DescribeUpdate and the next DescribeCluster reflect it (TestEKSUpdateClusterConfigVpcConfigUpdate)."
       no_changes_requested_error:
-        status: tests_missing
-        gap: "A call with none of logging/resourcesVpcConfig/kubernetesNetworkConfig set returns InvalidParameterException \"No configuration changes requested\" (handler_cluster.go), and nothing exercises this path."
+        status: reviewed
+        evidence: "#1979 — a request with none of logging/resourcesVpcConfig/kubernetesNetworkConfig set returns 400 InvalidParameterException (TestEKSUpdateClusterConfigRejectsNoChanges). AWS's API reference lists InvalidParameterException as a possible UpdateClusterConfig error but does not publish an exact runtime message for the no-changes case, so only the error code, HTTP status, and a non-empty message are asserted — not the literal \"No configuration changes requested\" string."
       live_mode_boundary:
         status: reviewed
         evidence: tests/integration/eks/eks_test.go#TestEKSLiveModeUpdateClusterConfigReturnsNotImplemented
@@ -305,14 +309,16 @@ operations:
       - tests/integration/eks/eks_addons_test.go#TestEKSFargateProfileLifecycle
       - tests/integration/eks/eks_test.go#TestEKSCreateFargateProfilePreservesSubnets
       - tests/integration/eks/eks_test.go#TestEKSLiveModeCreateFargateProfileReturnsNotImplemented
-    status: tests_missing
+      - tests/integration/eks/eks_test.go#TestEKSCreateFargateProfileRequiresPodExecutionRoleArn
+      - tests/integration/eks/eks_test.go#TestEKSCreateFargateProfilePreservesPodExecutionRoleAndSelectors
+    status: reviewed
     scenarios:
       subnets_round_trip:
         status: reviewed
         evidence: tests/integration/eks/eks_test.go#TestEKSCreateFargateProfilePreservesSubnets
       pod_execution_role_and_selectors_round_trip:
-        status: tests_missing
-        gap: "podExecutionRoleArn and selectors are required create inputs and are stored (handler_fargate.go createFargateProfile), but every test that sends them (TestEKSFargateProfileLifecycle, TestEKSCreateFargateProfilePreservesSubnets, TestEKSInlineTagsOnCreate, TestEKSDescribeResourcesReturnInlineTags) only asserts other fields — neither podExecutionRoleArn nor selectors is ever read back and compared in a create or describe response."
+        status: reviewed
+        evidence: "#1979 — the pinned model marks podExecutionRoleArn smithy.api#required (selectors is not); createFargateProfile (handler_fargate.go) previously accepted a request with no podExecutionRoleArn, which TestEKSCreateFargateProfileRequiresPodExecutionRoleArn caught failing (201 instead of 400) and which is now fixed with a serviceutil.RequireString check returning 400 MissingParameter, mirroring CreateAccessEntry's principalArn check. Both podExecutionRoleArn and selectors (including nested labels) round-trip through the create response and DescribeFargateProfile (TestEKSCreateFargateProfilePreservesPodExecutionRoleAndSelectors)."
       lifecycle_and_tags:
         status: reviewed
         evidence: List/Describe/Create/Delete lifecycle and inline tags are covered by TestEKSFargateProfileLifecycle, TestEKSInlineTagsOnCreate, TestEKSDescribeResourcesReturnInlineTags.
@@ -596,14 +602,15 @@ operations:
       - tests/integration/eks/eks_modeled_bindings_test.go#TestEKSUpdateAddon_modeledBinding
       - tests/integration/eks/eks_modeled_bindings_test.go#TestEKSUpdateAddon_inventedPluralPathDoesNotAnswer
       - tests/integration/eks/eks_test.go#TestEKSLiveModeUpdateAddonReturnsNotImplemented
-    status: tests_missing
+      - tests/integration/eks/eks_addons_test.go#TestEKSUpdateAddonEchoesResolveConflicts
+    status: reviewed
     scenarios:
       version_and_configuration_round_trip:
         status: reviewed
         evidence: addonVersion and configurationValues round-trip through DescribeAddon after an update (TestEKSUpdateAddon); the modeled POST binding and its distinct-from-plural-path shape are covered separately (TestEKSUpdateAddon_modeledBinding, TestEKSUpdateAddon_inventedPluralPathDoesNotAnswer).
       resolve_conflicts_echo:
-        status: tests_missing
-        gap: "resolveConflicts is appended to the recorded update's params (typed_logic.go, ~line 961, the same mechanism capabilities_dev.go's note describes as \"echoed into the update's params but not enforced\"), but no test ever sends resolveConflicts or inspects the update's params to confirm it is actually there."
+        status: reviewed
+        evidence: "#1979 — sending resolveConflicts: OVERWRITE on UpdateAddon appends {type: ResolveConflicts, value: OVERWRITE} to the recorded update's params (typed_logic.go ~line 961), visible in both the update response and DescribeUpdate, and the addon update itself proceeds normally (TestEKSUpdateAddonEchoesResolveConflicts)."
 
   DeleteAddon:
     aws_docs:
@@ -648,28 +655,26 @@ findings:
   fixed:
     - Live-mode EKS clusters no longer retain ACTIVE metadata after their control-plane container exits or disappears while Overcast is not observing Docker events.
     - "#143: completed a full operation-by-operation compatibility inventory for all 50 registered EKS operations, mapping each to its AWS API Reference page (or the CLI reference for the emulator-only UpdateKubeconfig), its handler file, and the integration tests that exercise it. 46 of 50 operations have test evidence for every distinct claim in their capabilities_dev.go note; the remaining 4 are recorded as tests_missing below with the specific untested claim named."
-  remaining_gaps:
-    - "Clusters: CreateCluster's accessConfig field and logging-on-create are never round-tripped through DescribeCluster by any test, and CreateCluster never tests the duplicate-name ResourceInUseException path that CreateAccessEntry and CreatePodIdentityAssociation both test for their own resources. UpdateClusterConfig's resourcesVpcConfig update path (update type VpcConfigUpdate) and its \"No configuration changes requested\" 400 error are also untested."
-    - "Fargate: CreateFargateProfile's podExecutionRoleArn and selectors are required inputs that are stored but never asserted back from any create or describe response."
-    - "Addons: UpdateAddon's resolveConflicts is echoed into the update's params (typed_logic.go) but no test sends it or inspects the params to confirm the echo actually happens."
+    - "#1979: added test evidence for the 4 tests_missing claims (CreateCluster's accessConfig/logging round-trip and duplicate-name rejection; UpdateClusterConfig's resourcesVpcConfig update and no-changes error; CreateFargateProfile's podExecutionRoleArn/selectors round-trip; UpdateAddon's resolveConflicts echo). One claim was false: createFargateProfile (handler_fargate.go) accepted a request with no podExecutionRoleArn despite the pinned model marking it smithy.api#required — fixed with a serviceutil.RequireString check (400 MissingParameter), mirroring CreateAccessEntry's principalArn check."
+  remaining_gaps: []
   intentionally_partial:
     - "CreateCluster's (and the equivalent UpdateClusterConfig/UpdateClusterVersion) logging, accessConfig and encryptionConfig are recorded and echoed only; nothing enforces them against a live k3s control plane. This is a stated design boundary (docs/services/eks/limitations.md § Non-goals), not a fixable gap."
     - "Nodegroup and Fargate profile capacity is metadata only in both modes — Overcast never provisions worker compute, so scalingConfig/desiredSize and similar fields describe intent that nothing acts on (docs/services/eks/limitations.md § Non-goals)."
     - "IAM enforcement, access policies and pod identity are stored, never enforced (docs/services/eks.md § Differences from AWS)."
 handoff:
-  start_with: [CreateCluster, UpdateClusterConfig, CreateFargateProfile, UpdateAddon]
+  start_with: []
   do_not_redo:
     [
-      DescribeCluster, DescribeClusterVersions, ListClusters, ListUpdates, ListInsights, DescribeInsight,
-      UpdateClusterVersion, DescribeUpdate, DeleteCluster, UpdateKubeconfig, CreateNodegroup,
+      CreateCluster, DescribeCluster, DescribeClusterVersions, ListClusters, ListUpdates, ListInsights, DescribeInsight,
+      UpdateClusterConfig, UpdateClusterVersion, DescribeUpdate, DeleteCluster, UpdateKubeconfig, CreateNodegroup,
       UpdateNodegroupVersion, UpdateNodegroupConfig, DescribeNodegroup, ListNodegroups, DeleteNodegroup,
-      ListFargateProfiles, DescribeFargateProfile, DeleteFargateProfile, ListTagsForResource, TagResource,
+      ListFargateProfiles, DescribeFargateProfile, CreateFargateProfile, DeleteFargateProfile, ListTagsForResource, TagResource,
       UntagResource, CreateAccessEntry, DescribeAccessEntry, UpdateAccessEntry, DeleteAccessEntry,
       ListAccessEntries, AssociateAccessPolicy, ListAccessPolicies, ListAssociatedAccessPolicies,
       DisassociateAccessPolicy, ListIdentityProviderConfigs, DescribeIdentityProviderConfig,
       AssociateIdentityProviderConfig, DisassociateIdentityProviderConfig, CreatePodIdentityAssociation,
       ListPodIdentityAssociations, DescribePodIdentityAssociation, UpdatePodIdentityAssociation,
-      DeletePodIdentityAssociation, CreateAddon, DescribeAddon, ListAddons, DeleteAddon,
+      DeletePodIdentityAssociation, CreateAddon, DescribeAddon, ListAddons, UpdateAddon, DeleteAddon,
       DescribeAddonConfiguration, DescribeAddonVersions,
     ]
   commands: [go test -count=1 ./internal/services/eks/... ./tests/integration/eks/...]

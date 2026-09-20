@@ -221,6 +221,74 @@ func TestEKSUpdateAddon(t *testing.T) {
 	}
 }
 
+// TestEKSUpdateAddonEchoesResolveConflicts proves the #1979 claim that
+// resolveConflicts is echoed into the update's params: DescribeUpdate shows
+// {type: ResolveConflicts, value: OVERWRITE} per the API reference, and the
+// addon update itself proceeds normally.
+// https://docs.aws.amazon.com/eks/latest/APIReference/API_UpdateAddon.html
+func TestEKSUpdateAddonEchoesResolveConflicts(t *testing.T) {
+	srv := newEKSServer(t)
+
+	_ = mustCreateCluster(t, srv.URL, "addon-resolve-conflicts-cluster", nil)
+	_ = mustCreateAddon(t, srv.URL, "addon-resolve-conflicts-cluster", "vpc-cni", "v1.16.0-eksbuild.1")
+
+	updateResp := eksCall(t, http.MethodPost, srv.URL+"/clusters/addon-resolve-conflicts-cluster/addons/vpc-cni/update", map[string]any{
+		"addonVersion":     "v1.18.3-eksbuild.3",
+		"resolveConflicts": "OVERWRITE",
+	})
+	if updateResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 for update addon, got %d", updateResp.StatusCode)
+	}
+	updateBody := decodeBody(t, updateResp)
+	update, ok := updateBody["update"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected update in response, got %#v", updateBody)
+	}
+	updateID, _ := update["id"].(string)
+	if updateID == "" {
+		t.Fatalf("expected non-empty update id")
+	}
+	if !addonUpdateParamsContain(update["params"], "ResolveConflicts", "OVERWRITE") {
+		t.Fatalf("expected update.params to contain {type: ResolveConflicts, value: OVERWRITE}, got %#v", update["params"])
+	}
+
+	descUpdateResp := eksCall(t, http.MethodGet, srv.URL+"/clusters/addon-resolve-conflicts-cluster/updates/"+updateID, nil)
+	if descUpdateResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 for describe update, got %d", descUpdateResp.StatusCode)
+	}
+	descUpdateBody := decodeBody(t, descUpdateResp)
+	descUpdate, _ := descUpdateBody["update"].(map[string]any)
+	if !addonUpdateParamsContain(descUpdate["params"], "ResolveConflicts", "OVERWRITE") {
+		t.Fatalf("expected DescribeUpdate params to contain {type: ResolveConflicts, value: OVERWRITE}, got %#v", descUpdate["params"])
+	}
+
+	descAddonResp := eksCall(t, http.MethodGet, srv.URL+"/clusters/addon-resolve-conflicts-cluster/addons/vpc-cni", nil)
+	if descAddonResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 for describe addon, got %d", descAddonResp.StatusCode)
+	}
+	descAddonBody := decodeBody(t, descAddonResp)
+	addon, _ := descAddonBody["addon"].(map[string]any)
+	if addon["addonVersion"] != "v1.18.3-eksbuild.3" {
+		t.Fatalf("expected addon update to proceed alongside resolveConflicts, addonVersion got %v", addon["addonVersion"])
+	}
+}
+
+// addonUpdateParamsContain reports whether an Update.params slice (as
+// decoded from JSON) contains an entry with the given type and value.
+func addonUpdateParamsContain(params any, wantType, wantValue string) bool {
+	list, _ := params.([]any)
+	for _, entry := range list {
+		m, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		if m["type"] == wantType && m["value"] == wantValue {
+			return true
+		}
+	}
+	return false
+}
+
 func TestEKSDescribeAddonVersions(t *testing.T) {
 	srv := newEKSServer(t)
 
