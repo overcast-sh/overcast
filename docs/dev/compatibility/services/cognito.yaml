@@ -71,9 +71,8 @@ operations:
       - AWS docs state Username is auto-generated when username attributes are email/phone-only sign-in identifiers.
       - AWS AdminCreateUser docs state ForceAliasCreation only applies to verified email/phone aliases and migrates the alias when true.
       - AWS AdminCreateUser docs state TemporaryPassword must conform to the pool password policy and Cognito generates one when omitted.
-    gaps:
-      - Self-service ConfirmSignUp ForceAliasCreation alias migration not yet reviewed.
-    next_action: Review ConfirmSignUp ForceAliasCreation and phone_number alias semantics.
+    gaps: []
+    next_action: "Include in broader admin-user operation sweep. Self-service ConfirmSignUp ForceAliasCreation alias migration is already covered under the ConfirmSignUp operation (TestConfirmSignUp_aliasPool_forceAliasCreation, TestConfirmSignUp_aliasPool_forcePhoneAliasCreation in cognito_aliases_test.go); issue #83 closed as already fixed."
   AdminGetUser:
     status: fixed
     aws_docs:
@@ -273,9 +272,8 @@ operations:
         notes: Sends another verification code to the pending email value, returns CodeDeliveryDetails, invalidates the previous code, and permits VerifyUserAttribute with the new code.
     evidence:
       - AWS GetUserAttributeVerificationCode docs state the operation sends a verification code for the requested signed-in user's attribute and returns CodeDeliveryDetails.
-    gaps:
-      - Exact code TTL, throttling, delivery failures, and Lambda ClientMetadata behavior are intentionally not emulated.
-    next_action: Review detailed validation errors for unsupported AttributeName values.
+    gaps: []
+    next_action: "Review detailed validation errors for unsupported AttributeName values. TTL/throttling/delivery-failure behavior is tracked as the consolidated finding in findings.intentionally_partial (issue #130); issue #85 closed as a duplicate of it."
   RespondToAuthChallenge:
     status: fixed
     aws_docs:
@@ -402,11 +400,8 @@ operations:
       - AWS SignInPolicy docs state AllowedFirstAuthFactors controls permitted first factors for a user pool.
     gaps:
       - CUSTOM_AUTH Lambda Define/Create/Verify trigger execution, multiple custom-challenge loops, and answer verification are intentionally partial.
-      - Device SRP verifier cryptographic proof validation is intentionally partial.
       - Device opt-in confirmation edge cases, exact validation errors, and user ListDevices pagination are not fully reviewed.
-      - SRP responses use AWS-shaped challenge parameters but don't perform full cryptographic proof validation.
-      - WebAuthn registration and assertion responses are accepted with AWS-shaped fields but don't perform attestation/assertion cryptographic validation.
-    next_action: Review exact device validation errors and opt-in confirmation edge cases.
+    next_action: "Review exact device validation errors and opt-in confirmation edge cases. Device SRP (#89), plain SRP (#91), and WebAuthn (#92) cryptographic proof validation are duplicates of the consolidated findings.intentionally_partial entries for issues #124, #125, and #127; closed as such."
   AdminRespondToAuthChallenge:
     status: fixed
     aws_docs:
@@ -453,11 +448,10 @@ operations:
       - AWS AdminRespondToAuthChallenge docs include DEVICE_SRP_AUTH and DEVICE_PASSWORD_VERIFIER as device-auth challenge responses.
       - AWS API docs state all admin challenge responses require SECRET_HASH when the app client has a client secret.
     gaps:
-      - ChallengeResponses USERNAME edge cases not fully reviewed.
+      - "ChallengeResponses USERNAME edge cases not fully reviewed: an unresolved or mismatched USERNAME in a SELECT_CHALLENGE/PASSWORD response answers NotAuthorizedException (\"Invalid session.\") through the session-identity check in completeChoicePasswordChallengeTyped (typed_logic.go:1181-1183), deliberately masking the difference between an invalid session and an unknown user; AWS's exact behavior here is unverified (issue #93, left open)."
       - CUSTOM_AUTH Lambda trigger execution and repeated custom-challenge loops are intentionally partial.
-      - Device SRP verifier cryptographic proof validation is intentionally partial.
       - MFA challenge behavior not fully reviewed.
-    next_action: Review all admin challenge flows against AWS docs.
+    next_action: "Review all admin challenge flows against AWS docs. Device SRP (#95) cryptographic proof validation is a duplicate of the consolidated findings.intentionally_partial entry for issue #125; closed as such."
   AdminDeleteUser:
     status: fixed
     aws_docs:
@@ -585,9 +579,8 @@ operations:
     evidence:
       - AWS ConfirmSignUp docs state ForceAliasCreation migrates an existing email/phone alias when true and returns AliasExistsException when false.
       - AWS ConfirmSignUp, InitiateAuth, and AdminInitiateAuth docs state the ConfirmSignUp Session can be passed to USER_AUTH for immediate sign-in.
-    gaps:
-      - General choice-based USER_AUTH without a ConfirmSignUp Session is not implemented/reviewed.
-    next_action: Review general USER_AUTH choice-based challenge behavior.
+    gaps: []
+    next_action: "Include in broader self-service operation sweep. General choice-based USER_AUTH without a Session is implemented in handleUserAuthWithConfirmSessionTyped's session == \"\" branch (typed_logic.go:911-957) and covered by the InitiateAuth/AdminInitiateAuth \"USER_AUTH password choice start\" scenarios; issue #99 closed as already fixed."
   ListUsers:
     status: fixed
     aws_docs:
@@ -624,8 +617,8 @@ operations:
     evidence:
       - AWS ListUsers docs define single-attribute server-side filters with `=` and `^=` and Limit/PaginationToken pagination.
     gaps:
-      - Full invalid-filter error-message parity not verified against real AWS.
-    next_action: Review AttributesToGet and invalid filter validation details.
+      - Exact AWS error-message wording for invalid filter values is unverified (tracked as issue #131).
+    next_action: "Review AttributesToGet edge cases. Issue #100 closed as a duplicate of #131."
   ListGroups:
     status: fixed
     aws_docs:
@@ -827,11 +820,8 @@ operations:
       - AWS SignInPolicy docs state AllowedFirstAuthFactors controls permitted first factors for a user pool.
     gaps:
       - CUSTOM_AUTH Lambda Define/Create/Verify trigger execution, multiple custom-challenge loops, and answer verification are intentionally partial.
-      - Device SRP verifier cryptographic proof validation is intentionally partial.
       - Device opt-in confirmation edge cases, exact validation errors, and user ListDevices pagination are not fully reviewed.
-      - SRP responses use AWS-shaped challenge parameters but don't perform full cryptographic proof validation.
-      - WebAuthn registration and assertion responses are accepted with AWS-shaped fields but don't perform attestation/assertion cryptographic validation.
-    next_action: Review exact device validation errors, opt-in confirmation edge cases, and app-tier restrictions for ALLOW_USER_AUTH.
+    next_action: "Review exact device validation errors, opt-in confirmation edge cases, and app-tier restrictions for ALLOW_USER_AUTH. Device SRP (#102), plain SRP (#104), and WebAuthn (#105) cryptographic proof validation are duplicates of the consolidated findings.intentionally_partial entries for issues #124, #125, and #127; closed as such."
   ConfirmDevice:
     status: fixed
     aws_docs:
@@ -933,7 +923,7 @@ operations:
     evidence:
       - AWS AdminGetDevice docs state UserPoolId, Username, and DeviceKey return the user's device details.
     gaps:
-      - Exact IAM enforcement and device attribute set are intentionally partial.
+      - "IAM authorization on the requested user is stored but not enforced, the same project-wide behavior as every other operation (docs/migration/differences.md's IAM policies row; OVERCAST_ENFORCE_IAM opts in) rather than an AdminGetDevice-specific gap. DeviceAttributes names (device_status, device_name, dev:device_remembered_status in toDeviceWire, device_auth.go:399-408) are emulator choices where AWS's DeviceAttributeType list is unconstrained. Issue #111 closed as intentionally partial."
     next_action: Review exact AdminGetDevice error shapes.
   AdminListDevices:
     status: fixed
@@ -950,7 +940,7 @@ operations:
     evidence:
       - AWS AdminListDevices docs state Limit and PaginationToken paginate a user's registered devices.
     gaps:
-      - Exact pagination-token encoding and validation messages are emulator-specific.
+      - "PaginationToken is an emulator-internal integer offset (listDevicesResponse, device_auth.go:361-386), not AWS's opaque token, and Limit's 0-60 range matches the model's QueryLimitType constraint; intentionally partial rather than an outstanding gap. Issue #112 closed as intentionally partial."
     next_action: Review exact AdminListDevices validation errors.
   AdminUpdateDeviceStatus:
     status: fixed
@@ -1258,15 +1248,24 @@ findings:
     - "Issue #133 (review all challenge flows, including MFA and NEW_PASSWORD_REQUIRED, against AWS docs) is subsumed by the more specific SRP/WebAuthn verification-boundary findings below (#124, #125, #127) and by the existing NEW_PASSWORD_REQUIRED/SOFTWARE_TOKEN_MFA/challenge-flow test coverage in cognito_user_auth_test.go; closed as-is with no separate action needed."
   remaining_gaps:
     - "Review exact device validation errors, user ListDevices pagination edge cases, and opt-in confirmation behavior. Tracked as issue #126, in progress on branch claude/compat-cognito-tests-tier-devices-filters-secrethash."
+    - "AdminInitiateAuth's and InitiateAuth's device opt-in confirmation edge cases remain open individually as issues #90 and #103 (the same gap issue #126 tracks at the ListDevices/validation-error level)."
+    - "RespondToAuthChallenge's ChallengeResponses USERNAME edge cases (issue #86) and MFA challenge behavior (issue #87), and AdminRespondToAuthChallenge's MFA challenge behavior (issue #96), are not fully reviewed."
+    - "SignUp's UUID-equals-sub dedicated assertion (issue #97) and duplicate username-attribute validation (issue #98) need review."
+    - "ConfirmDevice's device-verifier/duplicate-device/opt-in edge cases (issue #106), GetDevice's not-found/malformed-key messages (issue #107), ListDevices' pagination/Limit messages (issue #108), UpdateDeviceStatus's invalid-status/missing-device messages (issue #109), and AdminUpdateDeviceStatus's invalid-status/not-found messages (issue #113) are not fully reviewed; ForgetDevice and AdminForgetDevice answer 200 on an unknown DeviceKey where AWS answers ResourceNotFoundException (issues #110, #114)."
+    - AutoVerifiedAttributes and Schema are threaded onto the CreateUserPool wire call by the CloudFormation UserPool handler (they always were) but the Cognito service itself does not yet store either, so both still round-trip as dropped (issue #84).
     - "Review exact ListUsers invalid-filter validation parity. Tracked as issue #131, in progress on branch claude/compat-cognito-tests-tier-devices-filters-secrethash."
     - "Review SECRET_HASH expectations when username aliases are used. Tracked as issue #132, in progress on branch claude/compat-cognito-tests-tier-devices-filters-secrethash."
     - "Review every admin user operation that accepts Username for validation, errors, and response shape. Tracked as issue #134, in progress on branch claude/compat-cognito-tests-tier-devices-filters-secrethash."
     - "Essentials-tier SignInPolicy rejection for UpdateUserPool is implemented (handler_pools.go:146-157) but not yet covered by a dedicated compat test. Tracked as issue #116, in progress on branch claude/compat-cognito-tests-tier-devices-filters-secrethash."
+<<<<<<< HEAD
     - AutoVerifiedAttributes and Schema are threaded onto the CreateUserPool wire call by the CloudFormation UserPool handler (they always were) but the Cognito service itself does not yet store either, so both still round-trip as dropped.
+=======
+    - "Email/SMS/software-token MFA config details for SetUserPoolMfaConfig and GetUserPoolMfaConfig are not fully reviewed. Tracked as issues #119 and #121, in progress on branch claude/issue-119-cognito-mfa-config-shapes."
+>>>>>>> 84154a889 (docs(cognito): reconcile the baseline tracker for the auth, device and trigger review items)
   intentionally_partial:
     - SRP proof validation is not cryptographically verified; verifier responses are shape-checked and complete authentication for SDK-compatible local testing (typed_logic.go:1249-1250 completeSRPVerifierChallengeTyped checks only that PASSWORD_CLAIM_SIGNATURE/PASSWORD_CLAIM_SECRET_BLOCK/TIMESTAMP are present; issue #124).
     - Device SRP proof validation is not cryptographically verified; DEVICE_PASSWORD_VERIFIER responses are shape-checked and complete authentication for SDK-compatible local testing (device_auth.go:99-100 completeDevicePasswordVerifierTyped checks only that the same claim fields are present; issue #125).
-    - CUSTOM_AUTH Lambda Define/Create/Verify triggers, challenge answer verification, and repeated custom-challenge loops are not executed; Overcast emits AWS-shaped challenge/session responses and accepts ANSWER for SDK-compatible local testing.
+    - "CUSTOM_AUTH Lambda Define/Create/Verify triggers, challenge answer verification, and repeated custom-challenge loops are not executed; Overcast emits AWS-shaped challenge/session responses and accepts ANSWER for SDK-compatible local testing (triggers.go:18-19 names this scope explicitly, and docs/services/cognito/limitations.md's Lambda triggers table links it). Closes issues #88, #94, and #101 (the AdminInitiateAuth/InitiateAuth/AdminRespondToAuthChallenge CUSTOM_AUTH trigger-execution gap bullets describe this same, already-documented limitation rather than a separate review item)."
     - "WebAuthn attestation/assertion signatures, origin validation, and relying-party mismatch validation are not cryptographically verified; credential metadata and challenge shapes are emulated for SDK-compatible local testing (issue #127). SetUserPoolMfaConfig's validateWebAuthnConfiguration (typed_logic.go:2776-2787) checks only the UserVerification/FactorConfiguration enum values and performs no relying-party-ID/domain validation against public suffix or custom-domain constraints (issue #120). StartWebAuthnRegistration's registration challenge is time-boxed (webAuthnChallengeTTL, user_auth_factors.go:13, 5 minutes) and checked by CompleteWebAuthnRegistration, but AWS's exact error taxonomy for expired, mismatched, or replayed challenges is not reproduced (issue #122); RespondToAuthChallenge/AdminRespondToAuthChallenge's WEB_AUTHN completion checks only that the credential ID is a known registered credential (completeWebAuthnChallengeTyped, typed_logic.go:1319-1337), not the challenge nonce, origin, or assertion signature."
     - "Verification-code TTL, throttling, and delivery-failure behavior (GetUserAttributeVerificationCode, ForgotPassword, ResendConfirmationCode, and other code-issuing operations) are intentionally not emulated; a code stays valid until consumed or replaced (issue #130)."
     - LambdaConfig is stored by CreateUserPool/UpdateUserPool and returned by DescribeUserPool so a CDK pool's triggers round-trip visibly. As of issue #1171, PreSignUp, PostConfirmation, PreTokenGeneration, PostAuthentication, and CustomMessage are invoked by SignUp/AdminCreateUser/ConfirmSignUp/AdminConfirmSignUp/ConfirmForgotPassword/ResendConfirmationCode/ForgotPassword/InitiateAuth/AdminInitiateAuth/RespondToAuthChallenge/AdminRespondToAuthChallenge on the classic X-Amz-Target API. Still not invoked: PreAuthentication and UserMigration (not yet wired), the CUSTOM_AUTH challenge triggers DefineAuthChallenge/CreateAuthChallenge/VerifyAuthChallengeResponse (tracked separately by #88/#94/#101), PreTokenGeneration's V2_0/V3_0 access-token-customization event versions, CustomMessage for UpdateUserAttribute/VerifyUserAttribute/Authentication (MFA), and every trigger on the Smithy RPC v2 duplicate dispatch path (typed_logic.go) other than PreTokenGeneration, which that path gets for free because token issuance funnels through one shared function.

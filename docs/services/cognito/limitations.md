@@ -88,6 +88,13 @@ These have no AWS counterpart and exist for local development:
 - **Verification-code delivery** (sign-up, forgot-password, and attribute
   verification codes) has no emulated TTL, throttling, or delivery-failure
   behavior — a code stays valid until consumed or replaced.
+- **`AdminGetDevice`/`AdminListDevices`** don't check IAM authorization on the
+  requested user — the same project-wide behavior as every operation (see
+  [behavioural differences](../../migration/differences.md)) — and the
+  `DeviceAttributes` names they return (`device_status`, `device_name`,
+  `dev:device_remembered_status`) are emulator choices where AWS's list is
+  unconstrained. `AdminListDevices`' `PaginationToken` is an emulator-internal
+  integer offset, not AWS's opaque token.
 - **`UpdateUserPoolDomain`** accepts an SSL certificate update and does nothing
   with it.
 - **`DescribeUserPoolDomain`** returns an empty `DomainDescription` when the

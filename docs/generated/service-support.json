@@ -2722,7 +2722,7 @@
           "operation": "InitiateAuth",
           "category": "Auth / Token operations",
           "status": "✅ Supported",
-          "notes": "USER_PASSWORD_AUTH + USER_SRP_AUTH + REFRESH_TOKEN_AUTH + CUSTOM_AUTH; USER_AUTH with ConfirmSignUp Session, SELECT_CHALLENGE/PASSWORD/PASSWORD_SRP/WEB_AUTHN/EMAIL_OTP/SMS_OTP, or preferred PASSWORD/WEB_AUTHN/EMAIL_OTP/SMS_OTP; returns NEW_PASSWORD_REQUIRED, SOFTWARE_TOKEN_MFA, or DEVICE_SRP_AUTH; a completed authentication invokes PostAuthentication_Authentication then PreTokenGeneration (TokenGeneration_Authentication/_RefreshTokens/_NewPasswordChallenge/_AuthenticateDevice as appropriate), each able to fail the call (issue #1171); USER_SRP_AUTH/PASSWORD_SRP proofs are accepted once the SRP claim fields are present and are not cryptographically verified"
+          "notes": "USER_PASSWORD_AUTH + USER_SRP_AUTH + REFRESH_TOKEN_AUTH + CUSTOM_AUTH; USER_AUTH with ConfirmSignUp Session, SELECT_CHALLENGE/PASSWORD/PASSWORD_SRP/WEB_AUTHN/EMAIL_OTP/SMS_OTP, or preferred PASSWORD/WEB_AUTHN/EMAIL_OTP/SMS_OTP; returns NEW_PASSWORD_REQUIRED, SOFTWARE_TOKEN_MFA, or DEVICE_SRP_AUTH; a completed authentication invokes PostAuthentication_Authentication then PreTokenGeneration (TokenGeneration_Authentication/_RefreshTokens/_NewPasswordChallenge/_AuthenticateDevice as appropriate), each able to fail the call (issue #1171); USER_SRP_AUTH/PASSWORD_SRP proofs are accepted once the SRP claim fields are present and are not cryptographically verified; WebAuthn assertion signature validation is intentionally partial"
         },
         {
           "operation": "AdminInitiateAuth",
@@ -2776,13 +2776,13 @@
           "operation": "AdminGetDevice",
           "category": "Auth / Token operations",
           "status": "✅ Supported",
-          "notes": "Returns a user's confirmed device"
+          "notes": "Returns a user's confirmed device; IAM authorization on the requested user is stored but not enforced unless OVERCAST_ENFORCE_IAM is set, the same project-wide behavior as every other operation; DeviceAttributes names (device_status, device_name, dev:device_remembered_status) are emulator choices where AWS's list is unconstrained"
         },
         {
           "operation": "AdminListDevices",
           "category": "Auth / Token operations",
           "status": "✅ Supported",
-          "notes": "Lists a user's confirmed devices with pagination"
+          "notes": "Lists a user's confirmed devices with pagination; PaginationToken is an emulator-internal integer offset rather than AWS's opaque token, and Limit accepts 0-60 matching the model's QueryLimitType"
         },
         {
           "operation": "AdminUpdateDeviceStatus",
