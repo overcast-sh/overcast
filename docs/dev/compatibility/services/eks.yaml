@@ -8,11 +8,11 @@ implementation: [internal/services/eks]
 integration_tests: [tests/integration/eks]
 capability_docs: docs/services/eks.md
 operation_count_estimate: >-
-  50 operations declared in internal/services/eks/capabilities_dev.go, all StatusSupported: 29
+  49 AWS operations declared in internal/services/eks/capabilities_dev.go, all StatusSupported: 29
   Clusters (cluster CRUD/updates/insights plus access entries, access policy associations,
   identity provider configs and pod identity associations, which capabilities_dev.go groups
-  under the "Clusters" category), 1 Helpers (UpdateKubeconfig), 6 Nodegroups, 4 Fargate, 3 Tags,
-  7 Addons. This inventory (#143): 50 reviewed, 0 tests_missing, 0 intentionally_partial at the
+  under the "Clusters" category), 6 Nodegroups, 4 Fargate, 3 Tags,
+  7 Addons; 1 emulator extension (UpdateKubeconfig, Helpers category) counted separately. This inventory (#143): 50 reviewed, 0 tests_missing, 0 intentionally_partial at the
   operation level (the echoed-but-not-enforced design applies broadly and is recorded once in
   findings.intentionally_partial and docs/services/eks/limitations.md rather than per operation).
   #1979 closed the last 4 tests_missing entries (CreateCluster, UpdateClusterConfig,

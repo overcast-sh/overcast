@@ -1,6 +1,6 @@
 ---
 title: "API Gateway operations"
-description: "Every API Gateway operation Overcast declares — 104 of 106 implemented — with status, behaviour notes and a link to the AWS API reference for each."
+description: "Every API Gateway operation Overcast declares — 102 of 104 implemented — with status, behaviour notes and a link to the AWS API reference for each."
 section: "Service Reference"
 tags:
   - apigateway
@@ -13,7 +13,7 @@ tags:
 
 # API Gateway operations
 
-104 of 106 listed operations are implemented. Back to [API Gateway](../apigateway.md).
+102 of 104 listed operations are implemented. Back to [API Gateway](../apigateway.md).
 
 ## Summary
 
@@ -24,8 +24,7 @@ tags:
 | REST API v1 other      | 34           | 2              |
 | HTTP API v2 management | 15           |                |
 | HTTP API v2 stages     | 6            |                |
-| HTTP API v2 other      | 17           |                |
-| REST API v1 execution  | 1            |                |
+| HTTP API v2 other      | 16           |                |
 
 ---
 
@@ -146,31 +145,35 @@ tags:
 
 ### HTTP API v2 other
 
-| Operation            | Status       | Notes                                                                                                                                                                                                                                                                                                                 | AWS Docs                                                                              |
-| -------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `UpdateV2Stage`      | ✅ Supported | Patch description, autoDeploy, deploymentId, stageVariables                                                                                                                                                                                                                                                           | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_UpdateV2Stage.html)      |
-| `CreateV2Authorizer` | ✅ Supported | JWT and REQUEST types; config stored                                                                                                                                                                                                                                                                                  | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_CreateV2Authorizer.html) |
-| `GetV2Authorizer`    | ✅ Supported |                                                                                                                                                                                                                                                                                                                       | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_GetV2Authorizer.html)    |
-| `GetV2Authorizers`   | ✅ Supported |                                                                                                                                                                                                                                                                                                                       | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_GetV2Authorizers.html)   |
-| `DeleteV2Authorizer` | ✅ Supported |                                                                                                                                                                                                                                                                                                                       | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_DeleteV2Authorizer.html) |
-| `CreateV2DomainName` | ✅ Supported | Inert metadata; no routing effect                                                                                                                                                                                                                                                                                     | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_CreateV2DomainName.html) |
-| `GetV2DomainNames`   | ✅ Supported |                                                                                                                                                                                                                                                                                                                       | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_GetV2DomainNames.html)   |
-| `DeleteV2DomainName` | ✅ Supported |                                                                                                                                                                                                                                                                                                                       | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_DeleteV2DomainName.html) |
-| `CreateV2VpcLink`    | ✅ Supported | Status immediately AVAILABLE; no VPC connectivity enforced                                                                                                                                                                                                                                                            | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_CreateV2VpcLink.html)    |
-| `GetV2VpcLinks`      | ✅ Supported |                                                                                                                                                                                                                                                                                                                       | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_GetV2VpcLinks.html)      |
-| `DeleteV2VpcLink`    | ✅ Supported |                                                                                                                                                                                                                                                                                                                       | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_DeleteV2VpcLink.html)    |
-| `CreateV2ApiMapping` | ✅ Supported | Stored under the domain name                                                                                                                                                                                                                                                                                          | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_CreateV2ApiMapping.html) |
-| `GetV2ApiMappings`   | ✅ Supported |                                                                                                                                                                                                                                                                                                                       | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_GetV2ApiMappings.html)   |
-| `TagV2Resource`      | ✅ Supported | POST /v2/tags/{arn} — merges tags; ARN may contain slashes                                                                                                                                                                                                                                                            | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_TagV2Resource.html)      |
-| `UntagV2Resource`    | ✅ Supported | DELETE /v2/tags/{arn}?tagKeys=k1,k2                                                                                                                                                                                                                                                                                   | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_UntagV2Resource.html)    |
-| `GetV2Tags`          | ✅ Supported |                                                                                                                                                                                                                                                                                                                       | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_GetV2Tags.html)          |
-| `ExecuteV2API`       | ✅ Supported | AWS_PROXY and HTTP_PROXY integration types; records the same Count/4xx/5xx/Latency/IntegrationLatency metrics (HTTP APIs use AWS's lowercase 4xx/5xx metric names, not REST's 4XXError/5XXError) under all three AWS-documented HTTP dimension combinations — ApiId, ApiId+Stage, and ApiId+Stage+HttpMethod+RouteKey | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_ExecuteV2API.html)       |
+| Operation            | Status       | Notes                                                       | AWS Docs                                                                              |
+| -------------------- | ------------ | ----------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `UpdateV2Stage`      | ✅ Supported | Patch description, autoDeploy, deploymentId, stageVariables | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_UpdateV2Stage.html)      |
+| `CreateV2Authorizer` | ✅ Supported | JWT and REQUEST types; config stored                        | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_CreateV2Authorizer.html) |
+| `GetV2Authorizer`    | ✅ Supported |                                                             | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_GetV2Authorizer.html)    |
+| `GetV2Authorizers`   | ✅ Supported |                                                             | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_GetV2Authorizers.html)   |
+| `DeleteV2Authorizer` | ✅ Supported |                                                             | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_DeleteV2Authorizer.html) |
+| `CreateV2DomainName` | ✅ Supported | Inert metadata; no routing effect                           | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_CreateV2DomainName.html) |
+| `GetV2DomainNames`   | ✅ Supported |                                                             | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_GetV2DomainNames.html)   |
+| `DeleteV2DomainName` | ✅ Supported |                                                             | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_DeleteV2DomainName.html) |
+| `CreateV2VpcLink`    | ✅ Supported | Status immediately AVAILABLE; no VPC connectivity enforced  | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_CreateV2VpcLink.html)    |
+| `GetV2VpcLinks`      | ✅ Supported |                                                             | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_GetV2VpcLinks.html)      |
+| `DeleteV2VpcLink`    | ✅ Supported |                                                             | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_DeleteV2VpcLink.html)    |
+| `CreateV2ApiMapping` | ✅ Supported | Stored under the domain name                                | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_CreateV2ApiMapping.html) |
+| `GetV2ApiMappings`   | ✅ Supported |                                                             | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_GetV2ApiMappings.html)   |
+| `TagV2Resource`      | ✅ Supported | POST /v2/tags/{arn} — merges tags; ARN may contain slashes  | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_TagV2Resource.html)      |
+| `UntagV2Resource`    | ✅ Supported | DELETE /v2/tags/{arn}?tagKeys=k1,k2                         | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_UntagV2Resource.html)    |
+| `GetV2Tags`          | ✅ Supported |                                                             | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_GetV2Tags.html)          |
 
-### REST API v1 execution
+---
 
-| Operation        | Status       | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | AWS Docs                                                                          |
-| ---------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `ExecuteRestAPI` | ✅ Supported | Lambda proxy/non-proxy, HTTP_PROXY, HTTP, and MOCK integrations; stage variable substitution; base64 Lambda responses decoded before write; records AWS/ApiGateway CloudWatch metrics Count, 4XXError, 5XXError, Latency, and IntegrationLatency once per dispatched request under all three AWS-documented REST dimension combinations — ApiName, ApiName+Stage, and ApiName+Stage+Method+Resource (#1307) — an unresolvable restApiId records nothing, since there is no ApiName to dimension a series with | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_ExecuteRestAPI.html) |
+## Emulator extensions
+
+Operations Overcast serves that appear in no AWS model, so no SDK calls them and no AWS reference page describes them. They sit outside the operation counts above.
+
+| Operation        | Status       | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ---------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ExecuteRestAPI` | ✅ Supported | Lambda proxy/non-proxy, HTTP_PROXY, HTTP, and MOCK integrations; stage variable substitution; base64 Lambda responses decoded before write; records AWS/ApiGateway CloudWatch metrics Count, 4XXError, 5XXError, Latency, and IntegrationLatency once per dispatched request under all three AWS-documented REST dimension combinations — ApiName, ApiName+Stage, and ApiName+Stage+Method+Resource (#1307) — an unresolvable restApiId records nothing, since there is no ApiName to dimension a series with |
+| `ExecuteV2API`   | ✅ Supported | AWS_PROXY and HTTP_PROXY integration types; records the same Count/4xx/5xx/Latency/IntegrationLatency metrics (HTTP APIs use AWS's lowercase 4xx/5xx metric names, not REST's 4XXError/5XXError) under all three AWS-documented HTTP dimension combinations — ApiId, ApiId+Stage, and ApiId+Stage+HttpMethod+RouteKey                                                                                                                                                                                         |
 
 ## Related
 

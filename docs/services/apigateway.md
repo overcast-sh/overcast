@@ -125,7 +125,7 @@ flag says.
 
 ## Operations
 
-104 of 106 listed operations are implemented.
+102 of 104 listed operations are implemented.
 Per-operation status, notes and AWS API links: [API Gateway operations](apigateway/operations.md).
 
 <!-- END overcast:capabilities -->

@@ -1,6 +1,6 @@
 {
   "generated_by": "go run -tags dev ./cmd/capgen --write-docs",
-  "total_ops": 1516,
+  "total_ops": 1512,
   "services": [
     {
       "service": "s3",
@@ -997,8 +997,8 @@
     {
       "service": "apigateway",
       "display_name": "API Gateway",
-      "total_ops": 106,
-      "implemented_ops": 104,
+      "total_ops": 104,
+      "implemented_ops": 102,
       "operations": [
         {
           "operation": "CreateRestApi",
@@ -1561,21 +1561,23 @@
           "operation": "ExecuteRestAPI",
           "category": "REST API v1 execution",
           "status": "✅ Supported",
-          "notes": "Lambda proxy/non-proxy, HTTP_PROXY, HTTP, and MOCK integrations; stage variable substitution; base64 Lambda responses decoded before write; records AWS/ApiGateway CloudWatch metrics Count, 4XXError, 5XXError, Latency, and IntegrationLatency once per dispatched request under all three AWS-documented REST dimension combinations — ApiName, ApiName+Stage, and ApiName+Stage+Method+Resource (#1307) — an unresolvable restApiId records nothing, since there is no ApiName to dimension a series with"
+          "notes": "Lambda proxy/non-proxy, HTTP_PROXY, HTTP, and MOCK integrations; stage variable substitution; base64 Lambda responses decoded before write; records AWS/ApiGateway CloudWatch metrics Count, 4XXError, 5XXError, Latency, and IntegrationLatency once per dispatched request under all three AWS-documented REST dimension combinations — ApiName, ApiName+Stage, and ApiName+Stage+Method+Resource (#1307) — an unresolvable restApiId records nothing, since there is no ApiName to dimension a series with",
+          "emulator_only": true
         },
         {
           "operation": "ExecuteV2API",
           "category": "HTTP API v2 other",
           "status": "✅ Supported",
-          "notes": "AWS_PROXY and HTTP_PROXY integration types; records the same Count/4xx/5xx/Latency/IntegrationLatency metrics (HTTP APIs use AWS's lowercase 4xx/5xx metric names, not REST's 4XXError/5XXError) under all three AWS-documented HTTP dimension combinations — ApiId, ApiId+Stage, and ApiId+Stage+HttpMethod+RouteKey"
+          "notes": "AWS_PROXY and HTTP_PROXY integration types; records the same Count/4xx/5xx/Latency/IntegrationLatency metrics (HTTP APIs use AWS's lowercase 4xx/5xx metric names, not REST's 4XXError/5XXError) under all three AWS-documented HTTP dimension combinations — ApiId, ApiId+Stage, and ApiId+Stage+HttpMethod+RouteKey",
+          "emulator_only": true
         }
       ]
     },
     {
       "service": "appsync",
       "display_name": "AppSync",
-      "total_ops": 82,
-      "implemented_ops": 82,
+      "total_ops": 81,
+      "implemented_ops": 81,
       "operations": [
         {
           "operation": "CreateGraphqlApi",
@@ -1926,7 +1928,8 @@
           "operation": "ExecuteGraphQL",
           "category": "Execution \u0026 Evaluation",
           "status": "✅ Supported",
-          "notes": "Executes a GraphQL operation against the API; Cognito bearer tokens are decoded only, or verified against the local user pool when OVERCAST_ENFORCE_APPSYNC_COGNITO_AUTH=true"
+          "notes": "Executes a GraphQL operation against the API; Cognito bearer tokens are decoded only, or verified against the local user pool when OVERCAST_ENFORCE_APPSYNC_COGNITO_AUTH=true",
+          "emulator_only": true
         },
         {
           "operation": "EvaluateMappingTemplate",
@@ -8404,8 +8407,8 @@
     {
       "service": "eks",
       "display_name": "EKS",
-      "total_ops": 50,
-      "implemented_ops": 50,
+      "total_ops": 49,
+      "implemented_ops": 49,
       "operations": [
         {
           "operation": "CreateCluster",
@@ -8583,8 +8586,9 @@
           "operation": "UpdateKubeconfig",
           "category": "Helpers",
           "status": "✅ Supported",
-          "notes": "Emulator extension, not an AWS API operation — `aws eks update-kubeconfig` is a CLI-side command that calls DescribeCluster and writes the file locally, so no SDK calls this. Overcast returns the generated kubeconfig YAML instead (503 until a live cluster's endpoint/CA are ready)",
-          "docs_url": "[cli](https://docs.aws.amazon.com/cli/latest/reference/eks/update-kubeconfig.html)"
+          "notes": "`aws eks update-kubeconfig` is a CLI-side command that calls DescribeCluster and writes the file locally, so no SDK calls this. Overcast returns the generated kubeconfig YAML instead (503 until a live cluster's endpoint/CA are ready)",
+          "docs_url": "[cli](https://docs.aws.amazon.com/cli/latest/reference/eks/update-kubeconfig.html)",
+          "emulator_only": true
         },
         {
           "operation": "CreateNodegroup",

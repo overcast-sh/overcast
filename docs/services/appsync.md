@@ -138,7 +138,7 @@ Failures inside a resolver surface in the GraphQL response, not only in logs.
 
 ## Operations
 
-All 82 listed operations are implemented.
+All 81 listed operations are implemented.
 Per-operation status, notes and AWS API links: [AppSync operations](appsync/operations.md).
 
 <!-- END overcast:capabilities -->

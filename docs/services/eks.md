@@ -78,7 +78,7 @@ Switching the mode does not carry existing clusters across.
 
 ## Operations
 
-All 50 listed operations are implemented.
+All 49 listed operations are implemented.
 Per-operation status, notes and AWS API links: [EKS operations](eks/operations.md).
 
 <!-- END overcast:capabilities -->

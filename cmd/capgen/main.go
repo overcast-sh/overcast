@@ -351,12 +351,7 @@ var capabilityOperationAliases = map[string]string{
 // about AWS. That is the shape #864 was filed about, and it is why the staleness
 // check now runs alongside the exemption table rather than being trusted to
 // review.
-var capabilityManifestExemptions = map[string]string{
-	"apigateway/ExecuteRestAPI": "emulator invoke-route helper, not an AWS control-plane operation",
-	"apigateway/ExecuteV2API":   "emulator invoke-route helper, not an AWS control-plane operation",
-	"appsync/ExecuteGraphQL":    "emulator GraphQL execution helper, not an AWS SDK operation",
-	"eks/UpdateKubeconfig":      "emulator convenience helper, not an AWS SDK operation",
-}
+var capabilityManifestExemptions = map[string]string{}
 
 func capabilityManifestExemption(cap CapabilityDecl) string {
 	return capabilityManifestExemptions[cap.Service+"/"+cap.Operation]

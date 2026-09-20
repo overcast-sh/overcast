@@ -10,13 +10,13 @@ import (
 )
 
 func TestCheckCapabilitiesInManifest_allowsDocOnlyAndRejectsUnknown(t *testing.T) {
-	// Given: one modeled capability, one documented synthetic row, and one typo.
+	// Given: one modeled capability, one DocOnly row, one EmulatorOnly row, and one typo.
 	caps := []CapabilityDecl{
 		{Service: "secretsmanager", Operation: "ListSecrets"},
 		{Service: "cognito", Operation: "ListUsers"},
 		{Service: "apigateway", Operation: "CreateV2Api"},
 		{Service: "cloudfront", Operation: "DeleteFieldLevelEncryption"},
-		{Service: "appsync", Operation: "ExecuteGraphQL"},
+		{Service: "appsync", Operation: "ExecuteGraphQL", EmulatorOnly: true},
 		{Service: "secretsmanager", Operation: "ConsoleOnly", DocOnly: true},
 		{Service: "secretsmanager", Operation: "NotAnAWSOperation"},
 	}

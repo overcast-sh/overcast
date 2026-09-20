@@ -174,7 +174,8 @@ func init() {
 
 		// Execution & Evaluation
 		capabilities.Capability{Service: "appsync", Operation: "ExecuteGraphQL", Category: "Execution & Evaluation",
-			Status: capabilities.StatusSupported, Notes: "Executes a GraphQL operation against the API; Cognito bearer tokens are decoded only, or verified against the local user pool when OVERCAST_ENFORCE_APPSYNC_COGNITO_AUTH=true"},
+			EmulatorOnly: true,
+			Status:       capabilities.StatusSupported, Notes: "Executes a GraphQL operation against the API; Cognito bearer tokens are decoded only, or verified against the local user pool when OVERCAST_ENFORCE_APPSYNC_COGNITO_AUTH=true"},
 		capabilities.Capability{Service: "appsync", Operation: "EvaluateMappingTemplate", Category: "Execution & Evaluation",
 			Status: capabilities.StatusSupported, Notes: "Evaluates VTL mapping templates; logs and outErrors are not populated"},
 		capabilities.Capability{Service: "appsync", Operation: "EvaluateCode", Category: "Execution & Evaluation",
