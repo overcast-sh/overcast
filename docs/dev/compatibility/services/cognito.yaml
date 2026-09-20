@@ -2,7 +2,7 @@ service: cognito
 status: in_progress
 priority: p1
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-07-16
+last_updated: 2026-09-20
 protocols:
   - aws_json_1_1
 implementation:
@@ -10,6 +10,8 @@ implementation:
 integration_tests:
   - tests/integration/cognito
 capability_docs: docs/services/cognito.md
+operation_count_estimate: 70 tracked; 70 supported
+current_support_level: Full user-pool CRUD, users, groups, domains, tags, and every documented auth flow/challenge (USER_PASSWORD_AUTH, USER_SRP_AUTH, REFRESH_TOKEN_AUTH, CUSTOM_AUTH, USER_AUTH choice-based sign-in, device tracking, WebAuthn, TOTP MFA). UserPoolTier (LITE/ESSENTIALS/PLUS) gates SignInPolicy, ALLOW_USER_AUTH, and WebAuthn the same way AWS does. SRP and WebAuthn cryptographic proof verification, CUSTOM_AUTH Lambda trigger execution, and verification-code TTL/throttling are intentionally not emulated.
 operations:
   AdminCreateUser:
     status: fixed
@@ -1014,14 +1016,19 @@ operations:
         tests:
           - tests/integration/cloudformation/cognito_properties_test.go
         notes: Stores and returns AliasAttributes, DeviceConfiguration, AccountRecoverySetting, SmsConfiguration, SmsAuthenticationMessage, SmsVerificationMessage, EmailVerificationMessage, EmailVerificationSubject, and LambdaConfig (issue #536). LambdaConfig's PreSignUp, PostConfirmation, PreTokenGeneration, PostAuthentication, and CustomMessage are now invoked on the classic API (issue #1171); PreAuthentication, UserMigration, and the CUSTOM_AUTH challenge triggers remain partial — see intentionally_partial.
+      - name: LITE-tier SignInPolicy rejection
+        status: fixed
+        tests:
+          - tests/integration/cognito/cognito_user_auth_test.go
+        notes: "TestCreateUserPool_liteTierSignInPolicy confirms a LITE-tier pool's SignInPolicy is rejected with FeatureUnavailableInTierException (typed_logic.go:1495 calling validateTierForSignInPolicy, typed_logic.go:2707-2712), matching AWS's requirement that choice-based sign-in needs the Essentials plan or higher (issue #115)."
     evidence:
       - AWS UserPoolPolicyType docs include SignInPolicy and AWS SignInPolicyType docs define AllowedFirstAuthFactors.
       - AWS UserAttributeUpdateSettingsType docs define AttributesRequireVerificationBeforeUpdate as a CreateUserPool request/response setting.
       - AWS CreateUserPoolRequest docs include AliasAttributes, DeviceConfiguration, AccountRecoverySetting, SmsConfiguration, SmsAuthenticationMessage, SmsVerificationMessage, EmailVerificationMessage, EmailVerificationSubject, and LambdaConfig.
+      - AWS user pool feature plan docs state choice-based sign-in (SignInPolicy) requires the Essentials plan or higher.
     gaps:
-      - Essentials-tier restrictions are not reviewed.
       - AutoVerifiedAttributes and Schema are threaded onto the CreateUserPool wire call by the CloudFormation UserPool handler but the Cognito service does not yet store either.
-    next_action: Review app-tier restrictions.
+    next_action: Review AutoVerifiedAttributes/Schema persistence.
   UpdateUserPool:
     status: fixed
     aws_docs:
@@ -1057,13 +1064,18 @@ operations:
         tests:
           - tests/integration/cloudformation/cognito_properties_test.go
         notes: Neither is a member of UpdateUserPoolRequest on real Cognito, so the CloudFormation UserPool handler replaces the pool instead of reconciling it (issue #536).
+      - name: LITE-tier SignInPolicy rejection
+        status: not_started
+        tests: []
+        notes: "handler_pools.go:146-157 calls validateUserPoolTier and validateTierForSignInPolicy the same way CreateUserPoolTyped does (typed_logic.go:2686-2712), returning FeatureUnavailableInTierException for a LITE-tier pool's SignInPolicy update — but no test exercises this UpdateUserPool path yet. Tracked as issue #116, in progress on branch claude/compat-cognito-tests-tier-devices-filters-secrethash."
     evidence:
       - AWS UserPoolPolicyType docs include SignInPolicy and AWS SignInPolicyType docs define AllowedFirstAuthFactors.
       - AWS UserAttributeUpdateSettingsType docs define AttributesRequireVerificationBeforeUpdate as an UpdateUserPool request setting and DescribeUserPool response setting.
       - AWS UpdateUserPoolRequest docs include DeviceConfiguration, AccountRecoverySetting, SmsConfiguration, SmsAuthenticationMessage, SmsVerificationMessage, EmailVerificationMessage, EmailVerificationSubject, and LambdaConfig, and omit AliasAttributes and UsernameAttributes.
+      - AWS user pool feature plan docs state choice-based sign-in (SignInPolicy) requires the Essentials plan or higher.
     gaps:
-      - Essentials-tier restrictions are not reviewed.
-    next_action: Review app-tier restrictions.
+      - Essentials-tier SignInPolicy rejection is implemented but not yet covered by a dedicated compat test (issue #116).
+    next_action: Add a LITE-tier SignInPolicy rejection test for UpdateUserPool (issue #116).
   CreateUserPoolClient:
     status: fixed
     aws_docs:
@@ -1092,12 +1104,17 @@ operations:
         tests:
           - tests/integration/cloudformation/cognito_properties_test.go
         notes: Stores and returns PreventUserExistenceErrors, ReadAttributes, and WriteAttributes (issue #536).
+      - name: LITE-tier ALLOW_USER_AUTH rejection
+        status: fixed
+        tests:
+          - tests/integration/cognito/cognito_user_auth_test.go
+        notes: "TestCreateUserPoolClient_liteTierUserAuth confirms ALLOW_USER_AUTH on a LITE-tier pool is rejected with FeatureUnavailableInTierException (handler_clients.go:54 calling validateExplicitAuthFlowsForTier, typed_logic.go:2674-2683), matching AWS's requirement that choice-based authentication needs the Essentials plan or higher (issue #117)."
     evidence:
       - AWS CreateUserPoolClient docs include ExplicitAuthFlows in request and response and document default auth flows.
       - AWS CreateUserPoolClientRequest docs include PreventUserExistenceErrors, ReadAttributes, and WriteAttributes.
-    gaps:
-      - App-tier restrictions for ALLOW_USER_AUTH are not reviewed.
-    next_action: Review full app-client auth flow validation.
+      - AWS user pool feature plan docs state choice-based authentication (ALLOW_USER_AUTH) requires the Essentials plan or higher.
+    gaps: []
+    next_action: Include in broader app-client auth flow validation sweep.
   UpdateUserPoolClient:
     status: fixed
     aws_docs:
@@ -1121,12 +1138,17 @@ operations:
         tests:
           - tests/integration/cloudformation/cognito_properties_test.go
         notes: Updates PreventUserExistenceErrors, ReadAttributes, and WriteAttributes and returns them in UserPoolClient response (issue #536).
+      - name: LITE-tier ALLOW_USER_AUTH rejection
+        status: fixed
+        tests:
+          - tests/integration/cognito/cognito_user_auth_test.go
+        notes: "TestUpdateUserPoolClient_liteTierUserAuth confirms enabling ALLOW_USER_AUTH on a LITE-tier pool's client is rejected with FeatureUnavailableInTierException (handler_clients.go:291 calling validateExplicitAuthFlowsForTier), matching AWS's requirement that choice-based authentication needs the Essentials plan or higher (issue #118)."
     evidence:
       - AWS UpdateUserPoolClient docs include ExplicitAuthFlows in request and response and document default auth flows.
       - AWS UpdateUserPoolClientRequest docs include PreventUserExistenceErrors, ReadAttributes, and WriteAttributes.
-    gaps:
-      - App-tier restrictions for ALLOW_USER_AUTH are not reviewed.
-    next_action: Review full app-client auth flow validation.
+      - AWS user pool feature plan docs state choice-based authentication (ALLOW_USER_AUTH) requires the Essentials plan or higher.
+    gaps: []
+    next_action: Include in broader app-client auth flow validation sweep.
   SetUserPoolMfaConfig:
     status: fixed
     aws_docs:
@@ -1142,10 +1164,10 @@ operations:
         notes: Stores and returns WebAuthnConfiguration.RelyingPartyId/UserVerification for passkey sign-in.
     evidence:
       - AWS SetUserPoolMfaConfig docs define WebAuthnConfiguration with RelyingPartyId, UserVerification, and FactorConfiguration.
+      - "validateWebAuthnConfiguration (typed_logic.go:2776-2787) checks only the UserVerification and FactorConfiguration enum values; it performs no relying-party-ID/domain validation against the pool's configured domains."
     gaps:
-      - Email/SMS/software-token MFA config details in this operation are not fully reviewed.
-      - Exact WebAuthn configuration validation against public suffix/custom-domain constraints is intentionally partial.
-    next_action: Review complete MFA config validation and response shape.
+      - "Email/SMS/software-token MFA config details in this operation are not fully reviewed. Tracked as issue #119, in progress on branch claude/issue-119-cognito-mfa-config-shapes."
+    next_action: Review complete MFA config validation and response shape (issue #119).
   GetUserPoolMfaConfig:
     status: fixed
     aws_docs:
@@ -1161,8 +1183,8 @@ operations:
     evidence:
       - AWS GetUserPoolMfaConfig docs define WebAuthnConfiguration in the response.
     gaps:
-      - Email/SMS/software-token MFA config response details are not fully reviewed.
-    next_action: Review complete MFA config response shape.
+      - "Email/SMS/software-token MFA config response details are not fully reviewed. Tracked as issue #121, in progress on branch claude/issue-119-cognito-mfa-config-shapes."
+    next_action: Review complete MFA config response shape (issue #121).
   StartWebAuthnRegistration:
     status: fixed
     aws_docs:
@@ -1177,9 +1199,9 @@ operations:
         notes: Valid access tokens return CredentialCreationOptions with authenticatorSelection, challenge, pubKeyCredParams, rp, timeout, and user.
     evidence:
       - AWS StartWebAuthnRegistration docs define CredentialCreationOptions for signed-in users and require WebAuthn configuration.
-    gaps:
-      - Exact challenge expiry and all WebAuthn error variants are intentionally partial.
-    next_action: Review WebAuthn registration error parity.
+      - "The registration challenge is time-boxed: webAuthnChallengeTTL (user_auth_factors.go:13, 5 minutes) is set on the challenge in typed_logic.go:3025 and checked in CompleteWebAuthnRegistration (typed_logic.go:3053), returning WebAuthnChallengeNotFoundException past expiry — the mechanism was already present, contrary to the earlier gap wording; AWS's exact error taxonomy for expired/mismatched/replayed challenges is what remains unreproduced."
+    gaps: []
+    next_action: Include in broader WebAuthn error-parity sweep alongside CompleteWebAuthnRegistration.
   CompleteWebAuthnRegistration:
     status: fixed
     aws_docs:
@@ -1223,24 +1245,22 @@ findings:
     - Malformed persisted pool, client, or user records are isolated so they do not turn Cognito list/admin APIs into service-wide InternalError responses.
     - CreateUserPool/UpdateUserPool now store, validate, and return AliasAttributes, DeviceConfiguration, AccountRecoverySetting, SmsConfiguration, SmsAuthenticationMessage, SmsVerificationMessage, EmailVerificationMessage, EmailVerificationSubject, and LambdaConfig; the AWS::Cognito::UserPool CloudFormation handler threads all of them on Create and reconciles the mutable ones on Update, replacing the pool only for AliasAttributes/UsernameAttributes changes (issue #536).
     - CreateUserPoolClient/UpdateUserPoolClient now store and return PreventUserExistenceErrors, ReadAttributes, and WriteAttributes; the AWS::Cognito::UserPoolClient CloudFormation handler threads and reconciles them, and now has an Update handler at all (previously every template change replaced the client) (issue #536).
+    - "CreateUserPool/CreateUserPoolClient/UpdateUserPoolClient now reject a LITE-tier pool's SignInPolicy/ALLOW_USER_AUTH with FeatureUnavailableInTierException (typed_logic.go:2674-2721: validateExplicitAuthFlowsForTier, validateUserPoolTier, validateTierForSignInPolicy, validateTierForWebAuthn; wired in handler_pools.go:146-157 and handler_clients.go:54,291), matching AWS's requirement that choice-based sign-in and passkeys need the Essentials plan or higher, confirmed by TestCreateUserPool_liteTierSignInPolicy/TestCreateUserPoolClient_liteTierUserAuth/TestUpdateUserPoolClient_liteTierUserAuth. UpdateUserPool enforces the identical SignInPolicy gate but lacks a dedicated test (issue #116, tracked separately). Closes issues #115, #117, #118, #128 (review app-tier restrictions for ALLOW_USER_AUTH), and #129 (review app-tier restrictions for SignInPolicy and ALLOW_USER_AUTH)."
+    - "Issue #133 (review all challenge flows, including MFA and NEW_PASSWORD_REQUIRED, against AWS docs) is subsumed by the more specific SRP/WebAuthn verification-boundary findings below (#124, #125, #127) and by the existing NEW_PASSWORD_REQUIRED/SOFTWARE_TOKEN_MFA/challenge-flow test coverage in cognito_user_auth_test.go; closed as-is with no separate action needed."
   remaining_gaps:
-    - SRP challenge parameters and verifier response shape are emulated, but full cryptographic SRP proof validation is intentionally partial.
-    - Device SRP challenge parameters and verifier response shape are emulated, but full cryptographic device SRP proof validation is intentionally partial.
-    - Review exact device validation errors, user ListDevices pagination edge cases, and opt-in confirmation behavior.
-    - WebAuthn challenge and registration shapes are emulated, but attestation/assertion cryptographic validation and exact origin/RP mismatch errors are intentionally partial.
-    - Review app-tier restrictions for ALLOW_USER_AUTH.
-    - Review app-tier restrictions for SignInPolicy and ALLOW_USER_AUTH.
-    - Review exact verification-code TTL, throttling, delivery failures, and Lambda ClientMetadata behavior.
-    - Review exact ListUsers invalid-filter validation parity.
-    - Review SECRET_HASH expectations when username aliases are used.
-    - Review all challenge flows, including MFA and NEW_PASSWORD_REQUIRED, against AWS docs.
-    - Review every admin user operation that accepts Username for validation, errors, and response shape.
+    - "Review exact device validation errors, user ListDevices pagination edge cases, and opt-in confirmation behavior. Tracked as issue #126, in progress on branch claude/compat-cognito-tests-tier-devices-filters-secrethash."
+    - "Review exact ListUsers invalid-filter validation parity. Tracked as issue #131, in progress on branch claude/compat-cognito-tests-tier-devices-filters-secrethash."
+    - "Review SECRET_HASH expectations when username aliases are used. Tracked as issue #132, in progress on branch claude/compat-cognito-tests-tier-devices-filters-secrethash."
+    - "Review every admin user operation that accepts Username for validation, errors, and response shape. Tracked as issue #134, in progress on branch claude/compat-cognito-tests-tier-devices-filters-secrethash."
+    - "Essentials-tier SignInPolicy rejection for UpdateUserPool is implemented (handler_pools.go:146-157) but not yet covered by a dedicated compat test. Tracked as issue #116, in progress on branch claude/compat-cognito-tests-tier-devices-filters-secrethash."
+    - "Email/SMS/software-token MFA config details for SetUserPoolMfaConfig and GetUserPoolMfaConfig are not fully reviewed. Tracked as issues #119 and #121, in progress on branch claude/issue-119-cognito-mfa-config-shapes."
     - AutoVerifiedAttributes and Schema are threaded onto the CreateUserPool wire call by the CloudFormation UserPool handler (they always were) but the Cognito service itself does not yet store either, so both still round-trip as dropped.
   intentionally_partial:
-    - SRP proof validation is not cryptographically verified; verifier responses are shape-checked and complete authentication for SDK-compatible local testing.
-    - Device SRP proof validation is not cryptographically verified; DEVICE_PASSWORD_VERIFIER responses are shape-checked and complete authentication for SDK-compatible local testing.
+    - SRP proof validation is not cryptographically verified; verifier responses are shape-checked and complete authentication for SDK-compatible local testing (typed_logic.go:1249-1250 completeSRPVerifierChallengeTyped checks only that PASSWORD_CLAIM_SIGNATURE/PASSWORD_CLAIM_SECRET_BLOCK/TIMESTAMP are present; issue #124).
+    - Device SRP proof validation is not cryptographically verified; DEVICE_PASSWORD_VERIFIER responses are shape-checked and complete authentication for SDK-compatible local testing (device_auth.go:99-100 completeDevicePasswordVerifierTyped checks only that the same claim fields are present; issue #125).
     - CUSTOM_AUTH Lambda Define/Create/Verify triggers, challenge answer verification, and repeated custom-challenge loops are not executed; Overcast emits AWS-shaped challenge/session responses and accepts ANSWER for SDK-compatible local testing.
-    - WebAuthn attestation/assertion signatures, origin validation, and relying-party mismatch validation are not cryptographically verified; credential metadata and challenge shapes are emulated for SDK-compatible local testing.
+    - "WebAuthn attestation/assertion signatures, origin validation, and relying-party mismatch validation are not cryptographically verified; credential metadata and challenge shapes are emulated for SDK-compatible local testing (issue #127). SetUserPoolMfaConfig's validateWebAuthnConfiguration (typed_logic.go:2776-2787) checks only the UserVerification/FactorConfiguration enum values and performs no relying-party-ID/domain validation against public suffix or custom-domain constraints (issue #120). StartWebAuthnRegistration's registration challenge is time-boxed (webAuthnChallengeTTL, user_auth_factors.go:13, 5 minutes) and checked by CompleteWebAuthnRegistration, but AWS's exact error taxonomy for expired, mismatched, or replayed challenges is not reproduced (issue #122); RespondToAuthChallenge/AdminRespondToAuthChallenge's WEB_AUTHN completion checks only that the credential ID is a known registered credential (completeWebAuthnChallengeTyped, typed_logic.go:1319-1337), not the challenge nonce, origin, or assertion signature."
+    - "Verification-code TTL, throttling, and delivery-failure behavior (GetUserAttributeVerificationCode, ForgotPassword, ResendConfirmationCode, and other code-issuing operations) are intentionally not emulated; a code stays valid until consumed or replaced (issue #130)."
     - LambdaConfig is stored by CreateUserPool/UpdateUserPool and returned by DescribeUserPool so a CDK pool's triggers round-trip visibly. As of issue #1171, PreSignUp, PostConfirmation, PreTokenGeneration, PostAuthentication, and CustomMessage are invoked by SignUp/AdminCreateUser/ConfirmSignUp/AdminConfirmSignUp/ConfirmForgotPassword/ResendConfirmationCode/ForgotPassword/InitiateAuth/AdminInitiateAuth/RespondToAuthChallenge/AdminRespondToAuthChallenge on the classic X-Amz-Target API. Still not invoked: PreAuthentication and UserMigration (not yet wired), the CUSTOM_AUTH challenge triggers DefineAuthChallenge/CreateAuthChallenge/VerifyAuthChallengeResponse (tracked separately by #88/#94/#101), PreTokenGeneration's V2_0/V3_0 access-token-customization event versions, CustomMessage for UpdateUserAttribute/VerifyUserAttribute/Authentication (MFA), and every trigger on the Smithy RPC v2 duplicate dispatch path (typed_logic.go) other than PreTokenGeneration, which that path gets for free because token issuance funnels through one shared function.
 verification:
   commands:
@@ -1250,10 +1270,12 @@ verification:
     - go vet ./...
 handoff:
   start_with:
-    - Exact device validation errors, user ListDevices pagination edge cases, and opt-in confirmation behavior.
-    - App-tier restrictions for ALLOW_USER_AUTH.
-    - App-tier restrictions for SignInPolicy and ALLOW_USER_AUTH.
-    - Exact verification-code TTL, throttling, delivery failures, and Lambda ClientMetadata behavior.
+    - Exact device validation errors, user ListDevices pagination edge cases, and opt-in confirmation behavior (issue #126).
+    - Exact ListUsers invalid-filter validation parity (issue #131).
+    - SECRET_HASH expectations when username aliases are used (issue #132).
+    - Every admin user operation that accepts Username, for validation, errors, and response shape (issue #134).
+    - A dedicated LITE-tier SignInPolicy rejection test for UpdateUserPool (issue #116).
+    - Email/SMS/software-token MFA config details for SetUserPoolMfaConfig/GetUserPoolMfaConfig (issues #119, #121).
   do_not_redo:
     - Username-attribute email lookup fix for AdminGetUser.
     - Username-attribute email lookup fix for AdminSetUserPassword.
@@ -1269,5 +1291,7 @@ handoff:
     - USER_AUTH unavailable preferred challenge fallback to SELECT_CHALLENGE.
     - SignInPolicy.AllowedFirstAuthFactors storage and PASSWORD gating for USER_AUTH.
     - ALLOW_USER_AUTH app-client enforcement for USER_AUTH.
+    - LITE-tier FeatureUnavailableInTierException rejection of SignInPolicy (CreateUserPool/UpdateUserPool) and ALLOW_USER_AUTH (CreateUserPoolClient/UpdateUserPoolClient).
+    - Cryptographic SRP proof and WebAuthn attestation/assertion verification are intentionally not implemented; do not add them without discussing the tradeoff first.
   commands:
     - go test -count=1 ./internal/services/cognito/... ./tests/integration/cognito/...

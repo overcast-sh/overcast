@@ -74,6 +74,17 @@ An API Gateway authorizer or a JWT library pointed at those paths validates a
 token exactly as it would against AWS. Pool IDs keep AWS's
 `{region}_{8-char-hex}` shape.
 
+## Feature plans
+
+Real Cognito gates newer authentication features behind a user pool's
+`UserPoolTier` (`LITE`, `ESSENTIALS`, or `PLUS`); a pool with no tier set
+behaves as `ESSENTIALS`. Overcast enforces the same gate on `LITE`-tier
+pools, rejecting with `FeatureUnavailableInTierException`: a `SignInPolicy`
+on `CreateUserPool`/`UpdateUserPool`, `ALLOW_USER_AUTH` on
+`CreateUserPoolClient`/`UpdateUserPoolClient`, and a `WebAuthnConfiguration`
+on `SetUserPoolMfaConfig` — matching AWS's requirement that choice-based
+sign-in and passkeys need the Essentials plan or higher.
+
 ## Managed login
 
 A browser-usable hosted UI is served under
@@ -91,6 +102,7 @@ AWS's hosted-UI URLs.
 | Password storage     | Never retrievable                               | Bcrypt at minimum cost, and an emulator route returns the plaintext |
 | Hosted-UI URL        | `{domain}.auth.{region}.amazoncognito.com`      | A path under the emulator's own origin                              |
 | CUSTOM_AUTH triggers | `DefineAuthChallenge` and friends run           | Not invoked — the flow works, the triggers do not                   |
+| SRP proofs           | Cryptographically verified zero-knowledge proof | Accepted once the claim fields are present; any well-formed proof succeeds |
 
 The full list, including which trigger fires on which call, is in
 [Limitations](./cognito/limitations.md).

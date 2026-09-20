@@ -2572,7 +2572,7 @@
           "operation": "CreateUserPool",
           "category": "User Pool operations",
           "status": "✅ Supported",
-          "notes": "Returns Id and Arn; Id format {region}_{8-char-hex}; accepts SignInPolicy, email templates, UserAttributeUpdateSettings, DeviceConfiguration, AliasAttributes, AccountRecoverySetting, SmsConfiguration, SmsAuthenticationMessage, SmsVerificationMessage, EmailVerificationMessage, EmailVerificationSubject, and LambdaConfig; LambdaConfig's PreSignUp, PostConfirmation, PreTokenGeneration, PostAuthentication, and CustomMessage are invoked on the classic X-Amz-Target API (issue #1171); PreAuthentication, UserMigration, the CUSTOM_AUTH challenge triggers (#88/#94/#101), and the Smithy RPC v2 duplicate dispatch path are not"
+          "notes": "Returns Id and Arn; Id format {region}_{8-char-hex}; accepts SignInPolicy, email templates, UserAttributeUpdateSettings, DeviceConfiguration, AliasAttributes, AccountRecoverySetting, SmsConfiguration, SmsAuthenticationMessage, SmsVerificationMessage, EmailVerificationMessage, EmailVerificationSubject, and LambdaConfig; LambdaConfig's PreSignUp, PostConfirmation, PreTokenGeneration, PostAuthentication, and CustomMessage are invoked on the classic X-Amz-Target API (issue #1171); PreAuthentication, UserMigration, the CUSTOM_AUTH challenge triggers (#88/#94/#101), and the Smithy RPC v2 duplicate dispatch path are not; a LITE-tier UserPoolTier rejects a SignInPolicy with FeatureUnavailableInTierException, matching AWS's Essentials-tier gate on choice-based sign-in"
         },
         {
           "operation": "DescribeUserPool",
@@ -2590,7 +2590,7 @@
           "operation": "UpdateUserPool",
           "category": "User Pool operations",
           "status": "✅ Supported",
-          "notes": "Updates SignInPolicy, VerificationMessageTemplate, AdminCreateUserConfig, EmailConfiguration, UserAttributeUpdateSettings, DeviceConfiguration, AccountRecoverySetting, SmsConfiguration, SmsAuthenticationMessage, SmsVerificationMessage, EmailVerificationMessage, EmailVerificationSubject, and LambdaConfig; the CloudFormation UserPool handler treats an AliasAttributes/UsernameAttributes change as requiring replacement, matching real Cognito's UpdateUserPoolRequest (neither is a member there)"
+          "notes": "Updates SignInPolicy, VerificationMessageTemplate, AdminCreateUserConfig, EmailConfiguration, UserAttributeUpdateSettings, DeviceConfiguration, AccountRecoverySetting, SmsConfiguration, SmsAuthenticationMessage, SmsVerificationMessage, EmailVerificationMessage, EmailVerificationSubject, and LambdaConfig; the CloudFormation UserPool handler treats an AliasAttributes/UsernameAttributes change as requiring replacement, matching real Cognito's UpdateUserPoolRequest (neither is a member there); rejects an invalid UserPoolTier value, and rejects a LITE-tier pool's SignInPolicy update with FeatureUnavailableInTierException"
         },
         {
           "operation": "ListUserPools",
@@ -2614,7 +2614,7 @@
           "operation": "CreateUserPoolClient",
           "category": "User Pool Client operations",
           "status": "✅ Supported",
-          "notes": "Returns ClientId (26-char hex); accepts and validates ExplicitAuthFlows, AccessTokenValidity, IdTokenValidity, RefreshTokenValidity, TokenValidityUnits, PreventUserExistenceErrors, ReadAttributes, WriteAttributes"
+          "notes": "Returns ClientId (26-char hex); accepts and validates ExplicitAuthFlows, AccessTokenValidity, IdTokenValidity, RefreshTokenValidity, TokenValidityUnits, PreventUserExistenceErrors, ReadAttributes, WriteAttributes; ALLOW_USER_AUTH on a LITE-tier pool returns FeatureUnavailableInTierException, matching AWS's Essentials-tier gate on choice-based sign-in"
         },
         {
           "operation": "DescribeUserPoolClient",
@@ -2632,7 +2632,7 @@
           "operation": "UpdateUserPoolClient",
           "category": "User Pool Client operations",
           "status": "✅ Supported",
-          "notes": "Updates client name, validates ExplicitAuthFlows, token validity, PreventUserExistenceErrors, ReadAttributes, WriteAttributes"
+          "notes": "Updates client name, validates ExplicitAuthFlows, token validity, PreventUserExistenceErrors, ReadAttributes, WriteAttributes; ALLOW_USER_AUTH on a LITE-tier pool returns FeatureUnavailableInTierException"
         },
         {
           "operation": "ListUserPoolClients",
@@ -2722,25 +2722,25 @@
           "operation": "InitiateAuth",
           "category": "Auth / Token operations",
           "status": "✅ Supported",
-          "notes": "USER_PASSWORD_AUTH + USER_SRP_AUTH + REFRESH_TOKEN_AUTH + CUSTOM_AUTH; USER_AUTH with ConfirmSignUp Session, SELECT_CHALLENGE/PASSWORD/PASSWORD_SRP/WEB_AUTHN/EMAIL_OTP/SMS_OTP, or preferred PASSWORD/WEB_AUTHN/EMAIL_OTP/SMS_OTP; returns NEW_PASSWORD_REQUIRED, SOFTWARE_TOKEN_MFA, or DEVICE_SRP_AUTH; a completed authentication invokes PostAuthentication_Authentication then PreTokenGeneration (TokenGeneration_Authentication/_RefreshTokens/_NewPasswordChallenge/_AuthenticateDevice as appropriate), each able to fail the call (issue #1171)"
+          "notes": "USER_PASSWORD_AUTH + USER_SRP_AUTH + REFRESH_TOKEN_AUTH + CUSTOM_AUTH; USER_AUTH with ConfirmSignUp Session, SELECT_CHALLENGE/PASSWORD/PASSWORD_SRP/WEB_AUTHN/EMAIL_OTP/SMS_OTP, or preferred PASSWORD/WEB_AUTHN/EMAIL_OTP/SMS_OTP; returns NEW_PASSWORD_REQUIRED, SOFTWARE_TOKEN_MFA, or DEVICE_SRP_AUTH; a completed authentication invokes PostAuthentication_Authentication then PreTokenGeneration (TokenGeneration_Authentication/_RefreshTokens/_NewPasswordChallenge/_AuthenticateDevice as appropriate), each able to fail the call (issue #1171); USER_SRP_AUTH/PASSWORD_SRP proofs are accepted once the SRP claim fields are present and are not cryptographically verified"
         },
         {
           "operation": "AdminInitiateAuth",
           "category": "Auth / Token operations",
           "status": "✅ Supported",
-          "notes": "USER_PASSWORD_AUTH + USER_SRP_AUTH + REFRESH_TOKEN_AUTH + CUSTOM_AUTH with UserPoolId; USER_AUTH with ConfirmSignUp Session, SELECT_CHALLENGE/PASSWORD/PASSWORD_SRP/WEB_AUTHN/EMAIL_OTP/SMS_OTP, or preferred PASSWORD/WEB_AUTHN/EMAIL_OTP/SMS_OTP; same PostAuthentication/PreTokenGeneration trigger invocation as InitiateAuth (issue #1171)"
+          "notes": "USER_PASSWORD_AUTH + USER_SRP_AUTH + REFRESH_TOKEN_AUTH + CUSTOM_AUTH with UserPoolId; USER_AUTH with ConfirmSignUp Session, SELECT_CHALLENGE/PASSWORD/PASSWORD_SRP/WEB_AUTHN/EMAIL_OTP/SMS_OTP, or preferred PASSWORD/WEB_AUTHN/EMAIL_OTP/SMS_OTP; same PostAuthentication/PreTokenGeneration trigger invocation as InitiateAuth (issue #1171); same SRP verification boundary as InitiateAuth — proofs are accepted once the claim fields are present, not cryptographically verified"
         },
         {
           "operation": "RespondToAuthChallenge",
           "category": "Auth / Token operations",
           "status": "✅ Supported",
-          "notes": "SELECT_CHALLENGE/PASSWORD/PASSWORD_SRP/WEB_AUTHN/EMAIL_OTP/SMS_OTP, PASSWORD, PASSWORD_VERIFIER, CUSTOM_CHALLENGE, DEVICE_SRP_AUTH, DEVICE_PASSWORD_VERIFIER, WEB_AUTHN, EMAIL_OTP, SMS_OTP, NEW_PASSWORD_REQUIRED, and SOFTWARE_TOKEN_MFA challenges; a challenge completion that issues tokens invokes PostAuthentication_Authentication (skipped for NEW_PASSWORD_REQUIRED) then PreTokenGeneration, each able to fail the call (issue #1171)"
+          "notes": "SELECT_CHALLENGE/PASSWORD/PASSWORD_SRP/WEB_AUTHN/EMAIL_OTP/SMS_OTP, PASSWORD, PASSWORD_VERIFIER, CUSTOM_CHALLENGE, DEVICE_SRP_AUTH, DEVICE_PASSWORD_VERIFIER, WEB_AUTHN, EMAIL_OTP, SMS_OTP, NEW_PASSWORD_REQUIRED, and SOFTWARE_TOKEN_MFA challenges; a challenge completion that issues tokens invokes PostAuthentication_Authentication (skipped for NEW_PASSWORD_REQUIRED) then PreTokenGeneration, each able to fail the call (issue #1171); PASSWORD_VERIFIER/DEVICE_PASSWORD_VERIFIER accept the SRP claim fields without cryptographic proof verification, and WEB_AUTHN accepts the credential response without cryptographic assertion signature verification"
         },
         {
           "operation": "AdminRespondToAuthChallenge",
           "category": "Auth / Token operations",
           "status": "✅ Supported",
-          "notes": "Same as above with admin credentials, including the same trigger invocation (issue #1171)"
+          "notes": "Same as above with admin credentials, including the same trigger invocation (issue #1171); same SRP/WebAuthn verification boundary as RespondToAuthChallenge"
         },
         {
           "operation": "ConfirmDevice",
@@ -2872,7 +2872,7 @@
           "operation": "StartWebAuthnRegistration",
           "category": "Auth / Token operations",
           "status": "✅ Supported",
-          "notes": "Returns passkey CredentialCreationOptions for the signed-in user"
+          "notes": "Returns passkey CredentialCreationOptions for the signed-in user; the registration challenge expires after 5 minutes (WebAuthnChallengeNotFoundException from CompleteWebAuthnRegistration), but AWS's exact WebAuthn error taxonomy for expired, mismatched, or replayed challenges is not reproduced"
         },
         {
           "operation": "CompleteWebAuthnRegistration",

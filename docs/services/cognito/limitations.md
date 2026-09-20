@@ -74,6 +74,20 @@ These have no AWS counterpart and exist for local development:
   (`cognito-idp`) are.
 - **Passwords** are bcrypt-hashed at the library's minimum cost, which is not a
   production hashing configuration.
+- **SRP and device SRP proofs** are accepted once the claimed fields
+  (`PASSWORD_CLAIM_SIGNATURE`, `PASSWORD_CLAIM_SECRET_BLOCK`, `TIMESTAMP` for
+  `PASSWORD_VERIFIER`/`DEVICE_PASSWORD_VERIFIER`) are present; the proof
+  itself is not cryptographically verified, so any well-formed claim
+  succeeds.
+- **WebAuthn** registration and sign-in accept AWS-shaped requests without
+  full cryptographic verification: relying-party/domain checks, and
+  attestation/assertion signature validation are not performed, so a
+  well-formed credential response succeeds. The registration challenge does
+  expire after 5 minutes, but the sign-in challenge is never validated
+  against the client's response at all.
+- **Verification-code delivery** (sign-up, forgot-password, and attribute
+  verification codes) has no emulated TTL, throttling, or delivery-failure
+  behavior — a code stays valid until consumed or replaced.
 - **`UpdateUserPoolDomain`** accepts an SSL certificate update and does nothing
   with it.
 - **`DescribeUserPoolDomain`** returns an empty `DomainDescription` when the
