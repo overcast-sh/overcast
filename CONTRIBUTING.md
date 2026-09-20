@@ -1308,7 +1308,8 @@ manually from GitHub Actions. It also runs when a push to `main` changes the
 model inputs while a refresh PR is open, so that PR is regenerated on the new
 `main` instead of sitting conflicted until the next weekly run; a push never
 opens a PR. When a new revision exists, it regenerates the
-manifest, runs the model and routing gates, and creates or updates one PR from
+manifest and the compat model derived from it, runs the model and routing
+gates, and creates or updates one PR from
 `automation/aws-api-models`. It resets and force-with-lease updates only that
 dedicated branch and never merges the PR.
 
