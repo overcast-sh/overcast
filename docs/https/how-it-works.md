@@ -41,16 +41,48 @@ Re-minting a leaf never touches the CA, so the trust-store install stays valid.
 
 ## Which names the certificate covers
 
-The leaf covers `localhost`, `127.0.0.1` and `::1`, then for each wildcard DNS
-domain (`localhost.overcast.sh`, `localhost.localstack.cloud`,
+The leaf minted at startup covers `localhost`, `127.0.0.1` and `::1`, then for
+each wildcard DNS domain (`localhost.overcast.sh`, `localhost.localstack.cloud`,
 `localhost.floci.io`) the apex, `*.<domain>` and `*.s3.<domain>` for S3
 virtual-hosted buckets, plus `OVERCAST_HOSTNAME` and any
 `OVERCAST_SPLIT_HORIZON_HOSTS`.
 
-> [!WARNING]
-> TLS wildcards match exactly one label, so a host-routed name with a variable
-> middle (`{id}.execute-api.{region}.…`) is not covered. Use path-style
-> addressing for those over TLS.
+That list stops one label short of every host-routed invoke URL, because a TLS
+wildcard matches **exactly one label**: `*.localhost.overcast.sh` covers
+`mybucket.localhost.overcast.sh` and nothing deeper, while an API Gateway
+endpoint is `{id}.execute-api.{region}.localhost.overcast.sh`. The middle is a
+cross product of every host-route label with every region, so no fixed list
+covers it.
+
+Overcast mints for those at handshake time instead. The daemon keeps the CA
+open, and when a client presents a name it does not already cover — say
+`abc123.execute-api.us-east-1.localhost.overcast.sh` — it signs a leaf for that
+name's wildcard parent (`*.execute-api.us-east-1.localhost.overcast.sh`) and
+serves it, in about a millisecond. One leaf then covers every API in that
+region, and the next request for it is a cache hit. Host-routed addressing over
+TLS therefore needs nothing special:
+
+| Shape | Covered by |
+| --- | --- |
+| `localhost.overcast.sh` | the startup leaf |
+| `{bucket}.localhost.overcast.sh`, `{bucket}.s3.localhost.overcast.sh` | the startup leaf |
+| `{id}.execute-api.{region}.<domain>` (API Gateway) | minted on first handshake |
+| `{id}.lambda-url.{region}.<domain>` (function URLs) | minted on first handshake |
+| `{id}.appsync-api.{region}.<domain>` (AppSync) | minted on first handshake |
+| `{id}.cloudfront.<domain>` (CloudFront) | minted on first handshake |
+| `{name}-{id}.{region}.elb.<domain>` (load balancers) | minted on first handshake |
+| `{dotted.bucket}.s3.<domain>` | minted on first handshake |
+
+Minting is restricted to names **below a domain Overcast advertises** — the
+wildcard DNS domains, `OVERCAST_HOSTNAME`, and anything in
+`OVERCAST_SPLIT_HORIZON_HOSTS`. Any other name is served the startup leaf and
+fails the client's own name check, which is what a server should do for a name
+it does not serve.
+
+> [!NOTE]
+> Handshake-minted leaves live in memory only — `cert.pem` on disk stays the
+> startup leaf. They cost nothing to rebuild, and it keeps a read-only CA mount
+> (see [Overcast in Docker over HTTPS](./docker.md)) working unchanged.
 
 ## Offline
 
@@ -116,6 +148,9 @@ page cannot make your OS pop certificate prompts.
 
 ## Limitations
 
+- **Handshake minting is an auto-mode feature.** With your own certificate
+  (`OVERCAST_TLS_CERT`/`OVERCAST_TLS_KEY`) there is no CA to mint from, so
+  host-routed names work only if that certificate's own SANs cover them.
 - `overcast serve --bridge` (the mDNS port-80 proxy) is skipped while TLS is
   enabled — it proxies plain HTTP.
 - The web dev server (`pnpm run dev` in `web/`) has its own mkcert-based HTTPS
