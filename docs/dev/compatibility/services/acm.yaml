@@ -7,8 +7,8 @@ protocols: [aws_json_1_1, aws_json_1_0, rpcv2_cbor]
 implementation: [internal/services/acm]
 integration_tests: [tests/integration/acm]
 capability_docs: docs/services/acm.md
-operation_count_estimate: 11 tracked; 10 supported, 1 partial (ListCertificateDomainValidations)
-current_support_level: Minimal certificate lifecycle; certificates immediately ISSUED. Both tag-operation spellings share one tag set, round-trip, validate AWS's reserved-prefix/length/merged-set-limit constraints, and are covered by integration tests (#814, #1275, #1739).
+operation_count_estimate: 11 tracked; 9 supported, 2 partial (ListCertificates, ListCertificateDomainValidations)
+current_support_level: "Minimal certificate lifecycle; certificates immediately ISSUED. DomainName, SANs and ValidationMethod are validated against the modeled constraints, DescribeCertificate returns DomainValidationOptions (with a stable synthetic CNAME for DNS), and ListCertificates filters on CertificateStatuses (#1994). Both tag-operation spellings share one tag set, round-trip, validate AWS's reserved-prefix/length/merged-set-limit constraints, and are covered by integration tests (#814, #1275, #1739)."
 operations:
   TagResource:
     status: fixed
@@ -16,7 +16,7 @@ operations:
     aws_docs:
       - https://docs.aws.amazon.com/acm/latest/APIReference/API_TagResource.html
     implementation:
-      - internal/services/acm/typed_logic.go:366 (tagResourceTyped)
+      - internal/services/acm/typed_logic.go:476 (tagResourceTyped)
     tests:
       present:
         - tests/integration/acm/acm_tagging_test.go::TestACMTagResource_roundTrips
@@ -44,7 +44,7 @@ operations:
     aws_docs:
       - https://docs.aws.amazon.com/acm/latest/APIReference/API_UntagResource.html
     implementation:
-      - internal/services/acm/typed_logic.go:374 (untagResourceTyped)
+      - internal/services/acm/typed_logic.go:484 (untagResourceTyped)
     tests:
       present:
         - tests/integration/acm/acm_tagging_test.go::TestACMUntagResource_removesNamedKeysOnly
@@ -60,7 +60,7 @@ operations:
     aws_docs:
       - https://docs.aws.amazon.com/acm/latest/APIReference/API_ListTagsForResource.html
     implementation:
-      - internal/services/acm/typed_logic.go:388 (listTagsForResourceTyped)
+      - internal/services/acm/typed_logic.go:498 (listTagsForResourceTyped)
     tests:
       present:
         - tests/integration/acm/acm_tagging_test.go::TestACMDeleteCertificate_dropsItsTags
@@ -76,11 +76,21 @@ operations:
     aws_docs:
       - https://docs.aws.amazon.com/acm/latest/APIReference/API_RequestCertificate.html
     implementation:
-      - internal/services/acm/typed_logic.go:136 (requestCertificateTyped)
+      - internal/services/acm/typed_logic.go:150 (requestCertificateTyped)
+      - internal/services/acm/validation.go (DomainNameString length/pattern and the ValidationMethod enum)
     tests:
       present:
         - tests/integration/acm/acm_tagging_test.go::TestACMRequestCertificate_appliesTagsAtCreation
         - tests/integration/acm/acm_tagging_test.go::TestACMRequestCertificate_reservedPrefixRejected
+        - tests/integration/acm/acm_domain_validation_test.go::TestRequestCertificate_malformedDomainName
+        - tests/integration/acm/acm_domain_validation_test.go::TestRequestCertificate_wellFormedDomainNamesAccepted
+        - tests/integration/acm/acm_domain_validation_test.go::TestRequestCertificate_domainNameTooLong
+        - tests/integration/acm/acm_domain_validation_test.go::TestRequestCertificate_malformedSubjectAlternativeName
+        - tests/integration/acm/acm_domain_validation_test.go::TestRequestCertificate_rejectedDomainStrandsNothing
+        - tests/integration/acm/acm_domain_validation_test.go::TestRequestCertificate_unknownValidationMethod
+        - internal/services/acm/validation_test.go::TestDomainNamePattern_matchesTheModelledLanguage
+        - internal/services/acm/validation_test.go::TestValidateDomainName_namesTheMemberAndTheConstraint
+        - internal/services/acm/validation_test.go::TestValidateDomainName_lengthBeforePattern
     scenario_matrix:
       - scenario: Inline Tags supplied on RequestCertificate are applied at creation.
         status: fixed
@@ -88,15 +98,114 @@ operations:
       - scenario: "Inline Tags with a reserved aws: prefix reject the whole create — no certificate is stranded."
         status: fixed
         evidence: TestACMRequestCertificate_reservedPrefixRejected asserts the 400 and that ListCertificates shows no certificate for the rejected domain.
+      - scenario: A DomainName outside DomainNameString's pattern (underscore, leading/trailing hyphen, empty or over-long label, misplaced wildcard, trailing dot).
+        status: fixed
+        evidence: "TestRequestCertificate_malformedDomainName covers 12 shapes; each answers 400 ValidationException with AWS's constraint wording, echoing the model pattern verbatim."
+      - scenario: A DomainName of 254 characters that is otherwise well formed.
+        status: fixed
+        evidence: TestRequestCertificate_domainNameTooLong reports the length trait (253) rather than the pattern.
+      - scenario: A malformed SubjectAlternativeNames entry.
+        status: fixed
+        evidence: "TestRequestCertificate_malformedSubjectAlternativeName — the message names 'subjectAlternativeNames.2.member', the entry that failed."
+      - scenario: A rejected DomainName leaves no certificate behind.
+        status: fixed
+        evidence: TestRequestCertificate_rejectedDomainStrandsNothing — validation runs before the store write, the same ordering the inline-tag check keeps.
+      - scenario: A ValidationMethod outside the EMAIL/DNS/HTTP enum.
+        status: fixed
+        evidence: TestRequestCertificate_unknownValidationMethod.
+      - scenario: A wildcard certificate, a 63-character label and a deep subdomain stay legal.
+        status: fixed
+        evidence: "TestRequestCertificate_wellFormedDomainNamesAccepted, plus the unit table TestDomainNamePattern_matchesTheModelledLanguage, which pins the RE2 rewrite of a pattern Go cannot compile as written (it uses negative lookaheads)."
     findings:
       - Fixed — inline-tag validation and creation-rollback-on-rejection now match the shared tag validator (#814, #1275).
+      - >-
+        Fixed (#1994) — DomainName and every SAN are validated against
+        DomainNameString's length and pattern traits, and ValidationMethod
+        against its enum. The error is ValidationException, the front-end
+        constraint validator's answer, in AWS's "1 validation error detected:
+        Value '<v>' at '<member>' failed to satisfy constraint: ..." wording.
+        ACM's model does not list ValidationException among RequestCertificate's
+        errors (it lists it on nearly every other operation), but that list
+        covers what the service raises after dispatch, not what the framework
+        raises before it — ThrottlingException is missing from the same list.
+        The modeled InvalidParameterException stays where the service itself
+        raises it, on tag violations.
+  DescribeCertificate:
+    status: fixed
+    priority: p2
+    aws_docs:
+      - https://docs.aws.amazon.com/acm/latest/APIReference/API_DescribeCertificate.html
+      - https://docs.aws.amazon.com/acm/latest/APIReference/API_DomainValidation.html
+    implementation:
+      - internal/services/acm/typed_logic.go:224 (describeCertificateTyped), :349 (domainValidations)
+      - internal/services/acm/service.go (Certificate.DomainValidationOptions, DomainValidation, ResourceRecord)
+    tests:
+      present:
+        - tests/integration/acm/acm_domain_validation_test.go::TestDescribeCertificate_dnsValidationOptions
+        - tests/integration/acm/acm_domain_validation_test.go::TestDescribeCertificate_emailValidationOptions
+    scenario_matrix:
+      - scenario: DNS validation reports one entry per DomainName/SAN with a CNAME to publish.
+        status: fixed
+        evidence: "TestDescribeCertificate_dnsValidationOptions — _<token>.<domain>. CNAME _<token>.acm-validations.aws., one per domain, distinct per domain and identical across repeated DescribeCertificate calls."
+      - scenario: Email validation (and an unset ValidationMethod, which ACM defaults to EMAIL) reports ValidationDomain and no CNAME.
+        status: fixed
+        evidence: TestDescribeCertificate_emailValidationOptions.
+      - scenario: ValidationStatus agrees with the certificate's own Status.
+        status: fixed
+        evidence: Every entry is SUCCESS because the certificate is ISSUED on return; a PENDING_VALIDATION entry on an ISSUED certificate is a state AWS never reports.
+    findings:
+      - >-
+        Fixed (#1994) — CertificateDetail.DomainValidationOptions is populated
+        at RequestCertificate time and stored with the certificate, which is
+        both what AWS's own documentation describes ("as a result of the
+        RequestCertificate request") and what makes the record stable across
+        calls and restarts. The token is a hash of the ARN and the domain, not
+        random and not time-based.
+      - >-
+        The DNS record is the one piece of challenge data Overcast does
+        synthesize, because callers act on it: aws_acm_certificate_validation,
+        the CDK's DNS-validated certificate and every publish-then-wait script
+        read ResourceRecord. ValidationEmails stays absent — nothing reads a
+        list of addresses no mail was sent to.
+  ListCertificates:
+    status: fixed
+    priority: p3
+    aws_docs:
+      - https://docs.aws.amazon.com/acm/latest/APIReference/API_ListCertificates.html
+      - https://docs.aws.amazon.com/acm/latest/APIReference/API_Filters.html
+    implementation:
+      - internal/services/acm/typed_logic.go:232 (listCertificatesTyped)
+    tests:
+      present:
+        - tests/integration/acm/acm_domain_validation_test.go::TestListCertificates_filtersByCertificateStatuses
+        - tests/integration/acm/acm_domain_validation_test.go::TestListCertificates_unknownStatusRejected
+    scenario_matrix:
+      - scenario: CertificateStatuses selects on Status — PENDING_VALIDATION excludes an issued certificate, ISSUED includes it, several statuses match any of them, and an absent filter returns everything.
+        status: fixed
+        evidence: TestListCertificates_filtersByCertificateStatuses.
+      - scenario: A status outside the CertificateStatus enum.
+        status: fixed
+        evidence: "TestListCertificates_unknownStatusRejected — 400 ValidationException naming 'certificateStatuses.1.member', rather than silently widening the filter back to everything."
+      - scenario: Includes (keyTypes, keyUsage, extendedKeyUsage, exportOption, managedBy) and CertificateKeyPairOrigins.
+        status: intentionally_partial
+        evidence: Overcast generates no key material and models no export configuration, so there is nothing for these to select on. Recorded on the capability row and in docs/services/acm.md.
+      - scenario: MaxItems/NextToken pagination and SortBy/SortOrder.
+        status: implementation_mismatch
+        evidence: The whole list is returned in store order with no NextToken. Not part of #1994; no issue filed.
+    findings:
+      - >-
+        Fixed (#1994) — the request struct was empty, so every filter was
+        dropped on the floor and a PENDING_VALIDATION poll saw its own ISSUED
+        certificate as still pending. CertificateStatuses is honoured and
+        validated; the filters that select on material Overcast never generates
+        are recorded as intentionally partial rather than silently ignored.
   AddTagsToCertificate:
     status: fixed
     priority: p3
     aws_docs:
       - https://docs.aws.amazon.com/acm/latest/APIReference/API_AddTagsToCertificate.html
     implementation:
-      - internal/services/acm/typed_logic.go:293 (addTagsToCertificateTyped)
+      - internal/services/acm/typed_logic.go:403 (addTagsToCertificateTyped)
     tests:
       present:
         - tests/integration/acm/acm_tagging_test.go::TestACMAddTagsToCertificate_reservedPrefixRejected
@@ -147,14 +256,26 @@ findings:
       gap. docs/services/acm.md now states this under "What works". No code
       change was needed.
   remaining_gaps:
-    - "RequestCertificate accepts a malformed DomainName instead of validating format/wildcard placement (tracked in #1994)."
-    - "DescribeCertificate omits the modeled DomainValidationOptions member (tracked in #1994)."
-    - "ListCertificates ignores CertificateStatuses/Includes filters (tracked in #1994)."
+    - >-
+      An absent or empty DomainName still answers InvalidParameterException
+      with the message 'DomainName is required' (pre-dates #1994). AWS reports
+      it through the same front-end validator as a malformed one:
+      ValidationException, 'Value null at domainName failed to satisfy
+      constraint: Member must not be null'. Left alone as an unrelated
+      behaviour change; no issue filed.
+    - "ListCertificates ignores MaxItems/NextToken and SortBy/SortOrder — the whole list comes back in store order. No issue filed."
+    - "CertificateDetail's material-derived members (Serial, Subject, Issuer, NotBefore, NotAfter, KeyAlgorithm, SignatureAlgorithm, RenewalSummary) are absent; no key or chain is generated."
+    - "The CloudFormation AWS::CertificateManager::Certificate handler does not forward the template's ValidationMethod or DomainValidationOptions properties, so a CloudFormation-provisioned certificate always records EMAIL validation (internal/services/cloudformation/provisioner_json_coverage.go). Outside #1994's fence; no issue filed."
+    - "The MCP runtime tool acm_request_certificate (internal/mcp/providers/runtime_provider.go:5814) writes acm:certs directly instead of calling RequestCertificate, so it skips domain validation and records no DomainValidationOptions. Outside #1994 fence; no issue filed."
   intentionally_partial:
-    - ListCertificateDomainValidations synthesizes one SUCCESS entry per DomainName/SAN with no ValidationMethod or DNS/email challenge data, since Overcast issues certificates without ever validating them (docs/services/acm.md "Differences from AWS").
+    - ListCertificateDomainValidations synthesizes one SUCCESS entry per DomainName/SAN, echoing the requested ValidationMethod but carrying no ValidationChallenge, since Overcast issues certificates without ever validating them (docs/services/acm.md "Differences from AWS").
+    - DescribeCertificate's DNS ResourceRecord is derived from the certificate ARN rather than being a real challenge — stable and publishable, but nothing checks it and the domain is already SUCCESS.
+    - DomainValidation.ValidationEmails and HttpRedirect are never populated. No mail is sent, so there are no addresses to report; HttpRedirect exists only for HTTP validation of CloudFront-issued certificates.
+    - ListCertificates' Includes and CertificateKeyPairOrigins filters are ignored — they select on key material and export configuration Overcast never generates.
 handoff:
-  start_with: ["the three #1994 divergences — malformed DomainName, DescribeCertificate DomainValidationOptions, ListCertificates filters"]
+  start_with: ["ListCertificates pagination (MaxItems/NextToken), and the CloudFormation handler's dropped ValidationMethod property — neither has an issue"]
   do_not_redo:
     - "Tag round-trip, spelling parity, selective untag, inline-create tags, unknown-certificate errors, reserved-prefix rejection, and merged-set tag limit (#52, #814, #1275, #1739) from 2026-09-20."
     - "JSON 1.0/1.1/RPCv2 CBOR protocol acceptance is the framework-wide rule, not an ACM gap (#53) from 2026-09-20."
+    - "DomainName/SAN/ValidationMethod validation, DescribeCertificate's DomainValidationOptions, and the ListCertificates status filter (#1994) from 2026-09-20."
   commands: [go test -count=1 ./internal/services/acm/... ./tests/integration/acm/...]

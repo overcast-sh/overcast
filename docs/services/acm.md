@@ -42,6 +42,8 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | Certificates | `RequestCertificate`, `DescribeCertificate`, `ListCertificates`, `ListCertificateDomainValidations`, `DeleteCertificate` |
 | Tags         | The legacy `AddTagsToCertificate` family and the modern `TagResource` / `UntagResource` / `ListTagsForResource` aliases    |
 | Inline tags  | `Tags` supplied on `RequestCertificate` are applied at creation                                                            |
+| Validation records | `DescribeCertificate` returns one `DomainValidationOptions` entry per domain, with a CNAME to publish for `DNS`     |
+| List filtering | `ListCertificates` honours `CertificateStatuses`                                                                        |
 | Protocols    | AWS JSON 1.1, plus AWS JSON 1.0 and Smithy RPC v2 CBOR — accepting 1.0 alongside 1.1 is a framework-wide rule applied to every JSON-tier service, not an ACM-specific relaxation |
 
 ## Differences from AWS
@@ -50,7 +52,10 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | ---------------------------- | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
 | Validation                  | DNS or email round-trip; `PENDING_VALIDATION` first                                            | Skipped; the certificate is `ISSUED` on return                                                                        |
 | Certificate material        | A real X.509 chain is issued                                                                   | No key or chain is generated                                                                                           |
-| Domain validation summaries | `ListCertificateDomainValidations` reports `ValidationMethod` and DNS/email challenge details  | Every domain is reported `SUCCESS` with no `ValidationMethod` or challenge data — nothing was ever actually validated |
+| Validation records          | The CNAME in `DomainValidationOptions` is what proves you control the domain                   | Derived from the certificate ARN, already `SUCCESS`, and checked by nothing — publishing it changes no outcome        |
+| Validation emails           | `DomainValidation.ValidationEmails` lists the addresses ACM wrote to                           | Omitted; no mail is sent, so there are no addresses to report                                                          |
+| List filters                | `ListCertificates` also filters on key type, key usage, export option, and paginates           | Only `CertificateStatuses` is honoured; the rest select on material Overcast never generates                           |
+| Domain validation summaries | `ListCertificateDomainValidations` reports the DNS or email challenge itself                   | Every domain is `SUCCESS` with the requested method and no challenge — the CNAME is on `DescribeCertificate`          |
 | Import and renewal          | `ImportCertificate`, `RenewCertificate`, `ExportCertificate`                                   | Not implemented — `501 NotImplemented`                                                                                |
 
 ## Gotchas

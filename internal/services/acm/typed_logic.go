@@ -2,6 +2,8 @@ package acm
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 
@@ -14,6 +16,7 @@ import (
 
 type requestCertificateRequest struct {
 	DomainName              string   `json:"DomainName"`
+	ValidationMethod        string   `json:"ValidationMethod"`
 	SubjectAlternativeNames []string `json:"SubjectAlternativeNames"`
 	Tags                    []Tag    `json:"Tags"`
 }
@@ -30,7 +33,17 @@ type describeCertificateResponse struct {
 	Certificate *Certificate `json:"Certificate"`
 }
 
-type listCertificatesRequest struct{}
+// listCertificatesRequest carries the one filter Overcast can answer from
+// what it stores. CertificateKeyPairOrigins and Includes (keyTypes,
+// keyUsage, extendedKeyUsage, exportOption, managedBy) select on certificate
+// material and export configuration that Overcast never generates, so there
+// is nothing here to filter on; MaxItems/NextToken and SortBy/SortOrder are
+// not implemented either. All of them are absent rather than declared-and-
+// ignored so that this struct says exactly what is honoured. See
+// docs/services/acm.md "Differences from AWS".
+type listCertificatesRequest struct {
+	CertificateStatuses []string `json:"CertificateStatuses"`
+}
 
 type listCertificatesResponse struct {
 	CertificateSummaryList []certificateSummaryWire `json:"CertificateSummaryList"`
@@ -70,14 +83,15 @@ type domainValidationSummaryWire struct {
 
 // validationConfigurationWire mirrors ACM's ValidationConfiguration shape
 // (https://docs.aws.amazon.com/acm/latest/APIReference/API_ValidationConfiguration.html).
-// ValidationChallenge — the DNS CNAME record or validation email addresses —
-// is deliberately never populated: Overcast issues every certificate
-// immediately with no validation round trip, and describeCertificateTyped's
-// Certificate type carries no DomainValidationOptions/ResourceRecord either.
-// Inventing challenge data here that DescribeCertificate does not also
-// return would itself be a divergence real AWS never produces. ValidationMethod
-// is left unset for the same reason: RequestCertificate does not record which
-// method (DNS/EMAIL) a caller asked for, so reporting one would be a guess.
+// ValidationMethod echoes the method RequestCertificate recorded for that
+// domain, which is the same value DescribeCertificate reports for it.
+//
+// ValidationChallenge — the nested shape carrying the DNS record or the
+// validation email addresses — is still never populated. DescribeCertificate's
+// DomainValidationOptions is where a caller reads the CNAME to publish
+// (#1994), and duplicating it into a second, differently-shaped member that
+// AWS fills only during a validation-method migration would be a divergence
+// real AWS never produces.
 type validationConfigurationWire struct {
 	ValidationMethod string `json:"ValidationMethod,omitempty"`
 	ValidationStatus string `json:"ValidationStatus,omitempty"`
@@ -140,6 +154,26 @@ func (h *Handler) requestCertificateTyped(ctx context.Context, req *requestCerti
 			HTTPStatus: http.StatusBadRequest,
 		}
 	}
+	// Shape constraints before anything is created, so a rejected request
+	// strands no certificate — the same ordering the inline-tag check below
+	// keeps (#1052). DomainName and every SAN target DomainNameString, so one
+	// validator covers both; the member path is what tells the caller which
+	// of the two was wrong (#1994).
+	if aerr := validateDomainName(req.DomainName, "domainName"); aerr != nil {
+		return nil, aerr
+	}
+	for i, san := range req.SubjectAlternativeNames {
+		if aerr := validateDomainName(san, fmt.Sprintf("subjectAlternativeNames.%d.member", i+1)); aerr != nil {
+			return nil, aerr
+		}
+	}
+	method := req.ValidationMethod
+	if method == "" {
+		// ACM validates by email when RequestCertificate names no method.
+		method = "EMAIL"
+	} else if aerr := validateEnum(method, "validationMethod", validationMethods); aerr != nil {
+		return nil, aerr
+	}
 	region := middleware.RegionFromContext(ctx, h.cfg.Region)
 	certID := uuid.NewString()
 	arn := fmt.Sprintf("arn:aws:acm:%s:%s:certificate/%s", region, h.cfg.AccountID, certID)
@@ -169,6 +203,11 @@ func (h *Handler) requestCertificateTyped(ctx context.Context, req *requestCerti
 		CreatedAt:               now,
 		IssuedAt:                now,
 	}
+	// AWS builds DomainValidationOptions as a result of the RequestCertificate
+	// request itself, so they are stored with the certificate rather than
+	// synthesized per DescribeCertificate call — which is also what keeps a
+	// validation record stable across calls.
+	cert.DomainValidationOptions = domainValidations(arn, certDomains(cert), method)
 	if err := h.store.putCert(ctx, cert); err != nil {
 		return nil, protocol.ErrInternalError
 	}
@@ -191,12 +230,29 @@ func (h *Handler) describeCertificateTyped(ctx context.Context, req *describeCer
 }
 
 func (h *Handler) listCertificatesTyped(ctx context.Context, req *listCertificatesRequest) (*listCertificatesResponse, *protocol.AWSError) {
+	// A status outside the enum is rejected rather than ignored: a typo'd
+	// filter that silently matched everything is the failure this whole
+	// finding is about (#1994).
+	wanted := make(map[string]struct{}, len(req.CertificateStatuses))
+	for i, status := range req.CertificateStatuses {
+		member := fmt.Sprintf("certificateStatuses.%d.member", i+1)
+		if aerr := validateEnum(status, member, certificateStatuses); aerr != nil {
+			return nil, aerr
+		}
+		wanted[status] = struct{}{}
+	}
+
 	certs, err := h.store.listCerts(ctx)
 	if err != nil {
 		return nil, protocol.ErrInternalError
 	}
 	summaries := make([]certificateSummaryWire, 0, len(certs))
 	for _, c := range certs {
+		if len(wanted) > 0 {
+			if _, ok := wanted[c.Status]; !ok {
+				continue
+			}
+		}
 		summaries = append(summaries, certificateSummaryWire{
 			CertificateArn: c.CertificateArn,
 			DomainName:     c.DomainName,
@@ -228,6 +284,10 @@ func (h *Handler) listCertificateDomainValidationsTyped(ctx context.Context, req
 		}
 	}
 
+	methods := make(map[string]string, len(cert.DomainValidationOptions))
+	for _, opt := range cert.DomainValidationOptions {
+		methods[opt.DomainName] = opt.ValidationMethod
+	}
 	summaries := make([]domainValidationSummaryWire, 0, len(page.Items))
 	for _, domain := range page.Items {
 		summaries = append(summaries, domainValidationSummaryWire{
@@ -237,6 +297,7 @@ func (h *Handler) listCertificateDomainValidationsTyped(ctx context.Context, req
 			// every domain it names is honestly reported as already
 			// validated, consistent with that fiction.
 			ActiveValidationConfiguration: &validationConfigurationWire{
+				ValidationMethod: methods[domain],
 				ValidationStatus: "SUCCESS",
 			},
 		})
@@ -267,6 +328,55 @@ func certDomains(cert *Certificate) []string {
 		add(san)
 	}
 	return domains
+}
+
+// domainValidations builds one DomainValidation per domain on the certificate,
+// the way AWS populates CertificateDetail.DomainValidationOptions from the
+// RequestCertificate request.
+//
+// ValidationStatus is SUCCESS for every domain because the certificate is
+// ISSUED on return — a PENDING_VALIDATION entry on an ISSUED certificate is a
+// state AWS never reports, and callers branch on it.
+//
+// The DNS branch is the one place Overcast does synthesize challenge data.
+// The CNAME is not decoration: `aws_acm_certificate_validation`, the CDK's
+// DnsValidatedCertificate and every "publish the record, then wait" script
+// read ResourceRecord and act on it, so an absent record stops them dead,
+// while a present one lets the whole flow run against a certificate that is
+// already valid. EMAIL reports the domain the mail would have gone to and
+// HTTP reports neither, since its HttpRedirect analogue exists only for
+// CloudFront-issued certificates.
+func domainValidations(arn string, domains []string, method string) []DomainValidation {
+	out := make([]DomainValidation, 0, len(domains))
+	for _, domain := range domains {
+		entry := DomainValidation{
+			DomainName:       domain,
+			ValidationStatus: "SUCCESS",
+			ValidationMethod: method,
+		}
+		switch method {
+		case "DNS":
+			entry.ResourceRecord = &ResourceRecord{
+				Name:  "_" + validationToken(arn, domain, "name") + "." + domain + ".",
+				Type:  "CNAME",
+				Value: "_" + validationToken(arn, domain, "value") + ".acm-validations.aws.",
+			}
+		case "EMAIL":
+			entry.ValidationDomain = domain
+		}
+		out = append(out, entry)
+	}
+	return out
+}
+
+// validationToken derives the 32 hex characters AWS uses for each half of a
+// DNS validation record. It is a hash of the certificate ARN and the domain
+// rather than anything random or time-based, so the record a caller is told to
+// publish is the same one every later DescribeCertificate reports — including
+// after a restart, since the options are stored with the certificate.
+func validationToken(arn, domain, part string) string {
+	sum := sha256.Sum256([]byte(arn + "|" + domain + "|" + part))
+	return hex.EncodeToString(sum[:16])
 }
 
 func (h *Handler) deleteCertificateTyped(ctx context.Context, req *deleteCertificateRequest) (*struct{}, *protocol.AWSError) {

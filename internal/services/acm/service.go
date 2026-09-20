@@ -33,15 +33,43 @@ const serviceName = "acm"
 // answering every unimplemented operation with a 400.
 var awsapiService = serviceutil.MustAWSService(serviceName)
 
-// Certificate represents an ACM certificate.
+// Certificate represents an ACM certificate. It is both the stored record and
+// the CertificateDetail DescribeCertificate returns, so every member here is
+// one the AWS model carries.
 type Certificate struct {
-	CertificateArn          string   `json:"CertificateArn"`
-	DomainName              string   `json:"DomainName"`
-	SubjectAlternativeNames []string `json:"SubjectAlternativeNames,omitempty"`
-	Status                  string   `json:"Status"`
-	Type                    string   `json:"Type"`
-	CreatedAt               float64  `json:"CreatedAt"`
-	IssuedAt                float64  `json:"IssuedAt,omitempty"`
+	CertificateArn          string             `json:"CertificateArn"`
+	DomainName              string             `json:"DomainName"`
+	SubjectAlternativeNames []string           `json:"SubjectAlternativeNames,omitempty"`
+	DomainValidationOptions []DomainValidation `json:"DomainValidationOptions,omitempty"`
+	Status                  string             `json:"Status"`
+	Type                    string             `json:"Type"`
+	CreatedAt               float64            `json:"CreatedAt"`
+	IssuedAt                float64            `json:"IssuedAt,omitempty"`
+}
+
+// DomainValidation mirrors ACM's DomainValidation shape
+// (https://docs.aws.amazon.com/acm/latest/APIReference/API_DomainValidation.html):
+// what the initial validation of one domain on the certificate looked like.
+//
+// ValidationEmails and HttpRedirect are the two modeled members Overcast never
+// populates, so they are absent from the struct rather than always-empty
+// fields. Overcast sends no validation mail, and reporting addresses it never
+// wrote to would be a fiction a caller cannot check; HttpRedirect exists only
+// for HTTP validation of CloudFront-issued certificates.
+type DomainValidation struct {
+	DomainName       string          `json:"DomainName"`
+	ValidationDomain string          `json:"ValidationDomain,omitempty"`
+	ValidationStatus string          `json:"ValidationStatus,omitempty"`
+	ValidationMethod string          `json:"ValidationMethod,omitempty"`
+	ResourceRecord   *ResourceRecord `json:"ResourceRecord,omitempty"`
+}
+
+// ResourceRecord is the CNAME a caller publishes to validate a domain by DNS
+// (https://docs.aws.amazon.com/acm/latest/APIReference/API_ResourceRecord.html).
+type ResourceRecord struct {
+	Name  string `json:"Name"`
+	Type  string `json:"Type"`
+	Value string `json:"Value"`
 }
 
 // Tag is an ACM resource tag.

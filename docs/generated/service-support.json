@@ -7605,25 +7605,25 @@
           "operation": "RequestCertificate",
           "category": "Certificates",
           "status": "✅ Supported",
-          "notes": "Creates a certificate; immediately ISSUED; inline `Tags` applied at creation"
+          "notes": "Creates a certificate; immediately ISSUED; `DomainName`, each SAN and `ValidationMethod` validated against the modeled constraints; inline `Tags` applied at creation"
         },
         {
           "operation": "DescribeCertificate",
           "category": "Certificates",
           "status": "✅ Supported",
-          "notes": "Returns certificate details"
+          "notes": "Returns certificate details, including one `DomainValidationOptions` entry per domain — `SUCCESS`, the requested method, and for `DNS` a synthetic CNAME that is stable across calls"
         },
         {
           "operation": "ListCertificates",
           "category": "Certificates",
-          "status": "✅ Supported",
-          "notes": "Lists all certificates"
+          "status": "⚠️ Partial",
+          "notes": "Filters on `CertificateStatuses`; `Includes`, `CertificateKeyPairOrigins`, `SortBy`/`SortOrder` and `MaxItems`/`NextToken` are ignored — they select on certificate material Overcast never generates"
         },
         {
           "operation": "ListCertificateDomainValidations",
           "category": "Certificates",
           "status": "⚠️ Partial",
-          "notes": "One synthesized SUCCESS entry per DomainName/SAN; no ValidationMethod or DNS/email challenge data — Overcast issues certificates without ever validating them"
+          "notes": "One synthesized SUCCESS entry per DomainName/SAN, echoing the requested `ValidationMethod`; no `ValidationChallenge` — the DNS record lives on `DescribeCertificate`, and Overcast issues certificates without ever validating them"
         },
         {
           "operation": "DeleteCertificate",

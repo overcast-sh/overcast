@@ -19,7 +19,7 @@ All 11 listed operations are implemented. Back to [ACM](../acm.md).
 
 | Category     | ✅ Supported | ⚠️ Partial |
 | ------------ | ------------ | ---------- |
-| Certificates | 4            | 1          |
+| Certificates | 3            | 2          |
 | Tags         | 6            |            |
 
 ---
@@ -28,13 +28,13 @@ All 11 listed operations are implemented. Back to [ACM](../acm.md).
 
 ### Certificates
 
-| Operation                          | Status       | Notes                                                                                                                                                         | AWS Docs                                                                                              |
-| ---------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `RequestCertificate`               | ✅ Supported | Creates a certificate; immediately ISSUED; inline `Tags` applied at creation                                                                                  | [docs](https://docs.aws.amazon.com/acm/latest/APIReference/API_RequestCertificate.html)               |
-| `DescribeCertificate`              | ✅ Supported | Returns certificate details                                                                                                                                   | [docs](https://docs.aws.amazon.com/acm/latest/APIReference/API_DescribeCertificate.html)              |
-| `ListCertificates`                 | ✅ Supported | Lists all certificates                                                                                                                                        | [docs](https://docs.aws.amazon.com/acm/latest/APIReference/API_ListCertificates.html)                 |
-| `ListCertificateDomainValidations` | ⚠️ Partial   | One synthesized SUCCESS entry per DomainName/SAN; no ValidationMethod or DNS/email challenge data — Overcast issues certificates without ever validating them | [docs](https://docs.aws.amazon.com/acm/latest/APIReference/API_ListCertificateDomainValidations.html) |
-| `DeleteCertificate`                | ✅ Supported | Deletes a certificate by ARN                                                                                                                                  | [docs](https://docs.aws.amazon.com/acm/latest/APIReference/API_DeleteCertificate.html)                |
+| Operation                          | Status       | Notes                                                                                                                                                                                                                               | AWS Docs                                                                                              |
+| ---------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `RequestCertificate`               | ✅ Supported | Creates a certificate; immediately ISSUED; `DomainName`, each SAN and `ValidationMethod` validated against the modeled constraints; inline `Tags` applied at creation                                                               | [docs](https://docs.aws.amazon.com/acm/latest/APIReference/API_RequestCertificate.html)               |
+| `DescribeCertificate`              | ✅ Supported | Returns certificate details, including one `DomainValidationOptions` entry per domain — `SUCCESS`, the requested method, and for `DNS` a synthetic CNAME that is stable across calls                                                | [docs](https://docs.aws.amazon.com/acm/latest/APIReference/API_DescribeCertificate.html)              |
+| `ListCertificates`                 | ⚠️ Partial   | Filters on `CertificateStatuses`; `Includes`, `CertificateKeyPairOrigins`, `SortBy`/`SortOrder` and `MaxItems`/`NextToken` are ignored — they select on certificate material Overcast never generates                               | [docs](https://docs.aws.amazon.com/acm/latest/APIReference/API_ListCertificates.html)                 |
+| `ListCertificateDomainValidations` | ⚠️ Partial   | One synthesized SUCCESS entry per DomainName/SAN, echoing the requested `ValidationMethod`; no `ValidationChallenge` — the DNS record lives on `DescribeCertificate`, and Overcast issues certificates without ever validating them | [docs](https://docs.aws.amazon.com/acm/latest/APIReference/API_ListCertificateDomainValidations.html) |
+| `DeleteCertificate`                | ✅ Supported | Deletes a certificate by ARN                                                                                                                                                                                                        | [docs](https://docs.aws.amazon.com/acm/latest/APIReference/API_DeleteCertificate.html)                |
 
 ### Tags
 
