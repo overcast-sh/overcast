@@ -1304,7 +1304,10 @@ to generate `internal/awsapi/manifest.gen.go`. The generated manifest and
 runtime indexes are committed; the raw model checkout is not.
 
 The `AWS API model refresh` workflow checks upstream weekly and can be started
-manually from GitHub Actions. When a new revision exists, it regenerates the
+manually from GitHub Actions. It also runs when a push to `main` changes the
+model inputs while a refresh PR is open, so that PR is regenerated on the new
+`main` instead of sitting conflicted until the next weekly run; a push never
+opens a PR. When a new revision exists, it regenerates the
 manifest, runs the model and routing gates, and creates or updates one PR from
 `automation/aws-api-models`. It resets and force-with-lease updates only that
 dedicated branch and never merges the PR.
