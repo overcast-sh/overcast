@@ -976,6 +976,44 @@ func TestTLSAutoSANs_ipHostname(t *testing.T) {
 	}
 }
 
+// TestTLSWildcardBases verifies the set of domains the handshake will mint
+// below: every advertised domain, and nothing that has no subdomains to mint
+// for.
+func TestTLSWildcardBases(t *testing.T) {
+	// Given: a config with a custom hostname and an extra split-horizon host
+	clearEnv(t)
+	t.Setenv("OVERCAST_HOSTNAME", "overcast.internal")
+	t.Setenv("OVERCAST_SPLIT_HORIZON_HOSTS", "dev.example.test")
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	// When: the mintable bases are derived
+	bases := cfg.TLSWildcardBases()
+
+	// Then: every domain Overcast advertises is one of them
+	want := append([]string{}, config.WildcardDNSDomains...)
+	want = append(want, "dev.example.test", "overcast.internal")
+	for _, base := range want {
+		if !slices.Contains(bases, base) {
+			t.Errorf("TLSWildcardBases missing %q (got %v)", base, bases)
+		}
+	}
+
+	// And: an IP-literal hostname is not one — it has no subdomains, and a
+	// certificate for a name below it would be meaningless
+	clearEnv(t)
+	t.Setenv("OVERCAST_HOSTNAME", "192.168.1.50")
+	cfg, err = config.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := cfg.TLSWildcardBases(); slices.Contains(got, "192.168.1.50") {
+		t.Errorf("TLSWildcardBases contains an IP literal (got %v)", got)
+	}
+}
+
 // TestLoad_debugEnabled verifies debug mode is enabled via env var.
 func TestLoad_debugEnabled(t *testing.T) {
 	// Given: OVERCAST_DEBUG=true

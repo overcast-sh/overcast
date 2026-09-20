@@ -8,6 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"go.uber.org/zap"
+
+	"github.com/overcast-sh/overcast/internal/config"
 	"github.com/overcast-sh/overcast/internal/hostbridge/trust"
 )
 
@@ -62,6 +65,43 @@ func TestCloneServerTLSConfigIsolatesTheUIServer(t *testing.T) {
 
 	if api.TLSConfig == ui.TLSConfig {
 		t.Error("the API and UI servers hold the same *tls.Config — ServeTLS mutates it")
+	}
+}
+
+// A host-routed invoke URL has a variable middle
+// ("{id}.execute-api.{region}.<base>") that no single-label wildcard in the
+// startup SAN set covers; trust.CertSource mints for it at handshake time, but
+// only for names below the domains serverTLSConfig hands it. This test is the
+// wiring: it asserts the auto-mode config the serve path builds actually
+// serves such a name, so passing the SAN list without the base list — which
+// builds and starts fine, and fails only for the addressing this exists for —
+// cannot go unnoticed.
+func TestServerTLSConfig_autoModeServesHostRoutedNames(t *testing.T) {
+	// Given: the auto-mode TLS config the serve path builds
+	cfg := &config.Config{TLSMode: config.TLSModeAuto, CADir: trust.DirFor(t.TempDir()), Hostname: "localhost"}
+	tlsCfg, caPEM, err := serverTLSConfig(cfg, zap.NewNop())
+	if err != nil {
+		t.Fatalf("serverTLSConfig: %v", err)
+	}
+	if len(caPEM) == 0 {
+		t.Error("auto mode returned no CA PEM for the BFF to trust")
+	}
+
+	// When: a client asks for a host-routed name under an advertised domain
+	const invoke = "myapi123.execute-api.us-east-1.localhost.overcast.sh"
+	cert, err := tlsCfg.GetCertificate(&tls.ClientHelloInfo{ServerName: invoke})
+	if err != nil {
+		t.Fatalf("GetCertificate(%q): %v", invoke, err)
+	}
+
+	// Then: the certificate it is served covers that name
+	if err := cert.Leaf.VerifyHostname(invoke); err != nil {
+		t.Errorf("the certificate served for %s does not cover it: %v", invoke, err)
+	}
+	// And: a client that sends no SNI at all — an IP-literal dial — still gets
+	// the startup leaf from Certificates.
+	if len(tlsCfg.Certificates) != 1 {
+		t.Errorf("auto mode config carries %d static certificates, want 1 for the no-SNI dial", len(tlsCfg.Certificates))
 	}
 }
 

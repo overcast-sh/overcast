@@ -891,16 +891,21 @@ func buildHookEnv(cfg *config.Config) []string {
 //
 // Auto mode (OVERCAST_TLS=auto) mints — or reuses, see
 // trust.ServerCertificate — a leaf signed by the local overcast CA under
-// <data dir>/ca, covering every name Overcast advertises
-// (cfg.TLSAutoSANs). Explicit mode loads the configured cert/key pair and
-// hands the BFF the certificate file's PEM (self-signed certs and bundled
-// chains both verify that way; a chain-less private-CA leaf will not — ship
-// the chain in the cert file).
+// <data dir>/ca, covering every name Overcast advertises that can be
+// enumerated (cfg.TLSAutoSANs), and keeps the CA open to mint for the ones
+// that cannot: a host-routed name has a variable middle
+// ("{id}.execute-api.{region}.<base>") that no single-label wildcard covers,
+// so trust.CertSource mints per SNI under cfg.TLSWildcardBases.
+//
+// Explicit mode loads the configured cert/key pair and hands the BFF the
+// certificate file's PEM (self-signed certs and bundled chains both verify
+// that way; a chain-less private-CA leaf will not — ship the chain in the
+// cert file).
 func serverTLSConfig(cfg *config.Config, logger *zap.Logger) (*tls.Config, []byte, error) {
 	switch {
 	case cfg.TLSAuto():
 		caDir := cfg.CACertDir()
-		cert, _, err := trust.ServerCertificate(caDir, cfg.TLSAutoSANs())
+		certs, _, err := trust.NewCertSource(caDir, cfg.TLSAutoSANs(), cfg.TLSWildcardBases())
 		if err != nil {
 			return nil, nil, fmt.Errorf("mint TLS certificate: %w", err)
 		}
@@ -912,7 +917,7 @@ func serverTLSConfig(cfg *config.Config, logger *zap.Logger) (*tls.Config, []byt
 			zap.String("ca_dir", caDir),
 			zap.String("hint", "run `overcast trust install` once per machine so browsers and SDKs trust it"),
 		)
-		return &tls.Config{Certificates: []tls.Certificate{cert}}, caPEM, nil
+		return certs.TLSConfig(), caPEM, nil
 	case cfg.TLSEnabled():
 		cert, err := tls.LoadX509KeyPair(cfg.TLSCertFile, cfg.TLSKeyFile)
 		if err != nil {

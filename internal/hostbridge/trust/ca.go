@@ -211,6 +211,40 @@ func (ca *CA) IssueServerCert(sans []string) (certPEM, keyPEM []byte, err error)
 	return certPEM, keyPEM, nil
 }
 
+// issueTLSCertificate mints a leaf covering sans and returns it ready to
+// serve: a tls.Certificate with Leaf populated, so the TLS stack (and
+// CertSource's own coverage checks) never re-parses the DER.
+func (ca *CA) issueTLSCertificate(sans []string) (*tls.Certificate, error) {
+	certPEM, keyPEM, err := ca.IssueServerCert(sans)
+	if err != nil {
+		return nil, err
+	}
+	return tlsCertificateFromPEM(certPEM, keyPEM)
+}
+
+// tlsCertificateFromPEM turns a freshly-minted PEM pair into a servable
+// tls.Certificate with Leaf populated.
+func tlsCertificateFromPEM(certPEM, keyPEM []byte) (*tls.Certificate, error) {
+	cert, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		return nil, fmt.Errorf("trust: load freshly-minted leaf: %w", err)
+	}
+	leaf, err := x509.ParseCertificate(cert.Certificate[0])
+	if err != nil {
+		return nil, fmt.Errorf("trust: parse freshly-minted leaf: %w", err)
+	}
+	cert.Leaf = leaf
+	return &cert, nil
+}
+
+// pool returns a certificate pool containing just this CA — what a client
+// needs to dial a server holding one of its leaves.
+func (ca *CA) pool() *x509.CertPool {
+	pool := x509.NewCertPool()
+	pool.AddCert(ca.Cert)
+	return pool
+}
+
 // ServerCertificate returns a TLS server certificate covering sans, signed by
 // the CA in dir (created on first use), plus a pool containing that CA for
 // clients that need to dial the resulting server.
@@ -233,25 +267,29 @@ func ServerCertificate(dir string, sans []string) (tls.Certificate, *x509.CertPo
 	if err != nil {
 		return tls.Certificate{}, nil, err
 	}
-	pool := x509.NewCertPool()
-	pool.AddCert(ca.Cert)
+	cert, err := ca.cachedServerCertificate(dir, sans)
+	if err != nil {
+		return tls.Certificate{}, nil, err
+	}
+	return *cert, ca.pool(), nil
+}
 
+// cachedServerCertificate is ServerCertificate's body once the CA is in hand,
+// shared with NewCertSource so both reach the same on-disk leaf rather than
+// minting one each.
+func (ca *CA) cachedServerCertificate(dir string, sans []string) (*tls.Certificate, error) {
 	certPath := filepath.Join(dir, leafCertFile)
 	keyPath := filepath.Join(dir, leafKeyFile)
 	if cert, ok := loadCachedLeaf(certPath, keyPath, ca, sans); ok {
-		return cert, pool, nil
+		return cert, nil
 	}
 
 	certPEM, keyPEM, err := ca.IssueServerCert(sans)
 	if err != nil {
-		return tls.Certificate{}, nil, err
+		return nil, err
 	}
 	cacheLeaf(certPath, keyPath, certPEM, keyPEM)
-	cert, err := tls.X509KeyPair(certPEM, keyPEM)
-	if err != nil {
-		return tls.Certificate{}, nil, fmt.Errorf("trust: load freshly-minted leaf: %w", err)
-	}
-	return cert, pool, nil
+	return tlsCertificateFromPEM(certPEM, keyPEM)
 }
 
 // cacheLeaf persists a freshly-minted leaf, ignoring failures — see
@@ -268,25 +306,32 @@ func cacheLeaf(certPath, keyPath string, certPEM, keyPEM []byte) {
 // loadCachedLeaf returns the on-disk leaf when it is still fit for use:
 // readable, signed by ca, covering every requested SAN, and not about to
 // expire. Any failure simply reports !ok — the caller mints a replacement.
-func loadCachedLeaf(certPath, keyPath string, ca *CA, sans []string) (tls.Certificate, bool) {
+func loadCachedLeaf(certPath, keyPath string, ca *CA, sans []string) (*tls.Certificate, bool) {
 	cert, err := tls.LoadX509KeyPair(certPath, keyPath)
 	if err != nil {
-		return tls.Certificate{}, false
+		return nil, false
 	}
 	leaf, err := x509.ParseCertificate(cert.Certificate[0])
 	if err != nil {
-		return tls.Certificate{}, false
+		return nil, false
 	}
 	if err := leaf.CheckSignatureFrom(ca.Cert); err != nil {
-		return tls.Certificate{}, false
+		return nil, false
 	}
-	if now().Add(leafRenewalMargin).After(leaf.NotAfter) {
-		return tls.Certificate{}, false
+	if expiringSoon(leaf) {
+		return nil, false
 	}
 	if !leafCoversSANs(leaf, sans) {
-		return tls.Certificate{}, false
+		return nil, false
 	}
-	return cert, true
+	cert.Leaf = leaf
+	return &cert, true
+}
+
+// expiringSoon reports whether leaf is inside leafRenewalMargin of expiry, the
+// point at which a cached leaf — on disk or in a CertSource — is replaced.
+func expiringSoon(leaf *x509.Certificate) bool {
+	return now().Add(leafRenewalMargin).After(leaf.NotAfter)
 }
 
 // leafCoversSANs reports whether leaf carries every entry in sans, matching
