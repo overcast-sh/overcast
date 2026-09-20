@@ -89,9 +89,12 @@ Lifecycle labels:
 
 Priority labels:
 
+- `priority/p0`
 - `priority/p1`
 - `priority/p2`
 - `priority/p3`
+
+Priority is a derived value, not a judgment call — see [RICE Scoring](#rice-scoring) below.
 
 Effort labels:
 
@@ -112,6 +115,7 @@ Before creating an issue:
 2. Confirm the work is actionable and not already covered by an open issue.
 3. Choose the matching issue template from `.github/ISSUE_TEMPLATE/`.
 4. Apply labels during creation, not as a later cleanup step.
+5. Score it and set its priority label per [RICE Scoring](#rice-scoring) — do this at filing time, not as a follow-up.
 
 Title formats:
 
@@ -127,7 +131,47 @@ Minimum issue body sections:
 - References.
 - Current behavior or status.
 - Checklist or acceptance criteria.
+- A `RICE:` scoring line (see below).
 - Handoff notes if created from an interrupted task.
+
+## RICE Scoring
+
+Priority labels (`priority/p0`–`p3`) are not assigned by feel — they are derived from a RICE score,
+computed on filing. This applies to every issue an agent files, not only compat-audit issues.
+`docs/plans/backlog-rice.md` is the canonical model; read it before scoring anything non-obvious.
+The short version:
+
+```
+RICE = (Reach x Impact x Confidence) / Effort
+```
+
+- **Reach** (0–1000): `service_reach x path_factor`. `docs/plans/backlog-rice.md` §2 has the full
+  per-service reach table (`s3` 900, `iam` 750, `lambda` 800, down to `shield` 10, plus cross-cutting
+  surfaces like `protocol` 700). `path_factor` (0.02–0.75) is your own estimate of what share of that
+  service's users hit the specific path the issue describes — a default CDK property every stack
+  sets scores high; a single boundary-validation case or a narrow, newer feature scores low.
+- **Impact**: `3` silent wrong behavior on a path applications depend on, `2` a real divergence that
+  fails visibly (or a silent one on a narrow path), `1` a correctness/honesty gap with a workaround,
+  `0.5` fidelity polish nothing is misled by, `0.25` documenting an already-decided gap.
+- **Confidence**: `1.0` cites file/line or a reproduction, `0.8` scope is well specified but behavior
+  is inferred, `0.5` explicitly unverified (`needs-aws-verification`, a single unreproduced sighting).
+- **Effort**: person-weeks from the `effort/*` label — `small` 0.5, `medium` 1.5, `large` 4.0.
+
+Bands: `p0` >= 300, `p1` 100–299, `p2` 25–99, `p3` < 25.
+
+Put the inputs in the issue body as a `RICE:` line — three numbers, one sentence of basis each, and
+the resulting score and label, for example:
+
+```
+RICE: R=60 (s3 900 × ~0.07 — narrow but real path), I=2 (silent wrong behavior on that path),
+C=1.0 (exact handler line cited), E=0.5 (S — reuses an existing helper). -> **240 -> priority/p1**.
+```
+
+A generated compat-audit issue inheriting its service's tier label is a different, coarser claim
+("how important is this service") than a per-issue RICE score ("how important is this task") — see
+`docs/plans/backlog-rice.md` §1 for why conflating the two once put 106 issues at `p0`. Don't read a
+tier-inherited label as a considered per-issue judgment, and don't skip scoring a hand-filed issue
+just because a generated sibling nearby already has a label.
 
 ## Reading And Selecting Work
 
