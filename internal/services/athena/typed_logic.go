@@ -75,6 +75,38 @@ type workGroupSummary struct {
 	State string `json:"State" cbor:"State"`
 }
 
+// errQueryNotFound and errWorkGroupNotFound report an identifier Athena does
+// not know.
+//
+// 400, not 404. No exception in the Athena model overrides @httpError, and
+// InvalidRequestException is a client error, so the awsJson1_1 default
+// applies, and each operation's Errors section states it outright:
+// "InvalidRequestException ... HTTP Status Code: 400". Kinesis's
+// errNoSuchStream and Firehose's errStreamNotFound answer the same way for
+// the same reason (#2009).
+//
+// InvalidRequestException is the only client error GetQueryExecution,
+// GetQueryResults, GetWorkGroup, DeleteWorkGroup and StopQueryExecution model.
+// The three tag operations additionally model ResourceNotFoundException, but
+// both shapes are 400 client errors, so the status below is right for every
+// caller; which of the two AWS picks per operation is a separate question this
+// change does not settle.
+func errQueryNotFound(id string) *protocol.AWSError {
+	return &protocol.AWSError{
+		Code:       "InvalidRequestException",
+		Message:    fmt.Sprintf("QueryExecution %s not found", id),
+		HTTPStatus: http.StatusBadRequest,
+	}
+}
+
+func errWorkGroupNotFound(name string) *protocol.AWSError {
+	return &protocol.AWSError{
+		Code:       "InvalidRequestException",
+		Message:    fmt.Sprintf("WorkGroup %s not found", name),
+		HTTPStatus: http.StatusBadRequest,
+	}
+}
+
 func (s *Service) startQueryExecutionTyped(ctx context.Context, req *startQueryExecReq) (*startQueryExecResp, *protocol.AWSError) {
 	now := float64(s.clk.Now().Unix())
 	qe := &QueryExecution{
@@ -95,23 +127,37 @@ func (s *Service) startQueryExecutionTyped(ctx context.Context, req *startQueryE
 func (s *Service) getQueryExecutionTyped(ctx context.Context, req *queryIDReq) (*getQueryExecResp, *protocol.AWSError) {
 	qe, found := s.store.getQuery(ctx, req.QueryExecutionId)
 	if !found {
-		return nil, &protocol.AWSError{
-			Code: "InvalidRequestException", Message: fmt.Sprintf("QueryExecution %s not found", req.QueryExecutionId), HTTPStatus: http.StatusNotFound,
-		}
+		return nil, errQueryNotFound(req.QueryExecutionId)
 	}
 	return &getQueryExecResp{QueryExecution: *qe}, nil
 }
 
 func (s *Service) getQueryResultsTyped(ctx context.Context, req *queryIDReq) (*getQueryResultsResp, *protocol.AWSError) {
 	if _, found := s.store.getQuery(ctx, req.QueryExecutionId); !found {
-		return nil, &protocol.AWSError{
-			Code: "InvalidRequestException", Message: fmt.Sprintf("QueryExecution %s not found", req.QueryExecutionId), HTTPStatus: http.StatusNotFound,
-		}
+		return nil, errQueryNotFound(req.QueryExecutionId)
 	}
 	return &getQueryResultsResp{ResultSet: resultSetWire{
 		Rows:              []any{},
 		ResultSetMetadata: resultSetMetaWire{ColumnInfo: []any{}},
 	}}, nil
+}
+
+// stopQueryExecutionTyped answers StopQueryExecution: an unknown id is the
+// modeled InvalidRequestException, and a known one an empty
+// StopQueryExecutionOutput.
+//
+// It changes no state, and cannot: Overcast completes a query inside
+// StartQueryExecution, so every stored query is already SUCCEEDED — a terminal
+// state with nothing left to interrupt — and AWS leaves a terminal query's
+// state alone. The model backs that reading: the operation is
+// smithy.api#idempotent and declares no wrong-state exception, so a Stop that
+// arrives after completion has to be accepted rather than rejected. If queries
+// ever run asynchronously here, this is where CANCELLED would be set.
+func (s *Service) stopQueryExecutionTyped(ctx context.Context, req *queryIDReq) (*struct{}, *protocol.AWSError) {
+	if _, found := s.store.getQuery(ctx, req.QueryExecutionId); !found {
+		return nil, errQueryNotFound(req.QueryExecutionId)
+	}
+	return &struct{}{}, nil
 }
 
 func (s *Service) listQueryExecutionsTyped(ctx context.Context, _ *struct{}) (*listQueriesResp, *protocol.AWSError) {
@@ -152,9 +198,7 @@ func (s *Service) createWorkGroupTyped(ctx context.Context, req *createWorkGroup
 func (s *Service) getWorkGroupTyped(ctx context.Context, req *workGroupNameReq) (*getWorkGroupResp, *protocol.AWSError) {
 	wg, found := s.store.getWorkGroup(ctx, req.WorkGroup)
 	if !found {
-		return nil, &protocol.AWSError{
-			Code: "InvalidRequestException", Message: fmt.Sprintf("WorkGroup %s not found", req.WorkGroup), HTTPStatus: http.StatusNotFound,
-		}
+		return nil, errWorkGroupNotFound(req.WorkGroup)
 	}
 	return &getWorkGroupResp{WorkGroup: wg.WorkGroup}, nil
 }
@@ -173,9 +217,7 @@ func (s *Service) listWorkGroupsTyped(ctx context.Context, _ *struct{}) (*listWo
 
 func (s *Service) deleteWorkGroupTyped(ctx context.Context, req *workGroupNameReq) (*struct{}, *protocol.AWSError) {
 	if _, found := s.store.getWorkGroup(ctx, req.WorkGroup); !found {
-		return nil, &protocol.AWSError{
-			Code: "InvalidRequestException", Message: fmt.Sprintf("WorkGroup %s not found", req.WorkGroup), HTTPStatus: http.StatusNotFound,
-		}
+		return nil, errWorkGroupNotFound(req.WorkGroup)
 	}
 	if err := s.store.deleteWorkGroup(ctx, req.WorkGroup); err != nil {
 		return nil, protocol.ErrInternalError
@@ -213,9 +255,7 @@ func (s *Service) tagResourceTyped(ctx context.Context, req *tagResourceReq) (*s
 	}
 	wg, found := s.store.getWorkGroup(ctx, wgName)
 	if !found {
-		return nil, &protocol.AWSError{
-			Code: "InvalidRequestException", Message: fmt.Sprintf("WorkGroup %s not found", wgName), HTTPStatus: http.StatusNotFound,
-		}
+		return nil, errWorkGroupNotFound(wgName)
 	}
 	tags := wg.GetTags()
 	if tags == nil {
@@ -246,9 +286,7 @@ func (s *Service) untagResourceTyped(ctx context.Context, req *untagResourceReq)
 	}
 	wg, found := s.store.getWorkGroup(ctx, wgName)
 	if !found {
-		return nil, &protocol.AWSError{
-			Code: "InvalidRequestException", Message: fmt.Sprintf("WorkGroup %s not found", wgName), HTTPStatus: http.StatusNotFound,
-		}
+		return nil, errWorkGroupNotFound(wgName)
 	}
 	tags := wg.GetTags()
 	if tags != nil {
@@ -275,9 +313,7 @@ func (s *Service) listTagsForResourceTyped(ctx context.Context, req *listTagsFor
 	}
 	wg, found := s.store.getWorkGroup(ctx, wgName)
 	if !found {
-		return nil, &protocol.AWSError{
-			Code: "InvalidRequestException", Message: fmt.Sprintf("WorkGroup %s not found", wgName), HTTPStatus: http.StatusNotFound,
-		}
+		return nil, errWorkGroupNotFound(wgName)
 	}
 	return &listTagsForResourceResp{Tags: tagsToList(wg.GetTags())}, nil
 }

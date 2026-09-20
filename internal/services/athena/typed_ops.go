@@ -10,6 +10,7 @@ func (s *Service) typedOps() map[string]op.Operation {
 		"StartQueryExecution": op.NewTyped[startQueryExecReq, startQueryExecResp]("StartQueryExecution", s.startQueryExecutionTyped),
 		"GetQueryExecution":   op.NewTyped[queryIDReq, getQueryExecResp]("GetQueryExecution", s.getQueryExecutionTyped),
 		"GetQueryResults":     op.NewTyped[queryIDReq, getQueryResultsResp]("GetQueryResults", s.getQueryResultsTyped),
+		"StopQueryExecution":  op.NewTyped[queryIDReq, struct{}]("StopQueryExecution", s.stopQueryExecutionTyped),
 		"ListQueryExecutions": op.NewTyped[struct{}, listQueriesResp]("ListQueryExecutions", s.listQueryExecutionsTyped),
 		"CreateWorkGroup":     op.NewTyped[createWorkGroupReq, struct{}]("CreateWorkGroup", s.createWorkGroupTyped),
 		"GetWorkGroup":        op.NewTyped[workGroupNameReq, getWorkGroupResp]("GetWorkGroup", s.getWorkGroupTyped),

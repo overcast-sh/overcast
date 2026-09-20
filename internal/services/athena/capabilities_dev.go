@@ -9,6 +9,7 @@ func init() {
 		capabilities.Capability{Service: "athena", Operation: "StartQueryExecution", Category: "Queries", Status: capabilities.StatusSupported, Notes: "Starts a query; immediately succeeds"},
 		capabilities.Capability{Service: "athena", Operation: "GetQueryExecution", Category: "Queries", Status: capabilities.StatusSupported, Notes: "Returns query execution details"},
 		capabilities.Capability{Service: "athena", Operation: "GetQueryResults", Category: "Queries", Status: capabilities.StatusSupported, Notes: "Returns query results (empty result set)"},
+		capabilities.Capability{Service: "athena", Operation: "StopQueryExecution", Category: "Queries", Status: capabilities.StatusSupported, Notes: "Accepts a stop; queries are already SUCCEEDED, so state is unchanged"},
 		capabilities.Capability{Service: "athena", Operation: "ListQueryExecutions", Category: "Queries", Status: capabilities.StatusSupported, Notes: "Lists all query execution IDs"},
 		capabilities.Capability{Service: "athena", Operation: "CreateWorkGroup", Category: "WorkGroups", Status: capabilities.StatusSupported, Notes: "Creates a workgroup"},
 		capabilities.Capability{Service: "athena", Operation: "GetWorkGroup", Category: "WorkGroups", Status: capabilities.StatusSupported, Notes: "Returns workgroup details"},

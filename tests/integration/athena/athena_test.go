@@ -129,36 +129,27 @@ func TestCreateWorkGroup_success(t *testing.T) {
 	helpers.AssertStatus(t, resp, http.StatusOK)
 }
 
-// ─── Unknown-resource error shapes (issue #66 / tracker #9) ──────────────────
+// ─── Unknown-resource error shapes (issue #66, status fixed in #2009) ────────
 //
 // AWS ground truth, established against the pinned Athena Smithy model
 // (models/athena/service/2017-05-18/athena-2017-05-18.json) and the API
 // reference before writing these tests:
 //
-//   - GetQueryExecution, GetQueryResults, GetWorkGroup and DeleteWorkGroup all
-//     declare only InvalidRequestException (plus InternalServerException, and
-//     for GetQueryResults, TooManyRequestsException) for an unknown
-//     identifier — see each operation's "errors" list in the model.
-//     InvalidRequestException carries no @httpError trait, and the API
-//     reference is explicit about the default that implies: "HTTP Status
-//     Code: 400" (confirmed on
+//   - GetQueryExecution, GetQueryResults, GetWorkGroup, DeleteWorkGroup and
+//     StopQueryExecution all declare only InvalidRequestException (plus
+//     InternalServerException, and for GetQueryResults,
+//     TooManyRequestsException) for an unknown identifier — see each
+//     operation's "errors" list in the model. InvalidRequestException carries
+//     smithy.api#error: "client" and no @httpError trait, so the awsJson1_1
+//     default applies, and the API reference is explicit about it: "HTTP
+//     Status Code: 400" (confirmed on
 //     https://docs.aws.amazon.com/athena/latest/APIReference/API_GetQueryExecution.html#API_GetQueryExecution_Errors
-//     and the GetQueryResults equivalent). DynamoDB's own ResourceNotFoundException
-//     (internal/services/dynamodb/store.go's errTableNotFound) already follows
-//     this awsJson convention of answering "not found" with 400, not 404.
-//   - Overcast's Athena handlers (typed_logic.go and service.go) answer all
-//     four of these with HTTPStatus: http.StatusNotFound (404) instead — the
-//     Code value ("InvalidRequestException") and Message are otherwise
-//     correct. This is a confirmed divergence, reported separately; per this
-//     review's brief, a test must not pin the wrong status as if it were
-//     correct, so HTTP status is deliberately not asserted below.
-//   - StopQueryExecution is not implemented at all: it has no entry in
-//     Service.ops (service.go), so any call — regardless of QueryExecutionId
-//     — falls through to protocol.NotImplementedJSON (501). AWS models the
-//     same InvalidRequestException/400 pair for this operation's unknown-id
-//     case, so today's 501/NotImplemented response is itself the compat gap
-//     for this operation, not a narrower not-found-shape bug. See this
-//     package's test report for the full finding.
+//     and the GetQueryResults equivalent). Kinesis's errNoSuchStream and
+//     Firehose's errStreamNotFound answer 400 for the same reason.
+//   - InvalidRequestException also models an optional AthenaErrorCode member,
+//     documented as "the error code returned when the query execution failed
+//     to process". AWS documents no value for it on an unknown-identifier
+//     request, so Overcast neither emits nor asserts it here.
 
 func TestGetQueryExecution_unknownId(t *testing.T) {
 	// Given: an empty store (no query with this ID was ever started)
@@ -170,9 +161,9 @@ func TestGetQueryExecution_unknownId(t *testing.T) {
 	})
 	defer resp.Body.Close()
 
-	// Then: the JSON error names InvalidRequestException and the offending ID
-	// (HTTP status intentionally not asserted — see package comment above:
-	// AWS documents 400, Overcast answers 404)
+	// Then: HTTP 400 and a JSON error naming InvalidRequestException and the
+	// offending ID
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
 	helpers.AssertRequestID(t, resp)
 	assertAthenaJSONError(t, resp, "InvalidRequestException", "does-not-exist")
 }
@@ -187,8 +178,8 @@ func TestGetQueryResults_unknownId(t *testing.T) {
 	})
 	defer resp.Body.Close()
 
-	// Then: the JSON error names InvalidRequestException (status not
-	// asserted — see package comment above)
+	// Then: HTTP 400 and a JSON error naming InvalidRequestException
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
 	helpers.AssertRequestID(t, resp)
 	assertAthenaJSONError(t, resp, "InvalidRequestException", "")
 }
@@ -203,8 +194,8 @@ func TestGetWorkGroup_unknownName(t *testing.T) {
 	})
 	defer resp.Body.Close()
 
-	// Then: the JSON error names InvalidRequestException (status not
-	// asserted — see package comment above)
+	// Then: HTTP 400 and a JSON error naming InvalidRequestException
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
 	helpers.AssertRequestID(t, resp)
 	assertAthenaJSONError(t, resp, "InvalidRequestException", "does-not-exist")
 }
@@ -219,34 +210,87 @@ func TestDeleteWorkGroup_unknownName(t *testing.T) {
 	})
 	defer resp.Body.Close()
 
-	// Then: the JSON error names InvalidRequestException (status not
-	// asserted — see package comment above)
+	// Then: HTTP 400 and a JSON error naming InvalidRequestException
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
 	helpers.AssertRequestID(t, resp)
 	assertAthenaJSONError(t, resp, "InvalidRequestException", "")
 }
 
-// TestStopQueryExecution_unimplemented documents today's actual behavior for
-// an operation the AWS model declares (with InvalidRequestException/400 for
-// an unknown id) but that Overcast has not implemented at all. See the
-// package comment above for the AWS-side evidence and why this is reported
-// as a bigger gap than the not-found-shape divergence the other tests here
-// cover.
-func TestStopQueryExecution_unimplemented(t *testing.T) {
-	// Given: an empty store
+// ─── StopQueryExecution ───────────────────────────────────────────────────────
+
+// TestStopQueryExecution_alreadyFinished covers the only query state Overcast
+// can reach: StartQueryExecution completes synchronously, so a query is
+// already SUCCEEDED by the time anyone can stop it.
+//
+// The pinned model gives StopQueryExecution an empty StopQueryExecutionOutput,
+// only InternalServerException and InvalidRequestException for errors — no
+// "wrong state" exception — and marks the operation smithy.api#idempotent, so
+// a repeat call on a query that is already in a terminal state must answer the
+// same way rather than failing. A terminal query's state is AWS's to keep:
+// StopQueryExecution is documented as interrupting execution, and a SUCCEEDED
+// query has none left to interrupt, so nothing about it changes.
+func TestStopQueryExecution_alreadyFinished(t *testing.T) {
+	// Given: a query that has been started (and so has already SUCCEEDED)
+	srv := helpers.NewTestServer(t)
+	qid := startQuery(t, srv, "SELECT 1")
+
+	// When: StopQueryExecution is called for it, twice
+	resp := athenaCall(t, srv, "StopQueryExecution", map[string]any{
+		"QueryExecutionId": qid,
+	})
+	defer resp.Body.Close()
+
+	// Then: 200 with an empty document, per StopQueryExecutionOutput
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	if body := helpers.ReadBody(t, resp); strings.TrimSpace(body) != "{}" {
+		t.Errorf("expected an empty StopQueryExecutionOutput document, got: %s", body)
+	}
+
+	// And: the repeat call is accepted too (the operation is @idempotent)
+	again := athenaCall(t, srv, "StopQueryExecution", map[string]any{
+		"QueryExecutionId": qid,
+	})
+	defer again.Body.Close()
+	helpers.AssertStatus(t, again, http.StatusOK)
+
+	// And: the finished query keeps the state and completion time it had
+	get := athenaCall(t, srv, "GetQueryExecution", map[string]any{
+		"QueryExecutionId": qid,
+	})
+	defer get.Body.Close()
+	helpers.AssertStatus(t, get, http.StatusOK)
+	var result struct {
+		QueryExecution struct {
+			Status struct {
+				State              string  `json:"State"`
+				CompletionDateTime float64 `json:"CompletionDateTime"`
+			} `json:"Status"`
+		} `json:"QueryExecution"`
+	}
+	helpers.DecodeJSON(t, get, &result)
+	if result.QueryExecution.Status.State != "SUCCEEDED" {
+		t.Errorf("expected a stopped-but-already-finished query to stay SUCCEEDED, got %q", result.QueryExecution.Status.State)
+	}
+	if result.QueryExecution.Status.CompletionDateTime == 0 {
+		t.Error("expected CompletionDateTime to remain set after StopQueryExecution")
+	}
+}
+
+func TestStopQueryExecution_unknownId(t *testing.T) {
+	// Given: an empty store (no query with this ID was ever started)
 	srv := helpers.NewTestServer(t)
 
-	// When: StopQueryExecution is called at all (the QueryExecutionId does
-	// not matter — the operation has no handler registered)
+	// When: StopQueryExecution is called with an unknown QueryExecutionId
 	resp := athenaCall(t, srv, "StopQueryExecution", map[string]any{
 		"QueryExecutionId": "does-not-exist",
 	})
 	defer resp.Body.Close()
 
-	// Then: Overcast's generic unimplemented-operation fallback answers,
-	// not the AWS-modeled InvalidRequestException
-	helpers.AssertStatus(t, resp, http.StatusNotImplemented)
-	helpers.AssertHeader(t, resp, "x-emulator-unsupported", "true")
-	helpers.AssertJSONError(t, resp, "NotImplemented")
+	// Then: HTTP 400 and a JSON error naming InvalidRequestException and the
+	// offending ID — the only client error the operation models
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertRequestID(t, resp)
+	assertAthenaJSONError(t, resp, "InvalidRequestException", "does-not-exist")
 }
 
 // ─── GetQueryResults response shape ───────────────────────────────────────────

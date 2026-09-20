@@ -1,8 +1,8 @@
 // Package athena provides a basic emulation of Amazon Athena.
 //
 // Implemented operations: StartQueryExecution, GetQueryExecution,
-// GetQueryResults, ListQueryExecutions, CreateWorkGroup, GetWorkGroup,
-// ListWorkGroups, DeleteWorkGroup.
+// GetQueryResults, StopQueryExecution, ListQueryExecutions, CreateWorkGroup,
+// GetWorkGroup, ListWorkGroups, DeleteWorkGroup.
 //
 // Queries are accepted and immediately marked SUCCEEDED with empty results.
 package athena
@@ -183,6 +183,7 @@ func New(cfg *config.Config, st state.Store, logger *zap.Logger, clk clock.Clock
 		"StartQueryExecution": s.startQueryExecution,
 		"GetQueryExecution":   s.getQueryExecution,
 		"GetQueryResults":     s.getQueryResults,
+		"StopQueryExecution":  s.stopQueryExecution,
 		"ListQueryExecutions": s.listQueryExecutions,
 		"CreateWorkGroup":     s.createWorkGroup,
 		"GetWorkGroup":        s.getWorkGroup,
@@ -279,11 +280,7 @@ func (s *Service) getQueryExecution(w http.ResponseWriter, r *http.Request) {
 	}
 	qe, found := s.store.getQuery(r.Context(), req.QueryExecutionId)
 	if !found {
-		protocol.WriteJSONError(w, r, &protocol.AWSError{
-			Code:       "InvalidRequestException",
-			Message:    fmt.Sprintf("QueryExecution %s not found", req.QueryExecutionId),
-			HTTPStatus: http.StatusNotFound,
-		})
+		protocol.WriteJSONError(w, r, errQueryNotFound(req.QueryExecutionId))
 		return
 	}
 	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{"QueryExecution": qe})
@@ -297,11 +294,7 @@ func (s *Service) getQueryResults(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, found := s.store.getQuery(r.Context(), req.QueryExecutionId); !found {
-		protocol.WriteJSONError(w, r, &protocol.AWSError{
-			Code:       "InvalidRequestException",
-			Message:    fmt.Sprintf("QueryExecution %s not found", req.QueryExecutionId),
-			HTTPStatus: http.StatusNotFound,
-		})
+		protocol.WriteJSONError(w, r, errQueryNotFound(req.QueryExecutionId))
 		return
 	}
 	// Return empty result set.
@@ -311,6 +304,20 @@ func (s *Service) getQueryResults(w http.ResponseWriter, r *http.Request) {
 			"ResultSetMetadata": map[string]any{"ColumnInfo": []any{}},
 		},
 	})
+}
+
+func (s *Service) stopQueryExecution(w http.ResponseWriter, r *http.Request) {
+	// Delegates to stopQueryExecutionTyped (typed_logic.go) so the legacy
+	// JSON1.0/1.1 path and the CBOR typed path share one implementation.
+	var req queryIDReq
+	if !serviceutil.DecodeJSON(w, r, &req) {
+		return
+	}
+	if _, aerr := s.stopQueryExecutionTyped(r.Context(), &req); aerr != nil {
+		protocol.WriteJSONError(w, r, aerr)
+		return
+	}
+	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{})
 }
 
 func (s *Service) listQueryExecutions(w http.ResponseWriter, r *http.Request) {
@@ -351,11 +358,7 @@ func (s *Service) getWorkGroup(w http.ResponseWriter, r *http.Request) {
 	}
 	wg, found := s.store.getWorkGroup(r.Context(), req.WorkGroup)
 	if !found {
-		protocol.WriteJSONError(w, r, &protocol.AWSError{
-			Code:       "InvalidRequestException",
-			Message:    fmt.Sprintf("WorkGroup %s not found", req.WorkGroup),
-			HTTPStatus: http.StatusNotFound,
-		})
+		protocol.WriteJSONError(w, r, errWorkGroupNotFound(req.WorkGroup))
 		return
 	}
 	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{"WorkGroup": &wg.WorkGroup})
@@ -385,11 +388,7 @@ func (s *Service) deleteWorkGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, found := s.store.getWorkGroup(r.Context(), req.WorkGroup); !found {
-		protocol.WriteJSONError(w, r, &protocol.AWSError{
-			Code:       "InvalidRequestException",
-			Message:    fmt.Sprintf("WorkGroup %s not found", req.WorkGroup),
-			HTTPStatus: http.StatusNotFound,
-		})
+		protocol.WriteJSONError(w, r, errWorkGroupNotFound(req.WorkGroup))
 		return
 	}
 	if err := s.store.deleteWorkGroup(r.Context(), req.WorkGroup); err != nil {
@@ -428,10 +427,7 @@ func (s *Service) tagResource(w http.ResponseWriter, r *http.Request) {
 	}
 	wg, found := s.store.getWorkGroup(r.Context(), wgName)
 	if !found {
-		protocol.WriteJSONError(w, r, &protocol.AWSError{
-			Code: "InvalidRequestException", Message: fmt.Sprintf("WorkGroup %s not found", wgName),
-			HTTPStatus: http.StatusNotFound,
-		})
+		protocol.WriteJSONError(w, r, errWorkGroupNotFound(wgName))
 		return
 	}
 	if wg.Tags == nil {
@@ -473,10 +469,7 @@ func (s *Service) untagResource(w http.ResponseWriter, r *http.Request) {
 	}
 	wg, found := s.store.getWorkGroup(r.Context(), wgName)
 	if !found {
-		protocol.WriteJSONError(w, r, &protocol.AWSError{
-			Code: "InvalidRequestException", Message: fmt.Sprintf("WorkGroup %s not found", wgName),
-			HTTPStatus: http.StatusNotFound,
-		})
+		protocol.WriteJSONError(w, r, errWorkGroupNotFound(wgName))
 		return
 	}
 	if wg.Tags != nil {
@@ -512,10 +505,7 @@ func (s *Service) listTagsForResource(w http.ResponseWriter, r *http.Request) {
 	}
 	wg, found := s.store.getWorkGroup(r.Context(), wgName)
 	if !found {
-		protocol.WriteJSONError(w, r, &protocol.AWSError{
-			Code: "InvalidRequestException", Message: fmt.Sprintf("WorkGroup %s not found", wgName),
-			HTTPStatus: http.StatusNotFound,
-		})
+		protocol.WriteJSONError(w, r, errWorkGroupNotFound(wgName))
 		return
 	}
 	tagList := tagsToList(wg.Tags)

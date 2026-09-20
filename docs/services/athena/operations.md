@@ -1,6 +1,6 @@
 ---
 title: "Athena operations"
-description: "Every Athena operation Overcast declares — 11 of 11 implemented — with status, behaviour notes and a link to the AWS API reference for each."
+description: "Every Athena operation Overcast declares — 12 of 12 implemented — with status, behaviour notes and a link to the AWS API reference for each."
 section: "Service Reference"
 tags:
   - athena
@@ -13,13 +13,13 @@ tags:
 
 # Athena operations
 
-All 11 listed operations are implemented. Back to [Athena](../athena.md).
+All 12 listed operations are implemented. Back to [Athena](../athena.md).
 
 ## Summary
 
 | Category   | ✅ Supported |
 | ---------- | ------------ |
-| Queries    | 4            |
+| Queries    | 5            |
 | WorkGroups | 4            |
 | Tags       | 3            |
 
@@ -29,12 +29,13 @@ All 11 listed operations are implemented. Back to [Athena](../athena.md).
 
 ### Queries
 
-| Operation             | Status       | Notes                                    | AWS Docs                                                                                    |
-| --------------------- | ------------ | ---------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `StartQueryExecution` | ✅ Supported | Starts a query; immediately succeeds     | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_StartQueryExecution.html) |
-| `GetQueryExecution`   | ✅ Supported | Returns query execution details          | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_GetQueryExecution.html)   |
-| `GetQueryResults`     | ✅ Supported | Returns query results (empty result set) | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_GetQueryResults.html)     |
-| `ListQueryExecutions` | ✅ Supported | Lists all query execution IDs            | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_ListQueryExecutions.html) |
+| Operation             | Status       | Notes                                                                | AWS Docs                                                                                    |
+| --------------------- | ------------ | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `StartQueryExecution` | ✅ Supported | Starts a query; immediately succeeds                                 | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_StartQueryExecution.html) |
+| `GetQueryExecution`   | ✅ Supported | Returns query execution details                                      | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_GetQueryExecution.html)   |
+| `GetQueryResults`     | ✅ Supported | Returns query results (empty result set)                             | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_GetQueryResults.html)     |
+| `StopQueryExecution`  | ✅ Supported | Accepts a stop; queries are already SUCCEEDED, so state is unchanged | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_StopQueryExecution.html)  |
+| `ListQueryExecutions` | ✅ Supported | Lists all query execution IDs                                        | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_ListQueryExecutions.html) |
 
 ### WorkGroups
 

@@ -1,6 +1,6 @@
 {
   "generated_by": "go run -tags dev ./cmd/capgen --write-docs",
-  "total_ops": 1515,
+  "total_ops": 1516,
   "services": [
     {
       "service": "s3",
@@ -7672,8 +7672,8 @@
     {
       "service": "athena",
       "display_name": "Athena",
-      "total_ops": 11,
-      "implemented_ops": 11,
+      "total_ops": 12,
+      "implemented_ops": 12,
       "operations": [
         {
           "operation": "StartQueryExecution",
@@ -7692,6 +7692,12 @@
           "category": "Queries",
           "status": "✅ Supported",
           "notes": "Returns query results (empty result set)"
+        },
+        {
+          "operation": "StopQueryExecution",
+          "category": "Queries",
+          "status": "✅ Supported",
+          "notes": "Accepts a stop; queries are already SUCCEEDED, so state is unchanged"
         },
         {
           "operation": "ListQueryExecutions",
