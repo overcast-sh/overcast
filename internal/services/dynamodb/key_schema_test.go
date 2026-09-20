@@ -176,3 +176,111 @@ func TestDeclaredKeyAttrType_reportsWhetherDeclared(t *testing.T) {
 		t.Error("declaredKeyAttrType(nil, \"pk\") reported a declaration, want none")
 	}
 }
+
+// validateKeyConditionSchema resolves which parsed term plays which role and
+// then checks both against the key schema in play. The AWS-facing messages are
+// asserted end to end in tests/integration/dynamodb/key_condition_test.go;
+// this pins the resolution table itself, including the swap's effect on the
+// compiled condition, which no response body shows.
+func TestValidateKeyConditionSchema_rolesAndSchema(t *testing.T) {
+	// Helper builders keep each case to the shape under test.
+	eq := func(attr, val string) *sortKeyCond {
+		return &sortKeyCond{attr: attr, kind: sortKeyEq, val: attrValue{"S": val}}
+	}
+	gt := func(attr, val string) *sortKeyCond {
+		return &sortKeyCond{attr: attr, kind: sortKeyGT, val: attrValue{"S": val}}
+	}
+
+	cases := []struct {
+		name         string
+		hashAttrName string
+		sortAttrName string
+		kc           *keyCond
+		want         string // "" means accepted
+	}{
+		{
+			name: "nil condition is not this check's business",
+			// A missing KeyConditionExpression is rejected before compiling.
+			hashAttrName: "pk", sortAttrName: "sk", kc: nil,
+		},
+		{
+			name:         "partition key alone",
+			hashAttrName: "pk", sortAttrName: "sk",
+			kc: &keyCond{hashAttr: "pk", hashVal: attrValue{"S": "a"}},
+		},
+		{
+			name:         "partition key and sort key",
+			hashAttrName: "pk", sortAttrName: "sk",
+			kc: &keyCond{hashAttr: "pk", hashVal: attrValue{"S": "a"}, sortCond: gt("sk", "b")},
+		},
+		{
+			name:         "non-key second condition leaves the sort key missed",
+			hashAttrName: "pk", sortAttrName: "sk",
+			kc:   &keyCond{hashAttr: "pk", hashVal: attrValue{"S": "a"}, sortCond: eq("foo", "b")},
+			want: "Query condition missed key schema element: sk",
+		},
+		{
+			name:         "second condition with no sort key to miss",
+			hashAttrName: "pk", sortAttrName: "",
+			kc:   &keyCond{hashAttr: "pk", hashVal: attrValue{"S": "a"}, sortCond: eq("foo", "b")},
+			want: msgKeyConditionNotSupported,
+		},
+		{
+			name:         "index key schema, not the table's",
+			hashAttrName: "gsipk", sortAttrName: "gsisk",
+			kc:   &keyCond{hashAttr: "gsipk", hashVal: attrValue{"S": "a"}, sortCond: eq("sk", "b")},
+			want: "Query condition missed key schema element: gsisk",
+		},
+		{
+			name:         "no term could hold the partition-key role",
+			hashAttrName: "pk", sortAttrName: "sk",
+			kc:   &keyCond{sortCond: gt("sk", "b")},
+			want: "Query condition missed key schema element: pk",
+		},
+		{
+			name:         "partition key not constrained at all",
+			hashAttrName: "pk", sortAttrName: "sk",
+			kc:   &keyCond{hashAttr: "foo", hashVal: attrValue{"S": "a"}},
+			want: "Query condition missed key schema element: pk",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			aerr := validateKeyConditionSchema(tc.hashAttrName, tc.sortAttrName, tc.kc)
+			switch {
+			case tc.want == "" && aerr != nil:
+				t.Fatalf("validateKeyConditionSchema = %q, want accepted", aerr.Message)
+			case tc.want != "" && aerr == nil:
+				t.Fatalf("validateKeyConditionSchema accepted, want %q", tc.want)
+			case tc.want != "" && aerr.Message != tc.want:
+				t.Fatalf("validateKeyConditionSchema = %q, want %q", aerr.Message, tc.want)
+			}
+		})
+	}
+}
+
+// Both terms are equalities, so the parser cannot tell which is the partition
+// key's; the schema does, and the swap must move the value across with the
+// name or the query reads the wrong partition.
+func TestValidateKeyConditionSchema_swapsSortKeyFirstEqualities(t *testing.T) {
+	// Given: "sk = :s AND pk = :p" as the parser leaves it
+	kc := &keyCond{
+		hashAttr: "sk",
+		hashVal:  attrValue{"S": "sortval"},
+		sortCond: &sortKeyCond{attr: "pk", kind: sortKeyEq, val: attrValue{"S": "hashval"}},
+	}
+
+	// When: it is checked against a pk/sk schema
+	if aerr := validateKeyConditionSchema("pk", "sk", kc); aerr != nil {
+		t.Fatalf("validateKeyConditionSchema = %q, want accepted", aerr.Message)
+	}
+
+	// Then: both halves are in canonical order, names and values together
+	if kc.hashAttr != "pk" || extractScalar(kc.hashVal) != "hashval" {
+		t.Errorf("hash condition = %s/%s, want pk/hashval", kc.hashAttr, extractScalar(kc.hashVal))
+	}
+	if kc.sortCond.attr != "sk" || extractScalar(kc.sortCond.val) != "sortval" {
+		t.Errorf("sort condition = %s/%s, want sk/sortval", kc.sortCond.attr, extractScalar(kc.sortCond.val))
+	}
+}

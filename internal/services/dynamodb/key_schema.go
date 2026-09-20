@@ -172,31 +172,84 @@ func isEmptyScalar(v attrValue) bool {
 	return false
 }
 
+// msgOneConditionPerKey is AWS's answer when both conditions in a
+// KeyConditionExpression constrain the same attribute — "pk = :a AND pk = :b",
+// "pk = :p AND begins_with(pk, :q)", or a sort-key range written as a pair
+// rather than as BETWEEN. It is raised from the parser, which is the only
+// place that still sees both terms; see parseKeyCondition.
+//
+// Message source: planetlabs/datalake-api#21 quotes it verbatim from a real
+// account for "(#n0 = :v0 AND begins_with(#n0, :v0))", and equaltoai/lesser#1500
+// for "sk >= :a AND sk <= :b".
+const msgOneConditionPerKey = "KeyConditionExpressions must only contain one condition per key"
+
+// msgKeyConditionNotSupported is AWS's answer for a key condition that cannot
+// be one and leaves no key schema element to name as missed — a second
+// condition against a table or index with no sort key.
+//
+// Message source: https://dynobase.dev/dynamodb-errors/dynamodb-query-key-condition-not-supported/
+// and moto's validate_schema, which falls back to it for exactly this case
+// (moto/dynamodb/parsing/key_condition_expression.py).
+const msgKeyConditionNotSupported = "Query key condition not supported"
+
 // validateKeyConditionSchema checks that a compiled KeyConditionExpression
-// constrains the partition key actually in play — the table's for a
-// base-table Query, the index's when IndexName is set — returning AWS's
-// "Query condition missed key schema element: <name>" ValidationException
-// otherwise (issue #1707, rule 4). Without it a condition on the sort key
-// alone, or on a non-key attribute, was compiled as if its attribute were
-// the partition key and answered with whatever that lookup found, teaching
-// a data model DynamoDB cannot serve.
+// constrains the key schema actually in play — the table's for a base-table
+// Query, the index's when IndexName is set (issue #1707 rule 4, extended in
+// issue #135). Two things can be wrong, and AWS words them differently.
 //
-// The parser reads the first equality as the partition-key condition, but
-// AWS accepts the two conditions in either order, so a "sk = :s AND pk =
-// :p" is recognised here and its halves swapped in place before the check.
+// The partition key must be constrained by an equality. Without this check a
+// condition on the sort key alone, or on a non-key attribute, was compiled as
+// if its attribute were the partition key and answered with whatever that
+// lookup found, teaching a data model DynamoDB cannot serve.
 //
-// Message source: https://dynobase.dev/dynamodb-errors/dynamodb-query-condition-missed/,
+// The second condition, when there is one, must name the sort key. AWS reports
+// a non-key attribute there as the *sort key* being missed, not as the
+// non-key attribute being unsupported: that attribute is simply not a key
+// condition, which leaves the sort key unconstrained. getmoto/moto#3237
+// reports "Query condition missed key schema element: gsiK1SortKey" from a
+// real account for exactly this shape, and moto's validate_schema raises the
+// same. Overcast used to accept it: queryTypedCore overwrote the parsed
+// attribute name with the sort key's in every branch, so "pk = :p AND foo = :f"
+// silently answered as "pk = :p AND sk = :f". A table or index with no sort
+// key has nothing to name as missed, and falls back to
+// msgKeyConditionNotSupported.
+//
+// The parser provisionally reads a leading equality as the partition-key
+// condition, but AWS accepts the two conditions in either order (see
+// expr_key.go), so "sk = :s AND pk = :p" — the one case the parser cannot
+// disambiguate on its own — is recognised here and its halves swapped in place
+// before the checks.
+//
+// Message source for "Query condition missed key schema element: <name>":
+// https://dynobase.dev/dynamodb-errors/dynamodb-query-condition-missed/,
 // moto's query validation and floci-io/floci#3360 all carry it verbatim.
 func validateKeyConditionSchema(hashAttrName, sortAttrName string, kc *keyCond) *protocol.AWSError {
-	if kc == nil || kc.hashAttr == hashAttrName {
+	if kc == nil {
 		return nil
 	}
-	if sc := kc.sortCond; sc != nil && sc.kind == sortKeyEq && sc.attr == hashAttrName && kc.hashAttr == sortAttrName {
+	sc := kc.sortCond
+
+	// Both equalities, written sort key first: the only ordering the parser
+	// cannot resolve without the schema.
+	if kc.hashAttr != hashAttrName && sc != nil && sc.kind == sortKeyEq && sc.attr == hashAttrName {
 		kc.hashAttr, sc.attr = sc.attr, kc.hashAttr
 		kc.hashVal, sc.val = sc.val, kc.hashVal
-		return nil
 	}
-	return errValidation("Query condition missed key schema element: " + hashAttrName)
+
+	// An empty hashAttr is the parser saying no term was an equality, so
+	// nothing could hold the partition-key role.
+	if kc.hashAttr != hashAttrName {
+		return errValidation("Query condition missed key schema element: " + hashAttrName)
+	}
+
+	if sc != nil && sc.attr != sortAttrName {
+		if sortAttrName == "" {
+			return errValidation(msgKeyConditionNotSupported)
+		}
+		return errValidation("Query condition missed key schema element: " + sortAttrName)
+	}
+
+	return nil
 }
 
 // validateKeyConditionTypes checks every value a compiled

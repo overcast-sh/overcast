@@ -2,7 +2,7 @@ service: dynamodb
 status: not_started
 priority: p0
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-09-19
+last_updated: 2026-09-20
 protocols: [aws_json_1_0, rpcv2_cbor]
 implementation: [internal/services/dynamodb]
 integration_tests: [tests/integration/dynamodb]
@@ -182,8 +182,87 @@ findings:
           - tests/integration/dynamodb/request_validation_test.go
           - internal/services/dynamodb/attribute_definitions_test.go
           - internal/services/dynamodb/item_size_test.go
+    - scenario: >-
+        A KeyConditionExpression is checked against the key schema actually in play — the table's,
+        or the index's when IndexName is set — on both halves, and its two conditions may be written
+        in either order (issue #135). The partition key must be constrained by an equality; the
+        second condition, when there is one, must name that same schema's sort key. A non-key
+        attribute standing where the sort key belongs leaves the sort key unconstrained, so AWS
+        reports it as "Query condition missed key schema element: <sort key>" rather than as an
+        unsupported attribute; a table or index with no sort key has nothing to name and falls back
+        to "Query key condition not supported". Two conditions on one attribute — "pk = :a AND
+        pk = :b", "pk = :p AND begins_with(pk, :q)", or a sort-key range written as a pair rather
+        than as BETWEEN — is "KeyConditionExpressions must only contain one condition per key".
+        Order is not a constraint AWS imposes: "sk > :s AND pk = :p", "begins_with(sk, :s) AND
+        pk = :p" and "sk BETWEEN :lo AND :hi AND pk = :p" all mean what their hash-first spellings
+        mean. Neither are parentheses: a KeyConditionExpression is a conjunction and nothing else,
+        so brackets change no meaning, but expression builders emit them and AWS parses them —
+        "(#n0 = :v0 AND begins_with(#n0, :v0))" reaches a verdict on the conditions inside rather
+        than a syntax error. Before this, the parser required the first condition to be an
+        equality and refused brackets outright, and every Query branch overwrote the parsed sort
+        attribute name with the schema's, so "pk = :p AND foo = :f" silently answered as
+        "pk = :p AND sk = :f".
+      evidence:
+        aws_docs:
+          - https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Query.KeyConditionExpressions.html
+          - https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_Query.html
+        community:
+          - https://github.com/getmoto/moto/issues/3237
+          - https://dynobase.dev/dynamodb-errors/dynamodb-query-key-condition-not-supported/
+          - https://dynobase.dev/dynamodb-errors/dynamodb-query-condition-missed/
+          - https://github.com/planetlabs/datalake-api/pull/21
+          - https://github.com/equaltoai/lesser/issues/1500
+          - https://github.com/getmoto/moto/blob/master/moto/dynamodb/parsing/key_condition_expression.py
+        tests:
+          - tests/integration/dynamodb/key_condition_test.go
+          - internal/services/dynamodb/expr_key_test.go::TestKeyCond_termsInEitherOrder
+          - internal/services/dynamodb/expr_key_test.go::TestKeyCond_twoConditionsOnOneAttribute
+          - internal/services/dynamodb/key_schema_test.go::TestValidateKeyConditionSchema_rolesAndSchema
+    - scenario: >-
+        Query and Scan pagination semantics reviewed against the Query pagination guide and pinned
+        (issue #135). Limit caps the items READ, so a page reports the post-filter Count against the
+        pre-filter ScannedCount and still carries LastEvaluatedKey when the read window stopped
+        before the data did — including under Select=COUNT, where the cursor is the only way to
+        continue. ScanIndexForward orders a Query by sort key, ascending by default, and a reversed
+        walk resumes from its cursor in the reversed order rather than restarting at the ascending
+        end. A LastEvaluatedKey from an index read carries the table's own primary key as well as
+        the index key, so a client can feed it straight back; ExclusiveStartKey is resolved by
+        position rather than by identity, so a cursor whose item has since been deleted resumes
+        where that item would have sorted instead of restarting page one. All seven sort-key
+        operators the API reference lists are exercised end to end.
+      evidence:
+        aws_docs:
+          - https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Query.Pagination.html
+          - https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_Query.html
+          - https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_Scan.html
+        tests:
+          - tests/integration/dynamodb/key_condition_test.go::TestQuery_sortKeyOperatorMatrix
+          - tests/integration/dynamodb/key_condition_test.go::TestQuery_ScanIndexForward_reversePagination
+          - tests/integration/dynamodb/key_condition_test.go::TestQuery_SelectCOUNT_withLimitAndFilter
+          - tests/integration/dynamodb/key_condition_test.go::TestQuery_LSI_paginationCursorRoundTrips
+          - tests/integration/dynamodb/gsi_read_path_test.go
+          - tests/integration/dynamodb/numeric_key_order_test.go
+    - scenario: >-
+        GSI and LSI read behaviour reviewed and pinned (issue #135). An index query is validated and
+        answered against the index's own key schema, so the table's sort key is a non-key attribute
+        there. A Projection of ALL returns every base-table attribute, where KEYS_ONLY and INCLUDE
+        return only what the index projects — the index row physically never holds more. Both index
+        kinds are sparse: an item missing any index key attribute, the sort key included, is not in
+        the index and no query or scan of it can return that item. ConsistentRead=true is rejected
+        on a GSI and accepted on an LSI, which lives in the base table's own partition.
+      evidence:
+        aws_docs:
+          - https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/GSI.html
+          - https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/LSI.html
+        tests:
+          - tests/integration/dynamodb/index_projection_test.go
+          - tests/integration/dynamodb/gsi_read_path_test.go
+          - tests/integration/dynamodb/lsi_read_path_test.go
+          - tests/integration/dynamodb/consistent_read_test.go
+          - tests/integration/dynamodb/key_condition_test.go::TestQuery_GSI_tableSortKeyIsNotTheIndexSortKey
   remaining_gaps:
-    - Review expression edge cases, pagination semantics, and GSI/LSI behavior.
+    - A malformed ExclusiveStartKey is not validated against the key schema, where AWS answers ValidationException "The provided starting key is invalid". Query resolves the cursor positionally and never rejects it, so a cursor naming no key attribute at all silently restarts the walk from the beginning; a base-table Scan does reject a cursor missing the partition key, but with Overcast's own wording ("The provided key element does not match the schema: missing hash key ...") rather than AWS's, and accepts one missing the sort key.
+    - A KeyConditionExpression of three or more conditions is rejected as "Query key condition not supported" unless two of them name the same attribute, in which case it is "KeyConditionExpressions must only contain one condition per key". AWS instead reports the sort key as missed when the third condition is on a non-key attribute and the sort key itself is absent. Two conditions is the legal maximum either way, so only the wording of an already-correct rejection differs, and only in that sub-case.
     - The TTL transition window is 30 seconds rather than AWS's "up to one hour", so code that assumes an hour-long rejection window sees a shorter one here. Two behaviours in that lifecycle are documented-but-unverified against a real account, both taken from the AWS error messages the community reports rather than from a live call: that DescribeTimeToLive still names AttributeName while DISABLING, and the exact service-side validation text for a TimeToLiveSpecification missing a required member (the SDKs reject that client-side, so the service message is not observable through one).
     - Review CBOR coverage against SDK expectations.
     - UpdateTable applies BillingMode without the throughput validation CreateTable now enforces, so switching a table to PROVISIONED without ProvisionedThroughput is accepted where AWS answers "One or more parameter values were invalid: ProvisionedThroughput must be specified when BillingMode is PROVISIONED".

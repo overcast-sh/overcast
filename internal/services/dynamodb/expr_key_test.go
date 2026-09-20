@@ -334,3 +334,96 @@ func TestKeyCond_sortKeyNotSimple(t *testing.T) {
 		t.Error("expected error for nested sort key path")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Either-order parsing and one-condition-per-key (issue #135)
+// ---------------------------------------------------------------------------
+
+// The partition-key condition is the equality, wherever it is written. Role
+// assignment is the parser's alone except when both terms are equalities, so
+// these cases must come out of compileKeyCondition already canonical.
+func TestKeyCond_termsInEitherOrder(t *testing.T) {
+	values := map[string]attrValue{
+		":pk": {"S": "user#1"},
+		":sk": {"S": "a"},
+		":hi": {"S": "z"},
+	}
+	cases := []struct {
+		name     string
+		expr     string
+		wantSort sortKeyCondKind
+	}{
+		{"greaterThanFirst", "sk > :sk AND pk = :pk", sortKeyGT},
+		{"greaterOrEqualFirst", "sk >= :sk AND pk = :pk", sortKeyGE},
+		{"lessThanFirst", "sk < :sk AND pk = :pk", sortKeyLT},
+		{"lessOrEqualFirst", "sk <= :sk AND pk = :pk", sortKeyLE},
+		{"beginsWithFirst", "begins_with(sk, :sk) AND pk = :pk", sortKeyBeginsWith},
+		{"betweenFirst", "sk BETWEEN :sk AND :hi AND pk = :pk", sortKeyBetween},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			kc, err := compileKeyCondition(tc.expr, nil, values)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if kc.hashAttr != "pk" {
+				t.Errorf("hashAttr = %q, want %q", kc.hashAttr, "pk")
+			}
+			if extractScalar(kc.hashVal) != "user#1" {
+				t.Errorf("hashVal = %q, want %q", extractScalar(kc.hashVal), "user#1")
+			}
+			if kc.sortCond == nil {
+				t.Fatal("expected a sort condition")
+			}
+			if kc.sortCond.attr != "sk" {
+				t.Errorf("sort attr = %q, want %q", kc.sortCond.attr, "sk")
+			}
+			if kc.sortCond.kind != tc.wantSort {
+				t.Errorf("sort kind = %d, want %d", kc.sortCond.kind, tc.wantSort)
+			}
+		})
+	}
+}
+
+// With no equality anywhere, no term can be the partition-key condition. The
+// parser says so with an empty hashAttr rather than a message of its own,
+// because only validateKeyConditionSchema knows the partition key's name.
+func TestKeyCond_noEqualityLeavesHashUnassigned(t *testing.T) {
+	kc, err := compileKeyCondition(
+		"sk > :sk",
+		nil,
+		map[string]attrValue{":sk": {"S": "a"}},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kc.hashAttr != "" {
+		t.Errorf("hashAttr = %q, want empty", kc.hashAttr)
+	}
+	if kc.sortCond == nil || kc.sortCond.attr != "sk" {
+		t.Errorf("sort condition = %+v, want one on sk", kc.sortCond)
+	}
+}
+
+func TestKeyCond_twoConditionsOnOneAttribute(t *testing.T) {
+	values := map[string]attrValue{
+		":a": {"S": "a"},
+		":b": {"S": "b"},
+	}
+	for _, expr := range []string{
+		"pk = :a AND pk = :b",
+		"pk = :a AND begins_with(pk, :b)",
+		"sk >= :a AND sk <= :b",
+		"sk BETWEEN :a AND :b AND sk = :a",
+	} {
+		t.Run(expr, func(t *testing.T) {
+			_, err := compileKeyCondition(expr, nil, values)
+			if err == nil {
+				t.Fatalf("compileKeyCondition(%q) accepted, want rejected", expr)
+			}
+			if err.Error() != msgOneConditionPerKey {
+				t.Errorf("error = %q, want %q", err.Error(), msgOneConditionPerKey)
+			}
+		})
+	}
+}
