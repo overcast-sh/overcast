@@ -2,10 +2,10 @@ service: ecs
 status: fixed
 priority: p1
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-08-14
+last_updated: 2026-09-20
 protocols: [aws_json_1_1, rpcv2_cbor]
 implementation: [internal/services/ecs]
-integration_tests: [tests/integration/ecs]
+integration_tests: [tests/integration/ecs, tests/integration/cloudformation]
 capability_docs: docs/services/ecs.md
 operation_count_estimate: 40 supported, 8 unsupported
 current_support_level: Substantial cluster, task, service, task set, and Fargate support; some agent/attribute/exec operations stubbed.
@@ -109,6 +109,96 @@ operations:
           - internal/services/ecs/container_reconcile_test.go#TestReconcileContainers_exitedContainerStopsTask
           - internal/services/ecs/secret_deployment_test.go#TestUpdateService_forceNewDeploymentRefreshesSecret
         notes: A container that exits during Docker start cannot outrun task-record publication. ECS records STOPPED/EssentialContainerExited and the exit code, replaces a failed service task, and startup or event-stream reconnect reconciliation repairs missed Docker events through the same lifecycle path. A forced deployment after exit 1 still resolves the current secret for its replacement container.
+      fargate_missing_network_configuration:
+        status: fixed
+        evidence:
+          - tests/integration/ecs/ecs_test.go#TestCreateService_fargate_missing_networkConfiguration
+        notes: A FARGATE-launch-type CreateService against an awsvpc-mode task definition with no networkConfiguration is rejected with InvalidParameterException, matching RunTask's own requirement.
+      fargate_stores_network_configuration:
+        status: fixed
+        evidence:
+          - tests/integration/ecs/ecs_test.go#TestCreateService_fargate_stores_networkConfiguration
+        notes: A supplied networkConfiguration is stored on both the service and its PRIMARY deployment, and DescribeServices echoes it back on both.
+      cdk_paths:
+        status: fixed
+        evidence:
+          - tests/integration/cloudformation/ecs_service_test.go#TestCreateStack_ECSServiceDefaultsDesiredCount
+          - tests/integration/cloudformation/ecs_service_test.go#TestCreateStack_ECSServiceExplicitDesiredCountWins
+          - tests/integration/cloudformation/ecs_service_test.go#TestCreateStack_ECSServiceMissingNetworkConfigurationFailsStack
+          - tests/integration/cloudformation/ecs_service_update_test.go#TestUpdateStack_ECSServiceDesiredCountChange
+          - tests/integration/cloudformation/ecs_service_update_test.go#TestUpdateStack_ECSServiceTaskDefinitionChange
+          - tests/integration/cloudformation/ecs_service_update_test.go#TestUpdateStack_ECSServiceFailedUpdateLeavesStackRecoverable
+        notes: AWS::ECS::Service dispatches to CreateService/UpdateService through the emulator router rather than duplicating validation. TestCreateStack_ECSServiceDefaultsDesiredCount pins CloudFormation's documented default (desiredCount=1 when the CDK-shaped template omits DesiredCount) against a real Fargate/awsvpc service that reaches RUNNING under Docker; TestCreateStack_ECSServiceMissingNetworkConfigurationFailsStack confirms the same FARGATE/awsvpc NetworkConfiguration requirement is enforced through CloudFormation, not only the direct API.
+  RunTask:
+    status: reviewed
+    docs:
+      - https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_RunTask.html
+      - https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_NetworkConfiguration.html
+    scenarios:
+      basic_fargate_launch:
+        status: reviewed
+        evidence:
+          - tests/integration/ecs/ecs_test.go#TestRunTask_success
+        notes: A FARGATE RunTask with networkConfiguration returns one task at lastStatus=PROVISIONING, desiredStatus=RUNNING, launchType=FARGATE, and the requested cpu/memory carried onto the task, with an empty failures array.
+      awsvpc_attachments:
+        status: reviewed
+        evidence:
+          - tests/integration/ecs/ecs_test.go#TestRunTask_awsvpc_attachments
+        notes: An awsvpc-mode Fargate task gets a synthetic ElasticNetworkInterface attachment and platformVersion defaults to LATEST when the caller omits it, matching AWS's documented default. AWS's Task shape carries awsvpc details on attachments only (no networkConfiguration member on the response), which the test asserts by structure.
+      awsvpc_unbacked_vpc_rejected:
+        status: fixed
+        evidence:
+          - tests/integration/ecs/ecs_test.go#TestRunTask_awsvpc_unbackedVpcRejected
+        notes: A subnet whose VPC has no Docker-backed network (EC2 VPC strategy "shared" without a launched network) is rejected with a 400 naming the subnet "not launchable"/"unbacked", rather than silently succeeding and leaving the task unreachable.
+      fargate_missing_network_configuration:
+        status: fixed
+        evidence:
+          - tests/integration/ecs/ecs_test.go#TestRunTask_fargate_missing_networkConfiguration
+        notes: FARGATE launch type against an awsvpc-mode task definition with no networkConfiguration returns InvalidParameterException (400), matching AWS's documented requirement that networkConfiguration is required for awsvpc-mode task definitions.
+      cdk_asset_pull_and_run:
+        status: fixed
+        evidence:
+          - tests/integration/ecs/ecr_image_test.go#TestRunTask_withDocker_pullsCDKContainerAssetFromTheServedRegistry
+          - tests/integration/ecs/ecr_image_test.go#TestRunTask_withDocker_runsAnAssetPublishedTheWayCDKPublishesOne
+        notes: A task definition naming an image the way CDK writes it ("{account}.dkr.ecr.{region}.amazonaws.com/{repo}:{tag}") pulls from Overcast's own ECR registry and reaches RUNNING; the second test additionally reproduces cdk-assets' own publish decision (DescribeImages existence check before push) end to end, closing a gap where the image was never actually pushed because the existence check falsely reported it as already published.
+  RegisterTaskDefinition:
+    status: reviewed
+    docs:
+      - https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_RegisterTaskDefinition.html
+      - https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_TaskDefinition.html
+    scenarios:
+      basic_registration:
+        status: reviewed
+        evidence:
+          - tests/integration/ecs/ecs_test.go#TestRegisterTaskDefinition_success
+        notes: A minimal family-only registration returns 200 with a populated taskDefinitionArn and the requested family.
+      fargate_awsvpc_default:
+        status: fixed
+        evidence:
+          - tests/integration/ecs/ecs_test.go#TestRegisterTaskDefinition_fargate_sets_awsvpc_default
+        notes: requiresCompatibilities=[FARGATE] with no explicit networkMode sets networkMode=awsvpc automatically, matching AWS's documented "awsvpc network mode is required" behavior for Fargate.
+      fargate_invalid_network_mode:
+        status: fixed
+        evidence:
+          - tests/integration/ecs/ecs_test.go#TestRegisterTaskDefinition_fargate_invalid_networkMode
+        notes: requiresCompatibilities=[FARGATE] with an explicit non-awsvpc networkMode (e.g. bridge) is rejected with ClientException (400).
+      fargate_missing_cpu_memory:
+        status: fixed
+        evidence:
+          - tests/integration/ecs/ecs_test.go#TestRegisterTaskDefinition_fargate_missing_cpu_memory
+        notes: requiresCompatibilities=[FARGATE] without task-level cpu/memory is rejected with ClientException — both are required for Fargate per AWS docs.
+      fargate_invalid_cpu_memory_combo:
+        status: fixed
+        evidence:
+          - tests/integration/ecs/ecs_test.go#TestRegisterTaskDefinition_fargate_invalid_cpu_memory_combo
+        notes: cpu=256 with memory=128 is rejected with ClientException — 128 MiB is below the documented 512-4096 MiB range Fargate allows for 256 CPU units.
+      fargate_volume_restrictions:
+        status: reviewed
+        evidence:
+          - internal/services/ecs/volumes_test.go#TestValidateTaskVolumes_fargateRejectsHostSourcePath
+          - internal/services/ecs/volumes_test.go#TestValidateTaskVolumes_fargateAllowsEmptyHostBlock
+          - tests/integration/ecs/efs_volumes_test.go#TestRegisterTaskDefinition_efsVolumesRoundTrip
+        notes: Fargate rejects host.sourcePath with AWS's verbatim message ("host.sourcePath should not be set for volumes in Fargate") but accepts an empty host block (a scratch volume) and EC2 launch type accepts host.sourcePath; EFS-backed volumes and their container mount points round-trip through register/describe.
 findings:
   fixed:
     - DescribeClusters no longer returns creation-time zeroes after resources are added to a cluster.
@@ -118,10 +208,16 @@ findings:
     - UpdateService forceNewDeployment replaces tasks on the unchanged task definition and refreshes launch-time secret values, including through the CloudFormation/CDK nonce path.
     - Fast container exits cannot leave ECS tasks reported RUNNING; live Docker events update task state immediately, with central startup and reconnect reconciliation as the missed-event backstop.
   remaining_gaps:
-    - Prioritize RunTask, CreateService, RegisterTaskDefinition, Fargate awsvpc, and CDK paths.
     - Modern ListServiceDeployments, DescribeServiceDeployments, and service revision history are not implemented; they are a separate endpoint-sized feature rather than task retention metadata.
   intentionally_partial: []
 handoff:
-  start_with: [RegisterTaskDefinition, RunTask, CreateService]
-  do_not_redo: [DescribeClusters current counts, ListTasks omitted desiredStatus, stopped task one-hour retention, StopTask stop metadata]
-  commands: [go test -count=1 ./internal/services/ecs/... ./tests/integration/ecs/...]
+  start_with: [ListServiceDeployments, DescribeServiceDeployments]
+  do_not_redo:
+    [
+      DescribeClusters current counts, ListTasks omitted desiredStatus, stopped task one-hour retention,
+      StopTask stop metadata, RunTask basic Fargate launch and awsvpc attachments, RunTask/CreateService
+      Fargate missing-networkConfiguration validation, RunTask unbacked-VPC subnet rejection,
+      RegisterTaskDefinition Fargate awsvpc default/cpu-memory validation, RegisterTaskDefinition/RunTask
+      Fargate volume restrictions, CDK asset pull-and-run over ECR, AWS::ECS::Service CDK/CloudFormation paths,
+    ]
+  commands: [go test -count=1 ./internal/services/ecs/... ./tests/integration/ecs/... ./tests/integration/cloudformation/...]

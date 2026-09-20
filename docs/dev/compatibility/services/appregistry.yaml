@@ -1,21 +1,101 @@
 service: appregistry
-status: not_started
+status: reviewed
 priority: p3
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-05-17
+last_updated: 2026-09-20
 protocols: [rest_json, aws_json_1_0, aws_json_1_1, rpcv2_cbor]
 implementation: [internal/services/appregistry]
 integration_tests: [tests/integration/appregistry]
 capability_docs: docs/services/appregistry.md
-operation_count_estimate: 21 tracked items
-current_support_level: Applications, attribute groups, associations, and CloudFormation resource types supported; some behavior is config-only.
-operations: {}
+operation_count_estimate: 22 tracked; 22 supported (Tier 1 inert emulation for two operations, plus 20 hand-written)
+current_support_level: >-
+  Applications, attribute groups, resource associations and tagging are all
+  implemented over REST-JSON under /applications. CreateAttributeGroup and
+  TagResource are inert-tier: their inputs are stored verbatim and returned,
+  but nothing evaluates or acts on them. The four List operations
+  (ListApplications, ListAssociatedResources, ListAttributeGroups,
+  ListAssociatedAttributeGroups) accept AWS's modeled maxResults/nextToken
+  parameters but ignore them, always returning the full result set in one
+  page.
+operations:
+  ListApplications:
+    status: intentionally_partial
+    aws_docs:
+      - https://docs.aws.amazon.com/servicecatalog/latest/dg/API_app-registry_ListApplications.html
+    protocol: REST-JSON; GET /applications?maxResults={{maxResults}}&nextToken={{nextToken}}
+    tests:
+      - tests/integration/appregistry/pagination_test.go#TestListApplications_paginationParamsAcceptedAndIgnored
+    scenarios:
+      no_pagination:
+        status: intentionally_partial
+        evidence: internal/services/appregistry/handler.go's ListApplications (~169-182) never reads maxResults/nextToken from the request and never sets a response nextToken; internal/services/appregistry/capabilities_dev.go documents this in the operation's Notes ("No pagination (`nextToken` never returned)"). Confirmed by tests/integration/appregistry/pagination_test.go#TestListApplications_paginationParamsAcceptedAndIgnored, which sends maxResults=1 and an arbitrary nextToken against 3 applications and asserts all 3 come back with no nextToken in the response.
+  ListAssociatedResources:
+    status: intentionally_partial
+    aws_docs:
+      - https://docs.aws.amazon.com/servicecatalog/latest/dg/API_app-registry_ListAssociatedResources.html
+    protocol: REST-JSON; GET /applications/{application}/resources?maxResults={{maxResults}}&nextToken={{nextToken}}
+    tests:
+      - tests/integration/appregistry/pagination_test.go#TestListAssociatedResources_paginationParamsAcceptedAndIgnored
+    scenarios:
+      no_pagination:
+        status: intentionally_partial
+        evidence: internal/services/appregistry/handler.go's ListAssociatedResources (~335-358) never reads maxResults/nextToken and never sets a response nextToken; capabilities_dev.go's Notes say "No pagination." Confirmed by tests/integration/appregistry/pagination_test.go#TestListAssociatedResources_paginationParamsAcceptedAndIgnored, which associates 3 resources and asserts maxResults=1 still returns all 3 with no nextToken.
+  ListAttributeGroups:
+    status: intentionally_partial
+    aws_docs:
+      - https://docs.aws.amazon.com/servicecatalog/latest/dg/API_app-registry_ListAttributeGroups.html
+    protocol: REST-JSON; GET /attribute-groups?maxResults={{maxResults}}&nextToken={{nextToken}}
+    tests:
+      - tests/integration/appregistry/pagination_test.go#TestListAttributeGroups_paginationParamsAcceptedAndIgnored
+    scenarios:
+      no_pagination:
+        status: intentionally_partial
+        evidence: internal/services/appregistry/handler_attribute_groups.go's ListAttributeGroups (~168-181) never reads maxResults/nextToken and never sets a response nextToken; capabilities_dev.go's Notes say "No pagination." Confirmed by tests/integration/appregistry/pagination_test.go#TestListAttributeGroups_paginationParamsAcceptedAndIgnored, which creates 3 attribute groups and asserts maxResults=1 still returns all 3 with no nextToken.
+  ListAssociatedAttributeGroups:
+    status: intentionally_partial
+    aws_docs:
+      - https://docs.aws.amazon.com/servicecatalog/latest/dg/API_app-registry_ListAssociatedAttributeGroups.html
+    protocol: REST-JSON; GET /applications/{application}/attribute-groups?maxResults={{maxResults}}&nextToken={{nextToken}}
+    tests:
+      - tests/integration/appregistry/pagination_test.go#TestListAssociatedAttributeGroups_paginationParamsAcceptedAndIgnored
+    scenarios:
+      no_pagination:
+        status: intentionally_partial
+        evidence: internal/services/appregistry/handler_attribute_groups.go's ListAssociatedAttributeGroups (~291-307) never reads maxResults/nextToken and never sets a response nextToken; capabilities_dev.go's Notes say "Returns the associated attribute group IDs for an application. No pagination." Confirmed by tests/integration/appregistry/pagination_test.go#TestListAssociatedAttributeGroups_paginationParamsAcceptedAndIgnored, which associates 3 attribute groups and asserts maxResults=1 still returns all 3 with no nextToken.
+  CreateAttributeGroup:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/servicecatalog/latest/dg/API_app-registry_CreateAttributeGroup.html
+    tests:
+      - tests/integration/appregistry/appregistry_test.go#TestAttributeGroup_CRUD
+    scenarios:
+      inert_tier_storage:
+        status: reviewed
+        evidence: internal/services/appregistry/capabilities_dev.go marks CreateAttributeGroup "Inert tier — attributes JSON is stored verbatim." Nothing validates the attributes payload against a schema and nothing acts on it; it is round-tripped as-is. tests/integration/appregistry/appregistry_test.go#TestAttributeGroup_CRUD creates a group with an arbitrary attributes JSON blob and confirms it is stored and returned unchanged.
+  TagResource:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/servicecatalog/latest/dg/API_app-registry_TagResource.html
+    tests:
+      - tests/integration/appregistry/tag_validation_test.go
+    scenarios:
+      inert_tier_shared_store:
+        status: reviewed
+        evidence: internal/services/appregistry/capabilities_dev.go marks TagResource "Inert tier — merges into the shared ARN-keyed tag store." Tags are stored and returned by ListTagsForResource but never evaluated, matched against a policy, or acted on by any other operation. tests/integration/appregistry/tag_validation_test.go exercises the tag round trip and its validation.
 findings:
   fixed: []
-  remaining_gaps:
-    - Review inert/config-only behavior and no-pagination behavior.
-  intentionally_partial: []
+  remaining_gaps: []
+  intentionally_partial:
+    - ListApplications, ListAssociatedResources, ListAttributeGroups and ListAssociatedAttributeGroups accept the modeled maxResults/nextToken parameters but ignore them; every call returns the full result set in one page and nextToken is never populated in the response. Deliberate — see docs/services/appregistry.md's Differences from AWS table.
+    - CreateAttributeGroup and TagResource are inert-tier config-only operations — their inputs are stored and echoed back but never validated against a schema or acted on by other operations.
 handoff:
-  start_with: [CreateApplication, AssociateResource, tagging]
-  do_not_redo: []
+  start_with: []
+  do_not_redo:
+    [
+      CreateApplication, GetApplication, ListApplications, DeleteApplication, UpdateApplication,
+      AssociateResource, DisassociateResource, ListAssociatedResources, GetAssociatedResource,
+      CreateAttributeGroup, GetAttributeGroup, ListAttributeGroups, UpdateAttributeGroup, DeleteAttributeGroup,
+      AssociateAttributeGroup, DisassociateAttributeGroup, ListAssociatedAttributeGroups,
+      TagResource, UntagResource, ListTagsForResource,
+    ]
   commands: [go test -count=1 ./internal/services/appregistry/... ./tests/integration/appregistry/...]
