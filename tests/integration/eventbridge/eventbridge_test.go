@@ -177,7 +177,8 @@ func TestRPCv2CBOR_TargetsRoundTrip(t *testing.T) {
 	srv := helpers.NewTestServer(t)
 
 	resp := ebCBORCall(t, srv, "PutRule", map[string]any{
-		"Name": "cbor-target-rule",
+		"Name":         "cbor-target-rule",
+		"EventPattern": `{"source":["overcast.test"]}`,
 	})
 	helpers.AssertStatus(t, resp, http.StatusOK)
 	resp.Body.Close()

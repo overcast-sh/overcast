@@ -12,19 +12,19 @@ func init() {
 		capabilities.Capability{Service: "eventbridge", Operation: "ListEventBuses", Category: "Event buses", Status: capabilities.StatusSupported, Notes: "Always includes default bus"},
 		capabilities.Capability{Service: "eventbridge", Operation: "DeleteEventBus", Category: "Event buses", Status: capabilities.StatusSupported},
 		// Rules
-		capabilities.Capability{Service: "eventbridge", Operation: "PutRule", Category: "Rules", Status: capabilities.StatusSupported, Notes: "Creates or updates a rule"},
+		capabilities.Capability{Service: "eventbridge", Operation: "PutRule", Category: "Rules", Status: capabilities.StatusSupported, Notes: "Creates or updates a rule; refuses a rule with neither EventPattern nor ScheduleExpression, an unknown event bus, and an event pattern that is malformed or uses cidr, wildcard or $or"},
 		capabilities.Capability{Service: "eventbridge", Operation: "DescribeRule", Category: "Rules", Status: capabilities.StatusSupported},
 		capabilities.Capability{Service: "eventbridge", Operation: "ListRules", Category: "Rules", Status: capabilities.StatusSupported, Notes: "Lists rules for a bus"},
 		capabilities.Capability{Service: "eventbridge", Operation: "EnableRule", Category: "Rules", Status: capabilities.StatusSupported, Notes: "Sets rule state to ENABLED"},
 		capabilities.Capability{Service: "eventbridge", Operation: "DisableRule", Category: "Rules", Status: capabilities.StatusSupported, Notes: "Sets rule state to DISABLED"},
-		capabilities.Capability{Service: "eventbridge", Operation: "DeleteRule", Category: "Rules", Status: capabilities.StatusSupported},
-		capabilities.Capability{Service: "eventbridge", Operation: "TestEventPattern", Category: "Rules", Status: capabilities.StatusSupported, Notes: "Evaluates an event against a pattern with the matcher rule delivery uses; unparseable patterns are InvalidEventPatternException, mandatory envelope fields are not enforced"},
+		capabilities.Capability{Service: "eventbridge", Operation: "DeleteRule", Category: "Rules", Status: capabilities.StatusSupported, Notes: "Refuses a rule that still has targets, as AWS does; Force is the managed-rule escape only and does not bypass that"},
+		capabilities.Capability{Service: "eventbridge", Operation: "TestEventPattern", Category: "Rules", Status: capabilities.StatusSupported, Notes: "Evaluates an event against a pattern with the matcher rule delivery uses; malformed patterns and the cidr, wildcard and $or match types are InvalidEventPatternException, mandatory envelope fields are not enforced"},
 		// Targets
 		capabilities.Capability{Service: "eventbridge", Operation: "PutTargets", Category: "Targets", Status: capabilities.StatusSupported, Notes: "Adds Lambda, SQS, SNS, Step Functions, Kinesis, Firehose, ECS and event-bus targets; rejects other target types at add time"},
 		capabilities.Capability{Service: "eventbridge", Operation: "ListTargetsByRule", Category: "Targets", Status: capabilities.StatusSupported, Notes: "Lists targets including input transformers and ECS/Kinesis/SQS target parameters"},
 		capabilities.Capability{Service: "eventbridge", Operation: "RemoveTargets", Category: "Targets", Status: capabilities.StatusSupported, Notes: "Removes targets from a rule"},
 		// Events
-		capabilities.Capability{Service: "eventbridge", Operation: "PutEvents", Category: "Events", Status: capabilities.StatusSupported, Notes: "Delivers matching rules to Lambda, SQS, SNS, Step Functions, Kinesis, Firehose, ECS and event-bus targets, applying InputPath/InputTransformer and RetryPolicy/DLQ"},
+		capabilities.Capability{Service: "eventbridge", Operation: "PutEvents", Category: "Events", Status: capabilities.StatusSupported, Notes: "Delivers matching rules to Lambda, SQS, SNS, Step Functions, Kinesis, Firehose, ECS and event-bus targets, applying InputPath/InputTransformer and RetryPolicy/DLQ; patterns match on exact values plus prefix, suffix, exists, equals-ignore-case, numeric and anything-but"},
 		// Tags
 		capabilities.Capability{Service: "eventbridge", Operation: "TagResource", Category: "Tags", Status: capabilities.StatusSupported, Notes: "Tag buses and rules"},
 		capabilities.Capability{Service: "eventbridge", Operation: "ListTagsForResource", Category: "Tags", Status: capabilities.StatusSupported, Notes: "List tags for a resource"},

@@ -10,6 +10,100 @@ capability_docs: docs/services/eventbridge.md
 operation_count_estimate: 29 tracked; 18 supported, 11 unsupported
 current_support_level: Management-plane/CDK-compatible with real routing — PutEvents evaluates every rule on a bus and delivers matches to Lambda, SQS, SNS, Step Functions, Kinesis, Firehose, ECS RunTask and another event bus, applying InputPath/InputTransformer precedence and RetryPolicy/DeadLetterConfig (#467, PR #494). Archives, replay, and API destinations remain unimplemented.
 operations:
+  PutRule:
+    status: fixed
+    scenarios:
+      rule_requires_event_pattern_or_schedule_expression:
+        status: fixed
+        evidence:
+          - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_PutRule.html
+          - internal/services/eventbridge/rule_validation_test.go::TestPutRuleTyped_requiresEventPatternOrScheduleExpression
+          - tests/integration/eventbridge/rule_validation_test.go::TestPutRule_requiresEventPatternOrScheduleExpression
+        notes: >-
+          AWS documents "A rule must contain at least an EventPattern or ScheduleExpression";
+          PutRule now answers ValidationException/400 instead of storing a rule that can never
+          fire. The API reference publishes no message text, so the error code and 400 status are
+          the contractual part and the wording follows what real EventBridge returns.
+      unknown_event_bus_is_resource_not_found:
+        status: fixed
+        evidence:
+          - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_PutRule.html
+          - internal/services/eventbridge/rule_validation_test.go::TestPutRuleTyped_unknownEventBusIsResourceNotFound
+          - internal/services/eventbridge/rule_validation_test.go::TestPutRuleTyped_knownAndDefaultBusesAreAccepted
+          - internal/services/eventbridge/rule_validation_test.go::TestPutRuleTyped_busARNStoresTheRuleUnderTheBusName
+          - tests/integration/eventbridge/rule_validation_test.go::TestPutRule_unknownEventBusIsResourceNotFound
+        notes: >-
+          A rule naming a bus that was never created is ResourceNotFoundException/400 rather than a
+          rule stranded on a bus no PutEvents call can address. The default bus stays reachable
+          because it is never written to the store. EventBusName may also be the bus ARN the
+          parameter pattern admits as an optional prefix, and PutRule stores the rule under the
+          bus name either way, because DescribeRule, ListRules, PutTargets and delivery all key
+          off the name.
+      malformed_event_pattern_is_refused:
+        status: fixed
+        evidence:
+          - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_PutRule.html
+          - https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-event-patterns.html
+          - internal/services/eventbridge/rule_validation_test.go::TestPutRuleTyped_invalidEventPatternIsRefused
+          - internal/services/eventbridge/rule_validation_test.go::TestPutRuleTyped_refusedRuleIsNotStored
+          - internal/services/eventbridge/pattern_operators_test.go::TestValidateEventPattern
+          - tests/integration/eventbridge/rule_validation_test.go::TestPutRule_invalidEventPatternIsRefused
+        notes: >-
+          A non-JSON pattern, a field whose value is a bare scalar rather than an object or an
+          array, an unrecognized match type, and a match type given the wrong argument shape are
+          all InvalidEventPatternException/400. Validation runs before the store, so a refused
+          PutRule leaves no rule behind. The documented 4096-character EventPattern limit is
+          enforced here as well as in TestEventPattern.
+      content_filter_operators:
+        status: fixed
+        evidence:
+          - https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-event-patterns-content-based-filtering.html
+          - internal/services/eventbridge/pattern_operators_test.go::TestEventPatternOperators
+          - internal/services/eventbridge/rule_validation_test.go::TestPutRuleTyped_acceptsSupportedOperators
+          - tests/integration/eventbridge/rule_validation_test.go::TestPutEvents_contentFilterDeliversToSQSTarget
+        notes: >-
+          prefix, suffix, exists, equals-ignore-case, numeric (single comparison and range) and
+          anything-but (single value, list, and nested prefix/suffix/equals-ignore-case) are
+          evaluated by the one matcher PutEvents, TestEventPattern and the scheduled-rule engine
+          share, so a content-filtered rule delivers rather than matching nothing. exists is held
+          to the documented leaf-node restriction, and a numeric bound outside AWSs documented
+          -5.0e9..+5.0e9 range is refused. A clause the matcher cannot read - an empty candidate
+          array, an empty or wrongly shaped anything-but argument, a match expression with more
+          than one match type - is refused at PutRule and never matches at delivery time, so
+          anything-but can never negate an unreadable clause into a rule that matches every
+          event (TestEventPatternOperators_unreadableClauseNeverMatches).
+      unsupported_operators_fail_loudly:
+        status: fixed
+        evidence:
+          - https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-event-patterns-content-based-filtering.html
+          - internal/services/eventbridge/rule_validation_test.go::TestPutRuleTyped_unsupportedOperatorIsRefusedNotSilentlyStored
+        notes: >-
+          cidr, wildcard and $or are refused at PutRule and TestEventPattern time with
+          InvalidEventPatternException naming the match type, rather than stored as a rule that
+          never matches (the fail-loudly rule from #484).
+  DeleteRule:
+    status: fixed
+    scenarios:
+      rule_with_targets_attached:
+        status: fixed
+        evidence:
+          - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_DeleteRule.html
+          - tests/integration/eventbridge/rule_validation_test.go::TestDeleteRule_withTargetsAttachedIsRefused
+          - tests/integration/eventbridge/rule_validation_test.go::TestDeleteRule_forceDoesNotBypassTheTargetsCheck
+          - tests/integration/eventbridge/rule_validation_test.go::TestDeleteRule_withoutTargetsStaysIdempotent
+          - tests/integration/cloudformation/events_rule_teardown_test.go::TestDeleteStack_eventsRuleWithTargetsIsRemovedTargetsFirst
+        notes: >-
+          AWS documents "Before you can delete the rule, you must remove all targets, using
+          RemoveTargets", and answers ValidationException for a rule that still has them; deleting
+          it anyway used to strand the targets in the store. Force stays what the reference says it
+          is - the managed-rule escape, "ignored for rules that are not managed rules" - so it does
+          not bypass the check, and Overcast has no managed rules for it to apply to. Deleting a
+          rule that does not exist still succeeds, keeping AWSs "If you call delete rule multiple
+          times for the same rule, all calls will succeed." The CloudFormation AWS::Events::Rule
+          handler detaches the rules targets before DeleteRule, which is what real CloudFormations
+          resource provider does and what keeps stack teardown working under the new rule. The API
+          reference publishes no message text, so the wording follows real EventBridge and the
+          error code and 400 status are the contractual part.
   PutTargets:
     status: fixed
     priority: p1
@@ -17,6 +111,19 @@ operations:
       - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_PutTargets.html
       - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_Target.html
     scenarios:
+      target_validation_rejections:
+        status: fixed
+        evidence:
+          - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_PutTargets.html
+          - tests/integration/eventbridge/target_fanout_test.go::TestPutTargets_rejectsUnsupportedTargetType
+          - tests/integration/eventbridge/target_fanout_test.go::TestPutTargets_rejectsMalformedTargetARN
+          - tests/integration/eventbridge/target_fanout_test.go::TestPutTargets_rejectsMultipleInputSpecifications
+        notes: >-
+          A target type Overcast cannot deliver to comes back in FailedEntries with
+          UnsupportedTargetType and is not stored; a malformed target ARN, and a target setting
+          more than one of Input/InputPath/InputTransformer, are ValidationException for the whole
+          call. Reviewed under #148 - the fixtures now create their rule with an event pattern,
+          because a trigger-less rule is no longer accepted.
       ecs_fargate_target_round_trip:
         status: fixed
         evidence:
@@ -133,18 +240,25 @@ findings:
       PutTargets operation entries above for the full test list. docs/services/eventbridge.md
       already documents the eight target types and no longer calls routing "partial".
   remaining_gaps:
-    - Review advanced EventBridge pattern operators (prefix, suffix, numeric, anything-but, exists, cidr, wildcard) — PutEvents/TestEventPattern still match on exact values only.
-    - Review target validation, rule validation, and tag protocol fidelity.
+    - An event pattern is not matched against an array-valued event field; AWS matches when any member of the array matches.
+    - Only PutRule accepts the event-bus ARN spelling of EventBusName; DescribeRule, ListRules, PutTargets, RemoveTargets and DeleteRule still require the bare name.
+    - EventPatterns 4096-character limit is measured in bytes rather than characters, so a multi-byte pattern under the limit is refused (pre-existing in TestEventPattern, now shared with PutRule).
   intentionally_partial:
     - Target delivery covers eight target types (Lambda, SQS, SNS, Step Functions, Kinesis, Firehose, ECS RunTask, event bus); the remaining ~12 AWS target types (CloudWatch Logs, API destinations, Redshift, SageMaker Pipeline, and others) are refused at PutTargets with UnsupportedTargetType rather than accepted and dropped.
     - Archives, replay, and API destinations (Connections) are not implemented — 501, per docs/services/eventbridge.md.
     - Retry timing is immediate and capped at 5-6 total attempts rather than AWS's exponential backoff over up to 24 hours.
     - Bus-to-bus forwarding is a nested in-process call capped at 4 hops rather than AWS's independent, unbounded delivery.
+    - The numeric match type accepts "!=", which EventBridges matcher supports but the user guides operator table does not list. Accepting it was chosen over refusing a pattern real EventBridge takes; confirming it needs a real-AWS check the reference policy reserves for the user.
+    - The cidr, wildcard and $or match types are not evaluated. A pattern using one is refused at PutRule and TestEventPattern time with InvalidEventPatternException naming the match type, rather than accepted and silently never matched.
 handoff:
-  start_with: ["advanced event pattern operators, target/rule/tag protocol fidelity (#148, in progress elsewhere)"]
+  start_with: ["array-valued event field matching, the event-bus ARN spelling of EventBusName on DescribeRule/ListRules/PutTargets/RemoveTargets/DeleteRule, cidr and wildcard match types"]
   do_not_redo:
     - ECS/Fargate target metadata round-trip for PutTargets/ListTargetsByRule; covered by TestPutTargets_ecsFargateTargetRoundTrip.
     - SQS target delivery for matching PutEvents; covered by TestPutEvents_matchingRuleDeliversToSQSTarget.
     - Scheduled ECS/Fargate RunTask invocation; covered by TestScheduledRule_ecsFargateTargetRunsTask.
     - "PutEvents fan-out to Lambda/SNS/Step Functions/Kinesis/Firehose/event-bus, PutTargets validation (unsupported type, malformed ARN, multiple input specs), input shaping precedence, retry/DLQ, and Lambda permission enforcement (#147, #467, PR #494) from 2026-09-20."
+    - PutRule validation of the trigger, the event bus and the event pattern; covered by internal/services/eventbridge/rule_validation_test.go and tests/integration/eventbridge/rule_validation_test.go.
+    - The prefix, suffix, exists, equals-ignore-case, numeric and anything-but match types; covered by internal/services/eventbridge/pattern_operators_test.go and TestPutEvents_contentFilterDeliversToSQSTarget.
+    - PutTargets target-type, ARN-shape and input-specification validation; covered by the three TestPutTargets_rejects* tests.
+    - DeleteRules targets-attached refusal, Force not bypassing it, and the CloudFormation AWS::Events::Rule teardown that removes targets first; covered by the three TestDeleteRule_* tests and TestDeleteStack_eventsRuleWithTargetsIsRemovedTargetsFirst.
   commands: [go test -count=1 ./internal/services/eventbridge/... ./tests/integration/eventbridge/...]

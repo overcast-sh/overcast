@@ -833,8 +833,57 @@ func (h *eventsRuleHandler) Delete(ctx context.Context, router http.Handler, cfg
 	if eventBusName != "" {
 		body["EventBusName"] = eventBusName
 	}
+	// EventBridge refuses DeleteRule while the rule still has targets ("Before
+	// you can delete the rule, you must remove all targets, using
+	// RemoveTargets" — API_DeleteRule), and Force is the managed-rule escape
+	// rather than a way around that. Create attached these targets, so Delete
+	// takes them off again — which is what real CloudFormation's resource
+	// provider does, and why an AWS::Events::Rule with targets deletes cleanly
+	// on AWS despite the API rule.
+	if err := removeAllEventTargets(ctx, router, rCtx.Region, name, eventBusName); err != nil {
+		return err
+	}
 	rec, err := internalJSON(ctx, router, rCtx.Region, "AWSEvents.DeleteRule", body)
 	return teardownError("DeleteRule", rec, err)
+}
+
+// removeAllEventTargets detaches every target currently on a rule, so the rule
+// can be deleted. It removes what ListTargetsByRule reports rather than what
+// the template declared: an Update may have changed the set, and a target
+// added outside the stack would block the delete just as firmly.
+//
+// A rule that is already gone reports no targets and needs nothing removed, so
+// the teardown stays idempotent the way every other handler's Delete is.
+func removeAllEventTargets(ctx context.Context, router http.Handler, region, ruleName, eventBusName string) error {
+	listBody := map[string]any{"Rule": ruleName}
+	if eventBusName != "" {
+		listBody["EventBusName"] = eventBusName
+	}
+	rec, err := internalJSON(ctx, router, region, "AWSEvents.ListTargetsByRule", listBody)
+	if err != nil {
+		return teardownError("ListTargetsByRule", rec, err)
+	}
+	var listed struct {
+		Targets []struct {
+			ID string `json:"Id"`
+		} `json:"Targets"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &listed); err != nil {
+		return fmt.Errorf("ListTargetsByRule: parse response: %w", err)
+	}
+	if len(listed.Targets) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(listed.Targets))
+	for _, t := range listed.Targets {
+		ids = append(ids, t.ID)
+	}
+	rmBody := map[string]any{"Rule": ruleName, "Ids": ids}
+	if eventBusName != "" {
+		rmBody["EventBusName"] = eventBusName
+	}
+	rec, err = internalJSON(ctx, router, region, "AWSEvents.RemoveTargets", rmBody)
+	return teardownError("RemoveTargets", rec, err)
 }
 
 func (h *eventsRuleHandler) Update(ctx context.Context, router http.Handler, _ *config.Config, physicalID string, props map[string]any, oldProps map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
