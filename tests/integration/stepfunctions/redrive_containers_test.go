@@ -417,6 +417,47 @@ func TestRedriveExecution_distributedMapRedrivesFailedChildren(t *testing.T) {
 	}
 }
 
+// TestRedriveExecution_distributedMapStartsNoChildOnceItHasFailed is the
+// precondition every distributed-Map redrive test rests on, asserted on its
+// own: a Map that tolerates no failure and runs one child at a time starts
+// nothing after the child that fails it.
+//
+// It was not deterministic before issue #1973. The child goroutine gave the
+// concurrency slot back and only then cancelled the launcher, so a launcher
+// waiting for that slot could wake in between and start the next child —
+// which, reading a table that exists, succeeded. That is the second failure
+// on the issue: the sibling test read two SUCCEEDED children where it
+// expected one, having sampled a map run with a child the tolerance should
+// have stopped.
+func TestRedriveExecution_distributedMapStartsNoChildOnceItHasFailed(t *testing.T) {
+	// Given: a distributed Map, one child at a time, whose second child
+	// fails on a table that does not exist — the third would succeed
+	srv := helpers.NewTestServer(t)
+	createTable(t, srv, "tbl-ok")
+	got, execARN := runToEnd(t, srv, "dmap-stop", distributedGateDef("STANDARD"), distributedGateInput)
+	if got.Status != "FAILED" || got.Error != "States.ExceedToleratedFailureThreshold" {
+		t.Fatalf("run: status=%q error=%q (%s)", got.Status, got.Error, got.Cause)
+	}
+
+	// Then: two children ran, the third never started
+	mapRunArn := firstMapRunArn(t, rawHistory(t, srv, execARN))
+	children := mapRunChildren(t, srv, mapRunArn)
+	total := 0
+	for _, arns := range children {
+		total += len(arns)
+	}
+	if total != 2 || len(children["SUCCEEDED"]) != 1 || len(children["FAILED"]) != 1 {
+		t.Fatalf("children = %v, want one SUCCEEDED and one FAILED", children)
+	}
+	// And: the map run counts the one that never started as pending
+	described := sfnOK(t, srv, "DescribeMapRun", map[string]any{"mapRunArn": mapRunArn})
+	counts, _ := described["executionCounts"].(map[string]any)
+	if counts["succeeded"] != float64(1) || counts["failed"] != float64(1) ||
+		counts["running"] != float64(0) || counts["pending"] != float64(1) || counts["total"] != float64(3) {
+		t.Errorf("executionCounts = %v", counts)
+	}
+}
+
 func TestRedriveExecution_distributedMapRestartsExpressChildren(t *testing.T) {
 	// Given: a distributed Map of EXPRESS children, one of which failed
 	srv := helpers.NewTestServer(t)

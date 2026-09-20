@@ -383,10 +383,17 @@ func (in *interpreter) runChildren(ctx context.Context, live *liveMapRun, proces
 		mu       sync.Mutex
 		exceeded bool
 	)
+	// fail marks the run past its failure tolerance: nothing more is started
+	// and the children still running are stopped.
+	fail := func() {
+		mu.Lock()
+		exceeded = true
+		mu.Unlock()
+		cancel(errToleranceExceeded)
+	}
 	// Failures a redrive keeps can already be past the tolerance.
 	if live.toleranceExceeded(live.recordCopy()) {
-		exceeded = true
-		cancel(errToleranceExceeded)
+		fail()
 	}
 launch:
 	for i, plan := range plans {
@@ -395,6 +402,18 @@ launch:
 		}
 		for {
 			record, changed := live.snapshot()
+			// The counts are the authority on whether this run may start
+			// anything else, rather than childCtx's cancellation: a child
+			// gives its concurrency slot back in the same locked update that
+			// records its failure, so a launcher that has just been handed
+			// the slot always sees the failure too. Reading the cancellation
+			// instead raced it — the child cancels after the update it was
+			// woken by, so the slot freed by the failure that ends the run
+			// could be used to start the next child (issue #1973).
+			if live.toleranceExceeded(record) {
+				fail()
+				break launch
+			}
 			limit := record.MaxConcurrency
 			if limit <= 0 || limit > maxDistributedConcurrency {
 				limit = maxDistributedConcurrency
@@ -436,10 +455,7 @@ launch:
 				*run.ItemCounts.bucket(result.exec.Status) += n
 			})
 			if live.toleranceExceeded(record) {
-				mu.Lock()
-				exceeded = true
-				mu.Unlock()
-				cancel(errToleranceExceeded)
+				fail()
 			}
 		}(i, plan)
 	}
@@ -557,7 +573,7 @@ func (in *interpreter) runChildExecution(ctx context.Context, processor *aslBran
 	var outcome executionOutcome
 	if h.reserveRun(exec.ExecutionArn, run, false) {
 		outcome = h.runExecution(runCtx, &childSM, exec, processor, in.region, in.depth, run)
-		defer h.releaseRun(exec.ExecutionArn)
+		defer h.releaseRun(exec.ExecutionArn, run)
 	} else {
 		serr := &stateError{name: errRuntime, cause: "Overcast Step Functions is shutting down", aborted: true}
 		cursor := run.hist.lastID()
