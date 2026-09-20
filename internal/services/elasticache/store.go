@@ -522,11 +522,21 @@ func (s *cacheStore) allocatePortFixed(ctx context.Context, clusterID string, po
 
 // ── Errors ────────────────────────────────────────────────────────────────────
 
+// errClusterNotFound answers 404, not the 400 a validation failure gets. A
+// Query-protocol fault carries its own HTTP status in the model, in the same
+// aws.protocols#awsQueryError trait that settles its wire code, and
+// CacheClusterNotFoundFault declares httpResponseCode 404 — as do
+// ReplicationGroupNotFoundFault, CacheParameterGroupNotFoundFault and
+// ServerlessCacheNotFoundFault below.
+//
+// The status is per fault rather than per service, so it stays on each
+// constructor: CacheSubnetGroupNotFoundFault declares 400 in that same trait
+// and is correct as it stands.
 func errClusterNotFound(id string) *protocol.AWSError {
 	return &protocol.AWSError{
 		Code:       "CacheClusterNotFound",
 		Message:    fmt.Sprintf("Cache cluster %s not found.", id),
-		HTTPStatus: http.StatusBadRequest,
+		HTTPStatus: http.StatusNotFound,
 	}
 }
 
@@ -542,7 +552,7 @@ func errReplicationGroupNotFound(id string) *protocol.AWSError {
 	return &protocol.AWSError{
 		Code:       "ReplicationGroupNotFoundFault",
 		Message:    fmt.Sprintf("Replication group %s not found.", id),
-		HTTPStatus: http.StatusBadRequest,
+		HTTPStatus: http.StatusNotFound,
 	}
 }
 
@@ -577,6 +587,8 @@ func errServerlessCacheAlreadyExists(name string) *protocol.AWSError {
 	}
 }
 
+// errSubnetGroupNotFound keeps the 400 its awsQueryError trait declares. It is
+// the one not-found fault in this file that AWS does not answer at 404.
 func errSubnetGroupNotFound(name string) *protocol.AWSError {
 	return &protocol.AWSError{
 		Code:       "CacheSubnetGroupNotFoundFault",
@@ -597,7 +609,7 @@ func errParameterGroupNotFound(name string) *protocol.AWSError {
 	return &protocol.AWSError{
 		Code:       "CacheParameterGroupNotFound",
 		Message:    fmt.Sprintf("Cache parameter group %s not found.", name),
-		HTTPStatus: http.StatusBadRequest,
+		HTTPStatus: http.StatusNotFound,
 	}
 }
 

@@ -36,8 +36,8 @@ operations:
         evidence: An AZMode outside single-az/cross-az is InvalidParameterValue; either parameter on a non-Memcached engine, or a zone list whose length differs from NumCacheNodes, is InvalidParameterCombination. Accepted zones land on each node's CustomerAvailabilityZone, and PreferredAvailabilityZone becomes the "Multiple" AWS documents when the zones differ or AZMode is cross-az over more than one node.
       - name: ReplicationGroupId names an existing group
         status: fixed
-        tests: [TestCreateCacheCluster_unknownReplicationGroup, TestCreateCacheCluster_joinsExistingReplicationGroup, TestCreateCacheCluster_replicationGroupIdRejectedForMemcached]
-        evidence: An unknown group is ReplicationGroupNotFoundFault (one of the operation's modelled errors) and no cluster is written; a known one registers the cluster in MemberClusters; Memcached is InvalidParameterCombination.
+        tests: [TestCreateCacheCluster_unknownReplicationGroup, TestCreateCacheCluster_joinsExistingReplicationGroup, TestCreateCacheCluster_replicationGroupIdRejectedForMemcached, TestElastiCacheNotFoundFaults_useTheModelledStatus]
+        evidence: An unknown group is ReplicationGroupNotFoundFault (one of the operation's modelled errors) at HTTP 404, the status the fault's awsQueryError trait binds, and no cluster is written; a known one registers the cluster in MemberClusters; Memcached is InvalidParameterCombination.
       - name: CacheCluster XML shape
         status: fixed
         tests: [TestCreateCacheCluster_redisXMLShape, TestCreateCacheCluster_memcachedXMLShape, TestCreateCacheCluster_firstAddressInTheBodyIsTheClusterEndpoint]
@@ -159,9 +159,9 @@ findings:
     - Added ServerlessCache pagination, CacheUsageLimits, snapshot restore metadata, and CloudFormation in-place updates.
     - Docker-backed ElastiCache cache cluster, replication group, and serverless cache endpoint hostnames are registered as Docker DNS aliases on the Lambda network.
     - Missing or exited cache cluster, replication group, and serverless cache containers are replaced from live events and central startup/reconnect snapshots rather than being exposed as durable stopped resources.
+    - CacheClusterNotFound, ReplicationGroupNotFoundFault and CacheParameterGroupNotFound answer HTTP 404, the status their aws.protocols#awsQueryError traits bind, on every operation that raises them; the wire codes and messages are unchanged. CacheSubnetGroupNotFoundFault keeps the 400 its own trait declares (TestElastiCacheNotFoundFaults_useTheModelledStatus, TestDeleteStack_ElastiCacheCacheClusterAlreadyGone).
   remaining_gaps:
     - Serverless cache snapshots are metadata-only; no durable snapshot contents are emulated.
-    - CacheClusterNotFound, ReplicationGroupNotFoundFault and CacheParameterGroupNotFound answer HTTP 400 where the model's awsQueryError trait says 404; the codes are right and the status is not. Shared with Describe/Delete/Modify, so it wants its own pass.
     - Multi-shard and multi-replica replication groups (NumCacheClusters, NumNodeGroups, ReplicasPerNodeGroup) are not modelled; every group is one shard with one primary.
   intentionally_partial: []
 handoff:

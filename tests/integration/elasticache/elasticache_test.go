@@ -202,7 +202,7 @@ func TestDescribeCacheClusters_notFound(t *testing.T) {
 	resp := cacheQuery(t, srv, "DescribeCacheClusters", url.Values{
 		"CacheClusterId": []string{"nonexistent"},
 	})
-	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertStatus(t, resp, http.StatusNotFound)
 	assertQueryXMLError(t, resp, "CacheClusterNotFound")
 }
 
@@ -241,7 +241,7 @@ func TestDeleteCacheCluster_notFound(t *testing.T) {
 	resp := cacheQuery(t, srv, "DeleteCacheCluster", url.Values{
 		"CacheClusterId": []string{"no-such"},
 	})
-	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertStatus(t, resp, http.StatusNotFound)
 	assertQueryXMLError(t, resp, "CacheClusterNotFound")
 }
 
@@ -385,7 +385,7 @@ func TestDescribeReplicationGroups_notFound(t *testing.T) {
 	resp := cacheQuery(t, srv, "DescribeReplicationGroups", url.Values{
 		"ReplicationGroupId": []string{"no-rg"},
 	})
-	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertStatus(t, resp, http.StatusNotFound)
 	assertQueryXMLError(t, resp, "ReplicationGroupNotFoundFault")
 }
 
@@ -893,7 +893,7 @@ func TestDescribeCacheParameters_notFound(t *testing.T) {
 	resp := cacheQuery(t, srv, "DescribeCacheParameters", url.Values{
 		"CacheParameterGroupName": []string{"no-such-group"},
 	})
-	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertStatus(t, resp, http.StatusNotFound)
 	assertQueryXMLError(t, resp, "CacheParameterGroupNotFound")
 }
 
@@ -1048,7 +1048,7 @@ func TestDescribeCacheParameterGroups_not_found(t *testing.T) {
 		"CacheParameterGroupName": []string{"does-not-exist"},
 	})
 	// Then: CacheParameterGroupNotFound error
-	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertStatus(t, resp, http.StatusNotFound)
 	assertQueryXMLError(t, resp, "CacheParameterGroupNotFound")
 }
 
@@ -1078,7 +1078,7 @@ func TestDeleteCacheParameterGroup_success(t *testing.T) {
 	resp = cacheQuery(t, srv, "DescribeCacheParameterGroups", url.Values{
 		"CacheParameterGroupName": []string{"to-delete"},
 	})
-	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertStatus(t, resp, http.StatusNotFound)
 	assertQueryXMLError(t, resp, "CacheParameterGroupNotFound")
 }
 
@@ -1089,7 +1089,7 @@ func TestDeleteCacheParameterGroup_not_found(t *testing.T) {
 		"CacheParameterGroupName": []string{"ghost"},
 	})
 	// Then: CacheParameterGroupNotFound error
-	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertStatus(t, resp, http.StatusNotFound)
 	assertQueryXMLError(t, resp, "CacheParameterGroupNotFound")
 }
 
@@ -1149,7 +1149,7 @@ func TestModifyCacheCluster_not_found(t *testing.T) {
 		"CacheNodeType":  []string{"cache.t3.small"},
 	})
 	// Then: CacheClusterNotFound error
-	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertStatus(t, resp, http.StatusNotFound)
 	assertQueryXMLError(t, resp, "CacheClusterNotFound")
 }
 
@@ -1213,7 +1213,7 @@ func TestModifyReplicationGroup_not_found(t *testing.T) {
 		"ReplicationGroupDescription": []string{"updated"},
 	})
 	// Then: ReplicationGroupNotFoundFault error
-	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertStatus(t, resp, http.StatusNotFound)
 	assertQueryXMLError(t, resp, "ReplicationGroupNotFoundFault")
 }
 
