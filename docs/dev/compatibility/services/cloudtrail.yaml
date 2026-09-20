@@ -1,22 +1,41 @@
 service: cloudtrail
-status: not_started
+status: reviewed
 priority: p2
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-05-17
+last_updated: 2026-09-20
 protocols: [aws_json_1_1, aws_json_1_0, rpcv2_cbor]
 implementation: [internal/services/cloudtrail]
 integration_tests: [tests/integration/cloudtrail]
 capability_docs: docs/services/cloudtrail.md
-operation_count_estimate: 9 tracked, 9 inert
+operation_count_estimate: >-
+  12 tracked in internal/services/cloudtrail/capabilities_dev.go, all StatusInert.
+  docs/services/cloudtrail.md confirms "All 12 listed operations are implemented." (previously
+  recorded as 9 tracked/9 inert; #814 added AddTags/RemoveTags/ListTags, which raised the count
+  to 12 without changing the tier.)
 current_support_level: Metadata-only CloudTrail; no event delivery.
 operations: {}
 findings:
-  fixed: []
+  fixed:
+    - "#77: docs/services/cloudtrail.md already carries a Protocols row (line 41: \"AWS JSON
+      1.0 and Smithy RPC v2 CBOR\"), matching the service's declared protocols. No doc change
+      needed; the tracker was stale."
   remaining_gaps:
-    - Add protocol section to docs.
-    - Decide whether inert operations should be reviewed as supported metadata or partial.
-  intentionally_partial: []
+    - "#478/#479/#484 track promoting CloudTrail from Tier 1 (fully inert) to Tier 2 (real
+      event-call logging and LookupEvents). That is a materially larger feature — recording
+      every API call at the router/middleware layer, S3 delivery, a web UI event-history view —
+      tracked separately in docs/plans/full-emulation-priority.md and remains open. It is
+      outside this compatibility-tracker reconciliation's scope."
+  intentionally_partial:
+    - "#78: every one of the 12 operations is StatusInert by design, not StatusPartial or
+      StatusSupported with caveats. docs/services/cloudtrail.md's Gotchas section states this
+      explicitly (\"Every CloudTrail operation is Inert: the call is accepted and answered
+      correctly, and nothing happens as a result\"), and internal/services/cloudtrail/capabilities_dev.go
+      marks all 12 rows capabilities.StatusInert. Inert is the correct tier here: trail
+      CRUD/logging-state/tag calls really do accept and store their input and answer the
+      documented shape, but nothing downstream (event recording, S3 delivery, LookupEvents)
+      ever runs — which is what distinguishes Inert (accepted, no side effects) from Partial
+      (served with a caveat on an existing side effect)."
 handoff:
-  start_with: [CreateTrail, StartLogging, DescribeTrails]
-  do_not_redo: []
+  start_with: []
+  do_not_redo: [CreateTrail, DescribeTrails, UpdateTrail, DeleteTrail, ListTrails, GetTrailStatus, StartLogging, StopLogging, LookupEvents, AddTags, RemoveTags, ListTags]
   commands: [go test -count=1 ./internal/services/cloudtrail/... ./tests/integration/cloudtrail/...]

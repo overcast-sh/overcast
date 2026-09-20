@@ -1,22 +1,37 @@
 service: athena
-status: not_started
+status: in_progress
 priority: p2
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-05-17
+last_updated: 2026-09-20
 protocols: [aws_json_1_1, aws_json_1_0, rpcv2_cbor]
 implementation: [internal/services/athena]
 integration_tests: [tests/integration/athena]
 capability_docs: docs/services/athena.md
-operation_count_estimate: 8 supported
+operation_count_estimate: >-
+  11 tracked in internal/services/athena/capabilities_dev.go, all StatusSupported: 4 Queries
+  (StartQueryExecution, GetQueryExecution, GetQueryResults, ListQueryExecutions), 4 WorkGroups
+  (CreateWorkGroup, GetWorkGroup, ListWorkGroups, DeleteWorkGroup) and 3 Tags (TagResource,
+  UntagResource, ListTagsForResource). docs/services/athena.md confirms "All 11 listed
+  operations are implemented." (previously recorded as "8 supported", which predates
+  ListQueryExecutions and the three tag operations.)
 current_support_level: Basic queries and workgroups; queries immediately succeed with empty results.
 operations: {}
 findings:
   fixed: []
   remaining_gaps:
-    - Review query execution and result response shapes.
-    - Document inert query engine behavior in compatibility tracking.
-  intentionally_partial: []
+    - "#66: review query execution and result response shapes in more depth (Statistics,
+      EngineVersion, data-scanned figures, and whether GetQueryResults' ResultSet shape matches
+      AWS's column-metadata format exactly). Shape tests for this are in flight on branch
+      claude/compat-tests-ses-stubs-athena-shapes-cloudfront-xml."
+  intentionally_partial:
+    - "#67: the inert query engine is already documented. docs/services/athena.md's subtitle
+      ('no SQL is executed, so every query succeeds immediately with an empty result set'), its
+      'Differences from AWS' table (Query execution: 'stored, never parsed or run'; Results:
+      'Nothing is written'; Execution states: 'None of them is ever observed'; Statistics:
+      'Absent'; Workgroup configuration: 'Echoed, not enforced'), and its Gotchas note ('Any
+      assertion about the rows that come back needs real Athena') together describe the design
+      boundary this issue asked to have recorded."
 handoff:
-  start_with: [StartQueryExecution, GetQueryExecution, GetQueryResults]
-  do_not_redo: []
+  start_with: []
+  do_not_redo: [StartQueryExecution, GetQueryExecution, GetQueryResults, ListQueryExecutions, CreateWorkGroup, GetWorkGroup, ListWorkGroups, DeleteWorkGroup, TagResource, UntagResource, ListTagsForResource]
   commands: [go test -count=1 ./internal/services/athena/... ./tests/integration/athena/...]

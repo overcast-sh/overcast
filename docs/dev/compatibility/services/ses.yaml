@@ -1,20 +1,41 @@
 service: ses
-status: not_started
+status: in_progress
 priority: p2
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-05-17
+last_updated: 2026-09-20
 protocols: [query, rest_json]
 implementation: [internal/services/ses]
 integration_tests: [tests/integration/ses]
 capability_docs: docs/services/ses.md
-operation_count_estimate: 42 tracked; 24 supported, 18 unsupported
+operation_count_estimate: >-
+  45 tracked in internal/services/ses/capabilities_dev.go; 27 supported, 18 unsupported.
+  docs/services/ses.md confirms "27 of 45 listed operations are implemented." (previously
+  recorded as 42 tracked/24 supported, which undercounted both.)
 current_support_level: SES v1 sending, identities, and templates mostly supported; SES v2 minimal send/identity support; many config/receipt/DKIM operations stubbed.
 operations: {}
 findings:
-  fixed: []
+  fixed:
+    - "#180: multi-protocol tracking for v2 REST-JSON doc-only operations is fixed by #864
+      (feat(awsapi): enforce the manifest over the wire facts a service states about itself).
+      Every V2* capability row except V2Other is dispatched by a REST route registered in
+      RegisterRoutes rather than v1's action table. Before #864, DocOnly sat on all eight V2*
+      rows because capgen's manifest check did not read DisplayName — so a row named
+      V2SendEmail found no `sesv2` operation of that name and reported UNKNOWN_MODEL_OPERATION —
+      and its orphan check read only the v1 action table, missing REST-dispatched handlers
+      entirely. #864 fixed both: modeledOperationName now resolves through DisplayName, and the
+      orphan cross-check reads the package's handler methods. capgen also now rejects a DocOnly
+      row that has an implementation, so the flag cannot silently come back. Only V2Other (the
+      catch-all `NotImplemented` response for every other v2 operation) is DocOnly today, which
+      is correct — see internal/services/ses/capabilities_dev.go:52-69 for the full explanation
+      left in place by #864."
   remaining_gaps:
-    - Review multi-protocol tracking for v2 REST-JSON doc-only operations.
-    - Verify unsupported v1 stubs match AWS error shape.
+    - "#181: verify that the unsupported v1 stubs (GetIdentityDkimAttributes,
+      GetIdentityMailFromDomainAttributes, GetIdentityNotificationAttributes,
+      SetIdentityDkimEnabled, SetIdentityMailFromDomain, SetIdentityNotificationTopic,
+      VerifyDomainDkim, CreateConfigurationSet, DeleteConfigurationSet, ListConfigurationSets,
+      and the receipt-rule family) answer with AWS's documented error shape rather than a bare
+      generic 501 body. Tests for this are in flight on branch
+      claude/compat-tests-ses-stubs-athena-shapes-cloudfront-xml."
   intentionally_partial: []
 handoff:
   start_with: [SendEmail, SendRawEmail, SES v2 routes]

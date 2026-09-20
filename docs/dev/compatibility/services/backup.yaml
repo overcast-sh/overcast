@@ -1,22 +1,70 @@
 service: backup
-status: not_started
+status: reviewed
 priority: p3
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-05-17
-protocols: [aws_json_1_0, aws_json_1_1, rpcv2_cbor]
+last_updated: 2026-09-20
+protocols: [rest_json]
 implementation: [internal/services/backup]
 integration_tests: [tests/integration/backup]
 capability_docs: docs/services/backup.md
-operation_count_estimate: 9 tracked, all inert
-current_support_level: Metadata-only backup vault and backup plan CRUD; no jobs, recovery points, or scheduling.
+operation_count_estimate: >-
+  18 tracked in internal/services/backup/capabilities_dev.go: 7 StatusSupported
+  (CreateBackupVault, DeleteBackupVault, DeleteBackupPlan, DeleteBackupAccessPoint, TagResource,
+  ListTags, UntagResource) and 11 StatusPartial (the vault/plan/access-point Describe and List
+  operations, CreateBackupPlan, UpdateBackupPlan and CreateBackupAccessPoint — each Partial for
+  a specific named-missing member, per the capabilities_dev.go package comment). Zero are
+  StatusInert. docs/services/backup.md confirms "All 18 listed operations are implemented."
+  (previously recorded as "9 tracked, all inert" and the issue text that prompted this review
+  assumed "8 Supported, 10 Partial" — both undercounts predate #904, which registered real chi
+  routes for AWS Backup for the first time, and #1467/#1744, which added the six access-point
+  operations afterward. The correct current split is 7/11, verified by counting each
+  capabilities.Capability{} row.)
+current_support_level: >-
+  Real vault, plan and backup-access-point CRUD served at AWS's own restJson1 paths
+  (/backup-vaults, /backup/plans, /backup-access-point) — not metadata behind an invented
+  X-Amz-Target namespace, which is what #904 fixed. No backup job, restore job or schedule ever
+  runs, so a vault's NumberOfRecoveryPoints is always zero and a plan's rules are stored but
+  never fire; see docs/services/backup.md's "Differences from AWS" table for the full list of
+  named gaps (vault lock, shared vaults, plan versioning, AdvancedBackupSettings, access-point
+  S3 passthrough).
 operations: {}
 findings:
-  fixed: []
+  fixed:
+    - "#815 (tracked via PR referencing #904, fix(backup): serve AWS Backup at the paths AWS
+      models) fixed the actual routing bug the old 'inert' framing was hiding: AWS Backup was
+      dispatched off `X-Amz-Target: AWSBackup.<Operation>`, a target prefix AWS Backup does not
+      use — RegisterRoutes was empty and no AWS SDK, CDK construct or `aws backup` call could
+      ever have reached any operation. Routes now match internal/awsapi/manifest.gen.go exactly
+      (vaults under /backup-vaults, plans under /backup/plans, access points under
+      /backup-access-point, per internal/services/backup/service.go's package doc)."
+    - "#1467/#1744 (feat(backup): implement the six Backup Access Point operations) added
+      CreateBackupAccessPoint, DescribeBackupAccessPoint, DeleteBackupAccessPoint,
+      ListBackupAccessPoints, ListBackupAccessPointsByRecoveryPoint and
+      ListBackupAccessPointsByResource, raising the tracked operation count from 12 to 18."
   remaining_gaps:
-    - Add explicit protocol notes to docs.
-    - Verify inert capabilities match intended AWS SDK/IaC semantics.
-  intentionally_partial: []
+    - "#479 (Tier 1 -> Tier 2 promotion: real backup/restore jobs, recovery points and
+      scheduling) remains open and is a materially larger feature than this tracker's scope —
+      tracked separately in docs/plans/full-emulation-priority.md, not here."
+  intentionally_partial:
+    - "#70: zero of the 18 operations are StatusInert today — the capabilities_dev.go package
+      comment explains why 'Inert' (accepted, no side effects) stopped describing this service
+      once #904 wired up real routes and #1195/#1467 added real tag and access-point storage:
+      CreateBackupVault etc. really do create, store, list and delete vaults, plans and access
+      points. The three Deletes are StatusSupported because they serve their modeled shapes in
+      full (each models an InvalidRequestException for non-empty contents that Overcast can
+      never produce, since it runs no jobs). The 11 StatusPartial rows are each Partial for one
+      specifically named missing member (e.g. DescribeBackupVault's `Locked`/retention members,
+      the six access-point operations' recovery-point-derived fields), not a blanket caveat.
+      There are still no jobs, recovery points, or scheduling — that statement in the old
+      current_support_level was and remains true, it was just filed under the wrong tier name."
+    - "#69: docs/services/backup.md's 'What works' table lacked a Protocols row (unlike
+      docs/services/cloudtrail.md:41). Added one stating the actual wire protocol: AWS Backup
+      answers only Smithy restJson1 at its modeled paths, with no X-Amz-Target dispatch — not
+      aws_json_1_0/aws_json_1_1/rpcv2_cbor, which is what this tracker's own `protocols:` field
+      said before this review and is now corrected to match
+      internal/services/backup/service.go's package comment ('all 109 modeled backup operations
+      carry Protocols: ProtocolsRESTJSON and an empty target prefix')."
 handoff:
-  start_with: [CreateBackupVault, CreateBackupPlan]
-  do_not_redo: []
+  start_with: []
+  do_not_redo: [CreateBackupVault, DeleteBackupVault, DescribeBackupVault, ListBackupVaults, CreateBackupPlan, DeleteBackupPlan, GetBackupPlan, ListBackupPlans, UpdateBackupPlan, CreateBackupAccessPoint, DeleteBackupAccessPoint, DescribeBackupAccessPoint, ListBackupAccessPoints, ListBackupAccessPointsByRecoveryPoint, ListBackupAccessPointsByResource, TagResource, ListTags, UntagResource]
   commands: [go test -count=1 ./internal/services/backup/... ./tests/integration/backup/...]
