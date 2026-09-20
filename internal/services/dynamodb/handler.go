@@ -1086,9 +1086,13 @@ func (h *Handler) queryTypedCore(ctx context.Context, req *queryRequest) (any, *
 		sortAttrName = idxSortKeyName
 	}
 
-	// The condition must constrain that partition key (key_schema.go); this
-	// may swap a sort-key-first expression into canonical order, so it runs
-	// before the partition-key value is read out.
+	// The condition must constrain the key schema in play (key_schema.go);
+	// this may swap a sort-key-first expression into canonical order, so it
+	// runs before the partition-key value is read out. It is also what lets
+	// the branches below match kc.sortCond against the item directly: past
+	// this point the condition is known to name sortAttrName, where they used
+	// to overwrite the parsed name with it and so answer a condition on a
+	// non-key attribute as if it were a sort-key condition (issue #135).
 	if aerr := validateKeyConditionSchema(hashAttrName, sortAttrName, kc); aerr != nil {
 		return nil, aerr
 	}
@@ -1124,10 +1128,8 @@ func (h *Handler) queryTypedCore(ctx context.Context, req *queryRequest) (any, *
 			return nil, aerr
 		}
 		if kc.sortCond != nil {
-			sc := *kc.sortCond
-			sc.attr = sortAttrName
 			for _, item := range candidates {
-				if sc.matchItem(item) {
+				if kc.sortCond.matchItem(item) {
 					matched = append(matched, item)
 				}
 			}
@@ -1156,12 +1158,8 @@ func (h *Handler) queryTypedCore(ctx context.Context, req *queryRequest) (any, *
 					continue // sparse: not propagated to the LSI
 				}
 			}
-			if kc.sortCond != nil {
-				sc := *kc.sortCond
-				sc.attr = sortAttrName
-				if !sc.matchItem(item) {
-					continue
-				}
+			if kc.sortCond != nil && !kc.sortCond.matchItem(item) {
+				continue
 			}
 			matched = append(matched, item)
 		}
@@ -1183,12 +1181,8 @@ func (h *Handler) queryTypedCore(ctx context.Context, req *queryRequest) (any, *
 				continue
 			}
 			// Apply sort key condition if present.
-			if kc.sortCond != nil {
-				sc := *kc.sortCond
-				sc.attr = sortAttrName
-				if !sc.matchItem(item) {
-					continue
-				}
+			if kc.sortCond != nil && !kc.sortCond.matchItem(item) {
+				continue
 			}
 			matched = append(matched, item)
 		}
@@ -1213,10 +1207,8 @@ func (h *Handler) queryTypedCore(ctx context.Context, req *queryRequest) (any, *
 			return nil, aerr
 		}
 		if kc.sortCond != nil {
-			sc := *kc.sortCond
-			sc.attr = sortAttrName
 			for _, item := range candidates {
-				if sc.matchItem(item) {
+				if kc.sortCond.matchItem(item) {
 					matched = append(matched, item)
 				}
 			}
