@@ -125,6 +125,7 @@ function SortableFavourite({ item, dragging, ...rest }: SortableFavouriteProps) 
     <SidebarNavItem
       item={item}
       {...rest}
+      pinnable
       sortable={{
         setRowRef: setNodeRef,
         style: {

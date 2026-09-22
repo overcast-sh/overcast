@@ -11,12 +11,12 @@ import {
   BookOpen,
 } from "lucide-react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
-import { cva } from "class-variance-authority"
 import { sectionLabel } from "@/lib/typography"
 import { cn } from "@/lib/utils"
 import { useFavourites } from "@/hooks/use-favourites"
 import { useSearch } from "@/hooks/use-search"
 import { useServiceIconColor } from "@/hooks/use-service-icon-color"
+import { PinButton } from "@/components/service/pin-button"
 import { ServiceIconTile } from "@/components/service/service-icon-tile"
 import {
   ALL_SERVICES,
@@ -28,31 +28,6 @@ import {
 import { matchesQuery, orderGroupsByActiveService, type SearchResult } from "@/lib/search"
 import { CATALOG, type CatalogEntry } from "@/lib/unsupported-services"
 import { Tooltip } from "@/components/ui/tooltip"
-
-// ─── Star toggle variants ──────────────────────────────────────────────────
-
-/**
- * The star is always rendered so a glance tells you what is pinned — hover
- * only shifts the colour, it never reveals the control.
- */
-const starVariants = cva("rounded p-0.5 transition-colors", {
-  variants: {
-    active: {
-      true: "text-accent hover:text-accent/70",
-      false: "text-fg-subtle hover:text-fg-muted",
-    },
-    placement: {
-      /** Sits above the card's full-bleed click target. */
-      card: "relative z-10",
-      chip: "ml-0.5",
-    },
-  },
-  defaultVariants: { active: false, placement: "card" },
-})
-
-function pinLabel(label: string, isFavourite: boolean) {
-  return isFavourite ? `Unpin ${label} from sidebar` : `Pin ${label} to sidebar`
-}
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -80,16 +55,11 @@ export function useGlobalSearchShortcut(onOpen: () => void) {
 
 function ServiceCard({
   service,
-  isFavourite,
-  onToggleFavourite,
   onSelect,
 }: {
   service: ServiceDefinition
-  isFavourite: boolean
-  onToggleFavourite: (key: string, e: React.MouseEvent) => void
   onSelect: (service: ServiceDefinition) => void
 }) {
-  const pin = pinLabel(service.label, isFavourite)
   return (
     <div
       role="group"
@@ -108,20 +78,8 @@ function ServiceCard({
 
       <div className="flex items-center justify-between">
         <ServiceIconTile service={service} size={26} iconSize={15} />
-        {service.favouritable !== false && (
-          <button
-            onClick={(e) => onToggleFavourite(service.key, e)}
-            className={starVariants({ active: isFavourite })}
-            title={pin}
-            aria-label={pin}
-          >
-            <Star
-              className="h-[13px] w-[13px]"
-              fill={isFavourite ? "currentColor" : "none"}
-              strokeWidth={1.6}
-            />
-          </button>
-        )}
+        {/* Above the card's full-bleed click target. */}
+        <PinButton serviceKey={service.key} label={service.label} className="relative z-10" />
       </div>
 
       <div className="flex min-w-0 flex-col gap-px">
@@ -137,23 +95,10 @@ function ServiceCard({
 // ─── Mega menu (shown when query is empty) ─────────────────────────────────
 
 function MegaMenu({ onSelectService }: { onSelectService: (service: ServiceDefinition) => void }) {
-  const { isFavourite, recentServices, toggleFavourite } = useFavourites()
-
-  function handleToggleFavourite(key: string, e: React.MouseEvent) {
-    e.stopPropagation()
-    toggleFavourite(key)
-  }
+  const { recentServices } = useFavourites()
 
   function renderCard(s: ServiceDefinition) {
-    return (
-      <ServiceCard
-        key={s.key}
-        service={s}
-        isFavourite={isFavourite(s.key)}
-        onToggleFavourite={handleToggleFavourite}
-        onSelect={onSelectService}
-      />
-    )
+    return <ServiceCard key={s.key} service={s} onSelect={onSelectService} />
   }
 
   // Recently used — limited to services in ALL_SERVICES
@@ -337,7 +282,6 @@ function SearchResults({
   onSelectService: (service: ServiceDefinition) => void
   onSelectCatalogEntry: (id: string) => void
 }) {
-  const { isFavourite, toggleFavourite } = useFavourites()
   const { enabled: colorEnabled } = useServiceIconColor()
 
   // Matching services, with the current route's service promoted to the front.
@@ -388,7 +332,6 @@ function SearchResults({
           <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {matchedServices.map((s) => {
               const Icon = s.icon
-              const isFav = isFavourite(s.key)
               return (
                 // Two sibling buttons in a bordered row, not a pin nested inside the
                 // service button: interactive content inside a <button> is invalid, and
@@ -413,25 +356,7 @@ function SearchResults({
                     />
                     <span className="text-sm font-medium whitespace-nowrap text-fg">{s.label}</span>
                   </button>
-                  {s.favouritable !== false && (
-                    <button
-                      type="button"
-                      aria-label={pinLabel(s.label, isFav)}
-                      aria-pressed={isFav}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        toggleFavourite(s.key)
-                      }}
-                      className={starVariants({ active: isFav, placement: "chip" })}
-                    >
-                      <Star
-                        aria-hidden
-                        className="h-[13px] w-[13px]"
-                        fill={isFav ? "currentColor" : "none"}
-                        strokeWidth={1.6}
-                      />
-                    </button>
-                  )}
+                  <PinButton serviceKey={s.key} label={s.label} className="ml-0.5" />
                 </div>
               )
             })}

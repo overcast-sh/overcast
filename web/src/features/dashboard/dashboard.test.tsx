@@ -129,3 +129,88 @@ describe("Dashboard", () => {
     expect(within(table).getByText("SNS").closest("a")).not.toBeNull()
   })
 })
+
+describe("Dashboard > pinning", () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it("pins a service to the sidebar from its card", async () => {
+    const { user } = renderDashboard()
+
+    const section = await findSection("fully emulated")
+    await user.click(within(section).getByRole("button", { name: "Pin S3 to sidebar" }))
+
+    expect(JSON.parse(localStorage.getItem("overcast-favourites") ?? "[]")).toEqual(["/s3"])
+  })
+
+  // CloudWatch's card opens /cloudwatch/logs; the sidebar lists the /cloudwatch group.
+  it("pins the sidebar service that owns a card's route", async () => {
+    const { user } = renderDashboard()
+
+    await user.click(await screen.findByRole("button", { name: "Pin CloudWatch to sidebar" }))
+
+    expect(JSON.parse(localStorage.getItem("overcast-favourites") ?? "[]")).toEqual(["/cloudwatch"])
+  })
+
+  it("pins a partially emulated service from its card", async () => {
+    const { user } = renderDashboard()
+
+    const section = await findSection("partially emulated")
+    await user.click(within(section).getByRole("button", { name: "Pin ECR to sidebar" }))
+
+    expect(
+      within(section).getByRole("button", { name: "Unpin ECR from sidebar" }),
+    ).toBeInTheDocument()
+  })
+
+  it("keeps a pinned service's star visible without hovering the card", async () => {
+    localStorage.setItem("overcast-favourites", JSON.stringify(["/s3"]))
+    renderDashboard()
+
+    const star = within(await findSection("fully emulated")).getByRole("button", {
+      name: "Unpin S3 from sidebar",
+    })
+    expect(star).not.toHaveClass("opacity-0")
+  })
+
+  it("reveals an unpinned service's star only on hover or focus", async () => {
+    renderDashboard()
+
+    const star = within(await findSection("fully emulated")).getByRole("button", {
+      name: "Pin S3 to sidebar",
+    })
+    expect(star).toHaveClass("opacity-0", "group-hover:opacity-100", "focus-visible:opacity-100")
+  })
+
+  it("keeps the pin out of the card's link", async () => {
+    renderDashboard()
+
+    const section = await findSection("fully emulated")
+    const link = within(section).getByText("S3").closest("a")
+    expect(link).not.toContainElement(
+      within(section).getByRole("button", { name: "Pin S3 to sidebar" }),
+    )
+  })
+
+  it("does not navigate when the pin is clicked", async () => {
+    const { user, router } = renderDashboard()
+
+    const section = await findSection("fully emulated")
+    await user.click(within(section).getByRole("button", { name: "Pin S3 to sidebar" }))
+
+    expect(router.state.location.pathname).toBe("/")
+  })
+
+  it("pins a service from the list view", async () => {
+    const { user } = renderDashboard()
+
+    await user.click(await screen.findByRole("button", { name: "List view" }))
+    const table = screen.getByRole("table", { name: "Services" })
+    await user.click(within(table).getByRole("button", { name: "Pin DynamoDB to sidebar" }))
+
+    expect(
+      within(table).getByRole("button", { name: "Unpin DynamoDB from sidebar" }),
+    ).toBeInTheDocument()
+  })
+})

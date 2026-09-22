@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext } from "react"
 import { useLocalStorage } from "@/hooks/use-local-storage"
-import { ALL_SERVICES } from "@/lib/nav-services"
+import { isFavouritable } from "@/lib/nav-services"
 
 const FAVOURITES_KEY = "overcast-favourites"
 const RECENT_KEY = "overcast-recent-services"
@@ -12,7 +12,8 @@ const EMPTY_PINS: string[] = []
 interface FavouritesContextValue {
   /** Favourited service keys in display order — the array IS the order. */
   favourites: string[]
-  toggleFavourite: (key: string) => void
+  /** Pins go to the end of the order unless `at: "start"` says otherwise. */
+  toggleFavourite: (key: string, options?: { at?: "start" | "end" }) => void
   isFavourite: (key: string) => boolean
   reorderFavourites: (ordered: string[]) => void
   /** Recently visited service keys, most-recent first. */
@@ -34,12 +35,13 @@ export function FavouritesProvider({ children }: { children: React.ReactNode }) 
   const favourites = pinned ?? EMPTY_PINS
 
   const toggleFavourite = useCallback(
-    (key: string) => {
-      const svcDef = ALL_SERVICES.find((s) => s.key === key)
-      if (svcDef?.favouritable === false) return
+    (key: string, { at = "end" }: { at?: "start" | "end" } = {}) => {
       setPinned((prev) => {
         const current = prev ?? EMPTY_PINS
-        return current.includes(key) ? current.filter((k) => k !== key) : [...current, key]
+        // Unpinning always goes through, so a stale pin can still be removed.
+        if (current.includes(key)) return current.filter((k) => k !== key)
+        if (!isFavouritable(key)) return current
+        return at === "start" ? [key, ...current] : [...current, key]
       })
     },
     [setPinned],

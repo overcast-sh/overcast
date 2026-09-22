@@ -86,6 +86,16 @@ export const ALL_SERVICES: ServiceDefinition[] = Object.values(
   })
 
 /**
+ * Whether `key` can be pinned to the sidebar. Only sidebar services qualify: a
+ * key the sidebar cannot render (a dashboard-only service, or one that opts out
+ * via `favouritable: false`) would be stored as a pin that never appears.
+ */
+export function isFavouritable(key: string): boolean {
+  const service = ALL_SERVICES.find((s) => s.key === key)
+  return service !== undefined && service.favouritable !== false
+}
+
+/**
  * Resolve the service that owns `pathname`, using longest-prefix matching
  * against each service's `to` so nested routes resolve to the most specific
  * service (same idea as the sidebar's currentService logic). Returns the
