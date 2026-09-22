@@ -38,7 +38,7 @@ const messages: CapturedMessage[] = [
 
 function renderScreen(
   component: React.FC,
-  { debug = false, services }: { debug?: boolean; services?: string[] } = {},
+  { debug = false, services, route }: { debug?: boolean; services?: string[]; route?: string } = {},
 ) {
   const queryClient = createTestQueryClient()
   queryClient.setQueryData(inboxMessagesQueryOptions().queryKey, messages)
@@ -55,7 +55,10 @@ function renderScreen(
     } satisfies HealthResponse)
   }
 
-  return renderWithRouter(component, { queryClient })
+  return renderWithRouter(component, {
+    queryClient,
+    ...(route ? { path: route, initialEntry: route } : {}),
+  })
 }
 
 function mockNarrowViewport(isNarrow: boolean) {
@@ -186,6 +189,54 @@ describe("Sidebar pins", () => {
 
     expect(await screen.findByRole("link", { name: "S3" })).not.toHaveClass("opacity-50")
     expect(screen.getByRole("link", { name: "DynamoDB" })).not.toHaveClass("opacity-50")
+  })
+
+  it("unpins a service from its own sidebar row", async () => {
+    localStorage.setItem("overcast-favourites", JSON.stringify(["/s3", "/dynamodb"]))
+    const { user } = renderScreen(SidebarOnly, {})
+
+    await user.click(await screen.findByRole("button", { name: "Unpin S3 from sidebar" }))
+
+    expect(screen.queryByRole("link", { name: "S3" })).not.toBeInTheDocument()
+  })
+
+  it("pins the service being viewed from its sidebar row", async () => {
+    const { user } = renderScreen(SidebarOnly, { route: "/s3" })
+
+    await user.click(await screen.findByRole("button", { name: "Pin S3 to sidebar" }))
+
+    expect(screen.getByRole("button", { name: "Unpin S3 from sidebar" })).toBeInTheDocument()
+  })
+
+  // The viewed service's row sits above the pins, so pinning it must not move it.
+  it("pins the service being viewed above the existing pins", async () => {
+    localStorage.setItem("overcast-favourites", JSON.stringify(["/dynamodb"]))
+    const { user } = renderScreen(SidebarOnly, { route: "/s3" })
+
+    await user.click(await screen.findByRole("button", { name: "Pin S3 to sidebar" }))
+
+    expect(JSON.parse(localStorage.getItem("overcast-favourites") ?? "[]")).toEqual([
+      "/s3",
+      "/dynamodb",
+    ])
+  })
+
+  it("keeps the pin toggle out of the pinned row's link", async () => {
+    localStorage.setItem("overcast-favourites", JSON.stringify(["/s3"]))
+    renderScreen(SidebarOnly, {})
+
+    expect(await screen.findByRole("link", { name: "S3" })).not.toContainElement(
+      screen.getByRole("button", { name: "Unpin S3 from sidebar" }),
+    )
+  })
+
+  it("offers no pin toggle on the collapsed rail", async () => {
+    localStorage.setItem("overcast-favourites", JSON.stringify(["/s3"]))
+    localStorage.setItem(SIDEBAR_COLLAPSED_WIDE_STORAGE_KEY, "true")
+    renderScreen(SidebarOnly, {})
+
+    await screen.findByRole("link", { name: "S3" })
+    expect(screen.queryByRole("button", { name: "Unpin S3 from sidebar" })).not.toBeInTheDocument()
   })
 
   it("pins nothing by default", async () => {

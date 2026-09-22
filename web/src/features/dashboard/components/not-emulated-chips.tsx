@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils"
 import { CATALOG, CATALOG_CATEGORY_LABELS, type CatalogEntry } from "@/lib/unsupported-services"
 import type { ServiceTierEntry } from "../service-defs"
 import { TIER_DESCRIPTIONS } from "../tiers"
-import { ServiceTile } from "./service-tile"
+import { ServiceTile, ServiceTileLink, TILE_FOCUS_RING } from "./service-tile"
 
 // Unfilled by design: fill and border weight both fall off as emulation
 // coverage does — filled + solid (fully emulated), unfilled + solid
@@ -33,13 +33,16 @@ function ServiceChip({ entry }: { entry: ServiceTierEntry }) {
 
   return (
     <ServiceTile
-      entry={entry}
       className={CHIP_CLASS}
-      interactiveClassName="transition-colors hover:border-solid hover:border-accent hover:text-accent focus-visible:outline-accent"
-      tooltip={TIER_DESCRIPTIONS[tier]}
+      interactiveClassName={cn(
+        "transition-colors hover:border-solid hover:border-accent hover:text-accent",
+        TILE_FOCUS_RING,
+      )}
     >
       <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
-      {service.label}
+      <ServiceTileLink entry={entry} tooltip={TIER_DESCRIPTIONS[tier]}>
+        {service.label}
+      </ServiceTileLink>
     </ServiceTile>
   )
 }

@@ -3,6 +3,7 @@ import { ChevronDown, GripVertical, type LucideIcon } from "lucide-react"
 import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/core"
 import { cva } from "class-variance-authority"
 import { cn } from "@/lib/utils"
+import { PinButton } from "@/components/service/pin-button"
 import type { SubNavChild } from "@/lib/nav-services"
 import { useServiceIconColor } from "@/hooks/use-service-icon-color"
 import { flatChildren } from "./nav-children"
@@ -84,6 +85,13 @@ interface SidebarNavItemProps {
   onToggleExpand?: (key: string) => void
   badge?: { count: number; label: string }
   sortable?: SidebarSortableProps
+  /**
+   * Offers a pin toggle at the row's trailing edge, revealed on hover or focus,
+   * and where a new pin lands in the order (see `PinButton`). The collapsed
+   * rail has no room for it, so it is dropped there.
+   */
+  pinnable?: boolean
+  pinAt?: "start" | "end"
 }
 
 export function SidebarNavItem({
@@ -95,6 +103,8 @@ export function SidebarNavItem({
   onToggleExpand,
   badge,
   sortable,
+  pinnable = false,
+  pinAt,
 }: SidebarNavItemProps) {
   const { to, label, icon: Icon, color, children, exact } = item
   const active = exact
@@ -114,6 +124,10 @@ export function SidebarNavItem({
   const iconCls = cn("shrink-0", collapsed ? "h-[17px] w-[17px]" : "h-4 w-4", tint)
   const badgeNode = badge && badge.count > 0 && (
     <SidebarBadge count={badge.count} collapsed={collapsed} label={badge.label} />
+  )
+  // A sibling of the link/button rather than inside it, so it is its own tab stop.
+  const pinNode = pinnable && (
+    <PinButton serviceKey={to} label={label} reveal="hover" pinAt={pinAt} className="mr-1.5" />
   )
 
   if (collapsed) {
@@ -160,6 +174,7 @@ export function SidebarNavItem({
               className={cn("h-3 w-3 shrink-0 transition-transform", expanded && "rotate-180")}
             />
           </button>
+          {pinNode}
         </div>
         {expanded && <SidebarSubNav id={subNavId} items={children} pathname={pathname} />}
       </li>
@@ -179,6 +194,7 @@ export function SidebarNavItem({
         <span className="truncate">{label}</span>
         {badgeNode}
       </Link>
+      {pinNode}
     </li>
   )
 }

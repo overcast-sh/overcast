@@ -73,6 +73,8 @@ export function Sidebar() {
               pathname={pathname}
               expanded={isExpanded(currentService.to)}
               onToggleExpand={toggleExpand}
+              pinnable
+              pinAt="start"
             />
           )}
           <SidebarFavourites
