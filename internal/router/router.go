@@ -2046,19 +2046,7 @@ func dispatcherIsService(qd QueryDispatcher, service string) bool {
 // routed to the AppSync Events API handler; otherwise it falls back to the
 // API Gateway v2 handler (the more commonly used service at this path).
 func v2APIsDispatch(apigwRouter, appsyncRouter http.Handler) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		svc := middleware.ServiceFromCredential(r)
-		if svc == "appsync" && appsyncRouter != nil {
-			appsyncRouter.ServeHTTP(w, r)
-			return
-		}
-		if apigwRouter != nil {
-			apigwRouter.ServeHTTP(w, r)
-			return
-		}
-		// Neither service enabled — 404.
-		http.NotFound(w, r)
-	}
+	return signingNameDispatch("appsync", appsyncRouter, apigwRouter)
 }
 
 // applicationsDispatch returns a handler that dispatches /applications
@@ -2070,31 +2058,25 @@ func v2APIsDispatch(apigwRouter, appsyncRouter http.Handler) http.HandlerFunc {
 // as the web UI's — goes to AppRegistry, which owned this path outright before
 // #854 and must keep answering the callers it already had.
 func applicationsDispatch(appconfigRouter, appregistryRouter http.Handler) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if middleware.ServiceFromCredential(r) == "appconfig" && appconfigRouter != nil {
-			appconfigRouter.ServeHTTP(w, r)
-			return
-		}
-		if appregistryRouter != nil {
-			appregistryRouter.ServeHTTP(w, r)
-			return
-		}
-		// Neither service enabled — 404.
-		http.NotFound(w, r)
-	}
+	return signingNameDispatch("appconfig", appconfigRouter, appregistryRouter)
 }
 
 // signingNameDispatch returns a handler that sends a request signed for
-// signingName to owner and every other request to fallback. It is for a
-// service whose modeled paths are indistinguishable from S3 object paths, so
-// the credential scope is the only evidence of which one the caller meant.
+// signingName to owner and every other request to fallback. It serves every
+// path two services share on one listener, where the credential scope is the
+// only evidence of which one the caller meant. A nil owner (its service not
+// registered) sends everything to fallback; a nil fallback answers 404.
 func signingNameDispatch(signingName string, owner, fallback http.Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if middleware.ServiceFromCredential(r) == signingName {
+		if owner != nil && middleware.ServiceFromCredential(r) == signingName {
 			owner.ServeHTTP(w, r)
 			return
 		}
-		fallback.ServeHTTP(w, r)
+		if fallback != nil {
+			fallback.ServeHTTP(w, r)
+			return
+		}
+		http.NotFound(w, r)
 	}
 }
 
