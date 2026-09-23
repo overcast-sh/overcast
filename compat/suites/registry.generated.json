@@ -634,6 +634,62 @@
     },
     {
       "service": "eventbridge",
+      "name": "eventbridge-buses-shadow",
+      "generated": true,
+      "scenario": "compat/model/authored/eventbridge-buses.json",
+      "state": "candidate",
+      "shadowOf": "eventbridge-buses",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "CreateEventBus"
+        },
+        {
+          "name": "DescribeEventBus",
+          "depends": [
+            "CreateEventBus"
+          ]
+        },
+        {
+          "name": "ListEventBuses",
+          "depends": [
+            "CreateEventBus"
+          ]
+        },
+        {
+          "name": "TagEventBus",
+          "op": "TagResource",
+          "depends": [
+            "CreateEventBus"
+          ]
+        },
+        {
+          "name": "ListEventBridgeTagsForResource",
+          "op": "ListTagsForResource",
+          "depends": [
+            "TagEventBus"
+          ]
+        },
+        {
+          "name": "DeleteEventBus",
+          "depends": [
+            "DescribeEventBus",
+            "ListEventBuses",
+            "ListEventBridgeTagsForResource"
+          ]
+        }
+      ]
+    },
+    {
+      "service": "eventbridge",
       "name": "eventbridge-events-shadow",
       "generated": true,
       "scenario": "compat/model/authored/eventbridge-events.json",

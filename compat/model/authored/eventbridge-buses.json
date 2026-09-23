@@ -1,0 +1,144 @@
+{
+  "$comment": "Authored port of the hand-written registry group eventbridge-buses (docs/plans/compat-coverage-modelgen.md §3.11, G6, #1116). One spec in place of the five per-language implementations that exist and the two (dotnet-sdk, rust-sdk) that never did — 6 tests of parity debt per missing suite. It runs today under the shadow name eventbridge-buses-shadow, beside the natives, so the nightly can compare the two per (suite, test); the flip PR renames this group to eventbridge-buses, adds the scenario field to the hand-written registry.json entry, and deletes the native code. The clauses are the union of what the five natives assert — see compat/model/README.md § Authored scenarios.",
+  "version": 1,
+  "service": "eventbridge",
+  "client": {
+    "sdkId": "EventBridge",
+    "endpointPrefix": "events",
+    "signingName": "events",
+    "protocol": "awsJson1_1",
+    "apiVersion": "2015-10-07",
+    "targetPrefix": "AWSEvents",
+    "awsQueryCompatible": false
+  },
+  "groups": [
+    {
+      "$comment": "One custom bus, created by the CreateEventBus test and deleted by the DeleteEventBus test — the shape cli, node-js-sdk and java-sdk use, and the one registry.json's depends describes (DescribeEventBus, ListEventBuses and TagEventBus all depend on CreateEventBus; DeleteEventBus runs last). go-sdk and python-sdk instead create the bus in setup and have CreateEventBus and DeleteEventBus each make and remove a second, ephemeral bus, which asserts nothing the shared shape does not. The bus is named by $name, so it is {runId}-eventbridge-buses-shadow-bus: its own bus, never shared with another EventBridge group, because groups run in parallel and a shared bus name is exactly what issue #388 was (the cli suite's busName comment). There is no setup; teardown deletes the bus in case DeleteEventBus never ran. No clause is wrapped in `eventually`: no native polls, EventBridge documents no consistency window for a bus or tag write, and every native reads its own write back immediately.",
+      "name": "eventbridge-buses-shadow",
+      "kind": "lifecycle",
+      "setup": [],
+      "tests": [
+        {
+          "$comment": "cli, python-sdk, node-js-sdk and java-sdk assert the response carries an EventBusArn; go-sdk asserts only that the call succeeded. The ARN is exported because TagEventBus and ListEventBridgeTagsForResource address the bus by it — cli and node-js-sdk carry it forward from this response the same way; java-sdk re-reads it from DescribeEventBus in each tagging test.",
+          "name": "CreateEventBus",
+          "op": "CreateEventBus",
+          "call": {
+            "op": "CreateEventBus",
+            "params": { "Name": { "$name": "bus" } },
+            "export": { "bus.arn": "$.EventBusArn" }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.EventBusArn": { "nonEmpty": true } }
+            }
+          ]
+        },
+        {
+          "$comment": "go-sdk, cli, python-sdk and java-sdk assert Name is the bus's name; python-sdk and node-js-sdk assert Arn is present (node-js-sdk checks nothing else). The union is both, and Arn is compared to the ARN CreateEventBus returned rather than merely non-empty — expressible, and stronger.",
+          "name": "DescribeEventBus",
+          "op": "DescribeEventBus",
+          "call": {
+            "op": "DescribeEventBus",
+            "params": { "Name": { "$name": "bus" } }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Name": { "equals": { "$name": "bus" } },
+                "$.Arn": { "equals": { "$ref": "bus.arn" } }
+              }
+            }
+          ],
+          "depends": ["CreateEventBus"]
+        },
+        {
+          "$comment": "All five assert the bus's name is in the page. go-sdk, cli and python-sdk list unfiltered, java-sdk with Limit 100, node-js-sdk with a NamePrefix of the run id. NamePrefix set to the bus's own name is node-js-sdk's spelling narrowed to this group: on AWS an unfiltered first page is not guaranteed to hold one bus among many, and the narrower page is also the one whose non-membership DeleteEventBus proves below. (Overcast ignores NamePrefix today and answers every bus, which this membership clause cannot see and does not depend on.)",
+          "name": "ListEventBuses",
+          "op": "ListEventBuses",
+          "call": {
+            "op": "ListEventBuses",
+            "params": { "NamePrefix": { "$name": "bus" } }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.EventBuses",
+              "where": { "$.Name": { "$name": "bus" } }
+            }
+          ],
+          "depends": ["CreateEventBus"]
+        },
+        {
+          "$comment": "go-sdk, python-sdk, node-js-sdk and java-sdk write env=compat; cli writes env=test. env=compat is the majority spelling. cli and python-sdk read the tag set back and assert the pair; go-sdk, node-js-sdk and java-sdk assert nothing after the write (#1904). The read-back of key and value is the union.",
+          "name": "TagEventBus",
+          "op": "TagResource",
+          "call": {
+            "op": "TagResource",
+            "params": {
+              "ResourceARN": { "$ref": "bus.arn" },
+              "Tags": [{ "Key": "env", "Value": "compat" }]
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "call": {
+                "op": "ListTagsForResource",
+                "params": { "ResourceARN": { "$ref": "bus.arn" } }
+              },
+              "itemsPath": "$.Tags",
+              "where": { "$.Key": "env", "$.Value": "compat" }
+            }
+          ],
+          "depends": ["CreateEventBus"]
+        },
+        {
+          "$comment": "cli asserts only that the tag list is non-empty; go-sdk, node-js-sdk and java-sdk that some tag has the key env; python-sdk that env carries the value compat. Key and value together is the union and the strongest of the five. The test name is the registry's and is not an operation; its op is ListTagsForResource, which every native calls here.",
+          "name": "ListEventBridgeTagsForResource",
+          "op": "ListTagsForResource",
+          "call": {
+            "op": "ListTagsForResource",
+            "params": { "ResourceARN": { "$ref": "bus.arn" } }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Tags",
+              "where": { "$.Key": "env", "$.Value": "compat" }
+            }
+          ],
+          "depends": ["TagEventBus"]
+        },
+        {
+          "$comment": "cli, python-sdk and node-js-sdk list the buses again and assert the deleted one is gone; go-sdk and java-sdk assert only that DeleteEventBus returned (#1904). List non-membership, with the same NamePrefix as ListEventBuses (python-sdk and node-js-sdk pass one too), is what the natives assert and so what the port asserts. DescribeEventBus raising ResourceNotFoundException — its modeled error on AWS — would be the direct statement, but no native reads it, and Overcast today answers DescribeEventBus for an unknown bus with a synthesized Name and Arn rather than the error, so the clause would diverge from every native on a claim none of them made; that is an emulator gap to fix on its own, not something this soak can attribute. The bus deleted is the group's own, as cli, node-js-sdk and java-sdk do; go-sdk and python-sdk create and delete a second bus inside the test.",
+          "name": "DeleteEventBus",
+          "op": "DeleteEventBus",
+          "call": {
+            "op": "DeleteEventBus",
+            "params": { "Name": { "$name": "bus" } }
+          },
+          "assert": [
+            {
+              "kind": "absent",
+              "call": {
+                "op": "ListEventBuses",
+                "params": { "NamePrefix": { "$name": "bus" } }
+              },
+              "itemsPath": "$.EventBuses",
+              "where": { "$.Name": { "$name": "bus" } }
+            }
+          ],
+          "depends": ["DescribeEventBus", "ListEventBuses", "ListEventBridgeTagsForResource"]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "DeleteEventBus",
+          "params": { "Name": { "$name": "bus" } }
+        }
+      ]
+    }
+  ]
+}

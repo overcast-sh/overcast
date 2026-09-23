@@ -16,6 +16,7 @@ internal static class ScenarioGroups
     internal static IServiceGroup[] All(AwsClients clients) =>
     [
         new ScenariosAuthoredCognitoUserpools(clients),
+        new ScenariosAuthoredEventbridgeBuses(clients),
         new ScenariosAuthoredEventbridgeEvents(clients),
         new ScenariosAuthoredEventbridgeRules(clients),
         new ScenariosAuthoredKinesisStreams(clients),
