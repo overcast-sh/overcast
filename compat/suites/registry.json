@@ -827,6 +827,7 @@
     {
       "service": "cloudwatch-logs",
       "name": "logs-groups",
+      "scenario": "compat/model/authored/logs-groups.json",
       "tests": [
         {
           "name": "CreateLogGroup"

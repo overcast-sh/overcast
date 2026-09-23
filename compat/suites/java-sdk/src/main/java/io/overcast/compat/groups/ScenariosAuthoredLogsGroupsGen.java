@@ -33,8 +33,8 @@ import software.amazon.awssdk.services.cloudwatchlogs.model.TagLogGroupRequest;
  */
 public final class ScenariosAuthoredLogsGroupsGen implements ServiceGroup {
 
-    private static final Group GROUP_LOGS_GROUPS_SHADOW =
-            new Group("logs-groups-shadow", "compat/model/authored/logs-groups.json");
+    private static final Group GROUP_LOGS_GROUPS =
+            new Group("logs-groups", "compat/model/authored/logs-groups.json");
 
     private final AwsClients clients;
     private volatile CloudWatchLogsClient client;
@@ -51,26 +51,26 @@ public final class ScenariosAuthoredLogsGroupsGen implements ServiceGroup {
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("logs-groups-shadow:CreateLogGroup", this::testLogsGroupsShadowCreateLogGroup),
-                Map.entry("logs-groups-shadow:DescribeLogGroups", this::testLogsGroupsShadowDescribeLogGroups),
-                Map.entry("logs-groups-shadow:PutRetentionPolicy", this::testLogsGroupsShadowPutRetentionPolicy),
-                Map.entry("logs-groups-shadow:VerifyRetentionPolicy", this::testLogsGroupsShadowVerifyRetentionPolicy),
-                Map.entry("logs-groups-shadow:DeleteRetentionPolicy", this::testLogsGroupsShadowDeleteRetentionPolicy),
-                Map.entry("logs-groups-shadow:DeleteLogGroup", this::testLogsGroupsShadowDeleteLogGroup),
-                Map.entry("logs-groups-shadow:CreateLogStream", this::testLogsGroupsShadowCreateLogStream),
-                Map.entry("logs-groups-shadow:TagLogGroup", this::testLogsGroupsShadowTagLogGroup));
+                Map.entry("logs-groups:CreateLogGroup", this::testLogsGroupsCreateLogGroup),
+                Map.entry("logs-groups:DescribeLogGroups", this::testLogsGroupsDescribeLogGroups),
+                Map.entry("logs-groups:PutRetentionPolicy", this::testLogsGroupsPutRetentionPolicy),
+                Map.entry("logs-groups:VerifyRetentionPolicy", this::testLogsGroupsVerifyRetentionPolicy),
+                Map.entry("logs-groups:DeleteRetentionPolicy", this::testLogsGroupsDeleteRetentionPolicy),
+                Map.entry("logs-groups:DeleteLogGroup", this::testLogsGroupsDeleteLogGroup),
+                Map.entry("logs-groups:CreateLogStream", this::testLogsGroupsCreateLogStream),
+                Map.entry("logs-groups:TagLogGroup", this::testLogsGroupsTagLogGroup));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("logs-groups-shadow", this::setupLogsGroupsShadow));
+                Map.entry("logs-groups", this::setupLogsGroups));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("logs-groups-shadow", this::teardownLogsGroupsShadow));
+                Map.entry("logs-groups", this::teardownLogsGroups));
     }
 
     /**
@@ -90,8 +90,8 @@ public final class ScenariosAuthoredLogsGroupsGen implements ServiceGroup {
         return client;
     }
 
-    private void setupLogsGroupsShadow(TestContext t) {
-        GROUP_LOGS_GROUPS_SHADOW.runSetup(t,
+    private void setupLogsGroups(TestContext t) {
+        GROUP_LOGS_GROUPS.runSetup(t,
                 new Call("CreateLogGroup", "{\"logGroupName\":{\"$name\":\"group\"}}",
                         b -> CreateLogGroupRequest.builder()
                                 .logGroupName(b.string("logGroupName", Values.name("group")))
@@ -99,8 +99,8 @@ public final class ScenariosAuthoredLogsGroupsGen implements ServiceGroup {
                         r -> cl().createLogGroup((CreateLogGroupRequest) r)));
     }
 
-    private void teardownLogsGroupsShadow(TestContext t) {
-        GROUP_LOGS_GROUPS_SHADOW.runTeardown(t,
+    private void teardownLogsGroups(TestContext t) {
+        GROUP_LOGS_GROUPS.runTeardown(t,
                 new Call("DeleteLogGroup", "{\"logGroupName\":{\"$name\":\"created\"}}",
                         b -> DeleteLogGroupRequest.builder()
                                 .logGroupName(b.string("logGroupName", Values.name("created")))
@@ -113,8 +113,8 @@ public final class ScenariosAuthoredLogsGroupsGen implements ServiceGroup {
                         r -> cl().deleteLogGroup((DeleteLogGroupRequest) r)));
     }
 
-    private void testLogsGroupsShadowCreateLogGroup(TestContext t) {
-        GROUP_LOGS_GROUPS_SHADOW.runTest(t, "CreateLogGroup",
+    private void testLogsGroupsCreateLogGroup(TestContext t) {
+        GROUP_LOGS_GROUPS.runTest(t, "CreateLogGroup",
                 new Call("CreateLogGroup", "{\"logGroupName\":{\"$name\":\"created\"}}",
                         b -> CreateLogGroupRequest.builder()
                                 .logGroupName(b.string("logGroupName", Values.name("created")))
@@ -133,8 +133,8 @@ public final class ScenariosAuthoredLogsGroupsGen implements ServiceGroup {
                 ));
     }
 
-    private void testLogsGroupsShadowDescribeLogGroups(TestContext t) {
-        GROUP_LOGS_GROUPS_SHADOW.runTest(t, "DescribeLogGroups",
+    private void testLogsGroupsDescribeLogGroups(TestContext t) {
+        GROUP_LOGS_GROUPS.runTest(t, "DescribeLogGroups",
                 new Call("DescribeLogGroups", "{\"logGroupNamePrefix\":{\"$name\":\"group\"}}",
                         b -> DescribeLogGroupsRequest.builder()
                                 .logGroupNamePrefix(b.string("logGroupNamePrefix", Values.name("group")))
@@ -149,8 +149,8 @@ public final class ScenariosAuthoredLogsGroupsGen implements ServiceGroup {
                 ));
     }
 
-    private void testLogsGroupsShadowPutRetentionPolicy(TestContext t) {
-        GROUP_LOGS_GROUPS_SHADOW.runTest(t, "PutRetentionPolicy",
+    private void testLogsGroupsPutRetentionPolicy(TestContext t) {
+        GROUP_LOGS_GROUPS.runTest(t, "PutRetentionPolicy",
                 new Call("PutRetentionPolicy", "{\"logGroupName\":{\"$name\":\"group\"},\"retentionInDays\":7}",
                         b -> PutRetentionPolicyRequest.builder()
                                 .logGroupName(b.string("logGroupName", Values.name("group")))
@@ -170,8 +170,8 @@ public final class ScenariosAuthoredLogsGroupsGen implements ServiceGroup {
                 ));
     }
 
-    private void testLogsGroupsShadowVerifyRetentionPolicy(TestContext t) {
-        GROUP_LOGS_GROUPS_SHADOW.runTest(t, "VerifyRetentionPolicy",
+    private void testLogsGroupsVerifyRetentionPolicy(TestContext t) {
+        GROUP_LOGS_GROUPS.runTest(t, "VerifyRetentionPolicy",
                 new Call("DescribeLogGroups", "{\"logGroupNamePrefix\":{\"$name\":\"group\"}}",
                         b -> DescribeLogGroupsRequest.builder()
                                 .logGroupNamePrefix(b.string("logGroupNamePrefix", Values.name("group")))
@@ -185,8 +185,8 @@ public final class ScenariosAuthoredLogsGroupsGen implements ServiceGroup {
                 ));
     }
 
-    private void testLogsGroupsShadowDeleteRetentionPolicy(TestContext t) {
-        GROUP_LOGS_GROUPS_SHADOW.runTest(t, "DeleteRetentionPolicy",
+    private void testLogsGroupsDeleteRetentionPolicy(TestContext t) {
+        GROUP_LOGS_GROUPS.runTest(t, "DeleteRetentionPolicy",
                 new Call("DeleteRetentionPolicy", "{\"logGroupName\":{\"$name\":\"group\"}}",
                         b -> DeleteRetentionPolicyRequest.builder()
                                 .logGroupName(b.string("logGroupName", Values.name("group")))
@@ -205,8 +205,8 @@ public final class ScenariosAuthoredLogsGroupsGen implements ServiceGroup {
                 ));
     }
 
-    private void testLogsGroupsShadowDeleteLogGroup(TestContext t) {
-        GROUP_LOGS_GROUPS_SHADOW.runTest(t, "DeleteLogGroup",
+    private void testLogsGroupsDeleteLogGroup(TestContext t) {
+        GROUP_LOGS_GROUPS.runTest(t, "DeleteLogGroup",
                 new Call("DeleteLogGroup", "{\"logGroupName\":{\"$name\":\"created\"}}",
                         b -> DeleteLogGroupRequest.builder()
                                 .logGroupName(b.string("logGroupName", Values.name("created")))
@@ -225,8 +225,8 @@ public final class ScenariosAuthoredLogsGroupsGen implements ServiceGroup {
                 ));
     }
 
-    private void testLogsGroupsShadowCreateLogStream(TestContext t) {
-        GROUP_LOGS_GROUPS_SHADOW.runTest(t, "CreateLogStream",
+    private void testLogsGroupsCreateLogStream(TestContext t) {
+        GROUP_LOGS_GROUPS.runTest(t, "CreateLogStream",
                 new Call("CreateLogStream", "{\"logGroupName\":{\"$name\":\"group\"},\"logStreamName\":{\"$name\":\"stream\"}}",
                         b -> CreateLogStreamRequest.builder()
                                 .logGroupName(b.string("logGroupName", Values.name("group")))
@@ -247,8 +247,8 @@ public final class ScenariosAuthoredLogsGroupsGen implements ServiceGroup {
                 ));
     }
 
-    private void testLogsGroupsShadowTagLogGroup(TestContext t) {
-        GROUP_LOGS_GROUPS_SHADOW.runTest(t, "TagLogGroup",
+    private void testLogsGroupsTagLogGroup(TestContext t) {
+        GROUP_LOGS_GROUPS.runTest(t, "TagLogGroup",
                 new Call("TagLogGroup", "{\"logGroupName\":{\"$name\":\"group\"},\"tags\":{\"env\":\"compat\"}}",
                         b -> TagLogGroupRequest.builder()
                                 .logGroupName(b.string("logGroupName", Values.name("group")))
