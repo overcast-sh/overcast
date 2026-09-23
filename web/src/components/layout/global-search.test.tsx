@@ -112,4 +112,19 @@ describe("GlobalSearch mega menu", () => {
     await screen.findByPlaceholderText("Search services and resources…")
     expect(screen.queryByRole("button", { name: "Clear search" })).not.toBeInTheDocument()
   })
+
+  // #2062: Athena, Glue, Firehose and OpenSearch were offered as greyed-out
+  // "Unsupported" chips while the backend served all four. "amazon" matches
+  // Redshift's and Athena's catalogue labels alike, so both would render in the
+  // same pass.
+  it("offers no unsupported chip for a service the backend emulates", async () => {
+    const { user } = renderSearch()
+
+    await user.type(await screen.findByPlaceholderText("Search services and resources…"), "amazon")
+
+    expect(await screen.findByRole("button", { name: /Amazon Redshift/ })).toHaveTextContent(
+      "Unsupported",
+    )
+    expect(screen.queryByRole("button", { name: /Amazon Athena/ })).not.toBeInTheDocument()
+  })
 })

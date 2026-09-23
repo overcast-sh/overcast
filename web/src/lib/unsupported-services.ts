@@ -98,18 +98,6 @@ export const CATALOG: CatalogEntry[] = [
     goalTier: "unsupported",
   },
   {
-    id: "athena",
-    label: "Amazon Athena",
-    category: "analytics",
-    description:
-      "Serverless interactive query service that lets you analyze data directly in S3 using standard SQL.",
-    awsDocsUrl: "https://docs.aws.amazon.com/athena/latest/ug/",
-    reason:
-      "Athena requires a Presto/Trino query engine and deep S3 integration for federated queries. A full local implementation would be a substantial separate project.",
-    tier: "unsupported",
-    goalTier: "unsupported",
-  },
-  {
     id: "emr",
     label: "Amazon EMR",
     category: "analytics",
@@ -134,18 +122,6 @@ export const CATALOG: CatalogEntry[] = [
     goalTier: "unsupported",
   },
   {
-    id: "glue",
-    label: "AWS Glue",
-    category: "analytics",
-    description:
-      "Serverless data integration and ETL service with a managed data catalog for discovering and transforming data.",
-    awsDocsUrl: "https://docs.aws.amazon.com/glue/latest/dg/",
-    reason:
-      "Glue requires a Spark runtime for ETL jobs and a crawler infrastructure for schema discovery. The data catalog component alone could be added in the future.",
-    tier: "unsupported",
-    goalTier: "unsupported",
-  },
-  {
     id: "lakeformation",
     label: "AWS Lake Formation",
     category: "analytics",
@@ -166,30 +142,6 @@ export const CATALOG: CatalogEntry[] = [
     awsDocsUrl: "https://docs.aws.amazon.com/kinesisanalytics/latest/java/",
     reason:
       "Kinesis Data Analytics requires a full Apache Flink runtime. Kinesis Data Streams itself is supported in Overcast.",
-    tier: "unsupported",
-    goalTier: "unsupported",
-  },
-  {
-    id: "firehose",
-    label: "Amazon Data Firehose",
-    category: "analytics",
-    description:
-      "Reliably load real-time streaming data into data lakes, warehouses, and analytics tools like S3 or Redshift.",
-    awsDocsUrl: "https://docs.aws.amazon.com/firehose/latest/dev/",
-    reason:
-      "Firehose bridges streaming data to delivery targets. A local stub could be added since Overcast supports S3 and other targets.",
-    tier: "unsupported",
-    goalTier: "stub",
-  },
-  {
-    id: "opensearch",
-    label: "Amazon OpenSearch Service",
-    category: "analytics",
-    description:
-      "Managed OpenSearch (formerly Elasticsearch) for search, log analytics, and observability workloads.",
-    awsDocsUrl: "https://docs.aws.amazon.com/opensearch-service/latest/developerguide/",
-    reason:
-      "OpenSearch requires a full search engine cluster. Use a local OpenSearch/Elasticsearch container directly for development.",
     tier: "unsupported",
     goalTier: "unsupported",
   },
