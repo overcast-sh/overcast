@@ -1,31 +1,21 @@
-import { useMemo, useState, type ReactNode } from "react"
-import { useQuery } from "@tanstack/react-query"
-import { AlertTriangle, Download, FileText, Info, ListTree, Table2 } from "lucide-react"
+import type { ReactNode } from "react"
+import { AlertTriangle, Download, Info, type LucideIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { EmptyState } from "@/components/ui/primitives"
 import { HighlightedCode } from "@/components/ui/highlighted-code"
 import { SkeletonRows } from "@/components/ui/skeleton"
-import { formatBytes, formatCount } from "@/lib/format"
-import { OBJECT_PREVIEW_WINDOW } from "@/services/api"
 import { cn } from "@/lib/utils"
-import { s3ObjectParquetPreviewQueryOptions } from "../data"
-import { delimitedTable, type Delimiter } from "../preview-delimited"
-import { jsonlTable } from "../preview-jsonl"
 import type { DataPreviewKind } from "../preview-kind"
-import type { ParquetPreview } from "../preview-parquet"
-import { PREVIEW_ROW_LIMIT, describeRowCount, type PreviewTableModel } from "../preview-table"
-import { DataPreviewTable } from "./data-preview-table"
 
 /**
- * The S3 inspector's data-file previews: CSV, TSV and JSON Lines as a table
- * with a raw toggle, Parquet as its first rows and schema, and Avro as an
- * honest "not previewed". Plain text and JSON keep the dialog's own preview,
- * framed by the same `PreviewPanel`.
+ * The frame every S3 preview shares — the panel, its notices, the view toggle,
+ * the raw text — and the Avro notice. The data-file previews themselves (a
+ * `DataGrid` over CSV, TSV, JSON Lines or Parquet) are in `data-file-preview.tsx`.
  */
 
-const KIND_LABEL: Record<DataPreviewKind, string> = {
+export const KIND_LABEL: Record<DataPreviewKind, string> = {
   csv: "CSV",
   tsv: "TSV",
   jsonl: "JSON Lines",
@@ -108,10 +98,10 @@ export function PreviewNotice({
   )
 }
 
-interface ToggleOption<T extends string> {
+export interface ToggleOption<T extends string> {
   value: T
   label: string
-  icon: typeof Table2
+  icon: LucideIcon
 }
 
 /**
@@ -197,273 +187,6 @@ export function PreviewSkeleton({ noun = "preview" }: { noun?: string }) {
   return <SkeletonRows rows={6} noun={noun} />
 }
 
-// ─── CSV, TSV, JSON Lines ──────────────────────────────────────────────────
-
-type TextView = "table" | "raw"
-
-type TabularResult =
-  | { ok: true; table: PreviewTableModel; clippedFields: number; delimiter?: Delimiter }
-  | { ok: false; reason: string }
-
-const TEXT_VIEWS = [
-  { value: "table", label: "Table", icon: Table2 },
-  { value: "raw", label: "Raw", icon: FileText },
-] as const satisfies readonly ToggleOption<TextView>[]
-
-/**
- * A delimited or JSON Lines object as a table of its first rows, with the raw
- * text one click away.
- *
- * A file that does not parse the way its name promised — an unclosed quote,
- * a line that is not JSON, records of different shapes — is not an error: it
- * opens on the raw text, with a note saying why the table is not offered.
- * The parse never throws, so the dialog always has something to show.
- */
-export function TabularTextPreview({
-  kind,
-  text,
-  truncated,
-  objectBytes,
-}: {
-  kind: "csv" | "tsv" | "jsonl"
-  text: string
-  /** `text` is the opening window of a longer object. */
-  truncated: boolean
-  objectBytes: number
-}) {
-  const result = useMemo((): TabularResult => {
-    if (kind === "jsonl") {
-      const jsonl = jsonlTable(text, { truncated, objectBytes })
-      return jsonl.ok ? { ...jsonl, clippedFields: 0 } : jsonl
-    }
-    return delimitedTable(text, { preferred: kind === "tsv" ? "\t" : ",", truncated, objectBytes })
-  }, [kind, text, truncated, objectBytes])
-  const [view, setView] = useState<TextView>("table")
-  const label = KIND_LABEL[kind]
-  const readWindow = truncated
-    ? `first ${OBJECT_PREVIEW_WINDOW} of ${formatBytes(objectBytes)}`
-    : ""
-
-  if (!result.ok) {
-    return (
-      <PreviewPanel
-        format={label}
-        meta={truncated ? `raw · ${readWindow}` : "raw"}
-        notices={<PreviewNotice tone="warning">Shown as text: {result.reason}</PreviewNotice>}
-      >
-        <RawText text={text} language={null} keepLines />
-      </PreviewPanel>
-    )
-  }
-
-  const { table, clippedFields: clipped, delimiter } = result
-  // Named only when the text overruled the extension: a `.csv` that is
-  // really semicolon-separated reads wrongly unless the user is told why the
-  // columns split where they do.
-  const sniffed =
-    delimiter && delimiter !== (kind === "tsv" ? "\t" : ",") ? delimiterName(delimiter) : undefined
-  const meta =
-    view === "table"
-      ? [describeRowCount(table), columnCount(table), sniffed && `${sniffed}-separated`]
-          .filter(Boolean)
-          .join(" · ")
-      : ["raw", readWindow].filter(Boolean).join(" · ")
-
-  return (
-    <PreviewPanel
-      format={label}
-      meta={meta}
-      control={
-        <ViewToggle label={`${label} view`} value={view} options={TEXT_VIEWS} onChange={setView} />
-      }
-      notices={
-        view === "table" && (
-          <>
-            {table.truncatedByBytes && (
-              <PreviewNotice>
-                Read from the first {OBJECT_PREVIEW_WINDOW} of this {formatBytes(objectBytes)}{" "}
-                object, so the row total is an estimate. Download the file for all of it.
-              </PreviewNotice>
-            )}
-            {clipped > 0 && (
-              <PreviewNotice>
-                {clipped === 1 ? "One field is" : `${formatCount(clipped)} fields are`} longer than
-                the preview keeps and {clipped === 1 ? "is" : "are"} cut short.
-              </PreviewNotice>
-            )}
-          </>
-        )
-      }
-    >
-      {view === "table" ? (
-        <DataPreviewTable
-          table={table}
-          label={`First rows of the ${label} file`}
-          emptyMessage="No rows below the header."
-        />
-      ) : (
-        <RawText text={text} language={null} keepLines />
-      )}
-    </PreviewPanel>
-  )
-}
-
-function delimiterName(delimiter: string): string {
-  return { ",": "comma", "\t": "tab", ";": "semicolon", "|": "pipe" }[delimiter] ?? delimiter
-}
-
-function columnCount(table: PreviewTableModel): string {
-  const shown = table.columns.length
-  const total = shown + table.hiddenColumns
-  const noun = total === 1 ? "column" : "columns"
-  return table.hiddenColumns > 0
-    ? `${formatCount(shown)} of ${formatCount(total)} ${noun}`
-    : `${formatCount(total)} ${noun}`
-}
-
-// ─── Parquet ───────────────────────────────────────────────────────────────
-
-type ParquetView = "rows" | "schema"
-
-const PARQUET_VIEWS = [
-  { value: "rows", label: "Rows", icon: Table2 },
-  { value: "schema", label: "Schema", icon: ListTree },
-] as const satisfies readonly ToggleOption<ParquetView>[]
-
-/**
- * A Parquet object's first rows and its schema. Read by range — the footer,
- * then the first row group — so the object's size does not matter; see
- * `features/s3/preview-parquet.ts`.
- */
-export function ParquetObjectPreview({
-  bucket,
-  objectKey,
-  versionId,
-  size,
-  downloadHref,
-}: {
-  bucket: string
-  objectKey: string
-  versionId?: string
-  size: number
-  downloadHref: string
-}) {
-  const { data, error, isLoading } = useQuery(
-    s3ObjectParquetPreviewQueryOptions(bucket, objectKey, versionId, size),
-  )
-  const [chosen, setChosen] = useState<ParquetView | undefined>(undefined)
-
-  if (isLoading) {
-    return (
-      <PreviewPanel format="Parquet" meta="reading footer">
-        <PreviewSkeleton noun="parquet footer" />
-      </PreviewPanel>
-    )
-  }
-  if (error || !data) {
-    return (
-      <PreviewPanel format="Parquet" meta="not readable">
-        <UnreadableObject
-          title="Could not read this file as Parquet"
-          description={
-            error instanceof Error
-              ? parquetErrorMessage(error)
-              : "The preview could not be loaded. The file itself is untouched."
-          }
-          downloadHref={downloadHref}
-        />
-      </PreviewPanel>
-    )
-  }
-
-  // Rows first; the schema is the fallback when there are no rows to show.
-  const view = chosen ?? (data.table ? "rows" : "schema")
-  const rowsPart =
-    view === "rows" && data.table
-      ? describeRowCount(data.table)
-      : `${formatCount(data.numRows)} ${data.numRows === 1 ? "row" : "rows"}`
-  const meta = [
-    rowsPart,
-    `${formatCount(data.fields.length)} ${data.fields.length === 1 ? "column" : "columns"}`,
-    `${formatCount(data.rowGroups)} row ${data.rowGroups === 1 ? "group" : "groups"}`,
-    data.codecs.join(", ").toLowerCase(),
-  ]
-    .filter(Boolean)
-    .join(" · ")
-  // The table stops short of the row limit because the first row group
-  // does, not because the file does — worth one line, since "first 3 rows
-  // of 5" otherwise reads like a bug.
-  const stoppedAtGroup =
-    !!data.table &&
-    data.table.rows.length < PREVIEW_ROW_LIMIT &&
-    data.numRows > data.table.rows.length
-
-  return (
-    <PreviewPanel
-      format="Parquet"
-      meta={meta}
-      control={
-        <ViewToggle
-          label="Parquet view"
-          value={view}
-          options={PARQUET_VIEWS}
-          onChange={setChosen}
-        />
-      }
-      notices={
-        view === "rows" &&
-        stoppedAtGroup && (
-          <PreviewNotice>
-            Rows come from the first row group only; the footer and that group are all that was
-            read.
-          </PreviewNotice>
-        )
-      }
-    >
-      {view === "schema" ? (
-        <DataPreviewTable table={schemaTable(data)} label="Parquet schema" />
-      ) : data.table ? (
-        <DataPreviewTable
-          table={data.table}
-          label="First rows of the Parquet file"
-          emptyMessage="The file has a schema and no rows."
-        />
-      ) : (
-        <UnreadableObject
-          title="Rows not previewed"
-          description={data.rowsError ?? "The rows could not be read."}
-          downloadHref={downloadHref}
-          secondary="Switch to Schema for the columns, which come from the footer."
-        />
-      )}
-    </PreviewPanel>
-  )
-}
-
-/** The schema as a table of its own: one row per column. */
-function schemaTable(data: ParquetPreview): PreviewTableModel {
-  return {
-    columns: [
-      { name: "column", numeric: false },
-      { name: "type", numeric: false },
-      { name: "nullable", numeric: false },
-    ],
-    rows: data.fields.map((f) => [f.name, f.type, f.nullable ? "nullable" : "required"]),
-    totalRows: data.fields.length,
-    totalIsEstimate: false,
-    truncatedByBytes: false,
-    hiddenColumns: 0,
-  }
-}
-
-/** hyparquet's messages are for its own developers; the one people hit gets a sentence. */
-function parquetErrorMessage(error: Error): string {
-  if (/PAR1/.test(error.message)) {
-    return "It does not end with Parquet's footer marker, so it is not a Parquet file, or it was cut short while being written."
-  }
-  return error.message
-}
-
 // ─── Avro and other unreadable objects ─────────────────────────────────────
 
 /**
@@ -484,7 +207,7 @@ export function AvroNotice({ downloadHref }: { downloadHref: string }) {
   )
 }
 
-function UnreadableObject({
+export function UnreadableObject({
   title,
   description,
   secondary,

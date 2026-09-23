@@ -1,14 +1,6 @@
-import {
-  PREVIEW_COLUMN_LIMIT,
-  PREVIEW_ROW_LIMIT,
-  isNumericColumn,
-  roundEstimate,
-  type PreviewTableModel,
-} from "./preview-table"
-
 /**
- * CSV and TSV for the S3 preview: an RFC 4180 reader plus the table built
- * from it.
+ * CSV and TSV: an RFC 4180 reader, used by the data worker to parse one block
+ * of rows at a time (and the header), plus delimiter sniffing.
  *
  * Hand-written rather than a dependency because the job is small and bounded
  * — at most 1 MiB of text, read once, into strings — and every candidate
@@ -241,87 +233,12 @@ function fieldCount(line: string, delimiter: string): number {
   return count
 }
 
-export type DelimitedTableResult =
-  | { ok: true; table: PreviewTableModel; delimiter: Delimiter; clippedFields: number }
-  | { ok: false; reason: string }
-
-interface TableOptions {
-  /** The delimiter the key or content type implies; the text can overrule it. */
-  preferred: Delimiter
-  /** The text is the opening window of a longer object. */
-  truncated: boolean
-  /** The whole object's size in bytes, for estimating how many rows it holds. */
-  objectBytes?: number
-}
-
 /**
- * Delimited text as a preview table: the first record is the header, the next
- * `PREVIEW_ROW_LIMIT` are the rows.
- *
- * Ragged rows are padded or widened rather than refused — short rows are
- * common in hand-edited files, and a row longer than the header gets its extra
- * columns named `column_N`. Blank header names get the same treatment, and a
- * repeated one is suffixed, so every column can be told apart.
+ * Names for a header record: blank names become `column_N` and a repeated
+ * name is suffixed, so every column can be told apart. `width` may exceed the
+ * header — a row longer than it gets `column_N` for the extra fields.
  */
-export function delimitedTable(text: string, options: TableOptions): DelimitedTableResult {
-  const delimiter = sniffDelimiter(text, options.preferred)
-  const parsed = parseDelimited(text, {
-    delimiter,
-    maxRecords: PREVIEW_ROW_LIMIT + 1,
-    truncated: options.truncated,
-  })
-  if (parsed.malformed) return { ok: false, reason: parsed.malformed }
-  if (parsed.records.length === 0) {
-    return {
-      ok: false,
-      reason: options.truncated
-        ? "The first row is longer than the preview window, so no complete row could be read."
-        : "The file has no rows.",
-    }
-  }
-  const [header, ...body] = parsed.records
-  const width = Math.max(header.length, ...body.map((r) => r.length))
-  const shownWidth = Math.min(width, PREVIEW_COLUMN_LIMIT)
-  const names = columnNames(header, shownWidth)
-  const rows = body.map((r) => {
-    const row: string[] = r.slice(0, shownWidth)
-    while (row.length < shownWidth) row.push("")
-    return row
-  })
-
-  const dataRecords = parsed.recordCount - 1
-  let totalRows: number | undefined = dataRecords
-  let totalIsEstimate = false
-  if (options.truncated) {
-    totalIsEstimate = true
-    // Rows read so far, scaled by how much of the object the text covered.
-    // Characters stand in for bytes: exact for ASCII, an undercount of the
-    // ratio for multi-byte text, and this is an estimate either way.
-    totalRows =
-      options.objectBytes && parsed.consumedChars > 0
-        ? roundEstimate((dataRecords * options.objectBytes) / parsed.consumedChars)
-        : undefined
-  }
-
-  return {
-    ok: true,
-    delimiter,
-    clippedFields: parsed.clippedFields,
-    table: {
-      columns: names.map((name, index) => ({
-        name,
-        numeric: isNumericColumn(rows.map((r) => r[index])),
-      })),
-      rows,
-      totalRows,
-      totalIsEstimate,
-      truncatedByBytes: options.truncated,
-      hiddenColumns: width - shownWidth,
-    },
-  }
-}
-
-function columnNames(header: readonly string[], width: number): string[] {
+export function columnNames(header: readonly string[], width: number): string[] {
   const seen = new Map<string, number>()
   return Array.from({ length: width }, (_, index) => {
     const raw = (header[index] ?? "").trim()

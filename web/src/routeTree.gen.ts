@@ -98,6 +98,7 @@ import { Route as LambdaLayersLayerNameRouteImport } from './routes/lambda/layer
 import { Route as S3BucketIndexRouteImport } from './routes/s3/$bucket/index'
 import { Route as S3BucketConfigRouteImport } from './routes/s3/$bucket/config'
 import { Route as S3BucketUploadRouteImport } from './routes/s3/$bucket/upload'
+import { Route as S3BucketViewRouteImport } from './routes/s3/$bucket/view'
 import { Route as SqsQueueIndexRouteImport } from './routes/sqs/$queue/index'
 import { Route as CloudwatchLogsGroupNameIndexRouteImport } from './routes/cloudwatch/logs/$groupName/index'
 import { Route as CloudwatchLogsGroupNameStreamNameRouteImport } from './routes/cloudwatch/logs/$groupName/$streamName'
@@ -557,6 +558,11 @@ const S3BucketUploadRoute = S3BucketUploadRouteImport.update({
   path: '/upload',
   getParentRoute: () => S3BucketRoute,
 } as any)
+const S3BucketViewRoute = S3BucketViewRouteImport.update({
+  id: '/view',
+  path: '/view',
+  getParentRoute: () => S3BucketRoute,
+} as any)
 const SqsQueueIndexRoute = SqsQueueIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -679,6 +685,7 @@ export interface FileRoutesByFullPath {
   '/lambda/layers/$layerName': typeof LambdaLayersLayerNameRoute
   '/s3/$bucket/config': typeof S3BucketConfigRoute
   '/s3/$bucket/upload': typeof S3BucketUploadRoute
+  '/s3/$bucket/view': typeof S3BucketViewRoute
   '/appsync/$apiId/': typeof AppsyncApiIdIndexRoute
   '/cloudfront/$distributionId/': typeof CloudfrontDistributionIdIndexRoute
   '/cloudwatch/logs/': typeof CloudwatchLogsIndexRoute
@@ -770,6 +777,7 @@ export interface FileRoutesByTo {
   '/lambda/layers/$layerName': typeof LambdaLayersLayerNameRoute
   '/s3/$bucket/config': typeof S3BucketConfigRoute
   '/s3/$bucket/upload': typeof S3BucketUploadRoute
+  '/s3/$bucket/view': typeof S3BucketViewRoute
   '/appsync/$apiId': typeof AppsyncApiIdIndexRoute
   '/cloudfront/$distributionId': typeof CloudfrontDistributionIdIndexRoute
   '/cloudwatch/logs': typeof CloudwatchLogsIndexRoute
@@ -869,6 +877,7 @@ export interface FileRoutesById {
   '/lambda/layers/$layerName': typeof LambdaLayersLayerNameRoute
   '/s3/$bucket/config': typeof S3BucketConfigRoute
   '/s3/$bucket/upload': typeof S3BucketUploadRoute
+  '/s3/$bucket/view': typeof S3BucketViewRoute
   '/appsync/$apiId/': typeof AppsyncApiIdIndexRoute
   '/cloudfront/$distributionId/': typeof CloudfrontDistributionIdIndexRoute
   '/cloudwatch/logs/': typeof CloudwatchLogsIndexRoute
@@ -969,6 +978,7 @@ export interface FileRouteTypes {
     | '/lambda/layers/$layerName'
     | '/s3/$bucket/config'
     | '/s3/$bucket/upload'
+    | '/s3/$bucket/view'
     | '/appsync/$apiId/'
     | '/cloudfront/$distributionId/'
     | '/cloudwatch/logs/'
@@ -1060,6 +1070,7 @@ export interface FileRouteTypes {
     | '/lambda/layers/$layerName'
     | '/s3/$bucket/config'
     | '/s3/$bucket/upload'
+    | '/s3/$bucket/view'
     | '/appsync/$apiId'
     | '/cloudfront/$distributionId'
     | '/cloudwatch/logs'
@@ -1158,6 +1169,7 @@ export interface FileRouteTypes {
     | '/lambda/layers/$layerName'
     | '/s3/$bucket/config'
     | '/s3/$bucket/upload'
+    | '/s3/$bucket/view'
     | '/appsync/$apiId/'
     | '/cloudfront/$distributionId/'
     | '/cloudwatch/logs/'
@@ -1885,6 +1897,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof S3BucketUploadRouteImport
       parentRoute: typeof S3BucketRoute
     }
+    '/s3/$bucket/view': {
+      id: '/s3/$bucket/view'
+      path: '/view'
+      fullPath: '/s3/$bucket/view'
+      preLoaderRoute: typeof S3BucketViewRouteImport
+      parentRoute: typeof S3BucketRoute
+    }
     '/sqs/$queue/': {
       id: '/sqs/$queue/'
       path: '/'
@@ -2006,6 +2025,7 @@ const EcsClusterRouteWithChildren = EcsClusterRoute._addFileChildren(
 interface S3BucketRouteChildren {
   S3BucketConfigRoute: typeof S3BucketConfigRoute
   S3BucketUploadRoute: typeof S3BucketUploadRoute
+  S3BucketViewRoute: typeof S3BucketViewRoute
   S3BucketIndexRoute: typeof S3BucketIndexRoute
   S3BucketObjectsSplatRoute: typeof S3BucketObjectsSplatRoute
 }
@@ -2013,6 +2033,7 @@ interface S3BucketRouteChildren {
 const S3BucketRouteChildren: S3BucketRouteChildren = {
   S3BucketConfigRoute: S3BucketConfigRoute,
   S3BucketUploadRoute: S3BucketUploadRoute,
+  S3BucketViewRoute: S3BucketViewRoute,
   S3BucketIndexRoute: S3BucketIndexRoute,
   S3BucketObjectsSplatRoute: S3BucketObjectsSplatRoute,
 }

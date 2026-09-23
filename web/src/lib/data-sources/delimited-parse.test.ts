@@ -1,10 +1,4 @@
-import {
-  MAX_FIELD_CHARS,
-  delimitedTable,
-  parseDelimited,
-  sniffDelimiter,
-} from "./preview-delimited"
-import { PREVIEW_ROW_LIMIT } from "./preview-table"
+import { MAX_FIELD_CHARS, columnNames, parseDelimited, sniffDelimiter } from "./delimited-parse"
 
 const parse = (text: string, over: { delimiter?: string; truncated?: boolean } = {}) =>
   parseDelimited(text, {
@@ -128,69 +122,8 @@ describe("sniffDelimiter", () => {
   })
 })
 
-describe("delimitedTable", () => {
-  it("takes the first record as the header and the rest as rows", () => {
-    const result = delimitedTable("id,name\n1,Ada\n2,Grace\n", { preferred: ",", truncated: false })
-    if (!result.ok) throw new Error(result.reason)
-    expect(result.table.columns.map((c) => c.name)).toEqual(["id", "name"])
-    expect(result.table.rows).toEqual([
-      ["1", "Ada"],
-      ["2", "Grace"],
-    ])
-    expect(result.table.totalRows).toBe(2)
-    expect(result.table.totalIsEstimate).toBe(false)
-  })
-
-  it("right-aligns numeric columns and leaves identifiers with leading zeros alone", () => {
-    const result = delimitedTable("n,zip,price\n1,02134,1.5\n-2,10001,\n", {
-      preferred: ",",
-      truncated: false,
-    })
-    if (!result.ok) throw new Error(result.reason)
-    expect(result.table.columns.map((c) => c.numeric)).toEqual([true, false, true])
-  })
-
-  it("pads short rows and names the columns a long row adds", () => {
-    const result = delimitedTable("a,,a\n1\n1,2,3,4\n", { preferred: ",", truncated: false })
-    if (!result.ok) throw new Error(result.reason)
-    expect(result.table.columns.map((c) => c.name)).toEqual(["a", "column_2", "a_2", "column_4"])
-    expect(result.table.rows[0]).toEqual(["1", "", "", ""])
-  })
-
-  it("shows at most the preview's rows and says how many the file holds", () => {
-    const text = "n\n" + Array.from({ length: 500 }, (_, i) => `${i}\n`).join("")
-    const result = delimitedTable(text, { preferred: ",", truncated: false })
-    if (!result.ok) throw new Error(result.reason)
-    expect(result.table.rows).toHaveLength(PREVIEW_ROW_LIMIT)
-    expect(result.table.totalRows).toBe(500)
-  })
-
-  it("estimates the total from the share of the object a truncated window covered", () => {
-    // 1000 rows of "nnnn\n" is ~5 KB; call the object 10x that.
-    const text =
-      "n\n" + Array.from({ length: 1000 }, (_, i) => `${String(i).padStart(4, "0")}\n`).join("")
-    const result = delimitedTable(text + "12", {
-      preferred: ",",
-      truncated: true,
-      objectBytes: text.length * 10,
-    })
-    if (!result.ok) throw new Error(result.reason)
-    expect(result.table.truncatedByBytes).toBe(true)
-    expect(result.table.totalIsEstimate).toBe(true)
-    expect(result.table.totalRows).toBe(10_000)
-  })
-
-  it("degrades a malformed file to a reason instead of a misleading table", () => {
-    const result = delimitedTable('a,b\n"never closed\n', { preferred: ",", truncated: false })
-    expect(result.ok).toBe(false)
-  })
-
-  it("explains a window too small for even one complete row", () => {
-    const result = delimitedTable("a,b,c", { preferred: ",", truncated: true })
-    expect(result).toEqual({ ok: false, reason: expect.stringMatching(/first row is longer/) })
-  })
-
-  it("reads an empty object as having no rows rather than throwing", () => {
-    expect(delimitedTable("", { preferred: ",", truncated: false }).ok).toBe(false)
+describe("columnNames", () => {
+  it("names blank headers, suffixes repeats and names extra fields", () => {
+    expect(columnNames(["a", "", "a"], 4)).toEqual(["a", "column_2", "a_2", "column_4"])
   })
 })

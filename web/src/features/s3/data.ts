@@ -30,7 +30,6 @@ import { queryOptions, infiniteQueryOptions, mutationOptions } from "@tanstack/r
 import { s3 } from "@/services/api"
 import { endpointStore } from "@/services/endpoint-store"
 import type { S3ObjectVersion } from "@/types"
-import { rangeAsyncBuffer, readParquetPreview } from "./preview-parquet"
 
 // ─── Key factory ───────────────────────────────────────────────────────────
 
@@ -74,14 +73,6 @@ export const s3Keys = {
     [...s3Keys.meta(), bucket, key, versionId ?? null] as const,
   objectPreview: (bucket: string, key: string, versionId?: string) =>
     [...s3Keys.objectMeta(bucket, key, versionId), "preview"] as const,
-  // The size is in the key because the reader starts from it: the footer is
-  // the last bytes, and an overwrite that changed the length moves them.
-  objectParquetPreview: (
-    bucket: string,
-    key: string,
-    versionId: string | undefined,
-    size: number,
-  ) => [...s3Keys.objectMeta(bucket, key, versionId), "parquet", size] as const,
   notification: () => [...s3Keys.all(), "notification"] as const,
   bucketNotification: (bucket: string) => [...s3Keys.notification(), bucket] as const,
   lifecycle: () => [...s3Keys.all(), "lifecycle"] as const,
@@ -209,26 +200,6 @@ export function s3ObjectPreviewQueryOptions(bucket: string, key: string, version
   return queryOptions({
     queryKey: s3Keys.objectPreview(bucket, key, versionId),
     queryFn: () => s3.getObjectText(bucket, key, versionId),
-  })
-}
-
-/**
- * A Parquet object's schema and first rows, read by range: the footer, then
- * the first row group (see `preview-parquet.ts`). Not retried — a file that is
- * not Parquet fails the same way every time, and a retry is two more requests
- * to learn nothing.
- */
-export function s3ObjectParquetPreviewQueryOptions(
-  bucket: string,
-  key: string,
-  versionId: string | undefined,
-  size: number,
-) {
-  return queryOptions({
-    queryKey: s3Keys.objectParquetPreview(bucket, key, versionId, size),
-    queryFn: () =>
-      readParquetPreview(rangeAsyncBuffer(s3.getObjectDownloadUrl(bucket, key, versionId), size)),
-    retry: false,
   })
 }
 

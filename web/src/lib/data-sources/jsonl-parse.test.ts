@@ -1,4 +1,4 @@
-import { jsonlTable, parseJsonl, uniformColumns } from "./preview-jsonl"
+import { parseJsonl, uniformColumns } from "./jsonl-parse"
 
 describe("parseJsonl", () => {
   it("reads one record per line and skips blank lines", () => {
@@ -67,42 +67,5 @@ describe("uniformColumns", () => {
 
   it("refuses records with no fields at all", () => {
     expect(uniformColumns([{}, {}])).toBeNull()
-  })
-})
-
-describe("jsonlTable", () => {
-  it("tells an explicit null from an omitted key", () => {
-    const result = jsonlTable('{"id":1,"a":null,"b":2}\n{"id":2,"a":3}\n', { truncated: false })
-    if (!result.ok) throw new Error(result.reason)
-    expect(result.table.rows).toEqual([
-      [1, null, 2],
-      [2, 3, undefined],
-    ])
-  })
-
-  it("right-aligns JSON numbers but not numeric-looking strings", () => {
-    const result = jsonlTable('{"n":1,"s":"2"}\n{"n":2.5,"s":"3"}\n', { truncated: false })
-    if (!result.ok) throw new Error(result.reason)
-    expect(result.table.columns.map((c) => c.numeric)).toEqual([true, false])
-  })
-
-  it("keeps nested values for the cell to render compactly", () => {
-    const result = jsonlTable('{"id":1,"tags":["a","b"],"geo":{"lat":1}}\n', { truncated: false })
-    if (!result.ok) throw new Error(result.reason)
-    expect(result.table.rows[0]).toEqual([1, ["a", "b"], { lat: 1 }])
-  })
-
-  it("estimates the total for a truncated window", () => {
-    const line = '{"id":1}\n'
-    const text = line.repeat(100)
-    const result = jsonlTable(text, { truncated: true, objectBytes: text.length * 4 })
-    if (!result.ok) throw new Error(result.reason)
-    expect(result.table.totalIsEstimate).toBe(true)
-    expect(result.table.totalRows).toBe(400)
-  })
-
-  it("explains why mixed records stay raw", () => {
-    const result = jsonlTable('{"a":1,"b":2,"c":3}\n{"x":1,"y":2,"z":3}\n', { truncated: false })
-    expect(result).toEqual({ ok: false, reason: expect.stringMatching(/do not share/) })
   })
 })

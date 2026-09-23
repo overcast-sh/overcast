@@ -1,11 +1,3 @@
-import {
-  PREVIEW_COLUMN_LIMIT,
-  PREVIEW_ROW_LIMIT,
-  isNumericColumn,
-  roundEstimate,
-  type PreviewTableModel,
-} from "./preview-table"
-
 /**
  * JSON Lines as a table — when, and only when, it is one.
  *
@@ -87,54 +79,4 @@ export function uniformColumns(records: readonly unknown[]): string[] | null {
     if (Object.keys(record as object).length <= threshold) return null
   }
   return [...union.keys()]
-}
-
-export type JsonlTableResult =
-  { ok: true; table: PreviewTableModel } | { ok: false; reason: string }
-
-export function jsonlTable(
-  text: string,
-  options: { truncated: boolean; objectBytes?: number },
-): JsonlTableResult {
-  const parsed = parseJsonl(text, PREVIEW_ROW_LIMIT, options.truncated)
-  if (!parsed.ok) return parsed
-  const columns = uniformColumns(parsed.records)
-  if (!columns) {
-    return {
-      ok: false,
-      reason:
-        parsed.records.length === 0
-          ? "No complete records to tabulate."
-          : "Records do not share the same fields, so they are shown as written.",
-    }
-  }
-  const shown = columns.slice(0, PREVIEW_COLUMN_LIMIT)
-  const rows = parsed.records.map((record) => {
-    const r = record as Record<string, unknown>
-    // `undefined` for an omitted key, `null` for an explicit JSON null — the
-    // table draws the two differently.
-    return shown.map((key) => (Object.hasOwn(r, key) ? r[key] : undefined))
-  })
-  const totalRows = options.truncated
-    ? options.objectBytes && parsed.consumedChars > 0
-      ? roundEstimate((parsed.recordCount * options.objectBytes) / parsed.consumedChars)
-      : undefined
-    : parsed.recordCount
-  return {
-    ok: true,
-    table: {
-      columns: shown.map((name, index) => ({
-        name,
-        numeric: isNumericColumn(
-          rows.map((row) => row[index]),
-          { numericText: false },
-        ),
-      })),
-      rows,
-      totalRows,
-      totalIsEstimate: options.truncated,
-      truncatedByBytes: options.truncated,
-      hiddenColumns: columns.length - shown.length,
-    },
-  }
 }

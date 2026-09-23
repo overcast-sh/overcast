@@ -22,16 +22,10 @@ import { ObjectRevisionBar, ObjectVersionList } from "./object-version-list"
 import { formatBytes, formatDate } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { describeObjectReadError } from "@/features/s3/object-read-error"
-import { dataPreviewKind, isTextDataKind } from "@/features/s3/preview-kind"
+import { dataPreviewKind } from "@/features/s3/preview-kind"
 import { formatPreviewText, isImagePreviewable, isTextPreviewable } from "./object-preview-format"
-import {
-  AvroNotice,
-  ParquetObjectPreview,
-  PreviewPanel,
-  PreviewSkeleton,
-  RawText,
-  TabularTextPreview,
-} from "./data-preview"
+import { AvroNotice, PreviewPanel, PreviewSkeleton, RawText } from "./data-preview"
+import { DataFilePreview, OpenInViewer } from "./data-file-preview"
 import { IcebergMetadataSummary } from "./iceberg-metadata-summary"
 
 interface ObjectMetadata {
@@ -125,10 +119,12 @@ export function ObjectPreviewDialog({
   // No size gate: getObjectText fetches at most the first 1 MiB by Range, so
   // a text-like object of any size previews — its opening window, labelled as
   // such when the object holds more.
+  // The tabular kinds read their own text (a worker streams and indexes
+  // them); only Iceberg metadata and plain text come through this window.
   const canPreviewText =
     !!objectKey &&
     !!metadata &&
-    (isTextDataKind(dataKind) ||
+    (dataKind === "iceberg-metadata" ||
       (dataKind === null && isTextPreviewable(metadata.contentType, objectKey)))
   const { data: previewText, isLoading: previewLoading } = useQuery({
     ...s3ObjectPreviewQueryOptions(bucket, objectKey ?? "", versionId),
@@ -149,19 +145,6 @@ export function ObjectPreviewDialog({
         <PreviewPanel meta="loading">
           <PreviewSkeleton />
         </PreviewPanel>
-      )
-    }
-    if (dataKind === "csv" || dataKind === "tsv" || dataKind === "jsonl") {
-      // Keyed on the object so a new one opens on its table, whichever view
-      // the last one was left on.
-      return (
-        <TabularTextPreview
-          key={`${objectKey}?versionId=${versionId ?? ""}`}
-          kind={dataKind}
-          text={previewText.text}
-          truncated={previewText.truncated}
-          objectBytes={metadata.contentLength}
-        />
       )
     }
     const notes = [
@@ -221,14 +204,19 @@ export function ObjectPreviewDialog({
         </div>
       )}
       {textPreview}
-      {previewUrl && objectKey && dataKind === "parquet" && (
-        <ParquetObjectPreview
+      {objectKey && tabular && (
+        // Keyed on the object so a new one opens on its first rows, whichever
+        // view the last one was left on.
+        <DataFilePreview
           key={`${objectKey}?versionId=${versionId ?? ""}`}
+          kind={dataKind}
           bucket={bucket}
           objectKey={objectKey}
           versionId={versionId}
           size={metadata.contentLength}
-          downloadHref={previewUrl}
+          etag={metadata.etag}
+          gridClassName="h-[55vh]"
+          viewerLink={<OpenInViewer bucket={bucket} objectKey={objectKey} versionId={versionId} />}
         />
       )}
       {previewUrl && dataKind === "avro" && <AvroNotice downloadHref={previewUrl} />}
