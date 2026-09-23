@@ -2,7 +2,7 @@ service: s3
 status: in_progress
 priority: p0
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-09-19
+last_updated: 2026-09-23
 protocols: [rest_xml]
 implementation: [internal/services/s3]
 integration_tests: [tests/integration/s3]
@@ -517,13 +517,17 @@ operations:
     status: fixed
     aws_docs:
       - https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObject.html
+      - https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObjects.html
+      - https://docs.aws.amazon.com/AmazonS3/latest/userguide/WhatsNew.html
     implementation:
       - internal/services/s3/handler_object.go
       - internal/services/s3/version.go
+      - internal/services/s3/conditional_write.go
     tests:
       - tests/integration/s3/s3_versioning_test.go::TestDeleteObject_versionedBucketCreatesADeleteMarker
       - tests/integration/s3/s3_versioning_test.go::TestDeleteObject_removingADeleteMarkerRestoresTheObject
       - tests/integration/s3/s3_versioning_test.go::TestDeleteObject_versionTargetedDeletePromotesTheNewestSurvivor
+      - tests/integration/s3/s3_conditional_delete_test.go
     scenarios:
       - name: delete marker creation
         status: fixed
@@ -534,6 +538,43 @@ operations:
       - name: unknown versionId
         status: intentionally_partial
         gap: Treated as idempotent (204) rather than pinned to a modelled error, matching DeleteObject's documented idempotency.
+      - name: If-Match on DeleteObject
+        status: fixed
+        notes: >-
+          A mismatched ETag is 412 PreconditionFailed and the object is left in
+          place; a literal '*' matches any current ETag, per AWS's documented
+          If-Match behaviour for DeleteObject specifically (#2037). Reuses
+          conditional_write.go's evaluate(), so a key with no current version
+          answers 404 NoSuchKey, and a current version that is itself a delete
+          marker counts as "no current version" the same way it does for
+          PutObject's If-Match.
+      - name: If-Match with a versionId
+        status: fixed
+        notes: >-
+          The condition is checked against the named version's own ETag, not
+          against whichever version is current, since that is the version the
+          caller asked to remove.
+      - name: If-Match against the current version, no versionId given
+        status: fixed
+        notes: >-
+          On a versioning-enabled bucket a plain conditional delete checks the
+          current version before creating a delete marker; a mismatch leaves
+          the current version live and creates no marker.
+      - name: DeleteObjects per-key ETag
+        status: fixed
+        notes: >-
+          Each <Object> entry's <ETag> is DeleteObjects' per-key counterpart to
+          If-Match. A mismatch reports that key with a per-key <Error> of code
+          PreconditionFailed while the rest of the batch still proceeds; a
+          match deletes normally.
+      - name: IfMatchLastModifiedTime, IfMatchSize, and DeleteObjects' LastModifiedTime/Size
+        status: unsupported
+        gap: >-
+          AWS documents all four as supported for directory buckets only,
+          unlike If-Match/ETag, which the API reference states works for both
+          general purpose and directory buckets. Overcast has no S3 Express
+          zonal endpoint and serves general purpose bucket paths only, so
+          these are not modelled.
   PutObject:
     status: fixed
     aws_docs:
@@ -803,6 +844,7 @@ findings:
     - CompleteMultipartUpload validates the parts list — InvalidPart for a wrong or unknown ETag, InvalidPartOrder for an out-of-order list, EntityTooSmall for a non-final part under 5 MiB, MalformedXML for an empty list — and leaves a refused upload intact (#1706).
     - CloudFormation AWS::S3::Bucket uses the S3 handlers for lifecycle, versioning, notifications, encryption, tags, CORS, and website configuration.
     - GetObject, GetObjectTagging and CopyObject's source lookup now answer NoSuchBucket for a bucket that does not exist, instead of NoSuchKey (#1635); HeadObject is wire-identical either way per AWS's own documented HEAD limitation.
+    - DeleteObject and DeleteObjects honour If-Match, so a conditional delete no longer silently succeeds; a mismatch is 412 PreconditionFailed (per-key for DeleteObjects) and a missing key is 404 NoSuchKey rather than DeleteObject's usual idempotent 204 (#2037).
   remaining_gaps:
     - S3 error documents omit HostId, which real AWS sends on every error. Not specific to InvalidRange; belongs in a change against the whole REST-XML envelope rather than one operation (noted while fixing #1864).
     - Bucket policies are stored and returned but never evaluated, so a policy authorises and denies nothing.

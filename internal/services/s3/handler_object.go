@@ -614,6 +614,13 @@ type deleteObjectsRequest struct {
 type deleteObjectEntry struct {
 	Key       string `xml:"Key"`
 	VersionId string `xml:"VersionId,omitempty"`
+	// ETag is DeleteObjects' per-key counterpart to DeleteObject's If-Match
+	// header (com.amazonaws.s3#ObjectIdentifier$ETag): the entry is deleted
+	// only if it matches the key's current ETag. LastModifiedTime and Size,
+	// the shape's other two conditional fields, are documented as supported
+	// only for directory buckets, which Overcast does not emulate, so they
+	// are not modeled here.
+	ETag string `xml:"ETag,omitempty"`
 }
 
 // deleteObjectsResponse is the XML response for DeleteObjects.
@@ -668,7 +675,11 @@ func (h *Handler) DeleteObjects(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, entry := range req.Objects {
-		outcome, delErr := h.deleteOne(r, b, entry.Key, entry.VersionId)
+		// DeleteObjects has no If-None-Match counterpart, so the entry's ETag
+		// is the whole condition — unlike parseConditionalWrite, which also
+		// reads If-None-Match off request headers that do not apply here.
+		c := conditionalWrite{ifMatch: strings.TrimSpace(entry.ETag)}
+		outcome, delErr := h.deleteOne(r, b, entry.Key, entry.VersionId, c)
 		if delErr != nil {
 			resp.Errors = append(resp.Errors, deleteObjectError{
 				Key:     entry.Key,
@@ -712,7 +723,13 @@ func (h *Handler) DeleteObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	outcome, aerr := h.deleteOne(r, b, key, serviceutil.QueryString(r, "versionId", ""))
+	// DeleteObject only documents If-Match, not If-None-Match — read the
+	// header directly rather than through parseConditionalWrite, which also
+	// parses (and would refuse) an If-None-Match this operation does not
+	// define.
+	c := conditionalWrite{ifMatch: strings.TrimSpace(r.Header.Get("If-Match"))}
+
+	outcome, aerr := h.deleteOne(r, b, key, serviceutil.QueryString(r, "versionId", ""), c)
 	if aerr != nil {
 		protocol.WriteXMLError(w, r, aerr)
 		return
@@ -739,13 +756,18 @@ type deleteOutcome struct {
 }
 
 // deleteOne performs one DeleteObject, in whichever of AWS's three shapes the
-// bucket's versioning state and the request select.
+// bucket's versioning state and the request select. c is the caller's
+// If-Match condition (the zero value for an unconditional delete).
 //
-// All three are idempotent, which is why none of them reports a missing key:
-// AWS answers 204 for a key that was never there, and — in a versioning-enabled
-// bucket — still creates a delete marker for one, because a later PUT would
-// otherwise be un-deletable in the caller's mental model.
-func (h *Handler) deleteOne(r *http.Request, b *Bucket, key, versionID string) (deleteOutcome, *protocol.AWSError) {
+// Unconditionally, all three shapes are idempotent, which is why none of them
+// reports a missing key: AWS answers 204 for a key that was never there, and —
+// in a versioning-enabled bucket — still creates a delete marker for one,
+// because a later PUT would otherwise be un-deletable in the caller's mental
+// model. A condition changes that: AWS's conditional-writes guide documents
+// If-Match on a key with no current version (or whose current version is a
+// delete marker) as a 404 NoSuchKey rather than a silent no-op, because there
+// is no ETag to compare against. deleteOne applies that same rule to deletes.
+func (h *Handler) deleteOne(r *http.Request, b *Bucket, key, versionID string, c conditionalWrite) (deleteOutcome, *protocol.AWSError) {
 	ctx := r.Context()
 
 	if !b.versioned() {
@@ -758,6 +780,11 @@ func (h *Handler) deleteOne(r *http.Request, b *Bucket, key, versionID string) (
 		if aerr != nil {
 			return deleteOutcome{}, aerr
 		}
+		if c.active() {
+			if aerr := c.evaluate(key, obj); aerr != nil {
+				return deleteOutcome{}, aerr
+			}
+		}
 		if aerr := h.store.deleteObject(ctx, b.Name, key); aerr != nil {
 			return deleteOutcome{}, aerr
 		}
@@ -769,9 +796,15 @@ func (h *Handler) deleteOne(r *http.Request, b *Bucket, key, versionID string) (
 		return deleteOutcome{}, aerr
 	}
 	if versionID == "" {
+		// The condition applies to the current version, exactly as it would
+		// for a write — creating a delete marker on a mismatched or absent
+		// current version is what checkConditionalWrite already refuses.
+		if aerr := h.checkConditionalWrite(ctx, c, b.Name, key); aerr != nil {
+			return deleteOutcome{}, aerr
+		}
 		return h.createDeleteMarker(r, b, key)
 	}
-	return h.deleteVersionPermanently(r, b, key, versionID)
+	return h.deleteVersionPermanently(r, b, key, versionID, c)
 }
 
 // createDeleteMarker is a delete with no version id against a versioned bucket:
@@ -804,8 +837,11 @@ func (h *Handler) createDeleteMarker(r *http.Request, b *Bucket, key string) (de
 
 // deleteVersionPermanently is a delete that names a version id: that one
 // version really goes, and if it was the current one the newest version left
-// takes its place.
-func (h *Handler) deleteVersionPermanently(r *http.Request, b *Bucket, key, versionID string) (deleteOutcome, *protocol.AWSError) {
+// takes its place. c's condition, when present, applies to that named
+// version's own ETag rather than to whichever version is current — the
+// caller asked to remove a specific version, so that is the one it must
+// match.
+func (h *Handler) deleteVersionPermanently(r *http.Request, b *Bucket, key, versionID string, c conditionalWrite) (deleteOutcome, *protocol.AWSError) {
 	ctx := r.Context()
 
 	target, found, aerr := h.store.findVersion(ctx, b.Name, key, versionID)
@@ -815,6 +851,11 @@ func (h *Handler) deleteVersionPermanently(r *http.Request, b *Bucket, key, vers
 	if !found {
 		// Idempotent, as everywhere else in DeleteObject.
 		return deleteOutcome{versionID: versionID}, nil
+	}
+	if c.active() {
+		if aerr := c.evaluate(key, target); aerr != nil {
+			return deleteOutcome{}, aerr
+		}
 	}
 	if aerr := h.store.deleteVersion(ctx, target); aerr != nil {
 		return deleteOutcome{}, aerr
