@@ -3,6 +3,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -11,7 +12,7 @@ import (
 
 // Value expressions.
 //
-// A value in a recipe or a scenario is ordinary JSON with five expression
+// A value in a recipe or a scenario is ordinary JSON with six expression
 // forms, each an object with exactly one `$`-prefixed key:
 //
 //	{"$lit": <json>}                 the JSON verbatim, never interpreted
@@ -19,6 +20,8 @@ import (
 //	{"$name": "q"}                   {runId}-{group}-q, the only way to name a resource
 //	{"$concat": [<part>, ...]}       string concatenation; a bare string part is a literal
 //	{"$index": [<value>, n]}         element n of a list-valued expression
+//	{"$base64": "<base64>"}          these bytes — the only value a blob member takes
+//	{"$base64": {"$ref": "k.blob"}}  the bytes of a blob a previous call exported
 //
 // Everything else is structural: an object is a structure or map whose values
 // are themselves values, an array is a list of values, and a scalar is itself.
@@ -26,7 +29,7 @@ import (
 // agree on every value, so the grammar is closed and total.
 
 // exprKeys is the closed set of expression forms.
-var exprKeys = map[string]struct{}{"$lit": {}, "$ref": {}, "$name": {}, "$concat": {}, "$index": {}}
+var exprKeys = map[string]struct{}{"$lit": {}, "$ref": {}, "$name": {}, "$concat": {}, "$index": {}, "$base64": {}}
 
 // exprOf returns the expression form of a value, or "" for a structural value.
 func exprOf(v any) (key string, arg any, ok bool) {
@@ -60,7 +63,7 @@ func validateValue(v any, where string) error {
 		if !isExpr {
 			if dollar == 1 {
 				for k := range value {
-					return fmt.Errorf("%s: unknown expression %q (want one of $lit, $ref, $name, $concat, $index)", where, k)
+					return fmt.Errorf("%s: unknown expression %q (want one of $lit, $ref, $name, $concat, $index, $base64)", where, k)
 				}
 			}
 			for k, child := range value {
@@ -125,8 +128,46 @@ func validateExpr(key string, arg any, where string) error {
 		if _, err := integerOf(pair[1]); err != nil {
 			return fmt.Errorf("%s: $index position must be a non-negative integer", where)
 		}
+	case "$base64":
+		switch inner := arg.(type) {
+		case string:
+			if _, err := decodeBase64(inner); err != nil {
+				return fmt.Errorf("%s: $base64 %q: %w", where, inner, err)
+			}
+		case map[string]any:
+			key, _, isExpr := exprOf(inner)
+			if !isExpr || key != "$ref" {
+				return fmt.Errorf("%s: $base64 takes a base64 string or a {\"$ref\": ...} to an exported blob, got %s", where, valueKind(inner))
+			}
+			if err := validateValue(inner, where+".$base64"); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("%s: $base64 takes a base64 string or a {\"$ref\": ...} to an exported blob, got %s", where, valueKind(inner))
+		}
 	}
 	return nil
+}
+
+// decodeBase64 decodes the text of a `$base64` literal, which must be
+// standard base64 (RFC 4648 §4, the `+/` alphabet) with its padding, and
+// canonical: the one spelling of those bytes that re-encodes to itself.
+//
+// Canonical matters because a blob is compared as its document form — that same
+// base64 text — in every backend (compat/model/README.md § Values), so two
+// spellings of one byte string would be two values that `equals` tells apart.
+// URL-safe base64, missing padding, embedded whitespace and non-zero trailing
+// bits are all refused here rather than accepted by one runtime's decoder and
+// rejected by another's.
+func decodeBase64(text string) ([]byte, error) {
+	raw, err := base64.StdEncoding.Strict().DecodeString(text)
+	if err != nil {
+		return nil, fmt.Errorf("is not standard padded base64: %w", err)
+	}
+	if base64.StdEncoding.EncodeToString(raw) != text {
+		return nil, fmt.Errorf("is not the canonical spelling of its bytes (%q)", base64.StdEncoding.EncodeToString(raw))
+	}
+	return raw, nil
 }
 
 // integerOf accepts a JSON number that is a non-negative integer.
@@ -182,6 +223,8 @@ func walkValue(v any, visit func(key string, arg any)) {
 				}
 			case "$index":
 				walkValue(arg.([]any)[0], visit)
+			case "$base64":
+				walkValue(arg, visit)
 			}
 			return
 		}
@@ -218,6 +261,8 @@ func literalKind(v any, exports exportKinds) string {
 			return exports[arg.(string)]
 		case "$lit":
 			return literalKind(arg, exports)
+		case "$base64":
+			return "blob"
 		}
 		return ""
 	}

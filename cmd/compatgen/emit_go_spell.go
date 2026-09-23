@@ -30,6 +30,8 @@ import (
 //	*types.Tag              {"Key":"k"}    &types.Tag{Key: aws.String("k")}
 //	*string                 {"$ref":"q"}   aws.String(scenario.Bind[string](b, "M", scenario.Ref("q")))
 //	types.PolicyType        {"$ref":"t"}   types.PolicyType(scenario.Bind[string](b, "M", scenario.Ref("t")))
+//	[]byte                  {"$base64":"cmVjb3JkLTE="}            []byte("record-1")
+//	[]byte                  {"$base64":{"$ref":"k"}}  scenario.Blob(b, "M", scenario.Base64(scenario.Ref("k")))
 //
 // Two rules explain most of the table:
 //
@@ -104,6 +106,9 @@ func (sp *goSpeller) field(op, member string) (*types.Var, error) {
 // sit inside a composite literal that already states t.
 func (sp *goSpeller) value(t types.Type, v any, member, indent string, elide bool) (string, error) {
 	t = types.Unalias(t)
+	if goIsBytes(t) {
+		return sp.blob(v, member, indent)
+	}
 	if _, _, isExpr := exprOf(v); isExpr {
 		return sp.expr(t, v, member, indent)
 	}
@@ -212,9 +217,6 @@ func (sp *goSpeller) pointer(u *types.Pointer, v any, member, indent string, eli
 
 func (sp *goSpeller) slice(u *types.Slice, v any, member, indent string) (string, error) {
 	elem := types.Unalias(u.Elem())
-	if b, ok := elem.(*types.Basic); ok && b.Kind() == types.Byte {
-		return "", fmt.Errorf("a blob member is []byte, which the IR has no literal for")
-	}
 	items, ok := v.([]any)
 	if !ok {
 		return "", fmt.Errorf("a list member wants a JSON array, got %s", valueKind(v))
@@ -285,6 +287,46 @@ func (sp *goSpeller) structure(t types.Type, u *types.Struct, v any, member, ind
 		open = "{"
 	}
 	return goComposite(open, rendered, indent), nil
+}
+
+// goIsBytes reports whether a field type is smithy-go's blob: an unnamed
+// []byte.
+func goIsBytes(t types.Type) bool {
+	s, ok := types.Unalias(t).(*types.Slice)
+	if !ok {
+		return false
+	}
+	b, ok := types.Unalias(s.Elem()).(*types.Basic)
+	return ok && b.Kind() == types.Byte
+}
+
+// blob renders a `$base64` value into a []byte field.
+//
+// A literal is decoded here, at generation time, and written as a Go
+// conversion of a quoted string — `[]byte("record-1")`, with strconv.Quote's
+// \x escapes for anything unprintable — so the bytes are in the source for the
+// compiler and a reader alike. A `$base64` around a $ref is deferred like every
+// other expression and decoded by scenario.Blob at run time, from the base64
+// text an exported blob is in the context bag (compat/model/README.md
+// § Values). Anything else in a blob slot was refused upstream; saying so here
+// keeps this a total function rather than a silent wrong spelling.
+func (sp *goSpeller) blob(v any, member, indent string) (string, error) {
+	key, arg, isExpr := exprOf(v)
+	if !isExpr || key != "$base64" {
+		return "", fmt.Errorf("a blob member takes $base64, got %s", valueKind(v))
+	}
+	if text, literal := arg.(string); literal {
+		raw, err := decodeBase64(text)
+		if err != nil {
+			return "", fmt.Errorf("$base64 %q %w", text, err)
+		}
+		return "[]byte(" + strconv.Quote(string(raw)) + ")", nil
+	}
+	expr, err := goValue(v, indent)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("scenario.Blob(b, %q, %s)", member, expr), nil
 }
 
 // expr renders a deferred value expression into a typed slot.

@@ -1,0 +1,21 @@
+{
+  "$comment": "The shared blob-value conformance fixture (compat/model/README.md § Values). A blob's document form is its canonical standard base64 text in every backend: what `{\"$base64\": ...}` evaluates to in a check, what a blob member of a response renders as, and what an export of one puts in the context bag. `valid` pins both directions — the text decodes to exactly `hex`, and those bytes render back to exactly `base64` — and `invalid` pins what every decoder refuses rather than reads as some other bytes: another alphabet, missing padding, whitespace, and a second spelling of bytes that already have one. Every suite's unit tests read this file; a suite that cannot see it here fails when OVERCAST_COMPAT_FIXTURES_REQUIRED is set, exactly as the error fixtures do.",
+  "valid": [
+    { "name": "ascii", "base64": "cmVjb3JkLTE=", "hex": "7265636f72642d31" },
+    { "name": "nul-and-high-bytes", "base64": "AP8QgH8=", "hex": "00ff10807f" },
+    { "name": "one-byte-two-pads", "base64": "YQ==", "hex": "61" },
+    { "name": "two-bytes-one-pad", "base64": "YWI=", "hex": "6162" },
+    { "name": "three-bytes-no-pad", "base64": "YWJj", "hex": "616263" },
+    { "name": "plus-and-slash", "base64": "+/+/", "hex": "fbffbf" },
+    { "name": "not-utf8", "base64": "wyg=", "hex": "c328" },
+    { "name": "empty", "base64": "", "hex": "" }
+  ],
+  "invalid": [
+    { "name": "not-base64", "base64": "record-1" },
+    { "name": "url-safe-alphabet", "base64": "-_-_" },
+    { "name": "missing-padding", "base64": "YQ" },
+    { "name": "embedded-space", "base64": "YW Jj" },
+    { "name": "trailing-newline", "base64": "YWJj\n" },
+    { "name": "non-canonical-trailing-bits", "base64": "YR==" }
+  ]
+}

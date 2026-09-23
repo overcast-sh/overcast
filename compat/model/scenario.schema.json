@@ -289,6 +289,25 @@
         },
         {
           "type": "object",
+          "required": ["$base64"],
+          "additionalProperties": false,
+          "description": "A blob: canonical standard base64 text, or a $ref to a blob a previous call exported. The only value a blob member takes (compat/model/README.md § Values).",
+          "properties": {
+            "$base64": {
+              "oneOf": [
+                { "type": "string", "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$" },
+                {
+                  "type": "object",
+                  "required": ["$ref"],
+                  "additionalProperties": false,
+                  "properties": { "$ref": { "type": "string", "pattern": "^[a-z][a-z0-9]*\\.[a-zA-Z][a-zA-Z0-9]*$" } }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
           "propertyNames": { "pattern": "^[^$]" },
           "additionalProperties": { "$ref": "#/definitions/Value" }
         },

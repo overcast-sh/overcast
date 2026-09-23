@@ -60,6 +60,7 @@ const (
 	reasonAmbiguousListPage      = "ambiguous-list-page"
 	reasonSetupRefused           = "setup-refused"
 	reasonUnsupportedTagShape    = "unsupported-tag-shape"
+	reasonNoPortableValue        = "no-portable-value"
 )
 
 // autoBinding records a rule-2 binding, the riskiest inference the generator
@@ -168,7 +169,10 @@ func (b *binder) bindMember(group, op, member, target string, scope bindScope) (
 			continue
 		}
 		if _, available := scope.exports[bind.Ref]; available {
-			return bind.value(), nil
+			if r := b.unportable(op, member, target, bind.String()); r != nil {
+				return nil, r
+			}
+			return b.blobSafe(bind.value(), target), nil
 		}
 		if unavailable == "" {
 			unavailable = bind.String()
@@ -189,8 +193,11 @@ func (b *binder) bindMember(group, op, member, target string, scope bindScope) (
 		if _, available := scope.exports[ref]; !available {
 			continue
 		}
+		if r := b.unportable(op, member, target, ref); r != nil {
+			return nil, r
+		}
 		b.auto = append(b.auto, autoBinding{Group: group, Op: op, Member: member, Ref: ref})
-		return map[string]any{"$ref": ref}, nil
+		return b.blobSafe(map[string]any{"$ref": ref}, target), nil
 	}
 	// Rule 3: a curated literal.
 	if value, source, ok := b.values.lookup(b.service, op, member, target); ok {
@@ -213,6 +220,56 @@ func (b *binder) bindMember(group, op, member, target string, scope bindScope) (
 	}
 	return nil, refuse(reasonUnboundRequiredMember+":"+member,
 		fmt.Sprintf("%s.%s (%s) has no bind, no matching export, no curated value and no derivable literal", op, member, b.describeShape(target)))
+}
+
+// unportableKinds are the modeled kinds the IR has no value for at all: no
+// literal, and no expression a backend can hand its SDK. A timestamp is a Date,
+// a datetime, a time.Time or an Instant depending on who is asked, a document
+// is an SDK-specific tree, and a union is a tagged variant each typed SDK spells
+// as a type of its own; an interpreter has no model at run time to convert a
+// JSON value into any of them, and no typed emitter can spell one either.
+//
+// A blob is not here: it has `$base64` (compat/model/README.md § Values).
+var unportableKinds = map[string]bool{"timestamp": true, "document": true, "union": true}
+
+// unportable refuses a rule-1 or rule-2 binding into a member of a kind the IR
+// cannot carry. Without it such a $ref passes checkValue — both sides are a
+// timestamp, so the kinds agree — and is refused by every source emitter
+// instead, which scopes the whole group away from four suites rather than
+// recording one gap (#1910). The refusal is the binder's, so it lands in
+// gaps.json beside every other reason an operation was not generated.
+func (b *binder) unportable(op, member, target, ref string) *refusal {
+	kind := b.model.Kind(target)
+	if !unportableKinds[kind] {
+		return nil
+	}
+	return refuse(reasonNoPortableValue+":"+member,
+		fmt.Sprintf("%s.%s (%s) would bind to %s, but the IR has no %s value every backend can send: an interpreter has no model to convert JSON into one, and no typed emitter can spell one", op, member, b.describeShape(target), ref, kind))
+}
+
+// blobSafe wraps a bound $ref in `$base64` where the member — or, for a
+// list-wrapped bind, its element — is a blob. An exported blob is its base64
+// text in every backend's context bag, so a bare $ref would hand an interpreter
+// a string, and boto3 and the JS SDK would send that string's UTF-8 bytes rather
+// than the bytes it spells. `$base64` is what says "decode this" — see
+// checkBlob.
+func (b *binder) blobSafe(v any, target string) any {
+	switch b.model.Kind(target) {
+	case "blob":
+		if key, _, ok := exprOf(v); ok && key == "$ref" {
+			return map[string]any{"$base64": v}
+		}
+	case "list":
+		if items, ok := v.([]any); ok {
+			element := b.model.Shapes[target].Member
+			out := make([]any, len(items))
+			for i, item := range items {
+				out[i] = b.blobSafe(item, element)
+			}
+			return out
+		}
+	}
+	return v
 }
 
 // synthesize derives a legal literal from constraints alone. Only shapes whose
@@ -259,7 +316,16 @@ func (b *binder) describeShape(target string) string {
 // from a curated file, so the file is wrong.
 func (b *binder) checkValue(v any, target string, exports exportKinds, where, group string) error {
 	kind := b.model.Kind(target)
+	if kind == "blob" {
+		return checkBlob(b.model, v, target, exports, where)
+	}
 	if key, arg, isExpr := exprOf(v); isExpr {
+		if key == "$base64" {
+			return fmt.Errorf("%s: $base64 is bytes, for a blob member, but %s is a %s", where, b.describeShape(target), kind)
+		}
+		if key == "$ref" && unportableKinds[kind] {
+			return fmt.Errorf("%s: %s is a %s, for which the IR has no portable value, not even a $ref; leave the member unbound so the operation is refused", where, target, kind)
+		}
 		switch key {
 		case "$lit":
 			return b.checkValue(arg, target, exports, where, group)
@@ -296,10 +362,11 @@ func (b *binder) checkValue(v any, target string, exports exportKinds, where, gr
 		}
 	}
 	switch kind {
-	case "timestamp", "blob", "document":
+	case "timestamp", "document", "union":
 		// The SDKs disagree on how these are passed (a Date, a datetime, a
-		// Buffer, a string), and an interpreter has no model at run time to
-		// convert with, so the IR carries no literal of these kinds at all.
+		// time.Time; an SDK-specific document tree; a variant type of each
+		// SDK's own), and an interpreter has no model at run time to convert
+		// with, so the IR carries no literal of these kinds at all.
 		return fmt.Errorf("%s: %s is a %s, for which the IR has no portable literal; leave the member unbound so the operation is refused", where, target, kind)
 	case "string", "enum":
 		s, ok := v.(string)
@@ -352,7 +419,7 @@ func (b *binder) checkValue(v any, target string, exports exportKinds, where, gr
 				return err
 			}
 		}
-	case "structure", "union":
+	case "structure":
 		object, ok := v.(map[string]any)
 		if !ok {
 			return fmt.Errorf("%s: %s wants an object, got %s", where, b.describeShape(target), describeJSON(v))
@@ -366,15 +433,79 @@ func (b *binder) checkValue(v any, target string, exports exportKinds, where, gr
 				return err
 			}
 		}
-		if kind == "structure" {
-			for _, required := range b.model.RequiredMembers(target) {
-				if _, present := object[required]; !present {
-					return fmt.Errorf("%s: %s requires member %q; nested structures are written out in full, not bound", where, target, required)
-				}
+		for _, required := range b.model.RequiredMembers(target) {
+			if _, present := object[required]; !present {
+				return fmt.Errorf("%s: %s requires member %q; nested structures are written out in full, not bound", where, target, required)
 			}
 		}
 	}
 	return nil
+}
+
+// checkBlob holds a value for a blob member — an input member, a list element
+// or map value inside one, or the expected side of an `equals` or `where` that
+// resolves to a blob — to the one spelling the IR has for bytes: `$base64`,
+// holding either the base64 text of a literal or a $ref to a blob a previous
+// call exported (compat/model/README.md § Values).
+//
+// A plain string is an error rather than something to accept, because the
+// backends disagree about what it would mean: aws-cli v2 reads a blob in
+// --cli-input-json as base64, so `"record-1"` fails there with "Invalid
+// base64", while boto3 and the JS SDK send the string's UTF-8 bytes. No single
+// string puts the same bytes on the wire everywhere, and `$base64` does. A bare
+// $ref fails for the same reason: an exported blob is base64 text in every
+// context bag, so the interpreters would send the text's bytes, not the blob's.
+//
+// It is a function of the model rather than a binder method because authored
+// scenarios, which have no binder, are held to it too (authored.go).
+func checkBlob(model *serviceModel, v any, target string, exports exportKinds, where string) error {
+	key, arg, isExpr := exprOf(v)
+	if !isExpr || key != "$base64" {
+		return fmt.Errorf(`%s: %s is a blob; write its bytes as {"$base64": "<standard base64>"}, or {"$base64": {"$ref": "<context path>"}} for a blob a previous call exported — got %s, which the backends do not agree on (the AWS CLI reads a blob string as base64, boto3 and the JS SDK send its UTF-8 bytes)`,
+			where, bareShapeName(target), describeBlobValue(v))
+	}
+	switch inner := arg.(type) {
+	case string:
+		raw, err := decodeBase64(inner)
+		if err != nil {
+			return fmt.Errorf("%s: $base64 %q %w", where, inner, err)
+		}
+		c := model.Constraints(target)
+		if c.LengthMin != nil && int64(len(raw)) < *c.LengthMin || c.LengthMax != nil && int64(len(raw)) > *c.LengthMax {
+			return fmt.Errorf("%s: $base64 %q is %d bytes, outside %s's modeled length", where, inner, len(raw), bareShapeName(target))
+		}
+	case map[string]any:
+		refKey, refArg, ok := exprOf(inner)
+		if !ok || refKey != "$ref" {
+			return fmt.Errorf("%s: $base64 takes a base64 string or a $ref, got %s", where, valueKind(inner))
+		}
+		ref := refArg.(string)
+		refKind, known := exports[ref]
+		if !known {
+			return fmt.Errorf("%s: $ref %s is not exported before this call", where, ref)
+		}
+		if refKind != "" && refKind != "blob" {
+			return fmt.Errorf("%s: $base64 decodes an exported blob, but $ref %s is a %s", where, ref, refKind)
+		}
+	default:
+		return fmt.Errorf("%s: $base64 takes a base64 string or a $ref, got %s", where, valueKind(inner))
+	}
+	return nil
+}
+
+// describeBlobValue names what a blob member was wrongly given, for checkBlob's
+// message.
+func describeBlobValue(v any) string {
+	if key, _, ok := exprOf(v); ok {
+		if key == "$ref" {
+			return "a bare $ref, which hands an interpreter the exported blob's base64 text rather than its bytes"
+		}
+		return "a " + key + " expression"
+	}
+	if s, ok := v.(string); ok {
+		return fmt.Sprintf("the string %q", s)
+	}
+	return describeJSON(v)
 }
 
 func (b *binder) checkString(s, target, where string) error {
