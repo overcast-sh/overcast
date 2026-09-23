@@ -1,5 +1,5 @@
 {
-  "$comment": "Authored port of the hand-written registry group logs-groups (docs/plans/compat-coverage-modelgen.md §3.11, G6 wave 1, #1116). One spec in place of five per-language implementations — dotnet-sdk and rust-sdk never had one, and the port closes 16 rows of compat/parity-debt.json. It runs today under the shadow name logs-groups-shadow, beside the natives, so the nightly can compare the two per (suite, test); the flip PR renames this group to logs-groups, moves the registry entry into the hand-written registry.json, and deletes the native code. The clauses are the union of what the five natives assert — see compat/model/README.md § Authored scenarios.",
+  "$comment": "Authored port of the hand-written registry group logs-groups (docs/plans/compat-coverage-modelgen.md §3.11, G6 wave 1, #1116). One spec in place of the five per-language implementations it replaced — dotnet-sdk and rust-sdk never had one, and the port closes 16 rows of compat/parity-debt.json. It soaked as logs-groups-shadow beside those natives until the nightly comparison agreed on every one of its 56 (suite, test) pairs in each of three soak runs; the flip then renamed it to logs-groups, pointed the hand-written registry entry at it and deleted the native code. The clauses are the union of what the five natives asserted — see compat/model/README.md § Authored scenarios.",
   "version": 1,
   "service": "cloudwatch-logs",
   "client": {
@@ -14,7 +14,7 @@
   "groups": [
     {
       "$comment": "Two log groups: the group's own (created in setup, read and mutated by the retention, stream and tag tests) and an ephemeral one the CreateLogGroup test creates and the DeleteLogGroup test removes. go-sdk and python-sdk already split them that way; cli, node-js-sdk and java-sdk instead delete the one every earlier test read, which only works because the loaders topologically sort `depends` — DeleteLogGroup is listed sixth in the registry but depends on the seventh and eighth tests. Splitting them makes this group correct in file order as well as in dependency order. Nothing here exports: every CloudWatch Logs mutation in this group returns smithy.api#Unit, so no response carries a handle, and `$name` is what names a resource — deterministic within a run, so `{\"$name\": \"group\"}` is the same string wherever it appears.",
-      "name": "logs-groups-shadow",
+      "name": "logs-groups",
       "kind": "lifecycle",
       "setup": [
         {

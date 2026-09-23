@@ -23,20 +23,20 @@ func ScenariosAuthoredLogsGroups(c *clients.Clients) ServiceGroup {
 	return ServiceGroup{
 		Name: "scenarios/authored-logs-groups",
 		Impls: map[string]harness.TestFn{
-			"logs-groups-shadow:CreateLogGroup":        g.testLogsGroupsShadowCreateLogGroup,
-			"logs-groups-shadow:DescribeLogGroups":     g.testLogsGroupsShadowDescribeLogGroups,
-			"logs-groups-shadow:PutRetentionPolicy":    g.testLogsGroupsShadowPutRetentionPolicy,
-			"logs-groups-shadow:VerifyRetentionPolicy": g.testLogsGroupsShadowVerifyRetentionPolicy,
-			"logs-groups-shadow:DeleteRetentionPolicy": g.testLogsGroupsShadowDeleteRetentionPolicy,
-			"logs-groups-shadow:DeleteLogGroup":        g.testLogsGroupsShadowDeleteLogGroup,
-			"logs-groups-shadow:CreateLogStream":       g.testLogsGroupsShadowCreateLogStream,
-			"logs-groups-shadow:TagLogGroup":           g.testLogsGroupsShadowTagLogGroup,
+			"logs-groups:CreateLogGroup":        g.testLogsGroupsCreateLogGroup,
+			"logs-groups:DescribeLogGroups":     g.testLogsGroupsDescribeLogGroups,
+			"logs-groups:PutRetentionPolicy":    g.testLogsGroupsPutRetentionPolicy,
+			"logs-groups:VerifyRetentionPolicy": g.testLogsGroupsVerifyRetentionPolicy,
+			"logs-groups:DeleteRetentionPolicy": g.testLogsGroupsDeleteRetentionPolicy,
+			"logs-groups:DeleteLogGroup":        g.testLogsGroupsDeleteLogGroup,
+			"logs-groups:CreateLogStream":       g.testLogsGroupsCreateLogStream,
+			"logs-groups:TagLogGroup":           g.testLogsGroupsTagLogGroup,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"logs-groups-shadow": g.setupLogsGroupsShadow,
+			"logs-groups": g.setupLogsGroups,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"logs-groups-shadow": g.teardownLogsGroupsShadow,
+			"logs-groups": g.teardownLogsGroups,
 		},
 	}
 }
@@ -56,10 +56,10 @@ func (g *authoredLogsGroupsScenarios) cl() *cloudwatchlogs.Client {
 	return g.client
 }
 
-var groupLogsGroupsShadow = scenario.Group{Name: "logs-groups-shadow", File: "compat/model/authored/logs-groups.json"}
+var groupLogsGroups = scenario.Group{Name: "logs-groups", File: "compat/model/authored/logs-groups.json"}
 
-func (g *authoredLogsGroupsScenarios) setupLogsGroupsShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupLogsGroupsShadow.RunSetup(ctx, t,
+func (g *authoredLogsGroupsScenarios) setupLogsGroups(ctx context.Context, t *harness.TestContext) error {
+	return groupLogsGroups.RunSetup(ctx, t,
 		scenario.Call{
 			Op:     "CreateLogGroup",
 			Params: `{"logGroupName":{"$name":"group"}}`,
@@ -75,8 +75,8 @@ func (g *authoredLogsGroupsScenarios) setupLogsGroupsShadow(ctx context.Context,
 	)
 }
 
-func (g *authoredLogsGroupsScenarios) teardownLogsGroupsShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupLogsGroupsShadow.RunTeardown(ctx, t,
+func (g *authoredLogsGroupsScenarios) teardownLogsGroups(ctx context.Context, t *harness.TestContext) error {
+	return groupLogsGroups.RunTeardown(ctx, t,
 		scenario.Call{
 			Op:     "DeleteLogGroup",
 			Params: `{"logGroupName":{"$name":"created"}}`,
@@ -104,8 +104,8 @@ func (g *authoredLogsGroupsScenarios) teardownLogsGroupsShadow(ctx context.Conte
 	)
 }
 
-func (g *authoredLogsGroupsScenarios) testLogsGroupsShadowCreateLogGroup(ctx context.Context, t *harness.TestContext) error {
-	return groupLogsGroupsShadow.RunTest(ctx, t, "CreateLogGroup", scenario.Test{
+func (g *authoredLogsGroupsScenarios) testLogsGroupsCreateLogGroup(ctx context.Context, t *harness.TestContext) error {
+	return groupLogsGroups.RunTest(ctx, t, "CreateLogGroup", scenario.Test{
 		Call: scenario.Call{
 			Op:     "CreateLogGroup",
 			Params: `{"logGroupName":{"$name":"created"}}`,
@@ -139,8 +139,8 @@ func (g *authoredLogsGroupsScenarios) testLogsGroupsShadowCreateLogGroup(ctx con
 	})
 }
 
-func (g *authoredLogsGroupsScenarios) testLogsGroupsShadowDescribeLogGroups(ctx context.Context, t *harness.TestContext) error {
-	return groupLogsGroupsShadow.RunTest(ctx, t, "DescribeLogGroups", scenario.Test{
+func (g *authoredLogsGroupsScenarios) testLogsGroupsDescribeLogGroups(ctx context.Context, t *harness.TestContext) error {
+	return groupLogsGroups.RunTest(ctx, t, "DescribeLogGroups", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DescribeLogGroups",
 			Params: `{"logGroupNamePrefix":{"$name":"group"}}`,
@@ -163,8 +163,8 @@ func (g *authoredLogsGroupsScenarios) testLogsGroupsShadowDescribeLogGroups(ctx 
 	})
 }
 
-func (g *authoredLogsGroupsScenarios) testLogsGroupsShadowPutRetentionPolicy(ctx context.Context, t *harness.TestContext) error {
-	return groupLogsGroupsShadow.RunTest(ctx, t, "PutRetentionPolicy", scenario.Test{
+func (g *authoredLogsGroupsScenarios) testLogsGroupsPutRetentionPolicy(ctx context.Context, t *harness.TestContext) error {
+	return groupLogsGroups.RunTest(ctx, t, "PutRetentionPolicy", scenario.Test{
 		Call: scenario.Call{
 			Op:     "PutRetentionPolicy",
 			Params: `{"logGroupName":{"$name":"group"},"retentionInDays":7}`,
@@ -199,8 +199,8 @@ func (g *authoredLogsGroupsScenarios) testLogsGroupsShadowPutRetentionPolicy(ctx
 	})
 }
 
-func (g *authoredLogsGroupsScenarios) testLogsGroupsShadowVerifyRetentionPolicy(ctx context.Context, t *harness.TestContext) error {
-	return groupLogsGroupsShadow.RunTest(ctx, t, "VerifyRetentionPolicy", scenario.Test{
+func (g *authoredLogsGroupsScenarios) testLogsGroupsVerifyRetentionPolicy(ctx context.Context, t *harness.TestContext) error {
+	return groupLogsGroups.RunTest(ctx, t, "VerifyRetentionPolicy", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DescribeLogGroups",
 			Params: `{"logGroupNamePrefix":{"$name":"group"}}`,
@@ -222,8 +222,8 @@ func (g *authoredLogsGroupsScenarios) testLogsGroupsShadowVerifyRetentionPolicy(
 	})
 }
 
-func (g *authoredLogsGroupsScenarios) testLogsGroupsShadowDeleteRetentionPolicy(ctx context.Context, t *harness.TestContext) error {
-	return groupLogsGroupsShadow.RunTest(ctx, t, "DeleteRetentionPolicy", scenario.Test{
+func (g *authoredLogsGroupsScenarios) testLogsGroupsDeleteRetentionPolicy(ctx context.Context, t *harness.TestContext) error {
+	return groupLogsGroups.RunTest(ctx, t, "DeleteRetentionPolicy", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteRetentionPolicy",
 			Params: `{"logGroupName":{"$name":"group"}}`,
@@ -257,8 +257,8 @@ func (g *authoredLogsGroupsScenarios) testLogsGroupsShadowDeleteRetentionPolicy(
 	})
 }
 
-func (g *authoredLogsGroupsScenarios) testLogsGroupsShadowDeleteLogGroup(ctx context.Context, t *harness.TestContext) error {
-	return groupLogsGroupsShadow.RunTest(ctx, t, "DeleteLogGroup", scenario.Test{
+func (g *authoredLogsGroupsScenarios) testLogsGroupsDeleteLogGroup(ctx context.Context, t *harness.TestContext) error {
+	return groupLogsGroups.RunTest(ctx, t, "DeleteLogGroup", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteLogGroup",
 			Params: `{"logGroupName":{"$name":"created"}}`,
@@ -292,8 +292,8 @@ func (g *authoredLogsGroupsScenarios) testLogsGroupsShadowDeleteLogGroup(ctx con
 	})
 }
 
-func (g *authoredLogsGroupsScenarios) testLogsGroupsShadowCreateLogStream(ctx context.Context, t *harness.TestContext) error {
-	return groupLogsGroupsShadow.RunTest(ctx, t, "CreateLogStream", scenario.Test{
+func (g *authoredLogsGroupsScenarios) testLogsGroupsCreateLogStream(ctx context.Context, t *harness.TestContext) error {
+	return groupLogsGroups.RunTest(ctx, t, "CreateLogStream", scenario.Test{
 		Call: scenario.Call{
 			Op:     "CreateLogStream",
 			Params: `{"logGroupName":{"$name":"group"},"logStreamName":{"$name":"stream"}}`,
@@ -329,8 +329,8 @@ func (g *authoredLogsGroupsScenarios) testLogsGroupsShadowCreateLogStream(ctx co
 	})
 }
 
-func (g *authoredLogsGroupsScenarios) testLogsGroupsShadowTagLogGroup(ctx context.Context, t *harness.TestContext) error {
-	return groupLogsGroupsShadow.RunTest(ctx, t, "TagLogGroup", scenario.Test{
+func (g *authoredLogsGroupsScenarios) testLogsGroupsTagLogGroup(ctx context.Context, t *harness.TestContext) error {
+	return groupLogsGroups.RunTest(ctx, t, "TagLogGroup", scenario.Test{
 		Call: scenario.Call{
 			Op:     "TagLogGroup",
 			Params: `{"logGroupName":{"$name":"group"},"tags":{"env":"compat"}}`,

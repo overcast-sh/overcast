@@ -93,6 +93,58 @@ func (s *Service) SecretValue(ctx context.Context, secretID string) (string, boo
 	return "", false
 }
 
+// CreateManagedSecret creates a Secrets Manager secret on behalf of another
+// AWS service — currently RDS's managed master password
+// (ManageMasterUserPassword) — and returns its ARN. It is the write-side
+// counterpart to SecretValue: ECS only ever reads a secret Secrets Manager
+// already has, but RDS has to mint one when nothing exists yet, the same way
+// CreateSecret does over the wire, with the name the caller chose (RDS mints
+// "rds!db-<uuid>" / "rds!cluster-<uuid>", matching AWS's own scheme).
+func (s *Service) CreateManagedSecret(ctx context.Context, name, description, secretString string) (string, *protocol.AWSError) {
+	if _, aerr := s.handler.store.getSecret(ctx, name); aerr == nil {
+		return "", errResourceExists(name)
+	}
+	now := s.handler.store.now()
+	versionId := uuid.New().String()
+	arn := secretARN(middleware.RegionFromContext(ctx, s.cfg.Region), s.cfg.AccountID, name)
+
+	version := SecretVersion{
+		VersionId:    versionId,
+		SecretString: secretString,
+		Stages:       []string{stageAWSCurrent},
+		CreatedDate:  float64(now.Unix()),
+	}
+	sec := &Secret{
+		ARN:              arn,
+		Name:             name,
+		Description:      description,
+		Versions:         []SecretVersion{version},
+		CurrentVersionId: versionId,
+		CreatedDate:      float64(now.Unix()),
+		LastChangedDate:  float64(now.Unix()),
+	}
+	if aerr := s.handler.store.putSecret(ctx, sec); aerr != nil {
+		return "", aerr
+	}
+	return arn, nil
+}
+
+// DeleteManagedSecret immediately deletes a secret by name or ARN, bypassing
+// DeleteSecret's recovery window — the fate AWS gives a secret it owns when
+// the resource behind it (an RDS DB instance or cluster) is itself deleted.
+// A secret that is already gone is not an error: the caller is cleaning up
+// after itself, not asserting the secret still exists.
+func (s *Service) DeleteManagedSecret(ctx context.Context, secretID string) *protocol.AWSError {
+	sec, aerr := s.handler.store.resolveSecret(ctx, secretID)
+	if aerr != nil {
+		if aerr.Code == "ResourceNotFoundException" {
+			return nil
+		}
+		return aerr
+	}
+	return s.handler.store.deleteSecret(ctx, sec.Name)
+}
+
 // Name returns the service identifier.
 func (s *Service) Name() string { return serviceName }
 

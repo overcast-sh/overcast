@@ -216,8 +216,8 @@ func TestBuildRegistryStillDeclaresAShadowAsAGroup(t *testing.T) {
 // TestCommittedRegistryPortedGroups is the corpus half of every flip: each
 // hand-written entry that names an authored scenario replaced its native
 // implementations with it. sqs-queues was the first (#1903); kinesis-streams
-// followed as G6 wave 1 rank 1 (#1116). logs-metric-filters (#1949) joined
-// them as a group authored from the start — never native anywhere, so no
+// and logs-groups followed as G6 wave 1 (#1116). logs-metric-filters (#1949)
+// joined them as a group authored from the start — never native anywhere, so no
 // shadow ever soaked. The set is pinned rather than merely checked for
 // consistency, so a flip has to say here which group it moved. Every
 // consequence of the field — the group leaving the generated groups list, the
@@ -237,6 +237,7 @@ func TestCommittedRegistryPortedGroups(t *testing.T) {
 	want := map[string]string{
 		"sqs-queues":          "compat/model/authored/sqs-queues.json",
 		"kinesis-streams":     "compat/model/authored/kinesis-streams.json",
+		"logs-groups":         "compat/model/authored/logs-groups.json",
 		"logs-metric-filters": "compat/model/authored/logs-metric-filters.json",
 	}
 	if !reflect.DeepEqual(ported, want) {

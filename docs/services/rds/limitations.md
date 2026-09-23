@@ -74,6 +74,7 @@ cluster — AWS has no cluster-level field, and neither does Overcast.
 | Setting | Behaviour |
 | --- | --- |
 | `MasterUserPassword` | Applied to every member's engine |
+| `ManageMasterUserPassword` | **Enforced** — generates a password and a Secrets Manager secret, returned as `MasterUserSecret`; see [master account and passwords](./master-account.md#managed-master-password) |
 | `EngineVersion`, `Port` | Recorded and reported |
 | `DeletionProtection` | **Enforced** — `DeleteDBCluster` refuses a protected cluster, and a stack delete fails rather than removing it |
 | `BackupRetentionPeriod` | **Validated** to AWS's 1–35, defaulting to 1, then recorded only — Overcast takes no backups |

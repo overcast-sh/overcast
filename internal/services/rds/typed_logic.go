@@ -34,6 +34,14 @@ type createDBInstanceReq struct {
 	// `PubliclyAccessible=false` and so make the default unreachable.
 	PubliclyAccessible *bool                 `json:"PubliclyAccessible"`
 	Tags               []serviceutil.TagPair `json:"Tags"`
+	// ManageMasterUserPassword and MasterUserSecretKmsKeyId are the
+	// AWS-managed-secret path — see managed_secret.go. ManageMasterUserPassword
+	// is a pointer for the same reason PubliclyAccessible is: "absent" and
+	// "false" have to read as different requests, or a template that sets it
+	// false explicitly could never be told apart from one that never
+	// mentioned it.
+	ManageMasterUserPassword *bool  `json:"ManageMasterUserPassword"`
+	MasterUserSecretKmsKeyId string `json:"MasterUserSecretKmsKeyId"`
 	// AdditionalStorageVolumes is decoded only to detect that the caller sent
 	// it — see the rejection in createDBInstanceTyped. Its member fields are
 	// never read.
@@ -97,6 +105,12 @@ type modifyDBInstanceReq struct {
 	// MasterUserPassword rotates the master password. Unlike every other field
 	// here it is not applied to the record alone — see password.go.
 	MasterUserPassword string `json:"MasterUserPassword"`
+	// ManageMasterUserPassword toggles the managed-secret path on or off an
+	// existing instance. A pointer for the reason MultiAZ is: "absent",
+	// "true" and "false" are three different requests, and only a pointer
+	// tells "absent" apart from "false" — the one that turns management off.
+	ManageMasterUserPassword *bool  `json:"ManageMasterUserPassword"`
+	MasterUserSecretKmsKeyId string `json:"MasterUserSecretKmsKeyId"`
 }
 
 type createDBSubnetGroupReq struct {
@@ -158,6 +172,10 @@ type createDBClusterReq struct {
 	EnableCloudwatchLogsExports       []string                           `json:"EnableCloudwatchLogsExports"`
 	CloudwatchLogsExportConfiguration *cloudwatchLogsExportConfiguration `json:"CloudwatchLogsExportConfiguration"`
 	Tags                              []serviceutil.TagPair              `json:"Tags"`
+	// ManageMasterUserPassword and MasterUserSecretKmsKeyId — see
+	// createDBInstanceReq's fields of the same name.
+	ManageMasterUserPassword *bool  `json:"ManageMasterUserPassword"`
+	MasterUserSecretKmsKeyId string `json:"MasterUserSecretKmsKeyId"`
 }
 
 type describeDBClustersReq struct {
@@ -198,6 +216,10 @@ type modifyDBClusterReq struct {
 	BackupRetentionPeriod             *int                               `json:"BackupRetentionPeriod"`
 	DeletionProtection                *bool                              `json:"DeletionProtection"`
 	CloudwatchLogsExportConfiguration *cloudwatchLogsExportConfiguration `json:"CloudwatchLogsExportConfiguration"`
+	// ManageMasterUserPassword and MasterUserSecretKmsKeyId — see
+	// modifyDBInstanceReq's fields of the same name.
+	ManageMasterUserPassword *bool  `json:"ManageMasterUserPassword"`
+	MasterUserSecretKmsKeyId string `json:"MasterUserSecretKmsKeyId"`
 }
 
 type startDBClusterReq struct {
@@ -247,6 +269,13 @@ func (h *Handler) createDBInstanceTyped(ctx context.Context, req *createDBInstan
 	port := req.Port
 	dbName := req.DBName
 	dbSubnetGroupName := req.DBSubnetGroupName
+	// manageSecret, secretARN and secretKmsKeyId are managed_secret.go's
+	// ManageMasterUserPassword state. For an Aurora member they are inherited
+	// from the cluster below, exactly like masterUser/masterPass/etc — AWS
+	// mints one secret per cluster, never one per member.
+	manageSecret := false
+	secretARN := ""
+	secretKmsKeyId := ""
 	if clusterID != "" {
 		cluster, aerr := h.store.getDBCluster(ctx, clusterID)
 		if aerr != nil {
@@ -264,6 +293,12 @@ func (h *Handler) createDBInstanceTyped(ctx context.Context, req *createDBInstan
 		port = cluster.Port
 		dbName = cluster.DatabaseName
 		dbSubnetGroupName = cluster.DBSubnetGroupName
+		manageSecret = cluster.ManageMasterUserPassword
+		secretARN = cluster.MasterUserSecretARN
+		secretKmsKeyId = cluster.MasterUserSecretKmsKeyId
+	} else {
+		manageSecret = req.ManageMasterUserPassword != nil && *req.ManageMasterUserPassword
+		secretKmsKeyId = req.MasterUserSecretKmsKeyId
 	}
 
 	if clusterID == "" && req.Port != 0 {
@@ -281,11 +316,21 @@ func (h *Handler) createDBInstanceTyped(ctx context.Context, req *createDBInstan
 		}
 	}
 
-	if masterPass == "" {
+	if clusterID == "" {
+		if manageSecret && masterPass != "" {
+			return nil, errInvalidParameterCombination(
+				"You can't specify MasterUserPassword and set ManageMasterUserPassword to true at the same time.")
+		}
+		if !manageSecret {
+			if masterPass == "" {
+				return nil, errInvalidParameterValue("MasterUserPassword is required")
+			}
+			if aerr := validateMasterUserPassword(engine, masterPass); aerr != nil {
+				return nil, aerr
+			}
+		}
+	} else if masterPass == "" {
 		return nil, errInvalidParameterValue("MasterUserPassword is required")
-	}
-	if aerr := validateMasterUserPassword(engine, masterPass); aerr != nil {
-		return nil, aerr
 	}
 	if clusterID == "" {
 		if aerr := validateInitialDatabaseName(engine, dbName); aerr != nil {
@@ -302,6 +347,19 @@ func (h *Handler) createDBInstanceTyped(ctx context.Context, req *createDBInstan
 	incomingTags := serviceutil.TagsFromList(req.Tags)
 	if aerr := serviceutil.ValidateTags(rdsTagCfg, incomingTags); aerr != nil {
 		return nil, aerr
+	}
+
+	// Generated, and its Secrets Manager secret created, only now: after
+	// every check that would otherwise reject the create. A standalone
+	// instance only — an Aurora member already inherited manageSecret and
+	// secretARN from its cluster above, and must not mint a second secret.
+	if clusterID == "" && manageSecret {
+		generated, arn, aerr := h.createManagedMasterSecret(ctx, engine, "db", id, masterUser, secretKmsKeyId)
+		if aerr != nil {
+			return nil, aerr
+		}
+		masterPass = generated
+		secretARN = arn
 	}
 
 	instanceClass := req.DBInstanceClass
@@ -391,6 +449,10 @@ func (h *Handler) createDBInstanceTyped(ctx context.Context, req *createDBInstan
 		DBSubnetGroupName:    dbSubnetGroupName,
 		VpcID:                vpcID,
 		PubliclyAccessible:   &publiclyAccessible,
+
+		ManageMasterUserPassword: manageSecret,
+		MasterUserSecretARN:      secretARN,
+		MasterUserSecretKmsKeyId: secretKmsKeyId,
 	}
 
 	if aerr := h.store.putDBInstance(ctx, inst); aerr != nil {
@@ -513,6 +575,14 @@ func (h *Handler) deleteDBInstanceTyped(ctx context.Context, req *deleteDBInstan
 		h.bus.Publish(ctx, events.Event{Type: events.RDSInstanceDeleted, Time: h.clk.Now(), Source: "rds", Payload: events.ResourcePayload{Name: id}})
 	}
 	h.recordInstanceEvent(ctx, id, "DB instance deleted.", "deletion")
+
+	// Only a standalone instance owns its managed secret — an Aurora member
+	// only ever inherited its cluster's, and deleting one member must not
+	// take out the secret the rest of the cluster (and DeleteDBCluster) still
+	// need. Best-effort: see deleteManagedSecretBestEffort.
+	if inst.DBClusterIdentifier == "" && inst.MasterUserSecretARN != "" {
+		h.deleteManagedSecretBestEffort(ctx, inst.MasterUserSecretARN)
+	}
 
 	resp := &xmlDeleteDBInstanceResponse{
 		Xmlns: rdsXMLNS,
@@ -701,37 +771,119 @@ func (h *Handler) startDBInstanceTyped(ctx context.Context, req *startDBInstance
 
 // --- ModifyDBInstance ---
 
+// modifyDBInstanceMasterSecret resolves ModifyDBInstance's MasterUserPassword
+// and ManageMasterUserPassword into the single password change (if any) that
+// has to reach the running engine, and — only when ManageMasterUserPassword
+// itself is changing — the record's new managed-secret state.
+//
+// manageAfter is nil when management is not changing (an ordinary password
+// rotation, or no password-related change at all), which tells the caller to
+// leave the record's existing ManageMasterUserPassword/MasterUserSecret*
+// fields exactly as they are.
+func (h *Handler) modifyDBInstanceMasterSecret(ctx context.Context, id string, req *modifyDBInstanceReq) (passwordToApply string, manageAfter *bool, secretARN, kmsKeyID string, aerr *protocol.AWSError) {
+	current, aerr := h.store.getDBInstance(ctx, id)
+	if aerr != nil {
+		return "", nil, "", "", aerr
+	}
+
+	turningOn := req.ManageMasterUserPassword != nil && *req.ManageMasterUserPassword && !current.ManageMasterUserPassword
+	turningOff := req.ManageMasterUserPassword != nil && !*req.ManageMasterUserPassword && current.ManageMasterUserPassword
+
+	switch {
+	case turningOn:
+		// RDS is about to generate the password itself, so the caller must
+		// not also be supplying one — the same combination CreateDBInstance
+		// refuses.
+		if req.MasterUserPassword != "" {
+			return "", nil, "", "", errInvalidParameterCombination(
+				"You can't specify MasterUserPassword when you set ManageMasterUserPassword to true.")
+		}
+		generated, arn, gerr := h.createManagedMasterSecret(ctx, current.Engine, "db", id, current.MasterUsername, req.MasterUserSecretKmsKeyId)
+		if gerr != nil {
+			return "", nil, "", "", gerr
+		}
+		if aerr := h.changeMasterPassword(ctx, current, generated); aerr != nil {
+			return "", nil, "", "", aerr
+		}
+		managed := true
+		return generated, &managed, arn, req.MasterUserSecretKmsKeyId, nil
+
+	case turningOff:
+		// AWS requires the caller to supply the password they are taking
+		// ownership of — there is no other way for the instance to end this
+		// call with a password anyone but RDS itself knows.
+		if req.MasterUserPassword == "" {
+			return "", nil, "", "", errInvalidParameterValue(
+				"MasterUserPassword is required when you set ManageMasterUserPassword to false.")
+		}
+		if aerr := validateMasterUserPassword(current.Engine, req.MasterUserPassword); aerr != nil {
+			return "", nil, "", "", aerr
+		}
+		if req.MasterUserPassword != current.MasterUserPassword {
+			if aerr := h.changeMasterPassword(ctx, current, req.MasterUserPassword); aerr != nil {
+				return "", nil, "", "", aerr
+			}
+		}
+		// The secret is deleted once the record stops pointing at it — see
+		// modifyDBInstanceTyped. AWS: "Amazon RDS deletes the secret and uses
+		// the new password for the master user specified by MasterUserPassword."
+		managed := false
+		return req.MasterUserPassword, &managed, "", "", nil
+
+	default:
+		// No management transition: an ordinary password change, or none.
+		if req.MasterUserPassword == "" {
+			return "", nil, "", "", nil
+		}
+		if current.ManageMasterUserPassword && (req.ManageMasterUserPassword == nil || *req.ManageMasterUserPassword) {
+			return "", nil, "", "", errInvalidParameterCombination(
+				"You can't specify MasterUserPassword while the master password is managed by Amazon RDS. " +
+					"Set ManageMasterUserPassword to false to take ownership of it.")
+		}
+		if req.MasterUserPassword == current.MasterUserPassword {
+			return "", nil, "", "", nil
+		}
+		if aerr := h.changeMasterPassword(ctx, current, req.MasterUserPassword); aerr != nil {
+			return "", nil, "", "", aerr
+		}
+		return req.MasterUserPassword, nil, "", "", nil
+	}
+}
+
 func (h *Handler) modifyDBInstanceTyped(ctx context.Context, req *modifyDBInstanceReq) (*xmlModifyDBInstanceResponse, *protocol.AWSError) {
 	id := normalizeDBIdentifier(req.DBInstanceIdentifier)
 	if id == "" {
 		return nil, errInvalidParameterValue("DBInstanceIdentifier is required")
 	}
 
-	// The password goes first, and nothing else is applied unless it lands: a
-	// modification that half-succeeded is harder to reason about than one that
-	// was refused outright, and the caller can retry either way.
+	// The password (and any ManageMasterUserPassword transition) goes first,
+	// and nothing else is applied unless it lands: a modification that
+	// half-succeeded is harder to reason about than one that was refused
+	// outright, and the caller can retry either way.
 	//
 	// It runs against the engine in the container, which is far too slow to
 	// hold a record lock across, so it happens here on a snapshot — the record
 	// it reads only decides whether the password is really changing and how to
 	// reach the container. The new value is written with everything else below.
-	if req.MasterUserPassword != "" {
-		current, aerr := h.store.getDBInstance(ctx, id)
-		if aerr != nil {
-			return nil, aerr
-		}
-		if req.MasterUserPassword != current.MasterUserPassword {
-			if aerr := h.changeMasterPassword(ctx, current, req.MasterUserPassword); aerr != nil {
-				return nil, aerr
-			}
-		}
+	passwordToApply, manageAfter, secretARNAfter, kmsKeyIDAfter, mErr := h.modifyDBInstanceMasterSecret(ctx, id, req)
+	if mErr != nil {
+		return nil, mErr
 	}
 
 	var settledStatus string
 	var placementChanged bool
+	var retiredSecretARN string
 	inst, aerr := h.mutateInstance(ctx, id, func(inst *DBInstance) *protocol.AWSError {
-		if req.MasterUserPassword != "" {
-			inst.MasterUserPassword = req.MasterUserPassword
+		if passwordToApply != "" {
+			inst.MasterUserPassword = passwordToApply
+		}
+		if manageAfter != nil {
+			if !*manageAfter {
+				retiredSecretARN = inst.MasterUserSecretARN
+			}
+			inst.ManageMasterUserPassword = *manageAfter
+			inst.MasterUserSecretARN = secretARNAfter
+			inst.MasterUserSecretKmsKeyId = kmsKeyIDAfter
 		}
 		if req.DBInstanceClass != "" {
 			inst.DBInstanceClass = req.DBInstanceClass
@@ -770,6 +922,9 @@ func (h *Handler) modifyDBInstanceTyped(ctx context.Context, req *modifyDBInstan
 	if aerr != nil {
 		return nil, aerr
 	}
+	// Turning management off deletes the secret, as AWS documents for
+	// ModifyDBInstance — only once the record no longer points at it.
+	h.deleteManagedSecretBestEffort(ctx, retiredSecretARN)
 
 	// The wiring follows the record: a flag that only changed the response
 	// would leave a "public" instance unreachable from outside its VPC.
@@ -1076,11 +1231,19 @@ func (h *Handler) createDBClusterTyped(ctx context.Context, req *createDBCluster
 		return nil, aerr
 	}
 
-	if req.MasterUserPassword == "" {
-		return nil, errInvalidParameterValue("MasterUserPassword is required")
+	manageSecret := req.ManageMasterUserPassword != nil && *req.ManageMasterUserPassword
+	masterPass := req.MasterUserPassword
+	if manageSecret && masterPass != "" {
+		return nil, errInvalidParameterCombination(
+			"You can't specify MasterUserPassword and set ManageMasterUserPassword to true at the same time.")
 	}
-	if aerr := validateMasterUserPassword(engine, req.MasterUserPassword); aerr != nil {
-		return nil, aerr
+	if !manageSecret {
+		if masterPass == "" {
+			return nil, errInvalidParameterValue("MasterUserPassword is required")
+		}
+		if aerr := validateMasterUserPassword(engine, masterPass); aerr != nil {
+			return nil, aerr
+		}
 	}
 	if aerr := validateInitialDatabaseName(engine, req.DatabaseName); aerr != nil {
 		return nil, aerr
@@ -1119,6 +1282,18 @@ func (h *Handler) createDBClusterTyped(ctx context.Context, req *createDBCluster
 		return nil, aerr
 	}
 
+	// Generated, and its Secrets Manager secret created, only now: after
+	// every check that would otherwise reject the create.
+	secretARN := ""
+	if manageSecret {
+		generated, arn, aerr := h.createManagedMasterSecret(ctx, engine, "cluster", id, req.MasterUsername, req.MasterUserSecretKmsKeyId)
+		if aerr != nil {
+			return nil, aerr
+		}
+		masterPass = generated
+		secretARN = arn
+	}
+
 	engineVersion := req.EngineVersion
 	if engineVersion == "" {
 		engineVersion = defaultEngineVersions[engine]
@@ -1150,7 +1325,7 @@ func (h *Handler) createDBClusterTyped(ctx context.Context, req *createDBCluster
 		EngineVersion:       engineVersion,
 		Status:              "creating",
 		MasterUsername:      req.MasterUsername,
-		MasterUserPassword:  req.MasterUserPassword,
+		MasterUserPassword:  masterPass,
 		DatabaseName:        req.DatabaseName,
 		Port:                port,
 		// Built through the same helper the alias set and the wire response
@@ -1168,6 +1343,10 @@ func (h *Handler) createDBClusterTyped(ctx context.Context, req *createDBCluster
 		DBClusterParameterGroup:      req.DBClusterParameterGroupName,
 		VpcSecurityGroupIds:          req.VpcSecurityGroupIds,
 		EnabledCloudwatchLogsExports: logExports,
+
+		ManageMasterUserPassword: manageSecret,
+		MasterUserSecretARN:      secretARN,
+		MasterUserSecretKmsKeyId: req.MasterUserSecretKmsKeyId,
 	}
 	cluster.BackupRetentionPeriod = backupRetention
 	if req.DeletionProtection != nil {
@@ -1271,6 +1450,14 @@ func (h *Handler) deleteDBClusterTyped(ctx context.Context, req *deleteDBCluster
 		ResponseMetadata: protocol.ResponseMetadata{RequestID: protocol.RequestIDFromContext(ctx)},
 	}
 
+	// The cluster owns this secret outright — no member instance ever mints
+	// its own — so it is deleted here, once, rather than by whichever member
+	// happens to be deleted first (deleteDBInstanceTyped explicitly leaves a
+	// member's inherited secret alone for the same reason).
+	if cluster.MasterUserSecretARN != "" {
+		h.deleteManagedSecretBestEffort(ctx, cluster.MasterUserSecretARN)
+	}
+
 	clID := id
 	region := h.store.region(ctx)
 	h.scheduler.AfterScoped(region, clID, "delete", 50*time.Millisecond, func(ctx context.Context) {
@@ -1284,6 +1471,73 @@ func (h *Handler) deleteDBClusterTyped(ctx context.Context, req *deleteDBCluster
 }
 
 // --- ModifyDBCluster ---
+
+// modifyDBClusterMasterSecret is modifyDBInstanceMasterSecret for a cluster —
+// see that function for the shape and the reasoning behind it. The only
+// difference is the password change itself: changeClusterMasterPassword
+// rather than changeMasterPassword, since a cluster has no engine of its own
+// and rotates the password across every member.
+func (h *Handler) modifyDBClusterMasterSecret(ctx context.Context, id string, req *modifyDBClusterReq) (passwordToApply string, manageAfter *bool, secretARN, kmsKeyID string, aerr *protocol.AWSError) {
+	current, aerr := h.store.getDBCluster(ctx, id)
+	if aerr != nil {
+		return "", nil, "", "", aerr
+	}
+
+	turningOn := req.ManageMasterUserPassword != nil && *req.ManageMasterUserPassword && !current.ManageMasterUserPassword
+	turningOff := req.ManageMasterUserPassword != nil && !*req.ManageMasterUserPassword && current.ManageMasterUserPassword
+
+	switch {
+	case turningOn:
+		if req.MasterUserPassword != "" {
+			return "", nil, "", "", errInvalidParameterCombination(
+				"You can't specify MasterUserPassword when you set ManageMasterUserPassword to true.")
+		}
+		generated, arn, gerr := h.createManagedMasterSecret(ctx, current.Engine, "cluster", id, current.MasterUsername, req.MasterUserSecretKmsKeyId)
+		if gerr != nil {
+			return "", nil, "", "", gerr
+		}
+		if aerr := h.changeClusterMasterPassword(ctx, current, generated); aerr != nil {
+			return "", nil, "", "", aerr
+		}
+		managed := true
+		return generated, &managed, arn, req.MasterUserSecretKmsKeyId, nil
+
+	case turningOff:
+		if req.MasterUserPassword == "" {
+			return "", nil, "", "", errInvalidParameterValue(
+				"MasterUserPassword is required when you set ManageMasterUserPassword to false.")
+		}
+		if aerr := validateMasterUserPassword(current.Engine, req.MasterUserPassword); aerr != nil {
+			return "", nil, "", "", aerr
+		}
+		if req.MasterUserPassword != current.MasterUserPassword {
+			if aerr := h.changeClusterMasterPassword(ctx, current, req.MasterUserPassword); aerr != nil {
+				return "", nil, "", "", aerr
+			}
+		}
+		// The secret is deleted once the record stops pointing at it — see
+		// modifyDBClusterTyped.
+		managed := false
+		return req.MasterUserPassword, &managed, "", "", nil
+
+	default:
+		if req.MasterUserPassword == "" {
+			return "", nil, "", "", nil
+		}
+		if current.ManageMasterUserPassword && (req.ManageMasterUserPassword == nil || *req.ManageMasterUserPassword) {
+			return "", nil, "", "", errInvalidParameterCombination(
+				"You can't specify MasterUserPassword while the master password is managed by Amazon RDS. " +
+					"Set ManageMasterUserPassword to false to take ownership of it.")
+		}
+		if req.MasterUserPassword == current.MasterUserPassword {
+			return "", nil, "", "", nil
+		}
+		if aerr := h.changeClusterMasterPassword(ctx, current, req.MasterUserPassword); aerr != nil {
+			return "", nil, "", "", aerr
+		}
+		return req.MasterUserPassword, nil, "", "", nil
+	}
+}
 
 func (h *Handler) modifyDBClusterTyped(ctx context.Context, req *modifyDBClusterReq) (*xmlModifyDBClusterResponse, *protocol.AWSError) {
 	id := normalizeDBIdentifier(req.DBClusterIdentifier)
@@ -1304,27 +1558,30 @@ func (h *Handler) modifyDBClusterTyped(ctx context.Context, req *modifyDBCluster
 		}
 	}
 
-	// The password goes first, and nothing else is applied unless it lands —
-	// the same discipline ModifyDBInstance follows, and for the same reasons.
-	// It runs here rather than inside the mutation below on two counts: it
-	// reaches an engine in a container, which is far too slow to hold a record
-	// lock across, and it takes each member's instance lock, which must never
-	// nest inside the cluster's (see locks.go).
-	if req.MasterUserPassword != "" {
-		current, aerr := h.store.getDBCluster(ctx, id)
-		if aerr != nil {
-			return nil, aerr
-		}
-		if req.MasterUserPassword != current.MasterUserPassword {
-			if aerr := h.changeClusterMasterPassword(ctx, current, req.MasterUserPassword); aerr != nil {
-				return nil, aerr
-			}
-		}
+	// The password (and any ManageMasterUserPassword transition) goes first,
+	// and nothing else is applied unless it lands — the same discipline
+	// ModifyDBInstance follows, and for the same reasons. It runs here rather
+	// than inside the mutation below on two counts: it reaches an engine in a
+	// container, which is far too slow to hold a record lock across, and it
+	// takes each member's instance lock, which must never nest inside the
+	// cluster's (see locks.go).
+	passwordToApply, manageAfter, secretARNAfter, kmsKeyIDAfter, mErr := h.modifyDBClusterMasterSecret(ctx, id, req)
+	if mErr != nil {
+		return nil, mErr
 	}
 
+	var retiredSecretARN string
 	cluster, aerr := h.mutateCluster(ctx, id, func(cluster *DBCluster) *protocol.AWSError {
-		if req.MasterUserPassword != "" {
-			cluster.MasterUserPassword = req.MasterUserPassword
+		if passwordToApply != "" {
+			cluster.MasterUserPassword = passwordToApply
+		}
+		if manageAfter != nil {
+			if !*manageAfter {
+				retiredSecretARN = cluster.MasterUserSecretARN
+			}
+			cluster.ManageMasterUserPassword = *manageAfter
+			cluster.MasterUserSecretARN = secretARNAfter
+			cluster.MasterUserSecretKmsKeyId = kmsKeyIDAfter
 		}
 		if req.EngineVersion != "" {
 			cluster.EngineVersion = req.EngineVersion
@@ -1359,6 +1616,8 @@ func (h *Handler) modifyDBClusterTyped(ctx context.Context, req *modifyDBCluster
 	if aerr != nil {
 		return nil, aerr
 	}
+	// As ModifyDBInstance: turning management off deletes the secret.
+	h.deleteManagedSecretBestEffort(ctx, retiredSecretARN)
 
 	return &xmlModifyDBClusterResponse{
 		Xmlns: rdsXMLNS,

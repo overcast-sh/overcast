@@ -58,6 +58,27 @@ valid and is escaped before it reaches the engine.
 > them by default. If a `{{resolve:secretsmanager:…}}` password is refused, set
 > `ExcludeCharacters` on the generated secret, as you would for AWS.
 
+## Managed master password
+
+`ManageMasterUserPassword: true` skips `MasterUserPassword` entirely: RDS
+generates a password that satisfies the table above, stores it in a Secrets
+Manager secret named `rds!db-<uuid>` (`rds!cluster-<uuid>` for a cluster), and
+returns that secret's ARN as `MasterUserSecret` on every response that would
+otherwise carry the password. An Aurora member instance reports its cluster's
+secret rather than minting one of its own — AWS creates exactly one secret per
+cluster.
+
+The secret holds `{"username": "...", "password": "..."}` and no connection
+details, as on AWS. Read the host and port from `Endpoint` in
+`DescribeDBInstances` (or `DescribeDBClusters`).
+
+`ModifyDBInstance`/`ModifyDBCluster` can turn the option on, which generates a
+new password, or off, which requires `MasterUserPassword` in the same call to
+hand ownership of the password back to the caller. Supplying
+`MasterUserPassword` while the password stays managed is refused, the same
+combination `CreateDBInstance` refuses. Turning management off deletes the
+secret, as does deleting the DB instance or cluster itself.
+
 ## Password changes
 
 `MasterUserPassword` is applied to the running database rather than only

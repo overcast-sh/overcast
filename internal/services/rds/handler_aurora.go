@@ -123,6 +123,9 @@ type xmlDBCluster struct {
 	VpcSecurityGroups            xmlVpcSecurityGroups `xml:"VpcSecurityGroups"`
 	EnabledCloudwatchLogsExports xmlLogTypeList       `xml:"EnabledCloudwatchLogsExports"`
 	DBClusterMembers             xmlDBClusterMembers  `xml:"DBClusterMembers"`
+	// MasterUserSecret mirrors xmlDBInstance's field — see
+	// xmlMasterUserSecretFor in handler.go.
+	MasterUserSecret *xmlMasterUserSecret `xml:"MasterUserSecret,omitempty"`
 }
 
 // xmlVpcSecurityGroups is AWS's VpcSecurityGroupMembership list. The Status
@@ -258,5 +261,6 @@ func (h *Handler) toXMLDBCluster(ctx context.Context, c *DBCluster) xmlDBCluster
 		VpcSecurityGroups:            xmlVpcSecurityGroups{Items: groups},
 		EnabledCloudwatchLogsExports: xmlLogTypeList{Items: c.EnabledCloudwatchLogsExports},
 		DBClusterMembers:             xmlDBClusterMembers{Items: members},
+		MasterUserSecret:             xmlMasterUserSecretFor(c.MasterUserSecretARN, c.MasterUserSecretKmsKeyId),
 	}
 }
