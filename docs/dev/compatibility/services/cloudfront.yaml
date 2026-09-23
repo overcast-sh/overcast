@@ -2,7 +2,7 @@ service: cloudfront
 status: reviewed
 priority: p1
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-09-20
+last_updated: 2026-09-24
 protocols: [rest_xml]
 implementation: [internal/services/cloudfront]
 integration_tests: [tests/integration/cloudfront]
@@ -87,6 +87,36 @@ findings:
         aws_model: models/cloudfront/service/2020-05-31/cloudfront-2020-05-31.json (Distribution, DistributionConfig, DistributionSummary member order)
         tests: tests/integration/cloudfront/cloudfront_test.go::TestGetDistribution_xmlShape
       fixed_in: "#2010"
+    - scenario: >-
+        #2137: ProxyRequest keeps the request path percent-encoded as the viewer sent it. It read
+        chi's wildcard, which is encoded only when Go set RawPath (an encoding that differs from Go's
+        default, e.g. %2F) and decoded otherwise, so GET /100%25 became "/100%", the concatenated origin
+        URL failed to parse and the viewer got a 502. viewerPath now re-escapes the wildcard when RawPath
+        is unset, which reproduces the viewer's encoding exactly. The origin (custom, or an emulated one
+        reached by re-entering the router) receives the raw URI path as AWS documents; the cache key uses
+        the encoded path; a viewer-request function's event.request.uri is the encoded form (AWS hands
+        UTF-8 values to functions "without changing them"); a uri a function returns is brought to encoded
+        form by escapeURIPath (raw UTF-8, spaces, a stray "%", "?" and "#" are percent-encoded). Cache
+        behaviours match on normalizePathForMatch, the RFC 3986 section 6.2.2.2 step AWS applies before
+        matching: escaped unreserved characters are decoded ("%7E" matches "~"), every other escape stays
+        ("%40" is not "@", "%2F" is not a separator). DefaultRootObject is compared to the encoded "/" and
+        escaped before use (a no-op for every character the API allows).
+      evidence:
+        aws_docs: >-
+          https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/DownloadDistValuesCacheBehavior.html#path-normalization,
+          https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/edge-function-restrictions-all.html#function-restrictions-encoding,
+          https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/functions-event-structure.html
+        tests: >-
+          tests/integration/cloudfront/cloudfront_test.go::TestProxy_hostRoutedInvokeKeepsPercentEncoding,
+          tests/integration/cloudfront/cloudfront_test.go::TestProxy_encodedPathReachesAnEmulatedOrigin,
+          tests/integration/cloudfront/cloudfront_test.go::TestProxy_pathPatternMatchesTheNormalisedEncodedPath,
+          tests/integration/cloudfront/cloudfront_test.go::TestProxy_viewerRequestFunctionSeesTheEncodedURI,
+          tests/integration/cloudfront/cloudfront_test.go::TestProxy_viewerRequestFunctionURIReachesTheOrigin,
+          internal/services/cloudfront/handler_proxy_test.go::TestViewerPath_isAlwaysTheEncodedForm,
+          internal/services/cloudfront/handler_proxy_test.go::TestNormalizePathForMatch_decodesOnlyUnreserved,
+          internal/services/cloudfront/handler_proxy_test.go::TestEscapeURIPath_encodesOnlyWhatAPathCannotHold,
+          internal/services/cloudfront/handler_proxy_test.go::TestPathHelpers_doNotAllocateOnPlainPaths
+      fixed_in: "#2137"
   remaining_gaps:
     - >-
       Member order below the top level still follows the order the structs happened to be written in
@@ -96,6 +126,17 @@ findings:
       ViewerProtocolPolicy and ForwardedValues/MinTTL/DefaultTTL/MaxTTL last on both behavior shapes,
       and CustomHeaders before S3OriginConfig on Origin. SDKs address members by name, so this is a
       wire-shape divergence rather than a functional one, and nothing pins it yet.
+    - >-
+      #2137: path normalisation before cache-behaviour matching implements only the percent-encoding
+      step. AWS also resolves dot segments ("/a/b/.." matches "/a*", not "/a/b*") and collapses repeated
+      slashes before matching; Overcast matches the path as sent. Recorded on
+      docs/services/cloudfront/limitations.md ("Request paths").
+    - >-
+      #2137 (found in passing, not fixed): cacheTTL re-matches cache behaviours against the uri a
+      viewer-request function returned, so a rewrite can pick another behaviour's cache policy TTL; AWS
+      says a changed uri "doesn't change the cache behavior". A function-returned uri is not validated
+      to start with "/". The access log's cs-uri-stem is the internal /_overcast/cloudfront/distributions/{id}/...
+      route path rather than the viewer's URI.
   intentionally_partial:
     - >-
       ETags are a quoted version counter ("1", "2", …) rather than a content hash or an opaque token
@@ -106,5 +147,5 @@ findings:
       docs/services/cloudfront/limitations.md ("Distributions").
 handoff:
   start_with: [CreateDistribution, UpdateDistribution, invalidations]
-  do_not_redo: [ProxyRequest counting (#75), ETag semantics (recorded as intentionally_partial)]
+  do_not_redo: [ProxyRequest counting (#75), ETag semantics (recorded as intentionally_partial), ProxyRequest path encoding (#2137)]
   commands: [go test -count=1 ./internal/services/cloudfront/... ./tests/integration/cloudfront/...]

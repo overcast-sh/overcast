@@ -5,6 +5,7 @@ package cloudfront_test
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -4522,6 +4523,337 @@ func TestProxy_hostRoutedInvokeKeepsEncodedSlash(t *testing.T) {
 	}
 	if want := "/pkgs/@scope%2fpkg"; seen != want {
 		t.Errorf("origin saw path %q, want %q", seen, want)
+	}
+}
+
+// splitOriginURL returns the host and port of an httptest server, for pointing
+// a distribution's custom origin at it.
+func splitOriginURL(t *testing.T, rawURL string) (string, int) {
+	t.Helper()
+	hostPort := strings.TrimPrefix(rawURL, "http://")
+	colonIdx := strings.LastIndexByte(hostPort, ':')
+	var port int
+	if _, err := fmt.Sscanf(hostPort[colonIdx+1:], "%d", &port); err != nil {
+		t.Fatalf("parse origin port from %q: %v", rawURL, err)
+	}
+	return hostPort[:colonIdx], port
+}
+
+// hostRoutedGet requests rawPath, sent exactly as written, on a distribution's
+// own hostname.
+func hostRoutedGet(t *testing.T, srv *helpers.TestServer, distID, rawPath string) *http.Response {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, srv.URL+rawPath, nil)
+	if err != nil {
+		t.Fatalf("build request for %q: %v", rawPath, err)
+	}
+	req.Host = distID + ".cloudfront.localhost:4566"
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("proxy request %q: %v", rawPath, err)
+	}
+	return resp
+}
+
+// TestProxy_hostRoutedInvokeKeepsPercentEncoding: CloudFront forwards the URI
+// it received to the origin unchanged (edge-function-restrictions-all, "URI,
+// query string, and headers encoding"), whatever the viewer percent-encoded.
+// A path Go's default escaping spells the same way ("/100%25") used to reach
+// the proxy decoded, and re-parsing "/100%" as a URL failed with a 502.
+func TestProxy_hostRoutedInvokeKeepsPercentEncoding(t *testing.T) {
+	// Given: a distribution in front of an origin that records the wire path
+	var seen string
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = r.URL.EscapedPath()
+	}))
+	defer origin.Close()
+	originDomain, port := splitOriginURL(t, origin.URL)
+
+	srv := helpers.NewTestServer(t)
+	dist, _ := cfCreateDistFromXML(t, srv, viewerPolicyDistXML("proxy-percent-encoding", "allow-all", originDomain, port))
+
+	for _, path := range []string{
+		"/100%25",              // an encoded "%": Go's default spelling, so no RawPath
+		"/a%20b",               // an encoded space
+		"/caf%C3%A9",           // encoded UTF-8, upper-case hex
+		"/caf%c3%a9",           // the same, lower-case hex: not normalised
+		"/%7Euser/profile",     // an encoded unreserved character, left as sent
+		"/a%2fb%25c",           // an encoded slash beside an encoded "%"
+		"/reports/50%25-off/q", // an encoded "%" mid-path
+	} {
+		t.Run(path, func(t *testing.T) {
+			seen = ""
+
+			// When: a viewer requests the path via the dist's host
+			resp := hostRoutedGet(t, srv, dist.ID, path)
+			resp.Body.Close()
+
+			// Then: the origin sees the path byte-for-byte as the viewer sent it
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("status = %d, want 200", resp.StatusCode)
+			}
+			if seen != path {
+				t.Errorf("origin saw path %q, want %q", seen, path)
+			}
+		})
+	}
+}
+
+// TestProxy_encodedPathReachesAnEmulatedOrigin covers the other branch of
+// buildOriginRequest: an S3 origin is served by re-entering this emulator, so
+// the encoded path has to survive that hop too, or the wrong key is read.
+func TestProxy_encodedPathReachesAnEmulatedOrigin(t *testing.T) {
+	srv := helpers.NewTestServer(t)
+
+	// Given: a bucket holding objects whose keys need percent-encoding
+	putBucket, _ := http.NewRequest(http.MethodPut, srv.URL+"/cf-encoded-bucket", nil)
+	bResp, err := http.DefaultClient.Do(putBucket)
+	if err != nil {
+		t.Fatalf("create bucket: %v", err)
+	}
+	bResp.Body.Close()
+	objects := map[string]string{
+		"/100%25.txt":   "one hundred percent",
+		"/sp%20ace.txt": "a space",
+	}
+	for path, body := range objects {
+		putObj, _ := http.NewRequest(http.MethodPut, srv.URL+"/cf-encoded-bucket"+path, strings.NewReader(body))
+		oResp, err := http.DefaultClient.Do(putObj)
+		if err != nil {
+			t.Fatalf("put object %s: %v", path, err)
+		}
+		oResp.Body.Close()
+		helpers.AssertStatus(t, oResp, http.StatusOK)
+	}
+	dist, _ := cfCreateDistFromXML(t, srv,
+		singleOriginDistXML("cf-encoded-s3", "cf-encoded-bucket.s3.amazonaws.com", ""))
+
+	for path, want := range objects {
+		t.Run(path, func(t *testing.T) {
+			// When: the object is fetched through the distribution's host
+			resp := hostRoutedGet(t, srv, dist.ID, path)
+			defer resp.Body.Close()
+
+			// Then: the emulator's S3 served that exact key
+			helpers.AssertStatus(t, resp, http.StatusOK)
+			if body := string(readBody(t, resp)); body != want {
+				t.Errorf("body = %q, want %q", body, want)
+			}
+		})
+	}
+}
+
+// cfCreateFunctionWithCode creates a CloudFront Function running js and returns
+// its ARN, for a behavior's FunctionAssociations.
+func cfCreateFunctionWithCode(t *testing.T, srv *helpers.TestServer, name, js string) string {
+	t.Helper()
+	body := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<CreateFunctionRequest xmlns="http://cloudfront.amazonaws.com/doc/2020-05-31/">
+  <Name>%s</Name>
+  <FunctionConfig>
+    <Comment>encoded uri test</Comment>
+    <Runtime>cloudfront-js-2.0</Runtime>
+  </FunctionConfig>
+  <FunctionCode>%s</FunctionCode>
+</CreateFunctionRequest>`, name, base64.StdEncoding.EncodeToString([]byte(js)))
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/2020-05-31/function", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/xml")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("create function %s: %v", name, err)
+	}
+	defer resp.Body.Close()
+	helpers.AssertStatus(t, resp, http.StatusCreated)
+	var fn struct {
+		ARN string `xml:"FunctionMetadata>FunctionARN"`
+	}
+	if b := readBody(t, resp); xml.Unmarshal(b, &fn) != nil || fn.ARN == "" {
+		t.Fatalf("no FunctionARN in CreateFunction response: %s", b)
+	}
+	return fn.ARN
+}
+
+// encodedPathDistXML builds a distribution whose default behavior targets the
+// "default" origin and whose one cache behavior, for pathPattern, targets the
+// "patterned" origin. A non-empty fnARN is associated with both behaviors as a
+// viewer-request function.
+func encodedPathDistXML(callerRef, originDomain string, defaultPort, patternedPort int, pathPattern, fnARN string) string {
+	fas := ""
+	if fnARN != "" {
+		fas = fmt.Sprintf(`<FunctionAssociations><Quantity>1</Quantity><Items><FunctionAssociation>
+      <FunctionARN>%s</FunctionARN><EventType>viewer-request</EventType>
+    </FunctionAssociation></Items></FunctionAssociations>`, fnARN)
+	}
+	origin := func(id string, port int) string {
+		return fmt.Sprintf(`<Origin>
+        <Id>%s</Id>
+        <DomainName>%s</DomainName>
+        <CustomOriginConfig>
+          <HTTPPort>%d</HTTPPort>
+          <HTTPSPort>443</HTTPSPort>
+          <OriginProtocolPolicy>http-only</OriginProtocolPolicy>
+        </CustomOriginConfig>
+      </Origin>`, id, originDomain, port)
+	}
+	return fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<DistributionConfig xmlns="http://cloudfront.amazonaws.com/doc/2020-05-31/">
+  <CallerReference>%s</CallerReference>
+  <Comment>encoded path test</Comment>
+  <Enabled>true</Enabled>
+  <Origins>
+    <Quantity>2</Quantity>
+    <Items>
+      %s
+      %s
+    </Items>
+  </Origins>
+  <DefaultCacheBehavior>
+    <TargetOriginId>default</TargetOriginId>
+    <ViewerProtocolPolicy>allow-all</ViewerProtocolPolicy>
+    <ForwardedValues><QueryString>false</QueryString></ForwardedValues>
+    %s
+  </DefaultCacheBehavior>
+  <CacheBehaviors>
+    <Quantity>1</Quantity>
+    <Items>
+      <CacheBehavior>
+        <PathPattern>%s</PathPattern>
+        <TargetOriginId>patterned</TargetOriginId>
+        <ViewerProtocolPolicy>allow-all</ViewerProtocolPolicy>
+        <ForwardedValues><QueryString>false</QueryString></ForwardedValues>
+        %s
+      </CacheBehavior>
+    </Items>
+  </CacheBehaviors>
+</DistributionConfig>`, callerRef, origin("default", defaultPort), origin("patterned", patternedPort), fas, pathPattern, fas)
+}
+
+// TestProxy_pathPatternMatchesTheNormalisedEncodedPath: CloudFront normalises
+// the URI path per RFC 3986 section 6 and then matches cache behaviors against
+// it (DownloadDistValuesCacheBehavior, "Path normalization"). That
+// normalisation decodes percent-encoded UNRESERVED characters only, so "%7E"
+// matches a "~" in a pattern while a reserved "%40" stays distinct from "@".
+func TestProxy_pathPatternMatchesTheNormalisedEncodedPath(t *testing.T) {
+	// Given: two origins, one behind a path pattern, each recording what it saw
+	var hitBy, seen string
+	record := func(name string) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			hitBy, seen = name, r.URL.EscapedPath()
+		})
+	}
+	defaultOrigin := httptest.NewServer(record("default"))
+	defer defaultOrigin.Close()
+	patternedOrigin := httptest.NewServer(record("patterned"))
+	defer patternedOrigin.Close()
+	originDomain, defaultPort := splitOriginURL(t, defaultOrigin.URL)
+	_, patternedPort := splitOriginURL(t, patternedOrigin.URL)
+
+	srv := helpers.NewTestServer(t)
+	dist, _ := cfCreateDistFromXML(t, srv,
+		encodedPathDistXML("proxy-pattern-encoded", originDomain, defaultPort, patternedPort, "/~team/@*", ""))
+
+	for _, tc := range []struct{ path, wantOrigin string }{
+		{"/~team/@home", "patterned"},
+		{"/%7Eteam/@home", "patterned"}, // unreserved: normalised to "~"
+		{"/%7eteam/@home", "patterned"}, // hex case is not significant
+		{"/~team/%40home", "default"},   // reserved: "%40" is not "@"
+		{"/~team/@100%25", "patterned"}, // an encoded "%" after the match
+		{"/%7Eteam%2F@home", "default"}, // "%2F" is not a separator
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			hitBy, seen = "", ""
+
+			// When: a viewer requests the path
+			resp := hostRoutedGet(t, srv, dist.ID, tc.path)
+			resp.Body.Close()
+
+			// Then: the behavior is chosen on the normalised path, and the
+			// origin still receives the raw one
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("status = %d, want 200", resp.StatusCode)
+			}
+			if hitBy != tc.wantOrigin {
+				t.Errorf("served by the %q origin, want %q", hitBy, tc.wantOrigin)
+			}
+			if seen != tc.path {
+				t.Errorf("origin saw path %q, want the raw %q", seen, tc.path)
+			}
+		})
+	}
+}
+
+// TestProxy_viewerRequestFunctionSeesTheEncodedURI: a viewer-request function
+// is handed the URI "without changing" it (edge-function-restrictions-all,
+// "URI, query string, and headers encoding"), i.e. percent-encoded as the
+// viewer sent it, not decoded.
+func TestProxy_viewerRequestFunctionSeesTheEncodedURI(t *testing.T) {
+	// Given: a function that answers with the uri it was given
+	srv := helpers.NewTestServer(t)
+	fnARN := cfCreateFunctionWithCode(t, srv, "echo-uri", `function handler(event) {
+  return { statusCode: 200, statusDescription: 'OK',
+    headers: { 'x-seen-uri': { value: event.request.uri } } };
+}`)
+	dist, _ := cfCreateDistFromXML(t, srv,
+		encodedPathDistXML("proxy-fn-echo-uri", "127.0.0.1", 9, 9, "/never/*", fnARN))
+
+	for _, path := range []string{"/100%25", "/a%20b", "/caf%C3%A9", "/a%2Fb", "/plain/path"} {
+		t.Run(path, func(t *testing.T) {
+			// When: a viewer requests the path
+			resp := hostRoutedGet(t, srv, dist.ID, path)
+			resp.Body.Close()
+
+			// Then: the function saw the encoded form
+			helpers.AssertStatus(t, resp, http.StatusOK)
+			if got := resp.Header.Get("X-Seen-Uri"); got != path {
+				t.Errorf("function saw uri %q, want %q", got, path)
+			}
+		})
+	}
+}
+
+// TestProxy_viewerRequestFunctionURIReachesTheOrigin: the uri a function hands
+// back is what the origin is asked for. AWS recommends percent-encoding it and
+// forwards a changed URI as UTF-8, so an encoded uri passes through untouched
+// and a raw UTF-8 or space character reaches the origin percent-encoded, the
+// only way to put it on an HTTP/1.1 request line.
+func TestProxy_viewerRequestFunctionURIReachesTheOrigin(t *testing.T) {
+	// Given: an origin that records the wire path
+	var seen string
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = r.URL.EscapedPath()
+	}))
+	defer origin.Close()
+	originDomain, port := splitOriginURL(t, origin.URL)
+	srv := helpers.NewTestServer(t)
+
+	for i, tc := range []struct{ name, uri, want string }{
+		{"encoded percent", "/100%25", "/100%25"},
+		{"encoded UTF-8", "/caf%C3%A9", "/caf%C3%A9"},
+		{"encoded slash", "/a%2Fb", "/a%2Fb"},
+		{"raw UTF-8", "/café", "/caf%C3%A9"},
+		{"raw space", "/a b", "/a%20b"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			seen = ""
+			// And: a distribution whose function rewrites every uri to tc.uri
+			fnARN := cfCreateFunctionWithCode(t, srv, fmt.Sprintf("rewrite-uri-%d", i), fmt.Sprintf(`function handler(event) {
+  var request = event.request;
+  request.uri = %q;
+  return request;
+}`, tc.uri))
+			dist, _ := cfCreateDistFromXML(t, srv,
+				encodedPathDistXML(fmt.Sprintf("proxy-fn-rewrite-%d", i), originDomain, port, port, "/never/*", fnARN))
+
+			// When: a viewer requests any path
+			resp := hostRoutedGet(t, srv, dist.ID, "/index.html")
+			resp.Body.Close()
+
+			// Then: the origin is asked for the function's uri
+			helpers.AssertStatus(t, resp, http.StatusOK)
+			if seen != tc.want {
+				t.Errorf("origin saw path %q, want %q", seen, tc.want)
+			}
+		})
 	}
 }
 
