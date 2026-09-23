@@ -310,9 +310,11 @@ it, and check nobody else already has:
 bash scripts/issue-claim.sh 1325
 ```
 
-That reports any conflict and, if clear, sets `status/in-progress` and assigns
-you. Pass `--check` to look without claiming. With no argument it takes the
-issue number from the branch name, which is why agent branches are named
+That reports any conflict and, if clear, assigns you and sets
+`status/in-progress`. In the same edit it removes whichever of `status/ready`,
+`status/needs-triage` or `status/blocked` the issue had, because lifecycle
+labels are a state machine. Pass `--check` to look without claiming. With no
+argument it takes the issue number from the branch name, which is why agent branches are named
 `claude/issue-<n>-<slug>`.
 
 **Why a script rather than a habit.** `gh issue view <n>` renders title, body
