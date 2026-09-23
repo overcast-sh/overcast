@@ -79,7 +79,7 @@ tags:
 | `GetModel`               | ✅ Supported   |                                                                                                              | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_GetModel.html)               |
 | `GetModels`              | ✅ Supported   |                                                                                                              | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_GetModels.html)              |
 | `DeleteModel`            | ✅ Supported   |                                                                                                              | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_DeleteModel.html)            |
-| `CreateAuthorizer`       | ✅ Supported   | JWT and REQUEST types; config stored                                                                         | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_CreateAuthorizer.html)       |
+| `CreateAuthorizer`       | ✅ Supported   | TOKEN, REQUEST and COGNITO_USER_POOLS types, all enforced at request time                                    | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_CreateAuthorizer.html)       |
 | `GetAuthorizer`          | ✅ Supported   |                                                                                                              | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_GetAuthorizer.html)          |
 | `GetAuthorizers`         | ✅ Supported   |                                                                                                              | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_GetAuthorizers.html)         |
 | `DeleteAuthorizer`       | ✅ Supported   |                                                                                                              | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_DeleteAuthorizer.html)       |
@@ -148,7 +148,7 @@ tags:
 | Operation            | Status       | Notes                                                       | AWS Docs                                                                              |
 | -------------------- | ------------ | ----------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | `UpdateV2Stage`      | ✅ Supported | Patch description, autoDeploy, deploymentId, stageVariables | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_UpdateV2Stage.html)      |
-| `CreateV2Authorizer` | ✅ Supported | JWT and REQUEST types; config stored                        | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_CreateV2Authorizer.html) |
+| `CreateV2Authorizer` | ✅ Supported | REQUEST and JWT types, both enforced at request time        | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_CreateV2Authorizer.html) |
 | `GetV2Authorizer`    | ✅ Supported |                                                             | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_GetV2Authorizer.html)    |
 | `GetV2Authorizers`   | ✅ Supported |                                                             | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_GetV2Authorizers.html)   |
 | `DeleteV2Authorizer` | ✅ Supported |                                                             | [docs](https://docs.aws.amazon.com/apigateway/latest/api/API_DeleteV2Authorizer.html) |

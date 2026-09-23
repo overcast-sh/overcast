@@ -1193,7 +1193,7 @@
           "operation": "CreateAuthorizer",
           "category": "REST API v1 other",
           "status": "✅ Supported",
-          "notes": "JWT and REQUEST types; config stored"
+          "notes": "TOKEN, REQUEST and COGNITO_USER_POOLS types, all enforced at request time"
         },
         {
           "operation": "GetAuthorizer",
@@ -1480,7 +1480,7 @@
           "operation": "CreateV2Authorizer",
           "category": "HTTP API v2 other",
           "status": "✅ Supported",
-          "notes": "JWT and REQUEST types; config stored"
+          "notes": "REQUEST and JWT types, both enforced at request time"
         },
         {
           "operation": "GetV2Authorizer",

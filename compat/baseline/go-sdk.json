@@ -3020,6 +3020,83 @@
     },
     {
       "suite": "go-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "BatchCreatePartition",
+      "status": "pass"
+    },
+    {
+      "suite": "go-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "CreateDatabase",
+      "status": "pass"
+    },
+    {
+      "suite": "go-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "CreateTable",
+      "status": "pass"
+    },
+    {
+      "suite": "go-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "DeleteDatabase",
+      "status": "pass"
+    },
+    {
+      "suite": "go-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "DeletePartition",
+      "status": "pass"
+    },
+    {
+      "suite": "go-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "DeleteTable",
+      "status": "pass"
+    },
+    {
+      "suite": "go-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "GetPartitions",
+      "status": "pass"
+    },
+    {
+      "suite": "go-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "GetTable",
+      "status": "pass"
+    },
+    {
+      "suite": "go-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "GetTableVersions",
+      "status": "pass"
+    },
+    {
+      "suite": "go-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "UpdateTable",
+      "status": "pass"
+    },
+    {
+      "suite": "go-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "UpdateTableStaleVersion",
+      "status": "pass"
+    },
+    {
+      "suite": "go-sdk",
       "service": "iam",
       "group": "iam-gen-group",
       "test": "AddUserToGroup",

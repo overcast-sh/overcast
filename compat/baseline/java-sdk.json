@@ -3020,6 +3020,83 @@
     },
     {
       "suite": "java-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "BatchCreatePartition",
+      "status": "skip"
+    },
+    {
+      "suite": "java-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "CreateDatabase",
+      "status": "skip"
+    },
+    {
+      "suite": "java-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "CreateTable",
+      "status": "skip"
+    },
+    {
+      "suite": "java-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "DeleteDatabase",
+      "status": "skip"
+    },
+    {
+      "suite": "java-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "DeletePartition",
+      "status": "skip"
+    },
+    {
+      "suite": "java-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "DeleteTable",
+      "status": "skip"
+    },
+    {
+      "suite": "java-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "GetPartitions",
+      "status": "skip"
+    },
+    {
+      "suite": "java-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "GetTable",
+      "status": "skip"
+    },
+    {
+      "suite": "java-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "GetTableVersions",
+      "status": "skip"
+    },
+    {
+      "suite": "java-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "UpdateTable",
+      "status": "skip"
+    },
+    {
+      "suite": "java-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "UpdateTableStaleVersion",
+      "status": "skip"
+    },
+    {
+      "suite": "java-sdk",
       "service": "iam",
       "group": "iam-gen-group",
       "test": "AddUserToGroup",
