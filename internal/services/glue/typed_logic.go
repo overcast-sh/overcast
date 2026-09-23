@@ -153,7 +153,7 @@ func (s *Service) createDatabaseTyped(ctx context.Context, req *createDatabaseRe
 			return nil, aerr
 		}
 	}
-	defer s.locks.Lock("db:" + name)()
+	defer s.writeLock("db:" + name)()
 	_, found, err := s.store.getDatabase(ctx, name)
 	if err != nil {
 		return nil, errInternal(err)
@@ -207,7 +207,7 @@ func (s *Service) updateDatabaseTyped(ctx context.Context, req *updateDatabaseRe
 	if in := normName(req.DatabaseInput.Name); in != "" && in != name {
 		return nil, errInvalidInput("Renaming a database is not supported: DatabaseInput.Name %s does not match Name %s.", in, name)
 	}
-	defer s.locks.Lock("db:" + name)()
+	defer s.writeLock("db:" + name)()
 	cur, aerr := s.requireDatabase(ctx, name)
 	if aerr != nil {
 		return nil, aerr
@@ -226,7 +226,7 @@ func (s *Service) updateDatabaseTyped(ctx context.Context, req *updateDatabaseRe
 // reclaims them asynchronously, Overcast at once.
 func (s *Service) deleteDatabaseTyped(ctx context.Context, req *deleteDatabaseReq) (*struct{}, *protocol.AWSError) {
 	name := normName(req.Name)
-	defer s.locks.Lock("db:" + name)()
+	defer s.cascadeLock()()
 	if _, aerr := s.requireDatabase(ctx, name); aerr != nil {
 		return nil, aerr
 	}
@@ -363,7 +363,7 @@ func (s *Service) createTableTyped(ctx context.Context, req *createTableReq) (*c
 	name = normName(name)
 	dbName := normName(req.DatabaseName)
 
-	defer s.locks.Lock("table:" + tableKey(dbName, name))()
+	defer s.writeLock("table:" + tableKey(dbName, name))()
 	if _, aerr := s.requireDatabase(ctx, dbName); aerr != nil {
 		return nil, aerr
 	}
@@ -373,6 +373,12 @@ func (s *Service) createTableTyped(ctx context.Context, req *createTableReq) (*c
 	}
 	if found {
 		return nil, glueError(codeAlreadyExists, "Table already exists.")
+	}
+	// A table that is not found may still have left partitions or versions
+	// behind — its record was corrupt, or a crash interrupted its delete. A
+	// new table must not inherit them.
+	if err := s.store.deleteTableChildren(ctx, dbName, name); err != nil {
+		return nil, errInternal(err)
 	}
 
 	t := tableFromInput(in, dbName, name, s.catalogID(req.CatalogId))
@@ -482,7 +488,7 @@ func (s *Service) updateTableTyped(ctx context.Context, req *updateTableReq) (*s
 	}
 	dbName := normName(req.DatabaseName)
 
-	defer s.locks.Lock("table:" + tableKey(dbName, name))()
+	defer s.writeLock("table:" + tableKey(dbName, name))()
 	cur, aerr := s.requireTable(ctx, dbName, name)
 	if aerr != nil {
 		return nil, aerr
@@ -512,6 +518,7 @@ func (s *Service) updateTableTyped(ctx context.Context, req *updateTableReq) (*s
 // AWS also removes (asynchronously).
 func (s *Service) deleteTableTyped(ctx context.Context, req *deleteTableReq) (*struct{}, *protocol.AWSError) {
 	dbName, name := normName(req.DatabaseName), normName(req.Name)
+	defer s.cascadeLock()()
 	if _, aerr := s.requireDatabase(ctx, dbName); aerr != nil {
 		return nil, aerr
 	}
@@ -529,6 +536,7 @@ func (s *Service) batchDeleteTableTyped(ctx context.Context, req *batchDeleteTab
 		return nil, errInvalidInput("TablesToDelete must hold at most %d names.", maxBatchDeleteTables)
 	}
 	dbName := normName(req.DatabaseName)
+	defer s.cascadeLock()()
 	if _, aerr := s.requireDatabase(ctx, dbName); aerr != nil {
 		return nil, aerr
 	}
@@ -542,10 +550,12 @@ func (s *Service) batchDeleteTableTyped(ctx context.Context, req *batchDeleteTab
 }
 
 // deleteOneTable deletes one table of an existing database, cascading to its
-// partitions and archived versions.
+// partitions and archived versions. The caller holds cascadeLock.
+//
+// Existence is the raw record's, not a decodable one's: a corrupt table must
+// still be deletable, or its partitions and versions would outlive it.
 func (s *Service) deleteOneTable(ctx context.Context, dbName, name string) *protocol.AWSError {
-	defer s.locks.Lock("table:" + tableKey(dbName, name))()
-	_, found, err := s.store.getTable(ctx, dbName, name)
+	found, err := s.store.tableExists(ctx, dbName, name)
 	if err != nil {
 		return errInternal(err)
 	}

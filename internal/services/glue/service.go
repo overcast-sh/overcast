@@ -14,6 +14,7 @@ package glue
 import (
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
@@ -35,8 +36,33 @@ type Service struct {
 	store   *glueStore
 	cfg     *config.Config
 	clk     clock.Clock
-	locks   serviceutil.RecordLocks
 	typedOp map[string]op.Operation
+
+	// Locking. A write takes cascadeMu shared and then its record's stripe
+	// in locks (writeLock); a delete that cascades — DeleteDatabase,
+	// DeleteTable, BatchDeleteTable — takes cascadeMu exclusively
+	// (cascadeLock) and nothing else. So no write can land a table or
+	// partition under a parent a cascade is removing, and no goroutine ever
+	// holds two stripes, which could be one stripe twice.
+	cascadeMu sync.RWMutex
+	locks     serviceutil.RecordLocks
+}
+
+// writeLock serialises a write to the record named by key against other
+// writes to it and against every cascading delete.
+func (s *Service) writeLock(key string) func() {
+	s.cascadeMu.RLock()
+	unlock := s.locks.Lock(key)
+	return func() {
+		unlock()
+		s.cascadeMu.RUnlock()
+	}
+}
+
+// cascadeLock excludes every other write for the length of a cascading delete.
+func (s *Service) cascadeLock() func() {
+	s.cascadeMu.Lock()
+	return s.cascadeMu.Unlock
 }
 
 // New returns a configured Glue Service.

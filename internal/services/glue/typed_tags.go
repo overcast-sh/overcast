@@ -101,7 +101,7 @@ func (s *Service) tagResourceTyped(ctx context.Context, req *glueTagResourceReq)
 	if aerr != nil {
 		return nil, aerr
 	}
-	defer s.locks.Lock(target.lockKey)()
+	defer s.writeLock(target.lockKey)()
 	if aerr := serviceutil.ApplyInlineTags(ctx, target.lockKey, req.TagsToAdd, glueTagCfg, target.load, target.save); aerr != nil {
 		return nil, aerr
 	}
@@ -113,7 +113,7 @@ func (s *Service) untagResourceTyped(ctx context.Context, req *glueUntagResource
 	if aerr != nil {
 		return nil, aerr
 	}
-	defer s.locks.Lock(target.lockKey)()
+	defer s.writeLock(target.lockKey)()
 	if aerr := serviceutil.RemoveInlineTags(ctx, target.lockKey, req.TagsToRemove, target.load, target.save); aerr != nil {
 		return nil, aerr
 	}

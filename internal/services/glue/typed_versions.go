@@ -104,7 +104,7 @@ func (s *Service) getTableVersionsTyped(ctx context.Context, req *getTableVersio
 
 func (s *Service) deleteTableVersionTyped(ctx context.Context, req *deleteTableVersionReq) (*struct{}, *protocol.AWSError) {
 	dbName, name := normName(req.DatabaseName), normName(req.TableName)
-	defer s.locks.Lock("table:" + tableKey(dbName, name))()
+	defer s.writeLock("table:" + tableKey(dbName, name))()
 	cur, aerr := s.requireTable(ctx, dbName, name)
 	if aerr != nil {
 		return nil, aerr
@@ -120,7 +120,7 @@ func (s *Service) batchDeleteTableVersionTyped(ctx context.Context, req *batchDe
 		return nil, errInvalidInput("VersionIds must hold at most %d versions.", maxBatchDeleteTableVersions)
 	}
 	dbName, name := normName(req.DatabaseName), normName(req.TableName)
-	defer s.locks.Lock("table:" + tableKey(dbName, name))()
+	defer s.writeLock("table:" + tableKey(dbName, name))()
 	cur, aerr := s.requireTable(ctx, dbName, name)
 	if aerr != nil {
 		return nil, aerr

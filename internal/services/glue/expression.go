@@ -24,6 +24,7 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 // partitionFilter is a compiled Expression.
@@ -170,19 +171,27 @@ func lexExpression(s string) ([]token, error) {
 			i += n
 		case c == '-' || c == '+' || c == '.' || (c >= '0' && c <= '9'):
 			j := i + 1
-			for j < len(s) && (s[j] == '.' || (s[j] >= '0' && s[j] <= '9')) {
+			for j < len(s) && isNumberByte(s[j]) {
+				// A sign belongs to the number only straight after an exponent.
+				if (s[j] == '+' || s[j] == '-') && s[j-1] != 'e' && s[j-1] != 'E' {
+					break
+				}
 				j++
 			}
 			num := s[i:j]
-			if _, ok := new(big.Rat).SetString(num); !ok {
+			if _, ok := parseDecimal(num); !ok {
 				return nil, fmt.Errorf("invalid number %q", num)
 			}
 			toks = append(toks, token{tokNumber, num})
 			i = j
-		case c == '_' || unicode.IsLetter(rune(c)):
-			j := i + 1
-			for j < len(s) && (s[j] == '_' || s[j] == '$' || unicode.IsLetter(rune(s[j])) || unicode.IsDigit(rune(s[j]))) {
-				j++
+		case isIdentStart(s[i:]):
+			j := i
+			for j < len(s) {
+				r, size := utf8.DecodeRuneInString(s[j:])
+				if r != '_' && r != '$' && !unicode.IsLetter(r) && !unicode.IsDigit(r) {
+					break
+				}
+				j += size
 			}
 			word := s[i:j]
 			if up := strings.ToUpper(word); keywords[up] {
@@ -196,6 +205,33 @@ func lexExpression(s string) ([]token, error) {
 		}
 	}
 	return append(toks, token{tokEOF, ""}), nil
+}
+
+// isNumberByte reports whether b can continue a numeric literal: digits, a
+// decimal point, an exponent marker, or an exponent's sign.
+func isNumberByte(b byte) bool {
+	return (b >= '0' && b <= '9') || b == '.' || b == 'e' || b == 'E' || b == '+' || b == '-'
+}
+
+// isIdentStart reports whether s starts an unquoted identifier: a letter, in
+// any script, or an underscore.
+func isIdentStart(s string) bool {
+	r, _ := utf8.DecodeRuneInString(s)
+	return r == '_' || unicode.IsLetter(r)
+}
+
+// decimalPattern is a plain decimal number with an optional exponent. It is
+// deliberately stricter than big.Rat's own syntax, which also accepts
+// fractions ("1/2") and base prefixes ("0x10") that are not SQL numbers.
+var decimalPattern = regexp.MustCompile(`^[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?$`)
+
+// parseDecimal parses a SQL numeric literal or a stored numeric partition
+// value.
+func parseDecimal(s string) (*big.Rat, bool) {
+	if !decimalPattern.MatchString(s) {
+		return nil, false
+	}
+	return new(big.Rat).SetString(s)
 }
 
 // opSpelling is the source text of the comparison operator starting at s[i].
@@ -434,7 +470,7 @@ func flipOp(op string) string {
 
 func checkLiteral(kind keyKind, col, lit string) error {
 	if kind == kindNumber {
-		if _, ok := new(big.Rat).SetString(lit); !ok {
+		if _, ok := parseDecimal(lit); !ok {
 			return fmt.Errorf("%q is not a number, but partition key %q is numeric", lit, col)
 		}
 	}
@@ -589,10 +625,10 @@ func compareValues(kind keyKind, value, lit string) (int, bool) {
 	if kind == kindString {
 		return strings.Compare(value, lit), true
 	}
-	a, ok := new(big.Rat).SetString(value)
+	a, ok := parseDecimal(value)
 	if !ok {
 		return 0, false
 	}
-	b, _ := new(big.Rat).SetString(lit) // validated when the expression was parsed
+	b, _ := parseDecimal(lit) // validated when the expression was parsed
 	return a.Cmp(b), true
 }

@@ -129,8 +129,45 @@ func TestParsePartitionExpression_nonNumericStoredValueMatchesNothing(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	// When/Then: no comparison matches it, including inequality
-	if f.match(map[string]string{"year": "unknown"}) {
-		t.Error("a non-numeric stored value matched a numeric comparison")
+	// When/Then: no comparison matches it, including inequality — nor does
+	// a value only big.Rat's wider syntax reads as a number
+	for _, stored := range []string{"unknown", "0x10", "1/2"} {
+		if f.match(map[string]string{"year": stored}) {
+			t.Errorf("stored value %q matched a numeric comparison", stored)
+		}
+	}
+}
+
+func TestParsePartitionExpression_numbersAndIdentifiers(t *testing.T) {
+	keys := []Column{{Name: "année", Type: "int"}, {Name: "n", Type: "decimal"}}
+	cases := []struct {
+		expr   string
+		values map[string]string
+		want   bool
+	}{
+		{"année = 2024", map[string]string{"année": "2024"}, true},
+		{"n = 1e3", map[string]string{"n": "1000"}, true},
+		{"n > 1.5E-1", map[string]string{"n": "0.2"}, true},
+		{"n >= -2.5e+1", map[string]string{"n": "-25"}, true},
+		{"n = 1e3", map[string]string{"n": "1e3"}, true},
+		{"n=-1", map[string]string{"n": "-1"}, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.expr, func(t *testing.T) {
+			// Given/When: an expression with a non-ASCII key or an exponent
+			f, err := parsePartitionExpression(tc.expr, keys)
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+			// Then: it compares as the typed value
+			if got := f.match(tc.values); got != tc.want {
+				t.Errorf("match(%v) = %v, want %v", tc.values, got, tc.want)
+			}
+		})
+	}
+	for _, bad := range []string{"n = 0x10", "n = 1/2", "n = 1e", "n = 1e+", "n = 1.2.3"} {
+		if _, err := parsePartitionExpression(bad, keys); err == nil {
+			t.Errorf("parsePartitionExpression(%q) succeeded, want an invalid number", bad)
+		}
 	}
 }

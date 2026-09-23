@@ -128,19 +128,28 @@ func partitionFromInput(in *PartitionInput, t *tableRecord) *Partition {
 	}
 }
 
-// partitionLock serialises partition writes per table. One lock per table
-// rather than per partition, because UpdatePartition can move a partition to
-// new values and so writes two keys at once.
-func (s *Service) partitionLock(t *tableRecord) func() {
-	return s.locks.Lock("partitions:" + tableKey(t.DatabaseName, t.Name))
+// lockTable takes the table's write lock — the one UpdateTable and the
+// version operations take — and loads the table inside it, so a partition
+// write is serialised with every other write to its table and cannot land
+// under a table that is no longer there. One lock per table rather than per
+// partition, because UpdatePartition can move a partition to new values and
+// so writes two keys at once.
+func (s *Service) lockTable(ctx context.Context, dbName, tableName string) (*tableRecord, func(), *protocol.AWSError) {
+	dbName, tableName = normName(dbName), normName(tableName)
+	unlock := s.writeLock("table:" + tableKey(dbName, tableName))
+	t, aerr := s.requireTable(ctx, dbName, tableName)
+	if aerr != nil {
+		unlock()
+		return nil, nil, aerr
+	}
+	return t, unlock, nil
 }
 
-// createOnePartition creates one partition of t.
+// createOnePartition creates one partition of t. The caller holds lockTable.
 func (s *Service) createOnePartition(ctx context.Context, t *tableRecord, in *PartitionInput) *protocol.AWSError {
 	if aerr := checkPartitionValues(t, in.Values); aerr != nil {
 		return aerr
 	}
-	defer s.partitionLock(t)()
 	_, found, err := s.store.getPartition(ctx, t.DatabaseName, t.Name, in.Values)
 	if err != nil {
 		return errInternal(err)
@@ -160,10 +169,11 @@ func (s *Service) createPartitionTyped(ctx context.Context, req *createPartition
 	if req.PartitionInput == nil {
 		return nil, errInvalidInput("PartitionInput is required.")
 	}
-	t, aerr := s.requireTable(ctx, normName(req.DatabaseName), normName(req.TableName))
+	t, unlock, aerr := s.lockTable(ctx, req.DatabaseName, req.TableName)
 	if aerr != nil {
 		return nil, aerr
 	}
+	defer unlock()
 	if aerr := s.createOnePartition(ctx, t, req.PartitionInput); aerr != nil {
 		return nil, aerr
 	}
@@ -174,10 +184,11 @@ func (s *Service) batchCreatePartitionTyped(ctx context.Context, req *batchCreat
 	if len(req.PartitionInputList) > maxBatchCreatePartitions {
 		return nil, errInvalidInput("PartitionInputList must hold at most %d partitions.", maxBatchCreatePartitions)
 	}
-	t, aerr := s.requireTable(ctx, normName(req.DatabaseName), normName(req.TableName))
+	t, unlock, aerr := s.lockTable(ctx, req.DatabaseName, req.TableName)
 	if aerr != nil {
 		return nil, aerr
 	}
+	defer unlock()
 	resp := &batchPartitionErrorsResp{Errors: []PartitionError{}}
 	for i := range req.PartitionInputList {
 		in := &req.PartitionInputList[i]
@@ -286,10 +297,11 @@ func (s *Service) updatePartitionTyped(ctx context.Context, req *updatePartition
 	if req.PartitionInput == nil {
 		return nil, errInvalidInput("PartitionInput is required.")
 	}
-	t, aerr := s.requireTable(ctx, normName(req.DatabaseName), normName(req.TableName))
+	t, unlock, aerr := s.lockTable(ctx, req.DatabaseName, req.TableName)
 	if aerr != nil {
 		return nil, aerr
 	}
+	defer unlock()
 	newValues := req.PartitionInput.Values
 	if len(newValues) == 0 {
 		newValues = req.PartitionValueList
@@ -299,7 +311,6 @@ func (s *Service) updatePartitionTyped(ctx context.Context, req *updatePartition
 	}
 	oldKey := partitionKey(t.DatabaseName, t.Name, req.PartitionValueList)
 	newKey := partitionKey(t.DatabaseName, t.Name, newValues)
-	defer s.partitionLock(t)()
 	cur, found, err := s.store.getPartition(ctx, t.DatabaseName, t.Name, req.PartitionValueList)
 	if err != nil {
 		return nil, errInternal(err)
@@ -331,9 +342,8 @@ func (s *Service) updatePartitionTyped(ctx context.Context, req *updatePartition
 	return &struct{}{}, nil
 }
 
-// deleteOnePartition deletes one partition of t.
+// deleteOnePartition deletes one partition of t. The caller holds lockTable.
 func (s *Service) deleteOnePartition(ctx context.Context, t *tableRecord, values []string) *protocol.AWSError {
-	defer s.partitionLock(t)()
 	_, found, err := s.store.getPartition(ctx, t.DatabaseName, t.Name, values)
 	if err != nil {
 		return errInternal(err)
@@ -348,10 +358,11 @@ func (s *Service) deleteOnePartition(ctx context.Context, t *tableRecord, values
 }
 
 func (s *Service) deletePartitionTyped(ctx context.Context, req *deletePartitionReq) (*struct{}, *protocol.AWSError) {
-	t, aerr := s.requireTable(ctx, normName(req.DatabaseName), normName(req.TableName))
+	t, unlock, aerr := s.lockTable(ctx, req.DatabaseName, req.TableName)
 	if aerr != nil {
 		return nil, aerr
 	}
+	defer unlock()
 	if aerr := s.deleteOnePartition(ctx, t, req.PartitionValues); aerr != nil {
 		return nil, aerr
 	}
@@ -362,10 +373,11 @@ func (s *Service) batchDeletePartitionTyped(ctx context.Context, req *batchDelet
 	if len(req.PartitionsToDelete) > maxBatchDeletePartitions {
 		return nil, errInvalidInput("PartitionsToDelete must hold at most %d partitions.", maxBatchDeletePartitions)
 	}
-	t, aerr := s.requireTable(ctx, normName(req.DatabaseName), normName(req.TableName))
+	t, unlock, aerr := s.lockTable(ctx, req.DatabaseName, req.TableName)
 	if aerr != nil {
 		return nil, aerr
 	}
+	defer unlock()
 	resp := &batchPartitionErrorsResp{Errors: []PartitionError{}}
 	for _, key := range req.PartitionsToDelete {
 		if aerr := s.deleteOnePartition(ctx, t, key.Values); aerr != nil {
