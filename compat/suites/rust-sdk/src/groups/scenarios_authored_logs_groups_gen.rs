@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/logs-groups.json";
 
-const GROUP_LOGS_GROUPS_SHADOW: Group = Group {
-    name: "logs-groups-shadow",
+const GROUP_LOGS_GROUPS: Group = Group {
+    name: "logs-groups",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredLogsGroups {
         {
             let client = self.client.clone();
             impls.insert(
-                "logs-groups-shadow:CreateLogGroup".to_string(),
+                "logs-groups:CreateLogGroup".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_LOGS_GROUPS_SHADOW
-                            .run_test(&ctx, "CreateLogGroup", test_logs_groups_shadow_create_log_group(&client))
+                        GROUP_LOGS_GROUPS
+                            .run_test(&ctx, "CreateLogGroup", test_logs_groups_create_log_group(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredLogsGroups {
         {
             let client = self.client.clone();
             impls.insert(
-                "logs-groups-shadow:DescribeLogGroups".to_string(),
+                "logs-groups:DescribeLogGroups".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_LOGS_GROUPS_SHADOW
-                            .run_test(&ctx, "DescribeLogGroups", test_logs_groups_shadow_describe_log_groups(&client))
+                        GROUP_LOGS_GROUPS
+                            .run_test(&ctx, "DescribeLogGroups", test_logs_groups_describe_log_groups(&client))
                             .await
                     })
                 }),
@@ -79,12 +79,12 @@ impl ServiceGroup for ScenariosAuthoredLogsGroups {
         {
             let client = self.client.clone();
             impls.insert(
-                "logs-groups-shadow:PutRetentionPolicy".to_string(),
+                "logs-groups:PutRetentionPolicy".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_LOGS_GROUPS_SHADOW
-                            .run_test(&ctx, "PutRetentionPolicy", test_logs_groups_shadow_put_retention_policy(&client))
+                        GROUP_LOGS_GROUPS
+                            .run_test(&ctx, "PutRetentionPolicy", test_logs_groups_put_retention_policy(&client))
                             .await
                     })
                 }),
@@ -93,12 +93,12 @@ impl ServiceGroup for ScenariosAuthoredLogsGroups {
         {
             let client = self.client.clone();
             impls.insert(
-                "logs-groups-shadow:VerifyRetentionPolicy".to_string(),
+                "logs-groups:VerifyRetentionPolicy".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_LOGS_GROUPS_SHADOW
-                            .run_test(&ctx, "VerifyRetentionPolicy", test_logs_groups_shadow_verify_retention_policy(&client))
+                        GROUP_LOGS_GROUPS
+                            .run_test(&ctx, "VerifyRetentionPolicy", test_logs_groups_verify_retention_policy(&client))
                             .await
                     })
                 }),
@@ -107,12 +107,12 @@ impl ServiceGroup for ScenariosAuthoredLogsGroups {
         {
             let client = self.client.clone();
             impls.insert(
-                "logs-groups-shadow:DeleteRetentionPolicy".to_string(),
+                "logs-groups:DeleteRetentionPolicy".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_LOGS_GROUPS_SHADOW
-                            .run_test(&ctx, "DeleteRetentionPolicy", test_logs_groups_shadow_delete_retention_policy(&client))
+                        GROUP_LOGS_GROUPS
+                            .run_test(&ctx, "DeleteRetentionPolicy", test_logs_groups_delete_retention_policy(&client))
                             .await
                     })
                 }),
@@ -121,12 +121,12 @@ impl ServiceGroup for ScenariosAuthoredLogsGroups {
         {
             let client = self.client.clone();
             impls.insert(
-                "logs-groups-shadow:DeleteLogGroup".to_string(),
+                "logs-groups:DeleteLogGroup".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_LOGS_GROUPS_SHADOW
-                            .run_test(&ctx, "DeleteLogGroup", test_logs_groups_shadow_delete_log_group(&client))
+                        GROUP_LOGS_GROUPS
+                            .run_test(&ctx, "DeleteLogGroup", test_logs_groups_delete_log_group(&client))
                             .await
                     })
                 }),
@@ -135,12 +135,12 @@ impl ServiceGroup for ScenariosAuthoredLogsGroups {
         {
             let client = self.client.clone();
             impls.insert(
-                "logs-groups-shadow:CreateLogStream".to_string(),
+                "logs-groups:CreateLogStream".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_LOGS_GROUPS_SHADOW
-                            .run_test(&ctx, "CreateLogStream", test_logs_groups_shadow_create_log_stream(&client))
+                        GROUP_LOGS_GROUPS
+                            .run_test(&ctx, "CreateLogStream", test_logs_groups_create_log_stream(&client))
                             .await
                     })
                 }),
@@ -149,12 +149,12 @@ impl ServiceGroup for ScenariosAuthoredLogsGroups {
         {
             let client = self.client.clone();
             impls.insert(
-                "logs-groups-shadow:TagLogGroup".to_string(),
+                "logs-groups:TagLogGroup".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_LOGS_GROUPS_SHADOW
-                            .run_test(&ctx, "TagLogGroup", test_logs_groups_shadow_tag_log_group(&client))
+                        GROUP_LOGS_GROUPS
+                            .run_test(&ctx, "TagLogGroup", test_logs_groups_tag_log_group(&client))
                             .await
                     })
                 }),
@@ -168,11 +168,11 @@ impl ServiceGroup for ScenariosAuthoredLogsGroups {
         {
             let client = self.client.clone();
             setups.insert(
-                "logs-groups-shadow".to_string(),
+                "logs-groups".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_LOGS_GROUPS_SHADOW.run_setup(&ctx, setup_logs_groups_shadow(&client)).await
+                        GROUP_LOGS_GROUPS.run_setup(&ctx, setup_logs_groups(&client)).await
                     })
                 }),
             );
@@ -185,11 +185,11 @@ impl ServiceGroup for ScenariosAuthoredLogsGroups {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "logs-groups-shadow".to_string(),
+                "logs-groups".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_LOGS_GROUPS_SHADOW.run_teardown(&ctx, teardown_logs_groups_shadow(&client)).await
+                        GROUP_LOGS_GROUPS.run_teardown(&ctx, teardown_logs_groups(&client)).await
                     })
                 }),
             );
@@ -198,7 +198,7 @@ impl ServiceGroup for ScenariosAuthoredLogsGroups {
     }
 }
 
-fn setup_logs_groups_shadow(client: &aws_sdk_cloudwatchlogs::Client) -> Vec<Call> {
+fn setup_logs_groups(client: &aws_sdk_cloudwatchlogs::Client) -> Vec<Call> {
     vec![
         Call {
             op: "CreateLogGroup",
@@ -223,7 +223,7 @@ fn setup_logs_groups_shadow(client: &aws_sdk_cloudwatchlogs::Client) -> Vec<Call
     ]
 }
 
-fn teardown_logs_groups_shadow(client: &aws_sdk_cloudwatchlogs::Client) -> Vec<Call> {
+fn teardown_logs_groups(client: &aws_sdk_cloudwatchlogs::Client) -> Vec<Call> {
     vec![
         Call {
             op: "DeleteLogGroup",
@@ -268,7 +268,7 @@ fn teardown_logs_groups_shadow(client: &aws_sdk_cloudwatchlogs::Client) -> Vec<C
     ]
 }
 
-fn test_logs_groups_shadow_create_log_group(client: &aws_sdk_cloudwatchlogs::Client) -> Test {
+fn test_logs_groups_create_log_group(client: &aws_sdk_cloudwatchlogs::Client) -> Test {
     Test {
         call: Call {
             op: "CreateLogGroup",
@@ -323,7 +323,7 @@ fn test_logs_groups_shadow_create_log_group(client: &aws_sdk_cloudwatchlogs::Cli
     }
 }
 
-fn test_logs_groups_shadow_describe_log_groups(client: &aws_sdk_cloudwatchlogs::Client) -> Test {
+fn test_logs_groups_describe_log_groups(client: &aws_sdk_cloudwatchlogs::Client) -> Test {
     Test {
         call: Call {
             op: "DescribeLogGroups",
@@ -359,7 +359,7 @@ fn test_logs_groups_shadow_describe_log_groups(client: &aws_sdk_cloudwatchlogs::
     }
 }
 
-fn test_logs_groups_shadow_put_retention_policy(client: &aws_sdk_cloudwatchlogs::Client) -> Test {
+fn test_logs_groups_put_retention_policy(client: &aws_sdk_cloudwatchlogs::Client) -> Test {
     Test {
         call: Call {
             op: "PutRetentionPolicy",
@@ -418,7 +418,7 @@ fn test_logs_groups_shadow_put_retention_policy(client: &aws_sdk_cloudwatchlogs:
     }
 }
 
-fn test_logs_groups_shadow_verify_retention_policy(client: &aws_sdk_cloudwatchlogs::Client) -> Test {
+fn test_logs_groups_verify_retention_policy(client: &aws_sdk_cloudwatchlogs::Client) -> Test {
     Test {
         call: Call {
             op: "DescribeLogGroups",
@@ -451,7 +451,7 @@ fn test_logs_groups_shadow_verify_retention_policy(client: &aws_sdk_cloudwatchlo
     }
 }
 
-fn test_logs_groups_shadow_delete_retention_policy(client: &aws_sdk_cloudwatchlogs::Client) -> Test {
+fn test_logs_groups_delete_retention_policy(client: &aws_sdk_cloudwatchlogs::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteRetentionPolicy",
@@ -506,7 +506,7 @@ fn test_logs_groups_shadow_delete_retention_policy(client: &aws_sdk_cloudwatchlo
     }
 }
 
-fn test_logs_groups_shadow_delete_log_group(client: &aws_sdk_cloudwatchlogs::Client) -> Test {
+fn test_logs_groups_delete_log_group(client: &aws_sdk_cloudwatchlogs::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteLogGroup",
@@ -561,7 +561,7 @@ fn test_logs_groups_shadow_delete_log_group(client: &aws_sdk_cloudwatchlogs::Cli
     }
 }
 
-fn test_logs_groups_shadow_create_log_stream(client: &aws_sdk_cloudwatchlogs::Client) -> Test {
+fn test_logs_groups_create_log_stream(client: &aws_sdk_cloudwatchlogs::Client) -> Test {
     Test {
         call: Call {
             op: "CreateLogStream",
@@ -622,7 +622,7 @@ fn test_logs_groups_shadow_create_log_stream(client: &aws_sdk_cloudwatchlogs::Cl
     }
 }
 
-fn test_logs_groups_shadow_tag_log_group(client: &aws_sdk_cloudwatchlogs::Client) -> Test {
+fn test_logs_groups_tag_log_group(client: &aws_sdk_cloudwatchlogs::Client) -> Test {
     Test {
         call: Call {
             op: "TagLogGroup",

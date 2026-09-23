@@ -17,6 +17,19 @@
       ]
     },
     {
+      "group": "logs-groups",
+      "scenario": "compat/model/authored/logs-groups.json",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ]
+    },
+    {
       "group": "logs-metric-filters",
       "scenario": "compat/model/authored/logs-metric-filters.json",
       "suites": [
@@ -1608,74 +1621,6 @@
         },
         {
           "name": "ListKeyRotations"
-        }
-      ]
-    },
-    {
-      "service": "cloudwatch-logs",
-      "name": "logs-groups-shadow",
-      "generated": true,
-      "scenario": "compat/model/authored/logs-groups.json",
-      "state": "candidate",
-      "shadowOf": "logs-groups",
-      "suites": [
-        "cli",
-        "dotnet-sdk",
-        "go-sdk",
-        "java-sdk",
-        "node-js-sdk",
-        "python-sdk",
-        "rust-sdk"
-      ],
-      "tests": [
-        {
-          "name": "CreateLogGroup"
-        },
-        {
-          "name": "DescribeLogGroups",
-          "depends": [
-            "CreateLogGroup"
-          ]
-        },
-        {
-          "name": "PutRetentionPolicy",
-          "depends": [
-            "CreateLogGroup"
-          ]
-        },
-        {
-          "name": "VerifyRetentionPolicy",
-          "op": "DescribeLogGroups",
-          "depends": [
-            "PutRetentionPolicy"
-          ]
-        },
-        {
-          "name": "DeleteRetentionPolicy",
-          "depends": [
-            "VerifyRetentionPolicy"
-          ]
-        },
-        {
-          "name": "DeleteLogGroup",
-          "depends": [
-            "DescribeLogGroups",
-            "DeleteRetentionPolicy",
-            "CreateLogStream",
-            "TagLogGroup"
-          ]
-        },
-        {
-          "name": "CreateLogStream",
-          "depends": [
-            "CreateLogGroup"
-          ]
-        },
-        {
-          "name": "TagLogGroup",
-          "depends": [
-            "CreateLogGroup"
-          ]
         }
       ]
     },

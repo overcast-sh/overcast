@@ -1,5 +1,8 @@
 """
 groups/cloudwatch_logs.py — CloudWatch Logs compatibility test implementations.
+
+logs-groups is not here: it is a ported group, resolved from
+compat/model/authored/logs-groups.json by the scenario backend (#1116).
 """
 
 from __future__ import annotations
@@ -10,102 +13,6 @@ from lib.clients import make_clients
 
 def _logs(ctx: TestContext):
     return make_clients(ctx.endpoint, ctx.region).logs
-
-
-# ── logs-groups ───────────────────────────────────────────────────────────────
-
-def setup_logs_groups(ctx: TestContext) -> None:
-    logs = _logs(ctx)
-    name = f"/compat/{ctx.run_id}"
-    logs.create_log_group(logGroupName=name)
-    ctx["log_group"] = name
-
-
-def teardown_logs_groups(ctx: TestContext) -> None:
-    name = ctx.get("log_group")
-    if name:
-        try:
-            _logs(ctx).delete_log_group(logGroupName=name)
-        except Exception:
-            pass
-
-
-def CreateLogGroup(ctx: TestContext) -> None:
-    logs = _logs(ctx)
-    name = f"/compat/{ctx.run_id}-create"
-    logs.create_log_group(logGroupName=name)
-    try:
-        resp = logs.describe_log_groups(logGroupNamePrefix=name)
-        groups = resp.get("logGroups", [])
-        if not any(g["logGroupName"] == name for g in groups):
-            raise AssertionError(f"CreateLogGroup: {name!r} not found after creation")
-    finally:
-        logs.delete_log_group(logGroupName=name)
-
-
-def DescribeLogGroups(ctx: TestContext) -> None:
-    logs = _logs(ctx)
-    name = ctx["log_group"]
-    resp = logs.describe_log_groups(logGroupNamePrefix=name)
-    groups = resp.get("logGroups", [])
-    if not any(g["logGroupName"] == name for g in groups):
-        raise AssertionError(f"DescribeLogGroups: {name!r} not found")
-
-
-def PutRetentionPolicy(ctx: TestContext) -> None:
-    logs = _logs(ctx)
-    name = ctx["log_group"]
-    logs.put_retention_policy(logGroupName=name, retentionInDays=7)
-    resp = logs.describe_log_groups(logGroupNamePrefix=name)
-    groups = [g for g in resp.get("logGroups", []) if g["logGroupName"] == name]
-    if not (groups and groups[0].get("retentionInDays") == 7):
-        raise AssertionError("PutRetentionPolicy: retention!=7")
-
-
-def VerifyRetentionPolicy(ctx: TestContext) -> None:
-    logs = _logs(ctx)
-    name = ctx["log_group"]
-    resp = logs.describe_log_groups(logGroupNamePrefix=name)
-    groups = resp.get("logGroups", [])
-    matching = [g for g in groups if g["logGroupName"] == name]
-    if not matching:
-        raise AssertionError(f"VerifyRetentionPolicy: log group {name!r} not found")
-    if matching[0].get("retentionInDays") != 7:
-        raise AssertionError(f"VerifyRetentionPolicy: expected 7 days, got {matching[0].get('retentionInDays')}")
-
-
-def DeleteRetentionPolicy(ctx: TestContext) -> None:
-    logs = _logs(ctx)
-    name = ctx["log_group"]
-    logs.delete_retention_policy(logGroupName=name)
-    resp = logs.describe_log_groups(logGroupNamePrefix=name)
-    groups = [g for g in resp.get("logGroups", []) if g["logGroupName"] == name]
-    if not (groups and "retentionInDays" not in groups[0]):
-        raise AssertionError("DeleteRetentionPolicy: retention still set")
-
-
-def DeleteLogGroup(ctx: TestContext) -> None:
-    logs = _logs(ctx)
-    name = f"/compat/{ctx.run_id}-del"
-    logs.create_log_group(logGroupName=name)
-    logs.delete_log_group(logGroupName=name)
-    resp = logs.describe_log_groups(logGroupNamePrefix=name)
-    groups = resp.get("logGroups", [])
-    if any(g["logGroupName"] == name for g in groups):
-        raise AssertionError(f"DeleteLogGroup: {name!r} still listed after deletion")
-
-
-def CreateLogStream(ctx: TestContext) -> None:
-    logs = _logs(ctx)
-    name = ctx["log_group"]
-    stream = f"stream-grp-{ctx.run_id}"
-    logs.create_log_stream(logGroupName=name, logStreamName=stream)
-
-
-def TagLogGroup(ctx: TestContext) -> None:
-    logs = _logs(ctx)
-    name = ctx["log_group"]
-    logs.tag_log_group(logGroupName=name, tags={"env": "test"})
 
 
 # ── logs-events ───────────────────────────────────────────────────────────────
@@ -194,14 +101,6 @@ def DeleteLogStream(ctx: TestContext) -> None:
 # ── ImplMap ───────────────────────────────────────────────────────────────────
 
 IMPLS = {
-    "logs-groups:CreateLogGroup": CreateLogGroup,
-    "logs-groups:DescribeLogGroups": DescribeLogGroups,
-    "logs-groups:PutRetentionPolicy": PutRetentionPolicy,
-    "logs-groups:VerifyRetentionPolicy": VerifyRetentionPolicy,
-    "logs-groups:DeleteRetentionPolicy": DeleteRetentionPolicy,
-    "logs-groups:CreateLogStream": CreateLogStream,
-    "logs-groups:TagLogGroup": TagLogGroup,
-    "logs-groups:DeleteLogGroup": DeleteLogGroup,
     "logs-events:PutLogEvents": PutLogEvents,
     "logs-events:GetLogEvents": GetLogEvents,
     "logs-events:FilterLogEvents": FilterLogEvents,
@@ -210,11 +109,9 @@ IMPLS = {
 }
 
 SETUP = {
-    "logs-groups": setup_logs_groups,
     "logs-events": setup_logs_events,
 }
 
 TEARDOWN = {
-    "logs-groups": teardown_logs_groups,
     "logs-events": teardown_logs_events,
 }

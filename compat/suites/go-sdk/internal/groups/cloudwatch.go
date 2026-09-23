@@ -16,26 +16,16 @@ func CloudWatchLogs(c *clients.Clients) ServiceGroup {
 	g := &cwlGroup{c: c}
 	return ServiceGroup{
 		Impls: map[string]harness.TestFn{
-			"logs-groups:CreateLogGroup":        g.CreateLogGroup,
-			"logs-groups:DescribeLogGroups":     g.DescribeLogGroups,
-			"logs-groups:DeleteLogGroup":        g.DeleteLogGroup,
-			"logs-events:DescribeLogStreams":    g.DescribeLogStreams,
-			"logs-events:PutLogEvents":          g.PutLogEvents,
-			"logs-events:GetLogEvents":          g.GetLogEvents,
-			"logs-events:FilterLogEvents":       g.FilterLogEvents,
-			"logs-events:DeleteLogStream":       g.DeleteLogStream,
-			"logs-groups:PutRetentionPolicy":    g.PutRetentionPolicy,
-			"logs-groups:VerifyRetentionPolicy": g.VerifyRetentionPolicy,
-			"logs-groups:DeleteRetentionPolicy": g.DeleteRetentionPolicy,
-			"logs-groups:CreateLogStream":       g.CreateLogStream,
-			"logs-groups:TagLogGroup":           g.TagLogGroup,
+			"logs-events:DescribeLogStreams": g.DescribeLogStreams,
+			"logs-events:PutLogEvents":       g.PutLogEvents,
+			"logs-events:GetLogEvents":       g.GetLogEvents,
+			"logs-events:FilterLogEvents":    g.FilterLogEvents,
+			"logs-events:DeleteLogStream":    g.DeleteLogStream,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"logs-groups": g.setupGroups,
 			"logs-events": g.setupEvents,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"logs-groups": g.teardownGroups,
 			"logs-events": g.teardownEvents,
 		},
 	}
@@ -44,193 +34,6 @@ func CloudWatchLogs(c *clients.Clients) ServiceGroup {
 type cwlGroup struct{ c *clients.Clients }
 
 func (g *cwlGroup) client() *cloudwatchlogs.Client { return g.c.CloudWatchLogs() }
-
-// ── logs-groups ───────────────────────────────────────────────────────────────
-
-func (g *cwlGroup) setupGroups(ctx context.Context, t *harness.TestContext) error {
-	name := fmt.Sprintf("/oc/%s/logs", t.RunID)
-	if _, err := g.client().CreateLogGroup(ctx, &cloudwatchlogs.CreateLogGroupInput{
-		LogGroupName: aws.String(name),
-	}); err != nil {
-		return err
-	}
-	t.Set("cwl_group", name)
-	return nil
-}
-
-func (g *cwlGroup) teardownGroups(ctx context.Context, t *harness.TestContext) error {
-	if name := t.GetString("cwl_group"); name != "" {
-		g.client().DeleteLogGroup(ctx, &cloudwatchlogs.DeleteLogGroupInput{LogGroupName: aws.String(name)}) //nolint:errcheck
-	}
-	return nil
-}
-
-func (g *cwlGroup) CreateLogGroup(ctx context.Context, t *harness.TestContext) error {
-	name := fmt.Sprintf("/oc/%s/create", t.RunID)
-	if _, err := g.client().CreateLogGroup(ctx, &cloudwatchlogs.CreateLogGroupInput{
-		LogGroupName: aws.String(name),
-	}); err != nil {
-		return err
-	}
-	// Verify group appears
-	resp, err := g.client().DescribeLogGroups(ctx, &cloudwatchlogs.DescribeLogGroupsInput{
-		LogGroupNamePrefix: aws.String(name),
-	})
-	if err != nil {
-		g.client().DeleteLogGroup(ctx, &cloudwatchlogs.DeleteLogGroupInput{LogGroupName: aws.String(name)}) //nolint:errcheck
-		return fmt.Errorf("CreateLogGroup: DescribeLogGroups verify failed: %w", err)
-	}
-	found := false
-	for _, lg := range resp.LogGroups {
-		if aws.ToString(lg.LogGroupName) == name {
-			found = true
-			break
-		}
-	}
-	g.client().DeleteLogGroup(ctx, &cloudwatchlogs.DeleteLogGroupInput{LogGroupName: aws.String(name)}) //nolint:errcheck
-	if !found {
-		return fmt.Errorf("CreateLogGroup: group %q not found", name)
-	}
-	return nil
-}
-
-func (g *cwlGroup) DescribeLogGroups(ctx context.Context, t *harness.TestContext) error {
-	name := t.GetString("cwl_group")
-	resp, err := g.client().DescribeLogGroups(ctx, &cloudwatchlogs.DescribeLogGroupsInput{
-		LogGroupNamePrefix: aws.String(name),
-	})
-	if err != nil {
-		return err
-	}
-	if len(resp.LogGroups) == 0 {
-		return fmt.Errorf("DescribeLogGroups: %q not found", name)
-	}
-	return nil
-}
-
-func (g *cwlGroup) DeleteLogGroup(ctx context.Context, t *harness.TestContext) error {
-	name := fmt.Sprintf("/oc/%s/del", t.RunID)
-	g.client().CreateLogGroup(ctx, &cloudwatchlogs.CreateLogGroupInput{LogGroupName: aws.String(name)}) //nolint:errcheck
-	_, err := g.client().DeleteLogGroup(ctx, &cloudwatchlogs.DeleteLogGroupInput{LogGroupName: aws.String(name)})
-	if err != nil {
-		return err
-	}
-	resp, dErr := g.client().DescribeLogGroups(ctx, &cloudwatchlogs.DescribeLogGroupsInput{
-		LogGroupNamePrefix: aws.String(name),
-	})
-	if dErr != nil {
-		return nil
-	}
-	for _, lg := range resp.LogGroups {
-		if aws.ToString(lg.LogGroupName) == name {
-			return fmt.Errorf("DeleteLogGroup: group %q still present", name)
-		}
-	}
-	return nil
-}
-
-func (g *cwlGroup) CreateLogStream(ctx context.Context, t *harness.TestContext) error {
-	group := t.GetString("cwl_group")
-	streamName := "test-stream"
-	if _, err := g.client().CreateLogStream(ctx, &cloudwatchlogs.CreateLogStreamInput{
-		LogGroupName:  aws.String(group),
-		LogStreamName: aws.String(streamName),
-	}); err != nil {
-		return err
-	}
-	t.Set("cwl_stream", streamName)
-	return nil
-}
-
-func (g *cwlGroup) TagLogGroup(ctx context.Context, t *harness.TestContext) error {
-	group := t.GetString("cwl_group")
-	_, err := g.client().TagLogGroup(ctx, &cloudwatchlogs.TagLogGroupInput{
-		LogGroupName: aws.String(group),
-		Tags:         map[string]string{"env": "test"},
-	})
-	return err
-}
-
-func (g *cwlGroup) DescribeLogStreams(ctx context.Context, t *harness.TestContext) error {
-	group := t.GetString("cwl_evt_group")
-	resp, err := g.client().DescribeLogStreams(ctx, &cloudwatchlogs.DescribeLogStreamsInput{
-		LogGroupName: aws.String(group),
-	})
-	if err != nil {
-		return err
-	}
-	if len(resp.LogStreams) == 0 {
-		return fmt.Errorf("DescribeLogStreams: expected ≥1 stream")
-	}
-	return nil
-}
-
-func (g *cwlGroup) PutRetentionPolicy(ctx context.Context, t *harness.TestContext) error {
-	group := t.GetString("cwl_group")
-	_, err := g.client().PutRetentionPolicy(ctx, &cloudwatchlogs.PutRetentionPolicyInput{
-		LogGroupName:    aws.String(group),
-		RetentionInDays: aws.Int32(7),
-	})
-	if err != nil {
-		return err
-	}
-	resp, err := g.client().DescribeLogGroups(ctx, &cloudwatchlogs.DescribeLogGroupsInput{
-		LogGroupNamePrefix: aws.String(group),
-	})
-	if err != nil {
-		return fmt.Errorf("PutRetentionPolicy: DescribeLogGroups verify failed: %w", err)
-	}
-	for _, lg := range resp.LogGroups {
-		if aws.ToString(lg.LogGroupName) == group {
-			if aws.ToInt32(lg.RetentionInDays) != 7 {
-				return fmt.Errorf("PutRetentionPolicy: expected retention=7, got %d", aws.ToInt32(lg.RetentionInDays))
-			}
-			return nil
-		}
-	}
-	return fmt.Errorf("PutRetentionPolicy: group %q not found", group)
-}
-
-func (g *cwlGroup) VerifyRetentionPolicy(ctx context.Context, t *harness.TestContext) error {
-	group := t.GetString("cwl_group")
-	resp, err := g.client().DescribeLogGroups(ctx, &cloudwatchlogs.DescribeLogGroupsInput{
-		LogGroupNamePrefix: aws.String(group),
-	})
-	if err != nil {
-		return err
-	}
-	for _, lg := range resp.LogGroups {
-		if aws.ToString(lg.LogGroupName) == group {
-			if lg.RetentionInDays == nil || *lg.RetentionInDays != 7 {
-				return fmt.Errorf("VerifyRetentionPolicy: expected 7, got %v", lg.RetentionInDays)
-			}
-			return nil
-		}
-	}
-	return fmt.Errorf("VerifyRetentionPolicy: log group %q not found", group)
-}
-
-func (g *cwlGroup) DeleteRetentionPolicy(ctx context.Context, t *harness.TestContext) error {
-	group := t.GetString("cwl_group")
-	_, err := g.client().DeleteRetentionPolicy(ctx, &cloudwatchlogs.DeleteRetentionPolicyInput{
-		LogGroupName: aws.String(group),
-	})
-	if err != nil {
-		return err
-	}
-	resp, dErr := g.client().DescribeLogGroups(ctx, &cloudwatchlogs.DescribeLogGroupsInput{
-		LogGroupNamePrefix: aws.String(group),
-	})
-	if dErr != nil {
-		return nil
-	}
-	for _, lg := range resp.LogGroups {
-		if aws.ToString(lg.LogGroupName) == group && aws.ToInt32(lg.RetentionInDays) != 0 {
-			return fmt.Errorf("DeleteRetentionPolicy: retention still set to %d", aws.ToInt32(lg.RetentionInDays))
-		}
-	}
-	return nil
-}
 
 // ── logs-events ───────────────────────────────────────────────────────────────
 
@@ -309,6 +112,20 @@ func (g *cwlGroup) FilterLogEvents(ctx context.Context, t *harness.TestContext) 
 	}
 	if len(resp.Events) == 0 {
 		return fmt.Errorf("FilterLogEvents: expected ≥1 matching event")
+	}
+	return nil
+}
+
+func (g *cwlGroup) DescribeLogStreams(ctx context.Context, t *harness.TestContext) error {
+	group := t.GetString("cwl_evt_group")
+	resp, err := g.client().DescribeLogStreams(ctx, &cloudwatchlogs.DescribeLogStreamsInput{
+		LogGroupName: aws.String(group),
+	})
+	if err != nil {
+		return err
+	}
+	if len(resp.LogStreams) == 0 {
+		return fmt.Errorf("DescribeLogStreams: expected ≥1 stream")
 	}
 	return nil
 }
