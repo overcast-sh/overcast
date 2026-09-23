@@ -1,5 +1,5 @@
 // Writes the Parquet fixtures the S3 preview tests read, into
-// src/features/s3/__fixtures__/:
+// src/lib/data-sources/__fixtures__/:
 // - orders.parquet — SNAPPY, hyparquet's built-in codec;
 // - orders.zstd.parquet — the same rows as ZSTD, the codec Iceberg and S3
 //   Tables write by default, compressed with Node's own zlib (Node 22.15+).
@@ -24,7 +24,7 @@ import { fileURLToPath } from "node:url"
 import { ByteWriter, parquetWrite } from "hyparquet-writer"
 
 const here = dirname(fileURLToPath(import.meta.url))
-const fixtures = resolve(here, "../src/features/s3/__fixtures__")
+const fixtures = resolve(here, "../src/lib/data-sources/__fixtures__")
 
 const columnData = [
   { name: "order_id", data: [1001n, 1002n, 1003n, 1004n, 1005n] },

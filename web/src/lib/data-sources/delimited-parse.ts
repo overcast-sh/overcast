@@ -1,38 +1,34 @@
-import {
-  PREVIEW_COLUMN_LIMIT,
-  PREVIEW_ROW_LIMIT,
-  isNumericColumn,
-  roundEstimate,
-  type PreviewTableModel,
-} from "./preview-table"
+import { bomLength } from "./byte-order-mark"
 
 /**
- * CSV and TSV for the S3 preview: an RFC 4180 reader plus the table built
- * from it.
+ * CSV and TSV: an RFC 4180 reader, used by the data worker to parse the
+ * header and then one block of rows at a time, plus delimiter sniffing.
  *
  * Hand-written rather than a dependency because the job is small and bounded
- * — at most 1 MiB of text, read once, into strings — and every candidate
- * library carries what this does not need (streaming, workers, type casting,
- * a writer). The parser is one state machine over the text; what it accepts
- * is spelled out on `parseDelimited`.
+ * — one block of text between two index offsets, read once, into strings —
+ * and every candidate library carries what this does not need (streaming,
+ * workers, type casting, a writer). The parser is one state machine over the
+ * text; what it accepts is spelled out on `parseDelimited`.
  */
 
 export type Delimiter = "," | "\t" | ";" | "|"
 
 const CANDIDATES: readonly Delimiter[] = [",", "\t", ";", "|"]
 
-/** Characters in one field before the rest is dropped (see `DelimitedParse.clippedFields`). */
+/** Why a text is not CSV: the one failure both the parser and the indexer detect. */
+export const UNCLOSED_QUOTE =
+  "A quoted field is never closed, so the file cannot be split into rows reliably."
+
+/**
+ * Characters kept of one field. A 1 MiB single-field row is a legal CSV, and
+ * a block of them would hold the whole file in memory; the grid shows a line
+ * of each and its inspector a screenful, so the rest is dropped here.
+ */
 export const MAX_FIELD_CHARS = 64 * 1024
 
 export interface DelimitedParse {
   /** Every complete record read, header included, up to `maxRecords`. */
   records: string[][]
-  /** Complete records in the text, counted past `maxRecords`. */
-  recordCount: number
-  /** Characters of the text the counted records span — the basis of a size estimate. */
-  consumedChars: number
-  /** Fields longer than `MAX_FIELD_CHARS`, kept only up to it. */
-  clippedFields: number
   /**
    * Why the text is not CSV after all, when it is not. The table is withheld
    * and the raw text shown with this as the note, rather than a table that
@@ -43,7 +39,7 @@ export interface DelimitedParse {
 
 interface ParseOptions {
   delimiter: string
-  /** Records kept in `records`; the rest are only counted. */
+  /** Records read; parsing stops once this many are complete. */
   maxRecords: number
   /**
    * The text is the opening window of a longer object. Its last record is
@@ -74,9 +70,6 @@ interface ParseOptions {
 export function parseDelimited(text: string, options: ParseOptions): DelimitedParse {
   const { delimiter, maxRecords, truncated } = options
   const records: string[][] = []
-  let recordCount = 0
-  let consumedChars = 0
-  let clippedFields = 0
 
   let record: string[] = []
   let field = ""
@@ -86,7 +79,7 @@ export function parseDelimited(text: string, options: ParseOptions): DelimitedPa
   // Whether the field just ended was quoted: `""` on a line of its own is a
   // record holding one empty string, where an empty line is no record at all.
   let lastFieldWasQuoted = false
-  let i = text.charCodeAt(0) === 0xfeff ? 1 : 0
+  let i = bomLength(text)
   const n = text.length
 
   const append = (chunk: string) => {
@@ -102,24 +95,19 @@ export function parseDelimited(text: string, options: ParseOptions): DelimitedPa
   const endField = () => {
     lastFieldWasQuoted = quotedField
     record.push(field)
-    if (fieldClipped) clippedFields++
     field = ""
     fieldClipped = false
     quotedField = false
   }
-  const endRecord = (end: number) => {
+  const endRecord = () => {
     endField()
     // A blank line is one empty unquoted field; it separates, it is not data.
     const blank = record.length === 1 && record[0] === "" && !lastFieldWasQuoted
-    if (!blank) {
-      if (records.length < maxRecords) records.push(record)
-      recordCount++
-    }
-    consumedChars = end
+    if (!blank) records.push(record)
     record = []
   }
 
-  while (i < n) {
+  while (i < n && records.length < maxRecords) {
     if (inQuotes) {
       // Copy the run up to the next quote in one step: fields are mostly
       // plain text, and char-at-a-time concatenation is the slow path.
@@ -143,9 +131,8 @@ export function parseDelimited(text: string, options: ParseOptions): DelimitedPa
       endField()
       i++
     } else if (c === "\n" || c === "\r") {
-      const next = c === "\r" && text[i + 1] === "\n" ? i + 2 : i + 1
-      endRecord(next)
-      i = next
+      endRecord()
+      i = c === "\r" && text[i + 1] === "\n" ? i + 2 : i + 1
     } else if (c === '"' && field.length === 0 && !quotedField) {
       inQuotes = true
       quotedField = true
@@ -166,23 +153,13 @@ export function parseDelimited(text: string, options: ParseOptions): DelimitedPa
     }
   }
 
-  if (inQuotes && !truncated) {
-    return {
-      records,
-      recordCount,
-      consumedChars,
-      clippedFields,
-      malformed: "A quoted field is never closed, so the file cannot be split into rows reliably.",
-    }
-  }
+  if (inQuotes && !truncated) return { records, malformed: UNCLOSED_QUOTE }
   // The text ran out without a final line break. For a whole object that is
   // just a file with no trailing newline; for a truncated window it is the
   // record the cut went through, and it is dropped.
   const pending = record.length > 0 || field.length > 0 || quotedField
-  if (pending && !truncated && !inQuotes) {
-    endRecord(n)
-  }
-  return { records, recordCount, consumedChars, clippedFields }
+  if (pending && !truncated && !inQuotes && records.length < maxRecords) endRecord()
+  return { records }
 }
 
 /**
@@ -217,7 +194,7 @@ export function sniffDelimiter(text: string, preferred?: Delimiter): Delimiter {
 /** Up to ten complete lines, quote-aware enough that an embedded newline does not split one. */
 function parseSampleLines(text: string): string[] {
   const lines: string[] = []
-  let start = text.charCodeAt(0) === 0xfeff ? 1 : 0
+  let start = bomLength(text)
   let inQuotes = false
   for (let i = start; i < text.length && lines.length < 10; i++) {
     const c = text[i]
@@ -241,87 +218,12 @@ function fieldCount(line: string, delimiter: string): number {
   return count
 }
 
-export type DelimitedTableResult =
-  | { ok: true; table: PreviewTableModel; delimiter: Delimiter; clippedFields: number }
-  | { ok: false; reason: string }
-
-interface TableOptions {
-  /** The delimiter the key or content type implies; the text can overrule it. */
-  preferred: Delimiter
-  /** The text is the opening window of a longer object. */
-  truncated: boolean
-  /** The whole object's size in bytes, for estimating how many rows it holds. */
-  objectBytes?: number
-}
-
 /**
- * Delimited text as a preview table: the first record is the header, the next
- * `PREVIEW_ROW_LIMIT` are the rows.
- *
- * Ragged rows are padded or widened rather than refused — short rows are
- * common in hand-edited files, and a row longer than the header gets its extra
- * columns named `column_N`. Blank header names get the same treatment, and a
- * repeated one is suffixed, so every column can be told apart.
+ * Names for a header record: blank names become `column_N` and a repeated
+ * name is suffixed, so every column can be told apart. `width` may exceed the
+ * header — a row longer than it gets `column_N` for the extra fields.
  */
-export function delimitedTable(text: string, options: TableOptions): DelimitedTableResult {
-  const delimiter = sniffDelimiter(text, options.preferred)
-  const parsed = parseDelimited(text, {
-    delimiter,
-    maxRecords: PREVIEW_ROW_LIMIT + 1,
-    truncated: options.truncated,
-  })
-  if (parsed.malformed) return { ok: false, reason: parsed.malformed }
-  if (parsed.records.length === 0) {
-    return {
-      ok: false,
-      reason: options.truncated
-        ? "The first row is longer than the preview window, so no complete row could be read."
-        : "The file has no rows.",
-    }
-  }
-  const [header, ...body] = parsed.records
-  const width = Math.max(header.length, ...body.map((r) => r.length))
-  const shownWidth = Math.min(width, PREVIEW_COLUMN_LIMIT)
-  const names = columnNames(header, shownWidth)
-  const rows = body.map((r) => {
-    const row: string[] = r.slice(0, shownWidth)
-    while (row.length < shownWidth) row.push("")
-    return row
-  })
-
-  const dataRecords = parsed.recordCount - 1
-  let totalRows: number | undefined = dataRecords
-  let totalIsEstimate = false
-  if (options.truncated) {
-    totalIsEstimate = true
-    // Rows read so far, scaled by how much of the object the text covered.
-    // Characters stand in for bytes: exact for ASCII, an undercount of the
-    // ratio for multi-byte text, and this is an estimate either way.
-    totalRows =
-      options.objectBytes && parsed.consumedChars > 0
-        ? roundEstimate((dataRecords * options.objectBytes) / parsed.consumedChars)
-        : undefined
-  }
-
-  return {
-    ok: true,
-    delimiter,
-    clippedFields: parsed.clippedFields,
-    table: {
-      columns: names.map((name, index) => ({
-        name,
-        numeric: isNumericColumn(rows.map((r) => r[index])),
-      })),
-      rows,
-      totalRows,
-      totalIsEstimate,
-      truncatedByBytes: options.truncated,
-      hiddenColumns: width - shownWidth,
-    },
-  }
-}
-
-function columnNames(header: readonly string[], width: number): string[] {
+export function columnNames(header: readonly string[], width: number): string[] {
   const seen = new Map<string, number>()
   return Array.from({ length: width }, (_, index) => {
     const raw = (header[index] ?? "").trim()
@@ -330,4 +232,14 @@ function columnNames(header: readonly string[], width: number): string[] {
     seen.set(base, count + 1)
     return count === 0 ? base : `${base}_${count + 1}`
   })
+}
+
+/** Records to columns, padding a short record with empty strings. */
+export function recordFields(records: readonly string[][], width: number): string[][] {
+  const columns = Array.from({ length: width }, () => new Array<string>(records.length))
+  for (let r = 0; r < records.length; r++) {
+    const record = records[r]
+    for (let c = 0; c < width; c++) columns[c][r] = record[c] ?? ""
+  }
+  return columns
 }

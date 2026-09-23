@@ -25,6 +25,8 @@ interface CheckboxFilterDropdownProps {
   triggerLabel: string
   /** Which edge the menu is anchored to. `"end"` for a trigger sitting at the right of its row. */
   align?: "start" | "end"
+  /** Extra classes for the trigger — a denser toolbar sets its height. */
+  triggerClassName?: string
 }
 
 /**
@@ -49,6 +51,7 @@ export function CheckboxFilterDropdown({
   onHideAll,
   triggerLabel,
   align = "start",
+  triggerClassName,
 }: CheckboxFilterDropdownProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState("")
@@ -79,6 +82,7 @@ export function CheckboxFilterDropdown({
           className={cn(
             "h-9 gap-1 border border-border text-xs",
             selected.size > 0 && model === "show" && "bg-fg/5 font-medium",
+            triggerClassName,
           )}
         >
           {triggerLabel}
@@ -116,7 +120,10 @@ export function CheckboxFilterDropdown({
           <div aria-hidden className="mx-2 h-px bg-border" />
           <div className="px-2 py-1">
             <div className="relative">
-              <Search aria-hidden className="absolute top-1/2 left-2 h-3 w-3 -translate-y-1/2 text-fg-muted" />
+              <Search
+                aria-hidden
+                className="absolute top-1/2 left-2 h-3 w-3 -translate-y-1/2 text-fg-muted"
+              />
               <Input
                 ref={searchRef}
                 aria-label={`Search ${triggerLabel}`}

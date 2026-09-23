@@ -1,3 +1,4 @@
+import { formatBytes } from "@/lib/format"
 import { awsClients } from "../aws-clients"
 import { apiFetch, endpointHeaders, API_BASE, endpointResolver } from "./base"
 import {
@@ -39,13 +40,13 @@ import type {
 
 /**
  * How much of an object a text preview reads — one ranged GET for the opening
- * window. Parquet previews read by range too, but by the file's own structure
- * rather than against this cap.
+ * window. The data grid reads CSV, JSON Lines and Parquet by range as it
+ * scrolls, not against this cap; its raw-text view is this window.
  */
 export const OBJECT_PREVIEW_BYTES = 1024 * 1024
 
-/** `OBJECT_PREVIEW_BYTES` as the preview labels say it. */
-export const OBJECT_PREVIEW_WINDOW = `${OBJECT_PREVIEW_BYTES / (1024 * 1024)} MiB`
+/** `OBJECT_PREVIEW_BYTES` as the preview labels say it — in the units every size beside it uses. */
+export const OBJECT_PREVIEW_WINDOW = formatBytes(OBJECT_PREVIEW_BYTES)
 
 /** Base path of one bucket's object routes on the BFF. */
 const objectsPath = (bucket: string) =>

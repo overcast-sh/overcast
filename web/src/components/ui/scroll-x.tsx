@@ -73,10 +73,13 @@ function ScrollEdge({
   side,
   show,
   className,
+  style,
 }: {
   side: "start" | "end"
   show: boolean
   className?: string
+  /** Where the edge sits when it is not flush with the container — past a pinned column. */
+  style?: React.CSSProperties
 }) {
   return (
     <div
@@ -87,8 +90,9 @@ function ScrollEdge({
         show ? "opacity-100" : "opacity-0",
         className,
       )}
+      style={style}
     />
   )
 }
 
-export { ScrollX }
+export { ScrollEdge, ScrollX }
