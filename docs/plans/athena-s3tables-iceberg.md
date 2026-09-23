@@ -106,9 +106,42 @@ choice is between two options:
 - **(a) `github.com/apache/iceberg-go`.** It is pure Go and already implements the metadata builder and the update and requirement semantics, but it pulls in arrow-go and adds binary weight.
 - **(b) A hand-rolled model** covering the metadata v2 fields and the ~15 REST update actions.
 
-Recommend spiking (a) and measuring the binary delta. If the delta is more than a
-few MB, fall back to (b). Only metadata is touched here; data files are
-written by the engine or the client, never by Overcast.
+Only metadata is touched here; data files are written by the engine or the
+client, never by Overcast.
+
+**Decided: (b), hand-rolled** (#2068, measured 2026-09-23 against iceberg-go
+v0.6.0, linux/amd64, `CGO_ENABLED=0 -trimpath -s -w`).
+
+- **iceberg-go is complete for our needs.** It implements all 14 updates and all 8 requirements, the metadata and snapshot logs, and format v3.
+- **But nothing narrower than its `table` package gives the metadata builder, and `table` also carries the Arrow scanner and writers.** The measured costs:
+
+  | | Without iceberg-go | With iceberg-go |
+  | --- | --- | --- |
+  | Full binary | 64.3 MB | 97.2 MB (**+33 MB, +51%**) |
+  | Slim binary | 56.7 MB | 89.7 MB (**+33 MB, +58%**) |
+  | Module dependencies | 95 | 334 |
+  | Startup, in every process including CLI commands | — | +56 ms and 33 MB of allocations (`table/substrait`'s init) |
+
+- **Even the root package alone costs +3.9 MB.** Its REST request types are unexported, so importing it would still leave us writing those types ourselves.
+- **Estimated cost of hand-rolling:** ~1.3k lines of production code plus ~1k of tests (3–5 days) in `internal/icebergmeta`.
+- **The work has to handle these rules:**
+  - A value of `-1` in `set-current-schema`, `set-default-spec` or `set-default-sort-order` means "the one added last in this commit".
+  - A new partition spec or sort order that matches an existing one reuses its ID; partition field IDs start at 1000.
+  - Sequence numbers only ever increase, and `last-updated-ms` never goes backwards.
+  - `remove-snapshots` also removes refs that point at those snapshots and prunes the snapshot log.
+  - The metadata log is trimmed to `write.metadata.previous-versions-max`.
+  - The format version can only go up: v1 to v2 adds the UUID and last sequence number, and v3 adds `next-row-id`.
+- **Verification:** golden fixtures captured from PyIceberg and Spark, plus the Phase 5 integration tests. If iceberg-go is wanted as a differential test oracle, it lives in a separate test module, because even a `_test.go` import would put it in the main `go.mod`.
+
+The interface hides the choice:
+
+```go
+func New(spec CreateSpec, now time.Time) (*Metadata, error)   // schema/spec/order as Iceberg JSON
+func Parse(b []byte) (*Metadata, error)
+func Commit(base *Metadata, currentLocation string, req CommitRequest, now time.Time) (*Metadata, error) // base==nil: staged/new
+func NextMetadataLocation(tableLocation string, version int) string
+// ErrRequirementFailed → 409 CommitFailedException; ErrInvalidUpdate → 400
+```
 
 ## Phases
 
