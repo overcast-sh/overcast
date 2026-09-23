@@ -67,7 +67,7 @@ template, as CDK does, are re-hosted onto a reachable origin by
 | --- | --- |
 | REST v1 integrations | `AWS_PROXY`, `AWS` (non-proxy Lambda), `HTTP_PROXY`, `HTTP` and `MOCK` all execute |
 | HTTP v2 integrations | `AWS_PROXY` and `HTTP_PROXY` execute |
-| Authorizers | `COGNITO_USER_POOLS` (v1) and `JWT` (v2) are verified: RS256 signature, expiry, issuer and audience |
+| Authorizers | `COGNITO_USER_POOLS` (v1) and `JWT` (v2) are verified: RS256 signature, expiry, issuer and audience. `TOKEN`/`REQUEST` (v1) and `REQUEST` (v2) invoke the configured Lambda function and evaluate its response — see below |
 | Usage plans | Measured on every request — see below |
 | Stages and deployments | Deployments, stages, stage variables, and per-stage routing on both invoke forms |
 | Keys | API keys, usage plans, usage plan keys, and `GetUsage`'s daily `[used, remaining]` log |
@@ -77,7 +77,7 @@ template, as CDK does, are re-hosted onto a reachable origin by
 | Area                       | On AWS                                     | Overcast                                                                                                                                      |
 | -------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | Mapping templates          | Evaluated as VTL                           | Not evaluated — a `MOCK` integration returns its integration response's `application/json` template verbatim; other values pass through as-is |
-| Lambda and IAM authorizers | Enforced on every request                  | `TOKEN`, `REQUEST` and IAM authorizers are stored but not enforced at request time                                                            |
+| IAM authorizers            | Enforced on every request                  | `AWS_IAM` methods/routes are stored but not enforced at request time — the SigV4 signature they require isn't verified                        |
 | Request validation         | A request validator rejects a bad request  | Request validators are stored but not enforced                                                                                                |
 | WebSocket APIs             | Execution and connection management        | `WEBSOCKET` is accepted on creation; execution is not implemented, and the connection-management route returns `501`                          |
 | Usage counters             | A quota is carried across the whole period | In memory, so a restart resets them                                                                                                           |
@@ -114,12 +114,26 @@ A rejected request consumes neither quota nor a token, matching AWS. A plan
 configuring neither a throttle nor a quota never rejects anything, whatever the
 flag says.
 
+## Lambda authorizers
+
+A `TOKEN` or `REQUEST` authorizer (REST v1) or a `REQUEST` authorizer (HTTP
+v2) invokes the configured function and evaluates the IAM policy it returns
+against the request's `execute-api:Invoke` ARN — `Deny`, or no statement
+matching at all, answers `403`
+`{"Message":"User is not authorized to access this resource with an explicit
+deny"}`; a function that throws exactly `Unauthorized` answers `401`
+`{"message":"Unauthorized"}`; any other invocation failure answers `500`. An
+HTTP v2 authorizer using payload format `2.0` with `enableSimpleResponses` may
+return `{isAuthorized, context}` instead of a policy. `authorizerResultTtlInSeconds`
+caches the decision per identity source value, shared across every
+route/method that uses the authorizer, matching AWS.
+
 ## Gotchas
 
 > [!WARNING]
-> An unenforced authorizer is an open endpoint. A route protected only by a
-> Lambda or IAM authorizer is reachable without credentials here, so an
-> authorization test that passes locally proves nothing.
+> An unenforced authorizer is an open endpoint. A route protected only by an
+> `AWS_IAM` authorizer is reachable without credentials here, so an
+> authorization test that passes locally proves nothing for that one case.
 
 <!-- BEGIN overcast:capabilities -->
 

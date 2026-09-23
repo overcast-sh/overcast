@@ -40,6 +40,12 @@ type Handler struct {
 	// see usage.go.
 	usage *usageTracker
 
+	// lambdaAuthzCache holds Lambda TOKEN/REQUEST authorizer decisions keyed
+	// on (authorizer ID, identity source values), honouring
+	// authorizerResultTtlInSeconds. In-memory only, no background goroutine —
+	// see handler_lambda_auth.go.
+	lambdaAuthzCache *lambdaAuthorizerCache
+
 	// metrics is nil until Service.InitMetrics is called (or when automatic
 	// collection is disabled — see config.ServiceMetricsMode). Every call
 	// site in metrics_apigateway.go is nil-safe, matching Lambda's
@@ -91,10 +97,11 @@ func newHandler(cfg *config.Config, store state.Store, log *serviceutil.ServiceL
 		store: newAPIGatewayStore(store, cfg.Region),
 		log:   log,
 		clk:   clk,
-		// Allocating the tracker's map is not blocking work, so it stays in
-		// the constructor rather than behind a sync.Once — see
+		// Allocating these maps is not blocking work, so they stay in the
+		// constructor rather than behind a sync.Once — see
 		// docs/dev/performance.md § Startup budget.
-		usage: newUsageTracker(),
+		usage:            newUsageTracker(),
+		lambdaAuthzCache: newLambdaAuthorizerCache(),
 	}
 }
 
