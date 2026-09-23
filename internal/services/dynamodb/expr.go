@@ -15,6 +15,7 @@ package dynamodb
 // projection, key-condition).
 
 import (
+	"encoding/base64"
 	"fmt"
 	"strconv"
 	"strings"
@@ -406,11 +407,45 @@ func attrType(v attrValue) string {
 // extractScalar returns the scalar string from an S, N, or B attribute value.
 func extractScalar(v attrValue) string {
 	for _, val := range v {
-		if s, ok := val.(string); ok {
+		if s, ok := scalarString(val); ok {
 			return s
 		}
 	}
 	return ""
+}
+
+// scalarString returns the wire-string form of a decoded scalar
+// AttributeValue payload (an S, N, or B member's raw value) — the single
+// place extractScalar and extractKeyValue (store.go) both go through so a
+// Binary attribute resolves to the identical string regardless of which
+// protocol decoded the request (issue #1999).
+//
+// JSON has no binary wire type, so DynamoDB JSON always carries a "B" value
+// as base64 text, which encoding/json decodes into a Go string like any
+// other JSON string. Smithy RPC v2 CBOR has a genuine byte-string wire type,
+// and the CBOR codec (internal/protocol/codec/cbor.go) correctly leaves a
+// decoded "B" payload as a raw []byte rather than base64-encoding it, since
+// that is the real CBOR wire form a client sent. Before this, extractScalar
+// and extractKeyValue recognised only the `string` case: a CBOR-decoded
+// []byte read as an empty value, so key_schema.go's empty-key-value rule
+// (issue #1707, rule 3) rejected every PutItem/GetItem/Query/DeleteItem/
+// BatchGetItem/BatchWriteItem call against a Binary key sent over CBOR,
+// although the byte-identical request succeeded over JSON.
+//
+// A []byte payload is base64-encoded here to the same text an equivalent
+// JSON request would have decoded to, so the two protocols agree on the
+// stored key string (encodeStorageKeyComponent, key_order.go) and on every
+// scalar comparison (equality, BETWEEN, begins_with, sort order) for the
+// identical underlying bytes, whichever protocol wrote or reads the item.
+func scalarString(raw any) (string, bool) {
+	switch v := raw.(type) {
+	case string:
+		return v, true
+	case []byte:
+		return base64.StdEncoding.EncodeToString(v), true
+	default:
+		return "", false
+	}
 }
 
 // extractList returns the list elements from an L attribute value.
