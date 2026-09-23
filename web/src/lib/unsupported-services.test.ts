@@ -28,6 +28,11 @@ function backendTiers(): Map<string, string> {
   )
 }
 
+/** Registered at inert tier or above: the backend answers calls. Absent means not registered. */
+function isEmulated(tier: string | undefined): boolean {
+  return tier !== undefined && tier !== "stub" && tier !== "unsupported"
+}
+
 describe("unsupported-services CATALOG", () => {
   const tiers = backendTiers()
 
@@ -49,19 +54,15 @@ describe("unsupported-services CATALOG", () => {
     "organizations",
     "route53",
     "transfer",
-  ])(
-    "does not list %s, which the backend emulates",
-    (id) => {
-      expect(["stub", "unsupported", undefined]).not.toContain(tiers.get(id))
-      expect(CATALOG_BY_ID[id]).toBeUndefined()
-    },
-  )
+  ])("does not list %s, which the backend emulates", (id) => {
+    expect(isEmulated(tiers.get(id))).toBe(true)
+    expect(CATALOG_BY_ID[id]).toBeUndefined()
+  })
 
   it("lists no service the backend implements at inert tier or above", () => {
-    const implemented = CATALOG.filter((entry) => {
-      const tier = tiers.get(entry.id)
-      return tier !== undefined && tier !== "stub" && tier !== "unsupported"
-    }).map((entry) => entry.id)
+    const implemented = CATALOG.filter((entry) => isEmulated(tiers.get(entry.id))).map(
+      (entry) => entry.id,
+    )
 
     expect(implemented).toEqual([])
   })
