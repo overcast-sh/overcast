@@ -284,6 +284,32 @@ interface RowSource {
 - **The header and the row-number column stay in place.** Edge fades show when there is more content to either side.
 - **Keyboard:** arrow keys move a cell cursor, which scrolls the grid as needed. `⌘C` copies the selection as TSV, and Home and End jump to the first and last row.
 
+### Fetching: range requests and streaming
+
+Every byte arrives over one of two paths:
+
+- a **ranged `GET`** for random access;
+- a **streamed `GET`** (`fetch` → `ReadableStream`) for the CSV indexer.
+
+Both go straight to the emulator's S3 endpoint with the SDK's presigned-URL shape, or through the BFF download route if that is what the preview uses today. Whichever one is used, it must pass `Range` through unchanged and answer `206` with `Content-Range`. A test pins that.
+
+How reads are scheduled:
+
+- **Coalesce, then cap.** Parquet column chunks for one row group often sit next to each other, so adjacent or near-adjacent ranges (gap under 64 KB) merge into one request. At most 4 requests are in flight at once: browsers allow about 6 HTTP/1.1 connections per host, and the rest of the console needs some.
+- **Scroll velocity decides what gets fetched.**
+  - While the user drags the scrollbar or flings, the grid renders skeleton rows and fetches nothing for the blocks it flies past.
+  - When the scroll settles (about 120 ms idle), or slows below a threshold, it fetches the blocks now in view first, then prefetches ahead in the scroll direction.
+  - Blocks requested for positions already scrolled past are aborted.
+
+  Without this, dragging from row 0 to row 4,000,000 would queue thousands of range requests.
+- **Paint the moment data arrives.** Parquet rows come back through hyparquet's `onPage` or `onChunk`, and CSV blocks the moment they parse, so a slow block never holds up the rows around it.
+- **Two cache layers:**
+  - raw byte ranges (bounded, for re-decoding after a column is scrolled back into view);
+  - decoded row blocks (the LRU in *Memory budget* below).
+
+  A block is keyed by object ETag and range, so an object overwritten while open is re-read, not served stale. The grid shows *file changed — reload*.
+- **Open fast, read small.** The first request for Parquet reads only the footer: a small suffix range, then the exact footer length. For CSV, the first 64 KB range serves the first screen and the header while the streaming indexer starts separately. Neither waits for the other.
+
 ### Memory budget and device adaptation
 
 - **Decoded rows live in an LRU of fixed-size blocks** (1,000 rows by default), capped by bytes, not rows.
