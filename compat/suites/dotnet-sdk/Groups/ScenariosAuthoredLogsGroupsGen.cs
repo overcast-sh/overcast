@@ -15,7 +15,7 @@ namespace OvercastCompat.Groups;
 /// </remarks>
 internal sealed class ScenariosAuthoredLogsGroups : IServiceGroup
 {
-    private static readonly ScenarioGroup GroupLogsGroupsShadow = new("logs-groups-shadow", "compat/model/authored/logs-groups.json");
+    private static readonly ScenarioGroup GroupLogsGroups = new("logs-groups", "compat/model/authored/logs-groups.json");
 
     private readonly Lazy<AmazonCloudWatchLogsClient> _client;
 
@@ -35,30 +35,30 @@ internal sealed class ScenariosAuthoredLogsGroups : IServiceGroup
 
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["logs-groups-shadow:CreateLogGroup"] = TestLogsGroupsShadowCreateLogGroup,
-        ["logs-groups-shadow:DescribeLogGroups"] = TestLogsGroupsShadowDescribeLogGroups,
-        ["logs-groups-shadow:PutRetentionPolicy"] = TestLogsGroupsShadowPutRetentionPolicy,
-        ["logs-groups-shadow:VerifyRetentionPolicy"] = TestLogsGroupsShadowVerifyRetentionPolicy,
-        ["logs-groups-shadow:DeleteRetentionPolicy"] = TestLogsGroupsShadowDeleteRetentionPolicy,
-        ["logs-groups-shadow:DeleteLogGroup"] = TestLogsGroupsShadowDeleteLogGroup,
-        ["logs-groups-shadow:CreateLogStream"] = TestLogsGroupsShadowCreateLogStream,
-        ["logs-groups-shadow:TagLogGroup"] = TestLogsGroupsShadowTagLogGroup,
+        ["logs-groups:CreateLogGroup"] = TestLogsGroupsCreateLogGroup,
+        ["logs-groups:DescribeLogGroups"] = TestLogsGroupsDescribeLogGroups,
+        ["logs-groups:PutRetentionPolicy"] = TestLogsGroupsPutRetentionPolicy,
+        ["logs-groups:VerifyRetentionPolicy"] = TestLogsGroupsVerifyRetentionPolicy,
+        ["logs-groups:DeleteRetentionPolicy"] = TestLogsGroupsDeleteRetentionPolicy,
+        ["logs-groups:DeleteLogGroup"] = TestLogsGroupsDeleteLogGroup,
+        ["logs-groups:CreateLogStream"] = TestLogsGroupsCreateLogStream,
+        ["logs-groups:TagLogGroup"] = TestLogsGroupsTagLogGroup,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["logs-groups-shadow"] = SetupLogsGroupsShadow,
+        ["logs-groups"] = SetupLogsGroups,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["logs-groups-shadow"] = TeardownLogsGroupsShadow,
+        ["logs-groups"] = TeardownLogsGroups,
     };
 
     private AmazonCloudWatchLogsClient Cl() => _client.Value;
 
-    private Task SetupLogsGroupsShadow(TestContext t) =>
-        GroupLogsGroupsShadow.RunSetupAsync(t,
+    private Task SetupLogsGroups(TestContext t) =>
+        GroupLogsGroups.RunSetupAsync(t,
             new ScenarioCall
             {
                 Op = "CreateLogGroup",
@@ -74,8 +74,8 @@ internal sealed class ScenariosAuthoredLogsGroups : IServiceGroup
             }
         );
 
-    private Task TeardownLogsGroupsShadow(TestContext t) =>
-        GroupLogsGroupsShadow.RunTeardownAsync(t,
+    private Task TeardownLogsGroups(TestContext t) =>
+        GroupLogsGroups.RunTeardownAsync(t,
             new ScenarioCall
             {
                 Op = "DeleteLogGroup",
@@ -104,7 +104,7 @@ internal sealed class ScenariosAuthoredLogsGroups : IServiceGroup
             }
         );
 
-    private Task TestLogsGroupsShadowCreateLogGroup(TestContext t) => GroupLogsGroupsShadow.RunTestAsync(t, "CreateLogGroup", new ScenarioTest
+    private Task TestLogsGroupsCreateLogGroup(TestContext t) => GroupLogsGroups.RunTestAsync(t, "CreateLogGroup", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -141,7 +141,7 @@ internal sealed class ScenariosAuthoredLogsGroups : IServiceGroup
         ],
     });
 
-    private Task TestLogsGroupsShadowDescribeLogGroups(TestContext t) => GroupLogsGroupsShadow.RunTestAsync(t, "DescribeLogGroups", new ScenarioTest
+    private Task TestLogsGroupsDescribeLogGroups(TestContext t) => GroupLogsGroups.RunTestAsync(t, "DescribeLogGroups", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -166,7 +166,7 @@ internal sealed class ScenariosAuthoredLogsGroups : IServiceGroup
         ],
     });
 
-    private Task TestLogsGroupsShadowPutRetentionPolicy(TestContext t) => GroupLogsGroupsShadow.RunTestAsync(t, "PutRetentionPolicy", new ScenarioTest
+    private Task TestLogsGroupsPutRetentionPolicy(TestContext t) => GroupLogsGroups.RunTestAsync(t, "PutRetentionPolicy", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -204,7 +204,7 @@ internal sealed class ScenariosAuthoredLogsGroups : IServiceGroup
         ],
     });
 
-    private Task TestLogsGroupsShadowVerifyRetentionPolicy(TestContext t) => GroupLogsGroupsShadow.RunTestAsync(t, "VerifyRetentionPolicy", new ScenarioTest
+    private Task TestLogsGroupsVerifyRetentionPolicy(TestContext t) => GroupLogsGroups.RunTestAsync(t, "VerifyRetentionPolicy", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -228,7 +228,7 @@ internal sealed class ScenariosAuthoredLogsGroups : IServiceGroup
         ],
     });
 
-    private Task TestLogsGroupsShadowDeleteRetentionPolicy(TestContext t) => GroupLogsGroupsShadow.RunTestAsync(t, "DeleteRetentionPolicy", new ScenarioTest
+    private Task TestLogsGroupsDeleteRetentionPolicy(TestContext t) => GroupLogsGroups.RunTestAsync(t, "DeleteRetentionPolicy", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -265,7 +265,7 @@ internal sealed class ScenariosAuthoredLogsGroups : IServiceGroup
         ],
     });
 
-    private Task TestLogsGroupsShadowDeleteLogGroup(TestContext t) => GroupLogsGroupsShadow.RunTestAsync(t, "DeleteLogGroup", new ScenarioTest
+    private Task TestLogsGroupsDeleteLogGroup(TestContext t) => GroupLogsGroups.RunTestAsync(t, "DeleteLogGroup", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -302,7 +302,7 @@ internal sealed class ScenariosAuthoredLogsGroups : IServiceGroup
         ],
     });
 
-    private Task TestLogsGroupsShadowCreateLogStream(TestContext t) => GroupLogsGroupsShadow.RunTestAsync(t, "CreateLogStream", new ScenarioTest
+    private Task TestLogsGroupsCreateLogStream(TestContext t) => GroupLogsGroups.RunTestAsync(t, "CreateLogStream", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -341,7 +341,7 @@ internal sealed class ScenariosAuthoredLogsGroups : IServiceGroup
         ],
     });
 
-    private Task TestLogsGroupsShadowTagLogGroup(TestContext t) => GroupLogsGroupsShadow.RunTestAsync(t, "TagLogGroup", new ScenarioTest
+    private Task TestLogsGroupsTagLogGroup(TestContext t) => GroupLogsGroups.RunTestAsync(t, "TagLogGroup", new ScenarioTest
     {
         Call = new ScenarioCall
         {

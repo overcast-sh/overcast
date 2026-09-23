@@ -12,7 +12,8 @@ import java.util.Map;
 /**
  * CloudWatch Logs compatibility test group.
  *
- * <p>Groups: logs-groups, logs-events.
+ * <p>Groups: logs-events. logs-groups is a ported group, resolved from
+ * compat/model/authored/logs-groups.json by the scenario backend (#1116).
  */
 public final class CloudWatchLogsGroup implements ServiceGroup {
 
@@ -27,18 +28,10 @@ public final class CloudWatchLogsGroup implements ServiceGroup {
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("logs-groups:CreateLogGroup",        this::createLogGroup),
-                Map.entry("logs-groups:DescribeLogGroups",     this::describeLogGroups),
-                Map.entry("logs-groups:CreateLogStream",       this::createLogStream),
                 Map.entry("logs-events:DescribeLogStreams",    this::describeLogStreams),
-                Map.entry("logs-groups:TagLogGroup",           this::tagLogGroup),
-                Map.entry("logs-groups:DeleteLogGroup",        this::deleteLogGroup),
                 Map.entry("logs-events:PutLogEvents",          this::putLogEvents),
                 Map.entry("logs-events:GetLogEvents",          this::getLogEvents),
                 Map.entry("logs-events:FilterLogEvents",       this::filterLogEvents),
-                Map.entry("logs-groups:PutRetentionPolicy",    this::putRetentionPolicy),
-                Map.entry("logs-groups:VerifyRetentionPolicy", this::verifyRetentionPolicy),
-                Map.entry("logs-groups:DeleteRetentionPolicy", this::deleteRetentionPolicy),
                 Map.entry("logs-events:DeleteLogStream",       this::deleteLogStream)
         );
     }
@@ -46,7 +39,6 @@ public final class CloudWatchLogsGroup implements ServiceGroup {
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("logs-groups", this::setupGroups),
                 Map.entry("logs-events", this::setupEvents)
         );
     }
@@ -54,73 +46,8 @@ public final class CloudWatchLogsGroup implements ServiceGroup {
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("logs-groups", ctx -> deleteGroupSilently(ctx.getString("logGroupName"))),
                 Map.entry("logs-events", ctx -> deleteGroupSilently(ctx.getString("logsEventsGroup")))
         );
-    }
-
-    // ── logs-groups ───────────────────────────────────────────────────────────
-
-    private void setupGroups(TestContext ctx) {
-        ctx.set("logGroupName", "/compat/" + ctx.runId() + "/group");
-    }
-
-    private void createLogGroup(TestContext ctx) throws Exception {
-        String name = ctx.getString("logGroupName");
-        logs().createLogGroup(r -> r.logGroupName(name));
-    }
-
-    private void describeLogGroups(TestContext ctx) throws Exception {
-        String name = ctx.getString("logGroupName");
-        var resp = logs().describeLogGroups(r -> r.logGroupNamePrefix(name));
-        boolean found = resp.logGroups().stream().anyMatch(g -> g.logGroupName().equals(name));
-        Assertions.assertTrue(found, "DescribeLogGroups: created log group not found");
-    }
-
-    private void createLogStream(TestContext ctx) throws Exception {
-        String grp = ctx.getString("logGroupName");
-        if (grp == null) {
-            grp = "/compat/" + ctx.runId() + "/stream";
-            final String g = grp;
-            logs().createLogGroup(r -> r.logGroupName(g));
-            ctx.set("logGroupName", grp);
-        }
-        final String g = grp;
-        String stream = "stream-" + ctx.runId();
-        logs().createLogStream(r -> r.logGroupName(g).logStreamName(stream));
-        ctx.set("logStreamName", stream);
-    }
-
-    private void describeLogStreams(TestContext ctx) throws Exception {
-        String grp    = ctx.getString("logsEventsGroup");
-        if (grp == null) grp = ctx.getString("logGroupName");
-        String stream = ctx.getString("logsEventsStream");
-        if (stream == null) stream = ctx.getString("logStreamName");
-        Assertions.assertNotNull(grp, "DescribeLogStreams: no log group from setup");
-        Assertions.assertNotNull(stream, "DescribeLogStreams: no log stream from setup");
-        final String fg = grp;
-        final String fs = stream;
-        var resp = logs().describeLogStreams(r -> r.logGroupName(fg).logStreamNamePrefix(fs));
-        boolean found = resp.logStreams().stream().anyMatch(s -> s.logStreamName().equals(fs));
-        Assertions.assertTrue(found, "DescribeLogStreams: created log stream not found");
-    }
-
-    private void tagLogGroup(TestContext ctx) throws Exception {
-        String name = ctx.getString("logGroupName");
-        if (name == null) {
-            name = "/compat/" + ctx.runId() + "/tag";
-            final String n = name;
-            logs().createLogGroup(r -> r.logGroupName(n));
-            ctx.set("logGroupName", name);
-        }
-        final String n = name;
-        logs().tagLogGroup(r -> r.logGroupName(n).tags(Map.of("env", "compat")));
-    }
-
-    private void deleteLogGroup(TestContext ctx) throws Exception {
-        String name = ctx.getString("logGroupName");
-        logs().deleteLogGroup(r -> r.logGroupName(name));
-        ctx.set("logGroupName", null);
     }
 
     // ── logs-events ───────────────────────────────────────────────────────────
@@ -163,39 +90,14 @@ public final class CloudWatchLogsGroup implements ServiceGroup {
         Assertions.assertNotEmpty(resp.events(), "FilterLogEvents: no event matched the 'compat' pattern");
     }
 
-    private void putRetentionPolicy(TestContext ctx) throws Exception {
-        String grp = ctx.getString("logGroupName");
-        if (grp == null) {
-            grp = "/compat/" + ctx.runId() + "/retention";
-            final String g = grp;
-            logs().createLogGroup(r -> r.logGroupName(g));
-            ctx.set("logGroupName", grp);
-        }
-        final String g = grp;
-        logs().putRetentionPolicy(r -> r.logGroupName(g).retentionInDays(7));
-    }
-
-    private void deleteRetentionPolicy(TestContext ctx) throws Exception {
-        String grp = ctx.getString("logGroupName");
-        if (grp == null) {
-            grp = "/compat/" + ctx.runId() + "/retention";
-            final String g = grp;
-            logs().createLogGroup(r -> r.logGroupName(g));
-            ctx.set("logGroupName", grp);
-        }
-        final String g = grp;
-        logs().deleteRetentionPolicy(r -> r.logGroupName(g));
-    }
-
-    private void verifyRetentionPolicy(TestContext ctx) throws Exception {
-        String grp = ctx.getString("logGroupName");
-        var resp = logs().describeLogGroups(r -> r.logGroupNamePrefix(grp));
-        var match = resp.logGroups().stream()
-                .filter(lg -> lg.logGroupName().equals(grp))
-                .findFirst();
-        Assertions.assertTrue(match.isPresent(), "VerifyRetentionPolicy: log group not found");
-        Assertions.assertTrue(match.get().retentionInDays() != null && match.get().retentionInDays() == 7,
-                "VerifyRetentionPolicy: expected retentionInDays=7");
+    private void describeLogStreams(TestContext ctx) throws Exception {
+        String grp    = ctx.getString("logsEventsGroup");
+        String stream = ctx.getString("logsEventsStream");
+        Assertions.assertNotNull(grp, "DescribeLogStreams: no log group from setup");
+        Assertions.assertNotNull(stream, "DescribeLogStreams: no log stream from setup");
+        var resp = logs().describeLogStreams(r -> r.logGroupName(grp).logStreamNamePrefix(stream));
+        boolean found = resp.logStreams().stream().anyMatch(s -> s.logStreamName().equals(stream));
+        Assertions.assertTrue(found, "DescribeLogStreams: created log stream not found");
     }
 
     private void deleteLogStream(TestContext ctx) throws Exception {

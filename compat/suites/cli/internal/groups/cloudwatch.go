@@ -14,15 +14,6 @@ func CloudWatchLogs() ServiceGroup {
 	g := &cwlGroup{}
 	return ServiceGroup{
 		Impls: map[string]harness.TestFn{
-			// logs-groups
-			"logs-groups:CreateLogGroup":        g.CreateLogGroup,
-			"logs-groups:DescribeLogGroups":     g.DescribeLogGroups,
-			"logs-groups:PutRetentionPolicy":    g.PutRetentionPolicy,
-			"logs-groups:VerifyRetentionPolicy": g.VerifyRetentionPolicy,
-			"logs-groups:DeleteRetentionPolicy": g.DeleteRetentionPolicy,
-			"logs-groups:CreateLogStream":       g.CreateLogStream,
-			"logs-groups:TagLogGroup":           g.TagLogGroup,
-			"logs-groups:DeleteLogGroup":        g.DeleteLogGroup,
 			// logs-events
 			"logs-events:PutLogEvents":       g.PutLogEvents,
 			"logs-events:GetLogEvents":       g.GetLogEvents,
@@ -31,11 +22,9 @@ func CloudWatchLogs() ServiceGroup {
 			"logs-events:DeleteLogStream":    g.DeleteLogStream,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"logs-groups": g.setupGroups,
 			"logs-events": g.setupEvents,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"logs-groups": g.teardownGroup,
 			"logs-events": g.teardownEventsGroup,
 		},
 	}
@@ -43,155 +32,21 @@ func CloudWatchLogs() ServiceGroup {
 
 type cwlGroup struct{}
 
-// groupsName returns the log group name used by the logs-groups test group.
-// Uses a distinct suffix from eventsGroupName to avoid intra-suite conflicts
-// when both test groups run in parallel.
-func (g *cwlGroup) groupsName(t *harness.TestContext) string {
-	return fmt.Sprintf("/oc/cwl/%s", t.RunID)
-}
-
 // eventsGroupName returns the log group name used by the logs-events test group.
 func (g *cwlGroup) eventsGroupName(t *harness.TestContext) string {
 	return fmt.Sprintf("/oc/cwl-ev/%s", t.RunID)
 }
 
-func (g *cwlGroup) groupName(t *harness.TestContext) string {
-	return g.groupsName(t)
-}
 func (g *cwlGroup) streamName(t *harness.TestContext) string {
 	return fmt.Sprintf("stream-%s", t.RunID)
 }
 
-// ─── logs-groups ─────────────────────────────────────────────────────────────
-
-func (g *cwlGroup) setupGroups(_ context.Context, _ *harness.TestContext) error { return nil }
-
-func (g *cwlGroup) CreateLogGroup(_ context.Context, t *harness.TestContext) error {
-	return awscli.Run(t.Endpoint, t.Region,
-		"logs", "create-log-group",
-		"--log-group-name", g.groupName(t),
-	)
-}
-
-func (g *cwlGroup) DescribeLogGroups(_ context.Context, t *harness.TestContext) error {
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"logs", "describe-log-groups",
-		"--log-group-name-prefix", "/oc/cwl/",
-	)
-	if err != nil {
-		return err
-	}
-	groups, _ := out["logGroups"].([]any)
-	if len(groups) == 0 {
-		return fmt.Errorf("cwl DescribeLogGroups: expected at least 1 log group")
-	}
-	return nil
-}
-
-func (g *cwlGroup) PutRetentionPolicy(_ context.Context, t *harness.TestContext) error {
-	return awscli.Run(t.Endpoint, t.Region,
-		"logs", "put-retention-policy",
-		"--log-group-name", g.groupName(t),
-		"--retention-in-days", "7",
-	)
-}
-
-func (g *cwlGroup) VerifyRetentionPolicy(_ context.Context, t *harness.TestContext) error {
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"logs", "describe-log-groups",
-		"--log-group-name-prefix", g.groupName(t),
-	)
-	if err != nil {
-		return err
-	}
-	groups, _ := out["logGroups"].([]any)
-	if len(groups) == 0 {
-		return fmt.Errorf("cwl VerifyRetentionPolicy: log group not found")
-	}
-	grp := groups[0].(map[string]any)
-	days, _ := grp["retentionInDays"].(float64)
-	if days != 7 {
-		return fmt.Errorf("cwl VerifyRetentionPolicy: expected retentionInDays=7, got %v", days)
-	}
-	return nil
-}
-
-func (g *cwlGroup) DeleteRetentionPolicy(_ context.Context, t *harness.TestContext) error {
-	if err := awscli.Run(t.Endpoint, t.Region,
-		"logs", "delete-retention-policy",
-		"--log-group-name", g.groupName(t),
-	); err != nil {
-		return err
-	}
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"logs", "describe-log-groups",
-		"--log-group-name-prefix", g.groupName(t),
-	)
-	if err != nil {
-		return fmt.Errorf("cwl DeleteRetentionPolicy: describe failed: %w", err)
-	}
-	groups, _ := out["logGroups"].([]any)
-	for _, raw := range groups {
-		if m, ok := raw.(map[string]any); ok && m["logGroupName"] == g.groupName(t) {
-			if _, hasRetention := m["retentionInDays"]; hasRetention {
-				return fmt.Errorf("cwl DeleteRetentionPolicy: retention still set")
-			}
-		}
-	}
-	return nil
-}
-
-func (g *cwlGroup) CreateLogStream(_ context.Context, t *harness.TestContext) error {
-	return awscli.Run(t.Endpoint, t.Region,
-		"logs", "create-log-stream",
-		"--log-group-name", g.groupName(t),
-		"--log-stream-name", fmt.Sprintf("stream-grp-%s", t.RunID),
-	)
-}
-
-func (g *cwlGroup) TagLogGroup(_ context.Context, t *harness.TestContext) error {
-	return awscli.Run(t.Endpoint, t.Region,
-		"logs", "tag-log-group",
-		"--log-group-name", g.groupName(t),
-		"--tags", `env=test`,
-	)
-}
-
-func (g *cwlGroup) DeleteLogGroup(_ context.Context, t *harness.TestContext) error {
-	name := g.groupName(t)
-	if err := awscli.Run(t.Endpoint, t.Region,
-		"logs", "delete-log-group",
-		"--log-group-name", name,
-	); err != nil {
-		return err
-	}
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"logs", "describe-log-groups",
-		"--log-group-name-prefix", name,
-	)
-	if err != nil {
-		return fmt.Errorf("cwl DeleteLogGroup: describe failed: %w", err)
-	}
-	groups, _ := out["logGroups"].([]any)
-	for _, raw := range groups {
-		if m, ok := raw.(map[string]any); ok && m["logGroupName"] == name {
-			return fmt.Errorf("cwl DeleteLogGroup: group still present")
-		}
-	}
-	return nil
-}
-
-func (g *cwlGroup) teardownGroup(_ context.Context, t *harness.TestContext) error {
-	awscli.Run(t.Endpoint, t.Region, "logs", "delete-log-group", "--log-group-name", g.groupsName(t)) //nolint:errcheck
-	return nil
-}
+// ─── logs-events ─────────────────────────────────────────────────────────────
 
 func (g *cwlGroup) teardownEventsGroup(_ context.Context, t *harness.TestContext) error {
 	awscli.Run(t.Endpoint, t.Region, "logs", "delete-log-group", "--log-group-name", g.eventsGroupName(t)) //nolint:errcheck
 	return nil
 }
-
-// ─── logs-events ─────────────────────────────────────────────────────────────
 
 func (g *cwlGroup) setupEvents(_ context.Context, t *harness.TestContext) error {
 	if err := awscli.Run(t.Endpoint, t.Region,
