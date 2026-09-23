@@ -29,6 +29,17 @@ func (h *acmCertificateHandler) Create(ctx context.Context, router http.Handler,
 	if v, ok := props["SubjectAlternativeNames"]; ok {
 		body["SubjectAlternativeNames"] = v
 	}
+	if v, _ := props["ValidationMethod"].(string); v != "" {
+		body["ValidationMethod"] = v
+	}
+	// RequestCertificate applies Tags at creation (acm/typed_logic.go), so
+	// there is no separate tagging call the way Shield's CreateProtection
+	// needs one.
+	if tags := mergeResourceTags(rCtx.StackTags, props["Tags"]); len(tags) > 0 {
+		body["Tags"] = ecrTagsFromMap(tags)
+	}
+	noteUnconsumedProperties(ctx, "AWS::CertificateManager::Certificate", props,
+		"DomainName", "SubjectAlternativeNames", "ValidationMethod", "Tags")
 
 	rec, err := internalJSON(ctx, router, rCtx.Region, "CertificateManager.RequestCertificate", body)
 	if err != nil {
@@ -60,8 +71,53 @@ func (h *acmCertificateHandler) Delete(ctx context.Context, router http.Handler,
 	return teardownError("DeleteCertificate", rec, err)
 }
 
+// acmReconcileTags diffs desired against previous and applies only the
+// change via AddTagsToCertificate/RemoveTagsFromCertificate, mirroring
+// cloudtrailReconcileTags' and transferReconcileTags' add/remove split.
+// RemoveTagsFromCertificate takes a Tags list rather than TagKeys
+// (acm/typed_logic.go's removeTagsFromCertificateTyped reads only each
+// entry's Key), so a removed key is sent with no Value, the same way
+// cloudtrailRemoveTags does for CloudTrail's own Key-only RemoveTags.
+func acmReconcileTags(ctx context.Context, router http.Handler, region, certArn string, tags, prior map[string]string) error {
+	upserts, removals := logsLogGroupTagChanges(tags, prior)
+	if len(upserts) > 0 {
+		body := map[string]any{"CertificateArn": certArn, "Tags": ecrTagsFromMap(upserts)}
+		if _, err := internalJSON(ctx, router, region, "CertificateManager.AddTagsToCertificate", body); err != nil {
+			return fmt.Errorf("AddTagsToCertificate: %w", err)
+		}
+	}
+	if len(removals) > 0 {
+		entries := make([]map[string]string, 0, len(removals))
+		for _, k := range removals {
+			entries = append(entries, map[string]string{"Key": k})
+		}
+		body := map[string]any{"CertificateArn": certArn, "Tags": entries}
+		if _, err := internalJSON(ctx, router, region, "CertificateManager.RemoveTagsFromCertificate", body); err != nil {
+			return fmt.Errorf("RemoveTagsFromCertificate: %w", err)
+		}
+	}
+	return nil
+}
+
+// Update forces replacement for DomainName, SubjectAlternativeNames or
+// ValidationMethod — RequestCertificate is the only way to change any of
+// them, and ACM has no in-place rename — but reconciles a Tags-only change
+// via AddTagsToCertificate/RemoveTagsFromCertificate instead, matching real
+// ACM: Tags never force replacement.
 func (h *acmCertificateHandler) Update(ctx context.Context, router http.Handler, _ *config.Config, physicalID string, props map[string]any, oldProps map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
-	return "", nil, errReplacementRequired
+	for _, property := range []string{"DomainName", "SubjectAlternativeNames", "ValidationMethod"} {
+		if !reflect.DeepEqual(props[property], oldProps[property]) {
+			return "", nil, errReplacementRequired
+		}
+	}
+	tags := mergeResourceTags(rCtx.StackTags, props["Tags"])
+	prior := mergeResourceTags(rCtx.PreviousStackTags, oldProps["Tags"])
+	if !reflect.DeepEqual(tags, prior) {
+		if err := acmReconcileTags(ctx, router, rCtx.Region, physicalID, tags, prior); err != nil {
+			return "", nil, failUpdate(fmt.Errorf("acm tags: %w", err))
+		}
+	}
+	return physicalID, map[string]string{"Arn": physicalID}, nil
 }
 
 // ── AWS::ECR::Repository ────────────────────────────────────────────────────
@@ -422,6 +478,28 @@ func (h *cloudtrailTrailHandler) Create(ctx context.Context, router http.Handler
 		"IncludeGlobalServiceEvents": includeGlobal,
 		"IsMultiRegionTrail":         isMultiRegion,
 	}
+	// CreateTrailInput's member names (internal/services/cloudtrail/
+	// typed_logic.go) already match the template's own PascalCase 1:1 apart
+	// from KMSKeyId/KmsKeyId, so these are copied verbatim rather than run
+	// through forwardProperties, which would lowercase the leading letter.
+	if v, _ := props["S3KeyPrefix"].(string); v != "" {
+		body["S3KeyPrefix"] = v
+	}
+	if v, _ := props["CloudWatchLogsLogGroupArn"].(string); v != "" {
+		body["CloudWatchLogsLogGroupArn"] = v
+	}
+	if v, _ := props["CloudWatchLogsRoleArn"].(string); v != "" {
+		body["CloudWatchLogsRoleArn"] = v
+	}
+	if v, ok := props["EnableLogFileValidation"].(bool); ok {
+		body["EnableLogFileValidation"] = v
+	}
+	if v, _ := props["KMSKeyId"].(string); v != "" {
+		body["KmsKeyId"] = v
+	}
+	if v, ok := props["IsOrganizationTrail"].(bool); ok {
+		body["IsOrganizationTrail"] = v
+	}
 	// CreateTrail is the only trail operation that carries tags inline
 	// (internal/services/cloudtrail/typed_logic.go); Update reconciles via
 	// AddTags/RemoveTags below. Stack tags merge in here the same way every
@@ -429,6 +507,10 @@ func (h *cloudtrailTrailHandler) Create(ctx context.Context, router http.Handler
 	if tags := mergeResourceTags(rCtx.StackTags, props["Tags"]); len(tags) > 0 {
 		body["TagsList"] = cloudtrailTagsWire(tags)
 	}
+	noteUnconsumedProperties(ctx, "AWS::CloudTrail::Trail", props,
+		"TrailName", "S3BucketName", "IncludeGlobalServiceEvents", "IsMultiRegionTrail", "Tags",
+		"S3KeyPrefix", "CloudWatchLogsLogGroupArn", "CloudWatchLogsRoleArn", "EnableLogFileValidation",
+		"KMSKeyId", "IsOrganizationTrail")
 
 	rec, err := internalJSON(ctx, router, rCtx.Region, "com.amazonaws.cloudtrail.v20131101.CloudTrail_20131101.CreateTrail", body)
 	if err != nil {
@@ -501,6 +583,31 @@ func (h *cloudtrailTrailHandler) Update(ctx context.Context, router http.Handler
 	if v, ok := props["IsMultiRegionTrail"]; ok {
 		body["IsMultiRegionTrail"] = v
 	}
+	// updateTrailInput's members are pointers (internal/services/cloudtrail/
+	// typed_logic.go), so an omitted property leaves the stored value alone —
+	// forwarding only what the template set, same as the pair above.
+	if v, ok := props["S3KeyPrefix"]; ok {
+		body["S3KeyPrefix"] = v
+	}
+	if v, ok := props["CloudWatchLogsLogGroupArn"]; ok {
+		body["CloudWatchLogsLogGroupArn"] = v
+	}
+	if v, ok := props["CloudWatchLogsRoleArn"]; ok {
+		body["CloudWatchLogsRoleArn"] = v
+	}
+	if v, ok := props["EnableLogFileValidation"]; ok {
+		body["EnableLogFileValidation"] = v
+	}
+	if v, ok := props["KMSKeyId"]; ok {
+		body["KmsKeyId"] = v
+	}
+	if v, ok := props["IsOrganizationTrail"]; ok {
+		body["IsOrganizationTrail"] = v
+	}
+	noteUnconsumedProperties(ctx, "AWS::CloudTrail::Trail", props,
+		"TrailName", "S3BucketName", "IncludeGlobalServiceEvents", "IsMultiRegionTrail", "Tags",
+		"S3KeyPrefix", "CloudWatchLogsLogGroupArn", "CloudWatchLogsRoleArn", "EnableLogFileValidation",
+		"KMSKeyId", "IsOrganizationTrail")
 
 	if _, err := internalJSON(ctx, router, rCtx.Region, "com.amazonaws.cloudtrail.v20131101.CloudTrail_20131101.UpdateTrail", body); err != nil {
 		return "", nil, fmt.Errorf("UpdateTrail: %w", err)
@@ -1027,9 +1134,17 @@ func (h *transferUserHandler) Create(ctx context.Context, router http.Handler, c
 		"UserName": userName,
 		"Role":     role,
 	}
+	if v, _ := props["HomeDirectory"].(string); v != "" {
+		body["HomeDirectory"] = v
+	}
+	if v, _ := props["Policy"].(string); v != "" {
+		body["Policy"] = v
+	}
 	if tags := mergeResourceTags(rCtx.StackTags, props["Tags"]); len(tags) > 0 {
 		body["Tags"] = transferTagsWire(tags)
 	}
+	noteUnconsumedProperties(ctx, "AWS::Transfer::User", props,
+		"ServerId", "UserName", "Role", "HomeDirectory", "Policy", "Tags")
 
 	rec, err := internalJSON(ctx, router, rCtx.Region, "TransferService.CreateUser", body)
 	if err != nil {
@@ -1109,6 +1224,8 @@ func (h *transferUserHandler) Update(ctx context.Context, router http.Handler, _
 	if v, _ := props["Policy"].(string); v != "" {
 		body["Policy"] = v
 	}
+	noteUnconsumedProperties(ctx, "AWS::Transfer::User", props,
+		"ServerId", "UserName", "Role", "HomeDirectory", "Policy", "Tags")
 	if _, err := internalJSON(ctx, router, rCtx.Region, "TransferService.UpdateUser", body); err != nil {
 		return "", nil, fmt.Errorf("UpdateUser: %w", err)
 	}
@@ -1153,6 +1270,21 @@ func (h *shieldProtectionHandler) Create(ctx context.Context, router http.Handle
 		return "", nil, fmt.Errorf("CreateProtection: parse response: %w", err)
 	}
 
+	// CreateProtection's own request (shield/typed_logic.go's
+	// createProtectionRequest) carries no Tags member — real Shield applies
+	// tags to a protection the same way Backup/CloudWatch do, with a
+	// follow-up TagResource against the resource's ARN once it exists.
+	if tags := mergeResourceTags(rCtx.StackTags, props["Tags"]); len(tags) > 0 {
+		tagBody := map[string]any{
+			"ResourceARN": shieldProtectionARN(rCtx.AccountID, resp.ProtectionId),
+			"Tags":        ecrTagsFromMap(tags),
+		}
+		if _, err := internalJSON(ctx, router, rCtx.Region, "AWSShield_20160616.TagResource", tagBody); err != nil {
+			return "", nil, fmt.Errorf("TagResource: %w", err)
+		}
+	}
+	noteUnconsumedProperties(ctx, "AWS::Shield::Protection", props, "Name", "ResourceArn", "Tags")
+
 	attrs := map[string]string{
 		"ProtectionId": resp.ProtectionId,
 	}
@@ -1165,8 +1297,53 @@ func (h *shieldProtectionHandler) Delete(ctx context.Context, router http.Handle
 	return teardownError("DeleteProtection", rec, err)
 }
 
+// shieldProtectionARN builds the ARN Shield's TagResource/UntagResource
+// address a protection by (shield/handler.go's protectionARN): the service's
+// ARNs carry no region, "arn:aws:shield::<account>:protection/<id>".
+func shieldProtectionARN(accountID, protectionID string) string {
+	return fmt.Sprintf("arn:aws:shield::%s:protection/%s", accountID, protectionID)
+}
+
+// shieldReconcileTags diffs desired against previous and applies only the
+// change, mirroring cloudtrailReconcileTags'/transferReconcileTags' add/remove
+// split.
+func shieldReconcileTags(ctx context.Context, router http.Handler, region, protectionArn string, tags, prior map[string]string) error {
+	upserts, removals := logsLogGroupTagChanges(tags, prior)
+	if len(upserts) > 0 {
+		body := map[string]any{"ResourceARN": protectionArn, "Tags": ecrTagsFromMap(upserts)}
+		if _, err := internalJSON(ctx, router, region, "AWSShield_20160616.TagResource", body); err != nil {
+			return fmt.Errorf("shield TagResource: %w", err)
+		}
+	}
+	if len(removals) > 0 {
+		body := map[string]any{"ResourceARN": protectionArn, "TagKeys": removals}
+		if _, err := internalJSON(ctx, router, region, "AWSShield_20160616.UntagResource", body); err != nil {
+			return fmt.Errorf("shield UntagResource: %w", err)
+		}
+	}
+	return nil
+}
+
+// Update forces replacement for Name or ResourceArn — CreateProtection is the
+// only way to associate a protection with a resource, and there is no
+// in-place retarget — but reconciles a Tags-only change via
+// TagResource/UntagResource instead, matching real Shield: Tags never force
+// replacement.
 func (h *shieldProtectionHandler) Update(ctx context.Context, router http.Handler, _ *config.Config, physicalID string, props map[string]any, oldProps map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
-	return "", nil, errReplacementRequired
+	for _, property := range []string{"Name", "ResourceArn"} {
+		if !reflect.DeepEqual(props[property], oldProps[property]) {
+			return "", nil, errReplacementRequired
+		}
+	}
+	tags := mergeResourceTags(rCtx.StackTags, props["Tags"])
+	prior := mergeResourceTags(rCtx.PreviousStackTags, oldProps["Tags"])
+	if !reflect.DeepEqual(tags, prior) {
+		arn := shieldProtectionARN(rCtx.AccountID, physicalID)
+		if err := shieldReconcileTags(ctx, router, rCtx.Region, arn, tags, prior); err != nil {
+			return "", nil, failUpdate(fmt.Errorf("shield tags: %w", err))
+		}
+	}
+	return physicalID, map[string]string{"ProtectionId": physicalID}, nil
 }
 
 // ── AWS::KinesisFirehose::DeliveryStream ────────────────────────────────────
@@ -1250,6 +1427,10 @@ func (h *athenaWorkGroupHandler) Create(ctx context.Context, router http.Handler
 	if v, ok := props["WorkGroupConfiguration"]; ok {
 		body["Configuration"] = v
 	}
+	if tags := mergeResourceTags(rCtx.StackTags, props["Tags"]); len(tags) > 0 {
+		body["Tags"] = ecrTagsFromMap(tags)
+	}
+	noteUnconsumedProperties(ctx, "AWS::Athena::WorkGroup", props, "Name", "Description", "WorkGroupConfiguration", "Tags")
 
 	_, err := internalJSON(ctx, router, rCtx.Region, "AmazonAthena.CreateWorkGroup", body)
 	if err != nil {
@@ -1268,8 +1449,52 @@ func (h *athenaWorkGroupHandler) Delete(ctx context.Context, router http.Handler
 	return teardownError("DeleteWorkGroup", rec, err)
 }
 
+// athenaWorkGroupARN builds the ARN Athena's TagResource/UntagResource
+// address a workgroup by; the physical ID is the bare workgroup name.
+func athenaWorkGroupARN(region, accountID, name string) string {
+	return fmt.Sprintf("arn:aws:athena:%s:%s:workgroup/%s", region, accountID, name)
+}
+
+// athenaReconcileTags diffs desired against previous and applies only the
+// change, mirroring cloudtrailReconcileTags'/transferReconcileTags'
+// add/remove split.
+func athenaReconcileTags(ctx context.Context, router http.Handler, region, arn string, tags, prior map[string]string) error {
+	upserts, removals := logsLogGroupTagChanges(tags, prior)
+	if len(upserts) > 0 {
+		body := map[string]any{"ResourceARN": arn, "Tags": ecrTagsFromMap(upserts)}
+		if _, err := internalJSON(ctx, router, region, "AmazonAthena.TagResource", body); err != nil {
+			return fmt.Errorf("athena TagResource: %w", err)
+		}
+	}
+	if len(removals) > 0 {
+		body := map[string]any{"ResourceARN": arn, "TagKeys": removals}
+		if _, err := internalJSON(ctx, router, region, "AmazonAthena.UntagResource", body); err != nil {
+			return fmt.Errorf("athena UntagResource: %w", err)
+		}
+	}
+	return nil
+}
+
+// Update forces replacement for Name, Description or WorkGroupConfiguration —
+// Athena has no UpdateWorkGroup wired to this handler, a pre-existing gap
+// this fix does not extend — but reconciles a Tags-only change via
+// TagResource/UntagResource instead, matching real Athena: Tags never force
+// replacement.
 func (h *athenaWorkGroupHandler) Update(ctx context.Context, router http.Handler, _ *config.Config, physicalID string, props map[string]any, oldProps map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
-	return "", nil, errReplacementRequired
+	for _, property := range []string{"Name", "Description", "WorkGroupConfiguration"} {
+		if !reflect.DeepEqual(props[property], oldProps[property]) {
+			return "", nil, errReplacementRequired
+		}
+	}
+	tags := mergeResourceTags(rCtx.StackTags, props["Tags"])
+	prior := mergeResourceTags(rCtx.PreviousStackTags, oldProps["Tags"])
+	if !reflect.DeepEqual(tags, prior) {
+		arn := athenaWorkGroupARN(rCtx.Region, rCtx.AccountID, physicalID)
+		if err := athenaReconcileTags(ctx, router, rCtx.Region, arn, tags, prior); err != nil {
+			return "", nil, failUpdate(fmt.Errorf("athena tags: %w", err))
+		}
+	}
+	return physicalID, map[string]string{"Name": physicalID}, nil
 }
 
 // ── AWS::Glue::Database ─────────────────────────────────────────────────────
@@ -1811,7 +2036,16 @@ func (h *schedulerScheduleGroupHandler) Update(ctx context.Context, router http.
 // opensearchDomainPath is OpenSearch's modeled CreateDomain binding. Domains
 // are addressed by name beneath it, and the physical ID this handler returns
 // is the ARN, so Delete has to recover the name from it.
-const opensearchDomainPath = "/2021-01-01/opensearch/domain"
+//
+// opensearchTagsPath and opensearchTagsRemovalPath are OpenSearch's modeled
+// AddTags/RemoveTags bindings, both addressed by the domain's ARN in the
+// body rather than a path label (opensearch/service.go's addTagsRequest/
+// removeTagsRequest).
+const (
+	opensearchDomainPath      = "/2021-01-01/opensearch/domain"
+	opensearchTagsPath        = "/2021-01-01/tags"
+	opensearchTagsRemovalPath = "/2021-01-01/tags-removal"
+)
 
 type opensearchDomainHandler struct{}
 
@@ -1823,6 +2057,20 @@ func (h *opensearchDomainHandler) Create(ctx context.Context, router http.Handle
 		"DomainName":    domainName,
 		"EngineVersion": engineVersion,
 	}
+	// ClusterConfig's members (InstanceType, InstanceCount, …) are the same
+	// PascalCase names in the template and in CreateDomainRequest, so it is
+	// forwarded whole rather than through forwardProperties: the opensearch
+	// service stores it as opaque json.RawMessage and echoes it back verbatim
+	// (opensearch/service.go's ensureClusterConfig), never parsing a member
+	// out of it.
+	if v, ok := props["ClusterConfig"]; ok {
+		body["ClusterConfig"] = v
+	}
+	if tags := mergeResourceTags(rCtx.StackTags, props["Tags"]); len(tags) > 0 {
+		body["TagList"] = ecrTagsFromMap(tags)
+	}
+	noteUnconsumedProperties(ctx, "AWS::OpenSearchService::Domain", props, "DomainName", "EngineVersion", "ClusterConfig", "Tags")
+
 	data, err := json.Marshal(body)
 	if err != nil {
 		return "", nil, fmt.Errorf("CreateDomain: %w", err)
@@ -1869,8 +2117,52 @@ func (h *opensearchDomainHandler) Delete(ctx context.Context, router http.Handle
 	return teardownError("DeleteDomain", rec, err)
 }
 
+// opensearchReconcileTags diffs desired against previous and applies only
+// the change via AddTags/RemoveTags, mirroring cloudtrailReconcileTags'/
+// transferReconcileTags' add/remove split.
+func opensearchReconcileTags(ctx context.Context, router http.Handler, region, domainArn string, tags, prior map[string]string) error {
+	upserts, removals := logsLogGroupTagChanges(tags, prior)
+	if len(upserts) > 0 {
+		data, err := json.Marshal(map[string]any{"ARN": domainArn, "TagList": ecrTagsFromMap(upserts)})
+		if err != nil {
+			return err
+		}
+		if _, err := internalRequest(ctx, router, region, http.MethodPost, opensearchTagsPath, "application/json", data); err != nil {
+			return fmt.Errorf("opensearch AddTags: %w", err)
+		}
+	}
+	if len(removals) > 0 {
+		data, err := json.Marshal(map[string]any{"ARN": domainArn, "TagKeys": removals})
+		if err != nil {
+			return err
+		}
+		if _, err := internalRequest(ctx, router, region, http.MethodPost, opensearchTagsRemovalPath, "application/json", data); err != nil {
+			return fmt.Errorf("opensearch RemoveTags: %w", err)
+		}
+	}
+	return nil
+}
+
+// Update forces replacement for DomainName, EngineVersion or ClusterConfig —
+// OpenSearch has no UpdateDomainConfig wired to this handler, a pre-existing
+// gap this fix does not extend — but reconciles a Tags-only change via
+// AddTags/RemoveTags instead, matching real OpenSearch: Tags never force
+// replacement.
 func (h *opensearchDomainHandler) Update(ctx context.Context, router http.Handler, _ *config.Config, physicalID string, props map[string]any, oldProps map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
-	return "", nil, errReplacementRequired
+	for _, property := range []string{"DomainName", "EngineVersion", "ClusterConfig"} {
+		if !reflect.DeepEqual(props[property], oldProps[property]) {
+			return "", nil, errReplacementRequired
+		}
+	}
+	tags := mergeResourceTags(rCtx.StackTags, props["Tags"])
+	prior := mergeResourceTags(rCtx.PreviousStackTags, oldProps["Tags"])
+	if !reflect.DeepEqual(tags, prior) {
+		if err := opensearchReconcileTags(ctx, router, rCtx.Region, physicalID, tags, prior); err != nil {
+			return "", nil, failUpdate(fmt.Errorf("opensearch tags: %w", err))
+		}
+	}
+	domainName, _ := props["DomainName"].(string)
+	return physicalID, map[string]string{"Arn": physicalID, "DomainName": domainName}, nil
 }
 
 // ── AWS::AppConfig::Application ─────────────────────────────────────────────
@@ -1917,6 +2209,72 @@ func appconfigRESTJSON(ctx context.Context, router http.Handler, region, method,
 	return nil
 }
 
+// appconfigApplicationARN, appconfigEnvironmentARN and
+// appconfigConfigurationProfileARN build the ARNs AppConfig's shared
+// /tags/{ResourceArn} dispatch (internal/router/router.go's "---- /tags
+// service dispatch" section) reads a resource's identity from, matching
+// resolveTagTarget's segment layout (appconfig/service.go).
+func appconfigApplicationARN(rCtx *resolveContext, appID string) string {
+	return fmt.Sprintf("arn:aws:appconfig:%s:%s:application/%s", rCtx.Region, rCtx.AccountID, appID)
+}
+
+func appconfigEnvironmentARN(rCtx *resolveContext, appID, envID string) string {
+	return fmt.Sprintf("arn:aws:appconfig:%s:%s:application/%s/environment/%s", rCtx.Region, rCtx.AccountID, appID, envID)
+}
+
+func appconfigConfigurationProfileARN(rCtx *resolveContext, appID, profID string) string {
+	return fmt.Sprintf("arn:aws:appconfig:%s:%s:application/%s/configurationprofile/%s", rCtx.Region, rCtx.AccountID, appID, profID)
+}
+
+// appconfigTagResource and appconfigUntagResource dispatch to the shared
+// /tags/{ResourceArn} routes the main router owns (see the ARN builders
+// above): TagResource is a plain POST with a {key: value} Tags body
+// (appconfig/service.go's tagResource); UntagResource is a DELETE whose keys
+// travel as repeated ?tagKeys= query parameters, not a body, because it has
+// no typed operation of its own — see appconfig/service.go's untagResource.
+func appconfigTagResource(ctx context.Context, router http.Handler, region, arn string, tags map[string]string) error {
+	if len(tags) == 0 {
+		return nil
+	}
+	data, err := json.Marshal(map[string]any{"Tags": tags})
+	if err != nil {
+		return err
+	}
+	if _, err := internalRequest(ctx, router, region, http.MethodPost,
+		"/tags/"+url.PathEscape(arn), "application/json", data); err != nil {
+		return fmt.Errorf("appconfig TagResource: %w", err)
+	}
+	return nil
+}
+
+func appconfigUntagResource(ctx context.Context, router http.Handler, region, arn string, keys []string) error {
+	if len(keys) == 0 {
+		return nil
+	}
+	values := url.Values{}
+	for _, k := range keys {
+		values.Add("tagKeys", k)
+	}
+	path := "/tags/" + url.PathEscape(arn) + "?" + values.Encode()
+	if _, err := internalRequest(ctx, router, region, http.MethodDelete, path, "", nil); err != nil {
+		return fmt.Errorf("appconfig UntagResource: %w", err)
+	}
+	return nil
+}
+
+// appconfigReconcileTags diffs desired against previous and applies only the
+// change, mirroring cloudtrailReconcileTags'/transferReconcileTags'
+// add/remove split. Shared by all three AppConfig resource types: the
+// dispatch, body/query shape and ARN are the only things that differ between
+// them.
+func appconfigReconcileTags(ctx context.Context, router http.Handler, region, arn string, tags, prior map[string]string) error {
+	upserts, removals := logsLogGroupTagChanges(tags, prior)
+	if err := appconfigTagResource(ctx, router, region, arn, upserts); err != nil {
+		return err
+	}
+	return appconfigUntagResource(ctx, router, region, arn, removals)
+}
+
 type appconfigApplicationHandler struct{}
 
 func (h *appconfigApplicationHandler) Create(ctx context.Context, router http.Handler, cfg *config.Config, props map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
@@ -1929,6 +2287,13 @@ func (h *appconfigApplicationHandler) Create(ctx context.Context, router http.Ha
 	if desc != "" {
 		body["Description"] = desc
 	}
+	// CreateApplication takes Tags as the {key: value} map its own API uses
+	// (appconfig/service.go's createApplication), not the template's
+	// [{Key,Value}] list — mergeResourceTags already returns that shape.
+	if tags := mergeResourceTags(rCtx.StackTags, props["Tags"]); len(tags) > 0 {
+		body["Tags"] = tags
+	}
+	noteUnconsumedProperties(ctx, "AWS::AppConfig::Application", props, "Name", "Description", "Tags")
 
 	var resp struct {
 		Id   string `json:"Id"`
@@ -1952,8 +2317,27 @@ func (h *appconfigApplicationHandler) Delete(ctx context.Context, router http.Ha
 	return teardownError("DeleteApplication", rec, err)
 }
 
+// Update forces replacement for Name or Description — this handler has no
+// UpdateApplication call wired to it, a pre-existing gap this fix does not
+// extend — but reconciles a Tags-only change via the shared /tags/
+// {ResourceArn} TagResource/UntagResource instead, matching real AppConfig:
+// Tags never force replacement.
 func (h *appconfigApplicationHandler) Update(ctx context.Context, router http.Handler, _ *config.Config, physicalID string, props map[string]any, oldProps map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
-	return "", nil, errReplacementRequired
+	for _, property := range []string{"Name", "Description"} {
+		if !reflect.DeepEqual(props[property], oldProps[property]) {
+			return "", nil, errReplacementRequired
+		}
+	}
+	tags := mergeResourceTags(rCtx.StackTags, props["Tags"])
+	prior := mergeResourceTags(rCtx.PreviousStackTags, oldProps["Tags"])
+	if !reflect.DeepEqual(tags, prior) {
+		arn := appconfigApplicationARN(rCtx, physicalID)
+		if err := appconfigReconcileTags(ctx, router, rCtx.Region, arn, tags, prior); err != nil {
+			return "", nil, failUpdate(fmt.Errorf("appconfig application tags: %w", err))
+		}
+	}
+	name, _ := props["Name"].(string)
+	return physicalID, map[string]string{"Id": physicalID, "Name": name}, nil
 }
 
 // ── AWS::AppConfig::Environment ─────────────────────────────────────────────
@@ -1969,6 +2353,17 @@ func (h *appconfigEnvironmentHandler) Create(ctx context.Context, router http.Ha
 	if desc, _ := props["Description"].(string); desc != "" {
 		body["Description"] = desc
 	}
+	// Monitor's members (AlarmArn, AlarmRoleArn) are already the template's
+	// own spelling (appconfig/service.go's Monitor), so the list is forwarded
+	// whole rather than through forwardProperties.
+	if v, ok := props["Monitors"]; ok {
+		body["Monitors"] = v
+	}
+	if tags := mergeResourceTags(rCtx.StackTags, props["Tags"]); len(tags) > 0 {
+		body["Tags"] = tags
+	}
+	noteUnconsumedProperties(ctx, "AWS::AppConfig::Environment", props,
+		"ApplicationId", "Name", "Description", "Monitors", "Tags")
 
 	var resp struct {
 		Id string `json:"Id"`
@@ -1997,8 +2392,31 @@ func (h *appconfigEnvironmentHandler) Delete(ctx context.Context, router http.Ha
 	return teardownError("DeleteEnvironment", rec, err)
 }
 
+// Update forces replacement for ApplicationId, Name, Description or
+// Monitors — this handler has no UpdateEnvironment call wired to it, a
+// pre-existing gap this fix does not extend — but reconciles a Tags-only
+// change via the shared /tags/{ResourceArn} TagResource/UntagResource
+// instead, matching real AppConfig: Tags never force replacement.
 func (h *appconfigEnvironmentHandler) Update(ctx context.Context, router http.Handler, _ *config.Config, physicalID string, props map[string]any, oldProps map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
-	return "", nil, errReplacementRequired
+	// Physical ID is "{applicationId}/{environmentId}".
+	parts := strings.SplitN(physicalID, "/", 2)
+	if len(parts) != 2 {
+		return "", nil, errReplacementRequired
+	}
+	for _, property := range []string{"ApplicationId", "Name", "Description", "Monitors"} {
+		if !reflect.DeepEqual(props[property], oldProps[property]) {
+			return "", nil, errReplacementRequired
+		}
+	}
+	tags := mergeResourceTags(rCtx.StackTags, props["Tags"])
+	prior := mergeResourceTags(rCtx.PreviousStackTags, oldProps["Tags"])
+	if !reflect.DeepEqual(tags, prior) {
+		arn := appconfigEnvironmentARN(rCtx, parts[0], parts[1])
+		if err := appconfigReconcileTags(ctx, router, rCtx.Region, arn, tags, prior); err != nil {
+			return "", nil, failUpdate(fmt.Errorf("appconfig environment tags: %w", err))
+		}
+	}
+	return physicalID, map[string]string{"Id": parts[1], "ApplicationId": parts[0]}, nil
 }
 
 // ── AWS::AppConfig::ConfigurationProfile ────────────────────────────────────
@@ -2015,6 +2433,26 @@ func (h *appconfigConfigurationProfileHandler) Create(ctx context.Context, route
 		"Name":        name,
 		"LocationUri": locationURI,
 	}
+	if v, _ := props["Description"].(string); v != "" {
+		body["Description"] = v
+	}
+	if v, _ := props["RetrievalRoleArn"].(string); v != "" {
+		body["RetrievalRoleArn"] = v
+	}
+	if v, _ := props["Type"].(string); v != "" {
+		body["Type"] = v
+	}
+	// Validator's members (Type, Content) are already the template's own
+	// spelling (appconfig/service.go's Validator), so the list is forwarded
+	// whole rather than through forwardProperties.
+	if v, ok := props["Validators"]; ok {
+		body["Validators"] = v
+	}
+	if tags := mergeResourceTags(rCtx.StackTags, props["Tags"]); len(tags) > 0 {
+		body["Tags"] = tags
+	}
+	noteUnconsumedProperties(ctx, "AWS::AppConfig::ConfigurationProfile", props,
+		"ApplicationId", "Name", "LocationUri", "Description", "RetrievalRoleArn", "Type", "Validators", "Tags")
 
 	var resp struct {
 		Id string `json:"Id"`
@@ -2043,6 +2481,72 @@ func (h *appconfigConfigurationProfileHandler) Delete(ctx context.Context, route
 	return teardownError("DeleteConfigurationProfile", rec, err)
 }
 
+// Update forces replacement for ApplicationId, Name, LocationUri,
+// Description, RetrievalRoleArn, Type or Validators — this handler has no
+// UpdateConfigurationProfile call wired to it, a pre-existing gap this fix
+// does not extend — but reconciles a Tags-only change via the shared
+// /tags/{ResourceArn} TagResource/UntagResource instead, matching real
+// AppConfig: Tags never force replacement.
 func (h *appconfigConfigurationProfileHandler) Update(ctx context.Context, router http.Handler, _ *config.Config, physicalID string, props map[string]any, oldProps map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
-	return "", nil, errReplacementRequired
+	// Physical ID is "{applicationId}/{configurationProfileId}".
+	parts := strings.SplitN(physicalID, "/", 2)
+	if len(parts) != 2 {
+		return "", nil, errReplacementRequired
+	}
+	for _, property := range []string{"ApplicationId", "Name", "LocationUri", "Description", "RetrievalRoleArn", "Type", "Validators"} {
+		if !reflect.DeepEqual(props[property], oldProps[property]) {
+			return "", nil, errReplacementRequired
+		}
+	}
+	tags := mergeResourceTags(rCtx.StackTags, props["Tags"])
+	prior := mergeResourceTags(rCtx.PreviousStackTags, oldProps["Tags"])
+	if !reflect.DeepEqual(tags, prior) {
+		arn := appconfigConfigurationProfileARN(rCtx, parts[0], parts[1])
+		if err := appconfigReconcileTags(ctx, router, rCtx.Region, arn, tags, prior); err != nil {
+			return "", nil, failUpdate(fmt.Errorf("appconfig configuration profile tags: %w", err))
+		}
+	}
+	return physicalID, map[string]string{"Id": parts[1], "ApplicationId": parts[0]}, nil
+}
+
+// ── AWS::SES::ConfigurationSet ──────────────────────────────────────────────
+
+// sesConfigurationSetHandler used to be a stubResourceHandler, which
+// fabricates a physical ID and reports CREATE_COMPLETE without calling SES at
+// all — so a stack declaring one always "succeeded" for a resource that was
+// never created anywhere. SES's own CreateConfigurationSet answers a genuine
+// 501 (ses/handler_stubs.go's stub; ses/capabilities_dev.go marks it
+// Unsupported), so dispatching the real operation lets the existing 501 →
+// GeneralServiceException mapping in status_reason.go fail the resource
+// honestly instead — the same "dispatch to the gap rather than hide it" call
+// AWS::ApiGateway::RestApi's Body property makes for an unimplemented feature
+// with nothing to forward properties into.
+type sesConfigurationSetHandler struct{}
+
+func (h *sesConfigurationSetHandler) Create(ctx context.Context, router http.Handler, cfg *config.Config, props map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
+	name, _ := props["Name"].(string)
+	if name == "" {
+		name = rCtx.generatedNameWithin(maxNameLenSES)
+	}
+	params := map[string]string{
+		"Action":                "CreateConfigurationSet",
+		"ConfigurationSet.Name": name,
+	}
+	if _, err := internalQuery(ctx, router, rCtx.Region, params); err != nil {
+		return "", nil, fmt.Errorf("CreateConfigurationSet: %w", err)
+	}
+	// internalQuery only returns nil on a < 400 response, and
+	// CreateConfigurationSet always answers 501 today, so this line is
+	// unreachable in practice — kept so the handler still does the right
+	// thing if the service ever grows a real implementation.
+	return name, map[string]string{"Id": name}, nil
+}
+
+func (h *sesConfigurationSetHandler) Delete(ctx context.Context, router http.Handler, cfg *config.Config, physicalID string, rCtx *resolveContext) error {
+	params := map[string]string{
+		"Action":               "DeleteConfigurationSet",
+		"ConfigurationSetName": physicalID,
+	}
+	rec, err := internalQuery(ctx, router, rCtx.Region, params)
+	return teardownError("DeleteConfigurationSet", rec, err)
 }
