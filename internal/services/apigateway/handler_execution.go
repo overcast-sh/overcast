@@ -130,6 +130,15 @@ func (h *Handler) ExecuteRestAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 3b-ii. Enforce a Lambda TOKEN/REQUEST authorizer (authorizationType
+	// CUSTOM). AWS_IAM methods are intentionally not enforced here — see the
+	// package comment in handler_lambda_auth.go.
+	nr, authorized := h.checkRestLambdaAuthorizer(w, r, apiID, resource, method, requestPath, stageVars)
+	if !authorized {
+		return
+	}
+	r = nr
+
 	// 3c. Enforce API key requirement (apiKeyRequired=true on the method).
 	// AWS responds with 403 Forbidden when the x-api-key header is missing,
 	// invalid, disabled, or not associated (via a usage plan) with this stage.
@@ -244,6 +253,24 @@ func (h *Handler) executeRestLambdaProxy(
 	// before binaryMediaTypes support existed here.
 	isBinaryRequest := matchesBinaryMediaType(r.Header.Get("Content-Type"), api.BinaryMediaTypes)
 
+	reqCtx := v1RequestContext{
+		AccountID:        h.accountID(),
+		APIID:            api.ID,
+		ResourceID:       resource.ID,
+		Stage:            chi.URLParam(r, "stageName"),
+		RequestID:        protocol.NewRequestID(),
+		Identity:         v1Identity{SourceIP: clientIP(r)},
+		HTTPMethod:       r.Method,
+		Protocol:         requestProtocol(r),
+		Path:             requestPath,
+		ResourcePath:     resource.Path,
+		RequestTime:      h.clk.Now().Format("02/Jan/2006:15:04:05 +0000"),
+		RequestTimeEpoch: h.clk.Now().UnixMilli(),
+	}
+	if authCtx, ok := lambdaAuthorizerContextFromRequest(r); ok {
+		reqCtx.Authorizer = authCtx
+	}
+
 	proxyEvent := lambdaV1ProxyEvent{
 		Resource:                        resource.Path,
 		Path:                            requestPath,
@@ -254,22 +281,9 @@ func (h *Handler) executeRestLambdaProxy(
 		MultiValueQueryStringParameters: multiValueQueryParams,
 		PathParameters:                  pathParams,
 		StageVariables:                  stageVars,
-		RequestContext: v1RequestContext{
-			AccountID:        h.accountID(),
-			APIID:            api.ID,
-			ResourceID:       resource.ID,
-			Stage:            chi.URLParam(r, "stageName"),
-			RequestID:        protocol.NewRequestID(),
-			Identity:         v1Identity{SourceIP: clientIP(r)},
-			HTTPMethod:       r.Method,
-			Protocol:         requestProtocol(r),
-			Path:             requestPath,
-			ResourcePath:     resource.Path,
-			RequestTime:      h.clk.Now().Format("02/Jan/2006:15:04:05 +0000"),
-			RequestTimeEpoch: h.clk.Now().UnixMilli(),
-		},
-		Body:            proxyEventBody(body, isBinaryRequest),
-		IsBase64Encoded: isBinaryRequest,
+		RequestContext:                  reqCtx,
+		Body:                            proxyEventBody(body, isBinaryRequest),
+		IsBase64Encoded:                 isBinaryRequest,
 	}
 
 	payload, err := json.Marshal(proxyEvent)
@@ -407,6 +421,15 @@ func (h *Handler) ExecuteV2API(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 2c. Enforce a Lambda REQUEST authorizer (authorizationType CUSTOM).
+	// AWS_IAM routes are intentionally not enforced here — see the package
+	// comment in handler_lambda_auth.go.
+	nr, authorized := h.checkV2LambdaAuthorizer(w, r, apiID, api, route, requestPath, stageVars)
+	if !authorized {
+		return
+	}
+	r = nr
+
 	// 3. Resolve integration.
 	var integrationID string
 	if strings.HasPrefix(route.Target, "integrations/") {
@@ -504,6 +527,29 @@ func (h *Handler) executeV2LambdaProxy(
 
 	var payload []byte
 	if integ.PayloadFormatVersion == "2.0" {
+		reqCtx := v2RequestContext{
+			AccountID: h.accountID(),
+			APIID:     api.ApiID,
+			// Folded: a Host is case-insensitive, so the domain reported to
+			// handler code must not vary with how the caller typed it.
+			DomainName:   serviceutil.FoldHostname(r.Host),
+			DomainPrefix: serviceutil.DomainPrefix(r.Host),
+			HTTP: v2HTTP{
+				Method:    r.Method,
+				Path:      requestPath,
+				Protocol:  requestProtocol(r),
+				SourceIP:  clientIP(r),
+				UserAgent: r.Header.Get("User-Agent"),
+			},
+			RequestID: protocol.NewRequestID(),
+			RouteKey:  route.RouteKey,
+			Stage:     chi.URLParam(r, "stageName"),
+			Time:      h.clk.Now().Format("02/Jan/2006:15:04:05 +0000"),
+			TimeEpoch: h.clk.Now().UnixMilli(),
+		}
+		if authCtx, ok := lambdaAuthorizerContextFromRequest(r); ok {
+			reqCtx.Authorizer = authCtx
+		}
 		event := lambdaV2ProxyEvent{
 			Version:               "2.0",
 			RouteKey:              route.RouteKey,
@@ -514,28 +560,9 @@ func (h *Handler) executeV2LambdaProxy(
 			PathParameters:        pathParams,
 			StageVariables:        stageVars,
 			Cookies:               cookies,
-			RequestContext: v2RequestContext{
-				AccountID: h.accountID(),
-				APIID:     api.ApiID,
-				// Folded: a Host is case-insensitive, so the domain reported to
-				// handler code must not vary with how the caller typed it.
-				DomainName:   serviceutil.FoldHostname(r.Host),
-				DomainPrefix: serviceutil.DomainPrefix(r.Host),
-				HTTP: v2HTTP{
-					Method:    r.Method,
-					Path:      requestPath,
-					Protocol:  requestProtocol(r),
-					SourceIP:  clientIP(r),
-					UserAgent: r.Header.Get("User-Agent"),
-				},
-				RequestID: protocol.NewRequestID(),
-				RouteKey:  route.RouteKey,
-				Stage:     chi.URLParam(r, "stageName"),
-				Time:      h.clk.Now().Format("02/Jan/2006:15:04:05 +0000"),
-				TimeEpoch: h.clk.Now().UnixMilli(),
-			},
-			Body:            proxyEventBody(body, isBinaryRequest),
-			IsBase64Encoded: isBinaryRequest,
+			RequestContext:        reqCtx,
+			Body:                  proxyEventBody(body, isBinaryRequest),
+			IsBase64Encoded:       isBinaryRequest,
 		}
 		payload, err = json.Marshal(event)
 	} else {
@@ -562,6 +589,22 @@ func (h *Handler) executeV2LambdaProxy(
 			headersMulti[lower] = vals
 			headersV1[lower] = vals[len(vals)-1]
 		}
+		reqCtx := v1RequestContext{
+			AccountID:        h.accountID(),
+			APIID:            api.ApiID,
+			Stage:            chi.URLParam(r, "stageName"),
+			RequestID:        protocol.NewRequestID(),
+			Identity:         v1Identity{SourceIP: clientIP(r)},
+			HTTPMethod:       r.Method,
+			Protocol:         requestProtocol(r),
+			Path:             requestPath,
+			ResourcePath:     route.RouteKey,
+			RequestTime:      h.clk.Now().Format("02/Jan/2006:15:04:05 +0000"),
+			RequestTimeEpoch: h.clk.Now().UnixMilli(),
+		}
+		if authCtx, ok := lambdaAuthorizerContextFromRequest(r); ok {
+			reqCtx.Authorizer = authCtx
+		}
 		event := lambdaV1ProxyEvent{
 			Resource:                        route.RouteKey,
 			Path:                            requestPath,
@@ -572,21 +615,9 @@ func (h *Handler) executeV2LambdaProxy(
 			MultiValueQueryStringParameters: queryParamsMulti,
 			PathParameters:                  pathParams,
 			StageVariables:                  stageVars,
-			RequestContext: v1RequestContext{
-				AccountID:        h.accountID(),
-				APIID:            api.ApiID,
-				Stage:            chi.URLParam(r, "stageName"),
-				RequestID:        protocol.NewRequestID(),
-				Identity:         v1Identity{SourceIP: clientIP(r)},
-				HTTPMethod:       r.Method,
-				Protocol:         requestProtocol(r),
-				Path:             requestPath,
-				ResourcePath:     route.RouteKey,
-				RequestTime:      h.clk.Now().Format("02/Jan/2006:15:04:05 +0000"),
-				RequestTimeEpoch: h.clk.Now().UnixMilli(),
-			},
-			Body:            proxyEventBody(body, isBinaryRequest),
-			IsBase64Encoded: isBinaryRequest,
+			RequestContext:                  reqCtx,
+			Body:                            proxyEventBody(body, isBinaryRequest),
+			IsBase64Encoded:                 isBinaryRequest,
 		}
 		payload, err = json.Marshal(event)
 	}
@@ -750,6 +781,11 @@ type v1RequestContext struct {
 	ResourcePath     string     `json:"resourcePath"`
 	RequestTime      string     `json:"requestTime"`
 	RequestTimeEpoch int64      `json:"requestTimeEpoch"`
+	// Authorizer carries a Lambda TOKEN/REQUEST authorizer's principalId and
+	// custom context (flattened, per AWS's documented shape) — nil unless
+	// checkRestLambdaAuthorizer / checkV2LambdaAuthorizer (payload format 1.0)
+	// allowed the request. See handler_lambda_auth.go.
+	Authorizer map[string]any `json:"authorizer,omitempty"`
 }
 
 type v1Identity struct {
@@ -783,6 +819,12 @@ type v2RequestContext struct {
 	Stage        string `json:"stage"`
 	Time         string `json:"time"`
 	TimeEpoch    int64  `json:"timeEpoch"`
+	// Authorizer carries a Lambda REQUEST authorizer's context — nested under
+	// "lambda" for payload format 2.0 (either response shape), flat
+	// (principalId + context, format 1.0's REST-compatible shape) otherwise.
+	// Nil unless checkV2LambdaAuthorizer allowed the request. See
+	// handler_lambda_auth.go.
+	Authorizer map[string]any `json:"authorizer,omitempty"`
 }
 
 type v2HTTP struct {

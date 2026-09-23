@@ -609,13 +609,15 @@ func (h *Handler) DeleteUsagePlanKey(w http.ResponseWriter, r *http.Request) {
 // ---- HTTP API v2: Authorizers ---------------------------------------------
 
 type createV2AuthorizerRequest struct {
-	Name                         string     `json:"name"`
-	AuthorizerType               string     `json:"authorizerType"` // REQUEST, JWT
-	IdentitySource               string     `json:"identitySource,omitempty"`
-	AuthorizerURI                string     `json:"authorizerUri,omitempty"`
-	AuthorizerCredentialsArn     string     `json:"authorizerCredentialsArn,omitempty"`
-	AuthorizerResultTTLInSeconds int        `json:"authorizerResultTtlInSeconds,omitempty"`
-	JwtConfiguration             *JwtConfig `json:"jwtConfiguration,omitempty"`
+	Name                           string     `json:"name"`
+	AuthorizerType                 string     `json:"authorizerType"` // REQUEST, JWT
+	IdentitySource                 string     `json:"identitySource,omitempty"`
+	AuthorizerURI                  string     `json:"authorizerUri,omitempty"`
+	AuthorizerCredentialsArn       string     `json:"authorizerCredentialsArn,omitempty"`
+	AuthorizerResultTTLInSeconds   int        `json:"authorizerResultTtlInSeconds,omitempty"`
+	JwtConfiguration               *JwtConfig `json:"jwtConfiguration,omitempty"`
+	AuthorizerPayloadFormatVersion string     `json:"authorizerPayloadFormatVersion,omitempty"`
+	EnableSimpleResponses          bool       `json:"enableSimpleResponses,omitempty"`
 }
 
 // CreateV2Authorizer handles POST /v2/apis/{apiId}/authorizers.
@@ -643,14 +645,16 @@ func (h *Handler) CreateV2Authorizer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	auth := &AuthorizerV2{
-		AuthorizerID:                 generateShortID(),
-		Name:                         req.Name,
-		AuthorizerType:               req.AuthorizerType,
-		IdentitySource:               req.IdentitySource,
-		AuthorizerURI:                req.AuthorizerURI,
-		AuthorizerCredentialsArn:     req.AuthorizerCredentialsArn,
-		AuthorizerResultTTLInSeconds: req.AuthorizerResultTTLInSeconds,
-		JwtConfiguration:             req.JwtConfiguration,
+		AuthorizerID:                   generateShortID(),
+		Name:                           req.Name,
+		AuthorizerType:                 req.AuthorizerType,
+		IdentitySource:                 req.IdentitySource,
+		AuthorizerURI:                  req.AuthorizerURI,
+		AuthorizerCredentialsArn:       req.AuthorizerCredentialsArn,
+		AuthorizerResultTTLInSeconds:   req.AuthorizerResultTTLInSeconds,
+		JwtConfiguration:               req.JwtConfiguration,
+		AuthorizerPayloadFormatVersion: req.AuthorizerPayloadFormatVersion,
+		EnableSimpleResponses:          req.EnableSimpleResponses,
 	}
 
 	if aerr := h.store.putV2Authorizer(r.Context(), apiID, auth); aerr != nil {
