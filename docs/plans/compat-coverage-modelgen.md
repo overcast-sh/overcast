@@ -1520,6 +1520,69 @@ than raising —, `AddTagsToStream` and `DeleteStream`), `go-sdk` and `cli` tag
 `env=test` where the other three tag `env=compat`, and no two of the five assert
 the same thing about `DescribeStream`. The authored scenario is the union.
 
+#### 2026-09-23 — wave 1's first three flips
+
+`kinesis-streams`, `logs-groups` and `eventbridge-rules` are flipped (#1116),
+one PR each, stacked in that order. Their shadows soaked on `main` from
+2026-09-07. The nightly of 2026-09-22 (run 35703819967) compared all three
+on every one of its three soak runs:
+
+| Group | Pairs | Agreed | Parity debt closed | Diverged | Native lines deleted |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `kinesis-streams` | 49 | 35 | 14 | 0 | 660 |
+| `logs-groups` | 56 | 40 | 16 | 0 | 754 |
+| `eventbridge-rules` | 63 | 45 | 18 | 0 | 834 |
+
+Three things the flips settle for the ports that follow:
+
+- **This is where parity debt actually closes.** `sqs-queues` closed no row
+  (every suite already passed it). These three close 48 `dotnet-sdk` and
+  `rust-sdk` rows. Each moves from skip to pass on the next baseline
+  promotion on `main`, and no baseline file is edited by hand. The flip does
+  delete the group's rows from `compat/parity-debt.json`, though:
+  `--check-parity` fails a PR that leaves "stale parity debt" for a group a
+  suite now implements. `compat/model/README.md` lists this as step 6. The
+  `sqs-queues` flip never needed it.
+- **The corpus guard names every ported group.** `cmd/compatgen`'s
+  `TestCommittedRegistryPortedGroups` (formerly
+  `TestCommittedRegistryPortsSqsQueues`) pins the set on purpose, so each
+  flip adds its group there. The `cmd/compat`, `scripts/` and
+  python/node guards #1932 inverted pin only `sqs-queues`, and a later flip
+  leaves them alone. `logs-metric-filters` (#1949) is in the set as well:
+  it was authored as a scenario from the start and never had natives or a
+  shadow.
+- **Tests from other groups hide in the ported group's section.**
+  `DescribeLogStreams` is a `logs-events` test, and `ListShards` is a
+  `kinesis-shards` test in `java-sdk`. Each sat in the ported group's
+  section and moves rather than being deleted. go-sdk's
+  `RemoveTagsFromStream` was registered nowhere and goes with its section.
+  So a flip deletes by impl key, not by source region.
+
+**Wave 2, re-chosen by measurement.** Ports 4–6 as ranked (`ecs-clusters`,
+`cognito-userpools`, `rds-instances`) each need their service's shape
+snapshot, measured at the pinned revision:
+
+| Service | Bytes | Ops | B/op |
+| --- | ---: | ---: | ---: |
+| ecs | 182,266 | 77 | 2,367 — over the 1,608 B/op gate |
+| cognito-identity-provider | 197,617 | 132 | 1,497 |
+| rds | 277,817 | 164 | 1,694 — over the gate |
+
+`ecs` and `rds` are deferred for the reason `s3` was: each needs structural
+pruning, or a reviewed exception, before it can join. `cognito-userpools`
+went ahead with no cap raise (#2114). The rest of the wave is the unported
+groups of services the snapshot already holds, which cost no snapshot bytes:
+`eventbridge-events` (#2107), `eventbridge-buses`, `kinesis-shards`,
+`kinesis-records` and `logs-events`.
+
+Two of those five found generator gaps and are parked rather than forced.
+`kinesis-records` needs a portable blob value (#1910, draft #2123). The CLI
+reads a blob literal as base64, while python and node send it as UTF-8. The
+`logs-events` port needs a value for "now", and dotnet-sdk's emitter has to
+resolve SDK types at emit time: AWSSDK.CloudWatchLogs types
+`InputLogEvent.Timestamp` as `DateTime?`, where the model says `long` (draft
+#2132).
+
 ---
 
 ## 4. First milestone — pilot (Phase G2)
@@ -2017,7 +2080,7 @@ original scope stays legible.
 | **G3** Typed backends | **Done**, tracked as **#1820**. All four typed backends landed, one PR each: `go-sdk` (#1830, plus #1836 for emit-time SDK type resolution and #1833 for the precedent notes), `java-sdk` (#1851), `dotnet-sdk` (#1848), `rust-sdk` (#1853). Every backend produces results identical, test for test, to the three interpreters and to each other — 39 `pass` / 23 `unimplemented` / 0 `fail` / 0 `skip`, three runs each — and every generated group's `suites` now lists all seven backends. §3.2's binding decision, measured rather than assumed: only `go-sdk` reads the vendored SDK at emit time; `java-sdk`, `dotnet-sdk` and `rust-sdk` derive types from the pinned model alone. G4 fleet rollout is unblocked; see the §2 note dated 2026-09-06 | Source emitters for `go-sdk`, then `java-sdk`, `dotnet-sdk`, `rust-sdk` (one suite per PR); member→field naming rules per language | L each | Generated source compiles in the suite's normal build; the pilot groups produce **identical** results to the interpreter suites; generated `suites` scoping widens automatically on regeneration |
 | **G4** Tier-1 fleet rollout | **In progress**, tracked as **#1883**. **Wave 1 done** at Tier 0 (2026-09-07): `batch` #1881, `elastic-load-balancing` #1882 (+ classification fix #1889, closing #1884), `servicediscovery` #1887 — the inert tier's Phase I4 pilot trio, stacked bottom-up and merged. Every probe test lands `unimplemented` and every lifecycle group `skip` until the inert tier implements each service (the #1818 → #1821 precedent) — measured 0 `pass` / 0 `fail` in all three, batch 11 `unimplemented`/34 `skip`, servicediscovery 3/25, elastic-load-balancing 5/12; see the §2 note dated 2026-09-07 for the per-service table and the four generator faults the wave found. **Wave 2 done** (#1883, 2026-09-07): `secretsmanager` (#1897), `sns` (#1900), `kms` (#1899), `iam` (#1919, 180 modeled operations), chosen by implemented-operations-per-snapshot-byte rather than by smallest operation count; its snapshot/budget PR (`maxShapeSnapshotBytes` to 800 KiB) merged as #1891. Ten of the 26 new wave-1/wave-2 groups are gated on `main` (#1925); the rest stay `candidate` behind a known defect or a Tier-0 skip — see the §2 notes dated 2026-09-07 for per-service results, every defect filed, and the exact list. `elastic-load-balancing`'s rust nested-composite fault (#1885) is fixed by #1890, and #1896 (only `rust-sdk` read a nested `Error.Code`) is fixed by #1918 — `sns` and `iam`, both Query-protocol, are the proof — so no wave-1 or wave-2 group is scoped away from `rust-sdk` or blocked on Query error handling any more | One service per PR, ordered by [inert-tier-rollout.md](./inert-tier-rollout.md) then [full-emulation-priority.md](./full-emulation-priority.md); capped probe groups for [services-never-emulated.md](./services-never-emulated.md) | L, parallelizable per service | Per service: recipe reviewed, no unexplained refusal in `gaps.json`, soak passed, CI wall-clock within budget, coverage metric moves |
 | **G5** Steady state | Not started | Weekly model-refresh PR regenerates scenarios; coverage becomes the dashboard headline; `--slowest N` latency census | S | A model-refresh PR shows added/removed operations per service and cannot break the gate; coverage per service/tier is published |
-| **G6** Native-group migration (§3.11; overlaps G4/G5, starts any time after G3) | **In progress** — the mechanism landed with the pilot (#1898) and its prerequisites (#1916), and the first flip is merged: `sqs-queues` (#1932, closing the prerequisites tracker #1903, 2026-09-07), after the nightly `--compare-shadow` (run 34066538988) reported all 56 (suite, test) pairs in agreement in each of its three soak runs. The flip deleted 1,161 native lines across all seven suites and left every suite's `sqs-queues` row `pass` (8/8); the registry and baseline names did not move. `sqs-queues` carried no `dotnet-sdk`/`rust-sdk` parity debt going in, so the measurable gain is the union of assertions — `java-sdk` and `rust-sdk` gain the clauses their natives omitted. **G6 wave 1 chosen** (#1116, 2026-09-08): `kinesis-streams`, `logs-groups`, `eventbridge-rules`, `ecs-clusters`, `cognito-userpools`, `rds-instances` — 94 `dotnet-sdk`+`rust-sdk` rows; cross-service groups (`pipes-wiring`, `eventbridge-target-fanout`) wait on #1931. See the §3.11 notes dated 2026-09-07/08 for the two-PR shape and what the pilot found in the natives. The plan's original "94 hand-written groups" scope (below) is itself stale: `registry.json` has 141 groups / 803 tests as of 2026-09-08 | Port the existing 94 hand-written groups to authored IR scenarios, group by group: same registry names, one parallel soak cycle, results must match, then delete the per-language code. Exceptions file + lint for what stays native (streaming, presigned flows, the idiom suite). | L, parallelizable per group | Per group: soak-parity with the native predecessor, native code deleted, registry names unchanged; fleet-wide: rust/dotnet parity debt reaches zero via backends, the exceptions file is the only remaining native test code and every entry carries a reason |
+| **G6** Native-group migration (§3.11; overlaps G4/G5, starts any time after G3) | **In progress** — the mechanism landed with the pilot (#1898) and its prerequisites (#1916), and the first flip is merged: `sqs-queues` (#1932, closing the prerequisites tracker #1903, 2026-09-07), after the nightly `--compare-shadow` (run 34066538988) reported all 56 (suite, test) pairs in agreement in each of its three soak runs. The flip deleted 1,161 native lines across all seven suites and left every suite's `sqs-queues` row `pass` (8/8); the registry and baseline names did not move. `sqs-queues` carried no `dotnet-sdk`/`rust-sdk` parity debt going in, so the measurable gain is the union of assertions — `java-sdk` and `rust-sdk` gain the clauses their natives omitted. **Wave 1 ranks 1–3 flipped** (#1116, 2026-09-23): `kinesis-streams`, `logs-groups` and `eventbridge-rules`. Each soaked with zero divergences, 48 `dotnet-sdk`/`rust-sdk` parity rows are closed and 2,248 native lines are deleted — see the §3.11 note dated 2026-09-23. **G6 wave 1 chosen** (#1116, 2026-09-08): `kinesis-streams`, `logs-groups`, `eventbridge-rules`, `ecs-clusters`, `cognito-userpools`, `rds-instances` — 94 `dotnet-sdk`+`rust-sdk` rows; cross-service groups (`pipes-wiring`, `eventbridge-target-fanout`) wait on #1931. See the §3.11 notes dated 2026-09-07/08 for the two-PR shape and what the pilot found in the natives. The plan's original "94 hand-written groups" scope (below) is itself stale: `registry.json` has 141 groups / 803 tests as of 2026-09-08 | Port the existing 94 hand-written groups to authored IR scenarios, group by group: same registry names, one parallel soak cycle, results must match, then delete the per-language code. Exceptions file + lint for what stays native (streaming, presigned flows, the idiom suite). | L, parallelizable per group | Per group: soak-parity with the native predecessor, native code deleted, registry names unchanged; fleet-wide: rust/dotnet parity debt reaches zero via backends, the exceptions file is the only remaining native test code and every entry carries a reason |
 
 Every phase begins with a failing check, lands as small independently
 reviewable PRs, and leaves `main` green under both existing gates.
