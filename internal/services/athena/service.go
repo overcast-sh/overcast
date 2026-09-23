@@ -23,6 +23,7 @@ import (
 	"github.com/overcast-sh/overcast/internal/protocol"
 	"github.com/overcast-sh/overcast/internal/protocol/codec"
 	"github.com/overcast-sh/overcast/internal/protocol/op"
+	"github.com/overcast-sh/overcast/internal/services/glue"
 	"github.com/overcast-sh/overcast/internal/serviceutil"
 	"github.com/overcast-sh/overcast/internal/state"
 )
@@ -169,6 +170,7 @@ type Service struct {
 	clk     clock.Clock
 	ops     map[string]http.HandlerFunc
 	typedOp map[string]op.Operation
+	catalog glue.Catalog // set by InitGlueCatalog; see glue_catalog.go
 }
 
 // New returns a configured Athena Service.

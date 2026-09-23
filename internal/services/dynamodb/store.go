@@ -421,12 +421,14 @@ func (s *dynamoStore) listTables(ctx context.Context, prefix string) ([]*Table, 
 
 // ---- Item helpers ----------------------------------------------------------
 
-// extractKeyValue extracts the scalar string value from a DynamoDB attribute node.
-// e.g. {"S": "foo"} → "foo", {"N": "42"} → "42".
+// extractKeyValue extracts the scalar string value from a DynamoDB attribute
+// node. e.g. {"S": "foo"} → "foo", {"N": "42"} → "42", {"B": <bytes>} →
+// base64 text. Delegates to scalarString (expr.go) so a Binary key resolves
+// to the identical string whichever protocol decoded the request — see
+// scalarString's doc comment (issue #1999).
 func extractKeyValue(attr attrValue) string {
 	for _, v := range attr {
-		switch s := v.(type) {
-		case string:
+		if s, ok := scalarString(v); ok {
 			return s
 		}
 	}
