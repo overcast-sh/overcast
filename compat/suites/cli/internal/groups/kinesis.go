@@ -14,14 +14,6 @@ func Kinesis() ServiceGroup {
 	g := &kinesisGroup{}
 	return ServiceGroup{
 		Impls: map[string]harness.TestFn{
-			// kinesis-streams
-			"kinesis-streams:CreateStream":          g.CreateStream,
-			"kinesis-streams:DescribeStream":        g.DescribeStream,
-			"kinesis-streams:DescribeStreamSummary": g.DescribeStreamSummary,
-			"kinesis-streams:ListStreams":           g.ListStreams,
-			"kinesis-streams:AddTagsToStream":       g.AddTagsToStream,
-			"kinesis-streams:ListTagsForStream":     g.ListTagsForStream,
-			"kinesis-streams:DeleteStream":          g.DeleteStream,
 			// kinesis-records
 			"kinesis-records:PutRecord":        g.PutRecord,
 			"kinesis-records:PutRecords":       g.PutRecords,
@@ -33,12 +25,10 @@ func Kinesis() ServiceGroup {
 			"kinesis-shards:MergeShards": g.MergeShards,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"kinesis-streams": g.setupStreams,
 			"kinesis-records": g.setupRecords,
 			"kinesis-shards":  g.setupShards,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"kinesis-streams": g.teardownStream,
 			"kinesis-records": g.teardownStream,
 			"kinesis-shards":  g.teardownStream,
 		},
@@ -79,140 +69,7 @@ func (g *kinesisGroup) waitStreamActive(t *harness.TestContext) error {
 	return fmt.Errorf("kinesis: stream %s did not become ACTIVE", g.currentStreamName(t))
 }
 
-// ─── kinesis-streams ─────────────────────────────────────────────────────────
-
-func (g *kinesisGroup) setupStreams(_ context.Context, t *harness.TestContext) error {
-	name := fmt.Sprintf("%s-kinesis", t.RunID)
-	t.Set("stream_name", name)
-	// Best-effort pre-delete of any leftover stream from previous runs.
-	awscli.Run(t.Endpoint, t.Region, "kinesis", "delete-stream", "--stream-name", name) //nolint:errcheck
-	return nil
-}
-
-func (g *kinesisGroup) CreateStream(_ context.Context, t *harness.TestContext) error {
-	err := awscli.Run(t.Endpoint, t.Region,
-		"kinesis", "create-stream",
-		"--stream-name", g.currentStreamName(t),
-		"--shard-count", "1",
-	)
-	if err != nil {
-		return err
-	}
-	return g.waitStreamActive(t)
-}
-
-func (g *kinesisGroup) DescribeStream(_ context.Context, t *harness.TestContext) error {
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"kinesis", "describe-stream",
-		"--stream-name", g.currentStreamName(t),
-	)
-	if err != nil {
-		return err
-	}
-	desc, _ := out["StreamDescription"].(map[string]any)
-	shards, _ := desc["Shards"].([]any)
-	if len(shards) == 0 {
-		return fmt.Errorf("kinesis DescribeStream: no shards found")
-	}
-	shard := shards[0].(map[string]any)
-	shardID, _ := shard["ShardId"].(string)
-	t.Set("shard_id", shardID)
-
-	sr, _ := shard["HashKeyRange"].(map[string]any)
-	t.Set("hash_key_start", fmt.Sprintf("%v", sr["StartingHashKey"]))
-	t.Set("hash_key_end", fmt.Sprintf("%v", sr["EndingHashKey"]))
-	return nil
-}
-
-func (g *kinesisGroup) DescribeStreamSummary(_ context.Context, t *harness.TestContext) error {
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"kinesis", "describe-stream-summary",
-		"--stream-name", g.currentStreamName(t),
-	)
-	if err != nil {
-		return err
-	}
-	desc, _ := out["StreamDescriptionSummary"].(map[string]any)
-	if desc["StreamStatus"] != "ACTIVE" {
-		return fmt.Errorf("kinesis DescribeStreamSummary: expected StreamStatus=ACTIVE, got %v", desc["StreamStatus"])
-	}
-	return nil
-}
-
-func (g *kinesisGroup) ListStreams(_ context.Context, t *harness.TestContext) error {
-	out, err := awscli.RunOutput(t.Endpoint, t.Region, "kinesis", "list-streams")
-	if err != nil {
-		return err
-	}
-	names, _ := out["StreamNames"].([]any)
-	want := g.currentStreamName(t)
-	for _, v := range names {
-		if v == want {
-			return nil
-		}
-	}
-	return fmt.Errorf("kinesis ListStreams: stream %q not found", want)
-}
-
-func (g *kinesisGroup) AddTagsToStream(_ context.Context, t *harness.TestContext) error {
-	if err := awscli.Run(t.Endpoint, t.Region,
-		"kinesis", "add-tags-to-stream",
-		"--stream-name", g.currentStreamName(t),
-		"--tags", `{"env":"test"}`,
-	); err != nil {
-		return err
-	}
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"kinesis", "list-tags-for-stream",
-		"--stream-name", g.currentStreamName(t),
-	)
-	if err != nil {
-		return fmt.Errorf("kinesis AddTagsToStream: list-tags-for-stream failed: %w", err)
-	}
-	tags, _ := out["Tags"].([]any)
-	for _, raw := range tags {
-		if m, ok := raw.(map[string]any); ok && m["Key"] == "env" && m["Value"] == "test" {
-			return nil
-		}
-	}
-	return fmt.Errorf("kinesis AddTagsToStream: tag env=test not found")
-}
-
-func (g *kinesisGroup) ListTagsForStream(_ context.Context, t *harness.TestContext) error {
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"kinesis", "list-tags-for-stream",
-		"--stream-name", g.currentStreamName(t),
-	)
-	if err != nil {
-		return err
-	}
-	tags, _ := out["Tags"].([]any)
-	if len(tags) == 0 {
-		return fmt.Errorf("kinesis ListTagsForStream: no tags returned")
-	}
-	return nil
-}
-
-func (g *kinesisGroup) DeleteStream(_ context.Context, t *harness.TestContext) error {
-	name := g.currentStreamName(t)
-	if err := awscli.Run(t.Endpoint, t.Region,
-		"kinesis", "delete-stream",
-		"--stream-name", name,
-	); err != nil {
-		return err
-	}
-	out, err := awscli.RunOutput(t.Endpoint, t.Region, "kinesis", "list-streams")
-	if err != nil {
-		return fmt.Errorf("kinesis DeleteStream: list-streams failed: %w", err)
-	}
-	names, _ := out["StreamNames"].([]any)
-	for _, v := range names {
-		if v == name {
-			return fmt.Errorf("kinesis DeleteStream: stream %q still present after delete", name)
-		}
-	}
-	return nil
-}
+// ─── shared ───────────────────────────────────────────────────────────────────
 
 func (g *kinesisGroup) teardownStream(_ context.Context, t *harness.TestContext) error {
 	awscli.Run(t.Endpoint, t.Region, "kinesis", "delete-stream", "--stream-name", g.currentStreamName(t)) //nolint:errcheck

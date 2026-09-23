@@ -24,97 +24,6 @@ def _wait_stream_active(kin, stream_name: str, max_wait: int = 10) -> None:
     raise TimeoutError(f"Stream {stream_name!r} did not become ACTIVE within {max_wait}s")
 
 
-# ── kinesis-streams ───────────────────────────────────────────────────────────
-
-def setup_kinesis_streams(ctx: TestContext) -> None:
-    kin = _kin(ctx)
-    name = f"oc-{ctx.run_id}-stream"
-    kin.create_stream(StreamName=name, ShardCount=1)
-    _wait_stream_active(kin, name)
-    ctx["kinesis_stream"] = name
-
-
-def teardown_kinesis_streams(ctx: TestContext) -> None:
-    kin = _kin(ctx)
-    name = ctx.get("kinesis_stream")
-    if not name:
-        return
-    try:
-        kin.delete_stream(StreamName=name, EnforceConsumerDeletion=True)
-    except Exception:
-        pass
-
-
-def CreateStream(ctx: TestContext) -> None:
-    kin = _kin(ctx)
-    name = f"oc-{ctx.run_id}-create"
-    kin.create_stream(StreamName=name, ShardCount=1)
-    _wait_stream_active(kin, name)
-    ctx["kinesis_create_stream"] = name
-    kin.delete_stream(StreamName=name, EnforceConsumerDeletion=True)
-
-
-def DescribeStream(ctx: TestContext) -> None:
-    kin = _kin(ctx)
-    name = ctx["kinesis_stream"]
-    resp = kin.describe_stream(StreamName=name)
-    desc = resp["StreamDescription"]
-    if desc["StreamName"] != name:
-        raise AssertionError(f"DescribeStream: name mismatch {desc['StreamName']!r}")
-    if not desc.get("Shards"):
-        raise AssertionError("DescribeStream: no shards returned")
-
-
-def DescribeStreamSummary(ctx: TestContext) -> None:
-    kin = _kin(ctx)
-    name = ctx["kinesis_stream"]
-    resp = kin.describe_stream_summary(StreamName=name)
-    summary = resp["StreamDescriptionSummary"]
-    if summary["StreamName"] != name:
-        raise AssertionError(f"DescribeStreamSummary: name mismatch {summary['StreamName']!r}")
-    if summary["OpenShardCount"] < 1:
-        raise AssertionError(f"DescribeStreamSummary: expected ≥1 shard, got {summary['OpenShardCount']}")
-
-
-def ListStreams(ctx: TestContext) -> None:
-    kin = _kin(ctx)
-    name = ctx["kinesis_stream"]
-    resp = kin.list_streams()
-    if name not in resp.get("StreamNames", []):
-        raise AssertionError(f"ListStreams: {name!r} not found in {resp.get('StreamNames')}")
-
-
-def AddTagsToStream(ctx: TestContext) -> None:
-    kin = _kin(ctx)
-    name = ctx["kinesis_stream"]
-    kin.add_tags_to_stream(StreamName=name, Tags={"env": "compat", "suite": "python-sdk"})
-    resp = kin.list_tags_for_stream(StreamName=name)
-    tags = {t["Key"]: t["Value"] for t in resp.get("Tags", [])}
-    if tags.get("env") != "compat":
-        raise AssertionError(f"AddTagsToStream: env=compat tag not found after add; got {tags}")
-
-
-def ListTagsForStream(ctx: TestContext) -> None:
-    kin = _kin(ctx)
-    name = ctx["kinesis_stream"]
-    resp = kin.list_tags_for_stream(StreamName=name)
-    tags = {t["Key"]: t["Value"] for t in resp.get("Tags", [])}
-    if tags.get("env") != "compat":
-        raise AssertionError(f"ListTagsForStream: expected env=compat, got {tags}")
-
-
-def DeleteStream(ctx: TestContext) -> None:
-    # Already tested via setup lifecycle; test a separate transient stream
-    kin = _kin(ctx)
-    name = f"oc-{ctx.run_id}-del"
-    kin.create_stream(StreamName=name, ShardCount=1)
-    _wait_stream_active(kin, name)
-    kin.delete_stream(StreamName=name, EnforceConsumerDeletion=True)
-    resp = kin.list_streams()
-    if name in resp.get("StreamNames", []):
-        raise AssertionError(f"DeleteStream: {name!r} still listed after deletion")
-
-
 # ── kinesis-records ───────────────────────────────────────────────────────────
 
 def setup_kinesis_records(ctx: TestContext) -> None:
@@ -268,13 +177,6 @@ def MergeShards(ctx: TestContext) -> None:
 # ── ImplMap ───────────────────────────────────────────────────────────────────
 
 IMPLS = {
-    "kinesis-streams:CreateStream": CreateStream,
-    "kinesis-streams:DescribeStream": DescribeStream,
-    "kinesis-streams:DescribeStreamSummary": DescribeStreamSummary,
-    "kinesis-streams:ListStreams": ListStreams,
-    "kinesis-streams:AddTagsToStream": AddTagsToStream,
-    "kinesis-streams:ListTagsForStream": ListTagsForStream,
-    "kinesis-streams:DeleteStream": DeleteStream,
     "kinesis-records:PutRecord": PutRecord,
     "kinesis-records:PutRecords": PutRecords,
     "kinesis-records:GetShardIterator": GetShardIterator,
@@ -285,13 +187,11 @@ IMPLS = {
 }
 
 SETUP = {
-    "kinesis-streams": setup_kinesis_streams,
     "kinesis-records": setup_kinesis_records,
     "kinesis-shards": setup_kinesis_shards,
 }
 
 TEARDOWN = {
-    "kinesis-streams": teardown_kinesis_streams,
     "kinesis-records": teardown_kinesis_records,
     "kinesis-shards": teardown_kinesis_shards,
 }

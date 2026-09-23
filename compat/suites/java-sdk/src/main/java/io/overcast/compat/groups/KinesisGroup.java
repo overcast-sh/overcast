@@ -14,7 +14,8 @@ import java.util.Map;
 /**
  * Kinesis compatibility test group.
  *
- * <p>Groups: kinesis-streams, kinesis-records, kinesis-shards.
+ * <p>Groups: kinesis-records, kinesis-shards. kinesis-streams resolves through
+ * its authored scenario (compat/model/authored/kinesis-streams.json).
  */
 public final class KinesisGroup implements ServiceGroup {
 
@@ -29,14 +30,7 @@ public final class KinesisGroup implements ServiceGroup {
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("kinesis-streams:CreateStream",          this::createStream),
-                Map.entry("kinesis-streams:DescribeStream",        this::describeStream),
-                Map.entry("kinesis-streams:DescribeStreamSummary", this::describeStreamSummary),
-                Map.entry("kinesis-streams:ListStreams",           this::listStreams),
                 Map.entry("kinesis-shards:ListShards",             this::listShards),
-                Map.entry("kinesis-streams:AddTagsToStream",       this::addTagsToStream),
-                Map.entry("kinesis-streams:ListTagsForStream",     this::listTagsForStream),
-                Map.entry("kinesis-streams:DeleteStream",          this::deleteStream),
                 Map.entry("kinesis-records:PutRecord",             this::putRecord),
                 Map.entry("kinesis-records:PutRecords",            this::putRecords),
                 Map.entry("kinesis-records:GetRecords",            this::getRecords),
@@ -49,7 +43,6 @@ public final class KinesisGroup implements ServiceGroup {
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("kinesis-streams", this::setupStreams),
                 Map.entry("kinesis-records", this::setupRecords),
                 Map.entry("kinesis-shards",  this::setupShards)
         );
@@ -58,73 +51,9 @@ public final class KinesisGroup implements ServiceGroup {
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("kinesis-streams", ctx -> deleteStreamSilently(ctx.getString("kinesisStream"))),
                 Map.entry("kinesis-records", ctx -> deleteStreamSilently(ctx.getString("kinesisRecordsStream"))),
                 Map.entry("kinesis-shards",  ctx -> deleteStreamSilently(ctx.getString("kinesisShardsStream")))
         );
-    }
-
-    // ── kinesis-streams ───────────────────────────────────────────────────────
-
-    private void setupStreams(TestContext ctx) {
-        ctx.set("kinesisStream", "compat-" + ctx.runId());
-    }
-
-    private void createStream(TestContext ctx) throws Exception {
-        String name = ctx.getString("kinesisStream");
-        kinesis().createStream(r -> r.streamName(name).shardCount(1));
-        waitActive(name);
-    }
-
-    private void describeStream(TestContext ctx) throws Exception {
-        String name = ctx.getString("kinesisStream");
-        var resp = kinesis().describeStream(r -> r.streamName(name));
-        Assertions.assertNotBlank(resp.streamDescription().streamARN(), "DescribeStream: streamARN is blank");
-        Assertions.assertEquals(StreamStatus.ACTIVE, resp.streamDescription().streamStatus(),
-                "DescribeStream: stream not ACTIVE");
-    }
-
-    private void describeStreamSummary(TestContext ctx) throws Exception {
-        String name = ctx.getString("kinesisStream");
-        var resp = kinesis().describeStreamSummary(r -> r.streamName(name));
-        Assertions.assertNotBlank(resp.streamDescriptionSummary().streamARN(),
-                "DescribeStreamSummary: streamARN is blank");
-        Assertions.assertEquals(StreamStatus.ACTIVE, resp.streamDescriptionSummary().streamStatus(),
-                "DescribeStreamSummary: stream not ACTIVE");
-    }
-
-    private void listStreams(TestContext ctx) throws Exception {
-        String name = ctx.getString("kinesisStream");
-        var resp = kinesis().listStreams(r -> r.limit(100));
-        Assertions.assertTrue(resp.streamNames().contains(name), "ListStreams: created stream not found");
-    }
-
-    private void listShards(TestContext ctx) throws Exception {
-        String name = ctx.getString("kinesisStream");
-        if (name == null) name = ctx.getString("kinesisShardsStream");
-        if (name == null) name = ctx.getString("kinesisRecordsStream");
-        final String streamName = name;
-        var resp = kinesis().listShards(r -> r.streamName(streamName));
-        Assertions.assertGreaterThanOrEqual(1, resp.shards().size(), "ListShards: expected >= 1 shard");
-        ctx.set("shardId", resp.shards().get(0).shardId());
-    }
-
-    private void addTagsToStream(TestContext ctx) throws Exception {
-        String name = ctx.getString("kinesisStream");
-        kinesis().addTagsToStream(r -> r.streamName(name).tags(Map.of("env", "compat")));
-    }
-
-    private void listTagsForStream(TestContext ctx) throws Exception {
-        String name = ctx.getString("kinesisStream");
-        var resp = kinesis().listTagsForStream(r -> r.streamName(name));
-        boolean found = resp.tags().stream().anyMatch(t -> "env".equals(t.key()) && "compat".equals(t.value()));
-        Assertions.assertTrue(found, "ListTagsForStream: expected 'env=compat' tag");
-    }
-
-    private void deleteStream(TestContext ctx) throws Exception {
-        String name = ctx.getString("kinesisStream");
-        kinesis().deleteStream(r -> r.streamName(name));
-        ctx.set("kinesisStream", null);
     }
 
     // ── kinesis-records ───────────────────────────────────────────────────────
@@ -191,6 +120,15 @@ public final class KinesisGroup implements ServiceGroup {
         kinesis().createStream(r -> r.streamName(name).shardCount(2));
         waitActive(name);
         ctx.set("kinesisShardsStream", name);
+    }
+
+    private void listShards(TestContext ctx) throws Exception {
+        String name = ctx.getString("kinesisShardsStream");
+        if (name == null) name = ctx.getString("kinesisRecordsStream");
+        final String streamName = name;
+        var resp = kinesis().listShards(r -> r.streamName(streamName));
+        Assertions.assertGreaterThanOrEqual(1, resp.shards().size(), "ListShards: expected >= 1 shard");
+        ctx.set("shardId", resp.shards().get(0).shardId());
     }
 
     private void splitShard(TestContext ctx) throws Exception {
