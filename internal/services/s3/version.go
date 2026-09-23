@@ -487,9 +487,18 @@ func (h *Handler) saveCurrentObject(ctx context.Context, obj *Object) *protocol.
 // version Overcast records carries one, and an object in a bucket that has
 // never been versioned never does.
 func setVersionIDHeader(w http.ResponseWriter, obj *Object) {
-	if obj.Seq != "" {
-		w.Header().Set("x-amz-version-id", obj.wireVersionID())
+	if v := obj.headerVersionID(); v != "" {
+		w.Header().Set("x-amz-version-id", v)
 	}
+}
+
+// headerVersionID is the x-amz-version-id value S3 reports for obj, or "" when
+// it sends none — see setVersionIDHeader.
+func (o *Object) headerVersionID() string {
+	if o.Seq == "" {
+		return ""
+	}
+	return o.wireVersionID()
 }
 
 // discardNullVersion removes the key's existing null version, if it has one.

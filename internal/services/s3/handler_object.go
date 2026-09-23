@@ -58,6 +58,10 @@ func (h *Handler) initObjectRoutes() {
 	}
 }
 
+// defaultObjectContentType is the Content-Type S3 records for an object
+// written without one.
+const defaultObjectContentType = "application/octet-stream"
+
 // storageClassStandard is S3's default object storage class. AWS omits the
 // x-amz-storage-class header on responses for objects in it.
 const storageClassStandard = "STANDARD"
@@ -121,7 +125,7 @@ func (h *Handler) PutObject(w http.ResponseWriter, r *http.Request) {
 
 	contentType := r.Header.Get("Content-Type")
 	if contentType == "" {
-		contentType = "application/octet-stream"
+		contentType = defaultObjectContentType
 	}
 
 	storageClass, aerr := requestedStorageClass(r)
@@ -165,30 +169,16 @@ func (h *Handler) PutObject(w http.ResponseWriter, r *http.Request) {
 		Expires:            r.Header.Get("Expires"),
 	}
 
-	stamp, aerr := h.beginVersion(r.Context(), b, obj, obj.LastModified)
-	if aerr != nil {
-		protocol.WriteXMLError(w, r, aerr)
-		return
-	}
-
 	// Decode aws-chunked streaming uploads (SDK for .NET v4, Rust, newer
 	// Java) transparently so we store the raw object bytes, not the chunk
 	// framing. See aws_chunked.go.
 	body, _ := maybeDecodeAWSChunked(r)
 
-	// Stream the body to disk while computing the MD5 ETag in one pass.
-	// The body is never fully buffered in memory.
-	etag, size, aerr := h.store.putObjectStream(r.Context(), obj, body)
+	etag, aerr := h.writeObject(r.Context(), b, obj, body)
 	if aerr != nil {
 		protocol.WriteXMLError(w, r, aerr)
 		return
 	}
-	if aerr := h.commitVersion(r.Context(), b, obj); aerr != nil {
-		protocol.WriteXMLError(w, r, aerr)
-		return
-	}
-
-	h.publishObjectEvent(r, events.S3ObjectCreated, obj, stamp, "ObjectCreated:Put", size, etag)
 
 	w.Header().Set("ETag", etag)
 	setVersionIDHeader(w, obj)
@@ -198,10 +188,33 @@ func (h *Handler) PutObject(w http.ResponseWriter, r *http.Request) {
 	protocol.WriteEmpty(w, r, http.StatusOK)
 }
 
+// writeObject is PutObject's write path once the request has been parsed into
+// obj: it gives obj the key's next version identity, streams body to disk
+// while computing the MD5 ETag in one pass (the body is never fully
+// buffered), records the version, and publishes the ObjectCreated:Put event
+// the bucket's notifications are delivered from. The HTTP handler and the
+// in-process Service.PutObjectBytes both call it, so an internal write is
+// indistinguishable from a client's.
+func (h *Handler) writeObject(ctx context.Context, b *Bucket, obj *Object, body io.Reader) (string, *protocol.AWSError) {
+	stamp, aerr := h.beginVersion(ctx, b, obj, obj.LastModified)
+	if aerr != nil {
+		return "", aerr
+	}
+	etag, size, aerr := h.store.putObjectStream(ctx, obj, body)
+	if aerr != nil {
+		return "", aerr
+	}
+	if aerr := h.commitVersion(ctx, b, obj); aerr != nil {
+		return "", aerr
+	}
+	h.publishObjectEvent(ctx, events.S3ObjectCreated, obj, stamp, "ObjectCreated:Put", size, etag)
+	return etag, nil
+}
+
 // publishObjectEvent emits one object mutation onto the bus with the version
 // identity S3 attaches to a notification: the version id (only for a versioned
 // bucket) and the sequencer, which consumers compare to order events for a key.
-func (h *Handler) publishObjectEvent(r *http.Request, typ events.Type, obj *Object, stamp versionStamp, eventName string, size int64, etag string) {
+func (h *Handler) publishObjectEvent(ctx context.Context, typ events.Type, obj *Object, stamp versionStamp, eventName string, size int64, etag string) {
 	payload := events.S3ObjectPayload{
 		Bucket:    obj.Bucket,
 		Key:       obj.Key,
@@ -213,7 +226,7 @@ func (h *Handler) publishObjectEvent(r *http.Request, typ events.Type, obj *Obje
 	if obj.Seq != "" {
 		payload.VersionID = obj.wireVersionID()
 	}
-	h.bus.Publish(r.Context(), events.Event{
+	h.bus.Publish(ctx, events.Event{
 		Type:    typ,
 		Time:    obj.LastModified,
 		Source:  "s3",
@@ -884,7 +897,7 @@ func (h *Handler) publishDelete(r *http.Request, bucket, key string, removed *Ob
 	if removed != nil {
 		subject.Seq, subject.VersionID = removed.Seq, removed.VersionID
 	}
-	h.publishObjectEvent(r, events.S3ObjectRemoved, subject, stamp, eventName, 0, "")
+	h.publishObjectEvent(r.Context(), events.S3ObjectRemoved, subject, stamp, eventName, 0, "")
 }
 
 // copyObjectResponse is the XML for a successful CopyObject.
@@ -987,7 +1000,7 @@ func (h *Handler) CopyObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.publishObjectEvent(r, events.S3ObjectCreated, dest, stamp, "ObjectCreated:Copy", n, etag)
+	h.publishObjectEvent(r.Context(), events.S3ObjectCreated, dest, stamp, "ObjectCreated:Copy", n, etag)
 
 	setVersionIDHeader(w, dest)
 	if src.Seq != "" {

@@ -122,7 +122,7 @@ func (h *Handler) CreateMultipartUpload(w http.ResponseWriter, r *http.Request) 
 
 	contentType := r.Header.Get("Content-Type")
 	if contentType == "" {
-		contentType = "application/octet-stream"
+		contentType = defaultObjectContentType
 	}
 
 	upload := &MultipartUpload{
@@ -337,7 +337,7 @@ func (h *Handler) CompleteMultipartUpload(w http.ResponseWriter, r *http.Request
 	_ = h.store.deleteMultipartUpload(r.Context(), uploadID) // best-effort cleanup
 
 	// Emit S3ObjectCreated event.
-	h.publishObjectEvent(r, events.S3ObjectCreated, obj, stamp, "ObjectCreated:CompleteMultipartUpload", totalSize, etag)
+	h.publishObjectEvent(r.Context(), events.S3ObjectCreated, obj, stamp, "ObjectCreated:CompleteMultipartUpload", totalSize, etag)
 
 	setVersionIDHeader(w, obj)
 	location := fmt.Sprintf("/%s/%s", bucket, key)
