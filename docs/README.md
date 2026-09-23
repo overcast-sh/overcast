@@ -121,7 +121,7 @@ Shorter overview: the [service reference index](./services/README.md).
 | CloudWatch       | [cloudwatch.md](./services/cloudwatch.md)           | 17  | Minimal / targeted support    |
 | DynamoDB Streams | [dynamodbstreams.md](./services/dynamodbstreams.md) | 4   | Minimal / targeted support    |
 | Firehose         | [firehose.md](./services/firehose.md)               | 9   | Minimal / targeted support    |
-| Glue             | [glue.md](./services/glue.md)                       | 11  | Minimal / targeted support    |
+| Glue             | [glue.md](./services/glue.md)                       | 26  | Minimal / targeted support    |
 | OpenSearch       | [opensearch.md](./services/opensearch.md)           | 8   | Minimal / targeted support    |
 | AppRegistry      | [appregistry.md](./services/appregistry.md)         | 22  | IaC/discovery-oriented stub   |
 | Backup           | [backup.md](./services/backup.md)                   | 18  | IaC/discovery-oriented stub   |

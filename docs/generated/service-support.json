@@ -1,6 +1,6 @@
 {
   "generated_by": "go run -tags dev ./cmd/capgen --write-docs",
-  "total_ops": 1512,
+  "total_ops": 1527,
   "services": [
     {
       "service": "s3",
@@ -7980,56 +7980,146 @@
     {
       "service": "glue",
       "display_name": "Glue",
-      "total_ops": 11,
-      "implemented_ops": 11,
+      "total_ops": 26,
+      "implemented_ops": 26,
       "operations": [
         {
           "operation": "CreateDatabase",
           "category": "Databases",
           "status": "✅ Supported",
-          "notes": "Creates a database in the catalog"
+          "notes": "Keeps the whole DatabaseInput and Tags; duplicate names are AlreadyExistsException"
         },
         {
           "operation": "GetDatabase",
           "category": "Databases",
           "status": "✅ Supported",
-          "notes": "Returns database details"
+          "notes": "Returns the full database with CreateTime"
         },
         {
           "operation": "GetDatabases",
           "category": "Databases",
           "status": "✅ Supported",
-          "notes": "Lists all databases"
+          "notes": "Paginated with MaxResults and NextToken"
+        },
+        {
+          "operation": "UpdateDatabase",
+          "category": "Databases",
+          "status": "✅ Supported",
+          "notes": "Replaces the definition; renaming is refused"
         },
         {
           "operation": "DeleteDatabase",
           "category": "Databases",
           "status": "✅ Supported",
-          "notes": "Deletes a database"
+          "notes": "Also deletes the database's tables, partitions and table versions"
         },
         {
           "operation": "CreateTable",
           "category": "Tables",
-          "status": "✅ Supported",
-          "notes": "Creates a table in a database"
+          "status": "⚠️ Partial",
+          "notes": "Keeps the whole TableInput; OpenTableFormatInput.IcebergInput writes no Iceberg metadata"
         },
         {
           "operation": "GetTable",
           "category": "Tables",
           "status": "✅ Supported",
-          "notes": "Returns table details"
+          "notes": "Returns the full table with CreateTime, UpdateTime and VersionId"
         },
         {
           "operation": "GetTables",
           "category": "Tables",
           "status": "✅ Supported",
-          "notes": "Lists tables in a database"
+          "notes": "Expression is a name regex; paginated"
+        },
+        {
+          "operation": "UpdateTable",
+          "category": "Tables",
+          "status": "⚠️ Partial",
+          "notes": "VersionId concurrency and archiving; UpdateOpenTableFormatInput is not implemented"
         },
         {
           "operation": "DeleteTable",
           "category": "Tables",
           "status": "✅ Supported",
-          "notes": "Deletes a table"
+          "notes": "Also deletes the table's partitions and versions"
+        },
+        {
+          "operation": "BatchDeleteTable",
+          "category": "Tables",
+          "status": "✅ Supported",
+          "notes": "Reports missing tables in Errors"
+        },
+        {
+          "operation": "GetTableVersion",
+          "category": "Table versions",
+          "status": "✅ Supported",
+          "notes": "Current version when VersionId is omitted"
+        },
+        {
+          "operation": "GetTableVersions",
+          "category": "Table versions",
+          "status": "✅ Supported",
+          "notes": "Current and archived versions, newest first; paginated"
+        },
+        {
+          "operation": "DeleteTableVersion",
+          "category": "Table versions",
+          "status": "✅ Supported",
+          "notes": "Archived versions only; the current one is InvalidInputException"
+        },
+        {
+          "operation": "BatchDeleteTableVersion",
+          "category": "Table versions",
+          "status": "✅ Supported",
+          "notes": "Reports failed versions in Errors"
+        },
+        {
+          "operation": "CreatePartition",
+          "category": "Partitions",
+          "status": "✅ Supported",
+          "notes": "One value per partition key; duplicates are AlreadyExistsException"
+        },
+        {
+          "operation": "BatchCreatePartition",
+          "category": "Partitions",
+          "status": "✅ Supported",
+          "notes": "Up to 100; per-partition failures in Errors"
+        },
+        {
+          "operation": "GetPartition",
+          "category": "Partitions",
+          "status": "✅ Supported",
+          "notes": "Returns the full partition"
+        },
+        {
+          "operation": "GetPartitions",
+          "category": "Partitions",
+          "status": "⚠️ Partial",
+          "notes": "Expression supports comparisons, AND/OR/NOT, IN, BETWEEN, LIKE, IS NULL; paginated, Segment supported"
+        },
+        {
+          "operation": "BatchGetPartition",
+          "category": "Partitions",
+          "status": "✅ Supported",
+          "notes": "Missing partitions are omitted"
+        },
+        {
+          "operation": "UpdatePartition",
+          "category": "Partitions",
+          "status": "✅ Supported",
+          "notes": "Replaces the definition; new Values move the partition"
+        },
+        {
+          "operation": "DeletePartition",
+          "category": "Partitions",
+          "status": "✅ Supported",
+          "notes": "Deletes one partition"
+        },
+        {
+          "operation": "BatchDeletePartition",
+          "category": "Partitions",
+          "status": "✅ Supported",
+          "notes": "Up to 25; missing partitions in Errors"
         },
         {
           "operation": "TagResource",
