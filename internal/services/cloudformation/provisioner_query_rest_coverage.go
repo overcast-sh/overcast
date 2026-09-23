@@ -478,6 +478,21 @@ func (h *elbv2ListenerHandler) Update(ctx context.Context, router http.Handler, 
 
 type autoscalingASGHandler struct{}
 
+// autoscalingASGCreateProperties is everything AWS::AutoScaling::
+// AutoScalingGroup's Create acts on. The resource type has more
+// (CapacityRebalance, Context, DefaultInstanceWarmup, DesiredCapacityType,
+// InstanceId, LifecycleHookSpecificationList, LoadBalancerNames,
+// MaxInstanceLifetime, MetricsCollection, NewInstancesProtectedFromScaleIn,
+// NotificationConfigurations, PlacementGroup, ServiceLinkedRoleARN,
+// TargetGroupARNs), and those reach the user as the resource's
+// ResourceStatusReason rather than being dropped in silence — see
+// noteUnconsumedProperties in provisioner_properties.go and #540.
+var autoscalingASGCreateProperties = []string{
+	"AutoScalingGroupName", "MinSize", "MaxSize", "DesiredCapacity", "AvailabilityZones",
+	"VPCZoneIdentifier", "LaunchConfigurationName", "LaunchTemplate", "MixedInstancesPolicy",
+	"Tags", "Cooldown", "HealthCheckType", "HealthCheckGracePeriod", "TerminationPolicies",
+}
+
 // vpcZoneIdentifierParam renders the VPCZoneIdentifier property as the
 // comma-separated string CreateAutoScalingGroup takes.
 //
@@ -571,6 +586,24 @@ func (h *autoscalingASGHandler) Create(ctx context.Context, router http.Handler,
 			}
 		}
 	}
+	if v := fmtPropString(props, "Cooldown"); v != "" {
+		// CreateAutoScalingGroupInput.DefaultCooldown is spelled differently
+		// than the template's Cooldown property.
+		params["DefaultCooldown"] = v
+	}
+	if v, _ := props["HealthCheckType"].(string); v != "" {
+		params["HealthCheckType"] = v
+	}
+	if v := fmtPropString(props, "HealthCheckGracePeriod"); v != "" {
+		params["HealthCheckGracePeriod"] = v
+	}
+	if policies, ok := props["TerminationPolicies"].([]any); ok {
+		for i, p := range policies {
+			if s, _ := p.(string); s != "" {
+				params[fmt.Sprintf("TerminationPolicies.member.%d", i+1)] = s
+			}
+		}
+	}
 	// Tags with PropagateAtLaunch are applied to every instance the
 	// reconciler launches, so they have to reach the service.
 	if tags, ok := props["Tags"].([]any); ok {
@@ -593,6 +626,7 @@ func (h *autoscalingASGHandler) Create(ctx context.Context, router http.Handler,
 			idx++
 		}
 	}
+	noteUnconsumedProperties(ctx, "AWS::AutoScaling::AutoScalingGroup", props, autoscalingASGCreateProperties...)
 
 	_, err := internalQuery(ctx, router, rCtx.Region, params)
 	if err != nil {
@@ -646,6 +680,26 @@ func (h *autoscalingASGHandler) Update(ctx context.Context, router http.Handler,
 			}
 		}
 	}
+	// UpdateAutoScalingGroup also accepts LaunchConfigurationName,
+	// LaunchTemplate and MixedInstancesPolicy on real AWS; this handler
+	// leaves those three Create-only, matching Create's own list of what it
+	// forwards (autoscalingASGCreateProperties).
+	if v := fmtPropString(props, "Cooldown"); v != "" {
+		params["DefaultCooldown"] = v
+	}
+	if v, _ := props["HealthCheckType"].(string); v != "" {
+		params["HealthCheckType"] = v
+	}
+	if v := fmtPropString(props, "HealthCheckGracePeriod"); v != "" {
+		params["HealthCheckGracePeriod"] = v
+	}
+	if policies, ok := props["TerminationPolicies"].([]any); ok {
+		for i, p := range policies {
+			if s, _ := p.(string); s != "" {
+				params[fmt.Sprintf("TerminationPolicies.member.%d", i+1)] = s
+			}
+		}
+	}
 
 	if _, err := internalQuery(ctx, router, rCtx.Region, params); err != nil {
 		return "", nil, fmt.Errorf("UpdateAutoScalingGroup: %w", err)
@@ -656,6 +710,25 @@ func (h *autoscalingASGHandler) Update(ctx context.Context, router http.Handler,
 // ── AWS::AutoScaling::LaunchConfiguration ──────────────────────────────────
 
 type autoscalingLaunchConfigHandler struct{}
+
+// autoscalingLaunchConfigCreateProperties is everything AWS::AutoScaling::
+// LaunchConfiguration's Create acts on. The resource type has more
+// (AssociatePublicIpAddress, BlockDeviceMappings, ClassicLinkVPCId,
+// ClassicLinkVPCSecurityGroups, EbsOptimized, InstanceMonitoring, KernelId,
+// PlacementTenancy, RamDiskId, SpotPrice), and those reach the user as the
+// resource's ResourceStatusReason rather than being dropped in silence — see
+// noteUnconsumedProperties in provisioner_properties.go and #540.
+//
+// UserData reaches CreateLaunchConfiguration and is stored (LaunchConfig.UserData,
+// internal/services/autoscaling/store.go), but the service's own
+// DescribeLaunchConfigurations does not echo it back — asgXMLLaunchConfig in
+// internal/services/autoscaling/typed_logic.go has no UserData field, unlike
+// real AWS's response. That is a pre-existing gap in the AutoScaling service
+// itself, outside this package.
+var autoscalingLaunchConfigCreateProperties = []string{
+	"LaunchConfigurationName", "ImageId", "InstanceType", "SecurityGroups",
+	"KeyName", "IamInstanceProfile", "UserData",
+}
 
 func (h *autoscalingLaunchConfigHandler) Create(ctx context.Context, router http.Handler, cfg *config.Config, props map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
 	name, _ := props["LaunchConfigurationName"].(string)
@@ -687,6 +760,16 @@ func (h *autoscalingLaunchConfigHandler) Create(ctx context.Context, router http
 			}
 		}
 	}
+	if v, _ := props["KeyName"].(string); v != "" {
+		params["KeyName"] = v
+	}
+	if v, _ := props["IamInstanceProfile"].(string); v != "" {
+		params["IamInstanceProfile"] = v
+	}
+	if v, _ := props["UserData"].(string); v != "" {
+		params["UserData"] = v
+	}
+	noteUnconsumedProperties(ctx, "AWS::AutoScaling::LaunchConfiguration", props, autoscalingLaunchConfigCreateProperties...)
 
 	_, err := internalQuery(ctx, router, rCtx.Region, params)
 	if err != nil {
@@ -2352,6 +2435,16 @@ func (h *iamAccessKeyHandler) Update(ctx context.Context, router http.Handler, _
 
 type wafv2WebACLHandler struct{}
 
+// wafv2WebACLCreateProperties is everything AWS::WAFv2::WebACL's Create acts
+// on. The resource type has more (CustomResponseBodies, AssociationConfig,
+// CaptchaConfig, ChallengeConfig, TokenDomains, DataProtectionConfig, and the
+// scope-adjacent OnSourceDDoSProtectionConfig), and those reach the user as
+// the resource's ResourceStatusReason rather than being dropped in silence —
+// see noteUnconsumedProperties in provisioner_properties.go and #540.
+var wafv2WebACLCreateProperties = []string{
+	"Name", "Scope", "DefaultAction", "VisibilityConfig", "Rules", "Description", "Tags",
+}
+
 func (h *wafv2WebACLHandler) Create(ctx context.Context, router http.Handler, cfg *config.Config, props map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
 	name, _ := props["Name"].(string)
 	if name == "" {
@@ -2376,6 +2469,15 @@ func (h *wafv2WebACLHandler) Create(ctx context.Context, router http.Handler, cf
 	if v, ok := props["Rules"].([]any); ok {
 		body["Rules"] = v
 	}
+	// CreateWebACL is AWSWAF_20190729's own JSON-target protocol, whose
+	// members are the template's own PascalCase names, not restJson1's
+	// lowerCamel — forwardProperties would rewrite "Description" to
+	// "description" and break the wire shape, so this uses forwardPropertiesAs
+	// with an identity mapping instead. The request's Tags member (see
+	// createWebACLRequest in internal/services/waf/typed_logic.go) is already
+	// the CloudFormation [{Key,Value}] shape, so it forwards untouched too.
+	forwardPropertiesAs(props, body, map[string]string{"Description": "Description", "Tags": "Tags"})
+	noteUnconsumedProperties(ctx, "AWS::WAFv2::WebACL", props, wafv2WebACLCreateProperties...)
 
 	rec, err := internalJSON(ctx, router, rCtx.Region, "AWSWAF_20190729.CreateWebACL", body)
 	if err != nil {
@@ -2393,7 +2495,16 @@ func (h *wafv2WebACLHandler) Create(ctx context.Context, router http.Handler, cf
 	}
 
 	physicalID := fmt.Sprintf("%s/%s", scope, resp.Summary.Id)
-	return physicalID, nil, nil
+	// CreateWebACL answered with no attributes at all, so Fn::GetAtt Arn and
+	// Id never resolved. Capacity and LabelNamespace are also documented
+	// GetAtt attributes, but CreateWebACL's response — and the WebACL type
+	// itself, internal/services/waf/service.go — carries neither, so there is
+	// nothing to return them from.
+	attrs := map[string]string{
+		"Arn": resp.Summary.ARN,
+		"Id":  resp.Summary.Id,
+	}
+	return physicalID, attrs, nil
 }
 
 func (h *wafv2WebACLHandler) Delete(ctx context.Context, router http.Handler, cfg *config.Config, physicalID string, rCtx *resolveContext) error {
