@@ -1,6 +1,7 @@
 package cloudformation
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -34,6 +35,20 @@ func policyDocumentJSON(v any) []byte {
 	}
 	b, _ := json.Marshal(v)
 	return b
+}
+
+// iamPolicyDocumentPropertyChanged reports whether a `Json`-typed
+// policy-document property (AssumeRolePolicyDocument today) actually
+// changed, comparing policyDocumentJSON's normalised wire form rather than
+// the raw resolved value with reflect.DeepEqual (what iamJSONPropertyChanged
+// does for every other property). Such a property accepts a JSON string or
+// an equivalent object, and a template that rewrites the same policy from
+// one form to the other is never a change IAM would see — but it is always a
+// change to reflect.DeepEqual, because a string and a map are never equal,
+// which is what let #1982 through: the "changed" check fired, and the update
+// path then re-encoded a string document that Create had left untouched.
+func iamPolicyDocumentPropertyChanged(props, oldProps map[string]any, property string) bool {
+	return !bytes.Equal(policyDocumentJSON(props[property]), policyDocumentJSON(oldProps[property]))
 }
 
 // iamValidateInlinePolicyPrincipals enforces AWS::IAM::Policy's one documented
