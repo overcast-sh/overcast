@@ -1,4 +1,4 @@
-import type { AsyncBuffer, FileMetaData, SchemaElement, SchemaTree } from "hyparquet"
+import type { AsyncBuffer, Compressors, FileMetaData, SchemaElement, SchemaTree } from "hyparquet"
 import { PREVIEW_COLUMN_LIMIT, PREVIEW_ROW_LIMIT, type PreviewTableModel } from "./preview-table"
 
 /**
@@ -6,7 +6,9 @@ import { PREVIEW_COLUMN_LIMIT, PREVIEW_ROW_LIMIT, type PreviewTableModel } from 
  *
  * Only this module imports the library, and only with `import()`, so it is its
  * own chunk and costs nothing until a Parquet object is opened. The type-only
- * import above is erased at build time.
+ * import above is erased at build time. The decompressors for codecs hyparquet
+ * lacks (`hyparquet-compressors`) are a second lazy chunk, fetched only when the
+ * first row group actually uses one of them.
  *
  * What is read, and in what order, is the point of the design:
  *
@@ -57,8 +59,28 @@ export interface ParquetPreview {
   rowsError?: string
 }
 
-/** Codecs `hyparquet` decodes without a plug-in. */
-const SUPPORTED_CODECS = new Set(["UNCOMPRESSED", "SNAPPY"])
+/** Codecs `hyparquet` decodes on its own. */
+const BUILT_IN_CODECS = new Set(["UNCOMPRESSED", "SNAPPY"])
+
+/**
+ * Codecs decoded through `hyparquet-compressors`. ZSTD is the one that
+ * matters most: Iceberg writes ZSTD Parquet by default, and so does S3 Tables.
+ * BROTLI is deliberately absent — its decoder carries a ~80 KB dictionary for
+ * a codec almost no writer uses — and LZO has no decoder at all; both keep the
+ * schema-only fallback, which names the codec.
+ */
+const PLUGIN_CODECS = new Set(["GZIP", "ZSTD", "LZ4", "LZ4_RAW"])
+
+async function loadCompressors(): Promise<Compressors> {
+  const { decompressZstd, gunzip, decompressLz4, decompressLz4Raw } =
+    await import("hyparquet-compressors")
+  return {
+    GZIP: (input, length) => gunzip(input, new Uint8Array(length)),
+    ZSTD: (input) => decompressZstd(input),
+    LZ4: decompressLz4,
+    LZ4_RAW: decompressLz4Raw,
+  }
+}
 
 /**
  * An `AsyncBuffer` over one S3 object: each `slice` is a ranged GET.
@@ -127,7 +149,9 @@ export async function readParquetPreview(
     return preview
   }
   const firstCodecs = new Set(first.columns.map((c) => c.meta_data?.codec ?? "UNCOMPRESSED"))
-  const unsupported = [...firstCodecs].filter((c) => !SUPPORTED_CODECS.has(c))
+  const unsupported = [...firstCodecs].filter(
+    (c) => !BUILT_IN_CODECS.has(c) && !PLUGIN_CODECS.has(c),
+  )
   if (unsupported.length > 0) {
     preview.rowsError = `Rows are compressed with ${unsupported.join(", ")}, which the preview does not decode. The schema still reads, from the footer, which is never compressed.`
     return preview
@@ -141,9 +165,11 @@ export async function readParquetPreview(
   const shownColumns = columns.slice(0, PREVIEW_COLUMN_LIMIT)
   const rowEnd = Math.min(maxRows, Number(first.num_rows))
   try {
+    const needsPlugin = [...firstCodecs].some((c) => PLUGIN_CODECS.has(c))
     const rows = await parquetReadObjects({
       file,
       metadata,
+      compressors: needsPlugin ? await loadCompressors() : undefined,
       rowStart: 0,
       rowEnd,
       columns: shownColumns.map((c) => c.element.name),

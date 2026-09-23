@@ -491,8 +491,9 @@ describe("ObjectPreviewDialog > CSV and TSV", () => {
     const table = await screen.findByRole("table", { name: /First rows of the CSV file/ })
     expect(within(table).getByRole("columnheader", { name: "name" })).toBeInTheDocument()
     expect(within(table).getByText("Ada")).toBeInTheDocument()
-    // An empty field reads as an empty string, not as nothing.
-    expect(within(table).getByTitle("Empty string")).toHaveTextContent('""')
+    // An empty field is a token, told apart from NULL and from a value.
+    expect(within(table).getByLabelText("empty string")).toHaveTextContent("empty")
+    expect(within(table).queryByLabelText("null")).not.toBeInTheDocument()
     expect(screen.getByText("2 rows · 3 columns")).toBeInTheDocument()
   })
 
@@ -568,11 +569,26 @@ describe("ObjectPreviewDialog > JSON Lines", () => {
   })
 
   it("tabulates records with the same fields, drawing NULL as a token", async () => {
-    api.preview = { text: '{"id":1,"email":null}\n{"id":2,"email":"b@x"}\n', truncated: false }
+    api.preview = {
+      text: '{"id":1,"email":null,"name":"a"}\n{"id":2,"email":"b@x"}\n',
+      truncated: false,
+    }
     renderObject("users.jsonl")
     const table = await screen.findByRole("table", { name: /JSON Lines/ })
-    expect(within(table).getByText("NULL")).toBeInTheDocument()
+    expect(within(table).getByLabelText("null")).toHaveTextContent("NULL")
     expect(within(table).getByText("b@x")).toBeInTheDocument()
+    // A key the record omits is neither NULL nor an empty string.
+    expect(within(table).getByTitle("Not present in this record")).toHaveTextContent("not present")
+  })
+
+  it("widens the dialog for a table, and only for a table", async () => {
+    api.preview = { text: '{"id":1}\n', truncated: false }
+    const { unmount } = renderObject("users.jsonl")
+    expect(await screen.findByRole("dialog")).toHaveClass("max-w-6xl")
+    unmount()
+    renderObject("notes.txt", { contentType: "text/plain" })
+    expect(await screen.findByRole("dialog")).toHaveClass("max-w-4xl")
+    expect(screen.getByRole("dialog")).not.toHaveClass("max-w-6xl")
   })
 
   it("keeps records of different shapes as written", async () => {
@@ -692,7 +708,8 @@ describe("ObjectPreviewDialog > Iceberg metadata", () => {
     expect(within(summary).getByText("3051729675574597004")).toBeInTheDocument()
     expect(within(summary).getByText("order_id")).toBeInTheDocument()
     // The JSON itself is still there, underneath.
-    const json = await screen.findByLabelText("JSON preview")
+    expect(screen.getByText("Raw JSON")).toBeInTheDocument()
+    const json = await screen.findByRole("region", { name: "Preview" })
     await waitFor(() => expect(json).toHaveTextContent('"format-version": 2'))
   })
 })

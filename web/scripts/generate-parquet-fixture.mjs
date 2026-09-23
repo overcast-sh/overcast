@@ -1,10 +1,13 @@
-// Writes the Parquet fixture the S3 preview tests read:
-// src/features/s3/__fixtures__/orders.parquet.
+// Writes the Parquet fixtures the S3 preview tests read, into
+// src/features/s3/__fixtures__/:
+// - orders.parquet — SNAPPY, hyparquet's built-in codec;
+// - orders.zstd.parquet — the same rows as ZSTD, the codec Iceberg and S3
+//   Tables write by default, compressed with Node's own zlib (Node 22.15+).
 //
 //   cd web && node scripts/generate-parquet-fixture.mjs
 //
-// Deterministic: fixed values, fixed dates, no clock and no randomness, so a
-// re-run produces the same bytes unless hyparquet-writer changes its encoder
+// Deterministic: fixed values, fixed dates, no clock and no randomness, and a
+// pinned ZSTD level, so a re-run produces the same bytes unless hyparquet-writer changes its encoder
 // (its `created_by` string carries the version, which is the one expected
 // diff after a bump). Commit the regenerated file with the version bump.
 //
@@ -15,12 +18,13 @@
 // - two row groups (3 rows, then 2), so a test can assert that reading the
 //   first rows never fetched a byte of the second group.
 import { writeFileSync } from "node:fs"
+import { constants, zstdCompressSync } from "node:zlib"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { ByteWriter, parquetWrite } from "hyparquet-writer"
 
 const here = dirname(fileURLToPath(import.meta.url))
-const out = resolve(here, "../src/features/s3/__fixtures__/orders.parquet")
+const fixtures = resolve(here, "../src/features/s3/__fixtures__")
 
 const columnData = [
   { name: "order_id", data: [1001n, 1002n, 1003n, 1004n, 1005n] },
@@ -96,7 +100,16 @@ const schema = [
   { name: "zip", type: "BYTE_ARRAY", converted_type: "UTF8", repetition_type: "OPTIONAL" },
 ]
 
-const writer = new ByteWriter()
-parquetWrite({ writer, columnData, schema, rowGroupSize: 3 })
-writeFileSync(out, new Uint8Array(writer.getBuffer()))
-console.log(`wrote ${out}`)
+const zstd = (bytes) =>
+  new Uint8Array(zstdCompressSync(bytes, { params: { [constants.ZSTD_c_compressionLevel]: 3 } }))
+
+for (const [name, options] of [
+  ["orders.parquet", {}],
+  ["orders.zstd.parquet", { codec: "ZSTD", compressors: { ZSTD: zstd } }],
+]) {
+  const writer = new ByteWriter()
+  await parquetWrite({ writer, columnData, schema, rowGroupSize: 3, ...options })
+  const out = resolve(fixtures, name)
+  writeFileSync(out, new Uint8Array(writer.getBuffer()))
+  console.log(`wrote ${out}`)
+}

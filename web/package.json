@@ -94,6 +94,7 @@
     "github-slugger": "2.0.0",
     "hono": "^4.12.9",
     "hyparquet": "^1.31.1",
+    "hyparquet-compressors": "^1.1.2",
     "lucide-react": "^1.7.0",
     "monaco-editor": "^0.56.0",
     "prismjs": "^1.30.0",

@@ -30,7 +30,11 @@ import { cn } from "@/lib/utils"
  * - numbers right-align in tabular figures;
  * - NULL, an empty string and a missing field each read differently;
  * - the header sticks while the body scrolls, inside the table's own scroller,
- *   and a wide table scrolls sideways there rather than widening the dialog.
+ *   and a wide table scrolls sideways there rather than widening the dialog;
+ * - the row number sticks to the left while the columns scroll under it, and
+ *   the overflow shadows (`ScrollX`) sit clear of it and wider than a list's,
+ *   because a mono value cut at the edge — `2026-09-01T00:00:00.00` — reads
+ *   as a complete value unless something says there is more.
  */
 export function DataPreviewTable({
   table,
@@ -53,10 +57,12 @@ export function DataPreviewTable({
       // drawn on the cells instead.
       className="border-separate border-spacing-0"
       scrollerClassName={cn("max-h-[55vh]", className)}
+      edgeClassName="w-10"
+      startEdgeClassName="left-12"
     >
       <TableHeader className="border-0">
         <TableRow className="border-0">
-          <HeaderCell className="w-px text-right">
+          <HeaderCell className={cn(ROW_NUMBER, "z-20 text-right")}>
             <span className="sr-only">Row</span>#
           </HeaderCell>
           {table.columns.map((column, index) => (
@@ -82,9 +88,17 @@ export function DataPreviewTable({
           table.rows.map((row, r) => (
             <TableRow
               key={r}
-              className="border-0 *:border-b *:border-border-muted last:*:border-b-0 hover:bg-bg-subtle"
+              className="group border-0 *:border-b *:border-border-muted last:*:border-b-0 hover:bg-bg-subtle"
             >
-              <TableCell className="w-px px-3 py-1.5 text-right text-fg-subtle tabular-nums select-none">
+              <TableCell
+                className={cn(
+                  ROW_NUMBER,
+                  // Opaque, or the columns scrolling under it show through;
+                  // and it follows the row's hover so the row still reads
+                  // as one band.
+                  "z-1 bg-bg-elevated py-1.5 text-right text-fg-subtle tabular-nums select-none group-hover:bg-bg-subtle",
+                )}
+              >
                 {r + 1}
               </TableCell>
               {table.columns.map((column, c) => (
@@ -97,6 +111,9 @@ export function DataPreviewTable({
     </Table>
   )
 }
+
+/** The sticky row-number column: a fixed width, so the start shadow can sit exactly clear of it. */
+const ROW_NUMBER = "sticky left-0 w-12 min-w-12 max-w-12 border-r border-border-muted px-3"
 
 function HeaderCell({ className, ...props }: ThHTMLAttributes<HTMLTableCellElement>) {
   return (
@@ -120,16 +137,24 @@ function DataCell({ value, column }: { value: unknown; column: PreviewColumn }) 
       title={cell.kind === "absent" ? "Not present in this record" : undefined}
       className={cn("px-3 py-1.5 whitespace-nowrap", column.numeric && "text-right tabular-nums")}
     >
+      {/* NULL and an empty string are both tokens rather than text, so
+          neither reads as data, and they differ in every channel a glance
+          uses: solid vs dashed border, upright caps vs lowercase italic. */}
       {cell.kind === "null" ? (
         <span
+          aria-label="null"
           title="NULL"
           className="rounded-sm border border-border px-1 text-2xs tracking-wider text-fg-subtle"
         >
           NULL
         </span>
       ) : cell.kind === "empty" ? (
-        <span title="Empty string" className="text-fg-subtle opacity-70">
-          {cell.text}
+        <span
+          aria-label="empty string"
+          title="Empty string"
+          className="rounded-sm border border-dashed border-border px-1 text-2xs font-light text-fg-subtle italic"
+        >
+          empty
         </span>
       ) : cell.kind === "absent" ? (
         <span className="sr-only">not present</span>

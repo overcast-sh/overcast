@@ -6,11 +6,15 @@ import { rangeAsyncBuffer, readParquetPreview } from "./preview-parquet"
 
 // orders.parquet: 5 rows in two row groups (3 + 2), one column per type
 // family. Regenerate with `node scripts/generate-parquet-fixture.mjs`.
-const fixture = readFileSync(resolve(__dirname, "__fixtures__/orders.parquet"))
 // Copied into this realm's ArrayBuffer: hyparquet checks `instanceof
 // ArrayBuffer`, and under jsdom a Node Buffer's backing store is not one.
-const bytes = new ArrayBuffer(fixture.byteLength)
-new Uint8Array(bytes).set(fixture)
+function load(name: string): ArrayBuffer {
+  const file = readFileSync(resolve(__dirname, "__fixtures__", name))
+  const copy = new ArrayBuffer(file.byteLength)
+  new Uint8Array(copy).set(file)
+  return copy
+}
+const bytes = load("orders.parquet")
 
 const metadataLength = () => parquetMetadata(bytes).metadata_length
 
@@ -135,6 +139,44 @@ describe("readParquetPreview", () => {
     // Declined from the footer alone: nothing before the metadata was read.
     const footerStart = bytes.byteLength - 8 - metadataLength()
     expect(reads.every(([start]) => start >= footerStart)).toBe(true)
+  })
+})
+
+describe("readParquetPreview > codecs", () => {
+  it("reads ZSTD rows, the codec Iceberg and S3 Tables write by default", async () => {
+    const preview = await readParquetPreview(recordingBuffer(load("orders.zstd.parquet")).file)
+    expect(preview.codecs).toEqual(["ZSTD"])
+    expect(preview.rowsError).toBeUndefined()
+    const table = preview.table
+    if (!table) throw new Error("no rows")
+    expect(table.rows.map((r) => formatPreviewCell(r[1], table.columns[1]).text)).toEqual([
+      "Ada Lovelace",
+      "Grace Hopper",
+      "NULL",
+    ])
+    expect(formatPreviewCell(table.rows[0][2], table.columns[2]).text).toBe("19.99")
+  })
+
+  it("keeps the schema and names a codec it cannot decode", async () => {
+    // Written here rather than committed: Node's zlib has a Brotli encoder,
+    // and the preview deliberately ships no Brotli decoder.
+    const { ByteWriter, parquetWrite } = await import("hyparquet-writer")
+    const { brotliCompressSync } = await import("node:zlib")
+    const writer = new ByteWriter()
+    await parquetWrite({
+      writer,
+      codec: "BROTLI",
+      compressors: { BROTLI: (input: Uint8Array) => new Uint8Array(brotliCompressSync(input)) },
+      columnData: [{ name: "id", data: [1, 2, 3], type: "INT32" }],
+    })
+    const written = new Uint8Array(writer.getBuffer())
+    const brotli = new ArrayBuffer(written.byteLength)
+    new Uint8Array(brotli).set(written)
+
+    const preview = await readParquetPreview(recordingBuffer(brotli).file)
+    expect(preview.fields).toEqual([{ name: "id", type: "INT32", nullable: true }])
+    expect(preview.table).toBeUndefined()
+    expect(preview.rowsError).toMatch(/compressed with BROTLI/)
   })
 })
 

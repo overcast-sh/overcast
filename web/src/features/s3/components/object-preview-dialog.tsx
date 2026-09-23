@@ -20,6 +20,7 @@ import { CodeBlock } from "@/components/ui/primitives"
 import { SkeletonRows } from "@/components/ui/skeleton"
 import { ObjectRevisionBar, ObjectVersionList } from "./object-version-list"
 import { formatBytes, formatDate } from "@/lib/format"
+import { cn } from "@/lib/utils"
 import { describeObjectReadError } from "@/features/s3/object-read-error"
 import { dataPreviewKind, isTextDataKind } from "@/features/s3/preview-kind"
 import { formatPreviewText, isImagePreviewable, isTextPreviewable } from "./object-preview-format"
@@ -119,6 +120,8 @@ export function ObjectPreviewDialog({
   // plain-text treatment. Decided by content type and key, before any byte
   // is fetched, because Parquet is read by range and never as text.
   const dataKind = objectKey && metadata ? dataPreviewKind(metadata.contentType, objectKey) : null
+  const tabular =
+    dataKind === "csv" || dataKind === "tsv" || dataKind === "jsonl" || dataKind === "parquet"
   // No size gate: getObjectText fetches at most the first 1 MiB by Range, so
   // a text-like object of any size previews — its opening window, labelled as
   // such when the object holds more.
@@ -169,8 +172,8 @@ export function ObjectPreviewDialog({
       <>
         {dataKind === "iceberg-metadata" && <IcebergMetadataSummary text={previewText.text} />}
         <PreviewPanel
-          format={dataKind === "iceberg-metadata" ? "JSON" : undefined}
-          meta={["Preview", ...notes].join(" · ")}
+          // Under the Iceberg summary this is the file itself, and says so.
+          meta={[dataKind === "iceberg-metadata" ? "Raw JSON" : "Preview", ...notes].join(" · ")}
         >
           <RawText
             text={formattedPreview?.text ?? ""}
@@ -245,7 +248,15 @@ export function ObjectPreviewDialog({
 
   return (
     <Dialog open={!!objectKey} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[90vh] max-w-4xl overflow-hidden">
+      <DialogContent
+        className={cn(
+          "max-h-[90vh] max-w-4xl overflow-hidden",
+          // A table of a data file is the one preview that uses the width:
+          // up to 72rem, and never closer than 1/24 of the viewport to
+          // either edge, so it still floats at 1024 px.
+          tabular && "w-11/12 max-w-6xl",
+        )}
+      >
         <DialogHeader>
           <DialogTitle
             className="flex items-center gap-2 truncate font-mono text-sm"

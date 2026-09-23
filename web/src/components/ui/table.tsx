@@ -11,6 +11,8 @@ import { cn } from "@/lib/utils"
 function Table({
   className,
   scrollerClassName,
+  edgeClassName,
+  startEdgeClassName,
   ...props
 }: React.HTMLAttributes<HTMLTableElement> & {
   /**
@@ -18,9 +20,16 @@ function Table({
    * scroll vertically too, which is what a sticky header needs to stick to.
    */
   scrollerClassName?: string
+  /** Passed to `ScrollX`'s overflow shadows; see there. */
+  edgeClassName?: string
+  startEdgeClassName?: string
 }) {
   return (
-    <ScrollX scrollerClassName={scrollerClassName}>
+    <ScrollX
+      scrollerClassName={scrollerClassName}
+      edgeClassName={edgeClassName}
+      startEdgeClassName={startEdgeClassName}
+    >
       <table className={cn("w-full caption-bottom text-sm", className)} {...props} />
     </ScrollX>
   )

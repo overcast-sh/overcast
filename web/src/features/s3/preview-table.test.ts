@@ -64,9 +64,10 @@ describe("formatPreviewCell", () => {
   it("draws the three kinds of nothing differently", () => {
     expect(formatPreviewCell(null)).toEqual({ kind: "null", text: "NULL" })
     expect(formatPreviewCell(undefined)).toEqual({ kind: "absent", text: "" })
-    expect(formatPreviewCell("")).toEqual({ kind: "empty", text: '""' })
-    // The string "NULL" is a value, and must not read as the token.
+    expect(formatPreviewCell("")).toEqual({ kind: "empty", text: "empty" })
+    // The strings "NULL" and "empty" are values, and must not read as tokens.
     expect(formatPreviewCell("NULL").kind).toBe("value")
+    expect(formatPreviewCell("empty").kind).toBe("value")
   })
 
   it("formats typed values", () => {

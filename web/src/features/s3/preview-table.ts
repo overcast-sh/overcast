@@ -131,7 +131,7 @@ export function isNumericColumn(
 export function formatPreviewCell(value: unknown, column?: PreviewColumn): FormattedCell {
   if (value === null) return { kind: "null", text: "NULL" }
   if (value === undefined) return { kind: "absent", text: "" }
-  if (value === "") return { kind: "empty", text: '""' }
+  if (value === "") return { kind: "empty", text: "empty" }
   return clip(valueText(value, column))
 }
 
