@@ -278,11 +278,18 @@ interface RowSource {
 
 ### Rendering
 
-- **Rows and columns are both virtualized** (`@tanstack/react-virtual`, already a dependency). Only the visible cells plus a small overscan are in the DOM, so a million rows and 300 columns render the same number of elements as 30 rows and 10 columns.
-- **Row height is fixed.** A long value truncates with an ellipsis and opens a cell inspector on click, or on Enter from the keyboard; the inspector shows JSON trees for complex types. Column widths come from sampling the first block, and the user can resize them.
-- **Browsers cap an element's height** (about 17 million px in Firefox and 33 million in Chromium). At 28 px a row, anything above roughly 500k rows would overflow a naive spacer. The grid therefore **maps scroll position onto row index**: past a safe height it uses a fixed-height spacer and computes the first visible row from the scroll fraction. Scrolling feels the same, and a precise **Go to row** box (`⌘G`) gives exact jumps.
+- **Only what is on screen is in the DOM.** Rows are windowed by the grid itself (below), and columns by `@tanstack/react-virtual`, already a dependency: there is no height cap across, so the stock pixel virtualizer fits that axis. Only the visible cells plus a small overscan are rendered, so a million rows and 300 columns render the same number of elements as 30 rows and 10 columns.
+- **Column state is headless TanStack Table** (v9, as `ResourceTable` uses it) with no row model: sizing, resizing, the pinned row-number column, visibility (a Columns menu) and order.
+- **Row height is fixed.** A long value truncates with an ellipsis and opens a cell inspector on double-click, on its inspect button, or on Enter from the keyboard; the inspector shows complex types as indented, highlighted JSON. Column widths come from sampling the first block, and the user can resize them.
+- **Browsers cap an element's height**, at a value that varies by engine and version: somewhere between about 17 and 34 million px. At 28 px a row, a naive spacer overflows past a few hundred thousand rows. The grid therefore caps its spacer at the lower of a runtime probe (a hidden element asked for a billion pixels, read back once) and 10 million px, and scrolls in a **hybrid** way:
+  - it keeps a **logical position** in unscaled pixels and renders from that;
+  - **small deltas** — wheel, trackpad, touch, keyboard — move the logical position 1:1, so one wheel notch moves the same number of rows at a thousand rows as at five million, and momentum, touch inertia and overlay scrollbars stay the browser's own;
+  - only a **large jump** — dragging the thumb or clicking the track — maps proportionally: half-way down the track is half-way through the rows;
+  - the native `scrollTop` is **re-centred quietly** when the scroll comes to rest, so the thumb shows where the rows are, and at once if fine scrolling walks it near either end, where the next notch would have nowhere to go. The first and last few viewports map 1:1, so the first and last rows are reached exactly.
+
+  Scaling every delta instead (what a proportional scroller, or TanStack/virtual#1172's `scale`, does) would move a wheel notch about 30 rows at five million. A custom scrollbar would mean re-implementing momentum, touch, paging and accessibility. A **Go to row** box (`⌘G`) gives exact jumps.
 - **The header and the row-number column stay in place.** Edge fades show when there is more content to either side.
-- **Keyboard:** arrow keys move a cell cursor, which scrolls the grid as needed. `⌘C` copies the selection as TSV, and Home and End jump to the first and last row.
+- **Keyboard:** arrow keys move a cell cursor, which scrolls the grid as needed, and Shift extends a selection. PageUp and PageDown move the cursor and the rows a viewport at a time. Home and End go to the first and last column, and with `⌘` to the first and last row. `⌘C` copies the selection as TSV.
 
 ### Fetching: range requests and streaming
 

@@ -1,6 +1,7 @@
 import { isRedirect } from "@tanstack/react-router"
 import { Route as BucketIndexRoute } from "./$bucket/index"
 import { Route as ObjectBrowserRoute } from "./$bucket/objects/$"
+import { Route as DataViewerRoute } from "./$bucket/view"
 
 describe("S3 bucket routes", () => {
   it("forwards the bucket's front door to the object browser without a history entry", () => {
@@ -40,5 +41,22 @@ describe("S3 bucket routes", () => {
     expect(validate({ versionId: "v2" })).toEqual({ versionId: "v2" })
     expect(validate({})).toEqual({ versionId: undefined })
     expect(validate({ versionId: 7 })).toEqual({ versionId: undefined })
+  })
+
+  it("titles the data viewer by its bucket", async () => {
+    const head = await DataViewerRoute.options.head?.({ params: { bucket: "lake" } } as never)
+    expect(head?.meta?.[0]?.title).toBe("Data viewer — lake — S3 — Overcast")
+  })
+
+  it.each([
+    [{ key: "a.csv", row: "42" }, { key: "a.csv", row: 42, versionId: undefined }],
+    [{ key: "a.csv", row: "0" }, { key: "a.csv", row: undefined, versionId: undefined }],
+    [{ key: "a.csv", row: "1.5" }, { key: "a.csv", row: undefined, versionId: undefined }],
+    [{ versionId: "v2" }, { key: "", row: undefined, versionId: "v2" }],
+  ])("reads the viewer's key, 1-based row and revision from %o", (search, expected) => {
+    const validate = DataViewerRoute.options.validateSearch as unknown as (
+      search: Record<string, unknown>,
+    ) => unknown
+    expect(validate(search)).toEqual(expected)
   })
 })

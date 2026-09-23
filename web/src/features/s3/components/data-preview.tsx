@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/ui/primitives"
 import { HighlightedCode } from "@/components/ui/highlighted-code"
 import { SkeletonRows } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
+import { describeObjectReadError } from "../object-read-error"
 
 /**
  * The frame every S3 preview shares — the panel, its notices, the view toggle,
@@ -175,6 +176,18 @@ export function RawText({
 /** The preview body while bytes are on their way: static, never a spinner. */
 export function PreviewSkeleton({ noun = "preview" }: { noun?: string }) {
   return <SkeletonRows rows={6} noun={noun} />
+}
+
+/** The object could not be read at all: why, in the words `describeObjectReadError` chooses. */
+export function ObjectReadError({ error, versionId }: { error: unknown; versionId?: string }) {
+  return (
+    <div
+      role="alert"
+      className="rounded-lg border border-border bg-bg-muted px-3 py-2 text-sm text-fg-muted"
+    >
+      {describeObjectReadError(error, versionId)}
+    </div>
+  )
 }
 
 // ─── Avro and other unreadable objects ─────────────────────────────────────

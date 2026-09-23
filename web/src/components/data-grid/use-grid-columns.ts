@@ -10,6 +10,7 @@ import {
   type ColumnDef,
 } from "@tanstack/react-table"
 import type { DataColumn, RowBlock } from "@/lib/data-sources/row-source"
+import { formatCount } from "@/lib/format"
 import { MONO_CHAR_WIDTH, sampleColumnWidth } from "./cell-format"
 
 /**
@@ -81,24 +82,27 @@ export interface GridColumns {
   }
 }
 
-/** Wide enough for the row count's digits (at least three). */
+/** Wide enough for the last row's number as the grid prints it, separators included. */
 export function rowNumberWidth(rowCount: number): number {
-  const digits = Math.max(String(Math.max(rowCount, 1)).length, 3)
-  return Math.round(digits * MONO_CHAR_WIDTH + ROW_NUMBER_PADDING)
+  const characters = Math.max(formatCount(Math.max(rowCount, 1)).length, 3)
+  return Math.round(characters * MONO_CHAR_WIDTH + ROW_NUMBER_PADDING)
 }
 
 export function useGridColumns(
   columns: readonly DataColumn[],
   { rowCount, sample }: { rowCount: number; sample: RowBlock | undefined },
 ): GridColumns {
-  // Widths are sampled once, from the first rows to arrive: a column that
-  // resized itself under the reader as more rows loaded would be worse than
-  // a starting width that is a little off. Adjusted during render, guarded
-  // so it runs once.
-  const [sampled, setSampled] = useState<number[] | null>(null)
-  if (!sampled && sample) {
-    setSampled(columns.map((column, i) => sampleColumnWidth(column, sample.columns[i])))
-  }
+  // Each column's width is sampled once, from the first of its values to
+  // arrive (a projecting source delivers columns one at a time): a column
+  // that resized itself under the reader as more rows loaded would be worse
+  // than a starting width that is a little off. Adjusted during render,
+  // guarded so it only runs when a column has new values to sample.
+  const [sampled, setSampled] = useState<ReadonlyMap<number, number>>(() => new Map())
+  const fresh = columns.flatMap((column, i) => {
+    const values = sample?.columns[i]
+    return values && !sampled.has(i) ? [[i, sampleColumnWidth(column, values)] as const] : []
+  })
+  if (fresh.length > 0) setSampled(new Map([...sampled, ...fresh]))
   const numbersWidth = rowNumberWidth(rowCount)
 
   const definitions = useMemo<ColumnDef<GridFeatures, never>[]>(
@@ -106,7 +110,7 @@ export function useGridColumns(
       { id: ROW_NUMBER_ID, size: numbersWidth, enableResizing: false, enableHiding: false },
       ...columns.map((column, index) => ({
         id: String(index),
-        size: sampled?.[index] ?? sampleColumnWidth(column, undefined),
+        size: sampled.get(index) ?? sampleColumnWidth(column, undefined),
         minSize: MIN_WIDTH,
         maxSize: MAX_WIDTH,
       })),

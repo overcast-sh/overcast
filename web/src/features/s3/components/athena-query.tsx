@@ -33,9 +33,9 @@ export function AthenaQuery({
   return (
     <PopoverPrimitive.Root>
       <PopoverPrimitive.Trigger asChild>
-        <Button variant="ghost" size="sm">
-          <Database aria-hidden className="h-3.5 w-3.5" />
-          Query with Athena
+        <Button variant="ghost" size="sm" title="Query with Athena">
+          <Database aria-hidden className="size-3.5" />
+          <span className="sr-only sm:not-sr-only">Query with Athena</span>
         </Button>
       </PopoverPrimitive.Trigger>
       <PopoverPrimitive.Portal>
@@ -45,7 +45,7 @@ export function AthenaQuery({
           collisionPadding={12}
           className="z-50 flex w-[min(34rem,92vw)] flex-col gap-2 rounded-card border border-border bg-bg-elevated p-3 shadow-xl"
         >
-          <p className="text-[13px] text-fg-muted">
+          <p className="text-xs text-fg-muted">
             To sort or filter the whole file, query it. This SQL makes a table over the object’s
             folder and selects from it; run it with{" "}
             <code className="font-mono text-xs">aws athena</code> against this emulator.

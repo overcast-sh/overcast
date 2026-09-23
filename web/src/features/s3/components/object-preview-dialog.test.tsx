@@ -1,9 +1,10 @@
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
-import { http, HttpResponse } from "msw"
+import { http } from "msw"
 import { stubLayout } from "@/components/data-grid/testing/layout"
 import { render, renderWithRouter, screen, userEvent, waitFor, within } from "@/test/render"
 import { server } from "@/test/server"
+import { serveObject } from "../testing/serve-object"
 // Type-only, so referencing it inside the hoisted vi.mock factory is legal.
 import type * as ApiModule from "@/services/api"
 import type { S3ObjectVersion } from "@/types"
@@ -443,26 +444,6 @@ describe("ObjectPreviewDialog > version history", () => {
 // These run the real row sources and the real data worker (in-process, as
 // jsdom has no Worker) against a download route served by MSW — full GETs as
 // a stream, Range GETs as 206 — so what is under test is the dialog end to end.
-
-/** Serves `content` at the object download route, honouring Range. */
-function serveObject(content: string | Uint8Array, etag = '"v1"') {
-  const bytes = typeof content === "string" ? new TextEncoder().encode(content) : content
-  server.use(
-    http.get(/\/api\/s3\/buckets\/[^/]+\/objects\/.+\/download/, ({ request }) => {
-      const range = /^bytes=(\d+)-(\d*)$/.exec(request.headers.get("Range") ?? "")
-      if (!range) {
-        return new HttpResponse(bytes.slice(), { status: 200, headers: { ETag: etag } })
-      }
-      const start = Number(range[1])
-      const end = range[2] ? Math.min(Number(range[2]) + 1, bytes.length) : bytes.length
-      return new HttpResponse(bytes.slice(start, end), {
-        status: 206,
-        headers: { ETag: etag, "Content-Range": `bytes ${start}-${end - 1}/${bytes.length}` },
-      })
-    }),
-  )
-  return bytes.length
-}
 
 /** The dialog inside a router, as the bucket page renders it: *Open in viewer* is a link. */
 function renderObject(

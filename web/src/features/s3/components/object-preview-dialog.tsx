@@ -21,10 +21,9 @@ import { SkeletonRows } from "@/components/ui/skeleton"
 import { ObjectRevisionBar, ObjectVersionList } from "./object-version-list"
 import { formatBytes, formatDate } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import { describeObjectReadError } from "@/features/s3/object-read-error"
 import { dataPreviewKind, isTabularKind } from "@/features/s3/preview-kind"
 import { formatPreviewText, isImagePreviewable, isTextPreviewable } from "./object-preview-format"
-import { AvroNotice, PreviewPanel, PreviewSkeleton, RawText } from "./data-preview"
+import { AvroNotice, ObjectReadError, PreviewPanel, PreviewSkeleton, RawText } from "./data-preview"
 import { DataFilePreview, OpenInViewer } from "./data-file-preview"
 import { IcebergMetadataSummary } from "./iceberg-metadata-summary"
 
@@ -169,12 +168,7 @@ export function ObjectPreviewDialog({
   const details = loading ? (
     <SkeletonRows rows={4} noun="object details" />
   ) : error ? (
-    <div
-      role="alert"
-      className="rounded-lg border border-border bg-bg-muted px-3 py-2 text-sm text-fg-muted"
-    >
-      {describeObjectReadError(error, versionId)}
-    </div>
+    <ObjectReadError error={error} versionId={versionId} />
   ) : metadata ? (
     <div className="flex min-h-0 flex-col gap-3 overflow-hidden">
       <DefinitionList layout="inline">

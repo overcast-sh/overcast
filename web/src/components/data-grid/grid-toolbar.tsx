@@ -61,8 +61,8 @@ function FindField({ find }: { find: GridFind }) {
   const total =
     matches.length >= MAX_MATCHES ? `${formatCount(MAX_MATCHES)}+` : formatCount(matches.length)
   return (
-    <div className="flex items-center gap-1">
-      <div className="relative">
+    <div className="flex min-w-0 flex-1 items-center gap-1 sm:flex-none">
+      <div className="relative min-w-0 flex-1">
         <Search
           aria-hidden
           className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-fg-subtle"
@@ -78,7 +78,7 @@ function FindField({ find }: { find: GridFind }) {
             event.preventDefault()
             step(event.shiftKey ? -1 : 1)
           }}
-          className="w-56 pl-8"
+          className="w-full pl-8 sm:w-56"
         />
       </div>
       {searching && (
@@ -134,7 +134,10 @@ function GoToRowField({
         submit()
       }}
     >
-      <label htmlFor={id} className="font-mono text-2xs whitespace-nowrap text-fg-muted">
+      <label
+        htmlFor={id}
+        className="sr-only font-mono text-2xs whitespace-nowrap text-fg-muted sm:not-sr-only"
+      >
         Go to row
       </label>
       <div className="relative">
@@ -149,6 +152,8 @@ function GoToRowField({
             setNote(null)
           }}
           aria-describedby={note ? `${id}-note` : undefined}
+          placeholder="Row"
+
           className="w-28 pr-10"
         />
         <kbd

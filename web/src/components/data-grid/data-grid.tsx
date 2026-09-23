@@ -163,7 +163,8 @@ function DataGridView({
     null,
   )
   const inspect = (cell: Cell) => {
-    cursor.moveTo(cell)
+    // Enter inspects the cursor's cell and keeps the selection it anchors.
+    if (cursor.cursor?.row !== cell.row || cursor.cursor.col !== cell.col) cursor.moveTo(cell)
     setInspecting({ cell, anchor: document.getElementById(cellId(gridId, cell)) })
   }
   const { copy } = useCopyToClipboard()
