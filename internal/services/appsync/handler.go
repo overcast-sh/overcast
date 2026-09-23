@@ -14,6 +14,7 @@ package appsync
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -246,19 +247,16 @@ func (h *Handler) CreateGraphqlApi(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Real AWS auto-creates a default API key when auth type is API_KEY.
-	if api.AuthenticationType == "API_KEY" {
-		expires, _ := normalizeAPIKeyExpires(h.clk.Now(), 0)
-		key := &ApiKey{
-			Id:      generateAPIKeyID(),
-			Expires: expires,
-			Deletes: apiKeyDeletes(expires),
-		}
-		if err := h.store.PutApiKey(r.Context(), apiID, key); err != nil {
-			protocol.WriteJSONError(w, r, protocol.Wrap(protocol.ErrInternalError, err))
-			return
-		}
-	}
+	// AWS's CreateGraphqlApi does not create an API key as a side effect, even
+	// for authenticationType=API_KEY: the response shape
+	// (https://docs.aws.amazon.com/appsync/latest/APIReference/API_CreateGraphqlApi.html)
+	// carries no apiKey field, and the AWS console's "default key" is a
+	// separate CreateApiKey call it makes after CreateGraphqlApi succeeds, not
+	// something the API itself performs. Callers that want a key call
+	// CreateApiKey explicitly (see AWS::AppSync::ApiKey's CloudFormation
+	// handler for the pattern). Overcast auto-created one here until #62;
+	// removing it is a breaking change for anything that relied on the
+	// implicit key.
 
 	h.publish(r, events.AppSyncAPICreated, events.ResourcePayload{Name: api.Name})
 
@@ -577,7 +575,65 @@ func validateGraphqlAPIInput(api *GraphqlAPI) *protocol.AWSError {
 	if len(api.OwnerContact) > 256 {
 		return badRequestError("ownerContact must be 256 characters or fewer.")
 	}
+	if err := validateLogConfig(api.LogConfig); err != nil {
+		return err
+	}
+	if err := validateAdditionalAuthenticationProviders(api.AdditionalAuthenticationProviders); err != nil {
+		return err
+	}
 	return serviceutil.ValidateTags(appsyncTagCfg, api.Tags)
+}
+
+// validateLogConfig checks the shape of a create/update request's logConfig,
+// stored as raw JSON for zero-cost passthrough (see GraphqlAPI.LogConfig).
+// AWS models LogConfig.fieldLogLevel as required
+// (https://docs.aws.amazon.com/appsync/latest/APIReference/API_LogConfig.html)
+// with values NONE, ERROR, ALL, INFO, or DEBUG; other LogConfig fields
+// (cloudWatchLogsRoleArn, excludeVerboseContent) are passed through
+// unvalidated, matching every other passthrough-typed ARN/bool field this
+// handler does not otherwise check.
+func validateLogConfig(raw json.RawMessage) *protocol.AWSError {
+	if len(raw) == 0 {
+		return nil
+	}
+	var cfg struct {
+		FieldLogLevel string `json:"fieldLogLevel"`
+	}
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		return badRequestError("logConfig is invalid.")
+	}
+	if !containsString([]string{"NONE", "ERROR", "ALL", "INFO", "DEBUG"}, cfg.FieldLogLevel) {
+		return badRequestError("logConfig.fieldLogLevel is invalid or missing.")
+	}
+	return nil
+}
+
+// validateAdditionalAuthenticationProviders checks the shape of a
+// create/update request's additionalAuthenticationProviders, stored as raw
+// JSON for zero-cost passthrough (see
+// GraphqlAPI.AdditionalAuthenticationProviders). AWS models each element's
+// authenticationType as optional but, when present, constrained to the same
+// enum as the top-level field
+// (https://docs.aws.amazon.com/appsync/latest/APIReference/API_AdditionalAuthenticationProvider.html).
+// The nested openIDConnectConfig/userPoolConfig/lambdaAuthorizerConfig
+// objects are not validated here, matching the top-level fields of the same
+// shapes.
+func validateAdditionalAuthenticationProviders(raw json.RawMessage) *protocol.AWSError {
+	if len(raw) == 0 {
+		return nil
+	}
+	var providers []struct {
+		AuthenticationType string `json:"authenticationType"`
+	}
+	if err := json.Unmarshal(raw, &providers); err != nil {
+		return badRequestError("additionalAuthenticationProviders is invalid.")
+	}
+	for _, p := range providers {
+		if p.AuthenticationType != "" && !containsString([]string{"API_KEY", "AWS_IAM", "AMAZON_COGNITO_USER_POOLS", "OPENID_CONNECT", "AWS_LAMBDA"}, p.AuthenticationType) {
+			return badRequestError("additionalAuthenticationProviders authenticationType is invalid.")
+		}
+	}
+	return nil
 }
 
 // apiForARN extracts the API ID from a resource ARN and loads the API.

@@ -1,22 +1,87 @@
 service: bedrock
-status: not_started
+status: fixed
 priority: p2
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-05-17
-protocols: [rest_json, aws_json_1_0, aws_json_1_1, rpcv2_cbor]
+last_updated: 2026-09-23
+protocols: [rest_json]
 implementation: [internal/services/bedrock]
 integration_tests: [tests/integration/bedrock]
 capability_docs: docs/services/bedrock.md
-operation_count_estimate: 2 supported
-current_support_level: Runtime-only canned InvokeModel and Converse responses; no real inference.
-operations: {}
+operation_count_estimate: 2 declared in internal/services/bedrock/capabilities_dev.go, both StatusInert
+current_support_level: >-
+  InvokeModel and Converse are reachable at the paths and protocol the pinned model gives
+  them — POST /model/{modelId}/invoke and POST /model/{modelId}/converse, restJson1, no
+  X-Amz-Target — and answer without running any model. Converse returns a complete
+  ConverseResponse with every @required member present; the assistant text is canned and
+  token counts/latency are zero. InvokeModel's payload is not parsed, and its response is
+  one self-describing placeholder field rather than any model family's shape, because the
+  payload format belongs to the invoked model and Overcast does not emulate model
+  inference. See docs/services/bedrock.md.
+operations:
+  InvokeModel:
+    status: fixed
+    aws_docs:
+      - https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_InvokeModel.html
+    scenario_matrix:
+      - scenario: Reachable at the AWS-modeled binding (POST /model/{modelId}/invoke) instead of an invented /_bedrock prefix
+        status: fixed
+        evidence: tests/integration/bedrock/bedrock_test.go::TestInvokeModel_modeledBinding; TestInvokeModel_inventedPrefixIsGone
+        notes: >-
+          Fixed by #890 (2026-08-11), closing #857. Before #890, InvokeModel/Converse were
+          mounted on an Overcast-invented /_bedrock prefix plus an invented Bedrock.
+          X-Amz-Target header on top of restJson1, which bedrock-runtime does not use —
+          unreachable from any AWS SDK across 33 releases, and the integration suite never
+          caught it because it drove /_bedrock throughout instead of an address a client
+          would use.
+      - scenario: Inference profile ARN as modelId
+        status: fixed
+        evidence: tests/integration/bedrock/bedrock_test.go::TestInvokeModel_inferenceProfileARNModelID
+      - scenario: Missing request body
+        status: fixed
+        evidence: tests/integration/bedrock/bedrock_test.go::TestInvokeModel_missingBody
+      - scenario: Streaming sibling route (InvokeModelWithResponseStream) is not swallowed by InvokeModel's route
+        status: fixed
+        evidence: tests/integration/bedrock/bedrock_test.go::TestInvokeModel_streamingSiblingIsNotSwallowed
+      - scenario: Response payload shape
+        status: intentionally_partial
+        evidence: internal/services/bedrock/capabilities_dev.go ("the required payload is not parsed and no model runs... it returns one self-describing field rather than any model family's shape")
+        notes: >-
+          InvokeModel's request/response body format is defined per model family, not by
+          the Bedrock Runtime API itself (the operation's own shape is an opaque Blob).
+          Overcast does not run inference, so it cannot honestly produce a model-specific
+          payload; the placeholder is a deliberate, documented choice, not an oversight.
+  Converse:
+    status: fixed
+    aws_docs:
+      - https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_Converse.html
+    scenario_matrix:
+      - scenario: Reachable at the AWS-modeled binding (POST /model/{modelId}/converse) instead of an invented /_bedrock prefix
+        status: fixed
+        evidence: tests/integration/bedrock/bedrock_test.go::TestConverse_modeledBinding; TestInvokeModel_inventedPrefixIsGone
+        notes: Fixed by #890, closing #857 — see InvokeModel above for the shared root cause.
+      - scenario: Canned response completeness
+        status: intentionally_partial
+        evidence: internal/services/bedrock/capabilities_dev.go ("accepted and answered with a complete ConverseResponse, every @required member present; no inference runs, so the assistant text is canned and the token counts and latency are zero")
+        notes: The modeled shape is honored; the content is not real inference, by design.
 findings:
-  fixed: []
-  remaining_gaps:
-    - Review AWS Bedrock Runtime path compatibility and canned response shapes.
-    - Custom /_bedrock prefix likely needs explicit compatibility classification.
-  intentionally_partial: []
+  fixed:
+    - "#857/#890: InvokeModel and Converse are now served at the AWS-modeled REST bindings
+      (/model/{modelId}/invoke, /model/{modelId}/converse) with no X-Amz-Target, instead of
+      the emulator-invented /_bedrock prefix that made both operations unreachable from any
+      AWS SDK across 33 releases. Closes #71 and #72 — the path compatibility review and the
+      /_bedrock classification question are resolved by the same fix, which predates this
+      reconciliation pass (merged 2026-08-11); this pass found the tracker had not been
+      updated to reflect it."
+  remaining_gaps: []
+  intentionally_partial:
+    - "InvokeModel's response payload is a self-describing placeholder rather than a
+      model-specific shape, because the payload format is owned by the invoked model
+      family and Overcast does not run inference. Converse returns a complete,
+      correctly-shaped ConverseResponse with canned assistant text and zero token
+      counts/latency, for the same reason. Both are StatusInert in
+      internal/services/bedrock/capabilities_dev.go, not StatusSupported — the capability
+      table already states this; the tracker previously did not."
 handoff:
-  start_with: [InvokeModel, Converse]
-  do_not_redo: []
+  start_with: []
+  do_not_redo: [InvokeModel AWS-modeled path binding, Converse AWS-modeled path binding, inference profile ARN modelId, missing body handling, streaming sibling route isolation, /_bedrock removal]
   commands: [go test -count=1 ./internal/services/bedrock/... ./tests/integration/bedrock/...]

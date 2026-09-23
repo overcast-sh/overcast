@@ -1,21 +1,165 @@
 service: autoscaling
-status: not_started
+status: implementation_mismatch
 priority: p2
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-05-17
+last_updated: 2026-09-23
 protocols: [query]
 implementation: [internal/services/autoscaling]
 integration_tests: [tests/integration/autoscaling]
 capability_docs: docs/services/autoscaling.md
-operation_count_estimate: 19 tracked, all inert
-current_support_level: Metadata-only Auto Scaling resources; no EC2 instance management.
-operations: {}
+operation_count_estimate: >-
+  25 operations declared in internal/services/autoscaling/capabilities_dev.go, all
+  StatusSupported. The tracker previously said "19 tracked, all inert" and
+  "Metadata-only ... no EC2 instance management", which PRs #541, #1723, #1842 and #1870
+  made false: reconcile.go launches/terminates real EC2 instances to converge each group
+  on DesiredCapacity, and policy.go executes SimpleScaling/StepScaling for real.
+current_support_level: >-
+  Real convergence, not metadata-only: CreateAutoScalingGroup/UpdateAutoScalingGroup/
+  SetDesiredCapacity/ExecutePolicy move DesiredCapacity, and a reconciler calls EC2
+  RunInstances/TerminateInstances to close the gap, clamped to MinSize/MaxSize and spread
+  across AvailabilityZones or VPCZoneIdentifier subnets. Launch source is a
+  LaunchConfiguration or an EC2 LaunchTemplate (by ID/name, including $Latest/$Default),
+  resolved through EC2 at configure time. Lifecycle hooks really pause an instance in
+  Pending:Wait/Terminating:Wait and publish the EventBridge lifecycle-action event.
+  SimpleScaling and StepScaling scaling policies execute, including CloudWatch-alarm-driven
+  ExecutePolicy; TargetTrackingScaling and PredictiveScaling are refused with 501.
+  MixedInstancesPolicy and an ASG's InstanceId launch source are refused with 501.
+  See docs/services/autoscaling.md#what-works and #refused-not-ignored.
+operations:
+  CreateAutoScalingGroup:
+    status: fixed
+    aws_docs:
+      - https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_CreateAutoScalingGroup.html
+    scenario_matrix:
+      - scenario: Group launches EC2 instances to DesiredCapacity from a LaunchConfiguration or LaunchTemplate
+        status: fixed
+        evidence: tests/integration/autoscaling/reconciliation_test.go::TestCreateAutoScalingGroup_launchesInstancesToDesiredCapacity; tests/integration/autoscaling/launch_template_test.go::TestCreateAutoScalingGroup_launchTemplateConvergesToDesiredCapacity
+      - scenario: Zone/subnet validation and derivation (neither AvailabilityZones nor VPCZoneIdentifier, subnets outside AvailabilityZones, zones derived from subnets)
+        status: fixed
+        evidence: tests/integration/autoscaling/zone_subnet_test.go
+      - scenario: MixedInstancesPolicy and InstanceId launch sources
+        status: intentionally_partial
+        evidence: internal/services/autoscaling/capabilities_dev.go; refused with 501 rather than silently ignored
+  UpdateAutoScalingGroup:
+    status: fixed
+    aws_docs:
+      - https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_UpdateAutoScalingGroup.html
+    scenario_matrix:
+      - scenario: Min/max/desired changes re-converge the group; switching launch source clears the other
+        status: fixed
+        evidence: tests/integration/autoscaling/autoscaling_test.go::TestUpdateAutoScalingGroup_desiredCapacity; tests/integration/autoscaling/launch_template_test.go::TestUpdateAutoScalingGroup_switchesToALaunchTemplate
+  DescribeAutoScalingGroups:
+    status: fixed
+    aws_docs:
+      - https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_DescribeAutoScalingGroups.html
+    scenario_matrix:
+      - scenario: Reports the real converged instance set with LifecycleState/HealthStatus/AvailabilityZone/ProtectedFromScaleIn
+        status: fixed
+        evidence: tests/integration/autoscaling/autoscaling_test.go::TestDescribeAutoScalingGroups_afterCreate
+  DeleteAutoScalingGroup:
+    status: fixed
+    aws_docs:
+      - https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_DeleteAutoScalingGroup.html
+    scenario_matrix:
+      - scenario: ResourceInUse while instances remain unless ForceDelete
+        status: fixed
+        evidence: tests/integration/autoscaling/reconciliation_test.go::TestDeleteAutoScalingGroup_refusesWhileInstancesRemain
+  SetDesiredCapacity:
+    status: fixed
+    aws_docs:
+      - https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_SetDesiredCapacity.html
+    scenario_matrix:
+      - scenario: Launches or terminates instances to converge; out-of-range values rejected
+        status: fixed
+        evidence: tests/integration/autoscaling/reconciliation_test.go::TestSetDesiredCapacity_scalesInAndOut; tests/integration/autoscaling/reconciliation_test.go::TestSetDesiredCapacity_rejectsOutOfRange
+  CreateLaunchConfiguration:
+    status: fixed
+    aws_docs:
+      - https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_CreateLaunchConfiguration.html
+    scenario_matrix:
+      - scenario: ImageId/InstanceType/SecurityGroups drive RunInstances at launch time
+        status: fixed
+        evidence: tests/integration/autoscaling/autoscaling_test.go::TestCreateLaunchConfiguration_success
+  DescribeLaunchConfigurations:
+    status: implementation_mismatch
+    aws_docs:
+      - https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_DescribeLaunchConfigurations.html
+    scenario_matrix:
+      - scenario: UserData round-trips on the described LaunchConfiguration
+        status: implementation_mismatch
+        evidence: "#2074: CreateLaunchConfiguration stores UserData (store.go) but DescribeLaunchConfigurations never renders it in the Query XML response. Pre-existing; found while forwarding the property from CloudFormation for #2060. Fix in progress."
+  PutScalingPolicy:
+    status: fixed
+    aws_docs:
+      - https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_PutScalingPolicy.html
+    scenario_matrix:
+      - scenario: SimpleScaling and StepScaling execute, honouring ChangeInCapacity/ExactCapacity/PercentChangeInCapacity/MinAdjustmentMagnitude and cooldown
+        status: fixed
+        evidence: tests/integration/autoscaling/reconciliation_test.go::TestExecutePolicy_simpleScalingChangesCapacity
+      - scenario: TargetTrackingScaling and PredictiveScaling policy types
+        status: intentionally_partial
+        evidence: tests/integration/autoscaling/reconciliation_test.go::TestPutScalingPolicy_refusesPolicyTypesItCannotEvaluate; refused with 501, matching the "Refused, not ignored" contract in docs/services/autoscaling.md rather than accepting and never evaluating them
+  ExecutePolicy:
+    status: fixed
+    aws_docs:
+      - https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_ExecutePolicy.html
+    scenario_matrix:
+      - scenario: CloudWatch-alarm-driven policy execution
+        status: fixed
+        evidence: docs/services/autoscaling.md#what-works ("A policy ARN in an alarm's AlarmActions works end to end")
+  PutLifecycleHook:
+    status: fixed
+    aws_docs:
+      - https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_PutLifecycleHook.html
+    scenario_matrix:
+      - scenario: Instance parks in Pending:Wait/Terminating:Wait and emits the EventBridge lifecycle-action event until CompleteLifecycleAction/HeartbeatTimeout
+        status: fixed
+        evidence: tests/integration/autoscaling/reconciliation_test.go::TestPutLifecycleHook_pausesLaunchUntilCompleted
+  CreateOrUpdateTags:
+    status: fixed
+    aws_docs:
+      - https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_CreateOrUpdateTags.html
+    scenario_matrix:
+      - scenario: PropagateAtLaunch tags applied to launched EC2 instances
+        status: fixed
+        evidence: tests/integration/autoscaling/autoscaling_test.go::TestCreateOrUpdateTags_success
+  DescribeTags:
+    status: fixed
+    aws_docs:
+      - https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_DescribeTags.html
+    scenario_matrix:
+      - scenario: Filters auto-scaling-group/key/propagate-at-launch/value; an unimplemented filter name is refused, not ignored
+        status: fixed
+        evidence: tests/integration/autoscaling/autoscaling_test.go::TestDescribeTags_unimplementedFilterIsRefused; tests/integration/autoscaling/autoscaling_test.go::TestDescribeTags_filtersByKey
+  SetInstanceHealth:
+    status: fixed
+    aws_docs:
+      - https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_SetInstanceHealth.html
+    scenario_matrix:
+      - scenario: Unhealthy instances are terminated and replaced by the reconciler
+        status: fixed
+        evidence: tests/integration/autoscaling/reconciliation_test.go::TestSetInstanceHealth_replacesUnhealthyInstances
 findings:
-  fixed: []
+  fixed:
+    - "The tracker's status/operation_count_estimate/current_support_level were stale: they
+      said not_started, \"19 tracked, all inert\" and \"Metadata-only Auto Scaling resources;
+      no EC2 instance management\", none of which has been true since #541 (launch
+      configurations/groups launching real EC2 instances), #1723 (Auto Scaling groups
+      launching from EC2 launch templates), #1842 and #1870. Corrected above from
+      internal/services/autoscaling/reconcile.go, policy.go,
+      internal/services/autoscaling/capabilities_dev.go (25 operations, all
+      StatusSupported) and docs/services/autoscaling.md, which already described this
+      accurately."
   remaining_gaps:
-    - Review inert versus supported classification for Query XML CRUD responses.
-  intentionally_partial: []
+    - "#2074: DescribeLaunchConfigurations omits UserData that CreateLaunchConfiguration
+      stored (found while forwarding the property from CloudFormation for #2060). Fix
+      in progress in a parallel change; not yet fixed as of this reconciliation."
+  intentionally_partial:
+    - "PutScalingPolicy refuses TargetTrackingScaling and PredictiveScaling with 501
+      rather than accepting and never evaluating them (docs/services/autoscaling.md's
+      \"Refused, not ignored\" contract). CreateAutoScalingGroup/UpdateAutoScalingGroup
+      refuse MixedInstancesPolicy and an InstanceId launch source the same way."
 handoff:
-  start_with: [CreateAutoScalingGroup, launch configurations, tags]
-  do_not_redo: []
+  start_with: [DescribeLaunchConfigurations UserData (#2074)]
+  do_not_redo: [CreateAutoScalingGroup EC2 convergence, UpdateAutoScalingGroup re-convergence, DescribeAutoScalingGroups real instance reporting, DeleteAutoScalingGroup ResourceInUse/ForceDelete, SetDesiredCapacity convergence and range validation, CreateLaunchConfiguration, PutScalingPolicy SimpleScaling/StepScaling execution and TargetTracking/Predictive 501 refusal, ExecutePolicy including CloudWatch-alarm-driven execution, PutLifecycleHook pause/resume, CreateOrUpdateTags PropagateAtLaunch, DescribeTags filters, SetInstanceHealth replacement]
   commands: [go test -count=1 ./internal/services/autoscaling/... ./tests/integration/autoscaling/...]
