@@ -15,6 +15,10 @@
  *   dynamodb     / AWS::DynamoDB::Table       → /dynamodb/$tableName
  *   s3           / AWS::S3::Bucket            → /s3/$bucket
  *   logs         / AWS::Logs::LogGroup        → /cloudwatch/logs/group?groupName=…
+ *   logs (stream ARN)                         → /cloudwatch/logs/stream?groupName=…&streamName=…
+ *   states (state machine)                    → /stepfunctions/$name
+ *   states (execution)                        → /stepfunctions/execution/$name/$execution
+ *   iam (role, user, group, policy)           → /iam?tab=…&q=name
  *   cloudformation / AWS::CloudFormation::Stack → /cloudformation/$stackName
  *   secretsmanager / AWS::SecretsManager::Secret → /secretsmanager/$secretName
  *   kinesis      / AWS::Kinesis::Stream       → /kinesis/$streamName
@@ -39,6 +43,7 @@ import type { MouseEventHandler, ReactNode } from "react"
 import { Link } from "@tanstack/react-router"
 import { cn } from "@/lib/utils"
 import { endpointStore } from "@/services/endpoint-store"
+import { EMBEDDED_ARN_PATTERN, resolveArn, resolveService, type ResolvedRoute } from "./arn-routes"
 
 /** The design's link hover: accent at rest, the brighter accent-glow on hover. */
 const LINK_CLASS = "text-accent transition-colors hover:text-accent-hover hover:underline"
@@ -82,269 +87,6 @@ export function ArnText({ arn, className }: ArnTextProps) {
   )
 }
 
-// ─── Internal route resolution ────────────────────────────────────────────────
-
-type ResolvedRoute =
-  | { kind: "params"; to: string; params: Record<string, string> }
-  | { kind: "search"; to: string; search: Record<string, string> }
-
-/** Resolve an ARN to a UI route. Returns null for unknown/unparseable ARNs. */
-function resolveArn(arn: string): ResolvedRoute | null {
-  if (!arn.startsWith("arn:")) return null
-  const parts = arn.split(":")
-  if (parts.length < 6) return null
-
-  const service = parts[2]
-
-  switch (service) {
-    case "sqs": {
-      const queue = parts[5]
-      if (queue) return { kind: "params", to: "/sqs/$queue", params: { queue } }
-      break
-    }
-    case "sns": {
-      // subscription ARNs have 7+ parts — no dedicated page
-      if (parts.length === 6) {
-        const topic = parts[5]
-        if (topic) return { kind: "params", to: "/sns/$topic", params: { topic } }
-      }
-      break
-    }
-    case "lambda": {
-      const resourceType = parts[5]
-      if (resourceType === "function") {
-        const name = parts[6]
-        if (name) return { kind: "params", to: "/lambda/$name", params: { name } }
-      } else if (resourceType === "layer") {
-        const layerName = parts[6]
-        if (layerName)
-          return { kind: "params", to: "/lambda/layers/$layerName", params: { layerName } }
-      }
-      break
-    }
-    case "dynamodb": {
-      const tableMatch = parts.at(5)?.match(/^table\/([^/]+)/)
-      if (tableMatch)
-        return { kind: "params", to: "/dynamodb/$tableName", params: { tableName: tableMatch[1] } }
-      break
-    }
-    case "s3": {
-      const bucket = parts[5]
-      if (bucket) return { kind: "params", to: "/s3/$bucket", params: { bucket } }
-      break
-    }
-    case "logs": {
-      if (parts[5] === "log-group") {
-        const groupName = parts
-          .slice(6)
-          .join(":")
-          .replace(/:log-stream:.*$/, "")
-        if (groupName)
-          return { kind: "search", to: "/cloudwatch/logs/group", search: { groupName } }
-      }
-      break
-    }
-    case "cloudformation": {
-      const stackMatch = parts.at(5)?.match(/^stack\/([^/]+)/)
-      if (stackMatch)
-        return {
-          kind: "params",
-          to: "/cloudformation/$stackName",
-          params: { stackName: stackMatch[1] },
-        }
-      break
-    }
-    case "secretsmanager": {
-      // arn:aws:secretsmanager:region:account:secret:name-suffix
-      const secretName = parts[6] ?? parts[5]
-      if (secretName)
-        return { kind: "params", to: "/secretsmanager/$secretName", params: { secretName } }
-      break
-    }
-    case "kinesis": {
-      // arn:aws:kinesis:region:account:stream/name
-      const streamMatch = parts.at(5)?.match(/^stream\/(.+)/)
-      if (streamMatch)
-        return {
-          kind: "params",
-          to: "/kinesis/$streamName",
-          params: { streamName: streamMatch[1] },
-        }
-      break
-    }
-    case "ssm": {
-      // arn:aws:ssm:region:account:parameter/name
-      const paramMatch = parts.at(5)?.match(/^parameter\/(.+)/)
-      if (paramMatch) return { kind: "params", to: "/ssm/$name", params: { name: paramMatch[1] } }
-      break
-    }
-    case "rds": {
-      const dbMatch = parts.at(5)?.match(/^db:(.+)/)
-      if (dbMatch) return { kind: "params", to: "/rds/$instance", params: { instance: dbMatch[1] } }
-      break
-    }
-    case "cognito-idp": {
-      // arn:aws:cognito-idp:region:account:userpool/pool-id
-      const poolMatch = parts.at(5)?.match(/^userpool\/(.+)/)
-      if (poolMatch)
-        return { kind: "params", to: "/cognito/$poolId", params: { poolId: poolMatch[1] } }
-      break
-    }
-    case "appsync": {
-      // arn:aws:appsync:region:account:apis/apiId
-      const apiMatch = parts.at(5)?.match(/^apis\/(.+)/)
-      if (apiMatch) return { kind: "params", to: "/appsync/$apiId", params: { apiId: apiMatch[1] } }
-      break
-    }
-    case "events": {
-      // arn:aws:events:region:account:event-bus/name
-      const busMatch = parts.at(5)?.match(/^event-bus\/(.+)/)
-      if (busMatch)
-        return { kind: "params", to: "/eventbridge/$busName", params: { busName: busMatch[1] } }
-      break
-    }
-    case "kms": {
-      // arn:aws:kms:region:account:key/key-id
-      const keyMatch = parts.at(5)?.match(/^key\/(.+)/)
-      if (keyMatch) return { kind: "params", to: "/kms/$keyId", params: { keyId: keyMatch[1] } }
-      break
-    }
-    case "ecr": {
-      // arn:aws:ecr:region:account:repository/name
-      const repoMatch = parts.at(5)?.match(/^repository\/(.+)/)
-      if (repoMatch)
-        return {
-          kind: "params",
-          to: "/ecr/$repositoryName",
-          params: { repositoryName: repoMatch[1] },
-        }
-      break
-    }
-    case "cloudfront": {
-      // arn:aws:cloudfront::account:distribution/id
-      const distMatch = parts.at(5)?.match(/^distribution\/(.+)/)
-      if (distMatch)
-        return {
-          kind: "params",
-          to: "/cloudfront/$distributionId",
-          params: { distributionId: distMatch[1] },
-        }
-      break
-    }
-    case "ec2": {
-      // arn:aws:ec2:region:account:instance/id or vpc/id
-      const instanceMatch = parts.at(5)?.match(/^instance\/(.+)/)
-      if (instanceMatch)
-        return {
-          kind: "params",
-          to: "/ec2/$instanceId",
-          params: { instanceId: instanceMatch[1] },
-        }
-      const vpcMatch = parts.at(5)?.match(/^vpc\/(.+)/)
-      if (vpcMatch) return { kind: "params", to: "/ec2/vpc/$vpcId", params: { vpcId: vpcMatch[1] } }
-      break
-    }
-    case "ecs": {
-      // arn:aws:ecs:region:account:cluster/name
-      const clusterMatch = parts.at(5)?.match(/^cluster\/([^/]+)/)
-      if (clusterMatch)
-        return { kind: "params", to: "/ecs/$cluster", params: { cluster: clusterMatch[1] } }
-      break
-    }
-    case "apigateway": {
-      // arn:aws:apigateway:region::/restapis/id or /apis/id (account segment is empty)
-      const restMatch = parts.at(5)?.match(/^\/restapis\/([^/]+)/)
-      if (restMatch)
-        return { kind: "params", to: "/apigateway/rest/$apiId", params: { apiId: restMatch[1] } }
-      const httpMatch = parts.at(5)?.match(/^\/apis\/([^/]+)/)
-      if (httpMatch)
-        return { kind: "params", to: "/apigateway/http/$apiId", params: { apiId: httpMatch[1] } }
-      break
-    }
-  }
-  return null
-}
-
-// Normalise CFN types ("AWS::S3::Bucket") → short service name ("s3")
-const CFN_TYPE_TO_SERVICE: Record<string, string> = {
-  "AWS::SQS::Queue": "sqs",
-  "AWS::SNS::Topic": "sns",
-  "AWS::Lambda::Function": "lambda",
-  "AWS::Lambda::LayerVersion": "lambda:layer",
-  "AWS::DynamoDB::Table": "dynamodb",
-  "AWS::S3::Bucket": "s3",
-  "AWS::Logs::LogGroup": "logs",
-  "AWS::CloudWatch::LogGroup": "logs",
-  "AWS::CloudFormation::Stack": "cloudformation",
-  "AWS::SecretsManager::Secret": "secretsmanager",
-  "AWS::Kinesis::Stream": "kinesis",
-  "AWS::SSM::Parameter": "ssm",
-  "AWS::RDS::DBInstance": "rds",
-  "AWS::Cognito::UserPool": "cognito",
-  "AWS::AppSync::GraphQLApi": "appsync",
-  "AWS::Events::EventBus": "eventbridge",
-}
-
-/**
- * Resolve a plain resource ID + service name (or CFN type) to a UI route.
- * Returns null for unsupported services.
- */
-function resolveService(service: string, resourceId: string): ResolvedRoute | null {
-  const svc = CFN_TYPE_TO_SERVICE[service] ?? service.toLowerCase()
-
-  switch (svc) {
-    case "sqs": {
-      // resourceId may be a full queue URL — extract name from the last path segment
-      const queue = resourceId.split("/").pop() ?? resourceId
-      return { kind: "params", to: "/sqs/$queue", params: { queue } }
-    }
-    case "sns": {
-      // resourceId may be a full ARN — extract topic name from last colon segment
-      const topic = resourceId.includes("arn:")
-        ? ((resolveArn(resourceId) as { params: { topic: string } } | null)?.params.topic ??
-          resourceId.split(":").pop() ??
-          resourceId)
-        : resourceId
-      return { kind: "params", to: "/sns/$topic", params: { topic } }
-    }
-    case "lambda":
-      return { kind: "params", to: "/lambda/$name", params: { name: resourceId } }
-    case "lambda:layer":
-      return { kind: "params", to: "/lambda/layers/$layerName", params: { layerName: resourceId } }
-    case "dynamodb":
-      return { kind: "params", to: "/dynamodb/$tableName", params: { tableName: resourceId } }
-    case "s3":
-      return { kind: "params", to: "/s3/$bucket", params: { bucket: resourceId } }
-    case "logs":
-      return { kind: "search", to: "/cloudwatch/logs/group", search: { groupName: resourceId } }
-    case "cloudformation":
-      return {
-        kind: "params",
-        to: "/cloudformation/$stackName",
-        params: { stackName: resourceId },
-      }
-    case "secretsmanager":
-      return {
-        kind: "params",
-        to: "/secretsmanager/$secretName",
-        params: { secretName: resourceId },
-      }
-    case "kinesis":
-      return { kind: "params", to: "/kinesis/$streamName", params: { streamName: resourceId } }
-    case "ssm":
-      return { kind: "params", to: "/ssm/$name", params: { name: resourceId } }
-    case "rds":
-      return { kind: "params", to: "/rds/$instance", params: { instance: resourceId } }
-    case "cognito":
-      return { kind: "params", to: "/cognito/$poolId", params: { poolId: resourceId } }
-    case "appsync":
-      return { kind: "params", to: "/appsync/$apiId", params: { apiId: resourceId } }
-    case "eventbridge":
-      return { kind: "params", to: "/eventbridge/$busName", params: { busName: resourceId } }
-  }
-  return null
-}
-
 // ─── Shared link renderer ─────────────────────────────────────────────────────
 
 function RouteLink({
@@ -352,15 +94,19 @@ function RouteLink({
   children,
   className,
   onClick,
+  region: resourceRegion,
 }: {
   route: ResolvedRoute
   children: React.ReactNode
   className?: string
   onClick?: MouseEventHandler
+  /** The region the resource lives in, when it is known and may not be the console's. */
+  region?: string
 }) {
-  // Always include the active region so that middle-click / open-in-new-tab
-  // opens the correct region without relying on sessionStorage being copied.
-  const region = endpointStore.get().region
+  // Always include a region so that middle-click / open-in-new-tab opens the
+  // right one without relying on sessionStorage being copied: the resource's
+  // own when it is known, the console's otherwise.
+  const region = resourceRegion || endpointStore.get().region
 
   if (route.kind === "params")
     return (
@@ -368,7 +114,7 @@ function RouteLink({
         from="/"
         to={route.to}
         params={route.params}
-        search={{ region }}
+        search={{ ...route.search, region }}
         className={className}
         onClick={onClick}
       >
@@ -406,8 +152,10 @@ export function ArnLink({ arn, label, className }: ArnLinkProps) {
   const route = resolveArn(arn)
   const content = label != null ? <span>{label}</span> : <ArnText arn={arn} />
   if (!route) return <span className={base}>{content}</span>
+  // An ARN names its region (IAM, S3 and CloudFront ones leave it empty), and
+  // its page is in that region, whichever one the console is showing.
   return (
-    <RouteLink route={route} className={cn(base, LINK_CLASS)}>
+    <RouteLink route={route} className={cn(base, LINK_CLASS)} region={arn.split(":")[3]}>
       {content}
     </RouteLink>
   )
@@ -435,6 +183,8 @@ interface ResourceLinkProps {
   label?: string
   className?: string
   onClick?: MouseEventHandler
+  /** The region the resource is in, when it may not be the console's. Defaults to the ARN's, then the console's. */
+  region?: string
 }
 
 /**
@@ -449,6 +199,7 @@ export function ResourceLink({
   label,
   className,
   onClick,
+  region,
 }: ResourceLinkProps) {
   const display = label ?? arn ?? resourceId ?? ""
   const linked = cn(LINK_CLASS, className)
@@ -463,21 +214,18 @@ export function ResourceLink({
 
   if (!route) return <span className={className}>{display}</span>
   return (
-    <RouteLink route={route} className={linked} onClick={onClick}>
+    <RouteLink
+      route={route}
+      className={linked}
+      onClick={onClick}
+      region={region ?? arn?.split(":")[3]}
+    >
       {display}
     </RouteLink>
   )
 }
 
 // ─── LinkifiedText ─────────────────────────────────────────────────────────────
-
-// Matches ARN-shaped substrings anywhere within a larger string — e.g. an
-// error message like "failed to invoke arn:aws:lambda:...:function:foo".
-// The resource segment can contain colons/slashes, so this greedily
-// consumes everything up to the first character that would never appear
-// unescaped in one of this emulator's ARNs (whitespace or a JSON/text
-// delimiter).
-const EMBEDDED_ARN_PATTERN = /arn:[a-z0-9-]+:[a-z0-9-]+:[a-z0-9-]*:\d*:[^\s"'<>,;]+/gi
 
 /**
  * Renders `text` verbatim, except any embedded `arn:...` substrings are
