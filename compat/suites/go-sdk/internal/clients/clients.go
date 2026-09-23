@@ -21,6 +21,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/efs"
 	"github.com/aws/aws-sdk-go-v2/service/elasticache"
 	"github.com/aws/aws-sdk-go-v2/service/eventbridge"
+	"github.com/aws/aws-sdk-go-v2/service/glue"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/kinesis"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
@@ -75,6 +76,7 @@ type Clients struct {
 	sfnC         *sfn.Client
 	wafv2C       *wafv2.Client
 	shieldC      *shield.Client
+	glueC        *glue.Client
 	efsC         *efs.Client
 	s3tablesC    *s3tables.Client
 }
@@ -436,6 +438,17 @@ func (c *Clients) WAFv2() *wafv2.Client {
 		c.wafv2C = wafv2.NewFromConfig(cfg)
 	}
 	return c.wafv2C
+}
+
+// Glue returns a lazily-initialised Glue client.
+func (c *Clients) Glue() *glue.Client {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.glueC == nil {
+		cfg := c.awsCfgLocked()
+		c.glueC = glue.NewFromConfig(cfg)
+	}
+	return c.glueC
 }
 
 // Shield returns a lazily-initialised Shield client.

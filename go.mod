@@ -10,7 +10,9 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.32.38
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.37
 	github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider v1.67.7
+	github.com/aws/aws-sdk-go-v2/service/glue v1.153.1
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.100.1
+	github.com/aws/aws-sdk-go-v2/service/s3tables v1.23.0
 	github.com/aws/smithy-go v1.28.1
 	github.com/benbjohnson/clock v1.3.5
 	github.com/coder/websocket v1.8.15
@@ -42,7 +44,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.9.15 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.38 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.23 // indirect
-	github.com/aws/aws-sdk-go-v2/service/s3tables v1.23.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/signin v1.5.7 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.33.7 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.38.7 // indirect

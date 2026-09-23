@@ -261,9 +261,11 @@ var namespaceTiers = map[string]Tier{
 	"elbv2:targets":                  TierHot,
 
 	// ── Firehose / Glue ─────────────────────────────────────────────────
-	"firehose:streams": TierHot,
-	"glue:databases":   TierHot,
-	"glue:tables":      TierHot,
+	"firehose:streams":    TierHot,
+	"glue:databases":      TierHot,
+	"glue:tables":         TierHot,
+	"glue:partitions":     TierHot,
+	"glue:table-versions": TierHot,
 
 	// ── Pipes ───────────────────────────────────────────────────────────
 	"pipes:pipes": TierHot,

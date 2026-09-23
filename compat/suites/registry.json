@@ -5290,6 +5290,78 @@
           "op": "CreateCluster"
         }
       ]
+    },
+    {
+      "service": "glue",
+      "name": "glue-catalog",
+      "tests": [
+        {
+          "name": "CreateDatabase"
+        },
+        {
+          "name": "CreateTable",
+          "depends": [
+            "CreateDatabase"
+          ]
+        },
+        {
+          "name": "GetTable",
+          "depends": [
+            "CreateTable"
+          ]
+        },
+        {
+          "name": "UpdateTable",
+          "depends": [
+            "GetTable"
+          ]
+        },
+        {
+          "name": "UpdateTableStaleVersion",
+          "op": "UpdateTable",
+          "depends": [
+            "UpdateTable"
+          ]
+        },
+        {
+          "name": "GetTableVersions",
+          "depends": [
+            "UpdateTable"
+          ]
+        },
+        {
+          "name": "BatchCreatePartition",
+          "depends": [
+            "CreateTable"
+          ]
+        },
+        {
+          "name": "GetPartitions",
+          "depends": [
+            "BatchCreatePartition"
+          ]
+        },
+        {
+          "name": "DeletePartition",
+          "depends": [
+            "GetPartitions"
+          ]
+        },
+        {
+          "name": "DeleteTable",
+          "depends": [
+            "DeletePartition",
+            "GetTableVersions",
+            "UpdateTableStaleVersion"
+          ]
+        },
+        {
+          "name": "DeleteDatabase",
+          "depends": [
+            "DeleteTable"
+          ]
+        }
+      ]
     }
   ]
 }

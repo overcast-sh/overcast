@@ -11,7 +11,7 @@ tags:
 
 # CDK resource type coverage
 
-Overcast's CloudFormation provisioner handles **146 resource types**: 137 have
+Overcast's CloudFormation provisioner handles **147 resource types**: 138 have
 real handlers, 8 are recognised as stubs, and one — `AWS::SES::ConfigurationSet`
 — is recognised but always fails. Custom resources and nested stacks are
 resolved dynamically on top of those. A [`cdk deploy`](../cdk.md) succeeds for
@@ -70,7 +70,7 @@ stubs are, so a template that uses one still deploys.
 | CloudTrail | `AWS::CloudTrail::Trail` |
 | Backup | `AWS::Backup::BackupVault`, `AWS::Backup::BackupPlan` |
 | Transfer Family | `AWS::Transfer::Server`, `AWS::Transfer::User` |
-| Glue | `AWS::Glue::Database`, `AWS::Glue::Table` |
+| Glue | `AWS::Glue::Database`, `AWS::Glue::Table`, `AWS::Glue::Partition` |
 | Athena | `AWS::Athena::WorkGroup` |
 | OpenSearch | `AWS::OpenSearchService::Domain` |
 | Shield | `AWS::Shield::Protection` |

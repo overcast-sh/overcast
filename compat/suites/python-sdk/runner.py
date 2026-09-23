@@ -63,6 +63,7 @@ from groups import (
     shield,
     efs,
     s3tables,
+    glue,
 )
 
 SUITE = "python-sdk"
@@ -114,6 +115,7 @@ _modules = [
     shield,
     efs,
     s3tables,
+    glue,
 ]
 
 all_setup: dict = {}

@@ -31,9 +31,11 @@
 #   scripts/issue-claim.sh 1325         # or given explicitly
 #   scripts/issue-claim.sh --check      # report only, change nothing
 #
-# Without --check, a clear issue is claimed: status/in-progress plus self-assign.
-# Every agent here pushes as the same GitHub user, so the assignee says "someone
-# is on this" and not who; the label is the part that carries meaning.
+# Without --check, a clear issue is claimed: status/in-progress replaces any of
+# status/ready, status/needs-triage or status/blocked in one edit, plus
+# self-assign. Every agent here pushes as the same GitHub user, so the assignee
+# says "someone is on this" and not who; the label is the part that carries
+# meaning.
 #
 # Exit codes:
 #   0  clear, or claimed, or nothing to check, or unable to check
@@ -52,7 +54,7 @@ mode=claim
 issue=""
 
 usage() {
-	sed -n '3,40p' "$0" | sed 's/^# \{0,1\}//'
+	sed -n '3,42p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 for arg in "$@"; do
@@ -117,6 +119,7 @@ query($owner:String!,$repo:String!,$num:Int!){
     issue(number:$num){
       state
       title
+      labels(first:100){nodes{name}}
       timelineItems(last:100, itemTypes:[CROSS_REFERENCED_EVENT]){
         nodes{
           ... on CrossReferencedEvent{
@@ -194,8 +197,25 @@ if [ "$mode" = check ]; then
 	exit 0
 fi
 
-if gh issue edit "$issue" --add-label status/in-progress --add-assignee @me >/dev/null 2>&1; then
-	note "claimed #$issue (status/in-progress, assigned) — \"$title\""
+# Lifecycle labels are a state machine (github-issue-lifecycle skill § Updating
+# Lifecycle State): claiming moves the issue out of whichever pre-work state it
+# was in, in the same edit. Adding status/in-progress alone left #2062, #2063,
+# #2064, #2067 and #2088 carrying status/ready too, so they still showed up in
+# the ready queue agents pick work from (#2094). gh fails the whole edit when
+# asked to remove a label the issue does not have, so only the ones present are
+# passed. The array is never empty, which keeps "${edit[@]}" safe under set -u
+# on macOS's bash 3.2.
+edit=(--add-label status/in-progress --add-assignee @me)
+removed=""
+for label in status/ready status/needs-triage status/blocked; do
+	if printf '%s' "$response" | jq -e --arg l "$label" '[.data.repository.issue.labels.nodes[]?.name] | index($l)' >/dev/null; then
+		edit+=(--remove-label "$label")
+		removed="$removed, removed $label"
+	fi
+done
+
+if gh issue edit "$issue" "${edit[@]}" >/dev/null 2>&1; then
+	note "claimed #$issue (status/in-progress, assigned$removed) — \"$title\""
 else
 	# A claim that cannot be recorded is not worth failing over: the check above
 	# is the part that prevents duplicated work, and it has already passed.

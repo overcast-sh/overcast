@@ -55,6 +55,7 @@ pipes
 rds
 route-53
 s3
+s3tables
 scheduler
 secrets-manager
 service-catalog-appregistry

@@ -26,6 +26,7 @@
     "@aws-sdk/client-elastic-load-balancing": "^3.1101.0",
     "@aws-sdk/client-elasticache": "^3.1020.0",
     "@aws-sdk/client-eventbridge": "^3",
+    "@aws-sdk/client-glue": "^3.1127.0",
     "@aws-sdk/client-iam": "^3",
     "@aws-sdk/client-kinesis": "^3",
     "@aws-sdk/client-kms": "^3",

@@ -2854,8 +2854,9 @@ var resourceHandlers = map[string]resourceHandler{
 	// Athena
 	"AWS::Athena::WorkGroup": &athenaWorkGroupHandler{},
 	// Glue
-	"AWS::Glue::Database": &glueDatabaseHandler{},
-	"AWS::Glue::Table":    &glueTableHandler{},
+	"AWS::Glue::Database":  &glueDatabaseHandler{},
+	"AWS::Glue::Table":     &glueTableHandler{},
+	"AWS::Glue::Partition": &gluePartitionHandler{},
 	// CloudWatch
 	"AWS::CloudWatch::Alarm": &cloudwatchAlarmHandler{},
 	// EventBridge

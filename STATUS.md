@@ -108,7 +108,7 @@
 | CloudWatch      | 17  |
 | DynamoDB Streams | 4   |
 | Firehose        | 9   |
-| Glue            | 11  |
+| Glue            | 26  |
 | OpenSearch      | 8   |
 | AppRegistry     | 22  |
 | Backup          | 18  |
