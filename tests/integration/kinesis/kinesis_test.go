@@ -6,8 +6,10 @@ package kinesis_test
 import (
 	"bytes"
 	"context"
+	"crypto/md5" //nolint:gosec // reproduces AWS's partition-key hashing, not used for security
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"net/http"
 	"testing"
 
@@ -156,6 +158,197 @@ func TestRPCv2CBOR_RecordRoundTrip(t *testing.T) {
 	}
 	if recordsOut.Records[0].PartitionKey != "pk" {
 		t.Fatalf("record PartitionKey = %q, want pk", recordsOut.Records[0].PartitionKey)
+	}
+}
+
+// ---- Shard routing by MD5 hash key range (#1988) --------------------------
+
+// shardsWithHashKeyRanges lists a stream's open shards with their
+// HashKeyRange, the same shape TestSplitShard already decodes.
+func shardsWithHashKeyRanges(t *testing.T, srv *helpers.TestServer, streamName string) []struct {
+	ShardId      string `json:"ShardId"`
+	HashKeyRange struct {
+		StartingHashKey string `json:"StartingHashKey"`
+		EndingHashKey   string `json:"EndingHashKey"`
+	} `json:"HashKeyRange"`
+} {
+	t.Helper()
+	resp := kinesisCall(t, srv, "ListShards", map[string]any{"StreamName": streamName})
+	var out struct {
+		Shards []struct {
+			ShardId      string `json:"ShardId"`
+			HashKeyRange struct {
+				StartingHashKey string `json:"StartingHashKey"`
+				EndingHashKey   string `json:"EndingHashKey"`
+			} `json:"HashKeyRange"`
+		} `json:"Shards"`
+	}
+	decodeJSON(t, resp, &out)
+	return out.Shards
+}
+
+// md5HashKey reproduces AWS's PutRecord/PutRecords partition key hashing:
+// "An MD5 hash function is used to map partition keys to 128-bit integer
+// values" (API reference).
+func md5HashKey(partitionKey string) *big.Int {
+	sum := md5.Sum([]byte(partitionKey))
+	return new(big.Int).SetBytes(sum[:])
+}
+
+// shardContaining returns the ShardId of the shard whose HashKeyRange
+// contains hashKey, failing the test if none does.
+func shardContaining(t *testing.T, shards []struct {
+	ShardId      string `json:"ShardId"`
+	HashKeyRange struct {
+		StartingHashKey string `json:"StartingHashKey"`
+		EndingHashKey   string `json:"EndingHashKey"`
+	} `json:"HashKeyRange"`
+}, hashKey *big.Int) string {
+	t.Helper()
+	for _, s := range shards {
+		start, ok1 := new(big.Int).SetString(s.HashKeyRange.StartingHashKey, 10)
+		end, ok2 := new(big.Int).SetString(s.HashKeyRange.EndingHashKey, 10)
+		if !ok1 || !ok2 {
+			t.Fatalf("shard %s has unparseable HashKeyRange %+v", s.ShardId, s.HashKeyRange)
+		}
+		if hashKey.Cmp(start) >= 0 && hashKey.Cmp(end) <= 0 {
+			return s.ShardId
+		}
+	}
+	t.Fatalf("no shard's HashKeyRange contains hash key %s among %+v", hashKey, shards)
+	return ""
+}
+
+// TestPutRecord_routesByMD5HashKeyRange asserts a record lands in the shard
+// whose reported HashKeyRange actually contains the MD5 hash of its
+// partition key — not a byte-sum-modulo-shard-count placement, which
+// disagrees with the ranges Overcast itself reports via ListShards/
+// DescribeStream.
+func TestPutRecord_routesByMD5HashKeyRange(t *testing.T) {
+	srv := helpers.NewTestServer(t)
+	const streamName = "md5-routing"
+	const partitionKey = "route-by-md5-hash"
+
+	resp := kinesisCall(t, srv, "CreateStream", map[string]any{
+		"StreamName": streamName,
+		"ShardCount": 4,
+	})
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	resp.Body.Close()
+
+	shards := shardsWithHashKeyRanges(t, srv, streamName)
+	if len(shards) != 4 {
+		t.Fatalf("expected 4 open shards, got %d", len(shards))
+	}
+	wantShardID := shardContaining(t, shards, md5HashKey(partitionKey))
+
+	resp = kinesisCall(t, srv, "PutRecord", map[string]any{
+		"StreamName":   streamName,
+		"Data":         []byte("payload"),
+		"PartitionKey": partitionKey,
+	})
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	var out struct {
+		ShardId string `json:"ShardId"`
+	}
+	decodeJSON(t, resp, &out)
+
+	if out.ShardId != wantShardID {
+		t.Fatalf("PutRecord placed partition key %q on %s, want %s (the shard whose HashKeyRange contains its MD5 hash)", partitionKey, out.ShardId, wantShardID)
+	}
+}
+
+// TestPutRecords_routesByMD5HashKeyRange is PutRecords' counterpart to
+// TestPutRecord_routesByMD5HashKeyRange: batched records must use the same
+// routing as single-record PutRecord.
+func TestPutRecords_routesByMD5HashKeyRange(t *testing.T) {
+	srv := helpers.NewTestServer(t)
+	const streamName = "md5-routing-batch"
+	partitionKeys := []string{"batch-key-a", "batch-key-b", "batch-key-c"}
+
+	resp := kinesisCall(t, srv, "CreateStream", map[string]any{
+		"StreamName": streamName,
+		"ShardCount": 4,
+	})
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	resp.Body.Close()
+
+	shards := shardsWithHashKeyRanges(t, srv, streamName)
+	want := make([]string, len(partitionKeys))
+	records := make([]map[string]any, len(partitionKeys))
+	for i, pk := range partitionKeys {
+		want[i] = shardContaining(t, shards, md5HashKey(pk))
+		records[i] = map[string]any{"Data": []byte("payload"), "PartitionKey": pk}
+	}
+
+	resp = kinesisCall(t, srv, "PutRecords", map[string]any{
+		"StreamName": streamName,
+		"Records":    records,
+	})
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	var out struct {
+		Records []struct {
+			ShardId string `json:"ShardId"`
+		} `json:"Records"`
+	}
+	decodeJSON(t, resp, &out)
+	if len(out.Records) != len(want) {
+		t.Fatalf("expected %d records in response, got %d", len(want), len(out.Records))
+	}
+	for i, r := range out.Records {
+		if r.ShardId != want[i] {
+			t.Fatalf("record[%d] (partition key %q) placed on %s, want %s", i, partitionKeys[i], r.ShardId, want[i])
+		}
+	}
+}
+
+// TestPutRecord_explicitHashKeyOverridesPartitionKey asserts ExplicitHashKey
+// wins over the partition key's own MD5 hash when both are given.
+func TestPutRecord_explicitHashKeyOverridesPartitionKey(t *testing.T) {
+	srv := helpers.NewTestServer(t)
+	const streamName = "explicit-hash-key"
+	// A partition key whose own MD5 hash we deliberately do not use.
+	const partitionKey = "irrelevant-partition-key"
+
+	resp := kinesisCall(t, srv, "CreateStream", map[string]any{
+		"StreamName": streamName,
+		"ShardCount": 4,
+	})
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	resp.Body.Close()
+
+	shards := shardsWithHashKeyRanges(t, srv, streamName)
+	naturalShardID := shardContaining(t, shards, md5HashKey(partitionKey))
+
+	// Pick a shard other than the one the partition key would naturally hash
+	// to, and use its StartingHashKey as the ExplicitHashKey.
+	var targetShard string
+	var explicitHashKey string
+	for _, s := range shards {
+		if s.ShardId != naturalShardID {
+			targetShard = s.ShardId
+			explicitHashKey = s.HashKeyRange.StartingHashKey
+			break
+		}
+	}
+	if targetShard == "" {
+		t.Fatal("expected at least one shard different from the partition key's natural shard")
+	}
+
+	resp = kinesisCall(t, srv, "PutRecord", map[string]any{
+		"StreamName":      streamName,
+		"Data":            []byte("payload"),
+		"PartitionKey":    partitionKey,
+		"ExplicitHashKey": explicitHashKey,
+	})
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	var out struct {
+		ShardId string `json:"ShardId"`
+	}
+	decodeJSON(t, resp, &out)
+
+	if out.ShardId != targetShard {
+		t.Fatalf("PutRecord with ExplicitHashKey=%s placed on %s, want %s", explicitHashKey, out.ShardId, targetShard)
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"math/big"
 	"net/http"
 	"strings"
 
@@ -77,9 +78,10 @@ type listStreamsResponse struct {
 }
 
 type putRecordRequest struct {
-	StreamName   string `json:"StreamName"`
-	Data         []byte `json:"Data"`
-	PartitionKey string `json:"PartitionKey"`
+	StreamName      string `json:"StreamName"`
+	Data            []byte `json:"Data"`
+	PartitionKey    string `json:"PartitionKey"`
+	ExplicitHashKey string `json:"ExplicitHashKey"`
 }
 
 type putRecordResponse struct {
@@ -93,8 +95,9 @@ type putRecordsRequest struct {
 }
 
 type putRecordsItem struct {
-	Data         []byte `json:"Data"`
-	PartitionKey string `json:"PartitionKey"`
+	Data            []byte `json:"Data"`
+	PartitionKey    string `json:"PartitionKey"`
+	ExplicitHashKey string `json:"ExplicitHashKey"`
 }
 
 type putRecordsEntry struct {
@@ -411,6 +414,44 @@ func (h *Handler) listStreamsTyped(ctx context.Context, req *listStreamsRequest)
 	return out, nil
 }
 
+// shardForRecord resolves the open shard index a PutRecord/PutRecords entry
+// lands on: the shard whose HashKeyRange contains the MD5 hash of
+// partitionKey, or — when explicitHashKey is given — the shard whose range
+// contains that value instead, overriding the partition key entirely (the
+// PutRecord/PutRecords reference: "You can override hashing the partition
+// key to determine the shard by explicitly specifying a hash value using the
+// ExplicitHashKey parameter"). An explicitHashKey that is not a valid
+// non-negative integer, or that falls outside every open shard's range, is
+// AWS's InvalidArgumentException; neither PutRecord nor PutRecords models a
+// per-record error code for it (only ProvisionedThroughputExceededException
+// and InternalFailure are), so this fails the whole request.
+func shardForRecord(shards []Shard, partitionKey, explicitHashKey string) (int, *protocol.AWSError) {
+	hashKey := partitionKeyHashKey(partitionKey)
+	if explicitHashKey != "" {
+		hk, ok := new(big.Int).SetString(explicitHashKey, 10)
+		if !ok || hk.Sign() < 0 {
+			return 0, invalidArgument(fmt.Sprintf("Invalid ExplicitHashKey %s", explicitHashKey))
+		}
+		hashKey = hk
+	}
+	idx := pickShard(shards, hashKey)
+	if idx >= 0 {
+		return idx, nil
+	}
+	if explicitHashKey != "" {
+		return 0, invalidArgument(fmt.Sprintf("Invalid ExplicitHashKey %s", explicitHashKey))
+	}
+	// The computed partition-key hash landed outside every open shard's
+	// range. buildInitialShards/splitShardTyped/mergeShardsTyped keep open
+	// shards' ranges contiguous across the full 128-bit hash space, so this
+	// is an invariant violation rather than a normal request — fall back to
+	// the first open shard instead of failing the whole request.
+	if idx = firstOpenShard(shards); idx >= 0 {
+		return idx, nil
+	}
+	return 0, nil
+}
+
 func (h *Handler) putRecordTyped(ctx context.Context, req *putRecordRequest) (*putRecordResponse, *protocol.AWSError) {
 	if req.StreamName == "" {
 		return nil, errMissingParameter("StreamName")
@@ -419,7 +460,10 @@ func (h *Handler) putRecordTyped(ctx context.Context, req *putRecordRequest) (*p
 	if aerr != nil {
 		return nil, aerr
 	}
-	shardIdx := pickShard(st.Shards, req.PartitionKey)
+	shardIdx, aerr := shardForRecord(st.Shards, req.PartitionKey, req.ExplicitHashKey)
+	if aerr != nil {
+		return nil, aerr
+	}
 	shardID := st.Shards[shardIdx].ShardId
 	// Persisted per-shard counter, not len(records) — storage-access-plan.md
 	// A1: len() regresses after a deletion and can collide with a
@@ -455,7 +499,10 @@ func (h *Handler) putRecordsTyped(ctx context.Context, req *putRecordsRequest) (
 	shardIDs := make([]string, n)
 	counts := make(map[string]int, n)
 	for i, entry := range req.Records {
-		idx := pickShard(st.Shards, entry.PartitionKey)
+		idx, aerr := shardForRecord(st.Shards, entry.PartitionKey, entry.ExplicitHashKey)
+		if aerr != nil {
+			return nil, aerr
+		}
 		shardIdxs[i] = idx
 		shardIDs[i] = st.Shards[idx].ShardId
 		counts[shardIDs[i]]++
