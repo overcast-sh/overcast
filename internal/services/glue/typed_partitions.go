@@ -127,23 +127,6 @@ func partitionFromInput(in *PartitionInput, t *tableRecord) *Partition {
 	}
 }
 
-// lockTable takes the table's write lock — the one UpdateTable and the
-// version operations take — and loads the table inside it, so a partition
-// write is serialised with every other write to its table and cannot land
-// under a table that is no longer there. One lock per table rather than per
-// partition, because UpdatePartition can move a partition to new values and
-// so writes two keys at once.
-func (s *Service) lockTable(ctx context.Context, dbName, tableName string) (*tableRecord, func(), *protocol.AWSError) {
-	dbName, tableName = normName(dbName), normName(tableName)
-	unlock := s.writeLock("table:" + tableKey(dbName, tableName))
-	t, aerr := s.requireTable(ctx, dbName, tableName)
-	if aerr != nil {
-		unlock()
-		return nil, nil, aerr
-	}
-	return t, unlock, nil
-}
-
 // createOnePartition creates one partition of t. The caller holds lockTable.
 func (s *Service) createOnePartition(ctx context.Context, t *tableRecord, in *PartitionInput) *protocol.AWSError {
 	if aerr := checkPartitionValues(t, in.Values); aerr != nil {

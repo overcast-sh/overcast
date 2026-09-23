@@ -67,7 +67,7 @@ func (s *Service) tagTarget(arn string) (*tagTarget, *protocol.AWSError) {
 	switch {
 	case tableName != "":
 		return &tagTarget{
-			lockKey: "table:" + tableKey(dbName, tableName),
+			lockKey: tableLockKey(dbName, tableName),
 			load: func(ctx context.Context, _ string) (serviceutil.Taggable, *protocol.AWSError) {
 				return s.requireTable(ctx, dbName, tableName)
 			},
@@ -80,7 +80,7 @@ func (s *Service) tagTarget(arn string) (*tagTarget, *protocol.AWSError) {
 		}, nil
 	case dbName != "":
 		return &tagTarget{
-			lockKey: "db:" + dbName,
+			lockKey: databaseLockKey(dbName),
 			load: func(ctx context.Context, _ string) (serviceutil.Taggable, *protocol.AWSError) {
 				return s.requireDatabase(ctx, dbName)
 			},
