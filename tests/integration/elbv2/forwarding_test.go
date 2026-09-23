@@ -18,14 +18,15 @@ import (
 
 // backend stands in for whatever is registered behind a target group — a task,
 // an instance — and reports the Host it was addressed with, because an app
-// behind a load balancer builds its links from that.
+// behind a load balancer builds its links from that. It echoes the path as it
+// arrived on the wire, still encoded.
 func backend(t *testing.T, body string) (host string, port int, seenHost *string) {
 	t.Helper()
 	var got string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got = r.Host
 		w.Header().Set("X-Backend", "yes")
-		_, _ = io.WriteString(w, body+" "+r.URL.Path)
+		_, _ = io.WriteString(w, body+" "+r.URL.EscapedPath())
 	}))
 	t.Cleanup(srv.Close)
 
@@ -125,6 +126,45 @@ func TestLoadBalancer_forwardsToRegisteredTarget(t *testing.T) {
 	}
 	if *seenHost != dnsName {
 		t.Errorf("target saw Host %q, want the load balancer's name %q", *seenHost, dnsName)
+	}
+}
+
+func TestLoadBalancer_forwardsEncodedSlashUnchanged(t *testing.T) {
+	// Given: a load balancer forwarding to one registered target.
+	srv := helpers.NewTestServer(t)
+	host, port, _ := backend(t, "hello from")
+
+	lbArn := createLB(t, srv, "enc-alb")
+	tgArn := createTG(t, srv, "enc-tg")
+
+	resp := elbCall(t, srv, "CreateListener", url.Values{
+		"LoadBalancerArn":                        {lbArn},
+		"Protocol":                               {"HTTP"},
+		"Port":                                   {"80"},
+		"DefaultActions.member.1.Type":           {"forward"},
+		"DefaultActions.member.1.TargetGroupArn": {tgArn},
+	})
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	resp.Body.Close()
+
+	reg := elbCall(t, srv, "RegisterTargets", url.Values{
+		"TargetGroupArn":        {tgArn},
+		"Targets.member.1.Id":   {host},
+		"Targets.member.1.Port": {strconv.Itoa(port)},
+	})
+	helpers.AssertStatus(t, reg, http.StatusOK)
+	reg.Body.Close()
+
+	// When: the path carries a percent-encoded slash inside one segment.
+	got := getViaLoadBalancer(t, srv, lbDNSName(t, srv, lbArn), "/pkgs/@scope%2fpkg")
+	defer got.Body.Close()
+
+	// Then: the target receives the path exactly as sent — ALB does not
+	// rewrite it, so the %2f must not turn into a separator (#2136).
+	helpers.AssertStatus(t, got, http.StatusOK)
+	body, _ := io.ReadAll(got.Body)
+	if want := "hello from /pkgs/@scope%2fpkg"; string(body) != want {
+		t.Errorf("target saw %q, want %q", body, want)
 	}
 }
 

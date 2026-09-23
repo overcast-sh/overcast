@@ -17,7 +17,6 @@ package appsync
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/overcast-sh/overcast/internal/middleware"
 )
@@ -37,18 +36,9 @@ func (s *Service) HostRouteRewrite(r *http.Request, m middleware.HostRouteMatch)
 	// string (?header=...&payload=...), which must survive untouched.
 	if m.Label == middleware.LabelAppSyncRealtimeAPI {
 		r.URL.Path = "/_overcast/appsync/apis/" + m.ID + "/realtime"
-		if r.URL.RawPath != "" {
-			r.URL.RawPath = r.URL.Path
-		}
+		r.URL.RawPath = ""
 		return
 	}
 
-	path := r.URL.Path
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path
-	}
-	r.URL.Path = "/_overcast/appsync/apis/" + m.ID + path
-	if r.URL.RawPath != "" {
-		r.URL.RawPath = r.URL.Path
-	}
+	middleware.PrefixPath(r, "/_overcast/appsync/apis/"+m.ID)
 }

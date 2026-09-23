@@ -41,14 +41,7 @@ var roundRobin atomic.Uint64
 // ({name}-{id}.{region}.elb.{base}), so m.ID carries both and is not a useful
 // key on its own.
 func (s *Service) HostRouteRewrite(r *http.Request, _ middleware.HostRouteMatch) {
-	path := r.URL.Path
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path
-	}
-	r.URL.Path = "/_overcast/elb" + path
-	if r.URL.RawPath != "" {
-		r.URL.RawPath = r.URL.Path
-	}
+	middleware.PrefixPath(r, "/_overcast/elb")
 }
 
 // ProxyRequest forwards a request to a target registered behind the load
@@ -77,12 +70,14 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Strip the /_overcast/elb prefix the host rewrite added, restoring the path the
-	// client actually asked for.
+	// client actually asked for. RawPath is stripped alongside Path rather than
+	// cleared: ALB forwards the path to the target unchanged, so a %2F must not
+	// reach it as a separator (#2136).
 	r.URL.Path = strings.TrimPrefix(r.URL.Path, "/_overcast/elb")
 	if r.URL.Path == "" {
 		r.URL.Path = "/"
 	}
-	r.URL.RawPath = ""
+	r.URL.RawPath = strings.TrimPrefix(r.URL.RawPath, "/_overcast/elb")
 
 	upstream := &url.URL{Scheme: "http", Host: net.JoinHostPort(target, strconv.Itoa(port))}
 	proxyCtx, cancel := context.WithTimeout(ctx, proxyTimeout)

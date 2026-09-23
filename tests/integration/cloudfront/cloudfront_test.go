@@ -4489,6 +4489,42 @@ func TestProxy_hostRoutedInvokeAcrossResolvableBases(t *testing.T) {
 	}
 }
 
+// TestProxy_hostRoutedInvokeKeepsEncodedSlash: CloudFront hands the request
+// URI to the origin as the viewer sent it, so a %2f inside a segment must
+// reach a custom origin still encoded rather than as a separator (#2136).
+func TestProxy_hostRoutedInvokeKeepsEncodedSlash(t *testing.T) {
+	// Given: a distribution in front of an origin that records the wire path
+	var seen string
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = r.URL.EscapedPath()
+	}))
+	defer origin.Close()
+	originHost := origin.URL[len("http://"):]
+	colonIdx := strings.LastIndexByte(originHost, ':')
+	var port int
+	fmt.Sscanf(originHost[colonIdx+1:], "%d", &port)
+
+	srv := helpers.NewTestServer(t)
+	dist, _ := cfCreateDistFromXML(t, srv, viewerPolicyDistXML("proxy-encoded-slash", "allow-all", originHost[:colonIdx], port))
+
+	// When: a viewer requests a path with an encoded slash via the dist's host
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/pkgs/@scope%2fpkg", nil)
+	req.Host = dist.ID + ".cloudfront.localhost:4566"
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("proxy request: %v", err)
+	}
+	resp.Body.Close()
+
+	// Then: the origin sees the path byte-for-byte as the viewer sent it
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if want := "/pkgs/@scope%2fpkg"; seen != want {
+		t.Errorf("origin saw path %q, want %q", seen, want)
+	}
+}
+
 // viewerPolicyDistXML returns a distribution whose DefaultCacheBehavior carries
 // the given ViewerProtocolPolicy, pointed at the given custom origin.
 func viewerPolicyDistXML(callerRef, policy, originDomain string, originPort int) string {

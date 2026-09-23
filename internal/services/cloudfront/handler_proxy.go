@@ -616,14 +616,7 @@ func (h *Handler) resolveStagingTarget(ctx context.Context, cfg *DistributionCon
 // CloudFront is the only host-routed service whose IDs are not already
 // lowercase, which is why only this rewrite needs to canonicalise.
 func (s *Service) HostRouteRewrite(r *http.Request, m middleware.HostRouteMatch) {
-	path := r.URL.Path
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path
-	}
-	r.URL.Path = "/_overcast/cloudfront/distributions/" + strings.ToUpper(m.ID) + path
-	if r.URL.RawPath != "" {
-		r.URL.RawPath = r.URL.Path
-	}
+	middleware.PrefixPath(r, "/_overcast/cloudfront/distributions/"+strings.ToUpper(m.ID))
 }
 
 // isHTTPSViewerPolicy reports whether a ViewerProtocolPolicy requires the

@@ -397,14 +397,5 @@ func (h *Handler) ListFunctionUrlConfigs(w http.ResponseWriter, r *http.Request)
 // function URL created outside the default region resolves its config and
 // then 404s on the function behind it.
 func (s *Service) HostRouteRewrite(r *http.Request, m middleware.HostRouteMatch) {
-	path := r.URL.Path
-	if !hasLeadingSlash(path) {
-		path = "/" + path
-	}
-	r.URL.Path = "/_overcast/lambda/url-invoke/" + m.ID + path
-	if r.URL.RawPath != "" {
-		r.URL.RawPath = r.URL.Path
-	}
+	middleware.PrefixPath(r, "/_overcast/lambda/url-invoke/"+m.ID)
 }
-
-func hasLeadingSlash(s string) bool { return len(s) > 0 && s[0] == '/' }
