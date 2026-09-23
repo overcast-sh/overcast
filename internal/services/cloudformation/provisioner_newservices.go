@@ -2333,10 +2333,19 @@ func appsyncSourceApiAssociationAttrs(resp appsyncSourceApiAssociationResponse) 
 type cloudfrontDistributionHandler struct{}
 
 func (h *cloudfrontDistributionHandler) Create(ctx context.Context, router http.Handler, cfg *config.Config, props map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
+	// Tags is AWS::CloudFront::Distribution's own top-level property, a
+	// sibling of DistributionConfig rather than a member of it — captured
+	// before distConfig can alias props (the "properties at the top level"
+	// fallback below), and stripped from whichever map distConfig ends up
+	// being so it never leaks into the <DistributionConfig> XML as an
+	// unrecognised element.
+	rawTags := props["Tags"]
+
 	distConfig, _ := props["DistributionConfig"].(map[string]any)
 	if distConfig == nil {
 		distConfig = props // Some templates put config at the top level.
 	}
+	delete(distConfig, "Tags")
 
 	if _, ok := distConfig["CallerReference"].(string); !ok {
 		distConfig["CallerReference"] = fmt.Sprintf("%s-%d", rCtx.StackName, len(rCtx.Resources))
@@ -2351,20 +2360,89 @@ func (h *cloudfrontDistributionHandler) Create(ctx context.Context, router http.
 		return "", nil, fmt.Errorf("CloudFront: marshal config: %w", err)
 	}
 
-	rec, err := internalRequest(ctx, router, rCtx.Region, http.MethodPost, "/2020-05-31/distribution", "application/xml", xmlData)
+	path := "/2020-05-31/distribution"
+	body := xmlData
+	// CreateDistributionWithTags is the same create, wrapped so tags land
+	// atomically with the distribution: posting to plain /distribution has
+	// no way to carry Tags at all, so ListTagsForResource returned nothing
+	// for a distribution CloudFormation deployed with tags, and a template
+	// setting the _custom_id_ tag (internal/services/cloudfront/handler.go)
+	// got an auto-generated ID instead of the pinned one.
+	if tags := mergeResourceTags(rCtx.StackTags, rawTags); len(tags) > 0 {
+		wrapped, err := wrapCloudFrontDistributionConfigWithTags(xmlData, tags)
+		if err != nil {
+			return "", nil, fmt.Errorf("CloudFront: marshal tags: %w", err)
+		}
+		path = "/2020-05-31/distribution?WithTags"
+		body = wrapped
+	}
+
+	rec, err := internalRequest(ctx, router, rCtx.Region, http.MethodPost, path, "application/xml", body)
 	if err != nil {
 		return "", nil, fmt.Errorf("CreateDistribution: %w", err)
 	}
 
-	body := rec.Body.String()
-	id := extractXMLValue(body, "Id")
-	domainName := extractXMLValue(body, "DomainName")
+	respBody := rec.Body.String()
+	id := extractXMLValue(respBody, "Id")
+	domainName := extractXMLValue(respBody, "DomainName")
+
+	// AWS::CloudFront::Distribution has exactly these two top-level
+	// properties; DistributionConfig's own members all round-trip through
+	// the generic XML marshaller above (see #545's decision comment), so
+	// nothing beyond the pair below is ever left over here.
+	noteUnconsumedProperties(ctx, "AWS::CloudFront::Distribution", props, "DistributionConfig", "Tags")
 
 	attrs := map[string]string{
 		"DomainName": domainName,
 		"Id":         id,
 	}
 	return id, attrs, nil
+}
+
+// cfnCloudFrontTag and cfnCloudFrontTagsXML mirror the wire shape
+// internal/services/cloudfront/types.go's Tag/Tags structs declare
+// (<Tags><Items><Tag><Key>.../<Value>...</Tag></Items></Tags>, no Quantity
+// element, unlike Origins and the other DistributionConfig lists) —
+// duplicated here rather than imported so this package keeps dispatching to
+// CloudFront over HTTP rather than sharing Go types with it, the same
+// boundary every other cross-service call in this file keeps.
+type cfnCloudFrontTag struct {
+	Key   string `xml:"Key"`
+	Value string `xml:"Value"`
+}
+
+type cfnCloudFrontTagsXML struct {
+	XMLName xml.Name           `xml:"Tags"`
+	Items   []cfnCloudFrontTag `xml:"Items>Tag"`
+}
+
+// wrapCloudFrontDistributionConfigWithTags wraps an already-marshalled
+// <DistributionConfig> document together with a Tags block into the
+// <DistributionConfigWithTags> envelope CreateDistributionWithTags expects.
+// distConfigXML is concatenated rather than re-parsed: marshalCFNXML already
+// produced a complete, self-contained <DistributionConfig>...</DistributionConfig>
+// element.
+func wrapCloudFrontDistributionConfigWithTags(distConfigXML []byte, tags map[string]string) ([]byte, error) {
+	names := make([]string, 0, len(tags))
+	for k := range tags {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	wrapper := cfnCloudFrontTagsXML{}
+	for _, k := range names {
+		wrapper.Items = append(wrapper.Items, cfnCloudFrontTag{Key: k, Value: tags[k]})
+	}
+	tagsXML, err := xml.Marshal(wrapper)
+	if err != nil {
+		return nil, err
+	}
+
+	var buf bytes.Buffer
+	buf.WriteString("<DistributionConfigWithTags>")
+	buf.Write(distConfigXML)
+	buf.Write(tagsXML)
+	buf.WriteString("</DistributionConfigWithTags>")
+	return buf.Bytes(), nil
 }
 
 func ensureCloudFrontDistributionDefaults(distConfig map[string]any) {
