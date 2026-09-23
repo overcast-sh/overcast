@@ -171,3 +171,27 @@ func TestParsePartitionExpression_numbersAndIdentifiers(t *testing.T) {
 		}
 	}
 }
+
+func TestParsePartitionExpression_foldedDuplicateKeyStaysFilterable(t *testing.T) {
+	cases := []struct {
+		name string
+		keys []Column
+	}{
+		{"unsupported first", []Column{{Name: "Flag", Type: "boolean"}, {Name: "flag", Type: "int"}}},
+		{"unsupported last", []Column{{Name: "flag", Type: "int"}, {Name: "Flag", Type: "boolean"}}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Given: two keys whose names fold to one, only one of them filterable
+			// When: an expression names it
+			f, err := parsePartitionExpression("flag = 1", tc.keys)
+			// Then: it compiles against the filterable key and compares numerically
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+			if !f.match(map[string]string{"flag": "1.0"}) {
+				t.Error("flag = 1 did not match a stored 1.0")
+			}
+		})
+	}
+}

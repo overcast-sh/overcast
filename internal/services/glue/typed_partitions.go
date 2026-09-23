@@ -2,7 +2,6 @@ package glue
 
 import (
 	"context"
-	"strings"
 
 	"github.com/overcast-sh/overcast/internal/protocol"
 )
@@ -260,7 +259,7 @@ func partitionValueMap(keys []Column, values []string) map[string]string {
 	m := make(map[string]string, len(keys))
 	for i, k := range keys {
 		if i < len(values) {
-			m[strings.ToLower(k.Name)] = values[i]
+			m[partitionKeyName(k)] = values[i]
 		}
 	}
 	return m
