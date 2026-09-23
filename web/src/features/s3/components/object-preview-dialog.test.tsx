@@ -491,9 +491,10 @@ describe("ObjectPreviewDialog > CSV and TSV", () => {
     const table = await screen.findByRole("table", { name: /First rows of the CSV file/ })
     expect(within(table).getByRole("columnheader", { name: "name" })).toBeInTheDocument()
     expect(within(table).getByText("Ada")).toBeInTheDocument()
-    // An empty field is a token, told apart from NULL and from a value.
-    expect(within(table).getByLabelText("empty string")).toHaveTextContent("empty")
-    expect(within(table).queryByLabelText("null")).not.toBeInTheDocument()
+    // An empty field is a token, told apart from NULL and from a value, and
+    // announced as an empty string rather than as the word on it.
+    expect(within(table).getByTitle("Empty string")).toHaveTextContent("empty string")
+    expect(within(table).queryByText("NULL")).not.toBeInTheDocument()
     expect(screen.getByText("2 rows · 3 columns")).toBeInTheDocument()
   })
 
@@ -575,7 +576,7 @@ describe("ObjectPreviewDialog > JSON Lines", () => {
     }
     renderObject("users.jsonl")
     const table = await screen.findByRole("table", { name: /JSON Lines/ })
-    expect(within(table).getByLabelText("null")).toHaveTextContent("NULL")
+    expect(within(table).getByTitle("NULL")).toHaveTextContent("NULL")
     expect(within(table).getByText("b@x")).toBeInTheDocument()
     // A key the record omits is neither NULL nor an empty string.
     expect(within(table).getByTitle("Not present in this record")).toHaveTextContent("not present")
