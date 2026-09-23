@@ -1,7 +1,7 @@
 # Athena, S3 Tables and Iceberg — plan for real support
 
 > Status: proposal, 2026-09-23. Nothing here is implemented yet. It is based on
-> `main` at `cb08d3d22`.
+> `main` at `cb08d3d22`. Tracking issue: #2073, with one issue per phase below.
 
 ## Where things stand
 
@@ -45,7 +45,7 @@ lands in S3 and Glue where the rest of Overcast can see it.
 Rejected alternatives:
 
 - **An embedded pure-Go SQL engine.** No Parquet/ORC/Iceberg readers, a different dialect, and years of work.
-- **DuckDB in a sidecar.** It has no server mode and its dialect differs.
+- **DuckDB as the default engine,** whether embedded, run as a CLI subprocess or wrapped in a sidecar: its dialect is not Athena's. See the DuckDB and Floci bullets below.
 - **Presto.** Athena v2 is retired.
 - **Turning on CGO to embed DuckDB.** Every release binary (10 of them: linux, darwin and windows, amd64 and arm64, full and slim) is cross-compiled on a single Ubuntu runner, and the images are cross-built from `$BUILDPLATFORM` onto musl Alpine. CGO would need a C toolchain for each target, macOS runners or a Darwin SDK, and a glibc base image or a musl DuckDB build. It would also stop a bare checkout building without a C compiler, which is exactly the Windows-contributor case the cross-platform contract protects. All of that buys an engine whose dialect is not Athena's.
 - **If a Docker-free engine is wanted later,** run DuckDB's official CLI as a host subprocess: pin it by hash, download it on first use, and talk to it over stdin with JSON output. That gets the same engine with no CGO. Treat it as an optional second engine behind `ATHENA_ENGINE=duckdb`, and never as the default. It starts in under 100 ms and idles at tens of MiB, but it pays for that in fidelity:
@@ -115,13 +115,12 @@ written by the engine or the client, never by Overcast.
 Each phase ships on its own and has value without the phases after it. They
 are listed in dependency order.
 
-### Phase 0 — groundwork (S)
+### Phase 0 — groundwork (S) — #2062, #2063
 
 - Add an in-process S3 accessor next to `GetObjectBytes`: `PutObjectBytes`, `ListObjects` and `EnsureBucket`. `PutObjectBytes` must fire notifications, the same as the HTTP path. Inject it through func types in `router.go`.
 - Remove the stale athena, glue, firehose and opensearch entries from `unsupported-services.ts`.
-- File one tracking issue plus one issue per phase, with RICE scores (`github-issue-lifecycle` skill).
 
-### Phase 1 — Glue Data Catalog fidelity (M)
+### Phase 1 — Glue Data Catalog fidelity (M) — #2064
 
 Trino's Glue metastore and Iceberg's Glue catalog both need this, and it helps
 CDK users on its own.
@@ -135,7 +134,7 @@ CDK users on its own.
 - Add an exported read API (`GetTable` and `GetDatabases`) for Athena's metadata operations, injected in `router.go`.
 - CloudFormation: carry all of `AWS::Glue::Table`'s properties, and add `AWS::Glue::Partition`.
 
-### Phase 2 — Athena control plane completion (M)
+### Phase 2 — Athena control plane completion (M) — #2065
 
 This phase needs no engine.
 
@@ -147,7 +146,7 @@ This phase needs no engine.
 - Add `ListEngineVersions`, which returns only "Athena engine version 3".
 - CloudFormation: `AWS::Athena::NamedQuery`, `DataCatalog` and `PreparedStatement`, plus WorkGroup update in place instead of `errReplacementRequired` (see also #1759).
 
-### Phase 3 — Athena query execution on Trino (L)
+### Phase 3 — Athena query execution on Trino (L) — #2066
 
 **Engine manager.** Model it on ECR's `ensureRegistry` for the lazy singleton,
 and on ElastiCache's `SetDocker`, `Stop`, GC and readiness for everything else.
@@ -182,7 +181,7 @@ and on ElastiCache's `SetDocker`, `Stop`, GC and readiness for everything else.
   - integration tests behind `SkipWithoutDocker` and `PullOrSkip`: a CSV/Parquet table from S3, partitions, CTAS, an Iceberg `INSERT`/`MERGE` followed by a Glue `metadata_location` check, plus stop and failure cases;
   - a compat group with `requires: ["docker"]`.
 
-### Phase 4 — S3 Tables control plane (M–L)
+### Phase 4 — S3 Tables control plane (M–L) — #2067
 
 - A new `internal/services/s3tables` package, copying the REST pattern of `scheduler/`.
 - **Dispatch.** Register it under the SigV4 signing-name dispatcher so that `/buckets`, `/namespaces`, `/tables`, `/get-table` and `/tag` reach S3 Tables only when `ServiceFromCredential(r)=="s3tables"`, and S3 otherwise. Add it to the `detectService` route test as `s3`-classified families. Also update `allServices`, `ServiceTiers`, `state/tier.go`, `topology.go` and `serviceidentity.go`.
@@ -195,7 +194,7 @@ and on ElastiCache's `SetDocker`, `Stop`, GC and readiness for everything else.
 - **CloudFormation:** `AWS::S3Tables::TableBucket`, `Namespace`, `Table`, `TableBucketPolicy` and `TablePolicy`.
 - Docs, console page, compat group.
 
-### Phase 5 — the Iceberg REST catalog endpoint (L)
+### Phase 5 — the Iceberg REST catalog endpoint (L) — #2069, spike #2068
 
 - Serve the Iceberg REST spec that AWS exposes at `https://s3tables.<region>.amazonaws.com/iceberg`:
   - `GET /iceberg/v1/config?warehouse=<bucketARN>`;
@@ -208,13 +207,13 @@ and on ElastiCache's `SetDocker`, `Stop`, GC and readiness for everything else.
 - Wire Trino's per-bucket REST catalogs. Athena addresses them as `"s3tablescatalog/<bucket>"."<ns>"."<table>"`.
 - Verify with PyIceberg and Spark (`org.apache.iceberg.aws` REST plus SigV4) in integration tests, and with Trino end to end.
 
-### Phase 6 — the catalog federation Athena uses (M)
+### Phase 6 — the catalog federation Athena uses (M) — #2070
 
 - Glue multi-level catalogs: `GetCatalog`, `GetCatalogs`, and the `s3tablescatalog` federated catalog with one child catalog per table bucket. Accept `CatalogId` of the form `<account>:s3tablescatalog/<bucket>` on the Glue table and database APIs, backed by S3 Tables. This is how the console and Athena list S3 Tables.
 - Athena `ListDatabases` and `ListTableMetadata` over those catalogs.
 - Lake Formation grants are out of scope. Document that everything is readable.
 
-### Phase 7 — integrations and console (M)
+### Phase 7 — integrations and console (M) — #2071, #2072
 
 - **Step Functions:** add `athena:startQueryExecution` (`.sync`), `getQueryExecution`, `getQueryResults`, `stopQueryExecution`, and the named-query and workgroup integrations to `dispatchTask`. Also add Athena as a Distributed Map `ItemReader` source (#2040).
 - **Firehose Iceberg destination:** this needs Firehose delivery to exist first, which is a separate programme. Record it as a follow-up, not part of this plan.
