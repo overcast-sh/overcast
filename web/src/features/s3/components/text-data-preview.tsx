@@ -1,7 +1,6 @@
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { FileText, Table2 } from "lucide-react"
-import { DataGrid } from "@/components/data-grid/data-grid"
 import { saveDataOn } from "@/lib/data-sources/device-profile"
 import { NotTabularError } from "@/lib/data-sources/row-source"
 import { openTextSource, type TextRowSource } from "@/lib/data-sources/text-source"
@@ -11,7 +10,6 @@ import { formatBytes, formatQuantity } from "@/lib/format"
 import { OBJECT_PREVIEW_WINDOW } from "@/services/api"
 import { s3ObjectPreviewQueryOptions } from "../data"
 import { kindLabel } from "../preview-kind"
-import { AthenaQuery } from "./athena-query"
 import { useObjectSource, type DataFileProps } from "./data-file-source"
 import {
   PreviewNotice,
@@ -22,6 +20,7 @@ import {
   ViewToggle,
   type ToggleOption,
 } from "./data-preview"
+import { ObjectDataGrid } from "./object-data-grid"
 
 type TextView = "table" | "raw"
 
@@ -128,23 +127,13 @@ export function TextDataPreview({ kind, ...props }: DataFileProps & { kind: Text
       {view === "raw" ? (
         rawBody
       ) : source ? (
-        <DataGrid
+        <ObjectDataGrid
           source={source}
-          label={`Rows of ${objectKey}`}
-          className={gridClassName}
-          initialRow={props.initialRow}
-          onCursorChange={props.onCursorChange}
+          format={kind}
+          delimiter={source.delimiter}
           emptyMessage="No rows below the header."
           onReload={reload}
-          toolbarEnd={
-            <AthenaQuery
-              bucket={bucket}
-              objectKey={objectKey}
-              format={kind}
-              columns={source.columns}
-              delimiter={source.delimiter}
-            />
-          }
+          file={props}
         />
       ) : (
         <div className={gridClassName}>

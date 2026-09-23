@@ -1,4 +1,5 @@
 import type { RowBlock } from "@/lib/data-sources/row-source"
+import { columnBytes } from "@/lib/data-sources/value-bytes"
 import { LruCache } from "@/lib/lru-cache"
 
 /**
@@ -6,18 +7,27 @@ import { LruCache } from "@/lib/lru-cache"
  *
  * Capped by bytes rather than by rows because rows are not a unit of memory —
  * a thousand rows of three numbers and a thousand rows of forty free-text
- * columns differ by a factor of hundreds. Each block's size is an estimate
- * (strings at two bytes a character plus a header, numbers at eight), which
- * is what a budget needs: an upper bound that tracks the data, not a heap
- * profile.
+ * columns differ by a factor of hundreds. Sizes are the estimates of
+ * `columnBytes`, kept per column so a column that lands into a block adds
+ * only its own cost.
  *
  * The blocks on screen are pinned while they are, so eviction never takes
  * away a row being looked at; everything else goes least recently used
  * first. Keyed by block index: the grid remounts on a new source (a new ETag
  * is a new source), so a cache never holds two files' rows.
  */
+
+/** Per block, beyond its columns: the object and its arrays. */
+const BLOCK_OVERHEAD = 64
+
+interface Entry {
+  block: RowBlock
+  /** Estimated bytes of each column held, by column index. */
+  columnCosts: number[]
+}
+
 export class BlockCache {
-  private readonly lru: LruCache<RowBlock, number>
+  private readonly lru: LruCache<Entry, number>
   private pinned = new Set<number>()
 
   constructor(budget: number) {
@@ -35,12 +45,12 @@ export class BlockCache {
 
   /** Reads a block and marks it most recently used. */
   get(index: number): RowBlock | undefined {
-    return this.lru.get(index)
+    return this.lru.get(index)?.block
   }
 
   /** Reads without touching recency — for Find, which must not reorder the cache. */
   peek(index: number): RowBlock | undefined {
-    return this.lru.peek(index)
+    return this.lru.peek(index)?.block
   }
 
   /** Every cached block index, least recently used first. */
@@ -55,61 +65,21 @@ export class BlockCache {
    */
   set(index: number, block: RowBlock): void {
     const existing = this.lru.peek(index)
-    const merged =
-      existing && existing.count === block.count ? mergeColumns(existing, block) : block
-    this.lru.put(index, merged, blockBytes(merged))
+    const base = existing && existing.block.count === block.count ? existing : undefined
+    const columns = base ? base.block.columns.slice() : []
+    const columnCosts = base ? base.columnCosts.slice() : []
+    block.columns.forEach((values, i) => {
+      if (!values) return
+      columns[i] = values
+      columnCosts[i] = columnBytes(values)
+    })
+    const cost = columnCosts.reduce((sum, bytes) => sum + bytes, BLOCK_OVERHEAD)
+    this.lru.put(index, { block: { ...block, columns }, columnCosts }, cost)
   }
 
   /** The blocks on screen, which eviction must leave alone until the next call. */
   pin(indices: Iterable<number>): void {
     this.pinned = new Set(indices)
     this.lru.evict()
-  }
-}
-
-function mergeColumns(existing: RowBlock, update: RowBlock): RowBlock {
-  const columns = existing.columns.slice()
-  update.columns.forEach((column, i) => {
-    if (column) columns[i] = column
-  })
-  return { ...update, columns }
-}
-
-/** Estimated bytes one block holds. */
-export function blockBytes(block: RowBlock): number {
-  let bytes = 64
-  for (const column of block.columns) {
-    if (!column) continue
-    bytes += 16
-    if (ArrayBuffer.isView(column)) {
-      bytes += column.byteLength
-      continue
-    }
-    for (let i = 0; i < column.length; i++) bytes += valueBytes(column[i])
-  }
-  return bytes
-}
-
-function valueBytes(value: unknown): number {
-  switch (typeof value) {
-    case "string":
-      return 16 + value.length * 2
-    case "number":
-    case "boolean":
-    case "undefined":
-      return 8
-    case "bigint":
-      return 24
-  }
-  if (value === null) return 8
-  if (value instanceof Uint8Array) return 32 + value.byteLength
-  if (value instanceof Date) return 32
-  // Lists and structs: their JSON length is a fair proxy for their size.
-  try {
-    return (
-      32 + JSON.stringify(value, (_key, v: unknown) => (typeof v === "bigint" ? 0 : v)).length * 2
-    )
-  } catch {
-    return 64
   }
 }

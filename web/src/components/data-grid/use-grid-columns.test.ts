@@ -34,6 +34,15 @@ describe("useGridColumns", () => {
     expect(result.current.totalWidth).toBe(first.width + second.width)
   })
 
+  it("hands back the same layout when nothing about the columns changed", () => {
+    // The grid renders every scroll frame; a new layout each time would redo
+    // everything downstream of it, Find included.
+    const { result, rerender } = render()
+    const first = result.current
+    rerender({ sample: undefined })
+    expect(result.current).toBe(first)
+  })
+
   it("sizes a column from its first values once they arrive", () => {
     // Given: no rows yet, so widths come from the names
     const { result, rerender } = render()
@@ -57,7 +66,9 @@ describe("useGridColumns", () => {
   it("hides a column from the layout, keeping its source index on the rest", () => {
     const { result } = render()
     act(() => result.current.visibility.toggle("0"))
-    expect(result.current.columns.map((column) => [column.index, column.position])).toEqual([[1, 0]])
+    expect(result.current.columns.map((column) => [column.index, column.position])).toEqual([
+      [1, 0],
+    ])
     expect(result.current.visibility.hidden).toEqual(new Set(["0"]))
   })
 

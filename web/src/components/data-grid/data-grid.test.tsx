@@ -5,6 +5,7 @@ import { DataGrid } from "./data-grid"
 import { nativeFor, ROW_HEIGHT, SAFE_HEIGHT_CAP } from "./scroll-model"
 import { FakeSource } from "./testing/fake-source"
 import { stubLayout } from "./testing/layout"
+import { FIND_DELAY_MS } from "./use-grid-find"
 import { SETTLE_MS } from "./use-hybrid-scroll"
 
 const clipboard = vi.hoisted(() => ({ text: "" }))
@@ -218,7 +219,11 @@ describe("DataGrid", () => {
       const { user } = render(<DataGrid source={new FakeSource(100)} label="Rows" />)
       await landed()
       await user.type(screen.getByRole("searchbox", { name: "Find in loaded rows" }), "r7c2")
-      expect(screen.getByText("1 of 1 in loaded rows")).toBeInTheDocument()
+      expect(screen.getByRole("status")).toHaveTextContent("searching loaded rows")
+      act(() => {
+        vi.advanceTimersByTime(FIND_DELAY_MS)
+      })
+      expect(screen.getByRole("status")).toHaveTextContent("1 of 1 in loaded rows")
     })
 
     it("hides a column from the Columns menu", async () => {

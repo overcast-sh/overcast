@@ -75,7 +75,7 @@ export function GridBody({
                   value={value}
                   selected={inSelection(selection, row, position)}
                   active={cursor?.row === row && cursor.col === position}
-                  match={matches.has(`${row}:${position}`)}
+                  match={matches.size > 0 && matches.has(`${row}:${position}`)}
                 />
               )
             })}

@@ -279,7 +279,7 @@ interface RowSource {
 ### Rendering
 
 - **Only what is on screen is in the DOM.** Rows are windowed by the grid itself (below), and columns by `@tanstack/react-virtual`, already a dependency: there is no height cap across, so the stock pixel virtualizer fits that axis. Only the visible cells plus a small overscan are rendered, so a million rows and 300 columns render the same number of elements as 30 rows and 10 columns.
-- **Column state is headless TanStack Table** (v9, as `ResourceTable` uses it) with no row model: sizing, resizing, the pinned row-number column, visibility (a Columns menu) and order.
+- **Column state is headless TanStack Table** (v9, as `ResourceTable` uses it) with no row model: sizing, resizing, the pinned row-number column and visibility (a Columns menu). Reordering is #2135.
 - **Row height is fixed.** A long value truncates with an ellipsis and opens a cell inspector on double-click, on its inspect button, or on Enter from the keyboard; the inspector shows complex types as indented, highlighted JSON. Column widths come from sampling the first block, and the user can resize them.
 - **Browsers cap an element's height**, at a value that varies by engine and version: somewhere between about 17 and 34 million px. At 28 px a row, a naive spacer overflows past a few hundred thousand rows. The grid therefore caps its spacer at the lower of a runtime probe (a hidden element asked for a billion pixels, read back once) and 10 million px, and scrolls in a **hybrid** way:
   - it keeps a **logical position** in unscaled pixels and renders from that;

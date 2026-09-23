@@ -49,6 +49,7 @@ export function CellInspector({
           align="start"
           sideOffset={4}
           collisionPadding={12}
+          sticky="always"
           aria-label={`Row ${formatCount(row + 1)}, ${column.name}`}
           className="z-50 flex max-h-80 w-[min(32rem,90vw)] flex-col overflow-hidden rounded-card border border-border bg-bg-elevated shadow-xl"
         >

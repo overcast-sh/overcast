@@ -157,3 +157,54 @@ describe("budgets: a 200-column Parquet file", () => {
     source.dispose()
   })
 })
+
+describe("budgets: a Parquet file with one large row group and no page index", () => {
+  // Large enough that each column chunk (9.6 MB) is past what the raw byte
+  // cache keeps, so only decoding it once can keep scrolling from refetching it.
+  const ROWS = 1_200_000
+  let object: ReturnType<typeof bytesObject>
+
+  beforeAll(async () => {
+    // What pyarrow and Spark write by default: no offset index, so the
+    // smallest read is a whole column chunk.
+    const { ByteWriter, parquetWrite } = await import("hyparquet-writer")
+    const writer = new ByteWriter()
+    await parquetWrite({
+      writer,
+      rowGroupSize: ROWS,
+      // Numbers: jsdom's TextEncoder answers in another realm's Uint8Array,
+      // which the writer refuses for strings.
+      columnData: ["a", "b"].map((name, c) => ({
+        name,
+        type: "DOUBLE" as const,
+        offsetIndex: false,
+        data: Float64Array.from({ length: ROWS }, (_, r) => r + c / 10),
+      })),
+    })
+    object = bytesObject(new Uint8Array(writer.getBuffer()))
+  }, 60_000)
+
+  it("decodes each column chunk once, however many blocks are scrolled through", async () => {
+    // Given: the file open, and its first block read
+    const fake = fakeFetch(object)
+    const source = await openParquetSource({
+      url: "/big-group.parquet",
+      size: object.size,
+      port: inProcessDataWorker(fake.fetch),
+    })
+    const signal = new AbortController().signal
+    await source.getRows(0, BLOCK_ROWS, [0, 1], signal)
+    const firstBlock = fake.rangedBytes()
+    // When: the next nine blocks are scrolled through
+    for (let block = 1; block < 10; block++) {
+      await source.getRows(block * BLOCK_ROWS, (block + 1) * BLOCK_ROWS, [0, 1], signal)
+    }
+    const tenBlocks = fake.rangedBytes()
+    report.push(
+      `Parquet, one ${formatCount(ROWS)}-row group without a page index: first block ${(firstBlock / 1e3).toFixed(0)} KB, ten blocks ${(tenBlocks / 1e3).toFixed(0)} KB`,
+    )
+    // Then: nothing more was fetched after the chunks the first block needed
+    expect(tenBlocks).toBe(firstBlock)
+    source.dispose()
+  })
+})

@@ -1,7 +1,9 @@
 import { useCallback, useState, type ReactNode } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { useRowSource, type RowSourceState } from "@/components/data-grid/use-row-source"
 import type { RowSource } from "@/lib/data-sources/row-source"
 import { s3 } from "@/services/api"
+import { s3Keys } from "../data"
 
 /** What every data-file preview takes, in the object inspector and the full-page viewer alike. */
 export interface DataFileProps {
@@ -25,13 +27,16 @@ export interface DataFileProps {
 export interface ObjectSource<S extends RowSource> extends RowSourceState<S> {
   /** The object's download URL, which every range read goes to. */
   url: string
-  /** Opens the source again: *File changed — Reload*. */
+  /**
+   * Opens the source again: *File changed — Reload*. The object's metadata
+   * is fetched afresh first, so the new file is read at its new size.
+   */
   reload: () => void
 }
 
 /**
  * A row source over one S3 object, opened for as long as the preview shows
- * that object at that ETag, and opened afresh by `reload`.
+ * that object at that size and ETag, and opened afresh by `reload`.
  */
 export function useObjectSource<S extends RowSource>(
   { bucket, objectKey, versionId, size, etag }: DataFileProps,
@@ -39,8 +44,13 @@ export function useObjectSource<S extends RowSource>(
   open: (url: string, signal: AbortSignal) => Promise<S>,
 ): ObjectSource<S> {
   const url = s3.getObjectDownloadUrl(bucket, objectKey, versionId)
+  const queryClient = useQueryClient()
   const [generation, setGeneration] = useState(0)
-  const reload = useCallback(() => setGeneration((g) => g + 1), [])
+  const reload = useCallback(() => {
+    void queryClient
+      .refetchQueries({ queryKey: s3Keys.objectMeta(bucket, objectKey, versionId), exact: true })
+      .finally(() => setGeneration((g) => g + 1))
+  }, [queryClient, bucket, objectKey, versionId])
   const state = useRowSource<S>(`${format}:${url}:${size}:${etag ?? ""}:${generation}`, (signal) =>
     open(url, signal),
   )

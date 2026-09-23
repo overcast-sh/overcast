@@ -155,4 +155,15 @@ describe("RangeScheduler", () => {
     // When / Then: the read rejects with an HttpReadError naming it
     await expect(scheduler.read(0, KB)).rejects.toEqual(new HttpReadError(403))
   })
+
+  it("reports an object that shrank under it when a range comes back unsatisfiable", async () => {
+    // Given: an object whose ranges the server now refuses as past its end
+    const shrunk = (() => Promise.resolve(new Response(null, { status: 416 }))) as typeof fetch
+    const changed = vi.fn()
+    const scheduler = new RangeScheduler("/o", shrunk, { onChanged: changed })
+    // When: a read inside the size it was opened at fails
+    await expect(scheduler.read(0, KB)).rejects.toEqual(new HttpReadError(416))
+    // Then: the object is reported changed
+    expect(changed).toHaveBeenCalledOnce()
+  })
 })

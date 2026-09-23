@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react"
+import { useCallback, useId, useMemo, useRef, useState, type ReactNode } from "react"
 import { EmptyState } from "@/components/ui/primitives"
 import { ScrollEdge } from "@/components/ui/scroll-x"
 import { useCopyToClipboard } from "@/hooks/use-clipboard"
@@ -27,6 +27,7 @@ import { useGridCursor } from "./use-grid-cursor"
 import { useGridFind } from "./use-grid-find"
 import { useGridInput } from "./use-grid-input"
 import { useHybridScroll } from "./use-hybrid-scroll"
+import { useRowJumps } from "./use-row-jumps"
 import { useBlockView, useRowBlocks } from "./use-row-blocks"
 import { useSourceStatus } from "./use-source-status"
 
@@ -105,19 +106,19 @@ function DataGridView({
 
   // ─── Rows, columns and the blocks under them ────────────────────────────
   const blocks = useRowBlocks(source, cacheBytes)
-  const layout = useGridColumns(source.columns, { rowCount, sample: blocks.loader.cache.peek(0) })
+  const layout = useGridColumns(source.columns, { rowCount, sample: blocks.loader.lastLanded })
   const header = layout.headerHeight
   const viewport = Math.max(size.height - header, ROW_HEIGHT)
   const scroll = useHybridScroll(scroller, { rowCount, viewport })
   const { first: firstRow, offset } = rowWindow(scroll.top, ROW_HEIGHT)
   const lastRow = Math.min(rowCount - 1, Math.floor((scroll.top + viewport - 1) / ROW_HEIGHT))
-  const across = useColumnWindow(scroller, layout.columns, layout.rowNumberWidth)
+  const inView = useColumnWindow(scroller, layout.columns, layout.rowNumberWidth)
   useBlockView(
     blocks,
     {
       firstRow,
       lastRow,
-      columns: across.columns.map((column) => column.index),
+      columns: inView.map((column) => column.index),
       direction: scroll.direction,
       fast: scroll.fast,
     },
@@ -179,32 +180,20 @@ function DataGridView({
   const input = useGridInput({
     cursor,
     bounds,
-    home: { row: firstRow, col: across.columns[0]?.position ?? 0 },
+    home: { row: firstRow, col: inView[0]?.position ?? 0 },
     top,
     scrollToTop,
     copySelection,
     inspect,
   })
   const goToRef = useRef<HTMLInputElement>(null)
-  const goTo = (row: number): string | null => {
-    const target = Math.min(row, rowCount) - 1
-    scrollToTop(target * ROW_HEIGHT)
-    cursor.moveTo({ row: target, col: cursor.cursor?.col ?? 0 }, { reveal: false })
-    scroller.current?.focus()
-    if (row <= rowCount) return null
-    return status.rowCount.exact
-      ? `The file has ${formatQuantity(rowCount, "row")}`
-      : `Only ${formatQuantity(rowCount, "row")} indexed so far`
-  }
-
-  // A deep link opens on its row once the source knows it has that many.
-  const opened = useRef(initialRow === undefined)
-  useEffect(() => {
-    if (opened.current || initialRow === undefined) return
-    if (initialRow >= rowCount && !status.rowCount.exact) return
-    opened.current = true
-    scrollToTop(Math.min(initialRow, rowCount - 1) * ROW_HEIGHT)
-  }, [initialRow, rowCount, status.rowCount.exact, scrollToTop])
+  const { goTo } = useRowJumps({
+    rowCount: status.rowCount,
+    initialRow,
+    scrollToTop,
+    cursor,
+    focusGrid: () => scroller.current?.focus(),
+  })
 
   const inspected = inspecting && layout.columns[inspecting.cell.col]
   const active = cursor.cursor
@@ -212,7 +201,7 @@ function DataGridView({
     !!active &&
     active.row >= firstRow &&
     active.row <= lastRow &&
-    across.columns.some((column) => column.position === active.col)
+    inView.some((column) => column.position === active.col)
 
   return (
     <div
@@ -237,7 +226,8 @@ function DataGridView({
         ref={scroller}
         role="grid"
         aria-label={label}
-        aria-rowcount={rowCount + 1}
+        // Unknown (-1) while the file is still being counted.
+        aria-rowcount={status.rowCount.exact ? rowCount + 1 : -1}
         aria-colcount={source.columns.length + 1}
         aria-multiselectable
         aria-activedescendant={activeInView ? cellId(gridId, active) : undefined}
@@ -257,9 +247,9 @@ function DataGridView({
             style={{ width: size.width, height: size.height }}
           >
             <GridHeader
-              columns={across.columns}
+              columns={inView}
               rowNumberWidth={layout.rowNumberWidth}
-              scrollLeft={across.scrollLeft}
+              scrollLeft={scroll.left}
               height={header}
             />
             {rowCount === 0 ? (
@@ -271,9 +261,9 @@ function DataGridView({
                 lastRow={lastRow}
                 offset={offset}
                 top={header}
-                columns={across.columns}
+                columns={inView}
                 rowNumberWidth={layout.rowNumberWidth}
-                scrollLeft={across.scrollLeft}
+                scrollLeft={scroll.left}
                 valueAt={valueAt}
                 cursor={active}
                 selection={cursor.selection}

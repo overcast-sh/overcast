@@ -6,10 +6,9 @@ import type { LaidOutColumn } from "./use-grid-columns"
 const OVERSCAN = 2
 
 /**
- * The columns in view, and how far across the grid is scrolled, windowed by
- * `@tanstack/react-virtual` on the horizontal axis: there is no height cap
- * across, so the stock pixel virtualizer fits, as it does in the app's other
- * virtual lists. The pinned
+ * The columns in view, windowed by `@tanstack/react-virtual` on the
+ * horizontal axis: there is no height cap across, so the stock pixel
+ * virtualizer fits, as it does in the app's other virtual lists. The pinned
  * row-number column sits over the first `rowNumberWidth` pixels of the
  * scroller, so the scrolling columns start after it.
  */
@@ -17,7 +16,7 @@ export function useColumnWindow(
   scroller: RefObject<HTMLElement | null>,
   columns: readonly LaidOutColumn[],
   rowNumberWidth: number,
-): { columns: LaidOutColumn[]; scrollLeft: number } {
+): LaidOutColumn[] {
   const virtualizer = useVirtualizer({
     horizontal: true,
     // The grid re-renders a frame at a time as it is; a synchronous render
@@ -35,8 +34,5 @@ export function useColumnWindow(
   const widths = columns.map((column) => column.width).join(",")
   useLayoutEffect(() => virtualizer.measure(), [virtualizer, widths])
 
-  return {
-    columns: virtualizer.getVirtualItems().flatMap((item) => columns[item.index] ?? []),
-    scrollLeft: virtualizer.scrollOffset ?? 0,
-  }
+  return virtualizer.getVirtualItems().flatMap((item) => columns[item.index] ?? [])
 }

@@ -6,7 +6,6 @@ import { openParquetSource, type ParquetRowSource } from "@/lib/data-sources/par
 import type { DataColumn } from "@/lib/data-sources/row-source"
 import { createDataWorker } from "@/lib/data-sources/worker-port"
 import { formatQuantity } from "@/lib/format"
-import { AthenaQuery } from "./athena-query"
 import { useObjectSource, type DataFileProps } from "./data-file-source"
 import {
   PreviewPanel,
@@ -15,6 +14,7 @@ import {
   ViewToggle,
   type ToggleOption,
 } from "./data-preview"
+import { ObjectDataGrid } from "./object-data-grid"
 
 type ParquetView = "rows" | "schema"
 
@@ -36,7 +36,7 @@ const SCHEMA_COLUMNS: DataColumn[] = [
  * not decode.
  */
 export function ParquetDataPreview(props: DataFileProps) {
-  const { objectKey, bucket, size, gridClassName, viewerLink } = props
+  const { size, gridClassName, viewerLink } = props
   const { source, error, url, reload } = useObjectSource<ParquetRowSource>(
     props,
     "parquet",
@@ -112,22 +112,12 @@ export function ParquetDataPreview(props: DataFileProps) {
           />
         </div>
       ) : (
-        <DataGrid
+        <ObjectDataGrid
           source={source}
-          label={`Rows of ${objectKey}`}
-          className={gridClassName}
-          initialRow={props.initialRow}
-          onCursorChange={props.onCursorChange}
+          format="parquet"
           emptyMessage="The file has a schema and no rows."
           onReload={reload}
-          toolbarEnd={
-            <AthenaQuery
-              bucket={bucket}
-              objectKey={objectKey}
-              format="parquet"
-              columns={source.columns}
-            />
-          }
+          file={props}
         />
       )}
     </PreviewPanel>

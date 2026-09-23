@@ -70,22 +70,26 @@ class ParquetSource extends BaseSource implements ParquetRowSource {
     onPartial?: (block: RowBlock) => void,
   ): Promise<RowBlock> {
     if (this.info.rowsError) throw new Error(this.info.rowsError)
-    const columns = cols.length > 0 ? [...cols] : this.columns.map((_, i) => i)
+    const requested = cols.length > 0 ? [...cols] : this.columns.map((_, i) => i)
+    // Columns arrive once each: as partials while decoding, the rest in the reply.
+    const columns: RowBlock["columns"] = []
     const reply = await this.channel.request(
       "rows",
-      (id) => ({ type: "read-parquet", id, start, end, columns }),
+      (id) => ({ type: "read-parquet", id, start, end, columns: requested }),
       {
         signal,
-        onPartial:
-          onPartial &&
-          (({ column, count, values }) => {
-            const partial: RowBlock["columns"] = []
-            partial[column] = values
-            onPartial({ start, count, columns: partial })
-          }),
+        onPartial: ({ column, count, values }) => {
+          columns[column] = values
+          const partial: RowBlock["columns"] = []
+          partial[column] = values
+          onPartial?.({ start, count, columns: partial })
+        },
       },
     )
-    return { start, ...reply }
+    reply.columns.forEach((values, column) => {
+      if (values) columns[column] = values
+    })
+    return { start, count: reply.count, columns }
   }
 
   dispose(): void {

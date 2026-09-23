@@ -30,10 +30,16 @@ export class WorkerChannel {
   private next = 1
   private readonly pending = new Map<number, Pending>()
   private readonly stopListening: () => void
+  private readonly stopWatching: () => void
   private readonly port: DataWorkerPort
+  /** Why the channel is finished — closed, or its worker failed. Requests after it fail at once. */
+  private ended: Error | null = null
 
   constructor(port: DataWorkerPort, onEvent: (event: WorkerEvent) => void) {
     this.port = port
+    this.stopWatching = port.onFailure((reason) =>
+      this.end(new Error(`The data worker stopped: ${reason}.`)),
+    )
     this.stopListening = port.listen((message) => {
       if (message.type === "index" || message.type === "changed") return onEvent(message)
       const pending = this.pending.get(message.id)
@@ -52,6 +58,7 @@ export class WorkerChannel {
   ): Promise<ReplyOf<K>> {
     const id = this.next++
     return new Promise<ReplyOf<K>>((resolve, reject) => {
+      if (this.ended) return reject(this.ended)
       if (signal?.aborted) return reject(abortError())
       const onAbort = () => {
         if (!this.pending.delete(id)) return
@@ -78,13 +85,20 @@ export class WorkerChannel {
 
   /** A message nothing replies to. */
   send(message: ToWorker): void {
-    this.port.post(message)
+    if (!this.ended) this.port.post(message)
   }
 
   /** Rejects everything pending and terminates the worker. */
   close(): void {
+    this.end(abortError())
+  }
+
+  private end(reason: Error): void {
+    if (this.ended) return
+    this.ended = reason
     this.stopListening()
-    for (const pending of this.pending.values()) pending.fail(abortError())
+    this.stopWatching()
+    for (const pending of this.pending.values()) pending.fail(reason)
     this.pending.clear()
     this.port.terminate()
   }

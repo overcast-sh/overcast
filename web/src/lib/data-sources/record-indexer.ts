@@ -15,19 +15,25 @@ import { utf8BomLength } from "./byte-order-mark"
  * block parser can never disagree about where row 50,000 is. That is why it
  * needs the delimiter: "the start of a field" means "just after one".
  *
- * JSON Lines is read without quote tracking (`delimiter: null`): a JSON string
- * cannot hold a raw newline, and JSON's own `\"` escape is not CSV's.
+ * JSON Lines is read the way `parseJsonl` reads it (`delimiter: null`): without
+ * quote tracking — a JSON string cannot hold a raw newline, and JSON's own
+ * `\"` escape is not CSV's — with records ending at LF only, and a line of
+ * nothing but whitespace (CR included) not a record.
  *
- * Records end at LF, CRLF or a lone CR; a blank line is not a record, a record
- * holding only `""` is one, and a leading UTF-8 BOM is skipped. Offsets are
- * absolute positions in the object, and the indexer keeps its place mid-record
- * between pushes — so an index paused at a byte limit resumes by pushing the
- * bytes from `bytes` on, fetched with an open-ended Range request.
+ * CSV and TSV records end at LF, CRLF or a lone CR; a blank line is not a
+ * record, a record holding only `""` is one. A leading UTF-8 BOM is skipped.
+ *
+ * Offsets are absolute positions in the object, and the indexer keeps its
+ * place mid-record between pushes — so an index paused at a byte limit
+ * resumes by pushing the bytes from `bytes` on, fetched with an open-ended
+ * Range request.
  */
 
 const LF = 0x0a
 const CR = 0x0d
 const QUOTE = 0x22
+const SPACE = 0x20
+const TAB = 0x09
 
 export interface IndexerOptions {
   /** Record one offset per this many data records. */
@@ -83,6 +89,11 @@ export class RecordIndexer {
     let i = base === 0 ? utf8BomLength(chunk) : 0
     if (i > 0) this.recordStart = i
     const delimiter = this.options.delimiter
+    if (delimiter === null) {
+      this.pushLines(chunk, i, base)
+      this.position = base + n
+      return
+    }
     for (; i < n; i++) {
       const b = chunk[i]
       if (this.pendingCR) {
@@ -94,33 +105,31 @@ export class RecordIndexer {
         // A lone CR ended the record at the byte before this one.
         this.endRecord(base + i)
       }
-      if (delimiter !== null) {
-        if (this.inQuotes) {
-          if (b === QUOTE) {
-            this.inQuotes = false
-            this.quoteClosing = true
-          }
-          continue
+      if (this.inQuotes) {
+        if (b === QUOTE) {
+          this.inQuotes = false
+          this.quoteClosing = true
         }
-        if (this.quoteClosing) {
-          this.quoteClosing = false
-          if (b === QUOTE) {
-            // `""` inside a quoted field: a literal quote, still quoted.
-            this.inQuotes = true
-            continue
-          }
-        }
-        if (b === QUOTE && this.fieldStart) {
+        continue
+      }
+      if (this.quoteClosing) {
+        this.quoteClosing = false
+        if (b === QUOTE) {
+          // `""` inside a quoted field: a literal quote, still quoted.
           this.inQuotes = true
-          this.fieldStart = false
-          this.hasContent = true
           continue
         }
-        if (b === delimiter) {
-          this.fieldStart = true
-          this.hasContent = true
-          continue
-        }
+      }
+      if (b === QUOTE && this.fieldStart) {
+        this.inQuotes = true
+        this.fieldStart = false
+        this.hasContent = true
+        continue
+      }
+      if (b === delimiter) {
+        this.fieldStart = true
+        this.hasContent = true
+        continue
       }
       if (b === LF) {
         this.endRecord(base + i + 1)
@@ -132,6 +141,15 @@ export class RecordIndexer {
       }
     }
     this.position = base + n
+  }
+
+  /** JSON Lines: a record per LF-ended line holding anything but whitespace. */
+  private pushLines(chunk: Uint8Array, from: number, base: number): void {
+    for (let i = from; i < chunk.length; i++) {
+      const b = chunk[i]
+      if (b === LF) this.endRecord(base + i + 1)
+      else if (b !== SPACE && b !== TAB && b !== CR) this.hasContent = true
+    }
   }
 
   /** The object ended: a final record without a line break still counts. */

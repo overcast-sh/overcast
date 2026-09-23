@@ -6,15 +6,25 @@ import type { DataWorkerPort, FromWorker, ToWorker } from "./worker-protocol"
 function fakePort() {
   const sent: ToWorker[] = []
   let deliver: (message: FromWorker) => void = () => {}
+  let failWith: (reason: string) => void = () => {}
   const port: DataWorkerPort = {
     post: (message) => sent.push(message),
     listen(listener) {
       deliver = listener
       return () => (deliver = () => {})
     },
+    onFailure(listener) {
+      failWith = listener
+      return () => (failWith = () => {})
+    },
     terminate: () => {},
   }
-  return { port, sent, reply: (message: FromWorker) => deliver(message) }
+  return {
+    port,
+    sent,
+    reply: (message: FromWorker) => deliver(message),
+    crash: (reason: string) => failWith(reason),
+  }
 }
 
 const readText = (id: number): ToWorker => ({ type: "read-text", id, start: 0, end: 10, count: 1 })
@@ -74,5 +84,26 @@ describe("WorkerChannel", () => {
     channel.close()
     await expect(request).rejects.toSatisfy(isAbortError)
     expect(terminate).toHaveBeenCalled()
+  })
+
+  it("fails what is pending, and anything asked later, when the worker itself fails", async () => {
+    // Given: a request in flight
+    const { port, crash } = fakePort()
+    const channel = new WorkerChannel(port, () => {})
+    const pending = channel.request("rows", readText)
+    // When: the worker's script fails to load
+    crash("its script could not be loaded")
+    // Then: the pending request and a later one both fail, saying why
+    const reason = "The data worker stopped: its script could not be loaded."
+    await expect(pending).rejects.toThrow(reason)
+    await expect(channel.request("rows", readText)).rejects.toThrow(reason)
+  })
+
+  it("refuses a request made after it was closed, rather than leaving it hanging", async () => {
+    const { port, sent } = fakePort()
+    const channel = new WorkerChannel(port, () => {})
+    channel.close()
+    await expect(channel.request("rows", readText)).rejects.toSatisfy(isAbortError)
+    expect(sent).toHaveLength(0)
   })
 })

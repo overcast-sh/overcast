@@ -64,8 +64,9 @@ export type FromWorker =
   | ({ type: "text-head"; id: number } & TextHead)
   | ({ type: "index" } & IndexProgress)
   | ({ type: "parquet-head"; id: number } & ParquetHead)
+  /** A block of rows; for Parquet, only the columns not already sent as partials. */
   | ({ type: "rows"; id: number } & ColumnarRows)
-  /** One column of a pending `rows` reply, sent as soon as it decodes. */
+  /** One column of a pending `rows` reply, sent as soon as it decodes, and not again. */
   | { type: "rows-partial"; id: number; column: number; count: number; values: unknown[] }
   /** The object's ETag changed under an open file: it was overwritten. */
   | { type: "changed" }
@@ -81,5 +82,11 @@ export type FromWorker =
 export interface DataWorkerPort {
   post(message: ToWorker): void
   listen(listener: (message: FromWorker) => void): () => void
+  /**
+   * The worker itself failed — its script did not load, threw while
+   * evaluating, or a message could not be cloned — so nothing in flight will
+   * ever be answered.
+   */
+  onFailure(listener: (reason: string) => void): () => void
   terminate(): void
 }

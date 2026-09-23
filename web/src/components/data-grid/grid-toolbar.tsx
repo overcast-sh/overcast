@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CheckboxFilterDropdown } from "@/components/ui/checkbox-filter-dropdown"
 import { Input } from "@/components/ui/input"
+import { BlinkingCursor } from "@/components/ui/skeleton"
 import { formatCount } from "@/lib/format"
 import { MAX_MATCHES } from "./loaded-rows"
 import type { GridColumns } from "./use-grid-columns"
@@ -56,12 +57,12 @@ export function GridToolbar({
  * its count: anything more is a query (see *Query with Athena*).
  */
 function FindField({ find }: { find: GridFind }) {
-  const { query, setQuery, matches, index, step } = find
-  const searching = query.trim() !== ""
+  const { query, setQuery, matches, searching, index, step } = find
+  const active = query.trim() !== ""
   const total =
     matches.length >= MAX_MATCHES ? `${formatCount(MAX_MATCHES)}+` : formatCount(matches.length)
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-1 sm:flex-none">
+    <div className="flex min-w-0 basis-full items-center gap-1 sm:basis-auto">
       <div className="relative min-w-0 flex-1">
         <Search
           aria-hidden
@@ -81,12 +82,19 @@ function FindField({ find }: { find: GridFind }) {
           className="w-full pl-8 sm:w-56"
         />
       </div>
-      {searching && (
+      {active && (
         <>
           <span role="status" className="font-mono text-2xs whitespace-nowrap text-fg-muted">
-            {matches.length === 0
-              ? "no matches in loaded rows"
-              : `${formatCount(index + 1)} of ${total} in loaded rows`}
+            {searching ? (
+              <span className="flex items-center gap-1.5">
+                searching loaded rows
+                <BlinkingCursor />
+              </span>
+            ) : matches.length === 0 ? (
+              "no matches in loaded rows"
+            ) : (
+              `${formatCount(index + 1)} of ${total} in loaded rows`
+            )}
           </span>
           <Button
             variant="ghost"

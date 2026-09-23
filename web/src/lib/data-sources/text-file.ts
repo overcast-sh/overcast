@@ -44,7 +44,9 @@ export class TextFile {
   /** Settles once the head has decided the layout the indexer needs. */
   private readonly indexer: Promise<RecordIndexer>
   private resolveIndexer: (indexer: RecordIndexer) => void = () => {}
+  private rejectIndexer: (reason: unknown) => void = () => {}
   private running: AbortController | null = null
+  private disposed = false
   /** `Save-Data`: each run stops once the index covers `untilRows`. */
   private readonly onDemand: boolean
   private state: IndexingState
@@ -60,7 +62,12 @@ export class TextFile {
     this.onDemand = open.mode === "on-demand"
     this.state = this.onDemand ? "on-demand" : "running"
     this.untilRows = open.untilRows
-    this.indexer = new Promise((resolve) => (this.resolveIndexer = resolve))
+    this.indexer = new Promise((resolve, reject) => {
+      this.resolveIndexer = resolve
+      this.rejectIndexer = reject
+    })
+    // Awaited by the index run; a failed head must not also surface as unhandled.
+    this.indexer.catch(() => {})
   }
 
   /** The head: columns and first rows. The index starts streaming alongside it. */
@@ -74,8 +81,10 @@ export class TextFile {
       this.resolveIndexer(this.createIndexer(layout))
       return head
     } catch (error) {
-      // No head, no preview: the index would have nothing to serve.
+      // No head, no preview: the index would have nothing to serve, and the
+      // run waiting for its indexer unwinds — releasing its request slot.
       this.running?.abort()
+      this.rejectIndexer(error)
       throw error
     }
   }
@@ -96,6 +105,7 @@ export class TextFile {
   }
 
   dispose(): void {
+    this.disposed = true
     this.running?.abort()
   }
 
@@ -116,6 +126,7 @@ export class TextFile {
   }
 
   private startRun(): void {
+    if (this.disposed) return
     const controller = new AbortController()
     this.running = controller
     void this.run(controller).catch((error: unknown) => {
@@ -150,7 +161,9 @@ export class TextFile {
       return this.report(indexer.unterminatedQuote ? UNCLOSED_QUOTE : undefined)
     }
     this.state = outcome
-    return this.report()
+    await this.report()
+    // Asked for more rows while this run was reading towards an older target.
+    if (outcome === "on-demand" && indexer.rows < this.untilRows) this.startRun()
   }
 
   /** Posts the index's progress: the offsets recorded since the last report, and where it stands. */

@@ -47,8 +47,9 @@ export interface ScrollGeometry {
 }
 
 /**
- * The tallest element this engine lays out, measured once: a probe asks for
- * a billion pixels and reads back what it got. Capped at `SAFE_HEIGHT_CAP`,
+ * The tallest element this engine lays out, measured when a grid mounts: a
+ * probe asks for a billion pixels and reads back what it got — one forced
+ * layout, cheap next to the grid's own first render. Capped at `SAFE_HEIGHT_CAP`,
  * which is also the answer when there is no layout to ask (a test runner).
  */
 export function probeHeightCap(doc: Document = document): number {

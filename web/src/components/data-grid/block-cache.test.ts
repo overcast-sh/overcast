@@ -1,5 +1,5 @@
 import type { RowBlock } from "@/lib/data-sources/row-source"
-import { BlockCache, blockBytes } from "./block-cache"
+import { BlockCache } from "./block-cache"
 
 const block = (start: number, text = "x".repeat(100), count = 10): RowBlock => ({
   start,
@@ -7,17 +7,13 @@ const block = (start: number, text = "x".repeat(100), count = 10): RowBlock => (
   columns: [Array.from({ length: count }, () => text)],
 })
 
-describe("blockBytes", () => {
-  it("counts strings by length and numbers by width", () => {
-    const strings = blockBytes(block(0, "x".repeat(1000)))
-    const numbers = blockBytes({ start: 0, count: 10, columns: [new Array(10).fill(1)] })
-    expect(strings).toBeGreaterThan(20_000)
-    expect(numbers).toBeLessThan(200)
-  })
-})
-
 describe("BlockCache", () => {
-  const one = blockBytes(block(0))
+  /** What one test block costs: measured, so the budgets below are in blocks. */
+  const one = (() => {
+    const probe = new BlockCache(Infinity)
+    probe.set(0, block(0))
+    return probe.bytes
+  })()
 
   it("evicts the least recently used block once over budget", () => {
     const cache = new BlockCache(one * 3)
@@ -74,5 +70,16 @@ describe("BlockCache", () => {
     cache.set(0, { start: 0, count: 1, columns: [[1]] })
     cache.set(0, { start: 0, count: 2, columns: [[1, 2]] })
     expect(cache.peek(0)?.count).toBe(2)
+  })
+
+  it("adds only a landing column's cost when it merges into a block", () => {
+    // Given: a block holding one column
+    const cache = new BlockCache(Infinity)
+    cache.set(0, { start: 0, count: 2, columns: [["a", "b"]] })
+    const before = cache.bytes
+    // When: a second column lands
+    cache.set(0, { start: 0, count: 2, columns: [undefined, [1, 2]] })
+    // Then: the block grew by that column's cost alone
+    expect(cache.bytes - before).toBe(16 + 2 * 8)
   })
 })

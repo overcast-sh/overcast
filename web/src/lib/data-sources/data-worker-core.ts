@@ -70,18 +70,23 @@ export class DataWorkerCore {
         })
       case "read-parquet":
         return this.track(message.id, async (signal) => {
-          const rows = await required(this.parquet).read(
+          // Each column crosses the port once: as a partial the moment it
+          // decodes, or in the reply if it never reported itself complete.
+          const sent = new Set<number>()
+          const { count, columns } = await required(this.parquet).read(
             message.start,
             message.end,
             message.columns,
             signal,
             (column, values) => {
               if (signal.aborted) return
+              sent.add(column)
               const count = message.end - message.start
               this.post({ type: "rows-partial", id: message.id, column, count, values })
             },
           )
-          return { type: "rows", id: message.id, ...rows }
+          const unsent = columns.map((values, column) => (sent.has(column) ? undefined : values))
+          return { type: "rows", id: message.id, count, columns: unsent }
         })
     }
   }

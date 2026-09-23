@@ -1,4 +1,5 @@
 import { parseDelimited } from "./delimited-parse"
+import { parseJsonl } from "./jsonl-parse"
 import { RecordIndexer } from "./record-indexer"
 
 const encode = (text: string) => new TextEncoder().encode(text)
@@ -127,6 +128,29 @@ describe("RecordIndexer", () => {
         truncated: false,
       })
       expect(block.records.length, `block ${k}`).toBe(Math.min(7, indexer.rows - k * 7))
+    }
+  })
+
+  it("agrees with the JSON Lines parser, blank and whitespace-only lines included", () => {
+    // Given: records separated by every kind of line ending and blank line
+    let seed = 11
+    const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647
+    const pieces = ['{"a":1}', '{"s":"x\\"y"}', "   ", "\t", "", '{"b":[1,2]}  ']
+    const ends = ["\n", "\r\n", "\n\n", " \n"]
+    let text = ""
+    for (let i = 0; i < 400; i++) {
+      text += pieces[Math.floor(random() * pieces.length)]
+      text += ends[Math.floor(random() * ends.length)]
+    }
+    // When: it is indexed in small chunks
+    const indexer = index(text, { every: 7, chunk: 5, header: false, delimiter: null })
+    // Then: the index and the parser count the same records, block by block
+    const parsed = parseJsonl(text)
+    expect(parsed.ok && parsed.records.length).toBe(indexer.rows)
+    const offsets = [...indexer.offsets, indexer.end]
+    for (let k = 0; k + 1 < offsets.length; k++) {
+      const block = parseJsonl(between(text, offsets[k], offsets[k + 1]))
+      expect(block.ok && block.records.length, `block ${k}`).toBe(Math.min(7, indexer.rows - k * 7))
     }
   })
 })

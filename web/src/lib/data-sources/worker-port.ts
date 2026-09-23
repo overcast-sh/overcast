@@ -17,17 +17,28 @@ export function spawnDataWorker(): DataWorkerPort {
 
 function fromWorker(worker: Worker): DataWorkerPort {
   const listeners = new Set<(message: FromWorker) => void>()
+  const failures = new Set<(reason: string) => void>()
   worker.onmessage = (event: MessageEvent<FromWorker>) => {
     for (const listener of listeners) listener(event.data)
   }
+  const fail = (reason: string) => {
+    for (const listener of failures) listener(reason)
+  }
+  worker.onerror = (event) => fail(event.message || "its script could not be loaded")
+  worker.onmessageerror = () => fail("a message could not be read")
   return {
     post: (message) => worker.postMessage(message),
     listen(listener) {
       listeners.add(listener)
       return () => listeners.delete(listener)
     },
+    onFailure(listener) {
+      failures.add(listener)
+      return () => failures.delete(listener)
+    },
     terminate() {
       listeners.clear()
+      failures.clear()
       worker.terminate()
     },
   }
@@ -59,6 +70,8 @@ export function inProcessDataWorker(fetchImpl?: typeof fetch): DataWorkerPort {
       listeners.add(listener)
       return () => listeners.delete(listener)
     },
+    // The core runs on this thread: a failure is an exception the caller sees.
+    onFailure: () => () => {},
     terminate() {
       dead = true
       core.dispose()

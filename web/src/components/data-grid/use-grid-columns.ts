@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react"
 import {
-  columnOrderingFeature,
   columnPinningFeature,
   columnResizingFeature,
   columnSizingFeature,
@@ -15,12 +14,12 @@ import { MONO_CHAR_WIDTH, sampleColumnWidth } from "./cell-format"
 
 /**
  * The grid's column state on TanStack Table v9, headless: sizes, resizing,
- * the pinned row-number column, visibility and order — the same engine
+ * the pinned row-number column and visibility — the same engine
  * `ResourceTable` uses, with no row model at all. Rows are the row source's
  * business; the table only knows columns (`data` is always empty).
  *
- * Each data column's id is its index in the source, so a reordered or
- * hidden column still reads its values from the right place.
+ * Each data column's id is its index in the source, so a hidden column's
+ * neighbours still read their values from the right place.
  */
 
 const gridFeatures = tableFeatures({
@@ -28,7 +27,6 @@ const gridFeatures = tableFeatures({
   columnResizingFeature,
   columnPinningFeature,
   columnVisibilityFeature,
-  columnOrderingFeature,
 })
 
 type GridFeatures = typeof gridFeatures
@@ -93,10 +91,11 @@ export function useGridColumns(
   { rowCount, sample }: { rowCount: number; sample: RowBlock | undefined },
 ): GridColumns {
   // Each column's width is sampled once, from the first of its values to
-  // arrive (a projecting source delivers columns one at a time): a column
-  // that resized itself under the reader as more rows loaded would be worse
-  // than a starting width that is a little off. Adjusted during render,
-  // guarded so it only runs when a column has new values to sample.
+  // arrive, wherever the grid opened (a projecting source delivers columns
+  // one at a time): a column that resized itself under the reader as more
+  // rows loaded would be worse than a starting width that is a little off.
+  // Adjusted during render, guarded so it only runs when a column has new
+  // values to sample.
   const [sampled, setSampled] = useState<ReadonlyMap<number, number>>(() => new Map())
   const fresh = columns.flatMap((column, i) => {
     const values = sample?.columns[i]
@@ -118,13 +117,20 @@ export function useGridColumns(
     [columns, sampled, numbersWidth],
   )
 
-  const table = useTable<GridFeatures, never>({
-    features: gridFeatures,
-    data: NO_ROWS,
-    columns: definitions,
-    columnResizeMode: "onChange",
-    initialState: { columnPinning: { start: [ROW_NUMBER_ID], end: [] } },
-  })
+  // The options object is memoized because `useTable` hands back a new table
+  // for new options: inline, every render (a frame, while scrolling) would
+  // rebuild the layout below and everything downstream of it.
+  const options = useMemo(
+    () => ({
+      features: gridFeatures,
+      data: NO_ROWS,
+      columns: definitions,
+      columnResizeMode: "onChange" as const,
+      initialState: { columnPinning: { start: [ROW_NUMBER_ID], end: [] } },
+    }),
+    [definitions],
+  )
+  const table = useTable<GridFeatures, never>(options)
 
   const { state } = table
   return useMemo(() => {

@@ -35,8 +35,20 @@ interface Read {
 
 export class BlockLoader {
   readonly cache: BlockCache
+  /**
+   * The block (or column of one) that landed last — what the grid samples
+   * column widths from, wherever in the file it opened.
+   */
+  lastLanded: RowBlock | undefined
   private readonly source: RowSource
   private readonly inflight = new Map<number, Read[]>()
+  /**
+   * The row count each block was last read against. A block that came back
+   * short is read again only once the count has grown past it — the index
+   * has caught up — never merely because it is short, which would re-read a
+   * block that is short for good forever.
+   */
+  private readonly readAgainst = new Map<number, number>()
   private readonly onChange: () => void
   private readonly onError: (error: Error) => void
 
@@ -126,14 +138,16 @@ export class BlockLoader {
   /**
    * The columns a block still needs, or null when it has them all: every
    * visible column it lacks for a projecting source, or everything (`[]`)
-   * when the block is missing or was read short while the file was indexing.
+   * when the block is missing, or was read short while the file was indexing
+   * and the index has grown since.
    */
   private neededColumns(index: number, visibleColumns: readonly number[]): number[] | null {
     const { blockSize, rowCount, projects } = this.source
     const start = index * blockSize
     const expected = Math.min(start + blockSize, rowCount.value) - start
     const cached = this.cache.peek(index)
-    const whole = !cached || cached.count < expected
+    const grown = (this.readAgainst.get(index) ?? -1) < rowCount.value
+    const whole = !cached || (cached.count < expected && grown)
     if (!projects) return whole ? [] : null
     const missing = whole ? [...visibleColumns] : visibleColumns.filter((c) => !cached.columns[c])
     return missing.length > 0 ? missing : null
@@ -144,16 +158,19 @@ export class BlockLoader {
     const start = index * blockSize
     const end = Math.min(start + blockSize, rowCount.value)
     const read: Read = { controller: new AbortController(), columns: new Set(columns) }
+    const against = rowCount.value
     this.inflight.set(index, [...(this.inflight.get(index) ?? []), read])
     const live = () => !read.controller.signal.aborted
     const store = (block: RowBlock) => {
       if (!live()) return
       this.cache.set(index, block)
+      this.lastLanded = block
       this.onChange()
     }
     this.source.getRows(start, end, columns, read.controller.signal, store).then(
       (block) => {
         this.forget(index, read)
+        if (live()) this.readAgainst.set(index, against)
         store(block)
       },
       (reason: unknown) => {

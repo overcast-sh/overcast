@@ -49,6 +49,11 @@ export function useGridCursor({
     [bounds, reveal, onRowChange],
   )
 
-  const selection = cursor ? selectionOf(cursor, anchor ?? cursor) : null
-  return { cursor, selection, moveTo }
+  // Clamped as it is shown, not as it is stored: a deep link past the rows
+  // indexed so far, or columns hidden under the cursor, never put it off the
+  // grid — and a link to a row not yet indexed lands there once it is.
+  const empty = bounds.rowCount === 0 || bounds.colCount === 0
+  const shown = cursor && !empty ? clampCell(cursor, bounds) : null
+  const selection = shown ? selectionOf(shown, clampCell(anchor ?? shown, bounds)) : null
+  return { cursor: shown, selection, moveTo }
 }

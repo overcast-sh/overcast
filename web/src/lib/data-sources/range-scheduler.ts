@@ -17,7 +17,8 @@ import { checkedResponse, rangeHeader } from "./http-read"
  *   again. A read inside any cached range is a hit.
  *
  * It also watches the object's `ETag`. The first response fixes it; a later
- * one that disagrees means the object was overwritten while open. The cached
+ * one that disagrees means the object was overwritten while open, and so
+ * does a 416 for a range that was inside the object when it was opened. The cached
  * bytes belong to the old object, so they are dropped, and `onChanged` fires
  * so the grid can say *file changed — reload* instead of stitching rows from
  * two different files together.
@@ -43,6 +44,8 @@ interface Waiter {
   resolve: (bytes: Uint8Array) => void
   reject: (error: unknown) => void
   settled: boolean
+  /** Stops listening to the caller's signal, so a settled read keeps nothing alive. */
+  release: () => void
 }
 
 interface Request {
@@ -85,8 +88,16 @@ export class RangeScheduler {
     if (hit) return Promise.resolve(hit)
     if (signal?.aborted) return Promise.reject(abortError())
     return new Promise<Uint8Array>((resolve, reject) => {
-      const waiter: Waiter = { start, end, resolve, reject, settled: false }
-      signal?.addEventListener("abort", () => this.abandon(waiter), { once: true })
+      const onAbort = () => this.abandon(waiter)
+      const waiter: Waiter = {
+        start,
+        end,
+        resolve,
+        reject,
+        settled: false,
+        release: () => signal?.removeEventListener("abort", onAbort),
+      }
+      signal?.addEventListener("abort", onAbort, { once: true })
       this.queue.push(waiter)
       this.scheduleFlush()
     })
@@ -112,9 +123,14 @@ export class RangeScheduler {
       this.etag = etag
     } else if (etag !== this.etag) {
       this.etag = etag
-      this.cache.clear()
-      this.onChanged?.()
+      this.objectChanged()
     }
+  }
+
+  /** The object is not the one opened: its cached bytes are the old one's. */
+  private objectChanged(): void {
+    this.cache.clear()
+    this.onChanged?.()
   }
 
   /** Aborts everything and forgets every byte — the file is closing. */
@@ -182,11 +198,15 @@ export class RangeScheduler {
       signal: request.controller.signal,
     })
       .then(async (response) => {
+        // Every read is inside the size the object was opened at, so a range
+        // the server calls unsatisfiable means the object shrank under us.
+        if (response.status === 416) this.objectChanged()
         checkedResponse(response)
         this.checkEtag(response)
         let bytes = new Uint8Array(await response.arrayBuffer())
-        // A server that ignored Range sent the whole object.
-        if (response.status === 200) bytes = bytes.subarray(request.start, request.end)
+        // A server that ignored Range sent the whole object: copy the range
+        // out, so the cache does not keep the rest of it alive.
+        if (response.status === 200) bytes = bytes.slice(request.start, request.end)
         this.cache.remember(request.start, bytes)
         for (const waiter of request.waiters) {
           const from = waiter.start - request.start
@@ -207,6 +227,7 @@ export class RangeScheduler {
 function settle(waiter: Waiter, outcome: () => void): boolean {
   if (waiter.settled) return false
   waiter.settled = true
+  waiter.release()
   outcome()
   return true
 }

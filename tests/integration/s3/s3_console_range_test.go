@@ -54,6 +54,7 @@ func TestConsoleDownloadRoute_servesRangesEndToEnd(t *testing.T) {
 		wantStatus  int
 		wantRange   string
 		wantBody    string
+		refused     bool // an error answer: no ETag, no bytes to compare
 	}{
 		{
 			name:        "a block between two offsets",
@@ -81,6 +82,14 @@ func TestConsoleDownloadRoute_servesRangesEndToEnd(t *testing.T) {
 			wantStatus: http.StatusOK,
 			wantBody:   string(content),
 		},
+		{
+			// A stale index asking past the end of a shrunk object: the
+			// grid reports the status rather than parsing an error page.
+			name:        "a range past the end",
+			rangeHeader: "bytes=2000-",
+			wantStatus:  http.StatusRequestedRangeNotSatisfiable,
+			refused:     true,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -104,10 +113,16 @@ func TestConsoleDownloadRoute_servesRangesEndToEnd(t *testing.T) {
 			if got := resp.Header.Get("Content-Range"); got != tc.wantRange {
 				t.Errorf("Content-Range: want %q, got %q", tc.wantRange, got)
 			}
+			if tc.refused {
+				return
+			}
 			if resp.Header.Get("ETag") == "" {
 				t.Error("expected an ETag")
 			}
-			body, _ := io.ReadAll(resp.Body)
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
 			if string(body) != tc.wantBody {
 				t.Errorf("body: want %d bytes %q…, got %d bytes %q…",
 					len(tc.wantBody), prefix(tc.wantBody), len(body), prefix(string(body)))

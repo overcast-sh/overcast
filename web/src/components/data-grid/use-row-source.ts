@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react"
+import { useEffect, useEffectEvent, useState } from "react"
 import type { RowSource } from "@/lib/data-sources/row-source"
 
 export interface RowSourceState<S extends RowSource> {
@@ -22,15 +22,13 @@ export function useRowSource<S extends RowSource>(
     source: null,
     error: null,
   })
-  const openRef = useRef(open)
-  useLayoutEffect(() => {
-    openRef.current = open
-  })
+  // The latest `open`, read when the key changes — not a reason to reopen itself.
+  const openSource = useEffectEvent(open)
 
   useEffect(() => {
     const controller = new AbortController()
     let opened: S | null = null
-    openRef.current(controller.signal).then(
+    openSource(controller.signal).then(
       (source) => {
         if (controller.signal.aborted) {
           source.dispose()

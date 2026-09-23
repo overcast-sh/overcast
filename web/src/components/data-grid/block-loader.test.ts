@@ -108,6 +108,24 @@ describe("BlockLoader", () => {
     ])
   })
 
+  it("reads a block that stays short only once, until the row count grows", async () => {
+    // Given: a source whose block 0 always comes back a row short
+    const source = new FakeSource(1_000)
+    const answer = source.getRows.bind(source)
+    source.getRows = async (start, end, cols, signal) => {
+      const block = await answer(start, end, cols, signal)
+      return { ...block, count: block.count - 1 }
+    }
+    const { loader } = loaderFor(source)
+    // When: the view is loaded again and again, as landing blocks re-render it
+    for (let i = 0; i < 5; i++) {
+      loader.update(view(0))
+      await flush()
+    }
+    // Then: it was read once
+    expect(source.reads).toHaveLength(1)
+  })
+
   it("reports a failed read, but not an aborted one", async () => {
     const source = new FakeSource(100_000)
     source.getRows = () => Promise.reject(new Error("Read failed: HTTP 403"))
