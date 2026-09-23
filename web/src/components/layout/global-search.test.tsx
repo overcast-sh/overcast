@@ -126,5 +126,37 @@ describe("GlobalSearch mega menu", () => {
       "Unsupported",
     )
     expect(screen.queryByRole("button", { name: /Amazon Athena/ })).not.toBeInTheDocument()
+    // #2081
+    expect(screen.queryByRole("button", { name: /Amazon Route 53/ })).not.toBeInTheDocument()
+  })
+
+  // #2081: the same for five more inert services. Their labels start "AWS", as
+  // AWS Config's does, so one query would render them all alongside it.
+  it("offers no unsupported chip for the other backend-emulated services", async () => {
+    const { user } = renderSearch()
+
+    await user.type(await screen.findByPlaceholderText("Search services and resources…"), "aws")
+
+    expect(await screen.findByRole("button", { name: /AWS Config/ })).toHaveTextContent(
+      "Unsupported",
+    )
+    for (const label of [
+      "AWS Certificate Manager",
+      "AWS Backup",
+      "AWS CloudTrail",
+      "AWS Organizations",
+      "AWS Transfer Family",
+    ]) {
+      expect(screen.queryByRole("button", { name: new RegExp(label) })).not.toBeInTheDocument()
+    }
+  })
+
+  // #2081: Bedrock is registered as a stub, so its chip says so.
+  it("labels bedrock's chip as a stub", async () => {
+    const { user } = renderSearch()
+
+    await user.type(await screen.findByPlaceholderText("Search services and resources…"), "bedrock")
+
+    expect(await screen.findByRole("button", { name: /Amazon Bedrock/ })).toHaveTextContent("Stub")
   })
 })

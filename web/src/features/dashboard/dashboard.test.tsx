@@ -129,8 +129,8 @@ describe("Dashboard", () => {
     expect(within(table).getByText("SNS").closest("a")).not.toBeNull()
   })
 
-  // #2062: the "Other AWS Services" catalogue claimed Athena, Glue, Firehose
-  // and OpenSearch were not emulated while the backend served all four.
+  // #2062, #2081: the "Other AWS Services" catalogue claimed these services were
+  // not emulated while the backend served every one of them.
   it("does not list backend-emulated services among the other AWS services", async () => {
     const { user } = renderDashboard()
 
@@ -143,6 +143,12 @@ describe("Dashboard", () => {
       "AWS Glue",
       "Amazon Data Firehose",
       "Amazon OpenSearch Service",
+      "AWS Certificate Manager",
+      "AWS Backup",
+      "AWS CloudTrail",
+      "AWS Organizations",
+      "Amazon Route 53",
+      "AWS Transfer Family",
     ]) {
       expect(within(section).queryByText(label)).not.toBeInTheDocument()
     }
