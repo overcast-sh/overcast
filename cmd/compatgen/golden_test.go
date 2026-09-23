@@ -47,8 +47,9 @@ func assertGolden(t *testing.T, path string, got []byte) {
 }
 
 // fixtureRenderEnv is the `-explain` environment for the fixture service: the
-// stand-in Go SDK's types for the Go rendering, and the fixture's own shape
-// model for every rendering that reads the model instead. The fixture has no
+// stand-in Go SDK's types for the Go rendering, the stand-in .NET SDK type
+// table for the .NET one, and the fixture's own shape model for every
+// rendering that reads it. The fixture has no
 // recipe under compat/model/recipes, which is why renderEnv takes a resolver
 // rather than a directory.
 //
@@ -56,5 +57,9 @@ func assertGolden(t *testing.T, path string, got []byte) {
 // backend asserts that `-explain` renders the source it emits, and each needs
 // this to do it.
 func fixtureRenderEnv(gen *generation) renderEnv {
-	return renderEnv{goTypes: fixtureGoTypes(), model: staticModel(gen.model)}
+	return renderEnv{
+		goTypes: fixtureGoTypes(),
+		dotnet:  func() (*dotnetSDKTypes, error) { return fixtureDotnetTypes(), nil },
+		model:   staticModel(gen.model),
+	}
 }

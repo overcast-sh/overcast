@@ -243,6 +243,18 @@ func generateAll(root string, c *corpus) ([]*generation, outputSet, error) {
 			return nil, nil, err
 		}
 	}
+	// The .NET emitter spells each member as AWSSDK declares it too, but
+	// cannot load an assembly: it reads the table the dotnet-sdk suite
+	// reflected from its pinned packages, committed beside it, and refuses to
+	// run on one that does not match those pins (dotnetsdktypes.go).
+	sdk := sdkTypes{goTypes: goTypes}
+	if hasBackend(dotnetSDKSuite) {
+		dotnet, err := loadCheckedDotnetSDKTypes(root)
+		if err != nil {
+			return nil, nil, err
+		}
+		sdk.dotnet = dotnet
+	}
 	for _, w := range planned {
 		var (
 			gen   *generation
@@ -276,7 +288,7 @@ func generateAll(root string, c *corpus) ([]*generation, outputSet, error) {
 			if !hasBackend(backend.suite) {
 				continue
 			}
-			emission, err := backend.emit(gen, goTypes)
+			emission, err := backend.emit(gen, sdk)
 			if err != nil {
 				return nil, nil, fmt.Errorf("%s: %w", label, err)
 			}

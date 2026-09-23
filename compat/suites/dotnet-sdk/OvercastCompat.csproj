@@ -15,10 +15,13 @@
   </ItemGroup>
 
   <!-- The AWS SDK for .NET, pinned. The generated groups under Groups/ are
-       compiled against these exact packages, and cmd/compatgen's emitter reads
-       the shape model rather than the SDK (see cmd/compatgen/emit_dotnet.go),
-       so a package older than the pinned model is a compile error here rather
-       than a refusal there. AWSSDK.Organizations is therefore pinned at a
+       compiled against these exact packages, and cmd/compatgen spells them
+       from sdk-types/, the table of these packages' member types this suite
+       reflects from them: change a pin here and refresh that table in the same
+       change (README.md § The SDK type table), or the generator refuses to
+       run. An operation a package does not declare is refused there rather
+       than failing the build here, but the fix is still a pin that declares
+       it, which is why AWSSDK.Organizations is pinned at a
        version that declares every operation models/aws/shapes/organizations.json
        carries - 4.0.0 predates five of them, ResponsibilityTransfer among them
        - and AWSSDK.Core rises to the version that package requires. AWSSDK.Batch

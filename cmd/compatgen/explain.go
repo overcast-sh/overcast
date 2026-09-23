@@ -30,13 +30,20 @@ import (
 type renderer func(env renderEnv, s *scenario, g *group, t *test) string
 
 // renderEnv is what a rendering needs from outside the scenario file. Only the
-// three source-emitting backends use it: they are the renderings that reproduce
+// four source-emitting backends use it: they are the renderings that reproduce
 // real emitted source, so each spells a member the way its emitter does and has
 // to read what the emitter reads — the vendored SDK's declarations for Go, the
-// pinned shape snapshot for Java and Rust. The other four are pseudo-code
-// derived from the IR alone.
+// pinned shape snapshot for Java and Rust, and the snapshot plus the committed
+// SDK type table for .NET. The other three are pseudo-code derived from the IR
+// alone.
 type renderEnv struct {
 	goTypes *goSDKTypes
+	// dotnet reads the .NET SDK type table (dotnetsdktypes.go) the .NET
+	// rendering spells members through, as the emitter does. A func, with its
+	// error returned to the rendering, for the reason model's is below: a nil
+	// func is "no table was configured", and `-explain` must still say
+	// something useful without one.
+	dotnet func() (*dotnetSDKTypes, error)
 	// model resolves a service's pinned shapes. It is not one backend's own:
 	// every emitter that spells a member from the model rather than from its
 	// SDK reads it here, which is why it is named after what it returns and not
@@ -89,14 +96,26 @@ func (env renderEnv) shapes(service string) (*serviceModel, error) {
 	return env.model(service)
 }
 
-// dotnetSpeller resolves one service's modeled shapes for the .NET rendering,
-// off the same shared source javaSpeller reads.
-func (env renderEnv) dotnetSpeller(service string) (*dotnetSpeller, error) {
+// dotnetSpeller resolves one service's modeled shapes, off the same shared
+// source javaSpeller reads, and its AWSSDK package's slice of the .NET SDK type
+// table, for the .NET rendering.
+func (env renderEnv) dotnetSpeller(service, sdkID string) (*dotnetSpeller, error) {
 	model, err := env.shapes(service)
 	if err != nil {
 		return nil, err
 	}
-	return &dotnetSpeller{model: model}, nil
+	if env.dotnet == nil {
+		return nil, fmt.Errorf("internal: no .NET SDK type table was configured")
+	}
+	table, err := env.dotnet()
+	if err != nil {
+		return nil, err
+	}
+	pkg, err := table.service(sdkID)
+	if err != nil {
+		return nil, err
+	}
+	return newDotnetSpeller(model, pkg, sdkID), nil
 }
 
 // repoShapes reads a service's pinned shape snapshot from the repository.
@@ -164,7 +183,10 @@ func runExplain(opts options, stdout io.Writer) error {
 	}
 	env := renderEnv{
 		goTypes: newGoSDKTypes(filepath.Join(opts.root, filepath.FromSlash(goSDKModuleDir))),
-		model:   repoShapes(opts.root),
+		dotnet: func() (*dotnetSDKTypes, error) {
+			return loadDotnetSDKTypes(filepath.Join(opts.root, filepath.FromSlash(dotnetSDKTypesDir)))
+		},
+		model: repoShapes(opts.root),
 	}
 	_, err = io.WriteString(stdout, render(env, s, g, t))
 	return err

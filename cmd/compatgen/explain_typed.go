@@ -143,10 +143,10 @@ func renderJava(env renderEnv, s *scenario, g *group, t *test) string {
 // description of them. The definition of done for a typed backend asks for one
 // naming table; this is how there comes to be only one.
 //
-// loadErr is non-nil when the service's shape snapshot could not be read. That
-// must never happen to generation, which has already loaded it, but it can
-// happen to `-explain` on a partial checkout. Saying so beats printing a
-// spelling that would be a guess.
+// loadErr is non-nil when the service's shape snapshot or its slice of the .NET
+// SDK type table could not be read. That must never happen to generation,
+// which has already loaded both, but it can happen to `-explain` on a partial
+// checkout. Saying so beats printing a spelling that would be a guess.
 func dotnetStyle(sp *dotnetSpeller, loadErr error) style {
 	st := typedStyle()
 	st.object = func(entries [][2]string) string {
@@ -162,7 +162,7 @@ func dotnetStyle(sp *dotnetSpeller, loadErr error) style {
 	// prefers it, so a second spelling of the same call would only ever be dead.
 	st.callLines = func(op string, params map[string]any) []string {
 		if loadErr != nil {
-			return []string{fmt.Sprintf("// the service's shape snapshot could not be read: %v", loadErr)}
+			return []string{fmt.Sprintf("// the service's shape snapshot or .NET SDK type table could not be read: %v", loadErr)}
 		}
 		lines, err := dotnetInputLines(sp, op, params, "")
 		if err != nil {
@@ -177,7 +177,7 @@ func dotnetStyle(sp *dotnetSpeller, loadErr error) style {
 }
 
 func renderDotnet(env renderEnv, s *scenario, g *group, t *test) string {
-	sp, loadErr := env.dotnetSpeller(s.Service)
+	sp, loadErr := env.dotnetSpeller(s.Service, s.Client.SDKID)
 	e := &explainer{st: dotnetStyle(sp, loadErr)}
 	return e.test(s, g, t, func() {
 		e.linef("var client = new %s(new %s { ServiceURL = endpoint });",

@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -40,15 +41,16 @@ import (
 //	service   → namespace Amazon.<stem>, client Amazon<stem>Client (dotnetSDKStems)
 //	operation → new <Op>Request() and client.<Op>Async(request)
 //	member    → the property named <Member> with its first letter capitalized
-//	value     → the member's *modeled* kind, spelled by dotnetSpeller
+//	value     → the member's modeled kind and the property's AWSSDK type,
+//	            spelled by dotnetSpeller
 //
-// # Why this backend reads the model where go-sdk reads the SDK
+// # Why this backend reads the SDK too, and how
 //
 // emit_go.go loads the vendored SDK at generation time because `aws.String(v)`
 // compiles only where smithy-go made that member a pointer, and the pinned
-// shape snapshot cannot say whether it did. The .NET emitter faces the same
-// question and answers it from the model, because three measured facts about
-// the pinned AWSSDK major make the SDK's own declarations unnecessary:
+// shape snapshot cannot say whether it did (#1831). This emitter used to answer
+// the same question from the model alone, on three measured facts about the
+// pinned AWSSDK major, and all three still hold:
 //
 //  1. **v4 made every value-typed member nullable.** `ReceiveMessageRequest`'s
 //     MaxNumberOfMessages, VisibilityTimeout and WaitTimeSeconds are `int?`,
@@ -56,8 +58,7 @@ import (
 //     a local sink confirms the consequence: setting VisibilityTimeout and
 //     WaitTimeSeconds to 0 sends `"VisibilityTimeout":0,"WaitTimeSeconds":0`,
 //     and leaving them unset sends neither. So the zero-value refusal go-sdk
-//     needs (compat/model/README.md § Values) has nothing to refuse here, and
-//     the nullability that made the Go lookup necessary is uniform.
+//     needs (compat/model/README.md § Values) has nothing to refuse here.
 //  2. **C# target-typing spells the composites.** A collection expression
 //     (`["All"]`), a target-typed `new()` and a target-typed `new() { ["k"] =
 //     "v" }` take their element, structure and value types from the property
@@ -69,12 +70,20 @@ import (
 //     for a deferred expression alike, so an enum member needs no type name
 //     either.
 //
-// What that costs is stated rather than hidden: this backend cannot refuse an
-// operation the vendored SDK does not declare, or a member it renamed, because
-// it never asks the SDK. Those become a compile error in the suite's own build
-// — loud, but suite-wide rather than scoped to one group. The pinned package
-// versions in OvercastCompat.csproj are what keep them from arising; see that
-// file's comment and cmd/compatgen/README.md § Source emitters.
+// What they do not cover is a member AWSSDK customizes away from its modeled
+// kind. AWSSDK.CloudWatchLogs types InputLogEvent.Timestamp as DateTime? where
+// the model says long, so a long written from the model fails the suite's build
+// with CS0029 (#2132). So each member is now spelled against the type AWSSDK
+// gives its property, read from the SDK type table (dotnetsdktypes.go) — the
+// dotnet-sdk suite's own reflection over the assemblies it pins, committed,
+// because this program runs where there is no .NET SDK to load them with. Where
+// the model and the SDK agree the spelling is what it always was; where they
+// disagree the one way that is measured (dotnetEpochMilliseconds) it is a
+// conversion; anywhere else it is a refusal.
+//
+// Reading the SDK also turns two suite-wide compile errors into refusals scoped
+// to one group, as go-sdk's lookup does: an operation the pinned package does
+// not declare, and a member it renamed or dropped.
 
 // dotnetSuiteDir is where the emitted files live, repository-relative.
 const dotnetSuiteDir = "compat/suites/dotnet-sdk/Groups"
@@ -86,7 +95,7 @@ const dotnetSuiteDir = "compat/suites/dotnet-sdk/Groups"
 // registry — a suite that cannot execute a group must not be listed as able
 // to.
 //
-// Three things produce it, and all three are read off the model:
+// What produces it:
 //
 //	the member's modeled kind has no C# literal   a timestamp, document, union,
 //	                                              bigInteger or bigDecimal (a
@@ -98,17 +107,29 @@ const dotnetSuiteDir = "compat/suites/dotnet-sdk/Groups"
 //	range                                         range at compile time, and a
 //	                                              compile error here is
 //	                                              suite-wide
+//	the pinned package lacks the operation or     recorded as :<Op>Request, or
+//	the member                                    under the member
+//	the model and AWSSDK disagree about the       a DateTime over a long in a
+//	member's type in a way with no measured       service whose unit is not
+//	spelling                                      measured, or any other pair
+//	a request or response property whose          recorded under the property:
+//	document form would differ from the other     the same DateTime-over-long,
+//	backends'                                     read rather than sent
 const dotnetEmitReason = "dotnet-emit-unsupported"
 
 // emitDotnet renders one service's generated groups as C# for the dotnet-sdk
 // suite.
-func emitDotnet(gen *generation) (*sourceEmission, error) {
+func emitDotnet(gen *generation, table *dotnetSDKTypes) (*sourceEmission, error) {
 	s := gen.scenario
 	e := &sourceEmission{
 		Path:    dotnetSuiteDir + "/" + dotnetFileName(gen.unit),
 		Refused: map[string]bool{},
 	}
-	sp := &dotnetSpeller{model: gen.model}
+	pkg, err := table.service(s.Client.SDKID)
+	if err != nil {
+		return nil, err
+	}
+	sp := newDotnetSpeller(gen.model, pkg, s.Client.SDKID)
 
 	groups := make([]group, 0, len(s.Groups))
 	for _, g := range s.Groups {
@@ -122,6 +143,18 @@ func emitDotnet(gen *generation) (*sourceEmission, error) {
 
 	if err := dotnetMethodNamesAreUnique(gen.unit, groups); err != nil {
 		return nil, err
+	}
+
+	// Every request and response property the emitted groups touch whose
+	// document form Documents has to be told (dotnetEpochMillisecondsProperties).
+	// The refusals above have already proved each one renderable.
+	epochMilliseconds := map[string]map[string]bool{}
+	for _, g := range groups {
+		for _, c := range callsOf(g) {
+			if err := sp.dotnetEpochMillisecondsProperties(c, epochMilliseconds); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	class := dotnetNameClass(gen.unit)
@@ -162,6 +195,7 @@ func emitDotnet(gen *generation) (*sourceEmission, error) {
 	w.linef("            (credentials, configuration) => new %s(credentials, (%s)configuration),",
 		dotnetNameClientClass(s.Client.SDKID), dotnetNameConfigClass(s.Client.SDKID))
 	w.linef("            new %s()));", dotnetNameConfigClass(s.Client.SDKID))
+	dotnetWriteEpochMilliseconds(w, sp.sdk, epochMilliseconds)
 	w.linef("    }")
 	w.linef("")
 	w.linef("    public string SourceName => %s;", csString(class))
@@ -222,6 +256,37 @@ func dotnetWriteMap(w *sourceWriter, value, name string, entries func(*sourceWri
 	w.linef("    {")
 	entries(w)
 	w.linef("    };")
+}
+
+// dotnetWriteEpochMilliseconds emits the constructor's registrations of the
+// properties Documents renders as epoch milliseconds, one call per class, in
+// class and property order. Each property is named through nameof, so a table
+// that disagreed with the pinned package would be a compile error rather than a
+// registration that silently matched nothing. Nothing is written for a service
+// that has none, which is every service but one today.
+func dotnetWriteEpochMilliseconds(w *sourceWriter, sdk *dotnetSDKPackage, classes map[string]map[string]bool) {
+	if len(classes) == 0 {
+		return
+	}
+	w.linef("        // Epoch-millisecond longs in the model, typed as DateTime by")
+	w.linef("        // %s. Every other backend reads the number the service sent,", sdk.describe())
+	w.linef("        // so that number is their document form here too")
+	w.linef("        // (compat/model/README.md § Values).")
+	for _, className := range sortedStringKeys(classes) {
+		qualified := sdk.Namespace + "." + className
+		args := []string{"typeof(" + qualified + ")"}
+		for _, property := range sortedStringKeys(classes[className]) {
+			args = append(args, "nameof("+qualified+"."+property+")")
+		}
+		w.linef("        Documents.EpochMilliseconds(")
+		for i, arg := range args {
+			suffix := ","
+			if i == len(args)-1 {
+				suffix = ");"
+			}
+			w.linef("            %s%s", arg, suffix)
+		}
+	}
 }
 
 // dotnetWriteGroup emits one group: its setup and teardown hooks — registered
@@ -531,6 +596,10 @@ func dotnetNameProperty(member string) string {
 // It is the emitter's Build body and, line for line, what `-explain -lang
 // dotnet` prints, which is what keeps the two from drifting.
 func dotnetInputLines(sp *dotnetSpeller, op string, params map[string]any, indent string) ([]string, error) {
+	class, err := sp.requestClass(op)
+	if err != nil {
+		return nil, err
+	}
 	lines := []string{fmt.Sprintf("var request = new %sRequest();", op)}
 	input := sp.model.InputShape(op)
 	for _, member := range sortedValueKeys(params) {
@@ -538,7 +607,11 @@ func dotnetInputLines(sp *dotnetSpeller, op string, params map[string]any, inden
 		if err != nil {
 			return nil, err
 		}
-		value, err := sp.value(target, params[member], member, indent)
+		property, err := sp.property(class, op+"Request", member)
+		if err != nil {
+			return nil, err
+		}
+		value, err := sp.value(target, property, params[member], member, indent)
 		if err != nil {
 			return nil, fmt.Errorf("%s.%s: %w", op, member, err)
 		}
@@ -552,9 +625,47 @@ func dotnetInputLines(sp *dotnetSpeller, op string, params map[string]any, inden
 // ---------------------------------------------------------------------------
 
 // dotnetSpeller renders one IR value as C# source, against the member's
-// modeled kind. See this file's header for why the model is the authority here
-// and the vendored SDK is the authority in emit_go.go.
-type dotnetSpeller struct{ model *serviceModel }
+// modeled kind *and* the type AWSSDK gives the property it is assigned to. See
+// this file's header for why both are read.
+type dotnetSpeller struct {
+	model *serviceModel
+	// sdk is the service's slice of the SDK type table (dotnetsdktypes.go).
+	sdk *dotnetSDKPackage
+	// epochMilliseconds is set for a service whose AWSSDK package is measured
+	// to carry an epoch-milliseconds long as a DateTime — see
+	// dotnetEpochMilliseconds.
+	epochMilliseconds bool
+}
+
+// newDotnetSpeller returns the speller for one service. A measurement counts
+// only for the package it was taken on: a row naming another package than the
+// one the service resolved to measured something else.
+func newDotnetSpeller(model *serviceModel, sdk *dotnetSDKPackage, sdkID string) *dotnetSpeller {
+	pkg, measured := dotnetEpochMilliseconds[sdkID]
+	return &dotnetSpeller{model: model, sdk: sdk, epochMilliseconds: measured && pkg == sdk.Package}
+}
+
+// dotnetEpochMilliseconds names the services whose AWSSDK package types a
+// modeled `long` of epoch milliseconds as a DateTime, keyed by SDK id — the one
+// disagreement between the model and the SDK this emitter spells rather than
+// refuses.
+//
+// It is a table of measurements, not a rule. The SDK type table says a property
+// is a DateTime where the model says long; it cannot say what the SDK puts on
+// the wire for it, and a customization that meant seconds would be spelled
+// wrongly by a rule that assumed milliseconds and would still compile. So a
+// service is added here with the wire test that proves the unit, and anywhere
+// else the same disagreement is refused (dotnet-emit-unsupported) rather than
+// guessed at.
+var dotnetEpochMilliseconds = map[string]string{ // SDK id → the package measured
+	// AWSSDK.CloudWatchLogs 4.0.0: InputLogEvent.Timestamp, LogStream's and
+	// LogGroup's CreationTime and the other `Timestamp`-shaped members are
+	// DateTime? over the model's long. Measured both ways by
+	// SdkWireFormTests: PutLogEvents sends the DateTime as its epoch
+	// milliseconds, and DescribeLogStreams reads a number back as the DateTime
+	// that many milliseconds after the epoch (#1116, #2132).
+	"CloudWatch Logs": "AWSSDK.CloudWatchLogs",
+}
 
 // target resolves the shape a modeled member points at.
 func (sp *dotnetSpeller) target(input, op, member string) (string, error) {
@@ -568,50 +679,180 @@ func (sp *dotnetSpeller) target(input, op, member string) (string, error) {
 	return target, nil
 }
 
-// value renders one IR value as C# source for a member of the given shape.
-//
-// Nothing here names an SDK type: a composite is written as a collection
-// expression or a target-typed `new()`, and an enum as the string its
-// ConstantClass converts from. The property being assigned supplies the type,
-// which is what makes the emitted source depend on the model alone.
-func (sp *dotnetSpeller) value(target string, v any, member, indent string) (string, error) {
+// requestClass returns the properties of an operation's request class, or an
+// error saying the pinned package does not declare one — a generation-time
+// refusal where it would otherwise be a suite-wide compile error.
+func (sp *dotnetSpeller) requestClass(op string) (map[string]dotnetType, error) {
+	class, ok := sp.sdk.class(op + "Request")
+	if !ok {
+		return nil, fmt.Errorf("%s declares no %s.%sRequest; the operation is newer than the pin in %s",
+			sp.sdk.describe(), sp.sdk.Namespace, op, dotnetCsprojPath)
+	}
+	return class, nil
+}
+
+// property returns the type AWSSDK gives the property a modeled member is
+// assigned through.
+func (sp *dotnetSpeller) property(class map[string]dotnetType, className, member string) (dotnetType, error) {
+	name := dotnetNameProperty(member)
+	t, ok := class[name]
+	if !ok {
+		return dotnetType{}, fmt.Errorf("%s declares no property %s.%s for member %q", sp.sdk.describe(), className, name, member)
+	}
+	return t, nil
+}
+
+// dotnetNoLiteralKinds are the modeled kinds with no C# literal whatever the
+// SDK's type: the IR has no portable value of them (compat/model/README.md
+// § Values), so the binder never binds one and this is a backstop.
+var dotnetNoLiteralKinds = map[string]bool{"timestamp": true, "document": true, "union": true}
+
+// dotnetSlot is how one member is spelled, decided by the modeled kind and the
+// SDK's property type together.
+type dotnetSlot struct {
+	// form is string, bool, integer, float, epochMilliseconds, blob, list, map
+	// or structure.
+	form string
+	// scalar is the C# type a literal is range-checked against and Bind is
+	// instantiated with: string, bool, byte, short, int, long, float, double.
+	scalar string
+}
+
+// dotnetIntegral is the inclusive range of each C# integral type the table can
+// name, and whether Binder.Bind can produce it. `byte` is C#'s unsigned byte;
+// ulong's range is cut at int64's, the widest a scenario literal carries.
+var dotnetIntegral = map[string]struct {
+	min, max int64
+	bindable bool
+}{
+	"byte":   {0, math.MaxUint8, true},
+	"sbyte":  {math.MinInt8, math.MaxInt8, false},
+	"short":  {math.MinInt16, math.MaxInt16, true},
+	"ushort": {0, math.MaxUint16, false},
+	"int":    {math.MinInt32, math.MaxInt32, true},
+	"uint":   {0, math.MaxUint32, false},
+	"long":   {math.MinInt64, math.MaxInt64, true},
+	"ulong":  {0, math.MaxInt64, false},
+}
+
+// slot matches a member's modeled kind against the SDK's type for it. Where
+// the two agree the spelling follows the SDK's type; where they disagree in the
+// one measured way (dotnetEpochMilliseconds) it is a conversion; anywhere else
+// it is an error naming both, which refuses the group rather than emitting
+// source that does not compile.
+func (sp *dotnetSpeller) slot(target string, t dotnetType) (dotnetSlot, error) {
 	kind := sp.model.Kind(target)
-	if kind == "blob" {
+	shapeType := sp.model.ShapeType(target)
+	switch kind {
+	case "string", "enum":
+		if t.scalar("string") || t.Form == "enum" {
+			return dotnetSlot{form: "string", scalar: "string"}, nil
+		}
+	case "boolean":
+		if t.scalar("bool") {
+			return dotnetSlot{form: "bool", scalar: "bool"}, nil
+		}
+	case "integer":
+		if shapeType == "bigInteger" {
+			// The IR has no way to say which precision was meant, and the .NET
+			// SDK gives the shape no numeric property a literal builds.
+			return dotnetSlot{}, fmt.Errorf("no C# literal builds a %s member", shapeType)
+		}
+		if _, integral := dotnetIntegral[t.Name]; t.Form == "scalar" && integral {
+			return dotnetSlot{form: "integer", scalar: t.Name}, nil
+		}
+		if t.scalar("DateTime") && shapeType == "long" {
+			if !sp.epochMilliseconds {
+				return dotnetSlot{}, fmt.Errorf("the model says long and %s types it %s; that is spelled only where the wire unit is measured (dotnetEpochMilliseconds), and it has not been for this service",
+					sp.sdk.describe(), t.Raw)
+			}
+			return dotnetSlot{form: "epochMilliseconds", scalar: "long"}, nil
+		}
+	case "float":
+		if shapeType == "bigDecimal" {
+			return dotnetSlot{}, fmt.Errorf("no C# literal builds a %s member", shapeType)
+		}
+		if t.scalar("float") || t.scalar("double") {
+			return dotnetSlot{form: "float", scalar: t.Name}, nil
+		}
+	case "blob":
+		if t.scalar("MemoryStream") {
+			return dotnetSlot{form: "blob"}, nil
+		}
+	case "list":
+		if t.Form == "list" {
+			return dotnetSlot{form: "list"}, nil
+		}
+	case "map":
+		if t.Form == "map" {
+			return dotnetSlot{form: "map"}, nil
+		}
+	case "structure":
+		if t.Form == "class" {
+			if _, ok := sp.sdk.class(t.Name); !ok {
+				return dotnetSlot{}, fmt.Errorf("%s names class %s, which the table does not declare", sp.sdk.describe(), t.Name)
+			}
+			return dotnetSlot{form: "structure"}, nil
+		}
+	}
+	return dotnetSlot{}, fmt.Errorf("the model says %s and %s types it %s, and the emitter has no spelling of one as the other",
+		shapeType, sp.sdk.describe(), t.Raw)
+}
+
+// value renders one IR value as C# source for a member of the given shape,
+// assigned to a property of the given SDK type.
+//
+// Nothing here names an SDK type unless it has to: a composite is written as a
+// collection expression or a target-typed `new()`, and an enum as the string
+// its ConstantClass converts from, so the property being assigned supplies the
+// type. What the SDK's type settles is the scalar underneath — which C# type a
+// literal is range-checked against and Bind is instantiated with — and the one
+// conversion the model's kind does not predict.
+func (sp *dotnetSpeller) value(target string, t dotnetType, v any, member, indent string) (string, error) {
+	kind := sp.model.Kind(target)
+	if dotnetNoLiteralKinds[kind] {
+		return "", fmt.Errorf("the dotnet-sdk emitter has no C# literal for a %s member", kind)
+	}
+	slot, err := sp.slot(target, t)
+	if err != nil {
+		return "", err
+	}
+	if slot.form == "blob" {
 		return dotnetBlob(v, member)
 	}
 	if _, _, isExpr := exprOf(v); isExpr {
-		return sp.expr(target, v, member)
+		return sp.expr(target, slot, v, member)
 	}
 	if v == nil {
-		switch kind {
-		case "string", "enum", "list", "map", "structure":
+		switch slot.form {
+		case "string", "list", "map", "structure":
 			return "null", nil
 		}
 		return "", fmt.Errorf("null cannot be written into a %s member", kind)
 	}
-	switch kind {
-	case "string", "enum":
+	switch slot.form {
+	case "string":
 		s, ok := v.(string)
 		if !ok {
 			return "", fmt.Errorf("a %s member wants a string, got %s", kind, valueKind(v))
 		}
 		return csString(s), nil
-	case "boolean":
+	case "bool":
 		out, ok := v.(bool)
 		if !ok {
 			return "", fmt.Errorf("a boolean member wants a boolean, got %s", valueKind(v))
 		}
 		return strconv.FormatBool(out), nil
-	case "integer", "float":
-		return sp.number(target, v)
+	case "integer", "float", "epochMilliseconds":
+		return sp.number(target, slot, v)
 	case "list":
-		return sp.list(target, v, member, indent)
+		return sp.list(target, *t.Elem, v, member, indent)
 	case "map":
-		return sp.mapping(target, v, member, indent)
+		return sp.mapping(target, t, v, member, indent)
 	case "structure":
-		return sp.structure(target, v, member, indent)
+		return sp.structure(target, t.Name, v, member, indent)
 	}
-	return "", fmt.Errorf("the dotnet-sdk emitter has no C# literal for a %s member", kind)
+	return "", fmt.Errorf("internal: no spelling for a %s slot", slot.form)
 }
 
 // dotnetBlob renders a `$base64` value into a blob member, which AWSSDK for
@@ -642,76 +883,67 @@ func dotnetBlob(v any, member string) (string, error) {
 	return fmt.Sprintf("b.Blob(%s, %s)", csString(member), rendered), nil
 }
 
-// number renders an integer or floating-point literal. The suffix is chosen
-// from the shape's own Smithy type rather than from the value: C# widens an
-// int literal to long, float and double implicitly, so only the narrower
-// floating-point targets need one — and a `1.5` written into a `float?`
-// property does not compile without it.
-func (sp *dotnetSpeller) number(target string, v any) (string, error) {
+// dotnetEpochMillisecondsRange is the inclusive range of
+// DateTimeOffset.FromUnixTimeMilliseconds: 0001-01-01 to 9999-12-31, the
+// range of a DateTime. A literal outside it throws when the suite runs.
+var dotnetEpochMillisecondsRange = [2]int64{-62135596800000, 253402300799999}
+
+// number renders an integer, floating-point or epoch-milliseconds literal.
+// Its range is the SDK property's C# type's, not the model's: C# checks an
+// integral literal against the type it is assigned to at compile time, and a
+// compile error in this backend is suite-wide rather than scoped to one group,
+// so a literal outside it is refused here, where the cost is one group leaving
+// the dotnet-sdk column.
+//
+// A long is written with an `L` and a float with an `f`: C# widens an int
+// literal into a long, a float and a double implicitly, but a `1.5` written
+// into a `float?` does not compile without its suffix.
+func (sp *dotnetSpeller) number(target string, slot dotnetSlot, v any) (string, error) {
 	n, ok := numberOf(v)
 	if !ok {
 		return "", fmt.Errorf("a numeric member wants a number, got %s", valueKind(v))
 	}
 	shapeType := sp.model.ShapeType(target)
-	switch shapeType {
-	case "byte", "short", "integer", "intEnum", "long":
+	switch slot.form {
+	case "integer", "epochMilliseconds":
 		if !n.Whole {
 			return "", fmt.Errorf("a%s member wants a whole number, got %s", integerArticle(shapeType), n.Text)
 		}
-		r, known := csIntegralRange(shapeType)
-		if !known {
-			return "", fmt.Errorf("no C# literal builds a %s member", shapeType)
+		r := [2]int64{dotnetIntegral[slot.scalar].min, dotnetIntegral[slot.scalar].max}
+		if slot.form == "epochMilliseconds" {
+			r = dotnetEpochMillisecondsRange
 		}
 		// A whole number wider than an int64 is out of range for every C#
 		// integer type, and is refused before the type's own range is
-		// consulted rather than being folded to one that fits. A literal
-		// outside the property's range is a *compile* error in C#, and this
-		// backend's compile errors are suite-wide rather than scoped to one
-		// group — so it is refused here, where the cost is one group leaving
-		// the dotnet-sdk column.
+		// consulted rather than being folded to one that fits.
 		if !n.Fits || n.Int < r[0] || n.Int > r[1] {
 			return "", fmt.Errorf("%s is out of range for a%s member", n.Text, integerArticle(shapeType))
 		}
 		digits := strconv.FormatInt(n.Int, 10)
-		if shapeType == "long" {
+		if slot.form == "epochMilliseconds" {
+			// The SDK's DateTime, built from the model's number: the property
+			// is DateTime?, and the literal the scenario wrote is the epoch
+			// milliseconds every other backend sends as it stands.
+			return "System.DateTimeOffset.FromUnixTimeMilliseconds(" + digits + "L).UtcDateTime", nil
+		}
+		if slot.scalar == "long" {
 			return digits + "L", nil
 		}
 		return digits, nil
-	case "float", "double":
+	case "float":
 		// javac and Roslyn agree here: a literal a float cannot carry is a
 		// compile error rather than an infinity, and a double a float64 cannot
 		// carry would be one.
-		if !n.Representable || (shapeType == "float" && math.Abs(n.Float) > math.MaxFloat32) {
+		if !n.Representable || (slot.scalar == "float" && math.Abs(n.Float) > math.MaxFloat32) {
 			return "", fmt.Errorf("%s is out of range for a %s member", n.Text, shapeType)
 		}
 		rendered := strconv.FormatFloat(n.Float, 'g', -1, 64)
-		if shapeType == "float" {
+		if slot.scalar == "float" {
 			return rendered + "f", nil
 		}
 		return rendered, nil
 	}
-	// bigInteger and bigDecimal: the .NET SDK gives them no numeric property
-	// type a C# literal builds, and the IR has no way to say which precision
-	// was meant. Refuse rather than round.
-	return "", fmt.Errorf("no C# literal builds a %s member", shapeType)
-}
-
-// csIntegralRange is the inclusive range of the C# type scalarType names for an
-// integral shape type. Both are keyed by the shape type, so they cannot come to
-// disagree about which C# type a member has — and note that C#'s `byte` is the
-// unsigned one, which is why its range starts at zero.
-func csIntegralRange(shapeType string) (r [2]int64, known bool) {
-	switch shapeType {
-	case "byte":
-		return [2]int64{0, math.MaxUint8}, true
-	case "short":
-		return [2]int64{math.MinInt16, math.MaxInt16}, true
-	case "integer", "intEnum":
-		return [2]int64{math.MinInt32, math.MaxInt32}, true
-	case "long":
-		return [2]int64{math.MinInt64, math.MaxInt64}, true
-	}
-	return [2]int64{}, false
+	return "", fmt.Errorf("internal: no number spelling for a %s slot", slot.form)
 }
 
 // integerArticle names an integral shape type in a message, with its article:
@@ -723,7 +955,7 @@ func integerArticle(shapeType string) string {
 	return " " + shapeType
 }
 
-func (sp *dotnetSpeller) list(target string, v any, member, indent string) (string, error) {
+func (sp *dotnetSpeller) list(target string, elem dotnetType, v any, member, indent string) (string, error) {
 	items, ok := v.([]any)
 	if !ok {
 		return "", fmt.Errorf("a list member wants a JSON array, got %s", valueKind(v))
@@ -734,7 +966,7 @@ func (sp *dotnetSpeller) list(target string, v any, member, indent string) (stri
 	}
 	rendered := make([]string, 0, len(items))
 	for _, item := range items {
-		out, err := sp.value(element, item, member, indent+"    ")
+		out, err := sp.value(element, elem, item, member, indent+"    ")
 		if err != nil {
 			return "", err
 		}
@@ -745,7 +977,7 @@ func (sp *dotnetSpeller) list(target string, v any, member, indent string) (stri
 	return csList(rendered, indent), nil
 }
 
-func (sp *dotnetSpeller) mapping(target string, v any, member, indent string) (string, error) {
+func (sp *dotnetSpeller) mapping(target string, t dotnetType, v any, member, indent string) (string, error) {
 	entries, ok := v.(map[string]any)
 	if !ok {
 		return "", fmt.Errorf("a map member wants a JSON object, got %s", valueKind(v))
@@ -754,13 +986,16 @@ func (sp *dotnetSpeller) mapping(target string, v any, member, indent string) (s
 	if kind := sp.model.Kind(key); kind != "string" && kind != "enum" {
 		return "", fmt.Errorf("a map member keyed by %s has no IR spelling; the IR's objects have string keys", kind)
 	}
+	if !t.Key.scalar("string") && t.Key.Form != "enum" {
+		return "", fmt.Errorf("%s keys the map by %s, which a string key does not convert to", sp.sdk.describe(), t.Key.Raw)
+	}
 	value := sp.model.ValueTarget(target)
 	if value == "" {
 		return "", fmt.Errorf("the model gives map shape %s no value shape", target)
 	}
 	rendered := make([]string, 0, len(entries))
 	for _, k := range sortedKeys(entries) {
-		out, err := sp.value(value, entries[k], member, indent+"    ")
+		out, err := sp.value(value, *t.Value, entries[k], member, indent+"    ")
 		if err != nil {
 			return "", err
 		}
@@ -769,18 +1004,23 @@ func (sp *dotnetSpeller) mapping(target string, v any, member, indent string) (s
 	return csInitializer(rendered, indent), nil
 }
 
-func (sp *dotnetSpeller) structure(target string, v any, member, indent string) (string, error) {
+func (sp *dotnetSpeller) structure(target, className string, v any, member, indent string) (string, error) {
 	members, ok := v.(map[string]any)
 	if !ok {
 		return "", fmt.Errorf("a structure member wants a JSON object, got %s", valueKind(v))
 	}
+	class, _ := sp.sdk.class(className)
 	rendered := make([]string, 0, len(members))
 	for _, k := range sortedKeys(members) {
 		field, ok := sp.model.MemberTarget(target, k)
 		if !ok {
 			return "", fmt.Errorf("%s has no member %q", target, k)
 		}
-		out, err := sp.value(field, members[k], member, indent+"    ")
+		property, err := sp.property(class, className, k)
+		if err != nil {
+			return "", err
+		}
+		out, err := sp.value(field, property, members[k], member, indent+"    ")
 		if err != nil {
 			return "", err
 		}
@@ -793,47 +1033,119 @@ func (sp *dotnetSpeller) structure(target string, v any, member, indent string) 
 //
 // The expression itself is still the IR's — Val.Ref, Val.Name and the rest,
 // rendered by dotnetValue — and it still resolves through the run's context
-// bag. Binder.Bind converts the result to the one C# scalar type the member's
-// modeled kind names; the conversion to a ConstantClass enum, and the widening
-// into a nullable property, are the compiler's, not this emitter's.
-func (sp *dotnetSpeller) expr(target string, v any, member string) (string, error) {
-	scalar, err := sp.scalarType(target)
-	if err != nil {
-		return "", err
+// bag. Binder.Bind converts the result to the C# scalar the SDK's property
+// holds; the conversion to a ConstantClass enum, and the widening into a
+// nullable property, are the compiler's, not this emitter's. An epoch-
+// milliseconds slot goes through Binder.EpochMilliseconds instead, which makes
+// the DateTime the property holds out of the number the context carries.
+func (sp *dotnetSpeller) expr(target string, slot dotnetSlot, v any, member string) (string, error) {
+	switch slot.form {
+	case "string", "bool", "integer", "float", "epochMilliseconds":
+	default:
+		return "", fmt.Errorf("a value expression can only be bound to a scalar member, and this one is a %s", sp.model.Kind(target))
+	}
+	if slot.form == "integer" && !dotnetIntegral[slot.scalar].bindable {
+		return "", fmt.Errorf("a value expression cannot be bound to a %s property; Binder.Bind converts to byte, short, int and long", slot.scalar)
 	}
 	rendered, err := dotnetValue(v)
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("b.Bind<%s>(%s, %s)", scalar, csString(member), rendered), nil
+	if slot.form == "epochMilliseconds" {
+		return fmt.Sprintf("b.EpochMilliseconds(%s, %s)", csString(member), rendered), nil
+	}
+	return fmt.Sprintf("b.Bind<%s>(%s, %s)", slot.scalar, csString(member), rendered), nil
 }
 
-// scalarType is the C# type Bind is instantiated with for a member's modeled
-// kind. It is the .NET counterpart of smithy-go's scalar mapping, and an enum
-// reaches it as its underlying string: ConstantClass declares an implicit
-// conversion from string, so the emitted assignment needs no cast.
-func (sp *dotnetSpeller) scalarType(target string) (string, error) {
-	switch sp.model.ShapeType(target) {
-	case "string":
-		return "string", nil
-	case "enum":
-		return "string", nil
-	case "boolean":
-		return "bool", nil
-	case "byte":
-		return "byte", nil
-	case "short":
-		return "short", nil
-	case "integer", "intEnum":
-		return "int", nil
-	case "long":
-		return "long", nil
-	case "float":
-		return "float", nil
-	case "double":
-		return "double", nil
+// ---------------------------------------------------------------------------
+// Document forms
+// ---------------------------------------------------------------------------
+
+// dotnetEpochMillisecondsProperties collects, for every call a group makes,
+// the request and response properties AWSSDK types as a DateTime where the
+// model says epoch-milliseconds long, keyed by class name.
+//
+// The response is read as a document (Scenario/Documents.cs), and a DateTime
+// renders there as ISO text — right for a modeled timestamp, which no backend
+// compares, and wrong for one of these: every other backend holds the number
+// the service sent, so an `equals`, a `where` or an export `$ref`'d into a
+// later request would disagree. So the emitted file registers each such
+// property with Documents.EpochMilliseconds, which renders it as that number.
+// Request classes are walked too, because failure-message field 3 renders the
+// request that was sent through the same conversion.
+//
+// A disagreement it cannot render — the same DateTime-for-long in a service
+// whose wire unit is not measured, or one inside a list or a map value, which
+// a (class, property) registration cannot name — is an error, and refuses the
+// group rather than leaving one backend reading a different document.
+func (sp *dotnetSpeller) dotnetEpochMillisecondsProperties(c call, into map[string]map[string]bool) error {
+	seen := map[string]bool{}
+	if input := sp.model.InputShape(c.Op); input != "" {
+		if err := sp.epochMillisecondsIn(input, c.Op+"Request", into, seen); err != nil {
+			return err
+		}
 	}
-	return "", fmt.Errorf("a value expression can only be bound to a scalar member, and this one is a %s", sp.model.Kind(target))
+	if output := sp.model.OutputShape(c.Op); output != "" {
+		if err := sp.epochMillisecondsIn(output, c.Op+"Response", into, seen); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (sp *dotnetSpeller) epochMillisecondsIn(structure, className string, into map[string]map[string]bool, seen map[string]bool) error {
+	if seen[className] {
+		return nil
+	}
+	seen[className] = true
+	class, ok := sp.sdk.class(className)
+	if !ok {
+		// A response class the pinned package does not declare leaves nothing
+		// to render; a request class it does not declare is refused by
+		// requestClass before this is asked.
+		return nil
+	}
+	for _, member := range sp.model.Members(structure) {
+		target, ok := sp.model.MemberTarget(structure, member)
+		if !ok {
+			continue
+		}
+		name := dotnetNameProperty(member)
+		t, ok := class[name]
+		if !ok {
+			continue
+		}
+		if err := sp.epochMillisecondsAt(target, t, className, name, into, seen); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (sp *dotnetSpeller) epochMillisecondsAt(target string, t dotnetType, className, property string, into map[string]map[string]bool, seen map[string]bool) error {
+	switch kind := sp.model.Kind(target); {
+	case kind == "integer" && t.scalar("DateTime"):
+		if _, err := sp.slot(target, t); err != nil {
+			return &dotnetDocumentError{class: className, property: property, err: err}
+		}
+		if into[className] == nil {
+			into[className] = map[string]bool{}
+		}
+		into[className][property] = true
+	case kind == "structure" && t.Form == "class":
+		return sp.epochMillisecondsIn(target, t.Name, into, seen)
+	case (kind == "list" && t.Form == "list") || (kind == "map" && t.Form == "map"):
+		inner, innerType := sp.model.ElementTarget(target), t.Elem
+		if kind == "map" {
+			inner, innerType = sp.model.ValueTarget(target), t.Value
+		}
+		if sp.model.Kind(inner) == "integer" && innerType.scalar("DateTime") {
+			return &dotnetDocumentError{class: className, property: property,
+				err: fmt.Errorf("it holds a %s of DateTimes where the model says long, and a conversion registered by property cannot reach inside one", kind)}
+		}
+		return sp.epochMillisecondsAt(inner, *innerType, className, property, into, seen)
+	}
+	return nil
 }
 
 // ---------------------------------------------------------------------------
@@ -991,21 +1303,76 @@ func dotnetMethodNamesAreUnique(service string, groups []group) error {
 // dotnetRefusals reports the members of a group's calls this backend cannot
 // express. A group with any is not emitted and is scoped away from dotnet-sdk.
 //
-// It decides by attempting the very spelling emission would write, so one code
-// path answers "can this be emitted" and "how" and the two cannot drift.
+// Three things are asked, each by attempting what emission would write, so one
+// code path answers "can this be emitted" and "how" and the two cannot drift:
+// whether the pinned package declares the operation's request class at all,
+// whether each input member can be spelled into the property AWSSDK declares
+// for it, and whether every request and response the group touches has a
+// document form that agrees with the other backends
+// (dotnetEpochMillisecondsProperties).
 func dotnetRefusals(gen *generation, sp *dotnetSpeller, g group) []gap {
-	return refusals(gen, g, dotnetEmitReason, refusalChecks{
+	out := refusals(gen, g, dotnetEmitReason, refusalChecks{
+		call: func(op string) (string, error) {
+			if _, err := sp.requestClass(op); err != nil {
+				return op + "Request", err
+			}
+			return "", nil
+		},
 		member: func(op, member string, v any) error {
 			target, err := sp.target(gen.model.InputShape(op), op, member)
 			if err != nil {
 				return err
 			}
-			if _, err := sp.value(target, v, member, ""); err != nil {
+			class, err := sp.requestClass(op)
+			if err != nil {
+				return err
+			}
+			property, err := sp.property(class, op+"Request", member)
+			if err != nil {
+				return err
+			}
+			if _, err := sp.value(target, property, v, member, ""); err != nil {
 				return fmt.Errorf("%s.%s cannot be spelled as C#: %v", op, member, err)
 			}
 			return nil
 		},
 	})
+	// An operation already refused for its input is not reported twice: the
+	// first reason is the one to fix.
+	seen := map[string]bool{}
+	for _, refused := range out {
+		seen[refused.Operation] = true
+	}
+	for _, c := range callsOf(g) {
+		if seen[c.Op] {
+			continue
+		}
+		seen[c.Op] = true
+		var failed *dotnetDocumentError
+		if err := sp.dotnetEpochMillisecondsProperties(c, map[string]map[string]bool{}); errors.As(err, &failed) {
+			out = append(out, gap{
+				Service:   gen.scenario.Service,
+				Operation: c.Op,
+				Group:     g.Name,
+				Reason:    dotnetEmitReason + ":" + failed.property,
+				Detail:    fmt.Sprintf("%s has no document form every backend agrees on: %v", c.Op, err),
+			})
+		}
+	}
+	sortGaps(out)
+	return out
+}
+
+// dotnetDocumentError is a request or response property whose document form
+// would disagree with the other backends'. It carries the property's name, which
+// is what the refusal is recorded under.
+type dotnetDocumentError struct {
+	class, property string
+	err             error
+}
+
+func (e *dotnetDocumentError) Error() string {
+	return fmt.Sprintf("%s.%s: %v", e.class, e.property, e.err)
 }
 
 // ---------------------------------------------------------------------------

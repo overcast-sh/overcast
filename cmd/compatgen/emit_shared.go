@@ -288,13 +288,13 @@ type sourceEmission struct {
 // removed. Adding a backend is a row in sourceBackends, not another copy of the
 // block that used to sit in main.go.
 //
-// emit takes the Go SDK type loader because the Go emitter needs it (emit_go.go
-// says why) and no other backend does; one that reads the model alone ignores
-// it. Threading one loader through is cheaper than a second table of
-// per-backend inputs for the single backend that has any.
+// emit takes the SDK type sources the backends that read their SDK need — the
+// Go emitter's loader over the vendored Go SDK (emit_go.go) and the .NET
+// emitter's committed type table (dotnetsdktypes.go). A backend that reads the
+// model alone ignores both.
 type sourceBackend struct {
 	suite string
-	emit  func(gen *generation, goTypes *goSDKTypes) (*sourceEmission, error)
+	emit  func(gen *generation, sdk sdkTypes) (*sourceEmission, error)
 	// indexPath is the index file, repository-relative, and index renders it
 	// from the services actually emitted.
 	indexPath string
@@ -307,13 +307,20 @@ type sourceBackend struct {
 	emittedFile func(name string) bool
 }
 
+// sdkTypes is what the typed emitters that read their SDK read it through. Each
+// is nil when its backend is not enabled.
+type sdkTypes struct {
+	goTypes *goSDKTypes
+	dotnet  *dotnetSDKTypes
+}
+
 // sourceBackends is every typed source emitter, in the order their files are
 // rendered. A suite appears here whether or not scenarioBackends names it: the
 // index is emitted either way, and a stale file has to be removed either way.
 var sourceBackends = []sourceBackend{
 	{
 		suite:     goSDKSuite,
-		emit:      emitGo,
+		emit:      func(gen *generation, sdk sdkTypes) (*sourceEmission, error) { return emitGo(gen, sdk.goTypes) },
 		indexPath: goIndexPath,
 		index:     emitGoIndex,
 		dir:       goSuiteDir,
@@ -324,7 +331,7 @@ var sourceBackends = []sourceBackend{
 	},
 	{
 		suite:     javaSDKSuite,
-		emit:      func(gen *generation, _ *goSDKTypes) (*sourceEmission, error) { return emitJava(gen) },
+		emit:      func(gen *generation, _ sdkTypes) (*sourceEmission, error) { return emitJava(gen) },
 		indexPath: javaIndexPath,
 		index:     func(services []string) ([]byte, error) { return emitJavaIndex(services), nil },
 		dir:       javaSuiteDir,
@@ -335,7 +342,7 @@ var sourceBackends = []sourceBackend{
 	},
 	{
 		suite:     dotnetSDKSuite,
-		emit:      func(gen *generation, _ *goSDKTypes) (*sourceEmission, error) { return emitDotnet(gen) },
+		emit:      func(gen *generation, sdk sdkTypes) (*sourceEmission, error) { return emitDotnet(gen, sdk.dotnet) },
 		indexPath: dotnetIndexPath,
 		index:     func(services []string) ([]byte, error) { return emitDotnetIndex(services), nil },
 		dir:       dotnetSuiteDir,
@@ -346,7 +353,7 @@ var sourceBackends = []sourceBackend{
 	},
 	{
 		suite:     rustSDKSuite,
-		emit:      func(gen *generation, _ *goSDKTypes) (*sourceEmission, error) { return emitRust(gen) },
+		emit:      func(gen *generation, _ sdkTypes) (*sourceEmission, error) { return emitRust(gen) },
 		indexPath: rustIndexPath,
 		index:     emitRustIndex,
 		dir:       rustSuiteDir,

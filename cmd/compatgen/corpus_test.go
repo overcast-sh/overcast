@@ -210,7 +210,10 @@ var vendoredSDKAvailable = sync.OnceValue(func() error {
 //
 // The go-sdk suite's go.mod and go.sum come with it: they are what pins the
 // SDK the emitter resolves field types from, so a copy without them would
-// generate a corpus the real run could not reproduce.
+// generate a corpus the real run could not reproduce. The dotnet-sdk suite's
+// csproj comes too, for the same reason: the .NET emitter reads the SDK type
+// table under its sdk-types/ only after checking it against that project's
+// pins.
 func copyCorpus(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
@@ -224,7 +227,7 @@ func copyCorpus(t *testing.T) string {
 				return nil
 			}
 			name := entry.Name()
-			if !strings.HasSuffix(path, ".json") && !strings.HasSuffix(path, ".txt") && name != "go.mod" && name != "go.sum" {
+			if !strings.HasSuffix(path, ".json") && !strings.HasSuffix(path, ".txt") && !strings.HasSuffix(path, ".csproj") && name != "go.mod" && name != "go.sum" {
 				return nil
 			}
 			relPath, err := filepath.Rel(repoRoot, path)

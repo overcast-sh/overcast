@@ -29,6 +29,19 @@ internal sealed class ScenariosAuthoredLogsGroups : IServiceGroup
         _client = new Lazy<AmazonCloudWatchLogsClient>(() => clients.CreateClient(
             (credentials, configuration) => new AmazonCloudWatchLogsClient(credentials, (AmazonCloudWatchLogsConfig)configuration),
             new AmazonCloudWatchLogsConfig()));
+        // Epoch-millisecond longs in the model, typed as DateTime by
+        // AWSSDK.CloudWatchLogs 4.0.0. Every other backend reads the number the service sent,
+        // so that number is their document form here too
+        // (compat/model/README.md § Values).
+        Documents.EpochMilliseconds(
+            typeof(Amazon.CloudWatchLogs.Model.LogGroup),
+            nameof(Amazon.CloudWatchLogs.Model.LogGroup.CreationTime));
+        Documents.EpochMilliseconds(
+            typeof(Amazon.CloudWatchLogs.Model.LogStream),
+            nameof(Amazon.CloudWatchLogs.Model.LogStream.CreationTime),
+            nameof(Amazon.CloudWatchLogs.Model.LogStream.FirstEventTimestamp),
+            nameof(Amazon.CloudWatchLogs.Model.LogStream.LastEventTimestamp),
+            nameof(Amazon.CloudWatchLogs.Model.LogStream.LastIngestionTime));
     }
 
     public string SourceName => "ScenariosAuthoredLogsGroups";
