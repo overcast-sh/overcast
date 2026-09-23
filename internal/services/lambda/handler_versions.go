@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strconv"
 	"time"
 
@@ -33,9 +34,20 @@ import (
 // publishVersionRequest mirrors the AWS PublishVersion request body.
 // https://docs.aws.amazon.com/lambda/latest/api/API_PublishVersion.html
 type publishVersionRequest struct {
-	CodeSha256  string `json:"CodeSha256,omitempty"`
-	Description string `json:"Description,omitempty"`
-	RevisionId  string `json:"RevisionId,omitempty"`
+	CodeSha256  string          `json:"CodeSha256,omitempty"`
+	Description string          `json:"Description,omitempty"`
+	RevisionId  string          `json:"RevisionId,omitempty"`
+	PublishTo   json.RawMessage `json:"PublishTo"`
+}
+
+// unsupportedMembers is PublishVersion's 501 gate. PublishTo refuses for the
+// same reason CreateFunction's does — see CreateFunction's gate documentation
+// in handler_functions.go — and is the only member here Overcast does not
+// implement.
+func (req *publishVersionRequest) unsupportedMembers() unsupportedRequestMembers {
+	return unsupportedRequestMembers{
+		"PublishTo": rawRequestField(req.PublishTo),
+	}
 }
 
 // listVersionsResponse is the ListVersionsByFunction response envelope. Each
@@ -172,6 +184,55 @@ func (h *Handler) newFunctionVersion(fn *Function, description string) *Function
 	return v
 }
 
+// versionSnapshotFields zeroes the parts of a Function that must not gate
+// PublishVersion's "nothing changed" comparison, leaving only what AWS
+// actually snapshots into a version:
+//
+//   - fields a mutation stamps regardless of what changed: LastModified,
+//     RevisionId, CreationID;
+//   - fields lifecycle machinery advances on its own: State*, LastUpdateStatus*;
+//   - the deployment package's bytes and their derived CodeHash/CodeSize/
+//     CodeGeneration — code identity is compared separately via CodeSha256
+//     (see functionChangedSinceVersion), because LastModified-fallback hashing
+//     for a function with no zip on record would otherwise make every image
+//     function's code compare unequal to itself;
+//   - Tags and ReservedConcurrency, which are associated with the function's
+//     unqualified ARN, not with a published snapshot — TagResource and
+//     PutFunctionConcurrency neither one bumps RevisionId or LastModified in
+//     this codebase, which is the existing signal that AWS does not treat
+//     them as function "configuration" either.
+func versionSnapshotFields(fn *Function) Function {
+	snap := *fn
+	snap.LastModified = ""
+	snap.RevisionId = ""
+	snap.CreationID = ""
+	snap.State = ""
+	snap.StateReason = ""
+	snap.StateReasonCode = ""
+	snap.LastUpdateStatus = ""
+	snap.LastUpdateStatusReason = ""
+	snap.LastUpdateStatusReasonCode = ""
+	snap.CodeZip = nil
+	snap.CodeSize = 0
+	snap.CodeHash = ""
+	snap.CodeGeneration = ""
+	snap.Tags = nil
+	snap.ReservedConcurrency = nil
+	return snap
+}
+
+// functionChangedSinceVersion reports whether fn's code or configuration
+// differs from the snapshot v froze at publish time — the test PublishVersion
+// applies before allocating a new version number: "AWS Lambda doesn't publish
+// a version if the function's configuration and code haven't changed since
+// the last version" (API_PublishVersion.html).
+func functionChangedSinceVersion(fn *Function, v *FunctionVersion) bool {
+	if codeSha256(fn) != v.CodeSha256 {
+		return true
+	}
+	return !reflect.DeepEqual(versionSnapshotFields(fn), versionSnapshotFields(&v.Function))
+}
+
 // aliasToResponse converts a FunctionAlias to the wire response shape.
 func aliasToResponse(a *FunctionAlias) aliasResponse {
 	return aliasResponse{
@@ -204,6 +265,16 @@ func (h *Handler) PublishVersion(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// unsupportedMembers lists what stays 501 here, and why — PublishTo's one
+	// value asks for a $LATEST.PUBLISHED qualifier Lambda Managed Instances
+	// resolves unqualified invokes to instead of $LATEST; Managed Instances
+	// are not emulated (see CreateFunction's gate), so this is refused before
+	// any version is allocated, exactly as CreateFunction and
+	// UpdateFunctionCode already refuse the same member.
+	if req.unsupportedMembers().requested() {
+		protocol.NotImplementedJSON(w, r)
+		return
+	}
 
 	fn, aerr := h.ls.getFunction(ctx, name)
 	if aerr != nil {
@@ -228,14 +299,41 @@ func (h *Handler) PublishVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// RevisionId and CodeSha256 are preconditions, checked before deciding
+	// whether this call is a no-op publish. AWS's own text: RevisionId "Only
+	// update the function if the revision ID matches the ID that's specified"
+	// — PreconditionFailedException's own documentation names this exact
+	// wording for a mismatch (API_PublishVersion.html). CodeSha256 "Only
+	// publish a version if the hash value matches the value that's specified"
+	// is not tied to a specific error by AWS's docs; this reports it as
+	// InvalidParameterValueException, the family every other CodeSha256/hash
+	// mismatch in this codebase uses. Unlike RevisionId's, this half is an
+	// inferred behaviour rather than one captured against real AWS.
+	if req.RevisionId != "" && req.RevisionId != fn.RevisionId {
+		protocol.WriteJSONError(w, r, policyRevisionMismatch())
+		return
+	}
+	if req.CodeSha256 != "" {
+		if current := codeSha256(fn); req.CodeSha256 != current {
+			protocol.WriteJSONError(w, r, lambdaInvalidParameter(
+				"CodeSha256 hash value does not match. New hash value: "+current+", Provided hash value: "+req.CodeSha256))
+			return
+		}
+	}
+
 	v := h.newFunctionVersion(fn, req.Description)
-	if aerr := h.ls.publishVersion(ctx, v); aerr != nil {
+	result, published, aerr := h.ls.publishVersionOrReuse(ctx, fn, v)
+	if aerr != nil {
 		log.Error("publish version", zap.String("function", name), zap.Error(aerr.Unwrap()))
 		protocol.WriteJSONError(w, r, aerr)
 		return
 	}
+	if !published {
+		log.Debug("publish version: no change since last version, reusing it",
+			zap.String("function", name), zap.Int("version", result.Version))
+	}
 
-	protocol.WriteRESTJSON(w, r, http.StatusCreated, versionToResponse(v))
+	protocol.WriteRESTJSON(w, r, http.StatusCreated, versionToResponse(result))
 }
 
 // ListVersionsByFunction handles GET /2015-03-31/functions/{name}/versions.

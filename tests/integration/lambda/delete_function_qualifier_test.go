@@ -74,9 +74,12 @@ func deleteFunctionQualified(t *testing.T, srv *helpers.TestServer, function, qu
 // https://docs.aws.amazon.com/lambda/latest/api/API_DeleteFunction.html
 func TestDeleteFunction_QualifierDeletesOnlyThatVersion(t *testing.T) {
 	// Given: a function with two published versions, each carrying a policy.
+	// A code change separates the two publishes — PublishVersion no longer
+	// allocates a new number when nothing changed since the last one.
 	srv := helpers.NewTestServer(t)
 	createFunction(t, srv, "qualified-delete-fn")
 	first := publishLambdaVersion(t, srv, "qualified-delete-fn")
+	updateLambdaCode(t, srv, "qualified-delete-fn", []byte("second-zip-bytes"))
 	second := publishLambdaVersion(t, srv, "qualified-delete-fn")
 	addQualifiedPermission(t, srv, "qualified-delete-fn", first, "on-first")
 	addQualifiedPermission(t, srv, "qualified-delete-fn", second, "on-second")

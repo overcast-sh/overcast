@@ -66,7 +66,7 @@ func init() {
 
 		// Aliases & versions
 		capabilities.Capability{Service: "lambda", Operation: "PublishVersion", Category: "Aliases & versions",
-			Status: capabilities.StatusSupported, Notes: "Immutable snapshot of function config, reporting LastUpdateStatus Successful because nothing can update it; version numbers are monotonically incrementing integers; refused with ResourceConflictException while an update is still in progress"},
+			Status: capabilities.StatusSupported, Notes: "Immutable snapshot of function config, reporting LastUpdateStatus Successful because nothing can update it; version numbers are monotonically incrementing integers; refused with ResourceConflictException while an update is still in progress; when code and configuration are unchanged since the highest existing version, returns that version instead of allocating a new one, as AWS documents; RevisionId and CodeSha256 are preconditions checked first — a RevisionId mismatch answers PreconditionFailedException, a CodeSha256 mismatch InvalidParameterValueException; PublishTo returns 501 before anything is persisted, for the same reason CreateFunction's does"},
 		capabilities.Capability{Service: "lambda", Operation: "ListVersionsByFunction", Category: "Aliases & versions",
 			Status: capabilities.StatusSupported, Notes: "Always includes `$LATEST` as first entry"},
 		capabilities.Capability{Service: "lambda", Operation: "CreateAlias", Category: "Aliases & versions",

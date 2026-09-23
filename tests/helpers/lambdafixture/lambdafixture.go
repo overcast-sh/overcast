@@ -88,6 +88,7 @@ type FunctionConfiguration struct {
 	MemorySize          int                  `json:"MemorySize"`
 	State               string               `json:"State"`
 	CodeSize            int64                `json:"CodeSize"`
+	CodeSha256          string               `json:"CodeSha256,omitempty"`
 	LastModified        string               `json:"LastModified"`
 	RevisionId          string               `json:"RevisionId"`
 	PackageType         string               `json:"PackageType"`

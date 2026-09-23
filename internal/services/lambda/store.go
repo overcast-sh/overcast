@@ -632,6 +632,52 @@ func (s *lambdaStore) publishVersionLocked(ctx context.Context, v *FunctionVersi
 	return s.putVersion(ctx, v)
 }
 
+// publishVersionOrReuse is PublishVersion's core: "AWS Lambda doesn't publish
+// a version if the function's configuration and code haven't changed since
+// the last version" (API_PublishVersion.html). It compares fn against the
+// highest version currently published for it and, when nothing has changed,
+// returns that version instead of allocating a new number; otherwise it
+// publishes v exactly as publishVersionLocked would. The comparison and any
+// allocation happen under the same lock, so a concurrent PublishVersion
+// cannot allocate two version numbers for the same unchanged snapshot, and
+// cannot reuse a version another goroutine is simultaneously superseding.
+//
+// A caller whose fn has no published version at all always publishes — there
+// is nothing to compare against — which is also what keeps createFunctionPublishing's
+// unconditional first version (via publishVersionLocked directly) unaffected:
+// it never reaches this path.
+func (s *lambdaStore) publishVersionOrReuse(ctx context.Context, fn *Function, v *FunctionVersion) (result *FunctionVersion, published bool, aerr *protocol.AWSError) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	versions, aerr := s.listVersions(ctx, fn.Name)
+	if aerr != nil {
+		return nil, false, aerr
+	}
+	if latest := highestVersion(versions); latest != nil && !functionChangedSinceVersion(fn, latest) {
+		return latest, false, nil
+	}
+	if aerr := s.publishVersionLocked(ctx, v); aerr != nil {
+		return nil, false, aerr
+	}
+	return v, true, nil
+}
+
+// highestVersion returns the highest-numbered entry in versions, or nil for
+// an empty slice. listVersions already returns them in ascending order, but
+// this does not trust that ordering — a version being deleted mid-scan is
+// exactly the kind of gap AWS's own "never reuses a version number" guarantee
+// leaves behind.
+func highestVersion(versions []*FunctionVersion) *FunctionVersion {
+	var latest *FunctionVersion
+	for _, v := range versions {
+		if latest == nil || v.Version > latest.Version {
+			latest = v
+		}
+	}
+	return latest
+}
+
 // nextVersionLocked increments and returns the next version number for a
 // function. Version numbers start at 1. The caller holds s.mu, which is what
 // makes the read-increment-write atomic.

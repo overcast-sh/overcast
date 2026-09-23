@@ -762,6 +762,7 @@ const (
 	OpUpdateFunctionConfiguration = "UpdateFunctionConfiguration"
 	OpCreateEventSourceMapping    = "CreateEventSourceMapping"
 	OpUpdateEventSourceMapping    = "UpdateEventSourceMapping"
+	OpPublishVersion              = "PublishVersion"
 )
 
 // UnsupportedRequestMembers reports the modeled request members each Lambda
@@ -779,6 +780,7 @@ func UnsupportedRequestMembers() map[string][]string {
 		OpUpdateFunctionConfiguration: (&updateFunctionConfigurationRequest{}).unsupportedMembers(),
 		OpCreateEventSourceMapping:    (&createESMRequest{}).unsupportedMembers(),
 		OpUpdateEventSourceMapping:    (&updateESMRequest{}).unsupportedMembers(),
+		OpPublishVersion:              (&publishVersionRequest{}).unsupportedMembers(),
 	}
 	out := make(map[string][]string, len(gates))
 	for operation, members := range gates {

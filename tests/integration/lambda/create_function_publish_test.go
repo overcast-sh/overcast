@@ -176,6 +176,10 @@ func TestCreateFunction_publishTrue_nextPublishedVersionIsTwo(t *testing.T) {
 	helpers.AssertStatus(t, resp, http.StatusCreated)
 	resp.Body.Close()
 
+	// And: its code changes — PublishVersion no longer allocates a new number
+	// when nothing changed since the version the create just published.
+	updateLambdaCode(t, srv, "publish-next-fn", []byte("second-zip-bytes"))
+
 	// When: PublishVersion is called afterwards.
 	publish := doJSON(t, http.MethodPost, lambdaURL(srv, "/functions/publish-next-fn/versions"), publishVersionReq{})
 	defer publish.Body.Close()
