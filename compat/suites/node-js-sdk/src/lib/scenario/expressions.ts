@@ -4,7 +4,8 @@
  * The three primitives every assertion and every call parameter is built from
  * (compat/model/README.md § Values, § Paths, § Assertions):
  *
- *   evaluateValue()  `$lit` `$ref` `$name` `$concat` `$index` → a JS value
+ *   evaluateValue()  `$lit` `$ref` `$name` `$concat` `$index` `$base64` → a JS value
+ *   toDocument()     an SDK response → the IR's document (a blob as base64 text)
  *   resolvePath()    `$.Messages[0].ReceiptHandle` → found/not-found + value
  *   jsonEquals()     equality "as JSON", after the SDK's own mapping
  *
@@ -68,6 +69,7 @@ export function asExpression(v: ValueObject): Expression | null {
     case "$name":
     case "$concat":
     case "$index":
+    case "$base64":
       return v as unknown as Expression;
     default:
       throw new ExpressionError(`unknown value expression ${JSON.stringify(key)}`);
@@ -142,6 +144,15 @@ function evaluateExpression(expr: Expression, ctx: EvalContext): unknown {
     return out;
   }
 
+  if ("$base64" in expr) {
+    // A blob: these bytes. The AWS SDK for JavaScript takes a Uint8Array for
+    // a blob member and would serialize a string as its UTF-8 — which is why a
+    // blob is never a plain string in the IR. The argument is base64 text: a
+    // literal, or a $ref to a blob a previous call exported, which the context
+    // bag holds in its document form (see toDocument).
+    return decodeBase64(evaluateValue(expr.$base64 as Value, ctx));
+  }
+
   const [listExpr, index] = expr.$index;
   const list = evaluateValue(listExpr, ctx);
   if (!Array.isArray(list)) {
@@ -155,6 +166,59 @@ function evaluateExpression(expr: Expression, ctx: EvalContext): unknown {
     );
   }
   return list[index];
+}
+
+// ─── Blobs ────────────────────────────────────────────────────────────────
+
+const BASE64_RE = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+
+/**
+ * Decode a blob's document form: standard base64 with padding, in its one
+ * canonical spelling. Node's own decoder is lenient — it reads the URL-safe
+ * alphabet, skips whitespace and tolerates missing padding — so the text is
+ * held to the alphabet first and to a round trip after, which is what refuses
+ * a second spelling of the same bytes. compat/model/testdata/blobs pins what
+ * every backend accepts and refuses.
+ */
+export function decodeBase64(text: unknown): Uint8Array {
+  if (typeof text !== "string") {
+    throw new ExpressionError(`$base64 takes base64 text, got ${describe(text)}`);
+  }
+  if (!BASE64_RE.test(text)) {
+    throw new ExpressionError(
+      `$base64 ${JSON.stringify(text)} is not standard padded base64`,
+    );
+  }
+  const bytes = Buffer.from(text, "base64");
+  const canonical = bytes.toString("base64");
+  if (canonical !== text) {
+    throw new ExpressionError(
+      `$base64 ${JSON.stringify(text)} is not the canonical spelling of its bytes, ` +
+        `which is ${JSON.stringify(canonical)}`,
+    );
+  }
+  return new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+}
+
+/**
+ * Map an SDK response to the IR's document form, which differs from what the
+ * AWS SDK for JavaScript returns in one respect: a blob is a Uint8Array there
+ * and its standard base64 text here, as it is in every other backend (the AWS
+ * CLI prints it that way, and the typed suites render their SDK's blob type
+ * the same). That is what an `equals` against a `$base64` compares, and what
+ * an export of a blob puts in the context bag for a later `$base64` around a
+ * `$ref` to decode. Everything else — a Date, `$metadata` — is left as the SDK
+ * gave it.
+ */
+export function toDocument(value: unknown): unknown {
+  if (value instanceof Uint8Array) return Buffer.from(value).toString("base64");
+  if (Array.isArray(value)) return value.map(toDocument);
+  if (isRecord(value) && isPlainObject(value)) {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value)) out[k] = toDocument(v);
+    return out;
+  }
+  return value;
 }
 
 // ─── Paths ────────────────────────────────────────────────────────────────
@@ -235,10 +299,14 @@ export function resolvePath(root: unknown, path: Path): Resolution {
  * SQS's queue attributes are modeled as a map of strings, which is why the
  * scenario compares `"30"` and not `30`.
  *
- * Timestamps and blobs are never compared — the generator does not emit them
- * — so a `Date` or a `Uint8Array` reaching here is never equal to anything.
+ * A blob compares as its document form, base64 text, whichever side it is on:
+ * a `$base64` evaluates to a Uint8Array and a response blob is already text.
+ * Timestamps are never compared — the generator does not emit them — so a
+ * `Date` reaching here is never equal to anything.
  */
 export function jsonEquals(actual: unknown, expected: unknown): boolean {
+  if (actual instanceof Uint8Array) actual = toDocument(actual);
+  if (expected instanceof Uint8Array) expected = toDocument(expected);
   if (actual === expected) return true;
   if (actual === null || expected === null) return false;
   if (Array.isArray(actual) || Array.isArray(expected)) {
@@ -287,7 +355,12 @@ export function describe(v: unknown): string {
   if (v === undefined) return "<missing>";
   if (typeof v === "bigint") return `${v}n`;
   try {
-    const s = JSON.stringify(v);
+    // A blob is shown as its document form, base64 text — which is also the
+    // params JSON the CLI sends for the same call — rather than as the
+    // index-keyed object JSON.stringify makes of a Uint8Array.
+    const s = JSON.stringify(v, (_key, value: unknown) =>
+      value instanceof Uint8Array ? toDocument(value) : value,
+    );
     return s === undefined ? String(v) : s;
   } catch {
     return String(v);

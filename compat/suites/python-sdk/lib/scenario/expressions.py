@@ -12,6 +12,8 @@ part of the interpreter that unit tests can exercise exhaustively.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import re
 from typing import Any, Mapping, Sequence, Union
 
@@ -128,7 +130,53 @@ def _expression(key: str, arg: Any, *, context: Mapping[str, Any], run_id: str,
                 f"$index {index} is out of range for a list of {len(evaluated)}"
             )
         return evaluated[index]
+    if key == "$base64":
+        # A blob: these bytes. boto3 takes ``bytes`` for a blob member and
+        # would send a ``str`` as its UTF-8 — which is why a blob is never a
+        # plain string in the IR. The argument is base64 text: a literal, or a
+        # $ref to a blob a previous call exported, which the context bag holds
+        # in its document form (see :func:`to_document`).
+        text = evaluate(arg, context=context, run_id=run_id, group=group)
+        return decode_base64(text)
     raise ScenarioError(f"unknown value expression {key!r}")
+
+
+def decode_base64(text: Any) -> bytes:
+    """Decode a blob's document form: standard base64 with padding, in its one
+    canonical spelling. ``b64decode(validate=True)`` refuses a character
+    outside the alphabet but not non-zero trailing bits, so the round trip is
+    what refuses a second spelling of the same bytes. compat/model/testdata/
+    blobs pins what every backend accepts and refuses."""
+    if not isinstance(text, str):
+        raise ScenarioError(f"$base64 takes base64 text, got {text!r}")
+    try:
+        raw = base64.b64decode(text, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise ScenarioError(f"$base64 {text!r} is not standard padded base64: {exc}") from exc
+    canonical = base64.b64encode(raw).decode("ascii")
+    if canonical != text:
+        raise ScenarioError(
+            f"$base64 {text!r} is not the canonical spelling of its bytes, which is {canonical!r}"
+        )
+    return raw
+
+
+def to_document(value: Any) -> Any:
+    """Map a boto3 response to the IR's document form, which differs from what
+    boto3 returns in one respect: a blob is ``bytes`` in boto3 and its standard
+    base64 text in the document, as it is in every other backend (the AWS CLI
+    prints it that way, and the typed suites render their SDK's blob type the
+    same). That is what an ``equals`` against a ``$base64`` compares, and what
+    an export of a blob puts in the context bag for a later ``$base64`` around a
+    ``$ref`` to decode. Everything else — a ``datetime``, a streaming body — is
+    left as boto3 gave it."""
+    if isinstance(value, (bytes, bytearray)):
+        return base64.b64encode(bytes(value)).decode("ascii")
+    if isinstance(value, dict):
+        return {k: to_document(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [to_document(v) for v in value]
+    return value
 
 
 def json_equal(a: Any, b: Any) -> bool:
@@ -142,7 +190,13 @@ def json_equal(a: Any, b: Any) -> bool:
     Python would get wrong on its own is ``True == 1``, which is false as JSON,
     so booleans are compared identically and never against numbers. Two
     numbers of different Python types (``1`` and ``1.0``) are equal, because
-    JSON has one number type. Timestamps and blobs are never compared."""
+    JSON has one number type. A blob compares as its document form, base64
+    text, whichever side it is on: a ``$base64`` evaluates to ``bytes`` and a
+    response blob is already text. Timestamps are never compared."""
+    if isinstance(a, (bytes, bytearray)):
+        a = to_document(a)
+    if isinstance(b, (bytes, bytearray)):
+        b = to_document(b)
     if isinstance(a, bool) or isinstance(b, bool):
         return isinstance(a, bool) and isinstance(b, bool) and a is b
     if isinstance(a, (int, float)) and isinstance(b, (int, float)):

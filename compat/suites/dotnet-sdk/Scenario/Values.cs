@@ -16,6 +16,7 @@ namespace OvercastCompat.Scenario;
 /// {"$name": "q"}     → Val.Name("q")
 /// {"$concat": [...]} → Val.Concat(...)
 /// {"$index": [v, n]} → Val.Index(v, n)
+/// {"$base64": x}     → Val.Base64(x), and b.Blob(member, Val.Base64(x)) in a blob slot
 /// </code>
 /// </remarks>
 internal delegate object? ScenarioValue(Binder binder);
@@ -64,6 +65,63 @@ internal static class Val
         }
         return joined.ToString();
     };
+
+    /// <summary>
+    /// <c>$base64</c>: a blob. Its value is the blob's document form — the
+    /// canonical standard base64 text, which is also how Documents renders a
+    /// MemoryStream out of a response and so how an exported blob sits in the
+    /// context bag.
+    /// </summary>
+    /// <remarks>
+    /// That is what lets an <c>equals</c> compare a blob path against it as two
+    /// strings. <paramref name="arg"/> is a literal base64 string or an
+    /// expression evaluating to one (the generator allows only a <c>$ref</c> to
+    /// an exported blob); text that is not canonical standard base64 is an
+    /// error, never a second spelling of the same bytes. A blob member does not
+    /// take this value as it is: <see cref="Binder.Blob"/> decodes it into the
+    /// MemoryStream the request property wants.
+    /// </remarks>
+    public static ScenarioValue Base64(object? arg) => binder =>
+    {
+        if (binder.Evaluate(arg) is not string text)
+        {
+            throw new ScenarioValueException(
+                $"$base64 takes base64 text, got {Documents.Render(binder.Evaluate(arg))}");
+        }
+        DecodeBase64(text);
+        return text;
+    };
+
+    /// <summary>
+    /// Decodes a blob's document form: standard base64 with padding, in its one
+    /// canonical spelling.
+    /// </summary>
+    /// <remarks>
+    /// <c>Convert.FromBase64String</c> skips whitespace and does not check the
+    /// trailing bits, so the round trip is what refuses a second spelling of the
+    /// same bytes. compat/model/testdata/blobs pins what every backend accepts
+    /// and refuses.
+    /// </remarks>
+    public static byte[] DecodeBase64(string text)
+    {
+        byte[] raw;
+        try
+        {
+            raw = System.Convert.FromBase64String(text);
+        }
+        catch (FormatException ex)
+        {
+            throw new ScenarioValueException(
+                $"$base64 {Documents.Render(text)} is not standard padded base64: {ex.Message}");
+        }
+        var canonical = System.Convert.ToBase64String(raw);
+        if (canonical != text)
+        {
+            throw new ScenarioValueException(
+                $"$base64 {Documents.Render(text)} is not the canonical spelling of its bytes, which is {Documents.Render(canonical)}");
+        }
+        return raw;
+    }
 
     /// <summary>Takes element <paramref name="index"/> of a list-valued expression.</summary>
     public static ScenarioValue Index(object? list, int index) => binder =>
@@ -186,6 +244,39 @@ internal sealed class Binder(string runId, string group, ContextBag bag)
             FailedMember = member;
             Error = ex;
             return default!;
+        }
+    }
+
+    /// <summary>
+    /// Binds a <c>$base64</c> expression into a blob member, which AWSSDK for
+    /// .NET types as a MemoryStream.
+    /// </summary>
+    /// <remarks>
+    /// The emitted source calls this only for a deferred blob — a
+    /// <c>$base64</c> around a <c>$ref</c> — because a literal's bytes are
+    /// written into the source directly. Like <see cref="Bind{T}"/>, a failure
+    /// is recorded and abandons the call; the null returned then is never sent.
+    /// </remarks>
+    public MemoryStream Blob(string member, object? value)
+    {
+        if (Error is not null)
+        {
+            return null!;
+        }
+        try
+        {
+            if (Evaluate(value) is not string text)
+            {
+                throw new ScenarioValueException(
+                    $"wanted a blob's base64 text, got {Documents.Render(Evaluate(value))}");
+            }
+            return new MemoryStream(Val.DecodeBase64(text));
+        }
+        catch (ScenarioValueException ex)
+        {
+            FailedMember = member;
+            Error = ex;
+            return null!;
         }
     }
 

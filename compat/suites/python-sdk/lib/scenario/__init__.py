@@ -7,8 +7,9 @@ points each generated group at its scenario file. This package executes that IR
 with boto3, so a generated group needs no Python source of its own:
 
     loader.py       reads the scenario files the registry names
-    expressions.py  the value expressions ($lit/$ref/$name/$concat/$index),
-                    the path syntax, JSON equality and non-emptiness
+    expressions.py  the value expressions ($lit/$ref/$name/$concat/$index/
+                    $base64), the path syntax, the response document (a blob
+                    as its base64 text), JSON equality and non-emptiness
     executor.py     the boto3 calls, the context bag, exports, error names
     assertions.py   the closed assertion set
     failures.py     the one six-field failure-message builder

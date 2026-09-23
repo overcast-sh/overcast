@@ -21,6 +21,7 @@ import {
   ExpressionError,
   evaluateParams,
   resolvePath,
+  toDocument,
 } from "./expressions.ts";
 import type { EvalContext } from "./expressions.ts";
 import {
@@ -319,7 +320,9 @@ async function performCall(
     throw expressionFailure(site, call.op, err);
   }
   try {
-    return { params, response: await env.send(call.op, params) };
+    // The response becomes the IR's document here, once, so a blob reads as
+    // its base64 text in every clause and every export (toDocument).
+    return { params, response: toDocument(await env.send(call.op, params)) };
   } catch (err) {
     const failure = fail(
       site,

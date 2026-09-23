@@ -21,6 +21,7 @@ forgotten in one clause and present in another.
 
 from __future__ import annotations
 
+import base64
 import json
 from typing import Any, Optional
 
@@ -66,17 +67,27 @@ class ScenarioFailure(AssertionError):
     a transport error."""
 
 
+def _json_default(value: Any) -> Any:
+    """What ``json.dumps`` cannot write itself. A blob is its document form,
+    standard base64 — the params the CLI sends and the value every other
+    backend prints for the same call (compat/model/README.md § Values) — and
+    anything else (a ``datetime``) is its repr."""
+    if isinstance(value, (bytes, bytearray)):
+        return base64.b64encode(bytes(value)).decode("ascii")
+    return repr(value)
+
+
 def render(value: Any) -> str:
     """Render a value the way the message shows it: JSON where JSON can, a
-    repr where it cannot (a ``datetime``, a ``bytes`` blob).
+    blob as its base64 text, and a repr for anything else (a ``datetime``).
 
     ``sort_keys`` keeps a message byte-identical across runs, which is what
     makes three-run comparison meaningful."""
     if value is MISSING:
         return "<missing>"
     try:
-        return json.dumps(value, sort_keys=True, default=repr)
-    except (TypeError, ValueError):  # pragma: no cover - default=repr covers it
+        return json.dumps(value, sort_keys=True, default=_json_default)
+    except (TypeError, ValueError):  # pragma: no cover - the default covers it
         return repr(value)
 
 

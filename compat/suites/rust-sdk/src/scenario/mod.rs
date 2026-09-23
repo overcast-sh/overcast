@@ -382,6 +382,12 @@ pub fn index(value: Value, n: usize) -> Value {
     Value::Index(Box::new(value), n)
 }
 
+/// A blob (`$base64`): base64 text, a literal or a `$ref` to an exported blob.
+#[allow(dead_code)]
+pub fn base64(value: Value) -> Value {
+    Value::Base64(Box::new(value))
+}
+
 /// A list of values.
 pub fn list(items: Vec<Value>) -> Value {
     Value::List(items)

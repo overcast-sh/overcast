@@ -203,10 +203,17 @@ describe("jsonEquals", () => {
     assert.ok(!jsonEquals({ a: 1 }, { a: 1, b: 2 }));
   });
 
-  it("never treats a timestamp or a blob as equal", () => {
+  it("never treats a timestamp as equal", () => {
     const when = new Date(0);
     assert.ok(!jsonEquals(when, new Date(0)));
-    assert.ok(!jsonEquals(new Uint8Array([1]), new Uint8Array([1])));
+  });
+
+  it("compares a blob as its base64 text, on either side", () => {
+    assert.ok(jsonEquals(new Uint8Array([1]), new Uint8Array([1])));
+    assert.ok(jsonEquals("AQ==", new Uint8Array([1])));
+    assert.ok(jsonEquals(new Uint8Array([1]), "AQ=="));
+    assert.ok(!jsonEquals(new Uint8Array([1]), new Uint8Array([2])));
+    assert.ok(!jsonEquals(new Uint8Array([1]), [1]));
   });
 });
 

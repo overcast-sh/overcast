@@ -89,9 +89,10 @@ final class Doc {
             return DateTimeFormatter.ISO_INSTANT.format(t);
         }
         if (v instanceof SdkBytes bytes) {
-            // A blob is bytes, which JSON carries base64-encoded. Blobs are
-            // refused by the generator, so nothing asserts on one; rendering it
-            // the way the wire does still beats a list of 8-bit numbers.
+            // A blob's document form in every backend is its standard base64
+            // text (compat/model/README.md § Values): what an `equals` against
+            // a `$base64` compares, and what an export of a blob puts in the
+            // context bag for a later `$base64` around a $ref to decode.
             return Base64.getEncoder().encodeToString(bytes.asByteArray());
         }
         if (v instanceof Enum<?>) {
