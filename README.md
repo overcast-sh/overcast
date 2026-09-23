@@ -334,7 +334,7 @@ the [CLI reference](./docs/cli/bridge.md).
 
 <!-- BEGIN overcast:root-service-list -->
 
-Overcast currently registers **50 AWS services**. Coverage ranges from broad
+Overcast currently registers **51 AWS services**. Coverage ranges from broad
 service emulation to minimal discovery/IaC stubs; check the per-service docs for
 exact endpoint support.
 
@@ -347,10 +347,10 @@ exact endpoint support.
 [ELBv2](./docs/services/elb.md), [EventBridge](./docs/services/eventbridge.md), [Firehose](./docs/services/firehose.md), [Glue](./docs/services/glue.md),
 [IAM](./docs/services/iam.md), [Kinesis](./docs/services/kinesis.md), [KMS](./docs/services/kms.md), [Lambda](./docs/services/lambda.md),
 [MSK](./docs/services/msk.md), [OpenSearch](./docs/services/opensearch.md), [Organizations](./docs/services/organizations.md), [Pipes](./docs/services/pipes.md),
-[RDS](./docs/services/rds.md), [Route 53](./docs/services/route53.md), [S3](./docs/services/s3.md), [Scheduler](./docs/services/scheduler.md),
-[Secrets Manager](./docs/services/secretsmanager.md), [SES](./docs/services/ses.md), [Shield](./docs/services/shield.md), [SNS](./docs/services/sns.md),
-[SQS](./docs/services/sqs.md), [SSM](./docs/services/ssm.md), [Step Functions](./docs/services/stepfunctions.md), [STS](./docs/services/sts.md),
-[Transfer Family](./docs/services/transfer.md), [WAF v2](./docs/services/waf.md).
+[RDS](./docs/services/rds.md), [Route 53](./docs/services/route53.md), [S3](./docs/services/s3.md), [S3 Tables](./docs/services/s3tables.md),
+[Scheduler](./docs/services/scheduler.md), [Secrets Manager](./docs/services/secretsmanager.md), [SES](./docs/services/ses.md), [Shield](./docs/services/shield.md),
+[SNS](./docs/services/sns.md), [SQS](./docs/services/sqs.md), [SSM](./docs/services/ssm.md), [Step Functions](./docs/services/stepfunctions.md),
+[STS](./docs/services/sts.md), [Transfer Family](./docs/services/transfer.md), [WAF v2](./docs/services/waf.md).
 
 Some services require Docker socket access for full runtime behaviour:
 

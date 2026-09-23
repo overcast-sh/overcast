@@ -8,7 +8,7 @@
 
 ## Service coverage
 
-50 AWS services are registered. Coverage varies from comprehensive to stub.
+51 AWS services are registered. Coverage varies from comprehensive to stub.
 
 ### Comprehensive — core + advanced features
 
@@ -41,6 +41,7 @@
 | RDS             | 34  | DB instances (Docker), start/stop, modify, subnet/parameter groups                                                                                                                                         |
 | ElastiCache     | 24  | Clusters (Docker Redis), replication groups, subnet groups, tagging                                                                                                                                        |
 | EFS             | 31  | File systems (Docker-volume-backed, `live` mode default), mount targets, access points, file-system policies, lifecycle/backup config, tagging                                                            |
+| S3 Tables       | 49  | Table buckets, namespaces, Iceberg tables with a real `--table-s3` warehouse bucket each, first `metadata.json` on create, `versionToken` commits; maintenance/replication stored, never run |
 | AppConfig       | 20  | Apps, environments, profiles, hosted config versions (CRUD + version counter)                                                                                                                              |
 | AppConfigData   | 2   | StartConfigurationSession, GetLatestConfiguration; poll-based delivery with "unchanged" detection                                                                                                          |
 | Secrets Manager | 22  | Secret CRUD, versioning, tags, real rotation (invokes the configured Lambda, all four steps), resource policies (stored, not evaluated — #496)                                                            |
@@ -88,6 +89,7 @@
 | RDS             | 34  |
 | ElastiCache     | 24  |
 | EFS             | 31  |
+| S3 Tables       | 49  |
 | AppConfig       | 20  |
 | AppConfigData   | 2   |
 | Secrets Manager | 22  |

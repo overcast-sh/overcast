@@ -72,6 +72,7 @@ import (
 	"github.com/overcast-sh/overcast/internal/services/rds"
 	route53svcpkg "github.com/overcast-sh/overcast/internal/services/route53"
 	"github.com/overcast-sh/overcast/internal/services/s3"
+	"github.com/overcast-sh/overcast/internal/services/s3tables"
 	"github.com/overcast-sh/overcast/internal/services/scheduler"
 	"github.com/overcast-sh/overcast/internal/services/secretsmanager"
 	"github.com/overcast-sh/overcast/internal/services/ses"
@@ -452,8 +453,10 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	prof.mark("  new: transfer")
 	efsSvc := efs.New(cfg, store, logger, clk)
 	prof.mark("  new: efs")
+	s3tablesSvc := s3tables.New(cfg, store, logger, clk)
+	prof.mark("  new: s3tables")
 
-	prof.mark("service constructors (47)")
+	prof.mark("service constructors (48)")
 
 	allServices := []Service{
 		// S3 is listed last so its /{bucket}/* wildcard routes are registered
@@ -507,6 +510,7 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 		backupSvc,
 		transferSvc,
 		efsSvc,
+		s3tablesSvc,
 		s3Svc, // must be last — registers /{bucket}/* wildcard
 	}
 
@@ -638,6 +642,9 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	lambdaSvc.InitS3Sync(func(ctx context.Context, bucket, key, versionID string) ([]byte, *protocol.AWSError) {
 		return s3Svc.GetObjectBytes(ctx, bucket, key, versionID)
 	})
+	// S3 Tables → S3: each table's "--table-s3" warehouse bucket and its first
+	// metadata.json go through S3's own create and write paths.
+	s3tablesSvc.InitS3Access(s3Svc.EnsureTableWarehouseBucket, s3Svc.PutObjectBytes)
 	// Lambda → EC2: VPC resolver so Lambda can connect containers to VPC networks.
 	lambdaSvc.SetVPCResolver(ec2Svc)
 	// EFS → Lambda/ECS: FileSystemConfigs and efsVolumeConfiguration mount the
@@ -1072,6 +1079,33 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 				sub.HandleFunc("/*", applicationsDispatch(appconfigApps, appregistryApps))
 				sub.HandleFunc("/", applicationsDispatch(appconfigApps, appregistryApps))
 			})
+		}
+	}
+
+	// ---- S3 Tables root dispatch --------------------------------------------
+	// Every root S3 Tables binds — /buckets, /namespaces, /tables, /get-table,
+	// /tag and the replication and record-expiration roots — is also a legal
+	// S3 bucket name, so no path can tell the two apart. The SigV4 signing name
+	// can: a request signed for "s3tables" reaches S3 Tables, and everything
+	// else (unsigned traffic, S3-signed traffic, any other scope) reaches
+	// exactly the restFallback the "/*" route below would have given it, so a
+	// bucket named "tables" keeps working as it did before S3 Tables existed.
+	{
+		s3Fallback := wholePath(restFallback(operationRegistry, s3Router))
+		if registeredForTest(cfg, "s3tables") {
+			roots := s3tablesSvc.RootRouters()
+			for _, root := range s3tables.Roots {
+				sub := roots[root]
+				delegateUnmatched(sub, s3Fallback)
+				dispatchMounts = recordDispatchMount(dispatchMounts, root, "s3tables", sub)
+				dispatch := signingNameDispatch("s3tables", sub, s3Fallback)
+				// "/*" alone: it also matches the bare root, and a separate "/"
+				// would register "/namespaces", "/tables" and "/tag", paths no
+				// model binds (only their children are operations).
+				r.Route(root, func(m chi.Router) {
+					m.HandleFunc("/*", dispatch)
+				})
+			}
 		}
 	}
 
@@ -2040,6 +2074,35 @@ func applicationsDispatch(appconfigRouter, appregistryRouter http.Handler) http.
 		}
 		// Neither service enabled — 404.
 		http.NotFound(w, r)
+	}
+}
+
+// signingNameDispatch returns a handler that sends a request signed for
+// signingName to owner and every other request to fallback. It is for a
+// service whose modeled paths are indistinguishable from S3 object paths, so
+// the credential scope is the only evidence of which one the caller meant.
+func signingNameDispatch(signingName string, owner, fallback http.Handler) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if middleware.ServiceFromCredential(r) == signingName {
+			owner.ServeHTTP(w, r)
+			return
+		}
+		fallback.ServeHTTP(w, r)
+	}
+}
+
+// wholePath makes a handler reached from inside a chi mount route on the full
+// request path again. A mount shifts chi's routing path past its prefix, which
+// the next router then matches against; S3's router has absolute patterns, so
+// handed the shifted path it would read "/tables/key" as the object "key" in a
+// bucket that does not exist. Clearing RoutePath makes chi fall back to the
+// request URL, exactly as it does for the unmounted "/*" route.
+func wholePath(h http.Handler) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if rctx := chi.RouteContext(r.Context()); rctx != nil {
+			rctx.RoutePath = ""
+		}
+		h.ServeHTTP(w, r)
 	}
 }
 

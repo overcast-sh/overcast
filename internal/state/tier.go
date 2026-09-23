@@ -77,6 +77,11 @@ var namespaceTiers = map[string]Tier{
 	"s3:multipart":     TierCached,
 	"s3:parts":         TierCached,
 
+	// ── S3 Tables ───────────────────────────────────────────────────────
+	"s3tables:buckets":    TierHot,
+	"s3tables:namespaces": TierHot,
+	"s3tables:tables":     TierHot,
+
 	// ── SQS ─────────────────────────────────────────────────────────────
 	"sqs:queues":           TierHot,
 	"sqs:purge":            TierHot,

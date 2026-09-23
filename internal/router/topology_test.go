@@ -832,3 +832,29 @@ func TestBuildTopology_pipeLegacyRecordWithoutARNs(t *testing.T) {
 		"us-east-1::sqs::legacy-queue",
 		"legacy-pipe", "RUNNING")
 }
+
+func TestBuildTopologyIncludesS3TablesBucketsAndTables(t *testing.T) {
+	// Given: a table bucket holding one table, as the s3tables service stores them.
+	bucket, _ := json.Marshal(map[string]any{"name": "lake"})
+	table, _ := json.Marshal(map[string]any{"name": "orders", "namespace": "sales", "bucket": "lake", "tableId": "t-1"})
+
+	// When: topology is built from the S3 Tables namespaces.
+	resp := buildTopology(&config.Config{Region: "us-east-1"}, map[string][]state.KV{
+		"s3tables:buckets": {{Key: "eu-west-1/lake", Value: string(bucket)}},
+		"s3tables:tables":  {{Key: "eu-west-1/lake/sales/orders", Value: string(table)}},
+	}, "")
+
+	// Then: both appear in the bucket's region, joined table → bucket.
+	if len(resp.Nodes) != 2 || len(resp.Edges) != 1 {
+		t.Fatalf("nodes %#v, edges %#v", resp.Nodes, resp.Edges)
+	}
+	edge := resp.Edges[0]
+	if edge.Source != "eu-west-1::s3tables::lake/t-1" || edge.Target != "eu-west-1::s3tables::lake" {
+		t.Fatalf("unexpected edge %#v", edge)
+	}
+	for _, n := range resp.Nodes {
+		if n.Service != "s3tables" || n.Region != "eu-west-1" {
+			t.Fatalf("unexpected node %#v", n)
+		}
+	}
+}

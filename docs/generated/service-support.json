@@ -1,6 +1,6 @@
 {
   "generated_by": "go run -tags dev ./cmd/capgen --write-docs",
-  "total_ops": 1512,
+  "total_ops": 1561,
   "services": [
     {
       "service": "s3",
@@ -6253,6 +6253,296 @@
           "operation": "DescribeReplicationConfigurations",
           "category": "Replication",
           "status": "❌ Unsupported"
+        }
+      ]
+    },
+    {
+      "service": "s3tables",
+      "display_name": "S3 Tables",
+      "total_ops": 49,
+      "implemented_ops": 49,
+      "operations": [
+        {
+          "operation": "CreateTableBucket",
+          "category": "Table buckets",
+          "status": "✅ Supported",
+          "notes": "Table bucket naming rules; `encryptionConfiguration`, `storageClassConfiguration` and `tags` on create"
+        },
+        {
+          "operation": "GetTableBucket",
+          "category": "Table buckets",
+          "status": "✅ Supported",
+          "notes": "Addressed by ARN; `type` is always `customer`"
+        },
+        {
+          "operation": "ListTableBuckets",
+          "category": "Table buckets",
+          "status": "✅ Supported",
+          "notes": "`prefix`, `type`, `maxBuckets` and `continuationToken`"
+        },
+        {
+          "operation": "DeleteTableBucket",
+          "category": "Table buckets",
+          "status": "✅ Supported",
+          "notes": "`ConflictException` while the bucket still holds namespaces"
+        },
+        {
+          "operation": "CreateNamespace",
+          "category": "Namespaces",
+          "status": "✅ Supported",
+          "notes": "One-level namespaces, as AWS; namespace naming rules"
+        },
+        {
+          "operation": "GetNamespace",
+          "category": "Namespaces",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "ListNamespaces",
+          "category": "Namespaces",
+          "status": "✅ Supported",
+          "notes": "`prefix`, `maxNamespaces` and `continuationToken`"
+        },
+        {
+          "operation": "DeleteNamespace",
+          "category": "Namespaces",
+          "status": "✅ Supported",
+          "notes": "`ConflictException` while the namespace still holds tables"
+        },
+        {
+          "operation": "CreateTable",
+          "category": "Tables",
+          "status": "⚠️ Partial",
+          "notes": "Creates the table's `--table-s3` warehouse bucket in S3; `metadata.iceberg.schema` (primitive types), `partitionSpec`, `writeOrder` and `properties` write the first `metadata.json`; `schemaV2` returns 501"
+        },
+        {
+          "operation": "GetTable",
+          "category": "Tables",
+          "status": "✅ Supported",
+          "notes": "By `tableArn`, or by `tableBucketARN`, `namespace` and `name`"
+        },
+        {
+          "operation": "ListTables",
+          "category": "Tables",
+          "status": "✅ Supported",
+          "notes": "`namespace`, `prefix`, `maxTables` and `continuationToken`"
+        },
+        {
+          "operation": "DeleteTable",
+          "category": "Tables",
+          "status": "✅ Supported",
+          "notes": "Optional `versionToken` check; the warehouse bucket and its objects are left in S3"
+        },
+        {
+          "operation": "RenameTable",
+          "category": "Tables",
+          "status": "✅ Supported",
+          "notes": "New name and/or namespace; the ARN and version token are unchanged"
+        },
+        {
+          "operation": "GetTableMetadataLocation",
+          "category": "Tables",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "UpdateTableMetadataLocation",
+          "category": "Tables",
+          "status": "✅ Supported",
+          "notes": "Compare-and-swap on `versionToken`: a stale token is `ConflictException`; the location must be inside the warehouse"
+        },
+        {
+          "operation": "PutTableBucketPolicy",
+          "category": "Policies",
+          "status": "🧊 Inert",
+          "notes": "Stored and returned; not evaluated"
+        },
+        {
+          "operation": "GetTableBucketPolicy",
+          "category": "Policies",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "DeleteTableBucketPolicy",
+          "category": "Policies",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "PutTablePolicy",
+          "category": "Policies",
+          "status": "🧊 Inert",
+          "notes": "Stored and returned; not evaluated"
+        },
+        {
+          "operation": "GetTablePolicy",
+          "category": "Policies",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "DeleteTablePolicy",
+          "category": "Policies",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "PutTableBucketEncryption",
+          "category": "Encryption, storage class and metrics",
+          "status": "🧊 Inert",
+          "notes": "Stored; new tables inherit it. Objects are not encrypted"
+        },
+        {
+          "operation": "GetTableBucketEncryption",
+          "category": "Encryption, storage class and metrics",
+          "status": "✅ Supported",
+          "notes": "`AES256` until configured otherwise"
+        },
+        {
+          "operation": "DeleteTableBucketEncryption",
+          "category": "Encryption, storage class and metrics",
+          "status": "✅ Supported",
+          "notes": "Returns the bucket to `AES256`"
+        },
+        {
+          "operation": "GetTableEncryption",
+          "category": "Encryption, storage class and metrics",
+          "status": "✅ Supported",
+          "notes": "The bucket's configuration at create time, or the table's own"
+        },
+        {
+          "operation": "PutTableBucketStorageClass",
+          "category": "Encryption, storage class and metrics",
+          "status": "🧊 Inert",
+          "notes": "Stored; new tables inherit it"
+        },
+        {
+          "operation": "GetTableBucketStorageClass",
+          "category": "Encryption, storage class and metrics",
+          "status": "✅ Supported",
+          "notes": "`STANDARD` until configured otherwise"
+        },
+        {
+          "operation": "GetTableStorageClass",
+          "category": "Encryption, storage class and metrics",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "PutTableBucketMetricsConfiguration",
+          "category": "Encryption, storage class and metrics",
+          "status": "🧊 Inert",
+          "notes": "Recorded; no CloudWatch metrics are published"
+        },
+        {
+          "operation": "GetTableBucketMetricsConfiguration",
+          "category": "Encryption, storage class and metrics",
+          "status": "✅ Supported",
+          "notes": "`NotFoundException` until configured"
+        },
+        {
+          "operation": "DeleteTableBucketMetricsConfiguration",
+          "category": "Encryption, storage class and metrics",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "PutTableBucketMaintenanceConfiguration",
+          "category": "Maintenance",
+          "status": "🧊 Inert",
+          "notes": "Stored and echoed; no maintenance runs"
+        },
+        {
+          "operation": "GetTableBucketMaintenanceConfiguration",
+          "category": "Maintenance",
+          "status": "✅ Supported",
+          "notes": "AWS's defaults merged with what was put"
+        },
+        {
+          "operation": "PutTableMaintenanceConfiguration",
+          "category": "Maintenance",
+          "status": "🧊 Inert",
+          "notes": "Stored and echoed; no compaction or snapshot management runs"
+        },
+        {
+          "operation": "GetTableMaintenanceConfiguration",
+          "category": "Maintenance",
+          "status": "✅ Supported",
+          "notes": "AWS's defaults merged with what was put"
+        },
+        {
+          "operation": "GetTableMaintenanceJobStatus",
+          "category": "Maintenance",
+          "status": "🧊 Inert",
+          "notes": "Every job reports `Not_Yet_Run`, or `Disabled` when turned off"
+        },
+        {
+          "operation": "PutTableBucketReplication",
+          "category": "Replication and record expiration",
+          "status": "🧊 Inert",
+          "notes": "Stored with a `versionToken`; nothing is replicated"
+        },
+        {
+          "operation": "GetTableBucketReplication",
+          "category": "Replication and record expiration",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "DeleteTableBucketReplication",
+          "category": "Replication and record expiration",
+          "status": "✅ Supported",
+          "notes": "Optional `versionToken` check"
+        },
+        {
+          "operation": "PutTableReplication",
+          "category": "Replication and record expiration",
+          "status": "🧊 Inert",
+          "notes": "Stored with a `versionToken`; nothing is replicated"
+        },
+        {
+          "operation": "GetTableReplication",
+          "category": "Replication and record expiration",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "DeleteTableReplication",
+          "category": "Replication and record expiration",
+          "status": "✅ Supported",
+          "notes": "`versionToken` check"
+        },
+        {
+          "operation": "GetTableReplicationStatus",
+          "category": "Replication and record expiration",
+          "status": "🧊 Inert",
+          "notes": "Every destination reports `pending`"
+        },
+        {
+          "operation": "PutTableRecordExpirationConfiguration",
+          "category": "Replication and record expiration",
+          "status": "🧊 Inert",
+          "notes": "Stored and echoed; no records expire"
+        },
+        {
+          "operation": "GetTableRecordExpirationConfiguration",
+          "category": "Replication and record expiration",
+          "status": "✅ Supported",
+          "notes": "`disabled` until configured"
+        },
+        {
+          "operation": "GetTableRecordExpirationJobStatus",
+          "category": "Replication and record expiration",
+          "status": "🧊 Inert",
+          "notes": "`NotYetRun` when enabled, otherwise `Disabled`"
+        },
+        {
+          "operation": "TagResource",
+          "category": "Tags",
+          "status": "✅ Supported",
+          "notes": "Table buckets and tables; the 50-tag limit and AWS's key and value rules"
+        },
+        {
+          "operation": "UntagResource",
+          "category": "Tags",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "ListTagsForResource",
+          "category": "Tags",
+          "status": "✅ Supported"
         }
       ]
     },

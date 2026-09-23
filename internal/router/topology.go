@@ -148,6 +148,10 @@ const (
 	tNsEFSFileSystems  = "efs:filesystems"
 	tNsEFSAccessPoints = "efs:accesspoints"
 
+	// S3 Tables resource tracking.
+	tNsS3TableBuckets = "s3tables:buckets"
+	tNsS3Tables       = "s3tables:tables"
+
 	// MSK resource tracking.
 	tNsMSKClusters = "msk:clusters"
 
@@ -356,6 +360,19 @@ type tEFSFileSystem struct {
 	ID     string `json:"FileSystemId"`
 	Status string `json:"LifeCycleState"`
 }
+
+// S3 Tables resources. Keys are "{region}/{bucket}" and
+// "{region}/{bucket}/{namespace}/{table}".
+type tS3TableBucket struct {
+	Name string `json:"name"`
+}
+type tS3Table struct {
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+	Bucket    string `json:"bucket"`
+	TableID   string `json:"tableId"`
+}
+
 type tEFSAccessPoint struct {
 	ID           string `json:"AccessPointId"`
 	FileSystemID string `json:"FileSystemId"`
@@ -494,6 +511,7 @@ func newTopologyHandler(cfg *config.Config, store state.Store) http.HandlerFunc 
 			tNsCognitoPools,
 			tNsMSKClusters,
 			tNsEFSFileSystems, tNsEFSAccessPoints,
+			tNsS3TableBuckets, tNsS3Tables,
 		}
 
 		results := make([]scanResult, len(namespaces))
@@ -1038,6 +1056,31 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 			Region:  region,
 			Status:  ap.Status,
 		})
+	}
+
+	// S3 Tables: table buckets and their tables. A table's node is keyed by its
+	// id, which RenameTable leaves alone, and labelled namespace.table.
+	for _, kv := range byNS[tNsS3TableBuckets] {
+		var b tS3TableBucket
+		if json.Unmarshal([]byte(kv.Value), &b) != nil || b.Name == "" {
+			continue
+		}
+		region, _ := splitRegionKey(kv.Key)
+		if region == "" {
+			region = defaultRegion
+		}
+		addNode(topologyNode{ID: region + "::s3tables::" + b.Name, Service: "s3tables", Label: b.Name, Region: region})
+	}
+	for _, kv := range byNS[tNsS3Tables] {
+		var t tS3Table
+		if json.Unmarshal([]byte(kv.Value), &t) != nil || t.TableID == "" {
+			continue
+		}
+		region, _ := splitRegionKey(kv.Key)
+		if region == "" {
+			region = defaultRegion
+		}
+		addNode(topologyNode{ID: region + "::s3tables::" + t.Bucket + "/" + t.TableID, Service: "s3tables", Label: t.Namespace + "." + t.Name, Region: region})
 	}
 
 	// API Gateway REST APIs (v1)
@@ -1821,6 +1864,22 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 			Type:   "vpc-attachment",
 			Label:  "access point",
 		})
+	}
+
+	// S3 Tables: table → its table bucket. The richer data-lake map (warehouse
+	// sub-labels, commit overlays) is #2089's.
+	for _, kv := range byNS[tNsS3Tables] {
+		var t tS3Table
+		if json.Unmarshal([]byte(kv.Value), &t) != nil || t.TableID == "" {
+			continue
+		}
+		region, _ := splitRegionKey(kv.Key)
+		if region == "" {
+			region = defaultRegion
+		}
+		srcID := region + "::s3tables::" + t.Bucket + "/" + t.TableID
+		bucketID := region + "::s3tables::" + t.Bucket
+		addEdge(topologyEdge{ID: "s3tables-bucket::" + srcID + "→" + bucketID, Source: srcID, Target: bucketID, Type: "s3tables-table", Label: "table"})
 	}
 
 	// CloudFormation stack ownership + intra-stack reference edges.
