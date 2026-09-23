@@ -1,5 +1,10 @@
-import type { AsyncBuffer, Compressors, FileMetaData, SchemaElement, SchemaTree } from "hyparquet"
-import { PREVIEW_COLUMN_LIMIT, PREVIEW_ROW_LIMIT, type PreviewTableModel } from "./preview-table"
+import type { AsyncBuffer, Compressors, RowGroup, SchemaElement, SchemaTree } from "hyparquet"
+import {
+  PREVIEW_COLUMN_LIMIT,
+  PREVIEW_ROW_LIMIT,
+  type PreviewColumn,
+  type PreviewTableModel,
+} from "./preview-table"
 
 /**
  * Parquet for the S3 preview, through `hyparquet`.
@@ -145,7 +150,7 @@ export async function readParquetPreview(
 
   const first = metadata.row_groups.at(0)
   if (!first || numRows === 0) {
-    preview.table = emptyTable(columns, numRows)
+    preview.table = previewTable(columns, [], numRows)
     return preview
   }
   const firstCodecs = new Set(first.columns.map((c) => c.meta_data?.codec ?? "UNCOMPRESSED"))
@@ -156,7 +161,7 @@ export async function readParquetPreview(
     preview.rowsError = `Rows are compressed with ${unsupported.join(", ")}, which the preview does not decode. The schema still reads, from the footer, which is never compressed.`
     return preview
   }
-  const groupBytes = rowGroupBytes(metadata)
+  const groupBytes = rowGroupBytes(first)
   if (groupBytes > maxRowGroupBytes) {
     preview.rowsError = `The first row group is ${formatMiB(groupBytes)}, over the preview's ${formatMiB(maxRowGroupBytes)} limit, so its rows are not read.`
     return preview
@@ -174,27 +179,32 @@ export async function readParquetPreview(
       rowEnd,
       columns: shownColumns.map((c) => c.element.name),
     })
-    preview.table = {
-      columns: shownColumns.map(previewColumn),
+    preview.table = previewTable(
+      columns,
       // hyparquet leaves a null list or struct as `undefined`; in Parquet that
       // is a NULL like any other, so it is drawn as one.
-      rows: rows.map((row) => shownColumns.map((c) => row[c.element.name] ?? null)),
-      totalRows: numRows,
-      totalIsEstimate: false,
-      truncatedByBytes: false,
-      hiddenColumns: columns.length - shownColumns.length,
-    }
+      rows.map((row) => shownColumns.map((c) => row[c.element.name] ?? null)),
+      numRows,
+    )
   } catch (error) {
     preview.rowsError = `The rows could not be decoded: ${error instanceof Error ? error.message : String(error)}`
   }
   return preview
 }
 
-function emptyTable(columns: SchemaTree[], numRows: number): PreviewTableModel {
+/**
+ * The table for the first `PREVIEW_COLUMN_LIMIT` of `columns`, `rows` already
+ * cut to them. Parquet's footer counts the rows, so the total is exact.
+ */
+function previewTable(
+  columns: SchemaTree[],
+  rows: unknown[][],
+  numRows: number,
+): PreviewTableModel {
   const shown = columns.slice(0, PREVIEW_COLUMN_LIMIT)
   return {
     columns: shown.map(previewColumn),
-    rows: [],
+    rows,
     totalRows: numRows,
     totalIsEstimate: false,
     truncatedByBytes: false,
@@ -203,11 +213,10 @@ function emptyTable(columns: SchemaTree[], numRows: number): PreviewTableModel {
 }
 
 /**
- * The first row group's size on disk. `total_compressed_size` is optional in
- * the format, so it falls back to the sum of the column chunks.
+ * A row group's size on disk. `total_compressed_size` is optional in the
+ * format, so it falls back to the sum of the column chunks.
  */
-function rowGroupBytes(metadata: FileMetaData): number {
-  const group = metadata.row_groups[0]
+function rowGroupBytes(group: RowGroup): number {
   if (group.total_compressed_size !== undefined) return Number(group.total_compressed_size)
   return group.columns.reduce((sum, c) => sum + Number(c.meta_data?.total_compressed_size ?? 0), 0)
 }
@@ -216,7 +225,7 @@ function formatMiB(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MiB`
 }
 
-function previewColumn(node: SchemaTree) {
+function previewColumn(node: SchemaTree): PreviewColumn {
   const e = node.element
   const logical = e.logical_type
   const decimal = logical?.type === "DECIMAL" || e.converted_type === "DECIMAL"

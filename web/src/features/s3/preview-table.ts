@@ -1,4 +1,4 @@
-import { formatCount } from "@/lib/format"
+import { formatCount, formatQuantity } from "@/lib/format"
 
 /**
  * The tabular model every data preview renders through — CSV, TSV, JSON Lines
@@ -27,6 +27,9 @@ export const PREVIEW_COLUMN_LIMIT = 200
  * legal CSV; drawing it — or putting it in a `title` — would stall the dialog.
  */
 export const PREVIEW_CELL_CHARS = 500
+
+/** Characters of a clipped cell kept for its `title`, where the full value is reachable. */
+const PREVIEW_TITLE_CHARS = 4000
 
 export interface PreviewColumn {
   name: string
@@ -76,16 +79,14 @@ export interface FormattedCell {
  */
 export function describeRowCount(model: PreviewTableModel): string {
   const shown = model.rows.length
-  const noun = (n: number) => (n === 1 ? "row" : "rows")
+  const rows = formatQuantity(shown, "row")
   const total = model.totalRows
-  if (total !== undefined && !model.totalIsEstimate && total <= shown) {
-    return `${formatCount(shown)} ${noun(shown)}`
-  }
+  if (total !== undefined && !model.totalIsEstimate && total <= shown) return rows
   if (total !== undefined && total > shown) {
     const approx = model.totalIsEstimate ? "~" : ""
-    return `first ${formatCount(shown)} ${noun(shown)} of ${approx}${formatCount(total)}`
+    return `first ${rows} of ${approx}${formatCount(total)}`
   }
-  return `first ${formatCount(shown)} ${noun(shown)}`
+  return `first ${rows}`
 }
 
 /**
@@ -140,7 +141,7 @@ function clip(text: string): FormattedCell {
   return {
     kind: "value",
     text: `${text.slice(0, PREVIEW_CELL_CHARS)}…`,
-    title: text.slice(0, 4000),
+    title: text.slice(0, PREVIEW_TITLE_CHARS),
   }
 }
 
