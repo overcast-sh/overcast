@@ -52,6 +52,17 @@ import (
 // scenario is model-checked, so porting a group of a service outside the
 // corpus adds that service's snapshot (#1883, #1116).
 //
+// 2026-09-23, G6 wave 1's cognito-userpools port (#1116): the snapshot stood
+// at 962,176 bytes at revision 56df161c after the model refresh, and
+// cognito-identity-provider adds 197,617 bytes over 132 operations, 1,497 B/op,
+// inside the 1,608 B/op gate. That takes it to 13 services / 1,159,793 bytes,
+// 4.6% of the 24 MiB fleet ceiling, under this cap without raising it and
+// leaving 69,007 bytes of headroom — enough for a kinesis-sized service, not
+// for another cloudwatch-logs. Wave 1's remaining ports (ecs-clusters,
+// rds-instances) are to services outside the corpus, so the first of them that
+// does not fit is the one that argues for the next raise, as a reviewed
+// decision rather than inside its own rebase.
+//
 // **Raise this constant deliberately, as a reviewer, never automatically.** It
 // is the enforcement half of §4.6's size gate: growing it is how the fleet
 // budget gets spent, and the projection that budget rests on is in §4.6. A

@@ -130,6 +130,15 @@ func (h *Handler) ExecuteRestAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 3b-ii. Enforce a Lambda TOKEN/REQUEST authorizer (authorizationType
+	// CUSTOM). AWS_IAM methods are intentionally not enforced here — see the
+	// package comment in handler_lambda_auth.go.
+	nr, authorized := h.checkRestLambdaAuthorizer(w, r, apiID, resource, method, requestPath, stageVars)
+	if !authorized {
+		return
+	}
+	r = nr
+
 	// 3c. Enforce API key requirement (apiKeyRequired=true on the method).
 	// AWS responds with 403 Forbidden when the x-api-key header is missing,
 	// invalid, disabled, or not associated (via a usage plan) with this stage.
@@ -237,6 +246,31 @@ func (h *Handler) executeRestLambdaProxy(
 		pathParams = nil
 	}
 
+	// REST APIs base64-encode the request body into the proxy event only when
+	// the request's Content-Type matches one of the API's configured
+	// binaryMediaTypes — see api-gateway-payload-encodings-workflow.html.
+	// Without a match the body is passed through as a UTF-8 string, as it was
+	// before binaryMediaTypes support existed here.
+	isBinaryRequest := matchesBinaryMediaType(r.Header.Get("Content-Type"), api.BinaryMediaTypes)
+
+	reqCtx := v1RequestContext{
+		AccountID:        h.accountID(),
+		APIID:            api.ID,
+		ResourceID:       resource.ID,
+		Stage:            chi.URLParam(r, "stageName"),
+		RequestID:        protocol.NewRequestID(),
+		Identity:         v1Identity{SourceIP: clientIP(r)},
+		HTTPMethod:       r.Method,
+		Protocol:         requestProtocol(r),
+		Path:             requestPath,
+		ResourcePath:     resource.Path,
+		RequestTime:      h.clk.Now().Format("02/Jan/2006:15:04:05 +0000"),
+		RequestTimeEpoch: h.clk.Now().UnixMilli(),
+	}
+	if authCtx, ok := lambdaAuthorizerContextFromRequest(r); ok {
+		reqCtx.Authorizer = authCtx
+	}
+
 	proxyEvent := lambdaV1ProxyEvent{
 		Resource:                        resource.Path,
 		Path:                            requestPath,
@@ -247,22 +281,9 @@ func (h *Handler) executeRestLambdaProxy(
 		MultiValueQueryStringParameters: multiValueQueryParams,
 		PathParameters:                  pathParams,
 		StageVariables:                  stageVars,
-		RequestContext: v1RequestContext{
-			AccountID:        h.accountID(),
-			APIID:            api.ID,
-			ResourceID:       resource.ID,
-			Stage:            chi.URLParam(r, "stageName"),
-			RequestID:        protocol.NewRequestID(),
-			Identity:         v1Identity{SourceIP: clientIP(r)},
-			HTTPMethod:       r.Method,
-			Protocol:         requestProtocol(r),
-			Path:             requestPath,
-			ResourcePath:     resource.Path,
-			RequestTime:      h.clk.Now().Format("02/Jan/2006:15:04:05 +0000"),
-			RequestTimeEpoch: h.clk.Now().UnixMilli(),
-		},
-		Body:            proxyEventBody(body),
-		IsBase64Encoded: false,
+		RequestContext:                  reqCtx,
+		Body:                            proxyEventBody(body, isBinaryRequest),
+		IsBase64Encoded:                 isBinaryRequest,
 	}
 
 	payload, err := json.Marshal(proxyEvent)
@@ -303,11 +324,13 @@ func (h *Handler) executeRestLambdaProxy(
 
 	var proxyResp lambdaProxyResponse
 	if err := json.Unmarshal(outcome.Payload, &proxyResp); err != nil {
-		writeGatewayError(w, http.StatusBadGateway, "Malformed Lambda proxy response")
+		writeGatewayError(w, http.StatusBadGateway, "Internal server error")
 		return
 	}
 
-	writeLambdaProxyResponse(w, &proxyResp)
+	if !writeLambdaProxyResponse(w, &proxyResp) {
+		writeGatewayError(w, http.StatusBadGateway, "Internal server error")
+	}
 }
 
 // executeRestMock returns a response based on integration response configuration.
@@ -398,6 +421,15 @@ func (h *Handler) ExecuteV2API(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 2c. Enforce a Lambda REQUEST authorizer (authorizationType CUSTOM).
+	// AWS_IAM routes are intentionally not enforced here — see the package
+	// comment in handler_lambda_auth.go.
+	nr, authorized := h.checkV2LambdaAuthorizer(w, r, apiID, api, route, requestPath, stageVars)
+	if !authorized {
+		return
+	}
+	r = nr
+
 	// 3. Resolve integration.
 	var integrationID string
 	if strings.HasPrefix(route.Target, "integrations/") {
@@ -486,8 +518,38 @@ func (h *Handler) executeV2LambdaProxy(
 
 	pathParams := extractV2PathParams(route.RouteKey, requestPath)
 
+	// HTTP APIs need no binaryMediaTypes configuration: any request body whose
+	// Content-Type isn't recognised as text is base64-encoded into the proxy
+	// event with isBase64Encoded set true. See "Handling binary data using
+	// Amazon API Gateway HTTP APIs" (AWS Compute Blog) — content-type driven
+	// binary detection, no opt-in list required.
+	isBinaryRequest := !isTextContentType(r.Header.Get("Content-Type"))
+
 	var payload []byte
 	if integ.PayloadFormatVersion == "2.0" {
+		reqCtx := v2RequestContext{
+			AccountID: h.accountID(),
+			APIID:     api.ApiID,
+			// Folded: a Host is case-insensitive, so the domain reported to
+			// handler code must not vary with how the caller typed it.
+			DomainName:   serviceutil.FoldHostname(r.Host),
+			DomainPrefix: serviceutil.DomainPrefix(r.Host),
+			HTTP: v2HTTP{
+				Method:    r.Method,
+				Path:      requestPath,
+				Protocol:  requestProtocol(r),
+				SourceIP:  clientIP(r),
+				UserAgent: r.Header.Get("User-Agent"),
+			},
+			RequestID: protocol.NewRequestID(),
+			RouteKey:  route.RouteKey,
+			Stage:     chi.URLParam(r, "stageName"),
+			Time:      h.clk.Now().Format("02/Jan/2006:15:04:05 +0000"),
+			TimeEpoch: h.clk.Now().UnixMilli(),
+		}
+		if authCtx, ok := lambdaAuthorizerContextFromRequest(r); ok {
+			reqCtx.Authorizer = authCtx
+		}
 		event := lambdaV2ProxyEvent{
 			Version:               "2.0",
 			RouteKey:              route.RouteKey,
@@ -498,28 +560,9 @@ func (h *Handler) executeV2LambdaProxy(
 			PathParameters:        pathParams,
 			StageVariables:        stageVars,
 			Cookies:               cookies,
-			RequestContext: v2RequestContext{
-				AccountID: h.accountID(),
-				APIID:     api.ApiID,
-				// Folded: a Host is case-insensitive, so the domain reported to
-				// handler code must not vary with how the caller typed it.
-				DomainName:   serviceutil.FoldHostname(r.Host),
-				DomainPrefix: serviceutil.DomainPrefix(r.Host),
-				HTTP: v2HTTP{
-					Method:    r.Method,
-					Path:      requestPath,
-					Protocol:  requestProtocol(r),
-					SourceIP:  clientIP(r),
-					UserAgent: r.Header.Get("User-Agent"),
-				},
-				RequestID: protocol.NewRequestID(),
-				RouteKey:  route.RouteKey,
-				Stage:     chi.URLParam(r, "stageName"),
-				Time:      h.clk.Now().Format("02/Jan/2006:15:04:05 +0000"),
-				TimeEpoch: h.clk.Now().UnixMilli(),
-			},
-			Body:            proxyEventBody(body),
-			IsBase64Encoded: false,
+			RequestContext:        reqCtx,
+			Body:                  proxyEventBody(body, isBinaryRequest),
+			IsBase64Encoded:       isBinaryRequest,
 		}
 		payload, err = json.Marshal(event)
 	} else {
@@ -546,6 +589,22 @@ func (h *Handler) executeV2LambdaProxy(
 			headersMulti[lower] = vals
 			headersV1[lower] = vals[len(vals)-1]
 		}
+		reqCtx := v1RequestContext{
+			AccountID:        h.accountID(),
+			APIID:            api.ApiID,
+			Stage:            chi.URLParam(r, "stageName"),
+			RequestID:        protocol.NewRequestID(),
+			Identity:         v1Identity{SourceIP: clientIP(r)},
+			HTTPMethod:       r.Method,
+			Protocol:         requestProtocol(r),
+			Path:             requestPath,
+			ResourcePath:     route.RouteKey,
+			RequestTime:      h.clk.Now().Format("02/Jan/2006:15:04:05 +0000"),
+			RequestTimeEpoch: h.clk.Now().UnixMilli(),
+		}
+		if authCtx, ok := lambdaAuthorizerContextFromRequest(r); ok {
+			reqCtx.Authorizer = authCtx
+		}
 		event := lambdaV1ProxyEvent{
 			Resource:                        route.RouteKey,
 			Path:                            requestPath,
@@ -556,21 +615,9 @@ func (h *Handler) executeV2LambdaProxy(
 			MultiValueQueryStringParameters: queryParamsMulti,
 			PathParameters:                  pathParams,
 			StageVariables:                  stageVars,
-			RequestContext: v1RequestContext{
-				AccountID:        h.accountID(),
-				APIID:            api.ApiID,
-				Stage:            chi.URLParam(r, "stageName"),
-				RequestID:        protocol.NewRequestID(),
-				Identity:         v1Identity{SourceIP: clientIP(r)},
-				HTTPMethod:       r.Method,
-				Protocol:         requestProtocol(r),
-				Path:             requestPath,
-				ResourcePath:     route.RouteKey,
-				RequestTime:      h.clk.Now().Format("02/Jan/2006:15:04:05 +0000"),
-				RequestTimeEpoch: h.clk.Now().UnixMilli(),
-			},
-			Body:            proxyEventBody(body),
-			IsBase64Encoded: false,
+			RequestContext:                  reqCtx,
+			Body:                            proxyEventBody(body, isBinaryRequest),
+			IsBase64Encoded:                 isBinaryRequest,
 		}
 		payload, err = json.Marshal(event)
 	}
@@ -619,19 +666,88 @@ func (h *Handler) executeV2LambdaProxy(
 			_, _ = w.Write(outcome.Payload)
 			return
 		}
-		writeGatewayError(w, http.StatusBadGateway, "Malformed Lambda proxy response")
+		writeGatewayError(w, http.StatusBadGateway, "Internal server error")
 		return
 	}
 
-	writeLambdaProxyResponse(w, &proxyResp)
+	if !writeLambdaProxyResponse(w, &proxyResp) {
+		writeGatewayError(w, http.StatusBadGateway, "Internal server error")
+	}
 }
 
-func proxyEventBody(body []byte) *string {
+// proxyEventBody renders the request body for a Lambda proxy event. When
+// base64Encoded is true (the request's Content-Type was classified as
+// binary — see matchesBinaryMediaType / isTextContentType) the bytes are
+// base64-encoded, matching what AWS places in the event when isBase64Encoded
+// is true. An empty body is always encoded as JSON null, not an empty string.
+func proxyEventBody(body []byte, base64Encoded bool) *string {
 	if len(body) == 0 {
 		return nil
 	}
+	if base64Encoded {
+		s := base64.StdEncoding.EncodeToString(body)
+		return &s
+	}
 	s := string(body)
 	return &s
+}
+
+// matchesBinaryMediaType reports whether contentType matches one of a REST
+// API's configured binaryMediaTypes entries, honouring AWS's wildcard forms
+// ("*/*", "image/*"). A request whose Content-Type matches is base64-encoded
+// into the Lambda proxy event body with isBase64Encoded set true.
+//
+// Per AWS docs (api-gateway-payload-encodings-workflow.html): "Binary data,
+// A binary data type, Set with matching media types, Undefined -> Binary
+// data" — the encoded-for-Lambda column of that table is the base64 form,
+// which is how binary payloads always cross the JSON proxy-event boundary.
+func matchesBinaryMediaType(contentType string, binaryMediaTypes []string) bool {
+	if contentType == "" || len(binaryMediaTypes) == 0 {
+		return false
+	}
+	mediaType := contentType
+	if i := strings.IndexByte(mediaType, ';'); i >= 0 {
+		mediaType = mediaType[:i]
+	}
+	mediaType = strings.TrimSpace(mediaType)
+	for _, bmt := range binaryMediaTypes {
+		if bmt == "*/*" || bmt == mediaType {
+			return true
+		}
+		if prefix, ok := strings.CutSuffix(bmt, "/*"); ok && strings.HasPrefix(mediaType, prefix+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+// isTextContentType reports whether contentType is one of the media types
+// HTTP APIs (v2) treat as text, passed through in the Lambda proxy event body
+// without base64 encoding. Unlike REST APIs, HTTP APIs need no
+// binaryMediaTypes configuration: any Content-Type not recognised as text is
+// treated as binary and base64-encoded, per "Handling binary data using
+// Amazon API Gateway HTTP APIs" (AWS Compute Blog) — content-type driven
+// binary detection. A request with no Content-Type at all is treated as text,
+// matching the pre-existing behaviour for a body sent without one.
+func isTextContentType(contentType string) bool {
+	if contentType == "" {
+		return true
+	}
+	mediaType := contentType
+	if i := strings.IndexByte(mediaType, ';'); i >= 0 {
+		mediaType = mediaType[:i]
+	}
+	mediaType = strings.ToLower(strings.TrimSpace(mediaType))
+	if strings.HasPrefix(mediaType, "text/") {
+		return true
+	}
+	switch mediaType {
+	case "application/json", "application/xml", "application/javascript",
+		"application/x-www-form-urlencoded", "application/ld+json",
+		"application/xhtml+xml", "application/graphql":
+		return true
+	}
+	return strings.HasSuffix(mediaType, "+json") || strings.HasSuffix(mediaType, "+xml")
 }
 
 // ---- Event types ----------------------------------------------------------
@@ -665,6 +781,11 @@ type v1RequestContext struct {
 	ResourcePath     string     `json:"resourcePath"`
 	RequestTime      string     `json:"requestTime"`
 	RequestTimeEpoch int64      `json:"requestTimeEpoch"`
+	// Authorizer carries a Lambda TOKEN/REQUEST authorizer's principalId and
+	// custom context (flattened, per AWS's documented shape) — nil unless
+	// checkRestLambdaAuthorizer / checkV2LambdaAuthorizer (payload format 1.0)
+	// allowed the request. See handler_lambda_auth.go.
+	Authorizer map[string]any `json:"authorizer,omitempty"`
 }
 
 type v1Identity struct {
@@ -698,6 +819,12 @@ type v2RequestContext struct {
 	Stage        string `json:"stage"`
 	Time         string `json:"time"`
 	TimeEpoch    int64  `json:"timeEpoch"`
+	// Authorizer carries a Lambda REQUEST authorizer's context — nested under
+	// "lambda" for payload format 2.0 (either response shape), flat
+	// (principalId + context, format 1.0's REST-compatible shape) otherwise.
+	// Nil unless checkV2LambdaAuthorizer allowed the request. See
+	// handler_lambda_auth.go.
+	Authorizer map[string]any `json:"authorizer,omitempty"`
 }
 
 type v2HTTP struct {
@@ -741,8 +868,11 @@ func requestProtocol(r *http.Request) string {
 }
 
 // lambdaProxyResponse is the unified response format from Lambda proxy integration.
+// StatusCode is a pointer so a response that omits the (required) field can
+// be told apart from one that explicitly sets it to a value — see
+// writeLambdaProxyResponse.
 type lambdaProxyResponse struct {
-	StatusCode        int                 `json:"statusCode"`
+	StatusCode        *int                `json:"statusCode"`
 	Headers           map[string]string   `json:"headers,omitempty"`
 	MultiValueHeaders map[string][]string `json:"multiValueHeaders,omitempty"`
 	Body              string              `json:"body,omitempty"`
@@ -947,8 +1077,37 @@ func extractV2PathParams(routeKey, requestPath string) map[string]string {
 	return params
 }
 
-// writeLambdaProxyResponse translates a Lambda proxy response to an HTTP response.
-func writeLambdaProxyResponse(w http.ResponseWriter, resp *lambdaProxyResponse) {
+// writeLambdaProxyResponse translates a Lambda proxy response to an HTTP
+// response. It returns false — writing nothing to w — when resp is malformed:
+// a proxy integration output is required to carry statusCode, and a body
+// declared isBase64Encoded must actually be valid base64. The caller must
+// then answer AWS's own 502 {"message":"Internal server error"} instead, the
+// same response API Gateway gives a client for any other execution failure to
+// parse the Lambda output (handle-errors-in-lambda-integration.html).
+//
+// Verified against AWS docs (http-api-develop-integrations-lambda.html /
+// api-gateway-simple-proxy-for-lambda-error-handling): the proxy response
+// format is {isBase64Encoded, statusCode, headers, body}, with statusCode
+// documented as required — nothing there licenses defaulting a missing one to
+// 200, or silently writing an undecodable "base64" body back out raw.
+func writeLambdaProxyResponse(w http.ResponseWriter, resp *lambdaProxyResponse) bool {
+	if resp.StatusCode == nil {
+		return false
+	}
+	status := *resp.StatusCode
+	if status < 100 || status > 599 {
+		return false
+	}
+
+	var decodedBody []byte
+	if resp.IsBase64Encoded && resp.Body != "" {
+		decoded, err := base64.StdEncoding.DecodeString(resp.Body)
+		if err != nil {
+			return false
+		}
+		decodedBody = decoded
+	}
+
 	multiValueKeys := make(map[string]struct{}, len(resp.MultiValueHeaders))
 	for k := range resp.MultiValueHeaders {
 		multiValueKeys[textproto.CanonicalMIMEHeaderKey(k)] = struct{}{}
@@ -968,25 +1127,15 @@ func writeLambdaProxyResponse(w http.ResponseWriter, resp *lambdaProxyResponse) 
 		w.Header().Add("Set-Cookie", cookie)
 	}
 
-	status := resp.StatusCode
-	if status == 0 {
-		status = http.StatusOK
-	}
-
 	w.WriteHeader(status)
-	if resp.Body != "" {
-		if resp.IsBase64Encoded {
-			decoded, err := base64.StdEncoding.DecodeString(resp.Body)
-			if err == nil {
-				_, _ = w.Write(decoded)
-			} else {
-				// Fallback: write raw body if base64 decode fails.
-				_, _ = w.Write([]byte(resp.Body))
-			}
-		} else {
-			_, _ = w.Write([]byte(resp.Body))
+	if resp.IsBase64Encoded {
+		if len(decodedBody) > 0 {
+			_, _ = w.Write(decodedBody)
 		}
+	} else if resp.Body != "" {
+		_, _ = w.Write([]byte(resp.Body))
 	}
+	return true
 }
 
 // writeGatewayError writes a JSON error in the API Gateway error format.

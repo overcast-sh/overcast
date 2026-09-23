@@ -5,6 +5,7 @@ package main
 import (
 	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -64,5 +65,50 @@ func TestClientInfo_alwaysStatesAWSQueryCompatible(t *testing.T) {
 	}
 	if value != false {
 		t.Fatalf("awsQueryCompatible = %v, want false", value)
+	}
+}
+
+// TestSnapshotServiceFor_resolvesAnOvercastKeyToItsSnapshot covers how an
+// authored scenario, which has no recipe `model` field, finds its shapes: its
+// `service` is the hand-written registry group's Overcast key, and the snapshot
+// is named for the model service that key aliases from. cognito-userpools is
+// the first port that needs it (#1116) — the registry says cognito, the
+// snapshot is cognito-identity-provider.json.
+func TestSnapshotServiceFor_resolvesAnOvercastKeyToItsSnapshot(t *testing.T) {
+	for _, testCase := range []struct {
+		name    string
+		files   []string
+		service string
+		want    string
+		wantErr string
+	}{
+		{name: "own name", files: []string{"kinesis.json"}, service: "kinesis", want: "kinesis"},
+		{name: "aliased model service", files: []string{"cognito-identity-provider.json", "kinesis.json"}, service: "cognito", want: "cognito-identity-provider"},
+		{name: "own name wins over an alias", files: []string{"cloudwatch-events.json", "eventbridge.json"}, service: "eventbridge", want: "eventbridge"},
+		{name: "nothing committed", files: []string{"kinesis.json"}, service: "cognito", want: "cognito"},
+		{name: "two snapshots alias to one key", files: []string{"api-gateway.json", "apigatewayv2.json"}, service: "apigateway", wantErr: "api-gateway, apigatewayv2"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			// Given: a snapshot directory holding exactly these files.
+			dir := t.TempDir()
+			for _, name := range testCase.files {
+				writeFile(t, filepath.Join(dir, name), "{}")
+			}
+
+			// When: an authored scenario for the service is planned.
+			got, err := snapshotServiceFor(dir, testCase.service)
+
+			// Then: it reads the one snapshot the key names, and refuses to
+			// guess between two.
+			if testCase.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), testCase.wantErr) {
+					t.Fatalf("snapshotServiceFor(%q) = %q, %v; want an error naming %s", testCase.service, got, err, testCase.wantErr)
+				}
+				return
+			}
+			if err != nil || got != testCase.want {
+				t.Fatalf("snapshotServiceFor(%q) = %q, %v; want %q", testCase.service, got, err, testCase.want)
+			}
+		})
 	}
 }

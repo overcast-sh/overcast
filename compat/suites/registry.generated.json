@@ -388,6 +388,77 @@
       ]
     },
     {
+      "service": "cognito",
+      "name": "cognito-userpools-shadow",
+      "generated": true,
+      "scenario": "compat/model/authored/cognito-userpools.json",
+      "state": "candidate",
+      "shadowOf": "cognito-userpools",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "CreateUserPool"
+        },
+        {
+          "name": "DescribeUserPool",
+          "depends": [
+            "CreateUserPool"
+          ]
+        },
+        {
+          "name": "ListUserPools",
+          "depends": [
+            "CreateUserPool"
+          ]
+        },
+        {
+          "name": "CreateUserPoolClient",
+          "depends": [
+            "CreateUserPool"
+          ]
+        },
+        {
+          "name": "ListUserPoolClients",
+          "depends": [
+            "CreateUserPoolClient"
+          ]
+        },
+        {
+          "name": "AdminCreateUser",
+          "depends": [
+            "CreateUserPool"
+          ]
+        },
+        {
+          "name": "ListUsers",
+          "depends": [
+            "AdminCreateUser"
+          ]
+        },
+        {
+          "name": "AdminDeleteUser",
+          "depends": [
+            "ListUsers"
+          ]
+        },
+        {
+          "name": "DeleteUserPool",
+          "depends": [
+            "ListUserPoolClients",
+            "AdminDeleteUser"
+          ]
+        }
+      ]
+    },
+    {
       "service": "elastic-load-balancing",
       "name": "elastic-load-balancing-gen-loadbalancer",
       "generated": true,
