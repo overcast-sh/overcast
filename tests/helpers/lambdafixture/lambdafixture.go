@@ -79,6 +79,7 @@ type FunctionCode struct {
 type FunctionConfiguration struct {
 	FunctionName        string               `json:"FunctionName"`
 	FunctionArn         string               `json:"FunctionArn"`
+	Version             string               `json:"Version"`
 	Runtime             string               `json:"Runtime"`
 	Handler             string               `json:"Handler"`
 	Role                string               `json:"Role"`
@@ -87,6 +88,7 @@ type FunctionConfiguration struct {
 	MemorySize          int                  `json:"MemorySize"`
 	State               string               `json:"State"`
 	CodeSize            int64                `json:"CodeSize"`
+	CodeSha256          string               `json:"CodeSha256,omitempty"`
 	LastModified        string               `json:"LastModified"`
 	RevisionId          string               `json:"RevisionId"`
 	PackageType         string               `json:"PackageType"`

@@ -243,6 +243,14 @@ func TestUnsupportedFields_ExplicitNoOpValuesAreNotRequests(t *testing.T) {
 		defer resp.Body.Close()
 		helpers.AssertStatus(t, resp, http.StatusAccepted)
 	})
+
+	t.Run("PublishVersion", func(t *testing.T) {
+		resp := doJSON(t, http.MethodPost, lambdaURL(srv, "/functions/explicit-noop-fn/versions"), map[string]any{
+			"PublishTo": nil,
+		})
+		defer resp.Body.Close()
+		helpers.AssertStatus(t, resp, http.StatusCreated)
+	})
 }
 
 // The other half of the same rule: a value that genuinely asks for an
@@ -274,6 +282,13 @@ func TestUnsupportedFields_RealRequestsStill501(t *testing.T) {
 		resp := doJSON(t, http.MethodPost, lambdaURL(srv, "/event-source-mappings/"), map[string]any{
 			"FunctionName": "real-request-fn", "EventSourceArn": sqsARN("real-request-queue"),
 			"ParallelizationFactor": 2,
+		})
+		assertLambdaUnsupported(t, resp)
+	})
+
+	t.Run("PublishVersion", func(t *testing.T) {
+		resp := doJSON(t, http.MethodPost, lambdaURL(srv, "/functions/real-request-fn/versions"), map[string]any{
+			"PublishTo": "LATEST_PUBLISHED",
 		})
 		assertLambdaUnsupported(t, resp)
 	})

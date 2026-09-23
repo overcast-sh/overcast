@@ -830,11 +830,16 @@ func TestPublishVersion_incrementing(t *testing.T) {
 	srv := helpers.NewTestServer(t)
 	createFunction(t, srv, "inc-fn")
 
-	// When PublishVersion is called twice
+	// When PublishVersion is called twice with a code change in between —
+	// AWS doesn't publish a version if nothing changed since the last one
+	// (see TestPublishVersion_noChangeReusesTheLatestVersion), so two
+	// consecutive publishes only get distinct numbers when something did.
 	resp1 := doJSON(t, http.MethodPost, lambdaURL(srv, "/functions/inc-fn/versions"), publishVersionReq{})
 	helpers.AssertStatus(t, resp1, http.StatusCreated)
 	var ver1 versionConfiguration
 	decodeJSON(t, resp1, &ver1)
+
+	updateLambdaCode(t, srv, "inc-fn", []byte("second-zip-bytes"))
 
 	resp2 := doJSON(t, http.MethodPost, lambdaURL(srv, "/functions/inc-fn/versions"), publishVersionReq{})
 	helpers.AssertStatus(t, resp2, http.StatusCreated)
@@ -908,11 +913,14 @@ func TestListVersionsByFunction_empty(t *testing.T) {
 }
 
 func TestListVersionsByFunction_afterPublish(t *testing.T) {
-	// Given a function with two published versions
+	// Given a function with two published versions. A code change separates
+	// the two publishes — PublishVersion no longer allocates a new number
+	// when nothing changed since the last one.
 	srv := helpers.NewTestServer(t)
 	createFunction(t, srv, "list-pub-fn")
 
 	doJSON(t, http.MethodPost, lambdaURL(srv, "/functions/list-pub-fn/versions"), publishVersionReq{})
+	updateLambdaCode(t, srv, "list-pub-fn", []byte("second-zip-bytes"))
 	doJSON(t, http.MethodPost, lambdaURL(srv, "/functions/list-pub-fn/versions"), publishVersionReq{})
 
 	// When GET /functions/{name}/versions

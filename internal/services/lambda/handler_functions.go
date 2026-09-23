@@ -762,6 +762,7 @@ const (
 	OpUpdateFunctionConfiguration = "UpdateFunctionConfiguration"
 	OpCreateEventSourceMapping    = "CreateEventSourceMapping"
 	OpUpdateEventSourceMapping    = "UpdateEventSourceMapping"
+	OpPublishVersion              = "PublishVersion"
 )
 
 // UnsupportedRequestMembers reports the modeled request members each Lambda
@@ -779,6 +780,7 @@ func UnsupportedRequestMembers() map[string][]string {
 		OpUpdateFunctionConfiguration: (&updateFunctionConfigurationRequest{}).unsupportedMembers(),
 		OpCreateEventSourceMapping:    (&createESMRequest{}).unsupportedMembers(),
 		OpUpdateEventSourceMapping:    (&updateESMRequest{}).unsupportedMembers(),
+		OpPublishVersion:              (&publishVersionRequest{}).unsupportedMembers(),
 	}
 	out := make(map[string][]string, len(gates))
 	for operation, members := range gates {
@@ -1638,63 +1640,137 @@ func (h *Handler) DeleteFunctionCodeSigningConfig(w http.ResponseWriter, r *http
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GetFunction handles GET /2015-03-31/functions/{name}.
-// Returns FunctionConfiguration + Code location block.
+// validateQualifier checks an optional Qualifier against the pinned model's
+// NumericLatestPublishedOrAliasQualifier length and pattern constraints.
+// Shared by every operation whose FunctionName accepts a qualifier embedded
+// in the path or given via the query string — DeleteFunction, GetFunction,
+// GetFunctionConfiguration.
+func validateQualifier(qualifier string) *protocol.AWSError {
+	if qualifier == "" {
+		return nil
+	}
+	if len(qualifier) > 128 {
+		return smithyStringLengthConstraint("qualifier", qualifier, 128)
+	}
+	if !qualifierPattern().MatchString(qualifier) {
+		return smithyPatternConstraint("qualifier", qualifier, qualifierConstraint)
+	}
+	return nil
+}
+
+// resolveFunctionQualifier resolves a Qualifier — "", "$LATEST", a version
+// number, or an alias name — to the FunctionConfiguration GetFunction and
+// GetFunctionConfiguration report for it: "Specify a version or alias to get
+// details about a published version of the function"
+// (API_GetFunction.html, API_GetFunctionConfiguration.html). An alias resolves
+// through its FunctionVersion, which is itself a version number or $LATEST.
+// Returns a ResourceNotFoundException naming name:qualifier for an unknown
+// version or alias.
+func (h *Handler) resolveFunctionQualifier(ctx context.Context, fn *Function, qualifier string) (*functionConfiguration, *protocol.AWSError) {
+	if qualifier == "" || qualifier == "$LATEST" {
+		return functionToConfig(fn), nil
+	}
+	if version, err := strconv.Atoi(qualifier); err == nil {
+		versions, aerr := h.ls.listVersions(ctx, fn.Name)
+		if aerr != nil {
+			return nil, aerr
+		}
+		for _, v := range versions {
+			if v.Version == version {
+				return versionToResponse(v), nil
+			}
+		}
+		return nil, lambdaFunctionNotFound(qualifiedResourceName(fn.Name, qualifier))
+	}
+	alias, aerr := h.ls.getAlias(ctx, fn.Name, qualifier)
+	if aerr != nil {
+		return nil, aerr
+	}
+	if alias == nil {
+		return nil, lambdaFunctionNotFound(qualifiedResourceName(fn.Name, qualifier))
+	}
+	return h.resolveFunctionQualifier(ctx, fn, alias.FunctionVersion)
+}
+
+// GetFunction handles GET /2015-03-31/functions/{name}[?Qualifier=].
+// Returns FunctionConfiguration + Code location block. The FunctionName path
+// label accepts an embedded qualifier ("my-function:2"); an explicit
+// Qualifier query parameter wins over one embedded in the path.
 func (h *Handler) GetFunction(w http.ResponseWriter, r *http.Request) {
 	log := h.log.WithRecorder(r.Context())
-	name := chi.URLParam(r, "name")
-	log.Debug("get function", zap.String("function", name))
-	fn, aerr := h.ls.getFunction(r.Context(), name)
+	identifier := chi.URLParam(r, "name")
+	name, qualifier := splitFunctionIdentifier(identifier, r.URL.Query().Get("Qualifier"))
+	log.Debug("get function", zap.String("function", name), zap.String("qualifier", qualifier))
+	ctx := r.Context()
+
+	if aerr := validateQualifier(qualifier); aerr != nil {
+		protocol.WriteJSONError(w, r, aerr)
+		return
+	}
+
+	fn, aerr := h.ls.getFunction(ctx, name)
 	if aerr != nil {
 		protocol.WriteJSONError(w, r, aerr)
 		return
 	}
 	if fn == nil {
-		protocol.WriteJSONError(w, r, &protocol.AWSError{
-			Code:       "ResourceNotFoundException",
-			Message:    "Function not found: " + name,
-			HTTPStatus: http.StatusNotFound,
-		})
+		protocol.WriteJSONError(w, r, lambdaFunctionNotFound(qualifiedResourceName(name, qualifier)))
+		return
+	}
+
+	cfg, aerr := h.resolveFunctionQualifier(ctx, fn, qualifier)
+	if aerr != nil {
+		protocol.WriteJSONError(w, r, aerr)
 		return
 	}
 
 	codeBlock := &getFunctionCode{
-		Location:       "https://awslambda-overcast-placeholder.s3.amazonaws.com/" + fn.Name + ".zip",
+		Location:       "https://awslambda-overcast-placeholder.s3.amazonaws.com/" + cfg.FunctionName + ".zip",
 		RepositoryType: "S3",
 	}
-	if fn.PackageType == "Image" {
+	if cfg.PackageType == "Image" {
 		codeBlock.RepositoryType = "ECR"
-		codeBlock.Location = fn.ImageUri
+		codeBlock.Location = cfg.ImageUri
 	}
 
 	protocol.WriteRESTJSON(w, r, http.StatusOK, getFunctionResponse{
-		Configuration: *functionToConfig(fn),
+		Configuration: *cfg,
 		Code:          codeBlock,
 		Tags:          fn.Tags,
 	})
 }
 
-// GetFunctionConfiguration handles GET /2015-03-31/functions/{name}/configuration.
+// GetFunctionConfiguration handles GET /2015-03-31/functions/{name}/configuration[?Qualifier=].
 // Returns FunctionConfiguration only (no Code block), matching AWS behaviour.
 func (h *Handler) GetFunctionConfiguration(w http.ResponseWriter, r *http.Request) {
 	log := h.log.WithRecorder(r.Context())
-	name := chi.URLParam(r, "name")
-	log.Debug("get function configuration", zap.String("function", name))
-	fn, aerr := h.ls.getFunction(r.Context(), name)
+	identifier := chi.URLParam(r, "name")
+	name, qualifier := splitFunctionIdentifier(identifier, r.URL.Query().Get("Qualifier"))
+	log.Debug("get function configuration", zap.String("function", name), zap.String("qualifier", qualifier))
+	ctx := r.Context()
+
+	if aerr := validateQualifier(qualifier); aerr != nil {
+		protocol.WriteJSONError(w, r, aerr)
+		return
+	}
+
+	fn, aerr := h.ls.getFunction(ctx, name)
 	if aerr != nil {
 		protocol.WriteJSONError(w, r, aerr)
 		return
 	}
 	if fn == nil {
-		protocol.WriteJSONError(w, r, &protocol.AWSError{
-			Code:       "ResourceNotFoundException",
-			Message:    "Function not found: " + name,
-			HTTPStatus: http.StatusNotFound,
-		})
+		protocol.WriteJSONError(w, r, lambdaFunctionNotFound(qualifiedResourceName(name, qualifier)))
 		return
 	}
 
-	protocol.WriteRESTJSON(w, r, http.StatusOK, functionToConfig(fn))
+	cfg, aerr := h.resolveFunctionQualifier(ctx, fn, qualifier)
+	if aerr != nil {
+		protocol.WriteJSONError(w, r, aerr)
+		return
+	}
+
+	protocol.WriteRESTJSON(w, r, http.StatusOK, *cfg)
 }
 
 // ─── Update lifecycle ────────────────────────────────────────────────────────
@@ -2335,15 +2411,9 @@ func (h *Handler) DeleteFunction(w http.ResponseWriter, r *http.Request) {
 
 	// NumericLatestPublishedOrAliasQualifier, the shape DeleteFunctionRequest's
 	// Qualifier targets in the pinned Lambda model.
-	if qualifier != "" {
-		if len(qualifier) > 128 {
-			protocol.WriteJSONError(w, r, smithyStringLengthConstraint("qualifier", qualifier, 128))
-			return
-		}
-		if !qualifierPattern().MatchString(qualifier) {
-			protocol.WriteJSONError(w, r, smithyPatternConstraint("qualifier", qualifier, qualifierConstraint))
-			return
-		}
+	if aerr := validateQualifier(qualifier); aerr != nil {
+		protocol.WriteJSONError(w, r, aerr)
+		return
 	}
 
 	fn, aerr := h.ls.getFunction(ctx, name)
