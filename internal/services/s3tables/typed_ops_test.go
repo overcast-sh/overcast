@@ -56,8 +56,13 @@ func TestTypedOps_coverEveryModeledOperation(t *testing.T) {
 }
 
 func TestRootRouters_mountEveryRoot(t *testing.T) {
+	// Given: a service
 	s, _ := newTestService(t)
+
+	// When: its root routers are built
 	routers := s.RootRouters()
+
+	// Then: every root the main router mounts has one
 	for _, root := range Roots {
 		if routers[root] == nil {
 			t.Errorf("no router for %s", root)
@@ -66,6 +71,9 @@ func TestRootRouters_mountEveryRoot(t *testing.T) {
 }
 
 func TestValidateNames(t *testing.T) {
+	// Given: names on each side of AWS's naming rules
+	// When: each is validated
+	// Then: exactly the legal ones pass
 	buckets := map[string]bool{
 		"my-bucket": true, "abc": true, strings.Repeat("a", 63): true,
 		"ab": false, "My-Bucket": false, "my.bucket": false, "my_bucket": false, "-bucket": false,
@@ -94,6 +102,9 @@ func TestValidateNames(t *testing.T) {
 }
 
 func TestParseARNs(t *testing.T) {
+	// Given: well-formed bucket and table ARNs, and malformed ones
+	// When: each is parsed
+	// Then: the parts come back, and a malformed ARN is refused
 	b, aerr := parseBucketARN("arn:aws:s3tables:eu-west-1:111122223333:bucket/my-bucket")
 	if aerr != nil || b.Region != "eu-west-1" || b.Account != "111122223333" || b.Bucket != "my-bucket" || b.TableID != "" {
 		t.Errorf("bucket ARN = %+v, %v", b, aerr)
@@ -116,9 +127,13 @@ func TestParseARNs(t *testing.T) {
 }
 
 func TestResolveBucket_otherRegionOrAccountIsNotFound(t *testing.T) {
+	// Given: a bucket in us-east-1 of account 111122223333
 	s, _ := newTestService(t)
 	arn := seed(t, s)
 	ctx := context.Background()
+
+	// When: its ARN is resolved with another region or account
+	// Then: this regional endpoint does not hold it
 	for _, other := range []string{
 		strings.Replace(arn, "us-east-1", "eu-west-1", 1),
 		strings.Replace(arn, "111122223333", "999999999999", 1),
@@ -215,6 +230,7 @@ func TestListings_skipMalformedRecords(t *testing.T) {
 }
 
 func TestListTables_paginatesAndRejectsBadLimits(t *testing.T) {
+	// Given: a namespace holding three tables
 	s, _ := newTestService(t)
 	arn := seed(t, s)
 	ctx := context.Background()
@@ -223,6 +239,9 @@ func TestListTables_paginatesAndRejectsBadLimits(t *testing.T) {
 			t.Fatalf("createTable: %v", aerr)
 		}
 	}
+
+	// When: they are listed two at a time
+	// Then: the first page carries a token, the second holds the last table
 	two := 2
 	first, aerr := s.listTablesTyped(ctx, &listTablesRequest{TableBucketARN: arn, MaxTables: &two})
 	if aerr != nil || len(first.Tables) != 2 || first.ContinuationToken == "" {
@@ -232,6 +251,8 @@ func TestListTables_paginatesAndRejectsBadLimits(t *testing.T) {
 	if aerr != nil || len(second.Tables) != 1 || second.ContinuationToken != "" || second.Tables[0].Name != "c" {
 		t.Errorf("second page = %+v, %v", second, aerr)
 	}
+
+	// And: a page size outside 1..1000 is refused
 	for _, bad := range []int{0, 1001} {
 		if _, aerr := s.listTablesTyped(ctx, &listTablesRequest{TableBucketARN: arn, MaxTables: &bad}); aerr == nil || aerr.Code != "BadRequestException" {
 			t.Errorf("maxTables=%d = %v", bad, aerr)

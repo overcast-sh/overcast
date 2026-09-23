@@ -41,6 +41,9 @@ func TestBuildInitialMetadata_declaredIDsAddressTheirOwnColumn(t *testing.T) {
 }
 
 func TestBuildInitialMetadata_duplicateDeclaredIDIsRefused(t *testing.T) {
+	// Given: two columns that declare the same id
+	// When: the first metadata document is built
+	// Then: the request is refused as a bad request
 	in := &icebergMetadata{Schema: &icebergSchema{Fields: []icebergSchemaField{
 		{ID: intp(1), Name: "a", Type: "int"},
 		{ID: intp(1), Name: "b", Type: "int"},
