@@ -34,12 +34,11 @@ export const Route = createRootRoute({
   }),
   beforeLoad: ({ search }) => {
     const { region } = search
-    if (region) {
-      const current = endpointStore.get()
-      if (current.region !== region) {
-        endpointStore.set({ ...current, region })
-      }
-    }
+    // Set even when it matches the current region: the set is what records
+    // the region as chosen, and an unrecorded one is replaced by the server's
+    // default when that arrives (see endpointStore.seedServerRegion). An
+    // unchanged set persists without notifying anyone.
+    if (region) endpointStore.set({ ...endpointStore.get(), region })
   },
   head: () => ({
     meta: [{ title: "Overcast" }],
