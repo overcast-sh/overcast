@@ -9,7 +9,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -37,8 +36,7 @@ func validateLimit(v *int, field string) *protocol.AWSError {
 		return nil
 	}
 	if *v < 1 || *v > listMaxLimit {
-		return badRequest(fmt.Sprintf(
-			"1 validation error detected: Value '%d' at '%s' failed to satisfy constraint: Member must have value between 1 and %d", *v, field, listMaxLimit))
+		return validationError("Value '%d' at '%s' failed to satisfy constraint: Member must have value between 1 and %d", *v, field, listMaxLimit)
 	}
 	return nil
 }
@@ -145,28 +143,39 @@ type createTableBucketResponse struct {
 	ARN string `json:"arn"`
 }
 
+// validateCreateOptions checks the optional members CreateTableBucket and
+// CreateTable share.
+func validateCreateOptions(enc *encryptionConfiguration, sc *storageClassConfiguration, tags map[string]string) *protocol.AWSError {
+	if enc != nil {
+		if aerr := validateEncryption(enc); aerr != nil {
+			return aerr
+		}
+	}
+	if sc != nil {
+		if aerr := validateStorageClass(sc); aerr != nil {
+			return aerr
+		}
+	}
+	if len(tags) > 0 {
+		return serviceutil.ValidateTags(tagCfg, tags)
+	}
+	return nil
+}
+
 func (s *Service) createTableBucketTyped(ctx context.Context, req *createTableBucketRequest) (*createTableBucketResponse, *protocol.AWSError) {
 	if aerr := validateTableBucketName(req.Name); aerr != nil {
 		return nil, aerr
 	}
+	if aerr := validateCreateOptions(req.EncryptionConfiguration, req.StorageClassConfiguration, req.Tags); aerr != nil {
+		return nil, aerr
+	}
 	enc := encryptionConfiguration{SSEAlgorithm: sseAES256}
 	if req.EncryptionConfiguration != nil {
-		if aerr := validateEncryption(req.EncryptionConfiguration); aerr != nil {
-			return nil, aerr
-		}
 		enc = *req.EncryptionConfiguration
 	}
 	storage := storageStandard
 	if req.StorageClassConfiguration != nil {
-		if aerr := validateStorageClass(req.StorageClassConfiguration); aerr != nil {
-			return nil, aerr
-		}
 		storage = req.StorageClassConfiguration.StorageClass
-	}
-	if len(req.Tags) > 0 {
-		if aerr := serviceutil.ValidateTags(tagCfg, req.Tags); aerr != nil {
-			return nil, aerr
-		}
 	}
 
 	region := s.regionOf(ctx)
@@ -238,11 +247,8 @@ func (s *Service) listTableBucketsTyped(ctx context.Context, req *listTableBucke
 	if aerr := validateLimit(req.MaxBuckets, "maxBuckets"); aerr != nil {
 		return nil, aerr
 	}
-	switch req.Type {
-	case "", resourceTypeCustomer, "aws":
-	default:
-		return nil, badRequest(fmt.Sprintf(
-			"1 validation error detected: Value '%s' at 'type' failed to satisfy constraint: Member must satisfy enum value set: [customer, aws]", req.Type))
+	if req.Type != "" && req.Type != resourceTypeCustomer && req.Type != resourceTypeAWS {
+		return nil, enumError("type", req.Type, resourceTypeCustomer, resourceTypeAWS)
 	}
 	buckets, aerr := s.listBuckets(ctx, s.regionOf(ctx))
 	if aerr != nil {
@@ -252,7 +258,7 @@ func (s *Service) listTableBucketsTyped(ctx context.Context, req *listTableBucke
 	for _, b := range buckets {
 		// Every bucket a caller can create is a customer bucket; AWS-managed
 		// ("aws") buckets are never created here.
-		if req.Type == "aws" || !strings.HasPrefix(b.Name, req.Prefix) {
+		if req.Type == resourceTypeAWS || !strings.HasPrefix(b.Name, req.Prefix) {
 			continue
 		}
 		summaries = append(summaries, bucketSummary(b))
@@ -283,15 +289,22 @@ func (s *Service) deleteTableBucketTyped(ctx context.Context, req *tableBucketAR
 // updateBucket runs a read-modify-write of one table bucket under the
 // service's write lock.
 func (s *Service) updateBucket(ctx context.Context, arn string, mutate func(*tableBucket) *protocol.AWSError) (*tableBucket, *protocol.AWSError) {
+	return readModifyWrite(s, func() (*tableBucket, *protocol.AWSError) { return s.resolveBucket(ctx, arn) }, mutate,
+		func(b *tableBucket) *protocol.AWSError { return s.saveBucket(ctx, b) })
+}
+
+// readModifyWrite resolves a record, applies mutate and saves the result, all
+// under the service's write lock, so the resolve-check-write is one step.
+func readModifyWrite[T any](s *Service, resolve func() (*T, *protocol.AWSError), mutate, save func(*T) *protocol.AWSError) (*T, *protocol.AWSError) {
 	defer s.lock()()
-	b, aerr := s.resolveBucket(ctx, arn)
+	v, aerr := resolve()
 	if aerr != nil {
 		return nil, aerr
 	}
-	if aerr := mutate(b); aerr != nil {
+	if aerr := mutate(v); aerr != nil {
 		return nil, aerr
 	}
-	return b, s.saveBucket(ctx, b)
+	return v, save(v)
 }
 
 // ─── Namespaces ───────────────────────────────────────────────────────────────
@@ -308,7 +321,7 @@ type createNamespaceResponse struct {
 
 func (s *Service) createNamespaceTyped(ctx context.Context, req *createNamespaceRequest) (*createNamespaceResponse, *protocol.AWSError) {
 	if len(req.Namespace) != 1 {
-		return nil, badRequest("1 validation error detected: Value at 'namespace' failed to satisfy constraint: Member must have length less than or equal to 1")
+		return nil, validationError("Value at 'namespace' failed to satisfy constraint: Member must have length less than or equal to 1")
 	}
 	name := req.Namespace[0]
 	if aerr := validateNamespaceName(name); aerr != nil {
@@ -484,37 +497,9 @@ type createTableResponse struct {
 }
 
 func (s *Service) createTableTyped(ctx context.Context, req *createTableRequest) (*createTableResponse, *protocol.AWSError) {
-	if aerr := validateTableName(req.Name); aerr != nil {
+	iceberg, aerr := validateCreateTable(req)
+	if aerr != nil {
 		return nil, aerr
-	}
-	if req.Format != formatIceberg {
-		return nil, badRequest(fmt.Sprintf(
-			"1 validation error detected: Value '%s' at 'format' failed to satisfy constraint: Member must satisfy enum value set: [ICEBERG]", req.Format))
-	}
-	if req.EncryptionConfiguration != nil {
-		if aerr := validateEncryption(req.EncryptionConfiguration); aerr != nil {
-			return nil, aerr
-		}
-	}
-	if req.StorageClassConfiguration != nil {
-		if aerr := validateStorageClass(req.StorageClassConfiguration); aerr != nil {
-			return nil, aerr
-		}
-	}
-	if len(req.Tags) > 0 {
-		if aerr := serviceutil.ValidateTags(tagCfg, req.Tags); aerr != nil {
-			return nil, aerr
-		}
-	}
-	var iceberg *icebergMetadata
-	if req.Metadata != nil && req.Metadata.Iceberg != nil {
-		iceberg = req.Metadata.Iceberg
-		if len(iceberg.SchemaV2) > 0 {
-			return nil, notImplemented("CreateTable with metadata.iceberg.schemaV2 is not emulated; declare the columns with metadata.iceberg.schema.")
-		}
-		if iceberg.Schema == nil {
-			return nil, badRequest("metadata.iceberg.schema is required.")
-		}
 	}
 
 	defer s.lock()()
@@ -528,14 +513,60 @@ func (s *Service) createTableTyped(ctx context.Context, req *createTableRequest)
 		return nil, errTableExists
 	}
 
+	t := s.newTableRecord(b, n, req)
+	// The metadata document is built before anything is created, so a schema
+	// Iceberg would refuse leaves no warehouse bucket behind.
+	var metadataJSON []byte
+	if iceberg != nil {
+		if metadataJSON, aerr = buildInitialMetadata(t.TableID, t.WarehouseLocation, t.CreatedAt, iceberg); aerr != nil {
+			return nil, aerr
+		}
+	}
+	if aerr := s.createWarehouse(ctx, t, metadataJSON); aerr != nil {
+		return nil, aerr
+	}
+	if aerr := s.saveTable(ctx, t); aerr != nil {
+		return nil, aerr
+	}
+	return &createTableResponse{TableARN: t.ARN, VersionToken: t.VersionToken}, nil
+}
+
+// validateCreateTable checks everything CreateTable can check without state,
+// and returns metadata.iceberg when the caller supplied one.
+func validateCreateTable(req *createTableRequest) (*icebergMetadata, *protocol.AWSError) {
+	if aerr := validateTableName(req.Name); aerr != nil {
+		return nil, aerr
+	}
+	if req.Format != formatIceberg {
+		return nil, enumError("format", req.Format, formatIceberg)
+	}
+	if aerr := validateCreateOptions(req.EncryptionConfiguration, req.StorageClassConfiguration, req.Tags); aerr != nil {
+		return nil, aerr
+	}
+	if req.Metadata == nil || req.Metadata.Iceberg == nil {
+		return nil, nil
+	}
+	iceberg := req.Metadata.Iceberg
+	if len(iceberg.SchemaV2) > 0 {
+		return nil, notImplemented("CreateTable with metadata.iceberg.schemaV2 is not emulated; declare the columns with metadata.iceberg.schema.")
+	}
+	if iceberg.Schema == nil {
+		return nil, badRequest("metadata.iceberg.schema is required.")
+	}
+	return iceberg, nil
+}
+
+// newTableRecord is a new table in namespace n of bucket b, with a fresh id,
+// version token and warehouse location. It inherits the bucket's encryption
+// and storage class unless the request sets its own.
+func (s *Service) newTableRecord(b *tableBucket, n *namespaceRecord, req *createTableRequest) *tableRecord {
 	now := s.now()
 	tableID := s.newID()
-	warehouse := s.newWarehouseBucketName()
 	t := &tableRecord{
 		Name: req.Name, Namespace: n.Name, NamespaceID: n.NamespaceID,
 		Bucket: b.Name, BucketARN: b.ARN, TableBucketID: b.TableBucketID, Region: b.Region,
-		TableID: tableID, ARN: b.ARN + "/table/" + tableID, Format: formatIceberg,
-		VersionToken: s.newVersionToken(), WarehouseLocation: "s3://" + warehouse,
+		TableID: tableID, ARN: tableARN(b.ARN, tableID), Format: formatIceberg,
+		VersionToken: s.newVersionToken(), WarehouseLocation: "s3://" + s.newWarehouseBucketName(),
 		CreatedAt: now, CreatedBy: s.accountID(), ModifiedAt: now, ModifiedBy: s.accountID(),
 		OwnerAccountID: s.accountID(), Encryption: b.Encryption, StorageClass: b.StorageClass,
 		Tags: req.Tags,
@@ -546,32 +577,28 @@ func (s *Service) createTableTyped(ctx context.Context, req *createTableRequest)
 	if req.StorageClassConfiguration != nil {
 		t.StorageClass = req.StorageClassConfiguration.StorageClass
 	}
+	return t
+}
 
-	// The metadata document is built before anything is created, so a schema
-	// Iceberg would refuse leaves no warehouse bucket behind.
-	var metadataJSON []byte
-	if iceberg != nil {
-		metadataJSON, aerr = buildInitialMetadata(tableID, t.WarehouseLocation, now, iceberg)
-		if aerr != nil {
-			return nil, aerr
-		}
-	}
+// createWarehouse creates the table's warehouse bucket through the S3
+// accessor and, when there is one, writes its first metadata file there and
+// points the table at it.
+func (s *Service) createWarehouse(ctx context.Context, t *tableRecord, metadataJSON []byte) *protocol.AWSError {
+	warehouse := strings.TrimPrefix(t.WarehouseLocation, "s3://")
 	if s.ensureWarehouse != nil {
-		if aerr := s.ensureWarehouse(ctx, warehouse, b.Region); aerr != nil {
-			return nil, aerr
+		if aerr := s.ensureWarehouse(ctx, warehouse, t.Region); aerr != nil {
+			return aerr
 		}
 	}
-	if metadataJSON != nil && s.putObject != nil {
-		key := icebergmeta.MetadataPath(0, s.newID())
-		if _, aerr := s.putObject(ctx, warehouse, key, metadataJSON, s3PutJSON); aerr != nil {
-			return nil, aerr
-		}
-		t.MetadataLocation = t.WarehouseLocation + "/" + key
+	if metadataJSON == nil || s.putObject == nil {
+		return nil
 	}
-	if aerr := s.saveTable(ctx, t); aerr != nil {
-		return nil, aerr
+	key := icebergmeta.MetadataPath(0, s.newID())
+	if _, aerr := s.putObject(ctx, warehouse, key, metadataJSON, s3PutJSON); aerr != nil {
+		return aerr
 	}
-	return &createTableResponse{TableARN: t.ARN, VersionToken: t.VersionToken}, nil
+	t.MetadataLocation = t.WarehouseLocation + "/" + key
+	return nil
 }
 
 type getTableRequest struct {
@@ -710,29 +737,17 @@ func (s *Service) deleteTableTyped(ctx context.Context, req *tableRequest) (any,
 
 // updateTable runs a read-modify-write of one table under the write lock.
 func (s *Service) updateTable(ctx context.Context, arn, namespace, name string, mutate func(*tableRecord) *protocol.AWSError) (*tableRecord, *protocol.AWSError) {
-	defer s.lock()()
-	_, t, aerr := s.resolveTable(ctx, arn, namespace, name)
-	if aerr != nil {
-		return nil, aerr
-	}
-	if aerr := mutate(t); aerr != nil {
-		return nil, aerr
-	}
-	return t, s.saveTable(ctx, t)
+	return readModifyWrite(s, func() (*tableRecord, *protocol.AWSError) {
+		_, t, aerr := s.resolveTable(ctx, arn, namespace, name)
+		return t, aerr
+	}, mutate, func(t *tableRecord) *protocol.AWSError { return s.saveTable(ctx, t) })
 }
 
 // updateTableByARN is updateTable for the operations that address a table by
 // its ARN.
 func (s *Service) updateTableByARN(ctx context.Context, arn string, mutate func(*tableRecord) *protocol.AWSError) (*tableRecord, *protocol.AWSError) {
-	defer s.lock()()
-	t, aerr := s.resolveTableARN(ctx, arn)
-	if aerr != nil {
-		return nil, aerr
-	}
-	if aerr := mutate(t); aerr != nil {
-		return nil, aerr
-	}
-	return t, s.saveTable(ctx, t)
+	return readModifyWrite(s, func() (*tableRecord, *protocol.AWSError) { return s.resolveTableARN(ctx, arn) }, mutate,
+		func(t *tableRecord) *protocol.AWSError { return s.saveTable(ctx, t) })
 }
 
 type renameTableRequest struct {

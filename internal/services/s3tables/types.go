@@ -15,6 +15,7 @@ const (
 	storageIntelligentTiering = "INTELLIGENT_TIERING"
 
 	resourceTypeCustomer = "customer"
+	resourceTypeAWS      = "aws"
 	formatIceberg        = "ICEBERG"
 
 	statusEnabled  = "enabled"

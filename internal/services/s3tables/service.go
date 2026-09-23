@@ -101,11 +101,6 @@ func (s *Service) accountID() string {
 
 func (s *Service) now() time.Time { return s.clk.Now().UTC() }
 
-// bucketARN is arn:aws:s3tables:<region>:<account>:bucket/<name>.
-func (s *Service) bucketARN(region, name string) string {
-	return "arn:aws:s3tables:" + region + ":" + s.accountID() + ":bucket/" + name
-}
-
 func (s *Service) newID() string { return uuid.NewString() }
 
 // versionTokenBytes gives a 20-character hex token, the length AWS's tokens

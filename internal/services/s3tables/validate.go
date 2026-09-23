@@ -1,6 +1,6 @@
 package s3tables
 
-// Names, ARNs and the modeled errors.
+// Names, configuration shapes and the modeled errors.
 //
 // Naming rules are AWS's, from "Amazon S3 table bucket, table, and namespace
 // naming rules":
@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/overcast-sh/overcast/internal/protocol"
@@ -32,6 +33,18 @@ func notFound(msg string) *protocol.AWSError {
 
 func conflict(msg string) *protocol.AWSError {
 	return &protocol.AWSError{Code: "ConflictException", Message: msg, HTTPStatus: http.StatusConflict}
+}
+
+// validationError is the model-validation error AWS answers a constraint
+// violation with: "1 validation error detected: " and the constraint.
+func validationError(format string, args ...any) *protocol.AWSError {
+	return badRequest("1 validation error detected: " + fmt.Sprintf(format, args...))
+}
+
+// enumError is validationError for a member outside its enum.
+func enumError(field, value string, allowed ...string) *protocol.AWSError {
+	return validationError("Value '%s' at '%s' failed to satisfy constraint: Member must satisfy enum value set: [%s]",
+		value, field, strings.Join(allowed, ", "))
 }
 
 func notImplemented(msg string) *protocol.AWSError {
@@ -109,55 +122,9 @@ func validateNamespaceName(name string) *protocol.AWSError {
 // model-validation wording AWS answers a table name with.
 func validateTableName(name string) *protocol.AWSError {
 	if !namespaceOrTableName.MatchString(name) {
-		return badRequest(fmt.Sprintf(
-			"1 validation error detected: Value '%s' at 'name' failed to satisfy constraint: Member must satisfy regular expression pattern: [0-9a-z_]*", name))
+		return validationError("Value '%s' at 'name' failed to satisfy constraint: Member must satisfy regular expression pattern: [0-9a-z_]*", name)
 	}
 	return nil
-}
-
-// ─── ARNs ─────────────────────────────────────────────────────────────────────
-
-// bucketARNPattern is the model's TableBucketARN pattern with the service
-// component fixed to s3tables; tableARNPattern is TableARN's.
-var (
-	bucketARNPattern = regexp.MustCompile(`^arn:(aws[-a-z0-9]*):s3tables:([-a-z0-9]*):([0-9]{12}):bucket/([a-z0-9_-]{3,63})$`)
-	tableARNPattern  = regexp.MustCompile(`^arn:(aws[-a-z0-9]*):s3tables:([-a-z0-9]*):([0-9]{12}):bucket/([a-z0-9_-]{3,63})/table/([a-zA-Z0-9_-]{1,255})$`)
-)
-
-// parsedARN is a table bucket or table ARN taken apart.
-type parsedARN struct {
-	Region  string
-	Account string
-	Bucket  string
-	TableID string // empty for a bucket ARN
-}
-
-func parseBucketARN(arn string) (parsedARN, *protocol.AWSError) {
-	m := bucketARNPattern.FindStringSubmatch(arn)
-	if m == nil {
-		return parsedARN{}, badRequest("The specified table bucket ARN is not valid.")
-	}
-	return parsedARN{Region: m[2], Account: m[3], Bucket: m[4]}, nil
-}
-
-func parseTableARN(arn string) (parsedARN, *protocol.AWSError) {
-	m := tableARNPattern.FindStringSubmatch(arn)
-	if m == nil {
-		return parsedARN{}, badRequest("The specified table ARN is not valid.")
-	}
-	return parsedARN{Region: m[2], Account: m[3], Bucket: m[4], TableID: m[5]}, nil
-}
-
-// parseResourceARN accepts either kind, which is what the tagging operations'
-// ResourceArn names.
-func parseResourceARN(arn string) (parsedARN, *protocol.AWSError) {
-	if p, aerr := parseTableARN(arn); aerr == nil {
-		return p, nil
-	}
-	if p, aerr := parseBucketARN(arn); aerr == nil {
-		return p, nil
-	}
-	return parsedARN{}, badRequest("The specified resource ARN is not valid.")
 }
 
 // ─── Configuration shapes ─────────────────────────────────────────────────────
@@ -176,8 +143,7 @@ func validateEncryption(c *encryptionConfiguration) *protocol.AWSError {
 			return badRequest("kmsKeyArn must be specified when sseAlgorithm is aws:kms.")
 		}
 	default:
-		return badRequest(fmt.Sprintf(
-			"1 validation error detected: Value '%s' at 'encryptionConfiguration.sseAlgorithm' failed to satisfy constraint: Member must satisfy enum value set: [AES256, aws:kms]", c.SSEAlgorithm))
+		return enumError("encryptionConfiguration.sseAlgorithm", c.SSEAlgorithm, sseAES256, sseKMS)
 	}
 	return nil
 }
@@ -190,8 +156,7 @@ func validateStorageClass(c *storageClassConfiguration) *protocol.AWSError {
 	case storageStandard, storageIntelligentTiering:
 		return nil
 	}
-	return badRequest(fmt.Sprintf(
-		"1 validation error detected: Value '%s' at 'storageClassConfiguration.storageClass' failed to satisfy constraint: Member must satisfy enum value set: [STANDARD, INTELLIGENT_TIERING]", c.StorageClass))
+	return enumError("storageClassConfiguration.storageClass", c.StorageClass, storageStandard, storageIntelligentTiering)
 }
 
 func validateStatus(status, field string) *protocol.AWSError {
@@ -199,22 +164,14 @@ func validateStatus(status, field string) *protocol.AWSError {
 	case "", statusEnabled, statusDisabled:
 		return nil
 	}
-	return badRequest(fmt.Sprintf(
-		"1 validation error detected: Value '%s' at '%s' failed to satisfy constraint: Member must satisfy enum value set: [enabled, disabled]", status, field))
+	return enumError(field, status, statusEnabled, statusDisabled)
 }
 
 // validateMaintenance checks a maintenance value against the type its path
 // names: the settings union may only carry that type's member.
 func validateMaintenance(typ string, v *maintenanceValue, allowed ...string) *protocol.AWSError {
-	known := false
-	for _, a := range allowed {
-		if a == typ {
-			known = true
-		}
-	}
-	if !known {
-		return badRequest(fmt.Sprintf(
-			"1 validation error detected: Value '%s' at 'type' failed to satisfy constraint: Member must satisfy enum value set: [%s]", typ, strings.Join(allowed, ", ")))
+	if !slices.Contains(allowed, typ) {
+		return enumError("type", typ, allowed...)
 	}
 	if v == nil {
 		return badRequest("value is required.")
@@ -236,11 +193,9 @@ func validateMaintenance(typ string, v *maintenanceValue, allowed ...string) *pr
 		}
 	}
 	if c := v.Settings.IcebergCompaction; c != nil && c.Strategy != "" {
-		switch c.Strategy {
-		case "auto", "binpack", "sort", "z-order":
-		default:
-			return badRequest(fmt.Sprintf(
-				"1 validation error detected: Value '%s' at 'value.settings.icebergCompaction.strategy' failed to satisfy constraint: Member must satisfy enum value set: [auto, binpack, sort, z-order]", c.Strategy))
+		strategies := []string{"auto", "binpack", "sort", "z-order"}
+		if !slices.Contains(strategies, c.Strategy) {
+			return enumError("value.settings.icebergCompaction.strategy", c.Strategy, strategies...)
 		}
 	}
 	return nil

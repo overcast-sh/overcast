@@ -610,66 +610,70 @@ type listTagsResponse struct {
 	Tags map[string]string `json:"tags"`
 }
 
-// withResourceTags runs fn against the tags of the bucket or table an ARN
-// names, saving the record when save is set. Tags live on the record, so they
-// go when it does.
-func (s *Service) withResourceTags(ctx context.Context, arn string, save bool, fn func(map[string]string) (map[string]string, *protocol.AWSError)) (map[string]string, *protocol.AWSError) {
+// resourceTags returns the tags of the bucket or table an ARN names.
+func (s *Service) resourceTags(ctx context.Context, arn string) (map[string]string, *protocol.AWSError) {
 	p, aerr := parseResourceARN(arn)
 	if aerr != nil {
 		return nil, aerr
-	}
-	if save {
-		defer s.lock()()
 	}
 	if p.TableID != "" {
 		t, aerr := s.resolveTableARN(ctx, arn)
 		if aerr != nil {
 			return nil, aerr
 		}
-		tags, aerr := fn(maps.Clone(t.Tags))
-		if aerr != nil || !save {
-			return tags, aerr
-		}
-		t.Tags = tags
-		return tags, s.saveTable(ctx, t)
+		return t.Tags, nil
 	}
 	b, aerr := s.resolveBucket(ctx, arn)
 	if aerr != nil {
 		return nil, aerr
 	}
-	tags, aerr := fn(maps.Clone(b.Tags))
-	if aerr != nil || !save {
-		return tags, aerr
+	return b.Tags, nil
+}
+
+// updateResourceTags replaces the tags of the bucket or table an ARN names
+// with what edit makes of a copy of them. Tags live on the record, so they go
+// when it does.
+func (s *Service) updateResourceTags(ctx context.Context, arn string, edit func(map[string]string) (map[string]string, *protocol.AWSError)) *protocol.AWSError {
+	p, aerr := parseResourceARN(arn)
+	if aerr != nil {
+		return aerr
 	}
-	b.Tags = tags
-	return tags, s.saveBucket(ctx, b)
+	apply := func(tags *map[string]string) *protocol.AWSError {
+		edited, aerr := edit(maps.Clone(*tags))
+		if aerr == nil {
+			*tags = edited
+		}
+		return aerr
+	}
+	if p.TableID != "" {
+		_, aerr = s.updateTableByARN(ctx, arn, func(t *tableRecord) *protocol.AWSError { return apply(&t.Tags) })
+		return aerr
+	}
+	_, aerr = s.updateBucket(ctx, arn, func(b *tableBucket) *protocol.AWSError { return apply(&b.Tags) })
+	return aerr
 }
 
 func (s *Service) tagResourceTyped(ctx context.Context, req *tagResourceRequest) (any, *protocol.AWSError) {
-	_, aerr := s.withResourceTags(ctx, req.ResourceARN, true, func(tags map[string]string) (map[string]string, *protocol.AWSError) {
+	return nil, s.updateResourceTags(ctx, req.ResourceARN, func(tags map[string]string) (map[string]string, *protocol.AWSError) {
 		if tags == nil {
 			tags = map[string]string{}
 		}
 		maps.Copy(tags, req.Tags)
 		return tags, serviceutil.ValidateTags(tagCfg, tags)
 	})
-	return struct{}{}, aerr
 }
 
 func (s *Service) untagResourceTyped(ctx context.Context, req *untagResourceRequest) (any, *protocol.AWSError) {
-	_, aerr := s.withResourceTags(ctx, req.ResourceARN, true, func(tags map[string]string) (map[string]string, *protocol.AWSError) {
+	return nil, s.updateResourceTags(ctx, req.ResourceARN, func(tags map[string]string) (map[string]string, *protocol.AWSError) {
 		for _, k := range req.TagKeys {
 			delete(tags, k)
 		}
 		return tags, nil
 	})
-	return nil, aerr
 }
 
 func (s *Service) listTagsForResourceTyped(ctx context.Context, req *listTagsRequest) (*listTagsResponse, *protocol.AWSError) {
-	tags, aerr := s.withResourceTags(ctx, req.ResourceARN, false, func(tags map[string]string) (map[string]string, *protocol.AWSError) {
-		return tags, nil
-	})
+	tags, aerr := s.resourceTags(ctx, req.ResourceARN)
 	if aerr != nil {
 		return nil, aerr
 	}

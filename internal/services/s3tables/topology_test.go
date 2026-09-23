@@ -15,7 +15,7 @@ func TestContributeTopology_bucketsTablesAndStackAlias(t *testing.T) {
 	if aerr := s.saveBucket(ctx, b); aerr != nil {
 		t.Fatalf("saveBucket: %v", aerr)
 	}
-	tbl := &tableRecord{Name: "orders", Namespace: "sales", Bucket: "lake", Region: "eu-west-1", TableID: "t-1", ARN: b.ARN + "/table/t-1"}
+	tbl := &tableRecord{Name: "orders", Namespace: "sales", Bucket: "lake", Region: "eu-west-1", TableID: "t-1", ARN: tableARN(b.ARN, "t-1")}
 	if aerr := s.saveTable(ctx, tbl); aerr != nil {
 		t.Fatalf("saveTable: %v", aerr)
 	}
