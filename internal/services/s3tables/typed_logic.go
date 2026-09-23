@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/overcast-sh/overcast/internal/icebergmeta"
 	"github.com/overcast-sh/overcast/internal/protocol"
 	"github.com/overcast-sh/overcast/internal/serviceutil"
 )
@@ -561,7 +562,7 @@ func (s *Service) createTableTyped(ctx context.Context, req *createTableRequest)
 		}
 	}
 	if metadataJSON != nil && s.putObject != nil {
-		key := "metadata/" + metadataFileName(s.newID())
+		key := icebergmeta.MetadataPath(0, s.newID())
 		if _, aerr := s.putObject(ctx, warehouse, key, metadataJSON, s3PutJSON); aerr != nil {
 			return nil, aerr
 		}

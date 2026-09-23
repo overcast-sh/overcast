@@ -4,14 +4,16 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 )
 
-func baseInput() TableInput {
-	return TableInput{
-		TableUUID:     "5f1a8f36-8b3a-4bcb-9b3a-1c2d3e4f5a6b",
-		Location:      "s3://abc--table-s3",
-		LastUpdatedMS: 1758628800000,
-		Columns: []ColumnInput{
+var testNow = time.UnixMilli(1758628800000)
+
+func baseInput() CreateSpec {
+	return CreateSpec{
+		TableUUID: "5f1a8f36-8b3a-4bcb-9b3a-1c2d3e4f5a6b",
+		Location:  "s3://abc--table-s3",
+		Fields: []Field{
 			{Name: "id", Type: "long", Required: true},
 			{Name: "name", Type: "string"},
 			{Name: "amount", Type: "Decimal( 10 ,2 )"},
@@ -25,7 +27,7 @@ func TestNew_writesTheSpecsInitialTable(t *testing.T) {
 	in.Properties = map[string]string{"write.format.default": "parquet"}
 
 	// When: its metadata is built and serialised
-	m, err := New(in)
+	m, err := New(in, testNow)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -44,7 +46,7 @@ func TestNew_writesTheSpecsInitialTable(t *testing.T) {
 		"table-uuid":            in.TableUUID,
 		"location":              in.Location,
 		"last-sequence-number":  float64(0),
-		"last-updated-ms":       float64(in.LastUpdatedMS),
+		"last-updated-ms":       float64(testNow.UnixMilli()),
 		"last-column-id":        float64(3),
 		"current-schema-id":     float64(0),
 		"default-spec-id":       float64(0),
@@ -77,14 +79,14 @@ func TestNew_writesTheSpecsInitialTable(t *testing.T) {
 }
 
 func TestNew_partitionAndSortOrder(t *testing.T) {
-	// Given: a table partitioned by day(id) and sorted by name
+	// Given: a table partitioned by bucket[16](id) and sorted by name
 	in := baseInput()
-	in.Partition = []PartitionFieldInput{{SourceID: 1, Name: "id_bucket", Transform: "bucket[16]"}}
+	in.PartitionFields = []PartitionField{{SourceID: 1, Name: "id_bucket", Transform: "bucket[16]"}}
 	in.SortOrderID = 1
-	in.SortFields = []SortFieldInput{{SourceID: 2, Transform: "identity", Direction: "asc", NullOrder: "nulls-first"}}
+	in.SortFields = []SortField{{SourceID: 2, Transform: "identity", Direction: "asc", NullOrder: "nulls-first"}}
 
 	// When: its metadata is built
-	m, err := New(in)
+	m, err := New(in, testNow)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -99,44 +101,51 @@ func TestNew_partitionAndSortOrder(t *testing.T) {
 }
 
 func TestNew_rejectsWhatTheSpecDoesNotAllow(t *testing.T) {
-	cases := map[string]func(*TableInput){
-		"no columns":         func(in *TableInput) { in.Columns = nil },
-		"duplicate column":   func(in *TableInput) { in.Columns = append(in.Columns, ColumnInput{Name: "id", Type: "int"}) },
-		"unknown type":       func(in *TableInput) { in.Columns[0].Type = "varchar" },
-		"nested type string": func(in *TableInput) { in.Columns[0].Type = "list<int>" },
-		"bad partition": func(in *TableInput) {
-			in.Partition = []PartitionFieldInput{{SourceID: 9, Name: "p", Transform: "identity"}}
+	// Given: a valid table, altered in one way the spec forbids
+	cases := map[string]func(*CreateSpec){
+		"no columns":         func(in *CreateSpec) { in.Fields = nil },
+		"duplicate column":   func(in *CreateSpec) { in.Fields = append(in.Fields, Field{Name: "id", Type: "int"}) },
+		"unknown type":       func(in *CreateSpec) { in.Fields[0].Type = "varchar" },
+		"nested type string": func(in *CreateSpec) { in.Fields[0].Type = "list<int>" },
+		"bad partition": func(in *CreateSpec) {
+			in.PartitionFields = []PartitionField{{SourceID: 9, Name: "p", Transform: "identity"}}
 		},
-		"sort order id zero":  func(in *TableInput) { in.SortFields = []SortFieldInput{{SourceID: 1, Transform: "identity"}} },
-		"missing location":    func(in *TableInput) { in.Location = "" },
-		"column without name": func(in *TableInput) { in.Columns[1].Name = "" },
-		"v3-only type":        func(in *TableInput) { in.Columns[0].Type = "timestamp_ns" },
-		"duplicate partition id": func(in *TableInput) {
-			in.Partition = []PartitionFieldInput{{SourceID: 1, Name: "a", Transform: "identity", FieldID: 1001}, {SourceID: 2, Name: "b", Transform: "identity", FieldID: 1001}}
+		"sort order id zero":  func(in *CreateSpec) { in.SortFields = []SortField{{SourceID: 1, Transform: "identity"}} },
+		"missing location":    func(in *CreateSpec) { in.Location = "" },
+		"column without name": func(in *CreateSpec) { in.Fields[1].Name = "" },
+		"v3-only type":        func(in *CreateSpec) { in.Fields[0].Type = "timestamp_ns" },
+		"duplicate partition id": func(in *CreateSpec) {
+			in.PartitionFields = []PartitionField{{SourceID: 1, Name: "a", Transform: "identity", FieldID: 1001}, {SourceID: 2, Name: "b", Transform: "identity", FieldID: 1001}}
 		},
-		"duplicate partition name": func(in *TableInput) {
-			in.Partition = []PartitionFieldInput{{SourceID: 1, Name: "a", Transform: "identity"}, {SourceID: 2, Name: "a", Transform: "identity"}}
+		"duplicate partition name": func(in *CreateSpec) {
+			in.PartitionFields = []PartitionField{{SourceID: 1, Name: "a", Transform: "identity"}, {SourceID: 2, Name: "a", Transform: "identity"}}
 		},
-		"bad sort direction": func(in *TableInput) {
+		"bad sort direction": func(in *CreateSpec) {
 			in.SortOrderID = 1
-			in.SortFields = []SortFieldInput{{SourceID: 1, Transform: "identity", Direction: "up", NullOrder: "nulls-first"}}
+			in.SortFields = []SortField{{SourceID: 1, Transform: "identity", Direction: "up", NullOrder: "nulls-first"}}
 		},
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
 			in := baseInput()
 			mutate(&in)
-			_, err := New(in)
-			var inv *ErrInvalid
-			if !errors.As(err, &inv) {
-				t.Fatalf("New err = %v, want *ErrInvalid", err)
+			// When: its metadata is built
+			_, err := New(in, testNow)
+
+			// Then: New refuses it as invalid
+			if !errors.Is(err, ErrInvalid) {
+				t.Fatalf("New err = %v, want ErrInvalid", err)
 			}
 		})
 	}
 }
 
-func TestFileName(t *testing.T) {
-	if got := FileName(0, "abc"); got != "00000-abc.metadata.json" {
-		t.Errorf("FileName = %q", got)
+func TestMetadataPath(t *testing.T) {
+	// Given/When: the path of a table's first metadata file
+	got := MetadataPath(0, "abc")
+
+	// Then: it is the reference implementation's zero-padded name under metadata/
+	if got != "metadata/00000-abc.metadata.json" {
+		t.Errorf("MetadataPath = %q", got)
 	}
 }

@@ -8,14 +8,21 @@
 // for a document of a dozen fields. Only metadata is written here; data and
 // manifest files are always the engine's or the client's.
 //
+// The API is Decision 4's in docs/plans/athena-s3tables-iceberg.md: New takes
+// the table in Iceberg's own types and hides how the document is built.
+// Parse and Commit join it with the Iceberg REST catalog (#2069).
+//
 // Spec: https://iceberg.apache.org/spec/#table-metadata-fields
 package icebergmeta
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
+	"time"
 )
 
 // FormatVersion is the Iceberg table format this package writes.
@@ -102,53 +109,33 @@ type Metadata struct {
 	Refs               map[string]any    `json:"refs"`
 }
 
-// ColumnInput is a column as a caller declares it: a name, an Iceberg type and
-// whether it is required. Ids are assigned by New, as Iceberg assigns fresh
-// ids to a new table's schema whatever the caller proposed.
-type ColumnInput struct {
-	Name     string
-	Type     string
-	Required bool
-	Doc      string
+// CreateSpec describes a new table in Iceberg's own terms. Field ids are
+// ignored: New assigns 1..n in declaration order, as Iceberg assigns fresh ids
+// to a new table's schema whatever the caller proposed. A partition field's
+// FieldID is optional (zero means "assign one"); partition and sort fields
+// name their column by its assigned id.
+type CreateSpec struct {
+	TableUUID       string
+	Location        string
+	Fields          []Field
+	PartitionFields []PartitionField
+	SortOrderID     int
+	SortFields      []SortField
+	Properties      map[string]string
 }
 
-// PartitionFieldInput is a partition field as a caller declares it. FieldID
-// is optional (zero means "assign one").
-type PartitionFieldInput struct {
-	SourceID  int
-	FieldID   int
-	Name      string
-	Transform string
-}
+// ErrInvalid is matched (errors.Is) by every error New returns for a table
+// definition the spec does not allow. The error's message is written for the
+// API caller.
+var ErrInvalid = errors.New("icebergmeta: invalid table definition")
 
-// SortFieldInput is a sort field as a caller declares it.
-type SortFieldInput struct {
-	SourceID  int
-	Transform string
-	Direction string
-	NullOrder string
-}
+type invalidError struct{ reason string }
 
-// TableInput is everything New needs to describe a new table.
-type TableInput struct {
-	TableUUID     string
-	Location      string
-	LastUpdatedMS int64
-	Columns       []ColumnInput
-	Partition     []PartitionFieldInput
-	SortOrderID   int
-	SortFields    []SortFieldInput
-	Properties    map[string]string
-}
-
-// ErrInvalid reports a table definition the spec does not allow. Its message
-// is written for the API caller.
-type ErrInvalid struct{ Reason string }
-
-func (e *ErrInvalid) Error() string { return e.Reason }
+func (e invalidError) Error() string        { return e.reason }
+func (e invalidError) Is(target error) bool { return target == ErrInvalid }
 
 func invalid(format string, args ...any) error {
-	return &ErrInvalid{Reason: fmt.Sprintf(format, args...)}
+	return invalidError{reason: fmt.Sprintf(format, args...)}
 }
 
 // primitiveTypes are the format-version 2 primitive type names without
@@ -183,113 +170,40 @@ func canonicalPrimitive(typ string) (string, bool) {
 	return "", false
 }
 
-// New builds the metadata of a table that has no snapshots yet: one schema
-// (id 0) with field ids assigned 1..n in declaration order, the given
-// partition spec as spec 0 (unpartitioned when empty) and the given sort order
-// (unsorted, id 0, when empty).
-func New(in TableInput) (*Metadata, error) {
-	if in.TableUUID == "" || in.Location == "" {
+// New builds the metadata of a table that has no snapshots yet, last updated
+// at now: one schema (id 0) with field ids assigned 1..n in declaration order,
+// the given partition spec as spec 0 (unpartitioned when empty) and the given
+// sort order (unsorted, id 0, when empty).
+func New(spec CreateSpec, now time.Time) (*Metadata, error) {
+	if spec.TableUUID == "" || spec.Location == "" {
 		return nil, invalid("a table needs a UUID and a location")
 	}
-	if len(in.Columns) == 0 {
-		return nil, invalid("The schema must contain at least one field.")
+	schema, err := newSchema(spec.Fields)
+	if err != nil {
+		return nil, err
 	}
-	fields := make([]Field, 0, len(in.Columns))
-	seen := make(map[string]bool, len(in.Columns))
-	for i, c := range in.Columns {
-		if c.Name == "" {
-			return nil, invalid("Schema field %d has no name.", i)
-		}
-		if seen[c.Name] {
-			return nil, invalid("Schema field name %q is used more than once.", c.Name)
-		}
-		seen[c.Name] = true
-		typ, ok := canonicalPrimitive(c.Type)
-		if !ok {
-			return nil, invalid("Schema field %q has an unsupported type %q.", c.Name, c.Type)
-		}
-		fields = append(fields, Field{
-			ID:       i + 1,
-			Name:     c.Name,
-			Required: c.Required,
-			Type:     typ,
-			Doc:      c.Doc,
-		})
+	partitionSpec, lastPartitionID, err := newPartitionSpec(spec.PartitionFields, len(schema.Fields))
+	if err != nil {
+		return nil, err
 	}
-
-	spec := PartitionSpec{SpecID: InitialSpecID, Fields: []PartitionField{}}
-	lastPartitionID := firstPartitionFieldID - 1
-	for _, p := range in.Partition {
-		if p.FieldID != 0 && p.FieldID > lastPartitionID {
-			lastPartitionID = p.FieldID
-		}
+	orders, defaultOrder, err := newSortOrders(spec.SortOrderID, spec.SortFields, len(schema.Fields))
+	if err != nil {
+		return nil, err
 	}
-	partitionIDs := map[int]bool{}
-	partitionNames := map[string]bool{}
-	for _, p := range in.Partition {
-		if p.SourceID < 1 || p.SourceID > len(fields) {
-			return nil, invalid("Partition field %q refers to unknown source id %d.", p.Name, p.SourceID)
-		}
-		if p.Name == "" || p.Transform == "" {
-			return nil, invalid("A partition field needs a name and a transform.")
-		}
-		id := p.FieldID
-		if id == 0 {
-			// Explicit ids were taken into account above, so an assigned one
-			// can never collide with them.
-			lastPartitionID++
-			id = lastPartitionID
-		}
-		if id < firstPartitionFieldID || partitionIDs[id] {
-			return nil, invalid("Partition field id %d is invalid or used more than once.", id)
-		}
-		if partitionNames[p.Name] {
-			return nil, invalid("Partition field name %q is used more than once.", p.Name)
-		}
-		partitionIDs[id], partitionNames[p.Name] = true, true
-		spec.Fields = append(spec.Fields, PartitionField{SourceID: p.SourceID, FieldID: id, Name: p.Name, Transform: p.Transform})
-	}
-
-	orders := []SortOrder{{OrderID: UnsortedOrderID, Fields: []SortField{}}}
-	defaultOrder := UnsortedOrderID
-	if len(in.SortFields) > 0 {
-		if in.SortOrderID == UnsortedOrderID {
-			return nil, invalid("Sort order id 0 is reserved for the unsorted order.")
-		}
-		sorted := SortOrder{OrderID: in.SortOrderID, Fields: make([]SortField, 0, len(in.SortFields))}
-		for _, f := range in.SortFields {
-			if f.SourceID < 1 || f.SourceID > len(fields) {
-				return nil, invalid("Sort field refers to unknown source id %d.", f.SourceID)
-			}
-			if f.Direction != "asc" && f.Direction != "desc" {
-				return nil, invalid("Sort direction %q must be asc or desc.", f.Direction)
-			}
-			if f.NullOrder != "nulls-first" && f.NullOrder != "nulls-last" {
-				return nil, invalid("Sort null-order %q must be nulls-first or nulls-last.", f.NullOrder)
-			}
-			if f.Transform == "" {
-				return nil, invalid("A sort field needs a transform.")
-			}
-			sorted.Fields = append(sorted.Fields, SortField(f))
-		}
-		orders = append(orders, sorted)
-		defaultOrder = in.SortOrderID
-	}
-
-	props := in.Properties
+	props := spec.Properties
 	if props == nil {
 		props = map[string]string{}
 	}
 	return &Metadata{
 		FormatVersion:      FormatVersion,
-		TableUUID:          in.TableUUID,
-		Location:           in.Location,
-		LastUpdatedMS:      in.LastUpdatedMS,
-		LastColumnID:       len(fields),
+		TableUUID:          spec.TableUUID,
+		Location:           spec.Location,
+		LastUpdatedMS:      now.UnixMilli(),
+		LastColumnID:       len(schema.Fields),
 		CurrentSchemaID:    InitialSchemaID,
-		Schemas:            []Schema{{Type: "struct", SchemaID: InitialSchemaID, Fields: fields}},
+		Schemas:            []Schema{schema},
 		DefaultSpecID:      InitialSpecID,
-		PartitionSpecs:     []PartitionSpec{spec},
+		PartitionSpecs:     []PartitionSpec{partitionSpec},
 		LastPartitionID:    lastPartitionID,
 		DefaultSortOrderID: defaultOrder,
 		SortOrders:         orders,
@@ -301,8 +215,95 @@ func New(in TableInput) (*Metadata, error) {
 	}, nil
 }
 
-// FileName is the name of the n-th metadata file of a table, in the
-// "<version>-<uuid>.metadata.json" form the reference implementation writes.
-func FileName(version int, fileUUID string) string {
-	return fmt.Sprintf("%05d-%s.metadata.json", version, fileUUID)
+// newSchema is the initial schema: the columns in order, ids 1..n, types in
+// their canonical spelling.
+func newSchema(columns []Field) (Schema, error) {
+	if len(columns) == 0 {
+		return Schema{}, invalid("The schema must contain at least one field.")
+	}
+	fields := make([]Field, 0, len(columns))
+	seen := make(map[string]bool, len(columns))
+	for i, c := range columns {
+		if c.Name == "" {
+			return Schema{}, invalid("Schema field %d has no name.", i)
+		}
+		if seen[c.Name] {
+			return Schema{}, invalid("Schema field name %q is used more than once.", c.Name)
+		}
+		seen[c.Name] = true
+		typ, ok := canonicalPrimitive(c.Type)
+		if !ok {
+			return Schema{}, invalid("Schema field %q has an unsupported type %q.", c.Name, c.Type)
+		}
+		fields = append(fields, Field{ID: i + 1, Name: c.Name, Required: c.Required, Type: typ, Doc: c.Doc})
+	}
+	return Schema{Type: "struct", SchemaID: InitialSchemaID, Fields: fields}, nil
+}
+
+// newPartitionSpec is spec 0 over a schema of columnCount columns, with the
+// spec's last partition field id. Explicit field ids are honoured; the rest
+// are assigned above the highest explicit one, so the two never collide.
+func newPartitionSpec(in []PartitionField, columnCount int) (PartitionSpec, int, error) {
+	spec := PartitionSpec{SpecID: InitialSpecID, Fields: []PartitionField{}}
+	lastID := firstPartitionFieldID - 1
+	for _, p := range in {
+		lastID = max(lastID, p.FieldID)
+	}
+	ids := map[int]bool{}
+	names := map[string]bool{}
+	for _, p := range in {
+		if p.SourceID < 1 || p.SourceID > columnCount {
+			return PartitionSpec{}, 0, invalid("Partition field %q refers to unknown source id %d.", p.Name, p.SourceID)
+		}
+		if p.Name == "" || p.Transform == "" {
+			return PartitionSpec{}, 0, invalid("A partition field needs a name and a transform.")
+		}
+		if p.FieldID == 0 {
+			lastID++
+			p.FieldID = lastID
+		}
+		if p.FieldID < firstPartitionFieldID || ids[p.FieldID] {
+			return PartitionSpec{}, 0, invalid("Partition field id %d is invalid or used more than once.", p.FieldID)
+		}
+		if names[p.Name] {
+			return PartitionSpec{}, 0, invalid("Partition field name %q is used more than once.", p.Name)
+		}
+		ids[p.FieldID], names[p.Name] = true, true
+		spec.Fields = append(spec.Fields, p)
+	}
+	return spec, lastID, nil
+}
+
+// newSortOrders is the unsorted order plus, when fields are given, the order
+// orderID over them, with the id of the default order.
+func newSortOrders(orderID int, in []SortField, columnCount int) ([]SortOrder, int, error) {
+	orders := []SortOrder{{OrderID: UnsortedOrderID, Fields: []SortField{}}}
+	if len(in) == 0 {
+		return orders, UnsortedOrderID, nil
+	}
+	if orderID == UnsortedOrderID {
+		return nil, 0, invalid("Sort order id 0 is reserved for the unsorted order.")
+	}
+	for _, f := range in {
+		if f.SourceID < 1 || f.SourceID > columnCount {
+			return nil, 0, invalid("Sort field refers to unknown source id %d.", f.SourceID)
+		}
+		if f.Direction != "asc" && f.Direction != "desc" {
+			return nil, 0, invalid("Sort direction %q must be asc or desc.", f.Direction)
+		}
+		if f.NullOrder != "nulls-first" && f.NullOrder != "nulls-last" {
+			return nil, 0, invalid("Sort null-order %q must be nulls-first or nulls-last.", f.NullOrder)
+		}
+		if f.Transform == "" {
+			return nil, 0, invalid("A sort field needs a transform.")
+		}
+	}
+	return append(orders, SortOrder{OrderID: orderID, Fields: slices.Clone(in)}), orderID, nil
+}
+
+// MetadataPath is where the n-th metadata file of a table lives, relative to
+// the table's location, in the "metadata/<version>-<uuid>.metadata.json" form
+// the reference implementation writes.
+func MetadataPath(version int, fileUUID string) string {
+	return fmt.Sprintf("metadata/%05d-%s.metadata.json", version, fileUUID)
 }

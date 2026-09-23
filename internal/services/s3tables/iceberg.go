@@ -17,11 +17,6 @@ import (
 // s3PutJSON is how the metadata document is stored in the warehouse.
 var s3PutJSON = events.S3PutObjectOptions{ContentType: "application/json"}
 
-// metadataFileName names a new table's first metadata file.
-func metadataFileName(fileUUID string) string {
-	return icebergmeta.FileName(0, fileUUID)
-}
-
 // buildInitialMetadata turns metadata.iceberg into the table's first
 // metadata.json. Iceberg assigns a new table's column ids itself, 1..n in
 // declaration order; a column id the caller supplied is honoured only as the
@@ -29,7 +24,7 @@ func metadataFileName(fileUUID string) string {
 // declared id is addressed by its position (1..n) unless another field
 // declared that number; a declared id used twice is refused.
 func buildInitialMetadata(tableUUID, location string, now time.Time, in *icebergMetadata) ([]byte, *protocol.AWSError) {
-	columns := make([]icebergmeta.ColumnInput, 0, len(in.Schema.Fields))
+	columns := make([]icebergmeta.Field, 0, len(in.Schema.Fields))
 	idMap := make(map[int]int, len(in.Schema.Fields))
 	for i, f := range in.Schema.Fields {
 		if f.ID == nil {
@@ -46,7 +41,7 @@ func buildInitialMetadata(tableUUID, location string, now time.Time, in *iceberg
 				idMap[i+1] = i + 1
 			}
 		}
-		columns = append(columns, icebergmeta.ColumnInput{Name: f.Name, Type: f.Type, Required: f.Required})
+		columns = append(columns, icebergmeta.Field{Name: f.Name, Type: f.Type, Required: f.Required})
 	}
 	source := func(id int) int {
 		if mapped, ok := idMap[id]; ok {
@@ -55,37 +50,35 @@ func buildInitialMetadata(tableUUID, location string, now time.Time, in *iceberg
 		return -1 // refused by icebergmeta as an unknown source id
 	}
 
-	table := icebergmeta.TableInput{
-		TableUUID:     tableUUID,
-		Location:      location,
-		LastUpdatedMS: now.UnixMilli(),
-		Columns:       columns,
-		Properties:    in.Properties,
+	spec := icebergmeta.CreateSpec{
+		TableUUID:  tableUUID,
+		Location:   location,
+		Fields:     columns,
+		Properties: in.Properties,
 	}
 	if in.PartitionSpec != nil {
 		if in.PartitionSpec.SpecID != nil && *in.PartitionSpec.SpecID != icebergmeta.InitialSpecID {
 			return nil, badRequest("A new table's partition spec must have spec-id 0.")
 		}
 		for _, p := range in.PartitionSpec.Fields {
-			table.Partition = append(table.Partition, icebergmeta.PartitionFieldInput{
+			spec.PartitionFields = append(spec.PartitionFields, icebergmeta.PartitionField{
 				SourceID: source(p.SourceID), FieldID: p.FieldID, Name: p.Name, Transform: p.Transform,
 			})
 		}
 	}
 	if in.WriteOrder != nil && len(in.WriteOrder.Fields) > 0 {
-		table.SortOrderID = in.WriteOrder.OrderID
+		spec.SortOrderID = in.WriteOrder.OrderID
 		for _, f := range in.WriteOrder.Fields {
-			table.SortFields = append(table.SortFields, icebergmeta.SortFieldInput{
+			spec.SortFields = append(spec.SortFields, icebergmeta.SortField{
 				SourceID: source(f.SourceID), Transform: f.Transform, Direction: f.Direction, NullOrder: f.NullOrder,
 			})
 		}
 	}
 
-	meta, err := icebergmeta.New(table)
+	meta, err := icebergmeta.New(spec, now)
 	if err != nil {
-		var inv *icebergmeta.ErrInvalid
-		if errors.As(err, &inv) {
-			return nil, badRequest(inv.Reason)
+		if errors.Is(err, icebergmeta.ErrInvalid) {
+			return nil, badRequest(err.Error())
 		}
 		return nil, protocol.Wrap(protocol.ErrInternalError, err)
 	}
