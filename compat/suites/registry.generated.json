@@ -1376,6 +1376,40 @@
       ]
     },
     {
+      "service": "kinesis",
+      "name": "kinesis-shards-shadow",
+      "generated": true,
+      "scenario": "compat/model/authored/kinesis-shards.json",
+      "state": "candidate",
+      "shadowOf": "kinesis-shards",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "ListShards"
+        },
+        {
+          "name": "SplitShard",
+          "depends": [
+            "ListShards"
+          ]
+        },
+        {
+          "name": "MergeShards",
+          "depends": [
+            "SplitShard"
+          ]
+        }
+      ]
+    },
+    {
       "service": "kms",
       "name": "kms-gen-key",
       "generated": true,
