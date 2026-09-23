@@ -364,13 +364,90 @@ jobs:
       upload-artifacts: true
       retention-days: 90
 
+  # The public compatibility report overcast.sh renders at /compat/. It is
+  # built from the aggregated results of the Compatibility Tests run on this
+  # exact SHA — the run RELEASE.md already requires to be green — rather than
+  # from compat.yml's own `release: created` re-run, which finishes long after
+  # the website has been told to rebuild. Uploaded as an `overcast*` artifact,
+  # so release-assets picks it up into dist/ with the binaries, checksums it and
+  # attaches it to the release.
+  #
+  # It never blocks a release: when anything is missing it warns and ships no
+  # report, and the site keeps showing the previous release's.
+  compat-report:
+    name: Build compatibility report
+    needs: [check-version]
+    if: needs.check-version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      issues: read
+    # Up to 60 minutes waiting for the compat run a VERSION-bump push starts
+    # alongside this workflow (about 20 minutes on main today), plus setup.
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build compat-report.json
+        id: report
+        # A step-level continue-on-error, so a missing or red compat run costs
+        # this release its report and nothing else.
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+          TAG: ${{ needs.check-version.outputs.tag }}
+        run: |
+          run_id=""
+          for _ in $(seq 60); do
+            run=$(gh run list --workflow compat.yml --commit "$SHA" --limit 20 \
+              --json databaseId,status,conclusion \
+              --jq '[.[] | select(.status == "completed")][0] // empty | "\(.databaseId) \(.conclusion)"')
+            if [ -n "$run" ]; then
+              run_id=${run% *}
+              conclusion=${run#* }
+              break
+            fi
+            echo "Waiting for the Compatibility Tests run on $SHA..."
+            sleep 60
+          done
+          if [ -z "$run_id" ]; then
+            echo "No completed Compatibility Tests run for $SHA."
+            exit 1
+          fi
+          if [ "$conclusion" != "success" ]; then
+            echo "Compatibility Tests run $run_id concluded $conclusion."
+            exit 1
+          fi
+          gh run download "$run_id" --name "compat-results-$SHA" --dir compat-run
+          python3 scripts/compat-issues.py compat-issues.json
+          mkdir -p compat-report
+          go run ./cmd/compat --results-file compat-run/compat-results.json \
+            --issues-file compat-issues.json \
+            --publish-report compat-report/compat-report.json \
+            --publish-version "$TAG" --publish-commit "$SHA"
+      - name: Warn when the report is missing
+        if: steps.report.outcome != 'success'
+        env:
+          TAG: ${{ needs.check-version.outputs.tag }}
+        run: echo "::warning title=No compatibility report::$TAG ships without compat-report.json; overcast.sh/compat keeps showing the previous release's. See the step above."
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: overcast-compat-report
+          path: compat-report/compat-report.json
+          if-no-files-found: warn
+
   release-assets:
     name: Publish release assets
     # Publishing requires a one-click approval of this exact SHA in the
     # 'release' environment (required reviewer: the maintainer). Everything
     # before this point runs unattended; nothing ships without a human.
     environment: release
-    needs: [check-version, binaries]
+    needs: [check-version, binaries, compat-report]
     if: needs.check-version.outputs.should_release == 'true' && needs.binaries.result == 'success'
     runs-on: ubuntu-latest
     # 120, and the number is not derived from the duration — which is the
