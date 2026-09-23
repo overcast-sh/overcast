@@ -1,0 +1,120 @@
+{
+  "$comment": "Authored port of the hand-written registry group eventbridge-events (docs/plans/compat-coverage-modelgen.md §3.11, G6, #1116). One spec in place of the five per-language implementations that exist and the two (dotnet-sdk, rust-sdk) that never did — 2 tests of parity debt per missing suite. It runs today under the shadow name eventbridge-events-shadow, beside the natives, so the nightly can compare the two per (suite, test); the flip PR renames this group to eventbridge-events, adds the scenario field to the hand-written registry.json entry, and deletes the native code. The clauses are the union of what the five natives assert — see compat/model/README.md § Authored scenarios. This group is PutEvents' own answer only: no native here verifies that an event reached a target, which is eventbridge-target-fanout's job and the cross-service gap #1931.",
+  "version": 1,
+  "service": "eventbridge",
+  "client": {
+    "sdkId": "EventBridge",
+    "endpointPrefix": "events",
+    "signingName": "events",
+    "protocol": "awsJson1_1",
+    "apiVersion": "2015-10-07",
+    "targetPrefix": "AWSEvents",
+    "awsQueryCompatible": false
+  },
+  "groups": [
+    {
+      "$comment": "Every event goes to one custom bus created in setup and deleted in teardown (#388: each EventBridge group uses its own bus). go-sdk, cli, python-sdk and java-sdk all create a bus in setup, but they do not all use it: node-js-sdk puts both tests' events on the default bus, go-sdk puts PutEventsBatch's there, and java-sdk puts PutEvents' there — the default bus is shared by every concurrent run and every other group, which a per-run bus is the whole point of avoiding. cli and python-sdk put both tests on their own bus, and that is the shape taken. No clause is wrapped in `eventually`: PutEvents answers synchronously with one result entry per request entry, and every native reads that answer directly.",
+      "name": "eventbridge-events-shadow",
+      "kind": "lifecycle",
+      "setup": [
+        {
+          "op": "CreateEventBus",
+          "params": { "Name": { "$name": "bus" } }
+        }
+      ],
+      "tests": [
+        {
+          "$comment": "All five natives assert FailedEntryCount is 0 — go-sdk, cli and python-sdk as `> 0` fails, node-js-sdk as `<= 0`, java-sdk as equality — which is one claim, spelled here as equality. Entries[0].EventId is the union's addition: AWS documents PutEventsResultEntry.EventId as the ID of a successfully ingested event and ErrorCode/ErrorMessage as present only on a failed one, so a zero failure count and an accepted entry with an id are the same statement read from both ends; Entries[1] missing pins that one request entry got one result entry, the single-entry half of cli's count check below. The Source/DetailType/Detail literals differ in every native (my.app/order, oc.cli/TestEvent, compat.test/CompatTest, com.example.overcast/TestEvent, compat.<runId>/CompatTest) and nothing reads them back; a fixed source naming this group is used, since the bus is already per run.",
+          "name": "PutEvents",
+          "op": "PutEvents",
+          "call": {
+            "op": "PutEvents",
+            "params": {
+              "Entries": [
+                {
+                  "Source": "compat.eventbridge-events",
+                  "DetailType": "CompatTest",
+                  "Detail": "{\"key\":\"value\"}",
+                  "EventBusName": { "$name": "bus" }
+                }
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.FailedEntryCount": { "equals": 0 },
+                "$.Entries[0].EventId": { "nonEmpty": true },
+                "$.Entries[1]": { "missing": true }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "go-sdk, python-sdk and node-js-sdk send five entries, cli two, java-sdk one (its PutEventsBatch is a single event on the custom bus, implemented as putEventsCustomBus). Five is the majority and the only size that is a batch in every sense. All five natives assert FailedEntryCount is 0; cli alone also asserts the response carries exactly as many result entries as it sent, which is expressed here as Entries[4] present and Entries[5] missing — `equals` on a list's length has no spelling in the IR, and the index pair is the same claim exactly. Every result entry carrying an EventId is the union's addition, on the same AWS-documented grounds as PutEvents'. Detail carries each entry's index, as go-sdk, python-sdk and node-js-sdk do; the IR has no loop, so the five entries are written out.",
+          "name": "PutEventsBatch",
+          "op": "PutEvents",
+          "call": {
+            "op": "PutEvents",
+            "params": {
+              "Entries": [
+                {
+                  "Source": "compat.eventbridge-events",
+                  "DetailType": "CompatBatch",
+                  "Detail": "{\"index\":0}",
+                  "EventBusName": { "$name": "bus" }
+                },
+                {
+                  "Source": "compat.eventbridge-events",
+                  "DetailType": "CompatBatch",
+                  "Detail": "{\"index\":1}",
+                  "EventBusName": { "$name": "bus" }
+                },
+                {
+                  "Source": "compat.eventbridge-events",
+                  "DetailType": "CompatBatch",
+                  "Detail": "{\"index\":2}",
+                  "EventBusName": { "$name": "bus" }
+                },
+                {
+                  "Source": "compat.eventbridge-events",
+                  "DetailType": "CompatBatch",
+                  "Detail": "{\"index\":3}",
+                  "EventBusName": { "$name": "bus" }
+                },
+                {
+                  "Source": "compat.eventbridge-events",
+                  "DetailType": "CompatBatch",
+                  "Detail": "{\"index\":4}",
+                  "EventBusName": { "$name": "bus" }
+                }
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.FailedEntryCount": { "equals": 0 },
+                "$.Entries[0].EventId": { "nonEmpty": true },
+                "$.Entries[1].EventId": { "nonEmpty": true },
+                "$.Entries[2].EventId": { "nonEmpty": true },
+                "$.Entries[3].EventId": { "nonEmpty": true },
+                "$.Entries[4].EventId": { "nonEmpty": true },
+                "$.Entries[5]": { "missing": true }
+              }
+            }
+          ],
+          "depends": ["PutEvents"]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "DeleteEventBus",
+          "params": { "Name": { "$name": "bus" } }
+        }
+      ]
+    }
+  ]
+}

@@ -11,6 +11,9 @@ use crate::groups::ServiceGroup;
 #[path = "scenarios_authored_cognito_userpools_gen.rs"]
 mod scenarios_authored_cognito_userpools_gen;
 
+#[path = "scenarios_authored_eventbridge_events_gen.rs"]
+mod scenarios_authored_eventbridge_events_gen;
+
 #[path = "scenarios_authored_eventbridge_rules_gen.rs"]
 mod scenarios_authored_eventbridge_rules_gen;
 
@@ -56,6 +59,7 @@ mod scenarios_sqs_gen;
 pub fn scenario_groups(clients: &Arc<AwsClients>) -> Vec<Box<dyn ServiceGroup>> {
     vec![
         Box::new(scenarios_authored_cognito_userpools_gen::ScenariosAuthoredCognitoUserpools::new(clients)),
+        Box::new(scenarios_authored_eventbridge_events_gen::ScenariosAuthoredEventbridgeEvents::new(clients)),
         Box::new(scenarios_authored_eventbridge_rules_gen::ScenariosAuthoredEventbridgeRules::new(clients)),
         Box::new(scenarios_authored_kinesis_streams_gen::ScenariosAuthoredKinesisStreams::new(clients)),
         Box::new(scenarios_authored_logs_groups_gen::ScenariosAuthoredLogsGroups::new(clients)),

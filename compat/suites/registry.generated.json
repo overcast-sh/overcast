@@ -608,6 +608,35 @@
     },
     {
       "service": "eventbridge",
+      "name": "eventbridge-events-shadow",
+      "generated": true,
+      "scenario": "compat/model/authored/eventbridge-events.json",
+      "state": "candidate",
+      "shadowOf": "eventbridge-events",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "PutEvents"
+        },
+        {
+          "name": "PutEventsBatch",
+          "op": "PutEvents",
+          "depends": [
+            "PutEvents"
+          ]
+        }
+      ]
+    },
+    {
+      "service": "eventbridge",
       "name": "eventbridge-rules-shadow",
       "generated": true,
       "scenario": "compat/model/authored/eventbridge-rules.json",
