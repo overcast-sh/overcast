@@ -2,7 +2,6 @@ package glue
 
 import (
 	"context"
-	"errors"
 	"maps"
 	"regexp"
 	"strconv"
@@ -45,7 +44,7 @@ func (s *Service) catalogID(requested string) string {
 func paginate[T any](items []T, maxResults int32, token string, limit int) (serviceutil.Page[T], *protocol.AWSError) {
 	page, err := serviceutil.Paginate(items, int(maxResults), token,
 		serviceutil.PaginateOptions{DefaultLimit: limit, MaxLimit: limit})
-	if errors.Is(err, serviceutil.ErrInvalidPageToken) {
+	if err != nil { // serviceutil.ErrInvalidPageToken, its only error
 		return page, errInvalidInput("Invalid NextToken.")
 	}
 	return page, nil

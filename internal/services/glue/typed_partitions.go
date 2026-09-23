@@ -2,6 +2,7 @@ package glue
 
 import (
 	"context"
+	"slices"
 
 	"github.com/overcast-sh/overcast/internal/protocol"
 )
@@ -291,8 +292,7 @@ func (s *Service) updatePartitionTyped(ctx context.Context, req *updatePartition
 	if aerr := checkPartitionValues(t, newValues); aerr != nil {
 		return nil, aerr
 	}
-	oldKey := partitionKey(t.DatabaseName, t.Name, req.PartitionValueList)
-	newKey := partitionKey(t.DatabaseName, t.Name, newValues)
+	moved := !slices.Equal(newValues, req.PartitionValueList)
 	cur, found, err := s.store.getPartition(ctx, t.DatabaseName, t.Name, req.PartitionValueList)
 	if err != nil {
 		return nil, errInternal(err)
@@ -300,7 +300,7 @@ func (s *Service) updatePartitionTyped(ctx context.Context, req *updatePartition
 	if !found {
 		return nil, errPartitionNotFound()
 	}
-	if newKey != oldKey {
+	if moved {
 		_, exists, err := s.store.getPartition(ctx, t.DatabaseName, t.Name, newValues)
 		if err != nil {
 			return nil, errInternal(err)
@@ -316,7 +316,7 @@ func (s *Service) updatePartitionTyped(ctx context.Context, req *updatePartition
 	if err := s.store.putPartition(ctx, p); err != nil {
 		return nil, errInternal(err)
 	}
-	if newKey != oldKey {
+	if moved {
 		if err := s.store.deletePartition(ctx, t.DatabaseName, t.Name, req.PartitionValueList); err != nil {
 			return nil, errInternal(err)
 		}

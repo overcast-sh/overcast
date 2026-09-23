@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -80,6 +81,10 @@ func normName(name string) string { return strings.ToLower(name) }
 
 func esc(name string) string { return url.PathEscape(name) }
 
+// databaseKey is a database's key: its name alone, unescaped, since it is the
+// whole key in its own namespace and cannot be confused with another.
+func databaseKey(name string) string { return name }
+
 // databasePrefix is the key prefix under which a database's tables, and their
 // partitions and versions, live.
 func databasePrefix(dbName string) string { return esc(dbName) + "/" }
@@ -99,7 +104,7 @@ func partitionKey(dbName, tableName string, values []string) string {
 		if i > 0 {
 			b.WriteByte('/')
 		}
-		b.WriteString(url.PathEscape(v))
+		b.WriteString(esc(v))
 	}
 	return b.String()
 }
@@ -129,7 +134,7 @@ func (s *glueStore) migrateLegacyKeys(ctx context.Context) error {
 			continue
 		}
 		db.Name = normName(db.Name)
-		if err := s.moveRecord(ctx, nsDatabases, kv.Key, db.Name, &db); err != nil {
+		if err := s.moveRecord(ctx, nsDatabases, kv.Key, databaseKey(db.Name), &db); err != nil {
 			return err
 		}
 	}
@@ -252,12 +257,12 @@ func (s *glueStore) deletePrefix(ctx context.Context, ns, prefix string) error {
 // ─── Databases ─────────────────────────────────────────────────
 
 func (s *glueStore) putDatabase(ctx context.Context, db *databaseRecord) error {
-	return s.put(ctx, nsDatabases, db.Name, db)
+	return s.put(ctx, nsDatabases, databaseKey(db.Name), db)
 }
 
 func (s *glueStore) getDatabase(ctx context.Context, name string) (*databaseRecord, bool, error) {
 	var db databaseRecord
-	found, err := s.get(ctx, nsDatabases, name, &db)
+	found, err := s.get(ctx, nsDatabases, databaseKey(name), &db)
 	if !found || err != nil {
 		return nil, false, err
 	}
@@ -284,7 +289,7 @@ func (s *glueStore) deleteDatabase(ctx context.Context, name string) error {
 			return err
 		}
 	}
-	if err := s.store.Delete(ctx, nsDatabases, name); err != nil {
+	if err := s.store.Delete(ctx, nsDatabases, databaseKey(name)); err != nil {
 		return fmt.Errorf("glue: delete database %q: %w", name, err)
 	}
 	return nil
@@ -437,9 +442,18 @@ func (s *glueStore) listPartitions(ctx context.Context, dbName, tableName string
 	if err != nil {
 		return nil, err
 	}
-	sort.SliceStable(out, func(i, j int) bool {
-		return partitionKey(dbName, tableName, out[i].Values) < partitionKey(dbName, tableName, out[j].Values)
-	})
+	type keyed struct {
+		key string
+		p   *Partition
+	}
+	byKey := make([]keyed, len(out))
+	for i, p := range out {
+		byKey[i] = keyed{partitionKey(dbName, tableName, p.Values), p}
+	}
+	slices.SortStableFunc(byKey, func(a, b keyed) int { return strings.Compare(a.key, b.key) })
+	for i, k := range byKey {
+		out[i] = k.p
+	}
 	return out, nil
 }
 
