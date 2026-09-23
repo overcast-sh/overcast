@@ -197,22 +197,69 @@ func fillBucketARN(r *http.Request, req *tableBucketARNRequest) *protocol.AWSErr
 	return nil
 }
 
-// withBucketBody decodes an operation's body and then binds its
-// {tableBucketARN} label through set, so the label always wins over a body
-// member of the same name.
-func withBucketBody[In any](set func(*In, string)) filler[In] {
+// withBody decodes an operation's body and then runs bind, so a label or query
+// member always wins over a body member of the same name.
+func withBody[In any](bind func(*http.Request, *In)) filler[In] {
 	return func(r *http.Request, req *In) *protocol.AWSError {
 		if aerr := decodeBody(r, req); aerr != nil {
 			return aerr
 		}
-		set(req, label(r, "tableBucketARN"))
+		bind(r, req)
 		return nil
 	}
+}
+
+// tableLabels are the path labels the table routes bind; a route leaves the
+// ones its pattern lacks empty.
+type tableLabels struct {
+	bucketARN, namespace, name, typ string
+}
+
+// withBucketBody is withBody for an operation whose only label is
+// {tableBucketARN}.
+func withBucketBody[In any](set func(*In, string)) filler[In] {
+	return withBody(func(r *http.Request, req *In) { set(req, label(r, "tableBucketARN")) })
+}
+
+// withTableBody is withBody for an operation addressed by the
+// {tableBucketARN}, {namespace}, {name} and {type} labels (whichever its
+// pattern has).
+func withTableBody[In any](set func(*In, tableLabels)) filler[In] {
+	return withBody(func(r *http.Request, req *In) {
+		set(req, tableLabels{
+			bucketARN: label(r, "tableBucketARN"), namespace: label(r, "namespace"),
+			name: label(r, "name"), typ: label(r, "type"),
+		})
+	})
 }
 
 func bodyOnly[In any](r *http.Request, req *In) *protocol.AWSError {
 	return decodeBody(r, req)
 }
+
+var fillPutBucketMaintenance = withTableBody(func(q *putBucketMaintenanceRequest, l tableLabels) {
+	q.TableBucketARN, q.Type = l.bucketARN, l.typ
+})
+
+var fillCreateTable = withTableBody(func(q *createTableRequest, l tableLabels) {
+	q.TableBucketARN, q.Namespace = l.bucketARN, l.namespace
+})
+
+var fillPutTableMaintenance = withTableBody(func(q *putTableMaintenanceRequest, l tableLabels) {
+	q.TableBucketARN, q.Namespace, q.Name, q.Type = l.bucketARN, l.namespace, l.name, l.typ
+})
+
+var fillUpdateMetadataLocation = withTableBody(func(q *updateMetadataLocationRequest, l tableLabels) {
+	q.TableBucketARN, q.Namespace, q.Name = l.bucketARN, l.namespace, l.name
+})
+
+var fillTablePolicy = withTableBody(func(q *tablePolicyRequest, l tableLabels) {
+	q.TableBucketARN, q.Namespace, q.Name = l.bucketARN, l.namespace, l.name
+})
+
+var fillRenameTable = withTableBody(func(q *renameTableRequest, l tableLabels) {
+	q.TableBucketARN, q.Namespace, q.Name = l.bucketARN, l.namespace, l.name
+})
 
 func fillListTableBuckets(r *http.Request, req *listTableBucketsRequest) *protocol.AWSError {
 	q := r.URL.Query()
@@ -220,14 +267,6 @@ func fillListTableBuckets(r *http.Request, req *listTableBucketsRequest) *protoc
 	var aerr *protocol.AWSError
 	req.MaxBuckets, aerr = queryInt(r, "maxBuckets")
 	return aerr
-}
-
-func fillPutBucketMaintenance(r *http.Request, req *putBucketMaintenanceRequest) *protocol.AWSError {
-	if aerr := decodeBody(r, req); aerr != nil {
-		return aerr
-	}
-	req.TableBucketARN, req.Type = label(r, "tableBucketARN"), label(r, "type")
-	return nil
 }
 
 func fillListNamespaces(r *http.Request, req *listNamespacesRequest) *protocol.AWSError {
@@ -253,52 +292,11 @@ func fillListTables(r *http.Request, req *listTablesRequest) *protocol.AWSError 
 	return aerr
 }
 
-func fillCreateTable(r *http.Request, req *createTableRequest) *protocol.AWSError {
-	if aerr := decodeBody(r, req); aerr != nil {
-		return aerr
-	}
-	req.TableBucketARN, req.Namespace = label(r, "tableBucketARN"), label(r, "namespace")
-	return nil
-}
-
 // fillTable binds the {tableBucketARN}/{namespace}/{name} labels, plus the
 // versionToken query member DeleteTable carries.
 func fillTable(r *http.Request, req *tableRequest) *protocol.AWSError {
 	req.TableBucketARN, req.Namespace, req.Name = label(r, "tableBucketARN"), label(r, "namespace"), label(r, "name")
 	req.VersionToken = r.URL.Query().Get("versionToken")
-	return nil
-}
-
-func fillPutTableMaintenance(r *http.Request, req *putTableMaintenanceRequest) *protocol.AWSError {
-	if aerr := decodeBody(r, req); aerr != nil {
-		return aerr
-	}
-	req.TableBucketARN, req.Namespace, req.Name = label(r, "tableBucketARN"), label(r, "namespace"), label(r, "name")
-	req.Type = label(r, "type")
-	return nil
-}
-
-func fillUpdateMetadataLocation(r *http.Request, req *updateMetadataLocationRequest) *protocol.AWSError {
-	if aerr := decodeBody(r, req); aerr != nil {
-		return aerr
-	}
-	req.TableBucketARN, req.Namespace, req.Name = label(r, "tableBucketARN"), label(r, "namespace"), label(r, "name")
-	return nil
-}
-
-func fillTablePolicy(r *http.Request, req *tablePolicyRequest) *protocol.AWSError {
-	if aerr := decodeBody(r, req); aerr != nil {
-		return aerr
-	}
-	req.TableBucketARN, req.Namespace, req.Name = label(r, "tableBucketARN"), label(r, "namespace"), label(r, "name")
-	return nil
-}
-
-func fillRenameTable(r *http.Request, req *renameTableRequest) *protocol.AWSError {
-	if aerr := decodeBody(r, req); aerr != nil {
-		return aerr
-	}
-	req.TableBucketARN, req.Namespace, req.Name = label(r, "tableBucketARN"), label(r, "namespace"), label(r, "name")
 	return nil
 }
 
@@ -313,13 +311,9 @@ func fillListTags(r *http.Request, req *listTagsRequest) *protocol.AWSError {
 	return nil
 }
 
-func fillTagResource(r *http.Request, req *tagResourceRequest) *protocol.AWSError {
-	if aerr := decodeBody(r, req); aerr != nil {
-		return aerr
-	}
+var fillTagResource = withBody(func(r *http.Request, req *tagResourceRequest) {
 	req.ResourceARN = label(r, "resourceArn")
-	return nil
-}
+})
 
 func fillUntagResource(r *http.Request, req *untagResourceRequest) *protocol.AWSError {
 	req.ResourceARN = label(r, "resourceArn")
@@ -338,14 +332,10 @@ func fillBucketReplication(r *http.Request, req *bucketReplicationRequest) *prot
 	return nil
 }
 
-func fillTableReplication(r *http.Request, req *tableReplicationRequest) *protocol.AWSError {
-	if aerr := decodeBody(r, req); aerr != nil {
-		return aerr
-	}
+var fillTableReplication = withBody(func(r *http.Request, req *tableReplicationRequest) {
 	q := r.URL.Query()
 	req.TableARN, req.VersionToken = q.Get("tableArn"), q.Get("versionToken")
-	return nil
-}
+})
 
 func fillTableARN(r *http.Request, req *tableARNRequest) *protocol.AWSError {
 	q := r.URL.Query()
@@ -353,10 +343,6 @@ func fillTableARN(r *http.Request, req *tableARNRequest) *protocol.AWSError {
 	return nil
 }
 
-func fillPutRecordExpiration(r *http.Request, req *putRecordExpirationRequest) *protocol.AWSError {
-	if aerr := decodeBody(r, req); aerr != nil {
-		return aerr
-	}
+var fillPutRecordExpiration = withBody(func(r *http.Request, req *putRecordExpirationRequest) {
 	req.TableARN = r.URL.Query().Get("tableArn")
-	return nil
-}
+})
