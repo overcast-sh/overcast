@@ -10,6 +10,7 @@ import "github.com/overcast-sh/overcast-compat-go-sdk/internal/clients"
 func scenarioGroups(c *clients.Clients) []ServiceGroup {
 	return []ServiceGroup{
 		ScenariosAuthoredCognitoUserpools(c),
+		ScenariosAuthoredEventbridgeBuses(c),
 		ScenariosAuthoredEventbridgeEvents(c),
 		ScenariosAuthoredEventbridgeRules(c),
 		ScenariosAuthoredKinesisStreams(c),

@@ -1917,6 +1917,7 @@
         },
         {
           "name": "ListEventBridgeTagsForResource",
+          "op": "ListTagsForResource",
           "depends": [
             "TagEventBus"
           ]
