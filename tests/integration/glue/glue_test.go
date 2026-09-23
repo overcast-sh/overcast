@@ -7,8 +7,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 
+	"github.com/overcast-sh/overcast/internal/protocol"
 	"github.com/overcast-sh/overcast/tests/helpers"
 )
 
@@ -122,12 +124,13 @@ func TestDeleteDatabase_success(t *testing.T) {
 	defer del.Body.Close()
 	helpers.AssertStatus(t, del, http.StatusOK)
 
-	// Then: GetDatabase returns 404
+	// Then: GetDatabase answers EntityNotFoundException, which Glue sends
+	// as a 400 like all its client errors
 	resp := glueCall(t, srv, "GetDatabase", map[string]any{
 		"Name": "testdb",
 	})
 	defer resp.Body.Close()
-	helpers.AssertStatus(t, resp, http.StatusNotFound)
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
 }
 
 // ─── CreateTable ──────────────────────────────────────────────────────────────
@@ -182,5 +185,27 @@ func TestGetTable_success(t *testing.T) {
 	helpers.DecodeJSON(t, resp, &result)
 	if result.Table.Name != "testtable" {
 		t.Errorf("expected Name=testtable, got %q", result.Table.Name)
+	}
+}
+
+// ─── CreateTable with OpenTableFormatInput ────────────────────────────────────
+
+func TestCreateTable_icebergInputMarksTheMissingMetadataAsALimitation(t *testing.T) {
+	// Given: a database
+	srv := helpers.NewTestServer(t)
+	createDatabase(t, srv, "testdb")
+
+	// When: CreateTable asks Glue to write the table's Iceberg metadata
+	resp := glueCall(t, srv, "CreateTable", map[string]any{
+		"DatabaseName":         "testdb",
+		"TableInput":           map[string]any{"Name": "ice"},
+		"OpenTableFormatInput": map[string]any{"IcebergInput": map[string]any{"MetadataOperation": "CREATE"}},
+	})
+	defer resp.Body.Close()
+
+	// Then: the table is created, and the response says what was not done
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	if got := resp.Header.Get(protocol.EmulationLimitationHeader); !strings.Contains(got, "IcebergInput") {
+		t.Errorf("%s = %q, want the Iceberg metadata limitation", protocol.EmulationLimitationHeader, got)
 	}
 }

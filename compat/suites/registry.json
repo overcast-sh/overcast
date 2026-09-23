@@ -1750,6 +1750,7 @@
     {
       "service": "kinesis",
       "name": "kinesis-streams",
+      "scenario": "compat/model/authored/kinesis-streams.json",
       "tests": [
         {
           "name": "CreateStream"
@@ -3866,6 +3867,88 @@
       ]
     },
     {
+      "service": "s3tables",
+      "name": "s3tables-tables",
+      "tests": [
+        {
+          "name": "CreateTableBucket"
+        },
+        {
+          "name": "GetTableBucket",
+          "depends": [
+            "CreateTableBucket"
+          ]
+        },
+        {
+          "name": "ListTableBuckets",
+          "depends": [
+            "CreateTableBucket"
+          ]
+        },
+        {
+          "name": "CreateNamespace",
+          "depends": [
+            "CreateTableBucket"
+          ]
+        },
+        {
+          "name": "ListNamespaces",
+          "depends": [
+            "CreateNamespace"
+          ]
+        },
+        {
+          "name": "CreateTable",
+          "depends": [
+            "CreateNamespace"
+          ]
+        },
+        {
+          "name": "GetTable",
+          "depends": [
+            "CreateTable"
+          ]
+        },
+        {
+          "name": "ListTables",
+          "depends": [
+            "CreateTable"
+          ]
+        },
+        {
+          "name": "UpdateTableMetadataLocation",
+          "depends": [
+            "CreateTable"
+          ]
+        },
+        {
+          "name": "UpdateTableMetadataLocationStaleToken",
+          "op": "UpdateTableMetadataLocation",
+          "depends": [
+            "UpdateTableMetadataLocation"
+          ]
+        },
+        {
+          "name": "DeleteTable",
+          "depends": [
+            "CreateTable"
+          ]
+        },
+        {
+          "name": "DeleteNamespace",
+          "depends": [
+            "DeleteTable"
+          ]
+        },
+        {
+          "name": "DeleteTableBucket",
+          "depends": [
+            "DeleteNamespace"
+          ]
+        }
+      ]
+    },
+    {
       "service": "appconfigdata",
       "name": "appconfigdata-sessions",
       "tests": [
@@ -5206,6 +5289,78 @@
         {
           "name": "CreateClusterWithTags",
           "op": "CreateCluster"
+        }
+      ]
+    },
+    {
+      "service": "glue",
+      "name": "glue-catalog",
+      "tests": [
+        {
+          "name": "CreateDatabase"
+        },
+        {
+          "name": "CreateTable",
+          "depends": [
+            "CreateDatabase"
+          ]
+        },
+        {
+          "name": "GetTable",
+          "depends": [
+            "CreateTable"
+          ]
+        },
+        {
+          "name": "UpdateTable",
+          "depends": [
+            "GetTable"
+          ]
+        },
+        {
+          "name": "UpdateTableStaleVersion",
+          "op": "UpdateTable",
+          "depends": [
+            "UpdateTable"
+          ]
+        },
+        {
+          "name": "GetTableVersions",
+          "depends": [
+            "UpdateTable"
+          ]
+        },
+        {
+          "name": "BatchCreatePartition",
+          "depends": [
+            "CreateTable"
+          ]
+        },
+        {
+          "name": "GetPartitions",
+          "depends": [
+            "BatchCreatePartition"
+          ]
+        },
+        {
+          "name": "DeletePartition",
+          "depends": [
+            "GetPartitions"
+          ]
+        },
+        {
+          "name": "DeleteTable",
+          "depends": [
+            "DeletePartition",
+            "GetTableVersions",
+            "UpdateTableStaleVersion"
+          ]
+        },
+        {
+          "name": "DeleteDatabase",
+          "depends": [
+            "DeleteTable"
+          ]
         }
       ]
     }

@@ -129,10 +129,10 @@ var manifest = []target{
 	{"internal/services/cloudformation", "DiagnosticProvenance", "DiagnosticProvenance"},
 
 	// GET /_overcast/topology — the Map page's graph.
-	{"internal/router", "topologyResponse", "TopologyResponse"},
-	{"internal/router", "topologyNode", "TopologyNode"},
-	{"internal/router", "topologyEdge", "TopologyEdge"},
-	{"internal/router", "topologyECSResourceType", "TopologyECSResourceType"},
+	{"internal/topology", "Response", "TopologyResponse"},
+	{"internal/topology", "Node", "TopologyNode"},
+	{"internal/topology", "Edge", "TopologyEdge"},
+	{"internal/topology", "ECSResourceType", "TopologyECSResourceType"},
 
 	// GET /_overcast/ses/inbox/messages — the Inbox page.
 	{"internal/smtp", "CapturedMessage", "CapturedMessage"},

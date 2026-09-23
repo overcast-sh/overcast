@@ -151,11 +151,14 @@ func (s *Service) deleteRuleRecord(ctx context.Context, busName, name string) (s
 	return arn, nil
 }
 
-// deleteEventBusRecord removes an event bus and its tags, and returns the bus's
-// ARN for the event the caller publishes.
+// deleteEventBusRecord removes an event bus, its tags and its permission
+// policy, and returns the bus's ARN for the event the caller publishes.
 func (s *Service) deleteEventBusRecord(ctx context.Context, name string) (string, *protocol.AWSError) {
 	arn := s.busARN(ctx, name)
 	if aerr := s.tagStore().Delete(ctx, arn); aerr != nil {
+		return "", aerr
+	}
+	if aerr := s.deleteBusPolicyStatements(ctx, name); aerr != nil {
 		return "", aerr
 	}
 	if err := s.store.Delete(ctx, nsBuses, serviceutil.RegionKey(s.region(ctx), name)); err != nil {

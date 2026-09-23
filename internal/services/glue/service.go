@@ -1,17 +1,20 @@
-// Package glue provides a basic emulation of AWS Glue Data Catalog.
+// Package glue emulates the AWS Glue Data Catalog.
 //
-// Implemented operations: CreateDatabase, GetDatabase, GetDatabases,
-// DeleteDatabase, CreateTable, GetTable, GetTables, DeleteTable.
+// Implemented: databases (Create, Get, GetDatabases, Update, Delete), tables
+// (Create, Get, GetTables, Update, Delete, BatchDelete), table versions (Get,
+// GetTableVersions, Delete, BatchDelete), partitions (Create, BatchCreate,
+// Get, GetPartitions with an Expression filter, BatchGet, Update, Delete,
+// BatchDelete) and tags. Definitions are kept whole — StorageDescriptor,
+// Parameters, PartitionKeys and the rest — because query engines (Trino's
+// Glue metastore, the Iceberg Glue catalogs) read them back.
 //
-// Enough for data-layer stacks referencing AWS::Glue::Database and Table.
+// Catalog is the read-only view other services use.
 package glue
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
@@ -27,174 +30,55 @@ import (
 
 const serviceName = "glue"
 
-// ─── Types ────────────────────────────────────────────────────
-
-// Database represents a Glue database. This is the wire shape — the AWS
-// model's Database carries no Tags member, so tags must never be embedded
-// here. See databaseRecord for how tags are persisted; GetTags is the real
-// channel for reading them back.
-type Database struct {
-	Name        string `json:"Name"`
-	Description string `json:"Description,omitempty"`
-	CatalogId   string `json:"CatalogId,omitempty"`
-}
-
-// databaseRecord is a Database as persisted: the wire shape plus its tags.
-type databaseRecord struct {
-	Database
-	Tags map[string]string `json:"overcastTags,omitempty"`
-}
-
-func (d *databaseRecord) GetTags() map[string]string  { return d.Tags }
-func (d *databaseRecord) SetTags(t map[string]string) { d.Tags = t }
-
-// Table represents a Glue table. This is the wire shape — the AWS model's
-// Table carries no Tags member, so tags must never be embedded here. See
-// tableRecord for how tags are persisted; GetTags is the real channel for
-// reading them back.
-type Table struct {
-	Name         string `json:"Name"`
-	DatabaseName string `json:"DatabaseName"`
-	Description  string `json:"Description,omitempty"`
-	TableType    string `json:"TableType,omitempty"`
-	CatalogId    string `json:"CatalogId,omitempty"`
-}
-
-// tableRecord is a Table as persisted: the wire shape plus its tags.
-type tableRecord struct {
-	Table
-	Tags map[string]string `json:"overcastTags,omitempty"`
-}
-
-func (t *tableRecord) GetTags() map[string]string     { return t.Tags }
-func (t *tableRecord) SetTags(tags map[string]string) { t.Tags = tags }
-
-// ─── Store ────────────────────────────────────────────────────
-
-type glueStore struct {
-	store state.Store
-	cfg   *config.Config
-}
-
-func newGlueStore(s state.Store, cfg *config.Config) *glueStore {
-	return &glueStore{store: s, cfg: cfg}
-}
-
-const (
-	nsDatabases = "glue:databases"
-	nsTables    = "glue:tables"
-)
-
-func (s *glueStore) putDatabase(ctx context.Context, db *databaseRecord) error {
-	raw, err := json.Marshal(db)
-	if err != nil {
-		return fmt.Errorf("glue: marshal database: %w", err)
-	}
-	return s.store.Set(ctx, nsDatabases, db.Name, string(raw))
-}
-
-func (s *glueStore) getDatabase(ctx context.Context, name string) (*databaseRecord, bool) {
-	raw, found, err := s.store.Get(ctx, nsDatabases, name)
-	if err != nil || !found {
-		return nil, false
-	}
-	var db databaseRecord
-	if json.Unmarshal([]byte(raw), &db) != nil {
-		return nil, false
-	}
-	return &db, true
-}
-
-func (s *glueStore) listDatabases(ctx context.Context) ([]*databaseRecord, error) {
-	pairs, err := s.store.Scan(ctx, nsDatabases, "")
-	if err != nil {
-		return nil, err
-	}
-	out := make([]*databaseRecord, 0, len(pairs))
-	for _, kv := range pairs {
-		var db databaseRecord
-		if json.Unmarshal([]byte(kv.Value), &db) == nil {
-			out = append(out, &db)
-		}
-	}
-	return out, nil
-}
-
-func (s *glueStore) deleteDatabase(ctx context.Context, name string) error {
-	return s.store.Delete(ctx, nsDatabases, name)
-}
-
-func tableKey(dbName, tableName string) string { return dbName + "/" + tableName }
-
-func (s *glueStore) putTable(ctx context.Context, t *tableRecord) error {
-	raw, err := json.Marshal(t)
-	if err != nil {
-		return fmt.Errorf("glue: marshal table: %w", err)
-	}
-	return s.store.Set(ctx, nsTables, tableKey(t.DatabaseName, t.Name), string(raw))
-}
-
-func (s *glueStore) getTable(ctx context.Context, dbName, tableName string) (*tableRecord, bool) {
-	raw, found, err := s.store.Get(ctx, nsTables, tableKey(dbName, tableName))
-	if err != nil || !found {
-		return nil, false
-	}
-	var t tableRecord
-	if json.Unmarshal([]byte(raw), &t) != nil {
-		return nil, false
-	}
-	return &t, true
-}
-
-func (s *glueStore) listTables(ctx context.Context, dbName string) ([]*tableRecord, error) {
-	pairs, err := s.store.Scan(ctx, nsTables, "")
-	if err != nil {
-		return nil, err
-	}
-	out := make([]*tableRecord, 0, len(pairs))
-	for _, kv := range pairs {
-		var t tableRecord
-		if json.Unmarshal([]byte(kv.Value), &t) == nil && t.DatabaseName == dbName {
-			out = append(out, &t)
-		}
-	}
-	return out, nil
-}
-
-func (s *glueStore) deleteTable(ctx context.Context, dbName, tableName string) error {
-	return s.store.Delete(ctx, nsTables, tableKey(dbName, tableName))
-}
-
-// ─── Service ──────────────────────────────────────────────────
-
 // Service implements router.Service and router.TargetDispatcher for Glue.
 type Service struct {
 	log     *serviceutil.ServiceLogger
 	store   *glueStore
 	cfg     *config.Config
-	ops     map[string]http.HandlerFunc
+	clk     clock.Clock
 	typedOp map[string]op.Operation
+
+	// Locking. A write takes cascadeMu shared and then its record's stripe
+	// in locks (writeLock); a delete that cascades — DeleteDatabase,
+	// DeleteTable, BatchDeleteTable — takes cascadeMu exclusively
+	// (cascadeLock) and nothing else. So no write can land a table or
+	// partition under a parent a cascade is removing, and no goroutine ever
+	// holds two stripes, which could be one stripe twice.
+	cascadeMu sync.RWMutex
+	locks     serviceutil.RecordLocks
+}
+
+// writeLock serialises a write to the record named by key against other
+// writes to it and against every cascading delete.
+func (s *Service) writeLock(key string) func() {
+	s.cascadeMu.RLock()
+	unlock := s.locks.Lock(key)
+	return func() {
+		unlock()
+		s.cascadeMu.RUnlock()
+	}
+}
+
+// databaseLockKey and tableLockKey name the writeLock stripe guarding a
+// database's or a table's record.
+func databaseLockKey(name string) string { return "db:" + name }
+
+func tableLockKey(dbName, tableName string) string { return "table:" + tableKey(dbName, tableName) }
+
+// cascadeLock excludes every other write for the length of a cascading delete.
+func (s *Service) cascadeLock() func() {
+	s.cascadeMu.Lock()
+	return s.cascadeMu.Unlock
 }
 
 // New returns a configured Glue Service.
-func New(cfg *config.Config, st state.Store, logger *zap.Logger, _ clock.Clock) *Service {
+func New(cfg *config.Config, st state.Store, logger *zap.Logger, clk clock.Clock) *Service {
+	log := serviceutil.NewServiceLogger(logger, serviceName)
 	s := &Service{
-		log:   serviceutil.NewServiceLogger(logger, serviceName),
-		store: newGlueStore(st, cfg),
+		log:   log,
+		store: newGlueStore(st, log),
 		cfg:   cfg,
-	}
-	s.ops = map[string]http.HandlerFunc{
-		"CreateDatabase": s.createDatabase,
-		"GetDatabase":    s.getDatabase,
-		"GetDatabases":   s.getDatabases,
-		"DeleteDatabase": s.deleteDatabase,
-		"CreateTable":    s.createTable,
-		"GetTable":       s.getTable,
-		"GetTables":      s.getTables,
-		"DeleteTable":    s.deleteTable,
-		"TagResource":    s.tagResource,
-		"UntagResource":  s.untagResource,
-		"GetTags":        s.getTags,
+		clk:   clk,
 	}
 	s.typedOp = s.typedOps()
 	return s
@@ -204,405 +88,30 @@ func (s *Service) Name() string                { return serviceName }
 func (s *Service) RegisterRoutes(_ chi.Router) {}
 func (s *Service) TargetPrefix() string        { return "AWSGlue." }
 
+// Dispatch serves every operation through its typed implementation, in the
+// wire protocol the request arrived in: AWS JSON 1.1 (Glue's own), JSON 1.0
+// or RPC v2 CBOR. A request dispatched without an identified codec is the
+// legacy X-Amz-Target path, which is JSON 1.1.
 func (s *Service) Dispatch(w http.ResponseWriter, r *http.Request) {
-	if c, opName := codec.FromContext(r.Context()); c != nil && opName != "" {
-		if !codec.Supports(s.SupportedProtocols(), c) {
-			w.Header().Set("x-emulator-unsupported-protocol", c.Name())
-			c.WriteError(w, r, &protocol.AWSError{
-				Code: "UnsupportedProtocol", Message: "Glue does not support wire protocol " + c.Name() + ".",
-				HTTPStatus: http.StatusUnsupportedMediaType,
-			})
-			return
-		}
-		if c.Name() != codec.NameRPCv2CBOR {
-			s.dispatchLegacy(w, r, opName)
-			return
-		}
-		if typed, ok := s.typedOp[opName]; ok {
-			typed.Invoke(w, r, c)
-			return
-		}
-		c.WriteError(w, r, protocol.ErrNotImplemented)
-		return
-	}
-	target := r.Header.Get("X-Amz-Target")
-	opName := target
-	if idx := strings.LastIndex(target, "."); idx >= 0 {
-		opName = target[idx+1:]
-	}
-	s.dispatchLegacy(w, r, opName)
-}
-
-func (s *Service) dispatchLegacy(w http.ResponseWriter, r *http.Request, opName string) {
-	if fn, ok := s.ops[opName]; ok {
-		fn(w, r)
-		return
-	}
-	protocol.NotImplementedJSON(w, r)
-}
-
-// ─── Handlers ─────────────────────────────────────────────────
-
-func (s *Service) createDatabase(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		DatabaseInput *Database `json:"DatabaseInput"`
-		CatalogId     string    `json:"CatalogId"`
-	}
-	if !serviceutil.DecodeJSON(w, r, &req) {
-		return
-	}
-	if req.DatabaseInput == nil || req.DatabaseInput.Name == "" {
-		protocol.WriteJSONError(w, r, &protocol.AWSError{
-			Code: "InvalidInputException", Message: "DatabaseInput.Name is required",
-			HTTPStatus: http.StatusBadRequest,
-		})
-		return
-	}
-	db := req.DatabaseInput
-	if db.CatalogId == "" {
-		db.CatalogId = s.cfg.AccountID
-	}
-	if err := s.store.putDatabase(r.Context(), &databaseRecord{Database: *db}); err != nil {
-		protocol.WriteJSONError(w, r, protocol.ErrInternalError)
-		return
-	}
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{})
-}
-
-func (s *Service) getDatabase(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Name string `json:"Name"`
-	}
-	if !serviceutil.DecodeJSON(w, r, &req) {
-		return
-	}
-	db, found := s.store.getDatabase(r.Context(), req.Name)
-	if !found {
-		protocol.WriteJSONError(w, r, &protocol.AWSError{
-			Code:       "EntityNotFoundException",
-			Message:    fmt.Sprintf("Database %s not found", req.Name),
-			HTTPStatus: http.StatusNotFound,
-		})
-		return
-	}
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{"Database": &db.Database})
-}
-
-func (s *Service) getDatabases(w http.ResponseWriter, r *http.Request) {
-	records, err := s.store.listDatabases(r.Context())
-	if err != nil {
-		protocol.WriteJSONError(w, r, protocol.ErrInternalError)
-		return
-	}
-	dbs := make([]*Database, 0, len(records))
-	for _, rec := range records {
-		dbs = append(dbs, &rec.Database)
-	}
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{"DatabaseList": dbs})
-}
-
-func (s *Service) deleteDatabase(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Name string `json:"Name"`
-	}
-	if !serviceutil.DecodeJSON(w, r, &req) {
-		return
-	}
-	if _, found := s.store.getDatabase(r.Context(), req.Name); !found {
-		protocol.WriteJSONError(w, r, &protocol.AWSError{
-			Code:       "EntityNotFoundException",
-			Message:    fmt.Sprintf("Database %s not found", req.Name),
-			HTTPStatus: http.StatusNotFound,
-		})
-		return
-	}
-	if err := s.store.deleteDatabase(r.Context(), req.Name); err != nil {
-		protocol.WriteJSONError(w, r, protocol.ErrInternalError)
-		return
-	}
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{})
-}
-
-func (s *Service) createTable(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		DatabaseName string `json:"DatabaseName"`
-		TableInput   *Table `json:"TableInput"`
-	}
-	if !serviceutil.DecodeJSON(w, r, &req) {
-		return
-	}
-	if req.TableInput == nil || req.TableInput.Name == "" {
-		protocol.WriteJSONError(w, r, &protocol.AWSError{
-			Code: "InvalidInputException", Message: "TableInput.Name is required",
-			HTTPStatus: http.StatusBadRequest,
-		})
-		return
-	}
-	t := req.TableInput
-	t.DatabaseName = req.DatabaseName
-	if t.CatalogId == "" {
-		t.CatalogId = s.cfg.AccountID
-	}
-	if err := s.store.putTable(r.Context(), &tableRecord{Table: *t}); err != nil {
-		protocol.WriteJSONError(w, r, protocol.ErrInternalError)
-		return
-	}
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{})
-}
-
-func (s *Service) getTable(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		DatabaseName string `json:"DatabaseName"`
-		Name         string `json:"Name"`
-	}
-	if !serviceutil.DecodeJSON(w, r, &req) {
-		return
-	}
-	t, found := s.store.getTable(r.Context(), req.DatabaseName, req.Name)
-	if !found {
-		protocol.WriteJSONError(w, r, &protocol.AWSError{
-			Code:       "EntityNotFoundException",
-			Message:    fmt.Sprintf("Table %s not found in database %s", req.Name, req.DatabaseName),
-			HTTPStatus: http.StatusNotFound,
-		})
-		return
-	}
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{"Table": &t.Table})
-}
-
-func (s *Service) getTables(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		DatabaseName string `json:"DatabaseName"`
-	}
-	if !serviceutil.DecodeJSON(w, r, &req) {
-		return
-	}
-	records, err := s.store.listTables(r.Context(), req.DatabaseName)
-	if err != nil {
-		protocol.WriteJSONError(w, r, protocol.ErrInternalError)
-		return
-	}
-	tables := make([]*Table, 0, len(records))
-	for _, rec := range records {
-		tables = append(tables, &rec.Table)
-	}
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{"TableList": tables})
-}
-
-func (s *Service) deleteTable(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		DatabaseName string `json:"DatabaseName"`
-		Name         string `json:"Name"`
-	}
-	if !serviceutil.DecodeJSON(w, r, &req) {
-		return
-	}
-	if _, found := s.store.getTable(r.Context(), req.DatabaseName, req.Name); !found {
-		protocol.WriteJSONError(w, r, &protocol.AWSError{
-			Code:       "EntityNotFoundException",
-			Message:    fmt.Sprintf("Table %s not found", req.Name),
-			HTTPStatus: http.StatusNotFound,
-		})
-		return
-	}
-	if err := s.store.deleteTable(r.Context(), req.DatabaseName, req.Name); err != nil {
-		protocol.WriteJSONError(w, r, protocol.ErrInternalError)
-		return
-	}
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{})
-}
-
-// ─── Tag handlers ───────────────────────────────────────────────
-
-var glueTagCfg = serviceutil.TagValidationConfig{
-	ExceededCode:    "InvalidInputException",
-	InvalidCode:     "InvalidInputException",
-	ExceededMessage: "Too many tags.",
-}
-
-func glueARNToDBAndTable(arn string) (dbName, tableName string) {
-	parts := strings.Split(arn, ":")
-	if len(parts) < 6 {
-		return "", ""
-	}
-	resource := parts[5]
-	if segs := strings.SplitN(resource, "/", 2); len(segs) == 2 {
-		rType := segs[0]
-		rest := segs[1]
-		switch rType {
-		case "database":
-			return rest, ""
-		case "table":
-			if s := strings.SplitN(rest, "/", 2); len(s) == 2 {
-				return s[0], s[1]
-			}
+	c, opName := codec.FromContext(r.Context())
+	if c == nil || opName == "" {
+		c = codec.JSON11
+		opName = r.Header.Get("X-Amz-Target")
+		if idx := strings.LastIndex(opName, "."); idx >= 0 {
+			opName = opName[idx+1:]
 		}
 	}
-	return "", ""
-}
-
-func (s *Service) tagResource(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		ResourceArn string            `json:"ResourceArn"`
-		TagsToAdd   map[string]string `json:"TagsToAdd"`
-	}
-	if !serviceutil.DecodeJSON(w, r, &req) {
-		return
-	}
-	dbName, tableName := glueARNToDBAndTable(req.ResourceArn)
-	if tableName != "" {
-		if aerr := serviceutil.ApplyInlineTags(r.Context(), dbName+"/"+tableName, req.TagsToAdd, glueTagCfg,
-			func(ctx context.Context, key string) (*tableRecord, *protocol.AWSError) {
-				t, found := s.store.getTable(ctx, dbName, tableName)
-				if !found {
-					return nil, &protocol.AWSError{Code: "EntityNotFoundException", Message: fmt.Sprintf("Table %s not found in database %s", tableName, dbName), HTTPStatus: http.StatusNotFound}
-				}
-				return t, nil
-			},
-			func(ctx context.Context, t *tableRecord) *protocol.AWSError {
-				if err := s.store.putTable(ctx, t); err != nil {
-					return protocol.ErrInternalError
-				}
-				return nil
-			},
-		); aerr != nil {
-			protocol.WriteJSONError(w, r, aerr)
-			return
-		}
-		protocol.WriteJSON(w, r, http.StatusOK, map[string]any{})
-		return
-	}
-	if dbName == "" {
-		protocol.WriteJSONError(w, r, &protocol.AWSError{
-			Code: "EntityNotFoundException", Message: "Resource not found",
-			HTTPStatus: http.StatusNotFound,
+	if !codec.Supports(s.SupportedProtocols(), c) {
+		w.Header().Set("x-emulator-unsupported-protocol", c.Name())
+		c.WriteError(w, r, &protocol.AWSError{
+			Code: "UnsupportedProtocol", Message: "Glue does not support wire protocol " + c.Name() + ".",
+			HTTPStatus: http.StatusUnsupportedMediaType,
 		})
 		return
 	}
-	if aerr := serviceutil.ApplyInlineTags(r.Context(), dbName, req.TagsToAdd, glueTagCfg,
-		func(ctx context.Context, key string) (*databaseRecord, *protocol.AWSError) {
-			db, found := s.store.getDatabase(ctx, dbName)
-			if !found {
-				return nil, &protocol.AWSError{Code: "EntityNotFoundException", Message: fmt.Sprintf("Database %s not found", dbName), HTTPStatus: http.StatusNotFound}
-			}
-			return db, nil
-		},
-		func(ctx context.Context, db *databaseRecord) *protocol.AWSError {
-			if err := s.store.putDatabase(ctx, db); err != nil {
-				return protocol.ErrInternalError
-			}
-			return nil
-		},
-	); aerr != nil {
-		protocol.WriteJSONError(w, r, aerr)
+	if typed, ok := s.typedOp[opName]; ok {
+		typed.Invoke(w, r, c)
 		return
 	}
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{})
-}
-
-func (s *Service) untagResource(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		ResourceArn  string   `json:"ResourceArn"`
-		TagsToRemove []string `json:"TagsToRemove"`
-	}
-	if !serviceutil.DecodeJSON(w, r, &req) {
-		return
-	}
-	dbName, tableName := glueARNToDBAndTable(req.ResourceArn)
-	if tableName != "" {
-		if aerr := serviceutil.RemoveInlineTags(r.Context(), dbName+"/"+tableName, req.TagsToRemove,
-			func(ctx context.Context, key string) (*tableRecord, *protocol.AWSError) {
-				t, found := s.store.getTable(ctx, dbName, tableName)
-				if !found {
-					return nil, &protocol.AWSError{Code: "EntityNotFoundException", Message: fmt.Sprintf("Table %s not found in database %s", tableName, dbName), HTTPStatus: http.StatusNotFound}
-				}
-				return t, nil
-			},
-			func(ctx context.Context, t *tableRecord) *protocol.AWSError {
-				if err := s.store.putTable(ctx, t); err != nil {
-					return protocol.ErrInternalError
-				}
-				return nil
-			},
-		); aerr != nil {
-			protocol.WriteJSONError(w, r, aerr)
-			return
-		}
-		protocol.WriteJSON(w, r, http.StatusOK, map[string]any{})
-		return
-	}
-	if dbName == "" {
-		protocol.WriteJSONError(w, r, &protocol.AWSError{
-			Code: "EntityNotFoundException", Message: "Resource not found",
-			HTTPStatus: http.StatusNotFound,
-		})
-		return
-	}
-	if aerr := serviceutil.RemoveInlineTags(r.Context(), dbName, req.TagsToRemove,
-		func(ctx context.Context, key string) (*databaseRecord, *protocol.AWSError) {
-			db, found := s.store.getDatabase(ctx, dbName)
-			if !found {
-				return nil, &protocol.AWSError{Code: "EntityNotFoundException", Message: fmt.Sprintf("Database %s not found", dbName), HTTPStatus: http.StatusNotFound}
-			}
-			return db, nil
-		},
-		func(ctx context.Context, db *databaseRecord) *protocol.AWSError {
-			if err := s.store.putDatabase(ctx, db); err != nil {
-				return protocol.ErrInternalError
-			}
-			return nil
-		},
-	); aerr != nil {
-		protocol.WriteJSONError(w, r, aerr)
-		return
-	}
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{})
-}
-
-func (s *Service) getTags(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		ResourceArn string `json:"ResourceArn"`
-	}
-	if !serviceutil.DecodeJSON(w, r, &req) {
-		return
-	}
-	dbName, tableName := glueARNToDBAndTable(req.ResourceArn)
-	if tableName != "" {
-		tags, aerr := serviceutil.ListInlineTags(r.Context(), dbName+"/"+tableName,
-			func(ctx context.Context, key string) (*tableRecord, *protocol.AWSError) {
-				t, found := s.store.getTable(ctx, dbName, tableName)
-				if !found {
-					return nil, &protocol.AWSError{Code: "EntityNotFoundException", Message: fmt.Sprintf("Table %s not found in database %s", tableName, dbName), HTTPStatus: http.StatusNotFound}
-				}
-				return t, nil
-			},
-		)
-		if aerr != nil {
-			protocol.WriteJSONError(w, r, aerr)
-			return
-		}
-		protocol.WriteJSON(w, r, http.StatusOK, map[string]map[string]string{"Tags": tags})
-		return
-	}
-	if dbName == "" {
-		protocol.WriteJSONError(w, r, &protocol.AWSError{
-			Code: "EntityNotFoundException", Message: "Resource not found",
-			HTTPStatus: http.StatusNotFound,
-		})
-		return
-	}
-	tags, aerr := serviceutil.ListInlineTags(r.Context(), dbName,
-		func(ctx context.Context, key string) (*databaseRecord, *protocol.AWSError) {
-			db, found := s.store.getDatabase(ctx, dbName)
-			if !found {
-				return nil, &protocol.AWSError{Code: "EntityNotFoundException", Message: fmt.Sprintf("Database %s not found", dbName), HTTPStatus: http.StatusNotFound}
-			}
-			return db, nil
-		},
-	)
-	if aerr != nil {
-		protocol.WriteJSONError(w, r, aerr)
-		return
-	}
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]map[string]string{"Tags": tags})
+	c.WriteError(w, r, protocol.ErrNotImplemented)
 }

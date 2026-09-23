@@ -651,13 +651,13 @@ A new resource type needs three things to be useful on the map:
 
 #### 5.3.1 — Backend topology nodes and edges
 
-In `internal/router/topology.go`, add:
+Implement `topology.Contributor` on the service: a `ContributeTopology(ctx, g *topology.Graph) error` method in the service's own `topology.go`. The router collects every service that implements it. In it, read only your own state (`serviceutil.ScanRegions` over your namespace) and add:
 
-1. **A node type** for the resource, including its relationships (edges) to other resources
-2. **State-driven visual counts** — e.g., a queue node shows message counts, a Lambda node shows instance state
-3. **Edge definitions** that connect your resource to related resources (e.g., SQS queue → subscribed SNS topic, Lambda function → EventBridge rule)
+1. **A node** per resource (`g.AddNode`), with ID `topology.NodeID(region, kind, name)`, registered under `topology.CFN(region, resourceType, physicalID)` so CloudFormation stacks own it
+2. **State-driven visual counts** — e.g., a queue node shows message counts. A per-service field on `topology.Node` needs `make generate-ts`
+3. **Links** (`g.AddLink`) for the relationships your state records, naming the other end by `topology.ID(...)` (or `topology.Image(...)` for a container image). Never read another service's state to draw an edge; `topology.Build` resolves the refs
 
-Follow existing services as templates: SQS nodes, SNS nodes, Lambda nodes, DynamoDB table nodes.
+Follow `internal/services/sqs/topology.go` and `internal/services/lambda/topology.go` as templates. Services not yet migrated still live in `internal/router/topology.go`'s legacy contributor (#2090).
 
 #### 5.3.2 — SSE event emission (backend)
 

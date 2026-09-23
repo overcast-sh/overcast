@@ -23,6 +23,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/elasticache v1.56.0
 	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancing v1.40.0
 	github.com/aws/aws-sdk-go-v2/service/eventbridge v1.45.23
+	github.com/aws/aws-sdk-go-v2/service/glue v1.157.0
 	github.com/aws/aws-sdk-go-v2/service/iam v1.53.7
 	github.com/aws/aws-sdk-go-v2/service/kinesis v1.43.5
 	github.com/aws/aws-sdk-go-v2/service/kms v1.50.4
@@ -31,6 +32,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/pipes v1.26.3
 	github.com/aws/aws-sdk-go-v2/service/rds v1.117.1
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.97.3
+	github.com/aws/aws-sdk-go-v2/service/s3tables v1.22.0
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.41.5
 	github.com/aws/aws-sdk-go-v2/service/servicediscovery v1.48.0
 	github.com/aws/aws-sdk-go-v2/service/ses v1.34.22

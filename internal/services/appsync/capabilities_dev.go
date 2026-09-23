@@ -118,7 +118,7 @@ func init() {
 		capabilities.Capability{Service: "appsync", Operation: "DeleteApiCache", Category: "API Cache",
 			Status: capabilities.StatusSupported},
 		capabilities.Capability{Service: "appsync", Operation: "FlushApiCache", Category: "API Cache",
-			Status: capabilities.StatusSupported},
+			Status: capabilities.StatusSupported, Notes: "No-op: there is no real cache to flush, matching CreateApiCache storing config only"},
 
 		// Types
 		capabilities.Capability{Service: "appsync", Operation: "CreateType", Category: "Types",
@@ -134,9 +134,9 @@ func init() {
 
 		// Merged APIs
 		capabilities.Capability{Service: "appsync", Operation: "AssociateSourceGraphqlApi", Category: "Merged APIs",
-			Status: capabilities.StatusSupported},
+			Status: capabilities.StatusSupported, Notes: "Merges source API schema SDL into the merged API by textual concatenation (schema_parser.go's Merge); resolvers and data sources are not copied or proxied from the source API, so a merged field needs its own resolver/data source defined directly on the merged API to execute. Real AWS AUTO_MERGE additionally carries resolvers and data sources over automatically"},
 		capabilities.Capability{Service: "appsync", Operation: "AssociateMergedGraphqlApi", Category: "Merged APIs",
-			Status: capabilities.StatusSupported},
+			Status: capabilities.StatusSupported, Notes: "Same schema-only merge as AssociateSourceGraphqlApi"},
 		capabilities.Capability{Service: "appsync", Operation: "GetSourceApiAssociation", Category: "Merged APIs",
 			Status: capabilities.StatusSupported},
 		capabilities.Capability{Service: "appsync", Operation: "ListSourceApiAssociations", Category: "Merged APIs",
@@ -146,7 +146,7 @@ func init() {
 		capabilities.Capability{Service: "appsync", Operation: "DisassociateMergedGraphqlApi", Category: "Merged APIs",
 			Status: capabilities.StatusSupported},
 		capabilities.Capability{Service: "appsync", Operation: "StartSchemaMerge", Category: "Merged APIs",
-			Status: capabilities.StatusSupported},
+			Status: capabilities.StatusSupported, Notes: "Re-runs the same schema-only merge as AssociateSourceGraphqlApi"},
 
 		// Events API
 		capabilities.Capability{Service: "appsync", Operation: "CreateApi", Category: "Events API",

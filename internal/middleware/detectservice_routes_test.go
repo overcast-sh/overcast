@@ -222,6 +222,19 @@ var registeredRouteClassification = map[string]string{
 	"/v1/clusters":       "s3",
 	"/v1/configurations": "s3",
 	"/v1/kafka-versions": "s3",
+	//   S3 Tables. The router itself dispatches these on the credential scope
+	//   (router.go's signingNameDispatch): unsigned and S3-signed traffic
+	//   reaches S3's bucket named for the root, which is what "s3" says.
+	"/buckets":                            "s3",
+	"/get-table":                          "s3",
+	"/namespaces":                         "s3",
+	"/replication-status":                 "s3",
+	"/table-bucket-replication":           "s3",
+	"/table-record-expiration":            "s3",
+	"/table-record-expiration-job-status": "s3",
+	"/table-replication":                  "s3",
+	"/tables":                             "s3",
+	"/tag":                                "s3",
 	//   Smithy RPC v2 (/service/{service}/operation/{operation}); the dispatcher
 	//   reads the service from the path itself and delegates to S3 without a
 	//   Smithy-Protocol header, so the s3 label matches what happens.

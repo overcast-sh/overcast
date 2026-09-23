@@ -61,6 +61,12 @@ func (s *Service) typedOps() map[string]op.Operation {
 		"TestEventPattern": op.NewTyped[testEventPatternRequest, testEventPatternResponse](
 			"TestEventPattern", s.testEventPatternTyped,
 		),
+		"PutPermission": op.NewTyped[putPermissionRequest, struct{}](
+			"PutPermission", s.putPermissionTyped,
+		),
+		"RemovePermission": op.NewTyped[removePermissionRequest, struct{}](
+			"RemovePermission", s.removePermissionTyped,
+		),
 	}
 }
 

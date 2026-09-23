@@ -1,6 +1,6 @@
 {
   "generated_by": "go run -tags dev ./cmd/capgen --write-docs",
-  "total_ops": 1512,
+  "total_ops": 1578,
   "services": [
     {
       "service": "s3",
@@ -654,13 +654,13 @@
           "operation": "GetFunction",
           "category": "Function management",
           "status": "✅ Supported",
-          "notes": "Returns FunctionConfiguration + Code location block; State/StateReason/StateReasonCode and LastUpdateStatus/LastUpdateStatusReason/LastUpdateStatusReasonCode both report, so `aws lambda wait function-active` and `wait function-updated` return; TracingConfig and EphemeralStorage always present, defaulting to PassThrough and 512 MB as on AWS; DeadLetterConfig reported only when the function has one"
+          "notes": "Returns FunctionConfiguration + Code location block; State/StateReason/StateReasonCode and LastUpdateStatus/LastUpdateStatusReason/LastUpdateStatusReasonCode both report, so `aws lambda wait function-active` and `wait function-updated` return; TracingConfig and EphemeralStorage always present, defaulting to PassThrough and 512 MB as on AWS; DeadLetterConfig reported only when the function has one; Qualifier — embedded in the name or given as a query parameter, the latter winning — selects a version number or alias and its Code block, defaulting to $LATEST; an unknown version or alias answers ResourceNotFoundException"
         },
         {
           "operation": "GetFunctionConfiguration",
           "category": "Function management",
           "status": "✅ Supported",
-          "notes": "Returns FunctionConfiguration only (no Code block); State/StateReason/StateReasonCode and LastUpdateStatus/LastUpdateStatusReason/LastUpdateStatusReasonCode both report, which is what the FunctionActive and FunctionUpdated waiters poll; TracingConfig and EphemeralStorage always present, defaulting to PassThrough and 512 MB as on AWS; DeadLetterConfig reported only when the function has one"
+          "notes": "Returns FunctionConfiguration only (no Code block); State/StateReason/StateReasonCode and LastUpdateStatus/LastUpdateStatusReason/LastUpdateStatusReasonCode both report, which is what the FunctionActive and FunctionUpdated waiters poll; TracingConfig and EphemeralStorage always present, defaulting to PassThrough and 512 MB as on AWS; DeadLetterConfig reported only when the function has one; Qualifier resolves the same way GetFunction's does — a version number, an alias (through its FunctionVersion), or $LATEST by default — with ResourceNotFoundException for an unknown one"
         },
         {
           "operation": "UpdateFunctionCode",
@@ -786,7 +786,7 @@
           "operation": "PublishVersion",
           "category": "Aliases \u0026 versions",
           "status": "✅ Supported",
-          "notes": "Immutable snapshot of function config, reporting LastUpdateStatus Successful because nothing can update it; version numbers are monotonically incrementing integers; refused with ResourceConflictException while an update is still in progress"
+          "notes": "Immutable snapshot of function config, reporting LastUpdateStatus Successful because nothing can update it; version numbers are monotonically incrementing integers; refused with ResourceConflictException while an update is still in progress; when code and configuration are unchanged since the highest existing version, returns that version instead of allocating a new one, as AWS documents; RevisionId and CodeSha256 are preconditions checked first — a RevisionId mismatch answers PreconditionFailedException, a CodeSha256 mismatch InvalidParameterValueException; PublishTo returns 501 before anything is persisted, for the same reason CreateFunction's does"
         },
         {
           "operation": "ListVersionsByFunction",
@@ -1193,7 +1193,7 @@
           "operation": "CreateAuthorizer",
           "category": "REST API v1 other",
           "status": "✅ Supported",
-          "notes": "JWT and REQUEST types; config stored"
+          "notes": "TOKEN, REQUEST and COGNITO_USER_POOLS types, all enforced at request time"
         },
         {
           "operation": "GetAuthorizer",
@@ -1480,7 +1480,7 @@
           "operation": "CreateV2Authorizer",
           "category": "HTTP API v2 other",
           "status": "✅ Supported",
-          "notes": "JWT and REQUEST types; config stored"
+          "notes": "REQUEST and JWT types, both enforced at request time"
         },
         {
           "operation": "GetV2Authorizer",
@@ -1811,7 +1811,8 @@
         {
           "operation": "FlushApiCache",
           "category": "API Cache",
-          "status": "✅ Supported"
+          "status": "✅ Supported",
+          "notes": "No-op: there is no real cache to flush, matching CreateApiCache storing config only"
         },
         {
           "operation": "CreateType",
@@ -1841,12 +1842,14 @@
         {
           "operation": "AssociateSourceGraphqlApi",
           "category": "Merged APIs",
-          "status": "✅ Supported"
+          "status": "✅ Supported",
+          "notes": "Merges source API schema SDL into the merged API by textual concatenation (schema_parser.go's Merge); resolvers and data sources are not copied or proxied from the source API, so a merged field needs its own resolver/data source defined directly on the merged API to execute. Real AWS AUTO_MERGE additionally carries resolvers and data sources over automatically"
         },
         {
           "operation": "AssociateMergedGraphqlApi",
           "category": "Merged APIs",
-          "status": "✅ Supported"
+          "status": "✅ Supported",
+          "notes": "Same schema-only merge as AssociateSourceGraphqlApi"
         },
         {
           "operation": "GetSourceApiAssociation",
@@ -1871,7 +1874,8 @@
         {
           "operation": "StartSchemaMerge",
           "category": "Merged APIs",
-          "status": "✅ Supported"
+          "status": "✅ Supported",
+          "notes": "Re-runs the same schema-only merge as AssociateSourceGraphqlApi"
         },
         {
           "operation": "CreateApi",
@@ -5104,20 +5108,20 @@
     {
       "service": "eventbridge",
       "display_name": "EventBridge",
-      "total_ops": 29,
-      "implemented_ops": 18,
+      "total_ops": 31,
+      "implemented_ops": 20,
       "operations": [
         {
           "operation": "CreateEventBus",
           "category": "Event buses",
           "status": "✅ Supported",
-          "notes": "Creates a custom event bus"
+          "notes": "Creates a custom event bus; stores Description, DeadLetterConfig and KmsKeyIdentifier"
         },
         {
           "operation": "DescribeEventBus",
           "category": "Event buses",
           "status": "✅ Supported",
-          "notes": "Returns bus details; synthetic default bus"
+          "notes": "Returns bus details including Description, DeadLetterConfig, KmsKeyIdentifier and the Policy built from PutPermission grants; synthetic default bus"
         },
         {
           "operation": "ListEventBuses",
@@ -5129,6 +5133,18 @@
           "operation": "DeleteEventBus",
           "category": "Event buses",
           "status": "✅ Supported"
+        },
+        {
+          "operation": "PutPermission",
+          "category": "Event buses",
+          "status": "✅ Supported",
+          "notes": "Stores a resource policy statement on the bus (or replaces it wholesale via the Policy parameter), returned by DescribeEventBus as Policy; stored, not enforced, the same as the rest of Overcast's IAM policies"
+        },
+        {
+          "operation": "RemovePermission",
+          "category": "Event buses",
+          "status": "✅ Supported",
+          "notes": "Removes one statement by StatementId, or the whole policy with RemoveAllPermissions"
         },
         {
           "operation": "PutRule",
@@ -6253,6 +6269,296 @@
           "operation": "DescribeReplicationConfigurations",
           "category": "Replication",
           "status": "❌ Unsupported"
+        }
+      ]
+    },
+    {
+      "service": "s3tables",
+      "display_name": "S3 Tables",
+      "total_ops": 49,
+      "implemented_ops": 49,
+      "operations": [
+        {
+          "operation": "CreateTableBucket",
+          "category": "Table buckets",
+          "status": "✅ Supported",
+          "notes": "Table bucket naming rules; `encryptionConfiguration`, `storageClassConfiguration` and `tags` on create"
+        },
+        {
+          "operation": "GetTableBucket",
+          "category": "Table buckets",
+          "status": "✅ Supported",
+          "notes": "Addressed by ARN; `type` is always `customer`"
+        },
+        {
+          "operation": "ListTableBuckets",
+          "category": "Table buckets",
+          "status": "✅ Supported",
+          "notes": "`prefix`, `type`, `maxBuckets` and `continuationToken`"
+        },
+        {
+          "operation": "DeleteTableBucket",
+          "category": "Table buckets",
+          "status": "✅ Supported",
+          "notes": "`ConflictException` while the bucket still holds namespaces"
+        },
+        {
+          "operation": "CreateNamespace",
+          "category": "Namespaces",
+          "status": "✅ Supported",
+          "notes": "One-level namespaces, as AWS; namespace naming rules"
+        },
+        {
+          "operation": "GetNamespace",
+          "category": "Namespaces",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "ListNamespaces",
+          "category": "Namespaces",
+          "status": "✅ Supported",
+          "notes": "`prefix`, `maxNamespaces` and `continuationToken`"
+        },
+        {
+          "operation": "DeleteNamespace",
+          "category": "Namespaces",
+          "status": "✅ Supported",
+          "notes": "`ConflictException` while the namespace still holds tables"
+        },
+        {
+          "operation": "CreateTable",
+          "category": "Tables",
+          "status": "⚠️ Partial",
+          "notes": "Creates the table's `--table-s3` warehouse bucket in S3; `metadata.iceberg.schema` (primitive types), `partitionSpec`, `writeOrder` and `properties` write the first `metadata.json`; `schemaV2` returns 501"
+        },
+        {
+          "operation": "GetTable",
+          "category": "Tables",
+          "status": "✅ Supported",
+          "notes": "By `tableArn`, or by `tableBucketARN`, `namespace` and `name`"
+        },
+        {
+          "operation": "ListTables",
+          "category": "Tables",
+          "status": "✅ Supported",
+          "notes": "`namespace`, `prefix`, `maxTables` and `continuationToken`"
+        },
+        {
+          "operation": "DeleteTable",
+          "category": "Tables",
+          "status": "✅ Supported",
+          "notes": "Optional `versionToken` check; the warehouse bucket and its objects are left in S3"
+        },
+        {
+          "operation": "RenameTable",
+          "category": "Tables",
+          "status": "✅ Supported",
+          "notes": "New name and/or namespace; the ARN and version token are unchanged"
+        },
+        {
+          "operation": "GetTableMetadataLocation",
+          "category": "Tables",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "UpdateTableMetadataLocation",
+          "category": "Tables",
+          "status": "✅ Supported",
+          "notes": "Compare-and-swap on `versionToken`: a stale token is `ConflictException`; the location must be inside the warehouse"
+        },
+        {
+          "operation": "PutTableBucketPolicy",
+          "category": "Policies",
+          "status": "🧊 Inert",
+          "notes": "Stored and returned; not evaluated"
+        },
+        {
+          "operation": "GetTableBucketPolicy",
+          "category": "Policies",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "DeleteTableBucketPolicy",
+          "category": "Policies",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "PutTablePolicy",
+          "category": "Policies",
+          "status": "🧊 Inert",
+          "notes": "Stored and returned; not evaluated"
+        },
+        {
+          "operation": "GetTablePolicy",
+          "category": "Policies",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "DeleteTablePolicy",
+          "category": "Policies",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "PutTableBucketEncryption",
+          "category": "Encryption, storage class and metrics",
+          "status": "🧊 Inert",
+          "notes": "Stored; new tables inherit it. Objects are not encrypted"
+        },
+        {
+          "operation": "GetTableBucketEncryption",
+          "category": "Encryption, storage class and metrics",
+          "status": "✅ Supported",
+          "notes": "`AES256` until configured otherwise"
+        },
+        {
+          "operation": "DeleteTableBucketEncryption",
+          "category": "Encryption, storage class and metrics",
+          "status": "✅ Supported",
+          "notes": "Returns the bucket to `AES256`"
+        },
+        {
+          "operation": "GetTableEncryption",
+          "category": "Encryption, storage class and metrics",
+          "status": "✅ Supported",
+          "notes": "The bucket's configuration at create time, or the table's own"
+        },
+        {
+          "operation": "PutTableBucketStorageClass",
+          "category": "Encryption, storage class and metrics",
+          "status": "🧊 Inert",
+          "notes": "Stored; new tables inherit it"
+        },
+        {
+          "operation": "GetTableBucketStorageClass",
+          "category": "Encryption, storage class and metrics",
+          "status": "✅ Supported",
+          "notes": "`STANDARD` until configured otherwise"
+        },
+        {
+          "operation": "GetTableStorageClass",
+          "category": "Encryption, storage class and metrics",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "PutTableBucketMetricsConfiguration",
+          "category": "Encryption, storage class and metrics",
+          "status": "🧊 Inert",
+          "notes": "Recorded; no CloudWatch metrics are published"
+        },
+        {
+          "operation": "GetTableBucketMetricsConfiguration",
+          "category": "Encryption, storage class and metrics",
+          "status": "✅ Supported",
+          "notes": "`NotFoundException` until configured"
+        },
+        {
+          "operation": "DeleteTableBucketMetricsConfiguration",
+          "category": "Encryption, storage class and metrics",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "PutTableBucketMaintenanceConfiguration",
+          "category": "Maintenance",
+          "status": "🧊 Inert",
+          "notes": "Stored and echoed; no maintenance runs"
+        },
+        {
+          "operation": "GetTableBucketMaintenanceConfiguration",
+          "category": "Maintenance",
+          "status": "✅ Supported",
+          "notes": "AWS's defaults merged with what was put"
+        },
+        {
+          "operation": "PutTableMaintenanceConfiguration",
+          "category": "Maintenance",
+          "status": "🧊 Inert",
+          "notes": "Stored and echoed; no compaction or snapshot management runs"
+        },
+        {
+          "operation": "GetTableMaintenanceConfiguration",
+          "category": "Maintenance",
+          "status": "✅ Supported",
+          "notes": "AWS's defaults merged with what was put"
+        },
+        {
+          "operation": "GetTableMaintenanceJobStatus",
+          "category": "Maintenance",
+          "status": "🧊 Inert",
+          "notes": "Every job reports `Not_Yet_Run`, or `Disabled` when turned off"
+        },
+        {
+          "operation": "PutTableBucketReplication",
+          "category": "Replication and record expiration",
+          "status": "🧊 Inert",
+          "notes": "Stored with a `versionToken`; nothing is replicated"
+        },
+        {
+          "operation": "GetTableBucketReplication",
+          "category": "Replication and record expiration",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "DeleteTableBucketReplication",
+          "category": "Replication and record expiration",
+          "status": "✅ Supported",
+          "notes": "Optional `versionToken` check"
+        },
+        {
+          "operation": "PutTableReplication",
+          "category": "Replication and record expiration",
+          "status": "🧊 Inert",
+          "notes": "Stored with a `versionToken`; nothing is replicated"
+        },
+        {
+          "operation": "GetTableReplication",
+          "category": "Replication and record expiration",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "DeleteTableReplication",
+          "category": "Replication and record expiration",
+          "status": "✅ Supported",
+          "notes": "`versionToken` check"
+        },
+        {
+          "operation": "GetTableReplicationStatus",
+          "category": "Replication and record expiration",
+          "status": "🧊 Inert",
+          "notes": "Every destination reports `pending`"
+        },
+        {
+          "operation": "PutTableRecordExpirationConfiguration",
+          "category": "Replication and record expiration",
+          "status": "🧊 Inert",
+          "notes": "Stored and echoed; no records expire"
+        },
+        {
+          "operation": "GetTableRecordExpirationConfiguration",
+          "category": "Replication and record expiration",
+          "status": "✅ Supported",
+          "notes": "`disabled` until configured"
+        },
+        {
+          "operation": "GetTableRecordExpirationJobStatus",
+          "category": "Replication and record expiration",
+          "status": "🧊 Inert",
+          "notes": "`NotYetRun` when enabled, otherwise `Disabled`"
+        },
+        {
+          "operation": "TagResource",
+          "category": "Tags",
+          "status": "✅ Supported",
+          "notes": "Table buckets and tables; the 50-tag limit and AWS's key and value rules"
+        },
+        {
+          "operation": "UntagResource",
+          "category": "Tags",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "ListTagsForResource",
+          "category": "Tags",
+          "status": "✅ Supported"
         }
       ]
     },
@@ -7980,56 +8286,146 @@
     {
       "service": "glue",
       "display_name": "Glue",
-      "total_ops": 11,
-      "implemented_ops": 11,
+      "total_ops": 26,
+      "implemented_ops": 26,
       "operations": [
         {
           "operation": "CreateDatabase",
           "category": "Databases",
           "status": "✅ Supported",
-          "notes": "Creates a database in the catalog"
+          "notes": "Keeps the whole DatabaseInput and Tags; duplicate names are AlreadyExistsException"
         },
         {
           "operation": "GetDatabase",
           "category": "Databases",
           "status": "✅ Supported",
-          "notes": "Returns database details"
+          "notes": "Returns the full database with CreateTime"
         },
         {
           "operation": "GetDatabases",
           "category": "Databases",
           "status": "✅ Supported",
-          "notes": "Lists all databases"
+          "notes": "Paginated with MaxResults and NextToken"
+        },
+        {
+          "operation": "UpdateDatabase",
+          "category": "Databases",
+          "status": "✅ Supported",
+          "notes": "Replaces the definition; renaming is refused"
         },
         {
           "operation": "DeleteDatabase",
           "category": "Databases",
           "status": "✅ Supported",
-          "notes": "Deletes a database"
+          "notes": "Also deletes the database's tables, partitions and table versions"
         },
         {
           "operation": "CreateTable",
           "category": "Tables",
-          "status": "✅ Supported",
-          "notes": "Creates a table in a database"
+          "status": "⚠️ Partial",
+          "notes": "Keeps the whole TableInput; OpenTableFormatInput.IcebergInput writes no Iceberg metadata"
         },
         {
           "operation": "GetTable",
           "category": "Tables",
           "status": "✅ Supported",
-          "notes": "Returns table details"
+          "notes": "Returns the full table with CreateTime, UpdateTime and VersionId"
         },
         {
           "operation": "GetTables",
           "category": "Tables",
           "status": "✅ Supported",
-          "notes": "Lists tables in a database"
+          "notes": "Expression is a name regex; paginated"
+        },
+        {
+          "operation": "UpdateTable",
+          "category": "Tables",
+          "status": "⚠️ Partial",
+          "notes": "VersionId concurrency and archiving; UpdateOpenTableFormatInput is not implemented"
         },
         {
           "operation": "DeleteTable",
           "category": "Tables",
           "status": "✅ Supported",
-          "notes": "Deletes a table"
+          "notes": "Also deletes the table's partitions and versions"
+        },
+        {
+          "operation": "BatchDeleteTable",
+          "category": "Tables",
+          "status": "✅ Supported",
+          "notes": "Reports missing tables in Errors"
+        },
+        {
+          "operation": "GetTableVersion",
+          "category": "Table versions",
+          "status": "✅ Supported",
+          "notes": "Current version when VersionId is omitted"
+        },
+        {
+          "operation": "GetTableVersions",
+          "category": "Table versions",
+          "status": "✅ Supported",
+          "notes": "Current and archived versions, newest first; paginated"
+        },
+        {
+          "operation": "DeleteTableVersion",
+          "category": "Table versions",
+          "status": "✅ Supported",
+          "notes": "Archived versions only; the current one is InvalidInputException"
+        },
+        {
+          "operation": "BatchDeleteTableVersion",
+          "category": "Table versions",
+          "status": "✅ Supported",
+          "notes": "Reports failed versions in Errors"
+        },
+        {
+          "operation": "CreatePartition",
+          "category": "Partitions",
+          "status": "✅ Supported",
+          "notes": "One value per partition key; duplicates are AlreadyExistsException"
+        },
+        {
+          "operation": "BatchCreatePartition",
+          "category": "Partitions",
+          "status": "✅ Supported",
+          "notes": "Up to 100; per-partition failures in Errors"
+        },
+        {
+          "operation": "GetPartition",
+          "category": "Partitions",
+          "status": "✅ Supported",
+          "notes": "Returns the full partition"
+        },
+        {
+          "operation": "GetPartitions",
+          "category": "Partitions",
+          "status": "⚠️ Partial",
+          "notes": "Expression supports comparisons, AND/OR/NOT, IN, BETWEEN, LIKE, IS NULL; paginated, Segment supported"
+        },
+        {
+          "operation": "BatchGetPartition",
+          "category": "Partitions",
+          "status": "✅ Supported",
+          "notes": "Missing partitions are omitted"
+        },
+        {
+          "operation": "UpdatePartition",
+          "category": "Partitions",
+          "status": "✅ Supported",
+          "notes": "Replaces the definition; new Values move the partition"
+        },
+        {
+          "operation": "DeletePartition",
+          "category": "Partitions",
+          "status": "✅ Supported",
+          "notes": "Deletes one partition"
+        },
+        {
+          "operation": "BatchDeletePartition",
+          "category": "Partitions",
+          "status": "✅ Supported",
+          "notes": "Up to 25; missing partitions in Errors"
         },
         {
           "operation": "TagResource",

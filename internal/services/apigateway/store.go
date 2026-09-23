@@ -269,8 +269,9 @@ type QuotaSettings struct {
 
 // ---- Domain types: Authorizers (P2/P3) ----------------------------------
 
-// Authorizer represents a REST API authorizer.
-// TODO(priority:P2): implement authorizer CRUD and invocation during request execution.
+// Authorizer represents a REST API authorizer. TOKEN, REQUEST and
+// COGNITO_USER_POOLS types are all invoked/validated during request
+// execution — see handler_lambda_auth.go and handler_auth.go.
 type Authorizer struct {
 	ID                           string   `json:"id"`
 	Name                         string   `json:"name"`
@@ -284,7 +285,6 @@ type Authorizer struct {
 }
 
 // AuthorizerV2 represents an HTTP API authorizer.
-// TODO(priority:P2): implement v2 authorizer CRUD — especially JWT authorizer for HTTP APIs.
 type AuthorizerV2 struct {
 	AuthorizerID                 string     `json:"authorizerId"`
 	Name                         string     `json:"name"`
@@ -294,6 +294,11 @@ type AuthorizerV2 struct {
 	AuthorizerCredentialsArn     string     `json:"authorizerCredentialsArn,omitempty"`
 	AuthorizerResultTTLInSeconds int        `json:"authorizerResultTtlInSeconds,omitempty"`
 	JwtConfiguration             *JwtConfig `json:"jwtConfiguration,omitempty"`
+	// AuthorizerPayloadFormatVersion ("1.0" or "2.0") and EnableSimpleResponses
+	// apply to REQUEST authorizers only, and select the input event shape and
+	// the accepted response contract — see handler_lambda_auth.go.
+	AuthorizerPayloadFormatVersion string `json:"authorizerPayloadFormatVersion,omitempty"`
+	EnableSimpleResponses          bool   `json:"enableSimpleResponses,omitempty"`
 }
 
 // JwtConfig defines JWT authorizer configuration for HTTP APIs.

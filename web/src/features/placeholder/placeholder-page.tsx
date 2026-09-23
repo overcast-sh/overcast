@@ -13,7 +13,7 @@ export interface PlaceholderPageProps {
   docsUrl?: string
   /**
    * Current emulation tier.
-   * "stub" = registered in backend, returns 501.
+   * "stub" = registered in backend with a small subset; the rest returns 501.
    * "unsupported" = not in Overcast at all.
    * Omit for legacy use where tier is unknown.
    */
@@ -22,7 +22,7 @@ export interface PlaceholderPageProps {
    * Aspirational tier. When different from `tier`, a WIP badge is shown.
    */
   goalTier?: "unsupported" | "stub" | "partial" | "full"
-  /** Why Overcast doesn't support this service */
+  /** Why Overcast doesn't support this service, or for a stub, what it does answer */
   reason?: string
 }
 
@@ -39,7 +39,7 @@ const TIER_DESCRIPTIONS: Record<string, string> = {
   partial: "Core operations work. Some endpoints return 501 or have limited behaviour.",
   inert:
     "Service accepts requests but operations have no side effects — always returns success without storing state.",
-  stub: "Registered so discovery works: at most a hardcoded, stateless answer to the service's describe call; every other operation returns 501 Not Implemented.",
+  stub: "Registered with only a small subset of operations; every other operation returns 501 Not Implemented.",
   unsupported: "Not registered in Overcast. Requests will fall through to the 501 handler.",
 }
 
@@ -84,23 +84,13 @@ export function PlaceholderPage({
       {tier !== undefined && (
         <div className="mt-4 flex items-center justify-center gap-4 text-xs text-fg-subtle">
           <span>
-            Current:{" "}
-            <Tooltip content={TIER_DESCRIPTIONS[tier] ?? tier}>
-              <span className="cursor-default font-medium text-fg-muted underline decoration-fg-subtle decoration-dotted underline-offset-2">
-                {TIER_LABELS[tier] ?? tier}
-              </span>
-            </Tooltip>
+            Current: <TierTerm tier={tier} />
           </span>
           {goalTier && goalTier !== tier && (
             <>
               <span className="text-border">→</span>
               <span>
-                Goal:{" "}
-                <Tooltip content={TIER_DESCRIPTIONS[goalTier] ?? goalTier}>
-                  <span className="cursor-default font-medium text-fg-muted underline decoration-fg-subtle decoration-dotted underline-offset-2">
-                    {TIER_LABELS[goalTier] ?? goalTier}
-                  </span>
-                </Tooltip>
+                Goal: <TierTerm tier={goalTier} />
               </span>
             </>
           )}
@@ -108,24 +98,12 @@ export function PlaceholderPage({
       )}
 
       <div className="mt-8 space-y-4 rounded-xl border border-border-muted bg-bg-elevated p-6 text-left">
-        {isStub ? (
-          <>
-            <p className="text-sm font-medium text-fg">Stub — returns 501</p>
-            <p className="text-sm text-fg-muted">
-              This service is registered in Overcast and all API calls are accepted, but every
-              operation returns{" "}
-              <code className="rounded bg-bg px-1 py-0.5 font-mono text-xs">
-                HTTP 501 Not Implemented
-              </code>
-              . Support is planned for a future release.
-            </p>
-          </>
-        ) : (
-          <>
-            <p className="text-sm font-medium text-fg">Not supported in Overcast</p>
-            {reason && <p className="text-sm text-fg-muted">{reason}</p>}
-          </>
-        )}
+        <p className="text-sm font-medium text-fg">
+          {isStub ? "Stub — most operations return 501" : "Not supported in Overcast"}
+        </p>
+        {/* For a stub the reason says which operations answer, since that
+            differs per service; otherwise it says why there is no emulation. */}
+        {reason && <p className="text-sm text-fg-muted">{reason}</p>}
 
         <p className="text-sm text-fg-subtle">
           API responses and behaviour are subject to change as support improves.{" "}
@@ -154,5 +132,16 @@ export function PlaceholderPage({
         )}
       </div>
     </div>
+  )
+}
+
+/** A tier's label, underlined as a term, with what the tier means as its tooltip. */
+function TierTerm({ tier }: { tier: string }) {
+  return (
+    <Tooltip content={TIER_DESCRIPTIONS[tier] ?? tier}>
+      <span className="cursor-default font-medium text-fg-muted underline decoration-fg-subtle decoration-dotted underline-offset-2">
+        {TIER_LABELS[tier] ?? tier}
+      </span>
+    </Tooltip>
   )
 }

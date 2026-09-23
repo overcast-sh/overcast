@@ -4,17 +4,17 @@
  * Status: NOT implemented in Overcast. Tests expected to fail with 501.
  *
  * Groups:
- *   kinesis-streams — stream lifecycle
  *   kinesis-records — PutRecord / PutRecords / GetRecords
  *   kinesis-shards  — shard management (split, merge, list)
+ *
+ * kinesis-streams resolves through its authored scenario
+ * (compat/model/authored/kinesis-streams.json).
  */
 
 import {
   CreateStreamCommand,
   DeleteStreamCommand,
-  DescribeStreamCommand,
   DescribeStreamSummaryCommand,
-  ListStreamsCommand,
   PutRecordCommand,
   PutRecordsCommand,
   GetShardIteratorCommand,
@@ -22,8 +22,6 @@ import {
   ListShardsCommand,
   SplitShardCommand,
   MergeShardsCommand,
-  AddTagsToStreamCommand,
-  ListTagsForStreamCommand,
   StreamStatus,
   ShardIteratorType,
 } from "@aws-sdk/client-kinesis";
@@ -50,131 +48,6 @@ async function waitForActive(
 
 export function makeKinesisGroups(suite: string): TestGroup[] {
   return [
-    // ── kinesis-streams ────────────────────────────────────────────────────
-    {
-      suite,
-      service: "kinesis",
-      name: "kinesis-streams",
-      tests: [
-        {
-          name: "CreateStream",
-          fn: async (ctx) => {
-            const { kinesis } = makeClients(ctx);
-            await kinesis.send(
-              new CreateStreamCommand({
-                StreamName: `${ctx.runId}-stream`,
-                ShardCount: 1,
-              }),
-            );
-            const resp = await kinesis.send(new ListStreamsCommand({}));
-            assert.ok(
-              resp.StreamNames?.includes(`${ctx.runId}-stream`),
-              "CreateStream: stream not found in ListStreams after create",
-            );
-          },
-        },
-        {
-          name: "DescribeStream",
-          fn: async (ctx) => {
-            const { kinesis } = makeClients(ctx);
-            const resp = await kinesis.send(
-              new DescribeStreamCommand({ StreamName: `${ctx.runId}-stream` }),
-            );
-            assert.ok(
-              resp.StreamDescription?.StreamARN,
-              "DescribeStream: missing StreamARN",
-            );
-            (ctx as Record<string, unknown>)["_streamArn"] =
-              resp.StreamDescription.StreamARN;
-          },
-        },
-        {
-          name: "DescribeStreamSummary",
-          fn: async (ctx) => {
-            const { kinesis } = makeClients(ctx);
-            const resp = await kinesis.send(
-              new DescribeStreamSummaryCommand({
-                StreamName: `${ctx.runId}-stream`,
-              }),
-            );
-            assert.ok(
-              resp.StreamDescriptionSummary?.StreamARN,
-              "DescribeStreamSummary: missing StreamARN",
-            );
-          },
-        },
-        {
-          name: "ListStreams",
-          fn: async (ctx) => {
-            const { kinesis } = makeClients(ctx);
-            const resp = await kinesis.send(new ListStreamsCommand({}));
-            assert.ok(
-              resp.StreamNames?.includes(`${ctx.runId}-stream`),
-              "ListStreams: stream not found",
-            );
-          },
-        },
-        {
-          name: "AddTagsToStream",
-          fn: async (ctx) => {
-            const { kinesis } = makeClients(ctx);
-            await kinesis.send(
-              new AddTagsToStreamCommand({
-                StreamName: `${ctx.runId}-stream`,
-                Tags: { env: "compat" },
-              }),
-            );
-            const resp = await kinesis.send(
-              new ListTagsForStreamCommand({
-                StreamName: `${ctx.runId}-stream`,
-              }),
-            );
-            assert.ok(
-              resp.Tags?.some((t) => t.Key === "env" && t.Value === "compat"),
-              "AddTagsToStream: tag env=compat not found after add",
-            );
-          },
-        },
-        {
-          name: "ListTagsForStream",
-          fn: async (ctx) => {
-            const { kinesis } = makeClients(ctx);
-            const resp = await kinesis.send(
-              new ListTagsForStreamCommand({
-                StreamName: `${ctx.runId}-stream`,
-              }),
-            );
-            assert.ok(
-              resp.Tags?.some((t) => t.Key === "env"),
-              "ListTagsForStream: tag not found",
-            );
-          },
-        },
-        {
-          name: "DeleteStream",
-          fn: async (ctx) => {
-            const { kinesis } = makeClients(ctx);
-            await kinesis.send(
-              new DeleteStreamCommand({ StreamName: `${ctx.runId}-stream` }),
-            );
-            const resp = await kinesis.send(new ListStreamsCommand({}));
-            assert.ok(
-              !resp.StreamNames?.includes(`${ctx.runId}-stream`),
-              "DeleteStream: stream still present after delete",
-            );
-          },
-        },
-      ],
-      teardown: async (ctx) => {
-        const { kinesis } = makeClients(ctx);
-        try {
-          await kinesis.send(
-            new DeleteStreamCommand({ StreamName: `${ctx.runId}-stream` }),
-          );
-        } catch {}
-      },
-    },
-
     // ── kinesis-records ────────────────────────────────────────────────────
     {
       suite,

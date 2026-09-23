@@ -1,3 +1,5 @@
+import { isRecord } from "@/lib/utils"
+
 /**
  * JSON Lines as a table — when, and only when, it is one.
  *
@@ -52,10 +54,6 @@ function lineNumber(text: string, offset: number): number {
   return line
 }
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-}
-
 /**
  * The columns a set of records shares, in first-seen order — or null when the
  * records are not a table.
@@ -68,15 +66,14 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  */
 export function uniformColumns(records: readonly unknown[]): string[] | null {
   if (records.length === 0) return null
-  const union = new Map<string, true>()
+  const union = new Set<string>()
+  const widths: number[] = []
   for (const record of records) {
-    if (!isPlainObject(record)) return null
-    for (const key of Object.keys(record)) union.set(key, true)
+    if (!isRecord(record)) return null
+    const keys = Object.keys(record)
+    for (const key of keys) union.add(key)
+    widths.push(keys.length)
   }
   if (union.size === 0) return null
-  const threshold = union.size / 2
-  for (const record of records) {
-    if (Object.keys(record as object).length <= threshold) return null
-  }
-  return [...union.keys()]
+  return widths.every((width) => width > union.size / 2) ? [...union] : null
 }

@@ -2,7 +2,7 @@ service: appsync
 status: fixed
 priority: p2
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-09-05
+last_updated: 2026-09-23
 protocols: [rest_json, graphql_execution, websocket_realtime, aws_json_1_0, aws_json_1_1, rpcv2_cbor]
 implementation: [internal/services/appsync]
 integration_tests: [tests/integration/appsync]
@@ -41,8 +41,16 @@ operations:
         evidence: TestCreateGraphqlApi_invalidApiType
         notes: Valid values are GRAPHQL and MERGED; omitted defaults to GRAPHQL.
       - scenario: Additional auth providers and nested auth/log/metrics config passthrough
-        status: tests_missing
-        evidence: Existing passthrough fields are stored as raw JSON, but nested shape validation is not reviewed.
+        status: fixed
+        evidence: TestCreateGraphqlApi_additionalAuthenticationProviders; TestCreateGraphqlApi_logConfigFieldLogLevel
+        notes: >-
+          additionalAuthenticationProviders[].authenticationType and
+          logConfig.fieldLogLevel are now validated against AWS's documented enums
+          (validateAdditionalAuthenticationProviders, validateLogConfig in handler.go);
+          previously these passthrough-typed fields (stored as raw JSON for zero-cost
+          passthrough) accepted any shape, including garbage. lambdaAuthorizerConfig,
+          openIDConnectConfig, userPoolConfig and enhancedMetricsConfig remain
+          unvalidated at create/update time, same as their top-level counterparts.
       - scenario: Tag regex validation
         status: intentionally_partial
         evidence: "Handler now validates count, key/value lengths, and aws: prefix; exact AWS key/value regexes remain unimplemented."
@@ -52,14 +60,44 @@ operations:
         notes: Fixed CloudFormation/CDK deployments that previously failed with Go JSON decoder text when Tags was forwarded as an array.
       - scenario: Visibility, introspection, queryDepthLimit, resolverCountLimit, ownerContact boundaries
         status: fixed
-        evidence: Handler validation added; TestCreateGraphqlApi_jsonProtocolOwnerContactTooLong covers typed/AWS JSON ownerContact length validation.
+        evidence: TestCreateGraphqlApi_queryDepthLimitBoundaries (0/75/76); TestCreateGraphqlApi_resolverCountLimitBoundaries (0/10000/10001); TestCreateGraphqlApi_ownerContactTooLong
+        notes: >-
+          The previously cited evidence (TestCreateGraphqlApi_jsonProtocolOwnerContactTooLong)
+          was stale — that test was renamed to TestCreateGraphqlApi_ownerContactTooLong by
+          #897, which dropped the separate "AWS JSON protocol" duplicate test variants
+          across this file (AppSync's control plane has one wire protocol, REST JSON; there
+          never was a second protocol variant to test). queryDepthLimit and
+          resolverCountLimit previously had no boundary tests at all.
+      - scenario: Default API key auto-creation on CreateGraphqlApi
+        status: fixed
+        evidence: TestApiKey_notAutoCreatedOnApiKeyAuth; TestApiKey_notAutoCreatedOnNonApiKeyAuth
+        notes: >-
+          #62: CreateGraphqlApi no longer auto-creates a default API key for
+          authenticationType=API_KEY. AWS's CreateGraphqlApi response
+          (https://docs.aws.amazon.com/appsync/latest/APIReference/API_CreateGraphqlApi.html)
+          carries no apiKey field — confirmed against both the API reference and the
+          pinned Smithy model's CreateGraphqlApiResponse shape, which has only a
+          graphqlApi member. The AWS console's "default key" convenience is a separate
+          CreateApiKey call the console makes after CreateGraphqlApi succeeds, not
+          something the CreateGraphqlApi operation itself does. Breaking change: callers
+          that relied on the implicit key must now call CreateApiKey explicitly (see
+          AWS::AppSync::ApiKey's CloudFormation handler for the pattern, which already did
+          this and was unaffected). No CloudFormation handler or compat suite test
+          depended on the auto-created key — checked provisioner_newservices.go's
+          appsyncApiKeyHandler (calls CreateApiKey directly) and
+          compat/suites/*/groups/appsync*.go's appsync-api-keys group (creates its own key
+          explicitly in every language suite).
     findings:
       fixed:
         - CreateGraphqlApi now returns HTTP 200 per AWS docs instead of 201.
         - CreateGraphqlApi now rejects missing name/authenticationType and invalid top-level enum/limit inputs with BadRequestException.
-      remaining_gaps:
-        - Add focused tests for visibility, introspectionConfig, queryDepthLimit, resolverCountLimit, ownerContact, tag boundaries, and nested auth config scenarios.
-        - Review default API key auto-creation against AWS SDK behavior; current implementation auto-creates one for API_KEY APIs but this was not re-verified in this operation review.
+        - "#61/#65: queryDepthLimit (0/75/76) and resolverCountLimit (0/10000/10001) boundary
+          tests added; nested additionalAuthenticationProviders[].authenticationType and
+          logConfig.fieldLogLevel are now validated and tested."
+        - "#62: CreateGraphqlApi no longer auto-creates a default API key for
+          authenticationType=API_KEY, matching AWS's documented response shape. Breaking
+          change; see the scenario above for the AWS-doc/model verification and the callers
+          checked."
   CloudFormationAppSyncResources:
     status: fixed
     aws_docs:
@@ -223,9 +261,14 @@ operations:
       - scenario: Encoded ARN path from SDK
         status: fixed
         evidence: TestTags_encodedARNPath
-      - scenario: Tag count, key/value length, aws: prefix, and regex validation
+      - scenario: "Tag count, key/value length, aws: prefix, and regex validation"
         status: fixed
-        evidence: TestTagResource_emptyTagKey; TestTagResource_invalidTagPatterns; TestTagResource_jsonProtocolInvalidTagPattern
+        evidence: TestTagResource_emptyTagKey; TestTagResource_invalidTagPatterns
+        notes: >-
+          The previously cited TestTagResource_jsonProtocolInvalidTagPattern was removed by
+          #897 along with every other "AWS JSON protocol" duplicate test variant in this
+          file; TestTagResource_invalidTagPatterns already covers the same invalid-key-
+          character case as a subtest.
   UpdateGraphqlApi:
     status: fixed
     aws_docs:
@@ -237,16 +280,20 @@ operations:
       - scenario: Invalid authenticationType enum
         status: fixed
         evidence: TestUpdateGraphqlApi_invalidAuthenticationType
-      - scenario: Missing required name through AWS JSON protocol
+      - scenario: Missing required name
         status: fixed
-        evidence: TestUpdateGraphqlApi_jsonProtocolMissingName
+        evidence: TestUpdateGraphqlApi_missingName
+        notes: >-
+          The previously cited TestUpdateGraphqlApi_jsonProtocolMissingName was renamed to
+          TestUpdateGraphqlApi_missingName by #897 (see the CreateGraphqlApi boundary
+          scenario above for why).
 findings:
-    fixed:
+  fixed:
       - CreateGraphqlApi HTTP status and top-level request validation now better match AWS docs.
       - CloudFormation AWS::AppSync::GraphQLApi now translates CDK/CloudFormation Tags arrays to AppSync CreateGraphqlApi tag maps before dispatching.
-      - Typed CreateGraphqlApi now includes the tags request field so SDK protocol variants do not drop create-time tags; covered by TestCreateGraphqlApi_jsonProtocolTags.
+      - Typed CreateGraphqlApi now includes the tags request field so SDK protocol variants do not drop create-time tags; covered by TestCreateGraphqlApi_inlineTags (renamed from TestCreateGraphqlApi_jsonProtocolTags by #897).
       - CloudFormation now provisions AppSync Events APIs and channel namespaces through the real Events API routes instead of stubbing them.
-      - Typed CreateGraphqlApi now carries ownerContact into shared validation; covered by TestCreateGraphqlApi_jsonProtocolOwnerContactTooLong.
+      - Typed CreateGraphqlApi now carries ownerContact into shared validation; covered by TestCreateGraphqlApi_ownerContactTooLong (renamed from TestCreateGraphqlApi_jsonProtocolOwnerContactTooLong by #897).
       - CreateApiKey now accepts CDK-style absolute Expires values 365 days from creation; covered by TestApiKey_createWithCdkStyleUpperBoundExpires and TestCreateStack_AppSyncApiKeyWithCdkStyleUpperBoundExpires.
       - StartSchemaCreation now accepts AppSync built-in auth and subscription directives in uploaded SDL; covered by TestSchema_appSyncDirectives and TestCreateStack_AppSyncGraphQLSchemaWithAwsDirectives.
       - StartSchemaCreation now accepts AppSync built-in scalar types in uploaded SDL; covered by TestSchema_appSyncScalars and TestCreateStack_AppSyncGraphQLSchemaWithAwsScalars.
@@ -258,17 +305,38 @@ findings:
       - Direct Lambda resolver events now carry pipeline stash and prev.result when invoked from pipeline functions, and deniedFields matching avoids cross-API full-ARN bleed-through.
       - Lambda authorizer requestContext now includes GraphQL query details, authorizer TTL caching honors authorizerResultTtlInSeconds and ttlOverride, and VTL BatchInvoke payloads are merged for nested Lambda batch resolvers.
       - AMAZON_COGNITO_USER_POOLS authorization can now verify bearer tokens against the local Cognito user pool named by userPoolConfig.userPoolId — RS256 signature, issuer, token_use, expiry and appIdClientRegex — behind OVERCAST_ENFORCE_APPSYNC_COGNITO_AUTH, for the primary and additional authentication providers alike.
+      - "#64: internal/services/appsync/capabilities_dev.go's Merged APIs and API Cache
+        categories now say what actually happens at execution time instead of a bare
+        Supported. AssociateSourceGraphqlApi/AssociateMergedGraphqlApi/StartSchemaMerge
+        merge source API schema SDL by textual concatenation only (schema_parser.go's
+        Merge) — resolvers and data sources are not copied from the source API, unlike
+        real AWS AUTO_MERGE, so a merged field needs its own resolver defined on the
+        merged API to execute. FlushApiCache is annotated as the no-op it is, matching
+        CreateApiCache's existing \"config stored; no actual caching enforced\" note.
+        CreateDomainName remains the only Domain Names operation annotated inert, which
+        was already correct — Domain Names' other operations (Get/List/Update/Delete)
+        just manage the same inert metadata record."
   remaining_gaps:
     - Continue typed protocol validation tests beyond the UpdateGraphqlApi missing-name, TagResource invalid-key, and CreateGraphqlApi ownerContact boundary cases.
-    - Audit support claims category by category.
-    - Downgrade or annotate config-only and inert behavior where AWS compatibility is limited.
-    - Continue CreateGraphqlApi boundary/nested-config coverage before marking reviewed.
+    - "#63: eight of the nine reviewed categories (CreateGraphqlApi, CloudFormation
+      resources, CreateApiKey, StartSchemaCreation, Lambda resolver execution, Cognito
+      authorization, TagResource, UpdateGraphqlApi — the operation blocks above) already
+      carry an audited scenario_matrix with test evidence. The one category that does not
+      is OPENID_CONNECT authorization, split out to #2095 (filed 2026-09-23) rather than
+      re-audited here: it still decodes tokens without verifying the signature, issuer,
+      iatTTL/authTTL or the clientId regex, and has no enforcement switch as Cognito now
+      does. The generic \"audit category by category\" framing is retired in favor of
+      naming the one category left."
     - Continue broader typed protocol validation and data-source CloudFormation coverage before marking the full AppSync service reviewed.
-    - OPENID_CONNECT authorization still decodes tokens without verifying the signature, issuer, iatTTL/authTTL or the clientId regex; there is no enforcement switch for it as there now is for Cognito.
   intentionally_partial:
     - AMAZON_COGNITO_USER_POOLS token verification is opt-in (OVERCAST_ENFORCE_APPSYNC_COGNITO_AUTH, default off). The default posture accepts any bearer token and decodes its claims, because the emulator is not a security boundary and local resolver tests mint unsigned JWTs. Even with enforcement on, only tokens minted by Overcast's own Cognito can verify — Overcast holds no key for a pool in real AWS, and does not fetch one — and OPENID_CONNECT and AWS_IAM authorization are unaffected by the switch.
+    - "Merged API schema merging (AssociateSourceGraphqlApi/AssociateMergedGraphqlApi/
+      StartSchemaMerge) is SDL-only: source schemas are concatenated and parsed, but
+      resolvers and data sources are not carried over from the source API the way real
+      AWS AUTO_MERGE does. See internal/services/appsync/capabilities_dev.go's Merged
+      APIs notes (#64)."
 handoff:
   issue: https://github.com/overcast-sh/overcast/issues/8
-  start_with: [remaining typed protocol validation, AppSync data-source CloudFormation end-to-end coverage]
-  do_not_redo: [CreateGraphqlApi success status, required name/authenticationType, authenticationType enum, apiType enum, CloudFormation GraphQLApi tag-array conversion, GraphQLApi EnvironmentVariables, GraphQLEndpointArn, resolver/function S3-backed schema/template/code locations, DomainName, DomainNameApiAssociation, ApiCache, SourceApiAssociation, AWS::AppSync::Api, AWS::AppSync::ChannelNamespace, AppSync tag route conflict, TagResource regex validation, UpdateGraphqlApi required-field/enum validation, CreateGraphqlApi typed ownerContact validation, CreateApiKey CDK-style Expires upper bound, StartSchemaCreation AppSync built-in directives, StartSchemaCreation AppSync built-in scalar types, StartSchemaCreation custom scalar and AWS-prefix object validation]
+  start_with: [OPENID_CONNECT signature/issuer/TTL/clientId verification (#2095), remaining typed protocol validation, AppSync data-source CloudFormation end-to-end coverage]
+  do_not_redo: [CreateGraphqlApi success status, required name/authenticationType, authenticationType enum, apiType enum, CloudFormation GraphQLApi tag-array conversion, GraphQLApi EnvironmentVariables, GraphQLEndpointArn, resolver/function S3-backed schema/template/code locations, DomainName, DomainNameApiAssociation, ApiCache, SourceApiAssociation, AWS::AppSync::Api, AWS::AppSync::ChannelNamespace, AppSync tag route conflict, TagResource regex validation, UpdateGraphqlApi required-field/enum validation, CreateGraphqlApi typed ownerContact validation, CreateApiKey CDK-style Expires upper bound, StartSchemaCreation AppSync built-in directives, StartSchemaCreation AppSync built-in scalar types, StartSchemaCreation custom scalar and AWS-prefix object validation, CreateGraphqlApi queryDepthLimit/resolverCountLimit boundaries, CreateGraphqlApi nested additionalAuthenticationProviders/logConfig validation, CreateGraphqlApi not auto-creating an API key, Merged APIs/API Cache honest capability notes]
   commands: [go test -count=1 ./internal/services/appsync/... ./internal/services/cloudformation/... ./tests/integration/appsync/... ./tests/integration/cloudformation/...]

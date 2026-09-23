@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest"
-import { formatAge, formatCount, formatDuration, formatPreciseTimeOfDay } from "./format"
+import {
+  formatAge,
+  formatCount,
+  formatDuration,
+  formatPreciseTimeOfDay,
+  formatQuantity,
+} from "./format"
 
 describe("formatPreciseTimeOfDay", () => {
   it("includes milliseconds so closely spaced scheduler events remain distinguishable", () => {
@@ -23,6 +29,22 @@ describe("formatCount", () => {
   it("leaves small numbers alone", () => {
     expect(formatCount(0)).toBe("0")
     expect(formatCount(7)).toBe("7")
+  })
+})
+
+describe("formatQuantity", () => {
+  it("uses the singular for exactly one and the plural otherwise", () => {
+    expect(formatQuantity(1, "row")).toBe("1 row")
+    expect(formatQuantity(0, "row")).toBe("0 rows")
+    expect(formatQuantity(2, "row group")).toBe("2 row groups")
+  })
+
+  it("groups the count as formatCount does", () => {
+    expect(formatQuantity(1204, "row")).toBe(`${formatCount(1204)} rows`)
+  })
+
+  it("takes an irregular plural", () => {
+    expect(formatQuantity(3, "entry", "entries")).toBe("3 entries")
   })
 })
 

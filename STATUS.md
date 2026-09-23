@@ -8,7 +8,7 @@
 
 ## Service coverage
 
-50 AWS services are registered. Coverage varies from comprehensive to stub.
+51 AWS services are registered. Coverage varies from comprehensive to stub.
 
 ### Comprehensive — core + advanced features
 
@@ -35,12 +35,13 @@
 | ECR             | 25  | Repository CRUD + registry metadata (DescribeRegistry), image metadata (PutImage/DescribeImages/BatchGetImage/BatchDeleteImage/DescribeImageScanFindings), auth token, repository+lifecycle policies, tags |
 | KMS             | 34  | Keys, aliases, symmetric AES-256-GCM + RSA-2048 signing                                                                                                                                                    |
 | Kinesis         | 23  | Streams, records, shards, tags, retention                                                                                                                                                                  |
-| EventBridge     | 29  | Event buses, rules, targets, PutEvents, tags                                                                                                                                                               |
+| EventBridge     | 31  | Event buses, rules, targets, PutEvents, tags                                                                                                                                                               |
 | Scheduler       | 12  | Schedule groups, schedules, tags, clock-driven Lambda/SQS target firing                                                                                                                                    |
 | CloudFormation  | 53  | Stacks, change sets, async provisioner (136 resource types — see `docs/cdk.md#supported-resource-types`), intrinsic functions, GetAtt                                                                       |
 | RDS             | 34  | DB instances (Docker), start/stop, modify, subnet/parameter groups                                                                                                                                         |
 | ElastiCache     | 24  | Clusters (Docker Redis), replication groups, subnet groups, tagging                                                                                                                                        |
 | EFS             | 31  | File systems (Docker-volume-backed, `live` mode default), mount targets, access points, file-system policies, lifecycle/backup config, tagging                                                            |
+| S3 Tables       | 49  | Table buckets, namespaces, Iceberg tables with a real `--table-s3` warehouse bucket each, first `metadata.json` on create, `versionToken` commits; maintenance/replication stored, never run |
 | AppConfig       | 20  | Apps, environments, profiles, hosted config versions (CRUD + version counter)                                                                                                                              |
 | AppConfigData   | 2   | StartConfigurationSession, GetLatestConfiguration; poll-based delivery with "unchanged" detection                                                                                                          |
 | Secrets Manager | 22  | Secret CRUD, versioning, tags, real rotation (invokes the configured Lambda, all four steps), resource policies (stored, not evaluated — #496)                                                            |
@@ -82,12 +83,13 @@
 | ECR             | 25  |
 | KMS             | 34  |
 | Kinesis         | 23  |
-| EventBridge     | 29  |
+| EventBridge     | 31  |
 | Scheduler       | 12  |
 | CloudFormation  | 53  |
 | RDS             | 34  |
 | ElastiCache     | 24  |
 | EFS             | 31  |
+| S3 Tables       | 49  |
 | AppConfig       | 20  |
 | AppConfigData   | 2   |
 | Secrets Manager | 22  |
@@ -106,7 +108,7 @@
 | CloudWatch      | 17  |
 | DynamoDB Streams | 4   |
 | Firehose        | 9   |
-| Glue            | 11  |
+| Glue            | 26  |
 | OpenSearch      | 8   |
 | AppRegistry     | 22  |
 | Backup          | 18  |

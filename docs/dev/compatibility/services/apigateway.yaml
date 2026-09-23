@@ -2,19 +2,21 @@ service: apigateway
 status: in_progress
 priority: p0
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-07-14
+last_updated: 2026-09-23
 protocols: [rest_json]
 implementation: [internal/services/apigateway]
 integration_tests: [tests/integration/apigateway]
 capability_docs: docs/services/apigateway.md
 operation_count_estimate: 103 AWS operations tracked; 101 supported, 2 unsupported; 2 emulator extensions (ExecuteRestAPI, ExecuteV2API) counted separately
-current_support_level: Broad REST API v1 and HTTP API v2 management and execution support; some enforcement features are partial.
+current_support_level: Broad REST API v1 and HTTP API v2 management and execution support; Lambda proxy request/response fidelity, route matching, and Cognito/JWT/Lambda authorizer enforcement are reviewed; VTL mapping templates and AWS_IAM per-method enforcement remain intentionally partial.
 operations:
   ExecuteRestAPI:
     status: fixed
     aws_docs:
       - https://docs.aws.amazon.com/apigateway/latest/api/API_ExecuteRestAPI.html
       - https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html
+      - https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-payload-encodings-workflow.html
+      - https://docs.aws.amazon.com/apigateway/latest/developerguide/handle-errors-in-lambda-integration.html
     scenarios:
       - name: Lambda proxy response headers and multiValueHeaders merge
         status: fixed
@@ -26,24 +28,92 @@ operations:
         evidence:
           - internal/services/apigateway/handler_execution_test.go: TestExecuteRestLambdaProxy_absentRequestMapsAreNull
           - internal/services/apigateway/handler_execution_test.go: TestExecuteV2LambdaProxy_payloadFormatOneEmptyRequestBodyIsNull
-        notes: Docs reviewed for resource, path, method, headers, multiValueHeaders, query strings, pathParameters, stageVariables, requestContext, body, and isBase64Encoded. Overcast now emits null for absent queryStringParameters, multiValueQueryStringParameters, pathParameters, stageVariables, and no-body payload format 1.0 request bodies instead of empty objects/strings. Full scenario coverage is not complete.
+        notes: Docs reviewed for resource, path, method, headers, multiValueHeaders, query strings, pathParameters, stageVariables, requestContext, body, and isBase64Encoded. Overcast now emits null for absent queryStringParameters, multiValueQueryStringParameters, pathParameters, stageVariables, and no-body payload format 1.0 request bodies instead of empty objects/strings.
+      - name: REST duplicate query parameter ordering
+        status: fixed
+        evidence:
+          - internal/services/apigateway/handler_execution_test.go: TestExecuteRestLambdaProxy_duplicateQueryParameterUsesLastValueForSingleAndKeepsAllForMultiValue
+        notes: queryStringParameters keeps the last value for a repeated name and multiValueQueryStringParameters keeps every value in order, mirroring the already-fixed duplicate-header behavior. The implementation already did this; only the test coverage was missing (#54).
+      - name: REST/HTTP binary request base64 encoding
+        status: fixed
+        evidence:
+          - internal/services/apigateway/handler_execution_test.go: TestExecuteRestLambdaProxy_binaryContentTypeBase64EncodesRequestBody
+          - internal/services/apigateway/handler_execution_test.go: TestExecuteRestLambdaProxy_nonBinaryContentTypeLeavesRequestBodyAsText
+          - internal/services/apigateway/handler_execution_test.go: TestExecuteV2LambdaProxy_nonTextContentTypeBase64EncodesRequestBody
+          - internal/services/apigateway/handler_execution_test.go: TestExecuteV2LambdaProxy_textContentTypeLeavesRequestBodyAsText
+        notes: "Fixed #54: request isBase64Encoded was hardcoded false regardless of Content-Type. REST v1 now matches Content-Type against the RestAPI's binaryMediaTypes (with */* and type/* wildcard support); HTTP API v2 needs no binaryMediaTypes configuration and classifies any Content-Type outside a documented text set as binary, per api-gateway-payload-encodings-workflow.html and the AWS Compute Blog's HTTP API binary-data guidance."
       - name: Lambda proxy malformed output
-        status: docs_reviewed
-        notes: Docs state incompatible Lambda proxy output returns 502 Bad Gateway. Existing implementation returns 502 for unparseable structured proxy output; statusCode-required and invalid-base64 edge cases remain unreviewed.
+        status: fixed
+        evidence:
+          - internal/services/apigateway/handler_execution_test.go: TestExecuteRestLambdaProxy_missingStatusCodeAnswers502
+          - internal/services/apigateway/handler_execution_test.go: TestExecuteRestLambdaProxy_invalidBase64BodyAnswers502
+        notes: "Fixed #54: a proxy response missing the required statusCode was defaulted to 200 instead of failing, and a body declared isBase64Encoded that wasn't valid base64 was written back raw instead of failing. Both now answer AWS's 502 {\"message\":\"Internal server error\"}."
+  CreateAuthorizer:
+    status: fixed
+    aws_docs:
+      - https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-use-lambda-authorizer.html
+    scenarios:
+      - name: REST TOKEN/REQUEST authorizer enforcement
+        status: fixed
+        evidence:
+          - internal/services/apigateway/handler_lambda_auth_test.go: TestCheckRestLambdaAuthorizer_tokenAllow
+          - internal/services/apigateway/handler_lambda_auth_test.go: TestCheckRestLambdaAuthorizer_tokenDenyAnswers403WithCapitalMessage
+          - internal/services/apigateway/handler_lambda_auth_test.go: TestCheckRestLambdaAuthorizer_missingIdentitySourceAnswers401WithoutInvoking
+          - internal/services/apigateway/handler_lambda_auth_test.go: TestCheckRestLambdaAuthorizer_throwsUnauthorizedAnswers401
+          - internal/services/apigateway/handler_lambda_auth_test.go: TestCheckRestLambdaAuthorizer_throwsOtherErrorAnswers500
+          - internal/services/apigateway/handler_lambda_auth_test.go: TestCheckRestLambdaAuthorizer_requestTypeSendsHeadersAndQuery
+          - internal/services/apigateway/handler_lambda_auth_test.go: TestCheckRestLambdaAuthorizer_cachesWithinTTL
+          - internal/services/apigateway/handler_lambda_auth_test.go: TestCheckRestLambdaAuthorizer_contextFlowsIntoProxyEvent
+        notes: "Fixed #56: TOKEN and REQUEST authorizers (authorizationType CUSTOM) were stored but never invoked. Now invoked with the documented event shape, evaluated through internal/iampolicy against the returned policyDocument's Effect on the method ARN, cached per authorizerResultTtlInSeconds keyed on identity source values, and their context propagated into the downstream proxy event's requestContext.authorizer."
+  CreateV2Authorizer:
+    status: fixed
+    aws_docs:
+      - https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-lambda-authorizer.html
+    scenarios:
+      - name: HTTP v2 REQUEST authorizer enforcement, both payload formats
+        status: fixed
+        evidence:
+          - internal/services/apigateway/handler_lambda_auth_test.go: TestCheckV2LambdaAuthorizer_format1IAMPolicyAllow
+          - internal/services/apigateway/handler_lambda_auth_test.go: TestCheckV2LambdaAuthorizer_format2SimpleResponseDeny
+          - internal/services/apigateway/handler_lambda_auth_test.go: TestCheckV2LambdaAuthorizer_format2SimpleResponseAllowContextNestsUnderLambda
+          - internal/services/apigateway/handler_lambda_auth_test.go: TestCheckV2LambdaAuthorizer_format2IAMPolicyWithoutSimpleResponses
+        notes: "Fixed #56: format 1.0 uses the REST-compatible IAM-policy event/response shape; format 2.0 uses routeArn and identitySource as a list, and accepts either an IAM policy or (with enableSimpleResponses) a simple {isAuthorized, context} response. Format 2.0's context lands nested under requestContext.authorizer.lambda for both response shapes; format 1.0 lands flat, like REST."
+      - name: AWS_IAM per-method/route enforcement
+        status: intentionally_partial
+        notes: "AWS_IAM requires a verified SigV4 signature scoped to execute-api:Invoke on the method/route ARN. Overcast's SigV4/IAM posture (internal/middleware.IAMEnforce, OVERCAST_ENFORCE_IAM) classifies AWS control-plane operations via the generated operation registry; ExecuteRestAPI/ExecuteV2API are emulator-only routes the registry does not name, so there is no clean hook to enforce AWS_IAM per method/route without a second, parallel enforcement path. Documented in docs/services/apigateway.md rather than implemented, consistent with the project's IAM stance (README: not a security boundary)."
+  CloudFormationResources:
+    status: reviewed
+    aws_docs:
+      - https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/AWS_ApiGateway.html
+      - https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/AWS_ApiGatewayV2.html
+    scenarios:
+      - name: CDK/CloudFormation resource type coverage
+        status: reviewed
+        evidence:
+          - docs/cdk/resource-types.md
+          - internal/services/cloudformation/provisioner.go
+        notes: "#57 verified against docs/cdk/resource-types.md: 16 API Gateway/API Gateway V2 types are registered in provisioner.go's resourceHandlers (11 REST v1 real handlers, 4 HTTP v2 real handlers, and the AWS::ApiGateway::Account stub); AWS::ApiGatewayV2::Deployment is a separate documented stub. No code change was needed — only this tracker was stale."
 findings:
   fixed:
     - ExecuteRestAPI Lambda proxy responses no longer emit conflicting single-value header entries when the same header is returned via multiValueHeaders; multiValueHeaders now win as AWS documents.
     - ExecuteRestAPI Lambda proxy request events now encode absent query string/path parameter maps and no-body payload format 1.0 request bodies as JSON null rather than empty objects or empty strings.
+    - "#54: a Lambda proxy response missing statusCode, or claiming isBase64Encoded with an invalid base64 body, now answers AWS's 502 instead of a defaulted 200 or a raw-written body."
+    - "#54: REST v1 requests matching binaryMediaTypes, and HTTP v2 requests with a non-text Content-Type, are now base64-encoded into the proxy event with isBase64Encoded true."
+    - "#54: added the missing REST duplicate-query-parameter test; the implementation already matched AWS."
+    - "#56: REST TOKEN/REQUEST and HTTP v2 REQUEST Lambda authorizers are now invoked and enforced, including result caching and requestContext.authorizer propagation."
+    - "#57: verified CloudFormation/CDK API Gateway resource coverage against docs/cdk/resource-types.md; no gap found."
   remaining_gaps:
-    - Finish ExecuteRestAPI Lambda proxy scenario coverage for duplicate query/header value ordering, binary/base64 request handling, malformed output validation, and Lambda function-error mapping.
-    - Review Lambda, HTTP, MOCK integration execution fidelity.
-    - Review route matching and authorizer behavior.
-    - Review CloudFormation/CDK resource coverage.
-  intentionally_partial: []
+    - "#55: VTL request/response mapping templates are not evaluated (MOCK integrations return their application/json template verbatim; AWS integration passthrough is unmodified). Still open."
+    - Review HTTP_PROXY/HTTP/MOCK integration execution fidelity beyond what #54 covered.
+  intentionally_partial:
+    - "AWS_IAM authorizationType (both REST v1 methods and HTTP v2 routes) is stored but not enforced at request time — see CreateV2Authorizer's AWS_IAM scenario above."
 handoff:
-  start_with: [ExecuteRestAPI Lambda proxy request event edge cases, HTTP API route matching, authorizers]
+  start_with: [VTL mapping templates (#55), HTTP_PROXY/HTTP/MOCK integration fidelity]
   do_not_redo:
     - Lambda proxy response headers-vs-multiValueHeaders precedence for REST/HTTP shared writer.
     - REST Lambda proxy absent query/path/stage variable maps are null, and REST/HTTP payload format 1.0 no-body request bodies are null.
+    - REST/HTTP binary request base64 encoding, and malformed Lambda proxy response handling (missing statusCode, invalid base64 body) — both answer AWS's 502.
+    - REST TOKEN/REQUEST and HTTP v2 REQUEST Lambda authorizer invocation, policy evaluation, caching, and requestContext.authorizer propagation.
+    - CloudFormation/CDK API Gateway resource coverage — reviewed against docs/cdk/resource-types.md, no gap.
   commands:
     - go test -count=1 ./internal/services/apigateway/... ./tests/integration/apigateway/...

@@ -156,7 +156,13 @@ func TestContainerInstanceInvoke_timeoutReportsTheTimeoutAsItsDuration(t *testin
 			}
 		}
 	}
-	if duration < 1000 || duration >= 1000+float64(containerOutputEndMax.Milliseconds())/2 {
+	// The 1 s deadline starts when the context is created, a moment before
+	// Invoke records its own start, so the measured duration can land a few
+	// milliseconds under 1000 (CI saw 998.09). The regression this pins added
+	// the whole output wait on top, so allow a small margin below and keep the
+	// upper bound tight.
+	const belowTimeoutMargin = 50
+	if duration < 1000-belowTimeoutMargin || duration >= 1000+float64(containerOutputEndMax.Milliseconds())/2 {
 		t.Errorf("REPORT Duration should be about the 1000 ms timeout, got %.2f ms in %q", duration, report)
 	}
 }

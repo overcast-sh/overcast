@@ -17,38 +17,83 @@
  */
 export type DataPreviewKind = "csv" | "tsv" | "jsonl" | "parquet" | "avro" | "iceberg-metadata"
 
-const BY_CONTENT_TYPE: Partial<Record<string, DataPreviewKind>> = {
-  "text/csv": "csv",
-  "application/csv": "csv",
-  "text/tab-separated-values": "tsv",
-  "application/x-ndjson": "jsonl",
-  "application/ndjson": "jsonl",
-  "application/jsonl": "jsonl",
-  "application/x-jsonlines": "jsonl",
-  "application/jsonlines": "jsonl",
-  "application/vnd.apache.parquet": "parquet",
-  "application/x-parquet": "parquet",
-  "application/parquet": "parquet",
-  "avro/binary": "avro",
-  "application/avro": "avro",
-  "application/x-avro": "avro",
-  "application/vnd.apache.avro": "avro",
+interface KindTraits {
+  /** Key extensions that name the kind, lowercase and without the dot. */
+  extensions: readonly string[]
+  /** Media types that name the kind, whatever the key says. */
+  contentTypes: readonly string[]
+  /** `text` through the preview window, `range` by the file's own structure, `none` not read. */
+  read: "text" | "range" | "none"
+  /** Shown as a table of rows, which is what widens the dialog. */
+  tabular: boolean
 }
+
+const KINDS: Record<DataPreviewKind, KindTraits> = {
+  csv: {
+    extensions: ["csv"],
+    contentTypes: ["text/csv", "application/csv"],
+    read: "text",
+    tabular: true,
+  },
+  tsv: {
+    extensions: ["tsv", "tab"],
+    contentTypes: ["text/tab-separated-values"],
+    read: "text",
+    tabular: true,
+  },
+  jsonl: {
+    extensions: ["jsonl", "ndjson"],
+    contentTypes: [
+      "application/x-ndjson",
+      "application/ndjson",
+      "application/jsonl",
+      "application/x-jsonlines",
+      "application/jsonlines",
+    ],
+    read: "text",
+    tabular: true,
+  },
+  parquet: {
+    extensions: ["parquet", "parq", "pqt"],
+    contentTypes: [
+      "application/vnd.apache.parquet",
+      "application/x-parquet",
+      "application/parquet",
+    ],
+    read: "range",
+    tabular: true,
+  },
+  avro: {
+    extensions: ["avro"],
+    contentTypes: [
+      "avro/binary",
+      "application/avro",
+      "application/x-avro",
+      "application/vnd.apache.avro",
+    ],
+    read: "none",
+    tabular: false,
+  },
+  // Named by its key alone (see isIcebergMetadataKey): by content type and
+  // extension it is plain JSON.
+  "iceberg-metadata": { extensions: [], contentTypes: [], read: "text", tabular: false },
+}
+
+function lookup(pick: (traits: KindTraits) => readonly string[]): Map<string, DataPreviewKind> {
+  const entries = Object.entries(KINDS) as [DataPreviewKind, KindTraits][]
+  return new Map(entries.flatMap(([kind, traits]) => pick(traits).map((name) => [name, kind])))
+}
+
+const BY_CONTENT_TYPE = lookup((traits) => traits.contentTypes)
+const BY_EXTENSION = lookup((traits) => traits.extensions)
 
 export function dataPreviewKind(contentType: string, key: string): DataPreviewKind | null {
   // Named first: `v3.metadata.json` is JSON by every other measure, and the
   // content type (`application/json`) would otherwise settle it as plain JSON.
   if (isIcebergMetadataKey(key)) return "iceberg-metadata"
   const mediaType = contentType.split(";", 1)[0].trim().toLowerCase()
-  const byType = BY_CONTENT_TYPE[mediaType]
-  if (byType) return byType
-  const name = key.toLowerCase()
-  if (/\.csv$/.test(name)) return "csv"
-  if (/\.(tsv|tab)$/.test(name)) return "tsv"
-  if (/\.(jsonl|ndjson)$/.test(name)) return "jsonl"
-  if (/\.(parquet|parq|pqt)$/.test(name)) return "parquet"
-  if (/\.avro$/.test(name)) return "avro"
-  return null
+  const extension = /\.([^./]+)$/.exec(key.toLowerCase())?.[1] ?? ""
+  return BY_CONTENT_TYPE.get(mediaType) ?? BY_EXTENSION.get(extension) ?? null
 }
 
 /**
@@ -63,5 +108,10 @@ export function isIcebergMetadataKey(key: string): boolean {
 
 /** The kinds read as text through the preview window. */
 export function isTextDataKind(kind: DataPreviewKind | null): boolean {
-  return kind === "csv" || kind === "tsv" || kind === "jsonl" || kind === "iceberg-metadata"
+  return kind !== null && KINDS[kind].read === "text"
+}
+
+/** The kinds shown as a table of rows. */
+export function isTabularKind(kind: DataPreviewKind | null): boolean {
+  return kind !== null && KINDS[kind].tabular
 }

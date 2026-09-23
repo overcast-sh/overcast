@@ -509,3 +509,17 @@ func errMalformedPolicy(msg string) *protocol.AWSError {
 		HTTPStatus: 400,
 	}
 }
+
+// errPublicPolicy is what PutResourcePolicy answers when BlockPublicPolicy is
+// set and the resource policy would grant broad access to the secret. The
+// document itself is well-formed — being public is a different failure from
+// MalformedPolicyDocumentException, which is what the model documents:
+// "The BlockPublicPolicy parameter is set to true, and the resource policy
+// did not prevent broad access to the secret".
+func errPublicPolicy(msg string) *protocol.AWSError {
+	return &protocol.AWSError{
+		Code:       "PublicPolicyException",
+		Message:    msg,
+		HTTPStatus: 400,
+	}
+}

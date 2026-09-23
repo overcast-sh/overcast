@@ -35,6 +35,7 @@ import { EFSClient } from "@aws-sdk/client-efs"
 import { SFNClient } from "@aws-sdk/client-sfn"
 import { WAFV2Client } from "@aws-sdk/client-wafv2"
 import { ShieldClient } from "@aws-sdk/client-shield"
+import { GlueClient } from "@aws-sdk/client-glue"
 import { CloudFrontClient } from "@aws-sdk/client-cloudfront"
 import { ECRClient } from "@aws-sdk/client-ecr"
 import { NodeHttpHandler } from "@smithy/node-http-handler"
@@ -97,6 +98,7 @@ export interface Clients {
   sfn: SFNClient
   wafv2: WAFV2Client
   shield: ShieldClient
+  glue: GlueClient
   cloudfront: CloudFrontClient
   ecr: ECRClient
 }
@@ -138,6 +140,7 @@ export function makeClients(ctx: Pick<TestContext, "endpoint" | "region">): Clie
     sfn: new SFNClient(cfg),
     wafv2: new WAFV2Client(cfg),
     shield: new ShieldClient(cfg),
+    glue: new GlueClient(cfg),
     cloudfront: new CloudFrontClient(cfg),
     ecr: new ECRClient(cfg),
   }

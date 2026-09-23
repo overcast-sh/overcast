@@ -477,6 +477,7 @@ type asgXMLLaunchConfig struct {
 	KeyName                 string   `xml:"KeyName,omitempty"`
 	SecurityGroups          []string `xml:"SecurityGroups>member,omitempty"`
 	IamInstanceProfile      string   `xml:"IamInstanceProfile,omitempty"`
+	UserData                string   `xml:"UserData,omitempty"`
 	CreatedTime             string   `xml:"CreatedTime"`
 }
 
@@ -1221,6 +1222,7 @@ func (h *Handler) describeLaunchConfigsTyped(ctx context.Context, req *describeL
 			KeyName:                 lc.KeyName,
 			SecurityGroups:          lc.SecurityGroups,
 			IamInstanceProfile:      lc.IamInstanceProfile,
+			UserData:                lc.UserData,
 			CreatedTime:             formatTime(lc.CreatedTime),
 		})
 	}

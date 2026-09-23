@@ -5,24 +5,68 @@ package glue
 import "github.com/overcast-sh/overcast/internal/capabilities"
 
 func init() {
+	const svc = "glue"
 	capabilities.Default.Register(
 		// Databases
-		capabilities.Capability{Service: "glue", Operation: "CreateDatabase", Category: "Databases", Status: capabilities.StatusSupported, Notes: "Creates a database in the catalog"},
-		capabilities.Capability{Service: "glue", Operation: "GetDatabase", Category: "Databases", Status: capabilities.StatusSupported, Notes: "Returns database details"},
-		capabilities.Capability{Service: "glue", Operation: "GetDatabases", Category: "Databases", Status: capabilities.StatusSupported, Notes: "Lists all databases"},
-		capabilities.Capability{Service: "glue", Operation: "DeleteDatabase", Category: "Databases", Status: capabilities.StatusSupported, Notes: "Deletes a database"},
+		capabilities.Capability{Service: svc, Operation: "CreateDatabase", Category: "Databases", Status: capabilities.StatusSupported,
+			Notes: "Keeps the whole DatabaseInput and Tags; duplicate names are AlreadyExistsException"},
+		capabilities.Capability{Service: svc, Operation: "GetDatabase", Category: "Databases", Status: capabilities.StatusSupported,
+			Notes: "Returns the full database with CreateTime"},
+		capabilities.Capability{Service: svc, Operation: "GetDatabases", Category: "Databases", Status: capabilities.StatusSupported,
+			Notes: "Paginated with MaxResults and NextToken"},
+		capabilities.Capability{Service: svc, Operation: "UpdateDatabase", Category: "Databases", Status: capabilities.StatusSupported,
+			Notes: "Replaces the definition; renaming is refused"},
+		capabilities.Capability{Service: svc, Operation: "DeleteDatabase", Category: "Databases", Status: capabilities.StatusSupported,
+			Notes: "Also deletes the database's tables, partitions and table versions"},
+
 		// Tables
-		capabilities.Capability{Service: "glue", Operation: "CreateTable", Category: "Tables", Status: capabilities.StatusSupported, Notes: "Creates a table in a database"},
-		capabilities.Capability{Service: "glue", Operation: "GetTable", Category: "Tables", Status: capabilities.StatusSupported, Notes: "Returns table details"},
-		capabilities.Capability{Service: "glue", Operation: "GetTables", Category: "Tables", Status: capabilities.StatusSupported, Notes: "Lists tables in a database"},
-		capabilities.Capability{Service: "glue", Operation: "DeleteTable", Category: "Tables", Status: capabilities.StatusSupported, Notes: "Deletes a table"},
+		capabilities.Capability{Service: svc, Operation: "CreateTable", Category: "Tables", Status: capabilities.StatusPartial,
+			Notes: "Keeps the whole TableInput; OpenTableFormatInput.IcebergInput writes no Iceberg metadata"},
+		capabilities.Capability{Service: svc, Operation: "GetTable", Category: "Tables", Status: capabilities.StatusSupported,
+			Notes: "Returns the full table with CreateTime, UpdateTime and VersionId"},
+		capabilities.Capability{Service: svc, Operation: "GetTables", Category: "Tables", Status: capabilities.StatusSupported,
+			Notes: "Expression is a name regex; paginated"},
+		capabilities.Capability{Service: svc, Operation: "UpdateTable", Category: "Tables", Status: capabilities.StatusPartial,
+			Notes: "VersionId concurrency and archiving; UpdateOpenTableFormatInput is not implemented"},
+		capabilities.Capability{Service: svc, Operation: "DeleteTable", Category: "Tables", Status: capabilities.StatusSupported,
+			Notes: "Also deletes the table's partitions and versions"},
+		capabilities.Capability{Service: svc, Operation: "BatchDeleteTable", Category: "Tables", Status: capabilities.StatusSupported,
+			Notes: "Reports missing tables in Errors"},
+
+		// Table versions
+		capabilities.Capability{Service: svc, Operation: "GetTableVersion", Category: "Table versions", Status: capabilities.StatusSupported,
+			Notes: "Current version when VersionId is omitted"},
+		capabilities.Capability{Service: svc, Operation: "GetTableVersions", Category: "Table versions", Status: capabilities.StatusSupported,
+			Notes: "Current and archived versions, newest first; paginated"},
+		capabilities.Capability{Service: svc, Operation: "DeleteTableVersion", Category: "Table versions", Status: capabilities.StatusSupported,
+			Notes: "Archived versions only; the current one is InvalidInputException"},
+		capabilities.Capability{Service: svc, Operation: "BatchDeleteTableVersion", Category: "Table versions", Status: capabilities.StatusSupported,
+			Notes: "Reports failed versions in Errors"},
+
+		// Partitions
+		capabilities.Capability{Service: svc, Operation: "CreatePartition", Category: "Partitions", Status: capabilities.StatusSupported,
+			Notes: "One value per partition key; duplicates are AlreadyExistsException"},
+		capabilities.Capability{Service: svc, Operation: "BatchCreatePartition", Category: "Partitions", Status: capabilities.StatusSupported,
+			Notes: "Up to 100; per-partition failures in Errors"},
+		capabilities.Capability{Service: svc, Operation: "GetPartition", Category: "Partitions", Status: capabilities.StatusSupported,
+			Notes: "Returns the full partition"},
+		capabilities.Capability{Service: svc, Operation: "GetPartitions", Category: "Partitions", Status: capabilities.StatusPartial,
+			Notes: "Expression supports comparisons, AND/OR/NOT, IN, BETWEEN, LIKE, IS NULL; paginated, Segment supported"},
+		capabilities.Capability{Service: svc, Operation: "BatchGetPartition", Category: "Partitions", Status: capabilities.StatusSupported,
+			Notes: "Missing partitions are omitted"},
+		capabilities.Capability{Service: svc, Operation: "UpdatePartition", Category: "Partitions", Status: capabilities.StatusSupported,
+			Notes: "Replaces the definition; new Values move the partition"},
+		capabilities.Capability{Service: svc, Operation: "DeletePartition", Category: "Partitions", Status: capabilities.StatusSupported,
+			Notes: "Deletes one partition"},
+		capabilities.Capability{Service: svc, Operation: "BatchDeletePartition", Category: "Partitions", Status: capabilities.StatusSupported,
+			Notes: "Up to 25; missing partitions in Errors"},
 
 		// Tags
-		capabilities.Capability{Service: "glue", Operation: "TagResource", Category: "Tags",
+		capabilities.Capability{Service: svc, Operation: "TagResource", Category: "Tags",
 			Status: capabilities.StatusSupported, Notes: "Adds or overwrites tags on databases and tables"},
-		capabilities.Capability{Service: "glue", Operation: "UntagResource", Category: "Tags",
+		capabilities.Capability{Service: svc, Operation: "UntagResource", Category: "Tags",
 			Status: capabilities.StatusSupported, Notes: "Removes tags by key from databases and tables"},
-		capabilities.Capability{Service: "glue", Operation: "GetTags", Category: "Tags",
+		capabilities.Capability{Service: svc, Operation: "GetTags", Category: "Tags",
 			Status: capabilities.StatusSupported, Notes: "Returns tags for databases and tables"},
 	)
 }

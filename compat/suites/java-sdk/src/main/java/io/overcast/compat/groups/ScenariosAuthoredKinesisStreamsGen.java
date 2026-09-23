@@ -31,8 +31,8 @@ import software.amazon.awssdk.services.kinesis.model.ListTagsForStreamRequest;
  */
 public final class ScenariosAuthoredKinesisStreamsGen implements ServiceGroup {
 
-    private static final Group GROUP_KINESIS_STREAMS_SHADOW =
-            new Group("kinesis-streams-shadow", "compat/model/authored/kinesis-streams.json");
+    private static final Group GROUP_KINESIS_STREAMS =
+            new Group("kinesis-streams", "compat/model/authored/kinesis-streams.json");
 
     private final AwsClients clients;
     private volatile KinesisClient client;
@@ -49,25 +49,25 @@ public final class ScenariosAuthoredKinesisStreamsGen implements ServiceGroup {
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("kinesis-streams-shadow:CreateStream", this::testKinesisStreamsShadowCreateStream),
-                Map.entry("kinesis-streams-shadow:DescribeStream", this::testKinesisStreamsShadowDescribeStream),
-                Map.entry("kinesis-streams-shadow:DescribeStreamSummary", this::testKinesisStreamsShadowDescribeStreamSummary),
-                Map.entry("kinesis-streams-shadow:ListStreams", this::testKinesisStreamsShadowListStreams),
-                Map.entry("kinesis-streams-shadow:AddTagsToStream", this::testKinesisStreamsShadowAddTagsToStream),
-                Map.entry("kinesis-streams-shadow:ListTagsForStream", this::testKinesisStreamsShadowListTagsForStream),
-                Map.entry("kinesis-streams-shadow:DeleteStream", this::testKinesisStreamsShadowDeleteStream));
+                Map.entry("kinesis-streams:CreateStream", this::testKinesisStreamsCreateStream),
+                Map.entry("kinesis-streams:DescribeStream", this::testKinesisStreamsDescribeStream),
+                Map.entry("kinesis-streams:DescribeStreamSummary", this::testKinesisStreamsDescribeStreamSummary),
+                Map.entry("kinesis-streams:ListStreams", this::testKinesisStreamsListStreams),
+                Map.entry("kinesis-streams:AddTagsToStream", this::testKinesisStreamsAddTagsToStream),
+                Map.entry("kinesis-streams:ListTagsForStream", this::testKinesisStreamsListTagsForStream),
+                Map.entry("kinesis-streams:DeleteStream", this::testKinesisStreamsDeleteStream));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("kinesis-streams-shadow", this::setupKinesisStreamsShadow));
+                Map.entry("kinesis-streams", this::setupKinesisStreams));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("kinesis-streams-shadow", this::teardownKinesisStreamsShadow));
+                Map.entry("kinesis-streams", this::teardownKinesisStreams));
     }
 
     /**
@@ -87,8 +87,8 @@ public final class ScenariosAuthoredKinesisStreamsGen implements ServiceGroup {
         return client;
     }
 
-    private void setupKinesisStreamsShadow(TestContext t) {
-        GROUP_KINESIS_STREAMS_SHADOW.runSetup(t,
+    private void setupKinesisStreams(TestContext t) {
+        GROUP_KINESIS_STREAMS.runSetup(t,
                 new Call("CreateStream", "{\"ShardCount\":1,\"StreamName\":{\"$name\":\"s\"}}",
                         b -> CreateStreamRequest.builder()
                                 .shardCount(1)
@@ -97,8 +97,8 @@ public final class ScenariosAuthoredKinesisStreamsGen implements ServiceGroup {
                         r -> cl().createStream((CreateStreamRequest) r)));
     }
 
-    private void teardownKinesisStreamsShadow(TestContext t) {
-        GROUP_KINESIS_STREAMS_SHADOW.runTeardown(t,
+    private void teardownKinesisStreams(TestContext t) {
+        GROUP_KINESIS_STREAMS.runTeardown(t,
                 new Call("DeleteStream", "{\"StreamName\":{\"$name\":\"created\"}}",
                         b -> DeleteStreamRequest.builder()
                                 .streamName(b.string("StreamName", Values.name("created")))
@@ -111,8 +111,8 @@ public final class ScenariosAuthoredKinesisStreamsGen implements ServiceGroup {
                         r -> cl().deleteStream((DeleteStreamRequest) r)));
     }
 
-    private void testKinesisStreamsShadowCreateStream(TestContext t) {
-        GROUP_KINESIS_STREAMS_SHADOW.runTest(t, "CreateStream",
+    private void testKinesisStreamsCreateStream(TestContext t) {
+        GROUP_KINESIS_STREAMS.runTest(t, "CreateStream",
                 new Call("CreateStream", "{\"ShardCount\":1,\"StreamName\":{\"$name\":\"created\"}}",
                         b -> CreateStreamRequest.builder()
                                 .shardCount(1)
@@ -142,8 +142,8 @@ public final class ScenariosAuthoredKinesisStreamsGen implements ServiceGroup {
                 ));
     }
 
-    private void testKinesisStreamsShadowDescribeStream(TestContext t) {
-        GROUP_KINESIS_STREAMS_SHADOW.runTest(t, "DescribeStream",
+    private void testKinesisStreamsDescribeStream(TestContext t) {
+        GROUP_KINESIS_STREAMS.runTest(t, "DescribeStream",
                 new Call("DescribeStream", "{\"StreamName\":{\"$name\":\"s\"}}",
                         b -> DescribeStreamRequest.builder()
                                 .streamName(b.string("StreamName", Values.name("s")))
@@ -167,8 +167,8 @@ public final class ScenariosAuthoredKinesisStreamsGen implements ServiceGroup {
                 ));
     }
 
-    private void testKinesisStreamsShadowDescribeStreamSummary(TestContext t) {
-        GROUP_KINESIS_STREAMS_SHADOW.runTest(t, "DescribeStreamSummary",
+    private void testKinesisStreamsDescribeStreamSummary(TestContext t) {
+        GROUP_KINESIS_STREAMS.runTest(t, "DescribeStreamSummary",
                 new Call("DescribeStreamSummary", "{\"StreamName\":{\"$name\":\"s\"}}",
                         b -> DescribeStreamSummaryRequest.builder()
                                 .streamName(b.string("StreamName", Values.name("s")))
@@ -192,8 +192,8 @@ public final class ScenariosAuthoredKinesisStreamsGen implements ServiceGroup {
                 ));
     }
 
-    private void testKinesisStreamsShadowListStreams(TestContext t) {
-        GROUP_KINESIS_STREAMS_SHADOW.runTest(t, "ListStreams",
+    private void testKinesisStreamsListStreams(TestContext t) {
+        GROUP_KINESIS_STREAMS.runTest(t, "ListStreams",
                 new Call("ListStreams", "{}",
                         b -> ListStreamsRequest.builder()
                                 .build(),
@@ -207,8 +207,8 @@ public final class ScenariosAuthoredKinesisStreamsGen implements ServiceGroup {
                 ));
     }
 
-    private void testKinesisStreamsShadowAddTagsToStream(TestContext t) {
-        GROUP_KINESIS_STREAMS_SHADOW.runTest(t, "AddTagsToStream",
+    private void testKinesisStreamsAddTagsToStream(TestContext t) {
+        GROUP_KINESIS_STREAMS.runTest(t, "AddTagsToStream",
                 new Call("AddTagsToStream", "{\"StreamName\":{\"$name\":\"s\"},\"Tags\":{\"env\":\"compat\",\"project\":\"overcast\"}}",
                         b -> AddTagsToStreamRequest.builder()
                                 .streamName(b.string("StreamName", Values.name("s")))
@@ -239,8 +239,8 @@ public final class ScenariosAuthoredKinesisStreamsGen implements ServiceGroup {
                 ));
     }
 
-    private void testKinesisStreamsShadowListTagsForStream(TestContext t) {
-        GROUP_KINESIS_STREAMS_SHADOW.runTest(t, "ListTagsForStream",
+    private void testKinesisStreamsListTagsForStream(TestContext t) {
+        GROUP_KINESIS_STREAMS.runTest(t, "ListTagsForStream",
                 new Call("ListTagsForStream", "{\"StreamName\":{\"$name\":\"s\"}}",
                         b -> ListTagsForStreamRequest.builder()
                                 .streamName(b.string("StreamName", Values.name("s")))
@@ -262,8 +262,8 @@ public final class ScenariosAuthoredKinesisStreamsGen implements ServiceGroup {
                 ));
     }
 
-    private void testKinesisStreamsShadowDeleteStream(TestContext t) {
-        GROUP_KINESIS_STREAMS_SHADOW.runTest(t, "DeleteStream",
+    private void testKinesisStreamsDeleteStream(TestContext t) {
+        GROUP_KINESIS_STREAMS.runTest(t, "DeleteStream",
                 new Call("DeleteStream", "{\"StreamName\":{\"$name\":\"created\"}}",
                         b -> DeleteStreamRequest.builder()
                                 .streamName(b.string("StreamName", Values.name("created")))

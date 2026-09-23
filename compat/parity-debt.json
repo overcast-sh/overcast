@@ -430,6 +430,12 @@
     },
     {
       "suite": "dotnet-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "tests": 11
+    },
+    {
+      "suite": "dotnet-sdk",
       "service": "kinesis",
       "group": "kinesis-records",
       "tests": 4
@@ -439,12 +445,6 @@
       "service": "kinesis",
       "group": "kinesis-shards",
       "tests": 3
-    },
-    {
-      "suite": "dotnet-sdk",
-      "service": "kinesis",
-      "group": "kinesis-streams",
-      "tests": 7
     },
     {
       "suite": "dotnet-sdk",
@@ -529,6 +529,12 @@
       "service": "rds",
       "group": "rds-subnet-groups",
       "tests": 3
+    },
+    {
+      "suite": "dotnet-sdk",
+      "service": "s3tables",
+      "group": "s3tables-tables",
+      "tests": 13
     },
     {
       "suite": "dotnet-sdk",
@@ -934,6 +940,12 @@
     },
     {
       "suite": "java-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "tests": 11
+    },
+    {
+      "suite": "java-sdk",
       "service": "msk",
       "group": "msk-clusters",
       "tests": 16
@@ -967,6 +979,12 @@
       "service": "opensearch",
       "group": "opensearch-tags",
       "tests": 4
+    },
+    {
+      "suite": "java-sdk",
+      "service": "s3tables",
+      "group": "s3tables-tables",
+      "tests": 13
     },
     {
       "suite": "node-js-sdk",
@@ -1165,6 +1183,12 @@
       "service": "opensearch",
       "group": "opensearch-tags",
       "tests": 4
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "s3tables",
+      "group": "s3tables-tables",
+      "tests": 13
     },
     {
       "suite": "python-sdk",
@@ -1792,6 +1816,12 @@
     },
     {
       "suite": "rust-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "tests": 11
+    },
+    {
+      "suite": "rust-sdk",
       "service": "iam",
       "group": "iam-groups",
       "tests": 6
@@ -1831,12 +1861,6 @@
       "service": "kinesis",
       "group": "kinesis-shards",
       "tests": 3
-    },
-    {
-      "suite": "rust-sdk",
-      "service": "kinesis",
-      "group": "kinesis-streams",
-      "tests": 7
     },
     {
       "suite": "rust-sdk",
@@ -1921,6 +1945,12 @@
       "service": "rds",
       "group": "rds-subnet-groups",
       "tests": 3
+    },
+    {
+      "suite": "rust-sdk",
+      "service": "s3tables",
+      "group": "s3tables-tables",
+      "tests": 13
     },
     {
       "suite": "rust-sdk",

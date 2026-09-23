@@ -1,0 +1,533 @@
+service RESTJSON version=2018-05-10
+AccessDeniedException structure error=client code=403
+.message ErrorMessage
+AccountId string
+BadRequestException structure error=client code=400
+.message ErrorMessage
+ConflictException structure error=client code=409
+.message ErrorMessage
+CreateNamespace operation in=CreateNamespaceRequest out=CreateNamespaceResponse err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=PUT uri=/namespaces/{tableBucketARN} code=200
+CreateNamespaceRequest structure
+.namespace NamespaceList
+.tableBucketARN TableBucketARN label
+CreateNamespaceResponse structure
+.namespace NamespaceList
+.tableBucketARN TableBucketARN
+CreateTable operation in=CreateTableRequest out=CreateTableResponse err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=PUT uri=/tables/{tableBucketARN}/{namespace} code=200
+CreateTableBucket operation in=CreateTableBucketRequest out=CreateTableBucketResponse err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=PUT uri=/buckets code=200
+CreateTableBucketRequest structure
+.encryptionConfiguration EncryptionConfiguration
+.name TableBucketName
+.storageClassConfiguration StorageClassConfiguration
+.tags Tags
+CreateTableBucketResponse structure
+.arn TableBucketARN
+CreateTableRequest structure
+.encryptionConfiguration EncryptionConfiguration
+.format OpenTableFormat
+.metadata TableMetadata
+.name TableName
+.namespace NamespaceName label
+.storageClassConfiguration StorageClassConfiguration
+.tableBucketARN TableBucketARN label
+.tags Tags
+CreateTableResponse structure
+.tableARN TableARN
+.versionToken VersionToken
+DeleteNamespace operation in=DeleteNamespaceRequest out=~Unit err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=DELETE uri=/namespaces/{tableBucketARN}/{namespace} code=204
+DeleteNamespaceRequest structure
+.namespace NamespaceName label
+.tableBucketARN TableBucketARN label
+DeleteTable operation in=DeleteTableRequest out=~Unit err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=DELETE uri=/tables/{tableBucketARN}/{namespace}/{name} code=204
+DeleteTableBucket operation in=DeleteTableBucketRequest out=~Unit err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=DELETE uri=/buckets/{tableBucketARN} code=204
+DeleteTableBucketEncryption operation in=DeleteTableBucketEncryptionRequest out=~Unit err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=DELETE uri=/buckets/{tableBucketARN}/encryption code=204
+DeleteTableBucketEncryptionRequest structure
+.tableBucketARN TableBucketARN label
+DeleteTableBucketMetricsConfiguration operation in=DeleteTableBucketMetricsConfigurationRequest out=~Unit err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=DELETE uri=/buckets/{tableBucketARN}/metrics code=204
+DeleteTableBucketMetricsConfigurationRequest structure
+.tableBucketARN TableBucketARN label
+DeleteTableBucketPolicy operation in=DeleteTableBucketPolicyRequest out=~Unit err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=DELETE uri=/buckets/{tableBucketARN}/policy code=204
+DeleteTableBucketPolicyRequest structure
+.tableBucketARN TableBucketARN label
+DeleteTableBucketReplication operation in=DeleteTableBucketReplicationRequest out=~Unit err=AccessDeniedException,BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=DELETE uri=/table-bucket-replication code=204
+DeleteTableBucketReplicationRequest structure
+.tableBucketARN TableBucketARN query=tableBucketARN
+.versionToken VersionToken query=versionToken
+DeleteTableBucketRequest structure
+.tableBucketARN TableBucketARN label
+DeleteTablePolicy operation in=DeleteTablePolicyRequest out=~Unit err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=DELETE uri=/tables/{tableBucketARN}/{namespace}/{name}/policy code=204
+DeleteTablePolicyRequest structure
+.name TableName label
+.namespace NamespaceName label
+.tableBucketARN TableBucketARN label
+DeleteTableReplication operation in=DeleteTableReplicationRequest out=~Unit err=AccessDeniedException,BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=DELETE uri=/table-replication code=204
+DeleteTableReplicationRequest structure
+.tableArn TableARN query=tableArn
+.versionToken ~String query=versionToken
+DeleteTableRequest structure
+.name TableName label
+.namespace NamespaceName label
+.tableBucketARN TableBucketARN label
+.versionToken VersionToken query=versionToken
+EncryptionConfiguration structure
+.kmsKeyArn ~String
+.sseAlgorithm SSEAlgorithm
+ErrorMessage string
+ForbiddenException structure error=client code=403
+.message ErrorMessage
+GetNamespace operation in=GetNamespaceRequest out=GetNamespaceResponse err=AccessDeniedException,BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=GET uri=/namespaces/{tableBucketARN}/{namespace}
+GetNamespaceRequest structure
+.namespace NamespaceName label
+.tableBucketARN TableBucketARN label
+GetNamespaceResponse structure
+.createdAt ~Timestamp ts=date-time
+.createdBy AccountId
+.namespace NamespaceList
+.namespaceId NamespaceId
+.ownerAccountId AccountId
+.tableBucketId TableBucketId
+GetTable operation in=GetTableRequest out=GetTableResponse err=AccessDeniedException,BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=GET uri=/get-table
+GetTableBucket operation in=GetTableBucketRequest out=GetTableBucketResponse err=AccessDeniedException,BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=GET uri=/buckets/{tableBucketARN}
+GetTableBucketEncryption operation in=GetTableBucketEncryptionRequest out=GetTableBucketEncryptionResponse err=AccessDeniedException,BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=GET uri=/buckets/{tableBucketARN}/encryption
+GetTableBucketEncryptionRequest structure
+.tableBucketARN TableBucketARN label
+GetTableBucketEncryptionResponse structure
+.encryptionConfiguration EncryptionConfiguration
+GetTableBucketMaintenanceConfiguration operation in=GetTableBucketMaintenanceConfigurationRequest out=GetTableBucketMaintenanceConfigurationResponse err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=GET uri=/buckets/{tableBucketARN}/maintenance
+GetTableBucketMaintenanceConfigurationRequest structure
+.tableBucketARN TableBucketARN label
+GetTableBucketMaintenanceConfigurationResponse structure
+.configuration TableBucketMaintenanceConfiguration
+.tableBucketARN TableBucketARN
+GetTableBucketMetricsConfiguration operation in=GetTableBucketMetricsConfigurationRequest out=GetTableBucketMetricsConfigurationResponse err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=GET uri=/buckets/{tableBucketARN}/metrics
+GetTableBucketMetricsConfigurationRequest structure
+.tableBucketARN TableBucketARN label
+GetTableBucketMetricsConfigurationResponse structure
+.id ~String
+.tableBucketARN TableBucketARN
+GetTableBucketPolicy operation in=GetTableBucketPolicyRequest out=GetTableBucketPolicyResponse err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=GET uri=/buckets/{tableBucketARN}/policy
+GetTableBucketPolicyRequest structure
+.tableBucketARN TableBucketARN label
+GetTableBucketPolicyResponse structure
+.resourcePolicy ResourcePolicy
+GetTableBucketReplication operation in=GetTableBucketReplicationRequest out=GetTableBucketReplicationResponse err=AccessDeniedException,BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=GET uri=/table-bucket-replication code=200
+GetTableBucketReplicationRequest structure
+.tableBucketARN TableBucketARN query=tableBucketARN
+GetTableBucketReplicationResponse structure
+.configuration TableBucketReplicationConfiguration
+.versionToken VersionToken
+GetTableBucketRequest structure
+.tableBucketARN TableBucketARN label
+GetTableBucketResponse structure
+.arn TableBucketARN
+.createdAt ~Timestamp ts=date-time
+.name TableBucketName
+.ownerAccountId AccountId
+.tableBucketId TableBucketId
+.type TableBucketType
+GetTableBucketStorageClass operation in=GetTableBucketStorageClassRequest out=GetTableBucketStorageClassResponse err=AccessDeniedException,BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=GET uri=/buckets/{tableBucketARN}/storage-class
+GetTableBucketStorageClassRequest structure
+.tableBucketARN TableBucketARN label
+GetTableBucketStorageClassResponse structure
+.storageClassConfiguration StorageClassConfiguration
+GetTableEncryption operation in=GetTableEncryptionRequest out=GetTableEncryptionResponse err=AccessDeniedException,BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=GET uri=/tables/{tableBucketARN}/{namespace}/{name}/encryption
+GetTableEncryptionRequest structure
+.name TableName label
+.namespace NamespaceName label
+.tableBucketARN TableBucketARN label
+GetTableEncryptionResponse structure
+.encryptionConfiguration EncryptionConfiguration
+GetTableMaintenanceConfiguration operation in=GetTableMaintenanceConfigurationRequest out=GetTableMaintenanceConfigurationResponse err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=GET uri=/tables/{tableBucketARN}/{namespace}/{name}/maintenance
+GetTableMaintenanceConfigurationRequest structure
+.name TableName label
+.namespace NamespaceName label
+.tableBucketARN TableBucketARN label
+GetTableMaintenanceConfigurationResponse structure
+.configuration TableMaintenanceConfiguration
+.tableARN TableARN
+GetTableMaintenanceJobStatus operation in=GetTableMaintenanceJobStatusRequest out=GetTableMaintenanceJobStatusResponse err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=GET uri=/tables/{tableBucketARN}/{namespace}/{name}/maintenance-job-status
+GetTableMaintenanceJobStatusRequest structure
+.name TableName label
+.namespace NamespaceName label
+.tableBucketARN TableBucketARN label
+GetTableMaintenanceJobStatusResponse structure
+.status TableMaintenanceJobStatus
+.tableARN TableARN
+GetTableMetadataLocation operation in=GetTableMetadataLocationRequest out=GetTableMetadataLocationResponse err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=GET uri=/tables/{tableBucketARN}/{namespace}/{name}/metadata-location
+GetTableMetadataLocationRequest structure
+.name TableName label
+.namespace NamespaceName label
+.tableBucketARN TableBucketARN label
+GetTableMetadataLocationResponse structure
+.metadataLocation MetadataLocation
+.versionToken VersionToken
+.warehouseLocation WarehouseLocation
+GetTablePolicy operation in=GetTablePolicyRequest out=GetTablePolicyResponse err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=GET uri=/tables/{tableBucketARN}/{namespace}/{name}/policy
+GetTablePolicyRequest structure
+.name TableName label
+.namespace NamespaceName label
+.tableBucketARN TableBucketARN label
+GetTablePolicyResponse structure
+.resourcePolicy ResourcePolicy
+GetTableRecordExpirationConfiguration operation in=GetTableRecordExpirationConfigurationRequest out=GetTableRecordExpirationConfigurationResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,MethodNotAllowedException,NotFoundException,TooManyRequestsException method=GET uri=/table-record-expiration code=200
+GetTableRecordExpirationConfigurationRequest structure
+.tableArn TableARN query=tableArn
+GetTableRecordExpirationConfigurationResponse structure
+.configuration TableRecordExpirationConfigurationValue
+GetTableRecordExpirationJobStatus operation in=GetTableRecordExpirationJobStatusRequest out=GetTableRecordExpirationJobStatusResponse err=BadRequestException,ForbiddenException,InternalServerErrorException,MethodNotAllowedException,NotFoundException,TooManyRequestsException method=GET uri=/table-record-expiration-job-status code=200
+GetTableRecordExpirationJobStatusRequest structure
+.tableArn TableARN query=tableArn
+GetTableRecordExpirationJobStatusResponse structure
+.failureMessage ~String
+.lastRunTimestamp ~Timestamp ts=date-time
+.metrics TableRecordExpirationJobMetrics
+.status TableRecordExpirationJobStatus
+GetTableReplication operation in=GetTableReplicationRequest out=GetTableReplicationResponse err=AccessDeniedException,BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=GET uri=/table-replication code=200
+GetTableReplicationRequest structure
+.tableArn TableARN query=tableArn
+GetTableReplicationResponse structure
+.configuration TableReplicationConfiguration
+.versionToken ~String
+GetTableReplicationStatus operation in=GetTableReplicationStatusRequest out=GetTableReplicationStatusResponse err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=GET uri=/replication-status
+GetTableReplicationStatusRequest structure
+.tableArn TableARN query=tableArn
+GetTableReplicationStatusResponse structure
+.destinations ReplicationDestinationStatuses
+.sourceTableArn TableARN
+GetTableRequest structure
+.name TableName query=name
+.namespace NamespaceName query=namespace
+.tableArn TableARN query=tableArn
+.tableBucketARN TableBucketARN query=tableBucketARN
+GetTableResponse structure
+.createdAt ~Timestamp ts=date-time
+.createdBy AccountId
+.format OpenTableFormat
+.managedByService ~String
+.managedTableInformation ManagedTableInformation
+.metadataLocation MetadataLocation
+.modifiedAt ~Timestamp ts=date-time
+.modifiedBy AccountId
+.name TableName
+.namespace NamespaceList
+.namespaceId NamespaceId
+.ownerAccountId AccountId
+.tableARN TableARN
+.tableBucketId TableBucketId
+.type TableType
+.versionToken VersionToken
+.warehouseLocation WarehouseLocation
+GetTableStorageClass operation in=GetTableStorageClassRequest out=GetTableStorageClassResponse err=AccessDeniedException,BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=GET uri=/tables/{tableBucketARN}/{namespace}/{name}/storage-class
+GetTableStorageClassRequest structure
+.name TableName label
+.namespace NamespaceName label
+.tableBucketARN TableBucketARN label
+GetTableStorageClassResponse structure
+.storageClassConfiguration StorageClassConfiguration
+IAMRole string
+IcebergCompactionSettings structure
+.strategy IcebergCompactionStrategy
+.targetFileSizeMB PositiveInteger
+IcebergCompactionStrategy enum
+IcebergMetadata structure
+.partitionSpec IcebergPartitionSpec
+.properties TableProperties
+.schema IcebergSchema
+.schemaV2 IcebergSchemaV2
+.writeOrder IcebergSortOrder
+IcebergNullOrder enum
+IcebergPartitionField structure
+.fieldId ~Integer json=field-id
+.name ~String
+.sourceId ~Integer json=source-id
+.transform ~String
+IcebergPartitionFieldList list m=IcebergPartitionField
+IcebergPartitionSpec structure
+.fields IcebergPartitionFieldList
+.specId ~Integer json=spec-id
+IcebergSchema structure
+.fields SchemaFieldList
+IcebergSchemaV2 structure
+.fields SchemaV2FieldList
+.identifierFieldIds IntegerList json=identifier-field-ids
+.schemaId ~Integer json=schema-id
+.type SchemaV2FieldType
+IcebergSnapshotManagementSettings structure
+.maxSnapshotAgeHours PositiveInteger
+.minSnapshotsToKeep PositiveInteger
+IcebergSortDirection enum
+IcebergSortField structure
+.direction IcebergSortDirection
+.nullOrder IcebergNullOrder json=null-order
+.sourceId ~Integer json=source-id
+.transform ~String
+IcebergSortFieldList list m=IcebergSortField
+IcebergSortOrder structure
+.fields IcebergSortFieldList
+.orderId ~Integer json=order-id
+IcebergUnreferencedFileRemovalSettings structure
+.nonCurrentDays PositiveInteger
+.unreferencedDays PositiveInteger
+IntegerList list m=~Integer
+InternalServerErrorException structure error=server code=500
+.message ErrorMessage
+JobStatus enum
+LastSuccessfulReplicatedUpdate structure
+.metadataLocation MetadataLocation
+.timestamp ~Timestamp ts=date-time
+ListNamespaces operation in=ListNamespacesRequest out=ListNamespacesResponse err=AccessDeniedException,BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=GET uri=/namespaces/{tableBucketARN}
+ListNamespacesLimit integer
+ListNamespacesRequest structure
+.continuationToken NextToken query=continuationToken
+.maxNamespaces ListNamespacesLimit query=maxNamespaces
+.prefix ~String query=prefix
+.tableBucketARN TableBucketARN label
+ListNamespacesResponse structure
+.continuationToken NextToken
+.namespaces NamespaceSummaryList
+ListTableBuckets operation in=ListTableBucketsRequest out=ListTableBucketsResponse err=AccessDeniedException,BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=GET uri=/buckets
+ListTableBucketsLimit integer
+ListTableBucketsRequest structure
+.continuationToken NextToken query=continuationToken
+.maxBuckets ListTableBucketsLimit query=maxBuckets
+.prefix ~String query=prefix
+.type TableBucketType query=type
+ListTableBucketsResponse structure
+.continuationToken NextToken
+.tableBuckets TableBucketSummaryList
+ListTables operation in=ListTablesRequest out=ListTablesResponse err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=GET uri=/tables/{tableBucketARN}
+ListTablesLimit integer
+ListTablesRequest structure
+.continuationToken NextToken query=continuationToken
+.maxTables ListTablesLimit query=maxTables
+.namespace NamespaceName query=namespace
+.prefix ~String query=prefix
+.tableBucketARN TableBucketARN label
+ListTablesResponse structure
+.continuationToken NextToken
+.tables TableSummaryList
+ListTagsForResource operation in=ListTagsForResourceRequest out=ListTagsForResourceResponse err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=GET uri=/tag/{resourceArn} code=200
+ListTagsForResourceRequest structure
+.resourceArn ResourceArn label
+ListTagsForResourceResponse structure
+.tags Tags
+MaintenanceStatus enum
+ManagedTableInformation structure
+.replicationInformation ReplicationInformation
+MetadataLocation string
+MethodNotAllowedException structure error=client code=405
+.message ErrorMessage
+NamespaceId string
+NamespaceList list m=NamespaceName
+NamespaceName string
+NamespaceSummary structure
+.createdAt ~Timestamp ts=date-time
+.createdBy AccountId
+.namespace NamespaceList
+.namespaceId NamespaceId
+.ownerAccountId AccountId
+.tableBucketId TableBucketId
+NamespaceSummaryList list m=NamespaceSummary
+NextToken string
+NotFoundException structure error=client code=404
+.message ErrorMessage
+OpenTableFormat enum
+PositiveInteger integer
+PutTableBucketEncryption operation in=PutTableBucketEncryptionRequest out=~Unit err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=PUT uri=/buckets/{tableBucketARN}/encryption code=200
+PutTableBucketEncryptionRequest structure
+.encryptionConfiguration EncryptionConfiguration
+.tableBucketARN TableBucketARN label
+PutTableBucketMaintenanceConfiguration operation in=PutTableBucketMaintenanceConfigurationRequest out=~Unit err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=PUT uri=/buckets/{tableBucketARN}/maintenance/{type} code=204
+PutTableBucketMaintenanceConfigurationRequest structure
+.tableBucketARN TableBucketARN label
+.type TableBucketMaintenanceType label
+.value TableBucketMaintenanceConfigurationValue
+PutTableBucketMetricsConfiguration operation in=PutTableBucketMetricsConfigurationRequest out=~Unit err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=PUT uri=/buckets/{tableBucketARN}/metrics code=204
+PutTableBucketMetricsConfigurationRequest structure
+.tableBucketARN TableBucketARN label
+PutTableBucketPolicy operation in=PutTableBucketPolicyRequest out=~Unit err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=PUT uri=/buckets/{tableBucketARN}/policy code=200
+PutTableBucketPolicyRequest structure
+.resourcePolicy ResourcePolicy
+.tableBucketARN TableBucketARN label
+PutTableBucketReplication operation in=PutTableBucketReplicationRequest out=PutTableBucketReplicationResponse err=AccessDeniedException,BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=PUT uri=/table-bucket-replication code=200
+PutTableBucketReplicationRequest structure
+.configuration TableBucketReplicationConfiguration
+.tableBucketARN TableBucketARN query=tableBucketARN
+.versionToken VersionToken query=versionToken
+PutTableBucketReplicationResponse structure
+.status ~String
+.versionToken VersionToken
+PutTableBucketStorageClass operation in=PutTableBucketStorageClassRequest out=~Unit err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=PUT uri=/buckets/{tableBucketARN}/storage-class code=200
+PutTableBucketStorageClassRequest structure
+.storageClassConfiguration StorageClassConfiguration
+.tableBucketARN TableBucketARN label
+PutTableMaintenanceConfiguration operation in=PutTableMaintenanceConfigurationRequest out=~Unit err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=PUT uri=/tables/{tableBucketARN}/{namespace}/{name}/maintenance/{type} code=204
+PutTableMaintenanceConfigurationRequest structure
+.name TableName label
+.namespace NamespaceName label
+.tableBucketARN TableBucketARN label
+.type TableMaintenanceType label
+.value TableMaintenanceConfigurationValue
+PutTablePolicy operation in=PutTablePolicyRequest out=~Unit err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=PUT uri=/tables/{tableBucketARN}/{namespace}/{name}/policy code=200
+PutTablePolicyRequest structure
+.name TableName label
+.namespace NamespaceName label
+.resourcePolicy ResourcePolicy
+.tableBucketARN TableBucketARN label
+PutTableRecordExpirationConfiguration operation in=PutTableRecordExpirationConfigurationRequest out=~Unit err=BadRequestException,ForbiddenException,InternalServerErrorException,MethodNotAllowedException,NotFoundException,TooManyRequestsException method=PUT uri=/table-record-expiration code=204
+PutTableRecordExpirationConfigurationRequest structure
+.tableArn TableARN query=tableArn
+.value TableRecordExpirationConfigurationValue
+PutTableReplication operation in=PutTableReplicationRequest out=PutTableReplicationResponse err=AccessDeniedException,BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=PUT uri=/table-replication code=200
+PutTableReplicationRequest structure
+.configuration TableReplicationConfiguration
+.tableArn TableARN query=tableArn
+.versionToken ~String query=versionToken
+PutTableReplicationResponse structure
+.status ~String
+.versionToken ~String
+RenameTable operation in=RenameTableRequest out=~Unit err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=PUT uri=/tables/{tableBucketARN}/{namespace}/{name}/rename code=204
+RenameTableRequest structure
+.name TableName label
+.namespace NamespaceName label
+.newName TableName
+.newNamespaceName NamespaceName
+.tableBucketARN TableBucketARN label
+.versionToken VersionToken
+ReplicationDestination structure
+.destinationTableBucketARN TableBucketARN
+ReplicationDestinationStatusModel structure
+.destinationTableArn TableARN
+.destinationTableBucketArn TableBucketARN
+.failureMessage ~String
+.lastSuccessfulReplicatedUpdate LastSuccessfulReplicatedUpdate
+.replicationStatus ReplicationStatus
+ReplicationDestinationStatuses list m=ReplicationDestinationStatusModel
+ReplicationDestinations list m=ReplicationDestination
+ReplicationInformation structure
+.sourceTableARN TableARN
+ReplicationStatus enum
+ResourceArn string
+ResourcePolicy string
+SSEAlgorithm enum
+SchemaField structure
+.id ~Integer
+.name ~String
+.required ~Boolean
+.type ~String
+SchemaFieldList list m=SchemaField
+SchemaV2Field structure
+.doc ~String
+.id ~Integer
+.name ~String
+.required ~Boolean
+.type ~Document
+SchemaV2FieldList list m=SchemaV2Field
+SchemaV2FieldType enum
+StorageClass enum
+StorageClassConfiguration structure
+.storageClass StorageClass
+TableARN string
+TableBucketARN string
+TableBucketId string
+TableBucketMaintenanceConfiguration map k=TableBucketMaintenanceType v=TableBucketMaintenanceConfigurationValue
+TableBucketMaintenanceConfigurationValue structure
+.settings TableBucketMaintenanceSettings
+.status MaintenanceStatus
+TableBucketMaintenanceSettings union
+.icebergUnreferencedFileRemoval IcebergUnreferencedFileRemovalSettings
+TableBucketMaintenanceType enum
+TableBucketName string
+TableBucketReplicationConfiguration structure
+.role IAMRole
+.rules TableBucketReplicationRules
+TableBucketReplicationRule structure
+.destinations ReplicationDestinations
+TableBucketReplicationRules list m=TableBucketReplicationRule
+TableBucketSummary structure
+.arn TableBucketARN
+.createdAt ~Timestamp ts=date-time
+.name TableBucketName
+.ownerAccountId AccountId
+.tableBucketId TableBucketId
+.type TableBucketType
+TableBucketSummaryList list m=TableBucketSummary
+TableBucketType enum
+TableMaintenanceConfiguration map k=TableMaintenanceType v=TableMaintenanceConfigurationValue
+TableMaintenanceConfigurationValue structure
+.settings TableMaintenanceSettings
+.status MaintenanceStatus
+TableMaintenanceJobStatus map k=TableMaintenanceJobType v=TableMaintenanceJobStatusValue
+TableMaintenanceJobStatusValue structure
+.failureMessage ~String
+.lastRunTimestamp ~Timestamp ts=date-time
+.status JobStatus
+TableMaintenanceJobType enum
+TableMaintenanceSettings union
+.icebergCompaction IcebergCompactionSettings
+.icebergSnapshotManagement IcebergSnapshotManagementSettings
+TableMaintenanceType enum
+TableMetadata union
+.iceberg IcebergMetadata
+TableName string
+TableProperties map k=~String v=~String
+TableRecordExpirationConfigurationValue structure
+.settings TableRecordExpirationSettings
+.status TableRecordExpirationStatus
+TableRecordExpirationJobMetrics structure
+.deletedDataFiles ~Long
+.deletedRecords ~Long
+.removedFilesSize ~Long
+TableRecordExpirationJobStatus enum
+TableRecordExpirationSettings structure
+.days PositiveInteger
+TableRecordExpirationStatus enum
+TableReplicationConfiguration structure
+.role IAMRole
+.rules TableReplicationRules
+TableReplicationRule structure
+.destinations ReplicationDestinations
+TableReplicationRules list m=TableReplicationRule
+TableSummary structure
+.createdAt ~Timestamp ts=date-time
+.managedByService ~String
+.modifiedAt ~Timestamp ts=date-time
+.name TableName
+.namespace NamespaceList
+.namespaceId NamespaceId
+.tableARN TableARN
+.tableBucketId TableBucketId
+.type TableType
+TableSummaryList list m=TableSummary
+TableType enum
+TagKey string
+TagKeyList list m=TagKey
+TagResource operation in=TagResourceRequest out=TagResourceResponse err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=POST uri=/tag/{resourceArn} code=200
+TagResourceRequest structure
+.resourceArn ResourceArn label
+.tags Tags
+TagResourceResponse structure
+TagValue string
+Tags map k=TagKey v=TagValue
+TooManyRequestsException structure error=client code=429
+.message ErrorMessage
+UntagResource operation in=UntagResourceRequest out=UntagResourceResponse err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=DELETE uri=/tag/{resourceArn} code=204
+UntagResourceRequest structure
+.resourceArn ResourceArn label
+.tagKeys TagKeyList query=tagKeys
+UntagResourceResponse structure
+UpdateTableMetadataLocation operation in=UpdateTableMetadataLocationRequest out=UpdateTableMetadataLocationResponse err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=PUT uri=/tables/{tableBucketARN}/{namespace}/{name}/metadata-location
+UpdateTableMetadataLocationRequest structure
+.metadataLocation MetadataLocation
+.name TableName label
+.namespace NamespaceName label
+.tableBucketARN TableBucketARN label
+.versionToken VersionToken
+UpdateTableMetadataLocationResponse structure
+.metadataLocation MetadataLocation
+.name TableName
+.namespace NamespaceList
+.tableARN TableARN
+.versionToken VersionToken
+VersionToken string
+WarehouseLocation string

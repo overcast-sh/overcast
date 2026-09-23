@@ -4,6 +4,7 @@
 package autoscaling_test
 
 import (
+	"encoding/base64"
 	"encoding/xml"
 	"io"
 	"net/http"
@@ -99,6 +100,29 @@ func TestDescribeLaunchConfigurations_afterCreate(t *testing.T) {
 	}
 	if !strings.Contains(body, "ami-12345678") {
 		t.Errorf("expected ami-12345678 in body, got: %s", body)
+	}
+}
+
+func TestDescribeLaunchConfigurations_userDataRoundTrips(t *testing.T) {
+	// Given: a launch configuration created with UserData
+	srv := helpers.NewTestServer(t)
+	userData := base64.StdEncoding.EncodeToString([]byte("#!/bin/bash\necho hello"))
+	r := asCall(t, srv, "CreateLaunchConfiguration", map[string]string{
+		"LaunchConfigurationName": "my-lc",
+		"ImageId":                 "ami-12345678",
+		"InstanceType":            "t3.micro",
+		"UserData":                userData,
+	})
+	r.Body.Close()
+
+	// When: DescribeLaunchConfigurations is called
+	resp := asCall(t, srv, "DescribeLaunchConfigurations", nil)
+	body := xmlText(t, resp)
+
+	// Then: the UserData member round-trips
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	if !strings.Contains(body, "<UserData>"+userData+"</UserData>") {
+		t.Errorf("expected UserData %q in body, got: %s", userData, body)
 	}
 }
 

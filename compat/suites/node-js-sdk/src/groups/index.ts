@@ -35,6 +35,7 @@ import { makeElastiCacheGroups } from "./elasticache.ts";
 import { makeStepFunctionsGroups } from "./stepfunctions.ts";
 import { makeWAFGroups } from "./waf.ts";
 import { makeShieldGroups } from "./shield.ts";
+import { makeGlueGroups } from "./glue.ts";
 import { makeEFSGroups } from "./efs.ts";
 
 /** Every group the suite implements, in registration order. */
@@ -67,6 +68,7 @@ export function makeAllGroups(suite: string): TestGroup[] {
     ...makeStepFunctionsGroups(suite),
     ...makeWAFGroups(suite),
     ...makeShieldGroups(suite),
+    ...makeGlueGroups(suite),
     ...makeEFSGroups(suite),
   ];
 }

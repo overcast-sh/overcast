@@ -97,12 +97,13 @@ Shorter overview: the [service reference index](./services/README.md).
 | ECR              | [ecr.md](./services/ecr.md)                         | 25  | Core CRUD + common workflows  |
 | KMS              | [kms.md](./services/kms.md)                         | 34  | Core CRUD + common workflows  |
 | Kinesis          | [kinesis.md](./services/kinesis.md)                 | 23  | Core CRUD + common workflows  |
-| EventBridge      | [eventbridge.md](./services/eventbridge.md)         | 29  | Core CRUD + common workflows  |
+| EventBridge      | [eventbridge.md](./services/eventbridge.md)         | 31  | Core CRUD + common workflows  |
 | Scheduler        | [scheduler.md](./services/scheduler.md)             | 12  | Core CRUD + common workflows  |
 | CloudFormation   | [cloudformation.md](./services/cloudformation.md)   | 53  | Core CRUD + common workflows  |
 | RDS              | [rds.md](./services/rds.md)                         | 34  | Core CRUD + common workflows  |
 | ElastiCache      | [elasticache.md](./services/elasticache.md)         | 24  | Core CRUD + common workflows  |
 | EFS              | [efs.md](./services/efs.md)                         | 31  | Core CRUD + common workflows  |
+| S3 Tables        | [s3tables.md](./services/s3tables.md)               | 49  | Core CRUD + common workflows  |
 | AppConfig        | [appconfig.md](./services/appconfig.md)             | 20  | Core CRUD + common workflows  |
 | AppConfigData    | [appconfigdata.md](./services/appconfigdata.md)     | 2   | Core CRUD + common workflows  |
 | Secrets Manager  | [secretsmanager.md](./services/secretsmanager.md)   | 22  | Core CRUD + common workflows  |
@@ -121,7 +122,7 @@ Shorter overview: the [service reference index](./services/README.md).
 | CloudWatch       | [cloudwatch.md](./services/cloudwatch.md)           | 17  | Minimal / targeted support    |
 | DynamoDB Streams | [dynamodbstreams.md](./services/dynamodbstreams.md) | 4   | Minimal / targeted support    |
 | Firehose         | [firehose.md](./services/firehose.md)               | 9   | Minimal / targeted support    |
-| Glue             | [glue.md](./services/glue.md)                       | 11  | Minimal / targeted support    |
+| Glue             | [glue.md](./services/glue.md)                       | 26  | Minimal / targeted support    |
 | OpenSearch       | [opensearch.md](./services/opensearch.md)           | 8   | Minimal / targeted support    |
 | AppRegistry      | [appregistry.md](./services/appregistry.md)         | 22  | IaC/discovery-oriented stub   |
 | Backup           | [backup.md](./services/backup.md)                   | 18  | IaC/discovery-oriented stub   |

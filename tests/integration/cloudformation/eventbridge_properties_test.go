@@ -1,23 +1,24 @@
 package cloudformation_test
 
 // eventbridge_properties_test.go — AWS::Events::Rule and AWS::Events::EventBus
-// property threading (#539).
+// property threading (#539, #2076).
 //
 // EventBridge came out of the #540 sweep in good shape: PutRule already
 // forwarded Description, RoleArn, EventPattern, ScheduleExpression and the
 // whole Targets array. Tags was the one property both resource types dropped
 // even though TagResource/ListTagsForResource are implemented — the "supported
 // but never passed" shape. AWS::Events::EventBus's Description,
-// DeadLetterConfig, KmsKeyIdentifier and Policy are the other gap, but the
-// EventBridge service itself has no member for the first three on
-// CreateEventBus and no PutPermission implementation to apply the fourth, so
-// they are reported as unconsumed rather than forwarded to a call that would
-// have nowhere to put them.
+// DeadLetterConfig, KmsKeyIdentifier and Policy were the other gap: the
+// EventBridge service had no member for the first three on CreateEventBus and
+// no PutPermission implementation to apply the fourth, so the handler reported
+// them as unconsumed. #2076 gave CreateEventBus/DescribeEventBus the three
+// members and implemented PutPermission/RemovePermission, so the handler now
+// forwards all four instead.
 //
-// These read back through ListTagsForResource rather than asserting on the
-// request the handler built, the same shape eks_properties_test.go uses: a
-// property that reaches the service but is not stored is as invisible to a
-// user as one that never left the handler.
+// These read back through ListTagsForResource and DescribeEventBus rather
+// than asserting on the request the handler built, the same shape
+// eks_properties_test.go uses: a property that reaches the service but is not
+// stored is as invisible to a user as one that never left the handler.
 
 import (
 	"net/http"
@@ -29,7 +30,9 @@ import (
 )
 
 // eventsEventBusPropertiesTemplate sets every AWS::Events::EventBus property
-// #539 lists, only one of which (Tags) the service can actually accept.
+// #539 lists. Policy carries one real statement rather than an empty
+// Statement list, so the forwarded-policy assertion below has something to
+// find in DescribeEventBus's Policy.
 const eventsEventBusPropertiesTemplate = `{
   "AWSTemplateFormatVersion": "2010-09-09",
   "Resources": {
@@ -40,7 +43,7 @@ const eventsEventBusPropertiesTemplate = `{
         "Description": "a custom bus",
         "KmsKeyIdentifier": "alias/my-key",
         "DeadLetterConfig": {"Arn": "arn:aws:sqs:us-east-1:000000000000:dlq"},
-        "Policy": "{\"Version\":\"2012-10-17\",\"Statement\":[]}",
+        "Policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Sid\":\"AllowCrossAccount\",\"Effect\":\"Allow\",\"Principal\":{\"AWS\":\"111122223333\"},\"Action\":\"events:PutEvents\",\"Resource\":\"arn:aws:events:us-east-1:000000000000:event-bus/cfn-props-bus\"}]}",
         "Tags": [
           {"Key": "env", "Value": "prod"},
           {"Key": "Owner", "Value": "platform"}
@@ -79,14 +82,62 @@ func TestCreateStack_EventsEventBus_tagsForwarded(t *testing.T) {
 		t.Errorf("tags = %v, want env=prod and Owner=platform", tags)
 	}
 
-	// The four properties the service has nowhere to put are reported rather
-	// than dropped in silence — see noteUnconsumedProperties.
+	// No property is unconsumed any more: CreateEventBus now has a member
+	// for each of Description/KmsKeyIdentifier/DeadLetterConfig, and Policy
+	// is applied through PutPermission (#2076).
 	reasons := describeStackResourceReasons(t, srv, stackName)
 	for _, name := range []string{"Description", "DeadLetterConfig", "KmsKeyIdentifier", "Policy"} {
-		if !strings.Contains(reasons, name) {
-			t.Errorf("expected the bus's ResourceStatusReason to name the unapplied %s, got: %s", name, reasons)
+		if strings.Contains(reasons, name) {
+			t.Errorf("expected no unapplied-property reason naming %s, got: %s", name, reasons)
 		}
 	}
+}
+
+// TestCreateStack_EventsEventBus_descriptionDlqKmsAndPolicyForwarded is the
+// failing-first case for #2076: CreateEventBus's request shape carried only
+// Name and Tags, so Description/DeadLetterConfig/KmsKeyIdentifier never
+// reached the service and Policy had no PutPermission to apply through.
+func TestCreateStack_EventsEventBus_descriptionDlqKmsAndPolicyForwarded(t *testing.T) {
+	srv := helpers.NewTestServer(t)
+	const stackName = "eventbus-properties-describe-stack"
+
+	create := cfnQuery(t, srv, "CreateStack", url.Values{
+		"StackName":    []string{stackName},
+		"TemplateBody": []string{eventsEventBusPropertiesTemplate},
+	})
+	defer create.Body.Close()
+	helpers.AssertStatus(t, create, http.StatusOK)
+	waitForStackStatus(t, srv, stackName, "CREATE_COMPLETE")
+
+	described := eventsDescribeEventBus(t, srv, "cfn-props-bus")
+	if described["Description"] != "a custom bus" {
+		t.Errorf("Description = %v, want %q", described["Description"], "a custom bus")
+	}
+	if described["KmsKeyIdentifier"] != "alias/my-key" {
+		t.Errorf("KmsKeyIdentifier = %v, want %q", described["KmsKeyIdentifier"], "alias/my-key")
+	}
+	dlq, ok := described["DeadLetterConfig"].(map[string]any)
+	if !ok || dlq["Arn"] != "arn:aws:sqs:us-east-1:000000000000:dlq" {
+		t.Errorf("DeadLetterConfig = %v, want the dlq ARN", described["DeadLetterConfig"])
+	}
+	policy, _ := described["Policy"].(string)
+	if !strings.Contains(policy, "AllowCrossAccount") || !strings.Contains(policy, "111122223333") {
+		t.Errorf("Policy = %s, want it to contain the template's statement", policy)
+	}
+}
+
+// eventsDescribeEventBus performs AWSEvents.DescribeEventBus and returns the
+// decoded response body.
+func eventsDescribeEventBus(t *testing.T, srv *helpers.TestServer, name string) map[string]any {
+	t.Helper()
+	resp := awsJSONCall(t, srv, "AWSEvents.", "DescribeEventBus", "application/x-amz-json-1.1", map[string]any{
+		"Name": name,
+	})
+	defer resp.Body.Close()
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	var out map[string]any
+	helpers.DecodeJSON(t, resp, &out)
+	return out
 }
 
 // eventsRulePropertiesTemplate sets Tags on an AWS::Events::Rule alongside

@@ -2051,6 +2051,17 @@ type opensearchDomainHandler struct{}
 
 func (h *opensearchDomainHandler) Create(ctx context.Context, router http.Handler, cfg *config.Config, props map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
 	domainName, _ := props["DomainName"].(string)
+	if domainName == "" {
+		// DomainName is optional on the resource; CDK's opensearch.Domain
+		// construct omits it by default. CloudFormation still has to mint
+		// something to send CreateDomain, shaped to what OpenSearch accepts:
+		// lowercase, 3-28 characters, starting with a letter
+		// (domainNamePatternSource in opensearch/service.go). generatedName
+		// already starts with a letter — CloudFormation stack names are
+		// themselves anchored `[a-zA-Z][-a-zA-Z0-9]*` — so lowercasing it is
+		// enough to satisfy the pattern too.
+		domainName = strings.ToLower(rCtx.generatedNameWithin(maxNameLenOpenSearch))
+	}
 	engineVersion, _ := props["EngineVersion"].(string)
 
 	body := map[string]any{
@@ -2182,31 +2193,17 @@ func internalAppConfigRequest(ctx context.Context, router http.Handler, region, 
 	if body != nil {
 		contentType = "application/json"
 	}
-	return restCall("appconfig", region, method, path, contentType, body, http.Header{
-		"Authorization": []string{"AWS4-HMAC-SHA256 Credential=overcast/20250101/" + region + "/appconfig/aws4_request, SignedHeaders=host, Signature=overcast"},
-	}).do(ctx, router)
+	return restCall("appconfig", region, method, path, contentType, body, scopedAuthHeader("appconfig", region)).do(ctx, router)
 }
 
 // appconfigRESTJSON dispatches an AppConfig REST call and decodes its response.
 func appconfigRESTJSON(ctx context.Context, router http.Handler, region, method, path, opName string, body map[string]any, out any) error {
-	var data []byte
-	if body != nil {
-		var err error
-		data, err = json.Marshal(body)
-		if err != nil {
-			return fmt.Errorf("%s: marshal request: %w", opName, err)
-		}
+	// A nil map must reach signedRESTJSON as a nil interface, or it is sent
+	// as a JSON null.
+	if body == nil {
+		return signedRESTJSON(ctx, router, "appconfig", region, method, path, opName, nil, out)
 	}
-	rec, err := internalAppConfigRequest(ctx, router, region, method, path, data)
-	if err != nil {
-		return fmt.Errorf("%s: %w", opName, err)
-	}
-	if out != nil {
-		if err := json.Unmarshal(rec.Body.Bytes(), out); err != nil {
-			return fmt.Errorf("%s: parse response: %w", opName, err)
-		}
-	}
-	return nil
+	return signedRESTJSON(ctx, router, "appconfig", region, method, path, opName, body, out)
 }
 
 // appconfigApplicationARN, appconfigEnvironmentARN and

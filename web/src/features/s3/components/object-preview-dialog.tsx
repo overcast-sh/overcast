@@ -22,7 +22,7 @@ import { ObjectRevisionBar, ObjectVersionList } from "./object-version-list"
 import { formatBytes, formatDate } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { describeObjectReadError } from "@/features/s3/object-read-error"
-import { dataPreviewKind } from "@/features/s3/preview-kind"
+import { dataPreviewKind, isTabularKind } from "@/features/s3/preview-kind"
 import { formatPreviewText, isImagePreviewable, isTextPreviewable } from "./object-preview-format"
 import { AvroNotice, PreviewPanel, PreviewSkeleton, RawText } from "./data-preview"
 import { DataFilePreview, OpenInViewer } from "./data-file-preview"
@@ -114,8 +114,7 @@ export function ObjectPreviewDialog({
   // plain-text treatment. Decided by content type and key, before any byte
   // is fetched, because Parquet is read by range and never as text.
   const dataKind = objectKey && metadata ? dataPreviewKind(metadata.contentType, objectKey) : null
-  const tabular =
-    dataKind === "csv" || dataKind === "tsv" || dataKind === "jsonl" || dataKind === "parquet"
+  const tabular = isTabularKind(dataKind)
   // No size gate: getObjectText fetches at most the first 1 MiB by Range, so
   // a text-like object of any size previews — its opening window, labelled as
   // such when the object holds more.

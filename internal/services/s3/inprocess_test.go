@@ -30,6 +30,7 @@ var (
 	_ events.S3PutObjectFunc    = (*Service)(nil).PutObjectBytes
 	_ events.S3ListObjectsFunc  = (*Service)(nil).ListObjects
 	_ events.S3EnsureBucketFunc = (*Service)(nil).EnsureBucket
+	_ events.S3EnsureBucketFunc = (*Service)(nil).EnsureTableWarehouseBucket
 )
 
 // ---- Fixtures --------------------------------------------------------------
@@ -61,15 +62,20 @@ func (f *inProcessFixture) ensureBucket(t *testing.T, name string) {
 	}
 }
 
-func (f *inProcessFixture) setVersioning(t *testing.T, name, status string) {
+func (f *inProcessFixture) bucket(t *testing.T, name string) *Bucket {
 	t.Helper()
-	ctx := context.Background()
-	b, aerr := f.svc.handler.store.getBucket(ctx, name)
+	b, aerr := f.svc.handler.store.getBucket(context.Background(), name)
 	if aerr != nil {
 		t.Fatalf("get bucket %s: %v", name, aerr)
 	}
+	return b
+}
+
+func (f *inProcessFixture) setVersioning(t *testing.T, name, status string) {
+	t.Helper()
+	b := f.bucket(t, name)
 	b.VersioningStatus = status
-	if aerr := f.svc.handler.store.putBucket(ctx, b); aerr != nil {
+	if aerr := f.svc.handler.store.putBucket(context.Background(), b); aerr != nil {
 		t.Fatalf("put bucket %s: %v", name, aerr)
 	}
 }
@@ -81,6 +87,16 @@ func (f *inProcessFixture) put(t *testing.T, bucket, key, body string) events.S3
 		t.Fatalf("put %s/%s: %v", bucket, key, aerr)
 	}
 	return res
+}
+
+// meta reads back the stored object's metadata.
+func (f *inProcessFixture) meta(t *testing.T, bucket, key string) *Object {
+	t.Helper()
+	obj, aerr := f.svc.handler.store.getObjectMeta(context.Background(), bucket, key)
+	if aerr != nil {
+		t.Fatalf("meta %s/%s: %v", bucket, key, aerr)
+	}
+	return obj
 }
 
 func (f *inProcessFixture) read(t *testing.T, bucket, key, versionID string) string {
@@ -141,10 +157,7 @@ func TestPutObjectBytes_unversionedBucket(t *testing.T) {
 	if got := f.read(t, "results", "q/1.csv", ""); got != "a,b\n1,2\n" {
 		t.Errorf("body = %q", got)
 	}
-	obj, aerr := f.svc.handler.store.getObjectMeta(context.Background(), "results", "q/1.csv")
-	if aerr != nil {
-		t.Fatalf("meta: %v", aerr)
-	}
+	obj := f.meta(t, "results", "q/1.csv")
 	if obj.ContentType != "text/csv" {
 		t.Errorf("ContentType = %q", obj.ContentType)
 	}
@@ -165,11 +178,7 @@ func TestPutObjectBytes_defaultContentType(t *testing.T) {
 	f.put(t, "results", "k", "x")
 
 	// Then: it reads back as S3's default binary type
-	obj, aerr := f.svc.handler.store.getObjectMeta(context.Background(), "results", "k")
-	if aerr != nil {
-		t.Fatalf("meta: %v", aerr)
-	}
-	if obj.ContentType != "application/octet-stream" {
+	if obj := f.meta(t, "results", "k"); obj.ContentType != "application/octet-stream" {
 		t.Errorf("ContentType = %q", obj.ContentType)
 	}
 }
@@ -390,11 +399,7 @@ func TestEnsureBucket_idempotent(t *testing.T) {
 	if first != nil || second != nil {
 		t.Fatalf("EnsureBucket = %v, %v; want nil both times", first, second)
 	}
-	b, aerr := f.svc.handler.store.getBucket(ctx, "warehouse")
-	if aerr != nil {
-		t.Fatalf("get bucket: %v", aerr)
-	}
-	if b.Region != "eu-west-1" {
+	if b := f.bucket(t, "warehouse"); b.Region != "eu-west-1" {
 		t.Errorf("Region = %q", b.Region)
 	}
 }
@@ -422,11 +427,7 @@ func TestEnsureBucket_defaultRegion(t *testing.T) {
 	f.ensureBucket(t, "results")
 
 	// Then: it is created in the service's region
-	b, aerr := f.svc.handler.store.getBucket(context.Background(), "results")
-	if aerr != nil {
-		t.Fatalf("get bucket: %v", aerr)
-	}
-	if b.Region != "us-east-1" {
+	if b := f.bucket(t, "results"); b.Region != "us-east-1" {
 		t.Errorf("Region = %q", b.Region)
 	}
 }
@@ -435,8 +436,9 @@ func TestEnsureBucket_invalidName(t *testing.T) {
 	cases := []struct{ name, bucket string }{
 		{"too short", "ab"},
 		{"upper case", "Results"},
-		// Real S3 reserves the suffix for S3 Tables' own buckets, and so does
-		// the accessor until S3 Tables needs it (#2067).
+		// Real S3 reserves the suffix for S3 Tables' own buckets, so the
+		// general accessor refuses it; EnsureTableWarehouseBucket is the one
+		// entry point that may create it.
 		{"reserved S3 Tables suffix", "warehouse--table-s3"},
 	}
 	for _, tc := range cases {
@@ -451,6 +453,34 @@ func TestEnsureBucket_invalidName(t *testing.T) {
 			assertAWSError(t, aerr, "InvalidBucketName", http.StatusBadRequest)
 		})
 	}
+}
+
+func TestEnsureTableWarehouseBucket_createsTheReservedSuffixOnly(t *testing.T) {
+	// Given: a service
+	f := newInProcessFixture(t)
+	ctx := context.Background()
+
+	// When: S3 Tables ensures a warehouse bucket, twice
+	name := "63a8e430-6e0b-46f5-k833abtwr6s8tmtsycedn8s4yc3xhuse1b--table-s3"
+	first := f.svc.EnsureTableWarehouseBucket(ctx, name, "eu-west-1")
+	second := f.svc.EnsureTableWarehouseBucket(ctx, name, "eu-west-1")
+
+	// Then: it exists, in the requested region, and is writable like any bucket
+	if first != nil || second != nil {
+		t.Fatalf("EnsureTableWarehouseBucket = %v, %v; want nil both times", first, second)
+	}
+	b, aerr := f.svc.handler.store.getBucket(ctx, name)
+	if aerr != nil {
+		t.Fatalf("get bucket: %v", aerr)
+	}
+	if b.Region != "eu-west-1" {
+		t.Errorf("Region = %q", b.Region)
+	}
+	f.put(t, name, "metadata/00000.metadata.json", "{}")
+
+	// And: a name without the suffix is not a warehouse bucket
+	aerr = f.svc.EnsureTableWarehouseBucket(ctx, "plain-bucket", "")
+	assertAWSError(t, aerr, "InvalidBucketName", http.StatusBadRequest)
 }
 
 func TestEnsureBucket_announcesCreationOnce(t *testing.T) {

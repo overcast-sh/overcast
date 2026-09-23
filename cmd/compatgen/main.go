@@ -227,7 +227,11 @@ func generateAll(root string, c *corpus) ([]*generation, outputSet, error) {
 	// `go list`: to every backend below, an authored generation and a
 	// recipe-generated one are the same thing.
 	for _, a := range c.authored {
-		model, client, err := modelFor(a.scenario.Service, a.scenario.Service)
+		modelService, err := snapshotServiceFor(filepath.Join(root, filepath.FromSlash(shapesDir)), a.scenario.Service)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%s: %w", a.file, err)
+		}
+		model, client, err := modelFor(modelService, a.scenario.Service)
 		if err != nil {
 			return nil, nil, err
 		}

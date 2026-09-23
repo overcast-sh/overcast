@@ -319,17 +319,18 @@ const (
 	// groups, policies, managed policies and instance profiles. One constant
 	// used to carry 64 while its comment claimed it covered policies and
 	// instance profiles too, so those were truncated to half what IAM takes.
-	maxNameLenIAM       = 64  // role and user names
-	maxNameLenIAMPolicy = 128 // group, policy, managed-policy and instance-profile names
-	maxNameLenS3        = 63  // bucket names
-	maxNameLenSQS       = 80  // queue names (the ".fifo" suffix counts against this)
-	maxNameLenSNS       = 256 // topic names
-	maxNameLenRDS       = 63  // DB instance and cluster identifiers
-	maxNameLenCache     = 50  // ElastiCache cache cluster IDs (lowercase only)
-	maxNameLenECR       = 256 // repository names (lowercase only)
-	maxNameLenEvents    = 64  // EventBridge rule names
-	maxNameLenScheduler = 64  // EventBridge Scheduler schedule and schedule-group names
-	maxNameLenSFN       = 80  // Step Functions state-machine names
+	maxNameLenIAM        = 64  // role and user names
+	maxNameLenIAMPolicy  = 128 // group, policy, managed-policy and instance-profile names
+	maxNameLenS3         = 63  // bucket names
+	maxNameLenSQS        = 80  // queue names (the ".fifo" suffix counts against this)
+	maxNameLenSNS        = 256 // topic names
+	maxNameLenRDS        = 63  // DB instance and cluster identifiers
+	maxNameLenCache      = 50  // ElastiCache cache cluster IDs (lowercase only)
+	maxNameLenECR        = 256 // repository names (lowercase only)
+	maxNameLenEvents     = 64  // EventBridge rule names
+	maxNameLenScheduler  = 64  // EventBridge Scheduler schedule and schedule-group names
+	maxNameLenSFN        = 80  // Step Functions state-machine names
+	maxNameLenOpenSearch = 28  // domain names (also 3 minimum; lowercase only)
 
 	maxNameLenELBv2       = 32  // ELBv2 load balancer and target group names
 	maxNameLenCacheGroup  = 40  // ElastiCache replication group IDs and serverless cache names (lowercase only)

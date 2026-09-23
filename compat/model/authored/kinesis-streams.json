@@ -1,5 +1,5 @@
 {
-  "$comment": "Authored port of the hand-written registry group kinesis-streams (docs/plans/compat-coverage-modelgen.md §3.11, G6 wave 1 rank 1, #1116). One spec in place of five per-language implementations — and of the two that were never written: dotnet-sdk and rust-sdk carry 7 rows each of parity debt for this group, which the port closes. It runs today under the shadow name kinesis-streams-shadow, beside the natives, so the nightly can compare the two per (suite, test); the flip PR renames this group to kinesis-streams, moves the registry entry into the hand-written registry.json, and deletes the native code. The clauses are the union of what the five natives assert — see compat/model/README.md § Authored scenarios.",
+  "$comment": "Authored port of the hand-written registry group kinesis-streams (docs/plans/compat-coverage-modelgen.md §3.11, G6 wave 1 rank 1, #1116). One spec in place of the five per-language implementations it replaced — and of the two that were never written: dotnet-sdk and rust-sdk carried 7 rows each of parity debt for this group, which the port closes. It soaked as kinesis-streams-shadow beside those natives until the nightly comparison agreed on every one of its 49 (suite, test) pairs in each of three soak runs, 14 of them parity debt closed; the flip then renamed it to kinesis-streams, pointed the hand-written registry entry at it and deleted the native code. The clauses are the union of what the five natives asserted — see compat/model/README.md § Authored scenarios.",
   "version": 1,
   "service": "kinesis",
   "client": {
@@ -14,7 +14,7 @@
   "groups": [
     {
       "$comment": "Two streams: the group's own (created in setup, read and tagged by every test) and an ephemeral one the CreateStream test creates and the DeleteStream test removes. That split is what go-sdk and python-sdk already do, and it is what lets DeleteStream prove a delete without destroying the stream the earlier tests read; cli, node-js-sdk and java-sdk instead create the one stream in CreateStream and delete it in DeleteStream, which leaves the delete unverifiable against a stream anything else still needs. CreateStream returns no output at all (the operation's output shape is Unit), so every clause on it necessarily calls the service again. AWS documents CreateStream as asynchronous — the stream is CREATING until it is ACTIVE — and DeleteStream likewise leaves it DELETING until the deletion completes, so both are read through `eventually`. All five natives poll for ACTIVE with budgets between 3 s (node-js-sdk, 10 × 300 ms) and 30 s (go-sdk, cli, java-sdk); 15 s (30 × 500 ms) sits inside that range, and the delete's 10 s (20 × 500 ms) is the same order. Overcast answers ACTIVE on the first attempt, so the budget is fidelity to AWS rather than latency the emulator has.",
-      "name": "kinesis-streams-shadow",
+      "name": "kinesis-streams",
       "kind": "lifecycle",
       "setup": [
         {

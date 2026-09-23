@@ -95,6 +95,7 @@ var ServiceTiers = map[string]EmulationTier{
 	"glue":        TierInert,
 	"firehose":    TierInert,
 	"athena":      TierInert,
+	"s3tables":    TierInert,
 	"bedrock":     TierStub,
 	"appregistry": TierInert,
 	"elasticache": TierPartial,
@@ -122,6 +123,9 @@ var ServiceGoalTiers = map[string]EmulationTier{
 
 	// WIP — currently inert, goal is partial
 	"iam": TierPartial,
+	// s3tables' control plane is complete; the Iceberg REST catalog that lets
+	// engines commit to its tables is what stands between it and partial.
+	"s3tables": TierPartial,
 
 	// WIP — currently partial, goal is full. The execution engine landed, so
 	// Step Functions is no longer inert; `.waitForTaskToken`, activities and

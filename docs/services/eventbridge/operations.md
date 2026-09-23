@@ -1,6 +1,6 @@
 ---
 title: "EventBridge operations"
-description: "Every EventBridge operation Overcast declares — 18 of 29 implemented — with status, behaviour notes and a link to the AWS API reference for each."
+description: "Every EventBridge operation Overcast declares — 20 of 31 implemented — with status, behaviour notes and a link to the AWS API reference for each."
 section: "Service Reference"
 tags:
   - docs
@@ -13,13 +13,13 @@ tags:
 
 # EventBridge operations
 
-18 of 29 listed operations are implemented. Back to [EventBridge](../eventbridge.md).
+20 of 31 listed operations are implemented. Back to [EventBridge](../eventbridge.md).
 
 ## Summary
 
 | Category    | ✅ Supported | ❌ Unsupported |
 | ----------- | ------------ | -------------- |
-| Event buses | 4            |                |
+| Event buses | 6            |                |
 | Rules       | 7            |                |
 | Targets     | 3            |                |
 | Events      | 1            |                |
@@ -34,12 +34,14 @@ tags:
 
 ### Event buses
 
-| Operation          | Status       | Notes                                      | AWS Docs                                                                                      |
-| ------------------ | ------------ | ------------------------------------------ | --------------------------------------------------------------------------------------------- |
-| `CreateEventBus`   | ✅ Supported | Creates a custom event bus                 | [docs](https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_CreateEventBus.html)   |
-| `DescribeEventBus` | ✅ Supported | Returns bus details; synthetic default bus | [docs](https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_DescribeEventBus.html) |
-| `ListEventBuses`   | ✅ Supported | Always includes default bus                | [docs](https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_ListEventBuses.html)   |
-| `DeleteEventBus`   | ✅ Supported |                                            | [docs](https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_DeleteEventBus.html)   |
+| Operation          | Status       | Notes                                                                                                                                                                                                            | AWS Docs                                                                                      |
+| ------------------ | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `CreateEventBus`   | ✅ Supported | Creates a custom event bus; stores Description, DeadLetterConfig and KmsKeyIdentifier                                                                                                                            | [docs](https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_CreateEventBus.html)   |
+| `DescribeEventBus` | ✅ Supported | Returns bus details including Description, DeadLetterConfig, KmsKeyIdentifier and the Policy built from PutPermission grants; synthetic default bus                                                              | [docs](https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_DescribeEventBus.html) |
+| `ListEventBuses`   | ✅ Supported | Always includes default bus                                                                                                                                                                                      | [docs](https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_ListEventBuses.html)   |
+| `DeleteEventBus`   | ✅ Supported |                                                                                                                                                                                                                  | [docs](https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_DeleteEventBus.html)   |
+| `PutPermission`    | ✅ Supported | Stores a resource policy statement on the bus (or replaces it wholesale via the Policy parameter), returned by DescribeEventBus as Policy; stored, not enforced, the same as the rest of Overcast's IAM policies | [docs](https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_PutPermission.html)    |
+| `RemovePermission` | ✅ Supported | Removes one statement by StatementId, or the whole policy with RemoveAllPermissions                                                                                                                              | [docs](https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_RemovePermission.html) |
 
 ### Rules
 

@@ -46,6 +46,7 @@ var tables = [...]table{
 	{service: "rds", file: "rds.txt"},
 	{service: "route-53", file: "route_53.txt"},
 	{service: "s3", file: "s3.txt"},
+	{service: "s3tables", file: "s3tables.txt"},
 	{service: "scheduler", file: "scheduler.txt"},
 	{service: "secrets-manager", file: "secrets_manager.txt"},
 	{service: "service-catalog-appregistry", file: "service_catalog_appregistry.txt"},
