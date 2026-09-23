@@ -293,6 +293,17 @@ type xmlDBInstance struct {
 	PubliclyAccessible  bool   `xml:"PubliclyAccessible"`
 	StorageType         string `xml:"StorageType"`
 	DBClusterIdentifier string `xml:"DBClusterIdentifier,omitempty"`
+	// StorageOperationStatus and StorageOperationPercentProgress report an
+	// in-progress storage operation — PITR/snapshot restore, read-replica
+	// creation, blue/green deployment, Single-AZ->Multi-AZ conversion, or
+	// storage scaling. AWS documents both as present "only while a storage
+	// operation is in progress" and absent otherwise
+	// (rds-2014-10-31.json#DBInstance). Overcast performs none of these as
+	// asynchronous storage operations, so these are never set: the omitted
+	// wire shape below is AWS's own resting value, not a gap. See
+	// docs/dev/compatibility/services/rds.yaml for the tracked scenario.
+	StorageOperationStatus          *string `xml:"StorageOperationStatus,omitempty"`
+	StorageOperationPercentProgress *int    `xml:"StorageOperationPercentProgress,omitempty"`
 }
 
 type xmlEndpoint struct {

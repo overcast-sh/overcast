@@ -2,7 +2,7 @@ service: rds
 status: in_progress
 priority: p1
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-08-21
+last_updated: 2026-09-23
 protocols: [query]
 implementation: [internal/services/rds]
 integration_tests: [tests/integration/rds]
@@ -29,6 +29,25 @@ operations:
   CreateDBInstance:
     status: in_progress
     scenarios:
+      - name: AdditionalStorageVolumes and StorageOperationStatus (#2041)
+        status: intentionally_partial
+        tests: [TestCreateDBInstance_additionalStorageVolumesRejected, TestDescribeDBInstances_storageOperationStatusOmittedAtRest]
+        evidence: >-
+          rds-2014-10-31.json documents CreateDBInstanceMessage.AdditionalStorageVolumes as "supported for RDS
+          for Oracle and RDS for SQL Server DB instances only" (added 2025-11-14), and DBInstance.StorageOperationStatus
+          / StorageOperationPercentProgress as present "only while a storage operation is in progress" — covering
+          PITR/snapshot restore, read-replica creation, blue/green deployment, Single-AZ->Multi-AZ conversion, and
+          storage scaling — and absent otherwise (added 2026-07-20). Overcast emulates neither Oracle nor SQL Server
+          (see docs/services/rds/limitations.md), so every engine CreateDBInstance can actually create is one AWS
+          itself would refuse AdditionalStorageVolumes for; it is now rejected with InvalidParameterCombination
+          instead of being silently accepted and never honoured. Overcast also runs no asynchronous storage
+          operation, so StorageOperationStatus/StorageOperationPercentProgress are modelled on xmlDBInstance but
+          always omitted — AWS's own documented resting value, not an invented "always complete" state.
+        notes: >-
+          Revisit alongside SQL Server support (docs/services/rds/limitations.md "Engines that are not
+          emulated"): AdditionalStorageVolumes would then need real acceptance, storage, and per-volume
+          AdditionalStorageVolumeOutput rendering (StorageVolumeStatus, StorageOperationStatus,
+          StorageOperationPercentProgress) rather than outright rejection.
       - name: Lambda container DNS for DB instance endpoint
         status: fixed
         tests: [TestEndpointAliases_dbInstance, TestEndpointAliases_dbInstancePreservesCanonicalNameWhenEndpointIsIP]
@@ -200,6 +219,7 @@ findings:
     - Protected internal-account enforcement and the complete catalog of AWS-managed rds_* procedures are not emulated by stock engine images.
     - PostgreSQL extension availability follows the backing image rather than AWS's RDS extension allowlist.
     - Reserved-word validation covers common SQL keywords and engine system schemas, not every version-specific engine reserved word.
+    - CreateDBInstance's AdditionalStorageVolumes is rejected for every engine Overcast can create (Oracle/SQL Server only on AWS, neither emulated), and DBInstance's StorageOperationStatus/StorageOperationPercentProgress are always omitted since Overcast runs no asynchronous storage operation (#2041).
 handoff:
   start_with: [CreateDBInstance validation errors, CreateDBCluster optional parameters and defaults, DBClusterMembers]
   do_not_redo: [Aurora MySQL 3 instance parameter group family, Lambda container DNS for Docker-backed RDS DB instance endpoint hostnames, runtime and startup recovery of DB instance containers, master-account initialization and initial database semantics, Aurora cluster happy-path lifecycle and cluster XML response parity across the SDK/CLI compat suites]
