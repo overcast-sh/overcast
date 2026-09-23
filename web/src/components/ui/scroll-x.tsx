@@ -21,16 +21,24 @@ import { cn } from "@/lib/utils"
  * `tabIndex={0}` on the scroller because a container that scrolls but cannot
  * be focused is reachable by trackpad and by nothing else (WCAG 2.1.1).
  *
- * @param className        wrapper — layout, borders, anything positioned against the edges
+ * @param className         wrapper — layout, borders, anything positioned against the edges
  * @param scrollerClassName the scrolling element itself
+ * @param edgeClassName     both edge shadows — a wider one for a dense grid
+ * @param startEdgeClassName the start shadow only — `left-12` moves it clear of
+ *                          a sticky first column, which would otherwise sit
+ *                          under the shadow it is meant to cast
  */
 function ScrollX({
   className,
   scrollerClassName,
+  edgeClassName,
+  startEdgeClassName,
   children,
 }: {
   className?: string
   scrollerClassName?: string
+  edgeClassName?: string
+  startEdgeClassName?: string
   children: React.ReactNode
 }) {
   const { ref, start, end } = useOverflowEdges<HTMLDivElement>()
@@ -43,8 +51,8 @@ function ScrollX({
       >
         {children}
       </div>
-      <ScrollEdge side="start" show={start} />
-      <ScrollEdge side="end" show={end} />
+      <ScrollEdge side="start" show={start} className={cn(edgeClassName, startEdgeClassName)} />
+      <ScrollEdge side="end" show={end} className={edgeClassName} />
     </div>
   )
 }
@@ -61,7 +69,15 @@ function ScrollX({
  * `aria-hidden` and `pointer-events-none` — it is a picture of a fact the
  * scroller already exposes to assistive technology and to the pointer.
  */
-function ScrollEdge({ side, show }: { side: "start" | "end"; show: boolean }) {
+function ScrollEdge({
+  side,
+  show,
+  className,
+}: {
+  side: "start" | "end"
+  show: boolean
+  className?: string
+}) {
   return (
     <div
       aria-hidden
@@ -69,6 +85,7 @@ function ScrollEdge({ side, show }: { side: "start" | "end"; show: boolean }) {
         "pointer-events-none absolute inset-y-0 w-6 from-scrim-edge to-transparent transition-opacity",
         side === "start" ? "left-0 bg-linear-to-r" : "right-0 bg-linear-to-l",
         show ? "opacity-100" : "opacity-0",
+        className,
       )}
     />
   )

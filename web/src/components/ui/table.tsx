@@ -8,9 +8,28 @@ import { cn } from "@/lib/utils"
  * sideways scroll and the edge shadow that says there is more of it — so every
  * `ResourceTable` consumer inherits the same behaviour from one place.
  */
-function Table({ className, ...props }: React.HTMLAttributes<HTMLTableElement>) {
+function Table({
+  className,
+  scrollerClassName,
+  edgeClassName,
+  startEdgeClassName,
+  ...props
+}: React.HTMLAttributes<HTMLTableElement> & {
+  /**
+   * Classes for the scrolling element — a `max-h-*` here makes the table
+   * scroll vertically too, which is what a sticky header needs to stick to.
+   */
+  scrollerClassName?: string
+  /** Passed to `ScrollX`'s overflow shadows; see there. */
+  edgeClassName?: string
+  startEdgeClassName?: string
+}) {
   return (
-    <ScrollX>
+    <ScrollX
+      scrollerClassName={scrollerClassName}
+      edgeClassName={edgeClassName}
+      startEdgeClassName={startEdgeClassName}
+    >
       <table className={cn("w-full caption-bottom text-sm", className)} {...props} />
     </ScrollX>
   )
