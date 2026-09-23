@@ -37,20 +37,14 @@ import (
 // ({apiId}.execute-api.{region}.{base}/...) to the emulator's internal
 // /_overcast/apigateway/execute-api/{apiId}/{region}/* marker route (see
 // ExecuteByHost for why the client's path is passed through verbatim rather
-// than being parsed here).
+// than being parsed here). AWS matches resources against the still-encoded
+// path, so a %2F inside a segment must reach the router intact (#2136).
 func (s *Service) HostRouteRewrite(r *http.Request, m middleware.HostRouteMatch) {
-	path := r.URL.Path
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path
-	}
 	region := m.Region
 	if region == "" {
 		region = "-"
 	}
-	r.URL.Path = "/_overcast/apigateway/execute-api/" + m.ID + "/" + region + path
-	if r.URL.RawPath != "" {
-		r.URL.RawPath = r.URL.Path
-	}
+	middleware.PrefixPath(r, "/_overcast/apigateway/execute-api/"+m.ID+"/"+region)
 }
 
 // ExecuteByHost handles /_overcast/apigateway/execute-api/{apiId}/{region}/* — see

@@ -37,9 +37,10 @@ import (
 //  2. Add its "label" -> service-name entry to hostRouteLabels below.
 //  3. In router.go, append one middleware.HostRouteRow{Label: "...", Rewrite: ...}
 //     to the rows slice passed to middleware.HostAddressing. Keep Rewrite thin:
-//     string manipulation of r.URL.Path (and maybe a region context stamp)
-//     only, or a call into one small exported method on the owning service
-//     (e.g. apigwSvc.HostRouteRewrite) — never protocol/business logic here.
+//     a PrefixPath call (and maybe a region context stamp) only, or a call
+//     into one small exported method on the owning service (e.g.
+//     apigwSvc.HostRouteRewrite) — never protocol/business logic here. Do not
+//     assign r.URL.Path by hand: it loses the client's encoding (#2136).
 //
 // ---- Guardrail: labels must not be plausible bucket-name segments ----
 //
@@ -216,6 +217,32 @@ type HostRouteRow struct {
 	// Host that doesn't match the grammar at all should fall through
 	// untouched (see AGENTS.md "Routing fallthrough is S3").
 	Rewrite func(r *http.Request, m HostRouteMatch)
+}
+
+// PrefixPath prepends prefix (a literal path with nothing to escape) to the
+// request path, keeping r.URL.RawPath in step when it is set. RawPath holds
+// the client's encoding whenever it differs from the default, most notably a
+// %2F inside a segment, and chi routes on it; copying the decoded Path over
+// it turns that %2F into a separator. API Gateway, Lambda function URLs, ALB
+// and CloudFront all hand the path on still encoded, so the rewrite must too
+// (#2136).
+//
+// An empty Path (an absolute-form request line with no path) becomes prefix
+// + "/", which is what the internal /* routes need. S3 virtual-hosted
+// addressing keeps its own inline prefixing because it must map that case to
+// "/{bucket}", not "/{bucket}/".
+func PrefixPath(r *http.Request, prefix string) {
+	r.URL.Path = prefix + withLeadingSlash(r.URL.Path)
+	if r.URL.RawPath != "" {
+		r.URL.RawPath = prefix + withLeadingSlash(r.URL.RawPath)
+	}
+}
+
+func withLeadingSlash(p string) string {
+	if strings.HasPrefix(p, "/") {
+		return p
+	}
+	return "/" + p
 }
 
 // The middleware that applies these rows is HostAddressing in

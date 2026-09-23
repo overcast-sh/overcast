@@ -1,9 +1,52 @@
 package middleware
 
 import (
+	"net/http/httptest"
 	"regexp"
 	"testing"
 )
+
+func TestPrefixPath(t *testing.T) {
+	// Given: request targets with and without encoding Go keeps in RawPath
+	tests := []struct {
+		name, target, wantPath, wantEscaped string
+	}{
+		{"plain", "/prod/hello", "/p/prod/hello", "/p/prod/hello"},
+		{"encoded slash kept", "/prod/@scope%2fpkg", "/p/prod/@scope/pkg", "/p/prod/@scope%2fpkg"},
+		{"encoded slash beside a space", "/a%2Fb%20c", "/p/a/b c", "/p/a%2Fb%20c"},
+		{"root", "/", "/p/", "/p/"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := httptest.NewRequest("GET", "http://example.test"+tt.target, nil)
+
+			// When: the path is prefixed
+			PrefixPath(r, "/p")
+
+			// Then: Path is decoded and the wire form survives in EscapedPath
+			if r.URL.Path != tt.wantPath {
+				t.Errorf("Path = %q, want %q", r.URL.Path, tt.wantPath)
+			}
+			if got := r.URL.EscapedPath(); got != tt.wantEscaped {
+				t.Errorf("EscapedPath() = %q, want %q", got, tt.wantEscaped)
+			}
+		})
+	}
+}
+
+func TestPrefixPath_emptyPathGetsRootSlash(t *testing.T) {
+	// Given: an absolute-form request line with no path leaves Path empty
+	r := httptest.NewRequest("GET", "http://example.test/", nil)
+	r.URL.Path = ""
+
+	// When: the path is prefixed
+	PrefixPath(r, "/p")
+
+	// Then: it lands on the prefix's root, which the internal /* routes match
+	if r.URL.Path != "/p/" {
+		t.Errorf("Path = %q, want %q", r.URL.Path, "/p/")
+	}
+}
 
 func TestParseHostRoute(t *testing.T) {
 	// Given: a table of Host headers covering the grammar's edge cases
