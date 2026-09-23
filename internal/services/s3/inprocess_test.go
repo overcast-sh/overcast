@@ -61,15 +61,20 @@ func (f *inProcessFixture) ensureBucket(t *testing.T, name string) {
 	}
 }
 
-func (f *inProcessFixture) setVersioning(t *testing.T, name, status string) {
+func (f *inProcessFixture) bucket(t *testing.T, name string) *Bucket {
 	t.Helper()
-	ctx := context.Background()
-	b, aerr := f.svc.handler.store.getBucket(ctx, name)
+	b, aerr := f.svc.handler.store.getBucket(context.Background(), name)
 	if aerr != nil {
 		t.Fatalf("get bucket %s: %v", name, aerr)
 	}
+	return b
+}
+
+func (f *inProcessFixture) setVersioning(t *testing.T, name, status string) {
+	t.Helper()
+	b := f.bucket(t, name)
 	b.VersioningStatus = status
-	if aerr := f.svc.handler.store.putBucket(ctx, b); aerr != nil {
+	if aerr := f.svc.handler.store.putBucket(context.Background(), b); aerr != nil {
 		t.Fatalf("put bucket %s: %v", name, aerr)
 	}
 }
@@ -81,6 +86,16 @@ func (f *inProcessFixture) put(t *testing.T, bucket, key, body string) events.S3
 		t.Fatalf("put %s/%s: %v", bucket, key, aerr)
 	}
 	return res
+}
+
+// meta reads back the stored object's metadata.
+func (f *inProcessFixture) meta(t *testing.T, bucket, key string) *Object {
+	t.Helper()
+	obj, aerr := f.svc.handler.store.getObjectMeta(context.Background(), bucket, key)
+	if aerr != nil {
+		t.Fatalf("meta %s/%s: %v", bucket, key, aerr)
+	}
+	return obj
 }
 
 func (f *inProcessFixture) read(t *testing.T, bucket, key, versionID string) string {
@@ -141,10 +156,7 @@ func TestPutObjectBytes_unversionedBucket(t *testing.T) {
 	if got := f.read(t, "results", "q/1.csv", ""); got != "a,b\n1,2\n" {
 		t.Errorf("body = %q", got)
 	}
-	obj, aerr := f.svc.handler.store.getObjectMeta(context.Background(), "results", "q/1.csv")
-	if aerr != nil {
-		t.Fatalf("meta: %v", aerr)
-	}
+	obj := f.meta(t, "results", "q/1.csv")
 	if obj.ContentType != "text/csv" {
 		t.Errorf("ContentType = %q", obj.ContentType)
 	}
@@ -165,11 +177,7 @@ func TestPutObjectBytes_defaultContentType(t *testing.T) {
 	f.put(t, "results", "k", "x")
 
 	// Then: it reads back as S3's default binary type
-	obj, aerr := f.svc.handler.store.getObjectMeta(context.Background(), "results", "k")
-	if aerr != nil {
-		t.Fatalf("meta: %v", aerr)
-	}
-	if obj.ContentType != "application/octet-stream" {
+	if obj := f.meta(t, "results", "k"); obj.ContentType != "application/octet-stream" {
 		t.Errorf("ContentType = %q", obj.ContentType)
 	}
 }
@@ -390,11 +398,7 @@ func TestEnsureBucket_idempotent(t *testing.T) {
 	if first != nil || second != nil {
 		t.Fatalf("EnsureBucket = %v, %v; want nil both times", first, second)
 	}
-	b, aerr := f.svc.handler.store.getBucket(ctx, "warehouse")
-	if aerr != nil {
-		t.Fatalf("get bucket: %v", aerr)
-	}
-	if b.Region != "eu-west-1" {
+	if b := f.bucket(t, "warehouse"); b.Region != "eu-west-1" {
 		t.Errorf("Region = %q", b.Region)
 	}
 }
@@ -422,11 +426,7 @@ func TestEnsureBucket_defaultRegion(t *testing.T) {
 	f.ensureBucket(t, "results")
 
 	// Then: it is created in the service's region
-	b, aerr := f.svc.handler.store.getBucket(context.Background(), "results")
-	if aerr != nil {
-		t.Fatalf("get bucket: %v", aerr)
-	}
-	if b.Region != "us-east-1" {
+	if b := f.bucket(t, "results"); b.Region != "us-east-1" {
 		t.Errorf("Region = %q", b.Region)
 	}
 }

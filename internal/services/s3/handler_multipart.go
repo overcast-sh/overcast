@@ -120,10 +120,7 @@ func (h *Handler) CreateMultipartUpload(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	contentType := r.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = defaultObjectContentType
-	}
+	contentType := objectContentType(r.Header.Get("Content-Type"))
 
 	upload := &MultipartUpload{
 		UploadID:    uuid.New().String(),
