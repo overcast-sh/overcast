@@ -44,7 +44,7 @@ rules that matter most here, as acceptance criteria on every console issue:
 
 ## Service registration and plumbing
 
-Shared by every screen, so it lands first (#W0):
+Shared by every screen, so it lands first (W0, #2085):
 
 - **Browser SDK clients:** `@aws-sdk/client-athena`, `client-glue` and `client-s3tables` in `services/aws-clients.ts`, with API modules under `services/api/`. That keeps the SDK-first policy: no `fetch` for AWS surfaces.
 - **`service-registry.ts` entries:** Athena, Glue Data Catalog and S3 Tables, each with a lucide icon (trademark rule), a `--cat-*` slot, the `analytics` category, sub-nav `children`, dashboard copy and `docKey`.
@@ -253,7 +253,7 @@ of what reads from and writes to what. `internal/router/topology.go` has no
 contributor interface, so the new nodes follow its existing pattern:
 namespace scan, decode struct, and node and edge loops, plus `tsgen` for the
 generated types. Pulling topology contributions out into a per-service interface
-would be a cross-service refactor, and it's filed separately (#W6) rather than
+would be a cross-service refactor, and it's filed separately (W6, #2090) rather than
 smuggled in.
 
 ### Nodes
@@ -330,14 +330,14 @@ acceptance criteria:
 
 | Id | Work | Depends on | Size |
 | --- | --- | --- | --- |
-| W0 | Registry, SDK clients, ARN routes, search contributors, raw-state labels; bus events published by Athena, Glue and S3 Tables | #2064, #2065, #2067 (per service) | M |
-| W1 | Athena workspace: editor, results grid, history, saved queries, workgroups, engine status | W0, #2065 (#2066 for real results) | L |
-| W2 | Glue catalog browser + create-from-S3 wizard | W0, #2064 | M |
-| W3 | S3 Tables console + connect panel + Iceberg snapshot and metadata viewer | W0, #2067 (#2069 for snapshots) | M |
-| W4 | S3 console: tabular, Parquet and Iceberg previews; managed warehouse buckets | #2067 for the badge | S–M |
-| W5 | System map: nodes, edges, overlays and node routes for Athena, Glue and S3 Tables | W0 | M |
-| W6 | Refactor: topology contributor interface (optional, separate) | — | M |
-| W7 | Terminal and agent QoL: `overcast athena query`, MCP tools, sample dataset, engine health | #2066 | M |
+| W0 #2085 | Registry, SDK clients, ARN routes, search contributors, raw-state labels; bus events published by Athena, Glue and S3 Tables | #2064, #2065, #2067 (per service) | M |
+| W1 #2072 | Athena workspace: editor, results grid, history, saved queries, workgroups, engine status | W0, #2065 (#2066 for real results) | L |
+| W2 #2086 | Glue catalog browser + create-from-S3 wizard | W0, #2064 | M |
+| W3 #2087 | S3 Tables console + connect panel + Iceberg snapshot and metadata viewer | W0, #2067 (#2069 for snapshots) | M |
+| W4 #2088 | S3 console: tabular, Parquet and Iceberg previews; managed warehouse buckets | #2067 for the badge | S–M |
+| W5 #2089 | System map: nodes, edges, overlays and node routes for Athena, Glue and S3 Tables | W0 #2085 | M |
+| W6 #2090 | Refactor: topology contributor interface (optional, separate) | — | M |
+| W7 #2091 | Terminal and agent QoL: `overcast athena query`, MCP tools, sample dataset, engine health | #2066 | M |
 
 W1 can build against the inert engine and a stubbed status endpoint. It
 doesn't have to wait for Trino: the result grid is tested against recorded
