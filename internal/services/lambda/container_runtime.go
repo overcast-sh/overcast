@@ -1942,17 +1942,32 @@ func (ci *containerInstance) Invoke(ctx context.Context, event []byte, opts Invo
 		// Cancel the pending invocation so its ResultCh is closed and no
 		// drain goroutine is needed. This also removes the map entry.
 		ci.runtimeAPI.CancelInvocation(reqID)
-		// Same as the crash path: wait for the init's stream to end rather
-		// than for its output to go quiet. A container that is merely being
-		// abandoned by its caller has an init that is still running, so this
-		// returns on its bound — which is why the bound is short.
-		ci.awaitContainerOutputEnd()
 		// Only a deadline is a Lambda timeout. A plain cancellation means the
 		// caller went away — the console closing its progress stream, an SDK
 		// client disconnecting — and labelling that "timeout" sends people
 		// hunting for a handler bug that isn't there, with a REPORT line that
 		// contradicts the function's configured timeout.
 		timedOut := errors.Is(ctx.Err(), context.DeadlineExceeded)
+		if timedOut {
+			// AWS resets the execution environment the instant a function
+			// times out: the handler does not keep running, and nothing it
+			// does afterwards is observable. Kill the container now, before
+			// waiting for its output below — that is what makes the wait end
+			// promptly (the init's log connection drops the moment the
+			// container dies) instead of paying its full bound while the
+			// handler keeps executing and logging past this invocation's
+			// REPORT. A plain cancellation leaves the container running: the
+			// caller merely walked away, and the handler may still finish
+			// normally for whoever reuses this environment next.
+			ci.killTimedOutContainer()
+		}
+		// Same as the crash path: wait for the init's stream to end rather
+		// than for its output to go quiet. A container that is merely being
+		// abandoned by its caller has an init that is still running, so this
+		// returns on its bound — which is why the bound is short. A timed-out
+		// container's init is already dying from the kill above, so this
+		// normally returns almost immediately rather than paying the bound.
+		ci.awaitContainerOutputEnd()
 		outcome := outcomeCrashed
 		if timedOut {
 			outcome = outcomeTimedOut
@@ -2107,6 +2122,32 @@ func (ci *containerInstance) awaitIdleLog() {
 			zap.String("container", shortContainerID(ci.id)),
 			zap.Uint64("awaited_seq", seq),
 			zap.Duration("waited", logSeqWaitMax),
+		)
+	}
+}
+
+// containerKillTimeoutMax bounds the stop call killTimedOutContainer issues
+// at a function's deadline. It stays well under containerOutputEndMax: a
+// Docker daemon slow to answer the kill still leaves the output wait its own
+// full bound to fall back on, so this call cannot make a timeout invoke wait
+// longer overall, only fail to make it end sooner.
+const containerKillTimeoutMax = 1 * time.Second
+
+// killTimedOutContainer stops the container immediately — no grace period —
+// so a handler that overran its timeout cannot keep running, logging, or
+// producing side effects after this invocation's REPORT. AWS resets the
+// execution environment the moment a function times out; this is the
+// emulator's equivalent. Best-effort: a container Docker cannot reach here is
+// still marked unhealthy and torn down once this invocation returns (see
+// Release → closeInstance → Close), just later than ideal, so a failure here
+// is logged and not otherwise acted on.
+func (ci *containerInstance) killTimedOutContainer() {
+	ctx, cancel := context.WithTimeout(context.Background(), containerKillTimeoutMax)
+	defer cancel()
+	if err := ci.docker.StopContainer(ctx, ci.id, 0); err != nil {
+		ci.logger.Debug("lambda container: stop on timeout",
+			zap.String("container", shortContainerID(ci.id)),
+			zap.Error(err),
 		)
 	}
 }
