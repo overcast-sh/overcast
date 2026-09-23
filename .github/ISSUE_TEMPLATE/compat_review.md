@@ -14,6 +14,11 @@ assignees: ''
 **Operation/resource:**
 **Current docs/status:** <!-- e.g. docs/services/sqs.md, STATUS.md, compatibility tracker -->
 
+<!-- Links this issue from the public compatibility report (overcast.sh/compat).
+     Replace the target: <service>[/<group-or-operation>[/<test>]][@<suite>],
+     comma-separated for several. Delete the line if no compat result applies. -->
+<!-- compat:<service>/<operation> -->
+
 ## References
 
 <!-- Add AWS docs first. Add Overcast files/tests if known. -->

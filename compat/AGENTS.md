@@ -1013,6 +1013,44 @@ The aggregate job renders one report three ways, all from
 | **Sticky PR comment** | Digest: counts, pass rate, top issues, link to the run |
 | **Artifacts** | `compat-results.json` + `compat-junit.xml`, 90-day retention; attached to releases |
 
+### The public report
+
+Every release also ships `compat-report.json`, which
+[overcast.sh/compat](https://overcast.sh/compat/) renders as the public
+compatibility report. The release workflow's `compat-report` job builds it from
+the green Compatibility Tests run on the release commit:
+
+```sh
+python3 scripts/compat-issues.py compat-issues.json          # open issues with markers
+go run ./cmd/compat --results-file compat-results.json   --issues-file compat-issues.json   --publish-report compat-report.json --publish-version v0.42.0
+```
+
+`--publish-report` ([cmd/compat/publish.go](../cmd/compat/publish.go)) joins the
+results with the registry, [model/gaps.json](model/gaps.json) and
+[flaky.json](flaky.json), and gives every non-passing cell exactly one reason
+code: `behaviour-mismatch`, `not-emulated`, `quarantined-flaky`,
+`dependency-failed`, `suite-not-written`, `candidate`, `not-reported`,
+`sdk-lacks-api`, `needs-environment` or `other-skip`. Gaps are published as
+`untested`. The schema is [report.schema.json](report.schema.json).
+
+**A new skip or failure wording has to be classified.** A message nothing
+recognises is published as a bare `other-skip`. Add it to `classifyResult` and
+to `TestClassifyResultCoversEveryErrorConvention`.
+
+**Linking a result to its issue.** Put a hidden marker in the body of an open
+issue labelled `compat`:
+
+```html
+<!-- compat:sqs/PurgeQueue -->
+<!-- compat:iam/iam-gen-role/PutRolePermissionsBoundary@rust-sdk, iam/CreateUser -->
+```
+
+A target is `<service>[/<group-or-operation>[/<test>]][@<suite>]`, and each
+result links to the most specific target that matches it. Closing the issue
+retires the link. When an issue cannot carry a marker, add the link to
+[report-issues.json](report-issues.json) instead; a link there beats a marker.
+A quarantined test links to the `issue` in its flaky.json entry.
+
 ---
 
 ### registry.json — canonical test matrix
