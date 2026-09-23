@@ -2,7 +2,7 @@ service: cloudformation
 status: implementation_mismatch
 priority: p0
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-09-06
+last_updated: 2026-09-23
 protocols: [query]
 implementation: [internal/services/cloudformation]
 integration_tests: [tests/integration/cloudformation]
@@ -224,18 +224,33 @@ findings:
       A failed resource's ResourceStatusReason is CloudFormation's "Resource
       handler returned message: … (RequestToken: …, HandlerErrorCode: …)"
       sentence rather than the service's raw XML/JSON error body.
+    - "#73: resourceHandlers (internal/services/cloudformation/provisioner.go) has 141
+      entries — 132 real handlers, 8 stub registrations, and the AWS::SES::ConfigurationSet
+      fail-handler — matching docs/cdk/resource-types.md exactly (regenerated 2026-09-23 by
+      #2080). #540 and #2060, the property-drop sweeps the stale \"audit resource-type
+      tracking\" gap was standing in for, both closed the same day. Resource-type tracking
+      is current; there is nothing further to audit here."
   remaining_gaps:
-    - Audit resource-type tracking against provisioner registrations.
     - Add CloudFormation Ref compatibility tests for resource handlers whose physical ID differs from documented Ref semantics.
     - AWS::EKS::Addon's physical ID uses "/" between cluster name and add-on name; AWS documents "|" ("cluster-name|vpc-cni"). Not fixed here — eksAddonHandler was concurrently owned by another change (#1692).
     - Implement cross-region AWS::SNS::Subscription Region semantics (tracked in #633).
-    - Review update/delete semantics and unsupported-resource stubbing.
     - Add support for S3 EventBridge notifications (#635), lifecycle transition minimum object size (#636), and website redirects/routing rules (#637); CloudFormation currently fails these shapes loudly.
     - AWS::Logs::LogGroup KmsKeyId, DataProtectionPolicy, LogGroupClass, and newer LogGroup properties need underlying CloudWatch Logs API/state support before CloudFormation can forward them.
     - AWS::DynamoDB::Table SSESpecification, PointInTimeRecoverySpecification, DeletionProtectionEnabled, TableClass, KinesisStreamSpecification, ContributorInsightsSpecification, ImportSourceSpecification, ResourcePolicy, and OnDemandThroughput are not forwarded; the underlying DynamoDB emulation has no support for any of them (see docs/services/dynamodb.md), so CloudFormation cannot honestly apply them either. AWS::DynamoDB::GlobalTable inherits the same gap for its shared top-level properties, plus SSE/PITR/ContributorInsights being per-Replica rather than top-level, and offers no cross-region replication (single-region emulator).
     - AWS::KMS::Key Tags and EnableKeyRotation are not applied; see docs/dev/compatibility/services/kms.yaml.
     - Complete Secrets Manager generated-value updates (#678), replica regions (#679), target attachments (#680), and rotation schedules (#681).
-  intentionally_partial: []
+  intentionally_partial:
+    - "#74: unsupported-resource stubbing is documented, not an open gap — every stub and the
+      one deliberate always-fails handler (AWS::SES::ConfigurationSet) are listed in
+      docs/cdk/resource-types.md's Stubs and Fails sections, with what a stub returns and
+      why. What #74's \"review update/delete semantics\" half actually names is broader:
+      restoring in-place resource-side state on update rollback across every
+      resourceUpdater, not just AWS::Lambda::Function's resourceUpdateRollbacker hook
+      (added by #520). That is #639 (open, effort/large) — full audit and implementation
+      across every updater is out of scope for this reconciliation pass; recorded here
+      rather than claimed done. The resource ref-override gap two rows above
+      (\"resource ref overrides for non-name physical ids\", IAM Policy/InstanceProfile/
+      ServiceLinkedRole, Events EventBus/Rule) is separate from both and remains open."
 handoff:
   start_with: [CloudFormation Ref semantics for IAM and EventBridge resource handlers, CreateStack, DeleteStack, resource handlers]
   do_not_redo:
