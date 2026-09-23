@@ -1811,7 +1811,8 @@
         {
           "operation": "FlushApiCache",
           "category": "API Cache",
-          "status": "✅ Supported"
+          "status": "✅ Supported",
+          "notes": "No-op: there is no real cache to flush, matching CreateApiCache storing config only"
         },
         {
           "operation": "CreateType",
@@ -1841,12 +1842,14 @@
         {
           "operation": "AssociateSourceGraphqlApi",
           "category": "Merged APIs",
-          "status": "✅ Supported"
+          "status": "✅ Supported",
+          "notes": "Merges source API schema SDL into the merged API by textual concatenation (schema_parser.go's Merge); resolvers and data sources are not copied or proxied from the source API, so a merged field needs its own resolver/data source defined directly on the merged API to execute. Real AWS AUTO_MERGE additionally carries resolvers and data sources over automatically"
         },
         {
           "operation": "AssociateMergedGraphqlApi",
           "category": "Merged APIs",
-          "status": "✅ Supported"
+          "status": "✅ Supported",
+          "notes": "Same schema-only merge as AssociateSourceGraphqlApi"
         },
         {
           "operation": "GetSourceApiAssociation",
@@ -1871,7 +1874,8 @@
         {
           "operation": "StartSchemaMerge",
           "category": "Merged APIs",
-          "status": "✅ Supported"
+          "status": "✅ Supported",
+          "notes": "Re-runs the same schema-only merge as AssociateSourceGraphqlApi"
         },
         {
           "operation": "CreateApi",
