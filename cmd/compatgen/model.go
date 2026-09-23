@@ -10,7 +10,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strings"
 
+	"github.com/overcast-sh/overcast/internal/awsapi"
 	"github.com/overcast-sh/overcast/internal/awsmodel"
 )
 
@@ -46,6 +48,45 @@ type serviceModel struct {
 // modelMissingHint is what a user reads when a recipe names a service whose
 // shapes are not committed. The generator never falls back to the raw corpus.
 const modelMissingHint = "add the service to models/aws/shapes-services.txt and regenerate the snapshot with `make generate-aws-operations` (see cmd/awsmodelgen/README.md)"
+
+// snapshotServiceFor is the shape-snapshot key for an Overcast service key
+// that has no recipe to state it — an authored scenario's. A recipe says it in
+// its `model` field (secretsmanager's is secrets-manager); an authored scenario
+// has no such field, because the scenario file deliberately carries no
+// per-snapshot naming (compat/model/README.md § Naming) and its `service` must
+// be the hand-written registry group's, which is the Overcast key. So the key
+// is resolved here instead, from the one table that already relates the two:
+// a snapshot named for the service itself wins (kinesis, cloudwatch-logs), and
+// otherwise the one committed snapshot whose model service awsapi.ServiceKey
+// maps onto it (cognito-identity-provider for cognito). None leaves the service
+// its own name, so loadModel refuses it with the instruction to widen the
+// snapshot; more than one is ambiguous and refused here, naming them.
+func snapshotServiceFor(shapesDir, service string) (string, error) {
+	if _, err := os.Stat(filepath.Join(shapesDir, service+".json")); err == nil {
+		return service, nil
+	}
+	files, err := filepath.Glob(filepath.Join(shapesDir, "*.json"))
+	if err != nil {
+		return "", err
+	}
+	var matches []string
+	for _, f := range files {
+		model := strings.TrimSuffix(filepath.Base(f), ".json")
+		if awsapi.ServiceKey(model) == service {
+			matches = append(matches, model)
+		}
+	}
+	switch len(matches) {
+	case 0:
+		return service, nil
+	case 1:
+		return matches[0], nil
+	default:
+		sort.Strings(matches)
+		return "", fmt.Errorf("service %q is the Overcast key of %d committed shape snapshots (%s); an authored scenario cannot say which it means",
+			service, len(matches), strings.Join(matches, ", "))
+	}
+}
 
 // loadModel reads models/aws/shapes/<modelService>.json.
 func loadModel(shapesDir, modelService string) (*serviceModel, error) {

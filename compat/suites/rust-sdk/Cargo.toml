@@ -13,6 +13,12 @@ aws-sdk-batch = "=1.126.0"
 # release of the same vintage as its neighbours below, so it resolves under the
 # aws-smithy-runtime-api and aws-smithy-types pins without moving them.
 aws-sdk-cloudwatchlogs = "=1.57.0"
+# G6 wave 1 (#1116): the authored cognito-userpools scenario is the first thing
+# this suite runs against Cognito user pools, so the crate is added with it.
+# 1.59.0 was published the same day as aws-sdk-kinesis 1.52.0 and declares
+# identical requirements (aws-smithy-types ^1.2.9, aws-smithy-runtime-api
+# ^1.7.3), which the exact pins below meet.
+aws-sdk-cognitoidentityprovider = "=1.59.0"
 aws-sdk-dynamodb = "=1.56.0"
 aws-sdk-elasticloadbalancing = "=1.111.0"
 aws-sdk-eventbridge = "=1.54.0"

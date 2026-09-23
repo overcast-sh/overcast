@@ -849,7 +849,7 @@ emitted source from it through the same emitters. `-check` covers it: the file
 itself is never rewritten, but the source and the registry entry produced from
 it are.
 
-Three things the generator checks that a generated file cannot need, because a
+Four things the generator checks that a generated file cannot need, because a
 human wrote the names:
 
 - **The names are the registry's.** The group is `<group>` or
@@ -858,6 +858,13 @@ human wrote the names:
   `compat/baseline/`, `compat/flaky.json`, `compat/parity-debt.json` and the
   dashboard's history, so a scenario that quietly renamed a test would soak
   green and then orphan one baseline entry *per suite* on the flip.
+- **The `service` is the registry group's.** It is the Overcast key the
+  hand-written entry carries, not the shape snapshot's, and the two can differ:
+  `cognito-userpools` is service `cognito`, whose shapes are
+  `cognito-identity-provider.json`. A recipe states that in its `model` field;
+  an authored scenario has no recipe, so the generator reads the snapshot named
+  for the service if there is one, and otherwise the one committed snapshot
+  whose model service `awsapi.ServiceKey` aliases onto it.
 - **The `client` block is the model's.** The interpreters build their client
   from it, so a stale copy is a scenario talking to the wrong wire format.
 - **Every call is the model's.** An unknown operation, or a member the
