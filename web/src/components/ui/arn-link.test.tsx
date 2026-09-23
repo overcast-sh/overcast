@@ -4,7 +4,7 @@
  * Events page to auto-link resource ARNs (see internal/events.Event.ResourceARN
  * on the Go side and event-console.tsx's JsonString on the web side).
  *
- * resolveArn/resolveService are not exported, so these tests go through the
+ * Resolution itself lives in arn-routes.ts; these tests go through the
  * public component API and assert on rendered output — an anchor with the
  * expected href for a recognised service, and plain (non-link) text for an
  * unrecognised one.
@@ -55,6 +55,28 @@ describe("ArnLink", () => {
     )
     const link = container.querySelector("a")
     expect(link?.getAttribute("href")).toContain("/lambda/my-fn")
+  })
+
+  it.each([
+    [
+      "a state machine",
+      "arn:aws:states:us-east-1:000000000000:stateMachine:orders:2",
+      "/stepfunctions/orders",
+    ],
+    [
+      "an execution",
+      "arn:aws:states:us-east-1:000000000000:execution:orders:run-1",
+      "/stepfunctions/execution/orders/run-1",
+    ],
+    ["an IAM role", "arn:aws:iam::000000000000:role/service/app-role", "/iam?tab=roles&q=app-role"],
+    [
+      "a log stream",
+      "arn:aws:logs:us-east-1:000000000000:log-group:/aws/lambda/fn:log-stream:2026/09/22/abc",
+      "/cloudwatch/logs/stream?groupName=%2Faws%2Flambda%2Ffn&streamName=2026%2F09%2F22%2Fabc",
+    ],
+  ])("links %s ARN to its page", async (_, arn, href) => {
+    const { container } = await renderRouted(() => <ArnLink arn={arn} />, "/")
+    expect(container.querySelector("a")?.getAttribute("href")).toContain(href)
   })
 
   it("renders plain text (no link) for a service with no mapped UI route", async () => {

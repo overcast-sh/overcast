@@ -22,6 +22,7 @@ import {
 } from "../execution-trace"
 import { eventCategory, historyEventFailure, type EventCategory } from "../format"
 import { EventType } from "./event-type"
+import { ErrorCause } from "./error-cause"
 import { JsonPane } from "./json-pane"
 
 type Category = "all" | EventCategory
@@ -205,12 +206,7 @@ function EventDetail({ event }: { event: HistoryEvent }) {
   )
   return (
     <div className="flex flex-col gap-3">
-      {failure.error && (
-        <p className="text-xs text-danger">
-          <span className="font-mono font-semibold">{failure.error}</span>
-          {failure.cause ? ` — ${failure.cause}` : ""}
-        </p>
-      )}
+      {failure.error && <ErrorCause error={failure.error} cause={failure.cause} />}
       {payloads.length > 0 && (
         <div className={cn("grid gap-3", payloads.length > 1 && "md:grid-cols-2")}>
           {payloads.map((k) => (

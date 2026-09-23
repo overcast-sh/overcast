@@ -1930,6 +1930,11 @@ func (ci *containerInstance) Invoke(ctx context.Context, event []byte, opts Invo
 		ci.emitInvocationEnd(reqID, outcomeCrashed, elapsed, ci.reportMemoryMB(memSample), 0, traceID)
 		return nil, fmt.Errorf("lambda container exited unexpectedly (exit code %s) — check container logs for details", exitCode)
 	case <-ctx.Done():
+		// The invocation ended here, at the deadline or the cancellation.
+		// Measured before the output wait below: a still-running container
+		// makes that wait last its whole bound, and counting it reported a
+		// 3 s timeout as "Duration: 5000 ms".
+		elapsed := ci.clk.Now().Sub(start)
 		if waitCancel != nil {
 			waitCancel()
 		}
@@ -1942,7 +1947,6 @@ func (ci *containerInstance) Invoke(ctx context.Context, event []byte, opts Invo
 		// abandoned by its caller has an init that is still running, so this
 		// returns on its bound — which is why the bound is short.
 		ci.awaitContainerOutputEnd()
-		elapsed := ci.clk.Now().Sub(start)
 		// Only a deadline is a Lambda timeout. A plain cancellation means the
 		// caller went away — the console closing its progress stream, an SDK
 		// client disconnecting — and labelling that "timeout" sends people

@@ -22,7 +22,7 @@ import { Tabs, TabList, Tab, TabPanel } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { DefinitionCard, Definition } from "@/components/ui/definition-card"
 import { PageHeader, Spinner, EmptyState, SectionLabel } from "@/components/ui/primitives"
-import { ArnText } from "@/components/ui/arn-link"
+import { ArnLink, ArnText } from "@/components/ui/arn-link"
 import { cn } from "@/lib/utils"
 import { executionStatusVariant, formatTimestamp } from "@/features/stepfunctions/format"
 import { parseDefinition } from "../asl"
@@ -507,8 +507,23 @@ export function StateMachineDetail({ name, tab: requestedTab, onTabChange }: Pro
             <Definition label="Type" value={machine?.type} />
             <Definition label="Status" value={machine?.status} />
             <Definition label="Created" value={formatTimestamp(machine?.creationDate)} />
-            <Definition label="Role" value={machine?.roleArn} copyable />
+            <Definition
+              label="Role"
+              value={machine?.roleArn && <ArnLink arn={machine.roleArn} />}
+              copyable={machine?.roleArn}
+            />
             <Definition label="Logging" value={machine?.loggingConfiguration?.level} />
+            {machine?.loggingConfiguration?.destinations
+              ?.map((d) => d.cloudWatchLogsLogGroup?.logGroupArn)
+              .filter((arn): arn is string => Boolean(arn))
+              .map((arn) => (
+                <Definition
+                  key={arn}
+                  label="Log group"
+                  value={<ArnLink arn={arn} />}
+                  copyable={arn}
+                />
+              ))}
             <Definition
               label="Tracing"
               value={machine?.tracingConfiguration?.enabled ? "Enabled" : "Disabled"}

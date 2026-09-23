@@ -29,6 +29,8 @@ export const lambdaKeys = {
   all: () => [...endpointStore.getKeys(), "lambda"] as const,
   runtimes: () => [...lambdaKeys.all(), "runtimes"] as const,
   functions: () => [...lambdaKeys.all(), "functions"] as const,
+  function: (name: string, region = "") =>
+    [...lambdaKeys.functions(), "detail", name, region] as const,
   source: () => [...lambdaKeys.all(), "source"] as const,
   sourceFiles: (name: string) => [...lambdaKeys.source(), name] as const,
   sourceFile: (name: string, file: string) => [...lambdaKeys.all(), "source", name, file] as const,
@@ -59,6 +61,21 @@ export function lambdaFunctionsQueryOptions() {
   return queryOptions({
     queryKey: lambdaKeys.functions(),
     queryFn: () => lambda.listFunctions(),
+  })
+}
+
+/**
+ * One function's configuration — for a page that only knows its name, such as
+ * a Step Functions Task that called it. Not retried: a function that does not
+ * exist is an answer, not a transient failure.
+ */
+export function lambdaFunctionQueryOptions(name: string, region?: string) {
+  return queryOptions({
+    queryKey: lambdaKeys.function(name, region),
+    queryFn: () => lambda.getFunction(name, region),
+    enabled: name !== "",
+    retry: false,
+    staleTime: 30_000,
   })
 }
 
@@ -190,11 +207,13 @@ export function putTestEventMutationOptions() {
       functionName,
       eventName,
       body,
+      region,
     }: {
       functionName: string
       eventName: string
       body: string
-    }): Promise<SavedTestEvent> => lambda.putTestEvent(functionName, eventName, body),
+      region?: string
+    }): Promise<SavedTestEvent> => lambda.putTestEvent(functionName, eventName, body, region),
   })
 }
 

@@ -3,6 +3,7 @@ package lambda
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"strings"
 	"testing"
@@ -121,6 +122,42 @@ func TestContainerInstanceInvoke_callerCancellationIsNotAFunctionTimeout(t *test
 	report := reportLine(t, ci)
 	if !strings.HasSuffix(report, "Status: error") {
 		t.Errorf("REPORT should end in Status: error, got %q", report)
+	}
+}
+
+// TestContainerInstanceInvoke_timeoutReportsTheTimeoutAsItsDuration pins that
+// a timed-out invocation's REPORT measures the invocation, not the wait for
+// its container's output afterwards. The wait used to be counted: a function
+// with a 3 s timeout reported "Duration: 5000 ms  Billed Duration: 5001 ms",
+// the timeout plus the whole containerOutputEndMax bound, since the container
+// is still running (and so its log stream still open) when the deadline fires.
+func TestContainerInstanceInvoke_timeoutReportsTheTimeoutAsItsDuration(t *testing.T) {
+	// Given: an invocation bounded by a 1 s function timeout, in a container
+	// whose init is still connected — its log stream open, as it is when the
+	// handler is merely slow rather than dead.
+	ci := newStalledContainerInstance(t)
+	ci.logSink.mu.Lock()
+	ci.logSink.openStreams = 1
+	ci.logSink.mu.Unlock()
+	invokeCtx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	// When: the function never answers.
+	_, _ = ci.Invoke(invokeCtx, []byte(`{}`), InvokeOptions{})
+
+	// Then: the REPORT's duration is the timeout, not the timeout plus the
+	// output wait that followed it.
+	report := reportLine(t, ci)
+	var duration float64
+	for _, field := range strings.Split(report, "\t") {
+		if strings.HasPrefix(field, "Duration: ") {
+			if _, err := fmt.Sscanf(field, "Duration: %f ms", &duration); err != nil {
+				t.Fatalf("unreadable Duration field %q: %v", field, err)
+			}
+		}
+	}
+	if duration < 1000 || duration >= 1000+float64(containerOutputEndMax.Milliseconds())/2 {
+		t.Errorf("REPORT Duration should be about the 1000 ms timeout, got %.2f ms in %q", duration, report)
 	}
 }
 

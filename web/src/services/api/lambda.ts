@@ -154,10 +154,15 @@ export const lambda = {
       `/lambda/functions/${encodeURIComponent(name)}/test-events`,
     ).then((r) => r.events),
 
-  putTestEvent: (functionName: string, eventName: string, body: string) =>
+  /** `region` saves it against another region's function than the console's. */
+  putTestEvent: (functionName: string, eventName: string, body: string, region?: string) =>
     apiFetch<SavedTestEvent>(
       `/lambda/functions/${encodeURIComponent(functionName)}/test-events/${encodeURIComponent(eventName)}`,
-      { method: "PUT", body: JSON.stringify({ body }) },
+      {
+        method: "PUT",
+        body: JSON.stringify({ body }),
+        ...(region ? { headers: { "x-overcast-region": region } } : {}),
+      },
     ),
 
   deleteTestEvent: (functionName: string, eventName: string) =>
@@ -175,8 +180,8 @@ export const lambda = {
   createFunction: async (params: CreateFunctionCommandInput) =>
     await awsClients.lambda().send(new CreateFunctionCommand(params)),
 
-  getFunction: async (name: string) => {
-    const res = await awsClients.lambda().send(new GetFunctionCommand({ FunctionName: name }))
+  getFunction: async (name: string, region?: string) => {
+    const res = await awsClients.lambda(region).send(new GetFunctionCommand({ FunctionName: name }))
     return res.Configuration ?? {}
   },
 

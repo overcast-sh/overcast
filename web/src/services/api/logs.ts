@@ -155,9 +155,11 @@ export const logs = {
       logStreamNamePrefix?: string
       nextToken?: string
       limit?: number
+      /** Read another region's group than the console's own. */
+      region?: string
     } = {},
   ) => {
-    const res = await awsClients.logs().send(
+    const res = await awsClients.logs(opts.region).send(
       new FilterLogEventsCommand({
         logGroupName: groupName,
         ...(opts.filterPattern ? { filterPattern: opts.filterPattern } : {}),

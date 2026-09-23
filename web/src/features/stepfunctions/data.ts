@@ -1,5 +1,7 @@
 import { queryOptions, mutationOptions } from "@tanstack/react-query"
 import { stepfunctions } from "@/services/api/stepfunctions"
+import { logs } from "@/services/api"
+import { logsKeys } from "@/features/cloudwatch/logs/data"
 import { endpointStore } from "@/services/endpoint-store"
 
 // ─── Key factory ───────────────────────────────────────────────────────────
@@ -96,6 +98,44 @@ export function sfnExecutionHistoryQueryOptions(executionArn: string, live = fal
     queryFn: () => stepfunctions.getExecutionHistory(executionArn),
     enabled: executionArn !== "",
     refetchInterval: live ? LIVE_POLL_MS : false,
+  })
+}
+
+/** The most log events read for one Task's attempts — far more than one invocation writes. */
+export const TASK_LOG_LIMIT = 5000
+
+/**
+ * A function's log events across the window a Task's attempts ran in. A window
+ * with no end is one whose attempt is still running: it reads up to now and
+ * keeps polling, so the invocation's lines stream in, under a key that does
+ * not move with the clock.
+ */
+export function sfnTaskLogsQueryOptions(
+  groupName: string,
+  window: { startMs: number; endMs?: number },
+  region?: string,
+) {
+  const live = window.endMs === undefined
+  return queryOptions({
+    queryKey: [
+      ...logsKeys.filter(groupName),
+      "sfn-task",
+      region ?? "",
+      window.startMs,
+      window.endMs ?? "live",
+    ] as const,
+    queryFn: () =>
+      logs.filterEvents(groupName, {
+        startTime: window.startMs,
+        ...(window.endMs !== undefined ? { endTime: window.endMs } : {}),
+        limit: TASK_LOG_LIMIT,
+        region,
+      }),
+    enabled: groupName !== "",
+    retry: false,
+    // A settled window still polls until its end has passed: its slack is
+    // there for lines CloudWatch Logs delivers after the attempt settled.
+    refetchInterval: () => (live || Date.now() <= (window.endMs ?? 0) ? LIVE_POLL_MS * 2 : false),
   })
 }
 
