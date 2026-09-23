@@ -58,6 +58,7 @@ func All() []ServiceGroup {
 		Shield().named("shield"),
 		ElastiCache().named("elasticache"),
 		EFS().named("efs"),
+		S3Tables().named("s3tables"),
 		AppConfigData().named("appconfigdata"),
 		OpenSearch().named("opensearch"),
 		AppConfig().named("appconfig"),

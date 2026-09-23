@@ -68,5 +68,6 @@ func handWritten(c *clients.Clients) []ServiceGroup {
 		Shield(c).named("shield"),
 		ElastiCache(c).named("elasticache"),
 		EFS(c).named("efs"),
+		S3Tables(c).named("s3tables"),
 	}
 }

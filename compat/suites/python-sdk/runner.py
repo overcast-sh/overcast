@@ -62,6 +62,7 @@ from groups import (
     waf,
     shield,
     efs,
+    s3tables,
 )
 
 SUITE = "python-sdk"
@@ -112,6 +113,7 @@ _modules = [
     waf,
     shield,
     efs,
+    s3tables,
 ]
 
 all_setup: dict = {}
