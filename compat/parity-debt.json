@@ -430,6 +430,12 @@
     },
     {
       "suite": "dotnet-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "tests": 11
+    },
+    {
+      "suite": "dotnet-sdk",
       "service": "kinesis",
       "group": "kinesis-records",
       "tests": 4
@@ -931,6 +937,12 @@
       "service": "eks",
       "group": "eks-tags",
       "tests": 4
+    },
+    {
+      "suite": "java-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "tests": 11
     },
     {
       "suite": "java-sdk",
@@ -1789,6 +1801,12 @@
       "service": "eventbridge",
       "group": "eventbridge-target-fanout",
       "tests": 3
+    },
+    {
+      "suite": "rust-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "tests": 11
     },
     {
       "suite": "rust-sdk",
