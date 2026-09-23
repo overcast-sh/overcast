@@ -2,7 +2,8 @@ import * as PopoverPrimitive from "@radix-ui/react-popover"
 import { Database } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CopyButton } from "@/components/ui/copy-button"
-import type { GridColumn } from "@/components/data-grid/row-source"
+import type { DataColumn } from "@/lib/data-sources/row-source"
+import type { TabularKind } from "../preview-kind"
 import { athenaSql } from "../athena-sql"
 
 /**
@@ -24,8 +25,8 @@ export function AthenaQuery({
 }: {
   bucket: string
   objectKey: string
-  format: "csv" | "tsv" | "jsonl" | "parquet"
-  columns: readonly GridColumn[]
+  format: TabularKind
+  columns: readonly DataColumn[]
   delimiter?: string
 }) {
   const sql = athenaSql({ bucket, objectKey, format, columns, delimiter })
@@ -46,14 +47,19 @@ export function AthenaQuery({
         >
           <p className="text-[13px] text-fg-muted">
             To sort or filter the whole file, query it. This SQL makes a table over the object’s
-            folder and selects from it; run it with <code className="font-mono text-xs">aws athena</code>{" "}
-            against this emulator.
+            folder and selects from it; run it with{" "}
+            <code className="font-mono text-xs">aws athena</code> against this emulator.
           </p>
           <div className="relative">
             <pre className="max-h-64 overflow-auto rounded-control border border-border bg-bg-muted p-2 pr-9 font-mono text-xs leading-relaxed text-fg">
               {sql}
             </pre>
-            <CopyButton value={sql} noun="Athena SQL" tone="inline" className="absolute top-2 right-2" />
+            <CopyButton
+              value={sql}
+              noun="Athena SQL"
+              tone="inline"
+              className="absolute top-2 right-2"
+            />
           </div>
         </PopoverPrimitive.Content>
       </PopoverPrimitive.Portal>

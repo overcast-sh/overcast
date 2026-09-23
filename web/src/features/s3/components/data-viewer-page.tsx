@@ -9,7 +9,7 @@ import { formatBytes } from "@/lib/format"
 import { s3 } from "@/services/api"
 import { s3ObjectMetaQueryOptions } from "../data"
 import { describeObjectReadError } from "../object-read-error"
-import { dataPreviewKind } from "../preview-kind"
+import { dataPreviewKind, isTabularKind } from "../preview-kind"
 import { DataFilePreview } from "./data-file-preview"
 
 /**
@@ -32,11 +32,12 @@ export function DataViewerPage({
   row?: number
 }) {
   const navigate = useNavigate()
-  const { data: metadata, error, isLoading } = useQuery(
-    s3ObjectMetaQueryOptions(bucket, objectKey, versionId),
-  )
+  const {
+    data: metadata,
+    error,
+    isLoading,
+  } = useQuery(s3ObjectMetaQueryOptions(bucket, objectKey, versionId))
   const kind = metadata ? dataPreviewKind(metadata.contentType, objectKey) : null
-  const tabular = kind === "csv" || kind === "tsv" || kind === "jsonl" || kind === "parquet"
   const objectHref = {
     to: "/s3/$bucket/objects/$" as const,
     params: { bucket, _splat: objectKey },
@@ -94,7 +95,7 @@ export function DataViewerPage({
         >
           {describeObjectReadError(error, versionId)}
         </div>
-      ) : metadata && tabular ? (
+      ) : metadata && isTabularKind(kind) ? (
         <DataFilePreview
           kind={kind}
           bucket={bucket}

@@ -1,6 +1,6 @@
 import type { AsyncBuffer, Compressors, FileMetaData, SchemaElement, SchemaTree } from "hyparquet"
-import type { GridColumn } from "@/components/data-grid/row-source"
-import { RangeScheduler } from "./range-scheduler"
+import type { DataColumn } from "./row-source"
+import type { RangeScheduler } from "./range-scheduler"
 
 /**
  * Random access into a Parquet object, for the data worker.
@@ -63,27 +63,23 @@ async function loadCompressors(): Promise<Compressors> {
  * cache when they were read before.
  *
  * The length comes from the HeadObject the console has already made, so there
- * is no probe request.
+ * is no probe request. `signal` aborts every slice read through the buffer —
+ * one buffer per row read, so a block scrolled past stops fetching.
  */
-export function schedulerAsyncBuffer(scheduler: RangeScheduler, byteLength: number): AsyncBuffer {
+export function schedulerAsyncBuffer(
+  scheduler: RangeScheduler,
+  byteLength: number,
+  signal?: AbortSignal,
+): AsyncBuffer {
   return {
     byteLength,
     async slice(start: number, end?: number): Promise<ArrayBuffer> {
-      const bytes = await scheduler.read(start, end ?? byteLength)
+      const bytes = await scheduler.read(start, end ?? byteLength, signal)
       // A copy: the scheduler hands out views of a coalesced response, and
       // hyparquet wants an ArrayBuffer of its own.
       return bytes.slice().buffer
     },
   }
-}
-
-/** An `AsyncBuffer` straight over a URL — the scheduler with its defaults. */
-export function rangeAsyncBuffer(
-  url: string,
-  byteLength: number,
-  fetchImpl: typeof fetch = fetch,
-): AsyncBuffer {
-  return schedulerAsyncBuffer(new RangeScheduler(url, fetchImpl), byteLength)
 }
 
 export interface ParquetField {
@@ -93,7 +89,7 @@ export interface ParquetField {
 }
 
 export interface ParquetHead {
-  columns: GridColumn[]
+  columns: DataColumn[]
   /** The schema, for the Schema view: name, type and nullability per column. */
   fields: ParquetField[]
   numRows: number
@@ -196,7 +192,7 @@ export async function readParquetRows(
 }
 
 /** A schema column as the grid describes it: its type, alignment and formatting hints. */
-export function gridColumn(node: SchemaTree): GridColumn {
+export function gridColumn(node: SchemaTree): DataColumn {
   const e = node.element
   const logical = e.logical_type
   const decimal = logical?.type === "DECIMAL" || e.converted_type === "DECIMAL"

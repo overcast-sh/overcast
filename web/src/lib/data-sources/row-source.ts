@@ -13,7 +13,7 @@
  * per-row object churn a million-row scroll would otherwise make.
  */
 
-export interface GridColumn {
+export interface DataColumn {
   name: string
   /** Declared type, where the format has one — shown under the name. */
   type?: string
@@ -43,16 +43,19 @@ export interface RowBlock {
   columns: (ArrayLike<unknown> | undefined)[]
 }
 
+export type IndexingState =
+  /** Reading through the object in the background. */
+  | "running"
+  /** Stopped at the per-run byte limit; `continueIndexing()` reads on. */
+  | "paused-limit"
+  /** `Save-Data` is on: the file is indexed only as far as it is scrolled. */
+  | "on-demand"
+  | "done"
+  | "error"
+
 /** Where a text source's background indexing has got to. */
 export interface IndexingStatus {
-  state:
-    | "running"
-    /** Stopped at the per-run byte limit; `continueIndexing()` reads on. */
-    | "paused-limit"
-    /** `Save-Data` is on: the file is indexed only as far as it is scrolled. */
-    | "on-demand"
-    | "done"
-    | "error"
+  state: IndexingState
   rows: number
   bytes: number
   totalBytes: number
@@ -60,7 +63,7 @@ export interface IndexingStatus {
 }
 
 export interface RowSource {
-  readonly columns: readonly GridColumn[]
+  readonly columns: readonly DataColumn[]
   readonly rowCount: RowCount
   /** Rows per block. Blocks start at multiples of it. */
   readonly blockSize: number
@@ -88,7 +91,7 @@ export interface RowSource {
     signal: AbortSignal,
     onPartial?: (block: RowBlock) => void,
   ): Promise<RowBlock>
-  /** Called when the row count or indexing status changes. Returns an unsubscribe. */
+  /** Called when the row count, the indexing status or `changed` moves. Returns an unsubscribe. */
   subscribe(listener: () => void): () => void
   /** Reads on past a paused index — the byte limit, or on-demand mode near its end. */
   continueIndexing?(): void
@@ -104,4 +107,16 @@ export function isAbortError(error: unknown): boolean {
   return error instanceof DOMException
     ? error.name === "AbortError"
     : error instanceof Error && error.name === "AbortError"
+}
+
+/**
+ * The file does not read as the table its name promised: an unclosed quote,
+ * JSON Lines records of different shapes. The preview shows the raw text
+ * with this message rather than a grid that misreads the file.
+ */
+export class NotTabularError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "NotTabularError"
+  }
 }

@@ -1,4 +1,4 @@
-import type { GridColumn } from "./row-source"
+import type { DataColumn } from "@/lib/data-sources/row-source"
 
 /**
  * Turning a cell's value into text, at the last moment.
@@ -21,6 +21,9 @@ import type { GridColumn } from "./row-source"
 export const CELL_CHARS = 500
 export const INSPECT_CHARS = 64 * 1024
 
+/** One character of JetBrains Mono at 12 px: what the grid's widths are measured in. */
+export const MONO_CHAR_WIDTH = 7.25
+
 export type CellKind = "value" | "null" | "absent" | "empty"
 
 export interface FormattedCell {
@@ -30,44 +33,17 @@ export interface FormattedCell {
   clipped?: boolean
 }
 
-/** A number as a CSV spells it: optional sign, digits, point, exponent. */
-const NUMERIC_TEXT = /^[-+]?(\d+(\.\d*)?|\.\d+)([eE][-+]?\d+)?$/
-
-/**
- * True when every non-empty value is a number (and there is at least one), so
- * the column right-aligns. Leading zeros make it text: `007` and `02134` are
- * identifiers, and right-aligning them reads as arithmetic.
- *
- * `numericText: false` is for typed sources (JSON), where `"42"` is a string
- * someone chose to quote and is not a number however it reads.
- */
-export function isNumericColumn(
-  values: ArrayLike<unknown>,
-  { numericText = true }: { numericText?: boolean } = {},
-): boolean {
-  let seen = false
-  for (let i = 0; i < values.length; i++) {
-    const value = values[i]
-    if (value === null || value === undefined || value === "") continue
-    if (typeof value === "number" || typeof value === "bigint") {
-      seen = true
-      continue
-    }
-    if (typeof value !== "string" || !numericText) return false
-    const trimmed = value.trim()
-    if (!NUMERIC_TEXT.test(trimmed) || /^[-+]?0\d/.test(trimmed)) return false
-    seen = true
-  }
-  return seen
-}
-
 /** A cell as the grid draws it: one line, at most `CELL_CHARS`. */
-export function formatCell(value: unknown, column?: GridColumn): FormattedCell {
+export function formatCell(value: unknown, column?: DataColumn): FormattedCell {
   return cellText(value, column, CELL_CHARS)
 }
 
 /** The value as text, up to `limit` characters — `INSPECT_CHARS` for the inspector. */
-export function cellText(value: unknown, column?: GridColumn, limit = INSPECT_CHARS): FormattedCell {
+export function cellText(
+  value: unknown,
+  column?: DataColumn,
+  limit = INSPECT_CHARS,
+): FormattedCell {
   if (value === null) return { kind: "null", text: "NULL" }
   if (value === undefined) return { kind: "absent", text: "" }
   if (value === "") return { kind: "empty", text: "empty" }
@@ -78,14 +54,14 @@ export function cellText(value: unknown, column?: GridColumn, limit = INSPECT_CH
 }
 
 /** What a cell puts on the clipboard: the value, `NULL` for a NULL, nothing for absence. */
-export function clipboardText(value: unknown, column?: GridColumn): string {
+export function clipboardText(value: unknown, column?: DataColumn): string {
   const cell = cellText(value, column)
   if (cell.kind !== "value") return cell.kind === "null" ? "NULL" : ""
   // TSV: a tab or a line break inside a value would split it.
   return cell.text.replace(/[\t\n\r]+/g, " ")
 }
 
-function valueText(value: unknown, column?: GridColumn): string {
+function valueText(value: unknown, column?: DataColumn): string {
   if (typeof value === "string") return value
   if (typeof value === "number") {
     if (column?.scale !== undefined && Number.isFinite(value)) return value.toFixed(column.scale)
@@ -153,10 +129,9 @@ export function prettyJson(value: unknown): string {
  * cannot make a column the width of the screen. The user resizes from there.
  */
 export function sampleColumnWidth(
-  column: GridColumn,
+  column: DataColumn,
   sample: ArrayLike<unknown> | undefined,
 ): number {
-  const CHAR = 7.25 // JetBrains Mono at 12px
   const PADDING = 26
   let longest = Math.max(column.name.length, (column.type?.length ?? 0) * 0.92)
   if (sample) {
@@ -167,5 +142,5 @@ export function sampleColumnWidth(
       if (length > longest) longest = length
     }
   }
-  return Math.round(Math.min(Math.max(longest * CHAR + PADDING, 64), 320))
+  return Math.round(Math.min(Math.max(longest * MONO_CHAR_WIDTH + PADDING, 64), 320))
 }

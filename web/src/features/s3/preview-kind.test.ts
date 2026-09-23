@@ -1,9 +1,4 @@
-import {
-  dataPreviewKind,
-  isIcebergMetadataKey,
-  isTabularKind,
-  isTextDataKind,
-} from "./preview-kind"
+import { dataPreviewKind, isIcebergMetadataKey, isTabularKind, kindLabel } from "./preview-kind"
 
 describe("dataPreviewKind", () => {
   it.each([
@@ -54,16 +49,6 @@ describe("isIcebergMetadataKey", () => {
   })
 })
 
-describe("isTextDataKind", () => {
-  it("reads the text formats through the window and the binary ones not", () => {
-    expect(isTextDataKind("csv")).toBe(true)
-    expect(isTextDataKind("iceberg-metadata")).toBe(true)
-    expect(isTextDataKind("parquet")).toBe(false)
-    expect(isTextDataKind("avro")).toBe(false)
-    expect(isTextDataKind(null)).toBe(false)
-  })
-})
-
 describe("isTabularKind", () => {
   it.each([
     ["csv", true],
@@ -75,5 +60,15 @@ describe("isTabularKind", () => {
     [null, false],
   ] as const)("%s is tabular: %s", (kind, tabular) => {
     expect(isTabularKind(kind)).toBe(tabular)
+  })
+})
+
+describe("kindLabel", () => {
+  it.each([
+    ["csv", "CSV"],
+    ["jsonl", "JSON Lines"],
+    ["iceberg-metadata", "Iceberg metadata"],
+  ] as const)("names %s %s", (kind, label) => {
+    expect(kindLabel(kind)).toBe(label)
   })
 })

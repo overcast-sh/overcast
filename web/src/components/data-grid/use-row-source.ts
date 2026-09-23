@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
-import type { RowSource } from "./row-source"
+import type { RowSource } from "@/lib/data-sources/row-source"
 
 export interface RowSourceState<S extends RowSource> {
   source: S | null

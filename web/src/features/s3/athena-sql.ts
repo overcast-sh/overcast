@@ -1,4 +1,5 @@
-import type { GridColumn } from "@/components/data-grid/row-source"
+import type { DataColumn } from "@/lib/data-sources/row-source"
+import type { TabularKind } from "./preview-kind"
 
 /**
  * The SQL *Query with Athena* offers for a data file: a `CREATE EXTERNAL
@@ -24,8 +25,8 @@ export function athenaSql({
 }: {
   bucket: string
   objectKey: string
-  format: "csv" | "tsv" | "jsonl" | "parquet"
-  columns: readonly GridColumn[]
+  format: TabularKind
+  columns: readonly DataColumn[]
   delimiter?: string
 }): string {
   const folder = objectKey.includes("/") ? objectKey.slice(0, objectKey.lastIndexOf("/") + 1) : ""
@@ -44,14 +45,16 @@ export function athenaSql({
       storage = "ROW FORMAT SERDE 'org.openx.data.jsonserde.JsonSerDe'"
       break
     default: {
-      const separator = (delimiter ?? (format === "tsv" ? "\t" : ",")) === "\t" ? "\\t" : (delimiter ?? ",")
+      const separator =
+        (delimiter ?? (format === "tsv" ? "\t" : ",")) === "\t" ? "\\t" : (delimiter ?? ",")
       storage = [
         "ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.OpenCSVSerde'",
         `WITH SERDEPROPERTIES ('separatorChar' = '${separator}', 'quoteChar' = '"')`,
       ].join("\n")
     }
   }
-  const header = format === "csv" || format === "tsv" ? "\nTBLPROPERTIES ('skip.header.line.count' = '1')" : ""
+  const header =
+    format === "csv" || format === "tsv" ? "\nTBLPROPERTIES ('skip.header.line.count' = '1')" : ""
   return `CREATE EXTERNAL TABLE ${table} (
 ${defs}
 )
@@ -65,7 +68,7 @@ FROM ${table}
 LIMIT 100;`
 }
 
-function athenaType(column: GridColumn, format: string): string {
+function athenaType(column: DataColumn, format: string): string {
   if (format === "csv" || format === "tsv") return "string"
   if (format === "jsonl") return column.numeric ? "double" : "string"
   const t = (column.type ?? "").toUpperCase()
@@ -79,7 +82,10 @@ function athenaType(column: GridColumn, format: string): string {
   if (t === "BOOLEAN") return "boolean"
   if (t.startsWith("LIST<")) return "array<string>"
   if (t.startsWith("STRUCT<")) {
-    const fields = (column.type ?? "").slice(7, -1).split(",").map((f) => f.trim())
+    const fields = (column.type ?? "")
+      .slice(7, -1)
+      .split(",")
+      .map((f) => f.trim())
     return `struct<${fields.map((f) => `${f}:string`).join(",")}>`
   }
   if (t.startsWith("MAP<")) return "map<string,string>"
@@ -88,7 +94,10 @@ function athenaType(column: GridColumn, format: string): string {
 
 /** A table name Athena accepts unquoted: lowercase letters, digits and underscores. */
 function identifier(name: string): string {
-  const id = name.toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, "")
+  const id = name
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, "_")
+    .replace(/^_+|_+$/g, "")
   return /^[0-9]/.test(id) ? `t_${id}` : id || "data"
 }
 

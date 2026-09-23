@@ -26,7 +26,9 @@ export function bytesObject(content: string | Uint8Array): ByteSource {
  * computed, never stored, so a five-million-row file costs no memory to serve.
  * Row `i` is `id,name,amount` with `id = i`.
  */
-export function syntheticCsv(rows: number): ByteSource & { header: string; rowText(i: number): string } {
+export function syntheticCsv(
+  rows: number,
+): ByteSource & { header: string; rowText(i: number): string } {
   const header = "id,name,amount\n"
   const rowText = (i: number) => {
     const id = String(i).padStart(9, "0")
@@ -80,9 +82,13 @@ export interface FakeFetch {
 /**
  * A `fetch` over one object. A full GET streams it in `chunk`-byte pieces
  * (pulled lazily, so a cancelled stream stops generating); a Range GET
- * answers 206 with exactly those bytes.
+ * answers 206 with exactly those bytes. Every response carries `etag()`, so a
+ * test can overwrite the object mid-read by changing what it returns.
  */
-export function fakeFetch(object: ByteSource, { chunk = 256 * 1024 } = {}): FakeFetch {
+export function fakeFetch(
+  object: ByteSource,
+  { chunk = 256 * 1024, etag = () => '"v1"' }: { chunk?: number; etag?: () => string } = {},
+): FakeFetch {
   const requests: FakeRequest[] = []
   let ranged = 0
   let streamed = 0
@@ -97,22 +103,26 @@ export function fakeFetch(object: ByteSource, { chunk = 256 * 1024 } = {}): Fake
       requests.push({ range: [start, end] })
       if (!range[2]) {
         // An open-ended range: a stream from `start`.
-        return Promise.resolve(streamResponse(object, start, chunk, signal, (n) => (streamed += n)))
+        return Promise.resolve(
+          streamResponse(object, start, { chunk, etag: etag(), signal }, (n) => (streamed += n)),
+        )
       }
       const body = object.read(start, Math.min(end, object.size))
       ranged += body.length
       return Promise.resolve(
         new Response(body.slice(), {
           status: 206,
-          headers: { "Content-Range": `bytes ${start}-${end - 1}/${object.size}` },
+          headers: { "Content-Range": `bytes ${start}-${end - 1}/${object.size}`, ETag: etag() },
         }),
       )
     }
     requests.push({})
-    return Promise.resolve(streamResponse(object, 0, chunk, signal, (n) => (streamed += n)))
+    return Promise.resolve(
+      streamResponse(object, 0, { chunk, etag: etag(), signal }, (n) => (streamed += n)),
+    )
   }
   return {
-    fetch: impl as typeof fetch,
+    fetch: impl,
     requests,
     rangedBytes: () => ranged,
     streamedBytes: () => streamed,
@@ -122,8 +132,7 @@ export function fakeFetch(object: ByteSource, { chunk = 256 * 1024 } = {}): Fake
 function streamResponse(
   object: ByteSource,
   from: number,
-  chunk: number,
-  signal: AbortSignal | null | undefined,
+  { chunk, etag, signal }: { chunk: number; etag: string; signal?: AbortSignal | null },
   count: (n: number) => void,
 ): Response {
   let pos = from
@@ -144,5 +153,5 @@ function streamResponse(
       controller.enqueue(bytes)
     },
   })
-  return new Response(stream, { status: from > 0 ? 206 : 200 })
+  return new Response(stream, { status: from > 0 ? 206 : 200, headers: { ETag: etag } })
 }

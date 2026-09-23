@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { http, HttpResponse } from "msw"
-import { render, screen, userEvent, waitFor, within } from "@/test/render"
+import { stubLayout } from "@/components/data-grid/testing/layout"
+import { render, renderWithRouter, screen, userEvent, waitFor, within } from "@/test/render"
 import { server } from "@/test/server"
 // Type-only, so referencing it inside the hoisted vi.mock factory is legal.
 import type * as ApiModule from "@/services/api"
@@ -260,12 +261,12 @@ describe("ObjectPreviewDialog > text preview", () => {
 
   it("previews a text-like object larger than the fetch window", async () => {
     // The size of the *fetch* is capped by the Range request, not by refusing
-    // the object: a 5 MiB log previews as its first 1 MiB, labelled as such.
+    // the object: a 5 MB log previews as its first 1 MB, labelled as such.
     api.preview = { text: "first lines of a big log", truncated: true }
     renderText(5 * 1024 * 1024)
 
     expect(await screen.findByText("first lines of a big log")).toBeInTheDocument()
-    expect(await screen.findByText(/first 1 MiB/)).toBeInTheDocument()
+    expect(await screen.findByText(/first 1 MB/)).toBeInTheDocument()
     expect(screen.queryByText(/Preview is available for/)).not.toBeInTheDocument()
   })
 
@@ -274,7 +275,7 @@ describe("ObjectPreviewDialog > text preview", () => {
     renderText(12)
 
     expect(await screen.findByText("all twelve b.")).toBeInTheDocument()
-    expect(screen.queryByText(/first 1 MiB/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/first 1 MB/)).not.toBeInTheDocument()
   })
 })
 
@@ -463,11 +464,14 @@ function serveObject(content: string | Uint8Array, etag = '"v1"') {
   return bytes.length
 }
 
+/** The dialog inside a router, as the bucket page renders it: *Open in viewer* is a link. */
 function renderObject(
   objectKey: string,
   over: { contentType?: string; contentLength?: number; onClose?: () => void } = {},
 ) {
-  return render(
+  // A laid-out viewport, so the grid has rows and columns to render.
+  stubLayout()
+  return renderWithRouter(() => (
     <ObjectPreviewDialog
       bucket="lake"
       objectKey={objectKey}
@@ -479,8 +483,8 @@ function renderObject(
       loading={false}
       onSelectVersion={() => {}}
       onClose={over.onClose ?? (() => {})}
-    />,
-  )
+    />
+  ))
 }
 
 const ORDERS_CSV = 'id,name,amount\n1,Ada,19.99\n2,"",5\n'
@@ -491,13 +495,11 @@ describe("ObjectPreviewDialog > CSV and TSV", () => {
     api.preview = { text: ORDERS_CSV, truncated: false }
   })
 
-  it("holds a static skeleton while the first rows are on their way", () => {
+  it("holds a static skeleton while the first rows are on their way", async () => {
     // No handler answers, so the object never arrives.
-    server.use(
-      http.get(/\/download/, () => new Promise<never>(() => {})),
-    )
+    server.use(http.get(/\/download/, () => new Promise<never>(() => {})))
     renderObject("orders.csv", { contentLength: 100 })
-    expect(screen.getByRole("status")).toHaveTextContent("loading first rows")
+    expect(await screen.findByRole("status")).toHaveTextContent("loading first rows")
     expect(screen.queryByRole("grid")).not.toBeInTheDocument()
   })
 
@@ -507,9 +509,9 @@ describe("ObjectPreviewDialog > CSV and TSV", () => {
     const grid = await screen.findByRole("grid", { name: /Rows of orders.csv/ })
     expect(within(grid).getByRole("columnheader", { name: /name/ })).toBeInTheDocument()
     expect(await within(grid).findByText("Ada")).toBeInTheDocument()
-    // An empty field is a token, told apart from NULL and from a value.
-    expect(within(grid).getByLabelText("empty string")).toHaveTextContent("empty")
-    expect(within(grid).queryByLabelText("null")).not.toBeInTheDocument()
+    // An empty field is a token, named for what it is, and told apart from NULL.
+    expect(within(grid).getByRole("gridcell", { name: "empty string" })).toBeInTheDocument()
+    expect(within(grid).queryByRole("gridcell", { name: "NULL" })).not.toBeInTheDocument()
     expect(await screen.findByText(/rows 1–2 of 2$/)).toBeInTheDocument()
   })
 
@@ -545,7 +547,9 @@ describe("ObjectPreviewDialog > CSV and TSV", () => {
     api.preview = { text: broken, truncated: false }
     const size = serveObject(broken)
     renderObject("broken.csv", { contentLength: size })
-    expect(await screen.findByText(/Shown as text: A quoted field is never closed/)).toBeInTheDocument()
+    expect(
+      await screen.findByText(/Shown as text: A quoted field is never closed/),
+    ).toBeInTheDocument()
     expect(await screen.findByText(/never closed,1/)).toBeInTheDocument()
     expect(screen.queryByRole("grid")).not.toBeInTheDocument()
   })
@@ -585,7 +589,7 @@ describe("ObjectPreviewDialog > JSON Lines", () => {
     const size = serveObject('{"id":1,"email":null,"name":"a"}\n{"id":2,"email":"b@x"}\n')
     renderObject("users.jsonl", { contentLength: size })
     const grid = await screen.findByRole("grid")
-    expect(await within(grid).findByLabelText("null")).toHaveTextContent("NULL")
+    expect(await within(grid).findByRole("gridcell", { name: "NULL" })).toBeInTheDocument()
     expect(within(grid).getByText("b@x")).toBeInTheDocument()
     // A key the record omits is neither NULL nor an empty string.
     expect(within(grid).getByTitle("Not present in this record")).toHaveTextContent("not present")
@@ -654,9 +658,9 @@ describe("ObjectPreviewDialog > Parquet", () => {
 })
 
 describe("ObjectPreviewDialog > Avro", () => {
-  it("says the file is not previewed rather than showing nothing", () => {
+  it("says the file is not previewed rather than showing nothing", async () => {
     renderObject("orders/metadata/snap-1.avro")
-    expect(screen.getByText("Avro — not previewed")).toBeInTheDocument()
+    expect(await screen.findByText("Avro — not previewed")).toBeInTheDocument()
     expect(screen.getByRole("link", { name: /Download instead/ })).toBeInTheDocument()
     expect(screen.queryByText(/Preview is available for/)).not.toBeInTheDocument()
   })

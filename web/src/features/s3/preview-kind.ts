@@ -1,9 +1,10 @@
 /**
  * Which data-file preview an object gets, if any.
  *
- * - `csv`, `tsv`, `jsonl` — text, read through the 1 MiB window, shown as a
- *   table with a toggle back to the raw text;
- * - `parquet` — binary, read by Range: the footer, then the first row group;
+ * - `csv`, `tsv`, `jsonl` — text, streamed and indexed into the `DataGrid`,
+ *   with a toggle back to the raw text (its opening window);
+ * - `parquet` — binary, read by Range into the `DataGrid`: the footer, then
+ *   only the rows and columns in view;
  * - `avro` — binary and not decoded here; the dialog says so instead of
  *   offering nothing, since Iceberg's manifests and manifest lists are Avro and
  *   are exactly what a developer browsing a table's `metadata/` prefix opens;
@@ -17,31 +18,35 @@
  */
 export type DataPreviewKind = "csv" | "tsv" | "jsonl" | "parquet" | "avro" | "iceberg-metadata"
 
+/** The kinds shown as rows in the `DataGrid`. */
+export type TabularKind = "csv" | "tsv" | "jsonl" | "parquet"
+
 interface KindTraits {
+  /** The format's name, as the preview's badge shows it. */
+  label: string
   /** Key extensions that name the kind, lowercase and without the dot. */
   extensions: readonly string[]
   /** Media types that name the kind, whatever the key says. */
   contentTypes: readonly string[]
-  /** `text` through the preview window, `range` by the file's own structure, `none` not read. */
-  read: "text" | "range" | "none"
-  /** Shown as a table of rows, which is what widens the dialog. */
+  /** Shown as rows in the grid, which is what widens the dialog. */
   tabular: boolean
 }
 
 const KINDS: Record<DataPreviewKind, KindTraits> = {
   csv: {
+    label: "CSV",
     extensions: ["csv"],
     contentTypes: ["text/csv", "application/csv"],
-    read: "text",
     tabular: true,
   },
   tsv: {
+    label: "TSV",
     extensions: ["tsv", "tab"],
     contentTypes: ["text/tab-separated-values"],
-    read: "text",
     tabular: true,
   },
   jsonl: {
+    label: "JSON Lines",
     extensions: ["jsonl", "ndjson"],
     contentTypes: [
       "application/x-ndjson",
@@ -50,20 +55,20 @@ const KINDS: Record<DataPreviewKind, KindTraits> = {
       "application/x-jsonlines",
       "application/jsonlines",
     ],
-    read: "text",
     tabular: true,
   },
   parquet: {
+    label: "Parquet",
     extensions: ["parquet", "parq", "pqt"],
     contentTypes: [
       "application/vnd.apache.parquet",
       "application/x-parquet",
       "application/parquet",
     ],
-    read: "range",
     tabular: true,
   },
   avro: {
+    label: "Avro",
     extensions: ["avro"],
     contentTypes: [
       "avro/binary",
@@ -71,12 +76,16 @@ const KINDS: Record<DataPreviewKind, KindTraits> = {
       "application/x-avro",
       "application/vnd.apache.avro",
     ],
-    read: "none",
     tabular: false,
   },
   // Named by its key alone (see isIcebergMetadataKey): by content type and
   // extension it is plain JSON.
-  "iceberg-metadata": { extensions: [], contentTypes: [], read: "text", tabular: false },
+  "iceberg-metadata": {
+    label: "Iceberg metadata",
+    extensions: [],
+    contentTypes: [],
+    tabular: false,
+  },
 }
 
 function lookup(pick: (traits: KindTraits) => readonly string[]): Map<string, DataPreviewKind> {
@@ -106,12 +115,12 @@ export function isIcebergMetadataKey(key: string): boolean {
   return name.endsWith(".metadata.json") && !name.endsWith(".gz.metadata.json")
 }
 
-/** The kinds read as text through the preview window. */
-export function isTextDataKind(kind: DataPreviewKind | null): boolean {
-  return kind !== null && KINDS[kind].read === "text"
+/** The kinds shown as rows in the grid. */
+export function isTabularKind(kind: DataPreviewKind | null): kind is TabularKind {
+  return kind !== null && KINDS[kind].tabular
 }
 
-/** The kinds shown as a table of rows. */
-export function isTabularKind(kind: DataPreviewKind | null): boolean {
-  return kind !== null && KINDS[kind].tabular
+/** The format's name for a badge: "CSV", "JSON Lines". */
+export function kindLabel(kind: DataPreviewKind): string {
+  return KINDS[kind].label
 }

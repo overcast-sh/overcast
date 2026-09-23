@@ -2,7 +2,9 @@ import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { parquetMetadata, type AsyncBuffer } from "hyparquet"
 import { formatCell } from "@/components/data-grid/cell-format"
-import { openParquet, rangeAsyncBuffer, readParquetRows } from "./parquet-reader"
+import { HttpReadError } from "./http-read"
+import { openParquet, readParquetRows, schedulerAsyncBuffer } from "./parquet-reader"
+import { RangeScheduler } from "./range-scheduler"
 
 // orders.parquet: 5 rows in two row groups (3 + 2), one column per type
 // family; orders.zstd.parquet: the same rows as ZSTD. Regenerate both with
@@ -96,9 +98,15 @@ describe("readParquetRows", () => {
     // and nothing of the first group, nor any other column of the second.
     expect(reads.some((r) => overlaps(r, chunkSpan(1, 1)))).toBe(true)
     for (let c = 0; c < meta.row_groups[0].columns.length; c++) {
-      expect(reads.some((r) => overlaps(r, chunkSpan(0, c))), `group 0, column ${c}`).toBe(false)
+      expect(
+        reads.some((r) => overlaps(r, chunkSpan(0, c))),
+        `group 0, column ${c}`,
+      ).toBe(false)
       if (c !== 1) {
-        expect(reads.some((r) => overlaps(r, chunkSpan(1, c))), `group 1, column ${c}`).toBe(false)
+        expect(
+          reads.some((r) => overlaps(r, chunkSpan(1, c))),
+          `group 1, column ${c}`,
+        ).toBe(false)
       }
     }
   })
@@ -176,31 +184,31 @@ describe("readParquetRows", () => {
   })
 })
 
-describe("rangeAsyncBuffer", () => {
+describe("schedulerAsyncBuffer", () => {
+  const over = (fetchImpl: typeof fetch, size: number) =>
+    schedulerAsyncBuffer(new RangeScheduler("/obj", fetchImpl), size)
+
   it("asks for exactly the slice as an inclusive byte range", async () => {
-    const fetchImpl = vi.fn((_url: string, _init?: RequestInit) =>
+    // Given: a server that answers any range with three bytes
+    const fetchImpl = vi.fn<typeof fetch>(() =>
       Promise.resolve(new Response(new Uint8Array([1, 2, 3]), { status: 206 })),
     )
-    const buffer = rangeAsyncBuffer("/obj", 100, fetchImpl as unknown as typeof fetch)
-    const slice = await buffer.slice(10, 13)
+    // When: hyparquet slices bytes 10 to 13
+    const slice = await over(fetchImpl, 100).slice(10, 13)
+    // Then: one request for bytes=10-12, and its bytes as an ArrayBuffer
     expect(new Uint8Array(slice)).toEqual(new Uint8Array([1, 2, 3]))
-    const init = fetchImpl.mock.calls[0][1]
-    expect(new Headers(init?.headers).get("Range")).toBe("bytes=10-12")
+    expect(new Headers(fetchImpl.mock.calls[0][1]?.headers).get("Range")).toBe("bytes=10-12")
   })
 
   it("cuts the slice out of a server that ignored the range and sent everything", async () => {
     const whole = Uint8Array.from({ length: 20 }, (_, i) => i)
-    const fetchImpl = (() =>
-      Promise.resolve(new Response(whole, { status: 200 }))) as unknown as typeof fetch
-    const slice = await rangeAsyncBuffer("/obj", 20, fetchImpl).slice(5, 8)
+    const fetchImpl: typeof fetch = () => Promise.resolve(new Response(whole, { status: 200 }))
+    const slice = await over(fetchImpl, 20).slice(5, 8)
     expect(new Uint8Array(slice)).toEqual(new Uint8Array([5, 6, 7]))
   })
 
   it("carries the HTTP status on a failed read", async () => {
-    const fetchImpl = (() =>
-      Promise.resolve(new Response("", { status: 403 }))) as unknown as typeof fetch
-    await expect(rangeAsyncBuffer("/obj", 20, fetchImpl).slice(0, 4)).rejects.toMatchObject({
-      status: 403,
-    })
+    const fetchImpl: typeof fetch = () => Promise.resolve(new Response("", { status: 403 }))
+    await expect(over(fetchImpl, 20).slice(0, 4)).rejects.toEqual(new HttpReadError(403))
   })
 })

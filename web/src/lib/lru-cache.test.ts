@@ -52,4 +52,32 @@ describe("LruCache", () => {
     expect(cache.get("not-json")).toBeNull()
     expect(cache.get("never-seen")).toBeUndefined()
   })
+
+  it("stores an entry past a quarter of the budget when the share limit is lifted", () => {
+    const cache = new LruCache<string>(100, { maxEntryShare: Infinity })
+    cache.put("giant", "G", 90)
+    expect(cache.get("giant")).toBe("G")
+  })
+
+  it("never evicts a pinned entry, even when it is the oldest", () => {
+    // Given: a full cache whose oldest entry is pinned
+    const cache = new LruCache<string, number>(20, {
+      maxEntryShare: 1,
+      isPinned: (key) => key === 1,
+    })
+    cache.put(1, "pinned", 10)
+    cache.put(2, "B", 10)
+    // When: another entry needs room
+    cache.put(3, "C", 10)
+    // Then: the next-oldest unpinned entry goes instead
+    expect(cache.keys()).toEqual([1, 3])
+  })
+
+  it("reads an entry with peek without making it the most recent", () => {
+    const cache = new LruCache<string>(100)
+    cache.put("a", "A", 1)
+    cache.put("b", "B", 1)
+    cache.peek("a")
+    expect(cache.keys()).toEqual(["a", "b"])
+  })
 })

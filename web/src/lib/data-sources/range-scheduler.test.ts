@@ -1,4 +1,5 @@
-import { isAbortError } from "@/components/data-grid/row-source"
+import { HttpReadError } from "./http-read"
+import { isAbortError } from "./row-source"
 import { RangeScheduler } from "./range-scheduler"
 
 const KB = 1024
@@ -123,13 +124,35 @@ describe("RangeScheduler", () => {
   })
 
   it("reports an object that changed under it", async () => {
+    // Given: an object whose second response carries a new ETag
     const s = server(4 * 1024 * KB, { etags: ['"v1"', '"v2"'] })
-    const scheduler = new RangeScheduler("/o", s.fetchImpl)
     const changed = vi.fn()
-    scheduler.onChanged = changed
+    const scheduler = new RangeScheduler("/o", s.fetchImpl, { onChanged: changed })
     await scheduler.read(0, KB)
     expect(changed).not.toHaveBeenCalled()
+    // When: a read sees the new ETag
     await scheduler.read(1024 * KB, 1025 * KB)
+    // Then: the change is reported once
     expect(changed).toHaveBeenCalledOnce()
+  })
+
+  it("stops serving the old object's bytes once the ETag moves", async () => {
+    // Given: a cached range of the first version
+    const s = server(4 * 1024 * KB, { etags: ['"v1"', '"v2"'] })
+    const scheduler = new RangeScheduler("/o", s.fetchImpl)
+    await scheduler.read(0, 100 * KB)
+    // When: another read reveals the object was overwritten
+    await scheduler.read(1024 * KB, 1025 * KB)
+    // Then: a read inside the old range goes back to the server
+    await scheduler.read(10 * KB, 20 * KB)
+    expect(s.calls).toHaveLength(3)
+  })
+
+  it("fails a read the server refuses with the status", async () => {
+    // Given: a server that answers 403
+    const refuse = (() => Promise.resolve(new Response(null, { status: 403 }))) as typeof fetch
+    const scheduler = new RangeScheduler("/o", refuse)
+    // When / Then: the read rejects with an HttpReadError naming it
+    await expect(scheduler.read(0, KB)).rejects.toEqual(new HttpReadError(403))
   })
 })

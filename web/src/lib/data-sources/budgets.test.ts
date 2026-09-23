@@ -1,7 +1,12 @@
-import { BlockCache, DEFAULT_CACHE_BYTES } from "@/components/data-grid/block-cache"
-import type { RowSource } from "@/components/data-grid/row-source"
-import { BLOCK_ROWS, openParquetSource, openTextSource } from "./sources"
+import { BlockCache } from "@/components/data-grid/block-cache"
+import { formatCount } from "@/lib/format"
+import { BLOCK_ROWS } from "./base-source"
+import { DEFAULT_CACHE_BYTES } from "./device-profile"
+import { openParquetSource } from "./parquet-source"
+import type { RowSource } from "./row-source"
+import { openTextSource } from "./text-source"
 import { bytesObject, fakeFetch, syntheticCsv } from "./testing/fake-object"
+import { indexSettled } from "./testing/source-helpers"
 import { inProcessDataWorker } from "./worker-port"
 
 /**
@@ -19,19 +24,6 @@ const report: string[] = []
 afterAll(() => {
   console.info(`\nData grid budgets\n${report.map((line) => `  ${line}`).join("\n")}\n`)
 })
-
-function settled(source: RowSource) {
-  return new Promise<void>((resolve) => {
-    const check = () => {
-      if (source.indexing?.state !== "running") {
-        stop()
-        resolve()
-      }
-    }
-    const stop = source.subscribe(check)
-    check()
-  })
-}
 
 describe("budgets: a five-million-row CSV", () => {
   const ROWS = 5_000_000
@@ -51,7 +43,9 @@ describe("budgets: a five-million-row CSV", () => {
     })
     const first = await source.getRows(0, 40, [], new AbortController().signal)
     const elapsed = performance.now() - began
-    report.push(`CSV ${ROWS.toLocaleString("en-US")} rows (${(csv.size / 1e6).toFixed(0)} MB): first rows in ${elapsed.toFixed(0)} ms`)
+    report.push(
+      `CSV ${formatCount(ROWS)} rows (${(csv.size / 1e6).toFixed(0)} MB): first rows in ${elapsed.toFixed(0)} ms`,
+    )
     expect(first.columns[0]?.[39]).toBe("000000039")
     expect(elapsed).toBeLessThan(300)
     // The first 64 KB by range, and the indexer's stream — nothing else.
@@ -61,9 +55,11 @@ describe("budgets: a five-million-row CSV", () => {
 
   it("indexes the whole file into a few thousand offsets", async () => {
     const began = performance.now()
-    await settled(source)
+    await indexSettled(source)
     const elapsed = performance.now() - began
-    report.push(`CSV: indexed ${ROWS.toLocaleString("en-US")} rows in ${(elapsed / 1000).toFixed(1)} s (in-process)`)
+    report.push(
+      `CSV: indexed ${formatCount(ROWS)} rows in ${(elapsed / 1000).toFixed(1)} s (in-process)`,
+    )
     expect(source.rowCount).toEqual({ value: ROWS, exact: true })
   }, 120_000)
 
@@ -78,7 +74,9 @@ describe("budgets: a five-million-row CSV", () => {
       expect(block.columns[0]?.[0]).toBe(String(row).padStart(9, "0"))
     }
     const requests = fake.requests.length - before
-    report.push(`CSV: ${positions.length} jumps anywhere in the file, ${requests} requests, slowest block ${worst.toFixed(0)} ms`)
+    report.push(
+      `CSV: ${positions.length} jumps anywhere in the file, ${requests} requests, slowest block ${worst.toFixed(0)} ms`,
+    )
     expect(requests).toBe(positions.length)
   })
 
@@ -92,7 +90,12 @@ describe("budgets: a five-million-row CSV", () => {
       cache.pin([block])
       cache.set(
         block,
-        await source.getRows(block * BLOCK_ROWS, (block + 1) * BLOCK_ROWS, [], new AbortController().signal),
+        await source.getRows(
+          block * BLOCK_ROWS,
+          (block + 1) * BLOCK_ROWS,
+          [],
+          new AbortController().signal,
+        ),
       )
     }
     const heapAfter = process.memoryUsage().heapUsed
@@ -142,7 +145,7 @@ describe("budgets: a 200-column Parquet file", () => {
     const read = performance.now() - readBegan
     const readRequests = fake.requests.length - openRequests
     report.push(
-      `Parquet ${COLUMNS} columns × ${ROWS.toLocaleString("en-US")} rows (${(object.size / 1e6).toFixed(1)} MB): opened in ${opened.toFixed(0)} ms with ${openRequests} request(s); 8 columns × 1,000 rows in ${read.toFixed(0)} ms with ${readRequests} request(s), ${(fake.rangedBytes() / 1e3).toFixed(0)} KB read in all`,
+      `Parquet ${formatCount(COLUMNS)} columns × ${formatCount(ROWS)} rows (${(object.size / 1e6).toFixed(1)} MB): opened in ${opened.toFixed(0)} ms with ${openRequests} request(s); 8 columns × 1,000 rows in ${read.toFixed(0)} ms with ${readRequests} request(s), ${(fake.rangedBytes() / 1e3).toFixed(0)} KB read in all`,
     )
     expect(block.columns[3]?.[0]).toBe(12_000 * COLUMNS + 3)
     expect(block.columns[8]).toBeUndefined()

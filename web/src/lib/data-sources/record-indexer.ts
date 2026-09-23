@@ -1,3 +1,5 @@
+import { utf8BomLength } from "./byte-order-mark"
+
 /**
  * The sparse byte-offset index of a CSV, TSV or JSON Lines file.
  *
@@ -18,8 +20,9 @@
  *
  * Records end at LF, CRLF or a lone CR; a blank line is not a record, a record
  * holding only `""` is one, and a leading UTF-8 BOM is skipped. Offsets are
- * absolute positions in the object, so an index paused at a byte limit
- * resumes from `resumeState()` with a Range request.
+ * absolute positions in the object, and the indexer keeps its place mid-record
+ * between pushes — so an index paused at a byte limit resumes by pushing the
+ * bytes from `bytes` on, fetched with an open-ended Range request.
  */
 
 const LF = 0x0a
@@ -33,15 +36,6 @@ export interface IndexerOptions {
   delimiter: number | null
   /** The first record is a header, not data (CSV/TSV). */
   header: boolean
-}
-
-export interface IndexerState {
-  /** Absolute offset the next pushed chunk starts at. */
-  position: number
-  /** Data records seen so far. */
-  rows: number
-  /** Whether the header has been passed. */
-  headerDone: boolean
 }
 
 export class RecordIndexer {
@@ -63,20 +57,9 @@ export class RecordIndexer {
   private pendingCR = false
   private headerDone: boolean
 
-  constructor(options: IndexerOptions, resume?: IndexerState) {
+  constructor(options: IndexerOptions) {
     this.options = options
     this.headerDone = !options.header
-    if (resume) {
-      this.position = resume.position
-      this.recordStart = resume.position
-      this.rows = resume.rows
-      this.headerDone = resume.headerDone
-    }
-  }
-
-  /** Where a resumed index should start reading: after the last complete record. */
-  resumeState(): IndexerState {
-    return { position: this.recordStart, rows: this.rows, headerDone: this.headerDone }
   }
 
   /** Offset just past the last complete record. */
@@ -95,13 +78,10 @@ export class RecordIndexer {
   }
 
   push(chunk: Uint8Array): void {
-    let i = 0
     const n = chunk.length
     const base = this.position
-    if (base === 0 && n >= 3 && chunk[0] === 0xef && chunk[1] === 0xbb && chunk[2] === 0xbf) {
-      i = 3
-      this.recordStart = 3
-    }
+    let i = base === 0 ? utf8BomLength(chunk) : 0
+    if (i > 0) this.recordStart = i
     const delimiter = this.options.delimiter
     for (; i < n; i++) {
       const b = chunk[i]

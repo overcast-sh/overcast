@@ -1,4 +1,10 @@
-import { MAX_FIELD_CHARS, columnNames, parseDelimited, sniffDelimiter } from "./delimited-parse"
+import {
+  MAX_FIELD_CHARS,
+  columnNames,
+  parseDelimited,
+  recordFields,
+  sniffDelimiter,
+} from "./delimited-parse"
 
 const parse = (text: string, over: { delimiter?: string; truncated?: boolean } = {}) =>
   parseDelimited(text, {
@@ -72,19 +78,30 @@ describe("parseDelimited", () => {
       ["a", "b"],
       ["1", "2"],
     ])
-    expect(result.recordCount).toBe(2)
   })
 
   it("drops the unterminated last line of a truncated window", () => {
     expect(parse("a,b\n1,2\n3,", { truncated: true }).records).toHaveLength(2)
   })
 
-  it("keeps records only up to the limit but counts them all", () => {
+  it("stops reading at the record limit", () => {
+    // Given: a header and fifty records
     const text = "h\n" + Array.from({ length: 50 }, (_, i) => `${i}\n`).join("")
+    // When: it is parsed with room for ten
     const result = parseDelimited(text, { delimiter: ",", maxRecords: 10, truncated: false })
-    expect(result.records).toHaveLength(10)
-    expect(result.recordCount).toBe(51)
-    expect(result.consumedChars).toBe(text.length)
+    // Then: the first ten come back, the header among them
+    expect(result.records.map((r) => r[0])).toEqual([
+      "h",
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+    ])
   })
 
   it("clips a huge field instead of holding all of it", () => {
@@ -92,7 +109,6 @@ describe("parseDelimited", () => {
     const result = parse(`a,b\n${huge},1\n`)
     expect(result.records[1][0]).toHaveLength(MAX_FIELD_CHARS)
     expect(result.records[1][1]).toBe("1")
-    expect(result.clippedFields).toBe(1)
   })
 
   it("splits on tabs for TSV", () => {
@@ -125,5 +141,14 @@ describe("sniffDelimiter", () => {
 describe("columnNames", () => {
   it("names blank headers, suffixes repeats and names extra fields", () => {
     expect(columnNames(["a", "", "a"], 4)).toEqual(["a", "column_2", "a_2", "column_4"])
+  })
+})
+
+describe("recordFields", () => {
+  it("turns records into columns, padding a short record with empty strings", () => {
+    expect(recordFields([["a", "b"], ["c"]], 2)).toEqual([
+      ["a", "c"],
+      ["b", ""],
+    ])
   })
 })

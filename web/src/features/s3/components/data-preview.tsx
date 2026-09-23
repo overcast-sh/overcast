@@ -7,22 +7,12 @@ import { EmptyState } from "@/components/ui/primitives"
 import { HighlightedCode } from "@/components/ui/highlighted-code"
 import { SkeletonRows } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
-import type { DataPreviewKind } from "../preview-kind"
 
 /**
  * The frame every S3 preview shares — the panel, its notices, the view toggle,
  * the raw text — and the Avro notice. The data-file previews themselves (a
  * `DataGrid` over CSV, TSV, JSON Lines or Parquet) are in `data-file-preview.tsx`.
  */
-
-export const KIND_LABEL: Record<DataPreviewKind, string> = {
-  csv: "CSV",
-  tsv: "TSV",
-  jsonl: "JSON Lines",
-  parquet: "Parquet",
-  avro: "Avro",
-  "iceberg-metadata": "Iceberg metadata",
-}
 
 // ─── Frame ────────────────────────────────────────────────────────────────
 

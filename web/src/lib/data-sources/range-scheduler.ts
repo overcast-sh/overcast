@@ -1,13 +1,14 @@
-import { abortError } from "@/components/data-grid/row-source"
+import { abortError } from "./row-source"
+import { checkedResponse, rangeHeader } from "./http-read"
 
 /**
  * Every ranged GET a data worker makes goes through one scheduler, which does
  * three things a naive `fetch` per read would not:
  *
- * - **Coalesces.** Reads queued together whose ranges are adjacent or nearly
- *   so (a gap under `gap`, 64 KB) become one request. A Parquet row group's
- *   column chunks usually sit side by side, so six visible columns are one
- *   request, not six.
+ * - **Coalesces.** Reads queued in the same turn whose ranges are adjacent or
+ *   nearly so (a gap under `gap`, 64 KB) become one request. A Parquet row
+ *   group's column chunks usually sit side by side, so six visible columns
+ *   are one request, not six.
  * - **Caps concurrency** at `maxInFlight` (4). Browsers allow about six
  *   HTTP/1.1 connections per host and the rest of the console needs some; the
  *   indexer's stream, when there is one, holds one of the four.
@@ -16,9 +17,10 @@ import { abortError } from "@/components/data-grid/row-source"
  *   again. A read inside any cached range is a hit.
  *
  * It also watches the object's `ETag`. The first response fixes it; a later
- * response that disagrees means the object was overwritten while open, and
- * `onChanged` fires so the grid can say *file changed — reload* instead of
- * stitching rows from two different files together.
+ * one that disagrees means the object was overwritten while open. The cached
+ * bytes belong to the old object, so they are dropped, and `onChanged` fires
+ * so the grid can say *file changed — reload* instead of stitching rows from
+ * two different files together.
  *
  * A read whose signal aborts is dropped from its request; a request nobody is
  * waiting for any more is aborted.
@@ -31,6 +33,8 @@ export interface SchedulerOptions {
   /** Never merge into a request larger than this. */
   maxRequest?: number
   cacheBytes?: number
+  /** The object's ETag moved: it was overwritten while open. */
+  onChanged?: () => void
 }
 
 interface Waiter {
@@ -38,8 +42,7 @@ interface Waiter {
   end: number
   resolve: (bytes: Uint8Array) => void
   reject: (error: unknown) => void
-  signal?: AbortSignal
-  done: boolean
+  settled: boolean
 }
 
 interface Request {
@@ -50,22 +53,20 @@ interface Request {
 }
 
 export class RangeScheduler {
+  /** Requests actually sent — the number the budgets and the PR quote. */
+  requests = 0
   readonly url: string
   private readonly fetchImpl: typeof fetch
   private readonly maxInFlight: number
   private readonly gap: number
   private readonly maxRequest: number
-  private readonly cacheBytes: number
+  private readonly onChanged?: () => void
+  private readonly cache: RangeCache
   private queue: Waiter[] = []
   private readonly inFlight = new Set<Request>()
   private reserved = 0
   private flushScheduled = false
-  private readonly cache: { start: number; end: number; bytes: Uint8Array }[] = []
-  private cached = 0
-  /** Requests actually sent — for tests and for the measurements in the PR. */
-  requests = 0
-  etag: string | undefined
-  onChanged: (() => void) | undefined
+  private etag: string | undefined
 
   constructor(url: string, fetchImpl: typeof fetch, options: SchedulerOptions = {}) {
     this.url = url
@@ -73,38 +74,25 @@ export class RangeScheduler {
     this.maxInFlight = options.maxInFlight ?? 4
     this.gap = options.gap ?? 64 * 1024
     this.maxRequest = options.maxRequest ?? 8 * 1024 * 1024
-    this.cacheBytes = options.cacheBytes ?? 32 * 1024 * 1024
+    this.cache = new RangeCache(options.cacheBytes ?? 32 * 1024 * 1024)
+    this.onChanged = options.onChanged
   }
 
   /** Bytes `[start, end)`. */
   read(start: number, end: number, signal?: AbortSignal): Promise<Uint8Array> {
     if (end <= start) return Promise.resolve(new Uint8Array(0))
-    const hit = this.lookup(start, end)
+    const hit = this.cache.lookup(start, end)
     if (hit) return Promise.resolve(hit)
     if (signal?.aborted) return Promise.reject(abortError())
     return new Promise<Uint8Array>((resolve, reject) => {
-      const waiter: Waiter = { start, end, resolve, reject, signal, done: false }
-      signal?.addEventListener(
-        "abort",
-        () => {
-          if (waiter.done) return
-          waiter.done = true
-          reject(abortError())
-          this.queue = this.queue.filter((w) => w !== waiter)
-          for (const request of this.inFlight) {
-            if (request.waiters.includes(waiter) && request.waiters.every((w) => w.done)) {
-              request.controller.abort()
-            }
-          }
-        },
-        { once: true },
-      )
+      const waiter: Waiter = { start, end, resolve, reject, settled: false }
+      signal?.addEventListener("abort", () => this.abandon(waiter), { once: true })
       this.queue.push(waiter)
       this.scheduleFlush()
     })
   }
 
-  /** Holds one of the slots for a long-lived stream (the indexer's). */
+  /** Holds one of the slots for a long-lived stream (the indexer's). Returns its release. */
   reserve(): () => void {
     this.reserved++
     let released = false
@@ -120,41 +108,30 @@ export class RangeScheduler {
   checkEtag(response: Response): void {
     const etag = response.headers.get("ETag") ?? undefined
     if (!etag) return
-    if (this.etag === undefined) this.etag = etag
-    else if (etag !== this.etag) this.onChanged?.()
+    if (this.etag === undefined) {
+      this.etag = etag
+    } else if (etag !== this.etag) {
+      this.etag = etag
+      this.cache.clear()
+      this.onChanged?.()
+    }
   }
 
+  /** Aborts everything and forgets every byte — the file is closing. */
   clear(): void {
     for (const request of this.inFlight) request.controller.abort()
-    for (const waiter of this.queue) {
-      waiter.done = true
-      waiter.reject(abortError())
-    }
+    for (const waiter of this.queue) settle(waiter, () => waiter.reject(abortError()))
     this.queue = []
-    this.cache.length = 0
-    this.cached = 0
+    this.cache.clear()
   }
 
-  private lookup(start: number, end: number): Uint8Array | undefined {
-    for (let i = this.cache.length - 1; i >= 0; i--) {
-      const entry = this.cache[i]
-      if (entry.start <= start && entry.end >= end) {
-        // Most recently used goes to the end.
-        this.cache.splice(i, 1)
-        this.cache.push(entry)
-        return entry.bytes.subarray(start - entry.start, end - entry.start)
+  private abandon(waiter: Waiter): void {
+    if (!settle(waiter, () => waiter.reject(abortError()))) return
+    this.queue = this.queue.filter((w) => w !== waiter)
+    for (const request of this.inFlight) {
+      if (request.waiters.includes(waiter) && request.waiters.every((w) => w.settled)) {
+        request.controller.abort()
       }
-    }
-    return undefined
-  }
-
-  private remember(start: number, bytes: Uint8Array): void {
-    if (bytes.length > this.cacheBytes / 4) return
-    this.cache.push({ start, end: start + bytes.length, bytes })
-    this.cached += bytes.length
-    while (this.cached > this.cacheBytes && this.cache.length > 0) {
-      const old = this.cache.shift()
-      if (old) this.cached -= old.bytes.length
     }
   }
 
@@ -170,62 +147,106 @@ export class RangeScheduler {
   }
 
   private flush(): void {
-    this.queue = this.queue.filter((w) => !w.done)
+    this.queue = this.queue.filter((w) => !w.settled).sort((a, b) => a.start - b.start)
     while (this.queue.length > 0 && this.inFlight.size + this.reserved < this.maxInFlight) {
-      this.queue.sort((a, b) => a.start - b.start)
-      const first = this.queue[0]
-      const request: Request = {
-        start: first.start,
-        end: first.end,
-        waiters: [first],
-        controller: new AbortController(),
-      }
-      let i = 1
-      for (; i < this.queue.length; i++) {
-        const next = this.queue[i]
-        if (next.start - request.end >= this.gap) break
-        const end = Math.max(request.end, next.end)
-        if (end - request.start > this.maxRequest) break
-        request.end = end
-        request.waiters.push(next)
-      }
-      this.queue = this.queue.slice(i)
-      this.send(request)
+      this.send(this.takeMergeable())
     }
+  }
+
+  /** The first queued read, and every one after it close enough to share its request. */
+  private takeMergeable(): Request {
+    const [first] = this.queue
+    const request: Request = {
+      start: first.start,
+      end: first.end,
+      waiters: [first],
+      controller: new AbortController(),
+    }
+    let i = 1
+    for (; i < this.queue.length; i++) {
+      const next = this.queue[i]
+      const end = Math.max(request.end, next.end)
+      if (next.start - request.end >= this.gap || end - request.start > this.maxRequest) break
+      request.end = end
+      request.waiters.push(next)
+    }
+    this.queue = this.queue.slice(i)
+    return request
   }
 
   private send(request: Request): void {
     this.inFlight.add(request)
     this.requests++
     this.fetchImpl(this.url, {
-      headers: { Range: `bytes=${request.start}-${request.end - 1}` },
+      headers: { Range: rangeHeader(request.start, request.end) },
       signal: request.controller.signal,
     })
-      .then(async (res) => {
-        if (!res.ok) {
-          throw Object.assign(new Error(`Read failed: HTTP ${res.status}`), { status: res.status })
-        }
-        this.checkEtag(res)
-        let bytes = new Uint8Array(await res.arrayBuffer())
+      .then(async (response) => {
+        checkedResponse(response)
+        this.checkEtag(response)
+        let bytes = new Uint8Array(await response.arrayBuffer())
         // A server that ignored Range sent the whole object.
-        if (res.status === 200) bytes = bytes.subarray(request.start, request.end)
-        this.remember(request.start, bytes)
+        if (response.status === 200) bytes = bytes.subarray(request.start, request.end)
+        this.cache.remember(request.start, bytes)
         for (const waiter of request.waiters) {
-          if (waiter.done) continue
-          waiter.done = true
-          waiter.resolve(bytes.subarray(waiter.start - request.start, waiter.end - request.start))
+          const from = waiter.start - request.start
+          settle(waiter, () => waiter.resolve(bytes.subarray(from, waiter.end - request.start)))
         }
       })
       .catch((error: unknown) => {
-        for (const waiter of request.waiters) {
-          if (waiter.done) continue
-          waiter.done = true
-          waiter.reject(error)
-        }
+        for (const waiter of request.waiters) settle(waiter, () => waiter.reject(error))
       })
       .finally(() => {
         this.inFlight.delete(request)
         this.flush()
       })
+  }
+}
+
+/** Runs `outcome` once per waiter; false when the waiter had already settled. */
+function settle(waiter: Waiter, outcome: () => void): boolean {
+  if (waiter.settled) return false
+  waiter.settled = true
+  outcome()
+  return true
+}
+
+/**
+ * Fetched byte ranges, least recently used first, capped by bytes. A lookup
+ * is a hit when any cached range contains the one asked for. One range may
+ * take at most a quarter of the budget, so a single large read cannot flush
+ * everything else. Linear in the entries, which the cap keeps to a few dozen.
+ */
+class RangeCache {
+  private entries: { start: number; end: number; bytes: Uint8Array }[] = []
+  private total = 0
+  private readonly budget: number
+
+  constructor(budget: number) {
+    this.budget = budget
+  }
+
+  lookup(start: number, end: number): Uint8Array | undefined {
+    const i = this.entries.findLastIndex((e) => e.start <= start && e.end >= end)
+    if (i === -1) return undefined
+    const [entry] = this.entries.splice(i, 1)
+    this.entries.push(entry)
+    return entry.bytes.subarray(start - entry.start, end - entry.start)
+  }
+
+  remember(start: number, bytes: Uint8Array): void {
+    if (bytes.length > this.budget / 4) return
+    this.entries.push({ start, end: start + bytes.length, bytes })
+    this.total += bytes.length
+    while (this.total > this.budget) {
+      const oldest = this.entries.shift()
+      if (!oldest) break
+      this.total -= oldest.bytes.length
+    }
+  }
+
+  clear(): void {
+    this.entries = []
+    this.total = 0
   }
 }

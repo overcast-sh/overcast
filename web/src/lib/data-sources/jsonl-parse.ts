@@ -1,4 +1,5 @@
 import { isRecord } from "@/lib/utils"
+import { bomLength } from "./byte-order-mark"
 
 /**
  * JSON Lines as a table — when, and only when, it is one.
@@ -11,47 +12,60 @@ import { isRecord } from "@/lib/utils"
  * answer for the rest.
  */
 
-export type JsonlRecords =
-  | { ok: true; records: unknown[]; recordCount: number; consumedChars: number }
-  | { ok: false; reason: string }
+export type JsonlRecords = { ok: true; records: unknown[] } | { ok: false; reason: string }
+
+interface JsonlOptions {
+  /** Records read; parsing stops once this many are complete. */
+  maxRecords?: number
+  /**
+   * The text is the opening window of a longer object, so its last line is
+   * the one the cut went through: dropped rather than failed on.
+   */
+  truncated?: boolean
+}
 
 /**
- * Parses up to `maxRecords` lines, counting (not keeping) the rest. A line
- * that is not JSON makes the whole file not JSON Lines — except the last line
- * of a truncated window, which the cut went through.
+ * One JSON value per non-blank line. A line that is not JSON makes the text
+ * not JSON Lines — except the last line of a truncated window.
  */
-export function parseJsonl(text: string, maxRecords: number, truncated: boolean): JsonlRecords {
+export function parseJsonl(
+  text: string,
+  { maxRecords = Infinity, truncated = false }: JsonlOptions = {},
+): JsonlRecords {
   const records: unknown[] = []
-  let recordCount = 0
-  let consumedChars = 0
-  let start = text.charCodeAt(0) === 0xfeff ? 1 : 0
-  while (start < text.length) {
+  let start = bomLength(text)
+  while (start < text.length && records.length < maxRecords) {
     let end = text.indexOf("\n", start)
-    const lastLine = end === -1
-    if (lastLine) end = text.length
-    // A window that ends without a newline ends mid-record.
-    if (lastLine && truncated) break
+    if (end === -1) {
+      if (truncated) break
+      end = text.length
+    }
     const line = text.slice(start, end).trim()
     if (line !== "") {
-      recordCount++
-      if (records.length < maxRecords) {
-        try {
-          records.push(JSON.parse(line))
-        } catch {
-          return { ok: false, reason: `Line ${lineNumber(text, start)} is not valid JSON.` }
-        }
+      try {
+        records.push(JSON.parse(line))
+      } catch {
+        return { ok: false, reason: `Line ${lineNumber(text, start)} is not valid JSON.` }
       }
     }
-    consumedChars = end + 1
     start = end + 1
   }
-  return { ok: true, records, recordCount, consumedChars: Math.min(consumedChars, text.length) }
+  return { ok: true, records }
 }
 
 function lineNumber(text: string, offset: number): number {
   let line = 1
   for (let i = 0; i < offset; i++) if (text.charCodeAt(i) === 10) line++
   return line
+}
+
+/**
+ * Records to columns: one array per key, holding each record's value for it.
+ * A key a record omits is `undefined` — "not present", which the grid tells
+ * apart from a JSON `null`.
+ */
+export function recordColumns(records: readonly unknown[], keys: readonly string[]): unknown[][] {
+  return keys.map((key) => records.map((record) => (isRecord(record) ? record[key] : undefined)))
 }
 
 /**

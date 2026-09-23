@@ -7,7 +7,12 @@ const COMMA = 0x2c
 
 function index(
   text: string,
-  { every = 2, header = true, delimiter = COMMA as number | null, chunk = 0 } = {},
+  {
+    every = 2,
+    header = true,
+    delimiter = COMMA,
+    chunk = 0,
+  }: { every?: number; header?: boolean; delimiter?: number | null; chunk?: number } = {},
 ) {
   const indexer = new RecordIndexer({ every, header, delimiter })
   const bytes = encode(text)
@@ -86,26 +91,24 @@ describe("RecordIndexer", () => {
     expect(indexer.offsets).toEqual([0, 13])
   })
 
-  it("resumes from where it paused and continues the same offsets", () => {
+  it("keeps its place mid-record between pushes, so a paused index resumes where it stopped", () => {
+    // Given: an index paused partway through the record "c"
     const text = "h\na\nb\nc\nd\ne\nf\n"
-    const whole = index(text)
-    const first = new RecordIndexer({ every: 2, header: true, delimiter: COMMA })
     const bytes = encode(text)
-    first.push(bytes.subarray(0, 7)) // "h\na\nb\nc" — c is incomplete
-    const state = first.resumeState()
-    expect(state.position).toBe(6)
-    const second = new RecordIndexer(first.options, state)
-    second.push(bytes.subarray(state.position))
-    second.finish()
-    expect([...first.offsets, ...second.offsets]).toEqual(whole.offsets)
-    expect(second.rows).toBe(whole.rows)
+    const paused = new RecordIndexer({ every: 2, header: true, delimiter: COMMA })
+    paused.push(bytes.subarray(0, 7))
+    // When: it is fed the rest from the byte it stopped at
+    paused.push(bytes.subarray(paused.bytes))
+    paused.finish()
+    // Then: it records the same offsets as an index that never paused
+    expect(paused.offsets).toEqual(index(text).offsets)
   })
 
   it("agrees with the block parser about how many records there are", () => {
     // A seeded mix of every construct both have to agree on.
     let seed = 7
     const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647
-    const pieces = ['plain', '"a,b"', '"x\ny"', '""', '"q""q"', "", "5\" floppy"]
+    const pieces = ["plain", '"a,b"', '"x\ny"', '""', '"q""q"', "", '5" floppy']
     const ends = ["\n", "\r\n", "\r", "\n\n"]
     let text = "h1,h2\n"
     for (let i = 0; i < 400; i++) {
@@ -114,7 +117,7 @@ describe("RecordIndexer", () => {
     }
     const indexer = index(text, { every: 7, chunk: 5 })
     const parsed = parseDelimited(text, { delimiter: ",", maxRecords: Infinity, truncated: false })
-    expect(indexer.rows).toBe(parsed.recordCount - 1)
+    expect(indexer.rows).toBe(parsed.records.length - 1)
     // And every block the index cuts parses to exactly its share of records.
     const offsets = [...indexer.offsets, indexer.end]
     for (let k = 0; k + 1 < offsets.length; k++) {
@@ -123,7 +126,7 @@ describe("RecordIndexer", () => {
         maxRecords: Infinity,
         truncated: false,
       })
-      expect(block.recordCount, `block ${k}`).toBe(Math.min(7, indexer.rows - k * 7))
+      expect(block.records.length, `block ${k}`).toBe(Math.min(7, indexer.rows - k * 7))
     }
   })
 })
