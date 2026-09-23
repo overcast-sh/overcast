@@ -654,6 +654,73 @@ func (h *iamServiceLinkedRoleHandler) Delete(ctx context.Context, router http.Ha
 
 // ── AWS::Events::EventBus ──────────────────────────────────────────────────
 
+// eventsTagsWire converts a plain tag map into the [{Key,Value}] shape
+// EventBridge's CreateEventBus and PutRule expect on the wire (typed_logic.go
+// tagEntry: json:"Key"/"Value"), which happens to be the same shape
+// AWS::Events::Rule and AWS::Events::EventBus already model Tags in — so no
+// key-casing conversion is needed, only the map -> list shape change.
+func eventsTagsWire(tags map[string]string) []map[string]string {
+	names := make([]string, 0, len(tags))
+	for k := range tags {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	out := make([]map[string]string, 0, len(tags))
+	for _, k := range names {
+		out = append(out, map[string]string{"Key": k, "Value": tags[k]})
+	}
+	return out
+}
+
+// eventsBusARN mirrors internal/services/eventbridge's own busARN
+// construction (protocol.ARN(region, accountID, "events", "event-bus/"+name)),
+// so an update that needs the bus's ARN to reconcile tags does not depend on
+// a value CreateEventBus's response happened to send back.
+func eventsBusARN(region, accountID, name string) string {
+	return fmt.Sprintf("arn:aws:events:%s:%s:event-bus/%s", region, accountID, name)
+}
+
+// eventsReconcileTags brings resourceARN's tags from oldTags to newTags,
+// tagging additions/changes and untagging removals.
+//
+// TagResource alone cannot do this: AWS documents it as merging ("the tags
+// you specify are merged with any existing tags"), so it never removes a tag
+// that dropped out of the template or out of the stack's own Tags. A
+// stack-tag-only update that removed a tag would otherwise leave it stuck on
+// the resource forever.
+func eventsReconcileTags(ctx context.Context, router http.Handler, region, resourceARN string, oldTags, newTags map[string]string) error {
+	upserts := make(map[string]string)
+	for k, v := range newTags {
+		if old, ok := oldTags[k]; !ok || old != v {
+			upserts[k] = v
+		}
+	}
+	var removals []string
+	for k := range oldTags {
+		if _, ok := newTags[k]; !ok {
+			removals = append(removals, k)
+		}
+	}
+	if len(upserts) > 0 {
+		if _, err := internalJSON(ctx, router, region, "AWSEvents.TagResource", map[string]any{
+			"ResourceARN": resourceARN,
+			"Tags":        eventsTagsWire(upserts),
+		}); err != nil {
+			return fmt.Errorf("TagResource: %w", err)
+		}
+	}
+	if len(removals) > 0 {
+		sort.Strings(removals)
+		if _, err := internalJSON(ctx, router, region, "AWSEvents.UntagResource", map[string]any{
+			"ResourceARN": resourceARN,
+			"TagKeys":     removals,
+		}); err != nil {
+			return fmt.Errorf("UntagResource: %w", err)
+		}
+	}
+	return nil
+}
+
 type eventsEventBusHandler struct{}
 
 func (h *eventsEventBusHandler) Create(ctx context.Context, router http.Handler, cfg *config.Config, props map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
@@ -663,6 +730,19 @@ func (h *eventsEventBusHandler) Create(ctx context.Context, router http.Handler,
 	}
 
 	body := map[string]any{"Name": name}
+	if tags := mergeResourceTags(rCtx.StackTags, props["Tags"]); len(tags) > 0 {
+		body["Tags"] = eventsTagsWire(tags)
+	}
+	// CreateEventBus's own request shape (createEventBusRequest,
+	// internal/services/eventbridge/typed_logic.go) carries only Name and
+	// Tags — the service has no member for Description, DeadLetterConfig or
+	// KmsKeyIdentifier on an event bus, and applying Policy the way AWS's
+	// resource does would mean a PutPermission call, which is unimplemented
+	// (absent from dispatchLegacy in internal/services/eventbridge/service.go
+	// and from capabilities_dev.go — #481 is the broader API-destination and
+	// permission gap). Reported rather than sent to a call that has nowhere
+	// to put them.
+	noteUnconsumedProperties(ctx, "AWS::Events::EventBus", props, "Name", "Tags")
 	rec, err := internalJSON(ctx, router, rCtx.Region, "AWSEvents.CreateEventBus", body)
 	if err != nil {
 		return "", nil, fmt.Errorf("CreateEventBus: %w", err)
@@ -677,7 +757,7 @@ func (h *eventsEventBusHandler) Create(ctx context.Context, router http.Handler,
 
 	arn := resp.EventBusArn
 	if arn == "" {
-		arn = fmt.Sprintf("arn:aws:events:%s:%s:event-bus/%s", rCtx.Region, rCtx.AccountID, name)
+		arn = eventsBusARN(rCtx.Region, rCtx.AccountID, name)
 	}
 
 	attrs := map[string]string{
@@ -688,6 +768,37 @@ func (h *eventsEventBusHandler) Create(ctx context.Context, router http.Handler,
 	// AWS::Events::EventBus as returning the name, and every consumer builds an
 	// ARN as "…:event-bus/" + name. Returning the ARN here fed it back into that
 	// concatenation and produced a doubled ARN.
+	return name, attrs, nil
+}
+
+// Update handles the one property that can change without replacing the bus:
+// Tags. Name has no rename operation on EventBridge's side (no UpdateEventBus
+// exists), so a Name change is a replacement; everything else Create accepts
+// is already unconsumed there (see noteUnconsumedProperties in Create) and
+// stays that way here.
+func (h *eventsEventBusHandler) Update(ctx context.Context, router http.Handler, _ *config.Config, physicalID string, props map[string]any, oldProps map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
+	name, _ := props["Name"].(string)
+	if name == "" {
+		name = physicalID
+	}
+	if name != physicalID {
+		return "", nil, errReplacementRequired
+	}
+
+	arn := eventsBusARN(rCtx.Region, rCtx.AccountID, name)
+	newTags := mergeResourceTags(rCtx.StackTags, props["Tags"])
+	var oldTags map[string]string
+	if oldProps != nil {
+		oldTags = mergeResourceTags(rCtx.PreviousStackTags, oldProps["Tags"])
+	}
+	if err := eventsReconcileTags(ctx, router, rCtx.Region, arn, oldTags, newTags); err != nil {
+		return "", nil, err
+	}
+
+	attrs := map[string]string{
+		"Arn":  arn,
+		"Name": name,
+	}
 	return name, attrs, nil
 }
 
@@ -739,6 +850,11 @@ func (h *eventsRuleHandler) Create(ctx context.Context, router http.Handler, cfg
 	if v, _ := props["ScheduleExpression"].(string); v != "" {
 		body["ScheduleExpression"] = v
 	}
+	if tags := mergeResourceTags(rCtx.StackTags, props["Tags"]); len(tags) > 0 {
+		body["Tags"] = eventsTagsWire(tags)
+	}
+	noteUnconsumedProperties(ctx, "AWS::Events::Rule", props, "Name", "EventBusName",
+		"State", "Description", "RoleArn", "EventPattern", "ScheduleExpression", "Targets", "Tags")
 
 	rec, err := internalJSON(ctx, router, rCtx.Region, "AWSEvents.PutRule", body)
 	if err != nil {
@@ -990,6 +1106,20 @@ func (h *eventsRuleHandler) Update(ctx context.Context, router http.Handler, _ *
 		if err := putEventTargets(ctx, router, rCtx.Region, ruleName, eventBusName, toAdd); err != nil {
 			return "", nil, err
 		}
+	}
+
+	// PutRule's own Tags parameter only merges (AWS: "merged with any
+	// existing tags") — it cannot remove one, so a stack-tag-only removal
+	// needs the same explicit reconcile the event bus's Update uses.
+	// physicalID is the rule ARN (see eventRuleIdentityFromArn above), which
+	// is what TagResource/UntagResource key on.
+	newTags := mergeResourceTags(rCtx.StackTags, props["Tags"])
+	var oldTags map[string]string
+	if oldProps != nil {
+		oldTags = mergeResourceTags(rCtx.PreviousStackTags, oldProps["Tags"])
+	}
+	if err := eventsReconcileTags(ctx, router, rCtx.Region, physicalID, oldTags, newTags); err != nil {
+		return "", nil, err
 	}
 
 	return physicalID, map[string]string{"Arn": physicalID}, nil
