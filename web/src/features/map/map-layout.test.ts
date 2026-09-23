@@ -196,6 +196,7 @@ describe("buildLayoutNodes", () => {
 
 import { buildLayout, absoluteLeafRects, segmentsCross } from "./map-layout"
 import { ObstacleIndex, polylineClear } from "./map-edge-routing"
+import { ENGINE_BUDGET, ENGINE_STATS, timeBudgetMs } from "./map-layout-engine"
 
 /** Every edge's polyline (handle → route → handle) must clear every other node. */
 function assertRoutesClear(layout: ReturnType<typeof buildLayout>, edges: TopologyEdge[]) {
@@ -321,7 +322,12 @@ describe("buildLayout packing", () => {
     assertRoutesClear(layout, edges)
   })
 
-  it("lays out a few hundred resources in well under a second", () => {
+  // Annealing is most of the running time (about 90% here) and its iteration
+  // count is a pure function of the input, so the test bounds that count
+  // rather than timing it: a wall-clock bound on the whole layout flaked on
+  // shared CI runners (1044ms against 1000ms). Only the rest of the pipeline
+  // is timed, against a budget with lots of headroom.
+  it("lays out a few hundred resources without superlinear work", () => {
     const nodes: TopologyNode[] = []
     const edges: TopologyEdge[] = []
     const services = ["s3", "sqs", "lambda", "dynamodb", "sns", "logs"]
@@ -333,13 +339,33 @@ describe("buildLayout packing", () => {
       if (i % 20 !== 19) edges.push({ id: `c${i}`, source: `r${i}`, target: `r${i + 1}`, type: "esm" })
       if (i % 9 === 0) edges.push({ id: `x${i}`, source: `r${i}`, target: `r${i + 5}`, type: "logs" })
     }
-    const start = performance.now()
-    const layout = buildLayout(nodes, edges, overridesFor(nodes, {}), region)
-    const ms = performance.now() - start
+    const overrides = overridesFor(nodes, {})
+    ENGINE_STATS.iterations = 0
+    const layout = buildLayout(nodes, edges, overrides, region)
     expect(layout.nodes.length).toBeGreaterThan(300)
     assertNoOverlaps(layout.nodes)
     assertRoutesClear(layout, edges)
-    expect(ms).toBeLessThan(1000)
+
+    // The annealer's share of the H6 budget, in iterations. It is spent per
+    // virtual node on every nesting level, so the count lands above it (2×
+    // on this map); 3× leaves room for layering changes while still failing
+    // an annealer whose work grows with anything but the node count.
+    const annealBudget = timeBudgetMs(nodes.length) * ENGINE_BUDGET.annealTimeShare * ENGINE_BUDGET.iterationsPerMs
+    expect(ENGINE_STATS.iterations).toBeGreaterThan(0)
+    expect(ENGINE_STATS.iterations).toBeLessThanOrEqual(annealBudget * 3)
+
+    // Everything but annealing takes under 100ms on a desktop; a second
+    // allows a 10× slower runner while still catching a quadratic step,
+    // which at 300 nodes costs hundreds of times more.
+    const share = ENGINE_BUDGET.annealTimeShare
+    ENGINE_BUDGET.annealTimeShare = 0
+    try {
+      const start = performance.now()
+      buildLayout(nodes, edges, overrides, region)
+      expect(performance.now() - start).toBeLessThan(1000)
+    } finally {
+      ENGINE_BUDGET.annealTimeShare = share
+    }
   })
 })
 
