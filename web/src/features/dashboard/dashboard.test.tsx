@@ -128,6 +128,25 @@ describe("Dashboard", () => {
     const table = screen.getByRole("table", { name: "Services" })
     expect(within(table).getByText("SNS").closest("a")).not.toBeNull()
   })
+
+  // #2062: the "Other AWS Services" catalogue claimed Athena, Glue, Firehose
+  // and OpenSearch were not emulated while the backend served all four.
+  it("does not list backend-emulated services among the other AWS services", async () => {
+    const { user } = renderDashboard()
+
+    const section = await findSection("not emulated")
+    await user.click(within(section).getByRole("button", { name: /Other AWS Services/ }))
+
+    expect(within(section).getByText("Amazon Redshift")).toBeInTheDocument()
+    for (const label of [
+      "Amazon Athena",
+      "AWS Glue",
+      "Amazon Data Firehose",
+      "Amazon OpenSearch Service",
+    ]) {
+      expect(within(section).queryByText(label)).not.toBeInTheDocument()
+    }
+  })
 })
 
 describe("Dashboard > pinning", () => {
