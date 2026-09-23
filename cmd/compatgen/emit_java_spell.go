@@ -35,6 +35,8 @@ import (
 //	list<structure Tag>     [{"Key":"k"}]      List.of(Tag.builder().key("k").build())
 //	string                  {"$ref":"q"}       b.string("M", Values.ref("q"))
 //	enum Color              {"$ref":"c"}       b.string("M", Values.ref("c"))
+//	blob                    {"$base64":"cmVj"} SdkBytes.fromByteArray(Base64.getDecoder().decode("cmVj"))
+//	blob                    {"$base64":{"$ref":"k"}} b.blob("M", Values.base64(Values.ref("k")))
 //
 // # An enum is spelled as its wire value, never as the enum class
 //
@@ -137,12 +139,12 @@ var javaScalarBinders = map[string]string{
 }
 
 // javaUnsupportedKinds are the modeled member kinds no value in the IR's
-// grammar can carry. Timestamps, blobs and documents have no portable literal
-// and are already refused upstream (compat/model/README.md § Recipes), so this
-// is a backstop rather than a live path; a union has no Java literal either.
+// grammar can carry. Timestamps, documents and unions have no portable value
+// and are refused upstream — an error in a recipe or an authored scenario, and
+// `no-portable-value` for a binding (binder.go) — so this is a backstop rather
+// than a live path. A blob is not here: `$base64` spells it (blob, below).
 var javaUnsupportedKinds = map[string]bool{
 	"timestamp": true,
-	"blob":      true,
 	"document":  true,
 	"union":     true,
 }
@@ -226,6 +228,9 @@ func (sp *javaSpeller) valueIn(target string, v any, member string, slot javaSlo
 	if javaUnsupportedKinds[kind] {
 		return "", fmt.Errorf("the java-sdk emitter has no Java value expression for a %s member (%s)", kind, bareShapeName(target))
 	}
+	if kind == "blob" {
+		return javaBlob(v, member)
+	}
 	if _, _, isExpr := exprOf(v); isExpr {
 		return sp.expr(target, kind, v, member, slot)
 	}
@@ -246,6 +251,34 @@ func (sp *javaSpeller) valueIn(target string, v any, member string, slot javaSlo
 		return sp.structure(target, v, member)
 	}
 	return "", fmt.Errorf("no Java literal builds a %s member (%s)", kind, bareShapeName(target))
+}
+
+// javaBlob renders a `$base64` value into a blob member, whose builder setter
+// takes an SdkBytes.
+//
+// Java has no byte-string literal, so a literal is spelled as the SDK's own
+// SdkBytes built from the scenario's base64 text by the platform decoder —
+// the same text the scenario file writes, so the emitted line greps against
+// it — and the generator has already proved that text canonical. Both classes
+// are written fully qualified: an emitted file imports exactly the model
+// classes it names, and neither of these is one. A `$base64` around a $ref is
+// deferred like every other expression, through Binder.blob.
+func javaBlob(v any, member string) (string, error) {
+	key, arg, isExpr := exprOf(v)
+	if !isExpr || key != "$base64" {
+		return "", fmt.Errorf("a blob member takes $base64, got %s", valueKind(v))
+	}
+	if text, literal := arg.(string); literal {
+		if _, err := decodeBase64(text); err != nil {
+			return "", fmt.Errorf("$base64 %q %w", text, err)
+		}
+		return "software.amazon.awssdk.core.SdkBytes.fromByteArray(java.util.Base64.getDecoder().decode(" + javaQuote(text) + "))", nil
+	}
+	rendered, err := javaValue(v)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("b.blob(%s, %s)", javaQuote(member), rendered), nil
 }
 
 // scalar renders a literal into a scalar member. An enum is its wire value: the

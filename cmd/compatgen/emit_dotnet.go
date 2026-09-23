@@ -88,8 +88,10 @@ const dotnetSuiteDir = "compat/suites/dotnet-sdk/Groups"
 //
 // Three things produce it, and all three are read off the model:
 //
-//	the member's modeled kind has no C# literal   a timestamp, blob, document,
-//	                                              union, bigInteger or bigDecimal
+//	the member's modeled kind has no C# literal   a timestamp, document, union,
+//	                                              bigInteger or bigDecimal (a
+//	                                              blob is a MemoryStream — see
+//	                                              dotnetBlob)
 //	a value expression on a composite member      $ref/$name resolve into one
 //	                                              scalar slot, never a list
 //	an integer literal outside the C# type's      C# checks an integral literal's
@@ -573,10 +575,13 @@ func (sp *dotnetSpeller) target(input, op, member string) (string, error) {
 // ConstantClass converts from. The property being assigned supplies the type,
 // which is what makes the emitted source depend on the model alone.
 func (sp *dotnetSpeller) value(target string, v any, member, indent string) (string, error) {
+	kind := sp.model.Kind(target)
+	if kind == "blob" {
+		return dotnetBlob(v, member)
+	}
 	if _, _, isExpr := exprOf(v); isExpr {
 		return sp.expr(target, v, member)
 	}
-	kind := sp.model.Kind(target)
 	if v == nil {
 		switch kind {
 		case "string", "enum", "list", "map", "structure":
@@ -607,6 +612,34 @@ func (sp *dotnetSpeller) value(target string, v any, member, indent string) (str
 		return sp.structure(target, v, member, indent)
 	}
 	return "", fmt.Errorf("the dotnet-sdk emitter has no C# literal for a %s member", kind)
+}
+
+// dotnetBlob renders a `$base64` value into a blob member, which AWSSDK for
+// .NET types as a MemoryStream.
+//
+// C# has no byte-string literal for arbitrary bytes (a u8 literal is UTF-8
+// text only), so a literal is spelled as a MemoryStream over the scenario's
+// own base64 text, decoded by the platform — the same text the scenario file
+// writes, so the emitted line greps against it — and the generator has already
+// proved that text canonical. Both types are written fully qualified rather
+// than relying on the project's implicit usings. A `$base64` around a $ref is
+// deferred like every other expression, through Binder.Blob.
+func dotnetBlob(v any, member string) (string, error) {
+	key, arg, isExpr := exprOf(v)
+	if !isExpr || key != "$base64" {
+		return "", fmt.Errorf("a blob member takes $base64, got %s", valueKind(v))
+	}
+	if text, literal := arg.(string); literal {
+		if _, err := decodeBase64(text); err != nil {
+			return "", fmt.Errorf("$base64 %q %w", text, err)
+		}
+		return "new System.IO.MemoryStream(System.Convert.FromBase64String(" + csString(text) + "))", nil
+	}
+	rendered, err := dotnetValue(v)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("b.Blob(%s, %s)", csString(member), rendered), nil
 }
 
 // number renders an integer or floating-point literal. The suffix is chosen
@@ -809,7 +842,7 @@ func (sp *dotnetSpeller) scalarType(target string) (string, error) {
 
 // dotnetValue renders one IR value as an *untyped* C# expression: an object is
 // a Dictionary<string, object?>, a list an object?[], a scalar itself, and
-// each of the five expression forms a Val constructor. Nothing else is
+// each of the six expression forms a Val constructor. Nothing else is
 // representable, which is what makes this total.
 //
 // Untyped is right in the two places it is used. An assertion's expected value
@@ -853,6 +886,12 @@ func dotnetValue(v any) (string, error) {
 				return "", err
 			}
 			return fmt.Sprintf("Val.Index(%s, %d)", inner, n), nil
+		case "$base64":
+			inner, err := dotnetValue(arg)
+			if err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("Val.Base64(%s)", inner), nil
 		}
 	}
 	switch value := v.(type) {

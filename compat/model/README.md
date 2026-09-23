@@ -23,6 +23,7 @@ Generator: [cmd/compatgen/README.md](../../cmd/compatgen/README.md).
 | `authored/<group>.json` | a human | an authored scenario: the same IR, written by hand to port one hand-written registry group — see [Authored scenarios](#authored-scenarios) |
 | `gaps.json` | `cmd/compatgen` | every operation the generator refused, with a reason (`gaps.schema.json`) |
 | `testdata/errors/*.json` | a human | the shared error-matching conformance fixtures every interpreter's unit tests run — see [Errors](#errors) |
+| `testdata/blobs/blobs.json` | a human | the shared blob-value fixture every suite's unit tests run — see [Values](#values) |
 | `../suites/registry.generated.json` | `cmd/compatgen` | the generated registry sibling every loader concatenates |
 
 `<service>` is the Overcast capability key, exactly as a registry group's
@@ -223,8 +224,9 @@ the SDK itself would (a boto3 `int` is a JSON number, a `bool` a boolean, a
 no coercion and none may be added: the generator only ever emits an `equals`
 literal of the member's modeled kind, so a cross-type comparison means the
 response disagrees with the model, which is the disagreement the check exists
-to catch. Timestamps and blobs are never compared. The same rule governs a
-`where` entry.
+to catch. A blob is compared as its document form, base64 text, against an
+`equals` or `where` written as `$base64` — see [Values](#values). Timestamps are
+never compared. The same rule governs a `where` entry.
 
 ### Errors
 
@@ -422,9 +424,37 @@ an array is a list of values; a scalar is itself.
 | `{"$name": "q"}` | the string `{runId}-{group}-q`, where `runId` is the suite's run id (`OVERCAST_COMPAT_RUN_ID`) and `group` the group name — deterministic within a run, so the same suffix names the same resource wherever it appears in the group |
 | `{"$concat": [<part>, ...]}` | the parts joined; a part that is a bare string is a literal, otherwise it is an expression that must evaluate to a string |
 | `{"$index": [<value>, n]}` | element `n` of a list-valued expression |
+| `{"$base64": "<base64>"}` | a blob: these bytes. The text is standard base64 (`+/`, padded) in its one canonical spelling; the generator refuses anything else |
+| `{"$base64": {"$ref": "rec.data"}}` | a blob: the bytes of a blob a previous call exported |
 
 No conditionals, no arithmetic, no scripting: eight implementations have to
 agree on every value.
+
+**A blob takes `$base64` and nothing else, and `$base64` goes nowhere else.**
+The backends disagree about what a plain string on a blob member means — the
+AWS CLI v2 reads it as base64 (`"record-1"` fails with `Invalid base64`), boto3
+and the JS SDK send its UTF-8 bytes — so no string literal puts the same bytes
+on the wire everywhere. A recipe or an authored scenario that writes one on a
+blob member, or on the expected side of an `equals` or a `where` that resolves
+to a blob, is a generation error naming the member; a bare `$ref` is refused
+for the same reason, and a `$ref` the binder supplies is wrapped in `$base64`
+for you. A **blob's document form is its canonical base64 text in every
+backend**: the CLI prints it that way, python-sdk and node-js-sdk convert
+`bytes`/`Uint8Array` when the response arrives, go-sdk, java-sdk and dotnet-sdk
+render `[]byte`/`SdkBytes`/`MemoryStream`, and rust-sdk reads the wire body,
+which already carries it. So an exported blob is that text in the context bag,
+`$base64` around a `$ref` decodes it back into bytes, and `equals` compares a
+blob path with a `$base64` as two strings. Each backend hands its SDK bytes:
+`bytes`, a `Uint8Array`, the text itself for `--cli-input-json`, and
+`[]byte("…")`, `SdkBytes`, a `MemoryStream` or a `Blob` over a byte string in
+the four emitted languages. `testdata/blobs/blobs.json` is the shared fixture
+every suite's unit tests run: which texts decode to which bytes, the rendering
+back, and the spellings every decoder refuses.
+
+A timestamp, a document or a union has no portable value at all: a literal is
+a generation error, and a binding the binder would have made is refused as
+`no-portable-value:<Member>` in `gaps.json` rather than left for four emitters
+to refuse (#1910).
 
 **A scenario may not depend on sending a member's modeled default.** A typed
 SDK that gives a defaulted member a value-typed field cannot tell "unset" from
@@ -986,6 +1016,7 @@ service and operation, with a stable reason:
 | `ambiguous-list-page` | a `list` with no `itemsPath`, whose operation's output holds two lists with no `@paginated` `items` trait to choose between them, or no list at all. Give the resource an explicit `list.itemsPath` |
 | `no-output-to-assert` | a probe of an operation that returns nothing a probe can assert: no output at all, or no identity member and no single list to check the shape of. Reading back the resource it names would assert something that was already true before the call, so there is nothing honest to assert |
 | `setup-refused:<resource>` | a required resource could not be bound |
+| `no-portable-value:<Member>` | binding rule 1 or 2 would have bound a timestamp, document or union member to an export, and the IR has no value of that kind every backend can send. Refused here so the gap is recorded, rather than left to the source emitters, whose refusal would silently scope the whole group away from their suites |
 | `unsupported-tag-shape:<Shape>` | the tag member is neither a string map nor a list of `{Key, Value}` or `{TagKey, TagValue}` structures, or the untag member is neither a list of strings nor a list of key-only structures (a structure with exactly one string member, such as ELB Classic's `TagKeyOnly`). `<Shape>` is the bare shape name; the qualified Smithy id is in the detail |
 | `dotnet-emit-unsupported:<Member>` | the dotnet-sdk emitter cannot write that member as C#: its modeled kind has no C# literal (a timestamp, blob, document, union, bigInteger or bigDecimal), a value expression is bound to a composite member, which has no scalar slot to land in, or an integer literal falls outside the C# type's range — C# range-checks an integral literal at compile time, and a compile error in this backend is suite-wide rather than scoped to one group. It scopes the group away from `dotnet-sdk` exactly as `go-emit-unsupported` does for `go-sdk`. It is shorter than that list because the two emitters read different things: the .NET emitter never asks the SDK, so it has no "the SDK renamed it" refusal — see [Naming](#naming) |
 | `go-emit-unsupported:<Member>` | the go-sdk emitter cannot write that member as typed Go: its modeled kind has no IR literal (a timestamp, blob, document or union), or the vendored SDK has no `<Op>Input`, no field for the member, or a field of a type no literal builds, or the member is value-typed and the scenario sets it to its zero value (see § Values). It is the one reason here that does **not** mean "no test": the operation is generated and the interpreters run it, and the group is scoped away from `go-sdk` in the generated registry instead, because a suite listed against a group it cannot compile would report as a hard failure |

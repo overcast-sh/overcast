@@ -1,6 +1,7 @@
 package scenario
 
 import (
+	"encoding/base64"
 	"fmt"
 	"strings"
 )
@@ -160,9 +161,43 @@ func (e *evaluator) evalExpr(key string, arg any) (any, error) {
 			return nil, fmt.Errorf("$index %d is past the end of a list of %d", int(n), len(list))
 		}
 		return list[int(n)], nil
+	case "$base64":
+		// A blob. The AWS CLI v2 reads a blob member of --cli-input-json as
+		// base64 text, so the text is what goes in the document — which is
+		// also a blob's document form in every backend, how `aws --output
+		// json` prints one, and so what an exported blob already is in the
+		// bag. It is still checked: text that is not canonical standard base64
+		// would reach the CLI as a different spelling from the one every other
+		// backend decodes, or fail there as "Invalid base64".
+		ev, err := e.eval(arg)
+		if err != nil {
+			return nil, err
+		}
+		text, ok := ev.(string)
+		if !ok {
+			return nil, fmt.Errorf("$base64 takes base64 text, got %s", render(ev))
+		}
+		if _, err := decodeBase64(text); err != nil {
+			return nil, err
+		}
+		return text, nil
 	default:
 		return nil, fmt.Errorf("unknown value expression %q", key)
 	}
+}
+
+// decodeBase64 decodes a blob's document form: standard base64 with padding,
+// in its one canonical spelling. compat/model/testdata/blobs pins what it
+// accepts and refuses, for every backend at once.
+func decodeBase64(text string) ([]byte, error) {
+	raw, err := base64.StdEncoding.Strict().DecodeString(text)
+	if err != nil {
+		return nil, fmt.Errorf("$base64 %q is not standard padded base64: %v", text, err)
+	}
+	if canonical := base64.StdEncoding.EncodeToString(raw); canonical != text {
+		return nil, fmt.Errorf("$base64 %q is not the canonical spelling of its bytes, which is %q", text, canonical)
+	}
+	return raw, nil
 }
 
 // name is $name: "{runId}-{group}-{suffix}", with the group token the whole

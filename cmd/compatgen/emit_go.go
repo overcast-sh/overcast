@@ -88,13 +88,13 @@ const goSuiteDir = "compat/suites/go-sdk/internal/groups"
 const goEmitReason = "go-emit-unsupported"
 
 // goUnsupportedKinds are the modeled member kinds no value in the IR's grammar
-// can carry. Timestamps, blobs and documents have no portable literal and are
-// already refused upstream (compat/model/README.md § Recipes), so this is a
-// backstop rather than a live path; a union's Go representation is an
-// interface no literal builds.
+// can carry. Timestamps, documents and unions have no portable value and are
+// refused upstream — an error in a recipe or an authored scenario, and
+// `no-portable-value` for a binding (binder.go) — so this is a backstop rather
+// than a live path. A blob is not here: `$base64` spells it, as a []byte
+// literal or a scenario.Blob binding (emit_go_spell.go).
 var goUnsupportedKinds = map[string]bool{
 	"timestamp": true,
-	"blob":      true,
 	"document":  true,
 	"union":     true,
 }
@@ -507,7 +507,7 @@ const goValueWidth = 80
 
 // goValue renders one IR value as an *untyped* Go expression, indented for
 // the line it will sit on: an object is a map[string]any, a list a []any, a
-// scalar itself, and each of the five expression forms is a scenario.Value
+// scalar itself, and each of the six expression forms is a scenario.Value
 // constructor. Nothing else is representable, which is what makes this total.
 //
 // Untyped is right in the two places it is still used. An assertion's expected
@@ -551,6 +551,12 @@ func goValue(v any, indent string) (string, error) {
 				return "", err
 			}
 			return fmt.Sprintf("scenario.Index(%s, %d)", inner, n), nil
+		case "$base64":
+			inner, err := goValue(arg, indent)
+			if err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("scenario.Base64(%s)", inner), nil
 		}
 	}
 	switch value := v.(type) {

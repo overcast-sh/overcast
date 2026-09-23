@@ -27,7 +27,7 @@ from ..clients import make_client
 # not implemented this" must be one rule for the whole suite, or a generated
 # probe and a hand-written test would disagree about the same response.
 from ..harness import TestContext, _is_unimplemented
-from .expressions import evaluate, resolve_path
+from .expressions import evaluate, resolve_path, to_document
 from .failures import MISSING, ScenarioError, ScenarioFailure, failure_message
 from .loader import ScenarioGroup
 
@@ -131,7 +131,9 @@ class Executor:
         reject it here rather than silently coerce, which is the right failure.
         """
         client = self._clients.get(self.ctx, botocore_service(self.spec.client["endpointPrefix"]))
-        return getattr(client, xform_name(call["op"]))(**params)
+        # The response becomes the IR's document here, once, so a blob reads as
+        # its base64 text in every clause and every export (to_document).
+        return to_document(getattr(client, xform_name(call["op"]))(**params))
 
     def perform(self, call: dict, ref: StepRef, assertion: str, *,
                 apply_exports: bool = True) -> tuple[dict, dict]:

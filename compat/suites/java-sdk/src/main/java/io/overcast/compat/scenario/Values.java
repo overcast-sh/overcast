@@ -1,6 +1,7 @@
 package io.overcast.compat.scenario;
 
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +22,7 @@ import java.util.Map;
  *   {"$name": "q"}     → Values.name("q")
  *   {"$concat": [...]} → Values.concat(...)
  *   {"$index": [v, n]} → Values.index(v, n)
+ *   {"$base64": x}     → Values.base64(x), and b.blob(member, Values.base64(x)) in a blob slot
  * </pre>
  */
 public final class Values {
@@ -83,6 +85,54 @@ public final class Values {
             }
             return items.get(n);
         };
+    }
+
+    /**
+     * {@code $base64}: a blob. Its value is the blob's document form — the
+     * canonical standard base64 text, which is also how {@link Doc} renders an
+     * {@code SdkBytes} out of a response and so how an exported blob sits in
+     * the context bag — which is what lets an {@code equals} compare a blob
+     * path against it as two strings. {@code arg} is a literal base64 string or
+     * an expression evaluating to one (the generator allows only a
+     * {@code $ref} to an exported blob); text that is not canonical standard
+     * base64 is an error, never a second spelling of the same bytes.
+     *
+     * <p>A blob member does not take this value as it is:
+     * {@link Binder#blob(String, Object)} decodes it into the {@code SdkBytes}
+     * the builder setter wants.
+     */
+    public static Value base64(Object arg) {
+        return b -> {
+            Object v = b.eval(arg);
+            if (!(v instanceof String text)) {
+                throw ValueException.of("$base64 takes base64 text, got " + Json.render(v));
+            }
+            decodeBase64(text);
+            return text;
+        };
+    }
+
+    /**
+     * Decodes a blob's document form: standard base64 with padding, in its one
+     * canonical spelling. {@code java.util.Base64}'s basic decoder refuses a
+     * character outside the alphabet but not non-zero trailing bits or a
+     * missing pad, so the round trip is what refuses a second spelling of the
+     * same bytes. {@code compat/model/testdata/blobs} pins what every backend
+     * accepts and refuses.
+     */
+    public static byte[] decodeBase64(String text) {
+        byte[] raw;
+        try {
+            raw = Base64.getDecoder().decode(text);
+        } catch (IllegalArgumentException e) {
+            throw ValueException.of("$base64 " + Json.render(text) + " is not standard padded base64: " + e.getMessage());
+        }
+        String canonical = Base64.getEncoder().encodeToString(raw);
+        if (!canonical.equals(text)) {
+            throw ValueException.of("$base64 " + Json.render(text)
+                    + " is not the canonical spelling of its bytes, which is " + Json.render(canonical));
+        }
+        return raw;
     }
 
     /**

@@ -1,5 +1,7 @@
 package io.overcast.compat.scenario;
 
+import software.amazon.awssdk.core.SdkBytes;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -105,6 +107,24 @@ public final class Binder {
     /** Binds an expression into a {@code Double} member. */
     public Double doubleValue(String member, Object v) {
         return fractional(member, v, "Double");
+    }
+
+    /**
+     * Binds a {@code $base64} expression into a blob member. The emitted source
+     * calls this only for a deferred blob — a {@code $base64} around a
+     * {@code $ref} — because a literal's bytes are written into the source
+     * directly.
+     */
+    public SdkBytes blob(String member, Object v) {
+        Object value = evalFor(member, v);
+        if (!(value instanceof String text)) {
+            throw member(member, "wanted a blob's base64 text, got " + Json.render(value));
+        }
+        try {
+            return SdkBytes.fromByteArray(Values.decodeBase64(text));
+        } catch (ValueException e) {
+            throw member(member, e.getMessage());
+        }
     }
 
     // ── Evaluation ───────────────────────────────────────────────────────────

@@ -77,13 +77,12 @@ const rustSuiteDir = "compat/suites/rust-sdk/src/groups"
 const rustEmitReason = "rust-emit-unsupported"
 
 // rustUnsupportedKinds are the modeled member kinds no value in the IR's
-// grammar can carry. Timestamps, blobs and documents have no portable literal
-// and are already refused upstream (compat/model/README.md § Recipes), so this
-// is a backstop rather than a live path; a union is a Rust enum whose variant
-// the IR cannot name.
+// grammar can carry. Timestamps, documents and unions have no portable value
+// and are refused upstream — an error in a recipe or an authored scenario, and
+// `no-portable-value` for a binding (binder.go) — so this is a backstop rather
+// than a live path. A blob is not here: `$base64` spells it (rustBlob).
 var rustUnsupportedKinds = map[string]bool{
 	"timestamp": true,
-	"blob":      true,
 	"document":  true,
 	"union":     true,
 }
@@ -679,6 +678,9 @@ func rustValueOfKind(model *serviceModel, crate, target string, value any, path 
 	if rustUnsupportedKinds[kind] {
 		return "", fmt.Errorf("the rust-sdk emitter has no Rust value expression for a %s member (%s)", kind, path)
 	}
+	if kind == "blob" {
+		return rustBlob(crate, value, path, bind)
+	}
 	if _, _, isExpr := exprOf(value); !isExpr {
 		return rustLiteralOfKind(model, crate, target, value)
 	}
@@ -700,6 +702,50 @@ func rustValueOfKind(model *serviceModel, crate, target string, value any, path 
 	// the composite at run time would mean converting a document into typed
 	// values without a type to convert it to — reflection, by another name.
 	return "", fmt.Errorf("a value expression can only be bound to a scalar member; %s is a %s", path, kind)
+}
+
+// rustBlob renders a `$base64` value into a blob member, whose setter takes the
+// crate's re-exported `primitives::Blob`.
+//
+// A literal is decoded at generation time and written as a Rust byte string —
+// printable ASCII as itself, everything else as \xNN — so the bytes are in the
+// source for the compiler and a reader alike. A `$base64` around a $ref is
+// deferred: the runtime has already evaluated it into the params document as
+// base64 text, and Binder::blob reads that leaf back and decodes it.
+func rustBlob(crate string, value any, path string, bind *rustBindings) (string, error) {
+	key, arg, isExpr := exprOf(value)
+	if !isExpr || key != "$base64" {
+		return "", fmt.Errorf("%s is a blob member, which takes $base64, but the scenario gives it %s", path, valueKind(value))
+	}
+	if text, literal := arg.(string); literal {
+		raw, err := decodeBase64(text)
+		if err != nil {
+			return "", fmt.Errorf("%s: $base64 %q %w", path, text, err)
+		}
+		return fmt.Sprintf("%s::primitives::Blob::new(%s.to_vec())", crate, rustByteString(raw)), nil
+	}
+	bind.used = true
+	return fmt.Sprintf("%s::primitives::Blob::new(b.blob(%s)?)", crate, rustString(path)), nil
+}
+
+// rustByteString renders bytes as a Rust byte-string literal.
+func rustByteString(raw []byte) string {
+	var b strings.Builder
+	b.WriteString(`b"`)
+	for _, c := range raw {
+		switch {
+		case c == '"':
+			b.WriteString(`\"`)
+		case c == '\\':
+			b.WriteString(`\\`)
+		case c >= 0x20 && c < 0x7f:
+			b.WriteByte(c)
+		default:
+			fmt.Fprintf(&b, `\x%02x`, c)
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
 }
 
 // rustLiteralOfKind renders a literal the scenario file states outright.
@@ -862,6 +908,12 @@ func rustValue(v any, indent string) (string, error) {
 				return "", err
 			}
 			return fmt.Sprintf("scenario::index(%s, %d)", inner, n), nil
+		case "$base64":
+			inner, err := rustValue(arg, indent)
+			if err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("scenario::base64(%s)", inner), nil
 		}
 	}
 	switch value := v.(type) {

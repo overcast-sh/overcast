@@ -175,6 +175,11 @@ func generateAuthored(a authored, model *serviceModel, client clientInfo) (*gene
 			}
 		}
 	}
+	for _, g := range s.Groups {
+		if err := checkAuthoredValues(model, g); err != nil {
+			return nil, fmt.Errorf("%s: group %s: %w", a.file, g.Name, err)
+		}
+	}
 	return &generation{
 		scenario: s,
 		unit:     authoredUnit(a.name),
@@ -207,6 +212,178 @@ func checkAuthoredCall(model *serviceModel, c call) error {
 	for _, ctx := range sortedStringKeys(c.Export) {
 		if err := checkAuthoredPath(model, output, c.Export[ctx]); err != nil {
 			return fmt.Errorf("export %s: %w", ctx, err)
+		}
+	}
+	return nil
+}
+
+// checkAuthoredValues holds an authored group's values to the rules that decide
+// whether every backend can send them, which is the half of checkValue a
+// generated scenario gets from the binder and a hand-written one would
+// otherwise not get at all.
+//
+// It is the blob rule (checkBlob): a blob member — at any depth, and on the
+// expected side of an `equals` or a `where` that resolves to one — takes
+// `$base64` and nothing else, and `$base64` goes nowhere else. Without it a
+// string literal on a blob member passed this file, and the four source
+// emitters were what refused it, each scoping the group away from its suite
+// (#1910): the port would have run in three suites and reported no reason why.
+// Here it is an error naming the member and pointing at `$base64`.
+//
+// Exports are tracked in the order the group runs — setup, then each test's
+// call and its clauses, then teardown — so a `$base64` around a $ref is checked
+// against the kind of what that $ref really names.
+func checkAuthoredValues(model *serviceModel, g group) error {
+	exports := exportKinds{}
+	record := func(c call) {
+		output := model.OutputShape(c.Op)
+		for _, ctx := range sortedStringKeys(c.Export) {
+			path, err := parsePath(c.Export[ctx])
+			if err != nil || output == "" {
+				continue
+			}
+			if target, err := model.ResolvePath(output, path); err == nil {
+				exports[ctx] = model.Kind(target)
+			}
+		}
+	}
+	checkCall := func(c call, where string) error {
+		input := model.InputShape(c.Op)
+		for _, member := range sortedKeys(c.Params) {
+			target, ok := model.MemberTarget(input, member)
+			if !ok {
+				continue // checkAuthoredCall has already named it
+			}
+			if err := checkAuthoredValue(model, c.Params[member], target, exports, where+" "+c.Op+"."+member); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	var checkClause func(a assertion, own string, where string) error
+	checkClause = func(a assertion, own string, where string) error {
+		output := model.OutputShape(own)
+		if a.Call != nil {
+			if err := checkCall(*a.Call, where); err != nil {
+				return err
+			}
+			output = model.OutputShape(a.Call.Op)
+		}
+		for _, raw := range sortedCheckPaths(a.Checks) {
+			c := a.Checks[raw]
+			if c.Equals == nil || output == "" {
+				continue
+			}
+			path, err := parsePath(raw)
+			if err != nil {
+				return err
+			}
+			target, err := model.ResolvePath(output, path)
+			if err != nil {
+				continue // an unresolvable path is the check's own failure to report
+			}
+			if err := checkAuthoredValue(model, c.Equals, target, exports, where+" check "+raw); err != nil {
+				return err
+			}
+		}
+		if len(a.Where) > 0 && output != "" {
+			if items, err := parsePath(a.ItemsPath); err == nil {
+				if list, err := model.ResolvePath(output, items); err == nil && model.Kind(list) == "list" {
+					element := model.Shapes[list].Member
+					for _, raw := range sortedValueKeys(a.Where) {
+						path, err := parsePath(raw)
+						if err != nil {
+							return err
+						}
+						target, err := model.ResolvePath(element, path)
+						if err != nil {
+							continue
+						}
+						if err := checkAuthoredValue(model, a.Where[raw], target, exports, where+" where "+raw); err != nil {
+							return err
+						}
+					}
+				}
+			}
+		}
+		if a.Call != nil {
+			record(*a.Call)
+		}
+		if a.Assert != nil {
+			return checkClause(*a.Assert, own, where)
+		}
+		return nil
+	}
+	for i, c := range g.Setup {
+		if err := checkCall(c, fmt.Sprintf("setup[%d]", i)); err != nil {
+			return err
+		}
+		record(c)
+	}
+	for _, t := range g.Tests {
+		where := "test " + t.Name
+		if err := checkCall(t.Call, where+": call"); err != nil {
+			return err
+		}
+		record(t.Call)
+		for i, a := range t.Assert {
+			if err := checkClause(a, t.Call.Op, fmt.Sprintf("%s: assert[%d]", where, i)); err != nil {
+				return err
+			}
+		}
+	}
+	for i, c := range g.Teardown {
+		if err := checkCall(c, fmt.Sprintf("teardown[%d]", i)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// checkAuthoredValue walks one value against the shape it is sent as, or
+// compared with, and applies the blob rule wherever the two meet a blob. It
+// descends only through structure the value itself spells out; an expression
+// other than `$base64` is left alone, because what it evaluates to is the run's
+// business and not this check's.
+func checkAuthoredValue(model *serviceModel, v any, target string, exports exportKinds, where string) error {
+	kind := model.Kind(target)
+	if kind == "blob" {
+		return checkBlob(model, v, target, exports, where)
+	}
+	if key, _, isExpr := exprOf(v); isExpr {
+		if key == "$base64" {
+			return fmt.Errorf("%s: $base64 is bytes, for a blob member, but %s is a %s", where, bareShapeName(target), kind)
+		}
+		return nil
+	}
+	switch value := v.(type) {
+	case []any:
+		if kind != "list" {
+			return nil
+		}
+		for i, item := range value {
+			if err := checkAuthoredValue(model, item, model.Shapes[target].Member, exports, fmt.Sprintf("%s[%d]", where, i)); err != nil {
+				return err
+			}
+		}
+	case map[string]any:
+		for _, k := range sortedKeys(value) {
+			var child string
+			switch kind {
+			case "map":
+				child = model.Shapes[target].Value
+			case "structure":
+				t, ok := model.MemberTarget(target, k)
+				if !ok {
+					continue
+				}
+				child = t
+			default:
+				return nil
+			}
+			if err := checkAuthoredValue(model, value[k], child, exports, where+"."+k); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

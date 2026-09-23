@@ -33,13 +33,14 @@ export interface ValueObject {
   [key: string]: Value;
 }
 
-/** The five expression forms. `$`-keyed, exactly one key each. */
+/** The six expression forms. `$`-keyed, exactly one key each. */
 export type Expression =
   | { $lit: JsonValue }
   | { $ref: string }
   | { $name: string }
   | { $concat: Value[] }
-  | { $index: [Value, number] };
+  | { $index: [Value, number] }
+  | { $base64: string | { $ref: string } };
 
 /**
  * A response path: `$`, then any number of `.Member` or `[index]` segments.

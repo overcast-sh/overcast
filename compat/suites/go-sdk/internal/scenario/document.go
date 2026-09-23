@@ -97,10 +97,10 @@ func fromValue(rv reflect.Value) (any, bool) {
 		if rv.Kind() == reflect.Slice && rv.IsNil() {
 			return nil, false
 		}
-		// A blob is []byte, which JSON carries base64-encoded. Blobs are
-		// refused by the generator, so nothing asserts on one; rendering it
-		// the way the wire does is still better than a list of 8-bit numbers
-		// in a failure message.
+		// A blob is []byte, and its document form in every backend is its
+		// standard base64 text (compat/model/README.md § Values): what an
+		// `equals` against a `$base64` compares, and what an export of a blob
+		// puts in the context bag for a later `$base64` around a $ref to decode.
 		if rv.Type().Elem().Kind() == reflect.Uint8 && rv.Type().Elem().PkgPath() == "" {
 			return base64.StdEncoding.EncodeToString(rv.Bytes()), true
 		}

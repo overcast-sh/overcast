@@ -1,6 +1,7 @@
 package scenario
 
 import (
+	"encoding/base64"
 	"fmt"
 	"math"
 	"strings"
@@ -21,6 +22,7 @@ import (
 //	{"$name": "q"}     → Name("q")
 //	{"$concat": [...]} → Concat(...)
 //	{"$index": [v, n]} → Index(v, n)
+//	{"$base64": x}     → Base64(x), and Blob(b, member, Base64(x)) in a blob slot
 
 // A Value is one deferred value expression. It is deferred rather than
 // evaluated where it is written because a clause is built before the test's
@@ -89,6 +91,73 @@ func Index(list any, n int) Value {
 		}
 		return items[n], nil
 	}
+}
+
+// Base64 is `$base64`: a blob. Its value is the blob's document form — the
+// canonical standard base64 text, which is also how document.go renders a []byte
+// out of a response and so how an exported blob sits in the context bag — which
+// is what lets an `equals` compare a blob path against it as two strings. arg
+// is a literal base64 string or an expression evaluating to one (the generator
+// allows only a $ref to an exported blob); text that is not canonical standard
+// base64 is an error, never a second spelling of the same bytes.
+//
+// A blob member does not take this value as it is: scenario.Blob decodes it
+// into the []byte the SDK field wants.
+func Base64(arg any) Value {
+	return func(b *Binder) (any, error) {
+		v, err := b.eval(arg)
+		if err != nil {
+			return nil, err
+		}
+		text, ok := v.(string)
+		if !ok {
+			return nil, fmt.Errorf("$base64 takes base64 text, got %s", render(v))
+		}
+		if _, err := DecodeBase64(text); err != nil {
+			return nil, err
+		}
+		return text, nil
+	}
+}
+
+// DecodeBase64 decodes a blob's document form: standard base64 with padding,
+// in its one canonical spelling. compat/model/testdata/blobs pins what it
+// accepts and refuses, for every backend at once.
+func DecodeBase64(text string) ([]byte, error) {
+	raw, err := base64.StdEncoding.Strict().DecodeString(text)
+	if err != nil {
+		return nil, fmt.Errorf("$base64 %q is not standard padded base64: %v", text, err)
+	}
+	if canonical := base64.StdEncoding.EncodeToString(raw); canonical != text {
+		return nil, fmt.Errorf("$base64 %q is not the canonical spelling of its bytes, which is %q", text, canonical)
+	}
+	return raw, nil
+}
+
+// Blob evaluates a `$base64` expression into the []byte a blob member is. The
+// emitted source calls it only for a deferred blob — a `$base64` around a $ref —
+// because a literal's bytes are written into the source as a []byte literal.
+// Like Bind, a failure is recorded on the binder and abandons the call.
+func Blob(b *Binder, member string, v any) []byte {
+	if b.err != nil {
+		return nil
+	}
+	value, err := b.eval(v)
+	if err != nil {
+		b.fail(member, err)
+		return nil
+	}
+	text, ok := value.(string)
+	if !ok {
+		b.fail(member, fmt.Errorf("wanted a blob's base64 text, got %s", render(value)))
+		return nil
+	}
+	raw, err := DecodeBase64(text)
+	if err != nil {
+		b.fail(member, err)
+		return nil
+	}
+	return raw
 }
 
 // refError is an unresolvable $ref: an error for the step that carries it, and

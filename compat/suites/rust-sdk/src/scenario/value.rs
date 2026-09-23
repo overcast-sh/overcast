@@ -13,6 +13,7 @@
 //! {"$name": "q"}     → Value::Name("q")
 //! {"$concat": [...]} → Value::Concat(...)
 //! {"$index": [v, n]} → Value::Index(v, n)
+//! {"$base64": x}     → Value::Base64(x), read back by Binder::blob in a blob slot
 //! ```
 //!
 //! # Why the typed call reads the evaluated params rather than the expression
@@ -45,6 +46,11 @@ pub enum Value {
     /// current corpus writes one; the grammar is closed, not corpus-shaped.
     #[allow(dead_code)]
     Index(Box<Value>, usize),
+    /// `$base64`: a blob. It evaluates to the blob's document form — the
+    /// canonical standard base64 text, which is also how a blob arrives in a
+    /// JSON or XML response body and so how an exported one sits in the bag —
+    /// and [`Binder::blob`] decodes it into the bytes a blob setter takes.
+    Base64(Box<Value>),
     /// A list of values.
     List(Vec<Value>),
     /// A structure or map of values.
@@ -105,6 +111,16 @@ impl Value {
                     json::render(&other)
                 ))),
             },
+            Value::Base64(inner) => match inner.eval(bag)? {
+                Json::String(text) => {
+                    decode_base64(&text).map_err(EvalError::Message)?;
+                    Ok(Json::String(text))
+                }
+                other => Err(EvalError::Message(format!(
+                    "$base64 takes base64 text, got {}",
+                    json::render(&other)
+                ))),
+            },
             Value::List(items) => {
                 let mut out = Vec::with_capacity(items.len());
                 for item in items {
@@ -141,6 +157,7 @@ impl Value {
                 "$index",
                 Json::Array(vec![inner.raw(), Json::Number((*n).into())]),
             ),
+            Value::Base64(inner) => expr("$base64", inner.raw()),
             Value::List(items) => Json::Array(items.iter().map(Value::raw).collect()),
             Value::Map(entries) => {
                 let mut out = serde_json::Map::new();
@@ -151,6 +168,26 @@ impl Value {
             }
         }
     }
+}
+
+/// Decodes a blob's document form: standard base64 with padding, in its one
+/// canonical spelling. The `base64` crate's standard engine refuses a missing
+/// pad and non-zero trailing bits already; the round trip is kept anyway, so
+/// the rule is stated the way every other backend states it.
+/// compat/model/testdata/blobs pins what every backend accepts and refuses.
+pub(crate) fn decode_base64(text: &str) -> Result<Vec<u8>, String> {
+    use base64::Engine;
+    let engine = base64::engine::general_purpose::STANDARD;
+    let raw = engine.decode(text).map_err(|err| {
+        format!("$base64 {text:?} is not standard padded base64: {err}")
+    })?;
+    let canonical = engine.encode(&raw);
+    if canonical != text {
+        return Err(format!(
+            "$base64 {text:?} is not the canonical spelling of its bytes, which is {canonical:?}"
+        ));
+    }
+    Ok(raw)
 }
 
 fn expr(key: &str, arg: Json) -> Json {
@@ -233,6 +270,23 @@ impl Binder {
         match self.at(member)? {
             Json::String(s) => Ok(s.clone()),
             other => Err(self.wrong(member, "a string", other)),
+        }
+    }
+
+    /// The value at a member path, as the bytes of a blob.
+    ///
+    /// The evaluated params hold a `$base64` as its base64 text — its document
+    /// form, and what a failure message's field 3 shows — so this decodes it.
+    /// Only a deferred blob (a `$base64` around a `$ref`) goes through here; a
+    /// literal's bytes are written into the emitted source as a byte string.
+    #[allow(dead_code)]
+    pub fn blob(&self, member: &str) -> Result<Vec<u8>, BindError> {
+        match self.at(member)? {
+            Json::String(text) => decode_base64(text).map_err(|message| BindError {
+                member: member.to_string(),
+                message,
+            }),
+            other => Err(self.wrong(member, "a blob's base64 text", other)),
         }
     }
 
