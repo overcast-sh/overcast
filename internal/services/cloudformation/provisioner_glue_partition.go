@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/overcast-sh/overcast/internal/config"
@@ -15,7 +16,9 @@ import (
 // https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-glue-partition.html
 //
 // PartitionInput has the Glue API's PartitionInput shape, so it is forwarded
-// as-is. CatalogId, DatabaseName and TableName require replacement;
+// as-is apart from Values, which are strings in the API but arrive as numbers
+// from a template that writes `Values: [2020]` unquoted, as CloudFormation
+// itself accepts. CatalogId, DatabaseName and TableName require replacement;
 // PartitionInput updates in place through UpdatePartition, which also moves
 // the partition when its Values change.
 //
@@ -29,10 +32,22 @@ type gluePartitionHandler struct{}
 var gluePartitionProperties = []string{"CatalogId", "DatabaseName", "TableName", "PartitionInput"}
 
 func gluePartitionBody(props map[string]any) map[string]any {
+	input := props["PartitionInput"]
+	if in, ok := input.(map[string]any); ok {
+		// props belongs to the resolved template; copy rather than mutate.
+		normalised := make(map[string]any, len(in))
+		for k, v := range in {
+			normalised[k] = v
+		}
+		if _, has := in["Values"]; has {
+			normalised["Values"] = gluePartitionValues(props)
+		}
+		input = normalised
+	}
 	body := map[string]any{
 		"DatabaseName":   props["DatabaseName"],
 		"TableName":      props["TableName"],
-		"PartitionInput": props["PartitionInput"],
+		"PartitionInput": input,
 	}
 	if catalogID, _ := props["CatalogId"].(string); catalogID != "" {
 		body["CatalogId"] = catalogID
@@ -45,6 +60,11 @@ func gluePartitionValues(props map[string]any) []string {
 	raw, _ := input["Values"].([]any)
 	values := make([]string, 0, len(raw))
 	for _, v := range raw {
+		if f, ok := v.(float64); ok {
+			// Spelled as written: 2020, not 2020.000000 or 2.02e+03.
+			values = append(values, strconv.FormatFloat(f, 'f', -1, 64))
+			continue
+		}
 		values = append(values, fmt.Sprint(v))
 	}
 	return values
@@ -96,18 +116,17 @@ func (h *gluePartitionHandler) Delete(ctx context.Context, router http.Handler, 
 	return teardownError("DeletePartition", rec, err)
 }
 
-func (h *gluePartitionHandler) Update(ctx context.Context, router http.Handler, _ *config.Config, physicalID string, props map[string]any, oldProps map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
+func (h *gluePartitionHandler) Update(ctx context.Context, router http.Handler, _ *config.Config, _ string, props map[string]any, oldProps map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
 	for _, name := range []string{"CatalogId", "DatabaseName", "TableName"} {
 		if fmt.Sprint(props[name]) != fmt.Sprint(oldProps[name]) {
 			return "", nil, errReplacementRequired
 		}
 	}
-	_, _, oldValues, ok := parseGluePartitionPhysicalID(physicalID)
-	if !ok {
-		return "", nil, errReplacementRequired
-	}
+	// The partition to update is the one oldProps describes, not the one
+	// physicalID names: on a rollback the provisioner passes the previous
+	// physical ID while the partition already lives at the new values.
 	body := gluePartitionBody(props)
-	body["PartitionValueList"] = oldValues
+	body["PartitionValueList"] = gluePartitionValues(oldProps)
 	if _, err := internalJSON(ctx, router, rCtx.Region, "AWSGlue.UpdatePartition", body); err != nil {
 		return "", nil, fmt.Errorf("UpdatePartition: %w", err)
 	}
