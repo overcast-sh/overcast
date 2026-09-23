@@ -1446,7 +1446,7 @@ manifest.
 8. Add the operation to `compat/suites/registry.json`, then implement it in **every** SDK/CLI compat suite (node-js-sdk, python-sdk, go-sdk, cli, java-sdk, dotnet-sdk, rust-sdk) — marking it `na` where an SDK has no API for it. `go run ./cmd/compat --check-parity` enforces this; see [compat/AGENTS.md § Baseline & uniformity policy](./compat/AGENTS.md#baseline--uniformity-policy)
 9. **Web UI** — if the new endpoint exposes data the user would want to see or manage:
    - Update the service's list/detail pages in `web/src/features/<service>/` (or create them if they don't exist)
-   - Add topology nodes/edges in `internal/router/topology.go` if the endpoint creates a new resource type that has relationships to other services
+   - Put the new resource type on the system map in the service's `ContributeTopology` (see [internal/topology](./internal/topology/types.go)) if it has relationships to other services
    - Wire SSE cache invalidation in `web/src/hooks/use-event-stream.ts` so the UI updates in real time when the resource is created/deleted
 10. `make test` — all tests must pass with `-race`
 
@@ -1515,7 +1515,7 @@ works and is exactly as unbounded as it always was — it just does not get the 
   - `nav: false` — omit from sidebar but still show a dashboard card (e.g. KMS, STS)
   - `dashboardCard: false` — omit from dashboard but still show in sidebar (e.g. WAF, CloudWatch)
 - Create list and detail pages in `web/src/features/<n>/` and `web/src/routes/<n>/` (follow an existing service like SSM or KMS as a template)
-- Add topology nodes and edges in `internal/router/topology.go` so the service appears on the system map with its resource relationships
+- Implement `topology.Contributor` on the service (`ContributeTopology`, in the service's own `topology.go`) so it appears on the system map with its resource relationships. `internal/services/sqs/topology.go` and `internal/services/lambda/topology.go` are the worked examples
 - Add SSE event types and wire cache invalidation in `web/src/hooks/use-event-stream.ts` so the UI updates in real time
 - Add an AWS SDK client factory in `web/src/services/aws-clients.ts`; if the service needs a custom BFF route (beyond simple JSON proxy), add a handler in `internal/bff/bff.go` and register it in `bff.NewHandler`
 

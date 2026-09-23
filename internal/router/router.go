@@ -86,6 +86,7 @@ import (
 	"github.com/overcast-sh/overcast/internal/serviceutil"
 	"github.com/overcast-sh/overcast/internal/smtp"
 	"github.com/overcast-sh/overcast/internal/state"
+	"github.com/overcast-sh/overcast/internal/topology"
 	"github.com/overcast-sh/overcast/internal/trace"
 )
 
@@ -519,6 +520,7 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	}
 	var stoppers []namedStopper
 	var readiers []Readier
+	var topologyContributors []topology.Contributor
 	serviceByName := make(map[string]Service, len(allServices))
 	// Keep S3's deliberately broad bucket/object routes private until every
 	// non-S3 service has had an opportunity to own an explicit path. The final
@@ -592,6 +594,9 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 		}
 		if rd, ok := svc.(Readier); ok {
 			readiers = append(readiers, rd)
+		}
+		if tc, ok := svc.(topology.Contributor); ok {
+			topologyContributors = append(topologyContributors, tc)
 		}
 		enabledServiceNames = append(enabledServiceNames, svc.Name())
 		if tier, ok := ServiceTiers[svc.Name()]; ok {
@@ -1206,7 +1211,7 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	r.HandleFunc(middleware.AWSCompatPrefix+"*", newAWSCompatNotFoundHandler(compatHinter))
 
 	// GET /_overcast/topology — full cross-region resource graph for the system map.
-	r.Get("/_overcast/topology", newTopologyHandler(cfg, store))
+	r.Get("/_overcast/topology", newTopologyHandler(cfg, store, topologyContributors, logger))
 
 	// GET /_overcast/preflight/region — why a console list page came back
 	// empty when the resources are in a region the reader is not looking at.
