@@ -24,6 +24,7 @@ public final class ScenariosGen {
                 new ScenariosAuthoredEventbridgeBusesGen(clients),
                 new ScenariosAuthoredEventbridgeEventsGen(clients),
                 new ScenariosAuthoredEventbridgeRulesGen(clients),
+                new ScenariosAuthoredKinesisShardsGen(clients),
                 new ScenariosAuthoredKinesisStreamsGen(clients),
                 new ScenariosAuthoredLogsGroupsGen(clients),
                 new ScenariosAuthoredLogsMetricFiltersGen(clients),

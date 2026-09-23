@@ -1,0 +1,225 @@
+{
+  "$comment": "Authored port of the hand-written registry group kinesis-shards (docs/plans/compat-coverage-modelgen.md §3.11, G6, #1116). One spec in place of five per-language implementations — and of the two that were never written: dotnet-sdk and rust-sdk carry 3 rows each of parity debt for this group, which the port closes. It runs today under the shadow name kinesis-shards-shadow, beside the natives, so the nightly can compare the two per (suite, test); the flip PR renames this group to kinesis-shards, points the registry entry at this file, and deletes the native code. The clauses are the union of what the five natives assert — see compat/model/README.md § Authored scenarios.",
+  "version": 1,
+  "service": "kinesis",
+  "client": {
+    "sdkId": "Kinesis",
+    "endpointPrefix": "kinesis",
+    "signingName": "kinesis",
+    "protocol": "awsJson1_1",
+    "apiVersion": "2013-12-02",
+    "targetPrefix": "Kinesis_20131202",
+    "awsQueryCompatible": false
+  },
+  "groups": [
+    {
+      "$comment": "One two-shard stream, created in setup and deleted in teardown — all five natives create exactly that. Its life is one reshard and back: ListShards reads the two shards, SplitShard splits the first, MergeShards merges the split's two children again. Every native computes SplitShard's NewStartingHashKey as the big-integer midpoint of the parent's range, which no IR value expression can spell (no arithmetic, by design); it is a literal here instead, and the SplitShard test says why that literal is the one every native sends. Where the natives disagree on what to merge, none of them is followed: see MergeShards. Two limits of the IR are stated rather than hidden. (1) Setup cannot poll: every native waits for the stream to reach ACTIVE before its first test, and a setup step here is one call, so the first test's primary ListShards is the one call in this group that may meet a CREATING stream — AWS lists ResourceInUseException for ListShards. Overcast answers ACTIVE on the first attempt, so nothing the soak observes depends on it, and ListShards's own `eventually` restores the wait before any reshard. (2) Reads after a reshard filter to the open shards (ShardFilter AT_LATEST), which is what the python-sdk, node-js-sdk, go-sdk, cli and java-sdk natives do by hand (keeping the shards with no EndingSequenceNumber); the filter is what makes one read mean the same on AWS, whose unfiltered ListShards also returns the closed parents, and on Overcast, whose ListShards returns open shards only and ignores ShardFilter (internal/services/kinesis/capabilities_dev.go). SplitShard and MergeShards are asynchronous on AWS — the stream is UPDATING until ACTIVE — so their effects are read through `eventually`, 30 × 500 ms: inside the natives' own waits, which run from 3 s (node-js-sdk, 10 × 300 ms) to 30 s (go-sdk, java-sdk).",
+      "name": "kinesis-shards-shadow",
+      "kind": "lifecycle",
+      "setup": [
+        {
+          "op": "CreateStream",
+          "params": {
+            "StreamName": { "$name": "s" },
+            "ShardCount": 2
+          }
+        }
+      ],
+      "tests": [
+        {
+          "$comment": "go-sdk and node-js-sdk assert at least two shards; python-sdk and java-sdk at least one; cli that the list is non-empty, and it records the first shard and its hash range for the split. The union, as exact claims because setup asks for exactly two shards and the IR has no ordered comparison: shard 0 and shard 1 are present and there is no third. Shard 0's StartingHashKey is asserted to be \"0\" — no native asserts it, but it is the precondition the literal NewStartingHashKey in SplitShard rests on, stated where a failure of it would be legible; AWS's own list-shards example (a 3-shard stream, shardId-000000000001 starting at floor(2^128/3)) documents the keyspace being dealt out to shards in ID order from 0. The EndingHashKey is deliberately not asserted: AWS gives a 2-shard stream's shard 0 the range 0..2^127−1, Overcast's buildInitialShards 0..2^127−2 (it divides 2^128−1 rather than 2^128), which is an emulator fidelity gap the natives never observe and a shadow must not diverge on. The trailing `eventually` is the wait for ACTIVE the natives do in setup, restored before SplitShard needs it.",
+          "name": "ListShards",
+          "op": "ListShards",
+          "call": {
+            "op": "ListShards",
+            "params": { "StreamName": { "$name": "s" } },
+            "export": {
+              "shard.first": "$.Shards[0].ShardId",
+              "shard.second": "$.Shards[1].ShardId"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Shards[0].ShardId": { "nonEmpty": true },
+                "$.Shards[0].HashKeyRange.StartingHashKey": { "equals": "0" },
+                "$.Shards[1].ShardId": { "nonEmpty": true },
+                "$.Shards[2]": { "missing": true }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 30,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "DescribeStreamSummary",
+                  "params": { "StreamName": { "$name": "s" } }
+                },
+                "checks": {
+                  "$.StreamDescriptionSummary.StreamStatus": { "equals": "ACTIVE" },
+                  "$.StreamDescriptionSummary.OpenShardCount": { "equals": 2 }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "Every native splits the first listed shard at the midpoint of its hash range, floor((start + end) / 2), computed in big-integer arithmetic (Go math/big, Python int, JS BigInt, Java BigInteger). The IR has no arithmetic, so the midpoint is written as the literal it always evaluates to: shard 0 of a fresh 2-shard stream starts at 0 and ends at 2^127−1 on AWS, and floor((0 + 2^127−1) / 2) = 2^126−1 = 85070591730234615865843651857942052863; on Overcast it ends at 2^127−2, and floor((0 + 2^127−2) / 2) is the same 2^126−1. So the port sends exactly the key every native sends, against both. AWS's SplitShard reference requires only that NewStartingHashKey lie in the parent's range and itself splits shardId-000000000000 at the literal \"10\"; the ListShards test above asserts the range's start that this rests on. What the natives assert afterwards: python-sdk at least two open shards, node-js-sdk at least three, cli at least two shards of any state; go-sdk and java-sdk only wait for ACTIVE. The union, exact: the stream is ACTIVE again with three open shards, the unsplit shard (shard.second) is still the first of them — which, since a split mints higher shard IDs and ListShards lists in shard-ID order, makes the other two the children — and the children are the parent's two halves, one starting at 0 and one at the split key. Their IDs are exported for MergeShards.",
+          "name": "SplitShard",
+          "op": "SplitShard",
+          "call": {
+            "op": "SplitShard",
+            "params": {
+              "StreamName": { "$name": "s" },
+              "ShardToSplit": { "$ref": "shard.first" },
+              "NewStartingHashKey": "85070591730234615865843651857942052863"
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 30,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "DescribeStreamSummary",
+                  "params": { "StreamName": { "$name": "s" } }
+                },
+                "checks": {
+                  "$.StreamDescriptionSummary.StreamStatus": { "equals": "ACTIVE" },
+                  "$.StreamDescriptionSummary.OpenShardCount": { "equals": 3 }
+                }
+              }
+            },
+            {
+              "kind": "readback",
+              "call": {
+                "op": "ListShards",
+                "params": {
+                  "StreamName": { "$name": "s" },
+                  "ShardFilter": { "Type": "AT_LATEST" }
+                },
+                "export": {
+                  "child.first": "$.Shards[1].ShardId",
+                  "child.second": "$.Shards[2].ShardId"
+                }
+              },
+              "checks": {
+                "$.Shards[0].ShardId": { "equals": { "$ref": "shard.second" } },
+                "$.Shards[1].ShardId": { "nonEmpty": true },
+                "$.Shards[2].ShardId": { "nonEmpty": true },
+                "$.Shards[3]": { "missing": true }
+              }
+            },
+            {
+              "kind": "listContains",
+              "call": {
+                "op": "ListShards",
+                "params": {
+                  "StreamName": { "$name": "s" },
+                  "ShardFilter": { "Type": "AT_LATEST" }
+                }
+              },
+              "itemsPath": "$.Shards",
+              "where": { "$.HashKeyRange.StartingHashKey": "0" }
+            },
+            {
+              "kind": "listContains",
+              "call": {
+                "op": "ListShards",
+                "params": {
+                  "StreamName": { "$name": "s" },
+                  "ShardFilter": { "Type": "AT_LATEST" }
+                }
+              },
+              "itemsPath": "$.Shards",
+              "where": { "$.HashKeyRange.StartingHashKey": "85070591730234615865843651857942052863" }
+            }
+          ],
+          "depends": ["ListShards"]
+        },
+        {
+          "$comment": "This is where the port departs from all five natives, deliberately. Each merges the first two OPEN shards it lists: go-sdk, cli, python-sdk and node-js-sdk in list order, java-sdk sorted by StartingHashKey compared as a string. After the split above those are the unsplit shard (2^127..2^128−1) and the lower child (0..2^126−2) in list order, and the lower child and the unsplit shard again in java-sdk's string order (\"0\" < \"170…\" < \"850…\") — never adjacent either way. AWS's MergeShards requires the two ranges to form one contiguous set with no gaps, so all five would fail against AWS with InvalidArgumentException; they pass today only because Overcast's mergeShardsTyped does not check adjacency (it takes the min start and max end of whatever it is given). The port merges the split's two children, which are adjacent by construction, so the same call is valid on both. go-sdk, cli and java-sdk also return success without merging when fewer than two shards are open. What the natives assert afterwards: python-sdk and node-js-sdk that fewer shards are open than before; go-sdk and java-sdk only wait for ACTIVE; cli nothing. The union, exact: ACTIVE with two open shards, neither child among them, and an open shard covering the children's range from 0 — the merged child AWS documents as receiving the hash keys of both parents.",
+          "name": "MergeShards",
+          "op": "MergeShards",
+          "call": {
+            "op": "MergeShards",
+            "params": {
+              "StreamName": { "$name": "s" },
+              "ShardToMerge": { "$ref": "child.first" },
+              "AdjacentShardToMerge": { "$ref": "child.second" }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 30,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "DescribeStreamSummary",
+                  "params": { "StreamName": { "$name": "s" } }
+                },
+                "checks": {
+                  "$.StreamDescriptionSummary.StreamStatus": { "equals": "ACTIVE" },
+                  "$.StreamDescriptionSummary.OpenShardCount": { "equals": 2 }
+                }
+              }
+            },
+            {
+              "kind": "readback",
+              "call": {
+                "op": "ListShards",
+                "params": {
+                  "StreamName": { "$name": "s" },
+                  "ShardFilter": { "Type": "AT_LATEST" }
+                }
+              },
+              "checks": {
+                "$.Shards[0].ShardId": { "equals": { "$ref": "shard.second" } },
+                "$.Shards[1].HashKeyRange.StartingHashKey": { "equals": "0" },
+                "$.Shards[2]": { "missing": true }
+              }
+            },
+            {
+              "kind": "absent",
+              "call": {
+                "op": "ListShards",
+                "params": {
+                  "StreamName": { "$name": "s" },
+                  "ShardFilter": { "Type": "AT_LATEST" }
+                }
+              },
+              "itemsPath": "$.Shards",
+              "where": { "$.ShardId": { "$ref": "child.first" } }
+            },
+            {
+              "kind": "absent",
+              "call": {
+                "op": "ListShards",
+                "params": {
+                  "StreamName": { "$name": "s" },
+                  "ShardFilter": { "Type": "AT_LATEST" }
+                }
+              },
+              "itemsPath": "$.Shards",
+              "where": { "$.ShardId": { "$ref": "child.second" } }
+            }
+          ],
+          "depends": ["SplitShard"]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "DeleteStream",
+          "params": { "StreamName": { "$name": "s" } }
+        }
+      ]
+    }
+  ]
+}
