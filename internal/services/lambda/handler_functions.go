@@ -2581,7 +2581,15 @@ func (h *Handler) InvokeFunction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Write AWS-style invoke response.
+	// Write AWS-style invoke response. Its x-amzn-RequestId is the
+	// invocation's own request id — the one in the function's START/REPORT
+	// lines — which is how a caller (Step Functions' lambda:invoke hands it on
+	// as SdkResponseMetadata.RequestId) finds the invocation's logs.
+	requestID := result.RequestID
+	if requestID == "" {
+		requestID = protocol.RequestIDFromContext(r.Context())
+	}
+	w.Header().Set("x-amzn-requestid", requestID)
 	w.Header().Set("Content-Type", "application/json")
 	if result.FunctionError != "" {
 		w.Header().Set("X-Amz-Function-Error", result.FunctionError)
@@ -2948,6 +2956,13 @@ func (h *Handler) invokeSyncOnce(ctx context.Context, fn *Function, rt Runtime, 
 
 	if invokeErr != nil {
 		log.Error("invoke: execution error", zap.String("function", name), zap.Error(invokeErr))
+		// A timed-out invocation still has the request id its logs carry —
+		// the one the caller needs to find them.
+		var timeout *invokeTimeoutError
+		requestID := ""
+		if errors.As(invokeErr, &timeout) {
+			requestID = timeout.RequestID
+		}
 		return &InvokeResult{
 			StatusCode:    200,
 			Payload:       invokeFailurePayload(invokeErr),
@@ -2955,6 +2970,7 @@ func (h *Handler) invokeSyncOnce(ctx context.Context, fn *Function, rt Runtime, 
 			LogGroupName:  fn.logGroupName(),
 			LogStreamName: logStreamName,
 			Duration:      invokeDuration,
+			RequestID:     requestID,
 		}
 	}
 	result.LogGroupName = fn.logGroupName()
