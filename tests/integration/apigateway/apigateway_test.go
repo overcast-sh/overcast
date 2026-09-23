@@ -3216,6 +3216,97 @@ func TestExecuteRestAPI_hostBasedInvoke(t *testing.T) {
 	}
 }
 
+// TestExecuteRestAPI_hostBasedInvokeEncodedSlashStaysOneSegment covers #2136.
+// AWS matches resources against the still-encoded path, so %2F inside a
+// segment is not a separator: npm's /@scope%2fpkg must match /{package}, not
+// the childless /{package}/{version} beside it. Path-style invoke already did
+// this; host-style used to decode the path first and answer 403.
+func TestExecuteRestAPI_hostBasedInvokeEncodedSlashStaysOneSegment(t *testing.T) {
+	// Given: /{package} with a PUT method and a method-less /{package}/{version}
+	srv := helpers.NewTestServer(t)
+	apiID, rootID := createRestAPIWithRoot(t, srv, "host-exec-encoded-slash")
+	pkgID := createResource(t, srv, apiID, rootID, "{package}")
+	createResource(t, srv, apiID, pkgID, "{version}")
+	putMethod(t, srv, apiID, pkgID, "PUT")
+	putIntegration(t, srv, apiID, pkgID, "PUT", "MOCK", "")
+	putMethodResponse(t, srv, apiID, pkgID, "PUT", "200")
+	putIntegrationResponse(t, srv, apiID, pkgID, "PUT", "200", `{"ok":true}`)
+	depID := createDeployment(t, srv, apiID)
+	createStage(t, srv, apiID, depID, "prod")
+
+	for _, tc := range []struct{ name, path, host string }{
+		{"host-style", "/prod/@scope%2fpkg", apiID + ".execute-api.eu-west-1.localhost.overcast.sh:4566"},
+		{"path-style", "/restapis/" + apiID + "/prod/_user_request_/@scope%2fpkg", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// When: a scoped package name is PUT with its slash percent-encoded
+			var resp *http.Response
+			if tc.host != "" {
+				resp = apiCallWithHost(t, srv, http.MethodPut, tc.path, tc.host, map[string]any{})
+			} else {
+				resp = apiCall(t, srv, http.MethodPut, tc.path, map[string]any{})
+			}
+
+			// Then: it reaches the /{package} PUT method's integration
+			helpers.AssertStatus(t, resp, http.StatusOK)
+			if body := helpers.ReadBody(t, resp); body != `{"ok":true}` {
+				t.Errorf("expected mock body %q, got %q", `{"ok":true}`, body)
+			}
+		})
+	}
+}
+
+// TestExecuteV2API_hostBasedInvokeEncodedSlashStaysOneSegment is the HTTP API
+// counterpart of the REST test above (#2136): with GET /{package} and
+// GET /{package}/{version} both routed, /@scope%2fpkg must pick /{package}.
+func TestExecuteV2API_hostBasedInvokeEncodedSlashStaysOneSegment(t *testing.T) {
+	// Given: each route proxies to its own upstream, which names itself
+	upstreamNamed := func(name string) string {
+		u := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-Route", name)
+		}))
+		t.Cleanup(u.Close)
+		return u.URL
+	}
+	srv := helpers.NewTestServer(t)
+	apiID := createV2API(t, srv, "v2-host-encoded-slash")
+	for routeKey, name := range map[string]string{
+		"GET /{package}":           "package",
+		"GET /{package}/{version}": "version",
+	} {
+		integResp := apiCall(t, srv, http.MethodPost, "/v2/apis/"+apiID+"/integrations", map[string]any{
+			"integrationType":   "HTTP_PROXY",
+			"integrationUri":    upstreamNamed(name),
+			"integrationMethod": "GET",
+		})
+		helpers.AssertStatus(t, integResp, http.StatusCreated)
+		var integ map[string]any
+		helpers.DecodeJSON(t, integResp, &integ)
+		createV2RouteWithTarget(t, srv, apiID, routeKey, "integrations/"+integ["integrationId"].(string))
+	}
+	createV2Stage(t, srv, apiID, "$default")
+
+	for _, tc := range []struct{ name, path, host string }{
+		{"host-style", "/@scope%2fpkg", apiID + ".execute-api.us-east-1.localhost:4566"},
+		{"path-style", "/v2/apis/" + apiID + "/stages/$default/@scope%2fpkg", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// When: a scoped package name is requested with its slash encoded
+			var resp *http.Response
+			if tc.host != "" {
+				resp = apiCallWithHost(t, srv, http.MethodGet, tc.path, tc.host, nil)
+			} else {
+				resp = apiCall(t, srv, http.MethodGet, tc.path, nil)
+			}
+			defer resp.Body.Close()
+
+			// Then: the one-segment route handles it
+			helpers.AssertStatus(t, resp, http.StatusOK)
+			helpers.AssertHeader(t, resp, "X-Route", "package")
+		})
+	}
+}
+
 // TestExecuteV2API_hostBasedInvokeDefaultStage proves a $default HTTP API
 // stage is reachable through its Host-routed invoke URL with NO stage
 // segment in the path — matching real AWS's $default semantics — via the
