@@ -19,7 +19,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"sort"
 	"strings"
 
 	"github.com/overcast-sh/overcast/internal/config"
@@ -36,31 +35,11 @@ const (
 // s3tablesCall dispatches one S3 Tables operation and decodes its response
 // into out when out is non-nil.
 func s3tablesCall(ctx context.Context, router http.Handler, region, method, path, op string, body, out any) error {
-	var data []byte
-	contentType := ""
-	if body != nil {
-		var err error
-		if data, err = json.Marshal(body); err != nil {
-			return fmt.Errorf("%s: marshal request: %w", op, err)
-		}
-		contentType = "application/json"
-	}
-	rec, err := s3tablesRequest(ctx, router, region, method, path, contentType, data)
-	if err != nil {
-		return fmt.Errorf("%s: %w", op, err)
-	}
-	if out != nil {
-		if err := json.Unmarshal(rec.Body.Bytes(), out); err != nil {
-			return fmt.Errorf("%s: parse response: %w", op, err)
-		}
-	}
-	return nil
+	return signedRESTJSON(ctx, router, "s3tables", region, method, path, op, body, out)
 }
 
 func s3tablesRequest(ctx context.Context, router http.Handler, region, method, path, contentType string, body []byte) (*httptest.ResponseRecorder, error) {
-	return restCall("s3tables", region, method, path, contentType, body, http.Header{
-		"Authorization": []string{"AWS4-HMAC-SHA256 Credential=overcast/20250101/" + region + "/s3tables/aws4_request, SignedHeaders=host, Signature=overcast"},
-	}).do(ctx, router)
+	return restCall("s3tables", region, method, path, contentType, body, scopedAuthHeader("s3tables", region)).do(ctx, router)
 }
 
 func s3tablesBucketPath(bucketARN string, rest ...string) string {
@@ -89,6 +68,18 @@ func cfnLowerStatus(v any) string {
 func cfnObject(v any) map[string]any {
 	m, _ := v.(map[string]any)
 	return m
+}
+
+// s3tablesPropChanged reports whether property name differs between props
+// and old, compared as JSON. On create (old == nil) a set property counts as
+// changed.
+func s3tablesPropChanged(props, old map[string]any, name string) bool {
+	if old == nil {
+		return props[name] != nil
+	}
+	a, _ := json.Marshal(props[name])
+	b, _ := json.Marshal(old[name])
+	return string(a) != string(b)
 }
 
 // s3tablesEncryption maps EncryptionConfiguration {SSEAlgorithm, KMSKeyArn}.
@@ -148,42 +139,13 @@ func (h *s3tablesTableBucketHandler) Create(ctx context.Context, router http.Han
 // through its own operation, skipping any that did not change since old (nil
 // on create).
 func (h *s3tablesTableBucketHandler) applyConfiguration(ctx context.Context, router http.Handler, region, arn string, props, old map[string]any) error {
-	changed := func(name string) bool {
-		if old == nil {
-			return props[name] != nil
-		}
-		a, _ := json.Marshal(props[name])
-		b, _ := json.Marshal(old[name])
-		return string(a) != string(b)
-	}
-	if changed("UnreferencedFileRemoval") && props["UnreferencedFileRemoval"] == nil {
-		// Removed from the template: back to AWS's default, which is enabled.
-		value := map[string]any{"status": "enabled", "settings": map[string]any{"icebergUnreferencedFileRemoval": map[string]any{
-			"unreferencedDays": 3, "nonCurrentDays": 10,
-		}}}
+	if s3tablesPropChanged(props, old, "UnreferencedFileRemoval") {
 		if err := s3tablesCall(ctx, router, region, http.MethodPut, s3tablesBucketPath(arn, "maintenance", "icebergUnreferencedFileRemoval"),
-			"PutTableBucketMaintenanceConfiguration", map[string]any{"value": value}, nil); err != nil {
+			"PutTableBucketMaintenanceConfiguration", map[string]any{"value": s3tablesUnreferencedFileRemoval(props["UnreferencedFileRemoval"])}, nil); err != nil {
 			return err
 		}
 	}
-	if ufr := cfnObject(props["UnreferencedFileRemoval"]); ufr != nil && changed("UnreferencedFileRemoval") {
-		settings := map[string]any{}
-		if v, ok := ufr["UnreferencedDays"]; ok {
-			settings["unreferencedDays"] = v
-		}
-		if v, ok := ufr["NoncurrentDays"]; ok {
-			settings["nonCurrentDays"] = v
-		}
-		value := map[string]any{"settings": map[string]any{"icebergUnreferencedFileRemoval": settings}}
-		if s := cfnLowerStatus(ufr["Status"]); s != "" {
-			value["status"] = s
-		}
-		if err := s3tablesCall(ctx, router, region, http.MethodPut, s3tablesBucketPath(arn, "maintenance", "icebergUnreferencedFileRemoval"),
-			"PutTableBucketMaintenanceConfiguration", map[string]any{"value": value}, nil); err != nil {
-			return err
-		}
-	}
-	if changed("MetricsConfiguration") {
+	if s3tablesPropChanged(props, old, "MetricsConfiguration") {
 		method, op := http.MethodDelete, "DeleteTableBucketMetricsConfiguration"
 		if cfnLowerStatus(cfnObject(props["MetricsConfiguration"])["Status"]) == "enabled" {
 			method, op = http.MethodPut, "PutTableBucketMetricsConfiguration"
@@ -192,19 +154,39 @@ func (h *s3tablesTableBucketHandler) applyConfiguration(ctx context.Context, rou
 			return err
 		}
 	}
-	if changed("ReplicationConfiguration") && props["ReplicationConfiguration"] == nil {
-		if err := s3tablesCall(ctx, router, region, http.MethodDelete, "/table-bucket-replication?tableBucketARN="+url.QueryEscape(arn),
-			"DeleteTableBucketReplication", nil, nil); err != nil {
-			return err
+	if s3tablesPropChanged(props, old, "ReplicationConfiguration") {
+		path := "/table-bucket-replication?tableBucketARN=" + url.QueryEscape(arn)
+		if repl := cfnObject(props["ReplicationConfiguration"]); repl != nil {
+			return s3tablesCall(ctx, router, region, http.MethodPut, path, "PutTableBucketReplication",
+				map[string]any{"configuration": convertCFKeysToAPI(repl)}, nil)
 		}
-	}
-	if repl := cfnObject(props["ReplicationConfiguration"]); repl != nil && changed("ReplicationConfiguration") {
-		if err := s3tablesCall(ctx, router, region, http.MethodPut, "/table-bucket-replication?tableBucketARN="+url.QueryEscape(arn),
-			"PutTableBucketReplication", map[string]any{"configuration": convertCFKeysToAPI(repl)}, nil); err != nil {
-			return err
-		}
+		return s3tablesCall(ctx, router, region, http.MethodDelete, path, "DeleteTableBucketReplication", nil, nil)
 	}
 	return nil
+}
+
+// s3tablesUnreferencedFileRemoval maps UnreferencedFileRemoval onto the
+// icebergUnreferencedFileRemoval maintenance value. A property removed from
+// the template (nil) goes back to AWS's default: enabled, 3 and 10 days.
+func s3tablesUnreferencedFileRemoval(v any) map[string]any {
+	ufr := cfnObject(v)
+	if ufr == nil {
+		return map[string]any{"status": "enabled", "settings": map[string]any{"icebergUnreferencedFileRemoval": map[string]any{
+			"unreferencedDays": 3, "nonCurrentDays": 10,
+		}}}
+	}
+	settings := map[string]any{}
+	if v, ok := ufr["UnreferencedDays"]; ok {
+		settings["unreferencedDays"] = v
+	}
+	if v, ok := ufr["NoncurrentDays"]; ok {
+		settings["nonCurrentDays"] = v
+	}
+	value := map[string]any{"settings": map[string]any{"icebergUnreferencedFileRemoval": settings}}
+	if s := cfnLowerStatus(ufr["Status"]); s != "" {
+		value["status"] = s
+	}
+	return value
 }
 
 func (h *s3tablesTableBucketHandler) Update(ctx context.Context, router http.Handler, _ *config.Config, physicalID string, props, oldProps map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
@@ -252,21 +234,7 @@ func (h *s3tablesTableBucketHandler) Delete(ctx context.Context, router http.Han
 // reconcileS3TablesTags applies the difference between the effective tags
 // before and after an update through TagResource and UntagResource.
 func reconcileS3TablesTags(ctx context.Context, router http.Handler, region, arn string, stackTags, priorStackTags []Tag, rawTags, rawPrior any) error {
-	tags := mergeResourceTags(stackTags, rawTags)
-	prior := mergeResourceTags(priorStackTags, rawPrior)
-	added := map[string]string{}
-	for k, v := range tags {
-		if prior[k] != v {
-			added[k] = v
-		}
-	}
-	var removed []string
-	for k := range prior {
-		if _, ok := tags[k]; !ok {
-			removed = append(removed, k)
-		}
-	}
-	sort.Strings(removed)
+	added, removed := tagDelta(mergeResourceTags(stackTags, rawTags), mergeResourceTags(priorStackTags, rawPrior))
 	path := "/tag/" + url.PathEscape(arn)
 	if len(added) > 0 {
 		if err := s3tablesCall(ctx, router, region, http.MethodPost, path, "TagResource", map[string]any{"tags": added}, nil); err != nil {
@@ -513,9 +481,7 @@ func s3tablesTableAttrs(ctx context.Context, router http.Handler, region, tableA
 // create-only properties force a replacement.
 func (h *s3tablesTableHandler) Update(ctx context.Context, router http.Handler, _ *config.Config, physicalID string, props, oldProps map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
 	for _, name := range []string{"TableBucketARN", "OpenTableFormat", "IcebergMetadata", "WithoutMetadata", "StorageClassConfiguration"} {
-		a, _ := json.Marshal(props[name])
-		b, _ := json.Marshal(oldProps[name])
-		if string(a) != string(b) {
+		if s3tablesPropChanged(props, oldProps, name) {
 			return "", nil, errReplacementRequired
 		}
 	}

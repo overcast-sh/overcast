@@ -933,20 +933,7 @@ func reconcileKinesisRetention(ctx context.Context, router http.Handler, region,
 func reconcileKinesisStreamTags(ctx context.Context, router http.Handler, region, streamName string, stackTags, priorStackTags []Tag, rawTags, rawPrior any) error {
 	tags := mergeResourceTags(stackTags, rawTags)
 	prior := mergeResourceTags(priorStackTags, rawPrior)
-
-	added := make(map[string]string)
-	for key, value := range tags {
-		if prior[key] != value {
-			added[key] = value
-		}
-	}
-	removed := make([]string, 0)
-	for key := range prior {
-		if _, ok := tags[key]; !ok {
-			removed = append(removed, key)
-		}
-	}
-	sort.Strings(removed)
+	added, removed := tagDelta(tags, prior)
 
 	if len(added) > 0 {
 		body := map[string]any{"StreamName": streamName, "Tags": added}
@@ -1413,9 +1400,7 @@ func appsyncEventsRESTJSON(ctx context.Context, router http.Handler, region, met
 // Events call CloudFormation made was invisible in a trace and linked to no
 // parent. Going through internalRequest is what fixes that.
 func internalAppSyncEventsRequest(ctx context.Context, router http.Handler, region, method, path, contentType string, body []byte) (*httptest.ResponseRecorder, error) {
-	return internalRequest(ctx, router, region, method, path, contentType, body, http.Header{
-		"Authorization": []string{"AWS4-HMAC-SHA256 Credential=overcast/20250101/" + region + "/appsync/aws4_request, SignedHeaders=host, Signature=overcast"},
-	})
+	return internalRequest(ctx, router, region, method, path, contentType, body, scopedAuthHeader("appsync", region))
 }
 
 func appsyncRESTJSON(ctx context.Context, router http.Handler, region, method, path, opName string, body map[string]any, out any) error {

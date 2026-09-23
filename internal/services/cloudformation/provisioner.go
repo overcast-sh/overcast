@@ -3635,19 +3635,7 @@ func updateSQSQueueTags(ctx context.Context, router http.Handler, region, queueU
 	tags := mergeResourceTags(stackTags, rawTags)
 	prior := mergeResourceTags(priorStackTags, rawPrior)
 
-	added := make(map[string]string)
-	for key, value := range tags {
-		if prior[key] != value {
-			added[key] = value
-		}
-	}
-	removed := make([]string, 0)
-	for key := range prior {
-		if _, ok := tags[key]; !ok {
-			removed = append(removed, key)
-		}
-	}
-	sort.Strings(removed)
+	added, removed := tagDelta(tags, prior)
 
 	if len(added) > 0 {
 		body := map[string]any{"QueueUrl": queueURL, "Tags": added}
@@ -4497,19 +4485,7 @@ func dynamodbUntagResource(ctx context.Context, router http.Handler, region, tab
 func reconcileDynamoDBTags(ctx context.Context, router http.Handler, region, tableARN string, stackTags, priorStackTags []Tag, rawTags, rawPrior any) error {
 	tags := mergeResourceTags(stackTags, rawTags)
 	prior := mergeResourceTags(priorStackTags, rawPrior)
-	added := make(map[string]string)
-	for key, value := range tags {
-		if prior[key] != value {
-			added[key] = value
-		}
-	}
-	var removed []string
-	for key := range prior {
-		if _, ok := tags[key]; !ok {
-			removed = append(removed, key)
-		}
-	}
-	sort.Strings(removed)
+	added, removed := tagDelta(tags, prior)
 	if len(added) > 0 {
 		if err := dynamodbTagResource(ctx, router, region, tableARN, added); err != nil {
 			return fmt.Errorf("dynamodb TagResource: %w", err)
@@ -5248,19 +5224,7 @@ func requiredPropertyMissing(logicalID, resourceType, property string) error {
 func updateLambdaTags(ctx context.Context, router http.Handler, region, resourceARN string, stackTags, priorStackTags []Tag, rawTags, rawPrior any) (bool, error) {
 	tags := mergeResourceTags(stackTags, rawTags)
 	prior := mergeResourceTags(priorStackTags, rawPrior)
-	added := make(map[string]string)
-	for key, value := range tags {
-		if prior[key] != value {
-			added[key] = value
-		}
-	}
-	removed := make([]string, 0)
-	for key := range prior {
-		if _, ok := tags[key]; !ok {
-			removed = append(removed, key)
-		}
-	}
-	sort.Strings(removed)
+	added, removed := tagDelta(tags, prior)
 	path := "/2017-03-31/tags/" + url.PathEscape(resourceARN)
 	applied := false
 	if len(added) > 0 {
@@ -5466,6 +5430,59 @@ func (h *lambdaUrlHandler) Delete(ctx context.Context, router http.Handler, _ *c
 	}
 	rec, err := internalRequest(ctx, router, rCtx.Region, http.MethodDelete, path, "", nil)
 	return teardownError("DeleteFunctionUrlConfig", rec, err)
+}
+
+// tagDelta is what an update must send to take a resource from prior tags to
+// tags: the keys added or changed, and the keys removed (sorted).
+func tagDelta(tags, prior map[string]string) (added map[string]string, removed []string) {
+	added = make(map[string]string)
+	for key, value := range tags {
+		if prior[key] != value {
+			added[key] = value
+		}
+	}
+	for key := range prior {
+		if _, ok := tags[key]; !ok {
+			removed = append(removed, key)
+		}
+	}
+	sort.Strings(removed)
+	return added, removed
+}
+
+// scopedAuthHeader is a SigV4 Authorization header whose credential scope
+// names service, for the internal calls the router can only route by signing
+// name (a path two services share, or one that is also an S3 bucket name).
+// The signature is never checked.
+func scopedAuthHeader(service, region string) http.Header {
+	return http.Header{"Authorization": []string{
+		"AWS4-HMAC-SHA256 Credential=overcast/20250101/" + region + "/" + service + "/aws4_request, SignedHeaders=host, Signature=overcast",
+	}}
+}
+
+// signedRESTJSON dispatches one REST-JSON operation signed for service and
+// decodes its response into out when out is non-nil. body, when non-nil, is
+// sent as JSON.
+func signedRESTJSON(ctx context.Context, router http.Handler, service, region, method, path, op string, body, out any) error {
+	var data []byte
+	contentType := ""
+	if body != nil {
+		var err error
+		if data, err = json.Marshal(body); err != nil {
+			return fmt.Errorf("%s: marshal request: %w", op, err)
+		}
+		contentType = "application/json"
+	}
+	rec, err := restCall(service, region, method, path, contentType, data, scopedAuthHeader(service, region)).do(ctx, router)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+	if out != nil {
+		if err := json.Unmarshal(rec.Body.Bytes(), out); err != nil {
+			return fmt.Errorf("%s: parse response: %w", op, err)
+		}
+	}
+	return nil
 }
 
 func mergeResourceTags(stackTags []Tag, rawResourceTags any) map[string]string {
@@ -6080,19 +6097,7 @@ func removeSSMParameterTags(ctx context.Context, router http.Handler, region, na
 // reconcileSSMParameterTags diffs desired against previous and applies only
 // the change, mirroring updateLambdaTags' add/remove split.
 func reconcileSSMParameterTags(ctx context.Context, router http.Handler, region, name string, tags, prior map[string]string) error {
-	added := make(map[string]string)
-	for key, value := range tags {
-		if prior[key] != value {
-			added[key] = value
-		}
-	}
-	removed := make([]string, 0)
-	for key := range prior {
-		if _, ok := tags[key]; !ok {
-			removed = append(removed, key)
-		}
-	}
-	sort.Strings(removed)
+	added, removed := tagDelta(tags, prior)
 	if err := addSSMParameterTags(ctx, router, region, name, added); err != nil {
 		return err
 	}
