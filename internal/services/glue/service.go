@@ -59,6 +59,12 @@ func (s *Service) writeLock(key string) func() {
 	}
 }
 
+// databaseLockKey and tableLockKey name the writeLock stripe guarding a
+// database's or a table's record.
+func databaseLockKey(name string) string { return "db:" + name }
+
+func tableLockKey(dbName, tableName string) string { return "table:" + tableKey(dbName, tableName) }
+
 // cascadeLock excludes every other write for the length of a cascading delete.
 func (s *Service) cascadeLock() func() {
 	s.cascadeMu.Lock()

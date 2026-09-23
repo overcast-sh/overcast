@@ -2,7 +2,6 @@ package glue
 
 import (
 	"context"
-	"errors"
 	"maps"
 	"regexp"
 	"strconv"
@@ -45,7 +44,7 @@ func (s *Service) catalogID(requested string) string {
 func paginate[T any](items []T, maxResults int32, token string, limit int) (serviceutil.Page[T], *protocol.AWSError) {
 	page, err := serviceutil.Paginate(items, int(maxResults), token,
 		serviceutil.PaginateOptions{DefaultLimit: limit, MaxLimit: limit})
-	if errors.Is(err, serviceutil.ErrInvalidPageToken) {
+	if err != nil { // serviceutil.ErrInvalidPageToken, its only error
 		return page, errInvalidInput("Invalid NextToken.")
 	}
 	return page, nil
@@ -83,6 +82,24 @@ func (s *Service) requireTable(ctx context.Context, dbName, tableName string) (*
 		return nil, errTableNotFound(tableName)
 	}
 	return t, nil
+}
+
+// lockTable takes the table's write lock and loads the table inside it, so
+// the caller's write — UpdateTable, a version delete, any partition write —
+// is serialised with every other write to the table and cannot land under a
+// table that is no longer there. The caller runs the returned unlock.
+// Partitions share their table's lock rather than taking one each, because
+// UpdatePartition can move a partition to new values and so writes two keys
+// at once.
+func (s *Service) lockTable(ctx context.Context, dbName, tableName string) (*tableRecord, func(), *protocol.AWSError) {
+	dbName, tableName = normName(dbName), normName(tableName)
+	unlock := s.writeLock(tableLockKey(dbName, tableName))
+	t, aerr := s.requireTable(ctx, dbName, tableName)
+	if aerr != nil {
+		unlock()
+		return nil, nil, aerr
+	}
+	return t, unlock, nil
 }
 
 // ─── Databases ─────────────────────────────────────────────────
@@ -153,7 +170,7 @@ func (s *Service) createDatabaseTyped(ctx context.Context, req *createDatabaseRe
 			return nil, aerr
 		}
 	}
-	defer s.writeLock("db:" + name)()
+	defer s.writeLock(databaseLockKey(name))()
 	_, found, err := s.store.getDatabase(ctx, name)
 	if err != nil {
 		return nil, errInternal(err)
@@ -207,7 +224,7 @@ func (s *Service) updateDatabaseTyped(ctx context.Context, req *updateDatabaseRe
 	if in := normName(req.DatabaseInput.Name); in != "" && in != name {
 		return nil, errInvalidInput("Renaming a database is not supported: DatabaseInput.Name %s does not match Name %s.", in, name)
 	}
-	defer s.writeLock("db:" + name)()
+	defer s.writeLock(databaseLockKey(name))()
 	cur, aerr := s.requireDatabase(ctx, name)
 	if aerr != nil {
 		return nil, aerr
@@ -363,7 +380,7 @@ func (s *Service) createTableTyped(ctx context.Context, req *createTableReq) (*c
 	name = normName(name)
 	dbName := normName(req.DatabaseName)
 
-	defer s.writeLock("table:" + tableKey(dbName, name))()
+	defer s.writeLock(tableLockKey(dbName, name))()
 	if _, aerr := s.requireDatabase(ctx, dbName); aerr != nil {
 		return nil, aerr
 	}
@@ -488,11 +505,11 @@ func (s *Service) updateTableTyped(ctx context.Context, req *updateTableReq) (*s
 	}
 	dbName := normName(req.DatabaseName)
 
-	defer s.writeLock("table:" + tableKey(dbName, name))()
-	cur, aerr := s.requireTable(ctx, dbName, name)
+	cur, unlock, aerr := s.lockTable(ctx, dbName, name)
 	if aerr != nil {
 		return nil, aerr
 	}
+	defer unlock()
 	if req.VersionId != "" && req.VersionId != cur.VersionId {
 		return nil, glueError(codeConcurrentModification,
 			"Update table failed due to concurrent modifications: version %s is not the current version %s.", req.VersionId, cur.VersionId)

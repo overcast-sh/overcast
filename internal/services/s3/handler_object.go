@@ -62,6 +62,15 @@ func (h *Handler) initObjectRoutes() {
 // written without one.
 const defaultObjectContentType = "application/octet-stream"
 
+// objectContentType is the Content-Type S3 records for an object written with
+// contentType, which may be empty.
+func objectContentType(contentType string) string {
+	if contentType == "" {
+		return defaultObjectContentType
+	}
+	return contentType
+}
+
 // storageClassStandard is S3's default object storage class. AWS omits the
 // x-amz-storage-class header on responses for objects in it.
 const storageClassStandard = "STANDARD"
@@ -123,11 +132,6 @@ func (h *Handler) PutObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	contentType := r.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = defaultObjectContentType
-	}
-
 	storageClass, aerr := requestedStorageClass(r)
 	if aerr != nil {
 		protocol.WriteXMLError(w, r, aerr)
@@ -159,7 +163,7 @@ func (h *Handler) PutObject(w http.ResponseWriter, r *http.Request) {
 		Bucket:             bucket,
 		Key:                key,
 		StorageClass:       storageClass,
-		ContentType:        contentType,
+		ContentType:        objectContentType(r.Header.Get("Content-Type")),
 		LastModified:       h.clk.Now().UTC(),
 		Metadata:           meta,
 		ContentDisposition: r.Header.Get("Content-Disposition"),
@@ -222,9 +226,7 @@ func (h *Handler) publishObjectEvent(ctx context.Context, typ events.Type, obj *
 		ETag:      etag,
 		EventName: eventName,
 		Sequencer: stamp.sequencer(),
-	}
-	if obj.Seq != "" {
-		payload.VersionID = obj.wireVersionID()
+		VersionID: obj.headerVersionID(),
 	}
 	h.bus.Publish(ctx, events.Event{
 		Type:    typ,

@@ -23,8 +23,6 @@ import (
 	"math/big"
 	"regexp"
 	"strings"
-	"unicode"
-	"unicode/utf8"
 )
 
 // partitionFilter is a compiled Expression.
@@ -38,36 +36,41 @@ type keyKind int
 const (
 	kindString keyKind = iota
 	kindNumber
+	// kindUnsupported is a declared key whose type AWS does not allow in an
+	// expression: naming it is an error, as AWS reports.
+	kindUnsupported
 )
 
-// partitionKeyKinds maps each partition key (lowercased) to its comparison
-// kind, rejecting a key whose type AWS does not allow in an expression.
+// partitionKeyName is how an expression names a partition key: its name,
+// lowercased.
+func partitionKeyName(k Column) string { return strings.ToLower(k.Name) }
+
+// partitionKeyKinds maps every declared partition key to its comparison kind.
+// Of two keys that fold to one name, a filterable one wins.
 func partitionKeyKinds(keys []Column) map[string]keyKind {
 	kinds := make(map[string]keyKind, len(keys))
 	for _, k := range keys {
-		kind, ok := kindOf(k.Type)
-		if !ok {
-			// Recorded as absent: naming it in an expression is an error,
-			// which is what AWS reports for an unsupported key type.
+		name, kind := partitionKeyName(k), kindOf(k.Type)
+		if _, seen := kinds[name]; seen && kind == kindUnsupported {
 			continue
 		}
-		kinds[strings.ToLower(k.Name)] = kind
+		kinds[name] = kind
 	}
 	return kinds
 }
 
-func kindOf(colType string) (keyKind, bool) {
+func kindOf(colType string) keyKind {
 	t := strings.ToLower(strings.TrimSpace(colType))
 	if i := strings.IndexByte(t, '('); i >= 0 {
 		t = t[:i] // decimal(10,2), varchar(20), char(3)
 	}
 	switch t {
 	case "", "string", "char", "varchar", "date", "timestamp":
-		return kindString, true
+		return kindString
 	case "int", "integer", "bigint", "long", "tinyint", "smallint", "decimal":
-		return kindNumber, true
+		return kindNumber
 	default:
-		return 0, false
+		return kindUnsupported
 	}
 }
 
@@ -75,13 +78,13 @@ func kindOf(colType string) (keyKind, bool) {
 // An empty expression matches every partition.
 func parsePartitionExpression(expr string, keys []Column) (partitionFilter, error) {
 	if strings.TrimSpace(expr) == "" {
-		return matchAll{}, nil
+		return constFilter(true), nil
 	}
 	toks, err := lexExpression(expr)
 	if err != nil {
 		return nil, err
 	}
-	p := &exprParser{toks: toks, kinds: partitionKeyKinds(keys), declared: declaredKeys(keys)}
+	p := &exprParser{toks: toks, kinds: partitionKeyKinds(keys)}
 	f, err := p.parseOr()
 	if err != nil {
 		return nil, err
@@ -90,134 +93,6 @@ func parsePartitionExpression(expr string, keys []Column) (partitionFilter, erro
 		return nil, fmt.Errorf("unexpected %q", p.peek().text)
 	}
 	return f, nil
-}
-
-func declaredKeys(keys []Column) map[string]bool {
-	out := make(map[string]bool, len(keys))
-	for _, k := range keys {
-		out[strings.ToLower(k.Name)] = true
-	}
-	return out
-}
-
-// ─── Lexer ─────────────────────────────────────────────────────
-
-type tokKind int
-
-const (
-	tokEOF tokKind = iota
-	tokIdent
-	tokString
-	tokNumber
-	tokOp // = <> != < <= > >=
-	tokLParen
-	tokRParen
-	tokComma
-	tokKeyword // AND OR NOT IN BETWEEN LIKE IS NULL
-)
-
-type token struct {
-	kind tokKind
-	text string // keywords upper-cased; identifiers as written, unquoted
-}
-
-var keywords = map[string]bool{
-	"AND": true, "OR": true, "NOT": true, "IN": true,
-	"BETWEEN": true, "LIKE": true, "IS": true, "NULL": true,
-}
-
-func lexExpression(s string) ([]token, error) {
-	var toks []token
-	for i := 0; i < len(s); {
-		c := s[i]
-		switch {
-		case c == ' ' || c == '\t' || c == '\r' || c == '\n':
-			i++
-		case c == '(':
-			toks = append(toks, token{tokLParen, "("})
-			i++
-		case c == ')':
-			toks = append(toks, token{tokRParen, ")"})
-			i++
-		case c == ',':
-			toks = append(toks, token{tokComma, ","})
-			i++
-		case c == '=':
-			toks = append(toks, token{tokOp, "="})
-			i++
-		case c == '<' || c == '>' || c == '!':
-			op := opSpelling(c, s, i)
-			i += len(op)
-			switch op {
-			case "!":
-				return nil, fmt.Errorf("unexpected %q", op)
-			case "!=":
-				op = "<>"
-			}
-			toks = append(toks, token{tokOp, op})
-		case c == '\'':
-			lit, n, err := lexQuoted(s[i:], '\'')
-			if err != nil {
-				return nil, err
-			}
-			toks = append(toks, token{tokString, lit})
-			i += n
-		case c == '"' || c == '`':
-			id, n, err := lexQuoted(s[i:], c)
-			if err != nil {
-				return nil, err
-			}
-			toks = append(toks, token{tokIdent, id})
-			i += n
-		case c == '-' || c == '+' || c == '.' || (c >= '0' && c <= '9'):
-			j := i + 1
-			for j < len(s) && isNumberByte(s[j]) {
-				// A sign belongs to the number only straight after an exponent.
-				if (s[j] == '+' || s[j] == '-') && s[j-1] != 'e' && s[j-1] != 'E' {
-					break
-				}
-				j++
-			}
-			num := s[i:j]
-			if _, ok := parseDecimal(num); !ok {
-				return nil, fmt.Errorf("invalid number %q", num)
-			}
-			toks = append(toks, token{tokNumber, num})
-			i = j
-		case isIdentStart(s[i:]):
-			j := i
-			for j < len(s) {
-				r, size := utf8.DecodeRuneInString(s[j:])
-				if r != '_' && r != '$' && !unicode.IsLetter(r) && !unicode.IsDigit(r) {
-					break
-				}
-				j += size
-			}
-			word := s[i:j]
-			if up := strings.ToUpper(word); keywords[up] {
-				toks = append(toks, token{tokKeyword, up})
-			} else {
-				toks = append(toks, token{tokIdent, word})
-			}
-			i = j
-		default:
-			return nil, fmt.Errorf("unexpected character %q", c)
-		}
-	}
-	return append(toks, token{tokEOF, ""}), nil
-}
-
-// isNumberByte reports whether b can continue a numeric literal: digits, a
-// decimal point, an exponent marker, or an exponent's sign.
-func isNumberByte(b byte) bool {
-	return (b >= '0' && b <= '9') || b == '.' || b == 'e' || b == 'E' || b == '+' || b == '-'
-}
-
-// isIdentStart reports whether s starts an unquoted identifier: a letter, in
-// any script, or an underscore.
-func isIdentStart(s string) bool {
-	r, _ := utf8.DecodeRuneInString(s)
-	return r == '_' || unicode.IsLetter(r)
 }
 
 // decimalPattern is a plain decimal number with an optional exponent. It is
@@ -234,41 +109,12 @@ func parseDecimal(s string) (*big.Rat, bool) {
 	return new(big.Rat).SetString(s)
 }
 
-// opSpelling is the source text of the comparison operator starting at s[i].
-func opSpelling(c byte, s string, i int) string {
-	if i+1 < len(s) && (s[i+1] == '=' || (c == '<' && s[i+1] == '>')) {
-		return s[i : i+2]
-	}
-	return s[i : i+1]
-}
-
-// lexQuoted reads a quote-delimited token starting at s[0], where a doubled
-// quote stands for one quote character. It returns the unquoted text and the
-// number of bytes consumed.
-func lexQuoted(s string, q byte) (string, int, error) {
-	var b strings.Builder
-	for i := 1; i < len(s); i++ {
-		if s[i] != q {
-			b.WriteByte(s[i])
-			continue
-		}
-		if i+1 < len(s) && s[i+1] == q {
-			b.WriteByte(q)
-			i++
-			continue
-		}
-		return b.String(), i + 1, nil
-	}
-	return "", 0, fmt.Errorf("unterminated %c", q)
-}
-
 // ─── Parser ────────────────────────────────────────────────────
 
 type exprParser struct {
-	toks     []token
-	pos      int
-	kinds    map[string]keyKind
-	declared map[string]bool
+	toks  []token
+	pos   int
+	kinds map[string]keyKind // every declared partition key; see partitionKeyKinds
 }
 
 func (p *exprParser) peek() token { return p.toks[p.pos] }
@@ -349,10 +195,11 @@ func (p *exprParser) parseOperand() (operand, error) {
 	switch t.kind {
 	case tokIdent:
 		col := strings.ToLower(t.text)
-		if !p.declared[col] {
+		kind, declared := p.kinds[col]
+		if !declared {
 			return operand{}, fmt.Errorf("unknown partition key %q", t.text)
 		}
-		if _, ok := p.kinds[col]; !ok {
+		if kind == kindUnsupported {
 			return operand{}, fmt.Errorf("partition key %q has a type that cannot be filtered on", t.text)
 		}
 		return operand{column: col}, nil
@@ -391,7 +238,7 @@ func (p *exprParser) parsePredicate() (partitionFilter, error) {
 		return p.comparison(left, t.text, right)
 	}
 
-	col, err := p.requireColumn(left)
+	col, err := requireColumn(left)
 	if err != nil {
 		return nil, err
 	}
@@ -426,7 +273,7 @@ func (p *exprParser) parsePredicate() (partitionFilter, error) {
 	return f, nil
 }
 
-func (p *exprParser) requireColumn(o operand) (string, error) {
+func requireColumn(o operand) (string, error) {
 	if o.column == "" {
 		return "", fmt.Errorf("expected a partition key, found literal %q", o.lit)
 	}
@@ -446,11 +293,10 @@ func (p *exprParser) comparison(left operand, op string, right operand) (partiti
 	default:
 		return nil, fmt.Errorf("a comparison needs a partition key")
 	}
-	kind := p.kinds[left.column]
-	if err := checkLiteral(kind, left.column, right.lit); err != nil {
+	if err := checkLiteral(p.kinds[left.column], left.column, right.lit); err != nil {
 		return nil, err
 	}
-	return cmpFilter{column: left.column, op: op, lit: right.lit, kind: kind}, nil
+	return p.cmp(left.column, op, right.lit), nil
 }
 
 func flipOp(op string) string {
@@ -477,6 +323,16 @@ func checkLiteral(kind keyKind, col, lit string) error {
 	return nil
 }
 
+// cmp builds the comparison `col op lit`, whose literal checkLiteral has
+// accepted for col.
+func (p *exprParser) cmp(col, op, lit string) cmpFilter {
+	f := cmpFilter{column: col, op: op, lit: lit, kind: p.kinds[col]}
+	if f.kind == kindNumber {
+		f.num, _ = parseDecimal(lit)
+	}
+	return f
+}
+
 func (p *exprParser) literal(col string) (string, error) {
 	t := p.next()
 	if t.kind != tokString && t.kind != tokNumber {
@@ -492,13 +348,13 @@ func (p *exprParser) parseIn(col string) (partitionFilter, error) {
 	if _, err := p.expect(tokLParen, "( after IN"); err != nil {
 		return nil, err
 	}
-	var alts orFilterList
+	var alts orFilter
 	for {
 		lit, err := p.literal(col)
 		if err != nil {
 			return nil, err
 		}
-		alts = append(alts, cmpFilter{column: col, op: "=", lit: lit, kind: p.kinds[col]})
+		alts = append(alts, p.cmp(col, "=", lit))
 		if p.peek().kind == tokComma {
 			p.next()
 			continue
@@ -522,11 +378,7 @@ func (p *exprParser) parseBetween(col string) (partitionFilter, error) {
 	if err != nil {
 		return nil, err
 	}
-	kind := p.kinds[col]
-	return andFilter{
-		cmpFilter{column: col, op: ">=", lit: lo, kind: kind},
-		cmpFilter{column: col, op: "<=", lit: hi, kind: kind},
-	}, nil
+	return andFilter{p.cmp(col, ">=", lo), p.cmp(col, "<=", hi)}, nil
 }
 
 func (p *exprParser) parseLike(col string) (partitionFilter, error) {
@@ -552,10 +404,8 @@ func (p *exprParser) parseLike(col string) (partitionFilter, error) {
 
 // ─── Filters ───────────────────────────────────────────────────
 
-type matchAll struct{}
-
-func (matchAll) match(map[string]string) bool { return true }
-
+// constFilter matches every partition or none: an empty expression, or IS
+// [NOT] NULL, which a stored partition's values never are.
 type constFilter bool
 
 func (c constFilter) match(map[string]string) bool { return bool(c) }
@@ -564,13 +414,9 @@ type andFilter struct{ l, r partitionFilter }
 
 func (f andFilter) match(v map[string]string) bool { return f.l.match(v) && f.r.match(v) }
 
-type orFilter struct{ l, r partitionFilter }
+type orFilter []partitionFilter
 
-func (f orFilter) match(v map[string]string) bool { return f.l.match(v) || f.r.match(v) }
-
-type orFilterList []partitionFilter
-
-func (fs orFilterList) match(v map[string]string) bool {
+func (fs orFilter) match(v map[string]string) bool {
 	for _, f := range fs {
 		if f.match(v) {
 			return true
@@ -595,10 +441,11 @@ type cmpFilter struct {
 	op     string
 	lit    string
 	kind   keyKind
+	num    *big.Rat // lit, parsed, when kind is kindNumber
 }
 
 func (f cmpFilter) match(v map[string]string) bool {
-	c, ok := compareValues(f.kind, v[f.column], f.lit)
+	c, ok := f.compare(v[f.column])
 	if !ok {
 		// A stored value that is not a number under a numeric key matches
 		// no comparison at all.
@@ -621,14 +468,15 @@ func (f cmpFilter) match(v map[string]string) bool {
 	return false
 }
 
-func compareValues(kind keyKind, value, lit string) (int, bool) {
-	if kind == kindString {
-		return strings.Compare(value, lit), true
+// compare orders a stored value against the literal under the key's kind.
+// It is false when a numeric key's stored value is not a number.
+func (f cmpFilter) compare(value string) (int, bool) {
+	if f.kind == kindString {
+		return strings.Compare(value, f.lit), true
 	}
-	a, ok := parseDecimal(value)
+	n, ok := parseDecimal(value)
 	if !ok {
 		return 0, false
 	}
-	b, _ := parseDecimal(lit) // validated when the expression was parsed
-	return a.Cmp(b), true
+	return n.Cmp(f.num), true
 }

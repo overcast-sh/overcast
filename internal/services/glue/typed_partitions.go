@@ -2,7 +2,7 @@ package glue
 
 import (
 	"context"
-	"strings"
+	"slices"
 
 	"github.com/overcast-sh/overcast/internal/protocol"
 )
@@ -128,23 +128,6 @@ func partitionFromInput(in *PartitionInput, t *tableRecord) *Partition {
 	}
 }
 
-// lockTable takes the table's write lock — the one UpdateTable and the
-// version operations take — and loads the table inside it, so a partition
-// write is serialised with every other write to its table and cannot land
-// under a table that is no longer there. One lock per table rather than per
-// partition, because UpdatePartition can move a partition to new values and
-// so writes two keys at once.
-func (s *Service) lockTable(ctx context.Context, dbName, tableName string) (*tableRecord, func(), *protocol.AWSError) {
-	dbName, tableName = normName(dbName), normName(tableName)
-	unlock := s.writeLock("table:" + tableKey(dbName, tableName))
-	t, aerr := s.requireTable(ctx, dbName, tableName)
-	if aerr != nil {
-		unlock()
-		return nil, nil, aerr
-	}
-	return t, unlock, nil
-}
-
 // createOnePartition creates one partition of t. The caller holds lockTable.
 func (s *Service) createOnePartition(ctx context.Context, t *tableRecord, in *PartitionInput) *protocol.AWSError {
 	if aerr := checkPartitionValues(t, in.Values); aerr != nil {
@@ -260,7 +243,7 @@ func partitionValueMap(keys []Column, values []string) map[string]string {
 	m := make(map[string]string, len(keys))
 	for i, k := range keys {
 		if i < len(values) {
-			m[strings.ToLower(k.Name)] = values[i]
+			m[partitionKeyName(k)] = values[i]
 		}
 	}
 	return m
@@ -309,8 +292,7 @@ func (s *Service) updatePartitionTyped(ctx context.Context, req *updatePartition
 	if aerr := checkPartitionValues(t, newValues); aerr != nil {
 		return nil, aerr
 	}
-	oldKey := partitionKey(t.DatabaseName, t.Name, req.PartitionValueList)
-	newKey := partitionKey(t.DatabaseName, t.Name, newValues)
+	moved := !slices.Equal(newValues, req.PartitionValueList)
 	cur, found, err := s.store.getPartition(ctx, t.DatabaseName, t.Name, req.PartitionValueList)
 	if err != nil {
 		return nil, errInternal(err)
@@ -318,7 +300,7 @@ func (s *Service) updatePartitionTyped(ctx context.Context, req *updatePartition
 	if !found {
 		return nil, errPartitionNotFound()
 	}
-	if newKey != oldKey {
+	if moved {
 		_, exists, err := s.store.getPartition(ctx, t.DatabaseName, t.Name, newValues)
 		if err != nil {
 			return nil, errInternal(err)
@@ -334,7 +316,7 @@ func (s *Service) updatePartitionTyped(ctx context.Context, req *updatePartition
 	if err := s.store.putPartition(ctx, p); err != nil {
 		return nil, errInternal(err)
 	}
-	if newKey != oldKey {
+	if moved {
 		if err := s.store.deletePartition(ctx, t.DatabaseName, t.Name, req.PartitionValueList); err != nil {
 			return nil, errInternal(err)
 		}

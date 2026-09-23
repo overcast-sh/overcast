@@ -188,10 +188,6 @@ func (s *Service) PutObjectBytes(ctx context.Context, bucket, key string, body [
 		return events.S3PutObjectResult{}, protocol.ErrInvalidArgument("An object key must not be empty.")
 	}
 
-	contentType := opts.ContentType
-	if contentType == "" {
-		contentType = defaultObjectContentType
-	}
 	var meta map[string]string
 	if len(opts.Metadata) > 0 {
 		// Stored lower-cased, as PutObject stores x-amz-meta-* names.
@@ -203,7 +199,7 @@ func (s *Service) PutObjectBytes(ctx context.Context, bucket, key string, body [
 	obj := &Object{
 		Bucket:       bucket,
 		Key:          key,
-		ContentType:  contentType,
+		ContentType:  objectContentType(opts.ContentType),
 		LastModified: h.clk.Now().UTC(),
 		Metadata:     meta,
 	}
