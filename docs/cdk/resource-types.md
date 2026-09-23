@@ -11,16 +11,20 @@ tags:
 
 # CDK resource type coverage
 
-Overcast's CloudFormation provisioner handles **142 resource types**, and a
-[`cdk deploy`](../cdk.md) succeeds for a stack built from them: 133 have real
-handlers, 9 are recognised as stubs, and custom resources and nested stacks are
-resolved dynamically on top of those.
+Overcast's CloudFormation provisioner handles **142 resource types**: 133 have
+real handlers, 8 are recognised as stubs, and one — `AWS::SES::ConfigurationSet`
+— is recognised but always fails. Custom resources and nested stacks are
+resolved dynamically on top of those. A [`cdk deploy`](../cdk.md) succeeds for
+a stack built from the first two groups.
 
 Read the tables by what a type creates. A real handler provisions through the
 emulated service, so it creates state the ordinary AWS APIs can query and
 `Fn::GetAtt` resolves against. A stub returns a synthetic physical ID and
-creates nothing. A type in neither table is stubbed the same way, so a template
-that uses one still deploys.
+creates nothing. `AWS::SES::ConfigurationSet` does neither: it dispatches to
+SES's own `CreateConfigurationSet`, which Overcast does not implement, so the
+resource fails outright rather than reporting success for something that was
+never created. A type in neither table is stubbed the same way the successful
+stubs are, so a template that uses one still deploys.
 
 ## Real handlers
 
@@ -82,11 +86,20 @@ No real resources are created.
 - `AWS::ApiGateway::Account`
 - `AWS::ApiGatewayV2::Deployment`
 - `AWS::ElastiCache::ParameterGroup`
-- `AWS::SES::ConfigurationSet`
 - `AWS::Events::Connection`
 - `AWS::CDK::Metadata`
 - `AWS::CloudFormation::WaitConditionHandle`
 - `AWS::CloudFormation::WaitCondition`
+
+## Recognised, but fails
+
+`AWS::SES::ConfigurationSet` dispatches to SES's own `CreateConfigurationSet`,
+which Overcast's SES emulation does not implement — see its status on the
+[SES operation support](../services/ses/operations.md) page. Rather than
+answering a synthetic success the way the stubs above do, the resource fails
+with a `ResourceStatusReason` naming the operation — see
+[CDK troubleshooting](./troubleshooting.md) for what to do with a failed
+resource.
 
 ## Unknown resource types
 

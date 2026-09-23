@@ -1233,6 +1233,20 @@ var stackTagPropagationResourceTypes = map[string]bool{
 	// PutRule's merge-only Tags parameter, which cannot remove one.
 	"AWS::Events::EventBus": true,
 	"AWS::Events::Rule":     true,
+	// #2060: gained Tags support in the same pass that gave each one an
+	// Update carve-out reconciling a Tags-only change via the service's own
+	// TagResource/UntagResource (or equivalent) instead of forcing the
+	// unconditional replacement these handlers used to return for every
+	// Update — see each handler's Update comment in
+	// provisioner_json_coverage.go for the properties that still force
+	// replacement.
+	"AWS::CertificateManager::Certificate": true,
+	"AWS::Athena::WorkGroup":               true,
+	"AWS::Shield::Protection":              true,
+	"AWS::OpenSearchService::Domain":       true,
+	"AWS::AppConfig::Application":          true,
+	"AWS::AppConfig::Environment":          true,
+	"AWS::AppConfig::ConfigurationProfile": true,
 }
 
 // stackTagPropagationExclusions (stack_tag_propagation_coverage_dev_test.go)
@@ -2812,7 +2826,7 @@ var resourceHandlers = map[string]resourceHandler{
 	"AWS::CloudFront::Distribution": &cloudfrontDistributionHandler{},
 	// SES
 	"AWS::SES::Template":         &sesTemplateHandler{},
-	"AWS::SES::ConfigurationSet": &stubResourceHandler{},
+	"AWS::SES::ConfigurationSet": &sesConfigurationSetHandler{},
 	// Certificate Manager
 	"AWS::CertificateManager::Certificate": &acmCertificateHandler{},
 	// ECR
