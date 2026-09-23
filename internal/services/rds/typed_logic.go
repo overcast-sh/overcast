@@ -34,6 +34,28 @@ type createDBInstanceReq struct {
 	// `PubliclyAccessible=false` and so make the default unreachable.
 	PubliclyAccessible *bool                 `json:"PubliclyAccessible"`
 	Tags               []serviceutil.TagPair `json:"Tags"`
+	// AdditionalStorageVolumes is decoded only to detect that the caller sent
+	// it — see the rejection in createDBInstanceTyped. Its member fields are
+	// never read.
+	AdditionalStorageVolumes []additionalStorageVolumeReq `json:"AdditionalStorageVolumes"`
+}
+
+// additionalStorageVolumeReq mirrors AWS's AdditionalStorageVolume request
+// shape (rds-2014-10-31.json#AdditionalStorageVolume). AWS documents it as
+// "supported for RDS for Oracle and RDS for SQL Server DB instances only",
+// and Overcast emulates neither engine — a commercial licence rules out
+// Oracle entirely, and SQL Server is simply not yet implemented (see
+// docs/services/rds/limitations.md). Every engine createDBInstanceTyped can
+// actually create is therefore one AWS itself would refuse this parameter
+// for, so it is rejected outright rather than silently accepted and echoed
+// back for a container that never runs.
+type additionalStorageVolumeReq struct {
+	VolumeName          string `json:"VolumeName"`
+	AllocatedStorage    *int   `json:"AllocatedStorage"`
+	IOPS                *int   `json:"IOPS"`
+	MaxAllocatedStorage *int   `json:"MaxAllocatedStorage"`
+	StorageThroughput   *int   `json:"StorageThroughput"`
+	StorageType         string `json:"StorageType"`
 }
 
 type describeDBInstancesReq struct {
@@ -205,6 +227,14 @@ func (h *Handler) createDBInstanceTyped(ctx context.Context, req *createDBInstan
 	}
 	if !supportedEngines[engine] {
 		return nil, errInvalidParameterValue("Engine must be one of: mysql, postgres, mariadb, aurora-mysql, aurora-postgresql")
+	}
+
+	// AdditionalStorageVolumes is Oracle/SQL Server only on AWS, and engine is
+	// already known-supported at this point — never Oracle or SQL Server (see
+	// additionalStorageVolumeReq) — so any value here names a combination AWS
+	// itself would refuse.
+	if len(req.AdditionalStorageVolumes) > 0 {
+		return nil, errInvalidParameterCombination("Additional storage volumes are supported for RDS for Oracle and RDS for SQL Server DB instances only.")
 	}
 
 	// Aurora member settings belong to the cluster. CreateDBInstance accepts

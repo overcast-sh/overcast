@@ -314,6 +314,45 @@ func TestCreateDBInstance_duplicate(t *testing.T) {
 	assertQueryXMLError(t, resp, "DBInstanceAlreadyExists")
 }
 
+// TestCreateDBInstance_additionalStorageVolumesRejected covers #2041.
+//
+// AWS's CreateDBInstanceMessage.AdditionalStorageVolumes documents itself as
+// "supported for RDS for Oracle and RDS for SQL Server DB instances only" —
+// see the pinned rds-2014-10-31.json model. Overcast never emulates either
+// engine (docs/services/rds/limitations.md), so every engine it can actually
+// create is one AWS itself would refuse the parameter for. Rejecting it here
+// is the AWS-faithful behaviour; silently accepting and echoing it back would
+// invent support Overcast cannot provide (no Oracle/SQL Server container ever
+// runs).
+func TestCreateDBInstance_additionalStorageVolumesRejected(t *testing.T) {
+	// Given: the RDS service
+	srv := helpers.NewTestServer(t)
+
+	// When: CreateDBInstance is called with AdditionalStorageVolumes on a
+	// supported (non-Oracle/SQL Server) engine
+	resp := rdsQuery(t, srv, "CreateDBInstance", url.Values{
+		"DBInstanceIdentifier": []string{"asv-db"},
+		"Engine":               []string{"mysql"},
+		"MasterUsername":       []string{"admin"},
+		"MasterUserPassword":   []string{"Password1!"},
+		"AdditionalStorageVolumes.member.1.VolumeName":       []string{"RDSDBDATA2"},
+		"AdditionalStorageVolumes.member.1.AllocatedStorage": []string{"100"},
+	})
+	defer resp.Body.Close()
+
+	// Then: 400 error with InvalidParameterCombination, and no instance was
+	// created
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	assertQueryXMLError(t, resp, "InvalidParameterCombination")
+
+	describeResp := rdsQuery(t, srv, "DescribeDBInstances", url.Values{
+		"DBInstanceIdentifier": []string{"asv-db"},
+	})
+	defer describeResp.Body.Close()
+	helpers.AssertStatus(t, describeResp, http.StatusBadRequest)
+	assertQueryXMLError(t, describeResp, "DBInstanceNotFound")
+}
+
 func TestCreateDBInstance_unbackedSubnetGroupRejected(t *testing.T) {
 	srv := helpers.NewTestServer(t, helpers.WithEC2VPCStrategy("shared"))
 	vpcID := createVpcForRDS(t, srv, "10.55.0.0/16")
@@ -389,6 +428,46 @@ func TestDescribeDBInstances_success(t *testing.T) {
 	assert.Equal(t, "desc-db", result.Result.DBInstances.Items[0].DBInstanceIdentifier)
 	assert.Equal(t, "mysql", result.Result.DBInstances.Items[0].Engine)
 	assert.Empty(t, result.Result.DBInstances.Items[0].MasterUserPassword, "MasterUserPassword must not be returned")
+}
+
+// TestDescribeDBInstances_storageOperationStatusOmittedAtRest covers #2041.
+//
+// AWS's DBInstance.StorageOperationStatus and .StorageOperationPercentProgress
+// document themselves as appearing "only while a storage operation is in
+// progress" and absent otherwise — see the pinned rds-2014-10-31.json model.
+// Overcast performs no asynchronous storage operation (PITR/snapshot restore,
+// read-replica creation, blue/green deployment, Single-AZ->Multi-AZ
+// conversion, storage scaling) at all, so a resting instance's AWS-faithful
+// response omits both elements entirely rather than inventing an
+// always-"completed"/100 state.
+func TestDescribeDBInstances_storageOperationStatusOmittedAtRest(t *testing.T) {
+	// Given: a DB instance exists
+	srv := helpers.NewTestServer(t)
+	createResp := rdsQuery(t, srv, "CreateDBInstance", url.Values{
+		"DBInstanceIdentifier": []string{"storage-op-db"},
+		"Engine":               []string{"mysql"},
+		"MasterUsername":       []string{"admin"},
+		"MasterUserPassword":   []string{"Password1!"},
+	})
+	defer createResp.Body.Close()
+	helpers.AssertStatus(t, createResp, http.StatusOK)
+	createBody, err := io.ReadAll(createResp.Body)
+	require.NoError(t, err)
+	assert.NotContains(t, string(createBody), "StorageOperationStatus")
+	assert.NotContains(t, string(createBody), "StorageOperationPercentProgress")
+
+	// When: DescribeDBInstances is called for it
+	resp := rdsQuery(t, srv, "DescribeDBInstances", url.Values{
+		"DBInstanceIdentifier": []string{"storage-op-db"},
+	})
+	defer resp.Body.Close()
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	// Then: neither element is present on the wire — AWS's own resting value
+	assert.NotContains(t, string(body), "StorageOperationStatus")
+	assert.NotContains(t, string(body), "StorageOperationPercentProgress")
 }
 
 func TestDescribeDBInstances_byId(t *testing.T) {
