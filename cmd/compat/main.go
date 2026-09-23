@@ -96,8 +96,16 @@ var (
 	lintFlakyFrom    = flag.String("lint-flaky-from", "", "Old flaky list for growth linting")
 	lintFlakyTo      = flag.String("lint-flaky-to", "", "New flaky list for growth linting")
 	flakyGrowthOK    = flag.Bool("flaky-growth-approved", false, "Accept new flaky-list entries: a reviewer has agreed to the quarantine (CI sets this from the PR's quarantine-approved label). Per-entry checks (reason, issue, date, deadline) still apply")
-	interactive      = flag.Bool("interactive", false, "Start in interactive mode (long-lived suite processes)")
-	noUI             = flag.Bool("no-ui", false, "Don't serve embedded UI (use with external Vite dev server)")
+	// --publish-report: the public report overcast.sh renders. See publish.go.
+	publishReport     = flag.String("publish-report", "", "Join --results-file with the registry, gaps, flaky list and issue links into the public compatibility report at this path, then exit")
+	publishVersion    = flag.String("publish-version", "", "Release version recorded in --publish-report (e.g. v0.42.0)")
+	publishCommit     = flag.String("publish-commit", "", "Commit SHA recorded in --publish-report")
+	gapsFilePath      = flag.String("gaps-file", "compat/model/gaps.json", "Operations the generator refused to test, published as untested by --publish-report")
+	issuesFilePath    = flag.String("issues-file", "", "Marker-linked issues from scripts/compat-issues.py, for --publish-report (empty = none)")
+	curatedIssuesPath = flag.String("curated-issues-file", "compat/report-issues.json", "Hand-written issue links for --publish-report; they beat marker links")
+	issueRepo         = flag.String("issue-repo", defaultIssueRepo, "owner/repo that bare issue numbers in --publish-report refer to")
+	interactive       = flag.Bool("interactive", false, "Start in interactive mode (long-lived suite processes)")
+	noUI              = flag.Bool("no-ui", false, "Don't serve embedded UI (use with external Vite dev server)")
 
 	// Environment management — see launch.go.
 	dev               = flag.Bool("dev", false, "One-command dev loop: manage Overcast, serve the dashboard with a hot-reloading UI, open a browser")
@@ -346,6 +354,18 @@ func main() {
 		if err := lintBaselineShardSizes(*baselineFile); err != nil {
 			fmt.Fprintf(os.Stderr, "compat: baseline size check failed: %v\n", err)
 			os.Exit(1)
+		}
+		return
+	}
+
+	if *publishReport != "" {
+		if err := publishReportFile(publishOptions{
+			ResultsPath: *resultsFile, RegistryPath: *registryFile, GeneratedRegistryPath: *generatedRegistryFile,
+			GapsPath: *gapsFilePath, FlakyPath: *flakyFilePath, IssuesPath: *issuesFilePath, CuratedPath: *curatedIssuesPath,
+			OutPath: *publishReport, Version: *publishVersion, Commit: *publishCommit, IssueRepo: *issueRepo,
+		}); err != nil {
+			fmt.Fprintf(os.Stderr, "compat: publish report: %v\n", err)
+			os.Exit(2)
 		}
 		return
 	}

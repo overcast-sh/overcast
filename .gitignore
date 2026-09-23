@@ -51,6 +51,9 @@ tmp/
 compat-results.json
 # compat agent-friendly text report (regenerated after every run, not for VCS)
 compat-report.txt
+# public compat report and its issue links (built per release by release.yml)
+/compat-report.json
+/compat-issues.json
 
 # There is deliberately no entry here for a docs nav/search index. Both used to
 # be generated into the tree and committed (web/src/docs-nav.gen.ts,

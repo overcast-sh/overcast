@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/overcast-sh/overcast/compat/report-issues.schema.json",
+  "title": "Overcast Compat Report Issue Links",
+  "description": "compat/report-issues.json — hand-written issue links for the public compatibility report. A link here beats a <!-- compat:<target> --> marker in an issue body.",
+  "type": "object",
+  "required": ["version", "links"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "type": "integer", "const": 1 },
+    "comment": { "type": "string" },
+    "links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["target", "issue"],
+        "additionalProperties": false,
+        "properties": {
+          "target": {
+            "type": "string",
+            "description": "<service>[/<group-or-operation>[/<test>]][@<suite>]",
+            "pattern": "^[a-z0-9][a-z0-9-]*(/[A-Za-z0-9_.-]+){0,2}(@[a-z0-9-]+)?$"
+          },
+          "issue": { "type": "integer", "minimum": 1 }
+        }
+      }
+    }
+  }
+}
