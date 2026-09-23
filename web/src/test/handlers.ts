@@ -34,7 +34,15 @@ export const healthHandlers = [
 
 // ─── S3 ───────────────────────────────────────────────────────────────────
 
-export const s3Handlers = [http.get("/api/s3/buckets", () => HttpResponse.json({ buckets: [] }))]
+export const s3Handlers = [
+  http.get("/api/s3/buckets", () => HttpResponse.json({ buckets: [] })),
+  // The object download route the data previews read by Range: an empty
+  // object unless a test serves one (features/s3/testing/serve-object.ts).
+  http.get(
+    "/api/s3/buckets/:bucket/objects/:key/download",
+    () => new HttpResponse(new Uint8Array()),
+  ),
+]
 
 // ─── SQS ──────────────────────────────────────────────────────────────────
 
