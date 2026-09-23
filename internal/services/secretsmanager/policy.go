@@ -76,7 +76,7 @@ func (h *Handler) putResourcePolicyTyped(ctx context.Context, req *putResourcePo
 		return nil, errMalformedPolicy(findings[0].ErrorMessage)
 	}
 	if req.BlockPublicPolicy != nil && *req.BlockPublicPolicy && doc.grantsPublicAccess() {
-		return nil, errMalformedPolicy(
+		return nil, errPublicPolicy(
 			"Resource policy contains a statement granting access to all principals, and BlockPublicPolicy is set.")
 	}
 

@@ -5,6 +5,7 @@ package kinesis
 
 import (
 	"context"
+	"crypto/md5" //nolint:gosec // reproduces AWS's partition-key hashing, not used for security
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -355,30 +356,46 @@ func buildInitialShards(shardCount int) []Shard {
 	return shards
 }
 
-// pickShard selects the shard for a given partition key using MD5 hash (same as AWS).
-func pickShard(shards []Shard, partitionKey string) int {
-	// Simple deterministic mapping: sum of bytes mod shard count.
-	var sum int
-	for _, b := range []byte(partitionKey) {
-		sum += int(b)
-	}
+// partitionKeyHashKey returns the 128-bit integer AWS maps a partition key
+// to: "An MD5 hash function is used to map partition keys to 128-bit integer
+// values and to map associated data records to shards using the hash key
+// ranges of the shards" (PutRecord/PutRecords API reference).
+func partitionKeyHashKey(partitionKey string) *big.Int {
+	sum := md5.Sum([]byte(partitionKey)) //nolint:gosec // reproduces AWS's partition-key hashing, not used for security
+	return new(big.Int).SetBytes(sum[:])
+}
+
+// pickShard selects the open shard whose HashKeyRange contains hashKey — the
+// same placement AWS uses for a record's MD5-hashed partition key, or for an
+// ExplicitHashKey supplied directly. A closed shard (one with an
+// EndingSequenceNumber, superseded by SplitShard/MergeShards children) is
+// never selected. Returns -1 if no open shard's range contains hashKey.
+func pickShard(shards []Shard, hashKey *big.Int) int {
 	for i, shard := range shards {
-		if shard.SequenceNumberRange.EndingSequenceNumber == "" {
-			// Only pick active shards.
-			_ = i
+		if shard.SequenceNumberRange.EndingSequenceNumber != "" {
+			continue
+		}
+		start, ok1 := new(big.Int).SetString(shard.HashKeyRange.StartingHashKey, 10)
+		end, ok2 := new(big.Int).SetString(shard.HashKeyRange.EndingHashKey, 10)
+		if !ok1 || !ok2 {
+			continue
+		}
+		if hashKey.Cmp(start) >= 0 && hashKey.Cmp(end) <= 0 {
+			return i
 		}
 	}
-	// Filter only active shards (no EndingSequenceNumber).
-	var active []int
+	return -1
+}
+
+// firstOpenShard returns the index of the first shard with no
+// EndingSequenceNumber, or -1 if every shard is closed.
+func firstOpenShard(shards []Shard) int {
 	for i, shard := range shards {
 		if shard.SequenceNumberRange.EndingSequenceNumber == "" {
-			active = append(active, i)
+			return i
 		}
 	}
-	if len(active) == 0 {
-		return 0
-	}
-	return active[sum%len(active)]
+	return -1
 }
 
 // formatSeqNo renders a Kinesis-style sequence number: fixed-width and

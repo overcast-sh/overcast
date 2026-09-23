@@ -518,9 +518,11 @@ func TestPutResourcePolicy_blockPublicPolicy(t *testing.T) {
 	})
 	defer resp.Body.Close()
 
-	// Then: AWS refuses it
+	// Then: AWS refuses it with PublicPolicyException — the document is
+	// well-formed, it is public, which is a different failure from
+	// MalformedPolicyDocumentException (#1914).
 	helpers.AssertStatus(t, resp, http.StatusBadRequest)
-	helpers.AssertJSONError(t, resp, "MalformedPolicyDocumentException")
+	helpers.AssertJSONError(t, resp, "PublicPolicyException")
 }
 
 func TestValidateResourcePolicy_valid(t *testing.T) {
