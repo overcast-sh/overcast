@@ -37,5 +37,6 @@ iam
 # scenario is held to the model exactly as a generated one is, so the port
 # needs the service's shapes committed.
 cloudwatch-logs
+cognito-identity-provider
 eventbridge
 kinesis
