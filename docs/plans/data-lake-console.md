@@ -138,9 +138,12 @@ bound to `?tab=`.
 ### Result grid
 
 This is the one deliberate exception to `ResourceTable`. A result set has
-arbitrary, typed columns and can hold thousands of rows, and it is not a
-resource list. It is a virtualized grid (`@tanstack/react-virtual`, already a
-dependency), reading pages from `GetQueryResults` as the user scrolls.
+arbitrary, typed columns and can hold millions of rows, and it is not a
+resource list. It is the shared `DataGrid` described under *Large data in the
+browser*, fed by a result row source:
+
+- **Small results** page through `GetQueryResults`.
+- **Large results** read the result CSV at `OutputLocation` through the CSV row source, which can jump anywhere in the file. `GetQueryResults` only pages forward by `NextToken`, so it can't do that.
 
 - **Cell rendering by type:**
   - numbers are right-aligned and mono;
@@ -237,10 +240,84 @@ Each snippet has a copy button. The same panel appears in the docs page, generat
 
 **Create table:** a schema builder (name, type, required, with nested structs added by indentation) and an optional partition spec. It calls `CreateTable` with `metadata.iceberg`. A *Copy as CDK* action gives `CfnTable` (S3 Tables).
 
+## Large data in the browser
+
+A developer's CSV, JSON Lines or Parquet file can hold millions of rows. The
+preview and the Athena grid must open quickly, scroll smoothly and stay within
+memory on a low-end laptop or a tablet, whatever the file's size. The rule:
+**the browser never holds the file.** It holds the rows on screen, a bounded
+cache around them, and a small index. It fetches everything else on demand
+with HTTP Range requests, which Overcast's S3 already serves.
+
+### One grid, several row sources
+
+`DataGrid` is a shared component in `components/data-grid/`. It knows nothing about formats; it asks a **row source**:
+
+```ts
+interface RowSource {
+  columns: Column[]                             // name, type, width hint
+  rowCount: { value: number; exact: boolean }   // grows while indexing
+  getRows(start: number, end: number, cols: number[], signal: AbortSignal): Promise<Row[]>
+  subscribe(onChange: () => void): () => void   // count or index progress
+  dispose(): void
+}
+```
+
+| Source | How it gets rows | Row count |
+| --- | --- | --- |
+| **Parquet** | The footer gives exact counts and byte ranges per row group and column chunk. `getRows` asks hyparquet for `rowStart`/`rowEnd` with a `columns` projection of the visible columns only, so scrolling a 200-column file fetches a handful of column chunks. | Exact, immediately |
+| **CSV/TSV/JSONL** | A worker streams the object (`fetch` → `ReadableStream`), parsing quote-aware so embedded newlines are handled. It records a **sparse byte-offset index**, one offset per 1,000 rows (a million rows is about 8 KB). `getRows` reads the byte range between two index points and parses only that block. | Grows while the worker indexes; exact when done |
+| **Athena result** | Paged `GetQueryResults` for small results; the CSV source over `OutputLocation` for large ones | From `Statistics`, else the CSV source |
+| **Iceberg table** (with S3 Tables) | The Parquet source per data file, concatenated in manifest order | From the snapshot summary |
+
+### Keeping the main thread free
+
+- **Parsing, decompression and indexing run in a Web Worker** (module worker, lazy-loaded with the format code). The main thread only renders.
+- **Results cross back as columnar typed arrays where possible,** so there is no per-cell object churn.
+- **Closing the preview, or scrolling away before a request lands, aborts it** via `AbortSignal`. Closing also terminates the worker.
+
+### Rendering
+
+- **Rows and columns are both virtualized** (`@tanstack/react-virtual`, already a dependency). Only the visible cells plus a small overscan are in the DOM, so a million rows and 300 columns render the same number of elements as 30 rows and 10 columns.
+- **Row height is fixed.** A long value truncates with an ellipsis and opens a cell inspector on click, or on Enter from the keyboard; the inspector shows JSON trees for complex types. Column widths come from sampling the first block, and the user can resize them.
+- **Browsers cap an element's height** (about 17 million px in Firefox and 33 million in Chromium). At 28 px a row, anything above roughly 500k rows would overflow a naive spacer. The grid therefore **maps scroll position onto row index**: past a safe height it uses a fixed-height spacer and computes the first visible row from the scroll fraction. Scrolling feels the same, and a precise **Go to row** box (`⌘G`) gives exact jumps.
+- **The header and the row-number column stay in place.** Edge fades show when there is more content to either side.
+- **Keyboard:** arrow keys move a cell cursor, which scrolls the grid as needed. `⌘C` copies the selection as TSV, and Home and End jump to the first and last row.
+
+### Memory budget and device adaptation
+
+- **Decoded rows live in an LRU of fixed-size blocks** (1,000 rows by default), capped by bytes, not rows.
+  - The default cap is 64 MB. It halves when `navigator.deviceMemory` reports 4 GB or less (Chromium only; elsewhere it assumes the conservative default), and again when the primary pointer is coarse (tablet or phone).
+  - Blocks around the viewport are prefetched in the scroll direction; the rest are evicted.
+- **The first rows appear as soon as the first block parses, without waiting for the index.** While indexing, the footer reads *indexing · 1.2M rows so far*. The user can scroll into the indexed part immediately; beyond it they see static skeleton rows until indexing catches up.
+- **Indexing stops at a per-file byte limit** (512 MB by default). Past it the footer reads *indexed the first 512 MB — Continue*. On localhost streaming is fast, but a 20 GB file shouldn't start a background job nobody asked for.
+- **`Save-Data`** turns background indexing off: rows load on demand only.
+
+### What the grid does not do
+
+The grid doesn't sort or filter a whole large file in the browser. Doing that
+well needs an engine, and faking it over the loaded blocks would lie about
+the data.
+
+- **Find** searches loaded blocks, labelled so.
+- **For anything more there is *Query with Athena*:** it opens the editor with a `SELECT` over a table for this file (or offers to create one).
+
+The Athena grid follows the same rule: sort and filter in SQL.
+
+### Testing and budgets
+
+- **Unit tests** for the index, block cache and eviction, abort handling, scroll-to-row mapping above the height cap, and each row source against fixtures.
+- **A synthetic 5-million-row CSV and a 200-column Parquet file,** generated on the fly in tests and never committed, prove these budgets in CI:
+  - first rows in under 300 ms from opening;
+  - no main-thread task over 50 ms while scrolling;
+  - heap stays under the cap after scrolling top to bottom.
+- **Screenshots** at 1440 and 1024 px, plus a phone width for the full-page viewer.
+
 ## S3 console changes
 
-- **Tabular preview:** CSV and TSV render as a table of the first rows, with a toggle back to raw text. JSON Lines renders as a table when its keys are uniform.
-- **Parquet preview:** schema plus the first rows via `hyparquet`, lazy-loaded, reading only the footer and the first row group with Range requests. The existing 1 MiB cap stays for text; Parquet reads by range.
+- **Tabular preview:** CSV, TSV and uniform JSON Lines open in the shared `DataGrid` with a toggle back to raw text. The dialog shows the file straight away and streams in the rest; see *Large data in the browser*.
+- **Parquet preview:** schema plus rows via `hyparquet` (lazy-loaded, with `hyparquet-compressors` for ZSTD and GZIP), fetching only the row groups and columns in view.
+- **Open in data viewer:** a full-page route (`/s3/$bucket/view?key=…`) with the same grid, for files too big to work with in a dialog. Its URL deep-links to a row (`&row=`).
 - **Iceberg metadata:** `*.metadata.json` gets the Iceberg metadata viewer. Avro manifests show *Avro — not previewed* rather than garbage.
 - **Warehouse buckets** (`--table-s3`) carry a *Managed by S3 Tables* badge and a link to the owning table bucket. They are excluded from the S3 bucket list by default behind a *Show managed buckets* toggle, bound to `?managed=1`.
 - **Prefix action** *Create Glue table from this prefix* opens the Glue wizard pre-filled.
@@ -331,13 +408,14 @@ acceptance criteria:
 | Id | Work | Depends on | Size |
 | --- | --- | --- | --- |
 | W0 #2085 | Registry, SDK clients, ARN routes, search contributors, raw-state labels; bus events published by Athena, Glue and S3 Tables | #2064, #2065, #2067 (per service) | M |
-| W1 #2072 | Athena workspace: editor, results grid, history, saved queries, workgroups, engine status | W0, #2065 (#2066 for real results) | L |
+| W1 #2072 | Athena workspace: editor, results grid, history, saved queries, workgroups, engine status | W0, W8, #2065 (#2066 for real results) | L |
 | W2 #2086 | Glue catalog browser + create-from-S3 wizard | W0, #2064 | M |
 | W3 #2087 | S3 Tables console + connect panel + Iceberg snapshot and metadata viewer | W0, #2067 (#2069 for snapshots) | M |
 | W4 #2088 | S3 console: tabular, Parquet and Iceberg previews; managed warehouse buckets | #2067 for the badge | S–M |
 | W5 #2089 | System map: nodes, edges, overlays and node routes for Athena, Glue and S3 Tables | W0 #2085 | M |
 | W6 #2090 | Refactor: topology contributor interface (optional, separate) | — | M |
 | W7 #2091 | Terminal and agent QoL: `overcast athena query`, MCP tools, sample dataset, engine health | #2066 | M |
+| W8 #2093 | Shared virtualized `DataGrid` and streaming row sources (Parquet, CSV/TSV/JSONL, Athena results); full-page S3 data viewer | #2092 | L |
 
 W1 can build against the inert engine and a stubbed status endpoint. It
 doesn't have to wait for Trino: the result grid is tested against recorded
