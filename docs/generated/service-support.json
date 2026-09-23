@@ -5737,7 +5737,7 @@
           "operation": "CreateDBInstance",
           "category": "DB instances",
           "status": "✅ Supported",
-          "notes": "Docker-backed when available; async creating→available; mysql/postgres/mariadb/aurora-mysql/aurora-postgresql; master accounts can create databases/users and grant privileges; omitted `DBName` creates no MySQL/MariaDB database; Aurora members use cluster-owned placement, credentials, version, port, and database; omitted `PubliclyAccessible` defaults to false for Aurora and otherwise follows subnet placement"
+          "notes": "Docker-backed when available; async creating→available; mysql/postgres/mariadb/aurora-mysql/aurora-postgresql; master accounts can create databases/users and grant privileges; omitted `DBName` creates no MySQL/MariaDB database; Aurora members use cluster-owned placement, credentials, version, port, and database; omitted `PubliclyAccessible` defaults to false for Aurora and otherwise follows subnet placement; `ManageMasterUserPassword` generates a password and creates a Secrets Manager secret (`rds!db-\u003cuuid\u003e`), returned as `MasterUserSecret`; `Tags` applied via the shared tag store"
         },
         {
           "operation": "DescribeDBInstances",
@@ -5749,7 +5749,7 @@
           "operation": "DeleteDBInstance",
           "category": "DB instances",
           "status": "✅ Supported",
-          "notes": "Sets status to \"deleting\"; stops+removes Docker container"
+          "notes": "Sets status to \"deleting\"; stops+removes Docker container; deletes the instance's own Secrets Manager secret when `ManageMasterUserPassword` was set (never a secret inherited from an Aurora cluster)"
         },
         {
           "operation": "StopDBInstance",
@@ -5767,7 +5767,7 @@
           "operation": "ModifyDBInstance",
           "category": "DB instances",
           "status": "✅ Supported",
-          "notes": "Metadata updates (class, storage, engine version, multi-AZ, public accessibility); `MasterUserPassword` is applied to the running engine, requires an `available` instance, and uses RDS's engine-specific length and forbidden-character rules"
+          "notes": "Metadata updates (class, storage, engine version, multi-AZ, public accessibility); `MasterUserPassword` is applied to the running engine, requires an `available` instance, and uses RDS's engine-specific length and forbidden-character rules; `ManageMasterUserPassword` turns the managed-secret path on (generating a new password) or off (requires `MasterUserPassword`)"
         },
         {
           "operation": "RebootDBInstance",
@@ -5815,7 +5815,7 @@
           "operation": "CreateDBCluster",
           "category": "Aurora clusters",
           "status": "✅ Supported",
-          "notes": "aurora-mysql and aurora-postgresql only; logical cluster, Docker started on first instance"
+          "notes": "aurora-mysql and aurora-postgresql only; logical cluster, Docker started on first instance; `ManageMasterUserPassword` generates a password and creates a Secrets Manager secret (`rds!cluster-\u003cuuid\u003e`), returned as `MasterUserSecret` and inherited by every member instance; `Tags` applied via the shared tag store"
         },
         {
           "operation": "DescribeDBClusters",
@@ -5827,13 +5827,13 @@
           "operation": "DeleteDBCluster",
           "category": "Aurora clusters",
           "status": "✅ Supported",
-          "notes": "Sets status to \"deleting\"; async removal; refuses a cluster with `DeletionProtection` enabled"
+          "notes": "Sets status to \"deleting\"; async removal; refuses a cluster with `DeletionProtection` enabled; deletes the cluster's Secrets Manager secret when `ManageMasterUserPassword` was set"
         },
         {
           "operation": "ModifyDBCluster",
           "category": "Aurora clusters",
           "status": "✅ Supported",
-          "notes": "`MasterUserPassword` applied to every member's engine; engine version, port and `DeletionProtection` applied; backup/maintenance windows, cluster parameter group, security groups and log exports recorded"
+          "notes": "`MasterUserPassword` applied to every member's engine; engine version, port and `DeletionProtection` applied; backup/maintenance windows, cluster parameter group, security groups and log exports recorded; `ManageMasterUserPassword` turns the managed-secret path on or off the same way ModifyDBInstance does"
         },
         {
           "operation": "StartDBCluster",

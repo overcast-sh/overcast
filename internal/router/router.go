@@ -673,6 +673,10 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	// ECS/RDS → EC2: resolve subnet-backed launches against VPC network state.
 	ecsSvc.SetVPCResolver(ec2Svc)
 	rdsSvc.SetVPCResolver(ec2Svc)
+	// RDS → Secrets Manager: ManageMasterUserPassword creates and deletes the
+	// secret behind a managed master password, the write-side counterpart to
+	// ECS's read-only SetSecretResolvers above.
+	rdsSvc.SetSecretsManager(smSvc)
 	elasticacheSvc.SetVPCResolver(ec2Svc)
 	// EFS → EC2: a mount target's export joins the VPC its subnet is in, where
 	// the functions and tasks that mount it are.

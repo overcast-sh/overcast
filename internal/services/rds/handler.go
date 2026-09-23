@@ -42,9 +42,15 @@ type Handler struct {
 	dockerWg          sync.WaitGroup
 	puller            *docker.ImagePuller
 	vpcResolver       VPCNetworkResolver
-	gc                *docker.GC
-	ops               map[string]http.HandlerFunc
-	typedOp           map[string]op.Operation
+	// secretsManager is nil until Service.SetSecretsManager wires it, which
+	// the router does unconditionally at startup (see EC2/VPC's
+	// SetVPCResolver for the same pattern). ManageMasterUserPassword refuses
+	// rather than silently skipping secret creation when it is absent — see
+	// errManagedPasswordUnavailable in managed_secret.go.
+	secretsManager SecretsManagerAccess
+	gc             *docker.GC
+	ops            map[string]http.HandlerFunc
+	typedOp        map[string]op.Operation
 
 	// instances scopes container sweeps to the containers this instance
 	// created. Load-bearing for RDS beyond tidiness: an engine container holds
@@ -304,6 +310,32 @@ type xmlDBInstance struct {
 	// docs/dev/compatibility/services/rds.yaml for the tracked scenario.
 	StorageOperationStatus          *string `xml:"StorageOperationStatus,omitempty"`
 	StorageOperationPercentProgress *int    `xml:"StorageOperationPercentProgress,omitempty"`
+	// MasterUserSecret is present only when ManageMasterUserPassword is set —
+	// a pointer because encoding/xml's omitempty does not treat a plain
+	// struct as ever "empty", so a value type would emit an always-present
+	// empty element. See xmlMasterUserSecretFor.
+	MasterUserSecret *xmlMasterUserSecret `xml:"MasterUserSecret,omitempty"`
+}
+
+// xmlMasterUserSecret is AWS's MasterUserSecret shape
+// (rds-2014-10-31.json#MasterUserSecret: KmsKeyId, SecretArn, SecretStatus).
+// SecretStatus is always "active": Overcast performs no rotation, so a
+// managed secret is never anything else.
+type xmlMasterUserSecret struct {
+	KmsKeyId     string `xml:"KmsKeyId,omitempty"`
+	SecretArn    string `xml:"SecretArn"`
+	SecretStatus string `xml:"SecretStatus"`
+}
+
+// xmlMasterUserSecretFor builds the MasterUserSecret element for a record
+// whose password is managed, or returns nil for one whose is not — the
+// pointer that keeps the element off the wire entirely when there is nothing
+// to report, exactly as AWS omits it.
+func xmlMasterUserSecretFor(secretARN, kmsKeyID string) *xmlMasterUserSecret {
+	if secretARN == "" {
+		return nil
+	}
+	return &xmlMasterUserSecret{KmsKeyId: kmsKeyID, SecretArn: secretARN, SecretStatus: "active"}
 }
 
 type xmlEndpoint struct {
@@ -540,6 +572,7 @@ func (h *Handler) toXMLDBInstance(ctx context.Context, inst *DBInstance) xmlDBIn
 		PubliclyAccessible:   inst.PubliclyAccessibleOrDefault(),
 		StorageType:          inst.StorageType,
 		DBClusterIdentifier:  inst.DBClusterIdentifier,
+		MasterUserSecret:     xmlMasterUserSecretFor(inst.MasterUserSecretARN, inst.MasterUserSecretKmsKeyId),
 	}
 }
 

@@ -101,6 +101,20 @@ type DBInstance struct {
 	// maxRetainedLogBytes; LastLogsAt says when the copy was taken.
 	LastLogs   string `json:"LastLogs,omitempty"`
 	LastLogsAt string `json:"LastLogsAt,omitempty"`
+
+	// ManageMasterUserPassword records whether RDS generated the master
+	// password and stores it in a Secrets Manager secret it owns, rather than
+	// the caller supplying MasterUserPassword directly. An Aurora member
+	// instance inherits this (and the two fields below) from its cluster —
+	// see managed_secret.go and createDBInstanceTyped.
+	ManageMasterUserPassword bool `json:"ManageMasterUserPassword,omitempty"`
+	// MasterUserSecretARN is the ARN of that secret. Empty when the password
+	// is not managed.
+	MasterUserSecretARN string `json:"MasterUserSecretARN,omitempty"`
+	// MasterUserSecretKmsKeyId is the caller-supplied (or AWS-default,
+	// recorded-only — Overcast performs no encryption) KMS key ID associated
+	// with the managed secret.
+	MasterUserSecretKmsKeyId string `json:"MasterUserSecretKmsKeyId,omitempty"`
 }
 
 // PubliclyAccessibleOrDefault reports whether the instance is meant to be
@@ -203,6 +217,16 @@ type DBCluster struct {
 	VpcSecurityGroupIds          []string `json:"VpcSecurityGroupIds,omitempty"`
 	EnabledCloudwatchLogsExports []string `json:"EnabledCloudwatchLogsExports,omitempty"`
 	DeletionProtection           bool     `json:"DeletionProtection,omitempty"`
+
+	// ManageMasterUserPassword, MasterUserSecretARN and MasterUserSecretKmsKeyId
+	// are managed_secret.go's ManageMasterUserPassword state, at cluster scope
+	// — see the identical fields on DBInstance. A member instance created
+	// under this cluster inherits all three rather than owning a secret of
+	// its own; AWS mints exactly one secret per Aurora cluster, not one per
+	// member.
+	ManageMasterUserPassword bool   `json:"ManageMasterUserPassword,omitempty"`
+	MasterUserSecretARN      string `json:"MasterUserSecretARN,omitempty"`
+	MasterUserSecretKmsKeyId string `json:"MasterUserSecretKmsKeyId,omitempty"`
 }
 
 // DBClusterMember represents one DB instance that belongs to an Aurora cluster.
