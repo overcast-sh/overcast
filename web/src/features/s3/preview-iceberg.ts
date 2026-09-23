@@ -1,3 +1,5 @@
+import { isRecord } from "@/lib/utils"
+
 /**
  * The at-a-glance facts of an Iceberg table metadata file (`*.metadata.json`),
  * for the summary card the S3 preview puts above the JSON.
@@ -38,8 +40,9 @@ export interface IcebergSummary {
 
 type Json = Record<string, unknown>
 
-function isObject(value: unknown): value is Json {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
+/** The objects in a JSON array, or none when `value` is not an array. */
+function objectsIn(value: unknown): Json[] {
+  return Array.isArray(value) ? value.filter(isRecord) : []
 }
 
 /**
@@ -55,14 +58,14 @@ export function icebergSummary(text: string): IcebergSummary | null {
   } catch {
     return null
   }
-  if (!isObject(doc)) return null
+  if (!isRecord(doc)) return null
   const formatVersion = doc["format-version"]
   if (typeof formatVersion !== "number") return null
   if (typeof doc["table-uuid"] !== "string" && typeof doc.location !== "string") return null
 
   const schema = currentSchema(doc)
   const fieldsById = new Map<number, string>()
-  const fields = (Array.isArray(schema?.fields) ? schema.fields : []).filter(isObject).map((f) => {
+  const fields = objectsIn(schema?.fields).map((f) => {
     const field: IcebergField = {
       id: typeof f.id === "number" ? f.id : undefined,
       name: String(f.name ?? ""),
@@ -89,11 +92,11 @@ export function icebergSummary(text: string): IcebergSummary | null {
 
 /** v2 and later list every schema and name the current one; v1 carries a single `schema`. */
 function currentSchema(doc: Json): Json | undefined {
-  const schemas = Array.isArray(doc.schemas) ? doc.schemas.filter(isObject) : []
+  const schemas = objectsIn(doc.schemas)
   const currentId = doc["current-schema-id"]
   const current = schemas.find((s) => s["schema-id"] === currentId)
   if (current) return current
-  if (isObject(doc.schema)) return doc.schema
+  if (isRecord(doc.schema)) return doc.schema
   return schemas.at(-1)
 }
 
@@ -113,15 +116,15 @@ function currentSnapshotId(text: string): string | null {
 /** Iceberg types as their spec spellings: `long`, `decimal(10, 2)`, `list<string>`, `map<string, long>`, `struct<…>`. */
 export function typeName(type: unknown): string {
   if (typeof type === "string") return type
-  if (!isObject(type)) return "unknown"
+  if (!isRecord(type)) return "unknown"
   switch (type.type) {
     case "list":
       return `list<${typeName(type.element)}>`
     case "map":
       return `map<${typeName(type.key)}, ${typeName(type.value)}>`
     case "struct": {
-      const fields = Array.isArray(type.fields) ? type.fields.filter(isObject) : []
-      return `struct<${fields.map((f) => `${String(f.name)}: ${typeName(f.type)}`).join(", ")}>`
+      const fields = objectsIn(type.fields).map((f) => `${String(f.name)}: ${typeName(f.type)}`)
+      return `struct<${fields.join(", ")}>`
     }
     default:
       return typeof type.type === "string" ? type.type : "unknown"
@@ -129,16 +132,12 @@ export function typeName(type: unknown): string {
 }
 
 function partitionFields(doc: Json, fieldsById: Map<number, string>): string[] {
-  const specs = Array.isArray(doc["partition-specs"]) ? doc["partition-specs"].filter(isObject) : []
+  const specs = objectsIn(doc["partition-specs"])
   const defaultId = doc["default-spec-id"]
   const spec = specs.find((s) => s["spec-id"] === defaultId)
   // v1 also carries the spec inline as `partition-spec`: a bare field list.
-  const fields = Array.isArray(spec?.fields)
-    ? spec.fields
-    : Array.isArray(doc["partition-spec"])
-      ? doc["partition-spec"]
-      : []
-  return fields.filter(isObject).map((f) => {
+  const fields = objectsIn(Array.isArray(spec?.fields) ? spec.fields : doc["partition-spec"])
+  return fields.map((f) => {
     const sourceId = f["source-id"]
     const source =
       (typeof sourceId === "number" ? fieldsById.get(sourceId) : undefined) ?? String(f.name ?? "?")

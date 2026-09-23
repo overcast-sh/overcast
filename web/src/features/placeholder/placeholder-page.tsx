@@ -84,23 +84,13 @@ export function PlaceholderPage({
       {tier !== undefined && (
         <div className="mt-4 flex items-center justify-center gap-4 text-xs text-fg-subtle">
           <span>
-            Current:{" "}
-            <Tooltip content={TIER_DESCRIPTIONS[tier] ?? tier}>
-              <span className="cursor-default font-medium text-fg-muted underline decoration-fg-subtle decoration-dotted underline-offset-2">
-                {TIER_LABELS[tier] ?? tier}
-              </span>
-            </Tooltip>
+            Current: <TierTerm tier={tier} />
           </span>
           {goalTier && goalTier !== tier && (
             <>
               <span className="text-border">→</span>
               <span>
-                Goal:{" "}
-                <Tooltip content={TIER_DESCRIPTIONS[goalTier] ?? goalTier}>
-                  <span className="cursor-default font-medium text-fg-muted underline decoration-fg-subtle decoration-dotted underline-offset-2">
-                    {TIER_LABELS[goalTier] ?? goalTier}
-                  </span>
-                </Tooltip>
+                Goal: <TierTerm tier={goalTier} />
               </span>
             </>
           )}
@@ -108,19 +98,12 @@ export function PlaceholderPage({
       )}
 
       <div className="mt-8 space-y-4 rounded-xl border border-border-muted bg-bg-elevated p-6 text-left">
-        {isStub ? (
-          <>
-            <p className="text-sm font-medium text-fg">Stub — most operations return 501</p>
-            {/* Which operations a stub answers differs per service, so the
-                entry's own reason says what works. */}
-            {reason && <p className="text-sm text-fg-muted">{reason}</p>}
-          </>
-        ) : (
-          <>
-            <p className="text-sm font-medium text-fg">Not supported in Overcast</p>
-            {reason && <p className="text-sm text-fg-muted">{reason}</p>}
-          </>
-        )}
+        <p className="text-sm font-medium text-fg">
+          {isStub ? "Stub — most operations return 501" : "Not supported in Overcast"}
+        </p>
+        {/* For a stub the reason says which operations answer, since that
+            differs per service; otherwise it says why there is no emulation. */}
+        {reason && <p className="text-sm text-fg-muted">{reason}</p>}
 
         <p className="text-sm text-fg-subtle">
           API responses and behaviour are subject to change as support improves.{" "}
@@ -149,5 +132,16 @@ export function PlaceholderPage({
         )}
       </div>
     </div>
+  )
+}
+
+/** A tier's label, underlined as a term, with what the tier means as its tooltip. */
+function TierTerm({ tier }: { tier: string }) {
+  return (
+    <Tooltip content={TIER_DESCRIPTIONS[tier] ?? tier}>
+      <span className="cursor-default font-medium text-fg-muted underline decoration-fg-subtle decoration-dotted underline-offset-2">
+        {TIER_LABELS[tier] ?? tier}
+      </span>
+    </Tooltip>
   )
 }

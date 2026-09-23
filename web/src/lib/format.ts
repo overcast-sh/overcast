@@ -17,6 +17,14 @@ export function formatCount(value: number): string {
   return value.toLocaleString()
 }
 
+/**
+ * A count with its noun, singular for exactly one: `1 row`, `1,204 rows`,
+ * `2 row groups`. `plural` is for the nouns an `s` does not make plural.
+ */
+export function formatQuantity(count: number, noun: string, plural = `${noun}s`): string {
+  return `${formatCount(count)} ${count === 1 ? noun : plural}`
+}
+
 export function formatDate(date: string | Date | number | undefined): string {
   if (!date) return "—"
   try {

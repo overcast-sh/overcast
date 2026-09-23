@@ -1,6 +1,6 @@
 import { useMemo } from "react"
 import { Definition, DefinitionCard } from "@/components/ui/definition-card"
-import { formatCount, formatDate } from "@/lib/format"
+import { formatCount, formatDate, formatQuantity } from "@/lib/format"
 import { icebergSummary } from "../preview-iceberg"
 
 /**
@@ -18,6 +18,7 @@ export function IcebergMetadataSummary({ text }: { text: string }) {
   if (!summary) return null
   const snapshot = summary.currentSnapshotId
   const partitioned = summary.partitionFields.length > 0
+  const schemaName = summary.schemaId === undefined ? "Schema" : `Schema ${summary.schemaId}`
   return (
     <DefinitionCard
       aria-label="Iceberg table metadata"
@@ -47,7 +48,7 @@ export function IcebergMetadataSummary({ text }: { text: string }) {
       <Definition label="Location" value={summary.location} copyable full />
       <Definition
         full
-        label={`Schema${summary.schemaId !== undefined ? ` ${summary.schemaId}` : ""} · ${formatCount(summary.fields.length)} ${summary.fields.length === 1 ? "field" : "fields"}`}
+        label={`${schemaName} · ${formatQuantity(summary.fields.length, "field")}`}
         value={
           // A run of name/type pairs rather than a table: the schema here is
           // a glance at what the columns are, and the JSON below has the rest.

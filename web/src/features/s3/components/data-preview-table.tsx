@@ -139,10 +139,13 @@ function DataCell({ value, column }: { value: unknown; column: PreviewColumn }) 
     >
       {/* NULL and an empty string are both tokens rather than text, so
           neither reads as data, and they differ in every channel a glance
-          uses: solid vs dashed border, upright caps vs lowercase italic. */}
+          uses: solid vs dashed border, upright caps vs lowercase italic.
+          The empty token's spoken name is sr-only text rather than an
+          aria-label, which a plain span cannot carry: screen readers ignore
+          a name on the generic role and would read the cell as the word
+          "empty". */}
       {cell.kind === "null" ? (
         <span
-          aria-label="null"
           title="NULL"
           className="rounded-sm border border-border px-1 text-2xs tracking-wider text-fg-subtle"
         >
@@ -150,11 +153,11 @@ function DataCell({ value, column }: { value: unknown; column: PreviewColumn }) 
         </span>
       ) : cell.kind === "empty" ? (
         <span
-          aria-label="empty string"
           title="Empty string"
           className="rounded-sm border border-dashed border-border px-1 text-2xs font-light text-fg-subtle italic"
         >
-          empty
+          <span aria-hidden>empty</span>
+          <span className="sr-only">empty string</span>
         </span>
       ) : cell.kind === "absent" ? (
         <span className="sr-only">not present</span>

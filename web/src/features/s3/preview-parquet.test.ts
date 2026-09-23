@@ -4,19 +4,30 @@ import { parquetMetadata, type AsyncBuffer } from "hyparquet"
 import { formatPreviewCell } from "./preview-table"
 import { rangeAsyncBuffer, readParquetPreview } from "./preview-parquet"
 
+/**
+ * Copied into this realm's ArrayBuffer: hyparquet checks `instanceof
+ * ArrayBuffer`, and under jsdom a Node Buffer's backing store is not one.
+ */
+function toArrayBuffer(source: Uint8Array): ArrayBuffer {
+  const copy = new ArrayBuffer(source.byteLength)
+  new Uint8Array(copy).set(source)
+  return copy
+}
+
 // orders.parquet: 5 rows in two row groups (3 + 2), one column per type
 // family. Regenerate with `node scripts/generate-parquet-fixture.mjs`.
-// Copied into this realm's ArrayBuffer: hyparquet checks `instanceof
-// ArrayBuffer`, and under jsdom a Node Buffer's backing store is not one.
 function load(name: string): ArrayBuffer {
-  const file = readFileSync(resolve(__dirname, "__fixtures__", name))
-  const copy = new ArrayBuffer(file.byteLength)
-  new Uint8Array(copy).set(file)
-  return copy
+  return toArrayBuffer(readFileSync(resolve(__dirname, "__fixtures__", name)))
 }
 const bytes = load("orders.parquet")
 
-const metadataLength = () => parquetMetadata(bytes).metadata_length
+/** Where the footer starts: the metadata, then its 4-byte length and the `PAR1` magic. */
+const footerStart = () => bytes.byteLength - 8 - parquetMetadata(bytes).metadata_length
+
+/** A `fetch` that answers every request with `response`. */
+function fakeFetch(response: () => Response) {
+  return vi.fn((_input: RequestInfo | URL, _init?: RequestInit) => Promise.resolve(response()))
+}
 
 /** An in-memory AsyncBuffer that records every range it is asked for. */
 function recordingBuffer(source: ArrayBuffer = bytes) {
@@ -67,9 +78,8 @@ describe("readParquetPreview", () => {
     const meta = parquetMetadata(bytes)
     const second = meta.row_groups[1].columns.map((c) => Number(c.meta_data?.data_page_offset))
     const secondStart = Math.min(...second)
-    const footerStart = bytes.byteLength - 8 - meta.metadata_length
     for (const [start, end] of reads) {
-      const touchesSecondGroup = start < footerStart && end > secondStart
+      const touchesSecondGroup = start < footerStart() && end > secondStart
       expect(touchesSecondGroup, `read ${start}-${end}`).toBe(false)
     }
     // …and the first group's data really was read, by range, not skipped.
@@ -137,8 +147,7 @@ describe("readParquetPreview", () => {
     expect(preview.table).toBeUndefined()
     expect(preview.rowsError).toMatch(/first row group is .* over the preview's .* limit/)
     // Declined from the footer alone: nothing before the metadata was read.
-    const footerStart = bytes.byteLength - 8 - metadataLength()
-    expect(reads.every(([start]) => start >= footerStart)).toBe(true)
+    expect(reads.every(([start]) => start >= footerStart())).toBe(true)
   })
 })
 
@@ -169,9 +178,7 @@ describe("readParquetPreview > codecs", () => {
       compressors: { BROTLI: (input: Uint8Array) => new Uint8Array(brotliCompressSync(input)) },
       columnData: [{ name: "id", data: [1, 2, 3], type: "INT32" }],
     })
-    const written = new Uint8Array(writer.getBuffer())
-    const brotli = new ArrayBuffer(written.byteLength)
-    new Uint8Array(brotli).set(written)
+    const brotli = toArrayBuffer(new Uint8Array(writer.getBuffer()))
 
     const preview = await readParquetPreview(recordingBuffer(brotli).file)
     expect(preview.fields).toEqual([{ name: "id", type: "INT32", nullable: true }])
@@ -182,9 +189,7 @@ describe("readParquetPreview > codecs", () => {
 
 describe("rangeAsyncBuffer", () => {
   it("asks for exactly the slice as an inclusive byte range", async () => {
-    const fetchImpl = vi.fn(() =>
-      Promise.resolve(new Response(new Uint8Array([1, 2, 3]), { status: 206 })),
-    ) as unknown as typeof fetch
+    const fetchImpl = fakeFetch(() => new Response(new Uint8Array([1, 2, 3]), { status: 206 }))
     const buffer = rangeAsyncBuffer("/obj", 100, fetchImpl)
     const slice = await buffer.slice(10, 13)
     expect(new Uint8Array(slice)).toEqual(new Uint8Array([1, 2, 3]))
@@ -193,15 +198,13 @@ describe("rangeAsyncBuffer", () => {
 
   it("cuts the slice out of a server that ignored the range and sent everything", async () => {
     const whole = Uint8Array.from({ length: 20 }, (_, i) => i)
-    const fetchImpl = (() =>
-      Promise.resolve(new Response(whole, { status: 200 }))) as unknown as typeof fetch
+    const fetchImpl = fakeFetch(() => new Response(whole, { status: 200 }))
     const slice = await rangeAsyncBuffer("/obj", 20, fetchImpl).slice(5, 8)
     expect(new Uint8Array(slice)).toEqual(new Uint8Array([5, 6, 7]))
   })
 
   it("carries the HTTP status on a failed read", async () => {
-    const fetchImpl = (() =>
-      Promise.resolve(new Response("", { status: 403 }))) as unknown as typeof fetch
+    const fetchImpl = fakeFetch(() => new Response("", { status: 403 }))
     await expect(rangeAsyncBuffer("/obj", 20, fetchImpl).slice(0, 4)).rejects.toMatchObject({
       status: 403,
     })
