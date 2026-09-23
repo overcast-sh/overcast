@@ -1928,6 +1928,185 @@ exports.handler = async () => {
 	}
 }
 
+// TestInvoke_timeoutStopsHandler pins issue #2055: a handler that overruns its
+// timeout must be stopped at the deadline, not left running. On AWS the
+// execution environment is reset the instant a function times out, so nothing
+// the handler does afterwards — a log line, a side effect — is ever observed.
+// Before the fix, containerInstance.Invoke marked the environment unhealthy
+// and cancelled the Runtime API invocation but never stopped the container
+// itself, so the handler kept running (and logging) inside it until Release
+// tore the container down well after the invoke had already returned.
+//
+// The handler logs an INIT_ID line at module load (once per container) and,
+// for a "slow" invocation, a marker after a 2.5 s sleep that must never
+// survive a 1 s timeout — long enough that the pre-fix container, killed only
+// once Release ran after the up-to-2 s output-drain wait, was still alive to
+// log it, and short enough that the fixed code (which kills at the deadline)
+// never lets it happen. A second, fast invocation's response payload carries
+// its own INIT_ID: a different one from the first proves the first container
+// was actually destroyed rather than merely marked unhealthy and reused.
+func TestInvoke_timeoutStopsHandler(t *testing.T) {
+	helpers.SkipWithoutDocker(t)
+
+	// Given a function whose handler can be told to outlive its timeout.
+	srv := helpers.NewTestServer(t, helpers.WithLambdaDocker())
+	code := makeZip(t, "index.js", `
+const crypto = require("crypto");
+const initId = crypto.randomUUID();
+console.log("INIT_ID " + initId);
+exports.handler = async (event) => {
+  if (event && event.slow) {
+    console.log("SLOW_HANDLER_START " + initId);
+    await new Promise(r => setTimeout(r, 2500));
+    console.log("SLOW_HANDLER_DONE_SHOULD_NOT_APPEAR " + initId);
+    return { initId };
+  }
+  return { initId };
+};
+`)
+	resp := doJSON(t, http.MethodPost, lambdaURL(srv, "/functions"), createFunctionReq{
+		FunctionName: "timeout-stops-handler-fn",
+		Runtime:      "nodejs20.x",
+		Handler:      "index.handler",
+		Role:         "arn:aws:iam::000000000000:role/lambda-role",
+		Timeout:      1,
+		MemorySize:   128,
+		Code:         &lambdaCode{ZipFile: code},
+	})
+	helpers.AssertStatus(t, resp, http.StatusCreated)
+	resp.Body.Close()
+	waitForFunctionActive(t, srv, "timeout-stops-handler-fn")
+
+	// When the first invocation sleeps past its 1 s timeout.
+	slowResp := invokeFunction(t, srv, "timeout-stops-handler-fn", map[string]bool{"slow": true})
+	slowBody, _ := io.ReadAll(slowResp.Body)
+	slowResp.Body.Close()
+
+	// Then the invoke reports the timeout, AWS-shaped.
+	if slowResp.Header.Get("X-Amz-Function-Error") != "Unhandled" {
+		t.Errorf("expected X-Amz-Function-Error: Unhandled, got %q (body=%s)", slowResp.Header.Get("X-Amz-Function-Error"), slowBody)
+	}
+	if !strings.Contains(string(slowBody), "Task timed out after 1.0") {
+		t.Errorf("expected AWS's timeout message, got body=%s", slowBody)
+	}
+
+	// And: even after waiting comfortably past the handler's 2.5 s sleep, its
+	// post-sleep line never lands in CloudWatch — the handler was stopped at
+	// the deadline, not merely abandoned.
+	groupName := "/aws/lambda/timeout-stops-handler-fn"
+	const (
+		pollFor      = 8 * time.Second
+		pollInterval = 200 * time.Millisecond
+	)
+	var events []map[string]any
+	var sawInit, sawSlowStart, sawReport, sawForbiddenDone bool
+	var initID string
+	deadline := time.Now().Add(pollFor)
+	for time.Now().Before(deadline) {
+		events = filterLogEvents(t, srv, groupName)
+		sawInit, sawSlowStart, sawReport, sawForbiddenDone = false, false, false, false
+		for _, e := range events {
+			msg, _ := e["message"].(string)
+			// A handler's own console.log line is wrapped in Lambda's
+			// standard prefix ("<timestamp>\t<requestId>\tINFO\t<text>"), so
+			// the markers are matched by substring rather than by prefix.
+			if id, ok := extractMarker(msg, "INIT_ID "); ok {
+				sawInit = true
+				initID = id
+			}
+			if _, ok := extractMarker(msg, "SLOW_HANDLER_START "); ok {
+				sawSlowStart = true
+			}
+			if _, ok := extractMarker(msg, "SLOW_HANDLER_DONE_SHOULD_NOT_APPEAR "); ok {
+				sawForbiddenDone = true
+			}
+			if strings.HasPrefix(msg, "REPORT RequestId:") && strings.Contains(msg, "Status: timeout") {
+				sawReport = true
+			}
+		}
+		if sawInit && sawSlowStart && sawReport {
+			break
+		}
+		time.Sleep(pollInterval)
+	}
+	if !(sawInit && sawSlowStart && sawReport) {
+		t.Fatalf("expected INIT_ID, SLOW_HANDLER_START and a timeout REPORT in CloudWatch Logs for %q within %v; got %d events: %+v",
+			groupName, pollFor, len(events), events)
+	}
+	if sawForbiddenDone {
+		t.Errorf("handler kept running after its timeout: SLOW_HANDLER_DONE_SHOULD_NOT_APPEAR was logged after REPORT (events=%+v)", events)
+	}
+	if initID == "" {
+		t.Fatal("could not read the first container's INIT_ID from CloudWatch Logs")
+	}
+
+	// When the next invocation runs (fast, no timeout).
+	fastResp := invokeFunction(t, srv, "timeout-stops-handler-fn", map[string]bool{"slow": false})
+	helpers.AssertStatus(t, fastResp, http.StatusOK)
+	fastBody, _ := io.ReadAll(fastResp.Body)
+	fastResp.Body.Close()
+
+	// Then it ran in a fresh execution environment: a new INIT_ID, not the
+	// timed-out container reused. A container merely marked unhealthy but
+	// still alive and warm would answer with the same INIT_ID.
+	var fastResult struct {
+		InitID string `json:"initId"`
+	}
+	if err := json.Unmarshal(fastBody, &fastResult); err != nil {
+		t.Fatalf("unmarshal fast invoke response: %v (body=%s)", err, fastBody)
+	}
+	if fastResult.InitID == "" {
+		t.Fatal("fast invoke response missing initId")
+	}
+	if fastResult.InitID == initID {
+		t.Errorf("second invoke reused the timed-out container (same INIT_ID %s); expected a fresh execution environment", initID)
+	}
+}
+
+// extractMarker reports whether msg contains marker, and if so returns the
+// single whitespace-delimited token that follows it (e.g. the UUID after
+// "INIT_ID "). Handler console.log output arrives wrapped in Lambda's
+// standard log-line prefix, so the marker is rarely at the start of msg.
+func extractMarker(msg, marker string) (string, bool) {
+	i := strings.Index(msg, marker)
+	if i < 0 {
+		return "", false
+	}
+	rest := msg[i+len(marker):]
+	if end := strings.IndexAny(rest, " \t\r\n"); end >= 0 {
+		rest = rest[:end]
+	}
+	return rest, true
+}
+
+// filterLogEvents calls Logs_20140328.FilterLogEvents for group and returns
+// its events. Fails the test on a transport error; a non-200 (e.g. the log
+// group not created yet) is reported as zero events so pollers can keep
+// waiting.
+func filterLogEvents(t *testing.T, srv *helpers.TestServer, group string) []map[string]any {
+	t.Helper()
+	body, _ := json.Marshal(map[string]any{"logGroupName": group})
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/", bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("build FilterLogEvents request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/x-amz-json-1.1")
+	req.Header.Set("X-Amz-Target", "Logs_20140328.FilterLogEvents")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("FilterLogEvents: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil
+	}
+	var result struct {
+		Events []map[string]any `json:"events"`
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&result)
+	return result.Events
+}
+
 // invokeForLogTail invokes fn with X-Amz-Log-Type: Tail and returns the decoded
 // X-Amz-Log-Result.
 func invokeForLogTail(t *testing.T, srv *helpers.TestServer, fn string, payload []byte) []byte {
