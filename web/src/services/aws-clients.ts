@@ -52,11 +52,16 @@ const EMULATOR_CREDENTIALS = {
   secretAccessKey: "overcast",
 } as const
 
-function baseConfig() {
+/**
+ * `region` overrides the console's region for one client — for reading a
+ * resource another region's ARN names (a Step Functions Task calling a
+ * function by ARN elsewhere) without switching the whole console.
+ */
+function baseConfig(region?: string) {
   const ep = endpointResolver.get()
   return {
     endpoint: ep.baseUrl,
-    region: ep.region,
+    region: region || ep.region,
     credentials: EMULATOR_CREDENTIALS,
     tls: false,
     disableHostPrefix: true,
@@ -73,10 +78,10 @@ export const awsClients = {
   sns: () => new SNSClient(baseConfig()),
   dynamodb: () => new DynamoDBClient(baseConfig()),
   kinesis: () => new KinesisClient(baseConfig()),
-  lambda: () => new LambdaClient(baseConfig()),
+  lambda: (region?: string) => new LambdaClient(baseConfig(region)),
   pipes: () => new PipesClient(baseConfig()),
   cloudwatch: () => new CloudWatchClient(baseConfig()),
-  logs: () => new CloudWatchLogsClient(baseConfig()),
+  logs: (region?: string) => new CloudWatchLogsClient(baseConfig(region)),
   sesv2: () => new SESv2Client(baseConfig()),
   secretsmanager: () => new SecretsManagerClient(baseConfig()),
   cloudformation: () => new CloudFormationClient(baseConfig()),

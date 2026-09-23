@@ -131,6 +131,67 @@ describe("buildTrace", () => {
     expect(run?.error).toBeUndefined()
   })
 
+  it("records each attempt's own window, parameters and outcome", () => {
+    // Given: a lambda:invoke Task that failed once, then succeeded on retry
+    const m = model({
+      StartAt: "Call",
+      States: { Call: { Type: "Task", Resource: "arn:aws:states:::lambda:invoke", End: true } },
+    })
+    const params = '{"FunctionName":"fn","Payload":{}}'
+    const trace = buildTrace(
+      linear([
+        ["ExecutionStarted", { input: "{}" }],
+        ["TaskStateEntered", { name: "Call", input: "{}" }],
+        ["TaskScheduled", { resourceType: "lambda", resource: "invoke", parameters: params }],
+        ["TaskStarted", { resourceType: "lambda", resource: "invoke" }],
+        ["TaskFailed", { error: "Lambda.Unknown", cause: "boom" }],
+        ["TaskScheduled", { resourceType: "lambda", resource: "invoke", parameters: params }],
+        ["TaskStarted", { resourceType: "lambda", resource: "invoke" }],
+        ["TaskSucceeded", { output: '{"StatusCode":200}' }],
+        ["TaskStateExited", { name: "Call", output: "{}" }],
+        ["ExecutionSucceeded", { output: "{}" }],
+      ]),
+      m,
+    )
+
+    // Then: two attempts, each bounded by its own events and carrying its own result
+    const attempts = trace.runsByName.get("Call")?.[0].taskAttempts ?? []
+    expect(
+      attempts.map((a) => [a.status, a.scheduledAt - T0, a.startedAt! - T0, a.endAt! - T0]),
+    ).toEqual([
+      ["failed", 30, 40, 50],
+      ["succeeded", 60, 70, 80],
+    ])
+    expect(attempts[0]).toMatchObject({
+      error: "Lambda.Unknown",
+      cause: "boom",
+      parameters: params,
+    })
+    expect(attempts[1].output).toBe('{"StatusCode":200}')
+  })
+
+  it("settles an attempt the execution was stopped during as aborted, at the stop", () => {
+    // Given: StopExecution arrives while the function is still running
+    const m = model({
+      StartAt: "Call",
+      States: { Call: { Type: "Task", Resource: "arn:aws:states:::lambda:invoke", End: true } },
+    })
+    const trace = buildTrace(
+      linear([
+        ["ExecutionStarted", { input: "{}" }],
+        ["TaskStateEntered", { name: "Call", input: "{}" }],
+        ["TaskScheduled", { resourceType: "lambda", resource: "invoke", parameters: "{}" }],
+        ["TaskStarted", { resourceType: "lambda", resource: "invoke" }],
+        ["ExecutionAborted", {}],
+      ]),
+      m,
+    )
+
+    // Then: the attempt is over, not still running, and ended when the execution did
+    const [attempt] = trace.runsByName.get("Call")?.[0].taskAttempts ?? []
+    expect([attempt.status, attempt.endAt! - T0]).toEqual(["aborted", 50])
+  })
+
   it("marks a state that failed and moved on through a Catch as caught, and the move as a catch", () => {
     // Given: a Task fails and its Catch goes to Recover — no exit event for the Task, as on AWS
     const m = model({

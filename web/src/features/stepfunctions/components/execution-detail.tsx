@@ -1,15 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Link, useNavigate } from "@tanstack/react-router"
-import {
-  AlertTriangle,
-  Crosshair,
-  ListTree,
-  Play,
-  RefreshCw,
-  RotateCcw,
-  Square,
-} from "lucide-react"
+import { Crosshair, ListTree, Play, RefreshCw, RotateCcw, Square } from "lucide-react"
 import {
   sfnExecutionDefinitionQueryOptions,
   sfnExecutionHistoryQueryOptions,
@@ -29,10 +21,11 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { ResizableSplit } from "@/components/ui/resizable-split"
 import { Tabs, TabList, Tab, TabPanel } from "@/components/ui/tabs"
 import { PageHeader, Spinner, EmptyState, SectionLabel } from "@/components/ui/primitives"
-import { ArnText } from "@/components/ui/arn-link"
+import { ArnLink, ArnText } from "@/components/ui/arn-link"
 import { cn } from "@/lib/utils"
 import { executionStatusVariant, formatTimestamp } from "@/features/stepfunctions/format"
 import { parseDefinition } from "../asl"
+import { lambdaTargetOfRun } from "../lambda-invocations"
 import type { ExecutionTab } from "../views"
 import {
   buildTrace,
@@ -46,6 +39,7 @@ import { FlowDiagram } from "./flow-diagram"
 import { JsonPane } from "./json-pane"
 import { StartExecutionDialog } from "./start-execution-dialog"
 import { StateInspector } from "./state-inspector"
+import { ErrorCause } from "./error-cause"
 
 interface Props {
   /** State machine name, from the route. */
@@ -263,9 +257,17 @@ export function ExecutionDetail({
         title={execution}
         meta={<ArnText arn={executionArn} />}
         description={
-          <Link className="text-accent hover:underline" to="/stepfunctions/$name" params={{ name }}>
-            {name}
-          </Link>
+          stateMachineArn ? (
+            <ArnLink arn={stateMachineArn} label={name} className="text-sm" />
+          ) : (
+            <Link
+              className="text-accent hover:underline"
+              to="/stepfunctions/$name"
+              params={{ name }}
+            >
+              {name}
+            </Link>
+          )
         }
         actions={
           <>
@@ -330,18 +332,18 @@ export function ExecutionDetail({
       </div>
 
       {detail.error && (
-        <div className="flex flex-wrap items-start gap-3 rounded-lg border border-danger/30 bg-danger-muted px-4 py-3 text-sm text-danger">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <div className="flex min-w-48 flex-1 flex-col gap-1">
-            <span className="font-mono font-semibold">{detail.error}</span>
-            {detail.cause && (
-              <span className="break-words whitespace-pre-wrap text-fg-muted">{detail.cause}</span>
-            )}
-          </div>
+        <div className="flex flex-wrap items-start gap-3">
+          <ErrorCause
+            error={detail.error}
+            cause={detail.cause}
+            className="min-w-48 flex-1 px-4 py-3 text-sm"
+          />
           {failedRun && (
             <Button size="sm" variant="danger-ghost" onClick={() => selectRun(failedRun)}>
               <Crosshair className="mr-1.5 h-3.5 w-3.5" />
-              Show {failedRun.name}
+              {lambdaTargetOfRun(failedRun)
+                ? `Logs for ${failedRun.name}`
+                : `Show ${failedRun.name}`}
             </Button>
           )}
         </div>

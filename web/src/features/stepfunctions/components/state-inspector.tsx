@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button"
 import { Definition, DefinitionList } from "@/components/ui/definition-card"
 import { SectionLabel } from "@/components/ui/primitives"
 import { Tabs, TabList, Tab, TabPanel } from "@/components/ui/tabs"
+import { ResourceLink } from "@/components/ui/arn-link"
 import { formatPreciseTimeOfDay } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { parseTaskResource, type AslModel, type AslState } from "../asl"
@@ -30,8 +31,11 @@ import {
 } from "../execution-trace"
 import { sfnMapRunExecutionsQueryOptions } from "../data"
 import { EventType } from "./event-type"
+import { lambdaTargetOfRun, parseFunctionRef } from "../lambda-invocations"
 import { STATUS_THEME, stateTypeTheme } from "../state-theme"
+import { ErrorCause } from "./error-cause"
 import { JsonPane } from "./json-pane"
+import { LambdaInvocationsPanel } from "./lambda-invocations-panel"
 
 interface Props {
   model: AslModel
@@ -69,8 +73,19 @@ export function StateInspector({
   // starts fresh on its own default run and tab.
   const [runKey, setRunKey] = useState<string | undefined>()
   const run = runs.find((r) => r.key === runKey) ?? defaultRun
-  const [chosenTab, setTab] = useState("io")
-  const tab = trace ? chosenTab : "definition"
+  const lambdaTarget = lambdaTargetOfRun(run)
+  // A Lambda Task that went wrong opens on its invocation — the logs are
+  // what the reader came for — and every other run on its input and output.
+  const wentWrong =
+    run?.status === "failed" || run?.status === "caught" || (run?.retriedErrors.length ?? 0) > 0
+  const [chosenTab, setTab] = useState<string | undefined>()
+  // The default is settled the first time the run is shown, so a live run
+  // that starts retrying does not pull the reader off the tab they are on.
+  // Not on first render: a deep link can open before the history has loaded.
+  const [firstTab, setFirstTab] = useState<string | undefined>()
+  if (run && firstTab === undefined) setFirstTab(lambdaTarget && wentWrong ? "lambda" : "io")
+  const preferred = chosenTab ?? firstTab ?? "io"
+  const tab = !trace ? "definition" : preferred === "lambda" && !lambdaTarget ? "io" : preferred
 
   if (!state) return null
   const theme = stateTypeTheme(state.type)
@@ -117,7 +132,7 @@ export function StateInspector({
 
         {runs.length > 1 && <RunPicker runs={runs} selected={run} now={now} onSelect={setRunKey} />}
 
-        {run && <RunSummary run={run} now={now} />}
+        {run && <RunSummary run={run} now={now} hideRetries={Boolean(lambdaTarget)} />}
 
         {run?.mapRunArn && machineName && (
           <MapRunChildren mapRunArn={run.mapRunArn} machineName={machineName} />
@@ -126,6 +141,7 @@ export function StateInspector({
         <Tabs selectedKey={tab} onSelectionChange={setTab}>
           <TabList aria-label="State details">
             {trace && <Tab id="io">Input &amp; output</Tab>}
+            {trace && lambdaTarget && <Tab id="lambda">Lambda</Tab>}
             {trace && <Tab id="events">Events</Tab>}
             <Tab id="definition">Definition</Tab>
           </TabList>
@@ -143,6 +159,17 @@ export function StateInspector({
                       : "—"
                 }
                 bodyClassName="max-h-72"
+              />
+            </TabPanel>
+          )}
+          {trace && lambdaTarget && run && (
+            <TabPanel id="lambda" className="pt-3">
+              <LambdaInvocationsPanel
+                key={run.key}
+                run={run}
+                target={lambdaTarget}
+                stateName={state.name}
+                now={now}
               />
             </TabPanel>
           )}
@@ -257,7 +284,19 @@ function RunPicker({
   )
 }
 
-function RunSummary({ run, now }: { run: StateRun; now: number }) {
+/**
+ * `hideRetries` drops the retried-errors list when the Lambda tab lists every
+ * attempt with its own error, logs and invocation — the same facts, richer.
+ */
+function RunSummary({
+  run,
+  now,
+  hideRetries,
+}: {
+  run: StateRun
+  now: number
+  hideRetries: boolean
+}) {
   return (
     <div className="flex flex-col gap-3">
       <DefinitionList layout="inline">
@@ -280,26 +319,16 @@ function RunSummary({ run, now }: { run: StateRun; now: number }) {
         )}
       </DefinitionList>
       {run.error && (
-        <div
-          className={cn(
-            "rounded-md border px-3 py-2 text-xs",
-            run.status === "caught"
-              ? "border-warning/30 bg-warning-muted text-warning"
-              : "border-danger/30 bg-danger-muted text-danger",
-          )}
-        >
-          <p className="font-mono font-semibold wrap-anywhere">{run.error}</p>
-          {run.cause && (
-            <p className="mt-1 wrap-anywhere whitespace-pre-wrap text-fg-muted">
-              {prettyCause(run.cause)}
-            </p>
-          )}
-          {run.status === "caught" && (
-            <p className="mt-1 text-fg-muted">Caught — the execution moved on through a Catch.</p>
-          )}
-        </div>
+        <ErrorCause
+          error={run.error}
+          cause={run.cause}
+          tone={run.status === "caught" ? "caught" : "failed"}
+          note={
+            run.status === "caught" ? "Caught — the execution moved on through a Catch." : undefined
+          }
+        />
       )}
-      {run.retriedErrors.length > 0 && (
+      {run.retriedErrors.length > 0 && !hideRetries && (
         <div className="rounded-md border border-warning/30 bg-warning-muted px-3 py-2 text-xs text-warning">
           <p className="font-semibold">
             Retried {run.retriedErrors.length} time{run.retriedErrors.length === 1 ? "" : "s"}
@@ -315,21 +344,6 @@ function RunSummary({ run, now }: { run: StateRun; now: number }) {
       )}
     </div>
   )
-}
-
-/** A Lambda's error cause is itself JSON; show it indented rather than as one long line. */
-function prettyCause(cause: string): string {
-  try {
-    const parsed: unknown = JSON.parse(cause)
-    if (parsed && typeof parsed === "object") {
-      const { errorMessage, errorType } = parsed as { errorMessage?: string; errorType?: string }
-      if (errorMessage) return errorType ? `${errorType}: ${errorMessage}` : errorMessage
-      return JSON.stringify(parsed, null, 2)
-    }
-  } catch {
-    // Not JSON: show as written.
-  }
-  return cause
 }
 
 function RunEvents({ run, trace }: { run: StateRun | undefined; trace: ExecutionTrace }) {
@@ -356,6 +370,22 @@ function RunEvents({ run, trace }: { run: StateRun | undefined; trace: Execution
       })}
     </ol>
   )
+}
+
+/**
+ * The Lambda function a Task names in its definition — its Resource ARN, or a
+ * literal `FunctionName` for `lambda:invoke`. One chosen at run time
+ * (`FunctionName.$`, JSONata) is not knowable here; the run's Lambda tab has it.
+ */
+function definedFunction(resource: string | undefined, raw: Record<string, unknown>) {
+  if (!resource) return undefined
+  if (/^arn:[^:]+:lambda:/.test(resource)) return parseFunctionRef(resource) ?? undefined
+  if (!/^arn:[^:]+:states:::lambda:invoke/.test(resource)) return undefined
+  const args = (raw.Parameters ?? raw.Arguments) as Record<string, unknown> | undefined
+  const name = args?.FunctionName
+  return typeof name === "string" && !name.startsWith("{%")
+    ? (parseFunctionRef(name) ?? undefined)
+    : undefined
 }
 
 const DEFINITION_FIELDS_SHOWN_ELSEWHERE = new Set([
@@ -401,6 +431,7 @@ function StateDefinition({
     ),
   )
   const hasExtraFields = Object.keys(raw).some((k) => !DEFINITION_FIELDS_SHOWN_ELSEWHERE.has(k))
+  const calledFunction = definedFunction(resource, raw)
 
   return (
     <>
@@ -420,6 +451,19 @@ function StateDefinition({
               </span>
             }
             copyable={resource}
+          />
+        )}
+        {calledFunction && (
+          <Definition
+            label="Function"
+            value={
+              <ResourceLink
+                service="lambda"
+                resourceId={calledFunction.functionName}
+                region={calledFunction.region}
+              />
+            }
+            copyable={calledFunction.functionName}
           />
         )}
         {state.terminal && (

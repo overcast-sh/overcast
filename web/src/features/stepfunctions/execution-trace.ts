@@ -57,8 +57,38 @@ export interface StateRun {
   iterations?: Map<number, MapIterationInfo>
   /** Resource the task called, when it is a Task. */
   resource?: string
+  /**
+   * Each time the Task's work was scheduled, in order — one per Retry attempt.
+   * Empty for anything that is not a Task.
+   */
+  taskAttempts: TaskAttempt[]
   /** Last outcome of the work inside the state, before the run closed. */
   lastOutcome?: "succeeded" | "failed"
+}
+
+/**
+ * One attempt at a Task's work: from the `…Scheduled` event to the event that
+ * settled it. Its window is what ties the attempt to the Lambda invocation it
+ * made, and its own error — not the run's, which a later Retry may have
+ * cleared — is what that attempt failed with.
+ */
+export interface TaskAttempt {
+  scheduledEventId: number
+  scheduledAt: number
+  startedAt?: number
+  endAt?: number
+  /** `aborted`: the run ended around it — StopExecution, a timeout, a failed sibling. */
+  status: "running" | "succeeded" | "failed" | "timedOut" | "aborted"
+  /** `TaskScheduled`'s `resourceType` ("lambda", "sqs", …); absent for a Lambda function ARN Task. */
+  resourceType?: string
+  /** `TaskScheduled`'s `resource` ("invoke", …), or the function ARN of a `LambdaFunctionScheduled`. */
+  resource?: string
+  region?: string
+  /** What the attempt sent: an integration's resolved Parameters, or a Lambda function ARN Task's input. */
+  parameters?: string
+  output?: string
+  error?: string
+  cause?: string
 }
 
 export interface MapIterationInfo {
@@ -109,6 +139,9 @@ interface Frame {
 
 type Details = {
   mapRunArn?: string
+  resourceType?: string
+  region?: string
+  parameters?: string
   name?: string
   input?: string
   output?: string
@@ -196,6 +229,13 @@ export function buildTrace(events: HistoryEvent[], model?: AslModel): ExecutionT
     if (run.status !== "running") return
     run.end = at
     run.status = status ?? (run.lastOutcome === "failed" ? "caught" : "succeeded")
+    // An attempt still open when its run closes never got an outcome event:
+    // the run was cut short around it.
+    const attempt = run.taskAttempts.at(-1)
+    if (attempt?.status === "running") {
+      attempt.status = "aborted"
+      attempt.endAt = at
+    }
   }
 
   /** Pops frames above the given index, closing each run as it goes. */
@@ -315,6 +355,7 @@ export function buildTrace(events: HistoryEvent[], model?: AslModel): ExecutionT
         input: details?.input,
         attempts: 0,
         retriedErrors: [],
+        taskAttempts: [],
         iterationPath: path,
         parentKey: runOf(stack[stack.length - 1])?.key,
         scopeId: scope,
@@ -520,9 +561,30 @@ export function buildTrace(events: HistoryEvent[], model?: AslModel): ExecutionT
       const run = runOf(stack[stack.length - 1])
       if (run) {
         attributed = run.key
+        const attempt = run.taskAttempts.at(-1)
         if (SCHEDULE_EVENTS.test(type) && !type.startsWith("MapRun")) {
           run.attempts += 1
           if (details?.resource) run.resource = details.resource
+          run.taskAttempts.push({
+            scheduledEventId: id,
+            scheduledAt: at,
+            status: "running",
+            resourceType: details?.resourceType,
+            resource: details?.resource,
+            region: details?.region,
+            parameters: details?.parameters ?? details?.input,
+          })
+        } else if (attempt?.status === "running" && type.endsWith("Started")) {
+          attempt.startedAt ??= at
+        } else if (attempt?.status === "running" && isFailure(type)) {
+          attempt.status = type.endsWith("TimedOut") ? "timedOut" : "failed"
+          attempt.endAt = at
+          attempt.error = details?.error
+          attempt.cause = details?.cause
+        } else if (attempt?.status === "running" && type.endsWith("Succeeded")) {
+          attempt.status = "succeeded"
+          attempt.endAt = at
+          attempt.output = details?.output
         }
         if (isFailure(type)) {
           run.lastOutcome = "failed"
