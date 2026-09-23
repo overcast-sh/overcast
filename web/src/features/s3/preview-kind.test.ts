@@ -1,4 +1,9 @@
-import { dataPreviewKind, isIcebergMetadataKey, isTextDataKind } from "./preview-kind"
+import {
+  dataPreviewKind,
+  isIcebergMetadataKey,
+  isTabularKind,
+  isTextDataKind,
+} from "./preview-kind"
 
 describe("dataPreviewKind", () => {
   it.each([
@@ -10,6 +15,9 @@ describe("dataPreviewKind", () => {
     ["application/octet-stream", "logs/app.jsonl", "jsonl"],
     ["application/octet-stream", "logs/app.ndjson", "jsonl"],
     ["application/x-ndjson", "stream", "jsonl"],
+    ["binary/octet-stream", "sheet.TAB", "tsv"],
+    ["binary/octet-stream", "part-0.pqt", "parquet"],
+    ["application/x-avro", "blob", "avro"],
     ["binary/octet-stream", "warehouse/orders/data/00000-0-a.parquet", "parquet"],
     ["application/vnd.apache.parquet", "blob", "parquet"],
     ["binary/octet-stream", "orders/metadata/snap-1-1-abc.avro", "avro"],
@@ -28,6 +36,8 @@ describe("dataPreviewKind", () => {
     ["text/plain", "notes.txt"],
     ["image/png", "a.png"],
     ["binary/octet-stream", "data.csv.gz"],
+    ["binary/octet-stream", "exports.csv/readme"],
+    ["constructor", "blob"],
   ])("%s %s is not a data file", (contentType, key) => {
     expect(dataPreviewKind(contentType, key)).toBeNull()
   })
@@ -51,5 +61,19 @@ describe("isTextDataKind", () => {
     expect(isTextDataKind("parquet")).toBe(false)
     expect(isTextDataKind("avro")).toBe(false)
     expect(isTextDataKind(null)).toBe(false)
+  })
+})
+
+describe("isTabularKind", () => {
+  it.each([
+    ["csv", true],
+    ["tsv", true],
+    ["jsonl", true],
+    ["parquet", true],
+    ["avro", false],
+    ["iceberg-metadata", false],
+    [null, false],
+  ] as const)("%s is tabular: %s", (kind, tabular) => {
+    expect(isTabularKind(kind)).toBe(tabular)
   })
 })
