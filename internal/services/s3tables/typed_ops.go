@@ -1,0 +1,60 @@
+package s3tables
+
+import "github.com/overcast-sh/overcast/internal/protocol/op"
+
+// typedOps is every implemented operation, keyed by its model name. The REST
+// adapters in routes.go are the wire entry point; this registry names the same
+// codec-agnostic functions so a test can hold the two in step.
+func (s *Service) typedOps() map[string]op.Operation {
+	return map[string]op.Operation{
+		"CreateTableBucket":                      op.NewTyped[createTableBucketRequest, createTableBucketResponse]("CreateTableBucket", s.createTableBucketTyped),
+		"ListTableBuckets":                       op.NewTyped[listTableBucketsRequest, listTableBucketsResponse]("ListTableBuckets", s.listTableBucketsTyped),
+		"GetTableBucket":                         op.NewTyped[tableBucketARNRequest, tableBucketSummary]("GetTableBucket", s.getTableBucketTyped),
+		"DeleteTableBucket":                      op.NewTypedAny[tableBucketARNRequest]("DeleteTableBucket", s.deleteTableBucketTyped),
+		"PutTableBucketEncryption":               op.NewTypedAny[encryptionRequest]("PutTableBucketEncryption", s.putTableBucketEncryptionTyped),
+		"GetTableBucketEncryption":               op.NewTyped[tableBucketARNRequest, encryptionResponse]("GetTableBucketEncryption", s.getTableBucketEncryptionTyped),
+		"DeleteTableBucketEncryption":            op.NewTypedAny[tableBucketARNRequest]("DeleteTableBucketEncryption", s.deleteTableBucketEncryptionTyped),
+		"GetTableBucketMaintenanceConfiguration": op.NewTyped[tableBucketARNRequest, bucketMaintenanceResponse]("GetTableBucketMaintenanceConfiguration", s.getTableBucketMaintenanceConfigurationTyped),
+		"PutTableBucketMaintenanceConfiguration": op.NewTypedAny[putBucketMaintenanceRequest]("PutTableBucketMaintenanceConfiguration", s.putTableBucketMaintenanceConfigurationTyped),
+		"PutTableBucketMetricsConfiguration":     op.NewTypedAny[tableBucketARNRequest]("PutTableBucketMetricsConfiguration", s.putTableBucketMetricsConfigurationTyped),
+		"GetTableBucketMetricsConfiguration":     op.NewTyped[tableBucketARNRequest, metricsResponse]("GetTableBucketMetricsConfiguration", s.getTableBucketMetricsConfigurationTyped),
+		"DeleteTableBucketMetricsConfiguration":  op.NewTypedAny[tableBucketARNRequest]("DeleteTableBucketMetricsConfiguration", s.deleteTableBucketMetricsConfigurationTyped),
+		"PutTableBucketPolicy":                   op.NewTypedAny[bucketPolicyRequest]("PutTableBucketPolicy", s.putTableBucketPolicyTyped),
+		"GetTableBucketPolicy":                   op.NewTyped[tableBucketARNRequest, policyResponse]("GetTableBucketPolicy", s.getTableBucketPolicyTyped),
+		"DeleteTableBucketPolicy":                op.NewTypedAny[tableBucketARNRequest]("DeleteTableBucketPolicy", s.deleteTableBucketPolicyTyped),
+		"PutTableBucketStorageClass":             op.NewTypedAny[storageClassRequest]("PutTableBucketStorageClass", s.putTableBucketStorageClassTyped),
+		"GetTableBucketStorageClass":             op.NewTyped[tableBucketARNRequest, storageClassResponse]("GetTableBucketStorageClass", s.getTableBucketStorageClassTyped),
+		"CreateNamespace":                        op.NewTyped[createNamespaceRequest, createNamespaceResponse]("CreateNamespace", s.createNamespaceTyped),
+		"ListNamespaces":                         op.NewTyped[listNamespacesRequest, listNamespacesResponse]("ListNamespaces", s.listNamespacesTyped),
+		"GetNamespace":                           op.NewTyped[namespaceRequest, namespaceSummary]("GetNamespace", s.getNamespaceTyped),
+		"DeleteNamespace":                        op.NewTypedAny[namespaceRequest]("DeleteNamespace", s.deleteNamespaceTyped),
+		"ListTables":                             op.NewTyped[listTablesRequest, listTablesResponse]("ListTables", s.listTablesTyped),
+		"CreateTable":                            op.NewTyped[createTableRequest, createTableResponse]("CreateTable", s.createTableTyped),
+		"DeleteTable":                            op.NewTypedAny[tableRequest]("DeleteTable", s.deleteTableTyped),
+		"GetTableEncryption":                     op.NewTyped[tableRequest, encryptionResponse]("GetTableEncryption", s.getTableEncryptionTyped),
+		"GetTableMaintenanceConfiguration":       op.NewTyped[tableRequest, tableMaintenanceResponse]("GetTableMaintenanceConfiguration", s.getTableMaintenanceConfigurationTyped),
+		"PutTableMaintenanceConfiguration":       op.NewTypedAny[putTableMaintenanceRequest]("PutTableMaintenanceConfiguration", s.putTableMaintenanceConfigurationTyped),
+		"GetTableMaintenanceJobStatus":           op.NewTyped[tableRequest, tableMaintenanceJobStatusResponse]("GetTableMaintenanceJobStatus", s.getTableMaintenanceJobStatusTyped),
+		"GetTableMetadataLocation":               op.NewTyped[tableRequest, metadataLocationResponse]("GetTableMetadataLocation", s.getTableMetadataLocationTyped),
+		"UpdateTableMetadataLocation":            op.NewTyped[updateMetadataLocationRequest, updateMetadataLocationResponse]("UpdateTableMetadataLocation", s.updateTableMetadataLocationTyped),
+		"PutTablePolicy":                         op.NewTypedAny[tablePolicyRequest]("PutTablePolicy", s.putTablePolicyTyped),
+		"GetTablePolicy":                         op.NewTyped[tableRequest, policyResponse]("GetTablePolicy", s.getTablePolicyTyped),
+		"DeleteTablePolicy":                      op.NewTypedAny[tableRequest]("DeleteTablePolicy", s.deleteTablePolicyTyped),
+		"GetTableStorageClass":                   op.NewTyped[tableRequest, storageClassResponse]("GetTableStorageClass", s.getTableStorageClassTyped),
+		"RenameTable":                            op.NewTypedAny[renameTableRequest]("RenameTable", s.renameTableTyped),
+		"GetTable":                               op.NewTyped[getTableRequest, getTableResponse]("GetTable", s.getTableTyped),
+		"ListTagsForResource":                    op.NewTyped[listTagsRequest, listTagsResponse]("ListTagsForResource", s.listTagsForResourceTyped),
+		"TagResource":                            op.NewTypedAny[tagResourceRequest]("TagResource", s.tagResourceTyped),
+		"UntagResource":                          op.NewTypedAny[untagResourceRequest]("UntagResource", s.untagResourceTyped),
+		"PutTableBucketReplication":              op.NewTyped[bucketReplicationRequest, putReplicationResponse]("PutTableBucketReplication", s.putTableBucketReplicationTyped),
+		"GetTableBucketReplication":              op.NewTyped[bucketReplicationRequest, replicationResponse]("GetTableBucketReplication", s.getTableBucketReplicationTyped),
+		"DeleteTableBucketReplication":           op.NewTypedAny[bucketReplicationRequest]("DeleteTableBucketReplication", s.deleteTableBucketReplicationTyped),
+		"PutTableReplication":                    op.NewTyped[tableReplicationRequest, putReplicationResponse]("PutTableReplication", s.putTableReplicationTyped),
+		"GetTableReplication":                    op.NewTyped[tableARNRequest, replicationResponse]("GetTableReplication", s.getTableReplicationTyped),
+		"DeleteTableReplication":                 op.NewTypedAny[tableARNRequest]("DeleteTableReplication", s.deleteTableReplicationTyped),
+		"PutTableRecordExpirationConfiguration":  op.NewTypedAny[putRecordExpirationRequest]("PutTableRecordExpirationConfiguration", s.putTableRecordExpirationConfigurationTyped),
+		"GetTableRecordExpirationConfiguration":  op.NewTyped[tableARNRequest, recordExpirationResponse]("GetTableRecordExpirationConfiguration", s.getTableRecordExpirationConfigurationTyped),
+		"GetTableRecordExpirationJobStatus":      op.NewTyped[tableARNRequest, recordExpirationJobStatusResponse]("GetTableRecordExpirationJobStatus", s.getTableRecordExpirationJobStatusTyped),
+		"GetTableReplicationStatus":              op.NewTyped[tableARNRequest, replicationStatusResponse]("GetTableReplicationStatus", s.getTableReplicationStatusTyped),
+	}
+}

@@ -62,6 +62,7 @@ from groups import (
     waf,
     shield,
     efs,
+    s3tables,
     glue,
 )
 
@@ -113,6 +114,7 @@ _modules = [
     waf,
     shield,
     efs,
+    s3tables,
     glue,
 ]
 

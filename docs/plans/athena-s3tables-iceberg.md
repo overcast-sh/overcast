@@ -183,6 +183,11 @@ and on ElastiCache's `SetDocker`, `Stop`, GC and readiness for everything else.
 
 ### Phase 4 — S3 Tables control plane (M–L) — #2067
 
+> Implemented (2026-09-23): all 49 operations, the signing-name dispatch, the
+> warehouse bucket and CloudFormation. `CreateTable` writes its first
+> `metadata.json` through a hand-rolled `internal/icebergmeta` (option (b) of
+> Decision 4). The console page is #2072.
+
 - A new `internal/services/s3tables` package, copying the REST pattern of `scheduler/`.
 - **Dispatch.** Register it under the SigV4 signing-name dispatcher so that `/buckets`, `/namespaces`, `/tables`, `/get-table` and `/tag` reach S3 Tables only when `ServiceFromCredential(r)=="s3tables"`, and S3 otherwise. Add it to the `detectService` route test as `s3`-classified families. Also update `allServices`, `ServiceTiers`, `state/tier.go`, `topology.go` and `serviceidentity.go`.
 - **Operations.** Table buckets, namespaces and tables (Create, Get, List with prefix and continuation tokens, Delete, `RenameTable`). Also:

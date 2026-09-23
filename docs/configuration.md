@@ -86,6 +86,7 @@ Services](./README.md#services).
 | `rds`             | RDS              | `aws-rds`                                          |
 | `elasticache`     | ElastiCache      | `aws-elasticache`                                  |
 | `efs`             | EFS              | `aws-efs`                                          |
+| `s3tables`        | S3 Tables        | `aws-s3tables`                                     |
 | `appconfig`       | AppConfig        | `aws-appconfig`                                    |
 | `appconfigdata`   | AppConfigData    | — (runtime data plane; no constructs)              |
 | `secretsmanager`  | Secrets Manager  | `aws-secretsmanager`                               |

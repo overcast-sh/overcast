@@ -248,14 +248,35 @@ func (s *Service) ListObjects(ctx context.Context, bucket, prefix, continuationT
 // name is held to CreateBucket's global-namespace rules and refused with its
 // InvalidBucketName. Satisfies events.S3EnsureBucketFunc.
 func (s *Service) EnsureBucket(ctx context.Context, bucket, region string) *protocol.AWSError {
-	h := s.handler
 	if region == "" {
 		region = s.cfg.Region
 	}
-	if aerr := h.validateNewBucketName(bucket, bucketNamespaceGlobal, region); aerr != nil {
+	if aerr := s.handler.validateNewBucketName(bucket, bucketNamespaceGlobal, region); aerr != nil {
 		return aerr
 	}
-	_, aerr := h.createBucket(ctx, &Bucket{Name: bucket, Region: region})
+	return s.ensureValidatedBucket(ctx, bucket, region)
+}
+
+// EnsureTableWarehouseBucket is EnsureBucket for the warehouse bucket S3
+// Tables gives each table. The name must carry the "--table-s3" suffix that
+// real S3 reserves for exactly this purpose — which is why CreateBucket and
+// EnsureBucket both refuse it — and otherwise follows the general purpose
+// naming rules. Once created it is an ordinary bucket: clients and query
+// engines read and write the table's data and metadata files in it through
+// the S3 API, as they do against AWS. Satisfies events.S3EnsureBucketFunc.
+func (s *Service) EnsureTableWarehouseBucket(ctx context.Context, bucket, region string) *protocol.AWSError {
+	if region == "" {
+		region = s.cfg.Region
+	}
+	if aerr := serviceutil.TableWarehouseBucketName(bucket); aerr != nil {
+		return aerr
+	}
+	return s.ensureValidatedBucket(ctx, bucket, region)
+}
+
+// ensureValidatedBucket creates an already-validated bucket unless it exists.
+func (s *Service) ensureValidatedBucket(ctx context.Context, bucket, region string) *protocol.AWSError {
+	_, aerr := s.handler.createBucket(ctx, &Bucket{Name: bucket, Region: region})
 	return aerr
 }
 

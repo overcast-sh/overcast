@@ -29,6 +29,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/pipes"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3tables"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/aws/aws-sdk-go-v2/service/ses"
 	"github.com/aws/aws-sdk-go-v2/service/sfn"
@@ -77,6 +78,7 @@ type Clients struct {
 	shieldC      *shield.Client
 	glueC        *glue.Client
 	efsC         *efs.Client
+	s3tablesC    *s3tables.Client
 }
 
 // New creates a Clients bundle for the given endpoint and region.
@@ -337,6 +339,17 @@ func (c *Clients) EFS() *efs.Client {
 		c.efsC = efs.NewFromConfig(cfg)
 	}
 	return c.efsC
+}
+
+// S3Tables returns a lazily-initialised S3 Tables client.
+func (c *Clients) S3Tables() *s3tables.Client {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.s3tablesC == nil {
+		cfg := c.awsCfgLocked()
+		c.s3tablesC = s3tables.NewFromConfig(cfg)
+	}
+	return c.s3tablesC
 }
 
 // Cognito returns a lazily-initialised Cognito Identity Provider client.

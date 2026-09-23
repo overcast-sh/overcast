@@ -59,6 +59,7 @@ func All() []ServiceGroup {
 		Glue().named("glue"),
 		ElastiCache().named("elasticache"),
 		EFS().named("efs"),
+		S3Tables().named("s3tables"),
 		AppConfigData().named("appconfigdata"),
 		OpenSearch().named("opensearch"),
 		AppConfig().named("appconfig"),
