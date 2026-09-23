@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/eventbridge-rules.json";
 
-const GROUP_EVENTBRIDGE_RULES_SHADOW: Group = Group {
-    name: "eventbridge-rules-shadow",
+const GROUP_EVENTBRIDGE_RULES: Group = Group {
+    name: "eventbridge-rules",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredEventbridgeRules {
         {
             let client = self.client.clone();
             impls.insert(
-                "eventbridge-rules-shadow:PutRule".to_string(),
+                "eventbridge-rules:PutRule".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_EVENTBRIDGE_RULES_SHADOW
-                            .run_test(&ctx, "PutRule", test_eventbridge_rules_shadow_put_rule(&client))
+                        GROUP_EVENTBRIDGE_RULES
+                            .run_test(&ctx, "PutRule", test_eventbridge_rules_put_rule(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredEventbridgeRules {
         {
             let client = self.client.clone();
             impls.insert(
-                "eventbridge-rules-shadow:DescribeRule".to_string(),
+                "eventbridge-rules:DescribeRule".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_EVENTBRIDGE_RULES_SHADOW
-                            .run_test(&ctx, "DescribeRule", test_eventbridge_rules_shadow_describe_rule(&client))
+                        GROUP_EVENTBRIDGE_RULES
+                            .run_test(&ctx, "DescribeRule", test_eventbridge_rules_describe_rule(&client))
                             .await
                     })
                 }),
@@ -79,12 +79,12 @@ impl ServiceGroup for ScenariosAuthoredEventbridgeRules {
         {
             let client = self.client.clone();
             impls.insert(
-                "eventbridge-rules-shadow:ListRules".to_string(),
+                "eventbridge-rules:ListRules".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_EVENTBRIDGE_RULES_SHADOW
-                            .run_test(&ctx, "ListRules", test_eventbridge_rules_shadow_list_rules(&client))
+                        GROUP_EVENTBRIDGE_RULES
+                            .run_test(&ctx, "ListRules", test_eventbridge_rules_list_rules(&client))
                             .await
                     })
                 }),
@@ -93,12 +93,12 @@ impl ServiceGroup for ScenariosAuthoredEventbridgeRules {
         {
             let client = self.client.clone();
             impls.insert(
-                "eventbridge-rules-shadow:PutTargets".to_string(),
+                "eventbridge-rules:PutTargets".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_EVENTBRIDGE_RULES_SHADOW
-                            .run_test(&ctx, "PutTargets", test_eventbridge_rules_shadow_put_targets(&client))
+                        GROUP_EVENTBRIDGE_RULES
+                            .run_test(&ctx, "PutTargets", test_eventbridge_rules_put_targets(&client))
                             .await
                     })
                 }),
@@ -107,12 +107,12 @@ impl ServiceGroup for ScenariosAuthoredEventbridgeRules {
         {
             let client = self.client.clone();
             impls.insert(
-                "eventbridge-rules-shadow:ListTargetsByRule".to_string(),
+                "eventbridge-rules:ListTargetsByRule".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_EVENTBRIDGE_RULES_SHADOW
-                            .run_test(&ctx, "ListTargetsByRule", test_eventbridge_rules_shadow_list_targets_by_rule(&client))
+                        GROUP_EVENTBRIDGE_RULES
+                            .run_test(&ctx, "ListTargetsByRule", test_eventbridge_rules_list_targets_by_rule(&client))
                             .await
                     })
                 }),
@@ -121,12 +121,12 @@ impl ServiceGroup for ScenariosAuthoredEventbridgeRules {
         {
             let client = self.client.clone();
             impls.insert(
-                "eventbridge-rules-shadow:DisableRule".to_string(),
+                "eventbridge-rules:DisableRule".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_EVENTBRIDGE_RULES_SHADOW
-                            .run_test(&ctx, "DisableRule", test_eventbridge_rules_shadow_disable_rule(&client))
+                        GROUP_EVENTBRIDGE_RULES
+                            .run_test(&ctx, "DisableRule", test_eventbridge_rules_disable_rule(&client))
                             .await
                     })
                 }),
@@ -135,12 +135,12 @@ impl ServiceGroup for ScenariosAuthoredEventbridgeRules {
         {
             let client = self.client.clone();
             impls.insert(
-                "eventbridge-rules-shadow:EnableRule".to_string(),
+                "eventbridge-rules:EnableRule".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_EVENTBRIDGE_RULES_SHADOW
-                            .run_test(&ctx, "EnableRule", test_eventbridge_rules_shadow_enable_rule(&client))
+                        GROUP_EVENTBRIDGE_RULES
+                            .run_test(&ctx, "EnableRule", test_eventbridge_rules_enable_rule(&client))
                             .await
                     })
                 }),
@@ -149,12 +149,12 @@ impl ServiceGroup for ScenariosAuthoredEventbridgeRules {
         {
             let client = self.client.clone();
             impls.insert(
-                "eventbridge-rules-shadow:RemoveTargets".to_string(),
+                "eventbridge-rules:RemoveTargets".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_EVENTBRIDGE_RULES_SHADOW
-                            .run_test(&ctx, "RemoveTargets", test_eventbridge_rules_shadow_remove_targets(&client))
+                        GROUP_EVENTBRIDGE_RULES
+                            .run_test(&ctx, "RemoveTargets", test_eventbridge_rules_remove_targets(&client))
                             .await
                     })
                 }),
@@ -163,12 +163,12 @@ impl ServiceGroup for ScenariosAuthoredEventbridgeRules {
         {
             let client = self.client.clone();
             impls.insert(
-                "eventbridge-rules-shadow:DeleteRule".to_string(),
+                "eventbridge-rules:DeleteRule".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_EVENTBRIDGE_RULES_SHADOW
-                            .run_test(&ctx, "DeleteRule", test_eventbridge_rules_shadow_delete_rule(&client))
+                        GROUP_EVENTBRIDGE_RULES
+                            .run_test(&ctx, "DeleteRule", test_eventbridge_rules_delete_rule(&client))
                             .await
                     })
                 }),
@@ -182,11 +182,11 @@ impl ServiceGroup for ScenariosAuthoredEventbridgeRules {
         {
             let client = self.client.clone();
             setups.insert(
-                "eventbridge-rules-shadow".to_string(),
+                "eventbridge-rules".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_EVENTBRIDGE_RULES_SHADOW.run_setup(&ctx, setup_eventbridge_rules_shadow(&client)).await
+                        GROUP_EVENTBRIDGE_RULES.run_setup(&ctx, setup_eventbridge_rules(&client)).await
                     })
                 }),
             );
@@ -199,11 +199,11 @@ impl ServiceGroup for ScenariosAuthoredEventbridgeRules {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "eventbridge-rules-shadow".to_string(),
+                "eventbridge-rules".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_EVENTBRIDGE_RULES_SHADOW.run_teardown(&ctx, teardown_eventbridge_rules_shadow(&client)).await
+                        GROUP_EVENTBRIDGE_RULES.run_teardown(&ctx, teardown_eventbridge_rules(&client)).await
                     })
                 }),
             );
@@ -212,7 +212,7 @@ impl ServiceGroup for ScenariosAuthoredEventbridgeRules {
     }
 }
 
-fn setup_eventbridge_rules_shadow(client: &aws_sdk_eventbridge::Client) -> Vec<Call> {
+fn setup_eventbridge_rules(client: &aws_sdk_eventbridge::Client) -> Vec<Call> {
     vec![
         Call {
             op: "CreateEventBus",
@@ -237,7 +237,7 @@ fn setup_eventbridge_rules_shadow(client: &aws_sdk_eventbridge::Client) -> Vec<C
     ]
 }
 
-fn teardown_eventbridge_rules_shadow(client: &aws_sdk_eventbridge::Client) -> Vec<Call> {
+fn teardown_eventbridge_rules(client: &aws_sdk_eventbridge::Client) -> Vec<Call> {
     vec![
         Call {
             op: "RemoveTargets",
@@ -312,7 +312,7 @@ fn teardown_eventbridge_rules_shadow(client: &aws_sdk_eventbridge::Client) -> Ve
     ]
 }
 
-fn test_eventbridge_rules_shadow_put_rule(client: &aws_sdk_eventbridge::Client) -> Test {
+fn test_eventbridge_rules_put_rule(client: &aws_sdk_eventbridge::Client) -> Test {
     Test {
         call: Call {
             op: "PutRule",
@@ -352,7 +352,7 @@ fn test_eventbridge_rules_shadow_put_rule(client: &aws_sdk_eventbridge::Client) 
     }
 }
 
-fn test_eventbridge_rules_shadow_describe_rule(client: &aws_sdk_eventbridge::Client) -> Test {
+fn test_eventbridge_rules_describe_rule(client: &aws_sdk_eventbridge::Client) -> Test {
     Test {
         call: Call {
             op: "DescribeRule",
@@ -388,7 +388,7 @@ fn test_eventbridge_rules_shadow_describe_rule(client: &aws_sdk_eventbridge::Cli
     }
 }
 
-fn test_eventbridge_rules_shadow_list_rules(client: &aws_sdk_eventbridge::Client) -> Test {
+fn test_eventbridge_rules_list_rules(client: &aws_sdk_eventbridge::Client) -> Test {
     Test {
         call: Call {
             op: "ListRules",
@@ -426,7 +426,7 @@ fn test_eventbridge_rules_shadow_list_rules(client: &aws_sdk_eventbridge::Client
     }
 }
 
-fn test_eventbridge_rules_shadow_put_targets(client: &aws_sdk_eventbridge::Client) -> Test {
+fn test_eventbridge_rules_put_targets(client: &aws_sdk_eventbridge::Client) -> Test {
     Test {
         call: Call {
             op: "PutTargets",
@@ -498,7 +498,7 @@ fn test_eventbridge_rules_shadow_put_targets(client: &aws_sdk_eventbridge::Clien
     }
 }
 
-fn test_eventbridge_rules_shadow_list_targets_by_rule(client: &aws_sdk_eventbridge::Client) -> Test {
+fn test_eventbridge_rules_list_targets_by_rule(client: &aws_sdk_eventbridge::Client) -> Test {
     Test {
         call: Call {
             op: "ListTargetsByRule",
@@ -537,7 +537,7 @@ fn test_eventbridge_rules_shadow_list_targets_by_rule(client: &aws_sdk_eventbrid
     }
 }
 
-fn test_eventbridge_rules_shadow_disable_rule(client: &aws_sdk_eventbridge::Client) -> Test {
+fn test_eventbridge_rules_disable_rule(client: &aws_sdk_eventbridge::Client) -> Test {
     Test {
         call: Call {
             op: "DisableRule",
@@ -597,7 +597,7 @@ fn test_eventbridge_rules_shadow_disable_rule(client: &aws_sdk_eventbridge::Clie
     }
 }
 
-fn test_eventbridge_rules_shadow_enable_rule(client: &aws_sdk_eventbridge::Client) -> Test {
+fn test_eventbridge_rules_enable_rule(client: &aws_sdk_eventbridge::Client) -> Test {
     Test {
         call: Call {
             op: "EnableRule",
@@ -657,7 +657,7 @@ fn test_eventbridge_rules_shadow_enable_rule(client: &aws_sdk_eventbridge::Clien
     }
 }
 
-fn test_eventbridge_rules_shadow_remove_targets(client: &aws_sdk_eventbridge::Client) -> Test {
+fn test_eventbridge_rules_remove_targets(client: &aws_sdk_eventbridge::Client) -> Test {
     Test {
         call: Call {
             op: "RemoveTargets",
@@ -723,7 +723,7 @@ fn test_eventbridge_rules_shadow_remove_targets(client: &aws_sdk_eventbridge::Cl
     }
 }
 
-fn test_eventbridge_rules_shadow_delete_rule(client: &aws_sdk_eventbridge::Client) -> Test {
+fn test_eventbridge_rules_delete_rule(client: &aws_sdk_eventbridge::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteRule",

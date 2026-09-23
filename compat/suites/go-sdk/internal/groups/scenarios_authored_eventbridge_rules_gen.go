@@ -24,21 +24,21 @@ func ScenariosAuthoredEventbridgeRules(c *clients.Clients) ServiceGroup {
 	return ServiceGroup{
 		Name: "scenarios/authored-eventbridge-rules",
 		Impls: map[string]harness.TestFn{
-			"eventbridge-rules-shadow:PutRule":           g.testEventbridgeRulesShadowPutRule,
-			"eventbridge-rules-shadow:DescribeRule":      g.testEventbridgeRulesShadowDescribeRule,
-			"eventbridge-rules-shadow:ListRules":         g.testEventbridgeRulesShadowListRules,
-			"eventbridge-rules-shadow:PutTargets":        g.testEventbridgeRulesShadowPutTargets,
-			"eventbridge-rules-shadow:ListTargetsByRule": g.testEventbridgeRulesShadowListTargetsByRule,
-			"eventbridge-rules-shadow:DisableRule":       g.testEventbridgeRulesShadowDisableRule,
-			"eventbridge-rules-shadow:EnableRule":        g.testEventbridgeRulesShadowEnableRule,
-			"eventbridge-rules-shadow:RemoveTargets":     g.testEventbridgeRulesShadowRemoveTargets,
-			"eventbridge-rules-shadow:DeleteRule":        g.testEventbridgeRulesShadowDeleteRule,
+			"eventbridge-rules:PutRule":           g.testEventbridgeRulesPutRule,
+			"eventbridge-rules:DescribeRule":      g.testEventbridgeRulesDescribeRule,
+			"eventbridge-rules:ListRules":         g.testEventbridgeRulesListRules,
+			"eventbridge-rules:PutTargets":        g.testEventbridgeRulesPutTargets,
+			"eventbridge-rules:ListTargetsByRule": g.testEventbridgeRulesListTargetsByRule,
+			"eventbridge-rules:DisableRule":       g.testEventbridgeRulesDisableRule,
+			"eventbridge-rules:EnableRule":        g.testEventbridgeRulesEnableRule,
+			"eventbridge-rules:RemoveTargets":     g.testEventbridgeRulesRemoveTargets,
+			"eventbridge-rules:DeleteRule":        g.testEventbridgeRulesDeleteRule,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"eventbridge-rules-shadow": g.setupEventbridgeRulesShadow,
+			"eventbridge-rules": g.setupEventbridgeRules,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"eventbridge-rules-shadow": g.teardownEventbridgeRulesShadow,
+			"eventbridge-rules": g.teardownEventbridgeRules,
 		},
 	}
 }
@@ -58,10 +58,10 @@ func (g *authoredEventbridgeRulesScenarios) cl() *eventbridge.Client {
 	return g.client
 }
 
-var groupEventbridgeRulesShadow = scenario.Group{Name: "eventbridge-rules-shadow", File: "compat/model/authored/eventbridge-rules.json"}
+var groupEventbridgeRules = scenario.Group{Name: "eventbridge-rules", File: "compat/model/authored/eventbridge-rules.json"}
 
-func (g *authoredEventbridgeRulesScenarios) setupEventbridgeRulesShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupEventbridgeRulesShadow.RunSetup(ctx, t,
+func (g *authoredEventbridgeRulesScenarios) setupEventbridgeRules(ctx context.Context, t *harness.TestContext) error {
+	return groupEventbridgeRules.RunSetup(ctx, t,
 		scenario.Call{
 			Op:     "CreateEventBus",
 			Params: `{"Name":{"$name":"bus"}}`,
@@ -77,8 +77,8 @@ func (g *authoredEventbridgeRulesScenarios) setupEventbridgeRulesShadow(ctx cont
 	)
 }
 
-func (g *authoredEventbridgeRulesScenarios) teardownEventbridgeRulesShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupEventbridgeRulesShadow.RunTeardown(ctx, t,
+func (g *authoredEventbridgeRulesScenarios) teardownEventbridgeRules(ctx context.Context, t *harness.TestContext) error {
+	return groupEventbridgeRules.RunTeardown(ctx, t,
 		scenario.Call{
 			Op:     "RemoveTargets",
 			Params: `{"EventBusName":{"$name":"bus"},"Ids":["t1"],"Rule":{"$name":"rule"}}`,
@@ -121,8 +121,8 @@ func (g *authoredEventbridgeRulesScenarios) teardownEventbridgeRulesShadow(ctx c
 	)
 }
 
-func (g *authoredEventbridgeRulesScenarios) testEventbridgeRulesShadowPutRule(ctx context.Context, t *harness.TestContext) error {
-	return groupEventbridgeRulesShadow.RunTest(ctx, t, "PutRule", scenario.Test{
+func (g *authoredEventbridgeRulesScenarios) testEventbridgeRulesPutRule(ctx context.Context, t *harness.TestContext) error {
+	return groupEventbridgeRules.RunTest(ctx, t, "PutRule", scenario.Test{
 		Call: scenario.Call{
 			Op:     "PutRule",
 			Params: `{"EventBusName":{"$name":"bus"},"EventPattern":"{\"source\":[\"compat.eventbridge-rules\"]}","Name":{"$name":"rule"},"State":"ENABLED"}`,
@@ -149,8 +149,8 @@ func (g *authoredEventbridgeRulesScenarios) testEventbridgeRulesShadowPutRule(ct
 	})
 }
 
-func (g *authoredEventbridgeRulesScenarios) testEventbridgeRulesShadowDescribeRule(ctx context.Context, t *harness.TestContext) error {
-	return groupEventbridgeRulesShadow.RunTest(ctx, t, "DescribeRule", scenario.Test{
+func (g *authoredEventbridgeRulesScenarios) testEventbridgeRulesDescribeRule(ctx context.Context, t *harness.TestContext) error {
+	return groupEventbridgeRules.RunTest(ctx, t, "DescribeRule", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DescribeRule",
 			Params: `{"EventBusName":{"$name":"bus"},"Name":{"$name":"rule"}}`,
@@ -174,8 +174,8 @@ func (g *authoredEventbridgeRulesScenarios) testEventbridgeRulesShadowDescribeRu
 	})
 }
 
-func (g *authoredEventbridgeRulesScenarios) testEventbridgeRulesShadowListRules(ctx context.Context, t *harness.TestContext) error {
-	return groupEventbridgeRulesShadow.RunTest(ctx, t, "ListRules", scenario.Test{
+func (g *authoredEventbridgeRulesScenarios) testEventbridgeRulesListRules(ctx context.Context, t *harness.TestContext) error {
+	return groupEventbridgeRules.RunTest(ctx, t, "ListRules", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListRules",
 			Params: `{"EventBusName":{"$name":"bus"},"NamePrefix":{"$name":"rule"}}`,
@@ -199,8 +199,8 @@ func (g *authoredEventbridgeRulesScenarios) testEventbridgeRulesShadowListRules(
 	})
 }
 
-func (g *authoredEventbridgeRulesScenarios) testEventbridgeRulesShadowPutTargets(ctx context.Context, t *harness.TestContext) error {
-	return groupEventbridgeRulesShadow.RunTest(ctx, t, "PutTargets", scenario.Test{
+func (g *authoredEventbridgeRulesScenarios) testEventbridgeRulesPutTargets(ctx context.Context, t *harness.TestContext) error {
+	return groupEventbridgeRules.RunTest(ctx, t, "PutTargets", scenario.Test{
 		Call: scenario.Call{
 			Op:     "PutTargets",
 			Params: `{"EventBusName":{"$name":"bus"},"Rule":{"$name":"rule"},"Targets":[{"Arn":"arn:aws:sqs:us-east-1:000000000000:compat-eventbridge-rules-target","Id":"t1"}]}`,
@@ -245,8 +245,8 @@ func (g *authoredEventbridgeRulesScenarios) testEventbridgeRulesShadowPutTargets
 	})
 }
 
-func (g *authoredEventbridgeRulesScenarios) testEventbridgeRulesShadowListTargetsByRule(ctx context.Context, t *harness.TestContext) error {
-	return groupEventbridgeRulesShadow.RunTest(ctx, t, "ListTargetsByRule", scenario.Test{
+func (g *authoredEventbridgeRulesScenarios) testEventbridgeRulesListTargetsByRule(ctx context.Context, t *harness.TestContext) error {
+	return groupEventbridgeRules.RunTest(ctx, t, "ListTargetsByRule", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListTargetsByRule",
 			Params: `{"EventBusName":{"$name":"bus"},"Rule":{"$name":"rule"}}`,
@@ -271,8 +271,8 @@ func (g *authoredEventbridgeRulesScenarios) testEventbridgeRulesShadowListTarget
 	})
 }
 
-func (g *authoredEventbridgeRulesScenarios) testEventbridgeRulesShadowDisableRule(ctx context.Context, t *harness.TestContext) error {
-	return groupEventbridgeRulesShadow.RunTest(ctx, t, "DisableRule", scenario.Test{
+func (g *authoredEventbridgeRulesScenarios) testEventbridgeRulesDisableRule(ctx context.Context, t *harness.TestContext) error {
+	return groupEventbridgeRules.RunTest(ctx, t, "DisableRule", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DisableRule",
 			Params: `{"EventBusName":{"$name":"bus"},"Name":{"$name":"rule"}}`,
@@ -307,8 +307,8 @@ func (g *authoredEventbridgeRulesScenarios) testEventbridgeRulesShadowDisableRul
 	})
 }
 
-func (g *authoredEventbridgeRulesScenarios) testEventbridgeRulesShadowEnableRule(ctx context.Context, t *harness.TestContext) error {
-	return groupEventbridgeRulesShadow.RunTest(ctx, t, "EnableRule", scenario.Test{
+func (g *authoredEventbridgeRulesScenarios) testEventbridgeRulesEnableRule(ctx context.Context, t *harness.TestContext) error {
+	return groupEventbridgeRules.RunTest(ctx, t, "EnableRule", scenario.Test{
 		Call: scenario.Call{
 			Op:     "EnableRule",
 			Params: `{"EventBusName":{"$name":"bus"},"Name":{"$name":"rule"}}`,
@@ -343,8 +343,8 @@ func (g *authoredEventbridgeRulesScenarios) testEventbridgeRulesShadowEnableRule
 	})
 }
 
-func (g *authoredEventbridgeRulesScenarios) testEventbridgeRulesShadowRemoveTargets(ctx context.Context, t *harness.TestContext) error {
-	return groupEventbridgeRulesShadow.RunTest(ctx, t, "RemoveTargets", scenario.Test{
+func (g *authoredEventbridgeRulesScenarios) testEventbridgeRulesRemoveTargets(ctx context.Context, t *harness.TestContext) error {
+	return groupEventbridgeRules.RunTest(ctx, t, "RemoveTargets", scenario.Test{
 		Call: scenario.Call{
 			Op:     "RemoveTargets",
 			Params: `{"EventBusName":{"$name":"bus"},"Ids":["t1"],"Rule":{"$name":"rule"}}`,
@@ -384,8 +384,8 @@ func (g *authoredEventbridgeRulesScenarios) testEventbridgeRulesShadowRemoveTarg
 	})
 }
 
-func (g *authoredEventbridgeRulesScenarios) testEventbridgeRulesShadowDeleteRule(ctx context.Context, t *harness.TestContext) error {
-	return groupEventbridgeRulesShadow.RunTest(ctx, t, "DeleteRule", scenario.Test{
+func (g *authoredEventbridgeRulesScenarios) testEventbridgeRulesDeleteRule(ctx context.Context, t *harness.TestContext) error {
+	return groupEventbridgeRules.RunTest(ctx, t, "DeleteRule", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteRule",
 			Params: `{"EventBusName":{"$name":"bus"},"Name":{"$name":"rule"}}`,

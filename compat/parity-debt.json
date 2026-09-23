@@ -419,12 +419,6 @@
     {
       "suite": "dotnet-sdk",
       "service": "eventbridge",
-      "group": "eventbridge-rules",
-      "tests": 9
-    },
-    {
-      "suite": "dotnet-sdk",
-      "service": "eventbridge",
       "group": "eventbridge-target-fanout",
       "tests": 3
     },
@@ -1795,12 +1789,6 @@
       "service": "eventbridge",
       "group": "eventbridge-events",
       "tests": 2
-    },
-    {
-      "suite": "rust-sdk",
-      "service": "eventbridge",
-      "group": "eventbridge-rules",
-      "tests": 9
     },
     {
       "suite": "rust-sdk",

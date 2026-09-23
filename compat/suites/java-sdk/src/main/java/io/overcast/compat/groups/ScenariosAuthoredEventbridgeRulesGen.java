@@ -37,8 +37,8 @@ import software.amazon.awssdk.services.eventbridge.model.Target;
  */
 public final class ScenariosAuthoredEventbridgeRulesGen implements ServiceGroup {
 
-    private static final Group GROUP_EVENTBRIDGE_RULES_SHADOW =
-            new Group("eventbridge-rules-shadow", "compat/model/authored/eventbridge-rules.json");
+    private static final Group GROUP_EVENTBRIDGE_RULES =
+            new Group("eventbridge-rules", "compat/model/authored/eventbridge-rules.json");
 
     private final AwsClients clients;
     private volatile EventBridgeClient client;
@@ -55,27 +55,27 @@ public final class ScenariosAuthoredEventbridgeRulesGen implements ServiceGroup 
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("eventbridge-rules-shadow:PutRule", this::testEventbridgeRulesShadowPutRule),
-                Map.entry("eventbridge-rules-shadow:DescribeRule", this::testEventbridgeRulesShadowDescribeRule),
-                Map.entry("eventbridge-rules-shadow:ListRules", this::testEventbridgeRulesShadowListRules),
-                Map.entry("eventbridge-rules-shadow:PutTargets", this::testEventbridgeRulesShadowPutTargets),
-                Map.entry("eventbridge-rules-shadow:ListTargetsByRule", this::testEventbridgeRulesShadowListTargetsByRule),
-                Map.entry("eventbridge-rules-shadow:DisableRule", this::testEventbridgeRulesShadowDisableRule),
-                Map.entry("eventbridge-rules-shadow:EnableRule", this::testEventbridgeRulesShadowEnableRule),
-                Map.entry("eventbridge-rules-shadow:RemoveTargets", this::testEventbridgeRulesShadowRemoveTargets),
-                Map.entry("eventbridge-rules-shadow:DeleteRule", this::testEventbridgeRulesShadowDeleteRule));
+                Map.entry("eventbridge-rules:PutRule", this::testEventbridgeRulesPutRule),
+                Map.entry("eventbridge-rules:DescribeRule", this::testEventbridgeRulesDescribeRule),
+                Map.entry("eventbridge-rules:ListRules", this::testEventbridgeRulesListRules),
+                Map.entry("eventbridge-rules:PutTargets", this::testEventbridgeRulesPutTargets),
+                Map.entry("eventbridge-rules:ListTargetsByRule", this::testEventbridgeRulesListTargetsByRule),
+                Map.entry("eventbridge-rules:DisableRule", this::testEventbridgeRulesDisableRule),
+                Map.entry("eventbridge-rules:EnableRule", this::testEventbridgeRulesEnableRule),
+                Map.entry("eventbridge-rules:RemoveTargets", this::testEventbridgeRulesRemoveTargets),
+                Map.entry("eventbridge-rules:DeleteRule", this::testEventbridgeRulesDeleteRule));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("eventbridge-rules-shadow", this::setupEventbridgeRulesShadow));
+                Map.entry("eventbridge-rules", this::setupEventbridgeRules));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("eventbridge-rules-shadow", this::teardownEventbridgeRulesShadow));
+                Map.entry("eventbridge-rules", this::teardownEventbridgeRules));
     }
 
     /**
@@ -95,8 +95,8 @@ public final class ScenariosAuthoredEventbridgeRulesGen implements ServiceGroup 
         return client;
     }
 
-    private void setupEventbridgeRulesShadow(TestContext t) {
-        GROUP_EVENTBRIDGE_RULES_SHADOW.runSetup(t,
+    private void setupEventbridgeRules(TestContext t) {
+        GROUP_EVENTBRIDGE_RULES.runSetup(t,
                 new Call("CreateEventBus", "{\"Name\":{\"$name\":\"bus\"}}",
                         b -> CreateEventBusRequest.builder()
                                 .name(b.string("Name", Values.name("bus")))
@@ -104,8 +104,8 @@ public final class ScenariosAuthoredEventbridgeRulesGen implements ServiceGroup 
                         r -> cl().createEventBus((CreateEventBusRequest) r)));
     }
 
-    private void teardownEventbridgeRulesShadow(TestContext t) {
-        GROUP_EVENTBRIDGE_RULES_SHADOW.runTeardown(t,
+    private void teardownEventbridgeRules(TestContext t) {
+        GROUP_EVENTBRIDGE_RULES.runTeardown(t,
                 new Call("RemoveTargets", "{\"EventBusName\":{\"$name\":\"bus\"},\"Ids\":[\"t1\"],\"Rule\":{\"$name\":\"rule\"}}",
                         b -> RemoveTargetsRequest.builder()
                                 .eventBusName(b.string("EventBusName", Values.name("bus")))
@@ -126,8 +126,8 @@ public final class ScenariosAuthoredEventbridgeRulesGen implements ServiceGroup 
                         r -> cl().deleteEventBus((DeleteEventBusRequest) r)));
     }
 
-    private void testEventbridgeRulesShadowPutRule(TestContext t) {
-        GROUP_EVENTBRIDGE_RULES_SHADOW.runTest(t, "PutRule",
+    private void testEventbridgeRulesPutRule(TestContext t) {
+        GROUP_EVENTBRIDGE_RULES.runTest(t, "PutRule",
                 new Call("PutRule", "{\"EventBusName\":{\"$name\":\"bus\"},\"EventPattern\":\"{\\\"source\\\":[\\\"compat.eventbridge-rules\\\"]}\",\"Name\":{\"$name\":\"rule\"},\"State\":\"ENABLED\"}",
                         b -> PutRuleRequest.builder()
                                 .eventBusName(b.string("EventBusName", Values.name("bus")))
@@ -144,8 +144,8 @@ public final class ScenariosAuthoredEventbridgeRulesGen implements ServiceGroup 
                 ));
     }
 
-    private void testEventbridgeRulesShadowDescribeRule(TestContext t) {
-        GROUP_EVENTBRIDGE_RULES_SHADOW.runTest(t, "DescribeRule",
+    private void testEventbridgeRulesDescribeRule(TestContext t) {
+        GROUP_EVENTBRIDGE_RULES.runTest(t, "DescribeRule",
                 new Call("DescribeRule", "{\"EventBusName\":{\"$name\":\"bus\"},\"Name\":{\"$name\":\"rule\"}}",
                         b -> DescribeRuleRequest.builder()
                                 .eventBusName(b.string("EventBusName", Values.name("bus")))
@@ -161,8 +161,8 @@ public final class ScenariosAuthoredEventbridgeRulesGen implements ServiceGroup 
                 ));
     }
 
-    private void testEventbridgeRulesShadowListRules(TestContext t) {
-        GROUP_EVENTBRIDGE_RULES_SHADOW.runTest(t, "ListRules",
+    private void testEventbridgeRulesListRules(TestContext t) {
+        GROUP_EVENTBRIDGE_RULES.runTest(t, "ListRules",
                 new Call("ListRules", "{\"EventBusName\":{\"$name\":\"bus\"},\"NamePrefix\":{\"$name\":\"rule\"}}",
                         b -> ListRulesRequest.builder()
                                 .eventBusName(b.string("EventBusName", Values.name("bus")))
@@ -178,8 +178,8 @@ public final class ScenariosAuthoredEventbridgeRulesGen implements ServiceGroup 
                 ));
     }
 
-    private void testEventbridgeRulesShadowPutTargets(TestContext t) {
-        GROUP_EVENTBRIDGE_RULES_SHADOW.runTest(t, "PutTargets",
+    private void testEventbridgeRulesPutTargets(TestContext t) {
+        GROUP_EVENTBRIDGE_RULES.runTest(t, "PutTargets",
                 new Call("PutTargets", "{\"EventBusName\":{\"$name\":\"bus\"},\"Rule\":{\"$name\":\"rule\"},\"Targets\":[{\"Arn\":\"arn:aws:sqs:us-east-1:000000000000:compat-eventbridge-rules-target\",\"Id\":\"t1\"}]}",
                         b -> PutTargetsRequest.builder()
                                 .eventBusName(b.string("EventBusName", Values.name("bus")))
@@ -204,8 +204,8 @@ public final class ScenariosAuthoredEventbridgeRulesGen implements ServiceGroup 
                 ));
     }
 
-    private void testEventbridgeRulesShadowListTargetsByRule(TestContext t) {
-        GROUP_EVENTBRIDGE_RULES_SHADOW.runTest(t, "ListTargetsByRule",
+    private void testEventbridgeRulesListTargetsByRule(TestContext t) {
+        GROUP_EVENTBRIDGE_RULES.runTest(t, "ListTargetsByRule",
                 new Call("ListTargetsByRule", "{\"EventBusName\":{\"$name\":\"bus\"},\"Rule\":{\"$name\":\"rule\"}}",
                         b -> ListTargetsByRuleRequest.builder()
                                 .eventBusName(b.string("EventBusName", Values.name("bus")))
@@ -222,8 +222,8 @@ public final class ScenariosAuthoredEventbridgeRulesGen implements ServiceGroup 
                 ));
     }
 
-    private void testEventbridgeRulesShadowDisableRule(TestContext t) {
-        GROUP_EVENTBRIDGE_RULES_SHADOW.runTest(t, "DisableRule",
+    private void testEventbridgeRulesDisableRule(TestContext t) {
+        GROUP_EVENTBRIDGE_RULES.runTest(t, "DisableRule",
                 new Call("DisableRule", "{\"EventBusName\":{\"$name\":\"bus\"},\"Name\":{\"$name\":\"rule\"}}",
                         b -> DisableRuleRequest.builder()
                                 .eventBusName(b.string("EventBusName", Values.name("bus")))
@@ -243,8 +243,8 @@ public final class ScenariosAuthoredEventbridgeRulesGen implements ServiceGroup 
                 ));
     }
 
-    private void testEventbridgeRulesShadowEnableRule(TestContext t) {
-        GROUP_EVENTBRIDGE_RULES_SHADOW.runTest(t, "EnableRule",
+    private void testEventbridgeRulesEnableRule(TestContext t) {
+        GROUP_EVENTBRIDGE_RULES.runTest(t, "EnableRule",
                 new Call("EnableRule", "{\"EventBusName\":{\"$name\":\"bus\"},\"Name\":{\"$name\":\"rule\"}}",
                         b -> EnableRuleRequest.builder()
                                 .eventBusName(b.string("EventBusName", Values.name("bus")))
@@ -264,8 +264,8 @@ public final class ScenariosAuthoredEventbridgeRulesGen implements ServiceGroup 
                 ));
     }
 
-    private void testEventbridgeRulesShadowRemoveTargets(TestContext t) {
-        GROUP_EVENTBRIDGE_RULES_SHADOW.runTest(t, "RemoveTargets",
+    private void testEventbridgeRulesRemoveTargets(TestContext t) {
+        GROUP_EVENTBRIDGE_RULES.runTest(t, "RemoveTargets",
                 new Call("RemoveTargets", "{\"EventBusName\":{\"$name\":\"bus\"},\"Ids\":[\"t1\"],\"Rule\":{\"$name\":\"rule\"}}",
                         b -> RemoveTargetsRequest.builder()
                                 .eventBusName(b.string("EventBusName", Values.name("bus")))
@@ -290,8 +290,8 @@ public final class ScenariosAuthoredEventbridgeRulesGen implements ServiceGroup 
                 ));
     }
 
-    private void testEventbridgeRulesShadowDeleteRule(TestContext t) {
-        GROUP_EVENTBRIDGE_RULES_SHADOW.runTest(t, "DeleteRule",
+    private void testEventbridgeRulesDeleteRule(TestContext t) {
+        GROUP_EVENTBRIDGE_RULES.runTest(t, "DeleteRule",
                 new Call("DeleteRule", "{\"EventBusName\":{\"$name\":\"bus\"},\"Name\":{\"$name\":\"rule\"}}",
                         b -> DeleteRuleRequest.builder()
                                 .eventBusName(b.string("EventBusName", Values.name("bus")))
