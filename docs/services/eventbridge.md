@@ -42,7 +42,8 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 
 | Area | Behaviour |
 | --- | --- |
-| Buses and rules | Bus, rule, target and tag CRUD. `DescribeEventBus` answers for `default` whether or not it was created. |
+| Buses and rules | Bus, rule, target and tag CRUD. `CreateEventBus` stores `Description`, `DeadLetterConfig` and `KmsKeyIdentifier`; `DescribeEventBus` answers for `default` whether or not it was created. |
+| Bus permissions | `PutPermission` grants a statement, individually or as a whole `Policy` document that replaces the bus's policy; `RemovePermission` revokes one by `StatementId` or clears the policy with `RemoveAllPermissions`. `DescribeEventBus` reports the result as `Policy`. Stored, not enforced — like the rest of Overcast's IAM policies, nothing consults it to authorize a cross-account `PutEvents` call. |
 | Event patterns | Exact values plus `prefix`, `suffix`, `exists`, `equals-ignore-case`, `numeric` and `anything-but`. |
 | Rule validation | `PutRule` refuses a rule with no trigger, one naming an event bus that does not exist, and one whose pattern cannot be evaluated. |
 | Rule deletion | `DeleteRule` refuses a rule that still has targets, so `RemoveTargets` comes first. CloudFormation detaches them for you. |
@@ -107,7 +108,7 @@ about their expressions as AWS is.
 
 ## Operations
 
-18 of 29 listed operations are implemented.
+20 of 31 listed operations are implemented.
 Per-operation status, notes and AWS API links: [EventBridge operations](eventbridge/operations.md).
 
 <!-- END overcast:capabilities -->

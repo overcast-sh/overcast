@@ -2,14 +2,86 @@ service: eventbridge
 status: fixed
 priority: p1
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-09-20
+last_updated: 2026-09-23
 protocols: [aws_json_1_1, rpcv2_cbor]
 implementation: [internal/services/eventbridge]
 integration_tests: [tests/integration/eventbridge]
 capability_docs: docs/services/eventbridge.md
-operation_count_estimate: 29 tracked; 18 supported, 11 unsupported
-current_support_level: Management-plane/CDK-compatible with real routing — PutEvents evaluates every rule on a bus and delivers matches to Lambda, SQS, SNS, Step Functions, Kinesis, Firehose, ECS RunTask and another event bus, applying InputPath/InputTransformer precedence and RetryPolicy/DeadLetterConfig (#467, PR #494). Archives, replay, and API destinations remain unimplemented.
+operation_count_estimate: 31 tracked; 20 supported, 11 unsupported
+current_support_level: Management-plane/CDK-compatible with real routing — PutEvents evaluates every rule on a bus and delivers matches to Lambda, SQS, SNS, Step Functions, Kinesis, Firehose, ECS RunTask and another event bus, applying InputPath/InputTransformer precedence and RetryPolicy/DeadLetterConfig (#467, PR #494). CreateEventBus/DescribeEventBus carry Description, DeadLetterConfig and KmsKeyIdentifier, and PutPermission/RemovePermission store (but do not enforce) a bus's resource policy, read back as DescribeEventBus.Policy (#2076). Archives, replay, and API destinations remain unimplemented.
 operations:
+  CreateEventBus:
+    status: fixed
+    scenarios:
+      description_dlq_and_kms_key_identifier:
+        status: fixed
+        evidence:
+          - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_CreateEventBus.html
+          - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_DescribeEventBus.html
+          - tests/integration/eventbridge/bus_permission_test.go::TestCreateEventBus_forwardsDescriptionDeadLetterConfigAndKmsKeyIdentifier
+          - tests/integration/eventbridge/bus_permission_test.go::TestDescribeEventBus_omitsUnsetOptionalFields
+          - tests/integration/cloudformation/eventbridge_properties_test.go::TestCreateStack_EventsEventBus_descriptionDlqKmsAndPolicyForwarded
+        notes: >-
+          CreateEventBus's request shape previously carried only Name and Tags; it now accepts
+          Description, DeadLetterConfig and KmsKeyIdentifier, and both CreateEventBus's own
+          response and DescribeEventBus echo them back. A bus created without them omits the
+          fields entirely from DescribeEventBus rather than reporting empty strings/null, matching
+          AWS's shape for an unconfigured bus. The AWS::Events::EventBus CloudFormation handler
+          (internal/services/cloudformation/provisioner_resources.go) forwards all three instead
+          of reporting them as unconsumed.
+  PutPermission:
+    status: fixed
+    priority: p2
+    aws_docs:
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_PutPermission.html
+    scenarios:
+      individual_statement_and_whole_policy:
+        status: fixed
+        evidence:
+          - tests/integration/eventbridge/bus_permission_test.go::TestPutPermission_setsStatementReportedByDescribeEventBus
+          - tests/integration/eventbridge/bus_permission_test.go::TestPutPermission_wildcardPrincipalIsBare
+          - tests/integration/eventbridge/bus_permission_test.go::TestPutPermission_wholePolicyReplacesDocument
+          - tests/integration/cloudformation/eventbridge_properties_test.go::TestCreateStack_EventsEventBus_descriptionDlqKmsAndPolicyForwarded
+        notes: >-
+          PutPermission was entirely unimplemented (absent from dispatchLegacy and
+          capabilities_dev.go). It now supports AWS's two documented, mutually exclusive request
+          shapes: a single statement built from Action/Principal/StatementId/Condition (upserted by
+          StatementId on a repeat call, as AWS's own docs describe), or a whole Policy document that
+          replaces the bus's entire policy rather than merging into it. Principal "*" stays a bare
+          string; anything else is wrapped as {"AWS": "<arn>"}, expanding a bare account ID to its
+          root-user ARN. The resulting policy is what DescribeEventBus.Policy reports — stored, not
+          enforced against a cross-account PutEvents call, matching Overcast's IAM policies
+          elsewhere. The AWS::Events::EventBus CloudFormation handler applies a template's Policy
+          property through this whole-document path.
+      validation_and_resource_not_found:
+        status: fixed
+        evidence:
+          - tests/integration/eventbridge/bus_permission_test.go::TestPutPermission_missingRequiredFieldsIsValidationException
+          - tests/integration/eventbridge/bus_permission_test.go::TestPutPermission_unknownEventBusIsResourceNotFound
+        notes: >-
+          Neither a whole Policy nor the full Action/Principal/StatementId trio is
+          ValidationException/400; an EventBusName naming a bus that was never created is
+          ResourceNotFoundException/400, reusing the same requireEventBus check PutRule already
+          applies. The API reference publishes no message text for either, so the wording follows
+          this package's existing PutRule/PutEvents error style.
+  RemovePermission:
+    status: fixed
+    priority: p2
+    aws_docs:
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_RemovePermission.html
+    scenarios:
+      by_statement_id_and_remove_all:
+        status: fixed
+        evidence:
+          - tests/integration/eventbridge/bus_permission_test.go::TestRemovePermission_removesStatementByStatementId
+          - tests/integration/eventbridge/bus_permission_test.go::TestRemovePermission_removeAllPermissionsClearsPolicy
+          - tests/integration/eventbridge/bus_permission_test.go::TestRemovePermission_unknownStatementIdIsResourceNotFound
+        notes: >-
+          RemovePermission revokes one statement by StatementId, leaving the rest, or clears the
+          whole policy with RemoveAllPermissions. A StatementId naming a statement that was never
+          granted is ResourceNotFoundException/400. The last statement removed deletes the stored
+          policy record entirely, so DescribeEventBus.Policy goes back to being omitted rather than
+          an empty document — the same shape a bus that never had a permission granted reports.
   PutRule:
     status: fixed
     scenarios:

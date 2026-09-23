@@ -36,6 +36,8 @@ func TestTypedOps_matchDispatchSurface(t *testing.T) {
 		"DeleteRule",
 		"PutEvents",
 		"TestEventPattern",
+		"PutPermission",
+		"RemovePermission",
 	}
 
 	if len(ops) != len(expected) {
