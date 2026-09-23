@@ -56,6 +56,23 @@ func TestKinesis_missingStreamIdentifierIsInvalidArgument(t *testing.T) {
 	}
 }
 
+// TestPutRecord_explicitHashKeyOutOfRangeIsInvalidArgument asserts an
+// ExplicitHashKey that falls outside every open shard's HashKeyRange — here,
+// a value past the 128-bit hash space (2^128-1 = 39 digits) every shard's
+// range is carved from — is rejected with the modeled InvalidArgumentException
+// rather than silently accepted (#1988).
+func TestPutRecord_explicitHashKeyOutOfRangeIsInvalidArgument(t *testing.T) {
+	srv := helpers.NewTestServer(t)
+	createStream(t, srv, "explicit-hash-key-errors", 2)
+
+	assertKinesisError(t, srv, "PutRecord", map[string]any{
+		"StreamName":      "explicit-hash-key-errors",
+		"Data":            []byte("payload"),
+		"PartitionKey":    "pk",
+		"ExplicitHashKey": "9999999999999999999999999999999999999999",
+	}, "InvalidArgumentException", http.StatusBadRequest)
+}
+
 func TestSplitShard_unknownShardIsResourceNotFoundWith400(t *testing.T) {
 	srv := helpers.NewTestServer(t)
 	createStream(t, srv, "split-errors", 1)

@@ -457,6 +457,161 @@ func TestCreateGraphqlApi_invalidApiType(t *testing.T) {
 	helpers.AssertRequestID(t, resp)
 }
 
+// TestCreateGraphqlApi_queryDepthLimitBoundaries checks the documented range
+// at https://docs.aws.amazon.com/appsync/latest/APIReference/API_CreateGraphqlApi.html:
+// "Minimum value of 0. Maximum value of 75." 0 (unspecified/no limit) and 75
+// (the maximum) are accepted; 76 is rejected.
+func TestCreateGraphqlApi_queryDepthLimitBoundaries(t *testing.T) {
+	cases := []struct {
+		name  string
+		limit int
+		want  int
+	}{
+		{"zero-means-unlimited", 0, http.StatusOK},
+		{"at-maximum", 75, http.StatusOK},
+		{"above-maximum", 76, http.StatusBadRequest},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := helpers.NewTestServer(t)
+			resp := appsyncPost(t, srv, "/v1/apis", map[string]any{
+				"name":               "query-depth-" + tc.name,
+				"authenticationType": "API_KEY",
+				"queryDepthLimit":    tc.limit,
+			})
+			defer resp.Body.Close()
+			helpers.AssertStatus(t, resp, tc.want)
+			if tc.want == http.StatusBadRequest {
+				helpers.AssertJSONError(t, resp, "BadRequestException")
+			}
+		})
+	}
+}
+
+// TestCreateGraphqlApi_resolverCountLimitBoundaries checks the documented
+// range at https://docs.aws.amazon.com/appsync/latest/APIReference/API_CreateGraphqlApi.html:
+// "Minimum value of 0. Maximum value of 10000." 0 (unspecified, which AWS
+// sets to 10000) and 10000 (the maximum) are accepted; 10001 is rejected.
+func TestCreateGraphqlApi_resolverCountLimitBoundaries(t *testing.T) {
+	cases := []struct {
+		name  string
+		limit int
+		want  int
+	}{
+		{"zero-means-default", 0, http.StatusOK},
+		{"at-maximum", 10000, http.StatusOK},
+		{"above-maximum", 10001, http.StatusBadRequest},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := helpers.NewTestServer(t)
+			resp := appsyncPost(t, srv, "/v1/apis", map[string]any{
+				"name":               "resolver-count-" + tc.name,
+				"authenticationType": "API_KEY",
+				"resolverCountLimit": tc.limit,
+			})
+			defer resp.Body.Close()
+			helpers.AssertStatus(t, resp, tc.want)
+			if tc.want == http.StatusBadRequest {
+				helpers.AssertJSONError(t, resp, "BadRequestException")
+			}
+		})
+	}
+}
+
+// TestCreateGraphqlApi_logConfigFieldLogLevel checks logConfig.fieldLogLevel,
+// which AWS's LogConfig shape marks required
+// (https://docs.aws.amazon.com/appsync/latest/APIReference/API_LogConfig.html)
+// with values NONE, ERROR, ALL, INFO, or DEBUG.
+func TestCreateGraphqlApi_logConfigFieldLogLevel(t *testing.T) {
+	t.Run("valid level accepted", func(t *testing.T) {
+		srv := helpers.NewTestServer(t)
+		resp := appsyncPost(t, srv, "/v1/apis", map[string]any{
+			"name":               "log-config-valid",
+			"authenticationType": "API_KEY",
+			"logConfig": map[string]any{
+				"fieldLogLevel":         "ALL",
+				"cloudWatchLogsRoleArn": "arn:aws:iam::123456789012:role/appsync-logs",
+			},
+		})
+		defer resp.Body.Close()
+		helpers.AssertStatus(t, resp, http.StatusOK)
+	})
+
+	t.Run("invalid level rejected", func(t *testing.T) {
+		srv := helpers.NewTestServer(t)
+		resp := appsyncPost(t, srv, "/v1/apis", map[string]any{
+			"name":               "log-config-invalid",
+			"authenticationType": "API_KEY",
+			"logConfig": map[string]any{
+				"fieldLogLevel": "VERBOSE",
+			},
+		})
+		defer resp.Body.Close()
+		helpers.AssertStatus(t, resp, http.StatusBadRequest)
+		helpers.AssertJSONError(t, resp, "BadRequestException")
+	})
+
+	t.Run("missing required field rejected", func(t *testing.T) {
+		srv := helpers.NewTestServer(t)
+		resp := appsyncPost(t, srv, "/v1/apis", map[string]any{
+			"name":               "log-config-missing-level",
+			"authenticationType": "API_KEY",
+			"logConfig": map[string]any{
+				"cloudWatchLogsRoleArn": "arn:aws:iam::123456789012:role/appsync-logs",
+			},
+		})
+		defer resp.Body.Close()
+		helpers.AssertStatus(t, resp, http.StatusBadRequest)
+		helpers.AssertJSONError(t, resp, "BadRequestException")
+	})
+}
+
+// TestCreateGraphqlApi_additionalAuthenticationProviders checks the nested
+// authenticationType enum in additionalAuthenticationProviders, which AWS
+// constrains to the same values as the top-level field
+// (https://docs.aws.amazon.com/appsync/latest/APIReference/API_AdditionalAuthenticationProvider.html).
+func TestCreateGraphqlApi_additionalAuthenticationProviders(t *testing.T) {
+	t.Run("valid provider accepted", func(t *testing.T) {
+		srv := helpers.NewTestServer(t)
+		resp := appsyncPost(t, srv, "/v1/apis", map[string]any{
+			"name":               "additional-auth-valid",
+			"authenticationType": "API_KEY",
+			"additionalAuthenticationProviders": []map[string]any{
+				{"authenticationType": "AWS_IAM"},
+			},
+		})
+		defer resp.Body.Close()
+		helpers.AssertStatus(t, resp, http.StatusOK)
+		var result struct {
+			GraphqlAPI struct {
+				AdditionalAuthenticationProviders []map[string]any `json:"additionalAuthenticationProviders"`
+			} `json:"graphqlApi"`
+		}
+		helpers.DecodeJSON(t, resp, &result)
+		if len(result.GraphqlAPI.AdditionalAuthenticationProviders) != 1 {
+			t.Fatalf("expected 1 additional authentication provider, got %#v", result.GraphqlAPI.AdditionalAuthenticationProviders)
+		}
+		if got := result.GraphqlAPI.AdditionalAuthenticationProviders[0]["authenticationType"]; got != "AWS_IAM" {
+			t.Errorf("expected authenticationType=AWS_IAM, got %v", got)
+		}
+	})
+
+	t.Run("invalid provider authenticationType rejected", func(t *testing.T) {
+		srv := helpers.NewTestServer(t)
+		resp := appsyncPost(t, srv, "/v1/apis", map[string]any{
+			"name":               "additional-auth-invalid",
+			"authenticationType": "API_KEY",
+			"additionalAuthenticationProviders": []map[string]any{
+				{"authenticationType": "NONE"},
+			},
+		})
+		defer resp.Body.Close()
+		helpers.AssertStatus(t, resp, http.StatusBadRequest)
+		helpers.AssertJSONError(t, resp, "BadRequestException")
+	})
+}
+
 // ─── GetGraphqlApi ────────────────────────────────────────────────────────────
 
 func TestGetGraphqlApi_success(t *testing.T) {
@@ -1063,32 +1218,30 @@ func TestSchema_statusBeforeUpload(t *testing.T) {
 
 // ─── API Keys ─────────────────────────────────────────────────────────────────
 
-func TestApiKey_autoCreatedOnApiKeyAuth(t *testing.T) {
+// TestApiKey_notAutoCreatedOnApiKeyAuth checks that CreateGraphqlApi does not
+// create an API key as a side effect, even for authenticationType=API_KEY.
+// AWS's CreateGraphqlApi response
+// (https://docs.aws.amazon.com/appsync/latest/APIReference/API_CreateGraphqlApi.html)
+// carries no apiKey field; the AWS console's "default key" convenience is a
+// separate CreateApiKey call the console makes, not something the API itself
+// performs. Overcast auto-created one here until #62.
+func TestApiKey_notAutoCreatedOnApiKeyAuth(t *testing.T) {
 	// Given/When: an API is created with API_KEY authentication type
 	srv := helpers.NewTestServer(t)
 	apiID, _ := createTestAPI(t, srv) // uses authenticationType: API_KEY
 
-	// Then: a default API key is auto-created (matching real AWS behaviour)
+	// Then: no API key is auto-created
 	listResp := appsyncGet(t, srv, "/v1/apis/"+apiID+"/apikeys")
 	defer listResp.Body.Close()
 	helpers.AssertStatus(t, listResp, http.StatusOK)
 	var listResult struct {
 		ApiKeys []struct {
-			Id      string `json:"id"`
-			Expires int64  `json:"expires"`
-			Deletes int64  `json:"deletes"`
+			Id string `json:"id"`
 		} `json:"apiKeys"`
 	}
 	helpers.DecodeJSON(t, listResp, &listResult)
-	if len(listResult.ApiKeys) != 1 {
-		t.Fatalf("expected 1 auto-created API key, got %d", len(listResult.ApiKeys))
-	}
-	key := listResult.ApiKeys[0]
-	if len(key.Id) < 5 || key.Id[:4] != "da2-" {
-		t.Errorf("expected da2- prefixed key ID, got %q", key.Id)
-	}
-	if key.Expires == 0 {
-		t.Error("expected expires to be set on auto-created key")
+	if len(listResult.ApiKeys) != 0 {
+		t.Fatalf("expected 0 API keys immediately after CreateGraphqlApi, got %d", len(listResult.ApiKeys))
 	}
 }
 
@@ -1124,7 +1277,7 @@ func TestApiKey_notAutoCreatedOnNonApiKeyAuth(t *testing.T) {
 }
 
 func TestApiKey_createAndList(t *testing.T) {
-	// Given: an existing API (API_KEY auth type auto-creates one default key)
+	// Given: an existing API with no keys (CreateGraphqlApi does not auto-create one)
 	srv := helpers.NewTestServer(t)
 	apiID, _ := createTestAPI(t, srv)
 
@@ -1155,7 +1308,7 @@ func TestApiKey_createAndList(t *testing.T) {
 		t.Error("expected expires to be set")
 	}
 
-	// And: ListApiKeys returns both the auto-created key and the new key
+	// And: ListApiKeys returns exactly the explicitly created key
 	listResp := appsyncGet(t, srv, "/v1/apis/"+apiID+"/apikeys")
 	defer listResp.Body.Close()
 	helpers.AssertStatus(t, listResp, http.StatusOK)
@@ -1165,8 +1318,8 @@ func TestApiKey_createAndList(t *testing.T) {
 		} `json:"apiKeys"`
 	}
 	helpers.DecodeJSON(t, listResp, &listResult)
-	if len(listResult.ApiKeys) != 2 {
-		t.Errorf("expected 2 API keys (1 auto-created + 1 explicit), got %d", len(listResult.ApiKeys))
+	if len(listResult.ApiKeys) != 1 {
+		t.Errorf("expected 1 API key (the explicit one), got %d", len(listResult.ApiKeys))
 	}
 }
 
@@ -1226,7 +1379,8 @@ func TestApiKey_updateAndDelete(t *testing.T) {
 	defer del.Body.Close()
 	helpers.AssertStatus(t, del, http.StatusOK)
 
-	// Verify the explicitly created key is gone (auto-created default key remains)
+	// Verify the deleted key is gone. CreateGraphqlApi does not auto-create a
+	// default key (#62), so no other key remains.
 	listResp := appsyncGet(t, srv, "/v1/apis/"+apiID+"/apikeys")
 	defer listResp.Body.Close()
 	var listResult struct {
@@ -1235,12 +1389,14 @@ func TestApiKey_updateAndDelete(t *testing.T) {
 		} `json:"apiKeys"`
 	}
 	helpers.DecodeJSON(t, listResp, &listResult)
-	if len(listResult.ApiKeys) != 1 {
-		t.Errorf("expected 1 API key (auto-created default) after delete, got %d", len(listResult.ApiKeys))
+	if len(listResult.ApiKeys) != 0 {
+		t.Errorf("expected 0 API keys after delete, got %d", len(listResult.ApiKeys))
 	}
-	// The remaining key should NOT be the one we just deleted.
-	if len(listResult.ApiKeys) == 1 && listResult.ApiKeys[0].Id == keyID {
-		t.Errorf("deleted key %q should not still be present", keyID)
+	// The remaining keys should NOT include the one we just deleted.
+	for _, key := range listResult.ApiKeys {
+		if key.Id == keyID {
+			t.Errorf("deleted key %q should not still be present", keyID)
+		}
 	}
 }
 

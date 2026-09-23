@@ -2051,6 +2051,17 @@ type opensearchDomainHandler struct{}
 
 func (h *opensearchDomainHandler) Create(ctx context.Context, router http.Handler, cfg *config.Config, props map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
 	domainName, _ := props["DomainName"].(string)
+	if domainName == "" {
+		// DomainName is optional on the resource; CDK's opensearch.Domain
+		// construct omits it by default. CloudFormation still has to mint
+		// something to send CreateDomain, shaped to what OpenSearch accepts:
+		// lowercase, 3-28 characters, starting with a letter
+		// (domainNamePatternSource in opensearch/service.go). generatedName
+		// already starts with a letter — CloudFormation stack names are
+		// themselves anchored `[a-zA-Z][-a-zA-Z0-9]*` — so lowercasing it is
+		// enough to satisfy the pattern too.
+		domainName = strings.ToLower(rCtx.generatedNameWithin(maxNameLenOpenSearch))
+	}
 	engineVersion, _ := props["EngineVersion"].(string)
 
 	body := map[string]any{

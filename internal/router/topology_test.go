@@ -5,9 +5,25 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/overcast-sh/overcast/internal/config"
 	"github.com/overcast-sh/overcast/internal/state"
+	"github.com/overcast-sh/overcast/internal/topology"
 )
+
+// buildTopology builds the map from the legacy contributor's view of byNS,
+// alongside nodes standing in for the services that contribute their own.
+func buildTopology(defaultRegion string, byNS map[string][]state.KV, regionFilter string, others ...topology.Node) topology.Response {
+	legacy, migrated := &topology.Graph{}, &topology.Graph{}
+	contributeLegacyTopology(defaultRegion, byNS, legacy)
+	for _, n := range others {
+		migrated.AddNode(n)
+	}
+	return topology.Build(regionFilter, migrated, legacy)
+}
+
+// otherNode is a node a migrated service's contributor would have added.
+func otherNode(region, kind, name string) topology.Node {
+	return topology.Node{ID: topology.NodeID(region, kind, name), Service: kind, Label: name, Region: region}
+}
 
 func TestBuildTopologyIncludesWAFWebACLs(t *testing.T) {
 	// Given: a metadata-only WAFv2 Web ACL is stored in the service namespace.
@@ -23,7 +39,7 @@ func TestBuildTopologyIncludesWAFWebACLs(t *testing.T) {
 	})
 
 	// When: topology is built from the WAF namespace.
-	resp := buildTopology(&config.Config{Region: "us-east-1"}, map[string][]state.KV{
+	resp := buildTopology("us-east-1", map[string][]state.KV{
 		"waf:webacls": {{Key: "us-west-2/REGIONAL/acl-123", Value: string(webACLPayload)}},
 	}, "")
 
@@ -40,107 +56,11 @@ func TestBuildTopologyIncludesWAFWebACLs(t *testing.T) {
 	}
 }
 
-func TestBuildTopologyESMEdgesFromLambdaESMNamespace(t *testing.T) {
-	// Given: an SQS queue, a Lambda function, and an ESM linking them.
-	queuePayload, _ := json.Marshal(map[string]any{
-		"name": "my-queue",
-		"arn":  "arn:aws:sqs:us-east-1:000000000000:my-queue",
-	})
-	functionPayload, _ := json.Marshal(map[string]any{
-		"name": "my-function",
-		"arn":  "arn:aws:lambda:us-east-1:000000000000:function:my-function",
-	})
-	esmPayload, _ := json.Marshal(map[string]any{
-		"FunctionArn":    "arn:aws:lambda:us-east-1:000000000000:function:my-function",
-		"EventSourceArn": "arn:aws:sqs:us-east-1:000000000000:my-queue",
-	})
-
-	resp := buildTopology(&config.Config{Region: "us-east-1"}, map[string][]state.KV{
-		tNsQueues:    {{Key: "us-east-1/my-queue", Value: string(queuePayload)}},
-		tNsFunctions: {{Key: "us-east-1/my-function", Value: string(functionPayload)}},
-		tNsESM:       {{Key: "us-east-1/uuid-1", Value: string(esmPayload)}},
-	}, "")
-
-	edges := map[string]topologyEdge{}
-	for _, edge := range resp.Edges {
-		edges[edge.ID] = edge
-	}
-
-	wantID := "esm::us-east-1::sqs::my-queue→us-east-1::lambda::my-function"
-	if _, ok := edges[wantID]; !ok {
-		t.Fatalf("expected SQS → Lambda ESM edge (%s), got edges: %v", wantID, resp.Edges)
-	}
-	if got := edges[wantID].Type; got != "esm" {
-		t.Errorf("edge type: got %q, want %q", got, "esm")
-	}
-}
-
-func TestBuildTopologyDynamoDBESMFilterNode(t *testing.T) {
-	// Given: a stream-enabled DynamoDB table, a Lambda function, and a filtered ESM.
-	tablePayload, _ := json.Marshal(map[string]any{
-		"TableName": "items",
-		"TableArn":  "arn:aws:dynamodb:us-east-1:000000000000:table/items",
-		"StreamSpecification": map[string]any{
-			"StreamEnabled": true,
-		},
-	})
-	functionPayload, _ := json.Marshal(map[string]any{
-		"name": "stream-fn",
-		"arn":  "arn:aws:lambda:us-east-1:000000000000:function:stream-fn",
-	})
-	esmPayload, _ := json.Marshal(map[string]any{
-		"UUID":           "esm-1",
-		"FunctionArn":    "arn:aws:lambda:us-east-1:000000000000:function:stream-fn",
-		"EventSourceArn": "arn:aws:dynamodb:us-east-1:000000000000:table/items/stream/2026-01-01T00:00:00.000",
-		"FilterCriteria": map[string]any{
-			"Filters": []map[string]any{{"Pattern": `{"eventName":["INSERT"]}`}},
-		},
-	})
-
-	// When: topology is built.
-	resp := buildTopology(&config.Config{Region: "us-east-1"}, map[string][]state.KV{
-		tNsTables:    {{Key: "us-east-1/items", Value: string(tablePayload)}},
-		tNsFunctions: {{Key: "us-east-1/stream-fn", Value: string(functionPayload)}},
-		tNsESM:       {{Key: "us-east-1/esm-1", Value: string(esmPayload)}},
-	}, "")
-
-	// Then: the filter is visible as a node between DynamoDB and Lambda.
-	nodes := map[string]topologyNode{}
-	for _, node := range resp.Nodes {
-		nodes[node.ID] = node
-	}
-	filterID := "us-east-1::esm-filter::esm-1"
-	filter, ok := nodes[filterID]
-	if !ok {
-		t.Fatalf("expected ESM filter node %s, got nodes: %v", filterID, resp.Nodes)
-	}
-	if filter.Service != "esm-filter" || filter.ESMID != "esm-1" || len(filter.FilterPatterns) != 1 {
-		t.Fatalf("unexpected filter node: %#v", filter)
-	}
-
-	edges := map[string]topologyEdge{}
-	for _, edge := range resp.Edges {
-		edges[edge.ID] = edge
-	}
-	if edge := edges["esm-filter-in::esm-1"]; edge.Source != "us-east-1::dynamodb::items" || edge.Target != filterID {
-		t.Fatalf("unexpected filter input edge: %#v", edge)
-	}
-	if edge := edges["esm-filter-out::esm-1"]; edge.Source != filterID || edge.Target != "us-east-1::lambda::stream-fn" {
-		t.Fatalf("unexpected filter output edge: %#v", edge)
-	}
-}
-
-func TestBuildTopologyAddsECREdgesForLambdaAndECSConsumers(t *testing.T) {
+func TestBuildTopologyAddsECREdgesForECSConsumers(t *testing.T) {
 	repoPayload, _ := json.Marshal(map[string]any{
 		"repositoryArn":  "arn:aws:ecr:us-east-1:000000000000:repository/sample-app",
 		"repositoryName": "sample-app",
 		"repositoryUri":  "localhost:5000/000000000000/sample-app",
-	})
-	lambdaPayload, _ := json.Marshal(map[string]any{
-		"name":         "image-fn",
-		"arn":          "arn:aws:lambda:us-east-1:000000000000:function:image-fn",
-		"package_type": "Image",
-		"image_uri":    "localhost:5000/000000000000/sample-app:latest",
 	})
 	ecsServicePayload, _ := json.Marshal(map[string]any{
 		"serviceName":    "web",
@@ -157,14 +77,13 @@ func TestBuildTopologyAddsECREdgesForLambdaAndECSConsumers(t *testing.T) {
 		}},
 	})
 
-	resp := buildTopology(&config.Config{Region: "us-east-1"}, map[string][]state.KV{
+	resp := buildTopology("us-east-1", map[string][]state.KV{
 		tNsECRRepos:    {{Key: "us-east-1/sample-app", Value: string(repoPayload)}},
-		tNsFunctions:   {{Key: "us-east-1/image-fn", Value: string(lambdaPayload)}},
 		tNsECSServices: {{Key: "us-east-1/web", Value: string(ecsServicePayload)}},
 		tNsECSTaskDefs: {{Key: "us-east-1/demo:3", Value: string(taskDefPayload)}},
 	}, "")
 
-	nodes := map[string]topologyNode{}
+	nodes := map[string]topology.Node{}
 	for _, node := range resp.Nodes {
 		nodes[node.ID] = node
 	}
@@ -175,12 +94,9 @@ func TestBuildTopologyAddsECREdgesForLambdaAndECSConsumers(t *testing.T) {
 		t.Fatalf("expected repositoryUri to propagate to topology node, got %q", got)
 	}
 
-	edges := map[string]topologyEdge{}
+	edges := map[string]topology.Edge{}
 	for _, edge := range resp.Edges {
 		edges[edge.ID] = edge
-	}
-	if _, ok := edges["ecr-lambda::us-east-1::ecr::sample-app→us-east-1::lambda::image-fn"]; !ok {
-		t.Fatalf("expected ECR → Lambda edge, got %#v", resp.Edges)
 	}
 	if _, ok := edges["ecr-ecs::us-east-1::ecr::sample-app→us-east-1::ecs-service::demo/web"]; !ok {
 		t.Fatalf("expected ECR → ECS service edge, got %#v", resp.Edges)
@@ -216,7 +132,7 @@ func TestBuildTopologyECSResourcesUseCurrentClusterOwnership(t *testing.T) {
 	})
 
 	// When: the topology is built from the stored ECS records.
-	resp := buildTopology(&config.Config{Region: "us-east-1"}, map[string][]state.KV{
+	resp := buildTopology("us-east-1", map[string][]state.KV{
 		tNsClusters:    {{Key: "us-east-1/demo", Value: string(clusterPayload)}},
 		tNsECSServices: {{Key: "us-east-1/demo/web", Value: string(servicePayload)}},
 		tNsECSTasks: {
@@ -226,7 +142,7 @@ func TestBuildTopologyECSResourcesUseCurrentClusterOwnership(t *testing.T) {
 	}, "")
 
 	// Then: only the current task is shown, and every edge points at the real cluster/service nodes.
-	nodes := map[string]topologyNode{}
+	nodes := map[string]topology.Node{}
 	for _, node := range resp.Nodes {
 		nodes[node.ID] = node
 	}
@@ -255,7 +171,7 @@ func TestBuildTopologyECSResourcesUseCurrentClusterOwnership(t *testing.T) {
 		t.Fatalf("stopped task should not remain on the current-resource map: %#v", resp.Nodes)
 	}
 
-	edges := map[string]topologyEdge{}
+	edges := map[string]topology.Edge{}
 	for _, edge := range resp.Edges {
 		edges[edge.ID] = edge
 	}
@@ -286,14 +202,14 @@ func TestBuildTopologyECSChildrenUseOwningClusterRegion(t *testing.T) {
 	})
 
 	// When: the topology is built.
-	resp := buildTopology(&config.Config{Region: "us-east-1"}, map[string][]state.KV{
+	resp := buildTopology("us-east-1", map[string][]state.KV{
 		tNsClusters:    {{Key: "ap-southeast-2/demo", Value: string(clusterPayload)}},
 		tNsECSServices: {{Key: "ap-southeast-2/demo/web", Value: string(servicePayload)}},
 		tNsECSTasks:    {{Key: "ap-southeast-2/demo/task-1", Value: string(taskPayload)}},
 	}, "")
 
 	// Then: service and task navigation stay in the owning cluster's region.
-	nodes := map[string]topologyNode{}
+	nodes := map[string]topology.Node{}
 	for _, node := range resp.Nodes {
 		nodes[node.ID] = node
 	}
@@ -313,12 +229,6 @@ func TestBuildTopologyMatchesECRConsumersWithNormalizedImageRefs(t *testing.T) {
 		"repositoryName": "sample-app",
 		"repositoryUri":  "https://localhost:5000/000000000000/sample-app",
 	})
-	lambdaPayload, _ := json.Marshal(map[string]any{
-		"name":         "image-fn",
-		"arn":          "arn:aws:lambda:us-east-1:000000000000:function:image-fn",
-		"package_type": "Image",
-		"image_uri":    "localhost:5000/000000000000/sample-app@sha256:deadbeef",
-	})
 	ecsServicePayload, _ := json.Marshal(map[string]any{
 		"serviceName":    "web",
 		"serviceArn":     "arn:aws:ecs:us-east-1:000000000000:service/demo/web",
@@ -334,19 +244,15 @@ func TestBuildTopologyMatchesECRConsumersWithNormalizedImageRefs(t *testing.T) {
 		}},
 	})
 
-	resp := buildTopology(&config.Config{Region: "us-east-1"}, map[string][]state.KV{
+	resp := buildTopology("us-east-1", map[string][]state.KV{
 		tNsECRRepos:    {{Key: "us-east-1/sample-app", Value: string(repoPayload)}},
-		tNsFunctions:   {{Key: "us-east-1/image-fn", Value: string(lambdaPayload)}},
 		tNsECSServices: {{Key: "us-east-1/web", Value: string(ecsServicePayload)}},
 		tNsECSTaskDefs: {{Key: "us-east-1/demo:3", Value: string(taskDefPayload)}},
 	}, "")
 
-	edges := map[string]topologyEdge{}
+	edges := map[string]topology.Edge{}
 	for _, edge := range resp.Edges {
 		edges[edge.ID] = edge
-	}
-	if _, ok := edges["ecr-lambda::us-east-1::ecr::sample-app→us-east-1::lambda::image-fn"]; !ok {
-		t.Fatalf("expected normalized ECR → Lambda edge, got %#v", resp.Edges)
 	}
 	if _, ok := edges["ecr-ecs::us-east-1::ecr::sample-app→us-east-1::ecs-service::demo/web"]; !ok {
 		t.Fatalf("expected normalized ECR → ECS service edge, got %#v", resp.Edges)
@@ -370,13 +276,13 @@ func TestBuildTopologyIncludesAllElastiCacheResourceTypes(t *testing.T) {
 		"Engine":             "redis",
 	})
 
-	resp := buildTopology(&config.Config{Region: "us-east-1"}, map[string][]state.KV{
+	resp := buildTopology("us-east-1", map[string][]state.KV{
 		tNsCacheClusters:          {{Key: "us-east-1/session-cache", Value: string(clusterPayload)}},
 		tNsServerlessCaches:       {{Key: "us-west-2/api-cache", Value: string(serverlessPayload)}},
 		tNsCacheReplicationGroups: {{Key: "eu-west-1/checkout-rg", Value: string(replicationPayload)}},
 	}, "")
 
-	nodes := map[string]topologyNode{}
+	nodes := map[string]topology.Node{}
 	for _, node := range resp.Nodes {
 		nodes[node.ID] = node
 	}
@@ -409,28 +315,30 @@ func TestBuildTopologyIncludesAllElastiCacheResourceTypes(t *testing.T) {
 	}
 }
 
-func TestCfnResourceNodeIDMapsNonDefaultTypes(t *testing.T) {
+func TestCfnResourceRefMapsNonDefaultTypes(t *testing.T) {
 	tests := []struct {
 		resType    string
 		physicalID string
-		want       string
+		want       topology.Ref
 	}{
-		{"AWS::ApiGateway::RestApi", "abc123", "us-east-1::apigateway::abc123"},
-		{"AWS::ApiGatewayV2::Api", "def456", "us-east-1::apigateway::def456"},
-		{"AWS::ApiGateway::Resource", "abc123/res1", ""},
-		{"AWS::ApiGateway::Method", "abc123/res1/GET", ""},
-		{"AWS::Cognito::UserPool", "us-east-1_A1B2C3D4", "us-east-1::cognito::us-east-1_A1B2C3D4"},
-		{"AWS::AppSync::GraphQLApi", "abc123def456", "us-east-1::appsync::abc123def456"},
-		{"AWS::CloudFront::Distribution", "E1234567890ABC", "us-east-1::cloudfront::E1234567890ABC"},
-		{"AWS::WAFv2::WebACL", "REGIONAL/acl-123", "us-east-1::waf::acl-123"},
-		{"AWS::ElastiCache::CacheCluster", "cache-1", "us-east-1::elasticache::cache-1"},
-		{"AWS::ElastiCache::ServerlessCache", "cache-2", "us-east-1::elasticache::cache-2"},
-		{"AWS::ElastiCache::ReplicationGroup", "rg-1", "us-east-1::elasticache::rg-1"},
+		{"AWS::ApiGateway::RestApi", "abc123", topology.ID("us-east-1", "apigateway", "abc123")},
+		{"AWS::ApiGatewayV2::Api", "def456", topology.ID("us-east-1", "apigateway", "def456")},
+		{"AWS::Cognito::UserPool", "us-east-1_A1B2C3D4", topology.ID("us-east-1", "cognito", "us-east-1_A1B2C3D4")},
+		{"AWS::AppSync::GraphQLApi", "abc123def456", topology.ID("us-east-1", "appsync", "abc123def456")},
+		{"AWS::CloudFront::Distribution", "E1234567890ABC", topology.ID("us-east-1", "cloudfront", "E1234567890ABC")},
+		{"AWS::WAFv2::WebACL", "REGIONAL/acl-123", topology.ID("us-east-1", "waf", "acl-123")},
+		{"AWS::ElastiCache::CacheCluster", "cache-1", topology.ID("us-east-1", "elasticache", "cache-1")},
+		{"AWS::ElastiCache::ServerlessCache", "cache-2", topology.ID("us-east-1", "elasticache", "cache-2")},
+		{"AWS::ElastiCache::ReplicationGroup", "rg-1", topology.ID("us-east-1", "elasticache", "rg-1")},
+		// Types whose service contributes its own topology, and types with no
+		// node, resolve through the alias the service registers (if any).
+		{"AWS::SQS::Queue", "arn:aws:sqs:us-east-1:000000000000:q", topology.CFN("us-east-1", "AWS::SQS::Queue", "arn:aws:sqs:us-east-1:000000000000:q")},
+		{"AWS::Lambda::Function", "fn", topology.CFN("us-east-1", "AWS::Lambda::Function", "fn")},
+		{"AWS::ApiGateway::Resource", "abc123/res1", topology.CFN("us-east-1", "AWS::ApiGateway::Resource", "abc123/res1")},
 	}
 	for _, tt := range tests {
-		got := cfnResourceNodeID(tCFNResource{Type: tt.resType, PhysicalID: tt.physicalID}, "us-east-1")
-		if got != tt.want {
-			t.Errorf("cfnResourceNodeID(%s, %s) = %q, want %q", tt.resType, tt.physicalID, got, tt.want)
+		if got := cfnResourceRef(tCFNResource{Type: tt.resType, PhysicalID: tt.physicalID}, "us-east-1"); got != tt.want {
+			t.Errorf("cfnResourceRef(%s, %s) = %+v, want %+v", tt.resType, tt.physicalID, got, tt.want)
 		}
 	}
 }
@@ -456,7 +364,7 @@ func TestBuildTopologyCountsAPIGatewayRoutesWithRegionPrefixedKeys(t *testing.T)
 		"deploymentId": "deploy1",
 	})
 
-	resp := buildTopology(&config.Config{Region: "ap-southeast-2"}, map[string][]state.KV{
+	resp := buildTopology("ap-southeast-2", map[string][]state.KV{
 		tNsRestAPIs: {{Key: "ap-southeast-2/abc123", Value: string(restAPIPayload)}},
 		tNsAPIResources: {
 			{Key: "ap-southeast-2/abc123/res1", Value: string(resourcePayload)},
@@ -465,7 +373,7 @@ func TestBuildTopologyCountsAPIGatewayRoutesWithRegionPrefixedKeys(t *testing.T)
 		tNsAPIStages: {{Key: "ap-southeast-2/abc123/prod", Value: string(stagePayload)}},
 	}, "")
 
-	nodes := map[string]topologyNode{}
+	nodes := map[string]topology.Node{}
 	for _, node := range resp.Nodes {
 		nodes[node.ID] = node
 	}
@@ -503,13 +411,13 @@ func TestBuildTopologyAPIGatewayRegionDiffersFromDefault(t *testing.T) {
 		"deploymentId": "deploy1",
 	})
 
-	resp := buildTopology(&config.Config{Region: "us-east-1"}, map[string][]state.KV{
+	resp := buildTopology("us-east-1", map[string][]state.KV{
 		tNsRestAPIs:     {{Key: "ap-southeast-2/68fea4a56c", Value: string(restAPIPayload)}},
 		tNsAPIResources: {{Key: "ap-southeast-2/68fea4a56c/eb7380", Value: string(resourcePayload)}},
 		tNsAPIStages:    {{Key: "ap-southeast-2/68fea4a56c/prod", Value: string(stagePayload)}},
 	}, "")
 
-	nodes := map[string]topologyNode{}
+	nodes := map[string]topology.Node{}
 	for _, node := range resp.Nodes {
 		nodes[node.ID] = node
 	}
@@ -526,72 +434,6 @@ func TestBuildTopologyAPIGatewayRegionDiffersFromDefault(t *testing.T) {
 	}
 	if node.StageCount == nil || *node.StageCount != 1 {
 		t.Errorf("expected 1 stage, got %v", node.StageCount)
-	}
-}
-
-func TestBuildTopologyESMEdgeRegionMismatch(t *testing.T) {
-	// Given: nodes in ap-southeast-2, but ESM has ARNs with us-east-1 (stale
-	// data or cross-stack import from a different region).  The topology
-	// should still create the edges by falling back to name-based matching.
-
-	queuePayload, _ := json.Marshal(map[string]any{
-		"name": "my-queue",
-		"arn":  "arn:aws:sqs:ap-southeast-2:000000000000:my-queue",
-	})
-	functionPayload, _ := json.Marshal(map[string]any{
-		"name": "my-function",
-		"arn":  "arn:aws:lambda:ap-southeast-2:000000000000:function:my-function",
-	})
-	tablePayload, _ := json.Marshal(map[string]any{
-		"TableName": "my-table",
-		"TableArn":  "arn:aws:dynamodb:ap-southeast-2:000000000000:table/my-table",
-		"StreamSpecification": map[string]any{
-			"StreamEnabled":  true,
-			"StreamViewType": "NEW_AND_OLD_IMAGES",
-		},
-		"LatestStreamArn": "arn:aws:dynamodb:ap-southeast-2:000000000000:table/my-table/stream/2026-01-01T00:00:00.000",
-	})
-	// ESM ARNs reference us-east-1 (wrong region)
-	sqsESM, _ := json.Marshal(map[string]any{
-		"FunctionArn":    "arn:aws:lambda:us-east-1:000000000000:function:my-function",
-		"EventSourceArn": "arn:aws:sqs:us-east-1:000000000000:my-queue",
-	})
-	ddbESM, _ := json.Marshal(map[string]any{
-		"FunctionArn":    "arn:aws:lambda:us-east-1:000000000000:function:my-function",
-		"EventSourceArn": "arn:aws:dynamodb:us-east-1:000000000000:table/my-table/stream/2026-01-01T00:00:00.000",
-	})
-
-	resp := buildTopology(&config.Config{Region: "us-east-1"}, map[string][]state.KV{
-		tNsQueues:    {{Key: "ap-southeast-2/my-queue", Value: string(queuePayload)}},
-		tNsFunctions: {{Key: "ap-southeast-2/my-function", Value: string(functionPayload)}},
-		tNsTables:    {{Key: "ap-southeast-2/my-table", Value: string(tablePayload)}},
-		tNsESM: {
-			{Key: "ap-southeast-2/esm-sqs", Value: string(sqsESM)},
-			{Key: "ap-southeast-2/esm-ddb", Value: string(ddbESM)},
-		},
-	}, "")
-
-	esmEdges := map[string]topologyEdge{}
-	for _, e := range resp.Edges {
-		if e.Type == "esm" {
-			esmEdges[e.ID] = e
-		}
-	}
-
-	if len(esmEdges) != 2 {
-		t.Fatalf("expected 2 ESM edges, got %d: %v", len(esmEdges), esmEdges)
-	}
-
-	// Verify SQS → Lambda ESM edge (resolved to ap-southeast-2 nodes)
-	sqsEdgeID := "esm::ap-southeast-2::sqs::my-queue→ap-southeast-2::lambda::my-function"
-	if _, ok := esmEdges[sqsEdgeID]; !ok {
-		t.Errorf("missing SQS ESM edge; want %s, got: %v", sqsEdgeID, keys(esmEdges))
-	}
-
-	// Verify DynamoDB → Lambda ESM edge (resolved to ap-southeast-2 nodes)
-	ddbEdgeID := "esm::ap-southeast-2::dynamodb::my-table→ap-southeast-2::lambda::my-function"
-	if _, ok := esmEdges[ddbEdgeID]; !ok {
-		t.Errorf("missing DynamoDB ESM edge; want %s, got: %v", ddbEdgeID, keys(esmEdges))
 	}
 }
 
@@ -621,13 +463,13 @@ func TestBuildTopology_ec2InstanceDecodesStoreShape(t *testing.T) {
 	})
 
 	// When: topology is built from the EC2 namespaces.
-	resp := buildTopology(&config.Config{Region: "us-east-1"}, map[string][]state.KV{
+	resp := buildTopology("us-east-1", map[string][]state.KV{
 		tNsVPCs:      {{Key: "us-west-2/vpc-0abc", Value: string(vpcPayload)}},
 		tNsInstances: {{Key: "us-west-2/i-0123456789abcdef0", Value: string(instancePayload)}},
 	}, "")
 
 	// Then: the instance appears as an ec2 node grouped inside its VPC.
-	nodes := map[string]topologyNode{}
+	nodes := map[string]topology.Node{}
 	for _, n := range resp.Nodes {
 		nodes[n.ID] = n
 	}
@@ -660,8 +502,8 @@ func TestBuildTopology_ec2InstanceDecodesStoreShape(t *testing.T) {
 }
 
 // pipeEdges returns the edges of type "pipe" keyed by ID.
-func pipeEdges(resp topologyResponse) map[string]topologyEdge {
-	out := map[string]topologyEdge{}
+func pipeEdges(resp topology.Response) map[string]topology.Edge {
+	out := map[string]topology.Edge{}
 	for _, e := range resp.Edges {
 		if e.Type == "pipe" {
 			out[e.ID] = e
@@ -672,7 +514,7 @@ func pipeEdges(resp topologyResponse) map[string]topologyEdge {
 
 // assertPipeEdge checks that exactly one pipe edge exists and that it carries
 // the expected endpoints, label and state.
-func assertPipeEdge(t *testing.T, resp topologyResponse, wantID, wantSrc, wantTgt, wantLabel, wantState string) {
+func assertPipeEdge(t *testing.T, resp topology.Response, wantID, wantSrc, wantTgt, wantLabel, wantState string) {
 	t.Helper()
 	edges := pipeEdges(resp)
 	if len(edges) != 1 {
@@ -699,14 +541,6 @@ func assertPipeEdge(t *testing.T, resp topologyResponse, wantID, wantSrc, wantTg
 func TestBuildTopology_pipeSQSToLambda(t *testing.T) {
 	// Given: an SQS queue, a Lambda function, and a RUNNING pipe whose
 	// Source and Target are their ARNs (as AWS::Pipes::Pipe stores them).
-	queuePayload, _ := json.Marshal(map[string]any{
-		"name": "orders",
-		"arn":  "arn:aws:sqs:us-east-1:000000000000:orders",
-	})
-	functionPayload, _ := json.Marshal(map[string]any{
-		"name": "process-orders",
-		"arn":  "arn:aws:lambda:us-east-1:000000000000:function:process-orders",
-	})
 	pipePayload, _ := json.Marshal(map[string]any{
 		"Name":         "orders-to-lambda",
 		"Source":       "arn:aws:sqs:us-east-1:000000000000:orders",
@@ -715,11 +549,9 @@ func TestBuildTopology_pipeSQSToLambda(t *testing.T) {
 	})
 
 	// When: topology is built.
-	resp := buildTopology(&config.Config{Region: "us-east-1"}, map[string][]state.KV{
-		tNsQueues:    {{Key: "us-east-1/orders", Value: string(queuePayload)}},
-		tNsFunctions: {{Key: "us-east-1/process-orders", Value: string(functionPayload)}},
-		tNsPipes:     {{Key: "us-east-1/orders-to-lambda", Value: string(pipePayload)}},
-	}, "")
+	resp := buildTopology("us-east-1", map[string][]state.KV{
+		tNsPipes: {{Key: "us-east-1/orders-to-lambda", Value: string(pipePayload)}},
+	}, "", otherNode("us-east-1", "sqs", "orders"), otherNode("us-east-1", "lambda", "process-orders"))
 
 	// Then: a pipe edge links the queue node to the function node.
 	assertPipeEdge(t, resp,
@@ -740,10 +572,6 @@ func TestBuildTopology_pipeDynamoDBStreamToSQS(t *testing.T) {
 			"StreamViewType": "NEW_AND_OLD_IMAGES",
 		},
 	})
-	queuePayload, _ := json.Marshal(map[string]any{
-		"name": "event-fanout",
-		"arn":  "arn:aws:sqs:us-east-1:000000000000:event-fanout",
-	})
 	pipePayload, _ := json.Marshal(map[string]any{
 		"Name":         "events-to-queue",
 		"Source":       "arn:aws:dynamodb:us-east-1:000000000000:table/events/stream/2026-01-01T00:00:00.000",
@@ -752,11 +580,10 @@ func TestBuildTopology_pipeDynamoDBStreamToSQS(t *testing.T) {
 	})
 
 	// When: topology is built.
-	resp := buildTopology(&config.Config{Region: "us-east-1"}, map[string][]state.KV{
+	resp := buildTopology("us-east-1", map[string][]state.KV{
 		tNsTables: {{Key: "us-east-1/events", Value: string(tablePayload)}},
-		tNsQueues: {{Key: "us-east-1/event-fanout", Value: string(queuePayload)}},
 		tNsPipes:  {{Key: "us-east-1/events-to-queue", Value: string(pipePayload)}},
-	}, "")
+	}, "", otherNode("us-east-1", "sqs", "event-fanout"))
 
 	// Then: a pipe edge links the table node to the queue node, carrying the
 	// pipe's (non-RUNNING) state.
@@ -769,10 +596,6 @@ func TestBuildTopology_pipeDynamoDBStreamToSQS(t *testing.T) {
 
 func TestBuildTopology_pipeSQSToSNS(t *testing.T) {
 	// Given: an SQS queue, an SNS topic, and a pipe from the queue to the topic.
-	queuePayload, _ := json.Marshal(map[string]any{
-		"name": "inbound",
-		"arn":  "arn:aws:sqs:eu-west-1:000000000000:inbound",
-	})
 	topicPayload, _ := json.Marshal(map[string]any{
 		"name": "broadcast",
 		"arn":  "arn:aws:sns:eu-west-1:000000000000:broadcast",
@@ -786,11 +609,10 @@ func TestBuildTopology_pipeSQSToSNS(t *testing.T) {
 
 	// When: topology is built with a default region that differs from the
 	// resources' region, so endpoints must come from the ARNs.
-	resp := buildTopology(&config.Config{Region: "us-east-1"}, map[string][]state.KV{
-		tNsQueues: {{Key: "eu-west-1/inbound", Value: string(queuePayload)}},
+	resp := buildTopology("us-east-1", map[string][]state.KV{
 		tNsTopics: {{Key: "eu-west-1/broadcast", Value: string(topicPayload)}},
 		tNsPipes:  {{Key: "eu-west-1/inbound-to-broadcast", Value: string(pipePayload)}},
-	}, "")
+	}, "", otherNode("eu-west-1", "sqs", "inbound"))
 
 	// Then: a pipe edge links the queue node to the topic node in eu-west-1.
 	assertPipeEdge(t, resp,
@@ -807,10 +629,6 @@ func TestBuildTopology_pipeLegacyRecordWithoutARNs(t *testing.T) {
 		"TableName": "legacy-table",
 		"TableArn":  "arn:aws:dynamodb:us-east-1:000000000000:table/legacy-table",
 	})
-	queuePayload, _ := json.Marshal(map[string]any{
-		"name": "legacy-queue",
-		"arn":  "arn:aws:sqs:us-east-1:000000000000:legacy-queue",
-	})
 	pipePayload, _ := json.Marshal(map[string]any{
 		"Name":         "legacy-pipe",
 		"SourceName":   "legacy-table",
@@ -819,11 +637,10 @@ func TestBuildTopology_pipeLegacyRecordWithoutARNs(t *testing.T) {
 	})
 
 	// When: topology is built.
-	resp := buildTopology(&config.Config{Region: "us-east-1"}, map[string][]state.KV{
+	resp := buildTopology("us-east-1", map[string][]state.KV{
 		tNsTables: {{Key: "us-east-1/legacy-table", Value: string(tablePayload)}},
-		tNsQueues: {{Key: "us-east-1/legacy-queue", Value: string(queuePayload)}},
 		tNsPipes:  {{Key: "us-east-1/legacy-pipe", Value: string(pipePayload)}},
-	}, "")
+	}, "", otherNode("us-east-1", "sqs", "legacy-queue"))
 
 	// Then: the DynamoDB → SQS fallback still produces the edge.
 	assertPipeEdge(t, resp,
@@ -833,28 +650,40 @@ func TestBuildTopology_pipeLegacyRecordWithoutARNs(t *testing.T) {
 		"legacy-pipe", "RUNNING")
 }
 
-func TestBuildTopologyIncludesS3TablesBucketsAndTables(t *testing.T) {
-	// Given: a table bucket holding one table, as the s3tables service stores them.
-	bucket, _ := json.Marshal(map[string]any{"name": "lake"})
-	table, _ := json.Marshal(map[string]any{"name": "orders", "namespace": "sales", "bucket": "lake", "tableId": "t-1"})
+func TestBuildTopology_cloudFrontDistributionWithS3Origin(t *testing.T) {
+	// Given: a bucket, and a distribution fronting it stored under the
+	// region-scoped key the CloudFront store writes ("<region>/dist:<id>").
+	bucketPayload, _ := json.Marshal(map[string]any{"name": "site", "region": "us-west-2"})
+	distPayload, _ := json.Marshal(map[string]any{
+		"id":          "E1234567890ABC",
+		"status":      "Deployed",
+		"domain_name": "d111111abcdef8.cloudfront.net",
+		"distribution_config": map[string]any{
+			"comment": "website",
+			"origins": map[string]any{
+				"quantity": 1,
+				"items":    []map[string]any{{"id": "s3", "domain_name": "site.s3.amazonaws.com"}},
+			},
+		},
+	})
 
-	// When: topology is built from the S3 Tables namespaces.
-	resp := buildTopology(&config.Config{Region: "us-east-1"}, map[string][]state.KV{
-		"s3tables:buckets": {{Key: "eu-west-1/lake", Value: string(bucket)}},
-		"s3tables:tables":  {{Key: "eu-west-1/lake/sales/orders", Value: string(table)}},
+	// When: topology is built.
+	resp := buildTopology("us-east-1", map[string][]state.KV{
+		tNsBuckets:         {{Key: "site", Value: string(bucketPayload)}},
+		tNsCFDistributions: {{Key: "us-east-1/dist:E1234567890ABC", Value: string(distPayload)}},
 	}, "")
 
-	// Then: both appear in the bucket's region, joined table → bucket.
-	if len(resp.Nodes) != 2 || len(resp.Edges) != 1 {
-		t.Fatalf("nodes %#v, edges %#v", resp.Nodes, resp.Edges)
-	}
-	edge := resp.Edges[0]
-	if edge.Source != "eu-west-1::s3tables::lake/t-1" || edge.Target != "eu-west-1::s3tables::lake" {
-		t.Fatalf("unexpected edge %#v", edge)
-	}
-	for _, n := range resp.Nodes {
-		if n.Service != "s3tables" || n.Region != "eu-west-1" {
-			t.Fatalf("unexpected node %#v", n)
+	// Then: the distribution is a node, linked to the bucket in its own region.
+	var dist *topology.Node
+	for i := range resp.Nodes {
+		if resp.Nodes[i].ID == "us-east-1::cloudfront::E1234567890ABC" {
+			dist = &resp.Nodes[i]
 		}
+	}
+	if dist == nil || dist.Label != "website" || dist.OriginCount == nil || *dist.OriginCount != 1 {
+		t.Fatalf("expected a CloudFront node, got %+v", resp.Nodes)
+	}
+	if len(resp.Edges) != 1 || resp.Edges[0].Target != "us-west-2::s3::site" || resp.Edges[0].Type != "origin" {
+		t.Fatalf("expected an S3 origin edge to the bucket, got %+v", resp.Edges)
 	}
 }

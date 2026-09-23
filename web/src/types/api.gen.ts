@@ -603,7 +603,11 @@ export type AdvisorySeverity = "info" | "warning" | "critical"
  */
 export type DiagnosticProvenance = "aws-api" | "overcast-capture" | "overcast-inference"
 
-/** Generated from Go `router.topologyResponse` (internal/router/topology.go). */
+/**
+ * Response is the body of GET /_overcast/topology.
+ *
+ * Generated from Go `topology.Response` (internal/topology/types.go).
+ */
 export interface TopologyResponse {
   regions: string[]
   nodes: TopologyNode[]
@@ -611,11 +615,11 @@ export interface TopologyResponse {
 }
 
 /**
- * topologyNode is one node of GET /_overcast/topology's graph. The fields
+ * Node is one node of GET /_overcast/topology's graph. The fields
  * after Region are per-service details, each populated only for the services
  * named in its comment and omitted otherwise.
  *
- * Generated from Go `router.topologyNode` (internal/router/topology.go).
+ * Generated from Go `topology.Node` (internal/topology/types.go).
  */
 export interface TopologyNode {
   id: string
@@ -686,7 +690,11 @@ export interface TopologyNode {
   runningCount?: number
 }
 
-/** Generated from Go `router.topologyEdge` (internal/router/topology.go). */
+/**
+ * Edge is one connection of GET /_overcast/topology's graph.
+ *
+ * Generated from Go `topology.Edge` (internal/topology/types.go).
+ */
 export interface TopologyEdge {
   id: string
   source: string
@@ -699,12 +707,12 @@ export interface TopologyEdge {
 }
 
 /**
- * topologyECSResourceType says which kind of ECS resource a topology node is:
+ * ECSResourceType says which kind of ECS resource a topology node is:
  * one of the constants below. The Map page navigates differently for each
  * (a task node links to its task detail, a service node to its service), so
  * the values are a contract — cmd/tsgen renders them as the TypeScript union.
  *
- * Generated from Go `router.topologyECSResourceType` (internal/router/topology.go).
+ * Generated from Go `topology.ECSResourceType` (internal/topology/types.go).
  */
 export type TopologyECSResourceType = "cluster" | "service" | "task"
 

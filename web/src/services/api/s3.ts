@@ -37,6 +37,16 @@ import type {
   S3LifecycleRule,
 } from "@/types"
 
+/**
+ * How much of an object a text preview reads — one ranged GET for the opening
+ * window. Parquet previews read by range too, but by the file's own structure
+ * rather than against this cap.
+ */
+export const OBJECT_PREVIEW_BYTES = 1024 * 1024
+
+/** `OBJECT_PREVIEW_BYTES` as the preview labels say it. */
+export const OBJECT_PREVIEW_WINDOW = `${OBJECT_PREVIEW_BYTES / (1024 * 1024)} MiB`
+
 /** Base path of one bucket's object routes on the BFF. */
 const objectsPath = (bucket: string) =>
   `${API_BASE}/s3/buckets/${encodeURIComponent(bucket)}/objects`
@@ -375,7 +385,7 @@ export const s3 = {
     bucket: string,
     key: string,
     versionId?: string,
-    limitBytes = 1024 * 1024,
+    limitBytes = OBJECT_PREVIEW_BYTES,
   ): Promise<{ text: string; truncated: boolean }> => {
     const res = await fetch(s3.getObjectDownloadUrl(bucket, key, versionId), {
       headers: { Range: `bytes=0-${limitBytes - 1}` },

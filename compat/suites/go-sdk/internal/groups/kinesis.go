@@ -17,28 +17,19 @@ func Kinesis(c *clients.Clients) ServiceGroup {
 	g := &kinesisGroup{c: c}
 	return ServiceGroup{
 		Impls: map[string]harness.TestFn{
-			"kinesis-streams:CreateStream":          g.CreateStream,
-			"kinesis-streams:DescribeStream":        g.DescribeStream,
-			"kinesis-streams:DescribeStreamSummary": g.DescribeStreamSummary,
-			"kinesis-streams:ListStreams":           g.ListStreams,
-			"kinesis-streams:AddTagsToStream":       g.AddTagsToStream,
-			"kinesis-streams:ListTagsForStream":     g.ListTagsForStream,
-			"kinesis-streams:DeleteStream":          g.DeleteStream,
-			"kinesis-records:PutRecord":             g.PutRecord,
-			"kinesis-records:PutRecords":            g.PutRecords,
-			"kinesis-records:GetShardIterator":      g.GetShardIterator,
-			"kinesis-records:GetRecords":            g.GetRecords,
-			"kinesis-shards:ListShards":             g.ListShards,
-			"kinesis-shards:SplitShard":             g.SplitShard,
-			"kinesis-shards:MergeShards":            g.MergeShards,
+			"kinesis-records:PutRecord":        g.PutRecord,
+			"kinesis-records:PutRecords":       g.PutRecords,
+			"kinesis-records:GetShardIterator": g.GetShardIterator,
+			"kinesis-records:GetRecords":       g.GetRecords,
+			"kinesis-shards:ListShards":        g.ListShards,
+			"kinesis-shards:SplitShard":        g.SplitShard,
+			"kinesis-shards:MergeShards":       g.MergeShards,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"kinesis-streams": g.setupStreams,
 			"kinesis-records": g.setupRecords,
 			"kinesis-shards":  g.setupShards,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"kinesis-streams": g.teardownStreams,
 			"kinesis-records": g.teardownRecords,
 			"kinesis-shards":  g.teardownShards,
 		},
@@ -64,181 +55,6 @@ func (g *kinesisGroup) waitStreamActive(ctx context.Context, streamName string) 
 		time.Sleep(500 * time.Millisecond)
 	}
 	return fmt.Errorf("stream %q did not become ACTIVE within timeout", streamName)
-}
-
-// ── kinesis-streams ───────────────────────────────────────────────────────────
-
-func (g *kinesisGroup) setupStreams(ctx context.Context, t *harness.TestContext) error {
-	name := fmt.Sprintf("oc-stream-%s", t.RunID)
-	if _, err := g.cl().CreateStream(ctx, &kinesis.CreateStreamInput{
-		StreamName: aws.String(name),
-		ShardCount: aws.Int32(1),
-	}); err != nil {
-		return err
-	}
-	if err := g.waitStreamActive(ctx, name); err != nil {
-		return err
-	}
-	t.Set("kinesis_stream", name)
-	return nil
-}
-
-func (g *kinesisGroup) teardownStreams(ctx context.Context, t *harness.TestContext) error {
-	if name := t.GetString("kinesis_stream"); name != "" {
-		g.cl().DeleteStream(ctx, &kinesis.DeleteStreamInput{StreamName: aws.String(name)}) //nolint:errcheck
-	}
-	return nil
-}
-
-func (g *kinesisGroup) CreateStream(ctx context.Context, t *harness.TestContext) error {
-	name := fmt.Sprintf("oc-cs-%s", t.RunID)
-	_, err := g.cl().CreateStream(ctx, &kinesis.CreateStreamInput{
-		StreamName: aws.String(name),
-		ShardCount: aws.Int32(1),
-	})
-	if err != nil {
-		return err
-	}
-	g.waitStreamActive(ctx, name) //nolint:errcheck
-	// Verify stream appears in ListStreams
-	list, lErr := g.cl().ListStreams(ctx, &kinesis.ListStreamsInput{})
-	if lErr != nil {
-		g.cl().DeleteStream(ctx, &kinesis.DeleteStreamInput{StreamName: aws.String(name)}) //nolint:errcheck
-		return fmt.Errorf("CreateStream: ListStreams verify failed: %w", lErr)
-	}
-	found := false
-	for _, sn := range list.StreamNames {
-		if sn == name {
-			found = true
-			break
-		}
-	}
-	g.cl().DeleteStream(ctx, &kinesis.DeleteStreamInput{StreamName: aws.String(name)}) //nolint:errcheck
-	if !found {
-		return fmt.Errorf("CreateStream: stream %q not found in ListStreams", name)
-	}
-	return nil
-}
-
-func (g *kinesisGroup) DescribeStream(ctx context.Context, t *harness.TestContext) error {
-	resp, err := g.cl().DescribeStream(ctx, &kinesis.DescribeStreamInput{
-		StreamName: aws.String(t.GetString("kinesis_stream")),
-	})
-	if err != nil {
-		return err
-	}
-	if resp.StreamDescription == nil {
-		return fmt.Errorf("DescribeStream: nil description")
-	}
-	return nil
-}
-
-func (g *kinesisGroup) DescribeStreamSummary(ctx context.Context, t *harness.TestContext) error {
-	resp, err := g.cl().DescribeStreamSummary(ctx, &kinesis.DescribeStreamSummaryInput{
-		StreamName: aws.String(t.GetString("kinesis_stream")),
-	})
-	if err != nil {
-		return err
-	}
-	if resp.StreamDescriptionSummary == nil || aws.ToString(resp.StreamDescriptionSummary.StreamName) == "" {
-		return fmt.Errorf("DescribeStreamSummary: missing stream name in response")
-	}
-	return nil
-}
-
-func (g *kinesisGroup) ListStreams(ctx context.Context, t *harness.TestContext) error {
-	resp, err := g.cl().ListStreams(ctx, &kinesis.ListStreamsInput{})
-	if err != nil {
-		return err
-	}
-	found := false
-	for _, s := range resp.StreamNames {
-		if s == t.GetString("kinesis_stream") {
-			found = true
-			break
-		}
-	}
-	if !found {
-		return fmt.Errorf("ListStreams: stream %q not found", t.GetString("kinesis_stream"))
-	}
-	return nil
-}
-
-func (g *kinesisGroup) AddTagsToStream(ctx context.Context, t *harness.TestContext) error {
-	_, err := g.cl().AddTagsToStream(ctx, &kinesis.AddTagsToStreamInput{
-		StreamName: aws.String(t.GetString("kinesis_stream")),
-		Tags:       map[string]string{"env": "test"},
-	})
-	if err != nil {
-		return err
-	}
-	resp, err := g.cl().ListTagsForStream(ctx, &kinesis.ListTagsForStreamInput{
-		StreamName: aws.String(t.GetString("kinesis_stream")),
-	})
-	if err != nil {
-		return fmt.Errorf("AddTagsToStream: ListTagsForStream verify failed: %w", err)
-	}
-	for _, tag := range resp.Tags {
-		if aws.ToString(tag.Key) == "env" && aws.ToString(tag.Value) == "test" {
-			return nil
-		}
-	}
-	return fmt.Errorf("AddTagsToStream: env=test tag not found")
-}
-
-func (g *kinesisGroup) ListTagsForStream(ctx context.Context, t *harness.TestContext) error {
-	resp, err := g.cl().ListTagsForStream(ctx, &kinesis.ListTagsForStreamInput{
-		StreamName: aws.String(t.GetString("kinesis_stream")),
-	})
-	if err != nil {
-		return err
-	}
-	if len(resp.Tags) == 0 {
-		return fmt.Errorf("ListTagsForStream: expected ≥1 tag")
-	}
-	return nil
-}
-
-func (g *kinesisGroup) RemoveTagsFromStream(ctx context.Context, t *harness.TestContext) error {
-	_, err := g.cl().RemoveTagsFromStream(ctx, &kinesis.RemoveTagsFromStreamInput{
-		StreamName: aws.String(t.GetString("kinesis_stream")),
-		TagKeys:    []string{"env"},
-	})
-	if err != nil {
-		return err
-	}
-	resp, err := g.cl().ListTagsForStream(ctx, &kinesis.ListTagsForStreamInput{
-		StreamName: aws.String(t.GetString("kinesis_stream")),
-	})
-	if err != nil {
-		return fmt.Errorf("RemoveTagsFromStream: ListTagsForStream verify failed: %w", err)
-	}
-	for _, tag := range resp.Tags {
-		if aws.ToString(tag.Key) == "env" {
-			return fmt.Errorf("RemoveTagsFromStream: env tag still present")
-		}
-	}
-	return nil
-}
-
-func (g *kinesisGroup) DeleteStream(ctx context.Context, t *harness.TestContext) error {
-	name := fmt.Sprintf("oc-ds-%s", t.RunID)
-	g.cl().CreateStream(ctx, &kinesis.CreateStreamInput{StreamName: aws.String(name), ShardCount: aws.Int32(1)}) //nolint:errcheck
-	g.waitStreamActive(ctx, name)                                                                                //nolint:errcheck
-	_, err := g.cl().DeleteStream(ctx, &kinesis.DeleteStreamInput{StreamName: aws.String(name)})
-	if err != nil {
-		return err
-	}
-	list, lErr := g.cl().ListStreams(ctx, &kinesis.ListStreamsInput{})
-	if lErr != nil {
-		return nil
-	}
-	for _, sn := range list.StreamNames {
-		if sn == name {
-			return fmt.Errorf("DeleteStream: stream %q still present", name)
-		}
-	}
-	return nil
 }
 
 // ── kinesis-records ───────────────────────────────────────────────────────────

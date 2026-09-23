@@ -35,6 +35,10 @@ func wsConnectWithHeaders(t *testing.T, srv *helpers.TestServer, apiID string, h
 	return conn, ctx
 }
 
+// firstAPIKey returns an existing API key for apiID, creating one if none
+// exists yet. CreateGraphqlApi does not auto-create a key as a side effect
+// (#62), so fixtures that need one for x-api-key auth create it explicitly,
+// same as a real client would.
 func firstAPIKey(t *testing.T, srv *helpers.TestServer, apiID string) string {
 	t.Helper()
 	resp := appsyncGet(t, srv, "/v1/apis/"+apiID+"/apikeys")
@@ -46,10 +50,23 @@ func firstAPIKey(t *testing.T, srv *helpers.TestServer, apiID string) string {
 		} `json:"apiKeys"`
 	}
 	helpers.DecodeJSON(t, resp, &result)
-	if len(result.ApiKeys) == 0 {
-		t.Fatal("expected at least one API key")
+	if len(result.ApiKeys) > 0 {
+		return result.ApiKeys[0].Id
 	}
-	return result.ApiKeys[0].Id
+
+	createResp := appsyncPost(t, srv, "/v1/apis/"+apiID+"/apikeys", map[string]any{})
+	defer createResp.Body.Close()
+	helpers.AssertStatus(t, createResp, http.StatusOK)
+	var created struct {
+		ApiKey struct {
+			Id string `json:"id"`
+		} `json:"apiKey"`
+	}
+	helpers.DecodeJSON(t, createResp, &created)
+	if created.ApiKey.Id == "" {
+		t.Fatal("expected CreateApiKey to return an id")
+	}
+	return created.ApiKey.Id
 }
 
 // wsWrite sends a JSON message over the WebSocket.

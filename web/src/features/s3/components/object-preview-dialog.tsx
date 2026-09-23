@@ -2,7 +2,7 @@ import { useMemo, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Download } from "lucide-react"
 import { s3ObjectHistoryQueryOptions, s3ObjectPreviewQueryOptions } from "@/features/s3/data"
-import { s3 } from "@/services/api"
+import { OBJECT_PREVIEW_WINDOW, s3 } from "@/services/api"
 import { useEndpoint } from "@/hooks/use-endpoint"
 import { Button } from "@/components/ui/button"
 import { CopyUrlButton } from "@/components/ui/copy-url-button"
@@ -15,14 +15,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { HighlightedCode } from "@/components/ui/highlighted-code"
 import { Tab, TabList, TabPanel, Tabs } from "@/components/ui/tabs"
-import { Spinner, CodeBlock } from "@/components/ui/primitives"
+import { CodeBlock } from "@/components/ui/primitives"
+import { SkeletonRows } from "@/components/ui/skeleton"
 import { ObjectRevisionBar, ObjectVersionList } from "./object-version-list"
-import { cn } from "@/lib/utils"
 import { formatBytes, formatDate } from "@/lib/format"
+import { cn } from "@/lib/utils"
 import { describeObjectReadError } from "@/features/s3/object-read-error"
+import { dataPreviewKind, isTextDataKind } from "@/features/s3/preview-kind"
 import { formatPreviewText, isImagePreviewable, isTextPreviewable } from "./object-preview-format"
+import {
+  AvroNotice,
+  ParquetObjectPreview,
+  PreviewPanel,
+  PreviewSkeleton,
+  RawText,
+  TabularTextPreview,
+} from "./data-preview"
+import { IcebergMetadataSummary } from "./iceberg-metadata-summary"
 
 interface ObjectMetadata {
   contentType: string
@@ -106,11 +116,20 @@ export function ObjectPreviewDialog({
   })
   const previewUrl = objectKey ? s3.getObjectDownloadUrl(bucket, objectKey, versionId) : undefined
   const canPreviewImage = !!metadata && isImagePreviewable(metadata.contentType)
+  // CSV, Parquet, Iceberg metadata… — the formats that get more than the
+  // plain-text treatment. Decided by content type and key, before any byte
+  // is fetched, because Parquet is read by range and never as text.
+  const dataKind = objectKey && metadata ? dataPreviewKind(metadata.contentType, objectKey) : null
+  const tabular =
+    dataKind === "csv" || dataKind === "tsv" || dataKind === "jsonl" || dataKind === "parquet"
   // No size gate: getObjectText fetches at most the first 1 MiB by Range, so
   // a text-like object of any size previews — its opening window, labelled as
   // such when the object holds more.
   const canPreviewText =
-    !!objectKey && !!metadata && isTextPreviewable(metadata.contentType, objectKey)
+    !!objectKey &&
+    !!metadata &&
+    (isTextDataKind(dataKind) ||
+      (dataKind === null && isTextPreviewable(metadata.contentType, objectKey)))
   const { data: previewText, isLoading: previewLoading } = useQuery({
     ...s3ObjectPreviewQueryOptions(bucket, objectKey ?? "", versionId),
     enabled: canPreviewText && !!previewUrl,
@@ -123,10 +142,50 @@ export function ObjectPreviewDialog({
     [metadata, objectKey, previewText],
   )
 
+  const textPreview = (() => {
+    if (!canPreviewText) return null
+    if (previewLoading || !previewText) {
+      return (
+        <PreviewPanel meta="loading">
+          <PreviewSkeleton />
+        </PreviewPanel>
+      )
+    }
+    if (dataKind === "csv" || dataKind === "tsv" || dataKind === "jsonl") {
+      // Keyed on the object so a new one opens on its table, whichever view
+      // the last one was left on.
+      return (
+        <TabularTextPreview
+          key={`${objectKey}?versionId=${versionId ?? ""}`}
+          kind={dataKind}
+          text={previewText.text}
+          truncated={previewText.truncated}
+          objectBytes={metadata.contentLength}
+        />
+      )
+    }
+    const notes = [
+      previewText.truncated && `first ${OBJECT_PREVIEW_WINDOW}`,
+      formattedPreview?.skipped && "shown as plain text; too large to format",
+    ].filter(Boolean)
+    return (
+      <>
+        {dataKind === "iceberg-metadata" && <IcebergMetadataSummary text={previewText.text} />}
+        <PreviewPanel
+          // Under the Iceberg summary this is the file itself, and says so.
+          meta={[dataKind === "iceberg-metadata" ? "Raw JSON" : "Preview", ...notes].join(" · ")}
+        >
+          <RawText
+            text={formattedPreview?.text ?? ""}
+            language={formattedPreview?.language ?? null}
+          />
+        </PreviewPanel>
+      </>
+    )
+  })()
+
   const details = loading ? (
-    <div className="flex justify-center py-8">
-      <Spinner />
-    </div>
+    <SkeletonRows rows={4} noun="object details" />
   ) : error ? (
     <div
       role="alert"
@@ -161,39 +220,21 @@ export function ObjectPreviewDialog({
           />
         </div>
       )}
-      {canPreviewText && (
-        <div className="min-h-0 overflow-hidden rounded-lg border border-border bg-bg-muted">
-          <div className="border-b border-border px-3 py-2 text-xs font-medium text-fg-muted">
-            Preview{previewText?.truncated ? " (first 1 MiB)" : ""}
-            {formattedPreview?.skipped ? " — shown as plain text; too large to format" : ""}
-          </div>
-          {previewLoading ? (
-            <div className="flex justify-center py-8">
-              <Spinner />
-            </div>
-          ) : (
-            <HighlightedCode
-              text={formattedPreview?.text ?? ""}
-              language={formattedPreview?.language ?? null}
-              className={cn(
-                "max-h-[55vh] overflow-auto p-3 font-mono text-xs leading-relaxed text-fg",
-                // Policy, not accident (kept from the dialog's first
-                // commit): a document we chose a language for is code —
-                // it keeps its line shape and scrolls horizontally —
-                // while arbitrary plain text wraps. The skipped case
-                // (a 1 MiB minified bundle) lands in the wrapped branch,
-                // where it would otherwise be one mile-wide line.
-                formattedPreview?.language != null
-                  ? "whitespace-pre"
-                  : "wrap-break-word whitespace-pre-wrap",
-              )}
-            />
-          )}
-        </div>
+      {textPreview}
+      {previewUrl && objectKey && dataKind === "parquet" && (
+        <ParquetObjectPreview
+          key={`${objectKey}?versionId=${versionId ?? ""}`}
+          bucket={bucket}
+          objectKey={objectKey}
+          versionId={versionId}
+          size={metadata.contentLength}
+          downloadHref={previewUrl}
+        />
       )}
-      {objectKey && !canPreviewImage && !canPreviewText && (
+      {previewUrl && dataKind === "avro" && <AvroNotice downloadHref={previewUrl} />}
+      {objectKey && !canPreviewImage && !canPreviewText && dataKind === null && (
         <div className="rounded-lg border border-border bg-bg-muted px-3 py-2 text-sm text-fg-muted">
-          Preview is available for common image files and text-like objects.
+          Preview is available for images, text, CSV, TSV, JSON Lines and Parquet files.
         </div>
       )}
       {Object.keys(metadata.metadata).length > 0 && (
@@ -207,7 +248,15 @@ export function ObjectPreviewDialog({
 
   return (
     <Dialog open={!!objectKey} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[90vh] max-w-4xl overflow-hidden">
+      <DialogContent
+        className={cn(
+          "max-h-[90vh] max-w-4xl overflow-hidden",
+          // A table of a data file is the one preview that uses the width:
+          // up to 72rem, and never closer than 1/24 of the viewport to
+          // either edge, so it still floats at 1024 px.
+          tabular && "w-11/12 max-w-6xl",
+        )}
+      >
         <DialogHeader>
           <DialogTitle
             className="flex items-center gap-2 truncate font-mono text-sm"

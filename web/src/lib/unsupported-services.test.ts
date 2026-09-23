@@ -28,20 +28,6 @@ function backendTiers(): Map<string, string> {
   )
 }
 
-/**
- * Services the backend implements at inert or above that the catalogue still
- * lists as unsupported. The same mislabel as #2062, outside that issue's
- * scope. This set may only shrink: remove a name when its entry is removed.
- */
-const KNOWN_MISLABELLED = new Set([
-  "acm",
-  "backup",
-  "cloudtrail",
-  "organizations",
-  "route53",
-  "transfer",
-])
-
 describe("unsupported-services CATALOG", () => {
   const tiers = backendTiers()
 
@@ -51,8 +37,19 @@ describe("unsupported-services CATALOG", () => {
     expect(tiers.get("shield")).toBe("stub")
   })
 
-  // #2062
-  it.each(["athena", "glue", "firehose", "opensearch"])(
+  // #2062, #2081
+  it.each([
+    "athena",
+    "glue",
+    "firehose",
+    "opensearch",
+    "acm",
+    "backup",
+    "cloudtrail",
+    "organizations",
+    "route53",
+    "transfer",
+  ])(
     "does not list %s, which the backend emulates",
     (id) => {
       expect(["stub", "unsupported", undefined]).not.toContain(tiers.get(id))
@@ -66,21 +63,18 @@ describe("unsupported-services CATALOG", () => {
       return tier !== undefined && tier !== "stub" && tier !== "unsupported"
     }).map((entry) => entry.id)
 
-    expect(implemented.filter((id) => !KNOWN_MISLABELLED.has(id))).toEqual([])
+    expect(implemented).toEqual([])
   })
 
-  it("keeps the known-mislabelled list honest", () => {
-    // A name that no longer needs excusing must leave the list, so it cannot
-    // quietly cover a regression later.
-    const stale = [...KNOWN_MISLABELLED].filter((id) => {
-      const tier = tiers.get(id)
-      return (
-        CATALOG_BY_ID[id] === undefined ||
-        tier === undefined ||
-        tier === "stub" ||
-        tier === "unsupported"
-      )
-    })
-    expect(stale).toEqual([])
+  // #2081: bedrock was a backend stub catalogued as "unsupported". The two
+  // render differently (a "Stub" chip, and a placeholder that says which
+  // operations answer), so the catalogue must say which one the backend is.
+  it("marks each entry stub exactly when the backend registers it as a stub", () => {
+    const mismatched = CATALOG.filter(
+      (entry) => entry.tier !== (tiers.get(entry.id) === "stub" ? "stub" : "unsupported"),
+    ).map((entry) => `${entry.id}: catalogue ${entry.tier}, backend ${tiers.get(entry.id)}`)
+
+    expect(mismatched).toEqual([])
+    expect(CATALOG_BY_ID.bedrock?.tier).toBe("stub")
   })
 })

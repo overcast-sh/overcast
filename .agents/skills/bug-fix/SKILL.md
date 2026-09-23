@@ -314,7 +314,7 @@ Documentation MUST stay in sync with behaviour. Skipping this creates drift that
 Web UI must not be an afterthought. A bug fix may affect it:
 
 - **Does the fix change response shapes?** If the UI renders fields that changed format, casing, or structure, update the corresponding components in `web/src/features/<service>/` and query options in `data.ts`.
-- **Does the fix change resource lifecycle?** If create/delete timings or state transitions changed, update topology nodes in `internal/router/topology.go` and SSE cache invalidation in `web/src/hooks/use-event-stream.ts`.
+- **Does the fix change resource lifecycle?** If create/delete timings or state transitions changed, update the service's topology contributor (`internal/services/<svc>/topology.go`, or `internal/router/topology.go`'s legacy contributor for a service not yet migrated) and SSE cache invalidation in `web/src/hooks/use-event-stream.ts`.
 - **Does the fix affect a service's home screen?** Every service list page must include `ServiceDocsButton` in its `PageHeader` actions. Confirm the page is not broken.
 - **Does the fix affect global search?** If resource identifiers or fetch logic changed, update the search contributor in `web/src/lib/search-contributors/<service>.ts`.
 - Run `pnpm run typecheck` in `web/` to confirm no TypeScript regressions.

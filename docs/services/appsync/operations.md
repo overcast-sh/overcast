@@ -134,13 +134,13 @@ All 81 listed operations are implemented. Back to [AppSync](../appsync.md).
 
 ### API Cache
 
-| Operation        | Status       | Notes                                     | AWS Docs                                                                                |
-| ---------------- | ------------ | ----------------------------------------- | --------------------------------------------------------------------------------------- |
-| `CreateApiCache` | ✅ Supported | Config stored; no actual caching enforced | [docs](https://docs.aws.amazon.com/appsync/latest/APIReference/API_CreateApiCache.html) |
-| `GetApiCache`    | ✅ Supported |                                           | [docs](https://docs.aws.amazon.com/appsync/latest/APIReference/API_GetApiCache.html)    |
-| `UpdateApiCache` | ✅ Supported |                                           | [docs](https://docs.aws.amazon.com/appsync/latest/APIReference/API_UpdateApiCache.html) |
-| `DeleteApiCache` | ✅ Supported |                                           | [docs](https://docs.aws.amazon.com/appsync/latest/APIReference/API_DeleteApiCache.html) |
-| `FlushApiCache`  | ✅ Supported |                                           | [docs](https://docs.aws.amazon.com/appsync/latest/APIReference/API_FlushApiCache.html)  |
+| Operation        | Status       | Notes                                                                               | AWS Docs                                                                                |
+| ---------------- | ------------ | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `CreateApiCache` | ✅ Supported | Config stored; no actual caching enforced                                           | [docs](https://docs.aws.amazon.com/appsync/latest/APIReference/API_CreateApiCache.html) |
+| `GetApiCache`    | ✅ Supported |                                                                                     | [docs](https://docs.aws.amazon.com/appsync/latest/APIReference/API_GetApiCache.html)    |
+| `UpdateApiCache` | ✅ Supported |                                                                                     | [docs](https://docs.aws.amazon.com/appsync/latest/APIReference/API_UpdateApiCache.html) |
+| `DeleteApiCache` | ✅ Supported |                                                                                     | [docs](https://docs.aws.amazon.com/appsync/latest/APIReference/API_DeleteApiCache.html) |
+| `FlushApiCache`  | ✅ Supported | No-op: there is no real cache to flush, matching CreateApiCache storing config only | [docs](https://docs.aws.amazon.com/appsync/latest/APIReference/API_FlushApiCache.html)  |
 
 ### Types
 
@@ -154,15 +154,15 @@ All 81 listed operations are implemented. Back to [AppSync](../appsync.md).
 
 ### Merged APIs
 
-| Operation                      | Status       | Notes | AWS Docs                                                                                              |
-| ------------------------------ | ------------ | ----- | ----------------------------------------------------------------------------------------------------- |
-| `AssociateSourceGraphqlApi`    | ✅ Supported |       | [docs](https://docs.aws.amazon.com/appsync/latest/APIReference/API_AssociateSourceGraphqlApi.html)    |
-| `AssociateMergedGraphqlApi`    | ✅ Supported |       | [docs](https://docs.aws.amazon.com/appsync/latest/APIReference/API_AssociateMergedGraphqlApi.html)    |
-| `GetSourceApiAssociation`      | ✅ Supported |       | [docs](https://docs.aws.amazon.com/appsync/latest/APIReference/API_GetSourceApiAssociation.html)      |
-| `ListSourceApiAssociations`    | ✅ Supported |       | [docs](https://docs.aws.amazon.com/appsync/latest/APIReference/API_ListSourceApiAssociations.html)    |
-| `DisassociateSourceGraphqlApi` | ✅ Supported |       | [docs](https://docs.aws.amazon.com/appsync/latest/APIReference/API_DisassociateSourceGraphqlApi.html) |
-| `DisassociateMergedGraphqlApi` | ✅ Supported |       | [docs](https://docs.aws.amazon.com/appsync/latest/APIReference/API_DisassociateMergedGraphqlApi.html) |
-| `StartSchemaMerge`             | ✅ Supported |       | [docs](https://docs.aws.amazon.com/appsync/latest/APIReference/API_StartSchemaMerge.html)             |
+| Operation                      | Status       | Notes                                                                                                                                                                                                                                                                                                                                                                      | AWS Docs                                                                                              |
+| ------------------------------ | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `AssociateSourceGraphqlApi`    | ✅ Supported | Merges source API schema SDL into the merged API by textual concatenation (schema_parser.go's Merge); resolvers and data sources are not copied or proxied from the source API, so a merged field needs its own resolver/data source defined directly on the merged API to execute. Real AWS AUTO_MERGE additionally carries resolvers and data sources over automatically | [docs](https://docs.aws.amazon.com/appsync/latest/APIReference/API_AssociateSourceGraphqlApi.html)    |
+| `AssociateMergedGraphqlApi`    | ✅ Supported | Same schema-only merge as AssociateSourceGraphqlApi                                                                                                                                                                                                                                                                                                                        | [docs](https://docs.aws.amazon.com/appsync/latest/APIReference/API_AssociateMergedGraphqlApi.html)    |
+| `GetSourceApiAssociation`      | ✅ Supported |                                                                                                                                                                                                                                                                                                                                                                            | [docs](https://docs.aws.amazon.com/appsync/latest/APIReference/API_GetSourceApiAssociation.html)      |
+| `ListSourceApiAssociations`    | ✅ Supported |                                                                                                                                                                                                                                                                                                                                                                            | [docs](https://docs.aws.amazon.com/appsync/latest/APIReference/API_ListSourceApiAssociations.html)    |
+| `DisassociateSourceGraphqlApi` | ✅ Supported |                                                                                                                                                                                                                                                                                                                                                                            | [docs](https://docs.aws.amazon.com/appsync/latest/APIReference/API_DisassociateSourceGraphqlApi.html) |
+| `DisassociateMergedGraphqlApi` | ✅ Supported |                                                                                                                                                                                                                                                                                                                                                                            | [docs](https://docs.aws.amazon.com/appsync/latest/APIReference/API_DisassociateMergedGraphqlApi.html) |
+| `StartSchemaMerge`             | ✅ Supported | Re-runs the same schema-only merge as AssociateSourceGraphqlApi                                                                                                                                                                                                                                                                                                            | [docs](https://docs.aws.amazon.com/appsync/latest/APIReference/API_StartSchemaMerge.html)             |
 
 ### Events API
 

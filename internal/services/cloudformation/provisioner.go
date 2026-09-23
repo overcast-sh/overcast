@@ -5677,9 +5677,17 @@ func (h *iamRoleHandler) Update(ctx context.Context, router http.Handler, _ *con
 	}
 	mutations := make([]iamMutation, 0)
 	// AssumeRolePolicyDocument is the most commonly changed property in dev.
-	if ap, ok := props["AssumeRolePolicyDocument"]; ok && ap != nil && iamJSONPropertyChanged(props, oldProps, "AssumeRolePolicyDocument") {
-		document, _ := json.Marshal(ap)
-		oldDocument, _ := json.Marshal(oldProps["AssumeRolePolicyDocument"])
+	// Rendered through policyDocumentJSON, the same renderer Create uses: the
+	// property is CloudFormation's `Json` type, which allows a JSON string as
+	// well as an object, and json.Marshal-ing a string form a second time
+	// double-encodes it into a quoted string IAM now refuses outright as
+	// MalformedPolicyDocument (#1982). Comparing the normalised form here too
+	// means a template that rewrites the same policy from one form to the
+	// other is not treated as a change.
+	if ap, ok := props["AssumeRolePolicyDocument"]; ok && ap != nil &&
+		iamPolicyDocumentPropertyChanged(props, oldProps, "AssumeRolePolicyDocument") {
+		document := policyDocumentJSON(ap)
+		oldDocument := policyDocumentJSON(oldProps["AssumeRolePolicyDocument"])
 		mutations = append(mutations, iamMutation{
 			action: "UpdateAssumeRolePolicy", params: map[string]string{"RoleName": name, "PolicyDocument": string(document)},
 			undoAction: "UpdateAssumeRolePolicy", undoParams: map[string]string{"RoleName": name, "PolicyDocument": string(oldDocument)},

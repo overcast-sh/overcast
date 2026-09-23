@@ -544,6 +544,22 @@ func TestCreateStack_resourcesWithoutNames_areNamedByCloudFormation(t *testing.T
         "VisibilityConfig": {"CloudWatchMetricsEnabled": false, "MetricName": "m",
           "SampledRequestsEnabled": false}}}`,
 		},
+		{
+			// #1976 — DomainName is optional; the handler used to forward the
+			// empty string, and CreateDomain rejected it as required.
+			name:      "AWS::OpenSearchService::Domain",
+			logicalID: "Domain",
+			properties: `{
+        "Type": "AWS::OpenSearchService::Domain",
+        "Properties": {}
+      }`,
+			constraint: &nameConstraint{
+				nameOf: func(id string) string { return afterLast(id, "/") },
+				// DomainName: 3-28 characters, lowercase, starting with a
+				// letter (opensearch/service.go's domainNamePatternSource).
+				maxLen: 28, charset: `^[a-z][a-z0-9-]+$`,
+			},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			srv := helpers.NewTestServer(t)

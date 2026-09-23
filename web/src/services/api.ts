@@ -12,7 +12,7 @@
  * and re-exported here for backward compatibility.
  */
 
-export { s3 } from "./api/s3"
+export { s3, OBJECT_PREVIEW_WINDOW } from "./api/s3"
 export { sqs } from "./api/sqs"
 export { sns } from "./api/sns"
 export { dynamodb } from "./api/dynamodb"

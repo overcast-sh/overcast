@@ -3,120 +3,94 @@ package router
 // topology.go — internal topology API for the system map.
 //
 // GET /_overcast/topology — returns every resource and connection across all regions
-// in a single, fast response. Reads directly from the state store with
-// parallel Scan calls, avoiding the overhead of marshalling AWS SDK requests
-// back into our own process.
+// in a single, fast response.
 //
 // Optional query parameter:
 //   ?region=us-east-1   — return only resources whose region matches.
 //                         Omit to get all resources across all regions.
+//
+// Services that implement topology.Contributor put their own resources on the
+// map (see internal/topology). legacyTopology covers the services not yet
+// migrated to a contributor, reading their state directly from the store; it
+// shrinks as each service moves (#2090).
 
 import (
+	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
 	"sync"
 
+	"go.uber.org/zap"
+
 	"github.com/overcast-sh/overcast/internal/config"
 	"github.com/overcast-sh/overcast/internal/serviceutil"
 	"github.com/overcast-sh/overcast/internal/state"
+	"github.com/overcast-sh/overcast/internal/topology"
 )
 
-// ── Types ──────────────────────────────────────────────────────────────────
+// ── Handler ────────────────────────────────────────────────────────────────
 
-// topologyECSResourceType says which kind of ECS resource a topology node is:
-// one of the constants below. The Map page navigates differently for each
-// (a task node links to its task detail, a service node to its service), so
-// the values are a contract — cmd/tsgen renders them as the TypeScript union.
-type topologyECSResourceType = string
+// newTopologyHandler runs every contributor concurrently, each into its own
+// graph, and merges the graphs in contributor order. A contributor that fails
+// is logged and left off the map rather than failing the whole response.
+func newTopologyHandler(cfg *config.Config, store state.Store, contributors []topology.Contributor, logger *zap.Logger) http.HandlerFunc {
+	contributors = append([]topology.Contributor{legacyTopology{cfg: cfg, store: store}}, contributors...)
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		graphs := make([]*topology.Graph, len(contributors))
+		var wg sync.WaitGroup
+		for i, c := range contributors {
+			wg.Go(func() {
+				g := &topology.Graph{}
+				if err := c.ContributeTopology(ctx, g); err != nil {
+					logger.Warn("topology contributor failed", zap.String("contributor", contributorName(c)), zap.Error(err))
+					return
+				}
+				graphs[i] = g
+			})
+		}
+		wg.Wait()
 
-const (
-	topologyECSCluster topologyECSResourceType = "cluster"
-	topologyECSService topologyECSResourceType = "service"
-	topologyECSTask    topologyECSResourceType = "task"
-)
+		kept := graphs[:0]
+		for _, g := range graphs {
+			if g != nil {
+				kept = append(kept, g)
+			}
+		}
+		resp := topology.Build(r.URL.Query().Get("region"), kept...) // "" = all regions
 
-// topologyNode is one node of GET /_overcast/topology's graph. The fields
-// after Region are per-service details, each populated only for the services
-// named in its comment and omitted otherwise.
-type topologyNode struct {
-	ID      string `json:"id"`
-	Service string `json:"service"`
-	Label   string `json:"label"`
-	Region  string `json:"region"`
-
-	StreamEnabled                         *bool    `json:"streamEnabled,omitempty"`                         // DynamoDB only — whether the table has a stream
-	ApproximateNumberOfMessages           *int     `json:"approximateNumberOfMessages,omitempty"`           // SQS only — visible messages waiting to be consumed
-	ApproximateNumberOfMessagesNotVisible *int     `json:"approximateNumberOfMessagesNotVisible,omitempty"` // SQS only — messages in flight (received, not yet deleted/returned)
-	StackName                             *string  `json:"stackName,omitempty"`                             // CloudFormation stack name this resource belongs to (1:1 ownership)
-	VpcID                                 string   `json:"vpcId,omitempty"`                                 // VPC ID this resource belongs to (EC2 instances, RDS instances, …)
-	Status                                string   `json:"status,omitempty"`                                // resource status string (e.g. RDS DBInstanceStatus: "available", "stopped")
-	CidrBlock                             string   `json:"cidrBlock,omitempty"`                             // VPC only — CIDR block (e.g. "10.0.0.0/16")
-	SubnetCount                           *int     `json:"subnetCount,omitempty"`                           // VPC only — number of subnets in this VPC
-	HasInternetGateway                    *bool    `json:"hasInternetGateway,omitempty"`                    // VPC only — whether an internet gateway is attached
-	AttachedVpcID                         string   `json:"attachedVpcId,omitempty"`                         // IGW only — the VPC ID attached to this internet gateway
-	ProtocolType                          string   `json:"protocolType,omitempty"`                          // API Gateway only — protocol type (REST or HTTP)
-	RouteCount                            *int     `json:"routeCount,omitempty"`                            // API Gateway only — number of routes or resources configured
-	StageCount                            *int     `json:"stageCount,omitempty"`                            // API Gateway only — number of deployed stages
-	DomainName                            string   `json:"domainName,omitempty"`                            // CloudFront only — the distribution's domain name
-	OriginCount                           *int     `json:"originCount,omitempty"`                           // CloudFront only — number of origins
-	AuthenticationType                    string   `json:"authenticationType,omitempty"`                    // AppSync only — authentication type (API_KEY, AWS_IAM, …)
-	DataSourceCount                       *int     `json:"dataSourceCount,omitempty"`                       // AppSync only — number of data sources attached
-	ResolverCount                         *int     `json:"resolverCount,omitempty"`                         // AppSync only — number of resolvers configured
-	RepositoryUri                         string   `json:"repositoryUri,omitempty"`                         // ECR only — full push-ready repository URI (e.g. localhost:5000/my-repo)
-	Scope                                 string   `json:"scope,omitempty"`                                 // WAF only — REGIONAL or CLOUDFRONT
-	RuleCount                             *int     `json:"ruleCount,omitempty"`                             // WAF only — number of stored rules (rules are not enforced)
-	ESMID                                 string   `json:"esmId,omitempty"`                                 // Lambda ESM filter node only — EventSourceMapping UUID
-	FunctionName                          string   `json:"functionName,omitempty"`                          // Lambda ESM filter node only — target function name
-	EventSource                           string   `json:"eventSource,omitempty"`                           // Lambda ESM filter node only — source queue/table name
-	SourceType                            string   `json:"sourceType,omitempty"`                            // Lambda ESM filter node only — source type, e.g. dynamodb
-	FilterPatterns                        []string `json:"filterPatterns,omitempty"`                        // Lambda ESM filter node only — raw FilterCriteria patterns
-
-	ECSResourceType topologyECSResourceType `json:"ecsResourceType,omitempty"` // ECS only — whether this node is a cluster, service, or task
-	ClusterName     string                  `json:"clusterName,omitempty"`     // ECS service/task owner, used for detail navigation
-	TaskID          string                  `json:"taskId,omitempty"`          // ECS task only — task UUID used by the task detail route
-	DesiredCount    *int                    `json:"desiredCount,omitempty"`    // ECS service only — configured task count
-	RunningCount    *int                    `json:"runningCount,omitempty"`    // ECS service only — currently running task count
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}
 }
 
-type topologyEdge struct {
-	ID           string `json:"id"`
-	Source       string `json:"source"`
-	Target       string `json:"target"`
-	Type         string `json:"type"`
-	Label        string `json:"label,omitempty"`
-	State        string `json:"state,omitempty"`
-	SourceRegion string `json:"sourceRegion,omitempty"`
-	TargetRegion string `json:"targetRegion,omitempty"`
+func contributorName(c topology.Contributor) string {
+	if svc, ok := c.(Service); ok {
+		return svc.Name()
+	}
+	return "legacy"
 }
 
-type tFilterCriteria struct {
-	Filters []struct {
-		Pattern string `json:"Pattern"`
-	} `json:"Filters"`
+// ── Legacy contributor ─────────────────────────────────────────────────────
+
+// legacyTopology contributes the services that do not yet implement
+// topology.Contributor. It scans their namespaces in parallel and decodes
+// them into the lightweight structs below.
+type legacyTopology struct {
+	cfg   *config.Config
+	store state.Store
 }
 
-type topologyResponse struct {
-	Regions []string       `json:"regions"`
-	Nodes   []topologyNode `json:"nodes"`
-	Edges   []topologyEdge `json:"edges"`
-}
-
-// ── State store namespaces (mirrored from service packages) ────────────────
-// These are deliberately re-declared rather than imported so the topology
-// handler has no compile-time coupling to individual service packages.
-
+// State store namespaces, mirrored from the service packages not yet
+// migrated. Each is deleted when its service implements topology.Contributor
+// and reads its own namespace.
 const (
 	tNsBuckets       = "s3:buckets"
 	tNsNotifications = "s3:notifications"
-	tNsQueues        = "sqs:queues"
-	tNsMessages      = "sqs:messages"
 	tNsTopics        = "sns:topics"
 	tNsSubscriptions = "sns:subscriptions"
 	tNsTables        = "dynamodb:tables"
-	tNsFunctions     = "lambda:functions"
-	tNsESM           = "lambda:esm"
 	tNsLogGroups     = "logs:groups"
 	tNsPipes         = "pipes:pipes"
 	tNsCFNStacks     = "cfn:stacks"
@@ -148,10 +122,6 @@ const (
 	tNsEFSFileSystems  = "efs:filesystems"
 	tNsEFSAccessPoints = "efs:accesspoints"
 
-	// S3 Tables resource tracking.
-	tNsS3TableBuckets = "s3tables:buckets"
-	tNsS3Tables       = "s3tables:tables"
-
 	// MSK resource tracking.
 	tNsMSKClusters = "msk:clusters"
 
@@ -177,6 +147,49 @@ const (
 	tNsCognitoPools = "cognito:pools"
 )
 
+var legacyTopologyNamespaces = []string{
+	tNsBuckets, tNsNotifications,
+	tNsTopics, tNsSubscriptions, tNsTables,
+	tNsLogGroups, tNsPipes, tNsCFNStacks,
+	tNsInstances, tNsVPCs, tNsSubnets, tNsInternetGateways,
+	tNsClusters, tNsECSTaskDefs, tNsECSTasks, tNsECSServices,
+	tNsECRRepos,
+	tNsDBInstances,
+	tNsCacheClusters, tNsCacheReplicationGroups, tNsServerlessCaches,
+	tNsRestAPIs, tNsAPIResources, tNsAPIStages,
+	tNsV2APIs, tNsV2Routes, tNsV2Integ, tNsV2Stages,
+	tNsCFDistributions,
+	tNsWAFWebACLs,
+	tNsAppSync,
+	tNsCognitoPools,
+	tNsMSKClusters,
+	tNsEFSFileSystems, tNsEFSAccessPoints,
+}
+
+// ContributeTopology implements topology.Contributor. A namespace whose scan
+// fails is treated as empty.
+func (l legacyTopology) ContributeTopology(ctx context.Context, g *topology.Graph) error {
+	results := make([][]state.KV, len(legacyTopologyNamespaces))
+	var wg sync.WaitGroup
+	for i, ns := range legacyTopologyNamespaces {
+		wg.Go(func() {
+			if kvs, err := l.store.Scan(ctx, ns, ""); err == nil {
+				results[i] = kvs
+			}
+		})
+	}
+	wg.Wait()
+
+	byNS := make(map[string][]state.KV, len(legacyTopologyNamespaces))
+	for i, ns := range legacyTopologyNamespaces {
+		if results[i] != nil {
+			byNS[ns] = results[i]
+		}
+	}
+	contributeLegacyTopology(l.cfg.Region, byNS, g)
+	return nil
+}
+
 // ── Lightweight decode structs ─────────────────────────────────────────────
 // Only the fields the topology needs — keeps allocation small and decoupled
 // from the full domain types.
@@ -196,16 +209,6 @@ type tNotifQueue struct {
 }
 type tNotifLambda struct {
 	ARN string `json:"arn"`
-}
-
-type tQueue struct {
-	Name       string            `json:"name"`
-	ARN        string            `json:"arn"`
-	Attributes map[string]string `json:"attributes"`
-}
-type tRedrivePolicy struct {
-	DeadLetterTargetArn string `json:"deadLetterTargetArn"`
-	MaxReceiveCount     int    `json:"maxReceiveCount"`
 }
 
 type tTopic struct {
@@ -234,21 +237,6 @@ type tTable struct {
 }
 type tStreamSpec struct {
 	StreamEnabled bool `json:"StreamEnabled"`
-}
-
-type tFunction struct {
-	Name     string `json:"name"`
-	ARN      string `json:"arn"`
-	LogGroup string `json:"log_group,omitempty"`
-	ImageURI string `json:"image_uri,omitempty"`
-	Package  string `json:"package_type,omitempty"`
-}
-
-type tESM struct {
-	UUID           string           `json:"UUID"`
-	FunctionArn    string           `json:"FunctionArn"`
-	EventSourceArn string           `json:"EventSourceArn"`
-	FilterCriteria *tFilterCriteria `json:"FilterCriteria,omitempty"`
 }
 
 type tLogGroup struct {
@@ -360,19 +348,6 @@ type tEFSFileSystem struct {
 	ID     string `json:"FileSystemId"`
 	Status string `json:"LifeCycleState"`
 }
-
-// S3 Tables resources. Keys are "{region}/{bucket}" and
-// "{region}/{bucket}/{namespace}/{table}".
-type tS3TableBucket struct {
-	Name string `json:"name"`
-}
-type tS3Table struct {
-	Name      string `json:"name"`
-	Namespace string `json:"namespace"`
-	Bucket    string `json:"bucket"`
-	TableID   string `json:"tableId"`
-}
-
 type tEFSAccessPoint struct {
 	ID           string `json:"AccessPointId"`
 	FileSystemID string `json:"FileSystemId"`
@@ -481,88 +456,13 @@ type tAppSyncDataSource struct {
 	DynamodbConfig json.RawMessage `json:"dynamodbConfig,omitempty"`
 }
 
-// ── Handler ────────────────────────────────────────────────────────────────
-
-func newTopologyHandler(cfg *config.Config, store state.Store) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		regionFilter := r.URL.Query().Get("region") // "" = all regions
-
-		// Scan all namespaces in parallel for minimum latency.
-		type scanResult struct {
-			ns   string
-			data []state.KV
-		}
-
-		namespaces := []string{
-			tNsBuckets, tNsNotifications, tNsQueues, tNsMessages,
-			tNsTopics, tNsSubscriptions, tNsTables, tNsFunctions,
-			tNsESM, tNsLogGroups, tNsPipes, tNsCFNStacks,
-			tNsInstances, tNsVPCs, tNsSubnets, tNsInternetGateways,
-			tNsClusters, tNsECSTaskDefs, tNsECSTasks, tNsECSServices,
-			tNsECRRepos,
-			tNsDBInstances,
-			tNsCacheClusters, tNsCacheReplicationGroups, tNsServerlessCaches,
-			tNsRestAPIs, tNsAPIResources, tNsAPIStages,
-			tNsV2APIs, tNsV2Routes, tNsV2Integ, tNsV2Stages,
-			tNsCFDistributions,
-			tNsWAFWebACLs,
-			tNsAppSync,
-			tNsCognitoPools,
-			tNsMSKClusters,
-			tNsEFSFileSystems, tNsEFSAccessPoints,
-			tNsS3TableBuckets, tNsS3Tables,
-		}
-
-		results := make([]scanResult, len(namespaces))
-		var wg sync.WaitGroup
-		wg.Add(len(namespaces))
-		for i, ns := range namespaces {
-			go func(idx int, namespace string) {
-				defer wg.Done()
-				kvs, err := store.Scan(ctx, namespace, "")
-				if err != nil {
-					return // graceful degradation — namespace simply absent
-				}
-				results[idx] = scanResult{ns: namespace, data: kvs}
-			}(i, ns)
-		}
-		wg.Wait()
-
-		// Index results by namespace for easy lookup.
-		byNS := make(map[string][]state.KV, len(namespaces))
-		for _, sr := range results {
-			if sr.data != nil {
-				byNS[sr.ns] = sr.data
-			}
-		}
-
-		// ── Build response ─────────────────────────────────────────────────
-		resp := buildTopology(cfg, byNS, regionFilter)
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
-	}
-}
-
-// buildTopology constructs the full topology graph from raw state store data.
-// Extracted as a pure function to keep the handler thin and testable.
-func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter string) topologyResponse {
-	defaultRegion := cfg.Region
-
-	// ── Decode & collect nodes ─────────────────────────────────────────────
-	regionSet := make(map[string]bool)
-	nodeIndex := make(map[string]string) // node ID → region (for edge region tagging)
-
-	var nodes []topologyNode
-
-	addNode := func(n topologyNode) {
-		if regionFilter != "" && n.Region != regionFilter {
-			return
-		}
-		regionSet[n.Region] = true
-		nodeIndex[n.ID] = n.Region
-		nodes = append(nodes, n)
+// contributeLegacyTopology writes the unmigrated services' nodes and edges
+// from raw state store data. A pure function over byNS, so tests can seed it
+// directly.
+func contributeLegacyTopology(defaultRegion string, byNS map[string][]state.KV, g *topology.Graph) {
+	addNode := func(n topology.Node, aliases ...topology.Ref) { g.AddNode(n, aliases...) }
+	addEdge := func(src, tgt topology.Ref, idPrefix, typ string) {
+		g.AddLink(topology.Link{Source: src, Target: tgt, IDPrefix: idPrefix, Type: typ})
 	}
 
 	// S3 buckets
@@ -574,39 +474,11 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 		if b.Region == "" {
 			b.Region = defaultRegion
 		}
-		addNode(topologyNode{
-			ID:      b.Region + "::s3::" + b.Name,
+		addNode(topology.Node{
+			ID:      topology.NodeID(b.Region, "s3", b.Name),
 			Service: "s3",
 			Label:   b.Name,
 			Region:  b.Region,
-		})
-	}
-
-	// SQS queues (with message counts)
-	msgCounts := countSQSMessages(byNS[tNsMessages])
-	type queueMeta struct {
-		name   string
-		region string
-	}
-	queueIndex := make(map[string]queueMeta) // queue name → meta
-
-	for _, kv := range byNS[tNsQueues] {
-		var q tQueue
-		if json.Unmarshal([]byte(kv.Value), &q) != nil {
-			continue
-		}
-		region := regionFromARN(q.ARN, defaultRegion)
-		queueIndex[q.Name] = queueMeta{name: q.Name, region: region}
-		counts := msgCounts[q.Name]
-		visible := counts.visible
-		inFlight := counts.inFlight
-		addNode(topologyNode{
-			ID:                                    region + "::sqs::" + q.Name,
-			Service:                               "sqs",
-			Label:                                 q.Name,
-			Region:                                region,
-			ApproximateNumberOfMessages:           &visible,
-			ApproximateNumberOfMessagesNotVisible: &inFlight,
 		})
 	}
 
@@ -619,8 +491,8 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 		}
 		region := regionFromARN(t.ARN, defaultRegion)
 		topicIndex[t.Name] = region
-		addNode(topologyNode{
-			ID:      region + "::sns::" + t.Name,
+		addNode(topology.Node{
+			ID:      topology.NodeID(region, "sns", t.Name),
 			Service: "sns",
 			Label:   t.Name,
 			Region:  region,
@@ -635,8 +507,8 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 		}
 		region := regionFromARN(t.TableARN, defaultRegion)
 		streamEnabled := t.StreamSpecification != nil && t.StreamSpecification.StreamEnabled
-		addNode(topologyNode{
-			ID:            region + "::dynamodb::" + t.TableName,
+		addNode(topology.Node{
+			ID:            topology.NodeID(region, "dynamodb", t.TableName),
 			Service:       "dynamodb",
 			Label:         t.TableName,
 			Region:        region,
@@ -644,46 +516,15 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 		})
 	}
 
-	// Lambda functions
-	funcIndex := make(map[string]string) // function name → region
-	type funcMeta struct {
-		region   string
-		logGroup string
-		imageURI string
-		pkgType  string
-	}
-	funcMetas := make(map[string]funcMeta) // function name → meta
-	for _, kv := range byNS[tNsFunctions] {
-		var fn tFunction
-		if json.Unmarshal([]byte(kv.Value), &fn) != nil {
-			continue
-		}
-		region := regionFromARN(fn.ARN, defaultRegion)
-		funcIndex[fn.Name] = region
-		funcMetas[fn.Name] = funcMeta{region: region, logGroup: fn.LogGroup, imageURI: fn.ImageURI, pkgType: fn.Package}
-		addNode(topologyNode{
-			ID:      region + "::lambda::" + fn.Name,
-			Service: "lambda",
-			Label:   fn.Name,
-			Region:  region,
-		})
-	}
-
 	// CloudWatch Logs groups
-	// logGroupRegions maps group name → set of regions where the group exists.
-	// A group can exist in multiple regions (e.g. created by CFN in one region
-	// and accidentally duplicated in another); we track all so edges can
-	// prefer the same-region copy.
-	logGroupRegions := make(map[string][]string) // group name → regions
 	for _, kv := range byNS[tNsLogGroups] {
 		var lg tLogGroup
 		if json.Unmarshal([]byte(kv.Value), &lg) != nil {
 			continue
 		}
 		region := regionFromARN(lg.ARN, defaultRegion)
-		logGroupRegions[lg.Name] = append(logGroupRegions[lg.Name], region)
-		addNode(topologyNode{
-			ID:      region + "::logs::" + lg.Name,
+		addNode(topology.Node{
+			ID:      topology.NodeID(region, "logs", lg.Name),
 			Service: "logs",
 			Label:   lg.Name,
 			Region:  region,
@@ -696,12 +537,9 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 		if json.Unmarshal([]byte(kv.Value), &inst) != nil {
 			continue
 		}
-		region := defaultRegion
-		if r, _ := serviceutil.SplitRegionKey(kv.Key); r != "" {
-			region = r
-		}
-		addNode(topologyNode{
-			ID:      region + "::ec2::" + inst.InstanceID,
+		region := regionFromKey(kv.Key, defaultRegion)
+		addNode(topology.Node{
+			ID:      topology.NodeID(region, "ec2", inst.InstanceID),
 			Service: "ec2",
 			Label:   inst.InstanceID,
 			Region:  region,
@@ -741,14 +579,11 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 			continue
 		}
 		// Region is stored in the region-scoped key (e.g. "us-east-1/vpc-abc").
-		region := defaultRegion
-		if i := strings.IndexByte(kv.Key, '/'); i > 0 {
-			region = kv.Key[:i]
-		}
+		region := regionFromKey(kv.Key, defaultRegion)
 		subnetCount := subnetCountByVpc[vpc.VpcID]
 		_, hasIGW := igwAttachmentsByVpc[vpc.VpcID]
-		addNode(topologyNode{
-			ID:                 region + "::vpc::" + vpc.VpcID,
+		addNode(topology.Node{
+			ID:                 topology.NodeID(region, "vpc", vpc.VpcID),
 			Service:            "vpc",
 			Label:              vpc.VpcID,
 			Region:             region,
@@ -765,10 +600,7 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 		if json.Unmarshal([]byte(kv.Value), &igw) != nil {
 			continue
 		}
-		region := defaultRegion
-		if i := strings.IndexByte(kv.Key, '/'); i > 0 {
-			region = kv.Key[:i]
-		}
+		region := regionFromKey(kv.Key, defaultRegion)
 		// Find the attached VPC (if any).
 		var attachedVpc string
 		for _, att := range igw.Attachments {
@@ -777,8 +609,8 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 				break
 			}
 		}
-		addNode(topologyNode{
-			ID:            region + "::igw::" + igw.InternetGatewayID,
+		addNode(topology.Node{
+			ID:            topology.NodeID(region, "igw", igw.InternetGatewayID),
 			Service:       "igw",
 			Label:         igw.InternetGatewayID,
 			Region:        region,
@@ -799,19 +631,30 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 		}
 		region := regionFromARN(c.ARN, defaultRegion)
 		clusterIndex[c.ARN] = ecsClusterIdentity{name: c.Name, region: region}
-		addNode(topologyNode{
-			ID:              region + "::ecs::" + c.Name,
+		addNode(topology.Node{
+			ID:              topology.NodeID(region, "ecs", c.Name),
 			Service:         "ecs",
 			Label:           c.Name,
 			Region:          region,
 			Status:          c.Status,
-			ECSResourceType: topologyECSCluster,
+			ECSResourceType: topology.ECSCluster,
 			ClusterName:     c.Name,
 		})
 	}
 
-	// ECS services (nodes + edges to clusters)
-	ecsServiceTaskDefs := make(map[string]string)
+	// ECS task definitions' container images, for repository → service edges.
+	ecsTaskDefImages := make(map[string][]string)
+	for _, kv := range byNS[tNsECSTaskDefs] {
+		var td tECSTaskDefinition
+		if json.Unmarshal([]byte(kv.Value), &td) != nil {
+			continue
+		}
+		for _, container := range td.ContainerDefinitions {
+			ecsTaskDefImages[td.TaskDefinitionArn] = append(ecsTaskDefImages[td.TaskDefinitionArn], container.Image)
+		}
+	}
+
+	// ECS services (nodes, cluster edges and repository edges)
 	for _, kv := range byNS[tNsECSServices] {
 		var svc tECSService
 		if json.Unmarshal([]byte(kv.Value), &svc) != nil {
@@ -824,21 +667,25 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 			clusterName = cluster.name
 		}
 		desiredCount, runningCount := svc.DesiredCount, svc.RunningCount
-		ecsServiceTaskDefs[region+"::ecs-service::"+clusterName+"/"+svc.Name] = svc.TaskDefinition
-		addNode(topologyNode{
-			ID:              region + "::ecs-service::" + clusterName + "/" + svc.Name,
+		serviceRef := topology.ID(region, "ecs-service", clusterName+"/"+svc.Name)
+		addNode(topology.Node{
+			ID:              topology.NodeID(region, "ecs-service", clusterName+"/"+svc.Name),
 			Service:         "ecs",
 			Label:           svc.Name,
 			Region:          region,
 			Status:          svc.Status,
-			ECSResourceType: topologyECSService,
+			ECSResourceType: topology.ECSService,
 			ClusterName:     clusterName,
 			DesiredCount:    &desiredCount,
 			RunningCount:    &runningCount,
 		})
+		addEdge(topology.ID(region, "ecs", clusterName), serviceRef, "ecs-svc", "ecs")
+		for _, image := range ecsTaskDefImages[svc.TaskDefinition] {
+			addEdge(topology.Image(image), serviceRef, "ecr-ecs", "container-image")
+		}
 	}
 
-	// ECS tasks (nodes)
+	// ECS tasks (nodes, and edges to their service or cluster)
 	for _, kv := range byNS[tNsECSTasks] {
 		var task tECSTask
 		if json.Unmarshal([]byte(kv.Value), &task) != nil {
@@ -854,20 +701,26 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 			region = cluster.region
 			clusterName = cluster.name
 		}
-		addNode(topologyNode{
-			ID:              region + "::ecs-task::" + clusterName + "/" + taskID,
+		addNode(topology.Node{
+			ID:              topology.NodeID(region, "ecs-task", clusterName+"/"+taskID),
 			Service:         "ecs",
 			Label:           taskID,
 			Region:          region,
 			Status:          task.LastStatus,
-			ECSResourceType: topologyECSTask,
+			ECSResourceType: topology.ECSTask,
 			ClusterName:     clusterName,
 			TaskID:          taskID,
 		})
+		taskRef := topology.ID(region, "ecs-task", clusterName+"/"+taskID)
+		if svcName, ok := strings.CutPrefix(task.Group, "service:"); ok {
+			addEdge(topology.ID(region, "ecs-service", clusterName+"/"+svcName), taskRef, "ecs-task", "ecs")
+		} else {
+			// Orphan task → cluster directly
+			addEdge(topology.ID(region, "ecs", clusterName), taskRef, "ecs-task", "ecs")
+		}
 	}
 
-	// ECR repositories
-	ecrRepoNodeByImageRef := make(map[string]string)
+	// ECR repositories, registered under their URI so image consumers find them.
 	for _, kv := range byNS[tNsECRRepos] {
 		var repo tECRRepository
 		if json.Unmarshal([]byte(kv.Value), &repo) != nil {
@@ -875,39 +728,15 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 		}
 		region := regionFromARN(repo.RepositoryArn, defaultRegion)
 		if region == defaultRegion {
-			if keyRegion, _ := splitRegionKey(kv.Key); keyRegion != "" {
-				region = keyRegion
-			}
+			region = regionFromKey(kv.Key, defaultRegion)
 		}
-		nodeID := region + "::ecr::" + repo.RepositoryName
-		addNode(topologyNode{
-			ID:            nodeID,
+		addNode(topology.Node{
+			ID:            topology.NodeID(region, "ecr", repo.RepositoryName),
 			Service:       "ecr",
 			Label:         repo.RepositoryName,
 			Region:        region,
 			RepositoryUri: repo.RepositoryURI,
-		})
-		if ref := normalizeContainerImageRef(repo.RepositoryURI); ref != "" {
-			ecrRepoNodeByImageRef[ref] = nodeID
-		}
-	}
-
-	// ECS task definitions keyed for repository-consumer edge derivation.
-	ecsTaskDefImages := make(map[string][]string)
-	for _, kv := range byNS[tNsECSTaskDefs] {
-		var td tECSTaskDefinition
-		if json.Unmarshal([]byte(kv.Value), &td) != nil {
-			continue
-		}
-		images := make([]string, 0, len(td.ContainerDefinitions))
-		for _, container := range td.ContainerDefinitions {
-			if ref := normalizeContainerImageRef(container.Image); ref != "" {
-				images = append(images, ref)
-			}
-		}
-		if len(images) > 0 {
-			ecsTaskDefImages[td.TaskDefinitionArn] = images
-		}
+		}, topology.Image(repo.RepositoryURI))
 	}
 
 	// RDS DB instances
@@ -920,12 +749,9 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 			continue
 		}
 		// Region is not stored in the instance JSON — extract from the region-scoped key.
-		region := defaultRegion
-		if i := strings.IndexByte(kv.Key, '/'); i > 0 {
-			region = kv.Key[:i]
-		}
-		addNode(topologyNode{
-			ID:      region + "::rds::" + db.ID,
+		region := regionFromKey(kv.Key, defaultRegion)
+		addNode(topology.Node{
+			ID:      topology.NodeID(region, "rds", db.ID),
 			Service: "rds",
 			Label:   db.ID,
 			Region:  region,
@@ -942,12 +768,9 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 		if c.ID == "" {
 			continue
 		}
-		region := defaultRegion
-		if i := strings.IndexByte(kv.Key, '/'); i > 0 {
-			region = kv.Key[:i]
-		}
-		addNode(topologyNode{
-			ID:      region + "::elasticache::" + c.ID,
+		region := regionFromKey(kv.Key, defaultRegion)
+		addNode(topology.Node{
+			ID:      topology.NodeID(region, "elasticache", c.ID),
 			Service: "elasticache",
 			Label:   c.ID,
 			Region:  region,
@@ -962,12 +785,9 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 		if rg.ID == "" {
 			continue
 		}
-		region := defaultRegion
-		if i := strings.IndexByte(kv.Key, '/'); i > 0 {
-			region = kv.Key[:i]
-		}
-		addNode(topologyNode{
-			ID:      region + "::elasticache::" + rg.ID,
+		region := regionFromKey(kv.Key, defaultRegion)
+		addNode(topology.Node{
+			ID:      topology.NodeID(region, "elasticache", rg.ID),
 			Service: "elasticache",
 			Label:   rg.ID,
 			Region:  region,
@@ -982,12 +802,9 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 		if c.Name == "" {
 			continue
 		}
-		region := defaultRegion
-		if i := strings.IndexByte(kv.Key, '/'); i > 0 {
-			region = kv.Key[:i]
-		}
-		addNode(topologyNode{
-			ID:      region + "::elasticache::" + c.Name,
+		region := regionFromKey(kv.Key, defaultRegion)
+		addNode(topology.Node{
+			ID:      topology.NodeID(region, "elasticache", c.Name),
 			Service: "elasticache",
 			Label:   c.Name,
 			Region:  region,
@@ -1004,16 +821,13 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 		if c.ClusterArn == "" {
 			continue
 		}
-		region := defaultRegion
-		if i := strings.IndexByte(kv.Key, '/'); i > 0 {
-			region = kv.Key[:i]
-		}
+		region := regionFromKey(kv.Key, defaultRegion)
 		label := c.ClusterName
 		if label == "" {
 			label = c.ClusterArn
 		}
-		addNode(topologyNode{
-			ID:      region + "::msk::" + c.ClusterArn,
+		addNode(topology.Node{
+			ID:      topology.NodeID(region, "msk", c.ClusterArn),
 			Service: "msk",
 			Label:   label,
 			Region:  region,
@@ -1028,12 +842,9 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 		if json.Unmarshal([]byte(kv.Value), &fs) != nil || fs.ID == "" {
 			continue
 		}
-		region := defaultRegion
-		if i := strings.IndexByte(kv.Key, '/'); i > 0 {
-			region = kv.Key[:i]
-		}
-		addNode(topologyNode{
-			ID:      region + "::efs::" + fs.ID,
+		region := regionFromKey(kv.Key, defaultRegion)
+		addNode(topology.Node{
+			ID:      topology.NodeID(region, "efs", fs.ID),
 			Service: "efs",
 			Label:   fs.ID,
 			Region:  region,
@@ -1045,42 +856,23 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 		if json.Unmarshal([]byte(kv.Value), &ap) != nil || ap.ID == "" {
 			continue
 		}
-		region := defaultRegion
-		if i := strings.IndexByte(kv.Key, '/'); i > 0 {
-			region = kv.Key[:i]
-		}
-		addNode(topologyNode{
-			ID:      region + "::efs::" + ap.ID,
+		region := regionFromKey(kv.Key, defaultRegion)
+		addNode(topology.Node{
+			ID:      topology.NodeID(region, "efs", ap.ID),
 			Service: "efs",
 			Label:   ap.ID,
 			Region:  region,
 			Status:  ap.Status,
 		})
-	}
-
-	// S3 Tables: table buckets and their tables. A table's node is keyed by its
-	// id, which RenameTable leaves alone, and labelled namespace.table.
-	for _, kv := range byNS[tNsS3TableBuckets] {
-		var b tS3TableBucket
-		if json.Unmarshal([]byte(kv.Value), &b) != nil || b.Name == "" {
-			continue
+		if ap.FileSystemID != "" {
+			g.AddLink(topology.Link{
+				Source:   topology.ID(region, "efs", ap.ID),
+				Target:   topology.ID(region, "efs", ap.FileSystemID),
+				IDPrefix: "efs-ap",
+				Type:     "vpc-attachment",
+				Label:    "access point",
+			})
 		}
-		region, _ := splitRegionKey(kv.Key)
-		if region == "" {
-			region = defaultRegion
-		}
-		addNode(topologyNode{ID: region + "::s3tables::" + b.Name, Service: "s3tables", Label: b.Name, Region: region})
-	}
-	for _, kv := range byNS[tNsS3Tables] {
-		var t tS3Table
-		if json.Unmarshal([]byte(kv.Value), &t) != nil || t.TableID == "" {
-			continue
-		}
-		region, _ := splitRegionKey(kv.Key)
-		if region == "" {
-			region = defaultRegion
-		}
-		addNode(topologyNode{ID: region + "::s3tables::" + t.Bucket + "/" + t.TableID, Service: "s3tables", Label: t.Namespace + "." + t.Name, Region: region})
 	}
 
 	// API Gateway REST APIs (v1)
@@ -1089,12 +881,7 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 	v1ResourceCount := make(map[string]int)      // apiID → count
 	v1LambdaTargets := make(map[string][]string) // apiID → []functionName
 	for _, kv := range byNS[tNsAPIResources] {
-		// Strip region prefix, then extract apiID from "apiID/resourceID".
-		_, rest := splitRegionKey(kv.Key)
-		apiID := rest
-		if i := strings.IndexByte(rest, '/'); i > 0 {
-			apiID = rest[:i]
-		}
+		apiID := apiIDFromKey(kv.Key)
 		v1ResourceCount[apiID]++
 
 		// Extract Lambda targets from integrations.
@@ -1115,32 +902,19 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 	}
 	v1StageCount := make(map[string]int) // apiID → count
 	for _, kv := range byNS[tNsAPIStages] {
-		// Strip region prefix, then extract apiID from "apiID/stageName".
-		_, rest := splitRegionKey(kv.Key)
-		apiID := rest
-		if i := strings.IndexByte(rest, '/'); i > 0 {
-			apiID = rest[:i]
-		}
-		v1StageCount[apiID]++
+		v1StageCount[apiIDFromKey(kv.Key)]++
 	}
 
-	restAPIIndex := make(map[string]string) // apiID → region
 	for _, kv := range byNS[tNsRestAPIs] {
 		var api tRestAPI
 		if json.Unmarshal([]byte(kv.Value), &api) != nil {
 			continue
 		}
-		// Extract region from key: "{region}/{apiID}".
-		keyRegion, _ := splitRegionKey(kv.Key)
-		region := defaultRegion
-		if keyRegion != "" {
-			region = keyRegion
-		}
+		region := regionFromKey(kv.Key, defaultRegion)
 		routes := v1ResourceCount[api.ID]
 		stages := v1StageCount[api.ID]
-		restAPIIndex[api.ID] = region
-		addNode(topologyNode{
-			ID:           region + "::apigateway::" + api.ID,
+		addNode(topology.Node{
+			ID:           topology.NodeID(region, "apigateway", api.ID),
 			Service:      "apigateway",
 			Label:        api.Name,
 			Region:       region,
@@ -1148,6 +922,7 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 			RouteCount:   &routes,
 			StageCount:   &stages,
 		})
+		addAPIGatewayLambdaEdges(g, region, api.ID, v1LambdaTargets[api.ID])
 	}
 
 	// API Gateway HTTP APIs (v2)
@@ -1163,16 +938,12 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 		if json.Unmarshal([]byte(kv.Value), &integ) != nil {
 			continue
 		}
-		_, rest := splitRegionKey(kv.Key)
+		_, rest := serviceutil.SplitRegionKey(kv.Key)
 		v2IntegIndex[rest] = &integ
 	}
 
 	for _, kv := range byNS[tNsV2Routes] {
-		_, rest := splitRegionKey(kv.Key)
-		apiID := rest
-		if i := strings.IndexByte(rest, '/'); i > 0 {
-			apiID = rest[:i]
-		}
+		apiID := apiIDFromKey(kv.Key)
 		v2RouteCount[apiID]++
 
 		// Resolve route target → integration → Lambda.
@@ -1180,11 +951,9 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 		if json.Unmarshal([]byte(kv.Value), &route) != nil {
 			continue
 		}
-		if strings.HasPrefix(route.Target, "integrations/") {
-			integID := strings.TrimPrefix(route.Target, "integrations/")
-			integKey := apiID + "/" + integID
-			if integ, ok := v2IntegIndex[integKey]; ok {
-				if (integ.IntegrationType == "AWS_PROXY") && integ.IntegrationURI != "" {
+		if integID, ok := strings.CutPrefix(route.Target, "integrations/"); ok {
+			if integ, ok := v2IntegIndex[apiID+"/"+integID]; ok {
+				if integ.IntegrationType == "AWS_PROXY" && integ.IntegrationURI != "" {
 					fnName := lambdaNameFromARN(integ.IntegrationURI)
 					if fnName != "" {
 						v2LambdaTargets[apiID] = append(v2LambdaTargets[apiID], fnName)
@@ -1195,31 +964,19 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 	}
 	v2StageCount := make(map[string]int) // apiID → count
 	for _, kv := range byNS[tNsV2Stages] {
-		_, rest := splitRegionKey(kv.Key)
-		apiID := rest
-		if i := strings.IndexByte(rest, '/'); i > 0 {
-			apiID = rest[:i]
-		}
-		v2StageCount[apiID]++
+		v2StageCount[apiIDFromKey(kv.Key)]++
 	}
 
-	v2APIIndex := make(map[string]string) // apiID → region
 	for _, kv := range byNS[tNsV2APIs] {
 		var api tAPIV2
 		if json.Unmarshal([]byte(kv.Value), &api) != nil {
 			continue
 		}
-		// Extract region from key: "{region}/{apiID}".
-		keyRegion, _ := splitRegionKey(kv.Key)
-		region := defaultRegion
-		if keyRegion != "" {
-			region = keyRegion
-		}
+		region := regionFromKey(kv.Key, defaultRegion)
 		routes := v2RouteCount[api.ApiID]
 		stages := v2StageCount[api.ApiID]
-		v2APIIndex[api.ApiID] = region
-		addNode(topologyNode{
-			ID:           region + "::apigateway::" + api.ApiID,
+		addNode(topology.Node{
+			ID:           topology.NodeID(region, "apigateway", api.ApiID),
 			Service:      "apigateway",
 			Label:        api.Name,
 			Region:       region,
@@ -1227,20 +984,17 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 			RouteCount:   &routes,
 			StageCount:   &stages,
 		})
+		addAPIGatewayLambdaEdges(g, region, api.ApiID, v2LambdaTargets[api.ApiID])
 	}
 
-	// CloudFront distributions
-	// Index to track what S3 origins each distribution references.
-	type cfDistInfo struct {
-		nodeID    string
-		region    string
-		s3Origins []string // bucket names extracted from S3 origin domains
-	}
-	var cfDists []cfDistInfo
-
+	// CloudFront distributions, with edges to the S3 buckets they front.
 	for _, kv := range byNS[tNsCFDistributions] {
-		// Only include distribution records (prefixed with dist:).
-		if !strings.HasPrefix(kv.Key, "dist:") {
+		region, rest := serviceutil.SplitRegionKey(kv.Key)
+		if region == "" {
+			region = defaultRegion
+		}
+		// Only include distribution records (keys "us-east-1/dist:E1234567890ABC").
+		if !strings.HasPrefix(rest, "dist:") {
 			continue
 		}
 		var dist tCFDistribution
@@ -1250,19 +1004,13 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 		if dist.ID == "" {
 			continue
 		}
-		// Extract region from key (format: "us-east-1/dist:E1234567890ABC").
-		region := defaultRegion
-		if i := strings.IndexByte(kv.Key, '/'); i > 0 {
-			region = kv.Key[:i]
-		}
 		origins := dist.Config.Origins.Quantity
 		label := dist.ID
 		if dist.Config.Comment != "" {
 			label = dist.Config.Comment
 		}
-		nodeID := region + "::cloudfront::" + dist.ID
-		addNode(topologyNode{
-			ID:          nodeID,
+		addNode(topology.Node{
+			ID:          topology.NodeID(region, "cloudfront", dist.ID),
 			Service:     "cloudfront",
 			Label:       label,
 			Region:      region,
@@ -1270,19 +1018,21 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 			DomainName:  dist.DomainName,
 			OriginCount: &origins,
 		})
-
-		// Collect S3 origin bucket names for edge building.
-		info := cfDistInfo{nodeID: nodeID, region: region}
 		for _, o := range dist.Config.Origins.Items {
 			dn := o.DomainName
 			if strings.HasSuffix(dn, ".s3.amazonaws.com") || (strings.Contains(dn, ".s3.") && strings.HasSuffix(dn, ".amazonaws.com")) {
 				dn = strings.TrimSuffix(dn, ".amazonaws.com")
 				if idx := strings.Index(dn, ".s3"); idx > 0 {
-					info.s3Origins = append(info.s3Origins, dn[:idx])
+					g.AddLink(topology.Link{
+						Source:   topology.ID(region, "cloudfront", dist.ID),
+						Target:   topology.ID(region, "s3", dn[:idx]).AnyRegion(),
+						IDPrefix: "origin",
+						Type:     "origin",
+						Label:    "S3 origin",
+					})
 				}
 			}
 		}
-		cfDists = append(cfDists, info)
 	}
 
 	// WAFv2 Web ACLs. These nodes represent stored control-plane metadata;
@@ -1292,18 +1042,14 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 		if json.Unmarshal([]byte(kv.Value), &acl) != nil || acl.ID == "" {
 			continue
 		}
-		keyRegion, _ := splitRegionKey(kv.Key)
-		region := regionFromARN(acl.ARN, keyRegion)
-		if region == "" {
-			region = defaultRegion
-		}
+		region := regionFromARN(acl.ARN, regionFromKey(kv.Key, defaultRegion))
 		label := acl.Name
 		if label == "" {
 			label = acl.ID
 		}
 		ruleCount := len(acl.Rules)
-		addNode(topologyNode{
-			ID:        region + "::waf::" + acl.ID,
+		addNode(topology.Node{
+			ID:        topology.NodeID(region, "waf", acl.ID),
 			Service:   "waf",
 			Label:     label,
 			Region:    region,
@@ -1313,30 +1059,24 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 	}
 
 	// AppSync GraphQL APIs
-	// The "appsync" namespace stores all sub-resources with different key prefixes.
-	// API records: "region/api:APIID" → JSON
-	// DataSource records: "region/ds:APIID:NAME" → JSON
-	type appsyncAPIInfo struct {
-		nodeID string
-		region string
-		apiID  string
-	}
-	var appsyncAPIs []appsyncAPIInfo
-
-	// Count data sources and resolvers per API for metadata display.
+	// The "appsync" namespace stores all sub-resources with different key prefixes:
+	// "region/api:APIID", "region/ds:APIID:NAME" and "region/resolver:APIID:TYPE:FIELD".
+	// Count data sources and resolvers first, so API nodes carry the totals.
 	appsyncDSCount := make(map[string]int)       // apiID → count
 	appsyncResolverCount := make(map[string]int) // apiID → count
-	// Collect data source records for edge building (Lambda/DynamoDB targets).
-	type appsyncDSInfo struct {
-		apiID  string
-		region string
-		ds     tAppSyncDataSource
-	}
-	var appsyncDataSources []appsyncDSInfo
-
 	for _, kv := range byNS[tNsAppSync] {
-		// Split region from key: "us-east-1/api:xxx"
-		region, rest := splitRegionKey(kv.Key)
+		_, rest := serviceutil.SplitRegionKey(kv.Key)
+		if ds, ok := strings.CutPrefix(rest, "ds:"); ok {
+			if apiID, _, ok := strings.Cut(ds, ":"); ok {
+				appsyncDSCount[apiID]++
+			}
+		} else if resolver, ok := strings.CutPrefix(rest, "resolver:"); ok {
+			apiID, _, _ := strings.Cut(resolver, ":")
+			appsyncResolverCount[apiID]++
+		}
+	}
+	for _, kv := range byNS[tNsAppSync] {
+		region, rest := serviceutil.SplitRegionKey(kv.Key)
 		if region == "" {
 			region = defaultRegion
 		}
@@ -1348,14 +1088,8 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 			}
 			dsCount := appsyncDSCount[api.ApiId]
 			resolverCount := appsyncResolverCount[api.ApiId]
-			nodeID := region + "::appsync::" + api.ApiId
-			appsyncAPIs = append(appsyncAPIs, appsyncAPIInfo{
-				nodeID: nodeID,
-				region: region,
-				apiID:  api.ApiId,
-			})
-			addNode(topologyNode{
-				ID:                 nodeID,
+			addNode(topology.Node{
+				ID:                 topology.NodeID(region, "appsync", api.ApiId),
 				Service:            "appsync",
 				Label:              api.Name,
 				Region:             region,
@@ -1368,36 +1102,11 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 			if json.Unmarshal([]byte(kv.Value), &ds) != nil {
 				continue
 			}
-			// Extract apiID from key format "ds:APIID:DSNAME"
-			parts := strings.SplitN(strings.TrimPrefix(rest, "ds:"), ":", 2)
-			if len(parts) < 2 {
+			apiID, _, ok := strings.Cut(strings.TrimPrefix(rest, "ds:"), ":")
+			if !ok {
 				continue
 			}
-			apiID := parts[0]
-			appsyncDSCount[apiID]++
-			appsyncDataSources = append(appsyncDataSources, appsyncDSInfo{
-				apiID:  apiID,
-				region: region,
-				ds:     ds,
-			})
-		case strings.HasPrefix(rest, "resolver:"):
-			// Count resolvers per API. Key format: "resolver:APIID:TYPE:FIELD"
-			parts := strings.SplitN(strings.TrimPrefix(rest, "resolver:"), ":", 2)
-			if len(parts) >= 1 {
-				appsyncResolverCount[parts[0]]++
-			}
-		}
-	}
-	// Backfill the counts into already-created nodes.
-	for _, info := range appsyncAPIs {
-		dsCount := appsyncDSCount[info.apiID]
-		resolverCount := appsyncResolverCount[info.apiID]
-		for i := range nodes {
-			if nodes[i].ID == info.nodeID {
-				nodes[i].DataSourceCount = &dsCount
-				nodes[i].ResolverCount = &resolverCount
-				break
-			}
+			addAppSyncDataSourceEdge(g, region, apiID, ds)
 		}
 	}
 
@@ -1407,51 +1116,16 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 		if json.Unmarshal([]byte(kv.Value), &p) != nil {
 			continue
 		}
-		region, _ := splitRegionKey(kv.Key)
-		if region == "" {
-			region = defaultRegion
-		}
-		addNode(topologyNode{
-			ID:      region + "::cognito::" + p.ID,
+		region := regionFromKey(kv.Key, defaultRegion)
+		addNode(topology.Node{
+			ID:      topology.NodeID(region, "cognito", p.ID),
 			Service: "cognito",
 			Label:   p.Name,
 			Region:  region,
 		})
 	}
 
-	// ── Build edges ────────────────────────────────────────────────────────
-	var edges []topologyEdge
-
-	// resolveNodeID returns a node ID present in nodeIndex.  It first tries
-	// the candidate as-is; if that fails it scans for any node whose ID ends
-	// with the "::service::name" suffix (i.e. same resource in a different
-	// region).  Returns "" if no match is found.
-	resolveNodeID := func(candidate string) string {
-		if _, ok := nodeIndex[candidate]; ok {
-			return candidate
-		}
-		// Extract "service::name" portion (everything after the first "::").
-		if idx := strings.Index(candidate, "::"); idx >= 0 {
-			suffix := candidate[idx:] // e.g. "::lambda::my-func"
-			for nid := range nodeIndex {
-				if strings.HasSuffix(nid, suffix) {
-					return nid
-				}
-			}
-		}
-		return ""
-	}
-
-	addEdge := func(e topologyEdge) {
-		// Only emit edges where both endpoints exist in the node set.
-		_, srcOK := nodeIndex[e.Source]
-		_, tgtOK := nodeIndex[e.Target]
-		if srcOK && tgtOK {
-			e.SourceRegion = nodeIndex[e.Source]
-			e.TargetRegion = nodeIndex[e.Target]
-			edges = append(edges, e)
-		}
-	}
+	// ── Edges ──────────────────────────────────────────────────────────────
 
 	// S3 → SQS / Lambda notification edges
 	for _, kv := range byNS[tNsNotifications] {
@@ -1460,133 +1134,12 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 		if json.Unmarshal([]byte(kv.Value), &nc) != nil {
 			continue
 		}
-		// Find bucket's region
-		bucketRegion := defaultRegion
-		if _, ok := nodeIndex[defaultRegion+"::s3::"+bucketName]; ok {
-			bucketRegion = defaultRegion
-		} else {
-			// Scan for any region prefix matching this bucket
-			for nid, r := range nodeIndex {
-				if strings.HasSuffix(nid, "::s3::"+bucketName) {
-					bucketRegion = r
-					break
-				}
-			}
-		}
-		srcID := bucketRegion + "::s3::" + bucketName
+		bucket := topology.ID(defaultRegion, "s3", bucketName).AnyRegion()
 		for _, qc := range nc.QueueConfigurations {
-			qName := nameFromARNSuffix(qc.ARN)
-			qRegion := regionFromARN(qc.ARN, defaultRegion)
-			tgtID := qRegion + "::sqs::" + qName
-			addEdge(topologyEdge{
-				ID:     "notif::" + srcID + "→" + tgtID,
-				Source: srcID,
-				Target: tgtID,
-				Type:   "notification",
-			})
+			addEdge(bucket, topology.ID(regionFromARN(qc.ARN, defaultRegion), "sqs", nameFromARNSuffix(qc.ARN)), "notif", "notification")
 		}
 		for _, lc := range nc.LambdaConfigurations {
-			fnName := lambdaNameFromARN(lc.ARN)
-			fnRegion := regionFromARN(lc.ARN, defaultRegion)
-			tgtID := fnRegion + "::lambda::" + fnName
-			addEdge(topologyEdge{
-				ID:     "notif::" + srcID + "→" + tgtID,
-				Source: srcID,
-				Target: tgtID,
-				Type:   "notification",
-			})
-		}
-	}
-
-	// SQS → SQS DLQ edges (from RedrivePolicy)
-	for _, kv := range byNS[tNsQueues] {
-		var q tQueue
-		if json.Unmarshal([]byte(kv.Value), &q) != nil {
-			continue
-		}
-		rpRaw, ok := q.Attributes["RedrivePolicy"]
-		if !ok || rpRaw == "" {
-			continue
-		}
-		var rp tRedrivePolicy
-		if json.Unmarshal([]byte(rpRaw), &rp) != nil {
-			continue
-		}
-		srcRegion := regionFromARN(q.ARN, defaultRegion)
-		dlqName := nameFromARNSuffix(rp.DeadLetterTargetArn)
-		dlqRegion := regionFromARN(rp.DeadLetterTargetArn, defaultRegion)
-		srcID := srcRegion + "::sqs::" + q.Name
-		tgtID := dlqRegion + "::sqs::" + dlqName
-		label := "DLQ"
-		if rp.MaxReceiveCount > 0 {
-			label = fmt.Sprintf("DLQ (max %d)", rp.MaxReceiveCount)
-		}
-		addEdge(topologyEdge{
-			ID:     "dlq::" + srcID + "→" + tgtID,
-			Source: srcID,
-			Target: tgtID,
-			Type:   "dlq",
-			Label:  label,
-		})
-	}
-
-	// Lambda → CloudWatch Logs edges
-	for fnName, meta := range funcMetas {
-		// Use the function's custom log group, or fall back to the AWS convention.
-		logGroup := meta.logGroup
-		if logGroup == "" {
-			logGroup = "/aws/lambda/" + fnName
-		}
-		if regions, ok := logGroupRegions[logGroup]; ok && len(regions) > 0 {
-			// Prefer the log group in the same region as the function.
-			lgRegion := regions[0]
-			for _, r := range regions {
-				if r == meta.region {
-					lgRegion = r
-					break
-				}
-			}
-			srcID := meta.region + "::lambda::" + fnName
-			tgtID := lgRegion + "::logs::" + logGroup
-			addEdge(topologyEdge{
-				ID:     "logs::" + srcID + "→" + tgtID,
-				Source: srcID,
-				Target: tgtID,
-				Type:   "logs",
-			})
-		}
-	}
-
-	// ECR → Lambda image-function edges.
-	for fnName, meta := range funcMetas {
-		if !strings.EqualFold(meta.pkgType, "Image") || strings.TrimSpace(meta.imageURI) == "" {
-			continue
-		}
-		repoNodeID, ok := ecrRepoNodeByImageRef[normalizeContainerImageRef(meta.imageURI)]
-		if !ok {
-			continue
-		}
-		addEdge(topologyEdge{
-			ID:     "ecr-lambda::" + repoNodeID + "→" + meta.region + "::lambda::" + fnName,
-			Source: repoNodeID,
-			Target: meta.region + "::lambda::" + fnName,
-			Type:   "container-image",
-		})
-	}
-
-	// ECR → ECS service edges via stored task definition container images.
-	for serviceNodeID, taskDefArn := range ecsServiceTaskDefs {
-		for _, imageRef := range ecsTaskDefImages[taskDefArn] {
-			repoNodeID, ok := ecrRepoNodeByImageRef[imageRef]
-			if !ok {
-				continue
-			}
-			addEdge(topologyEdge{
-				ID:     "ecr-ecs::" + repoNodeID + "→" + serviceNodeID,
-				Source: repoNodeID,
-				Target: serviceNodeID,
-				Type:   "container-image",
-			})
+			addEdge(bucket, topology.ID(regionFromARN(lc.ARN, defaultRegion), "lambda", lambdaNameFromARN(lc.ARN)), "notif", "notification")
 		}
 	}
 
@@ -1600,103 +1153,16 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 		if !ok {
 			continue
 		}
-		srcID := topicRegion + "::sns::" + sub.TopicName
+		topic := topology.ID(topicRegion, "sns", sub.TopicName)
 		switch strings.ToLower(sub.Protocol) {
 		case "sqs":
 			qName := sub.QueueName
 			if qName == "" {
 				qName = nameFromARNSuffix(sub.Endpoint)
 			}
-			qRegion := regionFromARN(sub.Endpoint, defaultRegion)
-			tgtID := qRegion + "::sqs::" + qName
-			addEdge(topologyEdge{
-				ID:     "sub::" + srcID + "→" + tgtID,
-				Source: srcID,
-				Target: tgtID,
-				Type:   "subscription",
-			})
+			addEdge(topic, topology.ID(regionFromARN(sub.Endpoint, defaultRegion), "sqs", qName), "sub", "subscription")
 		case "lambda":
-			fnName := lambdaNameFromARN(sub.Endpoint)
-			fnRegion := regionFromARN(sub.Endpoint, defaultRegion)
-			tgtID := fnRegion + "::lambda::" + fnName
-			addEdge(topologyEdge{
-				ID:     "sub::" + srcID + "→" + tgtID,
-				Source: srcID,
-				Target: tgtID,
-				Type:   "subscription",
-			})
-		}
-	}
-
-	// Lambda ESM edges (SQS → Lambda, DynamoDB → Lambda)
-	for _, kv := range byNS[tNsESM] {
-		var esm tESM
-		if json.Unmarshal([]byte(kv.Value), &esm) != nil {
-			continue
-		}
-		fnName := lambdaNameFromARN(esm.FunctionArn)
-		fnRegion := regionFromARN(esm.FunctionArn, defaultRegion)
-		tgtID := resolveNodeID(fnRegion + "::lambda::" + fnName)
-		if tgtID == "" {
-			continue
-		}
-		srcArn := esm.EventSourceArn
-		if strings.Contains(srcArn, ":sqs:") {
-			qName := nameFromARNSuffix(srcArn)
-			qRegion := regionFromARN(srcArn, defaultRegion)
-			srcID := resolveNodeID(qRegion + "::sqs::" + qName)
-			if srcID == "" {
-				continue
-			}
-			addEdge(topologyEdge{
-				ID:     "esm::" + srcID + "→" + tgtID,
-				Source: srcID,
-				Target: tgtID,
-				Type:   "esm",
-			})
-		} else if strings.Contains(srcArn, ":dynamodb:") {
-			tblName := tableNameFromStreamARN(srcArn)
-			tblRegion := regionFromARN(srcArn, defaultRegion)
-			srcID := resolveNodeID(tblRegion + "::dynamodb::" + tblName)
-			if srcID == "" {
-				continue
-			}
-			patterns := esmFilterPatterns(esm.FilterCriteria)
-			if len(patterns) > 0 {
-				filterID := tblRegion + "::esm-filter::" + esm.UUID
-				addNode(topologyNode{
-					ID:             filterID,
-					Service:        "esm-filter",
-					Label:          "ESM filter",
-					Region:         tblRegion,
-					ESMID:          esm.UUID,
-					FunctionName:   fnName,
-					EventSource:    tblName,
-					SourceType:     "dynamodb",
-					FilterPatterns: patterns,
-				})
-				addEdge(topologyEdge{
-					ID:     "esm-filter-in::" + esm.UUID,
-					Source: srcID,
-					Target: filterID,
-					Type:   "esm-filter",
-					Label:  "filter",
-				})
-				addEdge(topologyEdge{
-					ID:     "esm-filter-out::" + esm.UUID,
-					Source: filterID,
-					Target: tgtID,
-					Type:   "esm",
-					Label:  "matched",
-				})
-				continue
-			}
-			addEdge(topologyEdge{
-				ID:     "esm::" + srcID + "→" + tgtID,
-				Source: srcID,
-				Target: tgtID,
-				Type:   "esm",
-			})
+			addEdge(topic, topology.ID(regionFromARN(sub.Endpoint, defaultRegion), "lambda", lambdaNameFromARN(sub.Endpoint)), "sub", "subscription")
 		}
 	}
 
@@ -1710,94 +1176,22 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 			continue
 		}
 		srcRegion := regionFromARN(p.SourceArn, defaultRegion)
-		tgtRegion := regionFromARN(p.TargetArn, defaultRegion)
-		srcID := pipeEndpointNodeID(p.SourceArn, defaultRegion)
-		if srcID == "" && p.SourceArn == "" && p.SourceName != "" {
-			srcID = srcRegion + "::dynamodb::" + p.SourceName
+		src := pipeEndpointRef(p.SourceArn, defaultRegion)
+		if p.SourceArn == "" && p.SourceName != "" {
+			src = topology.ID(srcRegion, "dynamodb", p.SourceName).AnyRegion()
 		}
-		tgtID := pipeEndpointNodeID(p.TargetArn, defaultRegion)
-		if tgtID == "" && p.TargetArn == "" && p.TargetName != "" {
-			tgtID = tgtRegion + "::sqs::" + p.TargetName
+		tgt := pipeEndpointRef(p.TargetArn, defaultRegion)
+		if p.TargetArn == "" && p.TargetName != "" {
+			tgt = topology.ID(regionFromARN(p.TargetArn, defaultRegion), "sqs", p.TargetName).AnyRegion()
 		}
-		if srcID == "" || tgtID == "" {
-			continue
-		}
-		if srcID = resolveNodeID(srcID); srcID == "" {
-			continue
-		}
-		if tgtID = resolveNodeID(tgtID); tgtID == "" {
-			continue
-		}
-		addEdge(topologyEdge{
+		g.AddLink(topology.Link{
+			Source: src,
+			Target: tgt,
 			ID:     "pipe::" + srcRegion + "::" + p.Name,
-			Source: srcID,
-			Target: tgtID,
 			Type:   "pipe",
 			Label:  p.Name,
 			State:  p.CurrentState,
 		})
-	}
-
-	// ECS service → cluster edges
-	for _, kv := range byNS[tNsECSServices] {
-		var svc tECSService
-		if json.Unmarshal([]byte(kv.Value), &svc) != nil {
-			continue
-		}
-		region := regionFromARN(svc.ARN, defaultRegion)
-		clusterName := nameFromSlashSuffix(svc.ClusterARN)
-		if cluster, ok := clusterIndex[svc.ClusterARN]; ok {
-			region = cluster.region
-			clusterName = cluster.name
-		}
-		srcID := region + "::ecs::" + clusterName
-		tgtID := region + "::ecs-service::" + clusterName + "/" + svc.Name
-		addEdge(topologyEdge{
-			ID:     "ecs-svc::" + srcID + "→" + tgtID,
-			Source: srcID,
-			Target: tgtID,
-			Type:   "ecs",
-		})
-	}
-
-	// ECS task → cluster edges, task → service edges
-	for _, kv := range byNS[tNsECSTasks] {
-		var task tECSTask
-		if json.Unmarshal([]byte(kv.Value), &task) != nil {
-			continue
-		}
-		if task.LastStatus == "STOPPED" {
-			continue
-		}
-		region := regionFromARN(task.TaskARN, defaultRegion)
-		taskID := nameFromSlashSuffix(task.TaskARN)
-		clusterName := nameFromSlashSuffix(task.ClusterARN)
-		if cluster, ok := clusterIndex[task.ClusterARN]; ok {
-			region = cluster.region
-			clusterName = cluster.name
-		}
-		taskNodeID := region + "::ecs-task::" + clusterName + "/" + taskID
-
-		// Task → service (if it belongs to one)
-		if strings.HasPrefix(task.Group, "service:") {
-			svcName := strings.TrimPrefix(task.Group, "service:")
-			svcNodeID := region + "::ecs-service::" + clusterName + "/" + svcName
-			addEdge(topologyEdge{
-				ID:     "ecs-task::" + svcNodeID + "→" + taskNodeID,
-				Source: svcNodeID,
-				Target: taskNodeID,
-				Type:   "ecs",
-			})
-		} else {
-			// Orphan task → cluster directly
-			clusterNodeID := region + "::ecs::" + clusterName
-			addEdge(topologyEdge{
-				ID:     "ecs-task::" + clusterNodeID + "→" + taskNodeID,
-				Source: clusterNodeID,
-				Target: taskNodeID,
-				Type:   "ecs",
-			})
-		}
 	}
 
 	// IGW → VPC attachment edges
@@ -1806,22 +1200,11 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 		if json.Unmarshal([]byte(kv.Value), &igw) != nil {
 			continue
 		}
-		region := defaultRegion
-		if i := strings.IndexByte(kv.Key, '/'); i > 0 {
-			region = kv.Key[:i]
-		}
+		region := regionFromKey(kv.Key, defaultRegion)
 		for _, att := range igw.Attachments {
-			if att.VpcID == "" {
-				continue
+			if att.VpcID != "" {
+				addEdge(topology.ID(region, "igw", igw.InternetGatewayID), topology.ID(region, "vpc", att.VpcID), "igw-attach", "vpc-attachment")
 			}
-			srcID := region + "::igw::" + igw.InternetGatewayID
-			tgtID := region + "::vpc::" + att.VpcID
-			addEdge(topologyEdge{
-				ID:     "igw-attach::" + srcID + "→" + tgtID,
-				Source: srcID,
-				Target: tgtID,
-				Type:   "vpc-attachment",
-			})
 		}
 	}
 
@@ -1831,58 +1214,16 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 		if json.Unmarshal([]byte(kv.Value), &inst) != nil || inst.VpcID == "" {
 			continue
 		}
-		region := defaultRegion
-		if r, _ := serviceutil.SplitRegionKey(kv.Key); r != "" {
-			region = r
-		}
-		srcID := region + "::vpc::" + inst.VpcID
-		tgtID := region + "::ec2::" + inst.InstanceID
-		addEdge(topologyEdge{
-			ID:     "vpc-member::" + srcID + "→" + tgtID,
-			Source: srcID,
-			Target: tgtID,
-			Type:   "vpc-member",
-		})
+		region := regionFromKey(kv.Key, defaultRegion)
+		addEdge(topology.ID(region, "vpc", inst.VpcID), topology.ID(region, "ec2", inst.InstanceID), "vpc-member", "vpc-member")
 	}
 
-	// EFS access point → file system edges.
-	for _, kv := range byNS[tNsEFSAccessPoints] {
-		var ap tEFSAccessPoint
-		if json.Unmarshal([]byte(kv.Value), &ap) != nil || ap.ID == "" || ap.FileSystemID == "" {
-			continue
-		}
-		region := defaultRegion
-		if i := strings.IndexByte(kv.Key, '/'); i > 0 {
-			region = kv.Key[:i]
-		}
-		srcID := region + "::efs::" + ap.ID
-		tgtID := region + "::efs::" + ap.FileSystemID
-		addEdge(topologyEdge{
-			ID:     "efs-ap::" + srcID + "→" + tgtID,
-			Source: srcID,
-			Target: tgtID,
-			Type:   "vpc-attachment",
-			Label:  "access point",
-		})
-	}
+	contributeCloudFormation(defaultRegion, byNS[tNsCFNStacks], g)
+}
 
-	// S3 Tables: table → its table bucket. The richer data-lake map (warehouse
-	// sub-labels, commit overlays) is #2089's.
-	for _, kv := range byNS[tNsS3Tables] {
-		var t tS3Table
-		if json.Unmarshal([]byte(kv.Value), &t) != nil || t.TableID == "" {
-			continue
-		}
-		region, _ := splitRegionKey(kv.Key)
-		if region == "" {
-			region = defaultRegion
-		}
-		srcID := region + "::s3tables::" + t.Bucket + "/" + t.TableID
-		bucketID := region + "::s3tables::" + t.Bucket
-		addEdge(topologyEdge{ID: "s3tables-bucket::" + srcID + "→" + bucketID, Source: srcID, Target: bucketID, Type: "s3tables-table", Label: "table"})
-	}
-
-	// CloudFormation stack ownership + intra-stack reference edges.
+// contributeCloudFormation tags each stack's resources with the stack's name
+// and links nested stacks to their parents.
+func contributeCloudFormation(defaultRegion string, kvs []state.KV, g *topology.Graph) {
 	// First pass: parse all stacks and index by ID for parent lookups.
 	type parsedCFNStack struct {
 		stack  tCFNStack
@@ -1890,7 +1231,7 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 	}
 	cfnStacksByID := make(map[string]parsedCFNStack)
 	var cfnStacks []parsedCFNStack
-	for _, kv := range byNS[tNsCFNStacks] {
+	for _, kv := range kvs {
 		var stack tCFNStack
 		if json.Unmarshal([]byte(kv.Value), &stack) != nil {
 			continue
@@ -1909,46 +1250,27 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 		}
 	}
 
-	// Second pass: ownership tagging, reference edges, and nested-stack edges.
+	// Second pass: ownership tagging and nested-stack edges.
 	for _, ps := range cfnStacks {
 		stack := ps.stack
 		stackRegion := ps.region
 
-		// Build logical→physical node ID mapping for this stack.
-		logicalToNodeID := make(map[string]string, len(stack.Resources))
 		for _, res := range stack.Resources {
-			if res.PhysicalID == "" {
-				continue
-			}
-			nodeID := cfnResourceNodeID(res, stackRegion)
-			if nodeID != "" {
-				logicalToNodeID[res.LogicalID] = nodeID
+			if res.PhysicalID != "" {
+				g.SetStack(cfnResourceRef(res, stackRegion), stack.StackName)
 			}
 		}
 
-		// Tag owned nodes with their stack name.
-		for _, nodeID := range logicalToNodeID {
-			for i := range nodes {
-				if nodes[i].ID == nodeID {
-					name := stack.StackName
-					nodes[i].StackName = &name
-					break
-				}
-			}
-		}
-
-		// Nested-stack edge: parent → child. Use the parent's physical
-		// resource (child stack ARN) to find the child's stack name and
-		// emit an edge between their stack group IDs.
-		// Note: stack group IDs (stack::region::name) are phantom nodes
-		// created by the frontend layout — they don't exist in the node
-		// set, so we append directly to edges instead of using addEdge.
+		// Nested-stack edge: parent → child, between their stack group IDs.
+		// Stack group IDs (stack::region::name) are phantom nodes created by
+		// the frontend layout — they don't exist in the node set, so the edge
+		// is added verbatim rather than as a link.
 		if stack.ParentStackID != "" {
 			if parent, ok := cfnStacksByID[stack.ParentStackID]; ok {
 				parentRegion := parent.region
 				srcID := "stack::" + parentRegion + "::" + parent.stack.StackName
 				tgtID := "stack::" + stackRegion + "::" + stack.StackName
-				edges = append(edges, topologyEdge{
+				g.AddEdge(topology.Edge{
 					ID:           "nested-stack::" + srcID + "→" + tgtID,
 					Source:       srcID,
 					Target:       tgtID,
@@ -1959,177 +1281,86 @@ func buildTopology(cfg *config.Config, byNS map[string][]state.KV, regionFilter 
 			}
 		}
 	}
+}
 
-	// API Gateway → Lambda edges (REST v1)
-	for apiID, fnNames := range v1LambdaTargets {
-		apiRegion := restAPIIndex[apiID]
-		srcID := apiRegion + "::apigateway::" + apiID
-		seen := make(map[string]bool)
-		for _, fnName := range fnNames {
-			if seen[fnName] {
-				continue
-			}
-			seen[fnName] = true
-			fnRegion, ok := funcIndex[fnName]
-			if !ok {
-				fnRegion = defaultRegion
-			}
-			tgtID := fnRegion + "::lambda::" + fnName
-			addEdge(topologyEdge{
-				ID:     "apigw::" + srcID + "→" + tgtID,
-				Source: srcID,
-				Target: tgtID,
-				Type:   "apigw-integration",
-			})
+// addAPIGatewayLambdaEdges links an API to each distinct function its
+// integrations invoke. Integration URIs are resolved by name, preferring the
+// API's own region.
+func addAPIGatewayLambdaEdges(g *topology.Graph, region, apiID string, fnNames []string) {
+	seen := make(map[string]bool)
+	for _, fnName := range fnNames {
+		if seen[fnName] {
+			continue
 		}
-	}
-
-	// API Gateway → Lambda edges (HTTP v2)
-	for apiID, fnNames := range v2LambdaTargets {
-		apiRegion := v2APIIndex[apiID]
-		srcID := apiRegion + "::apigateway::" + apiID
-		seen := make(map[string]bool)
-		for _, fnName := range fnNames {
-			if seen[fnName] {
-				continue
-			}
-			seen[fnName] = true
-			fnRegion, ok := funcIndex[fnName]
-			if !ok {
-				fnRegion = defaultRegion
-			}
-			tgtID := fnRegion + "::lambda::" + fnName
-			addEdge(topologyEdge{
-				ID:     "apigw::" + srcID + "→" + tgtID,
-				Source: srcID,
-				Target: tgtID,
-				Type:   "apigw-integration",
-			})
-		}
-	}
-
-	// Collect ordered region list
-	regions := make([]string, 0, len(regionSet))
-	for r := range regionSet {
-		regions = append(regions, r)
-	}
-	// If region filter was requested but no resources exist, still include it
-	if regionFilter != "" && !regionSet[regionFilter] {
-		regions = append(regions, regionFilter)
-	}
-
-	// CloudFront → S3 origin edges
-	for _, cf := range cfDists {
-		for _, bucket := range cf.s3Origins {
-			// Try to find the S3 bucket node in any region.
-			targetID := ""
-			for nid := range nodeIndex {
-				if strings.HasSuffix(nid, "::s3::"+bucket) {
-					targetID = nid
-					break
-				}
-			}
-			if targetID != "" {
-				addEdge(topologyEdge{
-					ID:     cf.nodeID + "->>" + targetID,
-					Source: cf.nodeID,
-					Target: targetID,
-					Type:   "origin",
-					Label:  "S3 origin",
-				})
-			}
-		}
-	}
-
-	// AppSync → Lambda / DynamoDB data source edges
-	for _, dsInfo := range appsyncDataSources {
-		// Find the AppSync API node for this data source.
-		srcID := dsInfo.region + "::appsync::" + dsInfo.apiID
-		switch dsInfo.ds.Type {
-		case "AWS_LAMBDA":
-			var cfg struct {
-				LambdaFunctionArn string `json:"lambdaFunctionArn"`
-			}
-			if json.Unmarshal(dsInfo.ds.LambdaConfig, &cfg) != nil || cfg.LambdaFunctionArn == "" {
-				continue
-			}
-			fnName := lambdaNameFromARN(cfg.LambdaFunctionArn)
-			fnRegion := regionFromARN(cfg.LambdaFunctionArn, dsInfo.region)
-			tgtID := fnRegion + "::lambda::" + fnName
-			addEdge(topologyEdge{
-				ID:     "appsync-ds::" + srcID + "→" + tgtID,
-				Source: srcID,
-				Target: tgtID,
-				Type:   "appsync-datasource",
-				Label:  dsInfo.ds.Name,
-			})
-		case "AMAZON_DYNAMODB":
-			var cfg struct {
-				TableName string `json:"tableName"`
-			}
-			if json.Unmarshal(dsInfo.ds.DynamodbConfig, &cfg) != nil || cfg.TableName == "" {
-				continue
-			}
-			tblRegion := dsInfo.region
-			tgtID := tblRegion + "::dynamodb::" + cfg.TableName
-			addEdge(topologyEdge{
-				ID:     "appsync-ds::" + srcID + "→" + tgtID,
-				Source: srcID,
-				Target: tgtID,
-				Type:   "appsync-datasource",
-				Label:  dsInfo.ds.Name,
-			})
-		}
-	}
-
-	if nodes == nil {
-		nodes = []topologyNode{}
-	}
-	if edges == nil {
-		edges = []topologyEdge{}
-	}
-
-	return topologyResponse{
-		Regions: regions,
-		Nodes:   nodes,
-		Edges:   edges,
+		seen[fnName] = true
+		g.AddLink(topology.Link{
+			Source:   topology.ID(region, "apigateway", apiID),
+			Target:   topology.ID(region, "lambda", fnName).AnyRegion(),
+			IDPrefix: "apigw",
+			Type:     "apigw-integration",
+		})
 	}
 }
 
-func esmFilterPatterns(fc *tFilterCriteria) []string {
-	if fc == nil || len(fc.Filters) == 0 {
-		return nil
-	}
-	out := make([]string, 0, len(fc.Filters))
-	for _, f := range fc.Filters {
-		if f.Pattern != "" {
-			out = append(out, f.Pattern)
+// addAppSyncDataSourceEdge links an AppSync API to a Lambda or DynamoDB data
+// source.
+func addAppSyncDataSourceEdge(g *topology.Graph, region, apiID string, ds tAppSyncDataSource) {
+	var target topology.Ref
+	switch ds.Type {
+	case "AWS_LAMBDA":
+		var cfg struct {
+			LambdaFunctionArn string `json:"lambdaFunctionArn"`
 		}
+		if json.Unmarshal(ds.LambdaConfig, &cfg) != nil || cfg.LambdaFunctionArn == "" {
+			return
+		}
+		target = topology.ID(regionFromARN(cfg.LambdaFunctionArn, region), "lambda", lambdaNameFromARN(cfg.LambdaFunctionArn))
+	case "AMAZON_DYNAMODB":
+		var cfg struct {
+			TableName string `json:"tableName"`
+		}
+		if json.Unmarshal(ds.DynamodbConfig, &cfg) != nil || cfg.TableName == "" {
+			return
+		}
+		target = topology.ID(region, "dynamodb", cfg.TableName)
+	default:
+		return
 	}
-	return out
+	g.AddLink(topology.Link{
+		Source:   topology.ID(region, "appsync", apiID),
+		Target:   target,
+		IDPrefix: "appsync-ds",
+		Type:     "appsync-datasource",
+		Label:    ds.Name,
+	})
 }
 
-// ── ARN helpers ────────────────────────────────────────────────────────────
+// ── Key and ARN helpers ────────────────────────────────────────────────────
 
-// regionFromARN extracts the region (segment 3) from a standard AWS ARN.
-// Returns fallback if the ARN is malformed or the region segment is empty.
+// regionFromARN extracts the region from a standard AWS ARN, or returns
+// fallback when the ARN has none.
 func regionFromARN(arn, fallback string) string {
-	// arn:aws:service:REGION:account:resource
-	parts := strings.SplitN(arn, ":", 6)
-	if len(parts) >= 4 && parts[3] != "" {
-		return parts[3]
+	if r := serviceutil.ARNRegion(arn); r != "" {
+		return r
 	}
 	return fallback
 }
 
-// splitRegionKey extracts the region prefix and remaining key from a
-// region-scoped store key of the form "us-east-1/api:xxx".
-// Returns ("", key) if no "/" separator is present.
-func splitRegionKey(key string) (region, rest string) {
-	if i := strings.IndexByte(key, '/'); i > 0 {
-		return key[:i], key[i+1:]
+// regionFromKey extracts the region from a region-scoped store key
+// ("us-east-1/vpc-abc"), or returns fallback when the key has none.
+func regionFromKey(key, fallback string) string {
+	if r, _ := serviceutil.SplitRegionKey(key); r != "" {
+		return r
 	}
-	return "", key
+	return fallback
+}
+
+// apiIDFromKey extracts the API ID from an API Gateway sub-resource key,
+// "{region}/{apiID}/{resourceID|stageName|…}".
+func apiIDFromKey(key string) string {
+	_, rest := serviceutil.SplitRegionKey(key)
+	apiID, _, _ := strings.Cut(rest, "/")
+	return apiID
 }
 
 // nameFromARNSuffix returns the last colon-separated segment of an ARN.
@@ -2145,23 +1376,6 @@ func nameFromSlashSuffix(arn string) string {
 		return arn[i+1:]
 	}
 	return nameFromARNSuffix(arn)
-}
-
-func normalizeContainerImageRef(image string) string {
-	image = strings.TrimSpace(image)
-	if image == "" {
-		return ""
-	}
-	image = strings.TrimPrefix(strings.TrimPrefix(image, "https://"), "http://")
-	if idx := strings.IndexByte(image, '@'); idx >= 0 {
-		image = image[:idx]
-	}
-	lastSlash := strings.LastIndexByte(image, '/')
-	lastColon := strings.LastIndexByte(image, ':')
-	if lastColon > lastSlash {
-		image = image[:lastColon]
-	}
-	return image
 }
 
 // lambdaNameFromARN extracts the function name from a Lambda ARN or
@@ -2216,134 +1430,86 @@ func isNumeric(s string) bool {
 	return len(s) > 0
 }
 
-// pipeEndpointNodeID maps an EventBridge Pipes source or target ARN to the
-// topology node ID that represents it, keyed on the ARN's service segment.
-// Returns "" for an empty ARN or a service the graph has no node type for.
-func pipeEndpointNodeID(arn, defaultRegion string) string {
+// pipeEndpointRef maps an EventBridge Pipes source or target ARN to the
+// node that represents it, keyed on the ARN's service segment and falling
+// back to the same name in another region. Returns the zero Ref for an empty
+// ARN or a service the graph has no node type for.
+func pipeEndpointRef(arn, defaultRegion string) topology.Ref {
 	parts := strings.SplitN(arn, ":", 6)
 	if len(parts) < 6 || parts[0] != "arn" {
-		return ""
+		return topology.Ref{}
 	}
 	region := regionFromARN(arn, defaultRegion)
+	var kind, name string
 	switch parts[2] {
-	case "sqs":
-		return region + "::sqs::" + nameFromARNSuffix(arn)
-	case "sns":
-		return region + "::sns::" + nameFromARNSuffix(arn)
+	case "sqs", "sns":
+		kind, name = parts[2], nameFromARNSuffix(arn)
 	case "dynamodb":
 		// Either a table ARN or a stream ARN; both map to the table node.
-		return region + "::dynamodb::" + tableNameFromStreamARN(arn)
+		kind, name = "dynamodb", tableNameFromStreamARN(arn)
 	case "lambda":
-		return region + "::lambda::" + lambdaNameFromARN(arn)
+		kind, name = "lambda", lambdaNameFromARN(arn)
 	case "kinesis":
 		// arn:aws:kinesis:region:acct:stream/<name>
-		return region + "::kinesis::" + nameFromSlashSuffix(arn)
+		kind, name = "kinesis", nameFromSlashSuffix(arn)
 	case "states":
 		// arn:aws:states:region:acct:stateMachine:<name>
-		return region + "::states::" + nameFromARNSuffix(arn)
+		kind, name = "states", nameFromARNSuffix(arn)
 	case "events":
 		// arn:aws:events:region:acct:event-bus/<name>
-		return region + "::events::" + nameFromSlashSuffix(arn)
+		kind, name = "events", nameFromSlashSuffix(arn)
+	default:
+		return topology.Ref{}
 	}
-	return ""
+	return topology.ID(region, kind, name).AnyRegion()
 }
 
-// cfnResourceNodeID maps a CloudFormation resource to the topology node ID
-// that represents it. Returns "" for resource types not present in the graph.
-func cfnResourceNodeID(res tCFNResource, defaultRegion string) string {
+// cfnResourceRef maps a CloudFormation resource to the node that represents
+// it. A type whose service contributes its own topology registers its nodes
+// under topology.CFN, so anything not listed here resolves that way.
+func cfnResourceRef(res tCFNResource, defaultRegion string) topology.Ref {
 	switch {
 	case strings.HasPrefix(res.Type, "AWS::S3::Bucket"):
-		return defaultRegion + "::s3::" + res.PhysicalID
-	case res.Type == "AWS::SQS::Queue":
-		name := nameFromARNSuffix(res.PhysicalID)
-		region := regionFromARN(res.PhysicalID, defaultRegion)
-		return region + "::sqs::" + name
+		return topology.ID(defaultRegion, "s3", res.PhysicalID)
 	case res.Type == "AWS::SNS::Topic":
-		name := nameFromARNSuffix(res.PhysicalID)
-		region := regionFromARN(res.PhysicalID, defaultRegion)
-		return region + "::sns::" + name
+		return topology.ID(regionFromARN(res.PhysicalID, defaultRegion), "sns", nameFromARNSuffix(res.PhysicalID))
 	case res.Type == "AWS::DynamoDB::Table":
 		name := res.PhysicalID
 		if i := strings.LastIndex(name, "/"); i >= 0 {
 			name = name[i+1:]
 		}
-		region := regionFromARN(res.PhysicalID, defaultRegion)
-		return region + "::dynamodb::" + name
-	case res.Type == "AWS::Lambda::Function":
-		name := lambdaNameFromARN(res.PhysicalID)
-		region := regionFromARN(res.PhysicalID, defaultRegion)
-		return region + "::lambda::" + name
+		return topology.ID(regionFromARN(res.PhysicalID, defaultRegion), "dynamodb", name)
 	case res.Type == "AWS::Logs::LogGroup":
-		return defaultRegion + "::logs::" + res.PhysicalID
+		return topology.ID(defaultRegion, "logs", res.PhysicalID)
 	case res.Type == "AWS::EC2::Instance":
-		return defaultRegion + "::ec2::" + res.PhysicalID
+		return topology.ID(defaultRegion, "ec2", res.PhysicalID)
 	case res.Type == "AWS::ECS::Cluster":
-		name := nameFromARNSuffix(res.PhysicalID)
-		return defaultRegion + "::ecs::" + name
+		return topology.ID(defaultRegion, "ecs", nameFromARNSuffix(res.PhysicalID))
 	case res.Type == "AWS::ECS::Service":
 		// PhysicalID is the service ARN: arn:aws:ecs:region:acct:service/cluster/name
-		parts := strings.SplitN(res.PhysicalID, "/", 3)
-		if len(parts) == 3 {
-			region := regionFromARN(res.PhysicalID, defaultRegion)
-			return region + "::ecs-service::" + parts[1] + "/" + parts[2]
+		if parts := strings.SplitN(res.PhysicalID, "/", 3); len(parts) == 3 {
+			return topology.ID(regionFromARN(res.PhysicalID, defaultRegion), "ecs-service", parts[1]+"/"+parts[2])
 		}
-		return ""
+		return topology.Ref{}
 	case res.Type == "AWS::RDS::DBInstance":
-		return defaultRegion + "::rds::" + res.PhysicalID
+		return topology.ID(defaultRegion, "rds", res.PhysicalID)
 	case res.Type == "AWS::ElastiCache::CacheCluster" || res.Type == "AWS::ElastiCache::ServerlessCache" || res.Type == "AWS::ElastiCache::ReplicationGroup":
-		return defaultRegion + "::elasticache::" + res.PhysicalID
+		return topology.ID(defaultRegion, "elasticache", res.PhysicalID)
 	case res.Type == "AWS::ApiGateway::RestApi" || res.Type == "AWS::ApiGatewayV2::Api":
-		return defaultRegion + "::apigateway::" + res.PhysicalID
+		return topology.ID(defaultRegion, "apigateway", res.PhysicalID)
 	case res.Type == "AWS::Cognito::UserPool":
-		return defaultRegion + "::cognito::" + res.PhysicalID
+		return topology.ID(defaultRegion, "cognito", res.PhysicalID)
 	case res.Type == "AWS::AppSync::GraphQLApi":
-		return defaultRegion + "::appsync::" + res.PhysicalID
+		return topology.ID(defaultRegion, "appsync", res.PhysicalID)
 	case res.Type == "AWS::CloudFront::Distribution":
-		return defaultRegion + "::cloudfront::" + res.PhysicalID
+		return topology.ID(defaultRegion, "cloudfront", res.PhysicalID)
 	case res.Type == "AWS::WAFv2::WebACL":
 		id := res.PhysicalID
 		if parts := strings.SplitN(id, "/", 2); len(parts) == 2 {
 			id = parts[1]
 		}
-		return defaultRegion + "::waf::" + id
+		return topology.ID(defaultRegion, "waf", id)
 	default:
-		return ""
+		return topology.CFN(defaultRegion, res.Type, res.PhysicalID)
 	}
-}
-
-// ── SQS message counting ──────────────────────────────────────────────────
-
-type sqsMessageCounts struct {
-	visible  int
-	inFlight int
-}
-
-// countSQSMessages scans the messages namespace and counts visible/in-flight
-// messages per queue. Keys are "queueName/messageID".
-func countSQSMessages(messageKVs []state.KV) map[string]sqsMessageCounts {
-	counts := make(map[string]sqsMessageCounts)
-	for _, kv := range messageKVs {
-		// Keys are "region/queueName/messageID" (region-prefixed).
-		parts := strings.SplitN(kv.Key, "/", 3)
-		if len(parts) < 3 {
-			continue
-		}
-		queueName := parts[1]
-		c := counts[queueName]
-		// We don't parse the full message just to count — check the
-		// receipt_handle field to determine visibility.
-		var msg struct {
-			ReceiptHandle string `json:"receipt_handle"`
-		}
-		if err := json.Unmarshal([]byte(kv.Value), &msg); err != nil {
-			continue
-		}
-		if msg.ReceiptHandle == "" {
-			c.visible++
-		} else {
-			c.inFlight++
-		}
-		counts[queueName] = c
-	}
-	return counts
 }

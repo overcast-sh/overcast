@@ -97,7 +97,7 @@ Shorter overview: the [service reference index](./services/README.md).
 | ECR              | [ecr.md](./services/ecr.md)                         | 25  | Core CRUD + common workflows  |
 | KMS              | [kms.md](./services/kms.md)                         | 34  | Core CRUD + common workflows  |
 | Kinesis          | [kinesis.md](./services/kinesis.md)                 | 23  | Core CRUD + common workflows  |
-| EventBridge      | [eventbridge.md](./services/eventbridge.md)         | 29  | Core CRUD + common workflows  |
+| EventBridge      | [eventbridge.md](./services/eventbridge.md)         | 31  | Core CRUD + common workflows  |
 | Scheduler        | [scheduler.md](./services/scheduler.md)             | 12  | Core CRUD + common workflows  |
 | CloudFormation   | [cloudformation.md](./services/cloudformation.md)   | 53  | Core CRUD + common workflows  |
 | RDS              | [rds.md](./services/rds.md)                         | 34  | Core CRUD + common workflows  |

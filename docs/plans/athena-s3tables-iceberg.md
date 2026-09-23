@@ -222,11 +222,7 @@ and on ElastiCache's `SetDocker`, `Stop`, GC and readiness for everything else.
 
 - **Step Functions:** add `athena:startQueryExecution` (`.sync`), `getQueryExecution`, `getQueryResults`, `stopQueryExecution`, and the named-query and workgroup integrations to `dispatchTask`. Also add Athena as a Distributed Map `ItemReader` source (#2040).
 - **Firehose Iceberg destination:** this needs Firehose delivery to exist first, which is a separate programme. Record it as a follow-up, not part of this plan.
-- **Console:**
-  - An Athena query editor: workgroup and catalog pickers, run and stop, a results grid, and history.
-  - A Glue catalog browser covering databases, tables, schema and partitions.
-  - An S3 Tables page covering buckets, namespaces, tables, metadata snapshots and the warehouse link.
-  - Register all of them in `service-registry.ts`.
+- **Console, system map and developer QoL:** designed in [data-lake-console.md](./data-lake-console.md). It covers the Athena query workspace, the Glue catalog browser with a create-from-S3 wizard, the S3 Tables console with a connect-a-client panel, S3 previews for CSV, Parquet and Iceberg files, map nodes, edges and live overlays, and `overcast athena query`, MCP tools and a sample dataset.
 - **Docs:** rewrite `athena.md` and `glue.md`, add `s3tables.md` with `limitations.md`, and write an "Iceberg locally" guide covering PyIceberg, Spark and Athena. Update STATUS.md and add a changelog fragment per PR.
 
 ## Out of scope

@@ -15,12 +15,18 @@ import (
 )
 
 type createEventBusRequest struct {
-	Name string     `json:"Name" cbor:"Name"`
-	Tags []tagEntry `json:"Tags" cbor:"Tags"`
+	Name             string              `json:"Name" cbor:"Name"`
+	Description      string              `json:"Description" cbor:"Description"`
+	KmsKeyIdentifier string              `json:"KmsKeyIdentifier" cbor:"KmsKeyIdentifier"`
+	DeadLetterConfig *ebDeadLetterConfig `json:"DeadLetterConfig" cbor:"DeadLetterConfig"`
+	Tags             []tagEntry          `json:"Tags" cbor:"Tags"`
 }
 
 type createEventBusResponse struct {
-	EventBusArn string `json:"EventBusArn" cbor:"EventBusArn"`
+	EventBusArn      string              `json:"EventBusArn" cbor:"EventBusArn"`
+	Description      string              `json:"Description,omitempty" cbor:"Description,omitempty"`
+	KmsKeyIdentifier string              `json:"KmsKeyIdentifier,omitempty" cbor:"KmsKeyIdentifier,omitempty"`
+	DeadLetterConfig *ebDeadLetterConfig `json:"DeadLetterConfig,omitempty" cbor:"DeadLetterConfig,omitempty"`
 }
 
 type describeEventBusRequest struct {
@@ -28,8 +34,15 @@ type describeEventBusRequest struct {
 }
 
 type describeEventBusResponse struct {
-	Name string `json:"Name" cbor:"Name"`
-	Arn  string `json:"Arn" cbor:"Arn"`
+	Name             string              `json:"Name" cbor:"Name"`
+	Arn              string              `json:"Arn" cbor:"Arn"`
+	Description      string              `json:"Description,omitempty" cbor:"Description,omitempty"`
+	KmsKeyIdentifier string              `json:"KmsKeyIdentifier,omitempty" cbor:"KmsKeyIdentifier,omitempty"`
+	DeadLetterConfig *ebDeadLetterConfig `json:"DeadLetterConfig,omitempty" cbor:"DeadLetterConfig,omitempty"`
+	// Policy is the JSON-encoded resource policy built from PutPermission
+	// grants (busPolicyJSON in permissions.go), omitted entirely once no
+	// permission has ever been granted on the bus — the same shape AWS uses.
+	Policy string `json:"Policy,omitempty" cbor:"Policy,omitempty"`
 }
 
 type listEventBusesRequest struct{}
@@ -161,7 +174,13 @@ func (s *Service) createEventBusTyped(ctx context.Context, req *createEventBusRe
 		return nil, aerr
 	}
 	arn := s.busARN(ctx, req.Name)
-	bus := eventBus{Name: req.Name, ARN: arn}
+	bus := eventBus{
+		Name:             req.Name,
+		ARN:              arn,
+		Description:      req.Description,
+		KmsKeyIdentifier: req.KmsKeyIdentifier,
+		DeadLetterConfig: req.DeadLetterConfig,
+	}
 	b, _ := json.Marshal(bus)
 	if err := s.store.Set(ctx, nsBuses, serviceutil.RegionKey(s.region(ctx), req.Name), string(b)); err != nil {
 		return nil, protocol.ErrInternalError
@@ -172,7 +191,12 @@ func (s *Service) createEventBusTyped(ctx context.Context, req *createEventBusRe
 		}
 	}
 	s.publishCtx(ctx, events.EventBridgeBusCreated, events.ResourcePayload{Name: req.Name, ARN: arn})
-	return &createEventBusResponse{EventBusArn: arn}, nil
+	return &createEventBusResponse{
+		EventBusArn:      arn,
+		Description:      req.Description,
+		KmsKeyIdentifier: req.KmsKeyIdentifier,
+		DeadLetterConfig: req.DeadLetterConfig,
+	}, nil
 }
 
 func (s *Service) describeEventBusTyped(ctx context.Context, req *describeEventBusRequest) (*describeEventBusResponse, *protocol.AWSError) {
@@ -180,14 +204,25 @@ func (s *Service) describeEventBusTyped(ctx context.Context, req *describeEventB
 	if name == "" {
 		name = "default"
 	}
+	policy, aerr := s.busPolicyJSON(ctx, name)
+	if aerr != nil {
+		return nil, aerr
+	}
 	raw, found, err := s.store.Get(ctx, nsBuses, serviceutil.RegionKey(s.region(ctx), name))
 	if err != nil || !found {
 		arn := s.busARN(ctx, name)
-		return &describeEventBusResponse{Name: name, Arn: arn}, nil
+		return &describeEventBusResponse{Name: name, Arn: arn, Policy: policy}, nil
 	}
 	var bus eventBus
 	json.Unmarshal([]byte(raw), &bus) //nolint:errcheck
-	return &describeEventBusResponse{Name: bus.Name, Arn: bus.ARN}, nil
+	return &describeEventBusResponse{
+		Name:             bus.Name,
+		Arn:              bus.ARN,
+		Description:      bus.Description,
+		KmsKeyIdentifier: bus.KmsKeyIdentifier,
+		DeadLetterConfig: bus.DeadLetterConfig,
+		Policy:           policy,
+	}, nil
 }
 
 func (s *Service) listEventBusesTyped(ctx context.Context, _ *listEventBusesRequest) (*listEventBusesResponse, *protocol.AWSError) {
@@ -651,4 +686,143 @@ func invalidEventPatternError(err error) *protocol.AWSError {
 		Message:    "Event pattern is not valid. Reason: " + err.Error(),
 		HTTPStatus: http.StatusBadRequest,
 	}
+}
+
+// ── PutPermission / RemovePermission ────────────────────────────────────────
+
+// ebPermissionCondition is PutPermission's optional Condition member. The
+// smithy model gives it a structured shape ({Type, Key, Value}), not the raw
+// JSON string the (older) prose documentation describes; the SDKs send it as
+// a nested object, so that is what Overcast decodes.
+type ebPermissionCondition struct {
+	Type  string `json:"Type" cbor:"Type"`
+	Key   string `json:"Key" cbor:"Key"`
+	Value string `json:"Value" cbor:"Value"`
+}
+
+type putPermissionRequest struct {
+	EventBusName string                 `json:"EventBusName" cbor:"EventBusName"`
+	Action       string                 `json:"Action" cbor:"Action"`
+	Principal    string                 `json:"Principal" cbor:"Principal"`
+	StatementId  string                 `json:"StatementId" cbor:"StatementId"`
+	Condition    *ebPermissionCondition `json:"Condition" cbor:"Condition"`
+	// Policy is a whole permission-policy JSON document, used "instead of"
+	// StatementId/Action/Principal/Condition (AWS's own wording) — it
+	// replaces the bus's entire policy rather than adding one statement.
+	Policy string `json:"Policy" cbor:"Policy"`
+}
+
+type removePermissionRequest struct {
+	StatementId          string `json:"StatementId" cbor:"StatementId"`
+	RemoveAllPermissions bool   `json:"RemoveAllPermissions" cbor:"RemoveAllPermissions"`
+	EventBusName         string `json:"EventBusName" cbor:"EventBusName"`
+}
+
+// putPermissionTyped grants (or replaces) a statement on the bus's resource
+// policy. AWS documents two mutually exclusive shapes for the request: a
+// single statement built from Action/Principal/StatementId/Condition, or a
+// whole Policy document supplied "instead of" those parameters — see
+// permissions.go for how each is turned into the statement list
+// DescribeEventBus.Policy is rendered from.
+//
+// Enforcement is deliberately out of scope: the policy is stored and
+// reported back through DescribeEventBus, not consulted to authorize
+// PutEvents from another account — the same stored-not-enforced treatment
+// Overcast gives every other IAM policy (config.Config.EnforceIAM gates
+// identity-policy evaluation for the caller's own credentials; it has no
+// bearing on this bus-level resource policy).
+func (s *Service) putPermissionTyped(ctx context.Context, req *putPermissionRequest) (*struct{}, *protocol.AWSError) {
+	busName, aerr := s.requireEventBus(ctx, req.EventBusName)
+	if aerr != nil {
+		return nil, aerr
+	}
+	var statements []map[string]any
+	if req.Policy != "" {
+		parsed, err := parsePolicyStatements(req.Policy)
+		if err != nil {
+			return nil, &protocol.AWSError{
+				Code:       "ValidationException",
+				Message:    "Policy is not valid JSON: " + err.Error(),
+				HTTPStatus: http.StatusBadRequest,
+			}
+		}
+		statements = parsed
+	} else {
+		if req.Action == "" || req.Principal == "" || req.StatementId == "" {
+			return nil, &protocol.AWSError{
+				Code:       "ValidationException",
+				Message:    "Parameters Action, Principal and StatementId must be specified, or Policy must be specified instead.",
+				HTTPStatus: http.StatusBadRequest,
+			}
+		}
+		existing, aerr := s.loadBusPolicyStatements(ctx, busName)
+		if aerr != nil {
+			return nil, aerr
+		}
+		statement := map[string]any{
+			"Sid":       req.StatementId,
+			"Effect":    "Allow",
+			"Principal": principalElement(req.Principal),
+			"Action":    req.Action,
+			"Resource":  s.busARN(ctx, busName),
+		}
+		if req.Condition != nil {
+			statement["Condition"] = map[string]any{
+				req.Condition.Type: map[string]any{req.Condition.Key: req.Condition.Value},
+			}
+		}
+		statements = upsertStatement(existing, req.StatementId, statement)
+	}
+	if aerr := s.saveBusPolicyStatements(ctx, busName, statements); aerr != nil {
+		return nil, aerr
+	}
+	return &struct{}{}, nil
+}
+
+// removePermissionTyped revokes one statement by StatementId, or the whole
+// policy at once with RemoveAllPermissions — AWS documents both, and a
+// StatementId that does not name a current statement is
+// ResourceNotFoundException.
+func (s *Service) removePermissionTyped(ctx context.Context, req *removePermissionRequest) (*struct{}, *protocol.AWSError) {
+	busName, aerr := s.requireEventBus(ctx, req.EventBusName)
+	if aerr != nil {
+		return nil, aerr
+	}
+	if req.RemoveAllPermissions {
+		if aerr := s.saveBusPolicyStatements(ctx, busName, nil); aerr != nil {
+			return nil, aerr
+		}
+		return &struct{}{}, nil
+	}
+	if req.StatementId == "" {
+		return nil, &protocol.AWSError{
+			Code:       "ValidationException",
+			Message:    "Parameter StatementId must be specified unless RemoveAllPermissions is set.",
+			HTTPStatus: http.StatusBadRequest,
+		}
+	}
+	statements, aerr := s.loadBusPolicyStatements(ctx, busName)
+	if aerr != nil {
+		return nil, aerr
+	}
+	kept := make([]map[string]any, 0, len(statements))
+	found := false
+	for _, st := range statements {
+		if sid, _ := st["Sid"].(string); sid == req.StatementId {
+			found = true
+			continue
+		}
+		kept = append(kept, st)
+	}
+	if !found {
+		return nil, &protocol.AWSError{
+			Code:       "ResourceNotFoundException",
+			Message:    fmt.Sprintf("Statement with the id %s does not exist.", req.StatementId),
+			HTTPStatus: http.StatusBadRequest,
+		}
+	}
+	if aerr := s.saveBusPolicyStatements(ctx, busName, kept); aerr != nil {
+		return nil, aerr
+	}
+	return &struct{}{}, nil
 }
