@@ -93,6 +93,29 @@ func AlphaNumericHyphenUnderscorePeriod(c rune) bool {
 // name — "must not contain two adjacent periods" is worth more there than a
 // sentence that does not say which of seven rules was hit.
 func BucketName(name string) *protocol.AWSError {
+	return bucketName(name, "")
+}
+
+// TableWarehouseBucketSuffix is the suffix S3 reserves for the warehouse
+// bucket S3 Tables gives every table. CreateBucket refuses it (BucketName),
+// because only S3 Tables may create a bucket that carries it.
+const TableWarehouseBucketSuffix = "--table-s3"
+
+// TableWarehouseBucketName validates the name of an S3 Tables warehouse
+// bucket: every general purpose naming rule except the one reserving the
+// "--table-s3" suffix, which such a bucket must carry. It exists so the one
+// caller entitled to that suffix can create the bucket without weakening the
+// rule for CreateBucket.
+func TableWarehouseBucketName(name string) *protocol.AWSError {
+	if !strings.HasSuffix(name, TableWarehouseBucketSuffix) {
+		return protocol.ErrInvalidBucketName("The specified bucket name is not valid. A table warehouse bucket name must end with the suffix " + TableWarehouseBucketSuffix + ".")
+	}
+	return bucketName(name, TableWarehouseBucketSuffix)
+}
+
+// bucketName applies the general purpose naming rules, exempting allowedSuffix
+// (when non-empty) from the reserved-suffix rule.
+func bucketName(name, allowedSuffix string) *protocol.AWSError {
 	if len(name) < 3 || len(name) > 63 {
 		return protocol.ErrInvalidBucketName("The specified bucket name is not valid. Bucket names must be between 3 and 63 characters.")
 	}
@@ -113,7 +136,7 @@ func BucketName(name string) *protocol.AWSError {
 		}
 	}
 	for _, suffix := range reservedBucketSuffixes {
-		if strings.HasSuffix(name, suffix) {
+		if suffix != allowedSuffix && strings.HasSuffix(name, suffix) {
 			return protocol.ErrInvalidBucketName("The specified bucket name is not valid. Bucket names must not end with the suffix " + suffix + ".")
 		}
 	}

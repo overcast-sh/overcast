@@ -30,6 +30,7 @@ var (
 	_ events.S3PutObjectFunc    = (*Service)(nil).PutObjectBytes
 	_ events.S3ListObjectsFunc  = (*Service)(nil).ListObjects
 	_ events.S3EnsureBucketFunc = (*Service)(nil).EnsureBucket
+	_ events.S3EnsureBucketFunc = (*Service)(nil).EnsureTableWarehouseBucket
 )
 
 // ---- Fixtures --------------------------------------------------------------
@@ -435,8 +436,9 @@ func TestEnsureBucket_invalidName(t *testing.T) {
 	cases := []struct{ name, bucket string }{
 		{"too short", "ab"},
 		{"upper case", "Results"},
-		// Real S3 reserves the suffix for S3 Tables' own buckets, and so does
-		// the accessor until S3 Tables needs it (#2067).
+		// Real S3 reserves the suffix for S3 Tables' own buckets, so the
+		// general accessor refuses it; EnsureTableWarehouseBucket is the one
+		// entry point that may create it.
 		{"reserved S3 Tables suffix", "warehouse--table-s3"},
 	}
 	for _, tc := range cases {
@@ -451,6 +453,34 @@ func TestEnsureBucket_invalidName(t *testing.T) {
 			assertAWSError(t, aerr, "InvalidBucketName", http.StatusBadRequest)
 		})
 	}
+}
+
+func TestEnsureTableWarehouseBucket_createsTheReservedSuffixOnly(t *testing.T) {
+	// Given: a service
+	f := newInProcessFixture(t)
+	ctx := context.Background()
+
+	// When: S3 Tables ensures a warehouse bucket, twice
+	name := "63a8e430-6e0b-46f5-k833abtwr6s8tmtsycedn8s4yc3xhuse1b--table-s3"
+	first := f.svc.EnsureTableWarehouseBucket(ctx, name, "eu-west-1")
+	second := f.svc.EnsureTableWarehouseBucket(ctx, name, "eu-west-1")
+
+	// Then: it exists, in the requested region, and is writable like any bucket
+	if first != nil || second != nil {
+		t.Fatalf("EnsureTableWarehouseBucket = %v, %v; want nil both times", first, second)
+	}
+	b, aerr := f.svc.handler.store.getBucket(ctx, name)
+	if aerr != nil {
+		t.Fatalf("get bucket: %v", aerr)
+	}
+	if b.Region != "eu-west-1" {
+		t.Errorf("Region = %q", b.Region)
+	}
+	f.put(t, name, "metadata/00000.metadata.json", "{}")
+
+	// And: a name without the suffix is not a warehouse bucket
+	aerr = f.svc.EnsureTableWarehouseBucket(ctx, "plain-bucket", "")
+	assertAWSError(t, aerr, "InvalidBucketName", http.StatusBadRequest)
 }
 
 func TestEnsureBucket_announcesCreationOnce(t *testing.T) {

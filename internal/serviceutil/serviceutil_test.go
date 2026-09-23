@@ -452,6 +452,36 @@ func TestBucketName_matchesAWSRules(t *testing.T) {
 	}
 }
 
+// TestTableWarehouseBucketName_exemptsOnlyItsOwnSuffix: the warehouse bucket
+// S3 Tables creates must carry the "--table-s3" suffix CreateBucket refuses,
+// and every other general purpose rule still applies to it.
+func TestTableWarehouseBucketName_exemptsOnlyItsOwnSuffix(t *testing.T) {
+	cases := []struct {
+		name  string
+		valid bool
+		why   string
+	}{
+		{name: "63a8e430-6e0b-46f5-k833abtwr6s8tmtsycedn8s4yc3xhuse1b--table-s3", valid: true, why: "AWS-shaped warehouse name"},
+		{name: "abc--table-s3", valid: true, why: "short warehouse name"},
+		{name: "my-bucket", why: "must carry the warehouse suffix"},
+		{name: "my-bucket--x-s3", why: "another reserved suffix"},
+		{name: "xn--abc--table-s3", why: "reserved prefix still applies"},
+		{name: "ABC--table-s3", why: "uppercase still refused"},
+		{name: strings.Repeat("a", 60) + "--table-s3", why: "too long"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := serviceutil.TableWarehouseBucketName(tc.name)
+			if tc.valid && err != nil {
+				t.Errorf("TableWarehouseBucketName(%q) rejected (%s): %v", tc.name, tc.why, err.Message)
+			}
+			if !tc.valid && err == nil {
+				t.Errorf("TableWarehouseBucketName(%q) accepted (%s)", tc.name, tc.why)
+			}
+		})
+	}
+}
+
 // ---- ResourceName validation -----------------------------------------------
 
 func TestResourceName_valid(t *testing.T) {
