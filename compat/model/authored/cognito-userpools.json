@@ -1,0 +1,244 @@
+{
+  "$comment": "Authored port of the hand-written registry group cognito-userpools (docs/plans/compat-coverage-modelgen.md §3.11, G6 wave 1, #1116). One spec in place of five per-language implementations — and of the two that were never written: dotnet-sdk and rust-sdk carry 9 rows each of parity debt for this group, which the port closes. It runs today under the shadow name cognito-userpools-shadow, beside the natives, so the nightly can compare the two per (suite, test); the flip PR renames this group to cognito-userpools, points the hand-written registry.json entry at this file, and deletes the native code. The clauses are the union of what the five natives assert — see compat/model/README.md § Authored scenarios. `service` is the registry group's, `cognito` — the Overcast key; its shape snapshot is models/aws/shapes/cognito-identity-provider.json, which cmd/compatgen resolves through the same alias awsapi.ServiceKey applies, since an authored scenario has no recipe to state it.",
+  "version": 1,
+  "service": "cognito",
+  "client": {
+    "sdkId": "Cognito Identity Provider",
+    "endpointPrefix": "cognito-idp",
+    "signingName": "cognito-idp",
+    "protocol": "awsJson1_1",
+    "apiVersion": "2016-04-18",
+    "targetPrefix": "AWSCognitoIdentityProviderService",
+    "awsQueryCompatible": false
+  },
+  "groups": [
+    {
+      "$comment": "One user pool, one app client and one user. The pool is created by the CreateUserPool test rather than by setup, which is what all five natives do, and every later test acts on it through the exported pool.id. DeleteUserPool removes that same pool, as go-sdk, python-sdk, node-js-sdk and java-sdk do; cli is the outlier — its DeleteUserPool creates a second, throwaway pool (compat-del-<runId>) and deletes that, leaving the group's pool to teardown, which proves the delete of a pool nothing else touched and nothing about the one the group built. No native polls: none of these operations is asynchronous on AWS the way a Kinesis stream is. The two deletion checks still go through a short `eventually` (10 × 500 ms), because they are the only clauses here that no native makes and Cognito documents no read-after-delete guarantee for ListUsers or DescribeUserPool; Overcast answers on the first attempt, so the budget is fidelity to AWS rather than latency the emulator has. Teardown removes the user, the client (only node-js-sdk's teardown does) and the pool; after a clean run all three are already gone, and each teardown call is individually wrapped, so their errors are logged and ignored.",
+      "name": "cognito-userpools-shadow",
+      "kind": "lifecycle",
+      "setup": [],
+      "tests": [
+        {
+          "$comment": "All five natives assert only that UserPool.Id is non-empty, and export it. The port adds that UserPool.Name is the name it asked for — the CreateUserPool response documents the created pool's UserPoolType, Name included. go-sdk, python-sdk, node-js-sdk and cli name the pool compat-<runId>, java-sdk the same via its setup hook; `$name` gives the run- and group-scoped equivalent.",
+          "name": "CreateUserPool",
+          "op": "CreateUserPool",
+          "call": {
+            "op": "CreateUserPool",
+            "params": { "PoolName": { "$name": "pool" } },
+            "export": { "pool.id": "$.UserPool.Id" }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.UserPool.Id": { "nonEmpty": true },
+                "$.UserPool.Name": { "equals": { "$name": "pool" } }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "go-sdk, python-sdk and node-js-sdk assert UserPool.Id is non-empty; cli that UserPool is present; java-sdk that the Id equals the created pool's. The union is java-sdk's equality, which implies the other three, plus the pool's Name as in CreateUserPool.",
+          "name": "DescribeUserPool",
+          "op": "DescribeUserPool",
+          "call": {
+            "op": "DescribeUserPool",
+            "params": { "UserPoolId": { "$ref": "pool.id" } }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.UserPool.Id": { "equals": { "$ref": "pool.id" } },
+                "$.UserPool.Name": { "equals": { "$name": "pool" } }
+              }
+            }
+          ],
+          "depends": ["CreateUserPool"]
+        },
+        {
+          "$comment": "go-sdk, python-sdk, node-js-sdk and cli call ListUserPools with MaxResults 10 and assert nothing but success; java-sdk asks for 60 and asserts the created pool is in the page. The union is java-sdk's membership check, and it takes java-sdk's 60 — MaxResults is required and 60 is its modeled maximum, so a bound of 10 is the one way this clause could fail for a reason that is not the emulator's, when a concurrent run has other pools in the region.",
+          "name": "ListUserPools",
+          "op": "ListUserPools",
+          "call": {
+            "op": "ListUserPools",
+            "params": { "MaxResults": 60 }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.UserPools",
+              "where": { "$.Id": { "$ref": "pool.id" } }
+            }
+          ],
+          "depends": ["CreateUserPool"]
+        },
+        {
+          "$comment": "All five natives assert UserPoolClient.ClientId is non-empty, and export it. go-sdk, python-sdk, node-js-sdk and cli name the client compat-client-<runId>; java-sdk uses the fixed name compat-client. `$name` is the run- and group-scoped spelling of the former.",
+          "name": "CreateUserPoolClient",
+          "op": "CreateUserPoolClient",
+          "call": {
+            "op": "CreateUserPoolClient",
+            "params": {
+              "UserPoolId": { "$ref": "pool.id" },
+              "ClientName": { "$name": "client" }
+            },
+            "export": { "client.id": "$.UserPoolClient.ClientId" }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.UserPoolClient.ClientId": { "nonEmpty": true } }
+            }
+          ],
+          "depends": ["CreateUserPool"]
+        },
+        {
+          "$comment": "go-sdk and python-sdk assert nothing but success; cli that UserPoolClients is present; node-js-sdk and java-sdk that the created client is in the list. The union is the membership check. go-sdk, python-sdk, node-js-sdk and cli page at 10, java-sdk at 60; the pool holds one client, so either bound shows it, and the port takes 60 — the modeled maximum — to match ListUserPools.",
+          "name": "ListUserPoolClients",
+          "op": "ListUserPoolClients",
+          "call": {
+            "op": "ListUserPoolClients",
+            "params": {
+              "UserPoolId": { "$ref": "pool.id" },
+              "MaxResults": 60
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.UserPoolClients",
+              "where": { "$.ClientId": { "$ref": "client.id" } }
+            }
+          ],
+          "depends": ["CreateUserPoolClient"]
+        },
+        {
+          "$comment": "go-sdk, python-sdk and node-js-sdk assert nothing but success; cli that User is present; java-sdk that User.Username is non-blank. The port asserts User.Username equals the username sent, which implies both: the pool is created with no UsernameAttributes, so Cognito keeps the given username rather than minting a UUID for an email or phone sign-in. go-sdk, python-sdk, node-js-sdk and java-sdk name the user compat-user-<runId>, cli compat-<runId>; `$name` is the run- and group-scoped spelling. Only java-sdk sends a TemporaryPassword, Passw0rd!#, and the port keeps it: it meets the default password policy a pool created with no Policies gets (8 characters minimum, an upper-case letter, a lower-case letter, a number and a symbol), and a fixed password keeps the request identical in every backend where the others leave Cognito to generate one.",
+          "name": "AdminCreateUser",
+          "op": "AdminCreateUser",
+          "call": {
+            "op": "AdminCreateUser",
+            "params": {
+              "UserPoolId": { "$ref": "pool.id" },
+              "Username": { "$name": "user" },
+              "TemporaryPassword": "Passw0rd!#"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.User.Username": { "equals": { "$name": "user" } } }
+            }
+          ],
+          "depends": ["CreateUserPool"]
+        },
+        {
+          "$comment": "go-sdk, python-sdk, node-js-sdk and cli assert nothing but success — and go-sdk, python-sdk, node-js-sdk and cli return early without calling the service at all when no pool id was recorded, so a failed CreateUserPool reads as a passing ListUsers there. java-sdk asserts the created user is in the list, with Limit 60. The union is the membership check; the port omits Limit, as the other four do — the pool holds one user, so any page shows it.",
+          "name": "ListUsers",
+          "op": "ListUsers",
+          "call": {
+            "op": "ListUsers",
+            "params": { "UserPoolId": { "$ref": "pool.id" } }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Users",
+              "where": { "$.Username": { "$name": "user" } }
+            }
+          ],
+          "depends": ["AdminCreateUser"]
+        },
+        {
+          "$comment": "No native asserts anything after AdminDeleteUser returns, and go-sdk, python-sdk and node-js-sdk return early without calling it when no username was recorded (cli and java-sdk raise instead). An IR test needs at least one clause, so the port asserts the documented effect — the user is no longer listed — through the same ListUsers read java-sdk's ListUsers makes, polled briefly (see the group's $comment).",
+          "name": "AdminDeleteUser",
+          "op": "AdminDeleteUser",
+          "call": {
+            "op": "AdminDeleteUser",
+            "params": {
+              "UserPoolId": { "$ref": "pool.id" },
+              "Username": { "$name": "user" }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 10,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "ListUsers",
+                  "params": { "UserPoolId": { "$ref": "pool.id" } }
+                },
+                "itemsPath": "$.Users",
+                "where": { "$.Username": { "$name": "user" } }
+              }
+            }
+          ],
+          "depends": ["ListUsers"]
+        },
+        {
+          "$comment": "No native asserts anything after DeleteUserPool returns; go-sdk, python-sdk and node-js-sdk skip the call when no pool id was recorded, and cli deletes a pool of its own (see the group's $comment). The port deletes the group's pool and asserts the documented effect twice: DescribeUserPool on it raises ResourceNotFoundException, which is in that operation's modeled errors, and ListUserPools no longer lists it. Both polled briefly. depends mirrors registry.json exactly.",
+          "name": "DeleteUserPool",
+          "op": "DeleteUserPool",
+          "call": {
+            "op": "DeleteUserPool",
+            "params": { "UserPoolId": { "$ref": "pool.id" } }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 10,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "DescribeUserPool",
+                  "params": { "UserPoolId": { "$ref": "pool.id" } }
+                },
+                "error": { "shape": "ResourceNotFoundException", "code": "ResourceNotFoundException" }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 10,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "ListUserPools",
+                  "params": { "MaxResults": 60 }
+                },
+                "itemsPath": "$.UserPools",
+                "where": { "$.Id": { "$ref": "pool.id" } }
+              }
+            }
+          ],
+          "depends": ["ListUserPoolClients", "AdminDeleteUser"]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "AdminDeleteUser",
+          "params": {
+            "UserPoolId": { "$ref": "pool.id" },
+            "Username": { "$name": "user" }
+          }
+        },
+        {
+          "op": "DeleteUserPoolClient",
+          "params": {
+            "UserPoolId": { "$ref": "pool.id" },
+            "ClientId": { "$ref": "client.id" }
+          }
+        },
+        {
+          "op": "DeleteUserPool",
+          "params": { "UserPoolId": { "$ref": "pool.id" } }
+        }
+      ]
+    }
+  ]
+}

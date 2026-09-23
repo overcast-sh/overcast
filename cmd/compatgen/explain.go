@@ -110,12 +110,16 @@ func repoShapes(root string) func(service string) (*serviceModel, error) {
 // read from the recipe's own `model` field. `-explain` reads the committed
 // scenario file rather than the corpus, and the scenario deliberately carries no
 // per-SDK or per-snapshot naming (compat/model/README.md § Naming), so the one
-// place that mapping lives is the recipe. A recipe that cannot be read leaves
-// the service its own name, which is right for every service that needs no
-// mapping.
+// place that mapping lives is the recipe. A service with no recipe — one only
+// an authored scenario covers — resolves the way generation resolved it
+// (snapshotServiceFor), and a recipe that cannot be decoded leaves the service
+// its own name, which is right for every service that needs no mapping.
 func modelServiceOf(root, service string) string {
 	contents, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(recipesDir), service+".json"))
 	if err != nil {
+		if model, err := snapshotServiceFor(filepath.Join(root, filepath.FromSlash(shapesDir)), service); err == nil {
+			return model
+		}
 		return service
 	}
 	// Decoded into the recipe itself, so the Model-or-service fallback is
