@@ -1251,6 +1251,11 @@ var stackTagPropagationResourceTypes = map[string]bool{
 	"AWS::AppConfig::Application":          true,
 	"AWS::AppConfig::Environment":          true,
 	"AWS::AppConfig::ConfigurationProfile": true,
+	// #544: Tags were dropped entirely on both resources (never forwarded on
+	// Create, never reconciled on Update); this set gains them at the same
+	// time RDS gains ManageMasterUserPassword.
+	"AWS::RDS::DBInstance": true,
+	"AWS::RDS::DBCluster":  true,
 }
 
 // stackTagPropagationExclusions (stack_tag_propagation_coverage_dev_test.go)

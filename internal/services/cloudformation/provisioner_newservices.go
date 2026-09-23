@@ -242,6 +242,69 @@ func latestDBInstanceEvent(ctx context.Context, router http.Handler, region, ins
 	return resp.Events[len(resp.Events)-1].Message
 }
 
+// ── RDS shared helpers ───────────────────────────────────────────────────────
+
+// rdsMasterUserSecretKmsKeyId reads the nested KmsKeyId a template sets under
+// `MasterUserSecret: {KmsKeyId: ...}` on AWS::RDS::DBInstance and
+// AWS::RDS::DBCluster alike — the one sub-property of MasterUserSecret that
+// is a request input; SecretArn is read-only, exposed only through
+// Fn::GetAtt MasterUserSecret.SecretArn.
+func rdsMasterUserSecretKmsKeyId(props map[string]any) string {
+	m, ok := props["MasterUserSecret"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	v, _ := m["KmsKeyId"].(string)
+	return v
+}
+
+// addRDSTagParams writes a merged tag map onto params as RDS's Query-protocol
+// tag list. RDS's TagList shape gives its member the locationName "Tag" (see
+// handler_tags.go's requireTaggableResource comment) rather than the
+// Query-protocol default "member", so — unlike most of this package's
+// Tags.member.N helpers — this one has to spell "Tag". Keys are sorted so the
+// same tag set always produces the same request.
+func addRDSTagParams(params map[string]string, tags map[string]string) {
+	keys := make([]string, 0, len(tags))
+	for k := range tags {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for i, k := range keys {
+		params[fmt.Sprintf("Tags.Tag.%d.Key", i+1)] = k
+		params[fmt.Sprintf("Tags.Tag.%d.Value", i+1)] = tags[k]
+	}
+}
+
+// updateRDSTags reconciles an RDS resource's tags on Update: added/changed
+// keys go through AddTagsToResource, keys dropped from the template go
+// through RemoveTagsFromResource. Mirrors updateSQSQueueTags's diff shape for
+// RDS's Query protocol; arn is the resource's own ARN (AddTagsToResource's
+// ResourceName), not its physical ID.
+func updateRDSTags(ctx context.Context, router http.Handler, region, arn string, stackTags, priorStackTags []Tag, rawTags, rawPrior any) error {
+	tags := mergeResourceTags(stackTags, rawTags)
+	prior := mergeResourceTags(priorStackTags, rawPrior)
+	added, removed := tagDelta(tags, prior)
+
+	if len(added) > 0 {
+		params := map[string]string{"Action": "AddTagsToResource", "Version": "2014-10-31", "ResourceName": arn}
+		addRDSTagParams(params, added)
+		if _, err := internalQuery(ctx, router, region, params); err != nil {
+			return fmt.Errorf("rds AddTagsToResource: %w", err)
+		}
+	}
+	if len(removed) > 0 {
+		params := map[string]string{"Action": "RemoveTagsFromResource", "Version": "2014-10-31", "ResourceName": arn}
+		for i, k := range removed {
+			params[fmt.Sprintf("TagKeys.member.%d", i+1)] = k
+		}
+		if _, err := internalQuery(ctx, router, region, params); err != nil {
+			return fmt.Errorf("rds RemoveTagsFromResource: %w", err)
+		}
+	}
+	return nil
+}
+
 // ── AWS::RDS::DBInstance ───────────────────────────────────────────────────
 
 type rdsDBInstanceHandler struct{}
@@ -271,6 +334,12 @@ func (h *rdsDBInstanceHandler) Create(ctx context.Context, router http.Handler, 
 	}
 	if v, _ := props["MasterUserPassword"].(string); v != "" {
 		params["MasterUserPassword"] = v
+	}
+	if v, ok := props["ManageMasterUserPassword"]; ok {
+		params["ManageMasterUserPassword"] = cfnScalarString(v)
+	}
+	if v := rdsMasterUserSecretKmsKeyId(props); v != "" {
+		params["MasterUserSecretKmsKeyId"] = v
 	}
 	if v, _ := props["DBInstanceClass"].(string); v != "" {
 		params["DBInstanceClass"] = v
@@ -316,6 +385,9 @@ func (h *rdsDBInstanceHandler) Create(ctx context.Context, router http.Handler, 
 			}
 		}
 	}
+	if tags := mergeResourceTags(rCtx.StackTags, props["Tags"]); len(tags) > 0 {
+		addRDSTagParams(params, tags)
+	}
 
 	rec, err := internalQuery(ctx, router, rCtx.Region, params)
 	if err != nil {
@@ -326,6 +398,7 @@ func (h *rdsDBInstanceHandler) Create(ctx context.Context, router http.Handler, 
 	arn := extractXMLValue(body, "DBInstanceArn")
 	endpointAddr := extractXMLValue(body, "Address")
 	endpointPort := extractXMLValue(body, "Port")
+	secretArn := extractXMLValue(body, "SecretArn")
 
 	if arn == "" {
 		arn = fmt.Sprintf("arn:aws:rds:%s:%s:db:%s", rCtx.Region, rCtx.AccountID, id)
@@ -335,6 +408,9 @@ func (h *rdsDBInstanceHandler) Create(ctx context.Context, router http.Handler, 
 		"DBInstanceArn":    arn,
 		"Endpoint.Address": endpointAddr,
 		"Endpoint.Port":    endpointPort,
+	}
+	if secretArn != "" {
+		attrs["MasterUserSecret.SecretArn"] = secretArn
 	}
 	return id, attrs, nil
 }
@@ -400,12 +476,25 @@ func (h *rdsDBInstanceHandler) Update(ctx context.Context, router http.Handler, 
 	if v, _ := props["MasterUserPassword"].(string); v != "" {
 		params["MasterUserPassword"] = v
 	}
+	if v, ok := props["ManageMasterUserPassword"]; ok {
+		params["ManageMasterUserPassword"] = cfnScalarString(v)
+	}
+	if v := rdsMasterUserSecretKmsKeyId(props); v != "" {
+		params["MasterUserSecretKmsKeyId"] = v
+	}
 
 	// ModifyDBInstance puts the instance into "modifying" and settles it
 	// afterwards, so the resource is no more complete when this returns than it
 	// is on the create path. The provisioner waits for it — see Stabilize.
 	if _, err := internalQuery(ctx, router, rCtx.Region, params); err != nil {
 		return "", nil, fmt.Errorf("ModifyDBInstance: %w", err)
+	}
+
+	arn := fmt.Sprintf("arn:aws:rds:%s:%s:db:%s", rCtx.Region, rCtx.AccountID, physicalID)
+	if oldProps != nil {
+		if err := updateRDSTags(ctx, router, rCtx.Region, arn, rCtx.StackTags, rCtx.PreviousStackTags, props["Tags"], oldProps["Tags"]); err != nil {
+			return "", nil, err
+		}
 	}
 	return physicalID, nil, nil
 }
@@ -436,6 +525,12 @@ func (h *rdsDBClusterHandler) Create(ctx context.Context, router http.Handler, c
 	}
 	if v, _ := props["MasterUserPassword"].(string); v != "" {
 		params["MasterUserPassword"] = v
+	}
+	if v, ok := props["ManageMasterUserPassword"]; ok {
+		params["ManageMasterUserPassword"] = cfnScalarString(v)
+	}
+	if v := rdsMasterUserSecretKmsKeyId(props); v != "" {
+		params["MasterUserSecretKmsKeyId"] = v
 	}
 	if v, _ := props["EngineVersion"].(string); v != "" {
 		params["EngineVersion"] = v
@@ -485,6 +580,9 @@ func (h *rdsDBClusterHandler) Create(ctx context.Context, router http.Handler, c
 			}
 		}
 	}
+	if tags := mergeResourceTags(rCtx.StackTags, props["Tags"]); len(tags) > 0 {
+		addRDSTagParams(params, tags)
+	}
 
 	rec, err := internalQuery(ctx, router, rCtx.Region, params)
 	if err != nil {
@@ -496,6 +594,7 @@ func (h *rdsDBClusterHandler) Create(ctx context.Context, router http.Handler, c
 	endpoint := extractXMLValue(body, "Endpoint")
 	readerEndpoint := extractXMLValue(body, "ReaderEndpoint")
 	port := extractXMLValue(body, "Port")
+	secretArn := extractXMLValue(body, "SecretArn")
 
 	if arn == "" {
 		arn = fmt.Sprintf("arn:aws:rds:%s:%s:cluster:%s", rCtx.Region, rCtx.AccountID, id)
@@ -507,6 +606,9 @@ func (h *rdsDBClusterHandler) Create(ctx context.Context, router http.Handler, c
 		"Endpoint.Port":        port,
 		"ReadEndpoint.Address": readerEndpoint,
 		"DBClusterResourceId":  fmt.Sprintf("cluster-%s", id),
+	}
+	if secretArn != "" {
+		attrs["MasterUserSecret.SecretArn"] = secretArn
 	}
 	return id, attrs, nil
 }
@@ -579,6 +681,12 @@ func (h *rdsDBClusterHandler) Update(ctx context.Context, router http.Handler, _
 	if v, _ := props["MasterUserPassword"].(string); v != "" {
 		params["MasterUserPassword"] = v
 	}
+	if v, ok := props["ManageMasterUserPassword"]; ok {
+		params["ManageMasterUserPassword"] = cfnScalarString(v)
+	}
+	if v := rdsMasterUserSecretKmsKeyId(props); v != "" {
+		params["MasterUserSecretKmsKeyId"] = v
+	}
 	if v := fmtPropString(props, "BackupRetentionPeriod"); v != "" {
 		params["BackupRetentionPeriod"] = v
 	}
@@ -616,6 +724,13 @@ func (h *rdsDBClusterHandler) Update(ctx context.Context, router http.Handler, _
 
 	if _, err := internalQuery(ctx, router, rCtx.Region, params); err != nil {
 		return "", nil, fmt.Errorf("ModifyDBCluster: %w", err)
+	}
+
+	arn := fmt.Sprintf("arn:aws:rds:%s:%s:cluster:%s", rCtx.Region, rCtx.AccountID, physicalID)
+	if oldProps != nil {
+		if err := updateRDSTags(ctx, router, rCtx.Region, arn, rCtx.StackTags, rCtx.PreviousStackTags, props["Tags"], oldProps["Tags"]); err != nil {
+			return "", nil, err
+		}
 	}
 	return physicalID, nil, nil
 }

@@ -31,7 +31,9 @@ package rds
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
+	"math/big"
 	"strconv"
 	"strings"
 	"time"
@@ -98,6 +100,51 @@ func validateMasterUserPassword(engine, password string) *protocol.AWSError {
 		}
 	}
 	return nil
+}
+
+// generatedPasswordChars is the alphabet a managed master password is drawn
+// from: every printable ASCII character validateMasterUserPassword accepts,
+// i.e. 0x21-0x7e minus the four RDS forbids in any master password.
+var generatedPasswordChars = func() string {
+	var b strings.Builder
+	for r := rune(0x21); r <= 0x7e; r++ {
+		if !strings.ContainsRune(forbiddenPasswordChars, r) {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}()
+
+// generatedMasterPasswordLength matches Secrets Manager's own
+// GetRandomPassword default length (see defaultPasswordLength in the
+// secretsmanager package) — the API AWS documents itself using to mint a
+// managed master password. It comfortably fits every supported engine's
+// maximum (41, the shortest of the bunch — see validateMasterUserPassword).
+const generatedMasterPasswordLength = 32
+
+// generateManagedMasterPassword returns a random password
+// validateMasterUserPassword accepts for engine, for ManageMasterUserPassword
+// to hand to Secrets Manager. It draws only from characters RDS allows in a
+// master password, so the generated value can never fail the same validation
+// a caller-supplied one is held to.
+func generateManagedMasterPassword(engine string) (string, *protocol.AWSError) {
+	out := make([]byte, generatedMasterPasswordLength)
+	max := big.NewInt(int64(len(generatedPasswordChars)))
+	for i := range out {
+		n, err := rand.Int(rand.Reader, max)
+		if err != nil {
+			return "", protocol.Wrap(protocol.ErrInternalError, err)
+		}
+		out[i] = generatedPasswordChars[n.Int64()]
+	}
+	password := string(out)
+	if aerr := validateMasterUserPassword(engine, password); aerr != nil {
+		// Unreachable in practice — the alphabet and length are built to
+		// satisfy every engine's rule — but a generator that produced a
+		// password its own validator refuses must not be trusted silently.
+		return "", aerr
+	}
+	return password, nil
 }
 
 // changeMasterPassword makes a new master password true of the instance, or
