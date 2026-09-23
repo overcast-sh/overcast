@@ -25,15 +25,6 @@ func EventBridge(c *clients.Clients) ServiceGroup {
 			"eventbridge-buses:TagEventBus":                           g.TagEventBus,
 			"eventbridge-buses:ListEventBridgeTagsForResource":        g.ListTagsForResource,
 			"eventbridge-buses:DeleteEventBus":                        g.DeleteEventBus,
-			"eventbridge-rules:PutRule":                               g.PutRule,
-			"eventbridge-rules:DescribeRule":                          g.DescribeRule,
-			"eventbridge-rules:ListRules":                             g.ListRules,
-			"eventbridge-rules:EnableRule":                            g.EnableRule,
-			"eventbridge-rules:DisableRule":                           g.DisableRule,
-			"eventbridge-rules:PutTargets":                            g.PutTargets,
-			"eventbridge-rules:ListTargetsByRule":                     g.ListTargetsByRule,
-			"eventbridge-rules:RemoveTargets":                         g.RemoveTargets,
-			"eventbridge-rules:DeleteRule":                            g.DeleteRule,
 			"eventbridge-events:PutEvents":                            g.PutEvents,
 			"eventbridge-events:PutEventsBatch":                       g.PutEventsBatch,
 			"eventbridge-target-fanout:PutFanoutTargets":              g.PutFanoutTargets,
@@ -44,13 +35,11 @@ func EventBridge(c *clients.Clients) ServiceGroup {
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
 			"eventbridge-buses":         g.setupBuses,
-			"eventbridge-rules":         g.setupRules,
 			"eventbridge-events":        g.setupEvents,
 			"eventbridge-target-fanout": g.setupFanout,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
 			"eventbridge-buses":         g.teardownBuses,
-			"eventbridge-rules":         g.teardownRules,
 			"eventbridge-events":        g.teardownEvents,
 			"eventbridge-target-fanout": g.teardownFanout,
 		},
@@ -162,183 +151,6 @@ func (g *ebGroup) DeleteEventBus(ctx context.Context, t *harness.TestContext) er
 	name := fmt.Sprintf("oc-db-%s", t.RunID)
 	g.cl().CreateEventBus(ctx, &eventbridge.CreateEventBusInput{Name: aws.String(name)}) //nolint:errcheck
 	_, err := g.cl().DeleteEventBus(ctx, &eventbridge.DeleteEventBusInput{Name: aws.String(name)})
-	return err
-}
-
-// ── eventbridge-rules ─────────────────────────────────────────────────────────
-
-func (g *ebGroup) setupRules(ctx context.Context, t *harness.TestContext) error {
-	busName := fmt.Sprintf("oc-rbus-%s", t.RunID)
-	if _, err := g.cl().CreateEventBus(ctx, &eventbridge.CreateEventBusInput{Name: aws.String(busName)}); err != nil {
-		return err
-	}
-	t.Set("eb_rules_bus", busName)
-
-	ruleName := fmt.Sprintf("oc-rule-%s", t.RunID)
-	if _, err := g.cl().PutRule(ctx, &eventbridge.PutRuleInput{
-		Name:               aws.String(ruleName),
-		EventBusName:       aws.String(busName),
-		ScheduleExpression: aws.String("rate(5 minutes)"),
-		State:              types.RuleStateEnabled,
-	}); err != nil {
-		return err
-	}
-	t.Set("eb_rule_name", ruleName)
-	return nil
-}
-
-func (g *ebGroup) teardownRules(ctx context.Context, t *harness.TestContext) error {
-	bus := t.GetString("eb_rules_bus")
-	rule := t.GetString("eb_rule_name")
-	if bus != "" && rule != "" {
-		// Remove all targets first
-		tgtsResp, err := g.cl().ListTargetsByRule(ctx, &eventbridge.ListTargetsByRuleInput{
-			Rule:         aws.String(rule),
-			EventBusName: aws.String(bus),
-		})
-		if err == nil && len(tgtsResp.Targets) > 0 {
-			ids := make([]string, 0, len(tgtsResp.Targets))
-			for _, tgt := range tgtsResp.Targets {
-				ids = append(ids, aws.ToString(tgt.Id))
-			}
-			g.cl().RemoveTargets(ctx, &eventbridge.RemoveTargetsInput{ //nolint:errcheck
-				Rule: aws.String(rule), EventBusName: aws.String(bus), Ids: ids,
-			})
-		}
-		g.cl().DeleteRule(ctx, &eventbridge.DeleteRuleInput{ //nolint:errcheck
-			Name: aws.String(rule), EventBusName: aws.String(bus),
-		})
-	}
-	if bus != "" {
-		g.cl().DeleteEventBus(ctx, &eventbridge.DeleteEventBusInput{Name: aws.String(bus)}) //nolint:errcheck
-	}
-	return nil
-}
-
-func (g *ebGroup) PutRule(ctx context.Context, t *harness.TestContext) error {
-	_, err := g.cl().PutRule(ctx, &eventbridge.PutRuleInput{
-		Name:               aws.String(fmt.Sprintf("oc-pr-%s", t.RunID)),
-		EventBusName:       aws.String(t.GetString("eb_rules_bus")),
-		ScheduleExpression: aws.String("rate(10 minutes)"),
-		State:              types.RuleStateEnabled,
-	})
-	if err == nil {
-		g.cl().DeleteRule(ctx, &eventbridge.DeleteRuleInput{ //nolint:errcheck
-			Name:         aws.String(fmt.Sprintf("oc-pr-%s", t.RunID)),
-			EventBusName: aws.String(t.GetString("eb_rules_bus")),
-		})
-	}
-	return err
-}
-
-func (g *ebGroup) DescribeRule(ctx context.Context, t *harness.TestContext) error {
-	ruleName := t.GetString("eb_rule_name")
-	resp, err := g.cl().DescribeRule(ctx, &eventbridge.DescribeRuleInput{
-		Name:         aws.String(ruleName),
-		EventBusName: aws.String(t.GetString("eb_rules_bus")),
-	})
-	if err != nil {
-		return err
-	}
-	if aws.ToString(resp.Name) != ruleName {
-		return fmt.Errorf("DescribeRule: name mismatch %v", aws.ToString(resp.Name))
-	}
-	if resp.State != types.RuleStateEnabled {
-		return fmt.Errorf("DescribeRule: expected ENABLED, got %v", resp.State)
-	}
-	return nil
-}
-
-func (g *ebGroup) ListRules(ctx context.Context, t *harness.TestContext) error {
-	_, err := g.cl().ListRules(ctx, &eventbridge.ListRulesInput{
-		EventBusName: aws.String(t.GetString("eb_rules_bus")),
-	})
-	return err
-}
-
-func (g *ebGroup) EnableRule(ctx context.Context, t *harness.TestContext) error {
-	_, err := g.cl().EnableRule(ctx, &eventbridge.EnableRuleInput{
-		Name:         aws.String(t.GetString("eb_rule_name")),
-		EventBusName: aws.String(t.GetString("eb_rules_bus")),
-	})
-	return err
-}
-
-func (g *ebGroup) DisableRule(ctx context.Context, t *harness.TestContext) error {
-	_, err := g.cl().DisableRule(ctx, &eventbridge.DisableRuleInput{
-		Name:         aws.String(t.GetString("eb_rule_name")),
-		EventBusName: aws.String(t.GetString("eb_rules_bus")),
-	})
-	if err == nil {
-		g.cl().EnableRule(ctx, &eventbridge.EnableRuleInput{ //nolint:errcheck
-			Name: aws.String(t.GetString("eb_rule_name")), EventBusName: aws.String(t.GetString("eb_rules_bus")),
-		})
-	}
-	return err
-}
-
-func (g *ebGroup) PutTargets(ctx context.Context, t *harness.TestContext) error {
-	rule := t.GetString("eb_rule_name")
-	bus := t.GetString("eb_rules_bus")
-	fakeArn := fmt.Sprintf("arn:aws:sqs:us-east-1:000000000000:oc-target-%s", t.RunID)
-	resp, err := g.cl().PutTargets(ctx, &eventbridge.PutTargetsInput{
-		Rule:         aws.String(rule),
-		EventBusName: aws.String(bus),
-		Targets:      []types.Target{{Id: aws.String("t1"), Arn: aws.String(fakeArn)}},
-	})
-	if err != nil {
-		return err
-	}
-	if resp.FailedEntryCount > 0 {
-		return fmt.Errorf("PutTargets: %d failed entries", resp.FailedEntryCount)
-	}
-	t.Set("eb_target_id", "t1")
-	return nil
-}
-
-func (g *ebGroup) ListTargetsByRule(ctx context.Context, t *harness.TestContext) error {
-	resp, err := g.cl().ListTargetsByRule(ctx, &eventbridge.ListTargetsByRuleInput{
-		Rule:         aws.String(t.GetString("eb_rule_name")),
-		EventBusName: aws.String(t.GetString("eb_rules_bus")),
-	})
-	if err != nil {
-		return err
-	}
-	if len(resp.Targets) == 0 {
-		return fmt.Errorf("ListTargetsByRule: no targets returned")
-	}
-	return nil
-}
-
-func (g *ebGroup) RemoveTargets(ctx context.Context, t *harness.TestContext) error {
-	targetID := t.GetString("eb_target_id")
-	if targetID == "" {
-		return nil
-	}
-	resp, err := g.cl().RemoveTargets(ctx, &eventbridge.RemoveTargetsInput{
-		Rule:         aws.String(t.GetString("eb_rule_name")),
-		EventBusName: aws.String(t.GetString("eb_rules_bus")),
-		Ids:          []string{targetID},
-	})
-	if err != nil {
-		return err
-	}
-	if resp.FailedEntryCount > 0 {
-		return fmt.Errorf("RemoveTargets: %d failed", resp.FailedEntryCount)
-	}
-	return nil
-}
-
-func (g *ebGroup) DeleteRule(ctx context.Context, t *harness.TestContext) error {
-	bus := t.GetString("eb_rules_bus")
-	name := fmt.Sprintf("oc-dr-%s", t.RunID)
-	g.cl().PutRule(ctx, &eventbridge.PutRuleInput{ //nolint:errcheck
-		Name: aws.String(name), EventBusName: aws.String(bus),
-		ScheduleExpression: aws.String("rate(1 day)"), State: types.RuleStateEnabled,
-	})
-	_, err := g.cl().DeleteRule(ctx, &eventbridge.DeleteRuleInput{
-		Name: aws.String(name), EventBusName: aws.String(bus),
-	})
 	return err
 }
 

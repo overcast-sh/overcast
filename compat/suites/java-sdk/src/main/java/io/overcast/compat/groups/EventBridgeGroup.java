@@ -16,7 +16,7 @@ import java.util.Map;
 /**
  * EventBridge compatibility test group.
  *
- * <p>Groups: eventbridge-buses, eventbridge-rules, eventbridge-events,
+ * <p>Groups: eventbridge-buses, eventbridge-events,
  * eventbridge-target-fanout, eventbridge-patterns.
  */
 public final class EventBridgeGroup implements ServiceGroup {
@@ -38,15 +38,6 @@ public final class EventBridgeGroup implements ServiceGroup {
                 Map.entry("eventbridge-buses:TagEventBus",                           this::tagEventBus),
                 Map.entry("eventbridge-buses:ListEventBridgeTagsForResource",        this::listTagsForEventBus),
                 Map.entry("eventbridge-buses:DeleteEventBus",                        this::deleteEventBus),
-                Map.entry("eventbridge-rules:PutRule",                               this::putRule),
-                Map.entry("eventbridge-rules:DescribeRule",                          this::describeRule),
-                Map.entry("eventbridge-rules:ListRules",                             this::listRules),
-                Map.entry("eventbridge-rules:EnableRule",                            this::enableRule),
-                Map.entry("eventbridge-rules:DisableRule",                           this::disableRule),
-                Map.entry("eventbridge-rules:PutTargets",                            this::putTargets),
-                Map.entry("eventbridge-rules:ListTargetsByRule",                     this::listTargetsByRule),
-                Map.entry("eventbridge-rules:RemoveTargets",                         this::removeTargets),
-                Map.entry("eventbridge-rules:DeleteRule",                            this::deleteRule),
                 Map.entry("eventbridge-events:PutEvents",                            this::putEvents),
                 Map.entry("eventbridge-events:PutEventsBatch",                       this::putEventsCustomBus),
                 Map.entry("eventbridge-target-fanout:PutFanoutTargets",              this::putFanoutTargets),
@@ -61,7 +52,6 @@ public final class EventBridgeGroup implements ServiceGroup {
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
                 Map.entry("eventbridge-buses",  this::setupBuses),
-                Map.entry("eventbridge-rules",  this::setupRules),
                 Map.entry("eventbridge-events", this::setupEventsGroup),
                 Map.entry("eventbridge-target-fanout", this::setupFanout)
         );
@@ -71,7 +61,6 @@ public final class EventBridgeGroup implements ServiceGroup {
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
                 Map.entry("eventbridge-buses",  ctx -> deleteBusSilently(ctx.getString("eventBusName"))),
-                Map.entry("eventbridge-rules",  this::teardownRules),
                 Map.entry("eventbridge-events", ctx -> deleteBusSilently(ctx.getString("eventsBusName"))),
                 Map.entry("eventbridge-target-fanout", this::teardownFanout)
         );
@@ -119,96 +108,6 @@ public final class EventBridgeGroup implements ServiceGroup {
         String name = ctx.getString("eventBusName");
         eb().deleteEventBus(r -> r.name(name));
         ctx.set("eventBusName", null);
-    }
-
-    // ── eventbridge-rules ─────────────────────────────────────────────────────
-
-    private void setupRules(TestContext ctx) throws Exception {
-        String bus  = "compat-rb-" + ctx.runId();
-        String rule = "compat-rule-" + ctx.runId();
-        eb().createEventBus(r -> r.name(bus));
-        ctx.set("rulesBusName", bus);
-        ctx.set("ruleName", rule);
-    }
-
-    private void teardownRules(TestContext ctx) {
-        String bus  = ctx.getString("rulesBusName");
-        String rule = ctx.getString("ruleName");
-        if (bus == null) return;
-        try {
-            eb().removeTargets(r -> r.rule(rule).eventBusName(bus).ids("t1"));
-        } catch (Exception ignored) {}
-        try {
-            eb().deleteRule(r -> r.name(rule).eventBusName(bus));
-        } catch (Exception ignored) {}
-        deleteBusSilently(bus);
-    }
-
-    private void putRule(TestContext ctx) throws Exception {
-        String bus  = ctx.getString("rulesBusName");
-        String rule = ctx.getString("ruleName");
-        var resp = eb().putRule(r -> r
-                .name(rule)
-                .eventBusName(bus)
-                .eventPattern("{\"source\":[\"compat.test\"]}")
-                .state(RuleState.ENABLED));
-        Assertions.assertNotBlank(resp.ruleArn(), "PutRule: ruleArn is blank");
-    }
-
-    private void describeRule(TestContext ctx) throws Exception {
-        String bus  = ctx.getString("rulesBusName");
-        String rule = ctx.getString("ruleName");
-        var resp = eb().describeRule(r -> r.name(rule).eventBusName(bus));
-        Assertions.assertEquals(rule, resp.name(), "DescribeRule: name mismatch");
-    }
-
-    private void listRules(TestContext ctx) throws Exception {
-        String bus  = ctx.getString("rulesBusName");
-        String rule = ctx.getString("ruleName");
-        var resp = eb().listRules(r -> r.eventBusName(bus));
-        boolean found = resp.rules().stream().anyMatch(r2 -> r2.name().equals(rule));
-        Assertions.assertTrue(found, "ListRules: created rule not found");
-    }
-
-    private void enableRule(TestContext ctx) throws Exception {
-        String bus  = ctx.getString("rulesBusName");
-        String rule = ctx.getString("ruleName");
-        eb().enableRule(r -> r.name(rule).eventBusName(bus));
-    }
-
-    private void disableRule(TestContext ctx) throws Exception {
-        String bus  = ctx.getString("rulesBusName");
-        String rule = ctx.getString("ruleName");
-        eb().disableRule(r -> r.name(rule).eventBusName(bus));
-        eb().enableRule(r -> r.name(rule).eventBusName(bus)); // re-enable for subsequent tests
-    }
-
-    private void putTargets(TestContext ctx) throws Exception {
-        String bus  = ctx.getString("rulesBusName");
-        String rule = ctx.getString("ruleName");
-        // Use a placeholder ARN — the emulator accepts any valid-looking ARN.
-        eb().putTargets(r -> r
-                .rule(rule).eventBusName(bus)
-                .targets(Target.builder().id("t1").arn("arn:aws:sqs:us-east-1:000000000000:compat-dummy").build()));
-    }
-
-    private void listTargetsByRule(TestContext ctx) throws Exception {
-        String bus  = ctx.getString("rulesBusName");
-        String rule = ctx.getString("ruleName");
-        var resp = eb().listTargetsByRule(r -> r.rule(rule).eventBusName(bus));
-        Assertions.assertNotEmpty(resp.targets(), "ListTargetsByRule: no targets found");
-    }
-
-    private void removeTargets(TestContext ctx) throws Exception {
-        String bus  = ctx.getString("rulesBusName");
-        String rule = ctx.getString("ruleName");
-        eb().removeTargets(r -> r.rule(rule).eventBusName(bus).ids("t1"));
-    }
-
-    private void deleteRule(TestContext ctx) throws Exception {
-        String bus  = ctx.getString("rulesBusName");
-        String rule = ctx.getString("ruleName");
-        eb().deleteRule(r -> r.name(rule).eventBusName(bus));
     }
 
     // ── eventbridge-events ────────────────────────────────────────────────────

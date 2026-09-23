@@ -99,155 +99,6 @@ def DeleteEventBus(ctx: TestContext) -> None:
         raise AssertionError(f"DeleteEventBus: bus {name} still present")
 
 
-# ── eventbridge-rules ─────────────────────────────────────────────────────────
-
-def setup_eventbridge_rules(ctx: TestContext) -> None:
-    eb = _eb(ctx)
-    bus_name = f"oc-{ctx.run_id}-rulebus"
-    eb.create_event_bus(Name=bus_name)
-    ctx["eb_rule_bus"] = bus_name
-
-
-def teardown_eventbridge_rules(ctx: TestContext) -> None:
-    eb = _eb(ctx)
-    bus_name = ctx.get("eb_rule_bus")
-    if not bus_name:
-        return
-    # Remove targets + rules before deleting bus
-    rule_name = ctx.get("eb_rule_name")
-    if rule_name:
-        target_ids = ctx.get("eb_target_ids", [])
-        if target_ids:
-            try:
-                eb.remove_targets(Rule=rule_name, EventBusName=bus_name, Ids=target_ids)
-            except Exception:
-                pass
-        try:
-            eb.delete_rule(Name=rule_name, EventBusName=bus_name, Force=True)
-        except Exception:
-            pass
-    try:
-        eb.delete_event_bus(Name=bus_name)
-    except Exception:
-        pass
-
-
-def PutRule(ctx: TestContext) -> None:
-    eb = _eb(ctx)
-    bus_name = ctx["eb_rule_bus"]
-    rule_name = f"oc-{ctx.run_id}-rule"
-    resp = eb.put_rule(
-        Name=rule_name,
-        EventBusName=bus_name,
-        EventPattern=json.dumps({"source": ["com.example.overcast"]}),
-        State="ENABLED",
-    )
-    if not resp.get("RuleArn"):
-        raise AssertionError(f"PutRule: missing RuleArn in {resp}")
-    ctx["eb_rule_name"] = rule_name
-
-
-def DescribeRule(ctx: TestContext) -> None:
-    eb = _eb(ctx)
-    rule_name = ctx["eb_rule_name"]
-    bus_name = ctx["eb_rule_bus"]
-    resp = eb.describe_rule(Name=rule_name, EventBusName=bus_name)
-    if resp["Name"] != rule_name:
-        raise AssertionError(f"DescribeRule: name mismatch {resp['Name']!r}")
-    if resp["State"] != "ENABLED":
-        raise AssertionError(f"DescribeRule: expected ENABLED, got {resp['State']!r}")
-
-
-def ListRules(ctx: TestContext) -> None:
-    eb = _eb(ctx)
-    rule_name = ctx["eb_rule_name"]
-    bus_name = ctx["eb_rule_bus"]
-    resp = eb.list_rules(EventBusName=bus_name)
-    rules = resp.get("Rules", [])
-    if not any(r["Name"] == rule_name for r in rules):
-        raise AssertionError(f"ListRules: {rule_name!r} not found")
-
-
-def PutTargets(ctx: TestContext) -> None:
-    eb = _eb(ctx)
-    rule_name = ctx["eb_rule_name"]
-    bus_name = ctx["eb_rule_bus"]
-    # Use a fake SQS ARN — target creation doesn't validate the ARN at registration time
-    target_id = "t1"
-    resp = eb.put_targets(
-        Rule=rule_name,
-        EventBusName=bus_name,
-        Targets=[{
-            "Id": target_id,
-            "Arn": f"arn:aws:sqs:us-east-1:000000000000:oc-{ctx.run_id}-tgt",
-        }],
-    )
-    if resp.get("FailedEntryCount", 0) > 0:
-        raise AssertionError(f"PutTargets: {resp['FailedEntryCount']} failed entries {resp.get('FailedEntries')}")
-    ctx["eb_target_ids"] = [target_id]
-
-
-def ListTargetsByRule(ctx: TestContext) -> None:
-    eb = _eb(ctx)
-    rule_name = ctx["eb_rule_name"]
-    bus_name = ctx["eb_rule_bus"]
-    resp = eb.list_targets_by_rule(Rule=rule_name, EventBusName=bus_name)
-    targets = resp.get("Targets", [])
-    if not targets:
-        raise AssertionError("ListTargetsByRule: no targets returned")
-
-
-def DisableRule(ctx: TestContext) -> None:
-    eb = _eb(ctx)
-    rule_name = ctx["eb_rule_name"]
-    bus_name = ctx["eb_rule_bus"]
-    eb.disable_rule(Name=rule_name, EventBusName=bus_name)
-    resp = eb.describe_rule(Name=rule_name, EventBusName=bus_name)
-    if resp["State"] != "DISABLED":
-        raise AssertionError(f"DisableRule: expected DISABLED, got {resp['State']!r}")
-
-
-def EnableRule(ctx: TestContext) -> None:
-    eb = _eb(ctx)
-    rule_name = ctx["eb_rule_name"]
-    bus_name = ctx["eb_rule_bus"]
-    eb.enable_rule(Name=rule_name, EventBusName=bus_name)
-    resp = eb.describe_rule(Name=rule_name, EventBusName=bus_name)
-    if resp["State"] != "ENABLED":
-        raise AssertionError(f"EnableRule: expected ENABLED, got {resp['State']!r}")
-
-
-def RemoveTargets(ctx: TestContext) -> None:
-    eb = _eb(ctx)
-    rule_name = ctx["eb_rule_name"]
-    bus_name = ctx["eb_rule_bus"]
-    target_ids = ctx.get("eb_target_ids", ["t1"])
-    resp = eb.remove_targets(Rule=rule_name, EventBusName=bus_name, Ids=target_ids)
-    if resp.get("FailedEntryCount", 0) > 0:
-        raise AssertionError(f"RemoveTargets: {resp['FailedEntryCount']} failed entries")
-    ctx["eb_target_ids"] = []
-    remaining = eb.list_targets_by_rule(Rule=rule_name, EventBusName=bus_name)
-    if not (len(remaining.get("Targets", [])) == 0):
-        raise AssertionError("RemoveTargets: targets still present")
-
-
-def DeleteRule(ctx: TestContext) -> None:
-    eb = _eb(ctx)
-    bus_name = ctx["eb_rule_bus"]
-    rule_name = f"oc-{ctx.run_id}-delrule"
-    eb.put_rule(
-        Name=rule_name,
-        EventBusName=bus_name,
-        EventPattern=json.dumps({"source": ["com.example.tmp"]}),
-        State="ENABLED",
-    )
-    eb.delete_rule(Name=rule_name, EventBusName=bus_name, Force=True)
-    resp = eb.list_rules(EventBusName=bus_name, NamePrefix=rule_name)
-    names = [r["Name"] for r in resp.get("Rules", [])]
-    if not (rule_name not in names):
-        raise AssertionError(f"DeleteRule: rule {rule_name} still present")
-
-
 # ── eventbridge-events ────────────────────────────────────────────────────────
 
 def setup_eventbridge_events(ctx: TestContext) -> None:
@@ -485,15 +336,6 @@ IMPLS = {
     "eventbridge-buses:TagEventBus": TagEventBus,
     "eventbridge-buses:ListEventBridgeTagsForResource": ListTagsForResource,
     "eventbridge-buses:DeleteEventBus": DeleteEventBus,
-    "eventbridge-rules:PutRule": PutRule,
-    "eventbridge-rules:DescribeRule": DescribeRule,
-    "eventbridge-rules:ListRules": ListRules,
-    "eventbridge-rules:PutTargets": PutTargets,
-    "eventbridge-rules:ListTargetsByRule": ListTargetsByRule,
-    "eventbridge-rules:DisableRule": DisableRule,
-    "eventbridge-rules:EnableRule": EnableRule,
-    "eventbridge-rules:RemoveTargets": RemoveTargets,
-    "eventbridge-rules:DeleteRule": DeleteRule,
     "eventbridge-events:PutEvents": PutEvents,
     "eventbridge-events:PutEventsBatch": PutEventsBatch,
     "eventbridge-target-fanout:PutFanoutTargets": PutFanoutTargets,
@@ -505,14 +347,12 @@ IMPLS = {
 
 SETUP = {
     "eventbridge-buses": setup_eventbridge_buses,
-    "eventbridge-rules": setup_eventbridge_rules,
     "eventbridge-events": setup_eventbridge_events,
     "eventbridge-target-fanout": setup_eventbridge_target_fanout,
 }
 
 TEARDOWN = {
     "eventbridge-buses": teardown_eventbridge_buses,
-    "eventbridge-rules": teardown_eventbridge_rules,
     "eventbridge-events": teardown_eventbridge_events,
     "eventbridge-target-fanout": teardown_eventbridge_target_fanout,
 }

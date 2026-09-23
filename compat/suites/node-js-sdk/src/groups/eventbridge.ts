@@ -5,7 +5,6 @@
  *
  * Groups:
  *   eventbridge-buses         — custom event bus lifecycle
- *   eventbridge-rules         — rule + target lifecycle on the default bus
  *   eventbridge-events        — PutEvents
  *   eventbridge-target-fanout — PutEvents actually reaching a rule's targets
  *   eventbridge-patterns      — TestEventPattern (stateless, no setup/teardown)
@@ -18,14 +17,10 @@ import {
   ListEventBusesCommand,
   PutRuleCommand,
   DeleteRuleCommand,
-  DescribeRuleCommand,
-  ListRulesCommand,
   PutTargetsCommand,
   RemoveTargetsCommand,
   ListTargetsByRuleCommand,
   PutEventsCommand,
-  EnableRuleCommand,
-  DisableRuleCommand,
   TagResourceCommand,
   ListTagsForResourceCommand,
   TestEventPatternCommand,
@@ -132,150 +127,6 @@ export function makeEventBridgeGroups(suite: string): TestGroup[] {
         try {
           await eventbridge.send(
             new DeleteEventBusCommand({ Name: `${ctx.runId}-bus` }),
-          );
-        } catch {}
-      },
-    },
-
-    // ── eventbridge-rules ──────────────────────────────────────────────────
-    {
-      suite,
-      service: "eventbridge",
-      name: "eventbridge-rules",
-      tests: [
-        {
-          name: "PutRule",
-          fn: async (ctx) => {
-            const { eventbridge } = makeClients(ctx);
-            const resp = await eventbridge.send(
-              new PutRuleCommand({
-                Name: `${ctx.runId}-rule`,
-                EventPattern: JSON.stringify({
-                  source: [`compat.${ctx.runId}`],
-                }),
-                State: RuleState.ENABLED,
-                Description: "compat test rule",
-              }),
-            );
-            assert.ok(resp.RuleArn, "PutRule: missing RuleArn");
-            (ctx as Record<string, unknown>)["_ruleArn"] = resp.RuleArn;
-          },
-        },
-        {
-          name: "DescribeRule",
-          fn: async (ctx) => {
-            const { eventbridge } = makeClients(ctx);
-            const resp = await eventbridge.send(
-              new DescribeRuleCommand({ Name: `${ctx.runId}-rule` }),
-            );
-            assert.ok(resp.Arn, "DescribeRule: missing Arn");
-            assert.strictEqual(resp.State, RuleState.ENABLED, `DescribeRule: unexpected state: ${resp.State}`);
-          },
-        },
-        {
-          name: "ListRules",
-          fn: async (ctx) => {
-            const { eventbridge } = makeClients(ctx);
-            const resp = await eventbridge.send(
-              new ListRulesCommand({ NamePrefix: ctx.runId }),
-            );
-            assert.ok(resp.Rules?.some((r) => r.Name === `${ctx.runId}-rule`), "ListRules: rule not found");
-          },
-        },
-        {
-          name: "PutTargets",
-          fn: async (ctx) => {
-            const { eventbridge } = makeClients(ctx);
-            // Use a synthetic SQS ARN — the rule just needs a valid ARN shape.
-            const queueArn = `arn:aws:sqs:us-east-1:000000000000:${ctx.runId}-eb-target`;
-            const resp = await eventbridge.send(
-              new PutTargetsCommand({
-                Rule: `${ctx.runId}-rule`,
-                Targets: [{ Id: "target-1", Arn: queueArn }],
-              }),
-            );
-            assert.ok(((resp.FailedEntryCount ?? 0)) <= (0), `PutTargets: ${resp.FailedEntryCount} failed entries`);
-          },
-        },
-        {
-          name: "ListTargetsByRule",
-          fn: async (ctx) => {
-            const { eventbridge } = makeClients(ctx);
-            const resp = await eventbridge.send(
-              new ListTargetsByRuleCommand({ Rule: `${ctx.runId}-rule` }),
-            );
-            assert.ok(resp.Targets?.some((t) => t.Id === "target-1"), "ListTargetsByRule: target not found");
-          },
-        },
-        {
-          name: "DisableRule",
-          fn: async (ctx) => {
-            const { eventbridge } = makeClients(ctx);
-            await eventbridge.send(
-              new DisableRuleCommand({ Name: `${ctx.runId}-rule` }),
-            );
-            const resp = await eventbridge.send(
-              new DescribeRuleCommand({ Name: `${ctx.runId}-rule` }),
-            );
-            assert.strictEqual(resp.State, "DISABLED", `DisableRule: expected State=DISABLED, got ${resp.State}`);
-          },
-        },
-        {
-          name: "EnableRule",
-          fn: async (ctx) => {
-            const { eventbridge } = makeClients(ctx);
-            await eventbridge.send(
-              new EnableRuleCommand({ Name: `${ctx.runId}-rule` }),
-            );
-            const resp = await eventbridge.send(
-              new DescribeRuleCommand({ Name: `${ctx.runId}-rule` }),
-            );
-            assert.strictEqual(resp.State, "ENABLED", `EnableRule: expected State=ENABLED, got ${resp.State}`);
-          },
-        },
-        {
-          name: "RemoveTargets",
-          fn: async (ctx) => {
-            const { eventbridge } = makeClients(ctx);
-            await eventbridge.send(
-              new RemoveTargetsCommand({
-                Rule: `${ctx.runId}-rule`,
-                Ids: ["target-1"],
-              }),
-            );
-            const resp = await eventbridge.send(
-              new ListTargetsByRuleCommand({ Rule: `${ctx.runId}-rule` }),
-            );
-            assert.notStrictEqual(resp.Targets?.some((t) => t.Id, "target-1"), "RemoveTargets: target-1 still present after remove");
-          },
-        },
-        {
-          name: "DeleteRule",
-          fn: async (ctx) => {
-            const { eventbridge } = makeClients(ctx);
-            await eventbridge.send(
-              new DeleteRuleCommand({ Name: `${ctx.runId}-rule` }),
-            );
-            const resp = await eventbridge.send(
-              new ListRulesCommand({ NamePrefix: ctx.runId }),
-            );
-            assert.ok(!resp.Rules?.some((r) => r.Name === `${ctx.runId}-rule`), `DeleteRule: rule ${ctx.runId}-rule still present after delete`);
-          },
-        },
-      ],
-      teardown: async (ctx) => {
-        const { eventbridge } = makeClients(ctx);
-        try {
-          await eventbridge.send(
-            new RemoveTargetsCommand({
-              Rule: `${ctx.runId}-rule`,
-              Ids: ["target-1"],
-            }),
-          );
-        } catch {}
-        try {
-          await eventbridge.send(
-            new DeleteRuleCommand({ Name: `${ctx.runId}-rule` }),
           );
         } catch {}
       },

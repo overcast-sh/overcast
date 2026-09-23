@@ -15,7 +15,7 @@ namespace OvercastCompat.Groups;
 /// </remarks>
 internal sealed class ScenariosAuthoredEventbridgeRules : IServiceGroup
 {
-    private static readonly ScenarioGroup GroupEventbridgeRulesShadow = new("eventbridge-rules-shadow", "compat/model/authored/eventbridge-rules.json");
+    private static readonly ScenarioGroup GroupEventbridgeRules = new("eventbridge-rules", "compat/model/authored/eventbridge-rules.json");
 
     private readonly Lazy<AmazonEventBridgeClient> _client;
 
@@ -35,31 +35,31 @@ internal sealed class ScenariosAuthoredEventbridgeRules : IServiceGroup
 
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["eventbridge-rules-shadow:PutRule"] = TestEventbridgeRulesShadowPutRule,
-        ["eventbridge-rules-shadow:DescribeRule"] = TestEventbridgeRulesShadowDescribeRule,
-        ["eventbridge-rules-shadow:ListRules"] = TestEventbridgeRulesShadowListRules,
-        ["eventbridge-rules-shadow:PutTargets"] = TestEventbridgeRulesShadowPutTargets,
-        ["eventbridge-rules-shadow:ListTargetsByRule"] = TestEventbridgeRulesShadowListTargetsByRule,
-        ["eventbridge-rules-shadow:DisableRule"] = TestEventbridgeRulesShadowDisableRule,
-        ["eventbridge-rules-shadow:EnableRule"] = TestEventbridgeRulesShadowEnableRule,
-        ["eventbridge-rules-shadow:RemoveTargets"] = TestEventbridgeRulesShadowRemoveTargets,
-        ["eventbridge-rules-shadow:DeleteRule"] = TestEventbridgeRulesShadowDeleteRule,
+        ["eventbridge-rules:PutRule"] = TestEventbridgeRulesPutRule,
+        ["eventbridge-rules:DescribeRule"] = TestEventbridgeRulesDescribeRule,
+        ["eventbridge-rules:ListRules"] = TestEventbridgeRulesListRules,
+        ["eventbridge-rules:PutTargets"] = TestEventbridgeRulesPutTargets,
+        ["eventbridge-rules:ListTargetsByRule"] = TestEventbridgeRulesListTargetsByRule,
+        ["eventbridge-rules:DisableRule"] = TestEventbridgeRulesDisableRule,
+        ["eventbridge-rules:EnableRule"] = TestEventbridgeRulesEnableRule,
+        ["eventbridge-rules:RemoveTargets"] = TestEventbridgeRulesRemoveTargets,
+        ["eventbridge-rules:DeleteRule"] = TestEventbridgeRulesDeleteRule,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["eventbridge-rules-shadow"] = SetupEventbridgeRulesShadow,
+        ["eventbridge-rules"] = SetupEventbridgeRules,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["eventbridge-rules-shadow"] = TeardownEventbridgeRulesShadow,
+        ["eventbridge-rules"] = TeardownEventbridgeRules,
     };
 
     private AmazonEventBridgeClient Cl() => _client.Value;
 
-    private Task SetupEventbridgeRulesShadow(TestContext t) =>
-        GroupEventbridgeRulesShadow.RunSetupAsync(t,
+    private Task SetupEventbridgeRules(TestContext t) =>
+        GroupEventbridgeRules.RunSetupAsync(t,
             new ScenarioCall
             {
                 Op = "CreateEventBus",
@@ -75,8 +75,8 @@ internal sealed class ScenariosAuthoredEventbridgeRules : IServiceGroup
             }
         );
 
-    private Task TeardownEventbridgeRulesShadow(TestContext t) =>
-        GroupEventbridgeRulesShadow.RunTeardownAsync(t,
+    private Task TeardownEventbridgeRules(TestContext t) =>
+        GroupEventbridgeRules.RunTeardownAsync(t,
             new ScenarioCall
             {
                 Op = "RemoveTargets",
@@ -121,7 +121,7 @@ internal sealed class ScenariosAuthoredEventbridgeRules : IServiceGroup
             }
         );
 
-    private Task TestEventbridgeRulesShadowPutRule(TestContext t) => GroupEventbridgeRulesShadow.RunTestAsync(t, "PutRule", new ScenarioTest
+    private Task TestEventbridgeRulesPutRule(TestContext t) => GroupEventbridgeRules.RunTestAsync(t, "PutRule", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -151,7 +151,7 @@ internal sealed class ScenariosAuthoredEventbridgeRules : IServiceGroup
         ],
     });
 
-    private Task TestEventbridgeRulesShadowDescribeRule(TestContext t) => GroupEventbridgeRulesShadow.RunTestAsync(t, "DescribeRule", new ScenarioTest
+    private Task TestEventbridgeRulesDescribeRule(TestContext t) => GroupEventbridgeRules.RunTestAsync(t, "DescribeRule", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -177,7 +177,7 @@ internal sealed class ScenariosAuthoredEventbridgeRules : IServiceGroup
         ],
     });
 
-    private Task TestEventbridgeRulesShadowListRules(TestContext t) => GroupEventbridgeRulesShadow.RunTestAsync(t, "ListRules", new ScenarioTest
+    private Task TestEventbridgeRulesListRules(TestContext t) => GroupEventbridgeRules.RunTestAsync(t, "ListRules", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -203,7 +203,7 @@ internal sealed class ScenariosAuthoredEventbridgeRules : IServiceGroup
         ],
     });
 
-    private Task TestEventbridgeRulesShadowPutTargets(TestContext t) => GroupEventbridgeRulesShadow.RunTestAsync(t, "PutTargets", new ScenarioTest
+    private Task TestEventbridgeRulesPutTargets(TestContext t) => GroupEventbridgeRules.RunTestAsync(t, "PutTargets", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -252,7 +252,7 @@ internal sealed class ScenariosAuthoredEventbridgeRules : IServiceGroup
         ],
     });
 
-    private Task TestEventbridgeRulesShadowListTargetsByRule(TestContext t) => GroupEventbridgeRulesShadow.RunTestAsync(t, "ListTargetsByRule", new ScenarioTest
+    private Task TestEventbridgeRulesListTargetsByRule(TestContext t) => GroupEventbridgeRules.RunTestAsync(t, "ListTargetsByRule", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -279,7 +279,7 @@ internal sealed class ScenariosAuthoredEventbridgeRules : IServiceGroup
         ],
     });
 
-    private Task TestEventbridgeRulesShadowDisableRule(TestContext t) => GroupEventbridgeRulesShadow.RunTestAsync(t, "DisableRule", new ScenarioTest
+    private Task TestEventbridgeRulesDisableRule(TestContext t) => GroupEventbridgeRules.RunTestAsync(t, "DisableRule", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -317,7 +317,7 @@ internal sealed class ScenariosAuthoredEventbridgeRules : IServiceGroup
         ],
     });
 
-    private Task TestEventbridgeRulesShadowEnableRule(TestContext t) => GroupEventbridgeRulesShadow.RunTestAsync(t, "EnableRule", new ScenarioTest
+    private Task TestEventbridgeRulesEnableRule(TestContext t) => GroupEventbridgeRules.RunTestAsync(t, "EnableRule", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -355,7 +355,7 @@ internal sealed class ScenariosAuthoredEventbridgeRules : IServiceGroup
         ],
     });
 
-    private Task TestEventbridgeRulesShadowRemoveTargets(TestContext t) => GroupEventbridgeRulesShadow.RunTestAsync(t, "RemoveTargets", new ScenarioTest
+    private Task TestEventbridgeRulesRemoveTargets(TestContext t) => GroupEventbridgeRules.RunTestAsync(t, "RemoveTargets", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -398,7 +398,7 @@ internal sealed class ScenariosAuthoredEventbridgeRules : IServiceGroup
         ],
     });
 
-    private Task TestEventbridgeRulesShadowDeleteRule(TestContext t) => GroupEventbridgeRulesShadow.RunTestAsync(t, "DeleteRule", new ScenarioTest
+    private Task TestEventbridgeRulesDeleteRule(TestContext t) => GroupEventbridgeRules.RunTestAsync(t, "DeleteRule", new ScenarioTest
     {
         Call = new ScenarioCall
         {

@@ -1934,6 +1934,7 @@
     {
       "service": "eventbridge",
       "name": "eventbridge-rules",
+      "scenario": "compat/model/authored/eventbridge-rules.json",
       "tests": [
         {
           "name": "PutRule"

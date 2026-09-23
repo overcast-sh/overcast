@@ -1,5 +1,5 @@
 {
-  "$comment": "Authored port of the hand-written registry group eventbridge-rules (docs/plans/compat-coverage-modelgen.md §3.11, G6 wave 1, #1116). One spec in place of the five per-language implementations that exist and the two (dotnet-sdk, rust-sdk) that never did — 9 tests of parity debt per missing suite. It runs today under the shadow name eventbridge-rules-shadow, beside the natives, so the nightly can compare the two per (suite, test); the flip PR renames this group to eventbridge-rules, adds the scenario field to the hand-written registry.json entry, and deletes the native code. The clauses are the union of what the five natives assert — see compat/model/README.md § Authored scenarios.",
+  "$comment": "Authored port of the hand-written registry group eventbridge-rules (docs/plans/compat-coverage-modelgen.md §3.11, G6 wave 1, #1116). One spec in place of the five per-language implementations it replaced and the two (dotnet-sdk, rust-sdk) that never existed — 9 tests of parity debt per missing suite. It soaked as eventbridge-rules-shadow beside those natives until the nightly comparison agreed on every one of its 63 (suite, test) pairs in each of three soak runs; the flip then renamed it to eventbridge-rules, pointed the hand-written registry entry at it and deleted the native code. The clauses are the union of what the five natives asserted — see compat/model/README.md § Authored scenarios.",
   "version": 1,
   "service": "eventbridge",
   "client": {
@@ -14,7 +14,7 @@
   "groups": [
     {
       "$comment": "One rule on one custom bus. The bus is created in setup (go-sdk, cli, python-sdk and java-sdk all do this; node-js-sdk is the one native that works on the default bus, which cannot isolate concurrent runs from each other). The rule itself is created by the PutRule test rather than by setup — that is what cli, python-sdk, node-js-sdk and java-sdk do, and it is what lets DescribeRule, ListRules, the target tests, Disable/EnableRule and DeleteRule all act on the one rule PutRule made. go-sdk is the outlier: its setup creates the rule and its PutRule creates a second, ephemeral one it deletes again, which asserts nothing the shared shape does not. No clause is wrapped in `eventually`: no native polls, EventBridge documents no consistency window for a rule or target write, and every native reads its own write back immediately.",
-      "name": "eventbridge-rules-shadow",
+      "name": "eventbridge-rules",
       "kind": "lifecycle",
       "setup": [
         {

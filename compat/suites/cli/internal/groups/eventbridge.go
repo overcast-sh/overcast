@@ -22,16 +22,6 @@ func EventBridge() ServiceGroup {
 			"eventbridge-buses:TagEventBus":                    g.TagEventBus,
 			"eventbridge-buses:ListEventBridgeTagsForResource": g.ListTagsForResource,
 			"eventbridge-buses:DeleteEventBus":                 g.DeleteEventBus,
-			// eventbridge-rules
-			"eventbridge-rules:PutRule":           g.PutRule,
-			"eventbridge-rules:DescribeRule":      g.DescribeRule,
-			"eventbridge-rules:ListRules":         g.ListRules,
-			"eventbridge-rules:PutTargets":        g.PutTargets,
-			"eventbridge-rules:ListTargetsByRule": g.ListTargetsByRule,
-			"eventbridge-rules:DisableRule":       g.DisableRule,
-			"eventbridge-rules:EnableRule":        g.EnableRule,
-			"eventbridge-rules:RemoveTargets":     g.RemoveTargets,
-			"eventbridge-rules:DeleteRule":        g.DeleteRule,
 			// eventbridge-events
 			"eventbridge-events:PutEvents":      g.PutEvents,
 			"eventbridge-events:PutEventsBatch": g.PutEventsBatch,
@@ -45,13 +35,11 @@ func EventBridge() ServiceGroup {
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
 			"eventbridge-buses":         g.setupBuses,
-			"eventbridge-rules":         g.setupRules,
 			"eventbridge-events":        g.setupEvents,
 			"eventbridge-target-fanout": g.setupFanout,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
 			"eventbridge-buses":         g.teardownBus,
-			"eventbridge-rules":         g.teardownRules,
 			"eventbridge-events":        g.teardownEvents,
 			"eventbridge-target-fanout": g.teardownFanout,
 		},
@@ -68,15 +56,6 @@ type ebGroup struct{}
 // behind plan item R7 and the DeleteEventBus quarantine (issue #388).
 func (g *ebGroup) busName(t *harness.TestContext, group string) string {
 	return fmt.Sprintf("%s-eb-%s", t.RunID, group)
-}
-func (g *ebGroup) ruleName(t *harness.TestContext) string {
-	return fmt.Sprintf("%s-rule", t.RunID)
-}
-func (g *ebGroup) targetID(t *harness.TestContext) string {
-	return fmt.Sprintf("%s-tgt", t.RunID)
-}
-func (g *ebGroup) fakeTargetARN(t *harness.TestContext) string {
-	return fmt.Sprintf("arn:aws:sqs:us-east-1:000000000000:oc-target-%s", t.RunID)
 }
 
 // ─── eventbridge-buses ───────────────────────────────────────────────────────
@@ -191,220 +170,6 @@ func (g *ebGroup) DeleteEventBus(_ context.Context, t *harness.TestContext) erro
 
 func (g *ebGroup) teardownBus(_ context.Context, t *harness.TestContext) error {
 	awscli.Run(t.Endpoint, t.Region, "events", "delete-event-bus", "--name", g.busName(t, "buses")) //nolint:errcheck
-	return nil
-}
-
-// ─── eventbridge-rules ───────────────────────────────────────────────────────
-
-func (g *ebGroup) setupRules(_ context.Context, t *harness.TestContext) error {
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"events", "create-event-bus",
-		"--name", g.busName(t, "rules"),
-	)
-	if err != nil {
-		return err
-	}
-	arn, _ := out["EventBusArn"].(string)
-	t.Set("bus_arn", arn)
-	return nil
-}
-
-func (g *ebGroup) PutRule(_ context.Context, t *harness.TestContext) error {
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"events", "put-rule",
-		"--name", g.ruleName(t),
-		"--event-bus-name", g.busName(t, "rules"),
-		"--schedule-expression", "rate(5 minutes)",
-		"--state", "ENABLED",
-	)
-	if err != nil {
-		return err
-	}
-	if out["RuleArn"] == nil {
-		return fmt.Errorf("eb PutRule: missing RuleArn")
-	}
-	return nil
-}
-
-func (g *ebGroup) DescribeRule(_ context.Context, t *harness.TestContext) error {
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"events", "describe-rule",
-		"--name", g.ruleName(t),
-		"--event-bus-name", g.busName(t, "rules"),
-	)
-	if err != nil {
-		return err
-	}
-	if name, _ := out["Name"].(string); name != g.ruleName(t) {
-		return fmt.Errorf("eb DescribeRule: expected Name=%q, got %q", g.ruleName(t), name)
-	}
-	return nil
-}
-
-func (g *ebGroup) ListRules(_ context.Context, t *harness.TestContext) error {
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"events", "list-rules",
-		"--event-bus-name", g.busName(t, "rules"),
-	)
-	if err != nil {
-		return err
-	}
-	rules, _ := out["Rules"].([]any)
-	for _, raw := range rules {
-		if m, ok := raw.(map[string]any); ok && m["Name"] == g.ruleName(t) {
-			return nil
-		}
-	}
-	return fmt.Errorf("eb ListRules: rule %q not found", g.ruleName(t))
-}
-
-func (g *ebGroup) PutTargets(_ context.Context, t *harness.TestContext) error {
-	targets := fmt.Sprintf(
-		`[{"Id":"%s","Arn":"%s"}]`,
-		g.targetID(t), g.fakeTargetARN(t),
-	)
-	if err := awscli.Run(t.Endpoint, t.Region,
-		"events", "put-targets",
-		"--rule", g.ruleName(t),
-		"--event-bus-name", g.busName(t, "rules"),
-		"--targets", targets,
-	); err != nil {
-		return err
-	}
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"events", "list-targets-by-rule",
-		"--rule", g.ruleName(t),
-		"--event-bus-name", g.busName(t, "rules"),
-	)
-	if err != nil {
-		return fmt.Errorf("eb PutTargets: list-targets failed: %w", err)
-	}
-	tgts, _ := out["Targets"].([]any)
-	if len(tgts) == 0 {
-		return fmt.Errorf("eb PutTargets: no targets after put")
-	}
-	return nil
-}
-
-func (g *ebGroup) ListTargetsByRule(_ context.Context, t *harness.TestContext) error {
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"events", "list-targets-by-rule",
-		"--rule", g.ruleName(t),
-		"--event-bus-name", g.busName(t, "rules"),
-	)
-	if err != nil {
-		return err
-	}
-	tgts, _ := out["Targets"].([]any)
-	if len(tgts) == 0 {
-		return fmt.Errorf("eb ListTargetsByRule: expected targets, got none")
-	}
-	return nil
-}
-
-func (g *ebGroup) DisableRule(_ context.Context, t *harness.TestContext) error {
-	if err := awscli.Run(t.Endpoint, t.Region,
-		"events", "disable-rule",
-		"--name", g.ruleName(t),
-		"--event-bus-name", g.busName(t, "rules"),
-	); err != nil {
-		return err
-	}
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"events", "describe-rule",
-		"--name", g.ruleName(t),
-		"--event-bus-name", g.busName(t, "rules"),
-	)
-	if err != nil {
-		return fmt.Errorf("eb DisableRule: describe failed: %w", err)
-	}
-	if state, _ := out["State"].(string); state != "DISABLED" {
-		return fmt.Errorf("eb DisableRule: expected DISABLED, got %q", state)
-	}
-	return nil
-}
-
-func (g *ebGroup) EnableRule(_ context.Context, t *harness.TestContext) error {
-	if err := awscli.Run(t.Endpoint, t.Region,
-		"events", "enable-rule",
-		"--name", g.ruleName(t),
-		"--event-bus-name", g.busName(t, "rules"),
-	); err != nil {
-		return err
-	}
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"events", "describe-rule",
-		"--name", g.ruleName(t),
-		"--event-bus-name", g.busName(t, "rules"),
-	)
-	if err != nil {
-		return fmt.Errorf("eb EnableRule: describe failed: %w", err)
-	}
-	if state, _ := out["State"].(string); state != "ENABLED" {
-		return fmt.Errorf("eb EnableRule: expected ENABLED, got %q", state)
-	}
-	return nil
-}
-
-func (g *ebGroup) RemoveTargets(_ context.Context, t *harness.TestContext) error {
-	if err := awscli.Run(t.Endpoint, t.Region,
-		"events", "remove-targets",
-		"--rule", g.ruleName(t),
-		"--event-bus-name", g.busName(t, "rules"),
-		"--ids", g.targetID(t),
-	); err != nil {
-		return err
-	}
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"events", "list-targets-by-rule",
-		"--rule", g.ruleName(t),
-		"--event-bus-name", g.busName(t, "rules"),
-	)
-	if err != nil {
-		return fmt.Errorf("eb RemoveTargets: list-targets failed: %w", err)
-	}
-	tgts, _ := out["Targets"].([]any)
-	if len(tgts) > 0 {
-		return fmt.Errorf("eb RemoveTargets: targets still present")
-	}
-	return nil
-}
-
-func (g *ebGroup) DeleteRule(_ context.Context, t *harness.TestContext) error {
-	if err := awscli.Run(t.Endpoint, t.Region,
-		"events", "delete-rule",
-		"--name", g.ruleName(t),
-		"--event-bus-name", g.busName(t, "rules"),
-	); err != nil {
-		return err
-	}
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"events", "list-rules",
-		"--event-bus-name", g.busName(t, "rules"),
-	)
-	if err != nil {
-		return fmt.Errorf("eb DeleteRule: list-rules failed: %w", err)
-	}
-	rules, _ := out["Rules"].([]any)
-	for _, raw := range rules {
-		if m, ok := raw.(map[string]any); ok && m["Name"] == g.ruleName(t) {
-			return fmt.Errorf("eb DeleteRule: rule still present")
-		}
-	}
-	return nil
-}
-
-func (g *ebGroup) teardownRules(_ context.Context, t *harness.TestContext) error {
-	awscli.Run(t.Endpoint, t.Region, "events", "remove-targets", //nolint:errcheck
-		"--rule", g.ruleName(t),
-		"--event-bus-name", g.busName(t, "rules"),
-		"--ids", g.targetID(t),
-	)
-	awscli.Run(t.Endpoint, t.Region, "events", "delete-rule", //nolint:errcheck
-		"--name", g.ruleName(t),
-		"--event-bus-name", g.busName(t, "rules"),
-	)
-	awscli.Run(t.Endpoint, t.Region, "events", "delete-event-bus", "--name", g.busName(t, "rules")) //nolint:errcheck
 	return nil
 }
 
