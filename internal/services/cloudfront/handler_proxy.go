@@ -101,9 +101,13 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Match the request path against CacheBehaviors, fall back to DefaultCacheBehavior.
+	// This is the only match: a function that later changes the uri "doesn't
+	// change the cache behavior for the request" (functions-event-structure),
+	// so everything the behavior decides, its cache policy included, is fixed here.
 	targetOriginID := cfg.DefaultCacheBehavior.TargetOriginId
 	viewerProtoPolicy := cfg.DefaultCacheBehavior.ViewerProtocolPolicy
 	behaviorFAs := cfg.DefaultCacheBehavior.FunctionAssociations
+	cachePolicyID := cfg.DefaultCacheBehavior.CachePolicyId
 	if cfg.CacheBehaviors != nil {
 		matchPath := normalizePathForMatch(reqPath)
 		for _, cb := range cfg.CacheBehaviors.Items {
@@ -111,6 +115,7 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 				targetOriginID = cb.TargetOriginId
 				viewerProtoPolicy = cb.ViewerProtocolPolicy
 				behaviorFAs = cb.FunctionAssociations
+				cachePolicyID = cb.CachePolicyId
 				break
 			}
 		}
@@ -174,7 +179,15 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 
 	// Run viewer-request CloudFront Functions.
 	domainName := distID + ".cloudfront.net"
-	if fnResult, fnErr := h.runViewerRequest(r, distID, domainName, reqPath, behaviorFAs); fnResult != nil && fnErr == nil {
+	fnResult, fnErr := h.runViewerRequest(r, distID, domainName, reqPath, behaviorFAs)
+	if fnErr != nil {
+		w.Header().Set("X-Amz-Cf-Pop", "DEV-P1")
+		w.Header().Set("X-Amz-Cf-Id", distID)
+		w.Header().Set("X-Cache", "Error from cloudfront")
+		http.Error(w, "The CloudFront function returned an invalid value", http.StatusBadGateway)
+		return
+	}
+	if fnResult != nil {
 		if fnResult.isResponse {
 			w.Header().Set("X-Amz-Cf-Pop", "DEV-P1")
 			w.Header().Set("X-Amz-Cf-Id", distID)
@@ -295,7 +308,7 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Failed to read origin response", http.StatusBadGateway)
 			return
 		}
-		ttl := h.cacheTTL(ctx, cfg, reqPath)
+		ttl := h.cacheTTL(ctx, cachePolicyID)
 
 		h.cache.set(cacheKey, &cfCacheEntry{
 			statusCode: resp.StatusCode,
@@ -323,21 +336,12 @@ func proxyCacheKey(distID, reqPath string, r *http.Request) string {
 	return distID + ":" + reqPath
 }
 
-// cacheTTL returns the TTL to use for a cached response.
-// It reads from the distribution's matching CacheBehavior CachePolicyId if set,
-// falling back to 86400 (24h).
-func (h *Handler) cacheTTL(ctx context.Context, cfg *DistributionConfig, reqPath string) time.Duration {
+// cacheTTL returns the TTL to use for a cached response: the DefaultTTL of
+// cachePolicyID, the policy of the behavior ProxyRequest matched, falling back
+// to 86400 (24h). It takes the policy rather than a path so it cannot re-match
+// behaviors on a uri a function has rewritten.
+func (h *Handler) cacheTTL(ctx context.Context, cachePolicyID string) time.Duration {
 	defaultTTL := int64(86400)
-	cachePolicyID := cfg.DefaultCacheBehavior.CachePolicyId
-	if cfg.CacheBehaviors != nil {
-		matchPath := normalizePathForMatch(reqPath)
-		for i := range cfg.CacheBehaviors.Items {
-			if matchPathPattern(cfg.CacheBehaviors.Items[i].PathPattern, matchPath) {
-				cachePolicyID = cfg.CacheBehaviors.Items[i].CachePolicyId
-				break
-			}
-		}
-	}
 	if cachePolicyID != "" {
 		if pol, err := h.store.GetCachePolicy(ctx, cachePolicyID); err == nil && pol != nil {
 			if pol.CachePolicyConfig.DefaultTTL != nil {

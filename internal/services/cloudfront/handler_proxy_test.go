@@ -172,4 +172,27 @@ func TestPathHelpers_doNotAllocateOnPlainPaths(t *testing.T) {
 	if n := testing.AllocsPerRun(100, func() { _ = escapeURIPath(p) }); n != 0 {
 		t.Errorf("escapeURIPath allocated %v times, want 0", n)
 	}
+	if n := testing.AllocsPerRun(100, func() { _ = logFieldEscape(p) }); n != 0 {
+		t.Errorf("logFieldEscape allocated %v times, want 0", n)
+	}
+}
+
+// TestLogFieldEscape_encodesTheDocumentedCharacters: standard log field values
+// URL-encode ASCII 0-32, 127 and above, and the characters in the table in
+// standard-logging-legacy-s3 ("Standard log file format"), "%" among them.
+func TestLogFieldEscape_encodesTheDocumentedCharacters(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"/images/cat.jpg", "/images/cat.jpg"},
+		{"/sub:delims@!$&()*+,;=/-._", "/sub:delims@!$&()*+,;=/-._"},
+		{"/a%20b", "/a%2520b"},
+		{"/~user", "/%7Euser"},
+		{"a b", "a%20b"},
+		{`<>"#%{}|\^~[]` + "`'", "%3C%3E%22%23%25%7B%7D%7C%5C%5E%7E%5B%5D%60%27"},
+		{"\x00\t\x1f\x7f", "%00%09%1F%7F"},
+		{"café", "caf%C3%A9"},
+	} {
+		if got := logFieldEscape(tc.in); got != tc.want {
+			t.Errorf("logFieldEscape(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
 }
