@@ -3043,6 +3043,84 @@
     },
     {
       "suite": "python-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "BatchCreatePartition",
+      "status": "pass"
+    },
+    {
+      "suite": "python-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "CreateDatabase",
+      "status": "pass"
+    },
+    {
+      "suite": "python-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "CreateTable",
+      "status": "pass"
+    },
+    {
+      "suite": "python-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "DeleteDatabase",
+      "status": "pass"
+    },
+    {
+      "suite": "python-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "DeletePartition",
+      "status": "pass"
+    },
+    {
+      "suite": "python-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "DeleteTable",
+      "status": "pass"
+    },
+    {
+      "suite": "python-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "GetPartitions",
+      "status": "pass"
+    },
+    {
+      "suite": "python-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "GetTable",
+      "status": "pass"
+    },
+    {
+      "suite": "python-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "GetTableVersions",
+      "status": "pass"
+    },
+    {
+      "suite": "python-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "UpdateTable",
+      "status": "pass"
+    },
+    {
+      "suite": "python-sdk",
+      "service": "glue",
+      "group": "glue-catalog",
+      "test": "UpdateTableStaleVersion",
+      "op": "UpdateTable",
+      "status": "pass"
+    },
+    {
+      "suite": "python-sdk",
       "service": "iam",
       "group": "iam-gen-group",
       "test": "AddUserToGroup",
