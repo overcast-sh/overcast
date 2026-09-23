@@ -79,6 +79,7 @@ type FunctionCode struct {
 type FunctionConfiguration struct {
 	FunctionName        string               `json:"FunctionName"`
 	FunctionArn         string               `json:"FunctionArn"`
+	Version             string               `json:"Version"`
 	Runtime             string               `json:"Runtime"`
 	Handler             string               `json:"Handler"`
 	Role                string               `json:"Role"`

@@ -2,7 +2,7 @@ service: lambda
 status: fixed
 priority: p0
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-09-20
+last_updated: 2026-09-23
 protocols: [rest_json, event_stream]
 implementation: [internal/services/lambda]
 integration_tests: [tests/integration/lambda, tests/integration/lambdadocker]
@@ -264,6 +264,7 @@ findings:
     - GetFunctionConcurrency answers 200 with an empty body for a function that has no reservation, as AWS does, rather than 404 ResourceNotFoundException; a reservation of 0 is still reported, so "switched off" stays distinguishable from "unset". Tests in tests/integration/lambda/reserved_concurrency_test.go.
     - DeadLetterConfig is accepted by CreateFunction and UpdateFunctionConfiguration and acted on: a failed asynchronous invocation is delivered to the target SQS queue or SNS topic with the original event as the body and AWS's RequestID/ErrorCode/ErrorMessage message attributes.
     - "#162: when Docker is unavailable, Invoke answers 200 with X-Amz-Function-Error: Unhandled and a Runtime.DockerUnavailable error body instead of an unmodeled failure, pinned by docker_verdict_test.go and documented on the service page. The operation_count_estimate was also corrected from \"51 tracked; 49 supported, 2 unsupported\" to the actual 62 tracked (59 supported, 2 partial, 1 unsupported)."
+    - "#1960: GetFunction and GetFunctionConfiguration honour the Qualifier query parameter (and an embedded name:qualifier), resolving a version number, an alias, or $LATEST, with ResourceNotFoundException for an unknown one; previously only DeleteFunction read it, so a qualified GetFunction/GetFunctionConfiguration silently answered $LATEST."
   remaining_gaps:
     - UpdateFunctionCode's Publish/PublishTo still return 501; the version snapshot CreateFunction and PublishVersion share (newFunctionVersion, publishVersion) makes Publish there a small follow-up.
     - "#161: review runtime invocation fidelity, error shapes, layers, and event source mappings (medium-sized audit, not currently in flight)."

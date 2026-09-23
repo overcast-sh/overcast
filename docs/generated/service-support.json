@@ -654,13 +654,13 @@
           "operation": "GetFunction",
           "category": "Function management",
           "status": "✅ Supported",
-          "notes": "Returns FunctionConfiguration + Code location block; State/StateReason/StateReasonCode and LastUpdateStatus/LastUpdateStatusReason/LastUpdateStatusReasonCode both report, so `aws lambda wait function-active` and `wait function-updated` return; TracingConfig and EphemeralStorage always present, defaulting to PassThrough and 512 MB as on AWS; DeadLetterConfig reported only when the function has one"
+          "notes": "Returns FunctionConfiguration + Code location block; State/StateReason/StateReasonCode and LastUpdateStatus/LastUpdateStatusReason/LastUpdateStatusReasonCode both report, so `aws lambda wait function-active` and `wait function-updated` return; TracingConfig and EphemeralStorage always present, defaulting to PassThrough and 512 MB as on AWS; DeadLetterConfig reported only when the function has one; Qualifier — embedded in the name or given as a query parameter, the latter winning — selects a version number or alias and its Code block, defaulting to $LATEST; an unknown version or alias answers ResourceNotFoundException"
         },
         {
           "operation": "GetFunctionConfiguration",
           "category": "Function management",
           "status": "✅ Supported",
-          "notes": "Returns FunctionConfiguration only (no Code block); State/StateReason/StateReasonCode and LastUpdateStatus/LastUpdateStatusReason/LastUpdateStatusReasonCode both report, which is what the FunctionActive and FunctionUpdated waiters poll; TracingConfig and EphemeralStorage always present, defaulting to PassThrough and 512 MB as on AWS; DeadLetterConfig reported only when the function has one"
+          "notes": "Returns FunctionConfiguration only (no Code block); State/StateReason/StateReasonCode and LastUpdateStatus/LastUpdateStatusReason/LastUpdateStatusReasonCode both report, which is what the FunctionActive and FunctionUpdated waiters poll; TracingConfig and EphemeralStorage always present, defaulting to PassThrough and 512 MB as on AWS; DeadLetterConfig reported only when the function has one; Qualifier resolves the same way GetFunction's does — a version number, an alias (through its FunctionVersion), or $LATEST by default — with ResourceNotFoundException for an unknown one"
         },
         {
           "operation": "UpdateFunctionCode",
