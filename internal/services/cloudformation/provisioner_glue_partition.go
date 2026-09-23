@@ -3,9 +3,9 @@ package cloudformation
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 
 	"github.com/overcast-sh/overcast/internal/config"
@@ -35,10 +35,7 @@ func gluePartitionBody(props map[string]any) map[string]any {
 	input := props["PartitionInput"]
 	if in, ok := input.(map[string]any); ok {
 		// props belongs to the resolved template; copy rather than mutate.
-		normalised := make(map[string]any, len(in))
-		for k, v := range in {
-			normalised[k] = v
-		}
+		normalised := maps.Clone(in)
 		if _, has := in["Values"]; has {
 			normalised["Values"] = gluePartitionValues(props)
 		}
@@ -60,12 +57,8 @@ func gluePartitionValues(props map[string]any) []string {
 	raw, _ := input["Values"].([]any)
 	values := make([]string, 0, len(raw))
 	for _, v := range raw {
-		if f, ok := v.(float64); ok {
-			// Spelled as written: 2020, not 2020.000000 or 2.02e+03.
-			values = append(values, strconv.FormatFloat(f, 'f', -1, 64))
-			continue
-		}
-		values = append(values, fmt.Sprint(v))
+		// Spelled as written: 2020, not 2020.000000 or 2.02e+03.
+		values = append(values, cfnScalarString(v))
 	}
 	return values
 }
@@ -118,7 +111,7 @@ func (h *gluePartitionHandler) Delete(ctx context.Context, router http.Handler, 
 
 func (h *gluePartitionHandler) Update(ctx context.Context, router http.Handler, _ *config.Config, _ string, props map[string]any, oldProps map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
 	for _, name := range []string{"CatalogId", "DatabaseName", "TableName"} {
-		if fmt.Sprint(props[name]) != fmt.Sprint(oldProps[name]) {
+		if cfnScalarString(props[name]) != cfnScalarString(oldProps[name]) {
 			return "", nil, errReplacementRequired
 		}
 	}
