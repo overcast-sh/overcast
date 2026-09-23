@@ -112,6 +112,28 @@ docker run --rm \
 it runs *inside* a container itself; this distinction only matters when you
 invoke Docker by hand from a Windows or macOS shell.
 
+### The SDK type table
+
+`sdk-types/AWSSDK.<Service>.txt` holds the member types of every `AWSSDK.*`
+package `OvercastCompat.csproj` pins — one file per package, every model class
+and each property's type — reflected from the assemblies by this suite
+(`Scenario/SdkTypeTable.cs`). `cmd/compatgen` spells the generated groups'
+C# from it, because it runs where there is no .NET SDK to load the assemblies
+with. Refresh it whenever you change an `AWSSDK.*` pin, then regenerate:
+
+```bash
+docker build -f compat/suites/dotnet-sdk/Dockerfile --target sdk-types \
+  --output type=local,dest=compat/suites/dotnet-sdk/sdk-types compat/suites
+make generate-compat-model
+```
+
+A stale table fails loudly in two places: `cmd/compatgen` refuses one whose
+versions differ from the csproj's pins, and `Tests/SdkTypeTableTests` fails on
+one that differs from the pinned assemblies. The `sdk-types` target stops
+before the image's test stage, so it works on a table that test would reject.
+If you add a package, delete the file of any package you removed: the export
+writes files and never deletes one.
+
 ### Via the Go CLI (recommended — runs all suites, or just this one)
 
 ```bash
@@ -161,7 +183,9 @@ dotnet-sdk/
   run.sh                   ← builds/runs the Dockerfile; what cmd/compat invokes in CI
   OvercastCompat.csproj    ← AWSSDK.* NuGet references; OutputType=Exe
   Program.cs               ← top-level statement entry point: wires clients, merges impls, runs
+                             (`--sdk-types <dir>` writes the SDK type table instead)
   README.md                ← you are here
+  sdk-types/               ← AWSSDK.<Service>.txt: the pinned SDK's member types, for cmd/compatgen
 
   Harness/
     TestContext.cs         ← per-group state bag (endpoint, region, runId, log)
@@ -190,6 +214,7 @@ dotnet-sdk/
     Execution.cs            ← the calls a clause makes and the closed assertion set
     Documents.cs, Paths.cs  ← an SDK response as one of the IR's documents, and paths over it
     Errors.cs, Failure.cs   ← error matching, 501 classification, the six-field message
+    SdkTypeTable.cs         ← renders sdk-types/ from the AWSSDK assemblies
 
   Tests/
     OvercastCompat.Tests.csproj ← separate xunit project (added in #1697)
@@ -199,6 +224,8 @@ dotnet-sdk/
     ScenarioTests.cs             ← the Scenario/ runtime against real SDK request/response objects
     ScenarioDocumentTests.cs     ← an SDK response as a document, and paths over it
     ScenarioErrorFixtureTests.cs ← the shared error-matching conformance fixtures
+    SdkTypeTableTests.cs         ← the committed sdk-types/ is what the pinned assemblies declare
+    SdkWireFormTests.cs          ← CloudWatch Logs' DateTime-over-long, measured on the wire
 ```
 
 **One file per AWS service.** Never split a service across multiple group

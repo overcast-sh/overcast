@@ -33,6 +33,7 @@ compat/suites/registry.generated.json linguist-generated=true
 compat/suites/go-sdk/internal/groups/scenarios_gen.go linguist-generated=true
 compat/suites/go-sdk/internal/groups/scenarios_*_gen.go linguist-generated=true
 compat/suites/dotnet-sdk/Groups/Scenarios*Gen.cs linguist-generated=true
+compat/suites/dotnet-sdk/sdk-types/*.txt linguist-generated=true
 
 # The public installers (install/README.md). install.sh must stay LF: a CRLF
 # copy from a Windows checkout is a script sh cannot run. install.ps1 follows

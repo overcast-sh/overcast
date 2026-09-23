@@ -12,9 +12,11 @@ CONTEXT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # bin/ and obj/ are pruned: they hold generated sources (AssemblyInfo.cs) whose
 # content varies by machine and configuration, so hashing them would rebuild the
-# image for reasons the image does not depend on.
+# image for reasons the image does not depend on. The SDK type table under
+# sdk-types/ is hashed: the image build's tests compare it with the pinned
+# assemblies, so a changed table has to rebuild to be checked.
 SRC_HASH=$(find "$SCRIPT_DIR" \( -name bin -o -name obj \) -prune -o \
-  -type f \( -name '*.cs' -o -name '*.csproj' -o -name 'Dockerfile' -o -name 'run.sh' \) -print \
+  -type f \( -name '*.cs' -o -name '*.csproj' -o -name '*.txt' -o -name 'Dockerfile' -o -name 'run.sh' \) -print \
   | sort | xargs md5sum 2>/dev/null | md5sum | cut -c1-12)
 REGISTRY_HASH=$(cat "$CONTEXT_DIR/registry.json" "$CONTEXT_DIR/registry.generated.json" \
   | md5sum | cut -c1-12)
