@@ -72,7 +72,7 @@ public sealed class ScenarioBlobFixtureTests
             Assert.Null(binder.Error);
             Assert.Equal(want, viaRef.ToArray());
 
-            Assert.True(Documents.TryConvert(new Record { Data = new MemoryStream(want) }, out var rendered));
+            Assert.True(Documents.TryConvert(new Amazon.Kinesis.Model.Record { Data = new MemoryStream(want) }, out var rendered));
             Assert.True(Paths.TryResolve(rendered, "$.Data", out var data));
             Assert.Equal(c.Base64, data);
             Assert.True(Documents.JsonEqual(data, binder.Evaluate(Val.Base64(c.Base64))),
