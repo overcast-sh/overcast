@@ -23,19 +23,19 @@ func ScenariosAuthoredKinesisStreams(c *clients.Clients) ServiceGroup {
 	return ServiceGroup{
 		Name: "scenarios/authored-kinesis-streams",
 		Impls: map[string]harness.TestFn{
-			"kinesis-streams-shadow:CreateStream":          g.testKinesisStreamsShadowCreateStream,
-			"kinesis-streams-shadow:DescribeStream":        g.testKinesisStreamsShadowDescribeStream,
-			"kinesis-streams-shadow:DescribeStreamSummary": g.testKinesisStreamsShadowDescribeStreamSummary,
-			"kinesis-streams-shadow:ListStreams":           g.testKinesisStreamsShadowListStreams,
-			"kinesis-streams-shadow:AddTagsToStream":       g.testKinesisStreamsShadowAddTagsToStream,
-			"kinesis-streams-shadow:ListTagsForStream":     g.testKinesisStreamsShadowListTagsForStream,
-			"kinesis-streams-shadow:DeleteStream":          g.testKinesisStreamsShadowDeleteStream,
+			"kinesis-streams:CreateStream":          g.testKinesisStreamsCreateStream,
+			"kinesis-streams:DescribeStream":        g.testKinesisStreamsDescribeStream,
+			"kinesis-streams:DescribeStreamSummary": g.testKinesisStreamsDescribeStreamSummary,
+			"kinesis-streams:ListStreams":           g.testKinesisStreamsListStreams,
+			"kinesis-streams:AddTagsToStream":       g.testKinesisStreamsAddTagsToStream,
+			"kinesis-streams:ListTagsForStream":     g.testKinesisStreamsListTagsForStream,
+			"kinesis-streams:DeleteStream":          g.testKinesisStreamsDeleteStream,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"kinesis-streams-shadow": g.setupKinesisStreamsShadow,
+			"kinesis-streams": g.setupKinesisStreams,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"kinesis-streams-shadow": g.teardownKinesisStreamsShadow,
+			"kinesis-streams": g.teardownKinesisStreams,
 		},
 	}
 }
@@ -55,10 +55,10 @@ func (g *authoredKinesisStreamsScenarios) cl() *kinesis.Client {
 	return g.client
 }
 
-var groupKinesisStreamsShadow = scenario.Group{Name: "kinesis-streams-shadow", File: "compat/model/authored/kinesis-streams.json"}
+var groupKinesisStreams = scenario.Group{Name: "kinesis-streams", File: "compat/model/authored/kinesis-streams.json"}
 
-func (g *authoredKinesisStreamsScenarios) setupKinesisStreamsShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupKinesisStreamsShadow.RunSetup(ctx, t,
+func (g *authoredKinesisStreamsScenarios) setupKinesisStreams(ctx context.Context, t *harness.TestContext) error {
+	return groupKinesisStreams.RunSetup(ctx, t,
 		scenario.Call{
 			Op:     "CreateStream",
 			Params: `{"ShardCount":1,"StreamName":{"$name":"s"}}`,
@@ -75,8 +75,8 @@ func (g *authoredKinesisStreamsScenarios) setupKinesisStreamsShadow(ctx context.
 	)
 }
 
-func (g *authoredKinesisStreamsScenarios) teardownKinesisStreamsShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupKinesisStreamsShadow.RunTeardown(ctx, t,
+func (g *authoredKinesisStreamsScenarios) teardownKinesisStreams(ctx context.Context, t *harness.TestContext) error {
+	return groupKinesisStreams.RunTeardown(ctx, t,
 		scenario.Call{
 			Op:     "DeleteStream",
 			Params: `{"StreamName":{"$name":"created"}}`,
@@ -104,8 +104,8 @@ func (g *authoredKinesisStreamsScenarios) teardownKinesisStreamsShadow(ctx conte
 	)
 }
 
-func (g *authoredKinesisStreamsScenarios) testKinesisStreamsShadowCreateStream(ctx context.Context, t *harness.TestContext) error {
-	return groupKinesisStreamsShadow.RunTest(ctx, t, "CreateStream", scenario.Test{
+func (g *authoredKinesisStreamsScenarios) testKinesisStreamsCreateStream(ctx context.Context, t *harness.TestContext) error {
+	return groupKinesisStreams.RunTest(ctx, t, "CreateStream", scenario.Test{
 		Call: scenario.Call{
 			Op:     "CreateStream",
 			Params: `{"ShardCount":1,"StreamName":{"$name":"created"}}`,
@@ -158,8 +158,8 @@ func (g *authoredKinesisStreamsScenarios) testKinesisStreamsShadowCreateStream(c
 	})
 }
 
-func (g *authoredKinesisStreamsScenarios) testKinesisStreamsShadowDescribeStream(ctx context.Context, t *harness.TestContext) error {
-	return groupKinesisStreamsShadow.RunTest(ctx, t, "DescribeStream", scenario.Test{
+func (g *authoredKinesisStreamsScenarios) testKinesisStreamsDescribeStream(ctx context.Context, t *harness.TestContext) error {
+	return groupKinesisStreams.RunTest(ctx, t, "DescribeStream", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DescribeStream",
 			Params: `{"StreamName":{"$name":"s"}}`,
@@ -199,8 +199,8 @@ func (g *authoredKinesisStreamsScenarios) testKinesisStreamsShadowDescribeStream
 	})
 }
 
-func (g *authoredKinesisStreamsScenarios) testKinesisStreamsShadowDescribeStreamSummary(ctx context.Context, t *harness.TestContext) error {
-	return groupKinesisStreamsShadow.RunTest(ctx, t, "DescribeStreamSummary", scenario.Test{
+func (g *authoredKinesisStreamsScenarios) testKinesisStreamsDescribeStreamSummary(ctx context.Context, t *harness.TestContext) error {
+	return groupKinesisStreams.RunTest(ctx, t, "DescribeStreamSummary", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DescribeStreamSummary",
 			Params: `{"StreamName":{"$name":"s"}}`,
@@ -240,8 +240,8 @@ func (g *authoredKinesisStreamsScenarios) testKinesisStreamsShadowDescribeStream
 	})
 }
 
-func (g *authoredKinesisStreamsScenarios) testKinesisStreamsShadowListStreams(ctx context.Context, t *harness.TestContext) error {
-	return groupKinesisStreamsShadow.RunTest(ctx, t, "ListStreams", scenario.Test{
+func (g *authoredKinesisStreamsScenarios) testKinesisStreamsListStreams(ctx context.Context, t *harness.TestContext) error {
+	return groupKinesisStreams.RunTest(ctx, t, "ListStreams", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListStreams",
 			Params: `{}`,
@@ -263,8 +263,8 @@ func (g *authoredKinesisStreamsScenarios) testKinesisStreamsShadowListStreams(ct
 	})
 }
 
-func (g *authoredKinesisStreamsScenarios) testKinesisStreamsShadowAddTagsToStream(ctx context.Context, t *harness.TestContext) error {
-	return groupKinesisStreamsShadow.RunTest(ctx, t, "AddTagsToStream", scenario.Test{
+func (g *authoredKinesisStreamsScenarios) testKinesisStreamsAddTagsToStream(ctx context.Context, t *harness.TestContext) error {
+	return groupKinesisStreams.RunTest(ctx, t, "AddTagsToStream", scenario.Test{
 		Call: scenario.Call{
 			Op:     "AddTagsToStream",
 			Params: `{"StreamName":{"$name":"s"},"Tags":{"env":"compat","project":"overcast"}}`,
@@ -317,8 +317,8 @@ func (g *authoredKinesisStreamsScenarios) testKinesisStreamsShadowAddTagsToStrea
 	})
 }
 
-func (g *authoredKinesisStreamsScenarios) testKinesisStreamsShadowListTagsForStream(ctx context.Context, t *harness.TestContext) error {
-	return groupKinesisStreamsShadow.RunTest(ctx, t, "ListTagsForStream", scenario.Test{
+func (g *authoredKinesisStreamsScenarios) testKinesisStreamsListTagsForStream(ctx context.Context, t *harness.TestContext) error {
+	return groupKinesisStreams.RunTest(ctx, t, "ListTagsForStream", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListTagsForStream",
 			Params: `{"StreamName":{"$name":"s"}}`,
@@ -348,8 +348,8 @@ func (g *authoredKinesisStreamsScenarios) testKinesisStreamsShadowListTagsForStr
 	})
 }
 
-func (g *authoredKinesisStreamsScenarios) testKinesisStreamsShadowDeleteStream(ctx context.Context, t *harness.TestContext) error {
-	return groupKinesisStreamsShadow.RunTest(ctx, t, "DeleteStream", scenario.Test{
+func (g *authoredKinesisStreamsScenarios) testKinesisStreamsDeleteStream(ctx context.Context, t *harness.TestContext) error {
+	return groupKinesisStreams.RunTest(ctx, t, "DeleteStream", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteStream",
 			Params: `{"StreamName":{"$name":"created"}}`,

@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/kinesis-streams.json";
 
-const GROUP_KINESIS_STREAMS_SHADOW: Group = Group {
-    name: "kinesis-streams-shadow",
+const GROUP_KINESIS_STREAMS: Group = Group {
+    name: "kinesis-streams",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredKinesisStreams {
         {
             let client = self.client.clone();
             impls.insert(
-                "kinesis-streams-shadow:CreateStream".to_string(),
+                "kinesis-streams:CreateStream".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_KINESIS_STREAMS_SHADOW
-                            .run_test(&ctx, "CreateStream", test_kinesis_streams_shadow_create_stream(&client))
+                        GROUP_KINESIS_STREAMS
+                            .run_test(&ctx, "CreateStream", test_kinesis_streams_create_stream(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredKinesisStreams {
         {
             let client = self.client.clone();
             impls.insert(
-                "kinesis-streams-shadow:DescribeStream".to_string(),
+                "kinesis-streams:DescribeStream".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_KINESIS_STREAMS_SHADOW
-                            .run_test(&ctx, "DescribeStream", test_kinesis_streams_shadow_describe_stream(&client))
+                        GROUP_KINESIS_STREAMS
+                            .run_test(&ctx, "DescribeStream", test_kinesis_streams_describe_stream(&client))
                             .await
                     })
                 }),
@@ -79,12 +79,12 @@ impl ServiceGroup for ScenariosAuthoredKinesisStreams {
         {
             let client = self.client.clone();
             impls.insert(
-                "kinesis-streams-shadow:DescribeStreamSummary".to_string(),
+                "kinesis-streams:DescribeStreamSummary".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_KINESIS_STREAMS_SHADOW
-                            .run_test(&ctx, "DescribeStreamSummary", test_kinesis_streams_shadow_describe_stream_summary(&client))
+                        GROUP_KINESIS_STREAMS
+                            .run_test(&ctx, "DescribeStreamSummary", test_kinesis_streams_describe_stream_summary(&client))
                             .await
                     })
                 }),
@@ -93,12 +93,12 @@ impl ServiceGroup for ScenariosAuthoredKinesisStreams {
         {
             let client = self.client.clone();
             impls.insert(
-                "kinesis-streams-shadow:ListStreams".to_string(),
+                "kinesis-streams:ListStreams".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_KINESIS_STREAMS_SHADOW
-                            .run_test(&ctx, "ListStreams", test_kinesis_streams_shadow_list_streams(&client))
+                        GROUP_KINESIS_STREAMS
+                            .run_test(&ctx, "ListStreams", test_kinesis_streams_list_streams(&client))
                             .await
                     })
                 }),
@@ -107,12 +107,12 @@ impl ServiceGroup for ScenariosAuthoredKinesisStreams {
         {
             let client = self.client.clone();
             impls.insert(
-                "kinesis-streams-shadow:AddTagsToStream".to_string(),
+                "kinesis-streams:AddTagsToStream".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_KINESIS_STREAMS_SHADOW
-                            .run_test(&ctx, "AddTagsToStream", test_kinesis_streams_shadow_add_tags_to_stream(&client))
+                        GROUP_KINESIS_STREAMS
+                            .run_test(&ctx, "AddTagsToStream", test_kinesis_streams_add_tags_to_stream(&client))
                             .await
                     })
                 }),
@@ -121,12 +121,12 @@ impl ServiceGroup for ScenariosAuthoredKinesisStreams {
         {
             let client = self.client.clone();
             impls.insert(
-                "kinesis-streams-shadow:ListTagsForStream".to_string(),
+                "kinesis-streams:ListTagsForStream".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_KINESIS_STREAMS_SHADOW
-                            .run_test(&ctx, "ListTagsForStream", test_kinesis_streams_shadow_list_tags_for_stream(&client))
+                        GROUP_KINESIS_STREAMS
+                            .run_test(&ctx, "ListTagsForStream", test_kinesis_streams_list_tags_for_stream(&client))
                             .await
                     })
                 }),
@@ -135,12 +135,12 @@ impl ServiceGroup for ScenariosAuthoredKinesisStreams {
         {
             let client = self.client.clone();
             impls.insert(
-                "kinesis-streams-shadow:DeleteStream".to_string(),
+                "kinesis-streams:DeleteStream".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_KINESIS_STREAMS_SHADOW
-                            .run_test(&ctx, "DeleteStream", test_kinesis_streams_shadow_delete_stream(&client))
+                        GROUP_KINESIS_STREAMS
+                            .run_test(&ctx, "DeleteStream", test_kinesis_streams_delete_stream(&client))
                             .await
                     })
                 }),
@@ -154,11 +154,11 @@ impl ServiceGroup for ScenariosAuthoredKinesisStreams {
         {
             let client = self.client.clone();
             setups.insert(
-                "kinesis-streams-shadow".to_string(),
+                "kinesis-streams".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_KINESIS_STREAMS_SHADOW.run_setup(&ctx, setup_kinesis_streams_shadow(&client)).await
+                        GROUP_KINESIS_STREAMS.run_setup(&ctx, setup_kinesis_streams(&client)).await
                     })
                 }),
             );
@@ -171,11 +171,11 @@ impl ServiceGroup for ScenariosAuthoredKinesisStreams {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "kinesis-streams-shadow".to_string(),
+                "kinesis-streams".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_KINESIS_STREAMS_SHADOW.run_teardown(&ctx, teardown_kinesis_streams_shadow(&client)).await
+                        GROUP_KINESIS_STREAMS.run_teardown(&ctx, teardown_kinesis_streams(&client)).await
                     })
                 }),
             );
@@ -184,7 +184,7 @@ impl ServiceGroup for ScenariosAuthoredKinesisStreams {
     }
 }
 
-fn setup_kinesis_streams_shadow(client: &aws_sdk_kinesis::Client) -> Vec<Call> {
+fn setup_kinesis_streams(client: &aws_sdk_kinesis::Client) -> Vec<Call> {
     vec![
         Call {
             op: "CreateStream",
@@ -213,7 +213,7 @@ fn setup_kinesis_streams_shadow(client: &aws_sdk_kinesis::Client) -> Vec<Call> {
     ]
 }
 
-fn teardown_kinesis_streams_shadow(client: &aws_sdk_kinesis::Client) -> Vec<Call> {
+fn teardown_kinesis_streams(client: &aws_sdk_kinesis::Client) -> Vec<Call> {
     vec![
         Call {
             op: "DeleteStream",
@@ -258,7 +258,7 @@ fn teardown_kinesis_streams_shadow(client: &aws_sdk_kinesis::Client) -> Vec<Call
     ]
 }
 
-fn test_kinesis_streams_shadow_create_stream(client: &aws_sdk_kinesis::Client) -> Test {
+fn test_kinesis_streams_create_stream(client: &aws_sdk_kinesis::Client) -> Test {
     Test {
         call: Call {
             op: "CreateStream",
@@ -345,7 +345,7 @@ fn test_kinesis_streams_shadow_create_stream(client: &aws_sdk_kinesis::Client) -
     }
 }
 
-fn test_kinesis_streams_shadow_describe_stream(client: &aws_sdk_kinesis::Client) -> Test {
+fn test_kinesis_streams_describe_stream(client: &aws_sdk_kinesis::Client) -> Test {
     Test {
         call: Call {
             op: "DescribeStream",
@@ -406,7 +406,7 @@ fn test_kinesis_streams_shadow_describe_stream(client: &aws_sdk_kinesis::Client)
     }
 }
 
-fn test_kinesis_streams_shadow_describe_stream_summary(client: &aws_sdk_kinesis::Client) -> Test {
+fn test_kinesis_streams_describe_stream_summary(client: &aws_sdk_kinesis::Client) -> Test {
     Test {
         call: Call {
             op: "DescribeStreamSummary",
@@ -467,7 +467,7 @@ fn test_kinesis_streams_shadow_describe_stream_summary(client: &aws_sdk_kinesis:
     }
 }
 
-fn test_kinesis_streams_shadow_list_streams(client: &aws_sdk_kinesis::Client) -> Test {
+fn test_kinesis_streams_list_streams(client: &aws_sdk_kinesis::Client) -> Test {
     Test {
         call: Call {
             op: "ListStreams",
@@ -500,7 +500,7 @@ fn test_kinesis_streams_shadow_list_streams(client: &aws_sdk_kinesis::Client) ->
     }
 }
 
-fn test_kinesis_streams_shadow_add_tags_to_stream(client: &aws_sdk_kinesis::Client) -> Test {
+fn test_kinesis_streams_add_tags_to_stream(client: &aws_sdk_kinesis::Client) -> Test {
     Test {
         call: Call {
             op: "AddTagsToStream",
@@ -586,7 +586,7 @@ fn test_kinesis_streams_shadow_add_tags_to_stream(client: &aws_sdk_kinesis::Clie
     }
 }
 
-fn test_kinesis_streams_shadow_list_tags_for_stream(client: &aws_sdk_kinesis::Client) -> Test {
+fn test_kinesis_streams_list_tags_for_stream(client: &aws_sdk_kinesis::Client) -> Test {
     Test {
         call: Call {
             op: "ListTagsForStream",
@@ -629,7 +629,7 @@ fn test_kinesis_streams_shadow_list_tags_for_stream(client: &aws_sdk_kinesis::Cl
     }
 }
 
-fn test_kinesis_streams_shadow_delete_stream(client: &aws_sdk_kinesis::Client) -> Test {
+fn test_kinesis_streams_delete_stream(client: &aws_sdk_kinesis::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteStream",

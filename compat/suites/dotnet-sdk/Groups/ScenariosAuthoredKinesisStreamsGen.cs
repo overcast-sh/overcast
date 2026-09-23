@@ -15,7 +15,7 @@ namespace OvercastCompat.Groups;
 /// </remarks>
 internal sealed class ScenariosAuthoredKinesisStreams : IServiceGroup
 {
-    private static readonly ScenarioGroup GroupKinesisStreamsShadow = new("kinesis-streams-shadow", "compat/model/authored/kinesis-streams.json");
+    private static readonly ScenarioGroup GroupKinesisStreams = new("kinesis-streams", "compat/model/authored/kinesis-streams.json");
 
     private readonly Lazy<AmazonKinesisClient> _client;
 
@@ -35,29 +35,29 @@ internal sealed class ScenariosAuthoredKinesisStreams : IServiceGroup
 
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["kinesis-streams-shadow:CreateStream"] = TestKinesisStreamsShadowCreateStream,
-        ["kinesis-streams-shadow:DescribeStream"] = TestKinesisStreamsShadowDescribeStream,
-        ["kinesis-streams-shadow:DescribeStreamSummary"] = TestKinesisStreamsShadowDescribeStreamSummary,
-        ["kinesis-streams-shadow:ListStreams"] = TestKinesisStreamsShadowListStreams,
-        ["kinesis-streams-shadow:AddTagsToStream"] = TestKinesisStreamsShadowAddTagsToStream,
-        ["kinesis-streams-shadow:ListTagsForStream"] = TestKinesisStreamsShadowListTagsForStream,
-        ["kinesis-streams-shadow:DeleteStream"] = TestKinesisStreamsShadowDeleteStream,
+        ["kinesis-streams:CreateStream"] = TestKinesisStreamsCreateStream,
+        ["kinesis-streams:DescribeStream"] = TestKinesisStreamsDescribeStream,
+        ["kinesis-streams:DescribeStreamSummary"] = TestKinesisStreamsDescribeStreamSummary,
+        ["kinesis-streams:ListStreams"] = TestKinesisStreamsListStreams,
+        ["kinesis-streams:AddTagsToStream"] = TestKinesisStreamsAddTagsToStream,
+        ["kinesis-streams:ListTagsForStream"] = TestKinesisStreamsListTagsForStream,
+        ["kinesis-streams:DeleteStream"] = TestKinesisStreamsDeleteStream,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["kinesis-streams-shadow"] = SetupKinesisStreamsShadow,
+        ["kinesis-streams"] = SetupKinesisStreams,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["kinesis-streams-shadow"] = TeardownKinesisStreamsShadow,
+        ["kinesis-streams"] = TeardownKinesisStreams,
     };
 
     private AmazonKinesisClient Cl() => _client.Value;
 
-    private Task SetupKinesisStreamsShadow(TestContext t) =>
-        GroupKinesisStreamsShadow.RunSetupAsync(t,
+    private Task SetupKinesisStreams(TestContext t) =>
+        GroupKinesisStreams.RunSetupAsync(t,
             new ScenarioCall
             {
                 Op = "CreateStream",
@@ -74,8 +74,8 @@ internal sealed class ScenariosAuthoredKinesisStreams : IServiceGroup
             }
         );
 
-    private Task TeardownKinesisStreamsShadow(TestContext t) =>
-        GroupKinesisStreamsShadow.RunTeardownAsync(t,
+    private Task TeardownKinesisStreams(TestContext t) =>
+        GroupKinesisStreams.RunTeardownAsync(t,
             new ScenarioCall
             {
                 Op = "DeleteStream",
@@ -104,7 +104,7 @@ internal sealed class ScenariosAuthoredKinesisStreams : IServiceGroup
             }
         );
 
-    private Task TestKinesisStreamsShadowCreateStream(TestContext t) => GroupKinesisStreamsShadow.RunTestAsync(t, "CreateStream", new ScenarioTest
+    private Task TestKinesisStreamsCreateStream(TestContext t) => GroupKinesisStreams.RunTestAsync(t, "CreateStream", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -161,7 +161,7 @@ internal sealed class ScenariosAuthoredKinesisStreams : IServiceGroup
         ],
     });
 
-    private Task TestKinesisStreamsShadowDescribeStream(TestContext t) => GroupKinesisStreamsShadow.RunTestAsync(t, "DescribeStream", new ScenarioTest
+    private Task TestKinesisStreamsDescribeStream(TestContext t) => GroupKinesisStreams.RunTestAsync(t, "DescribeStream", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -204,7 +204,7 @@ internal sealed class ScenariosAuthoredKinesisStreams : IServiceGroup
         ],
     });
 
-    private Task TestKinesisStreamsShadowDescribeStreamSummary(TestContext t) => GroupKinesisStreamsShadow.RunTestAsync(t, "DescribeStreamSummary", new ScenarioTest
+    private Task TestKinesisStreamsDescribeStreamSummary(TestContext t) => GroupKinesisStreams.RunTestAsync(t, "DescribeStreamSummary", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -247,7 +247,7 @@ internal sealed class ScenariosAuthoredKinesisStreams : IServiceGroup
         ],
     });
 
-    private Task TestKinesisStreamsShadowListStreams(TestContext t) => GroupKinesisStreamsShadow.RunTestAsync(t, "ListStreams", new ScenarioTest
+    private Task TestKinesisStreamsListStreams(TestContext t) => GroupKinesisStreams.RunTestAsync(t, "ListStreams", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -271,7 +271,7 @@ internal sealed class ScenariosAuthoredKinesisStreams : IServiceGroup
         ],
     });
 
-    private Task TestKinesisStreamsShadowAddTagsToStream(TestContext t) => GroupKinesisStreamsShadow.RunTestAsync(t, "AddTagsToStream", new ScenarioTest
+    private Task TestKinesisStreamsAddTagsToStream(TestContext t) => GroupKinesisStreams.RunTestAsync(t, "AddTagsToStream", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -328,7 +328,7 @@ internal sealed class ScenariosAuthoredKinesisStreams : IServiceGroup
         ],
     });
 
-    private Task TestKinesisStreamsShadowListTagsForStream(TestContext t) => GroupKinesisStreamsShadow.RunTestAsync(t, "ListTagsForStream", new ScenarioTest
+    private Task TestKinesisStreamsListTagsForStream(TestContext t) => GroupKinesisStreams.RunTestAsync(t, "ListTagsForStream", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -360,7 +360,7 @@ internal sealed class ScenariosAuthoredKinesisStreams : IServiceGroup
         ],
     });
 
-    private Task TestKinesisStreamsShadowDeleteStream(TestContext t) => GroupKinesisStreamsShadow.RunTestAsync(t, "DeleteStream", new ScenarioTest
+    private Task TestKinesisStreamsDeleteStream(TestContext t) => GroupKinesisStreams.RunTestAsync(t, "DeleteStream", new ScenarioTest
     {
         Call = new ScenarioCall
         {

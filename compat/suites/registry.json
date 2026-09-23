@@ -1750,6 +1750,7 @@
     {
       "service": "kinesis",
       "name": "kinesis-streams",
+      "scenario": "compat/model/authored/kinesis-streams.json",
       "tests": [
         {
           "name": "CreateStream"
