@@ -69,8 +69,10 @@ export interface CatalogEntry {
 
 export const CATALOG: CatalogEntry[] = [
   // ── Minimal backend stubs ─────────────────────────────────────────────
-  // Shield has a small metadata/probe subset and uses the same generic service
-  // page as services that are wholly unsupported.
+  // Registered in the backend (TierStub in internal/router/tiers.go) with a
+  // small subset of operations; everything else returns 501. Bedrock is the
+  // other stub and sits under Machine Learning, since the dashboard groups
+  // entries by category in array order.
   {
     id: "shield",
     label: "Shield",
@@ -215,9 +217,9 @@ export const CATALOG: CatalogEntry[] = [
       "Fully managed service for accessing foundation models (LLMs) from Amazon, Anthropic, and other providers via API.",
     awsDocsUrl: "https://docs.aws.amazon.com/bedrock/latest/userguide/",
     reason:
-      "Bedrock proxies to hosted LLM models. A stub could be added to simulate API responses, but model output cannot be replicated locally.",
-    tier: "unsupported",
-    goalTier: "unsupported",
+      "Bedrock Runtime's Converse and InvokeModel return a canned response, so an application wired to Bedrock can connect and parse a reply. No model runs, and every other operation returns 501.",
+    tier: "stub",
+    goalTier: "stub",
   },
   {
     id: "comprehend",
@@ -567,18 +569,6 @@ export const CATALOG: CatalogEntry[] = [
     goalTier: "unsupported",
   },
   {
-    id: "transfer",
-    label: "AWS Transfer Family",
-    category: "migration",
-    description:
-      "Managed SFTP, FTPS, and FTP service for directly transferring files into and out of S3.",
-    awsDocsUrl: "https://docs.aws.amazon.com/transfer/latest/userguide/",
-    reason:
-      "Transfer Family requires a managed SFTP/FTP server. A local stub could be feasible in the future given Overcast's S3 support.",
-    tier: "unsupported",
-    goalTier: "stub",
-  },
-  {
     id: "datasync",
     label: "AWS DataSync",
     category: "migration",
@@ -690,18 +680,6 @@ export const CATALOG: CatalogEntry[] = [
 
   // ── Management & Governance ────────────────────────────────────────────
   {
-    id: "cloudtrail",
-    label: "AWS CloudTrail",
-    category: "management",
-    description:
-      "Service that records API activity and account events for governance, compliance, and operational auditing.",
-    awsDocsUrl: "https://docs.aws.amazon.com/awscloudtrail/latest/userguide/",
-    reason:
-      "CloudTrail records API calls across all services. A local implementation could capture and expose Overcast API activity.",
-    tier: "unsupported",
-    goalTier: "stub",
-  },
-  {
     id: "config",
     label: "AWS Config",
     category: "management",
@@ -710,18 +688,6 @@ export const CATALOG: CatalogEntry[] = [
     awsDocsUrl: "https://docs.aws.amazon.com/config/latest/developerguide/",
     reason:
       "Config continuously records the configuration state of AWS resources and evaluates them against compliance rules. Faithfully emulating it would require tracking resource changes across every Overcast service and running a rules evaluation engine — and compliance auditing is a production governance activity with no practical development-time analogue.",
-    tier: "unsupported",
-    goalTier: "unsupported",
-  },
-  {
-    id: "organizations",
-    label: "AWS Organizations",
-    category: "management",
-    description:
-      "Account management service for governing multiple AWS accounts, applying policies, and organizing them into organizational units.",
-    awsDocsUrl: "https://docs.aws.amazon.com/organizations/latest/userguide/",
-    reason:
-      "Organizations manages a hierarchy of AWS accounts with SCPs, consolidated billing, and delegated administrators. All its semantics depend on real AWS account isolation boundaries — Overcast has no multi-account model, so the shared-root and policy primitives have nothing to operate on.",
     tier: "unsupported",
     goalTier: "unsupported",
   },
@@ -821,18 +787,6 @@ export const CATALOG: CatalogEntry[] = [
       "CloudHSM is a hardware security appliance. There is no software emulation that preserves its security properties.",
     tier: "unsupported",
     goalTier: "unsupported",
-  },
-  {
-    id: "acm",
-    label: "AWS Certificate Manager",
-    category: "security",
-    description:
-      "Service for provisioning, managing, and deploying TLS/SSL certificates for AWS services.",
-    awsDocsUrl: "https://docs.aws.amazon.com/acm/latest/userguide/",
-    reason:
-      "ACM could be partially emulated for local HTTPS development, but certificate issuance requires a CA.",
-    tier: "unsupported",
-    goalTier: "stub",
   },
   {
     id: "acm-pca",
@@ -979,18 +933,6 @@ export const CATALOG: CatalogEntry[] = [
   },
 
   // ── Networking (unsupported) ───────────────────────────────────────────
-  {
-    id: "route53",
-    label: "Amazon Route 53",
-    category: "networking",
-    description:
-      "Scalable DNS web service with domain registration, health checking, and traffic routing capabilities.",
-    awsDocsUrl: "https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/",
-    reason:
-      "Route 53 DNS emulation could be useful locally. A stub that accepts zone and record configuration is feasible.",
-    tier: "unsupported",
-    goalTier: "stub",
-  },
   {
     id: "directconnect",
     label: "AWS Direct Connect",
@@ -1141,18 +1083,6 @@ export const CATALOG: CatalogEntry[] = [
     awsDocsUrl: "https://docs.aws.amazon.com/fsx/latest/WindowsGuide/",
     reason:
       "FSx provides managed versions of specialized file systems. Use local file system tools for development.",
-    tier: "unsupported",
-    goalTier: "unsupported",
-  },
-  {
-    id: "backup",
-    label: "AWS Backup",
-    category: "storage",
-    description:
-      "Centralized backup service for automating data protection across AWS services and hybrid workloads.",
-    awsDocsUrl: "https://docs.aws.amazon.com/aws-backup/latest/devguide/",
-    reason:
-      "AWS Backup orchestrates backups across multiple services. Depends on those services being fully implemented.",
     tier: "unsupported",
     goalTier: "unsupported",
   },
