@@ -1,6 +1,7 @@
 package cloudformation
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -34,6 +35,20 @@ func policyDocumentJSON(v any) []byte {
 	}
 	b, _ := json.Marshal(v)
 	return b
+}
+
+// iamPolicyDocumentPropertyChanged reports whether a `Json`-typed
+// policy-document property (AssumeRolePolicyDocument today) actually
+// changed, comparing policyDocumentJSON's normalised wire form rather than
+// the raw resolved value with reflect.DeepEqual (what iamJSONPropertyChanged
+// does for every other property). Such a property accepts a JSON string or
+// an equivalent object, and a template that rewrites the same policy from
+// one form to the other is never a change IAM would see — but it is always a
+// change to reflect.DeepEqual, because a string and a map are never equal,
+// which is what let #1982 through: the "changed" check fired, and the update
+// path then re-encoded a string document that Create had left untouched.
+func iamPolicyDocumentPropertyChanged(props, oldProps map[string]any, property string) bool {
+	return !bytes.Equal(policyDocumentJSON(props[property]), policyDocumentJSON(oldProps[property]))
 }
 
 // iamValidateInlinePolicyPrincipals enforces AWS::IAM::Policy's one documented
@@ -597,6 +612,30 @@ func iamInstanceProfileRoleMutations(profileName string, props, oldProps map[str
 
 // ── AWS::IAM::ServiceLinkedRole ────────────────────────────────────────────
 
+// serviceLinkedRoleNames maps AWSServiceName to the service-linked role name
+// AWS actually mints, per
+// https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_aws-services-that-work-with-iam.html.
+// This is not a derivation — capitalising the text before the service
+// principal's first "." turns elasticloadbalancing.amazonaws.com into
+// AWSServiceRoleForelasticloadbalancing, not AWS's real
+// AWSServiceRoleForElasticLoadBalancing, and EKS's own name is
+// "AmazonEKS", not "ECS"-style "EKS" alone. A service missing from this
+// table falls back to that same title-cased derivation in Create below —
+// good enough to keep a stack deploying, not guaranteed to match the real
+// AWS name — so extend this table with the documented name as soon as a
+// service outside it is found, rather than leaving it on the guess.
+var serviceLinkedRoleNames = map[string]string{
+	"elasticloadbalancing.amazonaws.com": "AWSServiceRoleForElasticLoadBalancing",
+	"autoscaling.amazonaws.com":          "AWSServiceRoleForAutoScaling",
+	"ecs.amazonaws.com":                  "AWSServiceRoleForECS",
+	"eks.amazonaws.com":                  "AWSServiceRoleForAmazonEKS",
+	"rds.amazonaws.com":                  "AWSServiceRoleForRDS",
+	"elasticache.amazonaws.com":          "AWSServiceRoleForElastiCache",
+	"replicator.lambda.amazonaws.com":    "AWSServiceRoleForLambdaReplicator",
+	"opensearchservice.amazonaws.com":    "AWSServiceRoleForAmazonOpenSearchService",
+	"organizations.amazonaws.com":        "AWSServiceRoleForOrganizations",
+}
+
 type iamServiceLinkedRoleHandler struct{}
 
 func (h *iamServiceLinkedRoleHandler) Create(ctx context.Context, router http.Handler, cfg *config.Config, props map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
@@ -605,10 +644,28 @@ func (h *iamServiceLinkedRoleHandler) Create(ctx context.Context, router http.Ha
 		return "", nil, fmt.Errorf("ServiceLinkedRole: AWSServiceName is required")
 	}
 
-	// Derive role name from service: e.g. elasticloadbalancing.amazonaws.com → AWSServiceRoleForElasticLoadBalancing
-	roleName := "AWSServiceRoleFor" + serviceName
-	if idx := strings.Index(roleName, "."); idx >= 0 {
-		roleName = roleName[:idx]
+	roleName, ok := serviceLinkedRoleNames[serviceName]
+	if !ok {
+		// A service outside the table has no documented name to mint here,
+		// and failing the stack would regress one that deploys today. Fall
+		// back to a title-cased derivation of the service principal's first
+		// label instead — it is only a guess (AWS's real name does not
+		// always agree: EKS's is "AmazonEKS", not "Eks") — and add the real
+		// name to serviceLinkedRoleNames above once it is known, rather than
+		// leaving every unlisted service on the guess.
+		label := serviceName
+		if idx := strings.Index(label, "."); idx >= 0 {
+			label = label[:idx]
+		}
+		if label != "" {
+			label = strings.ToUpper(label[:1]) + label[1:]
+		}
+		roleName = "AWSServiceRoleFor" + label
+	}
+	// CustomSuffix is appended with an underscore for the services that allow
+	// more than one linked role per account.
+	if suffix, _ := props["CustomSuffix"].(string); suffix != "" {
+		roleName += "_" + suffix
 	}
 
 	assumePolicy := fmt.Sprintf(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"%s"},"Action":"sts:AssumeRole"}]}`, serviceName)
