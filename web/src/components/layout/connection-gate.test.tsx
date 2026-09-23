@@ -35,6 +35,16 @@ describe("ConnectionGate", () => {
       renderGate()
       expect(screen.queryByText(/^connecting to /)).not.toBeInTheDocument()
     })
+
+    // The dialog is prefilled with the default endpoint, so accepting it sets
+    // the store to the values it already held. The store used to skip
+    // notifying on an unchanged endpoint, so the gate never noticed the
+    // endpoint was now configured and the dialog stayed up until a reload.
+    it("hands over to the app when the prefilled default is accepted", async () => {
+      const { user } = renderGate()
+      await user.click(await screen.findByRole("button", { name: "Connect" }))
+      expect(await screen.findByText(SHELL)).toBeInTheDocument()
+    })
   })
 
   describe("with a configured but unreachable endpoint", () => {

@@ -11,7 +11,6 @@ import { DevToolsContext } from "@/hooks/use-dev-tools"
 import { isNetworkError } from "@/lib/network-error"
 import { preloadRouteChunksWhenIdle } from "@/lib/preload-route-chunks"
 import { endpointStore } from "@/services/endpoint-store"
-import { hasPersistedRegion, fetchServerRegion } from "@/services/discovery"
 import { applyStoredTheme } from "@/hooks/use-theme"
 import "@/styles/global.css"
 
@@ -28,16 +27,8 @@ function getErrorMessage(error: unknown): string {
 }
 
 // On startup, seed the region from the server's OVERCAST_DEFAULT_REGION if
-// the user has not explicitly chosen a region in this tab session.
-if (!hasPersistedRegion()) {
-  void fetchServerRegion(endpointStore.get().baseUrl).then((serverRegion) => {
-    if (!serverRegion) return
-    const current = endpointStore.get()
-    if (current.region !== serverRegion) {
-      endpointStore.set({ ...current, region: serverRegion })
-    }
-  })
-}
+// nothing — the user, or a `?region=` in the URL — has chosen one.
+void endpointStore.seedServerRegion()
 
 const router = createRouter({
   routeTree,
