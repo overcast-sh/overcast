@@ -1,6 +1,8 @@
-import { render, screen, userEvent, waitFor } from "@/test/render"
+import { render, screen, userEvent, waitFor, within } from "@/test/render"
 // Type-only, so referencing it inside the hoisted vi.mock factory is legal.
 import type * as ApiModule from "@/services/api"
+import type * as ParquetModule from "@/features/s3/preview-parquet"
+import type { ParquetPreview } from "@/features/s3/preview-parquet"
 import type { S3ObjectVersion } from "@/types"
 import { ObjectPreviewDialog } from "./object-preview-dialog"
 import { formatPreviewText, isTextPreviewable } from "./object-preview-format"
@@ -11,7 +13,25 @@ import { formatPreviewText, isTextPreviewable } from "./object-preview-format"
 const api = vi.hoisted(() => ({
   versions: [] as S3ObjectVersion[],
   preview: { text: "", truncated: false },
+  /** When set, the text preview never arrives — the loading state holds. */
+  previewPending: false,
 }))
+
+// The Parquet reader itself is tested against a real file in
+// preview-parquet.test.ts; here only what the dialog does with its answer is.
+const parquet = vi.hoisted(() => ({
+  result: undefined as unknown,
+  error: undefined as Error | undefined,
+}))
+
+vi.mock("@/features/s3/preview-parquet", async (importOriginal) => {
+  const actual = await importOriginal<typeof ParquetModule>()
+  return {
+    ...actual,
+    readParquetPreview: () =>
+      parquet.error ? Promise.reject(parquet.error) : Promise.resolve(parquet.result),
+  }
+})
 
 vi.mock("@/services/api", async (importOriginal) => {
   const actual = await importOriginal<typeof ApiModule>()
@@ -21,7 +41,8 @@ vi.mock("@/services/api", async (importOriginal) => {
       ...actual.s3,
       listObjectVersions: () =>
         Promise.resolve({ versions: api.versions, prefixes: [], isTruncated: false }),
-      getObjectText: () => Promise.resolve(api.preview),
+      getObjectText: () =>
+        api.previewPending ? new Promise(() => {}) : Promise.resolve(api.preview),
     },
   }
 })
@@ -427,5 +448,251 @@ describe("ObjectPreviewDialog > version history", () => {
 
     await user.click(await screen.findByRole("button", { name: "All 2" }))
     expect(screen.getByRole("tab", { name: /Versions/ })).toHaveAttribute("aria-selected", "true")
+  })
+})
+
+// ─── Data-file previews ────────────────────────────────────────────────────
+
+function renderObject(
+  objectKey: string,
+  over: { contentType?: string; contentLength?: number; onClose?: () => void } = {},
+) {
+  return render(
+    <ObjectPreviewDialog
+      bucket="lake"
+      objectKey={objectKey}
+      metadata={{
+        ...metadata,
+        contentType: over.contentType ?? "binary/octet-stream",
+        contentLength: over.contentLength ?? 64,
+      }}
+      loading={false}
+      onSelectVersion={() => {}}
+      onClose={over.onClose ?? (() => {})}
+    />,
+  )
+}
+
+describe("ObjectPreviewDialog > CSV and TSV", () => {
+  beforeEach(() => {
+    api.previewPending = false
+    api.preview = { text: 'id,name,amount\n1,Ada,19.99\n2,"",5\n', truncated: false }
+  })
+
+  it("holds a static skeleton while the bytes are on their way", () => {
+    api.previewPending = true
+    renderObject("orders.csv")
+    expect(screen.getByRole("status")).toHaveTextContent("loading preview")
+    expect(screen.queryByRole("table")).not.toBeInTheDocument()
+  })
+
+  it("renders the first rows as a table, with a caption saying how many", async () => {
+    renderObject("orders.csv")
+    const table = await screen.findByRole("table", { name: /First rows of the CSV file/ })
+    expect(within(table).getByRole("columnheader", { name: "name" })).toBeInTheDocument()
+    expect(within(table).getByText("Ada")).toBeInTheDocument()
+    // An empty field reads as an empty string, not as nothing.
+    expect(within(table).getByTitle("Empty string")).toHaveTextContent('""')
+    expect(screen.getByText("2 rows · 3 columns")).toBeInTheDocument()
+  })
+
+  it("right-aligns a numeric column", async () => {
+    renderObject("orders.csv")
+    const cell = await screen.findByText("19.99")
+    expect(cell.closest("td")).toHaveClass("text-right")
+    expect(screen.getByText("Ada").closest("td")).not.toHaveClass("text-right")
+  })
+
+  it("toggles to the raw text and back, by keyboard, announcing which is on", async () => {
+    renderObject("orders.csv")
+    const user = userEvent.setup()
+    const tableButton = await screen.findByRole("button", { name: "Table" })
+    const rawButton = screen.getByRole("button", { name: "Raw" })
+    expect(tableButton).toHaveAttribute("aria-pressed", "true")
+    expect(rawButton).toHaveAttribute("aria-pressed", "false")
+
+    rawButton.focus()
+    await user.keyboard("{Enter}")
+    expect(rawButton).toHaveAttribute("aria-pressed", "true")
+    expect(screen.queryByRole("table")).not.toBeInTheDocument()
+    expect(screen.getByText(/id,name,amount/)).toBeInTheDocument()
+
+    await user.click(tableButton)
+    expect(await screen.findByRole("table")).toBeInTheDocument()
+  })
+
+  it("says plainly when the table comes from a window of a larger file", async () => {
+    const rows = Array.from({ length: 300 }, (_, i) => `${i},name-${i}\n`).join("")
+    api.preview = { text: `n,name\n${rows}12,cut-sh`, truncated: true }
+    renderObject("big.csv", { contentLength: 50 * 1024 * 1024 })
+    expect(
+      await screen.findByText(/Read from the first 1 MiB of this 50 MB object/),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/first 200 rows of ~/)).toBeInTheDocument()
+  })
+
+  it("falls back to the raw text, with the reason, when the file is not valid CSV", async () => {
+    api.preview = { text: 'a,b\n"never closed,1\n', truncated: false }
+    renderObject("broken.csv")
+    expect(
+      await screen.findByText(/Shown as text: A quoted field is never closed/),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/never closed,1/)).toBeInTheDocument()
+    expect(screen.queryByRole("table")).not.toBeInTheDocument()
+  })
+
+  it("names a delimiter the text chose over the extension", async () => {
+    api.preview = { text: "name;price\nTea;1,50\n", truncated: false }
+    renderObject("prices.csv")
+    expect(await screen.findByText(/semicolon-separated/)).toBeInTheDocument()
+  })
+
+  it("reads a TSV on its tabs", async () => {
+    api.preview = { text: "a\tb\n1,5\t2\n", truncated: false }
+    renderObject("data.tsv")
+    expect(await screen.findByText("1,5")).toBeInTheDocument()
+  })
+
+  it("closes on Escape", async () => {
+    const onClose = vi.fn()
+    renderObject("orders.csv", { onClose })
+    await screen.findByRole("table")
+    await userEvent.setup().keyboard("{Escape}")
+    expect(onClose).toHaveBeenCalled()
+  })
+})
+
+describe("ObjectPreviewDialog > JSON Lines", () => {
+  beforeEach(() => {
+    api.previewPending = false
+  })
+
+  it("tabulates records with the same fields, drawing NULL as a token", async () => {
+    api.preview = { text: '{"id":1,"email":null}\n{"id":2,"email":"b@x"}\n', truncated: false }
+    renderObject("users.jsonl")
+    const table = await screen.findByRole("table", { name: /JSON Lines/ })
+    expect(within(table).getByText("NULL")).toBeInTheDocument()
+    expect(within(table).getByText("b@x")).toBeInTheDocument()
+  })
+
+  it("keeps records of different shapes as written", async () => {
+    api.preview = {
+      text: '{"type":"click","x":1,"y":2}\n{"sku":"A","amount":3,"currency":"GBP"}\n',
+      truncated: false,
+    }
+    renderObject("events.ndjson")
+    expect(await screen.findByText(/do not share the same fields/)).toBeInTheDocument()
+    expect(screen.queryByRole("table")).not.toBeInTheDocument()
+  })
+})
+
+describe("ObjectPreviewDialog > Parquet", () => {
+  const preview: ParquetPreview = {
+    fields: [
+      { name: "order_id", type: "INT64", nullable: false },
+      { name: "customer", type: "STRING", nullable: true },
+    ],
+    numRows: 1204,
+    rowGroups: 2,
+    codecs: ["SNAPPY"],
+    table: {
+      columns: [
+        { name: "order_id", type: "INT64", numeric: true },
+        { name: "customer", type: "STRING", numeric: false },
+      ],
+      rows: [
+        [1001n, "Ada Lovelace"],
+        [1002n, null],
+      ],
+      totalRows: 1204,
+      totalIsEstimate: false,
+      truncatedByBytes: false,
+      hiddenColumns: 0,
+    },
+  }
+
+  beforeEach(() => {
+    parquet.error = undefined
+    parquet.result = preview
+  })
+
+  it("shows the first rows, their types and the file's own row count", async () => {
+    renderObject("warehouse/orders/data/00000.parquet", { contentLength: 9_000_000 })
+    const table = await screen.findByRole("table", { name: /Parquet file/ })
+    expect(within(table).getByText("Ada Lovelace")).toBeInTheDocument()
+    expect(within(table).getByText("NULL")).toBeInTheDocument()
+    expect(within(table).getByText("STRING")).toBeInTheDocument()
+    expect(
+      screen.getByText("first 2 rows of 1,204 · 2 columns · 2 row groups · snappy"),
+    ).toBeInTheDocument()
+  })
+
+  it("shows the schema on request", async () => {
+    renderObject("t.parquet")
+    await screen.findByRole("table", { name: /Parquet file/ })
+    await userEvent.setup().click(screen.getByRole("button", { name: "Schema" }))
+    const schema = screen.getByRole("table", { name: "Parquet schema" })
+    expect(within(schema).getByText("order_id")).toBeInTheDocument()
+    expect(within(schema).getByText("required")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Schema" })).toHaveAttribute("aria-pressed", "true")
+  })
+
+  it("opens on the schema, with the reason, when the rows cannot be read", async () => {
+    parquet.result = {
+      ...preview,
+      table: undefined,
+      codecs: ["ZSTD"],
+      rowsError: "Rows are compressed with ZSTD, which the preview does not decode.",
+    }
+    renderObject("t.parquet")
+    expect(await screen.findByRole("table", { name: "Parquet schema" })).toBeInTheDocument()
+    await userEvent.setup().click(screen.getByRole("button", { name: "Rows" }))
+    expect(screen.getByText(/compressed with ZSTD/)).toBeInTheDocument()
+  })
+
+  it("explains a file that is not Parquet and offers the download instead", async () => {
+    parquet.error = new Error("parquet file invalid (footer != PAR1)")
+    renderObject("not-really.parquet")
+    expect(await screen.findByText("Could not read this file as Parquet")).toBeInTheDocument()
+    expect(screen.getByText(/footer marker/)).toBeInTheDocument()
+    const download = screen.getByRole("link", { name: /Download instead/ })
+    expect(download.getAttribute("href")).toContain("not-really.parquet")
+  })
+})
+
+describe("ObjectPreviewDialog > Avro", () => {
+  it("says the file is not previewed rather than showing nothing", () => {
+    renderObject("orders/metadata/snap-1.avro")
+    expect(screen.getByText("Avro — not previewed")).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: /Download instead/ })).toBeInTheDocument()
+    expect(screen.queryByText(/Preview is available for/)).not.toBeInTheDocument()
+  })
+})
+
+describe("ObjectPreviewDialog > Iceberg metadata", () => {
+  it("summarises the table above the JSON", async () => {
+    api.previewPending = false
+    api.preview = {
+      text: JSON.stringify({
+        "format-version": 2,
+        "table-uuid": "9c12d441-03fe-4693-9a96-a0705ddf69c1",
+        location: "s3://warehouse/sales/orders",
+        "last-updated-ms": 1790000000000,
+        "current-schema-id": 0,
+        schemas: [
+          { "schema-id": 0, fields: [{ id: 1, name: "order_id", required: true, type: "long" }] },
+        ],
+        snapshots: [{ "snapshot-id": 1 }],
+      }).replace('"snapshots"', '"current-snapshot-id":3051729675574597004,"snapshots"'),
+      truncated: false,
+    }
+    renderObject("orders/metadata/00001-abc.metadata.json", { contentType: "application/json" })
+    const summary = await screen.findByLabelText("Iceberg table metadata")
+    expect(within(summary).getByText("v2")).toBeInTheDocument()
+    expect(within(summary).getByText("3051729675574597004")).toBeInTheDocument()
+    expect(within(summary).getByText("order_id")).toBeInTheDocument()
+    // The JSON itself is still there, underneath.
+    const json = await screen.findByLabelText("JSON preview")
+    await waitFor(() => expect(json).toHaveTextContent('"format-version": 2'))
   })
 })

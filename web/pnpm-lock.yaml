@@ -224,6 +224,9 @@ importers:
       hono:
         specifier: ^4.12.9
         version: 4.13.5
+      hyparquet:
+        specifier: ^1.31.1
+        version: 1.31.1
       lucide-react:
         specifier: ^1.7.0
         version: 1.37.0(react@19.2.8)
@@ -297,6 +300,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^6.0.1
         version: 6.1.1(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.21.0))
+      hyparquet-writer:
+        specifier: ^0.16.10
+        version: 0.16.10
       jsdom:
         specifier: ^30.0.0
         version: 30.0.1
@@ -3190,6 +3196,12 @@ packages:
 
   html-url-attributes@3.0.1:
     resolution: {integrity: sha512-ol6UPyBWqsrO6EJySPz2O7ZSr856WDrEzM5zMqp+FJJLGMW35cLYmmZnl0vztAZxRUoNZJFTCohfjuIJ8I4QBQ==}
+
+  hyparquet-writer@0.16.10:
+    resolution: {integrity: sha512-53fpiA57kdJ2V7X97/VSAzHr8rb8Z2cr126T1pTL9TapZNOP/wNJqFh+jc7dRwwg9TpVMYeRNDMb+r5oiLqwjg==}
+
+  hyparquet@1.31.1:
+    resolution: {integrity: sha512-tF9580Xb+41+Eb+mH0av1k7m1PWl+PSKrX66Yd7UOZ760cwEXP9/enwHRMSCeVncaubRI8XPb3v580/ujYKK5w==}
 
   ignore@5.3.2:
     resolution: {integrity: sha512-hsBTNUqQTDwkWtcdYI2i06Y/nUBEsNEDJKjWdigLvegy8kDuJAS8uRlpkkcQpyEXL0Z/pjDy5HBmMjRCJ2gq+g==}
@@ -7323,6 +7335,12 @@ snapshots:
       - '@noble/hashes'
 
   html-url-attributes@3.0.1: {}
+
+  hyparquet-writer@0.16.10:
+    dependencies:
+      hyparquet: 1.31.1
+
+  hyparquet@1.31.1: {}
 
   ignore@5.3.2: {}
 
