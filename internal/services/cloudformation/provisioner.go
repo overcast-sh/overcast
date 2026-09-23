@@ -1199,6 +1199,10 @@ func hashProps(props map[string]any) string {
 // forwards Tags while being a member of neither this set nor
 // stackTagPropagationExclusions below.
 var stackTagPropagationResourceTypes = map[string]bool{
+	// Create merges stack tags; Update reconciles them through TagResource
+	// and UntagResource (provisioner_s3tables.go).
+	"AWS::S3Tables::TableBucket":      true,
+	"AWS::S3Tables::Table":            true,
 	"AWS::Lambda::Function":           true,
 	"AWS::Lambda::EventSourceMapping": true,
 	"AWS::Logs::LogGroup":             true,
@@ -2859,6 +2863,12 @@ var resourceHandlers = map[string]resourceHandler{
 	// PutPermission and friends) are unimplemented in
 	// internal/services/eventbridge — see #481. Revisit once that lands.
 	"AWS::Events::Connection": &stubResourceHandler{},
+	// S3 Tables (provisioner_s3tables.go)
+	cfnS3TablesTableBucket:       &s3tablesTableBucketHandler{},
+	cfnS3TablesNamespace:         &s3tablesNamespaceHandler{},
+	cfnS3TablesTable:             &s3tablesTableHandler{},
+	cfnS3TablesTableBucketPolicy: &s3tablesTableBucketPolicyHandler{},
+	cfnS3TablesTablePolicy:       &s3tablesTablePolicyHandler{},
 	// Scheduler
 	"AWS::Scheduler::Schedule":      &schedulerScheduleHandler{},
 	"AWS::Scheduler::ScheduleGroup": &schedulerScheduleGroupHandler{},
