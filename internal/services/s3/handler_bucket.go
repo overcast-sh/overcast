@@ -157,44 +157,21 @@ func (h *Handler) CreateBucket(w http.ResponseWriter, r *http.Request) {
 
 	region := middleware.RegionFromContext(r.Context(), h.cfg.Region)
 
-	// A name that breaks the naming rules is InvalidBucketName — "The
-	// specified bucket is not valid.", 400 — per S3's documented error list
-	// (see protocol.ErrInvalidBucketName). serviceutil already assigns that
-	// code, so its error is written through unchanged. This handler used to
-	// rewrite every one of them to InvalidArgument "to preserve the code
-	// expected by existing tests", which made the tests the wire contract
-	// instead of AWS; the swap was recorded as a deferred follow-up in
-	// docs/plans/host-routing-precedence.md §13 and is what this closes.
-	if namespace == bucketNamespaceAccountRegional {
-		if aerr := serviceutil.ValidateAccountRegionalBucketName(bucket, h.cfg.AccountID, region); aerr != nil {
-			protocol.WriteXMLError(w, r, aerr)
-			return
-		}
-	} else {
-		if aerr := serviceutil.BucketName(bucket); aerr != nil {
-			protocol.WriteXMLError(w, r, aerr)
-			return
-		}
-		if serviceutil.HasAccountRegionalBucketSuffix(bucket) {
-			// AWS's 2026 naming-rules update reserves the "-an" suffix for
-			// account regional namespace buckets. Unverified against real
-			// AWS: the exact error code for a global-namespace CreateBucket
-			// that carries it. It is a bucket-name rejection like the other
-			// reserved-suffix rules — which live in serviceutil.BucketName and
-			// answer InvalidBucketName — so it follows them rather than
-			// staying behind on InvalidArgument.
-			protocol.WriteXMLError(w, r, protocol.ErrInvalidBucketName(
-				"The specified bucket name is not valid. Bucket names must not end with the suffix -an unless created in your account regional namespace."))
-			return
-		}
+	if aerr := h.validateNewBucketName(bucket, namespace, region); aerr != nil {
+		protocol.WriteXMLError(w, r, aerr)
+		return
 	}
 
-	exists, aerr := h.store.bucketExists(r.Context(), bucket)
+	b := &Bucket{Name: bucket, Region: region}
+	if namespace == bucketNamespaceAccountRegional {
+		b.Namespace = bucketNamespaceAccountRegional
+	}
+	created, aerr := h.createBucket(r.Context(), b)
 	if aerr != nil {
 		protocol.WriteXMLError(w, r, aerr)
 		return
 	}
-	if exists {
+	if !created {
 		// Account-regional re-create is documented as a 409
 		// BucketAlreadyOwnedByYou "in every region including us-east-1" — the
 		// legacy 200-OK re-create behaviour below applies only to the global
@@ -218,17 +195,62 @@ func (h *Handler) CreateBucket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b := &Bucket{
-		Name:         bucket,
-		Region:       region,
-		CreationDate: h.clk.Now().UTC(),
-	}
+	w.Header().Set("Location", "/"+bucket)
+	protocol.WriteEmpty(w, r, http.StatusOK)
+}
+
+// validateNewBucketName applies CreateBucket's naming rules for a bucket
+// created in namespace. It is a separate step from createBucket so that an
+// internal caller entitled to a name S3 reserves for AWS's own use — S3
+// Tables' "--table-s3" warehouse buckets (#2067) — can apply its own rule
+// instead, without a second copy of the creation path.
+//
+// A name that breaks the naming rules is InvalidBucketName — "The specified
+// bucket is not valid.", 400 — per S3's documented error list (see
+// protocol.ErrInvalidBucketName). serviceutil already assigns that code, so
+// its error is returned unchanged. CreateBucket used to rewrite every one of
+// them to InvalidArgument "to preserve the code expected by existing tests",
+// which made the tests the wire contract instead of AWS; the swap was
+// recorded as a deferred follow-up in docs/plans/host-routing-precedence.md
+// §13 and is what this closes.
+func (h *Handler) validateNewBucketName(bucket, namespace, region string) *protocol.AWSError {
 	if namespace == bucketNamespaceAccountRegional {
-		b.Namespace = bucketNamespaceAccountRegional
+		return serviceutil.ValidateAccountRegionalBucketName(bucket, h.cfg.AccountID, region)
 	}
-	if aerr := h.store.putBucket(r.Context(), b); aerr != nil {
-		protocol.WriteXMLError(w, r, aerr)
-		return
+	if aerr := serviceutil.BucketName(bucket); aerr != nil {
+		return aerr
+	}
+	if serviceutil.HasAccountRegionalBucketSuffix(bucket) {
+		// AWS's 2026 naming-rules update reserves the "-an" suffix for
+		// account regional namespace buckets. Unverified against real AWS:
+		// the exact error code for a global-namespace CreateBucket that
+		// carries it. It is a bucket-name rejection like the other
+		// reserved-suffix rules — which live in serviceutil.BucketName and
+		// answer InvalidBucketName — so it follows them rather than staying
+		// behind on InvalidArgument.
+		return protocol.ErrInvalidBucketName(
+			"The specified bucket name is not valid. Bucket names must not end with the suffix -an unless created in your account regional namespace.")
+	}
+	return nil
+}
+
+// createBucket stores b, whose name has already been validated, unless a
+// bucket of that name exists — in which case it reports created=false and
+// leaves the existing bucket untouched, for the caller to answer the way its
+// operation requires. It stamps the creation date and announces the new
+// bucket on the event bus.
+func (h *Handler) createBucket(ctx context.Context, b *Bucket) (created bool, aerr *protocol.AWSError) {
+	exists, aerr := h.store.bucketExists(ctx, b.Name)
+	if aerr != nil {
+		return false, aerr
+	}
+	if exists {
+		return false, nil
+	}
+
+	b.CreationDate = h.clk.Now().UTC()
+	if aerr := h.store.putBucket(ctx, b); aerr != nil {
+		return false, aerr
 	}
 
 	// A bucket whose name carries a host-route label as a second-or-later dot
@@ -237,24 +259,23 @@ func (h *Handler) CreateBucket(w http.ResponseWriter, r *http.Request) {
 	// the name and so does Overcast, and the AWS wire format has no field for
 	// a warning, so a log line is the only channel available. Creation is
 	// naturally once per name, so no dedup is needed.
-	if label, reserved := middleware.BucketNameReservedLabel(bucket); reserved {
+	if label, reserved := middleware.BucketNameReservedLabel(b.Name); reserved {
 		h.log.Warn("bucket name contains a reserved host label; it is not addressable in bare "+
 			"virtual-hosted form — use path-style or {bucket}.s3.{host} addressing",
-			zap.String("bucket", bucket),
+			zap.String("bucket", b.Name),
 			zap.String("reserved_label", label),
 		)
 	}
 
-	w.Header().Set("Location", "/"+bucket)
 	if h.bus != nil {
-		h.bus.Publish(r.Context(), events.Event{
+		h.bus.Publish(ctx, events.Event{
 			Type:    events.S3BucketCreated,
 			Time:    h.clk.Now(),
 			Source:  "s3",
-			Payload: events.ResourcePayload{Name: bucket, ARN: protocol.ARN("", "", "s3", bucket)},
+			Payload: events.ResourcePayload{Name: b.Name, ARN: protocol.ARN("", "", "s3", b.Name)},
 		})
 	}
-	protocol.WriteEmpty(w, r, http.StatusOK)
+	return true, nil
 }
 
 // HeadBucket handles HEAD /{bucket}
@@ -809,6 +830,46 @@ func errInvalidContinuationToken() *protocol.AWSError {
 	}
 }
 
+// listObjectsV2Page resolves one ListObjectsV2 page: the entries after the
+// continuation token (or, on a first page, after startAfter), trimmed to
+// maxKeys, and the token for the page after them — empty when this page is the
+// last. The HTTP handler and the in-process Service.ListObjects both page
+// through it, so they answer the same keys and the same errors.
+func (h *Handler) listObjectsV2Page(ctx context.Context, bucket, prefix, delimiter, contToken, startAfter string, maxKeys int) ([]pageEntry, string, *protocol.AWSError) {
+	// Decode the opaque continuation token to a "start-after" key. The
+	// token is base64(lastEffectiveKeyOnPreviousPage) — P3's cursor-in-token
+	// pattern, just a raw string cursor rather than M1's integer-index
+	// codec (the wrong shape here: S3's cursor is a key, not an index).
+	// AWS rejects an invalid/garbled token with InvalidArgument rather than
+	// silently restarting from page 1 (pagination-plan.md G4).
+	if contToken != "" {
+		decoded, err := base64.StdEncoding.DecodeString(contToken)
+		if err != nil {
+			return nil, "", errInvalidContinuationToken()
+		}
+		startAfter = string(decoded)
+	}
+
+	exists, aerr := h.store.bucketExists(ctx, bucket)
+	if aerr != nil {
+		return nil, "", aerr
+	}
+	if !exists {
+		return nil, "", errNoSuchBucket(bucket)
+	}
+
+	entries, aerr := h.buildListPage(ctx, bucket, prefix, delimiter, startAfter, maxKeys)
+	if aerr != nil {
+		return nil, "", aerr
+	}
+
+	entries, truncated := trimListPage(entries, maxKeys)
+	if !truncated {
+		return entries, "", nil
+	}
+	return entries, base64.StdEncoding.EncodeToString([]byte(entries[len(entries)-1].key)), nil
+}
+
 // ListObjectsV2 handles GET /{bucket}?list-type=2.
 // AWS docs: https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
 func (h *Handler) ListObjectsV2(w http.ResponseWriter, r *http.Request) {
@@ -832,45 +893,13 @@ func (h *Handler) ListObjectsV2(w http.ResponseWriter, r *http.Request) {
 	fetchOwner := strings.EqualFold(serviceutil.QueryString(r, "fetch-owner", ""), "true")
 	contToken := serviceutil.QueryString(r, "continuation-token", "")
 	requestedStartAfter := serviceutil.QueryString(r, "start-after", "")
-	startAfter := requestedStartAfter
 
-	// Decode the opaque continuation token to a "start-after" key. The
-	// token is base64(lastEffectiveKeyOnPreviousPage) — P3's cursor-in-token
-	// pattern, just a raw string cursor rather than M1's integer-index
-	// codec (the wrong shape here: S3's cursor is a key, not an index).
-	// AWS rejects an invalid/garbled token with InvalidArgument rather than
-	// silently restarting from page 1 (pagination-plan.md G4).
-	if contToken != "" {
-		decoded, err := base64.StdEncoding.DecodeString(contToken)
-		if err != nil {
-			protocol.WriteXMLError(w, r, errInvalidContinuationToken())
-			return
-		}
-		startAfter = string(decoded)
-	}
-
-	exists, aerr := h.store.bucketExists(r.Context(), bucket)
+	entries, nextToken, aerr := h.listObjectsV2Page(r.Context(), bucket, prefix, delimiter, contToken, requestedStartAfter, maxKeys)
 	if aerr != nil {
 		protocol.WriteXMLError(w, r, aerr)
 		return
 	}
-	if !exists {
-		protocol.WriteXMLError(w, r, errNoSuchBucket(bucket))
-		return
-	}
-
-	entries, aerr := h.buildListPage(r.Context(), bucket, prefix, delimiter, startAfter, maxKeys)
-	if aerr != nil {
-		protocol.WriteXMLError(w, r, aerr)
-		return
-	}
-
-	entries, truncated := trimListPage(entries, maxKeys)
-
-	var nextToken string
-	if truncated {
-		nextToken = base64.StdEncoding.EncodeToString([]byte(entries[len(entries)-1].key))
-	}
+	truncated := nextToken != ""
 
 	// fetch-owner returns the bucket owner for every key. Overcast has a
 	// single account, so that is the same owner ListObjectVersions and

@@ -7,17 +7,37 @@ import (
 
 func (s *Service) typedOps() map[string]op.Operation {
 	return map[string]op.Operation{
+		// Databases
 		"CreateDatabase": op.NewTyped[createDatabaseReq, struct{}]("CreateDatabase", s.createDatabaseTyped),
 		"GetDatabase":    op.NewTyped[getDatabaseReq, getDatabaseResp]("GetDatabase", s.getDatabaseTyped),
-		"GetDatabases":   op.NewTyped[struct{}, getDatabasesResp]("GetDatabases", s.getDatabasesTyped),
+		"GetDatabases":   op.NewTyped[getDatabasesReq, getDatabasesResp]("GetDatabases", s.getDatabasesTyped),
+		"UpdateDatabase": op.NewTyped[updateDatabaseReq, struct{}]("UpdateDatabase", s.updateDatabaseTyped),
 		"DeleteDatabase": op.NewTyped[deleteDatabaseReq, struct{}]("DeleteDatabase", s.deleteDatabaseTyped),
-		"CreateTable":    op.NewTyped[createTableReq, struct{}]("CreateTable", s.createTableTyped),
-		"GetTable":       op.NewTyped[getTableReq, getTableResp]("GetTable", s.getTableTyped),
-		"GetTables":      op.NewTyped[getTablesReq, getTablesResp]("GetTables", s.getTablesTyped),
-		"DeleteTable":    op.NewTyped[deleteTableReq, struct{}]("DeleteTable", s.deleteTableTyped),
-		"TagResource":    op.NewTyped[glueTagResourceReq, struct{}]("TagResource", s.tagResourceTyped),
-		"UntagResource":  op.NewTyped[glueUntagResourceReq, struct{}]("UntagResource", s.untagResourceTyped),
-		"GetTags":        op.NewTyped[glueListTagsForResourceReq, glueListTagsForResourceResp]("GetTags", s.listTagsForResourceTyped),
+		// Tables
+		"CreateTable":      op.NewTyped[createTableReq, createTableResp]("CreateTable", s.createTableTyped),
+		"GetTable":         op.NewTyped[getTableReq, getTableResp]("GetTable", s.getTableTyped),
+		"GetTables":        op.NewTyped[getTablesReq, getTablesResp]("GetTables", s.getTablesTyped),
+		"UpdateTable":      op.NewTyped[updateTableReq, struct{}]("UpdateTable", s.updateTableTyped),
+		"DeleteTable":      op.NewTyped[deleteTableReq, struct{}]("DeleteTable", s.deleteTableTyped),
+		"BatchDeleteTable": op.NewTyped[batchDeleteTableReq, batchDeleteTableResp]("BatchDeleteTable", s.batchDeleteTableTyped),
+		// Table versions
+		"GetTableVersion":         op.NewTyped[getTableVersionReq, getTableVersionResp]("GetTableVersion", s.getTableVersionTyped),
+		"GetTableVersions":        op.NewTyped[getTableVersionsReq, getTableVersionsResp]("GetTableVersions", s.getTableVersionsTyped),
+		"DeleteTableVersion":      op.NewTyped[deleteTableVersionReq, struct{}]("DeleteTableVersion", s.deleteTableVersionTyped),
+		"BatchDeleteTableVersion": op.NewTyped[batchDeleteTableVersionReq, batchDeleteTableVersionResp]("BatchDeleteTableVersion", s.batchDeleteTableVersionTyped),
+		// Partitions
+		"CreatePartition":      op.NewTyped[createPartitionReq, struct{}]("CreatePartition", s.createPartitionTyped),
+		"BatchCreatePartition": op.NewTyped[batchCreatePartitionReq, batchPartitionErrorsResp]("BatchCreatePartition", s.batchCreatePartitionTyped),
+		"GetPartition":         op.NewTyped[getPartitionReq, getPartitionResp]("GetPartition", s.getPartitionTyped),
+		"GetPartitions":        op.NewTyped[getPartitionsReq, getPartitionsResp]("GetPartitions", s.getPartitionsTyped),
+		"BatchGetPartition":    op.NewTyped[batchGetPartitionReq, batchGetPartitionResp]("BatchGetPartition", s.batchGetPartitionTyped),
+		"UpdatePartition":      op.NewTyped[updatePartitionReq, struct{}]("UpdatePartition", s.updatePartitionTyped),
+		"DeletePartition":      op.NewTyped[deletePartitionReq, struct{}]("DeletePartition", s.deletePartitionTyped),
+		"BatchDeletePartition": op.NewTyped[batchDeletePartitionReq, batchPartitionErrorsResp]("BatchDeletePartition", s.batchDeletePartitionTyped),
+		// Tags
+		"TagResource":   op.NewTyped[glueTagResourceReq, struct{}]("TagResource", s.tagResourceTyped),
+		"UntagResource": op.NewTyped[glueUntagResourceReq, struct{}]("UntagResource", s.untagResourceTyped),
+		"GetTags":       op.NewTyped[glueListTagsForResourceReq, glueListTagsForResourceResp]("GetTags", s.listTagsForResourceTyped),
 	}
 }
 

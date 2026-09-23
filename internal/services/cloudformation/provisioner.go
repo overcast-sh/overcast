@@ -1227,6 +1227,26 @@ var stackTagPropagationResourceTypes = map[string]bool{
 	// parallel mechanism #1310 asks not to create.
 	"AWS::IAM::Role": true,
 	"AWS::IAM::User": true,
+	// Gained Tags support in #539: Create merges stack tags on both types,
+	// and Update now reconciles a stack-tag-only change via
+	// TagResource/UntagResource (eventsReconcileTags) rather than relying on
+	// PutRule's merge-only Tags parameter, which cannot remove one.
+	"AWS::Events::EventBus": true,
+	"AWS::Events::Rule":     true,
+	// #2060: gained Tags support in the same pass that gave each one an
+	// Update carve-out reconciling a Tags-only change via the service's own
+	// TagResource/UntagResource (or equivalent) instead of forcing the
+	// unconditional replacement these handlers used to return for every
+	// Update — see each handler's Update comment in
+	// provisioner_json_coverage.go for the properties that still force
+	// replacement.
+	"AWS::CertificateManager::Certificate": true,
+	"AWS::Athena::WorkGroup":               true,
+	"AWS::Shield::Protection":              true,
+	"AWS::OpenSearchService::Domain":       true,
+	"AWS::AppConfig::Application":          true,
+	"AWS::AppConfig::Environment":          true,
+	"AWS::AppConfig::ConfigurationProfile": true,
 }
 
 // stackTagPropagationExclusions (stack_tag_propagation_coverage_dev_test.go)
@@ -2806,7 +2826,7 @@ var resourceHandlers = map[string]resourceHandler{
 	"AWS::CloudFront::Distribution": &cloudfrontDistributionHandler{},
 	// SES
 	"AWS::SES::Template":         &sesTemplateHandler{},
-	"AWS::SES::ConfigurationSet": &stubResourceHandler{},
+	"AWS::SES::ConfigurationSet": &sesConfigurationSetHandler{},
 	// Certificate Manager
 	"AWS::CertificateManager::Certificate": &acmCertificateHandler{},
 	// ECR
@@ -2830,11 +2850,15 @@ var resourceHandlers = map[string]resourceHandler{
 	// Athena
 	"AWS::Athena::WorkGroup": &athenaWorkGroupHandler{},
 	// Glue
-	"AWS::Glue::Database": &glueDatabaseHandler{},
-	"AWS::Glue::Table":    &glueTableHandler{},
+	"AWS::Glue::Database":  &glueDatabaseHandler{},
+	"AWS::Glue::Table":     &glueTableHandler{},
+	"AWS::Glue::Partition": &gluePartitionHandler{},
 	// CloudWatch
 	"AWS::CloudWatch::Alarm": &cloudwatchAlarmHandler{},
 	// EventBridge
+	// A no-op stub, not coverage: API destinations (CreateConnection,
+	// PutPermission and friends) are unimplemented in
+	// internal/services/eventbridge — see #481. Revisit once that lands.
 	"AWS::Events::Connection": &stubResourceHandler{},
 	// Scheduler
 	"AWS::Scheduler::Schedule":      &schedulerScheduleHandler{},

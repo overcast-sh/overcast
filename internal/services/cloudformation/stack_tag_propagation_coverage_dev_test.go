@@ -79,6 +79,7 @@ var stackTagPropagationExclusions = map[string]string{
 	"AWS::EKS::Cluster":                           "Create merges stack tags (#540), but neither UpdateClusterConfig nor UpdateClusterVersion carries tags and the handler dispatches no Tag/Untag call, so joining the propagation set would mark the cluster changed on a stack-tag-only edit and then apply nothing. Reconciling EKS tags on update is its own change",
 	"AWS::EKS::Nodegroup":                         "see AWS::EKS::Cluster — UpdateNodegroupConfig carries no tags either",
 	"AWS::MSK::Cluster":                           "Create merges stack tags (#540). Joining the propagation set would be actively destructive here: mskClusterHandler.Update returns errReplacementRequired unconditionally, so a stack-tag-only edit would replace a Docker-backed Kafka cluster. MSK's own UpdateSecurity/UpdateMonitoring are 501 stubs; tag reconciliation waits on a real update path",
+	"AWS::CloudFront::Distribution":               "Create provisions with tags via CreateDistributionWithTags (#545), but cloudfrontDistributionHandler.Update returns errReplacementRequired unconditionally — the same shape as AWS::MSK::Cluster above — so joining the propagation set would replace a live, proxying distribution for a stack-tag-only edit. A real UpdateDistribution path that reconciles the whole config, tags included, is a separate, larger change out of #545's scope",
 }
 
 func TestStackTagPropagationCoverage(t *testing.T) {

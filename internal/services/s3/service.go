@@ -25,9 +25,11 @@
 package s3
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
@@ -165,6 +167,100 @@ func (s *Service) resolveObjectForRead(ctx context.Context, bucket, key, version
 		return nil, errMethodNotAllowedOnDeleteMarker()
 	}
 	return obj, nil
+}
+
+// PutObjectBytes stores body at bucket/key for internal callers such as
+// Athena's query-result writer. It goes through PutObject's own write path —
+// versioning, the MD5 ETag, and the bucket's event notifications (SQS, SNS,
+// Lambda, EventBridge) fire exactly as for an HTTP PutObject — and returns
+// the errors PutObject would (NoSuchBucket above all). Satisfies
+// events.S3PutObjectFunc.
+func (s *Service) PutObjectBytes(ctx context.Context, bucket, key string, body []byte, opts events.S3PutObjectOptions) (events.S3PutObjectResult, *protocol.AWSError) {
+	h := s.handler
+	b, aerr := h.store.getBucket(ctx, bucket)
+	if aerr != nil {
+		return events.S3PutObjectResult{}, aerr
+	}
+	// An HTTP PutObject cannot name an empty key — PUT /{bucket}/ is a
+	// bucket operation — so this guards a caller bug rather than mirroring
+	// an AWS answer.
+	if key == "" {
+		return events.S3PutObjectResult{}, protocol.ErrInvalidArgument("An object key must not be empty.")
+	}
+
+	contentType := opts.ContentType
+	if contentType == "" {
+		contentType = defaultObjectContentType
+	}
+	var meta map[string]string
+	if len(opts.Metadata) > 0 {
+		// Stored lower-cased, as PutObject stores x-amz-meta-* names.
+		meta = make(map[string]string, len(opts.Metadata))
+		for name, value := range opts.Metadata {
+			meta[strings.ToLower(name)] = value
+		}
+	}
+	obj := &Object{
+		Bucket:       bucket,
+		Key:          key,
+		ContentType:  contentType,
+		LastModified: h.clk.Now().UTC(),
+		Metadata:     meta,
+	}
+
+	etag, aerr := h.writeObject(ctx, b, obj, bytes.NewReader(body))
+	if aerr != nil {
+		return events.S3PutObjectResult{}, aerr
+	}
+	return events.S3PutObjectResult{ETag: etag, VersionID: obj.headerVersionID()}, nil
+}
+
+// ListObjects returns one page of the keys under prefix for internal callers,
+// through ListObjectsV2's own paging (no delimiter), so the keys, the
+// continuation tokens and the errors — NoSuchBucket, InvalidArgument for a
+// garbled token — are the ones a client sees. maxKeys <= 0 means
+// ListObjectsV2's default page size, and larger values are capped at it, as
+// the HTTP operation caps max-keys. Satisfies events.S3ListObjectsFunc.
+func (s *Service) ListObjects(ctx context.Context, bucket, prefix, continuationToken string, maxKeys int) (events.S3ObjectListPage, *protocol.AWSError) {
+	if maxKeys <= 0 || maxKeys > maxListPageSize {
+		maxKeys = maxListPageSize
+	}
+	entries, next, aerr := s.handler.listObjectsV2Page(ctx, bucket, prefix, "", continuationToken, "", maxKeys)
+	if aerr != nil {
+		return events.S3ObjectListPage{}, aerr
+	}
+	page := events.S3ObjectListPage{
+		Objects:               make([]events.S3ObjectSummary, 0, len(entries)),
+		NextContinuationToken: next,
+	}
+	// With no delimiter every entry is an object, never a common prefix.
+	for _, e := range entries {
+		page.Objects = append(page.Objects, events.S3ObjectSummary{
+			Key:          e.obj.Key,
+			Size:         e.obj.ContentLength,
+			ETag:         e.obj.ETag,
+			LastModified: e.obj.LastModified,
+		})
+	}
+	return page, nil
+}
+
+// EnsureBucket creates bucket in region (the configured region when empty)
+// unless it already exists, in which case it succeeds and leaves the bucket as
+// it is — the idempotent create an internal caller wants, in every region,
+// where CreateBucket answers BucketAlreadyOwnedByYou outside us-east-1. The
+// name is held to CreateBucket's global-namespace rules and refused with its
+// InvalidBucketName. Satisfies events.S3EnsureBucketFunc.
+func (s *Service) EnsureBucket(ctx context.Context, bucket, region string) *protocol.AWSError {
+	h := s.handler
+	if region == "" {
+		region = s.cfg.Region
+	}
+	if aerr := h.validateNewBucketName(bucket, bucketNamespaceGlobal, region); aerr != nil {
+		return aerr
+	}
+	_, aerr := h.createBucket(ctx, &Bucket{Name: bucket, Region: region})
+	return aerr
 }
 
 // RegisterRoutes mounts all S3 endpoints onto the given router.

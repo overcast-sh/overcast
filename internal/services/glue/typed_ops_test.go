@@ -11,8 +11,11 @@ import (
 )
 
 var allGlueOps = []string{
-	"CreateDatabase", "GetDatabase", "GetDatabases", "DeleteDatabase",
-	"CreateTable", "GetTable", "GetTables", "DeleteTable",
+	"CreateDatabase", "GetDatabase", "GetDatabases", "UpdateDatabase", "DeleteDatabase",
+	"CreateTable", "GetTable", "GetTables", "UpdateTable", "DeleteTable", "BatchDeleteTable",
+	"GetTableVersion", "GetTableVersions", "DeleteTableVersion", "BatchDeleteTableVersion",
+	"CreatePartition", "BatchCreatePartition", "GetPartition", "GetPartitions",
+	"BatchGetPartition", "UpdatePartition", "DeletePartition", "BatchDeletePartition",
 	"TagResource", "UntagResource", "GetTags",
 }
 
