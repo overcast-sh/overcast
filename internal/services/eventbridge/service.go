@@ -3,7 +3,7 @@
 // Implemented: CreateEventBus, DescribeEventBus, ListEventBuses, TagResource,
 // ListTagsForResource, DeleteEventBus, PutRule, DescribeRule, ListRules,
 // PutTargets, ListTargetsByRule, RemoveTargets, DisableRule, EnableRule,
-// DeleteRule, PutEvents, TestEventPattern.
+// DeleteRule, PutEvents, TestEventPattern, PutPermission, RemovePermission.
 package eventbridge
 
 import (
@@ -32,15 +32,16 @@ import (
 )
 
 const (
-	serviceName  = "eventbridge"
-	targetPrefix = "AWSEvents."
-	nsBuses      = "eb:buses"
-	nsRules      = "eb:rules"
-	nsTags       = "eb:tags"
-	nsTargets    = "eb:targets"
-	nsLastFire   = "eb:last-fire"
-	nsNextFire   = "eb:next-fire"
-	engineTick   = time.Second
+	serviceName   = "eventbridge"
+	targetPrefix  = "AWSEvents."
+	nsBuses       = "eb:buses"
+	nsRules       = "eb:rules"
+	nsTags        = "eb:tags"
+	nsTargets     = "eb:targets"
+	nsLastFire    = "eb:last-fire"
+	nsNextFire    = "eb:next-fire"
+	nsPermissions = "eb:permissions"
+	engineTick    = time.Second
 )
 
 // Service implements router.Service and router.TargetDispatcher for EventBridge.
@@ -239,15 +240,31 @@ func (s *Service) dispatchLegacy(w http.ResponseWriter, r *http.Request, op stri
 		s.putEvents(w, r)
 	case "TestEventPattern":
 		s.testEventPattern(w, r)
+	case "PutPermission":
+		s.putPermission(w, r)
+	case "RemovePermission":
+		s.removePermission(w, r)
 	default:
 		protocol.NotImplementedJSON(w, r)
 	}
 }
 
 type eventBus struct {
-	Name        string `json:"Name" cbor:"Name"`
-	ARN         string `json:"Arn" cbor:"Arn"`
-	Description string `json:"Description" cbor:"Description"`
+	Name             string              `json:"Name" cbor:"Name"`
+	ARN              string              `json:"Arn" cbor:"Arn"`
+	Description      string              `json:"Description" cbor:"Description"`
+	KmsKeyIdentifier string              `json:"KmsKeyIdentifier,omitempty" cbor:"KmsKeyIdentifier,omitempty"`
+	DeadLetterConfig *ebDeadLetterConfig `json:"DeadLetterConfig,omitempty" cbor:"DeadLetterConfig,omitempty"`
+}
+
+// ebDeadLetterConfig is CreateEventBus/DescribeEventBus's DeadLetterConfig
+// member — the SQS queue EventBridge would use as a dead-letter queue for the
+// bus itself. It is stored and echoed back verbatim; Overcast does not
+// deliver failed bus-level operations to it (that is a real-AWS behavior
+// with no analogue in this emulator, distinct from the per-target
+// DeadLetterConfig ebTarget already carries and delivery.go does act on).
+type ebDeadLetterConfig struct {
+	Arn string `json:"Arn,omitempty" cbor:"Arn,omitempty"`
 }
 
 type ebRule struct {
@@ -319,25 +336,20 @@ func (s *Service) createEventBus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) describeEventBus(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Name string `json:"Name"`
-	}
+	// Delegates to describeEventBusTyped (typed_logic.go) so the legacy
+	// JSON1.0/1.1 path and the CBOR typed path share one implementation —
+	// the legacy copy previously re-implemented this inline and dropped
+	// Description, DeadLetterConfig, KmsKeyIdentifier and Policy (#2076).
+	var req describeEventBusRequest
 	if !serviceutil.DecodeJSON(w, r, &req) {
 		return
 	}
-	if req.Name == "" {
-		req.Name = "default"
-	}
-	raw, found, err := s.store.Get(r.Context(), nsBuses, serviceutil.RegionKey(s.region(r.Context()), req.Name))
-	if err != nil || !found {
-		// Return a default bus if not found
-		arn := s.busARN(r.Context(), req.Name)
-		protocol.WriteJSON(w, r, http.StatusOK, map[string]any{"Name": req.Name, "Arn": arn})
+	resp, aerr := s.describeEventBusTyped(r.Context(), &req)
+	if aerr != nil {
+		protocol.WriteJSONError(w, r, aerr)
 		return
 	}
-	var bus eventBus
-	json.Unmarshal([]byte(raw), &bus) //nolint:errcheck
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{"Name": bus.Name, "Arn": bus.ARN})
+	protocol.WriteJSON(w, r, http.StatusOK, resp)
 }
 
 func (s *Service) listEventBuses(w http.ResponseWriter, r *http.Request) {
@@ -674,6 +686,34 @@ func (s *Service) testEventPattern(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	protocol.WriteJSON(w, r, http.StatusOK, resp)
+}
+
+func (s *Service) putPermission(w http.ResponseWriter, r *http.Request) {
+	// Delegates to putPermissionTyped (typed_logic.go) so the legacy
+	// JSON1.0/1.1 path and the CBOR typed path share one implementation.
+	var req putPermissionRequest
+	if !serviceutil.DecodeJSON(w, r, &req) {
+		return
+	}
+	if _, aerr := s.putPermissionTyped(r.Context(), &req); aerr != nil {
+		protocol.WriteJSONError(w, r, aerr)
+		return
+	}
+	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{})
+}
+
+func (s *Service) removePermission(w http.ResponseWriter, r *http.Request) {
+	// Delegates to removePermissionTyped (typed_logic.go) so the legacy
+	// JSON1.0/1.1 path and the CBOR typed path share one implementation.
+	var req removePermissionRequest
+	if !serviceutil.DecodeJSON(w, r, &req) {
+		return
+	}
+	if _, aerr := s.removePermissionTyped(r.Context(), &req); aerr != nil {
+		protocol.WriteJSONError(w, r, aerr)
+		return
+	}
+	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{})
 }
 
 func (s *Service) putEvents(w http.ResponseWriter, r *http.Request) {

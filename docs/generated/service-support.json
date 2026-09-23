@@ -1,6 +1,6 @@
 {
   "generated_by": "go run -tags dev ./cmd/capgen --write-docs",
-  "total_ops": 1527,
+  "total_ops": 1529,
   "services": [
     {
       "service": "s3",
@@ -5104,20 +5104,20 @@
     {
       "service": "eventbridge",
       "display_name": "EventBridge",
-      "total_ops": 29,
-      "implemented_ops": 18,
+      "total_ops": 31,
+      "implemented_ops": 20,
       "operations": [
         {
           "operation": "CreateEventBus",
           "category": "Event buses",
           "status": "✅ Supported",
-          "notes": "Creates a custom event bus"
+          "notes": "Creates a custom event bus; stores Description, DeadLetterConfig and KmsKeyIdentifier"
         },
         {
           "operation": "DescribeEventBus",
           "category": "Event buses",
           "status": "✅ Supported",
-          "notes": "Returns bus details; synthetic default bus"
+          "notes": "Returns bus details including Description, DeadLetterConfig, KmsKeyIdentifier and the Policy built from PutPermission grants; synthetic default bus"
         },
         {
           "operation": "ListEventBuses",
@@ -5129,6 +5129,18 @@
           "operation": "DeleteEventBus",
           "category": "Event buses",
           "status": "✅ Supported"
+        },
+        {
+          "operation": "PutPermission",
+          "category": "Event buses",
+          "status": "✅ Supported",
+          "notes": "Stores a resource policy statement on the bus (or replaces it wholesale via the Policy parameter), returned by DescribeEventBus as Policy; stored, not enforced, the same as the rest of Overcast's IAM policies"
+        },
+        {
+          "operation": "RemovePermission",
+          "category": "Event buses",
+          "status": "✅ Supported",
+          "notes": "Removes one statement by StatementId, or the whole policy with RemoveAllPermissions"
         },
         {
           "operation": "PutRule",
