@@ -2,7 +2,7 @@ service: acm
 status: fixed
 priority: p2
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-09-20
+last_updated: 2026-09-25
 protocols: [aws_json_1_1, aws_json_1_0, rpcv2_cbor]
 implementation: [internal/services/acm]
 integration_tests: [tests/integration/acm]
@@ -130,6 +130,13 @@ operations:
         raises before it — ThrottlingException is missing from the same list.
         The modeled InvalidParameterException stays where the service itself
         raises it, on tag violations.
+      - >-
+        Fixed (#2030) — an absent or empty DomainName now answers
+        ValidationException ("1 validation error detected: Value null at
+        'domainName' failed to satisfy constraint: Member must not be null"),
+        AWS's front-end "required member absent" wording, rather than the
+        service's own InvalidParameterException it answered before. Covered by
+        tests/integration/acm/acm_test.go::TestRequestCertificate_emptyDomainNameAnswersValidationException.
   DescribeCertificate:
     status: fixed
     priority: p2
@@ -255,27 +262,40 @@ findings:
       only; accepting 1.0 too is the framework-wide rule, not an ACM-specific
       gap. docs/services/acm.md now states this under "What works". No code
       change was needed.
-  remaining_gaps:
     - >-
-      An absent or empty DomainName still answers InvalidParameterException
-      with the message 'DomainName is required' (pre-dates #1994). AWS reports
-      it through the same front-end validator as a malformed one:
-      ValidationException, 'Value null at domainName failed to satisfy
-      constraint: Member must not be null'. Left alone as an unrelated
-      behaviour change; no issue filed.
+      #2030 — the empty-DomainName exception, the CloudFormation handler's
+      dropped ValidationMethod, and the MCP tool's RequestCertificate bypass
+      (the three gaps this section used to record under remaining_gaps) are
+      all fixed. See the RequestCertificate operation entry above for the
+      exception fix; the CloudFormation and MCP fixes are cross-cutting and
+      recorded here instead of on an operation row:
+      internal/services/cloudformation/provisioner_json_coverage.go's
+      acmCertificateHandler.Create already forwarded ValidationMethod (and
+      Tags) to RequestCertificate as of #2080, landed before this review —
+      tests/integration/cloudformation/provisioner_json_coverage_test.go::TestCreateStack_ACMCertificate_validationMethodAndTagsForwarded
+      covers it. internal/mcp/providers/runtime_provider.go's
+      toolACMRequestCertificate now dispatches through the router into ACM's
+      own RequestCertificate/DescribeCertificate — the same round trip
+      CloudFormation uses for other services — instead of building a
+      Certificate by hand, so it gets the same domain/SAN validation,
+      DomainValidationOptions and injected clock the wire API uses; covered by
+      internal/mcp/providers/runtime_provider_test.go's
+      TestRuntimeProvider_ACMMutationTools,
+      TestRuntimeProvider_ACMRequestCertificateRejectsMalformedDomain and
+      TestRuntimeProvider_ACMRequestCertificateRequiresRouter.
+  remaining_gaps:
     - "ListCertificates ignores MaxItems/NextToken and SortBy/SortOrder — the whole list comes back in store order. No issue filed."
     - "CertificateDetail's material-derived members (Serial, Subject, Issuer, NotBefore, NotAfter, KeyAlgorithm, SignatureAlgorithm, RenewalSummary) are absent; no key or chain is generated."
-    - "The CloudFormation AWS::CertificateManager::Certificate handler does not forward the template's ValidationMethod or DomainValidationOptions properties, so a CloudFormation-provisioned certificate always records EMAIL validation (internal/services/cloudformation/provisioner_json_coverage.go). Outside #1994's fence; no issue filed."
-    - "The MCP runtime tool acm_request_certificate (internal/mcp/providers/runtime_provider.go:5814) writes acm:certs directly instead of calling RequestCertificate, so it skips domain validation and records no DomainValidationOptions. Outside #1994 fence; no issue filed."
   intentionally_partial:
     - ListCertificateDomainValidations synthesizes one SUCCESS entry per DomainName/SAN, echoing the requested ValidationMethod but carrying no ValidationChallenge, since Overcast issues certificates without ever validating them (docs/services/acm.md "Differences from AWS").
     - DescribeCertificate's DNS ResourceRecord is derived from the certificate ARN rather than being a real challenge — stable and publishable, but nothing checks it and the domain is already SUCCESS.
     - DomainValidation.ValidationEmails and HttpRedirect are never populated. No mail is sent, so there are no addresses to report; HttpRedirect exists only for HTTP validation of CloudFront-issued certificates.
     - ListCertificates' Includes and CertificateKeyPairOrigins filters are ignored — they select on key material and export configuration Overcast never generates.
 handoff:
-  start_with: ["ListCertificates pagination (MaxItems/NextToken), and the CloudFormation handler's dropped ValidationMethod property — neither has an issue"]
+  start_with: ["ListCertificates pagination (MaxItems/NextToken/SortBy/SortOrder) — no issue filed"]
   do_not_redo:
     - "Tag round-trip, spelling parity, selective untag, inline-create tags, unknown-certificate errors, reserved-prefix rejection, and merged-set tag limit (#52, #814, #1275, #1739) from 2026-09-20."
     - "JSON 1.0/1.1/RPCv2 CBOR protocol acceptance is the framework-wide rule, not an ACM gap (#53) from 2026-09-20."
     - "DomainName/SAN/ValidationMethod validation, DescribeCertificate's DomainValidationOptions, and the ListCertificates status filter (#1994) from 2026-09-20."
-  commands: [go test -count=1 ./internal/services/acm/... ./tests/integration/acm/...]
+    - "The empty-DomainName exception, the CloudFormation ValidationMethod forward, and the MCP tool's RequestCertificate bypass (#2030) from 2026-09-25."
+  commands: [go test -count=1 ./internal/services/acm/... ./tests/integration/acm/... ./internal/mcp/providers/... ./tests/integration/cloudformation/...]

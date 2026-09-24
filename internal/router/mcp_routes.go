@@ -36,7 +36,12 @@ import (
 //
 // The slim build tag excludes this file entirely so overcast-slim never
 // exposes /_overcast/mcp.
-func registerMCPRoutes(r chi.Router, cfg *config.Config, store state.Store, bus *events.Bus, _ *zap.Logger, shutdownCh <-chan struct{}) {
+// registerMCPRoutes returns the RuntimeProvider it built, so the caller can
+// wire it to the fully-constructed router once every route is registered —
+// see RuntimeProvider.SetRouter's doc comment and the call site in
+// router.go, which mirrors cloudformation's initRouter for the same
+// circular-dependency reason.
+func registerMCPRoutes(r chi.Router, cfg *config.Config, store state.Store, bus *events.Bus, _ *zap.Logger, shutdownCh <-chan struct{}) *mcpproviders.RuntimeProvider {
 	// Built eagerly, and served lazily below. The order matters: AttachEventBus
 	// subscribes the provider to the bus so it can keep a window of recent
 	// events, and a subscription that waited for the first MCP request would
@@ -66,6 +71,7 @@ func registerMCPRoutes(r chi.Router, cfg *config.Config, store state.Store, bus 
 		rewritten.URL = &urlCopy
 		root().ServeHTTP(w, rewritten)
 	})
+	return provider
 }
 
 // newRuntimeMCPServer builds the runtime MCP server with the host wiring it

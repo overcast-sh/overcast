@@ -4,15 +4,22 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
+
+	"github.com/overcast-sh/overcast/internal/clock"
 	"github.com/overcast-sh/overcast/internal/config"
 	"github.com/overcast-sh/overcast/internal/events"
 	"github.com/overcast-sh/overcast/internal/iampolicy"
 	"github.com/overcast-sh/overcast/internal/mcp"
+	"github.com/overcast-sh/overcast/internal/middleware"
+	"github.com/overcast-sh/overcast/internal/protocol/codec"
 	"github.com/overcast-sh/overcast/internal/services/acm"
 	"github.com/overcast-sh/overcast/internal/services/dynamodb"
 	"github.com/overcast-sh/overcast/internal/services/ecr"
@@ -80,6 +87,21 @@ func assertAllListedOCResourcesResolve(t *testing.T, ctx context.Context, provid
 		}
 	}
 	assertRuntimeResourceReads(t, ctx, provider, expectations)
+}
+
+// newACMTestRouter builds just enough of the emulator's middleware chain to
+// serve ACM's own Dispatch: X-Amz-Target codec detection and the region
+// header ACM's typed handlers read through middleware.RegionFromContext. The
+// full router (internal/router.New) cannot be imported here — it imports this
+// package to build the runtime MCP provider, and that import would cycle.
+func newACMTestRouter(t *testing.T, cfg *config.Config, store state.Store, clk clock.Clock) http.Handler {
+	t.Helper()
+	svc := acm.New(cfg, store, zap.NewNop(), clk)
+	r := chi.NewRouter()
+	r.Use(middleware.Region)
+	r.Use(middleware.Protocol(codec.DefaultIdentifiers()))
+	r.Post("/", svc.Dispatch)
+	return r
 }
 
 func assertNoStateKeyFallback(t *testing.T, services []map[string]any, typedServices map[string]struct{}) {
@@ -2027,6 +2049,7 @@ func TestRuntimeProvider_ACMMutationTools(t *testing.T) {
 		AccountID: "000000000000",
 	}
 	provider := NewRuntimeProvider(cfg, store)
+	provider.SetRouter(newACMTestRouter(t, cfg, store, clock.NewMock()))
 
 	// request certificate
 	reqResult, err := provider.toolACMRequestCertificate(ctx, json.RawMessage(`{
@@ -2053,6 +2076,13 @@ func TestRuntimeProvider_ACMMutationTools(t *testing.T) {
 	}
 	if cert.CertificateArn == "" {
 		t.Error("CertificateArn must not be empty")
+	}
+	// Dispatched through the router into ACM's own RequestCertificate, so the
+	// certificate carries the DomainValidationOptions the wire API builds —
+	// the exact gap the store-writing version of this tool had (#2030).
+	if len(cert.DomainValidationOptions) != 2 {
+		t.Fatalf("DomainValidationOptions: got %d entries, want 2 (domain + SAN): %#v",
+			len(cert.DomainValidationOptions), cert.DomainValidationOptions)
 	}
 	arn := cert.CertificateArn
 
@@ -2122,6 +2152,50 @@ func TestRuntimeProvider_ACMMutationTools(t *testing.T) {
 	// double-delete returns error
 	if _, err := provider.toolACMDeleteCertificate(ctx, json.RawMessage(`{"arn":"`+arn+`"}`)); err == nil {
 		t.Error("expected error on double-delete")
+	}
+}
+
+// TestRuntimeProvider_ACMRequestCertificateRejectsMalformedDomain pins that
+// the MCP tool now runs through ACM's own RequestCertificate validation
+// rather than accepting anything as a domain name — the bypass #2030
+// reported. A malformed domain must leave no certificate behind, the same
+// no-partial-effect guarantee RequestCertificate itself gives (see
+// requestCertificateTyped's validation-before-creation ordering).
+func TestRuntimeProvider_ACMRequestCertificateRejectsMalformedDomain(t *testing.T) {
+	ctx := context.Background()
+	store := state.NewMemoryStore()
+	cfg := &config.Config{Region: "us-east-1", AccountID: "000000000000"}
+	provider := NewRuntimeProvider(cfg, store)
+	provider.SetRouter(newACMTestRouter(t, cfg, store, clock.NewMock()))
+
+	_, err := provider.toolACMRequestCertificate(ctx, json.RawMessage(`{"domain_name":"not a domain!"}`))
+	if err == nil {
+		t.Fatal("expected an error for a malformed domain name, got nil")
+	}
+	if !strings.Contains(err.Error(), "ValidationException") {
+		t.Fatalf("error = %q, want it to name ValidationException", err.Error())
+	}
+
+	kvs, err := store.Scan(ctx, "acm:certs", "")
+	if err != nil {
+		t.Fatalf("scan acm:certs: %v", err)
+	}
+	if len(kvs) != 0 {
+		t.Fatalf("expected no certificate stored after a rejected request, got %d", len(kvs))
+	}
+}
+
+// TestRuntimeProvider_ACMRequestCertificateRequiresRouter covers the failure
+// mode of a RuntimeProvider that never had SetRouter called on it — the
+// ordinary case for most unit tests in this file, and a real possibility
+// during startup before internal/router.New finishes wiring routes.
+func TestRuntimeProvider_ACMRequestCertificateRequiresRouter(t *testing.T) {
+	ctx := context.Background()
+	store := state.NewMemoryStore()
+	provider := NewRuntimeProvider(&config.Config{Region: "us-east-1"}, store)
+
+	if _, err := provider.toolACMRequestCertificate(ctx, json.RawMessage(`{"domain_name":"example.com"}`)); err == nil {
+		t.Fatal("expected an error when no router has been set")
 	}
 }
 
