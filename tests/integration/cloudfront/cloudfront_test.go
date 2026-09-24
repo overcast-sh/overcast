@@ -4784,6 +4784,68 @@ func TestProxy_pathPatternMatchesTheNormalisedEncodedPath(t *testing.T) {
 	}
 }
 
+// TestProxy_pathPatternMatchesAfterDotSegmentsAndSlashes: CloudFront normalises
+// the path "consistent with RFC 3986" before matching, and "multiple slashes
+// (//) or periods (..)" are "normalized and removed" — with behaviors "/a/b*"
+// and "/a*", "/a/b/.." matches "/a*" (DownloadDistValuesCacheBehavior, "Path
+// normalization"). Here "/a/b*" is the one pattern and the default behavior
+// stands in for "/a*". The origin still receives the raw path.
+func TestProxy_pathPatternMatchesAfterDotSegmentsAndSlashes(t *testing.T) {
+	// Given: two origins, one behind "/a/b*", each recording what it saw
+	var hitBy, seen string
+	record := func(name string) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			hitBy, seen = name, r.URL.EscapedPath()
+		})
+	}
+	defaultOrigin := httptest.NewServer(record("default"))
+	defer defaultOrigin.Close()
+	patternedOrigin := httptest.NewServer(record("patterned"))
+	defer patternedOrigin.Close()
+	originDomain, defaultPort := splitOriginURL(t, defaultOrigin.URL)
+	_, patternedPort := splitOriginURL(t, patternedOrigin.URL)
+
+	srv := helpers.NewTestServer(t)
+	dist, _ := cfCreateDistFromXML(t, srv,
+		encodedPathDistXML("proxy-pattern-dot-segments", originDomain, defaultPort, patternedPort, "/a/b*", ""))
+
+	for _, tc := range []struct{ path, wantOrigin string }{
+		{"/a/b/x", "patterned"},      // control
+		{"/a/b/..", "default"},       // the AWS example: "/a/"
+		{"/a/b/../", "default"},      // "/a/"
+		{"/a/b/%2E%2E", "default"},   // "." is unreserved: decoded, then resolved
+		{"/a/b/%2e%2E/", "default"},  // hex case is not significant
+		{"/a/./b/x", "patterned"},    // "/a/b/x"
+		{"/a//b/x", "patterned"},     // "/a/b/x"
+		{"//a/b/x", "patterned"},     // "/a/b/x"
+		{"/x/../a/b/x", "patterned"}, // "/a/b/x"
+		{"/../a/b/x", "patterned"},   // ".." above the root stays at the root
+		{"/a/x/..%2Fb/q", "default"}, // "%2F" is not a separator: no dot segment
+		{"/a/b.../x", "patterned"},   // "..." is an ordinary segment
+		{"/a/x/../../a/b", "patterned"},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			hitBy, seen = "", ""
+
+			// When: a viewer requests the path
+			resp := hostRoutedGet(t, srv, dist.ID, tc.path)
+			resp.Body.Close()
+
+			// Then: the behavior is chosen on the normalised path, and the
+			// origin still receives the raw one
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("status = %d, want 200", resp.StatusCode)
+			}
+			if hitBy != tc.wantOrigin {
+				t.Errorf("served by the %q origin, want %q", hitBy, tc.wantOrigin)
+			}
+			if seen != tc.path {
+				t.Errorf("origin saw path %q, want the raw %q", seen, tc.path)
+			}
+		})
+	}
+}
+
 // TestProxy_viewerRequestFunctionSeesTheEncodedURI: a viewer-request function
 // is handed the URI "without changing" it (edge-function-restrictions-all,
 // "URI, query string, and headers encoding"), i.e. percent-encoded as the

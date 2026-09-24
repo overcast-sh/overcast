@@ -190,6 +190,25 @@ findings:
           ("Viewer response": executes "regardless of whether the file is already in the CloudFront cache")
         tests: tests/integration/cloudfront/cloudfront_test.go::TestProxy_viewerResponseFunctionRunsOnACacheHit
       fixed_in: "#2146"
+    - scenario: >-
+        #2149: cache behaviours are matched after the rest of AWS's RFC 3986 normalisation, on top of the
+        percent-encoding step #2137 added. "." and ".." segments are resolved (section 5.2.4, applied after
+        escaped unreserved characters are decoded, so "%2E%2E" counts) and repeated slashes are collapsed,
+        which AWS names alongside ".." as "normalized and removed". "/a/b/.." now matches "/a*", not
+        "/a/b*", as in AWS's example. A ".." above the root stays at the root; "%2F" is still not a
+        separator. The origin still receives the raw path. Found while testing this: a path the viewer began
+        with "//" lost one slash before the proxy saw it (viewerPath re-added a leading "/" only when the
+        route's wildcard lacked one), so the origin got "/a" for "//a" and the two shared a cache entry.
+      evidence:
+        aws_docs: >-
+          https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/DownloadDistValuesCacheBehavior.html#path-normalization,
+          https://datatracker.ietf.org/doc/html/rfc3986#section-5.2.4
+        tests: >-
+          tests/integration/cloudfront/cloudfront_test.go::TestProxy_pathPatternMatchesAfterDotSegmentsAndSlashes,
+          internal/services/cloudfront/handler_proxy_test.go::TestNormalizePathForMatch_decodesOnlyUnreserved,
+          internal/services/cloudfront/handler_proxy_test.go::TestViewerPath_isAlwaysTheEncodedForm,
+          internal/services/cloudfront/handler_proxy_test.go::TestPathHelpers_doNotAllocateOnPlainPaths
+      fixed_in: "#2149"
   remaining_gaps:
     - >-
       Member order below the top level still follows the order the structs happened to be written in
@@ -199,11 +218,6 @@ findings:
       ViewerProtocolPolicy and ForwardedValues/MinTTL/DefaultTTL/MaxTTL last on both behavior shapes,
       and CustomHeaders before S3OriginConfig on Origin. SDKs address members by name, so this is a
       wire-shape divergence rather than a functional one, and nothing pins it yet.
-    - >-
-      #2137: path normalisation before cache-behaviour matching implements only the percent-encoding
-      step. AWS also resolves dot segments ("/a/b/.." matches "/a*", not "/a/b*") and collapses repeated
-      slashes before matching; Overcast matches the path as sent. Recorded on
-      docs/services/cloudfront/limitations.md ("Request paths").
   intentionally_partial:
     - >-
       ETags are a quoted version counter ("1", "2", …) rather than a content hash or an opaque token
@@ -214,5 +228,5 @@ findings:
       docs/services/cloudfront/limitations.md ("Distributions").
 handoff:
   start_with: [CreateDistribution, UpdateDistribution, invalidations]
-  do_not_redo: [ProxyRequest counting (#75), ETag semantics (recorded as intentionally_partial), ProxyRequest path encoding (#2137)]
+  do_not_redo: [ProxyRequest counting (#75), ETag semantics (recorded as intentionally_partial), ProxyRequest path encoding (#2137), path normalisation (#2149)]
   commands: [go test -count=1 ./internal/services/cloudfront/... ./tests/integration/cloudfront/...]

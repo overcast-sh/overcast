@@ -564,23 +564,93 @@ func withLeadingSlash(s string) string {
 // "/a%2Fb" but decoded for "/100%25", and appending a decoded "/100%" to an
 // origin URL made it unparseable (a 502). With RawPath unset the viewer's
 // encoding IS the default one, so re-escaping reproduces it exactly.
+//
+// The wildcard starts after the "/" that ends the route prefix, so that "/" is
+// always the viewer's first one and is put back unconditionally: a path the
+// viewer began with "//" keeps both.
 func viewerPath(r *http.Request) string {
-	p := withLeadingSlash(chi.URLParam(r, "*"))
+	p := "/" + chi.URLParam(r, "*")
 	if r.URL.RawPath == "" {
 		p = (&url.URL{Path: p}).EscapedPath()
 	}
 	return p
 }
 
-// normalizePathForMatch applies the RFC 3986 §6.2.2.2 percent-encoding
-// normalisation CloudFront performs before matching cache behaviors: an
-// escaped UNRESERVED character (ALPHA, DIGIT, "-", ".", "_", "~") is decoded,
-// so "/%7Euser" matches a "/~user/*" pattern. Every other escape stays as it
-// is — "%2F" is not a separator and "%40" is not "@" — which is harmless to
-// the match because a path pattern cannot itself contain "%".
+// normalizePathForMatch applies the RFC 3986 normalisation CloudFront performs
+// before matching cache behaviors (DownloadDistValuesCacheBehavior, "Path
+// normalization"), in RFC 3986 section 6's order:
 //
-// Returns p unchanged, without allocating, when it holds no escape.
+//  1. Percent-encoding (section 6.2.2.2): an escaped UNRESERVED character
+//     (ALPHA, DIGIT, "-", ".", "_", "~") is decoded, so "/%7Euser" matches a
+//     "/~user/*" pattern. Every other escape stays as it is — "%2F" is not a
+//     separator and "%40" is not "@" — which is harmless to the match because
+//     a path pattern cannot itself contain "%".
+//  2. Path segments (section 6.2.2.3): "." and ".." segments are resolved, and
+//     repeated slashes are collapsed, which AWS names alongside ".." as
+//     "normalized and removed". So "/a/b/.." matches "/a*", not "/a/b*".
+//
+// The result is for matching only; the origin still gets the raw path.
+// Returns p unchanged, without allocating, when there is nothing to normalise.
 func normalizePathForMatch(p string) string {
+	p = decodeUnreservedEscapes(p)
+	if !hasDotSegmentOrEmptySegment(p) {
+		return p
+	}
+	return removeDotSegments(p)
+}
+
+// hasDotSegmentOrEmptySegment reports whether p, a path starting with "/",
+// holds a "." or ".." segment or an empty one ("//"), without allocating.
+func hasDotSegmentOrEmptySegment(p string) bool {
+	for i := 0; i < len(p); i++ {
+		if p[i] != '/' {
+			continue
+		}
+		seg := p[i+1:]
+		if j := strings.IndexByte(seg, '/'); j >= 0 {
+			seg = seg[:j]
+		} else if seg == "" {
+			return false // a single trailing "/" is not an empty segment
+		}
+		if seg == "" || seg == "." || seg == ".." {
+			return true
+		}
+	}
+	return false
+}
+
+// removeDotSegments resolves "." and ".." segments as RFC 3986 section 5.2.4
+// does, dropping empty segments too so repeated slashes collapse. A ".." above
+// the root stays at the root. A path ending in a dot segment or a slash keeps
+// its trailing slash: "/a/b/.." is "/a/".
+func removeDotSegments(p string) string {
+	segs := strings.Split(strings.TrimPrefix(p, "/"), "/")
+	out := make([]string, 0, len(segs))
+	for _, s := range segs {
+		switch s {
+		case "", ".":
+		case "..":
+			if len(out) > 0 {
+				out = out[:len(out)-1]
+			}
+		default:
+			out = append(out, s)
+		}
+	}
+	if len(out) == 0 {
+		return "/"
+	}
+	norm := "/" + strings.Join(out, "/")
+	if last := segs[len(segs)-1]; last == "" || last == "." || last == ".." {
+		norm += "/"
+	}
+	return norm
+}
+
+// decodeUnreservedEscapes decodes the percent-escapes of unreserved characters
+// in p (RFC 3986 section 6.2.2.2) and leaves every other escape as it is.
+// Returns p unchanged, without allocating, when it holds no escape.
+func decodeUnreservedEscapes(p string) string {
 	i := strings.IndexByte(p, '%')
 	if i < 0 {
 		return p
