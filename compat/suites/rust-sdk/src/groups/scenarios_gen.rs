@@ -20,6 +20,9 @@ mod scenarios_authored_eventbridge_events_gen;
 #[path = "scenarios_authored_eventbridge_rules_gen.rs"]
 mod scenarios_authored_eventbridge_rules_gen;
 
+#[path = "scenarios_authored_kinesis_records_gen.rs"]
+mod scenarios_authored_kinesis_records_gen;
+
 #[path = "scenarios_authored_kinesis_shards_gen.rs"]
 mod scenarios_authored_kinesis_shards_gen;
 
@@ -71,6 +74,7 @@ pub fn scenario_groups(clients: &Arc<AwsClients>) -> Vec<Box<dyn ServiceGroup>> 
         Box::new(scenarios_authored_eventbridge_buses_gen::ScenariosAuthoredEventbridgeBuses::new(clients)),
         Box::new(scenarios_authored_eventbridge_events_gen::ScenariosAuthoredEventbridgeEvents::new(clients)),
         Box::new(scenarios_authored_eventbridge_rules_gen::ScenariosAuthoredEventbridgeRules::new(clients)),
+        Box::new(scenarios_authored_kinesis_records_gen::ScenariosAuthoredKinesisRecords::new(clients)),
         Box::new(scenarios_authored_kinesis_shards_gen::ScenariosAuthoredKinesisShards::new(clients)),
         Box::new(scenarios_authored_kinesis_streams_gen::ScenariosAuthoredKinesisStreams::new(clients)),
         Box::new(scenarios_authored_logs_events_gen::ScenariosAuthoredLogsEvents::new(clients)),
