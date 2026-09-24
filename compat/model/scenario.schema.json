@@ -308,6 +308,29 @@
         },
         {
           "type": "object",
+          "required": ["$now"],
+          "additionalProperties": false,
+          "description": "The client's clock at the moment the call is made, in epoch milliseconds, plus offsetMillis. Read once per call, so every $now in one call's params sees the same instant. Only for a long member, and never on the expected side of a check (compat/model/README.md § Values).",
+          "properties": {
+            "$now": {
+              "type": "object",
+              "required": ["unit"],
+              "additionalProperties": false,
+              "properties": {
+                "unit": { "enum": ["epochMillis"] },
+                "offsetMillis": {
+                  "type": "integer",
+                  "minimum": -3600000,
+                  "maximum": 3600000,
+                  "not": { "const": 0 },
+                  "description": "Added to the instant; omitted rather than 0, so each value has one spelling."
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
           "propertyNames": { "pattern": "^[^$]" },
           "additionalProperties": { "$ref": "#/definitions/Value" }
         },

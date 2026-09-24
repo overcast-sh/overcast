@@ -32,6 +32,8 @@ import (
 //	types.PolicyType        {"$ref":"t"}   types.PolicyType(scenario.Bind[string](b, "M", scenario.Ref("t")))
 //	[]byte                  {"$base64":"cmVjb3JkLTE="}            []byte("record-1")
 //	[]byte                  {"$base64":{"$ref":"k"}}  scenario.Blob(b, "M", scenario.Base64(scenario.Ref("k")))
+//	*int64                  {"$now":{"unit":"epochMillis","offsetMillis":-1}}
+//	                                       aws.Int64(scenario.Bind[int64](b, "M", scenario.Now("epochMillis", -1)))
 //
 // Two rules explain most of the table:
 //
@@ -354,6 +356,13 @@ func (sp *goSpeller) expr(t types.Type, v any, member, indent string) (string, e
 	kind, ok := goScalarKinds[basic.Kind()]
 	if !ok {
 		return "", fmt.Errorf("no scenario.Bind instantiation produces a %s", basic.Name())
+	}
+	// A `$now` is epoch milliseconds, which only an int64 holds. The generator
+	// has already held it to a modeled long; this is where a vendored SDK that
+	// typed that long as anything else is refused rather than overflowed at
+	// run time.
+	if key, _, _ := exprOf(v); key == "$now" && basic.Kind() != types.Int64 {
+		return "", fmt.Errorf("a $now is epoch milliseconds, which needs an int64, and the SDK gives this member a %s", basic.Name())
 	}
 	_, unnamed := core.(*types.Basic)
 	if pointer && !unnamed {

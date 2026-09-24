@@ -24,6 +24,7 @@ Generator: [cmd/compatgen/README.md](../../cmd/compatgen/README.md).
 | `gaps.json` | `cmd/compatgen` | every operation the generator refused, with a reason (`gaps.schema.json`) |
 | `testdata/errors/*.json` | a human | the shared error-matching conformance fixtures every interpreter's unit tests run — see [Errors](#errors) |
 | `testdata/blobs/blobs.json` | a human | the shared blob-value fixture every suite's unit tests run — see [Values](#values) |
+| `testdata/now/now.json` | a human | the shared `$now` fixture every suite's unit tests run — see [Values](#values) |
 | `../suites/registry.generated.json` | `cmd/compatgen` | the generated registry sibling every loader concatenates |
 
 `<service>` is the Overcast capability key, exactly as a registry group's
@@ -226,7 +227,8 @@ literal of the member's modeled kind, so a cross-type comparison means the
 response disagrees with the model, which is the disagreement the check exists
 to catch. A blob is compared as its document form, base64 text, against an
 `equals` or `where` written as `$base64` — see [Values](#values). Timestamps are
-never compared. The same rule governs a `where` entry.
+never compared, and a `$now` is never an expected value. The same rule governs a
+`where` entry.
 
 ### Errors
 
@@ -426,9 +428,13 @@ an array is a list of values; a scalar is itself.
 | `{"$index": [<value>, n]}` | element `n` of a list-valued expression |
 | `{"$base64": "<base64>"}` | a blob: these bytes. The text is standard base64 (`+/`, padded) in its one canonical spelling; the generator refuses anything else |
 | `{"$base64": {"$ref": "rec.data"}}` | a blob: the bytes of a blob a previous call exported |
+| `{"$now": {"unit": "epochMillis"}}` | the client's clock when the call is made, as an integer of epoch milliseconds |
+| `{"$now": {"unit": "epochMillis", "offsetMillis": -1}}` | the same reading, plus the offset: here, one millisecond earlier |
 
 No conditionals, no arithmetic, no scripting: eight implementations have to
-agree on every value.
+agree on every value. A `$now`'s offset is the one addition anywhere in the
+grammar, and it is a constant the scenario states, applied to a reading no
+scenario can see.
 
 **A blob takes `$base64` and nothing else, and `$base64` goes nowhere else.**
 The backends disagree about what a plain string on a blob member means — the
@@ -477,6 +483,76 @@ backends. That conversion is spelled only for a service whose wire unit has
 been measured (`dotnetEpochMilliseconds` in `cmd/compatgen/emit_dotnet.go`,
 and the suite's `SdkWireFormTests`); anywhere else the same disagreement is
 refused as `dotnet-emit-unsupported` — see [Naming](#naming).
+
+**`$now` is the client's own clock, read when the call is made.** A real caller
+stamps a CloudWatch Logs event with its own clock at the moment it calls
+`PutLogEvents`, and so does every native implementation. A value derived from
+the server, such as a stream's `creationTime`, would give every event the same
+timestamp. That hides the service's ordering and acceptance-window behaviour
+from the test. So the IR has a value for the client's clock, and it is
+deliberately small:
+
+- **The spelling is a closed object.** `unit` is required and has one value,
+  `epochMillis`. A model `long` does not say whether it counts seconds or
+  milliseconds, so the scenario states the unit and the generator checks it. A
+  second unit would be a new value added to this list and to all seven
+  runtimes. It would never change what `epochMillis` means.
+  `offsetMillis` is optional. It is a whole number of milliseconds, within one
+  hour either way, and never `0`: a zero offset is written by leaving the
+  member out, so each value has one spelling. Nothing else is accepted.
+- **The offset exists for ordering.** The clock is read **once per call**:
+  every `$now` in one call's params sees the same instant. Two events in one
+  `PutLogEvents` batch must be in chronological order, so the offset is what
+  makes them distinct and ordered (`-1` for the first, none for the second).
+  The one-hour bound keeps every value inside the window a service accepts a
+  client clock in. CloudWatch Logs rejects an event more than two hours ahead
+  or fourteen days behind.
+- **It goes on a `long` member and nowhere else.** A `long` is how a model spells
+  an epoch it counts itself, such as CloudWatch Logs' `InputLogEvent.timestamp`.
+  Every backend sends a `long` as a plain integer, so the instant reaches the
+  wire unchanged. An `int` or a `short` is refused, because epoch milliseconds
+  do not fit in one. A `$now` cannot be a `$concat` part or an `$index` list
+  either, because it is a number.
+- **It does not lift `no-portable-value` for a `timestamp` member.** Each SDK
+  takes its own type for one: a `datetime`, a `Date`, a `time.Time`, an
+  `Instant`, a `DateTime`, a smithy `DateTime`, and ISO text for the CLI. That
+  would be seven new spellings that no scenario needs yet, and none of them
+  would be exercised. `unit` is where such a value would be added, as a new
+  unit rather than a new expression.
+- **It is never an expected value.** The instant is gone once the call is sent,
+  so no response contains a value it could equal. An `equals` or a `where` that
+  holds a `$now` is refused. Assert what the service did with the value instead: that the events came back,
+  and in which order.
+
+A misplaced `$now` is a generation error naming the member, in a recipe and in
+an authored scenario alike. The generator never derives one, so a
+`timestamp` member the binder cannot fill is still refused in `gaps.json`, as
+`no-portable-value` or `unbound-required-member`. A typed SDK that declares the
+member as something other than a 64-bit integer, or as a `DateTime` in a service
+whose unit is not measured, is refused as that backend's `*-emit-unsupported`.
+
+Each backend reads its clock in epoch milliseconds and sends the reading plus
+the offset:
+
+| Backend | Where the clock is read | What reaches the SDK |
+| --- | --- | --- |
+| python-sdk | `params_for`, once per call | an `int` |
+| node-js-sdk | `evaluateParams`, once per call | a `number` |
+| cli | `evalParams`, on a per-call copy of the evaluator | the integer in `--cli-input-json` |
+| go-sdk | the call's `Binder`, on first use | `aws.Int64(scenario.Bind[int64](b, "M", scenario.Now("epochMillis", -1)))` |
+| java-sdk | the call's `Binder`, on first use | `b.longValue("M", Values.now("epochMillis", -1L))` |
+| dotnet-sdk | the call's `Binder`, on first use | `b.Bind<long>(…, Val.Now(…))` into a `long?`, or `b.EpochMilliseconds(…, Val.Now(…))` into the `DateTime?` AWSSDK declares over a measured `long` |
+| rust-sdk | `invoke_raw`, before the params are evaluated | an `i64`, read back by `b.i64(…)` |
+
+The dotnet-sdk row builds its `DateTime` from the same number every other
+backend sends. It does not use `DateTime.UtcNow`: that would be a second reading
+of the clock, and its sub-millisecond ticks would never reach the wire, which
+carries milliseconds. The interpreters refuse a `$now` evaluated anywhere but a
+call's params. The typed runtimes are given a `$now` only where the generator
+allowed one. `testdata/now/now.json` is the shared fixture every suite's unit
+tests run. It pins what each spelling evaluates to against a fixed instant,
+which spellings every reader refuses, and that a clock which moves between
+readings still gives one call one instant.
 
 **A scenario may not depend on sending a member's modeled default.** A typed
 SDK that gives a defaulted member a value-typed field cannot tell "unset" from
@@ -1054,10 +1130,10 @@ service and operation, with a stable reason:
 | `setup-refused:<resource>` | a required resource could not be bound |
 | `no-portable-value:<Member>` | binding rule 1 or 2 would have bound a timestamp, document or union member to an export, and the IR has no value of that kind every backend can send. Refused here so the gap is recorded, rather than left to the source emitters, whose refusal would silently scope the whole group away from their suites |
 | `unsupported-tag-shape:<Shape>` | the tag member is neither a string map nor a list of `{Key, Value}` or `{TagKey, TagValue}` structures, or the untag member is neither a list of strings nor a list of key-only structures (a structure with exactly one string member, such as ELB Classic's `TagKeyOnly`). `<Shape>` is the bare shape name; the qualified Smithy id is in the detail |
-| `dotnet-emit-unsupported:<Member>` | the dotnet-sdk emitter cannot write that member as C#: its modeled kind has no C# literal (a timestamp, document, union, bigInteger or bigDecimal), a value expression is bound to a composite member, which has no scalar slot to land in, an integer literal falls outside the range of the C# type AWSSDK gives the property — C# range-checks an integral literal at compile time, and a compile error in this backend is suite-wide rather than scoped to one group — or the pinned package's type table (`compat/suites/dotnet-sdk/sdk-types/`) says something the model cannot be spelled into: no request class for the operation (recorded as `:<Op>Request`), no property for the member, or a type the modeled kind does not convert to, where the one measured conversion (an epoch-milliseconds `long` AWSSDK types as `DateTime`, in a service whose unit is measured) does not apply. The same disagreement on a request or response property the group only *reads* is refused too, recorded under the property, because the suite's document would then differ from every other backend's — see [Values](#values). It scopes the group away from `dotnet-sdk` exactly as `go-emit-unsupported` does for `go-sdk` — see [Naming](#naming) |
-| `go-emit-unsupported:<Member>` | the go-sdk emitter cannot write that member as typed Go: its modeled kind has no IR literal (a timestamp, blob, document or union), or the vendored SDK has no `<Op>Input`, no field for the member, or a field of a type no literal builds, or the member is value-typed and the scenario sets it to its zero value (see § Values). It is the one reason here that does **not** mean "no test": the operation is generated and the interpreters run it, and the group is scoped away from `go-sdk` in the generated registry instead, because a suite listed against a group it cannot compile would report as a hard failure |
-| `java-emit-unsupported:<Member>` | the java-sdk emitter cannot write that member as typed Java: its modeled kind has no IR literal (a timestamp, blob, document or union), the model gives the operation no such member, the literal is of the wrong JSON type for the member's kind, a value expression is bound to a composite member, or the value is an explicit `null` — which the AWS SDK for Java v2 spells as "unset" and so cannot send. It is scoped away from `java-sdk` on the same terms as the row above. Unlike the Go emitter it needs no SDK lookup and refuses no zero: every Java scalar is boxed, so a builder setter takes the value whatever the member's optionality and a boxed `0` is serialized (measured by the suite's own `JavaSdkWireFactsTest`). What the model cannot answer — whether the *pinned* SDK has the operation at all — is answered by the suite's `mvn package`, as a compile error rather than a wrong request |
-| `rust-emit-unsupported:<Member>` | the rust-sdk emitter cannot write that member as typed Rust: its modeled kind has no IR literal (a timestamp, blob, document or union), or a value expression is bound to a composite member, which has no scalar slot to land in. A composite the scenario writes out as a literal is not a cause at any depth — a structure inside a structure is another builder chain, a list inside one is the repeated setter smithy-rs appends through, and a map inside one the two-argument insert. Its list is shorter than go-sdk's because a fluent setter takes the value rather than an `Option`, so there is no pointer-vs-value question and no zero-value case. It scopes the group away from `rust-sdk` on the same terms as the row above |
+| `dotnet-emit-unsupported:<Member>` | the dotnet-sdk emitter cannot write that member as C#: its modeled kind has no C# literal (a timestamp, document, union, bigInteger or bigDecimal), a value expression is bound to a composite member, which has no scalar slot to land in, a `$now` is bound to a property that is neither a `long` nor a measured `DateTime`, an integer literal falls outside the range of the C# type AWSSDK gives the property — C# range-checks an integral literal at compile time, and a compile error in this backend is suite-wide rather than scoped to one group — or the pinned package's type table (`compat/suites/dotnet-sdk/sdk-types/`) says something the model cannot be spelled into: no request class for the operation (recorded as `:<Op>Request`), no property for the member, or a type the modeled kind does not convert to, where the one measured conversion (an epoch-milliseconds `long` AWSSDK types as `DateTime`, in a service whose unit is measured) does not apply. The same disagreement on a request or response property the group only *reads* is refused too, recorded under the property, because the suite's document would then differ from every other backend's — see [Values](#values). It scopes the group away from `dotnet-sdk` exactly as `go-emit-unsupported` does for `go-sdk` — see [Naming](#naming) |
+| `go-emit-unsupported:<Member>` | the go-sdk emitter cannot write that member as typed Go: its modeled kind has no IR literal (a timestamp, blob, document or union), or the vendored SDK has no `<Op>Input`, no field for the member, or a field of a type no literal builds, or the member is value-typed and the scenario sets it to its zero value (see § Values), or a `$now` lands in a field that is not an `int64`. It is the one reason here that does **not** mean "no test": the operation is generated and the interpreters run it, and the group is scoped away from `go-sdk` in the generated registry instead, because a suite listed against a group it cannot compile would report as a hard failure |
+| `java-emit-unsupported:<Member>` | the java-sdk emitter cannot write that member as typed Java: its modeled kind has no IR literal (a timestamp, blob, document or union), the model gives the operation no such member, the literal is of the wrong JSON type for the member's kind, a value expression is bound to a composite member, a `$now` is bound to anything but a `long`, or the value is an explicit `null` — which the AWS SDK for Java v2 spells as "unset" and so cannot send. It is scoped away from `java-sdk` on the same terms as the row above. Unlike the Go emitter it needs no SDK lookup and refuses no zero: every Java scalar is boxed, so a builder setter takes the value whatever the member's optionality and a boxed `0` is serialized (measured by the suite's own `JavaSdkWireFactsTest`). What the model cannot answer — whether the *pinned* SDK has the operation at all — is answered by the suite's `mvn package`, as a compile error rather than a wrong request |
+| `rust-emit-unsupported:<Member>` | the rust-sdk emitter cannot write that member as typed Rust: its modeled kind has no IR literal (a timestamp, blob, document or union), or a value expression is bound to a composite member, which has no scalar slot to land in, or a `$now` to anything but an `i64`. A composite the scenario writes out as a literal is not a cause at any depth — a structure inside a structure is another builder chain, a list inside one is the repeated setter smithy-rs appends through, and a map inside one the two-argument insert. Its list is shorter than go-sdk's because a fluent setter takes the value rather than an `Option`, so there is no pointer-vs-value question and no zero-value case. It scopes the group away from `rust-sdk` on the same terms as the row above |
 
 Refusals are a feature. Fixing one is a line in a recipe or in
 `values.json`; guessing is never an option.

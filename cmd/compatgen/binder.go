@@ -326,6 +326,9 @@ func (b *binder) checkValue(v any, target string, exports exportKinds, where, gr
 		if key == "$ref" && unportableKinds[kind] {
 			return fmt.Errorf("%s: %s is a %s, for which the IR has no portable value, not even a $ref; leave the member unbound so the operation is refused", where, target, kind)
 		}
+		if key == "$now" {
+			return checkNowTarget(b.model, target, where)
+		}
 		switch key {
 		case "$lit":
 			return b.checkValue(arg, target, exports, where, group)
@@ -491,6 +494,33 @@ func checkBlob(model *serviceModel, v any, target string, exports exportKinds, w
 		return fmt.Errorf("%s: $base64 takes a base64 string or a $ref, got %s", where, valueKind(inner))
 	}
 	return nil
+}
+
+// checkNowTarget holds a `$now` to the one kind of member it may be sent as: a
+// `long`, which is how a model spells an epoch it counts itself (CloudWatch
+// Logs' InputLogEvent.timestamp). Every backend sends that as a plain integer,
+// so the instant reaches the wire unchanged everywhere.
+//
+// A `timestamp` member is refused, deliberately. Each SDK takes its own type
+// for one — a datetime, a Date, a time.Time, an Instant, a DateTime, a smithy
+// DateTime, ISO text for the CLI — so lifting `no-portable-value` for it would
+// be seven new spellings that no scenario yet needs and none would exercise.
+// An int or a short is refused because epoch milliseconds do not fit one.
+//
+// It is a function of the model rather than a binder method because authored
+// scenarios, which have no binder, are held to it too (authored.go).
+func checkNowTarget(model *serviceModel, target, where string) error {
+	if model.Kind(target) == "integer" && model.ShapeType(target) == "long" {
+		return nil
+	}
+	shape := bareShapeName(target)
+	if strings.HasPrefix(target, "smithy.api#") {
+		shape = model.ShapeType(target)
+	}
+	if model.Kind(target) == "timestamp" {
+		return fmt.Errorf("%s: $now is epoch milliseconds, for a long member, but %s is a timestamp, which has no portable value — not even the clock (compat/model/README.md § Values)", where, shape)
+	}
+	return fmt.Errorf("%s: $now is epoch milliseconds, for a long member, but %s is a %s", where, shape, model.ShapeType(target))
 }
 
 // describeBlobValue names what a blob member was wrongly given, for checkBlob's

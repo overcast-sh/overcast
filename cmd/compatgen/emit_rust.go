@@ -691,7 +691,11 @@ func rustValueOfKind(model *serviceModel, crate, target string, value any, path 
 	case "enum":
 		return fmt.Sprintf("%s::types::%s::from(b.string(%s)?.as_str())", crate, rustNameType(target), rustString(path)), nil
 	case "integer":
-		return fmt.Sprintf("b.%s(%s)?", rustIntWidth(model, target), rustString(path)), nil
+		width := rustIntWidth(model, target)
+		if key, _, _ := exprOf(value); key == "$now" && width != "i64" {
+			return "", fmt.Errorf("a $now is epoch milliseconds, which needs an i64, and %s is an %s", path, width)
+		}
+		return fmt.Sprintf("b.%s(%s)?", width, rustString(path)), nil
 	case "float":
 		return fmt.Sprintf("b.%s(%s)?", rustFloatWidth(model, target), rustString(path)), nil
 	case "boolean":
@@ -914,6 +918,12 @@ func rustValue(v any, indent string) (string, error) {
 				return "", err
 			}
 			return fmt.Sprintf("scenario::base64(%s)", inner), nil
+		case "$now":
+			unit, offset, err := nowParts(arg)
+			if err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("scenario::now(%s, %d)", rustString(unit), offset), nil
 		}
 	}
 	switch value := v.(type) {

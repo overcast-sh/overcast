@@ -37,6 +37,7 @@ import (
 //	enum Color              {"$ref":"c"}       b.string("M", Values.ref("c"))
 //	blob                    {"$base64":"cmVj"} SdkBytes.fromByteArray(Base64.getDecoder().decode("cmVj"))
 //	blob                    {"$base64":{"$ref":"k"}} b.blob("M", Values.base64(Values.ref("k")))
+//	long                    {"$now":{"unit":"epochMillis"}} b.longValue("M", Values.now("epochMillis", 0L))
 //
 // # An enum is spelled as its wire value, never as the enum class
 //
@@ -417,6 +418,9 @@ func (sp *javaSpeller) expr(target, kind string, v any, member string, slot java
 	accessor, known := javaScalarBinders[shapeType]
 	if !known {
 		return "", fmt.Errorf("a value expression can only be bound to a scalar member, and this one is a %s", kind)
+	}
+	if key, _, _ := exprOf(v); key == "$now" && shapeType != "long" {
+		return "", fmt.Errorf("a $now is epoch milliseconds, which needs a Long, and this member is a %s", shapeType)
 	}
 	if accessor == "" {
 		return "", fmt.Errorf("no Binder accessor produces the Java type for a %s member", shapeType)

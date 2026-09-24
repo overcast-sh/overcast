@@ -230,6 +230,11 @@ func checkAuthoredCall(model *serviceModel, c call) error {
 // (#1910): the port would have run in three suites and reported no reason why.
 // Here it is an error naming the member and pointing at `$base64`.
 //
+// It is also the `$now` rule: a `$now` goes on a `long` member and nowhere
+// else (checkNowTarget), and never on the expected side of an `equals` or a
+// `where` (checkNotExpected), because no response holds the instant a call
+// was made at.
+//
 // Exports are tracked in the order the group runs — setup, then each test's
 // call and its clauses, then teardown — so a `$base64` around a $ref is checked
 // against the kind of what that $ref really names.
@@ -254,6 +259,12 @@ func checkAuthoredValues(model *serviceModel, g group) error {
 			if !ok {
 				continue // checkAuthoredCall has already named it
 			}
+			// The grammar first: the schema admits a $now in any value
+			// position, and only this says one may not be a $concat part or a
+			// $index's list, nor carry an offset of 0 or beyond an hour.
+			if err := validateValue(c.Params[member], where+" "+c.Op+"."+member); err != nil {
+				return err
+			}
 			if err := checkAuthoredValue(model, c.Params[member], target, exports, where+" "+c.Op+"."+member); err != nil {
 				return err
 			}
@@ -271,6 +282,11 @@ func checkAuthoredValues(model *serviceModel, g group) error {
 		}
 		for _, raw := range sortedCheckPaths(a.Checks) {
 			c := a.Checks[raw]
+			if c.Equals != nil {
+				if err := checkNotExpected(c.Equals, where+" check "+raw); err != nil {
+					return err
+				}
+			}
 			if c.Equals == nil || output == "" {
 				continue
 			}
@@ -283,6 +299,11 @@ func checkAuthoredValues(model *serviceModel, g group) error {
 				continue // an unresolvable path is the check's own failure to report
 			}
 			if err := checkAuthoredValue(model, c.Equals, target, exports, where+" check "+raw); err != nil {
+				return err
+			}
+		}
+		for _, raw := range sortedValueKeys(a.Where) {
+			if err := checkNotExpected(a.Where[raw], where+" where "+raw); err != nil {
 				return err
 			}
 		}
@@ -353,6 +374,9 @@ func checkAuthoredValue(model *serviceModel, v any, target string, exports expor
 	if key, _, isExpr := exprOf(v); isExpr {
 		if key == "$base64" {
 			return fmt.Errorf("%s: $base64 is bytes, for a blob member, but %s is a %s", where, bareShapeName(target), kind)
+		}
+		if key == "$now" {
+			return checkNowTarget(model, target, where)
 		}
 		return nil
 	}

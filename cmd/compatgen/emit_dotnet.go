@@ -1047,6 +1047,14 @@ func (sp *dotnetSpeller) expr(target string, slot dotnetSlot, v any, member stri
 	if slot.form == "integer" && !dotnetIntegral[slot.scalar].bindable {
 		return "", fmt.Errorf("a value expression cannot be bound to a %s property; Binder.Bind converts to byte, short, int and long", slot.scalar)
 	}
+	// A `$now` is epoch milliseconds: a long, or the DateTime AWSSDK makes of
+	// one where the unit is measured — EpochMilliseconds builds it from the
+	// same number every other backend sends, so the client's clock reaches
+	// the wire unchanged. A property AWSSDK narrowed to anything else would
+	// overflow at run time, and is refused here instead.
+	if key, _, _ := exprOf(v); key == "$now" && slot.form != "epochMilliseconds" && slot.scalar != "long" {
+		return "", fmt.Errorf("a $now is epoch milliseconds, which needs a long or a measured DateTime, and %s types this property %s", sp.sdk.describe(), slot.scalar)
+	}
 	rendered, err := dotnetValue(v)
 	if err != nil {
 		return "", err
@@ -1154,7 +1162,7 @@ func (sp *dotnetSpeller) epochMillisecondsAt(target string, t dotnetType, classN
 
 // dotnetValue renders one IR value as an *untyped* C# expression: an object is
 // a Dictionary<string, object?>, a list an object?[], a scalar itself, and
-// each of the six expression forms a Val constructor. Nothing else is
+// each of the seven expression forms a Val constructor. Nothing else is
 // representable, which is what makes this total.
 //
 // Untyped is right in the two places it is used. An assertion's expected value
@@ -1204,6 +1212,12 @@ func dotnetValue(v any) (string, error) {
 				return "", err
 			}
 			return fmt.Sprintf("Val.Base64(%s)", inner), nil
+		case "$now":
+			unit, offset, err := nowParts(arg)
+			if err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("Val.Now(%s, %dL)", csString(unit), offset), nil
 		}
 	}
 	switch value := v.(type) {

@@ -688,7 +688,7 @@ func javaRequestLines(sp *javaSpeller, op string, params map[string]any) ([]stri
 }
 
 // javaValue renders one IR value as an *untyped* Java expression: an object is a
-// Values.map, a list a Values.list, a scalar itself, and each of the six
+// Values.map, a list a Values.list, a scalar itself, and each of the seven
 // expression forms a Values factory. Nothing else is representable, which is
 // what makes this total.
 //
@@ -739,6 +739,12 @@ func javaValue(v any) (string, error) {
 				return "", err
 			}
 			return fmt.Sprintf("Values.base64(%s)", inner), nil
+		case "$now":
+			unit, offset, err := nowParts(arg)
+			if err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("Values.now(%s, %dL)", javaQuote(unit), offset), nil
 		}
 	}
 	switch value := v.(type) {
