@@ -124,7 +124,7 @@ func (s *Service) batchGetNamedQueryTyped(ctx context.Context, req *batchGetName
 
 // listNamedQueriesTyped lists a workgroup's saved queries. "If a workgroup
 // is not specified, the saved queries for the primary workgroup are
-// returned."
+// returned," per ListNamedQueries.
 func (s *Service) listNamedQueriesTyped(ctx context.Context, req *listNamedQueriesReq) (*listNamedQueriesResp, *protocol.AWSError) {
 	wg, aerr := s.loadWorkGroup(ctx, orPrimary(req.WorkGroup))
 	if aerr != nil {

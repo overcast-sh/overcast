@@ -160,6 +160,8 @@ type QueryExecutionStatistics struct {
 }
 
 // AthenaError is why a query execution failed.
+//
+//nolint:revive // AWS names the shape AthenaError.
 type AthenaError struct {
 	ErrorCategory int32  `json:"ErrorCategory,omitempty"`
 	ErrorMessage  string `json:"ErrorMessage,omitempty"`

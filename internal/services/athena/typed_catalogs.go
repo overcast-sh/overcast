@@ -11,7 +11,7 @@ import (
 )
 
 // awsDataCatalog is the account's built-in Glue Data Catalog: "of which you
-// can have only one and cannot modify."
+// can have only one and cannot modify," in CreateDataCatalog's words.
 const awsDataCatalog = "AwsDataCatalog"
 
 // Data catalog types (DataCatalogType).
@@ -31,7 +31,7 @@ const (
 )
 
 // catalogNamePattern: "can use a maximum of 127 alphanumeric, underscore, at
-// sign, or hyphen characters."
+// sign, or hyphen characters," per CreateDataCatalog.
 var catalogNamePattern = regexp.MustCompile(`^[A-Za-z0-9_@-]{1,127}$`)
 
 func isBuiltinCatalog(name string) bool { return strings.EqualFold(name, awsDataCatalog) }

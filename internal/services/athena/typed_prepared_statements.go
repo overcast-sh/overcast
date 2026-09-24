@@ -12,7 +12,7 @@ import (
 var statementNamePattern = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_@:]{1,256}$`)
 
 // batchErrorStatementNotFound is UnprocessedPreparedStatementName's code for
-// "a prepared statement with the name provided could not be found."
+// "a prepared statement with the name provided could not be found", per the model.
 const batchErrorStatementNotFound = "STATEMENT_NOT_FOUND"
 
 type preparedStatementReq struct {

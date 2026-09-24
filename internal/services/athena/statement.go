@@ -15,7 +15,7 @@ const (
 // statementKinds maps a statement's first keyword to its StatementType.
 // "DML indicates DML (Data Manipulation Language) query statements, such as
 // CREATE TABLE AS SELECT. UTILITY indicates query statements other than DDL
-// and DML, such as SHOW CREATE TABLE, or DESCRIBE TABLE."
+// and DML, such as SHOW CREATE TABLE, or DESCRIBE TABLE." (StatementType).
 var statementKinds = map[string]string{
 	"SELECT": statementDML, "WITH": statementDML, "VALUES": statementDML, "TABLE": statementDML,
 	"INSERT": statementDML, "UPDATE": statementDML, "DELETE": statementDML, "MERGE": statementDML,

@@ -19,7 +19,8 @@ const (
 const minBytesScannedCutoff = 10000000
 
 // engineVersions is what ListEngineVersions returns: "a list of engine
-// versions that are available to choose from, including the Auto option."
+// versions that are available to choose from, including the Auto option,"
+// per ListEngineVersions.
 var engineVersions = []EngineVersion{
 	{SelectedEngineVersion: engineVersionAuto, EffectiveEngineVersion: engineVersion3},
 	{SelectedEngineVersion: engineVersion3, EffectiveEngineVersion: engineVersion3},

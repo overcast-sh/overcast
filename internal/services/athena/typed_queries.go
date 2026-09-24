@@ -235,7 +235,7 @@ const batchErrorInvalidInput = "INVALID_INPUT"
 
 // listQueryExecutionsTyped lists a workgroup's executions, most recent
 // first. "If a workgroup is not specified, returns a list of query execution
-// IDs for the primary workgroup."
+// IDs for the primary workgroup," per ListQueryExecutions.
 func (s *Service) listQueryExecutionsTyped(ctx context.Context, req *listQueriesReq) (*listQueriesResp, *protocol.AWSError) {
 	wg, aerr := s.loadWorkGroup(ctx, orPrimary(req.WorkGroup))
 	if aerr != nil {
