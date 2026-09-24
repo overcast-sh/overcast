@@ -154,6 +154,12 @@
     },
     {
       "suite": "dotnet-sdk",
+      "service": "athena",
+      "group": "athena-control",
+      "tests": 12
+    },
+    {
+      "suite": "dotnet-sdk",
       "service": "backup",
       "group": "backup-jobs",
       "tests": 4
@@ -805,6 +811,12 @@
       "service": "appconfigdata",
       "group": "appconfigdata-sessions",
       "tests": 5
+    },
+    {
+      "suite": "java-sdk",
+      "service": "athena",
+      "group": "athena-control",
+      "tests": 12
     },
     {
       "suite": "java-sdk",
@@ -1501,6 +1513,12 @@
       "service": "appsync",
       "group": "appsync-types",
       "tests": 5
+    },
+    {
+      "suite": "rust-sdk",
+      "service": "athena",
+      "group": "athena-control",
+      "tests": 12
     },
     {
       "suite": "rust-sdk",

@@ -1246,6 +1246,7 @@ var stackTagPropagationResourceTypes = map[string]bool{
 	// replacement.
 	"AWS::CertificateManager::Certificate": true,
 	"AWS::Athena::WorkGroup":               true,
+	"AWS::Athena::DataCatalog":             true,
 	"AWS::Shield::Protection":              true,
 	"AWS::OpenSearchService::Domain":       true,
 	"AWS::AppConfig::Application":          true,
@@ -2911,7 +2912,10 @@ var resourceHandlers = map[string]resourceHandler{
 	// Firehose
 	"AWS::KinesisFirehose::DeliveryStream": &firehoseDeliveryStreamHandler{},
 	// Athena
-	"AWS::Athena::WorkGroup": &athenaWorkGroupHandler{},
+	"AWS::Athena::WorkGroup":         &athenaWorkGroupHandler{},
+	"AWS::Athena::NamedQuery":        &athenaNamedQueryHandler{},
+	"AWS::Athena::PreparedStatement": &athenaPreparedStatementHandler{},
+	"AWS::Athena::DataCatalog":       &athenaDataCatalogHandler{},
 	// Glue
 	"AWS::Glue::Database":  &glueDatabaseHandler{},
 	"AWS::Glue::Table":     &glueTableHandler{},

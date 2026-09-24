@@ -104,7 +104,7 @@ func TestCreateStack_AthenaWorkGroupConfiguration_isForwarded(t *testing.T) {
 // instead of the schema property (WorkGroupConfiguration) does not get it
 // honored. Overcast has no per-property "unrecognised property" diagnostic
 // channel (only a resource-type-level one — see fidelity.go), so the
-// observable outcome is a workgroup with no configuration, exactly as any
+// observable outcome is a workgroup with none of that configuration, exactly as any
 // other unrecognised property is ignored.
 func TestCreateStack_AthenaConfiguration_isNotAcceptedAsAnAlias(t *testing.T) {
 	srv := helpers.NewTestServer(t)
@@ -132,7 +132,9 @@ func TestCreateStack_AthenaConfiguration_isNotAcceptedAsAnAlias(t *testing.T) {
 	helpers.AssertStatus(t, createResp, http.StatusOK)
 	waitForStackStatus(t, srv, stackName, "CREATE_COMPLETE")
 
-	if config := getWorkGroupConfiguration(t, srv, wgName); len(config) != 0 {
+	// Athena reports the engine version of every workgroup, so the check is
+	// that nothing from the template's Configuration arrived.
+	if config := getWorkGroupConfiguration(t, srv, wgName); outputLocation(config) != "" {
 		t.Fatalf("template key Configuration was honored as an alias for WorkGroupConfiguration: %#v", config)
 	}
 }

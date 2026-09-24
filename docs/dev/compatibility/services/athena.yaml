@@ -2,20 +2,20 @@ service: athena
 status: reviewed
 priority: p2
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-09-20
+last_updated: 2026-09-25
 protocols: [aws_json_1_1, aws_json_1_0, rpcv2_cbor]
 implementation: [internal/services/athena]
 integration_tests: [tests/integration/athena]
 capability_docs: docs/services/athena.md
 operation_count_estimate: >-
-  12 tracked in internal/services/athena/capabilities_dev.go, all StatusSupported: 5 Queries
-  (StartQueryExecution, GetQueryExecution, GetQueryResults, StopQueryExecution,
-  ListQueryExecutions), 4 WorkGroups (CreateWorkGroup, GetWorkGroup, ListWorkGroups,
-  DeleteWorkGroup) and 3 Tags (TagResource, UntagResource, ListTagsForResource).
-  docs/services/athena.md confirms "All 12 listed operations are implemented." (was 11 before
-  #2009 added StopQueryExecution; the older "8 supported" figure predates ListQueryExecutions
-  and the three tag operations.)
-current_support_level: Basic queries and workgroups; queries immediately succeed with empty results.
+  36 tracked in internal/services/athena/capabilities_dev.go since #2065: queries (6, two Inert
+  because no SQL runs), workgroups and engine versions (6), named queries (6), prepared
+  statements (6), data catalogs and Glue metadata (9) and tags (3).
+current_support_level: >-
+  Control plane for SQL workgroups, saved queries and catalogs (Spark sessions, notebooks,
+  calculations, capacity reservations and GetQueryRuntimeStatistics are not implemented);
+  queries go through a queryExecutor seam whose inert implementation
+  succeeds at once with empty results (#2066 replaces it with Trino).
 operations: {}
 findings:
   fixed:
@@ -34,8 +34,24 @@ findings:
       TestGetQueryExecution_unknownId, TestGetQueryResults_unknownId, TestGetWorkGroup_unknownName,
       TestDeleteWorkGroup_unknownName, TestAthenaCreateWorkGroup_invalidTagRejected,
       TestStopQueryExecution_alreadyFinished, TestStopQueryExecution_unknownId."
+    - "#2065: control plane completed. primary workgroup seeded on first use; CreateWorkGroup
+      refuses duplicates; UpdateWorkGroup applies ConfigurationUpdates with Remove* flags;
+      QueryExecution carries context, StatementType, EngineVersion, Statistics and the result
+      configuration resolved against the workgroup (EnforceWorkGroupConfiguration); a missing
+      output location is InvalidRequestException; ClientRequestToken idempotency; per-workgroup,
+      paginated ListQueryExecutions/ListNamedQueries; named queries, prepared statements and data
+      catalogs with their BatchGet operations; metadata operations read the Glue catalog. Tests:
+      tests/integration/athena/*_sdk_test.go (AWS SDK for Go v2), internal/services/athena unit
+      tests, tests/integration/cloudformation/athena_resources_test.go, compat group
+      athena-control."
   remaining_gaps: []
   intentionally_partial:
+    - "#2065: FEDERATED data catalogs answer 501, and LAMBDA/HIVE catalogs are stored but their
+      metadata is not readable (no connector runs). Spark workgroups (PySpark engine) answer 501.
+      Unverified choices recorded in the PR: BatchGet ErrorCode INVALID_INPUT for named queries and
+      query executions; a missing named query on Delete is InvalidRequestException; only named
+      queries block a non-recursive DeleteWorkGroup (the one kind of content both the API and
+      CloudFormation references name); OutputLocation reports <location>/<id>.csv or .txt."
     - "#67: the inert query engine is already documented. docs/services/athena.md's subtitle
       ('no SQL is executed, so every query succeeds immediately with an empty result set'), its
       'Differences from AWS' table (Query execution: 'stored, never parsed or run'; Results:
@@ -45,5 +61,5 @@ findings:
       boundary this issue asked to have recorded."
 handoff:
   start_with: []
-  do_not_redo: [StartQueryExecution, GetQueryExecution, GetQueryResults, StopQueryExecution, ListQueryExecutions, CreateWorkGroup, GetWorkGroup, ListWorkGroups, DeleteWorkGroup, TagResource, UntagResource, ListTagsForResource]
+  do_not_redo: [UpdateWorkGroup, BatchGetQueryExecution, ListEngineVersions, CreateNamedQuery, GetNamedQuery, BatchGetNamedQuery, ListNamedQueries, UpdateNamedQuery, DeleteNamedQuery, CreatePreparedStatement, GetPreparedStatement, BatchGetPreparedStatement, ListPreparedStatements, UpdatePreparedStatement, DeletePreparedStatement, CreateDataCatalog, GetDataCatalog, ListDataCatalogs, UpdateDataCatalog, DeleteDataCatalog, GetDatabase, ListDatabases, GetTableMetadata, ListTableMetadata, StartQueryExecution, GetQueryExecution, GetQueryResults, StopQueryExecution, ListQueryExecutions, CreateWorkGroup, GetWorkGroup, ListWorkGroups, DeleteWorkGroup, TagResource, UntagResource, ListTagsForResource]
   commands: [go test -count=1 ./internal/services/athena/... ./tests/integration/athena/...]
