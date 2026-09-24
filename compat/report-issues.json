@@ -1,0 +1,6 @@
+{
+  "$schema": "./report-issues.schema.json",
+  "version": 1,
+  "comment": "Hand-written issue links for the public compatibility report (overcast.sh/compat). Prefer a marker in the issue body instead — <!-- compat:<target> --> on an open issue labelled compat, collected by scripts/compat-issues.py — because it retires itself when the issue closes. Use this file only for a result whose issue cannot carry a marker. A link here beats a marker. Target: <service>[/<group-or-operation>[/<test>]][@<suite>]. See compat/AGENTS.md § The public report.",
+  "links": []
+}

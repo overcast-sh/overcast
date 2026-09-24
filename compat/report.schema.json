@@ -1,0 +1,158 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/overcast-sh/overcast/compat/report.schema.json",
+  "title": "Overcast Public Compatibility Report",
+  "description": "compat-report.json — written by `go run ./cmd/compat --publish-report`, attached to every GitHub release, and rendered by overcast.sh/compat. It joins a run's results with the registry, compat/model/gaps.json, compat/flaky.json and the issue links, so every non-passing cell carries exactly one reason code. Bump `schema` on any change a consumer could notice.",
+  "type": "object",
+  "required": ["schema", "version", "generatedAt", "issueRepo", "reasons", "suites", "totals", "services"],
+  "additionalProperties": false,
+  "definitions": {
+    "totals": {
+      "type": "object",
+      "required": ["cells", "pass", "byReason"],
+      "additionalProperties": false,
+      "properties": {
+        "cells": { "type": "integer", "minimum": 0, "description": "Every (test, suite) cell; pass plus the sum of byReason." },
+        "pass": { "type": "integer", "minimum": 0 },
+        "byReason": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } },
+        "untested": { "type": "integer", "minimum": 0, "description": "Operations with no test at all; they have no cells." }
+      }
+    },
+    "issue": {
+      "type": "object",
+      "required": ["number", "url"],
+      "additionalProperties": false,
+      "properties": {
+        "number": { "type": "integer", "minimum": 1 },
+        "url": { "type": "string" },
+        "title": { "type": "string" },
+        "state": { "type": "string" }
+      }
+    },
+    "result": {
+      "type": "object",
+      "required": ["status"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "enum": ["pass", "fail", "skip", "unimplemented", "na"] },
+        "reason": { "type": "string", "description": "A code from `reasons`. Absent exactly when the cell passed." },
+        "durationMs": { "type": "integer", "minimum": 0 },
+        "error": { "type": "string", "description": "The suite's own message, verbatim." },
+        "mismatch": {
+          "type": "object",
+          "description": "A generated scenario's six-field failure message, parsed (compat/model/README.md § Failure messages).",
+          "required": ["op", "kind", "expected", "actual", "scenario", "step"],
+          "additionalProperties": false,
+          "properties": {
+            "op": { "type": "string" },
+            "params": { "type": "string" },
+            "kind": { "type": "string" },
+            "path": { "type": "string" },
+            "expected": { "type": "string" },
+            "actual": { "type": "string" },
+            "scenario": { "type": "string" },
+            "step": { "type": "string" }
+          }
+        },
+        "blockedBy": { "type": "array", "items": { "type": "string" }, "description": "Tests in the same group whose failure skipped this one." },
+        "issue": { "$ref": "#/definitions/issue" }
+      }
+    }
+  },
+  "properties": {
+    "schema": { "type": "integer", "const": 1 },
+    "version": { "type": "string", "description": "The release, e.g. v0.42.0." },
+    "commit": { "type": "string" },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "runStartedAt": { "type": "string", "format": "date-time" },
+    "runFinishedAt": { "type": "string", "format": "date-time" },
+    "issueRepo": { "type": "string", "pattern": "^[^/]+/[^/]+$" },
+    "reasons": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "label", "summary", "whose"],
+        "additionalProperties": false,
+        "properties": {
+          "code": { "type": "string" },
+          "label": { "type": "string" },
+          "summary": { "type": "string" },
+          "whose": { "enum": ["overcast", "suite", "sdk", "environment", "none"] }
+        }
+      }
+    },
+    "suites": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "label", "kind", "language", "totals"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string" },
+          "kind": { "enum": ["sdk", "cli", "iac"] },
+          "language": { "type": "string" },
+          "totals": { "$ref": "#/definitions/totals" }
+        }
+      }
+    },
+    "totals": { "$ref": "#/definitions/totals" },
+    "services": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "totals", "groups"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "totals": { "$ref": "#/definitions/totals" },
+          "groups": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "tests"],
+              "additionalProperties": false,
+              "properties": {
+                "id": { "type": "string" },
+                "generated": { "type": "boolean" },
+                "state": { "enum": ["candidate", "gated"] },
+                "scenario": { "type": "string" },
+                "tests": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["name", "op", "results"],
+                    "additionalProperties": false,
+                    "properties": {
+                      "name": { "type": "string" },
+                      "op": { "type": "string" },
+                      "depends": { "type": "array", "items": { "type": "string" } },
+                      "requires": { "type": "array", "items": { "type": "string" } },
+                      "results": { "type": "object", "additionalProperties": { "$ref": "#/definitions/result" } }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "untested": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["op", "group", "reason", "code", "detail"],
+              "additionalProperties": false,
+              "properties": {
+                "op": { "type": "string" },
+                "group": { "type": "string" },
+                "reason": { "type": "string", "description": "The gaps.json reason, verbatim." },
+                "code": { "type": "string", "description": "The reason's stable code: the part before ':'." },
+                "detail": { "type": "string" },
+                "issue": { "$ref": "#/definitions/issue" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
