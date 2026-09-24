@@ -15,7 +15,7 @@ namespace OvercastCompat.Groups;
 /// </remarks>
 internal sealed class ScenariosAuthoredLogsEvents : IServiceGroup
 {
-    private static readonly ScenarioGroup GroupLogsEventsShadow = new("logs-events-shadow", "compat/model/authored/logs-events.json");
+    private static readonly ScenarioGroup GroupLogsEvents = new("logs-events", "compat/model/authored/logs-events.json");
 
     private readonly Lazy<AmazonCloudWatchLogsClient> _client;
 
@@ -56,27 +56,27 @@ internal sealed class ScenariosAuthoredLogsEvents : IServiceGroup
 
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["logs-events-shadow:PutLogEvents"] = TestLogsEventsShadowPutLogEvents,
-        ["logs-events-shadow:GetLogEvents"] = TestLogsEventsShadowGetLogEvents,
-        ["logs-events-shadow:FilterLogEvents"] = TestLogsEventsShadowFilterLogEvents,
-        ["logs-events-shadow:DescribeLogStreams"] = TestLogsEventsShadowDescribeLogStreams,
-        ["logs-events-shadow:DeleteLogStream"] = TestLogsEventsShadowDeleteLogStream,
+        ["logs-events:PutLogEvents"] = TestLogsEventsPutLogEvents,
+        ["logs-events:GetLogEvents"] = TestLogsEventsGetLogEvents,
+        ["logs-events:FilterLogEvents"] = TestLogsEventsFilterLogEvents,
+        ["logs-events:DescribeLogStreams"] = TestLogsEventsDescribeLogStreams,
+        ["logs-events:DeleteLogStream"] = TestLogsEventsDeleteLogStream,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["logs-events-shadow"] = SetupLogsEventsShadow,
+        ["logs-events"] = SetupLogsEvents,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["logs-events-shadow"] = TeardownLogsEventsShadow,
+        ["logs-events"] = TeardownLogsEvents,
     };
 
     private AmazonCloudWatchLogsClient Cl() => _client.Value;
 
-    private Task SetupLogsEventsShadow(TestContext t) =>
-        GroupLogsEventsShadow.RunSetupAsync(t,
+    private Task SetupLogsEvents(TestContext t) =>
+        GroupLogsEvents.RunSetupAsync(t,
             new ScenarioCall
             {
                 Op = "CreateLogGroup",
@@ -106,8 +106,8 @@ internal sealed class ScenariosAuthoredLogsEvents : IServiceGroup
             }
         );
 
-    private Task TeardownLogsEventsShadow(TestContext t) =>
-        GroupLogsEventsShadow.RunTeardownAsync(t,
+    private Task TeardownLogsEvents(TestContext t) =>
+        GroupLogsEvents.RunTeardownAsync(t,
             new ScenarioCall
             {
                 Op = "DeleteLogGroup",
@@ -123,7 +123,7 @@ internal sealed class ScenariosAuthoredLogsEvents : IServiceGroup
             }
         );
 
-    private Task TestLogsEventsShadowPutLogEvents(TestContext t) => GroupLogsEventsShadow.RunTestAsync(t, "PutLogEvents", new ScenarioTest
+    private Task TestLogsEventsPutLogEvents(TestContext t) => GroupLogsEvents.RunTestAsync(t, "PutLogEvents", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -227,7 +227,7 @@ internal sealed class ScenariosAuthoredLogsEvents : IServiceGroup
         ],
     });
 
-    private Task TestLogsEventsShadowGetLogEvents(TestContext t) => GroupLogsEventsShadow.RunTestAsync(t, "GetLogEvents", new ScenarioTest
+    private Task TestLogsEventsGetLogEvents(TestContext t) => GroupLogsEvents.RunTestAsync(t, "GetLogEvents", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -271,7 +271,7 @@ internal sealed class ScenariosAuthoredLogsEvents : IServiceGroup
         ],
     });
 
-    private Task TestLogsEventsShadowFilterLogEvents(TestContext t) => GroupLogsEventsShadow.RunTestAsync(t, "FilterLogEvents", new ScenarioTest
+    private Task TestLogsEventsFilterLogEvents(TestContext t) => GroupLogsEvents.RunTestAsync(t, "FilterLogEvents", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -351,7 +351,7 @@ internal sealed class ScenariosAuthoredLogsEvents : IServiceGroup
         ],
     });
 
-    private Task TestLogsEventsShadowDescribeLogStreams(TestContext t) => GroupLogsEventsShadow.RunTestAsync(t, "DescribeLogStreams", new ScenarioTest
+    private Task TestLogsEventsDescribeLogStreams(TestContext t) => GroupLogsEvents.RunTestAsync(t, "DescribeLogStreams", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -376,7 +376,7 @@ internal sealed class ScenariosAuthoredLogsEvents : IServiceGroup
         ],
     });
 
-    private Task TestLogsEventsShadowDeleteLogStream(TestContext t) => GroupLogsEventsShadow.RunTestAsync(t, "DeleteLogStream", new ScenarioTest
+    private Task TestLogsEventsDeleteLogStream(TestContext t) => GroupLogsEvents.RunTestAsync(t, "DeleteLogStream", new ScenarioTest
     {
         Call = new ScenarioCall
         {
