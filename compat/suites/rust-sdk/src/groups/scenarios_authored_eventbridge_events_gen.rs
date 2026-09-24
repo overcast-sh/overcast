@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/eventbridge-events.json";
 
-const GROUP_EVENTBRIDGE_EVENTS_SHADOW: Group = Group {
-    name: "eventbridge-events-shadow",
+const GROUP_EVENTBRIDGE_EVENTS: Group = Group {
+    name: "eventbridge-events",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredEventbridgeEvents {
         {
             let client = self.client.clone();
             impls.insert(
-                "eventbridge-events-shadow:PutEvents".to_string(),
+                "eventbridge-events:PutEvents".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_EVENTBRIDGE_EVENTS_SHADOW
-                            .run_test(&ctx, "PutEvents", test_eventbridge_events_shadow_put_events(&client))
+                        GROUP_EVENTBRIDGE_EVENTS
+                            .run_test(&ctx, "PutEvents", test_eventbridge_events_put_events(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredEventbridgeEvents {
         {
             let client = self.client.clone();
             impls.insert(
-                "eventbridge-events-shadow:PutEventsBatch".to_string(),
+                "eventbridge-events:PutEventsBatch".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_EVENTBRIDGE_EVENTS_SHADOW
-                            .run_test(&ctx, "PutEventsBatch", test_eventbridge_events_shadow_put_events_batch(&client))
+                        GROUP_EVENTBRIDGE_EVENTS
+                            .run_test(&ctx, "PutEventsBatch", test_eventbridge_events_put_events_batch(&client))
                             .await
                     })
                 }),
@@ -84,11 +84,11 @@ impl ServiceGroup for ScenariosAuthoredEventbridgeEvents {
         {
             let client = self.client.clone();
             setups.insert(
-                "eventbridge-events-shadow".to_string(),
+                "eventbridge-events".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_EVENTBRIDGE_EVENTS_SHADOW.run_setup(&ctx, setup_eventbridge_events_shadow(&client)).await
+                        GROUP_EVENTBRIDGE_EVENTS.run_setup(&ctx, setup_eventbridge_events(&client)).await
                     })
                 }),
             );
@@ -101,11 +101,11 @@ impl ServiceGroup for ScenariosAuthoredEventbridgeEvents {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "eventbridge-events-shadow".to_string(),
+                "eventbridge-events".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_EVENTBRIDGE_EVENTS_SHADOW.run_teardown(&ctx, teardown_eventbridge_events_shadow(&client)).await
+                        GROUP_EVENTBRIDGE_EVENTS.run_teardown(&ctx, teardown_eventbridge_events(&client)).await
                     })
                 }),
             );
@@ -114,7 +114,7 @@ impl ServiceGroup for ScenariosAuthoredEventbridgeEvents {
     }
 }
 
-fn setup_eventbridge_events_shadow(client: &aws_sdk_eventbridge::Client) -> Vec<Call> {
+fn setup_eventbridge_events(client: &aws_sdk_eventbridge::Client) -> Vec<Call> {
     vec![
         Call {
             op: "CreateEventBus",
@@ -139,7 +139,7 @@ fn setup_eventbridge_events_shadow(client: &aws_sdk_eventbridge::Client) -> Vec<
     ]
 }
 
-fn teardown_eventbridge_events_shadow(client: &aws_sdk_eventbridge::Client) -> Vec<Call> {
+fn teardown_eventbridge_events(client: &aws_sdk_eventbridge::Client) -> Vec<Call> {
     vec![
         Call {
             op: "DeleteEventBus",
@@ -164,7 +164,7 @@ fn teardown_eventbridge_events_shadow(client: &aws_sdk_eventbridge::Client) -> V
     ]
 }
 
-fn test_eventbridge_events_shadow_put_events(client: &aws_sdk_eventbridge::Client) -> Test {
+fn test_eventbridge_events_put_events(client: &aws_sdk_eventbridge::Client) -> Test {
     Test {
         call: Call {
             op: "PutEvents",
@@ -212,7 +212,7 @@ fn test_eventbridge_events_shadow_put_events(client: &aws_sdk_eventbridge::Clien
     }
 }
 
-fn test_eventbridge_events_shadow_put_events_batch(client: &aws_sdk_eventbridge::Client) -> Test {
+fn test_eventbridge_events_put_events_batch(client: &aws_sdk_eventbridge::Client) -> Test {
     Test {
         call: Call {
             op: "PutEvents",

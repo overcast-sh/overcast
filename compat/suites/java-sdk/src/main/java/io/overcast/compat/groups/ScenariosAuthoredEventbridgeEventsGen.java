@@ -27,8 +27,8 @@ import software.amazon.awssdk.services.eventbridge.model.PutEventsRequestEntry;
  */
 public final class ScenariosAuthoredEventbridgeEventsGen implements ServiceGroup {
 
-    private static final Group GROUP_EVENTBRIDGE_EVENTS_SHADOW =
-            new Group("eventbridge-events-shadow", "compat/model/authored/eventbridge-events.json");
+    private static final Group GROUP_EVENTBRIDGE_EVENTS =
+            new Group("eventbridge-events", "compat/model/authored/eventbridge-events.json");
 
     private final AwsClients clients;
     private volatile EventBridgeClient client;
@@ -45,20 +45,20 @@ public final class ScenariosAuthoredEventbridgeEventsGen implements ServiceGroup
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("eventbridge-events-shadow:PutEvents", this::testEventbridgeEventsShadowPutEvents),
-                Map.entry("eventbridge-events-shadow:PutEventsBatch", this::testEventbridgeEventsShadowPutEventsBatch));
+                Map.entry("eventbridge-events:PutEvents", this::testEventbridgeEventsPutEvents),
+                Map.entry("eventbridge-events:PutEventsBatch", this::testEventbridgeEventsPutEventsBatch));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("eventbridge-events-shadow", this::setupEventbridgeEventsShadow));
+                Map.entry("eventbridge-events", this::setupEventbridgeEvents));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("eventbridge-events-shadow", this::teardownEventbridgeEventsShadow));
+                Map.entry("eventbridge-events", this::teardownEventbridgeEvents));
     }
 
     /**
@@ -78,8 +78,8 @@ public final class ScenariosAuthoredEventbridgeEventsGen implements ServiceGroup
         return client;
     }
 
-    private void setupEventbridgeEventsShadow(TestContext t) {
-        GROUP_EVENTBRIDGE_EVENTS_SHADOW.runSetup(t,
+    private void setupEventbridgeEvents(TestContext t) {
+        GROUP_EVENTBRIDGE_EVENTS.runSetup(t,
                 new Call("CreateEventBus", "{\"Name\":{\"$name\":\"bus\"}}",
                         b -> CreateEventBusRequest.builder()
                                 .name(b.string("Name", Values.name("bus")))
@@ -87,8 +87,8 @@ public final class ScenariosAuthoredEventbridgeEventsGen implements ServiceGroup
                         r -> cl().createEventBus((CreateEventBusRequest) r)));
     }
 
-    private void teardownEventbridgeEventsShadow(TestContext t) {
-        GROUP_EVENTBRIDGE_EVENTS_SHADOW.runTeardown(t,
+    private void teardownEventbridgeEvents(TestContext t) {
+        GROUP_EVENTBRIDGE_EVENTS.runTeardown(t,
                 new Call("DeleteEventBus", "{\"Name\":{\"$name\":\"bus\"}}",
                         b -> DeleteEventBusRequest.builder()
                                 .name(b.string("Name", Values.name("bus")))
@@ -96,8 +96,8 @@ public final class ScenariosAuthoredEventbridgeEventsGen implements ServiceGroup
                         r -> cl().deleteEventBus((DeleteEventBusRequest) r)));
     }
 
-    private void testEventbridgeEventsShadowPutEvents(TestContext t) {
-        GROUP_EVENTBRIDGE_EVENTS_SHADOW.runTest(t, "PutEvents",
+    private void testEventbridgeEventsPutEvents(TestContext t) {
+        GROUP_EVENTBRIDGE_EVENTS.runTest(t, "PutEvents",
                 new Call("PutEvents", "{\"Entries\":[{\"Detail\":\"{\\\"key\\\":\\\"value\\\"}\",\"DetailType\":\"CompatTest\",\"EventBusName\":{\"$name\":\"bus\"},\"Source\":\"compat.eventbridge-events\"}]}",
                         b -> PutEventsRequest.builder()
                                 .entries(List.of(PutEventsRequestEntry.builder().detail("{\"key\":\"value\"}").detailType("CompatTest").eventBusName(b.string("Entries", Values.name("bus"))).source("compat.eventbridge-events").build()))
@@ -112,8 +112,8 @@ public final class ScenariosAuthoredEventbridgeEventsGen implements ServiceGroup
                 ));
     }
 
-    private void testEventbridgeEventsShadowPutEventsBatch(TestContext t) {
-        GROUP_EVENTBRIDGE_EVENTS_SHADOW.runTest(t, "PutEventsBatch",
+    private void testEventbridgeEventsPutEventsBatch(TestContext t) {
+        GROUP_EVENTBRIDGE_EVENTS.runTest(t, "PutEventsBatch",
                 new Call("PutEvents", "{\"Entries\":[{\"Detail\":\"{\\\"index\\\":0}\",\"DetailType\":\"CompatBatch\",\"EventBusName\":{\"$name\":\"bus\"},\"Source\":\"compat.eventbridge-events\"},{\"Detail\":\"{\\\"index\\\":1}\",\"DetailType\":\"CompatBatch\",\"EventBusName\":{\"$name\":\"bus\"},\"Source\":\"compat.eventbridge-events\"},{\"Detail\":\"{\\\"index\\\":2}\",\"DetailType\":\"CompatBatch\",\"EventBusName\":{\"$name\":\"bus\"},\"Source\":\"compat.eventbridge-events\"},{\"Detail\":\"{\\\"index\\\":3}\",\"DetailType\":\"CompatBatch\",\"EventBusName\":{\"$name\":\"bus\"},\"Source\":\"compat.eventbridge-events\"},{\"Detail\":\"{\\\"index\\\":4}\",\"DetailType\":\"CompatBatch\",\"EventBusName\":{\"$name\":\"bus\"},\"Source\":\"compat.eventbridge-events\"}]}",
                         b -> PutEventsRequest.builder()
                                 .entries(List.of(PutEventsRequestEntry.builder().detail("{\"index\":0}").detailType("CompatBatch").eventBusName(b.string("Entries", Values.name("bus"))).source("compat.eventbridge-events").build(), PutEventsRequestEntry.builder().detail("{\"index\":1}").detailType("CompatBatch").eventBusName(b.string("Entries", Values.name("bus"))).source("compat.eventbridge-events").build(), PutEventsRequestEntry.builder().detail("{\"index\":2}").detailType("CompatBatch").eventBusName(b.string("Entries", Values.name("bus"))).source("compat.eventbridge-events").build(), PutEventsRequestEntry.builder().detail("{\"index\":3}").detailType("CompatBatch").eventBusName(b.string("Entries", Values.name("bus"))).source("compat.eventbridge-events").build(), PutEventsRequestEntry.builder().detail("{\"index\":4}").detailType("CompatBatch").eventBusName(b.string("Entries", Values.name("bus"))).source("compat.eventbridge-events").build()))

@@ -407,18 +407,6 @@
     {
       "suite": "dotnet-sdk",
       "service": "eventbridge",
-      "group": "eventbridge-buses",
-      "tests": 6
-    },
-    {
-      "suite": "dotnet-sdk",
-      "service": "eventbridge",
-      "group": "eventbridge-events",
-      "tests": 2
-    },
-    {
-      "suite": "dotnet-sdk",
-      "service": "eventbridge",
       "group": "eventbridge-target-fanout",
       "tests": 3
     },
@@ -1764,18 +1752,6 @@
       "suite": "rust-sdk",
       "service": "elasticache",
       "group": "elasticache-subnet-groups",
-      "tests": 2
-    },
-    {
-      "suite": "rust-sdk",
-      "service": "eventbridge",
-      "group": "eventbridge-buses",
-      "tests": 6
-    },
-    {
-      "suite": "rust-sdk",
-      "service": "eventbridge",
-      "group": "eventbridge-events",
       "tests": 2
     },
     {

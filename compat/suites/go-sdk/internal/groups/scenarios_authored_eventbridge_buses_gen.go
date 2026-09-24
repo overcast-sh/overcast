@@ -24,18 +24,18 @@ func ScenariosAuthoredEventbridgeBuses(c *clients.Clients) ServiceGroup {
 	return ServiceGroup{
 		Name: "scenarios/authored-eventbridge-buses",
 		Impls: map[string]harness.TestFn{
-			"eventbridge-buses-shadow:CreateEventBus":                 g.testEventbridgeBusesShadowCreateEventBus,
-			"eventbridge-buses-shadow:DescribeEventBus":               g.testEventbridgeBusesShadowDescribeEventBus,
-			"eventbridge-buses-shadow:ListEventBuses":                 g.testEventbridgeBusesShadowListEventBuses,
-			"eventbridge-buses-shadow:TagEventBus":                    g.testEventbridgeBusesShadowTagEventBus,
-			"eventbridge-buses-shadow:ListEventBridgeTagsForResource": g.testEventbridgeBusesShadowListEventBridgeTagsForResource,
-			"eventbridge-buses-shadow:DeleteEventBus":                 g.testEventbridgeBusesShadowDeleteEventBus,
+			"eventbridge-buses:CreateEventBus":                 g.testEventbridgeBusesCreateEventBus,
+			"eventbridge-buses:DescribeEventBus":               g.testEventbridgeBusesDescribeEventBus,
+			"eventbridge-buses:ListEventBuses":                 g.testEventbridgeBusesListEventBuses,
+			"eventbridge-buses:TagEventBus":                    g.testEventbridgeBusesTagEventBus,
+			"eventbridge-buses:ListEventBridgeTagsForResource": g.testEventbridgeBusesListEventBridgeTagsForResource,
+			"eventbridge-buses:DeleteEventBus":                 g.testEventbridgeBusesDeleteEventBus,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"eventbridge-buses-shadow": g.setupEventbridgeBusesShadow,
+			"eventbridge-buses": g.setupEventbridgeBuses,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"eventbridge-buses-shadow": g.teardownEventbridgeBusesShadow,
+			"eventbridge-buses": g.teardownEventbridgeBuses,
 		},
 	}
 }
@@ -55,15 +55,15 @@ func (g *authoredEventbridgeBusesScenarios) cl() *eventbridge.Client {
 	return g.client
 }
 
-var groupEventbridgeBusesShadow = scenario.Group{Name: "eventbridge-buses-shadow", File: "compat/model/authored/eventbridge-buses.json"}
+var groupEventbridgeBuses = scenario.Group{Name: "eventbridge-buses", File: "compat/model/authored/eventbridge-buses.json"}
 
-func (g *authoredEventbridgeBusesScenarios) setupEventbridgeBusesShadow(ctx context.Context, t *harness.TestContext) error {
+func (g *authoredEventbridgeBusesScenarios) setupEventbridgeBuses(ctx context.Context, t *harness.TestContext) error {
 	// No setup steps: an empty phase is a no-op, not a missing one.
-	return groupEventbridgeBusesShadow.RunSetup(ctx, t)
+	return groupEventbridgeBuses.RunSetup(ctx, t)
 }
 
-func (g *authoredEventbridgeBusesScenarios) teardownEventbridgeBusesShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupEventbridgeBusesShadow.RunTeardown(ctx, t,
+func (g *authoredEventbridgeBusesScenarios) teardownEventbridgeBuses(ctx context.Context, t *harness.TestContext) error {
+	return groupEventbridgeBuses.RunTeardown(ctx, t,
 		scenario.Call{
 			Op:     "DeleteEventBus",
 			Params: `{"Name":{"$name":"bus"}}`,
@@ -79,8 +79,8 @@ func (g *authoredEventbridgeBusesScenarios) teardownEventbridgeBusesShadow(ctx c
 	)
 }
 
-func (g *authoredEventbridgeBusesScenarios) testEventbridgeBusesShadowCreateEventBus(ctx context.Context, t *harness.TestContext) error {
-	return groupEventbridgeBusesShadow.RunTest(ctx, t, "CreateEventBus", scenario.Test{
+func (g *authoredEventbridgeBusesScenarios) testEventbridgeBusesCreateEventBus(ctx context.Context, t *harness.TestContext) error {
+	return groupEventbridgeBuses.RunTest(ctx, t, "CreateEventBus", scenario.Test{
 		Call: scenario.Call{
 			Op:     "CreateEventBus",
 			Params: `{"Name":{"$name":"bus"}}`,
@@ -104,8 +104,8 @@ func (g *authoredEventbridgeBusesScenarios) testEventbridgeBusesShadowCreateEven
 	})
 }
 
-func (g *authoredEventbridgeBusesScenarios) testEventbridgeBusesShadowDescribeEventBus(ctx context.Context, t *harness.TestContext) error {
-	return groupEventbridgeBusesShadow.RunTest(ctx, t, "DescribeEventBus", scenario.Test{
+func (g *authoredEventbridgeBusesScenarios) testEventbridgeBusesDescribeEventBus(ctx context.Context, t *harness.TestContext) error {
+	return groupEventbridgeBuses.RunTest(ctx, t, "DescribeEventBus", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DescribeEventBus",
 			Params: `{"Name":{"$name":"bus"}}`,
@@ -127,8 +127,8 @@ func (g *authoredEventbridgeBusesScenarios) testEventbridgeBusesShadowDescribeEv
 	})
 }
 
-func (g *authoredEventbridgeBusesScenarios) testEventbridgeBusesShadowListEventBuses(ctx context.Context, t *harness.TestContext) error {
-	return groupEventbridgeBusesShadow.RunTest(ctx, t, "ListEventBuses", scenario.Test{
+func (g *authoredEventbridgeBusesScenarios) testEventbridgeBusesListEventBuses(ctx context.Context, t *harness.TestContext) error {
+	return groupEventbridgeBuses.RunTest(ctx, t, "ListEventBuses", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListEventBuses",
 			Params: `{"NamePrefix":{"$name":"bus"}}`,
@@ -151,8 +151,8 @@ func (g *authoredEventbridgeBusesScenarios) testEventbridgeBusesShadowListEventB
 	})
 }
 
-func (g *authoredEventbridgeBusesScenarios) testEventbridgeBusesShadowTagEventBus(ctx context.Context, t *harness.TestContext) error {
-	return groupEventbridgeBusesShadow.RunTest(ctx, t, "TagEventBus", scenario.Test{
+func (g *authoredEventbridgeBusesScenarios) testEventbridgeBusesTagEventBus(ctx context.Context, t *harness.TestContext) error {
+	return groupEventbridgeBuses.RunTest(ctx, t, "TagEventBus", scenario.Test{
 		Call: scenario.Call{
 			Op:     "TagResource",
 			Params: `{"ResourceARN":{"$ref":"bus.arn"},"Tags":[{"Key":"env","Value":"compat"}]}`,
@@ -188,8 +188,8 @@ func (g *authoredEventbridgeBusesScenarios) testEventbridgeBusesShadowTagEventBu
 	})
 }
 
-func (g *authoredEventbridgeBusesScenarios) testEventbridgeBusesShadowListEventBridgeTagsForResource(ctx context.Context, t *harness.TestContext) error {
-	return groupEventbridgeBusesShadow.RunTest(ctx, t, "ListEventBridgeTagsForResource", scenario.Test{
+func (g *authoredEventbridgeBusesScenarios) testEventbridgeBusesListEventBridgeTagsForResource(ctx context.Context, t *harness.TestContext) error {
+	return groupEventbridgeBuses.RunTest(ctx, t, "ListEventBridgeTagsForResource", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListTagsForResource",
 			Params: `{"ResourceARN":{"$ref":"bus.arn"}}`,
@@ -213,8 +213,8 @@ func (g *authoredEventbridgeBusesScenarios) testEventbridgeBusesShadowListEventB
 	})
 }
 
-func (g *authoredEventbridgeBusesScenarios) testEventbridgeBusesShadowDeleteEventBus(ctx context.Context, t *harness.TestContext) error {
-	return groupEventbridgeBusesShadow.RunTest(ctx, t, "DeleteEventBus", scenario.Test{
+func (g *authoredEventbridgeBusesScenarios) testEventbridgeBusesDeleteEventBus(ctx context.Context, t *harness.TestContext) error {
+	return groupEventbridgeBuses.RunTest(ctx, t, "DeleteEventBus", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteEventBus",
 			Params: `{"Name":{"$name":"bus"}}`,

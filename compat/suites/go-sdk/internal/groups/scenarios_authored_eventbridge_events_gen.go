@@ -24,14 +24,14 @@ func ScenariosAuthoredEventbridgeEvents(c *clients.Clients) ServiceGroup {
 	return ServiceGroup{
 		Name: "scenarios/authored-eventbridge-events",
 		Impls: map[string]harness.TestFn{
-			"eventbridge-events-shadow:PutEvents":      g.testEventbridgeEventsShadowPutEvents,
-			"eventbridge-events-shadow:PutEventsBatch": g.testEventbridgeEventsShadowPutEventsBatch,
+			"eventbridge-events:PutEvents":      g.testEventbridgeEventsPutEvents,
+			"eventbridge-events:PutEventsBatch": g.testEventbridgeEventsPutEventsBatch,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"eventbridge-events-shadow": g.setupEventbridgeEventsShadow,
+			"eventbridge-events": g.setupEventbridgeEvents,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"eventbridge-events-shadow": g.teardownEventbridgeEventsShadow,
+			"eventbridge-events": g.teardownEventbridgeEvents,
 		},
 	}
 }
@@ -51,10 +51,10 @@ func (g *authoredEventbridgeEventsScenarios) cl() *eventbridge.Client {
 	return g.client
 }
 
-var groupEventbridgeEventsShadow = scenario.Group{Name: "eventbridge-events-shadow", File: "compat/model/authored/eventbridge-events.json"}
+var groupEventbridgeEvents = scenario.Group{Name: "eventbridge-events", File: "compat/model/authored/eventbridge-events.json"}
 
-func (g *authoredEventbridgeEventsScenarios) setupEventbridgeEventsShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupEventbridgeEventsShadow.RunSetup(ctx, t,
+func (g *authoredEventbridgeEventsScenarios) setupEventbridgeEvents(ctx context.Context, t *harness.TestContext) error {
+	return groupEventbridgeEvents.RunSetup(ctx, t,
 		scenario.Call{
 			Op:     "CreateEventBus",
 			Params: `{"Name":{"$name":"bus"}}`,
@@ -70,8 +70,8 @@ func (g *authoredEventbridgeEventsScenarios) setupEventbridgeEventsShadow(ctx co
 	)
 }
 
-func (g *authoredEventbridgeEventsScenarios) teardownEventbridgeEventsShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupEventbridgeEventsShadow.RunTeardown(ctx, t,
+func (g *authoredEventbridgeEventsScenarios) teardownEventbridgeEvents(ctx context.Context, t *harness.TestContext) error {
+	return groupEventbridgeEvents.RunTeardown(ctx, t,
 		scenario.Call{
 			Op:     "DeleteEventBus",
 			Params: `{"Name":{"$name":"bus"}}`,
@@ -87,8 +87,8 @@ func (g *authoredEventbridgeEventsScenarios) teardownEventbridgeEventsShadow(ctx
 	)
 }
 
-func (g *authoredEventbridgeEventsScenarios) testEventbridgeEventsShadowPutEvents(ctx context.Context, t *harness.TestContext) error {
-	return groupEventbridgeEventsShadow.RunTest(ctx, t, "PutEvents", scenario.Test{
+func (g *authoredEventbridgeEventsScenarios) testEventbridgeEventsPutEvents(ctx context.Context, t *harness.TestContext) error {
+	return groupEventbridgeEvents.RunTest(ctx, t, "PutEvents", scenario.Test{
 		Call: scenario.Call{
 			Op:     "PutEvents",
 			Params: `{"Entries":[{"Detail":"{\"key\":\"value\"}","DetailType":"CompatTest","EventBusName":{"$name":"bus"},"Source":"compat.eventbridge-events"}]}`,
@@ -118,8 +118,8 @@ func (g *authoredEventbridgeEventsScenarios) testEventbridgeEventsShadowPutEvent
 	})
 }
 
-func (g *authoredEventbridgeEventsScenarios) testEventbridgeEventsShadowPutEventsBatch(ctx context.Context, t *harness.TestContext) error {
-	return groupEventbridgeEventsShadow.RunTest(ctx, t, "PutEventsBatch", scenario.Test{
+func (g *authoredEventbridgeEventsScenarios) testEventbridgeEventsPutEventsBatch(ctx context.Context, t *harness.TestContext) error {
+	return groupEventbridgeEvents.RunTest(ctx, t, "PutEventsBatch", scenario.Test{
 		Call: scenario.Call{
 			Op:     "PutEvents",
 			Params: `{"Entries":[{"Detail":"{\"index\":0}","DetailType":"CompatBatch","EventBusName":{"$name":"bus"},"Source":"compat.eventbridge-events"},{"Detail":"{\"index\":1}","DetailType":"CompatBatch","EventBusName":{"$name":"bus"},"Source":"compat.eventbridge-events"},{"Detail":"{\"index\":2}","DetailType":"CompatBatch","EventBusName":{"$name":"bus"},"Source":"compat.eventbridge-events"},{"Detail":"{\"index\":3}","DetailType":"CompatBatch","EventBusName":{"$name":"bus"},"Source":"compat.eventbridge-events"},{"Detail":"{\"index\":4}","DetailType":"CompatBatch","EventBusName":{"$name":"bus"},"Source":"compat.eventbridge-events"}]}`,

@@ -1894,6 +1894,7 @@
     {
       "service": "eventbridge",
       "name": "eventbridge-buses",
+      "scenario": "compat/model/authored/eventbridge-buses.json",
       "tests": [
         {
           "name": "CreateEventBus"
@@ -2033,6 +2034,7 @@
     {
       "service": "eventbridge",
       "name": "eventbridge-events",
+      "scenario": "compat/model/authored/eventbridge-events.json",
       "tests": [
         {
           "name": "PutEvents"

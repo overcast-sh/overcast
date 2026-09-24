@@ -16,8 +16,9 @@ import java.util.Map;
 /**
  * EventBridge compatibility test group.
  *
- * <p>Groups: eventbridge-buses, eventbridge-events,
- * eventbridge-target-fanout, eventbridge-patterns.
+ * <p>Groups: eventbridge-target-fanout, eventbridge-patterns. eventbridge-rules,
+ * eventbridge-buses and eventbridge-events resolve through their authored
+ * scenarios (compat/model/authored/).
  */
 public final class EventBridgeGroup implements ServiceGroup {
 
@@ -32,14 +33,6 @@ public final class EventBridgeGroup implements ServiceGroup {
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("eventbridge-buses:CreateEventBus",                        this::createEventBus),
-                Map.entry("eventbridge-buses:DescribeEventBus",                      this::describeEventBus),
-                Map.entry("eventbridge-buses:ListEventBuses",                        this::listEventBuses),
-                Map.entry("eventbridge-buses:TagEventBus",                           this::tagEventBus),
-                Map.entry("eventbridge-buses:ListEventBridgeTagsForResource",        this::listTagsForEventBus),
-                Map.entry("eventbridge-buses:DeleteEventBus",                        this::deleteEventBus),
-                Map.entry("eventbridge-events:PutEvents",                            this::putEvents),
-                Map.entry("eventbridge-events:PutEventsBatch",                       this::putEventsCustomBus),
                 Map.entry("eventbridge-target-fanout:PutFanoutTargets",              this::putFanoutTargets),
                 Map.entry("eventbridge-target-fanout:PutEventsToQueueTarget",        this::putEventsToQueueTarget),
                 Map.entry("eventbridge-target-fanout:PutEventsWithInputTransformer", this::putEventsWithInputTransformer),
@@ -51,8 +44,6 @@ public final class EventBridgeGroup implements ServiceGroup {
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("eventbridge-buses",  this::setupBuses),
-                Map.entry("eventbridge-events", this::setupEventsGroup),
                 Map.entry("eventbridge-target-fanout", this::setupFanout)
         );
     }
@@ -60,87 +51,9 @@ public final class EventBridgeGroup implements ServiceGroup {
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("eventbridge-buses",  ctx -> deleteBusSilently(ctx.getString("eventBusName"))),
-                Map.entry("eventbridge-events", ctx -> deleteBusSilently(ctx.getString("eventsBusName"))),
                 Map.entry("eventbridge-target-fanout", this::teardownFanout)
         );
     }
-
-    // ── eventbridge-buses ─────────────────────────────────────────────────────
-
-    private void setupBuses(TestContext ctx) {
-        ctx.set("eventBusName", "compat-bus-" + ctx.runId());
-    }
-
-    private void createEventBus(TestContext ctx) throws Exception {
-        String name = ctx.getString("eventBusName");
-        var resp = eb().createEventBus(r -> r.name(name));
-        Assertions.assertNotBlank(resp.eventBusArn(), "CreateEventBus: eventBusArn is blank");
-    }
-
-    private void describeEventBus(TestContext ctx) throws Exception {
-        String name = ctx.getString("eventBusName");
-        var resp = eb().describeEventBus(r -> r.name(name));
-        Assertions.assertEquals(name, resp.name(), "DescribeEventBus: name mismatch");
-    }
-
-    private void listEventBuses(TestContext ctx) throws Exception {
-        String name = ctx.getString("eventBusName");
-        var resp = eb().listEventBuses(r -> r.limit(100));
-        boolean found = resp.eventBuses().stream().anyMatch(b -> b.name().equals(name));
-        Assertions.assertTrue(found, "ListEventBuses: created bus not found");
-    }
-
-    private void tagEventBus(TestContext ctx) throws Exception {
-        var resp = eb().describeEventBus(r -> r.name(ctx.getString("eventBusName")));
-        eb().tagResource(r -> r.resourceARN(resp.arn()).tags(
-                Tag.builder().key("env").value("compat").build()));
-    }
-
-    private void listTagsForEventBus(TestContext ctx) throws Exception {
-        var resp = eb().describeEventBus(r -> r.name(ctx.getString("eventBusName")));
-        var tags = eb().listTagsForResource(r -> r.resourceARN(resp.arn()));
-        boolean found = tags.tags().stream().anyMatch(t -> "env".equals(t.key()));
-        Assertions.assertTrue(found, "ListTagsForEventBus: expected 'env' tag");
-    }
-
-    private void deleteEventBus(TestContext ctx) throws Exception {
-        String name = ctx.getString("eventBusName");
-        eb().deleteEventBus(r -> r.name(name));
-        ctx.set("eventBusName", null);
-    }
-
-    // ── eventbridge-events ────────────────────────────────────────────────────
-
-    private void setupEventsGroup(TestContext ctx) throws Exception {
-        String bus = "compat-ev-" + ctx.runId();
-        eb().createEventBus(r -> r.name(bus));
-        ctx.set("eventsBusName", bus);
-    }
-
-    private void putEvents(TestContext ctx) throws Exception {
-        var entry = PutEventsRequestEntry.builder()
-                .eventBusName("default")
-                .source("compat.test")
-                .detailType("CompatTest")
-                .detail("{\"key\":\"value\"}")
-                .build();
-        var resp = eb().putEvents(r -> r.entries(entry));
-        Assertions.assertEquals(0, resp.failedEntryCount(), "PutEvents: some events failed");
-    }
-
-    private void putEventsCustomBus(TestContext ctx) throws Exception {
-        String bus = ctx.getString("eventsBusName");
-        var entry = PutEventsRequestEntry.builder()
-                .eventBusName(bus)
-                .source("compat.test")
-                .detailType("CompatCustomBus")
-                .detail("{\"bus\":\"custom\"}")
-                .build();
-        var resp = eb().putEvents(r -> r.entries(entry));
-        Assertions.assertEquals(0, resp.failedEntryCount(), "PutEventsCustomBus: some events failed");
-    }
-
 
     // -- eventbridge-target-fanout ---------------------------------------------
     //
@@ -306,10 +219,4 @@ public final class EventBridgeGroup implements ServiceGroup {
         return "{\"source\":[\"compat.eventbridge-patterns.other\"]}";
     }
 
-    // -- Helpers ---------------------------------------------------------------
-
-    private void deleteBusSilently(String name) {
-        if (name == null) return;
-        try { eb().deleteEventBus(r -> r.name(name)); } catch (Exception ignored) {}
-    }
 }
