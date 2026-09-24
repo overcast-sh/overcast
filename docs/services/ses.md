@@ -66,6 +66,7 @@ LocalStack's shape — see
 | Identities    | v1 verify/list/delete and the v2 `CreateEmailIdentity` family, with inline `Tags`         |
 | Tags (v2)     | `TagResource`, `UntagResource`, `ListTagsForResource` by identity ARN                    |
 | Console       | The [SES page](http://localhost:4567/ses) adds and removes identities                    |
+| CloudFormation | `AWS::SES::Template` provisions, updates via `UpdateTemplate` and deletes; `AWS::SES::EmailIdentity` provisions, deletes and syncs tags — `DkimAttributes`, `DkimSigningAttributes`, `ConfigurationSetAttributes` and `FeedbackAttributes`/`MailFromAttributes` are accepted and dropped, matching the DKIM/MAIL FROM row below |
 
 ## Differences from AWS
 

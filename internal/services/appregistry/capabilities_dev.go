@@ -56,8 +56,12 @@ func init() {
 
 		// CloudFormation resource types
 		capabilities.Capability{Service: "appregistry", Operation: "AWS::ServiceCatalogAppRegistry::Application", Category: "CloudFormation resources",
-			Status: capabilities.StatusSupported, Notes: "`GetAtt` attributes: `Id`, `Arn`, `Name`, `ApplicationName`, `ApplicationTagKey`, `ApplicationTagValue`.", DocOnly: true},
+			Status: capabilities.StatusSupported, Notes: "`GetAtt` attributes: `Id`, `Arn`, `Name`, `ApplicationName`, `ApplicationTagKey`, `ApplicationTagValue`. Tags merge with stack tags on create and reconcile via TagResource/UntagResource on update.", DocOnly: true},
 		capabilities.Capability{Service: "appregistry", Operation: "AWS::ServiceCatalogAppRegistry::ResourceAssociation", Category: "CloudFormation resources",
 			Status: capabilities.StatusSupported, Notes: "Physical ID is `<appId>/<resourceType>/<resource>`.", DocOnly: true},
+		capabilities.Capability{Service: "appregistry", Operation: "AWS::ServiceCatalogAppRegistry::AttributeGroup", Category: "CloudFormation resources",
+			Status: capabilities.StatusSupported, Notes: "`GetAtt` attributes: `Id`, `Arn`. Tags merge with stack tags on create and reconcile via TagResource/UntagResource on update.", DocOnly: true},
+		capabilities.Capability{Service: "appregistry", Operation: "AWS::ServiceCatalogAppRegistry::AttributeGroupAssociation", Category: "CloudFormation resources",
+			Status: capabilities.StatusSupported, Notes: "Physical ID is `<appId>/<attributeGroupId>`. Both properties are replacement-only, so Update always replaces.", DocOnly: true},
 	)
 }

@@ -1,6 +1,6 @@
 {
   "generated_by": "go run -tags dev ./cmd/capgen --write-docs",
-  "total_ops": 1578,
+  "total_ops": 1580,
   "services": [
     {
       "service": "s3",
@@ -8506,8 +8506,8 @@
     {
       "service": "appregistry",
       "display_name": "AppRegistry",
-      "total_ops": 22,
-      "implemented_ops": 22,
+      "total_ops": 24,
+      "implemented_ops": 24,
       "operations": [
         {
           "operation": "CreateApplication",
@@ -8630,7 +8630,7 @@
           "operation": "AWS::ServiceCatalogAppRegistry::Application",
           "category": "CloudFormation resources",
           "status": "✅ Supported",
-          "notes": "`GetAtt` attributes: `Id`, `Arn`, `Name`, `ApplicationName`, `ApplicationTagKey`, `ApplicationTagValue`.",
+          "notes": "`GetAtt` attributes: `Id`, `Arn`, `Name`, `ApplicationName`, `ApplicationTagKey`, `ApplicationTagValue`. Tags merge with stack tags on create and reconcile via TagResource/UntagResource on update.",
           "doc_only": true
         },
         {
@@ -8638,6 +8638,20 @@
           "category": "CloudFormation resources",
           "status": "✅ Supported",
           "notes": "Physical ID is `\u003cappId\u003e/\u003cresourceType\u003e/\u003cresource\u003e`.",
+          "doc_only": true
+        },
+        {
+          "operation": "AWS::ServiceCatalogAppRegistry::AttributeGroup",
+          "category": "CloudFormation resources",
+          "status": "✅ Supported",
+          "notes": "`GetAtt` attributes: `Id`, `Arn`. Tags merge with stack tags on create and reconcile via TagResource/UntagResource on update.",
+          "doc_only": true
+        },
+        {
+          "operation": "AWS::ServiceCatalogAppRegistry::AttributeGroupAssociation",
+          "category": "CloudFormation resources",
+          "status": "✅ Supported",
+          "notes": "Physical ID is `\u003cappId\u003e/\u003cattributeGroupId\u003e`. Both properties are replacement-only, so Update always replaces.",
           "doc_only": true
         }
       ]

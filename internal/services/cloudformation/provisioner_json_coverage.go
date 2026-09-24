@@ -507,10 +507,14 @@ func (h *cloudtrailTrailHandler) Create(ctx context.Context, router http.Handler
 	if tags := mergeResourceTags(rCtx.StackTags, props["Tags"]); len(tags) > 0 {
 		body["TagsList"] = cloudtrailTagsWire(tags)
 	}
+	// IsLogging has no CreateTrail member (it is a separate StartLogging/
+	// StopLogging call, per GetTrailStatus/StartLogging/StopLogging in
+	// internal/services/cloudtrail) so it is not part of the CreateTrail body
+	// above; it is applied after the trail exists, below.
 	noteUnconsumedProperties(ctx, "AWS::CloudTrail::Trail", props,
 		"TrailName", "S3BucketName", "IncludeGlobalServiceEvents", "IsMultiRegionTrail", "Tags",
 		"S3KeyPrefix", "CloudWatchLogsLogGroupArn", "CloudWatchLogsRoleArn", "EnableLogFileValidation",
-		"KMSKeyId", "IsOrganizationTrail")
+		"KMSKeyId", "IsOrganizationTrail", "IsLogging")
 
 	rec, err := internalJSON(ctx, router, rCtx.Region, "com.amazonaws.cloudtrail.v20131101.CloudTrail_20131101.CreateTrail", body)
 	if err != nil {
@@ -527,6 +531,16 @@ func (h *cloudtrailTrailHandler) Create(ctx context.Context, router http.Handler
 	arn := resp.TrailARN
 	if arn == "" {
 		arn = fmt.Sprintf("arn:aws:cloudtrail:%s:%s:trail/%s", rCtx.Region, rCtx.AccountID, name)
+	}
+
+	// CreateTrail always starts with logging off (internal/services/cloudtrail/
+	// typed_logic.go), so a template that asks for IsLogging: true needs a
+	// follow-up StartLogging or GetTrailStatus disagrees with the template on
+	// the very first deploy.
+	if v, ok := props["IsLogging"].(bool); ok && v {
+		if _, err := internalJSON(ctx, router, rCtx.Region, "com.amazonaws.cloudtrail.v20131101.CloudTrail_20131101.StartLogging", map[string]any{"Name": name}); err != nil {
+			return "", nil, fmt.Errorf("StartLogging: %w", err)
+		}
 	}
 
 	attrs := map[string]string{
@@ -607,10 +621,24 @@ func (h *cloudtrailTrailHandler) Update(ctx context.Context, router http.Handler
 	noteUnconsumedProperties(ctx, "AWS::CloudTrail::Trail", props,
 		"TrailName", "S3BucketName", "IncludeGlobalServiceEvents", "IsMultiRegionTrail", "Tags",
 		"S3KeyPrefix", "CloudWatchLogsLogGroupArn", "CloudWatchLogsRoleArn", "EnableLogFileValidation",
-		"KMSKeyId", "IsOrganizationTrail")
+		"KMSKeyId", "IsOrganizationTrail", "IsLogging")
 
 	if _, err := internalJSON(ctx, router, rCtx.Region, "com.amazonaws.cloudtrail.v20131101.CloudTrail_20131101.UpdateTrail", body); err != nil {
 		return "", nil, fmt.Errorf("UpdateTrail: %w", err)
+	}
+
+	// IsLogging rides StartLogging/StopLogging rather than UpdateTrail (same
+	// reason as Create, above): call whichever direction the template now
+	// asks for, same as a CDK Trail construct's isLogging flag would drive on
+	// real AWS.
+	if v, ok := props["IsLogging"].(bool); ok {
+		target := "StartLogging"
+		if !v {
+			target = "StopLogging"
+		}
+		if _, err := internalJSON(ctx, router, rCtx.Region, "com.amazonaws.cloudtrail.v20131101.CloudTrail_20131101."+target, map[string]any{"Name": name}); err != nil {
+			return "", nil, fmt.Errorf("%s: %w", target, err)
+		}
 	}
 
 	tags := mergeResourceTags(rCtx.StackTags, props["Tags"])
@@ -809,6 +837,14 @@ func (h *backupBackupVaultHandler) Create(ctx context.Context, router http.Handl
 	if len(tags) > 0 {
 		body["BackupVaultTags"] = tags
 	}
+	// AccessPolicy, Notifications and LockConfiguration have no
+	// PutBackupVaultAccessPolicy/PutBackupVaultNotifications/
+	// PutBackupVaultLockConfiguration counterpart anywhere in
+	// internal/services/backup — the service does not model vault access
+	// policies, notifications or lock configuration at all, so there is
+	// nothing to forward them onto. Recorded rather than invented (#1760).
+	noteUnconsumedProperties(ctx, "AWS::Backup::BackupVault", props,
+		"BackupVaultName", "BackupVaultTags", "EncryptionKeyArn")
 	data, err := json.Marshal(body)
 	if err != nil {
 		return "", nil, fmt.Errorf("CreateBackupVault: %w", err)
@@ -879,6 +915,11 @@ func (h *backupBackupVaultHandler) Update(ctx context.Context, router http.Handl
 	if err := untagBackupResource(ctx, router, rCtx.Region, physicalID, removals); err != nil {
 		return "", nil, err
 	}
+	// See the matching comment in Create: AccessPolicy, Notifications and
+	// LockConfiguration are recorded rather than invented, since Backup has no
+	// operation for any of them to ride along on.
+	noteUnconsumedProperties(ctx, "AWS::Backup::BackupVault", props,
+		"BackupVaultName", "BackupVaultTags", "EncryptionKeyArn")
 	return physicalID, nil, nil
 }
 
@@ -947,18 +988,28 @@ func (h *backupBackupPlanHandler) Delete(ctx context.Context, router http.Handle
 	return teardownError("DeleteBackupPlan", rec, err)
 }
 
-// Update forces replacement for any BackupPlan structure or name change —
-// UpdateBackupPlan is not wired to this handler, a pre-existing gap this PR
-// does not extend. A tag-only change is handled without replacement, since
-// forcing one there would be a correctness regression this PR would
-// introduce: tags never force replacement on real AWS, and BackupPlanTags is
-// the one property #1195 makes mutable in place (via TagResource/
-// UntagResource — UpdateBackupPlan itself models no tags member either).
+// Update calls UpdateBackupPlan when the BackupPlan structure changed — the
+// schema (checked against the CloudFormation docs, 2026-09) marks BackupPlan
+// "Update requires: No interruption", and Backup's own UpdateBackupPlan
+// (POST /backup/plans/{BackupPlanId}, internal/services/backup/service.go)
+// exists for exactly this, so forcing replacement here was a correctness gap
+// (#1760), not the resource's real update behaviour. A tag-only change is
+// handled the same way it always was, since tags never force replacement on
+// real AWS and BackupPlanTags is the one property #1195 makes mutable via
+// TagResource/UntagResource — UpdateBackupPlan itself models no tags member.
 func (h *backupBackupPlanHandler) Update(ctx context.Context, router http.Handler, _ *config.Config, physicalID string, props map[string]any, oldProps map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
 	if changed, err := cfnPropertyChanged(props, oldProps, "BackupPlan"); err != nil {
 		return "", nil, err
 	} else if changed {
-		return "", nil, errReplacementRequired
+		backupPlan, _ := props["BackupPlan"].(map[string]any)
+		data, err := json.Marshal(map[string]any{"BackupPlan": backupPlan})
+		if err != nil {
+			return "", nil, fmt.Errorf("UpdateBackupPlan: %w", err)
+		}
+		if _, err := internalRequest(ctx, router, rCtx.Region, http.MethodPost,
+			backupPlansPath+"/"+url.PathEscape(backupIDFromARN(physicalID)), "application/json", data); err != nil {
+			return "", nil, fmt.Errorf("UpdateBackupPlan: %w", err)
+		}
 	}
 	newTags, err := backupResourceTagMap(props["BackupPlanTags"])
 	if err != nil {
@@ -2546,4 +2597,136 @@ func (h *sesConfigurationSetHandler) Delete(ctx context.Context, router http.Han
 	}
 	rec, err := internalQuery(ctx, router, rCtx.Region, params)
 	return teardownError("DeleteConfigurationSet", rec, err)
+}
+
+// ── AWS::SES::EmailIdentity ─────────────────────────────────────────────────
+//
+// #1764's decision: a real handler, not a stub. SESv2's CreateEmailIdentity/
+// GetEmailIdentity/DeleteEmailIdentity/TagResource/UntagResource (REST JSON,
+// internal/services/ses/handler.go) are all StatusSupported, and CDK's
+// `EmailIdentity` L2 construct (the CFN docs call this the type "CDK
+// templates reach for most") always sets EmailIdentity and usually Tags —
+// both of those reach the service.
+//
+// DkimAttributes, DkimSigningAttributes, ConfigurationSetAttributes and
+// FeedbackAttributes/MailFromAttributes are a different case: checked against
+// the CFN resource spec (aws-resource-ses-emailidentity.html, 2026-09) they
+// are all "Update requires: No interruption", so AWS applies them in place
+// through PutEmailIdentityDkimAttributes/PutEmailIdentityDkimSigningAttributes/
+// PutEmailIdentityConfigurationSetAttributes/PutEmailIdentityFeedbackAttributes/
+// PutEmailIdentityMailFromAttributes — but Overcast's SES v2 identity store
+// (VerifiedIdentity in internal/services/ses/store.go) has no fields for any
+// of them, CreateEmailIdentity's request shape does not accept them, and
+// GetEmailIdentity's response does not report them. Wiring these up is
+// service-level work (five new operations, a store schema change, and the
+// DkimDNSToken1-3 GetAtt attributes CreateEmailIdentity would need to
+// return), not a CFN-handler property-forwarding fix, so per the "do not
+// invent, record for follow-up" guidance they are reported through
+// noteUnconsumedProperties instead of being applied — a follow-up issue
+// tracks wiring the five Put* operations into the SES v2 identity store.
+type sesEmailIdentityHandler struct{}
+
+func (h *sesEmailIdentityHandler) Create(ctx context.Context, router http.Handler, cfg *config.Config, props map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
+	identity, _ := props["EmailIdentity"].(string)
+	if identity == "" {
+		return "", nil, fmt.Errorf("AWS::SES::EmailIdentity: EmailIdentity is required")
+	}
+
+	body := map[string]any{"EmailIdentity": identity}
+	if tags := mergeResourceTags(rCtx.StackTags, props["Tags"]); len(tags) > 0 {
+		body["Tags"] = sesTagsWire(tags)
+	}
+	noteUnconsumedProperties(ctx, "AWS::SES::EmailIdentity", props,
+		"EmailIdentity", "Tags")
+
+	data, err := json.Marshal(body)
+	if err != nil {
+		return "", nil, fmt.Errorf("CreateEmailIdentity: %w", err)
+	}
+	if _, err := internalRequest(ctx, router, rCtx.Region, http.MethodPost, "/v2/email/identities", "application/json", data); err != nil {
+		return "", nil, fmt.Errorf("CreateEmailIdentity: %w", err)
+	}
+
+	return identity, map[string]string{"Id": identity}, nil
+}
+
+func (h *sesEmailIdentityHandler) Delete(ctx context.Context, router http.Handler, cfg *config.Config, physicalID string, rCtx *resolveContext) error {
+	rec, err := internalRequest(ctx, router, rCtx.Region, http.MethodDelete,
+		"/v2/email/identities/"+url.PathEscape(physicalID), "", nil)
+	return teardownError("DeleteEmailIdentity", rec, err)
+}
+
+// Update forces replacement for an EmailIdentity change (the schema's one
+// "Update requires: Replacement" property, and SESv2 has no rename
+// operation) and otherwise reconciles a Tags change via TagResource/
+// UntagResource — the only one of the resource's other properties Overcast's
+// SES v2 identity store actually carries; see the type comment above for why
+// the rest stay in noteUnconsumedProperties instead of being applied here.
+func (h *sesEmailIdentityHandler) Update(ctx context.Context, router http.Handler, _ *config.Config, physicalID string, props map[string]any, oldProps map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
+	if n, ok := props["EmailIdentity"].(string); ok && n != "" && n != physicalID {
+		return "", nil, errReplacementRequired
+	}
+	noteUnconsumedProperties(ctx, "AWS::SES::EmailIdentity", props,
+		"EmailIdentity", "Tags")
+
+	tags := mergeResourceTags(rCtx.StackTags, props["Tags"])
+	prior := mergeResourceTags(rCtx.PreviousStackTags, oldProps["Tags"])
+	if !reflect.DeepEqual(tags, prior) {
+		arn := fmt.Sprintf("arn:aws:ses:%s:%s:identity/%s", rCtx.Region, rCtx.AccountID, physicalID)
+		if err := sesReconcileTags(ctx, router, rCtx.Region, arn, tags, prior); err != nil {
+			return "", nil, failUpdate(fmt.Errorf("ses email identity tags: %w", err))
+		}
+	}
+	return physicalID, map[string]string{"Id": physicalID}, nil
+}
+
+// sesTagsWire renders a merged tag map in SESv2's Tags wire shape
+// ([{Key,Value}]), the same shape CreateEmailIdentity/TagResource expect
+// (sesTag in internal/services/ses/handler.go).
+func sesTagsWire(tags map[string]string) []map[string]string {
+	out := make([]map[string]string, 0, len(tags))
+	for k, v := range tags {
+		out = append(out, map[string]string{"Key": k, "Value": v})
+	}
+	return out
+}
+
+func sesTagResource(ctx context.Context, router http.Handler, region, arn string, tags map[string]string) error {
+	if len(tags) == 0 {
+		return nil
+	}
+	data, err := json.Marshal(map[string]any{"ResourceArn": arn, "Tags": sesTagsWire(tags)})
+	if err != nil {
+		return err
+	}
+	if _, err := internalRequest(ctx, router, region, http.MethodPost, "/v2/email/tags", "application/json", data); err != nil {
+		return fmt.Errorf("ses TagResource: %w", err)
+	}
+	return nil
+}
+
+func sesUntagResource(ctx context.Context, router http.Handler, region, arn string, keys []string) error {
+	if len(keys) == 0 {
+		return nil
+	}
+	values := url.Values{"ResourceArn": {arn}}
+	for _, k := range keys {
+		values.Add("TagKeys", k)
+	}
+	path := "/v2/email/tags?" + values.Encode()
+	if _, err := internalRequest(ctx, router, region, http.MethodDelete, path, "", nil); err != nil {
+		return fmt.Errorf("ses UntagResource: %w", err)
+	}
+	return nil
+}
+
+// sesReconcileTags diffs desired against previous and applies only the
+// change, mirroring cloudtrailReconcileTags'/appconfigReconcileTags' add/
+// remove split.
+func sesReconcileTags(ctx context.Context, router http.Handler, region, arn string, tags, prior map[string]string) error {
+	upserts, removals := logsLogGroupTagChanges(tags, prior)
+	if err := sesTagResource(ctx, router, region, arn, upserts); err != nil {
+		return err
+	}
+	return sesUntagResource(ctx, router, region, arn, removals)
 }
