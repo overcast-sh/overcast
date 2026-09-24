@@ -762,43 +762,6 @@ func TestSign_andVerify_RSA2048(t *testing.T) {
 	}
 }
 
-func TestVerify_invalidSignature_returnsInvalid(t *testing.T) {
-	// Given: an RSA key and a message
-	srv := helpers.NewTestServer(t)
-	resp := kmsCall(t, srv, "CreateKey", map[string]any{
-		"KeySpec":  "RSA_2048",
-		"KeyUsage": "SIGN_VERIFY",
-	})
-	defer resp.Body.Close()
-	var createOut struct {
-		KeyMetadata struct {
-			KeyId string `json:"KeyId"`
-		} `json:"KeyMetadata"`
-	}
-	decodeJSON(t, resp, &createOut)
-	keyID := createOut.KeyMetadata.KeyId
-
-	// When: verifying a bogus signature
-	verifyResp := kmsCall(t, srv, "Verify", map[string]any{
-		"KeyId":            keyID,
-		"Message":          []byte("original message"),
-		"MessageType":      "RAW",
-		"Signature":        []byte("definitely not a valid signature bytes here"),
-		"SigningAlgorithm": "RSASSA_PKCS1_V1_5_SHA_256",
-	})
-	defer verifyResp.Body.Close()
-	helpers.AssertStatus(t, verifyResp, http.StatusOK)
-	var verifyOut struct {
-		SignatureValid bool `json:"SignatureValid"`
-	}
-	decodeJSON(t, verifyResp, &verifyOut)
-
-	// Then: SignatureValid=false
-	if verifyOut.SignatureValid {
-		t.Error("expected SignatureValid=false for invalid signature")
-	}
-}
-
 // ─── GetPublicKey ─────────────────────────────────────────────────────────────
 
 func TestGetPublicKey_RSA2048(t *testing.T) {

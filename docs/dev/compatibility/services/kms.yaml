@@ -246,6 +246,68 @@ operations:
         evidence: "AWS docs: \"The KeySpec and CustomerMasterKeySpec fields have the same value\"; Overcast omitted it. Now mirrors KeySpec, as GetPublicKey already did — same tests."
     findings:
       - Fixed — KeyMetadata omitted AWSAccountId and CustomerMasterKeySpec (#1906). Other optional KeyMetadata members (EncryptionAlgorithms, SigningAlgorithms, MacAlgorithms, CurrentKeyMaterialId) are still omitted; not in scope of #1906.
+  Sign:
+    status: fixed
+    priority: p1
+    aws_docs:
+      - https://docs.aws.amazon.com/kms/latest/APIReference/API_Sign.html
+      - https://docs.aws.amazon.com/kms/latest/developerguide/symm-asymm-choose-key-spec.html
+    implementation:
+      - internal/services/kms/signing.go (signTyped, validateSigningRequest, resolveSigningKey, signingDigest)
+    tests:
+      present:
+        - tests/integration/kms/sign_verify_test.go::TestSign_everyRSASigningAlgorithm
+        - tests/integration/kms/sign_verify_test.go::TestSign_messageTypeDigest
+        - tests/integration/kms/sign_verify_test.go::TestSign_digestLengthMustMatchAlgorithm
+        - tests/integration/kms/sign_verify_test.go::TestSignVerify_keyUsageNotSignVerify
+        - tests/integration/kms/sign_verify_test.go::TestSign_algorithmIncompatibleWithKeySpec
+        - tests/integration/kms/sign_verify_test.go::TestSign_signingAlgorithmMissingOrUnknown
+        - tests/integration/kms/sign_verify_test.go::TestSign_disabledKey
+        - tests/integration/kms/sign_verify_test.go::TestSign_unemulatedSigningKeySpecFailsLoudly
+    scenario_matrix:
+      - scenario: Each RSASSA_PSS_SHA_256/384/512 and RSASSA_PKCS1_V1_5_SHA_256/384/512 algorithm on an RSA_2048 key.
+        status: fixed
+        evidence: The signature is produced with the named padding and hash (PSS salt = hash length, per the developer guide) and verifies outside KMS with the GetPublicKey key — TestSign_everyRSASigningAlgorithm. Previously every algorithm produced PKCS#1 v1.5 SHA-256 (#2160).
+      - scenario: MessageType DIGEST.
+        status: fixed
+        evidence: The digest is signed without rehashing and must be the algorithm's hash length (ValidationException otherwise) — TestSign_messageTypeDigest, TestSign_digestLengthMustMatchAlgorithm.
+      - scenario: Key whose KeyUsage is not SIGN_VERIFY (symmetric, or RSA ENCRYPT_DECRYPT).
+        status: fixed
+        evidence: InvalidKeyUsageException (400) instead of a 500 InternalError or a signature from an encryption key — TestSignVerify_keyUsageNotSignVerify.
+      - scenario: Signing algorithm incompatible with the KeySpec (ECDSA on RSA).
+        status: fixed
+        evidence: InvalidKeyUsageException — TestSign_algorithmIncompatibleWithKeySpec.
+      - scenario: SigningAlgorithm missing or outside its enum.
+        status: fixed
+        evidence: ValidationException — TestSign_signingAlgorithmMissingOrUnknown.
+      - scenario: Signing key spec other than RSA_2048 (RSA_3072/4096, ECC_*, Ed25519, SM2, ML-DSA).
+        status: intentionally_partial
+        evidence: CreateKey generates a key pair for RSA_2048 only, so Sign/Verify refuse the rest with a ValidationException naming the spec rather than signing with the wrong material — TestSign_unemulatedSigningKeySpecFailsLoudly.
+    findings:
+      - Fixed — SigningAlgorithm and MessageType are honoured, KeyUsage and KeySpec compatibility are checked, and the key must be enabled (#2160).
+  Verify:
+    status: fixed
+    priority: p1
+    aws_docs:
+      - https://docs.aws.amazon.com/kms/latest/APIReference/API_Verify.html
+    implementation:
+      - internal/services/kms/signing.go (verifyTyped)
+    tests:
+      present:
+        - tests/integration/kms/sign_verify_test.go::TestVerify_tamperedMessageFailsWithInvalidSignature
+        - tests/integration/kms/sign_verify_test.go::TestVerify_garbageSignatureFailsWithInvalidSignature
+        - tests/integration/kms/sign_verify_test.go::TestVerify_rpcV2CBORInvalidSignature
+        - tests/integration/kms/sign_verify_test.go::TestVerify_differentAlgorithmFails
+        - tests/integration/kms/kms_test.go::TestSign_andVerify_RSA2048
+    scenario_matrix:
+      - scenario: Signature that does not verify (other message, other algorithm, garbage bytes).
+        status: fixed
+        evidence: "AWS docs: \"If the signature verification fails, the Verify operation fails with an KMSInvalidSignatureException exception.\" Overcast answered 200 SignatureValid:false; now 400 KMSInvalidSignatureException on both the JSON and CBOR paths (#2160)."
+      - scenario: Same KeyUsage, KeySpec, SigningAlgorithm and MessageType rules as Sign.
+        status: fixed
+        evidence: Shares validateSigningRequest/resolveSigningKey with Sign — TestSignVerify_keyUsageNotSignVerify.
+    findings:
+      - Fixed — Verify fails with KMSInvalidSignatureException instead of SignatureValid:false (#2160).
 findings:
   fixed:
     - operation: AWS::KMS::Key
@@ -303,6 +365,7 @@ findings:
   remaining_gaps:
     - "#1907 — six wire divergences: KeyArn/KeyState extras on ScheduleKeyDeletion/CancelKeyDeletion, ListKeys hiding PendingDeletion keys, DeleteAlias/ListAliases not-found, ListGrants KeyId as ARN, CreateGrant dropping service principals and Constraints.SourceArn."
     - KeyMetadata still omits EncryptionAlgorithms, SigningAlgorithms, MacAlgorithms and CurrentKeyMaterialId, which AWS returns for the matching KeyUsage/Origin.
+    - Only RSA_2048 keys get a key pair; CreateKey accepts RSA_3072/4096, ECC, Ed25519, SM2 and ML-DSA specs with AES material, so Sign/Verify/GetPublicKey on them are refused (#2160 follow-up).
     - Principal existence is not checked against remote AWS accounts; syntactically valid cross-account principals are accepted.
     - AWS::KMS::Key Tags are not applied by CloudFormation (create or update); KMS TagResource exists but the provisioner never dispatches it.
     - AWS::KMS::Key EnableKeyRotation is not applied by CloudFormation; KMS has no rotation-state operations yet.

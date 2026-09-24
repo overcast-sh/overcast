@@ -28,8 +28,8 @@ func init() {
 		capabilities.Capability{Service: "kms", Operation: "ReEncrypt", Category: "Symmetric crypto", Status: capabilities.StatusSupported, Notes: "Decrypts and re-encrypts ciphertext with destination key; a `SourceKeyId` naming a different key is an `IncorrectKeyException`"},
 		capabilities.Capability{Service: "kms", Operation: "GenerateDataKeyPair", Category: "Symmetric crypto", Status: capabilities.StatusSupported, Notes: "RSA_2048, RSA_3072, RSA_4096 key pair specs"},
 
-		capabilities.Capability{Service: "kms", Operation: "Sign", Category: "Asymmetric crypto", Status: capabilities.StatusSupported, Notes: "RSA_2048 with RSASSA_PKCS1_V1_5_SHA_256"},
-		capabilities.Capability{Service: "kms", Operation: "Verify", Category: "Asymmetric crypto", Status: capabilities.StatusSupported, Notes: "Returns `SignatureValid: true/false`"},
+		capabilities.Capability{Service: "kms", Operation: "Sign", Category: "Asymmetric crypto", Status: capabilities.StatusSupported, Notes: "RSA_2048 keys with all six RSASSA_PSS_* / RSASSA_PKCS1_V1_5_* algorithms, RAW or DIGEST messages; other signing key specs are refused"},
+		capabilities.Capability{Service: "kms", Operation: "Verify", Category: "Asymmetric crypto", Status: capabilities.StatusSupported, Notes: "RSA_2048 keys, every RSASSA algorithm; a signature that does not verify fails with KMSInvalidSignatureException"},
 		capabilities.Capability{Service: "kms", Operation: "GetPublicKey", Category: "Asymmetric crypto", Status: capabilities.StatusSupported, Notes: "Returns DER-encoded public key for RSA keys"},
 		capabilities.Capability{Service: "kms", Operation: "VerifyMac", Category: "Asymmetric crypto", Status: capabilities.StatusSupported, Notes: "HMAC_SHA_256, HMAC_SHA_384, HMAC_SHA_512"},
 

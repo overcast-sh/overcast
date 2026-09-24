@@ -67,12 +67,12 @@ All 34 listed operations are implemented. Back to [KMS](../kms.md).
 
 ### Asymmetric crypto
 
-| Operation      | Status       | Notes                                       | AWS Docs                                                                          |
-| -------------- | ------------ | ------------------------------------------- | --------------------------------------------------------------------------------- |
-| `Sign`         | ✅ Supported | RSA_2048 with RSASSA_PKCS1_V1_5_SHA_256     | [docs](https://docs.aws.amazon.com/kms/latest/APIReference/API_Sign.html)         |
-| `Verify`       | ✅ Supported | Returns `SignatureValid: true/false`        | [docs](https://docs.aws.amazon.com/kms/latest/APIReference/API_Verify.html)       |
-| `GetPublicKey` | ✅ Supported | Returns DER-encoded public key for RSA keys | [docs](https://docs.aws.amazon.com/kms/latest/APIReference/API_GetPublicKey.html) |
-| `VerifyMac`    | ✅ Supported | HMAC_SHA_256, HMAC_SHA_384, HMAC_SHA_512    | [docs](https://docs.aws.amazon.com/kms/latest/APIReference/API_VerifyMac.html)    |
+| Operation      | Status       | Notes                                                                                                                                 | AWS Docs                                                                          |
+| -------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `Sign`         | ✅ Supported | RSA_2048 keys with all six RSASSA_PSS_* / RSASSA_PKCS1_V1_5_* algorithms, RAW or DIGEST messages; other signing key specs are refused | [docs](https://docs.aws.amazon.com/kms/latest/APIReference/API_Sign.html)         |
+| `Verify`       | ✅ Supported | RSA_2048 keys, every RSASSA algorithm; a signature that does not verify fails with KMSInvalidSignatureException                       | [docs](https://docs.aws.amazon.com/kms/latest/APIReference/API_Verify.html)       |
+| `GetPublicKey` | ✅ Supported | Returns DER-encoded public key for RSA keys                                                                                           | [docs](https://docs.aws.amazon.com/kms/latest/APIReference/API_GetPublicKey.html) |
+| `VerifyMac`    | ✅ Supported | HMAC_SHA_256, HMAC_SHA_384, HMAC_SHA_512                                                                                              | [docs](https://docs.aws.amazon.com/kms/latest/APIReference/API_VerifyMac.html)    |
 
 ### Tags
 
