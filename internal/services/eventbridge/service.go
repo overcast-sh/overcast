@@ -353,22 +353,20 @@ func (s *Service) describeEventBus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) listEventBuses(w http.ResponseWriter, r *http.Request) {
-	kvs, err := s.store.Scan(r.Context(), nsBuses, serviceutil.RegionKey(s.region(r.Context()), ""))
-	if err != nil {
-		protocol.WriteJSONError(w, r, protocol.ErrInternalError)
+	// Delegates to listEventBusesTyped (typed_logic.go) so the legacy
+	// JSON1.0/1.1 path and the CBOR typed path share one implementation — the
+	// legacy copy previously decoded no request at all, and so ignored
+	// NamePrefix, Limit and NextToken (#2110).
+	var req listEventBusesRequest
+	if !serviceutil.DecodeJSON(w, r, &req) {
 		return
 	}
-	items := make([]map[string]any, 0, len(kvs)+1)
-	// Always include the default bus
-	defaultARN := s.busARN(r.Context(), "default")
-	items = append(items, map[string]any{"Name": "default", "Arn": defaultARN})
-	for _, kv := range kvs {
-		var bus eventBus
-		if json.Unmarshal([]byte(kv.Value), &bus) == nil && bus.Name != "default" {
-			items = append(items, map[string]any{"Name": bus.Name, "Arn": bus.ARN})
-		}
+	resp, aerr := s.listEventBusesTyped(r.Context(), &req)
+	if aerr != nil {
+		protocol.WriteJSONError(w, r, aerr)
+		return
 	}
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{"EventBuses": items})
+	protocol.WriteJSON(w, r, http.StatusOK, resp)
 }
 
 func (s *Service) tagResource(w http.ResponseWriter, r *http.Request) {

@@ -7,6 +7,7 @@ import {
   ListRulesCommand,
   PutRuleCommand,
   DeleteRuleCommand,
+  type EventBus,
 } from "@aws-sdk/client-eventbridge"
 
 export type { EventBus, Rule as EventRule } from "@aws-sdk/client-eventbridge"
@@ -43,9 +44,17 @@ export interface EventDelivery {
 }
 
 export const eventbridge = {
+  // ListEventBuses pages at 100 buses (#2110), so follow NextToken to the end.
   listBuses: async () => {
-    const res = await awsClients.eventbridge().send(new ListEventBusesCommand({}))
-    return res.EventBuses ?? []
+    const client = awsClients.eventbridge()
+    const all: EventBus[] = []
+    let nextToken: string | undefined
+    do {
+      const res = await client.send(new ListEventBusesCommand({ NextToken: nextToken }))
+      all.push(...(res.EventBuses ?? []))
+      nextToken = res.NextToken
+    } while (nextToken)
+    return all
   },
 
   createBus: async (name: string) => {

@@ -29,6 +29,48 @@ operations:
           AWS's shape for an unconfigured bus. The AWS::Events::EventBus CloudFormation handler
           (internal/services/cloudformation/provisioner_resources.go) forwards all three instead
           of reporting them as unconsumed.
+  DescribeEventBus:
+    status: fixed
+    priority: p2
+    aws_docs:
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_DescribeEventBus.html
+    scenarios:
+      missing_bus_and_default_bus:
+        status: fixed
+        evidence:
+          - tests/integration/eventbridge/bus_describe_list_test.go::TestDescribeEventBus_unknownBus
+          - tests/integration/eventbridge/bus_describe_list_test.go::TestDescribeEventBus_deletedBus
+          - tests/integration/eventbridge/bus_describe_list_test.go::TestDescribeEventBus_unknownBusArn
+          - tests/integration/eventbridge/bus_describe_list_test.go::TestDescribeEventBus_existingBusByArn
+          - tests/integration/eventbridge/bus_describe_list_test.go::TestDescribeEventBus_defaultBusNeverCreated
+        notes: >-
+          A store miss used to be answered with a 200 carrying the requested name and a freshly
+          minted ARN (#2110), so an existence check took the "exists" branch on Overcast and the
+          "missing" one on AWS. A bus that was never created, or has been deleted, is now
+          ResourceNotFoundException/400 — the operation's modeled error — whether it is named by
+          name or by ARN. The default bus, never written to the store, always exists. A store read
+          failure is InternalException rather than a synthesized bus.
+  ListEventBuses:
+    status: fixed
+    priority: p2
+    aws_docs:
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_ListEventBuses.html
+    scenarios:
+      name_prefix_limit_and_next_token:
+        status: fixed
+        evidence:
+          - tests/integration/eventbridge/bus_describe_list_test.go::TestListEventBuses_namePrefix
+          - tests/integration/eventbridge/bus_describe_list_test.go::TestListEventBuses_limitAndNextToken
+          - tests/integration/eventbridge/bus_describe_list_test.go::TestListEventBuses_invalidNextToken
+          - tests/integration/eventbridge/bus_describe_list_test.go::TestListEventBuses_limitOutOfRange
+        notes: >-
+          The handler decoded no request body, so NamePrefix, Limit and NextToken were ignored and
+          every bus in the region came back on one page (#2110). NamePrefix now filters, the
+          default bus included; Limit (modeled @range 1..100) pages through serviceutil.Paginate
+          with a NextToken, and a value outside the range is ValidationException. AWS documents no
+          default page size, so an omitted Limit uses the 100 cap. An unrecognised NextToken is
+          ValidationException rather than a restart from page one. Remaining gap: the EventBus list
+          items carry only Name and Arn, not Description, CreationTime or LastModifiedTime.
   PutPermission:
     status: fixed
     priority: p2
