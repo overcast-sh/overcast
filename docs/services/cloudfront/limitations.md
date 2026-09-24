@@ -44,13 +44,12 @@ it. The origin receives it byte-for-byte, a viewer-request function's
 that a function returns with raw UTF-8, spaces, or a stray `%` reaches the
 origin percent-encoded.
 
-Cache behaviours are matched after the percent-encoding step of AWS's
-RFC 3986 normalisation, so `/%7Euser` matches `/~user/*`, but `%40` never
-matches `@` and `%2F` is not a separator. Two parts of AWS's normalisation are
-not applied:
-
-- Dot segments (`/a/b/..`) are not resolved before matching.
-- Repeated slashes (`//`) are not collapsed before matching.
+Cache behaviours are matched on a normalised copy of the path, as on AWS.
+Escaped unreserved characters are decoded, so `/%7Euser` matches `/~user/*`,
+but `%40` never matches `@` and `%2F` is not a separator. Dot segments are
+resolved and repeated slashes collapsed, so `/a/b/..` matches `/a*` rather than
+`/a/b*`, and `/a//b` matches as `/a/b`. The normalised copy is used only for
+matching: the origin, the function and the cache key all see the raw path.
 
 ## Caching
 

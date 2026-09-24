@@ -93,6 +93,7 @@ func TestMatchPathPattern_followsAWSSemantics(t *testing.T) {
 func TestViewerPath_isAlwaysTheEncodedForm(t *testing.T) {
 	for _, target := range []string{
 		"/100%25", "/a%20b", "/caf%C3%A9", "/caf%c3%a9", "/a%2Fb%25c", "/%7Euser", "/plain/path", "/",
+		"//a/b", "//", "/a//b", "///a%2Fb", // repeated slashes are the viewer's too
 	} {
 		t.Run(target, func(t *testing.T) {
 			// Given: a request routed the way the router would route it
@@ -129,6 +130,25 @@ func TestNormalizePathForMatch_decodesOnlyUnreserved(t *testing.T) {
 		{"/bad%zz", "/bad%zz"}, // not an escape: left alone
 		{"/trailing%7", "/trailing%7"},
 		{"/end%", "/end%"},
+		// Dot segments and repeated slashes (RFC 3986 section 5.2.4, and
+		// AWS's "multiple slashes (//) or periods (..)").
+		{"/a/b/..", "/a/"},
+		{"/a/b/../", "/a/"},
+		{"/a/b/.", "/a/b/"},
+		{"/a/./b", "/a/b"},
+		{"/a/b/../c", "/a/c"},
+		{"/a/b/../../c", "/c"},
+		{"/../a", "/a"},
+		{"/..", "/"},
+		{"/.", "/"},
+		{"/", "/"},
+		{"/a//b", "/a/b"},
+		{"//a///b//", "/a/b/"},
+		{"/a/b/%2E%2E", "/a/"},     // decoded to "..", then resolved
+		{"/a/%2e/b", "/a/b"},       // decoded to ".", then resolved
+		{"/a/..%2Fb", "/a/..%2Fb"}, // "%2F" is not a separator
+		{"/a/.../b", "/a/.../b"},   // "..." is an ordinary segment
+		{"/a/.b/..c", "/a/.b/..c"},
 	} {
 		if got := normalizePathForMatch(tc.in); got != tc.want {
 			t.Errorf("normalizePathForMatch(%q) = %q, want %q", tc.in, got, tc.want)
