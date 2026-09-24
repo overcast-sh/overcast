@@ -39,6 +39,14 @@ func ScenariosKms(c *clients.Clients) ServiceGroup {
 			"kms-gen-key:GenerateDataKeyWithoutPlaintext": g.testKmsGenKeyGenerateDataKeyWithoutPlaintext,
 			"kms-gen-key:GenerateDataKeyPair":             g.testKmsGenKeyGenerateDataKeyPair,
 			"kms-gen-key:GenerateRandom":                  g.testKmsGenKeyGenerateRandom,
+			"kms-gen-key:Encrypt":                         g.testKmsGenKeyEncrypt,
+			"kms-gen-key:Decrypt":                         g.testKmsGenKeyDecrypt,
+			"kms-gen-key:ReEncrypt":                       g.testKmsGenKeyReEncrypt,
+			"kms-gen-key:DecryptReEncrypted":              g.testKmsGenKeyDecryptReEncrypted,
+			"kms-gen-key:CreateKeySigning":                g.testKmsGenKeyCreateKeySigning,
+			"kms-gen-key:Sign":                            g.testKmsGenKeySign,
+			"kms-gen-key:Verify":                          g.testKmsGenKeyVerify,
+			"kms-gen-key:ScheduleKeyDeletionSigning":      g.testKmsGenKeyScheduleKeyDeletionSigning,
 			"kms-gen-key:CreateGrant":                     g.testKmsGenKeyCreateGrant,
 			"kms-gen-key:ListGrants":                      g.testKmsGenKeyListGrants,
 			"kms-gen-key:ListRetirableGrants":             g.testKmsGenKeyListRetirableGrants,
@@ -537,6 +545,248 @@ func (g *kmsScenarios) testKmsGenKeyGenerateRandom(ctx context.Context, t *harne
 		Assert: []scenario.Clause{
 			scenario.ResponseField(
 				scenario.NonEmpty("$.Plaintext"),
+			),
+		},
+	})
+}
+
+func (g *kmsScenarios) testKmsGenKeyEncrypt(ctx context.Context, t *harness.TestContext) error {
+	return groupKmsGenKey.RunTest(ctx, t, "Encrypt", scenario.Test{
+		Call: scenario.Call{
+			Op:     "Encrypt",
+			Params: `{"KeyId":{"$ref":"key.id"},"Plaintext":{"$base64":"Y29tcGF0LXNjZW5hcmlvIHBsYWludGV4dA=="}}`,
+			Build: func(b *scenario.Binder) any {
+				in := &kms.EncryptInput{}
+				in.KeyId = aws.String(scenario.Bind[string](b, "KeyId", scenario.Ref("key.id")))
+				in.Plaintext = []byte("compat-scenario plaintext")
+				return in
+			},
+			Send: func(ctx context.Context, in any) (any, error) {
+				return g.cl().Encrypt(ctx, in.(*kms.EncryptInput))
+			},
+			Export: map[string]string{
+				"key.ciphertext": "$.CiphertextBlob",
+			},
+		},
+		Assert: []scenario.Clause{
+			scenario.ResponseField(
+				scenario.NonEmpty("$.CiphertextBlob"),
+				scenario.Equals("$.EncryptionAlgorithm", "SYMMETRIC_DEFAULT"),
+				scenario.Equals("$.KeyId", scenario.Ref("key.arn")),
+			),
+		},
+	})
+}
+
+func (g *kmsScenarios) testKmsGenKeyDecrypt(ctx context.Context, t *harness.TestContext) error {
+	return groupKmsGenKey.RunTest(ctx, t, "Decrypt", scenario.Test{
+		Call: scenario.Call{
+			Op:     "Decrypt",
+			Params: `{"CiphertextBlob":{"$base64":{"$ref":"key.ciphertext"}}}`,
+			Build: func(b *scenario.Binder) any {
+				in := &kms.DecryptInput{}
+				in.CiphertextBlob = scenario.Blob(b, "CiphertextBlob", scenario.Base64(scenario.Ref("key.ciphertext")))
+				return in
+			},
+			Send: func(ctx context.Context, in any) (any, error) {
+				return g.cl().Decrypt(ctx, in.(*kms.DecryptInput))
+			},
+		},
+		Assert: []scenario.Clause{
+			scenario.ResponseField(
+				scenario.Equals("$.EncryptionAlgorithm", "SYMMETRIC_DEFAULT"),
+				scenario.Equals("$.KeyId", scenario.Ref("key.arn")),
+				scenario.Equals("$.Plaintext", scenario.Base64("Y29tcGF0LXNjZW5hcmlvIHBsYWludGV4dA==")),
+			),
+		},
+	})
+}
+
+func (g *kmsScenarios) testKmsGenKeyReEncrypt(ctx context.Context, t *harness.TestContext) error {
+	return groupKmsGenKey.RunTest(ctx, t, "ReEncrypt", scenario.Test{
+		Call: scenario.Call{
+			Op:     "ReEncrypt",
+			Params: `{"CiphertextBlob":{"$base64":{"$ref":"key.ciphertext"}},"DestinationKeyId":{"$ref":"key.id"}}`,
+			Build: func(b *scenario.Binder) any {
+				in := &kms.ReEncryptInput{}
+				in.CiphertextBlob = scenario.Blob(b, "CiphertextBlob", scenario.Base64(scenario.Ref("key.ciphertext")))
+				in.DestinationKeyId = aws.String(scenario.Bind[string](b, "DestinationKeyId", scenario.Ref("key.id")))
+				return in
+			},
+			Send: func(ctx context.Context, in any) (any, error) {
+				return g.cl().ReEncrypt(ctx, in.(*kms.ReEncryptInput))
+			},
+			Export: map[string]string{
+				"key.reciphertext": "$.CiphertextBlob",
+			},
+		},
+		Assert: []scenario.Clause{
+			scenario.ResponseField(
+				scenario.NonEmpty("$.CiphertextBlob"),
+				scenario.Equals("$.DestinationEncryptionAlgorithm", "SYMMETRIC_DEFAULT"),
+				scenario.Equals("$.KeyId", scenario.Ref("key.arn")),
+				scenario.Equals("$.SourceEncryptionAlgorithm", "SYMMETRIC_DEFAULT"),
+				scenario.Equals("$.SourceKeyId", scenario.Ref("key.arn")),
+			),
+		},
+	})
+}
+
+func (g *kmsScenarios) testKmsGenKeyDecryptReEncrypted(ctx context.Context, t *harness.TestContext) error {
+	return groupKmsGenKey.RunTest(ctx, t, "DecryptReEncrypted", scenario.Test{
+		Call: scenario.Call{
+			Op:     "Decrypt",
+			Params: `{"CiphertextBlob":{"$base64":{"$ref":"key.reciphertext"}}}`,
+			Build: func(b *scenario.Binder) any {
+				in := &kms.DecryptInput{}
+				in.CiphertextBlob = scenario.Blob(b, "CiphertextBlob", scenario.Base64(scenario.Ref("key.reciphertext")))
+				return in
+			},
+			Send: func(ctx context.Context, in any) (any, error) {
+				return g.cl().Decrypt(ctx, in.(*kms.DecryptInput))
+			},
+		},
+		Assert: []scenario.Clause{
+			scenario.ResponseField(
+				scenario.Equals("$.KeyId", scenario.Ref("key.arn")),
+				scenario.Equals("$.Plaintext", scenario.Base64("Y29tcGF0LXNjZW5hcmlvIHBsYWludGV4dA==")),
+			),
+		},
+	})
+}
+
+func (g *kmsScenarios) testKmsGenKeyCreateKeySigning(ctx context.Context, t *harness.TestContext) error {
+	return groupKmsGenKey.RunTest(ctx, t, "CreateKeySigning", scenario.Test{
+		Call: scenario.Call{
+			Op:     "CreateKey",
+			Params: `{"Description":"compat-scenario signing key","KeySpec":"RSA_2048","KeyUsage":"SIGN_VERIFY"}`,
+			Build: func(b *scenario.Binder) any {
+				in := &kms.CreateKeyInput{}
+				in.Description = aws.String("compat-scenario signing key")
+				in.KeySpec = types.KeySpec("RSA_2048")
+				in.KeyUsage = types.KeyUsageType("SIGN_VERIFY")
+				return in
+			},
+			Send: func(ctx context.Context, in any) (any, error) {
+				return g.cl().CreateKey(ctx, in.(*kms.CreateKeyInput))
+			},
+			Export: map[string]string{
+				"key.signarn": "$.KeyMetadata.Arn",
+				"key.signid":  "$.KeyMetadata.KeyId",
+			},
+		},
+		Assert: []scenario.Clause{
+			scenario.Eventually(6, 500,
+				scenario.Readback(
+					scenario.Call{
+						Op:     "DescribeKey",
+						Params: `{"KeyId":{"$ref":"key.signid"}}`,
+						Build: func(b *scenario.Binder) any {
+							in := &kms.DescribeKeyInput{}
+							in.KeyId = aws.String(scenario.Bind[string](b, "KeyId", scenario.Ref("key.signid")))
+							return in
+						},
+						Send: func(ctx context.Context, in any) (any, error) {
+							return g.cl().DescribeKey(ctx, in.(*kms.DescribeKeyInput))
+						},
+					},
+					scenario.Equals("$.KeyMetadata.Arn", scenario.Ref("key.signarn")),
+					scenario.Equals("$.KeyMetadata.KeySpec", "RSA_2048"),
+					scenario.Equals("$.KeyMetadata.KeyUsage", "SIGN_VERIFY"),
+				),
+			),
+		},
+	})
+}
+
+func (g *kmsScenarios) testKmsGenKeySign(ctx context.Context, t *harness.TestContext) error {
+	return groupKmsGenKey.RunTest(ctx, t, "Sign", scenario.Test{
+		Call: scenario.Call{
+			Op:     "Sign",
+			Params: `{"KeyId":{"$ref":"key.signid"},"Message":{"$base64":"Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgdG8gc2lnbg=="},"SigningAlgorithm":"RSASSA_PKCS1_V1_5_SHA_256"}`,
+			Build: func(b *scenario.Binder) any {
+				in := &kms.SignInput{}
+				in.KeyId = aws.String(scenario.Bind[string](b, "KeyId", scenario.Ref("key.signid")))
+				in.Message = []byte("compat-scenario message to sign")
+				in.SigningAlgorithm = types.SigningAlgorithmSpec("RSASSA_PKCS1_V1_5_SHA_256")
+				return in
+			},
+			Send: func(ctx context.Context, in any) (any, error) {
+				return g.cl().Sign(ctx, in.(*kms.SignInput))
+			},
+			Export: map[string]string{
+				"key.signature": "$.Signature",
+			},
+		},
+		Assert: []scenario.Clause{
+			scenario.ResponseField(
+				scenario.Equals("$.KeyId", scenario.Ref("key.signarn")),
+				scenario.NonEmpty("$.Signature"),
+				scenario.Equals("$.SigningAlgorithm", "RSASSA_PKCS1_V1_5_SHA_256"),
+			),
+		},
+	})
+}
+
+func (g *kmsScenarios) testKmsGenKeyVerify(ctx context.Context, t *harness.TestContext) error {
+	return groupKmsGenKey.RunTest(ctx, t, "Verify", scenario.Test{
+		Call: scenario.Call{
+			Op:     "Verify",
+			Params: `{"KeyId":{"$ref":"key.signid"},"Message":{"$base64":"Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgdG8gc2lnbg=="},"Signature":{"$base64":{"$ref":"key.signature"}},"SigningAlgorithm":"RSASSA_PKCS1_V1_5_SHA_256"}`,
+			Build: func(b *scenario.Binder) any {
+				in := &kms.VerifyInput{}
+				in.KeyId = aws.String(scenario.Bind[string](b, "KeyId", scenario.Ref("key.signid")))
+				in.Message = []byte("compat-scenario message to sign")
+				in.Signature = scenario.Blob(b, "Signature", scenario.Base64(scenario.Ref("key.signature")))
+				in.SigningAlgorithm = types.SigningAlgorithmSpec("RSASSA_PKCS1_V1_5_SHA_256")
+				return in
+			},
+			Send: func(ctx context.Context, in any) (any, error) {
+				return g.cl().Verify(ctx, in.(*kms.VerifyInput))
+			},
+		},
+		Assert: []scenario.Clause{
+			scenario.ResponseField(
+				scenario.Equals("$.KeyId", scenario.Ref("key.signarn")),
+				scenario.Equals("$.SignatureValid", true),
+				scenario.Equals("$.SigningAlgorithm", "RSASSA_PKCS1_V1_5_SHA_256"),
+			),
+		},
+	})
+}
+
+func (g *kmsScenarios) testKmsGenKeyScheduleKeyDeletionSigning(ctx context.Context, t *harness.TestContext) error {
+	return groupKmsGenKey.RunTest(ctx, t, "ScheduleKeyDeletionSigning", scenario.Test{
+		Call: scenario.Call{
+			Op:     "ScheduleKeyDeletion",
+			Params: `{"KeyId":{"$ref":"key.signid"},"PendingWindowInDays":7}`,
+			Build: func(b *scenario.Binder) any {
+				in := &kms.ScheduleKeyDeletionInput{}
+				in.KeyId = aws.String(scenario.Bind[string](b, "KeyId", scenario.Ref("key.signid")))
+				in.PendingWindowInDays = aws.Int32(7)
+				return in
+			},
+			Send: func(ctx context.Context, in any) (any, error) {
+				return g.cl().ScheduleKeyDeletion(ctx, in.(*kms.ScheduleKeyDeletionInput))
+			},
+		},
+		Assert: []scenario.Clause{
+			scenario.Eventually(6, 500,
+				scenario.Readback(
+					scenario.Call{
+						Op:     "DescribeKey",
+						Params: `{"KeyId":{"$ref":"key.signid"}}`,
+						Build: func(b *scenario.Binder) any {
+							in := &kms.DescribeKeyInput{}
+							in.KeyId = aws.String(scenario.Bind[string](b, "KeyId", scenario.Ref("key.signid")))
+							return in
+						},
+						Send: func(ctx context.Context, in any) (any, error) {
+							return g.cl().DescribeKey(ctx, in.(*kms.DescribeKeyInput))
+						},
+					},
+					scenario.Equals("$.KeyMetadata.KeyState", "PendingDeletion"),
+				),
 			),
 		},
 	})
