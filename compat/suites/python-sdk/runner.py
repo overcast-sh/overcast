@@ -64,6 +64,7 @@ from groups import (
     efs,
     s3tables,
     glue,
+    athena,
 )
 
 SUITE = "python-sdk"
@@ -116,6 +117,7 @@ _modules = [
     efs,
     s3tables,
     glue,
+    athena,
 ]
 
 all_setup: dict = {}

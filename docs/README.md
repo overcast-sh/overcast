@@ -117,7 +117,7 @@ Shorter overview: the [service reference index](./services/README.md).
 | WAF v2           | [waf.md](./services/waf.md)                         | 7   | Minimal / targeted support    |
 | Shield           | [shield.md](./services/shield.md)                   | 8   | Minimal / targeted support    |
 | ACM              | [acm.md](./services/acm.md)                         | 11  | Minimal / targeted support    |
-| Athena           | [athena.md](./services/athena.md)                   | 12  | Minimal / targeted support    |
+| Athena           | [athena.md](./services/athena.md)                   | 36  | Minimal / targeted support    |
 | Bedrock          | [bedrock.md](./services/bedrock.md)                 | 2   | Minimal / targeted support    |
 | CloudWatch       | [cloudwatch.md](./services/cloudwatch.md)           | 17  | Minimal / targeted support    |
 | DynamoDB Streams | [dynamodbstreams.md](./services/dynamodbstreams.md) | 4   | Minimal / targeted support    |

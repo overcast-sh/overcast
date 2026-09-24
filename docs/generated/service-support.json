@@ -1,6 +1,6 @@
 {
   "generated_by": "go run -tags dev ./cmd/capgen --write-docs",
-  "total_ops": 1578,
+  "total_ops": 1602,
   "services": [
     {
       "service": "s3",
@@ -7981,80 +7981,214 @@
     {
       "service": "athena",
       "display_name": "Athena",
-      "total_ops": 12,
-      "implemented_ops": 12,
+      "total_ops": 36,
+      "implemented_ops": 36,
       "operations": [
         {
           "operation": "StartQueryExecution",
           "category": "Queries",
-          "status": "✅ Supported",
-          "notes": "Starts a query; immediately succeeds"
+          "status": "🧊 Inert",
+          "notes": "Resolves the result configuration against the workgroup and honours ClientRequestToken; no SQL runs, so the query succeeds at once having scanned nothing"
         },
         {
           "operation": "GetQueryExecution",
           "category": "Queries",
           "status": "✅ Supported",
-          "notes": "Returns query execution details"
+          "notes": "Full QueryExecution: context, statement type, engine version, resolved result configuration, statistics"
         },
         {
-          "operation": "GetQueryResults",
+          "operation": "BatchGetQueryExecution",
           "category": "Queries",
           "status": "✅ Supported",
-          "notes": "Returns query results (empty result set)"
-        },
-        {
-          "operation": "StopQueryExecution",
-          "category": "Queries",
-          "status": "✅ Supported",
-          "notes": "Accepts a stop; queries are already SUCCEEDED, so state is unchanged"
+          "notes": "Unknown IDs come back as UnprocessedQueryExecutionIds"
         },
         {
           "operation": "ListQueryExecutions",
           "category": "Queries",
           "status": "✅ Supported",
-          "notes": "Lists all query execution IDs"
+          "notes": "One workgroup (primary by default), most recent first, paginated"
+        },
+        {
+          "operation": "StopQueryExecution",
+          "category": "Queries",
+          "status": "✅ Supported",
+          "notes": "Cancels an unfinished query; a finished one keeps its state"
+        },
+        {
+          "operation": "GetQueryResults",
+          "category": "Queries",
+          "status": "🧊 Inert",
+          "notes": "An empty result set for a SUCCEEDED query; an unfinished or failed query is InvalidRequestException"
         },
         {
           "operation": "CreateWorkGroup",
           "category": "WorkGroups",
           "status": "✅ Supported",
-          "notes": "Creates a workgroup"
+          "notes": "Duplicate names are InvalidRequestException; engine version resolved"
         },
         {
           "operation": "GetWorkGroup",
           "category": "WorkGroups",
           "status": "✅ Supported",
-          "notes": "Returns workgroup details"
+          "notes": "Includes the built-in primary workgroup"
         },
         {
           "operation": "ListWorkGroups",
           "category": "WorkGroups",
           "status": "✅ Supported",
-          "notes": "Lists all workgroups"
+          "notes": "Full summaries, paginated"
+        },
+        {
+          "operation": "UpdateWorkGroup",
+          "category": "WorkGroups",
+          "status": "✅ Supported",
+          "notes": "Description, State and ConfigurationUpdates, including the Remove* flags"
         },
         {
           "operation": "DeleteWorkGroup",
           "category": "WorkGroups",
           "status": "✅ Supported",
-          "notes": "Deletes a workgroup"
+          "notes": "primary cannot be deleted; a workgroup with named queries or prepared statements needs RecursiveDeleteOption"
+        },
+        {
+          "operation": "ListEngineVersions",
+          "category": "WorkGroups",
+          "status": "✅ Supported",
+          "notes": "AUTO and Athena engine version 3"
+        },
+        {
+          "operation": "CreateNamedQuery",
+          "category": "NamedQueries",
+          "status": "✅ Supported",
+          "notes": "Honours ClientRequestToken"
+        },
+        {
+          "operation": "GetNamedQuery",
+          "category": "NamedQueries",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "BatchGetNamedQuery",
+          "category": "NamedQueries",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "ListNamedQueries",
+          "category": "NamedQueries",
+          "status": "✅ Supported",
+          "notes": "One workgroup (primary by default), paginated"
+        },
+        {
+          "operation": "UpdateNamedQuery",
+          "category": "NamedQueries",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "DeleteNamedQuery",
+          "category": "NamedQueries",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "CreatePreparedStatement",
+          "category": "PreparedStatements",
+          "status": "✅ Supported",
+          "notes": "Stored only; EXECUTE ... USING runs nothing"
+        },
+        {
+          "operation": "GetPreparedStatement",
+          "category": "PreparedStatements",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "BatchGetPreparedStatement",
+          "category": "PreparedStatements",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "ListPreparedStatements",
+          "category": "PreparedStatements",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "UpdatePreparedStatement",
+          "category": "PreparedStatements",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "DeletePreparedStatement",
+          "category": "PreparedStatements",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "CreateDataCatalog",
+          "category": "DataCatalogs",
+          "status": "⚠️ Partial",
+          "notes": "GLUE, LAMBDA and HIVE are registered; FEDERATED is not emulated"
+        },
+        {
+          "operation": "GetDataCatalog",
+          "category": "DataCatalogs",
+          "status": "✅ Supported",
+          "notes": "Includes the built-in AwsDataCatalog"
+        },
+        {
+          "operation": "ListDataCatalogs",
+          "category": "DataCatalogs",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "UpdateDataCatalog",
+          "category": "DataCatalogs",
+          "status": "✅ Supported",
+          "notes": "AwsDataCatalog cannot be modified"
+        },
+        {
+          "operation": "DeleteDataCatalog",
+          "category": "DataCatalogs",
+          "status": "✅ Supported",
+          "notes": "AwsDataCatalog cannot be deleted"
+        },
+        {
+          "operation": "GetDatabase",
+          "category": "DataCatalogs",
+          "status": "⚠️ Partial",
+          "notes": "Reads the Glue Data Catalog; LAMBDA and HIVE catalogs are not readable"
+        },
+        {
+          "operation": "ListDatabases",
+          "category": "DataCatalogs",
+          "status": "⚠️ Partial",
+          "notes": "Reads the Glue Data Catalog; paginated"
+        },
+        {
+          "operation": "GetTableMetadata",
+          "category": "DataCatalogs",
+          "status": "⚠️ Partial",
+          "notes": "Reads the Glue Data Catalog"
+        },
+        {
+          "operation": "ListTableMetadata",
+          "category": "DataCatalogs",
+          "status": "⚠️ Partial",
+          "notes": "Reads the Glue Data Catalog; Expression is a name regex; paginated"
         },
         {
           "operation": "TagResource",
           "category": "Tags",
           "status": "✅ Supported",
-          "notes": "Adds/updates tags on a workgroup"
+          "notes": "Workgroups and data catalogs"
         },
         {
           "operation": "UntagResource",
           "category": "Tags",
           "status": "✅ Supported",
-          "notes": "Removes tag keys from a workgroup"
+          "notes": "Workgroups and data catalogs"
         },
         {
           "operation": "ListTagsForResource",
           "category": "Tags",
           "status": "✅ Supported",
-          "notes": "Lists tags on a workgroup"
+          "notes": "Workgroups and data catalogs"
         }
       ]
     },

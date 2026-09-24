@@ -1,6 +1,6 @@
 ---
 title: "Athena — Amazon Athena"
-description: "Athena's control plane — workgroups, query executions and tags. Queries are recorded and reported SUCCEEDED without running, so every result set comes back empty."
+description: "Athena's control plane — workgroups, queries, named queries, prepared statements, data catalogs and Glue metadata. Queries succeed without running, so results are empty."
 section: "Service Reference"
 tags:
   - amazon
@@ -11,8 +11,9 @@ tags:
 
 # Athena — Amazon Athena
 
-Athena's control plane is emulated; no SQL is executed, so every query succeeds
-immediately with an empty result set.
+Athena's control plane is emulated: workgroups, saved queries, data catalogs
+and the Glue metadata they read. No SQL runs, so every query succeeds at once
+with an empty result set.
 
 **Status:** ⚠️ Partial
 
@@ -38,36 +39,45 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 
 | Area | Behaviour |
 | --- | --- |
-| Workgroups | Create, get, list, delete; `Configuration` is stored and handed back verbatim |
-| Query executions | `StartQueryExecution` records the SQL, workgroup and `OutputLocation` and returns an id |
-| Polling | `GetQueryExecution` reports `SUCCEEDED`, with submission and completion timestamps |
-| Results | `GetQueryResults` returns a well-formed but empty `ResultSet` |
-| Stopping | `StopQueryExecution` accepts a known query id and rejects an unknown one |
-| Tags | `TagResource`, `UntagResource` and `ListTagsForResource` on workgroup ARNs |
+| Workgroups | Create, get, list, update and delete. `primary` always exists and cannot be deleted |
+| Workgroup settings | `UpdateWorkGroup` applies `ConfigurationUpdates`, including the `Remove*` flags |
+| Result location | The workgroup's `ResultConfiguration` fills in what the query leaves out, and wins when `EnforceWorkGroupConfiguration` is set |
+| Query executions | Full `QueryExecution`: context, statement type, engine version, parameters, statistics |
+| Idempotency | A repeated `ClientRequestToken` returns the same query or named query |
+| Listing | `ListQueryExecutions` and `ListNamedQueries` cover one workgroup, `primary` by default, and paginate |
+| Saved queries | Named queries and prepared statements: create, get, batch get, list, update, delete |
+| Data catalogs | `AwsDataCatalog` is built in; `GLUE`, `HIVE` and `LAMBDA` catalogs can be registered |
+| Metadata | `GetDatabase`, `ListDatabases`, `GetTableMetadata` and `ListTableMetadata` read the [Glue Data Catalog](./glue.md) |
+| Tags | On workgroup and data catalog ARNs |
+| CloudFormation | `AWS::Athena::WorkGroup` (updated in place), `NamedQuery`, `PreparedStatement` and `DataCatalog` |
 
 ## Differences from AWS
 
-| Area                    | On AWS                                                           | Overcast                                                                                                     |
-| ----------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Query execution         | The SQL is parsed and run                                        | The string is stored, never parsed or run — a query over a Glue table returns nothing, not that table's rows |
-| Results                 | Written to `OutputLocation`                                      | Nothing is written; the bucket stays empty                                                                   |
-| Execution states        | `QUEUED`, `RUNNING`, `FAILED` and `CANCELLED`                    | None of them is ever observed                                                                                |
-| Stopping a query        | `StopQueryExecution` interrupts a running query                  | Every query has already finished, so a stop is accepted and changes nothing                                  |
-| Statistics              | `Statistics`, `EngineVersion` and data-scanned figures           | Absent                                                                                                       |
-| Workgroup configuration | Result-location overrides and bytes-scanned cutoffs are enforced | Echoed, not enforced                                                                                         |
+| Area | On AWS | Overcast |
+| --- | --- | --- |
+| Query execution | The SQL runs | Nothing runs; the query is `SUCCEEDED` as soon as it starts |
+| Results | Written to `OutputLocation` | Nothing is written, and `GetQueryResults` is empty |
+| Execution states | `QUEUED` and `RUNNING` are observable | A query is never seen before it finishes |
+| Statistics | Real timings and bytes scanned | Present, all zero |
+| Prepared statements | `EXECUTE ... USING` runs them | Stored and returned, never run |
+| Data catalogs | `FEDERATED` provisions a connector | `FEDERATED` is refused with a 501 |
+| Metadata | `LAMBDA` and `HIVE` catalogs are read through their connector | Only `GLUE` catalogs for this account are readable |
+| Spark | Spark workgroups, sessions and notebooks | Not emulated |
 
 ## Gotchas
 
 > [!NOTE]
-> A stack that provisions workgroups deploys, and code calling
-> `StartQueryExecution` gets an id-shaped answer it can poll. Any assertion
-> about the rows that come back needs real Athena.
+> A query needs a result location, as on AWS: set one on the workgroup or
+> pass `--result-configuration`. `primary` has none, so a bare
+> `start-query-execution` against it fails with `InvalidRequestException`.
+
+Any assertion about the rows a query returns still needs real Athena.
 
 <!-- BEGIN overcast:capabilities -->
 
 ## Operations
 
-All 12 listed operations are implemented.
+All 36 listed operations are implemented.
 Per-operation status, notes and AWS API links: [Athena operations](athena/operations.md).
 
 <!-- END overcast:capabilities -->

@@ -5366,6 +5366,79 @@
           ]
         }
       ]
+    },
+    {
+      "service": "athena",
+      "name": "athena-control",
+      "tests": [
+        {
+          "name": "CreateWorkGroup"
+        },
+        {
+          "name": "UpdateWorkGroup",
+          "depends": [
+            "CreateWorkGroup"
+          ]
+        },
+        {
+          "name": "ListWorkGroups",
+          "depends": [
+            "CreateWorkGroup"
+          ]
+        },
+        {
+          "name": "StartQueryExecution",
+          "depends": [
+            "CreateWorkGroup"
+          ]
+        },
+        {
+          "name": "ListQueryExecutions",
+          "depends": [
+            "StartQueryExecution"
+          ]
+        },
+        {
+          "name": "CreateNamedQuery",
+          "depends": [
+            "CreateWorkGroup"
+          ]
+        },
+        {
+          "name": "BatchGetNamedQuery",
+          "depends": [
+            "CreateNamedQuery"
+          ]
+        },
+        {
+          "name": "CreatePreparedStatement",
+          "depends": [
+            "CreateWorkGroup"
+          ]
+        },
+        {
+          "name": "CreateDataCatalog"
+        },
+        {
+          "name": "ListEngineVersions"
+        },
+        {
+          "name": "DeleteDataCatalog",
+          "depends": [
+            "CreateDataCatalog"
+          ]
+        },
+        {
+          "name": "DeleteWorkGroup",
+          "depends": [
+            "UpdateWorkGroup",
+            "ListWorkGroups",
+            "ListQueryExecutions",
+            "BatchGetNamedQuery",
+            "CreatePreparedStatement"
+          ]
+        }
+      ]
     }
   ]
 }
