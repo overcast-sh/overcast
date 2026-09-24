@@ -17,6 +17,7 @@ namespace OvercastCompat.Scenario;
 /// {"$concat": [...]} → Val.Concat(...)
 /// {"$index": [v, n]} → Val.Index(v, n)
 /// {"$base64": x}     → Val.Base64(x), and b.Blob(member, Val.Base64(x)) in a blob slot
+/// {"$now": {...}}    → Val.Now(unit, offsetMillis), in a long or epoch-milliseconds DateTime slot
 /// </code>
 /// </remarks>
 internal delegate object? ScenarioValue(Binder binder);
@@ -123,6 +124,53 @@ internal static class Val
         return raw;
     }
 
+    /// <summary><c>$now</c>'s one unit.</summary>
+    private const string NowUnit = "epochMillis";
+
+    /// <summary>The bound on <c>$now</c>'s offset, either way: one hour.</summary>
+    private const long NowMaxOffsetMillis = 3_600_000;
+
+    /// <summary>
+    /// <c>$now</c>: the client's clock when the call is made, in epoch
+    /// milliseconds, plus <paramref name="offsetMillis"/> — which
+    /// cmd/compatgen writes as 0 where the scenario omits it.
+    /// </summary>
+    /// <remarks>
+    /// The binder reads the clock once per call, so every <c>$now</c> in one
+    /// call's params sees the same instant and their offsets order them. The
+    /// value is the number every other backend sends; a long property takes it
+    /// through <see cref="Binder.Bind{T}"/>, and a DateTime property AWSSDK
+    /// declares over the model's long takes it through
+    /// <see cref="Binder.EpochMilliseconds"/>, which builds the DateTime from
+    /// exactly that number — rather than from <c>DateTime.UtcNow</c>, whose
+    /// ticks would reach the wire truncated to a millisecond the failure
+    /// message did not show, and would be a second reading of the clock.
+    /// </remarks>
+    public static ScenarioValue Now(string unit, long offsetMillis) => binder =>
+    {
+        CheckNowArguments(unit, offsetMillis);
+        return binder.Instant() + offsetMillis;
+    };
+
+    /// <summary>
+    /// Holds the two things any <c>$now</c> comes down to — a unit the IR has,
+    /// and an offset inside an hour — to the rule every runtime holds its
+    /// <c>Now</c> to. compat/model/testdata/now pins it for every backend.
+    /// </summary>
+    public static void CheckNowArguments(string unit, long offsetMillis)
+    {
+        if (unit != NowUnit)
+        {
+            throw new ScenarioValueException(
+                $"$now unit {Documents.Render(unit)} is not one the IR has; its one unit is \"epochMillis\"");
+        }
+        if (Math.Abs(offsetMillis) > NowMaxOffsetMillis)
+        {
+            throw new ScenarioValueException(
+                $"$now offsetMillis {offsetMillis} is outside ±{NowMaxOffsetMillis} (one hour)");
+        }
+    }
+
     /// <summary>Takes element <paramref name="index"/> of a list-valued expression.</summary>
     public static ScenarioValue Index(object? list, int index) => binder =>
     {
@@ -192,9 +240,23 @@ internal sealed class ContextBag
 /// failure is recorded here and the whole call is abandoned before anything is
 /// sent, which is what keeps an emitted Build body a flat list of assignments.
 /// </remarks>
-internal sealed class Binder(string runId, string group, ContextBag bag)
+internal sealed class Binder(string runId, string group, ContextBag bag, Func<long>? clock = null)
 {
     private readonly ContextBag _bag = bag;
+
+    /// <summary>The client's clock in epoch milliseconds, which a <c>$now</c> reads.</summary>
+    private readonly Func<long> _clock = clock ?? (() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+
+    /// <summary>This call's one reading of the clock, taken on first use.</summary>
+    private long? _now;
+
+    /// <summary>
+    /// This call's one reading of the clock, in epoch milliseconds: taken the
+    /// first time a <c>$now</c> needs it and kept, so every <c>$now</c> in one
+    /// call's params sees the same instant. The next call has a fresh binder,
+    /// and so a fresh reading.
+    /// </summary>
+    public long Instant() => _now ??= _clock();
 
     public string RunId { get; } = runId;
 

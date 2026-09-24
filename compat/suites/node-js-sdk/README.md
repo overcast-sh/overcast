@@ -110,7 +110,7 @@ node-js-sdk/
       scenario/     ← the scenario interpreter for generated groups
         ir.ts       ← TypeScript types for the scenario IR
         loader.ts   ← read, validate and cache compat/model/scenarios/*.json
-        expressions.ts ← $lit/$ref/$name/$concat/$index, paths, JSON equality
+        expressions.ts ← $lit/$ref/$name/$concat/$index/$base64/$now, paths, JSON equality
         assertions.ts  ← the closed assertion set's predicates
         executor.ts ← run a group's setup, tests and teardown
         client.ts   ← @aws-sdk/client-<kebab(sdkId)> by dynamic import

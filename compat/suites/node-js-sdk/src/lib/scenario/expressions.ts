@@ -4,7 +4,7 @@
  * The three primitives every assertion and every call parameter is built from
  * (compat/model/README.md § Values, § Paths, § Assertions):
  *
- *   evaluateValue()  `$lit` `$ref` `$name` `$concat` `$index` `$base64` → a JS value
+ *   evaluateValue()  `$lit` `$ref` `$name` `$concat` `$index` `$base64` `$now` → a JS value
  *   toDocument()     an SDK response → the IR's document (a blob as base64 text)
  *   resolvePath()    `$.Messages[0].ReceiptHandle` → found/not-found + value
  *   jsonEquals()     equality "as JSON", after the SDK's own mapping
@@ -23,6 +23,18 @@ export interface EvalContext {
   readonly group: string;
   /** Context path → exported value. Written by `export`, read by `$ref`. */
   readonly bag: Map<string, unknown>;
+  /**
+   * The client's clock in epoch milliseconds — what a `$now` reads. Defaults
+   * to `Date.now`; a test pins it.
+   */
+  readonly clock?: () => number;
+  /**
+   * The clock's reading for the call being evaluated, taken once by
+   * `evaluateParams` so every `$now` in one call's params sees the same
+   * instant. Unset everywhere else — an expected value, a `where` — and a
+   * `$now` evaluated there fails.
+   */
+  readonly nowMillis?: number;
 }
 
 /**
@@ -70,6 +82,7 @@ export function asExpression(v: ValueObject): Expression | null {
     case "$concat":
     case "$index":
     case "$base64":
+    case "$now":
       return v as unknown as Expression;
     default:
       throw new ExpressionError(`unknown value expression ${JSON.stringify(key)}`);
@@ -99,13 +112,18 @@ export function evaluateValue(value: Value, ctx: EvalContext): unknown {
   return value;
 }
 
-/** Evaluate a call's `params` object, which is always a structure. */
+/**
+ * Evaluate a call's `params` object, which is always a structure. The clock is
+ * read here, once per call, so every `$now` in these params sees the same
+ * instant (compat/model/README.md § Values).
+ */
 export function evaluateParams(
   params: ValueObject,
   ctx: EvalContext,
 ): Record<string, unknown> {
+  const call: EvalContext = { ...ctx, nowMillis: (ctx.clock ?? Date.now)() };
   const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(params)) out[k] = evaluateValue(v, ctx);
+  for (const [k, v] of Object.entries(params)) out[k] = evaluateValue(v, call);
   return out;
 }
 
@@ -153,6 +171,8 @@ function evaluateExpression(expr: Expression, ctx: EvalContext): unknown {
     return decodeBase64(evaluateValue(expr.$base64 as Value, ctx));
   }
 
+  if ("$now" in expr) return nowValue(expr.$now, ctx.nowMillis);
+
   const [listExpr, index] = expr.$index;
   const list = evaluateValue(listExpr, ctx);
   if (!Array.isArray(list)) {
@@ -166,6 +186,81 @@ function evaluateExpression(expr: Expression, ctx: EvalContext): unknown {
     );
   }
   return list[index];
+}
+
+// ─── The clock ────────────────────────────────────────────────────────────
+
+/** `$now`'s closed set of units. */
+const NOW_UNITS = new Set(["epochMillis"]);
+/** The bound on `$now`'s offset, either way: one hour. */
+const NOW_MAX_OFFSET_MILLIS = 3_600_000;
+
+/**
+ * Validate a `$now` argument and return its offset in milliseconds.
+ * compat/model/testdata/now pins what every backend accepts and refuses.
+ */
+export function nowOffset(arg: unknown): number {
+  if (!isRecord(arg)) {
+    throw new ExpressionError(`$now takes {"unit": "epochMillis"}, got ${describe(arg)}`);
+  }
+  const unknown = Object.keys(arg).filter((k) => k !== "unit" && k !== "offsetMillis");
+  if (unknown.length > 0) {
+    throw new ExpressionError(
+      `$now has no member ${JSON.stringify(unknown.sort()[0])}; it takes unit and offsetMillis`,
+    );
+  }
+  if (!("unit" in arg)) throw new ExpressionError(`$now needs "unit": "epochMillis"`);
+  let offset = 0;
+  if ("offsetMillis" in arg) {
+    const raw = arg.offsetMillis;
+    if (typeof raw !== "number" || !Number.isInteger(raw)) {
+      throw new ExpressionError(
+        `$now offsetMillis must be a whole number of milliseconds, got ${describe(raw)}`,
+      );
+    }
+    if (raw === 0) {
+      throw new ExpressionError("$now offsetMillis is 0; the scenario omits it instead");
+    }
+    offset = raw;
+  }
+  return checkNowArguments(arg.unit, offset);
+}
+
+/**
+ * The two things any `$now` comes down to — a unit the IR has, and an offset
+ * inside an hour — held to the same rule every runtime holds its
+ * `Now(unit, offsetMillis)` to.
+ */
+export function checkNowArguments(unit: unknown, offset: number): number {
+  if (typeof unit !== "string" || !NOW_UNITS.has(unit)) {
+    throw new ExpressionError(
+      `$now unit ${describe(unit)} is not one the IR has; its one unit is "epochMillis"`,
+    );
+  }
+  if (Math.abs(offset) > NOW_MAX_OFFSET_MILLIS) {
+    throw new ExpressionError(
+      `$now offsetMillis ${offset} is outside ±${NOW_MAX_OFFSET_MILLIS} (one hour)`,
+    );
+  }
+  return offset;
+}
+
+/**
+ * `$now`: the client's clock when the call is made, in epoch milliseconds,
+ * plus the offset. `evaluateParams` reads the clock once per call and hands the
+ * reading down, so every `$now` in one call's params sees the same instant and
+ * their offsets order them. Nothing else is handed a reading: an expected
+ * value is compared with a response, and no response holds the instant a call
+ * was made at.
+ */
+export function nowValue(arg: unknown, nowMillis: number | undefined): number {
+  const offset = nowOffset(arg);
+  if (nowMillis === undefined) {
+    throw new ExpressionError(
+      "$now is read when a call is made, so it can only be a call's param, never an expected value",
+    );
+  }
+  return nowMillis + offset;
 }
 
 // ─── Blobs ────────────────────────────────────────────────────────────────

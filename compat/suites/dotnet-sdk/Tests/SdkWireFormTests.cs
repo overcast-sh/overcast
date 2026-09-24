@@ -95,6 +95,39 @@ public sealed class SdkWireFormTests
     }
 
     [Fact]
+    public async Task TheClientsClockIsSentAsItsMilliseconds()
+    {
+        // Given: a call whose events are stamped with the client's clock
+        // (`$now`), one a millisecond behind the other, and a clock pinned to
+        // Millis that would move on a second if it were read twice.
+        var readings = new Queue<long>([Millis, Millis + 1000]);
+        var binder = new Binder("oc-test", "logs-events", new ContextBag(), readings.Dequeue);
+
+        // When: both are bound exactly as the emitted Build body binds them,
+        // and the request is sent.
+        var request = new PutLogEventsRequest
+        {
+            LogGroupName = "g",
+            LogStreamName = "s",
+            LogEvents =
+            [
+                new() { Message = "first", Timestamp = binder.EpochMilliseconds("logEvents", Val.Now("epochMillis", -1L)) },
+                new() { Message = "second", Timestamp = binder.EpochMilliseconds("logEvents", Val.Now("epochMillis", 0L)) },
+            ],
+        };
+        Assert.Null(binder.Error);
+        var (_, body) = await Exchange("{}", client => client.PutLogEventsAsync(request));
+
+        // Then: the wire carries one reading of the clock, offset per event,
+        // to the millisecond — the number every other backend sends.
+        using var sent = JsonDocument.Parse(body);
+        var events = sent.RootElement.GetProperty("logEvents");
+        Assert.Equal(Millis - 1, events[0].GetProperty("timestamp").GetInt64());
+        Assert.Equal(Millis, events[1].GetProperty("timestamp").GetInt64());
+        Assert.Single(readings);
+    }
+
+    [Fact]
     public void AModeledTimestampStaysIsoText()
     {
         // STS's Expiration is a Smithy timestamp, not a long: no backend

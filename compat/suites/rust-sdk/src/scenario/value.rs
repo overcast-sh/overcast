@@ -14,6 +14,7 @@
 //! {"$concat": [...]} → Value::Concat(...)
 //! {"$index": [v, n]} → Value::Index(v, n)
 //! {"$base64": x}     → Value::Base64(x), read back by Binder::blob in a blob slot
+//! {"$now": {...}}    → Value::Now(unit, offset), read back by Binder::i64
 //! ```
 //!
 //! # Why the typed call reads the evaluated params rather than the expression
@@ -51,6 +52,13 @@ pub enum Value {
     /// JSON or XML response body and so how an exported one sits in the bag —
     /// and [`Binder::blob`] decodes it into the bytes a blob setter takes.
     Base64(Box<Value>),
+    /// `$now`: the client's clock when the call is made, in epoch
+    /// milliseconds, plus an offset — the unit and the offset (0 where the
+    /// scenario omits it). The clock is read once per call, before the params
+    /// are evaluated (see [`Bag::at`]), so every `$now` in one call sees the
+    /// same instant.
+    #[allow(dead_code)]
+    Now(&'static str, i64),
     /// A list of values.
     List(Vec<Value>),
     /// A structure or map of values.
@@ -121,6 +129,17 @@ impl Value {
                     json::render(&other)
                 ))),
             },
+            Value::Now(unit, offset) => {
+                check_now_arguments(unit, *offset).map_err(EvalError::Message)?;
+                let now = bag.now.ok_or_else(|| {
+                    EvalError::Message(
+                        "$now is read when a call is made, so it can only be a call's param, \
+                         never an expected value"
+                            .to_string(),
+                    )
+                })?;
+                Ok(Json::Number((now + offset).into()))
+            }
             Value::List(items) => {
                 let mut out = Vec::with_capacity(items.len());
                 for item in items {
@@ -158,6 +177,15 @@ impl Value {
                 Json::Array(vec![inner.raw(), Json::Number((*n).into())]),
             ),
             Value::Base64(inner) => expr("$base64", inner.raw()),
+            Value::Now(unit, offset) => {
+                // The scenario file omits a zero offset, so this does too.
+                let mut arg = serde_json::Map::new();
+                arg.insert("unit".to_string(), Json::String((*unit).to_string()));
+                if *offset != 0 {
+                    arg.insert("offsetMillis".to_string(), Json::Number((*offset).into()));
+                }
+                expr("$now", Json::Object(arg))
+            }
             Value::List(items) => Json::Array(items.iter().map(Value::raw).collect()),
             Value::Map(entries) => {
                 let mut out = serde_json::Map::new();
@@ -190,6 +218,35 @@ pub(crate) fn decode_base64(text: &str) -> Result<Vec<u8>, String> {
     Ok(raw)
 }
 
+/// `$now`'s one unit, and the bound on its offset either way: one hour.
+const NOW_UNIT: &str = "epochMillis";
+const NOW_MAX_OFFSET_MILLIS: i64 = 3_600_000;
+
+/// Holds the two things any `$now` comes down to — a unit the IR has, and an
+/// offset inside an hour — to the rule every runtime holds its `Now` to.
+/// compat/model/testdata/now pins it for every backend at once.
+pub(crate) fn check_now_arguments(unit: &str, offset: i64) -> Result<(), String> {
+    if unit != NOW_UNIT {
+        return Err(format!(
+            "$now unit {unit:?} is not one the IR has; its one unit is \"epochMillis\""
+        ));
+    }
+    if !(-NOW_MAX_OFFSET_MILLIS..=NOW_MAX_OFFSET_MILLIS).contains(&offset) {
+        return Err(format!(
+            "$now offsetMillis {offset} is outside ±{NOW_MAX_OFFSET_MILLIS} (one hour)"
+        ));
+    }
+    Ok(())
+}
+
+/// The client's clock, in epoch milliseconds — what a `$now` reads.
+pub(crate) fn clock_millis() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_millis() as i64)
+        .unwrap_or_default()
+}
+
 fn expr(key: &str, arg: Json) -> Json {
     let mut out = serde_json::Map::new();
     out.insert(key.to_string(), arg);
@@ -208,6 +265,11 @@ fn expr(key: &str, arg: Json) -> Json {
 pub(crate) struct Bag<'a> {
     ctx: &'a TestContext,
     group: &'a str,
+    /// The clock's reading for the call whose params are being evaluated, in
+    /// epoch milliseconds, which is what a `$now` reads. `None` everywhere
+    /// else — an expected value, a `where` — and a `$now` evaluated there
+    /// fails.
+    now: Option<i64>,
 }
 
 /// The prefix every scenario context path is stored under.
@@ -215,7 +277,20 @@ const BAG_PREFIX: &str = "scenario:";
 
 impl<'a> Bag<'a> {
     pub(crate) fn new(ctx: &'a TestContext, group: &'a str) -> Self {
-        Self { ctx, group }
+        Self {
+            ctx,
+            group,
+            now: None,
+        }
+    }
+
+    /// The same bag, for evaluating one call's params with the clock read
+    /// once for that call — so every `$now` in them sees the same instant.
+    pub(crate) fn at(self, now: i64) -> Self {
+        Self {
+            now: Some(now),
+            ..self
+        }
     }
 
     pub(crate) fn get(&self, path: &str) -> Option<Json> {
