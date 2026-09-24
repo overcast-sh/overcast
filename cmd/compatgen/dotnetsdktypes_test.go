@@ -96,6 +96,13 @@ func TestDotnetSpeller_spellsAMeasuredEpochMillisecondsDateTime(t *testing.T) {
 			`b.EpochMilliseconds("Stamp", Val.Ref("stream.created"))`,
 		},
 		{
+			// The client's clock (`$now`), which is what the logs-events port
+			// stamps each event with: the same number every other backend
+			// sends, made into the DateTime the property wants.
+			"the client's clock", "Stamp", `{"$now":{"unit":"epochMillis","offsetMillis":-1}}`,
+			`b.EpochMilliseconds("Stamp", Val.Now("epochMillis", -1L))`,
+		},
+		{
 			// InputLogEvent's own shape: a structure inside a list, so the
 			// SDK's class is followed down from the request's property.
 			"inside a structure inside a list", "Events", `[{"At":{"$ref":"s"},"Note":"n"}]`,
@@ -174,6 +181,16 @@ func TestDotnetSpeller_refusesWhatTheSDKsTypeCannotTake(t *testing.T) {
 			edits:  map[string]map[string]string{"RotateWidgetRequest": {"Heading": "int?"}},
 			drop:   [2]string{"RotateWidgetRequest", "Angle"},
 			want:   "declares no property RotateWidgetRequest.Angle",
+		},
+		{
+			// The generator holds a $now to a modeled long; an SDK that
+			// narrowed that long would overflow at run time, and is refused.
+			name:   "the client's clock into a property narrower than a long",
+			op:     "RotateWidget",
+			member: "Angle",
+			value:  `{"$now":{"unit":"epochMillis"}}`,
+			edits:  map[string]map[string]string{"RotateWidgetRequest": {"Angle": "int?"}},
+			want:   "a $now is epoch milliseconds",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

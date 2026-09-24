@@ -75,6 +75,8 @@ mod xml;
 #[cfg(test)]
 mod errorfixtures;
 #[cfg(test)]
+mod nowfixtures;
+#[cfg(test)]
 mod tests;
 
 use std::collections::HashMap;
@@ -386,6 +388,13 @@ pub fn index(value: Value, n: usize) -> Value {
 #[allow(dead_code)]
 pub fn base64(value: Value) -> Value {
     Value::Base64(Box::new(value))
+}
+
+/// The client's clock when the call is made (`$now`), in epoch milliseconds,
+/// plus an offset: the unit, and the offset or 0.
+#[allow(dead_code)]
+pub fn now(unit: &'static str, offset_millis: i64) -> Value {
+    Value::Now(unit, offset_millis)
 }
 
 /// A list of values.

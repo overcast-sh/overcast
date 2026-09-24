@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.LongSupplier;
 
 /**
  * Resolves the deferred parts of one call's typed input.
@@ -32,11 +33,34 @@ public final class Binder {
     private final String runId;
     private final String group;
     private final ContextBag bag;
+    /** The client's clock in epoch milliseconds, which a {@code $now} reads. */
+    private final LongSupplier clock;
+    /** This call's one reading of {@link #clock}, taken on first use. */
+    private Long now;
 
     Binder(String runId, String group, ContextBag bag) {
+        this(runId, group, bag, System::currentTimeMillis);
+    }
+
+    /** A binder whose clock a test pins. */
+    Binder(String runId, String group, ContextBag bag, LongSupplier clock) {
         this.runId = runId;
         this.group = group;
         this.bag = bag;
+        this.clock = clock;
+    }
+
+    /**
+     * This call's one reading of the clock, in epoch milliseconds. It is taken
+     * the first time a {@code $now} needs it and kept, so every {@code $now} in
+     * one call's params sees the same instant; the next call has a fresh
+     * binder, and so a fresh reading.
+     */
+    long instant() {
+        if (now == null) {
+            now = clock.getAsLong();
+        }
+        return now;
     }
 
     String runId() {

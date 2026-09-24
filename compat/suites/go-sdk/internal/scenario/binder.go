@@ -6,6 +6,7 @@ import (
 	"math"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Value expressions (compat/model/README.md § Values), as Go.
@@ -23,6 +24,7 @@ import (
 //	{"$concat": [...]} → Concat(...)
 //	{"$index": [v, n]} → Index(v, n)
 //	{"$base64": x}     → Base64(x), and Blob(b, member, Base64(x)) in a blob slot
+//	{"$now": {...}}    → Now(unit, offsetMillis), in an int64 slot
 
 // A Value is one deferred value expression. It is deferred rather than
 // evaluated where it is written because a clause is built before the test's
@@ -160,6 +162,53 @@ func Blob(b *Binder, member string, v any) []byte {
 	return raw
 }
 
+// nowUnits is $now's closed set of units, and nowMaxOffsetMillis the bound on
+// its offset either way: one hour (compat/model/README.md § Values).
+var nowUnits = map[string]bool{"epochMillis": true}
+
+const nowMaxOffsetMillis = 3_600_000
+
+// CheckNowArguments holds the two things any $now comes down to — a unit the
+// IR has, and an offset inside an hour — to the rule every runtime holds its
+// Now to. compat/model/testdata/now pins it for every backend at once.
+func CheckNowArguments(unit string, offsetMillis int64) error {
+	if !nowUnits[unit] {
+		return fmt.Errorf(`$now unit %q is not one the IR has; its one unit is "epochMillis"`, unit)
+	}
+	if offsetMillis < -nowMaxOffsetMillis || offsetMillis > nowMaxOffsetMillis {
+		return fmt.Errorf("$now offsetMillis %d is outside ±%d (one hour)", offsetMillis, nowMaxOffsetMillis)
+	}
+	return nil
+}
+
+// Now is `$now`: the client's clock when the call is made, in epoch
+// milliseconds, plus offsetMillis — which cmd/compatgen writes as 0 where the
+// scenario omits it. The clock is read the first time a call's Binder needs
+// it and that reading is kept, so every $now in one call's params sees the
+// same instant and their offsets order them; the next call has a fresh
+// Binder, and so a fresh reading.
+func Now(unit string, offsetMillis int64) Value {
+	return func(b *Binder) (any, error) {
+		if err := CheckNowArguments(unit, offsetMillis); err != nil {
+			return nil, err
+		}
+		return float64(b.instant() + offsetMillis), nil
+	}
+}
+
+// instant is this call's one reading of the clock, in epoch milliseconds.
+func (b *Binder) instant() int64 {
+	if b.now == nil {
+		clock := b.clock
+		if clock == nil {
+			clock = func() int64 { return time.Now().UnixMilli() }
+		}
+		reading := clock()
+		b.now = &reading
+	}
+	return *b.now
+}
+
 // refError is an unresolvable $ref: an error for the step that carries it, and
 // the one failure a teardown step is allowed to be skipped for.
 type refError struct{ path string }
@@ -204,6 +253,11 @@ type Binder struct {
 	// failure-message field 4.
 	member string
 	err    error
+	// clock is the client's clock in epoch milliseconds, which a $now reads;
+	// nil is the real one, and a test pins it. now is this call's one
+	// reading of it, taken on first use.
+	clock func() int64
+	now   *int64
 }
 
 // Bindable is every Go scalar type an emitted call binds an expression into.

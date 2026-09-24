@@ -1,0 +1,47 @@
+{
+  "$comment": "The shared `$now` conformance fixture (compat/model/README.md § Values). `$now` is the client's clock when a call is made, in epoch milliseconds, plus `offsetMillis`. Every suite's unit tests read this file with the clock pinned to `instant`. `valid` pins what each spelling evaluates to. `invalid` pins the spellings every reader of the IR's JSON refuses: the generator and the python-sdk, node-js-sdk and cli interpreters. `invalidArguments` pins what every runtime's `Now(unit, offsetMillis)` refuses, including the four typed runtimes, which are handed those two arguments by emitted source rather than the JSON. `call` pins one instant per call: its params are evaluated with a clock that moves on by `tickMillis` every time it is read, so a runtime that read the clock twice in one call would send something other than `sent`. A suite that cannot see this file here fails when OVERCAST_COMPAT_FIXTURES_REQUIRED is set, exactly as the error and blob fixtures do.",
+  "instant": 1726000000123,
+  "valid": [
+    { "name": "no-offset", "now": { "unit": "epochMillis" }, "value": 1726000000123 },
+    { "name": "one-behind", "now": { "unit": "epochMillis", "offsetMillis": -1 }, "value": 1726000000122 },
+    { "name": "one-ahead", "now": { "unit": "epochMillis", "offsetMillis": 1 }, "value": 1726000000124 },
+    { "name": "an-hour-behind", "now": { "unit": "epochMillis", "offsetMillis": -3600000 }, "value": 1725996400123 },
+    { "name": "an-hour-ahead", "now": { "unit": "epochMillis", "offsetMillis": 3600000 }, "value": 1726003600123 }
+  ],
+  "invalid": [
+    { "name": "bare-unit", "now": "epochMillis" },
+    { "name": "null", "now": null },
+    { "name": "missing-unit", "now": {} },
+    { "name": "offset-without-unit", "now": { "offsetMillis": 1 } },
+    { "name": "unknown-unit", "now": { "unit": "epochSeconds" } },
+    { "name": "unknown-member", "now": { "unit": "epochMillis", "offset": 1 } },
+    { "name": "zero-offset", "now": { "unit": "epochMillis", "offsetMillis": 0 } },
+    { "name": "fractional-offset", "now": { "unit": "epochMillis", "offsetMillis": 1.5 } },
+    { "name": "string-offset", "now": { "unit": "epochMillis", "offsetMillis": "1" } },
+    { "name": "offset-past-an-hour-behind", "now": { "unit": "epochMillis", "offsetMillis": -3600001 } },
+    { "name": "offset-past-an-hour-ahead", "now": { "unit": "epochMillis", "offsetMillis": 3600001 } }
+  ],
+  "invalidArguments": [
+    { "name": "unknown-unit", "unit": "epochSeconds", "offsetMillis": 0 },
+    { "name": "empty-unit", "unit": "", "offsetMillis": 0 },
+    { "name": "offset-past-an-hour-behind", "unit": "epochMillis", "offsetMillis": -3600001 },
+    { "name": "offset-past-an-hour-ahead", "unit": "epochMillis", "offsetMillis": 3600001 }
+  ],
+  "call": {
+    "tickMillis": 1000,
+    "params": {
+      "logGroupName": "g",
+      "logEvents": [
+        { "message": "first", "timestamp": { "$now": { "unit": "epochMillis", "offsetMillis": -1 } } },
+        { "message": "second", "timestamp": { "$now": { "unit": "epochMillis" } } }
+      ]
+    },
+    "sent": {
+      "logGroupName": "g",
+      "logEvents": [
+        { "message": "first", "timestamp": 1726000000122 },
+        { "message": "second", "timestamp": 1726000000123 }
+      ]
+    }
+  }
+}

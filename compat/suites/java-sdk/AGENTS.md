@@ -98,7 +98,7 @@ compat/suites/java-sdk/
       Group.java            ← setup → tests → teardown, and every assertion kind
       Call.java             ← one call: op, raw params, typed build, client method, exports
       Clause/Check/Where/ErrorSpec.java ← the closed assertion vocabulary
-      Values/Value/Binder/ContextBag.java ← $ref, $name, $concat, $index, typed
+      Values/Value/Binder/ContextBag.java ← $ref, $name, $concat, $index, $base64, $now, typed
       Doc/Json/Paths.java   ← SDK response → document, canonical JSON, path resolution
       Errors.java           ← error matching over this SDK's surfaces
       Failure/UnimplementedFailure.java ← the six-field message, and the 501 classification

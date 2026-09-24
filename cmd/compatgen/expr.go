@@ -12,7 +12,7 @@ import (
 
 // Value expressions.
 //
-// A value in a recipe or a scenario is ordinary JSON with six expression
+// A value in a recipe or a scenario is ordinary JSON with seven expression
 // forms, each an object with exactly one `$`-prefixed key:
 //
 //	{"$lit": <json>}                 the JSON verbatim, never interpreted
@@ -22,6 +22,9 @@ import (
 //	{"$index": [<value>, n]}         element n of a list-valued expression
 //	{"$base64": "<base64>"}          these bytes — the only value a blob member takes
 //	{"$base64": {"$ref": "k.blob"}}  the bytes of a blob a previous call exported
+//	{"$now": {"unit": "epochMillis"}}  the client's clock when the call is made,
+//	                                 in epoch milliseconds, optionally plus
+//	                                 "offsetMillis": n — for a long member only
 //
 // Everything else is structural: an object is a structure or map whose values
 // are themselves values, an array is a list of values, and a scalar is itself.
@@ -29,7 +32,7 @@ import (
 // agree on every value, so the grammar is closed and total.
 
 // exprKeys is the closed set of expression forms.
-var exprKeys = map[string]struct{}{"$lit": {}, "$ref": {}, "$name": {}, "$concat": {}, "$index": {}, "$base64": {}}
+var exprKeys = map[string]struct{}{"$lit": {}, "$ref": {}, "$name": {}, "$concat": {}, "$index": {}, "$base64": {}, "$now": {}}
 
 // exprOf returns the expression form of a value, or "" for a structural value.
 func exprOf(v any) (key string, arg any, ok bool) {
@@ -63,7 +66,7 @@ func validateValue(v any, where string) error {
 		if !isExpr {
 			if dollar == 1 {
 				for k := range value {
-					return fmt.Errorf("%s: unknown expression %q (want one of $lit, $ref, $name, $concat, $index, $base64)", where, k)
+					return fmt.Errorf("%s: unknown expression %q (want one of $lit, $ref, $name, $concat, $index, $base64, $now)", where, k)
 				}
 			}
 			for k, child := range value {
@@ -110,8 +113,12 @@ func validateExpr(key string, arg any, where string) error {
 			if _, isString := part.(string); isString {
 				continue
 			}
-			if _, _, isExpr := exprOf(part); !isExpr {
+			partKey, _, isExpr := exprOf(part)
+			if !isExpr {
 				return fmt.Errorf("%s: $concat part %d must be a string or an expression", where, i)
+			}
+			if partKey == "$now" {
+				return fmt.Errorf("%s: $concat part %d is a $now, which is a number, not a string", where, i)
 			}
 			if err := validateValue(part, fmt.Sprintf("%s.$concat[%d]", where, i)); err != nil {
 				return err
@@ -121,6 +128,9 @@ func validateExpr(key string, arg any, where string) error {
 		pair, ok := arg.([]any)
 		if !ok || len(pair) != 2 {
 			return fmt.Errorf("%s: $index takes [<value>, <index>]", where)
+		}
+		if key, _, _ := exprOf(pair[0]); key == "$now" {
+			return fmt.Errorf("%s: $index takes a list, and a $now is a number", where)
 		}
 		if err := validateValue(pair[0], where+".$index[0]"); err != nil {
 			return err
@@ -145,8 +155,111 @@ func validateExpr(key string, arg any, where string) error {
 		default:
 			return fmt.Errorf("%s: $base64 takes a base64 string or a {\"$ref\": ...} to an exported blob, got %s", where, valueKind(inner))
 		}
+	case "$now":
+		if _, err := nowOf(arg); err != nil {
+			return fmt.Errorf("%s: %w", where, err)
+		}
 	}
 	return nil
+}
+
+// The `$now` value (compat/model/README.md § Values) is the client's own clock
+// at the moment a call is made, which is what a real caller stamps an event
+// with. It is a closed object rather than a bare keyword so that each of its
+// two knobs is named where it is used:
+//
+//   - unit says what the number counts. A model `long` does not say whether it
+//     is seconds or milliseconds — CloudWatch Logs' is milliseconds — so the
+//     author states it and the generator holds it to the one unit every
+//     backend implements. A second unit would be an addition to nowUnits and
+//     to seven runtimes, never a reinterpretation of this one.
+//   - offsetMillis is added to the instant. Every `$now` in one call's params
+//     sees the same instant, so the offset is what makes two values in one
+//     call distinct and ordered — two events in one PutLogEvents batch must be
+//     chronological. It is bounded to an hour either way, which keeps every
+//     value well inside the window services accept a client clock in
+//     (CloudWatch Logs refuses an event more than two hours ahead or fourteen
+//     days behind), and a zero offset is written by omitting it, so each value
+//     has one spelling.
+//
+// Nothing else is accepted: no arithmetic on other values, no timestamp
+// shape, no second clock.
+
+// nowUnits is the closed set of `$now` units.
+var nowUnits = map[string]bool{"epochMillis": true}
+
+// nowMaxOffsetMillis bounds `$now`'s offset, in either direction: one hour.
+const nowMaxOffsetMillis = 3_600_000
+
+// nowOf validates a `$now` argument and returns its offset in milliseconds.
+func nowOf(arg any) (int64, error) {
+	object, ok := arg.(map[string]any)
+	if !ok {
+		return 0, fmt.Errorf(`$now takes {"unit": "epochMillis"} with an optional "offsetMillis", got %s`, valueKind(arg))
+	}
+	for _, k := range sortedKeys(object) {
+		if k != "unit" && k != "offsetMillis" {
+			return 0, fmt.Errorf("$now has no member %q; it takes unit and offsetMillis", k)
+		}
+	}
+	unit, ok := object["unit"].(string)
+	if !ok {
+		return 0, fmt.Errorf(`$now needs "unit": "epochMillis", because a long does not say what it counts`)
+	}
+	if !nowUnits[unit] {
+		return 0, fmt.Errorf(`$now unit %q is not one the IR has; its one unit is "epochMillis"`, unit)
+	}
+	raw, present := object["offsetMillis"]
+	if !present {
+		return 0, nil
+	}
+	var offset int64
+	switch n := raw.(type) {
+	case json.Number:
+		i, err := n.Int64()
+		if err != nil {
+			return 0, fmt.Errorf("$now offsetMillis must be a whole number of milliseconds, got %s", n)
+		}
+		offset = i
+	case float64:
+		if n != float64(int64(n)) {
+			return 0, fmt.Errorf("$now offsetMillis must be a whole number of milliseconds, got %v", n)
+		}
+		offset = int64(n)
+	default:
+		return 0, fmt.Errorf("$now offsetMillis must be a number, got %s", valueKind(raw))
+	}
+	if offset == 0 {
+		return 0, fmt.Errorf("$now offsetMillis is 0; omit it instead, so each value has one spelling")
+	}
+	if offset < -nowMaxOffsetMillis || offset > nowMaxOffsetMillis {
+		return 0, fmt.Errorf("$now offsetMillis %d is outside ±%d (one hour)", offset, nowMaxOffsetMillis)
+	}
+	return offset, nil
+}
+
+// nowParts is a validated `$now` argument as the two arguments every typed
+// runtime's constructor takes — the unit and the offset, zero where the
+// scenario omits it — which is how the four emitters spell one.
+func nowParts(arg any) (unit string, offset int64, err error) {
+	offset, err = nowOf(arg)
+	if err != nil {
+		return "", 0, err
+	}
+	return arg.(map[string]any)["unit"].(string), offset, nil
+}
+
+// hasNow reports whether a value is, or contains, a `$now` — which the
+// expected side of a check may never hold: the instant is taken when a call is
+// made, so there is nothing in a response it could be equal to.
+func hasNow(v any) bool {
+	found := false
+	walkValue(v, func(key string, _ any) {
+		if key == "$now" {
+			found = true
+		}
+	})
+	return found
 }
 
 // decodeBase64 decodes the text of a `$base64` literal, which must be
@@ -263,6 +376,8 @@ func literalKind(v any, exports exportKinds) string {
 			return literalKind(arg, exports)
 		case "$base64":
 			return "blob"
+		case "$now":
+			return "integer"
 		}
 		return ""
 	}

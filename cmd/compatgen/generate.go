@@ -669,6 +669,9 @@ func (gb *groupBuilder) completeAssertion(a *assertion, ownOp, producer string) 
 			if err != nil {
 				return nil, fmt.Errorf("where %w", err)
 			}
+			if err := checkNotExpected(a.Where[path], "where "+path); err != nil {
+				return nil, err
+			}
 			if err := gb.g.binder.checkValue(a.Where[path], target, gb.exports, "where "+path, gb.group.Name); err != nil {
 				return nil, err
 			}
@@ -692,7 +695,23 @@ func (gb *groupBuilder) checkCheck(output, path string, c check) error {
 		return err
 	}
 	if c.Equals != nil {
+		if err := checkNotExpected(c.Equals, "check "+path); err != nil {
+			return err
+		}
 		return gb.g.binder.checkValue(c.Equals, target, gb.exports, "check "+path, gb.group.Name)
+	}
+	return nil
+}
+
+// checkNotExpected refuses a `$now` on the expected side of an `equals` or a
+// `where`. The instant is read when a call is made and is gone once it has
+// been sent, so a comparison against a later reading of the clock would hold
+// only by accident: there is nothing in a response it could be equal to.
+// Assert what the service did with the value instead — that the events came
+// back, in order — which every backend can check.
+func checkNotExpected(v any, where string) error {
+	if hasNow(v) {
+		return fmt.Errorf("%s: $now cannot be an expected value; the clock is read when a call is made, so no response can be compared with it", where)
 	}
 	return nil
 }

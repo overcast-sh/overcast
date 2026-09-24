@@ -20,6 +20,7 @@ func pyStyle() style {
 		str:     quote,
 		concat:  func(parts []string) string { return strings.Join(parts, " + ") },
 		index:   func(list string, i int) string { return fmt.Sprintf("%s[%d]", list, i) },
+		now:     func(offset int64) string { return nowPlus("now_ms", offset) },
 		object: func(entries [][2]string) string {
 			var parts []string
 			for _, e := range entries {
@@ -52,6 +53,7 @@ func jsStyle() style {
 	st := pyStyle()
 	st.comment = "//"
 	st.name = func(suffix string) string { return fmt.Sprintf("`${runId}-${group}-%s`", suffix) }
+	st.now = func(offset int64) string { return nowPlus("nowMs", offset) }
 	st.object = func(entries [][2]string) string {
 		var parts []string
 		for _, e := range entries {
@@ -79,6 +81,7 @@ func cliStyle(client clientInfo) style {
 	st := pyStyle()
 	st.name = func(suffix string) string { return fmt.Sprintf("\"$RUN_ID-$GROUP-%s\"", suffix) }
 	st.ref = func(ref string) string { return "$" + strings.ToUpper(strings.NewReplacer(".", "_").Replace(ref)) }
+	st.now = func(offset int64) string { return "$((" + nowPlus("NOW_MS", offset) + "))" }
 	st.pathExpr = func(root, path string) string {
 		return fmt.Sprintf("jq '%s' <<< \"$%s\"", strings.TrimPrefix(path, "$"), root)
 	}
@@ -95,6 +98,18 @@ func renderCLI(_ renderEnv, s *scenario, g *group, t *test) string {
 		e.linef("export AWS_ENDPOINT_URL=$ENDPOINT  # service command %q from endpointPrefix %q", cliService(s.Client), s.Client.EndpointPrefix)
 		e.linef("GROUP=%s", quote(g.Name))
 	})
+}
+
+// nowPlus spells a `$now` for pseudo-code: the variable holding the clock,
+// read once for the call in epoch milliseconds, and the offset added to it.
+func nowPlus(variable string, offset int64) string {
+	switch {
+	case offset > 0:
+		return fmt.Sprintf("%s + %d", variable, offset)
+	case offset < 0:
+		return fmt.Sprintf("%s - %d", variable, -offset)
+	}
+	return variable
 }
 
 // ---------------------------------------------------------------------------

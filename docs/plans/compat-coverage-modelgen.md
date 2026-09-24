@@ -941,8 +941,11 @@ So: **structure is generated, semantics are curated.**
 
 `$lit`, `$ref` (context path), `$name` (unique name, always
 `{runId}-{groupToken}-{suffix}` so name hygiene holds by construction),
-`$concat`, `$index`. No conditionals, no scripting, no arithmetic — eight
-implementations must agree exactly. Path syntax is dot-plus-numeric-index only
+`$concat`, `$index`, `$base64` (a blob's bytes, #1910) and `$now` (the client's
+clock when the call is made, in epoch milliseconds, plus a constant offset). No
+conditionals, no scripting, no arithmetic — eight implementations must agree
+exactly. The normative list, with each form's rules, is
+[compat/model/README.md § Values](../../compat/model/README.md#values). Path syntax is dot-plus-numeric-index only
 (`$.Attributes.QueueArn`, `$.Queues[0].Name`), not full JSONPath.
 
 #### Parameter binding algorithm (generator, offline, deterministic)
@@ -1624,8 +1627,10 @@ reads a blob literal as base64, while python and node send it as UTF-8. The
 `logs-events` port needs a value for "now", and dotnet-sdk's emitter has to
 resolve SDK types at emit time: AWSSDK.CloudWatchLogs types
 `InputLogEvent.Timestamp` as `DateTime?`, where the model says `long` (draft
-#2132). The second is resolved — see the §3.2 note dated 2026-09-24 — and the
-draft's emitted C# now compiles.
+#2132). Both are resolved. The second is the §3.2 note dated 2026-09-24. The
+first is `$now`, the client's own clock read once per call, which the owner
+chose over stamping events with a server-derived `creationTime`
+(compat/model/README.md § Values).
 
 ---
 

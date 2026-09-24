@@ -209,7 +209,7 @@ dotnet-sdk/
 
   Scenario/               ← hand-written runtime the generated groups call into
     Model.cs                ← the IR's calls, tests, clauses and checks as C# types
-    Values.cs               ← $lit/$ref/$name/$concat/$index, the context bag and the Binder
+    Values.cs               ← $lit/$ref/$name/$concat/$index/$base64/$now, the context bag and the Binder
     ScenarioGroup.cs        ← setup → tests → teardown, and the group's own identity
     Execution.cs            ← the calls a clause makes and the closed assertion set
     Documents.cs, Paths.cs  ← an SDK response as one of the IR's documents, and paths over it

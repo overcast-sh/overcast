@@ -23,6 +23,7 @@ import java.util.Map;
  *   {"$concat": [...]} → Values.concat(...)
  *   {"$index": [v, n]} → Values.index(v, n)
  *   {"$base64": x}     → Values.base64(x), and b.blob(member, Values.base64(x)) in a blob slot
+ *   {"$now": {...}}    → Values.now(unit, offsetMillis), in a Long slot
  * </pre>
  */
 public final class Values {
@@ -110,6 +111,41 @@ public final class Values {
             decodeBase64(text);
             return text;
         };
+    }
+
+    /** {@code $now}'s one unit, and the bound on its offset either way: one hour. */
+    private static final String NOW_UNIT = "epochMillis";
+    private static final long NOW_MAX_OFFSET_MILLIS = 3_600_000L;
+
+    /**
+     * {@code $now}: the client's clock when the call is made, in epoch
+     * milliseconds, plus {@code offsetMillis} — which {@code cmd/compatgen}
+     * writes as 0 where the scenario omits it. The binder reads the clock once
+     * per call, so every {@code $now} in one call's params sees the same
+     * instant and their offsets order them.
+     */
+    public static Value now(String unit, long offsetMillis) {
+        return b -> {
+            checkNowArguments(unit, offsetMillis);
+            return b.instant() + offsetMillis;
+        };
+    }
+
+    /**
+     * Holds the two things any {@code $now} comes down to — a unit the IR has,
+     * and an offset inside an hour — to the rule every runtime holds its
+     * {@code Now} to. {@code compat/model/testdata/now} pins it for every
+     * backend at once.
+     */
+    static void checkNowArguments(String unit, long offsetMillis) {
+        if (!NOW_UNIT.equals(unit)) {
+            throw ValueException.of("$now unit " + Json.render(unit)
+                    + " is not one the IR has; its one unit is \"epochMillis\"");
+        }
+        if (Math.abs(offsetMillis) > NOW_MAX_OFFSET_MILLIS) {
+            throw ValueException.of("$now offsetMillis " + offsetMillis + " is outside ±"
+                    + NOW_MAX_OFFSET_MILLIS + " (one hour)");
+        }
     }
 
     /**

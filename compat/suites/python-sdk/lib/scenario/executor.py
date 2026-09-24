@@ -16,6 +16,7 @@ fields as an assertion failure.
 from __future__ import annotations
 
 import threading
+import time
 from dataclasses import dataclass, replace
 from typing import Any, Callable, Optional
 
@@ -58,6 +59,12 @@ _BOTOCORE_SERVICE_OVERRIDES = {
     "email": "ses",
     "states": "stepfunctions",
 }
+
+
+def clock_ms() -> int:
+    """The client's clock, in epoch milliseconds — what a ``$now`` reads. A
+    module function so the unit tests can pin it."""
+    return time.time_ns() // 1_000_000
 
 
 def botocore_service(endpoint_prefix: str) -> str:
@@ -107,7 +114,11 @@ class Executor:
         not be evaluated. The raw IR params are shown, because the evaluated
         ones are what does not exist."""
         try:
-            return self.evaluate(call.get("params") or {})
+            # The clock is read here, once per call, so every $now in these
+            # params sees the same instant (compat/model/README.md § Values).
+            return evaluate(call.get("params") or {}, context=self.context,
+                            run_id=self.ctx.run_id, group=self.spec.name,
+                            now_ms=clock_ms())
         except ScenarioError as exc:
             raise ScenarioFailure(failure_message(
                 group=ref.group, test=ref.test, op=call["op"],

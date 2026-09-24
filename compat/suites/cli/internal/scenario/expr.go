@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // Value expressions (compat/model/README.md § Values). A value is JSON: an
@@ -35,6 +36,14 @@ type evaluator struct {
 	runID string
 	group string
 	bag   *contextBag
+	// clock is the client's clock in epoch milliseconds — what a $now reads.
+	// Nil is the real one; a test pins it.
+	clock func() int64
+	// now is the clock's reading for the call being evaluated, taken once by
+	// evalParams so every $now in one call's params sees the same instant. It
+	// is nil everywhere else — an expected value, a where — and a $now
+	// evaluated there fails.
+	now *int64
 }
 
 // refError is an unresolvable $ref: an error for the step that carries it, and
@@ -181,6 +190,17 @@ func (e *evaluator) evalExpr(key string, arg any) (any, error) {
 			return nil, err
 		}
 		return text, nil
+	case "$now":
+		// The client's clock, as the number of epoch milliseconds the CLI
+		// reads a long member of --cli-input-json as.
+		offset, err := nowOffset(arg)
+		if err != nil {
+			return nil, err
+		}
+		if e.now == nil {
+			return nil, fmt.Errorf("$now is read when a call is made, so it can only be a call's param, never an expected value")
+		}
+		return float64(*e.now + offset), nil
 	default:
 		return nil, fmt.Errorf("unknown value expression %q", key)
 	}
@@ -208,12 +228,81 @@ func (e *evaluator) name(suffix string) string {
 	return e.runID + "-" + e.group + "-" + suffix
 }
 
+// nowUnits is $now's closed set of units, and nowMaxOffsetMillis the bound on
+// its offset either way: one hour (compat/model/README.md § Values).
+var nowUnits = map[string]bool{"epochMillis": true}
+
+const nowMaxOffsetMillis = 3_600_000
+
+// nowOffset validates a $now argument and returns its offset in milliseconds.
+// compat/model/testdata/now pins what every backend accepts and refuses.
+func nowOffset(arg any) (int64, error) {
+	object, ok := arg.(map[string]any)
+	if !ok {
+		return 0, fmt.Errorf(`$now takes {"unit": "epochMillis"}, got %s`, render(arg))
+	}
+	for k := range object {
+		if k != "unit" && k != "offsetMillis" {
+			return 0, fmt.Errorf("$now has no member %q; it takes unit and offsetMillis", k)
+		}
+	}
+	unit, present := object["unit"]
+	if !present {
+		return 0, fmt.Errorf(`$now needs "unit": "epochMillis"`)
+	}
+	var offset int64
+	if raw, present := object["offsetMillis"]; present {
+		n, ok := raw.(float64)
+		if !ok || n != float64(int64(n)) {
+			return 0, fmt.Errorf("$now offsetMillis must be a whole number of milliseconds, got %s", render(raw))
+		}
+		if n == 0 {
+			return 0, fmt.Errorf("$now offsetMillis is 0; the scenario omits it instead")
+		}
+		offset = int64(n)
+	}
+	s, isString := unit.(string)
+	if !isString {
+		return 0, fmt.Errorf(`$now unit %s is not one the IR has; its one unit is "epochMillis"`, render(unit))
+	}
+	return checkNowArguments(s, offset)
+}
+
+// checkNowArguments holds the two things any $now comes down to — a unit the
+// IR has, and an offset inside an hour — to the rule every runtime holds its
+// Now(unit, offsetMillis) to.
+func checkNowArguments(unit string, offset int64) (int64, error) {
+	if !nowUnits[unit] {
+		return 0, fmt.Errorf(`$now unit %q is not one the IR has; its one unit is "epochMillis"`, unit)
+	}
+	if offset < -nowMaxOffsetMillis || offset > nowMaxOffsetMillis {
+		return 0, fmt.Errorf("$now offsetMillis %d is outside ±%d (one hour)", offset, nowMaxOffsetMillis)
+	}
+	return offset, nil
+}
+
+// clockMillis is the client's clock in epoch milliseconds.
+func (e *evaluator) clockMillis() int64 {
+	if e.clock != nil {
+		return e.clock()
+	}
+	return time.Now().UnixMilli()
+}
+
 // evalParams evaluates a call's input members. The returned map is what is
 // marshalled into --cli-input-json.
+//
+// The clock is read here, once per call, so every $now in these params sees
+// the same instant. It is read on a copy of the evaluator: a group's
+// evaluator is shared by the tests of a parallel probe group, and one call's
+// reading must not become another's.
 func (e *evaluator) evalParams(params map[string]any) (map[string]any, error) {
+	call := *e
+	now := e.clockMillis()
+	call.now = &now
 	out := make(map[string]any, len(params))
 	for k, v := range params {
-		ev, err := e.eval(v)
+		ev, err := call.eval(v)
 		if err != nil {
 			return nil, err
 		}

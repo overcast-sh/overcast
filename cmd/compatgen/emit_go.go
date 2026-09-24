@@ -507,7 +507,7 @@ const goValueWidth = 80
 
 // goValue renders one IR value as an *untyped* Go expression, indented for
 // the line it will sit on: an object is a map[string]any, a list a []any, a
-// scalar itself, and each of the six expression forms is a scenario.Value
+// scalar itself, and each of the seven expression forms is a scenario.Value
 // constructor. Nothing else is representable, which is what makes this total.
 //
 // Untyped is right in the two places it is still used. An assertion's expected
@@ -557,6 +557,12 @@ func goValue(v any, indent string) (string, error) {
 				return "", err
 			}
 			return fmt.Sprintf("scenario.Base64(%s)", inner), nil
+		case "$now":
+			unit, offset, err := nowParts(arg)
+			if err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("scenario.Now(%q, %d)", unit, offset), nil
 		}
 	}
 	switch value := v.(type) {

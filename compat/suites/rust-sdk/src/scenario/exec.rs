@@ -25,7 +25,7 @@ use super::capture::{Document, Outcome, SdkFailure, Wire};
 use super::errors;
 use super::failure::{self, Failure};
 use super::json;
-use super::value::{Bag, EvalError};
+use super::value::{clock_millis, Bag, EvalError};
 use super::{Call, Check, CheckKind, Clause, Group, Test, WhereEntry};
 use crate::harness::TestContext;
 
@@ -177,7 +177,9 @@ impl Execution<'_> {
     /// The returned observation carries the exact params JSON sent, so every
     /// failure downstream of it quotes what went on the wire.
     async fn invoke_raw(&self, call: &Call, step: &str) -> Result<Observed, Failure> {
-        let evaluated = match call.params.eval(&self.bag()) {
+        // The clock is read here, once per call, so every `$now` in these
+        // params sees the same instant (compat/model/README.md § Values).
+        let evaluated = match call.params.eval(&self.bag().at(clock_millis())) {
             Ok(evaluated) => evaluated,
             Err(err) => {
                 // Nothing was sent, so field 3 shows the params as the scenario

@@ -237,12 +237,14 @@ func readScenario(path string) (*scenario, error) {
 
 // A style says how a language spells the pieces the IR is made of.
 type style struct {
-	comment  string                  // line-comment prefix
-	ref      func(ref string) string // a context lookup
-	name     func(suffix string) string
-	str      func(s string) string // a string literal
-	concat   func(parts []string) string
-	index    func(list string, i int) string
+	comment string                  // line-comment prefix
+	ref     func(ref string) string // a context lookup
+	name    func(suffix string) string
+	str     func(s string) string // a string literal
+	concat  func(parts []string) string
+	index   func(list string, i int) string
+	// now is a `$now`: the clock read once for the call, plus the offset.
+	now      func(offsetMillis int64) string
 	object   func(entries [][2]string) string // key already rendered as a literal
 	list     func(items []string) string
 	pathExpr func(root, path string) string // response path access
@@ -282,6 +284,10 @@ func (st style) value(v any) string {
 			pair := arg.([]any)
 			i, _ := integerOf(pair[1])
 			return st.index(st.value(pair[0]), i)
+		case "$now":
+			if offset, err := nowOf(arg); err == nil && st.now != nil {
+				return st.now(offset)
+			}
 		}
 	}
 	switch value := v.(type) {

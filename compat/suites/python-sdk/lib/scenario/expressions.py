@@ -15,7 +15,7 @@ from __future__ import annotations
 import base64
 import binascii
 import re
-from typing import Any, Mapping, Sequence, Union
+from typing import Any, Mapping, Optional, Sequence, Union
 
 from .failures import MISSING, ScenarioError
 
@@ -66,17 +66,22 @@ def resolve_path(root: Any, path: str) -> Any:
     return value
 
 
-def evaluate(value: Any, *, context: Mapping[str, Any], run_id: str, group: str) -> Any:
+def evaluate(value: Any, *, context: Mapping[str, Any], run_id: str, group: str,
+             now_ms: Optional[int] = None) -> Any:
     """Evaluate a value expression against the group's context bag.
 
     An object with exactly one ``$``-prefixed key is an expression; any other
     object is a structure or map whose values are values; an array is a list
-    of values; a scalar is itself."""
+    of values; a scalar is itself.
+
+    ``now_ms`` is the clock, in epoch milliseconds, read once for the call
+    whose params these are (see :func:`now_value`). It is None everywhere else
+    — an expected value, a ``where`` — and a ``$now`` evaluated there fails."""
     if isinstance(value, Mapping):
         dollar_keys = [k for k in value if isinstance(k, str) and k.startswith("$")]
         if dollar_keys and len(value) == 1:
             return _expression(dollar_keys[0], value[dollar_keys[0]],
-                               context=context, run_id=run_id, group=group)
+                               context=context, run_id=run_id, group=group, now_ms=now_ms)
         if dollar_keys:
             # The schema forbids it, and `$lit` exists precisely so an object
             # whose keys start with `$` can still be written.
@@ -85,15 +90,15 @@ def evaluate(value: Any, *, context: Mapping[str, Any], run_id: str, group: str)
                 f"members {sorted(k for k in value if k not in dollar_keys)!r} "
                 "— use $lit for an object whose keys start with $"
             )
-        return {k: evaluate(v, context=context, run_id=run_id, group=group)
+        return {k: evaluate(v, context=context, run_id=run_id, group=group, now_ms=now_ms)
                 for k, v in value.items()}
     if isinstance(value, list):
-        return [evaluate(v, context=context, run_id=run_id, group=group) for v in value]
+        return [evaluate(v, context=context, run_id=run_id, group=group, now_ms=now_ms) for v in value]
     return value
 
 
 def _expression(key: str, arg: Any, *, context: Mapping[str, Any], run_id: str,
-                group: str) -> Any:
+                group: str, now_ms: Optional[int]) -> Any:
     if key == "$lit":
         # Verbatim, never interpreted — not even one level down.
         return arg
@@ -112,7 +117,7 @@ def _expression(key: str, arg: Any, *, context: Mapping[str, Any], run_id: str,
     if key == "$concat":
         parts: list[str] = []
         for part in arg:
-            evaluated = evaluate(part, context=context, run_id=run_id, group=group)
+            evaluated = evaluate(part, context=context, run_id=run_id, group=group, now_ms=now_ms)
             if not isinstance(evaluated, str):
                 raise ScenarioError(
                     f"$concat part {part!r} evaluated to {evaluated!r}, which is "
@@ -122,7 +127,7 @@ def _expression(key: str, arg: Any, *, context: Mapping[str, Any], run_id: str,
         return "".join(parts)
     if key == "$index":
         target, index = arg[0], arg[1]
-        evaluated = evaluate(target, context=context, run_id=run_id, group=group)
+        evaluated = evaluate(target, context=context, run_id=run_id, group=group, now_ms=now_ms)
         if isinstance(evaluated, (str, bytes)) or not isinstance(evaluated, Sequence):
             raise ScenarioError(f"$index target evaluated to {evaluated!r}, which is not a list")
         if index >= len(evaluated):
@@ -136,9 +141,64 @@ def _expression(key: str, arg: Any, *, context: Mapping[str, Any], run_id: str,
         # plain string in the IR. The argument is base64 text: a literal, or a
         # $ref to a blob a previous call exported, which the context bag holds
         # in its document form (see :func:`to_document`).
-        text = evaluate(arg, context=context, run_id=run_id, group=group)
+        text = evaluate(arg, context=context, run_id=run_id, group=group, now_ms=now_ms)
         return decode_base64(text)
+    if key == "$now":
+        return now_value(arg, now_ms)
     raise ScenarioError(f"unknown value expression {key!r}")
+
+
+# `$now`'s closed set of units, and the bound on its offset either way: one
+# hour (compat/model/README.md § Values).
+NOW_UNITS = frozenset({"epochMillis"})
+NOW_MAX_OFFSET_MILLIS = 3_600_000
+
+
+def now_offset(arg: Any) -> int:
+    """Validate a ``$now`` argument and return its offset in milliseconds.
+    compat/model/testdata/now pins what every backend accepts and refuses."""
+    if not isinstance(arg, Mapping):
+        raise ScenarioError(f'$now takes {{"unit": "epochMillis"}}, got {arg!r}')
+    unknown = sorted(set(arg) - {"unit", "offsetMillis"})
+    if unknown:
+        raise ScenarioError(f"$now has no member {unknown[0]!r}; it takes unit and offsetMillis")
+    if "unit" not in arg:
+        raise ScenarioError('$now needs "unit": "epochMillis"')
+    offset = arg.get("offsetMillis", None)
+    if "offsetMillis" in arg:
+        # A bool is an int to Python and never a number to JSON.
+        if isinstance(offset, bool) or not isinstance(offset, int):
+            raise ScenarioError(
+                f"$now offsetMillis must be a whole number of milliseconds, got {offset!r}")
+        if offset == 0:
+            raise ScenarioError("$now offsetMillis is 0; the scenario omits it instead")
+    return check_now_arguments(arg["unit"], offset or 0)
+
+
+def check_now_arguments(unit: Any, offset: int) -> int:
+    """The two things any ``$now`` comes down to — a unit the IR has, and an
+    offset inside an hour — held to the same rule every runtime holds its
+    ``Now(unit, offsetMillis)`` to."""
+    if unit not in NOW_UNITS:
+        raise ScenarioError(f'$now unit {unit!r} is not one the IR has; its one unit is "epochMillis"')
+    if not -NOW_MAX_OFFSET_MILLIS <= offset <= NOW_MAX_OFFSET_MILLIS:
+        raise ScenarioError(f"$now offsetMillis {offset} is outside ±{NOW_MAX_OFFSET_MILLIS} (one hour)")
+    return offset
+
+
+def now_value(arg: Any, now_ms: Optional[int]) -> int:
+    """``$now``: the client's clock when the call is made, in epoch
+    milliseconds, plus the offset. The executor reads the clock once per call
+    and hands the reading down, so every ``$now`` in one call's params sees the
+    same instant and their offsets order them. There is no reading anywhere
+    else: an expected value is compared with a response, and no response holds
+    the instant a call was made at."""
+    offset = now_offset(arg)
+    if now_ms is None:
+        raise ScenarioError(
+            "$now is read when a call is made, so it can only be a call's param, "
+            "never an expected value")
+    return now_ms + offset
 
 
 def decode_base64(text: Any) -> bytes:
