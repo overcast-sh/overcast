@@ -207,7 +207,20 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 	if cacheable {
 		cacheKey = proxyCacheKey(distID, reqPath, r)
 		if entry := h.cache.get(cacheKey); entry != nil {
-			for k, vals := range entry.headers {
+			// Viewer-response functions run on a hit too: the function
+			// "executes regardless of whether the file is already in the
+			// CloudFront cache" (lambda-cloudfront-trigger-events). The entry
+			// holds the origin's headers and is shared, so the function works
+			// on a copy — made only when there is a function to run.
+			hdrs := entry.headers
+			if behaviorFAs != nil && len(behaviorFAs.Items) > 0 && entry.statusCode < 400 {
+				hdrs = copyHeaders(entry.headers)
+				if err := h.runViewerResponse(r, distID, domainName, reqPath, behaviorFAs, entry.statusCode, hdrs); err != nil {
+					writeFunctionError(w, distID, err)
+					return
+				}
+			}
+			for k, vals := range hdrs {
 				for _, v := range vals {
 					w.Header().Add(k, v)
 				}
@@ -314,9 +327,11 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 		}
 		ttl := h.cacheTTL(ctx, cachePolicyID)
 
+		// Cache the origin's headers, not the function's changes to them: the
+		// viewer-response functions run again, per viewer, on every hit.
 		h.cache.set(cacheKey, &cfCacheEntry{
 			statusCode: resp.StatusCode,
-			headers:    copyHeaders(respHeaders),
+			headers:    copyHeaders(resp.Header),
 			body:       bodyBytes,
 			tags:       cachedTags,
 			expiresAt:  h.clk.Now().Add(ttl),

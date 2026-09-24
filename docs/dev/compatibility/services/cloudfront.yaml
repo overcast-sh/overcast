@@ -178,6 +178,18 @@ findings:
           tests/integration/cloudfront/cloudfront_test.go::TestProxy_viewerResponseFunctionErrors,
           tests/integration/cloudfront/cloudfront_test.go::TestProxy_viewerResponseFunctionSkippedOnOriginError
       fixed_in: "#2142"
+    - scenario: >-
+        #2146: viewer-response functions run on a cache hit, against the request being served. The hit
+        branch used to write the cached entry without running them. The cache also stored the headers after
+        the function had changed them, so a hit replayed what the function did for the viewer that filled
+        the cache. The cache now holds the origin's headers, and on a hit the function runs over a copy. A
+        function that fails on a hit answers 503 or 502, as on a miss.
+      evidence:
+        aws_docs: >-
+          https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/lambda-cloudfront-trigger-events.html
+          ("Viewer response": executes "regardless of whether the file is already in the CloudFront cache")
+        tests: tests/integration/cloudfront/cloudfront_test.go::TestProxy_viewerResponseFunctionRunsOnACacheHit
+      fixed_in: "#2146"
   remaining_gaps:
     - >-
       Member order below the top level still follows the order the structs happened to be written in
@@ -192,10 +204,6 @@ findings:
       step. AWS also resolves dot segments ("/a/b/.." matches "/a*", not "/a/b*") and collapses repeated
       slashes before matching; Overcast matches the path as sent. Recorded on
       docs/services/cloudfront/limitations.md ("Request paths").
-    - >-
-      #2142 (found in passing, not fixed): viewer-response functions do not run on a cache hit. The
-      cached response is written before they would run, while AWS runs them on every response it
-      returns to the viewer. Recorded on docs/services/cloudfront/limitations.md ("CloudFront Functions").
   intentionally_partial:
     - >-
       ETags are a quoted version counter ("1", "2", …) rather than a content hash or an opaque token

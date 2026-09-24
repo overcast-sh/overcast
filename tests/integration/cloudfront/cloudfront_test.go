@@ -5241,6 +5241,92 @@ func TestProxy_viewerResponseFunctionSkippedOnOriginError(t *testing.T) {
 	}
 }
 
+// TestProxy_viewerResponseFunctionRunsOnACacheHit: a viewer-response function
+// "executes regardless of whether the file is already in the CloudFront cache"
+// (lambda-cloudfront-trigger-events, "Viewer response"; CloudFront Functions
+// share the event). So on a hit it runs again, against THIS request, over the
+// origin's cached response — not a replay of what it did for the viewer that
+// filled the cache.
+func TestProxy_viewerResponseFunctionRunsOnACacheHit(t *testing.T) {
+	// Given: an origin that counts its requests
+	originDomain, port, hits := functionErrorOrigin(t, http.StatusOK)
+	srv := helpers.NewTestServer(t)
+
+	// And: a viewer-response function that echoes the request's x-v header,
+	// and throws when the request carries x-fail
+	fnARN := cfCreateFunctionWithCode(t, srv, "resp-fn-cache-hit", `function handler(event) {
+  var response = event.response;
+  if (event.request.headers['x-fail']) { throw new Error('boom'); }
+  var v = event.request.headers['x-v'];
+  if (v) { response.headers['x-echo'] = { value: v.value }; }
+  return response;
+}`)
+	dist, _ := cfCreateDistFromXML(t, srv, proxyDistXML(proxyDistSpec{
+		CallerRef: "proxy-fn-resp-cache-hit", OriginDomain: originDomain, OriginPort: port,
+		PathPattern: "/never/*", FnARN: fnARN, FnEventType: "viewer-response",
+	}))
+
+	get := func(t *testing.T, path string, headers map[string]string) *http.Response {
+		t.Helper()
+		req, _ := http.NewRequest(http.MethodGet, srv.URL+path, nil)
+		req.Host = dist.ID + ".cloudfront.localhost:4566"
+		for k, v := range headers {
+			req.Header.Set(k, v)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("proxy request: %v", err)
+		}
+		resp.Body.Close()
+		return resp
+	}
+
+	for _, tc := range []struct {
+		name          string
+		path          string
+		second        map[string]string
+		wantStatus    int
+		wantEcho      string
+		wantXCacheHit bool
+	}{
+		// The function sees the second viewer's header, not the first's.
+		{"runs against this request", "/echo", map[string]string{"X-V": "second"}, http.StatusOK, "second", true},
+		// The cache holds the origin's headers: the first viewer's x-echo is
+		// not replayed to a viewer the function adds nothing for.
+		{"cache holds the origin's headers", "/pure", nil, http.StatusOK, "", true},
+		// A function that fails on a hit fails the hit, as on a miss.
+		{"execution error on a hit", "/fail", map[string]string{"X-Fail": "1"}, http.StatusServiceUnavailable, "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			hits.Store(0)
+
+			// When: the path is fetched once to fill the cache...
+			first := get(t, tc.path, map[string]string{"X-V": "first"})
+			helpers.AssertStatus(t, first, http.StatusOK)
+			if got := first.Header.Get("X-Echo"); got != "first" {
+				t.Fatalf("first fetch X-Echo = %q, want %q", got, "first")
+			}
+
+			// ...and again, by a different viewer
+			second := get(t, tc.path, tc.second)
+
+			// Then: the second answer is the function's work on this request
+			helpers.AssertStatus(t, second, tc.wantStatus)
+			if got := second.Header.Get("X-Echo"); got != tc.wantEcho {
+				t.Errorf("second fetch X-Echo = %q, want %q", got, tc.wantEcho)
+			}
+			if tc.wantXCacheHit {
+				if got := second.Header.Get("X-Cache"); got != "Hit from cloudfront" {
+					t.Errorf("second fetch X-Cache = %q, want a hit", got)
+				}
+			}
+			if got := hits.Load(); got != 1 {
+				t.Errorf("origin answered %d requests, want 1: the second must come from the cache", got)
+			}
+		})
+	}
+}
+
 // accessLogLine waits for the single access-log object a distribution writes
 // under prefix in bucket and returns its tab-separated fields.
 func accessLogLine(t *testing.T, srv *helpers.TestServer, bucket, prefix string) []string {

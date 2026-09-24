@@ -89,16 +89,13 @@ distribution ID, for tests that need a stable one.
 ## CloudFront Functions
 
 Viewer-request and viewer-response functions are executed on the proxy path by
-an embedded JavaScript engine. Three divergences:
+an embedded JavaScript engine. Two divergences:
 
 - **Stage is not checked.** The function is resolved by ARN, so a
   `DEVELOPMENT` version attached to a behaviour runs on live requests without
   being published.
 - **`TestFunction` does not execute anything.** Use a real request through the
   distribution to exercise a function.
-- **Viewer-response functions do not run on a cache hit.** They run only when
-  the response comes from the origin. On AWS they run on every response,
-  including one served from the cache.
 
 Lambda@Edge is not emulated at all.
 
