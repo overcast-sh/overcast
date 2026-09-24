@@ -24,10 +24,27 @@ type cfFunctionResult struct {
 	headers map[string]string
 }
 
-// errFunctionValidation marks a function that ran but returned an invalid event
-// object — AWS's FunctionValidationErrors metric. The viewer gets a 502
-// (http-502-bad-gateway, "CloudFront function validation error").
-var errFunctionValidation = errors.New("function validation error")
+// The two ways a CloudFront Function fails, as AWS counts and answers them
+// (viewing-cloudfront-metrics). Either one ends the request: the origin is not
+// called, or its response is not delivered.
+var (
+	// errFunctionExecution: the function "fails to complete successfully" —
+	// it throws, or its code does not compile or defines no handler. The
+	// viewer gets a 503 (http-503-service-unavailable).
+	errFunctionExecution = errors.New("function execution error")
+	// errFunctionValidation: the function ran but returned an invalid event
+	// object. The viewer gets a 502 (http-502-bad-gateway, "CloudFront
+	// function validation error").
+	errFunctionValidation = errors.New("function validation error")
+)
+
+// functionErrorStatus is the status a viewer gets for a failed function.
+func functionErrorStatus(err error) int {
+	if errors.Is(err, errFunctionValidation) {
+		return http.StatusBadGateway
+	}
+	return http.StatusServiceUnavailable
+}
 
 // runViewerRequest executes all viewer-request CloudFront Functions for the
 // matching cache behavior.
@@ -38,8 +55,8 @@ var errFunctionValidation = errors.New("function validation error")
 //
 // Returns:
 //   - result: parsed output (may include an early HTTP response)
-//   - err: errFunctionValidation-wrapped if a function returned an invalid
-//     request; the request must then be refused, not forwarded
+//   - err: errFunctionExecution or errFunctionValidation, wrapped, if a
+//     function failed; the request must then be refused, not forwarded
 func (h *Handler) runViewerRequest(
 	r *http.Request,
 	distID string,
@@ -64,17 +81,11 @@ func (h *Handler) runViewerRequest(
 		}
 		event := buildViewerRequestEvent(r, distID, domainName, reqPath)
 		res, execErr := execCFFunction(fn.FunctionCode, event)
-		if errors.Is(execErr, errFunctionValidation) {
-			log.Warn("viewer-request function returned an invalid request",
+		if execErr != nil {
+			log.Warn("viewer-request function failed",
 				zap.String("arn", fa.FunctionARN),
 				zap.Error(execErr))
 			return nil, execErr
-		}
-		if execErr != nil {
-			log.Warn("viewer-request function error",
-				zap.String("arn", fa.FunctionARN),
-				zap.Error(execErr))
-			continue
 		}
 		result = res
 		// If it returned a response, stop processing.
@@ -92,6 +103,9 @@ func (h *Handler) runViewerRequest(
 
 // runViewerResponse executes all viewer-response CloudFront Functions.
 // Modifies the headers map in-place.
+//
+// It returns errFunctionExecution or errFunctionValidation, wrapped, if a
+// function failed; the origin's response must then not be delivered.
 func (h *Handler) runViewerResponse(
 	r *http.Request,
 	distID string,
@@ -100,10 +114,10 @@ func (h *Handler) runViewerResponse(
 	fas *FunctionAssociations,
 	statusCode int,
 	headers map[string][]string,
-) {
+) error {
 	log := h.log.WithRecorder(r.Context())
 	if fas == nil || len(fas.Items) == 0 {
-		return
+		return nil
 	}
 	for _, fa := range fas.Items {
 		if fa.EventType != "viewer-response" {
@@ -118,10 +132,10 @@ func (h *Handler) runViewerResponse(
 		event := buildViewerResponseEvent(r, distID, domainName, reqPath, statusCode, headers)
 		res, execErr := execCFFunction(fn.FunctionCode, event)
 		if execErr != nil {
-			log.Warn("viewer-response function error",
+			log.Warn("viewer-response function failed",
 				zap.String("arn", fa.FunctionARN),
 				zap.Error(execErr))
-			continue
+			return execErr
 		}
 		if res != nil {
 			// Merge modified headers back.
@@ -130,6 +144,7 @@ func (h *Handler) runViewerResponse(
 			}
 		}
 	}
+	return nil
 }
 
 // buildViewerRequestEvent constructs the CloudFront Functions event object for viewer-request.
@@ -213,38 +228,36 @@ func buildViewerResponseEvent(r *http.Request, distID, domainName, uri string, s
 }
 
 // execCFFunction runs a CloudFront Function using goja and parses the result.
+// Every error it returns wraps errFunctionExecution or errFunctionValidation.
 func execCFFunction(b64Code string, event map[string]interface{}) (*cfFunctionResult, error) {
 	src, err := base64.StdEncoding.DecodeString(b64Code)
 	if err != nil {
-		return nil, fmt.Errorf("decode function code: %w", err)
+		return nil, fmt.Errorf("%w: decode function code: %w", errFunctionExecution, err)
 	}
 
 	vm := goja.New()
 	vm.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
 
 	if _, err = vm.RunString(string(src)); err != nil {
-		return nil, fmt.Errorf("compile function: %w", err)
+		return nil, fmt.Errorf("%w: compile function: %w", errFunctionExecution, err)
 	}
 
 	handlerFn, ok := goja.AssertFunction(vm.Get("handler"))
 	if !ok {
-		return nil, fmt.Errorf("function must define a 'handler' function")
+		return nil, fmt.Errorf("%w: function must define a 'handler' function", errFunctionExecution)
 	}
 
 	retVal, callErr := handlerFn(goja.Undefined(), vm.ToValue(event))
 	if callErr != nil {
-		// JS functions can throw — treat as an error response.
-		return &cfFunctionResult{
-			isResponse: true,
-			statusCode: http.StatusInternalServerError,
-			statusDesc: "Function Error",
-		}, nil
+		return nil, fmt.Errorf("%w: %w", errFunctionExecution, callErr)
 	}
 
+	// A function must return a request or a response object; anything else
+	// (undefined included, when it forgets to return) is an invalid event.
 	ret := retVal.Export()
 	retMap, ok := ret.(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("unexpected function return type: %T", ret)
+		return nil, fmt.Errorf("%w: function returned %T, not a request or response object", errFunctionValidation, ret)
 	}
 
 	res := &cfFunctionResult{}

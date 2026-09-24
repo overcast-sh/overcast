@@ -4862,7 +4862,7 @@ func TestProxy_viewerRequestFunctionURIReachesTheOrigin(t *testing.T) {
 // proxyDistSpec describes a single-origin distribution for the behavior, cache
 // TTL and access-log tests: a default behavior and one cache behavior for
 // PathPattern, each with its own cache policy, and FnARN (when set) associated
-// with both as a viewer-request function.
+// with both for FnEventType (viewer-request when empty).
 type proxyDistSpec struct {
 	CallerRef       string
 	OriginDomain    string
@@ -4871,6 +4871,7 @@ type proxyDistSpec struct {
 	DefaultPolicyID string
 	PatternPolicyID string
 	FnARN           string
+	FnEventType     string
 	LogBucket       string // a bucket name; logging is off when empty
 	LogPrefix       string
 }
@@ -4878,9 +4879,13 @@ type proxyDistSpec struct {
 func proxyDistXML(s proxyDistSpec) string {
 	fas := ""
 	if s.FnARN != "" {
+		eventType := s.FnEventType
+		if eventType == "" {
+			eventType = "viewer-request"
+		}
 		fas = fmt.Sprintf(`<FunctionAssociations><Quantity>1</Quantity><Items><FunctionAssociation>
-      <FunctionARN>%s</FunctionARN><EventType>viewer-request</EventType>
-    </FunctionAssociation></Items></FunctionAssociations>`, s.FnARN)
+      <FunctionARN>%s</FunctionARN><EventType>%s</EventType>
+    </FunctionAssociation></Items></FunctionAssociations>`, s.FnARN, eventType)
 	}
 	policy := func(id string) string {
 		if id == "" {
@@ -5071,6 +5076,252 @@ func TestProxy_viewerRequestFunctionURIMustBeginWithSlash(t *testing.T) {
 			}
 			if got := originHits.Load(); got != wantHits {
 				t.Errorf("origin answered %d requests, want %d", got, wantHits)
+			}
+		})
+	}
+}
+
+// functionErrorOrigin starts an origin that counts its requests and answers
+// with status, and returns its host, port and hit counter.
+func functionErrorOrigin(t *testing.T, status int) (string, int, *atomic.Int32) {
+	t.Helper()
+	hits := new(atomic.Int32)
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.WriteHeader(status)
+	}))
+	t.Cleanup(origin.Close)
+	domain, port := splitOriginURL(t, origin.URL)
+	return domain, port, hits
+}
+
+// TestProxy_viewerRequestFunctionExecutionErrorIs503: a function that "fails to
+// complete successfully" is an execution error (viewing-cloudfront-metrics,
+// FunctionExecutionErrors), and "an HTTP 503 status code can indicate that
+// your function returned an execution error" (http-503-service-unavailable).
+// The request goes no further: the origin is not called.
+func TestProxy_viewerRequestFunctionExecutionErrorIs503(t *testing.T) {
+	originDomain, port, hits := functionErrorOrigin(t, http.StatusOK)
+	srv := helpers.NewTestServer(t)
+
+	for i, tc := range []struct{ name, code string }{
+		{"throws", `function handler(event) { throw new Error('boom'); }`},
+		{"syntax error", `function handler(event) { return event.request`},
+		{"no handler", `function notTheHandler(event) { return event.request; }`},
+		{"calls an undefined function", `function handler(event) { return missing(event.request); }`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			hits.Store(0)
+			// Given: a distribution whose viewer-request function cannot complete
+			fnARN := cfCreateFunctionWithCode(t, srv, fmt.Sprintf("exec-error-req-%d", i), tc.code)
+			dist, _ := cfCreateDistFromXML(t, srv, proxyDistXML(proxyDistSpec{
+				CallerRef: fmt.Sprintf("proxy-fn-exec-error-req-%d", i), OriginDomain: originDomain, OriginPort: port,
+				PathPattern: "/never/*", FnARN: fnARN,
+			}))
+
+			// When: a viewer requests a path
+			resp := hostRoutedGet(t, srv, dist.ID, "/page")
+			resp.Body.Close()
+
+			// Then: 503, and the origin was never asked
+			helpers.AssertStatus(t, resp, http.StatusServiceUnavailable)
+			if got := hits.Load(); got != 0 {
+				t.Errorf("origin answered %d requests, want 0", got)
+			}
+		})
+	}
+}
+
+// TestProxy_viewerRequestFunctionInvalidReturnIs502: a function that runs but
+// "returns invalid data (an invalid event object)" is a validation error
+// (viewing-cloudfront-metrics, FunctionValidationErrors), which reaches the
+// viewer as a 502 (http-502-bad-gateway). A viewer-request function must
+// return a request or a response object.
+func TestProxy_viewerRequestFunctionInvalidReturnIs502(t *testing.T) {
+	originDomain, port, hits := functionErrorOrigin(t, http.StatusOK)
+	srv := helpers.NewTestServer(t)
+
+	for i, tc := range []struct{ name, ret string }{
+		{"undefined", `undefined`},
+		{"null", `null`},
+		{"a string", `'/page'`},
+		{"a number", `42`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			hits.Store(0)
+			// Given: a distribution whose viewer-request function returns tc.ret
+			fnARN := cfCreateFunctionWithCode(t, srv, fmt.Sprintf("invalid-ret-req-%d", i),
+				fmt.Sprintf(`function handler(event) { return %s; }`, tc.ret))
+			dist, _ := cfCreateDistFromXML(t, srv, proxyDistXML(proxyDistSpec{
+				CallerRef: fmt.Sprintf("proxy-fn-invalid-ret-req-%d", i), OriginDomain: originDomain, OriginPort: port,
+				PathPattern: "/never/*", FnARN: fnARN,
+			}))
+
+			// When: a viewer requests a path
+			resp := hostRoutedGet(t, srv, dist.ID, "/page")
+			resp.Body.Close()
+
+			// Then: 502, and the origin was never asked
+			helpers.AssertStatus(t, resp, http.StatusBadGateway)
+			if got := hits.Load(); got != 0 {
+				t.Errorf("origin answered %d requests, want 0", got)
+			}
+		})
+	}
+}
+
+// TestProxy_viewerResponseFunctionErrors: the same two failure classes apply to
+// a viewer-response function — an execution error is a 503 and an invalid
+// return a 502 — in place of the origin's response.
+func TestProxy_viewerResponseFunctionErrors(t *testing.T) {
+	originDomain, port, _ := functionErrorOrigin(t, http.StatusOK)
+	srv := helpers.NewTestServer(t)
+
+	for i, tc := range []struct {
+		name, code string
+		wantStatus int
+		wantHeader string
+	}{
+		{"throws", `function handler(event) { throw new Error('boom'); }`, http.StatusServiceUnavailable, ""},
+		{"syntax error", `function handler(event) { return event.response`, http.StatusServiceUnavailable, ""},
+		{"returns undefined", `function handler(event) { }`, http.StatusBadGateway, ""},
+		{"healthy", `function handler(event) {
+  var response = event.response;
+  response.headers['x-fn'] = { value: 'ran' };
+  return response;
+}`, http.StatusOK, "ran"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Given: a distribution with tc.code as its viewer-response function
+			fnARN := cfCreateFunctionWithCode(t, srv, fmt.Sprintf("resp-fn-%d", i), tc.code)
+			dist, _ := cfCreateDistFromXML(t, srv, proxyDistXML(proxyDistSpec{
+				CallerRef: fmt.Sprintf("proxy-fn-resp-%d", i), OriginDomain: originDomain, OriginPort: port,
+				PathPattern: "/never/*", FnARN: fnARN, FnEventType: "viewer-response",
+			}))
+
+			// When: a viewer requests a path
+			resp := hostRoutedGet(t, srv, dist.ID, "/page")
+			resp.Body.Close()
+
+			// Then: the function's failure, not the origin's 200, is the answer
+			helpers.AssertStatus(t, resp, tc.wantStatus)
+			if got := resp.Header.Get("X-Fn"); got != tc.wantHeader {
+				t.Errorf("X-Fn = %q, want %q", got, tc.wantHeader)
+			}
+		})
+	}
+}
+
+// TestProxy_viewerResponseFunctionSkippedOnOriginError: "If the origin returns
+// an HTTP error of 400 and above, the CloudFront Function will not run"
+// (functions-event-structure, "Status code and body").
+func TestProxy_viewerResponseFunctionSkippedOnOriginError(t *testing.T) {
+	// Given: an origin that answers 404, and a viewer-response function that
+	// would both mark the response and fail if it ran
+	originDomain, port, _ := functionErrorOrigin(t, http.StatusNotFound)
+	srv := helpers.NewTestServer(t)
+	fnARN := cfCreateFunctionWithCode(t, srv, "resp-fn-origin-error", `function handler(event) {
+  var response = event.response;
+  response.headers['x-fn'] = { value: 'ran' };
+  return response;
+}`)
+	dist, _ := cfCreateDistFromXML(t, srv, proxyDistXML(proxyDistSpec{
+		CallerRef: "proxy-fn-resp-origin-error", OriginDomain: originDomain, OriginPort: port,
+		PathPattern: "/never/*", FnARN: fnARN, FnEventType: "viewer-response",
+	}))
+
+	// When: a viewer requests a path
+	resp := hostRoutedGet(t, srv, dist.ID, "/page")
+	resp.Body.Close()
+
+	// Then: the origin's 404 is passed through untouched by the function
+	helpers.AssertStatus(t, resp, http.StatusNotFound)
+	if got := resp.Header.Get("X-Fn"); got != "" {
+		t.Errorf("X-Fn = %q, want the function not to have run", got)
+	}
+}
+
+// TestProxy_viewerResponseFunctionRunsOnACacheHit: a viewer-response function
+// "executes regardless of whether the file is already in the CloudFront cache"
+// (lambda-cloudfront-trigger-events, "Viewer response"; CloudFront Functions
+// share the event). So on a hit it runs again, against THIS request, over the
+// origin's cached response — not a replay of what it did for the viewer that
+// filled the cache.
+func TestProxy_viewerResponseFunctionRunsOnACacheHit(t *testing.T) {
+	// Given: an origin that counts its requests
+	originDomain, port, hits := functionErrorOrigin(t, http.StatusOK)
+	srv := helpers.NewTestServer(t)
+
+	// And: a viewer-response function that echoes the request's x-v header,
+	// and throws when the request carries x-fail
+	fnARN := cfCreateFunctionWithCode(t, srv, "resp-fn-cache-hit", `function handler(event) {
+  var response = event.response;
+  if (event.request.headers['x-fail']) { throw new Error('boom'); }
+  var v = event.request.headers['x-v'];
+  if (v) { response.headers['x-echo'] = { value: v.value }; }
+  return response;
+}`)
+	dist, _ := cfCreateDistFromXML(t, srv, proxyDistXML(proxyDistSpec{
+		CallerRef: "proxy-fn-resp-cache-hit", OriginDomain: originDomain, OriginPort: port,
+		PathPattern: "/never/*", FnARN: fnARN, FnEventType: "viewer-response",
+	}))
+
+	get := func(t *testing.T, path string, headers map[string]string) *http.Response {
+		t.Helper()
+		req, _ := http.NewRequest(http.MethodGet, srv.URL+path, nil)
+		req.Host = dist.ID + ".cloudfront.localhost:4566"
+		for k, v := range headers {
+			req.Header.Set(k, v)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("proxy request: %v", err)
+		}
+		resp.Body.Close()
+		return resp
+	}
+
+	for _, tc := range []struct {
+		name          string
+		path          string
+		second        map[string]string
+		wantStatus    int
+		wantEcho      string
+		wantXCacheHit bool
+	}{
+		// The function sees the second viewer's header, not the first's.
+		{"runs against this request", "/echo", map[string]string{"X-V": "second"}, http.StatusOK, "second", true},
+		// The cache holds the origin's headers: the first viewer's x-echo is
+		// not replayed to a viewer the function adds nothing for.
+		{"cache holds the origin's headers", "/pure", nil, http.StatusOK, "", true},
+		// A function that fails on a hit fails the hit, as on a miss.
+		{"execution error on a hit", "/fail", map[string]string{"X-Fail": "1"}, http.StatusServiceUnavailable, "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			hits.Store(0)
+
+			// When: the path is fetched once to fill the cache...
+			first := get(t, tc.path, map[string]string{"X-V": "first"})
+			helpers.AssertStatus(t, first, http.StatusOK)
+			if got := first.Header.Get("X-Echo"); got != "first" {
+				t.Fatalf("first fetch X-Echo = %q, want %q", got, "first")
+			}
+
+			// ...and again, by a different viewer
+			second := get(t, tc.path, tc.second)
+
+			// Then: the second answer is the function's work on this request
+			helpers.AssertStatus(t, second, tc.wantStatus)
+			if got := second.Header.Get("X-Echo"); got != tc.wantEcho {
+				t.Errorf("second fetch X-Echo = %q, want %q", got, tc.wantEcho)
+			}
+			if tc.wantXCacheHit {
+				if got := second.Header.Get("X-Cache"); got != "Hit from cloudfront" {
+					t.Errorf("second fetch X-Cache = %q, want a hit", got)
+				}
+			}
+			if got := hits.Load(); got != 1 {
+				t.Errorf("origin answered %d requests, want 1: the second must come from the cache", got)
 			}
 		})
 	}
