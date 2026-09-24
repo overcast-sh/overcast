@@ -2,7 +2,9 @@ package firehose
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -15,6 +17,45 @@ type createDeliveryStreamReq struct {
 	DeliveryStreamName string                `json:"DeliveryStreamName" cbor:"DeliveryStreamName"`
 	DeliveryStreamType string                `json:"DeliveryStreamType" cbor:"DeliveryStreamType"`
 	Tags               []serviceutil.TagPair `json:"Tags" cbor:"Tags"`
+
+	// Destination configurations, the source configuration and the
+	// encryption configuration are carried as raw JSON rather than typed:
+	// Overcast stores and echoes each verbatim on DescribeDeliveryStream (see
+	// DeliveryStream.Destinations in service.go) without acting on any field
+	// within them, so there is nothing here for a typed struct to read.
+	// json.RawMessage has no CBOR encoding of its own, so a
+	// CreateDeliveryStream carrying one of these over RPC v2 CBOR — a path
+	// CloudFormation itself never takes — fails to decode rather than
+	// silently keeping the property; `cbor:"-"` states that rather than
+	// leaving it to a confusing runtime error.
+	S3DestinationConfiguration                      json.RawMessage `json:"S3DestinationConfiguration,omitempty" cbor:"-"`
+	ExtendedS3DestinationConfiguration              json.RawMessage `json:"ExtendedS3DestinationConfiguration,omitempty" cbor:"-"`
+	RedshiftDestinationConfiguration                json.RawMessage `json:"RedshiftDestinationConfiguration,omitempty" cbor:"-"`
+	ElasticsearchDestinationConfiguration           json.RawMessage `json:"ElasticsearchDestinationConfiguration,omitempty" cbor:"-"`
+	AmazonopensearchserviceDestinationConfiguration json.RawMessage `json:"AmazonopensearchserviceDestinationConfiguration,omitempty" cbor:"-"`
+	HttpEndpointDestinationConfiguration            json.RawMessage `json:"HttpEndpointDestinationConfiguration,omitempty" cbor:"-"`
+	SplunkDestinationConfiguration                  json.RawMessage `json:"SplunkDestinationConfiguration,omitempty" cbor:"-"`
+	SnowflakeDestinationConfiguration               json.RawMessage `json:"SnowflakeDestinationConfiguration,omitempty" cbor:"-"`
+	IcebergDestinationConfiguration                 json.RawMessage `json:"IcebergDestinationConfiguration,omitempty" cbor:"-"`
+	KinesisStreamSourceConfiguration                json.RawMessage `json:"KinesisStreamSourceConfiguration,omitempty" cbor:"-"`
+	DeliveryStreamEncryptionConfigurationInput      json.RawMessage `json:"DeliveryStreamEncryptionConfigurationInput,omitempty" cbor:"-"`
+}
+
+// destinationConfigsByName returns req's destination-config members keyed by
+// their own CreateDeliveryStream member name, for createDeliveryStreamTyped
+// to walk in firehoseDestinationConfigNames' fixed order.
+func (req *createDeliveryStreamReq) destinationConfigsByName() map[string]json.RawMessage {
+	return map[string]json.RawMessage{
+		"S3DestinationConfiguration":                      req.S3DestinationConfiguration,
+		"ExtendedS3DestinationConfiguration":              req.ExtendedS3DestinationConfiguration,
+		"RedshiftDestinationConfiguration":                req.RedshiftDestinationConfiguration,
+		"ElasticsearchDestinationConfiguration":           req.ElasticsearchDestinationConfiguration,
+		"AmazonopensearchserviceDestinationConfiguration": req.AmazonopensearchserviceDestinationConfiguration,
+		"HttpEndpointDestinationConfiguration":            req.HttpEndpointDestinationConfiguration,
+		"SplunkDestinationConfiguration":                  req.SplunkDestinationConfiguration,
+		"SnowflakeDestinationConfiguration":               req.SnowflakeDestinationConfiguration,
+		"IcebergDestinationConfiguration":                 req.IcebergDestinationConfiguration,
+	}
 }
 
 type describeDeliveryStreamReq struct {
@@ -54,6 +95,13 @@ type describeDeliveryStreamDescription struct {
 	DeliveryStreamType   string `json:"DeliveryStreamType" cbor:"DeliveryStreamType"`
 	HasMoreDestinations  bool   `json:"HasMoreDestinations" cbor:"HasMoreDestinations"`
 	Destinations         []any  `json:"Destinations" cbor:"Destinations"`
+	// Source and DeliveryStreamEncryptionConfiguration are omitted (rather
+	// than present-and-empty) whenever CreateDeliveryStream carried no
+	// KinesisStreamSourceConfiguration / DeliveryStreamEncryptionConfigurationInput
+	// — real DescribeDeliveryStream leaves both members out for a DirectPut,
+	// unencrypted stream too.
+	Source                                any `json:"Source,omitempty" cbor:"Source,omitempty"`
+	DeliveryStreamEncryptionConfiguration any `json:"DeliveryStreamEncryptionConfiguration,omitempty" cbor:"DeliveryStreamEncryptionConfiguration,omitempty"`
 }
 
 type describeDeliveryStreamResp struct {
@@ -100,14 +148,35 @@ func (s *Service) createDeliveryStreamTyped(ctx context.Context, req *createDeli
 	arn := fmt.Sprintf("arn:aws:firehose:%s:%s:deliverystream/%s", region, s.cfg.AccountID, req.DeliveryStreamName)
 	dsType := req.DeliveryStreamType
 	if dsType == "" {
-		dsType = "DirectPut"
+		if len(req.KinesisStreamSourceConfiguration) > 0 {
+			// A KinesisStreamSourceConfiguration with no explicit
+			// DeliveryStreamType names a KinesisStreamAsSource stream, not a
+			// DirectPut one — the CloudFormation resource forwards this
+			// property without also setting DeliveryStreamType whenever a
+			// template follows AWS's own example template for it (#535).
+			dsType = "KinesisStreamAsSource"
+		} else {
+			dsType = "DirectPut"
+		}
 	}
+
+	var destinations []firehoseDestination
+	configsByName := req.destinationConfigsByName()
+	for _, name := range firehoseDestinationConfigNames {
+		if cfgValue := configsByName[name]; len(cfgValue) > 0 {
+			destinations = append(destinations, firehoseDestination{ConfigName: name, Config: cfgValue})
+		}
+	}
+
 	ds := &DeliveryStream{
-		DeliveryStreamName:   req.DeliveryStreamName,
-		DeliveryStreamARN:    arn,
-		DeliveryStreamStatus: "ACTIVE",
-		DeliveryStreamType:   dsType,
-		Tags:                 tags,
+		DeliveryStreamName:      req.DeliveryStreamName,
+		DeliveryStreamARN:       arn,
+		DeliveryStreamStatus:    "ACTIVE",
+		DeliveryStreamType:      dsType,
+		Tags:                    tags,
+		Destinations:            destinations,
+		KinesisStreamSource:     req.KinesisStreamSourceConfiguration,
+		EncryptionConfiguration: req.DeliveryStreamEncryptionConfigurationInput,
 	}
 	if err := s.store.putStream(ctx, ds); err != nil {
 		return nil, protocol.ErrInternalError
@@ -125,14 +194,63 @@ func (s *Service) describeDeliveryStreamTyped(ctx context.Context, req *describe
 	}
 	return &describeDeliveryStreamResp{
 		DeliveryStreamDescription: describeDeliveryStreamDescription{
-			DeliveryStreamName:   ds.DeliveryStreamName,
-			DeliveryStreamARN:    ds.DeliveryStreamARN,
-			DeliveryStreamStatus: ds.DeliveryStreamStatus,
-			DeliveryStreamType:   ds.DeliveryStreamType,
-			HasMoreDestinations:  false,
-			Destinations:         []any{},
+			DeliveryStreamName:                    ds.DeliveryStreamName,
+			DeliveryStreamARN:                     ds.DeliveryStreamARN,
+			DeliveryStreamStatus:                  ds.DeliveryStreamStatus,
+			DeliveryStreamType:                    ds.DeliveryStreamType,
+			HasMoreDestinations:                   false,
+			Destinations:                          firehoseDestinationDescriptions(ds.Destinations),
+			Source:                                firehoseSourceDescription(ds.KinesisStreamSource),
+			DeliveryStreamEncryptionConfiguration: firehoseEncryptionDescription(ds.EncryptionConfiguration),
 		},
 	}, nil
+}
+
+// firehoseDestinationDescriptions renders DescribeDeliveryStream's
+// Destinations list from what CreateDeliveryStream stored: one entry per
+// destination configuration given, each carrying a synthetic DestinationId
+// and the same configuration object under its "...Description" member name.
+// An empty, non-nil slice (never nil) matches what real Describe returns for
+// a stream with no destinations configured.
+func firehoseDestinationDescriptions(destinations []firehoseDestination) []any {
+	out := make([]any, 0, len(destinations))
+	for i, d := range destinations {
+		descriptionName := strings.TrimSuffix(d.ConfigName, "Configuration") + "Description"
+		out = append(out, map[string]any{
+			"DestinationId": fmt.Sprintf("destinationId-%012d", i+1),
+			descriptionName: d.Config,
+		})
+	}
+	return out
+}
+
+// firehoseSourceDescription renders DescribeDeliveryStream's Source member
+// from the KinesisStreamSourceConfiguration CreateDeliveryStream was given,
+// or nil (omitted) when the stream has no stream source.
+func firehoseSourceDescription(kinesisStreamSource json.RawMessage) any {
+	if len(kinesisStreamSource) == 0 {
+		return nil
+	}
+	return map[string]any{"KinesisStreamSourceDescription": kinesisStreamSource}
+}
+
+// firehoseEncryptionDescription renders DescribeDeliveryStream's
+// DeliveryStreamEncryptionConfiguration from the
+// DeliveryStreamEncryptionConfigurationInput CreateDeliveryStream was given
+// (KeyARN/KeyType, echoed verbatim), adding Status — ENABLED, since Overcast
+// applies no encryption and so has nothing that could fail to enable it — the
+// one member the input shape does not carry. Returns nil (omitted) for an
+// unencrypted stream, matching real Describe.
+func firehoseEncryptionDescription(input json.RawMessage) any {
+	if len(input) == 0 {
+		return nil
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(input, &fields); err != nil || fields == nil {
+		fields = map[string]any{}
+	}
+	fields["Status"] = "ENABLED"
+	return fields
 }
 
 func (s *Service) listDeliveryStreamsTyped(ctx context.Context, _ *struct{}) (*listDeliveryStreamsResp, *protocol.AWSError) {

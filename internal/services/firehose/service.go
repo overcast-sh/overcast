@@ -5,8 +5,10 @@
 // ListDeliveryStreams, DeleteDeliveryStream, PutRecord, PutRecordBatch,
 // TagDeliveryStream, UntagDeliveryStream, ListTagsForDeliveryStream.
 //
-// Records are validated as AWS validates them and then discarded: no
-// destination configuration is stored and nothing is ever delivered.
+// Records are validated as AWS validates them and then discarded. Destination,
+// source and encryption configurations given to CreateDeliveryStream are
+// stored and echoed back by DescribeDeliveryStream (#535), but nothing acts
+// on them: no record is ever delivered anywhere (#150).
 package firehose
 
 import (
@@ -42,6 +44,47 @@ type DeliveryStream struct {
 	DeliveryStreamStatus string            `json:"DeliveryStreamStatus"`
 	DeliveryStreamType   string            `json:"DeliveryStreamType"`
 	Tags                 map[string]string `json:"Tags,omitempty"`
+
+	// Destinations, KinesisStreamSource and EncryptionConfiguration record
+	// what CreateDeliveryStream was given, verbatim, so DescribeDeliveryStream
+	// can echo it back — this emulation still delivers nothing to any of
+	// them (see the package doc and #150); PutRecord/PutRecordBatch validate
+	// and discard exactly as before. Destinations is a slice rather than a
+	// map so the order a template's destination properties were forwarded in
+	// stays stable across Describe calls.
+	Destinations            []firehoseDestination `json:"Destinations,omitempty"`
+	KinesisStreamSource     json.RawMessage       `json:"KinesisStreamSource,omitempty"`
+	EncryptionConfiguration json.RawMessage       `json:"EncryptionConfiguration,omitempty"`
+}
+
+// firehoseDestination pairs a destination configuration's CreateDeliveryStream
+// member name (e.g. "ExtendedS3DestinationConfiguration") with the object the
+// caller supplied for it. DescribeDeliveryStream renders it back with the
+// member renamed to its Description counterpart — CreateDeliveryStreamInput
+// and DestinationDescription share the same "<X>Destination" prefix for every
+// destination kind, differing only in the trailing Configuration/Description
+// word, so the rename is mechanical rather than a per-kind mapping.
+type firehoseDestination struct {
+	ConfigName string          `json:"ConfigName"`
+	Config     json.RawMessage `json:"Config"`
+}
+
+// firehoseDestinationConfigNames are every CreateDeliveryStream destination
+// member Overcast does not otherwise model (S3/ExtendedS3 included — neither
+// gets a typed struct because nothing here ever writes to either one; see
+// #150). Order matters only for which destination is listed first when a
+// template names more than one, which AWS's own "specify only one
+// destination configuration" constraint says should never happen.
+var firehoseDestinationConfigNames = []string{
+	"S3DestinationConfiguration",
+	"ExtendedS3DestinationConfiguration",
+	"RedshiftDestinationConfiguration",
+	"ElasticsearchDestinationConfiguration",
+	"AmazonopensearchserviceDestinationConfiguration",
+	"HttpEndpointDestinationConfiguration",
+	"SplunkDestinationConfiguration",
+	"SnowflakeDestinationConfiguration",
+	"IcebergDestinationConfiguration",
 }
 
 // ─── Store ────────────────────────────────────────────────────
