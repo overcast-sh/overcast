@@ -135,15 +135,7 @@ func TestTelemetryRelayDeliversInOrder(t *testing.T) {
 // accounting. A relay that answered "delivered" for a POST that never
 // connected would turn a retryable hiccup into a silently lost record.
 func TestTelemetryRelayReportsAnUnreachableDestination(t *testing.T) {
-	// A port nothing is listening on: bind one, read the address, close it.
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	dead := "http://" + ln.Addr().String()
-	if err := ln.Close(); err != nil {
-		t.Fatal(err)
-	}
+	dead := unansweringDestination(t)
 
 	h := newFakeHost(t)
 	startTelemetryRelay(t, h)
@@ -175,6 +167,37 @@ func TestTelemetryRelayReportsAnUnreachableDestination(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("the relay stopped delivering after a failed destination")
 	}
+}
+
+// unansweringDestination returns the URL of a destination that can never
+// deliver: it accepts each connection and resets it without reading or
+// answering, so every POST to it fails in transport.
+//
+// It holds its port for the whole test. Binding a port and closing it to get
+// an address "nothing listens on" does not: the port is free again at once,
+// and the fake host started next — or a test in a package running in parallel
+// — can be handed it, turning the dead destination into one that answers
+// (#2143).
+func unansweringDestination(t *testing.T) string {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return // the listener closed with the test
+			}
+			if tcp, ok := conn.(*net.TCPConn); ok {
+				_ = tcp.SetLinger(0) // close with a reset, not an orderly FIN
+			}
+			_ = conn.Close()
+		}
+	}()
+	return "http://" + ln.Addr().String()
 }
 
 // TestTelemetryRelayTreatsAnyResponseAsDelivered matches the host's own reading
