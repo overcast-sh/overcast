@@ -48,6 +48,26 @@ func echoServer(t *testing.T, prefix string) string {
 	return ln.Addr().String()
 }
 
+// refusingUpstream returns an address whose dial is refused for the whole
+// test, the way a stopped container's is. Closing a listener to get one is
+// not enough: its port is free again at once, and another listener — this
+// test's own target, or a parallel package's — can be handed it. So the
+// address is instead the local end of a connection the test keeps open: that
+// port is bound but not listening, so a connect to it is refused, and no
+// listener can take it while the connection holds it. A listener that
+// accepts and resets would not do: the proxy's dial would succeed and count
+// a client as attached, which is not what a dead upstream does.
+func refusingUpstream(t *testing.T) string {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { ln.Close() })
+	c, err := net.Dial("tcp", ln.Addr().String())
+	require.NoError(t, err)
+	t.Cleanup(func() { c.Close() })
+	return c.LocalAddr().String()
+}
+
 func dialTarget(t *testing.T, tgt *Target) net.Conn {
 	t.Helper()
 	c, err := net.DialTimeout("tcp", net.JoinHostPort(tgt.Host(), strconv.Itoa(tgt.Port())), 2*time.Second)
@@ -213,15 +233,12 @@ func TestManager_deadUpstreamClosesClient(t *testing.T) {
 	// Given: an upstream address nothing listens on
 	m := newTestManager(t, clock.NewMock(), config.DebuggerTimeoutAttached)
 	tgt := boundTarget(t, m, "lambda/fn", passthrough{})
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	tgt.SetUpstream(ln.Addr().String())
-	require.NoError(t, ln.Close())
+	tgt.SetUpstream(refusingUpstream(t))
 
 	// When: a client connects
 	c := dialTarget(t, tgt)
 	require.NoError(t, c.SetReadDeadline(time.Now().Add(5*time.Second)))
-	_, err = c.Read(make([]byte, 1))
+	_, err := c.Read(make([]byte, 1))
 
 	// Then: it is closed once the dial fails, and nothing counted as attached
 	assert.ErrorIs(t, err, io.EOF)
