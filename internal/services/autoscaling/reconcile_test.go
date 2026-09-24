@@ -5,6 +5,7 @@ package autoscaling
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -94,9 +95,16 @@ type fixture struct {
 
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
+	return newFixtureOn(t, state.NewMemoryStore())
+}
+
+// newFixtureOn builds the fixture over a given store, for a test that needs to
+// watch the service's writes.
+func newFixtureOn(t *testing.T, st state.Store) *fixture {
+	t.Helper()
 	mock := clock.NewMock()
 	svc := New(&config.Config{Region: "us-east-1", AccountID: "123456789012"},
-		state.NewMemoryStore(), zap.NewNop(), mock)
+		st, zap.NewNop(), mock)
 	// Drain the background loop immediately: these tests call reconcileOnce
 	// themselves so each pass is a known, countable step. Left running, the
 	// loop would race every handler poke and every mock.Add, and "how many
@@ -376,6 +384,93 @@ func TestReconcile_recordsScalingActivitiesWithAWSWording(t *testing.T) {
 	}
 	if a.EndTime.IsZero() {
 		t.Error("EndTime is unset on a completed activity")
+	}
+}
+
+// inServiceWriteSpy wraps a store and, at the moment an instance is written as
+// InService, records what that instance's launch activity says in the store
+// right then. It sees exactly what a Describe call arriving between two writes
+// would: the handlers read the store without the service's lock.
+type inServiceWriteSpy struct {
+	state.Store
+	mu   sync.Mutex
+	seen []string // the launch activity's StatusCode at each InService write
+}
+
+func (s *inServiceWriteSpy) Set(ctx context.Context, namespace, key, value string) error {
+	if namespace == nsInstances {
+		var inst ASGInstance
+		if json.Unmarshal([]byte(value), &inst) == nil && inst.LifecycleState == lifecycleInService {
+			status := "<no launch activity>"
+			if activities, err := newASGStore(s.Store).listActivities(ctx, inst.AutoScalingGroupName); err == nil {
+				for _, a := range activities {
+					if a.ActivityId == inst.LaunchActivityId {
+						status = a.StatusCode
+					}
+				}
+			}
+			s.mu.Lock()
+			s.seen = append(s.seen, status)
+			s.mu.Unlock()
+		}
+	}
+	return s.Store.Set(ctx, namespace, key, value)
+}
+
+// TestReconcile_launchActivityCompletesBeforeTheInstanceIsInService pins the
+// order of the two writes that finish a launch (#720). The Describe handlers
+// read the store without the service's lock, so if the instance became
+// InService first, DescribeAutoScalingInstances could show it in service while
+// DescribeScalingActivities still said PreInService for its launch. Completing
+// the activity first means a reader who sees InService also sees Successful.
+func TestReconcile_launchActivityCompletesBeforeTheInstanceIsInService(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		withHook bool
+	}{
+		{"straight from Pending", false},
+		{"released from Pending:Wait by a lifecycle hook", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Given: a service whose store records the launch activity's status
+			// at every InService write
+			spy := &inServiceWriteSpy{Store: state.NewMemoryStore()}
+			f := newFixtureOn(t, spy)
+			f.group(t, "g", 0, 3, 0)
+			if tc.withHook {
+				if _, aerr := f.svc.handler.putLifecycleHookTyped(f.ctx, &putLifecycleHookReq{
+					AutoScalingGroupName: "g", LifecycleHookName: "warmup",
+					LifecycleTransition: transitionLaunching, HeartbeatTimeout: 300,
+					DefaultResult: lifecycleResultContinue,
+				}); aerr != nil {
+					t.Fatalf("PutLifecycleHook: %v", aerr)
+				}
+			}
+
+			// When: the group launches two instances and they reach service
+			if _, aerr := f.svc.handler.setDesiredCapacityTyped(f.ctx, &setDesiredCapacityReq{
+				AutoScalingGroupName: "g", DesiredCapacity: 2,
+			}); aerr != nil {
+				t.Fatalf("SetDesiredCapacity: %v", aerr)
+			}
+			f.converge(t)
+			if tc.withHook {
+				f.mock.Add(301 * time.Second)
+				f.converge(t)
+			}
+
+			// Then: each instance went InService after its launch completed
+			spy.mu.Lock()
+			defer spy.mu.Unlock()
+			if len(spy.seen) != 2 {
+				t.Fatalf("saw %d InService writes, want 2 (states now %v)", len(spy.seen), states(f.instances(t, "g")))
+			}
+			for i, status := range spy.seen {
+				if status != "Successful" {
+					t.Errorf("InService write %d: its launch activity was %q, want Successful", i+1, status)
+				}
+			}
+		})
 	}
 }
 

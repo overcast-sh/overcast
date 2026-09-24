@@ -150,6 +150,16 @@ findings:
       internal/services/autoscaling/capabilities_dev.go (25 operations, all
       StatusSupported) and docs/services/autoscaling.md, which already described this
       accurately."
+    - "#720: a launch's two final writes were in the wrong order. The reconciler wrote the
+      instance InService, then marked its launch activity Successful, and the Describe
+      handlers read the store without the service lock. So DescribeAutoScalingInstances could
+      show an instance InService while DescribeScalingActivities still reported its launch as
+      PreInService, which intermittently failed TestDescribeScalingActivities_recordsLaunches
+      in CI. promoteToInService now completes the activity first, on both the direct and the
+      lifecycle-hook paths. Termination was already safe: its activity completes before the
+      instance is deleted. Evidence:
+      internal/services/autoscaling/reconcile_test.go::TestReconcile_launchActivityCompletesBeforeTheInstanceIsInService,
+      which reproduced the in-between state deterministically before the fix."
   remaining_gaps:
     - "#2074: DescribeLaunchConfigurations omits UserData that CreateLaunchConfiguration
       stored (found while forwarding the property from CloudFormation for #2060). Fix

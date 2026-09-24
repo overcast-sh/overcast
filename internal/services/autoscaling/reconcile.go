@@ -168,9 +168,7 @@ func (s *Service) reconcileGroup(ctx context.Context, name string) bool {
 					hookName: hook.LifecycleHookName, token: inst.LifecycleActionToken,
 				})
 			} else {
-				inst.LifecycleState = lifecycleInService
-				_ = s.st.putInstance(ctx, inst)
-				s.completeActivity(ctx, name, inst.LaunchActivityId, now)
+				s.promoteToInService(ctx, name, inst, now)
 				s.emitInstanceEvent(ctx, g, inst, "EC2 Instance Launch Successful")
 			}
 			changed = true
@@ -181,9 +179,7 @@ func (s *Service) reconcileGroup(ctx context.Context, name string) bool {
 					terminateNow = append(terminateNow, inst)
 				} else {
 					s.clearHook(inst)
-					inst.LifecycleState = lifecycleInService
-					_ = s.st.putInstance(ctx, inst)
-					s.completeActivity(ctx, name, inst.LaunchActivityId, now)
+					s.promoteToInService(ctx, name, inst, now)
 				}
 				changed = true
 			}
@@ -669,6 +665,20 @@ func (s *Service) recordActivity(ctx context.Context, g *AutoScalingGroup, a *Ac
 		s.log.Debug("autoscaling: could not record scaling activity", zap.Error(err))
 	}
 	return a.ActivityId
+}
+
+// promoteToInService finishes a launch: the launch activity is marked
+// Successful, then the instance is written InService. The order matters
+// because the Describe handlers read the store without s.mu (#720). An
+// instance written first could be seen InService by DescribeAutoScalingInstances
+// while DescribeScalingActivities still reported its launch as PreInService.
+// This way, anyone who sees InService also sees the launch completed.
+// Termination is already in this order: finishTermination completes the
+// activity before it deletes the instance. Callers hold s.mu.
+func (s *Service) promoteToInService(ctx context.Context, group string, inst *ASGInstance, now time.Time) {
+	s.completeActivity(ctx, group, inst.LaunchActivityId, now)
+	inst.LifecycleState = lifecycleInService
+	_ = s.st.putInstance(ctx, inst)
 }
 
 // completeActivity marks an in-flight activity Successful. Callers hold s.mu.
