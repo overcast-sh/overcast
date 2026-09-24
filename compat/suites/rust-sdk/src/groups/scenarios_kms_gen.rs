@@ -364,6 +364,34 @@ impl ServiceGroup for ScenariosKms {
         {
             let client = self.client.clone();
             impls.insert(
+                "kms-gen-key:VerifyOtherMessage".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_KMS_GEN_KEY
+                            .run_test(&ctx, "VerifyOtherMessage", test_kms_gen_key_verify_other_message(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
+                "kms-gen-key:VerifyOtherAlgorithm".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_KMS_GEN_KEY
+                            .run_test(&ctx, "VerifyOtherAlgorithm", test_kms_gen_key_verify_other_algorithm(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
                 "kms-gen-key:ScheduleKeyDeletionSigning".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
@@ -1697,6 +1725,78 @@ fn test_kms_gen_key_verify(client: &aws_sdk_kms::Client) -> Test {
                 scenario::equals("$.SignatureValid", scenario::lit(::serde_json::json!(true))),
                 scenario::equals("$.SigningAlgorithm", scenario::lit(::serde_json::json!("RSASSA_PKCS1_V1_5_SHA_256"))),
             ]),
+        ],
+    }
+}
+
+fn test_kms_gen_key_verify_other_message(client: &aws_sdk_kms::Client) -> Test {
+    Test {
+        call: Call {
+            op: "Verify",
+            params: scenario::map(vec![
+                ("KeyId", scenario::context("key.signid")),
+                ("Message", scenario::base64(scenario::lit(::serde_json::json!("Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgbmV2ZXIgc2lnbmVk")))),
+                ("Signature", scenario::base64(scenario::context("key.signature"))),
+                ("SigningAlgorithm", scenario::lit(::serde_json::json!("RSASSA_PKCS1_V1_5_SHA_256"))),
+            ]),
+            export: Vec::new(),
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .verify()
+                            .key_id(b.string("KeyId")?)
+                            .message(aws_sdk_kms::primitives::Blob::new(b"compat-scenario message never signed".to_vec()))
+                            .signature(aws_sdk_kms::primitives::Blob::new(b.blob("Signature")?))
+                            .signing_algorithm(aws_sdk_kms::types::SigningAlgorithmSpec::from("RSASSA_PKCS1_V1_5_SHA_256"))
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::error_code(scenario::error("KMSInvalidSignatureException", "KMSInvalidSignature")),
+        ],
+    }
+}
+
+fn test_kms_gen_key_verify_other_algorithm(client: &aws_sdk_kms::Client) -> Test {
+    Test {
+        call: Call {
+            op: "Verify",
+            params: scenario::map(vec![
+                ("KeyId", scenario::context("key.signid")),
+                ("Message", scenario::base64(scenario::lit(::serde_json::json!("Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgdG8gc2lnbg==")))),
+                ("Signature", scenario::base64(scenario::context("key.signature"))),
+                ("SigningAlgorithm", scenario::lit(::serde_json::json!("RSASSA_PSS_SHA_256"))),
+            ]),
+            export: Vec::new(),
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .verify()
+                            .key_id(b.string("KeyId")?)
+                            .message(aws_sdk_kms::primitives::Blob::new(b"compat-scenario message to sign".to_vec()))
+                            .signature(aws_sdk_kms::primitives::Blob::new(b.blob("Signature")?))
+                            .signing_algorithm(aws_sdk_kms::types::SigningAlgorithmSpec::from("RSASSA_PSS_SHA_256"))
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::error_code(scenario::error("KMSInvalidSignatureException", "KMSInvalidSignature")),
         ],
     }
 }

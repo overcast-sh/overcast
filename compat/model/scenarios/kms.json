@@ -816,6 +816,74 @@
           ]
         },
         {
+          "name": "VerifyOtherMessage",
+          "op": "Verify",
+          "call": {
+            "op": "Verify",
+            "params": {
+              "KeyId": {
+                "$ref": "key.signid"
+              },
+              "Message": {
+                "$base64": "Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgbmV2ZXIgc2lnbmVk"
+              },
+              "Signature": {
+                "$base64": {
+                  "$ref": "key.signature"
+                }
+              },
+              "SigningAlgorithm": "RSASSA_PKCS1_V1_5_SHA_256"
+            }
+          },
+          "assert": [
+            {
+              "kind": "errorCode",
+              "error": {
+                "shape": "KMSInvalidSignatureException",
+                "code": "KMSInvalidSignature"
+              }
+            }
+          ],
+          "depends": [
+            "CreateKeySigning",
+            "Sign"
+          ]
+        },
+        {
+          "name": "VerifyOtherAlgorithm",
+          "op": "Verify",
+          "call": {
+            "op": "Verify",
+            "params": {
+              "KeyId": {
+                "$ref": "key.signid"
+              },
+              "Message": {
+                "$base64": "Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgdG8gc2lnbg=="
+              },
+              "Signature": {
+                "$base64": {
+                  "$ref": "key.signature"
+                }
+              },
+              "SigningAlgorithm": "RSASSA_PSS_SHA_256"
+            }
+          },
+          "assert": [
+            {
+              "kind": "errorCode",
+              "error": {
+                "shape": "KMSInvalidSignatureException",
+                "code": "KMSInvalidSignature"
+              }
+            }
+          ],
+          "depends": [
+            "CreateKeySigning",
+            "Sign"
+          ]
+        },
+        {
           "name": "ScheduleKeyDeletionSigning",
           "op": "ScheduleKeyDeletion",
           "call": {

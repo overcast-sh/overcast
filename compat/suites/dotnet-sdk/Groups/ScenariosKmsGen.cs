@@ -58,6 +58,8 @@ internal sealed class ScenariosKms : IServiceGroup
         ["kms-gen-key:CreateKeySigning"] = TestKmsGenKeyCreateKeySigning,
         ["kms-gen-key:Sign"] = TestKmsGenKeySign,
         ["kms-gen-key:Verify"] = TestKmsGenKeyVerify,
+        ["kms-gen-key:VerifyOtherMessage"] = TestKmsGenKeyVerifyOtherMessage,
+        ["kms-gen-key:VerifyOtherAlgorithm"] = TestKmsGenKeyVerifyOtherAlgorithm,
         ["kms-gen-key:ScheduleKeyDeletionSigning"] = TestKmsGenKeyScheduleKeyDeletionSigning,
         ["kms-gen-key:CreateGrant"] = TestKmsGenKeyCreateGrant,
         ["kms-gen-key:ListGrants"] = TestKmsGenKeyListGrants,
@@ -783,6 +785,54 @@ internal sealed class ScenariosKms : IServiceGroup
                 Check.EqualTo("$.SignatureValid", true),
                 Check.EqualTo("$.SigningAlgorithm", "RSASSA_PKCS1_V1_5_SHA_256")
             )
+        ],
+    });
+
+    private Task TestKmsGenKeyVerifyOtherMessage(TestContext t) => GroupKmsGenKey.RunTestAsync(t, "VerifyOtherMessage", new ScenarioTest
+    {
+        Call = new ScenarioCall
+        {
+            Op = "Verify",
+            Params = "{\"KeyId\":{\"$ref\":\"key.signid\"},\"Message\":{\"$base64\":\"Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgbmV2ZXIgc2lnbmVk\"},\"Signature\":{\"$base64\":{\"$ref\":\"key.signature\"}},\"SigningAlgorithm\":\"RSASSA_PKCS1_V1_5_SHA_256\"}",
+            Build = b =>
+            {
+                var request = new VerifyRequest();
+                request.KeyId = b.Bind<string>("KeyId", Val.Ref("key.signid"));
+                request.Message = new System.IO.MemoryStream(System.Convert.FromBase64String("Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgbmV2ZXIgc2lnbmVk"));
+                request.Signature = b.Blob("Signature", Val.Base64(Val.Ref("key.signature")));
+                request.SigningAlgorithm = "RSASSA_PKCS1_V1_5_SHA_256";
+                return request;
+            },
+            SendAsync = async request =>
+                await Cl().VerifyAsync((VerifyRequest)request),
+        },
+        Assert =
+        [
+            Clause.ErrorCode(new ErrorSpec("KMSInvalidSignatureException", "KMSInvalidSignature"))
+        ],
+    });
+
+    private Task TestKmsGenKeyVerifyOtherAlgorithm(TestContext t) => GroupKmsGenKey.RunTestAsync(t, "VerifyOtherAlgorithm", new ScenarioTest
+    {
+        Call = new ScenarioCall
+        {
+            Op = "Verify",
+            Params = "{\"KeyId\":{\"$ref\":\"key.signid\"},\"Message\":{\"$base64\":\"Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgdG8gc2lnbg==\"},\"Signature\":{\"$base64\":{\"$ref\":\"key.signature\"}},\"SigningAlgorithm\":\"RSASSA_PSS_SHA_256\"}",
+            Build = b =>
+            {
+                var request = new VerifyRequest();
+                request.KeyId = b.Bind<string>("KeyId", Val.Ref("key.signid"));
+                request.Message = new System.IO.MemoryStream(System.Convert.FromBase64String("Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgdG8gc2lnbg=="));
+                request.Signature = b.Blob("Signature", Val.Base64(Val.Ref("key.signature")));
+                request.SigningAlgorithm = "RSASSA_PSS_SHA_256";
+                return request;
+            },
+            SendAsync = async request =>
+                await Cl().VerifyAsync((VerifyRequest)request),
+        },
+        Assert =
+        [
+            Clause.ErrorCode(new ErrorSpec("KMSInvalidSignatureException", "KMSInvalidSignature"))
         ],
     });
 

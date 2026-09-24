@@ -306,6 +306,34 @@
           ]
         },
         {
+          "$comment": "The negative path (#2160). The same signature over a different message does not verify, and AWS answers that with KMSInvalidSignatureException rather than SignatureValid false: \"If the signature verification fails, the Verify operation fails with an KMSInvalidSignatureException exception.\"",
+          "name": "VerifyOtherMessage",
+          "op": "Verify",
+          "params": {
+            "KeyId": { "$ref": "key.signid" },
+            "Message": { "$base64": "Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgbmV2ZXIgc2lnbmVk" },
+            "Signature": { "$base64": { "$ref": "key.signature" } },
+            "SigningAlgorithm": "RSASSA_PKCS1_V1_5_SHA_256"
+          },
+          "assert": [
+            { "kind": "errorCode", "error": { "shape": "KMSInvalidSignatureException" } }
+          ]
+        },
+        {
+          "$comment": "The same message and signature under a different algorithm do not verify either: \"If you submit a different algorithm, the signature verification fails.\" This is what catches a Sign that ignores SigningAlgorithm (#2160).",
+          "name": "VerifyOtherAlgorithm",
+          "op": "Verify",
+          "params": {
+            "KeyId": { "$ref": "key.signid" },
+            "Message": { "$base64": "Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgdG8gc2lnbg==" },
+            "Signature": { "$base64": { "$ref": "key.signature" } },
+            "SigningAlgorithm": "RSASSA_PSS_SHA_256"
+          },
+          "assert": [
+            { "kind": "errorCode", "error": { "shape": "KMSInvalidSignatureException" } }
+          ]
+        },
+        {
           "$comment": "Disposal of the signing key; nothing in the group uses it after Verify.",
           "name": "ScheduleKeyDeletionSigning",
           "op": "ScheduleKeyDeletion",
