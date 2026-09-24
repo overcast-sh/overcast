@@ -11,11 +11,12 @@ namespace OvercastCompat.Tests;
 /// build is <c>Nullable&lt;T&gt;</c>.
 /// </summary>
 /// <remarks>
-/// <c>cmd/compatgen/emit_dotnet.go</c> spells a member from the shape model and
-/// never asks the SDK, and one of the three facts that makes that safe is that
-/// AWSSDK v4 made every value-typed member nullable — so writing a zero really
-/// does send a zero, and the go-sdk emitter's value-typed-zero refusal has
-/// nothing to refuse here. That was measured on three members of one request.
+/// <c>cmd/compatgen/emit_dotnet.go</c> spells a member against the type the SDK
+/// type table (<c>sdk-types/</c>) gives its property, and one of the three
+/// facts that keep that spelling small is that AWSSDK v4 made every
+/// value-typed member nullable — so writing a zero really does send a zero,
+/// and the go-sdk emitter's value-typed-zero refusal has nothing to refuse
+/// here. That was measured on three members of one request.
 /// If it ever stops being true of a member the corpus sets, the emitter would
 /// silently omit that member from the wire — a wrong request that compiles, and
 /// a test that passes for the wrong reason.

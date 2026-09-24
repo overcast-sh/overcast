@@ -3,20 +3,97 @@
 package main
 
 import (
+	"maps"
 	"strings"
+	"sync"
 	"testing"
 )
 
 // The .NET emitter, over the same hermetic fixture the rest of the generator's
 // tests use (testdata/shapes/widgets.json + testdata/recipes/widgets.json).
 //
-// Unlike the Go emitter's tests these need no stand-in SDK: this backend
-// spells every member from the member's *modeled* kind, because C#'s
-// target-typing and AWSSDK v4's nullable value types between them leave
-// nothing for the SDK's own declarations to settle (emit_dotnet.go says which
-// three facts, and how each was measured). So the fixture model is the whole
-// input, and the proof that the emitted source *compiles* is the dotnet-sdk
-// suite's own build.
+// Like the Go emitter's tests these read a stand-in SDK: the emitter spells
+// each member against the type AWSSDK gives its property, which it reads from
+// the SDK type table the dotnet-sdk suite reflects (dotnetsdktypes.go), and
+// testdata/dotnet-sdk-types is that table for the fixture service — every
+// member spelled the way AWSSDK v4 spells its modeled kind. A test that needs
+// the SDK to disagree with the model edits a copy (withDotnetProperty) rather
+// than the committed fixture. The proof that real emitted source *compiles* is
+// still the dotnet-sdk suite's own build.
+
+// fixtureDotnetTypes is the stand-in table, read once per test binary.
+var fixtureDotnetTypes = sync.OnceValue(func() *dotnetSDKTypes {
+	types, err := loadDotnetSDKTypes("testdata/dotnet-sdk-types")
+	if err != nil {
+		panic(err)
+	}
+	return types
+})
+
+// fixtureDotnetSpeller is the speller emission uses for the fixture service.
+func fixtureDotnetSpeller(t *testing.T, gen *generation) *dotnetSpeller {
+	t.Helper()
+	pkg, err := fixtureDotnetTypes().service(gen.scenario.Client.SDKID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return newDotnetSpeller(gen.model, pkg, gen.scenario.Client.SDKID)
+}
+
+// withDotnetProperties returns a copy of the fixture table with some
+// properties retyped or added — class → property → type, in the table's own
+// grammar — creating a class that is not there. It is how a test makes the SDK
+// disagree with the model, the case the table exists for, without touching the
+// shared fixture.
+func withDotnetProperties(t *testing.T, edits map[string]map[string]string) *dotnetSDKTypes {
+	t.Helper()
+	src := fixtureDotnetTypes()
+	out := &dotnetSDKTypes{byNamespace: map[string]*dotnetSDKPackage{}}
+	for ns, pkg := range src.byNamespace {
+		clone := *pkg
+		clone.classes = maps.Clone(pkg.classes)
+		for class, properties := range edits {
+			props := maps.Clone(clone.classes[class])
+			if props == nil {
+				props = map[string]dotnetType{}
+			}
+			for property, raw := range properties {
+				parsed, err := parseDotnetType(raw)
+				if err != nil {
+					t.Fatal(err)
+				}
+				props[property] = parsed
+			}
+			clone.classes[class] = props
+		}
+		out.byNamespace[ns] = &clone
+		out.packages = append(out.packages, &clone)
+	}
+	return out
+}
+
+// spellDotnetMember spells one request member the way emission does: the
+// modeled target, the SDK's property type for it, then the value.
+func spellDotnetMember(t *testing.T, sp *dotnetSpeller, op, member, value string) (string, error) {
+	t.Helper()
+	target, err := sp.target(sp.model.InputShape(op), op, member)
+	if err != nil {
+		return "", err
+	}
+	class, err := sp.requestClass(op)
+	if err != nil {
+		return "", err
+	}
+	property, err := sp.property(class, op+"Request", member)
+	if err != nil {
+		return "", err
+	}
+	var v any
+	if err := decodeStrict([]byte(value), &v); err != nil {
+		t.Fatal(err)
+	}
+	return sp.value(target, property, v, member, "")
+}
 
 // dotnetGoldenPath is the emitted source for the fixture service. It carries a
 // .golden suffix so no C# project ever compiles it: it names a service that
@@ -28,7 +105,7 @@ func TestEmitDotnet_matchesTheGoldenSource(t *testing.T) {
 	_, gen := generateFixture(t)
 
 	// When: it is emitted as C#.
-	emission, err := emitDotnet(gen)
+	emission, err := emitDotnet(gen, fixtureDotnetTypes())
 	if err != nil {
 		t.Fatalf("emitDotnet: %v", err)
 	}
@@ -43,11 +120,11 @@ func TestEmitDotnet_matchesTheGoldenSource(t *testing.T) {
 func TestEmitDotnet_isDeterministic(t *testing.T) {
 	_, gen := generateFixture(t)
 
-	first, err := emitDotnet(gen)
+	first, err := emitDotnet(gen, fixtureDotnetTypes())
 	if err != nil {
 		t.Fatalf("emitDotnet: %v", err)
 	}
-	second, err := emitDotnet(gen)
+	second, err := emitDotnet(gen, fixtureDotnetTypes())
 	if err != nil {
 		t.Fatalf("emitDotnet: %v", err)
 	}
@@ -71,7 +148,7 @@ func TestEmitDotnet_isDeterministic(t *testing.T) {
 // loud but late.
 func TestEmitDotnet_emitsEveryGroupAndTest(t *testing.T) {
 	_, gen := generateFixture(t)
-	emission, err := emitDotnet(gen)
+	emission, err := emitDotnet(gen, fixtureDotnetTypes())
 	if err != nil {
 		t.Fatalf("emitDotnet: %v", err)
 	}
@@ -181,7 +258,7 @@ func TestEmitDotnet_refusesWhatItCannotSpell(t *testing.T) {
 			})
 
 			// When: the service is emitted.
-			emission, err := emitDotnet(gen)
+			emission, err := emitDotnet(gen, fixtureDotnetTypes())
 			if err != nil {
 				t.Fatalf("emitDotnet: %v", err)
 			}
@@ -220,7 +297,7 @@ func TestEmitDotnet_refusesWhatItCannotSpell(t *testing.T) {
 // mean the property being assigned supplies every type.
 func TestDotnetSpeller_spellsEveryShapeOfMember(t *testing.T) {
 	_, gen := generateFixture(t)
-	sp := &dotnetSpeller{model: gen.model}
+	sp := fixtureDotnetSpeller(t, gen)
 	for _, tc := range []struct {
 		name   string
 		op     string
@@ -256,15 +333,7 @@ func TestDotnetSpeller_spellsEveryShapeOfMember(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			target, err := sp.target(gen.model.InputShape(tc.op), tc.op, tc.member)
-			if err != nil {
-				t.Fatal(err)
-			}
-			var v any
-			if err := decodeStrict([]byte(tc.value), &v); err != nil {
-				t.Fatal(err)
-			}
-			got, err := sp.value(target, v, tc.member, "")
+			got, err := spellDotnetMember(t, sp, tc.op, tc.member, tc.value)
 			if err != nil {
 				t.Fatalf("spelling %s.%s: %v", tc.op, tc.member, err)
 			}
@@ -424,13 +493,13 @@ func TestExplainDotnetRendersTheEmittedCall(t *testing.T) {
 	}
 	explained := renderDotnet(fixtureRenderEnv(gen), gen.scenario, g, tc)
 
-	emission, err := emitDotnet(gen)
+	emission, err := emitDotnet(gen, fixtureDotnetTypes())
 	if err != nil {
 		t.Fatalf("emitDotnet: %v", err)
 	}
 	emitted := string(emission.Contents)
 
-	lines, err := dotnetInputLines(&dotnetSpeller{model: gen.model}, tc.Call.Op, tc.Call.Params, "")
+	lines, err := dotnetInputLines(fixtureDotnetSpeller(t, gen), tc.Call.Op, tc.Call.Params, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -457,7 +526,7 @@ func TestExplainDotnetSaysSoWhenTheModelCannotBeRead(t *testing.T) {
 		t.Fatal("fixture has no CreateWidget")
 	}
 	out := renderDotnet(renderEnv{}, gen.scenario, g, tc)
-	if !strings.Contains(out, "shape snapshot could not be read") {
+	if !strings.Contains(out, "could not be read") {
 		t.Errorf("the rendering does not say the model was unreadable:\n%s", out)
 	}
 }

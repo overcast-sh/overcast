@@ -29,6 +29,13 @@ internal sealed class ScenariosAuthoredLogsMetricFilters : IServiceGroup
         _client = new Lazy<AmazonCloudWatchLogsClient>(() => clients.CreateClient(
             (credentials, configuration) => new AmazonCloudWatchLogsClient(credentials, (AmazonCloudWatchLogsConfig)configuration),
             new AmazonCloudWatchLogsConfig()));
+        // Epoch-millisecond longs in the model, typed as DateTime by
+        // AWSSDK.CloudWatchLogs 4.0.0. Every other backend reads the number the service sent,
+        // so that number is their document form here too
+        // (compat/model/README.md § Values).
+        Documents.EpochMilliseconds(
+            typeof(Amazon.CloudWatchLogs.Model.MetricFilter),
+            nameof(Amazon.CloudWatchLogs.Model.MetricFilter.CreationTime));
     }
 
     public string SourceName => "ScenariosAuthoredLogsMetricFilters";

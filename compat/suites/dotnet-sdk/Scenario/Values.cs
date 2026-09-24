@@ -281,6 +281,49 @@ internal sealed class Binder(string runId, string group, ContextBag bag)
     }
 
     /// <summary>
+    /// Binds an expression into a DateTime property AWSSDK declares where the
+    /// model says a long of epoch milliseconds — CloudWatch Logs'
+    /// <c>InputLogEvent.Timestamp</c>.
+    /// </summary>
+    /// <remarks>
+    /// The value is the model's: the number every other backend sends as it
+    /// stands, and the number <see cref="Documents"/> renders a registered
+    /// DateTime back to, so an epoch exported from one response and bound into
+    /// the next request round-trips exactly. The SDK turns the DateTime back
+    /// into that number on the wire, which the suite's SdkWireFormTests
+    /// measure. cmd/compatgen emits this only for a service whose unit is
+    /// measured. Like <see cref="Bind{T}"/>, a failure is recorded and abandons
+    /// the call; the default returned then is never sent.
+    /// </remarks>
+    public DateTime EpochMilliseconds(string member, object? value)
+    {
+        if (Error is not null)
+        {
+            return default;
+        }
+        try
+        {
+            var evaluated = Evaluate(value);
+            var milliseconds = AsInteger(evaluated, long.MinValue, long.MaxValue, "long");
+            try
+            {
+                return DateTimeOffset.FromUnixTimeMilliseconds(milliseconds).UtcDateTime;
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                throw new ScenarioValueException(
+                    $"wanted epoch milliseconds a DateTime can hold, got {Documents.Render(evaluated)}");
+            }
+        }
+        catch (ScenarioValueException ex)
+        {
+            FailedMember = member;
+            Error = ex;
+            return default;
+        }
+    }
+
+    /// <summary>
     /// Evaluates one value: a ScenarioValue is an expression, a list is a list
     /// of values, a dictionary is a structure or map of values, and anything
     /// else is itself — normalised the way a document is, so a C# literal and a

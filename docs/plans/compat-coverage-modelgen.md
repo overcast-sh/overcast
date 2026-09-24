@@ -801,6 +801,49 @@ reading the vendored SDK at emit time; `java-sdk`, `dotnet-sdk` and `rust-sdk`
 derive everything from the pinned model, each with its own measurement rather
 than an assumption.
 
+**Superseded for `dotnet-sdk` (2026-09-24, #1116/#2132): it reads its SDK
+too, from a committed table.** The three measurements above still hold, but
+they only ever covered nullability, composites and enums. The G6 port of
+`logs-events` found the case they did not: `AWSSDK.CloudWatchLogs` 4.0.0 types
+`InputLogEvent.Timestamp` — and `LogStream.CreationTime` and every other
+member of the `Timestamp` shape — as `DateTime?`, where the model says `long`
+(epoch milliseconds). The emitted `long` failed the suite's build with
+`CS0029`, and on the response side the suite's document rendered the
+`DateTime` as ISO text where the other six backends hold the number, so an
+exported `creationTime` could not have been bound anyway.
+
+The .NET emitter now resolves each member's AWSSDK type at emit time, as
+#1831 made go-sdk do. How it obtains the types was the decision, because
+`go run -tags dev ./cmd/compatgen -check` runs in CI's docs job with Go alone
+— no .NET SDK, no NuGet cache — and must stay offline and byte-reproducible;
+reflecting over restored packages in a `-tags dev` step would have made it
+neither. So the dotnet-sdk suite reflects its own pinned assemblies into a
+text table, one file per package under `compat/suites/dotnet-sdk/sdk-types/`,
+exported by a `sdk-types` target of the suite's own Dockerfile (Docker is all
+a refresh needs), and the table is committed and read offline. Two guards keep
+it the SDK's: `cmd/compatgen` refuses a table whose package versions differ
+from `OvercastCompat.csproj`'s pins, naming the refresh command, and the
+suite's `SdkTypeTableTests` re-render it from the pinned assemblies and fail on
+any difference — in the image build and in `test.yml`'s
+compat-suite-unit-tests job. A digest like `models/aws/VERSION`'s would prove
+only that a file is what some run wrote.
+
+The one disagreement it spells is the measured one: a `long` AWSSDK types as a
+`DateTime`, in a service whose wire unit a wire test has measured
+(`dotnetEpochMilliseconds`, CloudWatch Logs only, measured both ways by the
+suite's `SdkWireFormTests`). A value bound into one becomes a `DateTime` built
+from the milliseconds, and each such property a group touches is registered
+with the suite's document conversion, which renders it back as the number — so
+the dotnet-sdk document agrees with the other six for `equals` and for `$ref`
+binds. A modeled `timestamp` is unchanged: no backend's document form agrees
+with another's (RFC 3339 text, ISO text, SDK date objects, raw epoch seconds),
+which is why the IR has no timestamp value and the binder refuses one as
+`no-portable-value`. Every other disagreement, and an operation or member the
+pinned package lacks, is refused as `dotnet-emit-unsupported` rather than left
+as a suite-wide compile error. Regenerating the committed corpus against the
+table changed no emitted request line; the only diff was the new document
+registrations in the two CloudWatch Logs files, whose results are unchanged.
+
 ### 3.3 D2 — Passing constructs between tests: recipes, exports, bindings
 
 This is the part the model cannot solve alone, so the design is explicit about
@@ -1581,7 +1624,8 @@ reads a blob literal as base64, while python and node send it as UTF-8. The
 `logs-events` port needs a value for "now", and dotnet-sdk's emitter has to
 resolve SDK types at emit time: AWSSDK.CloudWatchLogs types
 `InputLogEvent.Timestamp` as `DateTime?`, where the model says `long` (draft
-#2132).
+#2132). The second is resolved — see the §3.2 note dated 2026-09-24 — and the
+draft's emitted C# now compiles.
 
 ---
 
@@ -2077,7 +2121,7 @@ original scope stays legible.
 | **G0** Foundations | **Done** — #1356, #1357, #1367, #1370, and the loader tail under #1393, all seven suite PRs merged and the issue closed. `suites` scoping was honoured for every group in four suites and for generated groups only in `java-sdk`, `dotnet-sdk` and `rust-sdk` until #1737 aligned the three and re-seeded their baseline shards — see the §2 note | Shard `compat/baseline.json` → `compat/baseline/<suite>.json` (+ size budget); `--shard i/n` and `--generated-registry-file` in `cmd/compat`; `registry.generated.schema.json`; all 8 loaders read the generated sibling and fall back to a scenario resolver hook; `candidate`/`gated` state honoured by both gates; `compat/AGENTS.md` amendment for generated `suites` scoping + the lint that bounds it | M | With an **empty** generated registry, every gate, report and dashboard behaves exactly as today; baseline shards aggregate byte-identically; the scoping lint rejects a hand-written group that adds `suites` |
 | **G1** Model layer | **Done** — `internal/awsmodel` #1359, shape snapshot via inert-tier I1 with `sqs` added in #1684, `cmd/compatgen` and `compat/model/` in #1709. The model-utilisation follow-ups (#1795, closed) then moved three derivations out of the recipes and into the generator — see the §2 note | Extract `internal/awsmodel` AST reader; `cmd/compatgen` skeleton; the pruned shape snapshot `models/aws/shapes/` + `shapes-sha256` (shared deliverable with [inert-tier-rollout.md](./inert-tier-rollout.md) Phase I1 — build once, whichever plan gets there first); IR + recipe JSON schemas; `--scaffold`, `--review-report`, `--explain`; `gaps.json` | M | `make compat-model-check` regenerates byte-identically offline; the sha gate catches a hand edit; the snapshot is within its size budget; scaffolding a service produces a recipe skeleton a human can complete |
 | **G2** Pilot | **Done**, tracked as **#1768** (closed 2026-09-06). All three interpreters are merged — `python-sdk` #1787, `node-js-sdk` #1788 (+ #1796), `cli` #1790 — and the seven pilot groups run in all three suites with zero failures, identical across three runs, inside the §4.3 budget; the §2 note has the tally. Every §4.1 criterion and §4.2's 1–3 are met. #1813, the §4.2 criterion 5 regeneration demonstration, is met (#1818 then #1813): regeneration changed no byte of the corpus and the generated OU tests started passing on their own, in all three interpreters. The first candidate → gated promotion (machinery #1792/#1798) happened on 2026-09-06 as #1871, gating all nine groups; #1879 made the gate test state-aware. #1801 landed as #1823 | `python-sdk`, `node-js-sdk` and `cli` interpreters; `recipes/sqs.json` + `recipes/organizations.json`; the §4 acceptance criteria | L | Every §4.1 and §4.2 criterion met, including the regeneration demonstration in §4.2.5 |
-| **G3** Typed backends | **Done**, tracked as **#1820**. All four typed backends landed, one PR each: `go-sdk` (#1830, plus #1836 for emit-time SDK type resolution and #1833 for the precedent notes), `java-sdk` (#1851), `dotnet-sdk` (#1848), `rust-sdk` (#1853). Every backend produces results identical, test for test, to the three interpreters and to each other — 39 `pass` / 23 `unimplemented` / 0 `fail` / 0 `skip`, three runs each — and every generated group's `suites` now lists all seven backends. §3.2's binding decision, measured rather than assumed: only `go-sdk` reads the vendored SDK at emit time; `java-sdk`, `dotnet-sdk` and `rust-sdk` derive types from the pinned model alone. G4 fleet rollout is unblocked; see the §2 note dated 2026-09-06 | Source emitters for `go-sdk`, then `java-sdk`, `dotnet-sdk`, `rust-sdk` (one suite per PR); member→field naming rules per language | L each | Generated source compiles in the suite's normal build; the pilot groups produce **identical** results to the interpreter suites; generated `suites` scoping widens automatically on regeneration |
+| **G3** Typed backends | **Done**, tracked as **#1820**. All four typed backends landed, one PR each: `go-sdk` (#1830, plus #1836 for emit-time SDK type resolution and #1833 for the precedent notes), `java-sdk` (#1851), `dotnet-sdk` (#1848), `rust-sdk` (#1853). Every backend produces results identical, test for test, to the three interpreters and to each other — 39 `pass` / 23 `unimplemented` / 0 `fail` / 0 `skip`, three runs each — and every generated group's `suites` now lists all seven backends. §3.2's binding decision, measured rather than assumed: only `go-sdk` reads the vendored SDK at emit time; `java-sdk`, `dotnet-sdk` and `rust-sdk` derive types from the pinned model alone (superseded for `dotnet-sdk` on 2026-09-24: it reads a committed table of its pinned SDK's types — see §3.2). G4 fleet rollout is unblocked; see the §2 note dated 2026-09-06 | Source emitters for `go-sdk`, then `java-sdk`, `dotnet-sdk`, `rust-sdk` (one suite per PR); member→field naming rules per language | L each | Generated source compiles in the suite's normal build; the pilot groups produce **identical** results to the interpreter suites; generated `suites` scoping widens automatically on regeneration |
 | **G4** Tier-1 fleet rollout | **In progress**, tracked as **#1883**. **Wave 1 done** at Tier 0 (2026-09-07): `batch` #1881, `elastic-load-balancing` #1882 (+ classification fix #1889, closing #1884), `servicediscovery` #1887 — the inert tier's Phase I4 pilot trio, stacked bottom-up and merged. Every probe test lands `unimplemented` and every lifecycle group `skip` until the inert tier implements each service (the #1818 → #1821 precedent) — measured 0 `pass` / 0 `fail` in all three, batch 11 `unimplemented`/34 `skip`, servicediscovery 3/25, elastic-load-balancing 5/12; see the §2 note dated 2026-09-07 for the per-service table and the four generator faults the wave found. **Wave 2 done** (#1883, 2026-09-07): `secretsmanager` (#1897), `sns` (#1900), `kms` (#1899), `iam` (#1919, 180 modeled operations), chosen by implemented-operations-per-snapshot-byte rather than by smallest operation count; its snapshot/budget PR (`maxShapeSnapshotBytes` to 800 KiB) merged as #1891. Ten of the 26 new wave-1/wave-2 groups are gated on `main` (#1925); the rest stay `candidate` behind a known defect or a Tier-0 skip — see the §2 notes dated 2026-09-07 for per-service results, every defect filed, and the exact list. `elastic-load-balancing`'s rust nested-composite fault (#1885) is fixed by #1890, and #1896 (only `rust-sdk` read a nested `Error.Code`) is fixed by #1918 — `sns` and `iam`, both Query-protocol, are the proof — so no wave-1 or wave-2 group is scoped away from `rust-sdk` or blocked on Query error handling any more | One service per PR, ordered by [inert-tier-rollout.md](./inert-tier-rollout.md) then [full-emulation-priority.md](./full-emulation-priority.md); capped probe groups for [services-never-emulated.md](./services-never-emulated.md) | L, parallelizable per service | Per service: recipe reviewed, no unexplained refusal in `gaps.json`, soak passed, CI wall-clock within budget, coverage metric moves |
 | **G5** Steady state | Not started | Weekly model-refresh PR regenerates scenarios; coverage becomes the dashboard headline; `--slowest N` latency census | S | A model-refresh PR shows added/removed operations per service and cannot break the gate; coverage per service/tier is published |
 | **G6** Native-group migration (§3.11; overlaps G4/G5, starts any time after G3) | **In progress** — the mechanism landed with the pilot (#1898) and its prerequisites (#1916), and the first flip is merged: `sqs-queues` (#1932, closing the prerequisites tracker #1903, 2026-09-07), after the nightly `--compare-shadow` (run 34066538988) reported all 56 (suite, test) pairs in agreement in each of its three soak runs. The flip deleted 1,161 native lines across all seven suites and left every suite's `sqs-queues` row `pass` (8/8); the registry and baseline names did not move. `sqs-queues` carried no `dotnet-sdk`/`rust-sdk` parity debt going in, so the measurable gain is the union of assertions — `java-sdk` and `rust-sdk` gain the clauses their natives omitted. **Wave 1 ranks 1–3 flipped** (#1116, 2026-09-23): `kinesis-streams`, `logs-groups` and `eventbridge-rules`. Each soaked with zero divergences, 48 `dotnet-sdk`/`rust-sdk` parity rows are closed and 2,248 native lines are deleted — see the §3.11 note dated 2026-09-23. **G6 wave 1 chosen** (#1116, 2026-09-08): `kinesis-streams`, `logs-groups`, `eventbridge-rules`, `ecs-clusters`, `cognito-userpools`, `rds-instances` — 94 `dotnet-sdk`+`rust-sdk` rows; cross-service groups (`pipes-wiring`, `eventbridge-target-fanout`) wait on #1931. See the §3.11 notes dated 2026-09-07/08 for the two-PR shape and what the pilot found in the natives. The plan's original "94 hand-written groups" scope (below) is itself stale: `registry.json` has 141 groups / 803 tests as of 2026-09-08 | Port the existing 94 hand-written groups to authored IR scenarios, group by group: same registry names, one parallel soak cycle, results must match, then delete the per-language code. Exceptions file + lint for what stays native (streaming, presigned flows, the idiom suite). | L, parallelizable per group | Per group: soak-parity with the native predecessor, native code deleted, registry names unchanged; fleet-wide: rust/dotnet parity debt reaches zero via backends, the exceptions file is the only remaining native test code and every entry carries a reason |

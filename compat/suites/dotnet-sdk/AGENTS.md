@@ -61,7 +61,8 @@ compat/suites/dotnet-sdk/
   Dockerfile                 ← .NET SDK build stage (runs Tests/ too) + runtime stage
   run.sh                     ← builds/runs the Dockerfile; invoked by cmd/compat as `sh run.sh`
   OvercastCompat.csproj      ← AWSSDK.* NuGet references; OutputType=Exe
-  Program.cs                 ← top-level statement entry point
+  Program.cs                 ← top-level statement entry point (`--sdk-types <dir>` writes the table)
+  sdk-types/                 ← AWSSDK.<Service>.txt: the pinned SDK's member types, read by cmd/compatgen
 
   Harness/
     TestContext.cs           ← per-group state bag
@@ -336,17 +337,26 @@ every rule in there; where the two disagree, `Scenario/` is wrong.
 
 Two things about the generated half are worth knowing before you touch it:
 
-- **The emitter reads the shape model, not the SDK.** `emit_dotnet.go`'s header
-  records the three measured facts that make that safe — AWSSDK v4's nullable
-  value types, C#'s target-typed `new()` and collection expressions, and
-  `ConstantClass`'s implicit conversion from `string` — and the one cost: an
-  operation the pinned package does not declare, or a member it renamed, is a
-  **compile error in this project**, not a refusal in `gaps.json`. That is why
-  `OvercastCompat.csproj` pins a version of `AWSSDK.Organizations` newer than
-  the rest, and says so. **When an AWS model refresh adds an operation the
-  pinned AWSSDK has not shipped, the whole project stops compiling.** The fix
-  is a pin bump to a package version that declares it — never a change to the
-  emitter or to the recipe — and it follows
+- **The emitter reads the pinned SDK's types from `sdk-types/`.** Each member
+  is spelled against the type AWSSDK gives its property, read from the
+  committed table this suite reflects from its own pinned assemblies
+  (`Scenario/SdkTypeTable.cs`; the refresh command is in
+  [README.md § The SDK type table](README.md#the-sdk-type-table)).
+  `emit_dotnet.go`'s header records the three measured facts that keep the
+  spelling small — AWSSDK v4's nullable value types, C#'s target-typed `new()`
+  and collection expressions, and `ConstantClass`'s implicit conversion from
+  `string` — and the case they did not cover: AWSSDK.CloudWatchLogs types an
+  epoch-milliseconds `long` as `DateTime?`, which is spelled as a conversion
+  (`Binder.EpochMilliseconds`) and rendered back as the number
+  (`Documents.EpochMilliseconds`), and only for a service `SdkWireFormTests`
+  measures. An operation the pinned package does not declare, or a member it
+  renamed, is now a refusal in `gaps.json` rather than a compile error here.
+  **When you change an `AWSSDK.*` pin, refresh the table in the same change**:
+  `cmd/compatgen` refuses a table whose versions differ from the csproj, and
+  `SdkTypeTableTests` fails on one that differs from the assemblies. When an
+  AWS model refresh adds an operation the pinned AWSSDK has not shipped, the
+  fix is a pin bump to a package version that declares it — never a change to
+  the emitter or to the recipe — and it follows
   [compat/AGENTS.md § Upgrade procedure](../../AGENTS.md#upgrade-procedure).
 - **A generated group this suite is scoped to but cannot resolve is a hard
   failure**, naming the group (`generated group "<group>" is scoped to
@@ -384,6 +394,15 @@ generated half:
   value-typed members. That is the measured fact the emitter rests on; a member
   that stopped being nullable would make a zero vanish from the wire, in source
   that still compiles.
+- `SdkTypeTableTests.cs` — the committed `sdk-types/` table is what the
+  AWSSDK assemblies beside the test host declare, byte for byte. A pin bump
+  without a refresh, or a hand edit, fails here, naming the refresh command.
+- `SdkWireFormTests.cs` — the measurement behind the emitter's one spelled
+  disagreement: through a real `AmazonCloudWatchLogsClient` and an in-process
+  `HttpListener`, `PutLogEvents` sends an epoch bound through
+  `Binder.EpochMilliseconds` as exactly those milliseconds, and a
+  `creationTime` read back renders as the same number once registered with
+  `Documents.EpochMilliseconds`.
 - `ParallelGroupTests.cs` — the runner's parallel-group path: the tests of a
   group the registry marks `parallel` overlap, their results are still emitted
   in declaration order, a group declaring `depends` falls back to serial, and

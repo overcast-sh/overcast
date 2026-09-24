@@ -2,8 +2,23 @@ using OvercastCompat.Clients;
 using OvercastCompat.Groups;
 using OvercastCompat.Harness;
 using OvercastCompat.Registry;
+using OvercastCompat.Scenario;
 
 const string suite = "dotnet-sdk";
+
+// `--sdk-types <dir>` writes the SDK type table cmd/compatgen spells emitted C#
+// from, reflected from the AWSSDK assemblies beside this program, and runs no
+// test. The Dockerfile's sdk-types target is the only caller; see
+// Scenario/SdkTypeTable.cs.
+if (args is ["--sdk-types", var tableDirectory])
+{
+    Directory.CreateDirectory(tableDirectory);
+    foreach (var (file, contents) in SdkTypeTable.Render(AppContext.BaseDirectory))
+    {
+        File.WriteAllText(Path.Combine(tableDirectory, file), contents);
+    }
+    return;
+}
 
 // 127.0.0.1, not localhost: on a dual-stack host "localhost" resolves to ::1
 // first while the container publishes IPv4 only, so every new connection

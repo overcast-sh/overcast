@@ -1,0 +1,216 @@
+# A stand-in for the table the dotnet-sdk suite reflects from AWSSDK
+# (compat/suites/dotnet-sdk/sdk-types), for the fixture service: every member
+# spelled as AWSSDK v4 spells its modeled kind. Hand-maintained.
+package AWSSDK.Widgets 4.0.0
+namespace Amazon.Widgets.Model
+class ArchiveWidgetRequest
+  WidgetId string
+class ArchiveWidgetResponse
+class CalibrateGaugeRequest
+  GaugeId string
+class CalibrateGaugeResponse
+  Status string
+class CreateCogRequest
+  Name string
+class CreateCogResponse
+  CogId string
+class CreateSprocketRequest
+  Description string
+  Name string
+class CreateSprocketResponse
+  Arn string
+  SprocketId string
+class CreateWidgetRequest
+  Color enum:Color
+  Description string
+  Name string
+class CreateWidgetResponse
+  Arn string
+  WidgetId string
+class DeleteSprocketRequest
+  SprocketId string
+class DeleteSprocketResponse
+class DeleteWidgetRequest
+  WidgetId string
+class DeleteWidgetResponse
+class DescribeGaugeRequest
+class DescribeGaugeResponse
+  Gauge class:Gauge
+class DescribeGizmoRequest
+  GizmoArn string
+class DescribeGizmoResponse
+  Arn string
+class DescribeHubRequest
+class DescribeHubResponse
+  Hub class:Hub
+class DescribeHubTagsRequest
+  HubNames List<string>
+class DescribeHubTagsResponse
+  TagDescriptions List<class:HubTagDescription>
+class DescribeValveRequest
+class DescribeValveResponse
+  Valve class:Valve
+class DescribeWidgetRequest
+  WidgetId string
+class DescribeWidgetResponse
+  Widget class:Widget
+class FreezeWidgetRequest
+  WidgetId string
+class FreezeWidgetResponse
+class Gauge
+  Arn string
+  GaugeId string
+class GaugeTag
+  TagKey string
+  TagValue string
+class GetSprocketRequest
+  SprocketId string
+class GetSprocketResponse
+  Sprocket class:Sprocket
+class GetWidgetAckRequest
+class GetWidgetAckResponse
+class GetWidgetHistoryRequest
+  WidgetId string
+class GetWidgetHistoryResponse
+  Entries List<class:Widget>
+class GetWidgetRequest
+  WidgetId string
+class GetWidgetResponse
+  Widget class:Widget
+class GetWidgetSecretRequest
+class GetWidgetSecretResponse
+  Secret string
+class Hub
+  Arn string
+  HubName string
+class HubTagDescription
+  HubName string
+  Tags List<class:SprocketTag>
+class ListCogsRequest
+  NextToken string
+class ListCogsResponse
+  Cogs List<string>
+  NextToken string
+class ListGaugeTagsRequest
+  GaugeId string
+class ListGaugeTagsResponse
+  Tags List<class:GaugeTag>
+class ListGaugesRequest
+  Cursor string
+class ListGaugesResponse
+  Cursor string
+  Gauges List<class:Gauge>
+class ListSprocketTagsRequest
+  SprocketId string
+class ListSprocketTagsResponse
+  Tags List<class:SprocketTag>
+class ListValveTagsRequest
+  ValveId string
+class ListValveTagsResponse
+  Tags List<class:SprocketTag>
+class ListWidgetTagsRequest
+  WidgetId string
+class ListWidgetTagsResponse
+  Tags Dictionary<string,string>
+class ListWidgetsAndCogsRequest
+class ListWidgetsAndCogsResponse
+  Cogs List<string>
+  Widgets List<class:Widget>
+class ListWidgetsRequest
+  CreatedAfter DateTime?
+  NamePrefix string
+class ListWidgetsResponse
+  Widgets List<class:Widget>
+class PingWidgetsRequest
+class PingWidgetsResponse
+  Status string
+class PolishWidgetRequest
+  WidgetId string
+class PolishWidgetResponse
+class PurgeWidgetsRequest
+class PurgeWidgetsResponse
+class RetentionPolicy
+  Days int?
+  Enabled bool?
+class RotateWidgetRequest
+  Angle int?
+  WidgetId string
+class RotateWidgetResponse
+class ScanWidgetsRequest
+  NextToken string
+class ScanWidgetsResponse
+  NextToken string
+class SetWidgetSizeRequest
+  Size int?
+  WidgetId string
+class SetWidgetSizeResponse
+class Sprocket
+  Description string
+  SprocketId string
+class SprocketTag
+  Key string
+  Value string
+class SyncWidgetsRequest
+class SyncWidgetsResponse
+class TagGaugeRequest
+  GaugeId string
+  Tags List<class:GaugeTag>
+class TagGaugeResponse
+class TagHubRequest
+  HubNames List<string>
+  Tags List<class:SprocketTag>
+class TagHubResponse
+class TagSprocketRequest
+  SprocketId string
+  Tags List<class:SprocketTag>
+class TagSprocketResponse
+class TagValveRequest
+  Tags List<class:SprocketTag>
+  ValveId string
+class TagValveResponse
+class TagWidgetRequest
+  Tags Dictionary<string,string>
+  WidgetId string
+class TagWidgetResponse
+class UntagGaugeRequest
+  GaugeId string
+  TagKeys List<string>
+class UntagGaugeResponse
+class UntagHubRequest
+  HubNames List<string>
+  TagKeys List<string>
+class UntagHubResponse
+class UntagSprocketRequest
+  SprocketId string
+  TagKeys List<string>
+class UntagSprocketResponse
+class UntagValveRequest
+  TagKeys List<class:ValveTagKeyOnly>
+  ValveId string
+class UntagValveResponse
+class UntagWidgetRequest
+  TagKeys List<string>
+  WidgetId string
+class UntagWidgetResponse
+class UpdateWidgetRequest
+  Description string
+  Settings class:WidgetSettings
+  WidgetId string
+class UpdateWidgetResponse
+  Widget class:Widget
+class Valve
+  Arn string
+  ValveId string
+class ValveTagKeyOnly
+  Key string
+class Widget
+  Color enum:Color
+  Description string
+  Name string
+  Size int?
+  WidgetId string
+class WidgetSettings
+  Cogs List<string>
+  Labels Dictionary<string,string>
+  Retention class:RetentionPolicy
+  Tags List<class:SprocketTag>

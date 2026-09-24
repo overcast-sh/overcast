@@ -43,10 +43,75 @@ namespace OvercastCompat.Scenario;
 /// enum as a class wrapping the wire value; a path names the modeled member and
 /// expects the string the service sent, not an object with a Value
 /// property.</description></item>
+/// <item><description><b>a DateTime the model calls a long is its epoch
+/// milliseconds.</b> AWSSDK types some modeled longs as DateTime —
+/// CloudWatch Logs' <c>LogStream.CreationTime</c> among them — and every other
+/// backend holds the number the service sent. The generated groups register
+/// each such property through <see cref="EpochMilliseconds"/>, so an
+/// <c>equals</c>, a <c>where</c> and an exported <c>$ref</c> see that number
+/// here as they do there. A DateTime the model calls a timestamp stays ISO 8601
+/// text: the IR never compares or binds a timestamp, because the backends
+/// cannot agree on one (compat/model/README.md § Values).</description></item>
 /// </list>
 /// </remarks>
 internal static class Documents
 {
+    /// <summary>
+    /// The properties registered through <see cref="EpochMilliseconds"/>, by
+    /// declaring type and name.
+    /// </summary>
+    /// <remarks>
+    /// Keyed by the declaring type rather than by PropertyInfo: a PropertyInfo
+    /// read off a derived type carries that type as its ReflectedType and is not
+    /// equal to one read off the declaring type, so the same property would be
+    /// two keys.
+    /// </remarks>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<(Type, string), bool> EpochMillisecondProperties = new();
+
+    /// <summary>
+    /// Registers DateTime properties whose modeled type is a long of epoch
+    /// milliseconds, so their document form is that number rather than ISO
+    /// text.
+    /// </summary>
+    /// <remarks>
+    /// Called from a generated group's constructor, for the properties
+    /// cmd/compatgen found AWSSDK types as DateTime where the model says long —
+    /// on the requests the group sends as well as the responses it reads,
+    /// because failure-message field 3 renders the request through this same
+    /// conversion. Registering one twice is harmless.
+    /// </remarks>
+    public static void EpochMilliseconds(Type type, params string[] properties)
+    {
+        foreach (var name in properties)
+        {
+            var property = type.GetProperty(name, BindingFlags.Public | BindingFlags.Instance)
+                ?? throw new ArgumentException($"{type.FullName} declares no property {name}");
+            if ((Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType) != typeof(DateTime))
+            {
+                throw new ArgumentException(
+                    $"{type.FullName}.{name} is a {property.PropertyType.Name}, not a DateTime; only a DateTime has an epoch-milliseconds form");
+            }
+            EpochMillisecondProperties[(property.DeclaringType!, property.Name)] = true;
+        }
+    }
+
+    /// <summary>
+    /// A DateTime as the epoch milliseconds the service sent: the number every
+    /// other backend reads for a modeled long.
+    /// </summary>
+    /// <remarks>
+    /// An Unspecified kind is read as UTC rather than local time, which is what
+    /// the SDK means by one and what keeps the answer the same on a machine
+    /// whose clock is not in UTC.
+    /// </remarks>
+    public static double ToEpochMilliseconds(DateTime value)
+    {
+        var utc = value.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(value, DateTimeKind.Utc)
+            : value.ToUniversalTime();
+        return new DateTimeOffset(utc).ToUnixTimeMilliseconds();
+    }
+
     private static readonly JsonSerializerOptions CanonicalOptions = new()
     {
         // The IR's values are compared and printed as JSON, and an escaped
@@ -90,7 +155,9 @@ internal static class Documents
                 return true;
             // A timestamp is never compared by the IR (compat/model/README.md
             // § Assertions), but it can sit on a response a path walks past, so
-            // it is rendered rather than dropped.
+            // it is rendered rather than dropped. A DateTime the model calls a
+            // long never reaches here: FromObject renders a registered one as
+            // its epoch milliseconds (EpochMilliseconds).
             case DateTime timestamp:
                 document = timestamp.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.FFFFFFFZ", CultureInfo.InvariantCulture);
                 return true;
@@ -241,6 +308,11 @@ internal static class Documents
             {
                 // A property that throws on get says nothing about the
                 // response; treating it as absent beats failing the step.
+                continue;
+            }
+            if (raw is DateTime timestamp && EpochMillisecondProperties.ContainsKey((property.DeclaringType!, property.Name)))
+            {
+                members[property.Name] = ToEpochMilliseconds(timestamp);
                 continue;
             }
             if (TryConvert(raw, out var converted))
