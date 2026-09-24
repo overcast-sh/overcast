@@ -1,0 +1,189 @@
+{
+  "$comment": "Authored port of the hand-written registry group kinesis-records (docs/plans/compat-coverage-modelgen.md §3.11, G6, #1116). One spec in place of five per-language implementations — and of the two that were never written: dotnet-sdk and rust-sdk carry 4 rows each of parity debt for this group, which the port closes. It runs today under the shadow name kinesis-records-shadow, beside the natives, so the nightly can compare the two per (suite, test); the flip PR renames this group to kinesis-records, points the registry entry at this file, and deletes the native code. The clauses are the union of what the five natives assert — see compat/model/README.md § Authored scenarios. Every record's Data is a blob, so it is written as {\"$base64\": ...} (#1910): no string literal puts the same bytes on the wire in every backend, which is what parked this port until #2123.",
+  "version": 1,
+  "service": "kinesis",
+  "client": {
+    "sdkId": "Kinesis",
+    "endpointPrefix": "kinesis",
+    "signingName": "kinesis",
+    "protocol": "awsJson1_1",
+    "apiVersion": "2013-12-02",
+    "targetPrefix": "Kinesis_20131202",
+    "awsQueryCompatible": false
+  },
+  "groups": [
+    {
+      "$comment": "One one-shard stream, created in setup and deleted in teardown — all five natives create exactly that. The records are put and then read back from the trim horizon of that one shard. The natives disagree on every data literal (go-sdk \"record-data\", python-sdk \"hello-record\", node-js-sdk a JSON object, cli \"record-1\", java-sdk \"hello\") and on how many records PutRecords sends (go-sdk and cli 2, node-js-sdk 3, python-sdk 5, java-sdk 1); none of them reads its data back, so the choice changes nothing a native observes. This port takes go-sdk's literals throughout — \"record-data\" under pk1, then r1 under pk1 and r2 under pk2, the last two also exactly what the cli sends — and then asserts the round trip, which no native does. One IR limit is stated rather than hidden: setup cannot poll. Every native waits for the stream to reach ACTIVE before its first test, and a setup step here is one call, so the first test's PutRecord is the one call in this group that may meet a CREATING stream on AWS, which answers ResourceNotFoundException for a stream that is not yet ACTIVE. Overcast creates a stream ACTIVE, so nothing the soak observes depends on it; kinesis-shards states the same limit.",
+      "name": "kinesis-records-shadow",
+      "kind": "lifecycle",
+      "setup": [
+        {
+          "op": "CreateStream",
+          "params": {
+            "StreamName": { "$name": "s" },
+            "ShardCount": 1
+          }
+        }
+      ],
+      "tests": [
+        {
+          "$comment": "go-sdk and python-sdk assert a ShardId in the response; node-js-sdk and java-sdk a SequenceNumber; cli nothing. The union is both, non-empty. Both are exported: the ShardId is the shard GetShardIterator reads (python-sdk, node-js-sdk and cli take it from here), and the SequenceNumber is what GetRecords's round trip is checked against. The data is go-sdk's \"record-data\" under go-sdk's partition key pk1 (also node-js-sdk's and java-sdk's); cli's partition key is the run id, and nothing reads a partition key back in any native.",
+          "name": "PutRecord",
+          "op": "PutRecord",
+          "call": {
+            "op": "PutRecord",
+            "params": {
+              "StreamName": { "$name": "s" },
+              "Data": { "$base64": "cmVjb3JkLWRhdGE=" },
+              "PartitionKey": "pk1"
+            },
+            "export": {
+              "record.shard": "$.ShardId",
+              "record.seq": "$.SequenceNumber"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.ShardId": { "nonEmpty": true },
+                "$.SequenceNumber": { "nonEmpty": true }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "Every native asserts FailedRecordCount is 0 (python-sdk and go-sdk read an absent count as 0; node-js-sdk, java-sdk and cli require the member). The member is asserted to be present and 0: AWS returns FailedRecordCount on every PutRecords response, and so does Overcast (putRecordsResponse). Two records, go-sdk's and cli's r1/pk1 and r2/pk2 — the most common count, and enough that GetRecords reads a batch rather than a single record. They are read back order-independently, because AWS does not guarantee the order of records within one PutRecords request.",
+          "name": "PutRecords",
+          "op": "PutRecords",
+          "call": {
+            "op": "PutRecords",
+            "params": {
+              "StreamName": { "$name": "s" },
+              "Records": [
+                { "Data": { "$base64": "cjE=" }, "PartitionKey": "pk1" },
+                { "Data": { "$base64": "cjI=" }, "PartitionKey": "pk2" }
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.FailedRecordCount": { "equals": 0 }
+              }
+            }
+          ],
+          "depends": ["PutRecord"]
+        },
+        {
+          "$comment": "The natives disagree on where the shard comes from: python-sdk, node-js-sdk and cli take PutRecord's ShardId (falling back to shardId-000000000000), go-sdk the first shard of DescribeStream (failing when there is none), java-sdk the first shard of ListShards. The port takes PutRecord's ShardId, which is the shard the record is actually on, and asserts that the stream's shard list contains it — the one-shard stream's only shard, which is what go-sdk's and java-sdk's lookups return. Every native asks for a TRIM_HORIZON iterator and python-sdk, node-js-sdk, java-sdk and cli assert it is non-empty; go-sdk asserts nothing. The iterator is exported for GetRecords.",
+          "name": "GetShardIterator",
+          "op": "GetShardIterator",
+          "call": {
+            "op": "GetShardIterator",
+            "params": {
+              "StreamName": { "$name": "s" },
+              "ShardId": { "$ref": "record.shard" },
+              "ShardIteratorType": "TRIM_HORIZON"
+            },
+            "export": {
+              "shard.iterator": "$.ShardIterator"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.ShardIterator": { "nonEmpty": true }
+              }
+            },
+            {
+              "kind": "listContains",
+              "call": {
+                "op": "ListShards",
+                "params": { "StreamName": { "$name": "s" } }
+              },
+              "itemsPath": "$.Shards",
+              "where": { "$.ShardId": { "$ref": "record.shard" } }
+            }
+          ],
+          "depends": ["PutRecord"]
+        },
+        {
+          "$comment": "Every native reads with the iterator from GetShardIterator (python-sdk Limit 100, the others 10; this port 10, the majority) and asserts only that Records is non-empty. go-sdk returns success without reading when it has no iterator, and java-sdk fetches one of its own; with the registry's depends the iterator is always there, so neither path is kept. The union is extended by the round trip no native asserts: the records read back are the bytes this scenario put. That is safe to assert because the bytes are the scenario's own — no service-generated value is compared — and it is the claim Kinesis exists to make. Records[0] is PutRecord's record, exactly: one shard, a TRIM_HORIZON iterator, and PutRecord answered before PutRecords was sent, so it has the shard's lowest sequence number; its SequenceNumber equals the one PutRecord returned, its partition key is pk1 and its Data is \"record-data\". PutRecords's r1 and r2 are found anywhere in the list (AWS does not order records within one PutRecords request), and there is no fourth record. On AWS a record can take a moment to become visible to GetRecords, and a read from TRIM_HORIZON can come back empty with the data behind its NextShardIterator; the natives, which read once, would fail there. So the first read is an `eventually` re-reading the same iterator — valid for five minutes after GetShardIterator issued it — 20 × 500 ms, inside the natives' own waits (3 s to 30 s). Once it has passed, the records are visible and the remaining reads are single.",
+          "name": "GetRecords",
+          "op": "GetRecords",
+          "call": {
+            "op": "GetRecords",
+            "params": {
+              "ShardIterator": { "$ref": "shard.iterator" },
+              "Limit": 10
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 20,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "GetRecords",
+                  "params": {
+                    "ShardIterator": { "$ref": "shard.iterator" },
+                    "Limit": 10
+                  }
+                },
+                "checks": {
+                  "$.Records[0].SequenceNumber": { "equals": { "$ref": "record.seq" } },
+                  "$.Records[0].PartitionKey": { "equals": "pk1" },
+                  "$.Records[0].Data": { "equals": { "$base64": "cmVjb3JkLWRhdGE=" } },
+                  "$.Records[2].Data": { "nonEmpty": true },
+                  "$.Records[3]": { "missing": true }
+                }
+              }
+            },
+            {
+              "kind": "listContains",
+              "call": {
+                "op": "GetRecords",
+                "params": {
+                  "ShardIterator": { "$ref": "shard.iterator" },
+                  "Limit": 10
+                }
+              },
+              "itemsPath": "$.Records",
+              "where": {
+                "$.Data": { "$base64": "cjE=" },
+                "$.PartitionKey": "pk1"
+              }
+            },
+            {
+              "kind": "listContains",
+              "call": {
+                "op": "GetRecords",
+                "params": {
+                  "ShardIterator": { "$ref": "shard.iterator" },
+                  "Limit": 10
+                }
+              },
+              "itemsPath": "$.Records",
+              "where": {
+                "$.Data": { "$base64": "cjI=" },
+                "$.PartitionKey": "pk2"
+              }
+            }
+          ],
+          "depends": ["GetShardIterator"]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "DeleteStream",
+          "params": { "StreamName": { "$name": "s" } }
+        }
+      ]
+    }
+  ]
+}

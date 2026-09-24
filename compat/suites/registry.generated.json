@@ -1389,6 +1389,46 @@
       ]
     },
     {
+      "service": "kinesis",
+      "name": "kinesis-records-shadow",
+      "generated": true,
+      "scenario": "compat/model/authored/kinesis-records.json",
+      "state": "candidate",
+      "shadowOf": "kinesis-records",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "PutRecord"
+        },
+        {
+          "name": "PutRecords",
+          "depends": [
+            "PutRecord"
+          ]
+        },
+        {
+          "name": "GetShardIterator",
+          "depends": [
+            "PutRecord"
+          ]
+        },
+        {
+          "name": "GetRecords",
+          "depends": [
+            "GetShardIterator"
+          ]
+        }
+      ]
+    },
+    {
       "service": "kms",
       "name": "kms-gen-key",
       "generated": true,
