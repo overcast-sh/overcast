@@ -8231,13 +8231,13 @@
           "operation": "CreateDeliveryStream",
           "category": "Delivery Streams",
           "status": "✅ Supported",
-          "notes": "Creates a delivery stream"
+          "notes": "Creates a delivery stream; destination, Kinesis stream source and encryption configurations are stored and echoed by DescribeDeliveryStream, but nothing is ever delivered to a destination"
         },
         {
           "operation": "DescribeDeliveryStream",
           "category": "Delivery Streams",
           "status": "✅ Supported",
-          "notes": "Returns delivery stream details"
+          "notes": "Returns delivery stream details, including the destination(s), stream source and encryption configuration given at creation"
         },
         {
           "operation": "ListDeliveryStreams",

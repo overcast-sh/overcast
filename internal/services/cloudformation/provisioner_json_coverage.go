@@ -1401,20 +1401,63 @@ func (h *shieldProtectionHandler) Update(ctx context.Context, router http.Handle
 
 type firehoseDeliveryStreamHandler struct{}
 
+// firehoseDestinationProperties are AWS::KinesisFirehose::DeliveryStream's
+// destination-configuration properties — every one CreateDeliveryStream
+// takes, matching the CFN property reference for
+// AWS::KinesisFirehose::DeliveryStream verbatim, which shares CreateDeliveryStreamInput's
+// own member names rather than a CloudFormation-specific rendering of them.
+// firehose/typed_logic.go stores and echoes each of these on
+// DescribeDeliveryStream without acting on any field inside them (#150), so
+// they are copied through as-is.
+var firehoseDestinationProperties = []string{
+	"S3DestinationConfiguration",
+	"ExtendedS3DestinationConfiguration",
+	"RedshiftDestinationConfiguration",
+	"ElasticsearchDestinationConfiguration",
+	"AmazonopensearchserviceDestinationConfiguration",
+	"HttpEndpointDestinationConfiguration",
+	"SplunkDestinationConfiguration",
+	"SnowflakeDestinationConfiguration",
+	"IcebergDestinationConfiguration",
+}
+
 func (h *firehoseDeliveryStreamHandler) Create(ctx context.Context, router http.Handler, cfg *config.Config, props map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
 	name, _ := props["DeliveryStreamName"].(string)
 	if name == "" {
 		name = rCtx.generatedNameWithin(maxNameLenFirehose)
 	}
-	streamType, _ := props["DeliveryStreamType"].(string)
-	if streamType == "" {
-		streamType = "DirectPut"
-	}
 
-	body := map[string]any{
-		"DeliveryStreamName": name,
-		"DeliveryStreamType": streamType,
+	body := map[string]any{"DeliveryStreamName": name}
+	// DeliveryStreamType is left out rather than defaulted to "DirectPut"
+	// here: firehose/typed_logic.go's createDeliveryStreamTyped now infers
+	// KinesisStreamAsSource for a stream whose template set
+	// KinesisStreamSourceConfiguration but not DeliveryStreamType — the exact
+	// shape AWS's own example CloudFormation template for a Kinesis-sourced
+	// stream uses — and defaulting it here first would pre-empt that (#535).
+	if v, _ := props["DeliveryStreamType"].(string); v != "" {
+		body["DeliveryStreamType"] = v
 	}
+	for _, prop := range firehoseDestinationProperties {
+		if v, ok := props[prop]; ok && v != nil {
+			body[prop] = v
+		}
+	}
+	if v, ok := props["KinesisStreamSourceConfiguration"]; ok && v != nil {
+		body["KinesisStreamSourceConfiguration"] = v
+	}
+	if v, ok := props["DeliveryStreamEncryptionConfigurationInput"]; ok && v != nil {
+		body["DeliveryStreamEncryptionConfigurationInput"] = v
+	}
+	// CreateDeliveryStream applies Tags at creation (firehose/typed_logic.go),
+	// so there is no separate tagging call the way Update below needs one.
+	if tags := mergeResourceTags(rCtx.StackTags, props["Tags"]); len(tags) > 0 {
+		body["Tags"] = ecrTagsFromMap(tags)
+	}
+	noteUnconsumedProperties(ctx, "AWS::KinesisFirehose::DeliveryStream", props,
+		append([]string{
+			"DeliveryStreamName", "DeliveryStreamType",
+			"KinesisStreamSourceConfiguration", "DeliveryStreamEncryptionConfigurationInput", "Tags",
+		}, firehoseDestinationProperties...)...)
 
 	rec, err := internalJSON(ctx, router, rCtx.Region, "Firehose_20150804.CreateDeliveryStream", body)
 	if err != nil {
@@ -1452,8 +1495,61 @@ func (h *firehoseDeliveryStreamHandler) Delete(ctx context.Context, router http.
 	return teardownError("DeleteDeliveryStream", rec, err)
 }
 
+// firehoseReplacementProperties force AWS::KinesisFirehose::DeliveryStream
+// replacement on any change: every property but Tags, since Firehose has no
+// UpdateDestination (or any other update) operation implemented in
+// internal/services/firehose — so even though AWS marks most of these "No
+// interruption" (see docs/services/firehose.md "Differences from AWS"),
+// Overcast has no in-place update surface to reach for any of them.
+var firehoseReplacementProperties = append([]string{
+	"DeliveryStreamName", "DeliveryStreamType",
+	"KinesisStreamSourceConfiguration", "DeliveryStreamEncryptionConfigurationInput",
+}, firehoseDestinationProperties...)
+
+// firehoseTagResource and firehoseUntagResource dispatch to Firehose's own
+// TagDeliveryStream/UntagDeliveryStream (firehose/typed_logic.go), the one
+// pair of operations that let Update reconcile a Tags-only change — including
+// one driven purely by a stack-tag change — without replacing the stream.
+func firehoseTagResource(ctx context.Context, router http.Handler, region, name string, tags map[string]string) error {
+	if len(tags) == 0 {
+		return nil
+	}
+	body := map[string]any{"DeliveryStreamName": name, "Tags": ecrTagsFromMap(tags)}
+	if _, err := internalJSON(ctx, router, region, "Firehose_20150804.TagDeliveryStream", body); err != nil {
+		return fmt.Errorf("TagDeliveryStream: %w", err)
+	}
+	return nil
+}
+
+func firehoseUntagResource(ctx context.Context, router http.Handler, region, name string, keys []string) error {
+	if len(keys) == 0 {
+		return nil
+	}
+	body := map[string]any{"DeliveryStreamName": name, "TagKeys": keys}
+	if _, err := internalJSON(ctx, router, region, "Firehose_20150804.UntagDeliveryStream", body); err != nil {
+		return fmt.Errorf("UntagDeliveryStream: %w", err)
+	}
+	return nil
+}
+
 func (h *firehoseDeliveryStreamHandler) Update(ctx context.Context, router http.Handler, _ *config.Config, physicalID string, props map[string]any, oldProps map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
-	return "", nil, errReplacementRequired
+	for _, property := range firehoseReplacementProperties {
+		if !reflect.DeepEqual(props[property], oldProps[property]) {
+			return "", nil, errReplacementRequired
+		}
+	}
+	tags := mergeResourceTags(rCtx.StackTags, props["Tags"])
+	prior := mergeResourceTags(rCtx.PreviousStackTags, oldProps["Tags"])
+	if !reflect.DeepEqual(tags, prior) {
+		upserts, removals := logsLogGroupTagChanges(tags, prior)
+		if err := firehoseTagResource(ctx, router, rCtx.Region, physicalID, upserts); err != nil {
+			return "", nil, failUpdate(fmt.Errorf("firehose tags: %w", err))
+		}
+		if err := firehoseUntagResource(ctx, router, rCtx.Region, physicalID, removals); err != nil {
+			return "", nil, failUpdate(fmt.Errorf("firehose tags: %w", err))
+		}
+	}
+	return physicalID, nil, nil
 }
 
 // ── AWS::Athena::WorkGroup ──────────────────────────────────────────────────

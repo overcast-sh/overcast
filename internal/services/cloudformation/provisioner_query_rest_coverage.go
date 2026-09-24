@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"strings"
 	"time"
 
@@ -2099,22 +2100,53 @@ func (h *mskConfigurationHandler) Update(ctx context.Context, router http.Handle
 
 type pipesPipeHandler struct{}
 
+// pipesForwardedProperties are the AWS::Pipes::Pipe properties whose names
+// already match CreatePipe/UpdatePipe's own wire members 1:1 — CloudFormation
+// defines PipeSourceParameters, PipeTargetParameters and
+// PipeEnrichmentParameters as the same shape the CreatePipe API takes, not a
+// CloudFormation-specific rendering of it (verified against the CFN property
+// reference for AWS::Pipes::Pipe and its PipeSourceParameters/
+// PipeTargetParameters/PipeEnrichmentParameters sub-types) — so each is
+// copied through verbatim rather than translated. KmsKeyIdentifier and
+// LogConfiguration are deliberately absent: neither has any handling in
+// internal/services/pipes (createPipeRequest/updatePipeRequest carry no such
+// members), so forwarding them would only trade a visible
+// noteUnconsumedProperties limitation for a silent drop inside pipesStore's
+// json.Unmarshal — see provisioner_properties.go's package doc for why a
+// property the handler cannot act on stays visible rather than disappearing.
+var pipesForwardedProperties = []string{
+	"Source", "SourceParameters", "Target", "TargetParameters",
+	"Enrichment", "EnrichmentParameters", "RoleArn", "Description", "DesiredState",
+}
+
+func pipesBuildBody(props map[string]any, rCtx *resolveContext) map[string]any {
+	body := map[string]any{}
+	for _, name := range pipesForwardedProperties {
+		if v, ok := props[name]; ok && v != nil {
+			body[name] = v
+		}
+	}
+	// AWS::Pipes::Pipe.Tags is "Object of String" — a {key: value} map, not
+	// the classic [{Key,Value}] list mergeResourceTags reads — so cfnTagMap
+	// (which accepts either shape) does the CloudFormation-tag-shape read and
+	// mergeStackTags folds in the stack's own tags, the same pairing EKS and
+	// MSK's map-shaped Tags use (provisioner_query_rest_coverage.go's
+	// eksClusterHandler.Create and mskClusterHandler.Create).
+	if tags := mergeStackTags(rCtx.StackTags, cfnTagMap(props["Tags"])); len(tags) > 0 {
+		body["Tags"] = tags
+	}
+	return body
+}
+
 func (h *pipesPipeHandler) Create(ctx context.Context, router http.Handler, cfg *config.Config, props map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
 	name, _ := props["Name"].(string)
 	if name == "" {
 		name = rCtx.generatedNameWithin(maxNameLenPipes)
 	}
 
-	body := map[string]any{}
-	if v, ok := props["Source"].(string); ok && v != "" {
-		body["source"] = v
-	}
-	if v, ok := props["Target"].(string); ok && v != "" {
-		body["target"] = v
-	}
-	if v, ok := props["RoleArn"].(string); ok && v != "" {
-		body["roleArn"] = v
-	}
+	body := pipesBuildBody(props, rCtx)
+	noteUnconsumedProperties(ctx, "AWS::Pipes::Pipe", props,
+		append(append([]string{}, pipesForwardedProperties...), "Name", "Tags")...)
 
 	jsonBytes, err := json.Marshal(body)
 	if err != nil {
@@ -2142,6 +2174,56 @@ func (h *pipesPipeHandler) Create(ctx context.Context, router http.Handler, cfg 
 	return physicalID, nil, nil
 }
 
+// pipesTagResource and pipesUntagResource dispatch to Pipes' own
+// /tags/{ResourceArn} routes (internal/services/pipes/service.go's
+// TagResource/UntagResource). TagResource is a merge-only POST with a
+// lowercase {"tags": {...}} body — unlike the PascalCase members every other
+// Pipes operation uses — and UntagResource is a DELETE whose keys travel as
+// repeated ?tagKeys= query parameters.
+func pipesTagResource(ctx context.Context, router http.Handler, region, arn string, tags map[string]string) error {
+	if len(tags) == 0 {
+		return nil
+	}
+	data, err := json.Marshal(map[string]any{"tags": tags})
+	if err != nil {
+		return err
+	}
+	if _, err := internalRequest(ctx, router, region, http.MethodPost,
+		"/tags/"+url.PathEscape(arn), "application/json", data); err != nil {
+		return fmt.Errorf("pipes TagResource: %w", err)
+	}
+	return nil
+}
+
+func pipesUntagResource(ctx context.Context, router http.Handler, region, arn string, keys []string) error {
+	if len(keys) == 0 {
+		return nil
+	}
+	values := url.Values{}
+	for _, k := range keys {
+		values.Add("tagKeys", k)
+	}
+	path := "/tags/" + url.PathEscape(arn) + "?" + values.Encode()
+	if _, err := internalRequest(ctx, router, region, http.MethodDelete, path, "", nil); err != nil {
+		return fmt.Errorf("pipes UntagResource: %w", err)
+	}
+	return nil
+}
+
+// pipesReconcileTags diffs desired against previous and applies only the
+// change, mirroring acmReconcileTags'/appconfigReconcileTags' add/remove
+// split. UpdatePipe carries no Tags member of its own (pipes/service.go's
+// updatePipeRequest), so a Tags-only change — including one driven purely by
+// a stack-tag change — has to go through this pair of calls rather than the
+// PATCH the rest of Update uses.
+func pipesReconcileTags(ctx context.Context, router http.Handler, region, arn string, tags, prior map[string]string) error {
+	upserts, removals := logsLogGroupTagChanges(tags, prior)
+	if err := pipesTagResource(ctx, router, region, arn, upserts); err != nil {
+		return err
+	}
+	return pipesUntagResource(ctx, router, region, arn, removals)
+}
+
 func (h *pipesPipeHandler) Delete(ctx context.Context, router http.Handler, cfg *config.Config, physicalID string, rCtx *resolveContext) error {
 	rec, err := internalRequest(ctx, router, rCtx.Region, http.MethodDelete, "/v1/pipes/"+physicalID, "", nil)
 	return teardownError("DeletePipe", rec, err)
@@ -2149,7 +2231,8 @@ func (h *pipesPipeHandler) Delete(ctx context.Context, router http.Handler, cfg 
 
 func (h *pipesPipeHandler) Update(ctx context.Context, router http.Handler, _ *config.Config, physicalID string, props map[string]any, oldProps map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
 	// Physical ID is the pipe ARN, "arn:…:pipe/{name}" (or the bare name).
-	// Name and Source replace on real AWS; CreatePipe rejects duplicates, so
+	// Name and Source replace on real AWS (the CFN property reference marks
+	// both "Update requires: Replacement"); CreatePipe rejects duplicates, so
 	// replacing under an unchanged name can never succeed.
 	oldName := physicalID
 	if idx := strings.LastIndex(oldName, "/"); idx >= 0 {
@@ -2164,22 +2247,46 @@ func (h *pipesPipeHandler) Update(ctx context.Context, router http.Handler, _ *c
 		}
 	}
 
-	// The emulated pipe PATCHes state and description; the other mutable
-	// properties (Target, RoleArn, enrichment) have no update surface yet.
-	body := map[string]any{}
-	if v, _ := props["DesiredState"].(string); v != "" {
-		body["DesiredState"] = v
-	}
-	if v, _ := props["Description"].(string); v != "" {
-		body["Description"] = v
-	}
+	// Every other forwarded property updates in place — the CFN property
+	// reference marks RoleArn, Target, TargetParameters, SourceParameters,
+	// Enrichment, EnrichmentParameters, Description, DesiredState and Tags
+	// "Update requires: No interruption" — and UpdatePipe (pipes/service.go)
+	// applies all of them, RoleArn included. RoleArn is UpdatePipe's one
+	// required member, so it goes in even when the template did not change
+	// it: the emulated handler used to omit it whenever only Description or
+	// DesiredState changed, which UpdatePipe then rejected outright since it
+	// requires RoleArn on every call (#533).
+	body := pipesBuildBody(props, rCtx)
+	// UpdatePipe's request shape carries neither a Source nor a Tags member
+	// (AWS does not allow a pipe's source to change — see the replacement
+	// check above — and Tags updates through TagResource/UntagResource
+	// instead, below), so both are dropped here rather than sent as inert
+	// extra fields.
+	delete(body, "Source")
+	delete(body, "Tags")
+	noteUnconsumedProperties(ctx, "AWS::Pipes::Pipe", props,
+		append(append([]string{}, pipesForwardedProperties...), "Name", "Tags")...)
 	if len(body) > 0 {
 		jsonBytes, err := json.Marshal(body)
 		if err != nil {
 			return "", nil, fmt.Errorf("Pipes: marshal update request: %w", err)
 		}
-		if _, err := internalRequest(ctx, router, rCtx.Region, http.MethodPatch, "/v1/pipes/"+oldName, "application/json", jsonBytes); err != nil {
-			return "", nil, fmt.Errorf("UpdatePipe: %w", err)
+		// UpdatePipe is wired to PUT, not PATCH (pipes/service.go's
+		// RegisterRoutes: `r.Put("/{name}", s.handler.UpdatePipe)`, matching
+		// the AWS API). This handler sent PATCH until #533's failing test
+		// caught it — every update that actually reached this call 405'd,
+		// masked until now because most templates never changed a property
+		// this handler forwarded.
+		if _, err := internalRequest(ctx, router, rCtx.Region, http.MethodPut, "/v1/pipes/"+oldName, "application/json", jsonBytes); err != nil {
+			return "", nil, failUpdate(fmt.Errorf("UpdatePipe: %w", err))
+		}
+	}
+
+	tags := mergeStackTags(rCtx.StackTags, cfnTagMap(props["Tags"]))
+	prior := mergeStackTags(rCtx.PreviousStackTags, cfnTagMap(oldProps["Tags"]))
+	if !reflect.DeepEqual(tags, prior) {
+		if err := pipesReconcileTags(ctx, router, rCtx.Region, physicalID, tags, prior); err != nil {
+			return "", nil, failUpdate(fmt.Errorf("pipes tags: %w", err))
 		}
 	}
 	return physicalID, nil, nil

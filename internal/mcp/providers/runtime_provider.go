@@ -1,9 +1,12 @@
 package providers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"slices"
 	"sort"
@@ -44,6 +47,15 @@ type RuntimeProvider struct {
 	cfg   *config.Config
 	store state.Store
 
+	// router is the emulator's root HTTP handler, wired late via SetRouter —
+	// see its doc comment. A tool that needs a service's own validation,
+	// defaulting or clock (RequestCertificate's domain checks and
+	// DomainValidationOptions, for instance) dispatches through it via
+	// invokeJSON rather than re-implementing that logic against the store
+	// directly. nil until SetRouter runs, in which case such a tool reports
+	// that the runtime router is unavailable rather than silently degrading.
+	router http.Handler
+
 	recentEventsMu         sync.RWMutex
 	recentEvents           []map[string]any
 	recentEventBufferLimit int
@@ -62,6 +74,46 @@ func NewRuntimeProvider(cfg *config.Config, store state.Store) *RuntimeProvider 
 		store:                  store,
 		recentEventBufferLimit: defaultRuntimeRecentEventBufferLimit,
 	}
+}
+
+// SetRouter wires the emulator's root HTTP handler for tools that dispatch a
+// real service operation instead of manipulating the store directly. It is
+// called once, after the router is fully constructed (internal/router.New),
+// mirroring how CloudFormation's provisioner receives its own router late —
+// see cloudformation's initRouter — to avoid a circular dependency between
+// building the router and the services it mounts. A RuntimeProvider used
+// without ever calling SetRouter (as in most unit tests) simply cannot use
+// the tools that need it.
+func (p *RuntimeProvider) SetRouter(router http.Handler) {
+	p.router = router
+}
+
+// invokeJSON dispatches an AWS JSON 1.1 X-Amz-Target request into the
+// emulator's own router, exactly as a real SDK call would arrive, and returns
+// the raw response body. A non-2xx response becomes an error carrying the
+// service's own exception text, so a caller seeing it back gets the same
+// answer the wire API would.
+func (p *RuntimeProvider) invokeJSON(ctx context.Context, target string, body any) ([]byte, error) {
+	if p.router == nil {
+		return nil, fmt.Errorf("runtime router is unavailable")
+	}
+	data, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/", bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/x-amz-json-1.1")
+	req.Header.Set("X-Amz-Target", target)
+	req.Header.Set("X-Overcast-Region", p.defaultRegion())
+	rec := httptest.NewRecorder()
+	p.router.ServeHTTP(rec, req)
+	if rec.Code >= 400 {
+		return nil, fmt.Errorf("%s: HTTP %d: %s", target, rec.Code, strings.TrimSpace(rec.Body.String()))
+	}
+	return rec.Body.Bytes(), nil
 }
 
 // AttachEventBus subscribes the runtime provider to the shared event bus so
@@ -5811,6 +5863,14 @@ func (p *RuntimeProvider) toolIAMDeleteInstanceProfile(ctx context.Context, para
 	}, nil
 }
 
+// toolACMRequestCertificate used to build a Certificate by hand and write it
+// straight into acm:certs — skipping the domain/SAN validation, the
+// DomainValidationOptions RequestCertificate builds, and the injected clock,
+// so a malformed domain name was accepted and a caller's DomainValidation
+// read came back empty. It now dispatches through the router into ACM's own
+// RequestCertificate, exactly as the SDK would, and reads the result back
+// with DescribeCertificate — the same round trip the CloudFormation
+// provisioner uses for other services (#2030).
 func (p *RuntimeProvider) toolACMRequestCertificate(ctx context.Context, params json.RawMessage) (any, error) {
 	var args struct {
 		DomainName              string            `json:"domain_name"`
@@ -5820,31 +5880,13 @@ func (p *RuntimeProvider) toolACMRequestCertificate(ctx context.Context, params 
 	if err := json.Unmarshal(params, &args); err != nil {
 		return nil, fmt.Errorf("invalid arguments: %w", err)
 	}
-	if p.store == nil {
-		return nil, fmt.Errorf("runtime store is unavailable")
-	}
 	domainName := strings.TrimSpace(args.DomainName)
 	if domainName == "" {
 		return nil, fmt.Errorf("domain_name is required")
 	}
-	certID := uuid.New().String()
-	now := float64(time.Now().Unix())
-	arn := fmt.Sprintf("arn:aws:acm:%s:%s:certificate/%s", p.defaultRegion(), p.accountID(), certID)
-	cert := acm.Certificate{
-		CertificateArn:          arn,
-		DomainName:              domainName,
-		SubjectAlternativeNames: args.SubjectAlternativeNames,
-		Status:                  "ISSUED",
-		Type:                    "AMAZON_ISSUED",
-		CreatedAt:               now,
-		IssuedAt:                now,
-	}
-	certBytes, err := json.Marshal(cert)
-	if err != nil {
-		return nil, fmt.Errorf("marshal certificate: %w", err)
-	}
-	if err := p.store.Set(ctx, acmCertsStoreNamespace, arn, string(certBytes)); err != nil {
-		return nil, fmt.Errorf("store certificate: %w", err)
+	reqBody := map[string]any{"DomainName": domainName}
+	if len(args.SubjectAlternativeNames) > 0 {
+		reqBody["SubjectAlternativeNames"] = args.SubjectAlternativeNames
 	}
 	if len(args.Tags) > 0 {
 		tags := make([]acm.Tag, 0, len(args.Tags))
@@ -5852,17 +5894,33 @@ func (p *RuntimeProvider) toolACMRequestCertificate(ctx context.Context, params 
 			tags = append(tags, acm.Tag{Key: k, Value: v})
 		}
 		sort.Slice(tags, func(i, j int) bool { return tags[i].Key < tags[j].Key })
-		tagBytes, err := json.Marshal(tags)
-		if err != nil {
-			return nil, fmt.Errorf("marshal certificate tags: %w", err)
-		}
-		if err := p.store.Set(ctx, acmTagsStoreNamespace, arn, string(tagBytes)); err != nil {
-			return nil, fmt.Errorf("store certificate tags: %w", err)
-		}
+		reqBody["Tags"] = tags
+	}
+	respBody, err := p.invokeJSON(ctx, "CertificateManager.RequestCertificate", reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("request certificate: %w", err)
+	}
+	var reqResp struct {
+		CertificateArn string `json:"CertificateArn"`
+	}
+	if err := json.Unmarshal(respBody, &reqResp); err != nil {
+		return nil, fmt.Errorf("decode request certificate response: %w", err)
+	}
+	describeBody, err := p.invokeJSON(ctx, "CertificateManager.DescribeCertificate", map[string]any{
+		"CertificateArn": reqResp.CertificateArn,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("describe certificate: %w", err)
+	}
+	var describeResp struct {
+		Certificate acm.Certificate `json:"Certificate"`
+	}
+	if err := json.Unmarshal(describeBody, &describeResp); err != nil {
+		return nil, fmt.Errorf("decode describe certificate response: %w", err)
 	}
 	return map[string]any{
-		"certificate": cert,
-		"uri":         "oc://acm/certificates/" + url.PathEscape(arn),
+		"certificate": describeResp.Certificate,
+		"uri":         "oc://acm/certificates/" + url.PathEscape(describeResp.Certificate.CertificateArn),
 	}, nil
 }
 
