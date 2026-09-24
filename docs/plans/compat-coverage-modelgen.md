@@ -1020,6 +1020,7 @@ The IR has a closed set of assertion kinds:
 | `absent` | `Delete*`/`Untag*` | Delete→absence, or the declared not-found error |
 | `errorCode` | negative-path variants | assertion-contract exception 2 |
 | `eventually` | wraps any of the above, bounded `maxAttempts`/`delayMs` | "no sleep/polling unless strictly necessary" — only when the recipe declares the resource async |
+| `equalsJSON` (#1922) | a `checks` entry, author-asserted on a string member that holds a JSON document (IAM's policy documents) | "observable state is verified", where the state is a document the SDKs deserialize differently: a string is percent-decoded once and parsed, an object is used as it is, and the two documents are compared as JSON values — see [compat/model/README.md § Assertions](../../compat/model/README.md#documents-in-a-string-equalsjson) |
 | `isList` (#1709) | a `checks` entry rather than a clause of its own: a `List*` whose only assertable output is its page — the path resolves to a list, **empty or not**, and a member omitted rather than serialized as `[]` counts too | "observable state is verified", where the state is that the service answered with a page: an empty page is a legal single-page answer, so `nonEmpty` on a list the test did not populate is false by construction |
 
 Emission rules:
@@ -2063,6 +2064,12 @@ into that, and the record of how each was settled; the README is the spec.
   failure skips that step and the rest continue.
 - **`equals`** is JSON equality *after* the SDK's own mapping, never string
   comparison; timestamps and blobs are never compared.
+- **`equalsJSON`** compares a string member holding a JSON document by value
+  (#1922). A string is percent-decoded exactly once, as botocore's
+  `json_decode_policies` does, and then parsed. An object or array is taken as
+  it is, and anything else fails. Members compare in any order, arrays in
+  order, numbers by value. The operand is a literal object or array and is
+  never evaluated. `testdata/equalsjson/equalsjson.json` pins all of it.
 - **`isList`** holds when the path resolves to a list, empty or not — and when
   it does not resolve at all, because several AWS services omit an empty list
   member instead of serializing `[]` (SQS's `ListQueues` among them). A present
@@ -2361,4 +2368,9 @@ Done means all of the following hold simultaneously:
     iam recipe asserts none. #1922 asks for an `equalsJSON` check kind: both
     sides parsed as JSON (a string operand URL-decoded first) and compared
     structurally, so the same clause holds regardless of which shape the
-    backend saw.
+    backend saw. **Fixed 2026-09-25**: `equalsJSON` is in the generator and
+    all seven backends, with `testdata/equalsjson/equalsjson.json` as the
+    shared fixture. A string is percent-decoded once, whether or not it was
+    already JSON, because that is what botocore does before python-sdk and cli
+    see the value. The iam recipe had no refusal it lifts. `gaps.json` is
+    unchanged, and the `iam-*` ports are unblocked.

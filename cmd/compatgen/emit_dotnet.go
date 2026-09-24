@@ -492,6 +492,9 @@ func dotnetCheck(path string, c check) string {
 		return fmt.Sprintf("Check.Missing(%s)", csString(path))
 	case c.Matches != "":
 		return fmt.Sprintf("Check.Matches(%s, %s)", csString(path), csString(c.Matches))
+	case c.EqualsJSON != nil:
+		text, _ := equalsJSONText(c.EqualsJSON)
+		return fmt.Sprintf("Check.EqualsJson(%s, %s)", csString(path), csString(text))
 	default:
 		value, err := dotnetValue(c.Equals)
 		if err != nil {

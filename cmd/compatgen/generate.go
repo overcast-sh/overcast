@@ -694,6 +694,12 @@ func (gb *groupBuilder) checkCheck(output, path string, c check) error {
 	if err != nil {
 		return err
 	}
+	if c.EqualsJSON != nil {
+		if err := validateEqualsJSON(c.EqualsJSON, "check "+path); err != nil {
+			return err
+		}
+		return checkEqualsJSONTarget(gb.g.model, target, "check "+path)
+	}
 	if c.Equals != nil {
 		if err := checkNotExpected(c.Equals, "check "+path); err != nil {
 			return err
@@ -1739,6 +1745,7 @@ func cloneAssertion(a assertion) assertion {
 		out.Checks = make(map[string]check, len(a.Checks))
 		for k, v := range a.Checks {
 			v.Equals = cloneValue(v.Equals)
+			v.EqualsJSON = cloneValue(v.EqualsJSON)
 			out.Checks[k] = v
 		}
 	}

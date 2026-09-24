@@ -410,6 +410,11 @@ func goCheck(path string, c check, indent string) string {
 		return fmt.Sprintf("scenario.Missing(%q)", path)
 	case c.Matches != "":
 		return fmt.Sprintf("scenario.Matches(%q, %q)", path, c.Matches)
+	case c.EqualsJSON != nil:
+		// The document travels as its compact JSON text, which the runtime
+		// parses once; validateAssertion has already held it to the grammar.
+		text, _ := equalsJSONText(c.EqualsJSON)
+		return fmt.Sprintf("scenario.EqualsJSON(%q, %q)", path, text)
 	default:
 		value, err := goValue(c.Equals, indent)
 		if err != nil {

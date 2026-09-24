@@ -282,6 +282,24 @@ func checkAuthoredValues(model *serviceModel, g group) error {
 		}
 		for _, raw := range sortedCheckPaths(a.Checks) {
 			c := a.Checks[raw]
+			if c.EqualsJSON != nil {
+				if err := validateEqualsJSON(c.EqualsJSON, where+" check "+raw); err != nil {
+					return err
+				}
+				if output == "" {
+					continue
+				}
+				path, err := parsePath(raw)
+				if err != nil {
+					return err
+				}
+				if target, err := model.ResolvePath(output, path); err == nil {
+					if err := checkEqualsJSONTarget(model, target, where+" check "+raw); err != nil {
+						return err
+					}
+				}
+				continue
+			}
 			if c.Equals != nil {
 				if err := checkNotExpected(c.Equals, where+" check "+raw); err != nil {
 					return err

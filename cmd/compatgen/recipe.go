@@ -645,6 +645,11 @@ func validateAuthoredAssertion(a assertion, where string) error {
 				return err
 			}
 		}
+		if c.EqualsJSON != nil {
+			if err := validateEqualsJSON(c.EqualsJSON, where+".checks."+path); err != nil {
+				return err
+			}
+		}
 		if c.Matches != "" {
 			if _, ok := patternMatches(c.Matches, ""); !ok {
 				return fmt.Errorf("%s: matches %q is not a valid RE2 pattern", where, c.Matches)
