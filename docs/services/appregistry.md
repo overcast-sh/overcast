@@ -38,16 +38,23 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | Area | Behaviour |
 | --- | --- |
 | Resources | Applications, attribute groups, resource associations and tagging — all 22 modelled operations, over REST-JSON under `/applications` |
-| CloudFormation | `AWS::ServiceCatalogAppRegistry::Application` and `::ResourceAssociation` are provisioned resource types |
+| CloudFormation | `AWS::ServiceCatalogAppRegistry::Application`, `::ResourceAssociation`, `::AttributeGroup` and `::AttributeGroupAssociation` are provisioned resource types |
 | CDK `awsApplication` tags | Recorded as direct associations during a deploy |
 | Web console | A resource detail page shows a "belongs to application X" banner when a match is found |
 
 ### CloudFormation attributes
 
 The application exposes `Id`, `Arn`, `Name`, `ApplicationName`,
-`ApplicationTagKey` and `ApplicationTagValue` to `Fn::GetAtt`. An association's
-physical ID is `<appId>/<resourceType>/<resource>`, and `ResourceType` defaults
-to `CFN_STACK`.
+`ApplicationTagKey` and `ApplicationTagValue` to `Fn::GetAtt`; an attribute
+group exposes `Id` and `Arn`. A resource association's physical ID is
+`<appId>/<resourceType>/<resource>`, and `ResourceType` defaults to
+`CFN_STACK`; an attribute-group association's is `<appId>/<attributeGroupId>`,
+and — since both its properties are replacement-only on AWS — a template
+change to either always replaces it.
+
+An application's or attribute group's `Tags` merge with the stack's own tags
+on create, and a stack update reconciles a tag change through `TagResource`/
+`UntagResource` against the resource's ARN.
 
 ### CDK `awsApplication` tags
 
@@ -79,7 +86,7 @@ the console having to expand the parent stack.
 
 ## Operations
 
-All 22 listed operations are implemented.
+All 24 listed operations are implemented.
 Per-operation status, notes and AWS API links: [AppRegistry operations](appregistry/operations.md).
 
 <!-- END overcast:capabilities -->

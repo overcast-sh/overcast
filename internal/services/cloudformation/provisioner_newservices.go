@@ -2801,6 +2801,40 @@ func (h *sesTemplateHandler) Delete(ctx context.Context, router http.Handler, cf
 	return teardownError("DeleteTemplate", rec, err)
 }
 
+// Update calls SES's own UpdateTemplate rather than forcing replacement.
+// TemplateName is create-only in the schema (UpdateTemplate has no way to
+// rename a template, matching CloudTrail's TrailName), so a changed name
+// still replaces; a changed subject or body does not, since AWS does not
+// require replacement for either (#1764).
+func (h *sesTemplateHandler) Update(ctx context.Context, router http.Handler, _ *config.Config, physicalID string, props map[string]any, oldProps map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
+	tmpl, _ := props["Template"].(map[string]any)
+	if tmpl == nil {
+		tmpl = props
+	}
+	if n, ok := tmpl["TemplateName"].(string); ok && n != "" && n != physicalID {
+		return "", nil, errReplacementRequired
+	}
+
+	params := map[string]string{
+		"Action":                "UpdateTemplate",
+		"Template.TemplateName": physicalID,
+	}
+	if v, _ := tmpl["SubjectPart"].(string); v != "" {
+		params["Template.SubjectPart"] = v
+	}
+	if v, _ := tmpl["TextPart"].(string); v != "" {
+		params["Template.TextPart"] = v
+	}
+	if v, _ := tmpl["HtmlPart"].(string); v != "" {
+		params["Template.HtmlPart"] = v
+	}
+
+	if _, err := internalQuery(ctx, router, rCtx.Region, params); err != nil {
+		return "", nil, fmt.Errorf("UpdateTemplate: %w", err)
+	}
+	return physicalID, map[string]string{"Id": physicalID}, nil
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 // ── ElastiCache stabilization ──────────────────────────────────────────────

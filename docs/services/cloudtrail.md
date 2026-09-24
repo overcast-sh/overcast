@@ -37,7 +37,7 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | Trails | Create, describe, list, update and delete, with tags applied inline at creation |
 | Logging state | `StartLogging` and `StopLogging` toggle the flag `GetTrailStatus` reports |
 | Tagging | `AddTags`, `RemoveTags` and `ListTags` on trail ARNs |
-| CloudFormation | `AWS::CloudTrail::Trail` provisions, updates, deletes and syncs tags |
+| CloudFormation | `AWS::CloudTrail::Trail` provisions, updates, deletes, syncs tags and applies `IsLogging` via `StartLogging`/`StopLogging` |
 | Protocols | AWS JSON 1.0 and Smithy RPC v2 CBOR |
 
 ## Differences from AWS
