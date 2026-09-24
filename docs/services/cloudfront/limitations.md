@@ -36,6 +36,22 @@ correctness will pass locally and fail on AWS, or the reverse.
 > or restricts an origin to the distribution. Treat private-content behaviour as
 > untested until it runs on AWS.
 
+## Request paths
+
+The proxy keeps the request path percent-encoded, exactly as the viewer sent
+it. The origin receives it byte-for-byte, a viewer-request function's
+`event.request.uri` holds it, and it is the path in the cache key. A `uri`
+that a function returns with raw UTF-8, spaces, or a stray `%` reaches the
+origin percent-encoded.
+
+Cache behaviours are matched after the percent-encoding step of AWS's
+RFC 3986 normalisation, so `/%7Euser` matches `/~user/*`, but `%40` never
+matches `@` and `%2F` is not a separator. Two parts of AWS's normalisation are
+not applied:
+
+- Dot segments (`/a/b/..`) are not resolved before matching.
+- Repeated slashes (`//`) are not collapsed before matching.
+
 ## Caching
 
 The origin proxy has a real in-process response cache, with a simpler model
@@ -43,7 +59,7 @@ than CloudFront's.
 
 | Aspect | Overcast |
 | --- | --- |
-| Cache key | Distribution ID + path + raw query string |
+| Cache key | Distribution ID + percent-encoded path + raw query string |
 | Ignored in the key | Request headers, cookies, `Vary`, and every cache-policy key setting |
 | TTL source | The matched behaviour's cache policy `DefaultTTL`, else 86400 seconds |
 | Ignored for TTL | Origin `Cache-Control` and `Expires`, `MinTTL`, `MaxTTL`, and the legacy per-behaviour `DefaultTTL` |

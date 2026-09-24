@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -85,11 +86,10 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Extract the downstream path (everything after /_overcast/cloudfront/distributions/{distId}).
-	reqPath := chi.URLParam(r, "*")
-	if reqPath == "" || reqPath[0] != '/' {
-		reqPath = "/" + reqPath
-	}
+	// The downstream path, percent-encoded as the viewer sent it. Everything
+	// below works on this form: it is what the origin receives, what a
+	// function's event.request.uri holds, and what the cache is keyed on.
+	reqPath := viewerPath(r)
 
 	// Apply DefaultRootObject when path is exactly "/".
 	if reqPath == "/" && cfg.DefaultRootObject != "" {
@@ -97,7 +97,7 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 		if root[0] != '/' {
 			root = "/" + root
 		}
-		reqPath = root
+		reqPath = escapeURIPath(root)
 	}
 
 	// Match the request path against CacheBehaviors, fall back to DefaultCacheBehavior.
@@ -105,8 +105,9 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 	viewerProtoPolicy := cfg.DefaultCacheBehavior.ViewerProtocolPolicy
 	behaviorFAs := cfg.DefaultCacheBehavior.FunctionAssociations
 	if cfg.CacheBehaviors != nil {
+		matchPath := normalizePathForMatch(reqPath)
 		for _, cb := range cfg.CacheBehaviors.Items {
-			if matchPathPattern(cb.PathPattern, reqPath) {
+			if matchPathPattern(cb.PathPattern, matchPath) {
 				targetOriginID = cb.TargetOriginId
 				viewerProtoPolicy = cb.ViewerProtocolPolicy
 				behaviorFAs = cb.FunctionAssociations
@@ -329,8 +330,9 @@ func (h *Handler) cacheTTL(ctx context.Context, cfg *DistributionConfig, reqPath
 	defaultTTL := int64(86400)
 	cachePolicyID := cfg.DefaultCacheBehavior.CachePolicyId
 	if cfg.CacheBehaviors != nil {
+		matchPath := normalizePathForMatch(reqPath)
 		for i := range cfg.CacheBehaviors.Items {
-			if matchPathPattern(cfg.CacheBehaviors.Items[i].PathPattern, reqPath) {
+			if matchPathPattern(cfg.CacheBehaviors.Items[i].PathPattern, matchPath) {
 				cachePolicyID = cfg.CacheBehaviors.Items[i].CachePolicyId
 				break
 			}
@@ -374,9 +376,12 @@ func copyHeaders(h http.Header) map[string][]string {
 // service fell through to "custom origin" and was dialled at its literal
 // domain — so a distribution fronting an emulated service quietly reached out
 // to real AWS instead.
+//
+// reqPath is percent-encoded and is appended as-is, so the origin — local or
+// not — receives the URI byte-for-byte as the viewer (or a function) sent it.
 func (h *Handler) buildOriginRequest(origin *Origin, reqPath, viewerHost string) (originURL, hostHeader string) {
 	domain := origin.DomainName
-	originPath := strings.TrimRight(origin.OriginPath, "/")
+	originPath := escapeURIPath(strings.TrimRight(origin.OriginPath, "/"))
 
 	if h.servesOriginLocally(domain, viewerHost) {
 		return fmt.Sprintf("http://127.0.0.1:%d%s%s", h.emulatorPort(), originPath, reqPath), domain
@@ -496,6 +501,10 @@ func forwardHeaders(src, dst *http.Request) {
 // path always begins with "/", comparing a slash-less pattern against it
 // directly meant such a behavior could never match — its requests fell through
 // to the default behavior and were served by the wrong origin, silently.
+//
+// reqPath is the encoded path after normalizePathForMatch, the form AWS
+// matches on ("CloudFront normalizes URI paths consistent with RFC 3986 and
+// then matches the path with the correct cache behavior").
 func matchPathPattern(pattern, reqPath string) bool {
 	if pattern == "*" || pattern == "/*" {
 		return true
@@ -510,6 +519,122 @@ func withLeadingSlash(s string) string {
 		return s
 	}
 	return "/" + s
+}
+
+// viewerPath returns the request path below
+// /_overcast/cloudfront/distributions/{distId}, percent-encoded exactly as the
+// viewer sent it.
+//
+// chi routes on r.URL.RawPath when Go set it — only when the client's encoding
+// differs from Go's default, such as a %2F inside a segment — and on the
+// decoded r.URL.Path otherwise. So the wildcard alone is encoded for
+// "/a%2Fb" but decoded for "/100%25", and appending a decoded "/100%" to an
+// origin URL made it unparseable (a 502). With RawPath unset the viewer's
+// encoding IS the default one, so re-escaping reproduces it exactly.
+func viewerPath(r *http.Request) string {
+	p := withLeadingSlash(chi.URLParam(r, "*"))
+	if r.URL.RawPath == "" {
+		p = (&url.URL{Path: p}).EscapedPath()
+	}
+	return p
+}
+
+// normalizePathForMatch applies the RFC 3986 §6.2.2.2 percent-encoding
+// normalisation CloudFront performs before matching cache behaviors: an
+// escaped UNRESERVED character (ALPHA, DIGIT, "-", ".", "_", "~") is decoded,
+// so "/%7Euser" matches a "/~user/*" pattern. Every other escape stays as it
+// is — "%2F" is not a separator and "%40" is not "@" — which is harmless to
+// the match because a path pattern cannot itself contain "%".
+//
+// Returns p unchanged, without allocating, when it holds no escape.
+func normalizePathForMatch(p string) string {
+	i := strings.IndexByte(p, '%')
+	if i < 0 {
+		return p
+	}
+	var b strings.Builder
+	b.Grow(len(p))
+	b.WriteString(p[:i])
+	for ; i < len(p); i++ {
+		if p[i] == '%' && i+2 < len(p) && isHex(p[i+1]) && isHex(p[i+2]) {
+			if c := unhex(p[i+1])<<4 | unhex(p[i+2]); isUnreserved(c) {
+				b.WriteByte(c)
+				i += 2
+				continue
+			}
+		}
+		b.WriteByte(p[i])
+	}
+	return b.String()
+}
+
+// escapeURIPath percent-encodes every byte of p that may not appear literally
+// in a URI path, leaving valid escapes and legal characters untouched.
+//
+// A viewer's path is already in this form. A function's returned uri, or a
+// DefaultRootObject, need not be: AWS recommends percent-encoding a function's
+// uri but forwards a raw UTF-8 one too, and "/café" can only go on an HTTP/1.1
+// request line as "/caf%C3%A9". A stray "%" is encoded rather than rejected,
+// and "?" and "#" are encoded so they stay part of the path instead of starting
+// a query or fragment.
+//
+// Returns p unchanged, without allocating, when nothing needs encoding.
+func escapeURIPath(p string) string {
+	i := 0
+	for i < len(p) && !pathByteNeedsEscape(p, i) {
+		i++
+	}
+	if i == len(p) {
+		return p
+	}
+	const hexDigits = "0123456789ABCDEF"
+	var b strings.Builder
+	b.Grow(len(p) + 8)
+	b.WriteString(p[:i])
+	for ; i < len(p); i++ {
+		if c := p[i]; pathByteNeedsEscape(p, i) {
+			b.WriteByte('%')
+			b.WriteByte(hexDigits[c>>4])
+			b.WriteByte(hexDigits[c&0xF])
+		} else {
+			b.WriteByte(c)
+		}
+	}
+	return b.String()
+}
+
+// pathByteNeedsEscape reports whether p[i] must be percent-encoded to sit in a
+// URI path: anything outside RFC 3986's pchar set and "/", counting a "%" as
+// legal only when it starts a well-formed escape.
+func pathByteNeedsEscape(p string, i int) bool {
+	c := p[i]
+	switch {
+	case isUnreserved(c):
+		return false
+	case c == '%':
+		return i+2 >= len(p) || !isHex(p[i+1]) || !isHex(p[i+2])
+	}
+	return !strings.ContainsRune("/:@!$&'()*+,;=", rune(c))
+}
+
+func isUnreserved(c byte) bool {
+	return 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' || '0' <= c && c <= '9' ||
+		c == '-' || c == '.' || c == '_' || c == '~'
+}
+
+func isHex(c byte) bool {
+	return '0' <= c && c <= '9' || 'a' <= c && c <= 'f' || 'A' <= c && c <= 'F'
+}
+
+func unhex(c byte) byte {
+	switch {
+	case c <= '9':
+		return c - '0'
+	case c <= 'F':
+		return c - 'A' + 10
+	default:
+		return c - 'a' + 10
+	}
 }
 
 // globMatch reports whether s matches a pattern of literals, "*" (any run of

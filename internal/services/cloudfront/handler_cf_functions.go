@@ -25,6 +25,11 @@ type cfFunctionResult struct {
 
 // runViewerRequest executes all viewer-request CloudFront Functions for the
 // matching cache behavior.
+//
+// reqPath is percent-encoded, and is what event.request.uri carries: AWS hands
+// a function the URI as it arrived. A uri the function returns is brought back
+// to that form with escapeURIPath before it is used.
+//
 // Returns:
 //   - result: parsed output (may include an early HTTP response)
 //   - err: non-nil if function execution failed fatally
@@ -63,9 +68,10 @@ func (h *Handler) runViewerRequest(
 		if res != nil && res.isResponse {
 			return result, nil
 		}
-		// Apply URI change to the real request for next function in chain.
-		if res != nil && res.uri != "" && res.uri != reqPath {
-			r.URL.Path = res.uri
+		// The next function in the chain sees this one's uri.
+		if res != nil && res.uri != "" {
+			res.uri = escapeURIPath(res.uri)
+			reqPath = res.uri
 		}
 	}
 	return result, nil
