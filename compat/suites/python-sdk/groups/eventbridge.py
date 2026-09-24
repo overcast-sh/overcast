@@ -16,141 +16,6 @@ def _eb(ctx: TestContext):
     return make_clients(ctx.endpoint, ctx.region).eventbridge
 
 
-# ── eventbridge-buses ─────────────────────────────────────────────────────────
-
-def setup_eventbridge_buses(ctx: TestContext) -> None:
-    eb = _eb(ctx)
-    name = f"oc-{ctx.run_id}-bus"
-    resp = eb.create_event_bus(Name=name)
-    ctx["eb_bus_name"] = name
-    ctx["eb_bus_arn"] = resp.get("EventBusArn", "")
-
-
-def teardown_eventbridge_buses(ctx: TestContext) -> None:
-    eb = _eb(ctx)
-    name = ctx.get("eb_bus_name")
-    if not name:
-        return
-    try:
-        eb.delete_event_bus(Name=name)
-    except Exception:
-        pass
-
-
-def CreateEventBus(ctx: TestContext) -> None:
-    eb = _eb(ctx)
-    name = f"oc-{ctx.run_id}-bus-create"
-    resp = eb.create_event_bus(Name=name)
-    if not resp.get("EventBusArn"):
-        raise AssertionError(f"CreateEventBus: missing EventBusArn in {resp}")
-    # Clean up
-    try:
-        eb.delete_event_bus(Name=name)
-    except Exception:
-        pass
-
-
-def DescribeEventBus(ctx: TestContext) -> None:
-    eb = _eb(ctx)
-    name = ctx["eb_bus_name"]
-    resp = eb.describe_event_bus(Name=name)
-    if resp["Name"] != name:
-        raise AssertionError(f"DescribeEventBus: name mismatch {resp['Name']!r}")
-    if not resp.get("Arn"):
-        raise AssertionError("DescribeEventBus: missing Arn")
-
-
-def ListEventBuses(ctx: TestContext) -> None:
-    eb = _eb(ctx)
-    name = ctx["eb_bus_name"]
-    resp = eb.list_event_buses()
-    buses = resp.get("EventBuses", [])
-    if not any(b["Name"] == name for b in buses):
-        raise AssertionError(f"ListEventBuses: {name!r} not found in {[b['Name'] for b in buses]}")
-
-
-def TagEventBus(ctx: TestContext) -> None:
-    eb = _eb(ctx)
-    arn = ctx["eb_bus_arn"]
-    eb.tag_resource(ResourceARN=arn, Tags=[{"Key": "env", "Value": "compat"}])
-    resp = eb.list_tags_for_resource(ResourceARN=arn)
-    tags = {t["Key"]: t["Value"] for t in resp.get("Tags", [])}
-    if not (tags.get("env") == "compat"):
-        raise AssertionError(f"TagEventBus: env tag not found, got {tags}")
-
-
-def ListTagsForResource(ctx: TestContext) -> None:
-    eb = _eb(ctx)
-    arn = ctx["eb_bus_arn"]
-    resp = eb.list_tags_for_resource(ResourceARN=arn)
-    tags = {t["Key"]: t["Value"] for t in resp.get("Tags", [])}
-    if tags.get("env") != "compat":
-        raise AssertionError(f"ListTagsForResource: expected env=compat, got {tags}")
-
-
-def DeleteEventBus(ctx: TestContext) -> None:
-    eb = _eb(ctx)
-    name = f"oc-{ctx.run_id}-bus-del"
-    eb.create_event_bus(Name=name)
-    eb.delete_event_bus(Name=name)
-    resp = eb.list_event_buses(NamePrefix=name)
-    names = [b["Name"] for b in resp.get("EventBuses", [])]
-    if not (name not in names):
-        raise AssertionError(f"DeleteEventBus: bus {name} still present")
-
-
-# ── eventbridge-events ────────────────────────────────────────────────────────
-
-def setup_eventbridge_events(ctx: TestContext) -> None:
-    eb = _eb(ctx)
-    name = f"oc-{ctx.run_id}-evtbus"
-    eb.create_event_bus(Name=name)
-    ctx["eb_evt_bus"] = name
-
-
-def teardown_eventbridge_events(ctx: TestContext) -> None:
-    eb = _eb(ctx)
-    name = ctx.get("eb_evt_bus")
-    if not name:
-        return
-    try:
-        eb.delete_event_bus(Name=name)
-    except Exception:
-        pass
-
-
-def PutEvents(ctx: TestContext) -> None:
-    eb = _eb(ctx)
-    bus_name = ctx["eb_evt_bus"]
-    resp = eb.put_events(
-        Entries=[{
-            "Source": "com.example.overcast",
-            "DetailType": "TestEvent",
-            "Detail": json.dumps({"key": "value"}),
-            "EventBusName": bus_name,
-        }]
-    )
-    if resp.get("FailedEntryCount", 0) > 0:
-        raise AssertionError(f"PutEvents: {resp['FailedEntryCount']} failed entries {resp.get('Entries')}")
-
-
-def PutEventsBatch(ctx: TestContext) -> None:
-    eb = _eb(ctx)
-    bus_name = ctx["eb_evt_bus"]
-    entries = [
-        {
-            "Source": "com.example.overcast",
-            "DetailType": f"BatchEvent{i}",
-            "Detail": json.dumps({"index": i}),
-            "EventBusName": bus_name,
-        }
-        for i in range(5)
-    ]
-    resp = eb.put_events(Entries=entries)
-    if resp.get("FailedEntryCount", 0) > 0:
-        raise AssertionError(f"PutEventsBatch: {resp['FailedEntryCount']} failed entries {resp.get('Entries')}")
-
-
 # ── eventbridge-target-fanout ─────────────────────────────────────────────────
 #
 # Target fan-out: an event put on a bus reaches the rule's targets, with the
@@ -330,14 +195,6 @@ def TestEventPatternNoMatch(ctx: TestContext) -> None:
 # ── ImplMap ───────────────────────────────────────────────────────────────────
 
 IMPLS = {
-    "eventbridge-buses:CreateEventBus": CreateEventBus,
-    "eventbridge-buses:DescribeEventBus": DescribeEventBus,
-    "eventbridge-buses:ListEventBuses": ListEventBuses,
-    "eventbridge-buses:TagEventBus": TagEventBus,
-    "eventbridge-buses:ListEventBridgeTagsForResource": ListTagsForResource,
-    "eventbridge-buses:DeleteEventBus": DeleteEventBus,
-    "eventbridge-events:PutEvents": PutEvents,
-    "eventbridge-events:PutEventsBatch": PutEventsBatch,
     "eventbridge-target-fanout:PutFanoutTargets": PutFanoutTargets,
     "eventbridge-target-fanout:PutEventsToQueueTarget": PutEventsToQueueTarget,
     "eventbridge-target-fanout:PutEventsWithInputTransformer": PutEventsWithInputTransformer,
@@ -346,13 +203,9 @@ IMPLS = {
 }
 
 SETUP = {
-    "eventbridge-buses": setup_eventbridge_buses,
-    "eventbridge-events": setup_eventbridge_events,
     "eventbridge-target-fanout": setup_eventbridge_target_fanout,
 }
 
 TEARDOWN = {
-    "eventbridge-buses": teardown_eventbridge_buses,
-    "eventbridge-events": teardown_eventbridge_events,
     "eventbridge-target-fanout": teardown_eventbridge_target_fanout,
 }

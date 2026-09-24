@@ -130,8 +130,12 @@ var namespaceTiers = map[string]Tier{
 	"kinesis:records": TierCached,
 
 	// ── Athena ──────────────────────────────────────────────────────────
-	"athena:workgroups": TierHot,
-	"athena:queries":    TierCached,
+	"athena:workgroups":          TierHot,
+	"athena:named-queries":       TierHot,
+	"athena:prepared-statements": TierHot,
+	"athena:data-catalogs":       TierHot,
+	"athena:queries":             TierCached,
+	"athena:idempotency":         TierCached,
 
 	// ── Auto Scaling ────────────────────────────────────────────────────
 	"autoscaling:groups":        TierHot,

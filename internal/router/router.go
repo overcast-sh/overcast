@@ -285,8 +285,10 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	smithyDispatchers := make(map[string]*smithyRPCService)
 
 	// MCP runtime routes are mounted through a build-tag-aware hook.
-	// Slim builds intentionally do not expose MCP endpoints.
-	registerMCPRoutes(r, cfg, store, bus, logger, shutdownCh)
+	// Slim builds intentionally do not expose MCP endpoints (mcpProvider is
+	// nil in that case). The provider's own router is wired later, once every
+	// route below is registered — see the SetRouter call near cfnSvc.InitRouter.
+	mcpProvider := registerMCPRoutes(r, cfg, store, bus, logger, shutdownCh)
 
 	// ---- Service registry -------------------------------------------------
 	// To add a new service: implement router.Service and append it here.
@@ -1289,6 +1291,12 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 
 	// Wire CloudFormation's internal dispatch router now that all routes are registered.
 	cfnSvc.InitRouter(r)
+	// Same wiring, same reason, for the runtime MCP tools that dispatch a real
+	// service operation instead of touching the store directly (nil in slim
+	// builds, where registerMCPRoutes returns no provider).
+	if mcpProvider != nil {
+		mcpProvider.SetRouter(r)
+	}
 
 	// Start goroutine leak monitor in debug mode.
 	// Samples every 5 s; dumps all goroutine stacks when the count stays above

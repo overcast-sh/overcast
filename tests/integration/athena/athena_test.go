@@ -33,7 +33,8 @@ func athenaCall(t *testing.T, srv *helpers.TestServer, operation string, body ma
 func startQuery(t *testing.T, srv *helpers.TestServer, query string) string {
 	t.Helper()
 	resp := athenaCall(t, srv, "StartQueryExecution", map[string]any{
-		"QueryString": query,
+		"QueryString":         query,
+		"ResultConfiguration": map[string]any{"OutputLocation": "s3://athena-results/"},
 	})
 	defer resp.Body.Close()
 	helpers.AssertStatus(t, resp, http.StatusOK)

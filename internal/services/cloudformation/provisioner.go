@@ -1246,6 +1246,7 @@ var stackTagPropagationResourceTypes = map[string]bool{
 	// replacement.
 	"AWS::CertificateManager::Certificate": true,
 	"AWS::Athena::WorkGroup":               true,
+	"AWS::Athena::DataCatalog":             true,
 	"AWS::Shield::Protection":              true,
 	"AWS::OpenSearchService::Domain":       true,
 	"AWS::AppConfig::Application":          true,
@@ -1267,6 +1268,21 @@ var stackTagPropagationResourceTypes = map[string]bool{
 	// the type's first Tags support — Create merges stack tags and Update
 	// reconciles a change via SESv2's TagResource/UntagResource.
 	"AWS::SES::EmailIdentity": true,
+	// #533/#535: Tags were dropped entirely (CreatePipe sent only source,
+	// target and roleArn). Create now merges stack tags into CreatePipe's own
+	// Tags member; Update reconciles a Tags-only change — including a
+	// stack-tag change — via Pipes' own TagResource/UntagResource
+	// (pipesReconcileTags in provisioner_query_rest_coverage.go), since
+	// UpdatePipe carries no Tags member of its own.
+	"AWS::Pipes::Pipe": true,
+	// #535: Tags were dropped entirely (CreateDeliveryStream sent only name
+	// and type). Create now merges stack tags into CreateDeliveryStream's own
+	// Tags member; Update reconciles a Tags-only change via Firehose's own
+	// TagDeliveryStream/UntagDeliveryStream (firehoseTagResource/
+	// firehoseUntagResource in provisioner_json_coverage.go) — the one
+	// in-place update surface Firehose has, since it implements no
+	// UpdateDestination and every other property forces replacement.
+	"AWS::KinesisFirehose::DeliveryStream": true,
 }
 
 // stackTagPropagationExclusions (stack_tag_propagation_coverage_dev_test.go)
@@ -2896,7 +2912,10 @@ var resourceHandlers = map[string]resourceHandler{
 	// Firehose
 	"AWS::KinesisFirehose::DeliveryStream": &firehoseDeliveryStreamHandler{},
 	// Athena
-	"AWS::Athena::WorkGroup": &athenaWorkGroupHandler{},
+	"AWS::Athena::WorkGroup":         &athenaWorkGroupHandler{},
+	"AWS::Athena::NamedQuery":        &athenaNamedQueryHandler{},
+	"AWS::Athena::PreparedStatement": &athenaPreparedStatementHandler{},
+	"AWS::Athena::DataCatalog":       &athenaDataCatalogHandler{},
 	// Glue
 	"AWS::Glue::Database":  &glueDatabaseHandler{},
 	"AWS::Glue::Table":     &glueTableHandler{},

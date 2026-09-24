@@ -29,12 +29,12 @@ All 9 listed operations are implemented. Back to [Firehose](../firehose.md).
 
 ### Delivery Streams
 
-| Operation                | Status       | Notes                           | AWS Docs                                                                                         |
-| ------------------------ | ------------ | ------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `CreateDeliveryStream`   | ✅ Supported | Creates a delivery stream       | [docs](https://docs.aws.amazon.com/firehose/latest/APIReference/API_CreateDeliveryStream.html)   |
-| `DescribeDeliveryStream` | ✅ Supported | Returns delivery stream details | [docs](https://docs.aws.amazon.com/firehose/latest/APIReference/API_DescribeDeliveryStream.html) |
-| `ListDeliveryStreams`    | ✅ Supported | Lists all delivery streams      | [docs](https://docs.aws.amazon.com/firehose/latest/APIReference/API_ListDeliveryStreams.html)    |
-| `DeleteDeliveryStream`   | ✅ Supported | Deletes a delivery stream       | [docs](https://docs.aws.amazon.com/firehose/latest/APIReference/API_DeleteDeliveryStream.html)   |
+| Operation                | Status       | Notes                                                                                                                                                                                       | AWS Docs                                                                                         |
+| ------------------------ | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `CreateDeliveryStream`   | ✅ Supported | Creates a delivery stream; destination, Kinesis stream source and encryption configurations are stored and echoed by DescribeDeliveryStream, but nothing is ever delivered to a destination | [docs](https://docs.aws.amazon.com/firehose/latest/APIReference/API_CreateDeliveryStream.html)   |
+| `DescribeDeliveryStream` | ✅ Supported | Returns delivery stream details, including the destination(s), stream source and encryption configuration given at creation                                                                 | [docs](https://docs.aws.amazon.com/firehose/latest/APIReference/API_DescribeDeliveryStream.html) |
+| `ListDeliveryStreams`    | ✅ Supported | Lists all delivery streams                                                                                                                                                                  | [docs](https://docs.aws.amazon.com/firehose/latest/APIReference/API_ListDeliveryStreams.html)    |
+| `DeleteDeliveryStream`   | ✅ Supported | Deletes a delivery stream                                                                                                                                                                   | [docs](https://docs.aws.amazon.com/firehose/latest/APIReference/API_DeleteDeliveryStream.html)   |
 
 ### Records
 

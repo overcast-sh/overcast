@@ -61,6 +61,27 @@ func TestRequestCertificate_success(t *testing.T) {
 	}
 }
 
+// TestRequestCertificate_emptyDomainNameAnswersValidationException pins that
+// a missing DomainName is AWS's front-end "required member absent" rejection
+// (ValidationException, "Member must not be null") rather than the service's
+// own InvalidParameterException — the wrong exception #2030 reported this
+// handler answering before this fix. AWS gives the same treatment to any
+// other required member absent from the request; DomainName is
+// RequestCertificate's only required one.
+func TestRequestCertificate_emptyDomainNameAnswersValidationException(t *testing.T) {
+	// Given: an empty store
+	srv := helpers.NewTestServer(t)
+
+	// When: RequestCertificate is called with no DomainName at all
+	resp := acmCall(t, srv, "RequestCertificate", map[string]any{})
+	defer resp.Body.Close()
+
+	// Then: AWS's ValidationException for a missing required member, not
+	// ACM's own InvalidParameterException
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertJSONError(t, resp, "ValidationException")
+}
+
 // ─── DescribeCertificate ──────────────────────────────────────────────────────
 
 func TestDescribeCertificate_success(t *testing.T) {

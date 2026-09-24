@@ -31,8 +31,8 @@ import software.amazon.awssdk.services.eventbridge.model.TagResourceRequest;
  */
 public final class ScenariosAuthoredEventbridgeBusesGen implements ServiceGroup {
 
-    private static final Group GROUP_EVENTBRIDGE_BUSES_SHADOW =
-            new Group("eventbridge-buses-shadow", "compat/model/authored/eventbridge-buses.json");
+    private static final Group GROUP_EVENTBRIDGE_BUSES =
+            new Group("eventbridge-buses", "compat/model/authored/eventbridge-buses.json");
 
     private final AwsClients clients;
     private volatile EventBridgeClient client;
@@ -49,24 +49,24 @@ public final class ScenariosAuthoredEventbridgeBusesGen implements ServiceGroup 
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("eventbridge-buses-shadow:CreateEventBus", this::testEventbridgeBusesShadowCreateEventBus),
-                Map.entry("eventbridge-buses-shadow:DescribeEventBus", this::testEventbridgeBusesShadowDescribeEventBus),
-                Map.entry("eventbridge-buses-shadow:ListEventBuses", this::testEventbridgeBusesShadowListEventBuses),
-                Map.entry("eventbridge-buses-shadow:TagEventBus", this::testEventbridgeBusesShadowTagEventBus),
-                Map.entry("eventbridge-buses-shadow:ListEventBridgeTagsForResource", this::testEventbridgeBusesShadowListEventBridgeTagsForResource),
-                Map.entry("eventbridge-buses-shadow:DeleteEventBus", this::testEventbridgeBusesShadowDeleteEventBus));
+                Map.entry("eventbridge-buses:CreateEventBus", this::testEventbridgeBusesCreateEventBus),
+                Map.entry("eventbridge-buses:DescribeEventBus", this::testEventbridgeBusesDescribeEventBus),
+                Map.entry("eventbridge-buses:ListEventBuses", this::testEventbridgeBusesListEventBuses),
+                Map.entry("eventbridge-buses:TagEventBus", this::testEventbridgeBusesTagEventBus),
+                Map.entry("eventbridge-buses:ListEventBridgeTagsForResource", this::testEventbridgeBusesListEventBridgeTagsForResource),
+                Map.entry("eventbridge-buses:DeleteEventBus", this::testEventbridgeBusesDeleteEventBus));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("eventbridge-buses-shadow", this::setupEventbridgeBusesShadow));
+                Map.entry("eventbridge-buses", this::setupEventbridgeBuses));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("eventbridge-buses-shadow", this::teardownEventbridgeBusesShadow));
+                Map.entry("eventbridge-buses", this::teardownEventbridgeBuses));
     }
 
     /**
@@ -86,13 +86,13 @@ public final class ScenariosAuthoredEventbridgeBusesGen implements ServiceGroup 
         return client;
     }
 
-    private void setupEventbridgeBusesShadow(TestContext t) {
+    private void setupEventbridgeBuses(TestContext t) {
         // No setup steps: an empty phase is a no-op, not a missing one.
-        GROUP_EVENTBRIDGE_BUSES_SHADOW.runSetup(t);
+        GROUP_EVENTBRIDGE_BUSES.runSetup(t);
     }
 
-    private void teardownEventbridgeBusesShadow(TestContext t) {
-        GROUP_EVENTBRIDGE_BUSES_SHADOW.runTeardown(t,
+    private void teardownEventbridgeBuses(TestContext t) {
+        GROUP_EVENTBRIDGE_BUSES.runTeardown(t,
                 new Call("DeleteEventBus", "{\"Name\":{\"$name\":\"bus\"}}",
                         b -> DeleteEventBusRequest.builder()
                                 .name(b.string("Name", Values.name("bus")))
@@ -100,8 +100,8 @@ public final class ScenariosAuthoredEventbridgeBusesGen implements ServiceGroup 
                         r -> cl().deleteEventBus((DeleteEventBusRequest) r)));
     }
 
-    private void testEventbridgeBusesShadowCreateEventBus(TestContext t) {
-        GROUP_EVENTBRIDGE_BUSES_SHADOW.runTest(t, "CreateEventBus",
+    private void testEventbridgeBusesCreateEventBus(TestContext t) {
+        GROUP_EVENTBRIDGE_BUSES.runTest(t, "CreateEventBus",
                 new Call("CreateEventBus", "{\"Name\":{\"$name\":\"bus\"}}",
                         b -> CreateEventBusRequest.builder()
                                 .name(b.string("Name", Values.name("bus")))
@@ -115,8 +115,8 @@ public final class ScenariosAuthoredEventbridgeBusesGen implements ServiceGroup 
                 ));
     }
 
-    private void testEventbridgeBusesShadowDescribeEventBus(TestContext t) {
-        GROUP_EVENTBRIDGE_BUSES_SHADOW.runTest(t, "DescribeEventBus",
+    private void testEventbridgeBusesDescribeEventBus(TestContext t) {
+        GROUP_EVENTBRIDGE_BUSES.runTest(t, "DescribeEventBus",
                 new Call("DescribeEventBus", "{\"Name\":{\"$name\":\"bus\"}}",
                         b -> DescribeEventBusRequest.builder()
                                 .name(b.string("Name", Values.name("bus")))
@@ -130,8 +130,8 @@ public final class ScenariosAuthoredEventbridgeBusesGen implements ServiceGroup 
                 ));
     }
 
-    private void testEventbridgeBusesShadowListEventBuses(TestContext t) {
-        GROUP_EVENTBRIDGE_BUSES_SHADOW.runTest(t, "ListEventBuses",
+    private void testEventbridgeBusesListEventBuses(TestContext t) {
+        GROUP_EVENTBRIDGE_BUSES.runTest(t, "ListEventBuses",
                 new Call("ListEventBuses", "{\"NamePrefix\":{\"$name\":\"bus\"}}",
                         b -> ListEventBusesRequest.builder()
                                 .namePrefix(b.string("NamePrefix", Values.name("bus")))
@@ -146,8 +146,8 @@ public final class ScenariosAuthoredEventbridgeBusesGen implements ServiceGroup 
                 ));
     }
 
-    private void testEventbridgeBusesShadowTagEventBus(TestContext t) {
-        GROUP_EVENTBRIDGE_BUSES_SHADOW.runTest(t, "TagEventBus",
+    private void testEventbridgeBusesTagEventBus(TestContext t) {
+        GROUP_EVENTBRIDGE_BUSES.runTest(t, "TagEventBus",
                 new Call("TagResource", "{\"ResourceARN\":{\"$ref\":\"bus.arn\"},\"Tags\":[{\"Key\":\"env\",\"Value\":\"compat\"}]}",
                         b -> TagResourceRequest.builder()
                                 .resourceARN(b.string("ResourceARN", Values.ref("bus.arn")))
@@ -168,8 +168,8 @@ public final class ScenariosAuthoredEventbridgeBusesGen implements ServiceGroup 
                 ));
     }
 
-    private void testEventbridgeBusesShadowListEventBridgeTagsForResource(TestContext t) {
-        GROUP_EVENTBRIDGE_BUSES_SHADOW.runTest(t, "ListEventBridgeTagsForResource",
+    private void testEventbridgeBusesListEventBridgeTagsForResource(TestContext t) {
+        GROUP_EVENTBRIDGE_BUSES.runTest(t, "ListEventBridgeTagsForResource",
                 new Call("ListTagsForResource", "{\"ResourceARN\":{\"$ref\":\"bus.arn\"}}",
                         b -> ListTagsForResourceRequest.builder()
                                 .resourceARN(b.string("ResourceARN", Values.ref("bus.arn")))
@@ -185,8 +185,8 @@ public final class ScenariosAuthoredEventbridgeBusesGen implements ServiceGroup 
                 ));
     }
 
-    private void testEventbridgeBusesShadowDeleteEventBus(TestContext t) {
-        GROUP_EVENTBRIDGE_BUSES_SHADOW.runTest(t, "DeleteEventBus",
+    private void testEventbridgeBusesDeleteEventBus(TestContext t) {
+        GROUP_EVENTBRIDGE_BUSES.runTest(t, "DeleteEventBus",
                 new Call("DeleteEventBus", "{\"Name\":{\"$name\":\"bus\"}}",
                         b -> DeleteEventBusRequest.builder()
                                 .name(b.string("Name", Values.name("bus")))

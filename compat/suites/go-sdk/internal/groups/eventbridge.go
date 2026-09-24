@@ -19,14 +19,6 @@ func EventBridge(c *clients.Clients) ServiceGroup {
 	g := &ebGroup{c: c}
 	return ServiceGroup{
 		Impls: map[string]harness.TestFn{
-			"eventbridge-buses:CreateEventBus":                        g.CreateEventBus,
-			"eventbridge-buses:DescribeEventBus":                      g.DescribeEventBus,
-			"eventbridge-buses:ListEventBuses":                        g.ListEventBuses,
-			"eventbridge-buses:TagEventBus":                           g.TagEventBus,
-			"eventbridge-buses:ListEventBridgeTagsForResource":        g.ListTagsForResource,
-			"eventbridge-buses:DeleteEventBus":                        g.DeleteEventBus,
-			"eventbridge-events:PutEvents":                            g.PutEvents,
-			"eventbridge-events:PutEventsBatch":                       g.PutEventsBatch,
 			"eventbridge-target-fanout:PutFanoutTargets":              g.PutFanoutTargets,
 			"eventbridge-target-fanout:PutEventsToQueueTarget":        g.PutEventsToQueueTarget,
 			"eventbridge-target-fanout:PutEventsWithInputTransformer": g.PutEventsWithInputTransformer,
@@ -34,13 +26,9 @@ func EventBridge(c *clients.Clients) ServiceGroup {
 			"eventbridge-patterns:TestEventPatternNoMatch":            g.TestEventPatternNoMatch,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"eventbridge-buses":         g.setupBuses,
-			"eventbridge-events":        g.setupEvents,
 			"eventbridge-target-fanout": g.setupFanout,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"eventbridge-buses":         g.teardownBuses,
-			"eventbridge-events":        g.teardownEvents,
 			"eventbridge-target-fanout": g.teardownFanout,
 		},
 	}
@@ -49,110 +37,6 @@ func EventBridge(c *clients.Clients) ServiceGroup {
 type ebGroup struct{ c *clients.Clients }
 
 func (g *ebGroup) cl() *eventbridge.Client { return g.c.EventBridge() }
-
-// ── eventbridge-buses ─────────────────────────────────────────────────────────
-
-func (g *ebGroup) setupBuses(ctx context.Context, t *harness.TestContext) error {
-	name := fmt.Sprintf("oc-bus-%s", t.RunID)
-	resp, err := g.cl().CreateEventBus(ctx, &eventbridge.CreateEventBusInput{
-		Name: aws.String(name),
-	})
-	if err != nil {
-		return err
-	}
-	t.Set("eb_bus_name", name)
-	t.Set("eb_bus_arn", aws.ToString(resp.EventBusArn))
-	return nil
-}
-
-func (g *ebGroup) teardownBuses(ctx context.Context, t *harness.TestContext) error {
-	if name := t.GetString("eb_bus_name"); name != "" {
-		g.cl().DeleteEventBus(ctx, &eventbridge.DeleteEventBusInput{Name: aws.String(name)}) //nolint:errcheck
-	}
-	return nil
-}
-
-func (g *ebGroup) CreateEventBus(ctx context.Context, t *harness.TestContext) error {
-	name := fmt.Sprintf("oc-cb-%s", t.RunID)
-	_, err := g.cl().CreateEventBus(ctx, &eventbridge.CreateEventBusInput{Name: aws.String(name)})
-	if err == nil {
-		g.cl().DeleteEventBus(ctx, &eventbridge.DeleteEventBusInput{Name: aws.String(name)}) //nolint:errcheck
-	}
-	return err
-}
-
-func (g *ebGroup) DescribeEventBus(ctx context.Context, t *harness.TestContext) error {
-	resp, err := g.cl().DescribeEventBus(ctx, &eventbridge.DescribeEventBusInput{
-		Name: aws.String(t.GetString("eb_bus_name")),
-	})
-	if err != nil {
-		return err
-	}
-	if aws.ToString(resp.Name) != t.GetString("eb_bus_name") {
-		return fmt.Errorf("DescribeEventBus: name mismatch")
-	}
-	return nil
-}
-
-func (g *ebGroup) ListEventBuses(ctx context.Context, t *harness.TestContext) error {
-	name := t.GetString("eb_bus_name")
-	resp, err := g.cl().ListEventBuses(ctx, &eventbridge.ListEventBusesInput{})
-	if err != nil {
-		return err
-	}
-	for _, b := range resp.EventBuses {
-		if aws.ToString(b.Name) == name {
-			return nil
-		}
-	}
-	return fmt.Errorf("ListEventBuses: %q not found in results", name)
-}
-
-func (g *ebGroup) TagEBResource(ctx context.Context, t *harness.TestContext) error {
-	_, err := g.cl().TagResource(ctx, &eventbridge.TagResourceInput{
-		ResourceARN: aws.String(t.GetString("eb_bus_arn")),
-		Tags:        []types.Tag{{Key: aws.String("env"), Value: aws.String("test")}},
-	})
-	return err
-}
-
-func (g *ebGroup) UntagEBResource(ctx context.Context, t *harness.TestContext) error {
-	_, err := g.cl().UntagResource(ctx, &eventbridge.UntagResourceInput{
-		ResourceARN: aws.String(t.GetString("eb_bus_arn")),
-		TagKeys:     []string{"env"},
-	})
-	return err
-}
-
-func (g *ebGroup) TagEventBus(ctx context.Context, t *harness.TestContext) error {
-	_, err := g.cl().TagResource(ctx, &eventbridge.TagResourceInput{
-		ResourceARN: aws.String(t.GetString("eb_bus_arn")),
-		Tags:        []types.Tag{{Key: aws.String("env"), Value: aws.String("compat")}},
-	})
-	return err
-}
-
-func (g *ebGroup) ListTagsForResource(ctx context.Context, t *harness.TestContext) error {
-	resp, err := g.cl().ListTagsForResource(ctx, &eventbridge.ListTagsForResourceInput{
-		ResourceARN: aws.String(t.GetString("eb_bus_arn")),
-	})
-	if err != nil {
-		return err
-	}
-	for _, tag := range resp.Tags {
-		if aws.ToString(tag.Key) == "env" {
-			return nil
-		}
-	}
-	return fmt.Errorf("ListTagsForResource: tag 'env' not found")
-}
-
-func (g *ebGroup) DeleteEventBus(ctx context.Context, t *harness.TestContext) error {
-	name := fmt.Sprintf("oc-db-%s", t.RunID)
-	g.cl().CreateEventBus(ctx, &eventbridge.CreateEventBusInput{Name: aws.String(name)}) //nolint:errcheck
-	_, err := g.cl().DeleteEventBus(ctx, &eventbridge.DeleteEventBusInput{Name: aws.String(name)})
-	return err
-}
 
 // ── eventbridge-patterns ──────────────────────────────────────────────────────
 
@@ -193,65 +77,6 @@ func (g *ebGroup) TestEventPatternNoMatch(ctx context.Context, t *harness.TestCo
 	}
 	if matched {
 		return fmt.Errorf("TestEventPatternNoMatch: expected Result=false for a non-matching pattern, got true")
-	}
-	return nil
-}
-
-// ── eventbridge-events ────────────────────────────────────────────────────────
-
-func (g *ebGroup) setupEvents(ctx context.Context, t *harness.TestContext) error {
-	busName := fmt.Sprintf("oc-ebus-%s", t.RunID)
-	if _, err := g.cl().CreateEventBus(ctx, &eventbridge.CreateEventBusInput{Name: aws.String(busName)}); err != nil {
-		return err
-	}
-	t.Set("eb_evt_bus", busName)
-	return nil
-}
-
-func (g *ebGroup) teardownEvents(ctx context.Context, t *harness.TestContext) error {
-	if name := t.GetString("eb_evt_bus"); name != "" {
-		g.cl().DeleteEventBus(ctx, &eventbridge.DeleteEventBusInput{Name: aws.String(name)}) //nolint:errcheck
-	}
-	return nil
-}
-
-func (g *ebGroup) PutEvents(ctx context.Context, t *harness.TestContext) error {
-	bus := t.GetString("eb_evt_bus")
-	resp, err := g.cl().PutEvents(ctx, &eventbridge.PutEventsInput{
-		Entries: []types.PutEventsRequestEntry{
-			{
-				EventBusName: aws.String(bus),
-				Source:       aws.String("my.app"),
-				DetailType:   aws.String("order"),
-				Detail:       aws.String(`{"orderId":"123"}`),
-			},
-		},
-	})
-	if err != nil {
-		return err
-	}
-	if resp.FailedEntryCount > 0 {
-		return fmt.Errorf("PutEvents: %d failed entries", resp.FailedEntryCount)
-	}
-	return nil
-}
-
-func (g *ebGroup) PutEventsBatch(ctx context.Context, t *harness.TestContext) error {
-	entries := make([]types.PutEventsRequestEntry, 5)
-	for i := range entries {
-		entries[i] = types.PutEventsRequestEntry{
-			Source:       aws.String(fmt.Sprintf("compat.%s", t.RunID)),
-			DetailType:   aws.String("CompatBatch"),
-			Detail:       aws.String(fmt.Sprintf(`{"index":%d}`, i)),
-			EventBusName: aws.String("default"),
-		}
-	}
-	resp, err := g.cl().PutEvents(ctx, &eventbridge.PutEventsInput{Entries: entries})
-	if err != nil {
-		return err
-	}
-	if resp.FailedEntryCount > 0 {
-		return fmt.Errorf("PutEventsBatch: %d failed entries", resp.FailedEntryCount)
 	}
 	return nil
 }

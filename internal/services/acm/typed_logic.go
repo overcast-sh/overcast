@@ -148,11 +148,15 @@ type listTagsForResourceResponse struct {
 }
 
 func (h *Handler) requestCertificateTyped(ctx context.Context, req *requestCertificateRequest) (*requestCertificateResponse, *protocol.AWSError) {
+	// A missing DomainName is a framework-level "required member absent"
+	// rejection, not the service's own InvalidParameterException — the same
+	// distinction validateDomainName below draws for a domain that is
+	// present but malformed. AWS's front-end validator answers this with
+	// ValidationException, in the same "Member must not be null" wording
+	// used across the codebase for other required members (e.g.
+	// cloudwatch's alarmName, firehose's DeliveryStreamName) (#2030).
 	if req.DomainName == "" {
-		return nil, &protocol.AWSError{
-			Code: "InvalidParameterException", Message: "DomainName is required",
-			HTTPStatus: http.StatusBadRequest,
-		}
+		return nil, errValidation("1 validation error detected: Value null at 'domainName' failed to satisfy constraint: Member must not be null")
 	}
 	// Shape constraints before anything is created, so a rejected request
 	// strands no certificate — the same ordering the inline-tag check below

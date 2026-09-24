@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/apigateway"
 	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
 	"github.com/aws/aws-sdk-go-v2/service/appsync"
+	"github.com/aws/aws-sdk-go-v2/service/athena"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/aws/aws-sdk-go-v2/service/cloudfront"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
@@ -77,6 +78,7 @@ type Clients struct {
 	wafv2C       *wafv2.Client
 	shieldC      *shield.Client
 	glueC        *glue.Client
+	athenaC      *athena.Client
 	efsC         *efs.Client
 	s3tablesC    *s3tables.Client
 }
@@ -449,6 +451,17 @@ func (c *Clients) Glue() *glue.Client {
 		c.glueC = glue.NewFromConfig(cfg)
 	}
 	return c.glueC
+}
+
+// Athena returns a lazily-initialised Athena client.
+func (c *Clients) Athena() *athena.Client {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.athenaC == nil {
+		cfg := c.awsCfgLocked()
+		c.athenaC = athena.NewFromConfig(cfg)
+	}
+	return c.athenaC
 }
 
 // Shield returns a lazily-initialised Shield client.

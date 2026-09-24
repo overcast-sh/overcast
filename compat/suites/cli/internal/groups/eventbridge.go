@@ -15,16 +15,6 @@ func EventBridge() ServiceGroup {
 	g := &ebGroup{}
 	return ServiceGroup{
 		Impls: map[string]harness.TestFn{
-			// eventbridge-buses
-			"eventbridge-buses:CreateEventBus":                 g.CreateEventBus,
-			"eventbridge-buses:DescribeEventBus":               g.DescribeEventBus,
-			"eventbridge-buses:ListEventBuses":                 g.ListEventBuses,
-			"eventbridge-buses:TagEventBus":                    g.TagEventBus,
-			"eventbridge-buses:ListEventBridgeTagsForResource": g.ListTagsForResource,
-			"eventbridge-buses:DeleteEventBus":                 g.DeleteEventBus,
-			// eventbridge-events
-			"eventbridge-events:PutEvents":      g.PutEvents,
-			"eventbridge-events:PutEventsBatch": g.PutEventsBatch,
 			// eventbridge-target-fanout
 			"eventbridge-target-fanout:PutFanoutTargets":              g.PutFanoutTargets,
 			"eventbridge-target-fanout:PutEventsToQueueTarget":        g.PutEventsToQueueTarget,
@@ -34,207 +24,15 @@ func EventBridge() ServiceGroup {
 			"eventbridge-patterns:TestEventPatternNoMatch": g.TestEventPatternNoMatch,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"eventbridge-buses":         g.setupBuses,
-			"eventbridge-events":        g.setupEvents,
 			"eventbridge-target-fanout": g.setupFanout,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"eventbridge-buses":         g.teardownBus,
-			"eventbridge-events":        g.teardownEvents,
 			"eventbridge-target-fanout": g.teardownFanout,
 		},
 	}
 }
 
 type ebGroup struct{}
-
-// busName returns one group's event bus. Each group gets its OWN bus: groups
-// run in parallel (8 slots), and when the three EventBridge groups shared one
-// name, setupRules/setupEvents re-created the bus the buses group was testing,
-// DeleteEventBus deleted it from under the rules/events groups, and every
-// teardown deleted it from under everyone — the "bus not found" failures
-// behind plan item R7 and the DeleteEventBus quarantine (issue #388).
-func (g *ebGroup) busName(t *harness.TestContext, group string) string {
-	return fmt.Sprintf("%s-eb-%s", t.RunID, group)
-}
-
-// ─── eventbridge-buses ───────────────────────────────────────────────────────
-
-func (g *ebGroup) setupBuses(_ context.Context, _ *harness.TestContext) error { return nil }
-
-func (g *ebGroup) CreateEventBus(_ context.Context, t *harness.TestContext) error {
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"events", "create-event-bus",
-		"--name", g.busName(t, "buses"),
-	)
-	if err != nil {
-		return err
-	}
-	arn, _ := out["EventBusArn"].(string)
-	if arn == "" {
-		return fmt.Errorf("eventbridge CreateEventBus: missing EventBusArn")
-	}
-	t.Set("bus_arn", arn)
-	return nil
-}
-
-func (g *ebGroup) DescribeEventBus(_ context.Context, t *harness.TestContext) error {
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"events", "describe-event-bus",
-		"--name", g.busName(t, "buses"),
-	)
-	if err != nil {
-		return err
-	}
-	if name, _ := out["Name"].(string); name != g.busName(t, "buses") {
-		return fmt.Errorf("eb DescribeEventBus: expected Name=%q, got %q", g.busName(t, "buses"), name)
-	}
-	return nil
-}
-
-func (g *ebGroup) ListEventBuses(_ context.Context, t *harness.TestContext) error {
-	out, err := awscli.RunOutput(t.Endpoint, t.Region, "events", "list-event-buses")
-	if err != nil {
-		return err
-	}
-	buses, _ := out["EventBuses"].([]any)
-	for _, raw := range buses {
-		if m, ok := raw.(map[string]any); ok && m["Name"] == g.busName(t, "buses") {
-			return nil
-		}
-	}
-	return fmt.Errorf("eb ListEventBuses: bus %q not found", g.busName(t, "buses"))
-}
-
-func (g *ebGroup) TagEventBus(_ context.Context, t *harness.TestContext) error {
-	arn := t.GetString("bus_arn")
-	if err := awscli.Run(t.Endpoint, t.Region,
-		"events", "tag-resource",
-		"--resource-arn", arn,
-		"--tags", `[{"Key":"env","Value":"test"}]`,
-	); err != nil {
-		return err
-	}
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"events", "list-tags-for-resource",
-		"--resource-arn", arn,
-	)
-	if err != nil {
-		return fmt.Errorf("eb TagEventBus: list-tags failed: %w", err)
-	}
-	tags, _ := out["Tags"].([]any)
-	for _, raw := range tags {
-		if m, ok := raw.(map[string]any); ok && m["Key"] == "env" && m["Value"] == "test" {
-			return nil
-		}
-	}
-	return fmt.Errorf("eb TagEventBus: env=test tag not found")
-}
-
-func (g *ebGroup) ListTagsForResource(_ context.Context, t *harness.TestContext) error {
-	arn := t.GetString("bus_arn")
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"events", "list-tags-for-resource",
-		"--resource-arn", arn,
-	)
-	if err != nil {
-		return err
-	}
-	tags, _ := out["Tags"].([]any)
-	if len(tags) == 0 {
-		return fmt.Errorf("eb ListTagsForResource: expected tags, got none")
-	}
-	return nil
-}
-
-func (g *ebGroup) DeleteEventBus(_ context.Context, t *harness.TestContext) error {
-	name := g.busName(t, "buses")
-	if err := awscli.Run(t.Endpoint, t.Region,
-		"events", "delete-event-bus",
-		"--name", name,
-	); err != nil {
-		return err
-	}
-	out, err := awscli.RunOutput(t.Endpoint, t.Region, "events", "list-event-buses")
-	if err != nil {
-		return fmt.Errorf("eb DeleteEventBus: list-event-buses failed: %w", err)
-	}
-	buses, _ := out["EventBuses"].([]any)
-	for _, raw := range buses {
-		if m, ok := raw.(map[string]any); ok && m["Name"] == name {
-			return fmt.Errorf("eb DeleteEventBus: bus %q still present", name)
-		}
-	}
-	return nil
-}
-
-func (g *ebGroup) teardownBus(_ context.Context, t *harness.TestContext) error {
-	awscli.Run(t.Endpoint, t.Region, "events", "delete-event-bus", "--name", g.busName(t, "buses")) //nolint:errcheck
-	return nil
-}
-
-// ─── eventbridge-events ──────────────────────────────────────────────────────
-
-func (g *ebGroup) setupEvents(_ context.Context, t *harness.TestContext) error {
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"events", "create-event-bus",
-		"--name", g.busName(t, "events"),
-	)
-	if err != nil {
-		return err
-	}
-	arn, _ := out["EventBusArn"].(string)
-	t.Set("bus_arn", arn)
-	return nil
-}
-
-func (g *ebGroup) PutEvents(_ context.Context, t *harness.TestContext) error {
-	entries := fmt.Sprintf(
-		`[{"Source":"oc.cli","DetailType":"TestEvent","Detail":"{\"runId\":\"%s\"}","EventBusName":"%s"}]`,
-		t.RunID, g.busName(t, "events"),
-	)
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"events", "put-events",
-		"--entries", entries,
-	)
-	if err != nil {
-		return err
-	}
-	if fc, _ := out["FailedEntryCount"].(float64); fc > 0 {
-		return fmt.Errorf("eb PutEvents: FailedEntryCount=%v", fc)
-	}
-	return nil
-}
-
-func (g *ebGroup) PutEventsBatch(_ context.Context, t *harness.TestContext) error {
-	entries := fmt.Sprintf(
-		`[`+
-			`{"Source":"oc.cli","DetailType":"Event1","Detail":"{\"n\":1}","EventBusName":"%s"},`+
-			`{"Source":"oc.cli","DetailType":"Event2","Detail":"{\"n\":2}","EventBusName":"%s"}`+
-			`]`,
-		g.busName(t, "events"), g.busName(t, "events"),
-	)
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"events", "put-events",
-		"--entries", entries,
-	)
-	if err != nil {
-		return err
-	}
-	if fc, _ := out["FailedEntryCount"].(float64); fc > 0 {
-		return fmt.Errorf("eb PutEventsBatch: FailedEntryCount=%v", fc)
-	}
-	resEntries, _ := out["Entries"].([]any)
-	if len(resEntries) != 2 {
-		return fmt.Errorf("eb PutEventsBatch: expected 2 Entries, got %d", len(resEntries))
-	}
-	return nil
-}
-
-func (g *ebGroup) teardownEvents(_ context.Context, t *harness.TestContext) error {
-	awscli.Run(t.Endpoint, t.Region, "events", "delete-event-bus", "--name", g.busName(t, "events")) //nolint:errcheck
-	return nil
-}
 
 // ─── eventbridge-target-fanout ───────────────────────────────────────────────
 //

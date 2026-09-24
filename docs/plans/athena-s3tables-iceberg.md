@@ -1,9 +1,7 @@
 # Athena, S3 Tables and Iceberg — plan for real support
 
-> Status: proposal, 2026-09-23, based on `main` at `cb08d3d22`; "Where things
-> stand" describes that commit. Some phases have since been implemented —
-> see the note at the top of each. Tracking issue: #2073, with one issue per
-> phase below.
+> Status: proposal, 2026-09-23, based on `main` at `cb08d3d22`. A phase that
+> has been implemented says so at the top of its own section. Tracking issue: #2073, with one issue per phase below.
 
 ## Where things stand
 
@@ -137,6 +135,13 @@ CDK users on its own.
 - CloudFormation: carry all of `AWS::Glue::Table`'s properties, and add `AWS::Glue::Partition`.
 
 ### Phase 2 — Athena control plane completion (M) — #2065
+
+> Implemented (2026-09-25): every item below. Queries go through a
+> `queryExecutor` (`internal/services/athena/executor.go`): the service stores
+> the execution `QUEUED`, submits it, and validates and persists each
+> transition the executor reports; `StopQueryExecution` cancels in the
+> service. The executor wired today succeeds at once with empty results;
+> Phase 3 replaces it. `FEDERATED` catalogs and Spark engines answer 501.
 
 This phase needs no engine.
 

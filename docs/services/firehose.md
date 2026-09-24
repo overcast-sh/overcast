@@ -40,18 +40,19 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | Stream type | `DeliveryStreamType` is honoured, defaulting to `DirectPut` |
 | Writes | `PutRecord` and `PutRecordBatch` return a record id per record and `FailedPutCount: 0` |
 | Tags | Inline `Tags` at creation, plus `TagDeliveryStream`, `UntagDeliveryStream` and `ListTagsForDeliveryStream` |
+| Destination configuration | Every `*DestinationConfiguration` block, `KinesisStreamSourceConfiguration` and `DeliveryStreamEncryptionConfigurationInput` given to `CreateDeliveryStream` are stored and echoed back by `DescribeDeliveryStream`, renamed to their `*Description` counterparts |
 | Limits | Stream names, the 1,000 KiB record cap and `PutRecordBatch`'s 1–500 records / 4 MiB per call are enforced |
 | Errors | A repeated stream name is `ResourceInUseException`; every exception is HTTP 400, as AWS documents |
 
 ## Differences from AWS
 
-| Area                      | On AWS                                                                     | Overcast                                                                                                                            |
-| ------------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Delivery                  | Records reach S3, Redshift, OpenSearch or an HTTP endpoint                 | Records are discarded — a bucket wired as a destination stays empty                                                                 |
-| Destination configuration | Stored and returned                                                        | `S3DestinationConfiguration` and its siblings are ignored, and `DescribeDeliveryStream` always reports an empty `Destinations` list |
-| Transformation            | Lambda processors, dynamic partitioning, format conversion and compression | None of it is applied                                                                                                               |
-| Buffering                 | A buffer interval and size govern the flush                                | There is no buffer interval or size, so nothing is ever flushed                                                                     |
-| `UpdateDestination`       | Changes a live stream's destination                                        | Not implemented                                                                                                                     |
+| Area                | On AWS                                                                     | Overcast                                                          |
+| ------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Delivery            | Records reach S3, Redshift, OpenSearch or an HTTP endpoint                 | Records are discarded — a bucket wired as a destination stays empty; the stored destination configuration is never acted on |
+| Transformation      | Lambda processors, dynamic partitioning, format conversion and compression | None of it is applied                                              |
+| Buffering           | A buffer interval and size govern the flush                                | There is no buffer interval or size, so nothing is ever flushed    |
+| Encryption          | `DeliveryStreamEncryptionConfiguration.Status` can be `ENABLING`/`DISABLING` while a real key operation is in progress | Always `ENABLED` the instant a `DeliveryStreamEncryptionConfigurationInput` is given — nothing is actually encrypted |
+| `UpdateDestination` | Changes a live stream's destination in place                               | Not implemented — a CloudFormation update to any property but `Tags` replaces the stream instead |
 
 ## Gotchas
 

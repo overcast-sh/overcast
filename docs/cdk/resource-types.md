@@ -71,12 +71,12 @@ stubs are, so a template that uses one still deploys.
 | Backup | `AWS::Backup::BackupVault`, `AWS::Backup::BackupPlan` |
 | Transfer Family | `AWS::Transfer::Server`, `AWS::Transfer::User` |
 | Glue | `AWS::Glue::Database`, `AWS::Glue::Table`, `AWS::Glue::Partition` |
-| Athena | `AWS::Athena::WorkGroup` |
+| Athena | `AWS::Athena::WorkGroup`, `AWS::Athena::NamedQuery`, `AWS::Athena::PreparedStatement`, `AWS::Athena::DataCatalog` |
 | OpenSearch | `AWS::OpenSearchService::Domain` |
 | Shield | `AWS::Shield::Protection` |
 | WAF v2 | `AWS::WAFv2::WebACL` |
 | AppRegistry | `AWS::ServiceCatalogAppRegistry::Application`, `AWS::ServiceCatalogAppRegistry::ResourceAssociation` |
-| CloudFormation | `AWS::CloudFormation::Stack` (nested stacks), `AWS::CloudFormation::CustomResource`, `Custom::*` (resolved dynamically, in addition to the 136 static handlers) |
+| CloudFormation | `AWS::CloudFormation::Stack` (nested stacks), `AWS::CloudFormation::CustomResource`, `Custom::*` (resolved dynamically, in addition to the 145 static handlers) |
 
 ## Stubs
 
