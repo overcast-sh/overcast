@@ -15,7 +15,7 @@ namespace OvercastCompat.Groups;
 /// </remarks>
 internal sealed class ScenariosAuthoredEventbridgeBuses : IServiceGroup
 {
-    private static readonly ScenarioGroup GroupEventbridgeBusesShadow = new("eventbridge-buses-shadow", "compat/model/authored/eventbridge-buses.json");
+    private static readonly ScenarioGroup GroupEventbridgeBuses = new("eventbridge-buses", "compat/model/authored/eventbridge-buses.json");
 
     private readonly Lazy<AmazonEventBridgeClient> _client;
 
@@ -35,32 +35,32 @@ internal sealed class ScenariosAuthoredEventbridgeBuses : IServiceGroup
 
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["eventbridge-buses-shadow:CreateEventBus"] = TestEventbridgeBusesShadowCreateEventBus,
-        ["eventbridge-buses-shadow:DescribeEventBus"] = TestEventbridgeBusesShadowDescribeEventBus,
-        ["eventbridge-buses-shadow:ListEventBuses"] = TestEventbridgeBusesShadowListEventBuses,
-        ["eventbridge-buses-shadow:TagEventBus"] = TestEventbridgeBusesShadowTagEventBus,
-        ["eventbridge-buses-shadow:ListEventBridgeTagsForResource"] = TestEventbridgeBusesShadowListEventBridgeTagsForResource,
-        ["eventbridge-buses-shadow:DeleteEventBus"] = TestEventbridgeBusesShadowDeleteEventBus,
+        ["eventbridge-buses:CreateEventBus"] = TestEventbridgeBusesCreateEventBus,
+        ["eventbridge-buses:DescribeEventBus"] = TestEventbridgeBusesDescribeEventBus,
+        ["eventbridge-buses:ListEventBuses"] = TestEventbridgeBusesListEventBuses,
+        ["eventbridge-buses:TagEventBus"] = TestEventbridgeBusesTagEventBus,
+        ["eventbridge-buses:ListEventBridgeTagsForResource"] = TestEventbridgeBusesListEventBridgeTagsForResource,
+        ["eventbridge-buses:DeleteEventBus"] = TestEventbridgeBusesDeleteEventBus,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["eventbridge-buses-shadow"] = SetupEventbridgeBusesShadow,
+        ["eventbridge-buses"] = SetupEventbridgeBuses,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["eventbridge-buses-shadow"] = TeardownEventbridgeBusesShadow,
+        ["eventbridge-buses"] = TeardownEventbridgeBuses,
     };
 
     private AmazonEventBridgeClient Cl() => _client.Value;
 
-    private Task SetupEventbridgeBusesShadow(TestContext t) =>
+    private Task SetupEventbridgeBuses(TestContext t) =>
         // No setup steps: an empty phase is a no-op, not a missing one.
-        GroupEventbridgeBusesShadow.RunSetupAsync(t);
+        GroupEventbridgeBuses.RunSetupAsync(t);
 
-    private Task TeardownEventbridgeBusesShadow(TestContext t) =>
-        GroupEventbridgeBusesShadow.RunTeardownAsync(t,
+    private Task TeardownEventbridgeBuses(TestContext t) =>
+        GroupEventbridgeBuses.RunTeardownAsync(t,
             new ScenarioCall
             {
                 Op = "DeleteEventBus",
@@ -76,7 +76,7 @@ internal sealed class ScenariosAuthoredEventbridgeBuses : IServiceGroup
             }
         );
 
-    private Task TestEventbridgeBusesShadowCreateEventBus(TestContext t) => GroupEventbridgeBusesShadow.RunTestAsync(t, "CreateEventBus", new ScenarioTest
+    private Task TestEventbridgeBusesCreateEventBus(TestContext t) => GroupEventbridgeBuses.RunTestAsync(t, "CreateEventBus", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -103,7 +103,7 @@ internal sealed class ScenariosAuthoredEventbridgeBuses : IServiceGroup
         ],
     });
 
-    private Task TestEventbridgeBusesShadowDescribeEventBus(TestContext t) => GroupEventbridgeBusesShadow.RunTestAsync(t, "DescribeEventBus", new ScenarioTest
+    private Task TestEventbridgeBusesDescribeEventBus(TestContext t) => GroupEventbridgeBuses.RunTestAsync(t, "DescribeEventBus", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -127,7 +127,7 @@ internal sealed class ScenariosAuthoredEventbridgeBuses : IServiceGroup
         ],
     });
 
-    private Task TestEventbridgeBusesShadowListEventBuses(TestContext t) => GroupEventbridgeBusesShadow.RunTestAsync(t, "ListEventBuses", new ScenarioTest
+    private Task TestEventbridgeBusesListEventBuses(TestContext t) => GroupEventbridgeBuses.RunTestAsync(t, "ListEventBuses", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -152,7 +152,7 @@ internal sealed class ScenariosAuthoredEventbridgeBuses : IServiceGroup
         ],
     });
 
-    private Task TestEventbridgeBusesShadowTagEventBus(TestContext t) => GroupEventbridgeBusesShadow.RunTestAsync(t, "TagEventBus", new ScenarioTest
+    private Task TestEventbridgeBusesTagEventBus(TestContext t) => GroupEventbridgeBuses.RunTestAsync(t, "TagEventBus", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -191,7 +191,7 @@ internal sealed class ScenariosAuthoredEventbridgeBuses : IServiceGroup
         ],
     });
 
-    private Task TestEventbridgeBusesShadowListEventBridgeTagsForResource(TestContext t) => GroupEventbridgeBusesShadow.RunTestAsync(t, "ListEventBridgeTagsForResource", new ScenarioTest
+    private Task TestEventbridgeBusesListEventBridgeTagsForResource(TestContext t) => GroupEventbridgeBuses.RunTestAsync(t, "ListEventBridgeTagsForResource", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -217,7 +217,7 @@ internal sealed class ScenariosAuthoredEventbridgeBuses : IServiceGroup
         ],
     });
 
-    private Task TestEventbridgeBusesShadowDeleteEventBus(TestContext t) => GroupEventbridgeBusesShadow.RunTestAsync(t, "DeleteEventBus", new ScenarioTest
+    private Task TestEventbridgeBusesDeleteEventBus(TestContext t) => GroupEventbridgeBuses.RunTestAsync(t, "DeleteEventBus", new ScenarioTest
     {
         Call = new ScenarioCall
         {

@@ -1,5 +1,5 @@
 {
-  "$comment": "Authored port of the hand-written registry group eventbridge-events (docs/plans/compat-coverage-modelgen.md §3.11, G6, #1116). One spec in place of the five per-language implementations that exist and the two (dotnet-sdk, rust-sdk) that never did — 2 tests of parity debt per missing suite. It runs today under the shadow name eventbridge-events-shadow, beside the natives, so the nightly can compare the two per (suite, test); the flip PR renames this group to eventbridge-events, adds the scenario field to the hand-written registry.json entry, and deletes the native code. The clauses are the union of what the five natives assert — see compat/model/README.md § Authored scenarios. This group is PutEvents' own answer only: no native here verifies that an event reached a target, which is eventbridge-target-fanout's job and the cross-service gap #1931.",
+  "$comment": "Authored port of the hand-written registry group eventbridge-events (docs/plans/compat-coverage-modelgen.md §3.11, G6, #1116). One spec in place of the five per-language implementations that exist and the two (dotnet-sdk, rust-sdk) that never did — 2 tests of parity debt per missing suite. It soaked as eventbridge-events-shadow beside those natives until the nightly comparison (run 35973580902) agreed on every one of its 14 (suite, test) pairs in each of three soak runs; the flip then renamed it to eventbridge-events, pointed the hand-written registry entry at it and deleted the native code. The clauses are the union of what the five natives asserted — see compat/model/README.md § Authored scenarios. This group is PutEvents' own answer only: no native here verifies that an event reached a target, which is eventbridge-target-fanout's job and the cross-service gap #1931.",
   "version": 1,
   "service": "eventbridge",
   "client": {
@@ -14,7 +14,7 @@
   "groups": [
     {
       "$comment": "Every event goes to one custom bus created in setup and deleted in teardown (#388: each EventBridge group uses its own bus). go-sdk, cli, python-sdk and java-sdk all create a bus in setup, but they do not all use it: node-js-sdk puts both tests' events on the default bus, go-sdk puts PutEventsBatch's there, and java-sdk puts PutEvents' there — the default bus is shared by every concurrent run and every other group, which a per-run bus is the whole point of avoiding. cli and python-sdk put both tests on their own bus, and that is the shape taken. No clause is wrapped in `eventually`: PutEvents answers synchronously with one result entry per request entry, and every native reads that answer directly.",
-      "name": "eventbridge-events-shadow",
+      "name": "eventbridge-events",
       "kind": "lifecycle",
       "setup": [
         {

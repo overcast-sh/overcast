@@ -4,25 +4,20 @@
  * Status: NOT implemented in Overcast. Tests expected to fail with 501.
  *
  * Groups:
- *   eventbridge-buses         — custom event bus lifecycle
- *   eventbridge-events        — PutEvents
  *   eventbridge-target-fanout — PutEvents actually reaching a rule's targets
  *   eventbridge-patterns      — TestEventPattern (stateless, no setup/teardown)
+ *
+ * eventbridge-rules, eventbridge-buses and eventbridge-events resolve through
+ * their authored scenarios (compat/model/authored/).
  */
 
 import {
-  CreateEventBusCommand,
-  DeleteEventBusCommand,
-  DescribeEventBusCommand,
-  ListEventBusesCommand,
   PutRuleCommand,
   DeleteRuleCommand,
   PutTargetsCommand,
   RemoveTargetsCommand,
   ListTargetsByRuleCommand,
   PutEventsCommand,
-  TagResourceCommand,
-  ListTagsForResourceCommand,
   TestEventPatternCommand,
   RuleState,
 } from "@aws-sdk/client-eventbridge";
@@ -39,146 +34,6 @@ import * as assert from "node:assert/strict";
 
 export function makeEventBridgeGroups(suite: string): TestGroup[] {
   return [
-    // ── eventbridge-buses ──────────────────────────────────────────────────
-    {
-      suite,
-      service: "eventbridge",
-      name: "eventbridge-buses",
-      tests: [
-        {
-          name: "CreateEventBus",
-          fn: async (ctx) => {
-            const { eventbridge } = makeClients(ctx);
-            const resp = await eventbridge.send(
-              new CreateEventBusCommand({ Name: `${ctx.runId}-bus` }),
-            );
-            assert.ok(resp.EventBusArn, "CreateEventBus: missing EventBusArn");
-            (ctx as Record<string, unknown>)["_busArn"] = resp.EventBusArn;
-          },
-        },
-        {
-          name: "DescribeEventBus",
-          fn: async (ctx) => {
-            const { eventbridge } = makeClients(ctx);
-            const resp = await eventbridge.send(
-              new DescribeEventBusCommand({ Name: `${ctx.runId}-bus` }),
-            );
-            assert.ok(resp.Arn, "DescribeEventBus: missing Arn");
-          },
-        },
-        {
-          name: "ListEventBuses",
-          fn: async (ctx) => {
-            const { eventbridge } = makeClients(ctx);
-            const resp = await eventbridge.send(
-              new ListEventBusesCommand({ NamePrefix: ctx.runId }),
-            );
-            assert.ok(resp.EventBuses?.some((b) => b.Name === `${ctx.runId}-bus`), "ListEventBuses: bus not found");
-          },
-        },
-        {
-          name: "TagEventBus",
-          op: "TagResource",
-          fn: async (ctx) => {
-            const busArn = (ctx as Record<string, unknown>)[
-              "_busArn"
-            ] as string;
-            assert.ok(busArn, "no bus ARN");
-            const { eventbridge } = makeClients(ctx);
-            await eventbridge.send(
-              new TagResourceCommand({
-                ResourceARN: busArn,
-                Tags: [{ Key: "env", Value: "compat" }],
-              }),
-            );
-          },
-        },
-        {
-          name: "ListEventBridgeTagsForResource",
-          fn: async (ctx) => {
-            const busArn = (ctx as Record<string, unknown>)[
-              "_busArn"
-            ] as string;
-            assert.ok(busArn, "no bus ARN");
-            const { eventbridge } = makeClients(ctx);
-            const resp = await eventbridge.send(
-              new ListTagsForResourceCommand({ ResourceARN: busArn }),
-            );
-            assert.ok(resp.Tags?.some((t) => t.Key === "env"), "ListTagsForResource: tag not found");
-          },
-        },
-        {
-          name: "DeleteEventBus",
-          fn: async (ctx) => {
-            const { eventbridge } = makeClients(ctx);
-            const busName = `${ctx.runId}-bus`;
-            await eventbridge.send(
-              new DeleteEventBusCommand({ Name: busName }),
-            );
-            const resp = await eventbridge.send(
-              new ListEventBusesCommand({ NamePrefix: ctx.runId }),
-            );
-            assert.ok(!resp.EventBuses?.some((b) => b.Name === busName), `DeleteEventBus: event bus ${busName} still present after delete`);
-          },
-        },
-      ],
-      teardown: async (ctx) => {
-        const { eventbridge } = makeClients(ctx);
-        try {
-          await eventbridge.send(
-            new DeleteEventBusCommand({ Name: `${ctx.runId}-bus` }),
-          );
-        } catch {}
-      },
-    },
-
-    // ── eventbridge-events ─────────────────────────────────────────────────
-    {
-      suite,
-      service: "eventbridge",
-      name: "eventbridge-events",
-      tests: [
-        {
-          name: "PutEvents",
-          fn: async (ctx) => {
-            const { eventbridge } = makeClients(ctx);
-            const resp = await eventbridge.send(
-              new PutEventsCommand({
-                Entries: [
-                  {
-                    Source: `compat.${ctx.runId}`,
-                    DetailType: "CompatTest",
-                    Detail: JSON.stringify({
-                      runId: ctx.runId,
-                      test: "PutEvents",
-                    }),
-                    EventBusName: "default",
-                  },
-                ],
-              }),
-            );
-            assert.ok(((resp.FailedEntryCount ?? 0)) <= (0), `PutEvents: ${resp.FailedEntryCount} failed entries`);
-          },
-        },
-        {
-          name: "PutEventsBatch",
-          fn: async (ctx) => {
-            const { eventbridge } = makeClients(ctx);
-            const entries = Array.from({ length: 5 }, (_, i) => ({
-              Source: `compat.${ctx.runId}`,
-              DetailType: "CompatBatch",
-              Detail: JSON.stringify({ index: i }),
-              EventBusName: "default",
-            }));
-            const resp = await eventbridge.send(
-              new PutEventsCommand({ Entries: entries }),
-            );
-            assert.ok(((resp.FailedEntryCount ?? 0)) <= (0), `PutEventsBatch: ${resp.FailedEntryCount} failed entries`);
-          },
-        },
-      ],
-    },
-
     // ── eventbridge-target-fanout ──────────────────────────────────────────
     //
     // Target fan-out: an event put on a bus reaches the rule's targets, with

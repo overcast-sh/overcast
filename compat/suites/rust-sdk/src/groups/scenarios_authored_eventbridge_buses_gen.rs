@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/eventbridge-buses.json";
 
-const GROUP_EVENTBRIDGE_BUSES_SHADOW: Group = Group {
-    name: "eventbridge-buses-shadow",
+const GROUP_EVENTBRIDGE_BUSES: Group = Group {
+    name: "eventbridge-buses",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredEventbridgeBuses {
         {
             let client = self.client.clone();
             impls.insert(
-                "eventbridge-buses-shadow:CreateEventBus".to_string(),
+                "eventbridge-buses:CreateEventBus".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_EVENTBRIDGE_BUSES_SHADOW
-                            .run_test(&ctx, "CreateEventBus", test_eventbridge_buses_shadow_create_event_bus(&client))
+                        GROUP_EVENTBRIDGE_BUSES
+                            .run_test(&ctx, "CreateEventBus", test_eventbridge_buses_create_event_bus(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredEventbridgeBuses {
         {
             let client = self.client.clone();
             impls.insert(
-                "eventbridge-buses-shadow:DescribeEventBus".to_string(),
+                "eventbridge-buses:DescribeEventBus".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_EVENTBRIDGE_BUSES_SHADOW
-                            .run_test(&ctx, "DescribeEventBus", test_eventbridge_buses_shadow_describe_event_bus(&client))
+                        GROUP_EVENTBRIDGE_BUSES
+                            .run_test(&ctx, "DescribeEventBus", test_eventbridge_buses_describe_event_bus(&client))
                             .await
                     })
                 }),
@@ -79,12 +79,12 @@ impl ServiceGroup for ScenariosAuthoredEventbridgeBuses {
         {
             let client = self.client.clone();
             impls.insert(
-                "eventbridge-buses-shadow:ListEventBuses".to_string(),
+                "eventbridge-buses:ListEventBuses".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_EVENTBRIDGE_BUSES_SHADOW
-                            .run_test(&ctx, "ListEventBuses", test_eventbridge_buses_shadow_list_event_buses(&client))
+                        GROUP_EVENTBRIDGE_BUSES
+                            .run_test(&ctx, "ListEventBuses", test_eventbridge_buses_list_event_buses(&client))
                             .await
                     })
                 }),
@@ -93,12 +93,12 @@ impl ServiceGroup for ScenariosAuthoredEventbridgeBuses {
         {
             let client = self.client.clone();
             impls.insert(
-                "eventbridge-buses-shadow:TagEventBus".to_string(),
+                "eventbridge-buses:TagEventBus".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_EVENTBRIDGE_BUSES_SHADOW
-                            .run_test(&ctx, "TagEventBus", test_eventbridge_buses_shadow_tag_event_bus(&client))
+                        GROUP_EVENTBRIDGE_BUSES
+                            .run_test(&ctx, "TagEventBus", test_eventbridge_buses_tag_event_bus(&client))
                             .await
                     })
                 }),
@@ -107,12 +107,12 @@ impl ServiceGroup for ScenariosAuthoredEventbridgeBuses {
         {
             let client = self.client.clone();
             impls.insert(
-                "eventbridge-buses-shadow:ListEventBridgeTagsForResource".to_string(),
+                "eventbridge-buses:ListEventBridgeTagsForResource".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_EVENTBRIDGE_BUSES_SHADOW
-                            .run_test(&ctx, "ListEventBridgeTagsForResource", test_eventbridge_buses_shadow_list_event_bridge_tags_for_resource(&client))
+                        GROUP_EVENTBRIDGE_BUSES
+                            .run_test(&ctx, "ListEventBridgeTagsForResource", test_eventbridge_buses_list_event_bridge_tags_for_resource(&client))
                             .await
                     })
                 }),
@@ -121,12 +121,12 @@ impl ServiceGroup for ScenariosAuthoredEventbridgeBuses {
         {
             let client = self.client.clone();
             impls.insert(
-                "eventbridge-buses-shadow:DeleteEventBus".to_string(),
+                "eventbridge-buses:DeleteEventBus".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_EVENTBRIDGE_BUSES_SHADOW
-                            .run_test(&ctx, "DeleteEventBus", test_eventbridge_buses_shadow_delete_event_bus(&client))
+                        GROUP_EVENTBRIDGE_BUSES
+                            .run_test(&ctx, "DeleteEventBus", test_eventbridge_buses_delete_event_bus(&client))
                             .await
                     })
                 }),
@@ -140,11 +140,11 @@ impl ServiceGroup for ScenariosAuthoredEventbridgeBuses {
         {
             let client = self.client.clone();
             setups.insert(
-                "eventbridge-buses-shadow".to_string(),
+                "eventbridge-buses".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_EVENTBRIDGE_BUSES_SHADOW.run_setup(&ctx, setup_eventbridge_buses_shadow(&client)).await
+                        GROUP_EVENTBRIDGE_BUSES.run_setup(&ctx, setup_eventbridge_buses(&client)).await
                     })
                 }),
             );
@@ -157,11 +157,11 @@ impl ServiceGroup for ScenariosAuthoredEventbridgeBuses {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "eventbridge-buses-shadow".to_string(),
+                "eventbridge-buses".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_EVENTBRIDGE_BUSES_SHADOW.run_teardown(&ctx, teardown_eventbridge_buses_shadow(&client)).await
+                        GROUP_EVENTBRIDGE_BUSES.run_teardown(&ctx, teardown_eventbridge_buses(&client)).await
                     })
                 }),
             );
@@ -170,12 +170,12 @@ impl ServiceGroup for ScenariosAuthoredEventbridgeBuses {
     }
 }
 
-fn setup_eventbridge_buses_shadow(_client: &aws_sdk_eventbridge::Client) -> Vec<Call> {
+fn setup_eventbridge_buses(_client: &aws_sdk_eventbridge::Client) -> Vec<Call> {
     // An empty phase is a no-op, not a missing one.
     Vec::new()
 }
 
-fn teardown_eventbridge_buses_shadow(client: &aws_sdk_eventbridge::Client) -> Vec<Call> {
+fn teardown_eventbridge_buses(client: &aws_sdk_eventbridge::Client) -> Vec<Call> {
     vec![
         Call {
             op: "DeleteEventBus",
@@ -200,7 +200,7 @@ fn teardown_eventbridge_buses_shadow(client: &aws_sdk_eventbridge::Client) -> Ve
     ]
 }
 
-fn test_eventbridge_buses_shadow_create_event_bus(client: &aws_sdk_eventbridge::Client) -> Test {
+fn test_eventbridge_buses_create_event_bus(client: &aws_sdk_eventbridge::Client) -> Test {
     Test {
         call: Call {
             op: "CreateEventBus",
@@ -232,7 +232,7 @@ fn test_eventbridge_buses_shadow_create_event_bus(client: &aws_sdk_eventbridge::
     }
 }
 
-fn test_eventbridge_buses_shadow_describe_event_bus(client: &aws_sdk_eventbridge::Client) -> Test {
+fn test_eventbridge_buses_describe_event_bus(client: &aws_sdk_eventbridge::Client) -> Test {
     Test {
         call: Call {
             op: "DescribeEventBus",
@@ -263,7 +263,7 @@ fn test_eventbridge_buses_shadow_describe_event_bus(client: &aws_sdk_eventbridge
     }
 }
 
-fn test_eventbridge_buses_shadow_list_event_buses(client: &aws_sdk_eventbridge::Client) -> Test {
+fn test_eventbridge_buses_list_event_buses(client: &aws_sdk_eventbridge::Client) -> Test {
     Test {
         call: Call {
             op: "ListEventBuses",
@@ -297,7 +297,7 @@ fn test_eventbridge_buses_shadow_list_event_buses(client: &aws_sdk_eventbridge::
     }
 }
 
-fn test_eventbridge_buses_shadow_tag_event_bus(client: &aws_sdk_eventbridge::Client) -> Test {
+fn test_eventbridge_buses_tag_event_bus(client: &aws_sdk_eventbridge::Client) -> Test {
     Test {
         call: Call {
             op: "TagResource",
@@ -363,7 +363,7 @@ fn test_eventbridge_buses_shadow_tag_event_bus(client: &aws_sdk_eventbridge::Cli
     }
 }
 
-fn test_eventbridge_buses_shadow_list_event_bridge_tags_for_resource(client: &aws_sdk_eventbridge::Client) -> Test {
+fn test_eventbridge_buses_list_event_bridge_tags_for_resource(client: &aws_sdk_eventbridge::Client) -> Test {
     Test {
         call: Call {
             op: "ListTagsForResource",
@@ -400,7 +400,7 @@ fn test_eventbridge_buses_shadow_list_event_bridge_tags_for_resource(client: &aw
     }
 }
 
-fn test_eventbridge_buses_shadow_delete_event_bus(client: &aws_sdk_eventbridge::Client) -> Test {
+fn test_eventbridge_buses_delete_event_bus(client: &aws_sdk_eventbridge::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteEventBus",

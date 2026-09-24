@@ -1,5 +1,5 @@
 {
-  "$comment": "Authored port of the hand-written registry group eventbridge-buses (docs/plans/compat-coverage-modelgen.md §3.11, G6, #1116). One spec in place of the five per-language implementations that exist and the two (dotnet-sdk, rust-sdk) that never did — 6 tests of parity debt per missing suite. It runs today under the shadow name eventbridge-buses-shadow, beside the natives, so the nightly can compare the two per (suite, test); the flip PR renames this group to eventbridge-buses, adds the scenario field to the hand-written registry.json entry, and deletes the native code. The clauses are the union of what the five natives assert — see compat/model/README.md § Authored scenarios.",
+  "$comment": "Authored port of the hand-written registry group eventbridge-buses (docs/plans/compat-coverage-modelgen.md §3.11, G6, #1116). One spec in place of the five per-language implementations that exist and the two (dotnet-sdk, rust-sdk) that never did — 6 tests of parity debt per missing suite. It soaked as eventbridge-buses-shadow beside those natives until the nightly comparison (run 35973580902) agreed on every one of its 42 (suite, test) pairs in each of three soak runs; the flip then renamed it to eventbridge-buses, pointed the hand-written registry entry at it and deleted the native code. The clauses are the union of what the five natives asserted — see compat/model/README.md § Authored scenarios.",
   "version": 1,
   "service": "eventbridge",
   "client": {
@@ -14,7 +14,7 @@
   "groups": [
     {
       "$comment": "One custom bus, created by the CreateEventBus test and deleted by the DeleteEventBus test — the shape cli, node-js-sdk and java-sdk use, and the one registry.json's depends describes (DescribeEventBus, ListEventBuses and TagEventBus all depend on CreateEventBus; DeleteEventBus runs last). go-sdk and python-sdk instead create the bus in setup and have CreateEventBus and DeleteEventBus each make and remove a second, ephemeral bus, which asserts nothing the shared shape does not. The bus is named by $name, so it is {runId}-eventbridge-buses-shadow-bus: its own bus, never shared with another EventBridge group, because groups run in parallel and a shared bus name is exactly what issue #388 was (the cli suite's busName comment). There is no setup; teardown deletes the bus in case DeleteEventBus never ran. No clause is wrapped in `eventually`: no native polls, EventBridge documents no consistency window for a bus or tag write, and every native reads its own write back immediately.",
-      "name": "eventbridge-buses-shadow",
+      "name": "eventbridge-buses",
       "kind": "lifecycle",
       "setup": [],
       "tests": [

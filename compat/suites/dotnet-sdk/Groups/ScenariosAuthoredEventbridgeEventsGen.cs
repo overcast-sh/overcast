@@ -15,7 +15,7 @@ namespace OvercastCompat.Groups;
 /// </remarks>
 internal sealed class ScenariosAuthoredEventbridgeEvents : IServiceGroup
 {
-    private static readonly ScenarioGroup GroupEventbridgeEventsShadow = new("eventbridge-events-shadow", "compat/model/authored/eventbridge-events.json");
+    private static readonly ScenarioGroup GroupEventbridgeEvents = new("eventbridge-events", "compat/model/authored/eventbridge-events.json");
 
     private readonly Lazy<AmazonEventBridgeClient> _client;
 
@@ -35,24 +35,24 @@ internal sealed class ScenariosAuthoredEventbridgeEvents : IServiceGroup
 
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["eventbridge-events-shadow:PutEvents"] = TestEventbridgeEventsShadowPutEvents,
-        ["eventbridge-events-shadow:PutEventsBatch"] = TestEventbridgeEventsShadowPutEventsBatch,
+        ["eventbridge-events:PutEvents"] = TestEventbridgeEventsPutEvents,
+        ["eventbridge-events:PutEventsBatch"] = TestEventbridgeEventsPutEventsBatch,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["eventbridge-events-shadow"] = SetupEventbridgeEventsShadow,
+        ["eventbridge-events"] = SetupEventbridgeEvents,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["eventbridge-events-shadow"] = TeardownEventbridgeEventsShadow,
+        ["eventbridge-events"] = TeardownEventbridgeEvents,
     };
 
     private AmazonEventBridgeClient Cl() => _client.Value;
 
-    private Task SetupEventbridgeEventsShadow(TestContext t) =>
-        GroupEventbridgeEventsShadow.RunSetupAsync(t,
+    private Task SetupEventbridgeEvents(TestContext t) =>
+        GroupEventbridgeEvents.RunSetupAsync(t,
             new ScenarioCall
             {
                 Op = "CreateEventBus",
@@ -68,8 +68,8 @@ internal sealed class ScenariosAuthoredEventbridgeEvents : IServiceGroup
             }
         );
 
-    private Task TeardownEventbridgeEventsShadow(TestContext t) =>
-        GroupEventbridgeEventsShadow.RunTeardownAsync(t,
+    private Task TeardownEventbridgeEvents(TestContext t) =>
+        GroupEventbridgeEvents.RunTeardownAsync(t,
             new ScenarioCall
             {
                 Op = "DeleteEventBus",
@@ -85,7 +85,7 @@ internal sealed class ScenariosAuthoredEventbridgeEvents : IServiceGroup
             }
         );
 
-    private Task TestEventbridgeEventsShadowPutEvents(TestContext t) => GroupEventbridgeEventsShadow.RunTestAsync(t, "PutEvents", new ScenarioTest
+    private Task TestEventbridgeEventsPutEvents(TestContext t) => GroupEventbridgeEvents.RunTestAsync(t, "PutEvents", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -118,7 +118,7 @@ internal sealed class ScenariosAuthoredEventbridgeEvents : IServiceGroup
         ],
     });
 
-    private Task TestEventbridgeEventsShadowPutEventsBatch(TestContext t) => GroupEventbridgeEventsShadow.RunTestAsync(t, "PutEventsBatch", new ScenarioTest
+    private Task TestEventbridgeEventsPutEventsBatch(TestContext t) => GroupEventbridgeEvents.RunTestAsync(t, "PutEventsBatch", new ScenarioTest
     {
         Call = new ScenarioCall
         {
