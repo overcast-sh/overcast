@@ -1,5 +1,5 @@
 {
-  "$comment": "Authored port of the hand-written registry group logs-events (docs/plans/compat-coverage-modelgen.md §3.11, G6, #1116). One spec in place of five per-language implementations — dotnet-sdk and rust-sdk never had one, and the port closes 10 rows of compat/parity-debt.json. It runs today under the shadow name logs-events-shadow, beside the natives, so the nightly can compare the two per (suite, test); the flip PR renames this group to logs-events, points the registry entry at this file, and deletes the native code. The clauses are the union of what the five natives assert — see compat/model/README.md § Authored scenarios.",
+  "$comment": "Authored port of the hand-written registry group logs-events (docs/plans/compat-coverage-modelgen.md §3.11, G6, #1116). One spec in place of five per-language implementations — dotnet-sdk and rust-sdk never had one, and the port closes 10 rows of compat/parity-debt.json. It soaked as logs-events-shadow beside those natives until the nightly comparison (run 35973580902) agreed on every one of its 35 (suite, test) pairs in each of three soak runs; the flip then renamed it to logs-events, pointed the hand-written registry entry at it and deleted the native code. The clauses are the union of what the five natives asserted — see compat/model/README.md § Authored scenarios.",
   "version": 1,
   "service": "cloudwatch-logs",
   "client": {
@@ -14,7 +14,7 @@
   "groups": [
     {
       "$comment": "One log group holding one log stream, both created in setup, as all five natives do; teardown deletes the group, which takes the stream with it. Every event is stamped with the client's own clock at the moment PutLogEvents is called — `$now`, in epoch milliseconds, which is what InputLogEvent.timestamp counts — as every native stamps its events and as a real caller does. A literal would not do: CloudWatch Logs discards an event older than 14 days (or than the group's retention) or more than two hours in the future, reporting it in rejectedLogEventsInfo rather than failing the call, so a literal timestamp silently stops storing anything as it ages (#1721). The clock is read once per call, so the three events in the one batch carry offsets of -2, -1 and 0 ms: distinct, and in the chronological order PutLogEvents requires of a batch, which is what lets GetLogEvents assert the order it reads them back in. `$name` names the group and the stream, deterministic within a run.",
-      "name": "logs-events-shadow",
+      "name": "logs-events",
       "kind": "lifecycle",
       "setup": [
         {
