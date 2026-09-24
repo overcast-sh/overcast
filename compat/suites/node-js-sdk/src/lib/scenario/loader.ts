@@ -21,6 +21,7 @@
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { checkEqualsJsonOperand } from "./expressions.ts";
 import type {
   Assertion,
   Call,
@@ -300,6 +301,14 @@ function parseCheck(raw: unknown, at: string, fail: Fail): Check {
       return { matches: requireString(o["matches"], `${at}/matches`, fail) };
     case "equals":
       return { equals: parseValue(o["equals"], `${at}/equals`, fail) };
+    case "equalsJSON":
+      // Data, not a value: it is never walked for expressions, so an operand
+      // that would need one is refused here rather than read either way.
+      try {
+        return { equalsJSON: checkEqualsJsonOperand(o["equalsJSON"]) };
+      } catch (err) {
+        return fail(`${at}/equalsJSON`, err instanceof Error ? err.message : String(err));
+      }
     default:
       return fail(at, `unknown check ${JSON.stringify(key)}`);
   }

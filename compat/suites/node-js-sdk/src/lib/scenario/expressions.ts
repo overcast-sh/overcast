@@ -13,7 +13,7 @@
  * agree on every value.
  */
 
-import type { Expression, Path, Value, ValueObject } from "./ir.ts";
+import type { Expression, JsonValue, Path, Value, ValueObject } from "./ir.ts";
 
 /** The context a value is evaluated against. */
 export interface EvalContext {
@@ -428,6 +428,107 @@ export function jsonEquals(actual: unknown, expected: unknown): boolean {
 function isPlainObject(v: Record<string, unknown>): boolean {
   const proto = Object.getPrototypeOf(v) as unknown;
   return proto === Object.prototype || proto === null;
+}
+
+// ─── equalsJSON ───────────────────────────────────────────────────────────
+//
+// compat/model/README.md § Documents in a string: a member whose content is a
+// JSON document is compared as a document, not as text, because botocore hands
+// python-sdk and cli an IAM policy already decoded while this SDK hands over
+// the percent-encoded string. compat/model/testdata/equalsjson pins it.
+
+/**
+ * Refuse an `equalsJSON` operand that is not a literal JSON object or array,
+ * or that has a `$`-prefixed key at any depth. The operand is never
+ * evaluated, so such a key could only be read one way or the other by
+ * guessing; it is refused instead. Returns the operand, typed.
+ */
+export function checkEqualsJsonOperand(operand: unknown): JsonValue {
+  if (typeof operand !== "object" || operand === null) {
+    throw new ExpressionError(
+      `equalsJSON takes a JSON object or array, got ${describe(operand)}`,
+    );
+  }
+  refuseDollarKeys(operand);
+  return operand as JsonValue;
+}
+
+function refuseDollarKeys(value: unknown): void {
+  if (Array.isArray(value)) {
+    for (const v of value) refuseDollarKeys(v);
+    return;
+  }
+  if (!isRecord(value)) return;
+  for (const [k, v] of Object.entries(value)) {
+    if (k.startsWith("$")) {
+      throw new ExpressionError(
+        `equalsJSON's operand is a literal document and is never evaluated, ` +
+          `so it may not hold the key ${JSON.stringify(k)}`,
+      );
+    }
+    refuseDollarKeys(v);
+  }
+}
+
+/** Two ASCII hex digits' value, or -1 when `c` is not one. */
+function hexValue(c: number): number {
+  if (c >= 0x30 && c <= 0x39) return c - 0x30;
+  if (c >= 0x41 && c <= 0x46) return c - 0x41 + 10;
+  if (c >= 0x61 && c <= 0x66) return c - 0x61 + 10;
+  return -1;
+}
+
+/**
+ * Python's `urllib.parse.unquote`, which botocore applies to every IAM policy
+ * document: `%XX` becomes that byte, every other character contributes its
+ * own UTF-8 bytes, and the bytes are read as UTF-8 — once. `decodeURIComponent`
+ * is not it: it throws on a `%` that is not followed by two hex digits, which
+ * this keeps as written. `+` is not a space.
+ */
+export function percentDecode(text: string): string {
+  if (!text.includes("%")) return text;
+  const bytes: number[] = [];
+  const encoder = new TextEncoder();
+  let i = 0;
+  while (i < text.length) {
+    if (text.charCodeAt(i) === 0x25) {
+      // Past the end, charCodeAt is NaN and hexValue says -1.
+      const hi = hexValue(text.charCodeAt(i + 1));
+      const lo = hexValue(text.charCodeAt(i + 2));
+      if (hi >= 0 && lo >= 0) {
+        bytes.push(hi * 16 + lo);
+        i += 3;
+        continue;
+      }
+    }
+    // One code point, which may be a surrogate pair.
+    const cp = text.codePointAt(i) as number;
+    const ch = String.fromCodePoint(cp);
+    for (const b of encoder.encode(ch)) bytes.push(b);
+    i += ch.length;
+  }
+  return new TextDecoder("utf-8").decode(new Uint8Array(bytes));
+}
+
+/**
+ * The document the value at an `equalsJSON` path holds, or `undefined` when
+ * it holds none. A string is percent-decoded once and parsed as one JSON
+ * text; `JSON.parse` already allows JSON whitespace around it and refuses
+ * anything else after it. An array or a plain object is the document already
+ * — what botocore hands python-sdk, and what this SDK would hand over for a
+ * member it decoded itself. Anything else is not a document.
+ */
+export function asJsonDocument(value: unknown): JsonValue | undefined {
+  if (typeof value === "string") {
+    try {
+      return JSON.parse(percentDecode(value)) as JsonValue;
+    } catch {
+      return undefined;
+    }
+  }
+  if (Array.isArray(value)) return value as JsonValue;
+  if (isRecord(value) && isPlainObject(value)) return value as JsonValue;
+  return undefined;
 }
 
 /**

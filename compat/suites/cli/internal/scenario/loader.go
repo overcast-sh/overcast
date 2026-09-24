@@ -17,6 +17,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 )
 
@@ -117,11 +119,14 @@ const (
 	CheckEquals   CheckKind = "equals"
 	CheckMatches  CheckKind = "matches"
 	CheckMissing  CheckKind = "missing"
+	// CheckEqualsJSON compares a member holding a JSON document by value. Its
+	// operand is a literal object or array and is never evaluated.
+	CheckEqualsJSON CheckKind = "equalsJSON"
 )
 
 // Check is exactly one check against one response path. Value carries the
-// `equals` value expression or the `matches` pattern; the three boolean checks
-// leave it nil.
+// `equals` value expression, the `matches` pattern or the `equalsJSON`
+// document; the three boolean checks leave it nil.
 //
 // It is decoded by hand rather than as a struct of optional fields because
 // `{"equals": null}` is a legal check — the IR's Value admits null — and a
@@ -138,7 +143,7 @@ func (c *Check) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	if len(raw) != 1 {
-		return fmt.Errorf("check must carry exactly one of nonEmpty/isList/equals/matches/missing, got %d entries", len(raw))
+		return fmt.Errorf("check must carry exactly one of nonEmpty/isList/equals/matches/equalsJSON/missing, got %d entries", len(raw))
 	}
 	for k, v := range raw {
 		switch CheckKind(k) {
@@ -146,8 +151,59 @@ func (c *Check) UnmarshalJSON(b []byte) error {
 			c.Kind, c.Value = CheckKind(k), nil
 		case CheckEquals, CheckMatches:
 			c.Kind, c.Value = CheckKind(k), v
+		case CheckEqualsJSON:
+			// Refused here, at load, rather than when the check runs: a bad
+			// operand is the generator's bug, and a load error fails the whole
+			// group naming the file instead of one check failing on a document
+			// nobody meant.
+			if err := checkEqualsJSONOperand(v); err != nil {
+				return fmt.Errorf("equalsJSON: %w", err)
+			}
+			c.Kind, c.Value = CheckEqualsJSON, v
 		default:
 			return fmt.Errorf("unknown check %q", k)
+		}
+	}
+	return nil
+}
+
+// checkEqualsJSONOperand refuses an equalsJSON operand that is not a literal
+// JSON object or array (compat/model/README.md § Assertions). A `$`-prefixed
+// key at any depth is refused too: the operand is never evaluated, so an
+// object the rest of the IR would read as an expression — {"$ref": ...} — is
+// ambiguous here, and refusing it beats reading it either way.
+func checkEqualsJSONOperand(v any) error {
+	switch v.(type) {
+	case map[string]any, []any:
+	default:
+		return fmt.Errorf("the operand must be a JSON object or array, got %s", render(v))
+	}
+	return refuseDollarKeys(v)
+}
+
+// refuseDollarKeys walks a decoded JSON value for an object key starting with
+// `$`, in key order so the error names the same key on every run.
+func refuseDollarKeys(v any) error {
+	switch t := v.(type) {
+	case map[string]any:
+		keys := make([]string, 0, len(t))
+		for k := range t {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			if strings.HasPrefix(k, "$") {
+				return fmt.Errorf("the operand is a literal document and is never evaluated, so its key %q may not start with $", k)
+			}
+			if err := refuseDollarKeys(t[k]); err != nil {
+				return err
+			}
+		}
+	case []any:
+		for _, item := range t {
+			if err := refuseDollarKeys(item); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

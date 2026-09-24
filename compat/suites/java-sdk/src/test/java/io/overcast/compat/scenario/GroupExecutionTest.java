@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
 import software.amazon.awssdk.http.SdkHttpResponse;
+import software.amazon.awssdk.services.iam.model.GetRoleResponse;
+import software.amazon.awssdk.services.iam.model.Role;
 import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
 import software.amazon.awssdk.services.sqs.model.CreateQueueResponse;
 import software.amazon.awssdk.services.sqs.model.GetQueueAttributesRequest;
@@ -195,6 +197,31 @@ class GroupExecutionTest {
 
         // A present value that is not a list fails isList.
         assertFails(page, Check.isList("$.QueueUrls[0]"));
+    }
+
+    /**
+     * {@code equalsJSON} through the group, on the member it exists for: IAM
+     * hands this SDK the role's trust policy as the percent-encoded text the
+     * service sent, and the check decodes and compares it as a document.
+     */
+    @Test
+    void equalsJsonComparesTheMembersDocument() {
+        Object response = GetRoleResponse.builder().role(Role.builder()
+                .assumeRolePolicyDocument("%7B%22Version%22%3A%222012-10-17%22%2C%22Statement%22%3A%5B%5D%7D")
+                .build()).build();
+        assertHolds(response, Check.equalsJson("$.Role.AssumeRolePolicyDocument",
+                "{\"Statement\":[],\"Version\":\"2012-10-17\"}"));
+
+        AssertionError e = assertThrows(AssertionError.class, () -> GROUP.runTest(ctx(), "Probe", probe(response),
+                List.of(Clause.responseField(Check.equalsJson("$.Role.AssumeRolePolicyDocument",
+                        "{\"Version\":\"2008-10-17\"}")))));
+        assertTrue(e.getMessage().contains("responseField equalsJSON at $.Role.AssumeRolePolicyDocument:"
+                + " expected equalsJSON {\"Version\":\"2008-10-17\"},"
+                + " actual document {\"Statement\":[],\"Version\":\"2012-10-17\"}"), e.getMessage());
+
+        e = assertThrows(AssertionError.class, () -> GROUP.runTest(ctx(), "Probe", probe(response),
+                List.of(Clause.responseField(Check.equalsJson("$.Role.Description", "{}")))));
+        assertTrue(e.getMessage().contains("expected equalsJSON {}, actual <missing>"), e.getMessage());
     }
 
     /**

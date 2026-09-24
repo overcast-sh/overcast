@@ -55,6 +55,8 @@ func TestResponseFieldChecks(t *testing.T) {
 		"Items":  []any{},
 		"Nested": obj{"Arn": "arn:aws:widgets::1234:thing/t-1"},
 		"Null":   nil,
+		"Policy": "%7B%22b%22%3A%5B1%5D%2C%22a%22%3A%22x%2By%22%7D",
+		"Doc":    obj{"b": []any{float64(1)}, "a": "x+y"},
 	}
 	script := map[string][]fakeResult{"get-thing": {ok(body)}}
 	field := func(path string, check obj) obj {
@@ -87,6 +89,13 @@ func TestResponseFieldChecks(t *testing.T) {
 		// with the same six fields and the same phrase the sibling
 		// interpreters use — never an exception out of the evaluator.
 		{name: "matches reports a pattern the engine rejects", clause: field("$.Id", obj{"matches": `a(b`}), script: script, wantErr: "unsupported pattern: "},
+
+		{name: "equalsJSON holds on percent-encoded text", clause: field("$.Policy", obj{"equalsJSON": obj{"a": "x+y", "b": []any{float64(1)}}}), script: script},
+		{name: "equalsJSON holds on a decoded object", clause: field("$.Doc", obj{"equalsJSON": obj{"a": "x+y", "b": []any{float64(1)}}}), script: script},
+		{name: "equalsJSON fails naming the document", clause: field("$.Policy", obj{"equalsJSON": obj{"a": "x y"}}),
+			script: script, wantErr: `responseField equalsJSON at $.Policy: expected equalsJSON {"a":"x y"}, actual document {"a":"x+y","b":[1]}`},
+		{name: "equalsJSON fails on a non-document", clause: field("$.Count", obj{"equalsJSON": obj{}}), script: script, wantErr: "actual not a JSON document: 0"},
+		{name: "equalsJSON fails when absent", clause: field("$.Nope", obj{"equalsJSON": obj{}}), script: script, wantErr: "actual " + missingValue},
 
 		{name: "missing holds when absent", clause: field("$.Nope", obj{"missing": true}), script: script},
 		{name: "missing holds for a deep absent segment", clause: field("$.Nested.Nope.Deep", obj{"missing": true}), script: script},

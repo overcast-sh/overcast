@@ -15,8 +15,16 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from .executor import Executor, StepRef, describe_error, error_matches
-from .expressions import is_non_empty, json_equal, resolve_path
-from .failures import MISSING, ScenarioError, ScenarioFailure, render, render_clipped
+from .expressions import (
+    as_json_document,
+    check_equals_json_operand,
+    compact_json,
+    is_non_empty,
+    json_document_equal,
+    json_equal,
+    resolve_path,
+)
+from .failures import MISSING, ScenarioError, ScenarioFailure, clip, render, render_clipped
 
 
 @dataclass
@@ -219,9 +227,10 @@ def _run_checks(ex: Executor, checks: dict, response: dict, ref: StepRef,
         value = resolve_path(response, path)
         name, argument = next(iter(check.items()))
         try:
-            expected, holds = _check(name, argument, value, ex)
+            expected, holds, actual = _check(name, argument, value, ex)
         except ScenarioError as exc:
-            # An `equals` whose expected value is a $ref nothing exported.
+            # An `equals` whose expected value is a $ref nothing exported, or
+            # an `equalsJSON` operand the loader should already have refused.
             raise ex.fail(
                 ref=ref, op=op, params=params, assertion=assertion, path=path,
                 expected=f"{name} {render(argument)}, once evaluated",
@@ -240,28 +249,52 @@ def _run_checks(ex: Executor, checks: dict, response: dict, ref: StepRef,
         if not holds:
             raise ex.fail(
                 ref=ref, op=op, params=params, assertion=assertion, path=path,
-                expected=expected, actual=render_clipped(value),
+                expected=expected,
+                actual=render_clipped(value) if actual is None else actual,
             )
 
 
-def _check(name: str, argument: Any, value: Any, ex: Executor) -> tuple[str, bool]:
-    """One check: its "expected" description, and whether it holds."""
+def _check(name: str, argument: Any, value: Any,
+           ex: Executor) -> tuple[str, bool, Optional[str]]:
+    """One check: its "expected" description, whether it holds, and its own
+    "actual" description when the plain rendering of the value is not it."""
     if name == "nonEmpty":
-        return "a value that is not null, \"\", [] or {}", is_non_empty(value)
+        return "a value that is not null, \"\", [] or {}", is_non_empty(value), None
     if name == "isList":
         # True of a list, empty or not, and true of a member the service
         # omitted rather than serializing as []. A present non-list fails.
         return ("a list, empty or absent",
-                value is MISSING or isinstance(value, list))
+                value is MISSING or isinstance(value, list), None)
     if name == "equals":
         expected = ex.evaluate(argument)
-        return f"equals {render(expected)}", json_equal(value, expected)
+        return f"equals {render(expected)}", json_equal(value, expected), None
+    if name == "equalsJSON":
+        return _equals_json(argument, value)
     if name == "matches":
         # Compiled before the value is looked at, so a pattern `re` rejects is
         # reported as an unsupported pattern whatever the response held.
         pattern = re.compile(argument)
         return (f"matches /{argument}/",
-                isinstance(value, str) and pattern.search(value) is not None)
+                isinstance(value, str) and pattern.search(value) is not None, None)
     if name == "missing":
-        return "the path not to resolve", value is MISSING
+        return "the path not to resolve", value is MISSING, None
     raise ScenarioFailure(f"unknown check {name!r}")
+
+
+def _equals_json(operand: Any, value: Any) -> tuple[str, bool, Optional[str]]:
+    """``equalsJSON``: the value is a JSON document equal to the operand.
+
+    The operand is never evaluated — it is a literal document. botocore has
+    already decoded an IAM policy member into a dict, which is the document as
+    it stands; a string is percent-decoded once and parsed. The actual side is
+    the decoded document, so a reader compares two documents rather than a
+    percent-encoded string with an object."""
+    check_equals_json_operand(operand)
+    expected = f"equalsJSON {compact_json(operand)}"
+    if value is MISSING:
+        return expected, False, render(value)
+    is_document, document = as_json_document(value)
+    if not is_document:
+        return expected, False, f"not a JSON document: {render_clipped(value)}"
+    return (expected, json_document_equal(document, operand),
+            f"document {clip(compact_json(document))}")

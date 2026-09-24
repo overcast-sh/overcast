@@ -14,7 +14,10 @@ from __future__ import annotations
 
 import base64
 import binascii
+import json
+import math
 import re
+import urllib.parse
 from typing import Any, Mapping, Optional, Sequence, Union
 
 from .failures import MISSING, ScenarioError
@@ -270,6 +273,102 @@ def json_equal(a: Any, b: Any) -> bool:
     if isinstance(a, list) != isinstance(b, list):
         return False
     return a == b
+
+
+# ── equalsJSON ───────────────────────────────────────────────────────────────
+#
+# compat/model/README.md § Documents in a string: a member whose content is a
+# JSON document is compared as a document, not as text, because botocore hands
+# this suite an IAM policy already decoded to a dict while five other backends
+# see the percent-encoded string. compat/model/testdata/equalsjson pins it.
+
+
+def check_equals_json_operand(operand: Any) -> None:
+    """Refuse an ``equalsJSON`` operand that is not a literal JSON object or
+    array, or that has a ``$``-prefixed key at any depth. The operand is never
+    evaluated, so such a key could only be read one way or the other by
+    guessing; it is refused instead."""
+    if isinstance(operand, bool) or not isinstance(operand, (Mapping, list)):
+        raise ScenarioError(
+            f"equalsJSON takes a JSON object or array, got {operand!r}")
+    _refuse_dollar_keys(operand)
+
+
+def _refuse_dollar_keys(value: Any) -> None:
+    if isinstance(value, Mapping):
+        for key, member in value.items():
+            if isinstance(key, str) and key.startswith("$"):
+                raise ScenarioError(
+                    f"equalsJSON's operand is a literal document and is never "
+                    f"evaluated, so it may not hold the key {key!r}")
+            _refuse_dollar_keys(member)
+    elif isinstance(value, list):
+        for member in value:
+            _refuse_dollar_keys(member)
+
+
+def percent_decode(text: str) -> str:
+    """``%XX`` becomes that byte, ``+`` stays ``+``, a ``%`` not followed by
+    two hex digits is kept, and the bytes are read as UTF-8 — once. This is
+    exactly ``urllib.parse.unquote``, which is what botocore's
+    ``json_decode_policies`` applies, so it is used rather than restated."""
+    return urllib.parse.unquote(text, encoding="utf-8", errors="replace")
+
+
+def _refuse_constant(name: str) -> Any:
+    # `json` reads NaN and Infinity by default; neither is JSON.
+    raise ValueError(f"{name} is not JSON")
+
+
+def as_json_document(value: Any) -> tuple[bool, Any]:
+    """The document the value at an ``equalsJSON`` path holds, as ``(True,
+    document)``, or ``(False, None)`` when it holds none.
+
+    A string is percent-decoded once and parsed as one JSON text; ``json.loads``
+    already allows JSON whitespace around it and refuses anything else after
+    it. A dict or a list is the document already — botocore decoded it. Any
+    other value (a number, a boolean, ``None``, :data:`MISSING`) is not one."""
+    if isinstance(value, str):
+        try:
+            return True, json.loads(percent_decode(value), parse_constant=_refuse_constant)
+        except ValueError:
+            return False, None
+    if isinstance(value, (Mapping, list)):
+        return True, value
+    return False, None
+
+
+def json_document_equal(a: Any, b: Any) -> bool:
+    """Two documents are the same JSON value. Unlike :func:`json_equal` this
+    compares numbers as IEEE-754 doubles, as every other backend does, rather
+    than with Python's exact int/float comparison: ``2**53 + 1`` and
+    ``2**53`` are one double. A ``bool`` is an ``int`` to Python and never a
+    number to JSON."""
+    if isinstance(a, bool) or isinstance(b, bool):
+        return isinstance(a, bool) and isinstance(b, bool) and a is b
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+        return _as_double(a) == _as_double(b)
+    if isinstance(a, Mapping) and isinstance(b, Mapping):
+        return a.keys() == b.keys() and all(json_document_equal(a[k], b[k]) for k in a)
+    if isinstance(a, list) and isinstance(b, list):
+        return len(a) == len(b) and all(json_document_equal(x, y) for x, y in zip(a, b))
+    if isinstance(a, str) and isinstance(b, str):
+        return a == b
+    return a is None and b is None
+
+
+def _as_double(n: Any) -> float:
+    try:
+        return float(n)
+    except OverflowError:
+        # An int past the largest double is what a JSON parser that reads
+        # doubles would make infinite.
+        return math.inf if n > 0 else -math.inf
+
+
+def compact_json(document: Any) -> str:
+    """A document as the failure message shows it: compact, members sorted."""
+    return json.dumps(document, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
 def is_non_empty(value: Any) -> bool:

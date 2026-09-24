@@ -113,7 +113,9 @@ it.
 One case needs a checkout rather than the image. The shared error-matching
 conformance fixtures live in `compat/model/testdata/errors`, outside the
 `compat/suites` build context, so in the image build
-`src/scenario/errorfixtures.rs` says so on stderr and returns. `test.yml`'s
+`src/scenario/errorfixtures.rs` says so on stderr and returns — as do
+`nowfixtures.rs` and `equalsjsonfixtures.rs` for the `$now` and `equalsJSON`
+fixtures beside them in `compat/model/testdata`. `test.yml`'s
 `compat-suite-unit-tests` job runs `cargo test` from a full checkout beside the
 other suites' unit tests, which is where those fixtures are really answered.
 

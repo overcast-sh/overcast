@@ -94,7 +94,11 @@ def render(value: Any) -> str:
 def render_clipped(value: Any, limit: int = _MAX_VALUE_CHARS) -> str:
     """:func:`render`, clipped. For a value a message shows for orientation
     rather than for retyping."""
-    text = render(value)
+    return clip(render(value), limit)
+
+
+def clip(text: str, limit: int = _MAX_VALUE_CHARS) -> str:
+    """Text already rendered, clipped the way :func:`render_clipped` clips."""
     if len(text) <= limit:
         return text
     return text[:limit] + f"... ({len(text)} chars total)"
