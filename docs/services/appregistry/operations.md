@@ -1,6 +1,6 @@
 ---
 title: "AppRegistry operations"
-description: "Every AppRegistry operation Overcast declares — 22 of 22 implemented — with status, behaviour notes and a link to the AWS API reference for each."
+description: "Every AppRegistry operation Overcast declares — 24 of 24 implemented — with status, behaviour notes and a link to the AWS API reference for each."
 section: "Service Reference"
 tags:
   - appregistry
@@ -13,7 +13,7 @@ tags:
 
 # AppRegistry operations
 
-All 22 listed operations are implemented. Back to [AppRegistry](../appregistry.md).
+All 24 listed operations are implemented. Back to [AppRegistry](../appregistry.md).
 
 ## Summary
 
@@ -23,7 +23,7 @@ All 22 listed operations are implemented. Back to [AppRegistry](../appregistry.m
 | Resource associations    | 4            |
 | Attribute groups         | 8            |
 | Tagging                  | 3            |
-| CloudFormation resources | 2            |
+| CloudFormation resources | 4            |
 
 ---
 
@@ -71,10 +71,12 @@ All 22 listed operations are implemented. Back to [AppRegistry](../appregistry.m
 
 ### CloudFormation resources
 
-| Operation                                             | Status       | Notes                                                                                                    | AWS Docs                                                                                                                               |
-| ----------------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `AWS::ServiceCatalogAppRegistry::Application`         | ✅ Supported | `GetAtt` attributes: `Id`, `Arn`, `Name`, `ApplicationName`, `ApplicationTagKey`, `ApplicationTagValue`. | [docs](https://docs.aws.amazon.com/servicecatalog/latest/dg/API_app-registry_AWS::ServiceCatalogAppRegistry::Application.html)         |
-| `AWS::ServiceCatalogAppRegistry::ResourceAssociation` | ✅ Supported | Physical ID is `<appId>/<resourceType>/<resource>`.                                                      | [docs](https://docs.aws.amazon.com/servicecatalog/latest/dg/API_app-registry_AWS::ServiceCatalogAppRegistry::ResourceAssociation.html) |
+| Operation                                                   | Status       | Notes                                                                                                                                                                                                | AWS Docs                                                                                                                                     |
+| ----------------------------------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AWS::ServiceCatalogAppRegistry::Application`               | ✅ Supported | `GetAtt` attributes: `Id`, `Arn`, `Name`, `ApplicationName`, `ApplicationTagKey`, `ApplicationTagValue`. Tags merge with stack tags on create and reconcile via TagResource/UntagResource on update. | [docs](https://docs.aws.amazon.com/servicecatalog/latest/dg/API_app-registry_AWS::ServiceCatalogAppRegistry::Application.html)               |
+| `AWS::ServiceCatalogAppRegistry::ResourceAssociation`       | ✅ Supported | Physical ID is `<appId>/<resourceType>/<resource>`.                                                                                                                                                  | [docs](https://docs.aws.amazon.com/servicecatalog/latest/dg/API_app-registry_AWS::ServiceCatalogAppRegistry::ResourceAssociation.html)       |
+| `AWS::ServiceCatalogAppRegistry::AttributeGroup`            | ✅ Supported | `GetAtt` attributes: `Id`, `Arn`. Tags merge with stack tags on create and reconcile via TagResource/UntagResource on update.                                                                        | [docs](https://docs.aws.amazon.com/servicecatalog/latest/dg/API_app-registry_AWS::ServiceCatalogAppRegistry::AttributeGroup.html)            |
+| `AWS::ServiceCatalogAppRegistry::AttributeGroupAssociation` | ✅ Supported | Physical ID is `<appId>/<attributeGroupId>`. Both properties are replacement-only, so Update always replaces.                                                                                        | [docs](https://docs.aws.amazon.com/servicecatalog/latest/dg/API_app-registry_AWS::ServiceCatalogAppRegistry::AttributeGroupAssociation.html) |
 
 ## Related
 

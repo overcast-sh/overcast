@@ -1,6 +1,6 @@
 {
   "generated_by": "go run -tags dev ./cmd/capgen --write-docs",
-  "total_ops": 1602,
+  "total_ops": 1604,
   "services": [
     {
       "service": "s3",
@@ -5737,7 +5737,7 @@
           "operation": "CreateDBInstance",
           "category": "DB instances",
           "status": "✅ Supported",
-          "notes": "Docker-backed when available; async creating→available; mysql/postgres/mariadb/aurora-mysql/aurora-postgresql; master accounts can create databases/users and grant privileges; omitted `DBName` creates no MySQL/MariaDB database; Aurora members use cluster-owned placement, credentials, version, port, and database; omitted `PubliclyAccessible` defaults to false for Aurora and otherwise follows subnet placement; `ManageMasterUserPassword` generates a password and creates a Secrets Manager secret (`rds!db-\u003cuuid\u003e`), returned as `MasterUserSecret`; `Tags` applied via the shared tag store"
+          "notes": "Docker-backed when available; async creating→available; mysql/postgres/mariadb/aurora-mysql/aurora-postgresql; master accounts can create databases/users and grant privileges; omitted `DBName` creates no MySQL/MariaDB database; Aurora members use cluster-owned placement, credentials, version, port, and database; omitted `PubliclyAccessible` defaults to false for Aurora and otherwise follows subnet placement; `ManageMasterUserPassword` generates a password and creates a Secrets Manager secret (`rds!db-\u003cuuid\u003e`), returned as `MasterUserSecret`; `Tags` applied via the shared tag store; `StorageEncrypted`, `KmsKeyId`, `DeletionProtection`, `BackupRetentionPeriod`, `PreferredBackupWindow`, `PreferredMaintenanceWindow`, `AutoMinorVersionUpgrade`, `Iops`, `AvailabilityZone`, `EnableIAMDatabaseAuthentication`, `CACertificateIdentifier`, `MonitoringInterval`, `EnablePerformanceInsights`, `EnableCloudwatchLogsExports` and `CopyTagsToSnapshot` are accepted, stored and echoed back with AWS's own defaults where unset"
         },
         {
           "operation": "DescribeDBInstances",
@@ -5749,7 +5749,7 @@
           "operation": "DeleteDBInstance",
           "category": "DB instances",
           "status": "✅ Supported",
-          "notes": "Sets status to \"deleting\"; stops+removes Docker container; deletes the instance's own Secrets Manager secret when `ManageMasterUserPassword` was set (never a secret inherited from an Aurora cluster)"
+          "notes": "Sets status to \"deleting\"; stops+removes Docker container; deletes the instance's own Secrets Manager secret when `ManageMasterUserPassword` was set (never a secret inherited from an Aurora cluster); refuses an instance with `DeletionProtection` enabled"
         },
         {
           "operation": "StopDBInstance",
@@ -5767,7 +5767,7 @@
           "operation": "ModifyDBInstance",
           "category": "DB instances",
           "status": "✅ Supported",
-          "notes": "Metadata updates (class, storage, engine version, multi-AZ, public accessibility); `MasterUserPassword` is applied to the running engine, requires an `available` instance, and uses RDS's engine-specific length and forbidden-character rules; `ManageMasterUserPassword` turns the managed-secret path on (generating a new password) or off (requires `MasterUserPassword`)"
+          "notes": "Metadata updates (class, storage, engine version, multi-AZ, public accessibility); `MasterUserPassword` is applied to the running engine, requires an `available` instance, and uses RDS's engine-specific length and forbidden-character rules; `ManageMasterUserPassword` turns the managed-secret path on (generating a new password) or off (requires `MasterUserPassword`); `DeletionProtection`, `BackupRetentionPeriod`, `PreferredBackupWindow`, `PreferredMaintenanceWindow`, `AutoMinorVersionUpgrade`, `Iops`, `EnableIAMDatabaseAuthentication`, `CACertificateIdentifier`, `MonitoringInterval`, `EnablePerformanceInsights`, `CloudwatchLogsExportConfiguration` and `CopyTagsToSnapshot` are applied and echoed back; `StorageEncrypted`/`KmsKeyId`/`AvailabilityZone` are create-only, as on AWS"
         },
         {
           "operation": "RebootDBInstance",
@@ -5815,7 +5815,7 @@
           "operation": "CreateDBCluster",
           "category": "Aurora clusters",
           "status": "✅ Supported",
-          "notes": "aurora-mysql and aurora-postgresql only; logical cluster, Docker started on first instance; `ManageMasterUserPassword` generates a password and creates a Secrets Manager secret (`rds!cluster-\u003cuuid\u003e`), returned as `MasterUserSecret` and inherited by every member instance; `Tags` applied via the shared tag store"
+          "notes": "aurora-mysql and aurora-postgresql only; logical cluster, Docker started on first instance; `ManageMasterUserPassword` generates a password and creates a Secrets Manager secret (`rds!cluster-\u003cuuid\u003e`), returned as `MasterUserSecret` and inherited by every member instance; `Tags` applied via the shared tag store; `StorageEncrypted`, `KmsKeyId`, `EnableHttpEndpoint` and `ServerlessV2ScalingConfiguration` are accepted, stored and echoed back"
         },
         {
           "operation": "DescribeDBClusters",
@@ -5833,7 +5833,7 @@
           "operation": "ModifyDBCluster",
           "category": "Aurora clusters",
           "status": "✅ Supported",
-          "notes": "`MasterUserPassword` applied to every member's engine; engine version, port and `DeletionProtection` applied; backup/maintenance windows, cluster parameter group, security groups and log exports recorded; `ManageMasterUserPassword` turns the managed-secret path on or off the same way ModifyDBInstance does"
+          "notes": "`MasterUserPassword` applied to every member's engine; engine version, port and `DeletionProtection` applied; backup/maintenance windows, cluster parameter group, security groups and log exports recorded; `ManageMasterUserPassword` turns the managed-secret path on or off the same way ModifyDBInstance does; `EnableHttpEndpoint` and `ServerlessV2ScalingConfiguration` are applied and echoed back; `StorageEncrypted`/`KmsKeyId` are create-only, as on AWS"
         },
         {
           "operation": "StartDBCluster",
@@ -8640,8 +8640,8 @@
     {
       "service": "appregistry",
       "display_name": "AppRegistry",
-      "total_ops": 22,
-      "implemented_ops": 22,
+      "total_ops": 24,
+      "implemented_ops": 24,
       "operations": [
         {
           "operation": "CreateApplication",
@@ -8764,7 +8764,7 @@
           "operation": "AWS::ServiceCatalogAppRegistry::Application",
           "category": "CloudFormation resources",
           "status": "✅ Supported",
-          "notes": "`GetAtt` attributes: `Id`, `Arn`, `Name`, `ApplicationName`, `ApplicationTagKey`, `ApplicationTagValue`.",
+          "notes": "`GetAtt` attributes: `Id`, `Arn`, `Name`, `ApplicationName`, `ApplicationTagKey`, `ApplicationTagValue`. Tags merge with stack tags on create and reconcile via TagResource/UntagResource on update.",
           "doc_only": true
         },
         {
@@ -8772,6 +8772,20 @@
           "category": "CloudFormation resources",
           "status": "✅ Supported",
           "notes": "Physical ID is `\u003cappId\u003e/\u003cresourceType\u003e/\u003cresource\u003e`.",
+          "doc_only": true
+        },
+        {
+          "operation": "AWS::ServiceCatalogAppRegistry::AttributeGroup",
+          "category": "CloudFormation resources",
+          "status": "✅ Supported",
+          "notes": "`GetAtt` attributes: `Id`, `Arn`. Tags merge with stack tags on create and reconcile via TagResource/UntagResource on update.",
+          "doc_only": true
+        },
+        {
+          "operation": "AWS::ServiceCatalogAppRegistry::AttributeGroupAssociation",
+          "category": "CloudFormation resources",
+          "status": "✅ Supported",
+          "notes": "Physical ID is `\u003cappId\u003e/\u003cattributeGroupId\u003e`. Both properties are replacement-only, so Update always replaces.",
           "doc_only": true
         }
       ]

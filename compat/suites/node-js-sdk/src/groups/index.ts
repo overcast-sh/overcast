@@ -13,7 +13,6 @@ import { makeSQSGroups } from "./sqs.ts";
 import { makeDynamoDBGroups } from "./dynamodb.ts";
 import { makeSNSGroups } from "./sns.ts";
 import { makeLambdaGroups } from "./lambda.ts";
-import { makeCloudWatchLogsGroups } from "./cloudwatch-logs.ts";
 import { makeSESGroups } from "./ses.ts";
 import { makeIAMGroups } from "./iam.ts";
 import { makeSTSGroups } from "./sts.ts";
@@ -47,7 +46,6 @@ export function makeAllGroups(suite: string): TestGroup[] {
     ...makeDynamoDBGroups(suite),
     ...makeSNSGroups(suite),
     ...makeLambdaGroups(suite),
-    ...makeCloudWatchLogsGroups(suite),
     ...makeSESGroups(suite),
     ...makeIAMGroups(suite),
     ...makeSTSGroups(suite),

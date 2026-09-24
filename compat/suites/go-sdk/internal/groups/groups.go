@@ -45,7 +45,6 @@ func handWritten(c *clients.Clients) []ServiceGroup {
 		DynamoDB(c).named("dynamodb"),
 		SNS(c).named("sns"),
 		Lambda(c).named("lambda"),
-		CloudWatchLogs(c).named("cloudwatch-logs"),
 		SES(c).named("ses"),
 		IAM(c).named("iam"),
 		STS(c).named("sts"),

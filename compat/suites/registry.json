@@ -883,6 +883,7 @@
     {
       "service": "cloudwatch-logs",
       "name": "logs-events",
+      "scenario": "compat/model/authored/logs-events.json",
       "tests": [
         {
           "name": "PutLogEvents"

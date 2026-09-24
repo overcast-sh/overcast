@@ -34,7 +34,6 @@ func All() []ServiceGroup {
 		DynamoDB().named("dynamodb"),
 		SNS().named("sns"),
 		Lambda().named("lambda"),
-		CloudWatchLogs().named("cloudwatch-logs"),
 		SES().named("ses"),
 		IAM().named("iam"),
 		STS().named("sts"),

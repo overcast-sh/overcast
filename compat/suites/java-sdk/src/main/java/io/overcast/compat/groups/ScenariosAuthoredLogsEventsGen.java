@@ -33,8 +33,8 @@ import software.amazon.awssdk.services.cloudwatchlogs.model.PutLogEventsRequest;
  */
 public final class ScenariosAuthoredLogsEventsGen implements ServiceGroup {
 
-    private static final Group GROUP_LOGS_EVENTS_SHADOW =
-            new Group("logs-events-shadow", "compat/model/authored/logs-events.json");
+    private static final Group GROUP_LOGS_EVENTS =
+            new Group("logs-events", "compat/model/authored/logs-events.json");
 
     private final AwsClients clients;
     private volatile CloudWatchLogsClient client;
@@ -51,23 +51,23 @@ public final class ScenariosAuthoredLogsEventsGen implements ServiceGroup {
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("logs-events-shadow:PutLogEvents", this::testLogsEventsShadowPutLogEvents),
-                Map.entry("logs-events-shadow:GetLogEvents", this::testLogsEventsShadowGetLogEvents),
-                Map.entry("logs-events-shadow:FilterLogEvents", this::testLogsEventsShadowFilterLogEvents),
-                Map.entry("logs-events-shadow:DescribeLogStreams", this::testLogsEventsShadowDescribeLogStreams),
-                Map.entry("logs-events-shadow:DeleteLogStream", this::testLogsEventsShadowDeleteLogStream));
+                Map.entry("logs-events:PutLogEvents", this::testLogsEventsPutLogEvents),
+                Map.entry("logs-events:GetLogEvents", this::testLogsEventsGetLogEvents),
+                Map.entry("logs-events:FilterLogEvents", this::testLogsEventsFilterLogEvents),
+                Map.entry("logs-events:DescribeLogStreams", this::testLogsEventsDescribeLogStreams),
+                Map.entry("logs-events:DeleteLogStream", this::testLogsEventsDeleteLogStream));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("logs-events-shadow", this::setupLogsEventsShadow));
+                Map.entry("logs-events", this::setupLogsEvents));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("logs-events-shadow", this::teardownLogsEventsShadow));
+                Map.entry("logs-events", this::teardownLogsEvents));
     }
 
     /**
@@ -87,8 +87,8 @@ public final class ScenariosAuthoredLogsEventsGen implements ServiceGroup {
         return client;
     }
 
-    private void setupLogsEventsShadow(TestContext t) {
-        GROUP_LOGS_EVENTS_SHADOW.runSetup(t,
+    private void setupLogsEvents(TestContext t) {
+        GROUP_LOGS_EVENTS.runSetup(t,
                 new Call("CreateLogGroup", "{\"logGroupName\":{\"$name\":\"group\"}}",
                         b -> CreateLogGroupRequest.builder()
                                 .logGroupName(b.string("logGroupName", Values.name("group")))
@@ -102,8 +102,8 @@ public final class ScenariosAuthoredLogsEventsGen implements ServiceGroup {
                         r -> cl().createLogStream((CreateLogStreamRequest) r)));
     }
 
-    private void teardownLogsEventsShadow(TestContext t) {
-        GROUP_LOGS_EVENTS_SHADOW.runTeardown(t,
+    private void teardownLogsEvents(TestContext t) {
+        GROUP_LOGS_EVENTS.runTeardown(t,
                 new Call("DeleteLogGroup", "{\"logGroupName\":{\"$name\":\"group\"}}",
                         b -> DeleteLogGroupRequest.builder()
                                 .logGroupName(b.string("logGroupName", Values.name("group")))
@@ -111,8 +111,8 @@ public final class ScenariosAuthoredLogsEventsGen implements ServiceGroup {
                         r -> cl().deleteLogGroup((DeleteLogGroupRequest) r)));
     }
 
-    private void testLogsEventsShadowPutLogEvents(TestContext t) {
-        GROUP_LOGS_EVENTS_SHADOW.runTest(t, "PutLogEvents",
+    private void testLogsEventsPutLogEvents(TestContext t) {
+        GROUP_LOGS_EVENTS.runTest(t, "PutLogEvents",
                 new Call("PutLogEvents", "{\"logEvents\":[{\"message\":\"event one\",\"timestamp\":{\"$now\":{\"offsetMillis\":-2,\"unit\":\"epochMillis\"}}},{\"message\":\"event two\",\"timestamp\":{\"$now\":{\"offsetMillis\":-1,\"unit\":\"epochMillis\"}}},{\"message\":\"{\\\"level\\\":\\\"info\\\",\\\"msg\\\":\\\"structured\\\"}\",\"timestamp\":{\"$now\":{\"unit\":\"epochMillis\"}}}],\"logGroupName\":{\"$name\":\"group\"},\"logStreamName\":{\"$name\":\"stream\"}}",
                         b -> PutLogEventsRequest.builder()
                                 .logEvents(List.of(InputLogEvent.builder().message("event one").timestamp(b.longValue("logEvents", Values.now("epochMillis", -2L))).build(), InputLogEvent.builder().message("event two").timestamp(b.longValue("logEvents", Values.now("epochMillis", -1L))).build(), InputLogEvent.builder().message("{\"level\":\"info\",\"msg\":\"structured\"}").timestamp(b.longValue("logEvents", Values.now("epochMillis", 0L))).build()))
@@ -163,8 +163,8 @@ public final class ScenariosAuthoredLogsEventsGen implements ServiceGroup {
                 ));
     }
 
-    private void testLogsEventsShadowGetLogEvents(TestContext t) {
-        GROUP_LOGS_EVENTS_SHADOW.runTest(t, "GetLogEvents",
+    private void testLogsEventsGetLogEvents(TestContext t) {
+        GROUP_LOGS_EVENTS.runTest(t, "GetLogEvents",
                 new Call("GetLogEvents", "{\"logGroupName\":{\"$name\":\"group\"},\"logStreamName\":{\"$name\":\"stream\"},\"startFromHead\":true}",
                         b -> GetLogEventsRequest.builder()
                                 .logGroupName(b.string("logGroupName", Values.name("group")))
@@ -189,8 +189,8 @@ public final class ScenariosAuthoredLogsEventsGen implements ServiceGroup {
                 ));
     }
 
-    private void testLogsEventsShadowFilterLogEvents(TestContext t) {
-        GROUP_LOGS_EVENTS_SHADOW.runTest(t, "FilterLogEvents",
+    private void testLogsEventsFilterLogEvents(TestContext t) {
+        GROUP_LOGS_EVENTS.runTest(t, "FilterLogEvents",
                 new Call("FilterLogEvents", "{\"filterPattern\":\"event two\",\"logGroupName\":{\"$name\":\"group\"}}",
                         b -> FilterLogEventsRequest.builder()
                                 .filterPattern("event two")
@@ -234,8 +234,8 @@ public final class ScenariosAuthoredLogsEventsGen implements ServiceGroup {
                 ));
     }
 
-    private void testLogsEventsShadowDescribeLogStreams(TestContext t) {
-        GROUP_LOGS_EVENTS_SHADOW.runTest(t, "DescribeLogStreams",
+    private void testLogsEventsDescribeLogStreams(TestContext t) {
+        GROUP_LOGS_EVENTS.runTest(t, "DescribeLogStreams",
                 new Call("DescribeLogStreams", "{\"logGroupName\":{\"$name\":\"group\"}}",
                         b -> DescribeLogStreamsRequest.builder()
                                 .logGroupName(b.string("logGroupName", Values.name("group")))
@@ -250,8 +250,8 @@ public final class ScenariosAuthoredLogsEventsGen implements ServiceGroup {
                 ));
     }
 
-    private void testLogsEventsShadowDeleteLogStream(TestContext t) {
-        GROUP_LOGS_EVENTS_SHADOW.runTest(t, "DeleteLogStream",
+    private void testLogsEventsDeleteLogStream(TestContext t) {
+        GROUP_LOGS_EVENTS.runTest(t, "DeleteLogStream",
                 new Call("DeleteLogStream", "{\"logGroupName\":{\"$name\":\"group\"},\"logStreamName\":{\"$name\":\"stream\"}}",
                         b -> DeleteLogStreamRequest.builder()
                                 .logGroupName(b.string("logGroupName", Values.name("group")))

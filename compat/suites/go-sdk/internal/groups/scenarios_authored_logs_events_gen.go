@@ -24,17 +24,17 @@ func ScenariosAuthoredLogsEvents(c *clients.Clients) ServiceGroup {
 	return ServiceGroup{
 		Name: "scenarios/authored-logs-events",
 		Impls: map[string]harness.TestFn{
-			"logs-events-shadow:PutLogEvents":       g.testLogsEventsShadowPutLogEvents,
-			"logs-events-shadow:GetLogEvents":       g.testLogsEventsShadowGetLogEvents,
-			"logs-events-shadow:FilterLogEvents":    g.testLogsEventsShadowFilterLogEvents,
-			"logs-events-shadow:DescribeLogStreams": g.testLogsEventsShadowDescribeLogStreams,
-			"logs-events-shadow:DeleteLogStream":    g.testLogsEventsShadowDeleteLogStream,
+			"logs-events:PutLogEvents":       g.testLogsEventsPutLogEvents,
+			"logs-events:GetLogEvents":       g.testLogsEventsGetLogEvents,
+			"logs-events:FilterLogEvents":    g.testLogsEventsFilterLogEvents,
+			"logs-events:DescribeLogStreams": g.testLogsEventsDescribeLogStreams,
+			"logs-events:DeleteLogStream":    g.testLogsEventsDeleteLogStream,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"logs-events-shadow": g.setupLogsEventsShadow,
+			"logs-events": g.setupLogsEvents,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"logs-events-shadow": g.teardownLogsEventsShadow,
+			"logs-events": g.teardownLogsEvents,
 		},
 	}
 }
@@ -54,10 +54,10 @@ func (g *authoredLogsEventsScenarios) cl() *cloudwatchlogs.Client {
 	return g.client
 }
 
-var groupLogsEventsShadow = scenario.Group{Name: "logs-events-shadow", File: "compat/model/authored/logs-events.json"}
+var groupLogsEvents = scenario.Group{Name: "logs-events", File: "compat/model/authored/logs-events.json"}
 
-func (g *authoredLogsEventsScenarios) setupLogsEventsShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupLogsEventsShadow.RunSetup(ctx, t,
+func (g *authoredLogsEventsScenarios) setupLogsEvents(ctx context.Context, t *harness.TestContext) error {
+	return groupLogsEvents.RunSetup(ctx, t,
 		scenario.Call{
 			Op:     "CreateLogGroup",
 			Params: `{"logGroupName":{"$name":"group"}}`,
@@ -86,8 +86,8 @@ func (g *authoredLogsEventsScenarios) setupLogsEventsShadow(ctx context.Context,
 	)
 }
 
-func (g *authoredLogsEventsScenarios) teardownLogsEventsShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupLogsEventsShadow.RunTeardown(ctx, t,
+func (g *authoredLogsEventsScenarios) teardownLogsEvents(ctx context.Context, t *harness.TestContext) error {
+	return groupLogsEvents.RunTeardown(ctx, t,
 		scenario.Call{
 			Op:     "DeleteLogGroup",
 			Params: `{"logGroupName":{"$name":"group"}}`,
@@ -103,8 +103,8 @@ func (g *authoredLogsEventsScenarios) teardownLogsEventsShadow(ctx context.Conte
 	)
 }
 
-func (g *authoredLogsEventsScenarios) testLogsEventsShadowPutLogEvents(ctx context.Context, t *harness.TestContext) error {
-	return groupLogsEventsShadow.RunTest(ctx, t, "PutLogEvents", scenario.Test{
+func (g *authoredLogsEventsScenarios) testLogsEventsPutLogEvents(ctx context.Context, t *harness.TestContext) error {
+	return groupLogsEvents.RunTest(ctx, t, "PutLogEvents", scenario.Test{
 		Call: scenario.Call{
 			Op:     "PutLogEvents",
 			Params: `{"logEvents":[{"message":"event one","timestamp":{"$now":{"offsetMillis":-2,"unit":"epochMillis"}}},{"message":"event two","timestamp":{"$now":{"offsetMillis":-1,"unit":"epochMillis"}}},{"message":"{\"level\":\"info\",\"msg\":\"structured\"}","timestamp":{"$now":{"unit":"epochMillis"}}}],"logGroupName":{"$name":"group"},"logStreamName":{"$name":"stream"}}`,
@@ -200,8 +200,8 @@ func (g *authoredLogsEventsScenarios) testLogsEventsShadowPutLogEvents(ctx conte
 	})
 }
 
-func (g *authoredLogsEventsScenarios) testLogsEventsShadowGetLogEvents(ctx context.Context, t *harness.TestContext) error {
-	return groupLogsEventsShadow.RunTest(ctx, t, "GetLogEvents", scenario.Test{
+func (g *authoredLogsEventsScenarios) testLogsEventsGetLogEvents(ctx context.Context, t *harness.TestContext) error {
+	return groupLogsEvents.RunTest(ctx, t, "GetLogEvents", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetLogEvents",
 			Params: `{"logGroupName":{"$name":"group"},"logStreamName":{"$name":"stream"},"startFromHead":true}`,
@@ -242,8 +242,8 @@ func (g *authoredLogsEventsScenarios) testLogsEventsShadowGetLogEvents(ctx conte
 	})
 }
 
-func (g *authoredLogsEventsScenarios) testLogsEventsShadowFilterLogEvents(ctx context.Context, t *harness.TestContext) error {
-	return groupLogsEventsShadow.RunTest(ctx, t, "FilterLogEvents", scenario.Test{
+func (g *authoredLogsEventsScenarios) testLogsEventsFilterLogEvents(ctx context.Context, t *harness.TestContext) error {
+	return groupLogsEvents.RunTest(ctx, t, "FilterLogEvents", scenario.Test{
 		Call: scenario.Call{
 			Op:     "FilterLogEvents",
 			Params: `{"filterPattern":"event two","logGroupName":{"$name":"group"}}`,
@@ -318,8 +318,8 @@ func (g *authoredLogsEventsScenarios) testLogsEventsShadowFilterLogEvents(ctx co
 	})
 }
 
-func (g *authoredLogsEventsScenarios) testLogsEventsShadowDescribeLogStreams(ctx context.Context, t *harness.TestContext) error {
-	return groupLogsEventsShadow.RunTest(ctx, t, "DescribeLogStreams", scenario.Test{
+func (g *authoredLogsEventsScenarios) testLogsEventsDescribeLogStreams(ctx context.Context, t *harness.TestContext) error {
+	return groupLogsEvents.RunTest(ctx, t, "DescribeLogStreams", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DescribeLogStreams",
 			Params: `{"logGroupName":{"$name":"group"}}`,
@@ -342,8 +342,8 @@ func (g *authoredLogsEventsScenarios) testLogsEventsShadowDescribeLogStreams(ctx
 	})
 }
 
-func (g *authoredLogsEventsScenarios) testLogsEventsShadowDeleteLogStream(ctx context.Context, t *harness.TestContext) error {
-	return groupLogsEventsShadow.RunTest(ctx, t, "DeleteLogStream", scenario.Test{
+func (g *authoredLogsEventsScenarios) testLogsEventsDeleteLogStream(ctx context.Context, t *harness.TestContext) error {
+	return groupLogsEvents.RunTest(ctx, t, "DeleteLogStream", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteLogStream",
 			Params: `{"logGroupName":{"$name":"group"},"logStreamName":{"$name":"stream"}}`,

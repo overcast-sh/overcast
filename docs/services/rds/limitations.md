@@ -82,10 +82,38 @@ cluster — AWS has no cluster-level field, and neither does Overcast.
 | `DBClusterParameterGroupName` | Recorded only, and not checked against an existing group — Overcast implements no cluster parameter group operations |
 | `VpcSecurityGroupIds` | Recorded only — security groups are not enforced against a database |
 | `EnableCloudwatchLogsExports` | Recorded only — no engine log is shipped to CloudWatch Logs |
+| `EnableHttpEndpoint` | Recorded and reported as `HttpEndpointEnabled` — no Data API exists to actually reach |
+| `ServerlessV2ScalingConfiguration` | Recorded and reported — every member still runs as a fixed-size container regardless |
+| `StorageEncrypted`, `KmsKeyId` | Create-only, recorded and reported — no real encryption happens |
 
-On the CloudFormation side, `Engine`, `MasterUsername`, `DatabaseName` and
-`DBSubnetGroupName` carry "Update requires: Replacement" on AWS and force
-replacement here too.
+On the CloudFormation side, `Engine`, `MasterUsername`, `DatabaseName`,
+`DBSubnetGroupName` and `KmsKeyId` carry "Update requires: Replacement" on AWS
+and force replacement here too, as does a `StorageEncrypted` value that
+differs from the template's previous deploy.
+
+## What a DB instance records and what it enforces
+
+`ModifyDBInstance` accepts these settings — except `StorageEncrypted`,
+`KmsKeyId` and `AvailabilityZone`, which AWS itself only ever takes at create —
+and `DescribeDBInstances` reports them back with AWS's own field names and
+defaults. None of them changes runtime behaviour beyond `DeletionProtection`.
+
+| Setting | Behaviour |
+| --- | --- |
+| `DeletionProtection` | **Enforced** — `DeleteDBInstance` refuses a protected instance, the same way `DeleteDBCluster` refuses a protected cluster |
+| `BackupRetentionPeriod` | **Validated** to AWS's 0–35 (0 disables automated backups), defaulting to 1, then recorded only |
+| `AutoMinorVersionUpgrade` | Recorded and reported; defaults to `true` |
+| `CopyTagsToSnapshot`, `MonitoringInterval`, `EnablePerformanceInsights` (reported as `PerformanceInsightsEnabled`), `EnableIAMDatabaseAuthentication` (reported as `IAMDatabaseAuthenticationEnabled`) | Recorded and reported; each defaults to AWS's own resting value (`false`, except `MonitoringInterval`'s `0`) |
+| `PreferredBackupWindow`, `PreferredMaintenanceWindow`, `Iops`, `AvailabilityZone`, `CACertificateIdentifier` | Recorded only |
+| `EnableCloudwatchLogsExports` | Recorded only — no engine log is shipped to CloudWatch Logs |
+| `StorageEncrypted`, `KmsKeyId` | Create-only, recorded and reported — no real encryption happens |
+
+On the CloudFormation side, `DBInstanceIdentifier`, `Engine`, `MasterUsername`,
+`DBName` and `KmsKeyId` carry "Update requires: Replacement" on AWS and force
+replacement here too, as does a `StorageEncrypted` value that differs from the
+template's previous deploy. `AvailabilityZone` is not applied by an update —
+AWS moves it through a Multi-AZ failover rather than through
+`ModifyDBInstance`'s own parameters, a mechanism Overcast does not emulate.
 
 ## Reachability defaults
 

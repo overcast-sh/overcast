@@ -186,7 +186,6 @@ public final class Main {
                 new SsmGroup(clients),
                 new IamGroup(clients),
                 new KinesisGroup(clients),
-                new CloudWatchLogsGroup(clients),
                 new SesGroup(clients),
                 new EventBridgeGroup(clients),
                 new CloudFormationGroup(clients),

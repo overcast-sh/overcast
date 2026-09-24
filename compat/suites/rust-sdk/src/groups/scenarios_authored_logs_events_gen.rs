@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/logs-events.json";
 
-const GROUP_LOGS_EVENTS_SHADOW: Group = Group {
-    name: "logs-events-shadow",
+const GROUP_LOGS_EVENTS: Group = Group {
+    name: "logs-events",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredLogsEvents {
         {
             let client = self.client.clone();
             impls.insert(
-                "logs-events-shadow:PutLogEvents".to_string(),
+                "logs-events:PutLogEvents".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_LOGS_EVENTS_SHADOW
-                            .run_test(&ctx, "PutLogEvents", test_logs_events_shadow_put_log_events(&client))
+                        GROUP_LOGS_EVENTS
+                            .run_test(&ctx, "PutLogEvents", test_logs_events_put_log_events(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredLogsEvents {
         {
             let client = self.client.clone();
             impls.insert(
-                "logs-events-shadow:GetLogEvents".to_string(),
+                "logs-events:GetLogEvents".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_LOGS_EVENTS_SHADOW
-                            .run_test(&ctx, "GetLogEvents", test_logs_events_shadow_get_log_events(&client))
+                        GROUP_LOGS_EVENTS
+                            .run_test(&ctx, "GetLogEvents", test_logs_events_get_log_events(&client))
                             .await
                     })
                 }),
@@ -79,12 +79,12 @@ impl ServiceGroup for ScenariosAuthoredLogsEvents {
         {
             let client = self.client.clone();
             impls.insert(
-                "logs-events-shadow:FilterLogEvents".to_string(),
+                "logs-events:FilterLogEvents".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_LOGS_EVENTS_SHADOW
-                            .run_test(&ctx, "FilterLogEvents", test_logs_events_shadow_filter_log_events(&client))
+                        GROUP_LOGS_EVENTS
+                            .run_test(&ctx, "FilterLogEvents", test_logs_events_filter_log_events(&client))
                             .await
                     })
                 }),
@@ -93,12 +93,12 @@ impl ServiceGroup for ScenariosAuthoredLogsEvents {
         {
             let client = self.client.clone();
             impls.insert(
-                "logs-events-shadow:DescribeLogStreams".to_string(),
+                "logs-events:DescribeLogStreams".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_LOGS_EVENTS_SHADOW
-                            .run_test(&ctx, "DescribeLogStreams", test_logs_events_shadow_describe_log_streams(&client))
+                        GROUP_LOGS_EVENTS
+                            .run_test(&ctx, "DescribeLogStreams", test_logs_events_describe_log_streams(&client))
                             .await
                     })
                 }),
@@ -107,12 +107,12 @@ impl ServiceGroup for ScenariosAuthoredLogsEvents {
         {
             let client = self.client.clone();
             impls.insert(
-                "logs-events-shadow:DeleteLogStream".to_string(),
+                "logs-events:DeleteLogStream".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_LOGS_EVENTS_SHADOW
-                            .run_test(&ctx, "DeleteLogStream", test_logs_events_shadow_delete_log_stream(&client))
+                        GROUP_LOGS_EVENTS
+                            .run_test(&ctx, "DeleteLogStream", test_logs_events_delete_log_stream(&client))
                             .await
                     })
                 }),
@@ -126,11 +126,11 @@ impl ServiceGroup for ScenariosAuthoredLogsEvents {
         {
             let client = self.client.clone();
             setups.insert(
-                "logs-events-shadow".to_string(),
+                "logs-events".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_LOGS_EVENTS_SHADOW.run_setup(&ctx, setup_logs_events_shadow(&client)).await
+                        GROUP_LOGS_EVENTS.run_setup(&ctx, setup_logs_events(&client)).await
                     })
                 }),
             );
@@ -143,11 +143,11 @@ impl ServiceGroup for ScenariosAuthoredLogsEvents {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "logs-events-shadow".to_string(),
+                "logs-events".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_LOGS_EVENTS_SHADOW.run_teardown(&ctx, teardown_logs_events_shadow(&client)).await
+                        GROUP_LOGS_EVENTS.run_teardown(&ctx, teardown_logs_events(&client)).await
                     })
                 }),
             );
@@ -156,7 +156,7 @@ impl ServiceGroup for ScenariosAuthoredLogsEvents {
     }
 }
 
-fn setup_logs_events_shadow(client: &aws_sdk_cloudwatchlogs::Client) -> Vec<Call> {
+fn setup_logs_events(client: &aws_sdk_cloudwatchlogs::Client) -> Vec<Call> {
     vec![
         Call {
             op: "CreateLogGroup",
@@ -205,7 +205,7 @@ fn setup_logs_events_shadow(client: &aws_sdk_cloudwatchlogs::Client) -> Vec<Call
     ]
 }
 
-fn teardown_logs_events_shadow(client: &aws_sdk_cloudwatchlogs::Client) -> Vec<Call> {
+fn teardown_logs_events(client: &aws_sdk_cloudwatchlogs::Client) -> Vec<Call> {
     vec![
         Call {
             op: "DeleteLogGroup",
@@ -230,7 +230,7 @@ fn teardown_logs_events_shadow(client: &aws_sdk_cloudwatchlogs::Client) -> Vec<C
     ]
 }
 
-fn test_logs_events_shadow_put_log_events(client: &aws_sdk_cloudwatchlogs::Client) -> Test {
+fn test_logs_events_put_log_events(client: &aws_sdk_cloudwatchlogs::Client) -> Test {
     Test {
         call: Call {
             op: "PutLogEvents",
@@ -401,7 +401,7 @@ fn test_logs_events_shadow_put_log_events(client: &aws_sdk_cloudwatchlogs::Clien
     }
 }
 
-fn test_logs_events_shadow_get_log_events(client: &aws_sdk_cloudwatchlogs::Client) -> Test {
+fn test_logs_events_get_log_events(client: &aws_sdk_cloudwatchlogs::Client) -> Test {
     Test {
         call: Call {
             op: "GetLogEvents",
@@ -469,7 +469,7 @@ fn test_logs_events_shadow_get_log_events(client: &aws_sdk_cloudwatchlogs::Clien
     }
 }
 
-fn test_logs_events_shadow_filter_log_events(client: &aws_sdk_cloudwatchlogs::Client) -> Test {
+fn test_logs_events_filter_log_events(client: &aws_sdk_cloudwatchlogs::Client) -> Test {
     Test {
         call: Call {
             op: "FilterLogEvents",
@@ -595,7 +595,7 @@ fn test_logs_events_shadow_filter_log_events(client: &aws_sdk_cloudwatchlogs::Cl
     }
 }
 
-fn test_logs_events_shadow_describe_log_streams(client: &aws_sdk_cloudwatchlogs::Client) -> Test {
+fn test_logs_events_describe_log_streams(client: &aws_sdk_cloudwatchlogs::Client) -> Test {
     Test {
         call: Call {
             op: "DescribeLogStreams",
@@ -629,7 +629,7 @@ fn test_logs_events_shadow_describe_log_streams(client: &aws_sdk_cloudwatchlogs:
     }
 }
 
-fn test_logs_events_shadow_delete_log_stream(client: &aws_sdk_cloudwatchlogs::Client) -> Test {
+fn test_logs_events_delete_log_stream(client: &aws_sdk_cloudwatchlogs::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteLogStream",
