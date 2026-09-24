@@ -24,15 +24,15 @@ func ScenariosAuthoredKinesisShards(c *clients.Clients) ServiceGroup {
 	return ServiceGroup{
 		Name: "scenarios/authored-kinesis-shards",
 		Impls: map[string]harness.TestFn{
-			"kinesis-shards-shadow:ListShards":  g.testKinesisShardsShadowListShards,
-			"kinesis-shards-shadow:SplitShard":  g.testKinesisShardsShadowSplitShard,
-			"kinesis-shards-shadow:MergeShards": g.testKinesisShardsShadowMergeShards,
+			"kinesis-shards:ListShards":  g.testKinesisShardsListShards,
+			"kinesis-shards:SplitShard":  g.testKinesisShardsSplitShard,
+			"kinesis-shards:MergeShards": g.testKinesisShardsMergeShards,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"kinesis-shards-shadow": g.setupKinesisShardsShadow,
+			"kinesis-shards": g.setupKinesisShards,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"kinesis-shards-shadow": g.teardownKinesisShardsShadow,
+			"kinesis-shards": g.teardownKinesisShards,
 		},
 	}
 }
@@ -52,10 +52,10 @@ func (g *authoredKinesisShardsScenarios) cl() *kinesis.Client {
 	return g.client
 }
 
-var groupKinesisShardsShadow = scenario.Group{Name: "kinesis-shards-shadow", File: "compat/model/authored/kinesis-shards.json"}
+var groupKinesisShards = scenario.Group{Name: "kinesis-shards", File: "compat/model/authored/kinesis-shards.json"}
 
-func (g *authoredKinesisShardsScenarios) setupKinesisShardsShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupKinesisShardsShadow.RunSetup(ctx, t,
+func (g *authoredKinesisShardsScenarios) setupKinesisShards(ctx context.Context, t *harness.TestContext) error {
+	return groupKinesisShards.RunSetup(ctx, t,
 		scenario.Call{
 			Op:     "CreateStream",
 			Params: `{"ShardCount":2,"StreamName":{"$name":"s"}}`,
@@ -72,8 +72,8 @@ func (g *authoredKinesisShardsScenarios) setupKinesisShardsShadow(ctx context.Co
 	)
 }
 
-func (g *authoredKinesisShardsScenarios) teardownKinesisShardsShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupKinesisShardsShadow.RunTeardown(ctx, t,
+func (g *authoredKinesisShardsScenarios) teardownKinesisShards(ctx context.Context, t *harness.TestContext) error {
+	return groupKinesisShards.RunTeardown(ctx, t,
 		scenario.Call{
 			Op:     "DeleteStream",
 			Params: `{"StreamName":{"$name":"s"}}`,
@@ -89,8 +89,8 @@ func (g *authoredKinesisShardsScenarios) teardownKinesisShardsShadow(ctx context
 	)
 }
 
-func (g *authoredKinesisShardsScenarios) testKinesisShardsShadowListShards(ctx context.Context, t *harness.TestContext) error {
-	return groupKinesisShardsShadow.RunTest(ctx, t, "ListShards", scenario.Test{
+func (g *authoredKinesisShardsScenarios) testKinesisShardsListShards(ctx context.Context, t *harness.TestContext) error {
+	return groupKinesisShards.RunTest(ctx, t, "ListShards", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListShards",
 			Params: `{"StreamName":{"$name":"s"}}`,
@@ -136,8 +136,8 @@ func (g *authoredKinesisShardsScenarios) testKinesisShardsShadowListShards(ctx c
 	})
 }
 
-func (g *authoredKinesisShardsScenarios) testKinesisShardsShadowSplitShard(ctx context.Context, t *harness.TestContext) error {
-	return groupKinesisShardsShadow.RunTest(ctx, t, "SplitShard", scenario.Test{
+func (g *authoredKinesisShardsScenarios) testKinesisShardsSplitShard(ctx context.Context, t *harness.TestContext) error {
+	return groupKinesisShards.RunTest(ctx, t, "SplitShard", scenario.Test{
 		Call: scenario.Call{
 			Op:     "SplitShard",
 			Params: `{"NewStartingHashKey":"85070591730234615865843651857942052863","ShardToSplit":{"$ref":"shard.first"},"StreamName":{"$name":"s"}}`,
@@ -232,8 +232,8 @@ func (g *authoredKinesisShardsScenarios) testKinesisShardsShadowSplitShard(ctx c
 	})
 }
 
-func (g *authoredKinesisShardsScenarios) testKinesisShardsShadowMergeShards(ctx context.Context, t *harness.TestContext) error {
-	return groupKinesisShardsShadow.RunTest(ctx, t, "MergeShards", scenario.Test{
+func (g *authoredKinesisShardsScenarios) testKinesisShardsMergeShards(ctx context.Context, t *harness.TestContext) error {
+	return groupKinesisShards.RunTest(ctx, t, "MergeShards", scenario.Test{
 		Call: scenario.Call{
 			Op:     "MergeShards",
 			Params: `{"AdjacentShardToMerge":{"$ref":"child.second"},"ShardToMerge":{"$ref":"child.first"},"StreamName":{"$name":"s"}}`,

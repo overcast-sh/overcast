@@ -266,6 +266,118 @@ impl ServiceGroup for ScenariosKms {
         {
             let client = self.client.clone();
             impls.insert(
+                "kms-gen-key:Encrypt".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_KMS_GEN_KEY
+                            .run_test(&ctx, "Encrypt", test_kms_gen_key_encrypt(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
+                "kms-gen-key:Decrypt".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_KMS_GEN_KEY
+                            .run_test(&ctx, "Decrypt", test_kms_gen_key_decrypt(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
+                "kms-gen-key:ReEncrypt".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_KMS_GEN_KEY
+                            .run_test(&ctx, "ReEncrypt", test_kms_gen_key_re_encrypt(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
+                "kms-gen-key:DecryptReEncrypted".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_KMS_GEN_KEY
+                            .run_test(&ctx, "DecryptReEncrypted", test_kms_gen_key_decrypt_re_encrypted(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
+                "kms-gen-key:CreateKeySigning".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_KMS_GEN_KEY
+                            .run_test(&ctx, "CreateKeySigning", test_kms_gen_key_create_key_signing(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
+                "kms-gen-key:Sign".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_KMS_GEN_KEY
+                            .run_test(&ctx, "Sign", test_kms_gen_key_sign(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
+                "kms-gen-key:Verify".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_KMS_GEN_KEY
+                            .run_test(&ctx, "Verify", test_kms_gen_key_verify(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
+                "kms-gen-key:ScheduleKeyDeletionSigning".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_KMS_GEN_KEY
+                            .run_test(&ctx, "ScheduleKeyDeletionSigning", test_kms_gen_key_schedule_key_deletion_signing(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
                 "kms-gen-key:CreateGrant".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
@@ -1297,6 +1409,354 @@ fn test_kms_gen_key_generate_random(client: &aws_sdk_kms::Client) -> Test {
             scenario::response_field(vec![
                 scenario::non_empty("$.Plaintext"),
             ]),
+        ],
+    }
+}
+
+fn test_kms_gen_key_encrypt(client: &aws_sdk_kms::Client) -> Test {
+    Test {
+        call: Call {
+            op: "Encrypt",
+            params: scenario::map(vec![
+                ("KeyId", scenario::context("key.id")),
+                ("Plaintext", scenario::base64(scenario::lit(::serde_json::json!("Y29tcGF0LXNjZW5hcmlvIHBsYWludGV4dA==")))),
+            ]),
+            export: vec![
+                ("key.ciphertext", "$.CiphertextBlob"),
+            ],
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .encrypt()
+                            .key_id(b.string("KeyId")?)
+                            .plaintext(aws_sdk_kms::primitives::Blob::new(b"compat-scenario plaintext".to_vec()))
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::response_field(vec![
+                scenario::non_empty("$.CiphertextBlob"),
+                scenario::equals("$.EncryptionAlgorithm", scenario::lit(::serde_json::json!("SYMMETRIC_DEFAULT"))),
+                scenario::equals("$.KeyId", scenario::context("key.arn")),
+            ]),
+        ],
+    }
+}
+
+fn test_kms_gen_key_decrypt(client: &aws_sdk_kms::Client) -> Test {
+    Test {
+        call: Call {
+            op: "Decrypt",
+            params: scenario::map(vec![
+                ("CiphertextBlob", scenario::base64(scenario::context("key.ciphertext"))),
+            ]),
+            export: Vec::new(),
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .decrypt()
+                            .ciphertext_blob(aws_sdk_kms::primitives::Blob::new(b.blob("CiphertextBlob")?))
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::response_field(vec![
+                scenario::equals("$.EncryptionAlgorithm", scenario::lit(::serde_json::json!("SYMMETRIC_DEFAULT"))),
+                scenario::equals("$.KeyId", scenario::context("key.arn")),
+                scenario::equals("$.Plaintext", scenario::base64(scenario::lit(::serde_json::json!("Y29tcGF0LXNjZW5hcmlvIHBsYWludGV4dA==")))),
+            ]),
+        ],
+    }
+}
+
+fn test_kms_gen_key_re_encrypt(client: &aws_sdk_kms::Client) -> Test {
+    Test {
+        call: Call {
+            op: "ReEncrypt",
+            params: scenario::map(vec![
+                ("CiphertextBlob", scenario::base64(scenario::context("key.ciphertext"))),
+                ("DestinationKeyId", scenario::context("key.id")),
+            ]),
+            export: vec![
+                ("key.reciphertext", "$.CiphertextBlob"),
+            ],
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .re_encrypt()
+                            .ciphertext_blob(aws_sdk_kms::primitives::Blob::new(b.blob("CiphertextBlob")?))
+                            .destination_key_id(b.string("DestinationKeyId")?)
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::response_field(vec![
+                scenario::non_empty("$.CiphertextBlob"),
+                scenario::equals("$.DestinationEncryptionAlgorithm", scenario::lit(::serde_json::json!("SYMMETRIC_DEFAULT"))),
+                scenario::equals("$.KeyId", scenario::context("key.arn")),
+                scenario::equals("$.SourceEncryptionAlgorithm", scenario::lit(::serde_json::json!("SYMMETRIC_DEFAULT"))),
+                scenario::equals("$.SourceKeyId", scenario::context("key.arn")),
+            ]),
+        ],
+    }
+}
+
+fn test_kms_gen_key_decrypt_re_encrypted(client: &aws_sdk_kms::Client) -> Test {
+    Test {
+        call: Call {
+            op: "Decrypt",
+            params: scenario::map(vec![
+                ("CiphertextBlob", scenario::base64(scenario::context("key.reciphertext"))),
+            ]),
+            export: Vec::new(),
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .decrypt()
+                            .ciphertext_blob(aws_sdk_kms::primitives::Blob::new(b.blob("CiphertextBlob")?))
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::response_field(vec![
+                scenario::equals("$.KeyId", scenario::context("key.arn")),
+                scenario::equals("$.Plaintext", scenario::base64(scenario::lit(::serde_json::json!("Y29tcGF0LXNjZW5hcmlvIHBsYWludGV4dA==")))),
+            ]),
+        ],
+    }
+}
+
+fn test_kms_gen_key_create_key_signing(client: &aws_sdk_kms::Client) -> Test {
+    Test {
+        call: Call {
+            op: "CreateKey",
+            params: scenario::lit(::serde_json::json!({"Description": "compat-scenario signing key", "KeySpec": "RSA_2048", "KeyUsage": "SIGN_VERIFY"})),
+            export: vec![
+                ("key.signarn", "$.KeyMetadata.Arn"),
+                ("key.signid", "$.KeyMetadata.KeyId"),
+            ],
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |_b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .create_key()
+                            .description("compat-scenario signing key")
+                            .key_spec(aws_sdk_kms::types::KeySpec::from("RSA_2048"))
+                            .key_usage(aws_sdk_kms::types::KeyUsageType::from("SIGN_VERIFY"))
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::eventually(6, 500,
+                scenario::readback(
+                    Call {
+                        op: "DescribeKey",
+                        params: scenario::map(vec![
+                            ("KeyId", scenario::context("key.signid")),
+                        ]),
+                        export: Vec::new(),
+                        invoke: {
+                            let client = client.clone();
+                            scenario::invoker(move |b| {
+                                let client = client.clone();
+                                Box::pin(async move {
+                                    let capture = scenario::Capture::new();
+                                    let request = client
+                                        .describe_key()
+                                        .key_id(b.string("KeyId")?)
+                                        .customize()
+                                        .interceptor(capture.clone());
+                                    Ok(scenario::observe(request.send().await, &capture))
+                                })
+                            })
+                        },
+                    },
+                    vec![
+                        scenario::equals("$.KeyMetadata.Arn", scenario::context("key.signarn")),
+                        scenario::equals("$.KeyMetadata.KeySpec", scenario::lit(::serde_json::json!("RSA_2048"))),
+                        scenario::equals("$.KeyMetadata.KeyUsage", scenario::lit(::serde_json::json!("SIGN_VERIFY"))),
+                    ],
+                ),
+            ),
+        ],
+    }
+}
+
+fn test_kms_gen_key_sign(client: &aws_sdk_kms::Client) -> Test {
+    Test {
+        call: Call {
+            op: "Sign",
+            params: scenario::map(vec![
+                ("KeyId", scenario::context("key.signid")),
+                ("Message", scenario::base64(scenario::lit(::serde_json::json!("Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgdG8gc2lnbg==")))),
+                ("SigningAlgorithm", scenario::lit(::serde_json::json!("RSASSA_PKCS1_V1_5_SHA_256"))),
+            ]),
+            export: vec![
+                ("key.signature", "$.Signature"),
+            ],
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .sign()
+                            .key_id(b.string("KeyId")?)
+                            .message(aws_sdk_kms::primitives::Blob::new(b"compat-scenario message to sign".to_vec()))
+                            .signing_algorithm(aws_sdk_kms::types::SigningAlgorithmSpec::from("RSASSA_PKCS1_V1_5_SHA_256"))
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::response_field(vec![
+                scenario::equals("$.KeyId", scenario::context("key.signarn")),
+                scenario::non_empty("$.Signature"),
+                scenario::equals("$.SigningAlgorithm", scenario::lit(::serde_json::json!("RSASSA_PKCS1_V1_5_SHA_256"))),
+            ]),
+        ],
+    }
+}
+
+fn test_kms_gen_key_verify(client: &aws_sdk_kms::Client) -> Test {
+    Test {
+        call: Call {
+            op: "Verify",
+            params: scenario::map(vec![
+                ("KeyId", scenario::context("key.signid")),
+                ("Message", scenario::base64(scenario::lit(::serde_json::json!("Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgdG8gc2lnbg==")))),
+                ("Signature", scenario::base64(scenario::context("key.signature"))),
+                ("SigningAlgorithm", scenario::lit(::serde_json::json!("RSASSA_PKCS1_V1_5_SHA_256"))),
+            ]),
+            export: Vec::new(),
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .verify()
+                            .key_id(b.string("KeyId")?)
+                            .message(aws_sdk_kms::primitives::Blob::new(b"compat-scenario message to sign".to_vec()))
+                            .signature(aws_sdk_kms::primitives::Blob::new(b.blob("Signature")?))
+                            .signing_algorithm(aws_sdk_kms::types::SigningAlgorithmSpec::from("RSASSA_PKCS1_V1_5_SHA_256"))
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::response_field(vec![
+                scenario::equals("$.KeyId", scenario::context("key.signarn")),
+                scenario::equals("$.SignatureValid", scenario::lit(::serde_json::json!(true))),
+                scenario::equals("$.SigningAlgorithm", scenario::lit(::serde_json::json!("RSASSA_PKCS1_V1_5_SHA_256"))),
+            ]),
+        ],
+    }
+}
+
+fn test_kms_gen_key_schedule_key_deletion_signing(client: &aws_sdk_kms::Client) -> Test {
+    Test {
+        call: Call {
+            op: "ScheduleKeyDeletion",
+            params: scenario::map(vec![
+                ("KeyId", scenario::context("key.signid")),
+                ("PendingWindowInDays", scenario::lit(::serde_json::json!(7))),
+            ]),
+            export: Vec::new(),
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .schedule_key_deletion()
+                            .key_id(b.string("KeyId")?)
+                            .pending_window_in_days(7)
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::eventually(6, 500,
+                scenario::readback(
+                    Call {
+                        op: "DescribeKey",
+                        params: scenario::map(vec![
+                            ("KeyId", scenario::context("key.signid")),
+                        ]),
+                        export: Vec::new(),
+                        invoke: {
+                            let client = client.clone();
+                            scenario::invoker(move |b| {
+                                let client = client.clone();
+                                Box::pin(async move {
+                                    let capture = scenario::Capture::new();
+                                    let request = client
+                                        .describe_key()
+                                        .key_id(b.string("KeyId")?)
+                                        .customize()
+                                        .interceptor(capture.clone());
+                                    Ok(scenario::observe(request.send().await, &capture))
+                                })
+                            })
+                        },
+                    },
+                    vec![
+                        scenario::equals("$.KeyMetadata.KeyState", scenario::lit(::serde_json::json!("PendingDeletion"))),
+                    ],
+                ),
+            ),
         ],
     }
 }

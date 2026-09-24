@@ -3,7 +3,6 @@ package groups
 import (
 	"context"
 	"fmt"
-	"math/big"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -21,17 +20,12 @@ func Kinesis(c *clients.Clients) ServiceGroup {
 			"kinesis-records:PutRecords":       g.PutRecords,
 			"kinesis-records:GetShardIterator": g.GetShardIterator,
 			"kinesis-records:GetRecords":       g.GetRecords,
-			"kinesis-shards:ListShards":        g.ListShards,
-			"kinesis-shards:SplitShard":        g.SplitShard,
-			"kinesis-shards:MergeShards":       g.MergeShards,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
 			"kinesis-records": g.setupRecords,
-			"kinesis-shards":  g.setupShards,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
 			"kinesis-records": g.teardownRecords,
-			"kinesis-shards":  g.teardownShards,
 		},
 	}
 }
@@ -153,111 +147,4 @@ func (g *kinesisGroup) GetRecords(ctx context.Context, t *harness.TestContext) e
 		return fmt.Errorf("GetRecords: expected ≥1 record")
 	}
 	return nil
-}
-
-// ── kinesis-shards ────────────────────────────────────────────────────────────
-
-func (g *kinesisGroup) setupShards(ctx context.Context, t *harness.TestContext) error {
-	name := fmt.Sprintf("oc-shd-%s", t.RunID)
-	if _, err := g.cl().CreateStream(ctx, &kinesis.CreateStreamInput{
-		StreamName: aws.String(name), ShardCount: aws.Int32(2),
-	}); err != nil {
-		return err
-	}
-	if err := g.waitStreamActive(ctx, name); err != nil {
-		return err
-	}
-	t.Set("kinesis_shd_stream", name)
-	return nil
-}
-
-func (g *kinesisGroup) teardownShards(ctx context.Context, t *harness.TestContext) error {
-	if name := t.GetString("kinesis_shd_stream"); name != "" {
-		g.cl().DeleteStream(ctx, &kinesis.DeleteStreamInput{StreamName: aws.String(name)}) //nolint:errcheck
-	}
-	return nil
-}
-
-func (g *kinesisGroup) ListShards(ctx context.Context, t *harness.TestContext) error {
-	stream := t.GetString("kinesis_shd_stream")
-	resp, err := g.cl().ListShards(ctx, &kinesis.ListShardsInput{StreamName: aws.String(stream)})
-	if err != nil {
-		return err
-	}
-	if len(resp.Shards) < 2 {
-		return fmt.Errorf("ListShards: expected ≥2 shards, got %d", len(resp.Shards))
-	}
-	return nil
-}
-
-func (g *kinesisGroup) SplitShard(ctx context.Context, t *harness.TestContext) error {
-	stream := t.GetString("kinesis_shd_stream")
-	desc, err := g.cl().DescribeStream(ctx, &kinesis.DescribeStreamInput{StreamName: aws.String(stream)})
-	if err != nil {
-		return err
-	}
-	if len(desc.StreamDescription.Shards) == 0 {
-		return fmt.Errorf("SplitShard: no shards")
-	}
-	shard := desc.StreamDescription.Shards[0]
-	startKey := aws.ToString(shard.HashKeyRange.StartingHashKey)
-	endKey := aws.ToString(shard.HashKeyRange.EndingHashKey)
-
-	// compute midpoint as string
-	midKey := hashMidpoint(startKey, endKey)
-	_, err = g.cl().SplitShard(ctx, &kinesis.SplitShardInput{
-		StreamName:         aws.String(stream),
-		ShardToSplit:       shard.ShardId,
-		NewStartingHashKey: aws.String(midKey),
-	})
-	if err != nil {
-		if harness.IsUnimplemented(err) {
-			return nil
-		}
-		return err
-	}
-	return g.waitStreamActive(ctx, stream)
-}
-
-func (g *kinesisGroup) MergeShards(ctx context.Context, t *harness.TestContext) error {
-	stream := t.GetString("kinesis_shd_stream")
-	desc, err := g.cl().DescribeStream(ctx, &kinesis.DescribeStreamInput{StreamName: aws.String(stream)})
-	if err != nil {
-		return err
-	}
-	shards := desc.StreamDescription.Shards
-	// find two adjacent open shards
-	openShards := make([]types.Shard, 0, len(shards))
-	for _, s := range shards {
-		if s.SequenceNumberRange.EndingSequenceNumber == nil {
-			openShards = append(openShards, s)
-		}
-	}
-	if len(openShards) < 2 {
-		return nil // not enough open shards to merge, skip
-	}
-	_, err = g.cl().MergeShards(ctx, &kinesis.MergeShardsInput{
-		StreamName:           aws.String(stream),
-		ShardToMerge:         openShards[0].ShardId,
-		AdjacentShardToMerge: openShards[1].ShardId,
-	})
-	if err != nil {
-		if harness.IsUnimplemented(err) {
-			return nil
-		}
-		return err
-	}
-	return g.waitStreamActive(ctx, stream)
-}
-
-// hashMidpoint computes the decimal midpoint between two decimal 128-bit hash key strings.
-func hashMidpoint(start, end string) string {
-	s := new(big.Int)
-	e := new(big.Int)
-	two := big.NewInt(2)
-	s.SetString(start, 10)
-	e.SetString(end, 10)
-	mid := new(big.Int).Add(s, e)
-	mid.Div(mid, two)
-	return mid.String()
 }

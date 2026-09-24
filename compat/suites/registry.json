@@ -1827,6 +1827,7 @@
     {
       "service": "kinesis",
       "name": "kinesis-shards",
+      "scenario": "compat/model/authored/kinesis-shards.json",
       "tests": [
         {
           "name": "ListShards"

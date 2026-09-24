@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/kinesis-shards.json";
 
-const GROUP_KINESIS_SHARDS_SHADOW: Group = Group {
-    name: "kinesis-shards-shadow",
+const GROUP_KINESIS_SHARDS: Group = Group {
+    name: "kinesis-shards",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredKinesisShards {
         {
             let client = self.client.clone();
             impls.insert(
-                "kinesis-shards-shadow:ListShards".to_string(),
+                "kinesis-shards:ListShards".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_KINESIS_SHARDS_SHADOW
-                            .run_test(&ctx, "ListShards", test_kinesis_shards_shadow_list_shards(&client))
+                        GROUP_KINESIS_SHARDS
+                            .run_test(&ctx, "ListShards", test_kinesis_shards_list_shards(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredKinesisShards {
         {
             let client = self.client.clone();
             impls.insert(
-                "kinesis-shards-shadow:SplitShard".to_string(),
+                "kinesis-shards:SplitShard".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_KINESIS_SHARDS_SHADOW
-                            .run_test(&ctx, "SplitShard", test_kinesis_shards_shadow_split_shard(&client))
+                        GROUP_KINESIS_SHARDS
+                            .run_test(&ctx, "SplitShard", test_kinesis_shards_split_shard(&client))
                             .await
                     })
                 }),
@@ -79,12 +79,12 @@ impl ServiceGroup for ScenariosAuthoredKinesisShards {
         {
             let client = self.client.clone();
             impls.insert(
-                "kinesis-shards-shadow:MergeShards".to_string(),
+                "kinesis-shards:MergeShards".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_KINESIS_SHARDS_SHADOW
-                            .run_test(&ctx, "MergeShards", test_kinesis_shards_shadow_merge_shards(&client))
+                        GROUP_KINESIS_SHARDS
+                            .run_test(&ctx, "MergeShards", test_kinesis_shards_merge_shards(&client))
                             .await
                     })
                 }),
@@ -98,11 +98,11 @@ impl ServiceGroup for ScenariosAuthoredKinesisShards {
         {
             let client = self.client.clone();
             setups.insert(
-                "kinesis-shards-shadow".to_string(),
+                "kinesis-shards".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_KINESIS_SHARDS_SHADOW.run_setup(&ctx, setup_kinesis_shards_shadow(&client)).await
+                        GROUP_KINESIS_SHARDS.run_setup(&ctx, setup_kinesis_shards(&client)).await
                     })
                 }),
             );
@@ -115,11 +115,11 @@ impl ServiceGroup for ScenariosAuthoredKinesisShards {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "kinesis-shards-shadow".to_string(),
+                "kinesis-shards".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_KINESIS_SHARDS_SHADOW.run_teardown(&ctx, teardown_kinesis_shards_shadow(&client)).await
+                        GROUP_KINESIS_SHARDS.run_teardown(&ctx, teardown_kinesis_shards(&client)).await
                     })
                 }),
             );
@@ -128,7 +128,7 @@ impl ServiceGroup for ScenariosAuthoredKinesisShards {
     }
 }
 
-fn setup_kinesis_shards_shadow(client: &aws_sdk_kinesis::Client) -> Vec<Call> {
+fn setup_kinesis_shards(client: &aws_sdk_kinesis::Client) -> Vec<Call> {
     vec![
         Call {
             op: "CreateStream",
@@ -157,7 +157,7 @@ fn setup_kinesis_shards_shadow(client: &aws_sdk_kinesis::Client) -> Vec<Call> {
     ]
 }
 
-fn teardown_kinesis_shards_shadow(client: &aws_sdk_kinesis::Client) -> Vec<Call> {
+fn teardown_kinesis_shards(client: &aws_sdk_kinesis::Client) -> Vec<Call> {
     vec![
         Call {
             op: "DeleteStream",
@@ -182,7 +182,7 @@ fn teardown_kinesis_shards_shadow(client: &aws_sdk_kinesis::Client) -> Vec<Call>
     ]
 }
 
-fn test_kinesis_shards_shadow_list_shards(client: &aws_sdk_kinesis::Client) -> Test {
+fn test_kinesis_shards_list_shards(client: &aws_sdk_kinesis::Client) -> Test {
     Test {
         call: Call {
             op: "ListShards",
@@ -248,7 +248,7 @@ fn test_kinesis_shards_shadow_list_shards(client: &aws_sdk_kinesis::Client) -> T
     }
 }
 
-fn test_kinesis_shards_shadow_split_shard(client: &aws_sdk_kinesis::Client) -> Test {
+fn test_kinesis_shards_split_shard(client: &aws_sdk_kinesis::Client) -> Test {
     Test {
         call: Call {
             op: "SplitShard",
@@ -421,7 +421,7 @@ fn test_kinesis_shards_shadow_split_shard(client: &aws_sdk_kinesis::Client) -> T
     }
 }
 
-fn test_kinesis_shards_shadow_merge_shards(client: &aws_sdk_kinesis::Client) -> Test {
+fn test_kinesis_shards_merge_shards(client: &aws_sdk_kinesis::Client) -> Test {
     Test {
         call: Call {
             op: "MergeShards",

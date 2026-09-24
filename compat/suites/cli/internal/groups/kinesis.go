@@ -19,18 +19,12 @@ func Kinesis() ServiceGroup {
 			"kinesis-records:PutRecords":       g.PutRecords,
 			"kinesis-records:GetShardIterator": g.GetShardIterator,
 			"kinesis-records:GetRecords":       g.GetRecords,
-			// kinesis-shards
-			"kinesis-shards:ListShards":  g.ListShards,
-			"kinesis-shards:SplitShard":  g.SplitShard,
-			"kinesis-shards:MergeShards": g.MergeShards,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
 			"kinesis-records": g.setupRecords,
-			"kinesis-shards":  g.setupShards,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
 			"kinesis-records": g.teardownStream,
-			"kinesis-shards":  g.teardownStream,
 		},
 	}
 }
@@ -163,107 +157,6 @@ func (g *kinesisGroup) GetRecords(_ context.Context, t *harness.TestContext) err
 	records, _ := out["Records"].([]any)
 	if len(records) == 0 {
 		return fmt.Errorf("kinesis GetRecords: no records returned")
-	}
-	return nil
-}
-
-// ─── kinesis-shards ──────────────────────────────────────────────────────────
-
-func (g *kinesisGroup) setupShards(_ context.Context, t *harness.TestContext) error {
-	t.Set("stream_name", fmt.Sprintf("%s-kinesis-s", t.RunID))
-	if err := awscli.Run(t.Endpoint, t.Region,
-		"kinesis", "create-stream",
-		"--stream-name", g.currentStreamName(t),
-		"--shard-count", "2",
-	); err != nil {
-		return err
-	}
-	return g.waitStreamActive(t)
-}
-
-func (g *kinesisGroup) ListShards(_ context.Context, t *harness.TestContext) error {
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"kinesis", "list-shards",
-		"--stream-name", g.currentStreamName(t),
-	)
-	if err != nil {
-		return err
-	}
-	shards, _ := out["Shards"].([]any)
-	if len(shards) == 0 {
-		return fmt.Errorf("kinesis ListShards: no shards")
-	}
-	shard := shards[0].(map[string]any)
-	shardID, _ := shard["ShardId"].(string)
-	t.Set("split_shard_id", shardID)
-
-	hr, _ := shard["HashKeyRange"].(map[string]any)
-	start, _ := hr["StartingHashKey"].(string)
-	end, _ := hr["EndingHashKey"].(string)
-	t.Set("hash_key_start", start)
-	t.Set("hash_key_end", end)
-	return nil
-}
-
-func (g *kinesisGroup) SplitShard(_ context.Context, t *harness.TestContext) error {
-	shardID := t.GetString("split_shard_id")
-	start := t.GetString("hash_key_start")
-	end := t.GetString("hash_key_end")
-	if shardID == "" {
-		return fmt.Errorf("kinesis SplitShard: missing split_shard_id")
-	}
-	mid := hashMidpointStr(start, end)
-	if err := awscli.Run(t.Endpoint, t.Region,
-		"kinesis", "split-shard",
-		"--stream-name", g.currentStreamName(t),
-		"--shard-to-split", shardID,
-		"--new-starting-hash-key", mid,
-	); err != nil {
-		return err
-	}
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"kinesis", "list-shards",
-		"--stream-name", g.currentStreamName(t),
-	)
-	if err != nil {
-		return fmt.Errorf("kinesis SplitShard: list-shards failed: %w", err)
-	}
-	shards, _ := out["Shards"].([]any)
-	if len(shards) < 2 {
-		return fmt.Errorf("kinesis SplitShard: expected ≥2 shards after split, got %d", len(shards))
-	}
-	return nil
-}
-
-func (g *kinesisGroup) MergeShards(_ context.Context, t *harness.TestContext) error {
-	// List open shards.
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"kinesis", "list-shards",
-		"--stream-name", g.currentStreamName(t),
-	)
-	if err != nil {
-		return err
-	}
-	shards, _ := out["Shards"].([]any)
-	var openIDs []string
-	for _, raw := range shards {
-		s, _ := raw.(map[string]any)
-		seqRange, _ := s["SequenceNumberRange"].(map[string]any)
-		if _, closed := seqRange["EndingSequenceNumber"]; !closed {
-			id, _ := s["ShardId"].(string)
-			openIDs = append(openIDs, id)
-		}
-	}
-	if len(openIDs) < 2 {
-		return nil // not enough open shards
-	}
-	if err := awscli.Run(t.Endpoint, t.Region,
-		"kinesis", "merge-shards",
-		"--stream-name", g.currentStreamName(t),
-		"--shard-to-merge", openIDs[0],
-		"--adjacent-shard-to-merge", openIDs[1],
-	); err != nil {
-		return err
 	}
 	return nil
 }

@@ -18,11 +18,13 @@ import software.amazon.awssdk.services.kms.model.CancelKeyDeletionRequest;
 import software.amazon.awssdk.services.kms.model.CreateAliasRequest;
 import software.amazon.awssdk.services.kms.model.CreateGrantRequest;
 import software.amazon.awssdk.services.kms.model.CreateKeyRequest;
+import software.amazon.awssdk.services.kms.model.DecryptRequest;
 import software.amazon.awssdk.services.kms.model.DeleteAliasRequest;
 import software.amazon.awssdk.services.kms.model.DescribeCustomKeyStoresRequest;
 import software.amazon.awssdk.services.kms.model.DescribeKeyRequest;
 import software.amazon.awssdk.services.kms.model.DisableKeyRequest;
 import software.amazon.awssdk.services.kms.model.EnableKeyRequest;
+import software.amazon.awssdk.services.kms.model.EncryptRequest;
 import software.amazon.awssdk.services.kms.model.GenerateDataKeyPairRequest;
 import software.amazon.awssdk.services.kms.model.GenerateDataKeyRequest;
 import software.amazon.awssdk.services.kms.model.GenerateDataKeyWithoutPlaintextRequest;
@@ -39,14 +41,17 @@ import software.amazon.awssdk.services.kms.model.ListKeysRequest;
 import software.amazon.awssdk.services.kms.model.ListResourceTagsRequest;
 import software.amazon.awssdk.services.kms.model.ListRetirableGrantsRequest;
 import software.amazon.awssdk.services.kms.model.PutKeyPolicyRequest;
+import software.amazon.awssdk.services.kms.model.ReEncryptRequest;
 import software.amazon.awssdk.services.kms.model.RetireGrantRequest;
 import software.amazon.awssdk.services.kms.model.RevokeGrantRequest;
 import software.amazon.awssdk.services.kms.model.ScheduleKeyDeletionRequest;
+import software.amazon.awssdk.services.kms.model.SignRequest;
 import software.amazon.awssdk.services.kms.model.Tag;
 import software.amazon.awssdk.services.kms.model.TagResourceRequest;
 import software.amazon.awssdk.services.kms.model.UntagResourceRequest;
 import software.amazon.awssdk.services.kms.model.UpdateAliasRequest;
 import software.amazon.awssdk.services.kms.model.UpdateKeyDescriptionRequest;
+import software.amazon.awssdk.services.kms.model.VerifyRequest;
 
 /**
  * The generated kms groups.
@@ -92,6 +97,14 @@ public final class ScenariosKmsGen implements ServiceGroup {
                 Map.entry("kms-gen-key:GenerateDataKeyWithoutPlaintext", this::testKmsGenKeyGenerateDataKeyWithoutPlaintext),
                 Map.entry("kms-gen-key:GenerateDataKeyPair", this::testKmsGenKeyGenerateDataKeyPair),
                 Map.entry("kms-gen-key:GenerateRandom", this::testKmsGenKeyGenerateRandom),
+                Map.entry("kms-gen-key:Encrypt", this::testKmsGenKeyEncrypt),
+                Map.entry("kms-gen-key:Decrypt", this::testKmsGenKeyDecrypt),
+                Map.entry("kms-gen-key:ReEncrypt", this::testKmsGenKeyReEncrypt),
+                Map.entry("kms-gen-key:DecryptReEncrypted", this::testKmsGenKeyDecryptReEncrypted),
+                Map.entry("kms-gen-key:CreateKeySigning", this::testKmsGenKeyCreateKeySigning),
+                Map.entry("kms-gen-key:Sign", this::testKmsGenKeySign),
+                Map.entry("kms-gen-key:Verify", this::testKmsGenKeyVerify),
+                Map.entry("kms-gen-key:ScheduleKeyDeletionSigning", this::testKmsGenKeyScheduleKeyDeletionSigning),
                 Map.entry("kms-gen-key:CreateGrant", this::testKmsGenKeyCreateGrant),
                 Map.entry("kms-gen-key:ListGrants", this::testKmsGenKeyListGrants),
                 Map.entry("kms-gen-key:ListRetirableGrants", this::testKmsGenKeyListRetirableGrants),
@@ -432,6 +445,160 @@ public final class ScenariosKmsGen implements ServiceGroup {
                         Clause.responseField(
                                 Check.nonEmpty("$.Plaintext")
                         )
+                ));
+    }
+
+    private void testKmsGenKeyEncrypt(TestContext t) {
+        GROUP_KMS_GEN_KEY.runTest(t, "Encrypt",
+                new Call("Encrypt", "{\"KeyId\":{\"$ref\":\"key.id\"},\"Plaintext\":{\"$base64\":\"Y29tcGF0LXNjZW5hcmlvIHBsYWludGV4dA==\"}}",
+                        b -> EncryptRequest.builder()
+                                .keyId(b.string("KeyId", Values.ref("key.id")))
+                                .plaintext(software.amazon.awssdk.core.SdkBytes.fromByteArray(java.util.Base64.getDecoder().decode("Y29tcGF0LXNjZW5hcmlvIHBsYWludGV4dA==")))
+                                .build(),
+                        r -> cl().encrypt((EncryptRequest) r))
+                        .export("key.ciphertext", "$.CiphertextBlob"),
+                List.of(
+                        Clause.responseField(
+                                Check.nonEmpty("$.CiphertextBlob"),
+                                Check.equalTo("$.EncryptionAlgorithm", "SYMMETRIC_DEFAULT"),
+                                Check.equalTo("$.KeyId", Values.ref("key.arn"))
+                        )
+                ));
+    }
+
+    private void testKmsGenKeyDecrypt(TestContext t) {
+        GROUP_KMS_GEN_KEY.runTest(t, "Decrypt",
+                new Call("Decrypt", "{\"CiphertextBlob\":{\"$base64\":{\"$ref\":\"key.ciphertext\"}}}",
+                        b -> DecryptRequest.builder()
+                                .ciphertextBlob(b.blob("CiphertextBlob", Values.base64(Values.ref("key.ciphertext"))))
+                                .build(),
+                        r -> cl().decrypt((DecryptRequest) r)),
+                List.of(
+                        Clause.responseField(
+                                Check.equalTo("$.EncryptionAlgorithm", "SYMMETRIC_DEFAULT"),
+                                Check.equalTo("$.KeyId", Values.ref("key.arn")),
+                                Check.equalTo("$.Plaintext", Values.base64("Y29tcGF0LXNjZW5hcmlvIHBsYWludGV4dA=="))
+                        )
+                ));
+    }
+
+    private void testKmsGenKeyReEncrypt(TestContext t) {
+        GROUP_KMS_GEN_KEY.runTest(t, "ReEncrypt",
+                new Call("ReEncrypt", "{\"CiphertextBlob\":{\"$base64\":{\"$ref\":\"key.ciphertext\"}},\"DestinationKeyId\":{\"$ref\":\"key.id\"}}",
+                        b -> ReEncryptRequest.builder()
+                                .ciphertextBlob(b.blob("CiphertextBlob", Values.base64(Values.ref("key.ciphertext"))))
+                                .destinationKeyId(b.string("DestinationKeyId", Values.ref("key.id")))
+                                .build(),
+                        r -> cl().reEncrypt((ReEncryptRequest) r))
+                        .export("key.reciphertext", "$.CiphertextBlob"),
+                List.of(
+                        Clause.responseField(
+                                Check.nonEmpty("$.CiphertextBlob"),
+                                Check.equalTo("$.DestinationEncryptionAlgorithm", "SYMMETRIC_DEFAULT"),
+                                Check.equalTo("$.KeyId", Values.ref("key.arn")),
+                                Check.equalTo("$.SourceEncryptionAlgorithm", "SYMMETRIC_DEFAULT"),
+                                Check.equalTo("$.SourceKeyId", Values.ref("key.arn"))
+                        )
+                ));
+    }
+
+    private void testKmsGenKeyDecryptReEncrypted(TestContext t) {
+        GROUP_KMS_GEN_KEY.runTest(t, "DecryptReEncrypted",
+                new Call("Decrypt", "{\"CiphertextBlob\":{\"$base64\":{\"$ref\":\"key.reciphertext\"}}}",
+                        b -> DecryptRequest.builder()
+                                .ciphertextBlob(b.blob("CiphertextBlob", Values.base64(Values.ref("key.reciphertext"))))
+                                .build(),
+                        r -> cl().decrypt((DecryptRequest) r)),
+                List.of(
+                        Clause.responseField(
+                                Check.equalTo("$.KeyId", Values.ref("key.arn")),
+                                Check.equalTo("$.Plaintext", Values.base64("Y29tcGF0LXNjZW5hcmlvIHBsYWludGV4dA=="))
+                        )
+                ));
+    }
+
+    private void testKmsGenKeyCreateKeySigning(TestContext t) {
+        GROUP_KMS_GEN_KEY.runTest(t, "CreateKeySigning",
+                new Call("CreateKey", "{\"Description\":\"compat-scenario signing key\",\"KeySpec\":\"RSA_2048\",\"KeyUsage\":\"SIGN_VERIFY\"}",
+                        b -> CreateKeyRequest.builder()
+                                .description("compat-scenario signing key")
+                                .keySpec("RSA_2048")
+                                .keyUsage("SIGN_VERIFY")
+                                .build(),
+                        r -> cl().createKey((CreateKeyRequest) r))
+                        .export("key.signarn", "$.KeyMetadata.Arn")
+                        .export("key.signid", "$.KeyMetadata.KeyId"),
+                List.of(
+                        Clause.eventually(6, 500,
+                                Clause.readback(
+                                        new Call("DescribeKey", "{\"KeyId\":{\"$ref\":\"key.signid\"}}",
+                                                b -> DescribeKeyRequest.builder()
+                                                        .keyId(b.string("KeyId", Values.ref("key.signid")))
+                                                        .build(),
+                                                r -> cl().describeKey((DescribeKeyRequest) r)),
+                                        Check.equalTo("$.KeyMetadata.Arn", Values.ref("key.signarn")),
+                                        Check.equalTo("$.KeyMetadata.KeySpec", "RSA_2048"),
+                                        Check.equalTo("$.KeyMetadata.KeyUsage", "SIGN_VERIFY")
+                                ))
+                ));
+    }
+
+    private void testKmsGenKeySign(TestContext t) {
+        GROUP_KMS_GEN_KEY.runTest(t, "Sign",
+                new Call("Sign", "{\"KeyId\":{\"$ref\":\"key.signid\"},\"Message\":{\"$base64\":\"Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgdG8gc2lnbg==\"},\"SigningAlgorithm\":\"RSASSA_PKCS1_V1_5_SHA_256\"}",
+                        b -> SignRequest.builder()
+                                .keyId(b.string("KeyId", Values.ref("key.signid")))
+                                .message(software.amazon.awssdk.core.SdkBytes.fromByteArray(java.util.Base64.getDecoder().decode("Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgdG8gc2lnbg==")))
+                                .signingAlgorithm("RSASSA_PKCS1_V1_5_SHA_256")
+                                .build(),
+                        r -> cl().sign((SignRequest) r))
+                        .export("key.signature", "$.Signature"),
+                List.of(
+                        Clause.responseField(
+                                Check.equalTo("$.KeyId", Values.ref("key.signarn")),
+                                Check.nonEmpty("$.Signature"),
+                                Check.equalTo("$.SigningAlgorithm", "RSASSA_PKCS1_V1_5_SHA_256")
+                        )
+                ));
+    }
+
+    private void testKmsGenKeyVerify(TestContext t) {
+        GROUP_KMS_GEN_KEY.runTest(t, "Verify",
+                new Call("Verify", "{\"KeyId\":{\"$ref\":\"key.signid\"},\"Message\":{\"$base64\":\"Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgdG8gc2lnbg==\"},\"Signature\":{\"$base64\":{\"$ref\":\"key.signature\"}},\"SigningAlgorithm\":\"RSASSA_PKCS1_V1_5_SHA_256\"}",
+                        b -> VerifyRequest.builder()
+                                .keyId(b.string("KeyId", Values.ref("key.signid")))
+                                .message(software.amazon.awssdk.core.SdkBytes.fromByteArray(java.util.Base64.getDecoder().decode("Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgdG8gc2lnbg==")))
+                                .signature(b.blob("Signature", Values.base64(Values.ref("key.signature"))))
+                                .signingAlgorithm("RSASSA_PKCS1_V1_5_SHA_256")
+                                .build(),
+                        r -> cl().verify((VerifyRequest) r)),
+                List.of(
+                        Clause.responseField(
+                                Check.equalTo("$.KeyId", Values.ref("key.signarn")),
+                                Check.equalTo("$.SignatureValid", true),
+                                Check.equalTo("$.SigningAlgorithm", "RSASSA_PKCS1_V1_5_SHA_256")
+                        )
+                ));
+    }
+
+    private void testKmsGenKeyScheduleKeyDeletionSigning(TestContext t) {
+        GROUP_KMS_GEN_KEY.runTest(t, "ScheduleKeyDeletionSigning",
+                new Call("ScheduleKeyDeletion", "{\"KeyId\":{\"$ref\":\"key.signid\"},\"PendingWindowInDays\":7}",
+                        b -> ScheduleKeyDeletionRequest.builder()
+                                .keyId(b.string("KeyId", Values.ref("key.signid")))
+                                .pendingWindowInDays(7)
+                                .build(),
+                        r -> cl().scheduleKeyDeletion((ScheduleKeyDeletionRequest) r)),
+                List.of(
+                        Clause.eventually(6, 500,
+                                Clause.readback(
+                                        new Call("DescribeKey", "{\"KeyId\":{\"$ref\":\"key.signid\"}}",
+                                                b -> DescribeKeyRequest.builder()
+                                                        .keyId(b.string("KeyId", Values.ref("key.signid")))
+                                                        .build(),
+                                                r -> cl().describeKey((DescribeKeyRequest) r)),
+                                        Check.equalTo("$.KeyMetadata.KeyState", "PendingDeletion")
+                                ))
                 ));
     }
 
