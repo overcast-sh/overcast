@@ -397,7 +397,7 @@ builds the document from what it has:
 | Backend | The document |
 | --- | --- |
 | python-sdk, node-js-sdk, cli | the parsed response the SDK or `aws --output json` already holds |
-| java-sdk, dotnet-sdk | the SDK's response object, walked by accessor |
+| java-sdk, dotnet-sdk | the SDK's response object, walked by accessor — dotnet-sdk rendering a `DateTime` the model calls a `long` as its epoch milliseconds (see [Values](#values)) |
 | go-sdk | the SDK's output struct, reflected over — `internal/scenario/document.go` |
 | rust-sdk | the **raw response body**, kept by an interceptor: `aws-sdk-*` output types carry no `serde` derive and Rust has no reflection. JSON is itself; XML goes through `src/scenario/xml.rs`, which drops the root, unwraps the `<Op>Response`/`<Op>Result` envelope, flattens `<member>` lists and folds `<entry>` maps — to the same member names, because an element is named for its member |
 
@@ -454,7 +454,29 @@ back, and the spellings every decoder refuses.
 A timestamp, a document or a union has no portable value at all: a literal is
 a generation error, and a binding the binder would have made is refused as
 `no-portable-value:<Member>` in `gaps.json` rather than left for four emitters
-to refuse (#1910).
+to refuse (#1910). The backends could not agree on one if the IR had it. A
+timestamp response member reaches go-sdk and java-sdk as RFC 3339 text, the
+dotnet-sdk as ISO 8601 text, the CLI as ISO 8601 with an offset, python-sdk and
+node-js-sdk as the SDK's own `datetime` and `Date` objects, and rust-sdk as
+the raw wire — epoch seconds on the JSON protocols. That is why no `equals`,
+`where` or `$ref` may reach one; `nonEmpty` holds on every form.
+
+**An epoch the model calls a `long` is a number everywhere, and that includes
+the dotnet-sdk.** Some services model a time as a `long` rather than a
+timestamp — CloudWatch Logs' `Timestamp` shape is epoch milliseconds, behind
+`InputLogEvent.timestamp` and `LogStream.creationTime` — and six backends
+hold the number the service sent, so it is an ordinary integer to the IR:
+exportable, comparable, bindable. AWSSDK for .NET types those members as
+`DateTime?`, and without help its document would carry ISO text and its
+requests would not compile. So the dotnet-sdk emitter spells a value bound
+into one as a `DateTime` built from the milliseconds, and registers every such
+property its groups touch with the suite's document conversion, which renders
+it back as the number. An epoch exported from one response and bound into the
+next request therefore round-trips exactly, and reads the same in all seven
+backends. That conversion is spelled only for a service whose wire unit has
+been measured (`dotnetEpochMilliseconds` in `cmd/compatgen/emit_dotnet.go`,
+and the suite's `SdkWireFormTests`); anywhere else the same disagreement is
+refused as `dotnet-emit-unsupported` — see [Naming](#naming).
 
 **A scenario may not depend on sending a member's modeled default.** A typed
 SDK that gives a defaulted member a value-typed field cannot tell "unset" from
@@ -603,19 +625,33 @@ revision of the AWS model than any released SDK. That axis is answered by the
 suite's own `mvn package`, which fails naming the missing class, and the fix is
 the version pin in `compat/suites/java-sdk/pom.xml`.
 
-**dotnet-sdk reads the model too, for its own three reasons**, and they are
-measured rather than assumed. AWSSDK for .NET v4 made every value-typed member
+**dotnet-sdk reads its SDK too, from a committed table.** Three measured
+facts keep its spelling small. AWSSDK for .NET v4 made every value-typed member
 nullable (`int?`), so setting one to `0` really does send `0` — a wire capture
 of `ReceiveMessage` shows `"VisibilityTimeout":0` present when set and the
 member absent when not, which is why this backend has no counterpart to
-go-sdk's value-typed-zero refusal either. C#'s target-typed `new()` and
-collection expressions spell a map, a list and a nested structure without naming
-their types. And an enum is a `ConstantClass` with an implicit conversion from
-`string`, so it takes a bare string literal or a deferred expression alike. It
-meets the same limit java-sdk does — whether the *pinned* package has the
-operation at all is not a question the model answers — and gets the same answer
-one step later: a compile error in the suite's own `dotnet publish`, fixed by
-the version pin in `compat/suites/dotnet-sdk/OvercastCompat.csproj`.
+go-sdk's value-typed-zero refusal. C#'s target-typed `new()` and collection
+expressions spell a map, a list and a nested structure without naming their
+types. And an enum is a `ConstantClass` with an implicit conversion from
+`string`, so it takes a bare string literal or a deferred expression alike.
+Those facts once let the emitter read the model alone, and then AWSSDK turned
+out to customize members away from their modeled kind: `AWSSDK.CloudWatchLogs`
+types `InputLogEvent.Timestamp` as `DateTime?` over the model's `long`, and the
+emitted `long` did not compile (#2132). So each member is now spelled against
+the type AWSSDK gives its property, as go-sdk's is. The emitter cannot load an
+assembly — `cmd/compatgen -check` runs offline, with no .NET SDK — so the suite
+reflects its own pinned packages into
+`compat/suites/dotnet-sdk/sdk-types/AWSSDK.<Service>.txt`, committed and
+refreshed by the suite's `sdk-types` Docker target; the generator refuses a
+table whose versions differ from the csproj's pins, and the suite's
+`SdkTypeTableTests` fail on one that differs from the assemblies it names
+(`cmd/compatgen/README.md` § Source emitters). Where the model and the table
+disagree, the one measured pair — an epoch-milliseconds `long` AWSSDK types as
+`DateTime` — is spelled as a conversion (see [Values](#values)) and every other
+is refused. Reading the SDK also turns an operation the pinned package does not
+declare, or a member it renamed, from a compile error in the suite into a
+refusal of one group; the fix is still the version pin in
+`compat/suites/dotnet-sdk/OvercastCompat.csproj`, and a table refresh with it.
 
 **rust-sdk reads the model too**, and needs no lookup either; the fluent
 builder is why. A setter takes the value itself (`.queue_name(impl Into<String>)`,
@@ -1018,7 +1054,7 @@ service and operation, with a stable reason:
 | `setup-refused:<resource>` | a required resource could not be bound |
 | `no-portable-value:<Member>` | binding rule 1 or 2 would have bound a timestamp, document or union member to an export, and the IR has no value of that kind every backend can send. Refused here so the gap is recorded, rather than left to the source emitters, whose refusal would silently scope the whole group away from their suites |
 | `unsupported-tag-shape:<Shape>` | the tag member is neither a string map nor a list of `{Key, Value}` or `{TagKey, TagValue}` structures, or the untag member is neither a list of strings nor a list of key-only structures (a structure with exactly one string member, such as ELB Classic's `TagKeyOnly`). `<Shape>` is the bare shape name; the qualified Smithy id is in the detail |
-| `dotnet-emit-unsupported:<Member>` | the dotnet-sdk emitter cannot write that member as C#: its modeled kind has no C# literal (a timestamp, blob, document, union, bigInteger or bigDecimal), a value expression is bound to a composite member, which has no scalar slot to land in, or an integer literal falls outside the C# type's range — C# range-checks an integral literal at compile time, and a compile error in this backend is suite-wide rather than scoped to one group. It scopes the group away from `dotnet-sdk` exactly as `go-emit-unsupported` does for `go-sdk`. It is shorter than that list because the two emitters read different things: the .NET emitter never asks the SDK, so it has no "the SDK renamed it" refusal — see [Naming](#naming) |
+| `dotnet-emit-unsupported:<Member>` | the dotnet-sdk emitter cannot write that member as C#: its modeled kind has no C# literal (a timestamp, document, union, bigInteger or bigDecimal), a value expression is bound to a composite member, which has no scalar slot to land in, an integer literal falls outside the range of the C# type AWSSDK gives the property — C# range-checks an integral literal at compile time, and a compile error in this backend is suite-wide rather than scoped to one group — or the pinned package's type table (`compat/suites/dotnet-sdk/sdk-types/`) says something the model cannot be spelled into: no request class for the operation (recorded as `:<Op>Request`), no property for the member, or a type the modeled kind does not convert to, where the one measured conversion (an epoch-milliseconds `long` AWSSDK types as `DateTime`, in a service whose unit is measured) does not apply. The same disagreement on a request or response property the group only *reads* is refused too, recorded under the property, because the suite's document would then differ from every other backend's — see [Values](#values). It scopes the group away from `dotnet-sdk` exactly as `go-emit-unsupported` does for `go-sdk` — see [Naming](#naming) |
 | `go-emit-unsupported:<Member>` | the go-sdk emitter cannot write that member as typed Go: its modeled kind has no IR literal (a timestamp, blob, document or union), or the vendored SDK has no `<Op>Input`, no field for the member, or a field of a type no literal builds, or the member is value-typed and the scenario sets it to its zero value (see § Values). It is the one reason here that does **not** mean "no test": the operation is generated and the interpreters run it, and the group is scoped away from `go-sdk` in the generated registry instead, because a suite listed against a group it cannot compile would report as a hard failure |
 | `java-emit-unsupported:<Member>` | the java-sdk emitter cannot write that member as typed Java: its modeled kind has no IR literal (a timestamp, blob, document or union), the model gives the operation no such member, the literal is of the wrong JSON type for the member's kind, a value expression is bound to a composite member, or the value is an explicit `null` — which the AWS SDK for Java v2 spells as "unset" and so cannot send. It is scoped away from `java-sdk` on the same terms as the row above. Unlike the Go emitter it needs no SDK lookup and refuses no zero: every Java scalar is boxed, so a builder setter takes the value whatever the member's optionality and a boxed `0` is serialized (measured by the suite's own `JavaSdkWireFactsTest`). What the model cannot answer — whether the *pinned* SDK has the operation at all — is answered by the suite's `mvn package`, as a compile error rather than a wrong request |
 | `rust-emit-unsupported:<Member>` | the rust-sdk emitter cannot write that member as typed Rust: its modeled kind has no IR literal (a timestamp, blob, document or union), or a value expression is bound to a composite member, which has no scalar slot to land in. A composite the scenario writes out as a literal is not a cause at any depth — a structure inside a structure is another builder chain, a list inside one is the repeated setter smithy-rs appends through, and a map inside one the two-argument insert. Its list is shorter than go-sdk's because a fluent setter takes the value rather than an `Option`, so there is no pointer-vs-value question and no zero-value case. It scopes the group away from `rust-sdk` on the same terms as the row above |

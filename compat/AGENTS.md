@@ -1526,7 +1526,12 @@ the same SDK a month later; the only variable is the emulator.
 3. **Update the pin file and the AGENTS.md simultaneously.** Every version
    change in `package.json` / `Cargo.toml` / `.csproj` / `go.mod` /
    `requirements.txt` must be paired with an update to the pinned version
-   table in that suite's own `AGENTS.md`.
+   table in that suite's own `AGENTS.md`. A `dotnet-sdk` pin change also
+   refreshes `compat/suites/dotnet-sdk/sdk-types/`, the table of the pinned
+   packages' member types `cmd/compatgen` spells C# from, with the command in
+   [suites/dotnet-sdk/README.md § The SDK type table](suites/dotnet-sdk/README.md#the-sdk-type-table),
+   then regenerates: the generator refuses a table that does not match the
+   pins.
 
 4. **Full re-run against latest emulator `main`.** After bumping, trigger a
    complete run of the affected suite and verify zero new failures:
