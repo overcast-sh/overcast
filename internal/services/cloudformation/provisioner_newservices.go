@@ -276,6 +276,29 @@ func addRDSTagParams(params map[string]string, tags map[string]string) {
 	}
 }
 
+// addRDSServerlessV2ScalingParams writes a template's
+// ServerlessV2ScalingConfiguration onto params under the Query-protocol
+// struct prefix both CreateDBCluster and ModifyDBCluster use (the same
+// {MinCapacity,MaxCapacity,SecondsUntilAutoPause} shape on both sides, unlike
+// most of this package's request/response pairs). A value that is not a
+// nested object — absent, or a template mistake — is skipped rather than
+// guessed at; the service owns that error.
+func addRDSServerlessV2ScalingParams(params map[string]string, raw any, prefix string) {
+	cfg, ok := raw.(map[string]any)
+	if !ok {
+		return
+	}
+	if v := fmtPropString(cfg, "MinCapacity"); v != "" {
+		params[prefix+".MinCapacity"] = v
+	}
+	if v := fmtPropString(cfg, "MaxCapacity"); v != "" {
+		params[prefix+".MaxCapacity"] = v
+	}
+	if v := fmtPropString(cfg, "SecondsUntilAutoPause"); v != "" {
+		params[prefix+".SecondsUntilAutoPause"] = v
+	}
+}
+
 // updateRDSTags reconciles an RDS resource's tags on Update: added/changed
 // keys go through AddTagsToResource, keys dropped from the template go
 // through RemoveTagsFromResource. Mirrors updateSQSQueueTags's diff shape for
@@ -385,6 +408,60 @@ func (h *rdsDBInstanceHandler) Create(ctx context.Context, router http.Handler, 
 			}
 		}
 	}
+	// #2133: the remaining DBInstance properties CreateDBInstance/
+	// ModifyDBInstance accept but Describe* used to drop. StorageEncrypted,
+	// KmsKeyId and AvailabilityZone are create-only — ModifyDBInstanceMessage
+	// does not carry any of the three — so they are read only here, never in
+	// Update.
+	if v, ok := props["StorageEncrypted"]; ok {
+		params["StorageEncrypted"] = cfnScalarString(v)
+	}
+	if v, _ := props["KmsKeyId"].(string); v != "" {
+		params["KmsKeyId"] = v
+	}
+	if v, _ := props["AvailabilityZone"].(string); v != "" {
+		params["AvailabilityZone"] = v
+	}
+	if v, ok := props["DeletionProtection"]; ok {
+		params["DeletionProtection"] = cfnScalarString(v)
+	}
+	if v := fmtPropString(props, "BackupRetentionPeriod"); v != "" {
+		params["BackupRetentionPeriod"] = v
+	}
+	if v, _ := props["PreferredBackupWindow"].(string); v != "" {
+		params["PreferredBackupWindow"] = v
+	}
+	if v, _ := props["PreferredMaintenanceWindow"].(string); v != "" {
+		params["PreferredMaintenanceWindow"] = v
+	}
+	if v, ok := props["AutoMinorVersionUpgrade"]; ok {
+		params["AutoMinorVersionUpgrade"] = cfnScalarString(v)
+	}
+	if v := fmtPropString(props, "Iops"); v != "" {
+		params["Iops"] = v
+	}
+	if v, ok := props["EnableIAMDatabaseAuthentication"]; ok {
+		params["EnableIAMDatabaseAuthentication"] = cfnScalarString(v)
+	}
+	if v, _ := props["CACertificateIdentifier"].(string); v != "" {
+		params["CACertificateIdentifier"] = v
+	}
+	if v := fmtPropString(props, "MonitoringInterval"); v != "" {
+		params["MonitoringInterval"] = v
+	}
+	if v, ok := props["EnablePerformanceInsights"]; ok {
+		params["EnablePerformanceInsights"] = cfnScalarString(v)
+	}
+	if v, ok := props["CopyTagsToSnapshot"]; ok {
+		params["CopyTagsToSnapshot"] = cfnScalarString(v)
+	}
+	if logs, ok := props["EnableCloudwatchLogsExports"].([]any); ok {
+		for i, l := range logs {
+			if s, _ := l.(string); s != "" {
+				params[fmt.Sprintf("EnableCloudwatchLogsExports.member.%d", i+1)] = s
+			}
+		}
+	}
 	if tags := mergeResourceTags(rCtx.StackTags, props["Tags"]); len(tags) > 0 {
 		addRDSTagParams(params, tags)
 	}
@@ -449,6 +526,17 @@ var rdsInstanceReplaceOnChange = []string{
 	"Engine",
 	"MasterUsername",
 	"DBName",
+	// KmsKeyId: CloudFormation documents "Update requires: Replacement", and
+	// ModifyDBInstanceMessage does not accept it — see the Create comment.
+	"KmsKeyId",
+}
+
+// rdsInstanceBoolReplaceOnChange is rdsInstanceReplaceOnChange's counterpart
+// for boolean-typed properties: the string list above compares with a direct
+// `.(string)` assertion, which silently never fires for a JSON bool, so
+// StorageEncrypted needs its own comparison via fmtPropString.
+var rdsInstanceBoolReplaceOnChange = []string{
+	"StorageEncrypted",
 }
 
 func (h *rdsDBInstanceHandler) Update(ctx context.Context, router http.Handler, _ *config.Config, physicalID string, props map[string]any, oldProps map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
@@ -457,6 +545,13 @@ func (h *rdsDBInstanceHandler) Update(ctx context.Context, router http.Handler, 
 			newVal, _ := props[name].(string)
 			oldVal, _ := oldProps[name].(string)
 			if newVal != "" && oldVal != "" && newVal != oldVal {
+				return "", nil, errReplacementRequired
+			}
+		}
+		for _, name := range rdsInstanceBoolReplaceOnChange {
+			_, newOK := props[name]
+			_, oldOK := oldProps[name]
+			if newOK && oldOK && fmtPropString(props, name) != fmtPropString(oldProps, name) {
 				return "", nil, errReplacementRequired
 			}
 		}
@@ -481,6 +576,48 @@ func (h *rdsDBInstanceHandler) Update(ctx context.Context, router http.Handler, 
 	}
 	if v := rdsMasterUserSecretKmsKeyId(props); v != "" {
 		params["MasterUserSecretKmsKeyId"] = v
+	}
+	if v, ok := props["DeletionProtection"]; ok {
+		params["DeletionProtection"] = cfnScalarString(v)
+	}
+	if v := fmtPropString(props, "BackupRetentionPeriod"); v != "" {
+		params["BackupRetentionPeriod"] = v
+	}
+	if v, _ := props["PreferredBackupWindow"].(string); v != "" {
+		params["PreferredBackupWindow"] = v
+	}
+	if v, _ := props["PreferredMaintenanceWindow"].(string); v != "" {
+		params["PreferredMaintenanceWindow"] = v
+	}
+	if v, ok := props["AutoMinorVersionUpgrade"]; ok {
+		params["AutoMinorVersionUpgrade"] = cfnScalarString(v)
+	}
+	if v := fmtPropString(props, "Iops"); v != "" {
+		params["Iops"] = v
+	}
+	if v, ok := props["EnableIAMDatabaseAuthentication"]; ok {
+		params["EnableIAMDatabaseAuthentication"] = cfnScalarString(v)
+	}
+	if v, _ := props["CACertificateIdentifier"].(string); v != "" {
+		params["CACertificateIdentifier"] = v
+	}
+	if v := fmtPropString(props, "MonitoringInterval"); v != "" {
+		params["MonitoringInterval"] = v
+	}
+	if v, ok := props["EnablePerformanceInsights"]; ok {
+		params["EnablePerformanceInsights"] = cfnScalarString(v)
+	}
+	if v, ok := props["CopyTagsToSnapshot"]; ok {
+		params["CopyTagsToSnapshot"] = cfnScalarString(v)
+	}
+	if v, ok := props["EnableCloudwatchLogsExports"]; ok {
+		if logs, ok := v.([]any); ok {
+			for i, l := range logs {
+				if s, _ := l.(string); s != "" {
+					params[fmt.Sprintf("CloudwatchLogsExportConfiguration.EnableLogTypes.member.%d", i+1)] = s
+				}
+			}
+		}
 	}
 
 	// ModifyDBInstance puts the instance into "modifying" and settles it
@@ -580,6 +717,19 @@ func (h *rdsDBClusterHandler) Create(ctx context.Context, router http.Handler, c
 			}
 		}
 	}
+	// #2133: StorageEncrypted and KmsKeyId are create-only — CloudFormation
+	// documents both "Update requires: Replacement", and ModifyDBClusterMessage
+	// does not accept either — so they are read only here, never in Update.
+	if v, ok := props["StorageEncrypted"]; ok {
+		params["StorageEncrypted"] = cfnScalarString(v)
+	}
+	if v, _ := props["KmsKeyId"].(string); v != "" {
+		params["KmsKeyId"] = v
+	}
+	if v, ok := props["EnableHttpEndpoint"]; ok {
+		params["EnableHttpEndpoint"] = cfnScalarString(v)
+	}
+	addRDSServerlessV2ScalingParams(params, props["ServerlessV2ScalingConfiguration"], "ServerlessV2ScalingConfiguration")
 	if tags := mergeResourceTags(rCtx.StackTags, props["Tags"]); len(tags) > 0 {
 		addRDSTagParams(params, tags)
 	}
@@ -657,6 +807,15 @@ var rdsClusterReplaceOnChange = []string{
 	"MasterUsername",
 	"DatabaseName",
 	"DBSubnetGroupName",
+	// KmsKeyId: CloudFormation documents "Update requires: Replacement", and
+	// ModifyDBClusterMessage does not accept it — see the Create comment.
+	"KmsKeyId",
+}
+
+// rdsClusterBoolReplaceOnChange is rdsInstanceBoolReplaceOnChange's cluster
+// counterpart — see that comment.
+var rdsClusterBoolReplaceOnChange = []string{
+	"StorageEncrypted",
 }
 
 func (h *rdsDBClusterHandler) Update(ctx context.Context, router http.Handler, _ *config.Config, physicalID string, props map[string]any, oldProps map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
@@ -668,6 +827,13 @@ func (h *rdsDBClusterHandler) Update(ctx context.Context, router http.Handler, _
 			newVal, _ := props[name].(string)
 			oldVal, _ := oldProps[name].(string)
 			if newVal != "" && oldVal != "" && newVal != oldVal {
+				return "", nil, errReplacementRequired
+			}
+		}
+		for _, name := range rdsClusterBoolReplaceOnChange {
+			_, newOK := props[name]
+			_, oldOK := oldProps[name]
+			if newOK && oldOK && fmtPropString(props, name) != fmtPropString(oldProps, name) {
 				return "", nil, errReplacementRequired
 			}
 		}
@@ -721,6 +887,10 @@ func (h *rdsDBClusterHandler) Update(ctx context.Context, router http.Handler, _
 	if v, ok := props["DeletionProtection"]; ok {
 		params["DeletionProtection"] = cfnScalarString(v)
 	}
+	if v, ok := props["EnableHttpEndpoint"]; ok {
+		params["EnableHttpEndpoint"] = cfnScalarString(v)
+	}
+	addRDSServerlessV2ScalingParams(params, props["ServerlessV2ScalingConfiguration"], "ServerlessV2ScalingConfiguration")
 
 	if _, err := internalQuery(ctx, router, rCtx.Region, params); err != nil {
 		return "", nil, fmt.Errorf("ModifyDBCluster: %w", err)

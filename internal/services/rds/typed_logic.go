@@ -46,6 +46,28 @@ type createDBInstanceReq struct {
 	// it — see the rejection in createDBInstanceTyped. Its member fields are
 	// never read.
 	AdditionalStorageVolumes []additionalStorageVolumeReq `json:"AdditionalStorageVolumes"`
+
+	// The fields below are #2133's echo-only properties (see DBInstance's
+	// comment in store.go): accepted, stored, and returned with AWS's own
+	// field names and defaults, with no runtime effect beyond
+	// DeletionProtection. Boolean ones are pointers for the reason
+	// ManageMasterUserPassword's is — "absent" and "false" are different
+	// requests wherever AWS's own default is not false.
+	StorageEncrypted                *bool    `json:"StorageEncrypted"`
+	KmsKeyId                        string   `json:"KmsKeyId"`
+	DeletionProtection              *bool    `json:"DeletionProtection"`
+	BackupRetentionPeriod           *int     `json:"BackupRetentionPeriod"`
+	PreferredBackupWindow           string   `json:"PreferredBackupWindow"`
+	PreferredMaintenanceWindow      string   `json:"PreferredMaintenanceWindow"`
+	AutoMinorVersionUpgrade         *bool    `json:"AutoMinorVersionUpgrade"`
+	Iops                            int      `json:"Iops"`
+	AvailabilityZone                string   `json:"AvailabilityZone"`
+	EnableIAMDatabaseAuthentication *bool    `json:"EnableIAMDatabaseAuthentication"`
+	CACertificateIdentifier         string   `json:"CACertificateIdentifier"`
+	MonitoringInterval              int      `json:"MonitoringInterval"`
+	EnablePerformanceInsights       *bool    `json:"EnablePerformanceInsights"`
+	EnableCloudwatchLogsExports     []string `json:"EnableCloudwatchLogsExports"`
+	CopyTagsToSnapshot              *bool    `json:"CopyTagsToSnapshot"`
 }
 
 // additionalStorageVolumeReq mirrors AWS's AdditionalStorageVolume request
@@ -111,6 +133,27 @@ type modifyDBInstanceReq struct {
 	// tells "absent" apart from "false" — the one that turns management off.
 	ManageMasterUserPassword *bool  `json:"ManageMasterUserPassword"`
 	MasterUserSecretKmsKeyId string `json:"MasterUserSecretKmsKeyId"`
+
+	// The fields below mirror createDBInstanceReq's echo-only block, minus
+	// StorageEncrypted, KmsKeyId and AvailabilityZone: ModifyDBInstanceMessage
+	// does not accept any of the three (AWS applies them only at create; the
+	// first two are "Update requires: Replacement" in CloudFormation).
+	DeletionProtection              *bool  `json:"DeletionProtection"`
+	BackupRetentionPeriod           *int   `json:"BackupRetentionPeriod"`
+	PreferredBackupWindow           string `json:"PreferredBackupWindow"`
+	PreferredMaintenanceWindow      string `json:"PreferredMaintenanceWindow"`
+	AutoMinorVersionUpgrade         *bool  `json:"AutoMinorVersionUpgrade"`
+	Iops                            int    `json:"Iops"`
+	EnableIAMDatabaseAuthentication *bool  `json:"EnableIAMDatabaseAuthentication"`
+	CACertificateIdentifier         string `json:"CACertificateIdentifier"`
+	MonitoringInterval              int    `json:"MonitoringInterval"`
+	EnablePerformanceInsights       *bool  `json:"EnablePerformanceInsights"`
+	CopyTagsToSnapshot              *bool  `json:"CopyTagsToSnapshot"`
+	// CloudwatchLogsExportConfiguration mirrors modifyDBClusterReq's field of
+	// the same name — ModifyDBInstanceMessage spells log-export changes as a
+	// delta the same way ModifyDBClusterMessage does, unlike
+	// CreateDBInstanceMessage's plain EnableCloudwatchLogsExports list.
+	CloudwatchLogsExportConfiguration *cloudwatchLogsExportConfiguration `json:"CloudwatchLogsExportConfiguration"`
 }
 
 type createDBSubnetGroupReq struct {
@@ -176,6 +219,27 @@ type createDBClusterReq struct {
 	// createDBInstanceReq's fields of the same name.
 	ManageMasterUserPassword *bool  `json:"ManageMasterUserPassword"`
 	MasterUserSecretKmsKeyId string `json:"MasterUserSecretKmsKeyId"`
+
+	// StorageEncrypted, KmsKeyId, EnableHttpEndpoint and
+	// ServerlessV2ScalingConfiguration are #2133's remaining DBCluster
+	// echo-only properties — see the DBInstance ones above for the shared
+	// reasoning.
+	StorageEncrypted                 *bool                                `json:"StorageEncrypted"`
+	KmsKeyId                         string                               `json:"KmsKeyId"`
+	EnableHttpEndpoint               *bool                                `json:"EnableHttpEndpoint"`
+	ServerlessV2ScalingConfiguration *serverlessV2ScalingConfigurationReq `json:"ServerlessV2ScalingConfiguration"`
+}
+
+// serverlessV2ScalingConfigurationReq is AWS's ServerlessV2ScalingConfiguration
+// request shape — the same three fields CreateDBCluster and ModifyDBCluster
+// both accept. All three are pointers because Overcast performs no real
+// scaling and so has no meaningful zero: an omitted MinCapacity must not
+// silently become 0, a floor no Aurora Serverless v2 cluster can actually run
+// at.
+type serverlessV2ScalingConfigurationReq struct {
+	MinCapacity           *float64 `json:"MinCapacity"`
+	MaxCapacity           *float64 `json:"MaxCapacity"`
+	SecondsUntilAutoPause *int     `json:"SecondsUntilAutoPause"`
 }
 
 type describeDBClustersReq struct {
@@ -220,6 +284,12 @@ type modifyDBClusterReq struct {
 	// modifyDBInstanceReq's fields of the same name.
 	ManageMasterUserPassword *bool  `json:"ManageMasterUserPassword"`
 	MasterUserSecretKmsKeyId string `json:"MasterUserSecretKmsKeyId"`
+
+	// EnableHttpEndpoint and ServerlessV2ScalingConfiguration — see
+	// createDBClusterReq's fields of the same name. Unlike StorageEncrypted
+	// and KmsKeyId, ModifyDBClusterMessage accepts both.
+	EnableHttpEndpoint               *bool                                `json:"EnableHttpEndpoint"`
+	ServerlessV2ScalingConfiguration *serverlessV2ScalingConfigurationReq `json:"ServerlessV2ScalingConfiguration"`
 }
 
 type startDBClusterReq struct {
@@ -385,6 +455,21 @@ func (h *Handler) createDBInstanceTyped(ctx context.Context, req *createDBInstan
 		storageType = "gp2"
 	}
 
+	// #2133's echo-only properties. Validated up front, alongside the rest of
+	// createDBInstanceTyped's checks, so a rejected create still leaves no
+	// instance behind.
+	backupRetention := instanceBackupRetentionDefault
+	if req.BackupRetentionPeriod != nil {
+		if aerr := validateInstanceBackupRetentionPeriod(*req.BackupRetentionPeriod); aerr != nil {
+			return nil, aerr
+		}
+		backupRetention = *req.BackupRetentionPeriod
+	}
+	autoMinorVersionUpgrade := true
+	if req.AutoMinorVersionUpgrade != nil {
+		autoMinorVersionUpgrade = *req.AutoMinorVersionUpgrade
+	}
+
 	multiAZ := req.MultiAZ
 	vpcID := ""
 
@@ -453,6 +538,22 @@ func (h *Handler) createDBInstanceTyped(ctx context.Context, req *createDBInstan
 		ManageMasterUserPassword: manageSecret,
 		MasterUserSecretARN:      secretARN,
 		MasterUserSecretKmsKeyId: secretKmsKeyId,
+
+		StorageEncrypted:                req.StorageEncrypted != nil && *req.StorageEncrypted,
+		KmsKeyId:                        req.KmsKeyId,
+		DeletionProtection:              req.DeletionProtection != nil && *req.DeletionProtection,
+		BackupRetentionPeriod:           &backupRetention,
+		PreferredBackupWindow:           req.PreferredBackupWindow,
+		PreferredMaintenanceWindow:      req.PreferredMaintenanceWindow,
+		AutoMinorVersionUpgrade:         &autoMinorVersionUpgrade,
+		Iops:                            req.Iops,
+		AvailabilityZone:                req.AvailabilityZone,
+		EnableIAMDatabaseAuthentication: req.EnableIAMDatabaseAuthentication != nil && *req.EnableIAMDatabaseAuthentication,
+		CACertificateIdentifier:         req.CACertificateIdentifier,
+		MonitoringInterval:              req.MonitoringInterval,
+		PerformanceInsightsEnabled:      req.EnablePerformanceInsights != nil && *req.EnablePerformanceInsights,
+		EnabledCloudwatchLogsExports:    req.EnableCloudwatchLogsExports,
+		CopyTagsToSnapshot:              req.CopyTagsToSnapshot != nil && *req.CopyTagsToSnapshot,
 	}
 
 	if aerr := h.store.putDBInstance(ctx, inst); aerr != nil {
@@ -562,6 +663,18 @@ func (h *Handler) deleteDBInstanceTyped(ctx context.Context, req *deleteDBInstan
 	var containerID string
 	var hostPort int
 	inst, aerr := h.mutateInstance(ctx, id, func(inst *DBInstance) *protocol.AWSError {
+		// AWS refuses outright rather than deleting and reporting the flag
+		// afterwards — the same discipline deleteDBClusterTyped follows for
+		// DeletionProtection, and for the same reason: a flag that is
+		// recorded but not enforced is worse than one that was never
+		// recorded.
+		if inst.DeletionProtection {
+			return &protocol.AWSError{
+				Code:       "InvalidParameterCombination",
+				Message:    "Cannot delete protected DB Instance, please disable deletion protection and try again.",
+				HTTPStatus: http.StatusBadRequest,
+			}
+		}
 		containerID = inst.DockerContainerID
 		hostPort = inst.HostPort
 		inst.DBInstanceStatus = "deleting"
@@ -855,6 +968,13 @@ func (h *Handler) modifyDBInstanceTyped(ctx context.Context, req *modifyDBInstan
 	if id == "" {
 		return nil, errInvalidParameterValue("DBInstanceIdentifier is required")
 	}
+	// The same bound CreateDBInstance enforces. Without it an instance could
+	// be created at a legal retention and modified to one AWS would refuse.
+	if req.BackupRetentionPeriod != nil {
+		if aerr := validateInstanceBackupRetentionPeriod(*req.BackupRetentionPeriod); aerr != nil {
+			return nil, aerr
+		}
+	}
 
 	// The password (and any ManageMasterUserPassword transition) goes first,
 	// and nothing else is applied unless it lands: a modification that
@@ -910,6 +1030,44 @@ func (h *Handler) modifyDBInstanceTyped(ctx context.Context, req *modifyDBInstan
 		}
 		if req.StorageType != "" {
 			inst.StorageType = req.StorageType
+		}
+		if req.DeletionProtection != nil {
+			inst.DeletionProtection = *req.DeletionProtection
+		}
+		if req.BackupRetentionPeriod != nil {
+			brp := *req.BackupRetentionPeriod
+			inst.BackupRetentionPeriod = &brp
+		}
+		if req.PreferredBackupWindow != "" {
+			inst.PreferredBackupWindow = req.PreferredBackupWindow
+		}
+		if req.PreferredMaintenanceWindow != "" {
+			inst.PreferredMaintenanceWindow = req.PreferredMaintenanceWindow
+		}
+		if req.AutoMinorVersionUpgrade != nil {
+			amvu := *req.AutoMinorVersionUpgrade
+			inst.AutoMinorVersionUpgrade = &amvu
+		}
+		if req.Iops != 0 {
+			inst.Iops = req.Iops
+		}
+		if req.EnableIAMDatabaseAuthentication != nil {
+			inst.EnableIAMDatabaseAuthentication = *req.EnableIAMDatabaseAuthentication
+		}
+		if req.CACertificateIdentifier != "" {
+			inst.CACertificateIdentifier = req.CACertificateIdentifier
+		}
+		if req.MonitoringInterval != 0 {
+			inst.MonitoringInterval = req.MonitoringInterval
+		}
+		if req.EnablePerformanceInsights != nil {
+			inst.PerformanceInsightsEnabled = *req.EnablePerformanceInsights
+		}
+		if req.CopyTagsToSnapshot != nil {
+			inst.CopyTagsToSnapshot = *req.CopyTagsToSnapshot
+		}
+		if cfg := req.CloudwatchLogsExportConfiguration; cfg != nil {
+			inst.EnabledCloudwatchLogsExports = applyLogExportConfiguration(inst.EnabledCloudwatchLogsExports, cfg)
 		}
 
 		settledStatus = inst.DBInstanceStatus
@@ -1347,11 +1505,18 @@ func (h *Handler) createDBClusterTyped(ctx context.Context, req *createDBCluster
 		ManageMasterUserPassword: manageSecret,
 		MasterUserSecretARN:      secretARN,
 		MasterUserSecretKmsKeyId: req.MasterUserSecretKmsKeyId,
+
+		StorageEncrypted: req.StorageEncrypted != nil && *req.StorageEncrypted,
+		KmsKeyId:         req.KmsKeyId,
 	}
 	cluster.BackupRetentionPeriod = backupRetention
 	if req.DeletionProtection != nil {
 		cluster.DeletionProtection = *req.DeletionProtection
 	}
+	if req.EnableHttpEndpoint != nil {
+		cluster.HttpEndpointEnabled = *req.EnableHttpEndpoint
+	}
+	cluster.ServerlessV2ScalingConfiguration = toServerlessV2ScalingConfig(req.ServerlessV2ScalingConfiguration)
 
 	if aerr := h.store.putDBCluster(ctx, cluster); aerr != nil {
 		return nil, aerr
@@ -1611,6 +1776,12 @@ func (h *Handler) modifyDBClusterTyped(ctx context.Context, req *modifyDBCluster
 			cluster.EnabledCloudwatchLogsExports = applyLogExportConfiguration(
 				cluster.EnabledCloudwatchLogsExports, cfg)
 		}
+		if req.EnableHttpEndpoint != nil {
+			cluster.HttpEndpointEnabled = *req.EnableHttpEndpoint
+		}
+		if req.ServerlessV2ScalingConfiguration != nil {
+			cluster.ServerlessV2ScalingConfiguration = toServerlessV2ScalingConfig(req.ServerlessV2ScalingConfiguration)
+		}
 		return nil
 	})
 	if aerr != nil {
@@ -1626,6 +1797,27 @@ func (h *Handler) modifyDBClusterTyped(ctx context.Context, req *modifyDBCluster
 		},
 		ResponseMetadata: protocol.ResponseMetadata{RequestID: protocol.RequestIDFromContext(ctx)},
 	}, nil
+}
+
+// toServerlessV2ScalingConfig converts the request shape to the stored one,
+// or returns nil for an absent request — see ServerlessV2ScalingConfig's own
+// comment for why a present-but-empty struct must not be confused with "not
+// set".
+func toServerlessV2ScalingConfig(req *serverlessV2ScalingConfigurationReq) *ServerlessV2ScalingConfig {
+	if req == nil {
+		return nil
+	}
+	cfg := &ServerlessV2ScalingConfig{}
+	if req.MinCapacity != nil {
+		cfg.MinCapacity = *req.MinCapacity
+	}
+	if req.MaxCapacity != nil {
+		cfg.MaxCapacity = *req.MaxCapacity
+	}
+	if req.SecondsUntilAutoPause != nil {
+		cfg.SecondsUntilAutoPause = *req.SecondsUntilAutoPause
+	}
+	return cfg
 }
 
 // applyLogExportConfiguration folds an enable/disable request into the log

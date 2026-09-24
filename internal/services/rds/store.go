@@ -115,6 +115,66 @@ type DBInstance struct {
 	// recorded-only — Overcast performs no encryption) KMS key ID associated
 	// with the managed secret.
 	MasterUserSecretKmsKeyId string `json:"MasterUserSecretKmsKeyId,omitempty"`
+
+	// The fields below are #2133's echo-only properties: accepted on
+	// CreateDBInstance and (where AWS's own ModifyDBInstance accepts them)
+	// ModifyDBInstance, stored, and returned by Describe*/Create*/Modify*.
+	// None of them changes runtime behaviour — Overcast performs no real
+	// encryption, monitoring, or Performance Insights — except
+	// DeletionProtection, which DeleteDBInstance enforces the same way
+	// DeleteDBCluster already enforces it for clusters.
+	//
+	// StorageEncrypted and KmsKeyId are create-only on AWS (ModifyDBInstance
+	// does not accept either; CloudFormation documents both
+	// "Update requires: Replacement"), so no modify path ever writes them.
+	StorageEncrypted   bool   `json:"StorageEncrypted,omitempty"`
+	KmsKeyId           string `json:"KmsKeyId,omitempty"`
+	DeletionProtection bool   `json:"DeletionProtection,omitempty"`
+	// BackupRetentionPeriod and AutoMinorVersionUpgrade are pointers for the
+	// same reason PubliclyAccessible is: AWS's default is not the Go zero
+	// value (1 and true respectively), so a record written before this field
+	// existed must read back as the AWS default rather than as "0" or
+	// "false". Read them through BackupRetentionPeriodOrDefault /
+	// AutoMinorVersionUpgradeOrDefault, never by dereferencing directly.
+	// CreateDBInstance always resolves and stores a concrete pointer, so nil
+	// only ever means "predates this field".
+	BackupRetentionPeriod      *int   `json:"BackupRetentionPeriod,omitempty"`
+	PreferredBackupWindow      string `json:"PreferredBackupWindow,omitempty"`
+	PreferredMaintenanceWindow string `json:"PreferredMaintenanceWindow,omitempty"`
+	AutoMinorVersionUpgrade    *bool  `json:"AutoMinorVersionUpgrade,omitempty"`
+	Iops                       int    `json:"Iops,omitempty"`
+	// AvailabilityZone is recorded only — Overcast places every container on
+	// the same host regardless of what AZ a caller names, exactly as it does
+	// for DBSubnetGroup's subnets.
+	AvailabilityZone                string   `json:"AvailabilityZone,omitempty"`
+	EnableIAMDatabaseAuthentication bool     `json:"EnableIAMDatabaseAuthentication,omitempty"`
+	CACertificateIdentifier         string   `json:"CACertificateIdentifier,omitempty"`
+	MonitoringInterval              int      `json:"MonitoringInterval,omitempty"`
+	PerformanceInsightsEnabled      bool     `json:"PerformanceInsightsEnabled,omitempty"`
+	EnabledCloudwatchLogsExports    []string `json:"EnabledCloudwatchLogsExports,omitempty"`
+	CopyTagsToSnapshot              bool     `json:"CopyTagsToSnapshot,omitempty"`
+}
+
+// BackupRetentionPeriodOrDefault reports the automated-backup retention
+// period, resolving a record written before this field existed to AWS's own
+// CreateDBInstance default of 1 rather than the Go zero value 0 — which is
+// itself a legal, distinguishable AWS answer ("backups disabled") that a
+// live create/modify can still produce. See the field's own comment.
+func (i *DBInstance) BackupRetentionPeriodOrDefault() int {
+	if i.BackupRetentionPeriod != nil {
+		return *i.BackupRetentionPeriod
+	}
+	return instanceBackupRetentionDefault
+}
+
+// AutoMinorVersionUpgradeOrDefault reports whether minor engine upgrades are
+// applied automatically, resolving a record written before this field
+// existed to AWS's own default of true. See the field's own comment.
+func (i *DBInstance) AutoMinorVersionUpgradeOrDefault() bool {
+	if i.AutoMinorVersionUpgrade != nil {
+		return *i.AutoMinorVersionUpgrade
+	}
+	return true
 }
 
 // PubliclyAccessibleOrDefault reports whether the instance is meant to be
@@ -227,6 +287,35 @@ type DBCluster struct {
 	ManageMasterUserPassword bool   `json:"ManageMasterUserPassword,omitempty"`
 	MasterUserSecretARN      string `json:"MasterUserSecretARN,omitempty"`
 	MasterUserSecretKmsKeyId string `json:"MasterUserSecretKmsKeyId,omitempty"`
+
+	// StorageEncrypted, KmsKeyId, ServerlessV2ScalingConfiguration and
+	// HttpEndpointEnabled are #2133's remaining echo-only DBCluster
+	// properties — see DBInstance's identical block for the shared
+	// reasoning. StorageEncrypted and KmsKeyId are create-only on AWS
+	// (ModifyDBCluster does not accept either; CloudFormation documents both
+	// "Update requires: Replacement"), so no modify path writes them.
+	StorageEncrypted bool   `json:"StorageEncrypted,omitempty"`
+	KmsKeyId         string `json:"KmsKeyId,omitempty"`
+	// ServerlessV2ScalingConfiguration is nil unless the caller set it — AWS
+	// omits the whole ServerlessV2ScalingConfigurationInfo element for a
+	// provisioned (non-Serverless-v2) cluster, and a zero-value struct would
+	// claim MinCapacity/MaxCapacity of 0 for one.
+	ServerlessV2ScalingConfiguration *ServerlessV2ScalingConfig `json:"ServerlessV2ScalingConfiguration,omitempty"`
+	// HttpEndpointEnabled is EnableHttpEndpoint's stored, AWS-output-spelled
+	// form — see xmlDBCluster.
+	HttpEndpointEnabled bool `json:"HttpEndpointEnabled,omitempty"`
+}
+
+// ServerlessV2ScalingConfig is AWS's ServerlessV2ScalingConfiguration /
+// ServerlessV2ScalingConfigurationInfo shape (rds-2014-10-31.json): the same
+// three fields on the way in and the way out, unlike most of ModifyDBCluster's
+// settings. Overcast performs no real Aurora Serverless v2 autoscaling —
+// every member still runs as a fixed-size container — so this is recorded
+// only.
+type ServerlessV2ScalingConfig struct {
+	MinCapacity           float64 `json:"MinCapacity,omitempty"`
+	MaxCapacity           float64 `json:"MaxCapacity,omitempty"`
+	SecondsUntilAutoPause int     `json:"SecondsUntilAutoPause,omitempty"`
 }
 
 // DBClusterMember represents one DB instance that belongs to an Aurora cluster.

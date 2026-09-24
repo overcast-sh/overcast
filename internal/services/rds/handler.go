@@ -315,6 +315,47 @@ type xmlDBInstance struct {
 	// struct as ever "empty", so a value type would emit an always-present
 	// empty element. See xmlMasterUserSecretFor.
 	MasterUserSecret *xmlMasterUserSecret `xml:"MasterUserSecret,omitempty"`
+
+	// The fields below are #2133's echo-only properties. The ones AWS
+	// documents as always returning a value (never omitted, regardless of
+	// whether the caller ever set them) are plain, unconditional fields, the
+	// same way PubliclyAccessible above is; the rest — AWS's own "present
+	// only when relevant" fields — carry `omitempty`.
+	StorageEncrypted                 bool   `xml:"StorageEncrypted"`
+	KmsKeyId                         string `xml:"KmsKeyId,omitempty"`
+	DeletionProtection               bool   `xml:"DeletionProtection"`
+	BackupRetentionPeriod            int    `xml:"BackupRetentionPeriod"`
+	PreferredBackupWindow            string `xml:"PreferredBackupWindow,omitempty"`
+	PreferredMaintenanceWindow       string `xml:"PreferredMaintenanceWindow,omitempty"`
+	AutoMinorVersionUpgrade          bool   `xml:"AutoMinorVersionUpgrade"`
+	Iops                             int    `xml:"Iops,omitempty"`
+	AvailabilityZone                 string `xml:"AvailabilityZone,omitempty"`
+	IAMDatabaseAuthenticationEnabled bool   `xml:"IAMDatabaseAuthenticationEnabled"`
+	CACertificateIdentifier          string `xml:"CACertificateIdentifier,omitempty"`
+	// CertificateDetails mirrors CACertificateIdentifier — see
+	// xmlCertificateDetailsFor. Overcast tracks no certificate validity
+	// window, so ValidTill is never set.
+	CertificateDetails           *xmlCertificateDetails `xml:"CertificateDetails,omitempty"`
+	MonitoringInterval           int                    `xml:"MonitoringInterval"`
+	PerformanceInsightsEnabled   bool                   `xml:"PerformanceInsightsEnabled"`
+	EnabledCloudwatchLogsExports xmlLogTypeList         `xml:"EnabledCloudwatchLogsExports"`
+	CopyTagsToSnapshot           bool                   `xml:"CopyTagsToSnapshot"`
+}
+
+// xmlCertificateDetails is AWS's CertificateDetails shape
+// (rds-2014-10-31.json#CertificateDetails: CAIdentifier, ValidTill).
+type xmlCertificateDetails struct {
+	CAIdentifier string `xml:"CAIdentifier,omitempty"`
+}
+
+// xmlCertificateDetailsFor builds the CertificateDetails element AWS returns
+// alongside CACertificateIdentifier, or nil when no CA was named — the same
+// present-only-when-relevant shape xmlMasterUserSecretFor uses.
+func xmlCertificateDetailsFor(caIdentifier string) *xmlCertificateDetails {
+	if caIdentifier == "" {
+		return nil
+	}
+	return &xmlCertificateDetails{CAIdentifier: caIdentifier}
 }
 
 // xmlMasterUserSecret is AWS's MasterUserSecret shape
@@ -573,6 +614,23 @@ func (h *Handler) toXMLDBInstance(ctx context.Context, inst *DBInstance) xmlDBIn
 		StorageType:          inst.StorageType,
 		DBClusterIdentifier:  inst.DBClusterIdentifier,
 		MasterUserSecret:     xmlMasterUserSecretFor(inst.MasterUserSecretARN, inst.MasterUserSecretKmsKeyId),
+
+		StorageEncrypted:                 inst.StorageEncrypted,
+		KmsKeyId:                         inst.KmsKeyId,
+		DeletionProtection:               inst.DeletionProtection,
+		BackupRetentionPeriod:            inst.BackupRetentionPeriodOrDefault(),
+		PreferredBackupWindow:            inst.PreferredBackupWindow,
+		PreferredMaintenanceWindow:       inst.PreferredMaintenanceWindow,
+		AutoMinorVersionUpgrade:          inst.AutoMinorVersionUpgradeOrDefault(),
+		Iops:                             inst.Iops,
+		AvailabilityZone:                 inst.AvailabilityZone,
+		IAMDatabaseAuthenticationEnabled: inst.EnableIAMDatabaseAuthentication,
+		CACertificateIdentifier:          inst.CACertificateIdentifier,
+		CertificateDetails:               xmlCertificateDetailsFor(inst.CACertificateIdentifier),
+		MonitoringInterval:               inst.MonitoringInterval,
+		PerformanceInsightsEnabled:       inst.PerformanceInsightsEnabled,
+		EnabledCloudwatchLogsExports:     xmlLogTypeList{Items: inst.EnabledCloudwatchLogsExports},
+		CopyTagsToSnapshot:               inst.CopyTagsToSnapshot,
 	}
 }
 

@@ -136,10 +136,9 @@ func validateDBIdentifier(param, id string) *protocol.AWSError {
 }
 
 // Cluster backup retention, from CreateDBCluster's "Must be a value from 1 to
-// 35". Note the asymmetry with CreateDBInstance, which documents 0 to 35 because
-// 0 disables automated backups there — a cluster has no such setting, so 0 is
-// not a value it can be asked for. Overcast does not model instance-level
-// retention at all, so only the cluster rule has somewhere to live.
+// 35". Note the asymmetry with CreateDBInstance, which documents 0 to 35
+// because 0 disables automated backups there — a cluster has no such
+// setting, so 0 is not a value it can be asked for.
 const (
 	clusterBackupRetentionMin     = 1
 	clusterBackupRetentionMax     = 35
@@ -151,6 +150,25 @@ func validateClusterBackupRetentionPeriod(days int) *protocol.AWSError {
 		return errInvalidParameterValue(fmt.Sprintf(
 			"The parameter BackupRetentionPeriod must be a value from %d to %d: %d.",
 			clusterBackupRetentionMin, clusterBackupRetentionMax, days))
+	}
+	return nil
+}
+
+// Instance backup retention, from CreateDBInstance's "Must be a value from 0
+// to 35" — 0 disables automated backups, which is why the instance-side
+// minimum is 0 where the cluster-side one is 1 (#2133; DBInstance did not
+// model retention at all before this).
+const (
+	instanceBackupRetentionMin     = 0
+	instanceBackupRetentionMax     = 35
+	instanceBackupRetentionDefault = 1
+)
+
+func validateInstanceBackupRetentionPeriod(days int) *protocol.AWSError {
+	if days < instanceBackupRetentionMin || days > instanceBackupRetentionMax {
+		return errInvalidParameterValue(fmt.Sprintf(
+			"The parameter BackupRetentionPeriod must be a value from %d to %d: %d.",
+			instanceBackupRetentionMin, instanceBackupRetentionMax, days))
 	}
 	return nil
 }
