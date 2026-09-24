@@ -2,318 +2,139 @@ package athena
 
 import (
 	"context"
-	"fmt"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"net/http"
-
-	"github.com/google/uuid"
 
 	"github.com/overcast-sh/overcast/internal/protocol"
 	"github.com/overcast-sh/overcast/internal/serviceutil"
 )
 
-type startQueryExecReq struct {
-	QueryString         string `json:"QueryString" cbor:"QueryString"`
-	WorkGroup           string `json:"WorkGroup" cbor:"WorkGroup"`
-	ResultConfiguration struct {
-		OutputLocation string `json:"OutputLocation" cbor:"OutputLocation"`
-	} `json:"ResultConfiguration" cbor:"ResultConfiguration"`
+// Page-size caps, per operation's MaxResults range in the model. A request
+// above the cap is clamped rather than refused, as the other catalog services
+// here do.
+const (
+	queryExecutionsPageSize    = 50 // MaxQueryExecutionsCount
+	namedQueriesPageSize       = 50 // MaxNamedQueriesCount
+	workGroupsPageSize         = 50 // MaxWorkGroupsCount
+	preparedStatementsPageSize = 50 // MaxPreparedStatementsCount
+	dataCatalogsPageSize       = 50 // MaxDataCatalogsCount
+	databasesPageSize          = 50 // MaxDatabasesCount
+	tableMetadataPageSize      = 50 // MaxTableMetadataCount
+	engineVersionsPageSize     = 10 // MaxEngineVersionsCount
+	// batchGetMax is the most IDs or names a BatchGet* call accepts.
+	batchGetMax = 50
+)
+
+// Client request token length, from the model's IdempotencyToken shape.
+const (
+	minTokenLength = 32
+	maxTokenLength = 128
+)
+
+// now is the clock in epoch seconds with millisecond precision, the AWS JSON
+// timestamp encoding.
+func (s *Service) now() float64 { return float64(s.clk.Now().UnixMilli()) / 1000.0 }
+
+// lock takes the record lock for key and returns its release.
+func (s *Service) lock(key string) func() { return s.locks.Lock(key) }
+
+func paginate[T any](items []T, maxResults int32, token string, limit int) (serviceutil.Page[T], *protocol.AWSError) {
+	page, err := serviceutil.Paginate(items, int(maxResults), token,
+		serviceutil.PaginateOptions{DefaultLimit: limit, MaxLimit: limit})
+	if err != nil { // serviceutil.ErrInvalidPageToken, its only error
+		return page, errInvalidRequest("Invalid NextToken.")
+	}
+	return page, nil
 }
 
-type queryIDReq struct {
-	QueryExecutionId string `json:"QueryExecutionId" cbor:"QueryExecutionId"`
+// requireBatch validates a BatchGet* list: it is required and holds at most
+// batchGetMax entries.
+func requireBatch(member string, n int) *protocol.AWSError {
+	if n == 0 {
+		return errRequired(member)
+	}
+	if n > batchGetMax {
+		return errInvalidRequest("%s must contain at most %d items.", member, batchGetMax)
+	}
+	return nil
 }
 
-type workGroupNameReq struct {
-	WorkGroup string `json:"WorkGroup" cbor:"WorkGroup"`
-}
-
-type createWorkGroupReq struct {
-	Name        string      `json:"Name" cbor:"Name"`
-	Description string      `json:"Description" cbor:"Description"`
-	Tags        []athenaTag `json:"Tags" cbor:"Tags"`
-	// Configuration is kept as the caller sent it (result location, bytes
-	// cutoff, engine version, …) and handed back verbatim by GetWorkGroup;
-	// Overcast does not act on any of it.
-	Configuration map[string]any `json:"Configuration" cbor:"Configuration"`
-}
-
-type startQueryExecResp struct {
-	QueryExecutionId string `json:"QueryExecutionId" cbor:"QueryExecutionId"`
-}
-
-type getQueryExecResp struct {
-	QueryExecution QueryExecution `json:"QueryExecution" cbor:"QueryExecution"`
-}
-
-type getQueryResultsResp struct {
-	ResultSet resultSetWire `json:"ResultSet" cbor:"ResultSet"`
-}
-
-type resultSetWire struct {
-	Rows              []any             `json:"Rows" cbor:"Rows"`
-	ResultSetMetadata resultSetMetaWire `json:"ResultSetMetadata" cbor:"ResultSetMetadata"`
-}
-
-type resultSetMetaWire struct {
-	ColumnInfo []any `json:"ColumnInfo" cbor:"ColumnInfo"`
-}
-
-type listQueriesResp struct {
-	QueryExecutionIds []string `json:"QueryExecutionIds" cbor:"QueryExecutionIds"`
-}
-
-type getWorkGroupResp struct {
-	WorkGroup WorkGroup `json:"WorkGroup" cbor:"WorkGroup"`
-}
-
-type listWorkGroupsResp struct {
-	WorkGroups []workGroupSummary `json:"WorkGroups" cbor:"WorkGroups"`
-}
-
-type workGroupSummary struct {
-	Name  string `json:"Name" cbor:"Name"`
-	State string `json:"State" cbor:"State"`
-}
-
-// errQueryNotFound and errWorkGroupNotFound report an identifier Athena does
-// not know.
+// idempotent runs create at most once per client request token.
 //
-// 400, not 404. No exception in the Athena model overrides @httpError, and
-// InvalidRequestException is a client error, so the awsJson1_1 default
-// applies, and each operation's Errors section states it outright:
-// "InvalidRequestException ... HTTP Status Code: 400". Kinesis's
-// errNoSuchStream and Firehose's errStreamNotFound answer the same way for
-// the same reason (#2009).
-//
-// InvalidRequestException is the only client error GetQueryExecution,
-// GetQueryResults, GetWorkGroup, DeleteWorkGroup and StopQueryExecution model.
-// The three tag operations additionally model ResourceNotFoundException, but
-// both shapes are 400 client errors, so the status below is right for every
-// caller; which of the two AWS picks per operation is a separate question this
-// change does not settle.
-func errQueryNotFound(id string) *protocol.AWSError {
-	return &protocol.AWSError{
-		Code:       "InvalidRequestException",
-		Message:    fmt.Sprintf("QueryExecution %s not found", id),
-		HTTPStatus: http.StatusBadRequest,
+// "If another request is received, the same response is returned and another
+// query is not created. An error is returned if a parameter ... has changed."
+// request is the call's input with the token cleared; its fingerprint is what
+// a retry has to match. A call with no token is not deduplicated: the SDKs
+// generate one for every call, so only a hand-built request arrives without.
+func (s *Service) idempotent(ctx context.Context, operation, token string, request any, create func() (string, *protocol.AWSError)) (string, *protocol.AWSError) {
+	if token == "" {
+		return create()
 	}
-}
-
-func errWorkGroupNotFound(name string) *protocol.AWSError {
-	return &protocol.AWSError{
-		Code:       "InvalidRequestException",
-		Message:    fmt.Sprintf("WorkGroup %s not found", name),
-		HTTPStatus: http.StatusBadRequest,
+	if n := len(token); n < minTokenLength || n > maxTokenLength {
+		return "", errInvalidRequest("ClientRequestToken must be between %d and %d characters long.", minTokenLength, maxTokenLength)
 	}
-}
-
-func (s *Service) startQueryExecutionTyped(ctx context.Context, req *startQueryExecReq) (*startQueryExecResp, *protocol.AWSError) {
-	now := float64(s.clk.Now().Unix())
-	qe := &QueryExecution{
-		QueryExecutionId: uuid.NewString(),
-		Query:            req.QueryString,
-		WorkGroup:        req.WorkGroup,
-	}
-	qe.Status.State = "SUCCEEDED"
-	qe.Status.SubmissionDateTime = now
-	qe.Status.CompletionDateTime = now
-	qe.ResultConfiguration.OutputLocation = req.ResultConfiguration.OutputLocation
-	if err := s.store.putQuery(ctx, qe); err != nil {
-		return nil, protocol.ErrInternalError
-	}
-	return &startQueryExecResp{QueryExecutionId: qe.QueryExecutionId}, nil
-}
-
-func (s *Service) getQueryExecutionTyped(ctx context.Context, req *queryIDReq) (*getQueryExecResp, *protocol.AWSError) {
-	qe, found := s.store.getQuery(ctx, req.QueryExecutionId)
-	if !found {
-		return nil, errQueryNotFound(req.QueryExecutionId)
-	}
-	return &getQueryExecResp{QueryExecution: *qe}, nil
-}
-
-func (s *Service) getQueryResultsTyped(ctx context.Context, req *queryIDReq) (*getQueryResultsResp, *protocol.AWSError) {
-	if _, found := s.store.getQuery(ctx, req.QueryExecutionId); !found {
-		return nil, errQueryNotFound(req.QueryExecutionId)
-	}
-	return &getQueryResultsResp{ResultSet: resultSetWire{
-		Rows:              []any{},
-		ResultSetMetadata: resultSetMetaWire{ColumnInfo: []any{}},
-	}}, nil
-}
-
-// stopQueryExecutionTyped answers StopQueryExecution: an unknown id is the
-// modeled InvalidRequestException, and a known one an empty
-// StopQueryExecutionOutput.
-//
-// It changes no state, and cannot: Overcast completes a query inside
-// StartQueryExecution, so every stored query is already SUCCEEDED — a terminal
-// state with nothing left to interrupt — and AWS leaves a terminal query's
-// state alone. The model backs that reading: the operation is
-// smithy.api#idempotent and declares no wrong-state exception, so a Stop that
-// arrives after completion has to be accepted rather than rejected. If queries
-// ever run asynchronously here, this is where CANCELLED would be set.
-func (s *Service) stopQueryExecutionTyped(ctx context.Context, req *queryIDReq) (*struct{}, *protocol.AWSError) {
-	if _, found := s.store.getQuery(ctx, req.QueryExecutionId); !found {
-		return nil, errQueryNotFound(req.QueryExecutionId)
-	}
-	return &struct{}{}, nil
-}
-
-func (s *Service) listQueryExecutionsTyped(ctx context.Context, _ *struct{}) (*listQueriesResp, *protocol.AWSError) {
-	queries, err := s.store.listQueries(ctx)
+	fingerprint, err := requestFingerprint(request)
 	if err != nil {
-		return nil, protocol.ErrInternalError
+		return "", errInternal(err)
 	}
-	ids := make([]string, 0, len(queries))
-	for _, q := range queries {
-		ids = append(ids, q.QueryExecutionId)
-	}
-	return &listQueriesResp{QueryExecutionIds: ids}, nil
-}
-
-func (s *Service) createWorkGroupTyped(ctx context.Context, req *createWorkGroupReq) (*struct{}, *protocol.AWSError) {
-	if req.Name == "" {
-		return nil, &protocol.AWSError{
-			Code: "InvalidRequestException", Message: "Name is required", HTTPStatus: http.StatusBadRequest,
-		}
-	}
-	tags := make(map[string]string, len(req.Tags))
-	for _, t := range req.Tags {
-		tags[t.Key] = t.Value
-	}
-	if aerr := serviceutil.ValidateTags(athenaTagCfg, tags); aerr != nil {
-		return nil, aerr
-	}
-	wg := &workGroupRecord{
-		WorkGroup: WorkGroup{Name: req.Name, State: "ENABLED", Description: req.Description, Configuration: req.Configuration},
-		Tags:      tags,
-	}
-	if err := s.store.putWorkGroup(ctx, wg); err != nil {
-		return nil, protocol.ErrInternalError
-	}
-	return &struct{}{}, nil
-}
-
-func (s *Service) getWorkGroupTyped(ctx context.Context, req *workGroupNameReq) (*getWorkGroupResp, *protocol.AWSError) {
-	wg, found := s.store.getWorkGroup(ctx, req.WorkGroup)
-	if !found {
-		return nil, errWorkGroupNotFound(req.WorkGroup)
-	}
-	return &getWorkGroupResp{WorkGroup: wg.WorkGroup}, nil
-}
-
-func (s *Service) listWorkGroupsTyped(ctx context.Context, _ *struct{}) (*listWorkGroupsResp, *protocol.AWSError) {
-	workgroups, err := s.store.listWorkGroups(ctx)
+	defer s.lock("token:" + idempotencyKey(operation, token))()
+	prior, err := s.store.getIdempotency(ctx, operation, token)
 	if err != nil {
-		return nil, protocol.ErrInternalError
+		return "", errInternal(err)
 	}
-	summaries := make([]workGroupSummary, 0, len(workgroups))
-	for _, wg := range workgroups {
-		summaries = append(summaries, workGroupSummary{Name: wg.Name, State: wg.State})
-	}
-	return &listWorkGroupsResp{WorkGroups: summaries}, nil
-}
-
-func (s *Service) deleteWorkGroupTyped(ctx context.Context, req *workGroupNameReq) (*struct{}, *protocol.AWSError) {
-	if _, found := s.store.getWorkGroup(ctx, req.WorkGroup); !found {
-		return nil, errWorkGroupNotFound(req.WorkGroup)
-	}
-	if err := s.store.deleteWorkGroup(ctx, req.WorkGroup); err != nil {
-		return nil, protocol.ErrInternalError
-	}
-	return &struct{}{}, nil
-}
-
-type tagResourceReq struct {
-	ResourceARN string      `json:"ResourceARN" cbor:"ResourceARN"`
-	Tags        []athenaTag `json:"Tags" cbor:"Tags"`
-}
-
-type untagResourceReq struct {
-	ResourceARN string   `json:"ResourceARN" cbor:"ResourceARN"`
-	TagKeys     []string `json:"TagKeys" cbor:"TagKeys"`
-}
-
-type listTagsForResourceReq struct {
-	ResourceARN string `json:"ResourceARN" cbor:"ResourceARN"`
-}
-
-type listTagsForResourceResp struct {
-	Tags []athenaTag `json:"Tags" cbor:"Tags"`
-}
-
-func (s *Service) tagResourceTyped(ctx context.Context, req *tagResourceReq) (*struct{}, *protocol.AWSError) {
-	if req.ResourceARN == "" {
-		return nil, &protocol.AWSError{
-			Code: "InvalidRequestException", Message: "ResourceARN is required", HTTPStatus: http.StatusBadRequest,
+	if prior != nil {
+		if prior.Fingerprint != fingerprint {
+			return "", errInvalidRequest("Idempotent parameters do not match.")
 		}
+		return prior.ResourceID, nil
 	}
-	wgName, aerr := workGroupNameFromARN(req.ResourceARN)
+	id, aerr := create()
 	if aerr != nil {
-		return nil, aerr
+		return "", aerr
 	}
-	wg, found := s.store.getWorkGroup(ctx, wgName)
-	if !found {
-		return nil, errWorkGroupNotFound(wgName)
+	if err := s.store.putIdempotency(ctx, operation, token, &idempotencyRecord{ResourceID: id, Fingerprint: fingerprint}); err != nil {
+		return "", errInternal(err)
 	}
-	tags := wg.GetTags()
-	if tags == nil {
-		tags = map[string]string{}
-	}
-	for _, t := range req.Tags {
-		tags[t.Key] = t.Value
-	}
-	if aerr := serviceutil.ValidateTags(athenaTagCfg, tags); aerr != nil {
-		return nil, aerr
-	}
-	wg.SetTags(tags)
-	if err := s.store.putWorkGroup(ctx, wg); err != nil {
-		return nil, protocol.ErrInternalError
-	}
-	return &struct{}{}, nil
+	return id, nil
 }
 
-func (s *Service) untagResourceTyped(ctx context.Context, req *untagResourceReq) (*struct{}, *protocol.AWSError) {
-	if req.ResourceARN == "" {
-		return nil, &protocol.AWSError{
-			Code: "InvalidRequestException", Message: "ResourceARN is required", HTTPStatus: http.StatusBadRequest,
-		}
+func requestFingerprint(request any) (string, error) {
+	raw, err := json.Marshal(request)
+	if err != nil {
+		return "", err
 	}
-	wgName, aerr := workGroupNameFromARN(req.ResourceARN)
-	if aerr != nil {
-		return nil, aerr
-	}
-	wg, found := s.store.getWorkGroup(ctx, wgName)
-	if !found {
-		return nil, errWorkGroupNotFound(wgName)
-	}
-	tags := wg.GetTags()
-	if tags != nil {
-		for _, k := range req.TagKeys {
-			delete(tags, k)
-		}
-		wg.SetTags(tags)
-	}
-	if err := s.store.putWorkGroup(ctx, wg); err != nil {
-		return nil, protocol.ErrInternalError
-	}
-	return &struct{}{}, nil
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:]), nil
 }
 
-func (s *Service) listTagsForResourceTyped(ctx context.Context, req *listTagsForResourceReq) (*listTagsForResourceResp, *protocol.AWSError) {
-	if req.ResourceARN == "" {
-		return nil, &protocol.AWSError{
-			Code: "InvalidRequestException", Message: "ResourceARN is required", HTTPStatus: http.StatusBadRequest,
+// requireMembers reports the first of the named string members, in order,
+// that the caller left empty.
+func requireMembers(members ...[2]string) *protocol.AWSError {
+	for _, m := range members {
+		if m[1] == "" {
+			return errRequired(m[0])
 		}
 	}
-	wgName, aerr := workGroupNameFromARN(req.ResourceARN)
-	if aerr != nil {
-		return nil, aerr
+	return nil
+}
+
+// batchGet looks each key up with get and splits what it found from what it
+// could not return, which miss renders as the operation's Unprocessed*
+// entry. A client error on one key is a miss; a server error fails the call.
+func batchGet[T, U any](keys []string, get func(key string) (*T, *protocol.AWSError), miss func(key string, aerr *protocol.AWSError) U) ([]T, []U, *protocol.AWSError) {
+	found, missed := make([]T, 0, len(keys)), []U{}
+	for _, key := range keys {
+		v, aerr := get(key)
+		if aerr == nil {
+			found = append(found, *v)
+			continue
+		}
+		if aerr.HTTPStatus >= http.StatusInternalServerError {
+			return nil, nil, aerr
+		}
+		missed = append(missed, miss(key, aerr))
 	}
-	wg, found := s.store.getWorkGroup(ctx, wgName)
-	if !found {
-		return nil, errWorkGroupNotFound(wgName)
-	}
-	return &listTagsForResourceResp{Tags: tagsToList(wg.GetTags())}, nil
+	return found, missed, nil
 }
