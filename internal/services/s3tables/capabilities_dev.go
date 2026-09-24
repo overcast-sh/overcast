@@ -13,6 +13,7 @@ const (
 	catMaintenance = "Maintenance"
 	catReplication = "Replication and record expiration"
 	catTags        = "Tags"
+	catIceberg     = "Iceberg REST catalog"
 )
 
 func init() {
@@ -130,5 +131,42 @@ func init() {
 			Status: capabilities.StatusSupported},
 		capabilities.Capability{Operation: "ListTagsForResource", Category: catTags,
 			Status: capabilities.StatusSupported},
+
+		// Iceberg REST catalog, served at /iceberg and named by the spec's
+		// operationIds. EmulatorOnly: the Iceberg REST spec defines these, not
+		// the S3 Tables API model, so they are documented here but never
+		// counted as AWS operations the service covers.
+		capabilities.Capability{Operation: "IcebergGetConfig", Category: catIceberg, EmulatorOnly: true,
+			Status: capabilities.StatusSupported, Notes: "Needs `warehouse`; the `prefix` override is the URL-encoded ARN, and the defaults point the client's FileIO at Overcast's S3"},
+		capabilities.Capability{Operation: "IcebergListNamespaces", Category: catIceberg, EmulatorOnly: true,
+			Status: capabilities.StatusSupported, Notes: "`pageToken`/`pageSize`; a `parent` namespace has no children, since S3 Tables namespaces have one level"},
+		capabilities.Capability{Operation: "IcebergCreateNamespace", Category: catIceberg, EmulatorOnly: true,
+			Status: capabilities.StatusSupported, Notes: "One-level namespaces; any properties are kept, where AWS supports only `owner`"},
+		capabilities.Capability{Operation: "IcebergLoadNamespaceMetadata", Category: catIceberg, EmulatorOnly: true,
+			Status: capabilities.StatusSupported},
+		capabilities.Capability{Operation: "IcebergNamespaceExists", Category: catIceberg, EmulatorOnly: true,
+			Status: capabilities.StatusSupported, Notes: "`HEAD`"},
+		capabilities.Capability{Operation: "IcebergDropNamespace", Category: catIceberg, EmulatorOnly: true,
+			Status: capabilities.StatusSupported, Notes: "`NamespaceNotEmptyException` while the namespace still holds tables"},
+		capabilities.Capability{Operation: "IcebergUpdateProperties", Category: catIceberg, EmulatorOnly: true,
+			Status: capabilities.StatusSupported, Notes: "Not served by AWS; `UnprocessableEntityException` for a key both set and removed"},
+		capabilities.Capability{Operation: "IcebergListTables", Category: catIceberg, EmulatorOnly: true,
+			Status: capabilities.StatusSupported, Notes: "`pageToken`/`pageSize`"},
+		capabilities.Capability{Operation: "IcebergCreateTable", Category: catIceberg, EmulatorOnly: true,
+			Status: capabilities.StatusSupported, Notes: "Writes the first metadata file; also accepts `stage-create`, which AWS refuses with 400"},
+		capabilities.Capability{Operation: "IcebergRegisterTable", Category: catIceberg, EmulatorOnly: true,
+			Status: capabilities.StatusSupported, Notes: "Not served by AWS; the metadata's location must be an unused `--table-s3` warehouse"},
+		capabilities.Capability{Operation: "IcebergLoadTable", Category: catIceberg, EmulatorOnly: true,
+			Status: capabilities.StatusSupported, Notes: "Reads the table's current metadata file from its warehouse"},
+		capabilities.Capability{Operation: "IcebergTableExists", Category: catIceberg, EmulatorOnly: true,
+			Status: capabilities.StatusSupported, Notes: "`HEAD`"},
+		capabilities.Capability{Operation: "IcebergUpdateTable", Category: catIceberg, EmulatorOnly: true,
+			Status: capabilities.StatusSupported, Notes: "Every format v1/v2 update and requirement, in `UpdateTableMetadataLocation`'s compare-and-swap; `CommitFailedException` on a conflict"},
+		capabilities.Capability{Operation: "IcebergDropTable", Category: catIceberg, EmulatorOnly: true,
+			Status: capabilities.StatusSupported, Notes: "Only with `purgeRequested=true`, as on AWS; the files stay in the warehouse"},
+		capabilities.Capability{Operation: "IcebergRenameTable", Category: catIceberg, EmulatorOnly: true,
+			Status: capabilities.StatusSupported, Notes: "Within the table bucket"},
+		capabilities.Capability{Operation: "IcebergReportMetrics", Category: catIceberg, EmulatorOnly: true,
+			Status: capabilities.StatusSupported, Notes: "Not served by AWS; accepted and dropped"},
 	)
 }

@@ -95,7 +95,6 @@ var ServiceTiers = map[string]EmulationTier{
 	"glue":        TierInert,
 	"firehose":    TierInert,
 	"athena":      TierInert,
-	"s3tables":    TierInert,
 	"bedrock":     TierStub,
 	"appregistry": TierInert,
 	"elasticache": TierPartial,
@@ -108,6 +107,9 @@ var ServiceTiers = map[string]EmulationTier{
 	// efs is a full control-plane emulation with lifecycle states, but has no
 	// NFS data plane — file systems are not mountable.
 	"efs": TierPartial,
+	// s3tables: the whole control plane plus the Iceberg REST catalog that
+	// engines commit through; maintenance and replication are never run.
+	"s3tables": TierPartial,
 }
 
 // ServiceGoalTiers maps each service to its aspirational emulation tier — the
@@ -123,9 +125,6 @@ var ServiceGoalTiers = map[string]EmulationTier{
 
 	// WIP — currently inert, goal is partial
 	"iam": TierPartial,
-	// s3tables' control plane is complete; the Iceberg REST catalog that lets
-	// engines commit to its tables is what stands between it and partial.
-	"s3tables": TierPartial,
 
 	// WIP — currently partial, goal is full. The execution engine landed, so
 	// Step Functions is no longer inert; `.waitForTaskToken`, activities and

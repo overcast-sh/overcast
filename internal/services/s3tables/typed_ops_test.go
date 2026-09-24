@@ -274,6 +274,7 @@ func TestCreateTable_warehouseAndMetadataGoThroughTheS3Accessor(t *testing.T) {
 			written = append(written, bucket+"/"+key)
 			return events.S3PutObjectResult{}, nil
 		},
+		nil,
 	)
 	arn := seed(t, s)
 	ctx := context.Background()

@@ -91,7 +91,6 @@ var resourceServiceTiers = map[string]string{
 	"cloudtrail":  "inert",
 	"backup":      "inert",
 	"transfer":    "inert",
-	"s3tables":    "inert",
 }
 
 // cfnResourceService returns the router/capabilities service name a

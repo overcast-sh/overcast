@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/overcast-sh/overcast/internal/icebergmeta"
 	"github.com/overcast-sh/overcast/internal/protocol"
 	"github.com/overcast-sh/overcast/internal/serviceutil"
 )
@@ -323,28 +322,34 @@ func (s *Service) createNamespaceTyped(ctx context.Context, req *createNamespace
 	if len(req.Namespace) != 1 {
 		return nil, validationError("Value at 'namespace' failed to satisfy constraint: Member must have length less than or equal to 1")
 	}
-	name := req.Namespace[0]
-	if aerr := validateNamespaceName(name); aerr != nil {
-		return nil, aerr
-	}
-	defer s.lock()()
-	b, aerr := s.resolveBucket(ctx, req.TableBucketARN)
+	b, n, aerr := s.createNamespace(ctx, req.TableBucketARN, req.Namespace[0], nil)
 	if aerr != nil {
 		return nil, aerr
 	}
+	return &createNamespaceResponse{TableBucketARN: b.ARN, Namespace: []string{n.Name}}, nil
+}
+
+// createNamespace creates the namespace name in the table bucket arn names,
+// with the Iceberg properties the REST catalog may give it.
+func (s *Service) createNamespace(ctx context.Context, arn, name string, props map[string]string) (*tableBucket, *namespaceRecord, *protocol.AWSError) {
+	if aerr := validateNamespaceName(name); aerr != nil {
+		return nil, nil, aerr
+	}
+	defer s.lock()()
+	b, aerr := s.resolveBucket(ctx, arn)
+	if aerr != nil {
+		return nil, nil, aerr
+	}
 	if _, found, aerr := s.loadNamespace(ctx, b.Region, b.Name, name); aerr != nil {
-		return nil, aerr
+		return nil, nil, aerr
 	} else if found {
-		return nil, errNamespaceExists
+		return nil, nil, errNamespaceExists
 	}
 	n := &namespaceRecord{
 		Name: name, Bucket: b.Name, NamespaceID: s.newID(), CreatedAt: s.now(),
-		CreatedBy: s.accountID(), OwnerAccountID: s.accountID(),
+		CreatedBy: s.accountID(), OwnerAccountID: s.accountID(), Properties: props,
 	}
-	if aerr := s.saveNamespace(ctx, b.Region, n); aerr != nil {
-		return nil, aerr
-	}
-	return &createNamespaceResponse{TableBucketARN: b.ARN, Namespace: []string{name}}, nil
+	return b, n, s.saveNamespace(ctx, b.Region, n)
 }
 
 type namespaceRequest struct {
@@ -501,7 +506,23 @@ func (s *Service) createTableTyped(ctx context.Context, req *createTableRequest)
 	if aerr != nil {
 		return nil, aerr
 	}
+	t, aerr := s.createTable(ctx, req, func(t *tableRecord) ([]byte, *protocol.AWSError) {
+		if iceberg == nil {
+			return nil, nil
+		}
+		return buildInitialMetadata(t.TableID, t.WarehouseLocation, t.CreatedAt, iceberg)
+	})
+	if aerr != nil {
+		return nil, aerr
+	}
+	return &createTableResponse{TableARN: t.ARN, VersionToken: t.VersionToken}, nil
+}
 
+// createTable creates req's table under the service lock — the record, its
+// warehouse bucket and, when build returns one, its first metadata file. The
+// metadata is built before anything is created, so a definition Iceberg would
+// refuse leaves no warehouse bucket behind.
+func (s *Service) createTable(ctx context.Context, req *createTableRequest, build func(*tableRecord) ([]byte, *protocol.AWSError)) (*tableRecord, *protocol.AWSError) {
 	defer s.lock()()
 	b, n, aerr := s.resolveNamespace(ctx, req.TableBucketARN, req.Namespace)
 	if aerr != nil {
@@ -512,23 +533,15 @@ func (s *Service) createTableTyped(ctx context.Context, req *createTableRequest)
 	} else if found {
 		return nil, errTableExists
 	}
-
 	t := s.newTableRecord(b, n, req)
-	// The metadata document is built before anything is created, so a schema
-	// Iceberg would refuse leaves no warehouse bucket behind.
-	var metadataJSON []byte
-	if iceberg != nil {
-		if metadataJSON, aerr = buildInitialMetadata(t.TableID, t.WarehouseLocation, t.CreatedAt, iceberg); aerr != nil {
-			return nil, aerr
-		}
+	metadataJSON, aerr := build(t)
+	if aerr != nil {
+		return nil, aerr
 	}
 	if aerr := s.createWarehouse(ctx, t, metadataJSON); aerr != nil {
 		return nil, aerr
 	}
-	if aerr := s.saveTable(ctx, t); aerr != nil {
-		return nil, aerr
-	}
-	return &createTableResponse{TableARN: t.ARN, VersionToken: t.VersionToken}, nil
+	return t, s.saveTable(ctx, t)
 }
 
 // validateCreateTable checks everything CreateTable can check without state,
@@ -593,11 +606,11 @@ func (s *Service) createWarehouse(ctx context.Context, t *tableRecord, metadataJ
 	if metadataJSON == nil || s.putObject == nil {
 		return nil
 	}
-	key := icebergmeta.MetadataPath(0, s.newID())
-	if _, aerr := s.putObject(ctx, warehouse, key, metadataJSON, s3PutJSON); aerr != nil {
+	location, aerr := s.writeMetadataFile(ctx, t.WarehouseLocation, 0, metadataJSON)
+	if aerr != nil {
 		return aerr
 	}
-	t.MetadataLocation = t.WarehouseLocation + "/" + key
+	t.MetadataLocation = location
 	return nil
 }
 
@@ -849,11 +862,12 @@ type updateMetadataLocationResponse struct {
 	MetadataLocation string   `json:"metadataLocation"`
 }
 
-// updateTableMetadataLocationTyped is an Iceberg commit's compare-and-swap:
-// the new pointer is accepted only from a caller holding the current version
-// token, and every accepted swap issues a new one, so of two writers racing
-// from the same token exactly one wins and the other gets ConflictException.
-// The new location must lie inside the table's warehouse.
+// updateTableMetadataLocationTyped is an Iceberg commit made by the client
+// itself, through swapMetadata: the new pointer is accepted only from a
+// caller holding the current version token, and every accepted swap issues a
+// new one, so of two writers racing from the same token exactly one wins and
+// the other gets ConflictException. The new location must lie inside the
+// table's warehouse.
 func (s *Service) updateTableMetadataLocationTyped(ctx context.Context, req *updateMetadataLocationRequest) (*updateMetadataLocationResponse, *protocol.AWSError) {
 	if req.VersionToken == "" {
 		return nil, badRequest("versionToken is required.")
@@ -861,17 +875,16 @@ func (s *Service) updateTableMetadataLocationTyped(ctx context.Context, req *upd
 	if req.MetadataLocation == "" || len(req.MetadataLocation) > 2048 {
 		return nil, errBadMetadataLoc
 	}
-	t, aerr := s.updateTable(ctx, req.TableBucketARN, req.Namespace, req.Name, func(t *tableRecord) *protocol.AWSError {
-		if !strings.HasPrefix(req.MetadataLocation, t.WarehouseLocation+"/") {
-			return errBadMetadataLoc
+	t, aerr := s.swapMetadata(ctx, req.TableBucketARN, req.Namespace, req.Name, func(_ *tableBucket, _ *namespaceRecord, t *tableRecord) (*tableRecord, string, *protocol.AWSError) {
+		switch {
+		case t == nil:
+			return nil, "", errTableNotFound
+		case !strings.HasPrefix(req.MetadataLocation, t.WarehouseLocation+"/"):
+			return nil, "", errBadMetadataLoc
+		case req.VersionToken != t.VersionToken:
+			return nil, "", errVersionMismatch
 		}
-		if req.VersionToken != t.VersionToken {
-			return errVersionMismatch
-		}
-		t.MetadataLocation = req.MetadataLocation
-		t.VersionToken = s.newVersionToken()
-		t.ModifiedAt, t.ModifiedBy = s.now(), s.accountID()
-		return nil
+		return t, req.MetadataLocation, nil
 	})
 	if aerr != nil {
 		return nil, aerr

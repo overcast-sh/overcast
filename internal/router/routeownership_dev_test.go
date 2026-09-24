@@ -139,6 +139,10 @@ var unattributedRoutes = map[string]bool{
 	"/":            true,
 	"/*":           true,
 	"/service/{service}/operation/{operation}": true,
+	// S3 Tables' Iceberg REST catalog: router.go registers the root and
+	// dispatches it on the signing name, like the S3 Tables roots, but no
+	// model binds it, so there is no modeling owner to attribute it to.
+	"/iceberg/*": true,
 }
 
 // isInternalNamespace reports whether pattern is one of router.go's own

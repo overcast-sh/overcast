@@ -1,7 +1,9 @@
 # Athena, S3 Tables and Iceberg — plan for real support
 
-> Status: proposal, 2026-09-23. Nothing here is implemented yet. It is based on
-> `main` at `cb08d3d22`. Tracking issue: #2073, with one issue per phase below.
+> Status: proposal, 2026-09-23, based on `main` at `cb08d3d22`; "Where things
+> stand" describes that commit. Some phases have since been implemented —
+> see the note at the top of each. Tracking issue: #2073, with one issue per
+> phase below.
 
 ## Where things stand
 
@@ -200,6 +202,14 @@ and on ElastiCache's `SetDocker`, `Stop`, GC and readiness for everything else.
 - Docs, console page, compat group.
 
 ### Phase 5 — the Iceberg REST catalog endpoint (L) — #2069, spike #2068
+
+> Implemented (2026-09-25), except the Trino wiring: the catalog at `/iceberg`
+> (and unsigned at `/_overcast/s3tables/iceberg`), staged create, and commits
+> through `internal/icebergmeta`'s `Parse` and `Commit`, sharing one
+> compare-and-swap with `UpdateTableMetadataLocation`. Verified with PyIceberg
+> 0.12 end to end and against golden commits captured from it. Trino's
+> per-bucket REST catalogs and the end-to-end test move to Phase 3 (#2066),
+> which has no engine to wire them into yet.
 
 - Serve the Iceberg REST spec that AWS exposes at `https://s3tables.<region>.amazonaws.com/iceberg`:
   - `GET /iceberg/v1/config?warehouse=<bucketARN>`;

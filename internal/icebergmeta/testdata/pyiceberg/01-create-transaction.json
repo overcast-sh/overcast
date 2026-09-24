@@ -1,0 +1,276 @@
+{
+  "base": null,
+  "base-location": "",
+  "expected": {
+    "current-schema-id": 0,
+    "default-sort-order-id": 1,
+    "default-spec-id": 0,
+    "format-version": 2,
+    "last-column-id": 10,
+    "last-partition-id": 1001,
+    "last-sequence-number": 0,
+    "last-updated-ms": 1790286708022,
+    "location": "s3://golden--table-s3/ns/events",
+    "metadata-log": [],
+    "partition-specs": [
+      {
+        "fields": [
+          {
+            "field-id": 1000,
+            "name": "ts_day",
+            "source-id": 2,
+            "transform": "day"
+          },
+          {
+            "field-id": 1001,
+            "name": "id_bucket",
+            "source-id": 1,
+            "transform": "bucket[8]"
+          }
+        ],
+        "spec-id": 0
+      }
+    ],
+    "partition-statistics": [],
+    "properties": {
+      "write.metadata.previous-versions-max": "2"
+    },
+    "refs": {},
+    "schemas": [
+      {
+        "fields": [
+          {
+            "id": 1,
+            "name": "id",
+            "required": true,
+            "type": "long"
+          },
+          {
+            "id": 2,
+            "name": "ts",
+            "required": false,
+            "type": "timestamptz"
+          },
+          {
+            "id": 3,
+            "name": "tags",
+            "required": false,
+            "type": {
+              "element": "string",
+              "element-id": 6,
+              "element-required": false,
+              "type": "list"
+            }
+          },
+          {
+            "id": 4,
+            "name": "attrs",
+            "required": false,
+            "type": {
+              "key": "string",
+              "key-id": 7,
+              "type": "map",
+              "value": "double",
+              "value-id": 8,
+              "value-required": false
+            }
+          },
+          {
+            "id": 5,
+            "name": "point",
+            "required": false,
+            "type": {
+              "fields": [
+                {
+                  "id": 9,
+                  "name": "x",
+                  "required": false,
+                  "type": "double"
+                },
+                {
+                  "id": 10,
+                  "name": "y",
+                  "required": false,
+                  "type": "double"
+                }
+              ],
+              "type": "struct"
+            }
+          }
+        ],
+        "identifier-field-ids": [
+          1
+        ],
+        "schema-id": 0,
+        "type": "struct"
+      }
+    ],
+    "snapshot-log": [],
+    "snapshots": [],
+    "sort-orders": [
+      {
+        "fields": [
+          {
+            "direction": "asc",
+            "null-order": "nulls-first",
+            "source-id": 1,
+            "transform": "identity"
+          }
+        ],
+        "order-id": 1
+      }
+    ],
+    "statistics": [],
+    "table-uuid": "2f466cec-0e12-468c-a72d-3ddd24e5a1ba"
+  },
+  "name": "01-create-transaction",
+  "request": {
+    "identifier": {
+      "name": "events",
+      "namespace": [
+        "ns"
+      ]
+    },
+    "requirements": [
+      {
+        "type": "assert-create"
+      }
+    ],
+    "updates": [
+      {
+        "action": "assign-uuid",
+        "uuid": "2f466cec-0e12-468c-a72d-3ddd24e5a1ba"
+      },
+      {
+        "action": "upgrade-format-version",
+        "format-version": 2
+      },
+      {
+        "action": "add-schema",
+        "schema": {
+          "fields": [
+            {
+              "id": 1,
+              "name": "id",
+              "required": true,
+              "type": "long"
+            },
+            {
+              "id": 2,
+              "name": "ts",
+              "required": false,
+              "type": "timestamptz"
+            },
+            {
+              "id": 3,
+              "name": "tags",
+              "required": false,
+              "type": {
+                "element": "string",
+                "element-id": 6,
+                "element-required": false,
+                "type": "list"
+              }
+            },
+            {
+              "id": 4,
+              "name": "attrs",
+              "required": false,
+              "type": {
+                "key": "string",
+                "key-id": 7,
+                "type": "map",
+                "value": "double",
+                "value-id": 8,
+                "value-required": false
+              }
+            },
+            {
+              "id": 5,
+              "name": "point",
+              "required": false,
+              "type": {
+                "fields": [
+                  {
+                    "id": 9,
+                    "name": "x",
+                    "required": false,
+                    "type": "double"
+                  },
+                  {
+                    "id": 10,
+                    "name": "y",
+                    "required": false,
+                    "type": "double"
+                  }
+                ],
+                "type": "struct"
+              }
+            }
+          ],
+          "identifier-field-ids": [
+            1
+          ],
+          "schema-id": 0,
+          "type": "struct"
+        }
+      },
+      {
+        "action": "set-current-schema",
+        "schema-id": -1
+      },
+      {
+        "action": "add-spec",
+        "spec": {
+          "fields": [
+            {
+              "field-id": 1000,
+              "name": "ts_day",
+              "source-id": 2,
+              "transform": "day"
+            },
+            {
+              "field-id": 1001,
+              "name": "id_bucket",
+              "source-id": 1,
+              "transform": "bucket[8]"
+            }
+          ],
+          "spec-id": 0
+        }
+      },
+      {
+        "action": "set-default-spec",
+        "spec-id": -1
+      },
+      {
+        "action": "add-sort-order",
+        "sort-order": {
+          "fields": [
+            {
+              "direction": "asc",
+              "null-order": "nulls-first",
+              "source-id": 1,
+              "transform": "identity"
+            }
+          ],
+          "order-id": 1
+        }
+      },
+      {
+        "action": "set-default-sort-order",
+        "sort-order-id": -1
+      },
+      {
+        "action": "set-location",
+        "location": "s3://golden--table-s3/ns/events"
+      },
+      {
+        "action": "set-properties",
+        "updates": {
+          "write.metadata.previous-versions-max": "2"
+        }
+      }
+    ]
+  }
+}
