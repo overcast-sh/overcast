@@ -27,6 +27,7 @@ package kinesis
 import (
 	"context"
 	"testing"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -53,7 +54,7 @@ func newBenchHandler(b *testing.B, streamName string) (*Handler, context.Context
 		StreamARN:            streamARN(cfg.AccountID, cfg.Region, streamName),
 		StreamStatus:         "ACTIVE",
 		ShardCount:           1,
-		Shards:               buildInitialShards(1),
+		Shards:               InitialShards(1, time.Time{}),
 		Tags:                 map[string]string{},
 		CreatedAt:            clk.Now().UTC(),
 		RetentionPeriodHours: 24,

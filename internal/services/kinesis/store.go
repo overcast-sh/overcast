@@ -81,10 +81,37 @@ func (st *Stream) effectiveEncryptionType() string {
 }
 
 // Shard represents a Kinesis shard.
+//
+// ParentShardId and AdjacentParentShardId are its lineage, as AWS's Shard
+// shape reports it: a SplitShard child names the split shard as its parent; a
+// MergeShards child names ShardToMerge as its parent and AdjacentShardToMerge
+// as its adjacent parent. A shard CreateStream made has neither.
+//
+// CreatedAt and ClosedAt are internal: they are never on the wire, and exist
+// so ListShards' AT_TIMESTAMP and FROM_TIMESTAMP filters can tell which shards
+// were open when. A shard persisted before they existed has neither; see
+// Stream.shardOpenedAt and Stream.shardClosedAt.
 type Shard struct {
-	ShardId             string              `json:"ShardId"`
-	HashKeyRange        HashKeyRange        `json:"HashKeyRange"`
-	SequenceNumberRange SequenceNumberRange `json:"SequenceNumberRange"`
+	ShardId               string              `json:"ShardId"`
+	ParentShardId         string              `json:"ParentShardId,omitempty"`
+	AdjacentParentShardId string              `json:"AdjacentParentShardId,omitempty"`
+	HashKeyRange          HashKeyRange        `json:"HashKeyRange"`
+	SequenceNumberRange   SequenceNumberRange `json:"SequenceNumberRange"`
+	CreatedAt             time.Time           `json:"CreatedAt,omitzero"`
+	ClosedAt              *time.Time          `json:"ClosedAt,omitempty"`
+}
+
+// isOpen reports whether the shard still accepts records: a split or merge
+// closes it by giving it an EndingSequenceNumber.
+func (s Shard) isOpen() bool {
+	return s.SequenceNumberRange.EndingSequenceNumber == ""
+}
+
+// closeAt marks the shard closed by a reshard: seqNo becomes its
+// EndingSequenceNumber and now its (internal) close time.
+func (s *Shard) closeAt(seqNo string, now time.Time) {
+	s.SequenceNumberRange.EndingSequenceNumber = seqNo
+	s.ClosedAt = &now
 }
 
 // HashKeyRange defines the hash key range of a shard.
@@ -328,29 +355,41 @@ func (s *kinesisStore) nextShardSeqBlock(ctx context.Context, streamName, shardI
 
 // ---- Helpers ----------------------------------------------------------------
 
-// buildInitialShards returns evenly distributed shards for a new stream.
-// The 128-bit hash space (0 to 2^128-1) is divided equally among shardCount shards.
-func buildInitialShards(shardCount int) []Shard {
-	maxHash := new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 128), big.NewInt(1))
+// InitialShards returns the shards CreateStream gives a new stream: shard i
+// of shardCount covers [floor(i·2^128/shardCount), floor((i+1)·2^128/shardCount) − 1],
+// so the last one ends at 2^128 − 1.
+//
+// Per the AWS CLI reference's list-shards example
+// (https://docs.aws.amazon.com/cli/latest/reference/kinesis/list-shards.html),
+// a 3-shard stream's shardId-000000000001 covers
+// 113427455640312821154458202477256070485..226854911280625642308916404954512140969,
+// which is [floor(2^128/3), floor(2·2^128/3) − 1]. Dividing 2^128 − 1 instead
+// happens to agree for three shards but ends a 2-shard stream's shard 0 at
+// 2^127 − 2 rather than 2^127 − 1 (#2112).
+//
+// Exported for the MCP runtime provider, which writes streams straight to the
+// store and must lay their shards out the same way.
+func InitialShards(shardCount int, createdAt time.Time) []Shard {
+	keyspace := new(big.Int).Lsh(big.NewInt(1), 128)
+	n := big.NewInt(int64(shardCount))
+	boundary := func(i int) *big.Int {
+		b := new(big.Int).Mul(keyspace, big.NewInt(int64(i)))
+		return b.Div(b, n)
+	}
 	shards := make([]Shard, shardCount)
 	for i := 0; i < shardCount; i++ {
-		start := new(big.Int).Div(new(big.Int).Mul(maxHash, big.NewInt(int64(i))), big.NewInt(int64(shardCount)))
-		var end *big.Int
-		if i == shardCount-1 {
-			end = new(big.Int).Set(maxHash)
-		} else {
-			end = new(big.Int).Div(new(big.Int).Mul(maxHash, big.NewInt(int64(i+1))), big.NewInt(int64(shardCount)))
-			end.Sub(end, big.NewInt(1))
-		}
+		end := boundary(i + 1)
+		end.Sub(end, big.NewInt(1))
 		shards[i] = Shard{
 			ShardId: fmt.Sprintf("shardId-%012d", i),
 			HashKeyRange: HashKeyRange{
-				StartingHashKey: start.String(),
+				StartingHashKey: boundary(i).String(),
 				EndingHashKey:   end.String(),
 			},
 			SequenceNumberRange: SequenceNumberRange{
 				StartingSequenceNumber: fmt.Sprintf("49%019d", i),
 			},
+			CreatedAt: createdAt,
 		}
 	}
 	return shards
@@ -402,7 +441,7 @@ func firstOpenShard(shards []Shard) int {
 // lexicographically sortable ("49" + 19-digit shard index + 10-digit
 // per-shard counter) — unchanged from the pre-A1 wire format. shardIdx is
 // stable for the lifetime of a shard (Shards is append-only: see
-// buildInitialShards, splitShardTyped, mergeShardsTyped). n is the
+// InitialShards, splitShardTyped, mergeShardsTyped). n is the
 // persisted per-shard counter value from nextShardSeqBlock — never derived
 // from how many records currently exist for the shard.
 func formatSeqNo(shardIdx int, n int64) string {
