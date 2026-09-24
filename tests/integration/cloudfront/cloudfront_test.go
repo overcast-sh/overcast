@@ -12,7 +12,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/overcast-sh/overcast/tests/helpers"
 )
@@ -4852,6 +4854,338 @@ func TestProxy_viewerRequestFunctionURIReachesTheOrigin(t *testing.T) {
 			helpers.AssertStatus(t, resp, http.StatusOK)
 			if seen != tc.want {
 				t.Errorf("origin saw path %q, want %q", seen, tc.want)
+			}
+		})
+	}
+}
+
+// proxyDistSpec describes a single-origin distribution for the behavior, cache
+// TTL and access-log tests: a default behavior and one cache behavior for
+// PathPattern, each with its own cache policy, and FnARN (when set) associated
+// with both as a viewer-request function.
+type proxyDistSpec struct {
+	CallerRef       string
+	OriginDomain    string
+	OriginPort      int
+	PathPattern     string
+	DefaultPolicyID string
+	PatternPolicyID string
+	FnARN           string
+	LogBucket       string // a bucket name; logging is off when empty
+	LogPrefix       string
+}
+
+func proxyDistXML(s proxyDistSpec) string {
+	fas := ""
+	if s.FnARN != "" {
+		fas = fmt.Sprintf(`<FunctionAssociations><Quantity>1</Quantity><Items><FunctionAssociation>
+      <FunctionARN>%s</FunctionARN><EventType>viewer-request</EventType>
+    </FunctionAssociation></Items></FunctionAssociations>`, s.FnARN)
+	}
+	policy := func(id string) string {
+		if id == "" {
+			return `<ForwardedValues><QueryString>false</QueryString></ForwardedValues>`
+		}
+		return "<CachePolicyId>" + id + "</CachePolicyId>"
+	}
+	logging := ""
+	if s.LogBucket != "" {
+		logging = fmt.Sprintf(`<Logging>
+    <Enabled>true</Enabled>
+    <IncludeCookies>false</IncludeCookies>
+    <Bucket>%s.s3.amazonaws.com</Bucket>
+    <Prefix>%s</Prefix>
+  </Logging>`, s.LogBucket, s.LogPrefix)
+	}
+	return fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<DistributionConfig xmlns="http://cloudfront.amazonaws.com/doc/2020-05-31/">
+  <CallerReference>%s</CallerReference>
+  <Comment>proxy behavior test</Comment>
+  <Enabled>true</Enabled>
+  <Origins>
+    <Quantity>1</Quantity>
+    <Items>
+      <Origin>
+        <Id>origin</Id>
+        <DomainName>%s</DomainName>
+        <CustomOriginConfig>
+          <HTTPPort>%d</HTTPPort>
+          <HTTPSPort>443</HTTPSPort>
+          <OriginProtocolPolicy>http-only</OriginProtocolPolicy>
+        </CustomOriginConfig>
+      </Origin>
+    </Items>
+  </Origins>
+  <DefaultCacheBehavior>
+    <TargetOriginId>origin</TargetOriginId>
+    <ViewerProtocolPolicy>allow-all</ViewerProtocolPolicy>
+    %s
+    %s
+  </DefaultCacheBehavior>
+  <CacheBehaviors>
+    <Quantity>1</Quantity>
+    <Items>
+      <CacheBehavior>
+        <PathPattern>%s</PathPattern>
+        <TargetOriginId>origin</TargetOriginId>
+        <ViewerProtocolPolicy>allow-all</ViewerProtocolPolicy>
+        %s
+        %s
+      </CacheBehavior>
+    </Items>
+  </CacheBehaviors>
+  %s
+</DistributionConfig>`, s.CallerRef, s.OriginDomain, s.OriginPort,
+		policy(s.DefaultPolicyID), fas, s.PathPattern, policy(s.PatternPolicyID), fas, logging)
+}
+
+// cfCreateCachePolicyWithTTL creates a cache policy whose DefaultTTL is
+// defaultTTL seconds and returns its ID.
+func cfCreateCachePolicyWithTTL(t *testing.T, srv *helpers.TestServer, name string, defaultTTL int) string {
+	t.Helper()
+	body := strings.Replace(cachePolicyConfigXML(name),
+		"<DefaultTTL>86400</DefaultTTL>", fmt.Sprintf("<DefaultTTL>%d</DefaultTTL>", defaultTTL), 1)
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/2020-05-31/cache-policy", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/xml")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("create cache policy %s: %v", name, err)
+	}
+	defer resp.Body.Close()
+	helpers.AssertStatus(t, resp, http.StatusCreated)
+	var cp parsedCachePolicy
+	if b := readBody(t, resp); xml.Unmarshal(b, &cp) != nil || cp.ID == "" {
+		t.Fatalf("no cache policy Id in response: %s", b)
+	}
+	return cp.ID
+}
+
+// TestProxy_functionRewrittenURIKeepsTheBehaviorsCacheTTL: when a viewer-request
+// function changes the uri, "it doesn't change the cache behavior for the
+// request" (functions-event-structure, request object). The cache policy — and
+// so the TTL a response is cached for — is the one of the behavior the VIEWER's
+// path matched, not of whichever behavior the rewritten uri would match.
+func TestProxy_functionRewrittenURIKeepsTheBehaviorsCacheTTL(t *testing.T) {
+	// Given: an origin
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("cached body"))
+	}))
+	defer origin.Close()
+	originDomain, port := splitOriginURL(t, origin.URL)
+
+	// And: a long-TTL default behavior, a short-TTL "/short/*" behavior, and a
+	// function that moves each request across to the other behavior's paths
+	srv := helpers.NewTestServer(t, helpers.WithMockClock())
+	longPolicy := cfCreateCachePolicyWithTTL(t, srv, "ttl-long", 86400)
+	shortPolicy := cfCreateCachePolicyWithTTL(t, srv, "ttl-short", 60)
+	fnARN := cfCreateFunctionWithCode(t, srv, "cross-behaviors", `function handler(event) {
+  var request = event.request;
+  request.uri = request.uri.indexOf('/short/') === 0 ? '/elsewhere' : '/short/rewritten';
+  return request;
+}`)
+	dist, _ := cfCreateDistFromXML(t, srv, proxyDistXML(proxyDistSpec{
+		CallerRef: "proxy-fn-rewrite-ttl", OriginDomain: originDomain, OriginPort: port,
+		PathPattern: "/short/*", DefaultPolicyID: longPolicy, PatternPolicyID: shortPolicy, FnARN: fnARN,
+	}))
+
+	for _, tc := range []struct {
+		name, path, wantXCache string
+	}{
+		// The viewer matched the default behavior (86400s): still cached after
+		// 120s, though the rewritten "/short/rewritten" would match the 60s one.
+		{"viewer path on the long-TTL behavior", "/index.html", "Hit from cloudfront"},
+		// The viewer matched "/short/*" (60s): expired after 120s, though the
+		// rewritten "/elsewhere" would fall to the 86400s default.
+		{"viewer path on the short-TTL behavior", "/short/page", "Miss from cloudfront"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// When: the path is fetched, the clock passes the short TTL, and it is
+			// fetched again
+			first := hostRoutedGet(t, srv, dist.ID, tc.path)
+			first.Body.Close()
+			helpers.AssertStatus(t, first, http.StatusOK)
+			if got := first.Header.Get("X-Cache"); got != "Miss from cloudfront" {
+				t.Fatalf("first fetch X-Cache = %q, want a miss", got)
+			}
+			srv.AdvanceClock(120 * time.Second)
+			second := hostRoutedGet(t, srv, dist.ID, tc.path)
+			second.Body.Close()
+
+			// Then: the entry lived for the viewer's behavior's TTL
+			helpers.AssertStatus(t, second, http.StatusOK)
+			if got := second.Header.Get("X-Cache"); got != tc.wantXCache {
+				t.Errorf("second fetch X-Cache = %q, want %q", got, tc.wantXCache)
+			}
+		})
+	}
+}
+
+// TestProxy_viewerRequestFunctionURIMustBeginWithSlash: "The new uri value must
+// begin with a forward slash" (functions-event-structure). A function that runs
+// but returns an invalid event object is a validation error
+// (viewing-cloudfront-metrics, FunctionValidationErrors), and a CloudFront
+// function validation error reaches the viewer as a 502
+// (http-502-bad-gateway). The origin is never asked.
+func TestProxy_viewerRequestFunctionURIMustBeginWithSlash(t *testing.T) {
+	// Given: an origin that counts the requests it answers
+	var originHits atomic.Int32
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		originHits.Add(1)
+	}))
+	defer origin.Close()
+	originDomain, port := splitOriginURL(t, origin.URL)
+	srv := helpers.NewTestServer(t)
+
+	for i, tc := range []struct {
+		name, uri  string
+		wantStatus int
+	}{
+		{"relative path", `'index.html'`, http.StatusBadGateway},
+		{"empty", `''`, http.StatusBadGateway},
+		{"absolute URL", `'https://example.com/x'`, http.StatusBadGateway},
+		{"not a string", `42`, http.StatusBadGateway},
+		{"leading slash", `'/index.html'`, http.StatusOK},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			originHits.Store(0)
+			// And: a distribution whose function sets the uri to tc.uri
+			fnARN := cfCreateFunctionWithCode(t, srv, fmt.Sprintf("bad-uri-%d", i), fmt.Sprintf(`function handler(event) {
+  var request = event.request;
+  request.uri = %s;
+  return request;
+}`, tc.uri))
+			dist, _ := cfCreateDistFromXML(t, srv, proxyDistXML(proxyDistSpec{
+				CallerRef: fmt.Sprintf("proxy-fn-bad-uri-%d", i), OriginDomain: originDomain, OriginPort: port,
+				PathPattern: "/never/*", FnARN: fnARN,
+			}))
+
+			// When: a viewer requests a path
+			resp := hostRoutedGet(t, srv, dist.ID, "/page")
+			resp.Body.Close()
+
+			// Then: an invalid uri is a 502 and never reaches the origin
+			helpers.AssertStatus(t, resp, tc.wantStatus)
+			wantHits := int32(0)
+			if tc.wantStatus == http.StatusOK {
+				wantHits = 1
+			}
+			if got := originHits.Load(); got != wantHits {
+				t.Errorf("origin answered %d requests, want %d", got, wantHits)
+			}
+		})
+	}
+}
+
+// accessLogLine waits for the single access-log object a distribution writes
+// under prefix in bucket and returns its tab-separated fields.
+func accessLogLine(t *testing.T, srv *helpers.TestServer, bucket, prefix string) []string {
+	t.Helper()
+	var key string
+	helpers.Eventually(t, 5*time.Second, 20*time.Millisecond, func() bool {
+		resp, err := http.Get(srv.URL + "/" + bucket + "?list-type=2&prefix=" + prefix)
+		if err != nil {
+			return false
+		}
+		defer resp.Body.Close()
+		var list struct {
+			Keys []string `xml:"Contents>Key"`
+		}
+		if xml.Unmarshal(readBody(t, resp), &list) != nil || len(list.Keys) == 0 {
+			return false
+		}
+		key = list.Keys[0]
+		return true
+	}, "access log object under "+prefix)
+	resp, err := http.Get(srv.URL + "/" + bucket + "/" + key)
+	if err != nil {
+		t.Fatalf("get access log %s: %v", key, err)
+	}
+	defer resp.Body.Close()
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	return strings.Split(strings.TrimRight(string(readBody(t, resp)), "\n"), "\t")
+}
+
+// TestProxy_accessLogRecordsTheViewersURI: cs-uri-stem is "the portion of the
+// request URL that identifies the path and object", with no query string
+// (standard-logs-reference) — the URL the viewer asked for, not an internal
+// route and not a function's rewrite of it. Log field values carry
+// "URL-encoded equivalents" for spaces, bytes above 126 and the characters
+// < > " # % { } | \ ^ ~ [ ] ` ' (standard-logging-legacy-s3, "Standard log
+// file format"), so an already-encoded "%20" in the URI is logged as "%2520".
+func TestProxy_accessLogRecordsTheViewersURI(t *testing.T) {
+	// Given: an origin, and a bucket to receive the logs
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	defer origin.Close()
+	originDomain, port := splitOriginURL(t, origin.URL)
+	srv := helpers.NewTestServer(t)
+	putBucket, _ := http.NewRequest(http.MethodPut, srv.URL+"/cf-access-logs", nil)
+	bResp, err := http.DefaultClient.Do(putBucket)
+	if err != nil {
+		t.Fatalf("create bucket: %v", err)
+	}
+	bResp.Body.Close()
+	rewriteARN := cfCreateFunctionWithCode(t, srv, "log-rewrite", `function handler(event) {
+  var request = event.request;
+  request.uri = '/rewritten/object';
+  return request;
+}`)
+
+	const (
+		csURIStem   = 7
+		csUserAgent = 10
+		csURIQuery  = 11
+	)
+	for i, tc := range []struct {
+		name, rawURL, fnARN, userAgent string
+		wantStem, wantQuery, wantUA    string
+	}{
+		{name: "plain path", rawURL: "/images/cat.jpg",
+			wantStem: "/images/cat.jpg", wantQuery: "-"},
+		{name: "query string excluded", rawURL: "/search?q=cat&n=1",
+			wantStem: "/search", wantQuery: "q=cat&n=1"},
+		{name: "percent-encoded path", rawURL: "/a%20b/100%25",
+			wantStem: "/a%2520b/100%2525", wantQuery: "-"},
+		{name: "tilde", rawURL: "/~user/home",
+			wantStem: "/%7Euser/home", wantQuery: "-"},
+		{name: "function rewrite", rawURL: "/index.html", fnARN: rewriteARN,
+			wantStem: "/index.html", wantQuery: "-"},
+		{name: "user agent space", rawURL: "/ua", userAgent: "test agent/1.0",
+			wantStem: "/ua", wantQuery: "-", wantUA: "test%20agent/1.0"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// And: a logging distribution of its own, so its log object is alone
+			prefix := fmt.Sprintf("case%d/", i)
+			dist, _ := cfCreateDistFromXML(t, srv, proxyDistXML(proxyDistSpec{
+				CallerRef: fmt.Sprintf("proxy-access-log-%d", i), OriginDomain: originDomain, OriginPort: port,
+				PathPattern: "/never/*", FnARN: tc.fnARN, LogBucket: "cf-access-logs", LogPrefix: prefix,
+			}))
+
+			// When: a viewer requests the URL on the distribution's host
+			req, _ := http.NewRequest(http.MethodGet, srv.URL+tc.rawURL, nil)
+			req.Host = dist.ID + ".cloudfront.localhost:4566"
+			if tc.userAgent != "" {
+				req.Header.Set("User-Agent", tc.userAgent)
+			}
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatalf("proxy request: %v", err)
+			}
+			resp.Body.Close()
+			helpers.AssertStatus(t, resp, http.StatusOK)
+
+			// Then: the log line names the viewer's URI, log-encoded
+			fields := accessLogLine(t, srv, "cf-access-logs", prefix)
+			if len(fields) <= csURIQuery {
+				t.Fatalf("log line has %d fields: %q", len(fields), fields)
+			}
+			if got := fields[csURIStem]; got != tc.wantStem {
+				t.Errorf("cs-uri-stem = %q, want %q", got, tc.wantStem)
+			}
+			if got := fields[csURIQuery]; got != tc.wantQuery {
+				t.Errorf("cs-uri-query = %q, want %q", got, tc.wantQuery)
+			}
+			if tc.wantUA != "" && fields[csUserAgent] != tc.wantUA {
+				t.Errorf("cs(User-Agent) = %q, want %q", fields[csUserAgent], tc.wantUA)
 			}
 		})
 	}

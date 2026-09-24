@@ -117,6 +117,46 @@ findings:
           internal/services/cloudfront/handler_proxy_test.go::TestEscapeURIPath_encodesOnlyWhatAPathCannotHold,
           internal/services/cloudfront/handler_proxy_test.go::TestPathHelpers_doNotAllocateOnPlainPaths
       fixed_in: "#2137"
+    - scenario: >-
+        #2137 follow-up: a viewer-request function that changes the uri no longer changes the cache
+        policy TTL. ProxyRequest matches cache behaviours once, on the viewer's path, and now carries that
+        behaviour's CachePolicyId into cacheTTL; cacheTTL used to re-match behaviours on the rewritten uri,
+        so a rewrite could cache a response for another behaviour's DefaultTTL. AWS: a changed uri
+        "doesn't change the cache behavior for the request or the origin".
+      evidence:
+        aws_docs: https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/functions-event-structure.html#functions-event-structure-request
+        tests: tests/integration/cloudfront/cloudfront_test.go::TestProxy_functionRewrittenURIKeepsTheBehaviorsCacheTTL
+      fixed_in: "#2137"
+    - scenario: >-
+        #2137 follow-up: a uri returned by a viewer-request function must begin with "/". A relative,
+        empty or non-string uri is a function validation error (the FunctionValidationErrors metric:
+        the function "runs successfully but returns invalid data") and the viewer gets a 502, which
+        http-502-bad-gateway documents for a CloudFront function validation error. The origin is not
+        called. A relative uri used to be joined onto the origin host and fail by chance; an empty or
+        non-string one was ignored and the request forwarded unchanged.
+      evidence:
+        aws_docs: >-
+          https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/functions-event-structure.html#functions-event-structure-request,
+          https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/viewing-cloudfront-metrics.html#monitoring-console.cloudfront-functions,
+          https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/http-502-bad-gateway.html#http-502-cloudfront-function-validation-error
+        tests: tests/integration/cloudfront/cloudfront_test.go::TestProxy_viewerRequestFunctionURIMustBeginWithSlash
+      fixed_in: "#2137"
+    - scenario: >-
+        #2137 follow-up: the standard access log's cs-uri-stem is the viewer's URI path, with no query
+        string. It used to be r.URL.Path, the internal /_overcast/cloudfront/distributions/{id}/... route.
+        A function's rewrite is not logged: the field is "the portion of the request URL", i.e. the viewer's
+        request. Every free-text field (cs-uri-stem, cs(Referer), cs(User-Agent), cs-uri-query) now gets
+        the log file encoding AWS documents: ASCII 0-32, 127 and above, and < > " # % { } | \ ^ ~ [ ] ` '
+        become %XX. "%" is in that list, so an encoded "%20" in the URI is logged as "%2520".
+      evidence:
+        aws_docs: >-
+          https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/standard-logs-reference.html#BasicDistributionFileFormat,
+          https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/standard-logging-legacy-s3.html#LogFileFormat
+        tests: >-
+          tests/integration/cloudfront/cloudfront_test.go::TestProxy_accessLogRecordsTheViewersURI,
+          internal/services/cloudfront/handler_proxy_test.go::TestLogFieldEscape_encodesTheDocumentedCharacters,
+          internal/services/cloudfront/handler_proxy_test.go::TestPathHelpers_doNotAllocateOnPlainPaths
+      fixed_in: "#2137"
   remaining_gaps:
     - >-
       Member order below the top level still follows the order the structs happened to be written in
@@ -132,11 +172,11 @@ findings:
       slashes before matching; Overcast matches the path as sent. Recorded on
       docs/services/cloudfront/limitations.md ("Request paths").
     - >-
-      #2137 (found in passing, not fixed): cacheTTL re-matches cache behaviours against the uri a
-      viewer-request function returned, so a rewrite can pick another behaviour's cache policy TTL; AWS
-      says a changed uri "doesn't change the cache behavior". A function-returned uri is not validated
-      to start with "/". The access log's cs-uri-stem is the internal /_overcast/cloudfront/distributions/{id}/...
-      route path rather than the viewer's URI.
+      #2137 follow-up (found in passing, not fixed): a CloudFront Function execution error does not
+      answer 503 as http-503-service-unavailable documents. A function that throws answers 500; one that
+      fails to compile, has no handler, or returns a non-object is logged and skipped, and the request
+      goes to the origin as if no function were associated. Only the uri validation error above is
+      refused (502).
   intentionally_partial:
     - >-
       ETags are a quoted version counter ("1", "2", …) rather than a content hash or an opaque token

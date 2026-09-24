@@ -2,6 +2,7 @@ package cloudfront
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -23,6 +24,11 @@ type cfFunctionResult struct {
 	headers map[string]string
 }
 
+// errFunctionValidation marks a function that ran but returned an invalid event
+// object — AWS's FunctionValidationErrors metric. The viewer gets a 502
+// (http-502-bad-gateway, "CloudFront function validation error").
+var errFunctionValidation = errors.New("function validation error")
+
 // runViewerRequest executes all viewer-request CloudFront Functions for the
 // matching cache behavior.
 //
@@ -32,7 +38,8 @@ type cfFunctionResult struct {
 //
 // Returns:
 //   - result: parsed output (may include an early HTTP response)
-//   - err: non-nil if function execution failed fatally
+//   - err: errFunctionValidation-wrapped if a function returned an invalid
+//     request; the request must then be refused, not forwarded
 func (h *Handler) runViewerRequest(
 	r *http.Request,
 	distID string,
@@ -57,6 +64,12 @@ func (h *Handler) runViewerRequest(
 		}
 		event := buildViewerRequestEvent(r, distID, domainName, reqPath)
 		res, execErr := execCFFunction(fn.FunctionCode, event)
+		if errors.Is(execErr, errFunctionValidation) {
+			log.Warn("viewer-request function returned an invalid request",
+				zap.String("arn", fa.FunctionARN),
+				zap.Error(execErr))
+			return nil, execErr
+		}
 		if execErr != nil {
 			log.Warn("viewer-request function error",
 				zap.String("arn", fa.FunctionARN),
@@ -255,7 +268,14 @@ func execCFFunction(b64Code string, event map[string]interface{}) (*cfFunctionRe
 		}
 	} else {
 		res.isResponse = false
-		if uri, ok := retMap["uri"].(string); ok {
+		// "The new uri value must begin with a forward slash"
+		// (functions-event-structure). A request object always carries its
+		// uri, so an empty or non-string one is as invalid as a relative one.
+		if v, present := retMap["uri"]; present {
+			uri, ok := v.(string)
+			if !ok || !strings.HasPrefix(uri, "/") {
+				return nil, fmt.Errorf("%w: request.uri %#v must begin with \"/\"", errFunctionValidation, v)
+			}
 			res.uri = uri
 		}
 		if method, ok := retMap["method"].(string); ok {

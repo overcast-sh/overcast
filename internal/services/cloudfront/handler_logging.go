@@ -93,18 +93,23 @@ func (h *Handler) writeAccessLog(
 		host = distID + ".cloudfront.net"
 	}
 
-	referer := r.Header.Get("Referer")
+	referer := logFieldEscape(r.Header.Get("Referer"))
 	if referer == "" {
 		referer = "-"
 	}
-	ua := r.Header.Get("User-Agent")
+	ua := logFieldEscape(r.Header.Get("User-Agent"))
 	if ua == "" {
 		ua = "-"
 	}
-	qs := r.URL.RawQuery
+	qs := logFieldEscape(r.URL.RawQuery)
 	if qs == "" {
 		qs = "-"
 	}
+	// The URI the viewer asked for, as it sent it: not r.URL.Path, which is
+	// the internal /_overcast/cloudfront/distributions/{id}/... route, and not
+	// a function's rewrite. Then log-escaped like every other field, so an
+	// encoded "%20" in the URI is logged as "%2520", as CloudFront does.
+	uriStem := logFieldEscape(viewerPath(r))
 
 	scheme := "http"
 	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
@@ -122,7 +127,7 @@ func (h *Handler) writeAccessLog(
 		clientIP,                           // c-ip
 		r.Method,                           // cs-method
 		host,                               // cs(Host)
-		r.URL.Path,                         // cs-uri-stem
+		uriStem,                            // cs-uri-stem
 		fmt.Sprintf("%d", statusCode),      // sc-status
 		referer,                            // cs(Referer)
 		ua,                                 // cs(User-Agent)
@@ -154,4 +159,41 @@ func (h *Handler) writeAccessLog(
 		}
 		_ = resp.Body.Close()
 	}()
+}
+
+// logFieldEscape applies the URL encoding CloudFront uses for standard log
+// field values (standard-logging-legacy-s3, "Standard log file format"): ASCII
+// 0-32, 127 and above, and < > " # % { } | \ ^ ~ [ ] ` ' become %XX. That list
+// includes "%", so a value that was already percent-encoded is encoded again.
+//
+// Returns v unchanged, without allocating, when nothing in it needs escaping.
+func logFieldEscape(v string) string {
+	i := 0
+	for i < len(v) && !logByteNeedsEscape(v[i]) {
+		i++
+	}
+	if i == len(v) {
+		return v
+	}
+	const hexDigits = "0123456789ABCDEF"
+	var b strings.Builder
+	b.Grow(len(v) + 8)
+	b.WriteString(v[:i])
+	for ; i < len(v); i++ {
+		if c := v[i]; logByteNeedsEscape(c) {
+			b.WriteByte('%')
+			b.WriteByte(hexDigits[c>>4])
+			b.WriteByte(hexDigits[c&0xF])
+		} else {
+			b.WriteByte(c)
+		}
+	}
+	return b.String()
+}
+
+func logByteNeedsEscape(c byte) bool {
+	if c <= ' ' || c >= 0x7F {
+		return true
+	}
+	return strings.IndexByte(`<>"#%{}|\^~[]`+"`'", c) >= 0
 }
