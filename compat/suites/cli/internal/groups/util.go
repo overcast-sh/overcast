@@ -3,7 +3,6 @@ package groups
 import (
 	"encoding/base64"
 	"fmt"
-	"math/big"
 	"strings"
 
 	"github.com/overcast-sh/overcast-compat-cli/internal/harness"
@@ -12,17 +11,6 @@ import (
 // encodeBase64 returns the standard base64 encoding of b.
 func encodeBase64(b []byte) string {
 	return base64.StdEncoding.EncodeToString(b)
-}
-
-// hashMidpointStr returns the decimal string midpoint between two decimal hash key strings.
-func hashMidpointStr(start, end string) string {
-	s := new(big.Int)
-	e := new(big.Int)
-	s.SetString(start, 10)
-	e.SetString(end, 10)
-	sum := new(big.Int).Add(s, e)
-	mid := new(big.Int).Rsh(sum, 1) // divide by 2
-	return mid.String()
 }
 
 // statusRunner runs a CLI command and reports the HTTP status of the last

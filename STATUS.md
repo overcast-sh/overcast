@@ -110,7 +110,7 @@
 | Firehose        | 9   |
 | Glue            | 26  |
 | OpenSearch      | 8   |
-| AppRegistry     | 22  |
+| AppRegistry     | 24  |
 | Backup          | 18  |
 | CloudTrail      | 12  |
 | EKS             | 49  |

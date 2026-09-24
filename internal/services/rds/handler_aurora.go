@@ -126,6 +126,46 @@ type xmlDBCluster struct {
 	// MasterUserSecret mirrors xmlDBInstance's field — see
 	// xmlMasterUserSecretFor in handler.go.
 	MasterUserSecret *xmlMasterUserSecret `xml:"MasterUserSecret,omitempty"`
+
+	// StorageEncrypted and KmsKeyId are #2133's remaining DBCluster
+	// echo-only properties — see xmlDBInstance's identical fields in
+	// handler.go for the shared reasoning. StorageEncrypted is one of the
+	// "AWS always returns a value" fields; KmsKeyId is present only when set.
+	StorageEncrypted bool   `xml:"StorageEncrypted"`
+	KmsKeyId         string `xml:"KmsKeyId,omitempty"`
+	// HttpEndpointEnabled is BooleanOptional on AWS but, like StorageEncrypted,
+	// is rendered unconditionally with its resting default (false) rather
+	// than modeled as present-only-when-set: Overcast has no "never asked"
+	// state distinct from "explicitly disabled" to preserve, and false is
+	// both defaults' answer.
+	HttpEndpointEnabled bool `xml:"HttpEndpointEnabled"`
+	// ServerlessV2ScalingConfiguration, unlike HttpEndpointEnabled, has no
+	// meaningful zero value to fall back to — MinCapacity/MaxCapacity of 0
+	// would claim a scaling range no Aurora Serverless v2 cluster can run
+	// at — so it stays present-only-when-set.
+	ServerlessV2ScalingConfiguration *xmlServerlessV2ScalingConfiguration `xml:"ServerlessV2ScalingConfiguration,omitempty"`
+}
+
+// xmlServerlessV2ScalingConfiguration is AWS's
+// ServerlessV2ScalingConfigurationInfo output shape.
+type xmlServerlessV2ScalingConfiguration struct {
+	MinCapacity           float64 `xml:"MinCapacity,omitempty"`
+	MaxCapacity           float64 `xml:"MaxCapacity,omitempty"`
+	SecondsUntilAutoPause int     `xml:"SecondsUntilAutoPause,omitempty"`
+}
+
+// xmlServerlessV2ScalingConfigurationFor builds the wire element for a
+// cluster's recorded scaling configuration, or nil when none was ever set —
+// the same present-only-when-relevant shape xmlMasterUserSecretFor uses.
+func xmlServerlessV2ScalingConfigurationFor(cfg *ServerlessV2ScalingConfig) *xmlServerlessV2ScalingConfiguration {
+	if cfg == nil {
+		return nil
+	}
+	return &xmlServerlessV2ScalingConfiguration{
+		MinCapacity:           cfg.MinCapacity,
+		MaxCapacity:           cfg.MaxCapacity,
+		SecondsUntilAutoPause: cfg.SecondsUntilAutoPause,
+	}
 }
 
 // xmlVpcSecurityGroups is AWS's VpcSecurityGroupMembership list. The Status
@@ -262,5 +302,10 @@ func (h *Handler) toXMLDBCluster(ctx context.Context, c *DBCluster) xmlDBCluster
 		EnabledCloudwatchLogsExports: xmlLogTypeList{Items: c.EnabledCloudwatchLogsExports},
 		DBClusterMembers:             xmlDBClusterMembers{Items: members},
 		MasterUserSecret:             xmlMasterUserSecretFor(c.MasterUserSecretARN, c.MasterUserSecretKmsKeyId),
+
+		StorageEncrypted:                 c.StorageEncrypted,
+		KmsKeyId:                         c.KmsKeyId,
+		HttpEndpointEnabled:              c.HttpEndpointEnabled,
+		ServerlessV2ScalingConfiguration: xmlServerlessV2ScalingConfigurationFor(c.ServerlessV2ScalingConfiguration),
 	}
 }

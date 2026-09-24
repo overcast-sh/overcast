@@ -31,8 +31,8 @@ import software.amazon.awssdk.services.kinesis.model.SplitShardRequest;
  */
 public final class ScenariosAuthoredKinesisShardsGen implements ServiceGroup {
 
-    private static final Group GROUP_KINESIS_SHARDS_SHADOW =
-            new Group("kinesis-shards-shadow", "compat/model/authored/kinesis-shards.json");
+    private static final Group GROUP_KINESIS_SHARDS =
+            new Group("kinesis-shards", "compat/model/authored/kinesis-shards.json");
 
     private final AwsClients clients;
     private volatile KinesisClient client;
@@ -49,21 +49,21 @@ public final class ScenariosAuthoredKinesisShardsGen implements ServiceGroup {
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("kinesis-shards-shadow:ListShards", this::testKinesisShardsShadowListShards),
-                Map.entry("kinesis-shards-shadow:SplitShard", this::testKinesisShardsShadowSplitShard),
-                Map.entry("kinesis-shards-shadow:MergeShards", this::testKinesisShardsShadowMergeShards));
+                Map.entry("kinesis-shards:ListShards", this::testKinesisShardsListShards),
+                Map.entry("kinesis-shards:SplitShard", this::testKinesisShardsSplitShard),
+                Map.entry("kinesis-shards:MergeShards", this::testKinesisShardsMergeShards));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("kinesis-shards-shadow", this::setupKinesisShardsShadow));
+                Map.entry("kinesis-shards", this::setupKinesisShards));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("kinesis-shards-shadow", this::teardownKinesisShardsShadow));
+                Map.entry("kinesis-shards", this::teardownKinesisShards));
     }
 
     /**
@@ -83,8 +83,8 @@ public final class ScenariosAuthoredKinesisShardsGen implements ServiceGroup {
         return client;
     }
 
-    private void setupKinesisShardsShadow(TestContext t) {
-        GROUP_KINESIS_SHARDS_SHADOW.runSetup(t,
+    private void setupKinesisShards(TestContext t) {
+        GROUP_KINESIS_SHARDS.runSetup(t,
                 new Call("CreateStream", "{\"ShardCount\":2,\"StreamName\":{\"$name\":\"s\"}}",
                         b -> CreateStreamRequest.builder()
                                 .shardCount(2)
@@ -93,8 +93,8 @@ public final class ScenariosAuthoredKinesisShardsGen implements ServiceGroup {
                         r -> cl().createStream((CreateStreamRequest) r)));
     }
 
-    private void teardownKinesisShardsShadow(TestContext t) {
-        GROUP_KINESIS_SHARDS_SHADOW.runTeardown(t,
+    private void teardownKinesisShards(TestContext t) {
+        GROUP_KINESIS_SHARDS.runTeardown(t,
                 new Call("DeleteStream", "{\"StreamName\":{\"$name\":\"s\"}}",
                         b -> DeleteStreamRequest.builder()
                                 .streamName(b.string("StreamName", Values.name("s")))
@@ -102,8 +102,8 @@ public final class ScenariosAuthoredKinesisShardsGen implements ServiceGroup {
                         r -> cl().deleteStream((DeleteStreamRequest) r)));
     }
 
-    private void testKinesisShardsShadowListShards(TestContext t) {
-        GROUP_KINESIS_SHARDS_SHADOW.runTest(t, "ListShards",
+    private void testKinesisShardsListShards(TestContext t) {
+        GROUP_KINESIS_SHARDS.runTest(t, "ListShards",
                 new Call("ListShards", "{\"StreamName\":{\"$name\":\"s\"}}",
                         b -> ListShardsRequest.builder()
                                 .streamName(b.string("StreamName", Values.name("s")))
@@ -131,8 +131,8 @@ public final class ScenariosAuthoredKinesisShardsGen implements ServiceGroup {
                 ));
     }
 
-    private void testKinesisShardsShadowSplitShard(TestContext t) {
-        GROUP_KINESIS_SHARDS_SHADOW.runTest(t, "SplitShard",
+    private void testKinesisShardsSplitShard(TestContext t) {
+        GROUP_KINESIS_SHARDS.runTest(t, "SplitShard",
                 new Call("SplitShard", "{\"NewStartingHashKey\":\"85070591730234615865843651857942052863\",\"ShardToSplit\":{\"$ref\":\"shard.first\"},\"StreamName\":{\"$name\":\"s\"}}",
                         b -> SplitShardRequest.builder()
                                 .newStartingHashKey("85070591730234615865843651857942052863")
@@ -188,8 +188,8 @@ public final class ScenariosAuthoredKinesisShardsGen implements ServiceGroup {
                 ));
     }
 
-    private void testKinesisShardsShadowMergeShards(TestContext t) {
-        GROUP_KINESIS_SHARDS_SHADOW.runTest(t, "MergeShards",
+    private void testKinesisShardsMergeShards(TestContext t) {
+        GROUP_KINESIS_SHARDS.runTest(t, "MergeShards",
                 new Call("MergeShards", "{\"AdjacentShardToMerge\":{\"$ref\":\"child.second\"},\"ShardToMerge\":{\"$ref\":\"child.first\"},\"StreamName\":{\"$name\":\"s\"}}",
                         b -> MergeShardsRequest.builder()
                                 .adjacentShardToMerge(b.string("AdjacentShardToMerge", Values.ref("child.second")))

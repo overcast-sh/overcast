@@ -436,18 +436,6 @@
     },
     {
       "suite": "dotnet-sdk",
-      "service": "kinesis",
-      "group": "kinesis-shards",
-      "tests": 3
-    },
-    {
-      "suite": "dotnet-sdk",
-      "service": "cloudwatch-logs",
-      "group": "logs-events",
-      "tests": 5
-    },
-    {
-      "suite": "dotnet-sdk",
       "service": "msk",
       "group": "msk-clusters",
       "tests": 16
@@ -1837,18 +1825,6 @@
       "service": "kinesis",
       "group": "kinesis-records",
       "tests": 4
-    },
-    {
-      "suite": "rust-sdk",
-      "service": "kinesis",
-      "group": "kinesis-shards",
-      "tests": 3
-    },
-    {
-      "suite": "rust-sdk",
-      "service": "cloudwatch-logs",
-      "group": "logs-events",
-      "tests": 5
     },
     {
       "suite": "rust-sdk",

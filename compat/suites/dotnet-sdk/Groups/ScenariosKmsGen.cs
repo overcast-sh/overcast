@@ -51,6 +51,14 @@ internal sealed class ScenariosKms : IServiceGroup
         ["kms-gen-key:GenerateDataKeyWithoutPlaintext"] = TestKmsGenKeyGenerateDataKeyWithoutPlaintext,
         ["kms-gen-key:GenerateDataKeyPair"] = TestKmsGenKeyGenerateDataKeyPair,
         ["kms-gen-key:GenerateRandom"] = TestKmsGenKeyGenerateRandom,
+        ["kms-gen-key:Encrypt"] = TestKmsGenKeyEncrypt,
+        ["kms-gen-key:Decrypt"] = TestKmsGenKeyDecrypt,
+        ["kms-gen-key:ReEncrypt"] = TestKmsGenKeyReEncrypt,
+        ["kms-gen-key:DecryptReEncrypted"] = TestKmsGenKeyDecryptReEncrypted,
+        ["kms-gen-key:CreateKeySigning"] = TestKmsGenKeyCreateKeySigning,
+        ["kms-gen-key:Sign"] = TestKmsGenKeySign,
+        ["kms-gen-key:Verify"] = TestKmsGenKeyVerify,
+        ["kms-gen-key:ScheduleKeyDeletionSigning"] = TestKmsGenKeyScheduleKeyDeletionSigning,
         ["kms-gen-key:CreateGrant"] = TestKmsGenKeyCreateGrant,
         ["kms-gen-key:ListGrants"] = TestKmsGenKeyListGrants,
         ["kms-gen-key:ListRetirableGrants"] = TestKmsGenKeyListRetirableGrants,
@@ -557,6 +565,262 @@ internal sealed class ScenariosKms : IServiceGroup
         [
             Clause.ResponseField(
                 Check.NonEmpty("$.Plaintext")
+            )
+        ],
+    });
+
+    private Task TestKmsGenKeyEncrypt(TestContext t) => GroupKmsGenKey.RunTestAsync(t, "Encrypt", new ScenarioTest
+    {
+        Call = new ScenarioCall
+        {
+            Op = "Encrypt",
+            Params = "{\"KeyId\":{\"$ref\":\"key.id\"},\"Plaintext\":{\"$base64\":\"Y29tcGF0LXNjZW5hcmlvIHBsYWludGV4dA==\"}}",
+            Build = b =>
+            {
+                var request = new EncryptRequest();
+                request.KeyId = b.Bind<string>("KeyId", Val.Ref("key.id"));
+                request.Plaintext = new System.IO.MemoryStream(System.Convert.FromBase64String("Y29tcGF0LXNjZW5hcmlvIHBsYWludGV4dA=="));
+                return request;
+            },
+            SendAsync = async request =>
+                await Cl().EncryptAsync((EncryptRequest)request),
+            Export = new()
+            {
+                ["key.ciphertext"] = "$.CiphertextBlob",
+            },
+        },
+        Assert =
+        [
+            Clause.ResponseField(
+                Check.NonEmpty("$.CiphertextBlob"),
+                Check.EqualTo("$.EncryptionAlgorithm", "SYMMETRIC_DEFAULT"),
+                Check.EqualTo("$.KeyId", Val.Ref("key.arn"))
+            )
+        ],
+    });
+
+    private Task TestKmsGenKeyDecrypt(TestContext t) => GroupKmsGenKey.RunTestAsync(t, "Decrypt", new ScenarioTest
+    {
+        Call = new ScenarioCall
+        {
+            Op = "Decrypt",
+            Params = "{\"CiphertextBlob\":{\"$base64\":{\"$ref\":\"key.ciphertext\"}}}",
+            Build = b =>
+            {
+                var request = new DecryptRequest();
+                request.CiphertextBlob = b.Blob("CiphertextBlob", Val.Base64(Val.Ref("key.ciphertext")));
+                return request;
+            },
+            SendAsync = async request =>
+                await Cl().DecryptAsync((DecryptRequest)request),
+        },
+        Assert =
+        [
+            Clause.ResponseField(
+                Check.EqualTo("$.EncryptionAlgorithm", "SYMMETRIC_DEFAULT"),
+                Check.EqualTo("$.KeyId", Val.Ref("key.arn")),
+                Check.EqualTo("$.Plaintext", Val.Base64("Y29tcGF0LXNjZW5hcmlvIHBsYWludGV4dA=="))
+            )
+        ],
+    });
+
+    private Task TestKmsGenKeyReEncrypt(TestContext t) => GroupKmsGenKey.RunTestAsync(t, "ReEncrypt", new ScenarioTest
+    {
+        Call = new ScenarioCall
+        {
+            Op = "ReEncrypt",
+            Params = "{\"CiphertextBlob\":{\"$base64\":{\"$ref\":\"key.ciphertext\"}},\"DestinationKeyId\":{\"$ref\":\"key.id\"}}",
+            Build = b =>
+            {
+                var request = new ReEncryptRequest();
+                request.CiphertextBlob = b.Blob("CiphertextBlob", Val.Base64(Val.Ref("key.ciphertext")));
+                request.DestinationKeyId = b.Bind<string>("DestinationKeyId", Val.Ref("key.id"));
+                return request;
+            },
+            SendAsync = async request =>
+                await Cl().ReEncryptAsync((ReEncryptRequest)request),
+            Export = new()
+            {
+                ["key.reciphertext"] = "$.CiphertextBlob",
+            },
+        },
+        Assert =
+        [
+            Clause.ResponseField(
+                Check.NonEmpty("$.CiphertextBlob"),
+                Check.EqualTo("$.DestinationEncryptionAlgorithm", "SYMMETRIC_DEFAULT"),
+                Check.EqualTo("$.KeyId", Val.Ref("key.arn")),
+                Check.EqualTo("$.SourceEncryptionAlgorithm", "SYMMETRIC_DEFAULT"),
+                Check.EqualTo("$.SourceKeyId", Val.Ref("key.arn"))
+            )
+        ],
+    });
+
+    private Task TestKmsGenKeyDecryptReEncrypted(TestContext t) => GroupKmsGenKey.RunTestAsync(t, "DecryptReEncrypted", new ScenarioTest
+    {
+        Call = new ScenarioCall
+        {
+            Op = "Decrypt",
+            Params = "{\"CiphertextBlob\":{\"$base64\":{\"$ref\":\"key.reciphertext\"}}}",
+            Build = b =>
+            {
+                var request = new DecryptRequest();
+                request.CiphertextBlob = b.Blob("CiphertextBlob", Val.Base64(Val.Ref("key.reciphertext")));
+                return request;
+            },
+            SendAsync = async request =>
+                await Cl().DecryptAsync((DecryptRequest)request),
+        },
+        Assert =
+        [
+            Clause.ResponseField(
+                Check.EqualTo("$.KeyId", Val.Ref("key.arn")),
+                Check.EqualTo("$.Plaintext", Val.Base64("Y29tcGF0LXNjZW5hcmlvIHBsYWludGV4dA=="))
+            )
+        ],
+    });
+
+    private Task TestKmsGenKeyCreateKeySigning(TestContext t) => GroupKmsGenKey.RunTestAsync(t, "CreateKeySigning", new ScenarioTest
+    {
+        Call = new ScenarioCall
+        {
+            Op = "CreateKey",
+            Params = "{\"Description\":\"compat-scenario signing key\",\"KeySpec\":\"RSA_2048\",\"KeyUsage\":\"SIGN_VERIFY\"}",
+            Build = b =>
+            {
+                var request = new CreateKeyRequest();
+                request.Description = "compat-scenario signing key";
+                request.KeySpec = "RSA_2048";
+                request.KeyUsage = "SIGN_VERIFY";
+                return request;
+            },
+            SendAsync = async request =>
+                await Cl().CreateKeyAsync((CreateKeyRequest)request),
+            Export = new()
+            {
+                ["key.signarn"] = "$.KeyMetadata.Arn",
+                ["key.signid"] = "$.KeyMetadata.KeyId",
+            },
+        },
+        Assert =
+        [
+            Clause.Eventually(6, 500,
+                Clause.Readback(
+                    new ScenarioCall
+                    {
+                        Op = "DescribeKey",
+                        Params = "{\"KeyId\":{\"$ref\":\"key.signid\"}}",
+                        Build = b =>
+                        {
+                            var request = new DescribeKeyRequest();
+                            request.KeyId = b.Bind<string>("KeyId", Val.Ref("key.signid"));
+                            return request;
+                        },
+                        SendAsync = async request =>
+                            await Cl().DescribeKeyAsync((DescribeKeyRequest)request),
+                    },
+                    Check.EqualTo("$.KeyMetadata.Arn", Val.Ref("key.signarn")),
+                    Check.EqualTo("$.KeyMetadata.KeySpec", "RSA_2048"),
+                    Check.EqualTo("$.KeyMetadata.KeyUsage", "SIGN_VERIFY")
+                )
+            )
+        ],
+    });
+
+    private Task TestKmsGenKeySign(TestContext t) => GroupKmsGenKey.RunTestAsync(t, "Sign", new ScenarioTest
+    {
+        Call = new ScenarioCall
+        {
+            Op = "Sign",
+            Params = "{\"KeyId\":{\"$ref\":\"key.signid\"},\"Message\":{\"$base64\":\"Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgdG8gc2lnbg==\"},\"SigningAlgorithm\":\"RSASSA_PKCS1_V1_5_SHA_256\"}",
+            Build = b =>
+            {
+                var request = new SignRequest();
+                request.KeyId = b.Bind<string>("KeyId", Val.Ref("key.signid"));
+                request.Message = new System.IO.MemoryStream(System.Convert.FromBase64String("Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgdG8gc2lnbg=="));
+                request.SigningAlgorithm = "RSASSA_PKCS1_V1_5_SHA_256";
+                return request;
+            },
+            SendAsync = async request =>
+                await Cl().SignAsync((SignRequest)request),
+            Export = new()
+            {
+                ["key.signature"] = "$.Signature",
+            },
+        },
+        Assert =
+        [
+            Clause.ResponseField(
+                Check.EqualTo("$.KeyId", Val.Ref("key.signarn")),
+                Check.NonEmpty("$.Signature"),
+                Check.EqualTo("$.SigningAlgorithm", "RSASSA_PKCS1_V1_5_SHA_256")
+            )
+        ],
+    });
+
+    private Task TestKmsGenKeyVerify(TestContext t) => GroupKmsGenKey.RunTestAsync(t, "Verify", new ScenarioTest
+    {
+        Call = new ScenarioCall
+        {
+            Op = "Verify",
+            Params = "{\"KeyId\":{\"$ref\":\"key.signid\"},\"Message\":{\"$base64\":\"Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgdG8gc2lnbg==\"},\"Signature\":{\"$base64\":{\"$ref\":\"key.signature\"}},\"SigningAlgorithm\":\"RSASSA_PKCS1_V1_5_SHA_256\"}",
+            Build = b =>
+            {
+                var request = new VerifyRequest();
+                request.KeyId = b.Bind<string>("KeyId", Val.Ref("key.signid"));
+                request.Message = new System.IO.MemoryStream(System.Convert.FromBase64String("Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgdG8gc2lnbg=="));
+                request.Signature = b.Blob("Signature", Val.Base64(Val.Ref("key.signature")));
+                request.SigningAlgorithm = "RSASSA_PKCS1_V1_5_SHA_256";
+                return request;
+            },
+            SendAsync = async request =>
+                await Cl().VerifyAsync((VerifyRequest)request),
+        },
+        Assert =
+        [
+            Clause.ResponseField(
+                Check.EqualTo("$.KeyId", Val.Ref("key.signarn")),
+                Check.EqualTo("$.SignatureValid", true),
+                Check.EqualTo("$.SigningAlgorithm", "RSASSA_PKCS1_V1_5_SHA_256")
+            )
+        ],
+    });
+
+    private Task TestKmsGenKeyScheduleKeyDeletionSigning(TestContext t) => GroupKmsGenKey.RunTestAsync(t, "ScheduleKeyDeletionSigning", new ScenarioTest
+    {
+        Call = new ScenarioCall
+        {
+            Op = "ScheduleKeyDeletion",
+            Params = "{\"KeyId\":{\"$ref\":\"key.signid\"},\"PendingWindowInDays\":7}",
+            Build = b =>
+            {
+                var request = new ScheduleKeyDeletionRequest();
+                request.KeyId = b.Bind<string>("KeyId", Val.Ref("key.signid"));
+                request.PendingWindowInDays = 7;
+                return request;
+            },
+            SendAsync = async request =>
+                await Cl().ScheduleKeyDeletionAsync((ScheduleKeyDeletionRequest)request),
+        },
+        Assert =
+        [
+            Clause.Eventually(6, 500,
+                Clause.Readback(
+                    new ScenarioCall
+                    {
+                        Op = "DescribeKey",
+                        Params = "{\"KeyId\":{\"$ref\":\"key.signid\"}}",
+                        Build = b =>
+                        {
+                            var request = new DescribeKeyRequest();
+                            request.KeyId = b.Bind<string>("KeyId", Val.Ref("key.signid"));
+                            return request;
+                        },
+                        SendAsync = async request =>
+                            await Cl().DescribeKeyAsync((DescribeKeyRequest)request),
+                    },
+                    Check.EqualTo("$.KeyMetadata.KeyState", "PendingDeletion")
+                )
             )
         ],
     });

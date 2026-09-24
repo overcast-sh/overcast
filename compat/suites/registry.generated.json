@@ -17,8 +17,34 @@
       ]
     },
     {
+      "group": "kinesis-shards",
+      "scenario": "compat/model/authored/kinesis-shards.json",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ]
+    },
+    {
       "group": "kinesis-streams",
       "scenario": "compat/model/authored/kinesis-streams.json",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ]
+    },
+    {
+      "group": "logs-events",
+      "scenario": "compat/model/authored/logs-events.json",
       "suites": [
         "cli",
         "dotnet-sdk",
@@ -1376,40 +1402,6 @@
       ]
     },
     {
-      "service": "kinesis",
-      "name": "kinesis-shards-shadow",
-      "generated": true,
-      "scenario": "compat/model/authored/kinesis-shards.json",
-      "state": "candidate",
-      "shadowOf": "kinesis-shards",
-      "suites": [
-        "cli",
-        "dotnet-sdk",
-        "go-sdk",
-        "java-sdk",
-        "node-js-sdk",
-        "python-sdk",
-        "rust-sdk"
-      ],
-      "tests": [
-        {
-          "name": "ListShards"
-        },
-        {
-          "name": "SplitShard",
-          "depends": [
-            "ListShards"
-          ]
-        },
-        {
-          "name": "MergeShards",
-          "depends": [
-            "SplitShard"
-          ]
-        }
-      ]
-    },
-    {
       "service": "kms",
       "name": "kms-gen-key",
       "generated": true,
@@ -1510,6 +1502,58 @@
         },
         {
           "name": "GenerateRandom"
+        },
+        {
+          "name": "Encrypt",
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "Decrypt",
+          "depends": [
+            "CreateKey",
+            "Encrypt"
+          ]
+        },
+        {
+          "name": "ReEncrypt",
+          "depends": [
+            "CreateKey",
+            "Encrypt"
+          ]
+        },
+        {
+          "name": "DecryptReEncrypted",
+          "op": "Decrypt",
+          "depends": [
+            "CreateKey",
+            "ReEncrypt"
+          ]
+        },
+        {
+          "name": "CreateKeySigning",
+          "op": "CreateKey"
+        },
+        {
+          "name": "Sign",
+          "depends": [
+            "CreateKeySigning"
+          ]
+        },
+        {
+          "name": "Verify",
+          "depends": [
+            "CreateKeySigning",
+            "Sign"
+          ]
+        },
+        {
+          "name": "ScheduleKeyDeletionSigning",
+          "op": "ScheduleKeyDeletion",
+          "depends": [
+            "CreateKeySigning"
+          ]
         },
         {
           "name": "CreateGrant",
@@ -1653,54 +1697,6 @@
         },
         {
           "name": "ListKeyRotations"
-        }
-      ]
-    },
-    {
-      "service": "cloudwatch-logs",
-      "name": "logs-events-shadow",
-      "generated": true,
-      "scenario": "compat/model/authored/logs-events.json",
-      "state": "candidate",
-      "shadowOf": "logs-events",
-      "suites": [
-        "cli",
-        "dotnet-sdk",
-        "go-sdk",
-        "java-sdk",
-        "node-js-sdk",
-        "python-sdk",
-        "rust-sdk"
-      ],
-      "tests": [
-        {
-          "name": "PutLogEvents"
-        },
-        {
-          "name": "GetLogEvents",
-          "depends": [
-            "PutLogEvents"
-          ]
-        },
-        {
-          "name": "FilterLogEvents",
-          "depends": [
-            "PutLogEvents"
-          ]
-        },
-        {
-          "name": "DescribeLogStreams",
-          "depends": [
-            "PutLogEvents"
-          ]
-        },
-        {
-          "name": "DeleteLogStream",
-          "depends": [
-            "GetLogEvents",
-            "FilterLogEvents",
-            "DescribeLogStreams"
-          ]
         }
       ]
     },

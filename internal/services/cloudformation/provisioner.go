@@ -1256,6 +1256,17 @@ var stackTagPropagationResourceTypes = map[string]bool{
 	// time RDS gains ManageMasterUserPassword.
 	"AWS::RDS::DBInstance": true,
 	"AWS::RDS::DBCluster":  true,
+	// #1763: Create now merges stack tags (mergeMapResourceTags — Tags here is
+	// `Object of String`, not List<Tag>) and Update reconciles a change via
+	// TagResource/UntagResource, replacing the "no reconciliation at all" gap
+	// stackTagPropagationExclusions recorded below. AttributeGroup gained the
+	// same treatment in the same pass, for the same reason.
+	"AWS::ServiceCatalogAppRegistry::Application":    true,
+	"AWS::ServiceCatalogAppRegistry::AttributeGroup": true,
+	// #1764: a new handler (the resource type had none before), so this is
+	// the type's first Tags support — Create merges stack tags and Update
+	// reconciles a change via SESv2's TagResource/UntagResource.
+	"AWS::SES::EmailIdentity": true,
 }
 
 // stackTagPropagationExclusions (stack_tag_propagation_coverage_dev_test.go)
@@ -1264,6 +1275,31 @@ var stackTagPropagationResourceTypes = map[string]bool{
 // the reason found during #1310's audit — kept next to the dev-tagged
 // TestStackTagPropagationCoverage that is its only reader, since nothing in
 // the default build consults it.
+
+// effectiveResourceTagsMapShaped is the set of stackTagPropagationResourceTypes
+// members whose Tags property is `Object of String` (a plain JSON map, merged
+// via mergeMapResourceTags) rather than the List<Tag> shape
+// (`[{Key,Value}]`, merged via mergeResourceTags) every other member uses.
+// hashResourceProperties/resourcePropertiesMatch consult this so a map-shaped
+// type's effective-tags hash actually reflects its resource-level tags,
+// instead of silently losing them the way mergeResourceTags does when handed
+// a map (it only recognises the []any shape and falls back to stack tags
+// alone) — see mergeMapResourceTags' header comment for why the two shapes
+// coexist across CloudFormation's own resource specs.
+var effectiveResourceTagsMapShaped = map[string]bool{
+	"AWS::ServiceCatalogAppRegistry::Application":    true,
+	"AWS::ServiceCatalogAppRegistry::AttributeGroup": true,
+}
+
+// effectiveResourceTags merges stackTags with a resource's own Tags property,
+// picking the List<Tag> or map merge helper by the resource type's declared
+// shape (effectiveResourceTagsMapShaped).
+func effectiveResourceTags(resourceType string, stackTags []Tag, rawResourceTags any) map[string]string {
+	if effectiveResourceTagsMapShaped[resourceType] {
+		return mergeMapResourceTags(stackTags, rawResourceTags)
+	}
+	return mergeResourceTags(stackTags, rawResourceTags)
+}
 
 // hashResourceProperties includes only tags CloudFormation propagates outside
 // the resource property map. Resource-level tags are already present in props;
@@ -1278,7 +1314,7 @@ func hashResourceProperties(resourceType string, props map[string]any, stackTags
 	case stackTagPropagationResourceTypes[resourceType]:
 		return hashProps(map[string]any{
 			"Properties":    props,
-			"EffectiveTags": mergeResourceTags(stackTags, props["Tags"]),
+			"EffectiveTags": effectiveResourceTags(resourceType, stackTags, props["Tags"]),
 		})
 	default:
 		return hashProps(props)
@@ -1300,8 +1336,8 @@ func resourcePropertiesMatch(oldHash, resourceType string, props map[string]any,
 		currentTags = mergeNestedStackTags(stackTags, props["Tags"])
 		previousTags = mergeNestedStackTags(previousStackTags, props["Tags"])
 	} else {
-		currentTags = mergeResourceTags(stackTags, props["Tags"])
-		previousTags = mergeResourceTags(previousStackTags, props["Tags"])
+		currentTags = effectiveResourceTags(resourceType, stackTags, props["Tags"])
+		previousTags = effectiveResourceTags(resourceType, previousStackTags, props["Tags"])
 	}
 	effectiveTagsUnchanged := reflect.DeepEqual(currentTags, previousTags)
 	return effectiveTagsUnchanged && (oldHash == "" || oldHash == hashProps(props))
@@ -2800,8 +2836,10 @@ var resourceHandlers = map[string]resourceHandler{
 	"AWS::ECS::TaskDefinition": &ecsTaskDefinitionHandler{},
 	"AWS::ECS::Service":        &ecsServiceHandler{},
 	// Service Catalog AppRegistry
-	"AWS::ServiceCatalogAppRegistry::Application":         &appregistryApplicationHandler{},
-	"AWS::ServiceCatalogAppRegistry::ResourceAssociation": &appregistryResourceAssociationHandler{},
+	"AWS::ServiceCatalogAppRegistry::Application":               &appregistryApplicationHandler{},
+	"AWS::ServiceCatalogAppRegistry::ResourceAssociation":       &appregistryResourceAssociationHandler{},
+	"AWS::ServiceCatalogAppRegistry::AttributeGroup":            &appregistryAttributeGroupHandler{},
+	"AWS::ServiceCatalogAppRegistry::AttributeGroupAssociation": &appregistryAttributeGroupAssociationHandler{},
 	// RDS
 	"AWS::RDS::DBInstance":       &rdsDBInstanceHandler{},
 	"AWS::RDS::DBCluster":        &rdsDBClusterHandler{},
@@ -2836,6 +2874,7 @@ var resourceHandlers = map[string]resourceHandler{
 	// SES
 	"AWS::SES::Template":         &sesTemplateHandler{},
 	"AWS::SES::ConfigurationSet": &sesConfigurationSetHandler{},
+	"AWS::SES::EmailIdentity":    &sesEmailIdentityHandler{},
 	// Certificate Manager
 	"AWS::CertificateManager::Certificate": &acmCertificateHandler{},
 	// ECR
