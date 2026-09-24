@@ -181,10 +181,7 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 	domainName := distID + ".cloudfront.net"
 	fnResult, fnErr := h.runViewerRequest(r, distID, domainName, reqPath, behaviorFAs)
 	if fnErr != nil {
-		w.Header().Set("X-Amz-Cf-Pop", "DEV-P1")
-		w.Header().Set("X-Amz-Cf-Id", distID)
-		w.Header().Set("X-Cache", "Error from cloudfront")
-		http.Error(w, "The CloudFront function returned an invalid value", http.StatusBadGateway)
+		writeFunctionError(w, distID, fnErr)
 		return
 	}
 	if fnResult != nil {
@@ -281,9 +278,16 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Run viewer-response CloudFront Functions (may modify headers).
+	// Run viewer-response CloudFront Functions (may modify headers). They do
+	// not run on an origin error: "If the origin returns an HTTP error of 400
+	// and above, the CloudFront Function will not run" (functions-event-structure).
 	respHeaders := copyHeaders(resp.Header)
-	h.runViewerResponse(r, distID, domainName, reqPath, behaviorFAs, resp.StatusCode, respHeaders)
+	if resp.StatusCode < 400 {
+		if err := h.runViewerResponse(r, distID, domainName, reqPath, behaviorFAs, resp.StatusCode, respHeaders); err != nil {
+			writeFunctionError(w, distID, err)
+			return
+		}
+	}
 
 	// Copy (possibly modified) origin response headers.
 	for k, vals := range respHeaders {
@@ -323,6 +327,16 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(resp.StatusCode)
 		_, _ = io.Copy(w, resp.Body)
 	}
+}
+
+// writeFunctionError answers a viewer whose request a CloudFront Function
+// failed: 503 for an execution error, 502 for a validation error.
+func writeFunctionError(w http.ResponseWriter, distID string, err error) {
+	w.Header().Set("X-Amz-Cf-Pop", "DEV-P1")
+	w.Header().Set("X-Amz-Cf-Id", distID)
+	w.Header().Set("X-Cache", "Error from cloudfront")
+	status := functionErrorStatus(err)
+	http.Error(w, fmt.Sprintf("The CloudFront function failed (%d %s)", status, http.StatusText(status)), status)
 }
 
 // proxyCacheKey builds a cache key for a proxy request.

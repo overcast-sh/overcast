@@ -157,6 +157,27 @@ findings:
           internal/services/cloudfront/handler_proxy_test.go::TestLogFieldEscape_encodesTheDocumentedCharacters,
           internal/services/cloudfront/handler_proxy_test.go::TestPathHelpers_doNotAllocateOnPlainPaths
       fixed_in: "#2137"
+    - scenario: >-
+        #2142: a failed CloudFront Function ends the request the way AWS answers it. An execution error
+        (the function throws, does not compile, or defines no handler: "fails to complete successfully")
+        is a 503; a validation error (it returns something other than a request or response object) is a
+        502. Both apply to viewer-request functions, where the origin is then not called, and to
+        viewer-response functions, where the origin's response is not delivered. A function that threw
+        used to answer 500, and one that failed to compile or returned a non-object was logged and skipped,
+        so the request reached the origin as if no function were associated. Viewer-response functions also
+        no longer run on an origin status of 400 or above, as AWS documents.
+      evidence:
+        aws_docs: >-
+          https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/viewing-cloudfront-metrics.html#monitoring-console.cloudfront-functions,
+          https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/http-503-service-unavailable.html#http-503-lambda-execution-error,
+          https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/http-502-bad-gateway.html#http-502-cloudfront-function-validation-error,
+          https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/functions-event-structure.html#functions-event-structure-status-body
+        tests: >-
+          tests/integration/cloudfront/cloudfront_test.go::TestProxy_viewerRequestFunctionExecutionErrorIs503,
+          tests/integration/cloudfront/cloudfront_test.go::TestProxy_viewerRequestFunctionInvalidReturnIs502,
+          tests/integration/cloudfront/cloudfront_test.go::TestProxy_viewerResponseFunctionErrors,
+          tests/integration/cloudfront/cloudfront_test.go::TestProxy_viewerResponseFunctionSkippedOnOriginError
+      fixed_in: "#2142"
   remaining_gaps:
     - >-
       Member order below the top level still follows the order the structs happened to be written in
@@ -172,11 +193,9 @@ findings:
       slashes before matching; Overcast matches the path as sent. Recorded on
       docs/services/cloudfront/limitations.md ("Request paths").
     - >-
-      #2137 follow-up (found in passing, not fixed): a CloudFront Function execution error does not
-      answer 503 as http-503-service-unavailable documents. A function that throws answers 500; one that
-      fails to compile, has no handler, or returns a non-object is logged and skipped, and the request
-      goes to the origin as if no function were associated. Only the uri validation error above is
-      refused (502).
+      #2142 (found in passing, not fixed): viewer-response functions do not run on a cache hit. The
+      cached response is written before they would run, while AWS runs them on every response it
+      returns to the viewer. Recorded on docs/services/cloudfront/limitations.md ("CloudFront Functions").
   intentionally_partial:
     - >-
       ETags are a quoted version counter ("1", "2", …) rather than a content hash or an opaque token
