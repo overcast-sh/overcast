@@ -5,10 +5,10 @@
  *
  * Groups:
  *   kinesis-records — PutRecord / PutRecords / GetRecords
- *   kinesis-shards  — shard management (split, merge, list)
  *
- * kinesis-streams resolves through its authored scenario
- * (compat/model/authored/kinesis-streams.json).
+ * kinesis-streams and kinesis-shards resolve through their authored scenarios
+ * (compat/model/authored/kinesis-streams.json and
+ * compat/model/authored/kinesis-shards.json).
  */
 
 import {
@@ -19,9 +19,6 @@ import {
   PutRecordsCommand,
   GetShardIteratorCommand,
   GetRecordsCommand,
-  ListShardsCommand,
-  SplitShardCommand,
-  MergeShardsCommand,
   StreamStatus,
   ShardIteratorType,
 } from "@aws-sdk/client-kinesis";
@@ -145,118 +142,6 @@ export function makeKinesisGroups(suite: string): TestGroup[] {
         try {
           await kinesis.send(
             new DeleteStreamCommand({ StreamName: `${ctx.runId}-rec` }),
-          );
-        } catch {}
-      },
-    },
-
-    // ── kinesis-shards ─────────────────────────────────────────────────────
-    {
-      suite,
-      service: "kinesis",
-      name: "kinesis-shards",
-      setup: async (ctx) => {
-        const { kinesis } = makeClients(ctx);
-        await kinesis.send(
-          new CreateStreamCommand({
-            StreamName: `${ctx.runId}-shrd`,
-            ShardCount: 2,
-          }),
-        );
-        await waitForActive(kinesis, `${ctx.runId}-shrd`);
-      },
-      tests: [
-        {
-          name: "ListShards",
-          fn: async (ctx) => {
-            const { kinesis } = makeClients(ctx);
-            const resp = await kinesis.send(
-              new ListShardsCommand({ StreamName: `${ctx.runId}-shrd` }),
-            );
-            assert.ok(
-              (resp.Shards?.length ?? 0) >= 2,
-              `ListShards: expected ≥2 shards, got ${resp.Shards?.length}`,
-            );
-            (ctx as Record<string, unknown>)["_shards"] = resp.Shards;
-          },
-        },
-        {
-          name: "SplitShard",
-          fn: async (ctx) => {
-            const shards = (ctx as Record<string, unknown>)[
-              "_shards"
-            ] as Array<{
-              ShardId: string;
-              HashKeyRange: { StartingHashKey: string; EndingHashKey: string };
-            }>;
-            assert.ok(shards?.length, "no shards");
-            const { kinesis } = makeClients(ctx);
-            const shard = shards[0];
-            const start = BigInt(shard.HashKeyRange.StartingHashKey);
-            const end = BigInt(shard.HashKeyRange.EndingHashKey);
-            const mid = ((start + end) / 2n).toString();
-            await kinesis.send(
-              new SplitShardCommand({
-                StreamName: `${ctx.runId}-shrd`,
-                ShardToSplit: shard.ShardId,
-                NewStartingHashKey: mid,
-              }),
-            );
-            await waitForActive(kinesis, `${ctx.runId}-shrd`);
-            const resp = await kinesis.send(
-              new ListShardsCommand({ StreamName: `${ctx.runId}-shrd` }),
-            );
-            // After split, should have more shards than before (original 2 + 2 from split - 1 closed = 3 open, plus closed)
-            const openShards = (resp.Shards ?? []).filter(
-              (s) => !s.SequenceNumberRange?.EndingSequenceNumber,
-            );
-            assert.ok(
-              openShards.length >= 3,
-              `SplitShard: expected ≥3 open shards, got ${openShards.length}`,
-            );
-          },
-        },
-        {
-          name: "MergeShards",
-          fn: async (ctx) => {
-            const { kinesis } = makeClients(ctx);
-            // List open shards and merge the first two adjacent ones.
-            const listResp = await kinesis.send(
-              new ListShardsCommand({ StreamName: `${ctx.runId}-shrd` }),
-            );
-            const openShards = (listResp.Shards ?? []).filter(
-              (s) => !s.SequenceNumberRange?.EndingSequenceNumber,
-            );
-            assert.ok(
-              openShards.length >= 2,
-              `MergeShards: need ≥2 open shards, got ${openShards.length}`,
-            );
-            await kinesis.send(
-              new MergeShardsCommand({
-                StreamName: `${ctx.runId}-shrd`,
-                ShardToMerge: openShards[0].ShardId,
-                AdjacentShardToMerge: openShards[1].ShardId,
-              }),
-            );
-            await waitForActive(kinesis, `${ctx.runId}-shrd`);
-            const afterResp = await kinesis.send(
-              new ListShardsCommand({ StreamName: `${ctx.runId}-shrd` }),
-            );
-            const afterOpen = (afterResp.Shards ?? []).filter(
-              (s) => !s.SequenceNumberRange?.EndingSequenceNumber,
-            );
-            assert.ok(
-              afterOpen.length < openShards.length,
-              `MergeShards: expected fewer open shards after merge, got ${afterOpen.length}`,
-            );
-          },
-        },
-      ],
-      teardown: async (ctx) => {
-        const { kinesis } = makeClients(ctx);
-        try {
-          await kinesis.send(
-            new DeleteStreamCommand({ StreamName: `${ctx.runId}-shrd` }),
           );
         } catch {}
       },

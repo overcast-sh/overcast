@@ -15,7 +15,7 @@ namespace OvercastCompat.Groups;
 /// </remarks>
 internal sealed class ScenariosAuthoredKinesisShards : IServiceGroup
 {
-    private static readonly ScenarioGroup GroupKinesisShardsShadow = new("kinesis-shards-shadow", "compat/model/authored/kinesis-shards.json");
+    private static readonly ScenarioGroup GroupKinesisShards = new("kinesis-shards", "compat/model/authored/kinesis-shards.json");
 
     private readonly Lazy<AmazonKinesisClient> _client;
 
@@ -35,25 +35,25 @@ internal sealed class ScenariosAuthoredKinesisShards : IServiceGroup
 
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["kinesis-shards-shadow:ListShards"] = TestKinesisShardsShadowListShards,
-        ["kinesis-shards-shadow:SplitShard"] = TestKinesisShardsShadowSplitShard,
-        ["kinesis-shards-shadow:MergeShards"] = TestKinesisShardsShadowMergeShards,
+        ["kinesis-shards:ListShards"] = TestKinesisShardsListShards,
+        ["kinesis-shards:SplitShard"] = TestKinesisShardsSplitShard,
+        ["kinesis-shards:MergeShards"] = TestKinesisShardsMergeShards,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["kinesis-shards-shadow"] = SetupKinesisShardsShadow,
+        ["kinesis-shards"] = SetupKinesisShards,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["kinesis-shards-shadow"] = TeardownKinesisShardsShadow,
+        ["kinesis-shards"] = TeardownKinesisShards,
     };
 
     private AmazonKinesisClient Cl() => _client.Value;
 
-    private Task SetupKinesisShardsShadow(TestContext t) =>
-        GroupKinesisShardsShadow.RunSetupAsync(t,
+    private Task SetupKinesisShards(TestContext t) =>
+        GroupKinesisShards.RunSetupAsync(t,
             new ScenarioCall
             {
                 Op = "CreateStream",
@@ -70,8 +70,8 @@ internal sealed class ScenariosAuthoredKinesisShards : IServiceGroup
             }
         );
 
-    private Task TeardownKinesisShardsShadow(TestContext t) =>
-        GroupKinesisShardsShadow.RunTeardownAsync(t,
+    private Task TeardownKinesisShards(TestContext t) =>
+        GroupKinesisShards.RunTeardownAsync(t,
             new ScenarioCall
             {
                 Op = "DeleteStream",
@@ -87,7 +87,7 @@ internal sealed class ScenariosAuthoredKinesisShards : IServiceGroup
             }
         );
 
-    private Task TestKinesisShardsShadowListShards(TestContext t) => GroupKinesisShardsShadow.RunTestAsync(t, "ListShards", new ScenarioTest
+    private Task TestKinesisShardsListShards(TestContext t) => GroupKinesisShards.RunTestAsync(t, "ListShards", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -137,7 +137,7 @@ internal sealed class ScenariosAuthoredKinesisShards : IServiceGroup
         ],
     });
 
-    private Task TestKinesisShardsShadowSplitShard(TestContext t) => GroupKinesisShardsShadow.RunTestAsync(t, "SplitShard", new ScenarioTest
+    private Task TestKinesisShardsSplitShard(TestContext t) => GroupKinesisShards.RunTestAsync(t, "SplitShard", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -239,7 +239,7 @@ internal sealed class ScenariosAuthoredKinesisShards : IServiceGroup
         ],
     });
 
-    private Task TestKinesisShardsShadowMergeShards(TestContext t) => GroupKinesisShardsShadow.RunTestAsync(t, "MergeShards", new ScenarioTest
+    private Task TestKinesisShardsMergeShards(TestContext t) => GroupKinesisShards.RunTestAsync(t, "MergeShards", new ScenarioTest
     {
         Call = new ScenarioCall
         {
