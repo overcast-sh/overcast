@@ -58,8 +58,8 @@ func athenaTagsBody(body map[string]any, rCtx *resolveContext, props map[string]
 	}
 }
 
-// changed reports whether any of names differs between two property sets.
-func changed(props, oldProps map[string]any, names ...string) bool {
+// athenaPropertiesChanged reports whether any of names differs between two property sets.
+func athenaPropertiesChanged(props, oldProps map[string]any, names ...string) bool {
 	for _, name := range names {
 		if !reflect.DeepEqual(props[name], oldProps[name]) {
 			return true
@@ -89,7 +89,14 @@ func (h *athenaWorkGroupHandler) Create(ctx context.Context, router http.Handler
 	// The schema's property is WorkGroupConfiguration; Configuration is the
 	// CreateWorkGroup member it maps onto.
 	body := map[string]any{"Name": name}
-	forwardPropertiesAs(props, body, map[string]string{"Description": "Description", "WorkGroupConfiguration": "Configuration"})
+	forwardPropertiesAs(props, body, map[string]string{"Description": "Description"})
+	cfg, err := athenaCoerceConfiguration(athenaConfiguration(props))
+	if err != nil {
+		return "", nil, err
+	}
+	if cfg != nil {
+		body["Configuration"] = cfg
+	}
 	athenaTagsBody(body, rCtx, props)
 	noteUnconsumedProperties(ctx, "AWS::Athena::WorkGroup", props, athenaWorkGroupProperties...)
 	if _, err := athenaCall(ctx, router, rCtx.Region, "CreateWorkGroup", body); err != nil {
@@ -105,7 +112,7 @@ func (h *athenaWorkGroupHandler) Create(ctx context.Context, router http.Handler
 }
 
 func (h *athenaWorkGroupHandler) Update(ctx context.Context, router http.Handler, _ *config.Config, physicalID string, props, oldProps map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
-	if changed(props, oldProps, "Name") {
+	if athenaPropertiesChanged(props, oldProps, "Name") {
 		return "", nil, errReplacementRequired
 	}
 	description, _ := props["Description"].(string)
@@ -114,8 +121,14 @@ func (h *athenaWorkGroupHandler) Update(ctx context.Context, router http.Handler
 		state = "ENABLED"
 	}
 	body := map[string]any{"WorkGroup": physicalID, "Description": description, "State": state}
-	next, _ := props["WorkGroupConfiguration"].(map[string]any)
-	prev, _ := oldProps["WorkGroupConfiguration"].(map[string]any)
+	next, err := athenaCoerceConfiguration(athenaConfiguration(props))
+	if err != nil {
+		return "", nil, failUpdate(err)
+	}
+	prev, err := athenaCoerceConfiguration(athenaConfiguration(oldProps))
+	if err != nil {
+		return "", nil, failUpdate(err)
+	}
 	if updates := athenaConfigurationUpdates(next, prev); len(updates) > 0 {
 		body["ConfigurationUpdates"] = updates
 	}
@@ -130,6 +143,12 @@ func (h *athenaWorkGroupHandler) Update(ctx context.Context, router http.Handler
 		return "", nil, failUpdate(err)
 	}
 	return physicalID, attrs, nil
+}
+
+// athenaConfiguration is a template's WorkGroupConfiguration, nil when unset.
+func athenaConfiguration(props map[string]any) map[string]any {
+	cfg, _ := props["WorkGroupConfiguration"].(map[string]any)
+	return cfg
 }
 
 // DeleteWithProperties passes RecursiveDeleteOption through, so a workgroup
@@ -173,68 +192,6 @@ func athenaWorkGroupAttrs(ctx context.Context, router http.Handler, region, name
 		"WorkGroupConfiguration.EngineVersion.EffectiveEngineVersion":        engine,
 		"WorkGroupConfigurationUpdates.EngineVersion.EffectiveEngineVersion": engine,
 	}, nil
-}
-
-// athenaSettableConfiguration are the WorkGroupConfiguration members
-// ConfigurationUpdates takes under the same name.
-var athenaSettableConfiguration = []string{
-	"AdditionalConfiguration", "BytesScannedCutoffPerQuery", "CustomerContentEncryptionConfiguration",
-	"EnableMinimumEncryptionConfiguration", "EnforceWorkGroupConfiguration", "EngineConfiguration",
-	"EngineVersion", "ExecutionRole", "MonitoringConfiguration", "PublishCloudWatchMetricsEnabled",
-	"QueryResultsS3AccessGrantsConfiguration", "RequesterPaysEnabled",
-}
-
-// athenaRemovableConfiguration maps each member that can be cleared to the
-// flag that clears it.
-var athenaRemovableConfiguration = map[string]string{
-	"BytesScannedCutoffPerQuery":             "RemoveBytesScannedCutoffPerQuery",
-	"CustomerContentEncryptionConfiguration": "RemoveCustomerContentEncryptionConfiguration",
-}
-
-var athenaRemovableResultConfiguration = map[string]string{
-	"OutputLocation":          "RemoveOutputLocation",
-	"EncryptionConfiguration": "RemoveEncryptionConfiguration",
-	"ExpectedBucketOwner":     "RemoveExpectedBucketOwner",
-	"AclConfiguration":        "RemoveAclConfiguration",
-}
-
-// athenaConfigurationUpdates turns the template's desired
-// WorkGroupConfiguration into UpdateWorkGroup's ConfigurationUpdates: every
-// member it sets, and a Remove* flag for each clearable member it no longer
-// sets.
-func athenaConfigurationUpdates(next, prev map[string]any) map[string]any {
-	updates := setAndRemove(next, prev, athenaSettableConfiguration, athenaRemovableConfiguration)
-	nextResults, _ := next["ResultConfiguration"].(map[string]any)
-	prevResults, _ := prev["ResultConfiguration"].(map[string]any)
-	if nextResults != nil || prevResults != nil {
-		names := make([]string, 0, len(athenaRemovableResultConfiguration))
-		for name := range athenaRemovableResultConfiguration {
-			names = append(names, name)
-		}
-		updates["ResultConfigurationUpdates"] = setAndRemove(nextResults, prevResults, names, athenaRemovableResultConfiguration)
-	}
-	nextManaged, _ := next["ManagedQueryResultsConfiguration"].(map[string]any)
-	prevManaged, _ := prev["ManagedQueryResultsConfiguration"].(map[string]any)
-	if nextManaged != nil || prevManaged != nil {
-		updates["ManagedQueryResultsConfigurationUpdates"] = setAndRemove(nextManaged, prevManaged,
-			[]string{"Enabled", "EncryptionConfiguration"}, map[string]string{"EncryptionConfiguration": "RemoveEncryptionConfiguration"})
-	}
-	return updates
-}
-
-func setAndRemove(next, prev map[string]any, settable []string, removable map[string]string) map[string]any {
-	out := map[string]any{}
-	for _, name := range settable {
-		if v, ok := next[name]; ok && v != nil {
-			out[name] = v
-		}
-	}
-	for name, flag := range removable {
-		if _, had := prev[name]; had && next[name] == nil {
-			out[flag] = true
-		}
-	}
-	return out
 }
 
 // ── AWS::Athena::NamedQuery ─────────────────────────────────────────────────
@@ -312,7 +269,7 @@ func (h *athenaPreparedStatementHandler) Create(ctx context.Context, router http
 }
 
 func (h *athenaPreparedStatementHandler) Update(ctx context.Context, router http.Handler, _ *config.Config, _ string, props, oldProps map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
-	if changed(props, oldProps, "StatementName", "WorkGroup") {
+	if athenaPropertiesChanged(props, oldProps, "StatementName", "WorkGroup") {
 		return "", nil, errReplacementRequired
 	}
 	id, attrs, err := h.put(ctx, router, "UpdatePreparedStatement", props, rCtx)
@@ -342,11 +299,21 @@ func (h *athenaPreparedStatementHandler) Delete(ctx context.Context, router http
 
 type athenaDataCatalogHandler struct{}
 
-var athenaDataCatalogDefinition = []string{"Name", "Type", "Description", "Parameters"}
+var athenaDataCatalogDefinition = []string{"Name", "Type", "Description"}
 
-func (h *athenaDataCatalogHandler) Create(ctx context.Context, router http.Handler, _ *config.Config, props map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
+// athenaDataCatalogBody is a DataCatalog's create or update request, its
+// Parameters stringified as the API's string map requires.
+func athenaDataCatalogBody(props map[string]any) map[string]any {
 	body := map[string]any{}
 	forwardPropertiesAs(props, body, identityNames(athenaDataCatalogDefinition))
+	if params := cfnStringMap(props["Parameters"]); params != nil {
+		body["Parameters"] = params
+	}
+	return body
+}
+
+func (h *athenaDataCatalogHandler) Create(ctx context.Context, router http.Handler, _ *config.Config, props map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
+	body := athenaDataCatalogBody(props)
 	athenaTagsBody(body, rCtx, props)
 	noteUnconsumedProperties(ctx, "AWS::Athena::DataCatalog", props, "Name", "Type", "Description", "Parameters", "Tags")
 	if _, err := athenaCall(ctx, router, rCtx.Region, "CreateDataCatalog", body); err != nil {
@@ -357,12 +324,10 @@ func (h *athenaDataCatalogHandler) Create(ctx context.Context, router http.Handl
 }
 
 func (h *athenaDataCatalogHandler) Update(ctx context.Context, router http.Handler, _ *config.Config, physicalID string, props, oldProps map[string]any, rCtx *resolveContext) (string, map[string]string, error) {
-	if changed(props, oldProps, "Name") {
+	if athenaPropertiesChanged(props, oldProps, "Name") {
 		return "", nil, errReplacementRequired
 	}
-	body := map[string]any{}
-	forwardPropertiesAs(props, body, identityNames(athenaDataCatalogDefinition))
-	if _, err := athenaCall(ctx, router, rCtx.Region, "UpdateDataCatalog", body); err != nil {
+	if _, err := athenaCall(ctx, router, rCtx.Region, "UpdateDataCatalog", athenaDataCatalogBody(props)); err != nil {
 		return "", nil, failUpdate(err)
 	}
 	if err := athenaReconcileTags(ctx, router, rCtx, athenaARN(rCtx, "datacatalog", physicalID), props, oldProps); err != nil {

@@ -45,7 +45,7 @@ func TestStartQueryExecution_fullExecutionShape(t *testing.T) {
 		t.Fatalf("QueryExecutionContext = %+v", qe.QueryExecutionContext)
 	case len(qe.ExecutionParameters) != 1 || qe.ExecutionParameters[0] != "42":
 		t.Fatalf("ExecutionParameters = %v", qe.ExecutionParameters)
-	case aws.ToString(qe.ResultConfiguration.OutputLocation) != resultsLocation:
+	case aws.ToString(qe.ResultConfiguration.OutputLocation) != resultsLocation+aws.ToString(out.QueryExecutionId)+".csv":
 		t.Fatalf("ResultConfiguration = %+v", qe.ResultConfiguration)
 	case aws.ToInt32(qe.ResultReuseConfiguration.ResultReuseByAgeConfiguration.MaxAgeInMinutes) != 30:
 		t.Fatalf("ResultReuseConfiguration = %+v", qe.ResultReuseConfiguration)
@@ -69,6 +69,14 @@ func TestStartQueryExecution_statementTypes(t *testing.T) {
 		qe := must[*athena.GetQueryExecutionOutput](t, "GetQueryExecution")(c.GetQueryExecution(ctx, &athena.GetQueryExecutionInput{QueryExecutionId: aws.String(id)})).QueryExecution
 		if qe.StatementType != want {
 			t.Errorf("StatementType(%q) = %s, want %s", query, qe.StatementType, want)
+		}
+		// DDL and UTILITY output is plain text; everything else is CSV.
+		ext := ".csv"
+		if want != types.StatementTypeDml {
+			ext = ".txt"
+		}
+		if got := aws.ToString(qe.ResultConfiguration.OutputLocation); got != resultsLocation+id+ext {
+			t.Errorf("OutputLocation(%q) = %s, want %s", query, got, resultsLocation+id+ext)
 		}
 	}
 }
@@ -116,9 +124,11 @@ func TestStartQueryExecution_workGroupConfigurationResolution(t *testing.T) {
 
 			// Then: the workgroup decides when it enforces, the client
 			// otherwise, and the workgroup's encryption carries over
+			// The reported location is the result object under it.
 			rc := must[*athena.GetQueryExecutionOutput](t, "GetQueryExecution")(c.GetQueryExecution(ctx, &athena.GetQueryExecutionInput{QueryExecutionId: out.QueryExecutionId})).QueryExecution.ResultConfiguration
-			if aws.ToString(rc.OutputLocation) != tc.want || rc.EncryptionConfiguration == nil {
-				t.Fatalf("ResultConfiguration = %+v, want OutputLocation %s with the workgroup's encryption", rc, tc.want)
+			want := tc.want + aws.ToString(out.QueryExecutionId) + ".csv"
+			if aws.ToString(rc.OutputLocation) != want || rc.EncryptionConfiguration == nil {
+				t.Fatalf("ResultConfiguration = %+v, want OutputLocation %s with the workgroup's encryption", rc, want)
 			}
 		})
 	}

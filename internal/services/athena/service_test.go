@@ -149,3 +149,22 @@ func TestStore_legacyQueryRecordRanInPrimary(t *testing.T) {
 		t.Fatalf("QueryExecutionIds = %v", list.QueryExecutionIds)
 	}
 }
+
+func TestStore_legacyWorkGroupGetsAnEngineVersion(t *testing.T) {
+	// Given: a workgroup stored before workgroups carried an engine version
+	ctx := context.Background()
+	s, st := newTestService(t)
+	if err := st.Set(ctx, nsWorkGroups, "old", `{"Name":"old","State":"ENABLED","Configuration":{"ResultConfiguration":{"OutputLocation":"s3://r/"}}}`); err != nil {
+		t.Fatal(err)
+	}
+
+	// When: it is read
+	out, aerr := s.getWorkGroupTyped(ctx, &workGroupNameReq{WorkGroup: "old"})
+	mustOK(t, "GetWorkGroup", aerr)
+
+	// Then: it reports AUTO, as one created without a choice does, and keeps its settings
+	cfg := out.WorkGroup.Configuration
+	if cfg.EngineVersion.SelectedEngineVersion != engineVersionAuto || cfg.ResultConfiguration.OutputLocation != "s3://r/" {
+		t.Fatalf("Configuration = %+v", cfg)
+	}
+}

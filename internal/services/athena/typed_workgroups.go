@@ -186,7 +186,7 @@ func (s *Service) listWorkGroupsTyped(ctx context.Context, req *listWorkGroupsRe
 	if _, aerr := s.loadWorkGroup(ctx, primaryWorkGroup); aerr != nil {
 		return nil, aerr
 	}
-	records, err := scan[workGroupRecord](ctx, s.store, nsWorkGroups, "")
+	records, err := s.store.listWorkGroups(ctx)
 	if err != nil {
 		return nil, errInternal(err)
 	}
@@ -205,13 +205,18 @@ func (s *Service) listWorkGroupsTyped(ctx context.Context, req *listWorkGroupsRe
 	return &listWorkGroupsResp{WorkGroups: page.Items, NextToken: page.NextToken}, nil
 }
 
-// engineVersion is the workgroup's engine, AUTO for a record written before
-// workgroups carried one.
-func (wg *WorkGroup) engineVersion() *EngineVersion {
-	if wg.Configuration != nil && wg.Configuration.EngineVersion != nil {
-		return wg.Configuration.EngineVersion
+// engineVersion is the workgroup's engine; normalize guarantees one.
+func (wg *WorkGroup) engineVersion() *EngineVersion { return wg.Configuration.EngineVersion }
+
+// normalize gives a record written before workgroups carried an engine
+// version the one AWS reports for a workgroup that chose none: AUTO.
+func (wg *WorkGroup) normalize() {
+	if wg.Configuration == nil {
+		wg.Configuration = &WorkGroupConfiguration{}
 	}
-	return &EngineVersion{SelectedEngineVersion: engineVersionAuto, EffectiveEngineVersion: engineVersion3}
+	if wg.Configuration.EngineVersion == nil {
+		wg.Configuration.EngineVersion, _ = resolveEngineVersion(nil)
+	}
 }
 
 func (s *Service) updateWorkGroupTyped(ctx context.Context, req *updateWorkGroupReq) (*struct{}, *protocol.AWSError) {
@@ -246,9 +251,16 @@ func (s *Service) updateWorkGroupTyped(ctx context.Context, req *updateWorkGroup
 }
 
 // deleteWorkGroupTyped removes a workgroup. "The primary workgroup cannot be
-// deleted." A workgroup that still holds named queries or prepared
-// statements is refused unless RecursiveDeleteOption is set, which removes
-// them and the workgroup's query executions with it.
+// deleted." Named queries keep a workgroup from being deleted unless
+// RecursiveDeleteOption is set — the one kind of content both the API and
+// the CloudFormation reference name — and a recursive delete also removes the
+// workgroup's query executions, cancelling any still running. Prepared
+// statements go with the workgroup either way: nothing else can reach them,
+// and a later workgroup of the same name must not inherit them.
+//
+// contentsMu is taken before the workgroup's record lock, the order every
+// content write takes them in, so no named query or prepared statement can
+// be written into the workgroup while it is being emptied.
 func (s *Service) deleteWorkGroupTyped(ctx context.Context, req *deleteWorkGroupReq) (*struct{}, *protocol.AWSError) {
 	if req.WorkGroup == "" {
 		return nil, errRequired("WorkGroup")
@@ -256,17 +268,22 @@ func (s *Service) deleteWorkGroupTyped(ctx context.Context, req *deleteWorkGroup
 	if req.WorkGroup == primaryWorkGroup {
 		return nil, errInvalidRequest("The primary workgroup cannot be deleted.")
 	}
+	s.contentsMu.Lock()
+	defer s.contentsMu.Unlock()
 	defer s.lock(workGroupLockKey(req.WorkGroup))()
 	if _, aerr := s.loadWorkGroup(ctx, req.WorkGroup); aerr != nil {
 		return nil, aerr
 	}
-	contents, aerr := s.workGroupContents(ctx, req.WorkGroup)
+	recursive := req.RecursiveDeleteOption != nil && *req.RecursiveDeleteOption
+	contents, aerr := s.workGroupContents(ctx, req.WorkGroup, recursive)
 	if aerr != nil {
 		return nil, aerr
 	}
-	recursive := req.RecursiveDeleteOption != nil && *req.RecursiveDeleteOption
-	if len(contents.namedQueries)+len(contents.preparedStatements) > 0 && !recursive {
-		return nil, errInvalidRequest("WorkGroup %s is not empty. Set RecursiveDeleteOption to delete it with its contents.", req.WorkGroup)
+	if len(contents.namedQueries) > 0 && !recursive {
+		return nil, errInvalidRequest("WorkGroup %s is not empty. Set RecursiveDeleteOption to delete it with its named queries.", req.WorkGroup)
+	}
+	for _, qe := range contents.running {
+		s.executor.Cancel(ctx, qe)
 	}
 	if err := s.deleteContents(ctx, contents); err != nil {
 		return nil, errInternal(err)
@@ -277,14 +294,18 @@ func (s *Service) deleteWorkGroupTyped(ctx context.Context, req *deleteWorkGroup
 	return &struct{}{}, nil
 }
 
-// workGroupContents is what a recursive delete removes with a workgroup.
+// workGroupContents is what a delete removes with a workgroup, by key, and
+// which of the executions are still running.
 type workGroupContents struct {
 	namedQueries       []string
 	preparedStatements []string
 	queryExecutions    []string
+	running            []string
 }
 
-func (s *Service) workGroupContents(ctx context.Context, name string) (workGroupContents, *protocol.AWSError) {
+// workGroupContents lists a workgroup's named queries and prepared
+// statements, and, for a recursive delete, its query executions.
+func (s *Service) workGroupContents(ctx context.Context, name string, withQueries bool) (workGroupContents, *protocol.AWSError) {
 	var c workGroupContents
 	named, err := scan[NamedQuery](ctx, s.store, nsNamedQueries, "")
 	if err != nil {
@@ -302,13 +323,20 @@ func (s *Service) workGroupContents(ctx context.Context, name string) (workGroup
 	for _, ps := range statements {
 		c.preparedStatements = append(c.preparedStatements, preparedStatementKey(name, ps.StatementName))
 	}
+	if !withQueries {
+		return c, nil
+	}
 	queries, err := s.store.listQueries(ctx)
 	if err != nil {
 		return c, errInternal(err)
 	}
 	for _, qe := range queries {
-		if qe.WorkGroup == name {
-			c.queryExecutions = append(c.queryExecutions, qe.QueryExecutionId)
+		if qe.WorkGroup != name {
+			continue
+		}
+		c.queryExecutions = append(c.queryExecutions, qe.QueryExecutionId)
+		if !isTerminal(qe.Status.State) {
+			c.running = append(c.running, qe.QueryExecutionId)
 		}
 	}
 	return c, nil

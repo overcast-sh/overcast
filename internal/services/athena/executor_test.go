@@ -125,3 +125,65 @@ func TestExecutor_failureCarriesAthenaError(t *testing.T) {
 		t.Fatalf("status = %+v", st)
 	}
 }
+
+func TestExecutor_backwardAndUnknownReportsAreDropped(t *testing.T) {
+	// Given: a running query
+	ctx := context.Background()
+	s, f := newServiceWithExecutor(t)
+	out, aerr := s.startQueryExecutionTyped(ctx, startReq("SELECT 1"))
+	mustOK(t, "StartQueryExecution", aerr)
+	f.report(ctx, out.QueryExecutionId, queryTransition{State: stateRunning})
+
+	// When: the engine reports QUEUED again, then a state that does not exist
+	f.report(ctx, out.QueryExecutionId, queryTransition{State: stateQueued})
+	f.report(ctx, out.QueryExecutionId, queryTransition{State: "PAUSED"})
+
+	// Then: the query is still RUNNING
+	if got := queryState(t, s, out.QueryExecutionId).Status.State; got != stateRunning {
+		t.Fatalf("state = %s, want RUNNING", got)
+	}
+}
+
+func TestDeleteWorkGroup_recursiveCancelsRunningQueries(t *testing.T) {
+	// Given: a workgroup with a running query and a finished one
+	ctx := context.Background()
+	s, f := newServiceWithExecutor(t)
+	_, aerr := s.createWorkGroupTyped(ctx, &createWorkGroupReq{Name: "wg"})
+	mustOK(t, "CreateWorkGroup", aerr)
+	start := func() string {
+		req := startReq("SELECT 1")
+		req.WorkGroup = "wg"
+		out, aerr := s.startQueryExecutionTyped(ctx, req)
+		mustOK(t, "StartQueryExecution", aerr)
+		return out.QueryExecutionId
+	}
+	running, finished := start(), start()
+	f.report(ctx, finished, queryTransition{State: stateSucceeded})
+
+	// When: a plain delete, then a recursive one
+	_, aerr = s.deleteWorkGroupTyped(ctx, &deleteWorkGroupReq{WorkGroup: "wg"})
+	mustOK(t, "DeleteWorkGroup", aerr)
+	if _, aerr := s.getQueryExecutionTyped(ctx, &queryIDReq{QueryExecutionId: running}); aerr != nil {
+		t.Fatalf("a non-recursive delete removed the workgroup's executions: %s", aerr.Message)
+	}
+	_, aerr = s.createWorkGroupTyped(ctx, &createWorkGroupReq{Name: "wg"})
+	mustOK(t, "CreateWorkGroup again", aerr)
+	_, aerr = s.deleteWorkGroupTyped(ctx, &deleteWorkGroupReq{WorkGroup: "wg", RecursiveDeleteOption: ptr(true)})
+	mustOK(t, "DeleteWorkGroup recursive", aerr)
+
+	// Then: only the running query was cancelled, and both are gone
+	if len(f.cancelled) != 1 || f.cancelled[0] != running {
+		t.Fatalf("cancelled = %v, want [%s]", f.cancelled, running)
+	}
+	_, aerr = s.getQueryExecutionTyped(ctx, &queryIDReq{QueryExecutionId: running})
+	wantCode(t, "GetQueryExecution after recursive delete", aerr, codeInvalidRequest)
+}
+
+func TestInertExecutor_resultsHaveOnePage(t *testing.T) {
+	ctx := context.Background()
+	s, _ := newTestService(t)
+	out, aerr := s.startQueryExecutionTyped(ctx, startReq("SELECT 1"))
+	mustOK(t, "StartQueryExecution", aerr)
+	_, aerr = s.getQueryResultsTyped(ctx, &getQueryResultsReq{QueryExecutionId: out.QueryExecutionId, NextToken: "bogus"})
+	wantCode(t, "GetQueryResults with a NextToken", aerr, codeInvalidRequest)
+}

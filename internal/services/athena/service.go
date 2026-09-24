@@ -46,6 +46,10 @@ type Service struct {
 	// primaryMu serialises seeding the primary workgroup. It is separate from
 	// locks so that a caller holding primary's record lock can still seed it.
 	primaryMu sync.Mutex
+	// contentsMu keeps a workgroup's contents still while it is deleted:
+	// named-query and prepared-statement writes hold it shared, and
+	// DeleteWorkGroup exclusively. It is always taken before a record lock.
+	contentsMu sync.RWMutex
 }
 
 // New returns a configured Athena Service.

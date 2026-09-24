@@ -42,7 +42,7 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | Workgroups | Create, get, list, update and delete. `primary` always exists and cannot be deleted |
 | Workgroup settings | `UpdateWorkGroup` applies `ConfigurationUpdates`, including the `Remove*` flags |
 | Result location | The workgroup's `ResultConfiguration` fills in what the query leaves out, and wins when `EnforceWorkGroupConfiguration` is set |
-| Query executions | Full `QueryExecution`: context, statement type, engine version, parameters, statistics |
+| Query executions | `QueryExecution` with context, statement type, engine version, parameters, statistics, and the result object under `OutputLocation` |
 | Idempotency | A repeated `ClientRequestToken` returns the same query or named query |
 | Listing | `ListQueryExecutions` and `ListNamedQueries` cover one workgroup, `primary` by default, and paginate |
 | Saved queries | Named queries and prepared statements: create, get, batch get, list, update, delete |
@@ -57,7 +57,7 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | --- | --- | --- |
 | Query execution | The SQL runs | Nothing runs; the query is `SUCCEEDED` as soon as it starts |
 | Results | Written to `OutputLocation` | Nothing is written, and `GetQueryResults` is empty |
-| Execution states | `QUEUED` and `RUNNING` are observable | A query is never seen before it finishes |
+| Execution states | `QUEUED` and `RUNNING` last as long as the query runs | A query finishes inside `StartQueryExecution` |
 | Statistics | Real timings and bytes scanned | Present, all zero |
 | Prepared statements | `EXECUTE ... USING` runs them | Stored and returned, never run |
 | Data catalogs | `FEDERATED` provisions a connector | `FEDERATED` is refused with a 501 |

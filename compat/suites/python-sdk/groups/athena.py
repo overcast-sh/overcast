@@ -74,7 +74,7 @@ def StartQueryExecution(ctx: TestContext) -> None:
     ctx["athena_query_id"] = qid
     qe = a.get_query_execution(QueryExecutionId=qid)["QueryExecution"]
     location = qe.get("ResultConfiguration", {}).get("OutputLocation")
-    if qe.get("WorkGroup") != _wg(ctx) or location != _RESULTS or not qe.get("Status", {}).get("State"):
+    if qe.get("WorkGroup") != _wg(ctx) or location != f"{_RESULTS}{qid}.csv" or not qe.get("Status", {}).get("State"):
         raise AssertionError(f"GetQueryExecution: got {qe!r}")
 
 

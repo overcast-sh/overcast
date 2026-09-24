@@ -25,7 +25,8 @@ type listTagsForResourceReq struct {
 }
 
 type listTagsForResourceResp struct {
-	Tags []serviceutil.TagPair `json:"Tags"`
+	Tags      []serviceutil.TagPair `json:"Tags"`
+	NextToken string                `json:"NextToken,omitempty"`
 }
 
 // tagTarget is the record a tag operation's ARN names, how to load and save
@@ -36,6 +37,9 @@ type tagTarget struct {
 	save    func(ctx context.Context, rec serviceutil.Taggable) *protocol.AWSError
 }
 
+// tagsPageSize is ListTagsForResource's page cap (MaxTagsCount).
+const tagsPageSize = 75
+
 // tagTarget resolves arn:aws:athena:<region>:<account>:workgroup/<name> and
 // .../datacatalog/<name>, the two taggable resources Overcast emulates.
 func (s *Service) tagTarget(arn string) (*tagTarget, *protocol.AWSError) {
@@ -45,6 +49,9 @@ func (s *Service) tagTarget(arn string) (*tagTarget, *protocol.AWSError) {
 	parts := strings.SplitN(arn, ":", 6)
 	if len(parts) < 6 {
 		return nil, errInvalidRequest("Invalid ResourceARN format")
+	}
+	if parts[4] != s.cfg.AccountID {
+		return nil, athenaError(codeResourceNotFound, "Resource %s was not found.", arn)
 	}
 	kind, name, _ := strings.Cut(parts[5], "/")
 	switch kind {
@@ -106,5 +113,9 @@ func (s *Service) listTagsForResourceTyped(ctx context.Context, req *listTagsFor
 	if aerr != nil {
 		return nil, aerr
 	}
-	return &listTagsForResourceResp{Tags: serviceutil.TagsToList(tags)}, nil
+	page, aerr := paginate(serviceutil.TagsToList(tags), req.MaxResults, req.NextToken, tagsPageSize)
+	if aerr != nil {
+		return nil, aerr
+	}
+	return &listTagsForResourceResp{Tags: page.Items, NextToken: page.NextToken}, nil
 }

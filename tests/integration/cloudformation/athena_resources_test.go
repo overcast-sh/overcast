@@ -33,9 +33,11 @@ func athenaSDK(srv *helpers.TestServer) *athena.Client {
 // update changes.
 func athenaStackTemplate(phase string) string {
 	location, statement, description := "s3://results/v1/", "SELECT * FROM t WHERE id = ?", "first"
-	cutoff := `"BytesScannedCutoffPerQuery": 20000000,`
+	// The create phase spells the cutoff and the flag as a String-typed
+	// Parameter would produce them; CloudFormation converts both.
+	settings := `"BytesScannedCutoffPerQuery": "20000000", "EnforceWorkGroupConfiguration": "true",`
 	if phase == "update" {
-		location, statement, description, cutoff = "s3://results/v2/", "SELECT id FROM t WHERE id = ?", "second", ""
+		location, statement, description, settings = "s3://results/v2/", "SELECT id FROM t WHERE id = ?", "second", ""
 	}
 	return `{
   "Resources": {
@@ -48,8 +50,7 @@ func athenaStackTemplate(phase string) string {
         "RecursiveDeleteOption": true,
         "Tags": [{"Key": "phase", "Value": "` + phase + `"}],
         "WorkGroupConfiguration": {
-          ` + cutoff + `
-          "EnforceWorkGroupConfiguration": true,
+          ` + settings + `
           "ResultConfiguration": {"OutputLocation": "` + location + `"}
         }
       }
@@ -65,7 +66,7 @@ func athenaStackTemplate(phase string) string {
     "Catalog": {
       "Type": "AWS::Athena::DataCatalog",
       "Properties": {"Name": "cfn_hive", "Type": "HIVE", "Description": "` + description + `",
-        "Parameters": {"metadata-function": "arn:aws:lambda:us-east-1:000000000000:function:meta"}}
+        "Parameters": {"metadata-function": "arn:aws:lambda:us-east-1:000000000000:function:meta", "sdk-version": 1}}
     }
   },
   "Outputs": {
@@ -107,7 +108,8 @@ func TestStack_AthenaResources_lifecycle(t *testing.T) {
 	wg := mustCall(t, "GetWorkGroup", func() (*athena.GetWorkGroupOutput, error) {
 		return c.GetWorkGroup(ctx, &athena.GetWorkGroupInput{WorkGroup: wgName})
 	}).WorkGroup
-	if wg.State != types.WorkGroupStateDisabled || aws.ToInt64(wg.Configuration.BytesScannedCutoffPerQuery) != 20000000 {
+	if wg.State != types.WorkGroupStateDisabled || aws.ToInt64(wg.Configuration.BytesScannedCutoffPerQuery) != 20000000 ||
+		!aws.ToBool(wg.Configuration.EnforceWorkGroupConfiguration) {
 		t.Fatalf("WorkGroup = %+v / %+v", wg, wg.Configuration)
 	}
 	if outputs["WorkGroupRef"] != "cfn-athena-wg" || outputs["CreationTime"] == "" || outputs["Engine"] != "Athena engine version 3" ||
@@ -124,12 +126,14 @@ func TestStack_AthenaResources_lifecycle(t *testing.T) {
 	// When: the stack is updated
 	runStackAction(t, srv, "UpdateStack", stack, athenaStackTemplate("update"), "UPDATE_COMPLETE")
 
-	// Then: the workgroup changed in place, cutoff removed and tag replaced,
-	// and the statement and catalog were updated
+	// Then: the workgroup changed in place — the dropped cutoff removed, the
+	// dropped flag back to false, the tag replaced — and the statement and
+	// catalog were updated
 	wg = mustCall(t, "GetWorkGroup", func() (*athena.GetWorkGroupOutput, error) {
 		return c.GetWorkGroup(ctx, &athena.GetWorkGroupInput{WorkGroup: wgName})
 	}).WorkGroup
 	if aws.ToString(wg.Description) != "second" || wg.Configuration.BytesScannedCutoffPerQuery != nil ||
+		aws.ToBool(wg.Configuration.EnforceWorkGroupConfiguration) ||
 		aws.ToString(wg.Configuration.ResultConfiguration.OutputLocation) != "s3://results/v2/" {
 		t.Fatalf("updated WorkGroup = %+v / %+v", wg, wg.Configuration)
 	}
@@ -151,7 +155,7 @@ func TestStack_AthenaResources_lifecycle(t *testing.T) {
 	catalog := mustCall(t, "GetDataCatalog", func() (*athena.GetDataCatalogOutput, error) {
 		return c.GetDataCatalog(ctx, &athena.GetDataCatalogInput{Name: aws.String("cfn_hive")})
 	}).DataCatalog
-	if aws.ToString(catalog.Description) != "second" {
+	if aws.ToString(catalog.Description) != "second" || catalog.Parameters["sdk-version"] != "1" {
 		t.Fatalf("DataCatalog = %+v", catalog)
 	}
 

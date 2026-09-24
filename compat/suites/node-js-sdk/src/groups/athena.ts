@@ -104,7 +104,11 @@ export function makeAthenaGroups(suite: string): TestGroup[] {
             state(ctx).athenaQueryId = out.QueryExecutionId;
             const resp = await athena.send(new GetQueryExecutionCommand({ QueryExecutionId: out.QueryExecutionId }));
             assert.equal(resp.QueryExecution?.WorkGroup, workGroup(ctx), "GetQueryExecution: WorkGroup");
-            assert.equal(resp.QueryExecution?.ResultConfiguration?.OutputLocation, results, "GetQueryExecution: OutputLocation");
+            assert.equal(
+              resp.QueryExecution?.ResultConfiguration?.OutputLocation,
+              `${results}${out.QueryExecutionId}.csv`,
+              "GetQueryExecution: OutputLocation is the result object",
+            );
             assert.ok(resp.QueryExecution?.Status?.State, "GetQueryExecution: State");
           },
         },

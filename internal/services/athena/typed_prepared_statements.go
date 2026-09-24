@@ -57,7 +57,8 @@ func preparedStatementLockKey(workGroup, name string) string {
 }
 
 // validatePreparedStatement checks a create or update request and loads the
-// workgroup it names.
+// workgroup it names. The caller holds contentsMu shared, so the workgroup
+// cannot be deleted before the statement is written.
 func (s *Service) validatePreparedStatement(ctx context.Context, req *preparedStatementReq) *protocol.AWSError {
 	if aerr := requireMembers([2]string{"StatementName", req.StatementName}, [2]string{"WorkGroup", req.WorkGroup}, [2]string{"QueryStatement", req.QueryStatement}); aerr != nil {
 		return aerr
@@ -70,6 +71,8 @@ func (s *Service) validatePreparedStatement(ctx context.Context, req *preparedSt
 }
 
 func (s *Service) createPreparedStatementTyped(ctx context.Context, req *preparedStatementReq) (*struct{}, *protocol.AWSError) {
+	s.contentsMu.RLock()
+	defer s.contentsMu.RUnlock()
 	if aerr := s.validatePreparedStatement(ctx, req); aerr != nil {
 		return nil, aerr
 	}
@@ -88,6 +91,8 @@ func (s *Service) createPreparedStatementTyped(ctx context.Context, req *prepare
 }
 
 func (s *Service) updatePreparedStatementTyped(ctx context.Context, req *preparedStatementReq) (*struct{}, *protocol.AWSError) {
+	s.contentsMu.RLock()
+	defer s.contentsMu.RUnlock()
 	if aerr := s.validatePreparedStatement(ctx, req); aerr != nil {
 		return nil, aerr
 	}

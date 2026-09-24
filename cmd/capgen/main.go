@@ -2165,7 +2165,7 @@ var serviceIndexTiers = map[string]string{
 	"waf":             "Minimal / targeted support",
 	"shield":          "Minimal / targeted support",
 	"acm":             "Minimal / targeted support",
-	"athena":          "Minimal / targeted support",
+	"athena":          "Core CRUD + common workflows",
 	"s3tables":        "Core CRUD + common workflows",
 	"bedrock":         "Minimal / targeted support",
 	"cloudwatch":      "Minimal / targeted support",

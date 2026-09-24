@@ -63,6 +63,8 @@ func (s *Service) createNamedQueryTyped(ctx context.Context, req *createNamedQue
 	if aerr := requireMembers([2]string{"Name", req.Name}, [2]string{"Database", req.Database}, [2]string{"QueryString", req.QueryString}); aerr != nil {
 		return nil, aerr
 	}
+	s.contentsMu.RLock()
+	defer s.contentsMu.RUnlock()
 	fingerprinted := *req
 	fingerprinted.ClientRequestToken = ""
 	id, aerr := s.idempotent(ctx, "CreateNamedQuery", req.ClientRequestToken, &fingerprinted, func() (string, *protocol.AWSError) {

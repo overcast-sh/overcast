@@ -3,6 +3,7 @@ package athena
 import (
 	"context"
 	"sort"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -116,7 +117,7 @@ func (s *Service) startQueryExecutionTyped(ctx context.Context, req *startQueryE
 	// Submitted outside the idempotency lock: an executor may report
 	// transitions from its own goroutine, and a retry must not wait on it.
 	if submitted != nil {
-		s.executor.Submit(ctx, *submitted, s.applyTransition)
+		s.executor.Submit(context.WithoutCancel(ctx), *submitted, s.applyTransition)
 	}
 	return &startQueryExecResp{QueryExecutionId: id}, nil
 }
@@ -135,10 +136,12 @@ func (s *Service) newQueryExecution(ctx context.Context, req *startQueryExecReq)
 	if aerr != nil {
 		return nil, aerr
 	}
+	id, kind := uuid.NewString(), statementType(req.QueryString)
+	results.OutputLocation = resultObject(results.OutputLocation, id, kind)
 	qe := &QueryExecution{
-		QueryExecutionId:         uuid.NewString(),
+		QueryExecutionId:         id,
 		Query:                    req.QueryString,
-		StatementType:            statementType(req.QueryString),
+		StatementType:            kind,
 		WorkGroup:                wg.Name,
 		ResultConfiguration:      results,
 		ResultReuseConfiguration: resultReuseOrDefault(req.ResultReuseConfiguration),
@@ -146,10 +149,29 @@ func (s *Service) newQueryExecution(ctx context.Context, req *startQueryExecReq)
 		EngineVersion:            wg.engineVersion(),
 		Status:                   QueryExecutionStatus{State: stateQueued, SubmissionDateTime: s.now()},
 	}
+	if cfg := wg.Configuration; cfg != nil {
+		qe.ManagedQueryResultsConfiguration = cfg.ManagedQueryResultsConfiguration
+		qe.QueryResultsS3AccessGrantsConfiguration = cfg.QueryResultsS3AccessGrantsConfiguration
+	}
 	if req.QueryExecutionContext != nil {
 		qe.QueryExecutionContext = *req.QueryExecutionContext
 	}
 	return qe, nil
+}
+
+// resultObject is the object a query's results are written to, which is
+// what GetQueryExecution reports as OutputLocation: the result location the
+// query resolved to, then "<id>.csv" — or "<id>.txt" for the plain-text
+// output of a DDL or UTILITY statement. Managed results have no location.
+func resultObject(location, id, kind string) string {
+	if location == "" {
+		return ""
+	}
+	ext := ".csv"
+	if kind != statementDML {
+		ext = ".txt"
+	}
+	return strings.TrimSuffix(location, "/") + "/" + id + ext
 }
 
 // resolveResultConfiguration decides where a query's results go. "If set to
@@ -288,12 +310,12 @@ func (s *Service) stopQueryExecutionTyped(ctx context.Context, req *queryIDReq) 
 const maxQueryResults = 1000
 
 func (s *Service) getQueryResultsTyped(ctx context.Context, req *getQueryResultsReq) (*getQueryResultsResp, *protocol.AWSError) {
+	if req.MaxResults < 0 || req.MaxResults > maxQueryResults {
+		return nil, errInvalidRequest("MaxResults must be between 1 and %d.", maxQueryResults)
+	}
 	qe, aerr := s.requireQuery(ctx, req.QueryExecutionId)
 	if aerr != nil {
 		return nil, aerr
-	}
-	if req.MaxResults < 0 || req.MaxResults > maxQueryResults {
-		return nil, errInvalidRequest("MaxResults must be between 1 and %d.", maxQueryResults)
 	}
 	switch state := qe.Status.State; {
 	case state == stateSucceeded:

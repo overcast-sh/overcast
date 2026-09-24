@@ -2,8 +2,9 @@ package athena
 
 // model.go — Athena's wire shapes.
 //
-// Every struct mirrors an Athena model structure member for member
-// (internal/awsshapes/tables/athena.txt). Optional booleans and numbers are
+// Each struct is named after its Athena model structure
+// (internal/awsshapes/tables/athena.txt) and carries the members Overcast
+// reports, spelled as the model spells them. Optional booleans and numbers are
 // pointers so that a member a caller never sent stays absent on the way back
 // rather than coming back as a zero it did not choose.
 //
@@ -180,17 +181,21 @@ type QueryExecutionStatus struct {
 
 // QueryExecution is one run of a query, as GetQueryExecution returns it.
 type QueryExecution struct {
-	EngineVersion            *EngineVersion            `json:"EngineVersion,omitempty"`
-	ExecutionParameters      []string                  `json:"ExecutionParameters,omitempty"`
-	Query                    string                    `json:"Query"`
-	QueryExecutionContext    QueryExecutionContext     `json:"QueryExecutionContext"`
-	QueryExecutionId         string                    `json:"QueryExecutionId"`
-	ResultConfiguration      ResultConfiguration       `json:"ResultConfiguration"`
-	ResultReuseConfiguration *ResultReuseConfiguration `json:"ResultReuseConfiguration,omitempty"`
-	StatementType            string                    `json:"StatementType,omitempty"`
-	Statistics               *QueryExecutionStatistics `json:"Statistics,omitempty"`
-	Status                   QueryExecutionStatus      `json:"Status"`
-	WorkGroup                string                    `json:"WorkGroup"`
+	EngineVersion       *EngineVersion `json:"EngineVersion,omitempty"`
+	ExecutionParameters []string       `json:"ExecutionParameters,omitempty"`
+	// ManagedQueryResultsConfiguration and QueryResultsS3AccessGrantsConfiguration
+	// are the workgroup's, as the query ran under them.
+	ManagedQueryResultsConfiguration        *ManagedQueryResultsConfiguration `json:"ManagedQueryResultsConfiguration,omitempty"`
+	QueryResultsS3AccessGrantsConfiguration any                               `json:"QueryResultsS3AccessGrantsConfiguration,omitempty"`
+	Query                                   string                            `json:"Query"`
+	QueryExecutionContext                   QueryExecutionContext             `json:"QueryExecutionContext"`
+	QueryExecutionId                        string                            `json:"QueryExecutionId"`
+	ResultConfiguration                     ResultConfiguration               `json:"ResultConfiguration"`
+	ResultReuseConfiguration                *ResultReuseConfiguration         `json:"ResultReuseConfiguration,omitempty"`
+	StatementType                           string                            `json:"StatementType,omitempty"`
+	Statistics                              *QueryExecutionStatistics         `json:"Statistics,omitempty"`
+	Status                                  QueryExecutionStatus              `json:"Status"`
+	WorkGroup                               string                            `json:"WorkGroup"`
 }
 
 // ─── Named queries and prepared statements ────────────────────

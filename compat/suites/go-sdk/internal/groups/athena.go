@@ -138,7 +138,7 @@ func (g *athenaGroup) StartQueryExecution(ctx context.Context, t *harness.TestCo
 		return err
 	}
 	qe := resp.QueryExecution
-	if aws.ToString(qe.WorkGroup) != athenaWorkGroup(t) || aws.ToString(qe.ResultConfiguration.OutputLocation) != athenaResults || qe.Status == nil || qe.Status.State == "" {
+	if aws.ToString(qe.WorkGroup) != athenaWorkGroup(t) || aws.ToString(qe.ResultConfiguration.OutputLocation) != athenaResults+id+".csv" || qe.Status == nil || qe.Status.State == "" {
 		return fmt.Errorf("GetQueryExecution: workgroup %q, output %q, status %+v", aws.ToString(qe.WorkGroup), aws.ToString(qe.ResultConfiguration.OutputLocation), qe.Status)
 	}
 	return nil

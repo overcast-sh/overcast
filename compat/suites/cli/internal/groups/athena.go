@@ -129,7 +129,7 @@ func (g *athenaCliGroup) StartQueryExecution(_ context.Context, t *harness.TestC
 	qe, _ := got["QueryExecution"].(map[string]any)
 	results, _ := qe["ResultConfiguration"].(map[string]any)
 	status, _ := qe["Status"].(map[string]any)
-	if qe["WorkGroup"] != athenaCliWorkGroup(t) || results["OutputLocation"] != athenaCliResults || status["State"] == nil {
+	if qe["WorkGroup"] != athenaCliWorkGroup(t) || results["OutputLocation"] != athenaCliResults+id+".csv" || status["State"] == nil {
 		return fmt.Errorf("GetQueryExecution: got %v", qe)
 	}
 	return nil

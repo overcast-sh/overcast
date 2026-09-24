@@ -17,8 +17,19 @@ const (
 	stateCancelled = "CANCELLED"
 )
 
-func isTerminal(state string) bool {
-	return state == stateSucceeded || state == stateFailed || state == stateCancelled
+// stateOrder ranks each state along the only path an execution takes:
+// QUEUED, then RUNNING, then one terminal state.
+var stateOrder = map[string]int{
+	stateQueued: 0, stateRunning: 1,
+	stateSucceeded: 2, stateFailed: 2, stateCancelled: 2,
+}
+
+func isTerminal(state string) bool { return stateOrder[state] == stateOrder[stateSucceeded] }
+
+// advances reports whether moving from one state to another goes forward.
+func advances(from, to string) bool {
+	rank, known := stateOrder[to]
+	return known && rank > stateOrder[from]
 }
 
 // queryExecutor runs the queries StartQueryExecution accepts.
@@ -28,20 +39,25 @@ func isTerminal(state string) bool {
 // QUEUED and hands it to Submit; the executor reports each state change
 // through report, which the service validates and persists
 // (applyTransition); GetQueryResults asks the executor for the rows once the
-// record says SUCCEEDED. StopQueryExecution marks the record CANCELLED itself
-// and tells the executor through Cancel, so a stop is final whatever the
-// engine does afterwards.
+// record says SUCCEEDED. StopQueryExecution marks the record CANCELLED itself,
+// and a recursive DeleteWorkGroup removes it, and each tells the executor
+// through Cancel, so a stop is final whatever the engine does afterwards.
+//
+// An engine that runs queries in the background also owns what happens to
+// them across a restart: executions it left QUEUED or RUNNING must be failed
+// or resumed when it starts, since nothing else will move them.
 //
 // inertExecutor is the implementation wired today. A real engine replaces it
 // without touching the operations.
 type queryExecutor interface {
 	// Submit starts qe. It may report transitions before it returns, or
-	// later from its own goroutine, with a context of its own.
+	// later from its own goroutine; ctx outlives the request.
 	Submit(ctx context.Context, qe QueryExecution, report transitionReporter)
 	// Cancel asks the engine to abandon a query the service has already
-	// marked CANCELLED.
+	// marked CANCELLED or deleted.
 	Cancel(ctx context.Context, id string)
-	// Results returns one page of a SUCCEEDED query's results.
+	// Results returns one page of a SUCCEEDED query's results, and is where
+	// a NextToken is checked, since only the executor knows the pages.
 	Results(ctx context.Context, qe QueryExecution, req *getQueryResultsReq) (*getQueryResultsResp, *protocol.AWSError)
 }
 
@@ -71,15 +87,19 @@ func (inertExecutor) Submit(ctx context.Context, qe QueryExecution, report trans
 
 func (inertExecutor) Cancel(context.Context, string) {}
 
-func (inertExecutor) Results(context.Context, QueryExecution, *getQueryResultsReq) (*getQueryResultsResp, *protocol.AWSError) {
+func (inertExecutor) Results(_ context.Context, _ QueryExecution, req *getQueryResultsReq) (*getQueryResultsResp, *protocol.AWSError) {
+	if req.NextToken != "" { // an empty result has one page
+		return nil, errInvalidRequest("Invalid NextToken.")
+	}
 	return &getQueryResultsResp{ResultSet: ResultSet{
 		Rows:              []Row{},
 		ResultSetMetadata: ResultSetMetadata{ColumnInfo: []ColumnInfo{}},
 	}}, nil
 }
 
-// applyTransition moves an execution to t.State. A terminal execution never
-// moves again, so a report that arrives after a stop, or twice, is dropped.
+// applyTransition moves an execution to t.State. Only a move forward along
+// QUEUED, RUNNING, terminal is applied: a report that arrives after a stop,
+// arrives twice, goes backwards or names no state is dropped.
 // Reaching a terminal state stamps CompletionDateTime.
 func (s *Service) applyTransition(ctx context.Context, id string, t queryTransition) {
 	log := s.log.WithRecorder(ctx)
@@ -89,8 +109,8 @@ func (s *Service) applyTransition(ctx context.Context, id string, t queryTransit
 		log.Warn("query transition for an unreadable execution dropped", zap.String("queryExecutionId", id), zap.Error(err))
 		return
 	}
-	if isTerminal(qe.Status.State) {
-		log.Debug("query transition after a terminal state dropped",
+	if !advances(qe.Status.State, t.State) {
+		log.Debug("query transition that does not move forward dropped",
 			zap.String("queryExecutionId", id), zap.String("state", qe.Status.State), zap.String("reported", t.State))
 		return
 	}

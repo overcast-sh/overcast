@@ -12,7 +12,9 @@ operation_count_estimate: >-
   because no SQL runs), workgroups and engine versions (6), named queries (6), prepared
   statements (6), data catalogs and Glue metadata (9) and tags (3).
 current_support_level: >-
-  Full control plane; queries go through a queryExecutor seam whose inert implementation
+  Control plane for SQL workgroups, saved queries and catalogs (Spark sessions, notebooks,
+  calculations, capacity reservations and GetQueryRuntimeStatistics are not implemented);
+  queries go through a queryExecutor seam whose inert implementation
   succeeds at once with empty results (#2066 replaces it with Trino).
 operations: {}
 findings:
@@ -47,8 +49,9 @@ findings:
     - "#2065: FEDERATED data catalogs answer 501, and LAMBDA/HIVE catalogs are stored but their
       metadata is not readable (no connector runs). Spark workgroups (PySpark engine) answer 501.
       Unverified choices recorded in the PR: BatchGet ErrorCode INVALID_INPUT for named queries and
-      query executions; a missing named query on Delete is InvalidRequestException; a workgroup
-      holding named queries or prepared statements needs RecursiveDeleteOption."
+      query executions; a missing named query on Delete is InvalidRequestException; only named
+      queries block a non-recursive DeleteWorkGroup (the one kind of content both the API and
+      CloudFormation references name); OutputLocation reports <location>/<id>.csv or .txt."
     - "#67: the inert query engine is already documented. docs/services/athena.md's subtitle
       ('no SQL is executed, so every query succeeds immediately with an empty result set'), its
       'Differences from AWS' table (Query execution: 'stored, never parsed or run'; Results:

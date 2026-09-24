@@ -138,8 +138,21 @@ func (s *athenaStore) putWorkGroup(ctx context.Context, wg *workGroupRecord) err
 	return s.put(ctx, nsWorkGroups, wg.Name, wg)
 }
 
+// getWorkGroup reads one workgroup, normalized; see WorkGroup.normalize.
 func (s *athenaStore) getWorkGroup(ctx context.Context, name string) (*workGroupRecord, error) {
-	return getRecord[workGroupRecord](ctx, s, nsWorkGroups, name)
+	wg, err := getRecord[workGroupRecord](ctx, s, nsWorkGroups, name)
+	if wg != nil {
+		wg.normalize()
+	}
+	return wg, err
+}
+
+func (s *athenaStore) listWorkGroups(ctx context.Context) ([]*workGroupRecord, error) {
+	out, err := scan[workGroupRecord](ctx, s, nsWorkGroups, "")
+	for _, wg := range out {
+		wg.normalize()
+	}
+	return out, err
 }
 
 func (s *athenaStore) putQuery(ctx context.Context, qe *QueryExecution) error {
