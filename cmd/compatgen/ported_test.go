@@ -239,6 +239,7 @@ func TestCommittedRegistryPortedGroups(t *testing.T) {
 		"kinesis-streams":     "compat/model/authored/kinesis-streams.json",
 		"logs-groups":         "compat/model/authored/logs-groups.json",
 		"eventbridge-rules":   "compat/model/authored/eventbridge-rules.json",
+		"kinesis-shards":      "compat/model/authored/kinesis-shards.json",
 		"logs-metric-filters": "compat/model/authored/logs-metric-filters.json",
 	}
 	if !reflect.DeepEqual(ported, want) {
