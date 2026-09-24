@@ -668,13 +668,6 @@
     },
     {
       "service": "kms",
-      "operation": "Decrypt",
-      "group": "kms-gen-probe",
-      "reason": "probe-of-implemented-op",
-      "detail": "Decrypt is implemented (Supported), so it may not be probed, and no recipe resource gives it a role"
-    },
-    {
-      "service": "kms",
       "operation": "DeleteCustomKeyStore",
       "group": "kms-gen-probe",
       "reason": "never-probe",
@@ -717,13 +710,6 @@
     },
     {
       "service": "kms",
-      "operation": "Encrypt",
-      "group": "kms-gen-probe",
-      "reason": "probe-of-implemented-op",
-      "detail": "Encrypt is implemented (Supported), so it may not be probed, and no recipe resource gives it a role"
-    },
-    {
-      "service": "kms",
       "operation": "GenerateDataKeyPairWithoutPlaintext",
       "group": "kms-gen-probe",
       "reason": "never-probe",
@@ -752,13 +738,6 @@
     },
     {
       "service": "kms",
-      "operation": "ReEncrypt",
-      "group": "kms-gen-probe",
-      "reason": "probe-of-implemented-op",
-      "detail": "ReEncrypt is implemented (Supported), so it may not be probed, and no recipe resource gives it a role"
-    },
-    {
-      "service": "kms",
       "operation": "ReplicateKey",
       "group": "kms-gen-probe",
       "reason": "never-probe",
@@ -773,13 +752,6 @@
     },
     {
       "service": "kms",
-      "operation": "Sign",
-      "group": "kms-gen-probe",
-      "reason": "probe-of-implemented-op",
-      "detail": "Sign is implemented (Supported), so it may not be probed, and no recipe resource gives it a role"
-    },
-    {
-      "service": "kms",
       "operation": "UpdateCustomKeyStore",
       "group": "kms-gen-probe",
       "reason": "never-probe",
@@ -791,13 +763,6 @@
       "group": "kms-gen-probe",
       "reason": "never-probe",
       "detail": "Moves the primary of a multi-Region key to another Region, demoting the current primary to a replica. It changes which Region may replicate and manage the key."
-    },
-    {
-      "service": "kms",
-      "operation": "Verify",
-      "group": "kms-gen-probe",
-      "reason": "probe-of-implemented-op",
-      "detail": "Verify is implemented (Supported), so it may not be probed, and no recipe resource gives it a role"
     },
     {
       "service": "kms",

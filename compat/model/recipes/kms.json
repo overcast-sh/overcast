@@ -1,5 +1,5 @@
 {
-  "$comment": "AWS Key Management Service (AWS JSON 1.1, API version 2014-11-01), G4 wave 2 of docs/plans/compat-coverage-modelgen.md §5. Overcast implements 34 of the 54 modeled operations, so unlike wave 1 this file produces real pass/fail. Three facts about KMS shape the whole recipe. First, a KMS key cannot be deleted: ScheduleKeyDeletion moves it to KeyState PendingDeletion for 7-30 days and CancelKeyDeletion brings it back to Disabled, so absence is a state check and never a not-found. The IR's `delete` role can only prove absence with `notFound` (the read raises a not-found error) or with `list` non-membership, and neither is true of AWS here — DescribeKey still answers for a pending-deletion key, and ListKeys is documented as returning all KMS keys in the account and Region. So this resource declares no `delete`, and ScheduleKeyDeletion, CancelKeyDeletion and a second ScheduleKeyDeletion are authored operations with KeyState read-backs instead. The last of them is what disposes of the key: it is the final test in the group, so a run leaves nothing enabled behind even though the group has no teardown. Second, `list` is authored rather than declared for the same reason: the generator puts the derived list test after every authored operation, and a key the run has just scheduled for deletion is one Overcast's ListKeys omits, so the membership check has to run before the disposal rather than after it. Third, six implemented operations cannot be reached at all: Encrypt, Decrypt, ReEncrypt, Sign, Verify and VerifyMac each take a blob input (Plaintext, CiphertextBlob, Message, Signature, Mac) and the IR carries no portable literal for a blob — compat/model/README.md § Values, and binder.checkValue refuses one outright. Chaining them (GenerateRandom exports a Plaintext blob, Encrypt exports a CiphertextBlob) is expressible in the binder but not in the four source emitters, each of which refuses a blob member and would scope this whole group away from its suite, so it is not attempted. They are left uncovered and the gap report records them. Two curated compromises are worth naming. The grant principals are the documentation account's root, arn:aws:iam::123456789012:root, rather than the caller's: KMS documents CreateGrant as usable cross-account and its own example grants to a role in another account, but nothing in the IR can name the running account — KeyMetadata.AWSAccountId would supply it and Overcast does not return that member, so binding to it would fail every grant test rather than the one that asserts it. That assertion lives in DescribeKeyMetadata, on its own, where its failure names the missing member and nothing else depends on it. And no identifier this recipe names is capped below 54 characters (#1886): AliasName and the grant Name are 256, Description is 8192, so `$name` fits everywhere it is used.",
+  "$comment": "AWS Key Management Service (AWS JSON 1.1, API version 2014-11-01), G4 wave 2 of docs/plans/compat-coverage-modelgen.md §5. Overcast implements 34 of the 54 modeled operations, so unlike wave 1 this file produces real pass/fail. Three facts about KMS shape the whole recipe. First, a KMS key cannot be deleted: ScheduleKeyDeletion moves it to KeyState PendingDeletion for 7-30 days and CancelKeyDeletion brings it back to Disabled, so absence is a state check and never a not-found. The IR's `delete` role can only prove absence with `notFound` (the read raises a not-found error) or with `list` non-membership, and neither is true of AWS here — DescribeKey still answers for a pending-deletion key, and ListKeys is documented as returning all KMS keys in the account and Region. So this resource declares no `delete`, and ScheduleKeyDeletion, CancelKeyDeletion and a second ScheduleKeyDeletion are authored operations with KeyState read-backs instead. The last of them is what disposes of the key: it is the final test in the group, so a run leaves nothing enabled behind even though the group has no teardown. Second, `list` is authored rather than declared for the same reason: the generator puts the derived list test after every authored operation, and a key the run has just scheduled for deletion is one Overcast's ListKeys omits, so the membership check has to run before the disposal rather than after it. Third, the cryptographic operations take and return blobs (Plaintext, CiphertextBlob, Message, Signature), which the IR carries as `$base64` (compat/model/README.md § Values, #1910): a literal for bytes the recipe chooses, and a `$base64` around a `$ref` for a blob an earlier test exported. So Encrypt, Decrypt, ReEncrypt, Sign and Verify are authored as round trips — what went in comes back out, and a signature verifies — on the group's own key and on a third, SIGN_VERIFY key. VerifyMac stays uncovered: it needs a MAC only GenerateMac can produce, Overcast does not implement GenerateMac, and the gap report records it.Two curated compromises are worth naming. The grant principals are the documentation account's root, arn:aws:iam::123456789012:root, rather than the caller's: KMS documents CreateGrant as usable cross-account and its own example grants to a role in another account, but nothing in the IR can name the running account — KeyMetadata.AWSAccountId would supply it and Overcast does not return that member, so binding to it would fail every grant test rather than the one that asserts it. That assertion lives in DescribeKeyMetadata, on its own, where its failure names the missing member and nothing else depends on it. And no identifier this recipe names is capped below 54 characters (#1886): AliasName and the grant Name are 256, Description is 8192, so `$name` fits everywhere it is used.",
   "service": "kms",
   "neverProbe": {
     "ConnectCustomKeyStore": "Connects a custom key store to its AWS CloudHSM cluster or external key store proxy, which changes whether every KMS key in that store can be used at all.",
@@ -168,6 +168,161 @@
             {
               "kind": "responseField",
               "checks": { "$.Plaintext": { "nonEmpty": true } }
+            }
+          ]
+        },
+        {
+          "$comment": "Symmetric encryption under the group's own key. The plaintext is a `$base64` literal — the bytes of `compat-scenario plaintext` — because a plain string on a blob member puts different bytes on the wire in different backends (compat/model/README.md § Values). The ciphertext is opaque, so it is asserted non-empty and exported for Decrypt; KeyId is the key ARN, which is what AWS states here whichever identifier the request used.",
+          "op": "Encrypt",
+          "params": { "Plaintext": { "$base64": "Y29tcGF0LXNjZW5hcmlvIHBsYWludGV4dA==" } },
+          "export": { "key.ciphertext": "$.CiphertextBlob" },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.CiphertextBlob": { "nonEmpty": true },
+                "$.EncryptionAlgorithm": { "equals": "SYMMETRIC_DEFAULT" },
+                "$.KeyId": { "equals": { "$ref": "key.arn" } }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "The round trip: Encrypt's ciphertext decrypts to the bytes that went in. CiphertextBlob is written out rather than bound because the pinned model leaves it optional — AWS accepts a Decrypt without it under DryRun with IGNORE_CIPHERTEXT — so the binder would never supply it. KeyId is left out on purpose: symmetric ciphertext carries the key that made it, and naming that key in the response is the part of the call this asserts.",
+          "op": "Decrypt",
+          "params": { "CiphertextBlob": { "$base64": { "$ref": "key.ciphertext" } } },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.EncryptionAlgorithm": { "equals": "SYMMETRIC_DEFAULT" },
+                "$.KeyId": { "equals": { "$ref": "key.arn" } },
+                "$.Plaintext": { "equals": { "$base64": "Y29tcGF0LXNjZW5hcmlvIHBsYWludGV4dA==" } }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "Re-encrypted under the same key: ReEncrypt decrypts server-side and encrypts again under DestinationKeyId, so the answer names the key on both sides. CiphertextBlob is explicit for the same reason as Decrypt's. The new ciphertext is exported, and DecryptReEncrypted below is what proves it still holds the original bytes.",
+          "op": "ReEncrypt",
+          "params": {
+            "CiphertextBlob": { "$base64": { "$ref": "key.ciphertext" } },
+            "DestinationKeyId": { "$ref": "key.id" }
+          },
+          "export": { "key.reciphertext": "$.CiphertextBlob" },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.CiphertextBlob": { "nonEmpty": true },
+                "$.DestinationEncryptionAlgorithm": { "equals": "SYMMETRIC_DEFAULT" },
+                "$.KeyId": { "equals": { "$ref": "key.arn" } },
+                "$.SourceEncryptionAlgorithm": { "equals": "SYMMETRIC_DEFAULT" },
+                "$.SourceKeyId": { "equals": { "$ref": "key.arn" } }
+              }
+            }
+          ]
+        },
+        {
+          "name": "DecryptReEncrypted",
+          "op": "Decrypt",
+          "params": { "CiphertextBlob": { "$base64": { "$ref": "key.reciphertext" } } },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.KeyId": { "equals": { "$ref": "key.arn" } },
+                "$.Plaintext": { "equals": { "$base64": "Y29tcGF0LXNjZW5hcmlvIHBsYWludGV4dA==" } }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "A third key, for signing: AWS refuses Sign and Verify on a key whose KeyUsage is ENCRYPT_DECRYPT, so neither the group's symmetric key nor the RSA encryption key above can be used. RSA_2048 is the one signing spec Overcast implements. It is disposed of by ScheduleKeyDeletionSigning straight after Verify.",
+          "name": "CreateKeySigning",
+          "op": "CreateKey",
+          "params": {
+            "Description": "compat-scenario signing key",
+            "KeySpec": "RSA_2048",
+            "KeyUsage": "SIGN_VERIFY"
+          },
+          "export": {
+            "key.signid": "$.KeyMetadata.KeyId",
+            "key.signarn": "$.KeyMetadata.Arn"
+          },
+          "assert": [
+            {
+              "kind": "readback",
+              "call": {
+                "op": "DescribeKey",
+                "params": { "KeyId": { "$ref": "key.signid" } }
+              },
+              "checks": {
+                "$.KeyMetadata.Arn": { "equals": { "$ref": "key.signarn" } },
+                "$.KeyMetadata.KeySpec": { "equals": "RSA_2048" },
+                "$.KeyMetadata.KeyUsage": { "equals": "SIGN_VERIFY" }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "A raw message — MessageType defaults to RAW, so KMS hashes it — signed with PKCS #1 v1.5 over SHA-256. The signature is opaque, so it is asserted non-empty and exported for Verify.",
+          "op": "Sign",
+          "params": {
+            "KeyId": { "$ref": "key.signid" },
+            "Message": { "$base64": "Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgdG8gc2lnbg==" },
+            "SigningAlgorithm": "RSASSA_PKCS1_V1_5_SHA_256"
+          },
+          "export": { "key.signature": "$.Signature" },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.KeyId": { "equals": { "$ref": "key.signarn" } },
+                "$.Signature": { "nonEmpty": true },
+                "$.SigningAlgorithm": { "equals": "RSASSA_PKCS1_V1_5_SHA_256" }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "The signature Sign exported, over the same message and algorithm, verifies.",
+          "op": "Verify",
+          "params": {
+            "KeyId": { "$ref": "key.signid" },
+            "Message": { "$base64": "Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgdG8gc2lnbg==" },
+            "Signature": { "$base64": { "$ref": "key.signature" } },
+            "SigningAlgorithm": "RSASSA_PKCS1_V1_5_SHA_256"
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.KeyId": { "equals": { "$ref": "key.signarn" } },
+                "$.SignatureValid": { "equals": true },
+                "$.SigningAlgorithm": { "equals": "RSASSA_PKCS1_V1_5_SHA_256" }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "Disposal of the signing key; nothing in the group uses it after Verify.",
+          "name": "ScheduleKeyDeletionSigning",
+          "op": "ScheduleKeyDeletion",
+          "params": {
+            "KeyId": { "$ref": "key.signid" },
+            "PendingWindowInDays": 7
+          },
+          "assert": [
+            {
+              "kind": "readback",
+              "call": {
+                "op": "DescribeKey",
+                "params": { "KeyId": { "$ref": "key.signid" } }
+              },
+              "checks": {
+                "$.KeyMetadata.KeyState": { "equals": "PendingDeletion" }
+              }
             }
           ]
         },

@@ -524,6 +524,337 @@
           ]
         },
         {
+          "name": "Encrypt",
+          "op": "Encrypt",
+          "call": {
+            "op": "Encrypt",
+            "params": {
+              "KeyId": {
+                "$ref": "key.id"
+              },
+              "Plaintext": {
+                "$base64": "Y29tcGF0LXNjZW5hcmlvIHBsYWludGV4dA=="
+              }
+            },
+            "export": {
+              "key.ciphertext": "$.CiphertextBlob"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.CiphertextBlob": {
+                  "nonEmpty": true
+                },
+                "$.EncryptionAlgorithm": {
+                  "equals": "SYMMETRIC_DEFAULT"
+                },
+                "$.KeyId": {
+                  "equals": {
+                    "$ref": "key.arn"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKey"
+          ]
+        },
+        {
+          "name": "Decrypt",
+          "op": "Decrypt",
+          "call": {
+            "op": "Decrypt",
+            "params": {
+              "CiphertextBlob": {
+                "$base64": {
+                  "$ref": "key.ciphertext"
+                }
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.EncryptionAlgorithm": {
+                  "equals": "SYMMETRIC_DEFAULT"
+                },
+                "$.KeyId": {
+                  "equals": {
+                    "$ref": "key.arn"
+                  }
+                },
+                "$.Plaintext": {
+                  "equals": {
+                    "$base64": "Y29tcGF0LXNjZW5hcmlvIHBsYWludGV4dA=="
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKey",
+            "Encrypt"
+          ]
+        },
+        {
+          "name": "ReEncrypt",
+          "op": "ReEncrypt",
+          "call": {
+            "op": "ReEncrypt",
+            "params": {
+              "CiphertextBlob": {
+                "$base64": {
+                  "$ref": "key.ciphertext"
+                }
+              },
+              "DestinationKeyId": {
+                "$ref": "key.id"
+              }
+            },
+            "export": {
+              "key.reciphertext": "$.CiphertextBlob"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.CiphertextBlob": {
+                  "nonEmpty": true
+                },
+                "$.DestinationEncryptionAlgorithm": {
+                  "equals": "SYMMETRIC_DEFAULT"
+                },
+                "$.KeyId": {
+                  "equals": {
+                    "$ref": "key.arn"
+                  }
+                },
+                "$.SourceEncryptionAlgorithm": {
+                  "equals": "SYMMETRIC_DEFAULT"
+                },
+                "$.SourceKeyId": {
+                  "equals": {
+                    "$ref": "key.arn"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKey",
+            "Encrypt"
+          ]
+        },
+        {
+          "name": "DecryptReEncrypted",
+          "op": "Decrypt",
+          "call": {
+            "op": "Decrypt",
+            "params": {
+              "CiphertextBlob": {
+                "$base64": {
+                  "$ref": "key.reciphertext"
+                }
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.KeyId": {
+                  "equals": {
+                    "$ref": "key.arn"
+                  }
+                },
+                "$.Plaintext": {
+                  "equals": {
+                    "$base64": "Y29tcGF0LXNjZW5hcmlvIHBsYWludGV4dA=="
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKey",
+            "ReEncrypt"
+          ]
+        },
+        {
+          "name": "CreateKeySigning",
+          "op": "CreateKey",
+          "call": {
+            "op": "CreateKey",
+            "params": {
+              "Description": "compat-scenario signing key",
+              "KeySpec": "RSA_2048",
+              "KeyUsage": "SIGN_VERIFY"
+            },
+            "export": {
+              "key.signarn": "$.KeyMetadata.Arn",
+              "key.signid": "$.KeyMetadata.KeyId"
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "DescribeKey",
+                  "params": {
+                    "KeyId": {
+                      "$ref": "key.signid"
+                    }
+                  }
+                },
+                "checks": {
+                  "$.KeyMetadata.Arn": {
+                    "equals": {
+                      "$ref": "key.signarn"
+                    }
+                  },
+                  "$.KeyMetadata.KeySpec": {
+                    "equals": "RSA_2048"
+                  },
+                  "$.KeyMetadata.KeyUsage": {
+                    "equals": "SIGN_VERIFY"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sign",
+          "op": "Sign",
+          "call": {
+            "op": "Sign",
+            "params": {
+              "KeyId": {
+                "$ref": "key.signid"
+              },
+              "Message": {
+                "$base64": "Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgdG8gc2lnbg=="
+              },
+              "SigningAlgorithm": "RSASSA_PKCS1_V1_5_SHA_256"
+            },
+            "export": {
+              "key.signature": "$.Signature"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.KeyId": {
+                  "equals": {
+                    "$ref": "key.signarn"
+                  }
+                },
+                "$.Signature": {
+                  "nonEmpty": true
+                },
+                "$.SigningAlgorithm": {
+                  "equals": "RSASSA_PKCS1_V1_5_SHA_256"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKeySigning"
+          ]
+        },
+        {
+          "name": "Verify",
+          "op": "Verify",
+          "call": {
+            "op": "Verify",
+            "params": {
+              "KeyId": {
+                "$ref": "key.signid"
+              },
+              "Message": {
+                "$base64": "Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgdG8gc2lnbg=="
+              },
+              "Signature": {
+                "$base64": {
+                  "$ref": "key.signature"
+                }
+              },
+              "SigningAlgorithm": "RSASSA_PKCS1_V1_5_SHA_256"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.KeyId": {
+                  "equals": {
+                    "$ref": "key.signarn"
+                  }
+                },
+                "$.SignatureValid": {
+                  "equals": true
+                },
+                "$.SigningAlgorithm": {
+                  "equals": "RSASSA_PKCS1_V1_5_SHA_256"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKeySigning",
+            "Sign"
+          ]
+        },
+        {
+          "name": "ScheduleKeyDeletionSigning",
+          "op": "ScheduleKeyDeletion",
+          "call": {
+            "op": "ScheduleKeyDeletion",
+            "params": {
+              "KeyId": {
+                "$ref": "key.signid"
+              },
+              "PendingWindowInDays": 7
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "DescribeKey",
+                  "params": {
+                    "KeyId": {
+                      "$ref": "key.signid"
+                    }
+                  }
+                },
+                "checks": {
+                  "$.KeyMetadata.KeyState": {
+                    "equals": "PendingDeletion"
+                  }
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateKeySigning"
+          ]
+        },
+        {
           "name": "CreateGrant",
           "op": "CreateGrant",
           "call": {
