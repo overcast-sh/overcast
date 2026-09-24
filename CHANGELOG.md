@@ -75,54 +75,41 @@ can be applied mechanically rather than reconstructed from memory.
   AWS_IAM authorizers remain unenforced
   migration: make the authorizer function return an Allow policy (or `isAuthorized: true`) for the requests your tests make, or remove the authorizer from the local deployment
 
-- [appsync] `CreateGraphqlApi` boundary tests cover `queryDepthLimit` (0/75/76) and `resolverCountLimit` (0/10000/10001)
+- [s3tables] Amazon S3 Tables: table buckets, namespaces and Iceberg tables, with all 49 modeled operations answering; `AWS::S3Tables::TableBucket`, `Namespace`, `Table`, `TableBucketPolicy` and `TablePolicy` provision through it
+  Each table gets a real `--table-s3` warehouse bucket in S3; `CreateTable` with a schema writes the first Iceberg `metadata.json`.
+  `UpdateTableMetadataLocation` is a compare-and-swap on `versionToken`; maintenance, expiration and replication are stored, never run.
 
-- [cloudformation] `AWS::Glue::Partition`, and `AWS::Glue::Table` keeps every `TableInput` property (#2064)
-
-- [cloudformation/s3tables] `AWS::S3Tables::TableBucket`, `Namespace`, `Table`, `TableBucketPolicy` and `TablePolicy` provision through S3 Tables
-
-- [compat] every release ships `compat-report.json`, the public compatibility report
-  Each result that does not pass carries a reason code and, where one exists, its tracking issue. `go run ./cmd/compat --publish-report` builds it; overcast.sh/compat renders it.
+- [glue] partitions (create, get, update, delete, singly and in batches; `GetPartitions` filters by `Expression`), `UpdateTable` with `VersionId` concurrency and archived table versions, `UpdateDatabase` and `BatchDeleteTable`; `AWS::Glue::Partition` provisions and `AWS::Glue::Table` keeps every `TableInput` property (#2064)
+  the expression subset is comparisons, AND/OR/NOT, IN, BETWEEN, LIKE and IS NULL; anything else is InvalidInputException.
+  a stale VersionId is ConcurrentModificationException; GetTableVersion(s), DeleteTableVersion and BatchDeleteTableVersion read and prune versions.
 
 - [eventbridge] event buses store Description, DeadLetterConfig and KmsKeyIdentifier; PutPermission/RemovePermission manage a bus policy
   `DescribeEventBus` reports the policy PutPermission/RemovePermission build as `Policy`; stored, not enforced.
-
-- [glue] Glue partitions: create, get, update and delete, singly and in batches, with `GetPartitions` filtering by `Expression` (#2064)
-  the expression subset is comparisons, AND/OR/NOT, IN, BETWEEN, LIKE and IS NULL; anything else is InvalidInputException.
-
-- [glue] `UpdateTable` with `VersionId` concurrency and archived versions, plus `UpdateDatabase` and `BatchDeleteTable` (#2064)
-  a stale VersionId is ConcurrentModificationException; GetTableVersion(s), DeleteTableVersion and BatchDeleteTableVersion read and prune versions.
 
 - [rds] `CreateDBInstance`/`CreateDBCluster` accept `ManageMasterUserPassword`, RDS's own generated-and-managed master password.
   the generated password lands in a new Secrets Manager secret (`rds!db-<uuid>`/`rds!cluster-<uuid>`), returned as `MasterUserSecret`.
   `ModifyDBInstance`/`ModifyDBCluster` turn it on or off; turning it off, or deleting the DB, deletes the secret, as on AWS.
 
-- [s3tables] Amazon S3 Tables: table buckets, namespaces and Iceberg tables, with all 49 modeled operations answering
-  Each table gets a real `--table-s3` warehouse bucket in S3; `CreateTable` with a schema writes the first Iceberg `metadata.json`.
-  `UpdateTableMetadataLocation` is a compare-and-swap on `versionToken`; maintenance, expiration and replication are stored, never run.
+- [appsync] `CreateGraphqlApi` boundary tests cover `queryDepthLimit` (0/75/76) and `resolverCountLimit` (0/10000/10001)
+
+- [compat] every release ships `compat-report.json`, the public compatibility report
+  Each result that does not pass carries a reason code and, where one exists, its tracking issue. `go run ./cmd/compat --publish-report` builds it; overcast.sh/compat renders it.
 
 - [web] pin and unpin services straight from the sidebar and the dashboard, not only from global search
   sidebar rows show the star on hover; dashboard cards and list rows keep a filled star on pinned services
 
-- [web/s3] the object inspector previews CSV, TSV and JSON Lines as a table of their first rows, with a toggle back to the raw text
-  Parquet shows its schema and first rows (ZSTD and GZIP included), read by HTTP Range from the footer and the first row group only
-  Iceberg `*.metadata.json` gets a summary above its JSON; Avro files say they are not previewed instead of showing nothing
-
-- [web/stepfunctions] a Lambda Task's state inspector shows each attempt's invocation: its logs, REPORT metrics, log stream and error
-  Opens by default on a Lambda Task that failed, was caught or retried; matched by request id, the attempt's error, or timing, and says which.
-  "Replay in Lambda" saves the attempt's event as a test event and opens the function's Test tab.
-
-- [web] state machine, execution, IAM and log-stream ARNs link to their console pages, in the region the ARN names
-
-- [web/s3] the object inspector's CSV, TSV, JSON Lines and Parquet previews scroll the whole file, millions of rows included, in a virtualized data grid
-  a worker indexes text files as they stream and reads any block by HTTP Range; Parquet reads only the rows and columns in view
+- [web/s3] the object inspector previews CSV, TSV, JSON Lines and Parquet in a virtualized data grid that scrolls the whole file, millions of rows included, with a toggle back to the raw text
+  a worker indexes text files as they stream and reads any block by HTTP Range; Parquet shows its schema and reads only the rows and columns in view (ZSTD and GZIP included)
   the grid has a cell cursor, `⌘G` Go to row, `⌘C` copy as TSV, a cell inspector, resizable and hideable columns, and Find over the loaded rows
+  Iceberg `*.metadata.json` gets a summary above its JSON; Avro files say they are not previewed instead of showing nothing
 
 - [web/s3] a full-page data viewer at `/s3/<bucket>/view?key=…&row=…` opens a data file with the whole page to scroll it, deep-linked to a row
 
-### Changed
+- [web/stepfunctions] a Lambda Task's state inspector shows each attempt's invocation: its logs, REPORT metrics, log stream and error, and Step Functions errors show the function's own error type, message and stack trace
+  Opens by default on a Lambda Task that failed, was caught or retried; matched by request id, the attempt's error, or timing, and says which. Common Lambda failures get a hint.
+  "Replay in Lambda" saves the attempt's event as a test event and opens the function's Test tab.
 
-- [web/stepfunctions] Step Functions errors show the function's own error type, message and stack trace, with a hint for common Lambda failures
+- [web] state machine, execution, IAM and log-stream ARNs link to their console pages, in the region the ARN names
 
 ### Fixed
 
@@ -151,86 +138,51 @@ can be applied mechanically rather than reconstructed from memory.
   `PublishTo` returns 501 before mutation, matching `CreateFunction`'s gate
   migration: a script or test that publishes twice with nothing changed in between gets the same version back, as on AWS; change the code or configuration between publishes to get a new one
 
-- [apigateway] host-style invoke URLs keep `%2F` inside a path segment, so `/@scope%2fpkg` matches `/{package}` as on AWS.
-  it used to be decoded into a separator and answer 403 `Missing Authentication Token`; path-style invoke was unaffected.
+- [cloudfront] CloudFront Functions fail as on AWS: one that throws or has no compilable `handler` answers 503, and one that returns something other than a request or response object (say, a forgotten `return`) answers 502
+  they used to answer 500, or be skipped silently so the request went to the origin as if no function were attached.
+  a viewer-request function returning a `uri` not beginning with `/` gets a 502, and the origin is not called.
 
-- [autoscaling] `DescribeLaunchConfigurations` now returns the `UserData` member `CreateLaunchConfiguration` stored
+- [cloudfront] viewer-response functions run on a cache hit, once per viewer, instead of a hit replaying the headers set for the viewer that filled the cache; they no longer run when the origin answers 400 or above
 
-- [autoscaling] an instance no longer shows `InService` while its launch activity still reads `PreInService`.
-  the launch activity is now marked `Successful` before the instance goes `InService`, so `DescribeAutoScalingInstances` and `DescribeScalingActivities` always agree.
+- [cloudfront] request paths keep the viewer's encoding: a `%` (`/100%25`) reaches the origin instead of answering 502, a `//` prefix keeps both slashes, and a function's `event.request.uri` is percent-encoded as sent
+  the origin receives the path byte-for-byte, for custom and emulated origins alike; a `uri` returned with raw UTF-8 or spaces reaches the origin percent-encoded.
+  the `//` path used to lose a slash and share a cache entry with the single-slash path.
 
-- [cloudformation/eventbridge] AWS::Events::Rule and AWS::Events::EventBus now forward Tags.
-  EventBus properties with no service member (Description, DeadLetterConfig,
-  KmsKeyIdentifier, Policy) are reported as unconsumed instead of dropped silently.
+- [cloudfront] cache behaviours match as on AWS: after decoding escaped unreserved characters (`/%7Euser` matches `/~user/*`, `%40` does not match `@`) and after resolving dot segments and collapsing repeated slashes
+  `/a/b/..` matches `/a*`, not `/a/b*`, and `/a//b` matches as `/a/b`. The origin still receives the path exactly as sent.
+  a viewer-request function that rewrites the `uri` no longer changes the cache TTL: it comes from the behaviour the viewer's path matched.
 
-- [cloudformation/cloudfront] AWS::CloudFront::Distribution now provisions with tags.
-  Create dispatches to CreateDistributionWithTags when Tags is set, so
-  ListTagsForResource and the _custom_id_ tag both work again.
-
-- [cloudformation/opensearch] AWS::OpenSearchService::Domain without a DomainName now generates one instead of failing CreateDomain
-
-- [cloudformation/iam] AWS::IAM::ServiceLinkedRole now uses AWS's documented per-service role names instead of deriving one from the service prefix
-
-- [cloudformation/iam] AWS::IAM::Role update no longer double-encodes a string-form AssumeRolePolicyDocument
-
-- [cloudformation] forward CloudTrail, AppConfig, OpenSearch, ACM, Athena, Shield and Transfer properties the backing service already supports
-  a tags-only update to an AppConfig, OpenSearch, ACM, Athena or Shield resource, including a stack-tag change, now reconciles the tags in place instead of replacing the resource, as on AWS
-
-- [cloudformation/wafv2] `AWS::WAFv2::WebACL` dropped `Description` and `Tags`, and `Fn::GetAtt` `Arn`/`Id` never resolved.
-  `CreateWebACL`'s response already carried both attributes; the handler just discarded them.
-
-- [cloudformation/autoscaling] `AWS::AutoScaling::AutoScalingGroup` dropped `Cooldown`, `HealthCheckType` and two more, on create and update.
-  `HealthCheckGracePeriod` and `TerminationPolicies` were the rest.
-
-- [cloudformation/autoscaling] `AWS::AutoScaling::LaunchConfiguration` dropped `KeyName`, `IamInstanceProfile` and `UserData`.
-
-- [cloudformation] `AWS::RDS::DBInstance`/`AWS::RDS::DBCluster` forward `ManageMasterUserPassword`, `MasterUserSecret.KmsKeyId` and `Tags`.
-  those were previously dropped entirely; `Fn::GetAtt MasterUserSecret.SecretArn` now resolves and `Tags` reconcile on update.
-
-- [cloudfront] a viewer-request function that rewrites the `uri` no longer changes how long the response is cached.
-  the TTL comes from the cache behaviour the viewer's path matched, as on AWS, not from the behaviour the new `uri` would match.
-
-- [cloudfront] a viewer-request function that returns a `uri` not beginning with `/` gets a 502, and the origin is not called.
-  AWS treats this as a function validation error.
-
-- [cloudfront] the access log's `cs-uri-stem` is the viewer's path, not Overcast's internal `/_overcast/cloudfront/distributions/{id}/...` route.
+- [cloudfront] the access log's `cs-uri-stem` is the viewer's path, not Overcast's internal `/_overcast/cloudfront/distributions/{id}/...` route
   free-text fields use CloudFront's log encoding, so an encoded `%20` in the path is logged as `%2520`.
 
-- [cloudfront] a request path containing an encoded `%` (`/100%25`) reaches the origin instead of answering 502, for custom and emulated origins alike.
-  the proxy now works on the path exactly as the viewer encoded it, so the origin always receives it byte-for-byte.
-
-- [cloudfront] a viewer-request function's `event.request.uri` is percent-encoded as the viewer sent it, not decoded, as on AWS.
-  a `uri` returned with raw UTF-8 or spaces reaches the origin percent-encoded.
-
-- [cloudfront] cache behaviour path patterns match after decoding escaped unreserved characters, so `/%7Euser` matches `/~user/*`.
-  other escapes stay encoded for matching, as in AWS's RFC 3986 normalisation: `%40` does not match `@`.
-
-- [cloudfront] a CloudFront Function that throws, doesn't compile or has no `handler` now answers 503, as on AWS.
-  it used to answer 500 when it threw. When it failed to compile it was skipped, and the request went to the origin as if no function were attached.
-
-- [cloudfront] a CloudFront Function that returns something other than a request or response object now answers 502, as on AWS.
-  this covers forgetting to `return`. The function used to be skipped silently.
-
-- [cloudfront] viewer-response functions no longer run when the origin answers 400 or above, as AWS documents.
-
-- [cloudfront] viewer-response functions now run on a cache hit, as on AWS.
-  a hit no longer replays the headers the function set for the viewer that filled the cache; the function runs again for each viewer.
-
-- [cloudfront] cache behaviours now match after dot segments are resolved and repeated slashes collapsed, as on AWS.
-  `/a/b/..` matches `/a*`, not `/a/b*`, and `/a//b` matches as `/a/b`. The origin still receives the path exactly as sent.
-
-- [cloudfront] a request path that starts with `//` reaches the origin with both slashes.
-  it used to lose one, and shared a cache entry with the single-slash path.
-
-- [dynamodb] accept Binary key attributes over Smithy RPC v2 CBOR
+- [apigateway] host-style invoke URLs keep `%2F` inside a path segment, so `/@scope%2fpkg` matches `/{package}` as on AWS.
+  it used to be decoded into a separator and answer 403 `Missing Authentication Token`; path-style invoke was unaffected.
 
 - [elbv2/cloudfront/lambda] load balancers, CloudFront and function URLs pass a `%2F` in the path on still encoded.
   ALB targets and CloudFront origins receive the path as the client sent it; a function URL's `rawPath` keeps its encoding.
 
-- [glue] `GetTable` returns the whole `TableInput` it was given, and `GetDatabase` the whole `DatabaseInput` (#2064)
-  StorageDescriptor, PartitionKeys and Parameters were dropped on write; tables now carry CreateTime, UpdateTime and VersionId.
+- [autoscaling] an instance no longer shows `InService` while its launch activity still reads `PreInService`, and `DescribeLaunchConfigurations` returns the `UserData` `CreateLaunchConfiguration` stored
+  the launch activity is now marked `Successful` before the instance goes `InService`, so `DescribeAutoScalingInstances` and `DescribeScalingActivities` always agree.
 
-- [glue] deleting a database deletes its tables and their partitions and versions; deleting a table deletes its partitions (#2064)
+- [cloudformation] properties the backing service supports are forwarded instead of dropped: Tags on `AWS::Events::Rule`, `AWS::Events::EventBus` and `AWS::CloudFront::Distribution`; CloudTrail, AppConfig, OpenSearch, ACM, Athena, Shield and Transfer properties; `AWS::WAFv2::WebACL` `Description` and `Tags`
+  a tags-only update to an AppConfig, OpenSearch, ACM, Athena or Shield resource, including a stack-tag change, now reconciles the tags in place instead of replacing the resource, as on AWS
+  EventBus properties with no service member (Description, DeadLetterConfig, KmsKeyIdentifier, Policy) are reported as unconsumed instead of dropped silently.
+  a CloudFront distribution with Tags dispatches to CreateDistributionWithTags, so ListTagsForResource and the _custom_id_ tag both work again; `Fn::GetAtt` `Arn`/`Id` on a WebACL now resolves.
+
+- [cloudformation/autoscaling] `AWS::AutoScaling::AutoScalingGroup` forwards `Cooldown`, `HealthCheckType`, `HealthCheckGracePeriod` and `TerminationPolicies`, and `AWS::AutoScaling::LaunchConfiguration` forwards `KeyName`, `IamInstanceProfile` and `UserData`
+  these were dropped on create and update.
+
+- [cloudformation/rds] `AWS::RDS::DBInstance`/`AWS::RDS::DBCluster` forward `ManageMasterUserPassword`, `MasterUserSecret.KmsKeyId` and `Tags`.
+  those were previously dropped entirely; `Fn::GetAtt MasterUserSecret.SecretArn` now resolves and `Tags` reconcile on update.
+
+- [cloudformation/opensearch] AWS::OpenSearchService::Domain without a DomainName now generates one instead of failing CreateDomain
+
+- [cloudformation/iam] `AWS::IAM::ServiceLinkedRole` uses AWS's documented per-service role names, and an `AWS::IAM::Role` update no longer double-encodes a string-form AssumeRolePolicyDocument
+
+- [dynamodb] accept Binary key attributes over Smithy RPC v2 CBOR
+
+- [glue] `GetTable` returns the whole `TableInput` it was given, and `GetDatabase` the whole `DatabaseInput`; deleting a database deletes its tables, partitions and versions, and deleting a table deletes its partitions (#2064)
+  StorageDescriptor, PartitionKeys and Parameters were dropped on write; tables now carry CreateTime, UpdateTime and VersionId.
 
 - [kinesis] `PutRecord`/`PutRecords` route by the MD5 hash-key range AWS uses, honouring `ExplicitHashKey`
   previously routed by a byte-sum modulo shard count, which disagreed with the `HashKeyRange` values `ListShards`/`DescribeStream` report
@@ -239,13 +191,12 @@ can be applied mechanically rather than reconstructed from memory.
   resolves a version number, an alias (through its `FunctionVersion`), or `$LATEST` by default, embedded in the name or given as a query parameter
   an unknown version or alias answers `ResourceNotFoundException` instead of silently reporting `$LATEST`
 
-- [lambda] a timed-out invocation's handler is stopped immediately, not left running past REPORT
+- [lambda] a timed-out invocation's handler is stopped immediately, not left running past REPORT, and its REPORT Duration is the timeout
   the container is killed at the deadline rather than after Release, so late output and side effects can no longer happen; the next invoke gets a fresh environment
+  Duration used to be the timeout plus up to 2 s of output wait.
 
 - [lambda] a synchronous Invoke now answers with the invocation's request id in x-amzn-RequestId
   It was absent, so SDK callers read an empty id and Step Functions' lambda:invoke returned SdkResponseMetadata.RequestId "".
-
-- [lambda] a timed-out invocation's REPORT Duration is the timeout, no longer the timeout plus up to 2 s of output wait
 
 - [rds] `CreateDBInstance` rejects `AdditionalStorageVolumes` instead of silently dropping it, and `DBInstance` models the resting `StorageOperationStatus` fields
   Oracle/SQL Server only on AWS and neither engine is emulated, so it is now `InvalidParameterCombination`.
@@ -255,20 +206,12 @@ can be applied mechanically rather than reconstructed from memory.
 
 - [secretsmanager] `PutResourcePolicy` answers `PublicPolicyException` for a public statement, not `MalformedPolicyDocumentException`
 
-- [web] Athena, Glue, Firehose and OpenSearch are no longer listed as not emulated in global search and on the dashboard
-
-- [web] ACM, AWS Backup, CloudTrail, Organizations, Route 53 and Transfer Family are no longer listed as not emulated in global search and on the dashboard
+- [web] Athena, Glue, Firehose, OpenSearch, ACM, AWS Backup, CloudTrail, Organizations, Route 53 and Transfer Family are no longer listed as not emulated in global search and on the dashboard
   Bedrock now shows as a stub, not unsupported, and a stub's page says which operations it answers instead of claiming all return 501.
 
-- [web/map] SQS queue nodes on the system map show their real message counts again, instead of 0 since messages moved to their own storage
+- [web/map] the system map shows SQS queue nodes' real message counts again (not 0), draws a dead-letter edge when `maxReceiveCount` is a string as the AWS CLI writes it, and shows CloudFront distributions with edges to their S3 origins
 
-- [web/map] a dead-letter edge is drawn when the RedrivePolicy writes `maxReceiveCount` as a string, as the AWS CLI does
-
-- [web/map] CloudFront distributions appear on the system map, with edges to their S3 origins
-
-- [web] accepting the connection dialog's prefilled endpoint opens the console without a reload
-
-- [web] a `?region=` in the URL is no longer overwritten at startup by the server's default region
+- [web] accepting the connection dialog's prefilled endpoint opens the console without a reload, and a `?region=` in the URL is no longer overwritten at startup by the server's default region
 
 ## [0.0.1-alpha.43] - 2026-09-20
 
