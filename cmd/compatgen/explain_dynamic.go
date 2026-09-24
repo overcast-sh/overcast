@@ -21,6 +21,7 @@ func pyStyle() style {
 		concat:  func(parts []string) string { return strings.Join(parts, " + ") },
 		index:   func(list string, i int) string { return fmt.Sprintf("%s[%d]", list, i) },
 		now:     func(offset int64) string { return nowPlus("now_ms", offset) },
+		blob:    func(text string) string { return fmt.Sprintf("base64.b64decode(%s)", text) },
 		object: func(entries [][2]string) string {
 			var parts []string
 			for _, e := range entries {
@@ -54,6 +55,7 @@ func jsStyle() style {
 	st.comment = "//"
 	st.name = func(suffix string) string { return fmt.Sprintf("`${runId}-${group}-%s`", suffix) }
 	st.now = func(offset int64) string { return nowPlus("nowMs", offset) }
+	st.blob = func(text string) string { return fmt.Sprintf("Buffer.from(%s, \"base64\")", text) }
 	st.object = func(entries [][2]string) string {
 		var parts []string
 		for _, e := range entries {
@@ -82,6 +84,9 @@ func cliStyle(client clientInfo) style {
 	st.name = func(suffix string) string { return fmt.Sprintf("\"$RUN_ID-$GROUP-%s\"", suffix) }
 	st.ref = func(ref string) string { return "$" + strings.ToUpper(strings.NewReplacer(".", "_").Replace(ref)) }
 	st.now = func(offset int64) string { return "$((" + nowPlus("NOW_MS", offset) + "))" }
+	// The CLI reads a blob in --cli-input-json as base64 and prints one as
+	// base64, so the text is the value on both sides.
+	st.blob = func(text string) string { return text }
 	st.pathExpr = func(root, path string) string {
 		return fmt.Sprintf("jq '%s' <<< \"$%s\"", strings.TrimPrefix(path, "$"), root)
 	}

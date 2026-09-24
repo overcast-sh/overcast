@@ -27,6 +27,7 @@ func typedStyle() style {
 		return "map[string]any{" + strings.Join(parts, ", ") + "}"
 	}
 	st.list = func(items []string) string { return "[]T{" + strings.Join(items, ", ") + "}" }
+	st.blob = func(text string) string { return fmt.Sprintf("base64.StdEncoding.DecodeString(%s)", text) }
 	st.pathExpr = func(root, path string) string { return root + pathAsGo(path) }
 	st.call = func(op string, members [][2]string) string {
 		return fmt.Sprintf("client.%s(ctx, &%sInput{%s})", op, op, kv(members, ", ", false))
@@ -98,6 +99,9 @@ func javaStyle(sp *javaSpeller, loadErr error) style {
 		return "Map.of(" + strings.Join(parts, ", ") + ")"
 	}
 	st.list = func(items []string) string { return "List.of(" + strings.Join(items, ", ") + ")" }
+	st.blob = func(text string) string {
+		return fmt.Sprintf("SdkBytes.fromByteArray(Base64.getDecoder().decode(%s))", text)
+	}
 	st.pathExpr = func(root, path string) string { return root + pathAsGetters(path, "()") }
 	// No st.call override: callLines supersedes it for every call this style
 	// renders, and a second spelling of one would be the drift this backend's
@@ -157,6 +161,7 @@ func dotnetStyle(sp *dotnetSpeller, loadErr error) style {
 		return "new Dictionary<string, T> { " + strings.Join(parts, ", ") + " }"
 	}
 	st.list = func(items []string) string { return "new List<T> { " + strings.Join(items, ", ") + " }" }
+	st.blob = func(text string) string { return fmt.Sprintf("Convert.FromBase64String(%s)", text) }
 	st.pathExpr = func(root, path string) string { return root + pathAsGetters(path, "") }
 	// No st.call: callLines below is set unconditionally, and the explainer
 	// prefers it, so a second spelling of the same call would only ever be dead.
@@ -209,6 +214,7 @@ func rustStyle(model *serviceModel, crate string, modelErr error) style {
 		return "HashMap::from([" + strings.Join(parts, ", ") + "])"
 	}
 	st.list = func(items []string) string { return "vec![" + strings.Join(items, ", ") + "]" }
+	st.blob = func(text string) string { return fmt.Sprintf("Blob::new(base64_decode(%s))", text) }
 	st.pathExpr = func(root, path string) string { return root + pathAsRustAccessors(path) }
 	st.call = func(op string, members [][2]string) string {
 		var setters []string

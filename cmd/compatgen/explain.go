@@ -244,7 +244,11 @@ type style struct {
 	concat  func(parts []string) string
 	index   func(list string, i int) string
 	// now is a `$now`: the clock read once for the call, plus the offset.
-	now      func(offsetMillis int64) string
+	now func(offsetMillis int64) string
+	// blob is a `$base64`: the bytes its text spells, given that text already
+	// rendered — a string literal, or the context lookup of an exported blob,
+	// which every backend holds as its base64 text.
+	blob     func(text string) string
 	object   func(entries [][2]string) string // key already rendered as a literal
 	list     func(items []string) string
 	pathExpr func(root, path string) string // response path access
@@ -287,6 +291,10 @@ func (st style) value(v any) string {
 		case "$now":
 			if offset, err := nowOf(arg); err == nil && st.now != nil {
 				return st.now(offset)
+			}
+		case "$base64":
+			if st.blob != nil {
+				return st.blob(st.value(arg))
 			}
 		}
 	}
