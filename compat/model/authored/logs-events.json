@@ -1,0 +1,263 @@
+{
+  "$comment": "Authored port of the hand-written registry group logs-events (docs/plans/compat-coverage-modelgen.md §3.11, G6, #1116). One spec in place of five per-language implementations — dotnet-sdk and rust-sdk never had one, and the port closes 10 rows of compat/parity-debt.json. It runs today under the shadow name logs-events-shadow, beside the natives, so the nightly can compare the two per (suite, test); the flip PR renames this group to logs-events, points the registry entry at this file, and deletes the native code. The clauses are the union of what the five natives assert — see compat/model/README.md § Authored scenarios.",
+  "version": 1,
+  "service": "cloudwatch-logs",
+  "client": {
+    "sdkId": "CloudWatch Logs",
+    "endpointPrefix": "logs",
+    "signingName": "logs",
+    "protocol": "awsJson1_1",
+    "apiVersion": "2014-03-28",
+    "targetPrefix": "Logs_20140328",
+    "awsQueryCompatible": false
+  },
+  "groups": [
+    {
+      "$comment": "One log group holding one log stream, both created in setup, as all five natives do; teardown deletes the group, which takes the stream with it. Every event is stamped with the client's own clock at the moment PutLogEvents is called — `$now`, in epoch milliseconds, which is what InputLogEvent.timestamp counts — as every native stamps its events and as a real caller does. A literal would not do: CloudWatch Logs discards an event older than 14 days (or than the group's retention) or more than two hours in the future, reporting it in rejectedLogEventsInfo rather than failing the call, so a literal timestamp silently stops storing anything as it ages (#1721). The clock is read once per call, so the three events in the one batch carry offsets of -2, -1 and 0 ms: distinct, and in the chronological order PutLogEvents requires of a batch, which is what lets GetLogEvents assert the order it reads them back in. `$name` names the group and the stream, deterministic within a run.",
+      "name": "logs-events-shadow",
+      "kind": "lifecycle",
+      "setup": [
+        {
+          "op": "CreateLogGroup",
+          "params": { "logGroupName": { "$name": "group" } }
+        },
+        {
+          "op": "CreateLogStream",
+          "params": {
+            "logGroupName": { "$name": "group" },
+            "logStreamName": { "$name": "stream" }
+          }
+        }
+      ],
+      "tests": [
+        {
+          "$comment": "The five natives put five different batches (go-sdk two events, python-sdk two, node-js-sdk three including one JSON message, cli and java-sdk one) and assert five different things: node-js-sdk that rejectedLogEventsInfo is absent, go-sdk that no event was rejected as too old or too new, cli that GetLogEvents then returns events, python-sdk and java-sdk nothing (java-sdk only that the response object is non-null). The batch here is python-sdk's two messages plus node-js-sdk's structured one, so every later test can make the claim its natives make, each stamped with the client's clock a millisecond after the one before (see the group's comment). The union of the assertions: rejectedLogEventsInfo is missing — which is stronger than go-sdk's index reading, since AWS omits the member when every event was accepted — and each of the three messages is readable from the stream. The read-back goes through `eventually`: AWS documents a delay between PutLogEvents and the events becoming readable. No native polls at all (cli reads back once, immediately), so there is no native budget to sit inside; 20 × 500 ms is the kinesis-streams port's delete budget, and Overcast answers on the first attempt.",
+          "name": "PutLogEvents",
+          "op": "PutLogEvents",
+          "call": {
+            "op": "PutLogEvents",
+            "params": {
+              "logGroupName": { "$name": "group" },
+              "logStreamName": { "$name": "stream" },
+              "logEvents": [
+                { "timestamp": { "$now": { "unit": "epochMillis", "offsetMillis": -2 } }, "message": "event one" },
+                { "timestamp": { "$now": { "unit": "epochMillis", "offsetMillis": -1 } }, "message": "event two" },
+                { "timestamp": { "$now": { "unit": "epochMillis" } }, "message": "{\"level\":\"info\",\"msg\":\"structured\"}" }
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.rejectedLogEventsInfo": { "missing": true }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 20,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "GetLogEvents",
+                  "params": {
+                    "logGroupName": { "$name": "group" },
+                    "logStreamName": { "$name": "stream" },
+                    "startFromHead": true
+                  }
+                },
+                "itemsPath": "$.events",
+                "where": { "$.message": "event one" }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 20,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "GetLogEvents",
+                  "params": {
+                    "logGroupName": { "$name": "group" },
+                    "logStreamName": { "$name": "stream" },
+                    "startFromHead": true
+                  }
+                },
+                "itemsPath": "$.events",
+                "where": { "$.message": "event two" }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 20,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "GetLogEvents",
+                  "params": {
+                    "logGroupName": { "$name": "group" },
+                    "logStreamName": { "$name": "stream" },
+                    "startFromHead": true
+                  }
+                },
+                "itemsPath": "$.events",
+                "where": { "$.message": "{\"level\":\"info\",\"msg\":\"structured\"}" }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "go-sdk, cli and java-sdk assert the page is non-empty; python-sdk that it carries `event one`; node-js-sdk that it holds at least three events. The union is that all three messages put are on the page, and this goes one step further than any native: it reads them back in the order they were stamped. The events carry distinct client-side timestamps (see the group's comment), and GetLogEvents returns a stream's events in timestamp order, so read from the head the page is `event one`, `event two`, then the structured message. Three positions holding the three messages is also node-js-sdk's `>= 3`, without an ordered numeric comparison the IR does not have. The timestamps themselves are not compared: a `$now` is never an expected value, because no response holds the instant the call was made at. go-sdk and python-sdk read from the head and node-js-sdk and cli take the default; startFromHead is what makes the first page start at the batch rather than at the tail, so it is kept. java-sdk's `limit: 10` is incidental to a three-event stream and is dropped. The primary call is made once and cannot be retried, so the clause makes its own call through `eventually`, with the PutLogEvents budget.",
+          "name": "GetLogEvents",
+          "op": "GetLogEvents",
+          "call": {
+            "op": "GetLogEvents",
+            "params": {
+              "logGroupName": { "$name": "group" },
+              "logStreamName": { "$name": "stream" },
+              "startFromHead": true
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 20,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "GetLogEvents",
+                  "params": {
+                    "logGroupName": { "$name": "group" },
+                    "logStreamName": { "$name": "stream" },
+                    "startFromHead": true
+                  }
+                },
+                "checks": {
+                  "$.events[0].message": { "equals": "event one" },
+                  "$.events[1].message": { "equals": "event two" },
+                  "$.events[2].message": { "equals": "{\"level\":\"info\",\"msg\":\"structured\"}" }
+                }
+              }
+            }
+          ],
+          "depends": ["PutLogEvents"]
+        },
+        {
+          "$comment": "Every native filters the group by a plain term pattern and asserts only that something matched: go-sdk `event`, cli `hello`, java-sdk `compat`, python-sdk `event two`, node-js-sdk `structured` — each its own message's term. The primary call is python-sdk's two-term pattern, and the union is python-sdk's and node-js-sdk's claims with the matching message named rather than any match accepted. One clause goes further than any native, and the CloudWatch Logs filter-pattern reference is what it rests on: an unstructured pattern of several terms matches only events containing every term, so `event one` — which has `event` and lacks `two` — must be absent from that result. It is read after the membership clause has seen the batch, so it cannot pass merely because nothing was visible yet. FilterLogEvents is as eventually consistent as GetLogEvents, so the membership reads go through `eventually` with the same budget.",
+          "name": "FilterLogEvents",
+          "op": "FilterLogEvents",
+          "call": {
+            "op": "FilterLogEvents",
+            "params": {
+              "logGroupName": { "$name": "group" },
+              "filterPattern": "event two"
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 20,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "FilterLogEvents",
+                  "params": {
+                    "logGroupName": { "$name": "group" },
+                    "filterPattern": "event two"
+                  }
+                },
+                "itemsPath": "$.events",
+                "where": {
+                  "$.message": "event two",
+                  "$.logStreamName": { "$name": "stream" }
+                }
+              }
+            },
+            {
+              "kind": "absent",
+              "call": {
+                "op": "FilterLogEvents",
+                "params": {
+                  "logGroupName": { "$name": "group" },
+                  "filterPattern": "event two"
+                }
+              },
+              "itemsPath": "$.events",
+              "where": { "$.message": "event one" }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 20,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "FilterLogEvents",
+                  "params": {
+                    "logGroupName": { "$name": "group" },
+                    "filterPattern": "structured"
+                  }
+                },
+                "itemsPath": "$.events",
+                "where": { "$.message": "{\"level\":\"info\",\"msg\":\"structured\"}" }
+              }
+            }
+          ],
+          "depends": ["PutLogEvents"]
+        },
+        {
+          "$comment": "go-sdk and cli assert only that the group's listing is non-empty; python-sdk, node-js-sdk and java-sdk that it carries this group's stream by name, java-sdk asking with the stream's own name as logStreamNamePrefix and the other four listing the whole group. The union is the membership check against the whole group's listing, which is the call four of the five make.",
+          "name": "DescribeLogStreams",
+          "op": "DescribeLogStreams",
+          "call": {
+            "op": "DescribeLogStreams",
+            "params": { "logGroupName": { "$name": "group" } }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.logStreams",
+              "where": { "$.logStreamName": { "$name": "stream" } }
+            }
+          ],
+          "depends": ["PutLogEvents"]
+        },
+        {
+          "$comment": "cli, python-sdk, node-js-sdk and java-sdk delete the setup stream; go-sdk creates a second stream inside the test and deletes that. Four of five, and the one the depends list was written for: DeleteLogStream runs after every test that reads the stream, so deleting it destroys nothing another test still needs. The assertion is cli's and python-sdk's — the stream is absent from the group's listing afterwards. go-sdk makes the same check scoped by prefix; java-sdk asserts nothing (#1904); node-js-sdk's check can never fail — it calls `assert.notStrictEqual` on the boolean from `some()` and its own message string, which are never equal, and its `some` callback returns the stream name, truthy for any stream — a latent native bug this port supersedes. No native polls for the deletion and AWS does not document DeleteLogStream as asynchronous, so the absence is read once.",
+          "name": "DeleteLogStream",
+          "op": "DeleteLogStream",
+          "call": {
+            "op": "DeleteLogStream",
+            "params": {
+              "logGroupName": { "$name": "group" },
+              "logStreamName": { "$name": "stream" }
+            }
+          },
+          "assert": [
+            {
+              "kind": "absent",
+              "call": {
+                "op": "DescribeLogStreams",
+                "params": { "logGroupName": { "$name": "group" } }
+              },
+              "itemsPath": "$.logStreams",
+              "where": { "$.logStreamName": { "$name": "stream" } }
+            }
+          ],
+          "depends": ["GetLogEvents", "FilterLogEvents", "DescribeLogStreams"]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "DeleteLogGroup",
+          "params": { "logGroupName": { "$name": "group" } }
+        }
+      ]
+    }
+  ]
+}

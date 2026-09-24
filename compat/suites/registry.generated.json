@@ -1657,6 +1657,54 @@
       ]
     },
     {
+      "service": "cloudwatch-logs",
+      "name": "logs-events-shadow",
+      "generated": true,
+      "scenario": "compat/model/authored/logs-events.json",
+      "state": "candidate",
+      "shadowOf": "logs-events",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "PutLogEvents"
+        },
+        {
+          "name": "GetLogEvents",
+          "depends": [
+            "PutLogEvents"
+          ]
+        },
+        {
+          "name": "FilterLogEvents",
+          "depends": [
+            "PutLogEvents"
+          ]
+        },
+        {
+          "name": "DescribeLogStreams",
+          "depends": [
+            "PutLogEvents"
+          ]
+        },
+        {
+          "name": "DeleteLogStream",
+          "depends": [
+            "GetLogEvents",
+            "FilterLogEvents",
+            "DescribeLogStreams"
+          ]
+        }
+      ]
+    },
+    {
       "service": "organizations",
       "name": "organizations-gen-organization",
       "generated": true,
