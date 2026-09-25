@@ -25,7 +25,8 @@ import { dataPreviewKind, isTabularKind } from "@/features/s3/preview-kind"
 import { formatPreviewText, isImagePreviewable, isTextPreviewable } from "./object-preview-format"
 import { AvroNotice, ObjectReadError, PreviewPanel, PreviewSkeleton, RawText } from "./data-preview"
 import { DataFilePreview, OpenInViewer } from "./data-file-preview"
-import { IcebergMetadataSummary } from "./iceberg-metadata-summary"
+import { IcebergSummaryCard } from "@/components/iceberg/iceberg-summary-card"
+import { parseIcebergMetadata } from "@/components/iceberg/metadata"
 
 interface ObjectMetadata {
   contentType: string
@@ -128,6 +129,14 @@ export function ObjectPreviewDialog({
     ...s3ObjectPreviewQueryOptions(bucket, objectKey ?? "", versionId),
     enabled: canPreviewText && !!previewUrl,
   })
+  // Null when the file does not read as table metadata (a name that merely
+  // ends in `.metadata.json`, or one cut short by the preview window); the
+  // JSON below still shows whatever arrived.
+  const icebergMetadata = useMemo(
+    () =>
+      dataKind === "iceberg-metadata" && previewText ? parseIcebergMetadata(previewText.text) : null,
+    [dataKind, previewText],
+  )
   const formattedPreview = useMemo(
     () =>
       previewText && metadata && objectKey
@@ -151,7 +160,9 @@ export function ObjectPreviewDialog({
     ].filter(Boolean)
     return (
       <>
-        {dataKind === "iceberg-metadata" && <IcebergMetadataSummary text={previewText.text} />}
+        {icebergMetadata && (
+          <IcebergSummaryCard metadata={icebergMetadata} className="shrink-0 shadow-none" />
+        )}
         <PreviewPanel
           // Under the Iceberg summary this is the file itself, and says so.
           meta={[dataKind === "iceberg-metadata" ? "Raw JSON" : "Preview", ...notes].join(" · ")}
