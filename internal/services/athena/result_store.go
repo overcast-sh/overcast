@@ -11,8 +11,10 @@ import (
 //
 // A result is stored as one header record ("<id>") and its rows in chunks of
 // resultChunkRows ("<id>/<n>"), so a page reads only the chunks it covers
-// rather than the whole result. The namespace is Cached-tier: results are
-// read back rarely and can be large.
+// rather than the whole result. The chunks are stored as the statement
+// produces its rows and the header last, so a result is readable only once
+// it is whole. The namespace is Cached-tier: results are read back rarely
+// and can be large.
 
 const (
 	nsResults       = "athena:results"
@@ -23,8 +25,10 @@ const (
 // and what it wrote or read.
 type queryResult struct {
 	Columns []ColumnInfo `json:"columns"`
-	// Rows are the result rows. For a SELECT the first is the header row,
-	// the column names, as Athena returns it.
+	// Rows are the rows of a result Overcast makes itself, such as a SHOW
+	// statement's, which the executor writes out once the statement ends.
+	// The engine writes its rows to the statement's rowSink as they come
+	// instead, and leaves Rows empty.
 	Rows        [][]*string                `json:"-"`
 	RowCount    int                        `json:"rowCount"`
 	UpdateCount *int64                     `json:"updateCount,omitempty"`
@@ -43,18 +47,14 @@ type engineTiming struct {
 
 type resultStore struct{ store *athenaStore }
 
-func resultChunkKey(id string, chunk int) string { return id + "/" + strconv.Itoa(chunk) }
+// resultRowsPrefix is the prefix of every chunk key of a result's rows.
+func resultRowsPrefix(id string) string { return id + "/" }
 
-// put stores res under the query's id.
-func (s resultStore) put(ctx context.Context, id string, res *queryResult) error {
-	res.RowCount = len(res.Rows)
-	for start := 0; start < len(res.Rows); start += resultChunkRows {
-		chunk := res.Rows[start:min(start+resultChunkRows, len(res.Rows))]
-		if err := s.store.put(ctx, nsResults, resultChunkKey(id, start/resultChunkRows), chunk); err != nil {
-			return err
-		}
-	}
-	return s.store.put(ctx, nsResults, id, res)
+func resultChunkKey(id string, chunk int) string { return resultRowsPrefix(id) + strconv.Itoa(chunk) }
+
+// writer starts storing the result of the query with id.
+func (s resultStore) writer(id string) *resultChunkWriter {
+	return &resultChunkWriter{store: s, id: id}
 }
 
 // header reads a result without its rows, or nil when there is none.
@@ -81,16 +81,76 @@ func (s resultStore) rows(ctx context.Context, id string, res *queryResult, offs
 	return out, nil
 }
 
-// delete forgets a result.
+// delete forgets a result, finished or not: its rows are found by their
+// keys rather than through the header, which an unfinished result lacks.
 func (s resultStore) delete(ctx context.Context, id string) error {
-	res, err := s.header(ctx, id)
-	if err != nil || res == nil {
+	if err := s.deleteRows(ctx, id); err != nil {
 		return err
 	}
-	for chunk := 0; chunk*resultChunkRows < res.RowCount; chunk++ {
-		if err := s.store.delete(ctx, nsResults, resultChunkKey(id, chunk)); err != nil {
+	return s.store.delete(ctx, nsResults, id)
+}
+
+// deleteRows deletes every chunk of a result's rows.
+func (s resultStore) deleteRows(ctx context.Context, id string) error {
+	keys, err := s.store.store.List(ctx, nsResults, resultRowsPrefix(id))
+	if err != nil {
+		return fmt.Errorf("athena: list result %s: %w", id, err)
+	}
+	for _, key := range keys {
+		if err := s.store.delete(ctx, nsResults, key); err != nil {
 			return err
 		}
 	}
-	return s.store.delete(ctx, nsResults, id)
+	return nil
+}
+
+// resultChunkWriter stores a result's rows as they come, holding no more
+// than a chunk of them.
+type resultChunkWriter struct {
+	store  resultStore
+	id     string
+	chunk  [][]*string
+	stored int // chunks already stored
+	rows   int
+}
+
+// write takes the next row, storing the chunk it completes.
+func (w *resultChunkWriter) write(ctx context.Context, row []*string) error {
+	w.chunk = append(w.chunk, row)
+	w.rows++
+	if len(w.chunk) < resultChunkRows {
+		return nil
+	}
+	return w.flush(ctx)
+}
+
+func (w *resultChunkWriter) flush(ctx context.Context) error {
+	if len(w.chunk) == 0 {
+		return nil
+	}
+	if err := w.store.store.put(ctx, nsResults, resultChunkKey(w.id, w.stored), w.chunk); err != nil {
+		return err
+	}
+	w.stored++
+	clear(w.chunk)
+	w.chunk = w.chunk[:0]
+	return nil
+}
+
+// close stores the last chunk, then res as the result's header, which makes
+// the result readable.
+func (w *resultChunkWriter) close(ctx context.Context, res *queryResult) error {
+	if err := w.flush(ctx); err != nil {
+		return err
+	}
+	res.RowCount = w.rows
+	return w.store.store.put(ctx, nsResults, w.id, res)
+}
+
+// discard deletes the chunks stored so far of a result that is not kept.
+func (w *resultChunkWriter) discard(ctx context.Context) error {
+	if w.stored == 0 {
+		return nil
+	}
+	return w.store.deleteRows(ctx, w.id)
 }

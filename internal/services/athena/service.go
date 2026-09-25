@@ -84,15 +84,15 @@ func New(cfg *config.Config, st state.Store, logger *zap.Logger, clk clock.Clock
 		instances := serviceutil.NewAnchoredInstanceDomain(st, nsInstance, serviceutil.DataDirAnchor(cfg.DataDir))
 		s.engine = newEngineManager(cfg, log, clk, instances)
 	}
-	s.statements = &statementExecutor{route: s.runnerFor, results: resultStore{s.store}, clk: clk, log: log}
+	s.statements = &statementExecutor{route: s.runnerFor, results: resultStore{s.store}, maxResultBytes: cfg.AthenaMaxResultBytes, clk: clk, log: log}
 	s.executor = s.statements
 	s.typedOp = s.typedOps()
 	return s
 }
 
-// InitS3Access wires the in-process S3 accessor: query results are written
+// InitS3Access wires the in-process S3 accessor: query results are streamed
 // through put, and MSCK REPAIR TABLE lists a table's partitions through list.
-func (s *Service) InitS3Access(put events.S3PutObjectFunc, list events.S3ListObjectsFunc) {
+func (s *Service) InitS3Access(put events.S3PutObjectStreamFunc, list events.S3ListObjectsFunc) {
 	s.statements.output = &resultWriter{put: put}
 	s.listObjects = list
 }

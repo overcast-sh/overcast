@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -45,6 +46,7 @@ func TestAthenaEngine(t *testing.T) {
 	}{
 		{"first query starts the engine", (*env).testColdStart},
 		{"CSV table", (*env).testCSVTable},
+		{"large result", (*env).testLargeResult},
 		{"CTAS writes a Parquet table", (*env).testCTASParquet},
 		{"partitions", (*env).testPartitions},
 		{"Iceberg INSERT and MERGE", (*env).testIceberg},
@@ -109,6 +111,31 @@ func (e *env) testCSVTable() {
 	csv := e.get(strings.TrimPrefix(aws.ToString(qe.ResultConfiguration.OutputLocation), "s3://athena-engine-results/"), "athena-engine-results")
 	if want := "\"id\",\"name\"\n\"1\",\"alice\"\n\"2\",\"bob, jr\"\n\"3\",\"carol\"\n"; csv != want {
 		t.Fatalf("result object = %q, want %q", csv, want)
+	}
+}
+
+// testLargeResult reads a result the engine returns over many pages: every
+// row reaches both the result object and the result GetQueryResults pages.
+func (e *env) testLargeResult() {
+	t := e.t
+	const rows = 200_000
+	id := e.mustQuery(`SELECT a.n * 1000 + b.n AS n, 'row "' || CAST(a.n * 1000 + b.n AS varchar) || '"' AS label
+		FROM UNNEST(sequence(0, 199)) a(n) CROSS JOIN UNNEST(sequence(0, 999)) b(n)`)
+
+	location := aws.ToString(e.execution(id).ResultConfiguration.OutputLocation)
+	csv := e.get(strings.TrimPrefix(location, "s3://athena-engine-results/"), "athena-engine-results")
+	if lines := strings.Count(csv, "\n"); lines != rows+1 || !strings.HasPrefix(csv, "\"n\",\"label\"\n") ||
+		!strings.Contains(csv, "\n\"123456\",\"row \"\"123456\"\"\"\n") {
+		t.Fatalf("result object has %d lines and starts %.40q, want the header and %d rows", lines, csv, rows)
+	}
+	last := e.results(id, 0, strconv.Itoa(rows))
+	if got := rowsOf(last); len(got) != 1 || last.NextToken != nil {
+		t.Fatalf("last page = %v (next %q), want the one row left", got, aws.ToString(last.NextToken))
+	}
+	stats := must[*athena.GetQueryRuntimeStatisticsOutput](t, "GetQueryRuntimeStatistics")(e.athena.GetQueryRuntimeStatistics(e.ctx,
+		&athena.GetQueryRuntimeStatisticsInput{QueryExecutionId: aws.String(id)}))
+	if r := stats.QueryRuntimeStatistics.Rows; r == nil || aws.ToInt64(r.OutputRows) != rows {
+		t.Fatalf("runtime rows = %+v, want %d output rows", r, rows)
 	}
 }
 

@@ -197,7 +197,7 @@ func (h *Handler) PutObject(w http.ResponseWriter, r *http.Request) {
 // while computing the MD5 ETag in one pass (the body is never fully
 // buffered), records the version, and publishes the ObjectCreated:Put event
 // the bucket's notifications are delivered from. The HTTP handler and the
-// in-process Service.PutObjectBytes both call it, so an internal write is
+// in-process Service.PutObjectStream both call it, so an internal write is
 // indistinguishable from a client's.
 func (h *Handler) writeObject(ctx context.Context, b *Bucket, obj *Object, body io.Reader) (string, *protocol.AWSError) {
 	stamp, aerr := h.beginVersion(ctx, b, obj, obj.LastModified)

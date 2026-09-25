@@ -212,6 +212,35 @@ func TestLoad_lambdaMaxMemoryMB(t *testing.T) {
 	}
 }
 
+func TestLoad_athenaMaxResultBytes(t *testing.T) {
+	for raw, want := range map[string]int64{"": config.DefaultAthenaMaxResultBytes, "512m": 512 << 20, "1000": 1000} {
+		t.Run("value "+raw, func(t *testing.T) {
+			// Given: ATHENA_MAX_RESULT_BYTES unset, or set to a size
+			clearEnv(t)
+			t.Setenv("ATHENA_MAX_RESULT_BYTES", raw)
+
+			// When: we load config
+			cfg, err := config.Load()
+
+			// Then: the cap is that size, or 1 GiB by default
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if cfg.AthenaMaxResultBytes != want {
+				t.Fatalf("AthenaMaxResultBytes = %d, want %d", cfg.AthenaMaxResultBytes, want)
+			}
+		})
+	}
+
+	t.Run("rejects a value that is not a size, naming the variable", func(t *testing.T) {
+		clearEnv(t)
+		t.Setenv("ATHENA_MAX_RESULT_BYTES", "lots")
+		if _, err := config.Load(); err == nil || !strings.Contains(err.Error(), "ATHENA_MAX_RESULT_BYTES") {
+			t.Fatalf("Load: %v, want an error naming ATHENA_MAX_RESULT_BYTES", err)
+		}
+	})
+}
+
 func TestLoad_lambdaSeedRuntimeImages(t *testing.T) {
 	// Given: LAMBDA_SEED_RUNTIME_IMAGES is enabled.
 	clearEnv(t)

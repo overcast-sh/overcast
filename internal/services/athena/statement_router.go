@@ -123,7 +123,7 @@ type ddlRunner struct {
 	env  ddlEnv
 }
 
-func (r ddlRunner) run(ctx context.Context, _ func()) (*queryResult, *queryFailure) {
+func (r ddlRunner) run(ctx context.Context, _ func(), _ rowSink) (*queryResult, *queryFailure) {
 	if r.env.catalog == nil || r.env.writer == nil {
 		return nil, catalogFailure(protocol.Wrap(protocol.ErrInternalError, errCatalogNotWired))
 	}
@@ -136,13 +136,17 @@ func (ddlRunner) background() bool { return false }
 // nothing and returned no rows.
 type inertRunner struct{}
 
-func (inertRunner) run(context.Context, func()) (*queryResult, *queryFailure) { return nil, nil }
+func (inertRunner) run(context.Context, func(), rowSink) (*queryResult, *queryFailure) {
+	return nil, nil
+}
 
 func (inertRunner) background() bool { return false }
 
 // failedRunner is a statement that fails before it runs.
 type failedRunner struct{ fail *queryFailure }
 
-func (r failedRunner) run(context.Context, func()) (*queryResult, *queryFailure) { return nil, r.fail }
+func (r failedRunner) run(context.Context, func(), rowSink) (*queryResult, *queryFailure) {
+	return nil, r.fail
+}
 
 func (failedRunner) background() bool { return false }

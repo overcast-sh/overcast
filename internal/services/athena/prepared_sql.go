@@ -57,7 +57,7 @@ func (s *Service) preparedRunnerFor(qe QueryExecution) (queryRunner, bool) {
 // run saves or deletes the statement. A statement's name is unique in its
 // workgroup, so PREPARE of a name that exists fails, as
 // CreatePreparedStatement does.
-func (r preparedRunner) run(ctx context.Context, _ func()) (*queryResult, *queryFailure) {
+func (r preparedRunner) run(ctx context.Context, _ func(), _ rowSink) (*queryResult, *queryFailure) {
 	var aerr *protocol.AWSError
 	if r.deallocate {
 		_, aerr = r.s.deletePreparedStatementTyped(ctx, &preparedStatementNameReq{StatementName: r.name, WorkGroup: r.workGroup})

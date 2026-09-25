@@ -9,7 +9,9 @@ package s3
 import (
 	"context"
 	"crypto/md5"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -27,10 +29,11 @@ import (
 // The accessor's methods are what router.go hands to consuming services, so
 // their signatures must stay assignable to the shared func types.
 var (
-	_ events.S3PutObjectFunc    = (*Service)(nil).PutObjectBytes
-	_ events.S3ListObjectsFunc  = (*Service)(nil).ListObjects
-	_ events.S3EnsureBucketFunc = (*Service)(nil).EnsureBucket
-	_ events.S3EnsureBucketFunc = (*Service)(nil).EnsureTableWarehouseBucket
+	_ events.S3PutObjectFunc       = (*Service)(nil).PutObjectBytes
+	_ events.S3PutObjectStreamFunc = (*Service)(nil).PutObjectStream
+	_ events.S3ListObjectsFunc     = (*Service)(nil).ListObjects
+	_ events.S3EnsureBucketFunc    = (*Service)(nil).EnsureBucket
+	_ events.S3EnsureBucketFunc    = (*Service)(nil).EnsureTableWarehouseBucket
 )
 
 // ---- Fixtures --------------------------------------------------------------
@@ -293,6 +296,74 @@ func TestPutObjectBytes_firesNotification(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("no notification delivered for PutObjectBytes")
+	}
+}
+
+// ---- PutObjectStream -------------------------------------------------------
+
+// createdEvents counts the ObjectCreated events the bus has seen.
+func (f *inProcessFixture) createdEvents() int {
+	history, cancel := f.bus.SnapshotAndSubscribeAll(func(context.Context, events.Event) {})
+	cancel()
+	n := 0
+	for _, e := range history {
+		if e.Type == events.S3ObjectCreated {
+			n++
+		}
+	}
+	return n
+}
+
+func TestPutObjectStream_storesTheBodyAsItIsWritten(t *testing.T) {
+	// Given: a bucket, and a body its writer produces in pieces
+	f := newInProcessFixture(t)
+	f.ensureBucket(t, "results")
+	pr, pw := io.Pipe()
+	go func() {
+		for _, piece := range []string{"a,b\n", "1,2\n", "3,4\n"} {
+			_, _ = io.WriteString(pw, piece)
+		}
+		pw.Close()
+	}()
+
+	// When: it is streamed to a key
+	res, aerr := f.svc.PutObjectStream(context.Background(), "results", "q/1.csv", pr, events.S3PutObjectOptions{ContentType: "text/csv"})
+
+	// Then: the whole body is stored, with its ETag, and announced once
+	if aerr != nil {
+		t.Fatalf("put: %v", aerr)
+	}
+	const want = "a,b\n1,2\n3,4\n"
+	if got := f.read(t, "results", "q/1.csv", ""); got != want || res.ETag != md5ETag(want) {
+		t.Errorf("body = %q, ETag = %s", got, res.ETag)
+	}
+	if n := f.createdEvents(); n != 1 {
+		t.Errorf("ObjectCreated events = %d, want 1", n)
+	}
+}
+
+func TestPutObjectStream_failedReadStoresNothing(t *testing.T) {
+	// Given: a body whose writer gives up part way
+	f := newInProcessFixture(t)
+	f.ensureBucket(t, "results")
+	pr, pw := io.Pipe()
+	go func() {
+		_, _ = io.WriteString(pw, "a,b\n")
+		pw.CloseWithError(errors.New("query failed"))
+	}()
+
+	// When: it is streamed to a key
+	_, aerr := f.svc.PutObjectStream(context.Background(), "results", "q/1.csv", pr, events.S3PutObjectOptions{})
+
+	// Then: the write fails, the key does not exist and nothing was announced
+	if aerr == nil {
+		t.Fatal("put succeeded")
+	}
+	if _, aerr := f.svc.GetObjectBytes(context.Background(), "results", "q/1.csv", ""); aerr == nil || aerr.Code != "NoSuchKey" {
+		t.Errorf("GetObject after a failed stream = %v, want NoSuchKey", aerr)
+	}
+	if n := f.createdEvents(); n != 0 {
+		t.Errorf("ObjectCreated events = %d, want none", n)
 	}
 }
 

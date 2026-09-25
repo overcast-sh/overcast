@@ -81,9 +81,12 @@ statements Athena added to Trino.
 | Managed query results | Kept in Athena-owned storage | Readable through `GetQueryResults` only |
 | Queries across a restart | Carry on | A query still running when Overcast stops, or left running by a crash, is `FAILED` |
 | Other GLUE catalogs | Read their account's catalog | Every query reads this account's `AwsDataCatalog` |
+| Result size | Written in full | Up to 1 GiB of values; raise it with `ATHENA_MAX_RESULT_BYTES` |
 
-A large result is held in memory while it is written, so a query returning
-millions of rows costs Overcast that much memory.
+A result over the limit fails its query with `ErrorCategory` 2 and
+`ErrorType` 0, and nothing of it is kept. The limit takes a size such as
+`4g`. The result `GetQueryResults` reads lives with the rest of Overcast's
+state, in memory unless state is persisted.
 
 ## Credentials
 

@@ -644,7 +644,7 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	athenaSvc.InitGlueCatalog(glueSvc.Catalog(), glueSvc.CatalogWriter())
 	// Athena → S3: query results are written to their OutputLocation, and
 	// MSCK REPAIR TABLE lists a table's partitions, through S3's own paths.
-	athenaSvc.InitS3Access(s3Svc.PutObjectBytes, s3Svc.ListObjects)
+	athenaSvc.InitS3Access(s3Svc.PutObjectStream, s3Svc.ListObjects)
 	// Lambda → CloudWatch Logs: wire log writer so Lambda can write invocation logs.
 	lambdaSvc.InitLogWriter(logsSvc.LogWriter())
 	// Lambda bus: lifecycle events for topology / UI.

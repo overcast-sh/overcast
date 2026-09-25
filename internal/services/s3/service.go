@@ -170,12 +170,21 @@ func (s *Service) resolveObjectForRead(ctx context.Context, bucket, key, version
 }
 
 // PutObjectBytes stores body at bucket/key for internal callers such as
-// Athena's query-result writer. It goes through PutObject's own write path —
-// versioning, the MD5 ETag, and the bucket's event notifications (SQS, SNS,
-// Lambda, EventBridge) fire exactly as for an HTTP PutObject — and returns
-// the errors PutObject would (NoSuchBucket above all). Satisfies
-// events.S3PutObjectFunc.
+// S3 Tables' metadata writer. It is PutObjectStream over the whole body.
+// Satisfies events.S3PutObjectFunc.
 func (s *Service) PutObjectBytes(ctx context.Context, bucket, key string, body []byte, opts events.S3PutObjectOptions) (events.S3PutObjectResult, *protocol.AWSError) {
+	return s.PutObjectStream(ctx, bucket, key, bytes.NewReader(body), opts)
+}
+
+// PutObjectStream stores what body yields at bucket/key for internal callers
+// such as Athena's query-result writer, which writes a result as the engine
+// produces it. It goes through PutObject's own write path — versioning, the
+// MD5 ETag, and the bucket's event notifications (SQS, SNS, Lambda,
+// EventBridge) fire exactly as for an HTTP PutObject — and returns the errors
+// PutObject would (NoSuchBucket above all), before reading any of body. A
+// read that fails ends the write as an interrupted upload does, with no
+// notification. Satisfies events.S3PutObjectStreamFunc.
+func (s *Service) PutObjectStream(ctx context.Context, bucket, key string, body io.Reader, opts events.S3PutObjectOptions) (events.S3PutObjectResult, *protocol.AWSError) {
 	h := s.handler
 	b, aerr := h.store.getBucket(ctx, bucket)
 	if aerr != nil {
@@ -204,7 +213,7 @@ func (s *Service) PutObjectBytes(ctx context.Context, bucket, key string, body [
 		Metadata:     meta,
 	}
 
-	etag, aerr := h.writeObject(ctx, b, obj, bytes.NewReader(body))
+	etag, aerr := h.writeObject(ctx, b, obj, body)
 	if aerr != nil {
 		return events.S3PutObjectResult{}, aerr
 	}

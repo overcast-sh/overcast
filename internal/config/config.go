@@ -289,6 +289,10 @@ const DefaultAthenaEngineImage = "trinodb/trino:483@sha256:db58cc93e593a27065537
 // plus the JVM's own overhead.
 const DefaultAthenaEngineMemory = 1 << 30
 
+// DefaultAthenaMaxResultBytes is the largest query result Athena keeps: a
+// query whose rows pass it fails rather than growing without bound.
+const DefaultAthenaMaxResultBytes = 1 << 30
+
 // Default ports of the two auxiliary listeners that bind beside the AWS API.
 // Both fall back to an ephemeral port when the default is busy and are pinned
 // at any other value — the rule the web console's port already follows — so
@@ -1066,6 +1070,11 @@ type Config struct {
 	// stopped, for post-mortem inspection. Corresponds to
 	// ATHENA_KEEP_CONTAINERS.
 	AthenaKeepContainers bool
+
+	// AthenaMaxResultBytes caps the size of a query's result, as the total
+	// length of its values. Corresponds to ATHENA_MAX_RESULT_BYTES, which
+	// accepts a size such as 1g or 512m.
+	AthenaMaxResultBytes int64
 
 	// EC2VPCNetworkStrategy selects the policy used to map stored VPCs onto
 	// Docker networks. Docker bridges share one host address space, so two
@@ -2716,6 +2725,9 @@ func Load() (*Config, error) {
 	cfg.AthenaEngineMemory = athenaMemory
 	cfg.AthenaDockerSocket = envOr("ATHENA_DOCKER_SOCKET", cfg.LambdaDockerSocket)
 	cfg.AthenaKeepContainers = envBool("ATHENA_KEEP_CONTAINERS", false)
+	if cfg.AthenaMaxResultBytes, err = ParseMemorySize(envOr("ATHENA_MAX_RESULT_BYTES", ""), DefaultAthenaMaxResultBytes); err != nil {
+		return nil, fmt.Errorf("config: ATHENA_MAX_RESULT_BYTES: %w", err)
+	}
 
 	// EC2 VPC network strategy — unknown values fall back to "shared" at
 	// service construction with a logged warning. "netns" is explicitly
