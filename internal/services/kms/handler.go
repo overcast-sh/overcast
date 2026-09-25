@@ -99,40 +99,61 @@ func (h *Handler) initOps() {
 
 // ── Key wire type ─────────────────────────────────────────────────────────────
 
+// keyMetadataWire is the KeyMetadata structure of CreateKey and DescribeKey.
+// Per the API Reference (https://docs.aws.amazon.com/kms/latest/APIReference/API_KeyMetadata.html)
+// it carries AWSAccountId, "the twelve-digit account ID of the AWS account
+// that owns the KMS key", and the deprecated CustomerMasterKeySpec, of which
+// "the KeySpec and CustomerMasterKeySpec fields have the same value" (#1906).
 type keyMetadataWire struct {
-	KeyId               string    `json:"KeyId" cbor:"KeyId"`
-	Arn                 string    `json:"Arn" cbor:"Arn"`
-	Description         string    `json:"Description" cbor:"Description"`
-	KeySpec             string    `json:"KeySpec" cbor:"KeySpec"`
-	KeyUsage            string    `json:"KeyUsage" cbor:"KeyUsage"`
-	Enabled             bool      `json:"Enabled" cbor:"Enabled"`
-	KeyState            string    `json:"KeyState" cbor:"KeyState"`
-	CreationDate        float64   `json:"CreationDate" cbor:"CreationDate"`
-	DeletionDate        float64   `json:"DeletionDate,omitempty" cbor:"DeletionDate,omitempty"`
-	KeyManager          string    `json:"KeyManager" cbor:"KeyManager"`
-	Origin              string    `json:"Origin" cbor:"Origin"`
-	MultiRegion         bool      `json:"MultiRegion" cbor:"MultiRegion"`
-	XksKeyConfiguration *struct{} `json:"XksKeyConfiguration,omitempty" cbor:"XksKeyConfiguration,omitempty"`
+	AWSAccountId          string    `json:"AWSAccountId" cbor:"AWSAccountId"`
+	KeyId                 string    `json:"KeyId" cbor:"KeyId"`
+	Arn                   string    `json:"Arn" cbor:"Arn"`
+	Description           string    `json:"Description" cbor:"Description"`
+	CustomerMasterKeySpec string    `json:"CustomerMasterKeySpec" cbor:"CustomerMasterKeySpec"`
+	KeySpec               string    `json:"KeySpec" cbor:"KeySpec"`
+	KeyUsage              string    `json:"KeyUsage" cbor:"KeyUsage"`
+	Enabled               bool      `json:"Enabled" cbor:"Enabled"`
+	KeyState              string    `json:"KeyState" cbor:"KeyState"`
+	CreationDate          float64   `json:"CreationDate" cbor:"CreationDate"`
+	DeletionDate          float64   `json:"DeletionDate,omitempty" cbor:"DeletionDate,omitempty"`
+	KeyManager            string    `json:"KeyManager" cbor:"KeyManager"`
+	Origin                string    `json:"Origin" cbor:"Origin"`
+	MultiRegion           bool      `json:"MultiRegion" cbor:"MultiRegion"`
+	XksKeyConfiguration   *struct{} `json:"XksKeyConfiguration,omitempty" cbor:"XksKeyConfiguration,omitempty"`
 }
 
 func (h *Handler) toMeta(k *Key) keyMetadataWire {
 	m := keyMetadataWire{
-		KeyId:        k.KeyID,
-		Arn:          k.ARN,
-		Description:  k.Description,
-		KeySpec:      k.KeySpec,
-		KeyUsage:     k.KeyUsage,
-		Enabled:      k.Enabled,
-		KeyState:     k.KeyState,
-		CreationDate: float64(k.CreatedAt.UnixMilli()) / 1000.0,
-		KeyManager:   "CUSTOMER",
-		Origin:       "AWS_KMS",
-		MultiRegion:  false,
+		AWSAccountId:          h.keyAccountID(k),
+		KeyId:                 k.KeyID,
+		Arn:                   k.ARN,
+		Description:           k.Description,
+		CustomerMasterKeySpec: k.KeySpec,
+		KeySpec:               k.KeySpec,
+		KeyUsage:              k.KeyUsage,
+		Enabled:               k.Enabled,
+		KeyState:              k.KeyState,
+		CreationDate:          float64(k.CreatedAt.UnixMilli()) / 1000.0,
+		KeyManager:            "CUSTOMER",
+		Origin:                "AWS_KMS",
+		MultiRegion:           false,
 	}
 	if k.DeletionDate != nil {
 		m.DeletionDate = float64(k.DeletionDate.UnixMilli()) / 1000.0
 	}
 	return m
+}
+
+// keyAccountID returns the account that owns k: the account segment of its
+// ARN, so AWSAccountId always agrees with the Arn beside it — including for a
+// key persisted before the configured account changed. A key whose ARN has no
+// account segment falls back to the configured account.
+func (h *Handler) keyAccountID(k *Key) string {
+	// arn:aws:kms:<region>:<account>:key/<id>
+	if parts := strings.SplitN(k.ARN, ":", 6); len(parts) == 6 && parts[4] != "" {
+		return parts[4]
+	}
+	return h.cfg.AccountID
 }
 
 // ── Handlers ─────────────────────────────────────────────────────────────────
