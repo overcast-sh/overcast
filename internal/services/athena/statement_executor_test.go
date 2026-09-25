@@ -7,13 +7,14 @@ import (
 	"time"
 )
 
-// funcRunner is a queryRunner a test writes inline.
+// funcRunner is a queryRunner a test writes inline, returning its rows
+// rather than streaming them.
 type funcRunner struct {
 	fn    func(ctx context.Context, running func()) (*queryResult, *queryFailure)
 	async bool
 }
 
-func (r funcRunner) run(ctx context.Context, running func()) (*queryResult, *queryFailure) {
+func (r funcRunner) run(ctx context.Context, running func(), _ rowSink) (*queryResult, *queryFailure) {
 	return r.fn(ctx, running)
 }
 
@@ -203,5 +204,26 @@ func TestReapInterrupted_failsWhatAPreviousProcessLeftRunning(t *testing.T) {
 		if qe.Status.State != want || (want == stateFailed && qe.Status.StateChangeReason != restartReason) {
 			t.Errorf("%s: status = %+v", id, qe.Status)
 		}
+	}
+}
+
+func TestReapInterrupted_deletesTheRowsAnInterruptedQueryStored(t *testing.T) {
+	// Given: a query a previous process left RUNNING, with a chunk of its
+	// rows stored and no header, as a crash mid-query leaves it
+	ctx := context.Background()
+	s, _ := newTestService(t)
+	if err := s.store.putQuery(ctx, &QueryExecution{QueryExecutionId: "running", Status: QueryExecutionStatus{State: stateRunning}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.store.put(ctx, nsResults, resultChunkKey("running", 0), [][]*string{textRow("n")}); err != nil {
+		t.Fatal(err)
+	}
+
+	// When: this process first reads its queries
+	queryState(t, s, "running")
+
+	// Then: the rows are gone
+	if keys, err := s.store.store.List(ctx, nsResults, ""); err != nil || len(keys) != 0 {
+		t.Fatalf("stored result keys = %v, %v", keys, err)
 	}
 }

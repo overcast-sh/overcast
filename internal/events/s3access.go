@@ -2,6 +2,7 @@ package events
 
 import (
 	"context"
+	"io"
 	"time"
 
 	"github.com/overcast-sh/overcast/internal/protocol"
@@ -61,6 +62,13 @@ type S3ObjectListPage struct {
 // versioning, the ETag and the bucket's event notifications all behave as
 // they do for an HTTP write.
 type S3PutObjectFunc func(ctx context.Context, bucket, key string, body []byte, opts S3PutObjectOptions) (S3PutObjectResult, *protocol.AWSError)
+
+// S3PutObjectStreamFunc is S3PutObjectFunc for a body the caller produces as
+// it is written, so it is never held in memory whole. The object is stored,
+// and its notification sent, once body reports io.EOF. A read that fails ends
+// the write the way an interrupted upload ends one, with no notification; a
+// key that did not exist is still absent.
+type S3PutObjectStreamFunc func(ctx context.Context, bucket, key string, body io.Reader, opts S3PutObjectOptions) (S3PutObjectResult, *protocol.AWSError)
 
 // S3ListObjectsFunc lists the keys under prefix one page at a time, as
 // ListObjectsV2 does without a delimiter. maxKeys <= 0 means ListObjectsV2's

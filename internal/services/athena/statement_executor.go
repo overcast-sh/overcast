@@ -22,7 +22,9 @@ import (
 type queryRunner interface {
 	// run executes the statement, calling running once it starts executing
 	// rather than waiting. A runner that finishes at once need not call it.
-	run(ctx context.Context, running func()) (*queryResult, *queryFailure)
+	// Rows go to out as the statement produces them, or, for a result
+	// Overcast makes itself, in the result's Rows.
+	run(ctx context.Context, running func(), out rowSink) (*queryResult, *queryFailure)
 	// background reports whether the statement runs on a goroutine of its
 	// own rather than before Submit returns: true for the query engine,
 	// whose queries take as long as they take.
@@ -66,8 +68,11 @@ type statementExecutor struct {
 	route   func(ctx context.Context, qe QueryExecution) queryRunner
 	results resultStore
 	output  *resultWriter // nil until S3 is wired: results are not written
-	clk     clock.Clock
-	log     *serviceutil.ServiceLogger
+	// maxResultBytes is ATHENA_MAX_RESULT_BYTES; 0, which only a Config
+	// built in a test holds, is no limit.
+	maxResultBytes int64
+	clk            clock.Clock
+	log            *serviceutil.ServiceLogger
 
 	mu       sync.Mutex
 	running  map[string]context.CancelCauseFunc
@@ -125,19 +130,21 @@ func (e *statementExecutor) untrack(id string) {
 func (e *statementExecutor) execute(ctx context.Context, qe QueryExecution, r queryRunner, report transitionReporter) {
 	id := qe.QueryExecutionId
 	reportCtx := context.WithoutCancel(ctx)
+	out := e.stream(reportCtx, qe)
 	started := e.clk.Now()
-	res, fail := r.run(ctx, func() { report(reportCtx, id, queryTransition{State: stateRunning}) })
+	res, fail := r.run(ctx, func() { report(reportCtx, id, queryTransition{State: stateRunning}) }, out)
 	finished := e.clk.Now()
 	switch {
 	case fail == nil && ctx.Err() != nil:
 		// Stopped as it finished: a cancelled query keeps no result.
 		fail = &queryFailure{State: stateCancelled, Reason: "Query was cancelled."}
 	case fail == nil && res != nil: // the inert engine produces nothing to keep
-		fail = e.keep(reportCtx, qe, res)
+		fail = keep(res, out)
 		if fail == nil && ctx.Err() != nil { // cancelled while it was kept
 			e.forget(reportCtx, id)
 		}
 	}
+	out.abort()
 	if fail == nil {
 		report(reportCtx, id, queryTransition{State: stateSucceeded, Statistics: executionStatistics(res, started, finished, e.clk.Now())})
 		return
@@ -150,28 +157,32 @@ func (e *statementExecutor) execute(ctx context.Context, qe QueryExecution, r qu
 	report(reportCtx, id, t)
 }
 
-// keep writes a result to the query's OutputLocation, then stores it for
-// GetQueryResults; a result that could not be written is not kept.
-func (e *statementExecutor) keep(ctx context.Context, qe QueryExecution, res *queryResult) *queryFailure {
+// stream is where qe's rows go: its stored result, and its OutputLocation
+// when there is one to write to.
+func (e *statementExecutor) stream(ctx context.Context, qe QueryExecution) *resultStream {
+	s := &resultStream{ctx: ctx, id: qe.QueryExecutionId, chunks: e.results.writer(qe.QueryExecutionId), limit: e.maxResultBytes, log: e.log}
 	if location := qe.ResultConfiguration.OutputLocation; location != "" && e.output != nil {
-		if aerr := e.output.write(ctx, location, res); aerr != nil {
-			category, errorType := errorCategorySystem, errorTypeWriteResults
-			if aerr.Code == "NoSuchBucket" {
-				category, errorType = errorCategoryUser, errorTypeBucketNotFound
-			}
-			return failure(category, errorType, "Unable to write query results to "+location+": "+aerr.Code+": "+aerr.Message)
+		s.output, s.location = e.output, location
+	}
+	return s
+}
+
+// keep writes out the rows a statement returned rather than streamed, then
+// commits its result.
+func keep(res *queryResult, out *resultStream) *queryFailure {
+	for _, row := range res.Rows {
+		if fail := out.add(row); fail != nil {
+			return fail
 		}
 	}
-	if err := e.results.put(ctx, qe.QueryExecutionId, res); err != nil {
-		e.log.WithRecorder(ctx).Error("query result not stored", zap.String("queryExecutionId", qe.QueryExecutionId), zap.Error(err))
-		return failure(errorCategorySystem, errorTypeInternal, "Overcast could not store the query result.")
-	}
-	return nil
+	res.Rows = nil
+	return out.commit(res)
 }
 
 // executionStatistics fills QueryExecutionStatistics: what the engine said
-// about queueing, planning and scanning, and the wall clock around it.
-// Result writing is the service's processing time.
+// about queueing, planning and scanning, and the wall clock around it. Rows
+// are written as the engine returns them, so their writing is engine time;
+// committing the result is the service's processing time.
 func executionStatistics(res *queryResult, started, finished, written time.Time) *QueryExecutionStatistics {
 	stats := &QueryExecutionStatistics{
 		ResultReuseInformation:        &ResultReuseInformation{},

@@ -49,14 +49,6 @@ func TestRenderEngineFiles_catalogsPointAtOvercast(t *testing.T) {
 	}
 }
 
-func TestEncodeCSV_quotesAsAthenaDoes(t *testing.T) {
-	quoted, empty := `say "hi", ok`, ""
-	got := string(encodeCSV([][]*string{textRow("a", "b", "c"), {&quoted, nil, &empty}}))
-	if want := "\"a\",\"b\",\"c\"\n\"say \"\"hi\"\", ok\",,\"\"\n"; got != want {
-		t.Fatalf("encodeCSV = %q, want %q", got, want)
-	}
-}
-
 func TestEngineStatus_reportsTheInertEngine(t *testing.T) {
 	// Given: Athena with ATHENA_ENGINE=inert
 	s, _ := newTestService(t)

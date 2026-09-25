@@ -144,6 +144,7 @@ explaining.
 | `ATHENA_ENGINE_MEMORY`           | `1g`                   | Memory limit for the Athena engine container, at least `1g`; bytes or a `k`, `m` or `g` suffix |
 | `ATHENA_DOCKER_SOCKET`           | _(Lambda socket)_      | Docker endpoint for the Athena engine — Unix path or `tcp://host:port`               |
 | `ATHENA_KEEP_CONTAINERS`         | `false`                | Keep the stopped Athena engine container after it stops                              |
+| `ATHENA_MAX_RESULT_BYTES`        | `1g`                   | Largest Athena query result, by the length of its values; bytes or a `k`, `m` or `g` suffix |
 | `OVERCAST_ECR_REGISTRY_PORT`     | `4510`                 | Host port the shared ECR registry container asks for; `0`, or a port already taken, falls back to an ephemeral port |
 | `OVERCAST_ECR_REGISTRY_PERSIST`  | `true`                 | Back the fixed-port registry with a named Docker volume, so pushed images survive a restart |
 | `OVERCAST_SMTP_MOCK`             | `true`                 | Enable built-in SMTP capture server (auto-disabled when `OVERCAST_SMTP_HOST` is set) |

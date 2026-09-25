@@ -2,6 +2,7 @@ package athena
 
 import (
 	"context"
+	"io"
 	"sort"
 	"strings"
 	"sync"
@@ -25,13 +26,17 @@ type fakeS3 struct {
 	objects map[string]string // "bucket/key" → body
 }
 
-func (f *fakeS3) put(_ context.Context, bucket, key string, body []byte, _ events.S3PutObjectOptions) (events.S3PutObjectResult, *protocol.AWSError) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
+func (f *fakeS3) put(_ context.Context, bucket, key string, body io.Reader, _ events.S3PutObjectOptions) (events.S3PutObjectResult, *protocol.AWSError) {
 	if bucket == "missing" {
 		return events.S3PutObjectResult{}, &protocol.AWSError{Code: "NoSuchBucket", Message: "The specified bucket does not exist"}
 	}
-	f.objects[bucket+"/"+key] = string(body)
+	b, err := io.ReadAll(body)
+	if err != nil { // the writer gave up: nothing is stored
+		return events.S3PutObjectResult{}, protocol.Wrap(protocol.ErrInternalError, err)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.objects[bucket+"/"+key] = string(b)
 	return events.S3PutObjectResult{}, nil
 }
 
