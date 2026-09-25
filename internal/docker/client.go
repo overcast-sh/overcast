@@ -866,6 +866,7 @@ func (d *Client) CreateContainer(ctx context.Context, name string, req *CreateCo
 	if encoded := query.Encode(); encoded != "" {
 		path += "?" + encoded
 	}
+	req = withOwnerLabelsRequest(req)
 	var resp CreateContainerResponse
 	if err := d.doJSON(ctx, http.MethodPost, path, req, &resp); err != nil {
 		return "", fmt.Errorf("create container: %w", err)
@@ -1171,6 +1172,24 @@ func (d *Client) ListContainers(ctx context.Context, service string) ([]Containe
 		filterMap["label"] = append(filterMap["label"], LabelService+"="+service)
 	}
 	filterJSON, err := json.Marshal(filterMap)
+	if err != nil {
+		return nil, fmt.Errorf("list containers: marshal filters: %w", err)
+	}
+	path := "/v1.45/containers/json?all=true&filters=" + url.QueryEscape(string(filterJSON))
+	var containers []ContainerSummary
+	if err := d.doJSON(ctx, http.MethodGet, path, nil, &containers); err != nil {
+		return nil, fmt.Errorf("list containers: %w", err)
+	}
+	return containers, nil
+}
+
+// ListContainersWithLabel returns every container, running or stopped, that
+// carries the label key at all, whatever its value — and nothing else is
+// required of it. ListContainers cannot answer this: it also requires the
+// managed label, and a reaper looking for what a dead test process left behind
+// must not depend on every creator having set that.
+func (d *Client) ListContainersWithLabel(ctx context.Context, key string) ([]ContainerSummary, error) {
+	filterJSON, err := json.Marshal(map[string][]string{"label": {key}})
 	if err != nil {
 		return nil, fmt.Errorf("list containers: marshal filters: %w", err)
 	}

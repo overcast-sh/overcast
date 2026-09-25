@@ -172,6 +172,43 @@ hand-rolled one that assumed a Unix socket failed six tests there with `dial
 unix npipe://…`. Anything needing an Engine API call `docker.Client` does not
 implement takes that transport; never write a second dialer in test code.
 
+#### Containers a killed test binary leaves behind
+
+`t.Cleanup` removes the containers a test server starts: ECS tasks and their
+`internal.ecs.pause` containers, the ECR registry, Lambda functions. A binary
+that is killed never runs it. `go test -timeout` panics the process, and so
+does an interrupt. Its containers then keep running on a daemon that, on a
+developer machine, every session shares. Overcast's own startup sweep can't
+reclaim them either: it keys on `overcast.instance`, the server's data
+directory, and each test server's is a `t.TempDir` no later run sees again.
+
+So every container a test binary creates carries owner labels:
+`overcast.test.pid`, `overcast.test.host` and `overcast.test.started`.
+`tests/helpers` installs them in its `init` with `docker.SetOwnerLabels`,
+and the Docker client stamps them in `CreateContainer`. The first Docker-backed
+`NewTestServer` in each binary then removes every container whose owner is
+provably gone:
+- its PID no longer runs on this host, or
+- it started more than two hours ago, which catches a reused PID or an owner
+  on another host.
+
+This is `helpers.ReapOrphanedTestContainers`, the sidecar-free equivalent of
+testcontainers' Ryuk. Three rules keep it safe:
+
+- **Production never sets owner labels**, so the reaper can never touch a
+  container a user owns. A container without them is never reaped.
+- **Volumes are never owner-labelled.** Some are shared across processes on
+  purpose: the Lambda init volume, and a registry's data volume on its port.
+  An idle orphaned volume costs disk, not CPU.
+- **A live test's containers are never reaped**, including another concurrent
+  binary's on the same host. Liveness is checked per PID, and only against the
+  host that issued it.
+
+The emulator itself needs nothing extra. A graceful shutdown, including
+`overcast serve` on SIGINT or SIGTERM, runs ECS's `Stop` (drain and sweep) and
+removes the ECR registry. Only a process that can run no hook at all leaves
+orphans behind, and that is the case the reaper exists for.
+
 ---
 
 ## Build-tag-sensitive tests — guard the test like its subject
