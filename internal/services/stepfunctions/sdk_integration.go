@@ -260,16 +260,8 @@ func splitWordBoundaries(s string) []string {
 // do not offer), and static Parameters/Arguments naming a member the action
 // does not take. Anything valid that Overcast cannot run still provisions and
 // fails at run time, like every other gap.
-func validateSDKTask(state *aslState, loc string) error {
-	integration, serr := parseTaskResource(state.Resource)
-	if serr != nil {
-		return nil
-	}
-	service, ok := strings.CutPrefix(integration.service, "aws-sdk:")
-	if !ok {
-		return nil
-	}
-	notRecognised := invalidDefinitionf("%s: The resource provided %s is not recognized. The value is not a valid resource ARN, or the resource is not available in this region.", loc, state.Resource)
+func validateSDKTask(state *aslState, loc, service string, integration taskIntegration) error {
+	notRecognised := resourceNotRecognized(loc, state.Resource)
 	if integration.pattern != "" && integration.pattern != patternWaitForTaskToken {
 		return notRecognised
 	}
@@ -301,6 +293,12 @@ func validateSDKTask(state *aslState, loc string) error {
 		}
 	}
 	return nil
+}
+
+// resourceNotRecognized is AWS's CreateStateMachine refusal of a Task
+// Resource naming an integration it does not offer.
+func resourceNotRecognized(loc, resource string) error {
+	return invalidDefinitionf("%s: The resource provided %s is not recognized. The value is not a valid resource ARN, or the resource is not available in this region.", loc, resource)
 }
 
 // sdkMember finds the input member a PascalCase parameter names.

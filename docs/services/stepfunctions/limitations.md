@@ -18,9 +18,9 @@ listed is a bug.
 
 | Area                     | On AWS                                   | Overcast                                                                  |
 | ------------------------ | ---------------------------------------- | ------------------------------------------------------------------------- |
-| Optimized integrations   | About 200 services                       | Lambda, SQS `sendMessage`, SNS `publish`, DynamoDB item actions, EventBridge `putEvents`, Step Functions `startExecution` |
+| Optimized integrations   | About 200 services                       | Lambda, SQS `sendMessage`, SNS `publish`, DynamoDB item actions, EventBridge `putEvents`, all four Athena actions, Step Functions `startExecution` |
 | `aws-sdk:` integrations  | Every service and action                 | Every action of every service Overcast implements                        |
-| `.sync` pattern          | Many integrations                        | `states:startExecution` only                                              |
+| `.sync` pattern          | Many integrations                        | `states:startExecution` and `athena:startQueryExecution`                  |
 | `Credentials`            | Assumes the named role                   | Ignored: Overcast has one account                                         |
 
 An `aws-sdk:` Task reaches its service over the protocol that service speaks —
@@ -43,6 +43,14 @@ Where it still differs:
   state input of a Task with no `Parameters`; a static `Parameters` field is
   rejected when the state machine is created, as on AWS.
 - **An error's `Cause`** ends with the wire error code, which AWS leaves out.
+
+### Athena
+
+Overcast passes Athena's timestamps, such as `SubmissionDateTime`, through as
+the epoch seconds Athena's API returns. The format AWS gives them in a Task
+result has not been checked. `startQueryExecution.sync` checks its query once
+a second. With the [Athena](../athena.md) engine off, a query succeeds at once
+with no rows, so `.sync` returns straight away.
 
 ## Query languages
 
