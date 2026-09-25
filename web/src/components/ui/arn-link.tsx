@@ -52,7 +52,7 @@ import { endpointStore } from "@/services/endpoint-store"
 import { EMBEDDED_ARN_PATTERN, resolveArn, resolveService, type ResolvedRoute } from "./arn-routes"
 
 /** The design's link hover: accent at rest, the brighter accent-glow on hover. */
-const LINK_CLASS = "text-accent transition-colors hover:text-accent-hover hover:underline"
+export const LINK_CLASS = "text-accent transition-colors hover:text-accent-hover hover:underline"
 
 // ─── ArnText ─────────────────────────────────────────────────────────────────
 
