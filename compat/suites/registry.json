@@ -2690,6 +2690,7 @@
     {
       "service": "cognito",
       "name": "cognito-userpools",
+      "scenario": "compat/model/authored/cognito-userpools.json",
       "tests": [
         {
           "name": "CreateUserPool"

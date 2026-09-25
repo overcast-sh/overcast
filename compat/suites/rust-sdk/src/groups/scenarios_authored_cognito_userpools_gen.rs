@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/cognito-userpools.json";
 
-const GROUP_COGNITO_USERPOOLS_SHADOW: Group = Group {
-    name: "cognito-userpools-shadow",
+const GROUP_COGNITO_USERPOOLS: Group = Group {
+    name: "cognito-userpools",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredCognitoUserpools {
         {
             let client = self.client.clone();
             impls.insert(
-                "cognito-userpools-shadow:CreateUserPool".to_string(),
+                "cognito-userpools:CreateUserPool".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_COGNITO_USERPOOLS_SHADOW
-                            .run_test(&ctx, "CreateUserPool", test_cognito_userpools_shadow_create_user_pool(&client))
+                        GROUP_COGNITO_USERPOOLS
+                            .run_test(&ctx, "CreateUserPool", test_cognito_userpools_create_user_pool(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredCognitoUserpools {
         {
             let client = self.client.clone();
             impls.insert(
-                "cognito-userpools-shadow:DescribeUserPool".to_string(),
+                "cognito-userpools:DescribeUserPool".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_COGNITO_USERPOOLS_SHADOW
-                            .run_test(&ctx, "DescribeUserPool", test_cognito_userpools_shadow_describe_user_pool(&client))
+                        GROUP_COGNITO_USERPOOLS
+                            .run_test(&ctx, "DescribeUserPool", test_cognito_userpools_describe_user_pool(&client))
                             .await
                     })
                 }),
@@ -79,12 +79,12 @@ impl ServiceGroup for ScenariosAuthoredCognitoUserpools {
         {
             let client = self.client.clone();
             impls.insert(
-                "cognito-userpools-shadow:ListUserPools".to_string(),
+                "cognito-userpools:ListUserPools".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_COGNITO_USERPOOLS_SHADOW
-                            .run_test(&ctx, "ListUserPools", test_cognito_userpools_shadow_list_user_pools(&client))
+                        GROUP_COGNITO_USERPOOLS
+                            .run_test(&ctx, "ListUserPools", test_cognito_userpools_list_user_pools(&client))
                             .await
                     })
                 }),
@@ -93,12 +93,12 @@ impl ServiceGroup for ScenariosAuthoredCognitoUserpools {
         {
             let client = self.client.clone();
             impls.insert(
-                "cognito-userpools-shadow:CreateUserPoolClient".to_string(),
+                "cognito-userpools:CreateUserPoolClient".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_COGNITO_USERPOOLS_SHADOW
-                            .run_test(&ctx, "CreateUserPoolClient", test_cognito_userpools_shadow_create_user_pool_client(&client))
+                        GROUP_COGNITO_USERPOOLS
+                            .run_test(&ctx, "CreateUserPoolClient", test_cognito_userpools_create_user_pool_client(&client))
                             .await
                     })
                 }),
@@ -107,12 +107,12 @@ impl ServiceGroup for ScenariosAuthoredCognitoUserpools {
         {
             let client = self.client.clone();
             impls.insert(
-                "cognito-userpools-shadow:ListUserPoolClients".to_string(),
+                "cognito-userpools:ListUserPoolClients".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_COGNITO_USERPOOLS_SHADOW
-                            .run_test(&ctx, "ListUserPoolClients", test_cognito_userpools_shadow_list_user_pool_clients(&client))
+                        GROUP_COGNITO_USERPOOLS
+                            .run_test(&ctx, "ListUserPoolClients", test_cognito_userpools_list_user_pool_clients(&client))
                             .await
                     })
                 }),
@@ -121,12 +121,12 @@ impl ServiceGroup for ScenariosAuthoredCognitoUserpools {
         {
             let client = self.client.clone();
             impls.insert(
-                "cognito-userpools-shadow:AdminCreateUser".to_string(),
+                "cognito-userpools:AdminCreateUser".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_COGNITO_USERPOOLS_SHADOW
-                            .run_test(&ctx, "AdminCreateUser", test_cognito_userpools_shadow_admin_create_user(&client))
+                        GROUP_COGNITO_USERPOOLS
+                            .run_test(&ctx, "AdminCreateUser", test_cognito_userpools_admin_create_user(&client))
                             .await
                     })
                 }),
@@ -135,12 +135,12 @@ impl ServiceGroup for ScenariosAuthoredCognitoUserpools {
         {
             let client = self.client.clone();
             impls.insert(
-                "cognito-userpools-shadow:ListUsers".to_string(),
+                "cognito-userpools:ListUsers".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_COGNITO_USERPOOLS_SHADOW
-                            .run_test(&ctx, "ListUsers", test_cognito_userpools_shadow_list_users(&client))
+                        GROUP_COGNITO_USERPOOLS
+                            .run_test(&ctx, "ListUsers", test_cognito_userpools_list_users(&client))
                             .await
                     })
                 }),
@@ -149,12 +149,12 @@ impl ServiceGroup for ScenariosAuthoredCognitoUserpools {
         {
             let client = self.client.clone();
             impls.insert(
-                "cognito-userpools-shadow:AdminDeleteUser".to_string(),
+                "cognito-userpools:AdminDeleteUser".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_COGNITO_USERPOOLS_SHADOW
-                            .run_test(&ctx, "AdminDeleteUser", test_cognito_userpools_shadow_admin_delete_user(&client))
+                        GROUP_COGNITO_USERPOOLS
+                            .run_test(&ctx, "AdminDeleteUser", test_cognito_userpools_admin_delete_user(&client))
                             .await
                     })
                 }),
@@ -163,12 +163,12 @@ impl ServiceGroup for ScenariosAuthoredCognitoUserpools {
         {
             let client = self.client.clone();
             impls.insert(
-                "cognito-userpools-shadow:DeleteUserPool".to_string(),
+                "cognito-userpools:DeleteUserPool".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_COGNITO_USERPOOLS_SHADOW
-                            .run_test(&ctx, "DeleteUserPool", test_cognito_userpools_shadow_delete_user_pool(&client))
+                        GROUP_COGNITO_USERPOOLS
+                            .run_test(&ctx, "DeleteUserPool", test_cognito_userpools_delete_user_pool(&client))
                             .await
                     })
                 }),
@@ -182,11 +182,11 @@ impl ServiceGroup for ScenariosAuthoredCognitoUserpools {
         {
             let client = self.client.clone();
             setups.insert(
-                "cognito-userpools-shadow".to_string(),
+                "cognito-userpools".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_COGNITO_USERPOOLS_SHADOW.run_setup(&ctx, setup_cognito_userpools_shadow(&client)).await
+                        GROUP_COGNITO_USERPOOLS.run_setup(&ctx, setup_cognito_userpools(&client)).await
                     })
                 }),
             );
@@ -199,11 +199,11 @@ impl ServiceGroup for ScenariosAuthoredCognitoUserpools {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "cognito-userpools-shadow".to_string(),
+                "cognito-userpools".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_COGNITO_USERPOOLS_SHADOW.run_teardown(&ctx, teardown_cognito_userpools_shadow(&client)).await
+                        GROUP_COGNITO_USERPOOLS.run_teardown(&ctx, teardown_cognito_userpools(&client)).await
                     })
                 }),
             );
@@ -212,12 +212,12 @@ impl ServiceGroup for ScenariosAuthoredCognitoUserpools {
     }
 }
 
-fn setup_cognito_userpools_shadow(_client: &aws_sdk_cognitoidentityprovider::Client) -> Vec<Call> {
+fn setup_cognito_userpools(_client: &aws_sdk_cognitoidentityprovider::Client) -> Vec<Call> {
     // An empty phase is a no-op, not a missing one.
     Vec::new()
 }
 
-fn teardown_cognito_userpools_shadow(client: &aws_sdk_cognitoidentityprovider::Client) -> Vec<Call> {
+fn teardown_cognito_userpools(client: &aws_sdk_cognitoidentityprovider::Client) -> Vec<Call> {
     vec![
         Call {
             op: "AdminDeleteUser",
@@ -292,7 +292,7 @@ fn teardown_cognito_userpools_shadow(client: &aws_sdk_cognitoidentityprovider::C
     ]
 }
 
-fn test_cognito_userpools_shadow_create_user_pool(client: &aws_sdk_cognitoidentityprovider::Client) -> Test {
+fn test_cognito_userpools_create_user_pool(client: &aws_sdk_cognitoidentityprovider::Client) -> Test {
     Test {
         call: Call {
             op: "CreateUserPool",
@@ -325,7 +325,7 @@ fn test_cognito_userpools_shadow_create_user_pool(client: &aws_sdk_cognitoidenti
     }
 }
 
-fn test_cognito_userpools_shadow_describe_user_pool(client: &aws_sdk_cognitoidentityprovider::Client) -> Test {
+fn test_cognito_userpools_describe_user_pool(client: &aws_sdk_cognitoidentityprovider::Client) -> Test {
     Test {
         call: Call {
             op: "DescribeUserPool",
@@ -358,7 +358,7 @@ fn test_cognito_userpools_shadow_describe_user_pool(client: &aws_sdk_cognitoiden
     }
 }
 
-fn test_cognito_userpools_shadow_list_user_pools(client: &aws_sdk_cognitoidentityprovider::Client) -> Test {
+fn test_cognito_userpools_list_user_pools(client: &aws_sdk_cognitoidentityprovider::Client) -> Test {
     Test {
         call: Call {
             op: "ListUserPools",
@@ -392,7 +392,7 @@ fn test_cognito_userpools_shadow_list_user_pools(client: &aws_sdk_cognitoidentit
     }
 }
 
-fn test_cognito_userpools_shadow_create_user_pool_client(client: &aws_sdk_cognitoidentityprovider::Client) -> Test {
+fn test_cognito_userpools_create_user_pool_client(client: &aws_sdk_cognitoidentityprovider::Client) -> Test {
     Test {
         call: Call {
             op: "CreateUserPoolClient",
@@ -428,7 +428,7 @@ fn test_cognito_userpools_shadow_create_user_pool_client(client: &aws_sdk_cognit
     }
 }
 
-fn test_cognito_userpools_shadow_list_user_pool_clients(client: &aws_sdk_cognitoidentityprovider::Client) -> Test {
+fn test_cognito_userpools_list_user_pool_clients(client: &aws_sdk_cognitoidentityprovider::Client) -> Test {
     Test {
         call: Call {
             op: "ListUserPoolClients",
@@ -466,7 +466,7 @@ fn test_cognito_userpools_shadow_list_user_pool_clients(client: &aws_sdk_cognito
     }
 }
 
-fn test_cognito_userpools_shadow_admin_create_user(client: &aws_sdk_cognitoidentityprovider::Client) -> Test {
+fn test_cognito_userpools_admin_create_user(client: &aws_sdk_cognitoidentityprovider::Client) -> Test {
     Test {
         call: Call {
             op: "AdminCreateUser",
@@ -502,7 +502,7 @@ fn test_cognito_userpools_shadow_admin_create_user(client: &aws_sdk_cognitoident
     }
 }
 
-fn test_cognito_userpools_shadow_list_users(client: &aws_sdk_cognitoidentityprovider::Client) -> Test {
+fn test_cognito_userpools_list_users(client: &aws_sdk_cognitoidentityprovider::Client) -> Test {
     Test {
         call: Call {
             op: "ListUsers",
@@ -538,7 +538,7 @@ fn test_cognito_userpools_shadow_list_users(client: &aws_sdk_cognitoidentityprov
     }
 }
 
-fn test_cognito_userpools_shadow_admin_delete_user(client: &aws_sdk_cognitoidentityprovider::Client) -> Test {
+fn test_cognito_userpools_admin_delete_user(client: &aws_sdk_cognitoidentityprovider::Client) -> Test {
     Test {
         call: Call {
             op: "AdminDeleteUser",
@@ -599,7 +599,7 @@ fn test_cognito_userpools_shadow_admin_delete_user(client: &aws_sdk_cognitoident
     }
 }
 
-fn test_cognito_userpools_shadow_delete_user_pool(client: &aws_sdk_cognitoidentityprovider::Client) -> Test {
+fn test_cognito_userpools_delete_user_pool(client: &aws_sdk_cognitoidentityprovider::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteUserPool",

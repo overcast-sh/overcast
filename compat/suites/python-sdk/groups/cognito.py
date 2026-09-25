@@ -1,5 +1,8 @@
 """
 groups/cognito.py — Cognito User Pools compatibility test implementations for the Python suite.
+
+Groups: cognito-token-validity. cognito-userpools resolves through its
+authored scenario (compat/model/authored/cognito-userpools.json).
 """
 
 from __future__ import annotations
@@ -11,79 +14,9 @@ def _cognito(ctx: TestContext):
     return make_clients(ctx.endpoint, ctx.region)._get("cognito-idp")
 
 
-# ── cognito-userpools ─────────────────────────────────────────────────────────
-
-def CreateUserPool(ctx: TestContext) -> None:
-    cog = _cognito(ctx)
-    pool_name = f"compat-{ctx.run_id}"
-    resp = cog.create_user_pool(PoolName=pool_name)
-    pool = resp.get("UserPool", {})
-    if not pool.get("Id"):
-        raise AssertionError("CreateUserPool: missing Id")
-    ctx["cognito_pool_id"] = pool["Id"]
-
-
-def DescribeUserPool(ctx: TestContext) -> None:
-    cog = _cognito(ctx)
-    pool_id = ctx.get("cognito_pool_id")
-    if not pool_id:
-        raise AssertionError("DescribeUserPool: no pool from CreateUserPool")
-    resp = cog.describe_user_pool(UserPoolId=pool_id)
-    if not resp.get("UserPool", {}).get("Id"):
-        raise AssertionError("DescribeUserPool: missing Id")
-
-
-def ListUserPools(ctx: TestContext) -> None:
-    _cognito(ctx).list_user_pools(MaxResults=10)
-
-
-def AdminCreateUser(ctx: TestContext) -> None:
-    cog = _cognito(ctx)
-    pool_id = ctx.get("cognito_pool_id")
-    if not pool_id:
-        raise AssertionError("AdminCreateUser: no pool from CreateUserPool")
-    username = f"compat-user-{ctx.run_id}"
-    cog.admin_create_user(UserPoolId=pool_id, Username=username)
-    ctx["cognito_username"] = username
-
-
-def ListUsers(ctx: TestContext) -> None:
-    cog = _cognito(ctx)
-    pool_id = ctx.get("cognito_pool_id")
-    if not pool_id:
-        return
-    cog.list_users(UserPoolId=pool_id)
-
-
-def AdminDeleteUser(ctx: TestContext) -> None:
-    cog = _cognito(ctx)
-    pool_id = ctx.get("cognito_pool_id")
-    username = ctx.get("cognito_username")
-    if not pool_id or not username:
-        return
-    cog.admin_delete_user(UserPoolId=pool_id, Username=username)
-
-
-def DeleteUserPool(ctx: TestContext) -> None:
-    cog = _cognito(ctx)
-    pool_id = ctx.get("cognito_pool_id")
-    if not pool_id:
-        return
-    cog.delete_user_pool(UserPoolId=pool_id)
-
-
 # ── ImplMap ───────────────────────────────────────────────────────────────────
 
 IMPLS = {
-    "cognito-userpools:CreateUserPool": CreateUserPool,
-    "cognito-userpools:DescribeUserPool": DescribeUserPool,
-    "cognito-userpools:ListUserPools": ListUserPools,
-    "cognito-userpools:CreateUserPoolClient": lambda ctx: CreateUserPoolClientFn(ctx),
-    "cognito-userpools:ListUserPoolClients": lambda ctx: ListUserPoolClientsFn(ctx),
-    "cognito-userpools:AdminCreateUser": AdminCreateUser,
-    "cognito-userpools:ListUsers": ListUsers,
-    "cognito-userpools:AdminDeleteUser": AdminDeleteUser,
-    "cognito-userpools:DeleteUserPool": DeleteUserPool,
     "cognito-token-validity:CreateUserPoolClientWithTokenValidity": lambda ctx: CreateClientTokenValidity(ctx),
     "cognito-token-validity:DescribeUserPoolClientTokenValidity": lambda ctx: DescribeClientTokenValidity(ctx),
     "cognito-token-validity:UpdateUserPoolClientTokenValidity": lambda ctx: UpdateClientTokenValidity(ctx),
@@ -94,48 +27,8 @@ SETUP = {
     "cognito-token-validity": lambda ctx: None,
 }
 TEARDOWN = {
-    "cognito-userpools": lambda ctx: _teardown_user_pool(ctx),
     "cognito-token-validity": lambda ctx: _teardown_token_validity(ctx),
 }
-
-
-def _teardown_user_pool(ctx: TestContext) -> None:
-    pool_id = ctx.get("cognito_pool_id")
-    if not pool_id:
-        return
-    username = ctx.get("cognito_username")
-    if username:
-        try:
-            _cognito(ctx).admin_delete_user(UserPoolId=pool_id, Username=username)
-        except Exception:
-            pass
-    try:
-        _cognito(ctx).delete_user_pool(UserPoolId=pool_id)
-    except Exception:
-        pass
-
-
-def CreateUserPoolClientFn(ctx: TestContext) -> None:
-    cog = _cognito(ctx)
-    pool_id = ctx.get("cognito_pool_id")
-    if not pool_id:
-        raise AssertionError("CreateUserPoolClient: no pool from CreateUserPool")
-    resp = cog.create_user_pool_client(
-        UserPoolId=pool_id,
-        ClientName=f"compat-client-{ctx.run_id}",
-    )
-    client = resp.get("UserPoolClient", {})
-    if not client.get("ClientId"):
-        raise AssertionError("CreateUserPoolClient: missing ClientId")
-    ctx["cognito_client_id"] = client["ClientId"]
-
-
-def ListUserPoolClientsFn(ctx: TestContext) -> None:
-    cog = _cognito(ctx)
-    pool_id = ctx.get("cognito_pool_id")
-    if not pool_id:
-        raise AssertionError("ListUserPoolClients: no pool from CreateUserPool")
-    cog.list_user_pool_clients(UserPoolId=pool_id, MaxResults=10)
 
 
 # ── cognito-token-validity ────────────────────────────────────────────────────

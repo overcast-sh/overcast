@@ -23,21 +23,21 @@ func ScenariosAuthoredCognitoUserpools(c *clients.Clients) ServiceGroup {
 	return ServiceGroup{
 		Name: "scenarios/authored-cognito-userpools",
 		Impls: map[string]harness.TestFn{
-			"cognito-userpools-shadow:CreateUserPool":       g.testCognitoUserpoolsShadowCreateUserPool,
-			"cognito-userpools-shadow:DescribeUserPool":     g.testCognitoUserpoolsShadowDescribeUserPool,
-			"cognito-userpools-shadow:ListUserPools":        g.testCognitoUserpoolsShadowListUserPools,
-			"cognito-userpools-shadow:CreateUserPoolClient": g.testCognitoUserpoolsShadowCreateUserPoolClient,
-			"cognito-userpools-shadow:ListUserPoolClients":  g.testCognitoUserpoolsShadowListUserPoolClients,
-			"cognito-userpools-shadow:AdminCreateUser":      g.testCognitoUserpoolsShadowAdminCreateUser,
-			"cognito-userpools-shadow:ListUsers":            g.testCognitoUserpoolsShadowListUsers,
-			"cognito-userpools-shadow:AdminDeleteUser":      g.testCognitoUserpoolsShadowAdminDeleteUser,
-			"cognito-userpools-shadow:DeleteUserPool":       g.testCognitoUserpoolsShadowDeleteUserPool,
+			"cognito-userpools:CreateUserPool":       g.testCognitoUserpoolsCreateUserPool,
+			"cognito-userpools:DescribeUserPool":     g.testCognitoUserpoolsDescribeUserPool,
+			"cognito-userpools:ListUserPools":        g.testCognitoUserpoolsListUserPools,
+			"cognito-userpools:CreateUserPoolClient": g.testCognitoUserpoolsCreateUserPoolClient,
+			"cognito-userpools:ListUserPoolClients":  g.testCognitoUserpoolsListUserPoolClients,
+			"cognito-userpools:AdminCreateUser":      g.testCognitoUserpoolsAdminCreateUser,
+			"cognito-userpools:ListUsers":            g.testCognitoUserpoolsListUsers,
+			"cognito-userpools:AdminDeleteUser":      g.testCognitoUserpoolsAdminDeleteUser,
+			"cognito-userpools:DeleteUserPool":       g.testCognitoUserpoolsDeleteUserPool,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"cognito-userpools-shadow": g.setupCognitoUserpoolsShadow,
+			"cognito-userpools": g.setupCognitoUserpools,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"cognito-userpools-shadow": g.teardownCognitoUserpoolsShadow,
+			"cognito-userpools": g.teardownCognitoUserpools,
 		},
 	}
 }
@@ -57,15 +57,15 @@ func (g *authoredCognitoUserpoolsScenarios) cl() *cognitoidentityprovider.Client
 	return g.client
 }
 
-var groupCognitoUserpoolsShadow = scenario.Group{Name: "cognito-userpools-shadow", File: "compat/model/authored/cognito-userpools.json"}
+var groupCognitoUserpools = scenario.Group{Name: "cognito-userpools", File: "compat/model/authored/cognito-userpools.json"}
 
-func (g *authoredCognitoUserpoolsScenarios) setupCognitoUserpoolsShadow(ctx context.Context, t *harness.TestContext) error {
+func (g *authoredCognitoUserpoolsScenarios) setupCognitoUserpools(ctx context.Context, t *harness.TestContext) error {
 	// No setup steps: an empty phase is a no-op, not a missing one.
-	return groupCognitoUserpoolsShadow.RunSetup(ctx, t)
+	return groupCognitoUserpools.RunSetup(ctx, t)
 }
 
-func (g *authoredCognitoUserpoolsScenarios) teardownCognitoUserpoolsShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupCognitoUserpoolsShadow.RunTeardown(ctx, t,
+func (g *authoredCognitoUserpoolsScenarios) teardownCognitoUserpools(ctx context.Context, t *harness.TestContext) error {
+	return groupCognitoUserpools.RunTeardown(ctx, t,
 		scenario.Call{
 			Op:     "AdminDeleteUser",
 			Params: `{"UserPoolId":{"$ref":"pool.id"},"Username":{"$name":"user"}}`,
@@ -107,8 +107,8 @@ func (g *authoredCognitoUserpoolsScenarios) teardownCognitoUserpoolsShadow(ctx c
 	)
 }
 
-func (g *authoredCognitoUserpoolsScenarios) testCognitoUserpoolsShadowCreateUserPool(ctx context.Context, t *harness.TestContext) error {
-	return groupCognitoUserpoolsShadow.RunTest(ctx, t, "CreateUserPool", scenario.Test{
+func (g *authoredCognitoUserpoolsScenarios) testCognitoUserpoolsCreateUserPool(ctx context.Context, t *harness.TestContext) error {
+	return groupCognitoUserpools.RunTest(ctx, t, "CreateUserPool", scenario.Test{
 		Call: scenario.Call{
 			Op:     "CreateUserPool",
 			Params: `{"PoolName":{"$name":"pool"}}`,
@@ -133,8 +133,8 @@ func (g *authoredCognitoUserpoolsScenarios) testCognitoUserpoolsShadowCreateUser
 	})
 }
 
-func (g *authoredCognitoUserpoolsScenarios) testCognitoUserpoolsShadowDescribeUserPool(ctx context.Context, t *harness.TestContext) error {
-	return groupCognitoUserpoolsShadow.RunTest(ctx, t, "DescribeUserPool", scenario.Test{
+func (g *authoredCognitoUserpoolsScenarios) testCognitoUserpoolsDescribeUserPool(ctx context.Context, t *harness.TestContext) error {
+	return groupCognitoUserpools.RunTest(ctx, t, "DescribeUserPool", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DescribeUserPool",
 			Params: `{"UserPoolId":{"$ref":"pool.id"}}`,
@@ -156,8 +156,8 @@ func (g *authoredCognitoUserpoolsScenarios) testCognitoUserpoolsShadowDescribeUs
 	})
 }
 
-func (g *authoredCognitoUserpoolsScenarios) testCognitoUserpoolsShadowListUserPools(ctx context.Context, t *harness.TestContext) error {
-	return groupCognitoUserpoolsShadow.RunTest(ctx, t, "ListUserPools", scenario.Test{
+func (g *authoredCognitoUserpoolsScenarios) testCognitoUserpoolsListUserPools(ctx context.Context, t *harness.TestContext) error {
+	return groupCognitoUserpools.RunTest(ctx, t, "ListUserPools", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListUserPools",
 			Params: `{"MaxResults":60}`,
@@ -180,8 +180,8 @@ func (g *authoredCognitoUserpoolsScenarios) testCognitoUserpoolsShadowListUserPo
 	})
 }
 
-func (g *authoredCognitoUserpoolsScenarios) testCognitoUserpoolsShadowCreateUserPoolClient(ctx context.Context, t *harness.TestContext) error {
-	return groupCognitoUserpoolsShadow.RunTest(ctx, t, "CreateUserPoolClient", scenario.Test{
+func (g *authoredCognitoUserpoolsScenarios) testCognitoUserpoolsCreateUserPoolClient(ctx context.Context, t *harness.TestContext) error {
+	return groupCognitoUserpools.RunTest(ctx, t, "CreateUserPoolClient", scenario.Test{
 		Call: scenario.Call{
 			Op:     "CreateUserPoolClient",
 			Params: `{"ClientName":{"$name":"client"},"UserPoolId":{"$ref":"pool.id"}}`,
@@ -206,8 +206,8 @@ func (g *authoredCognitoUserpoolsScenarios) testCognitoUserpoolsShadowCreateUser
 	})
 }
 
-func (g *authoredCognitoUserpoolsScenarios) testCognitoUserpoolsShadowListUserPoolClients(ctx context.Context, t *harness.TestContext) error {
-	return groupCognitoUserpoolsShadow.RunTest(ctx, t, "ListUserPoolClients", scenario.Test{
+func (g *authoredCognitoUserpoolsScenarios) testCognitoUserpoolsListUserPoolClients(ctx context.Context, t *harness.TestContext) error {
+	return groupCognitoUserpools.RunTest(ctx, t, "ListUserPoolClients", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListUserPoolClients",
 			Params: `{"MaxResults":60,"UserPoolId":{"$ref":"pool.id"}}`,
@@ -231,8 +231,8 @@ func (g *authoredCognitoUserpoolsScenarios) testCognitoUserpoolsShadowListUserPo
 	})
 }
 
-func (g *authoredCognitoUserpoolsScenarios) testCognitoUserpoolsShadowAdminCreateUser(ctx context.Context, t *harness.TestContext) error {
-	return groupCognitoUserpoolsShadow.RunTest(ctx, t, "AdminCreateUser", scenario.Test{
+func (g *authoredCognitoUserpoolsScenarios) testCognitoUserpoolsAdminCreateUser(ctx context.Context, t *harness.TestContext) error {
+	return groupCognitoUserpools.RunTest(ctx, t, "AdminCreateUser", scenario.Test{
 		Call: scenario.Call{
 			Op:     "AdminCreateUser",
 			Params: `{"TemporaryPassword":"Passw0rd!#","UserPoolId":{"$ref":"pool.id"},"Username":{"$name":"user"}}`,
@@ -255,8 +255,8 @@ func (g *authoredCognitoUserpoolsScenarios) testCognitoUserpoolsShadowAdminCreat
 	})
 }
 
-func (g *authoredCognitoUserpoolsScenarios) testCognitoUserpoolsShadowListUsers(ctx context.Context, t *harness.TestContext) error {
-	return groupCognitoUserpoolsShadow.RunTest(ctx, t, "ListUsers", scenario.Test{
+func (g *authoredCognitoUserpoolsScenarios) testCognitoUserpoolsListUsers(ctx context.Context, t *harness.TestContext) error {
+	return groupCognitoUserpools.RunTest(ctx, t, "ListUsers", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListUsers",
 			Params: `{"UserPoolId":{"$ref":"pool.id"}}`,
@@ -279,8 +279,8 @@ func (g *authoredCognitoUserpoolsScenarios) testCognitoUserpoolsShadowListUsers(
 	})
 }
 
-func (g *authoredCognitoUserpoolsScenarios) testCognitoUserpoolsShadowAdminDeleteUser(ctx context.Context, t *harness.TestContext) error {
-	return groupCognitoUserpoolsShadow.RunTest(ctx, t, "AdminDeleteUser", scenario.Test{
+func (g *authoredCognitoUserpoolsScenarios) testCognitoUserpoolsAdminDeleteUser(ctx context.Context, t *harness.TestContext) error {
+	return groupCognitoUserpools.RunTest(ctx, t, "AdminDeleteUser", scenario.Test{
 		Call: scenario.Call{
 			Op:     "AdminDeleteUser",
 			Params: `{"UserPoolId":{"$ref":"pool.id"},"Username":{"$name":"user"}}`,
@@ -317,8 +317,8 @@ func (g *authoredCognitoUserpoolsScenarios) testCognitoUserpoolsShadowAdminDelet
 	})
 }
 
-func (g *authoredCognitoUserpoolsScenarios) testCognitoUserpoolsShadowDeleteUserPool(ctx context.Context, t *harness.TestContext) error {
-	return groupCognitoUserpoolsShadow.RunTest(ctx, t, "DeleteUserPool", scenario.Test{
+func (g *authoredCognitoUserpoolsScenarios) testCognitoUserpoolsDeleteUserPool(ctx context.Context, t *harness.TestContext) error {
+	return groupCognitoUserpools.RunTest(ctx, t, "DeleteUserPool", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteUserPool",
 			Params: `{"UserPoolId":{"$ref":"pool.id"}}`,

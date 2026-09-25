@@ -262,12 +262,6 @@
     },
     {
       "suite": "dotnet-sdk",
-      "service": "cognito",
-      "group": "cognito-userpools",
-      "tests": 9
-    },
-    {
-      "suite": "dotnet-sdk",
       "service": "ec2",
       "group": "ec2-instances",
       "tests": 10
@@ -1621,12 +1615,6 @@
       "service": "cognito",
       "group": "cognito-token-validity",
       "tests": 4
-    },
-    {
-      "suite": "rust-sdk",
-      "service": "cognito",
-      "group": "cognito-userpools",
-      "tests": 9
     },
     {
       "suite": "rust-sdk",

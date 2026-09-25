@@ -35,8 +35,8 @@ import software.amazon.awssdk.services.cognitoidentityprovider.model.ListUsersRe
  */
 public final class ScenariosAuthoredCognitoUserpoolsGen implements ServiceGroup {
 
-    private static final Group GROUP_COGNITO_USERPOOLS_SHADOW =
-            new Group("cognito-userpools-shadow", "compat/model/authored/cognito-userpools.json");
+    private static final Group GROUP_COGNITO_USERPOOLS =
+            new Group("cognito-userpools", "compat/model/authored/cognito-userpools.json");
 
     private final AwsClients clients;
     private volatile CognitoIdentityProviderClient client;
@@ -53,27 +53,27 @@ public final class ScenariosAuthoredCognitoUserpoolsGen implements ServiceGroup 
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("cognito-userpools-shadow:CreateUserPool", this::testCognitoUserpoolsShadowCreateUserPool),
-                Map.entry("cognito-userpools-shadow:DescribeUserPool", this::testCognitoUserpoolsShadowDescribeUserPool),
-                Map.entry("cognito-userpools-shadow:ListUserPools", this::testCognitoUserpoolsShadowListUserPools),
-                Map.entry("cognito-userpools-shadow:CreateUserPoolClient", this::testCognitoUserpoolsShadowCreateUserPoolClient),
-                Map.entry("cognito-userpools-shadow:ListUserPoolClients", this::testCognitoUserpoolsShadowListUserPoolClients),
-                Map.entry("cognito-userpools-shadow:AdminCreateUser", this::testCognitoUserpoolsShadowAdminCreateUser),
-                Map.entry("cognito-userpools-shadow:ListUsers", this::testCognitoUserpoolsShadowListUsers),
-                Map.entry("cognito-userpools-shadow:AdminDeleteUser", this::testCognitoUserpoolsShadowAdminDeleteUser),
-                Map.entry("cognito-userpools-shadow:DeleteUserPool", this::testCognitoUserpoolsShadowDeleteUserPool));
+                Map.entry("cognito-userpools:CreateUserPool", this::testCognitoUserpoolsCreateUserPool),
+                Map.entry("cognito-userpools:DescribeUserPool", this::testCognitoUserpoolsDescribeUserPool),
+                Map.entry("cognito-userpools:ListUserPools", this::testCognitoUserpoolsListUserPools),
+                Map.entry("cognito-userpools:CreateUserPoolClient", this::testCognitoUserpoolsCreateUserPoolClient),
+                Map.entry("cognito-userpools:ListUserPoolClients", this::testCognitoUserpoolsListUserPoolClients),
+                Map.entry("cognito-userpools:AdminCreateUser", this::testCognitoUserpoolsAdminCreateUser),
+                Map.entry("cognito-userpools:ListUsers", this::testCognitoUserpoolsListUsers),
+                Map.entry("cognito-userpools:AdminDeleteUser", this::testCognitoUserpoolsAdminDeleteUser),
+                Map.entry("cognito-userpools:DeleteUserPool", this::testCognitoUserpoolsDeleteUserPool));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("cognito-userpools-shadow", this::setupCognitoUserpoolsShadow));
+                Map.entry("cognito-userpools", this::setupCognitoUserpools));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("cognito-userpools-shadow", this::teardownCognitoUserpoolsShadow));
+                Map.entry("cognito-userpools", this::teardownCognitoUserpools));
     }
 
     /**
@@ -93,13 +93,13 @@ public final class ScenariosAuthoredCognitoUserpoolsGen implements ServiceGroup 
         return client;
     }
 
-    private void setupCognitoUserpoolsShadow(TestContext t) {
+    private void setupCognitoUserpools(TestContext t) {
         // No setup steps: an empty phase is a no-op, not a missing one.
-        GROUP_COGNITO_USERPOOLS_SHADOW.runSetup(t);
+        GROUP_COGNITO_USERPOOLS.runSetup(t);
     }
 
-    private void teardownCognitoUserpoolsShadow(TestContext t) {
-        GROUP_COGNITO_USERPOOLS_SHADOW.runTeardown(t,
+    private void teardownCognitoUserpools(TestContext t) {
+        GROUP_COGNITO_USERPOOLS.runTeardown(t,
                 new Call("AdminDeleteUser", "{\"UserPoolId\":{\"$ref\":\"pool.id\"},\"Username\":{\"$name\":\"user\"}}",
                         b -> AdminDeleteUserRequest.builder()
                                 .userPoolId(b.string("UserPoolId", Values.ref("pool.id")))
@@ -119,8 +119,8 @@ public final class ScenariosAuthoredCognitoUserpoolsGen implements ServiceGroup 
                         r -> cl().deleteUserPool((DeleteUserPoolRequest) r)));
     }
 
-    private void testCognitoUserpoolsShadowCreateUserPool(TestContext t) {
-        GROUP_COGNITO_USERPOOLS_SHADOW.runTest(t, "CreateUserPool",
+    private void testCognitoUserpoolsCreateUserPool(TestContext t) {
+        GROUP_COGNITO_USERPOOLS.runTest(t, "CreateUserPool",
                 new Call("CreateUserPool", "{\"PoolName\":{\"$name\":\"pool\"}}",
                         b -> CreateUserPoolRequest.builder()
                                 .poolName(b.string("PoolName", Values.name("pool")))
@@ -135,8 +135,8 @@ public final class ScenariosAuthoredCognitoUserpoolsGen implements ServiceGroup 
                 ));
     }
 
-    private void testCognitoUserpoolsShadowDescribeUserPool(TestContext t) {
-        GROUP_COGNITO_USERPOOLS_SHADOW.runTest(t, "DescribeUserPool",
+    private void testCognitoUserpoolsDescribeUserPool(TestContext t) {
+        GROUP_COGNITO_USERPOOLS.runTest(t, "DescribeUserPool",
                 new Call("DescribeUserPool", "{\"UserPoolId\":{\"$ref\":\"pool.id\"}}",
                         b -> DescribeUserPoolRequest.builder()
                                 .userPoolId(b.string("UserPoolId", Values.ref("pool.id")))
@@ -150,8 +150,8 @@ public final class ScenariosAuthoredCognitoUserpoolsGen implements ServiceGroup 
                 ));
     }
 
-    private void testCognitoUserpoolsShadowListUserPools(TestContext t) {
-        GROUP_COGNITO_USERPOOLS_SHADOW.runTest(t, "ListUserPools",
+    private void testCognitoUserpoolsListUserPools(TestContext t) {
+        GROUP_COGNITO_USERPOOLS.runTest(t, "ListUserPools",
                 new Call("ListUserPools", "{\"MaxResults\":60}",
                         b -> ListUserPoolsRequest.builder()
                                 .maxResults(60)
@@ -166,8 +166,8 @@ public final class ScenariosAuthoredCognitoUserpoolsGen implements ServiceGroup 
                 ));
     }
 
-    private void testCognitoUserpoolsShadowCreateUserPoolClient(TestContext t) {
-        GROUP_COGNITO_USERPOOLS_SHADOW.runTest(t, "CreateUserPoolClient",
+    private void testCognitoUserpoolsCreateUserPoolClient(TestContext t) {
+        GROUP_COGNITO_USERPOOLS.runTest(t, "CreateUserPoolClient",
                 new Call("CreateUserPoolClient", "{\"ClientName\":{\"$name\":\"client\"},\"UserPoolId\":{\"$ref\":\"pool.id\"}}",
                         b -> CreateUserPoolClientRequest.builder()
                                 .clientName(b.string("ClientName", Values.name("client")))
@@ -182,8 +182,8 @@ public final class ScenariosAuthoredCognitoUserpoolsGen implements ServiceGroup 
                 ));
     }
 
-    private void testCognitoUserpoolsShadowListUserPoolClients(TestContext t) {
-        GROUP_COGNITO_USERPOOLS_SHADOW.runTest(t, "ListUserPoolClients",
+    private void testCognitoUserpoolsListUserPoolClients(TestContext t) {
+        GROUP_COGNITO_USERPOOLS.runTest(t, "ListUserPoolClients",
                 new Call("ListUserPoolClients", "{\"MaxResults\":60,\"UserPoolId\":{\"$ref\":\"pool.id\"}}",
                         b -> ListUserPoolClientsRequest.builder()
                                 .maxResults(60)
@@ -199,8 +199,8 @@ public final class ScenariosAuthoredCognitoUserpoolsGen implements ServiceGroup 
                 ));
     }
 
-    private void testCognitoUserpoolsShadowAdminCreateUser(TestContext t) {
-        GROUP_COGNITO_USERPOOLS_SHADOW.runTest(t, "AdminCreateUser",
+    private void testCognitoUserpoolsAdminCreateUser(TestContext t) {
+        GROUP_COGNITO_USERPOOLS.runTest(t, "AdminCreateUser",
                 new Call("AdminCreateUser", "{\"TemporaryPassword\":\"Passw0rd!#\",\"UserPoolId\":{\"$ref\":\"pool.id\"},\"Username\":{\"$name\":\"user\"}}",
                         b -> AdminCreateUserRequest.builder()
                                 .temporaryPassword("Passw0rd!#")
@@ -215,8 +215,8 @@ public final class ScenariosAuthoredCognitoUserpoolsGen implements ServiceGroup 
                 ));
     }
 
-    private void testCognitoUserpoolsShadowListUsers(TestContext t) {
-        GROUP_COGNITO_USERPOOLS_SHADOW.runTest(t, "ListUsers",
+    private void testCognitoUserpoolsListUsers(TestContext t) {
+        GROUP_COGNITO_USERPOOLS.runTest(t, "ListUsers",
                 new Call("ListUsers", "{\"UserPoolId\":{\"$ref\":\"pool.id\"}}",
                         b -> ListUsersRequest.builder()
                                 .userPoolId(b.string("UserPoolId", Values.ref("pool.id")))
@@ -231,8 +231,8 @@ public final class ScenariosAuthoredCognitoUserpoolsGen implements ServiceGroup 
                 ));
     }
 
-    private void testCognitoUserpoolsShadowAdminDeleteUser(TestContext t) {
-        GROUP_COGNITO_USERPOOLS_SHADOW.runTest(t, "AdminDeleteUser",
+    private void testCognitoUserpoolsAdminDeleteUser(TestContext t) {
+        GROUP_COGNITO_USERPOOLS.runTest(t, "AdminDeleteUser",
                 new Call("AdminDeleteUser", "{\"UserPoolId\":{\"$ref\":\"pool.id\"},\"Username\":{\"$name\":\"user\"}}",
                         b -> AdminDeleteUserRequest.builder()
                                 .userPoolId(b.string("UserPoolId", Values.ref("pool.id")))
@@ -253,8 +253,8 @@ public final class ScenariosAuthoredCognitoUserpoolsGen implements ServiceGroup 
                 ));
     }
 
-    private void testCognitoUserpoolsShadowDeleteUserPool(TestContext t) {
-        GROUP_COGNITO_USERPOOLS_SHADOW.runTest(t, "DeleteUserPool",
+    private void testCognitoUserpoolsDeleteUserPool(TestContext t) {
+        GROUP_COGNITO_USERPOOLS.runTest(t, "DeleteUserPool",
                 new Call("DeleteUserPool", "{\"UserPoolId\":{\"$ref\":\"pool.id\"}}",
                         b -> DeleteUserPoolRequest.builder()
                                 .userPoolId(b.string("UserPoolId", Values.ref("pool.id")))
