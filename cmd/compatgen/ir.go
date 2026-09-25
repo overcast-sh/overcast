@@ -126,7 +126,8 @@ type assertion struct {
 	Assert      *assertion `json:"assert,omitempty"`
 }
 
-// check is exactly one of: nonEmpty, isList, equals, matches, missing.
+// check is exactly one of: nonEmpty, isList, equals, equalsJSON, matches,
+// missing.
 //
 // isList exists because nonEmpty cannot say "this is a page of results" — a
 // single-page List* legally returns an empty one, so nonEmpty on a list the
@@ -137,12 +138,19 @@ type assertion struct {
 // treats it the same way. A present value that is not a list still fails it —
 // isList is the strongest check that is true of a correct answer, present or
 // omitted, and false of everything else.
+//
+// equalsJSON compares a string member that holds a JSON document by value,
+// because the SDKs disagree about what such a member is: IAM sends a policy
+// document as percent-encoded JSON text, botocore hands python-sdk and cli the
+// parsed object, and the other five backends see the string. Its operand is a
+// literal JSON object or array, never evaluated (validateEqualsJSON).
 type check struct {
-	NonEmpty bool   `json:"nonEmpty,omitempty"`
-	IsList   bool   `json:"isList,omitempty"`
-	Equals   any    `json:"equals,omitempty"`
-	Matches  string `json:"matches,omitempty"`
-	Missing  bool   `json:"missing,omitempty"`
+	NonEmpty   bool   `json:"nonEmpty,omitempty"`
+	IsList     bool   `json:"isList,omitempty"`
+	Equals     any    `json:"equals,omitempty"`
+	EqualsJSON any    `json:"equalsJSON,omitempty"`
+	Matches    string `json:"matches,omitempty"`
+	Missing    bool   `json:"missing,omitempty"`
 }
 
 // errorSpec names an error two ways, because SDKs disagree on which they
@@ -190,7 +198,12 @@ func nonEmpty() check         { return check{NonEmpty: true} }
 func isList() check           { return check{IsList: true} }
 func equals(value any) check  { return check{Equals: value} }
 func matches(re string) check { return check{Matches: re} }
-func missing() check          { return check{Missing: true} }
+
+// equalsJSON is the document check. Its operand is not a value expression, so
+// nothing here evaluates or binds it; validateEqualsJSON holds it to the
+// grammar every backend reads.
+func equalsJSON(document any) check { return check{EqualsJSON: document} }
+func missing() check                { return check{Missing: true} }
 func checks(path string, c check) map[string]check {
 	return map[string]check{path: c}
 }
@@ -308,6 +321,12 @@ func validateAssertion(a assertion) error {
 		if c.Equals != nil {
 			set++
 		}
+		if c.EqualsJSON != nil {
+			set++
+			if err := validateEqualsJSON(c.EqualsJSON, "check "+path); err != nil {
+				return err
+			}
+		}
 		if c.Matches != "" {
 			set++
 		}
@@ -315,7 +334,7 @@ func validateAssertion(a assertion) error {
 			set++
 		}
 		if set != 1 {
-			return fmt.Errorf("check on %s must be exactly one of nonEmpty, isList, equals, matches, missing", path)
+			return fmt.Errorf("check on %s must be exactly one of nonEmpty, isList, equals, equalsJSON, matches, missing", path)
 		}
 	}
 	return nil

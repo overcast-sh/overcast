@@ -25,6 +25,7 @@ Generator: [cmd/compatgen/README.md](../../cmd/compatgen/README.md).
 | `testdata/errors/*.json` | a human | the shared error-matching conformance fixtures every interpreter's unit tests run — see [Errors](#errors) |
 | `testdata/blobs/blobs.json` | a human | the shared blob-value fixture every suite's unit tests run — see [Values](#values) |
 | `testdata/now/now.json` | a human | the shared `$now` fixture every suite's unit tests run — see [Values](#values) |
+| `testdata/equalsjson/equalsjson.json` | a human | the shared `equalsJSON` fixture every suite's unit tests run — see [Assertions](#assertions) |
 | `../suites/registry.generated.json` | `cmd/compatgen` | the generated registry sibling every loader concatenates |
 
 `<service>` is the Overcast capability key, exactly as a registry group's
@@ -201,6 +202,7 @@ The set is closed. `kind` selects the fields.
 | `{"nonEmpty": true}` | the path resolves to a value that is not `null`, `""`, `[]` or `{}`; numbers and booleans are never empty |
 | `{"isList": true}` | the path resolves to a list, **empty or not** — or does not resolve at all. It exists because `nonEmpty` cannot say "this is a page of results": a single-page `List*` legally returns an empty page |
 | `{"equals": <value>}` | the path resolves and the value is equal, as JSON, to the evaluated expression — by JSON type, with no coercion, so `1` never equals `"1"` and `true` never equals `1` |
+| `{"equalsJSON": <document>}` | the path resolves to a JSON document equal, as a JSON value, to the literal object or array given: a string is percent-decoded once and parsed, an object or array is the document already. See [Documents in a string](#documents-in-a-string-equalsjson) |
 | `{"matches": "<regex>"}` | the path resolves to a string matching the regular expression (RE2-compatible syntax; anchored only where the pattern anchors itself). A pattern the interpreter's own engine will not compile fails the check as an ordinary mismatch — expected `pattern <p>`, actual `unsupported pattern: <why>` — never as an exception out of the evaluator |
 | `{"missing": true}` | the path does not resolve — any segment absent. A member the service sent as JSON `null` **resolves**, so `missing` fails on it, and so does `nonEmpty` |
 
@@ -228,7 +230,99 @@ response disagrees with the model, which is the disagreement the check exists
 to catch. A blob is compared as its document form, base64 text, against an
 `equals` or `where` written as `$base64` — see [Values](#values). Timestamps are
 never compared, and a `$now` is never an expected value. The same rule governs a
-`where` entry.
+`where` entry. A string member that holds a JSON document is compared with
+`equalsJSON` rather than `equals` — see below.
+
+#### Documents in a string: `equalsJSON`
+
+Some members are strings whose content is a JSON document, and the SDKs do not
+agree about what they hand back for one. IAM's five `policyDocumentType`
+members are the case in scope: `Role.AssumeRolePolicyDocument` and the
+`PolicyDocument` of `GetRolePolicy`, `GetUserPolicy` and `GetGroupPolicy`, and
+`PolicyVersion.Document`. The API reference says the returned policy is
+"URL-encoded compliant with RFC 3986", and that some SDKs decode it
+automatically. botocore is one of them. It registers `json_decode_policies` on
+`after-call.iam`, which runs `json.loads(unquote(value))` over every
+`policyDocumentType` member. So python-sdk and cli hold an object there, while
+go-sdk, java-sdk, dotnet-sdk, node-js-sdk and rust-sdk hold the percent-encoded
+string. An `equals` cannot hold in both groups of backends, whatever it names.
+`equalsJSON` compares the document instead of its spelling:
+
+```jsonc
+"$.Role.AssumeRolePolicyDocument": { "equalsJSON": {
+  "Version": "2012-10-17",
+  "Statement": [{ "Effect": "Allow", "Principal": { "Service": "ec2.amazonaws.com" }, "Action": "sts:AssumeRole" }]
+} }
+```
+
+How a backend reads the value at the path:
+
+1. **A string is percent-decoded once, then parsed as one JSON text.** `%XX`
+   becomes that byte and the bytes are read as UTF-8. `+` stays `+`, and a `%`
+   that is not followed by two hex digits is kept as written. Whitespace around
+   the text is allowed; anything else after it means the value is not a
+   document. The string is decoded even when it was valid JSON before decoding,
+   and it is decoded exactly once. That is botocore's rule. python-sdk and cli
+   cannot opt out of it, because it runs before the scenario sees the response,
+   so every other backend applies the same rule to reach the same verdict. A
+   rule that tried the text as JSON first and decoded it only on failure would
+   read `{"a":"%41"}` as `%41` in five backends and as `A` in two. One
+   consequence is that the check cannot tell whether the service encoded the
+   document. botocore cannot tell either. An unencoded document that contains
+   no `%` reads the same after decoding, so whether a service percent-encodes
+   is a question this check does not answer.
+2. **An object or an array is the document already.** That is what botocore
+   hands python-sdk and cli.
+3. **Anything else is not a document**, and the check fails: a number, a
+   boolean, `null`, a string that does not parse, or a path that does not
+   resolve.
+
+Two documents are equal when they are the same JSON value. Object members are
+compared by name, in any order. Arrays are compared element by element, in
+order, because order means something in a JSON array and a policy's
+`Statement` list is one. Numbers are compared by numeric value, as IEEE-754
+doubles, so `1`, `1.0` and `1e0` are equal. Strings are compared after JSON
+unescaping, so `"é"` equals `"é"`. Types are never coerced: `"1"` is not
+`1`, and `true` is not `1`. Whitespace, member order and percent-encoding are
+the three differences the check exists to ignore. The value itself is not
+among them.
+
+Where it may go, and what it takes:
+
+- **It is author-asserted, and legal on a string member only.** The model has
+  no trait that says a string holds a document. IAM's `policyDocumentType` is a
+  plain string with a `@pattern`, and botocore recognizes it by shape name. So
+  a human says so by writing the check. What the generator can check is that the
+  member is a string at all. On an integer, a list or a structure the check is
+  a generation error naming the member, in a recipe and in an authored
+  scenario alike. It is a `checks` entry and nothing else. A `where` compares
+  with `equals` semantics, because no scenario yet needs to find a list item
+  by its document.
+- **The operand is a literal JSON object or array, and is never evaluated.**
+  A string operand would be ambiguous in exactly the way the check exists to
+  remove: it could be a document's JSON text, or a document that is itself a
+  string. So a string operand is refused, and so is any other scalar. No
+  `$ref`, `$name` or other expression may appear inside the operand.
+  Interpreters and emitters then carry it as data, and no backend has to decide
+  whether a `$`-prefixed key is an expression. Any object in the operand that
+  has a key starting with `$` is refused rather than read either way. No
+  policy grammar spells a key like that. A document that names a
+  run-specific resource would need an expression inside it. The first port that
+  needs one will add it, together with the evaluation rule all seven backends
+  would then share.
+- **The four typed emitters pass the operand as compact JSON text**, with
+  members sorted and numbers spelled as the scenario spells them:
+  `scenario.EqualsJSON(path, "…")`, `Check.equalsJson(path, "…")`,
+  `Check.EqualsJson(path, "…")` and `scenario::equals_json(path, "…")`. Each
+  runtime parses the text once and holds it to the same rules.
+
+A failure states the operand as `equalsJSON <compact JSON>` in field 5. The
+actual side is `document <compact JSON>` when the value decoded to a document,
+so a reader compares two documents rather than a percent-encoded string with
+an object. Otherwise it is `not a JSON document: <the value>`, or `<missing>`.
+`testdata/equalsjson/equalsjson.json` is the shared fixture every suite's unit
+tests run. It pins the percent-decoding, the documents that are equal and the
+ones that are not, and the operands every reader refuses.
 
 ### Errors
 

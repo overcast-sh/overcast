@@ -155,7 +155,7 @@ backend is consulted only for a test with no registered impl, and it answers
 | Module | Responsibility |
 | --- | --- |
 | `loader.py` | reads the scenario files the registry names, lazily and once |
-| `expressions.py` | `$lit`/`$ref`/`$name`/`$concat`/`$index`/`$base64`/`$now`, the path syntax, JSON equality |
+| `expressions.py` | `$lit`/`$ref`/`$name`/`$concat`/`$index`/`$base64`/`$now`, the path syntax, JSON equality, `equalsJSON`'s document decoding |
 | `executor.py` | the boto3 calls, the group's context bag, exports, error names |
 | `assertions.py` | the closed assertion set (`responseField`, `readback`, `listContains`, `absent`, `errorCode`, `eventually`) |
 | `failures.py` | the one builder for the six-field failure message |

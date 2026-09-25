@@ -212,6 +212,7 @@ dotnet-sdk/
     Values.cs               ← $lit/$ref/$name/$concat/$index/$base64/$now, the context bag and the Binder
     ScenarioGroup.cs        ← setup → tests → teardown, and the group's own identity
     Execution.cs            ← the calls a clause makes and the closed assertion set
+    EqualsJsonCheck.cs      ← equalsJSON: percent-decode, strict parse, compare as documents
     Documents.cs, Paths.cs  ← an SDK response as one of the IR's documents, and paths over it
     Errors.cs, Failure.cs   ← error matching, 501 classification, the six-field message
     SdkTypeTable.cs         ← renders sdk-types/ from the AWSSDK assemblies
@@ -224,6 +225,7 @@ dotnet-sdk/
     ScenarioTests.cs             ← the Scenario/ runtime against real SDK request/response objects
     ScenarioDocumentTests.cs     ← an SDK response as a document, and paths over it
     ScenarioErrorFixtureTests.cs ← the shared error-matching conformance fixtures
+    ScenarioEqualsJsonFixtureTests.cs ← the shared equalsJSON fixture (compat/model/testdata/equalsjson)
     SdkTypeTableTests.cs         ← the committed sdk-types/ is what the pinned assemblies declare
     SdkWireFormTests.cs          ← CloudWatch Logs' DateTime-over-long, measured on the wire
 ```

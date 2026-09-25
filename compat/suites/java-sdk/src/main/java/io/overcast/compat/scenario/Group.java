@@ -419,6 +419,12 @@ public final class Group {
                         throw checkFailed(obs, step, label, c, got, Json.render(want));
                     }
                 }
+                case EQUALS_JSON -> {
+                    String actual = EqualsJson.mismatch(c.value(), got);
+                    if (actual != null) {
+                        throw fail(obs, step, label, c.path(), EqualsJson.expected(c.value()), actual);
+                    }
+                }
                 case MATCHES -> {
                     String pattern = String.valueOf(c.value());
                     Pattern re;

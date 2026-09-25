@@ -73,6 +73,8 @@ mod value;
 mod xml;
 
 #[cfg(test)]
+mod equalsjsonfixtures;
+#[cfg(test)]
 mod errorfixtures;
 #[cfg(test)]
 mod nowfixtures;
@@ -187,6 +189,7 @@ pub enum CheckKind {
     Equals,
     Matches,
     Missing,
+    EqualsJson,
 }
 
 impl CheckKind {
@@ -197,12 +200,14 @@ impl CheckKind {
             CheckKind::Equals => "equals",
             CheckKind::Matches => "matches",
             CheckKind::Missing => "missing",
+            CheckKind::EqualsJson => "equalsJSON",
         }
     }
 }
 
 /// One check on one response path. `value` carries the expected value for
-/// `equals` and the pattern for `matches`, and is `None` for the rest.
+/// `equals`, the pattern for `matches` and the operand's JSON text for
+/// `equalsJSON`, and is `None` for the rest.
 pub struct Check {
     pub path: &'static str,
     pub kind: CheckKind,
@@ -336,6 +341,20 @@ pub fn matches(path: &'static str, pattern: &'static str) -> Check {
         path,
         kind: CheckKind::Matches,
         value: Some(Value::Lit(serde_json::Value::String(pattern.to_string()))),
+    }
+}
+
+/// Holds when the path resolves to a JSON document — text, percent-decoded
+/// once, or an object or array — that is the same JSON value as `document`, the
+/// operand's compact JSON text. The operand is checked when the check runs, not
+/// here, so a refused one is that test's failure rather than a panic while the
+/// group is being built.
+#[allow(dead_code)]
+pub fn equals_json(path: &'static str, document: &'static str) -> Check {
+    Check {
+        path,
+        kind: CheckKind::EqualsJson,
+        value: Some(Value::Lit(serde_json::Value::String(document.to_string()))),
     }
 }
 

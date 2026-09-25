@@ -499,6 +499,121 @@ async fn every_check_holds_where_the_ir_says_it_does() {
     assert!(!holds(vec![equals("$.Count", lit(json!("0")))]).await);
 }
 
+// ── equalsJSON ──────────────────────────────────────────────────────────────
+//
+// The shared fixture (equalsjsonfixtures.rs) sits outside the image build's
+// context, so the checks below are what the image build itself answers: the
+// check through the executor, and its failure message's expected and actual.
+
+/// Runs one `equalsJSON` check against `$.Doc` of a canned JSON body.
+async fn equals_json_at_doc(body: Json, operand: &'static str) -> Result<(), String> {
+    GROUP
+        .run_test(
+            &ctx(),
+            "GetRolePolicy",
+            Test {
+                call: ok_call("GetRolePolicy", map(vec![]), body),
+                assert: vec![response_field(vec![equals_json("$.Doc", operand)])],
+            },
+        )
+        .await
+}
+
+#[tokio::test]
+async fn equals_json_reads_the_document_however_the_wire_holds_it() {
+    // IAM's wire form: percent-encoded text, members in another order.
+    let encoded = "%7B%22Statement%22%3A%5B%7B%22Effect%22%3A%22Allow%22%7D%5D%2C%22Version%22%3A%222012-10-17%22%7D";
+    let operand = r#"{"Version":"2012-10-17","Statement":[{"Effect":"Allow"}]}"#;
+    assert!(equals_json_at_doc(json!({ "Doc": encoded }), operand).await.is_ok());
+    // Already an object, and numbers by value.
+    assert!(equals_json_at_doc(json!({"Doc": {"n": 1.0, "z": -0.0}}), r#"{"n":1,"z":0}"#)
+        .await
+        .is_ok());
+    // `+` is not a space, and the text is decoded once only.
+    assert!(equals_json_at_doc(json!({"Doc": "{\"a\":\"x+y\"}"}), r#"{"a":"x y"}"#)
+        .await
+        .is_err());
+    assert!(equals_json_at_doc(json!({"Doc": "%257B%257D"}), "{}").await.is_err());
+    // No coercion: a boolean is not a number, a string is not a number.
+    assert!(equals_json_at_doc(json!({"Doc": "{\"a\":true}"}), r#"{"a":1}"#).await.is_err());
+    assert!(equals_json_at_doc(json!({"Doc": "{\"a\":\"1\"}"}), r#"{"a":1}"#).await.is_err());
+}
+
+#[tokio::test]
+async fn equals_json_failures_name_the_document_or_why_there_is_none() {
+    let err = equals_json_at_doc(json!({"Doc": "{\"b\":2,\"a\":1}"}), r#"{"a":1}"#)
+        .await
+        .expect_err("an extra member");
+    assert!(
+        err.contains(r#"responseField equalsJSON at $.Doc: expected equalsJSON {"a":1}, actual document {"a":1,"b":2}"#),
+        "{err}"
+    );
+
+    let err = equals_json_at_doc(json!({"Doc": "not a policy"}), "{}")
+        .await
+        .expect_err("not JSON");
+    assert!(
+        err.contains(r#"expected equalsJSON {}, actual not a JSON document: "not a policy""#),
+        "{err}"
+    );
+
+    let err = equals_json_at_doc(json!({"Doc": "{} x"}), "{}")
+        .await
+        .expect_err("trailing garbage");
+    assert!(err.contains(r#"actual not a JSON document: "{} x""#), "{err}");
+
+    let err = equals_json_at_doc(json!({"Doc": 5}), "{}")
+        .await
+        .expect_err("a number is not a document");
+    assert!(err.contains("actual not a JSON document: 5"), "{err}");
+
+    let err = equals_json_at_doc(json!({}), "{}")
+        .await
+        .expect_err("the path does not resolve");
+    assert!(err.contains("expected equalsJSON {}, actual <missing>"), "{err}");
+}
+
+#[tokio::test]
+async fn an_equals_json_operand_that_is_not_a_literal_object_or_array_is_refused() {
+    let body = json!({"Doc": "{}"});
+    for operand in [
+        r#""{\"a\":1}""#,
+        "1",
+        "true",
+        "null",
+        "{} x",
+        r#"{"$ref":"role.policy"}"#,
+        r#"{"Statement":[{"Resource":{"$name":"q"}}]}"#,
+    ] {
+        let err = equals_json_at_doc(body.clone(), operand)
+            .await
+            .expect_err("the operand is refused");
+        assert!(
+            err.contains("expected a literal JSON object or array operand"),
+            "{operand}: {err}"
+        );
+    }
+    assert!(jsonpath::equals_json_operand(" [1] \n").is_ok(), "surrounding whitespace is fine");
+}
+
+#[test]
+fn percent_decoding_is_unquote_and_nothing_more() {
+    for (text, decoded) in [
+        ("%7b%22a%22%3A1%7D", r#"{"a":1}"#),
+        ("a+b", "a+b"),
+        ("a%2Bb", "a+b"),
+        ("%257B", "%7B"),
+        ("%zz", "%zz"),
+        ("a%4", "a%4"),
+        ("a%", "a%"),
+        ("caf%C3%A9", "café"),
+        ("café %E2%82%AC", "café €"),
+        ("", ""),
+    ] {
+        assert_eq!(jsonpath::percent_decode(text), decoded, "{text}");
+    }
+}
+
 #[tokio::test]
 async fn an_absent_list_reads_like_an_empty_one() {
     let ctx = ctx();

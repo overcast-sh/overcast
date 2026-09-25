@@ -710,6 +710,38 @@ impl Execution<'_> {
                     return Err(mismatch(&format!("a string matching {pattern:?}")));
                 }
             }
+            CheckKind::EqualsJson => {
+                // The operand is refused here, as the six-field mismatch a
+                // malformed pattern is, rather than by a panic in the
+                // constructor that would take the whole suite down with it.
+                let operand = match check.value.as_ref() {
+                    Some(super::Value::Lit(Json::String(text))) => json::equals_json_operand(text),
+                    _ => Err("no operand text in the generated source".to_string()),
+                };
+                let operand = match operand {
+                    Ok(operand) => operand,
+                    Err(err) => {
+                        return Err(self.fail(
+                            observed,
+                            step,
+                            &full_kind,
+                            check.path,
+                            "a literal JSON object or array operand",
+                            &failure::quote(&err),
+                        ))
+                    }
+                };
+                if let Err(actual) = json::equals_json(resolved, &operand) {
+                    return Err(self.fail(
+                        observed,
+                        step,
+                        &full_kind,
+                        check.path,
+                        &format!("equalsJSON {}", json::render(&operand)),
+                        &actual,
+                    ));
+                }
+            }
         }
         Ok(())
     }

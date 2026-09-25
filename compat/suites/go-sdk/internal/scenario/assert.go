@@ -309,6 +309,16 @@ func (e *execution) check(obs observed, c Check, kind, step string) error {
 		}
 		return nil
 
+	case CheckEqualsJSON:
+		if c.operandErr != nil {
+			return e.fail(obs, step, kind+" equalsJSON", c.Path,
+				"a JSON object or array operand in the generated source", quote(c.operandErr.Error()))
+		}
+		if holds, actual := equalsJSON(got, resolved, c.Value); !holds {
+			return e.fail(obs, step, kind+" equalsJSON", c.Path, "equalsJSON "+render(c.Value), actual)
+		}
+		return nil
+
 	default:
 		return fail(fmt.Sprintf("one of the IR's checks, got %q", string(c.Kind)))
 	}

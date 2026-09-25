@@ -1,0 +1,77 @@
+{
+  "$comment": "The shared `equalsJSON` conformance fixture (compat/model/README.md § Assertions). `{\"equalsJSON\": <document>}` compares a member holding a JSON document by value rather than by text, because the SDKs disagree about what such a member is: IAM sends a policy document as percent-encoded JSON text, botocore's json_decode_policies hands python-sdk and cli a parsed object, and the other five backends see the string. `decode` pins the percent-decoding every backend applies to a string: `%XX` becomes that byte, the bytes are read as UTF-8, `+` is left alone, a `%` not followed by two hex digits is kept as written, and the text is decoded exactly once, whether or not it was already JSON before decoding — which is what botocore does and what python-sdk and cli cannot opt out of. `holds` and `fails` pin the check itself: `actual` is the value a backend's document holds at the path (a string is decoded and then parsed as one JSON text; an object or an array is the document already; anything else is not a document), and `expected` is the check's operand. Two documents are equal when they are the same JSON value: object members compared by name, whatever their order; arrays compared element by element, in order; numbers by numeric value; strings, booleans and null by JSON type and value, with no coercion. `invalidExpected` pins the operands every reader refuses: the generator, the three interpreters' loaders, and the four typed runtimes' EqualsJSON when handed the operand's JSON text. The operand is a literal JSON object or array and is never evaluated, so an object with a `$`-prefixed key anywhere inside it — which the IR would otherwise read as an expression — is refused rather than read either way. Every suite's unit tests read this file; a suite that cannot see it here fails when OVERCAST_COMPAT_FIXTURES_REQUIRED is set, exactly as the error, blob and `$now` fixtures do.",
+  "decode": [
+    { "name": "plain-json-is-unchanged", "text": "{\"a\":1}", "decoded": "{\"a\":1}" },
+    { "name": "percent-encoded", "text": "%7B%22a%22%3A1%7D", "decoded": "{\"a\":1}" },
+    { "name": "lowercase-hex", "text": "%7b%22a%22%3a1%7d", "decoded": "{\"a\":1}" },
+    { "name": "encoded-space", "text": "a%20b", "decoded": "a b" },
+    { "name": "plus-is-literal", "text": "a+b", "decoded": "a+b" },
+    { "name": "encoded-plus", "text": "a%2Bb", "decoded": "a+b" },
+    { "name": "encoded-percent", "text": "100%25", "decoded": "100%" },
+    { "name": "decoded-once", "text": "%257B", "decoded": "%7B" },
+    { "name": "malformed-escape-kept", "text": "%zz", "decoded": "%zz" },
+    { "name": "truncated-escape-kept", "text": "a%4", "decoded": "a%4" },
+    { "name": "trailing-percent-kept", "text": "a%", "decoded": "a%" },
+    { "name": "utf8-multibyte", "text": "caf%C3%A9", "decoded": "café" },
+    { "name": "raw-non-ascii-kept", "text": "café %E2%82%AC", "decoded": "café €" },
+    { "name": "empty", "text": "", "decoded": "" }
+  ],
+  "holds": [
+    {
+      "name": "aws-wire-form",
+      "actual": "%7B%22Version%22%3A%222012-10-17%22%2C%22Statement%22%3A%5B%7B%22Effect%22%3A%22Allow%22%2C%22Principal%22%3A%7B%22Service%22%3A%22ec2.amazonaws.com%22%7D%2C%22Action%22%3A%22sts%3AAssumeRole%22%7D%5D%7D",
+      "expected": { "Version": "2012-10-17", "Statement": [ { "Effect": "Allow", "Principal": { "Service": "ec2.amazonaws.com" }, "Action": "sts:AssumeRole" } ] }
+    },
+    {
+      "name": "plain-json-text-reordered-and-spaced",
+      "actual": "{\n  \"Statement\": [ { \"Action\": \"sts:AssumeRole\", \"Principal\": { \"Service\": \"ec2.amazonaws.com\" }, \"Effect\": \"Allow\" } ],\n  \"Version\": \"2012-10-17\"\n}\n",
+      "expected": { "Version": "2012-10-17", "Statement": [ { "Effect": "Allow", "Principal": { "Service": "ec2.amazonaws.com" }, "Action": "sts:AssumeRole" } ] }
+    },
+    {
+      "name": "decoded-by-the-sdk",
+      "actual": { "Statement": [ { "Principal": { "Service": "ec2.amazonaws.com" }, "Action": "sts:AssumeRole", "Effect": "Allow" } ], "Version": "2012-10-17" },
+      "expected": { "Version": "2012-10-17", "Statement": [ { "Effect": "Allow", "Principal": { "Service": "ec2.amazonaws.com" }, "Action": "sts:AssumeRole" } ] }
+    },
+    { "name": "array-document", "actual": "[\"a\",{\"b\":null}]", "expected": [ "a", { "b": null } ] },
+    { "name": "array-decoded-by-the-sdk", "actual": [ "a", { "b": null } ], "expected": [ "a", { "b": null } ] },
+    { "name": "empty-object", "actual": "%7B%7D", "expected": {} },
+    { "name": "numbers-by-value", "actual": "{\"n\":1.0,\"m\":1e2,\"z\":-0}", "expected": { "n": 1, "m": 100, "z": 0 } },
+    { "name": "plus-stays-plus", "actual": "%7B%22a%22%3A%22x+y%22%7D", "expected": { "a": "x+y" } },
+    { "name": "encoded-plus", "actual": "%7B%22a%22%3A%22x%2By%22%7D", "expected": { "a": "x+y" } },
+    { "name": "encoded-percent", "actual": "%7B%22a%22%3A%22100%25%22%7D", "expected": { "a": "100%" } },
+    { "name": "decoded-even-when-already-json", "actual": "{\"a\":\"%41\"}", "expected": { "a": "A" } },
+    { "name": "unicode-escape", "actual": "{\"a\":\"\\u00e9\"}", "expected": { "a": "é" } },
+    { "name": "percent-encoded-utf8", "actual": "%7B%22a%22%3A%22caf%C3%A9%22%7D", "expected": { "a": "café" } }
+  ],
+  "fails": [
+    { "name": "array-order-is-significant", "actual": "{\"a\":[1,2]}", "expected": { "a": [ 2, 1 ] } },
+    { "name": "string-is-not-number", "actual": "{\"a\":\"1\"}", "expected": { "a": 1 } },
+    { "name": "boolean-is-not-number", "actual": "{\"a\":true}", "expected": { "a": 1 } },
+    { "name": "number-values-differ", "actual": "{\"a\":1}", "expected": { "a": 1.5 } },
+    { "name": "extra-member", "actual": "{\"a\":1,\"b\":2}", "expected": { "a": 1 } },
+    { "name": "missing-member", "actual": "{\"a\":1}", "expected": { "a": 1, "b": 2 } },
+    { "name": "null-is-not-absent", "actual": "{\"a\":null}", "expected": {} },
+    { "name": "object-is-not-array", "actual": "{}", "expected": [] },
+    { "name": "values-are-case-sensitive", "actual": "{\"Effect\":\"allow\"}", "expected": { "Effect": "Allow" } },
+    { "name": "names-are-case-sensitive", "actual": "{\"effect\":\"Allow\"}", "expected": { "Effect": "Allow" } },
+    { "name": "plus-is-not-space", "actual": "%7B%22a%22%3A%22x+y%22%7D", "expected": { "a": "x y" } },
+    { "name": "decoded-once-only", "actual": "%257B%257D", "expected": {} },
+    { "name": "not-json", "actual": "not a policy", "expected": {} },
+    { "name": "trailing-garbage", "actual": "{} x", "expected": {} },
+    { "name": "empty-text", "actual": "", "expected": {} },
+    { "name": "json-string-is-not-reparsed", "actual": "\"{}\"", "expected": {} },
+    { "name": "number-actual", "actual": 5, "expected": {} },
+    { "name": "boolean-actual", "actual": true, "expected": {} },
+    { "name": "null-actual", "actual": null, "expected": {} },
+    { "name": "sdk-object-differs", "actual": { "a": 1 }, "expected": { "a": 2 } }
+  ],
+  "invalidExpected": [
+    { "name": "json-text-in-a-string", "expected": "{\"a\":1}" },
+    { "name": "number", "expected": 1 },
+    { "name": "boolean", "expected": true },
+    { "name": "null", "expected": null },
+    { "name": "an-expression", "expected": { "$ref": "role.policy" } },
+    { "name": "a-nested-expression", "expected": { "Statement": [ { "Resource": { "$name": "q" } } ] } },
+    { "name": "a-dollar-key-beside-others", "expected": { "$comment": "x", "Version": "2012-10-17" } }
+  ]
+}

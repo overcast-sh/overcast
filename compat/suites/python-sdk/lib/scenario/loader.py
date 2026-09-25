@@ -22,6 +22,8 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from ..registry import REPO_ROOT
+from .expressions import check_equals_json_operand
+from .failures import ScenarioError
 
 
 @dataclass(frozen=True)
@@ -73,7 +75,7 @@ class ScenarioLibrary:
             with open(path, encoding="utf-8") as f:
                 data = json.load(f)
             groups = _index(scenario_file, data)
-        except (OSError, ValueError, KeyError, TypeError) as exc:
+        except (OSError, ValueError, KeyError, TypeError, ScenarioError) as exc:
             # Not fatal, and not silent. The registry and the scenario files
             # are generated together, so this cannot happen in a healthy tree;
             # when it does, returning None lets the loader's own sentinel
@@ -96,6 +98,9 @@ def _index(scenario_file: str, data: Any) -> dict[str, ScenarioGroup]:
     client = data["client"]
     indexed: dict[str, ScenarioGroup] = {}
     for group in data["groups"]:
+        for test in group["tests"]:
+            for i, clause in enumerate(test["assert"]):
+                _validate_clause(clause, f"{group['name']}/{test['name']} assert[{i}]")
         indexed[group["name"]] = ScenarioGroup(
             file=scenario_file,
             service=service,
@@ -107,3 +112,21 @@ def _index(scenario_file: str, data: Any) -> dict[str, ScenarioGroup]:
             teardown=list(group.get("teardown") or []),
         )
     return indexed
+
+
+def _validate_clause(clause: dict, where: str) -> None:
+    """Refuse an ``equalsJSON`` operand the interpreter would otherwise only
+    find out about mid-run. The loader checks nothing else — the generator and
+    ``make compat-model-check`` hold the files to the schema — but this operand
+    is carried as data and never evaluated, so one that is not a literal object
+    or array, or that holds a ``$`` key an expression would have, is refused
+    for the whole file rather than read either way."""
+    for path, check in (clause.get("checks") or {}).items():
+        if isinstance(check, dict) and "equalsJSON" in check:
+            try:
+                check_equals_json_operand(check["equalsJSON"])
+            except ScenarioError as exc:
+                raise ScenarioError(f"{where} {path}: {exc}") from exc
+    inner = clause.get("assert")
+    if isinstance(inner, dict):
+        _validate_clause(inner, f"{where}.assert")

@@ -80,12 +80,36 @@ describe("parseScenario", () => {
     assert.throws(() => parseScenario(raw, "test.json"), /at least one assertion/);
   });
 
-  it("refuses a check that is not one of the five", () => {
+  it("refuses a check that is not one of the six", () => {
     const raw = clone() as {
       groups: Array<{ tests: Array<{ assert: Array<{ checks: unknown }> }> }>;
     };
     raw.groups[0].tests[0].assert[0].checks = { "$.QueueUrl": { isBig: true } };
     assert.throws(() => parseScenario(raw, "test.json"), /unknown check "isBig"/);
+  });
+
+  it("carries an equalsJSON operand as data, and refuses one that is not a literal document", () => {
+    const withOperand = (operand: unknown) => {
+      const raw = clone() as {
+        groups: Array<{ tests: Array<{ assert: Array<{ checks: unknown }> }> }>;
+      };
+      raw.groups[0].tests[0].assert[0].checks = { "$.Doc": { equalsJSON: operand } };
+      return raw;
+    };
+    const doc = { Version: "2012-10-17", Statement: [{ Effect: "Allow" }] };
+    const parsed = parseScenario(withOperand(doc), "test.json");
+    const clause = parsed.groups[0].tests[0].assert[0];
+    assert.ok(clause.kind === "responseField");
+    assert.deepEqual(clause.checks["$.Doc"], { equalsJSON: doc });
+
+    assert.throws(
+      () => parseScenario(withOperand('{"a":1}'), "test.json"),
+      /\/checks\/\$\.Doc\/equalsJSON: equalsJSON takes a JSON object or array/,
+    );
+    assert.throws(
+      () => parseScenario(withOperand({ Statement: [{ Resource: { $name: "q" } }] }), "test.json"),
+      /never evaluated, so it may not hold the key "\$name"/,
+    );
   });
 
   it("refuses a path that is not the path grammar", () => {

@@ -101,14 +101,22 @@ const (
 	CheckEquals   CheckKind = "equals"
 	CheckMatches  CheckKind = "matches"
 	CheckMissing  CheckKind = "missing"
+	// CheckEqualsJSON compares a member holding a JSON document by value.
+	CheckEqualsJSON CheckKind = "equalsJSON"
 )
 
 // A Check is one check on one response path. Value carries the expected value
-// for equals and the pattern for matches, and is nil for the rest.
+// for equals, the pattern for matches and the parsed document for equalsJSON,
+// and is nil for the rest.
 type Check struct {
 	Path  string
 	Kind  CheckKind
 	Value any
+	// operandErr is why EqualsJSON refused its document. A constructor has no
+	// error to return, and the emitted groups build their checks when the
+	// suite registers them, so a refusal is carried here and fails the one
+	// check that holds it rather than panicking the whole run.
+	operandErr error
 }
 
 // A WhereEntry is one criterion an item of a list must satisfy. "$" is the
@@ -187,6 +195,17 @@ func Equals(path string, want any) Check {
 // Matches holds when the path resolves to a string matching the pattern.
 func Matches(path, pattern string) Check {
 	return Check{Path: path, Kind: CheckMatches, Value: pattern}
+}
+
+// EqualsJSON holds when the path resolves to a JSON document equal, as a JSON
+// value, to document: a string percent-decoded once and parsed as one JSON
+// text, which is how this SDK hands back an IAM policy document, or an object
+// or list as it stands. document is the operand as cmd/compatgen writes it —
+// compact JSON text of a literal object or array — and one that is not, or
+// that holds a `$`-prefixed key anywhere, fails the check when it runs.
+func EqualsJSON(path, document string) Check {
+	doc, err := parseEqualsJSONOperand(document)
+	return Check{Path: path, Kind: CheckEqualsJSON, Value: doc, operandErr: err}
 }
 
 // Missing holds when the path does not resolve. A member the service sent as
