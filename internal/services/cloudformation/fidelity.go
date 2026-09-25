@@ -84,7 +84,6 @@ var resourceServiceTiers = map[string]string{
 	"appconfig":   "inert",
 	"glue":        "inert",
 	"firehose":    "inert",
-	"athena":      "inert",
 	"appregistry": "inert",
 	"route53":     "inert",
 	"elbv2":       "inert",
