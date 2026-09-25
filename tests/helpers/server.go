@@ -178,6 +178,14 @@ func NewTestServer(t *testing.T, opts ...Option) *TestServer {
 		}
 	}
 
+	// A server that manages containers is where a dead test binary's
+	// containers would collide with this one's — same names, same ports, same
+	// daemon — so this is where the first one in each binary clears them. See
+	// reap.go.
+	if so.cfg.LambdaDockerSocket != "" || so.ownsNetworks || so.ownsRegistryVolume {
+		reapOrphansOnce()
+	}
+
 	// Registered before router.New, which is where the Docker supervisor
 	// creates the planes and where ECR claims its registry volume: a Fatal or a
 	// panic anywhere between creation and a later registration would leak them
