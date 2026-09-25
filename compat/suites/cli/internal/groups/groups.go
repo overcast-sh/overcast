@@ -56,6 +56,7 @@ func All() []ServiceGroup {
 		WAF().named("waf"),
 		Shield().named("shield"),
 		Glue().named("glue"),
+		GlueS3Tables().named("glue_s3tables"),
 		Athena().named("athena"),
 		AthenaEngine().named("athena_engine"),
 		ElastiCache().named("elasticache"),

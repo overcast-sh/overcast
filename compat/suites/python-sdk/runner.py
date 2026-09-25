@@ -63,6 +63,7 @@ from groups import (
     efs,
     s3tables,
     glue,
+    glue_s3tables,
     athena,
 )
 
@@ -115,6 +116,7 @@ _modules = [
     efs,
     s3tables,
     glue,
+    glue_s3tables,
     athena,
 ]
 

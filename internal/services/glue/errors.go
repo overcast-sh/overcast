@@ -36,6 +36,20 @@ func errPartitionNotFound() *protocol.AWSError {
 	return glueError(codeEntityNotFound, "Cannot find partition.")
 }
 
+func errCatalogNotFound(id string) *protocol.AWSError {
+	return glueError(codeEntityNotFound, "Catalog %s not found.", id)
+}
+
+// errFederatedNotImplemented answers an operation on a federated catalog
+// that Overcast serves only the database and table reads of.
+func errFederatedNotImplemented(operation, catalogID string) *protocol.AWSError {
+	return &protocol.AWSError{
+		Code:       protocol.ErrNotImplemented.Code,
+		Message:    fmt.Sprintf("%s is not implemented on the federated catalog %s: Overcast serves only its database and table reads through Glue.", operation, catalogID),
+		HTTPStatus: protocol.ErrNotImplemented.HTTPStatus,
+	}
+}
+
 func errInternal(err error) *protocol.AWSError {
 	return protocol.Wrap(protocol.ErrInternalError, err)
 }

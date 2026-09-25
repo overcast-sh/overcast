@@ -13,7 +13,7 @@ import (
 // refuses to delete the current one (DeleteTable is how that goes).
 
 type getTableVersionReq struct {
-	CatalogId    string `json:"CatalogId" cbor:"CatalogId"`
+	catalogRef
 	DatabaseName string `json:"DatabaseName" cbor:"DatabaseName"`
 	TableName    string `json:"TableName" cbor:"TableName"`
 	VersionId    string `json:"VersionId" cbor:"VersionId"`
@@ -24,7 +24,7 @@ type getTableVersionResp struct {
 }
 
 type getTableVersionsReq struct {
-	CatalogId    string `json:"CatalogId" cbor:"CatalogId"`
+	catalogRef
 	DatabaseName string `json:"DatabaseName" cbor:"DatabaseName"`
 	TableName    string `json:"TableName" cbor:"TableName"`
 	MaxResults   int32  `json:"MaxResults" cbor:"MaxResults"`
@@ -37,14 +37,14 @@ type getTableVersionsResp struct {
 }
 
 type deleteTableVersionReq struct {
-	CatalogId    string `json:"CatalogId" cbor:"CatalogId"`
+	catalogRef
 	DatabaseName string `json:"DatabaseName" cbor:"DatabaseName"`
 	TableName    string `json:"TableName" cbor:"TableName"`
 	VersionId    string `json:"VersionId" cbor:"VersionId"`
 }
 
 type batchDeleteTableVersionReq struct {
-	CatalogId    string   `json:"CatalogId" cbor:"CatalogId"`
+	catalogRef
 	DatabaseName string   `json:"DatabaseName" cbor:"DatabaseName"`
 	TableName    string   `json:"TableName" cbor:"TableName"`
 	VersionIds   []string `json:"VersionIds" cbor:"VersionIds"`
