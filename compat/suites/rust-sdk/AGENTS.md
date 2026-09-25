@@ -99,14 +99,16 @@ compat/suites/rust-sdk/
     scenario/      ← the hand-written runtime the generated groups call into
       mod.rs       ← Call/Test/Clause/Check, the constructors, the backend
       value.rs     ← the IR's value expressions, the context bag, the Binder
-      json.rs      ← paths, canonical rendering, JSON equality
+      json.rs      ← paths, canonical rendering, JSON equality, equalsJSON's
+                     percent-decoding and document comparison
       errors.rs    ← the error surfaces this SDK has, and the matcher
       capture.rs   ← the interceptor that keeps the raw response body
       xml.rs       ← the Query/REST XML body as a document, for the wires JSON
                      parsing cannot read
       exec.rs      ← running a group, and the closed assertion set
       failure.rs   ← the six-field failure message
-      tests.rs errorfixtures.rs      ← its unit tests
+      tests.rs errorfixtures.rs nowfixtures.rs equalsjsonfixtures.rs
+                   ← its unit tests
 ```
 
 **One module per AWS service.** Never split a service across modules, and
@@ -431,7 +433,8 @@ docker build -f compat/suites/rust-sdk/Dockerfile \
 One case cannot run there. `src/scenario/errorfixtures.rs` reads the shared
 error-matching fixtures under `compat/model/testdata/errors`, which sit outside
 the `compat/suites` build context, so in the image build it says so on stderr
-and returns. It runs for real in `test.yml`'s `compat-suite-unit-tests` job,
+and returns. `nowfixtures.rs` and `equalsjsonfixtures.rs` do the same with
+`compat/model/testdata/now` and `compat/model/testdata/equalsjson`. It runs for real in `test.yml`'s `compat-suite-unit-tests` job,
 from a full checkout, beside the other suites' unit tests — which is also where
 to run `cargo test` by hand when you have a host toolchain.
 

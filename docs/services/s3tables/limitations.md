@@ -1,6 +1,6 @@
 ---
 title: "S3 Tables limitations"
-description: "What S3 Tables stores without acting on, how its warehouse buckets behave, which Iceberg metadata CreateTable can write, and which error messages are inferred."
+description: "What S3 Tables stores without acting on, how its warehouse buckets behave, which Iceberg metadata Overcast writes, and which error messages are inferred."
 section: "Service Reference"
 tags:
   - docs
@@ -64,10 +64,10 @@ a schema, `metadataLocation` is absent until a client commits one, as on AWS.
 | `properties` | Copied into the metadata's properties |
 | `schemaV2` | Refused with `501 NotImplemented` |
 
-Overcast does not serve the Iceberg REST catalog, so engines that commit
-through it (PyIceberg, Spark, Trino) cannot write to these tables yet. A client
-that writes its own metadata file into the warehouse can commit it with
-`UpdateTableMetadataLocation`.
+Engines commit through the [Iceberg REST catalog](./iceberg-rest.md), which
+writes format-version 1 and 2 metadata, nested types included; a table asking
+for version 3 is refused. A client that writes its own metadata file into the
+warehouse can commit it with `UpdateTableMetadataLocation` instead.
 
 ## Errors
 
@@ -86,5 +86,6 @@ are Overcast's wording:
 ## Related
 
 - [S3 Tables](../s3tables.md)
+- [S3 Tables Iceberg REST catalog](./iceberg-rest.md)
 - [S3](../s3.md)
 - [All service pages](../README.md)

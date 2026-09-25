@@ -529,6 +529,9 @@ func internalService(path string) string {
 		return "cloudfront"
 	case strings.HasPrefix(path, "/_overcast/athena"):
 		return "athena"
+	case strings.HasPrefix(path, "/_overcast/s3tables"):
+		// The unsigned mount of S3 Tables' Iceberg REST catalog.
+		return "s3tables"
 	default:
 		// Includes /_overcast/apigateway and /_overcast/elb, which were
 		// "internal" before this phase too: host-routed traffic to either is

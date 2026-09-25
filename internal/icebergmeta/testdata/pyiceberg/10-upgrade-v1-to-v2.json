@@ -1,0 +1,134 @@
+{
+  "base": {
+    "current-schema-id": 0,
+    "default-sort-order-id": 0,
+    "default-spec-id": 0,
+    "format-version": 1,
+    "last-column-id": 1,
+    "last-partition-id": 999,
+    "last-updated-ms": 1790286709202,
+    "location": "s3://golden--table-s3/ns/legacy",
+    "metadata-log": [],
+    "partition-spec": [],
+    "partition-specs": [
+      {
+        "fields": [],
+        "spec-id": 0
+      }
+    ],
+    "partition-statistics": [],
+    "properties": {},
+    "refs": {},
+    "schema": {
+      "fields": [
+        {
+          "id": 1,
+          "name": "d",
+          "required": false,
+          "type": "date"
+        }
+      ],
+      "identifier-field-ids": [],
+      "schema-id": 0,
+      "type": "struct"
+    },
+    "schemas": [
+      {
+        "fields": [
+          {
+            "id": 1,
+            "name": "d",
+            "required": false,
+            "type": "date"
+          }
+        ],
+        "identifier-field-ids": [],
+        "schema-id": 0,
+        "type": "struct"
+      }
+    ],
+    "snapshot-log": [],
+    "snapshots": [],
+    "sort-orders": [
+      {
+        "fields": [],
+        "order-id": 0
+      }
+    ],
+    "statistics": [],
+    "table-uuid": "0cb1caad-cbdf-445d-a343-99c7518c4e75"
+  },
+  "base-location": "s3://golden--table-s3/ns/legacy/metadata/00000-64fd7912-409c-452e-b75f-81266e579a9b.metadata.json",
+  "expected": {
+    "current-schema-id": 0,
+    "default-sort-order-id": 0,
+    "default-spec-id": 0,
+    "format-version": 2,
+    "last-column-id": 1,
+    "last-partition-id": 999,
+    "last-sequence-number": 0,
+    "last-updated-ms": 1790286709249,
+    "location": "s3://golden--table-s3/ns/legacy",
+    "metadata-log": [
+      {
+        "metadata-file": "s3://golden--table-s3/ns/legacy/metadata/00000-64fd7912-409c-452e-b75f-81266e579a9b.metadata.json",
+        "timestamp-ms": 1790286709202
+      }
+    ],
+    "partition-specs": [
+      {
+        "fields": [],
+        "spec-id": 0
+      }
+    ],
+    "partition-statistics": [],
+    "properties": {},
+    "refs": {},
+    "schemas": [
+      {
+        "fields": [
+          {
+            "id": 1,
+            "name": "d",
+            "required": false,
+            "type": "date"
+          }
+        ],
+        "identifier-field-ids": [],
+        "schema-id": 0,
+        "type": "struct"
+      }
+    ],
+    "snapshot-log": [],
+    "snapshots": [],
+    "sort-orders": [
+      {
+        "fields": [],
+        "order-id": 0
+      }
+    ],
+    "statistics": [],
+    "table-uuid": "0cb1caad-cbdf-445d-a343-99c7518c4e75"
+  },
+  "name": "10-upgrade-v1-to-v2",
+  "request": {
+    "identifier": {
+      "name": "legacy",
+      "namespace": [
+        "ns"
+      ]
+    },
+    "requirements": [
+      {
+        "type": "assert-table-uuid",
+        "uuid": "0cb1caad-cbdf-445d-a343-99c7518c4e75"
+      }
+    ],
+    "updates": [
+      {
+        "action": "upgrade-format-version",
+        "format-version": 2
+      }
+    ]
+  }
+}

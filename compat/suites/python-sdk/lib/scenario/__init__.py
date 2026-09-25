@@ -9,7 +9,8 @@ with boto3, so a generated group needs no Python source of its own:
     loader.py       reads the scenario files the registry names
     expressions.py  the value expressions ($lit/$ref/$name/$concat/$index/
                     $base64/$now), the path syntax, the response document (a blob
-                    as its base64 text), JSON equality and non-emptiness
+                    as its base64 text), JSON equality and non-emptiness,
+                    and the document an equalsJSON check decodes
     executor.py     the boto3 calls, the context bag, exports, error names
     assertions.py   the closed assertion set
     failures.py     the one six-field failure-message builder

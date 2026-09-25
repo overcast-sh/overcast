@@ -2,6 +2,7 @@ package scenario
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"sort"
@@ -307,6 +308,12 @@ func (e *execution) check(obs observed, path string, c Check, kind, step string)
 		}
 		return nil
 
+	case CheckEqualsJSON:
+		if holds, actual := equalsJSON(got, resolved, c.Value); !holds {
+			return e.fail(obs, step, kind+" equalsJSON", path, "equalsJSON "+render(c.Value), actual)
+		}
+		return nil
+
 	default:
 		return fail(fmt.Sprintf("one of the IR's checks, got %q", string(c.Kind)))
 	}
@@ -324,6 +331,134 @@ func isEmpty(v any) bool {
 		return len(t) == 0
 	case map[string]any:
 		return len(t) == 0
+	default:
+		return false
+	}
+}
+
+// equalsJSON evaluates an equalsJSON check against the value at its path and,
+// when it does not hold, says what was there for the failure message: the
+// document it decoded to, the value that is not one, or the usual missing
+// rendering.
+func equalsJSON(got any, resolved bool, want any) (bool, string) {
+	if !resolved {
+		return false, missingValue
+	}
+	doc, isDoc := jsonDocument(got)
+	if !isDoc {
+		return false, "not a JSON document: " + render(got)
+	}
+	if !jsonValueEqual(doc, want) {
+		return false, "document " + render(doc)
+	}
+	return true, ""
+}
+
+// jsonDocument is the document an equalsJSON check compares, and whether the
+// value holds one at all.
+//
+// An object or a list is the document as it stands: botocore decodes an IAM
+// policy document before the CLI prints it, so this backend usually sees one
+// of those. A string is percent-decoded once and then read as exactly one JSON
+// text — the form the wire carries, which the other SDKs hand back as is.
+// Anything else (a number, a boolean, null) is not a document.
+func jsonDocument(v any) (any, bool) {
+	switch t := v.(type) {
+	case map[string]any, []any:
+		return t, true
+	case string:
+		// json.Unmarshal is the strict reader the check wants: surrounding
+		// whitespace is fine, anything after the one value is an error, and a
+		// number decodes to the float64 the comparison needs.
+		var doc any
+		if err := json.Unmarshal([]byte(percentDecode(t)), &doc); err != nil {
+			return nil, false
+		}
+		return doc, true
+	default:
+		return nil, false
+	}
+}
+
+// percentDecode is Python's urllib.parse.unquote, which botocore applies to a
+// policy document unconditionally and which python-sdk and cli therefore
+// cannot opt out of: `%XX` (either case) becomes that byte, `+` stays `+`, and
+// a `%` not followed by two hex digits is kept as written. It runs once, so
+// `%257B` is `%7B`. url.PathUnescape and url.QueryUnescape both refuse a
+// malformed escape, and the latter turns `+` into a space, so neither will do.
+func percentDecode(s string) string {
+	if !strings.Contains(s, "%") {
+		return s
+	}
+	out := make([]byte, 0, len(s))
+	for i := 0; i < len(s); i++ {
+		if s[i] == '%' && i+2 < len(s) {
+			hi, hiOK := unhex(s[i+1])
+			lo, loOK := unhex(s[i+2])
+			if hiOK && loOK {
+				out = append(out, hi<<4|lo)
+				i += 2
+				continue
+			}
+		}
+		out = append(out, s[i])
+	}
+	return string(out)
+}
+
+func unhex(c byte) (byte, bool) {
+	switch {
+	case '0' <= c && c <= '9':
+		return c - '0', true
+	case 'a' <= c && c <= 'f':
+		return c - 'a' + 10, true
+	case 'A' <= c && c <= 'F':
+		return c - 'A' + 10, true
+	}
+	return 0, false
+}
+
+// jsonValueEqual is equalsJSON's equality: objects by member name whatever
+// their order, arrays element by element in order, numbers by numeric value
+// (so 1, 1.0 and 1e0 are equal, and so are -0 and 0, which jsonEqual's
+// canonical text would tell apart), and strings, booleans and null by type and
+// value with no coercion.
+func jsonValueEqual(a, b any) bool {
+	switch x := a.(type) {
+	case map[string]any:
+		y, ok := b.(map[string]any)
+		if !ok || len(x) != len(y) {
+			return false
+		}
+		for k, xv := range x {
+			yv, present := y[k]
+			if !present || !jsonValueEqual(xv, yv) {
+				return false
+			}
+		}
+		return true
+	case []any:
+		y, ok := b.([]any)
+		if !ok || len(x) != len(y) {
+			return false
+		}
+		for i := range x {
+			if !jsonValueEqual(x[i], y[i]) {
+				return false
+			}
+		}
+		return true
+	case float64:
+		y, ok := b.(float64)
+		return ok && x == y
+	case string:
+		y, ok := b.(string)
+		return ok && x == y
+	case bool:
+		y, ok := b.(bool)
+		return ok && x == y
+	case nil:
+		return b == nil
 	default:
 		return false
 	}

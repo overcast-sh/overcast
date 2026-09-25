@@ -11,6 +11,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -35,7 +36,7 @@ func TestPutRecord_concurrentCallsProduceUniqueSequenceNumbers(t *testing.T) {
 		StreamARN:            streamARN(cfg.AccountID, cfg.Region, streamName),
 		StreamStatus:         "ACTIVE",
 		ShardCount:           1,
-		Shards:               buildInitialShards(1),
+		Shards:               InitialShards(1, time.Time{}),
 		Tags:                 map[string]string{},
 		CreatedAt:            clk.Now().UTC(),
 		RetentionPeriodHours: 24,

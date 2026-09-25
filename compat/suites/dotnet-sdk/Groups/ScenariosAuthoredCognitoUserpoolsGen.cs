@@ -15,7 +15,7 @@ namespace OvercastCompat.Groups;
 /// </remarks>
 internal sealed class ScenariosAuthoredCognitoUserpools : IServiceGroup
 {
-    private static readonly ScenarioGroup GroupCognitoUserpoolsShadow = new("cognito-userpools-shadow", "compat/model/authored/cognito-userpools.json");
+    private static readonly ScenarioGroup GroupCognitoUserpools = new("cognito-userpools", "compat/model/authored/cognito-userpools.json");
 
     private readonly Lazy<AmazonCognitoIdentityProviderClient> _client;
 
@@ -35,35 +35,35 @@ internal sealed class ScenariosAuthoredCognitoUserpools : IServiceGroup
 
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["cognito-userpools-shadow:CreateUserPool"] = TestCognitoUserpoolsShadowCreateUserPool,
-        ["cognito-userpools-shadow:DescribeUserPool"] = TestCognitoUserpoolsShadowDescribeUserPool,
-        ["cognito-userpools-shadow:ListUserPools"] = TestCognitoUserpoolsShadowListUserPools,
-        ["cognito-userpools-shadow:CreateUserPoolClient"] = TestCognitoUserpoolsShadowCreateUserPoolClient,
-        ["cognito-userpools-shadow:ListUserPoolClients"] = TestCognitoUserpoolsShadowListUserPoolClients,
-        ["cognito-userpools-shadow:AdminCreateUser"] = TestCognitoUserpoolsShadowAdminCreateUser,
-        ["cognito-userpools-shadow:ListUsers"] = TestCognitoUserpoolsShadowListUsers,
-        ["cognito-userpools-shadow:AdminDeleteUser"] = TestCognitoUserpoolsShadowAdminDeleteUser,
-        ["cognito-userpools-shadow:DeleteUserPool"] = TestCognitoUserpoolsShadowDeleteUserPool,
+        ["cognito-userpools:CreateUserPool"] = TestCognitoUserpoolsCreateUserPool,
+        ["cognito-userpools:DescribeUserPool"] = TestCognitoUserpoolsDescribeUserPool,
+        ["cognito-userpools:ListUserPools"] = TestCognitoUserpoolsListUserPools,
+        ["cognito-userpools:CreateUserPoolClient"] = TestCognitoUserpoolsCreateUserPoolClient,
+        ["cognito-userpools:ListUserPoolClients"] = TestCognitoUserpoolsListUserPoolClients,
+        ["cognito-userpools:AdminCreateUser"] = TestCognitoUserpoolsAdminCreateUser,
+        ["cognito-userpools:ListUsers"] = TestCognitoUserpoolsListUsers,
+        ["cognito-userpools:AdminDeleteUser"] = TestCognitoUserpoolsAdminDeleteUser,
+        ["cognito-userpools:DeleteUserPool"] = TestCognitoUserpoolsDeleteUserPool,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["cognito-userpools-shadow"] = SetupCognitoUserpoolsShadow,
+        ["cognito-userpools"] = SetupCognitoUserpools,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["cognito-userpools-shadow"] = TeardownCognitoUserpoolsShadow,
+        ["cognito-userpools"] = TeardownCognitoUserpools,
     };
 
     private AmazonCognitoIdentityProviderClient Cl() => _client.Value;
 
-    private Task SetupCognitoUserpoolsShadow(TestContext t) =>
+    private Task SetupCognitoUserpools(TestContext t) =>
         // No setup steps: an empty phase is a no-op, not a missing one.
-        GroupCognitoUserpoolsShadow.RunSetupAsync(t);
+        GroupCognitoUserpools.RunSetupAsync(t);
 
-    private Task TeardownCognitoUserpoolsShadow(TestContext t) =>
-        GroupCognitoUserpoolsShadow.RunTeardownAsync(t,
+    private Task TeardownCognitoUserpools(TestContext t) =>
+        GroupCognitoUserpools.RunTeardownAsync(t,
             new ScenarioCall
             {
                 Op = "AdminDeleteUser",
@@ -107,7 +107,7 @@ internal sealed class ScenariosAuthoredCognitoUserpools : IServiceGroup
             }
         );
 
-    private Task TestCognitoUserpoolsShadowCreateUserPool(TestContext t) => GroupCognitoUserpoolsShadow.RunTestAsync(t, "CreateUserPool", new ScenarioTest
+    private Task TestCognitoUserpoolsCreateUserPool(TestContext t) => GroupCognitoUserpools.RunTestAsync(t, "CreateUserPool", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -135,7 +135,7 @@ internal sealed class ScenariosAuthoredCognitoUserpools : IServiceGroup
         ],
     });
 
-    private Task TestCognitoUserpoolsShadowDescribeUserPool(TestContext t) => GroupCognitoUserpoolsShadow.RunTestAsync(t, "DescribeUserPool", new ScenarioTest
+    private Task TestCognitoUserpoolsDescribeUserPool(TestContext t) => GroupCognitoUserpools.RunTestAsync(t, "DescribeUserPool", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -159,7 +159,7 @@ internal sealed class ScenariosAuthoredCognitoUserpools : IServiceGroup
         ],
     });
 
-    private Task TestCognitoUserpoolsShadowListUserPools(TestContext t) => GroupCognitoUserpoolsShadow.RunTestAsync(t, "ListUserPools", new ScenarioTest
+    private Task TestCognitoUserpoolsListUserPools(TestContext t) => GroupCognitoUserpools.RunTestAsync(t, "ListUserPools", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -184,7 +184,7 @@ internal sealed class ScenariosAuthoredCognitoUserpools : IServiceGroup
         ],
     });
 
-    private Task TestCognitoUserpoolsShadowCreateUserPoolClient(TestContext t) => GroupCognitoUserpoolsShadow.RunTestAsync(t, "CreateUserPoolClient", new ScenarioTest
+    private Task TestCognitoUserpoolsCreateUserPoolClient(TestContext t) => GroupCognitoUserpools.RunTestAsync(t, "CreateUserPoolClient", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -212,7 +212,7 @@ internal sealed class ScenariosAuthoredCognitoUserpools : IServiceGroup
         ],
     });
 
-    private Task TestCognitoUserpoolsShadowListUserPoolClients(TestContext t) => GroupCognitoUserpoolsShadow.RunTestAsync(t, "ListUserPoolClients", new ScenarioTest
+    private Task TestCognitoUserpoolsListUserPoolClients(TestContext t) => GroupCognitoUserpools.RunTestAsync(t, "ListUserPoolClients", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -238,7 +238,7 @@ internal sealed class ScenariosAuthoredCognitoUserpools : IServiceGroup
         ],
     });
 
-    private Task TestCognitoUserpoolsShadowAdminCreateUser(TestContext t) => GroupCognitoUserpoolsShadow.RunTestAsync(t, "AdminCreateUser", new ScenarioTest
+    private Task TestCognitoUserpoolsAdminCreateUser(TestContext t) => GroupCognitoUserpools.RunTestAsync(t, "AdminCreateUser", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -263,7 +263,7 @@ internal sealed class ScenariosAuthoredCognitoUserpools : IServiceGroup
         ],
     });
 
-    private Task TestCognitoUserpoolsShadowListUsers(TestContext t) => GroupCognitoUserpoolsShadow.RunTestAsync(t, "ListUsers", new ScenarioTest
+    private Task TestCognitoUserpoolsListUsers(TestContext t) => GroupCognitoUserpools.RunTestAsync(t, "ListUsers", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -288,7 +288,7 @@ internal sealed class ScenariosAuthoredCognitoUserpools : IServiceGroup
         ],
     });
 
-    private Task TestCognitoUserpoolsShadowAdminDeleteUser(TestContext t) => GroupCognitoUserpoolsShadow.RunTestAsync(t, "AdminDeleteUser", new ScenarioTest
+    private Task TestCognitoUserpoolsAdminDeleteUser(TestContext t) => GroupCognitoUserpools.RunTestAsync(t, "AdminDeleteUser", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -328,7 +328,7 @@ internal sealed class ScenariosAuthoredCognitoUserpools : IServiceGroup
         ],
     });
 
-    private Task TestCognitoUserpoolsShadowDeleteUserPool(TestContext t) => GroupCognitoUserpoolsShadow.RunTestAsync(t, "DeleteUserPool", new ScenarioTest
+    private Task TestCognitoUserpoolsDeleteUserPool(TestContext t) => GroupCognitoUserpools.RunTestAsync(t, "DeleteUserPool", new ScenarioTest
     {
         Call = new ScenarioCall
         {

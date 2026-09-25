@@ -29,6 +29,7 @@ internal enum CheckKind
     IsList,
     EqualTo,
     Matches,
+    EqualsJson,
     Missing,
 }
 
@@ -154,7 +155,8 @@ internal sealed class Clause
 
 /// <summary>
 /// One check on one response path. <see cref="Value"/> carries the expected
-/// value for EqualTo and the pattern for Matches, and is null for the rest.
+/// value for EqualTo, the pattern for Matches and the parsed operand document
+/// for EqualsJson, and is null for the rest.
 /// </summary>
 internal sealed record Check(string Path, CheckKind Kind, object? Value)
 {
@@ -183,6 +185,25 @@ internal sealed record Check(string Path, CheckKind Kind, object? Value)
 
     /// <summary>Holds when the path resolves to a string matching the pattern.</summary>
     public static Check Matches(string path, string pattern) => new(path, CheckKind.Matches, pattern);
+
+    /// <summary>
+    /// Holds when the path resolves to a JSON document equal, as JSON, to
+    /// <paramref name="document"/>: a string percent-decoded once and parsed,
+    /// or an object or list as it is (see <see cref="EqualsJsonCheck"/>).
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="document"/> is the operand as the compact JSON text the
+    /// emitter wrote. It is parsed here, once, so an operand that is not a
+    /// literal object or array fails the test that builds it rather than every
+    /// evaluation of it; cmd/compatgen refuses such an operand first, so this is
+    /// the backstop the shared fixture holds every runtime to.
+    /// </remarks>
+    /// <exception cref="ScenarioValueException">
+    /// The operand is not one JSON object or array, or has a <c>$</c>-prefixed
+    /// key at any depth.
+    /// </exception>
+    public static Check EqualsJson(string path, string document) =>
+        new(path, CheckKind.EqualsJson, EqualsJsonCheck.Operand(document));
 
     /// <summary>
     /// Holds when the path does not resolve. A member the service sent as JSON

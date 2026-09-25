@@ -221,3 +221,103 @@ pub(crate) fn is_empty(value: &Json) -> bool {
         _ => false,
     }
 }
+
+/// The `equalsJSON` operand, from the compact JSON text the emitted source
+/// hands [`super::equals_json`].
+///
+/// The operand is a literal object or array and is never evaluated, so the
+/// text is parsed as exactly one JSON text — `serde_json` refuses anything but
+/// whitespace after it — and refused when it is any other kind of value, or
+/// when an object anywhere inside it has a `$`-prefixed member, which the IR
+/// would otherwise read as an expression (compat/model/README.md §
+/// Assertions). The generator refuses both already; this is the runtime holding
+/// the same line over source nobody generated.
+pub(crate) fn equals_json_operand(text: &str) -> Result<Json, String> {
+    let operand: Json = serde_json::from_str(text)
+        .map_err(|err| format!("equalsJSON operand is not one JSON text: {err}"))?;
+    if !operand.is_object() && !operand.is_array() {
+        return Err(format!(
+            "equalsJSON operand {} is not a JSON object or array",
+            render(&operand)
+        ));
+    }
+    if let Some(key) = dollar_key(&operand) {
+        return Err(format!(
+            "equalsJSON operand has the member {key:?}, which would read as an expression"
+        ));
+    }
+    Ok(operand)
+}
+
+fn dollar_key(value: &Json) -> Option<&str> {
+    match value {
+        Json::Object(entries) => entries.iter().find_map(|(key, value)| {
+            if key.starts_with('$') {
+                Some(key.as_str())
+            } else {
+                dollar_key(value)
+            }
+        }),
+        Json::Array(items) => items.iter().find_map(dollar_key),
+        _ => None,
+    }
+}
+
+/// `equalsJSON`: the value at the path, read as a JSON document, is the same
+/// JSON value as the operand. `Err` carries failure-message field 5's actual
+/// side.
+///
+/// A string is the document's text, percent-decoded once and then parsed —
+/// which is how an IAM policy document arrives here, since this suite reads the
+/// wire and IAM sends it percent-encoded. An object or an array is the document
+/// already. Anything else, or text that is not one JSON text, is not a
+/// document. The comparison is [`equal`] on a JSON wire whichever wire the
+/// response came off: the document's own text states its types, so the XML
+/// leniency has nothing to stand in for.
+pub(crate) fn equals_json(got: Option<&Json>, operand: &Json) -> Result<(), String> {
+    let Some(got) = got else {
+        return Err(MISSING.to_string());
+    };
+    let document = match got {
+        Json::String(text) => serde_json::from_str::<Json>(&percent_decode(text)).ok(),
+        Json::Object(_) | Json::Array(_) => Some(got.clone()),
+        _ => None,
+    };
+    match document {
+        Some(document) if equal(&document, operand, Wire::Json) => Ok(()),
+        Some(document) => Err(format!("document {}", render(&document))),
+        None => Err(format!("not a JSON document: {}", render(got))),
+    }
+}
+
+/// Percent-decodes a document's text exactly once, as botocore does to every
+/// IAM policy document before python-sdk and cli see it (Python's
+/// `urllib.parse.unquote`), so this suite reads the document they read.
+///
+/// `%` and two hex digits, in either case, is that byte; every other character
+/// is its own UTF-8 bytes — `+` stays `+`, and a `%` without two hex digits
+/// after it is kept as written. The bytes are then read as UTF-8, an invalid
+/// sequence replaced as `unquote` replaces it. Hand-rolled because no decoder
+/// in reach has exactly these rules: the form-encoding ones turn `+` into a
+/// space, and the strict ones refuse a malformed escape.
+pub(crate) fn percent_decode(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let (Some(high), Some(low)) = (hex(bytes[i + 1]), hex(bytes[i + 2])) {
+                out.push((high << 4) | low);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+fn hex(byte: u8) -> Option<u8> {
+    (byte as char).to_digit(16).map(|digit| digit as u8)
+}

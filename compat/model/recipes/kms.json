@@ -1,5 +1,5 @@
 {
-  "$comment": "AWS Key Management Service (AWS JSON 1.1, API version 2014-11-01), G4 wave 2 of docs/plans/compat-coverage-modelgen.md §5. Overcast implements 34 of the 54 modeled operations, so unlike wave 1 this file produces real pass/fail. Three facts about KMS shape the whole recipe. First, a KMS key cannot be deleted: ScheduleKeyDeletion moves it to KeyState PendingDeletion for 7-30 days and CancelKeyDeletion brings it back to Disabled, so absence is a state check and never a not-found. The IR's `delete` role can only prove absence with `notFound` (the read raises a not-found error) or with `list` non-membership, and neither is true of AWS here — DescribeKey still answers for a pending-deletion key, and ListKeys is documented as returning all KMS keys in the account and Region. So this resource declares no `delete`, and ScheduleKeyDeletion, CancelKeyDeletion and a second ScheduleKeyDeletion are authored operations with KeyState read-backs instead. The last of them is what disposes of the key: it is the final test in the group, so a run leaves nothing enabled behind even though the group has no teardown. Second, `list` is authored rather than declared for the same reason: the generator puts the derived list test after every authored operation, and a key the run has just scheduled for deletion is one Overcast's ListKeys omits, so the membership check has to run before the disposal rather than after it. Third, the cryptographic operations take and return blobs (Plaintext, CiphertextBlob, Message, Signature), which the IR carries as `$base64` (compat/model/README.md § Values, #1910): a literal for bytes the recipe chooses, and a `$base64` around a `$ref` for a blob an earlier test exported. So Encrypt, Decrypt, ReEncrypt, Sign and Verify are authored as round trips — what went in comes back out, and a signature verifies — on the group's own key and on a third, SIGN_VERIFY key. VerifyMac stays uncovered: it needs a MAC only GenerateMac can produce, Overcast does not implement GenerateMac, and the gap report records it.Two curated compromises are worth naming. The grant principals are the documentation account's root, arn:aws:iam::123456789012:root, rather than the caller's: KMS documents CreateGrant as usable cross-account and its own example grants to a role in another account, but nothing in the IR can name the running account — KeyMetadata.AWSAccountId would supply it and Overcast does not return that member, so binding to it would fail every grant test rather than the one that asserts it. That assertion lives in DescribeKeyMetadata, on its own, where its failure names the missing member and nothing else depends on it. And no identifier this recipe names is capped below 54 characters (#1886): AliasName and the grant Name are 256, Description is 8192, so `$name` fits everywhere it is used.",
+  "$comment": "AWS Key Management Service (AWS JSON 1.1, API version 2014-11-01), G4 wave 2 of docs/plans/compat-coverage-modelgen.md §5. Overcast implements 34 of the 54 modeled operations, so unlike wave 1 this file produces real pass/fail. Three facts about KMS shape the whole recipe. First, a KMS key cannot be deleted: ScheduleKeyDeletion moves it to KeyState PendingDeletion for 7-30 days and CancelKeyDeletion brings it back to Disabled, so absence is a state check and never a not-found. The IR's `delete` role can only prove absence with `notFound` (the read raises a not-found error) or with `list` non-membership, and neither is true of AWS here — DescribeKey still answers for a pending-deletion key, and ListKeys is documented as returning all KMS keys in the account and Region. So this resource declares no `delete`, and ScheduleKeyDeletion, CancelKeyDeletion and a second ScheduleKeyDeletion are authored operations with KeyState read-backs instead. The last of them is what disposes of the key: it is the final test in the group, so a run leaves nothing enabled behind even though the group has no teardown. Second, `list` is authored rather than declared for the same reason: the generator puts the derived list test after every authored operation, and a key the run has just scheduled for deletion is one Overcast's ListKeys omits, so the membership check has to run before the disposal rather than after it. Third, the cryptographic operations take and return blobs (Plaintext, CiphertextBlob, Message, Signature), which the IR carries as `$base64` (compat/model/README.md § Values, #1910): a literal for bytes the recipe chooses, and a `$base64` around a `$ref` for a blob an earlier test exported. So Encrypt, Decrypt, ReEncrypt, Sign and Verify are authored as round trips — what went in comes back out, and a signature verifies — on the group's own key and on a third, SIGN_VERIFY key. VerifyMac stays uncovered: it needs a MAC only GenerateMac can produce, Overcast does not implement GenerateMac, and the gap report records it.Two curated compromises are worth naming. The grant principals are the documentation account's root, arn:aws:iam::123456789012:root, rather than the caller's: KMS documents CreateGrant as usable cross-account and its own example grants to a role in another account, but nothing in the IR can name the running account — KeyMetadata.AWSAccountId would supply it, but Overcast did not return that member until #1906, so binding to it would have failed every grant test rather than the one that asserts it. That assertion lives in DescribeKeyMetadata, on its own, where a failure names the missing member and nothing else depends on it; rebinding the grant principals to it is now possible and left as a follow-up. And no identifier this recipe names is capped below 54 characters (#1886): AliasName and the grant Name are 256, Description is 8192, so `$name` fits everywhere it is used.",
   "service": "kms",
   "neverProbe": {
     "ConnectCustomKeyStore": "Connects a custom key store to its AWS CloudHSM cluster or external key store proxy, which changes whether every KMS key in that store can be used at all.",
@@ -303,6 +303,34 @@
                 "$.SigningAlgorithm": { "equals": "RSASSA_PKCS1_V1_5_SHA_256" }
               }
             }
+          ]
+        },
+        {
+          "$comment": "The negative path (#2160). The same signature over a different message does not verify, and AWS answers that with KMSInvalidSignatureException rather than SignatureValid false: \"If the signature verification fails, the Verify operation fails with an KMSInvalidSignatureException exception.\"",
+          "name": "VerifyOtherMessage",
+          "op": "Verify",
+          "params": {
+            "KeyId": { "$ref": "key.signid" },
+            "Message": { "$base64": "Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgbmV2ZXIgc2lnbmVk" },
+            "Signature": { "$base64": { "$ref": "key.signature" } },
+            "SigningAlgorithm": "RSASSA_PKCS1_V1_5_SHA_256"
+          },
+          "assert": [
+            { "kind": "errorCode", "error": { "shape": "KMSInvalidSignatureException" } }
+          ]
+        },
+        {
+          "$comment": "The same message and signature under a different algorithm do not verify either: \"If you submit a different algorithm, the signature verification fails.\" This is what catches a Sign that ignores SigningAlgorithm (#2160).",
+          "name": "VerifyOtherAlgorithm",
+          "op": "Verify",
+          "params": {
+            "KeyId": { "$ref": "key.signid" },
+            "Message": { "$base64": "Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgdG8gc2lnbg==" },
+            "Signature": { "$base64": { "$ref": "key.signature" } },
+            "SigningAlgorithm": "RSASSA_PSS_SHA_256"
+          },
+          "assert": [
+            { "kind": "errorCode", "error": { "shape": "KMSInvalidSignatureException" } }
           ]
         },
         {

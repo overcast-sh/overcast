@@ -8,6 +8,7 @@ import io.overcast.compat.harness.TestFn;
 import io.overcast.compat.scenario.Call;
 import io.overcast.compat.scenario.Check;
 import io.overcast.compat.scenario.Clause;
+import io.overcast.compat.scenario.ErrorSpec;
 import io.overcast.compat.scenario.Group;
 import io.overcast.compat.scenario.Values;
 import io.overcast.compat.scenario.Where;
@@ -104,6 +105,8 @@ public final class ScenariosKmsGen implements ServiceGroup {
                 Map.entry("kms-gen-key:CreateKeySigning", this::testKmsGenKeyCreateKeySigning),
                 Map.entry("kms-gen-key:Sign", this::testKmsGenKeySign),
                 Map.entry("kms-gen-key:Verify", this::testKmsGenKeyVerify),
+                Map.entry("kms-gen-key:VerifyOtherMessage", this::testKmsGenKeyVerifyOtherMessage),
+                Map.entry("kms-gen-key:VerifyOtherAlgorithm", this::testKmsGenKeyVerifyOtherAlgorithm),
                 Map.entry("kms-gen-key:ScheduleKeyDeletionSigning", this::testKmsGenKeyScheduleKeyDeletionSigning),
                 Map.entry("kms-gen-key:CreateGrant", this::testKmsGenKeyCreateGrant),
                 Map.entry("kms-gen-key:ListGrants", this::testKmsGenKeyListGrants),
@@ -578,6 +581,36 @@ public final class ScenariosKmsGen implements ServiceGroup {
                                 Check.equalTo("$.SignatureValid", true),
                                 Check.equalTo("$.SigningAlgorithm", "RSASSA_PKCS1_V1_5_SHA_256")
                         )
+                ));
+    }
+
+    private void testKmsGenKeyVerifyOtherMessage(TestContext t) {
+        GROUP_KMS_GEN_KEY.runTest(t, "VerifyOtherMessage",
+                new Call("Verify", "{\"KeyId\":{\"$ref\":\"key.signid\"},\"Message\":{\"$base64\":\"Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgbmV2ZXIgc2lnbmVk\"},\"Signature\":{\"$base64\":{\"$ref\":\"key.signature\"}},\"SigningAlgorithm\":\"RSASSA_PKCS1_V1_5_SHA_256\"}",
+                        b -> VerifyRequest.builder()
+                                .keyId(b.string("KeyId", Values.ref("key.signid")))
+                                .message(software.amazon.awssdk.core.SdkBytes.fromByteArray(java.util.Base64.getDecoder().decode("Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgbmV2ZXIgc2lnbmVk")))
+                                .signature(b.blob("Signature", Values.base64(Values.ref("key.signature"))))
+                                .signingAlgorithm("RSASSA_PKCS1_V1_5_SHA_256")
+                                .build(),
+                        r -> cl().verify((VerifyRequest) r)),
+                List.of(
+                        Clause.errorCode(ErrorSpec.of("KMSInvalidSignatureException", "KMSInvalidSignature"))
+                ));
+    }
+
+    private void testKmsGenKeyVerifyOtherAlgorithm(TestContext t) {
+        GROUP_KMS_GEN_KEY.runTest(t, "VerifyOtherAlgorithm",
+                new Call("Verify", "{\"KeyId\":{\"$ref\":\"key.signid\"},\"Message\":{\"$base64\":\"Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgdG8gc2lnbg==\"},\"Signature\":{\"$base64\":{\"$ref\":\"key.signature\"}},\"SigningAlgorithm\":\"RSASSA_PSS_SHA_256\"}",
+                        b -> VerifyRequest.builder()
+                                .keyId(b.string("KeyId", Values.ref("key.signid")))
+                                .message(software.amazon.awssdk.core.SdkBytes.fromByteArray(java.util.Base64.getDecoder().decode("Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgdG8gc2lnbg==")))
+                                .signature(b.blob("Signature", Values.base64(Values.ref("key.signature"))))
+                                .signingAlgorithm("RSASSA_PSS_SHA_256")
+                                .build(),
+                        r -> cl().verify((VerifyRequest) r)),
+                List.of(
+                        Clause.errorCode(ErrorSpec.of("KMSInvalidSignatureException", "KMSInvalidSignature"))
                 ));
     }
 

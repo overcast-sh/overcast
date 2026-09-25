@@ -215,6 +215,7 @@
           "nonEmpty": { "const": true, "description": "The path resolves to a value that is not null, \"\", [] or {}." },
           "isList": { "const": true, "description": "The path resolves to a list, or does not resolve at all. An empty list satisfies it, and so does an absent one: a single-page List* legally returns an empty page, and some AWS services omit that member entirely instead of serializing []. A present value that is not a list fails it." },
           "equals": { "$ref": "#/definitions/Value", "description": "The path resolves to a value equal (as JSON) to the evaluated expression." },
+          "equalsJSON": { "type": ["object", "array"], "description": "The path resolves to a JSON document equal, as a JSON value, to this one: a string is percent-decoded once and parsed as one JSON text, an object or array is the document already (botocore decodes IAM policy documents; the other SDKs do not). Object members compare by name in any order, arrays in order, numbers by value. The operand is a literal and is never evaluated; a key starting with $ anywhere inside it is refused. Legal only on a string member." },
           "matches": { "type": "string", "description": "The path resolves to a string matching this RE2-compatible regular expression." },
           "missing": { "const": true, "description": "The path does not resolve (any segment absent)." }
         }

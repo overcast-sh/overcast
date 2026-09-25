@@ -15,6 +15,8 @@
  */
 
 import {
+  asJsonDocument,
+  checkEqualsJsonOperand,
   describeClipped,
   evaluateValue,
   isEmpty,
@@ -112,6 +114,22 @@ function evaluateCheck(
     return { path, expected: `a string matching /${check.matches}/`, actual };
   }
 
+  if ("equalsJSON" in check) {
+    // Never evaluated: the operand is a literal document. The actual side is
+    // the decoded document, so a reader compares two documents rather than a
+    // percent-encoded string with an object. The loader has refused a bad
+    // operand already; a Check built by hand is held to the same rule, and
+    // the ExpressionError fails the clause as an unresolvable $ref would.
+    checkEqualsJsonOperand(check.equalsJSON);
+    const expected = expectationOf(check, ctx);
+    const document = asJsonDocument(found.value);
+    if (document === undefined) {
+      return { path, expected, actual: `not a JSON document: ${actual}` };
+    }
+    if (jsonEquals(document, check.equalsJSON)) return null;
+    return { path, expected, actual: `document ${render(document)}` };
+  }
+
   const expected = evaluateValue(check.equals, ctx);
   if (jsonEquals(found.value, expected)) return null;
   return { path, expected: render(expected), actual };
@@ -120,6 +138,7 @@ function evaluateCheck(
 function expectationOf(check: Check, ctx: EvalContext): string {
   if ("nonEmpty" in check) return "a non-empty value";
   if ("matches" in check) return `a string matching /${check.matches}/`;
+  if ("equalsJSON" in check) return `equalsJSON ${JSON.stringify(check.equalsJSON)}`;
   // isList and missing are handled before this is reached — both hold on a
   // path that does not resolve, so neither has an expectation to render here.
   return "the path to resolve";

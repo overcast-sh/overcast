@@ -260,6 +260,49 @@ public sealed class ScenarioTests
         }
     }
 
+    /// <summary>
+    /// equalsJSON through the group, on the member it exists for: IAM hands
+    /// AWSSDK the role's trust policy as the percent-encoded text the service
+    /// sent, and the check decodes and compares it as a document.
+    /// </summary>
+    [Fact]
+    public async Task EqualsJsonComparesTheMembersDocument()
+    {
+        var response = new Amazon.IdentityManagement.Model.GetRoleResponse
+        {
+            Role = new Amazon.IdentityManagement.Model.Role
+            {
+                AssumeRolePolicyDocument = "%7B%22Version%22%3A%222012-10-17%22%2C%22Statement%22%3A%5B%5D%7D",
+            },
+        };
+        ScenarioTest Probe(Check check) => new()
+        {
+            Call = new ScenarioCall
+            {
+                Op = "GetRole",
+                Params = "{}",
+                Build = _ => new Amazon.IdentityManagement.Model.GetRoleRequest(),
+                SendAsync = SendOk(response),
+            },
+            Assert = [Clause.ResponseField(check)],
+        };
+
+        await Group.RunTestAsync(NewContext(), "GetRole",
+            Probe(Check.EqualsJson("$.Role.AssumeRolePolicyDocument", "{\"Statement\":[],\"Version\":\"2012-10-17\"}")));
+
+        var failure = await Assert.ThrowsAsync<ScenarioFailure>(() => Group.RunTestAsync(NewContext(), "GetRole",
+            Probe(Check.EqualsJson("$.Role.AssumeRolePolicyDocument", "{\"Version\":\"2008-10-17\"}"))));
+        Assert.Contains(
+            "responseField equalsJSON at $.Role.AssumeRolePolicyDocument:"
+            + " expected equalsJSON {\"Version\":\"2008-10-17\"},"
+            + " actual document {\"Statement\":[],\"Version\":\"2012-10-17\"}",
+            failure.Message, StringComparison.Ordinal);
+
+        failure = await Assert.ThrowsAsync<ScenarioFailure>(() => Group.RunTestAsync(NewContext(), "GetRole",
+            Probe(Check.EqualsJson("$.Role.Description", "{}"))));
+        Assert.Contains("expected equalsJSON {}, actual <missing>", failure.Message, StringComparison.Ordinal);
+    }
+
     /// <summary>A stand-in response with one member of each shape the checks distinguish.</summary>
     private sealed class ProbeResponse
     {

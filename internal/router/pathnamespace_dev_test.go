@@ -31,6 +31,8 @@ var nonManifestRoutes = map[string]string{
 	"/*": "protocol root: the S3 fallback. S3's bucket/object space is deliberately unbounded, which is what makes every unclaimed prefix S3's.",
 	"/service/{service}/operation/{operation}": "protocol root: Smithy RPC v2 names the service and operation in the path itself. The manifest records each operation's own URI, never this dispatch shape.",
 
+	"/iceberg/*": "S3 Tables' Iceberg REST catalog, at the path AWS serves it on the S3 Tables endpoint (https://s3tables.<region>.amazonaws.com/iceberg). It is a real AWS surface, but the Iceberg REST spec defines it rather than any AWS model, so no manifest row can cover it. Dispatched on the SigV4 signing name like the S3 Tables roots, because \"iceberg\" is a legal bucket name; unsigned clients use the /_overcast/s3tables/iceberg mount instead.",
+
 	"/{accountID:[0-9]+}/{queueName}": "SQS path-style queue URL. A real AWS shape, but the manifest models it as an endpoint rather than an operation URI, so no row can cover it.",
 
 	"/_health":            "Overcast's own health endpoint before phase 2 moved it into the namespace, kept as an alias. A URL already written into someone's compose healthcheck or Testcontainers wait strategy is not a URL we can migrate for them, and a 404 there reads as a dead container — so it is served rather than left to the S3 catch-all. Reserved by the same underscore rule as internalPrefix. See internal/router/health_compat.go.",

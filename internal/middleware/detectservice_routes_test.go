@@ -103,7 +103,7 @@ var registeredRouteClassification = map[string]string{
 	// It is multi-valued because the prefix is a directory with several owners
 	// under it, not because anything is ambiguous: internalService reads the
 	// owner from the second segment.
-	"/_overcast": "appsync|athena|cloudfront|cognito|ecs|eks|events|internal|lambda|metrics|rds|secretsmanager|ses",
+	"/_overcast": "appsync|athena|cloudfront|cognito|ecs|eks|events|internal|lambda|metrics|rds|s3tables|secretsmanager|ses",
 
 	// The two compatibility roots, underscore-prefixed but deliberately not
 	// under "/_overcast". Their whole job is to answer at a URL somebody else's
@@ -225,8 +225,12 @@ var registeredRouteClassification = map[string]string{
 	//   S3 Tables. The router itself dispatches these on the credential scope
 	//   (router.go's signingNameDispatch): unsigned and S3-signed traffic
 	//   reaches S3's bucket named for the root, which is what "s3" says.
-	"/buckets":                            "s3",
-	"/get-table":                          "s3",
+	"/buckets":   "s3",
+	"/get-table": "s3",
+	//   ...and the Iceberg REST catalog AWS serves beside them, dispatched
+	//   the same way. An unsigned catalog client uses its /_overcast/s3tables
+	//   mount, which is classified above.
+	"/iceberg":                            "s3",
 	"/namespaces":                         "s3",
 	"/replication-status":                 "s3",
 	"/table-bucket-replication":           "s3",

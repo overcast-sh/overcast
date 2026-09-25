@@ -38,6 +38,7 @@ internal sealed class Execution(ScenarioGroup group, TestContext context, Contex
         [CheckKind.IsList] = "isList",
         [CheckKind.EqualTo] = "equals",
         [CheckKind.Matches] = "matches",
+        [CheckKind.EqualsJson] = "equalsJSON",
         [CheckKind.Missing] = "missing",
     };
 
@@ -449,6 +450,16 @@ internal sealed class Execution(ScenarioGroup group, TestContext context, Contex
                 if (!resolved || !Documents.JsonEqual(got, want))
                 {
                     throw Mismatch(Documents.Render(want));
+                }
+                return;
+            }
+
+            case CheckKind.EqualsJson:
+            {
+                var operand = check.Value!;
+                if (EqualsJsonCheck.Mismatch(operand, got, resolved) is { } actual)
+                {
+                    throw Fail(observed, step, label, check.Path, EqualsJsonCheck.Expected(operand), actual);
                 }
                 return;
             }

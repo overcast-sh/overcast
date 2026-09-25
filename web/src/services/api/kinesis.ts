@@ -49,7 +49,10 @@ export const kinesis = {
     const client = awsClients.kinesis()
     const [detail, shardsRes, tagsRes] = await Promise.all([
       client.send(new DescribeStreamSummaryCommand({ StreamName: name })),
-      client.send(new ListShardsCommand({ StreamName: name })),
+      // AT_LATEST: the open shards only. An unfiltered ListShards also lists
+      // the closed parents of every split and merge, as AWS does, and the
+      // Shards tab has no column yet that tells a closed shard from an open one.
+      client.send(new ListShardsCommand({ StreamName: name, ShardFilter: { Type: "AT_LATEST" } })),
       client.send(new ListTagsForStreamCommand({ StreamName: name })),
     ])
     const s = detail.StreamDescriptionSummary!

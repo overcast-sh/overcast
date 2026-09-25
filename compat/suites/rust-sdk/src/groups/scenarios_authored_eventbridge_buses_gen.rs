@@ -293,6 +293,13 @@ fn test_eventbridge_buses_list_event_buses(client: &aws_sdk_eventbridge::Client)
                     scenario::where_entry("$.Name", scenario::name("bus")),
                 ],
             ),
+            scenario::absent_from_list(
+                None,
+                "$.EventBuses",
+                vec![
+                    scenario::where_entry("$.Name", scenario::lit(::serde_json::json!("default"))),
+                ],
+            ),
         ],
     }
 }
@@ -450,6 +457,29 @@ fn test_eventbridge_buses_delete_event_bus(client: &aws_sdk_eventbridge::Client)
                 vec![
                     scenario::where_entry("$.Name", scenario::name("bus")),
                 ],
+            ),
+            scenario::absent_by_error(
+                Call {
+                    op: "DescribeEventBus",
+                    params: scenario::map(vec![("Name", scenario::name("bus"))]),
+                    export: Vec::new(),
+                    invoke: {
+                        let client = client.clone();
+                        scenario::invoker(move |b| {
+                            let client = client.clone();
+                            Box::pin(async move {
+                                let capture = scenario::Capture::new();
+                                let request = client
+                                    .describe_event_bus()
+                                    .name(b.string("Name")?)
+                                    .customize()
+                                    .interceptor(capture.clone());
+                                Ok(scenario::observe(request.send().await, &capture))
+                            })
+                        })
+                    },
+                },
+                scenario::error("ResourceNotFoundException", "ResourceNotFoundException"),
             ),
         ],
     }

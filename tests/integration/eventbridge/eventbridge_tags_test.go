@@ -120,22 +120,12 @@ func TestEventBridgeCreateEventBus_invalidTagRejected(t *testing.T) {
 	helpers.AssertStatus(t, resp, http.StatusBadRequest)
 	helpers.AssertJSONError(t, resp, "ValidationException")
 
-	// DescribeEventBus never 404s in this emulator (it mints an ARN for any
-	// name), so absence is checked via ListEventBuses instead.
-	list := ebCall(t, srv, "ListEventBuses", map[string]any{})
-	defer list.Body.Close()
-	helpers.AssertStatus(t, list, http.StatusOK)
-	var out struct {
-		EventBuses []struct {
-			Name string `json:"Name"`
-		} `json:"EventBuses"`
-	}
-	helpers.DecodeJSON(t, list, &out)
-	for _, b := range out.EventBuses {
-		if b.Name == "rejected-bus" {
-			t.Errorf("rejected-bus should not have been created")
-		}
-	}
+	// And: no bus was left behind — DescribeEventBus answers
+	// ResourceNotFoundException for it (#2110).
+	desc := ebCall(t, srv, "DescribeEventBus", map[string]any{"Name": "rejected-bus"})
+	defer desc.Body.Close()
+	helpers.AssertStatus(t, desc, http.StatusBadRequest)
+	helpers.AssertJSONError(t, desc, "ResourceNotFoundException")
 }
 
 // TestEventBridgeTagResource_roundTrip tags an existing rule with the SDK

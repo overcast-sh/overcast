@@ -35,6 +35,33 @@ func TestLoadRejectsAMalformedScenario(t *testing.T) {
 			]}`,
 			wantErr: "widgets-gen-thing/GetThingAbsent carries 2 errorCode clauses",
 		},
+		{
+			// An equalsJSON operand is a literal document and is never
+			// evaluated, so JSON text in a string is not one.
+			name: "an equalsJSON operand that is a string",
+			body: `{"version":1,"service":"widgets","client":{"endpointPrefix":"widgets"},"groups":[
+				{"name":"widgets-gen-thing","kind":"probe","setup":[],"teardown":[],"tests":[
+					{"name":"GetThing","op":"GetThing","call":{"op":"GetThing","params":{}},"assert":[
+						{"kind":"responseField","checks":{"$.Policy":{"equalsJSON":"{\"a\":1}"}}}
+					]}
+				]}
+			]}`,
+			wantErr: "equalsJSON: the operand must be a JSON object or array",
+		},
+		{
+			// A $-key inside the operand would be read as an expression
+			// anywhere else in the IR; here it is refused rather than read
+			// either way.
+			name: "an equalsJSON operand with a $-key",
+			body: `{"version":1,"service":"widgets","client":{"endpointPrefix":"widgets"},"groups":[
+				{"name":"widgets-gen-thing","kind":"probe","setup":[],"teardown":[],"tests":[
+					{"name":"GetThing","op":"GetThing","call":{"op":"GetThing","params":{}},"assert":[
+						{"kind":"responseField","checks":{"$.Policy":{"equalsJSON":{"Statement":[{"Resource":{"$ref":"q.arn"}}]}}}}
+					]}
+				]}
+			]}`,
+			wantErr: `its key "$ref" may not start with $`,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -116,6 +143,16 @@ func TestCheckDecoding(t *testing.T) {
 		{body: `{"equals":"60"}`, wantKind: CheckEquals, wantVal: "60"},
 		{body: `{"equals":null}`, wantKind: CheckEquals, wantVal: nil},
 		{body: `{"matches":"^p-"}`, wantKind: CheckMatches, wantVal: "^p-"},
+		{body: `{"equalsJSON":{"Version":"2012-10-17","Statement":[]}}`, wantKind: CheckEqualsJSON, wantVal: map[string]any{"Version": "2012-10-17", "Statement": []any{}}},
+		{body: `{"equalsJSON":["a",{"b":null}]}`, wantKind: CheckEqualsJSON, wantVal: []any{"a", map[string]any{"b": nil}}},
+		// The operand is a literal document, never a value expression: JSON
+		// text in a string, a scalar, and a $-key at any depth are refused
+		// when the file loads.
+		{body: `{"equalsJSON":"{\"a\":1}"}`, wantErr: true},
+		{body: `{"equalsJSON":1}`, wantErr: true},
+		{body: `{"equalsJSON":null}`, wantErr: true},
+		{body: `{"equalsJSON":{"$ref":"role.policy"}}`, wantErr: true},
+		{body: `{"equalsJSON":{"Statement":[{"Resource":{"$name":"q"}}]}}`, wantErr: true},
 		{body: `{}`, wantErr: true},
 		{body: `{"nonEmpty":true,"isList":true}`, wantErr: true},
 		{body: `{"nope":true}`, wantErr: true},
@@ -200,7 +237,7 @@ func checkClause(t *testing.T, file, where string, a *Assertion) {
 				t.Errorf("%s: %s: %v", file, where, err)
 			}
 			switch check.Kind {
-			case CheckNonEmpty, CheckIsList, CheckEquals, CheckMatches, CheckMissing:
+			case CheckNonEmpty, CheckIsList, CheckEquals, CheckMatches, CheckEqualsJSON, CheckMissing:
 			default:
 				t.Errorf("%s: %s: unknown check %q at %s", file, where, check.Kind, path)
 			}

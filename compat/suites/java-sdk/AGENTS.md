@@ -98,6 +98,7 @@ compat/suites/java-sdk/
       Group.java            ← setup → tests → teardown, and every assertion kind
       Call.java             ← one call: op, raw params, typed build, client method, exports
       Clause/Check/Where/ErrorSpec.java ← the closed assertion vocabulary
+      EqualsJson.java       ← equalsJSON: percent-decode, strict parse, compare as documents
       Values/Value/Binder/ContextBag.java ← $ref, $name, $concat, $index, $base64, $now, typed
       Doc/Json/Paths.java   ← SDK response → document, canonical JSON, path resolution
       Errors.java           ← error matching over this SDK's surfaces
@@ -119,6 +120,7 @@ compat/suites/java-sdk/
     scenario/GroupExecutionTest.java    ← the runtime, against an in-memory fake service
     scenario/ValuesAndDocumentTest.java ← values, documents, paths, canonical JSON
     scenario/ErrorFixturesTest.java     ← the shared error-matching conformance fixtures
+    scenario/EqualsJsonFixtureTest.java ← the shared equalsJSON fixture (compat/model/testdata/equalsjson)
     scenario/JavaSdkWireFactsTest.java  ← the SDK facts the emitter derives from the model
 ```
 

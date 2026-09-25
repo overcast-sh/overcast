@@ -121,6 +121,31 @@ All 49 listed operations are implemented. Back to [S3 Tables](../s3tables.md).
 | `UntagResource`       | ✅ Supported |                                                                          | [docs](https://docs.aws.amazon.com/AmazonS3/latest/API/API_s3TableBuckets_UntagResource.html)       |
 | `ListTagsForResource` | ✅ Supported |                                                                          | [docs](https://docs.aws.amazon.com/AmazonS3/latest/API/API_s3TableBuckets_ListTagsForResource.html) |
 
+---
+
+## Emulator extensions
+
+Operations Overcast serves that appear in no AWS model, so no SDK calls them and no AWS reference page describes them. They sit outside the operation counts above.
+
+| Operation                      | Status       | Notes                                                                                                                                 |
+| ------------------------------ | ------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `IcebergGetConfig`             | ✅ Supported | Needs `warehouse`; the `prefix` override is the URL-encoded ARN, and the defaults point the client's FileIO at Overcast's S3          |
+| `IcebergListNamespaces`        | ✅ Supported | `pageToken`/`pageSize`; a `parent` namespace has no children, since S3 Tables namespaces have one level                               |
+| `IcebergCreateNamespace`       | ✅ Supported | One-level namespaces; any properties are kept, where AWS supports only `owner`                                                        |
+| `IcebergLoadNamespaceMetadata` | ✅ Supported |                                                                                                                                       |
+| `IcebergNamespaceExists`       | ✅ Supported | `HEAD`                                                                                                                                |
+| `IcebergDropNamespace`         | ✅ Supported | `NamespaceNotEmptyException` while the namespace still holds tables                                                                   |
+| `IcebergUpdateProperties`      | ✅ Supported | Not served by AWS; `UnprocessableEntityException` for a key both set and removed                                                      |
+| `IcebergListTables`            | ✅ Supported | `pageToken`/`pageSize`                                                                                                                |
+| `IcebergCreateTable`           | ✅ Supported | Writes the first metadata file; also accepts `stage-create`, which AWS refuses with 400                                               |
+| `IcebergRegisterTable`         | ✅ Supported | Not served by AWS; the metadata's location must be an unused `--table-s3` warehouse                                                   |
+| `IcebergLoadTable`             | ✅ Supported | Reads the table's current metadata file from its warehouse                                                                            |
+| `IcebergTableExists`           | ✅ Supported | `HEAD`                                                                                                                                |
+| `IcebergUpdateTable`           | ✅ Supported | Every format v1/v2 update and requirement, in `UpdateTableMetadataLocation`'s compare-and-swap; `CommitFailedException` on a conflict |
+| `IcebergDropTable`             | ✅ Supported | Only with `purgeRequested=true`, as on AWS; the files stay in the warehouse                                                           |
+| `IcebergRenameTable`           | ✅ Supported | Within the table bucket                                                                                                               |
+| `IcebergReportMetrics`         | ✅ Supported | Not served by AWS; accepted and dropped                                                                                               |
+
 ## Related
 
 - [S3 Tables](../s3tables.md) — quick start, what works, and the differences from AWS

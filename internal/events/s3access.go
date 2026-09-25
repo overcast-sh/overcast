@@ -7,7 +7,7 @@ import (
 	"github.com/overcast-sh/overcast/internal/protocol"
 )
 
-// The in-process S3 accessor: how another service writes, lists and creates
+// The in-process S3 accessor: how another service reads, writes, lists and creates
 // buckets in the emulated S3 without an HTTP round trip through the router —
 // Athena writing query results to its OutputLocation, S3 Tables creating a
 // table's warehouse bucket.
@@ -66,6 +66,11 @@ type S3PutObjectFunc func(ctx context.Context, bucket, key string, body []byte, 
 // ListObjectsV2 does without a delimiter. maxKeys <= 0 means ListObjectsV2's
 // default page of 1,000, and larger values are capped there.
 type S3ListObjectsFunc func(ctx context.Context, bucket, prefix, continuationToken string, maxKeys int) (S3ObjectListPage, *protocol.AWSError)
+
+// S3GetObjectFunc reads an object's body, exactly as GetObject would: an empty
+// versionID reads the current version, and a missing bucket or key answers
+// NoSuchBucket or NoSuchKey.
+type S3GetObjectFunc func(ctx context.Context, bucket, key, versionID string) ([]byte, *protocol.AWSError)
 
 // S3EnsureBucketFunc creates bucket in region unless it already exists, in
 // which case it succeeds without touching it. An empty region means the

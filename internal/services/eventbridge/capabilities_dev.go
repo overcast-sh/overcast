@@ -8,8 +8,8 @@ func init() {
 	capabilities.Default.Register(
 		// Event buses
 		capabilities.Capability{Service: "eventbridge", Operation: "CreateEventBus", Category: "Event buses", Status: capabilities.StatusSupported, Notes: "Creates a custom event bus; stores Description, DeadLetterConfig and KmsKeyIdentifier"},
-		capabilities.Capability{Service: "eventbridge", Operation: "DescribeEventBus", Category: "Event buses", Status: capabilities.StatusSupported, Notes: "Returns bus details including Description, DeadLetterConfig, KmsKeyIdentifier and the Policy built from PutPermission grants; synthetic default bus"},
-		capabilities.Capability{Service: "eventbridge", Operation: "ListEventBuses", Category: "Event buses", Status: capabilities.StatusSupported, Notes: "Always includes default bus"},
+		capabilities.Capability{Service: "eventbridge", Operation: "DescribeEventBus", Category: "Event buses", Status: capabilities.StatusSupported, Notes: "Returns bus details including Description, DeadLetterConfig, KmsKeyIdentifier and the Policy built from PutPermission grants; ResourceNotFoundException for a missing bus, by name or ARN; the default bus always exists"},
+		capabilities.Capability{Service: "eventbridge", Operation: "ListEventBuses", Category: "Event buses", Status: capabilities.StatusSupported, Notes: "NamePrefix, Limit (1-100, default 100) and NextToken; includes the default bus when NamePrefix admits it"},
 		capabilities.Capability{Service: "eventbridge", Operation: "DeleteEventBus", Category: "Event buses", Status: capabilities.StatusSupported},
 		capabilities.Capability{Service: "eventbridge", Operation: "PutPermission", Category: "Event buses", Status: capabilities.StatusSupported, Notes: "Stores a resource policy statement on the bus (or replaces it wholesale via the Policy parameter), returned by DescribeEventBus as Policy; stored, not enforced, the same as the rest of Overcast's IAM policies"},
 		capabilities.Capability{Service: "eventbridge", Operation: "RemovePermission", Category: "Event buses", Status: capabilities.StatusSupported, Notes: "Removes one statement by StatementId, or the whole policy with RemoveAllPermissions"},

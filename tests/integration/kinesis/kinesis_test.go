@@ -646,10 +646,12 @@ func TestSplitShard(t *testing.T) {
 		t.Fatalf("expected empty body for SplitShard success, got %q", body)
 	}
 
-	// And: ListShards now shows two open child shards covering the
-	// original hash key range, with the parent no longer open.
+	// And: ListShards' open shards (AT_LATEST — an unfiltered listing also
+	// holds the closed parent) are two children covering the original hash
+	// key range, with the parent no longer among them.
 	resp = kinesisCall(t, srv, "ListShards", map[string]any{
-		"StreamName": "split-test",
+		"StreamName":  "split-test",
+		"ShardFilter": map[string]any{"Type": "AT_LATEST"},
 	})
 	var after struct {
 		Shards []struct {
@@ -743,9 +745,11 @@ func TestMergeShards(t *testing.T) {
 	helpers.AssertStatus(t, resp, http.StatusOK)
 	resp.Body.Close()
 
-	// Then: ListShards should show 1 open shard (the merged one)
+	// Then: ListShards should show 1 open shard (the merged one); the
+	// closed parents are only in an unfiltered listing
 	resp = kinesisCall(t, srv, "ListShards", map[string]any{
-		"StreamName": "merge-test",
+		"StreamName":  "merge-test",
+		"ShardFilter": map[string]any{"Type": "AT_LATEST"},
 	})
 	var afterResp struct {
 		Shards []struct {

@@ -14,9 +14,9 @@ func baseInput() CreateSpec {
 		TableUUID: "5f1a8f36-8b3a-4bcb-9b3a-1c2d3e4f5a6b",
 		Location:  "s3://abc--table-s3",
 		Fields: []Field{
-			{Name: "id", Type: "long", Required: true},
-			{Name: "name", Type: "string"},
-			{Name: "amount", Type: "Decimal( 10 ,2 )"},
+			{ID: 1, Name: "id", Type: PrimitiveType("long"), Required: true},
+			{ID: 2, Name: "name", Type: PrimitiveType("string")},
+			{ID: 3, Name: "amount", Type: PrimitiveType("Decimal( 10 ,2 )")},
 		},
 	}
 }
@@ -64,7 +64,7 @@ func TestNew_writesTheSpecsInitialTable(t *testing.T) {
 			t.Errorf("field %q id = %d, want %d", f.Name, f.ID, i+1)
 		}
 	}
-	if fields[2].Type != "decimal(10, 2)" || !fields[0].Required {
+	if fields[2].Type.Primitive != "decimal(10, 2)" || !fields[0].Required {
 		t.Errorf("fields = %+v", fields)
 	}
 	if len(m.PartitionSpecs) != 1 || len(m.PartitionSpecs[0].Fields) != 0 {
@@ -103,17 +103,19 @@ func TestNew_partitionAndSortOrder(t *testing.T) {
 func TestNew_rejectsWhatTheSpecDoesNotAllow(t *testing.T) {
 	// Given: a valid table, altered in one way the spec forbids
 	cases := map[string]func(*CreateSpec){
-		"no columns":         func(in *CreateSpec) { in.Fields = nil },
-		"duplicate column":   func(in *CreateSpec) { in.Fields = append(in.Fields, Field{Name: "id", Type: "int"}) },
-		"unknown type":       func(in *CreateSpec) { in.Fields[0].Type = "varchar" },
-		"nested type string": func(in *CreateSpec) { in.Fields[0].Type = "list<int>" },
+		"no columns": func(in *CreateSpec) { in.Fields = nil },
+		"duplicate column": func(in *CreateSpec) {
+			in.Fields = append(in.Fields, Field{ID: 4, Name: "id", Type: PrimitiveType("int")})
+		},
+		"unknown type":       func(in *CreateSpec) { in.Fields[0].Type = PrimitiveType("varchar") },
+		"nested type string": func(in *CreateSpec) { in.Fields[0].Type = PrimitiveType("list<int>") },
 		"bad partition": func(in *CreateSpec) {
 			in.PartitionFields = []PartitionField{{SourceID: 9, Name: "p", Transform: "identity"}}
 		},
 		"sort order id zero":  func(in *CreateSpec) { in.SortFields = []SortField{{SourceID: 1, Transform: "identity"}} },
 		"missing location":    func(in *CreateSpec) { in.Location = "" },
 		"column without name": func(in *CreateSpec) { in.Fields[1].Name = "" },
-		"v3-only type":        func(in *CreateSpec) { in.Fields[0].Type = "timestamp_ns" },
+		"v3-only type":        func(in *CreateSpec) { in.Fields[0].Type = PrimitiveType("timestamp_ns") },
 		"duplicate partition id": func(in *CreateSpec) {
 			in.PartitionFields = []PartitionField{{SourceID: 1, Name: "a", Transform: "identity", FieldID: 1001}, {SourceID: 2, Name: "b", Transform: "identity", FieldID: 1001}}
 		},

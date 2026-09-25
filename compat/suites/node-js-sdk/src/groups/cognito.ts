@@ -5,19 +5,16 @@
  * These tests define the coverage target for future Cognito implementation.
  *
  * Groups:
- *   cognito-userpools — user pool and user lifecycle
+ *   cognito-token-validity — user pool client token validity settings
+ *
+ * cognito-userpools resolves through its authored scenario
+ * (compat/model/authored/cognito-userpools.json).
  */
 
 import {
   CreateUserPoolCommand,
   DeleteUserPoolCommand,
-  DescribeUserPoolCommand,
-  ListUserPoolsCommand,
-  AdminCreateUserCommand,
-  AdminDeleteUserCommand,
-  ListUsersCommand,
   CreateUserPoolClientCommand,
-  ListUserPoolClientsCommand,
   DeleteUserPoolClientCommand,
   DescribeUserPoolClientCommand,
   UpdateUserPoolClientCommand,
@@ -28,193 +25,6 @@ import * as assert from "node:assert/strict";
 
 export function makeCognitoGroups(suite: string): TestGroup[] {
   return [
-    // ── cognito-userpools ──────────────────────────────────────────────────
-    {
-      suite,
-      service: "cognito",
-      name: "cognito-userpools",
-      tests: [
-        {
-          name: "CreateUserPool",
-          fn: async (ctx) => {
-            const { cognito } = makeClients(ctx);
-            const poolName = `compat-${ctx.runId}`;
-            const resp = await cognito.send(
-              new CreateUserPoolCommand({ PoolName: poolName }),
-            );
-            assert.ok(resp.UserPool?.Id, "CreateUserPool: missing Id");
-            (ctx as Record<string, unknown>)["_poolId"] = resp.UserPool.Id;
-          },
-        },
-        {
-          name: "DescribeUserPool",
-          fn: async (ctx) => {
-            const { cognito } = makeClients(ctx);
-            const poolId = (ctx as Record<string, unknown>)[
-              "_poolId"
-            ] as string;
-            assert.ok(poolId, "DescribeUserPool: no pool from CreateUserPool");
-            const resp = await cognito.send(
-              new DescribeUserPoolCommand({ UserPoolId: poolId }),
-            );
-            assert.ok(resp.UserPool?.Id, "DescribeUserPool: missing Id");
-          },
-        },
-        {
-          name: "ListUserPools",
-          fn: async (ctx) => {
-            const { cognito } = makeClients(ctx);
-            await cognito.send(new ListUserPoolsCommand({ MaxResults: 10 }));
-          },
-        },
-        {
-          name: "CreateUserPoolClient",
-          fn: async (ctx) => {
-            const { cognito } = makeClients(ctx);
-            const poolId = (ctx as Record<string, unknown>)[
-              "_poolId"
-            ] as string;
-            assert.ok(
-              poolId,
-              "CreateUserPoolClient: no pool from CreateUserPool",
-            );
-            const resp = await cognito.send(
-              new CreateUserPoolClientCommand({
-                UserPoolId: poolId,
-                ClientName: `compat-client-${ctx.runId}`,
-              }),
-            );
-            assert.ok(
-              resp.UserPoolClient?.ClientId,
-              "CreateUserPoolClient: missing ClientId",
-            );
-            (ctx as Record<string, unknown>)["_clientId"] =
-              resp.UserPoolClient.ClientId;
-          },
-        },
-        {
-          name: "ListUserPoolClients",
-          fn: async (ctx) => {
-            const { cognito } = makeClients(ctx);
-            const poolId = (ctx as Record<string, unknown>)[
-              "_poolId"
-            ] as string;
-            assert.ok(
-              poolId,
-              "ListUserPoolClients: no pool from CreateUserPool",
-            );
-            const resp = await cognito.send(
-              new ListUserPoolClientsCommand({
-                UserPoolId: poolId,
-                MaxResults: 10,
-              }),
-            );
-            const clientId = (ctx as Record<string, unknown>)[
-              "_clientId"
-            ] as string;
-            assert.ok(
-              resp.UserPoolClients?.some((c) => c.ClientId === clientId),
-              "ListUserPoolClients: created client not found",
-            );
-          },
-        },
-        {
-          name: "AdminCreateUser",
-          fn: async (ctx) => {
-            const { cognito } = makeClients(ctx);
-            const poolId = (ctx as Record<string, unknown>)[
-              "_poolId"
-            ] as string;
-            assert.ok(poolId, "AdminCreateUser: no pool from CreateUserPool");
-            await cognito.send(
-              new AdminCreateUserCommand({
-                UserPoolId: poolId,
-                Username: `compat-user-${ctx.runId}`,
-              }),
-            );
-            (ctx as Record<string, unknown>)["_username"] =
-              `compat-user-${ctx.runId}`;
-          },
-        },
-        {
-          name: "ListUsers",
-          fn: async (ctx) => {
-            const { cognito } = makeClients(ctx);
-            const poolId = (ctx as Record<string, unknown>)[
-              "_poolId"
-            ] as string;
-            if (!poolId) return;
-            await cognito.send(new ListUsersCommand({ UserPoolId: poolId }));
-          },
-        },
-        {
-          name: "AdminDeleteUser",
-          fn: async (ctx) => {
-            const { cognito } = makeClients(ctx);
-            const poolId = (ctx as Record<string, unknown>)[
-              "_poolId"
-            ] as string;
-            const username = (ctx as Record<string, unknown>)[
-              "_username"
-            ] as string;
-            if (!poolId || !username) return;
-            await cognito.send(
-              new AdminDeleteUserCommand({
-                UserPoolId: poolId,
-                Username: username,
-              }),
-            );
-          },
-        },
-        {
-          name: "DeleteUserPool",
-          fn: async (ctx) => {
-            const { cognito } = makeClients(ctx);
-            const poolId = (ctx as Record<string, unknown>)[
-              "_poolId"
-            ] as string;
-            if (!poolId) return;
-            await cognito.send(
-              new DeleteUserPoolCommand({ UserPoolId: poolId }),
-            );
-          },
-        },
-      ],
-      teardown: async (ctx) => {
-        const { cognito } = makeClients(ctx);
-        const poolId = (ctx as Record<string, unknown>)["_poolId"] as string;
-        if (!poolId) return;
-        const username = (ctx as Record<string, unknown>)[
-          "_username"
-        ] as string;
-        if (username) {
-          try {
-            await cognito.send(
-              new AdminDeleteUserCommand({
-                UserPoolId: poolId,
-                Username: username,
-              }),
-            );
-          } catch {}
-        }
-        const clientId = (ctx as Record<string, unknown>)[
-          "_clientId"
-        ] as string;
-        if (clientId) {
-          try {
-            await cognito.send(
-              new DeleteUserPoolClientCommand({
-                UserPoolId: poolId,
-                ClientId: clientId,
-              }),
-            );
-          } catch {}
-        }
-        try {
-          await cognito.send(new DeleteUserPoolCommand({ UserPoolId: poolId }));
-        } catch {}
-      },
-    },
     // ── cognito-token-validity ─────────────────────────────────────────────
     {
       suite,

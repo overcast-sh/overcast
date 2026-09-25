@@ -148,6 +148,11 @@ internal sealed class ScenariosAuthoredEventbridgeBuses : IServiceGroup
                 null,
                 "$.EventBuses",
                 new WhereEntry("$.Name", Val.Name("bus"))
+            ),
+            Clause.AbsentFromList(
+                null,
+                "$.EventBuses",
+                new WhereEntry("$.Name", "default")
             )
         ],
     });
@@ -250,7 +255,22 @@ internal sealed class ScenariosAuthoredEventbridgeBuses : IServiceGroup
                 },
                 "$.EventBuses",
                 new WhereEntry("$.Name", Val.Name("bus"))
-            )
+            ),
+            Clause.AbsentByError(
+                new ScenarioCall
+                {
+                    Op = "DescribeEventBus",
+                    Params = "{\"Name\":{\"$name\":\"bus\"}}",
+                    Build = b =>
+                    {
+                        var request = new DescribeEventBusRequest();
+                        request.Name = b.Bind<string>("Name", Val.Name("bus"));
+                        return request;
+                    },
+                    SendAsync = async request =>
+                        await Cl().DescribeEventBusAsync((DescribeEventBusRequest)request),
+                },
+                new ErrorSpec("ResourceNotFoundException", "ResourceNotFoundException"))
         ],
     });
 }

@@ -73,15 +73,24 @@ type pageCursor struct {
 	After string `json:"a"`
 	// Issued is the Unix time the token was minted, for nextTokenTTL.
 	Issued int64 `json:"t"`
+	// Filter is the ShardFilter a ListShards listing was made under. A
+	// request carrying the token may not repeat it, so the token must.
+	Filter *shardFilter `json:"f,omitempty"`
 }
 
 // sealPageToken mints the NextToken for a truncated page.
 func (h *Handler) sealPageToken(stream, after string) string {
-	raw, err := json.Marshal(pageCursor{Stream: stream, After: after, Issued: h.clk.Now().Unix()})
+	return h.sealCursor(pageCursor{Stream: stream, After: after})
+}
+
+// sealCursor mints the NextToken for cur, stamping its issue time.
+func (h *Handler) sealCursor(cur pageCursor) string {
+	cur.Issued = h.clk.Now().Unix()
+	raw, err := json.Marshal(cur)
 	if err != nil {
-		// pageCursor is three scalars; marshalling it cannot fail. Returning
-		// no token degrades to "this is the last page" rather than emitting
-		// a token no later call could decode.
+		// pageCursor is scalars and a struct of scalars; marshalling it
+		// cannot fail. Returning no token degrades to "this is the last
+		// page" rather than emitting a token no later call could decode.
 		return ""
 	}
 	return base64.URLEncoding.EncodeToString(raw)

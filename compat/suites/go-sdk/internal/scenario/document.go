@@ -2,8 +2,11 @@ package scenario
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"reflect"
+	"sort"
+	"strings"
 	"time"
 	"unicode"
 )
@@ -184,4 +187,188 @@ func mapKeyString(key reflect.Value) (string, bool) {
 		return key.String(), true
 	}
 	return "", false
+}
+
+// ---------------------------------------------------------------------------
+// equalsJSON — a member holding a JSON document, compared by value
+// ---------------------------------------------------------------------------
+//
+// IAM sends a policy document as percent-encoded JSON text and this SDK hands
+// that string back untouched, while botocore decodes it for python-sdk and
+// cli. equalsJSON is how one scenario check answers the same on both sides of
+// that split (compat/model/README.md § Assertions); its conformance fixture is
+// compat/model/testdata/equalsjson.
+
+// parseEqualsJSONOperand reads the operand cmd/compatgen writes into the
+// emitted source: exactly one JSON text holding an object or an array, with no
+// `$`-prefixed key at any depth. The operand is a literal and never
+// evaluated, so a key the rest of the IR would read as an expression —
+// {"$ref": ...} — is refused rather than read either way.
+func parseEqualsJSONOperand(text string) (any, error) {
+	var doc any
+	if err := json.Unmarshal([]byte(text), &doc); err != nil {
+		return nil, fmt.Errorf("equalsJSON operand is not one JSON text: %w", err)
+	}
+	switch doc.(type) {
+	case map[string]any, []any:
+	default:
+		return nil, fmt.Errorf("equalsJSON operand must be a JSON object or array, got %s", render(doc))
+	}
+	if err := refuseDollarKeys(doc); err != nil {
+		return nil, err
+	}
+	return doc, nil
+}
+
+// refuseDollarKeys walks a decoded JSON value for an object key starting with
+// `$`, in key order so the error names the same key on every run.
+func refuseDollarKeys(v any) error {
+	switch t := v.(type) {
+	case map[string]any:
+		keys := make([]string, 0, len(t))
+		for k := range t {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			if strings.HasPrefix(k, "$") {
+				return fmt.Errorf("equalsJSON operand is a literal document and is never evaluated, so its key %q may not start with $", k)
+			}
+			if err := refuseDollarKeys(t[k]); err != nil {
+				return err
+			}
+		}
+	case []any:
+		for _, item := range t {
+			if err := refuseDollarKeys(item); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// equalsJSON evaluates an equalsJSON check against the value at its path and,
+// when it does not hold, says what was there for the failure message: the
+// document it decoded to, the value that is not one, or the usual missing
+// rendering.
+func equalsJSON(got any, resolved bool, want any) (bool, string) {
+	if !resolved {
+		return false, missingValue
+	}
+	doc, isDoc := jsonDocument(got)
+	if !isDoc {
+		return false, "not a JSON document: " + render(got)
+	}
+	if !jsonValueEqual(doc, want) {
+		return false, "document " + render(doc)
+	}
+	return true, ""
+}
+
+// jsonDocument is the document an equalsJSON check compares, and whether the
+// value holds one at all. A string is percent-decoded once and then read as
+// exactly one JSON text; an object or a list is the document as it stands;
+// anything else (a number, a boolean, null) is not a document.
+func jsonDocument(v any) (any, bool) {
+	switch t := v.(type) {
+	case map[string]any, []any:
+		return t, true
+	case string:
+		// json.Unmarshal is the strict reader the check wants: surrounding
+		// whitespace is fine, anything after the one value is an error, and a
+		// number decodes to the float64 the comparison needs.
+		var doc any
+		if err := json.Unmarshal([]byte(percentDecode(t)), &doc); err != nil {
+			return nil, false
+		}
+		return doc, true
+	default:
+		return nil, false
+	}
+}
+
+// percentDecode is Python's urllib.parse.unquote, which botocore applies to a
+// policy document unconditionally and python-sdk and cli therefore cannot opt
+// out of, so every backend decodes the same way: `%XX` (either case) becomes
+// that byte, `+` stays `+`, and a `%` not followed by two hex digits is kept
+// as written. It runs once, so `%257B` is `%7B`. url.PathUnescape and
+// url.QueryUnescape both refuse a malformed escape, and the latter turns `+`
+// into a space, so neither will do.
+func percentDecode(s string) string {
+	if !strings.Contains(s, "%") {
+		return s
+	}
+	out := make([]byte, 0, len(s))
+	for i := 0; i < len(s); i++ {
+		if s[i] == '%' && i+2 < len(s) {
+			hi, hiOK := unhex(s[i+1])
+			lo, loOK := unhex(s[i+2])
+			if hiOK && loOK {
+				out = append(out, hi<<4|lo)
+				i += 2
+				continue
+			}
+		}
+		out = append(out, s[i])
+	}
+	return string(out)
+}
+
+func unhex(c byte) (byte, bool) {
+	switch {
+	case '0' <= c && c <= '9':
+		return c - '0', true
+	case 'a' <= c && c <= 'f':
+		return c - 'a' + 10, true
+	case 'A' <= c && c <= 'F':
+		return c - 'A' + 10, true
+	}
+	return 0, false
+}
+
+// jsonValueEqual is equalsJSON's equality: objects by member name whatever
+// their order, arrays element by element in order, numbers by numeric value
+// (so 1, 1.0 and 1e0 are equal, and so are -0 and 0, which jsonEqual's
+// canonical text would tell apart), and strings, booleans and null by type and
+// value with no coercion.
+func jsonValueEqual(a, b any) bool {
+	switch x := a.(type) {
+	case map[string]any:
+		y, ok := b.(map[string]any)
+		if !ok || len(x) != len(y) {
+			return false
+		}
+		for k, xv := range x {
+			yv, present := y[k]
+			if !present || !jsonValueEqual(xv, yv) {
+				return false
+			}
+		}
+		return true
+	case []any:
+		y, ok := b.([]any)
+		if !ok || len(x) != len(y) {
+			return false
+		}
+		for i := range x {
+			if !jsonValueEqual(x[i], y[i]) {
+				return false
+			}
+		}
+		return true
+	case float64:
+		y, ok := b.(float64)
+		return ok && x == y
+	case string:
+		y, ok := b.(string)
+		return ok && x == y
+	case bool:
+		y, ok := b.(bool)
+		return ok && x == y
+	case nil:
+		return b == nil
+	default:
+		return false
+	}
 }

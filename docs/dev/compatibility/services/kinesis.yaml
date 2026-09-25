@@ -2,12 +2,12 @@ service: kinesis
 status: fixed
 priority: p1
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-09-20
+last_updated: 2026-09-25
 protocols: [aws_json_1_1, aws_json_1_0, rpcv2_cbor]
 implementation: [internal/services/kinesis]
 integration_tests: [tests/integration/kinesis]
 capability_docs: docs/services/kinesis.md
-operation_count_estimate: 23 implemented (22 Supported, 1 Partial)
+operation_count_estimate: 23 implemented (23 Supported)
 current_support_level: >-
   Core Data Streams support for lifecycle, records, shards, retention and
   tagging. The four operations AWS documents as paginated — ListStreams,
@@ -15,8 +15,10 @@ current_support_level: >-
   page-size and truncation members instead of answering every call with the
   whole set (#155), and the error codes and HTTP statuses of every
   implemented operation were audited against the pinned Smithy model.
-  Record ingestion, shard iterators and resharding were not re-reviewed by
-  this pass beyond the error codes they raise.
+  Record ingestion and shard iterators were not re-reviewed by that pass
+  beyond the error codes they raise. The shard layout and resharding were
+  reviewed in #2112: initial hash ranges, split and merge ranges, lineage,
+  closed parents in the listings, and ListShards' ShardFilter.
 operations:
   ListStreams:
     status: reviewed
@@ -66,6 +68,10 @@ operations:
       - tests/integration/kinesis/pagination_test.go::TestRPCv2CBOR_ListShards_paginates
       - internal/services/kinesis/pagination_test.go::TestListShards_expiredNextTokenIsRejected
       - tests/integration/kinesis/golden_test.go::TestGolden_ListShards
+      - tests/integration/kinesis/shard_layout_test.go::TestListShards_shardFilterSelectsShardsByLifecycle
+      - tests/integration/kinesis/shard_layout_test.go::TestListShards_nextTokenKeepsTheShardFilter
+      - tests/integration/kinesis/shard_layout_test.go::TestListShards_malformedShardFilterIsInvalidArgument
+      - tests/integration/kinesis/shard_layout_test.go::TestRPCv2CBOR_ListShards_honoursShardFilter
     scenarios:
       page_walk:
         status: reviewed
@@ -83,17 +89,56 @@ operations:
         status: reviewed
         evidence: "\"Tokens expire after 300 seconds ... If you specify an expired token in a call to ListShards, you get ExpiredNextTokenException.\" nextTokenTTL implements it off the injected clock; a malformed token stays InvalidArgumentException so a client can tell the two apart."
       shard_filter:
-        status: unsupported
-        evidence: ShardFilter (AT_TRIM_HORIZON, FROM_TRIM_HORIZON, AT_LATEST, AFTER_SHARD_ID, AT_TIMESTAMP, FROM_TIMESTAMP) is not implemented and is ignored, so a filtered call returns the unfiltered open-shard list. Recorded in the ListShards capability note and in the Differences table of docs/services/kinesis.md; the operation is declared Partial for it.
+        status: fixed
+        evidence: "#2112: every ShardFilter type is honoured per https://docs.aws.amazon.com/kinesis/latest/APIReference/API_ShardFilter.html, over JSON and CBOR (a CBOR epoch-seconds tag decodes as Timestamp). Type is required; AFTER_SHARD_ID needs ShardId and AT_/FROM_TIMESTAMP need Timestamp, and a property given with a Type it cannot be used with is refused — all InvalidArgumentException. A NextToken carries the filter it was minted under, so ShardFilter alongside a NextToken is refused like the other NextToken exclusions (the reference does not list that exclusion; the KCL never sends both). Because no record expires, TRIM_HORIZON is the stream's creation: FROM_TRIM_HORIZON is every shard and AT_TRIM_HORIZON the shards CreateStream made. An AT_TIMESTAMP before the stream existed is corrected to TRIM_HORIZON, as the reference documents for FROM_TIMESTAMP."
       closed_shards:
-        status: intentionally_partial
-        evidence: Only open shards are listed, so a split or merge parent disappears rather than being returned with its EndingSequenceNumber. Pre-existing behaviour, unchanged by this pass and already documented.
+        status: fixed
+        evidence: "#2112: an unfiltered ListShards (FROM_TRIM_HORIZON, the documented default) lists a split or merge parent with its EndingSequenceNumber, as DescribeStream already did, and children carry ParentShardId/AdjacentParentShardId. Closed shards never expire (see intentionally_partial)."
     evidence:
       - Pinned model — ListShardsInput {StreamName, NextToken, ExclusiveStartShardId, MaxResults, StreamCreationTimestamp, ShardFilter, StreamARN, StreamId}, ListShardsOutput {Shards, NextToken}, ListShardsInputLimit @range 1..10000.
     gaps:
-      - ShardFilter is accepted and ignored.
       - StreamCreationTimestamp is only used to reject the NextToken combination; it does not disambiguate a recreated stream.
-    next_action: implement ShardFilter, or refuse it explicitly, if a consumer needs it
+      - Whether AWS accepts ShardFilter together with NextToken is unverified; Overcast refuses it.
+    next_action: none
+  Resharding:
+    status: fixed
+    aws_docs:
+      - https://docs.aws.amazon.com/kinesis/latest/APIReference/API_SplitShard.html
+      - https://docs.aws.amazon.com/kinesis/latest/APIReference/API_MergeShards.html
+      - https://docs.aws.amazon.com/kinesis/latest/APIReference/API_Shard.html
+      - https://docs.aws.amazon.com/cli/latest/reference/kinesis/list-shards.html
+    protocol: aws_json_1_1 and rpcv2_cbor
+    tests:
+      - tests/integration/kinesis/shard_layout_test.go::TestCreateStream_hashKeyRangesSplitTheKeyspaceAtFloorOfITimes2To128OverN
+      - tests/integration/kinesis/shard_layout_test.go::TestCreateStream_threeShardRangesMatchTheAWSCLIExample
+      - tests/integration/kinesis/shard_layout_test.go::TestSplitShard_childrenAbutAtTheNewStartingHashKeyAndNameTheirParent
+      - tests/integration/kinesis/shard_layout_test.go::TestSplitShard_theSplitKeyBelongsToTheUpperChildOnly
+      - tests/integration/kinesis/shard_layout_test.go::TestSplitShard_newStartingHashKeyOutsideTheParentIsInvalidArgument
+      - tests/integration/kinesis/shard_layout_test.go::TestMergeShards_mergedChildNamesBothParentsAndCoversTheirUnion
+      - tests/integration/kinesis/shard_layout_test.go::TestMergeShards_nonAdjacentShardsAreInvalidArgument
+      - tests/integration/kinesis/shard_layout_test.go::TestMergeShards_afterASplitOnlyTheAbuttingShardsMerge
+    scenarios:
+      initial_hash_ranges:
+        status: fixed
+        evidence: "#2112: shard i of N covers [floor(i*2^128/N), floor((i+1)*2^128/N) - 1]; the AWS CLI list-shards example (3 shards, shardId-000000000001 from 113427455640312821154458202477256070485) is reproduced exactly. Dividing 2^128 - 1 left a 2-shard stream's shard 0 ending at 2^127 - 2. The MCP runtime provider's create-stream tool, which gave every shard the whole keyspace, now uses the same layout."
+      split_ranges:
+        status: fixed
+        evidence: "#2112: the lower child ends at NewStartingHashKey - 1 (it ended at the key, which both children then owned). NewStartingHashKey must match its modeled pattern and lie strictly inside the parent's range, else InvalidArgumentException. The strict upper bound follows moto (its error message reads as copied from AWS) and is unverified against AWS; it errs toward refusing."
+      merge_adjacency:
+        status: fixed
+        evidence: '#2112: "Two shards are considered adjacent if the union of the hash key ranges for the two shards form a contiguous set with no gaps"; any other pair, a shard with itself included, is InvalidArgumentException. It used to merge whatever it was given into the min-start/max-end range.'
+      lineage:
+        status: fixed
+        evidence: "#2112: split children carry ParentShardId; a merged child carries ParentShardId = ShardToMerge and AdjacentParentShardId = AdjacentShardToMerge (the attribution moto and kinesis-mock both make), in DescribeStream and ListShards."
+      closed_shard_target:
+        status: tests_missing
+        evidence: Splitting or merging an already-closed shard answers ResourceNotFoundException. moto answers InvalidArgumentException ("... has already been merged or split, and thus is not eligible for merging or splitting") and kinesis-mock ResourceInUseException; unverified against AWS, so left unchanged.
+    evidence:
+      - AWS docs as listed; moto (moto/kinesis/models.py) and kinesis-mock (SplitShardRequest/MergeShardsRequest/ListShardsRequest.scala) cross-checked. No real AWS call was made.
+    gaps:
+      - The error for resharding a closed shard is unverified (see closed_shard_target).
+      - EndingSequenceNumber/StartingSequenceNumber on reshard are 21-digit placeholders, numerically below the 31-digit sequence numbers records carry.
+    next_action: verify the closed-shard reshard error against AWS when real-AWS access is approved
   DescribeStream:
     status: reviewed
     aws_docs:
@@ -200,15 +245,15 @@ findings:
     - "#155: ResourceNotFoundException answered HTTP 404 where every Kinesis exception is a 400."
     - "#155: a missing required member answered the unmodeled MissingParameter; it is InvalidArgumentException now."
     - "#155: ListShards accepts StreamARN as well as StreamName, which its reference requires."
+    - "#2112: initial hash ranges divided 2^128 - 1 instead of 2^128; SplitShard's children shared the split key; no shard carried ParentShardId/AdjacentParentShardId; MergeShards merged non-adjacent shards; ListShards hid closed parents and ignored ShardFilter."
   remaining_gaps:
-    - ListShards ignores ShardFilter.
     - Only ListShards accepts StreamARN; the other operations still require StreamName.
     - ListStreamConsumers and the rest of the enhanced fan-out surface are not implemented, so their pagination was not reviewed.
     - UpdateShardCount and DescribeLimits are unimplemented (#1096).
   intentionally_partial:
     - No throughput throttling, so ProvisionedThroughputExceededException is never raised.
     - Shard iterators never expire, so ExpiredIteratorException is never raised.
-    - Closed shards are omitted from ListShards.
+    - Closed shards never expire (no record does), so ListShards and DescribeStream keep every split or merge parent for the life of the stream.
     - Infrastructure failures use the shared InternalError rather than InternalFailureException.
 verification:
   commands:

@@ -11,30 +11,23 @@ import (
 	"github.com/overcast-sh/overcast-compat-go-sdk/internal/harness"
 )
 
+// Cognito returns the Cognito service group.
+//
+// Groups: cognito-token-validity. cognito-userpools resolves through its
+// authored scenario (compat/model/authored/cognito-userpools.json).
 func Cognito(c *clients.Clients) ServiceGroup {
 	g := &cognitoGroup{c: c}
 	return ServiceGroup{
 		Impls: map[string]harness.TestFn{
-			"cognito-userpools:CreateUserPool":                             g.CreateUserPool,
-			"cognito-userpools:DescribeUserPool":                           g.DescribeUserPool,
-			"cognito-userpools:ListUserPools":                              g.ListUserPools,
-			"cognito-userpools:CreateUserPoolClient":                       g.CreateUserPoolClient,
-			"cognito-userpools:ListUserPoolClients":                        g.ListUserPoolClients,
-			"cognito-userpools:AdminCreateUser":                            g.AdminCreateUser,
-			"cognito-userpools:ListUsers":                                  g.ListUsers,
-			"cognito-userpools:AdminDeleteUser":                            g.AdminDeleteUser,
-			"cognito-userpools:DeleteUserPool":                             g.DeleteUserPool,
 			"cognito-token-validity:CreateUserPoolClientWithTokenValidity": g.CreateClientTokenValidity,
 			"cognito-token-validity:DescribeUserPoolClientTokenValidity":   g.DescribeClientTokenValidity,
 			"cognito-token-validity:UpdateUserPoolClientTokenValidity":     g.UpdateClientTokenValidity,
 			"cognito-token-validity:DeleteUserPoolClient":                  g.DeleteUserPoolClient,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"cognito-userpools":      g.setupUserPools,
 			"cognito-token-validity": g.setupTokenValidity,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"cognito-userpools":      g.teardownUserPools,
 			"cognito-token-validity": g.teardownTokenValidity,
 		},
 	}
@@ -43,145 +36,6 @@ func Cognito(c *clients.Clients) ServiceGroup {
 type cognitoGroup struct{ c *clients.Clients }
 
 func (g *cognitoGroup) cl() *cip.Client { return g.c.Cognito() }
-
-func (g *cognitoGroup) setupUserPools(_ context.Context, _ *harness.TestContext) error { return nil }
-
-func (g *cognitoGroup) teardownUserPools(ctx context.Context, t *harness.TestContext) error {
-	poolID := t.GetString("cognito_pool_id")
-	if poolID == "" {
-		return nil
-	}
-	if username := t.GetString("cognito_username"); username != "" {
-		g.cl().AdminDeleteUser(ctx, &cip.AdminDeleteUserInput{ //nolint:errcheck
-			UserPoolId: aws.String(poolID),
-			Username:   aws.String(username),
-		})
-	}
-	g.cl().DeleteUserPool(ctx, &cip.DeleteUserPoolInput{UserPoolId: aws.String(poolID)}) //nolint:errcheck
-	return nil
-}
-
-func (g *cognitoGroup) CreateUserPool(ctx context.Context, t *harness.TestContext) error {
-	poolName := fmt.Sprintf("compat-%s", t.RunID)
-	resp, err := g.cl().CreateUserPool(ctx, &cip.CreateUserPoolInput{
-		PoolName: aws.String(poolName),
-	})
-	if err != nil {
-		return err
-	}
-	if resp.UserPool == nil || resp.UserPool.Id == nil {
-		return fmt.Errorf("CreateUserPool: missing Id")
-	}
-	t.Set("cognito_pool_id", *resp.UserPool.Id)
-	return nil
-}
-
-func (g *cognitoGroup) DescribeUserPool(ctx context.Context, t *harness.TestContext) error {
-	poolID := t.GetString("cognito_pool_id")
-	if poolID == "" {
-		return fmt.Errorf("DescribeUserPool: no pool from CreateUserPool")
-	}
-	resp, err := g.cl().DescribeUserPool(ctx, &cip.DescribeUserPoolInput{
-		UserPoolId: aws.String(poolID),
-	})
-	if err != nil {
-		return err
-	}
-	if resp.UserPool == nil || resp.UserPool.Id == nil {
-		return fmt.Errorf("DescribeUserPool: missing Id")
-	}
-	return nil
-}
-
-func (g *cognitoGroup) ListUserPools(ctx context.Context, t *harness.TestContext) error {
-	_, err := g.cl().ListUserPools(ctx, &cip.ListUserPoolsInput{
-		MaxResults: aws.Int32(10),
-	})
-	return err
-}
-
-func (g *cognitoGroup) AdminCreateUser(ctx context.Context, t *harness.TestContext) error {
-	poolID := t.GetString("cognito_pool_id")
-	if poolID == "" {
-		return fmt.Errorf("AdminCreateUser: no pool from CreateUserPool")
-	}
-	username := fmt.Sprintf("compat-user-%s", t.RunID)
-	_, err := g.cl().AdminCreateUser(ctx, &cip.AdminCreateUserInput{
-		UserPoolId: aws.String(poolID),
-		Username:   aws.String(username),
-	})
-	if err != nil {
-		return err
-	}
-	t.Set("cognito_username", username)
-	return nil
-}
-
-func (g *cognitoGroup) ListUsers(ctx context.Context, t *harness.TestContext) error {
-	poolID := t.GetString("cognito_pool_id")
-	if poolID == "" {
-		return nil
-	}
-	_, err := g.cl().ListUsers(ctx, &cip.ListUsersInput{
-		UserPoolId: aws.String(poolID),
-	})
-	return err
-}
-
-func (g *cognitoGroup) AdminDeleteUser(ctx context.Context, t *harness.TestContext) error {
-	poolID := t.GetString("cognito_pool_id")
-	username := t.GetString("cognito_username")
-	if poolID == "" || username == "" {
-		return nil
-	}
-	_, err := g.cl().AdminDeleteUser(ctx, &cip.AdminDeleteUserInput{
-		UserPoolId: aws.String(poolID),
-		Username:   aws.String(username),
-	})
-	return err
-}
-
-func (g *cognitoGroup) DeleteUserPool(ctx context.Context, t *harness.TestContext) error {
-	poolID := t.GetString("cognito_pool_id")
-	if poolID == "" {
-		return nil
-	}
-	_, err := g.cl().DeleteUserPool(ctx, &cip.DeleteUserPoolInput{
-		UserPoolId: aws.String(poolID),
-	})
-	return err
-}
-
-func (g *cognitoGroup) CreateUserPoolClient(ctx context.Context, t *harness.TestContext) error {
-	poolID := t.GetString("cognito_pool_id")
-	if poolID == "" {
-		return fmt.Errorf("CreateUserPoolClient: no pool from CreateUserPool")
-	}
-	resp, err := g.cl().CreateUserPoolClient(ctx, &cip.CreateUserPoolClientInput{
-		UserPoolId: aws.String(poolID),
-		ClientName: aws.String(fmt.Sprintf("compat-client-%s", t.RunID)),
-	})
-	if err != nil {
-		return err
-	}
-	if resp.UserPoolClient == nil || resp.UserPoolClient.ClientId == nil {
-		return fmt.Errorf("CreateUserPoolClient: missing ClientId")
-	}
-	t.Set("cognito_client_id", *resp.UserPoolClient.ClientId)
-	return nil
-}
-
-func (g *cognitoGroup) ListUserPoolClients(ctx context.Context, t *harness.TestContext) error {
-	poolID := t.GetString("cognito_pool_id")
-	if poolID == "" {
-		return fmt.Errorf("ListUserPoolClients: no pool from CreateUserPool")
-	}
-	_, err := g.cl().ListUserPoolClients(ctx, &cip.ListUserPoolClientsInput{
-		UserPoolId: aws.String(poolID),
-		MaxResults: aws.Int32(10),
-	})
-	return err
-}
 
 // ── cognito-token-validity ─────────────────────────────────────────────────
 

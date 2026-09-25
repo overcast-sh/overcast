@@ -4873,13 +4873,13 @@
           "operation": "Sign",
           "category": "Asymmetric crypto",
           "status": "✅ Supported",
-          "notes": "RSA_2048 with RSASSA_PKCS1_V1_5_SHA_256"
+          "notes": "RSA_2048 keys with all six RSASSA_PSS_* / RSASSA_PKCS1_V1_5_* algorithms, RAW or DIGEST messages; other signing key specs are refused"
         },
         {
           "operation": "Verify",
           "category": "Asymmetric crypto",
           "status": "✅ Supported",
-          "notes": "Returns `SignatureValid: true/false`"
+          "notes": "RSA_2048 keys, every RSASSA algorithm; a signature that does not verify fails with KMSInvalidSignatureException"
         },
         {
           "operation": "GetPublicKey",
@@ -5023,8 +5023,8 @@
         {
           "operation": "ListShards",
           "category": "General",
-          "status": "⚠️ Partial",
-          "notes": "Paginates on MaxResults/NextToken/ExclusiveStartShardId, addressable by StreamName or StreamARN; returns active (open) shards only and ignores ShardFilter"
+          "status": "✅ Supported",
+          "notes": "Paginates on MaxResults/NextToken/ExclusiveStartShardId, addressable by StreamName or StreamARN; lists closed split/merge parents with their lineage and honours every ShardFilter type. Closed shards never expire, so FROM_TRIM_HORIZON is every shard"
         },
         {
           "operation": "ListStreams",
@@ -5048,7 +5048,7 @@
           "operation": "MergeShards",
           "category": "General",
           "status": "✅ Supported",
-          "notes": "Closes both parents, creates merged child shard"
+          "notes": "Refuses shards whose hash key ranges are not adjacent; closes both parents and creates a child naming them as ParentShardId/AdjacentParentShardId"
         },
         {
           "operation": "PutRecord",
@@ -5071,7 +5071,7 @@
           "operation": "SplitShard",
           "category": "General",
           "status": "✅ Supported",
-          "notes": "Closes parent, creates two children at NewStartingHashKey"
+          "notes": "NewStartingHashKey must lie strictly inside the parent's range; closes the parent and creates two children, split at that key, naming it as ParentShardId"
         },
         {
           "operation": "StartStreamEncryption",
@@ -5121,13 +5121,13 @@
           "operation": "DescribeEventBus",
           "category": "Event buses",
           "status": "✅ Supported",
-          "notes": "Returns bus details including Description, DeadLetterConfig, KmsKeyIdentifier and the Policy built from PutPermission grants; synthetic default bus"
+          "notes": "Returns bus details including Description, DeadLetterConfig, KmsKeyIdentifier and the Policy built from PutPermission grants; ResourceNotFoundException for a missing bus, by name or ARN; the default bus always exists"
         },
         {
           "operation": "ListEventBuses",
           "category": "Event buses",
           "status": "✅ Supported",
-          "notes": "Always includes default bus"
+          "notes": "NamePrefix, Limit (1-100, default 100) and NextToken; includes the default bus when NamePrefix admits it"
         },
         {
           "operation": "DeleteEventBus",
@@ -6559,6 +6559,117 @@
           "operation": "ListTagsForResource",
           "category": "Tags",
           "status": "✅ Supported"
+        },
+        {
+          "operation": "IcebergGetConfig",
+          "category": "Iceberg REST catalog",
+          "status": "✅ Supported",
+          "notes": "Needs `warehouse`; the `prefix` override is the URL-encoded ARN, and the defaults point the client's FileIO at Overcast's S3",
+          "emulator_only": true
+        },
+        {
+          "operation": "IcebergListNamespaces",
+          "category": "Iceberg REST catalog",
+          "status": "✅ Supported",
+          "notes": "`pageToken`/`pageSize`; a `parent` namespace has no children, since S3 Tables namespaces have one level",
+          "emulator_only": true
+        },
+        {
+          "operation": "IcebergCreateNamespace",
+          "category": "Iceberg REST catalog",
+          "status": "✅ Supported",
+          "notes": "One-level namespaces; any properties are kept, where AWS supports only `owner`",
+          "emulator_only": true
+        },
+        {
+          "operation": "IcebergLoadNamespaceMetadata",
+          "category": "Iceberg REST catalog",
+          "status": "✅ Supported",
+          "emulator_only": true
+        },
+        {
+          "operation": "IcebergNamespaceExists",
+          "category": "Iceberg REST catalog",
+          "status": "✅ Supported",
+          "notes": "`HEAD`",
+          "emulator_only": true
+        },
+        {
+          "operation": "IcebergDropNamespace",
+          "category": "Iceberg REST catalog",
+          "status": "✅ Supported",
+          "notes": "`NamespaceNotEmptyException` while the namespace still holds tables",
+          "emulator_only": true
+        },
+        {
+          "operation": "IcebergUpdateProperties",
+          "category": "Iceberg REST catalog",
+          "status": "✅ Supported",
+          "notes": "Not served by AWS; `UnprocessableEntityException` for a key both set and removed",
+          "emulator_only": true
+        },
+        {
+          "operation": "IcebergListTables",
+          "category": "Iceberg REST catalog",
+          "status": "✅ Supported",
+          "notes": "`pageToken`/`pageSize`",
+          "emulator_only": true
+        },
+        {
+          "operation": "IcebergCreateTable",
+          "category": "Iceberg REST catalog",
+          "status": "✅ Supported",
+          "notes": "Writes the first metadata file; also accepts `stage-create`, which AWS refuses with 400",
+          "emulator_only": true
+        },
+        {
+          "operation": "IcebergRegisterTable",
+          "category": "Iceberg REST catalog",
+          "status": "✅ Supported",
+          "notes": "Not served by AWS; the metadata's location must be an unused `--table-s3` warehouse",
+          "emulator_only": true
+        },
+        {
+          "operation": "IcebergLoadTable",
+          "category": "Iceberg REST catalog",
+          "status": "✅ Supported",
+          "notes": "Reads the table's current metadata file from its warehouse",
+          "emulator_only": true
+        },
+        {
+          "operation": "IcebergTableExists",
+          "category": "Iceberg REST catalog",
+          "status": "✅ Supported",
+          "notes": "`HEAD`",
+          "emulator_only": true
+        },
+        {
+          "operation": "IcebergUpdateTable",
+          "category": "Iceberg REST catalog",
+          "status": "✅ Supported",
+          "notes": "Every format v1/v2 update and requirement, in `UpdateTableMetadataLocation`'s compare-and-swap; `CommitFailedException` on a conflict",
+          "emulator_only": true
+        },
+        {
+          "operation": "IcebergDropTable",
+          "category": "Iceberg REST catalog",
+          "status": "✅ Supported",
+          "notes": "Only with `purgeRequested=true`, as on AWS; the files stay in the warehouse",
+          "emulator_only": true
+        },
+        {
+          "operation": "IcebergRenameTable",
+          "category": "Iceberg REST catalog",
+          "status": "✅ Supported",
+          "notes": "Within the table bucket",
+          "emulator_only": true
+        },
+        {
+          "operation": "IcebergReportMetrics",
+          "category": "Iceberg REST catalog",
+          "status": "✅ Supported",
+          "notes": "Not served by AWS; accepted and dropped",
+          "emulator_only": true
         }
       ]
     },

@@ -72,6 +72,11 @@ export type Check =
   | { nonEmpty: true }
   | { isList: true }
   | { equals: Value }
+  /**
+   * A literal JSON object or array, never evaluated: no `$`-prefixed key at
+   * any depth (README § Documents in a string).
+   */
+  | { equalsJSON: JsonValue }
   | { matches: string }
   | { missing: true };
 

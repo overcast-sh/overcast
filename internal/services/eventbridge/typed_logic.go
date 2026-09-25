@@ -45,7 +45,13 @@ type describeEventBusResponse struct {
 	Policy string `json:"Policy,omitempty" cbor:"Policy,omitempty"`
 }
 
-type listEventBusesRequest struct{}
+type listEventBusesRequest struct {
+	NamePrefix string `json:"NamePrefix" cbor:"NamePrefix"`
+	// Limit is a pointer so an absent member (the default page size) is told
+	// apart from an explicit 0, which the model's @range(1, 100) rejects.
+	Limit     *int   `json:"Limit" cbor:"Limit"`
+	NextToken string `json:"NextToken" cbor:"NextToken"`
+}
 
 type eventBusResponse struct {
 	Name string `json:"Name" cbor:"Name"`
@@ -54,6 +60,7 @@ type eventBusResponse struct {
 
 type listEventBusesResponse struct {
 	EventBuses []eventBusResponse `json:"EventBuses" cbor:"EventBuses"`
+	NextToken  string             `json:"NextToken,omitempty" cbor:"NextToken,omitempty"`
 }
 
 type tagResourceRequest struct {
@@ -200,21 +207,36 @@ func (s *Service) createEventBusTyped(ctx context.Context, req *createEventBusRe
 }
 
 func (s *Service) describeEventBusTyped(ctx context.Context, req *describeEventBusRequest) (*describeEventBusResponse, *protocol.AWSError) {
-	name := req.Name
+	// Name may be the bus ARN — the EventBusNameOrArn pattern admits the
+	// prefix — and the bus is stored under its name either way.
+	name := eventBusNameFromRef(req.Name)
 	if name == "" {
 		name = "default"
+	}
+	raw, found, err := s.store.Get(ctx, nsBuses, serviceutil.RegionKey(s.region(ctx), name))
+	if err != nil {
+		return nil, protocol.Wrap(protocol.ErrInternalError, err)
+	}
+	// A store miss used to be answered with a synthesized bus, so an
+	// existence check succeeded here and failed on AWS (#2110). AWS models
+	// ResourceNotFoundException as DescribeEventBus's error for a bus that
+	// does not exist; only the default bus, which every account has and
+	// which is never written to the store, is described without a record.
+	var bus eventBus
+	switch {
+	case found:
+		if err := json.Unmarshal([]byte(raw), &bus); err != nil {
+			return nil, protocol.Wrap(protocol.ErrInternalError, fmt.Errorf("eventbridge: decode bus %s: %w", name, err))
+		}
+	case name == "default":
+		bus = eventBus{Name: name, ARN: s.busARN(ctx, name)}
+	default:
+		return nil, eventBusNotFound(name)
 	}
 	policy, aerr := s.busPolicyJSON(ctx, name)
 	if aerr != nil {
 		return nil, aerr
 	}
-	raw, found, err := s.store.Get(ctx, nsBuses, serviceutil.RegionKey(s.region(ctx), name))
-	if err != nil || !found {
-		arn := s.busARN(ctx, name)
-		return &describeEventBusResponse{Name: name, Arn: arn, Policy: policy}, nil
-	}
-	var bus eventBus
-	json.Unmarshal([]byte(raw), &bus) //nolint:errcheck
 	return &describeEventBusResponse{
 		Name:             bus.Name,
 		Arn:              bus.ARN,
@@ -225,21 +247,61 @@ func (s *Service) describeEventBusTyped(ctx context.Context, req *describeEventB
 	}, nil
 }
 
-func (s *Service) listEventBusesTyped(ctx context.Context, _ *listEventBusesRequest) (*listEventBusesResponse, *protocol.AWSError) {
-	kvs, err := s.store.Scan(ctx, nsBuses, serviceutil.RegionKey(s.region(ctx), ""))
-	if err != nil {
-		return nil, protocol.ErrInternalError
-	}
-	items := make([]eventBusResponse, 0, len(kvs)+1)
-	defaultARN := s.busARN(ctx, "default")
-	items = append(items, eventBusResponse{Name: "default", Arn: defaultARN})
-	for _, kv := range kvs {
-		var bus eventBus
-		if json.Unmarshal([]byte(kv.Value), &bus) == nil && bus.Name != "default" {
-			items = append(items, eventBusResponse{Name: bus.Name, Arn: bus.ARN})
+// listEventBusesPageOptions is ListEventBuses's page size. The model caps
+// Limit at 100 (LimitMax100) and the API reference documents no default for
+// an omitted Limit, so the cap doubles as the default: a caller that never
+// paginates sees at most one full page and a NextToken, the same shape it
+// must already handle on AWS.
+var listEventBusesPageOptions = serviceutil.PaginateOptions{DefaultLimit: 100, MaxLimit: 100}
+
+func (s *Service) listEventBusesTyped(ctx context.Context, req *listEventBusesRequest) (*listEventBusesResponse, *protocol.AWSError) {
+	// Limit is modeled @range(1, 100); an explicit value outside it is
+	// refused rather than clamped, the loud direction when AWS's exact
+	// answer is unverified.
+	if req.Limit != nil && (*req.Limit < 1 || *req.Limit > listEventBusesPageOptions.MaxLimit) {
+		return nil, &protocol.AWSError{
+			Code:       "ValidationException",
+			Message:    fmt.Sprintf("1 validation error detected: Value '%d' at 'limit' failed to satisfy constraint: Member must have value between 1 and 100", *req.Limit),
+			HTTPStatus: http.StatusBadRequest,
 		}
 	}
-	return &listEventBusesResponse{EventBuses: items}, nil
+	kvs, err := s.store.Scan(ctx, nsBuses, serviceutil.RegionKey(s.region(ctx), ""))
+	if err != nil {
+		return nil, protocol.Wrap(protocol.ErrInternalError, err)
+	}
+	items := make([]eventBusResponse, 0, len(kvs)+1)
+	// The default bus is never written to the store but always exists, so
+	// it heads the list whenever NamePrefix admits it. Stored buses follow
+	// in key (name) order, which keeps the page boundaries stable.
+	if strings.HasPrefix("default", req.NamePrefix) {
+		items = append(items, eventBusResponse{Name: "default", Arn: s.busARN(ctx, "default")})
+	}
+	for _, kv := range kvs {
+		var bus eventBus
+		if json.Unmarshal([]byte(kv.Value), &bus) != nil || bus.Name == "default" {
+			continue
+		}
+		if !strings.HasPrefix(bus.Name, req.NamePrefix) {
+			continue
+		}
+		items = append(items, eventBusResponse{Name: bus.Name, Arn: bus.ARN})
+	}
+	limit := 0
+	if req.Limit != nil {
+		limit = *req.Limit
+	}
+	page, err := serviceutil.Paginate(items, limit, req.NextToken, listEventBusesPageOptions)
+	if err != nil {
+		// The model lists only InternalException for ListEventBuses; a token
+		// this server never issued is a malformed request, answered with the
+		// ValidationException EventBridge uses for those.
+		return nil, &protocol.AWSError{
+			Code:       "ValidationException",
+			Message:    "The NextToken provided is invalid.",
+			HTTPStatus: http.StatusBadRequest,
+		}
+	}
+	return &listEventBusesResponse{EventBuses: page.Items, NextToken: page.NextToken}, nil
 }
 
 func (s *Service) tagResourceTyped(ctx context.Context, req *tagResourceRequest) (*struct{}, *protocol.AWSError) {
@@ -319,7 +381,8 @@ func validatePutRuleTrigger(req *putRuleRequest) *protocol.AWSError {
 // follows what this package already returns for a missing rule.
 //
 // The default bus is never written to the store — DescribeEventBus answers for
-// it whether or not it was created — so it is always reachable. EventBusName
+// it whether or not it was created, and for no other unstored name (#2110) —
+// so it is always reachable. EventBusName
 // may also be the bus ARN, which the API's own parameter pattern admits as an
 // optional prefix; the name is returned either way, because every other rule
 // path keys off the name.
@@ -336,13 +399,20 @@ func (s *Service) requireEventBus(ctx context.Context, ref string) (string, *pro
 		return "", protocol.ErrInternalError
 	}
 	if !found {
-		return "", &protocol.AWSError{
-			Code:       "ResourceNotFoundException",
-			Message:    fmt.Sprintf("Event bus %s does not exist.", name),
-			HTTPStatus: http.StatusBadRequest,
-		}
+		return "", eventBusNotFound(name)
 	}
 	return name, nil
+}
+
+// eventBusNotFound is the ResourceNotFoundException AWS answers for an event
+// bus that does not exist ("An entity that you specified does not exist"). AWS
+// publishes no message text; the wording is Overcast's.
+func eventBusNotFound(name string) *protocol.AWSError {
+	return &protocol.AWSError{
+		Code:       "ResourceNotFoundException",
+		Message:    fmt.Sprintf("Event bus %s does not exist.", name),
+		HTTPStatus: http.StatusBadRequest,
+	}
 }
 
 // requireRuleHasNoTargets refuses to delete a rule that still has targets.

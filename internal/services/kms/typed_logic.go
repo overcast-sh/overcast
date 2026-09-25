@@ -556,41 +556,6 @@ func (h *Handler) generateRandomTyped(_ context.Context, req *generateRandomRequ
 	return &generateRandomResponse{Plaintext: out}, nil
 }
 
-func (h *Handler) signTyped(ctx context.Context, req *signRequest) (*signResponse, *protocol.AWSError) {
-	k, aerr := h.resolveKeyForTyped(ctx, req.KeyId)
-	if aerr != nil {
-		return nil, aerr
-	}
-	privKey, err := parseRSAPrivateKey(k.RSAPrivKey)
-	if err != nil {
-		return nil, protocol.ErrInternalError
-	}
-	digest := sha256.Sum256(req.Message)
-	sig, err := rsa.SignPKCS1v15(rand.Reader, privKey, crypto.SHA256, digest[:])
-	if err != nil {
-		return nil, protocol.ErrInternalError
-	}
-	return &signResponse{KeyId: k.ARN, Signature: sig, SigningAlgorithm: req.SigningAlgorithm}, nil
-}
-
-func (h *Handler) verifyTyped(ctx context.Context, req *verifyRequest) (*verifyResponse, *protocol.AWSError) {
-	k, aerr := h.resolveKeyForTyped(ctx, req.KeyId)
-	if aerr != nil {
-		return nil, aerr
-	}
-	privKey, err := parseRSAPrivateKey(k.RSAPrivKey)
-	if err != nil {
-		return nil, protocol.ErrInternalError
-	}
-	digest := sha256.Sum256(req.Message)
-	verifyErr := rsa.VerifyPKCS1v15(&privKey.PublicKey, crypto.SHA256, digest[:], req.Signature)
-	return &verifyResponse{
-		KeyId:            k.ARN,
-		SignatureValid:   verifyErr == nil,
-		SigningAlgorithm: req.SigningAlgorithm,
-	}, nil
-}
-
 func (h *Handler) tagResourceTyped(ctx context.Context, req *tagResourceRequest) (*struct{}, *protocol.AWSError) {
 	k, aerr := h.resolveKeyForTyped(ctx, req.KeyId)
 	if aerr != nil {

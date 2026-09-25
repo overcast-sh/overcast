@@ -7,8 +7,9 @@ package io.overcast.compat.scenario;
  *
  * @param path  the response path this check reads
  * @param kind  which check it is
- * @param value the expected value for {@code EQUALS} and the pattern for
- *              {@code MATCHES}; {@code null} for the rest
+ * @param value the expected value for {@code EQUALS}, the pattern for
+ *              {@code MATCHES} and the parsed operand document for
+ *              {@code EQUALS_JSON}; {@code null} for the rest
  */
 public record Check(String path, Check.Kind kind, Object value) {
 
@@ -18,6 +19,7 @@ public record Check(String path, Check.Kind kind, Object value) {
         IS_LIST("isList"),
         EQUALS("equals"),
         MATCHES("matches"),
+        EQUALS_JSON("equalsJSON"),
         MISSING("missing");
 
         private final String label;
@@ -59,6 +61,24 @@ public record Check(String path, Check.Kind kind, Object value) {
     /** Holds when the path resolves to a string matching the pattern. */
     public static Check matches(String path, String pattern) {
         return new Check(path, Kind.MATCHES, pattern);
+    }
+
+    /**
+     * Holds when the path resolves to a JSON document equal, as JSON, to
+     * {@code document}: a string percent-decoded once and parsed, or an object
+     * or list as it is (see {@link EqualsJson}).
+     *
+     * <p>{@code document} is the operand as the compact JSON text the emitter
+     * wrote. It is parsed here, once, so an operand that is not a literal
+     * object or array fails the test that builds it rather than every
+     * evaluation of it; {@code cmd/compatgen} refuses such an operand first, so
+     * this is the backstop the shared fixture holds every runtime to.
+     *
+     * @throws ValueException when the operand is not one JSON object or array,
+     *                        or has a {@code $}-prefixed key at any depth
+     */
+    public static Check equalsJson(String path, String document) {
+        return new Check(path, Kind.EQUALS_JSON, EqualsJson.operand(document));
     }
 
     /**
