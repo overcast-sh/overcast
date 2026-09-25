@@ -77,8 +77,10 @@ func (s *createDatabaseStmt) run(ctx context.Context, env ddlEnv) (*queryResult,
 }
 
 func (s *dropDatabaseStmt) run(ctx context.Context, env ddlEnv) (*queryResult, *queryFailure) {
-	if _, found, err := env.catalog.GetDatabase(ctx, s.Name); err != nil || !found {
-		if err == nil && s.IfExists {
+	if _, found, err := env.catalog.GetDatabase(ctx, s.Name); err != nil {
+		return nil, catalogFailure(protocol.Wrap(protocol.ErrInternalError, err))
+	} else if !found {
+		if s.IfExists {
 			return emptyResult(), nil
 		}
 		return nil, failure(errorCategoryUser, errorTypeNotFound, "FAILED: SemanticException [Error 10072]: Database does not exist: "+s.Name)

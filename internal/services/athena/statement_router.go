@@ -27,6 +27,9 @@ func (s *Service) runnerFor(ctx context.Context, qe QueryExecution) queryRunner 
 		}
 		return ddlRunner{stmt: stmt, env: env}
 	}
+	if r, ok := s.preparedRunnerFor(qe); ok {
+		return r
+	}
 	if s.engine == nil || !s.engine.available() {
 		return inertRunner{}
 	}
@@ -106,6 +109,10 @@ func syntaxFailure(err error) *queryFailure {
 	var syntax *ddlSyntaxError
 	if errors.As(err, &syntax) {
 		return failure(errorCategoryUser, errorTypeSyntax, "FAILED: ParseException "+syntax.msg)
+	}
+	var stmt *statementError
+	if errors.As(err, &stmt) {
+		return failure(errorCategoryUser, stmt.errorType, stmt.msg)
 	}
 	return failure(errorCategorySystem, errorTypeInternal, err.Error())
 }

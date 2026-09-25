@@ -36,28 +36,51 @@ type engineRewrite struct {
 	parameters []string
 }
 
-// rewriteForEngine returns the SQL the engine runs for sql.
+// rewriteForEngine returns the SQL the engine runs for sql. It is read as
+// Trino's SQL, except that a CREATE TABLE is Hive DDL when it lexes as such.
 func rewriteForEngine(sql string, rw engineRewrite) (string, error) {
-	p, err := newDDLParser(sql)
-	if err != nil { // not Hive's lexically: the engine's to judge
-		return sql, nil
+	p, err := newEngineParser(sql)
+	if err != nil { // not lexically SQL: the engine's to judge
+		return bindParameters(engineStatement(sql), rw.parameters), nil
 	}
 	switch {
-	case p.accept("CREATE", "TABLE"):
-		sql, err = rewriteCreateTable(p, rw)
+	case p.peek().is("CREATE") && p.peekAt(1).is("TABLE"):
+		if hive, err := newDDLParser(p.src); err == nil {
+			p = hive
+		}
+		p.accept("CREATE", "TABLE")
+		if sql, err = rewriteCreateTable(p, rw); err != nil {
+			return "", err
+		}
 	case p.peek().is("EXECUTE") && !p.peekAt(1).is("IMMEDIATE"):
 		p.next()
 		return rewriteExecute(p, rw)
+	default:
+		sql = p.src
 	}
-	if err != nil || len(rw.parameters) == 0 {
-		return sql, err
+	return bindParameters(sql, rw.parameters), nil
+}
+
+// engineStatement is sql without a final semicolon or trailing comments.
+func engineStatement(sql string) string {
+	if p, err := newEngineParser(sql); err == nil {
+		return p.src
 	}
-	return executeImmediate(sql, strings.Join(rw.parameters, ", ")), nil
+	return strings.TrimSuffix(strings.TrimSpace(sql), ";")
+}
+
+// bindParameters runs sql with its ? placeholders bound to parameters, when
+// it is given any.
+func bindParameters(sql string, parameters []string) string {
+	if len(parameters) == 0 {
+		return sql
+	}
+	return executeImmediate(sql, strings.Join(parameters, ", "))
 }
 
 // executeImmediate runs sql with its ? placeholders bound to using.
 func executeImmediate(sql, using string) string {
-	out := "EXECUTE IMMEDIATE " + quoteString(strings.TrimSuffix(strings.TrimSpace(sql), ";"))
+	out := "EXECUTE IMMEDIATE " + quoteString(engineStatement(sql))
 	if using != "" {
 		out += " USING " + using
 	}
@@ -67,18 +90,17 @@ func executeImmediate(sql, using string) string {
 // rewriteExecute resolves EXECUTE name [USING values] against the
 // workgroup's prepared statements.
 func rewriteExecute(p *ddlParser, rw engineRewrite) (string, error) {
-	name, err := p.name()
+	name, err := p.preparedName()
 	if err != nil {
 		return "", err
 	}
 	query, found := rw.prepared(name)
 	if !found {
-		return "", &ddlSyntaxError{msg: "Prepared statement not found: " + name}
+		return "", &statementError{errorType: errorTypeUser, msg: "NOT_FOUND: Prepared statement not found: " + name}
 	}
 	using := strings.Join(rw.parameters, ", ")
 	if p.accept("USING") {
-		start := p.peek().start
-		using = strings.TrimSuffix(strings.TrimSpace(p.src[start:]), ";")
+		using = strings.TrimSpace(p.src[p.peek().start:])
 	} else if err := p.end(); err != nil {
 		return "", err
 	}
@@ -126,7 +148,7 @@ func rewriteCreateTable(p *ddlParser, rw engineRewrite) (string, error) {
 // icebergCreateTable is an Iceberg table's DDL in Trino's form.
 func icebergCreateTable(s *createTableStmt, database string) (string, error) {
 	if s.Location == "" {
-		return "", &ddlSyntaxError{msg: "LOCATION is required for an Iceberg table."}
+		return "", &statementError{errorType: errorTypeUser, msg: "LOCATION is required for an Iceberg table."}
 	}
 	cols := make([]string, len(s.Columns))
 	for i, c := range s.Columns {
@@ -278,7 +300,7 @@ func ctasTarget(props []ctasProperty, tablesLocation string) (catalog string, wi
 	}
 	if !hasLocation {
 		if tablesLocation == "" {
-			return "", nil, &ddlSyntaxError{msg: "CREATE TABLE AS needs " + locationKey + " when the workgroup keeps no result location."}
+			return "", nil, &statementError{errorType: errorTypeUser, msg: "CREATE TABLE AS needs " + locationKey + " when the workgroup keeps no result location."}
 		}
 		with = append(with, locationKey+" = "+quoteString(tablesLocation))
 	}

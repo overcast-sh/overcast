@@ -2,8 +2,9 @@ package athena
 
 import (
 	"context"
-	"net/url"
+	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/overcast-sh/overcast/internal/protocol"
@@ -42,7 +43,41 @@ func orderedValues(t glue.Table, spec partitionSpec) ([]string, *queryFailure) {
 func partitionPath(t glue.Table, values []string) string {
 	var b strings.Builder
 	for i, key := range t.PartitionKeys {
-		b.WriteString(strings.ToLower(key.Name) + "=" + url.PathEscape(values[i]) + "/")
+		b.WriteString(strings.ToLower(key.Name) + "=" + hiveEscapePath(values[i]) + "/")
+	}
+	return b.String()
+}
+
+// hiveEscapedChars are the characters Hive's FileUtils.escapePathName writes
+// as %XX in a partition directory name, beside the control characters.
+const hiveEscapedChars = "\"#%'*/:=?\\{[]^\x7f"
+
+// hiveEscapePath escapes a partition value as Hive names its directory.
+func hiveEscapePath(v string) string {
+	var b strings.Builder
+	for i := 0; i < len(v); i++ {
+		if c := v[i]; c < 0x20 || strings.IndexByte(hiveEscapedChars, c) >= 0 {
+			fmt.Fprintf(&b, "%%%02X", c)
+		} else {
+			b.WriteByte(c)
+		}
+	}
+	return b.String()
+}
+
+// hiveUnescapePath reverses hiveEscapePath: each %XX is the byte it names,
+// and anything else is itself.
+func hiveUnescapePath(v string) string {
+	var b strings.Builder
+	for i := 0; i < len(v); i++ {
+		if v[i] == '%' && i+2 < len(v) {
+			if n, err := strconv.ParseUint(v[i+1:i+3], 16, 8); err == nil {
+				b.WriteByte(byte(n))
+				i += 2
+				continue
+			}
+		}
+		b.WriteByte(v[i])
 	}
 	return b.String()
 }
@@ -77,7 +112,11 @@ func (s *alterPartitionsStmt) run(ctx context.Context, env ddlEnv) (*queryResult
 			return nil, fail
 		}
 		location := spec.Location
-		if location == "" {
+		if location == "" && !s.Drop {
+			if tableLocation(t) == "" {
+				return nil, failure(errorCategoryUser, errorTypeDDLFailed,
+					"FAILED: SemanticException Table "+t.Name+" has no LOCATION, so the partition needs one")
+			}
 			location = tableLocation(t) + partitionPath(t, values[i])
 		}
 		inputs[i] = partitionInput(t, values[i], location)
@@ -101,8 +140,8 @@ func (s *alterPartitionsStmt) run(ctx context.Context, env ddlEnv) (*queryResult
 }
 
 // run adds a partition for each partition directory under the table's
-// location that the catalog does not have, and reports each one as MSCK
-// REPAIR TABLE does.
+// location that the catalog does not have, at the directory it was found in,
+// and reports them as Hive's MSCK REPAIR TABLE does.
 func (s *repairTableStmt) run(ctx context.Context, env ddlEnv) (*queryResult, *queryFailure) {
 	ref := env.resolve(s.Table)
 	t, fail := env.requireTable(ctx, ref)
@@ -119,33 +158,49 @@ func (s *repairTableStmt) run(ctx context.Context, env ddlEnv) (*queryResult, *q
 	}
 	known := map[string]bool{}
 	for _, p := range existing {
-		known[partitionPath(t, p.Values)] = true
+		known[strings.Join(p.Values, "\x00")] = true
 	}
-	res, missing := textResult("result"), []glue.PartitionInput{}
-	for _, values := range found {
-		path := partitionPath(t, values)
-		if known[path] {
-			continue
+	var missing []glue.PartitionInput
+	var names []string
+	for _, dir := range found {
+		if key := strings.Join(dir.values, "\x00"); !known[key] {
+			known[key] = true
+			missing = append(missing, partitionInput(t, dir.values, tableLocation(t)+dir.path))
+			names = append(names, t.Name+":"+strings.TrimSuffix(dir.path, "/"))
 		}
-		known[path] = true
-		missing = append(missing, partitionInput(t, values, tableLocation(t)+path))
-		name := t.Name + ":" + strings.TrimSuffix(path, "/")
-		res.Rows = append(res.Rows, textRow("Partitions not in metastore:\t"+name), textRow("Repair: Added partition to metastore "+name))
 	}
-	if _, aerr := env.writer.CreatePartitions(ctx, ref.Database, ref.Table, missing); aerr != nil {
+	if len(missing) == 0 {
+		return textResult("result"), nil
+	}
+	errs, aerr := env.writer.CreatePartitions(ctx, ref.Database, ref.Table, missing)
+	if aerr != nil {
 		return nil, catalogFailure(aerr)
+	}
+	if len(errs) > 0 && errs[0].ErrorDetail != nil {
+		return nil, catalogFailure(&protocol.AWSError{Code: errs[0].ErrorDetail.ErrorCode, Message: errs[0].ErrorDetail.ErrorMessage})
+	}
+	res := textResult("result", "Partitions not in metastore:\t"+strings.Join(names, "\t"))
+	for _, name := range names {
+		res.Rows = append(res.Rows, textRow("Repair: Added partition to metastore "+name))
 	}
 	return res, nil
 }
 
-// partitionDirectories lists the table's location and returns the values of
-// every partition directory holding an object, in the order found.
-func (env ddlEnv) partitionDirectories(ctx context.Context, t glue.Table) ([][]string, *queryFailure) {
+// partitionDir is a partition directory found under a table's location: its
+// values, and its path relative to the location as it is written in S3.
+type partitionDir struct {
+	values []string
+	path   string
+}
+
+// partitionDirectories lists the table's location and returns every
+// partition directory holding an object, in the order found.
+func (env ddlEnv) partitionDirectories(ctx context.Context, t glue.Table) ([]partitionDir, *queryFailure) {
 	bucket, prefix, ok := splitS3URI(tableLocation(t))
 	if !ok || len(t.PartitionKeys) == 0 {
 		return nil, nil
 	}
-	var out [][]string
+	var out []partitionDir
 	token := ""
 	for {
 		page, aerr := env.list(ctx, bucket, prefix, token, 0)
@@ -153,8 +208,8 @@ func (env ddlEnv) partitionDirectories(ctx context.Context, t glue.Table) ([][]s
 			return nil, failure(errorCategoryUser, errorTypeDDLFailed, "FAILED: "+aerr.Code+": "+aerr.Message)
 		}
 		for _, obj := range page.Objects {
-			if values, ok := partitionValuesOf(t, strings.TrimPrefix(obj.Key, prefix)); ok {
-				out = append(out, values)
+			if dir, ok := partitionDirOf(t, strings.TrimPrefix(obj.Key, prefix)); ok {
+				out = append(out, dir)
 			}
 		}
 		if token = page.NextContinuationToken; token == "" {
@@ -163,26 +218,23 @@ func (env ddlEnv) partitionDirectories(ctx context.Context, t glue.Table) ([][]s
 	}
 }
 
-// partitionValuesOf reads a key relative to the table's location as
+// partitionDirOf reads a key relative to the table's location as
 // key=value/… directories, one per partition key in order.
-func partitionValuesOf(t glue.Table, rel string) ([]string, bool) {
+func partitionDirOf(t glue.Table, rel string) (partitionDir, bool) {
 	dirs := strings.Split(rel, "/")
 	if len(dirs) <= len(t.PartitionKeys) {
-		return nil, false
+		return partitionDir{}, false
 	}
-	values := make([]string, len(t.PartitionKeys))
+	dir := partitionDir{values: make([]string, len(t.PartitionKeys))}
 	for i, key := range t.PartitionKeys {
 		k, v, ok := strings.Cut(dirs[i], "=")
 		if !ok || !strings.EqualFold(k, key.Name) {
-			return nil, false
+			return partitionDir{}, false
 		}
-		unescaped, err := url.PathUnescape(v)
-		if err != nil {
-			return nil, false
-		}
-		values[i] = unescaped
+		dir.values[i] = hiveUnescapePath(v)
+		dir.path += dirs[i] + "/"
 	}
-	return values, true
+	return dir, true
 }
 
 func (s *showPartitionsStmt) run(ctx context.Context, env ddlEnv) (*queryResult, *queryFailure) {

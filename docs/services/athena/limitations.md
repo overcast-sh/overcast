@@ -41,9 +41,14 @@ which 9.7 s was the engine starting, and the container used 547 MiB after it
 and 658 MiB after a CTAS and an Iceberg `MERGE`, as Docker reports memory.
 Expect the start to be slower on a laptop.
 
-`GET /_overcast/athena/engine` reports the engine's state — `off`, `stopped`,
-`pulling`, `starting`, `ready` or `failed` — with the last start's timings and
-error.
+`GET /_overcast/athena/engine` reports the engine's state — `off`, `probing`,
+`stopped`, `pulling`, `starting`, `ready` or `failed` — with the last start's
+timings and error. `probing` lasts from Overcast starting until it knows
+whether Docker is there; a query started then waits, `QUEUED`, rather than
+running inert.
+
+The value `ATHENA_ENGINE_MEMORY` takes is a Docker memory size such as `2g`
+or `1536m`, at least `1g`.
 
 ## Dialect
 
@@ -62,6 +67,8 @@ statements Athena added to Trino.
 | CTAS `write_compression`, `vacuum_*` | Applied | Ignored |
 | User-defined functions | `USING EXTERNAL FUNCTION` calls a Lambda | Not supported |
 | Error messages | Name `awsdatacatalog` | An Iceberg table's error may name `awsdatacatalog_iceberg` |
+| `DESCRIBE t column`, `DESCRIBE t PARTITION (…)` | Describe one column or partition | Not parsed |
+| `ExecutionParameters` | Each one a single literal | Joined into `USING` as written, so each must be one SQL literal |
 
 ## Around the query
 
@@ -80,10 +87,18 @@ millions of rows costs Overcast that much memory.
 
 ## Credentials
 
-The engine calls Glue and S3 in Overcast as access key `overcast-athena`,
-through a listener of its own that it can always reach. With
-`OVERCAST_ENFORCE_IAM` on, those calls are evaluated like any other, and a key
-with no policies is denied, so queries that read tables fail.
+The engine calls Glue and S3 in Overcast through a listener of its own, on an
+address a container can reach: natively Overcast's API listens on loopback
+only. The listener is plain HTTP and serves only Glue's JSON operations and
+S3, and only to requests signed with an access key minted when Overcast
+starts, which only the engine's configuration carries. When no narrower
+address can be proved reachable it binds every interface, and Overcast logs a
+warning.
+
+The engine signs with Overcast's default secret key, so
+`OVERCAST_SIGV4_VALIDATE` accepts its requests. With `OVERCAST_ENFORCE_IAM`
+on, they are evaluated like any other, and a key with no policies is denied,
+so queries that read tables fail.
 
 ## Related
 

@@ -105,11 +105,19 @@ func (s *Service) InitRouter(h http.Handler) {
 	}
 }
 
-// SetDocker wires the daemon the query engine runs on. Until it is called —
-// and for good, if no daemon answers — queries run inert.
+// SetDocker wires the daemon the query engine runs on. Until it is called,
+// or DockerUnavailable is, a query waits QUEUED.
 func (s *Service) SetDocker(dc *docker.Client) {
 	if s.engine != nil {
 		s.engine.setDocker(dc)
+	}
+}
+
+// DockerUnavailable records that no daemon answered the probe: queries run
+// inert for the life of the process.
+func (s *Service) DockerUnavailable() {
+	if s.engine != nil {
+		s.engine.dockerUnavailable()
 	}
 }
 

@@ -131,3 +131,22 @@ func TestParseDDL_malformedStatementsFail(t *testing.T) {
 		}
 	}
 }
+
+func TestLexSQL_hiveEscapes(t *testing.T) {
+	for src, want := range map[string]string{
+		`'\u0001'`: "\x01", `'\001'`: "\x01", `'\t|\n'`: "\t|\n", `'\777'`: "777",
+		`'\u00e9t\u00e9'`: "\u00e9t\u00e9", `'\Z'`: "\x1a", `'50\%'`: `50\%`, `'it\'s'`: "it's",
+	} {
+		// When: a Hive string is lexed
+		toks, err := lexSQL(src, dialectHive)
+		// Then: its escapes are read as Hive reads them
+		if err != nil || toks[0].text != want {
+			t.Errorf("lexSQL(%s) = %q, %v; want %q", src, toks[0].text, err, want)
+		}
+	}
+	// A Trino string has no escapes, and a double-quoted token is a name.
+	toks, err := lexSQL(`'C:\' "Col"`, dialectTrino)
+	if err != nil || toks[0].text != `C:\` || toks[1].kind != tokIdent || toks[1].text != "Col" {
+		t.Fatalf("Trino tokens = %+v, %v", toks, err)
+	}
+}

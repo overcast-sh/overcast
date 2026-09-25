@@ -134,6 +134,9 @@ func (e *statementExecutor) execute(ctx context.Context, qe QueryExecution, r qu
 		fail = &queryFailure{State: stateCancelled, Reason: "Query was cancelled."}
 	case fail == nil && res != nil: // the inert engine produces nothing to keep
 		fail = e.keep(reportCtx, qe, res)
+		if fail == nil && ctx.Err() != nil { // cancelled while it was kept
+			e.forget(reportCtx, id)
+		}
 	}
 	if fail == nil {
 		report(reportCtx, id, queryTransition{State: stateSucceeded, Statistics: executionStatistics(res, started, finished, e.clk.Now())})
@@ -147,23 +150,21 @@ func (e *statementExecutor) execute(ctx context.Context, qe QueryExecution, r qu
 	report(reportCtx, id, t)
 }
 
-// keep stores a result for GetQueryResults and writes it to the query's
-// OutputLocation.
+// keep writes a result to the query's OutputLocation, then stores it for
+// GetQueryResults; a result that could not be written is not kept.
 func (e *statementExecutor) keep(ctx context.Context, qe QueryExecution, res *queryResult) *queryFailure {
+	if location := qe.ResultConfiguration.OutputLocation; location != "" && e.output != nil {
+		if aerr := e.output.write(ctx, location, res); aerr != nil {
+			category, errorType := errorCategorySystem, errorTypeWriteResults
+			if aerr.Code == "NoSuchBucket" {
+				category, errorType = errorCategoryUser, errorTypeBucketNotFound
+			}
+			return failure(category, errorType, "Unable to write query results to "+location+": "+aerr.Code+": "+aerr.Message)
+		}
+	}
 	if err := e.results.put(ctx, qe.QueryExecutionId, res); err != nil {
 		e.log.WithRecorder(ctx).Error("query result not stored", zap.String("queryExecutionId", qe.QueryExecutionId), zap.Error(err))
 		return failure(errorCategorySystem, errorTypeInternal, "Overcast could not store the query result.")
-	}
-	location := qe.ResultConfiguration.OutputLocation
-	if location == "" || e.output == nil {
-		return nil
-	}
-	if aerr := e.output.write(ctx, location, res); aerr != nil {
-		category, errorType := errorCategorySystem, errorTypeWriteResults
-		if aerr.Code == "NoSuchBucket" {
-			category, errorType = errorCategoryUser, errorTypeBucketNotFound
-		}
-		return failure(category, errorType, "Unable to write query results to "+location+": "+aerr.Code+": "+aerr.Message)
 	}
 	return nil
 }
@@ -196,6 +197,11 @@ func (e *statementExecutor) Cancel(ctx context.Context, id string) {
 		cancel(errQueryCancelled)
 	}
 	e.mu.Unlock()
+	e.forget(ctx, id)
+}
+
+// forget deletes a query's stored result.
+func (e *statementExecutor) forget(ctx context.Context, id string) {
 	if err := e.results.delete(ctx, id); err != nil {
 		e.log.WithRecorder(ctx).Warn("query result not deleted", zap.String("queryExecutionId", id), zap.Error(err))
 	}

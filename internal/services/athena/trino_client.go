@@ -154,18 +154,64 @@ func (c *trinoClient) execute(ctx context.Context, baseURL, sql string, session 
 
 // do sends one protocol request and decodes its page. Numbers are kept as
 // written, so a bigint or a decimal is never rounded through a float64.
+//
+// The protocol makes 429, 502, 503 and 504 transient: they are retried after
+// a short wait. Any other status fails the query; only a request that never
+// reached the engine is errTrinoUnreachable.
 func (c *trinoClient) do(req *http.Request) (*trinoResponse, error) {
-	resp, err := c.http.Do(req)
-	if err != nil {
-		if req.Context().Err() != nil {
-			return nil, req.Context().Err()
+	for attempt := 1; ; attempt++ {
+		resp, err := c.http.Do(req)
+		if err != nil {
+			if req.Context().Err() != nil {
+				return nil, req.Context().Err()
+			}
+			return nil, fmt.Errorf("%w: %v", errTrinoUnreachable, err)
 		}
-		return nil, fmt.Errorf("%w: %v", errTrinoUnreachable, err)
+		if trinoRetryable[resp.StatusCode] && attempt < trinoAttempts {
+			resp.Body.Close()
+			if req, err = retryRequest(req, attempt); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		return decodePage(req, resp)
 	}
+}
+
+// Transient statuses, and how many times a request is tried.
+var trinoRetryable = map[int]bool{
+	http.StatusTooManyRequests: true, http.StatusBadGateway: true,
+	http.StatusServiceUnavailable: true, http.StatusGatewayTimeout: true,
+}
+
+const (
+	trinoAttempts     = 5
+	trinoRetryBackoff = 100 * time.Millisecond
+)
+
+// retryRequest waits before attempt+1 and returns a copy of req to send.
+func retryRequest(req *http.Request, attempt int) (*http.Request, error) {
+	select {
+	case <-req.Context().Done():
+		return nil, req.Context().Err()
+	case <-time.After(time.Duration(attempt) * trinoRetryBackoff):
+	}
+	next := req.Clone(req.Context())
+	if req.GetBody != nil {
+		body, err := req.GetBody()
+		if err != nil {
+			return nil, err
+		}
+		next.Body = body
+	}
+	return next, nil
+}
+
+func decodePage(req *http.Request, resp *http.Response) (*trinoResponse, error) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return nil, fmt.Errorf("%w: %s %s: HTTP %d: %s", errTrinoUnreachable, req.Method, req.URL.Path, resp.StatusCode, bytes.TrimSpace(body))
+		return nil, fmt.Errorf("athena: engine answered %s %s with HTTP %d: %s", req.Method, req.URL.Path, resp.StatusCode, bytes.TrimSpace(body))
 	}
 	dec := json.NewDecoder(resp.Body)
 	dec.UseNumber()

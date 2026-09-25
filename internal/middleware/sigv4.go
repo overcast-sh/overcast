@@ -401,3 +401,12 @@ func writeSigV4Error(w http.ResponseWriter, r *http.Request, aerr *protocol.AWSE
 		protocol.WriteJSONError(w, r, aerr)
 	}
 }
+
+// CredentialAccessKey is the access key a request's SigV4 Authorization
+// header names, or "" when it names none.
+func CredentialAccessKey(r *http.Request) string {
+	if scope := credentialScope(r); scope != nil {
+		return scope[0]
+	}
+	return ""
+}

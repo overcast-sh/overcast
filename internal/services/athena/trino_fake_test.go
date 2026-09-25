@@ -27,6 +27,10 @@ type fakeTrino struct {
 	deleted   []string
 	starting  bool
 	statement []string
+	// busy answers the next busy statement requests 503, as a loaded
+	// coordinator does; status, when set, answers every one with it.
+	busy   int
+	status int
 }
 
 func newFakeTrino(t *testing.T) *fakeTrino {
@@ -57,6 +61,11 @@ func (f *fakeTrino) serve(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	switch {
+	case strings.HasPrefix(r.URL.Path, "/v1/statement") && f.status != 0:
+		w.WriteHeader(f.status)
+	case strings.HasPrefix(r.URL.Path, "/v1/statement") && f.busy > 0:
+		f.busy--
+		w.WriteHeader(http.StatusServiceUnavailable)
 	case r.URL.Path == "/v1/info":
 		_ = json.NewEncoder(w).Encode(map[string]any{"starting": f.starting})
 	case r.Method == http.MethodPost && r.URL.Path == "/v1/statement":

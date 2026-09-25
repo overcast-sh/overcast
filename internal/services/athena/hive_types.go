@@ -13,7 +13,7 @@ import (
 // hiveScalarTypes are the Hive type names Trino spells differently.
 var hiveScalarTypes = map[string]string{
 	"string": "varchar", "int": "integer", "float": "real",
-	"binary": "varbinary", "timestamp": "timestamp(6)",
+	"binary": "varbinary", "timestamp": "timestamp(6)", "decimal": "decimal(10,0)",
 }
 
 // trinoType converts one Hive type.

@@ -42,6 +42,7 @@ func TestColumnInfo_mapsTrinoTypes(t *testing.T) {
 func TestFormatValue_rendersAsAthenaDoes(t *testing.T) {
 	arrayOfInt := sig(t, `{"rawType":"array","arguments":[{"kind":"TYPE","value":{"rawType":"integer","arguments":[]}}]}`)
 	mapSig := sig(t, `{"rawType":"map","arguments":[{"kind":"TYPE","value":{"rawType":"varchar"}},{"kind":"TYPE","value":{"rawType":"integer"}}]}`)
+	intKeys := sig(t, `{"rawType":"map","arguments":[{"kind":"TYPE","value":{"rawType":"integer"}},{"kind":"TYPE","value":{"rawType":"varchar"}}]}`)
 	rowSig := sig(t, `{"rawType":"row","arguments":[{"kind":"NAMED_TYPE","value":{"fieldName":{"name":"a"},"typeSignature":{"rawType":"integer"}}},{"kind":"NAMED_TYPE","value":{"fieldName":{"name":"b"},"typeSignature":{"rawType":"varchar"}}}]}`)
 	cases := []struct {
 		v    any
@@ -54,6 +55,8 @@ func TestFormatValue_rendersAsAthenaDoes(t *testing.T) {
 		{[]any{json.Number("1"), nil}, arrayOfInt, "[1, null]"},
 		{map[string]any{"b": json.Number("2"), "a": json.Number("1")}, mapSig, "{a=1, b=2}"},
 		{[]any{json.Number("1"), "x"}, rowSig, "{a=1, b=x}"},
+		{"aGVsbG8=", trinoTypeSignature{RawType: "varbinary"}, "68 65 6c 6c 6f"},
+		{map[string]any{"10": "x", "9": "y"}, intKeys, "{9=y, 10=x}"},
 	}
 	for _, c := range cases {
 		if got := formatValue(c.v, c.sig); got == nil || *got != c.want {
@@ -78,6 +81,7 @@ func TestAthenaErrorFor_classifiesTrinoErrors(t *testing.T) {
 		{trinoError{ErrorName: "HIVE_METASTORE_ERROR", ErrorType: "EXTERNAL"}, 1, 204, false},
 		{trinoError{ErrorName: "ICEBERG_COMMIT_ERROR", ErrorType: "EXTERNAL"}, 1, 233, false},
 		{trinoError{ErrorName: "EXCEEDED_LOCAL_MEMORY_LIMIT", ErrorType: "INSUFFICIENT_RESOURCES"}, 1, 0, true},
+		{trinoError{ErrorName: "EXCEEDED_TIME_LIMIT", ErrorType: "INSUFFICIENT_RESOURCES"}, 1, 206, true},
 		{trinoError{ErrorName: "GENERIC_INTERNAL_ERROR", ErrorType: "INTERNAL_ERROR"}, 1, 200, false},
 	}
 	for _, c := range cases {

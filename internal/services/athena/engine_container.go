@@ -34,13 +34,14 @@ var enginePortKey = strconv.Itoa(enginePort) + "/tcp"
 // returns its ID and the endpoint Overcast reaches it on.
 func (m *engineManager) startContainer(ctx context.Context) (id, endpoint string, err error) {
 	dc := m.docker
-	gateway, err := m.gateway.open(ctx, dc, m.cfg, m.log.ZapLogger())
+	gateway, accessKey, err := m.gateway.open(ctx, dc, m.cfg, m.log.ZapLogger())
 	if err != nil {
 		return "", "", fmt.Errorf("reach Overcast from the engine: %w", err)
 	}
 	overcast := containerendpoint.New(m.cfg, gateway)
 	archive, err := engineConfigArchive(renderEngineFiles(engineSettings{
 		Overcast:  overcast.Endpoint(),
+		AccessKey: accessKey,
 		Region:    m.cfg.Region,
 		AccountID: m.cfg.AccountID,
 		Memory:    m.cfg.AthenaEngineMemory,

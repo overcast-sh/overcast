@@ -1,7 +1,9 @@
 package glue
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"slices"
 	"strings"
 
@@ -21,13 +23,28 @@ const (
 )
 
 // ColumnStatistics is one column's statistics. StatisticsData is kept as
-// decoded JSON: Overcast never reads its per-type members, so it round-trips
-// exactly.
+// decoded JSON: Overcast never reads its per-type members.
 type ColumnStatistics struct {
-	ColumnName     string  `json:"ColumnName"`
-	ColumnType     string  `json:"ColumnType"`
-	AnalyzedTime   float64 `json:"AnalyzedTime"`
-	StatisticsData any     `json:"StatisticsData"`
+	ColumnName     string    `json:"ColumnName"`
+	ColumnType     string    `json:"ColumnType"`
+	AnalyzedTime   float64   `json:"AnalyzedTime"`
+	StatisticsData exactJSON `json:"StatisticsData"`
+}
+
+// exactJSON is a JSON object whose numbers are kept as written, so a
+// bigint's minimum or maximum above 2^53 round-trips rather than being
+// rounded through a float64.
+type exactJSON map[string]any
+
+func (e *exactJSON) UnmarshalJSON(b []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.UseNumber()
+	var m map[string]any
+	if err := dec.Decode(&m); err != nil {
+		return err
+	}
+	*e = m
+	return nil
 }
 
 // ColumnStatisticsError is an Update*'s refusal of one entry.
@@ -73,6 +90,20 @@ type getColumnStatisticsResp struct {
 type deleteColumnStatisticsReq struct {
 	columnStatisticsTarget
 	ColumnName string `json:"ColumnName" cbor:"ColumnName"`
+}
+
+// tableStatisticsPrefix and partitionStatisticsPrefix are where a table's
+// and a partition's statistics live in nsColumnStatistics; see store.go.
+func tableStatisticsPrefix(dbName, tableName string) string {
+	return tablePrefix(dbName, tableName) + "t/"
+}
+
+func partitionStatisticsPrefix(dbName, tableName string, values []string) string {
+	escaped := make([]string, len(values))
+	for i, v := range values {
+		escaped[i] = esc(v)
+	}
+	return tablePrefix(dbName, tableName) + "p/" + esc(strings.Join(escaped, "/")) + "/"
 }
 
 // statisticsPrefix is the key prefix t's statistics live under, or those of
@@ -174,9 +205,9 @@ func (s *Service) deleteColumnStatistics(ctx context.Context, req *deleteColumnS
 	if aerr != nil {
 		return nil, aerr
 	}
+	// Presence rather than a decode, so a corrupt record can still be deleted.
 	key := prefix + esc(normName(req.ColumnName))
-	var cs ColumnStatistics
-	found, err := s.store.get(ctx, nsColumnStatistics, key, &cs)
+	_, found, err := s.store.store.Get(ctx, nsColumnStatistics, key)
 	if err != nil {
 		return nil, errInternal(err)
 	}

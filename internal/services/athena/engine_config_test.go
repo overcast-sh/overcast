@@ -121,3 +121,50 @@ func TestRunnerFor_routesEachStatement(t *testing.T) {
 func icebergTableInput(name string) glue.TableInput {
 	return glue.TableInput{Name: name, TableType: "EXTERNAL_TABLE", Parameters: map[string]string{"table_type": "ICEBERG"}}
 }
+
+func TestRenderEngineFiles_signsWithTheGatewayKey(t *testing.T) {
+	files := renderEngineFiles(engineSettings{Overcast: "http://gw:9", AccessKey: "OVERCASTATHENAKEY", Region: "eu-west-1", AccountID: "111122223333", Memory: 1 << 30})
+	for _, name := range []string{"catalog/awsdatacatalog.properties", "catalog/awsdatacatalog_iceberg.properties"} {
+		if !strings.Contains(files[name], "=OVERCASTATHENAKEY\n") {
+			t.Errorf("%s does not sign with the gateway's key:\n%s", name, files[name])
+		}
+	}
+}
+
+func TestEngineOnly_servesOnlyTheEnginesCalls(t *testing.T) {
+	// Given: the gateway's handler in front of an API that records the Host
+	var host string
+	h := engineOnly("OVERCASTATHENAKEY", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { host = r.Host }))
+	signed := func(key string) string {
+		return "AWS4-HMAC-SHA256 Credential=" + key + "/20260925/us-east-1/glue/aws4_request, SignedHeaders=host, Signature=00"
+	}
+	cases := []struct {
+		name, path, auth, target string
+		want                     int
+	}{
+		{"a Glue call", "/", signed("OVERCASTATHENAKEY"), "AWSGlue.GetTable", http.StatusOK},
+		{"an S3 call", "/bucket/key", signed("OVERCASTATHENAKEY"), "", http.StatusOK},
+		{"another key", "/", signed("AKIAOTHER"), "AWSGlue.GetTable", http.StatusForbidden},
+		{"no signature", "/bucket/key", "", "", http.StatusForbidden},
+		{"another service", "/", signed("OVERCASTATHENAKEY"), "AmazonAthena.ListWorkGroups", http.StatusForbidden},
+		{"an emulator path", "/_overcast/health", signed("OVERCASTATHENAKEY"), "", http.StatusForbidden},
+	}
+	for _, c := range cases {
+		// When: the request reaches the gateway
+		host = ""
+		req := httptest.NewRequest(http.MethodPost, "http://host.docker.internal:9"+c.path, nil)
+		if c.auth != "" {
+			req.Header.Set("Authorization", c.auth)
+		}
+		if c.target != "" {
+			req.Header.Set("X-Amz-Target", c.target)
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+
+		// Then: only the engine's own calls get through, addressed to localhost
+		if rec.Code != c.want || (c.want == http.StatusOK && host != "localhost") {
+			t.Errorf("%s: status %d, host %q; want %d", c.name, rec.Code, host, c.want)
+		}
+	}
+}

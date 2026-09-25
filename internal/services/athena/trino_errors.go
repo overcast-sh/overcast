@@ -59,7 +59,8 @@ var trinoErrorTypes = map[string]int32{
 // athenaErrorFor classifies a failed Trino query.
 func athenaErrorFor(e *trinoError) *AthenaError {
 	out := &AthenaError{ErrorMessage: e.Error(), ErrorCategory: errorCategorySystem, ErrorType: errorTypeEngineInternal}
-	if t, ok := trinoErrorTypes[e.ErrorName]; ok {
+	t, mapped := trinoErrorTypes[e.ErrorName]
+	if mapped {
 		out.ErrorType = t
 	} else if strings.HasPrefix(e.ErrorName, "ICEBERG_") {
 		out.ErrorType = errorTypeIceberg
@@ -71,7 +72,10 @@ func athenaErrorFor(e *trinoError) *AthenaError {
 			out.ErrorType = errorTypeUser
 		}
 	case "INSUFFICIENT_RESOURCES":
-		out.ErrorType, out.Retryable = errorTypeResourcesExhausted, true
+		out.Retryable = true
+		if !mapped {
+			out.ErrorType = errorTypeResourcesExhausted
+		}
 	}
 	return out
 }

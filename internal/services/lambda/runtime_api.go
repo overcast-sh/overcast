@@ -473,8 +473,8 @@ func (s *RuntimeAPIServer) serve(ln net.Listener) {
 
 // bindHostsOf recovers the local addresses a set of listeners is bound to, in
 // order, so a later per-environment listener can join the same set at a fresh
-// port. Order matters: listenAllOn settles the port on the first host, and the
-// first is the one containers dial.
+// port. Order matters: containerendpoint.ListenOn settles the port on the
+// first host, and the first is the one containers dial.
 func bindHostsOf(lns []net.Listener) []string {
 	hosts := make([]string, 0, len(lns))
 	for _, ln := range lns {

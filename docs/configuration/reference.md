@@ -141,7 +141,7 @@ explaining.
 | `EFS_NFS_IMAGE`                  | `registry.k8s.io/sig-storage/nfs-provisioner@sha256:…` | Digest-pinned image used for the NFS export containers               |
 | `ATHENA_ENGINE`                  | `trino`                | `trino` runs queries on an engine container; `inert` runs no SQL — see [Athena](../services/athena.md) |
 | `ATHENA_ENGINE_IMAGE`            | `trinodb/trino:483@sha256:…` | Digest-pinned image the Athena engine runs                                     |
-| `ATHENA_ENGINE_MEMORY`           | `1g`                   | Memory limit for the Athena engine container, in bytes or with a `k`, `m` or `g` suffix |
+| `ATHENA_ENGINE_MEMORY`           | `1g`                   | Memory limit for the Athena engine container, at least `1g`; bytes or a `k`, `m` or `g` suffix |
 | `ATHENA_DOCKER_SOCKET`           | _(Lambda socket)_      | Docker endpoint for the Athena engine — Unix path or `tcp://host:port`               |
 | `ATHENA_KEEP_CONTAINERS`         | `false`                | Keep the stopped Athena engine container after it stops                              |
 | `OVERCAST_ECR_REGISTRY_PORT`     | `4510`                 | Host port the shared ECR registry container asks for; `0`, or a port already taken, falls back to an ephemeral port |

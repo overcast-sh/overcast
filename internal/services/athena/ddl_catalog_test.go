@@ -128,6 +128,11 @@ func TestDDL_databasesAndTablesReachGlue(t *testing.T) {
 	if got := mustRun(t, s, "SHOW TABLES IN sales"); len(got) != 1 || got[0][0] != "orders" {
 		t.Fatalf("SHOW TABLES = %v", got)
 	}
+	for pattern, n := range map[string]int{"'ord*'": 1, "'.*ers'": 1, "'o.d.rs|x'": 1, "'.rders'": 1, "'rders'": 0, "'('": 0} {
+		if got := mustRun(t, s, "SHOW TABLES IN sales "+pattern); len(got) != n {
+			t.Errorf("SHOW TABLES %s = %v, want %d", pattern, got, n)
+		}
+	}
 	if got := mustRun(t, s, "SHOW COLUMNS IN sales.orders"); len(got) != 3 || got[2][0] != "dt" {
 		t.Fatalf("SHOW COLUMNS = %v", got)
 	}
@@ -177,7 +182,7 @@ func TestDDL_partitionsAndRepair(t *testing.T) {
 	mustRun(t, s, `CREATE EXTERNAL TABLE logs.hits (path string) PARTITIONED BY (year string, day string)
 		ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' LOCATION 's3://data/hits'`)
 	for _, key := range []string{"hits/year=2026/day=01/a.csv", "hits/year=2026/day=02/a.csv", "hits/year=2026/day=02/b.csv",
-		"hits/year=2025/day=a%2Fb/x.csv", "hits/_SUCCESS", "hits/year=2026/stray.csv"} {
+		"hits/year=2025/day=a%2Fb/x.csv", "hits/year=2024/day=10%3A00 am/x.csv", "hits/_SUCCESS", "hits/year=2026/stray.csv"} {
 		s3.objects["data/"+key] = "x"
 	}
 
@@ -187,11 +192,12 @@ func TestDDL_partitionsAndRepair(t *testing.T) {
 
 	// Then: each partition directory became a partition once, at its
 	// location and stored as the table is
-	if len(repaired) != 6 || !strings.HasPrefix(repaired[0][0], "Partitions not in metastore:") || len(again) != 0 {
+	if len(repaired) != 5 || !strings.HasPrefix(repaired[0][0], "Partitions not in metastore:\thits:year=2024/day=10%3A00 am\t") ||
+		repaired[1][0] != "Repair: Added partition to metastore hits:year=2024/day=10%3A00 am" || len(again) != 0 {
 		t.Fatalf("repair reported %v, then %v", repaired, again)
 	}
 	parts, _ := s.catalog.ListPartitions(ctx, "logs", "hits")
-	if len(parts) != 3 {
+	if len(parts) != 4 {
 		t.Fatalf("partitions = %+v", parts)
 	}
 	byValues := map[string]glue.Partition{}
@@ -201,6 +207,9 @@ func TestDDL_partitionsAndRepair(t *testing.T) {
 	if p := byValues["2025/a/b"]; p.StorageDescriptor == nil || p.StorageDescriptor.Location != "s3://data/hits/year=2025/day=a%2Fb/" ||
 		p.StorageDescriptor.SerdeInfo.Parameters["field.delim"] != "," {
 		t.Fatalf("escaped partition = %+v", p)
+	}
+	if p := byValues["2024/10:00 am"]; p.StorageDescriptor == nil || p.StorageDescriptor.Location != "s3://data/hits/year=2024/day=10%3A00 am/" {
+		t.Fatalf("partition with a colon and a space = %+v", p)
 	}
 
 	// When: partitions are added — one at a location of its own — and dropped
@@ -213,7 +222,7 @@ func TestDDL_partitionsAndRepair(t *testing.T) {
 
 	// Then: SHOW PARTITIONS lists what is left, sorted, as key=value paths
 	got := mustRun(t, s, "SHOW PARTITIONS logs.hits")
-	want := []string{"year=2025/day=a%2Fb", "year=2026/day=02", "year=2026/day=03", "year=2027/day=01"}
+	want := []string{"year=2024/day=10%3A00 am", "year=2025/day=a%2Fb", "year=2026/day=02", "year=2026/day=03", "year=2027/day=01"}
 	if len(got) != len(want) {
 		t.Fatalf("SHOW PARTITIONS = %v", got)
 	}
@@ -224,6 +233,26 @@ func TestDDL_partitionsAndRepair(t *testing.T) {
 	}
 	if p := byValuesAfter(t, s, "2026/03"); p.StorageDescriptor.Location != "s3://data/hits/year=2026/day=03/" {
 		t.Fatalf("default partition location = %q", p.StorageDescriptor.Location)
+	}
+
+	// When: a partition with no LOCATION is added to a table with none
+	mustRun(t, s, "CREATE EXTERNAL TABLE logs.nowhere (a int) PARTITIONED BY (day string)")
+	qe := run(t, s, "ALTER TABLE logs.nowhere ADD PARTITION (day='01')")
+
+	// Then: it fails, as there is nowhere to put it
+	if qe.Status.State != stateFailed {
+		t.Fatalf("adding a partition with no location = %+v", qe.Status)
+	}
+}
+
+func TestHivePathEscaping(t *testing.T) {
+	for value, want := range map[string]string{"10:00 am": "10%3A00 am", "a/b": "a%2Fb", "x=y#z": "x%3Dy%23z", "tab\t{}": "tab%09%7B}", "plain-_.": "plain-_."} {
+		// When: a value is escaped as a directory name, and read back
+		got := hiveEscapePath(value)
+		// Then: it is escaped as Hive escapes it, and reads back as itself
+		if got != want || hiveUnescapePath(got) != value {
+			t.Errorf("hiveEscapePath(%q) = %q (back: %q), want %q", value, got, hiveUnescapePath(got), want)
+		}
 	}
 }
 
@@ -255,5 +284,37 @@ func TestDDL_resultsAreWrittenAsText(t *testing.T) {
 	}
 	if meta := s3.objects[key+".metadata"]; !strings.Contains(meta, `"Name":"database_name"`) {
 		t.Fatalf("metadata = %q", meta)
+	}
+}
+
+func TestPrepareAndDeallocate(t *testing.T) {
+	// Given: an inert service
+	ctx := context.Background()
+	s, _ := newCatalogService(t)
+	stored := func(name string) string {
+		ps, _ := s.store.getPreparedStatement(ctx, "primary", name)
+		if ps == nil {
+			return ""
+		}
+		return ps.QueryStatement
+	}
+
+	// When: a statement is prepared, then prepared again under its name
+	mustRun(t, s, "PREPARE My@Q:1 FROM SELECT * FROM t WHERE id = ?;")
+	twice := run(t, s, "PREPARE My@Q:1 FROM SELECT 2")
+
+	// Then: the workgroup keeps the first, with its name's case, and the
+	// second fails as the name is taken
+	if got := stored("My@Q:1"); got != "SELECT * FROM t WHERE id = ?" || twice.Status.State != stateFailed {
+		t.Fatalf("prepared statement = %q, second PREPARE = %+v", got, twice.Status)
+	}
+
+	// When: it is deallocated, twice
+	mustRun(t, s, "DEALLOCATE PREPARE My@Q:1")
+	again := run(t, s, "DEALLOCATE PREPARE My@Q:1")
+
+	// Then: it is gone, and the second fails as there is nothing to drop
+	if stored("My@Q:1") != "" || again.Status.State != stateFailed {
+		t.Fatalf("after DEALLOCATE: %q, second = %+v", stored("My@Q:1"), again.Status)
 	}
 }

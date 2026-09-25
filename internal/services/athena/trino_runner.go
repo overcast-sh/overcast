@@ -34,6 +34,9 @@ func (trinoRunner) background() bool { return true }
 func (r trinoRunner) run(ctx context.Context, running func()) (*queryResult, *queryFailure) {
 	queued := r.clk.Now()
 	endpoint, release, err := r.engine.acquire(ctx)
+	if errors.Is(err, errEngineUnavailable) { // no Docker after all: the query runs inert
+		return inertRunner{}.run(ctx, running)
+	}
 	if err != nil {
 		return nil, failure(errorCategorySystem, errorTypeEngineInternal, err.Error())
 	}

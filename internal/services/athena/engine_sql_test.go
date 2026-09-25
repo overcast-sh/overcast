@@ -10,8 +10,11 @@ func testRewrite() engineRewrite {
 		database:       "demo",
 		tablesLocation: "s3://results/q/tables/abc/",
 		prepared: func(name string) (string, bool) {
-			if name == "by_id" {
+			switch name {
+			case "by_id":
 				return "SELECT * FROM t WHERE id = ?", true
+			case "My@Query:1":
+				return "SELECT 1; -- the one", true
 			}
 			return "", false
 		},
@@ -22,6 +25,11 @@ func TestRewriteForEngine(t *testing.T) {
 	cases := map[string]string{
 		// Passed through as written.
 		"SELECT 1": "SELECT 1",
+		// A final semicolon, and comments after it, are dropped: Trino
+		// rejects the one. A backslash is no escape in Trino's strings.
+		"SELECT 1;":            "SELECT 1",
+		"SELECT 1 ; -- done\n": "SELECT 1",
+		`SELECT 'C:\' AS p;`:   `SELECT 'C:\' AS p`,
 		"MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN DELETE": "MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN DELETE",
 		// An Iceberg table: Trino's types, WITH, the Iceberg catalog, and
 		// partition transforms with the column first.
@@ -43,6 +51,11 @@ func TestRewriteForEngine(t *testing.T) {
 			`WITH (location = 's3://b/ice/', format = 'PARQUET') AS SELECT 1 AS a`,
 		// A prepared statement, with and without USING.
 		"EXECUTE by_id USING 42": `EXECUTE IMMEDIATE 'SELECT * FROM t WHERE id = ?' USING 42`,
+		// A prepared statement's name keeps its case, its @ and its :.
+		"EXECUTE My@Query:1;": `EXECUTE IMMEDIATE 'SELECT 1'`,
+		// A CTAS's query goes without the final semicolon too.
+		"CREATE TABLE sales.copy AS SELECT * FROM t;": `CREATE TABLE "awsdatacatalog"."sales"."copy" ` +
+			`WITH (format = 'PARQUET', external_location = 's3://results/q/tables/abc/') AS SELECT * FROM t`,
 	}
 	for sql, want := range cases {
 		got, err := rewriteForEngine(sql, testRewrite())
@@ -61,6 +74,10 @@ func TestRewriteForEngine_executionParameters(t *testing.T) {
 	}
 	if got, _ := rewriteForEngine("EXECUTE by_id", rw); !strings.HasSuffix(got, "USING 'it''s', 7") {
 		t.Fatalf("EXECUTE with ExecutionParameters = %q", got)
+	}
+	// Parameters are bound even to SQL Overcast cannot lex.
+	if got, _ := rewriteForEngine("SELECT ? FROM 'unterminated;", rw); !strings.HasPrefix(got, "EXECUTE IMMEDIATE ") {
+		t.Fatalf("unlexable SQL with ExecutionParameters = %q", got)
 	}
 }
 
@@ -83,7 +100,7 @@ func TestRewriteForEngine_refusals(t *testing.T) {
 func TestTrinoType(t *testing.T) {
 	for hive, want := range map[string]string{
 		"STRING": "varchar", "int": "integer", "float": "real", "binary": "varbinary", "timestamp": "timestamp(6)",
-		"decimal(10, 2)": "decimal(10,2)", "varchar(5)": "varchar(5)", "bigint": "bigint",
+		"decimal(10, 2)": "decimal(10,2)", "varchar(5)": "varchar(5)", "bigint": "bigint", "decimal": "decimal(10,0)",
 		"array<struct<a:int, b:map<string,double>>>": `array(row("a" integer, "b" map(varchar, double)))`,
 	} {
 		if got, err := trinoType(hive); err != nil || got != want {

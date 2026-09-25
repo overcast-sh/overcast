@@ -294,3 +294,71 @@ func waitFor(t *testing.T, cond func() bool) {
 		time.Sleep(5 * time.Millisecond)
 	}
 }
+
+func TestEngineManager_queriesWaitForTheDockerProbe(t *testing.T) {
+	// Given: an engine whose Docker probe has not finished
+	cfg := &config.Config{AthenaDockerSocket: "unix:///probe.sock"}
+	m := newEngineManager(cfg, serviceutil.NewServiceLogger(zap.NewNop(), serviceName), clock.New(), nil)
+
+	// Then: queries are routed to it, and the status says it is probing
+	if !m.available() || m.snapshot().State != engineProbing {
+		t.Fatalf("available = %v, status = %+v", m.available(), m.snapshot())
+	}
+
+	// When: a query needs it, and the probe then fails
+	got := make(chan error, 1)
+	go func() {
+		_, _, err := m.acquire(context.Background())
+		got <- err
+	}()
+	select {
+	case err := <-got:
+		t.Fatalf("acquire returned %v before the probe finished", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	m.dockerUnavailable()
+
+	// Then: the waiting query learns there is no engine, and later ones
+	// run inert
+	if err := <-got; err != errEngineUnavailable {
+		t.Fatalf("acquire = %v, want errEngineUnavailable", err)
+	}
+	if m.available() || m.snapshot().State != engineOff {
+		t.Fatalf("after the probe failed: available = %v, status = %+v", m.available(), m.snapshot())
+	}
+}
+
+func TestEngineManager_idleStopArmsWhenAnAbandonedBootFinishes(t *testing.T) {
+	// Given: an engine that is slow to start, and a query that gives up
+	// waiting for it
+	clk := clock.NewMock()
+	m, d := newTestEngine(t, clk)
+	d.trino.mu.Lock()
+	d.trino.starting = true
+	d.trino.mu.Unlock()
+	ctx, cancel := context.WithCancel(context.Background())
+	gaveUp := make(chan error, 1)
+	go func() {
+		_, _, err := m.acquire(ctx)
+		gaveUp <- err
+	}()
+	waitFor(t, func() bool { return m.snapshot().State == engineStarting })
+	cancel()
+	if err := <-gaveUp; err != context.Canceled {
+		t.Fatalf("acquire = %v, want context.Canceled", err)
+	}
+
+	// When: the engine finishes starting with nothing holding it, and then
+	// sits idle for the idle timeout
+	d.trino.mu.Lock()
+	d.trino.starting = false
+	d.trino.mu.Unlock()
+	waitFor(t, func() bool {
+		clk.Add(engineReadyInterval)
+		return m.snapshot().State == engineReady
+	})
+	clk.Add(engineIdleTimeout)
+
+	// Then: it is stopped and removed
+	waitFor(t, func() bool { _, removed := d.snapshot(); return len(removed) == 1 })
+}

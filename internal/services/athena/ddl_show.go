@@ -41,18 +41,31 @@ func textResult(column string, rows ...string) *queryResult {
 	return res
 }
 
-// hivePattern compiles a SHOW pattern: '*' matches anything and '|'
-// separates alternatives, case-insensitively. An empty pattern matches all.
+// hivePattern compiles a SHOW pattern as Hive reads one: a regular
+// expression in which a '*' not following a '.' matches anything and '|'
+// separates alternatives, case-insensitively. An empty pattern matches all,
+// and one that does not compile matches nothing.
 func hivePattern(pattern string) *regexp.Regexp {
 	if pattern == "" {
 		return nil
 	}
 	alts := strings.Split(pattern, "|")
 	for i, a := range alts {
-		alts[i] = strings.ReplaceAll(regexp.QuoteMeta(strings.TrimSpace(a)), `\*`, ".*")
+		alts[i] = loneStar.ReplaceAllString(strings.TrimSpace(a), "$1.*")
 	}
-	return regexp.MustCompile("(?i)^(?:" + strings.Join(alts, "|") + ")$")
+	re, err := regexp.Compile("(?i)^(?:" + strings.Join(alts, "|") + ")$")
+	if err != nil {
+		return matchNothing
+	}
+	return re
 }
+
+var (
+	// loneStar is a '*' that is not already a regular expression's '.*'.
+	loneStar = regexp.MustCompile(`(^|[^.])\*`)
+	// matchNothing is the pattern a malformed one becomes.
+	matchNothing = regexp.MustCompile(`a^`)
+)
 
 // matching returns the names re matches, sorted.
 func matching(names []string, re *regexp.Regexp) []string {
@@ -83,7 +96,9 @@ func (s *showTablesStmt) run(ctx context.Context, env ddlEnv) (*queryResult, *qu
 	if database == "" {
 		database = env.database
 	}
-	if _, found, err := env.catalog.GetDatabase(ctx, database); err != nil || !found {
+	if _, found, err := env.catalog.GetDatabase(ctx, database); err != nil {
+		return nil, catalogFailure(protocol.Wrap(protocol.ErrInternalError, err))
+	} else if !found {
 		return nil, failure(errorCategoryUser, errorTypeNotFound, "FAILED: SemanticException [Error 10072]: Database does not exist: "+database)
 	}
 	tables, err := env.catalog.ListTables(ctx, database)

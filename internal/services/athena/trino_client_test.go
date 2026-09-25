@@ -3,6 +3,7 @@ package athena
 import (
 	"context"
 	"errors"
+	"net/http"
 	"testing"
 )
 
@@ -121,5 +122,33 @@ func TestTrinoClient_info(t *testing.T) {
 	f.starting = true
 	if starting, err := newTrinoClient().info(context.Background(), f.srv.URL); err != nil || !starting {
 		t.Fatalf("info = %v, %v; want starting", starting, err)
+	}
+}
+
+func TestTrinoClient_retriesABusyEngine(t *testing.T) {
+	// Given: an engine that answers 503 twice before it takes the statement
+	f := newFakeTrino(t)
+	f.busy = 2
+
+	// When: a statement is executed
+	final, err := newTrinoClient().execute(context.Background(), f.srv.URL, "SELECT 1", trinoSession{}, func(*trinoResponse) error { return nil })
+
+	// Then: the client waited it out, as Trino's protocol asks
+	if err != nil || final.Stats.State != "FINISHED" {
+		t.Fatalf("final = %+v, err = %v", final, err)
+	}
+}
+
+func TestTrinoClient_refusedRequestIsNotAnUnreachableEngine(t *testing.T) {
+	// Given: an engine that refuses the request outright
+	f := newFakeTrino(t)
+	f.status = http.StatusGone
+
+	// When: a statement is executed
+	_, err := newTrinoClient().execute(context.Background(), f.srv.URL, "SELECT 1", trinoSession{}, func(*trinoResponse) error { return nil })
+
+	// Then: the query fails, but the engine is not taken for gone
+	if err == nil || errors.Is(err, errTrinoUnreachable) {
+		t.Fatalf("err = %v, want a failure that is not errTrinoUnreachable", err)
 	}
 }

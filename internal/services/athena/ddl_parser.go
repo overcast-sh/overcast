@@ -23,12 +23,68 @@ type ddlSyntaxError struct{ msg string }
 
 func (e *ddlSyntaxError) Error() string { return e.msg }
 
-func newDDLParser(src string) (*ddlParser, error) {
-	toks, err := lexDDL(src)
+// statementError is a statement Overcast could read but will not run, such
+// as EXECUTE of a prepared statement that does not exist.
+type statementError struct {
+	errorType int32
+	msg       string
+}
+
+func (e *statementError) Error() string { return e.msg }
+
+// newDDLParser reads src as Hive DDL.
+func newDDLParser(src string) (*ddlParser, error) { return newParser(src, dialectHive) }
+
+// newEngineParser reads src as the engine's SQL, with no final semicolon
+// or trailing comments: Trino rejects the one and has no use for the other.
+func newEngineParser(src string) (*ddlParser, error) {
+	p, err := newParser(src, dialectTrino)
+	if err != nil {
+		return nil, err
+	}
+	p.trimTerminator()
+	return p, nil
+}
+
+func newParser(src string, dialect sqlDialect) (*ddlParser, error) {
+	toks, err := lexSQL(src, dialect)
 	if err != nil {
 		return nil, &ddlSyntaxError{msg: err.Error()}
 	}
 	return &ddlParser{src: src, toks: toks}, nil
+}
+
+// trimTerminator cuts the statement after its last token, dropping a final
+// semicolon and whatever follows it.
+func (p *ddlParser) trimTerminator() {
+	n := len(p.toks) - 1 // the EOF
+	if n > 0 && p.toks[n-1].isSymbol(";") {
+		n--
+	}
+	end := 0
+	if n > 0 {
+		end = p.toks[n-1].end
+	}
+	p.src = p.src[:end]
+	p.toks = append(p.toks[:n], token{kind: tokEOF, start: end, end: end})
+}
+
+// preparedName reads a prepared statement's name as written: its case kept,
+// and with the @ and : that StatementName allows.
+func (p *ddlParser) preparedName() (string, error) {
+	t := p.peek()
+	if t.kind == tokIdent || t.kind == tokString {
+		p.pos++
+		return t.text, nil
+	}
+	if t.kind != tokWord {
+		return "", p.fail("expected a statement name")
+	}
+	end := p.next().end
+	for n := p.peek(); n.start == end && (n.kind == tokWord || n.kind == tokNumber || n.isSymbol("@") || n.isSymbol(":")); n = p.peek() {
+		end = p.next().end
+	}
+	return p.src[t.start:end], nil
 }
 
 func (p *ddlParser) peek() token { return p.toks[p.pos] }

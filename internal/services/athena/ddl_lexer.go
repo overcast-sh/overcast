@@ -7,12 +7,21 @@ import (
 	"unicode"
 )
 
-// ddl_lexer.go — tokens of Athena's Hive DDL.
+// ddl_lexer.go — tokens of Athena's SQL, in either of its two dialects.
 //
-// Hive quotes identifiers with backticks and strings with either quote, so a
-// double-quoted token is a string here, unlike in Trino's SQL. Comments are
-// skipped. Each token remembers where it came from, so a column type or a
-// CTAS query can be carried over as written.
+// Hive DDL quotes identifiers with backticks and strings with either quote,
+// and reads backslash escapes in a string. Trino's SQL quotes identifiers
+// with double quotes and has no backslash escapes, so 'C:\' is a whole
+// string there. Comments are skipped. Each token remembers where it came
+// from, so a column type or a CTAS query can be carried over as written.
+
+// sqlDialect is which of Athena's two SQL dialects a statement is lexed in.
+type sqlDialect int
+
+const (
+	dialectHive sqlDialect = iota
+	dialectTrino
+)
 
 type tokenKind int
 
@@ -37,8 +46,8 @@ func (t token) is(kw string) bool { return t.kind == tokWord && strings.EqualFol
 // isSymbol reports whether t is the punctuation s.
 func (t token) isSymbol(s string) bool { return t.kind == tokSymbol && t.text == s }
 
-// lexDDL splits a statement into tokens, ending with tokEOF.
-func lexDDL(src string) ([]token, error) {
+// lexSQL splits a statement into tokens, ending with tokEOF.
+func lexSQL(src string, dialect sqlDialect) ([]token, error) {
 	var toks []token
 	for i := 0; i < len(src); {
 		c := src[i]
@@ -50,12 +59,12 @@ func lexDDL(src string) ([]token, error) {
 		case strings.HasPrefix(src[i:], "/*"):
 			i = skipTo(src, i+2, "*/")
 		case c == '\'' || c == '"' || c == '`':
-			text, end, err := lexQuoted(src, i)
+			text, end, err := lexQuoted(src, i, dialect == dialectHive && c != '`')
 			if err != nil {
 				return nil, err
 			}
 			kind := tokString
-			if c == '`' {
+			if c == '`' || c == '"' && dialect == dialectTrino {
 				kind = tokIdent
 			}
 			toks = append(toks, token{kind: kind, text: text, start: i, end: end})
@@ -93,14 +102,14 @@ func skipTo(src string, i int, end string) int {
 }
 
 // lexQuoted reads the quoted token at src[i], where a doubled quote stands
-// for itself, and returns its text and the offset just past it. In a string,
+// for itself, and returns its text and the offset just past it. With escapes,
 // a backslash escapes the next character as Hive reads it: '\t' is a tab and
 // '\001' the byte 1, which is how a delimiter is written.
-func lexQuoted(src string, i int) (string, int, error) {
+func lexQuoted(src string, i int, escapes bool) (string, int, error) {
 	q := src[i]
 	var b strings.Builder
 	for j := i + 1; j < len(src); j++ {
-		if src[j] == '\\' && q != '`' && j+1 < len(src) {
+		if escapes && src[j] == '\\' && j+1 < len(src) {
 			j += writeEscape(&b, src[j+1:])
 			continue
 		}
@@ -118,30 +127,33 @@ func lexQuoted(src string, i int) (string, int, error) {
 	return "", 0, fmt.Errorf("unterminated %c at offset %d", q, i)
 }
 
-// hiveEscapes are the single-character escapes Hive reads in a string.
-var hiveEscapes = map[byte]byte{'t': '\t', 'n': '\n', 'r': '\r', '0': 0}
+// hiveEscapes are the single-character escapes Hive's unescapeSQLString
+// reads in a string; any other escaped character stands for itself.
+var hiveEscapes = map[byte]string{
+	'0': "\x00", 'b': "\b", 'n': "\n", 'r': "\r", 't': "\t", 'Z': "\x1a", '%': "\\%", '_': "\\_",
+}
 
-// writeEscape writes the character the escape at the start of rest stands
-// for, and returns how many bytes of rest it used.
+// writeEscape writes what the escape at the start of rest stands for, and
+// returns how many bytes of rest it used: \uXXXX is a code point, three
+// octal digits from \000 to \177 a byte, and the rest one character each.
 func writeEscape(b *strings.Builder, rest string) int {
-	if n := octalLen(rest); n > 1 {
-		v, _ := strconv.ParseUint(rest[:n], 8, 8)
-		b.WriteByte(byte(v))
-		return n
+	if len(rest) >= 5 && rest[0] == 'u' {
+		if v, err := strconv.ParseUint(rest[1:5], 16, 16); err == nil {
+			b.WriteRune(rune(v))
+			return 5
+		}
 	}
-	if c, ok := hiveEscapes[rest[0]]; ok {
-		b.WriteByte(c)
+	if len(rest) >= 3 && rest[0] >= '0' && rest[0] <= '1' && isOctal(rest[1]) && isOctal(rest[2]) {
+		v, _ := strconv.ParseUint(rest[:3], 8, 8)
+		b.WriteByte(byte(v))
+		return 3
+	}
+	if e, ok := hiveEscapes[rest[0]]; ok {
+		b.WriteString(e)
 	} else {
 		b.WriteByte(rest[0])
 	}
 	return 1
 }
 
-// octalLen is how many of rest's leading bytes, up to three, are octal digits.
-func octalLen(rest string) int {
-	n := 0
-	for n < 3 && n < len(rest) && rest[n] >= '0' && rest[n] <= '7' {
-		n++
-	}
-	return n
-}
+func isOctal(c byte) bool { return c >= '0' && c <= '7' }

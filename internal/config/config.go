@@ -284,8 +284,9 @@ const (
 // version 3 is Trino, so this is the dialect a query is written in.
 const DefaultAthenaEngineImage = "trinodb/trino:483@sha256:db58cc93e593a2706553745f276bb119c9810e69918be56ecde088ba7ccb0534"
 
-// DefaultAthenaEngineMemory is the engine container's memory limit: a 512 MiB
-// heap, the smallest that runs ordinary queries, plus the JVM's own overhead.
+// DefaultAthenaEngineMemory is the engine container's memory limit, and the
+// least it may be: a 512 MiB heap, the smallest that runs ordinary queries,
+// plus the JVM's own overhead.
 const DefaultAthenaEngineMemory = 1 << 30
 
 // Default ports of the two auxiliary listeners that bind beside the AWS API.
@@ -2704,9 +2705,13 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("config: ATHENA_ENGINE %q is invalid (expected trino or inert)", rawAthenaEngine)
 	}
 	cfg.AthenaEngineImage = envOr("ATHENA_ENGINE_IMAGE", DefaultAthenaEngineImage)
-	athenaMemory, err := ParseMemorySize(envOr("ATHENA_ENGINE_MEMORY", ""), DefaultAthenaEngineMemory)
+	rawAthenaMemory := envOr("ATHENA_ENGINE_MEMORY", "")
+	athenaMemory, err := ParseMemorySize(rawAthenaMemory, DefaultAthenaEngineMemory)
 	if err != nil {
 		return nil, fmt.Errorf("config: ATHENA_ENGINE_MEMORY: %w", err)
+	}
+	if athenaMemory < DefaultAthenaEngineMemory {
+		return nil, fmt.Errorf("config: ATHENA_ENGINE_MEMORY %q is below 1g, which the engine needs to start", rawAthenaMemory)
 	}
 	cfg.AthenaEngineMemory = athenaMemory
 	cfg.AthenaDockerSocket = envOr("ATHENA_DOCKER_SOCKET", cfg.LambdaDockerSocket)

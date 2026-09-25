@@ -1,11 +1,14 @@
 package athena
 
 import (
+	"cmp"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"maps"
 	"math"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -114,6 +117,9 @@ func renderValue(v any, sig trinoTypeSignature) string {
 	case nil:
 		return "null"
 	case string:
+		if sig.RawType == "varbinary" {
+			return hexBytes(val)
+		}
 		return val
 	case json.Number:
 		return val.String()
@@ -135,13 +141,50 @@ func renderValue(v any, sig trinoTypeSignature) string {
 	case map[string]any:
 		key, value := sig.typeArgument(0), sig.typeArgument(1)
 		parts := make([]string, 0, len(val))
-		for _, k := range slices.Sorted(maps.Keys(val)) {
+		for _, k := range sortedKeys(val, key) {
 			parts = append(parts, renderValue(k, key)+"="+renderValue(val[k], value))
 		}
 		return "{" + strings.Join(parts, ", ") + "}"
 	default:
 		return fmt.Sprint(val)
 	}
+}
+
+// hexBytes renders Trino's base64 varbinary as Athena does: each byte as
+// two lower-case hex digits, separated by spaces.
+func hexBytes(b64 string) string {
+	raw, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil {
+		return b64
+	}
+	parts := make([]string, len(raw))
+	for i, c := range raw {
+		parts[i] = fmt.Sprintf("%02x", c)
+	}
+	return strings.Join(parts, " ")
+}
+
+// sortedKeys orders a map's keys: numerically when the key type is a
+// number, as text otherwise.
+func sortedKeys(m map[string]any, key trinoTypeSignature) []string {
+	keys := slices.Sorted(maps.Keys(m))
+	if !numericTypes[key.RawType] {
+		return keys
+	}
+	slices.SortStableFunc(keys, func(a, b string) int {
+		x, errA := strconv.ParseFloat(a, 64)
+		y, errB := strconv.ParseFloat(b, 64)
+		if errA != nil || errB != nil {
+			return strings.Compare(a, b)
+		}
+		return cmp.Compare(x, y)
+	})
+	return keys
+}
+
+// numericTypes are the Trino types whose values order as numbers.
+var numericTypes = map[string]bool{
+	"tinyint": true, "smallint": true, "integer": true, "bigint": true, "real": true, "double": true, "decimal": true,
 }
 
 // renderRow renders a row as {field=value, …}, the fields named when the

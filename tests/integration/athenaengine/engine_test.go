@@ -139,7 +139,7 @@ func (e *env) testPartitions() {
 		ROW FORMAT DELIMITED FIELDS TERMINATED BY ','
 		LOCATION 's3://` + bucket + `/sales/'`)
 	repaired := rowsOf(e.results(e.mustQuery("MSCK REPAIR TABLE demo.sales"), 0, ""))
-	if len(repaired) != 4 {
+	if len(repaired) != 3 {
 		t.Fatalf("MSCK REPAIR TABLE reported %v, want two partitions added", repaired)
 	}
 

@@ -2,12 +2,14 @@ package glue
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 )
 
 func stringStats(column string) ColumnStatistics {
 	return ColumnStatistics{ColumnName: column, ColumnType: "string", AnalyzedTime: 1,
-		StatisticsData: map[string]any{"Type": "STRING", "StringColumnStatisticsData": map[string]any{"NumberOfNulls": float64(0)}}}
+		StatisticsData: exactJSON{"Type": "STRING", "StringColumnStatisticsData": map[string]any{"NumberOfNulls": float64(0)}}}
 }
 
 func TestColumnStatistics_roundTripForTableAndPartition(t *testing.T) {
@@ -77,5 +79,31 @@ func TestColumnStatistics_goWithTheirTable(t *testing.T) {
 	mustOK(t, "GetColumnStatisticsForTable", aerr)
 	if len(got.ColumnStatisticsList) != 0 {
 		t.Fatalf("stale statistics survived: %+v", got.ColumnStatisticsList)
+	}
+}
+
+func TestColumnStatistics_bigintBoundsRoundTripExactly(t *testing.T) {
+	// Given: statistics whose maximum is the largest bigint, as a client sends it
+	ctx := context.Background()
+	s, _, _ := newTestService(t)
+	seedTable(t, s, "db", "t")
+	var in updateColumnStatisticsReq
+	body := `{"DatabaseName":"db","TableName":"t","ColumnStatisticsList":[{"ColumnName":"id","ColumnType":"bigint",
+		"StatisticsData":{"Type":"LONG","LongColumnStatisticsData":{"MaximumValue":9223372036854775807,"NumberOfNulls":0,"NumberOfDistinctValues":1}}}]}`
+	if err := json.Unmarshal([]byte(body), &in); err != nil {
+		t.Fatal(err)
+	}
+
+	// When: they are stored and read back
+	_, aerr := s.updateColumnStatisticsForTableTyped(ctx, &in)
+	mustOK(t, "UpdateColumnStatisticsForTable", aerr)
+	got, aerr := s.getColumnStatisticsForTableTyped(ctx, &getColumnStatisticsReq{
+		columnStatisticsTarget: columnStatisticsTarget{DatabaseName: "db", TableName: "t"}, ColumnNames: []string{"id"}})
+	mustOK(t, "GetColumnStatisticsForTable", aerr)
+
+	// Then: the maximum is the number that was written, not a float's rounding
+	out, err := json.Marshal(got.ColumnStatisticsList[0].StatisticsData)
+	if err != nil || !strings.Contains(string(out), `"MaximumValue":9223372036854775807`) {
+		t.Fatalf("StatisticsData = %s, %v", out, err)
 	}
 }

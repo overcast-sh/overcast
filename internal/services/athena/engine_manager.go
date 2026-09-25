@@ -41,6 +41,7 @@ const (
 // Engine states, as the status endpoint reports them.
 const (
 	engineOff      = "off"      // ATHENA_ENGINE=inert, or no Docker: queries run inert
+	engineProbing  = "probing"  // waiting to learn whether Docker is there
 	engineStopped  = "stopped"  // not running; the next query starts it
 	enginePulling  = "pulling"  // pulling the image
 	engineStarting = "starting" // container started, engine not answering yet
@@ -69,6 +70,12 @@ type engineManager struct {
 	bgCtx     context.Context
 	bgCancel  context.CancelFunc
 
+	// settled closes once it is known whether Docker is there: SetDocker, or
+	// the probe failing. A query waits for it rather than running inert in
+	// the moments after Overcast starts.
+	settled    chan struct{}
+	settleOnce sync.Once
+
 	mu       sync.Mutex
 	docker   *docker.Client
 	puller   *docker.ImagePuller
@@ -82,32 +89,76 @@ type engineManager struct {
 
 func newEngineManager(cfg *config.Config, log *serviceutil.ServiceLogger, clk clock.Clock, instances *serviceutil.InstanceDomain) *engineManager {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &engineManager{cfg: cfg, log: log, clk: clk, client: newTrinoClient(), instances: instances,
-		bgCtx: ctx, bgCancel: cancel, status: engineStatus{State: engineOff}}
+	m := &engineManager{cfg: cfg, log: log, clk: clk, client: newTrinoClient(), instances: instances,
+		bgCtx: ctx, bgCancel: cancel, settled: make(chan struct{}), status: engineStatus{State: engineOff}}
+	if cfg.AthenaDockerSocket == "" { // no probe will run
+		m.settle()
+	} else {
+		m.status.State = engineProbing
+	}
+	return m
 }
+
+func (m *engineManager) settle() { m.settleOnce.Do(func() { close(m.settled) }) }
 
 // setDocker wires the daemon the engine runs on, and removes any engine an
 // earlier run of this instance left behind.
 func (m *engineManager) setDocker(dc *docker.Client) {
 	gc := docker.NewGC(dc, m.log.ZapLogger(), m.cfg.AthenaKeepContainers, m.instances.Resolve)
 	gc.StartRemoveLoop(m.bgCtx)
-	gc.Sweep(serviceName)
+	if !m.cfg.AthenaKeepContainers {
+		go m.reclaim(dc)
+	}
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	m.docker, m.puller, m.gc = dc, docker.NewImagePuller(dc), gc
 	m.status.State = engineStopped
+	m.mu.Unlock()
+	m.settle()
 }
 
-// available reports whether queries can run on the engine at all.
+// dockerUnavailable records that no daemon answered: queries run inert.
+func (m *engineManager) dockerUnavailable() {
+	m.mu.Lock()
+	m.status.State = engineOff
+	m.mu.Unlock()
+	m.settle()
+}
+
+// reclaim removes this instance's engines from an earlier run, running or
+// not: a crash leaves one running, and the engine keeps nothing worth
+// adopting.
+func (m *engineManager) reclaim(dc *docker.Client) {
+	containers, err := dc.ListContainers(m.bgCtx, serviceName)
+	if err != nil {
+		m.log.Debug("could not list earlier engines", zap.Error(err))
+		return
+	}
+	domain := m.instances.Resolve(m.bgCtx)
+	for _, c := range containers {
+		if domain != "" && c.Instance() == domain && c.ResourceID() == engineResourceID {
+			if err := dc.RemoveContainer(m.bgCtx, c.ID, true); err != nil {
+				m.log.Warn("could not remove an earlier engine", zap.String("container", c.ID), zap.Error(err))
+			}
+		}
+	}
+}
+
+// available reports whether queries can run on the engine: Docker is
+// wired, or it may yet be.
 func (m *engineManager) available() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.docker != nil && !m.stopping
+	return !m.stopping && (m.docker != nil || m.status.State == engineProbing)
 }
 
 // acquire returns the engine's endpoint, starting it first if it is not
 // running, and holds it up until release is called.
 func (m *engineManager) acquire(ctx context.Context) (endpoint string, release func(), err error) {
+	select {
+	case <-m.settled:
+	case <-ctx.Done():
+		return "", nil, ctx.Err()
+	}
 	m.mu.Lock()
 	if m.docker == nil || m.stopping {
 		m.mu.Unlock()
@@ -145,8 +196,30 @@ func (m *engineManager) release() {
 	defer m.mu.Unlock()
 	m.inflight--
 	m.status.LastUsedAt = m.clk.Now()
-	if m.inflight == 0 && m.boot != nil && !m.stopping {
-		m.idle = m.clk.AfterFunc(engineIdleTimeout, m.stopIdle)
+	if m.inflight == 0 && m.boot != nil && isDone(m.boot.done) {
+		m.armIdleLocked()
+	}
+}
+
+// armIdleLocked schedules the idle stop, replacing any scheduled before. A
+// boot still in flight arms it itself when it finishes (start). The caller
+// holds mu.
+func (m *engineManager) armIdleLocked() {
+	if m.stopping {
+		return
+	}
+	if m.idle != nil {
+		m.idle.Stop()
+	}
+	m.idle = m.clk.AfterFunc(engineIdleTimeout, m.stopIdle)
+}
+
+func isDone(ch <-chan struct{}) bool {
+	select {
+	case <-ch:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -154,13 +227,7 @@ func (m *engineManager) release() {
 func (m *engineManager) stopIdle() {
 	m.mu.Lock()
 	b := m.boot
-	if m.inflight > 0 || b == nil || m.stopping {
-		m.mu.Unlock()
-		return
-	}
-	select {
-	case <-b.done:
-	default: // still starting: it is not idle
+	if m.inflight > 0 || b == nil || m.stopping || !isDone(b.done) {
 		m.mu.Unlock()
 		return
 	}
@@ -227,6 +294,9 @@ func (m *engineManager) start(b *engineBoot) {
 		return
 	}
 	m.status.State, m.status.LastError = engineReady, ""
+	if m.inflight == 0 { // every query that wanted it gave up while it started
+		m.armIdleLocked()
+	}
 	m.status.ContainerID, m.status.Endpoint, m.status.StartedAt = b.containerID, b.endpoint, m.clk.Now()
 	m.log.Info("query engine ready", zap.String("container", b.containerID), zap.Int64("pullMillis", m.status.PullMillis),
 		zap.Int64("startMillis", m.status.StartMillis))
@@ -268,6 +338,7 @@ func (m *engineManager) stop(ctx context.Context) {
 	if m.idle != nil {
 		m.idle.Stop()
 	}
+	m.settle()
 	gc := m.gc
 	m.mu.Unlock()
 	m.bgCancel()

@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -29,7 +30,7 @@ func ParseMemorySize(raw string, fallback int64) (int64, error) {
 	}
 	n, err := strconv.ParseInt(s[:split], 10, 64)
 	unit, known := memoryUnits[strings.TrimSpace(s[split:])]
-	if err != nil || !known || n <= 0 {
+	if err != nil || !known || n <= 0 || n > math.MaxInt64/unit {
 		return 0, fmt.Errorf("%q is not a memory size (expected a number of bytes, or one with a k, m or g suffix)", raw)
 	}
 	return n * unit, nil

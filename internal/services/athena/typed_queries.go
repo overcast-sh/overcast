@@ -334,8 +334,11 @@ func (s *Service) getQueryResultsTyped(ctx context.Context, req *getQueryResults
 // reapInterrupted fails every execution a previous process left QUEUED or
 // RUNNING: no engine resumes a query across a restart, so nothing else
 // would ever move it. It runs once, before this process first reads or
-// starts a query, so the only unfinished records it can see are those.
+// starts a query, so the only unfinished records it can see are those. It
+// is not retried when the list fails: by the next call this process may have
+// queries of its own running, which a retry would fail too.
 func (s *Service) reapInterrupted(ctx context.Context) {
+	ctx = context.WithoutCancel(ctx) // one request's end must not cut the reap short
 	_ = s.reaped.Do(func() error {
 		queries, err := s.store.listQueries(ctx)
 		if err != nil {

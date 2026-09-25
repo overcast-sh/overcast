@@ -114,18 +114,6 @@ func partitionKey(dbName, tableName string, values []string) string {
 	return b.String()
 }
 
-func tableStatisticsPrefix(dbName, tableName string) string {
-	return tablePrefix(dbName, tableName) + "t/"
-}
-
-func partitionStatisticsPrefix(dbName, tableName string, values []string) string {
-	escaped := make([]string, len(values))
-	for i, v := range values {
-		escaped[i] = esc(v)
-	}
-	return tablePrefix(dbName, tableName) + "p/" + esc(strings.Join(escaped, "/")) + "/"
-}
-
 func versionKey(dbName, tableName, versionID string) string {
 	return tablePrefix(dbName, tableName) + esc(versionID)
 }

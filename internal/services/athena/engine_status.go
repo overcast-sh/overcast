@@ -17,7 +17,7 @@ const engineStatusPath = "/_overcast/athena/engine"
 type engineStatus struct {
 	// Engine is ATHENA_ENGINE: trino or inert.
 	Engine string `json:"engine"`
-	// State is off, stopped, pulling, starting, ready or failed.
+	// State is off, probing, stopped, pulling, starting, ready or failed.
 	State string `json:"state"`
 	// Reason says why an engine is off.
 	Reason      string `json:"reason,omitempty"`
@@ -42,7 +42,7 @@ func (m *engineManager) snapshot() engineStatus {
 	defer m.mu.Unlock()
 	s := m.status
 	s.Engine, s.Image, s.MemoryBytes, s.RunningQueries = string(config.AthenaEngineTrino), m.cfg.AthenaEngineImage, m.cfg.AthenaEngineMemory, m.inflight
-	if m.docker == nil {
+	if s.State == engineOff {
 		s.Reason = "No Docker daemon is connected, so queries run inert: they succeed with empty results."
 	}
 	return s

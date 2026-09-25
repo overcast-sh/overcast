@@ -7,6 +7,8 @@ import (
 	"maps"
 	"slices"
 	"strings"
+
+	"github.com/overcast-sh/overcast/internal/middleware"
 )
 
 // engine_config.go — the configuration the engine container starts with,
@@ -35,10 +37,6 @@ const (
 	// Hive catalog redirects Iceberg tables to.
 	hiveCatalog    = "awsdatacatalog"
 	icebergCatalog = "awsdatacatalog_iceberg"
-
-	// engineAccessKey signs the engine's calls to Overcast. Overcast does not
-	// check credentials unless told to; see the Athena docs' limitations.
-	engineAccessKey = "overcast-athena"
 )
 
 // enginePlugins are the only plugins the engine loads.
@@ -47,8 +45,9 @@ var enginePlugins = []string{"hive", "iceberg"}
 // engineSettings are the inputs the configuration is rendered from.
 type engineSettings struct {
 	// Overcast is the origin the container reaches Overcast's API on, for
-	// both Glue and S3.
+	// both Glue and S3, and AccessKey the key the gateway there accepts.
 	Overcast  string
+	AccessKey string
 	Region    string
 	AccountID string
 	// Memory is the container's memory limit in bytes.
@@ -113,20 +112,22 @@ func renderEngineFiles(s engineSettings) map[string]string {
 
 // awsProperties point a catalog's Glue metastore and its S3 file system at
 // Overcast. S3 is path-style: the endpoint is an address, not a name a
-// bucket can be prefixed to.
+// bucket can be prefixed to. The secret is the one Overcast checks a
+// signature from an unknown key against, so the engine's calls pass
+// OVERCAST_SIGV4_VALIDATE.
 func (s engineSettings) awsProperties() []string {
 	return []string{
 		"hive.metastore.glue.region=" + s.Region,
 		"hive.metastore.glue.endpoint-url=" + s.Overcast,
 		"hive.metastore.glue.catalogid=" + s.AccountID,
-		"hive.metastore.glue.aws-access-key=" + engineAccessKey,
-		"hive.metastore.glue.aws-secret-key=" + engineAccessKey,
+		"hive.metastore.glue.aws-access-key=" + s.AccessKey,
+		"hive.metastore.glue.aws-secret-key=" + middleware.DefaultSigV4Secret,
 		"fs.native-s3.enabled=true",
 		"s3.endpoint=" + s.Overcast,
 		"s3.region=" + s.Region,
 		"s3.path-style-access=true",
-		"s3.aws-access-key=" + engineAccessKey,
-		"s3.aws-secret-key=" + engineAccessKey,
+		"s3.aws-access-key=" + s.AccessKey,
+		"s3.aws-secret-key=" + middleware.DefaultSigV4Secret,
 	}
 }
 

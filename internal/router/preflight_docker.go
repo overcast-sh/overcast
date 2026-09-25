@@ -113,3 +113,13 @@ func dockerUnavailableWarning(configs []docker.ServiceConfig, results []docker.S
 		strings.Join(parts, "; "),
 	)
 }
+
+// dockerConnected reports whether the probe connected the named service.
+func dockerConnected(results []docker.ServiceResult, name string) bool {
+	for _, r := range results {
+		if r.Name == name {
+			return true
+		}
+	}
+	return false
+}

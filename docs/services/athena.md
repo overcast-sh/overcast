@@ -50,9 +50,12 @@ ever. Later queries start at once.
 | Iceberg | `CREATE TABLE … TBLPROPERTIES ('table_type'='ICEBERG')`, then `INSERT`, `MERGE`, `UPDATE` and `DELETE` commit through Glue's `metadata_location` |
 | Formats | CSV, JSON, Parquet, ORC and Avro tables in S3, partitioned or not |
 | Workgroups | Create, get, list, update and delete; the result location, its enforcement and `BytesScannedCutoffPerQuery` apply to each query |
-| Saved queries | Named queries and prepared statements; `EXECUTE … USING` and `ExecutionParameters` bind their parameters |
+| Idempotency | A repeated `ClientRequestToken` returns the same query or named query |
+| Listing | `ListQueryExecutions` and `ListNamedQueries` cover one workgroup, `primary` by default, and paginate |
+| Saved queries | Named queries and prepared statements, through the API or SQL `PREPARE` and `DEALLOCATE PREPARE`; `EXECUTE … USING` and `ExecutionParameters` bind their parameters |
 | Data catalogs | `AwsDataCatalog` is built in; `GLUE`, `HIVE` and `LAMBDA` catalogs can be registered |
 | Metadata | `GetDatabase`, `ListDatabases`, `GetTableMetadata` and `ListTableMetadata` read the Glue Data Catalog |
+| Tags | On workgroup and data catalog ARNs |
 | CloudFormation | `AWS::Athena::WorkGroup` (updated in place), `NamedQuery`, `PreparedStatement` and `DataCatalog` |
 
 Without a Docker daemon, or with `ATHENA_ENGINE=inert`, the engine is off:
@@ -69,6 +72,8 @@ settings, and `/_overcast/athena/engine` reports its state.
 | Result reuse | `ResultReuseConfiguration` reuses a recent result | Every query runs |
 | CloudWatch metrics | Published when the workgroup enables them | Not published |
 | S3 Tables catalogs | `s3tablescatalog/<bucket>` queries a table bucket | Not queryable yet |
+| Data catalogs | `FEDERATED` provisions a connector | `FEDERATED` is refused with a 501 |
+| Metadata | `LAMBDA` and `HIVE` catalogs are read through their connector | Only `GLUE` catalogs for this account are readable |
 | Spark | Spark workgroups, sessions and notebooks | Not emulated |
 
 The rest — result files, statistics, errors and the engine itself — is in

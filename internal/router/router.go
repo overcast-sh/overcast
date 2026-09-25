@@ -1003,6 +1003,12 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 					setter(res.Client)
 				}
 			}
+			// Athena's queries wait for this answer rather than running inert
+			// while the probe is still going, so a daemon that did not answer
+			// has to be said out loud.
+			if _, probed := dockerServices["athena"]; probed && !dockerConnected(results, "athena") {
+				athenaSvc.DockerUnavailable()
+			}
 			targetsByClient := dockerReconcileTargetsByClient(results, serviceByName)
 
 			// Snapshot only after the watcher has opened its stream. The initial

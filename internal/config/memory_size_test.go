@@ -20,7 +20,7 @@ func TestParseMemorySize(t *testing.T) {
 			t.Errorf("ParseMemorySize(%q) = %d, %v; want %d", in, got, err, want)
 		}
 	}
-	for _, in := range []string{"g", "1t", "-1g", "0", "one"} {
+	for _, in := range []string{"g", "1t", "-1g", "0", "one", "99999999999g"} {
 		if _, err := ParseMemorySize(in, 42); err == nil {
 			t.Errorf("ParseMemorySize(%q) accepted a value that is not a size", in)
 		}
