@@ -409,10 +409,7 @@ func validateState(branch *aslBranch, name string, state *aslState, where, defau
 		if state.Resource == "" {
 			return invalidDefinitionf("%s: Task requires Resource", loc)
 		}
-		if err := validateSDKTask(state, loc); err != nil {
-			return err
-		}
-		if err := validateAthenaTask(state, loc); err != nil {
+		if err := validateTaskResource(state, loc); err != nil {
 			return err
 		}
 	case stateTypeParallel:

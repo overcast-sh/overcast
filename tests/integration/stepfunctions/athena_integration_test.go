@@ -91,8 +91,9 @@ func TestStartExecution_athenaStartQueryExecutionSyncThenResults(t *testing.T) {
 	// When: it runs
 	got, execARN := runToEnd(t, srv, "athena-sync", def, `{}`)
 
-	// Then: .sync hands on the final GetQueryExecution response, and the
-	// two request-response calls return their API responses
+	// Then: .sync records its start as TaskSubmitted and hands on the final
+	// GetQueryExecution response; the two request-response calls return
+	// their API responses
 	var out struct {
 		QueryExecution struct {
 			QueryExecutionId string
@@ -115,14 +116,12 @@ func TestStartExecution_athenaStartQueryExecutionSyncThenResults(t *testing.T) {
 	if out.Results.ResultSet == nil {
 		t.Errorf("getQueryResults output = %s, want a ResultSet", got.Output)
 	}
-	succeeded := 0
+	counts := map[string]int{}
 	for _, e := range execHistory(t, srv, execARN) {
-		if e.Type == "TaskSucceeded" {
-			succeeded++
-		}
+		counts[e.Type]++
 	}
-	if succeeded != 3 {
-		t.Errorf("TaskSucceeded events = %d, want 3", succeeded)
+	if counts["TaskSubmitted"] != 1 || counts["TaskSucceeded"] != 3 {
+		t.Errorf("TaskSubmitted, TaskSucceeded events = %d, %d, want 1, 3", counts["TaskSubmitted"], counts["TaskSucceeded"])
 	}
 }
 

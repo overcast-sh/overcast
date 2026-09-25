@@ -16,14 +16,14 @@ import (
 
 // fakeAthena stands in for Athena behind the router a Task dispatches
 // through. Each GetQueryExecution answers with the next of states, repeating
-// the last one; every request is recorded, and each poll is signalled.
+// the last one; every request is recorded.
 type fakeAthena struct {
-	mu       sync.Mutex
-	states   []string
-	calls    []athenaCall
-	polled   chan string
-	stopped  chan struct{}
-	failWith string // an Athena error code every call answers with
+	failWith string // an Athena error code every call answers with; set before use
+
+	mu      sync.Mutex
+	states  []string
+	calls   []athenaCall
+	stopped chan struct{}
 }
 
 type athenaCall struct {
@@ -32,7 +32,7 @@ type athenaCall struct {
 }
 
 func newFakeAthena(states ...string) *fakeAthena {
-	return &fakeAthena{states: states, polled: make(chan string, 64), stopped: make(chan struct{}, 1)}
+	return &fakeAthena{states: states, stopped: make(chan struct{}, 1)}
 }
 
 func (f *fakeAthena) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -60,23 +60,17 @@ func (f *fakeAthena) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"Query":            "SELECT 1",
 			"Status":           map[string]any{"State": queryState, "StateChangeReason": "reason for " + queryState},
 		}})
-		signal(f.polled, queryState)
 	case "AmazonAthena.StopQueryExecution":
 		_, _ = io.WriteString(w, `{}`)
-		signal(f.stopped, struct{}{})
+		select {
+		case f.stopped <- struct{}{}:
+		default:
+		}
 	case "AmazonAthena.GetQueryResults":
 		_, _ = io.WriteString(w, `{"ResultSet":{"Rows":[{"Data":[{"VarCharValue":"1"}]}]},"UpdateCount":0}`)
 	default:
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = io.WriteString(w, `{"__type":"UnknownOperationException"}`)
-	}
-}
-
-// signal sends v without blocking the handler when nobody is listening.
-func signal[T any](ch chan T, v T) {
-	select {
-	case ch <- v:
-	default:
 	}
 }
 
@@ -90,6 +84,7 @@ func (f *fakeAthena) nextState() string {
 	return next
 }
 
+// targets lists the operations called, in order.
 func (f *fakeAthena) targets() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -100,15 +95,41 @@ func (f *fakeAthena) targets() []string {
 	return out
 }
 
-// newAthenaTestHandler builds a Handler on a mock clock whose Tasks reach
-// athena, with one state machine running a single Task on resource.
-func newAthenaTestHandler(t *testing.T, athena *fakeAthena, resource, parameters string) (*Handler, *clock.Mock, string) {
+// lastBody is the request body of the most recent call to operation.
+func (f *fakeAthena) lastBody(operation string) map[string]any {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i := len(f.calls) - 1; i >= 0; i-- {
+		if f.calls[i].target == "AmazonAthena."+operation {
+			return f.calls[i].body
+		}
+	}
+	return nil
+}
+
+// armingClock is a mock clock that reports each timer it arms, so a test can
+// advance it in lockstep with a `.sync` Task's polls: the only timers these
+// executions arm are the waits between them.
+type armingClock struct {
+	*clock.Mock
+	armed chan time.Duration
+}
+
+func (c *armingClock) Timer(d time.Duration) *clock.Timer {
+	t := c.Mock.Timer(d)
+	c.armed <- d
+	return t
+}
+
+// newAthenaTestHandler builds a Handler whose Tasks reach athena, with one
+// state machine running the single Task state task.
+func newAthenaTestHandler(t *testing.T, athena *fakeAthena, task string) (*Handler, *armingClock, string) {
 	t.Helper()
-	h, clk := newRedriveTestHandler(t, state.NewMemoryStore())
+	clk := &armingClock{Mock: clock.NewMock(), armed: make(chan time.Duration)}
+	h := newTestHandler(state.NewMemoryStore(), clk)
 	h.router = athena
-	def := `{"StartAt":"Q","States":{"Q":{"Type":"Task","Resource":"` + resource + `","Parameters":` + parameters + `,"End":true}}}`
 	resp, aerr := h.createStateMachineTyped(context.Background(), &createStateMachineRequest{
-		Name: "athena", Definition: def, RoleArn: "arn:aws:iam::000000000000:role/r",
+		Name: "athena", Definition: `{"StartAt":"Q","States":{"Q":` + task + `}}`, RoleArn: "arn:aws:iam::000000000000:role/r",
 	})
 	if aerr != nil {
 		t.Fatalf("createStateMachineTyped: %+v", aerr)
@@ -116,9 +137,14 @@ func newAthenaTestHandler(t *testing.T, athena *fakeAthena, resource, parameters
 	return h, clk, resp.StateMachineArn
 }
 
-// runAthenaExecution runs the state machine to its end, advancing the mock
-// clock one poll interval at a time while a `.sync` Task waits on the query.
-func runAthenaExecution(t *testing.T, h *Handler, clk *clock.Mock, smARN string) *Execution {
+// athenaTask is a Task state on resource with parameters.
+func athenaTask(resource, parameters string) string {
+	return `{"Type":"Task","Resource":"arn:aws:states:::athena:` + resource + `","Parameters":` + parameters + `,"End":true}`
+}
+
+// runAthenaExecution runs the state machine to its end, advancing the clock
+// through each wait between polls as the Task arms it.
+func runAthenaExecution(t *testing.T, h *Handler, clk *armingClock, smARN string) *Execution {
 	t.Helper()
 	finished := make(chan *Execution, 1)
 	go func() {
@@ -128,20 +154,19 @@ func runAthenaExecution(t *testing.T, h *Handler, clk *clock.Mock, smARN string)
 		}
 		finished <- exec
 	}()
-	deadline := time.Now().Add(10 * time.Second)
-	for time.Now().Before(deadline) {
+	for {
 		select {
 		case exec := <-finished:
 			if exec == nil {
 				t.FailNow()
 			}
 			return exec
-		default:
-			clk.Add(athenaPollInterval)
+		case d := <-clk.armed:
+			clk.Add(d)
+		case <-time.After(10 * time.Second):
+			t.Fatal("the execution did not finish")
 		}
 	}
-	t.Fatal("the execution did not finish")
-	return nil
 }
 
 func decodeOutput(t *testing.T, exec *Execution) map[string]any {
@@ -153,11 +178,25 @@ func decodeOutput(t *testing.T, exec *Execution) map[string]any {
 	return out
 }
 
+// historyTypes lists an execution's history event types, comma-separated.
+func historyTypes(t *testing.T, h *Handler, execARN string) string {
+	t.Helper()
+	resp, aerr := h.getExecutionHistoryTyped(context.Background(), &getExecutionHistoryRequest{ExecutionArn: execARN})
+	if aerr != nil {
+		t.Fatalf("getExecutionHistoryTyped: %+v", aerr)
+	}
+	types := make([]string, len(resp.Events))
+	for i, e := range resp.Events {
+		types[i] = e.Type
+	}
+	return strings.Join(types, ",")
+}
+
 func TestAthenaStartQueryExecution_requestResponse(t *testing.T) {
 	// Given: a request-response startQueryExecution Task
 	athena := newFakeAthena("RUNNING")
-	h, clk, smARN := newAthenaTestHandler(t, athena, "arn:aws:states:::athena:startQueryExecution",
-		`{"QueryString":"SELECT 1","WorkGroup":"primary","ResultConfiguration":{"OutputLocation":"s3://results/"}}`)
+	h, clk, smARN := newAthenaTestHandler(t, athena, athenaTask("startQueryExecution",
+		`{"QueryString":"SELECT 1","WorkGroup":"primary","ResultConfiguration":{"OutputLocation":"s3://results/"}}`))
 
 	// When: it runs
 	exec := runAthenaExecution(t, h, clk, smARN)
@@ -170,7 +209,7 @@ func TestAthenaStartQueryExecution_requestResponse(t *testing.T) {
 	if got := athena.targets(); len(got) != 1 || got[0] != "StartQueryExecution" {
 		t.Fatalf("calls = %v, want only StartQueryExecution", got)
 	}
-	if body := athena.calls[0].body; body["QueryString"] != "SELECT 1" || body["WorkGroup"] != "primary" {
+	if body := athena.lastBody("StartQueryExecution"); body["QueryString"] != "SELECT 1" || body["WorkGroup"] != "primary" {
 		t.Errorf("request = %v, want the Parameters forwarded", body)
 	}
 	if out := decodeOutput(t, exec); out["QueryExecutionId"] != "q-1" || len(out) != 1 {
@@ -181,19 +220,22 @@ func TestAthenaStartQueryExecution_requestResponse(t *testing.T) {
 func TestAthenaStartQueryExecution_syncWaitsForSuccess(t *testing.T) {
 	// Given: a .sync Task on a query that runs for two polls
 	athena := newFakeAthena("QUEUED", "RUNNING", "SUCCEEDED")
-	h, clk, smARN := newAthenaTestHandler(t, athena, "arn:aws:states:::athena:startQueryExecution.sync",
-		`{"QueryString":"SELECT 1"}`)
+	h, clk, smARN := newAthenaTestHandler(t, athena, athenaTask("startQueryExecution.sync", `{"QueryString":"SELECT 1"}`))
 
 	// When: it runs
 	exec := runAthenaExecution(t, h, clk, smARN)
 
-	// Then: the Task's result is the final GetQueryExecution response
+	// Then: the start is recorded as TaskSubmitted, and the Task's result is
+	// the final GetQueryExecution response
 	if exec.Status != statusSucceeded {
 		t.Fatalf("status = %s (%s: %s)", exec.Status, exec.Error, exec.Cause)
 	}
-	want := []string{"StartQueryExecution", "GetQueryExecution", "GetQueryExecution", "GetQueryExecution"}
-	if got := athena.targets(); strings.Join(got, ",") != strings.Join(want, ",") {
-		t.Errorf("calls = %v, want %v", got, want)
+	want := "StartQueryExecution,GetQueryExecution,GetQueryExecution,GetQueryExecution"
+	if got := strings.Join(athena.targets(), ","); got != want {
+		t.Errorf("calls = %s, want %s", got, want)
+	}
+	if types := historyTypes(t, h, exec.ExecutionArn); !strings.Contains(types, "TaskStarted,TaskSubmitted,TaskSucceeded") {
+		t.Errorf("history = %s, want TaskStarted, TaskSubmitted, TaskSucceeded", types)
 	}
 	qe, _ := decodeOutput(t, exec)["QueryExecution"].(map[string]any)
 	status, _ := qe["Status"].(map[string]any)
@@ -207,8 +249,7 @@ func TestAthenaStartQueryExecution_syncQueryEndsUnsuccessfully(t *testing.T) {
 		t.Run(final, func(t *testing.T) {
 			// Given: a .sync Task on a query that ends final
 			athena := newFakeAthena("RUNNING", final)
-			h, clk, smARN := newAthenaTestHandler(t, athena, "arn:aws:states:::athena:startQueryExecution.sync",
-				`{"QueryString":"SELECT 1"}`)
+			h, clk, smARN := newAthenaTestHandler(t, athena, athenaTask("startQueryExecution.sync", `{"QueryString":"SELECT 1"}`))
 
 			// When: it runs
 			exec := runAthenaExecution(t, h, clk, smARN)
@@ -234,17 +275,30 @@ func TestAthenaStartQueryExecution_syncQueryEndsUnsuccessfully(t *testing.T) {
 	}
 }
 
+func TestAthenaStartQueryExecution_syncUnrecognizedState(t *testing.T) {
+	// Given: a .sync Task on a query reporting a state Athena does not model
+	athena := newFakeAthena("BOGUS")
+	h, clk, smARN := newAthenaTestHandler(t, athena, athenaTask("startQueryExecution.sync", `{"QueryString":"SELECT 1"}`))
+
+	// When: it runs
+	exec := runAthenaExecution(t, h, clk, smARN)
+
+	// Then: it fails loudly at once rather than polling forever
+	if exec.Error != errRuntime || !strings.Contains(exec.Cause, `"BOGUS"`) {
+		t.Errorf("error = %q (%s), want %s naming the state", exec.Error, exec.Cause, errRuntime)
+	}
+}
+
 func TestAthenaStartQueryExecution_stoppedExecutionStopsTheQuery(t *testing.T) {
-	// Given: a .sync Task waiting on a query that never finishes
+	// Given: a .sync Task waiting between polls on a query that never finishes
 	athena := newFakeAthena("RUNNING")
-	h, _, smARN := newAthenaTestHandler(t, athena, "arn:aws:states:::athena:startQueryExecution.sync",
-		`{"QueryString":"SELECT 1"}`)
+	h, clk, smARN := newAthenaTestHandler(t, athena, athenaTask("startQueryExecution.sync", `{"QueryString":"SELECT 1"}`))
 	ctx := context.Background()
 	exec, aerr := h.startExecution(ctx, smARN, "run", `{}`, 0, executionAsync)
 	if aerr != nil {
 		t.Fatalf("startExecution: %+v", aerr)
 	}
-	<-athena.polled
+	<-clk.armed
 
 	// When: the execution is stopped
 	if _, aerr := h.stopExecutionTyped(ctx, &stopExecutionRequest{ExecutionArn: exec.ExecutionArn}); aerr != nil {
@@ -257,8 +311,41 @@ func TestAthenaStartQueryExecution_stoppedExecutionStopsTheQuery(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatalf("StopQueryExecution was never called; calls = %v", athena.targets())
 	}
-	if body := athena.calls[len(athena.calls)-1].body; body["QueryExecutionId"] != "q-1" {
+	if body := athena.lastBody("StopQueryExecution"); body["QueryExecutionId"] != "q-1" {
 		t.Errorf("StopQueryExecution request = %v, want QueryExecutionId q-1", body)
+	}
+}
+
+func TestAthenaStartQueryExecution_syncTaskTimeoutStopsTheQuery(t *testing.T) {
+	// Given: a .sync Task with a one-second budget on a query that never
+	// finishes, on a clock nobody advances. A Task deadline is wall-clock,
+	// so this test takes a second.
+	athena := newFakeAthena("RUNNING")
+	h, clk, smARN := newAthenaTestHandler(t, athena,
+		`{"Type":"Task","Resource":"arn:aws:states:::athena:startQueryExecution.sync","TimeoutSeconds":1,
+		  "Parameters":{"QueryString":"SELECT 1"},"End":true}`)
+	go func() {
+		for range clk.armed { // accept each wait, never end it
+		}
+	}()
+
+	// When: it runs
+	exec, aerr := h.startExecution(context.Background(), smARN, "run", `{}`, 0, executionSync)
+	if aerr != nil {
+		t.Fatalf("startExecution: %+v", aerr)
+	}
+
+	// Then: the Task times out with States.Timeout, and its query is stopped
+	if exec.Error != errTimeout {
+		t.Errorf("error = %q (%s), want %s", exec.Error, exec.Cause, errTimeout)
+	}
+	if types := historyTypes(t, h, exec.ExecutionArn); !strings.Contains(types, "TaskTimedOut") {
+		t.Errorf("history = %s, want a TaskTimedOut event", types)
+	}
+	select {
+	case <-athena.stopped:
+	default:
+		t.Errorf("StopQueryExecution was never called; calls = %v", athena.targets())
 	}
 }
 
@@ -274,8 +361,7 @@ func TestAthenaIntegrations_requestResponse(t *testing.T) {
 		t.Run(tc.action, func(t *testing.T) {
 			// Given: a Task on the optimized integration
 			athena := newFakeAthena("SUCCEEDED")
-			h, clk, smARN := newAthenaTestHandler(t, athena, "arn:aws:states:::athena:"+tc.action,
-				`{"QueryExecutionId":"q-1"}`)
+			h, clk, smARN := newAthenaTestHandler(t, athena, athenaTask(tc.action, `{"QueryExecutionId":"q-1"}`))
 
 			// When: it runs
 			exec := runAthenaExecution(t, h, clk, smARN)
@@ -299,8 +385,8 @@ func TestAthenaIntegrations_apiErrorIsPrefixed(t *testing.T) {
 	// Given: Athena refuses the call
 	athena := newFakeAthena("SUCCEEDED")
 	athena.failWith = "InvalidRequestException"
-	h, clk, smARN := newAthenaTestHandler(t, athena, "arn:aws:states:::athena:startQueryExecution.sync",
-		`{"QueryString":"SELECT 1","WorkGroup":"missing"}`)
+	h, clk, smARN := newAthenaTestHandler(t, athena,
+		athenaTask("startQueryExecution.sync", `{"QueryString":"SELECT 1","WorkGroup":"missing"}`))
 
 	// When: it runs
 	exec := runAthenaExecution(t, h, clk, smARN)
@@ -319,7 +405,7 @@ func TestAthenaIntegrations_unofferedResourceIsNotRecognized(t *testing.T) {
 	} {
 		t.Run(resource, func(t *testing.T) {
 			// Given: an athena: Resource AWS does not offer
-			h, _ := newRedriveTestHandler(t, state.NewMemoryStore())
+			h := newTestHandler(state.NewMemoryStore(), clock.NewMock())
 			def := `{"StartAt":"Q","States":{"Q":{"Type":"Task","Resource":"` + resource + `","End":true}}}`
 
 			// When: a state machine is created with it

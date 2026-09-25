@@ -46,16 +46,11 @@ Where it still differs:
 
 ### Athena
 
-The four Athena actions AWS offers — `startQueryExecution`,
-`stopQueryExecution`, `getQueryExecution` and `getQueryResults` — each return
-their API response. `startQueryExecution.sync` checks the query once a second
-and returns the final `GetQueryExecution` response. A query that ends `FAILED`
-or `CANCELLED` fails the Task with `States.TaskFailed`, and the cause is that
-response as JSON. A timed-out or stopped Task stops its query.
-
-Timestamps such as `SubmissionDateTime` are epoch seconds, as Athena's API
-returns them. Without Docker, or with `ATHENA_ENGINE=inert`, a query succeeds at
-once with no rows, so `.sync` returns straight away.
+Overcast passes Athena's timestamps, such as `SubmissionDateTime`, through as
+the epoch seconds Athena's API returns. The format AWS gives them in a Task
+result has not been checked. `startQueryExecution.sync` checks its query once
+a second. With the [Athena](../athena.md) engine off, a query succeeds at once
+with no rows, so `.sync` returns straight away.
 
 ## Query languages
 

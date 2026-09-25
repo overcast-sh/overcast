@@ -260,15 +260,7 @@ func splitWordBoundaries(s string) []string {
 // do not offer), and static Parameters/Arguments naming a member the action
 // does not take. Anything valid that Overcast cannot run still provisions and
 // fails at run time, like every other gap.
-func validateSDKTask(state *aslState, loc string) error {
-	integration, serr := parseTaskResource(state.Resource)
-	if serr != nil {
-		return nil
-	}
-	service, ok := strings.CutPrefix(integration.service, "aws-sdk:")
-	if !ok {
-		return nil
-	}
+func validateSDKTask(state *aslState, loc, service string, integration taskIntegration) error {
 	notRecognised := resourceNotRecognized(loc, state.Resource)
 	if integration.pattern != "" && integration.pattern != patternWaitForTaskToken {
 		return notRecognised
