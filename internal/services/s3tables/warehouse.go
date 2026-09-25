@@ -68,8 +68,9 @@ func errUnreadableMetadata(location, reason string) *protocol.AWSError {
 // metadataProposal decides where a table's metadata pointer moves, given the
 // table as it stands under the service lock — t is nil when the table does
 // not exist, and a proposal that creates it returns the new record. An empty
-// location means "leave the table as it is".
-type metadataProposal func(b *tableBucket, n *namespaceRecord, t *tableRecord) (*tableRecord, string, *protocol.AWSError)
+// location means "leave the table as it is". meta is the metadata at
+// location when the proposer has parsed it, and nil otherwise.
+type metadataProposal func(b *tableBucket, n *namespaceRecord, t *tableRecord) (_ *tableRecord, location string, meta *icebergmeta.Metadata, _ *protocol.AWSError)
 
 // swapMetadata is the compare-and-swap every change to a table's metadata
 // goes through: UpdateTableMetadataLocation's and the Iceberg REST catalog's
@@ -78,22 +79,43 @@ type metadataProposal func(b *tableBucket, n *namespaceRecord, t *tableRecord) (
 // now is, and points the table at the proposed location with a fresh version
 // token. Of two writers racing from the same state exactly one wins; the
 // other's proposal sees the winner's table and fails its check.
+//
+// The swap is published once the lock is released: its event may need the
+// new metadata file read, which is no reason to hold up other writers.
 func (s *Service) swapMetadata(ctx context.Context, bucketARN, namespace, name string, propose metadataProposal) (*tableRecord, *protocol.AWSError) {
+	t, swap, aerr := s.swapLocked(ctx, bucketARN, namespace, name, propose)
+	if swap != nil {
+		s.publishSwap(ctx, swap)
+	}
+	return t, aerr
+}
+
+// swapLocked is swapMetadata's compare-and-swap, under the service lock. It
+// describes the swap it made, or returns a nil swap when it made none.
+func (s *Service) swapLocked(ctx context.Context, bucketARN, namespace, name string, propose metadataProposal) (*tableRecord, *metadataSwap, *protocol.AWSError) {
 	defer s.lock()()
 	b, n, aerr := s.resolveNamespace(ctx, bucketARN, namespace)
 	if aerr != nil {
-		return nil, aerr
+		return nil, nil, aerr
 	}
 	current, _, aerr := s.loadTable(ctx, b.Region, b.Name, n.Name, name)
 	if aerr != nil {
-		return nil, aerr
+		return nil, nil, aerr
 	}
-	t, location, aerr := propose(b, n, current)
+	swap := &metadataSwap{created: current == nil}
+	if current != nil {
+		swap.previous = current.MetadataLocation
+	}
+	t, location, meta, aerr := propose(b, n, current)
 	if aerr != nil || location == "" {
-		return t, aerr
+		return t, nil, aerr
 	}
 	t.MetadataLocation = location
 	t.VersionToken = s.newVersionToken()
 	t.ModifiedAt, t.ModifiedBy = s.now(), s.accountID()
-	return t, s.saveTable(ctx, t)
+	if aerr := s.saveTable(ctx, t); aerr != nil {
+		return t, nil, aerr
+	}
+	swap.table, swap.metadata = *t, meta
+	return t, swap, nil
 }

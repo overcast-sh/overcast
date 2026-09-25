@@ -119,6 +119,7 @@ func (s *Service) startQueryExecutionTyped(ctx context.Context, req *startQueryE
 	// Submitted outside the idempotency lock: an executor may report
 	// transitions from its own goroutine, and a retry must not wait on it.
 	if submitted != nil {
+		s.publishQueryState(ctx, submitted)
 		s.executor.Submit(context.WithoutCancel(ctx), *submitted, s.applyTransition)
 	}
 	return &startQueryExecResp{QueryExecutionId: id}, nil
@@ -339,7 +340,9 @@ func (s *Service) getQueryResultsTyped(ctx context.Context, req *getQueryResults
 // call this process may have queries of its own running, which a retry would
 // fail too.
 func (s *Service) reapInterrupted(ctx context.Context) {
-	ctx = context.WithoutCancel(ctx) // one request's end must not cut the reap short
+	// One request's end must not cut the reap short, and the executions it
+	// fails are no part of that request: their events carry no request ID.
+	ctx = protocol.ContextWithRequestID(context.WithoutCancel(ctx), "")
 	_ = s.reaped.Do(func() error {
 		queries, err := s.store.listQueries(ctx)
 		if err != nil {

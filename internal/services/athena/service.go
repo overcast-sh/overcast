@@ -50,6 +50,8 @@ type Service struct {
 	catalog       glue.Catalog
 	catalogWriter glue.CatalogWriter
 	listObjects   events.S3ListObjectsFunc
+	// bus receives each query's state changes; nil until InitBus.
+	bus *events.Bus
 
 	executor   queryExecutor
 	statements *statementExecutor

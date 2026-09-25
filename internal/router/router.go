@@ -828,6 +828,11 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	mskSvc.InitBus(bus)
 	// EC2: wire bus for VPC/subnet/security group lifecycle events.
 	ec2Svc.InitBus(bus)
+	// Data lake: wire bus for Athena query states, Glue table and partition
+	// changes, and S3 Tables creates, renames, deletes and commits.
+	athenaSvc.InitBus(bus)
+	glueSvc.InitBus(bus)
+	s3tablesSvc.InitBus(bus)
 	// EventBridge: wire bus for bus/rule lifecycle events.
 	ebSvc.InitBus(bus)
 	ebSvc.InitLambdaAuthorizer(lambdaSvc)

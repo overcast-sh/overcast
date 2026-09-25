@@ -21,6 +21,7 @@ import (
 
 	"github.com/overcast-sh/overcast/internal/clock"
 	"github.com/overcast-sh/overcast/internal/config"
+	"github.com/overcast-sh/overcast/internal/events"
 	"github.com/overcast-sh/overcast/internal/protocol"
 	"github.com/overcast-sh/overcast/internal/protocol/codec"
 	"github.com/overcast-sh/overcast/internal/protocol/op"
@@ -37,6 +38,8 @@ type Service struct {
 	cfg     *config.Config
 	clk     clock.Clock
 	typedOp map[string]op.Operation
+	// bus receives table and partition changes; nil until InitBus.
+	bus *events.Bus
 
 	// Locking. A write takes cascadeMu shared and then its record's stripe
 	// in locks (writeLock); a delete that cascades — DeleteDatabase,

@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strconv"
 
+	"github.com/overcast-sh/overcast/internal/events"
 	"github.com/overcast-sh/overcast/internal/protocol"
 	"github.com/overcast-sh/overcast/internal/serviceutil"
 )
@@ -247,8 +248,15 @@ func (s *Service) deleteDatabaseTyped(ctx context.Context, req *deleteDatabaseRe
 	if _, aerr := s.requireDatabase(ctx, name); aerr != nil {
 		return nil, aerr
 	}
+	tables, err := s.store.listTables(ctx, name)
+	if err != nil {
+		return nil, errInternal(err)
+	}
 	if err := s.store.deleteDatabase(ctx, name); err != nil {
 		return nil, errInternal(err)
+	}
+	for _, t := range tables {
+		s.publishTableChanged(ctx, name, t.Name, events.GlueTableDeleted)
 	}
 	return &struct{}{}, nil
 }
@@ -423,6 +431,7 @@ func (s *Service) createTableTyped(ctx context.Context, req *createTableReq) (*c
 	if err := s.store.putTable(ctx, &tableRecord{Table: t}); err != nil {
 		return nil, errInternal(err)
 	}
+	s.publishTableChanged(ctx, dbName, name, events.GlueTableCreated)
 	return resp, nil
 }
 
@@ -528,6 +537,7 @@ func (s *Service) updateTableTyped(ctx context.Context, req *updateTableReq) (*s
 	if err := s.store.putTable(ctx, &tableRecord{Table: t, Tags: cur.Tags}); err != nil {
 		return nil, errInternal(err)
 	}
+	s.publishTableChanged(ctx, dbName, name, events.GlueTableUpdated)
 	return &struct{}{}, nil
 }
 
@@ -582,5 +592,6 @@ func (s *Service) deleteOneTable(ctx context.Context, dbName, name string) *prot
 	if err := s.store.deleteTable(ctx, dbName, name); err != nil {
 		return errInternal(err)
 	}
+	s.publishTableChanged(ctx, dbName, name, events.GlueTableDeleted)
 	return nil
 }

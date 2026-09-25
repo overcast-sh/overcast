@@ -67,6 +67,9 @@ type Service struct {
 	ensureWarehouse events.S3EnsureBucketFunc
 	putObject       events.S3PutObjectFunc
 	getObject       events.S3GetObjectFunc
+
+	// bus receives table creates, renames, deletes and commits; nil until InitBus.
+	bus *events.Bus
 }
 
 // New returns a configured S3 Tables Service. It does no I/O.

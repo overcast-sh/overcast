@@ -79,7 +79,8 @@ type transitionReporter func(ctx context.Context, id string, t queryTransition)
 // applyTransition moves an execution to t.State. Only a move forward along
 // QUEUED, RUNNING, terminal is applied: a report that arrives after a stop,
 // arrives twice, goes backwards or names no state is dropped.
-// Reaching a terminal state stamps CompletionDateTime.
+// Reaching a terminal state stamps CompletionDateTime. Each transition
+// applied is published as an athena:QueryStateChanged event.
 func (s *Service) applyTransition(ctx context.Context, id string, t queryTransition) {
 	log := s.log.WithRecorder(ctx)
 	defer s.lock(queryLockKey(id))()
@@ -104,7 +105,9 @@ func (s *Service) applyTransition(ctx context.Context, id string, t queryTransit
 	}
 	if err := s.store.putQuery(ctx, qe); err != nil {
 		log.Error("query transition not persisted", zap.String("queryExecutionId", id), zap.Error(err))
+		return
 	}
+	s.publishQueryState(ctx, qe)
 }
 
 func queryLockKey(id string) string { return "query:" + id }

@@ -153,19 +153,19 @@ func (s *Service) icebergRegisterTableTyped(ctx context.Context, req *icebergReg
 	if !strings.HasPrefix(req.MetadataLocation, location+"/") {
 		return nil, badRequest("The metadata file must lie under the table's location " + meta.Location + ".")
 	}
-	t, aerr := s.swapMetadata(ctx, req.BucketARN, req.Namespace, req.Name, func(b *tableBucket, n *namespaceRecord, t *tableRecord) (*tableRecord, string, *protocol.AWSError) {
+	t, aerr := s.swapMetadata(ctx, req.BucketARN, req.Namespace, req.Name, func(b *tableBucket, n *namespaceRecord, t *tableRecord) (*tableRecord, string, *icebergmeta.Metadata, *protocol.AWSError) {
 		switch {
 		case t == nil:
 			t, aerr := s.newCatalogTable(ctx, b, n, req.Name, location, meta.TableUUID)
-			return t, req.MetadataLocation, aerr
+			return t, req.MetadataLocation, meta, aerr
 		case !req.Overwrite:
-			return nil, "", errTableExists
+			return nil, "", nil, errTableExists
 		}
 		if aerr := s.claimWarehouse(ctx, b, t, location); aerr != nil {
-			return nil, "", aerr
+			return nil, "", nil, aerr
 		}
 		t.WarehouseLocation = location
-		return t, req.MetadataLocation, nil
+		return t, req.MetadataLocation, meta, nil
 	})
 	if aerr != nil {
 		return nil, aerr

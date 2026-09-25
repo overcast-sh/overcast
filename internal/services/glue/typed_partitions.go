@@ -160,6 +160,7 @@ func (s *Service) createPartitionTyped(ctx context.Context, req *createPartition
 	if aerr := s.createOnePartition(ctx, t, req.PartitionInput); aerr != nil {
 		return nil, aerr
 	}
+	s.publishPartitionsChanged(ctx, t.DatabaseName, t.Name)
 	return &struct{}{}, nil
 }
 
@@ -179,6 +180,7 @@ func (s *Service) batchCreatePartitionTyped(ctx context.Context, req *batchCreat
 			resp.Errors = append(resp.Errors, PartitionError{PartitionValues: in.Values, ErrorDetail: errorDetail(aerr)})
 		}
 	}
+	s.publishIfAnyApplied(ctx, t, len(req.PartitionInputList), resp)
 	return resp, nil
 }
 
@@ -321,6 +323,7 @@ func (s *Service) updatePartitionTyped(ctx context.Context, req *updatePartition
 			return nil, errInternal(err)
 		}
 	}
+	s.publishPartitionsChanged(ctx, t.DatabaseName, t.Name)
 	return &struct{}{}, nil
 }
 
@@ -348,6 +351,7 @@ func (s *Service) deletePartitionTyped(ctx context.Context, req *deletePartition
 	if aerr := s.deleteOnePartition(ctx, t, req.PartitionValues); aerr != nil {
 		return nil, aerr
 	}
+	s.publishPartitionsChanged(ctx, t.DatabaseName, t.Name)
 	return &struct{}{}, nil
 }
 
@@ -366,5 +370,6 @@ func (s *Service) batchDeletePartitionTyped(ctx context.Context, req *batchDelet
 			resp.Errors = append(resp.Errors, PartitionError{PartitionValues: key.Values, ErrorDetail: errorDetail(aerr)})
 		}
 	}
+	s.publishIfAnyApplied(ctx, t, len(req.PartitionsToDelete), resp)
 	return resp, nil
 }
