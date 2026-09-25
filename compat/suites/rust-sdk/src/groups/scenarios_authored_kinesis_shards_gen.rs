@@ -209,8 +209,11 @@ fn test_kinesis_shards_list_shards(client: &aws_sdk_kinesis::Client) -> Test {
         },
         assert: vec![
             scenario::response_field(vec![
+                scenario::equals("$.Shards[0].HashKeyRange.EndingHashKey", scenario::lit(::serde_json::json!("170141183460469231731687303715884105727"))),
                 scenario::equals("$.Shards[0].HashKeyRange.StartingHashKey", scenario::lit(::serde_json::json!("0"))),
                 scenario::non_empty("$.Shards[0].ShardId"),
+                scenario::equals("$.Shards[1].HashKeyRange.EndingHashKey", scenario::lit(::serde_json::json!("340282366920938463463374607431768211455"))),
+                scenario::equals("$.Shards[1].HashKeyRange.StartingHashKey", scenario::lit(::serde_json::json!("170141183460469231731687303715884105728"))),
                 scenario::non_empty("$.Shards[1].ShardId"),
                 scenario::missing("$.Shards[2]"),
             ]),
@@ -379,7 +382,9 @@ fn test_kinesis_shards_split_shard(client: &aws_sdk_kinesis::Client) -> Test {
                 }),
                 "$.Shards",
                 vec![
+                    scenario::where_entry("$.HashKeyRange.EndingHashKey", scenario::lit(::serde_json::json!("85070591730234615865843651857942052862"))),
                     scenario::where_entry("$.HashKeyRange.StartingHashKey", scenario::lit(::serde_json::json!("0"))),
+                    scenario::where_entry("$.ParentShardId", scenario::context("shard.first")),
                 ],
             ),
             scenario::list_contains(
@@ -414,7 +419,35 @@ fn test_kinesis_shards_split_shard(client: &aws_sdk_kinesis::Client) -> Test {
                 }),
                 "$.Shards",
                 vec![
+                    scenario::where_entry("$.HashKeyRange.EndingHashKey", scenario::lit(::serde_json::json!("170141183460469231731687303715884105727"))),
                     scenario::where_entry("$.HashKeyRange.StartingHashKey", scenario::lit(::serde_json::json!("85070591730234615865843651857942052863"))),
+                    scenario::where_entry("$.ParentShardId", scenario::context("shard.first")),
+                ],
+            ),
+            scenario::list_contains(
+                Some(Call {
+                    op: "ListShards",
+                    params: scenario::map(vec![("StreamName", scenario::name("s"))]),
+                    export: Vec::new(),
+                    invoke: {
+                        let client = client.clone();
+                        scenario::invoker(move |b| {
+                            let client = client.clone();
+                            Box::pin(async move {
+                                let capture = scenario::Capture::new();
+                                let request = client
+                                    .list_shards()
+                                    .stream_name(b.string("StreamName")?)
+                                    .customize()
+                                    .interceptor(capture.clone());
+                                Ok(scenario::observe(request.send().await, &capture))
+                            })
+                        })
+                    },
+                }),
+                "$.Shards",
+                vec![
+                    scenario::where_entry("$.ShardId", scenario::context("shard.first")),
                 ],
             ),
         ],
@@ -584,6 +617,44 @@ fn test_kinesis_shards_merge_shards(client: &aws_sdk_kinesis::Client) -> Test {
                 "$.Shards",
                 vec![
                     scenario::where_entry("$.ShardId", scenario::context("child.second")),
+                ],
+            ),
+            scenario::list_contains(
+                Some(Call {
+                    op: "ListShards",
+                    params: scenario::map(vec![
+                        ("ShardFilter", scenario::lit(::serde_json::json!({"Type": "AT_LATEST"}))),
+                        ("StreamName", scenario::name("s")),
+                    ]),
+                    export: Vec::new(),
+                    invoke: {
+                        let client = client.clone();
+                        scenario::invoker(move |b| {
+                            let client = client.clone();
+                            Box::pin(async move {
+                                let capture = scenario::Capture::new();
+                                let request = client
+                                    .list_shards()
+                                    .shard_filter(
+                                        aws_sdk_kinesis::types::ShardFilter::builder()
+                                            .r#type(aws_sdk_kinesis::types::ShardFilterType::from("AT_LATEST"))
+                                            .build()
+                                            .map_err(|err| scenario::build_error("ShardFilter", err))?
+                                    )
+                                    .stream_name(b.string("StreamName")?)
+                                    .customize()
+                                    .interceptor(capture.clone());
+                                Ok(scenario::observe(request.send().await, &capture))
+                            })
+                        })
+                    },
+                }),
+                "$.Shards",
+                vec![
+                    scenario::where_entry("$.AdjacentParentShardId", scenario::context("child.second")),
+                    scenario::where_entry("$.HashKeyRange.EndingHashKey", scenario::lit(::serde_json::json!("170141183460469231731687303715884105727"))),
+                    scenario::where_entry("$.HashKeyRange.StartingHashKey", scenario::lit(::serde_json::json!("0"))),
+                    scenario::where_entry("$.ParentShardId", scenario::context("child.first")),
                 ],
             ),
         ],

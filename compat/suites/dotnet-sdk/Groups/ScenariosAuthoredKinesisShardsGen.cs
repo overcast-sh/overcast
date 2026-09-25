@@ -110,8 +110,11 @@ internal sealed class ScenariosAuthoredKinesisShards : IServiceGroup
         Assert =
         [
             Clause.ResponseField(
+                Check.EqualTo("$.Shards[0].HashKeyRange.EndingHashKey", "170141183460469231731687303715884105727"),
                 Check.EqualTo("$.Shards[0].HashKeyRange.StartingHashKey", "0"),
                 Check.NonEmpty("$.Shards[0].ShardId"),
+                Check.EqualTo("$.Shards[1].HashKeyRange.EndingHashKey", "340282366920938463463374607431768211455"),
+                Check.EqualTo("$.Shards[1].HashKeyRange.StartingHashKey", "170141183460469231731687303715884105728"),
                 Check.NonEmpty("$.Shards[1].ShardId"),
                 Check.Missing("$.Shards[2]")
             ),
@@ -216,7 +219,9 @@ internal sealed class ScenariosAuthoredKinesisShards : IServiceGroup
                         await Cl().ListShardsAsync((ListShardsRequest)request),
                 },
                 "$.Shards",
-                new WhereEntry("$.HashKeyRange.StartingHashKey", "0")
+                new WhereEntry("$.HashKeyRange.EndingHashKey", "85070591730234615865843651857942052862"),
+                new WhereEntry("$.HashKeyRange.StartingHashKey", "0"),
+                new WhereEntry("$.ParentShardId", Val.Ref("shard.first"))
             ),
             Clause.ListContains(
                 new ScenarioCall
@@ -234,7 +239,26 @@ internal sealed class ScenariosAuthoredKinesisShards : IServiceGroup
                         await Cl().ListShardsAsync((ListShardsRequest)request),
                 },
                 "$.Shards",
-                new WhereEntry("$.HashKeyRange.StartingHashKey", "85070591730234615865843651857942052863")
+                new WhereEntry("$.HashKeyRange.EndingHashKey", "170141183460469231731687303715884105727"),
+                new WhereEntry("$.HashKeyRange.StartingHashKey", "85070591730234615865843651857942052863"),
+                new WhereEntry("$.ParentShardId", Val.Ref("shard.first"))
+            ),
+            Clause.ListContains(
+                new ScenarioCall
+                {
+                    Op = "ListShards",
+                    Params = "{\"StreamName\":{\"$name\":\"s\"}}",
+                    Build = b =>
+                    {
+                        var request = new ListShardsRequest();
+                        request.StreamName = b.Bind<string>("StreamName", Val.Name("s"));
+                        return request;
+                    },
+                    SendAsync = async request =>
+                        await Cl().ListShardsAsync((ListShardsRequest)request),
+                },
+                "$.Shards",
+                new WhereEntry("$.ShardId", Val.Ref("shard.first"))
             )
         ],
     });
@@ -331,6 +355,27 @@ internal sealed class ScenariosAuthoredKinesisShards : IServiceGroup
                 },
                 "$.Shards",
                 new WhereEntry("$.ShardId", Val.Ref("child.second"))
+            ),
+            Clause.ListContains(
+                new ScenarioCall
+                {
+                    Op = "ListShards",
+                    Params = "{\"ShardFilter\":{\"Type\":\"AT_LATEST\"},\"StreamName\":{\"$name\":\"s\"}}",
+                    Build = b =>
+                    {
+                        var request = new ListShardsRequest();
+                        request.ShardFilter = new() { Type = "AT_LATEST" };
+                        request.StreamName = b.Bind<string>("StreamName", Val.Name("s"));
+                        return request;
+                    },
+                    SendAsync = async request =>
+                        await Cl().ListShardsAsync((ListShardsRequest)request),
+                },
+                "$.Shards",
+                new WhereEntry("$.AdjacentParentShardId", Val.Ref("child.second")),
+                new WhereEntry("$.HashKeyRange.EndingHashKey", "170141183460469231731687303715884105727"),
+                new WhereEntry("$.HashKeyRange.StartingHashKey", "0"),
+                new WhereEntry("$.ParentShardId", Val.Ref("child.first"))
             )
         ],
     });
