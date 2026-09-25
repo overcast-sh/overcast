@@ -269,7 +269,7 @@ func validateSDKTask(state *aslState, loc string) error {
 	if !ok {
 		return nil
 	}
-	notRecognised := invalidDefinitionf("%s: The resource provided %s is not recognized. The value is not a valid resource ARN, or the resource is not available in this region.", loc, state.Resource)
+	notRecognised := resourceNotRecognized(loc, state.Resource)
 	if integration.pattern != "" && integration.pattern != patternWaitForTaskToken {
 		return notRecognised
 	}
@@ -301,6 +301,12 @@ func validateSDKTask(state *aslState, loc string) error {
 		}
 	}
 	return nil
+}
+
+// resourceNotRecognized is AWS's CreateStateMachine refusal of a Task
+// Resource naming an integration it does not offer.
+func resourceNotRecognized(loc, resource string) error {
+	return invalidDefinitionf("%s: The resource provided %s is not recognized. The value is not a valid resource ARN, or the resource is not available in this region.", loc, resource)
 }
 
 // sdkMember finds the input member a PascalCase parameter names.

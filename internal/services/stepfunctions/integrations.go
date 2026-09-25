@@ -27,7 +27,7 @@ import (
 // taskIntegration is a parsed Task Resource ARN.
 type taskIntegration struct {
 	// service is the history-event resourceType: "lambda", "sqs", "sns",
-	// "dynamodb", "states".
+	// "dynamodb", "athena", "states".
 	service string
 	// action is the history-event resource: "invoke", "sendMessage", …
 	action string
@@ -271,6 +271,8 @@ func (in *interpreter) dispatchTask(ctx context.Context, integration taskIntegra
 		return in.publishSNS(ctx, payload)
 	case "dynamodb":
 		return in.invokeDynamoDB(ctx, integration, payload)
+	case "athena":
+		return in.invokeAthena(ctx, integration, payload)
 	case "events":
 		if integration.action != "putEvents" || integration.pattern != "" {
 			return nil, unsupportedError("the events:%s%s integration — only events:putEvents is interpreted", integration.action, patternSuffix(integration.pattern))

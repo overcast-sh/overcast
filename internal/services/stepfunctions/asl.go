@@ -412,6 +412,9 @@ func validateState(branch *aslBranch, name string, state *aslState, where, defau
 		if err := validateSDKTask(state, loc); err != nil {
 			return err
 		}
+		if err := validateAthenaTask(state, loc); err != nil {
+			return err
+		}
 	case stateTypeParallel:
 		if len(state.Branches) == 0 {
 			return invalidDefinitionf("%s: Parallel requires a non-empty Branches array", loc)

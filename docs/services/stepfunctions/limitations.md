@@ -18,9 +18,9 @@ listed is a bug.
 
 | Area                     | On AWS                                   | Overcast                                                                  |
 | ------------------------ | ---------------------------------------- | ------------------------------------------------------------------------- |
-| Optimized integrations   | About 200 services                       | Lambda, SQS `sendMessage`, SNS `publish`, DynamoDB item actions, EventBridge `putEvents`, Step Functions `startExecution` |
+| Optimized integrations   | About 200 services                       | Lambda, SQS `sendMessage`, SNS `publish`, DynamoDB item actions, EventBridge `putEvents`, all four Athena actions, Step Functions `startExecution` |
 | `aws-sdk:` integrations  | Every service and action                 | Every action of every service Overcast implements                        |
-| `.sync` pattern          | Many integrations                        | `states:startExecution` only                                              |
+| `.sync` pattern          | Many integrations                        | `states:startExecution` and `athena:startQueryExecution`                  |
 | `Credentials`            | Assumes the named role                   | Ignored: Overcast has one account                                         |
 
 An `aws-sdk:` Task reaches its service over the protocol that service speaks —
@@ -43,6 +43,19 @@ Where it still differs:
   state input of a Task with no `Parameters`; a static `Parameters` field is
   rejected when the state machine is created, as on AWS.
 - **An error's `Cause`** ends with the wire error code, which AWS leaves out.
+
+### Athena
+
+The four Athena actions AWS offers — `startQueryExecution`,
+`stopQueryExecution`, `getQueryExecution` and `getQueryResults` — each return
+their API response. `startQueryExecution.sync` checks the query once a second
+and returns the final `GetQueryExecution` response. A query that ends `FAILED`
+or `CANCELLED` fails the Task with `States.TaskFailed`, and the cause is that
+response as JSON. A timed-out or stopped Task stops its query.
+
+Timestamps such as `SubmissionDateTime` are epoch seconds, as Athena's API
+returns them. Without Docker, or with `ATHENA_ENGINE=inert`, a query succeeds at
+once with no rows, so `.sync` returns straight away.
 
 ## Query languages
 
