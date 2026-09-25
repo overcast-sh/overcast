@@ -100,8 +100,14 @@
       "firstSeen": "2026-09-06"
     },
     "kms-gen-key": {
-      "state": "candidate",
-      "firstSeen": "2026-09-06"
+      "state": "gated",
+      "firstSeen": "2026-09-06",
+      "promotedAt": "2026-09-25",
+      "runs": [
+        "run-36113485565-1",
+        "run-36113485565-2",
+        "run-36113485565-3"
+      ]
     },
     "kms-gen-probe": {
       "state": "gated",

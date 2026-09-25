@@ -1528,7 +1528,7 @@
       "name": "kms-gen-key",
       "generated": true,
       "scenario": "compat/model/scenarios/kms.json",
-      "state": "candidate",
+      "state": "gated",
       "suites": [
         "cli",
         "dotnet-sdk",
