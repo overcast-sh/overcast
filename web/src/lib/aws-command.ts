@@ -49,7 +49,12 @@ export interface AwsCommandTarget {
   region: string
 }
 
-/** `StartQueryExecution` → `["start", "query", "execution"]`. */
+/**
+ * `StartQueryExecution` → `["start", "query", "execution"]`, and
+ * `DescribeDBInstances` → `["describe", "db", "instances"]`: the CLI's and
+ * boto3's spelling splits a run of capitals before its last one, which
+ * `wordsFromIdentifier` does not.
+ */
 function words(name: string): string[] {
   return name
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
