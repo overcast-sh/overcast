@@ -1,4 +1,6 @@
 import type { DataColumn } from "@/lib/data-sources/row-source"
+import { parquetHiveType } from "@/lib/hive-types"
+import { hiveIdentifier, tableIdentifier } from "@/lib/sql-quote"
 import type { TabularKind } from "./preview-kind"
 
 /**
@@ -31,10 +33,10 @@ export function athenaSql({
 }): string {
   const folder = objectKey.includes("/") ? objectKey.slice(0, objectKey.lastIndexOf("/") + 1) : ""
   const file = objectKey.slice(objectKey.lastIndexOf("/") + 1)
-  const table = identifier(file.replace(/\.[^.]*$/, "") || "data")
+  const table = tableIdentifier(file.replace(/\.[^.]*$/, "") || "data")
   const location = `s3://${bucket}/${folder}`
   const defs = columns
-    .map((c) => `  ${quoteIdentifier(c.name)} ${athenaType(c, format)}`)
+    .map((c) => `  ${hiveIdentifier(c.name)} ${athenaType(c, format)}`)
     .join(",\n")
   let storage: string
   switch (format) {
@@ -71,37 +73,5 @@ LIMIT 100;`
 function athenaType(column: DataColumn, format: string): string {
   if (format === "csv" || format === "tsv") return "string"
   if (format === "jsonl") return column.numeric ? "double" : "string"
-  const t = (column.type ?? "").toUpperCase()
-  if (t.startsWith("DECIMAL")) return t.toLowerCase().replace(/\s/g, "")
-  if (t.startsWith("TIMESTAMP")) return "timestamp"
-  if (t === "DATE") return "date"
-  if (t === "INT64" || t === "UINT64") return "bigint"
-  if (t === "INT32" || t === "UINT32" || t === "INT16" || t === "INT8") return "int"
-  if (t === "DOUBLE") return "double"
-  if (t === "FLOAT") return "float"
-  if (t === "BOOLEAN") return "boolean"
-  if (t.startsWith("LIST<")) return "array<string>"
-  if (t.startsWith("STRUCT<")) {
-    const fields = (column.type ?? "")
-      .slice(7, -1)
-      .split(",")
-      .map((f) => f.trim())
-    return `struct<${fields.map((f) => `${f}:string`).join(",")}>`
-  }
-  if (t.startsWith("MAP<")) return "map<string,string>"
-  return "string"
-}
-
-/** A table name Athena accepts unquoted: lowercase letters, digits and underscores. */
-function identifier(name: string): string {
-  const id = name
-    .toLowerCase()
-    .replace(/[^a-z0-9_]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-  return /^[0-9]/.test(id) ? `t_${id}` : id || "data"
-}
-
-/** Column names keep their spelling, backquoted as Hive DDL wants. */
-function quoteIdentifier(name: string): string {
-  return `\`${name.replace(/`/g, "``")}\``
+  return parquetHiveType(column.type)
 }
