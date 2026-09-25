@@ -14,35 +14,6 @@ func IAM() ServiceGroup {
 	g := &iamGroup{}
 	return ServiceGroup{
 		Impls: map[string]harness.TestFn{
-			// iam-users
-			"iam-users:CreateUser":       g.CreateUser,
-			"iam-users:GetUser":          g.GetUser,
-			"iam-users:ListUsers":        g.ListUsers, // group-qualified to avoid collision with cognito-userpools:ListUsers
-			"iam-users:CreateAccessKey":  g.CreateAccessKey,
-			"iam-users:DeleteAccessKey":  g.DeleteAccessKey,
-			"iam-users:PutUserPolicy":    g.PutUserPolicy,
-			"iam-users:GetUserPolicy":    g.GetUserPolicy,
-			"iam-users:DeleteUserPolicy": g.DeleteUserPolicy,
-			"iam-users:UpdateUser":       g.UpdateUser,
-			"iam-users:ListAccessKeys":   g.ListAccessKeys,
-			"iam-users:DeleteUser":       g.DeleteUser,
-			// iam-roles
-			"iam-roles:CreateRole":                  g.CreateRole,
-			"iam-roles:CreateRoleMalformedDocument": g.CreateRoleMalformedDocument,
-			"iam-roles:GetRole":                     g.GetRole,
-			"iam-roles:GetRoleReturnsTags":          g.GetRoleReturnsTags,
-			"iam-roles:ListRoles":                   g.ListRoles,
-			"iam-roles:AttachRolePolicy":            g.AttachRolePolicy,
-			"iam-roles:ListAttachedRolePolicies":    g.ListAttachedRolePolicies,
-			"iam-roles:DetachRolePolicy":            g.DetachRolePolicy,
-			"iam-roles:PutRolePolicy":               g.PutRolePolicy,
-			"iam-roles:GetRolePolicy":               g.GetRolePolicy,
-			"iam-roles:ListRolePolicies":            g.ListRolePolicies,
-			"iam-roles:DeleteRolePolicy":            g.DeleteRolePolicy,
-			"iam-roles:CreateInstanceProfile":       g.CreateInstanceProfile,
-			"iam-roles:AddRoleToInstanceProfile":    g.AddRoleToInstanceProfile,
-			"iam-roles:GetInstanceProfile":          g.GetInstanceProfile,
-			"iam-roles:DeleteRole":                  g.DeleteRole,
 			// iam-policies
 			"iam-policies:CreatePolicy":                        g.CreatePolicy,
 			"iam-policies:CreatePolicyMalformedDocument":       g.CreatePolicyMalformedDocument,
@@ -67,15 +38,11 @@ func IAM() ServiceGroup {
 			"iam-simulate:SimulatePrincipalPolicyImplicitDeny": g.SimulatePrincipalPolicyImplicitDeny,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"iam-users":    g.setupUsers,
-			"iam-roles":    g.setupRoles,
 			"iam-policies": g.setupPolicies,
 			"iam-groups":   g.setupGroups,
 			"iam-simulate": g.setupSimulate,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"iam-users":    g.teardownUsers,
-			"iam-roles":    g.teardownRoles,
 			"iam-policies": g.teardownPolicies,
 			"iam-groups":   g.teardownIAMGroups,
 			"iam-simulate": g.teardownSimulate,
@@ -85,9 +52,6 @@ func IAM() ServiceGroup {
 
 // One Namer per IAM resource type keeps names deterministic and descriptive.
 var (
-	iamUserNamer      = harness.NewNamer("iam-usr")
-	iamRoleNamer      = harness.NewNamer("iam-rol")
-	iamProfileNamer   = harness.NewNamer("iam-prof")
 	iamPolicyNamer    = harness.NewNamer("iam-pol")
 	iamGroupNamer     = harness.NewNamer("iam-grp")
 	iamPolRoleNamer   = harness.NewNamer("iam-pr") // separate role for iam-policies group
@@ -113,8 +77,8 @@ func (g *iamGroup) s3PolicyDoc() string {
 // API_CreateRole.html, Errors).
 const iamMalformedPolicy = `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Resource":"*"}]}`
 
-// iamTagArgs is the --tags shorthand the role and policy fixtures are created
-// with, and the tag set GetRole and GetPolicy must hand back on the resource.
+// iamTagArgs is the --tags shorthand the policy fixture is created with, and
+// the tag set GetPolicy must hand back on the resource.
 var iamTagArgs = []string{"Key=owner,Value=compat", "Key=stage,Value=dev"}
 
 // expectIAMFailure runs a command that must fail and asserts both halves of the
@@ -168,336 +132,12 @@ func (g *iamGroup) iamAttachmentCount(t *harness.TestContext, testName string) (
 	return count, nil
 }
 
-// ─── iam-users ───────────────────────────────────────────────────────────────
-
-func (g *iamGroup) setupUsers(_ context.Context, _ *harness.TestContext) error { return nil }
-
-func (g *iamGroup) CreateUser(_ context.Context, t *harness.TestContext) error {
-	_, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"iam", "create-user",
-		"--user-name", iamUserNamer.Name(t),
-	)
-	if err != nil && isAlreadyExists(err) {
-		return nil // idempotent — resource from a previous run
-	}
-	return err
-}
-
-func (g *iamGroup) GetUser(_ context.Context, t *harness.TestContext) error {
-	_, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"iam", "get-user",
-		"--user-name", iamUserNamer.Name(t),
-	)
-	return err
-}
-
-func (g *iamGroup) ListUsers(_ context.Context, t *harness.TestContext) error {
-	_, err := awscli.RunOutput(t.Endpoint, t.Region, "iam", "list-users")
-	return err
-}
-
-func (g *iamGroup) CreateAccessKey(_ context.Context, t *harness.TestContext) error {
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"iam", "create-access-key",
-		"--user-name", iamUserNamer.Name(t),
-	)
-	if err != nil {
-		return err
-	}
-	ak, _ := out["AccessKey"].(map[string]any)
-	keyID, _ := ak["AccessKeyId"].(string)
-	t.Set("access_key_id", keyID)
-	return nil
-}
-
-func (g *iamGroup) DeleteAccessKey(_ context.Context, t *harness.TestContext) error {
-	keyID := t.GetString("access_key_id")
-	if keyID == "" {
-		return nil
-	}
-	return awscli.Run(t.Endpoint, t.Region,
-		"iam", "delete-access-key",
-		"--user-name", iamUserNamer.Name(t),
-		"--access-key-id", keyID,
-	)
-}
-
-func (g *iamGroup) PutUserPolicy(_ context.Context, t *harness.TestContext) error {
-	return awscli.Run(t.Endpoint, t.Region,
-		"iam", "put-user-policy",
-		"--user-name", iamUserNamer.Name(t),
-		"--policy-name", "inline-policy",
-		"--policy-document", g.s3PolicyDoc(),
-	)
-}
-
-func (g *iamGroup) GetUserPolicy(_ context.Context, t *harness.TestContext) error {
-	_, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"iam", "get-user-policy",
-		"--user-name", iamUserNamer.Name(t),
-		"--policy-name", "inline-policy",
-	)
-	return err
-}
-
-func (g *iamGroup) DeleteUserPolicy(_ context.Context, t *harness.TestContext) error {
-	return awscli.Run(t.Endpoint, t.Region,
-		"iam", "delete-user-policy",
-		"--user-name", iamUserNamer.Name(t),
-		"--policy-name", "inline-policy",
-	)
-}
-
-func (g *iamGroup) UpdateUser(_ context.Context, t *harness.TestContext) error {
-	old := iamUserNamer.Name(t)
-	newName := old + "-upd"
-	if err := awscli.Run(t.Endpoint, t.Region,
-		"iam", "update-user",
-		"--user-name", old,
-		"--new-user-name", newName,
-	); err != nil {
-		return err
-	}
-	// Rename back so teardown works.
-	awscli.Run(t.Endpoint, t.Region, "iam", "update-user", //nolint:errcheck
-		"--user-name", newName, "--new-user-name", old)
-	return nil
-}
-
-func (g *iamGroup) ListAccessKeys(_ context.Context, t *harness.TestContext) error {
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"iam", "list-access-keys",
-		"--user-name", iamUserNamer.Name(t),
-	)
-	if err != nil {
-		return err
-	}
-	_ = out["AccessKeyMetadata"]
-	return nil
-}
-
-func (g *iamGroup) DeleteUser(_ context.Context, t *harness.TestContext) error {
-	return awscli.Run(t.Endpoint, t.Region,
-		"iam", "delete-user",
-		"--user-name", iamUserNamer.Name(t),
-	)
-}
-
-func (g *iamGroup) teardownUsers(_ context.Context, t *harness.TestContext) error {
-	// Best-effort cleanup — delete inline policies and access keys first.
-	awscli.Run(t.Endpoint, t.Region, "iam", "delete-user-policy", //nolint:errcheck
-		"--user-name", iamUserNamer.Name(t), "--policy-name", "inline-policy")
-	if keyID := t.GetString("access_key_id"); keyID != "" {
-		awscli.Run(t.Endpoint, t.Region, "iam", "delete-access-key", //nolint:errcheck
-			"--user-name", iamUserNamer.Name(t), "--access-key-id", keyID)
-	}
-	awscli.Run(t.Endpoint, t.Region, "iam", "delete-user", "--user-name", iamUserNamer.Name(t)) //nolint:errcheck
-	return nil
-}
-
-// ─── iam-roles ───────────────────────────────────────────────────────────────
-
-func (g *iamGroup) setupRoles(_ context.Context, _ *harness.TestContext) error { return nil }
-
-func (g *iamGroup) CreateRole(_ context.Context, t *harness.TestContext) error {
-	out, err := awscli.RunOutput(t.Endpoint, t.Region, append([]string{
-		"iam", "create-role",
-		"--role-name", iamRoleNamer.Name(t),
-		"--assume-role-policy-document", g.assumePolicy(),
-		"--tags",
-	}, iamTagArgs...)...)
-	if err != nil {
-		if isAlreadyExists(err) {
-			// Role exists from a previous run — fetch its ARN so tests can proceed.
-			out, err = awscli.RunOutput(t.Endpoint, t.Region,
-				"iam", "get-role",
-				"--role-name", iamRoleNamer.Name(t),
-			)
-			if err != nil {
-				return err
-			}
-		} else {
-			return err
-		}
-	}
-	role, _ := out["Role"].(map[string]any)
-	arn, _ := role["Arn"].(string)
-	t.Set("role_arn", arn)
-	return nil
-}
-
-func (g *iamGroup) GetRole(_ context.Context, t *harness.TestContext) error {
-	_, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"iam", "get-role",
-		"--role-name", iamRoleNamer.Name(t),
-	)
-	return err
-}
-
-// CreateRoleMalformedDocument pins that a trust policy AWS would refuse is
-// refused here too, rather than stored unparsed.
-func (g *iamGroup) CreateRoleMalformedDocument(_ context.Context, t *harness.TestContext) error {
-	return expectIAMFailure(t, "iam CreateRoleMalformedDocument", "MalformedPolicyDocument", 400,
-		"iam", "create-role",
-		"--role-name", iamRoleNamer.Name(t)+"-malformed",
-		"--assume-role-policy-document", iamMalformedPolicy,
-	)
-}
-
-// GetRoleReturnsTags pins that Tags supplied to create-role come back on the
-// role itself, which is where AWS documents them (API_Role.html).
-func (g *iamGroup) GetRoleReturnsTags(_ context.Context, t *harness.TestContext) error {
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"iam", "get-role",
-		"--role-name", iamRoleNamer.Name(t),
-	)
-	if err != nil {
-		return err
-	}
-	role, _ := out["Role"].(map[string]any)
-	return assertResourceTags("iam GetRoleReturnsTags", role["Tags"])
-}
-
-func (g *iamGroup) ListRoles(_ context.Context, t *harness.TestContext) error {
-	_, err := awscli.RunOutput(t.Endpoint, t.Region, "iam", "list-roles")
-	return err
-}
-
-func (g *iamGroup) AttachRolePolicy(_ context.Context, t *harness.TestContext) error {
-	return awscli.Run(t.Endpoint, t.Region,
-		"iam", "attach-role-policy",
-		"--role-name", iamRoleNamer.Name(t),
-		"--policy-arn", "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess",
-	)
-}
-
-func (g *iamGroup) ListAttachedRolePolicies(_ context.Context, t *harness.TestContext) error {
-	_, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"iam", "list-attached-role-policies",
-		"--role-name", iamRoleNamer.Name(t),
-	)
-	return err
-}
-
-func (g *iamGroup) DetachRolePolicy(_ context.Context, t *harness.TestContext) error {
-	return awscli.Run(t.Endpoint, t.Region,
-		"iam", "detach-role-policy",
-		"--role-name", iamRoleNamer.Name(t),
-		"--policy-arn", "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess",
-	)
-}
-
-func (g *iamGroup) CreateInstanceProfile(_ context.Context, t *harness.TestContext) error {
-	_, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"iam", "create-instance-profile",
-		"--instance-profile-name", iamProfileNamer.Name(t),
-	)
-	if err != nil && isAlreadyExists(err) {
-		return nil // idempotent
-	}
-	return err
-}
-
-func (g *iamGroup) AddRoleToInstanceProfile(_ context.Context, t *harness.TestContext) error {
-	return awscli.Run(t.Endpoint, t.Region,
-		"iam", "add-role-to-instance-profile",
-		"--instance-profile-name", iamProfileNamer.Name(t),
-		"--role-name", iamRoleNamer.Name(t),
-	)
-}
-
-func (g *iamGroup) GetInstanceProfile(_ context.Context, t *harness.TestContext) error {
-	_, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"iam", "get-instance-profile",
-		"--instance-profile-name", iamProfileNamer.Name(t),
-	)
-	return err
-}
-
-func (g *iamGroup) PutRolePolicy(_ context.Context, t *harness.TestContext) error {
-	return awscli.Run(t.Endpoint, t.Region,
-		"iam", "put-role-policy",
-		"--role-name", iamRoleNamer.Name(t),
-		"--policy-name", "inline-role-policy",
-		"--policy-document", g.s3PolicyDoc(),
-	)
-}
-
-func (g *iamGroup) GetRolePolicy(_ context.Context, t *harness.TestContext) error {
-	_, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"iam", "get-role-policy",
-		"--role-name", iamRoleNamer.Name(t),
-		"--policy-name", "inline-role-policy",
-	)
-	return err
-}
-
-func (g *iamGroup) ListRolePolicies(_ context.Context, t *harness.TestContext) error {
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"iam", "list-role-policies",
-		"--role-name", iamRoleNamer.Name(t),
-	)
-	if err != nil {
-		return err
-	}
-	names, _ := out["PolicyNames"].([]any)
-	for _, v := range names {
-		if v == "inline-role-policy" {
-			return nil
-		}
-	}
-	return fmt.Errorf("iam ListRolePolicies: inline-role-policy not found")
-}
-
-func (g *iamGroup) DeleteRolePolicy(_ context.Context, t *harness.TestContext) error {
-	return awscli.Run(t.Endpoint, t.Region,
-		"iam", "delete-role-policy",
-		"--role-name", iamRoleNamer.Name(t),
-		"--policy-name", "inline-role-policy",
-	)
-}
-
-func (g *iamGroup) DeleteRole(_ context.Context, t *harness.TestContext) error {
-	// Remove role from any instance profiles first.
-	awscli.Run(t.Endpoint, t.Region, "iam", "remove-role-from-instance-profile", //nolint:errcheck
-		"--instance-profile-name", iamProfileNamer.Name(t),
-		"--role-name", iamRoleNamer.Name(t),
-	)
-	awscli.Run(t.Endpoint, t.Region, "iam", "delete-instance-profile", //nolint:errcheck
-		"--instance-profile-name", iamProfileNamer.Name(t),
-	)
-	return awscli.Run(t.Endpoint, t.Region,
-		"iam", "delete-role",
-		"--role-name", iamRoleNamer.Name(t),
-	)
-}
-
-func (g *iamGroup) teardownRoles(_ context.Context, t *harness.TestContext) error {
-	awscli.Run(t.Endpoint, t.Region, "iam", "delete-role-policy", //nolint:errcheck
-		"--role-name", iamRoleNamer.Name(t), "--policy-name", "inline-role-policy")
-	awscli.Run(t.Endpoint, t.Region, "iam", "detach-role-policy", //nolint:errcheck
-		"--role-name", iamRoleNamer.Name(t),
-		"--policy-arn", "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess",
-	)
-	awscli.Run(t.Endpoint, t.Region, "iam", "remove-role-from-instance-profile", //nolint:errcheck
-		"--instance-profile-name", iamProfileNamer.Name(t), "--role-name", iamRoleNamer.Name(t),
-	)
-	awscli.Run(t.Endpoint, t.Region, "iam", "delete-instance-profile", //nolint:errcheck
-		"--instance-profile-name", iamProfileNamer.Name(t))
-	awscli.Run(t.Endpoint, t.Region, "iam", "delete-role", "--role-name", iamRoleNamer.Name(t)) //nolint:errcheck
-	// The malformed-document case must not create anything; delete it anyway so
-	// a regression that stored it does not leak a role into the next run.
-	awscli.Run(t.Endpoint, t.Region, "iam", "delete-role", //nolint:errcheck
-		"--role-name", iamRoleNamer.Name(t)+"-malformed")
-	return nil
-}
-
 // ─── iam-policies ────────────────────────────────────────────────────────────
 
 func (g *iamGroup) setupPolicies(_ context.Context, t *harness.TestContext) error {
 	// Create a role so we can test policy attachment.
-	// Use iamPolRoleNamer (not iamRoleNamer) so this group's role doesn't
-	// collide with the iam-roles group that runs in parallel.
+	// iamPolRoleNamer gives this group a role of its own, so it doesn't collide
+	// with the iam-roles scenario that runs in parallel.
 	out, err := awscli.RunOutput(t.Endpoint, t.Region,
 		"iam", "create-role",
 		"--role-name", iamPolRoleNamer.Name(t),
@@ -637,7 +277,8 @@ func (g *iamGroup) teardownPolicies(_ context.Context, t *harness.TestContext) e
 		awscli.Run(t.Endpoint, t.Region, "iam", "delete-policy", "--policy-arn", policyArn) //nolint:errcheck
 	}
 	awscli.Run(t.Endpoint, t.Region, "iam", "delete-role", "--role-name", iamPolRoleNamer.Name(t)) //nolint:errcheck
-	// Same guard as teardownRoles: the refused create-policy must leave nothing.
+	// The refused create-policy must leave nothing; delete it anyway so a
+	// regression that stored it does not leak a policy into the next run.
 	awscli.Run(t.Endpoint, t.Region, "iam", "delete-policy", //nolint:errcheck
 		"--policy-arn", "arn:aws:iam::000000000000:policy/"+iamPolicyNamer.Name(t)+"-malformed")
 	return nil
@@ -647,8 +288,8 @@ func (g *iamGroup) teardownPolicies(_ context.Context, t *harness.TestContext) e
 
 func (g *iamGroup) setupGroups(_ context.Context, t *harness.TestContext) error {
 	// Create a user to add to the group.
-	// Use iamGrpUserNamer (not iamUserNamer) so this doesn't
-	// collide with the iam-users group that runs in parallel.
+	// iamGrpUserNamer gives this group a user of its own, so it doesn't collide
+	// with the iam-users scenario that runs in parallel.
 	_, err := awscli.RunOutput(t.Endpoint, t.Region,
 		"iam", "create-user", "--user-name", iamGrpUserNamer.Name(t),
 	)
