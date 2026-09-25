@@ -16,9 +16,9 @@ const engineStatusPath = "/_overcast/athena/engine"
 // engineStatus is what engineStatusPath reports.
 type engineStatus struct {
 	// Engine is ATHENA_ENGINE: trino or inert.
-	Engine string `json:"engine"`
+	Engine config.AthenaEngine `json:"engine"`
 	// State is off, probing, stopped, pulling, starting, ready or failed.
-	State string `json:"state"`
+	State engineState `json:"state"`
 	// Reason says why an engine is off.
 	Reason      string `json:"reason,omitempty"`
 	Image       string `json:"image,omitempty"`
@@ -41,7 +41,7 @@ func (m *engineManager) snapshot() engineStatus {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	s := m.status
-	s.Engine, s.Image, s.MemoryBytes, s.RunningQueries = string(config.AthenaEngineTrino), m.cfg.AthenaEngineImage, m.cfg.AthenaEngineMemory, m.inflight
+	s.Engine, s.Image, s.MemoryBytes, s.RunningQueries = config.AthenaEngineTrino, m.cfg.AthenaEngineImage, m.cfg.AthenaEngineMemory, m.inflight
 	if s.State == engineOff {
 		s.Reason = "No Docker daemon is connected, so queries run inert: they succeed with empty results."
 	}
@@ -50,7 +50,7 @@ func (m *engineManager) snapshot() engineStatus {
 
 func (s *Service) engineStatus() engineStatus {
 	if s.engine == nil {
-		return engineStatus{Engine: string(config.AthenaEngineInert), State: engineOff,
+		return engineStatus{Engine: config.AthenaEngineInert, State: engineOff,
 			Reason: "ATHENA_ENGINE=inert: queries succeed with empty results. DDL still updates the Glue Data Catalog."}
 	}
 	return s.engine.snapshot()
