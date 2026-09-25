@@ -113,8 +113,11 @@ public final class ScenariosAuthoredKinesisShardsGen implements ServiceGroup {
                         .export("shard.second", "$.Shards[1].ShardId"),
                 List.of(
                         Clause.responseField(
+                                Check.equalTo("$.Shards[0].HashKeyRange.EndingHashKey", "170141183460469231731687303715884105727"),
                                 Check.equalTo("$.Shards[0].HashKeyRange.StartingHashKey", "0"),
                                 Check.nonEmpty("$.Shards[0].ShardId"),
+                                Check.equalTo("$.Shards[1].HashKeyRange.EndingHashKey", "340282366920938463463374607431768211455"),
+                                Check.equalTo("$.Shards[1].HashKeyRange.StartingHashKey", "170141183460469231731687303715884105728"),
                                 Check.nonEmpty("$.Shards[1].ShardId"),
                                 Check.missing("$.Shards[2]")
                         ),
@@ -173,7 +176,9 @@ public final class ScenariosAuthoredKinesisShardsGen implements ServiceGroup {
                                                 .build(),
                                         r -> cl().listShards((ListShardsRequest) r)),
                                 "$.Shards",
-                                Where.of("$.HashKeyRange.StartingHashKey", "0")
+                                Where.of("$.HashKeyRange.EndingHashKey", "85070591730234615865843651857942052862"),
+                                Where.of("$.HashKeyRange.StartingHashKey", "0"),
+                                Where.of("$.ParentShardId", Values.ref("shard.first"))
                         ),
                         Clause.listContains(
                                 new Call("ListShards", "{\"ShardFilter\":{\"Type\":\"AT_LATEST\"},\"StreamName\":{\"$name\":\"s\"}}",
@@ -183,7 +188,18 @@ public final class ScenariosAuthoredKinesisShardsGen implements ServiceGroup {
                                                 .build(),
                                         r -> cl().listShards((ListShardsRequest) r)),
                                 "$.Shards",
-                                Where.of("$.HashKeyRange.StartingHashKey", "85070591730234615865843651857942052863")
+                                Where.of("$.HashKeyRange.EndingHashKey", "170141183460469231731687303715884105727"),
+                                Where.of("$.HashKeyRange.StartingHashKey", "85070591730234615865843651857942052863"),
+                                Where.of("$.ParentShardId", Values.ref("shard.first"))
+                        ),
+                        Clause.listContains(
+                                new Call("ListShards", "{\"StreamName\":{\"$name\":\"s\"}}",
+                                        b -> ListShardsRequest.builder()
+                                                .streamName(b.string("StreamName", Values.name("s")))
+                                                .build(),
+                                        r -> cl().listShards((ListShardsRequest) r)),
+                                "$.Shards",
+                                Where.of("$.ShardId", Values.ref("shard.first"))
                         )
                 ));
     }
@@ -238,6 +254,19 @@ public final class ScenariosAuthoredKinesisShardsGen implements ServiceGroup {
                                         r -> cl().listShards((ListShardsRequest) r)),
                                 "$.Shards",
                                 Where.of("$.ShardId", Values.ref("child.second"))
+                        ),
+                        Clause.listContains(
+                                new Call("ListShards", "{\"ShardFilter\":{\"Type\":\"AT_LATEST\"},\"StreamName\":{\"$name\":\"s\"}}",
+                                        b -> ListShardsRequest.builder()
+                                                .shardFilter(ShardFilter.builder().type("AT_LATEST").build())
+                                                .streamName(b.string("StreamName", Values.name("s")))
+                                                .build(),
+                                        r -> cl().listShards((ListShardsRequest) r)),
+                                "$.Shards",
+                                Where.of("$.AdjacentParentShardId", Values.ref("child.second")),
+                                Where.of("$.HashKeyRange.EndingHashKey", "170141183460469231731687303715884105727"),
+                                Where.of("$.HashKeyRange.StartingHashKey", "0"),
+                                Where.of("$.ParentShardId", Values.ref("child.first"))
                         )
                 ));
     }

@@ -109,8 +109,11 @@ func (g *authoredKinesisShardsScenarios) testKinesisShardsListShards(ctx context
 		},
 		Assert: []scenario.Clause{
 			scenario.ResponseField(
+				scenario.Equals("$.Shards[0].HashKeyRange.EndingHashKey", "170141183460469231731687303715884105727"),
 				scenario.Equals("$.Shards[0].HashKeyRange.StartingHashKey", "0"),
 				scenario.NonEmpty("$.Shards[0].ShardId"),
+				scenario.Equals("$.Shards[1].HashKeyRange.EndingHashKey", "340282366920938463463374607431768211455"),
+				scenario.Equals("$.Shards[1].HashKeyRange.StartingHashKey", "170141183460469231731687303715884105728"),
 				scenario.NonEmpty("$.Shards[1].ShardId"),
 				scenario.Missing("$.Shards[2]"),
 			),
@@ -209,7 +212,9 @@ func (g *authoredKinesisShardsScenarios) testKinesisShardsSplitShard(ctx context
 					},
 				},
 				"$.Shards",
+				scenario.Where("$.HashKeyRange.EndingHashKey", "85070591730234615865843651857942052862"),
 				scenario.Where("$.HashKeyRange.StartingHashKey", "0"),
+				scenario.Where("$.ParentShardId", scenario.Ref("shard.first")),
 			),
 			scenario.ListContains(
 				&scenario.Call{
@@ -226,7 +231,25 @@ func (g *authoredKinesisShardsScenarios) testKinesisShardsSplitShard(ctx context
 					},
 				},
 				"$.Shards",
+				scenario.Where("$.HashKeyRange.EndingHashKey", "170141183460469231731687303715884105727"),
 				scenario.Where("$.HashKeyRange.StartingHashKey", "85070591730234615865843651857942052863"),
+				scenario.Where("$.ParentShardId", scenario.Ref("shard.first")),
+			),
+			scenario.ListContains(
+				&scenario.Call{
+					Op:     "ListShards",
+					Params: `{"StreamName":{"$name":"s"}}`,
+					Build: func(b *scenario.Binder) any {
+						in := &kinesis.ListShardsInput{}
+						in.StreamName = aws.String(scenario.Bind[string](b, "StreamName", scenario.Name("s")))
+						return in
+					},
+					Send: func(ctx context.Context, in any) (any, error) {
+						return g.cl().ListShards(ctx, in.(*kinesis.ListShardsInput))
+					},
+				},
+				"$.Shards",
+				scenario.Where("$.ShardId", scenario.Ref("shard.first")),
 			),
 		},
 	})
@@ -318,6 +341,26 @@ func (g *authoredKinesisShardsScenarios) testKinesisShardsMergeShards(ctx contex
 				},
 				"$.Shards",
 				scenario.Where("$.ShardId", scenario.Ref("child.second")),
+			),
+			scenario.ListContains(
+				&scenario.Call{
+					Op:     "ListShards",
+					Params: `{"ShardFilter":{"Type":"AT_LATEST"},"StreamName":{"$name":"s"}}`,
+					Build: func(b *scenario.Binder) any {
+						in := &kinesis.ListShardsInput{}
+						in.ShardFilter = &types.ShardFilter{Type: types.ShardFilterType("AT_LATEST")}
+						in.StreamName = aws.String(scenario.Bind[string](b, "StreamName", scenario.Name("s")))
+						return in
+					},
+					Send: func(ctx context.Context, in any) (any, error) {
+						return g.cl().ListShards(ctx, in.(*kinesis.ListShardsInput))
+					},
+				},
+				"$.Shards",
+				scenario.Where("$.AdjacentParentShardId", scenario.Ref("child.second")),
+				scenario.Where("$.HashKeyRange.EndingHashKey", "170141183460469231731687303715884105727"),
+				scenario.Where("$.HashKeyRange.StartingHashKey", "0"),
+				scenario.Where("$.ParentShardId", scenario.Ref("child.first")),
 			),
 		},
 	})
