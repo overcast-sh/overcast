@@ -27,7 +27,7 @@ import (
 // taskIntegration is a parsed Task Resource ARN.
 type taskIntegration struct {
 	// service is the history-event resourceType: "lambda", "sqs", "sns",
-	// "dynamodb", "states".
+	// "dynamodb", "athena", "states".
 	service string
 	// action is the history-event resource: "invoke", "sendMessage", …
 	action string
@@ -41,8 +41,11 @@ type taskIntegration struct {
 	activityArn string
 }
 
-// patternWaitForTaskToken is the callback service-integration pattern.
-const patternWaitForTaskToken = "waitForTaskToken"
+// The service-integration patterns: Run a Job and Wait for a Callback.
+const (
+	patternSync             = "sync"
+	patternWaitForTaskToken = "waitForTaskToken"
+)
 
 // direct reports whether the Resource named a Lambda function ARN directly,
 // which AWS records with LambdaFunction* history events rather than Task*.
@@ -102,6 +105,24 @@ func parseTaskResource(resource string) (taskIntegration, *stateError) {
 		return taskIntegration{service: service, action: action, pattern: pattern}, nil
 	}
 	return taskIntegration{}, unsupportedError("Task Resource %q", resource)
+}
+
+// validateTaskResource rejects, at CreateStateMachine, a Task Resource AWS
+// refuses there. Only aws-sdk and athena integrations are checked so far
+// (#2188); any other Resource Overcast cannot run still provisions and fails
+// at run time.
+func validateTaskResource(state *aslState, loc string) error {
+	integration, serr := parseTaskResource(state.Resource)
+	if serr != nil {
+		return nil
+	}
+	if service, ok := strings.CutPrefix(integration.service, "aws-sdk:"); ok {
+		return validateSDKTask(state, loc, service, integration)
+	}
+	if integration.service == "athena" && !athenaIntegrationOffered(integration) {
+		return resourceNotRecognized(loc, state.Resource)
+	}
+	return nil
 }
 
 // runTask executes one attempt of a Task state.
@@ -271,6 +292,8 @@ func (in *interpreter) dispatchTask(ctx context.Context, integration taskIntegra
 		return in.publishSNS(ctx, payload)
 	case "dynamodb":
 		return in.invokeDynamoDB(ctx, integration, payload)
+	case "athena":
+		return in.invokeAthena(ctx, integration, payload)
 	case "events":
 		if integration.action != "putEvents" || integration.pattern != "" {
 			return nil, unsupportedError("the events:%s%s integration — only events:putEvents is interpreted", integration.action, patternSuffix(integration.pattern))

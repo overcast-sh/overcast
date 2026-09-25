@@ -69,7 +69,7 @@ drift from the service it targets.
 | -------------------- | ----------------------------- | ----------------------------------------------------------------------------------------- |
 | JSONata engine       | JSONata 2.0.6                 | JSONata 2.2 plus AWS's added functions; `??` and `?:` are also accepted                   |
 | `aws-sdk:` integrations | Every service              | Every service Overcast implements; any other fails the execution with `States.Runtime`    |
-| Optimized integrations | ~200 services               | Lambda, SQS, SNS, DynamoDB, EventBridge and Step Functions                                |
+| Optimized integrations | ~200 services               | Lambda, SQS, SNS, DynamoDB, EventBridge, Athena and Step Functions                        |
 | `ItemReader`         | JSON, JSONL, CSV, manifests, Parquet | JSON, JSONL, CSV and S3 listings                                                   |
 | Express workflows    | No history, no `ListExecutions` | Recorded like Standard ones, so they can be inspected                                   |
 

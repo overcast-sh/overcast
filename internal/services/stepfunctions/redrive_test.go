@@ -21,9 +21,14 @@ func newRedriveTestHandler(t *testing.T, store state.Store) (*Handler, *clock.Mo
 	t.Helper()
 	clk := clock.NewMock()
 	clk.Set(time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC))
+	return newTestHandler(store, clk), clk
+}
+
+// newTestHandler builds a Handler over store, on clk.
+func newTestHandler(store state.Store, clk clock.Clock) *Handler {
 	cfg := &config.Config{Region: "us-east-1", AccountID: "000000000000"}
 	log := serviceutil.NewServiceLogger(zap.NewNop(), "stepfunctions")
-	return newHandler(cfg, newStore(store, cfg.Region), log, clk), clk
+	return newHandler(cfg, newStore(store, cfg.Region), log, clk)
 }
 
 // failedExecution runs definition to its (unsuccessful) end synchronously.

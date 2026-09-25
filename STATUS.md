@@ -144,6 +144,6 @@ prioritized Tier 2 full-emulation backlog itself.
 Tracked in [GitHub Issues](https://github.com/overcast-sh/overcast/issues).
 `// TODO(priority:Pn):` comments in code are auto-converted to issues.
 
-- Step Functions optimized integrations beyond Lambda, SQS, SNS, DynamoDB, EventBridge and Step Functions (every service Overcast implements is already reachable through `aws-sdk:` integrations)
+- Step Functions optimized integrations beyond Lambda, SQS, SNS, DynamoDB, EventBridge, Athena and Step Functions (every service Overcast implements is already reachable through `aws-sdk:` integrations)
 - API Gateway cache settings (`CacheClusterEnabled`/`Size`, `ClientCertificateId`, `DocumentationVersion`); usage-plan throttle/quota enforcement itself shipped and is opt-in via `OVERCAST_ENFORCE_APIGATEWAY_THROTTLE`
 - Topology graph enhancements (`internal/router/topology.go`) — e.g. S3 → SNS notification edges via `TopicConfigurations`
