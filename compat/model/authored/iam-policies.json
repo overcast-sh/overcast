@@ -1,0 +1,287 @@
+{
+  "$comment": "Authored port of the hand-written registry group iam-policies (docs/plans/compat-coverage-modelgen.md §3.11, G6, #1116). One spec in place of six per-language implementations (go-sdk, cli, python-sdk, node-js-sdk, java-sdk, dotnet-sdk) and of the one that was never written: rust-sdk carries 8 rows of parity debt for this group, which the port closes. It runs today under the shadow name iam-policies-shadow, beside the natives, so the nightly can compare the two per (suite, test); the flip PR renames this group to iam-policies, points the hand-written registry entry at this file, and deletes the native code. The clauses are the union of what the six natives assert — see compat/model/README.md § Authored scenarios. No native reads a policy document back (none calls GetPolicyVersion), so no clause here compares one and `equalsJSON` has nothing to check.",
+  "version": 1,
+  "service": "iam",
+  "client": {
+    "sdkId": "IAM",
+    "endpointPrefix": "iam",
+    "signingName": "iam",
+    "protocol": "awsQuery",
+    "apiVersion": "2010-05-08",
+    "awsQueryCompatible": false
+  },
+  "groups": [
+    {
+      "$comment": "One customer managed policy, created by the CreatePolicy test, and one role created in setup for the attachment-count tests to attach it to. python-sdk, node-js-sdk, cli and java-sdk create the group's policy in CreatePolicy, which is also what the registry's `depends` (GetPolicy on CreatePolicy) records; go-sdk and dotnet-sdk create it in setup and have CreatePolicy make a second, throwaway policy it deletes again, which asserts nothing the shared shape does not. go-sdk, python-sdk, cli, java-sdk and dotnet-sdk create the role in setup; node-js-sdk creates it inside GetPolicyAttachmentCountAfterAttach. Setup is the majority, and it keeps the attach test to the one call it is about. The role's trust policy is the one all six natives use (lambda.amazonaws.com). IAM is eventually consistent and documents that a change may not be visible at once, so every read that follows a write in the same test goes through `eventually`, with the 6 x 500 ms budget the generated iam recipe (#1919) uses for the same reads; no native polls, and Overcast answers on the first attempt, so the budget is fidelity to AWS rather than latency the emulator has. Teardown detaches the policy (a no-op error after GetPolicyAttachmentCountAfterDetach passed), then deletes the role and the policy, in the order IAM requires: a role with an attached policy and a policy with an attachment both refuse deletion with DeleteConflict.",
+      "name": "iam-policies-shadow",
+      "kind": "lifecycle",
+      "setup": [
+        {
+          "op": "CreateRole",
+          "params": {
+            "RoleName": { "$name": "role" },
+            "AssumeRolePolicyDocument": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"lambda.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}"
+          }
+        }
+      ],
+      "tests": [
+        {
+          "$comment": "Union: python-sdk, node-js-sdk and dotnet-sdk assert the response carries the policy's Arn; java-sdk asserts its PolicyId; dotnet-sdk also lists the policies back and finds the Arn; go-sdk and cli assert only that the call succeeded. All of it, plus the name the policy was given. The tag set (owner=compat, stage=dev) is the one every native creates the group's policy with, and GetPolicyReturnsTags reads it back. The document literal differs in every native — s3:GetObject (go-sdk, python-sdk), s3:GetObject and s3:PutObject (cli), a Deny on * (node-js-sdk), s3:ListAllMyBuckets (java-sdk), s3:ListBucket (dotnet-sdk) — and nothing reads it back; python-sdk's is used. The ListPolicies read-back takes the Scope and MaxItems the ListPolicies test does, for the reason given there.",
+          "name": "CreatePolicy",
+          "op": "CreatePolicy",
+          "call": {
+            "op": "CreatePolicy",
+            "params": {
+              "PolicyName": { "$name": "policy" },
+              "PolicyDocument": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:GetObject\",\"Resource\":\"*\"}]}",
+              "Tags": [
+                { "Key": "owner", "Value": "compat" },
+                { "Key": "stage", "Value": "dev" }
+              ]
+            },
+            "export": { "policy.arn": "$.Policy.Arn" }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Policy.Arn": { "nonEmpty": true },
+                "$.Policy.PolicyId": { "nonEmpty": true },
+                "$.Policy.PolicyName": { "equals": { "$name": "policy" } }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "ListPolicies",
+                  "params": { "Scope": "Local", "MaxItems": 1000 }
+                },
+                "itemsPath": "$.Policies",
+                "where": { "$.Arn": { "$ref": "policy.arn" } }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "All six natives assert the error code MalformedPolicyDocument, and all six also assert the HTTP status is 400. The IR's error clause has no status, so the 400 is not carried here: the code is the contract a caller branches on, and the Query protocol binds this error to 400 in the model (awsQueryError httpResponseCode 400), so a service that answered the right code with another status would already be answering off-model. The document is the one every native uses: a statement with no Action or NotAction, which AWS refuses (IAM User Guide, reference_policies_elements_action.html; API_CreatePolicy.html, Errors). cli's teardown also deletes a policy of the malformed name in case the refusal failed to happen; that ARN would need the account id, which the IR has no value for, and the clause failing already reports the bug that guard cleans up after.",
+          "name": "CreatePolicyMalformedDocument",
+          "op": "CreatePolicy",
+          "call": {
+            "op": "CreatePolicy",
+            "params": {
+              "PolicyName": { "$name": "policy-malformed" },
+              "PolicyDocument": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Resource\":\"*\"}]}"
+            }
+          },
+          "assert": [
+            {
+              "kind": "errorCode",
+              "error": { "shape": "MalformedPolicyDocumentException", "code": "MalformedPolicyDocument" }
+            }
+          ]
+        },
+        {
+          "$comment": "Union: go-sdk and python-sdk assert the Arn is the one CreatePolicy returned; node-js-sdk, java-sdk and dotnet-sdk assert the PolicyName is non-empty; cli asserts only that the call succeeded. Both, with the name compared to the one the policy was given rather than merely non-empty.",
+          "name": "GetPolicy",
+          "op": "GetPolicy",
+          "call": {
+            "op": "GetPolicy",
+            "params": { "PolicyArn": { "$ref": "policy.arn" } }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Policy.Arn": { "equals": { "$ref": "policy.arn" } },
+                "$.Policy.PolicyName": { "equals": { "$name": "policy" } }
+              }
+            }
+          ],
+          "depends": ["CreatePolicy"]
+        },
+        {
+          "$comment": "All six natives assert both fixture tags, owner=compat and stage=dev, are on the policy (API_Policy.html: Tags). One membership clause per tag, because a `where` matches one list item.",
+          "name": "GetPolicyReturnsTags",
+          "op": "GetPolicy",
+          "call": {
+            "op": "GetPolicy",
+            "params": { "PolicyArn": { "$ref": "policy.arn" } }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Policy.Tags",
+              "where": { "$.Key": "owner", "$.Value": "compat" }
+            },
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Policy.Tags",
+              "where": { "$.Key": "stage", "$.Value": "dev" }
+            }
+          ],
+          "depends": ["CreatePolicy"]
+        },
+        {
+          "$comment": "Union: python-sdk and dotnet-sdk find the policy by Arn, node-js-sdk and java-sdk by PolicyName; go-sdk and cli assert only that the call succeeded. The item is matched on both. Scope Local is what go-sdk, python-sdk, node-js-sdk, cli and java-sdk ask for; dotnet-sdk lists every scope, which on AWS puts the account's policies behind more than a thousand AWS managed ones. MaxItems 1000 is java-sdk's, and AWS's ceiling for the member: the others take the default page of 100, which a busy account's customer managed policies can overflow, and none of them pages.",
+          "name": "ListPolicies",
+          "op": "ListPolicies",
+          "call": {
+            "op": "ListPolicies",
+            "params": { "Scope": "Local", "MaxItems": 1000 }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Policies",
+              "where": {
+                "$.Arn": { "$ref": "policy.arn" },
+                "$.PolicyName": { "$name": "policy" }
+              }
+            }
+          ],
+          "depends": ["CreatePolicy"]
+        },
+        {
+          "$comment": "All six natives: AttachmentCount is 0 before the attach and 1 after attaching the policy to one role (API_Policy.html: \"The number of entities (users, groups, and roles) that the policy is attached to\"). The primary GetPolicy is the before-read. AttachRolePolicy's output is Unit — AWS returns no member but ResponseMetadata — and a clause that makes a call has to carry a check, so the attach is a readback whose one check is that a member the operation never returns is missing: the check holds on any successful answer, and the clause fails exactly when the attach does, which is all the natives assert of it. The IR has no clause for a call made only for its effect; this is how a Unit operation's success is spelled until it has one.",
+          "name": "GetPolicyAttachmentCountAfterAttach",
+          "op": "GetPolicy",
+          "call": {
+            "op": "GetPolicy",
+            "params": { "PolicyArn": { "$ref": "policy.arn" } }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.Policy.AttachmentCount": { "equals": 0 } }
+            },
+            {
+              "kind": "readback",
+              "call": {
+                "op": "AttachRolePolicy",
+                "params": {
+                  "RoleName": { "$name": "role" },
+                  "PolicyArn": { "$ref": "policy.arn" }
+                }
+              },
+              "checks": { "$.Policy": { "missing": true } }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "GetPolicy",
+                  "params": { "PolicyArn": { "$ref": "policy.arn" } }
+                },
+                "checks": { "$.Policy.AttachmentCount": { "equals": 1 } }
+              }
+            }
+          ],
+          "depends": ["CreatePolicy"]
+        },
+        {
+          "$comment": "All six natives detach the policy from the role and assert AttachmentCount is back to 0, which a counter incremented but never decremented would fail. The primary GetPolicy runs before the detach, so its count is the 1 GetPolicyAttachmentCountAfterAttach left — asserted here as the union's addition, since it is what makes the move to 0 a move rather than a reading. The detach is spelled as the attach is in the previous test, for the same reason: DetachRolePolicy's output is Unit.",
+          "name": "GetPolicyAttachmentCountAfterDetach",
+          "op": "GetPolicy",
+          "call": {
+            "op": "GetPolicy",
+            "params": { "PolicyArn": { "$ref": "policy.arn" } }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.Policy.AttachmentCount": { "equals": 1 } }
+            },
+            {
+              "kind": "readback",
+              "call": {
+                "op": "DetachRolePolicy",
+                "params": {
+                  "RoleName": { "$name": "role" },
+                  "PolicyArn": { "$ref": "policy.arn" }
+                }
+              },
+              "checks": { "$.Policy": { "missing": true } }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "GetPolicy",
+                  "params": { "PolicyArn": { "$ref": "policy.arn" } }
+                },
+                "checks": { "$.Policy.AttachmentCount": { "equals": 0 } }
+              }
+            }
+          ],
+          "depends": ["GetPolicyAttachmentCountAfterAttach"]
+        },
+        {
+          "$comment": "go-sdk, python-sdk, node-js-sdk, cli and java-sdk delete the group's policy and assert only that the call succeeded; dotnet-sdk deletes a policy of its own and asserts it is gone from ListPolicies. The union deletes the group's policy and asserts both absences: gone from the listing, as dotnet-sdk checks, and GetPolicy answering NoSuchEntity, which API_GetPolicy.html documents for a policy that does not exist and which the generated iam recipe asserts for the same delete.",
+          "name": "DeletePolicy",
+          "op": "DeletePolicy",
+          "call": {
+            "op": "DeletePolicy",
+            "params": { "PolicyArn": { "$ref": "policy.arn" } }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "GetPolicy",
+                  "params": { "PolicyArn": { "$ref": "policy.arn" } }
+                },
+                "error": { "shape": "NoSuchEntityException", "code": "NoSuchEntity" }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "ListPolicies",
+                  "params": { "Scope": "Local", "MaxItems": 1000 }
+                },
+                "itemsPath": "$.Policies",
+                "where": { "$.Arn": { "$ref": "policy.arn" } }
+              }
+            }
+          ],
+          "depends": ["GetPolicy", "ListPolicies", "GetPolicyAttachmentCountAfterDetach"]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "DetachRolePolicy",
+          "params": {
+            "RoleName": { "$name": "role" },
+            "PolicyArn": { "$ref": "policy.arn" }
+          }
+        },
+        {
+          "op": "DeleteRole",
+          "params": { "RoleName": { "$name": "role" } }
+        },
+        {
+          "op": "DeletePolicy",
+          "params": { "PolicyArn": { "$ref": "policy.arn" } }
+        }
+      ]
+    }
+  ]
+}
