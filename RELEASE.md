@@ -91,6 +91,17 @@ The release workflow:
 - replaces the GitHub release notes with generated notes from the versioned
   `CHANGELOG.md` section
 
+Athena's engine image, `ghcr.io/overcast-sh/overcast-athena-engine`, is not
+part of a release. It carries a Trino release rather than an Overcast one, and
+`.github/workflows/athena-engine-image.yml` publishes it when a merge to `main`
+changes `docker/athena-engine/` or that workflow, after the same `release`
+environment approval. Overcast pins it by digest in
+`config.DefaultAthenaEngineImage`, so a new build reaches users only through a
+pull request that moves that pin; the workflow's run summary prints the
+reference to pin. The package must be public, like `overcast` and
+`overcast-slim`: after its first publish, check that an anonymous
+`docker pull` works and that the package is linked to this repository.
+
 ## Version Format
 
 Use SemVer tags with a leading `v` for GitHub releases.

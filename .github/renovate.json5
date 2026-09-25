@@ -242,6 +242,16 @@
       automerge: true,
     },
     {
+      // Athena's engine image (docker/athena-engine/Dockerfile) moves to a
+      // new Trino release together with its plugin zips' URLs and checksums,
+      // which no manager here reads — a version bump alone would fail the
+      // build. Digest advances of the pinned release still flow (above).
+      matchManagers: ['dockerfile'],
+      matchPackageNames: ['trinodb/trino-core'],
+      matchUpdateTypes: ['major', 'minor', 'patch'],
+      enabled: false,
+    },
+    {
       // Non-major Go deps automerge once every required check is green: the
       // full test matrix, lint, the compat suites and both image builds run
       // on the updated modules (scripts/ci-scope.py counts go.mod/go.sum as

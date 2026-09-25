@@ -567,7 +567,7 @@ If a task would require broad architectural changes, **stop and surface the trad
 
 ## Release awareness
 
-Changes merged into `main` do **not** imply a stable release. Docker images are only published when a release tag is pushed. Do not assume code on `main` is available to end users — treat it as nightly/integration until tagged.
+Changes merged into `main` do **not** imply a stable release. Docker images are only published when a release tag is pushed. (Athena's engine image is the one exception: it is published from `main` — see [RELEASE.md](./RELEASE.md).) Do not assume code on `main` is available to end users — treat it as nightly/integration until tagged.
 
 ---
 
