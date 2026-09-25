@@ -2,7 +2,7 @@ service: kms
 status: fixed
 priority: p1
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-09-20
+last_updated: 2026-09-25
 protocols: [aws_json_1_1, aws_json_1_0, rpcv2_cbor]
 implementation: [internal/services/kms]
 integration_tests: [tests/integration/kms, tests/integration/cloudformation]
@@ -221,6 +221,31 @@ operations:
         evidence: "TestCreateAlias_duplicateName returns AlreadyExistsException and leaves the existing alias where it pointed; TestUpdateAlias_stillRepointsExistingAlias confirms UpdateAlias is unaffected and still re-points."
     findings:
       - Fixed — CreateAlias now enforces the documented prefix, reserved-prefix, pattern/256-character-cap and duplicate-name rules (#1710, PR #1845).
+  DescribeKey:
+    status: fixed
+    priority: p2
+    aws_docs:
+      - https://docs.aws.amazon.com/kms/latest/APIReference/API_KeyMetadata.html
+      - https://docs.aws.amazon.com/kms/latest/APIReference/API_DescribeKey.html
+      - https://docs.aws.amazon.com/kms/latest/APIReference/API_CreateKey.html
+    implementation:
+      - internal/services/kms/handler.go:125 (toMeta, shared by CreateKey and DescribeKey on every protocol)
+      - internal/services/kms/handler.go:151 (keyAccountID)
+    tests:
+      present:
+        - tests/integration/kms/key_metadata_test.go::TestKeyMetadata_accountIDAndCustomerMasterKeySpec
+        - tests/integration/kms/key_metadata_test.go::TestRPCv2CBOR_DescribeKey_accountIDAndCustomerMasterKeySpec
+      compat:
+        - kms-gen-key/DescribeKeyMetadata (asserts $.KeyMetadata.AWSAccountId matches ^[0-9]{12}$)
+    scenario_matrix:
+      - scenario: KeyMetadata.AWSAccountId on CreateKey and DescribeKey.
+        status: fixed
+        evidence: "AWS docs: \"The twelve-digit account ID of the AWS account that owns the KMS key\"; Overcast omitted the member. It is now the account segment of the key ARN (so it always agrees with Arn) — TestKeyMetadata_accountIDAndCustomerMasterKeySpec (symmetric and RSA_2048, JSON 1.1), TestRPCv2CBOR_DescribeKey_accountIDAndCustomerMasterKeySpec."
+      - scenario: Deprecated KeyMetadata.CustomerMasterKeySpec.
+        status: fixed
+        evidence: "AWS docs: \"The KeySpec and CustomerMasterKeySpec fields have the same value\"; Overcast omitted it. Now mirrors KeySpec, as GetPublicKey already did — same tests."
+    findings:
+      - Fixed — KeyMetadata omitted AWSAccountId and CustomerMasterKeySpec (#1906). Other optional KeyMetadata members (EncryptionAlgorithms, SigningAlgorithms, MacAlgorithms, CurrentKeyMaterialId) are still omitted; not in scope of #1906.
 findings:
   fixed:
     - operation: AWS::KMS::Key
@@ -276,6 +301,8 @@ findings:
       framework-wide rule, not a KMS-specific gap. docs/services/kms.md now states this
       under "What works". No code change was needed.
   remaining_gaps:
+    - "#1907 — six wire divergences: KeyArn/KeyState extras on ScheduleKeyDeletion/CancelKeyDeletion, ListKeys hiding PendingDeletion keys, DeleteAlias/ListAliases not-found, ListGrants KeyId as ARN, CreateGrant dropping service principals and Constraints.SourceArn."
+    - KeyMetadata still omits EncryptionAlgorithms, SigningAlgorithms, MacAlgorithms and CurrentKeyMaterialId, which AWS returns for the matching KeyUsage/Origin.
     - Principal existence is not checked against remote AWS accounts; syntactically valid cross-account principals are accepted.
     - AWS::KMS::Key Tags are not applied by CloudFormation (create or update); KMS TagResource exists but the provisioner never dispatches it.
     - AWS::KMS::Key EnableKeyRotation is not applied by CloudFormation; KMS has no rotation-state operations yet.
