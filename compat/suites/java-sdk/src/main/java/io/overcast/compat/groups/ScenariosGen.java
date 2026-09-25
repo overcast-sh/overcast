@@ -24,6 +24,7 @@ public final class ScenariosGen {
                 new ScenariosAuthoredEventbridgeBusesGen(clients),
                 new ScenariosAuthoredEventbridgeEventsGen(clients),
                 new ScenariosAuthoredEventbridgeRulesGen(clients),
+                new ScenariosAuthoredIamPoliciesGen(clients),
                 new ScenariosAuthoredIamRolesGen(clients),
                 new ScenariosAuthoredIamUsersGen(clients),
                 new ScenariosAuthoredKinesisRecordsGen(clients),
