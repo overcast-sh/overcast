@@ -54,7 +54,7 @@
           "depends": ["CreateEventBus"]
         },
         {
-          "$comment": "All five assert the bus's name is in the page. go-sdk, cli and python-sdk list unfiltered, java-sdk with Limit 100, node-js-sdk with a NamePrefix of the run id. NamePrefix set to the bus's own name is node-js-sdk's spelling narrowed to this group: on AWS an unfiltered first page is not guaranteed to hold one bus among many, and the narrower page is also the one whose non-membership DeleteEventBus proves below. (Overcast ignores NamePrefix today and answers every bus, which this membership clause cannot see and does not depend on.)",
+          "$comment": "All five assert the bus's name is in the page. go-sdk, cli and python-sdk list unfiltered, java-sdk with Limit 100, node-js-sdk with a NamePrefix of the run id. NamePrefix set to the bus's own name is node-js-sdk's spelling narrowed to this group: on AWS an unfiltered first page is not guaranteed to hold one bus among many, and the narrower page is also the one whose non-membership DeleteEventBus proves below. The second clause is that NamePrefix filters at all: the default bus, which every account has and which no {runId}-prefixed name admits, must not be on the page. The natives never asserted it; it was added with #2110, when Overcast stopped ignoring NamePrefix and answering every bus.",
           "name": "ListEventBuses",
           "op": "ListEventBuses",
           "call": {
@@ -66,6 +66,11 @@
               "kind": "listContains",
               "itemsPath": "$.EventBuses",
               "where": { "$.Name": { "$name": "bus" } }
+            },
+            {
+              "kind": "absent",
+              "itemsPath": "$.EventBuses",
+              "where": { "$.Name": "default" }
             }
           ],
           "depends": ["CreateEventBus"]
@@ -112,7 +117,7 @@
           "depends": ["TagEventBus"]
         },
         {
-          "$comment": "cli, python-sdk and node-js-sdk list the buses again and assert the deleted one is gone; go-sdk and java-sdk assert only that DeleteEventBus returned (#1904). List non-membership, with the same NamePrefix as ListEventBuses (python-sdk and node-js-sdk pass one too), is what the natives assert and so what the port asserts. DescribeEventBus raising ResourceNotFoundException — its modeled error on AWS — would be the direct statement, but no native reads it, and Overcast today answers DescribeEventBus for an unknown bus with a synthesized Name and Arn rather than the error, so the clause would diverge from every native on a claim none of them made; that is an emulator gap to fix on its own, not something this soak can attribute. The bus deleted is the group's own, as cli, node-js-sdk and java-sdk do; go-sdk and python-sdk create and delete a second bus inside the test.",
+          "$comment": "cli, python-sdk and node-js-sdk list the buses again and assert the deleted one is gone; go-sdk and java-sdk assert only that DeleteEventBus returned (#1904). List non-membership, with the same NamePrefix as ListEventBuses (python-sdk and node-js-sdk pass one too), is what the natives assert and so what the port asserts. DescribeEventBus raising ResourceNotFoundException — its modeled error on AWS — is the direct statement, asserted second. No native read it, because Overcast used to answer DescribeEventBus for an unknown bus with a synthesized Name and Arn; it was added with #2110, which made that a ResourceNotFoundException. The bus deleted is the group's own, as cli, node-js-sdk and java-sdk do; go-sdk and python-sdk create and delete a second bus inside the test.",
           "name": "DeleteEventBus",
           "op": "DeleteEventBus",
           "call": {
@@ -128,6 +133,14 @@
               },
               "itemsPath": "$.EventBuses",
               "where": { "$.Name": { "$name": "bus" } }
+            },
+            {
+              "kind": "absent",
+              "call": {
+                "op": "DescribeEventBus",
+                "params": { "Name": { "$name": "bus" } }
+              },
+              "error": { "shape": "ResourceNotFoundException", "code": "ResourceNotFoundException" }
             }
           ],
           "depends": ["DescribeEventBus", "ListEventBuses", "ListEventBridgeTagsForResource"]

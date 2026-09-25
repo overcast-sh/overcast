@@ -147,6 +147,11 @@ func (g *authoredEventbridgeBusesScenarios) testEventbridgeBusesListEventBuses(c
 				"$.EventBuses",
 				scenario.Where("$.Name", scenario.Name("bus")),
 			),
+			scenario.AbsentFromList(
+				nil,
+				"$.EventBuses",
+				scenario.Where("$.Name", "default"),
+			),
 		},
 	})
 }
@@ -243,6 +248,21 @@ func (g *authoredEventbridgeBusesScenarios) testEventbridgeBusesDeleteEventBus(c
 				},
 				"$.EventBuses",
 				scenario.Where("$.Name", scenario.Name("bus")),
+			),
+			scenario.AbsentByError(
+				scenario.Call{
+					Op:     "DescribeEventBus",
+					Params: `{"Name":{"$name":"bus"}}`,
+					Build: func(b *scenario.Binder) any {
+						in := &eventbridge.DescribeEventBusInput{}
+						in.Name = aws.String(scenario.Bind[string](b, "Name", scenario.Name("bus")))
+						return in
+					},
+					Send: func(ctx context.Context, in any) (any, error) {
+						return g.cl().DescribeEventBus(ctx, in.(*eventbridge.DescribeEventBusInput))
+					},
+				},
+				scenario.Error("ResourceNotFoundException", "ResourceNotFoundException"),
 			),
 		},
 	})

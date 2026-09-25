@@ -5121,13 +5121,13 @@
           "operation": "DescribeEventBus",
           "category": "Event buses",
           "status": "✅ Supported",
-          "notes": "Returns bus details including Description, DeadLetterConfig, KmsKeyIdentifier and the Policy built from PutPermission grants; synthetic default bus"
+          "notes": "Returns bus details including Description, DeadLetterConfig, KmsKeyIdentifier and the Policy built from PutPermission grants; ResourceNotFoundException for a missing bus, by name or ARN; the default bus always exists"
         },
         {
           "operation": "ListEventBuses",
           "category": "Event buses",
           "status": "✅ Supported",
-          "notes": "Always includes default bus"
+          "notes": "NamePrefix, Limit (1-100, default 100) and NextToken; includes the default bus when NamePrefix admits it"
         },
         {
           "operation": "DeleteEventBus",

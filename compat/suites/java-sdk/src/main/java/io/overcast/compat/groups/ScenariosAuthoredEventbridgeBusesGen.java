@@ -8,6 +8,7 @@ import io.overcast.compat.harness.TestFn;
 import io.overcast.compat.scenario.Call;
 import io.overcast.compat.scenario.Check;
 import io.overcast.compat.scenario.Clause;
+import io.overcast.compat.scenario.ErrorSpec;
 import io.overcast.compat.scenario.Group;
 import io.overcast.compat.scenario.Values;
 import io.overcast.compat.scenario.Where;
@@ -142,6 +143,11 @@ public final class ScenariosAuthoredEventbridgeBusesGen implements ServiceGroup 
                                 null,
                                 "$.EventBuses",
                                 Where.of("$.Name", Values.name("bus"))
+                        ),
+                        Clause.absentFromList(
+                                null,
+                                "$.EventBuses",
+                                Where.of("$.Name", "default")
                         )
                 ));
     }
@@ -201,7 +207,14 @@ public final class ScenariosAuthoredEventbridgeBusesGen implements ServiceGroup 
                                         r -> cl().listEventBuses((ListEventBusesRequest) r)),
                                 "$.EventBuses",
                                 Where.of("$.Name", Values.name("bus"))
-                        )
+                        ),
+                        Clause.absentByError(
+                                new Call("DescribeEventBus", "{\"Name\":{\"$name\":\"bus\"}}",
+                                        b -> DescribeEventBusRequest.builder()
+                                                .name(b.string("Name", Values.name("bus")))
+                                                .build(),
+                                        r -> cl().describeEventBus((DescribeEventBusRequest) r)),
+                                ErrorSpec.of("ResourceNotFoundException", "ResourceNotFoundException"))
                 ));
     }
 }
