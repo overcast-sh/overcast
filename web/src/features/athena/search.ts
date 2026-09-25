@@ -4,7 +4,19 @@
  * helper other pages use to build that link.
  */
 
-export const ATHENA_TABS = ["editor", "history", "saved", "workgroups", "catalogs"] as const
+import { ATHENA_TAB } from "@/components/ui/arn-routes"
+
+/**
+ * The page's tabs, in order. The list tabs' ids are `ATHENA_TAB`'s, which
+ * ARN links and search results already open.
+ */
+export const ATHENA_TABS = [
+  "editor",
+  "history",
+  ATHENA_TAB.savedQueries,
+  ATHENA_TAB.workgroups,
+  ATHENA_TAB.dataCatalogs,
+] as const
 
 export type AthenaTab = (typeof ATHENA_TABS)[number]
 

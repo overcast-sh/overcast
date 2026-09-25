@@ -21,7 +21,9 @@ describe("athenaEditorLink", () => {
 
   it("reads a hand-written URL-encoded link", () => {
     const parsed = validateAthenaSearch(
-      defaultParseSearch(`?tab=editor&catalog=s3tablescatalog%2Fwarehouse&database=ns&sql=${encodeURIComponent(SQL)}`),
+      defaultParseSearch(
+        `?tab=editor&catalog=s3tablescatalog%2Fwarehouse&database=ns&sql=${encodeURIComponent(SQL)}`,
+      ),
     )
     expect(parsed).toMatchObject({ catalog: "s3tablescatalog/warehouse", database: "ns", sql: SQL })
   })
