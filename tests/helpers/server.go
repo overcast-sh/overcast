@@ -403,6 +403,20 @@ func WithECSDocker() Option {
 	}
 }
 
+// WithAthenaEngine runs Athena's queries on a real Trino container. Off by
+// default: the engine is a gigabyte image and seconds of start-up, which
+// only the engine's own tests should pay for. Like WithLambdaDocker it uses
+// the shared planes rather than minting networks: the engine joins no VPC,
+// and a daemon's address pools are finite.
+func WithAthenaEngine() Option {
+	return func(so *serverOptions) {
+		so.cfg.AthenaEngine = config.AthenaEngineTrino
+		so.cfg.AthenaEngineImage = config.DefaultAthenaEngineImage
+		so.cfg.AthenaEngineMemory = config.DefaultAthenaEngineMemory
+		so.cfg.AthenaDockerSocket = TestDockerSocket()
+	}
+}
+
 // WaitForECSDocker blocks until the ECS service of a server started with
 // WithECSDocker has finished probing its daemon and is backed by Docker, so a
 // task the test then runs is placed in a real container rather than answered

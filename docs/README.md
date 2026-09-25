@@ -117,12 +117,12 @@ Shorter overview: the [service reference index](./services/README.md).
 | WAF v2           | [waf.md](./services/waf.md)                         | 7   | Minimal / targeted support    |
 | Shield           | [shield.md](./services/shield.md)                   | 8   | Minimal / targeted support    |
 | ACM              | [acm.md](./services/acm.md)                         | 11  | Minimal / targeted support    |
-| Athena           | [athena.md](./services/athena.md)                   | 36  | Core CRUD + common workflows  |
+| Athena           | [athena.md](./services/athena.md)                   | 37  | Core CRUD + common workflows  |
 | Bedrock          | [bedrock.md](./services/bedrock.md)                 | 2   | Minimal / targeted support    |
 | CloudWatch       | [cloudwatch.md](./services/cloudwatch.md)           | 17  | Minimal / targeted support    |
 | DynamoDB Streams | [dynamodbstreams.md](./services/dynamodbstreams.md) | 4   | Minimal / targeted support    |
 | Firehose         | [firehose.md](./services/firehose.md)               | 9   | Minimal / targeted support    |
-| Glue             | [glue.md](./services/glue.md)                       | 26  | Minimal / targeted support    |
+| Glue             | [glue.md](./services/glue.md)                       | 32  | Minimal / targeted support    |
 | OpenSearch       | [opensearch.md](./services/opensearch.md)           | 8   | Minimal / targeted support    |
 | AppRegistry      | [appregistry.md](./services/appregistry.md)         | 24  | IaC/discovery-oriented stub   |
 | Backup           | [backup.md](./services/backup.md)                   | 18  | IaC/discovery-oriented stub   |

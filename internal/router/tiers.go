@@ -70,6 +70,10 @@ var ServiceTiers = map[string]EmulationTier{
 	// dead-lettering to the target's DeadLetterConfig queue. Archives,
 	// replays, connections and API destinations still return 501.
 	"eventbridge": TierPartial,
+	// athena runs queries for real on a Trino container started on the first
+	// query, writes their results to S3 and runs Hive DDL against the Glue
+	// Data Catalog. Without Docker it is inert: queries succeed with no rows.
+	"athena": TierPartial,
 
 	// Inert — full CRUD, resources stored, but no enforcement / side-effects
 	"iam":        TierInert,
@@ -94,7 +98,6 @@ var ServiceTiers = map[string]EmulationTier{
 	"appconfig":   TierInert,
 	"glue":        TierInert,
 	"firehose":    TierInert,
-	"athena":      TierInert,
 	"s3tables":    TierInert,
 	"bedrock":     TierStub,
 	"appregistry": TierInert,

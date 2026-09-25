@@ -1,6 +1,6 @@
 {
   "generated_by": "go run -tags dev ./cmd/capgen --write-docs",
-  "total_ops": 1604,
+  "total_ops": 1611,
   "services": [
     {
       "service": "s3",
@@ -7981,14 +7981,14 @@
     {
       "service": "athena",
       "display_name": "Athena",
-      "total_ops": 36,
-      "implemented_ops": 36,
+      "total_ops": 37,
+      "implemented_ops": 37,
       "operations": [
         {
           "operation": "StartQueryExecution",
           "category": "Queries",
-          "status": "🧊 Inert",
-          "notes": "Resolves the result configuration against the workgroup and honours ClientRequestToken; no SQL runs, so the query succeeds at once having scanned nothing"
+          "status": "✅ Supported",
+          "notes": "Runs on a Trino engine container started on the first query; Hive DDL runs against the Glue Data Catalog; results written to OutputLocation. Without Docker, or with ATHENA_ENGINE=inert, queries succeed with no rows"
         },
         {
           "operation": "GetQueryExecution",
@@ -8012,13 +8012,19 @@
           "operation": "StopQueryExecution",
           "category": "Queries",
           "status": "✅ Supported",
-          "notes": "Cancels an unfinished query; a finished one keeps its state"
+          "notes": "Cancels an unfinished query on the engine; a finished one keeps its state"
         },
         {
           "operation": "GetQueryResults",
           "category": "Queries",
-          "status": "🧊 Inert",
-          "notes": "An empty result set for a SUCCEEDED query; an unfinished or failed query is InvalidRequestException"
+          "status": "✅ Supported",
+          "notes": "Paginated; a SELECT's header row first, Athena ColumnInfo types, UpdateCount for DML; an unfinished or failed query is InvalidRequestException"
+        },
+        {
+          "operation": "GetQueryRuntimeStatistics",
+          "category": "Queries",
+          "status": "⚠️ Partial",
+          "notes": "Timeline and Rows from the engine's statistics; OutputStage is not reported"
         },
         {
           "operation": "CreateWorkGroup",
@@ -8092,7 +8098,7 @@
           "operation": "CreatePreparedStatement",
           "category": "PreparedStatements",
           "status": "✅ Supported",
-          "notes": "Stored only; EXECUTE ... USING runs nothing"
+          "notes": "EXECUTE ... USING runs the statement on the engine"
         },
         {
           "operation": "GetPreparedStatement",
@@ -8420,8 +8426,8 @@
     {
       "service": "glue",
       "display_name": "Glue",
-      "total_ops": 26,
-      "implemented_ops": 26,
+      "total_ops": 32,
+      "implemented_ops": 32,
       "operations": [
         {
           "operation": "CreateDatabase",
@@ -8560,6 +8566,40 @@
           "category": "Partitions",
           "status": "✅ Supported",
           "notes": "Up to 25; missing partitions in Errors"
+        },
+        {
+          "operation": "UpdateColumnStatisticsForTable",
+          "category": "Column statistics",
+          "status": "✅ Supported",
+          "notes": "Stored and echoed; an unknown column comes back in Errors"
+        },
+        {
+          "operation": "UpdateColumnStatisticsForPartition",
+          "category": "Column statistics",
+          "status": "✅ Supported",
+          "notes": "Stored and echoed; an unknown column comes back in Errors"
+        },
+        {
+          "operation": "GetColumnStatisticsForTable",
+          "category": "Column statistics",
+          "status": "✅ Supported",
+          "notes": "A column with no statistics comes back in Errors"
+        },
+        {
+          "operation": "GetColumnStatisticsForPartition",
+          "category": "Column statistics",
+          "status": "✅ Supported",
+          "notes": "A column with no statistics comes back in Errors"
+        },
+        {
+          "operation": "DeleteColumnStatisticsForTable",
+          "category": "Column statistics",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "DeleteColumnStatisticsForPartition",
+          "category": "Column statistics",
+          "status": "✅ Supported"
         },
         {
           "operation": "TagResource",

@@ -328,3 +328,30 @@ type ResultSet struct {
 	ResultSetMetadata ResultSetMetadata `json:"ResultSetMetadata"`
 	Rows              []Row             `json:"Rows"`
 }
+
+// ─── Runtime statistics ───────────────────────────────────────
+
+// QueryRuntimeStatisticsTimeline is where an execution's time went.
+type QueryRuntimeStatisticsTimeline struct {
+	EngineExecutionTimeInMillis      int64 `json:"EngineExecutionTimeInMillis"`
+	QueryPlanningTimeInMillis        int64 `json:"QueryPlanningTimeInMillis"`
+	QueryQueueTimeInMillis           int64 `json:"QueryQueueTimeInMillis"`
+	ServicePreProcessingTimeInMillis int64 `json:"ServicePreProcessingTimeInMillis"`
+	ServiceProcessingTimeInMillis    int64 `json:"ServiceProcessingTimeInMillis"`
+	TotalExecutionTimeInMillis       int64 `json:"TotalExecutionTimeInMillis"`
+}
+
+// QueryRuntimeStatisticsRows is what an execution read and produced.
+type QueryRuntimeStatisticsRows struct {
+	InputBytes  int64 `json:"InputBytes"`
+	InputRows   int64 `json:"InputRows"`
+	OutputBytes int64 `json:"OutputBytes"`
+	OutputRows  int64 `json:"OutputRows"`
+}
+
+// QueryRuntimeStatistics is GetQueryRuntimeStatistics' report. OutputStage,
+// the per-stage plan tree, is not reported.
+type QueryRuntimeStatistics struct {
+	Rows     *QueryRuntimeStatisticsRows     `json:"Rows,omitempty"`
+	Timeline *QueryRuntimeStatisticsTimeline `json:"Timeline,omitempty"`
+}

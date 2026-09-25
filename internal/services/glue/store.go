@@ -26,6 +26,11 @@ const (
 	nsTables        = "glue:tables"
 	nsPartitions    = "glue:partitions"
 	nsTableVersions = "glue:table-versions"
+	// nsColumnStatistics holds column statistics under their table's prefix:
+	// "<table prefix>t/<column>" for the table's own, and
+	// "<table prefix>p/<values>/<column>" for a partition's, the values
+	// escaped a second time so they form one segment.
+	nsColumnStatistics = "glue:column-statistics"
 )
 
 // databaseRecord is a Database as persisted: the wire shape plus its tags.
@@ -107,6 +112,18 @@ func partitionKey(dbName, tableName string, values []string) string {
 		b.WriteString(esc(v))
 	}
 	return b.String()
+}
+
+func tableStatisticsPrefix(dbName, tableName string) string {
+	return tablePrefix(dbName, tableName) + "t/"
+}
+
+func partitionStatisticsPrefix(dbName, tableName string, values []string) string {
+	escaped := make([]string, len(values))
+	for i, v := range values {
+		escaped[i] = esc(v)
+	}
+	return tablePrefix(dbName, tableName) + "p/" + esc(strings.Join(escaped, "/")) + "/"
 }
 
 func versionKey(dbName, tableName, versionID string) string {
@@ -284,7 +301,7 @@ func (s *glueStore) listDatabases(ctx context.Context) ([]*databaseRecord, error
 // its tables and each table's partitions and archived versions.
 func (s *glueStore) deleteDatabase(ctx context.Context, name string) error {
 	prefix := databasePrefix(name)
-	for _, ns := range []string{nsPartitions, nsTableVersions, nsTables} {
+	for _, ns := range []string{nsPartitions, nsTableVersions, nsColumnStatistics, nsTables} {
 		if err := s.deletePrefix(ctx, ns, prefix); err != nil {
 			return err
 		}
@@ -344,10 +361,11 @@ func (s *glueStore) tableExists(ctx context.Context, dbName, tableName string) (
 	return found, nil
 }
 
-// deleteTableChildren removes the table's partitions and archived versions.
+// deleteTableChildren removes the table's partitions, archived versions and
+// column statistics.
 func (s *glueStore) deleteTableChildren(ctx context.Context, dbName, tableName string) error {
 	prefix := tablePrefix(dbName, tableName)
-	for _, ns := range []string{nsPartitions, nsTableVersions} {
+	for _, ns := range []string{nsPartitions, nsTableVersions, nsColumnStatistics} {
 		if err := s.deletePrefix(ctx, ns, prefix); err != nil {
 			return err
 		}
@@ -462,5 +480,5 @@ func (s *glueStore) deletePartition(ctx context.Context, dbName, tableName strin
 	if err := s.store.Delete(ctx, nsPartitions, key); err != nil {
 		return fmt.Errorf("glue: delete partition %q: %w", key, err)
 	}
-	return nil
+	return s.deletePrefix(ctx, nsColumnStatistics, partitionStatisticsPrefix(dbName, tableName, values))
 }

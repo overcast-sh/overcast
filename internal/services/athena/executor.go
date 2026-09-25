@@ -43,22 +43,26 @@ func advances(from, to string) bool {
 // and a recursive DeleteWorkGroup removes it, and each tells the executor
 // through Cancel, so a stop is final whatever the engine does afterwards.
 //
-// An engine that runs queries in the background also owns what happens to
-// them across a restart: executions it left QUEUED or RUNNING must be failed
-// or resumed when it starts, since nothing else will move them.
+// No engine resumes a query across a restart. Executions a previous process
+// left QUEUED or RUNNING are failed by the service the first time this one
+// touches its queries (reapInterrupted), and those still running at shutdown
+// are failed by the executor's Stop.
 //
-// inertExecutor is the implementation wired today. A real engine replaces it
-// without touching the operations.
+// statementExecutor is the one implementation: it routes each statement to
+// the Glue catalog (DDL), the Trino engine or the inert engine.
 type queryExecutor interface {
 	// Submit starts qe. It may report transitions before it returns, or
 	// later from its own goroutine; ctx outlives the request.
 	Submit(ctx context.Context, qe QueryExecution, report transitionReporter)
 	// Cancel asks the engine to abandon a query the service has already
-	// marked CANCELLED or deleted.
+	// marked CANCELLED or deleted, and to forget its results.
 	Cancel(ctx context.Context, id string)
 	// Results returns one page of a SUCCEEDED query's results, and is where
 	// a NextToken is checked, since only the executor knows the pages.
 	Results(ctx context.Context, qe QueryExecution, req *getQueryResultsReq) (*getQueryResultsResp, *protocol.AWSError)
+	// RuntimeStatistics reports what a finished query read and produced,
+	// which only the engine that ran it knows.
+	RuntimeStatistics(ctx context.Context, qe QueryExecution) (*QueryRuntimeStatistics, *protocol.AWSError)
 }
 
 // queryTransition is one state change an executor reports.
@@ -71,31 +75,6 @@ type queryTransition struct {
 
 // transitionReporter applies a transition to the execution with id.
 type transitionReporter func(ctx context.Context, id string, t queryTransition)
-
-// inertExecutor runs nothing: every query succeeds the moment it is
-// submitted, having scanned nothing and returned no rows.
-type inertExecutor struct{}
-
-func (inertExecutor) Submit(ctx context.Context, qe QueryExecution, report transitionReporter) {
-	report(ctx, qe.QueryExecutionId, queryTransition{
-		State: stateSucceeded,
-		Statistics: &QueryExecutionStatistics{
-			ResultReuseInformation: &ResultReuseInformation{},
-		},
-	})
-}
-
-func (inertExecutor) Cancel(context.Context, string) {}
-
-func (inertExecutor) Results(_ context.Context, _ QueryExecution, req *getQueryResultsReq) (*getQueryResultsResp, *protocol.AWSError) {
-	if req.NextToken != "" { // an empty result has one page
-		return nil, errInvalidRequest("Invalid NextToken.")
-	}
-	return &getQueryResultsResp{ResultSet: ResultSet{
-		Rows:              []Row{},
-		ResultSetMetadata: ResultSetMetadata{ColumnInfo: []ColumnInfo{}},
-	}}, nil
-}
 
 // applyTransition moves an execution to t.State. Only a move forward along
 // QUEUED, RUNNING, terminal is applied: a report that arrives after a stop,

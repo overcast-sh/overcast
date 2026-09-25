@@ -107,6 +107,31 @@ def GetTableVersions(ctx: TestContext) -> None:
         raise AssertionError(f"GetTableVersions: pre-update version {ctx.get('glue_version')!r} not listed")
 
 
+def UpdateColumnStatisticsForTable(ctx: TestContext) -> None:
+    resp = _glue(ctx).update_column_statistics_for_table(
+        DatabaseName=_db(ctx), TableName=_table(ctx),
+        ColumnStatisticsList=[{
+            "ColumnName": "id", "ColumnType": "bigint", "AnalyzedTime": 1700000000,
+            "StatisticsData": {"Type": "LONG", "LongColumnStatisticsData": {
+                "NumberOfNulls": 0, "NumberOfDistinctValues": 3, "MaximumValue": 9}},
+        }],
+    )
+    if resp.get("Errors"):
+        raise AssertionError(f"UpdateColumnStatisticsForTable: errors {resp['Errors']}")
+
+
+def GetColumnStatisticsForTable(ctx: TestContext) -> None:
+    resp = _glue(ctx).get_column_statistics_for_table(
+        DatabaseName=_db(ctx), TableName=_table(ctx), ColumnNames=["id", "payload"])
+    stats = resp.get("ColumnStatisticsList", [])
+    if len(stats) != 1 or stats[0].get("ColumnName") != "id" or \
+            stats[0]["StatisticsData"]["LongColumnStatisticsData"].get("NumberOfDistinctValues") != 3:
+        raise AssertionError(f"GetColumnStatisticsForTable: {stats!r}")
+    errors = resp.get("Errors", [])
+    if len(errors) != 1 or errors[0].get("ColumnName") != "payload":
+        raise AssertionError(f"GetColumnStatisticsForTable: errors {errors!r}, want payload, which has none")
+
+
 def BatchCreatePartition(ctx: TestContext) -> None:
     inputs = [
         {"Values": [y, m], "StorageDescriptor": {"Location": f"s3://compat-glue-catalog/events/year={y}/month={m}/"}}
@@ -153,6 +178,8 @@ IMPLS = {
     "glue-catalog:UpdateTable": UpdateTable,
     "glue-catalog:UpdateTableStaleVersion": UpdateTableStaleVersion,
     "glue-catalog:GetTableVersions": GetTableVersions,
+    "glue-catalog:UpdateColumnStatisticsForTable": UpdateColumnStatisticsForTable,
+    "glue-catalog:GetColumnStatisticsForTable": GetColumnStatisticsForTable,
     "glue-catalog:BatchCreatePartition": BatchCreatePartition,
     "glue-catalog:GetPartitions": GetPartitions,
     "glue-catalog:DeletePartition": DeletePartition,

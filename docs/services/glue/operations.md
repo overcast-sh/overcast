@@ -1,6 +1,6 @@
 ---
 title: "Glue operations"
-description: "Every Glue operation Overcast declares — 26 of 26 implemented — with status, behaviour notes and a link to the AWS API reference for each."
+description: "Every Glue operation Overcast declares — 32 of 32 implemented — with status, behaviour notes and a link to the AWS API reference for each."
 section: "Service Reference"
 tags:
   - docs
@@ -13,17 +13,18 @@ tags:
 
 # Glue operations
 
-All 26 listed operations are implemented. Back to [Glue](../glue.md).
+All 32 listed operations are implemented. Back to [Glue](../glue.md).
 
 ## Summary
 
-| Category       | ✅ Supported | ⚠️ Partial |
-| -------------- | ------------ | ---------- |
-| Databases      | 5            |            |
-| Tables         | 4            | 2          |
-| Table versions | 4            |            |
-| Partitions     | 7            | 1          |
-| Tags           | 3            |            |
+| Category          | ✅ Supported | ⚠️ Partial |
+| ----------------- | ------------ | ---------- |
+| Databases         | 5            |            |
+| Tables            | 4            | 2          |
+| Table versions    | 4            |            |
+| Partitions        | 7            | 1          |
+| Column statistics | 6            |            |
+| Tags              | 3            |            |
 
 ---
 
@@ -71,6 +72,17 @@ All 26 listed operations are implemented. Back to [Glue](../glue.md).
 | `UpdatePartition`      | ✅ Supported | Replaces the definition; new Values move the partition                                                | [docs](https://docs.aws.amazon.com/glue/latest/dg/aws-glue-api-UpdatePartition.html)      |
 | `DeletePartition`      | ✅ Supported | Deletes one partition                                                                                 | [docs](https://docs.aws.amazon.com/glue/latest/dg/aws-glue-api-DeletePartition.html)      |
 | `BatchDeletePartition` | ✅ Supported | Up to 25; missing partitions in Errors                                                                | [docs](https://docs.aws.amazon.com/glue/latest/dg/aws-glue-api-BatchDeletePartition.html) |
+
+### Column statistics
+
+| Operation                            | Status       | Notes                                                     | AWS Docs                                                                                                |
+| ------------------------------------ | ------------ | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `UpdateColumnStatisticsForTable`     | ✅ Supported | Stored and echoed; an unknown column comes back in Errors | [docs](https://docs.aws.amazon.com/glue/latest/dg/aws-glue-api-UpdateColumnStatisticsForTable.html)     |
+| `UpdateColumnStatisticsForPartition` | ✅ Supported | Stored and echoed; an unknown column comes back in Errors | [docs](https://docs.aws.amazon.com/glue/latest/dg/aws-glue-api-UpdateColumnStatisticsForPartition.html) |
+| `GetColumnStatisticsForTable`        | ✅ Supported | A column with no statistics comes back in Errors          | [docs](https://docs.aws.amazon.com/glue/latest/dg/aws-glue-api-GetColumnStatisticsForTable.html)        |
+| `GetColumnStatisticsForPartition`    | ✅ Supported | A column with no statistics comes back in Errors          | [docs](https://docs.aws.amazon.com/glue/latest/dg/aws-glue-api-GetColumnStatisticsForPartition.html)    |
+| `DeleteColumnStatisticsForTable`     | ✅ Supported |                                                           | [docs](https://docs.aws.amazon.com/glue/latest/dg/aws-glue-api-DeleteColumnStatisticsForTable.html)     |
+| `DeleteColumnStatisticsForPartition` | ✅ Supported |                                                           | [docs](https://docs.aws.amazon.com/glue/latest/dg/aws-glue-api-DeleteColumnStatisticsForPartition.html) |
 
 ### Tags
 

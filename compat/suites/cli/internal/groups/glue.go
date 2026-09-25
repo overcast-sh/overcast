@@ -19,17 +19,19 @@ func Glue() ServiceGroup {
 	g := &glueCliGroup{}
 	return ServiceGroup{
 		Impls: map[string]harness.TestFn{
-			"glue-catalog:CreateDatabase":          g.CreateDatabase,
-			"glue-catalog:CreateTable":             g.CreateTable,
-			"glue-catalog:GetTable":                g.GetTable,
-			"glue-catalog:UpdateTable":             g.UpdateTable,
-			"glue-catalog:UpdateTableStaleVersion": g.UpdateTableStaleVersion,
-			"glue-catalog:GetTableVersions":        g.GetTableVersions,
-			"glue-catalog:BatchCreatePartition":    g.BatchCreatePartition,
-			"glue-catalog:GetPartitions":           g.GetPartitions,
-			"glue-catalog:DeletePartition":         g.DeletePartition,
-			"glue-catalog:DeleteTable":             g.DeleteTable,
-			"glue-catalog:DeleteDatabase":          g.DeleteDatabase,
+			"glue-catalog:CreateDatabase":                 g.CreateDatabase,
+			"glue-catalog:CreateTable":                    g.CreateTable,
+			"glue-catalog:GetTable":                       g.GetTable,
+			"glue-catalog:UpdateTable":                    g.UpdateTable,
+			"glue-catalog:UpdateTableStaleVersion":        g.UpdateTableStaleVersion,
+			"glue-catalog:GetTableVersions":               g.GetTableVersions,
+			"glue-catalog:UpdateColumnStatisticsForTable": g.UpdateColumnStatisticsForTable,
+			"glue-catalog:GetColumnStatisticsForTable":    g.GetColumnStatisticsForTable,
+			"glue-catalog:BatchCreatePartition":           g.BatchCreatePartition,
+			"glue-catalog:GetPartitions":                  g.GetPartitions,
+			"glue-catalog:DeletePartition":                g.DeletePartition,
+			"glue-catalog:DeleteTable":                    g.DeleteTable,
+			"glue-catalog:DeleteDatabase":                 g.DeleteDatabase,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
@@ -166,6 +168,44 @@ func (g *glueCliGroup) GetTableVersions(_ context.Context, t *harness.TestContex
 		}
 	}
 	return fmt.Errorf("GetTableVersions: the pre-update version %q is not listed (%d versions)", t.GetString("glue_version"), len(versions))
+}
+
+func (g *glueCliGroup) UpdateColumnStatisticsForTable(_ context.Context, t *harness.TestContext) error {
+	out, err := awscli.RunOutput(t.Endpoint, t.Region, "glue", "update-column-statistics-for-table",
+		"--database-name", glueCliDatabase(t), "--table-name", glueCliTable(t),
+		"--column-statistics-list", glueJSON([]map[string]any{{
+			"ColumnName": "id", "ColumnType": "bigint", "AnalyzedTime": 1700000000,
+			"StatisticsData": map[string]any{"Type": "LONG", "LongColumnStatisticsData": map[string]any{
+				"NumberOfNulls": 0, "NumberOfDistinctValues": 3, "MaximumValue": 9}},
+		}}))
+	if err != nil {
+		return err
+	}
+	if errs, _ := out["Errors"].([]any); len(errs) != 0 {
+		return fmt.Errorf("UpdateColumnStatisticsForTable: %d errors", len(errs))
+	}
+	return nil
+}
+
+func (g *glueCliGroup) GetColumnStatisticsForTable(_ context.Context, t *harness.TestContext) error {
+	out, err := awscli.RunOutput(t.Endpoint, t.Region, "glue", "get-column-statistics-for-table",
+		"--database-name", glueCliDatabase(t), "--table-name", glueCliTable(t), "--column-names", "id", "payload")
+	if err != nil {
+		return err
+	}
+	stats, _ := out["ColumnStatisticsList"].([]any)
+	errs, _ := out["Errors"].([]any)
+	if len(stats) != 1 || len(errs) != 1 {
+		return fmt.Errorf("GetColumnStatisticsForTable: got %v", out)
+	}
+	first, _ := stats[0].(map[string]any)
+	data, _ := first["StatisticsData"].(map[string]any)
+	long, _ := data["LongColumnStatisticsData"].(map[string]any)
+	missing, _ := errs[0].(map[string]any)
+	if first["ColumnName"] != "id" || long["NumberOfDistinctValues"] != float64(3) || missing["ColumnName"] != "payload" {
+		return fmt.Errorf("GetColumnStatisticsForTable: got %v", out)
+	}
+	return nil
 }
 
 func (g *glueCliGroup) BatchCreatePartition(_ context.Context, t *harness.TestContext) error {

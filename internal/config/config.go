@@ -266,6 +266,28 @@ const (
 // ppc64le, s390x) and runs unprivileged.
 const DefaultEFSNFSImage = "registry.k8s.io/sig-storage/nfs-provisioner@sha256:c825f3d5e28bde099bd7a3daace28772d412c9157ad47fa752a9ad0baafc118d"
 
+// AthenaEngine names what runs Athena's queries.
+type AthenaEngine string
+
+const (
+	// AthenaEngineTrino runs queries on a Trino container, started on the
+	// first query. The default; without a Docker daemon it behaves as inert.
+	AthenaEngineTrino AthenaEngine = "trino"
+
+	// AthenaEngineInert runs no SQL: a query succeeds at once with an empty
+	// result. DDL still updates the Glue Data Catalog.
+	AthenaEngineInert AthenaEngine = "inert"
+)
+
+// DefaultAthenaEngineImage is the Trino release Athena's queries run on,
+// pinned by digest (the multi-arch index of trinodb/trino:483). Athena engine
+// version 3 is Trino, so this is the dialect a query is written in.
+const DefaultAthenaEngineImage = "trinodb/trino:483@sha256:db58cc93e593a2706553745f276bb119c9810e69918be56ecde088ba7ccb0534"
+
+// DefaultAthenaEngineMemory is the engine container's memory limit: a 512 MiB
+// heap, the smallest that runs ordinary queries, plus the JVM's own overhead.
+const DefaultAthenaEngineMemory = 1 << 30
+
 // Default ports of the two auxiliary listeners that bind beside the AWS API.
 // Both fall back to an ephemeral port when the default is busy and are pinned
 // at any other value — the rule the web console's port already follows — so
@@ -1021,6 +1043,28 @@ type Config struct {
 	// EFSNFSImage is the NFS-Ganesha image used for mount-target exports,
 	// pinned by digest. Override to run a different build.
 	EFSNFSImage string
+
+	// AthenaEngine selects what runs Athena's queries: trino (default) or
+	// inert. Corresponds to ATHENA_ENGINE.
+	AthenaEngine AthenaEngine
+
+	// AthenaEngineImage is the Trino image the engine container runs,
+	// pinned by digest. Corresponds to ATHENA_ENGINE_IMAGE.
+	AthenaEngineImage string
+
+	// AthenaEngineMemory is the engine container's memory limit in bytes.
+	// Corresponds to ATHENA_ENGINE_MEMORY, which accepts a size such as
+	// 1g or 1536m.
+	AthenaEngineMemory int64
+
+	// AthenaDockerSocket is the Docker endpoint the engine container is
+	// managed through. Defaults to LambdaDockerSocket.
+	AthenaDockerSocket string
+
+	// AthenaKeepContainers leaves the engine container in place when it is
+	// stopped, for post-mortem inspection. Corresponds to
+	// ATHENA_KEEP_CONTAINERS.
+	AthenaKeepContainers bool
 
 	// EC2VPCNetworkStrategy selects the policy used to map stored VPCs onto
 	// Docker networks. Docker bridges share one host address space, so two
@@ -1986,6 +2030,11 @@ func ServiceOverrideIneffective(service string) (reason string, ok bool) {
 //	OVERCAST_EFS_NFS                   false (true = one NFS-Ganesha export container per mount target, live mode only)
 //	EFS_NFS_PORT_BASE                  22049
 //	EFS_NFS_IMAGE                      registry.k8s.io/sig-storage/nfs-provisioner@sha256:c825f3d5… (digest-pinned)
+//	ATHENA_ENGINE                      trino (trino|inert — inert runs no SQL; DDL still reaches Glue)
+//	ATHENA_ENGINE_IMAGE                trinodb/trino:483@sha256:db58cc93… (digest-pinned)
+//	ATHENA_ENGINE_MEMORY               1g    (engine container memory limit; bytes or k/m/g)
+//	ATHENA_DOCKER_SOCKET               <LAMBDA_DOCKER_SOCKET>
+//	ATHENA_KEEP_CONTAINERS             false
 //	OVERCAST_SMTP_MOCK                 true  (false when SMTP_HOST is set)
 //	OVERCAST_SMTP_PORT                 1025  (0 = ephemeral. The default falls back to an ephemeral
 //	                                           port when busy; any other value is pinned)
@@ -2647,6 +2696,21 @@ func Load() (*Config, error) {
 	cfg.EFSNFSExport = envBool("OVERCAST_EFS_NFS", false)
 	cfg.EFSNFSPortBase = envInt("EFS_NFS_PORT_BASE", 22049)
 	cfg.EFSNFSImage = envOr("EFS_NFS_IMAGE", DefaultEFSNFSImage)
+
+	// Athena query engine — the socket falls back to Lambda's.
+	rawAthenaEngine := strings.ToLower(strings.TrimSpace(envOr("ATHENA_ENGINE", string(AthenaEngineTrino))))
+	cfg.AthenaEngine = AthenaEngine(rawAthenaEngine)
+	if cfg.AthenaEngine != AthenaEngineTrino && cfg.AthenaEngine != AthenaEngineInert {
+		return nil, fmt.Errorf("config: ATHENA_ENGINE %q is invalid (expected trino or inert)", rawAthenaEngine)
+	}
+	cfg.AthenaEngineImage = envOr("ATHENA_ENGINE_IMAGE", DefaultAthenaEngineImage)
+	athenaMemory, err := ParseMemorySize(envOr("ATHENA_ENGINE_MEMORY", ""), DefaultAthenaEngineMemory)
+	if err != nil {
+		return nil, fmt.Errorf("config: ATHENA_ENGINE_MEMORY: %w", err)
+	}
+	cfg.AthenaEngineMemory = athenaMemory
+	cfg.AthenaDockerSocket = envOr("ATHENA_DOCKER_SOCKET", cfg.LambdaDockerSocket)
+	cfg.AthenaKeepContainers = envBool("ATHENA_KEEP_CONTAINERS", false)
 
 	// EC2 VPC network strategy — unknown values fall back to "shared" at
 	// service construction with a logged warning. "netns" is explicitly

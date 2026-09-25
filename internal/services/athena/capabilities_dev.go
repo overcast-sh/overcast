@@ -8,8 +8,8 @@ func init() {
 	const svc = "athena"
 	capabilities.Default.Register(
 		// Queries
-		capabilities.Capability{Service: svc, Operation: "StartQueryExecution", Category: "Queries", Status: capabilities.StatusInert,
-			Notes: "Resolves the result configuration against the workgroup and honours ClientRequestToken; no SQL runs, so the query succeeds at once having scanned nothing"},
+		capabilities.Capability{Service: svc, Operation: "StartQueryExecution", Category: "Queries", Status: capabilities.StatusSupported,
+			Notes: "Runs on a Trino engine container started on the first query; Hive DDL runs against the Glue Data Catalog; results written to OutputLocation. Without Docker, or with ATHENA_ENGINE=inert, queries succeed with no rows"},
 		capabilities.Capability{Service: svc, Operation: "GetQueryExecution", Category: "Queries", Status: capabilities.StatusSupported,
 			Notes: "Full QueryExecution: context, statement type, engine version, resolved result configuration, statistics"},
 		capabilities.Capability{Service: svc, Operation: "BatchGetQueryExecution", Category: "Queries", Status: capabilities.StatusSupported,
@@ -17,9 +17,11 @@ func init() {
 		capabilities.Capability{Service: svc, Operation: "ListQueryExecutions", Category: "Queries", Status: capabilities.StatusSupported,
 			Notes: "One workgroup (primary by default), most recent first, paginated"},
 		capabilities.Capability{Service: svc, Operation: "StopQueryExecution", Category: "Queries", Status: capabilities.StatusSupported,
-			Notes: "Cancels an unfinished query; a finished one keeps its state"},
-		capabilities.Capability{Service: svc, Operation: "GetQueryResults", Category: "Queries", Status: capabilities.StatusInert,
-			Notes: "An empty result set for a SUCCEEDED query; an unfinished or failed query is InvalidRequestException"},
+			Notes: "Cancels an unfinished query on the engine; a finished one keeps its state"},
+		capabilities.Capability{Service: svc, Operation: "GetQueryResults", Category: "Queries", Status: capabilities.StatusSupported,
+			Notes: "Paginated; a SELECT's header row first, Athena ColumnInfo types, UpdateCount for DML; an unfinished or failed query is InvalidRequestException"},
+		capabilities.Capability{Service: svc, Operation: "GetQueryRuntimeStatistics", Category: "Queries", Status: capabilities.StatusPartial,
+			Notes: "Timeline and Rows from the engine's statistics; OutputStage is not reported"},
 
 		// Workgroups
 		capabilities.Capability{Service: svc, Operation: "CreateWorkGroup", Category: "WorkGroups", Status: capabilities.StatusSupported,
@@ -47,7 +49,7 @@ func init() {
 
 		// Prepared statements
 		capabilities.Capability{Service: svc, Operation: "CreatePreparedStatement", Category: "PreparedStatements", Status: capabilities.StatusSupported,
-			Notes: "Stored only; EXECUTE ... USING runs nothing"},
+			Notes: "EXECUTE ... USING runs the statement on the engine"},
 		capabilities.Capability{Service: svc, Operation: "GetPreparedStatement", Category: "PreparedStatements", Status: capabilities.StatusSupported},
 		capabilities.Capability{Service: svc, Operation: "BatchGetPreparedStatement", Category: "PreparedStatements", Status: capabilities.StatusSupported},
 		capabilities.Capability{Service: svc, Operation: "ListPreparedStatements", Category: "PreparedStatements", Status: capabilities.StatusSupported},

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/glue"
@@ -22,17 +23,19 @@ func Glue(c *clients.Clients) ServiceGroup {
 	g := &glueGroup{c: c}
 	return ServiceGroup{
 		Impls: map[string]harness.TestFn{
-			"glue-catalog:CreateDatabase":          g.CreateDatabase,
-			"glue-catalog:CreateTable":             g.CreateTable,
-			"glue-catalog:GetTable":                g.GetTable,
-			"glue-catalog:UpdateTable":             g.UpdateTable,
-			"glue-catalog:UpdateTableStaleVersion": g.UpdateTableStaleVersion,
-			"glue-catalog:GetTableVersions":        g.GetTableVersions,
-			"glue-catalog:BatchCreatePartition":    g.BatchCreatePartition,
-			"glue-catalog:GetPartitions":           g.GetPartitions,
-			"glue-catalog:DeletePartition":         g.DeletePartition,
-			"glue-catalog:DeleteTable":             g.DeleteTable,
-			"glue-catalog:DeleteDatabase":          g.DeleteDatabase,
+			"glue-catalog:CreateDatabase":                 g.CreateDatabase,
+			"glue-catalog:CreateTable":                    g.CreateTable,
+			"glue-catalog:GetTable":                       g.GetTable,
+			"glue-catalog:UpdateTable":                    g.UpdateTable,
+			"glue-catalog:UpdateTableStaleVersion":        g.UpdateTableStaleVersion,
+			"glue-catalog:GetTableVersions":               g.GetTableVersions,
+			"glue-catalog:UpdateColumnStatisticsForTable": g.UpdateColumnStatisticsForTable,
+			"glue-catalog:GetColumnStatisticsForTable":    g.GetColumnStatisticsForTable,
+			"glue-catalog:BatchCreatePartition":           g.BatchCreatePartition,
+			"glue-catalog:GetPartitions":                  g.GetPartitions,
+			"glue-catalog:DeletePartition":                g.DeletePartition,
+			"glue-catalog:DeleteTable":                    g.DeleteTable,
+			"glue-catalog:DeleteDatabase":                 g.DeleteDatabase,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
@@ -166,6 +169,44 @@ func (g *glueGroup) GetTableVersions(ctx context.Context, t *harness.TestContext
 		}
 	}
 	return fmt.Errorf("GetTableVersions: the pre-update version %q is not listed (%d versions)", t.GetString("glue_version"), len(resp.TableVersions))
+}
+
+func (g *glueGroup) UpdateColumnStatisticsForTable(ctx context.Context, t *harness.TestContext) error {
+	resp, err := g.cl().UpdateColumnStatisticsForTable(ctx, &glue.UpdateColumnStatisticsForTableInput{
+		DatabaseName: aws.String(glueDatabaseName(t)), TableName: aws.String(glueTableName(t)),
+		ColumnStatisticsList: []types.ColumnStatistics{{
+			ColumnName: aws.String("id"), ColumnType: aws.String("bigint"), AnalyzedTime: aws.Time(time.Unix(1700000000, 0)),
+			StatisticsData: &types.ColumnStatisticsData{
+				Type:                     types.ColumnStatisticsTypeLong,
+				LongColumnStatisticsData: &types.LongColumnStatisticsData{NumberOfNulls: 0, NumberOfDistinctValues: 3, MaximumValue: 9},
+			},
+		}},
+	})
+	if err != nil {
+		return err
+	}
+	if len(resp.Errors) != 0 {
+		return fmt.Errorf("UpdateColumnStatisticsForTable: %d errors", len(resp.Errors))
+	}
+	return nil
+}
+
+func (g *glueGroup) GetColumnStatisticsForTable(ctx context.Context, t *harness.TestContext) error {
+	resp, err := g.cl().GetColumnStatisticsForTable(ctx, &glue.GetColumnStatisticsForTableInput{
+		DatabaseName: aws.String(glueDatabaseName(t)), TableName: aws.String(glueTableName(t)), ColumnNames: []string{"id", "payload"},
+	})
+	if err != nil {
+		return err
+	}
+	if len(resp.ColumnStatisticsList) != 1 || aws.ToString(resp.ColumnStatisticsList[0].ColumnName) != "id" ||
+		resp.ColumnStatisticsList[0].StatisticsData.LongColumnStatisticsData == nil ||
+		resp.ColumnStatisticsList[0].StatisticsData.LongColumnStatisticsData.NumberOfDistinctValues != 3 {
+		return fmt.Errorf("GetColumnStatisticsForTable: %+v", resp.ColumnStatisticsList)
+	}
+	if len(resp.Errors) != 1 || aws.ToString(resp.Errors[0].ColumnName) != "payload" {
+		return fmt.Errorf("GetColumnStatisticsForTable: errors %+v, want payload, which has none", resp.Errors)
+	}
+	return nil
 }
 
 func (g *glueGroup) BatchCreatePartition(ctx context.Context, t *harness.TestContext) error {

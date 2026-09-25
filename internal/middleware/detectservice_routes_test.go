@@ -103,7 +103,7 @@ var registeredRouteClassification = map[string]string{
 	// It is multi-valued because the prefix is a directory with several owners
 	// under it, not because anything is ambiguous: internalService reads the
 	// owner from the second segment.
-	"/_overcast": "appsync|cloudfront|cognito|ecs|eks|events|internal|lambda|metrics|rds|secretsmanager|ses",
+	"/_overcast": "appsync|athena|cloudfront|cognito|ecs|eks|events|internal|lambda|metrics|rds|secretsmanager|ses",
 
 	// The two compatibility roots, underscore-prefixed but deliberately not
 	// under "/_overcast". Their whole job is to answer at a URL somebody else's

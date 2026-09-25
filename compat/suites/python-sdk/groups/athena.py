@@ -2,10 +2,14 @@
 groups/athena.py — Athena control-plane compatibility test implementations for the Python suite.
 
 athena-control drives a workgroup with a result location, a query run in it,
-a named query, a prepared statement and a data catalog.
+a named query, a prepared statement and a data catalog. athena-engine runs
+Hive DDL that writes the Glue Data Catalog, then a query over a CSV table in
+S3 on the engine.
 """
 
 from __future__ import annotations
+
+import time
 
 from botocore.exceptions import ClientError
 
@@ -143,6 +147,99 @@ def DeleteWorkGroup(ctx: TestContext) -> None:
     _expect_invalid_request("GetWorkGroup after DeleteWorkGroup", lambda: a.get_work_group(WorkGroup=_wg(ctx)))
 
 
+# ── athena-engine ─────────────────────────────────────────────────────────────
+
+# The first query waits for the engine to be pulled and started.
+_ENGINE_QUERY_WAIT = 240
+
+
+def _s3(ctx: TestContext):
+    return make_clients(ctx.endpoint, ctx.region)._get("s3")
+
+
+def _engine_bucket(ctx: TestContext) -> str:
+    return f"{ctx.run_id}-athena-engine"
+
+
+def _engine_db(ctx: TestContext) -> str:
+    # An identifier Hive DDL and Trino SQL both accept unquoted.
+    return ctx.run_id.replace("-", "_") + "_athena_engine"
+
+
+def _run(ctx: TestContext, query: str) -> str:
+    """Start query and wait for it to succeed, returning its id."""
+    a = _athena(ctx)
+    qid = a.start_query_execution(
+        QueryString=query,
+        ResultConfiguration={"OutputLocation": f"s3://{_engine_bucket(ctx)}/results/"},
+    )["QueryExecutionId"]
+    deadline = time.monotonic() + _ENGINE_QUERY_WAIT
+    while True:
+        status = a.get_query_execution(QueryExecutionId=qid)["QueryExecution"]["Status"]
+        if status["State"] == "SUCCEEDED":
+            return qid
+        if status["State"] in ("FAILED", "CANCELLED"):
+            raise AssertionError(f"{query}: {status['State']}: {status.get('StateChangeReason')}")
+        if time.monotonic() > deadline:
+            raise AssertionError(f"{query}: still unfinished after {_ENGINE_QUERY_WAIT}s")
+        time.sleep(0.5)
+
+
+def CreateDatabaseStatement(ctx: TestContext) -> None:
+    _run(ctx, f"CREATE DATABASE {_engine_db(ctx)}")
+    db = _athena(ctx).get_database(CatalogName="AwsDataCatalog", DatabaseName=_engine_db(ctx))["Database"]
+    if db.get("Name") != _engine_db(ctx):
+        raise AssertionError(f"GetDatabase: {db!r}")
+
+
+def CreateExternalTableStatement(ctx: TestContext) -> None:
+    _s3(ctx).put_object(Bucket=_engine_bucket(ctx), Key="people/part-0.csv", Body=b"1,alice\n2,bob\n")
+    _run(ctx, f"CREATE EXTERNAL TABLE {_engine_db(ctx)}.people (id int, name string) "
+              f"ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' LOCATION 's3://{_engine_bucket(ctx)}/people/'")
+    cols = _athena(ctx).get_table_metadata(
+        CatalogName="AwsDataCatalog", DatabaseName=_engine_db(ctx), TableName="people")["TableMetadata"]["Columns"]
+    if [c["Name"] for c in cols] != ["id", "name"] or cols[1].get("Type") != "string":
+        raise AssertionError(f"GetTableMetadata: columns {cols!r}")
+
+
+def SelectFromTable(ctx: TestContext) -> None:
+    qid = _run(ctx, f"SELECT id, name FROM {_engine_db(ctx)}.people ORDER BY id")
+    ctx["athena_engine_query"] = qid
+    rs = _athena(ctx).get_query_results(QueryExecutionId=qid)["ResultSet"]
+    rows = [[d.get("VarCharValue") for d in r["Data"]] for r in rs["Rows"]]
+    if rows != [["id", "name"], ["1", "alice"], ["2", "bob"]]:
+        raise AssertionError(f"GetQueryResults: rows {rows!r}, want the header then 1, alice and 2, bob")
+    types = [c.get("Type") for c in rs["ResultSetMetadata"]["ColumnInfo"]]
+    if types != ["integer", "varchar"]:
+        raise AssertionError(f"GetQueryResults: column types {types!r}")
+
+
+def GetQueryRuntimeStatistics(ctx: TestContext) -> None:
+    stats = _athena(ctx).get_query_runtime_statistics(
+        QueryExecutionId=ctx["athena_engine_query"])["QueryRuntimeStatistics"]
+    if stats.get("Rows", {}).get("OutputRows") != 2 or "Timeline" not in stats:
+        raise AssertionError(f"GetQueryRuntimeStatistics: {stats!r}")
+
+
+def _engine_setup(ctx: TestContext) -> None:
+    _s3(ctx).create_bucket(Bucket=_engine_bucket(ctx))
+
+
+def _engine_teardown(ctx: TestContext) -> None:
+    glue = make_clients(ctx.endpoint, ctx.region)._get("glue")
+    try:
+        glue.delete_database(Name=_engine_db(ctx))
+    except Exception:
+        pass
+    s3 = _s3(ctx)
+    try:
+        for obj in s3.list_objects_v2(Bucket=_engine_bucket(ctx)).get("Contents", []):
+            s3.delete_object(Bucket=_engine_bucket(ctx), Key=obj["Key"])
+        s3.delete_bucket(Bucket=_engine_bucket(ctx))
+    except Exception:
+        pass
+
+
 # ── ImplMap ───────────────────────────────────────────────────────────────────
 
 IMPLS = {
@@ -158,11 +255,18 @@ IMPLS = {
     "athena-control:ListEngineVersions": ListEngineVersions,
     "athena-control:DeleteDataCatalog": DeleteDataCatalog,
     "athena-control:DeleteWorkGroup": DeleteWorkGroup,
+    "athena-engine:CreateDatabaseStatement": CreateDatabaseStatement,
+    "athena-engine:CreateExternalTableStatement": CreateExternalTableStatement,
+    "athena-engine:SelectFromTable": SelectFromTable,
+    "athena-engine:GetQueryRuntimeStatistics": GetQueryRuntimeStatistics,
 }
 
-SETUP = {}
+SETUP = {
+    "athena-engine": lambda ctx: _engine_setup(ctx),
+}
 TEARDOWN = {
     "athena-control": lambda ctx: _teardown(ctx),
+    "athena-engine": lambda ctx: _engine_teardown(ctx),
 }
 
 

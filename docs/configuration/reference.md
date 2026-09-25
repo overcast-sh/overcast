@@ -1,6 +1,6 @@
 ---
 title: "Environment variable reference"
-description: "Every environment variable Overcast reads, with its default: the OVERCAST_* settings, the per-service LAMBDA_*, ECS_*, RDS_*, ELASTICACHE_*, MSK_*, EKS_* and EFS_* overrides, and DOCKER_HOST."
+description: "Every environment variable Overcast reads, with its default: the OVERCAST_* settings, the per-service LAMBDA_*, ECS_*, RDS_*, ELASTICACHE_*, MSK_*, EKS_*, EFS_* and ATHENA_* overrides, and DOCKER_HOST."
 section: "Reference"
 tags:
   - configuration
@@ -139,6 +139,11 @@ explaining.
 | `OVERCAST_EFS_NFS`               | `false`                | Run one NFS-Ganesha export container per mount target (live mode only) — see [EFS](../services/efs.md) |
 | `EFS_NFS_PORT_BASE`              | `22049`                | Starting host port for the NFS export containers                                     |
 | `EFS_NFS_IMAGE`                  | `registry.k8s.io/sig-storage/nfs-provisioner@sha256:…` | Digest-pinned image used for the NFS export containers               |
+| `ATHENA_ENGINE`                  | `trino`                | `trino` runs queries on an engine container; `inert` runs no SQL — see [Athena](../services/athena.md) |
+| `ATHENA_ENGINE_IMAGE`            | `trinodb/trino:483@sha256:…` | Digest-pinned image the Athena engine runs                                     |
+| `ATHENA_ENGINE_MEMORY`           | `1g`                   | Memory limit for the Athena engine container, in bytes or with a `k`, `m` or `g` suffix |
+| `ATHENA_DOCKER_SOCKET`           | _(Lambda socket)_      | Docker endpoint for the Athena engine — Unix path or `tcp://host:port`               |
+| `ATHENA_KEEP_CONTAINERS`         | `false`                | Keep the stopped Athena engine container after it stops                              |
 | `OVERCAST_ECR_REGISTRY_PORT`     | `4510`                 | Host port the shared ECR registry container asks for; `0`, or a port already taken, falls back to an ephemeral port |
 | `OVERCAST_ECR_REGISTRY_PERSIST`  | `true`                 | Back the fixed-port registry with a named Docker volume, so pushed images survive a restart |
 | `OVERCAST_SMTP_MOCK`             | `true`                 | Enable built-in SMTP capture server (auto-disabled when `OVERCAST_SMTP_HOST` is set) |

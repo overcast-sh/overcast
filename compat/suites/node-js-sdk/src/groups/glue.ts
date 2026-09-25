@@ -15,11 +15,13 @@ import {
   DeletePartitionCommand,
   DeleteTableCommand,
   EntityNotFoundException,
+  GetColumnStatisticsForTableCommand,
   GetDatabaseCommand,
   GetPartitionCommand,
   GetPartitionsCommand,
   GetTableCommand,
   GetTableVersionsCommand,
+  UpdateColumnStatisticsForTableCommand,
   UpdateTableCommand,
   type TableInput,
 } from "@aws-sdk/client-glue";
@@ -150,6 +152,46 @@ export function makeGlueGroups(suite: string): TestGroup[] {
               (resp.TableVersions ?? []).some((v) => v.VersionId === read),
               `GetTableVersions: the pre-update version ${read} is not listed`,
             );
+          },
+        },
+        {
+          name: "UpdateColumnStatisticsForTable",
+          depends: ["CreateTable"],
+          fn: async (ctx) => {
+            const { glue } = makeClients(ctx);
+            const resp = await glue.send(
+              new UpdateColumnStatisticsForTableCommand({
+                DatabaseName: database(ctx),
+                TableName: table(ctx),
+                ColumnStatisticsList: [
+                  {
+                    ColumnName: "id",
+                    ColumnType: "bigint",
+                    AnalyzedTime: new Date(1700000000000),
+                    StatisticsData: {
+                      Type: "LONG",
+                      LongColumnStatisticsData: { NumberOfNulls: 0, NumberOfDistinctValues: 3, MaximumValue: 9 },
+                    },
+                  },
+                ],
+              }),
+            );
+            assert.equal(resp.Errors?.length ?? 0, 0, "UpdateColumnStatisticsForTable: errors");
+          },
+        },
+        {
+          name: "GetColumnStatisticsForTable",
+          depends: ["UpdateColumnStatisticsForTable"],
+          fn: async (ctx) => {
+            const { glue } = makeClients(ctx);
+            const resp = await glue.send(
+              new GetColumnStatisticsForTableCommand({ DatabaseName: database(ctx), TableName: table(ctx), ColumnNames: ["id", "payload"] }),
+            );
+            const stats = resp.ColumnStatisticsList ?? [];
+            assert.equal(stats.length, 1, "GetColumnStatisticsForTable: statistics");
+            assert.equal(stats[0].ColumnName, "id", "GetColumnStatisticsForTable: ColumnName");
+            assert.equal(stats[0].StatisticsData?.LongColumnStatisticsData?.NumberOfDistinctValues, 3, "GetColumnStatisticsForTable: NumberOfDistinctValues");
+            assert.deepEqual((resp.Errors ?? []).map((e) => e.ColumnName), ["payload"], "GetColumnStatisticsForTable: a column with none is in Errors");
           },
         },
         {

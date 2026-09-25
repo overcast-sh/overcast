@@ -1,6 +1,6 @@
 ---
 title: "Athena operations"
-description: "Every Athena operation Overcast declares — 36 of 36 implemented — with status, behaviour notes and a link to the AWS API reference for each."
+description: "Every Athena operation Overcast declares — 37 of 37 implemented — with status, behaviour notes and a link to the AWS API reference for each."
 section: "Service Reference"
 tags:
   - athena
@@ -13,18 +13,18 @@ tags:
 
 # Athena operations
 
-All 36 listed operations are implemented. Back to [Athena](../athena.md).
+All 37 listed operations are implemented. Back to [Athena](../athena.md).
 
 ## Summary
 
-| Category           | ✅ Supported | 🧊 Inert | ⚠️ Partial |
-| ------------------ | ------------ | -------- | ---------- |
-| Queries            | 4            | 2        |            |
-| WorkGroups         | 6            |          |            |
-| NamedQueries       | 6            |          |            |
-| PreparedStatements | 6            |          |            |
-| DataCatalogs       | 4            |          | 5          |
-| Tags               | 3            |          |            |
+| Category           | ✅ Supported | ⚠️ Partial |
+| ------------------ | ------------ | ---------- |
+| Queries            | 6            | 1          |
+| WorkGroups         | 6            |            |
+| NamedQueries       | 6            |            |
+| PreparedStatements | 6            |            |
+| DataCatalogs       | 4            | 5          |
+| Tags               | 3            |            |
 
 ---
 
@@ -32,14 +32,15 @@ All 36 listed operations are implemented. Back to [Athena](../athena.md).
 
 ### Queries
 
-| Operation                | Status       | Notes                                                                                                                                                     | AWS Docs                                                                                       |
-| ------------------------ | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `StartQueryExecution`    | 🧊 Inert     | Resolves the result configuration against the workgroup and honours ClientRequestToken; no SQL runs, so the query succeeds at once having scanned nothing | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_StartQueryExecution.html)    |
-| `GetQueryExecution`      | ✅ Supported | Full QueryExecution: context, statement type, engine version, resolved result configuration, statistics                                                   | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_GetQueryExecution.html)      |
-| `BatchGetQueryExecution` | ✅ Supported | Unknown IDs come back as UnprocessedQueryExecutionIds                                                                                                     | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_BatchGetQueryExecution.html) |
-| `ListQueryExecutions`    | ✅ Supported | One workgroup (primary by default), most recent first, paginated                                                                                          | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_ListQueryExecutions.html)    |
-| `StopQueryExecution`     | ✅ Supported | Cancels an unfinished query; a finished one keeps its state                                                                                               | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_StopQueryExecution.html)     |
-| `GetQueryResults`        | 🧊 Inert     | An empty result set for a SUCCEEDED query; an unfinished or failed query is InvalidRequestException                                                       | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_GetQueryResults.html)        |
+| Operation                   | Status       | Notes                                                                                                                                                                                                                  | AWS Docs                                                                                          |
+| --------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `StartQueryExecution`       | ✅ Supported | Runs on a Trino engine container started on the first query; Hive DDL runs against the Glue Data Catalog; results written to OutputLocation. Without Docker, or with ATHENA_ENGINE=inert, queries succeed with no rows | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_StartQueryExecution.html)       |
+| `GetQueryExecution`         | ✅ Supported | Full QueryExecution: context, statement type, engine version, resolved result configuration, statistics                                                                                                                | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_GetQueryExecution.html)         |
+| `BatchGetQueryExecution`    | ✅ Supported | Unknown IDs come back as UnprocessedQueryExecutionIds                                                                                                                                                                  | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_BatchGetQueryExecution.html)    |
+| `ListQueryExecutions`       | ✅ Supported | One workgroup (primary by default), most recent first, paginated                                                                                                                                                       | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_ListQueryExecutions.html)       |
+| `StopQueryExecution`        | ✅ Supported | Cancels an unfinished query on the engine; a finished one keeps its state                                                                                                                                              | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_StopQueryExecution.html)        |
+| `GetQueryResults`           | ✅ Supported | Paginated; a SELECT's header row first, Athena ColumnInfo types, UpdateCount for DML; an unfinished or failed query is InvalidRequestException                                                                         | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_GetQueryResults.html)           |
+| `GetQueryRuntimeStatistics` | ⚠️ Partial   | Timeline and Rows from the engine's statistics; OutputStage is not reported                                                                                                                                            | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_GetQueryRuntimeStatistics.html) |
 
 ### WorkGroups
 
@@ -65,14 +66,14 @@ All 36 listed operations are implemented. Back to [Athena](../athena.md).
 
 ### PreparedStatements
 
-| Operation                   | Status       | Notes                                       | AWS Docs                                                                                          |
-| --------------------------- | ------------ | ------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `CreatePreparedStatement`   | ✅ Supported | Stored only; EXECUTE ... USING runs nothing | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_CreatePreparedStatement.html)   |
-| `GetPreparedStatement`      | ✅ Supported |                                             | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_GetPreparedStatement.html)      |
-| `BatchGetPreparedStatement` | ✅ Supported |                                             | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_BatchGetPreparedStatement.html) |
-| `ListPreparedStatements`    | ✅ Supported |                                             | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_ListPreparedStatements.html)    |
-| `UpdatePreparedStatement`   | ✅ Supported |                                             | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_UpdatePreparedStatement.html)   |
-| `DeletePreparedStatement`   | ✅ Supported |                                             | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_DeletePreparedStatement.html)   |
+| Operation                   | Status       | Notes                                              | AWS Docs                                                                                          |
+| --------------------------- | ------------ | -------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `CreatePreparedStatement`   | ✅ Supported | EXECUTE ... USING runs the statement on the engine | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_CreatePreparedStatement.html)   |
+| `GetPreparedStatement`      | ✅ Supported |                                                    | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_GetPreparedStatement.html)      |
+| `BatchGetPreparedStatement` | ✅ Supported |                                                    | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_BatchGetPreparedStatement.html) |
+| `ListPreparedStatements`    | ✅ Supported |                                                    | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_ListPreparedStatements.html)    |
+| `UpdatePreparedStatement`   | ✅ Supported |                                                    | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_UpdatePreparedStatement.html)   |
+| `DeletePreparedStatement`   | ✅ Supported |                                                    | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_DeletePreparedStatement.html)   |
 
 ### DataCatalogs
 

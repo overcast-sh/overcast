@@ -16,6 +16,9 @@ var allGlueOps = []string{
 	"GetTableVersion", "GetTableVersions", "DeleteTableVersion", "BatchDeleteTableVersion",
 	"CreatePartition", "BatchCreatePartition", "GetPartition", "GetPartitions",
 	"BatchGetPartition", "UpdatePartition", "DeletePartition", "BatchDeletePartition",
+	"UpdateColumnStatisticsForTable", "UpdateColumnStatisticsForPartition",
+	"GetColumnStatisticsForTable", "GetColumnStatisticsForPartition",
+	"DeleteColumnStatisticsForTable", "DeleteColumnStatisticsForPartition",
 	"TagResource", "UntagResource", "GetTags",
 }
 

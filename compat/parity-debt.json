@@ -160,6 +160,12 @@
     },
     {
       "suite": "dotnet-sdk",
+      "service": "athena",
+      "group": "athena-engine",
+      "tests": 4
+    },
+    {
+      "suite": "dotnet-sdk",
       "service": "backup",
       "group": "backup-jobs",
       "tests": 4
@@ -420,7 +426,7 @@
       "suite": "dotnet-sdk",
       "service": "glue",
       "group": "glue-catalog",
-      "tests": 11
+      "tests": 13
     },
     {
       "suite": "dotnet-sdk",
@@ -820,6 +826,12 @@
     },
     {
       "suite": "java-sdk",
+      "service": "athena",
+      "group": "athena-engine",
+      "tests": 4
+    },
+    {
+      "suite": "java-sdk",
       "service": "backup",
       "group": "backup-jobs",
       "tests": 4
@@ -918,7 +930,7 @@
       "suite": "java-sdk",
       "service": "glue",
       "group": "glue-catalog",
-      "tests": 11
+      "tests": 13
     },
     {
       "suite": "java-sdk",
@@ -1522,6 +1534,12 @@
     },
     {
       "suite": "rust-sdk",
+      "service": "athena",
+      "group": "athena-engine",
+      "tests": 4
+    },
+    {
+      "suite": "rust-sdk",
       "service": "backup",
       "group": "backup-jobs",
       "tests": 4
@@ -1782,7 +1800,7 @@
       "suite": "rust-sdk",
       "service": "glue",
       "group": "glue-catalog",
-      "tests": 11
+      "tests": 13
     },
     {
       "suite": "rust-sdk",

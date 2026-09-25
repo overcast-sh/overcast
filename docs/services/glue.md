@@ -49,6 +49,7 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | Concurrency | An `UpdateTable` whose `VersionId` is not current is `ConcurrentModificationException` |
 | Partitions | Create, get, update and delete, singly and in batches |
 | Partition queries | `GetPartitions` filters by `Expression`, pages, and honours `Segment` and `ExcludeColumnSchema` |
+| Column statistics | Update, get and delete for a table or a partition, stored as written and deleted with their table or partition |
 | Names | Database and table names are folded to lowercase, as on AWS |
 | Errors | `AlreadyExistsException` on a duplicate, `EntityNotFoundException` for a missing parent, both HTTP 400 |
 | Paging | `GetDatabases`, `GetTables`, `GetTableVersions` and `GetPartitions` take `MaxResults` and `NextToken` |
@@ -102,7 +103,7 @@ the same `ConcurrentModificationException` they retry on AWS.
 
 ## Operations
 
-All 26 listed operations are implemented.
+All 32 listed operations are implemented.
 Per-operation status, notes and AWS API links: [Glue operations](glue/operations.md).
 
 <!-- END overcast:capabilities -->

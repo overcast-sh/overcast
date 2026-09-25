@@ -639,8 +639,12 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	// S3 notifications → SQS + SNS + Lambda + EventBridge: connect after all
 	// services are constructed.
 	s3Svc.InitNotifications(sqsSvc.Enqueuer(), snsSvc.TopicPublisher(), lambdaSvc.Invoker(), lambdaSvc, ebSvc.BusPublisher(), bus, logger)
-	// Athena ← Glue: AwsDataCatalog is the Glue Data Catalog, read in-process.
-	athenaSvc.InitGlueCatalog(glueSvc.Catalog())
+	// Athena ← Glue: AwsDataCatalog is the Glue Data Catalog, read in-process,
+	// and Athena's DDL writes to it through Glue's own operations.
+	athenaSvc.InitGlueCatalog(glueSvc.Catalog(), glueSvc.CatalogWriter())
+	// Athena → S3: query results are written to their OutputLocation, and
+	// MSCK REPAIR TABLE lists a table's partitions, through S3's own paths.
+	athenaSvc.InitS3Access(s3Svc.PutObjectBytes, s3Svc.ListObjects)
 	// Lambda → CloudWatch Logs: wire log writer so Lambda can write invocation logs.
 	lambdaSvc.InitLogWriter(logsSvc.LogWriter())
 	// Lambda bus: lifecycle events for topology / UI.
@@ -897,6 +901,9 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	// EventBridge rule delivers through, so one target ARN behaves identically
 	// on a schedule and on a rule (#734).
 	schedulerSvc.InitRouter(r)
+	// Athena: the query engine reaches Glue and S3 through a listener of its
+	// own that serves the root router (see athena's engine_gateway.go).
+	athenaSvc.InitRouter(r)
 	// ---- Docker Supervisor ------------------------------------------------
 	// A single Supervisor probes Docker once per unique socket, creates per-
 	// service networks, runs one event watcher, and reconciles container state.
@@ -938,6 +945,12 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 		dockerServices["efs"] = docker.ServiceConfig{Name: "efs", Socket: cfg.EFSDockerSocket}
 		dockerSetters["efs"] = efsSvc.SetDocker
 	}
+	// Athena's query engine is one container, started on the first query.
+	// ATHENA_ENGINE=inert registers nothing, so no probe runs for it.
+	if cfg.AthenaEngine != config.AthenaEngineInert && cfg.AthenaDockerSocket != "" {
+		dockerServices["athena"] = docker.ServiceConfig{Name: "athena", Socket: cfg.AthenaDockerSocket}
+		dockerSetters["athena"] = athenaSvc.SetDocker
+	}
 	if len(dockerServices) > 0 {
 		dockerTracker := docker.NewTracker()
 		dockerStatusFn = func() *docker.Status {
@@ -955,7 +968,7 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 		go func() {
 			// Collect configs in deterministic order.
 			var configs []docker.ServiceConfig
-			for _, name := range []string{"lambda", "ecr", "rds", "elasticache", "msk", "ecs", "ec2", "eks", "efs"} {
+			for _, name := range []string{"lambda", "ecr", "rds", "elasticache", "msk", "ecs", "ec2", "eks", "efs", "athena"} {
 				if sc, ok := dockerServices[name]; ok {
 					configs = append(configs, sc)
 				}

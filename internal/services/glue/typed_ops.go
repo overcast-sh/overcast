@@ -34,6 +34,13 @@ func (s *Service) typedOps() map[string]op.Operation {
 		"UpdatePartition":      op.NewTyped[updatePartitionReq, struct{}]("UpdatePartition", s.updatePartitionTyped),
 		"DeletePartition":      op.NewTyped[deletePartitionReq, struct{}]("DeletePartition", s.deletePartitionTyped),
 		"BatchDeletePartition": op.NewTyped[batchDeletePartitionReq, batchPartitionErrorsResp]("BatchDeletePartition", s.batchDeletePartitionTyped),
+		// Column statistics
+		"UpdateColumnStatisticsForTable":     op.NewTyped[updateColumnStatisticsReq, updateColumnStatisticsResp]("UpdateColumnStatisticsForTable", s.updateColumnStatisticsForTableTyped),
+		"UpdateColumnStatisticsForPartition": op.NewTyped[updateColumnStatisticsReq, updateColumnStatisticsResp]("UpdateColumnStatisticsForPartition", s.updateColumnStatisticsForPartitionTyped),
+		"GetColumnStatisticsForTable":        op.NewTyped[getColumnStatisticsReq, getColumnStatisticsResp]("GetColumnStatisticsForTable", s.getColumnStatisticsForTableTyped),
+		"GetColumnStatisticsForPartition":    op.NewTyped[getColumnStatisticsReq, getColumnStatisticsResp]("GetColumnStatisticsForPartition", s.getColumnStatisticsForPartitionTyped),
+		"DeleteColumnStatisticsForTable":     op.NewTyped[deleteColumnStatisticsReq, struct{}]("DeleteColumnStatisticsForTable", s.deleteColumnStatisticsForTableTyped),
+		"DeleteColumnStatisticsForPartition": op.NewTyped[deleteColumnStatisticsReq, struct{}]("DeleteColumnStatisticsForPartition", s.deleteColumnStatisticsForPartitionTyped),
 		// Tags
 		"TagResource":   op.NewTyped[glueTagResourceReq, struct{}]("TagResource", s.tagResourceTyped),
 		"UntagResource": op.NewTyped[glueUntagResourceReq, struct{}]("UntagResource", s.untagResourceTyped),
