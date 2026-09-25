@@ -6,8 +6,10 @@ package kinesis
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"net/http"
+	"regexp"
 
 	"github.com/overcast-sh/overcast/internal/clock"
 	"github.com/overcast-sh/overcast/internal/config"
@@ -623,48 +625,103 @@ func streamModeDetailsToMap(smd *StreamModeDetails) map[string]any {
 	return map[string]any{"StreamMode": smd.StreamMode}
 }
 
+// shardToMap renders a shard in AWS's Shard shape. ParentShardId and
+// AdjacentParentShardId appear only on a shard that has them, and
+// EndingSequenceNumber only on a closed one; CreatedAt/ClosedAt are internal
+// and never rendered.
 func shardToMap(shard Shard) map[string]any {
+	seqRange := map[string]any{
+		"StartingSequenceNumber": shard.SequenceNumberRange.StartingSequenceNumber,
+	}
+	if !shard.isOpen() {
+		seqRange["EndingSequenceNumber"] = shard.SequenceNumberRange.EndingSequenceNumber
+	}
 	m := map[string]any{
 		"ShardId": shard.ShardId,
 		"HashKeyRange": map[string]any{
 			"StartingHashKey": shard.HashKeyRange.StartingHashKey,
 			"EndingHashKey":   shard.HashKeyRange.EndingHashKey,
 		},
-		"SequenceNumberRange": map[string]any{
-			"StartingSequenceNumber": shard.SequenceNumberRange.StartingSequenceNumber,
-		},
+		"SequenceNumberRange": seqRange,
 	}
-	if shard.SequenceNumberRange.EndingSequenceNumber != "" {
-		m["SequenceNumberRange"].(map[string]any)["EndingSequenceNumber"] = shard.SequenceNumberRange.EndingSequenceNumber
+	if shard.ParentShardId != "" {
+		m["ParentShardId"] = shard.ParentShardId
+	}
+	if shard.AdjacentParentShardId != "" {
+		m["AdjacentParentShardId"] = shard.AdjacentParentShardId
 	}
 	return m
 }
 
-// allShards renders every shard of the stream, open or closed, in shard-ID
-// order (Shards is append-only and IDs are fixed-width, so slice order is ID
-// order). DescribeStream answers from this: a split or merge parent stays in
-// its response, carrying the EndingSequenceNumber that closed it, which is
-// how a consumer follows shard lineage.
-func allShards(st *Stream) []map[string]any {
-	shards := make([]map[string]any, 0, len(st.Shards))
-	for _, shard := range st.Shards {
-		shards = append(shards, shardToMap(shard))
+// renderShards renders shards in the order given — shard-ID order for any
+// slice drawn from Stream.Shards, which is append-only with fixed-width IDs.
+func renderShards(shards []Shard) []map[string]any {
+	out := make([]map[string]any, 0, len(shards))
+	for _, shard := range shards {
+		out = append(out, shardToMap(shard))
 	}
-	return shards
+	return out
 }
 
-// openShards is allShards without the closed ones, which is what ListShards
-// answers from — see the "Closed shards" row in docs/services/kinesis.md for
-// the divergence that leaves.
-func openShards(st *Stream) []map[string]any {
-	shards := make([]map[string]any, 0, len(st.Shards))
-	for _, shard := range st.Shards {
-		if shard.SequenceNumberRange.EndingSequenceNumber != "" {
-			continue
+// allShards renders every shard of the stream, open or closed. DescribeStream
+// answers from this, and so does an unfiltered ListShards (see filterShards):
+// a split or merge parent stays listed, carrying the EndingSequenceNumber
+// that closed it, and its children name it as ParentShardId, which is how a
+// consumer follows shard lineage.
+func allShards(st *Stream) []map[string]any {
+	return renderShards(st.Shards)
+}
+
+// openShardIndex returns the index of the open shard with ID shardID, or -1
+// when the stream has no such shard or it is already closed.
+func openShardIndex(st *Stream, shardID string) int {
+	for i, shard := range st.Shards {
+		if shard.ShardId == shardID && shard.isOpen() {
+			return i
 		}
-		shards = append(shards, shardToMap(shard))
 	}
-	return shards
+	return -1
+}
+
+// splitKeyPattern is NewStartingHashKey's modeled pattern.
+var splitKeyPattern = regexp.MustCompile(`^(0|([1-9]\d{0,38}))$`)
+
+// validateSplitKey parses SplitShard's NewStartingHashKey and checks it lies
+// strictly inside parent's range. The key becomes the upper child's first
+// key and the lower child ends one below it, so a key equal to the parent's
+// StartingHashKey would leave the lower child empty. The upper bound is
+// strict too, following moto, whose error message ("... is not both greater
+// than one plus the shard's StartingHashKey ... and less than the shard's
+// EndingHashKey") reads as copied from AWS's. That is unverified against
+// AWS; where it is wrong, this refuses a split AWS would accept, which fails
+// loudly rather than letting a split AWS refuses pass.
+func validateSplitKey(parent Shard, key string) (*big.Int, *protocol.AWSError) {
+	if key == "" {
+		return nil, errMissingParameter("NewStartingHashKey")
+	}
+	k, ok := new(big.Int).SetString(key, 10)
+	if !splitKeyPattern.MatchString(key) || !ok {
+		return nil, invalidArgument(fmt.Sprintf("NewStartingHashKey %s is not a valid hash key.", key))
+	}
+	start, ok1 := new(big.Int).SetString(parent.HashKeyRange.StartingHashKey, 10)
+	end, ok2 := new(big.Int).SetString(parent.HashKeyRange.EndingHashKey, 10)
+	if !ok1 || !ok2 || k.Cmp(start) <= 0 || k.Cmp(end) >= 0 {
+		return nil, invalidArgument(fmt.Sprintf(
+			"NewStartingHashKey %s used in SplitShard() on shard %s is not both greater than the shard's StartingHashKey %s and less than the shard's EndingHashKey %s.",
+			key, parent.ShardId, parent.HashKeyRange.StartingHashKey, parent.HashKeyRange.EndingHashKey))
+	}
+	return k, nil
+}
+
+// abuts reports whether hi starts on the key right after lo ends, i.e.
+// whether the two ranges together form one contiguous set.
+func abuts(lo, hi HashKeyRange) bool {
+	loEnd, ok1 := new(big.Int).SetString(lo.EndingHashKey, 10)
+	hiStart, ok2 := new(big.Int).SetString(hi.StartingHashKey, 10)
+	if !ok1 || !ok2 {
+		return false
+	}
+	return loEnd.Add(loEnd, big.NewInt(1)).Cmp(hiStart) == 0
 }
 
 // shardIDOf reads a rendered shard back, for minting a cursor from the last

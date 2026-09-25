@@ -4637,27 +4637,19 @@ func (p *RuntimeProvider) toolKinesisCreateStream(ctx context.Context, params js
 	if shardCount <= 0 {
 		shardCount = 1
 	}
-	shards := make([]kinesis.Shard, 0, shardCount)
-	for i := 0; i < shardCount; i++ {
-		shards = append(shards, kinesis.Shard{
-			ShardId: fmt.Sprintf("shardId-%012d", i),
-			HashKeyRange: kinesis.HashKeyRange{
-				StartingHashKey: "0",
-				EndingHashKey:   "340282366920938463463374607431768211455",
-			},
-			SequenceNumberRange: kinesis.SequenceNumberRange{
-				StartingSequenceNumber: fmt.Sprintf("49%019d", i),
-			},
-		})
-	}
+	// The same layout CreateStream gives a stream. Giving every shard the
+	// whole keyspace, as this used to, made them all overlap: PutRecord
+	// routed every record to shard 0 and a split or merge of any other shard
+	// produced ranges no AWS stream could have (#2112).
+	createdAt := time.Now().UTC()
 	stream := kinesis.Stream{
 		StreamName:           name,
 		StreamARN:            protocol.ARN(region, p.accountID(), "kinesis", "stream/"+name),
 		StreamStatus:         "ACTIVE",
 		ShardCount:           shardCount,
-		Shards:               shards,
+		Shards:               kinesis.InitialShards(shardCount, createdAt),
 		Tags:                 map[string]string{},
-		CreatedAt:            time.Now().UTC(),
+		CreatedAt:            createdAt,
 		RetentionPeriodHours: 24,
 	}
 	raw, err := json.Marshal(stream)

@@ -149,13 +149,19 @@ type getRecordsResponse struct {
 // the error for naming neither would otherwise be a lie. The other
 // operations in this package still take StreamName only — see the remaining
 // gaps in docs/dev/compatibility/services/kinesis.yaml.
+//
+// ShardFilter is refused alongside a NextToken too: the token carries the
+// filter it was minted under (pageCursor.Filter), so a second one could only
+// contradict it. The reference does not list that exclusion; the KCL, the
+// API's main client, never sends both.
 type listShardsRequest struct {
-	StreamName              string   `json:"StreamName"`
-	StreamARN               string   `json:"StreamARN"`
-	NextToken               string   `json:"NextToken"`
-	ExclusiveStartShardId   string   `json:"ExclusiveStartShardId"`
-	MaxResults              *int     `json:"MaxResults"`
-	StreamCreationTimestamp *float64 `json:"StreamCreationTimestamp"`
+	StreamName              string       `json:"StreamName"`
+	StreamARN               string       `json:"StreamARN"`
+	NextToken               string       `json:"NextToken"`
+	ExclusiveStartShardId   string       `json:"ExclusiveStartShardId"`
+	MaxResults              *int         `json:"MaxResults"`
+	StreamCreationTimestamp *float64     `json:"StreamCreationTimestamp"`
+	ShardFilter             *shardFilter `json:"ShardFilter"`
 }
 
 type listShardsResponse struct {
@@ -309,14 +315,15 @@ func (h *Handler) createStreamTyped(ctx context.Context, req *createStreamReques
 	if _, aerr := h.store.getStream(ctx, req.StreamName); aerr == nil {
 		return nil, errStreamAlreadyExists(req.StreamName)
 	}
+	now := h.clk.Now().UTC()
 	st := &Stream{
 		StreamName:           req.StreamName,
 		StreamARN:            streamARN(h.cfg.AccountID, middleware.RegionFromContext(ctx, h.cfg.Region), req.StreamName),
 		StreamStatus:         "ACTIVE",
 		ShardCount:           shardCount,
-		Shards:               buildInitialShards(shardCount),
+		Shards:               InitialShards(shardCount, now),
 		Tags:                 createStreamTags(req.Tags),
-		CreatedAt:            h.clk.Now().UTC(),
+		CreatedAt:            now,
 		RetentionPeriodHours: 24,
 		StreamModeDetails:    req.StreamModeDetails,
 		EncryptionType:       "NONE",
@@ -442,7 +449,7 @@ func shardForRecord(shards []Shard, partitionKey, explicitHashKey string) (int, 
 		return 0, invalidArgument(fmt.Sprintf("Invalid ExplicitHashKey %s", explicitHashKey))
 	}
 	// The computed partition-key hash landed outside every open shard's
-	// range. buildInitialShards/splitShardTyped/mergeShardsTyped keep open
+	// range. InitialShards/splitShardTyped/mergeShardsTyped keep open
 	// shards' ranges contiguous across the full 128-bit hash space, so this
 	// is an invariant violation rather than a normal request — fall back to
 	// the first open shard instead of failing the whole request.
@@ -658,53 +665,61 @@ func (h *Handler) listShardsTyped(ctx context.Context, req *listShardsRequest) (
 	if aerr := validateLimit(req.MaxResults, "MaxResults", listShardsModelMax); aerr != nil {
 		return nil, aerr
 	}
-	streamName, after, aerr := h.listShardsCursor(req)
+	cur, aerr := h.listShardsCursor(req)
 	if aerr != nil {
 		return nil, aerr
 	}
-	st, aerr := h.store.getStream(ctx, streamName)
+	st, aerr := h.store.getStream(ctx, cur.Stream)
 	if aerr != nil {
 		return nil, aerr
 	}
-	shards := shardsAfter(openShards(st), after)
+	// Every shard the filter admits, closed parents included: with no
+	// ShardFilter AWS answers FROM_TRIM_HORIZON, which lists a split or
+	// merge parent until it expires (#2112).
+	shards := shardsAfter(renderShards(filterShards(st, cur.Filter)), cur.After)
 	page, hasMore := pageOf(shards, req.MaxResults, listShardsDefaultLimit, listShardsMaxLimit)
 
 	out := &listShardsResponse{Shards: page}
 	if hasMore {
-		out.NextToken = h.sealPageToken(st.StreamName, shardIDOf(page[len(page)-1]))
+		out.NextToken = h.sealCursor(pageCursor{Stream: st.StreamName, After: shardIDOf(page[len(page)-1]), Filter: cur.Filter})
 	}
 	return out, nil
 }
 
-// listShardsCursor resolves which stream to list and where to resume, and
-// enforces the members NextToken excludes.
-func (h *Handler) listShardsCursor(req *listShardsRequest) (streamName, after string, aerr *protocol.AWSError) {
+// listShardsCursor resolves which stream to list, where to resume and under
+// which ShardFilter, and enforces the members NextToken excludes.
+func (h *Handler) listShardsCursor(req *listShardsRequest) (pageCursor, *protocol.AWSError) {
 	if req.NextToken != "" {
 		switch {
 		case req.StreamName != "":
-			return "", "", invalidArgument("NextToken and StreamName cannot be provided together.")
+			return pageCursor{}, invalidArgument("NextToken and StreamName cannot be provided together.")
 		case req.ExclusiveStartShardId != "":
-			return "", "", invalidArgument("NextToken and ExclusiveStartShardId cannot be provided together.")
+			return pageCursor{}, invalidArgument("NextToken and ExclusiveStartShardId cannot be provided together.")
 		case req.StreamCreationTimestamp != nil:
-			return "", "", invalidArgument("NextToken and StreamCreationTimestamp cannot be provided together.")
+			return pageCursor{}, invalidArgument("NextToken and StreamCreationTimestamp cannot be provided together.")
+		case req.ShardFilter != nil:
+			return pageCursor{}, invalidArgument("NextToken and ShardFilter cannot be provided together.")
 		}
-		cur, tokenErr := h.openPageToken(req.NextToken)
-		if tokenErr != nil {
-			return "", "", tokenErr
-		}
-		return cur.Stream, cur.After, nil
+		return h.openPageToken(req.NextToken)
 	}
-	if req.StreamName != "" {
-		return req.StreamName, req.ExclusiveStartShardId, nil
+	if req.ShardFilter != nil {
+		if aerr := req.ShardFilter.validate(); aerr != nil {
+			return pageCursor{}, aerr
+		}
+	}
+	cur := pageCursor{Stream: req.StreamName, After: req.ExclusiveStartShardId, Filter: req.ShardFilter}
+	if cur.Stream != "" {
+		return cur, nil
 	}
 	if req.StreamARN == "" {
-		return "", "", invalidArgument("Either StreamName or StreamARN must be provided.")
+		return pageCursor{}, invalidArgument("Either StreamName or StreamARN must be provided.")
 	}
 	name, arnErr := streamNameFromARN(req.StreamARN)
 	if arnErr != nil {
-		return "", "", arnErr
+		return pageCursor{}, arnErr
 	}
-	return name, req.ExclusiveStartShardId, nil
+	cur.Stream = name
+	return cur, nil
 }
 
 func (h *Handler) splitShardTyped(ctx context.Context, req *splitShardRequest) (*struct{}, *protocol.AWSError) {
@@ -715,36 +730,47 @@ func (h *Handler) splitShardTyped(ctx context.Context, req *splitShardRequest) (
 	if aerr != nil {
 		return nil, aerr
 	}
-	idx := -1
-	for i, shard := range st.Shards {
-		if shard.ShardId == req.ShardToSplit && shard.SequenceNumberRange.EndingSequenceNumber == "" {
-			idx = i
-			break
-		}
-	}
+	idx := openShardIndex(st, req.ShardToSplit)
 	if idx < 0 {
 		return nil, shardNotFound(req.ShardToSplit, req.StreamName)
 	}
 	orig := st.Shards[idx]
+	splitKey, aerr := validateSplitKey(orig, req.NewStartingHashKey)
+	if aerr != nil {
+		return nil, aerr
+	}
+	lowerEnd := new(big.Int).Sub(splitKey, big.NewInt(1))
+
+	now := h.clk.Now().UTC()
 	nowSeq := fmt.Sprintf("49%019d", len(st.Shards))
-	st.Shards[idx].SequenceNumberRange.EndingSequenceNumber = nowSeq
-	child1 := Shard{
-		ShardId: fmt.Sprintf("shardId-%012d", len(st.Shards)),
+	st.Shards[idx].closeAt(nowSeq, now)
+	// The lower child ends one below NewStartingHashKey, so the two children
+	// partition the parent's range without sharing a key: "The
+	// NewStartingHashKey hash key value and all higher hash key values in
+	// hash key range are distributed to one of the child shards. All the
+	// lower hash key values in the range are distributed to the other child
+	// shard." (SplitShard API reference, #2112).
+	lower := Shard{
+		ShardId:       fmt.Sprintf("shardId-%012d", len(st.Shards)),
+		ParentShardId: orig.ShardId,
 		HashKeyRange: HashKeyRange{
 			StartingHashKey: orig.HashKeyRange.StartingHashKey,
-			EndingHashKey:   req.NewStartingHashKey,
+			EndingHashKey:   lowerEnd.String(),
 		},
 		SequenceNumberRange: SequenceNumberRange{StartingSequenceNumber: nowSeq},
+		CreatedAt:           now,
 	}
-	child2 := Shard{
-		ShardId: fmt.Sprintf("shardId-%012d", len(st.Shards)+1),
+	upper := Shard{
+		ShardId:       fmt.Sprintf("shardId-%012d", len(st.Shards)+1),
+		ParentShardId: orig.ShardId,
 		HashKeyRange: HashKeyRange{
-			StartingHashKey: req.NewStartingHashKey,
+			StartingHashKey: splitKey.String(),
 			EndingHashKey:   orig.HashKeyRange.EndingHashKey,
 		},
 		SequenceNumberRange: SequenceNumberRange{StartingSequenceNumber: nowSeq},
+		CreatedAt:           now,
 	}
-	st.Shards = append(st.Shards, child1, child2)
+	st.Shards = append(st.Shards, lower, upper)
 	st.ShardCount = activeShardCount(st)
 	if aerr := h.store.putStream(ctx, st); aerr != nil {
 		return nil, aerr
@@ -760,44 +786,46 @@ func (h *Handler) mergeShardsTyped(ctx context.Context, req *mergeShardsRequest)
 	if aerr != nil {
 		return nil, aerr
 	}
-	mergeIdx, adjIdx := -1, -1
-	for i, shard := range st.Shards {
-		if shard.SequenceNumberRange.EndingSequenceNumber != "" {
-			continue
-		}
-		if shard.ShardId == req.ShardToMerge {
-			mergeIdx = i
-		}
-		if shard.ShardId == req.AdjacentShardToMerge {
-			adjIdx = i
-		}
-	}
+	mergeIdx := openShardIndex(st, req.ShardToMerge)
 	if mergeIdx < 0 {
 		return nil, shardNotFound(req.ShardToMerge, req.StreamName)
 	}
+	adjIdx := openShardIndex(st, req.AdjacentShardToMerge)
 	if adjIdx < 0 {
 		return nil, shardNotFound(req.AdjacentShardToMerge, req.StreamName)
 	}
+	merging, adjacent := st.Shards[mergeIdx], st.Shards[adjIdx]
+	// "Two shards are considered adjacent if the union of the hash key
+	// ranges for the two shards form a contiguous set with no gaps"
+	// (MergeShards API reference); anything else is InvalidArgumentException
+	// (#2112). A shard is never adjacent to itself.
+	lo, hi := merging, adjacent
+	if cmpHashKey(hi.HashKeyRange.StartingHashKey, lo.HashKeyRange.StartingHashKey) < 0 {
+		lo, hi = hi, lo
+	}
+	if !abuts(lo.HashKeyRange, hi.HashKeyRange) {
+		return nil, invalidArgument(fmt.Sprintf(
+			"Shards %s and %s in stream %s are not adjacent: their hash key ranges do not form a contiguous set.",
+			req.ShardToMerge, req.AdjacentShardToMerge, req.StreamName))
+	}
+
+	now := h.clk.Now().UTC()
 	nowSeq := fmt.Sprintf("49%019d", len(st.Shards))
-	st.Shards[mergeIdx].SequenceNumberRange.EndingSequenceNumber = nowSeq
-	st.Shards[adjIdx].SequenceNumberRange.EndingSequenceNumber = nowSeq
-	startHash := st.Shards[mergeIdx].HashKeyRange.StartingHashKey
-	endHash := st.Shards[mergeIdx].HashKeyRange.EndingHashKey
-	adjStart := st.Shards[adjIdx].HashKeyRange.StartingHashKey
-	adjEnd := st.Shards[adjIdx].HashKeyRange.EndingHashKey
-	if cmpHashKey(adjStart, startHash) < 0 {
-		startHash = adjStart
-	}
-	if cmpHashKey(adjEnd, endHash) > 0 {
-		endHash = adjEnd
-	}
+	st.Shards[mergeIdx].closeAt(nowSeq, now)
+	st.Shards[adjIdx].closeAt(nowSeq, now)
+	// ShardToMerge is the child's parent and AdjacentShardToMerge its
+	// adjacent parent, as the request names them — the same attribution
+	// moto and kinesis-mock make.
 	merged := Shard{
-		ShardId: fmt.Sprintf("shardId-%012d", len(st.Shards)),
+		ShardId:               fmt.Sprintf("shardId-%012d", len(st.Shards)),
+		ParentShardId:         merging.ShardId,
+		AdjacentParentShardId: adjacent.ShardId,
 		HashKeyRange: HashKeyRange{
-			StartingHashKey: startHash,
-			EndingHashKey:   endHash,
+			StartingHashKey: lo.HashKeyRange.StartingHashKey,
+			EndingHashKey:   hi.HashKeyRange.EndingHashKey,
 		},
 		SequenceNumberRange: SequenceNumberRange{StartingSequenceNumber: nowSeq},
+		CreatedAt:           now,
 	}
 	st.Shards = append(st.Shards, merged)
 	st.ShardCount = activeShardCount(st)

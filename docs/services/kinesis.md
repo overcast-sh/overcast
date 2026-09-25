@@ -43,7 +43,8 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | Writes | `PutRecord` and `PutRecords` route by partition-key hash into the owning shard |
 | Reads | `GetShardIterator` supports `TRIM_HORIZON`, `LATEST`, `AT_SEQUENCE_NUMBER` and `AFTER_SEQUENCE_NUMBER`; `GetRecords` returns a usable `NextShardIterator` |
 | Pagination | `ListStreams`, `ListShards`, `DescribeStream` and `ListTagsForStream` page on their documented cursors and limits; a `NextToken` expires after 300 seconds |
-| Resharding | `SplitShard` and `MergeShards` close the parents and create real children with correct hash-key ranges |
+| Resharding | `SplitShard` and `MergeShards` close the parents and create children that name them in `ParentShardId`/`AdjacentParentShardId`; the closed parents stay listed with an `EndingSequenceNumber`, and `MergeShards` refuses shards that are not adjacent |
+| Shard listing | `ListShards` honours every `ShardFilter` type; a `NextToken` keeps the filter it was issued under |
 | Consumers | Lambda event source mappings and EventBridge Pipes poll Kinesis streams |
 | Tags | `AddTagsToStream`/`RemoveTagsFromStream` and the ARN-addressed `TagResource`/`UntagResource`/`ListTagsForResource` |
 
@@ -55,9 +56,8 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | Throttling       | `ProvisionedThroughputExceededException` past the provisioned rate | `PutRecords` always reports `FailedRecordCount: 0`; throughput throttling is not simulated                                                                                       |
 | Encryption       | Records are encrypted with the named key                           | `StartStreamEncryption` stores `EncryptionType` and `KeyId` and `Describe*` echoes them; records are stored unencrypted                                                          |
 | Capacity modes   | On-demand capacity is enforced                                     | `UpdateStreamMode` is recorded; nothing is enforced                                                                                                                              |
-| Shard filtering  | `ListShards` narrows its answer with `ShardFilter`                 | `ShardFilter` is ignored, so every open shard comes back whatever filter was asked for                                                                                    |
+| Shard expiry     | A closed shard expires with its records and leaves the listings    | Closed shards never expire, since no record does: `ListShards` and `DescribeStream` keep every split or merge parent for the life of the stream                                  |
 | Enhanced fan-out | `SubscribeToShard` and the consumer registration APIs              | Not emulated, and a consumer ARN is refused by `TagResource`                                                                                                                     |
-| Closed shards    | `ListShards` includes them                                         | Open shards only, so a split parent disappears from the list                                                                                                                     |
 
 ## Gotchas
 
