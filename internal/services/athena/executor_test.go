@@ -27,6 +27,10 @@ func (f *fakeExecutor) Results(context.Context, QueryExecution, *getQueryResults
 	return &getQueryResultsResp{ResultSet: ResultSet{Rows: []Row{{Data: []Datum{{VarCharValue: ptr("1")}}}}}}, nil
 }
 
+func (f *fakeExecutor) RuntimeStatistics(context.Context, QueryExecution) (*QueryRuntimeStatistics, *protocol.AWSError) {
+	return &QueryRuntimeStatistics{Rows: &QueryRuntimeStatisticsRows{OutputRows: 1}}, nil
+}
+
 func newServiceWithExecutor(t *testing.T) (*Service, *fakeExecutor) {
 	t.Helper()
 	s, _ := newTestService(t)
@@ -179,7 +183,7 @@ func TestDeleteWorkGroup_recursiveCancelsRunningQueries(t *testing.T) {
 	wantCode(t, "GetQueryExecution after recursive delete", aerr, codeInvalidRequest)
 }
 
-func TestInertExecutor_resultsHaveOnePage(t *testing.T) {
+func TestInertEngine_resultsHaveOnePage(t *testing.T) {
 	ctx := context.Background()
 	s, _ := newTestService(t)
 	out, aerr := s.startQueryExecutionTyped(ctx, startReq("SELECT 1"))

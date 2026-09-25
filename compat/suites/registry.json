@@ -5339,6 +5339,18 @@
           ]
         },
         {
+          "name": "UpdateColumnStatisticsForTable",
+          "depends": [
+            "CreateTable"
+          ]
+        },
+        {
+          "name": "GetColumnStatisticsForTable",
+          "depends": [
+            "UpdateColumnStatisticsForTable"
+          ]
+        },
+        {
           "name": "BatchCreatePartition",
           "depends": [
             "CreateTable"
@@ -5361,7 +5373,8 @@
           "depends": [
             "DeletePartition",
             "GetTableVersions",
-            "UpdateTableStaleVersion"
+            "UpdateTableStaleVersion",
+            "GetColumnStatisticsForTable"
           ]
         },
         {
@@ -5441,6 +5454,42 @@
             "ListQueryExecutions",
             "BatchGetNamedQuery",
             "CreatePreparedStatement"
+          ]
+        }
+      ]
+    },
+    {
+      "service": "athena",
+      "name": "athena-engine",
+      "tests": [
+        {
+          "name": "CreateDatabaseStatement",
+          "op": "StartQueryExecution"
+        },
+        {
+          "name": "CreateExternalTableStatement",
+          "op": "StartQueryExecution",
+          "depends": [
+            "CreateDatabaseStatement"
+          ]
+        },
+        {
+          "name": "SelectFromTable",
+          "op": "GetQueryResults",
+          "requires": [
+            "docker"
+          ],
+          "depends": [
+            "CreateExternalTableStatement"
+          ]
+        },
+        {
+          "name": "GetQueryRuntimeStatistics",
+          "requires": [
+            "docker"
+          ],
+          "depends": [
+            "SelectFromTable"
           ]
         }
       ]

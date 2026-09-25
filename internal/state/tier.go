@@ -136,6 +136,7 @@ var namespaceTiers = map[string]Tier{
 	"athena:data-catalogs":       TierHot,
 	"athena:queries":             TierCached,
 	"athena:idempotency":         TierCached,
+	"athena:results":             TierCached,
 
 	// ── Auto Scaling ────────────────────────────────────────────────────
 	"autoscaling:groups":        TierHot,
@@ -265,11 +266,12 @@ var namespaceTiers = map[string]Tier{
 	"elbv2:targets":                  TierHot,
 
 	// ── Firehose / Glue ─────────────────────────────────────────────────
-	"firehose:streams":    TierHot,
-	"glue:databases":      TierHot,
-	"glue:tables":         TierHot,
-	"glue:partitions":     TierHot,
-	"glue:table-versions": TierHot,
+	"firehose:streams":       TierHot,
+	"glue:databases":         TierHot,
+	"glue:tables":            TierHot,
+	"glue:partitions":        TierHot,
+	"glue:table-versions":    TierHot,
+	"glue:column-statistics": TierHot,
 
 	// ── Pipes ───────────────────────────────────────────────────────────
 	"pipes:pipes": TierHot,

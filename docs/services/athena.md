@@ -1,19 +1,20 @@
 ---
 title: "Athena — Amazon Athena"
-description: "Athena's control plane — workgroups, queries, named queries, prepared statements, data catalogs and Glue metadata. Queries succeed without running, so results are empty."
+description: "Athena queries run for real on a Trino engine container, over tables in the Glue Data Catalog and data in S3, with results written to the output location."
 section: "Service Reference"
 tags:
   - amazon
   - athena
   - docs
   - services
+  - sql
+  - trino
 ---
 
 # Athena — Amazon Athena
 
-Athena's control plane is emulated: workgroups, saved queries, data catalogs
-and the Glue metadata they read. No SQL runs, so every query succeeds at once
-with an empty result set.
+Athena queries run for real, on a Trino container Overcast starts on the first
+query, over tables in the [Glue Data Catalog](./glue.md) and data in S3.
 
 **Status:** ⚠️ Partial
 
@@ -22,47 +23,61 @@ with an empty result set.
 ```bash
 export AWS_ENDPOINT_URL=http://localhost:4566
 
-aws athena create-work-group --name analytics
-aws athena start-query-execution \
-  --work-group analytics \
-  --query-string 'SELECT 1' \
+aws s3 mb s3://results
+aws athena start-query-execution --query-string 'SELECT 1 AS one' \
   --result-configuration OutputLocation=s3://results/
-
-aws athena get-query-execution --query-execution-id <id>
-# Status.State is already SUCCEEDED
+aws athena get-query-results --query-execution-id <id>
+# once Status.State is SUCCEEDED: the header row "one", then "1"
 ```
 
 Any credentials work; with none configured, run `eval "$(overcast env)"` first
 — see [Using AWS SDKs and CLI](../sdk-cli.md#credentials).
 
+The first query waits, `QUEUED`, while the engine starts — about ten seconds
+with the image already pulled, plus the pull of a 2.4 GB image the first time
+ever. Later queries start at once.
+
 ## What works
 
 | Area | Behaviour |
 | --- | --- |
-| Workgroups | Create, get, list, update and delete. `primary` always exists and cannot be deleted |
-| Workgroup settings | `UpdateWorkGroup` applies `ConfigurationUpdates`, including the `Remove*` flags |
-| Result location | The workgroup's `ResultConfiguration` fills in what the query leaves out, and wins when `EnforceWorkGroupConfiguration` is set |
-| Query executions | `QueryExecution` with context, statement type, engine version, parameters, statistics, and the result object under `OutputLocation` |
+| Queries | `SELECT`, `INSERT`, CTAS, `MERGE`, `UPDATE`, `DELETE`, views and every Trino function, run on the engine Athena engine version 3 is |
+| Execution states | `QUEUED` while the engine starts, `RUNNING`, then `SUCCEEDED`, `FAILED` or `CANCELLED`; `StopQueryExecution` cancels the query on the engine |
+| Failures | `AthenaError` with the error category and type Athena would give, and the engine's message as `StateChangeReason` |
+| Results | `<id>.csv` (or `.txt` for DDL and utility statements) and its `.metadata` at `OutputLocation`; `GetQueryResults` pages, header row first for a `SELECT`, `UpdateCount` for DML |
+| Statistics | `Statistics` and `GetQueryRuntimeStatistics` from the engine's own timings and bytes scanned |
+| DDL | `CREATE EXTERNAL TABLE`, `CREATE DATABASE`, `DROP`, `ALTER TABLE ADD/DROP PARTITION`, `MSCK REPAIR TABLE`, `SHOW` and `DESCRIBE` write and read the Glue Data Catalog directly |
+| Iceberg | `CREATE TABLE … TBLPROPERTIES ('table_type'='ICEBERG')`, then `INSERT`, `MERGE`, `UPDATE` and `DELETE` commit through Glue's `metadata_location` |
+| Formats | CSV, JSON, Parquet, ORC and Avro tables in S3, partitioned or not |
+| Workgroups | Create, get, list, update and delete; the result location, its enforcement and `BytesScannedCutoffPerQuery` apply to each query |
 | Idempotency | A repeated `ClientRequestToken` returns the same query or named query |
 | Listing | `ListQueryExecutions` and `ListNamedQueries` cover one workgroup, `primary` by default, and paginate |
-| Saved queries | Named queries and prepared statements: create, get, batch get, list, update, delete |
+| Saved queries | Named queries and prepared statements, through the API or SQL `PREPARE` and `DEALLOCATE PREPARE`; `EXECUTE … USING` and `ExecutionParameters` bind their parameters |
 | Data catalogs | `AwsDataCatalog` is built in; `GLUE`, `HIVE` and `LAMBDA` catalogs can be registered |
-| Metadata | `GetDatabase`, `ListDatabases`, `GetTableMetadata` and `ListTableMetadata` read the [Glue Data Catalog](./glue.md) |
+| Metadata | `GetDatabase`, `ListDatabases`, `GetTableMetadata` and `ListTableMetadata` read the Glue Data Catalog |
 | Tags | On workgroup and data catalog ARNs |
 | CloudFormation | `AWS::Athena::WorkGroup` (updated in place), `NamedQuery`, `PreparedStatement` and `DataCatalog` |
+
+Without a Docker daemon, or with `ATHENA_ENGINE=inert`, the engine is off:
+queries succeed at once with no rows, and DDL still reaches Glue. The
+[configuration reference](../configuration/reference.md) lists the engine's
+settings, and `/_overcast/athena/engine` reports its state.
 
 ## Differences from AWS
 
 | Area | On AWS | Overcast |
 | --- | --- | --- |
-| Query execution | The SQL runs | Nothing runs; the query is `SUCCEEDED` as soon as it starts |
-| Results | Written to `OutputLocation` | Nothing is written, and `GetQueryResults` is empty |
-| Execution states | `QUEUED` and `RUNNING` last as long as the query runs | A query finishes inside `StartQueryExecution` |
-| Statistics | Real timings and bytes scanned | Present, all zero |
-| Prepared statements | `EXECUTE ... USING` runs them | Stored and returned, never run |
+| SQL dialect | Athena engine version 3 | Trino 483, so dialect differences are rare; see [the list](./athena/limitations.md#dialect) |
+| First query | Starts at once | Waits for the engine to start |
+| Result reuse | `ResultReuseConfiguration` reuses a recent result | Every query runs |
+| CloudWatch metrics | Published when the workgroup enables them | Not published |
+| S3 Tables catalogs | `s3tablescatalog/<bucket>` queries a table bucket | Not queryable yet |
 | Data catalogs | `FEDERATED` provisions a connector | `FEDERATED` is refused with a 501 |
 | Metadata | `LAMBDA` and `HIVE` catalogs are read through their connector | Only `GLUE` catalogs for this account are readable |
 | Spark | Spark workgroups, sessions and notebooks | Not emulated |
+
+The rest — result files, statistics, errors and the engine itself — is in
+[Athena limitations](./athena/limitations.md).
 
 ## Gotchas
 
@@ -71,19 +86,18 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 > pass `--result-configuration`. `primary` has none, so a bare
 > `start-query-execution` against it fails with `InvalidRequestException`.
 
-Any assertion about the rows a query returns still needs real Athena.
-
 <!-- BEGIN overcast:capabilities -->
 
 ## Operations
 
-All 36 listed operations are implemented.
+All 37 listed operations are implemented.
 Per-operation status, notes and AWS API links: [Athena operations](athena/operations.md).
 
 <!-- END overcast:capabilities -->
 
 ## Related
 
+- [Athena limitations](./athena/limitations.md) — the engine, the dialect and the results in detail
 - [Glue Data Catalog](./glue.md) — where Athena's table metadata lives
 - [All service pages](./README.md)
 - [Service names and state overrides](../configuration.md#service-names)

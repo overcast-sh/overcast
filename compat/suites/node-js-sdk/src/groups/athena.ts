@@ -4,6 +4,8 @@
  * Groups:
  *   athena-control — a workgroup with a result location, a query run in it, a
  *                    named query, a prepared statement and a data catalog
+ *   athena-engine  — Hive DDL that writes the Glue Data Catalog, then a query
+ *                    over a CSV table in S3 run on the engine
  */
 
 import {
@@ -14,10 +16,14 @@ import {
   CreateWorkGroupCommand,
   DeleteDataCatalogCommand,
   DeleteWorkGroupCommand,
+  GetDatabaseCommand,
   GetDataCatalogCommand,
   GetNamedQueryCommand,
   GetPreparedStatementCommand,
   GetQueryExecutionCommand,
+  GetQueryResultsCommand,
+  GetQueryRuntimeStatisticsCommand,
+  GetTableMetadataCommand,
   GetWorkGroupCommand,
   InvalidRequestException,
   ListEngineVersionsCommand,
@@ -26,6 +32,8 @@ import {
   StartQueryExecutionCommand,
   UpdateWorkGroupCommand,
 } from "@aws-sdk/client-athena";
+import { CreateBucketCommand, DeleteBucketCommand, DeleteObjectCommand, ListObjectsV2Command, PutObjectCommand } from "@aws-sdk/client-s3";
+import { DeleteDatabaseCommand } from "@aws-sdk/client-glue";
 import { makeClients } from "../lib/clients.ts";
 import type { TestContext, TestGroup } from "../lib/harness.ts";
 import * as assert from "node:assert/strict";
@@ -44,6 +52,37 @@ async function expectInvalidRequest(what: string, call: () => Promise<unknown>):
     assert.ok(err instanceof InvalidRequestException, `${what}: want InvalidRequestException, got ${String(err)}`);
     return true;
   });
+}
+
+// athena-engine: the first query waits for the engine to be pulled and started.
+const engineQueryWaitMs = 240_000;
+const engineBucket = (ctx: TestContext) => `${ctx.runId}-athena-engine`;
+// An identifier Hive DDL and Trino SQL both accept unquoted.
+const engineDatabase = (ctx: TestContext) => `${ctx.runId.replaceAll("-", "_")}_athena_engine`;
+const skipWithoutDocker =
+  process.env.OVERCAST_COMPAT_SKIP_DOCKER === "1" ? "Docker not available (set OVERCAST_COMPAT_SKIP_DOCKER=0 to enable)" : false;
+
+/** runQuery starts query and waits for it to succeed, returning its id. */
+async function runQuery(ctx: TestContext, query: string): Promise<string> {
+  const { athena } = makeClients(ctx);
+  const out = await athena.send(
+    new StartQueryExecutionCommand({
+      QueryString: query,
+      ResultConfiguration: { OutputLocation: `s3://${engineBucket(ctx)}/results/` },
+    }),
+  );
+  const id = out.QueryExecutionId ?? "";
+  const deadline = Date.now() + engineQueryWaitMs;
+  for (;;) {
+    const resp = await athena.send(new GetQueryExecutionCommand({ QueryExecutionId: id }));
+    const status = resp.QueryExecution?.Status;
+    if (status?.State === "SUCCEEDED") return id;
+    if (status?.State === "FAILED" || status?.State === "CANCELLED") {
+      throw new Error(`${query}: ${status.State}: ${status.StateChangeReason}`);
+    }
+    if (Date.now() > deadline) throw new Error(`${query}: still unfinished after ${engineQueryWaitMs}ms`);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
 }
 
 export function makeAthenaGroups(suite: string): TestGroup[] {
@@ -219,6 +258,90 @@ export function makeAthenaGroups(suite: string): TestGroup[] {
         // RecursiveDeleteOption removes the named query and prepared statement with it.
         try {
           await athena.send(new DeleteWorkGroupCommand({ WorkGroup: workGroup(ctx), RecursiveDeleteOption: true }));
+        } catch {}
+      },
+    },
+    // ── athena-engine ──────────────────────────────────────────────────────
+    {
+      suite,
+      service: "athena",
+      name: "athena-engine",
+      setup: async (ctx) => {
+        const { s3 } = makeClients(ctx);
+        await s3.send(new CreateBucketCommand({ Bucket: engineBucket(ctx) }));
+      },
+      tests: [
+        {
+          name: "CreateDatabaseStatement",
+          op: "StartQueryExecution",
+          fn: async (ctx) => {
+            const { athena } = makeClients(ctx);
+            await runQuery(ctx, `CREATE DATABASE ${engineDatabase(ctx)}`);
+            const resp = await athena.send(new GetDatabaseCommand({ CatalogName: "AwsDataCatalog", DatabaseName: engineDatabase(ctx) }));
+            assert.equal(resp.Database?.Name, engineDatabase(ctx), "GetDatabase: Name");
+          },
+        },
+        {
+          name: "CreateExternalTableStatement",
+          op: "StartQueryExecution",
+          depends: ["CreateDatabaseStatement"],
+          fn: async (ctx) => {
+            const { athena, s3 } = makeClients(ctx);
+            await s3.send(new PutObjectCommand({ Bucket: engineBucket(ctx), Key: "people/part-0.csv", Body: "1,alice\n2,bob\n" }));
+            await runQuery(
+              ctx,
+              `CREATE EXTERNAL TABLE ${engineDatabase(ctx)}.people (id int, name string) ` +
+                `ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' LOCATION 's3://${engineBucket(ctx)}/people/'`,
+            );
+            const resp = await athena.send(
+              new GetTableMetadataCommand({ CatalogName: "AwsDataCatalog", DatabaseName: engineDatabase(ctx), TableName: "people" }),
+            );
+            const cols = resp.TableMetadata?.Columns ?? [];
+            assert.deepEqual(cols.map((c) => c.Name), ["id", "name"], "GetTableMetadata: columns");
+            assert.equal(cols[1]?.Type, "string", "GetTableMetadata: name type");
+          },
+        },
+        {
+          name: "SelectFromTable",
+          op: "GetQueryResults",
+          depends: ["CreateExternalTableStatement"],
+          skip: skipWithoutDocker,
+          fn: async (ctx) => {
+            const { athena } = makeClients(ctx);
+            const id = await runQuery(ctx, `SELECT id, name FROM ${engineDatabase(ctx)}.people ORDER BY id`);
+            state(ctx).athenaEngineQuery = id;
+            const resp = await athena.send(new GetQueryResultsCommand({ QueryExecutionId: id }));
+            const rows = (resp.ResultSet?.Rows ?? []).map((r) => (r.Data ?? []).map((d) => d.VarCharValue));
+            assert.deepEqual(rows, [["id", "name"], ["1", "alice"], ["2", "bob"]], "GetQueryResults: the header then the rows");
+            const types = (resp.ResultSet?.ResultSetMetadata?.ColumnInfo ?? []).map((c) => c.Type);
+            assert.deepEqual(types, ["integer", "varchar"], "GetQueryResults: column types");
+          },
+        },
+        {
+          name: "GetQueryRuntimeStatistics",
+          depends: ["SelectFromTable"],
+          skip: skipWithoutDocker,
+          fn: async (ctx) => {
+            const { athena } = makeClients(ctx);
+            const resp = await athena.send(
+              new GetQueryRuntimeStatisticsCommand({ QueryExecutionId: state(ctx).athenaEngineQuery as string }),
+            );
+            assert.equal(resp.QueryRuntimeStatistics?.Rows?.OutputRows, 2, "GetQueryRuntimeStatistics: OutputRows");
+            assert.ok(resp.QueryRuntimeStatistics?.Timeline, "GetQueryRuntimeStatistics: Timeline");
+          },
+        },
+      ],
+      teardown: async (ctx) => {
+        const { glue, s3 } = makeClients(ctx);
+        try {
+          await glue.send(new DeleteDatabaseCommand({ Name: engineDatabase(ctx) }));
+        } catch {}
+        try {
+          const listed = await s3.send(new ListObjectsV2Command({ Bucket: engineBucket(ctx) }));
+          for (const o of listed.Contents ?? []) {
+            await s3.send(new DeleteObjectCommand({ Bucket: engineBucket(ctx), Key: o.Key }));
+          }
+          await s3.send(new DeleteBucketCommand({ Bucket: engineBucket(ctx) }));
         } catch {}
       },
     },

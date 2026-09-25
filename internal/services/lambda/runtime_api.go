@@ -45,6 +45,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/overcast-sh/overcast/internal/clock"
+	"github.com/overcast-sh/overcast/internal/containerendpoint"
 	"github.com/overcast-sh/overcast/internal/services/lambda/initproto"
 	"go.uber.org/zap"
 )
@@ -432,49 +433,6 @@ func NewRuntimeAPIServerFromListeners(lns []net.Listener, containerAddr string, 
 	return s, nil
 }
 
-// listenAllOn binds hosts on port and returns the listeners in the same order.
-//
-// The first host is the one containers dial, so its bind is the one that has to
-// succeed and the one that settles the port: a port of 0 (which the test server
-// uses to avoid collisions between parallel packages) is resolved by the first
-// listener and the rest join it there, rather than each taking a different
-// OS-assigned port and leaving containers pointed at one of them.
-//
-// A later host that cannot be bound is dropped with a warning instead of
-// failing the lot. Those addresses are conveniences — loopback for a developer
-// or a test on this machine — and something else holding the port on one of
-// them is no reason to leave Lambda without a runtime.
-func listenAllOn(hosts []string, port int, logger *zap.Logger) ([]net.Listener, error) {
-	if len(hosts) == 0 {
-		return nil, fmt.Errorf("runtime api: no address to bind")
-	}
-
-	primary := net.JoinHostPort(hosts[0], strconv.Itoa(port))
-	first, err := net.Listen("tcp", primary)
-	if err != nil {
-		return nil, fmt.Errorf("runtime api: listen %s: %w", primary, err)
-	}
-	lns := []net.Listener{first}
-
-	bound, ok := first.Addr().(*net.TCPAddr)
-	if !ok {
-		_ = first.Close()
-		return nil, fmt.Errorf("runtime api: listen %s: not a TCP address", primary)
-	}
-
-	for _, host := range hosts[1:] {
-		addr := net.JoinHostPort(host, strconv.Itoa(bound.Port))
-		ln, lnErr := net.Listen("tcp", addr)
-		if lnErr != nil {
-			logger.Warn("runtime api: secondary listen failed — address unavailable",
-				zap.String("addr", addr), zap.Error(lnErr))
-			continue
-		}
-		lns = append(lns, ln)
-	}
-	return lns, nil
-}
-
 // runtimeAPIListenFix is what to change when the shared Runtime API listener
 // cannot bind; it travels with the startup warning and /_overcast/health.
 const runtimeAPIListenFix = "set LAMBDA_RUNTIME_API_PORT to a free port, or 0 for an ephemeral one"
@@ -489,7 +447,7 @@ const runtimeAPIListenFix = "set LAMBDA_RUNTIME_API_PORT to a free port, or 0 fo
 // anything else is pinned and fails, so a deliberate choice is never silently
 // replaced. fellBack reports whether the fallback was taken.
 func listenRuntimeAPI(hosts []string, port, defaultPort int, logger *zap.Logger) (lns []net.Listener, fellBack bool, err error) {
-	lns, err = listenAllOn(hosts, port, logger)
+	lns, err = containerendpoint.ListenOn(hosts, port, logger)
 	if err == nil || port != defaultPort || port == 0 {
 		return lns, false, err
 	}
@@ -497,7 +455,7 @@ func listenRuntimeAPI(hosts []string, port, defaultPort int, logger *zap.Logger)
 		zap.Int("requested_port", port),
 		zap.Error(err),
 		zap.String("hint", "set LAMBDA_RUNTIME_API_PORT to pin a different port"))
-	lns, err = listenAllOn(hosts, 0, logger)
+	lns, err = containerendpoint.ListenOn(hosts, 0, logger)
 	return lns, err == nil, err
 }
 
@@ -515,8 +473,8 @@ func (s *RuntimeAPIServer) serve(ln net.Listener) {
 
 // bindHostsOf recovers the local addresses a set of listeners is bound to, in
 // order, so a later per-environment listener can join the same set at a fresh
-// port. Order matters: listenAllOn settles the port on the first host, and the
-// first is the one containers dial.
+// port. Order matters: containerendpoint.ListenOn settles the port on the
+// first host, and the first is the one containers dial.
 func bindHostsOf(lns []net.Listener) []string {
 	hosts := make([]string, 0, len(lns))
 	for _, ln := range lns {
@@ -623,7 +581,7 @@ func (s *RuntimeAPIServer) AddContainerListener() (*containerListener, error) {
 	if len(s.bindHosts) == 0 {
 		return nil, fmt.Errorf("runtime api: no bind address for a per-container listener")
 	}
-	lns, err := listenAllOn(s.bindHosts, 0, s.logger)
+	lns, err := containerendpoint.ListenOn(s.bindHosts, 0, s.logger)
 	if err != nil {
 		return nil, err
 	}

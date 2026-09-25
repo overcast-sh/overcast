@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 
 	"github.com/overcast-sh/overcast/internal/protocol"
 )
@@ -97,6 +98,7 @@ func (s *Service) startQueryExecutionTyped(ctx context.Context, req *startQueryE
 	if aerr := validateStart(req); aerr != nil {
 		return nil, aerr
 	}
+	s.reapInterrupted(ctx)
 	fingerprinted := *req
 	fingerprinted.ClientRequestToken = ""
 	var submitted *QueryExecution
@@ -216,6 +218,7 @@ func (s *Service) requireQuery(ctx context.Context, id string) (*QueryExecution,
 	if id == "" {
 		return nil, errRequired("QueryExecutionId")
 	}
+	s.reapInterrupted(ctx)
 	qe, err := s.store.getQuery(ctx, id)
 	if err != nil {
 		return nil, errInternal(err)
@@ -263,6 +266,7 @@ func (s *Service) listQueryExecutionsTyped(ctx context.Context, req *listQueries
 	if aerr != nil {
 		return nil, aerr
 	}
+	s.reapInterrupted(ctx)
 	queries, err := s.store.listQueries(ctx)
 	if err != nil {
 		return nil, errInternal(err)
@@ -325,4 +329,50 @@ func (s *Service) getQueryResultsTyped(ctx context.Context, req *getQueryResults
 	default:
 		return nil, errInvalidRequest("Query has not yet finished. Current state: %s", state)
 	}
+}
+
+// reapInterrupted fails every execution a previous process left QUEUED or
+// RUNNING: no engine resumes a query across a restart, so nothing else
+// would ever move it. It runs once, before this process first reads or
+// starts a query, so the only unfinished records it can see are those. It
+// is not retried when the list fails: by the next call this process may have
+// queries of its own running, which a retry would fail too.
+func (s *Service) reapInterrupted(ctx context.Context) {
+	ctx = context.WithoutCancel(ctx) // one request's end must not cut the reap short
+	_ = s.reaped.Do(func() error {
+		queries, err := s.store.listQueries(ctx)
+		if err != nil {
+			s.log.WithRecorder(ctx).Warn("interrupted queries not failed", zap.Error(err))
+			return nil
+		}
+		for _, qe := range queries {
+			if !isTerminal(qe.Status.State) {
+				s.applyTransition(ctx, qe.QueryExecutionId, interrupted(restartReason))
+			}
+		}
+		return nil
+	})
+}
+
+type getQueryRuntimeStatisticsResp struct {
+	QueryRuntimeStatistics QueryRuntimeStatistics `json:"QueryRuntimeStatistics"`
+}
+
+// getQueryRuntimeStatisticsTyped reports what a query read and produced.
+// "Statistics from the Timeline section of the response object are
+// available as soon as QueryExecutionStatus$State is in a SUCCEEDED or
+// FAILED state", so an unfinished query has none yet.
+func (s *Service) getQueryRuntimeStatisticsTyped(ctx context.Context, req *queryIDReq) (*getQueryRuntimeStatisticsResp, *protocol.AWSError) {
+	qe, aerr := s.requireQuery(ctx, req.QueryExecutionId)
+	if aerr != nil {
+		return nil, aerr
+	}
+	if !isTerminal(qe.Status.State) {
+		return &getQueryRuntimeStatisticsResp{}, nil
+	}
+	stats, aerr := s.executor.RuntimeStatistics(ctx, *qe)
+	if aerr != nil {
+		return nil, aerr
+	}
+	return &getQueryRuntimeStatisticsResp{QueryRuntimeStatistics: *stats}, nil
 }

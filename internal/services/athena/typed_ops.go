@@ -8,12 +8,13 @@ import (
 func (s *Service) typedOps() map[string]op.Operation {
 	return map[string]op.Operation{
 		// Query executions
-		"StartQueryExecution":    op.NewTyped[startQueryExecReq, startQueryExecResp]("StartQueryExecution", s.startQueryExecutionTyped),
-		"GetQueryExecution":      op.NewTyped[queryIDReq, getQueryExecResp]("GetQueryExecution", s.getQueryExecutionTyped),
-		"BatchGetQueryExecution": op.NewTyped[batchGetQueryExecReq, batchGetQueryExecResp]("BatchGetQueryExecution", s.batchGetQueryExecutionTyped),
-		"ListQueryExecutions":    op.NewTyped[listQueriesReq, listQueriesResp]("ListQueryExecutions", s.listQueryExecutionsTyped),
-		"StopQueryExecution":     op.NewTyped[queryIDReq, struct{}]("StopQueryExecution", s.stopQueryExecutionTyped),
-		"GetQueryResults":        op.NewTyped[getQueryResultsReq, getQueryResultsResp]("GetQueryResults", s.getQueryResultsTyped),
+		"StartQueryExecution":       op.NewTyped[startQueryExecReq, startQueryExecResp]("StartQueryExecution", s.startQueryExecutionTyped),
+		"GetQueryExecution":         op.NewTyped[queryIDReq, getQueryExecResp]("GetQueryExecution", s.getQueryExecutionTyped),
+		"BatchGetQueryExecution":    op.NewTyped[batchGetQueryExecReq, batchGetQueryExecResp]("BatchGetQueryExecution", s.batchGetQueryExecutionTyped),
+		"ListQueryExecutions":       op.NewTyped[listQueriesReq, listQueriesResp]("ListQueryExecutions", s.listQueryExecutionsTyped),
+		"StopQueryExecution":        op.NewTyped[queryIDReq, struct{}]("StopQueryExecution", s.stopQueryExecutionTyped),
+		"GetQueryResults":           op.NewTyped[getQueryResultsReq, getQueryResultsResp]("GetQueryResults", s.getQueryResultsTyped),
+		"GetQueryRuntimeStatistics": op.NewTyped[queryIDReq, getQueryRuntimeStatisticsResp]("GetQueryRuntimeStatistics", s.getQueryRuntimeStatisticsTyped),
 		// Workgroups and engine versions
 		"CreateWorkGroup":    op.NewTyped[createWorkGroupReq, struct{}]("CreateWorkGroup", s.createWorkGroupTyped),
 		"GetWorkGroup":       op.NewTyped[workGroupNameReq, getWorkGroupResp]("GetWorkGroup", s.getWorkGroupTyped),

@@ -61,6 +61,18 @@ func init() {
 		capabilities.Capability{Service: svc, Operation: "BatchDeletePartition", Category: "Partitions", Status: capabilities.StatusSupported,
 			Notes: "Up to 25; missing partitions in Errors"},
 
+		// Column statistics
+		capabilities.Capability{Service: svc, Operation: "UpdateColumnStatisticsForTable", Category: "Column statistics", Status: capabilities.StatusSupported,
+			Notes: "Stored and echoed; an unknown column comes back in Errors"},
+		capabilities.Capability{Service: svc, Operation: "UpdateColumnStatisticsForPartition", Category: "Column statistics", Status: capabilities.StatusSupported,
+			Notes: "Stored and echoed; an unknown column comes back in Errors"},
+		capabilities.Capability{Service: svc, Operation: "GetColumnStatisticsForTable", Category: "Column statistics", Status: capabilities.StatusSupported,
+			Notes: "A column with no statistics comes back in Errors"},
+		capabilities.Capability{Service: svc, Operation: "GetColumnStatisticsForPartition", Category: "Column statistics", Status: capabilities.StatusSupported,
+			Notes: "A column with no statistics comes back in Errors"},
+		capabilities.Capability{Service: svc, Operation: "DeleteColumnStatisticsForTable", Category: "Column statistics", Status: capabilities.StatusSupported},
+		capabilities.Capability{Service: svc, Operation: "DeleteColumnStatisticsForPartition", Category: "Column statistics", Status: capabilities.StatusSupported},
+
 		// Tags
 		capabilities.Capability{Service: svc, Operation: "TagResource", Category: "Tags",
 			Status: capabilities.StatusSupported, Notes: "Adds or overwrites tags on databases and tables"},

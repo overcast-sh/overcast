@@ -527,6 +527,8 @@ func internalService(path string) string {
 		return "appsync"
 	case strings.HasPrefix(path, "/_overcast/cloudfront"):
 		return "cloudfront"
+	case strings.HasPrefix(path, "/_overcast/athena"):
+		return "athena"
 	case strings.HasPrefix(path, "/_overcast/s3tables"):
 		// The unsigned mount of S3 Tables' Iceberg REST catalog.
 		return "s3tables"

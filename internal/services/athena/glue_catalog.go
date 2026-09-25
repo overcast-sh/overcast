@@ -12,8 +12,10 @@ import (
 
 // InitGlueCatalog wires the Glue Data Catalog that AwsDataCatalog — and any
 // GLUE catalog registered for this account — reads its databases and tables
-// from.
-func (s *Service) InitGlueCatalog(c glue.Catalog) { s.catalog = c }
+// from, and that Athena's DDL writes to.
+func (s *Service) InitGlueCatalog(c glue.Catalog, w glue.CatalogWriter) {
+	s.catalog, s.catalogWriter = c, w
+}
 
 var errCatalogNotWired = errors.New("athena: glue catalog not wired")
 

@@ -155,6 +155,24 @@ This phase needs no engine.
 
 ### Phase 3 — Athena query execution on Trino (L) — #2066
 
+> Implemented (2026-09-25): the engine manager, the Trino client, the DDL
+> router and translator, results, statistics, the bytes-scanned cutoff and
+> the tests. Three deviations from the design below:
+>
+> - The image is the stock `trinodb/trino:483`, pinned by digest, with
+>   `plugin.dir` pointed at links to the `hive` and `iceberg` plugins, since
+>   nothing publishes a slim image yet (#2184). Measured on Docker Desktop,
+>   Windows 11, 24 cores, a loaded host: ready in 9.7–16.6 s after the pull;
+>   545–569 MiB after the first queries; 652 MiB after a CTAS and a `MERGE`.
+> - The engine reaches Glue and S3 through a listener of its own, bound where
+>   `containerendpoint.ResolveListen` proves a container can connect, because
+>   Overcast's API binds loopback natively and may be TLS-only.
+> - Glue gained column statistics: Trino's Glue metastore writes them on every
+>   CTAS and `INSERT` into a Hive table.
+>
+> Follow-ups: CloudWatch metrics (#2181), `ResultReuseConfiguration` (#2182)
+> and the S3 Tables REST catalogs (#2183).
+
 **Engine manager.** Model it on ECR's `ensureRegistry` for the lazy singleton,
 and on ElastiCache's `SetDocker`, `Stop`, GC and readiness for everything else.
 

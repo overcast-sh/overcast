@@ -103,12 +103,12 @@
 | WAF v2          | 7   |
 | Shield          | 8   |
 | ACM             | 11  |
-| Athena          | 36  |
+| Athena          | 37  |
 | Bedrock         | 2   |
 | CloudWatch      | 17  |
 | DynamoDB Streams | 4   |
 | Firehose        | 9   |
-| Glue            | 26  |
+| Glue            | 32  |
 | OpenSearch      | 8   |
 | AppRegistry     | 24  |
 | Backup          | 18  |
