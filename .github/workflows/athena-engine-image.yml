@@ -1,0 +1,170 @@
+name: Athena engine image
+
+# Builds Athena's query engine image (docker/athena-engine/Dockerfile) and
+# publishes it to ghcr.io/<owner>/overcast-athena-engine.
+#
+# The image is versioned by the Trino release it carries, not by Overcast's,
+# and Overcast pins it by digest (config.DefaultAthenaEngineImage). So it is
+# published from `main` when its Dockerfile or this workflow changes, rather
+# than with each release; a pull request that changes either gets a build and
+# the engine's integration tests on the result.
+#
+# Publishing waits for the maintainer's approval in the `release` environment,
+# like every image this repository publishes. Merging to `main` is the only
+# trigger: there is deliberately no workflow_dispatch.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docker/athena-engine/**
+      - .github/workflows/athena-engine-image.yml
+  pull_request:
+    branches: [main]
+    paths:
+      - docker/athena-engine/**
+      - .github/workflows/athena-engine-image.yml
+
+permissions:
+  contents: read
+
+# One run per pull request, and every push run its own group — see the note on
+# test.yml's concurrency block for why a push run must never share one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CONTEXT: docker/athena-engine
+  IMAGE: ghcr.io/${{ github.repository_owner }}/overcast-athena-engine
+
+# No build cache is exported: the build is two downloads and an unzip, and
+# its layers would take about a gigabyte of the Actions cache test.yml's Go
+# caches live in. The second build in the test job reuses the builder's own.
+jobs:
+  test:
+    name: Build and test the engine image
+    runs-on: ubuntu-latest
+    # An estimate until the first run measures it: the build is two downloads
+    # (~620 MB of plugin zips) and a trino-core pull, and the engine tests ran
+    # in 20-40 s locally, plus the Go build of the test binary.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+
+      # Both platforms, so a change that breaks either fails here rather than
+      # at publish time. Nothing is pushed: this only proves the build.
+      - name: Build both platforms
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: ${{ env.CONTEXT }}
+          platforms: linux/amd64,linux/arm64
+
+      # The runner's own platform again, from the builder's cache, into the
+      # local daemon for the tests below.
+      - name: Load the runner's platform
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: ${{ env.CONTEXT }}
+          load: true
+          tags: overcast-athena-engine:ci
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Athena engine integration tests
+        env:
+          ATHENA_ENGINE_IMAGE: overcast-athena-engine:ci
+        run: go test -count=1 -v -timeout=15m ./tests/integration/athenaengine/...
+
+  publish:
+    name: Publish the engine image
+    needs: test
+    if: github.event_name == 'push'
+    # Publishing requires a one-click approval of this exact SHA in the
+    # 'release' environment (required reviewer: the maintainer).
+    environment: release
+    # One publish at a time, so an older build approved late cannot take the
+    # moving tag back: a newer pending publish replaces an older pending one,
+    # and a running one is never cancelled.
+    concurrency:
+      group: athena-engine-publish
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    # Most of this is the approval wait; the build is the test job's again.
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The tag is the Trino release, read from the Dockerfile so the two
+      # cannot disagree. Every timestamp in the image is the commit's — the
+      # files' through SOURCE_DATE_EPOCH and rewrite-timestamp, the created
+      # label through the metadata step — so rebuilding a commit on the same
+      # BuildKit gives the same digests.
+      - name: Read the Trino version and the commit time
+        id: inputs
+        run: |
+          version=$(sed -n 's/^ARG TRINO_VERSION=//p' "$CONTEXT/Dockerfile")
+          [ -n "$version" ] || { echo "::error::no ARG TRINO_VERSION in $CONTEXT/Dockerfile"; exit 1; }
+          {
+            echo "trino=$version"
+            echo "epoch=$(git log -1 --format=%ct)"
+            echo "created=$(TZ=UTC git log -1 --date=format-local:%Y-%m-%dT%H:%M:%SZ --format=%cd)"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # `483` moves to the newest build of that release; `483-<sha>` never
+      # moves. Overcast pins neither, but the digest. The created label would
+      # otherwise be the time this step ran.
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=${{ steps.inputs.outputs.trino }}
+            type=sha,prefix=${{ steps.inputs.outputs.trino }}-
+          labels: |
+            org.opencontainers.image.created=${{ steps.inputs.outputs.created }}
+
+      # No provenance or SBOM attestation: each records when and where it was
+      # built, which would give every rebuild a new index digest.
+      - name: Build & push image
+        id: build
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        env:
+          SOURCE_DATE_EPOCH: ${{ steps.inputs.outputs.epoch }}
+        with:
+          context: ${{ env.CONTEXT }}
+          platforms: linux/amd64,linux/arm64
+          outputs: type=registry,rewrite-timestamp=true
+          provenance: false
+          sbom: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Summarize the digest to pin
+        env:
+          TRINO: ${{ steps.inputs.outputs.trino }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          {
+            echo "Published \`$IMAGE:$TRINO\`. Pin it in \`config.DefaultAthenaEngineImage\` as:"
+            echo
+            echo "    $IMAGE:$TRINO@$DIGEST"
+          } >> "$GITHUB_STEP_SUMMARY"

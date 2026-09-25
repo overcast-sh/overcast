@@ -164,6 +164,12 @@ This phase needs no engine.
 >   nothing publishes a slim image yet (#2184). Measured on Docker Desktop,
 >   Windows 11, 24 cores, a loaded host: ready in 9.7–16.6 s after the pull;
 >   545–569 MiB after the first queries; 652 MiB after a CTAS and a `MERGE`.
+>   The slim image now has a Dockerfile (`docker/athena-engine/`) and a
+>   publishing workflow (#2184); the default moves to it once published
+>   (#2187). It is 0.78 GB to pull (amd64, compressed) against the stock
+>   image's 1.04 GB, and 1.86 GB on disk against 2.43 GB, not the 1.2 GB
+>   estimated above: trino-core is 0.41 GB compressed on its own, and the two
+>   plugins share only part of their jars. Start-up and memory are unchanged.
 > - The engine reaches Glue and S3 through a listener of its own, bound where
 >   `containerendpoint.ResolveListen` proves a container can connect, because
 >   Overcast's API binds loopback natively and may be TLS-only.

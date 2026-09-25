@@ -407,14 +407,24 @@ func WithECSDocker() Option {
 // default: the engine is a gigabyte image and seconds of start-up, which
 // only the engine's own tests should pay for. Like WithLambdaDocker it uses
 // the shared planes rather than minting networks: the engine joins no VPC,
-// and a daemon's address pools are finite.
+// and a daemon's address pools are finite. The image is AthenaEngineImage.
 func WithAthenaEngine() Option {
 	return func(so *serverOptions) {
 		so.cfg.AthenaEngine = config.AthenaEngineTrino
-		so.cfg.AthenaEngineImage = config.DefaultAthenaEngineImage
+		so.cfg.AthenaEngineImage = AthenaEngineImage()
 		so.cfg.AthenaEngineMemory = config.DefaultAthenaEngineMemory
 		so.cfg.AthenaDockerSocket = TestDockerSocket()
 	}
+}
+
+// AthenaEngineImage is the engine image the tests run: ATHENA_ENGINE_IMAGE
+// when it is set, as it is to try an engine image built locally, else the
+// default.
+func AthenaEngineImage() string {
+	if image := os.Getenv("ATHENA_ENGINE_IMAGE"); image != "" {
+		return image
+	}
+	return config.DefaultAthenaEngineImage
 }
 
 // WaitForECSDocker blocks until the ECS service of a server started with

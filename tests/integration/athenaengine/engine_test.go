@@ -19,7 +19,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/glue"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
-	"github.com/overcast-sh/overcast/internal/config"
 	"github.com/overcast-sh/overcast/internal/docker"
 	"github.com/overcast-sh/overcast/tests/helpers"
 )
@@ -31,7 +30,13 @@ const (
 
 func TestAthenaEngine(t *testing.T) {
 	helpers.SkipWithoutDocker(t)
-	helpers.PullOrSkip(t, docker.NewClient(helpers.TestDockerSocket(), nil), config.DefaultAthenaEngineImage)
+	// An image already present is not pulled here: it may be one built
+	// locally, which no registry has. The engine's own pull then fails and
+	// falls back to it.
+	dc, image := docker.NewClient(helpers.TestDockerSocket(), nil), helpers.AthenaEngineImage()
+	if present, err := dc.ImageExists(t.Context(), image); err != nil || !present {
+		helpers.PullOrSkip(t, dc, image)
+	}
 	srv := helpers.NewTestServer(t, helpers.WithAthenaEngine())
 	e := newEnv(t, srv)
 	e.waitForDocker()
