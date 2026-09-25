@@ -121,9 +121,9 @@ node-js-sdk/
       index.ts      ← makeAllGroups() + makeImplMap() — the registration point
       apigateway.ts       elasticache.ts     ses.ts
       appsync.ts          eventbridge.ts     shield.ts
-      cloudformation.ts   iam.ts             sns.ts
-      cloudfront.ts       kinesis.ts         sqs.ts
-      cloudwatch-logs.ts  kms.ts             ssm.ts
+      athena.ts           glue.ts            sns.ts
+      cloudformation.ts   iam.ts             sqs.ts
+      cloudfront.ts       kms.ts             ssm.ts
       cognito.ts          lambda.ts          stepfunctions.ts
       dynamodb.ts         pipes.ts           sts.ts
       ec2.ts              rds.ts             waf.ts

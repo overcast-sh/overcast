@@ -19,7 +19,6 @@ import { makeSTSGroups } from "./sts.ts";
 import { makeSecretsManagerGroups } from "./secretsmanager.ts";
 import { makeKMSGroups } from "./kms.ts";
 import { makeSSMGroups } from "./ssm.ts";
-import { makeKinesisGroups } from "./kinesis.ts";
 import { makeEventBridgeGroups } from "./eventbridge.ts";
 import { makePipesGroups } from "./pipes.ts";
 import { makeCloudFormationGroups } from "./cloudformation.ts";
@@ -52,7 +51,6 @@ export function makeAllGroups(suite: string): TestGroup[] {
     ...makeSecretsManagerGroups(suite),
     ...makeKMSGroups(suite),
     ...makeSSMGroups(suite),
-    ...makeKinesisGroups(suite),
     ...makeEventBridgeGroups(suite),
     ...makePipesGroups(suite),
     ...makeCloudFormationGroups(suite),

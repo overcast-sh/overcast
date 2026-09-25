@@ -424,12 +424,6 @@
     },
     {
       "suite": "dotnet-sdk",
-      "service": "kinesis",
-      "group": "kinesis-records",
-      "tests": 4
-    },
-    {
-      "suite": "dotnet-sdk",
       "service": "msk",
       "group": "msk-clusters",
       "tests": 16
@@ -1819,12 +1813,6 @@
       "service": "iam",
       "group": "iam-users",
       "tests": 11
-    },
-    {
-      "suite": "rust-sdk",
-      "service": "kinesis",
-      "group": "kinesis-records",
-      "tests": 4
     },
     {
       "suite": "rust-sdk",

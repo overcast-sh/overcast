@@ -1801,6 +1801,7 @@
     {
       "service": "kinesis",
       "name": "kinesis-records",
+      "scenario": "compat/model/authored/kinesis-records.json",
       "tests": [
         {
           "name": "PutRecord"

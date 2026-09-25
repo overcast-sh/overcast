@@ -15,7 +15,7 @@ namespace OvercastCompat.Groups;
 /// </remarks>
 internal sealed class ScenariosAuthoredKinesisRecords : IServiceGroup
 {
-    private static readonly ScenarioGroup GroupKinesisRecordsShadow = new("kinesis-records-shadow", "compat/model/authored/kinesis-records.json");
+    private static readonly ScenarioGroup GroupKinesisRecords = new("kinesis-records", "compat/model/authored/kinesis-records.json");
 
     private readonly Lazy<AmazonKinesisClient> _client;
 
@@ -35,26 +35,26 @@ internal sealed class ScenariosAuthoredKinesisRecords : IServiceGroup
 
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["kinesis-records-shadow:PutRecord"] = TestKinesisRecordsShadowPutRecord,
-        ["kinesis-records-shadow:PutRecords"] = TestKinesisRecordsShadowPutRecords,
-        ["kinesis-records-shadow:GetShardIterator"] = TestKinesisRecordsShadowGetShardIterator,
-        ["kinesis-records-shadow:GetRecords"] = TestKinesisRecordsShadowGetRecords,
+        ["kinesis-records:PutRecord"] = TestKinesisRecordsPutRecord,
+        ["kinesis-records:PutRecords"] = TestKinesisRecordsPutRecords,
+        ["kinesis-records:GetShardIterator"] = TestKinesisRecordsGetShardIterator,
+        ["kinesis-records:GetRecords"] = TestKinesisRecordsGetRecords,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["kinesis-records-shadow"] = SetupKinesisRecordsShadow,
+        ["kinesis-records"] = SetupKinesisRecords,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["kinesis-records-shadow"] = TeardownKinesisRecordsShadow,
+        ["kinesis-records"] = TeardownKinesisRecords,
     };
 
     private AmazonKinesisClient Cl() => _client.Value;
 
-    private Task SetupKinesisRecordsShadow(TestContext t) =>
-        GroupKinesisRecordsShadow.RunSetupAsync(t,
+    private Task SetupKinesisRecords(TestContext t) =>
+        GroupKinesisRecords.RunSetupAsync(t,
             new ScenarioCall
             {
                 Op = "CreateStream",
@@ -71,8 +71,8 @@ internal sealed class ScenariosAuthoredKinesisRecords : IServiceGroup
             }
         );
 
-    private Task TeardownKinesisRecordsShadow(TestContext t) =>
-        GroupKinesisRecordsShadow.RunTeardownAsync(t,
+    private Task TeardownKinesisRecords(TestContext t) =>
+        GroupKinesisRecords.RunTeardownAsync(t,
             new ScenarioCall
             {
                 Op = "DeleteStream",
@@ -88,7 +88,7 @@ internal sealed class ScenariosAuthoredKinesisRecords : IServiceGroup
             }
         );
 
-    private Task TestKinesisRecordsShadowPutRecord(TestContext t) => GroupKinesisRecordsShadow.RunTestAsync(t, "PutRecord", new ScenarioTest
+    private Task TestKinesisRecordsPutRecord(TestContext t) => GroupKinesisRecords.RunTestAsync(t, "PutRecord", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -119,7 +119,7 @@ internal sealed class ScenariosAuthoredKinesisRecords : IServiceGroup
         ],
     });
 
-    private Task TestKinesisRecordsShadowPutRecords(TestContext t) => GroupKinesisRecordsShadow.RunTestAsync(t, "PutRecords", new ScenarioTest
+    private Task TestKinesisRecordsPutRecords(TestContext t) => GroupKinesisRecords.RunTestAsync(t, "PutRecords", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -154,7 +154,7 @@ internal sealed class ScenariosAuthoredKinesisRecords : IServiceGroup
         ],
     });
 
-    private Task TestKinesisRecordsShadowGetShardIterator(TestContext t) => GroupKinesisRecordsShadow.RunTestAsync(t, "GetShardIterator", new ScenarioTest
+    private Task TestKinesisRecordsGetShardIterator(TestContext t) => GroupKinesisRecords.RunTestAsync(t, "GetShardIterator", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -200,7 +200,7 @@ internal sealed class ScenariosAuthoredKinesisRecords : IServiceGroup
         ],
     });
 
-    private Task TestKinesisRecordsShadowGetRecords(TestContext t) => GroupKinesisRecordsShadow.RunTestAsync(t, "GetRecords", new ScenarioTest
+    private Task TestKinesisRecordsGetRecords(TestContext t) => GroupKinesisRecords.RunTestAsync(t, "GetRecords", new ScenarioTest
     {
         Call = new ScenarioCall
         {
