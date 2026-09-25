@@ -44,6 +44,9 @@ import { ECRClient } from "@aws-sdk/client-ecr"
 import { EFSClient } from "@aws-sdk/client-efs"
 import { EKSClient } from "@aws-sdk/client-eks"
 import { AutoScalingClient } from "@aws-sdk/client-auto-scaling"
+import { AthenaClient } from "@aws-sdk/client-athena"
+import { GlueClient } from "@aws-sdk/client-glue"
+import { S3TablesClient } from "@aws-sdk/client-s3tables"
 import { endpointResolver } from "./discovery"
 
 // Emulator accepts any non-empty credentials without validation.
@@ -106,4 +109,7 @@ export const awsClients = {
   efs: () => new EFSClient(baseConfig()),
   eks: () => new EKSClient(baseConfig()),
   autoscaling: () => new AutoScalingClient(baseConfig()),
+  athena: () => new AthenaClient(baseConfig()),
+  glue: () => new GlueClient(baseConfig()),
+  s3tables: () => new S3TablesClient(baseConfig()),
 }

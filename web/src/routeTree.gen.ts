@@ -28,6 +28,7 @@ import { Route as ApplicationsIndexRouteImport } from './routes/applications/ind
 import { Route as ApplicationsApplicationIdRouteImport } from './routes/applications/$applicationId'
 import { Route as AppsyncIndexRouteImport } from './routes/appsync/index'
 import { Route as AppsyncApiIdRouteImport } from './routes/appsync/$apiId'
+import { Route as AthenaIndexRouteImport } from './routes/athena/index'
 import { Route as AutoscalingIndexRouteImport } from './routes/autoscaling/index'
 import { Route as CloudformationIndexRouteImport } from './routes/cloudformation/index'
 import { Route as CloudformationStackNameRouteImport } from './routes/cloudformation/$stackName'
@@ -56,6 +57,7 @@ import { Route as EksIndexRouteImport } from './routes/eks/index'
 import { Route as ElasticacheIndexRouteImport } from './routes/elasticache/index'
 import { Route as EventbridgeIndexRouteImport } from './routes/eventbridge/index'
 import { Route as EventbridgeBusNameRouteImport } from './routes/eventbridge/$busName'
+import { Route as GlueIndexRouteImport } from './routes/glue/index'
 import { Route as KinesisIndexRouteImport } from './routes/kinesis/index'
 import { Route as KinesisStreamNameRouteImport } from './routes/kinesis/$streamName'
 import { Route as KmsIndexRouteImport } from './routes/kms/index'
@@ -69,6 +71,7 @@ import { Route as RdsIndexRouteImport } from './routes/rds/index'
 import { Route as RdsInstanceRouteImport } from './routes/rds/$instance'
 import { Route as S3IndexRouteImport } from './routes/s3/index'
 import { Route as S3BucketRouteImport } from './routes/s3/$bucket'
+import { Route as S3tablesIndexRouteImport } from './routes/s3tables/index'
 import { Route as SecretsmanagerIndexRouteImport } from './routes/secretsmanager/index'
 import { Route as SecretsmanagerSecretNameRouteImport } from './routes/secretsmanager/$secretName'
 import { Route as SnsIndexRouteImport } from './routes/sns/index'
@@ -93,12 +96,16 @@ import { Route as DebugTracesIndexRouteImport } from './routes/debug/traces/inde
 import { Route as DebugTracesRequestIdRouteImport } from './routes/debug/traces/$requestId'
 import { Route as Ec2VpcVpcIdRouteImport } from './routes/ec2/vpc.$vpcId'
 import { Route as EcsClusterIndexRouteImport } from './routes/ecs/$cluster.index'
+import { Route as GlueDatabaseIndexRouteImport } from './routes/glue/$database/index'
+import { Route as GlueDatabaseTableRouteImport } from './routes/glue/$database/$table'
 import { Route as LambdaLayersIndexRouteImport } from './routes/lambda/layers/index'
 import { Route as LambdaLayersLayerNameRouteImport } from './routes/lambda/layers/$layerName'
 import { Route as S3BucketIndexRouteImport } from './routes/s3/$bucket/index'
 import { Route as S3BucketConfigRouteImport } from './routes/s3/$bucket/config'
 import { Route as S3BucketUploadRouteImport } from './routes/s3/$bucket/upload'
 import { Route as S3BucketViewRouteImport } from './routes/s3/$bucket/view'
+import { Route as S3tablesBucketIndexRouteImport } from './routes/s3tables/$bucket/index'
+import { Route as S3tablesBucketTableIdRouteImport } from './routes/s3tables/$bucket/$tableId'
 import { Route as SqsQueueIndexRouteImport } from './routes/sqs/$queue/index'
 import { Route as CloudwatchLogsGroupNameIndexRouteImport } from './routes/cloudwatch/logs/$groupName/index'
 import { Route as CloudwatchLogsGroupNameStreamNameRouteImport } from './routes/cloudwatch/logs/$groupName/$streamName'
@@ -201,6 +208,11 @@ const AppsyncIndexRoute = AppsyncIndexRouteImport.update({
 const AppsyncApiIdRoute = AppsyncApiIdRouteImport.update({
   id: '/appsync/$apiId',
   path: '/appsync/$apiId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AthenaIndexRoute = AthenaIndexRouteImport.update({
+  id: '/athena/',
+  path: '/athena/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AutoscalingIndexRoute = AutoscalingIndexRouteImport.update({
@@ -346,6 +358,11 @@ const EventbridgeBusNameRoute = EventbridgeBusNameRouteImport.update({
   path: '/eventbridge/$busName',
   getParentRoute: () => rootRouteImport,
 } as any)
+const GlueIndexRoute = GlueIndexRouteImport.update({
+  id: '/glue/',
+  path: '/glue/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const KinesisIndexRoute = KinesisIndexRouteImport.update({
   id: '/kinesis/',
   path: '/kinesis/',
@@ -409,6 +426,11 @@ const S3IndexRoute = S3IndexRouteImport.update({
 const S3BucketRoute = S3BucketRouteImport.update({
   id: '/s3/$bucket',
   path: '/s3/$bucket',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const S3tablesIndexRoute = S3tablesIndexRouteImport.update({
+  id: '/s3tables/',
+  path: '/s3tables/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SecretsmanagerIndexRoute = SecretsmanagerIndexRouteImport.update({
@@ -533,6 +555,16 @@ const EcsClusterIndexRoute = EcsClusterIndexRouteImport.update({
   path: '/',
   getParentRoute: () => EcsClusterRoute,
 } as any)
+const GlueDatabaseIndexRoute = GlueDatabaseIndexRouteImport.update({
+  id: '/glue/$database/',
+  path: '/glue/$database/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GlueDatabaseTableRoute = GlueDatabaseTableRouteImport.update({
+  id: '/glue/$database/$table',
+  path: '/glue/$database/$table',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LambdaLayersIndexRoute = LambdaLayersIndexRouteImport.update({
   id: '/lambda/layers/',
   path: '/lambda/layers/',
@@ -562,6 +594,16 @@ const S3BucketViewRoute = S3BucketViewRouteImport.update({
   id: '/view',
   path: '/view',
   getParentRoute: () => S3BucketRoute,
+} as any)
+const S3tablesBucketIndexRoute = S3tablesBucketIndexRouteImport.update({
+  id: '/s3tables/$bucket/',
+  path: '/s3tables/$bucket/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const S3tablesBucketTableIdRoute = S3tablesBucketTableIdRouteImport.update({
+  id: '/s3tables/$bucket/$tableId',
+  path: '/s3tables/$bucket/$tableId',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const SqsQueueIndexRoute = SqsQueueIndexRouteImport.update({
   id: '/',
@@ -647,6 +689,7 @@ export interface FileRoutesByFullPath {
   '/apigateway/': typeof ApigatewayIndexRoute
   '/applications/': typeof ApplicationsIndexRoute
   '/appsync/': typeof AppsyncIndexRoute
+  '/athena/': typeof AthenaIndexRoute
   '/autoscaling/': typeof AutoscalingIndexRoute
   '/cloudformation/': typeof CloudformationIndexRoute
   '/cloudfront/': typeof CloudfrontIndexRoute
@@ -661,6 +704,7 @@ export interface FileRoutesByFullPath {
   '/eks/': typeof EksIndexRoute
   '/elasticache/': typeof ElasticacheIndexRoute
   '/eventbridge/': typeof EventbridgeIndexRoute
+  '/glue/': typeof GlueIndexRoute
   '/kinesis/': typeof KinesisIndexRoute
   '/kms/': typeof KmsIndexRoute
   '/lambda/': typeof LambdaIndexRoute
@@ -668,6 +712,7 @@ export interface FileRoutesByFullPath {
   '/pipes/': typeof PipesIndexRoute
   '/rds/': typeof RdsIndexRoute
   '/s3/': typeof S3IndexRoute
+  '/s3tables/': typeof S3tablesIndexRoute
   '/secretsmanager/': typeof SecretsmanagerIndexRoute
   '/sns/': typeof SnsIndexRoute
   '/sqs/': typeof SqsIndexRoute
@@ -682,17 +727,21 @@ export interface FileRoutesByFullPath {
   '/cloudwatch/logs/stream': typeof CloudwatchLogsStreamRoute
   '/debug/traces/$requestId': typeof DebugTracesRequestIdRoute
   '/ec2/vpc/$vpcId': typeof Ec2VpcVpcIdRoute
+  '/glue/$database/$table': typeof GlueDatabaseTableRoute
   '/lambda/layers/$layerName': typeof LambdaLayersLayerNameRoute
   '/s3/$bucket/config': typeof S3BucketConfigRoute
   '/s3/$bucket/upload': typeof S3BucketUploadRoute
   '/s3/$bucket/view': typeof S3BucketViewRoute
+  '/s3tables/$bucket/$tableId': typeof S3tablesBucketTableIdRoute
   '/appsync/$apiId/': typeof AppsyncApiIdIndexRoute
   '/cloudfront/$distributionId/': typeof CloudfrontDistributionIdIndexRoute
   '/cloudwatch/logs/': typeof CloudwatchLogsIndexRoute
   '/debug/traces/': typeof DebugTracesIndexRoute
   '/ecs/$cluster/': typeof EcsClusterIndexRoute
+  '/glue/$database/': typeof GlueDatabaseIndexRoute
   '/lambda/layers/': typeof LambdaLayersIndexRoute
   '/s3/$bucket/': typeof S3BucketIndexRoute
+  '/s3tables/$bucket/': typeof S3tablesBucketIndexRoute
   '/sqs/$queue/': typeof SqsQueueIndexRoute
   '/cloudwatch/logs/$groupName/$streamName': typeof CloudwatchLogsGroupNameStreamNameRoute
   '/ecs/$cluster/tasks/$taskId': typeof EcsClusterTasksTaskIdRoute
@@ -739,6 +788,7 @@ export interface FileRoutesByTo {
   '/apigateway': typeof ApigatewayIndexRoute
   '/applications': typeof ApplicationsIndexRoute
   '/appsync': typeof AppsyncIndexRoute
+  '/athena': typeof AthenaIndexRoute
   '/autoscaling': typeof AutoscalingIndexRoute
   '/cloudformation': typeof CloudformationIndexRoute
   '/cloudfront': typeof CloudfrontIndexRoute
@@ -753,6 +803,7 @@ export interface FileRoutesByTo {
   '/eks': typeof EksIndexRoute
   '/elasticache': typeof ElasticacheIndexRoute
   '/eventbridge': typeof EventbridgeIndexRoute
+  '/glue': typeof GlueIndexRoute
   '/kinesis': typeof KinesisIndexRoute
   '/kms': typeof KmsIndexRoute
   '/lambda': typeof LambdaIndexRoute
@@ -760,6 +811,7 @@ export interface FileRoutesByTo {
   '/pipes': typeof PipesIndexRoute
   '/rds': typeof RdsIndexRoute
   '/s3': typeof S3IndexRoute
+  '/s3tables': typeof S3tablesIndexRoute
   '/secretsmanager': typeof SecretsmanagerIndexRoute
   '/sns': typeof SnsIndexRoute
   '/sqs': typeof SqsIndexRoute
@@ -774,17 +826,21 @@ export interface FileRoutesByTo {
   '/cloudwatch/logs/stream': typeof CloudwatchLogsStreamRoute
   '/debug/traces/$requestId': typeof DebugTracesRequestIdRoute
   '/ec2/vpc/$vpcId': typeof Ec2VpcVpcIdRoute
+  '/glue/$database/$table': typeof GlueDatabaseTableRoute
   '/lambda/layers/$layerName': typeof LambdaLayersLayerNameRoute
   '/s3/$bucket/config': typeof S3BucketConfigRoute
   '/s3/$bucket/upload': typeof S3BucketUploadRoute
   '/s3/$bucket/view': typeof S3BucketViewRoute
+  '/s3tables/$bucket/$tableId': typeof S3tablesBucketTableIdRoute
   '/appsync/$apiId': typeof AppsyncApiIdIndexRoute
   '/cloudfront/$distributionId': typeof CloudfrontDistributionIdIndexRoute
   '/cloudwatch/logs': typeof CloudwatchLogsIndexRoute
   '/debug/traces': typeof DebugTracesIndexRoute
   '/ecs/$cluster': typeof EcsClusterIndexRoute
+  '/glue/$database': typeof GlueDatabaseIndexRoute
   '/lambda/layers': typeof LambdaLayersIndexRoute
   '/s3/$bucket': typeof S3BucketIndexRoute
+  '/s3tables/$bucket': typeof S3tablesBucketIndexRoute
   '/sqs/$queue': typeof SqsQueueIndexRoute
   '/cloudwatch/logs/$groupName/$streamName': typeof CloudwatchLogsGroupNameStreamNameRoute
   '/ecs/$cluster/tasks/$taskId': typeof EcsClusterTasksTaskIdRoute
@@ -839,6 +895,7 @@ export interface FileRoutesById {
   '/apigateway/': typeof ApigatewayIndexRoute
   '/applications/': typeof ApplicationsIndexRoute
   '/appsync/': typeof AppsyncIndexRoute
+  '/athena/': typeof AthenaIndexRoute
   '/autoscaling/': typeof AutoscalingIndexRoute
   '/cloudformation/': typeof CloudformationIndexRoute
   '/cloudfront/': typeof CloudfrontIndexRoute
@@ -853,6 +910,7 @@ export interface FileRoutesById {
   '/eks/': typeof EksIndexRoute
   '/elasticache/': typeof ElasticacheIndexRoute
   '/eventbridge/': typeof EventbridgeIndexRoute
+  '/glue/': typeof GlueIndexRoute
   '/kinesis/': typeof KinesisIndexRoute
   '/kms/': typeof KmsIndexRoute
   '/lambda/': typeof LambdaIndexRoute
@@ -860,6 +918,7 @@ export interface FileRoutesById {
   '/pipes/': typeof PipesIndexRoute
   '/rds/': typeof RdsIndexRoute
   '/s3/': typeof S3IndexRoute
+  '/s3tables/': typeof S3tablesIndexRoute
   '/secretsmanager/': typeof SecretsmanagerIndexRoute
   '/sns/': typeof SnsIndexRoute
   '/sqs/': typeof SqsIndexRoute
@@ -874,17 +933,21 @@ export interface FileRoutesById {
   '/cloudwatch/logs/stream': typeof CloudwatchLogsStreamRoute
   '/debug/traces/$requestId': typeof DebugTracesRequestIdRoute
   '/ec2/vpc/$vpcId': typeof Ec2VpcVpcIdRoute
+  '/glue/$database/$table': typeof GlueDatabaseTableRoute
   '/lambda/layers/$layerName': typeof LambdaLayersLayerNameRoute
   '/s3/$bucket/config': typeof S3BucketConfigRoute
   '/s3/$bucket/upload': typeof S3BucketUploadRoute
   '/s3/$bucket/view': typeof S3BucketViewRoute
+  '/s3tables/$bucket/$tableId': typeof S3tablesBucketTableIdRoute
   '/appsync/$apiId/': typeof AppsyncApiIdIndexRoute
   '/cloudfront/$distributionId/': typeof CloudfrontDistributionIdIndexRoute
   '/cloudwatch/logs/': typeof CloudwatchLogsIndexRoute
   '/debug/traces/': typeof DebugTracesIndexRoute
   '/ecs/$cluster/': typeof EcsClusterIndexRoute
+  '/glue/$database/': typeof GlueDatabaseIndexRoute
   '/lambda/layers/': typeof LambdaLayersIndexRoute
   '/s3/$bucket/': typeof S3BucketIndexRoute
+  '/s3tables/$bucket/': typeof S3tablesBucketIndexRoute
   '/sqs/$queue/': typeof SqsQueueIndexRoute
   '/cloudwatch/logs/$groupName/$streamName': typeof CloudwatchLogsGroupNameStreamNameRoute
   '/ecs/$cluster/tasks/$taskId': typeof EcsClusterTasksTaskIdRoute
@@ -940,6 +1003,7 @@ export interface FileRouteTypes {
     | '/apigateway/'
     | '/applications/'
     | '/appsync/'
+    | '/athena/'
     | '/autoscaling/'
     | '/cloudformation/'
     | '/cloudfront/'
@@ -954,6 +1018,7 @@ export interface FileRouteTypes {
     | '/eks/'
     | '/elasticache/'
     | '/eventbridge/'
+    | '/glue/'
     | '/kinesis/'
     | '/kms/'
     | '/lambda/'
@@ -961,6 +1026,7 @@ export interface FileRouteTypes {
     | '/pipes/'
     | '/rds/'
     | '/s3/'
+    | '/s3tables/'
     | '/secretsmanager/'
     | '/sns/'
     | '/sqs/'
@@ -975,17 +1041,21 @@ export interface FileRouteTypes {
     | '/cloudwatch/logs/stream'
     | '/debug/traces/$requestId'
     | '/ec2/vpc/$vpcId'
+    | '/glue/$database/$table'
     | '/lambda/layers/$layerName'
     | '/s3/$bucket/config'
     | '/s3/$bucket/upload'
     | '/s3/$bucket/view'
+    | '/s3tables/$bucket/$tableId'
     | '/appsync/$apiId/'
     | '/cloudfront/$distributionId/'
     | '/cloudwatch/logs/'
     | '/debug/traces/'
     | '/ecs/$cluster/'
+    | '/glue/$database/'
     | '/lambda/layers/'
     | '/s3/$bucket/'
+    | '/s3tables/$bucket/'
     | '/sqs/$queue/'
     | '/cloudwatch/logs/$groupName/$streamName'
     | '/ecs/$cluster/tasks/$taskId'
@@ -1032,6 +1102,7 @@ export interface FileRouteTypes {
     | '/apigateway'
     | '/applications'
     | '/appsync'
+    | '/athena'
     | '/autoscaling'
     | '/cloudformation'
     | '/cloudfront'
@@ -1046,6 +1117,7 @@ export interface FileRouteTypes {
     | '/eks'
     | '/elasticache'
     | '/eventbridge'
+    | '/glue'
     | '/kinesis'
     | '/kms'
     | '/lambda'
@@ -1053,6 +1125,7 @@ export interface FileRouteTypes {
     | '/pipes'
     | '/rds'
     | '/s3'
+    | '/s3tables'
     | '/secretsmanager'
     | '/sns'
     | '/sqs'
@@ -1067,17 +1140,21 @@ export interface FileRouteTypes {
     | '/cloudwatch/logs/stream'
     | '/debug/traces/$requestId'
     | '/ec2/vpc/$vpcId'
+    | '/glue/$database/$table'
     | '/lambda/layers/$layerName'
     | '/s3/$bucket/config'
     | '/s3/$bucket/upload'
     | '/s3/$bucket/view'
+    | '/s3tables/$bucket/$tableId'
     | '/appsync/$apiId'
     | '/cloudfront/$distributionId'
     | '/cloudwatch/logs'
     | '/debug/traces'
     | '/ecs/$cluster'
+    | '/glue/$database'
     | '/lambda/layers'
     | '/s3/$bucket'
+    | '/s3tables/$bucket'
     | '/sqs/$queue'
     | '/cloudwatch/logs/$groupName/$streamName'
     | '/ecs/$cluster/tasks/$taskId'
@@ -1131,6 +1208,7 @@ export interface FileRouteTypes {
     | '/apigateway/'
     | '/applications/'
     | '/appsync/'
+    | '/athena/'
     | '/autoscaling/'
     | '/cloudformation/'
     | '/cloudfront/'
@@ -1145,6 +1223,7 @@ export interface FileRouteTypes {
     | '/eks/'
     | '/elasticache/'
     | '/eventbridge/'
+    | '/glue/'
     | '/kinesis/'
     | '/kms/'
     | '/lambda/'
@@ -1152,6 +1231,7 @@ export interface FileRouteTypes {
     | '/pipes/'
     | '/rds/'
     | '/s3/'
+    | '/s3tables/'
     | '/secretsmanager/'
     | '/sns/'
     | '/sqs/'
@@ -1166,17 +1246,21 @@ export interface FileRouteTypes {
     | '/cloudwatch/logs/stream'
     | '/debug/traces/$requestId'
     | '/ec2/vpc/$vpcId'
+    | '/glue/$database/$table'
     | '/lambda/layers/$layerName'
     | '/s3/$bucket/config'
     | '/s3/$bucket/upload'
     | '/s3/$bucket/view'
+    | '/s3tables/$bucket/$tableId'
     | '/appsync/$apiId/'
     | '/cloudfront/$distributionId/'
     | '/cloudwatch/logs/'
     | '/debug/traces/'
     | '/ecs/$cluster/'
+    | '/glue/$database/'
     | '/lambda/layers/'
     | '/s3/$bucket/'
+    | '/s3tables/$bucket/'
     | '/sqs/$queue/'
     | '/cloudwatch/logs/$groupName/$streamName'
     | '/ecs/$cluster/tasks/$taskId'
@@ -1230,6 +1314,7 @@ export interface RootRouteChildren {
   ApigatewayIndexRoute: typeof ApigatewayIndexRoute
   ApplicationsIndexRoute: typeof ApplicationsIndexRoute
   AppsyncIndexRoute: typeof AppsyncIndexRoute
+  AthenaIndexRoute: typeof AthenaIndexRoute
   AutoscalingIndexRoute: typeof AutoscalingIndexRoute
   CloudformationIndexRoute: typeof CloudformationIndexRoute
   CloudfrontIndexRoute: typeof CloudfrontIndexRoute
@@ -1243,6 +1328,7 @@ export interface RootRouteChildren {
   EksIndexRoute: typeof EksIndexRoute
   ElasticacheIndexRoute: typeof ElasticacheIndexRoute
   EventbridgeIndexRoute: typeof EventbridgeIndexRoute
+  GlueIndexRoute: typeof GlueIndexRoute
   KinesisIndexRoute: typeof KinesisIndexRoute
   KmsIndexRoute: typeof KmsIndexRoute
   LambdaIndexRoute: typeof LambdaIndexRoute
@@ -1250,6 +1336,7 @@ export interface RootRouteChildren {
   PipesIndexRoute: typeof PipesIndexRoute
   RdsIndexRoute: typeof RdsIndexRoute
   S3IndexRoute: typeof S3IndexRoute
+  S3tablesIndexRoute: typeof S3tablesIndexRoute
   SecretsmanagerIndexRoute: typeof SecretsmanagerIndexRoute
   SnsIndexRoute: typeof SnsIndexRoute
   SqsIndexRoute: typeof SqsIndexRoute
@@ -1263,9 +1350,13 @@ export interface RootRouteChildren {
   CloudwatchLogsGroupRoute: typeof CloudwatchLogsGroupRoute
   CloudwatchLogsStreamRoute: typeof CloudwatchLogsStreamRoute
   Ec2VpcVpcIdRoute: typeof Ec2VpcVpcIdRoute
+  GlueDatabaseTableRoute: typeof GlueDatabaseTableRoute
   LambdaLayersLayerNameRoute: typeof LambdaLayersLayerNameRoute
+  S3tablesBucketTableIdRoute: typeof S3tablesBucketTableIdRoute
   CloudwatchLogsIndexRoute: typeof CloudwatchLogsIndexRoute
+  GlueDatabaseIndexRoute: typeof GlueDatabaseIndexRoute
   LambdaLayersIndexRoute: typeof LambdaLayersIndexRoute
+  S3tablesBucketIndexRoute: typeof S3tablesBucketIndexRoute
   CloudwatchLogsGroupNameStreamNameRoute: typeof CloudwatchLogsGroupNameStreamNameRoute
   StepfunctionsExecutionNameExecutionRoute: typeof StepfunctionsExecutionNameExecutionRoute
   WafScopeWebAclIdNameRoute: typeof WafScopeWebAclIdNameRoute
@@ -1405,6 +1496,13 @@ declare module '@tanstack/react-router' {
       path: '/appsync/$apiId'
       fullPath: '/appsync/$apiId'
       preLoaderRoute: typeof AppsyncApiIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/athena/': {
+      id: '/athena/'
+      path: '/athena'
+      fullPath: '/athena/'
+      preLoaderRoute: typeof AthenaIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/autoscaling/': {
@@ -1603,6 +1701,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EventbridgeBusNameRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/glue/': {
+      id: '/glue/'
+      path: '/glue'
+      fullPath: '/glue/'
+      preLoaderRoute: typeof GlueIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/kinesis/': {
       id: '/kinesis/'
       path: '/kinesis'
@@ -1692,6 +1797,13 @@ declare module '@tanstack/react-router' {
       path: '/s3/$bucket'
       fullPath: '/s3/$bucket'
       preLoaderRoute: typeof S3BucketRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/s3tables/': {
+      id: '/s3tables/'
+      path: '/s3tables'
+      fullPath: '/s3tables/'
+      preLoaderRoute: typeof S3tablesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/secretsmanager/': {
@@ -1862,6 +1974,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EcsClusterIndexRouteImport
       parentRoute: typeof EcsClusterRoute
     }
+    '/glue/$database/': {
+      id: '/glue/$database/'
+      path: '/glue/$database'
+      fullPath: '/glue/$database/'
+      preLoaderRoute: typeof GlueDatabaseIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/glue/$database/$table': {
+      id: '/glue/$database/$table'
+      path: '/glue/$database/$table'
+      fullPath: '/glue/$database/$table'
+      preLoaderRoute: typeof GlueDatabaseTableRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/lambda/layers/': {
       id: '/lambda/layers/'
       path: '/lambda/layers'
@@ -1903,6 +2029,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/s3/$bucket/view'
       preLoaderRoute: typeof S3BucketViewRouteImport
       parentRoute: typeof S3BucketRoute
+    }
+    '/s3tables/$bucket/': {
+      id: '/s3tables/$bucket/'
+      path: '/s3tables/$bucket'
+      fullPath: '/s3tables/$bucket/'
+      preLoaderRoute: typeof S3tablesBucketIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/s3tables/$bucket/$tableId': {
+      id: '/s3tables/$bucket/$tableId'
+      path: '/s3tables/$bucket/$tableId'
+      fullPath: '/s3tables/$bucket/$tableId'
+      preLoaderRoute: typeof S3tablesBucketTableIdRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/sqs/$queue/': {
       id: '/sqs/$queue/'
@@ -2099,6 +2239,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApigatewayIndexRoute: ApigatewayIndexRoute,
   ApplicationsIndexRoute: ApplicationsIndexRoute,
   AppsyncIndexRoute: AppsyncIndexRoute,
+  AthenaIndexRoute: AthenaIndexRoute,
   AutoscalingIndexRoute: AutoscalingIndexRoute,
   CloudformationIndexRoute: CloudformationIndexRoute,
   CloudfrontIndexRoute: CloudfrontIndexRoute,
@@ -2112,6 +2253,7 @@ const rootRouteChildren: RootRouteChildren = {
   EksIndexRoute: EksIndexRoute,
   ElasticacheIndexRoute: ElasticacheIndexRoute,
   EventbridgeIndexRoute: EventbridgeIndexRoute,
+  GlueIndexRoute: GlueIndexRoute,
   KinesisIndexRoute: KinesisIndexRoute,
   KmsIndexRoute: KmsIndexRoute,
   LambdaIndexRoute: LambdaIndexRoute,
@@ -2119,6 +2261,7 @@ const rootRouteChildren: RootRouteChildren = {
   PipesIndexRoute: PipesIndexRoute,
   RdsIndexRoute: RdsIndexRoute,
   S3IndexRoute: S3IndexRoute,
+  S3tablesIndexRoute: S3tablesIndexRoute,
   SecretsmanagerIndexRoute: SecretsmanagerIndexRoute,
   SnsIndexRoute: SnsIndexRoute,
   SqsIndexRoute: SqsIndexRoute,
@@ -2132,9 +2275,13 @@ const rootRouteChildren: RootRouteChildren = {
   CloudwatchLogsGroupRoute: CloudwatchLogsGroupRoute,
   CloudwatchLogsStreamRoute: CloudwatchLogsStreamRoute,
   Ec2VpcVpcIdRoute: Ec2VpcVpcIdRoute,
+  GlueDatabaseTableRoute: GlueDatabaseTableRoute,
   LambdaLayersLayerNameRoute: LambdaLayersLayerNameRoute,
+  S3tablesBucketTableIdRoute: S3tablesBucketTableIdRoute,
   CloudwatchLogsIndexRoute: CloudwatchLogsIndexRoute,
+  GlueDatabaseIndexRoute: GlueDatabaseIndexRoute,
   LambdaLayersIndexRoute: LambdaLayersIndexRoute,
+  S3tablesBucketIndexRoute: S3tablesBucketIndexRoute,
   CloudwatchLogsGroupNameStreamNameRoute:
     CloudwatchLogsGroupNameStreamNameRoute,
   StepfunctionsExecutionNameExecutionRoute:

@@ -35,6 +35,12 @@
  *   ecs          / AWS::ECS::Cluster          → /ecs/$cluster
  *   apigateway (rest) / AWS::ApiGateway::RestApi → /apigateway/rest/$apiId
  *   apigateway (http) / AWS::ApiGatewayV2::Api   → /apigateway/http/$apiId
+ *   athena (workgroup, datacatalog) / AWS::Athena::WorkGroup, ::DataCatalog
+ *                                             → /athena?tab=…&q=name
+ *   glue (database) / AWS::Glue::Database     → /glue/$database
+ *   glue (table)                              → /glue/$database/$table
+ *   s3tables (bucket) / AWS::S3Tables::TableBucket → /s3tables/$bucket
+ *   s3tables (table)  / AWS::S3Tables::Table       → /s3tables/$bucket/$tableId
  *
  * Unrecognised services render as plain text — no link, no error.
  */

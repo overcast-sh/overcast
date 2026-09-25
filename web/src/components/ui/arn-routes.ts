@@ -19,6 +19,27 @@ const IAM_TAB_FOR: Record<string, string> = {
   policy: "policies",
 }
 
+/**
+ * The Athena page's tabs, as its `tab` search param names them — the ones a
+ * link to one Athena resource opens on, filtered to it by `q`.
+ */
+export const ATHENA_TAB = {
+  workgroups: "workgroups",
+  savedQueries: "saved-queries",
+  dataCatalogs: "data-catalogs",
+} as const
+
+/** The Athena page's tab for each kind of Athena resource ARN. */
+const ATHENA_TAB_FOR: Record<string, string> = {
+  workgroup: ATHENA_TAB.workgroups,
+  datacatalog: ATHENA_TAB.dataCatalogs,
+}
+
+/** The Athena page, on the tab listing `kind`, filtered to `name`. */
+function athenaRoute(kind: string, name: string): ResolvedRoute {
+  return { kind: "search", to: "/athena", search: { tab: ATHENA_TAB_FOR[kind], q: name } }
+}
+
 /** Resolve an ARN to a UI route. Returns null for unknown/unparseable ARNs. */
 export function resolveArn(arn: string): ResolvedRoute | null {
   if (!arn.startsWith("arn:")) return null
@@ -215,6 +236,41 @@ export function resolveArn(arn: string): ResolvedRoute | null {
         return { kind: "params", to: "/ecs/$cluster", params: { cluster: clusterMatch[1] } }
       break
     }
+    case "athena": {
+      // arn:aws:athena:region:account:workgroup/name or datacatalog/name
+      const athenaMatch = parts.at(5)?.match(/^(workgroup|datacatalog)\/(.+)$/)
+      if (athenaMatch) return athenaRoute(athenaMatch[1], athenaMatch[2])
+      break
+    }
+    case "glue": {
+      // arn:aws:glue:region:account:table/db/name, database/db or catalog
+      const resource = parts.at(5) ?? ""
+      const tableMatch = /^table\/([^/]+)\/(.+)$/.exec(resource)
+      if (tableMatch)
+        return {
+          kind: "params",
+          to: "/glue/$database/$table",
+          params: { database: tableMatch[1], table: tableMatch[2] },
+        }
+      const databaseMatch = /^database\/(.+)$/.exec(resource)
+      if (databaseMatch)
+        return { kind: "params", to: "/glue/$database", params: { database: databaseMatch[1] } }
+      if (resource === "catalog") return { kind: "search", to: "/glue", search: {} }
+      break
+    }
+    case "s3tables": {
+      // arn:aws:s3tables:region:account:bucket/name or bucket/name/table/id
+      const bucketMatch = parts.at(5)?.match(/^bucket\/([^/]+)(?:\/table\/([^/]+))?$/)
+      if (bucketMatch?.[2])
+        return {
+          kind: "params",
+          to: "/s3tables/$bucket/$tableId",
+          params: { bucket: bucketMatch[1], tableId: bucketMatch[2] },
+        }
+      if (bucketMatch)
+        return { kind: "params", to: "/s3tables/$bucket", params: { bucket: bucketMatch[1] } }
+      break
+    }
     case "apigateway": {
       // arn:aws:apigateway:region::/restapis/id or /apis/id (account segment is empty)
       const restMatch = parts.at(5)?.match(/^\/restapis\/([^/]+)/)
@@ -247,6 +303,12 @@ const CFN_TYPE_TO_SERVICE: Record<string, string> = {
   "AWS::Cognito::UserPool": "cognito",
   "AWS::AppSync::GraphQLApi": "appsync",
   "AWS::Events::EventBus": "eventbridge",
+  "AWS::Athena::WorkGroup": "athena:workgroup",
+  "AWS::Athena::DataCatalog": "athena:datacatalog",
+  "AWS::Glue::Database": "glue:database",
+  // Both answer Ref with their ARN.
+  "AWS::S3Tables::TableBucket": "s3tables",
+  "AWS::S3Tables::Table": "s3tables",
 }
 
 /**
@@ -305,6 +367,14 @@ export function resolveService(service: string, resourceId: string): ResolvedRou
       return { kind: "params", to: "/appsync/$apiId", params: { apiId: resourceId } }
     case "eventbridge":
       return { kind: "params", to: "/eventbridge/$busName", params: { busName: resourceId } }
+    case "athena:workgroup":
+      return athenaRoute("workgroup", resourceId)
+    case "athena:datacatalog":
+      return athenaRoute("datacatalog", resourceId)
+    case "glue:database":
+      return { kind: "params", to: "/glue/$database", params: { database: resourceId } }
+    case "s3tables":
+      return resolveArn(resourceId)
   }
   return null
 }

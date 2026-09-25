@@ -48,6 +48,9 @@ import {
   Network,
   HardDrive,
   Gauge,
+  DatabaseSearch,
+  LibraryBig,
+  Table2,
   type LucideIcon,
 } from "lucide-react"
 
@@ -55,6 +58,7 @@ import {
 
 export type ServiceCategory =
   | "storage"
+  | "analytics"
   | "compute"
   | "messaging"
   | "security"
@@ -63,6 +67,7 @@ export type ServiceCategory =
 
 export const CATEGORY_LABELS: Record<ServiceCategory, string> = {
   storage: "Storage & Database",
+  analytics: "Analytics",
   compute: "Compute",
   messaging: "Messaging",
   security: "Security & Identity",
@@ -72,6 +77,7 @@ export const CATEGORY_LABELS: Record<ServiceCategory, string> = {
 
 export const CATEGORY_ORDER: ServiceCategory[] = [
   "storage",
+  "analytics",
   "compute",
   "messaging",
   "security",
@@ -281,6 +287,59 @@ export const SERVICES = {
     description: "Managed Kafka clusters (Redpanda)",
     dashboardDescription: "Managed Kafka — clusters, bootstrap brokers, and configurations.",
     docKey: "msk",
+  },
+
+  // ── Analytics ──────────────────────────────────────────────────────────
+  // Athena and the Glue Data Catalog share the violet-magenta end of the
+  // ramp, as one query-and-catalog family; S3 Tables takes S3's slot, since
+  // its tables live in S3 warehouse buckets. Their console pages are still to
+  // come (#2072, #2086, #2087): until each lands, its routes render
+  // ConsolePendingPage, and it adds its sub-nav `children` with its tabs.
+  athena: {
+    label: "Athena",
+    icon: DatabaseSearch,
+    color: "text-cat-8",
+    bg: "bg-cat-8/10",
+    border: "border-cat-8/30",
+    css: "var(--cat-8)",
+    letter: "At",
+    to: "/athena",
+    category: "analytics",
+    description: "SQL queries over S3 data",
+    dashboardDescription:
+      "SQL over S3 data — run queries, then review history, saved queries and workgroups.",
+    docKey: "athena",
+  },
+  glue: {
+    label: "Glue",
+    icon: LibraryBig,
+    color: "text-cat-9",
+    bg: "bg-cat-9/10",
+    border: "border-cat-9/30",
+    css: "var(--cat-9)",
+    letter: "Gl",
+    to: "/glue",
+    category: "analytics",
+    description: "Databases, tables and partitions",
+    dashboardLabel: "Glue Data Catalog",
+    dashboardDescription:
+      "Data Catalog — the databases, tables and partitions Athena and Iceberg clients read.",
+    docKey: "glue",
+  },
+  s3tables: {
+    label: "S3 Tables",
+    icon: Table2,
+    color: "text-cat-2",
+    bg: "bg-cat-2/10",
+    border: "border-cat-2/30",
+    css: "var(--cat-2)",
+    letter: "S3T",
+    to: "/s3tables",
+    category: "analytics",
+    description: "Managed Iceberg tables",
+    dashboardDescription:
+      "Iceberg tables in table buckets — namespaces, tables, snapshots and the REST catalog.",
+    docKey: "s3tables",
   },
 
   // ── Compute ────────────────────────────────────────────────────────────
