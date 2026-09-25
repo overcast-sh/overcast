@@ -2,7 +2,7 @@ service: iam
 status: reviewed
 priority: p0
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-09-20
+last_updated: 2026-09-25
 protocols: [query]
 implementation: [internal/services/iam, internal/services/cloudformation]
 integration_tests: [tests/integration/iam, tests/integration/cloudformation]
@@ -55,6 +55,9 @@ operations:
       cfn_replacement_properties:
         status: reviewed
         evidence: RoleName and Path changes return errReplacementRequired; Description, MaxSessionDuration, PermissionsBoundary, ManagedPolicyArns, Policies and Tags reconcile in place, matching each property's documented Update requires.
+      trust_policy_encoding:
+        status: fixed
+        evidence: "Role.AssumeRolePolicyDocument was returned as raw JSON on CreateRole, GetRole, ListRoles and every Role inside an InstanceProfile; API_Role.html documents it URL-encoded per RFC 3986. It now goes through encodePolicyDocument while the store keeps it raw (#2180). Pinned on the raw XML body by tests/integration/iam/iam_policy_document_encoding_test.go."
   GetRole:
     status: reviewed
     aws_docs:
@@ -64,7 +67,11 @@ operations:
       - tests/integration/iam/golden_test.go
       - tests/integration/iam/iam_test.go
       - tests/integration/iam/iam_resource_tags_test.go
+      - tests/integration/iam/iam_policy_document_encoding_test.go
     scenarios:
+      trust_policy_encoding:
+        status: fixed
+        evidence: AssumeRolePolicyDocument is returned URL-encoded per RFC 3986 (spaces as %20), including after UpdateAssumeRolePolicy (#2180).
       existing_role:
         status: reviewed
         evidence: Returns the role with its Tags and, when set, AttachedPermissionsBoundary; golden_test.go pins the wire shape.
@@ -285,6 +292,7 @@ operations:
         evidence: Path and Description changes force a replacement, matching the resource reference.
 findings:
   fixed:
+    - "Policy-document encoding (#2180). Role.AssumeRolePolicyDocument (CreateRole, GetRole, ListRoles, instance-profile roles) and GetAccountAuthorizationDetails' RoleDetail trust policy and User/Group/RolePolicyList documents were returned as raw JSON; AWS URL-encodes every policy document per RFC 3986. All now go through encodePolicyDocument; stored documents stay raw, so SimulatePrincipalPolicy, enforcement and the MCP tools (which read the store) are unaffected. GetPolicyVersion is not implemented and GetAccountAuthorizationDetails emits no PolicyVersionList, so no managed-policy document is returned anywhere yet — whoever adds either must encode it."
     - Reconcile docs/capability wording with IAM enforcement tests. README.md's "What Overcast is NOT" table claimed opt-in enforcement "evaluates identity, resource, and boundary policies" — resource-based policies (bucket/queue/topic policies) are not consulted at request time; only identity policies and the permissions boundary are, per internal/middleware/iam_enforce.go's evaluateIAMDecision and docs/services/iam.md's own "Resource-based policies ... are not consulted at request time yet" note, both of which the internal/middleware/iam_enforce_resources_test.go suite exercises (those "ResourcePolicy" test names cover identity-policy Resource-ARN scoping, not attached resource-based policies). Also completed docs/services/iam.md's action-prefix exception list, which named 8 of the 10 services whose IAM action prefix differs from Overcast's service key — DynamoDB Streams (authorizes under dynamodb:) and AppConfig Data (authorizes under appconfig:) were implemented in internal/middleware/serviceidentity.go's iamActionPrefix but undocumented and untested; pinned with two new cases in internal/middleware/serviceidentity_test.go's TestRequestIAMActionUsesTheAWSActionPrefix.
     - CDK role, policy and instance profile review (#154). Five divergences, each with a failing test first. (1) AWS::IAM::InstanceProfile's Ref returned the ARN where AWS documents the name, so an ARN reached every property that takes an InstanceProfileName. (2) DeleteInstanceProfile deleted a profile that still held a role, where AWS answers DeleteConflict; CloudFormation's handler gained the DeleteWithProperties that removes the roles first. (3) AddRoleToInstanceProfile ignored AWS's one-role-per-profile quota. (4) AWS::IAM::Policy provisioned successfully with no Groups, Roles or Users, writing its document to nobody. (5) Role and instance-profile updates restated GetAtt "Arn" without the entity's Path, changing the ARN shape of any entity at a non-default path on an unrelated update. ListRolePolicies, ListUserPolicies and ListGroupPolicies also returned map-iteration order, so two identical calls disagreed; they are sorted now.
   remaining_gaps:
