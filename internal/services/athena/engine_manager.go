@@ -38,15 +38,19 @@ const (
 	engineResourceID = "engine"
 )
 
-// Engine states, as the status endpoint reports them.
+// engineState is the engine's state, as the status endpoint reports it. An
+// alias, so cmd/tsgen renders the constants below as the console's union.
+type engineState = string
+
+// Engine states.
 const (
-	engineOff      = "off"      // ATHENA_ENGINE=inert, or no Docker: queries run inert
-	engineProbing  = "probing"  // waiting to learn whether Docker is there
-	engineStopped  = "stopped"  // not running; the next query starts it
-	enginePulling  = "pulling"  // pulling the image
-	engineStarting = "starting" // container started, engine not answering yet
-	engineReady    = "ready"
-	engineFailed   = "failed" // the last start failed; the next query tries again
+	engineOff      engineState = "off"      // ATHENA_ENGINE=inert, or no Docker: queries run inert
+	engineProbing  engineState = "probing"  // waiting to learn whether Docker is there
+	engineStopped  engineState = "stopped"  // not running; the next query starts it
+	enginePulling  engineState = "pulling"  // pulling the image
+	engineStarting engineState = "starting" // container started, engine not answering yet
+	engineReady    engineState = "ready"
+	engineFailed   engineState = "failed" // the last start failed; the next query tries again
 )
 
 var errEngineUnavailable = errors.New("athena: no Docker daemon to run the query engine on")
@@ -324,7 +328,7 @@ func (m *engineManager) awaitReady(b *engineBoot) error {
 	}
 }
 
-func (m *engineManager) setState(state, lastError string) {
+func (m *engineManager) setState(state engineState, lastError string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.status.State, m.status.LastError = state, lastError
