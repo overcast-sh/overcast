@@ -212,6 +212,8 @@ func parseShowTables(p *ddlParser) (ddlStatement, error) {
 // showPartitionsStmt is SHOW PARTITIONS name.
 type showPartitionsStmt struct{ Table tableRef }
 
+func (s *showPartitionsStmt) target() tableRef { return s.Table }
+
 func parseShowPartitions(p *ddlParser) (ddlStatement, error) {
 	table, err := p.tableName()
 	if err != nil {
@@ -222,6 +224,8 @@ func parseShowPartitions(p *ddlParser) (ddlStatement, error) {
 
 // showColumnsStmt is SHOW COLUMNS (IN|FROM) name [(IN|FROM) database].
 type showColumnsStmt struct{ Table tableRef }
+
+func (s *showColumnsStmt) target() tableRef { return s.Table }
 
 func parseShowColumns(p *ddlParser) (ddlStatement, error) {
 	if !p.accept("IN") && !p.accept("FROM") {
@@ -245,6 +249,8 @@ type showTablePropertiesStmt struct {
 	Property string
 }
 
+func (s *showTablePropertiesStmt) target() tableRef { return s.Table }
+
 func parseShowTableProperties(p *ddlParser) (ddlStatement, error) {
 	table, err := p.tableName()
 	if err != nil {
@@ -265,6 +271,8 @@ func parseShowTableProperties(p *ddlParser) (ddlStatement, error) {
 // describeStmt is DESCRIBE [EXTENDED|FORMATTED] name. DESCRIBE INPUT and
 // DESCRIBE OUTPUT, which describe a prepared statement, are the engine's.
 type describeStmt struct{ Table tableRef }
+
+func (s *describeStmt) target() tableRef { return s.Table }
 
 func parseDescribe(p *ddlParser) (ddlStatement, error) {
 	if p.peek().is("INPUT") || p.peek().is("OUTPUT") {

@@ -57,6 +57,9 @@ import { stsKeys } from "@/features/sts/data"
 import { kinesisKeys } from "@/features/kinesis/data"
 import { ecrKeys } from "@/features/ecr/data"
 import { wafKeys } from "@/features/waf/data"
+import { athenaKeys } from "@/features/athena/data"
+import { glueKeys } from "@/features/glue/data"
+import { s3tablesKeys } from "@/features/s3tables/data"
 import { topologyKey } from "@/features/map/use-topology"
 import { lambdaInstanceKeys } from "@/hooks/use-lambda-instances"
 import { appendEvents } from "@/workers/event-buffer"
@@ -533,6 +536,18 @@ function getEventQueryMap(): Record<string, QueryKey[] | undefined> {
     // ── WAF ────────────────────────────────────────────────────────────
     [EventType.waf.WebACLCreated]: [wafKeys.webACLs(), topologyKey],
     [EventType.waf.WebACLDeleted]: [wafKeys.webACLs(), topologyKey],
+    // ── Athena ─────────────────────────────────────────────────────────
+    [EventType.athena.QueryStateChanged]: [athenaKeys.executions()],
+    // ── Glue ───────────────────────────────────────────────────────────
+    // Deleting a table deletes its partitions with it.
+    [EventType.glue.TableChanged]: [glueKeys.tables(), glueKeys.partitions()],
+    [EventType.glue.PartitionsChanged]: [glueKeys.partitions()],
+    // ── S3 Tables ──────────────────────────────────────────────────────
+    // Tables are nodes on the map (internal/services/s3tables/topology.go).
+    [EventType.s3tables.TableCreated]: [s3tablesKeys.tables(), topologyKey],
+    [EventType.s3tables.TableDeleted]: [s3tablesKeys.tables(), topologyKey],
+    [EventType.s3tables.TableRenamed]: [s3tablesKeys.tables(), topologyKey],
+    [EventType.s3tables.TableCommitted]: [s3tablesKeys.tables()],
   }
 }
 

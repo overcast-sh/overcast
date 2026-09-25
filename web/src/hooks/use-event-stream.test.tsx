@@ -14,6 +14,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { render, renderHook, act, screen } from "@testing-library/react"
 import { DISCONNECTED, type WorkerMessage } from "@/workers/event-stream.protocol"
 import type { StreamEvent } from "@/types"
+import { athenaKeys } from "@/features/athena/data"
+import { glueKeys } from "@/features/glue/data"
+import { s3tablesKeys } from "@/features/s3tables/data"
+import { topologyKey } from "@/features/map/use-topology"
 
 const listeners: ((msg: WorkerMessage) => void)[] = []
 
@@ -223,5 +227,32 @@ describe("useEventStreamSubscription", () => {
 
     emit({ type: "events", events: [ev(2)] })
     expect(invalidate.mock.calls.length).toBe(afterQuiet + leading)
+  })
+})
+
+describe("useEventStreamSubscription > data-lake events", () => {
+  beforeEach(() => {
+    listeners.length = 0
+  })
+
+  // #2085: what each event the Athena, Glue and S3 Tables services publish
+  // makes stale.
+  it.each([
+    ["athena:QueryStateChanged", "athena", [athenaKeys.executions()]],
+    ["glue:TableChanged", "glue", [glueKeys.tables(), glueKeys.partitions()]],
+    ["glue:PartitionsChanged", "glue", [glueKeys.partitions()]],
+    ["s3tables:TableCreated", "s3tables", [s3tablesKeys.tables(), topologyKey]],
+    ["s3tables:TableDeleted", "s3tables", [s3tablesKeys.tables(), topologyKey]],
+    ["s3tables:TableRenamed", "s3tables", [s3tablesKeys.tables(), topologyKey]],
+    ["s3tables:TableCommitted", "s3tables", [s3tablesKeys.tables()]],
+  ])("invalidates what %s makes stale", (type, source, keys) => {
+    const client = makeClient()
+    const invalidate = vi.spyOn(client, "invalidateQueries")
+    renderHook(() => useEventStreamSubscription(), { wrapper: wrapperFor(client) })
+
+    emit(init([]))
+    emit({ type: "events", events: [ev(1, type, source)] })
+
+    expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual(keys)
   })
 })

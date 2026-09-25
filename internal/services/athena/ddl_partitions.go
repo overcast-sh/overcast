@@ -276,6 +276,8 @@ type alterPartitionsStmt struct {
 	Partitions []partitionSpec
 }
 
+func (s *alterPartitionsStmt) target() tableRef { return s.Table }
+
 // parseAlterTable reads the partition forms of ALTER TABLE; any other ALTER
 // TABLE is the engine's.
 func parseAlterTable(p *ddlParser) (ddlStatement, error) {
@@ -338,6 +340,8 @@ func parsePartitionSpec(p *ddlParser, withLocation bool) (partitionSpec, error) 
 
 // repairTableStmt is MSCK REPAIR TABLE name.
 type repairTableStmt struct{ Table tableRef }
+
+func (s *repairTableStmt) target() tableRef { return s.Table }
 
 func parseRepairTable(p *ddlParser) (ddlStatement, error) {
 	table, err := p.tableName()

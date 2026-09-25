@@ -4,6 +4,7 @@ import { FavouritesProvider } from "@/hooks/use-favourites"
 import { ServiceIconColorProvider } from "@/hooks/use-service-icon-color"
 import { createTestQueryClient, renderWithRouter, screen, waitFor, within } from "@/test/render"
 import type { HealthResponse } from "@/types/common"
+import { registerContributor } from "@/lib/search"
 import { GlobalSearch } from "./global-search"
 
 /**
@@ -158,5 +159,41 @@ describe("GlobalSearch mega menu", () => {
     await user.type(await screen.findByPlaceholderText("Search services and resources…"), "bedrock")
 
     expect(await screen.findByRole("button", { name: /Amazon Bedrock/ })).toHaveTextContent("Stub")
+  })
+})
+
+describe("GlobalSearch results", () => {
+  // #2085: a result can link to a tab and a filter, which only survive the
+  // navigation as a search string, not as part of the path.
+  registerContributor({
+    id: "test:query-string-result",
+    search: (query) =>
+      Promise.resolve(
+        query === "etl-workgroup"
+          ? [
+              {
+                id: "test:etl",
+                label: "etl-workgroup",
+                service: "Athena",
+                serviceKey: "/athena",
+                type: "Workgroup",
+                href: "/athena?tab=workgroups&q=etl",
+              },
+            ]
+          : [],
+      ),
+  })
+
+  it("navigates to a result's path with its query string as the search", async () => {
+    const { user, router } = renderSearch()
+
+    await user.type(
+      await screen.findByPlaceholderText("Search services and resources…"),
+      "etl-workgroup",
+    )
+    await user.click(await screen.findByRole("option", { name: /etl-workgroup/ }))
+
+    await waitFor(() => expect(router.state.location.pathname).toBe("/athena"))
+    expect(router.state.location.search).toEqual({ tab: "workgroups", q: "etl" })
   })
 })

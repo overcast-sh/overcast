@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/overcast-sh/overcast/internal/events"
+	"github.com/overcast-sh/overcast/internal/icebergmeta"
 	"github.com/overcast-sh/overcast/internal/protocol"
 	"github.com/overcast-sh/overcast/internal/serviceutil"
 )
@@ -541,7 +543,11 @@ func (s *Service) createTable(ctx context.Context, req *createTableRequest, buil
 	if aerr := s.createWarehouse(ctx, t, metadataJSON); aerr != nil {
 		return nil, aerr
 	}
-	return t, s.saveTable(ctx, t)
+	if aerr := s.saveTable(ctx, t); aerr != nil {
+		return nil, aerr
+	}
+	s.publishTable(ctx, events.S3TablesTableCreated, t)
+	return t, nil
 }
 
 // validateCreateTable checks everything CreateTable can check without state,
@@ -745,7 +751,11 @@ func (s *Service) deleteTableTyped(ctx context.Context, req *tableRequest) (any,
 	if req.VersionToken != "" && req.VersionToken != t.VersionToken {
 		return nil, errVersionMismatch
 	}
-	return nil, s.deleteTableRecord(ctx, t)
+	if aerr := s.deleteTableRecord(ctx, t); aerr != nil {
+		return nil, aerr
+	}
+	s.publishTable(ctx, events.S3TablesTableDeleted, t)
+	return nil, nil
 }
 
 // updateTable runs a read-modify-write of one table under the write lock.
@@ -827,7 +837,11 @@ func (s *Service) renameTableTyped(ctx context.Context, req *renameTableRequest)
 	if aerr := s.saveTable(ctx, t); aerr != nil {
 		return nil, aerr
 	}
-	return nil, s.deleteTableRecord(ctx, &old)
+	if aerr := s.deleteTableRecord(ctx, &old); aerr != nil {
+		return nil, aerr
+	}
+	s.publishTable(ctx, events.S3TablesTableRenamed, t)
+	return nil, nil
 }
 
 // ─── Metadata location ────────────────────────────────────────────────────────
@@ -875,16 +889,16 @@ func (s *Service) updateTableMetadataLocationTyped(ctx context.Context, req *upd
 	if req.MetadataLocation == "" || len(req.MetadataLocation) > 2048 {
 		return nil, errBadMetadataLoc
 	}
-	t, aerr := s.swapMetadata(ctx, req.TableBucketARN, req.Namespace, req.Name, func(_ *tableBucket, _ *namespaceRecord, t *tableRecord) (*tableRecord, string, *protocol.AWSError) {
+	t, aerr := s.swapMetadata(ctx, req.TableBucketARN, req.Namespace, req.Name, func(_ *tableBucket, _ *namespaceRecord, t *tableRecord) (*tableRecord, string, *icebergmeta.Metadata, *protocol.AWSError) {
 		switch {
 		case t == nil:
-			return nil, "", errTableNotFound
+			return nil, "", nil, errTableNotFound
 		case !strings.HasPrefix(req.MetadataLocation, t.WarehouseLocation+"/"):
-			return nil, "", errBadMetadataLoc
+			return nil, "", nil, errBadMetadataLoc
 		case req.VersionToken != t.VersionToken:
-			return nil, "", errVersionMismatch
+			return nil, "", nil, errVersionMismatch
 		}
-		return t, req.MetadataLocation, nil
+		return t, req.MetadataLocation, nil, nil
 	})
 	if aerr != nil {
 		return nil, aerr

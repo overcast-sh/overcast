@@ -27,10 +27,10 @@ var errLocationChange = badRequest("S3 Tables does not let a table's location ch
 
 func (s *Service) icebergCommitTableTyped(ctx context.Context, req *icebergCommitTableRequest) (*icebergLoadTableResult, *protocol.AWSError) {
 	var result *icebergmeta.Metadata
-	t, aerr := s.swapMetadata(ctx, req.BucketARN, req.Namespace, req.Table, func(b *tableBucket, n *namespaceRecord, t *tableRecord) (*tableRecord, string, *protocol.AWSError) {
+	t, aerr := s.swapMetadata(ctx, req.BucketARN, req.Namespace, req.Table, func(b *tableBucket, n *namespaceRecord, t *tableRecord) (*tableRecord, string, *icebergmeta.Metadata, *protocol.AWSError) {
 		next, t, location, aerr := s.proposeCommit(ctx, b, n, t, req)
 		result = next
-		return t, location, aerr
+		return t, location, next, aerr
 	})
 	if aerr != nil {
 		return nil, aerr

@@ -8,25 +8,11 @@
  * registered at the inert tier and answering calls.
  *
  * The backend's own tier table, `internal/router/tiers.go`, is the source of
- * truth (every registered service must appear in it — its own test enforces
- * that), so this reads it rather than restating it.
+ * truth, read through `backendTiers`.
  */
-import { readFileSync } from "node:fs"
 import { describe, expect, it } from "vitest"
+import { backendTiers } from "@/test/backend-tiers"
 import { CATALOG, CATALOG_BY_ID } from "./unsupported-services"
-
-/** `ServiceTiers` from tiers.go, as service name → tier. vitest's cwd is `web/`. */
-function backendTiers(): Map<string, string> {
-  const source = readFileSync("../internal/router/tiers.go", "utf8")
-  const block = /var ServiceTiers = map\[string\]EmulationTier\{([\s\S]*?)\n\}/.exec(source)?.[1]
-  if (!block) throw new Error("ServiceTiers map not found in internal/router/tiers.go")
-  return new Map(
-    [...block.matchAll(/^\s*"([a-z0-9]+)":\s*Tier([A-Za-z]+),/gm)].map(([, name, tier]) => [
-      name,
-      tier.toLowerCase(),
-    ]),
-  )
-}
 
 /** Registered at inert tier or above: the backend answers calls. Absent means not registered. */
 function isEmulated(tier: string | undefined): boolean {

@@ -12,7 +12,7 @@
 import type { FC } from "react"
 import { describe, expect, it } from "vitest"
 import { renderWithRouter, waitFor } from "@/test/render"
-import { ArnLink, LinkifiedText } from "./arn-link"
+import { ArnLink, LinkifiedText, ResourceLink } from "./arn-link"
 
 /**
  * `renderWithRouter` mounts a real TanStack Router, and the router's initial
@@ -74,6 +74,32 @@ describe("ArnLink", () => {
       "arn:aws:logs:us-east-1:000000000000:log-group:/aws/lambda/fn:log-stream:2026/09/22/abc",
       "/cloudwatch/logs/stream?groupName=%2Faws%2Flambda%2Ffn&streamName=2026%2F09%2F22%2Fabc",
     ],
+    [
+      "an Athena workgroup",
+      "arn:aws:athena:us-east-1:000000000000:workgroup/etl",
+      "/athena?tab=workgroups&q=etl",
+    ],
+    [
+      "an Athena data catalog",
+      "arn:aws:athena:us-east-1:000000000000:datacatalog/lake",
+      "/athena?tab=data-catalogs&q=lake",
+    ],
+    ["a Glue database", "arn:aws:glue:us-east-1:000000000000:database/sales", "/glue/sales"],
+    [
+      "a Glue table",
+      "arn:aws:glue:us-east-1:000000000000:table/sales/orders",
+      "/glue/sales/orders",
+    ],
+    [
+      "an S3 Tables bucket",
+      "arn:aws:s3tables:us-east-1:000000000000:bucket/lake",
+      "/s3tables/lake",
+    ],
+    [
+      "an S3 Tables table",
+      "arn:aws:s3tables:us-east-1:000000000000:bucket/lake/table/0f3c-9a",
+      "/s3tables/lake/0f3c-9a",
+    ],
   ])("links %s ARN to its page", async (_, arn, href) => {
     const { container } = await renderRouted(() => <ArnLink arn={arn} />, "/")
     expect(container.querySelector("a")?.getAttribute("href")).toContain(href)
@@ -92,6 +118,25 @@ describe("ArnLink", () => {
     const { container } = await renderRouted(() => <ArnLink arn="not-an-arn" />, "/")
     expect(container.querySelector("a")).toBeNull()
     expect(container.textContent).toBe("not-an-arn")
+  })
+})
+
+describe("ResourceLink", () => {
+  // CloudFormation's resources list names each resource by type and physical id.
+  it.each([
+    ["AWS::Athena::WorkGroup", "etl", "/athena?tab=workgroups&q=etl"],
+    ["AWS::Glue::Database", "sales", "/glue/sales"],
+    [
+      "AWS::S3Tables::TableBucket",
+      "arn:aws:s3tables:us-east-1:000000000000:bucket/lake",
+      "/s3tables/lake",
+    ],
+  ])("links a %s to its page", async (service, resourceId, href) => {
+    const { container } = await renderRouted(
+      () => <ResourceLink service={service} resourceId={resourceId} />,
+      "/",
+    )
+    expect(container.querySelector("a")?.getAttribute("href")).toContain(href)
   })
 })
 

@@ -297,6 +297,25 @@ export const EventType = {
     WebACLCreated: "waf:WebACLCreated",
     WebACLDeleted: "waf:WebACLDeleted",
   },
+
+  // ── Athena ───────────────────────────────────────────────────────────────
+  athena: {
+    QueryStateChanged: "athena:QueryStateChanged",
+  },
+
+  // ── Glue ─────────────────────────────────────────────────────────────────
+  glue: {
+    TableChanged: "glue:TableChanged",
+    PartitionsChanged: "glue:PartitionsChanged",
+  },
+
+  // ── S3 Tables ────────────────────────────────────────────────────────────
+  s3tables: {
+    TableCreated: "s3tables:TableCreated",
+    TableDeleted: "s3tables:TableDeleted",
+    TableRenamed: "s3tables:TableRenamed",
+    TableCommitted: "s3tables:TableCommitted",
+  },
 } as const
 
 /**

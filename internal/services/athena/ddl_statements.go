@@ -100,6 +100,8 @@ type createTableStmt struct {
 	Properties    map[string]string
 }
 
+func (s *createTableStmt) target() tableRef { return s.Table }
+
 func parseCreateExternalTable(p *ddlParser) (ddlStatement, error) {
 	s := &createTableStmt{IfNotExists: p.ifNotExists()}
 	var err error
@@ -268,6 +270,8 @@ type dropTableStmt struct {
 	Table    tableRef
 	IfExists bool
 }
+
+func (s *dropTableStmt) target() tableRef { return s.Table }
 
 func parseDropTable(p *ddlParser) (ddlStatement, error) {
 	s := &dropTableStmt{IfExists: p.ifExists()}
