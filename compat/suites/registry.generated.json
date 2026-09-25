@@ -1472,6 +1472,22 @@
           ]
         },
         {
+          "name": "VerifyOtherMessage",
+          "op": "Verify",
+          "depends": [
+            "CreateKeySigning",
+            "Sign"
+          ]
+        },
+        {
+          "name": "VerifyOtherAlgorithm",
+          "op": "Verify",
+          "depends": [
+            "CreateKeySigning",
+            "Sign"
+          ]
+        },
+        {
           "name": "ScheduleKeyDeletionSigning",
           "op": "ScheduleKeyDeletion",
           "depends": [

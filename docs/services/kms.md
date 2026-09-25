@@ -40,7 +40,7 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | Key lifecycle     | `CreateKey` (symmetric and RSA specs), enable/disable, description updates, schedule/cancel deletion |
 | Aliases           | Create, update, delete and list; names must start `alias/` and be unique; any operation taking `KeyId` accepts a UUID, an ARN or an alias |
 | Symmetric crypto  | `Encrypt`, `Decrypt`, `ReEncrypt`, `GenerateDataKey` and `GenerateDataKeyWithoutPlaintext` (`KeySpec` or `NumberOfBytes`, never both), `GenerateDataKeyPair`, `GenerateRandom` |
-| Asymmetric crypto | `Sign` / `Verify` (RSA-2048, `RSASSA_PKCS1_V1_5_SHA_256`), `GetPublicKey` (DER), `VerifyMac` (HMAC-SHA-256/384/512) |
+| Asymmetric crypto | `Sign` / `Verify` on `RSA_2048` keys with every RSASSA-PSS and PKCS #1 v1.5 algorithm (SHA-256/384/512), `RAW` or `DIGEST` messages; a signature that does not verify is a `KMSInvalidSignatureException`. `GetPublicKey` (DER), `VerifyMac` (HMAC-SHA-256/384/512) |
 | Key policies      | `PutKeyPolicy` validates structure, principals and caller-lockout safety before it mutates      |
 | Grants and tags   | Full CRUD, including `ListRetirableGrants`                                                     |
 | Protocols         | AWS JSON 1.1, plus AWS JSON 1.0 and Smithy RPC v2 CBOR — accepting 1.0 alongside 1.1 is a framework-wide rule applied to every JSON-tier service, not a KMS-specific relaxation |
@@ -63,6 +63,7 @@ checks its optional `SourceKeyId` the same way.
 | Multi-Region keys     | `MultiRegion=true` replicates                         | Rejected at `CreateKey` rather than silently ignored                               |
 | External key material | `Origin=EXTERNAL` / `AWS_CLOUDHSM`                    | Rejected at `CreateKey`; only `AWS_KMS` is emulated                                |
 | Automatic rotation    | `EnableKeyRotation` and friends                       | Not implemented — `501 Not Implemented`                                            |
+| Signing key specs     | RSA_2048/3072/4096, ECC, Ed25519, SM2 and ML-DSA sign | Only `RSA_2048` has a key pair; `Sign`/`Verify` on any other signing spec is a `ValidationException` |
 
 ## Gotchas
 

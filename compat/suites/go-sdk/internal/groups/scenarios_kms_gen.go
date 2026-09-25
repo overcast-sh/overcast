@@ -46,6 +46,8 @@ func ScenariosKms(c *clients.Clients) ServiceGroup {
 			"kms-gen-key:CreateKeySigning":                g.testKmsGenKeyCreateKeySigning,
 			"kms-gen-key:Sign":                            g.testKmsGenKeySign,
 			"kms-gen-key:Verify":                          g.testKmsGenKeyVerify,
+			"kms-gen-key:VerifyOtherMessage":              g.testKmsGenKeyVerifyOtherMessage,
+			"kms-gen-key:VerifyOtherAlgorithm":            g.testKmsGenKeyVerifyOtherAlgorithm,
 			"kms-gen-key:ScheduleKeyDeletionSigning":      g.testKmsGenKeyScheduleKeyDeletionSigning,
 			"kms-gen-key:CreateGrant":                     g.testKmsGenKeyCreateGrant,
 			"kms-gen-key:ListGrants":                      g.testKmsGenKeyListGrants,
@@ -751,6 +753,52 @@ func (g *kmsScenarios) testKmsGenKeyVerify(ctx context.Context, t *harness.TestC
 				scenario.Equals("$.SignatureValid", true),
 				scenario.Equals("$.SigningAlgorithm", "RSASSA_PKCS1_V1_5_SHA_256"),
 			),
+		},
+	})
+}
+
+func (g *kmsScenarios) testKmsGenKeyVerifyOtherMessage(ctx context.Context, t *harness.TestContext) error {
+	return groupKmsGenKey.RunTest(ctx, t, "VerifyOtherMessage", scenario.Test{
+		Call: scenario.Call{
+			Op:     "Verify",
+			Params: `{"KeyId":{"$ref":"key.signid"},"Message":{"$base64":"Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgbmV2ZXIgc2lnbmVk"},"Signature":{"$base64":{"$ref":"key.signature"}},"SigningAlgorithm":"RSASSA_PKCS1_V1_5_SHA_256"}`,
+			Build: func(b *scenario.Binder) any {
+				in := &kms.VerifyInput{}
+				in.KeyId = aws.String(scenario.Bind[string](b, "KeyId", scenario.Ref("key.signid")))
+				in.Message = []byte("compat-scenario message never signed")
+				in.Signature = scenario.Blob(b, "Signature", scenario.Base64(scenario.Ref("key.signature")))
+				in.SigningAlgorithm = types.SigningAlgorithmSpec("RSASSA_PKCS1_V1_5_SHA_256")
+				return in
+			},
+			Send: func(ctx context.Context, in any) (any, error) {
+				return g.cl().Verify(ctx, in.(*kms.VerifyInput))
+			},
+		},
+		Assert: []scenario.Clause{
+			scenario.ErrorCode(scenario.Error("KMSInvalidSignatureException", "KMSInvalidSignature")),
+		},
+	})
+}
+
+func (g *kmsScenarios) testKmsGenKeyVerifyOtherAlgorithm(ctx context.Context, t *harness.TestContext) error {
+	return groupKmsGenKey.RunTest(ctx, t, "VerifyOtherAlgorithm", scenario.Test{
+		Call: scenario.Call{
+			Op:     "Verify",
+			Params: `{"KeyId":{"$ref":"key.signid"},"Message":{"$base64":"Y29tcGF0LXNjZW5hcmlvIG1lc3NhZ2UgdG8gc2lnbg=="},"Signature":{"$base64":{"$ref":"key.signature"}},"SigningAlgorithm":"RSASSA_PSS_SHA_256"}`,
+			Build: func(b *scenario.Binder) any {
+				in := &kms.VerifyInput{}
+				in.KeyId = aws.String(scenario.Bind[string](b, "KeyId", scenario.Ref("key.signid")))
+				in.Message = []byte("compat-scenario message to sign")
+				in.Signature = scenario.Blob(b, "Signature", scenario.Base64(scenario.Ref("key.signature")))
+				in.SigningAlgorithm = types.SigningAlgorithmSpec("RSASSA_PSS_SHA_256")
+				return in
+			},
+			Send: func(ctx context.Context, in any) (any, error) {
+				return g.cl().Verify(ctx, in.(*kms.VerifyInput))
+			},
+		},
+		Assert: []scenario.Clause{
+			scenario.ErrorCode(scenario.Error("KMSInvalidSignatureException", "KMSInvalidSignature")),
 		},
 	})
 }

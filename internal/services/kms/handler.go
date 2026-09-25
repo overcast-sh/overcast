@@ -554,79 +554,32 @@ func (h *Handler) GenerateRandom(w http.ResponseWriter, r *http.Request) {
 	}, "application/x-amz-json-1.1")
 }
 
-// Sign signs a message using an asymmetric key.
+// Sign creates a digital signature; the logic lives in signTyped (signing.go).
 func (h *Handler) Sign(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		KeyId            string `json:"KeyId"`
-		Message          []byte `json:"Message"`
-		MessageType      string `json:"MessageType"`      // "RAW" or "DIGEST"
-		SigningAlgorithm string `json:"SigningAlgorithm"` // "RSASSA_PKCS1_V1_5_SHA_256", etc.
-	}
+	var req signRequest
 	if !serviceutil.DecodeJSON(w, r, &req) {
 		return
 	}
-	ctx := r.Context()
-	k, err := h.resolveKey(ctx, req.KeyId)
-	if err != nil || k == nil {
-		if k == nil {
-			protocol.WriteJSONError(w, r, errNotFound(req.KeyId))
-			return
-		}
-		protocol.WriteJSONError(w, r, protocol.ErrInternalError)
+	out, aerr := h.signTyped(r.Context(), &req)
+	if aerr != nil {
+		protocol.WriteJSONError(w, r, aerr)
 		return
 	}
-	privKey, parseErr := parseRSAPrivateKey(k.RSAPrivKey)
-	if parseErr != nil {
-		protocol.WriteJSONError(w, r, protocol.ErrInternalError)
-		return
-	}
-	digest := sha256.Sum256(req.Message)
-	sig, signErr := rsa.SignPKCS1v15(rand.Reader, privKey, crypto.SHA256, digest[:])
-	if signErr != nil {
-		protocol.WriteJSONError(w, r, protocol.ErrInternalError)
-		return
-	}
-	protocol.WriteAWSJSON(w, r, http.StatusOK, map[string]any{
-		"KeyId":            k.ARN,
-		"Signature":        sig,
-		"SigningAlgorithm": req.SigningAlgorithm,
-	}, "application/x-amz-json-1.1")
+	protocol.WriteAWSJSON(w, r, http.StatusOK, out, "application/x-amz-json-1.1")
 }
 
-// Verify verifies a signature.
+// Verify verifies a digital signature; the logic lives in verifyTyped (signing.go).
 func (h *Handler) Verify(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		KeyId            string `json:"KeyId"`
-		Message          []byte `json:"Message"`
-		MessageType      string `json:"MessageType"`
-		Signature        []byte `json:"Signature"`
-		SigningAlgorithm string `json:"SigningAlgorithm"`
-	}
+	var req verifyRequest
 	if !serviceutil.DecodeJSON(w, r, &req) {
 		return
 	}
-	ctx := r.Context()
-	k, err := h.resolveKey(ctx, req.KeyId)
-	if err != nil || k == nil {
-		if k == nil {
-			protocol.WriteJSONError(w, r, errNotFound(req.KeyId))
-			return
-		}
-		protocol.WriteJSONError(w, r, protocol.ErrInternalError)
+	out, aerr := h.verifyTyped(r.Context(), &req)
+	if aerr != nil {
+		protocol.WriteJSONError(w, r, aerr)
 		return
 	}
-	privKey, parseErr := parseRSAPrivateKey(k.RSAPrivKey)
-	if parseErr != nil {
-		protocol.WriteJSONError(w, r, protocol.ErrInternalError)
-		return
-	}
-	digest := sha256.Sum256(req.Message)
-	verifyErr := rsa.VerifyPKCS1v15(&privKey.PublicKey, crypto.SHA256, digest[:], req.Signature)
-	protocol.WriteAWSJSON(w, r, http.StatusOK, map[string]any{
-		"KeyId":            k.ARN,
-		"SignatureValid":   verifyErr == nil,
-		"SigningAlgorithm": req.SigningAlgorithm,
-	}, "application/x-amz-json-1.1")
+	protocol.WriteAWSJSON(w, r, http.StatusOK, out, "application/x-amz-json-1.1")
 }
 
 // ── GetPublicKey ──────────────────────────────────────────────────────────────

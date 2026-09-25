@@ -4873,13 +4873,13 @@
           "operation": "Sign",
           "category": "Asymmetric crypto",
           "status": "✅ Supported",
-          "notes": "RSA_2048 with RSASSA_PKCS1_V1_5_SHA_256"
+          "notes": "RSA_2048 keys with all six RSASSA_PSS_* / RSASSA_PKCS1_V1_5_* algorithms, RAW or DIGEST messages; other signing key specs are refused"
         },
         {
           "operation": "Verify",
           "category": "Asymmetric crypto",
           "status": "✅ Supported",
-          "notes": "Returns `SignatureValid: true/false`"
+          "notes": "RSA_2048 keys, every RSASSA algorithm; a signature that does not verify fails with KMSInvalidSignatureException"
         },
         {
           "operation": "GetPublicKey",
