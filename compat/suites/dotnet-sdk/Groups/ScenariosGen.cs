@@ -20,6 +20,7 @@ internal static class ScenarioGroups
         new ScenariosAuthoredEventbridgeEvents(clients),
         new ScenariosAuthoredEventbridgeRules(clients),
         new ScenariosAuthoredIamRoles(clients),
+        new ScenariosAuthoredIamUsers(clients),
         new ScenariosAuthoredKinesisRecords(clients),
         new ScenariosAuthoredKinesisShards(clients),
         new ScenariosAuthoredKinesisStreams(clients),

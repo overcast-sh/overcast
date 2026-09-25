@@ -1399,6 +1399,91 @@
       ]
     },
     {
+      "service": "iam",
+      "name": "iam-users-shadow",
+      "generated": true,
+      "scenario": "compat/model/authored/iam-users.json",
+      "state": "candidate",
+      "shadowOf": "iam-users",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "CreateUser"
+        },
+        {
+          "name": "GetUser",
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "ListUsers",
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "CreateAccessKey",
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "DeleteAccessKey",
+          "depends": [
+            "CreateAccessKey"
+          ]
+        },
+        {
+          "name": "PutUserPolicy",
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "GetUserPolicy",
+          "depends": [
+            "PutUserPolicy"
+          ]
+        },
+        {
+          "name": "DeleteUserPolicy",
+          "depends": [
+            "GetUserPolicy"
+          ]
+        },
+        {
+          "name": "UpdateUser",
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "ListAccessKeys",
+          "depends": [
+            "CreateUser"
+          ]
+        },
+        {
+          "name": "DeleteUser",
+          "depends": [
+            "DeleteAccessKey",
+            "DeleteUserPolicy",
+            "UpdateUser",
+            "ListAccessKeys"
+          ]
+        }
+      ]
+    },
+    {
       "service": "kinesis",
       "name": "kinesis-records-shadow",
       "generated": true,
