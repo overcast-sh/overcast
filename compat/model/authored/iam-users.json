@@ -1,0 +1,350 @@
+{
+  "$comment": "Authored port of the hand-written registry group iam-users (docs/plans/compat-coverage-modelgen.md §3.11, #1116). One spec in place of six per-language implementations (go-sdk, python-sdk, node-js-sdk, cli, java-sdk, dotnet-sdk) — and of the one that was never written: rust-sdk carries 11 rows of parity debt for this group, which the port closes. It runs as iam-users-shadow beside those natives until the nightly comparison agrees; this file then flips to iam-users and the native code goes. The clauses are the union of what the six natives assert — see compat/model/README.md § Authored scenarios. Every policy document is compared with `equalsJSON`, because botocore hands python-sdk and cli the document already decoded while the other five backends hold AWS's percent-encoded string (README § Documents in a string).",
+  "version": 1,
+  "service": "iam",
+  "client": {
+    "sdkId": "IAM",
+    "endpointPrefix": "iam",
+    "signingName": "iam",
+    "protocol": "awsQuery",
+    "apiVersion": "2010-05-08",
+    "awsQueryCompatible": false
+  },
+  "groups": [
+    {
+      "$comment": "One user, one access key and one inline policy. The natives split two ways on whose user the tests act on. java-sdk, node-js-sdk and cli create the group's user in the CreateUser test and delete that same user in DeleteUser — which is what the registry's depends record (every test depends on CreateUser; DeleteUser depends on the tests that empty the user first). go-sdk, python-sdk and dotnet-sdk instead create the group's user in a setup hook, and their CreateUser and DeleteUser each create and remove a second, throwaway user, so their DeleteUser proves the delete of a user nothing else touched and nothing about the one the group built. The port takes the first shape: setup is empty, CreateUser creates the user under `$name` \"user\" and exports its name and id, and every later test addresses it through the exported user.name. UpdateUser renames the user and re-exports user.name from its own read-back, so ListAccessKeys and DeleteUser address it under whatever name it now has (see UpdateUser's $comment). IAM is eventually consistent (IAM User Guide, troubleshoot_general.html#troubleshoot_general_eventual-consistency), so every clause that reads a change back through a second call is an `eventually` (10 × 500 ms). No native polls — go-sdk, python-sdk, cli and node-js-sdk read nothing back at all, and java-sdk and dotnet-sdk read back at once — and Overcast answers on the first attempt, so the budget is fidelity to AWS rather than latency the emulator has. Teardown mirrors what go-sdk, python-sdk, cli and java-sdk do in UpdateUser, renaming the user back \"so teardown works\", and then removes the policy, the key and the user under the original name, as python-sdk, cli, node-js-sdk and dotnet-sdk teardowns do. After a clean run all of it is already gone; each teardown call is individually wrapped, so their errors are logged and ignored.",
+      "name": "iam-users-shadow",
+      "kind": "lifecycle",
+      "setup": [],
+      "tests": [
+        {
+          "$comment": "python-sdk asserts User.UserName is the name it sent; node-js-sdk, java-sdk and dotnet-sdk that User.UserId is non-empty; java-sdk that User.Arn is non-empty; dotnet-sdk that ListUsers then lists the user; go-sdk and cli nothing but success (cli also treats EntityAlreadyExists as success). The port asserts the union, with the ListUsers read polled (see the group's $comment) and paged at MaxItems 1000, the modeled maximum: go-sdk, python-sdk, node-js-sdk, cli and dotnet-sdk call ListUsers with no MaxItems (IAM's default page is 100) and java-sdk asks for 100, and a 100-user page is the one way the clause could fail for a reason that is not the emulator's, when concurrent groups and runs have other users in the account. Names: go-sdk oc-cu-<runId>, python-sdk <runId>-u-create, node-js-sdk <runId>-user, cli iam-usr-<runId>, java-sdk compat-user-<runId>, dotnet-sdk <runId>-iam-create-user; `$name` \"user\" is the run- and group-scoped spelling.",
+          "name": "CreateUser",
+          "op": "CreateUser",
+          "call": {
+            "op": "CreateUser",
+            "params": { "UserName": { "$name": "user" } },
+            "export": { "user.name": "$.User.UserName", "user.id": "$.User.UserId" }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.User.UserName": { "equals": { "$name": "user" } },
+                "$.User.UserId": { "nonEmpty": true },
+                "$.User.Arn": { "nonEmpty": true }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 10,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": { "op": "ListUsers", "params": { "MaxItems": 1000 } },
+                "itemsPath": "$.Users",
+                "where": { "$.UserName": { "$name": "user" } }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "go-sdk, python-sdk, node-js-sdk, java-sdk and dotnet-sdk assert User.UserName equals the user's name; cli nothing but success. The port adds that User.UserId is the id CreateUser returned — a user's unique id is stable for its lifetime (IAM User Guide, reference_identifiers.html#identifiers-unique-ids) — which ties the read to the user this group created rather than to any user of that name.",
+          "name": "GetUser",
+          "op": "GetUser",
+          "call": {
+            "op": "GetUser",
+            "params": { "UserName": { "$ref": "user.name" } }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.User.UserName": { "equals": { "$ref": "user.name" } },
+                "$.User.UserId": { "equals": { "$ref": "user.id" } }
+              }
+            }
+          ],
+          "depends": ["CreateUser"]
+        },
+        {
+          "$comment": "python-sdk, node-js-sdk, java-sdk and dotnet-sdk assert the user is in the list; go-sdk and cli nothing but success. The union is the membership check, at MaxItems 1000 for the reason CreateUser's $comment gives (java-sdk asks for 100, the rest for IAM's default of 100).",
+          "name": "ListUsers",
+          "op": "ListUsers",
+          "call": {
+            "op": "ListUsers",
+            "params": { "MaxItems": 1000 }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Users",
+              "where": { "$.UserName": { "$ref": "user.name" }, "$.UserId": { "$ref": "user.id" } }
+            }
+          ],
+          "depends": ["CreateUser"]
+        },
+        {
+          "$comment": "go-sdk, python-sdk, node-js-sdk, java-sdk and dotnet-sdk assert AccessKey.AccessKeyId is non-empty and keep it for DeleteAccessKey; cli keeps it without asserting. The port exports only the AccessKeyId, which is all DeleteAccessKey and teardown need. SecretAccessKey is asserted present and nothing more, and is never exported: a `matches` on it would print the secret in the failure message the moment it failed, and `nonEmpty` can only fail on a value that is empty or absent, so nothing secret can reach a log. Added, from the API reference (API_CreateAccessKey.html, API_AccessKey.html): the key belongs to the user it was created for, and a new key's Status is Active. node-js-sdk and dotnet-sdk assert, in their ListAccessKeys, that a key they create there is listed; this group's own key is deleted before ListAccessKeys runs, so the port makes that claim here, about this key, polled.",
+          "name": "CreateAccessKey",
+          "op": "CreateAccessKey",
+          "call": {
+            "op": "CreateAccessKey",
+            "params": { "UserName": { "$ref": "user.name" } },
+            "export": { "key.id": "$.AccessKey.AccessKeyId" }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.AccessKey.AccessKeyId": { "nonEmpty": true },
+                "$.AccessKey.SecretAccessKey": { "nonEmpty": true },
+                "$.AccessKey.UserName": { "equals": { "$ref": "user.name" } },
+                "$.AccessKey.Status": { "equals": "Active" }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 10,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": { "op": "ListAccessKeys", "params": { "UserName": { "$ref": "user.name" } } },
+                "itemsPath": "$.AccessKeyMetadata",
+                "where": { "$.AccessKeyId": { "$ref": "key.id" }, "$.Status": "Active" }
+              }
+            }
+          ],
+          "depends": ["CreateUser"]
+        },
+        {
+          "$comment": "No native asserts anything after DeleteAccessKey returns; cli returns success without calling the service when no key id was recorded. An IR test needs at least one clause, so the port asserts the documented effect — the key is no longer listed for the user — polled.",
+          "name": "DeleteAccessKey",
+          "op": "DeleteAccessKey",
+          "call": {
+            "op": "DeleteAccessKey",
+            "params": { "UserName": { "$ref": "user.name" }, "AccessKeyId": { "$ref": "key.id" } }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 10,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": { "op": "ListAccessKeys", "params": { "UserName": { "$ref": "user.name" } } },
+                "itemsPath": "$.AccessKeyMetadata",
+                "where": { "$.AccessKeyId": { "$ref": "key.id" } }
+              }
+            }
+          ],
+          "depends": ["CreateAccessKey"]
+        },
+        {
+          "$comment": "No native asserts anything after PutUserPolicy returns. They disagree on both literals. Policy name: go-sdk, node-js-sdk and cli inline-policy; python-sdk compat-policy; java-sdk inline; dotnet-sdk inline-user-policy — the port takes inline-policy, the majority; an inline policy's name is scoped to its user, so it needs no `$name`. Document: python-sdk, node-js-sdk and dotnet-sdk allow \"s3:GetObject\" as a string; go-sdk the same action as a one-element list; cli [\"s3:GetObject\",\"s3:PutObject\"]; java-sdk s3:ListAllMyBuckets — the port takes the majority's document, byte for byte. The documented effect, asserted here and polled, is that ListUserPolicies names the policy.",
+          "name": "PutUserPolicy",
+          "op": "PutUserPolicy",
+          "call": {
+            "op": "PutUserPolicy",
+            "params": {
+              "UserName": { "$ref": "user.name" },
+              "PolicyName": "inline-policy",
+              "PolicyDocument": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:GetObject\",\"Resource\":\"*\"}]}"
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 10,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": { "op": "ListUserPolicies", "params": { "UserName": { "$ref": "user.name" } } },
+                "itemsPath": "$.PolicyNames",
+                "where": { "$": "inline-policy" }
+              }
+            }
+          ],
+          "depends": ["CreateUser"]
+        },
+        {
+          "$comment": "go-sdk, node-js-sdk and java-sdk assert PolicyDocument is non-empty; python-sdk that PolicyName is the one put; dotnet-sdk that the percent-decoded document contains s3:GetObject; cli nothing but success. The union is PolicyName, plus the document compared by value with `equalsJSON` against exactly what PutUserPolicy sent — which implies non-empty and implies dotnet-sdk's containment, and holds whether the service percent-encodes the document (as AWS does) or not. UserName is added: it is a required member of the response (API_GetUserPolicy.html).",
+          "name": "GetUserPolicy",
+          "op": "GetUserPolicy",
+          "call": {
+            "op": "GetUserPolicy",
+            "params": { "UserName": { "$ref": "user.name" }, "PolicyName": "inline-policy" }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.PolicyName": { "equals": "inline-policy" },
+                "$.UserName": { "equals": { "$ref": "user.name" } },
+                "$.PolicyDocument": {
+                  "equalsJSON": {
+                    "Version": "2012-10-17",
+                    "Statement": [{ "Effect": "Allow", "Action": "s3:GetObject", "Resource": "*" }]
+                  }
+                }
+              }
+            }
+          ],
+          "depends": ["PutUserPolicy"]
+        },
+        {
+          "$comment": "No native asserts anything after DeleteUserPolicy returns. The port asserts the documented effect twice, both polled: ListUserPolicies no longer names the policy, and GetUserPolicy on it raises NoSuchEntity, which is in that operation's modeled errors.",
+          "name": "DeleteUserPolicy",
+          "op": "DeleteUserPolicy",
+          "call": {
+            "op": "DeleteUserPolicy",
+            "params": { "UserName": { "$ref": "user.name" }, "PolicyName": "inline-policy" }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 10,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": { "op": "ListUserPolicies", "params": { "UserName": { "$ref": "user.name" } } },
+                "itemsPath": "$.PolicyNames",
+                "where": { "$": "inline-policy" }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 10,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "GetUserPolicy",
+                  "params": { "UserName": { "$ref": "user.name" }, "PolicyName": "inline-policy" }
+                },
+                "error": { "shape": "NoSuchEntityException", "code": "NoSuchEntity" }
+              }
+            }
+          ],
+          "depends": ["GetUserPolicy"]
+        },
+        {
+          "$comment": "The natives do not agree on what UpdateUser updates. go-sdk, python-sdk, cli and java-sdk rename the user (NewUserName: oc-upd-<runId>, <name>-upd, <name>-upd and <name>-updated) and rename it straight back \"so teardown works\"; only java-sdk reads the renamed user back first, asserting GetUser under the new name answers with it. node-js-sdk and dotnet-sdk move the user to NewPath /newpath/ and assert GetUser then reports that Path. UpdateUser takes both members in one call, so the union is one call doing both: the user becomes `$name` \"user-upd\" under /newpath/. Asserted, polled: GetUser under the new name answers with that name, that Path and the same UserId (so it is this user renamed, not another one), and GetUser under the old name raises NoSuchEntity. The port does not rename back inside the test, where the IR has no clause for a second write; instead the read-back exports User.UserName into user.name, so ListAccessKeys and DeleteUser — the two tests after this one — address the user under the name it now has. Exports apply only once their clause holds, so if the rename did not happen user.name still names the user as it is, and the later tests are not failed for this one's fault. Teardown performs the natives' rename back.",
+          "name": "UpdateUser",
+          "op": "UpdateUser",
+          "call": {
+            "op": "UpdateUser",
+            "params": {
+              "UserName": { "$ref": "user.name" },
+              "NewUserName": { "$name": "user-upd" },
+              "NewPath": "/newpath/"
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 10,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "GetUser",
+                  "params": { "UserName": { "$name": "user-upd" } },
+                  "export": { "user.name": "$.User.UserName" }
+                },
+                "checks": {
+                  "$.User.UserName": { "equals": { "$name": "user-upd" } },
+                  "$.User.Path": { "equals": "/newpath/" },
+                  "$.User.UserId": { "equals": { "$ref": "user.id" } }
+                }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 10,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": { "op": "GetUser", "params": { "UserName": { "$name": "user" } } },
+                "error": { "shape": "NoSuchEntityException", "code": "NoSuchEntity" }
+              }
+            }
+          ],
+          "depends": ["CreateUser"]
+        },
+        {
+          "$comment": "python-sdk and java-sdk assert AccessKeyMetadata is present; go-sdk and cli nothing but success; node-js-sdk and dotnet-sdk create a second key, assert it is listed, and delete it. The port makes node-js-sdk's and dotnet-sdk's claim in CreateAccessKey instead, about the group's own key: a key created here would have to be deleted before DeleteUser (IAM refuses to delete a user that still has keys, DeleteConflict), and no clause may write. So this test asserts the page is a list — `isList` rather than python-sdk's presence check, because an absent list and an empty one must read alike in every backend (README § Assertions), and this user has no keys left — and that the key DeleteAccessKey removed is not in it. It runs after UpdateUser and addresses the user through user.name, so it also reads the renamed user's keys under the new name.",
+          "name": "ListAccessKeys",
+          "op": "ListAccessKeys",
+          "call": {
+            "op": "ListAccessKeys",
+            "params": { "UserName": { "$ref": "user.name" } }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.AccessKeyMetadata": { "isList": true } }
+            },
+            {
+              "kind": "absent",
+              "itemsPath": "$.AccessKeyMetadata",
+              "where": { "$.AccessKeyId": { "$ref": "key.id" } }
+            }
+          ],
+          "depends": ["CreateUser"]
+        },
+        {
+          "$comment": "java-sdk, node-js-sdk and cli delete the group's user and assert nothing after; go-sdk, python-sdk and dotnet-sdk create and delete a throwaway user, and python-sdk and dotnet-sdk then assert ListUsers no longer lists it (see the group's $comment). The port deletes the group's user, under the name UpdateUser left it with, and asserts the documented effect twice, both polled: ListUsers (at MaxItems 1000, as in ListUsers) no longer lists its id, and GetUser on it raises NoSuchEntity. depends mirrors registry.json exactly.",
+          "name": "DeleteUser",
+          "op": "DeleteUser",
+          "call": {
+            "op": "DeleteUser",
+            "params": { "UserName": { "$ref": "user.name" } }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 10,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": { "op": "ListUsers", "params": { "MaxItems": 1000 } },
+                "itemsPath": "$.Users",
+                "where": { "$.UserId": { "$ref": "user.id" } }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 10,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": { "op": "GetUser", "params": { "UserName": { "$ref": "user.name" } } },
+                "error": { "shape": "NoSuchEntityException", "code": "NoSuchEntity" }
+              }
+            }
+          ],
+          "depends": ["DeleteAccessKey", "DeleteUserPolicy", "UpdateUser", "ListAccessKeys"]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "UpdateUser",
+          "params": { "UserName": { "$name": "user-upd" }, "NewUserName": { "$name": "user" } }
+        },
+        {
+          "op": "DeleteUserPolicy",
+          "params": { "UserName": { "$name": "user" }, "PolicyName": "inline-policy" }
+        },
+        {
+          "op": "DeleteAccessKey",
+          "params": { "UserName": { "$name": "user" }, "AccessKeyId": { "$ref": "key.id" } }
+        },
+        {
+          "op": "DeleteUser",
+          "params": { "UserName": { "$name": "user" } }
+        }
+      ]
+    }
+  ]
+}

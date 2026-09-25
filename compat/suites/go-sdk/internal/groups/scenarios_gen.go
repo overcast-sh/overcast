@@ -14,6 +14,7 @@ func scenarioGroups(c *clients.Clients) []ServiceGroup {
 		ScenariosAuthoredEventbridgeEvents(c),
 		ScenariosAuthoredEventbridgeRules(c),
 		ScenariosAuthoredIamRoles(c),
+		ScenariosAuthoredIamUsers(c),
 		ScenariosAuthoredKinesisRecords(c),
 		ScenariosAuthoredKinesisShards(c),
 		ScenariosAuthoredKinesisStreams(c),
