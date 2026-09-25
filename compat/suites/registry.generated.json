@@ -1286,6 +1286,73 @@
     },
     {
       "service": "iam",
+      "name": "iam-policies-shadow",
+      "generated": true,
+      "scenario": "compat/model/authored/iam-policies.json",
+      "state": "candidate",
+      "shadowOf": "iam-policies",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "CreatePolicy"
+        },
+        {
+          "name": "CreatePolicyMalformedDocument",
+          "op": "CreatePolicy"
+        },
+        {
+          "name": "GetPolicy",
+          "depends": [
+            "CreatePolicy"
+          ]
+        },
+        {
+          "name": "GetPolicyReturnsTags",
+          "op": "GetPolicy",
+          "depends": [
+            "CreatePolicy"
+          ]
+        },
+        {
+          "name": "ListPolicies",
+          "depends": [
+            "CreatePolicy"
+          ]
+        },
+        {
+          "name": "GetPolicyAttachmentCountAfterAttach",
+          "op": "GetPolicy",
+          "depends": [
+            "CreatePolicy"
+          ]
+        },
+        {
+          "name": "GetPolicyAttachmentCountAfterDetach",
+          "op": "GetPolicy",
+          "depends": [
+            "GetPolicyAttachmentCountAfterAttach"
+          ]
+        },
+        {
+          "name": "DeletePolicy",
+          "depends": [
+            "GetPolicy",
+            "ListPolicies",
+            "GetPolicyAttachmentCountAfterDetach"
+          ]
+        }
+      ]
+    },
+    {
+      "service": "iam",
       "name": "iam-roles-shadow",
       "generated": true,
       "scenario": "compat/model/authored/iam-roles.json",
