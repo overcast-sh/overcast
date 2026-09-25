@@ -1,0 +1,491 @@
+{
+  "$comment": "Authored port of the hand-written registry group iam-roles (docs/plans/compat-coverage-modelgen.md §3.11, #1116). One spec in place of the six per-language implementations of that group, and of the one that was never written — rust-sdk carries 16 rows of compat/parity-debt.json for it, which the port closes. It runs as iam-roles-shadow (candidate, shadowOf: iam-roles) beside the natives until the nightly comparison agrees; this file flips nothing. The clauses are the union of what the six natives assert — see compat/model/README.md § Authored scenarios. Every policy document is compared with `equalsJSON` (#2179): botocore hands python-sdk and cli a decoded object where the other five backends hold the percent-encoded string, so no `equals` could hold in both, and none of the natives compared a document by value at all.",
+  "version": 1,
+  "service": "iam",
+  "client": {
+    "sdkId": "IAM",
+    "endpointPrefix": "iam",
+    "signingName": "iam",
+    "protocol": "awsQuery",
+    "apiVersion": "2010-05-08",
+    "awsQueryCompatible": false
+  },
+  "groups": [
+    {
+      "$comment": "Two roles. `role` is the group's own: CreateRole makes it with the fixture tags, and every later test reads or mutates it — which is what node-js-sdk, java-sdk and cli do. `doomed` is a bare role setup makes for DeleteRole to remove, which is what go-sdk, python-sdk and dotnet-sdk do (each creates and deletes a role of its own inside that test). The split is forced by the schedule: DeleteRole is listed twelfth in the registry, ahead of the four inline-policy tests that still need `role`, and runs last only because the loaders topologically sort `depends` (it depends on DeleteRolePolicy). Deleting `doomed` makes the group correct in file order as well as in dependency order, and it removes a role with nothing attached, so AWS has no DeleteConflict to raise — node-js-sdk, java-sdk and cli first had to take `role` out of the instance profile with unchecked calls, which a scenario test cannot make. `role`'s attachments, its instance profile and the role itself go in teardown, in the order AWS requires. Nothing is exported but the role's ARN: IAM names are the handles, and `$name` makes them.",
+      "name": "iam-roles-shadow",
+      "kind": "lifecycle",
+      "setup": [
+        {
+          "op": "CreateRole",
+          "params": {
+            "RoleName": { "$name": "doomed" },
+            "AssumeRolePolicyDocument": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"lambda.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}"
+          }
+        }
+      ],
+      "tests": [
+        {
+          "$comment": "All six natives trust lambda.amazonaws.com. node-js-sdk and java-sdk create the group's role here with the fixture tags (owner=compat, stage=dev, the set every native tags with); go-sdk, python-sdk and dotnet-sdk create it in setup and make a throwaway role in this test instead; cli creates it here and asserts nothing about the response. The union of the assertions: RoleId (node-js-sdk, java-sdk) and Arn (java-sdk, dotnet-sdk) present, RoleName the one asked for (python-sdk), and the role listed by ListRoles (dotnet-sdk). ListRoles asks for MaxItems 1000 as java-sdk does, so a busy account's first page of 100 cannot hide the role. IAM is eventually consistent, so the listing goes through `eventually` with the generated iam recipe's budget (6 × 500 ms); no native polls, and Overcast answers on the first attempt.",
+          "name": "CreateRole",
+          "op": "CreateRole",
+          "call": {
+            "op": "CreateRole",
+            "params": {
+              "RoleName": { "$name": "role" },
+              "AssumeRolePolicyDocument": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"lambda.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}",
+              "Tags": [
+                { "Key": "owner", "Value": "compat" },
+                { "Key": "stage", "Value": "dev" }
+              ]
+            },
+            "export": { "role.arn": "$.Role.Arn" }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Role.RoleName": { "equals": { "$name": "role" } },
+                "$.Role.RoleId": { "nonEmpty": true },
+                "$.Role.Arn": { "nonEmpty": true }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": { "op": "ListRoles", "params": { "MaxItems": 1000 } },
+                "itemsPath": "$.Roles",
+                "where": { "$.RoleName": { "$name": "role" } }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "All six natives send the same malformed trust policy — a statement with no Action or NotAction, which the IAM User Guide says AWS refuses — and require MalformedPolicyDocument. That is the awsQueryError code the model gives MalformedPolicyDocumentException, so the clause carries both spellings. The six natives also require HTTP 400, which the IR cannot state: it has no status-code check. The model binds this error to 400 (`smithy.api#httpError`), but that half of the assertion is not carried over. No depends, as in the registry. Teardown deletes the `malformed` role in case a regression stored it, as node-js-sdk, dotnet-sdk and cli do.",
+          "name": "CreateRoleMalformedDocument",
+          "op": "CreateRole",
+          "call": {
+            "op": "CreateRole",
+            "params": {
+              "RoleName": { "$name": "malformed" },
+              "AssumeRolePolicyDocument": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Resource\":\"*\"}]}"
+            }
+          },
+          "assert": [
+            {
+              "kind": "errorCode",
+              "error": { "shape": "MalformedPolicyDocumentException", "code": "MalformedPolicyDocument" }
+            }
+          ]
+        },
+        {
+          "$comment": "go-sdk, python-sdk, java-sdk and dotnet-sdk assert RoleName; node-js-sdk and dotnet-sdk assert that Arn is present; cli asserts nothing. The union pins the ARN to the one CreateRole returned, which is stronger than present. The trust policy is compared by value with `equalsJSON` — no native read it back. The IAM API reference documents it on the Role that GetRole returns, as a URL-encoded document.",
+          "name": "GetRole",
+          "op": "GetRole",
+          "call": {
+            "op": "GetRole",
+            "params": { "RoleName": { "$name": "role" } }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Role.RoleName": { "equals": { "$name": "role" } },
+                "$.Role.Arn": { "equals": { "$ref": "role.arn" } },
+                "$.Role.AssumeRolePolicyDocument": {
+                  "equalsJSON": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                      {
+                        "Effect": "Allow",
+                        "Principal": { "Service": "lambda.amazonaws.com" },
+                        "Action": "sts:AssumeRole"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "depends": ["CreateRole"]
+        },
+        {
+          "$comment": "All six natives agree: both fixture tags come back on the role GetRole returns, which is where the API reference documents them (API_Role.html). One listContains per tag, as each native checks the two independently.",
+          "name": "GetRoleReturnsTags",
+          "op": "GetRole",
+          "call": {
+            "op": "GetRole",
+            "params": { "RoleName": { "$name": "role" } }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Role.Tags",
+              "where": { "$.Key": "owner", "$.Value": "compat" }
+            },
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Role.Tags",
+              "where": { "$.Key": "stage", "$.Value": "dev" }
+            }
+          ],
+          "depends": ["CreateRole"]
+        },
+        {
+          "$comment": "python-sdk, node-js-sdk, java-sdk and dotnet-sdk require the group's role in the listing; go-sdk and cli only that the call succeeds. Membership is the union. MaxItems 1000 is java-sdk's; the others take the default page of 100, which a busy account can fill.",
+          "name": "ListRoles",
+          "op": "ListRoles",
+          "call": {
+            "op": "ListRoles",
+            "params": { "MaxItems": 1000 }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Roles",
+              "where": { "$.RoleName": { "$name": "role" } }
+            }
+          ],
+          "depends": ["CreateRole"]
+        },
+        {
+          "$comment": "The natives disagree on the managed policy: go-sdk and python-sdk attach arn:aws:iam::aws:policy/ReadOnlyAccess, while node-js-sdk, java-sdk, cli and dotnet-sdk attach AmazonS3ReadOnlyAccess. This file uses the majority's. go-sdk also attaches it to a role of its own that it creates here, not to the group's role. No native asserts anything beyond success. The read-back is the check ListAttachedRolePolicies makes next, run through `eventually` (6 × 500 ms, the iam recipe's budget) because IAM is eventually consistent.",
+          "name": "AttachRolePolicy",
+          "op": "AttachRolePolicy",
+          "call": {
+            "op": "AttachRolePolicy",
+            "params": {
+              "RoleName": { "$name": "role" },
+              "PolicyArn": "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "ListAttachedRolePolicies",
+                  "params": { "RoleName": { "$name": "role" } }
+                },
+                "itemsPath": "$.AttachedPolicies",
+                "where": { "$.PolicyArn": "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess" }
+              }
+            }
+          ],
+          "depends": ["CreateRole"]
+        },
+        {
+          "$comment": "python-sdk, node-js-sdk, java-sdk and dotnet-sdk require the attached policy's ARN in the listing; go-sdk and cli only that the call succeeds. Membership is the union.",
+          "name": "ListAttachedRolePolicies",
+          "op": "ListAttachedRolePolicies",
+          "call": {
+            "op": "ListAttachedRolePolicies",
+            "params": { "RoleName": { "$name": "role" } }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.AttachedPolicies",
+              "where": { "$.PolicyArn": "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess" }
+            }
+          ],
+          "depends": ["AttachRolePolicy"]
+        },
+        {
+          "$comment": "No native asserts anything beyond success. The detach is proved the way the attach was: the policy is gone from ListAttachedRolePolicies, polled for the same reason and with the same budget.",
+          "name": "DetachRolePolicy",
+          "op": "DetachRolePolicy",
+          "call": {
+            "op": "DetachRolePolicy",
+            "params": {
+              "RoleName": { "$name": "role" },
+              "PolicyArn": "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "ListAttachedRolePolicies",
+                  "params": { "RoleName": { "$name": "role" } }
+                },
+                "itemsPath": "$.AttachedPolicies",
+                "where": { "$.PolicyArn": "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess" }
+              }
+            }
+          ],
+          "depends": ["ListAttachedRolePolicies"]
+        },
+        {
+          "$comment": "python-sdk and java-sdk assert InstanceProfileName; dotnet-sdk asserts that Arn is present; go-sdk, node-js-sdk and cli assert nothing. node-js-sdk, java-sdk and cli also accept EntityAlreadyExists from an earlier run against the same emulator. A `$name` is scoped to the run, so this test does not need that. The union pins the name and requires the ARN.",
+          "name": "CreateInstanceProfile",
+          "op": "CreateInstanceProfile",
+          "call": {
+            "op": "CreateInstanceProfile",
+            "params": { "InstanceProfileName": { "$name": "profile" } }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.InstanceProfile.InstanceProfileName": { "equals": { "$name": "profile" } },
+                "$.InstanceProfile.Arn": { "nonEmpty": true }
+              }
+            }
+          ],
+          "depends": ["CreateRole"]
+        },
+        {
+          "$comment": "No native asserts anything beyond success here; GetInstanceProfile checks the membership next. The read-back makes the same check here, through `eventually` with the iam recipe's budget.",
+          "name": "AddRoleToInstanceProfile",
+          "op": "AddRoleToInstanceProfile",
+          "call": {
+            "op": "AddRoleToInstanceProfile",
+            "params": {
+              "InstanceProfileName": { "$name": "profile" },
+              "RoleName": { "$name": "role" }
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "GetInstanceProfile",
+                  "params": { "InstanceProfileName": { "$name": "profile" } }
+                },
+                "itemsPath": "$.InstanceProfile.Roles",
+                "where": { "$.RoleName": { "$name": "role" } }
+              }
+            }
+          ],
+          "depends": ["CreateInstanceProfile"]
+        },
+        {
+          "$comment": "python-sdk and java-sdk assert the profile's name; python-sdk, node-js-sdk and dotnet-sdk assert that the group's role is in its Roles; go-sdk asserts only that InstanceProfile is present; cli asserts nothing. The union checks both the name and the role.",
+          "name": "GetInstanceProfile",
+          "op": "GetInstanceProfile",
+          "call": {
+            "op": "GetInstanceProfile",
+            "params": { "InstanceProfileName": { "$name": "profile" } }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.InstanceProfile.InstanceProfileName": { "equals": { "$name": "profile" } }
+              }
+            },
+            {
+              "kind": "listContains",
+              "itemsPath": "$.InstanceProfile.Roles",
+              "where": { "$.RoleName": { "$name": "role" } }
+            }
+          ],
+          "depends": ["AddRoleToInstanceProfile"]
+        },
+        {
+          "$comment": "python-sdk and dotnet-sdk create a role, delete it, and require it gone from ListRoles; go-sdk creates and deletes one and asserts only success; node-js-sdk, java-sdk and cli delete the group's own role after unchecked calls that clear its instance profile. Here the role is `doomed`, which setup made — see the group's $comment for why. The union: absent from ListRoles (MaxItems 1000, as above), and GetRole answering NoSuchEntity, which is the error the IAM API reference names for a role that does not exist. Both go through `eventually` with the iam recipe's budget, because IAM is eventually consistent. depends mirrors registry.json exactly.",
+          "name": "DeleteRole",
+          "op": "DeleteRole",
+          "call": {
+            "op": "DeleteRole",
+            "params": { "RoleName": { "$name": "doomed" } }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": { "op": "ListRoles", "params": { "MaxItems": 1000 } },
+                "itemsPath": "$.Roles",
+                "where": { "$.RoleName": { "$name": "doomed" } }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "GetRole",
+                  "params": { "RoleName": { "$name": "doomed" } }
+                },
+                "error": { "shape": "NoSuchEntityException", "code": "NoSuchEntity" }
+              }
+            }
+          ],
+          "depends": ["DetachRolePolicy", "DeleteRolePolicy", "GetInstanceProfile"]
+        },
+        {
+          "$comment": "The natives disagree on both the policy name and the document. java-sdk names the policy `inline`, and the other five name it inline-role-policy. The document grants logs:* in node-js-sdk and dotnet-sdk, s3:GetObject in go-sdk and python-sdk, s3:GetObject and s3:PutObject in cli, and s3:ListAllMyBuckets in java-sdk. This file uses inline-role-policy and dotnet-sdk's logs:* document, because dotnet-sdk is the only native that reads the document back and checks it (for logs:*). No native asserts anything beyond success here. The read-back compares the stored document by value, polled with the iam recipe's budget.",
+          "name": "PutRolePolicy",
+          "op": "PutRolePolicy",
+          "call": {
+            "op": "PutRolePolicy",
+            "params": {
+              "RoleName": { "$name": "role" },
+              "PolicyName": "inline-role-policy",
+              "PolicyDocument": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"logs:*\",\"Resource\":\"*\"}]}"
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "readback",
+                "call": {
+                  "op": "GetRolePolicy",
+                  "params": {
+                    "RoleName": { "$name": "role" },
+                    "PolicyName": "inline-role-policy"
+                  }
+                },
+                "checks": {
+                  "$.PolicyDocument": {
+                    "equalsJSON": {
+                      "Version": "2012-10-17",
+                      "Statement": [{ "Effect": "Allow", "Action": "logs:*", "Resource": "*" }]
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "depends": ["CreateRole"]
+        },
+        {
+          "$comment": "python-sdk asserts PolicyName. go-sdk, node-js-sdk and java-sdk assert that PolicyDocument is present, and dotnet-sdk that its decoded text contains logs:*. cli asserts nothing. The union pins PolicyName and RoleName, which the IAM API reference documents on the GetRolePolicy response, and compares the document by value with `equalsJSON`. That is stronger than both present and contains.",
+          "name": "GetRolePolicy",
+          "op": "GetRolePolicy",
+          "call": {
+            "op": "GetRolePolicy",
+            "params": {
+              "RoleName": { "$name": "role" },
+              "PolicyName": "inline-role-policy"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.RoleName": { "equals": { "$name": "role" } },
+                "$.PolicyName": { "equals": "inline-role-policy" },
+                "$.PolicyDocument": {
+                  "equalsJSON": {
+                    "Version": "2012-10-17",
+                    "Statement": [{ "Effect": "Allow", "Action": "logs:*", "Resource": "*" }]
+                  }
+                }
+              }
+            }
+          ],
+          "depends": ["PutRolePolicy"]
+        },
+        {
+          "$comment": "All six natives agree: the policy's name is in PolicyNames.",
+          "name": "ListRolePolicies",
+          "op": "ListRolePolicies",
+          "call": {
+            "op": "ListRolePolicies",
+            "params": { "RoleName": { "$name": "role" } }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.PolicyNames",
+              "where": { "$": "inline-role-policy" }
+            }
+          ],
+          "depends": ["PutRolePolicy"]
+        },
+        {
+          "$comment": "No native asserts anything beyond success. The delete is proved by the name leaving ListRolePolicies, polled with the iam recipe's budget.",
+          "name": "DeleteRolePolicy",
+          "op": "DeleteRolePolicy",
+          "call": {
+            "op": "DeleteRolePolicy",
+            "params": {
+              "RoleName": { "$name": "role" },
+              "PolicyName": "inline-role-policy"
+            }
+          },
+          "assert": [
+            {
+              "kind": "eventually",
+              "maxAttempts": 6,
+              "delayMs": 500,
+              "assert": {
+                "kind": "absent",
+                "call": {
+                  "op": "ListRolePolicies",
+                  "params": { "RoleName": { "$name": "role" } }
+                },
+                "itemsPath": "$.PolicyNames",
+                "where": { "$": "inline-role-policy" }
+              }
+            }
+          ],
+          "depends": ["GetRolePolicy", "ListRolePolicies"]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "RemoveRoleFromInstanceProfile",
+          "params": {
+            "InstanceProfileName": { "$name": "profile" },
+            "RoleName": { "$name": "role" }
+          }
+        },
+        {
+          "op": "DeleteInstanceProfile",
+          "params": { "InstanceProfileName": { "$name": "profile" } }
+        },
+        {
+          "op": "DeleteRolePolicy",
+          "params": {
+            "RoleName": { "$name": "role" },
+            "PolicyName": "inline-role-policy"
+          }
+        },
+        {
+          "op": "DetachRolePolicy",
+          "params": {
+            "RoleName": { "$name": "role" },
+            "PolicyArn": "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
+          }
+        },
+        {
+          "op": "DeleteRole",
+          "params": { "RoleName": { "$name": "role" } }
+        },
+        {
+          "op": "DeleteRole",
+          "params": { "RoleName": { "$name": "doomed" } }
+        },
+        {
+          "op": "DeleteRole",
+          "params": { "RoleName": { "$name": "malformed" } }
+        }
+      ]
+    }
+  ]
+}
