@@ -6559,6 +6559,117 @@
           "operation": "ListTagsForResource",
           "category": "Tags",
           "status": "✅ Supported"
+        },
+        {
+          "operation": "IcebergGetConfig",
+          "category": "Iceberg REST catalog",
+          "status": "✅ Supported",
+          "notes": "Needs `warehouse`; the `prefix` override is the URL-encoded ARN, and the defaults point the client's FileIO at Overcast's S3",
+          "emulator_only": true
+        },
+        {
+          "operation": "IcebergListNamespaces",
+          "category": "Iceberg REST catalog",
+          "status": "✅ Supported",
+          "notes": "`pageToken`/`pageSize`; a `parent` namespace has no children, since S3 Tables namespaces have one level",
+          "emulator_only": true
+        },
+        {
+          "operation": "IcebergCreateNamespace",
+          "category": "Iceberg REST catalog",
+          "status": "✅ Supported",
+          "notes": "One-level namespaces; any properties are kept, where AWS supports only `owner`",
+          "emulator_only": true
+        },
+        {
+          "operation": "IcebergLoadNamespaceMetadata",
+          "category": "Iceberg REST catalog",
+          "status": "✅ Supported",
+          "emulator_only": true
+        },
+        {
+          "operation": "IcebergNamespaceExists",
+          "category": "Iceberg REST catalog",
+          "status": "✅ Supported",
+          "notes": "`HEAD`",
+          "emulator_only": true
+        },
+        {
+          "operation": "IcebergDropNamespace",
+          "category": "Iceberg REST catalog",
+          "status": "✅ Supported",
+          "notes": "`NamespaceNotEmptyException` while the namespace still holds tables",
+          "emulator_only": true
+        },
+        {
+          "operation": "IcebergUpdateProperties",
+          "category": "Iceberg REST catalog",
+          "status": "✅ Supported",
+          "notes": "Not served by AWS; `UnprocessableEntityException` for a key both set and removed",
+          "emulator_only": true
+        },
+        {
+          "operation": "IcebergListTables",
+          "category": "Iceberg REST catalog",
+          "status": "✅ Supported",
+          "notes": "`pageToken`/`pageSize`",
+          "emulator_only": true
+        },
+        {
+          "operation": "IcebergCreateTable",
+          "category": "Iceberg REST catalog",
+          "status": "✅ Supported",
+          "notes": "Writes the first metadata file; also accepts `stage-create`, which AWS refuses with 400",
+          "emulator_only": true
+        },
+        {
+          "operation": "IcebergRegisterTable",
+          "category": "Iceberg REST catalog",
+          "status": "✅ Supported",
+          "notes": "Not served by AWS; the metadata's location must be an unused `--table-s3` warehouse",
+          "emulator_only": true
+        },
+        {
+          "operation": "IcebergLoadTable",
+          "category": "Iceberg REST catalog",
+          "status": "✅ Supported",
+          "notes": "Reads the table's current metadata file from its warehouse",
+          "emulator_only": true
+        },
+        {
+          "operation": "IcebergTableExists",
+          "category": "Iceberg REST catalog",
+          "status": "✅ Supported",
+          "notes": "`HEAD`",
+          "emulator_only": true
+        },
+        {
+          "operation": "IcebergUpdateTable",
+          "category": "Iceberg REST catalog",
+          "status": "✅ Supported",
+          "notes": "Every format v1/v2 update and requirement, in `UpdateTableMetadataLocation`'s compare-and-swap; `CommitFailedException` on a conflict",
+          "emulator_only": true
+        },
+        {
+          "operation": "IcebergDropTable",
+          "category": "Iceberg REST catalog",
+          "status": "✅ Supported",
+          "notes": "Only with `purgeRequested=true`, as on AWS; the files stay in the warehouse",
+          "emulator_only": true
+        },
+        {
+          "operation": "IcebergRenameTable",
+          "category": "Iceberg REST catalog",
+          "status": "✅ Supported",
+          "notes": "Within the table bucket",
+          "emulator_only": true
+        },
+        {
+          "operation": "IcebergReportMetrics",
+          "category": "Iceberg REST catalog",
+          "status": "✅ Supported",
+          "notes": "Not served by AWS; accepted and dropped",
+          "emulator_only": true
         }
       ]
     },

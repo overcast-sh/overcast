@@ -1,12 +1,14 @@
 package s3tables
 
 // CreateTable's metadata.iceberg: translating the S3 Tables shape into the
-// initial Iceberg metadata document internal/icebergmeta builds.
+// initial Iceberg metadata document internal/icebergmeta builds, and the
+// service's answers to icebergmeta's errors.
 
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/overcast-sh/overcast/internal/events"
@@ -41,7 +43,7 @@ func buildInitialMetadata(tableUUID, location string, now time.Time, in *iceberg
 				idMap[i+1] = i + 1
 			}
 		}
-		columns = append(columns, icebergmeta.Field{Name: f.Name, Type: f.Type, Required: f.Required})
+		columns = append(columns, icebergmeta.Field{ID: i + 1, Name: f.Name, Type: icebergmeta.PrimitiveType(f.Type), Required: f.Required})
 	}
 	source := func(id int) int {
 		if mapped, ok := idMap[id]; ok {
@@ -75,16 +77,41 @@ func buildInitialMetadata(tableUUID, location string, now time.Time, in *iceberg
 		}
 	}
 
+	meta, aerr := newMetadata(spec, now)
+	if aerr != nil {
+		return nil, aerr
+	}
+	return marshalMetadata(meta)
+}
+
+// newMetadata is icebergmeta.New answered in the service's errors.
+func newMetadata(spec icebergmeta.CreateSpec, now time.Time) (*icebergmeta.Metadata, *protocol.AWSError) {
 	meta, err := icebergmeta.New(spec, now)
 	if err != nil {
-		if errors.Is(err, icebergmeta.ErrInvalid) {
-			return nil, badRequest(err.Error())
-		}
-		return nil, protocol.Wrap(protocol.ErrInternalError, err)
+		return nil, icebergmetaError(err)
 	}
+	return meta, nil
+}
+
+func marshalMetadata(meta *icebergmeta.Metadata) ([]byte, *protocol.AWSError) {
 	raw, err := json.Marshal(meta)
 	if err != nil {
 		return nil, protocol.Wrap(protocol.ErrInternalError, err)
 	}
 	return raw, nil
+}
+
+// icebergmetaError answers an icebergmeta error: a table definition or update
+// the spec forbids is the caller's BadRequestException, and a commit whose
+// requirement the table no longer meets is the Iceberg REST catalog's
+// CommitFailedException — another writer committed first.
+func icebergmetaError(err error) *protocol.AWSError {
+	switch {
+	case errors.Is(err, icebergmeta.ErrInvalid):
+		return badRequest(err.Error())
+	case errors.Is(err, icebergmeta.ErrRequirementFailed):
+		return icebergError(http.StatusConflict, "CommitFailedException", err.Error())
+	default:
+		return protocol.Wrap(protocol.ErrInternalError, err)
+	}
 }

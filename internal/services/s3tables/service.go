@@ -12,11 +12,16 @@
 // replication configuration are stored and echoed, and their job-status
 // operations report that nothing has run.
 //
+// The Iceberg REST catalog AWS serves beside the API, at /iceberg, is here too
+// (iceberg_rest*.go): its commits go through the same compare-and-swap as
+// UpdateTableMetadataLocation, and it also answers unsigned clients under
+// /_overcast/s3tables/iceberg.
+//
 // Routing. Every root the model binds — /buckets, /namespaces, /tables,
 // /get-table, /tag and the replication and record-expiration roots — is also a
-// legal S3 bucket name, so the main router sends a request here only when it
-// is signed for "s3tables" and to S3 otherwise (see RootRouters and
-// router.go).
+// legal S3 bucket name, and so is /iceberg, so the main router sends a request
+// here only when it is signed for "s3tables" and to S3 otherwise (see
+// RootRouters, IcebergRouter and router.go).
 package s3tables
 
 import (
@@ -55,12 +60,13 @@ type Service struct {
 	// Writes are small and in-process, so contention is not a concern.
 	mu sync.Mutex
 
-	// ensureWarehouse and putObject are the in-process S3 accessor, wired by
-	// InitS3Access. router.New always wires them; they are nil only in unit
-	// tests that build the service directly, where tables are created without
-	// a warehouse bucket or metadata file.
+	// ensureWarehouse, putObject and getObject are the in-process S3
+	// accessor, wired by InitS3Access. router.New always wires them; they are
+	// nil only in unit tests that build the service directly, where tables are
+	// created without a warehouse bucket or metadata file.
 	ensureWarehouse events.S3EnsureBucketFunc
 	putObject       events.S3PutObjectFunc
+	getObject       events.S3GetObjectFunc
 }
 
 // New returns a configured S3 Tables Service. It does no I/O.
@@ -69,19 +75,25 @@ func New(cfg *config.Config, st state.Store, logger *zap.Logger, clk clock.Clock
 }
 
 // InitS3Access wires the in-process S3 accessor: ensure creates a table's
-// "--table-s3" warehouse bucket and put writes its metadata file.
-func (s *Service) InitS3Access(ensure events.S3EnsureBucketFunc, put events.S3PutObjectFunc) {
+// "--table-s3" warehouse bucket, put writes its metadata files and get reads
+// them back for the Iceberg REST catalog.
+func (s *Service) InitS3Access(ensure events.S3EnsureBucketFunc, put events.S3PutObjectFunc, get events.S3GetObjectFunc) {
 	s.ensureWarehouse = ensure
 	s.putObject = put
+	s.getObject = get
 }
 
 // Name satisfies router.Service.
 func (s *Service) Name() string { return serviceName }
 
-// RegisterRoutes satisfies router.Service. It registers nothing on the shared
-// router: every S3 Tables root is also a legal S3 bucket name, so the main
-// router mounts RootRouters behind a signing-name dispatcher instead.
-func (s *Service) RegisterRoutes(chi.Router) {}
+// RegisterRoutes satisfies router.Service. It registers only the unsigned
+// mount of the Iceberg REST catalog, under /_overcast/: every S3 Tables root,
+// and the catalog's own /iceberg root, is also a legal S3 bucket name, so the
+// main router mounts RootRouters and IcebergRouter behind a signing-name
+// dispatcher instead.
+func (s *Service) RegisterRoutes(r chi.Router) {
+	r.Mount(IcebergInternalRoot, s.IcebergRouter())
+}
 
 func (s *Service) lock() func() {
 	s.mu.Lock()

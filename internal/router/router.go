@@ -651,9 +651,9 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	lambdaSvc.InitS3Sync(func(ctx context.Context, bucket, key, versionID string) ([]byte, *protocol.AWSError) {
 		return s3Svc.GetObjectBytes(ctx, bucket, key, versionID)
 	})
-	// S3 Tables → S3: each table's "--table-s3" warehouse bucket and its first
-	// metadata.json go through S3's own create and write paths.
-	s3tablesSvc.InitS3Access(s3Svc.EnsureTableWarehouseBucket, s3Svc.PutObjectBytes)
+	// S3 Tables → S3: each table's "--table-s3" warehouse bucket and its
+	// metadata files go through S3's own create, write and read paths.
+	s3tablesSvc.InitS3Access(s3Svc.EnsureTableWarehouseBucket, s3Svc.PutObjectBytes, s3Svc.GetObjectBytes)
 	// Lambda → EC2: VPC resolver so Lambda can connect containers to VPC networks.
 	lambdaSvc.SetVPCResolver(ec2Svc)
 	// EFS → Lambda/ECS: FileSystemConfigs and efsVolumeConfiguration mount the
@@ -1098,7 +1098,8 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	// ---- S3 Tables root dispatch --------------------------------------------
 	// Every root S3 Tables binds — /buckets, /namespaces, /tables, /get-table,
 	// /tag and the replication and record-expiration roots — is also a legal
-	// S3 bucket name, so no path can tell the two apart. The SigV4 signing name
+	// S3 bucket name, as is /iceberg, where its Iceberg REST catalog lives, so
+	// no path can tell the two apart. The SigV4 signing name
 	// can: a request signed for "s3tables" reaches S3 Tables, and everything
 	// else (unsigned traffic, S3-signed traffic, any other scope) reaches
 	// exactly the restFallback the "/*" route below would have given it, so a
@@ -1119,6 +1120,15 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 					m.HandleFunc("/*", dispatch)
 				})
 			}
+			// The Iceberg REST catalog, which AWS serves under /iceberg on
+			// the same endpoint. "iceberg" is a legal bucket name too, so it is
+			// dispatched the same way. It is no model's binding, so it is not
+			// recorded as a dispatch mount; its unsigned twin lives under
+			// /_overcast/ (see s3tables.Service.RegisterRoutes).
+			icebergDispatch := signingNameDispatch("s3tables", s3tablesSvc.IcebergRouter(), s3Fallback)
+			r.Route(s3tables.IcebergRoot, func(m chi.Router) {
+				m.HandleFunc("/*", icebergDispatch)
+			})
 		}
 	}
 

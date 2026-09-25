@@ -98,6 +98,14 @@ func recordAWSError(w http.ResponseWriter, aerr *AWSError) {
 	}
 }
 
+// RecordError attaches aerr, cause included, to the request's log line and
+// trace, as every Write*Error helper here does. It is for a handler that puts
+// an error on the wire in a model of its own — a non-AWS protocol such as the
+// Iceberg REST catalog's — so its failures are logged like any other.
+func RecordError(w http.ResponseWriter, aerr *AWSError) {
+	recordAWSError(w, aerr)
+}
+
 // Error implements the error interface.
 // Returns the AWS error code and message; the cause is accessible via Unwrap.
 func (e *AWSError) Error() string {

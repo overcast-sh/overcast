@@ -128,14 +128,16 @@ type tableBucket struct {
 	Tags        map[string]string           `json:"tags,omitempty"`
 }
 
-// namespaceRecord is a persisted namespace.
+// namespaceRecord is a persisted namespace. Properties are the Iceberg REST
+// catalog's namespace properties; the S3 Tables API has none.
 type namespaceRecord struct {
-	Name           string    `json:"name"`
-	Bucket         string    `json:"bucket"`
-	NamespaceID    string    `json:"namespaceId"`
-	CreatedAt      time.Time `json:"createdAt"`
-	CreatedBy      string    `json:"createdBy"`
-	OwnerAccountID string    `json:"ownerAccountId"`
+	Name           string            `json:"name"`
+	Bucket         string            `json:"bucket"`
+	NamespaceID    string            `json:"namespaceId"`
+	CreatedAt      time.Time         `json:"createdAt"`
+	CreatedBy      string            `json:"createdBy"`
+	OwnerAccountID string            `json:"ownerAccountId"`
+	Properties     map[string]string `json:"properties,omitempty"`
 }
 
 // tableRecord is a persisted table. Its ARN names the table by TableID, which
