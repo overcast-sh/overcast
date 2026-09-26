@@ -2312,6 +2312,101 @@
       ]
     },
     {
+      "service": "s3tables",
+      "name": "s3tables-tables-shadow",
+      "generated": true,
+      "scenario": "compat/model/authored/s3tables-tables.json",
+      "state": "candidate",
+      "shadowOf": "s3tables-tables",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "CreateTableBucket"
+        },
+        {
+          "name": "GetTableBucket",
+          "depends": [
+            "CreateTableBucket"
+          ]
+        },
+        {
+          "name": "ListTableBuckets",
+          "depends": [
+            "CreateTableBucket"
+          ]
+        },
+        {
+          "name": "CreateNamespace",
+          "depends": [
+            "CreateTableBucket"
+          ]
+        },
+        {
+          "name": "ListNamespaces",
+          "depends": [
+            "CreateNamespace"
+          ]
+        },
+        {
+          "name": "CreateTable",
+          "depends": [
+            "CreateNamespace"
+          ]
+        },
+        {
+          "name": "GetTable",
+          "depends": [
+            "CreateTable"
+          ]
+        },
+        {
+          "name": "ListTables",
+          "depends": [
+            "CreateTable"
+          ]
+        },
+        {
+          "name": "UpdateTableMetadataLocation",
+          "depends": [
+            "CreateTable"
+          ]
+        },
+        {
+          "name": "UpdateTableMetadataLocationStaleToken",
+          "op": "UpdateTableMetadataLocation",
+          "depends": [
+            "UpdateTableMetadataLocation"
+          ]
+        },
+        {
+          "name": "DeleteTable",
+          "depends": [
+            "CreateTable"
+          ]
+        },
+        {
+          "name": "DeleteNamespace",
+          "depends": [
+            "DeleteTable"
+          ]
+        },
+        {
+          "name": "DeleteTableBucket",
+          "depends": [
+            "DeleteNamespace"
+          ]
+        }
+      ]
+    },
+    {
       "service": "secretsmanager",
       "name": "secretsmanager-gen-secret",
       "generated": true,

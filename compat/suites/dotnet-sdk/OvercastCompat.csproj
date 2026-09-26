@@ -50,6 +50,7 @@
     <PackageReference Include="AWSSDK.Lambda" Version="4.0.0" />
     <PackageReference Include="AWSSDK.Organizations" Version="4.0.101.4" />
     <PackageReference Include="AWSSDK.S3" Version="4.0.0" />
+    <PackageReference Include="AWSSDK.S3Tables" Version="4.0.0" />
     <PackageReference Include="AWSSDK.SecretsManager" Version="4.0.0" />
     <PackageReference Include="AWSSDK.SecurityToken" Version="4.0.0" />
     <PackageReference Include="AWSSDK.ServiceDiscovery" Version="4.0.101.8" />

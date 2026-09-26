@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/overcast-sh/overcast/internal/awsmodel"
 )
 
 // TestLoadModel_readsAWSQueryCompatible covers the derivation the scenario
@@ -35,6 +37,41 @@ func TestLoadModel_readsAWSQueryCompatible(t *testing.T) {
 			// Then: the derived fact matches what the snapshot declares.
 			if model.QueryCompatible != testCase.want {
 				t.Fatalf("QueryCompatible for %s = %v, want %v", testCase.service, model.QueryCompatible, testCase.want)
+			}
+		})
+	}
+}
+
+// TestReadServiceTraits_endpointPrefixFallsBackToARNNamespace covers the
+// one committed snapshot whose aws.api#service trait states no endpointPrefix:
+// S3 Tables names only its arnNamespace, and botocore's metadata for it gives
+// endpointPrefix "s3tables", the same string. A stated prefix always wins.
+func TestReadServiceTraits_endpointPrefixFallsBackToARNNamespace(t *testing.T) {
+	for _, testCase := range []struct {
+		name  string
+		trait string
+		want  string
+	}{
+		{name: "stated", trait: `{"endpointPrefix":"kinesis","arnNamespace":"kinesis","sdkId":"Kinesis"}`, want: "kinesis"},
+		{name: "stated differs from arnNamespace", trait: `{"endpointPrefix":"events","arnNamespace":"eventbridge"}`, want: "events"},
+		{name: "absent", trait: `{"arnNamespace":"s3tables","sdkId":"S3Tables"}`, want: "s3tables"},
+		{name: "neither", trait: `{"sdkId":"Widgets"}`, want: ""},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			// Given: a service shape carrying this aws.api#service trait.
+			service := awsmodel.SnapshotShape{Type: "service", Traits: map[string]json.RawMessage{
+				"aws.api#service": json.RawMessage(testCase.trait),
+			}}
+
+			// When: the generator reads its traits.
+			model := &serviceModel{}
+			if err := model.readServiceTraits(service); err != nil {
+				t.Fatalf("readServiceTraits: %v", err)
+			}
+
+			// Then: the endpoint prefix is the stated one, else the arnNamespace.
+			if model.EndpointPrefix != testCase.want {
+				t.Fatalf("EndpointPrefix = %q, want %q", model.EndpointPrefix, testCase.want)
 			}
 		})
 	}

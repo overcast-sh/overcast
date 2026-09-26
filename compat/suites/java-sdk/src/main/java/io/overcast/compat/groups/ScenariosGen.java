@@ -44,6 +44,7 @@ public final class ScenariosGen {
                 new ScenariosAuthoredLogsEventsGen(clients),
                 new ScenariosAuthoredLogsGroupsGen(clients),
                 new ScenariosAuthoredLogsMetricFiltersGen(clients),
+                new ScenariosAuthoredS3tablesTablesGen(clients),
                 new ScenariosAuthoredSqsQueuesGen(clients),
                 new ScenariosBatchGen(clients),
                 new ScenariosElasticLoadBalancingGen(clients),

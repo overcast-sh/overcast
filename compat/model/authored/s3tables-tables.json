@@ -1,0 +1,460 @@
+{
+  "$comment": "Authored port of the hand-written registry group s3tables-tables (docs/plans/compat-coverage-modelgen.md §3.11, G6 wave 3, #1116, #2226). One spec in place of the three per-language implementations that exist (cli, go-sdk, python-sdk) and the four that never did (node-js-sdk, java-sdk, dotnet-sdk, rust-sdk) — 13 tests of parity debt per missing suite. It runs as s3tables-tables-shadow beside those natives until a nightly --compare-shadow agrees on every (suite, test) pair; the flip then renames it to s3tables-tables. The clauses are the union of what the three natives assert, plus read-backs of documented effects where a native asserted only success, each stated in its test's $comment — see compat/model/README.md § Authored scenarios.",
+  "version": 1,
+  "service": "s3tables",
+  "client": {
+    "sdkId": "S3Tables",
+    "endpointPrefix": "s3tables",
+    "signingName": "s3tables",
+    "protocol": "restJson1",
+    "apiVersion": "2018-05-10",
+    "awsQueryCompatible": false
+  },
+  "groups": [
+    {
+      "$comment": "One table bucket, one namespace in it and one table in that, created by the Create* tests and deleted by the Delete* tests in reverse order — the shape all three natives use and the one registry.json's depends describes. The bucket is named by $name, so it is {runId}-s3tables-tables-shadow-bucket: lowercase letters, digits and hyphens, well inside the 3–63 characters TableBucketName allows, and its own bucket, never shared with the native group (whose bucket is s3tables-tables-{runId}). The natives derive the namespace from the bucket name with hyphens turned into underscores, because NamespaceName allows `[0-9a-z_]` and no hyphen; $name always carries hyphens, so the port names the namespace `compat` and the table `orders` (the natives' table name) as literals. Both are scoped to the run's own bucket, so a literal is exactly as unique as the natives' derived name. There is no setup. Teardown deletes the table, the namespace and the bucket, each on its own — the natives' teardown order, which is also the only order S3 Tables accepts (a bucket that still holds a namespace, or a namespace that still holds a table, is a ConflictException). No clause is wrapped in `eventually`: no native polls, and S3 Tables documents no consistency window for these control-plane writes.",
+      "name": "s3tables-tables-shadow",
+      "kind": "lifecycle",
+      "setup": [],
+      "tests": [
+        {
+          "$comment": "All three natives assert the returned ARN starts with `arn:aws:s3tables:` and ends with `:bucket/<name>`. A `matches` pattern cannot embed a $name (compat/model/README.md § Authored scenarios, the sqs-queues pilot note), so the port splits the claim in two: the ARN matches the model's own TableBucketARN pattern, narrowed to the `aws` partition and the `s3tables` service as the natives narrow it, and a read-back by that ARN answers the bucket this test named. Together they tie this exact ARN to this exact name, which is what the suffix check was for. The ARN is exported because every later call addresses the bucket by it, as the natives carry it forward.",
+          "name": "CreateTableBucket",
+          "op": "CreateTableBucket",
+          "call": {
+            "op": "CreateTableBucket",
+            "params": { "name": { "$name": "bucket" } },
+            "export": { "bucket.arn": "$.arn" }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.arn": { "matches": "^arn:aws:s3tables:[-a-z0-9]*:[0-9]{12}:bucket/[a-z0-9_-]{3,63}$" }
+              }
+            },
+            {
+              "kind": "readback",
+              "call": {
+                "op": "GetTableBucket",
+                "params": { "tableBucketARN": { "$ref": "bucket.arn" } }
+              },
+              "checks": {
+                "$.name": { "equals": { "$name": "bucket" } }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "All three natives assert arn is the ARN CreateTableBucket returned, name is the bucket's name, and createdAt and ownerAccountId are present. The union is exactly that; createdAt is a timestamp, so `nonEmpty` is the only check any backend can make on it (compat/model/README.md § Values).",
+          "name": "GetTableBucket",
+          "op": "GetTableBucket",
+          "call": {
+            "op": "GetTableBucket",
+            "params": { "tableBucketARN": { "$ref": "bucket.arn" } }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.arn": { "equals": { "$ref": "bucket.arn" } },
+                "$.name": { "equals": { "$name": "bucket" } },
+                "$.createdAt": { "nonEmpty": true },
+                "$.ownerAccountId": { "nonEmpty": true }
+              }
+            }
+          ],
+          "depends": ["CreateTableBucket"]
+        },
+        {
+          "$comment": "All three natives list with prefix set to the bucket's own name and assert a bucket of that name is on the page. The port asks the same and matches the item by its ARN as well as its name, which ties the entry to the bucket this run created.",
+          "name": "ListTableBuckets",
+          "op": "ListTableBuckets",
+          "call": {
+            "op": "ListTableBuckets",
+            "params": { "prefix": { "$name": "bucket" } }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.tableBuckets",
+              "where": {
+                "$.name": { "$name": "bucket" },
+                "$.arn": { "$ref": "bucket.arn" }
+              }
+            }
+          ],
+          "depends": ["CreateTableBucket"]
+        },
+        {
+          "$comment": "All three natives assert the response names the one-element namespace they asked for, in the bucket they asked for. Added, from the API reference (API_s3TableBuckets_GetNamespace.html): the namespace can be read back from the bucket by name, and answers the same one-element namespace list — the Create* read-back compat/AGENTS.md's assertion contract asks for, which no native made.",
+          "name": "CreateNamespace",
+          "op": "CreateNamespace",
+          "call": {
+            "op": "CreateNamespace",
+            "params": {
+              "tableBucketARN": { "$ref": "bucket.arn" },
+              "namespace": ["compat"]
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.namespace": { "equals": ["compat"] },
+                "$.tableBucketARN": { "equals": { "$ref": "bucket.arn" } }
+              }
+            },
+            {
+              "kind": "readback",
+              "call": {
+                "op": "GetNamespace",
+                "params": {
+                  "tableBucketARN": { "$ref": "bucket.arn" },
+                  "namespace": "compat"
+                }
+              },
+              "checks": {
+                "$.namespace": { "equals": ["compat"] }
+              }
+            }
+          ],
+          "depends": ["CreateTableBucket"]
+        },
+        {
+          "$comment": "All three natives assert the bucket holds exactly one namespace and that it is the one CreateNamespace made. The bucket is this run's own, so exactly one is right; the port says so as the first item being that namespace and there being no second item.",
+          "name": "ListNamespaces",
+          "op": "ListNamespaces",
+          "call": {
+            "op": "ListNamespaces",
+            "params": { "tableBucketARN": { "$ref": "bucket.arn" } }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.namespaces[0].namespace": { "equals": ["compat"] },
+                "$.namespaces[1]": { "missing": true }
+              }
+            }
+          ],
+          "depends": ["CreateNamespace"]
+        },
+        {
+          "$comment": "All three natives create an ICEBERG table named `orders` and assert the returned tableARN lies under the bucket's ARN (`<bucket ARN>/table/…`) and a versionToken is present. The prefix cannot be written as a pattern around a $ref, so the port splits it as CreateTableBucket does: the ARN matches the model's own TableARN pattern, narrowed to `aws`/`s3tables`, and a GetTable read-back of this bucket, namespace and name answers this exact ARN, which is what ties the table to the bucket. The read-back also exports the table's warehouseLocation and its current versionToken: UpdateTableMetadataLocation binds both by $ref, where each native re-read them with GetTableMetadataLocation just before its update. Nothing between this test and that one writes to the table, so this GetTable's token is still current there, and the stale-token test later proves the service keeps it current no longer than it should. tableARN and versionToken are also exported from this response, the ARN for the read-backs below and the token as the one CreateTable handed out.",
+          "name": "CreateTable",
+          "op": "CreateTable",
+          "call": {
+            "op": "CreateTable",
+            "params": {
+              "tableBucketARN": { "$ref": "bucket.arn" },
+              "namespace": "compat",
+              "name": "orders",
+              "format": "ICEBERG"
+            },
+            "export": {
+              "table.arn": "$.tableARN",
+              "table.createToken": "$.versionToken"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.tableARN": { "matches": "^arn:aws:s3tables:[-a-z0-9]*:[0-9]{12}:bucket/[a-z0-9_-]{3,63}/table/[a-zA-Z0-9_-]{1,255}$" },
+                "$.versionToken": { "nonEmpty": true }
+              }
+            },
+            {
+              "kind": "readback",
+              "call": {
+                "op": "GetTable",
+                "params": {
+                  "tableBucketARN": { "$ref": "bucket.arn" },
+                  "namespace": "compat",
+                  "name": "orders"
+                },
+                "export": {
+                  "table.warehouse": "$.warehouseLocation",
+                  "table.token": "$.versionToken"
+                }
+              },
+              "checks": {
+                "$.tableARN": { "equals": { "$ref": "table.arn" } },
+                "$.versionToken": { "equals": { "$ref": "table.createToken" } }
+              }
+            }
+          ],
+          "depends": ["CreateNamespace"]
+        },
+        {
+          "$comment": "go-sdk, python-sdk and cli assert name `orders`, format ICEBERG and a warehouseLocation that is an s3:// URI; python-sdk and cli also assert tableARN is the one CreateTable returned. The union is all four. go-sdk addresses the table by tableArn, python-sdk and cli by bucket, namespace and name; the port uses the name form, because the cli native records that the AWS CLI release the suite pins predates GetTable's tableArn member, and CreateTable's read-back already found this same ARN by name. Added, from the API reference (API_s3TableBuckets_GetTable.html): namespace is the one-element list the table was created in.",
+          "name": "GetTable",
+          "op": "GetTable",
+          "call": {
+            "op": "GetTable",
+            "params": {
+              "tableBucketARN": { "$ref": "bucket.arn" },
+              "namespace": "compat",
+              "name": "orders"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.name": { "equals": "orders" },
+                "$.format": { "equals": "ICEBERG" },
+                "$.tableARN": { "equals": { "$ref": "table.arn" } },
+                "$.namespace": { "equals": ["compat"] },
+                "$.warehouseLocation": { "matches": "^s3://" }
+              }
+            }
+          ],
+          "depends": ["CreateTable"]
+        },
+        {
+          "$comment": "All three natives assert the namespace holds exactly one table, named `orders`. The port says so as the first item being that table — matched by its ARN as well, which ties it to the table this run created — and there being no second item.",
+          "name": "ListTables",
+          "op": "ListTables",
+          "call": {
+            "op": "ListTables",
+            "params": {
+              "tableBucketARN": { "$ref": "bucket.arn" },
+              "namespace": "compat"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.tables[0].name": { "equals": "orders" },
+                "$.tables[0].tableARN": { "equals": { "$ref": "table.arn" } },
+                "$.tables[1]": { "missing": true }
+              }
+            }
+          ],
+          "depends": ["CreateTable"]
+        },
+        {
+          "$comment": "All three natives point the table at `<warehouseLocation>/metadata/00001-compat.metadata.json` under the current versionToken (Overcast requires the location to lie inside the warehouse), and assert the response echoes that location and carries a token different from the one sent; go-sdk also reads the location back with GetTableMetadataLocation. The port binds the warehouse and the token GetTable answered in CreateTable's read-back, and asserts the echo and go-sdk's read-back, whose versionToken must be the new one this response carried. The IR has no not-equals check, so 'the token changed' is asserted by its documented consequence (API_s3TableBuckets_UpdateTableMetadataLocation.html, ConflictException): the token this update consumed is refused by a second update. That is strictly stronger than inequality — an unchanged token would let the second update succeed — and it is why this test, not only the StaleToken test after it, fails when the service forgets to rotate the token. Its location is 00002, the one the StaleToken test uses, so the refusal leaves no trace either way.",
+          "name": "UpdateTableMetadataLocation",
+          "op": "UpdateTableMetadataLocation",
+          "call": {
+            "op": "UpdateTableMetadataLocation",
+            "params": {
+              "tableBucketARN": { "$ref": "bucket.arn" },
+              "namespace": "compat",
+              "name": "orders",
+              "versionToken": { "$ref": "table.token" },
+              "metadataLocation": { "$concat": [{ "$ref": "table.warehouse" }, "/metadata/00001-compat.metadata.json"] }
+            },
+            "export": { "table.updatedToken": "$.versionToken" }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.metadataLocation": { "equals": { "$concat": [{ "$ref": "table.warehouse" }, "/metadata/00001-compat.metadata.json"] } },
+                "$.tableARN": { "equals": { "$ref": "table.arn" } },
+                "$.versionToken": { "nonEmpty": true }
+              }
+            },
+            {
+              "kind": "readback",
+              "call": {
+                "op": "GetTableMetadataLocation",
+                "params": {
+                  "tableBucketARN": { "$ref": "bucket.arn" },
+                  "namespace": "compat",
+                  "name": "orders"
+                }
+              },
+              "checks": {
+                "$.metadataLocation": { "equals": { "$concat": [{ "$ref": "table.warehouse" }, "/metadata/00001-compat.metadata.json"] } },
+                "$.versionToken": { "equals": { "$ref": "table.updatedToken" } }
+              }
+            },
+            {
+              "kind": "absent",
+              "call": {
+                "op": "UpdateTableMetadataLocation",
+                "params": {
+                  "tableBucketARN": { "$ref": "bucket.arn" },
+                  "namespace": "compat",
+                  "name": "orders",
+                  "versionToken": { "$ref": "table.token" },
+                  "metadataLocation": { "$concat": [{ "$ref": "table.warehouse" }, "/metadata/00002-compat.metadata.json"] }
+                }
+              },
+              "error": { "shape": "ConflictException", "code": "ConflictException" }
+            }
+          ],
+          "depends": ["CreateTable"]
+        },
+        {
+          "$comment": "All three natives send the pre-update token with a new location and assert the update is refused as ConflictException; python-sdk and cli also assert HTTP 409. ConflictException is what the API reference documents for a versionToken that no longer matches (API_s3TableBuckets_UpdateTableMetadataLocation.html: 'The request failed because there is a conflict with a previous write'), and the model gives the shape httpError 409 — the IR checks the code, not the status, so the 409 rests on the shape. RESTJSON has no awsQueryError code, so shape and code are the same string. Added: a refused compare-and-swap writes nothing, so the table still points at the location UpdateTableMetadataLocation set, under the token that update returned.",
+          "name": "UpdateTableMetadataLocationStaleToken",
+          "op": "UpdateTableMetadataLocation",
+          "call": {
+            "op": "UpdateTableMetadataLocation",
+            "params": {
+              "tableBucketARN": { "$ref": "bucket.arn" },
+              "namespace": "compat",
+              "name": "orders",
+              "versionToken": { "$ref": "table.token" },
+              "metadataLocation": { "$concat": [{ "$ref": "table.warehouse" }, "/metadata/00002-compat.metadata.json"] }
+            }
+          },
+          "assert": [
+            {
+              "kind": "errorCode",
+              "error": { "shape": "ConflictException", "code": "ConflictException" }
+            },
+            {
+              "kind": "readback",
+              "call": {
+                "op": "GetTableMetadataLocation",
+                "params": {
+                  "tableBucketARN": { "$ref": "bucket.arn" },
+                  "namespace": "compat",
+                  "name": "orders"
+                }
+              },
+              "checks": {
+                "$.metadataLocation": { "equals": { "$concat": [{ "$ref": "table.warehouse" }, "/metadata/00001-compat.metadata.json"] } },
+                "$.versionToken": { "equals": { "$ref": "table.updatedToken" } }
+              }
+            }
+          ],
+          "depends": ["UpdateTableMetadataLocation"]
+        },
+        {
+          "$comment": "All three natives delete the table and assert GetTable then fails with NotFoundException — go-sdk by tableArn, python-sdk and cli by name; the port reads by name, for GetTable's reason. Added: the table is no longer listed in its namespace.",
+          "name": "DeleteTable",
+          "op": "DeleteTable",
+          "call": {
+            "op": "DeleteTable",
+            "params": {
+              "tableBucketARN": { "$ref": "bucket.arn" },
+              "namespace": "compat",
+              "name": "orders"
+            }
+          },
+          "assert": [
+            {
+              "kind": "absent",
+              "call": {
+                "op": "GetTable",
+                "params": {
+                  "tableBucketARN": { "$ref": "bucket.arn" },
+                  "namespace": "compat",
+                  "name": "orders"
+                }
+              },
+              "error": { "shape": "NotFoundException", "code": "NotFoundException" }
+            },
+            {
+              "kind": "absent",
+              "call": {
+                "op": "ListTables",
+                "params": {
+                  "tableBucketARN": { "$ref": "bucket.arn" },
+                  "namespace": "compat"
+                }
+              },
+              "itemsPath": "$.tables",
+              "where": { "$.name": "orders" }
+            }
+          ],
+          "depends": ["CreateTable"]
+        },
+        {
+          "$comment": "All three natives assert only that DeleteNamespace succeeds. Added, as compat/AGENTS.md's assertion contract asks of a Delete*: GetNamespace then fails with NotFoundException (API_s3TableBuckets_GetNamespace.html), and the namespace is no longer listed in the bucket.",
+          "name": "DeleteNamespace",
+          "op": "DeleteNamespace",
+          "call": {
+            "op": "DeleteNamespace",
+            "params": {
+              "tableBucketARN": { "$ref": "bucket.arn" },
+              "namespace": "compat"
+            }
+          },
+          "assert": [
+            {
+              "kind": "absent",
+              "call": {
+                "op": "GetNamespace",
+                "params": {
+                  "tableBucketARN": { "$ref": "bucket.arn" },
+                  "namespace": "compat"
+                }
+              },
+              "error": { "shape": "NotFoundException", "code": "NotFoundException" }
+            },
+            {
+              "kind": "absent",
+              "call": {
+                "op": "ListNamespaces",
+                "params": { "tableBucketARN": { "$ref": "bucket.arn" } }
+              },
+              "itemsPath": "$.namespaces",
+              "where": { "$.namespace": ["compat"] }
+            }
+          ],
+          "depends": ["DeleteTable"]
+        },
+        {
+          "$comment": "All three natives delete the bucket and assert GetTableBucket then fails with NotFoundException. Added: the bucket is no longer listed under its own name as a prefix, the page ListTableBuckets found it on.",
+          "name": "DeleteTableBucket",
+          "op": "DeleteTableBucket",
+          "call": {
+            "op": "DeleteTableBucket",
+            "params": { "tableBucketARN": { "$ref": "bucket.arn" } }
+          },
+          "assert": [
+            {
+              "kind": "absent",
+              "call": {
+                "op": "GetTableBucket",
+                "params": { "tableBucketARN": { "$ref": "bucket.arn" } }
+              },
+              "error": { "shape": "NotFoundException", "code": "NotFoundException" }
+            },
+            {
+              "kind": "absent",
+              "call": {
+                "op": "ListTableBuckets",
+                "params": { "prefix": { "$name": "bucket" } }
+              },
+              "itemsPath": "$.tableBuckets",
+              "where": { "$.name": { "$name": "bucket" } }
+            }
+          ],
+          "depends": ["DeleteNamespace"]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "DeleteTable",
+          "params": {
+            "tableBucketARN": { "$ref": "bucket.arn" },
+            "namespace": "compat",
+            "name": "orders"
+          }
+        },
+        {
+          "op": "DeleteNamespace",
+          "params": {
+            "tableBucketARN": { "$ref": "bucket.arn" },
+            "namespace": "compat"
+          }
+        },
+        {
+          "op": "DeleteTableBucket",
+          "params": { "tableBucketARN": { "$ref": "bucket.arn" } }
+        }
+      ]
+    }
+  ]
+}
