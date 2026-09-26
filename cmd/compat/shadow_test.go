@@ -358,3 +358,44 @@ func TestCompareShadow_separatesPairsNeitherHalfExercised(t *testing.T) {
 		}
 	}
 }
+
+// Debt is closed by a shadow that works, not by one that merely ran. A shadow
+// failing in a suite that never implemented the native group used to count as
+// "parity debt closed", which hid a real node-js-sdk interpreter bug in #2240
+// (#2246): nonEmpty failed on every timestamp, and only in suites with no
+// native to diverge from. The shadow answering "unimplemented" is not a fault
+// of the port — the natives elsewhere report the same 501 — so that still
+// closes the debt; a shadow that fails is a divergence and blocks the flip.
+func TestCompareShadow_debtClosesOnlyWhenTheShadowWorks(t *testing.T) {
+	for _, tt := range []struct {
+		shadow compat.Status
+		want   shadowVerdict
+	}{
+		{compat.StatusPass, shadowDebtClosed},
+		{compat.StatusUnimplemented, shadowDebtClosed},
+		{compat.StatusFail, shadowDiverge},
+	} {
+		t.Run(string(tt.shadow), func(t *testing.T) {
+			// Given: rust-sdk never implemented the native group, and the shadow
+			// answered tt.shadow there.
+			report := reportWithResults(
+				resultSpec{suite: "rust-sdk", service: "sqs", group: "sqs-queues-shadow", test: "CreateQueue", status: tt.shadow},
+			)
+			skipWithReason(report, "rust-sdk", "sqs-queues", "CreateQueue", notImplementedSentinel("rust-sdk"))
+
+			// When: the two are compared.
+			comparisons := compareShadows(shadowRegistry("CreateQueue"), report)
+
+			// Then: only a shadow that works closes the debt, and a failing one
+			// blocks the flip.
+			if got := comparisons[0].Pairs[0].verdict(); got != tt.want {
+				t.Fatalf("verdict = %v, want %v (pair %+v)", got, tt.want, comparisons[0].Pairs[0])
+			}
+			var out strings.Builder
+			clear := writeShadowReport(&out, comparisons, false)
+			if blocks := tt.want == shadowDiverge; clear == blocks {
+				t.Fatalf("flip clear = %v, want %v:\n%s", clear, !blocks, out.String())
+			}
+		})
+	}
+}
