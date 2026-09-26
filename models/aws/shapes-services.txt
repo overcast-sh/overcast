@@ -40,3 +40,12 @@ cloudwatch-logs
 cognito-identity-provider
 eventbridge
 kinesis
+
+# compat-coverage-modelgen G6 wave 3 (#1116): services whose hand-written
+# groups exist only in the cli suite, so each port closes debt in six suites.
+# Measured at revision 56df161c, all inside the 1,608 B/op gate; eks, kafka
+# and opensearch were measured too and are deferred, being over it.
+appconfig
+backup
+ecr
+s3tables
