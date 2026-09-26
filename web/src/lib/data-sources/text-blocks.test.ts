@@ -18,7 +18,17 @@ describe("delimitedHead", () => {
         ["Ada", "Grace"],
       ],
     })
-    expect(layout).toEqual({ kind: "delimited", delimiter: ",", width: 2 })
+    expect(layout).toEqual({ kind: "delimited", delimiter: ",", width: 2, quotedValues: false })
+  })
+
+  it("keeps a quoted-values file's NULLs, and lays out its blocks the same way", () => {
+    const { head, layout } = delimitedHead('"id","note"\n"1",\n', ",", {
+      rows: 10,
+      truncated: false,
+      quotedValues: true,
+    })
+    expect(head.first.columns).toEqual([["1"], [null]])
+    expect(textBlock('"2",\n', layout, 10).columns).toEqual([["2"], [null]])
   })
 
   it("keeps only the rows asked for", () => {
@@ -80,7 +90,11 @@ describe("jsonlHead", () => {
 
 describe("textBlock", () => {
   it("parses a CSV block with the head's delimiter and width", () => {
-    const block = textBlock("1;x\n2\n", { kind: "delimited", delimiter: ";", width: 2 }, 10)
+    const block = textBlock(
+      "1;x\n2\n",
+      { kind: "delimited", delimiter: ";", width: 2, quotedValues: false },
+      10,
+    )
     expect(block).toEqual({
       count: 2,
       columns: [

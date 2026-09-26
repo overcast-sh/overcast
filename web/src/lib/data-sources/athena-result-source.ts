@@ -1,3 +1,4 @@
+import { withDeclaredColumns, type DeclaredColumns } from "./declared-columns"
 import { memorySource } from "./memory-source"
 import type { DataColumn, RowSource } from "./row-source"
 import { openTextSource } from "./text-source"
@@ -18,6 +19,12 @@ import type { DataWorkerPort } from "./worker-protocol"
  *
  * A result whose size is not known (no `Statistics`) takes the CSV path,
  * which is right for any size.
+ *
+ * The CSV declares no types, so the CSV path takes them from the result's
+ * `ColumnInfo` (which the first page of `GetQueryResults` carries, and the
+ * caller has already read) and reads each field through the same mapping the
+ * paged path does: a number right-aligns and a NULL reads as NULL either way.
+ * Athena quotes every value in the CSV, so an unquoted empty field is a NULL.
  */
 
 /** Largest result read through `GetQueryResults`: a few pages of 1,000 rows. */
@@ -25,7 +32,7 @@ export const PAGED_RESULT_ROWS = 5000
 
 export interface AthenaResultPage {
   /** From `ResultSetMetadata.ColumnInfo`, typed. */
-  columns: DataColumn[]
+  columns: readonly DataColumn[]
   /** Data rows only: the caller drops the header row the first page carries. */
   rows: unknown[][]
   nextToken?: string
@@ -34,6 +41,8 @@ export interface AthenaResultPage {
 export interface AthenaResult {
   /** Rows in the result, from `QueryExecution.Statistics` when it has them. */
   rowCount?: number
+  /** The result's columns, typed from `ColumnInfo`, and how a field's text reads as a value. */
+  schema: DeclaredColumns
   /** One page of `GetQueryResults`, from `token` (none for the first). */
   readPage(token: string | undefined, signal?: AbortSignal): Promise<AthenaResultPage>
   /** The result CSV at `OutputLocation`: a URL a ranged GET reaches, and its size. */
@@ -52,7 +61,14 @@ export async function openAthenaResultSource(
   },
 ): Promise<RowSource> {
   if (result.rowCount === undefined || result.rowCount > PAGED_RESULT_ROWS) {
-    return openTextSource({ ...result.output, kind: "csv", port: spawnWorker(), signal })
+    const csv = await openTextSource({
+      ...result.output,
+      kind: "csv",
+      quotedValues: true,
+      port: spawnWorker(),
+      signal,
+    })
+    return withDeclaredColumns(csv, result.schema)
   }
   let page = await result.readPage(undefined, signal)
   const { columns } = page

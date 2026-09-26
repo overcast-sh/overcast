@@ -19,13 +19,19 @@ import type { ColumnarRows, TextHead } from "./worker-protocol"
 
 /** How the rest of the file is read, as decided by its head. */
 export type TextLayout =
-  { kind: "delimited"; delimiter: Delimiter; width: number } | { kind: "jsonl"; keys: string[] }
+  | { kind: "delimited"; delimiter: Delimiter; width: number; quotedValues: boolean }
+  | { kind: "jsonl"; keys: string[] }
 
 interface HeadOptions {
   /** Rows kept for the first block. */
   rows: number
   /** The bytes are the opening window of a longer object. */
   truncated: boolean
+}
+
+interface DelimitedHeadOptions extends HeadOptions {
+  /** Every value is quoted, so an unquoted empty field is a NULL (`parseDelimited`). */
+  quotedValues?: boolean
 }
 
 /**
@@ -35,10 +41,15 @@ interface HeadOptions {
 export function delimitedHead(
   text: string,
   preferred: Delimiter,
-  { rows, truncated }: HeadOptions,
+  { rows, truncated, quotedValues = false }: DelimitedHeadOptions,
 ): { head: TextHead; layout: TextLayout } {
   const delimiter = sniffDelimiter(text, preferred)
-  const parsed = parseDelimited(text, { delimiter, maxRecords: rows + 1, truncated })
+  const parsed = parseDelimited(text, {
+    delimiter,
+    maxRecords: rows + 1,
+    truncated,
+    quotedValues,
+  })
   if (parsed.malformed) throw new NotTabularError(parsed.malformed)
   if (parsed.records.length === 0) {
     throw new NotTabularError(
@@ -56,7 +67,7 @@ export function delimitedHead(
       delimiter,
       first: { count: body.length, columns },
     },
-    layout: { kind: "delimited", delimiter, width },
+    layout: { kind: "delimited", delimiter, width, quotedValues },
   }
 }
 
@@ -94,6 +105,7 @@ export function textBlock(text: string, layout: TextLayout, rows: number): Colum
     delimiter: layout.delimiter,
     maxRecords: rows,
     truncated: false,
+    quotedValues: layout.quotedValues,
   })
   return { count: records.length, columns: recordFields(records, layout.width) }
 }

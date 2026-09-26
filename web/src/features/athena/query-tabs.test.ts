@@ -3,6 +3,7 @@ import {
   closeQueryTab,
   initialQueryTabs,
   openQueryTab,
+  queryContext,
   restoreQueryTabs,
   selectQueryTab,
   updateQueryTab,
@@ -27,6 +28,23 @@ describe("query tabs", () => {
       sql: "SELECT 1",
       database: "sales",
     })
+  })
+
+  it("carry only the query context into a tab opened from another", () => {
+    // Given: a tab with a run, parameters and column widths of its own
+    const from = openQueryTab(initialQueryTabs(), {
+      sql: "SELECT ?",
+      database: "sales",
+      parameters: ["1"],
+      executionId: "run-1",
+      columnWidths: { id: 120 },
+    })
+    // When: a tab is opened from it
+    const opened = activeQueryTab(openQueryTab(from, queryContext(activeQueryTab(from))))
+    // Then: it shares the context, and starts with nothing else of the first
+    expect(opened).toMatchObject({ database: "sales", sql: "", parameters: [] })
+    expect(opened.executionId).toBeUndefined()
+    expect(opened.columnWidths).toBeUndefined()
   })
 
   it("update one tab and leave the others", () => {
@@ -71,6 +89,13 @@ describe("restoreQueryTabs", () => {
       ],
     })
     expect(restored.tabs.map((t) => t.sql)).toEqual(["1"])
+  })
+
+  it("keeps a tab's column widths, dropping any that are not widths", () => {
+    const restored = restoreQueryTabs({
+      tabs: [{ id: "a", columnWidths: { id: 120, name: "wide", note: -1 } }],
+    })
+    expect(restored.tabs[0].columnWidths).toEqual({ id: 120 })
   })
 
   it("repairs missing fields and drops entries that are not tabs", () => {

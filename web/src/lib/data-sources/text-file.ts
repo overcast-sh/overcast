@@ -111,17 +111,21 @@ export class TextFile {
 
   private parseHead(bytes: Uint8Array, truncated: boolean) {
     const text = new TextDecoder().decode(bytes)
-    const { kind, every } = this.options
+    const { kind, every, quotedValues } = this.options
     const options = { rows: every, truncated }
     if (kind === "jsonl") return jsonlHead(text, options)
-    return delimitedHead(text, kind === "tsv" ? "\t" : ",", options)
+    return delimitedHead(text, kind === "tsv" ? "\t" : ",", { ...options, quotedValues })
   }
 
   private createIndexer(layout: TextLayout): RecordIndexer {
+    const delimited = layout.kind === "delimited"
     return new RecordIndexer({
       every: this.options.every,
-      delimiter: layout.kind === "delimited" ? delimiterByte(layout.delimiter) : null,
-      header: layout.kind === "delimited",
+      delimiter: delimited ? delimiterByte(layout.delimiter) : null,
+      header: delimited,
+      // The parser reads a quoted-values file's blank line as a NULL record
+      // (`parseDelimited`), so the index must count it, or the two disagree.
+      blankRecords: delimited && layout.quotedValues,
     })
   }
 

@@ -42,6 +42,8 @@ export interface IndexerOptions {
   delimiter: number | null
   /** The first record is a header, not data (CSV/TSV). */
   header: boolean
+  /** A blank line is a record: one NULL, in a CSV whose values are all quoted. */
+  blankRecords?: boolean
 }
 
 export class RecordIndexer {
@@ -163,7 +165,7 @@ export class RecordIndexer {
   }
 
   private endRecord(end: number): void {
-    if (this.hasContent) {
+    if (this.hasContent || this.options.blankRecords) {
       if (!this.headerDone) {
         this.headerDone = true
         this.headerEnd = end

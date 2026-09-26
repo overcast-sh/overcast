@@ -1,5 +1,11 @@
 import type { GetQueryResultsOutput } from "@aws-sdk/client-athena"
-import { parseComplexValue, resultColumn, resultPage, resultValue } from "./result-values"
+import {
+  parseComplexValue,
+  resultColumn,
+  resultPage,
+  resultSchema,
+  resultValue,
+} from "./result-values"
 
 describe("resultColumn", () => {
   it("marks a decimal right-aligned, with its precision and scale", () => {
@@ -18,7 +24,7 @@ describe("resultColumn", () => {
 
 describe("resultValue", () => {
   it.each([
-    [undefined, "varchar", null],
+    [null, "varchar", null],
     ["", "varchar", ""],
     ["42", "integer", 42],
     ["9007199254740993", "bigint", 9007199254740993n],
@@ -87,5 +93,17 @@ describe("resultPage", () => {
 
   it("carries the next page's token", () => {
     expect(resultPage(output, true).nextToken).toBe("next")
+  })
+
+  it("types the result CSV's fields the way it types the page's", () => {
+    // The CSV path reads the same columns through the same mapping, so a
+    // large result renders as a small one does.
+    const schema = resultSchema(output)
+    expect(schema.columns).toEqual(resultPage(output, true).columns)
+    expect([schema.value("1", 0), schema.value(null, 1), schema.value("", 1)]).toEqual([
+      1,
+      null,
+      "",
+    ])
   })
 })

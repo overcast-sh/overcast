@@ -1,19 +1,31 @@
-import { act, renderHook } from "@/test/render"
+import { act, fireEvent, renderHook } from "@/test/render"
 import type { DataColumn, RowBlock } from "@/lib/data-sources/row-source"
 import { sampleColumnWidth } from "./cell-format"
-import { rowNumberWidth, useGridColumns } from "./use-grid-columns"
+import { rowNumberWidth, useGridColumns, type ColumnWidthsOptions } from "./use-grid-columns"
 
 const COLUMNS: DataColumn[] = [
   { name: "id", numeric: true },
   { name: "comment", numeric: false },
 ]
 
-function render(columns = COLUMNS, sample?: RowBlock) {
+function render(columns = COLUMNS, sample?: RowBlock, widths: ColumnWidthsOptions = {}) {
   return renderHook(
     ({ sample: block }: { sample?: RowBlock }) =>
-      useGridColumns(columns, { rowCount: 1000, sample: block }),
+      useGridColumns(columns, { rowCount: 1000, sample: block, ...widths }),
     { initialProps: { sample } },
   )
+}
+
+/** Drags a column's edge `by` px, as the header's resize handle would. */
+function drag(onResizeStart: (event: unknown) => void, by: number) {
+  act(() => onResizeStart(new MouseEvent("mousedown", { clientX: 100 })))
+  act(() => {
+    fireEvent.mouseMove(document, { clientX: 100 + by / 2 })
+    fireEvent.mouseMove(document, { clientX: 100 + by })
+  })
+  act(() => {
+    fireEvent.mouseUp(document, { clientX: 100 + by })
+  })
 }
 
 describe("rowNumberWidth", () => {
@@ -72,9 +84,57 @@ describe("useGridColumns", () => {
     expect(result.current.visibility.hidden).toEqual(new Set(["0"]))
   })
 
+  it("opens with the widths the caller kept, by name, over the sampled ones", () => {
+    // Given: a width kept for "comment", and one for a column this result lacks
+    const initialWidths = { comment: 300, gone: 90 }
+    // When: the columns are laid out
+    const { result } = render(COLUMNS, undefined, { initialWidths })
+    // Then: "comment" opens at its kept width, and "id" is sampled as usual
+    expect(result.current.columns.map((column) => column.width)).toEqual([
+      sampleColumnWidth(COLUMNS[0], undefined),
+      300,
+    ])
+  })
+
+  it("clamps a kept width to the resize limits", () => {
+    const { result } = render(COLUMNS, undefined, { initialWidths: { id: 1, comment: 1e6 } })
+    expect(result.current.columns.map((column) => column.width)).toEqual([48, 1200])
+  })
+
+  it("reports the widths by name once a resize ends, not on every frame of it", () => {
+    // Given: a caller keeping widths
+    const onWidthsChange = vi.fn()
+    const { result } = render(COLUMNS, undefined, {
+      initialWidths: { comment: 200 },
+      onWidthsChange,
+    })
+    const before = result.current.columns[0].width
+    // When: the reader drags the id column 60 px wider
+    drag(result.current.columns[0].onResizeStart, 60)
+    // Then: one report, with the kept width and the new one
+    expect(onWidthsChange).toHaveBeenCalledTimes(1)
+    expect(onWidthsChange).toHaveBeenCalledWith({ id: before + 60, comment: 200 })
+  })
+
   it("gives the header a second line when the format declares types", () => {
     const plain = render().result.current.headerHeight
     const typed = render([{ name: "id", type: "INT64", numeric: true }]).result.current.headerHeight
     expect(typed).toBeGreaterThan(plain)
+  })
+
+  it("reports a drag that starts and ends between two renders", () => {
+    // Given: a caller keeping widths, and nothing reported on opening
+    const onWidthsChange = vi.fn()
+    const { result } = render(COLUMNS, undefined, { onWidthsChange })
+    expect(onWidthsChange).not.toHaveBeenCalled()
+    const before = result.current.columns[1].width
+    // When: a flick of the edge presses, moves and releases within one frame
+    act(() => {
+      result.current.columns[1].onResizeStart(new MouseEvent("mousedown", { clientX: 100 }))
+      fireEvent.mouseMove(document, { clientX: 130 })
+      fireEvent.mouseUp(document, { clientX: 130 })
+    })
+    // Then: the new width is still reported
+    expect(onWidthsChange).toHaveBeenCalledWith({ comment: before + 30 })
   })
 })

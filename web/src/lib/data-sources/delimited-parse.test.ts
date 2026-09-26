@@ -6,14 +6,37 @@ import {
   sniffDelimiter,
 } from "./delimited-parse"
 
-const parse = (text: string, over: { delimiter?: string; truncated?: boolean } = {}) =>
+const parse = (
+  text: string,
+  over: { delimiter?: string; truncated?: boolean; quotedValues?: boolean } = {},
+) =>
   parseDelimited(text, {
     delimiter: over.delimiter ?? ",",
     maxRecords: 1000,
     truncated: over.truncated ?? false,
+    quotedValues: over.quotedValues,
   })
 
 describe("parseDelimited", () => {
+  describe("with quoted values, as Athena writes a result", () => {
+    it("reads an unquoted empty field as a NULL and a quoted one as an empty string", () => {
+      expect(parse('"id","note"\n"1",\n,""\n', { quotedValues: true }).records).toEqual([
+        ["id", "note"],
+        ["1", null],
+        [null, ""],
+      ])
+    })
+
+    it("reads a blank line as a record of one NULL, not a separator", () => {
+      expect(parse('"n"\n"1"\n\n"3"\n', { quotedValues: true }).records).toEqual([
+        ["n"],
+        ["1"],
+        [null],
+        ["3"],
+      ])
+    })
+  })
+
   it("splits plain records", () => {
     expect(parse("a,b,c\n1,2,3\n").records).toEqual([
       ["a", "b", "c"],

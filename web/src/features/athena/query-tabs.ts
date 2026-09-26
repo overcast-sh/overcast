@@ -1,6 +1,9 @@
+import type { ColumnWidths } from "@/components/data-grid/use-grid-columns"
+
 /**
  * The editor's query tabs: several per viewer, each with its own SQL,
- * workgroup, query context, parameter values and last execution.
+ * workgroup, query context, parameter values, last execution and the result
+ * grid's column widths.
  *
  * Kept in `localStorage` through `useLocalStorage`, which is a per-viewer
  * convenience and survives a failing store. Every function here is pure, so
@@ -25,6 +28,8 @@ export interface QueryTab {
   parameters: string[]
   /** The last execution started from this tab. */
   executionId?: string
+  /** The result grid's column widths, by column name, as the reader last set them. */
+  columnWidths?: ColumnWidths
 }
 
 export interface QueryTabs {
@@ -58,6 +63,14 @@ export function createQueryTab(tabs: readonly QueryTab[], init: Partial<QueryTab
     ...init,
     id: newId(),
   }
+}
+
+/**
+ * What a tab opened from another carries over: the query context — the
+ * workgroup, catalog and database — and nothing of its SQL, run or result.
+ */
+export function queryContext(tab: QueryTab): Pick<QueryTab, "workGroup" | "catalog" | "database"> {
+  return { workGroup: tab.workGroup, catalog: tab.catalog, database: tab.database }
 }
 
 export function initialQueryTabs(): QueryTabs {
@@ -109,6 +122,15 @@ function text(value: unknown, fallback: string): string {
   return typeof value === "string" ? value : fallback
 }
 
+/** Stored widths, keeping only the ones that are widths. */
+function widths(value: unknown): ColumnWidths | undefined {
+  if (!isRecord(value)) return undefined
+  const entries = Object.entries(value).filter(
+    (entry): entry is [string, number] => typeof entry[1] === "number" && entry[1] > 0,
+  )
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined
+}
+
 /** A stored tab, repaired field by field; null when it is not a tab at all. */
 function restoreTab(value: unknown): QueryTab | null {
   if (!isRecord(value) || typeof value.id !== "string") return null
@@ -123,6 +145,7 @@ function restoreTab(value: unknown): QueryTab | null {
       ? value.parameters.filter((p): p is string => typeof p === "string")
       : [],
     executionId: typeof value.executionId === "string" ? value.executionId : undefined,
+    columnWidths: widths(value.columnWidths),
   }
 }
 

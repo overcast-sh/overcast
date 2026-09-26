@@ -23,6 +23,8 @@ export interface OpenText {
   url: string
   size: number
   kind: TextKind
+  /** CSV: every value is quoted (Athena's result CSV), so an unquoted empty field is a NULL. */
+  quotedValues?: boolean
   /** Rows per block, and per index point. */
   every: number
   /** Bytes indexed per run before pausing to ask. */

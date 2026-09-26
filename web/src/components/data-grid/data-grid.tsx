@@ -22,7 +22,7 @@ import { GridToolbar } from "./grid-toolbar"
 import { selectionTsv } from "./loaded-rows"
 import { ROW_HEIGHT, rowWindow } from "./scroll-model"
 import { useColumnWindow } from "./use-column-window"
-import { useGridColumns } from "./use-grid-columns"
+import { useGridColumns, type ColumnWidthsOptions } from "./use-grid-columns"
 import { useGridCursor } from "./use-grid-cursor"
 import { useGridFind } from "./use-grid-find"
 import { useGridInput } from "./use-grid-input"
@@ -57,7 +57,7 @@ import { useSourceStatus } from "./use-source-status"
  * searches the loaded rows; a query does the rest (`toolbarEnd`).
  */
 
-export interface DataGridProps {
+export interface DataGridProps extends ColumnWidthsOptions {
   source: RowSource
   /** Accessible name of the grid. */
   label: string
@@ -97,6 +97,8 @@ function DataGridView({
   cacheBytes,
   emptyMessage = "No rows.",
   onReload,
+  initialWidths,
+  onWidthsChange,
 }: DataGridProps) {
   const gridId = useId()
   const { ref: scroller, start: fadeStart, end: fadeEnd } = useOverflowEdges<HTMLDivElement>()
@@ -106,7 +108,12 @@ function DataGridView({
 
   // ─── Rows, columns and the blocks under them ────────────────────────────
   const blocks = useRowBlocks(source, cacheBytes)
-  const layout = useGridColumns(source.columns, { rowCount, sample: blocks.loader.lastLanded })
+  const layout = useGridColumns(source.columns, {
+    rowCount,
+    sample: blocks.loader.lastLanded,
+    initialWidths,
+    onWidthsChange,
+  })
   const header = layout.headerHeight
   const viewport = Math.max(size.height - header, ROW_HEIGHT)
   const scroll = useHybridScroll(scroller, { rowCount, viewport })

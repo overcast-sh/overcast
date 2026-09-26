@@ -13,9 +13,16 @@ function index(
     header = true,
     delimiter = COMMA,
     chunk = 0,
-  }: { every?: number; header?: boolean; delimiter?: number | null; chunk?: number } = {},
+    blankRecords,
+  }: {
+    every?: number
+    header?: boolean
+    delimiter?: number | null
+    chunk?: number
+    blankRecords?: boolean
+  } = {},
 ) {
-  const indexer = new RecordIndexer({ every, header, delimiter })
+  const indexer = new RecordIndexer({ every, header, delimiter, blankRecords })
   const bytes = encode(text)
   if (chunk > 0) {
     for (let i = 0; i < bytes.length; i += chunk) indexer.push(bytes.subarray(i, i + chunk))
@@ -65,6 +72,22 @@ describe("RecordIndexer", () => {
 
   it("skips blank lines but counts a record of one quoted empty string", () => {
     expect(index('h\n\n\na\n""\n\nb\n', { every: 1 }).rows).toBe(3)
+  })
+
+  it("counts a blank line as a record when asked to, as the quoted-values parser does", () => {
+    // Given: an Athena result of one column, whose third value is a NULL
+    const text = '"n"\n"1"\n"2"\n\n"4"\r\n'
+    // When: it is indexed with blank lines as records
+    const indexer = index(text, { every: 1, chunk: 3, blankRecords: true })
+    // Then: the NULL is a row, as the parser reads it — and no row follows the last line break
+    const parsed = parseDelimited(text, {
+      delimiter: ",",
+      maxRecords: Infinity,
+      truncated: false,
+      quotedValues: true,
+    })
+    expect(indexer.rows).toBe(4)
+    expect(parsed.records).toHaveLength(indexer.rows + 1)
   })
 
   it("skips a byte-order mark before the header", () => {

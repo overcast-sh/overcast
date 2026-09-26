@@ -72,7 +72,12 @@ export function QueryPane({ tab, onChange, completion, engine, editorRef }: Quer
       message={failureMessage}
     />
   ) : execution?.Status?.State === "SUCCEEDED" ? (
-    <QueryResult execution={execution} inert={isInert(engine)} />
+    <QueryResult
+      execution={execution}
+      inert={isInert(engine)}
+      columnWidths={tab.columnWidths}
+      onColumnWidthsChange={(columnWidths) => onChange({ columnWidths })}
+    />
   ) : execution ? null : (
     <EmptyState
       className="py-10"

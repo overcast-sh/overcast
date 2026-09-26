@@ -5,7 +5,7 @@ import type { RowSource } from "@/lib/data-sources/row-source"
 import { createDataWorker } from "@/lib/data-sources/worker-port"
 import { parseS3Uri } from "@/lib/s3-uri"
 import { athena, s3 } from "@/services/api"
-import { resultPage } from "./result-values"
+import { resultPage, resultSchema } from "./result-values"
 
 /**
  * The row count that sends a result down the paged path whatever its size:
@@ -26,7 +26,9 @@ const READ_BY_PAGE = 0
  * - a DDL or utility result is always paged: its file is a `.txt` with no
  *   header, not a CSV — and so is a result with no `OutputLocation` to read;
  * - a `SELECT` with no runtime statistics takes the CSV path, right for any
- *   size.
+ *   size. Its columns are typed from the first page's `ColumnInfo`, already
+ *   read, rather than from the `.csv.metadata` object beside the CSV, whose
+ *   encoding AWS does not document.
  */
 export function useResultSource(
   execution: QueryExecution,
@@ -47,6 +49,7 @@ export function useResultSource(
     const byRange = location !== null && (rowCount === undefined || rowCount > firstRows)
     const result: AthenaResult = {
       rowCount,
+      schema: resultSchema(firstPage),
       output: {
         url: location ? s3.getObjectDownloadUrl(location.bucket, location.key) : "",
         size: byRange
