@@ -2,7 +2,8 @@ import { Link } from "@tanstack/react-router"
 import { SquareTerminal } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { RowAction } from "@/components/ui/resource-list-page"
-import { athenaEditorLink, previewSql } from "../athena-link"
+import { athenaEditorLink } from "@/features/athena/links"
+import { previewSql } from "../athena-link"
 
 interface QueryInAthenaProps {
   database: string
