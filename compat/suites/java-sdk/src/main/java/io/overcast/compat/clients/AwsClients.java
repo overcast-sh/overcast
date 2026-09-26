@@ -4,7 +4,7 @@ import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.awscore.client.builder.AwsClientBuilder;
 import software.amazon.awssdk.awscore.client.builder.AwsSyncClientBuilder;
-import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
+import software.amazon.awssdk.http.apache.ApacheHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.apigateway.ApiGatewayClient;
 import software.amazon.awssdk.services.apigatewayv2.ApiGatewayV2Client;
@@ -46,6 +46,11 @@ import java.net.URI;
  *   <li>The Overcast endpoint override ({@code OVERCAST_ENDPOINT})</li>
  *   <li>Fake static credentials — Overcast accepts but does not validate them</li>
  *   <li>Path-style access for S3 (required for the local emulator)</li>
+ *   <li>The SDK's Apache HTTP client for every sync client. Not
+ *       {@code UrlConnectionHttpClient}: {@code HttpURLConnection} refuses the
+ *       {@code PATCH} method outright, so every PATCH-bound operation (AppConfig's
+ *       {@code Update*}, among others) failed in the client and never reached
+ *       Overcast (#2261).</li>
  * </ul>
  *
  * <p>Clients are created lazily on first access and reused thereafter.
@@ -112,7 +117,7 @@ public final class AwsClients {
                 .endpointOverride(endpoint)
                 .region(region)
                 .credentialsProvider(credentials)
-                .httpClient(UrlConnectionHttpClient.create());
+                .httpClient(ApacheHttpClient.create());
     }
 
     public S3Client s3() {
@@ -123,7 +128,7 @@ public final class AwsClients {
                             .endpointOverride(endpoint)
                             .region(region)
                             .credentialsProvider(credentials)
-                            .httpClient(UrlConnectionHttpClient.create())
+                            .httpClient(ApacheHttpClient.create())
                             .serviceConfiguration(S3Configuration.builder()
                                     .pathStyleAccessEnabled(true)
                                     .chunkedEncodingEnabled(false)
@@ -143,7 +148,7 @@ public final class AwsClients {
                             .endpointOverride(endpoint)
                             .region(region)
                             .credentialsProvider(credentials)
-                            .httpClient(UrlConnectionHttpClient.create())
+                            .httpClient(ApacheHttpClient.create())
                             .build();
                 }
             }
@@ -159,7 +164,7 @@ public final class AwsClients {
                             .endpointOverride(endpoint)
                             .region(region)
                             .credentialsProvider(credentials)
-                            .httpClient(UrlConnectionHttpClient.create())
+                            .httpClient(ApacheHttpClient.create())
                             .build();
                 }
             }
@@ -175,7 +180,7 @@ public final class AwsClients {
                             .endpointOverride(endpoint)
                             .region(region)
                             .credentialsProvider(credentials)
-                            .httpClient(UrlConnectionHttpClient.create())
+                            .httpClient(ApacheHttpClient.create())
                             .build();
                 }
             }
@@ -191,7 +196,7 @@ public final class AwsClients {
                             .endpointOverride(endpoint)
                             .region(region)
                             .credentialsProvider(credentials)
-                            .httpClient(UrlConnectionHttpClient.create())
+                            .httpClient(ApacheHttpClient.create())
                             .build();
                 }
             }
@@ -222,7 +227,7 @@ public final class AwsClients {
                             .endpointOverride(endpoint)
                             .region(region)
                             .credentialsProvider(credentials)
-                            .httpClient(UrlConnectionHttpClient.create())
+                            .httpClient(ApacheHttpClient.create())
                             .build();
                 }
             }
@@ -238,7 +243,7 @@ public final class AwsClients {
                             .endpointOverride(endpoint)
                             .region(region)
                             .credentialsProvider(credentials)
-                            .httpClient(UrlConnectionHttpClient.create())
+                            .httpClient(ApacheHttpClient.create())
                             .build();
                 }
             }
@@ -254,7 +259,7 @@ public final class AwsClients {
                             .endpointOverride(endpoint)
                             .region(region)
                             .credentialsProvider(credentials)
-                            .httpClient(UrlConnectionHttpClient.create())
+                            .httpClient(ApacheHttpClient.create())
                             .build();
                 }
             }
@@ -270,7 +275,7 @@ public final class AwsClients {
                             .endpointOverride(endpoint)
                             .region(region)
                             .credentialsProvider(credentials)
-                            .httpClient(UrlConnectionHttpClient.create())
+                            .httpClient(ApacheHttpClient.create())
                             .build();
                 }
             }
@@ -286,7 +291,7 @@ public final class AwsClients {
                             .endpointOverride(endpoint)
                             .region(region)
                             .credentialsProvider(credentials)
-                            .httpClient(UrlConnectionHttpClient.create())
+                            .httpClient(ApacheHttpClient.create())
                             .build();
                 }
             }
@@ -302,7 +307,7 @@ public final class AwsClients {
                             .endpointOverride(endpoint)
                             .region(region)
                             .credentialsProvider(credentials)
-                            .httpClient(UrlConnectionHttpClient.create())
+                            .httpClient(ApacheHttpClient.create())
                             .build();
                 }
             }
@@ -318,7 +323,7 @@ public final class AwsClients {
                             .endpointOverride(endpoint)
                             .region(region)
                             .credentialsProvider(credentials)
-                            .httpClient(UrlConnectionHttpClient.create())
+                            .httpClient(ApacheHttpClient.create())
                             .build();
                 }
             }
@@ -334,7 +339,7 @@ public final class AwsClients {
                             .endpointOverride(endpoint)
                             .region(region)
                             .credentialsProvider(credentials)
-                            .httpClient(UrlConnectionHttpClient.create())
+                            .httpClient(ApacheHttpClient.create())
                             .build();
                 }
             }
@@ -350,7 +355,7 @@ public final class AwsClients {
                             .endpointOverride(endpoint)
                             .region(region)
                             .credentialsProvider(credentials)
-                            .httpClient(UrlConnectionHttpClient.create())
+                            .httpClient(ApacheHttpClient.create())
                             .build();
                 }
             }
@@ -366,7 +371,7 @@ public final class AwsClients {
                             .endpointOverride(endpoint)
                             .region(region)
                             .credentialsProvider(credentials)
-                            .httpClient(UrlConnectionHttpClient.create())
+                            .httpClient(ApacheHttpClient.create())
                             .build();
                 }
             }
@@ -382,7 +387,7 @@ public final class AwsClients {
                             .endpointOverride(endpoint)
                             .region(region)
                             .credentialsProvider(credentials)
-                            .httpClient(UrlConnectionHttpClient.create())
+                            .httpClient(ApacheHttpClient.create())
                             .build();
                 }
             }
@@ -398,7 +403,7 @@ public final class AwsClients {
                             .endpointOverride(endpoint)
                             .region(region)
                             .credentialsProvider(credentials)
-                            .httpClient(UrlConnectionHttpClient.create())
+                            .httpClient(ApacheHttpClient.create())
                             .build();
                 }
             }
@@ -414,7 +419,7 @@ public final class AwsClients {
                             .endpointOverride(endpoint)
                             .region(region)
                             .credentialsProvider(credentials)
-                            .httpClient(UrlConnectionHttpClient.create())
+                            .httpClient(ApacheHttpClient.create())
                             .build();
                 }
             }
@@ -430,7 +435,7 @@ public final class AwsClients {
                             .endpointOverride(endpoint)
                             .region(region)
                             .credentialsProvider(credentials)
-                            .httpClient(UrlConnectionHttpClient.create())
+                            .httpClient(ApacheHttpClient.create())
                             .build();
                 }
             }
@@ -446,7 +451,7 @@ public final class AwsClients {
                             .endpointOverride(endpoint)
                             .region(region)
                             .credentialsProvider(credentials)
-                            .httpClient(UrlConnectionHttpClient.create())
+                            .httpClient(ApacheHttpClient.create())
                             .build();
                 }
             }
@@ -462,7 +467,7 @@ public final class AwsClients {
                             .endpointOverride(endpoint)
                             .region(region)
                             .credentialsProvider(credentials)
-                            .httpClient(UrlConnectionHttpClient.create())
+                            .httpClient(ApacheHttpClient.create())
                             .build();
                 }
             }
@@ -478,7 +483,7 @@ public final class AwsClients {
                             .endpointOverride(endpoint)
                             .region(region)
                             .credentialsProvider(credentials)
-                            .httpClient(UrlConnectionHttpClient.create())
+                            .httpClient(ApacheHttpClient.create())
                             .build();
                 }
             }
@@ -494,7 +499,7 @@ public final class AwsClients {
                             .endpointOverride(endpoint)
                             .region(region)
                             .credentialsProvider(credentials)
-                            .httpClient(UrlConnectionHttpClient.create())
+                            .httpClient(ApacheHttpClient.create())
                             .build();
                 }
             }
@@ -510,7 +515,7 @@ public final class AwsClients {
                             .endpointOverride(endpoint)
                             .region(region)
                             .credentialsProvider(credentials)
-                            .httpClient(UrlConnectionHttpClient.create())
+                            .httpClient(ApacheHttpClient.create())
                             .build();
                 }
             }
@@ -526,7 +531,7 @@ public final class AwsClients {
                             .endpointOverride(endpoint)
                             .region(region)
                             .credentialsProvider(credentials)
-                            .httpClient(UrlConnectionHttpClient.create())
+                            .httpClient(ApacheHttpClient.create())
                             .build();
                 }
             }
@@ -542,7 +547,7 @@ public final class AwsClients {
                             .endpointOverride(endpoint)
                             .region(region)
                             .credentialsProvider(credentials)
-                            .httpClient(UrlConnectionHttpClient.create())
+                            .httpClient(ApacheHttpClient.create())
                             .build();
                 }
             }
@@ -558,7 +563,7 @@ public final class AwsClients {
                             .endpointOverride(endpoint)
                             .region(region)
                             .credentialsProvider(credentials)
-                            .httpClient(UrlConnectionHttpClient.create())
+                            .httpClient(ApacheHttpClient.create())
                             .build();
                 }
             }
