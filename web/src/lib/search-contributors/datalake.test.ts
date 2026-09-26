@@ -146,7 +146,7 @@ describe("s3tables contributor", () => {
         label: "web",
         sublabel: "lake",
         type: "Namespace",
-        href: "/s3tables/lake?namespace=web",
+        href: "/s3tables/lake?q=web",
       }),
     )
   })

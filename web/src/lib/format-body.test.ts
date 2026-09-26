@@ -2,6 +2,13 @@ import { describe, expect, it } from "vitest"
 import { formatBodyForDisplay, MAX_FORMAT_BYTES } from "./format-body"
 
 describe("formatBodyForDisplay", () => {
+  it("keeps a JSON integer past 2^53 as written", () => {
+    // An Iceberg snapshot id: a round trip through JSON.parse would print …000.
+    const { text } = formatBodyForDisplay('{"snapshot-id":3051729675574597004}', "json")
+
+    expect(text).toBe('{\n  "snapshot-id": 3051729675574597004\n}')
+  })
+
   it("does not indent after HTML void tags when the content type is HTML", () => {
     // Given: an S3-style HTML preview with void tags that never close.
     const html = "<html><head><meta charset=\"utf-8\"><link rel=\"icon\" href=\"/f.ico\"></head><body>Hi<br><img src=\"x.png\"><p>after</p></body></html>"

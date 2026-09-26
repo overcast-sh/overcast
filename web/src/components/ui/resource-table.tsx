@@ -346,6 +346,12 @@ interface ResourceTableProps<T extends RowData, TVars> {
   /** Which rows can expand at all. Defaults to every row, once `expandedContent` is set. */
   canExpand?: (item: T) => boolean
   /**
+   * What the panel shows, lowercase — `"diff with previous"` names the chevron
+   * "Show diff with previous" / "Hide diff with previous" rather than the
+   * generic "Expand row", for the reader and the screen reader alike.
+   */
+  expandLabel?: string
+  /**
    * Rows to open on first paint — a deep link that names one of them. Applied
    * once, when the rows first arrive, so a reader who closes the panel does not
    * find it open again on the next refetch.
@@ -467,6 +473,7 @@ export function ResourceTable<T extends RowData, TVars = string>({
   rowClassName,
   expandedContent,
   canExpand,
+  expandLabel,
   defaultExpanded,
   emptyIcon: EmptyIcon,
   emptyTitle,
@@ -718,7 +725,12 @@ export function ResourceTable<T extends RowData, TVars = string>({
               <button
                 type="button"
                 aria-expanded={isExpanded}
-                aria-label={`${isExpanded ? "Collapse" : "Expand"} row`}
+                aria-label={
+                  expandLabel
+                    ? `${isExpanded ? "Hide" : "Show"} ${expandLabel}`
+                    : `${isExpanded ? "Collapse" : "Expand"} row`
+                }
+                title={expandLabel ? `${isExpanded ? "Hide" : "Show"} ${expandLabel}` : undefined}
                 onClick={row.getToggleExpandedHandler()}
                 className="flex cursor-pointer items-center text-fg-subtle transition-colors hover:text-fg"
               >

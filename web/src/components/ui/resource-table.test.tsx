@@ -284,6 +284,7 @@ describe("ResourceTable > expanding a row", () => {
     onRowClick?: (t: Topic) => void
     canExpand?: (t: Topic) => boolean
     defaultExpanded?: (t: Topic) => boolean
+    expandLabel?: string
   }) {
     return (
       <ResourceTable
@@ -294,6 +295,7 @@ describe("ResourceTable > expanding a row", () => {
         onRowClick={props.onRowClick}
         canExpand={props.canExpand}
         defaultExpanded={props.defaultExpanded}
+        expandLabel={props.expandLabel}
         expandedContent={(t) => <p>Detail for {t.name}</p>}
       />
     )
@@ -309,6 +311,13 @@ describe("ResourceTable > expanding a row", () => {
 
     await user.click(within(row).getByRole("button", { name: "Collapse row" }))
     expect(screen.queryByText("Detail for alerts")).not.toBeInTheDocument()
+  })
+
+  it("names the chevron after what the panel shows when the page says", async () => {
+    const { user } = render(<ExpandableTopics expandLabel="subscriptions" />)
+    const row = screen.getByRole("row", { name: /alerts/ })
+    await user.click(within(row).getByRole("button", { name: "Show subscriptions" }))
+    expect(within(row).getByRole("button", { name: "Hide subscriptions" })).toBeInTheDocument()
   })
 
   // Reading two events side by side is the reason this is a row rather than a

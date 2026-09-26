@@ -19,6 +19,7 @@ client at Overcast's endpoint instead and configure it the way the AWS docs do.
 
 ## PyIceberg
 
+<!-- connect-snippet:pyiceberg -->
 ```python
 from pyiceberg.catalog import load_catalog
 
@@ -30,10 +31,16 @@ catalog = load_catalog("s3tables", **{
     "rest.signing-name": "s3tables",
     "rest.signing-region": "us-east-1",
 })
+table = catalog.load_table("sales.orders")
+print(table.scan().to_arrow())
+```
+
+On a fresh bucket, create the namespace and table first, then write to it:
+
+```python
 catalog.create_namespace("sales")
 table = catalog.create_table("sales.orders", schema=schema)
 table.append(rows)
-print(table.scan().to_arrow())
 ```
 
 Set `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_REGION` to anything:
@@ -42,6 +49,7 @@ configure, because the catalog's config response supplies Overcast's.
 
 ## Spark
 
+<!-- connect-snippet:spark -->
 ```bash
 spark-shell \
   --packages org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.9.2,org.apache.iceberg:iceberg-aws-bundle:1.9.2 \
@@ -54,7 +62,66 @@ spark-shell \
   --conf spark.sql.catalog.s3tables.rest.signing-name=s3tables \
   --conf spark.sql.catalog.s3tables.rest.signing-region=us-east-1 \
   --conf spark.sql.catalog.s3tables.io-impl=org.apache.iceberg.aws.s3.S3FileIO
+# then: spark.table("s3tables.sales.orders").show()
 ```
+
+## Trino
+
+A catalog file for Trino's Iceberg connector:
+
+<!-- connect-snippet:trino -->
+```properties
+# etc/catalog/s3tables.properties
+# From a container, use host.docker.internal in place of localhost.
+connector.name=iceberg
+iceberg.catalog.type=rest
+iceberg.rest-catalog.uri=http://localhost:4566/iceberg
+iceberg.rest-catalog.warehouse=arn:aws:s3tables:us-east-1:000000000000:bucket/analytics
+iceberg.rest-catalog.security=SIGV4
+iceberg.rest-catalog.signing-name=s3tables
+fs.native-s3.enabled=true
+s3.endpoint=http://localhost:4566
+s3.region=us-east-1
+s3.path-style-access=true
+s3.aws-access-key=test
+s3.aws-secret-key=test
+```
+
+## DuckDB
+
+DuckDB's `iceberg` extension attaches to the [unsigned catalog](#clients-without-sigv4):
+
+<!-- connect-snippet:duckdb -->
+```sql
+INSTALL iceberg;
+LOAD iceberg;
+-- DuckDB signs for S3 Tables only against AWS, so use Overcast's unsigned catalog.
+CREATE SECRET (
+  TYPE s3, KEY_ID 'test', SECRET 'test', REGION 'us-east-1',
+  ENDPOINT 'localhost:4566', URL_STYLE 'path', USE_SSL false
+);
+ATTACH 'arn:aws:s3tables:us-east-1:000000000000:bucket/analytics' AS s3tables (
+  TYPE iceberg, ENDPOINT 'http://localhost:4566/_overcast/s3tables/iceberg', AUTHORIZATION_TYPE 'none'
+);
+SELECT * FROM s3tables.sales.orders LIMIT 10;
+```
+
+## AWS CLI
+
+The table's current metadata file, which every client above reads first:
+
+<!-- connect-snippet:aws-cli -->
+```bash
+aws s3tables get-table-metadata-location \
+  --endpoint-url http://localhost:4566 \
+  --region us-east-1 \
+  --table-bucket-arn arn:aws:s3tables:us-east-1:000000000000:bucket/analytics \
+  --namespace sales \
+  --name orders
+```
+
+The S3 Tables console shows these snippets for each table bucket and table,
+with its own endpoint and ARNs filled in.
 
 ## Clients without SigV4
 
