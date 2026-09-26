@@ -279,10 +279,13 @@ const (
 	AthenaEngineInert AthenaEngine = "inert"
 )
 
-// DefaultAthenaEngineImage is the Trino release Athena's queries run on,
-// pinned by digest (the multi-arch index of trinodb/trino:483). Athena engine
-// version 3 is Trino, so this is the dialect a query is written in.
-const DefaultAthenaEngineImage = "trinodb/trino:483@sha256:db58cc93e593a2706553745f276bb119c9810e69918be56ecde088ba7ccb0534"
+// DefaultAthenaEngineImage is the Trino release Athena's queries run on:
+// ghcr.io/overcast-sh/overcast-athena-engine, trinodb/trino-core with only the
+// hive and iceberg plugins (docker/athena-engine/Dockerfile), pinned by the
+// digest of its multi-arch index. Athena engine version 3 is Trino, so this is
+// the dialect a query is written in. Renovate advances the pin
+// (.github/renovate.json5), so it keeps the tag@digest form.
+const DefaultAthenaEngineImage = "ghcr.io/overcast-sh/overcast-athena-engine:483@sha256:15ff23b929679956908ee314f5514c54fa733c4127044b266601dbec7aaa0041"
 
 // DefaultAthenaEngineMemory is the engine container's memory limit, and the
 // least it may be: a 512 MiB heap, the smallest that runs ordinary queries,
@@ -2041,7 +2044,7 @@ func ServiceOverrideIneffective(service string) (reason string, ok bool) {
 //	EFS_NFS_PORT_BASE                  22049
 //	EFS_NFS_IMAGE                      registry.k8s.io/sig-storage/nfs-provisioner@sha256:c825f3d5… (digest-pinned)
 //	ATHENA_ENGINE                      trino (trino|inert — inert runs no SQL; DDL still reaches Glue)
-//	ATHENA_ENGINE_IMAGE                trinodb/trino:483@sha256:db58cc93… (digest-pinned)
+//	ATHENA_ENGINE_IMAGE                ghcr.io/overcast-sh/overcast-athena-engine:483@sha256:… (digest-pinned)
 //	ATHENA_ENGINE_MEMORY               1g    (engine container memory limit; bytes or k/m/g)
 //	ATHENA_DOCKER_SOCKET               <LAMBDA_DOCKER_SOCKET>
 //	ATHENA_KEEP_CONTAINERS             false

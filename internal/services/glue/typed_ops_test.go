@@ -11,6 +11,7 @@ import (
 )
 
 var allGlueOps = []string{
+	"GetCatalog", "GetCatalogs",
 	"CreateDatabase", "GetDatabase", "GetDatabases", "UpdateDatabase", "DeleteDatabase",
 	"CreateTable", "GetTable", "GetTables", "UpdateTable", "DeleteTable", "BatchDeleteTable",
 	"GetTableVersion", "GetTableVersions", "DeleteTableVersion", "BatchDeleteTableVersion",

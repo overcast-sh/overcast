@@ -15,6 +15,9 @@ import (
 
 // runnerFor picks the runner for qe's statement.
 func (s *Service) runnerFor(ctx context.Context, qe QueryExecution) queryRunner {
+	if isS3TablesCatalog(qe.QueryExecutionContext.Catalog) {
+		return failedRunner{s3TablesQueryFailure()}
+	}
 	database := orDefault(qe.QueryExecutionContext.Database, defaultDatabase)
 	stmt, err := parseDDL(qe.Query)
 	if err != nil {
@@ -103,6 +106,14 @@ func orDefault(v, fallback string) string {
 		return fallback
 	}
 	return strings.ToLower(v)
+}
+
+// s3TablesQueryFailure fails a query run in an S3 Tables catalog, which the
+// engine has no catalog for yet (#2183): running it against AwsDataCatalog
+// instead would answer about the wrong tables.
+func s3TablesQueryFailure() *queryFailure {
+	return failure(errorCategoryUser, errorTypeNotSupported,
+		"NOT_SUPPORTED: Overcast cannot run queries in an s3tablescatalog/<bucket> catalog yet; its metadata operations can read it.")
 }
 
 func syntaxFailure(err error) *queryFailure {

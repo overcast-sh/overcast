@@ -3,7 +3,6 @@ package glue
 import (
 	"context"
 	"maps"
-	"regexp"
 	"strconv"
 
 	"github.com/overcast-sh/overcast/internal/events"
@@ -33,7 +32,7 @@ func iamAllowedPrincipals() []any {
 	}}
 }
 
-func (s *Service) now() float64 { return float64(s.clk.Now().UnixMilli()) / 1000.0 }
+func (s *Service) now() float64 { return epochSeconds(s.clk.Now()) }
 
 func (s *Service) catalogID(requested string) string {
 	if requested != "" {
@@ -42,11 +41,16 @@ func (s *Service) catalogID(requested string) string {
 	return s.cfg.AccountID
 }
 
+// paginate pages items. An empty page is an empty list, never null: AWS
+// always returns the list member.
 func paginate[T any](items []T, maxResults int32, token string, limit int) (serviceutil.Page[T], *protocol.AWSError) {
 	page, err := serviceutil.Paginate(items, int(maxResults), token,
 		serviceutil.PaginateOptions{DefaultLimit: limit, MaxLimit: limit})
 	if err != nil { // serviceutil.ErrInvalidPageToken, its only error
 		return page, errInvalidInput("Invalid NextToken.")
+	}
+	if page.Items == nil {
+		page.Items = []T{}
 	}
 	return page, nil
 }
@@ -106,14 +110,14 @@ func (s *Service) lockTable(ctx context.Context, dbName, tableName string) (*tab
 // ─── Databases ─────────────────────────────────────────────────
 
 type createDatabaseReq struct {
-	CatalogId     string            `json:"CatalogId" cbor:"CatalogId"`
+	catalogRef
 	DatabaseInput *DatabaseInput    `json:"DatabaseInput" cbor:"DatabaseInput"`
 	Tags          map[string]string `json:"Tags" cbor:"Tags"`
 }
 
 type getDatabaseReq struct {
-	CatalogId string `json:"CatalogId" cbor:"CatalogId"`
-	Name      string `json:"Name" cbor:"Name"`
+	catalogRef
+	Name string `json:"Name" cbor:"Name"`
 }
 
 type getDatabaseResp struct {
@@ -121,25 +125,25 @@ type getDatabaseResp struct {
 }
 
 type getDatabasesReq struct {
-	CatalogId  string `json:"CatalogId" cbor:"CatalogId"`
+	catalogRef
 	MaxResults int32  `json:"MaxResults" cbor:"MaxResults"`
 	NextToken  string `json:"NextToken" cbor:"NextToken"`
 }
 
 type getDatabasesResp struct {
-	DatabaseList []*Database `json:"DatabaseList" cbor:"DatabaseList"`
-	NextToken    string      `json:"NextToken,omitempty" cbor:"NextToken,omitempty"`
+	DatabaseList []Database `json:"DatabaseList" cbor:"DatabaseList"`
+	NextToken    string     `json:"NextToken,omitempty" cbor:"NextToken,omitempty"`
 }
 
 type updateDatabaseReq struct {
-	CatalogId     string         `json:"CatalogId" cbor:"CatalogId"`
+	catalogRef
 	Name          string         `json:"Name" cbor:"Name"`
 	DatabaseInput *DatabaseInput `json:"DatabaseInput" cbor:"DatabaseInput"`
 }
 
 type deleteDatabaseReq struct {
-	CatalogId string `json:"CatalogId" cbor:"CatalogId"`
-	Name      string `json:"Name" cbor:"Name"`
+	catalogRef
+	Name string `json:"Name" cbor:"Name"`
 }
 
 // databaseFromInput builds the stored definition. UpdateDatabase replaces a
@@ -189,30 +193,6 @@ func (s *Service) createDatabaseTyped(ctx context.Context, req *createDatabaseRe
 		return nil, errInternal(err)
 	}
 	return &struct{}{}, nil
-}
-
-func (s *Service) getDatabaseTyped(ctx context.Context, req *getDatabaseReq) (*getDatabaseResp, *protocol.AWSError) {
-	db, aerr := s.requireDatabase(ctx, normName(req.Name))
-	if aerr != nil {
-		return nil, aerr
-	}
-	return &getDatabaseResp{Database: &db.Database}, nil
-}
-
-func (s *Service) getDatabasesTyped(ctx context.Context, req *getDatabasesReq) (*getDatabasesResp, *protocol.AWSError) {
-	records, err := s.store.listDatabases(ctx)
-	if err != nil {
-		return nil, errInternal(err)
-	}
-	page, aerr := paginate(records, req.MaxResults, req.NextToken, catalogPageSize)
-	if aerr != nil {
-		return nil, aerr
-	}
-	dbs := make([]*Database, 0, len(page.Items))
-	for _, rec := range page.Items {
-		dbs = append(dbs, &rec.Database)
-	}
-	return &getDatabasesResp{DatabaseList: dbs, NextToken: page.NextToken}, nil
 }
 
 func (s *Service) updateDatabaseTyped(ctx context.Context, req *updateDatabaseReq) (*struct{}, *protocol.AWSError) {
@@ -270,7 +250,7 @@ type openTableFormatInput struct {
 }
 
 type createTableReq struct {
-	CatalogId            string                `json:"CatalogId" cbor:"CatalogId"`
+	catalogRef
 	DatabaseName         string                `json:"DatabaseName" cbor:"DatabaseName"`
 	Name                 string                `json:"Name" cbor:"Name"`
 	TableInput           *TableInput           `json:"TableInput" cbor:"TableInput"`
@@ -295,7 +275,7 @@ func (r *createTableResp) EmulationLimitations() []string {
 }
 
 type getTableReq struct {
-	CatalogId    string `json:"CatalogId" cbor:"CatalogId"`
+	catalogRef
 	DatabaseName string `json:"DatabaseName" cbor:"DatabaseName"`
 	Name         string `json:"Name" cbor:"Name"`
 }
@@ -305,7 +285,7 @@ type getTableResp struct {
 }
 
 type getTablesReq struct {
-	CatalogId    string `json:"CatalogId" cbor:"CatalogId"`
+	catalogRef
 	DatabaseName string `json:"DatabaseName" cbor:"DatabaseName"`
 	Expression   string `json:"Expression" cbor:"Expression"`
 	MaxResults   int32  `json:"MaxResults" cbor:"MaxResults"`
@@ -318,7 +298,7 @@ type getTablesResp struct {
 }
 
 type updateTableReq struct {
-	CatalogId                  string         `json:"CatalogId" cbor:"CatalogId"`
+	catalogRef
 	DatabaseName               string         `json:"DatabaseName" cbor:"DatabaseName"`
 	Name                       string         `json:"Name" cbor:"Name"`
 	TableInput                 *TableInput    `json:"TableInput" cbor:"TableInput"`
@@ -328,13 +308,13 @@ type updateTableReq struct {
 }
 
 type deleteTableReq struct {
-	CatalogId    string `json:"CatalogId" cbor:"CatalogId"`
+	catalogRef
 	DatabaseName string `json:"DatabaseName" cbor:"DatabaseName"`
 	Name         string `json:"Name" cbor:"Name"`
 }
 
 type batchDeleteTableReq struct {
-	CatalogId      string   `json:"CatalogId" cbor:"CatalogId"`
+	catalogRef
 	DatabaseName   string   `json:"DatabaseName" cbor:"DatabaseName"`
 	TablesToDelete []string `json:"TablesToDelete" cbor:"TablesToDelete"`
 }
@@ -435,46 +415,6 @@ func (s *Service) createTableTyped(ctx context.Context, req *createTableReq) (*c
 	return resp, nil
 }
 
-func (s *Service) getTableTyped(ctx context.Context, req *getTableReq) (*getTableResp, *protocol.AWSError) {
-	t, aerr := s.requireTable(ctx, normName(req.DatabaseName), normName(req.Name))
-	if aerr != nil {
-		return nil, aerr
-	}
-	return &getTableResp{Table: &t.Table}, nil
-}
-
-func (s *Service) getTablesTyped(ctx context.Context, req *getTablesReq) (*getTablesResp, *protocol.AWSError) {
-	dbName := normName(req.DatabaseName)
-	if _, aerr := s.requireDatabase(ctx, dbName); aerr != nil {
-		return nil, aerr
-	}
-	// Expression is "a regular expression pattern. If present, only those
-	// tables whose names match the pattern are returned." It must match the
-	// whole name.
-	var re *regexp.Regexp
-	if req.Expression != "" {
-		var err error
-		if re, err = regexp.Compile("^(?:" + req.Expression + ")$"); err != nil {
-			return nil, errInvalidInput("Invalid Expression %q: %v", req.Expression, err)
-		}
-	}
-	records, err := s.store.listTables(ctx, dbName)
-	if err != nil {
-		return nil, errInternal(err)
-	}
-	tables := make([]*Table, 0, len(records))
-	for _, rec := range records {
-		if re == nil || re.MatchString(rec.Name) {
-			tables = append(tables, &rec.Table)
-		}
-	}
-	page, aerr := paginate(tables, req.MaxResults, req.NextToken, catalogPageSize)
-	if aerr != nil {
-		return nil, aerr
-	}
-	return &getTablesResp{TableList: page.Items, NextToken: page.NextToken}, nil
-}
-
 // nextVersionID is the version UpdateTable gives a table whose current
 // version is cur.
 func nextVersionID(cur string) string {
@@ -492,11 +432,7 @@ func nextVersionID(cur string) string {
 // definition is kept as a table version.
 func (s *Service) updateTableTyped(ctx context.Context, req *updateTableReq) (*struct{}, *protocol.AWSError) {
 	if req.UpdateOpenTableFormatInput != nil {
-		return nil, &protocol.AWSError{
-			Code:       protocol.ErrNotImplemented.Code,
-			Message:    "UpdateOpenTableFormatInput is not implemented: Overcast does not write Iceberg metadata.",
-			HTTPStatus: protocol.ErrNotImplemented.HTTPStatus,
-		}
+		return nil, errNotImplemented("UpdateOpenTableFormatInput is not implemented: Overcast does not write Iceberg metadata.")
 	}
 	if req.TableInput == nil {
 		return nil, errInvalidInput("TableInput is required.")

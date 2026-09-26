@@ -424,6 +424,12 @@
     },
     {
       "suite": "dotnet-sdk",
+      "service": "glue",
+      "group": "glue-s3tables-catalog",
+      "tests": 4
+    },
+    {
+      "suite": "dotnet-sdk",
       "service": "msk",
       "group": "msk-clusters",
       "tests": 16
@@ -922,6 +928,12 @@
     },
     {
       "suite": "java-sdk",
+      "service": "glue",
+      "group": "glue-s3tables-catalog",
+      "tests": 4
+    },
+    {
+      "suite": "java-sdk",
       "service": "msk",
       "group": "msk-clusters",
       "tests": 16
@@ -1122,6 +1134,12 @@
       "suite": "node-js-sdk",
       "service": "eks",
       "group": "eks-tags",
+      "tests": 4
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "glue",
+      "group": "glue-s3tables-catalog",
       "tests": 4
     },
     {
@@ -1783,6 +1801,12 @@
       "service": "glue",
       "group": "glue-catalog",
       "tests": 13
+    },
+    {
+      "suite": "rust-sdk",
+      "service": "glue",
+      "group": "glue-s3tables-catalog",
+      "tests": 4
     },
     {
       "suite": "rust-sdk",

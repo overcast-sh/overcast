@@ -19,14 +19,14 @@ const (
 )
 
 type createPartitionReq struct {
-	CatalogId      string          `json:"CatalogId" cbor:"CatalogId"`
+	catalogRef
 	DatabaseName   string          `json:"DatabaseName" cbor:"DatabaseName"`
 	TableName      string          `json:"TableName" cbor:"TableName"`
 	PartitionInput *PartitionInput `json:"PartitionInput" cbor:"PartitionInput"`
 }
 
 type batchCreatePartitionReq struct {
-	CatalogId          string           `json:"CatalogId" cbor:"CatalogId"`
+	catalogRef
 	DatabaseName       string           `json:"DatabaseName" cbor:"DatabaseName"`
 	TableName          string           `json:"TableName" cbor:"TableName"`
 	PartitionInputList []PartitionInput `json:"PartitionInputList" cbor:"PartitionInputList"`
@@ -37,7 +37,7 @@ type batchPartitionErrorsResp struct {
 }
 
 type getPartitionReq struct {
-	CatalogId       string   `json:"CatalogId" cbor:"CatalogId"`
+	catalogRef
 	DatabaseName    string   `json:"DatabaseName" cbor:"DatabaseName"`
 	TableName       string   `json:"TableName" cbor:"TableName"`
 	PartitionValues []string `json:"PartitionValues" cbor:"PartitionValues"`
@@ -55,7 +55,7 @@ type segment struct {
 }
 
 type getPartitionsReq struct {
-	CatalogId           string   `json:"CatalogId" cbor:"CatalogId"`
+	catalogRef
 	DatabaseName        string   `json:"DatabaseName" cbor:"DatabaseName"`
 	TableName           string   `json:"TableName" cbor:"TableName"`
 	Expression          string   `json:"Expression" cbor:"Expression"`
@@ -71,7 +71,7 @@ type getPartitionsResp struct {
 }
 
 type batchGetPartitionReq struct {
-	CatalogId       string               `json:"CatalogId" cbor:"CatalogId"`
+	catalogRef
 	DatabaseName    string               `json:"DatabaseName" cbor:"DatabaseName"`
 	TableName       string               `json:"TableName" cbor:"TableName"`
 	PartitionsToGet []PartitionValueList `json:"PartitionsToGet" cbor:"PartitionsToGet"`
@@ -83,7 +83,7 @@ type batchGetPartitionResp struct {
 }
 
 type updatePartitionReq struct {
-	CatalogId          string          `json:"CatalogId" cbor:"CatalogId"`
+	catalogRef
 	DatabaseName       string          `json:"DatabaseName" cbor:"DatabaseName"`
 	TableName          string          `json:"TableName" cbor:"TableName"`
 	PartitionValueList []string        `json:"PartitionValueList" cbor:"PartitionValueList"`
@@ -91,14 +91,14 @@ type updatePartitionReq struct {
 }
 
 type deletePartitionReq struct {
-	CatalogId       string   `json:"CatalogId" cbor:"CatalogId"`
+	catalogRef
 	DatabaseName    string   `json:"DatabaseName" cbor:"DatabaseName"`
 	TableName       string   `json:"TableName" cbor:"TableName"`
 	PartitionValues []string `json:"PartitionValues" cbor:"PartitionValues"`
 }
 
 type batchDeletePartitionReq struct {
-	CatalogId          string               `json:"CatalogId" cbor:"CatalogId"`
+	catalogRef
 	DatabaseName       string               `json:"DatabaseName" cbor:"DatabaseName"`
 	TableName          string               `json:"TableName" cbor:"TableName"`
 	PartitionsToDelete []PartitionValueList `json:"PartitionsToDelete" cbor:"PartitionsToDelete"`

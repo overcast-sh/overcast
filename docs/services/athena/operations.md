@@ -77,17 +77,17 @@ All 37 listed operations are implemented. Back to [Athena](../athena.md).
 
 ### DataCatalogs
 
-| Operation           | Status       | Notes                                                                  | AWS Docs                                                                                  |
-| ------------------- | ------------ | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `CreateDataCatalog` | ⚠️ Partial   | GLUE, LAMBDA and HIVE are registered; FEDERATED is not emulated        | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_CreateDataCatalog.html) |
-| `GetDataCatalog`    | ✅ Supported | Includes the built-in AwsDataCatalog                                   | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_GetDataCatalog.html)    |
-| `ListDataCatalogs`  | ✅ Supported |                                                                        | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_ListDataCatalogs.html)  |
-| `UpdateDataCatalog` | ✅ Supported | AwsDataCatalog cannot be modified                                      | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_UpdateDataCatalog.html) |
-| `DeleteDataCatalog` | ✅ Supported | AwsDataCatalog cannot be deleted                                       | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_DeleteDataCatalog.html) |
-| `GetDatabase`       | ⚠️ Partial   | Reads the Glue Data Catalog; LAMBDA and HIVE catalogs are not readable | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_GetDatabase.html)       |
-| `ListDatabases`     | ⚠️ Partial   | Reads the Glue Data Catalog; paginated                                 | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_ListDatabases.html)     |
-| `GetTableMetadata`  | ⚠️ Partial   | Reads the Glue Data Catalog                                            | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_GetTableMetadata.html)  |
-| `ListTableMetadata` | ⚠️ Partial   | Reads the Glue Data Catalog; Expression is a name regex; paginated     | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_ListTableMetadata.html) |
+| Operation           | Status       | Notes                                                                                                     | AWS Docs                                                                                  |
+| ------------------- | ------------ | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `CreateDataCatalog` | ⚠️ Partial   | GLUE, LAMBDA and HIVE are registered; FEDERATED is not emulated                                           | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_CreateDataCatalog.html) |
+| `GetDataCatalog`    | ✅ Supported | Includes the built-in AwsDataCatalog                                                                      | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_GetDataCatalog.html)    |
+| `ListDataCatalogs`  | ✅ Supported | As on AWS, s3tablescatalog/<bucket> catalogs are not listed unless registered                             | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_ListDataCatalogs.html)  |
+| `UpdateDataCatalog` | ✅ Supported | AwsDataCatalog cannot be modified                                                                         | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_UpdateDataCatalog.html) |
+| `DeleteDataCatalog` | ✅ Supported | AwsDataCatalog cannot be deleted                                                                          | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_DeleteDataCatalog.html) |
+| `GetDatabase`       | ⚠️ Partial   | Reads the Glue Data Catalog, s3tablescatalog/<bucket> included; LAMBDA and HIVE catalogs are not readable | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_GetDatabase.html)       |
+| `ListDatabases`     | ⚠️ Partial   | Reads the Glue Data Catalog, s3tablescatalog/<bucket> included; paginated                                 | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_ListDatabases.html)     |
+| `GetTableMetadata`  | ⚠️ Partial   | Reads the Glue Data Catalog, s3tablescatalog/<bucket> included                                            | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_GetTableMetadata.html)  |
+| `ListTableMetadata` | ⚠️ Partial   | Reads the Glue Data Catalog, s3tablescatalog/<bucket> included; Expression is a name regex; paginated     | [docs](https://docs.aws.amazon.com/athena/latest/APIReference/API_ListTableMetadata.html) |
 
 ### Tags
 

@@ -6,41 +6,47 @@ import (
 )
 
 func (s *Service) typedOps() map[string]op.Operation {
+	// Every operation but the database and table reads and the tag
+	// operations, which name no catalog, serves only the account's own
+	// catalog: see ownCatalogOp.
 	return map[string]op.Operation{
+		// Catalogs
+		"GetCatalog":  op.NewTyped[getCatalogReq, getCatalogResp]("GetCatalog", s.getCatalogTyped),
+		"GetCatalogs": op.NewTyped[getCatalogsReq, getCatalogsResp]("GetCatalogs", s.getCatalogsTyped),
 		// Databases
-		"CreateDatabase": op.NewTyped[createDatabaseReq, struct{}]("CreateDatabase", s.createDatabaseTyped),
+		"CreateDatabase": ownCatalogOp(s, "CreateDatabase", s.createDatabaseTyped),
 		"GetDatabase":    op.NewTyped[getDatabaseReq, getDatabaseResp]("GetDatabase", s.getDatabaseTyped),
 		"GetDatabases":   op.NewTyped[getDatabasesReq, getDatabasesResp]("GetDatabases", s.getDatabasesTyped),
-		"UpdateDatabase": op.NewTyped[updateDatabaseReq, struct{}]("UpdateDatabase", s.updateDatabaseTyped),
-		"DeleteDatabase": op.NewTyped[deleteDatabaseReq, struct{}]("DeleteDatabase", s.deleteDatabaseTyped),
+		"UpdateDatabase": ownCatalogOp(s, "UpdateDatabase", s.updateDatabaseTyped),
+		"DeleteDatabase": ownCatalogOp(s, "DeleteDatabase", s.deleteDatabaseTyped),
 		// Tables
-		"CreateTable":      op.NewTyped[createTableReq, createTableResp]("CreateTable", s.createTableTyped),
+		"CreateTable":      ownCatalogOp(s, "CreateTable", s.createTableTyped),
 		"GetTable":         op.NewTyped[getTableReq, getTableResp]("GetTable", s.getTableTyped),
 		"GetTables":        op.NewTyped[getTablesReq, getTablesResp]("GetTables", s.getTablesTyped),
-		"UpdateTable":      op.NewTyped[updateTableReq, struct{}]("UpdateTable", s.updateTableTyped),
-		"DeleteTable":      op.NewTyped[deleteTableReq, struct{}]("DeleteTable", s.deleteTableTyped),
-		"BatchDeleteTable": op.NewTyped[batchDeleteTableReq, batchDeleteTableResp]("BatchDeleteTable", s.batchDeleteTableTyped),
+		"UpdateTable":      ownCatalogOp(s, "UpdateTable", s.updateTableTyped),
+		"DeleteTable":      ownCatalogOp(s, "DeleteTable", s.deleteTableTyped),
+		"BatchDeleteTable": ownCatalogOp(s, "BatchDeleteTable", s.batchDeleteTableTyped),
 		// Table versions
-		"GetTableVersion":         op.NewTyped[getTableVersionReq, getTableVersionResp]("GetTableVersion", s.getTableVersionTyped),
-		"GetTableVersions":        op.NewTyped[getTableVersionsReq, getTableVersionsResp]("GetTableVersions", s.getTableVersionsTyped),
-		"DeleteTableVersion":      op.NewTyped[deleteTableVersionReq, struct{}]("DeleteTableVersion", s.deleteTableVersionTyped),
-		"BatchDeleteTableVersion": op.NewTyped[batchDeleteTableVersionReq, batchDeleteTableVersionResp]("BatchDeleteTableVersion", s.batchDeleteTableVersionTyped),
+		"GetTableVersion":         ownCatalogOp(s, "GetTableVersion", s.getTableVersionTyped),
+		"GetTableVersions":        ownCatalogOp(s, "GetTableVersions", s.getTableVersionsTyped),
+		"DeleteTableVersion":      ownCatalogOp(s, "DeleteTableVersion", s.deleteTableVersionTyped),
+		"BatchDeleteTableVersion": ownCatalogOp(s, "BatchDeleteTableVersion", s.batchDeleteTableVersionTyped),
 		// Partitions
-		"CreatePartition":      op.NewTyped[createPartitionReq, struct{}]("CreatePartition", s.createPartitionTyped),
-		"BatchCreatePartition": op.NewTyped[batchCreatePartitionReq, batchPartitionErrorsResp]("BatchCreatePartition", s.batchCreatePartitionTyped),
-		"GetPartition":         op.NewTyped[getPartitionReq, getPartitionResp]("GetPartition", s.getPartitionTyped),
-		"GetPartitions":        op.NewTyped[getPartitionsReq, getPartitionsResp]("GetPartitions", s.getPartitionsTyped),
-		"BatchGetPartition":    op.NewTyped[batchGetPartitionReq, batchGetPartitionResp]("BatchGetPartition", s.batchGetPartitionTyped),
-		"UpdatePartition":      op.NewTyped[updatePartitionReq, struct{}]("UpdatePartition", s.updatePartitionTyped),
-		"DeletePartition":      op.NewTyped[deletePartitionReq, struct{}]("DeletePartition", s.deletePartitionTyped),
-		"BatchDeletePartition": op.NewTyped[batchDeletePartitionReq, batchPartitionErrorsResp]("BatchDeletePartition", s.batchDeletePartitionTyped),
+		"CreatePartition":      ownCatalogOp(s, "CreatePartition", s.createPartitionTyped),
+		"BatchCreatePartition": ownCatalogOp(s, "BatchCreatePartition", s.batchCreatePartitionTyped),
+		"GetPartition":         ownCatalogOp(s, "GetPartition", s.getPartitionTyped),
+		"GetPartitions":        ownCatalogOp(s, "GetPartitions", s.getPartitionsTyped),
+		"BatchGetPartition":    ownCatalogOp(s, "BatchGetPartition", s.batchGetPartitionTyped),
+		"UpdatePartition":      ownCatalogOp(s, "UpdatePartition", s.updatePartitionTyped),
+		"DeletePartition":      ownCatalogOp(s, "DeletePartition", s.deletePartitionTyped),
+		"BatchDeletePartition": ownCatalogOp(s, "BatchDeletePartition", s.batchDeletePartitionTyped),
 		// Column statistics
-		"UpdateColumnStatisticsForTable":     op.NewTyped[updateColumnStatisticsReq, updateColumnStatisticsResp]("UpdateColumnStatisticsForTable", s.updateColumnStatisticsForTableTyped),
-		"UpdateColumnStatisticsForPartition": op.NewTyped[updateColumnStatisticsReq, updateColumnStatisticsResp]("UpdateColumnStatisticsForPartition", s.updateColumnStatisticsForPartitionTyped),
-		"GetColumnStatisticsForTable":        op.NewTyped[getColumnStatisticsReq, getColumnStatisticsResp]("GetColumnStatisticsForTable", s.getColumnStatisticsForTableTyped),
-		"GetColumnStatisticsForPartition":    op.NewTyped[getColumnStatisticsReq, getColumnStatisticsResp]("GetColumnStatisticsForPartition", s.getColumnStatisticsForPartitionTyped),
-		"DeleteColumnStatisticsForTable":     op.NewTyped[deleteColumnStatisticsReq, struct{}]("DeleteColumnStatisticsForTable", s.deleteColumnStatisticsForTableTyped),
-		"DeleteColumnStatisticsForPartition": op.NewTyped[deleteColumnStatisticsReq, struct{}]("DeleteColumnStatisticsForPartition", s.deleteColumnStatisticsForPartitionTyped),
+		"UpdateColumnStatisticsForTable":     ownCatalogOp(s, "UpdateColumnStatisticsForTable", s.updateColumnStatisticsForTableTyped),
+		"UpdateColumnStatisticsForPartition": ownCatalogOp(s, "UpdateColumnStatisticsForPartition", s.updateColumnStatisticsForPartitionTyped),
+		"GetColumnStatisticsForTable":        ownCatalogOp(s, "GetColumnStatisticsForTable", s.getColumnStatisticsForTableTyped),
+		"GetColumnStatisticsForPartition":    ownCatalogOp(s, "GetColumnStatisticsForPartition", s.getColumnStatisticsForPartitionTyped),
+		"DeleteColumnStatisticsForTable":     ownCatalogOp(s, "DeleteColumnStatisticsForTable", s.deleteColumnStatisticsForTableTyped),
+		"DeleteColumnStatisticsForPartition": ownCatalogOp(s, "DeleteColumnStatisticsForPartition", s.deleteColumnStatisticsForPartitionTyped),
 		// Tags
 		"TagResource":   op.NewTyped[glueTagResourceReq, struct{}]("TagResource", s.tagResourceTyped),
 		"UntagResource": op.NewTyped[glueUntagResourceReq, struct{}]("UntagResource", s.untagResourceTyped),

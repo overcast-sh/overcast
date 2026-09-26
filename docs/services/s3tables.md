@@ -49,6 +49,7 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | Iceberg REST catalog | Served at `/iceberg`: namespaces, tables, commits and staged create — see [the catalog page](./s3tables/iceberg-rest.md) |
 | Configuration | Policies, encryption, storage class, metrics, maintenance, record expiration and replication are stored and read back |
 | Tags | On table buckets and tables, on create or through the tagging operations |
+| Glue and Athena | Every table bucket is a catalog under Glue's `s3tablescatalog`, which Athena reads as `s3tablescatalog/<bucket>` — see [Glue](./glue.md#s3-tables-through-s3tablescatalog) |
 | CloudFormation | `AWS::S3Tables::TableBucket`, `Namespace`, `Table`, `TableBucketPolicy` and `TablePolicy` |
 
 ## Differences from AWS

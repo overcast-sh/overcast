@@ -68,7 +68,7 @@ func newCatalogService(t *testing.T) (*Service, *fakeS3) {
 	s, _ := newTestService(t)
 	g := glue.New(&config.Config{Region: "us-east-1", AccountID: "123456789012"}, state.NewMemoryStore(), zap.NewNop(), clock.New())
 	s3 := &fakeS3{objects: map[string]string{}}
-	s.InitGlueCatalog(g.Catalog(), g.CatalogWriter())
+	s.InitGlueCatalog(g.Catalogs(), g.CatalogWriter())
 	s.InitS3Access(s3.put, s3.list)
 	return s, s3
 }
