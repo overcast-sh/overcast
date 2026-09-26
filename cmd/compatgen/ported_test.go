@@ -247,6 +247,9 @@ func TestCommittedRegistryPortedGroups(t *testing.T) {
 		"kinesis-records":     "compat/model/authored/kinesis-records.json",
 		"iam-roles":           "compat/model/authored/iam-roles.json",
 		"iam-users":           "compat/model/authored/iam-users.json",
+		"iam-policies":        "compat/model/authored/iam-policies.json",
+		"iam-simulate":        "compat/model/authored/iam-simulate.json",
+		"iam-groups":          "compat/model/authored/iam-groups.json",
 		"logs-metric-filters": "compat/model/authored/logs-metric-filters.json",
 	}
 	if !reflect.DeepEqual(ported, want) {

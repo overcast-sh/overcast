@@ -1,9 +1,22 @@
 # Data-lake console, system map and developer QoL
 
-> Status: design, 2026-09-23. Companion to
-> [athena-s3tables-iceberg.md](./athena-s3tables-iceberg.md) (tracking #2073).
-> The backend phases there decide *what* works; this decides how a developer
-> *sees and drives* it. Nothing here is implemented yet.
+> Status: implemented, 2026-09-26. Designed on 2026-09-23 as the companion to
+> [athena-s3tables-iceberg.md](./athena-s3tables-iceberg.md) (tracking #2073):
+> the backend phases there decide *what* works, and this decides how a developer
+> *sees and drives* it.
+>
+> Where each piece landed:
+> - plumbing: #2200;
+> - shared helpers: #2210;
+> - Athena workspace: #2207;
+> - Glue console: #2208 and #2217;
+> - S3 Tables console and the shared Iceberg viewer: #2206;
+> - S3 previews: #2092;
+> - DataGrid: #2121;
+> - map: #2218;
+> - CLI, MCP tools and sample dataset: #2223.
+>
+> Open refinements are #2216, #2222, #2127, #2128 and #2135.
 
 ## What a developer is doing
 

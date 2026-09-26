@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/iam-groups.json";
 
-const GROUP_IAM_GROUPS_SHADOW: Group = Group {
-    name: "iam-groups-shadow",
+const GROUP_IAM_GROUPS: Group = Group {
+    name: "iam-groups",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredIamGroups {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-groups-shadow:CreateGroup".to_string(),
+                "iam-groups:CreateGroup".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_GROUPS_SHADOW
-                            .run_test(&ctx, "CreateGroup", test_iam_groups_shadow_create_group(&client))
+                        GROUP_IAM_GROUPS
+                            .run_test(&ctx, "CreateGroup", test_iam_groups_create_group(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredIamGroups {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-groups-shadow:AddUserToGroup".to_string(),
+                "iam-groups:AddUserToGroup".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_GROUPS_SHADOW
-                            .run_test(&ctx, "AddUserToGroup", test_iam_groups_shadow_add_user_to_group(&client))
+                        GROUP_IAM_GROUPS
+                            .run_test(&ctx, "AddUserToGroup", test_iam_groups_add_user_to_group(&client))
                             .await
                     })
                 }),
@@ -79,12 +79,12 @@ impl ServiceGroup for ScenariosAuthoredIamGroups {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-groups-shadow:ListGroupsForUser".to_string(),
+                "iam-groups:ListGroupsForUser".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_GROUPS_SHADOW
-                            .run_test(&ctx, "ListGroupsForUser", test_iam_groups_shadow_list_groups_for_user(&client))
+                        GROUP_IAM_GROUPS
+                            .run_test(&ctx, "ListGroupsForUser", test_iam_groups_list_groups_for_user(&client))
                             .await
                     })
                 }),
@@ -93,12 +93,12 @@ impl ServiceGroup for ScenariosAuthoredIamGroups {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-groups-shadow:RemoveUserFromGroup".to_string(),
+                "iam-groups:RemoveUserFromGroup".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_GROUPS_SHADOW
-                            .run_test(&ctx, "RemoveUserFromGroup", test_iam_groups_shadow_remove_user_from_group(&client))
+                        GROUP_IAM_GROUPS
+                            .run_test(&ctx, "RemoveUserFromGroup", test_iam_groups_remove_user_from_group(&client))
                             .await
                     })
                 }),
@@ -107,12 +107,12 @@ impl ServiceGroup for ScenariosAuthoredIamGroups {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-groups-shadow:GetGroup".to_string(),
+                "iam-groups:GetGroup".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_GROUPS_SHADOW
-                            .run_test(&ctx, "GetGroup", test_iam_groups_shadow_get_group(&client))
+                        GROUP_IAM_GROUPS
+                            .run_test(&ctx, "GetGroup", test_iam_groups_get_group(&client))
                             .await
                     })
                 }),
@@ -121,12 +121,12 @@ impl ServiceGroup for ScenariosAuthoredIamGroups {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-groups-shadow:DeleteGroup".to_string(),
+                "iam-groups:DeleteGroup".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_GROUPS_SHADOW
-                            .run_test(&ctx, "DeleteGroup", test_iam_groups_shadow_delete_group(&client))
+                        GROUP_IAM_GROUPS
+                            .run_test(&ctx, "DeleteGroup", test_iam_groups_delete_group(&client))
                             .await
                     })
                 }),
@@ -140,11 +140,11 @@ impl ServiceGroup for ScenariosAuthoredIamGroups {
         {
             let client = self.client.clone();
             setups.insert(
-                "iam-groups-shadow".to_string(),
+                "iam-groups".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_GROUPS_SHADOW.run_setup(&ctx, setup_iam_groups_shadow(&client)).await
+                        GROUP_IAM_GROUPS.run_setup(&ctx, setup_iam_groups(&client)).await
                     })
                 }),
             );
@@ -157,11 +157,11 @@ impl ServiceGroup for ScenariosAuthoredIamGroups {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "iam-groups-shadow".to_string(),
+                "iam-groups".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_GROUPS_SHADOW.run_teardown(&ctx, teardown_iam_groups_shadow(&client)).await
+                        GROUP_IAM_GROUPS.run_teardown(&ctx, teardown_iam_groups(&client)).await
                     })
                 }),
             );
@@ -170,7 +170,7 @@ impl ServiceGroup for ScenariosAuthoredIamGroups {
     }
 }
 
-fn setup_iam_groups_shadow(client: &aws_sdk_iam::Client) -> Vec<Call> {
+fn setup_iam_groups(client: &aws_sdk_iam::Client) -> Vec<Call> {
     vec![
         Call {
             op: "CreateUser",
@@ -195,7 +195,7 @@ fn setup_iam_groups_shadow(client: &aws_sdk_iam::Client) -> Vec<Call> {
     ]
 }
 
-fn teardown_iam_groups_shadow(client: &aws_sdk_iam::Client) -> Vec<Call> {
+fn teardown_iam_groups(client: &aws_sdk_iam::Client) -> Vec<Call> {
     vec![
         Call {
             op: "RemoveUserFromGroup",
@@ -264,7 +264,7 @@ fn teardown_iam_groups_shadow(client: &aws_sdk_iam::Client) -> Vec<Call> {
     ]
 }
 
-fn test_iam_groups_shadow_create_group(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_groups_create_group(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "CreateGroup",
@@ -328,7 +328,7 @@ fn test_iam_groups_shadow_create_group(client: &aws_sdk_iam::Client) -> Test {
     }
 }
 
-fn test_iam_groups_shadow_add_user_to_group(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_groups_add_user_to_group(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "AddUserToGroup",
@@ -389,7 +389,7 @@ fn test_iam_groups_shadow_add_user_to_group(client: &aws_sdk_iam::Client) -> Tes
     }
 }
 
-fn test_iam_groups_shadow_list_groups_for_user(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_groups_list_groups_for_user(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "ListGroupsForUser",
@@ -424,7 +424,7 @@ fn test_iam_groups_shadow_list_groups_for_user(client: &aws_sdk_iam::Client) -> 
     }
 }
 
-fn test_iam_groups_shadow_remove_user_from_group(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_groups_remove_user_from_group(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "RemoveUserFromGroup",
@@ -515,7 +515,7 @@ fn test_iam_groups_shadow_remove_user_from_group(client: &aws_sdk_iam::Client) -
     }
 }
 
-fn test_iam_groups_shadow_get_group(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_groups_get_group(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "GetGroup",
@@ -547,7 +547,7 @@ fn test_iam_groups_shadow_get_group(client: &aws_sdk_iam::Client) -> Test {
     }
 }
 
-fn test_iam_groups_shadow_delete_group(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_groups_delete_group(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteGroup",

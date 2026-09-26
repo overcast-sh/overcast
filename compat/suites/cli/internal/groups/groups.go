@@ -35,7 +35,6 @@ func All() []ServiceGroup {
 		SNS().named("sns"),
 		Lambda().named("lambda"),
 		SES().named("ses"),
-		IAM().named("iam"),
 		STS().named("sts"),
 		SecretsManager().named("secretsmanager"),
 		KMS().named("kms"),

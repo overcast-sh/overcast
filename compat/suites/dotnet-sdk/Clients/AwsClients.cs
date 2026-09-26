@@ -1,7 +1,6 @@
 using Amazon;
 using Amazon.DynamoDBv2;
 using Amazon.EventBridge;
-using Amazon.IdentityManagement;
 using Amazon.KeyManagementService;
 using Amazon.Lambda;
 using Amazon.Runtime;
@@ -22,7 +21,6 @@ public sealed class AwsClients
 
     private AmazonDynamoDBClient? _dynamodb;
     private AmazonEventBridgeClient? _eventbridge;
-    private AmazonIdentityManagementServiceClient? _iam;
     private AmazonKeyManagementServiceClient? _kms;
     private AmazonLambdaClient? _lambda;
     private AmazonS3Client? _s3;
@@ -64,11 +62,6 @@ public sealed class AwsClients
     public AmazonEventBridgeClient EventBridge()
     {
         return _eventbridge ??= CreateClient((creds, cfg) => new AmazonEventBridgeClient(creds, (AmazonEventBridgeConfig)cfg), new AmazonEventBridgeConfig());
-    }
-
-    public AmazonIdentityManagementServiceClient IAM()
-    {
-        return _iam ??= CreateClient((creds, cfg) => new AmazonIdentityManagementServiceClient(creds, (AmazonIdentityManagementServiceConfig)cfg), new AmazonIdentityManagementServiceConfig());
     }
 
     public AmazonKeyManagementServiceClient KMS()

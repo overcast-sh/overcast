@@ -34,8 +34,8 @@ import software.amazon.awssdk.services.iam.model.Tag;
  */
 public final class ScenariosAuthoredIamPoliciesGen implements ServiceGroup {
 
-    private static final Group GROUP_IAM_POLICIES_SHADOW =
-            new Group("iam-policies-shadow", "compat/model/authored/iam-policies.json");
+    private static final Group GROUP_IAM_POLICIES =
+            new Group("iam-policies", "compat/model/authored/iam-policies.json");
 
     private final AwsClients clients;
     private volatile IamClient client;
@@ -52,26 +52,26 @@ public final class ScenariosAuthoredIamPoliciesGen implements ServiceGroup {
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("iam-policies-shadow:CreatePolicy", this::testIamPoliciesShadowCreatePolicy),
-                Map.entry("iam-policies-shadow:CreatePolicyMalformedDocument", this::testIamPoliciesShadowCreatePolicyMalformedDocument),
-                Map.entry("iam-policies-shadow:GetPolicy", this::testIamPoliciesShadowGetPolicy),
-                Map.entry("iam-policies-shadow:GetPolicyReturnsTags", this::testIamPoliciesShadowGetPolicyReturnsTags),
-                Map.entry("iam-policies-shadow:ListPolicies", this::testIamPoliciesShadowListPolicies),
-                Map.entry("iam-policies-shadow:GetPolicyAttachmentCountAfterAttach", this::testIamPoliciesShadowGetPolicyAttachmentCountAfterAttach),
-                Map.entry("iam-policies-shadow:GetPolicyAttachmentCountAfterDetach", this::testIamPoliciesShadowGetPolicyAttachmentCountAfterDetach),
-                Map.entry("iam-policies-shadow:DeletePolicy", this::testIamPoliciesShadowDeletePolicy));
+                Map.entry("iam-policies:CreatePolicy", this::testIamPoliciesCreatePolicy),
+                Map.entry("iam-policies:CreatePolicyMalformedDocument", this::testIamPoliciesCreatePolicyMalformedDocument),
+                Map.entry("iam-policies:GetPolicy", this::testIamPoliciesGetPolicy),
+                Map.entry("iam-policies:GetPolicyReturnsTags", this::testIamPoliciesGetPolicyReturnsTags),
+                Map.entry("iam-policies:ListPolicies", this::testIamPoliciesListPolicies),
+                Map.entry("iam-policies:GetPolicyAttachmentCountAfterAttach", this::testIamPoliciesGetPolicyAttachmentCountAfterAttach),
+                Map.entry("iam-policies:GetPolicyAttachmentCountAfterDetach", this::testIamPoliciesGetPolicyAttachmentCountAfterDetach),
+                Map.entry("iam-policies:DeletePolicy", this::testIamPoliciesDeletePolicy));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("iam-policies-shadow", this::setupIamPoliciesShadow));
+                Map.entry("iam-policies", this::setupIamPolicies));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("iam-policies-shadow", this::teardownIamPoliciesShadow));
+                Map.entry("iam-policies", this::teardownIamPolicies));
     }
 
     /**
@@ -91,8 +91,8 @@ public final class ScenariosAuthoredIamPoliciesGen implements ServiceGroup {
         return client;
     }
 
-    private void setupIamPoliciesShadow(TestContext t) {
-        GROUP_IAM_POLICIES_SHADOW.runSetup(t,
+    private void setupIamPolicies(TestContext t) {
+        GROUP_IAM_POLICIES.runSetup(t,
                 new Call("CreateRole", "{\"AssumeRolePolicyDocument\":\"{\\\"Version\\\":\\\"2012-10-17\\\",\\\"Statement\\\":[{\\\"Effect\\\":\\\"Allow\\\",\\\"Principal\\\":{\\\"Service\\\":\\\"lambda.amazonaws.com\\\"},\\\"Action\\\":\\\"sts:AssumeRole\\\"}]}\",\"RoleName\":{\"$name\":\"role\"}}",
                         b -> CreateRoleRequest.builder()
                                 .assumeRolePolicyDocument("{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"lambda.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}")
@@ -101,8 +101,8 @@ public final class ScenariosAuthoredIamPoliciesGen implements ServiceGroup {
                         r -> cl().createRole((CreateRoleRequest) r)));
     }
 
-    private void teardownIamPoliciesShadow(TestContext t) {
-        GROUP_IAM_POLICIES_SHADOW.runTeardown(t,
+    private void teardownIamPolicies(TestContext t) {
+        GROUP_IAM_POLICIES.runTeardown(t,
                 new Call("DetachRolePolicy", "{\"PolicyArn\":{\"$ref\":\"policy.arn\"},\"RoleName\":{\"$name\":\"role\"}}",
                         b -> DetachRolePolicyRequest.builder()
                                 .policyArn(b.string("PolicyArn", Values.ref("policy.arn")))
@@ -121,8 +121,8 @@ public final class ScenariosAuthoredIamPoliciesGen implements ServiceGroup {
                         r -> cl().deletePolicy((DeletePolicyRequest) r)));
     }
 
-    private void testIamPoliciesShadowCreatePolicy(TestContext t) {
-        GROUP_IAM_POLICIES_SHADOW.runTest(t, "CreatePolicy",
+    private void testIamPoliciesCreatePolicy(TestContext t) {
+        GROUP_IAM_POLICIES.runTest(t, "CreatePolicy",
                 new Call("CreatePolicy", "{\"PolicyDocument\":\"{\\\"Version\\\":\\\"2012-10-17\\\",\\\"Statement\\\":[{\\\"Effect\\\":\\\"Allow\\\",\\\"Action\\\":\\\"s3:GetObject\\\",\\\"Resource\\\":\\\"*\\\"}]}\",\"PolicyName\":{\"$name\":\"policy\"},\"Tags\":[{\"Key\":\"owner\",\"Value\":\"compat\"},{\"Key\":\"stage\",\"Value\":\"dev\"}]}",
                         b -> CreatePolicyRequest.builder()
                                 .policyDocument("{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:GetObject\",\"Resource\":\"*\"}]}")
@@ -151,8 +151,8 @@ public final class ScenariosAuthoredIamPoliciesGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamPoliciesShadowCreatePolicyMalformedDocument(TestContext t) {
-        GROUP_IAM_POLICIES_SHADOW.runTest(t, "CreatePolicyMalformedDocument",
+    private void testIamPoliciesCreatePolicyMalformedDocument(TestContext t) {
+        GROUP_IAM_POLICIES.runTest(t, "CreatePolicyMalformedDocument",
                 new Call("CreatePolicy", "{\"PolicyDocument\":\"{\\\"Version\\\":\\\"2012-10-17\\\",\\\"Statement\\\":[{\\\"Effect\\\":\\\"Allow\\\",\\\"Resource\\\":\\\"*\\\"}]}\",\"PolicyName\":{\"$name\":\"policy-malformed\"}}",
                         b -> CreatePolicyRequest.builder()
                                 .policyDocument("{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Resource\":\"*\"}]}")
@@ -164,8 +164,8 @@ public final class ScenariosAuthoredIamPoliciesGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamPoliciesShadowGetPolicy(TestContext t) {
-        GROUP_IAM_POLICIES_SHADOW.runTest(t, "GetPolicy",
+    private void testIamPoliciesGetPolicy(TestContext t) {
+        GROUP_IAM_POLICIES.runTest(t, "GetPolicy",
                 new Call("GetPolicy", "{\"PolicyArn\":{\"$ref\":\"policy.arn\"}}",
                         b -> GetPolicyRequest.builder()
                                 .policyArn(b.string("PolicyArn", Values.ref("policy.arn")))
@@ -179,8 +179,8 @@ public final class ScenariosAuthoredIamPoliciesGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamPoliciesShadowGetPolicyReturnsTags(TestContext t) {
-        GROUP_IAM_POLICIES_SHADOW.runTest(t, "GetPolicyReturnsTags",
+    private void testIamPoliciesGetPolicyReturnsTags(TestContext t) {
+        GROUP_IAM_POLICIES.runTest(t, "GetPolicyReturnsTags",
                 new Call("GetPolicy", "{\"PolicyArn\":{\"$ref\":\"policy.arn\"}}",
                         b -> GetPolicyRequest.builder()
                                 .policyArn(b.string("PolicyArn", Values.ref("policy.arn")))
@@ -202,8 +202,8 @@ public final class ScenariosAuthoredIamPoliciesGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamPoliciesShadowListPolicies(TestContext t) {
-        GROUP_IAM_POLICIES_SHADOW.runTest(t, "ListPolicies",
+    private void testIamPoliciesListPolicies(TestContext t) {
+        GROUP_IAM_POLICIES.runTest(t, "ListPolicies",
                 new Call("ListPolicies", "{\"MaxItems\":1000,\"Scope\":\"Local\"}",
                         b -> ListPoliciesRequest.builder()
                                 .maxItems(1000)
@@ -220,8 +220,8 @@ public final class ScenariosAuthoredIamPoliciesGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamPoliciesShadowGetPolicyAttachmentCountAfterAttach(TestContext t) {
-        GROUP_IAM_POLICIES_SHADOW.runTest(t, "GetPolicyAttachmentCountAfterAttach",
+    private void testIamPoliciesGetPolicyAttachmentCountAfterAttach(TestContext t) {
+        GROUP_IAM_POLICIES.runTest(t, "GetPolicyAttachmentCountAfterAttach",
                 new Call("GetPolicy", "{\"PolicyArn\":{\"$ref\":\"policy.arn\"}}",
                         b -> GetPolicyRequest.builder()
                                 .policyArn(b.string("PolicyArn", Values.ref("policy.arn")))
@@ -252,8 +252,8 @@ public final class ScenariosAuthoredIamPoliciesGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamPoliciesShadowGetPolicyAttachmentCountAfterDetach(TestContext t) {
-        GROUP_IAM_POLICIES_SHADOW.runTest(t, "GetPolicyAttachmentCountAfterDetach",
+    private void testIamPoliciesGetPolicyAttachmentCountAfterDetach(TestContext t) {
+        GROUP_IAM_POLICIES.runTest(t, "GetPolicyAttachmentCountAfterDetach",
                 new Call("GetPolicy", "{\"PolicyArn\":{\"$ref\":\"policy.arn\"}}",
                         b -> GetPolicyRequest.builder()
                                 .policyArn(b.string("PolicyArn", Values.ref("policy.arn")))
@@ -284,8 +284,8 @@ public final class ScenariosAuthoredIamPoliciesGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamPoliciesShadowDeletePolicy(TestContext t) {
-        GROUP_IAM_POLICIES_SHADOW.runTest(t, "DeletePolicy",
+    private void testIamPoliciesDeletePolicy(TestContext t) {
+        GROUP_IAM_POLICIES.runTest(t, "DeletePolicy",
                 new Call("DeletePolicy", "{\"PolicyArn\":{\"$ref\":\"policy.arn\"}}",
                         b -> DeletePolicyRequest.builder()
                                 .policyArn(b.string("PolicyArn", Values.ref("policy.arn")))

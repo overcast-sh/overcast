@@ -15,7 +15,7 @@ namespace OvercastCompat.Groups;
 /// </remarks>
 internal sealed class ScenariosAuthoredIamGroups : IServiceGroup
 {
-    private static readonly ScenarioGroup GroupIamGroupsShadow = new("iam-groups-shadow", "compat/model/authored/iam-groups.json");
+    private static readonly ScenarioGroup GroupIamGroups = new("iam-groups", "compat/model/authored/iam-groups.json");
 
     private readonly Lazy<AmazonIdentityManagementServiceClient> _client;
 
@@ -35,28 +35,28 @@ internal sealed class ScenariosAuthoredIamGroups : IServiceGroup
 
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["iam-groups-shadow:CreateGroup"] = TestIamGroupsShadowCreateGroup,
-        ["iam-groups-shadow:AddUserToGroup"] = TestIamGroupsShadowAddUserToGroup,
-        ["iam-groups-shadow:ListGroupsForUser"] = TestIamGroupsShadowListGroupsForUser,
-        ["iam-groups-shadow:RemoveUserFromGroup"] = TestIamGroupsShadowRemoveUserFromGroup,
-        ["iam-groups-shadow:GetGroup"] = TestIamGroupsShadowGetGroup,
-        ["iam-groups-shadow:DeleteGroup"] = TestIamGroupsShadowDeleteGroup,
+        ["iam-groups:CreateGroup"] = TestIamGroupsCreateGroup,
+        ["iam-groups:AddUserToGroup"] = TestIamGroupsAddUserToGroup,
+        ["iam-groups:ListGroupsForUser"] = TestIamGroupsListGroupsForUser,
+        ["iam-groups:RemoveUserFromGroup"] = TestIamGroupsRemoveUserFromGroup,
+        ["iam-groups:GetGroup"] = TestIamGroupsGetGroup,
+        ["iam-groups:DeleteGroup"] = TestIamGroupsDeleteGroup,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["iam-groups-shadow"] = SetupIamGroupsShadow,
+        ["iam-groups"] = SetupIamGroups,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["iam-groups-shadow"] = TeardownIamGroupsShadow,
+        ["iam-groups"] = TeardownIamGroups,
     };
 
     private AmazonIdentityManagementServiceClient Cl() => _client.Value;
 
-    private Task SetupIamGroupsShadow(TestContext t) =>
-        GroupIamGroupsShadow.RunSetupAsync(t,
+    private Task SetupIamGroups(TestContext t) =>
+        GroupIamGroups.RunSetupAsync(t,
             new ScenarioCall
             {
                 Op = "CreateUser",
@@ -72,8 +72,8 @@ internal sealed class ScenariosAuthoredIamGroups : IServiceGroup
             }
         );
 
-    private Task TeardownIamGroupsShadow(TestContext t) =>
-        GroupIamGroupsShadow.RunTeardownAsync(t,
+    private Task TeardownIamGroups(TestContext t) =>
+        GroupIamGroups.RunTeardownAsync(t,
             new ScenarioCall
             {
                 Op = "RemoveUserFromGroup",
@@ -116,7 +116,7 @@ internal sealed class ScenariosAuthoredIamGroups : IServiceGroup
             }
         );
 
-    private Task TestIamGroupsShadowCreateGroup(TestContext t) => GroupIamGroupsShadow.RunTestAsync(t, "CreateGroup", new ScenarioTest
+    private Task TestIamGroupsCreateGroup(TestContext t) => GroupIamGroups.RunTestAsync(t, "CreateGroup", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -164,7 +164,7 @@ internal sealed class ScenariosAuthoredIamGroups : IServiceGroup
         ],
     });
 
-    private Task TestIamGroupsShadowAddUserToGroup(TestContext t) => GroupIamGroupsShadow.RunTestAsync(t, "AddUserToGroup", new ScenarioTest
+    private Task TestIamGroupsAddUserToGroup(TestContext t) => GroupIamGroups.RunTestAsync(t, "AddUserToGroup", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -204,7 +204,7 @@ internal sealed class ScenariosAuthoredIamGroups : IServiceGroup
         ],
     });
 
-    private Task TestIamGroupsShadowListGroupsForUser(TestContext t) => GroupIamGroupsShadow.RunTestAsync(t, "ListGroupsForUser", new ScenarioTest
+    private Task TestIamGroupsListGroupsForUser(TestContext t) => GroupIamGroups.RunTestAsync(t, "ListGroupsForUser", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -230,7 +230,7 @@ internal sealed class ScenariosAuthoredIamGroups : IServiceGroup
         ],
     });
 
-    private Task TestIamGroupsShadowRemoveUserFromGroup(TestContext t) => GroupIamGroupsShadow.RunTestAsync(t, "RemoveUserFromGroup", new ScenarioTest
+    private Task TestIamGroupsRemoveUserFromGroup(TestContext t) => GroupIamGroups.RunTestAsync(t, "RemoveUserFromGroup", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -289,7 +289,7 @@ internal sealed class ScenariosAuthoredIamGroups : IServiceGroup
         ],
     });
 
-    private Task TestIamGroupsShadowGetGroup(TestContext t) => GroupIamGroupsShadow.RunTestAsync(t, "GetGroup", new ScenarioTest
+    private Task TestIamGroupsGetGroup(TestContext t) => GroupIamGroups.RunTestAsync(t, "GetGroup", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -314,7 +314,7 @@ internal sealed class ScenariosAuthoredIamGroups : IServiceGroup
         ],
     });
 
-    private Task TestIamGroupsShadowDeleteGroup(TestContext t) => GroupIamGroupsShadow.RunTestAsync(t, "DeleteGroup", new ScenarioTest
+    private Task TestIamGroupsDeleteGroup(TestContext t) => GroupIamGroups.RunTestAsync(t, "DeleteGroup", new ScenarioTest
     {
         Call = new ScenarioCall
         {

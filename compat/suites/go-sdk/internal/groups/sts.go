@@ -2,6 +2,7 @@ package groups
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -156,4 +157,21 @@ func (g *stsGroup) AssumeRoleWithWebIdentity(ctx context.Context, t *harness.Tes
 		return fmt.Errorf("AssumeRoleWithWebIdentity: nil credentials")
 	}
 	return nil
+}
+
+// iamAssumePolicy is the trust policy of the role sts-assume assumes. It
+// moved here from iam.go when the last native IAM groups were deleted.
+func iamAssumePolicy() string {
+	doc := map[string]interface{}{
+		"Version": "2012-10-17",
+		"Statement": []map[string]interface{}{
+			{
+				"Effect":    "Allow",
+				"Principal": map[string]interface{}{"Service": "lambda.amazonaws.com"},
+				"Action":    "sts:AssumeRole",
+			},
+		},
+	}
+	b, _ := json.Marshal(doc)
+	return string(b)
 }

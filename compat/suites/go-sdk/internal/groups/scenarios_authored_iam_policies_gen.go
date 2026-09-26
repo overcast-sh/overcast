@@ -24,20 +24,20 @@ func ScenariosAuthoredIamPolicies(c *clients.Clients) ServiceGroup {
 	return ServiceGroup{
 		Name: "scenarios/authored-iam-policies",
 		Impls: map[string]harness.TestFn{
-			"iam-policies-shadow:CreatePolicy":                        g.testIamPoliciesShadowCreatePolicy,
-			"iam-policies-shadow:CreatePolicyMalformedDocument":       g.testIamPoliciesShadowCreatePolicyMalformedDocument,
-			"iam-policies-shadow:GetPolicy":                           g.testIamPoliciesShadowGetPolicy,
-			"iam-policies-shadow:GetPolicyReturnsTags":                g.testIamPoliciesShadowGetPolicyReturnsTags,
-			"iam-policies-shadow:ListPolicies":                        g.testIamPoliciesShadowListPolicies,
-			"iam-policies-shadow:GetPolicyAttachmentCountAfterAttach": g.testIamPoliciesShadowGetPolicyAttachmentCountAfterAttach,
-			"iam-policies-shadow:GetPolicyAttachmentCountAfterDetach": g.testIamPoliciesShadowGetPolicyAttachmentCountAfterDetach,
-			"iam-policies-shadow:DeletePolicy":                        g.testIamPoliciesShadowDeletePolicy,
+			"iam-policies:CreatePolicy":                        g.testIamPoliciesCreatePolicy,
+			"iam-policies:CreatePolicyMalformedDocument":       g.testIamPoliciesCreatePolicyMalformedDocument,
+			"iam-policies:GetPolicy":                           g.testIamPoliciesGetPolicy,
+			"iam-policies:GetPolicyReturnsTags":                g.testIamPoliciesGetPolicyReturnsTags,
+			"iam-policies:ListPolicies":                        g.testIamPoliciesListPolicies,
+			"iam-policies:GetPolicyAttachmentCountAfterAttach": g.testIamPoliciesGetPolicyAttachmentCountAfterAttach,
+			"iam-policies:GetPolicyAttachmentCountAfterDetach": g.testIamPoliciesGetPolicyAttachmentCountAfterDetach,
+			"iam-policies:DeletePolicy":                        g.testIamPoliciesDeletePolicy,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"iam-policies-shadow": g.setupIamPoliciesShadow,
+			"iam-policies": g.setupIamPolicies,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"iam-policies-shadow": g.teardownIamPoliciesShadow,
+			"iam-policies": g.teardownIamPolicies,
 		},
 	}
 }
@@ -57,10 +57,10 @@ func (g *authoredIamPoliciesScenarios) cl() *iam.Client {
 	return g.client
 }
 
-var groupIamPoliciesShadow = scenario.Group{Name: "iam-policies-shadow", File: "compat/model/authored/iam-policies.json"}
+var groupIamPolicies = scenario.Group{Name: "iam-policies", File: "compat/model/authored/iam-policies.json"}
 
-func (g *authoredIamPoliciesScenarios) setupIamPoliciesShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupIamPoliciesShadow.RunSetup(ctx, t,
+func (g *authoredIamPoliciesScenarios) setupIamPolicies(ctx context.Context, t *harness.TestContext) error {
+	return groupIamPolicies.RunSetup(ctx, t,
 		scenario.Call{
 			Op:     "CreateRole",
 			Params: `{"AssumeRolePolicyDocument":"{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"lambda.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}","RoleName":{"$name":"role"}}`,
@@ -77,8 +77,8 @@ func (g *authoredIamPoliciesScenarios) setupIamPoliciesShadow(ctx context.Contex
 	)
 }
 
-func (g *authoredIamPoliciesScenarios) teardownIamPoliciesShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupIamPoliciesShadow.RunTeardown(ctx, t,
+func (g *authoredIamPoliciesScenarios) teardownIamPolicies(ctx context.Context, t *harness.TestContext) error {
+	return groupIamPolicies.RunTeardown(ctx, t,
 		scenario.Call{
 			Op:     "DetachRolePolicy",
 			Params: `{"PolicyArn":{"$ref":"policy.arn"},"RoleName":{"$name":"role"}}`,
@@ -119,8 +119,8 @@ func (g *authoredIamPoliciesScenarios) teardownIamPoliciesShadow(ctx context.Con
 	)
 }
 
-func (g *authoredIamPoliciesScenarios) testIamPoliciesShadowCreatePolicy(ctx context.Context, t *harness.TestContext) error {
-	return groupIamPoliciesShadow.RunTest(ctx, t, "CreatePolicy", scenario.Test{
+func (g *authoredIamPoliciesScenarios) testIamPoliciesCreatePolicy(ctx context.Context, t *harness.TestContext) error {
+	return groupIamPolicies.RunTest(ctx, t, "CreatePolicy", scenario.Test{
 		Call: scenario.Call{
 			Op:     "CreatePolicy",
 			Params: `{"PolicyDocument":"{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:GetObject\",\"Resource\":\"*\"}]}","PolicyName":{"$name":"policy"},"Tags":[{"Key":"owner","Value":"compat"},{"Key":"stage","Value":"dev"}]}`,
@@ -170,8 +170,8 @@ func (g *authoredIamPoliciesScenarios) testIamPoliciesShadowCreatePolicy(ctx con
 	})
 }
 
-func (g *authoredIamPoliciesScenarios) testIamPoliciesShadowCreatePolicyMalformedDocument(ctx context.Context, t *harness.TestContext) error {
-	return groupIamPoliciesShadow.RunTest(ctx, t, "CreatePolicyMalformedDocument", scenario.Test{
+func (g *authoredIamPoliciesScenarios) testIamPoliciesCreatePolicyMalformedDocument(ctx context.Context, t *harness.TestContext) error {
+	return groupIamPolicies.RunTest(ctx, t, "CreatePolicyMalformedDocument", scenario.Test{
 		Call: scenario.Call{
 			Op:     "CreatePolicy",
 			Params: `{"PolicyDocument":"{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Resource\":\"*\"}]}","PolicyName":{"$name":"policy-malformed"}}`,
@@ -191,8 +191,8 @@ func (g *authoredIamPoliciesScenarios) testIamPoliciesShadowCreatePolicyMalforme
 	})
 }
 
-func (g *authoredIamPoliciesScenarios) testIamPoliciesShadowGetPolicy(ctx context.Context, t *harness.TestContext) error {
-	return groupIamPoliciesShadow.RunTest(ctx, t, "GetPolicy", scenario.Test{
+func (g *authoredIamPoliciesScenarios) testIamPoliciesGetPolicy(ctx context.Context, t *harness.TestContext) error {
+	return groupIamPolicies.RunTest(ctx, t, "GetPolicy", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetPolicy",
 			Params: `{"PolicyArn":{"$ref":"policy.arn"}}`,
@@ -214,8 +214,8 @@ func (g *authoredIamPoliciesScenarios) testIamPoliciesShadowGetPolicy(ctx contex
 	})
 }
 
-func (g *authoredIamPoliciesScenarios) testIamPoliciesShadowGetPolicyReturnsTags(ctx context.Context, t *harness.TestContext) error {
-	return groupIamPoliciesShadow.RunTest(ctx, t, "GetPolicyReturnsTags", scenario.Test{
+func (g *authoredIamPoliciesScenarios) testIamPoliciesGetPolicyReturnsTags(ctx context.Context, t *harness.TestContext) error {
+	return groupIamPolicies.RunTest(ctx, t, "GetPolicyReturnsTags", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetPolicy",
 			Params: `{"PolicyArn":{"$ref":"policy.arn"}}`,
@@ -245,8 +245,8 @@ func (g *authoredIamPoliciesScenarios) testIamPoliciesShadowGetPolicyReturnsTags
 	})
 }
 
-func (g *authoredIamPoliciesScenarios) testIamPoliciesShadowListPolicies(ctx context.Context, t *harness.TestContext) error {
-	return groupIamPoliciesShadow.RunTest(ctx, t, "ListPolicies", scenario.Test{
+func (g *authoredIamPoliciesScenarios) testIamPoliciesListPolicies(ctx context.Context, t *harness.TestContext) error {
+	return groupIamPolicies.RunTest(ctx, t, "ListPolicies", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListPolicies",
 			Params: `{"MaxItems":1000,"Scope":"Local"}`,
@@ -271,8 +271,8 @@ func (g *authoredIamPoliciesScenarios) testIamPoliciesShadowListPolicies(ctx con
 	})
 }
 
-func (g *authoredIamPoliciesScenarios) testIamPoliciesShadowGetPolicyAttachmentCountAfterAttach(ctx context.Context, t *harness.TestContext) error {
-	return groupIamPoliciesShadow.RunTest(ctx, t, "GetPolicyAttachmentCountAfterAttach", scenario.Test{
+func (g *authoredIamPoliciesScenarios) testIamPoliciesGetPolicyAttachmentCountAfterAttach(ctx context.Context, t *harness.TestContext) error {
+	return groupIamPolicies.RunTest(ctx, t, "GetPolicyAttachmentCountAfterAttach", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetPolicy",
 			Params: `{"PolicyArn":{"$ref":"policy.arn"}}`,
@@ -326,8 +326,8 @@ func (g *authoredIamPoliciesScenarios) testIamPoliciesShadowGetPolicyAttachmentC
 	})
 }
 
-func (g *authoredIamPoliciesScenarios) testIamPoliciesShadowGetPolicyAttachmentCountAfterDetach(ctx context.Context, t *harness.TestContext) error {
-	return groupIamPoliciesShadow.RunTest(ctx, t, "GetPolicyAttachmentCountAfterDetach", scenario.Test{
+func (g *authoredIamPoliciesScenarios) testIamPoliciesGetPolicyAttachmentCountAfterDetach(ctx context.Context, t *harness.TestContext) error {
+	return groupIamPolicies.RunTest(ctx, t, "GetPolicyAttachmentCountAfterDetach", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetPolicy",
 			Params: `{"PolicyArn":{"$ref":"policy.arn"}}`,
@@ -381,8 +381,8 @@ func (g *authoredIamPoliciesScenarios) testIamPoliciesShadowGetPolicyAttachmentC
 	})
 }
 
-func (g *authoredIamPoliciesScenarios) testIamPoliciesShadowDeletePolicy(ctx context.Context, t *harness.TestContext) error {
-	return groupIamPoliciesShadow.RunTest(ctx, t, "DeletePolicy", scenario.Test{
+func (g *authoredIamPoliciesScenarios) testIamPoliciesDeletePolicy(ctx context.Context, t *harness.TestContext) error {
+	return groupIamPolicies.RunTest(ctx, t, "DeletePolicy", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeletePolicy",
 			Params: `{"PolicyArn":{"$ref":"policy.arn"}}`,
