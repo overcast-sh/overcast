@@ -484,7 +484,7 @@ export function makeS3Groups(suite: string): TestGroup[] {
               uploadId || !etag,
               "missing UploadId or ETag from previous steps",
             );
-            await s3.send(
+            const completed = await s3.send(
               new CompleteMultipartUploadCommand({
                 Bucket: bucket,
                 Key: "big.bin",
@@ -498,6 +498,19 @@ export function makeS3Groups(suite: string): TestGroup[] {
             assert.ok(
               head.ContentLength,
               "CompleteMultipartUpload: missing ContentLength on assembled object",
+            );
+            // S3 gives a multipart object the MD5 of its parts' binary MD5s, suffixed with the part count (#2232):
+            // md5(md5(5 MiB of "a"))-1 for UploadPart's single part.
+            const want = '"65d79814053817eae59f7c7cee98d3f8-1"';
+            assert.strictEqual(
+              completed.ETag,
+              want,
+              "CompleteMultipartUpload: ETag",
+            );
+            assert.strictEqual(
+              head.ETag,
+              want,
+              "CompleteMultipartUpload: HeadObject ETag",
             );
           },
         },

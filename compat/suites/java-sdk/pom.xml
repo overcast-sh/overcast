@@ -82,6 +82,10 @@
          this suite runs against ECR, whose hand-written groups exist only in
          the cli suite. -->
     <dependency><groupId>software.amazon.awssdk</groupId><artifactId>ecr</artifactId></dependency>
+    <!-- G6 wave 3 (#1116): the authored backup-tags scenario is the first
+         thing this suite runs against AWS Backup, so the client is added with
+         it. Its version comes from the BOM above, like every client here. -->
+    <dependency><groupId>software.amazon.awssdk</groupId><artifactId>backup</artifactId></dependency>
     <!-- URL connection client (no Apache HTTP, keeps image small) -->
     <dependency><groupId>software.amazon.awssdk</groupId><artifactId>url-connection-client</artifactId></dependency>
     <!-- Async HTTP client — required by LambdaAsyncClient (InvokeWithResponseStream) -->

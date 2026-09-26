@@ -663,7 +663,7 @@ func (s *s3Group) CompleteMultipartUpload(ctx context.Context, t *harness.TestCo
 	bucket := t.GetString("s3_mp_bucket")
 	uploadID := t.GetString("s3_upload_id")
 	etag := t.GetString("s3_part_etag")
-	_, err := s.client().CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
+	out, err := s.client().CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
 		Bucket:   aws.String(bucket),
 		Key:      aws.String("mp-key"),
 		UploadId: aws.String(uploadID),
@@ -676,12 +676,21 @@ func (s *s3Group) CompleteMultipartUpload(ctx context.Context, t *harness.TestCo
 	if err != nil {
 		return err
 	}
-	_, err = s.client().HeadObject(ctx, &s3.HeadObjectInput{
+	head, err := s.client().HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String("mp-key"),
 	})
 	if err != nil {
 		return fmt.Errorf("CompleteMultipartUpload: HeadObject verify failed: %w", err)
+	}
+	// S3 gives a multipart object the MD5 of its parts' binary MD5s, suffixed with the part count (#2232):
+	// md5(md5(5 MiB of "x"))-1 for UploadPart's single part.
+	const want = `"9dc2b5968307ce171ec8a2a9251a60d9-1"`
+	if got := aws.ToString(out.ETag); got != want {
+		return fmt.Errorf("CompleteMultipartUpload: ETag = %s, want %s", got, want)
+	}
+	if got := aws.ToString(head.ETag); got != want {
+		return fmt.Errorf("CompleteMultipartUpload: HeadObject ETag = %s, want %s", got, want)
 	}
 	return nil
 }

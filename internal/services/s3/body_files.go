@@ -27,6 +27,16 @@ import (
 // never shares a directory with a bucket's bodies.
 const stagingDir = ".staging"
 
+// partsDir holds the parts of every multipart upload in progress, one
+// directory per upload. Its name starts with a dot for the same reason as
+// stagingDir's (#2234).
+const partsDir = ".multipart"
+
+// legacyPartsDir is where releases before #2234 kept parts: a name that is
+// also a valid bucket name, so deleting a bucket called "multipart" deleted
+// every upload's parts. Parts found there are moved to partsDir.
+const legacyPartsDir = "multipart"
+
 // bodyFill streams a body's bytes into w and reports how many it wrote.
 type bodyFill func(w io.Writer) (int64, error)
 
@@ -35,14 +45,14 @@ func copyFrom(r io.Reader) bodyFill {
 	return func(w io.Writer) (int64, error) { return io.Copy(w, r) }
 }
 
-// bodyDigest describes a body once all of it has been written.
-type bodyDigest struct {
-	md5  []byte
-	size int64
+// md5Hashed wraps fill so the bytes it writes are hashed on their way to the
+// file. Once fill has run, etag returns the ETag S3 gives a body stored in one
+// piece: its quoted MD5.
+func md5Hashed(fill bodyFill) (hashed bodyFill, etag func() string) {
+	h := md5.New()
+	hashed = func(w io.Writer) (int64, error) { return fill(io.MultiWriter(w, h)) }
+	return hashed, func() string { return fmt.Sprintf(`"%x"`, h.Sum(nil)) }
 }
-
-// etag is the ETag S3 gives a body stored in one piece: its quoted MD5.
-func (d bodyDigest) etag() string { return fmt.Sprintf(`"%x"`, d.md5) }
 
 // bodyFiles is the directory of body files.
 //
@@ -55,9 +65,9 @@ func (d bodyDigest) etag() string { return fmt.Sprintf(`"%x"`, d.md5) }
 type bodyFiles struct {
 	dir string
 
-	// swept guards sweepStaged, which runs on first use rather than at
+	// prepared guards prepareBodyDir, which runs on first use rather than at
 	// construction — New must not touch the disk (AGENTS.md startup budget).
-	swept sync.Once
+	prepared sync.Once
 
 	// paths serialises every change to what a body path holds together with
 	// the records that describe it — installing a body and committing its
@@ -75,7 +85,6 @@ func newBodyFiles(dir string) *bodyFiles {
 // root opens the body directory, creating it on first need. The caller
 // closes it.
 func (b *bodyFiles) root() (*os.Root, error) {
-	b.swept.Do(b.sweepStaged)
 	root, err := os.OpenRoot(b.dir)
 	if errors.Is(err, fs.ErrNotExist) {
 		if err := os.MkdirAll(b.dir, 0o755); err != nil {
@@ -83,15 +92,50 @@ func (b *bodyFiles) root() (*os.Root, error) {
 		}
 		root, err = os.OpenRoot(b.dir)
 	}
-	return root, err
+	if err != nil {
+		return nil, err
+	}
+	b.prepared.Do(func() { prepareBodyDir(root) })
+	return root, nil
 }
 
-// sweepStaged discards whatever a previous process left staged: a staged body
-// belongs to a write that never completed, so no record refers to it. A
-// leftover that cannot be removed costs only disk space, so a failure here is
-// not worth failing a request over.
-func (b *bodyFiles) sweepStaged() {
-	_ = os.RemoveAll(filepath.Join(b.dir, stagingDir))
+// prepareBodyDir tidies what a previous process left behind, before this one reads
+// or writes any body. Neither step is worth failing a request over: a staged
+// leftover that cannot be removed costs only disk space, and a legacy part
+// that cannot be moved fails only its own upload's completion.
+func prepareBodyDir(root *os.Root) {
+	// A staged body belongs to a write that never completed, so no record
+	// refers to it.
+	_ = root.RemoveAll(stagingDir)
+	adoptLegacyParts(root)
+}
+
+// adoptLegacyParts moves each upload directory found in legacyPartsDir into
+// partsDir, so an upload begun before #2234 still completes. A bucket's
+// bodies are always files directly under its directory, so the
+// subdirectories there are exactly the uploads, even when a bucket named
+// "multipart" shares the directory. The directory itself is removed once
+// empty, as deleteObject removes an emptied bucket's.
+func adoptLegacyParts(root *os.Root) {
+	dir, err := root.Open(legacyPartsDir)
+	if err != nil {
+		return // nothing stored by an earlier release
+	}
+	entries, err := dir.ReadDir(-1)
+	_ = dir.Close()
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		if err := root.MkdirAll(partsDir, 0o755); err != nil {
+			return
+		}
+		_ = root.Rename(filepath.Join(legacyPartsDir, e.Name()), filepath.Join(partsDir, e.Name()))
+	}
+	_ = root.Remove(legacyPartsDir)
 }
 
 // locked runs fn holding rel's path lock, for a change to what rel holds that
@@ -148,20 +192,20 @@ func (b *bodyFiles) removeAll(rel string) error {
 // fill streams the bytes into a staged file; nothing at rel changes while it
 // runs, so a fill that fails — a client that disconnects, a producer that
 // gives up — leaves whatever rel held untouched. Once fill has succeeded the
-// staged file is renamed over rel, and commit is handed its digest to store
+// staged file is renamed over rel, and commit is handed its size to store
 // the records that describe it, under rel's path lock. If commit fails, rel is
 // put back as it was: the previous body is restored from where it was kept
 // before the rename, or the new file is removed when there was no previous
 // body. commit must therefore fail only before anything it stored is visible.
 // No staged file outlives the call.
-func (b *bodyFiles) replace(rel string, fill bodyFill, commit func(bodyDigest) *protocol.AWSError) *protocol.AWSError {
+func (b *bodyFiles) replace(rel string, fill bodyFill, commit func(size int64) *protocol.AWSError) *protocol.AWSError {
 	root, err := b.root()
 	if err != nil {
 		return bodyError(rel, err)
 	}
 	defer root.Close()
 
-	staged, digest, err := stageBody(root, fill)
+	staged, size, err := stageBody(root, fill)
 	if err != nil {
 		return bodyError(rel, err)
 	}
@@ -172,7 +216,7 @@ func (b *bodyFiles) replace(rel string, fill bodyFill, commit func(bodyDigest) *
 	if err != nil {
 		return bodyError(rel, err)
 	}
-	if aerr := commit(digest); aerr != nil {
+	if aerr := commit(size); aerr != nil {
 		if err := inst.undo(); err != nil {
 			return bodyError(rel, errors.Join(aerr, fmt.Errorf("restore previous body: %w", err)))
 		}
@@ -182,27 +226,26 @@ func (b *bodyFiles) replace(rel string, fill bodyFill, commit func(bodyDigest) *
 	return nil
 }
 
-// stageBody writes fill's bytes to a new file in stagingDir, hashing them on
-// the way, and returns the file's name. A fill that fails leaves no file.
-func stageBody(root *os.Root, fill bodyFill) (string, bodyDigest, error) {
+// stageBody writes fill's bytes to a new file in stagingDir and returns the
+// file's name and size. A fill that fails leaves no file.
+func stageBody(root *os.Root, fill bodyFill) (string, int64, error) {
 	if err := root.MkdirAll(stagingDir, 0o755); err != nil {
-		return "", bodyDigest{}, err
+		return "", 0, err
 	}
 	name := filepath.Join(stagingDir, rand.Text())
 	f, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o666)
 	if err != nil {
-		return "", bodyDigest{}, err
+		return "", 0, err
 	}
-	h := md5.New()
-	n, err := fill(io.MultiWriter(f, h))
+	n, err := fill(f)
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}
 	if err != nil {
 		_ = root.Remove(name)
-		return "", bodyDigest{}, err
+		return "", 0, err
 	}
-	return name, bodyDigest{md5: h.Sum(nil), size: n}, nil
+	return name, n, nil
 }
 
 // installation is a body renamed into place, with what rel held before it

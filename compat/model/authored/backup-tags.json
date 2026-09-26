@@ -1,0 +1,101 @@
+{
+  "$comment": "Authored port of the hand-written registry group backup-tags (docs/plans/compat-coverage-modelgen.md §3.11, G6 wave 3, #1116). One spec in place of the single native implementation, which lives only in the cli suite (compat/suites/cli/internal/groups/backup.go), and of the six that were never written — go-sdk, python-sdk, node-js-sdk, java-sdk, dotnet-sdk and rust-sdk each carry 3 rows of parity debt for it, which the port closes. It runs as backup-tags-shadow beside the cli native so the nightly can compare the two per (suite, test); nothing is flipped and no native code is deleted. The clauses are what the cli native asserts, with each choice stated on its test — see compat/model/README.md § Authored scenarios.",
+  "version": 1,
+  "service": "backup",
+  "client": {
+    "sdkId": "Backup",
+    "endpointPrefix": "backup",
+    "signingName": "backup",
+    "protocol": "restJson1",
+    "apiVersion": "2018-11-15",
+    "awsQueryCompatible": false
+  },
+  "groups": [
+    {
+      "$comment": "The group owns one backup vault, created in setup and deleted in teardown, exactly as the cli native does: tag operations address a resource by ARN, so the group tags a real, taggable resource of its own rather than an invented ARN. The vault is named by $name ({runId}-backup-tags-shadow-vault), so it is never shared with another Backup group — the five run in parallel, which is why the native gives each group its own Namer. The ARN is exported from CreateBackupVault's response, as the native's setup does. The native calls CreateBackupVault and DeleteBackupVault unsigned and the tag operations signed; every scenario call is signed, as a real Backup client's always is, and Overcast answers both spellings of the vault calls (the unsigned one is what backup-vaults exists to cover, #963). Teardown mirrors the native's in reverse creation order: remove the tag in case UntagResource never ran, then the vault. The registry declares no depends, so none is declared here; the tests still run in order, which is what lets ListTags read the tag TagResource wrote. No clause is wrapped in `eventually`: the native polls nothing, and it reads every write back immediately.",
+      "name": "backup-tags-shadow",
+      "kind": "lifecycle",
+      "setup": [
+        {
+          "op": "CreateBackupVault",
+          "params": { "BackupVaultName": { "$name": "vault" } },
+          "export": { "vault.arn": "$.BackupVaultArn" }
+        }
+      ],
+      "tests": [
+        {
+          "$comment": "The cli native writes one tag, oc-compat, whose value is the vault's own name (the run id already makes it unique), and reads it back through ListTags, because TagResource's modeled output is Unit: it asserts the ListTags response carries Tags at all — an absent member is what an answer from another service looked like (#976) — and that Tags[oc-compat] is the value written. The equality on the map key implies the member is present, so one check states both. The key and value are the native's.",
+          "name": "TagResource",
+          "op": "TagResource",
+          "call": {
+            "op": "TagResource",
+            "params": {
+              "ResourceArn": { "$ref": "vault.arn" },
+              "Tags": { "oc-compat": { "$name": "vault" } }
+            }
+          },
+          "assert": [
+            {
+              "kind": "readback",
+              "call": {
+                "op": "ListTags",
+                "params": { "ResourceArn": { "$ref": "vault.arn" } }
+              },
+              "checks": { "$.Tags.oc-compat": { "equals": { "$name": "vault" } } }
+            }
+          ]
+        },
+        {
+          "$comment": "The cli native asserts ListTags carries a Tags member and, when TagResource recorded that it wrote its tag, that Tags[oc-compat] is the value written. The IR has no conditional, and the registry declares no depends, so the port asserts the value unconditionally: the tests run in order and TagResource has always run first, so this is the native's claim in every run where TagResource passed. Where TagResource failed, this test fails too rather than passing on an empty map — a cascade the native avoided, stated here rather than hidden. The value check implies the Tags member is present, which is the native's #976 guard.",
+          "name": "ListTags",
+          "op": "ListTags",
+          "call": {
+            "op": "ListTags",
+            "params": { "ResourceArn": { "$ref": "vault.arn" } }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.Tags.oc-compat": { "equals": { "$name": "vault" } } }
+            }
+          ]
+        },
+        {
+          "$comment": "The cli native removes the oc-compat key whether or not TagResource wrote it (AWS treats removing an absent key as success), then reads ListTags back, because UntagResource's modeled output is Unit: it accepts a response with no Tags member, since the vault now carries no tags and either spelling of nothing is fine, and fails only if the removed key is still present. `missing` on $.Tags.oc-compat is exactly that — it holds when Tags is absent and when Tags lacks the key, and fails when the key is still there.",
+          "name": "UntagResource",
+          "op": "UntagResource",
+          "call": {
+            "op": "UntagResource",
+            "params": {
+              "ResourceArn": { "$ref": "vault.arn" },
+              "TagKeyList": ["oc-compat"]
+            }
+          },
+          "assert": [
+            {
+              "kind": "readback",
+              "call": {
+                "op": "ListTags",
+                "params": { "ResourceArn": { "$ref": "vault.arn" } }
+              },
+              "checks": { "$.Tags.oc-compat": { "missing": true } }
+            }
+          ]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "UntagResource",
+          "params": {
+            "ResourceArn": { "$ref": "vault.arn" },
+            "TagKeyList": ["oc-compat"]
+          }
+        },
+        {
+          "op": "DeleteBackupVault",
+          "params": { "BackupVaultName": { "$name": "vault" } }
+        }
+      ]
+    }
+  ]
+}

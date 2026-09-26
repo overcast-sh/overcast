@@ -641,14 +641,23 @@ impl ServiceGroup for S3Group {
                     let etag = ctx.get("s3MpEtag").ok_or_else(|| "s3MpEtag not set".to_string())?;
                     let part = CompletedPart::builder().part_number(1).e_tag(&etag).build();
                     let completed = CompletedMultipartUpload::builder().parts(part).build();
-                    clients.s3().complete_multipart_upload()
+                    let resp = clients.s3().complete_multipart_upload()
                         .bucket(&bucket)
                         .key(&key)
                         .upload_id(&upload_id)
                         .multipart_upload(completed)
                         .send().await.map_err(crate::harness::sdk_error)?;
                     let head = clients.s3().head_object().bucket(&bucket).key(&key).send().await.map_err(crate::harness::sdk_error)?;
-                    (head.content_length().unwrap_or_default() > 0).then_some(()).ok_or_else(|| "CompleteMultipartUpload: ContentLength should be > 0".to_string())
+                    (head.content_length().unwrap_or_default() > 0).then_some(()).ok_or_else(|| "CompleteMultipartUpload: ContentLength should be > 0".to_string())?;
+                    // S3 gives a multipart object the MD5 of its parts' binary MD5s, suffixed with the part count (#2232):
+                    // md5(md5(5 MiB of "A"))-1 for UploadPart's single part.
+                    let want = "\"ad68245c78c0fbbbe87df8ecf43247bf-1\"";
+                    for (what, got) in [("ETag", resp.e_tag()), ("HeadObject ETag", head.e_tag())] {
+                        if got != Some(want) {
+                            return Err(format!("CompleteMultipartUpload: {what} = {got:?}, want {want}"));
+                        }
+                    }
+                    Ok(())
                 })
             }),
         );

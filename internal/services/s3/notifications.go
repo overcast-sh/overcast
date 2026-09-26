@@ -413,7 +413,7 @@ func buildEventBridgeEntry(p events.S3ObjectPayload) (events.BusEntry, bool) {
 		Object: eventBridgeObjectDetail{
 			Key:       p.Key,
 			Size:      p.Size,
-			ETag:      strings.Trim(p.ETag, `"`),
+			ETag:      unquoteETag(p.ETag),
 			VersionID: p.VersionID,
 			Sequencer: p.Sequencer,
 		},
