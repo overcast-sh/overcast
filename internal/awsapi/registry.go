@@ -31,6 +31,11 @@ type Claim struct {
 	Protocol     Protocol
 	ErrorProfile ErrorProfile
 	Ambiguous    bool
+	// CatchAll marks a REST binding whose whole URI is one root greedy label,
+	// "/{Label+}". It matches every path for its method, so a match says
+	// nothing about which service the caller addressed. MediaStore Data's
+	// object operations are the only such bindings outside S3 (#2264).
+	CatchAll bool
 }
 
 // Registry classifies modeled, non-S3 operations that no service handler has
@@ -191,19 +196,64 @@ func (r *Registry) ClaimRESTQuery(method, path, rawQuery string) (Claim, bool) {
 	}
 
 	op := restOperations[operationIndex]
-	profile := ErrorProfileJSON
-	if op.Protocol == ProtocolRESTXML {
-		profile = ErrorProfileXML
-	}
 	return Claim{
 		Service:      overcastService(op.ModelService),
 		ModelService: op.ModelService,
 		SigningName:  op.SigningName,
 		Operation:    op.Operation,
 		Protocol:     op.Protocol,
-		ErrorProfile: profile,
+		ErrorProfile: restErrorProfile(op.Protocol),
 		Ambiguous:    op.Ambiguous,
+		CatchAll:     isRootCatchAll(operationIndex),
 	}, true
+}
+
+// isRootCatchAll reports whether a matched REST operation is bound at the
+// root node's greedy edge with nothing after it: its URI is "/{Label+}".
+// A greedy label followed by a literal ends at a deeper node, so it keeps
+// the evidence its literal carries.
+func isRootCatchAll(operationIndex int) bool {
+	greedy := restTrieNodes[0].Greedy
+	if greedy < 0 {
+		return false
+	}
+	node := restTrieNodes[greedy]
+	return operationIndex >= node.OperationStart && operationIndex < node.OperationEnd
+}
+
+// SigningNameErrorProfile returns the error envelope of the REST protocol a
+// SigV4 signing name's modeled bindings speak, for answering a caller whose
+// request matched none of them. It reports false for a name no REST binding
+// declares; see IsSigningName for which names those are. Where a signing
+// name's bindings span both REST protocols, the first in generated order wins,
+// which TestSigningNameErrorProfile_isUnambiguous shows never happens today.
+func SigningNameErrorProfile(signingName string) (ErrorProfile, bool) {
+	profile, ok := signingNameProfiles[strings.ToLower(signingName)]
+	return profile, ok
+}
+
+// signingNameProfiles is built once from the generated REST operations, as
+// signingNames is.
+var signingNameProfiles = func() map[string]ErrorProfile {
+	profiles := make(map[string]ErrorProfile, 128)
+	for _, op := range restOperations {
+		if op.SigningName == "" {
+			continue
+		}
+		name := strings.ToLower(op.SigningName)
+		if _, seen := profiles[name]; seen {
+			continue
+		}
+		profiles[name] = restErrorProfile(op.Protocol)
+	}
+	return profiles
+}()
+
+func restErrorProfile(p Protocol) ErrorProfile {
+	if p == ProtocolRESTXML {
+		return ErrorProfileXML
+	}
+	return ErrorProfileJSON
 }
 
 // RESTOperation returns the operation the pinned models bind to this request

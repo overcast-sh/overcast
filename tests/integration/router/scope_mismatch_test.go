@@ -264,3 +264,79 @@ func TestScopeMismatch_unsignedS3VirtualHostRequest_remainsUnaffected(t *testing
 
 	helpers.AssertStatus(t, putResp, http.StatusOK)
 }
+
+// ── A root catch-all binding is no evidence of the caller's service (#2264) ──
+
+// TestScopeMismatch_rootCatchAllBinding_answersCallersOwn501 pins the half of
+// #2264 that is not S3 Tables' own. MediaStore Data binds GET, PUT, DELETE and
+// HEAD to "/{Path+}", the only root greedy bindings in the non-S3 models, so
+// the trie matches every path to MediaStore when no more specific binding does.
+// #887's rule treated that match as proof that the caller meant MediaStore. An
+// s3tables-signed GetTable from an SDK older than the pinned model then got
+// "Credential should be scoped to correct service: 'mediastore'", which
+// misattributes every signed call on a binding Overcast's models do not know,
+// retired or newer.
+//
+// A catch-all proves nothing about the caller, so the caller's own scope
+// decides. The request gets the generated 501 in its own service's protocol:
+// JSON for a restJson1 service, XML for a restXml one. That is still loud, and
+// it names no service the caller never addressed.
+func TestScopeMismatch_rootCatchAllBinding_answersCallersOwn501(t *testing.T) {
+	srv := helpers.NewTestServer(t)
+
+	for _, tc := range []struct {
+		scope  string
+		method string
+		xml    bool
+	}{
+		{"s3tables", http.MethodGet, false},
+		{"lambda", http.MethodPut, false},
+		{"route53", http.MethodDelete, true},
+	} {
+		t.Run(tc.scope, func(t *testing.T) {
+			// Given: a path that only MediaStore Data's /{Path+} binds
+			// When: a caller signed for another real service sends it
+			resp := scopeMismatchRequest(t, srv, tc.method, "/scope-probe-2264/one/two", tc.scope)
+			defer resp.Body.Close()
+
+			// Then: it gets its own service's 501, not a MediaStore scope error
+			helpers.AssertStatus(t, resp, http.StatusNotImplemented)
+			helpers.AssertHeader(t, resp, "x-emulator-unsupported", "true")
+			if tc.xml {
+				helpers.AssertXMLError(t, resp, "NotImplemented")
+				return
+			}
+			code, message := jsonErrorBody(t, resp)
+			if code != "NotImplemented" {
+				t.Errorf("code = %q, want NotImplemented (message: %s)", code, message)
+			}
+		})
+	}
+}
+
+// TestScopeMismatch_rootCatchAllBinding_ownersAndUnrecognisedScopesUnchanged
+// is the counterweight: the change reads the caller's scope only where it is
+// a real signing name that the catch-all does not belong to. A MediaStore
+// caller still reaches MediaStore's 501. An unrecognised scope and unsigned
+// traffic still reach S3.
+func TestScopeMismatch_rootCatchAllBinding_ownersAndUnrecognisedScopesUnchanged(t *testing.T) {
+	srv := helpers.NewTestServer(t)
+
+	// Given: a path that only MediaStore Data's /{Path+} binds
+	// When: MediaStore Data's own caller sends it
+	resp := scopeMismatchRequest(t, srv, http.MethodGet, "/scope-probe-2264/one/two", "mediastore")
+
+	// Then: it still reaches MediaStore's 501
+	helpers.AssertStatus(t, resp, http.StatusNotImplemented)
+	if code, _ := jsonErrorBody(t, resp); code != "NotImplemented" {
+		t.Errorf("mediastore caller: code = %q, want NotImplemented", code)
+	}
+
+	// And: a scope no pinned model declares, and unsigned traffic, still reach S3
+	for _, scope := range []string{"not-a-real-aws-service", ""} {
+		resp := scopeMismatchRequest(t, srv, http.MethodGet, "/scope-probe-2264/one/two", scope)
+		helpers.AssertStatus(t, resp, http.StatusNotFound)
+		helpers.AssertXMLError(t, resp, "NoSuchBucket")
+		resp.Body.Close()
+	}
+}

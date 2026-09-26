@@ -59,7 +59,40 @@ func restOperation(svc string, r *http.Request) string {
 	if operation, ok := overcastRESTOperation(svc, r.Method, r.URL.Path); ok {
 		return operation
 	}
-	return modeledRESTOperation(awsapiServiceKey(svc), r)
+	if operation := modeledRESTOperation(awsapiServiceKey(svc), r); operation != "" {
+		return operation
+	}
+	return retiredRESTOperation(svc, r)
+}
+
+// retiredRESTOperation names the bindings Overcast still serves after the
+// pinned model moved the operation elsewhere. SDKs generated before the move
+// keep sending the old binding, and AWS keeps answering them. The model no
+// longer describes it, so it is listed here, and it is consulted only after
+// the model has had its say.
+//
+// Naming it is load-bearing for authorization, not only for the log label:
+// IAMEnforce lets an unnamed request through, so an unnamed retired binding
+// would be a way around a policy that denies the operation on its current one.
+//
+// One binding has moved so far: S3 Tables' GetTable, from
+// GET /tables/{tableBucketARN}/{namespace}/{name} to GET /get-table on
+// 2025-06-06 (#2264; see s3tables.fillLegacyGetTable). The escaped path is
+// read because the bucket ARN label carries a percent-encoded '/'.
+func retiredRESTOperation(svc string, r *http.Request) string {
+	if svc != "s3tables" || r.Method != http.MethodGet {
+		return ""
+	}
+	rest, found := strings.CutPrefix(r.URL.EscapedPath(), "/tables/")
+	if !found {
+		return ""
+	}
+	bucket, rest, _ := strings.Cut(rest, "/")
+	namespace, name, _ := strings.Cut(rest, "/")
+	if bucket == "" || namespace == "" || name == "" || strings.IndexByte(name, '/') >= 0 {
+		return ""
+	}
+	return "GetTable"
 }
 
 // modeledRESTOperation walks the generated trie for a request, trying the
@@ -134,8 +167,8 @@ const lambdaFunctionResourcePrefix = "/_overcast/lambda/functions/"
 // AWS API port — source-code storage for the function editor, saved test
 // events for the Test tab, and an SSE invoke that streams progress — so there
 // is no `@http` trait to generate them from and they have to be listed. This
-// is the only hand-written path mapping left, and it is shared: the logger's
-// label and IAM's action both come from here.
+// is one of two hand-written path mappings left, beside retiredRESTOperation,
+// and it is shared: the logger's label and IAM's action both come from here.
 //
 // See internal/services/lambda/service.go's RegisterRoutes, which is where
 // these routes are registered and the only place they can be added.
