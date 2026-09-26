@@ -6,13 +6,9 @@ package s3
 // handler.go.
 
 import (
-	"crypto/md5"
 	"encoding/xml"
 	"fmt"
-	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -176,24 +172,13 @@ func (h *Handler) UploadPart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	body, _ := maybeDecodeAWSChunked(r)
-	etag, n, streamErr := h.store.putPartStream(uploadID, partNumber, body)
-	if streamErr != nil {
-		protocol.WriteXMLError(w, r, protocol.Wrap(protocol.ErrInternalError, streamErr))
-		return
-	}
-
-	part := &Part{
-		PartNumber:   partNumber,
-		ETag:         etag,
-		Size:         n,
-		LastModified: h.clk.Now().UTC(),
-	}
-	if aerr := h.store.savePart(r.Context(), uploadID, part); aerr != nil {
+	part := &Part{PartNumber: partNumber, LastModified: h.clk.Now().UTC()}
+	if aerr := h.store.storePart(r.Context(), uploadID, part, body); aerr != nil {
 		protocol.WriteXMLError(w, r, aerr)
 		return
 	}
 
-	w.Header().Set("ETag", etag)
+	w.Header().Set("ETag", part.ETag)
 	protocol.WriteEmpty(w, r, http.StatusOK)
 }
 
@@ -277,54 +262,11 @@ func (h *Handler) CompleteMultipartUpload(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Stream all part bodies to the final object body path, computing MD5.
-	finalPath := h.store.bodyPath(bucket, key, obj.VersionID)
-	if mkdirErr := os.MkdirAll(filepath.Dir(finalPath), 0o755); mkdirErr != nil {
-		protocol.WriteXMLError(w, r, protocol.Wrap(protocol.ErrInternalError, mkdirErr))
-		return
-	}
-
-	finalFile, createErr := os.Create(finalPath)
-	if createErr != nil {
-		protocol.WriteXMLError(w, r, protocol.Wrap(protocol.ErrInternalError, createErr))
-		return
-	}
-
-	mhash := md5.New()
-	mw := io.MultiWriter(finalFile, mhash)
-	var totalSize int64
-
-	for _, p := range orderedParts {
-		pf, openErr := h.store.openPartBody(uploadID, p.PartNumber)
-		if openErr != nil {
-			finalFile.Close()
-			protocol.WriteXMLError(w, r, protocol.Wrap(protocol.ErrInternalError, openErr))
-			return
-		}
-		n, copyErr := io.Copy(mw, pf)
-		pf.Close()
-		if copyErr != nil {
-			finalFile.Close()
-			protocol.WriteXMLError(w, r, protocol.Wrap(protocol.ErrInternalError, copyErr))
-			return
-		}
-		totalSize += n
-	}
-
-	if cerr := finalFile.Close(); cerr != nil {
-		protocol.WriteXMLError(w, r, protocol.Wrap(protocol.ErrInternalError, cerr))
-		return
-	}
-
-	etag := fmt.Sprintf(`"%x-%d"`, mhash.Sum(nil), len(orderedParts))
-
-	// Save final object metadata.
-	obj.ContentLength, obj.ETag = totalSize, etag
-	if aerr := h.store.putObjectMeta(r.Context(), obj); aerr != nil {
-		protocol.WriteXMLError(w, r, aerr)
-		return
-	}
-	if aerr := h.commitVersion(r.Context(), b, obj); aerr != nil {
+	// Stream the parts, in order, into the object's body, computing its MD5
+	// on the way. A failure part way leaves the key as it was and the upload
+	// intact, so the client can retry the completion.
+	commit := func() *protocol.AWSError { return h.commitObject(r.Context(), b, obj) }
+	if aerr := h.store.storeObject(obj, h.store.partsOf(uploadID, orderedParts), multipartETag(len(orderedParts)), commit); aerr != nil {
 		protocol.WriteXMLError(w, r, aerr)
 		return
 	}
@@ -334,7 +276,7 @@ func (h *Handler) CompleteMultipartUpload(w http.ResponseWriter, r *http.Request
 	_ = h.store.deleteMultipartUpload(r.Context(), uploadID) // best-effort cleanup
 
 	// Emit S3ObjectCreated event.
-	h.publishObjectEvent(r.Context(), events.S3ObjectCreated, obj, stamp, "ObjectCreated:CompleteMultipartUpload", totalSize, etag)
+	h.publishObjectEvent(r.Context(), events.S3ObjectCreated, obj, stamp, "ObjectCreated:CompleteMultipartUpload", obj.ContentLength, obj.ETag)
 
 	setVersionIDHeader(w, obj)
 	location := fmt.Sprintf("/%s/%s", bucket, key)
@@ -343,8 +285,16 @@ func (h *Handler) CompleteMultipartUpload(w http.ResponseWriter, r *http.Request
 		Location: location,
 		Bucket:   bucket,
 		Key:      key,
-		ETag:     etag,
+		ETag:     obj.ETag,
 	})
+}
+
+// multipartETag is the ETag Overcast gives an object assembled from parts: the
+// MD5 of its bytes, suffixed with the number of parts. S3 hashes the parts'
+// binary MD5s rather than the bytes, so the digest differs from AWS's while
+// the "-N" shape matches (#2232).
+func multipartETag(parts int) func(bodyDigest) string {
+	return func(d bodyDigest) string { return fmt.Sprintf(`"%x-%d"`, d.md5, parts) }
 }
 
 // minMultipartPartSize is AWS's floor for every part except the last: 5 MiB.

@@ -39,23 +39,31 @@ var (
 // ---- Fixtures --------------------------------------------------------------
 
 type inProcessFixture struct {
-	svc   *Service
-	bus   *events.Bus
-	clock *clock.Mock
+	svc     *Service
+	bus     *events.Bus
+	clock   *clock.Mock
+	dataDir string
 }
 
 func newInProcessFixture(t *testing.T) *inProcessFixture {
+	t.Helper()
+	return newInProcessFixtureOn(t, state.NewMemoryStore())
+}
+
+// newInProcessFixtureOn is newInProcessFixture over a caller-supplied store,
+// for tests that run against every backend or inject a fault into one.
+func newInProcessFixtureOn(t *testing.T, store state.Store) *inProcessFixture {
 	t.Helper()
 	cfg := &config.Config{Region: "us-east-1", AccountID: "000000000000", DataDir: t.TempDir()}
 	mock := clock.NewMock()
 	mock.Set(time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC))
 	bus := events.NewBus()
-	svc := New(cfg, state.NewMemoryStore(), zap.NewNop(), mock, bus)
+	svc := New(cfg, store, zap.NewNop(), mock, bus)
 	t.Cleanup(func() {
 		svc.Stop(context.Background())
 		bus.Stop()
 	})
-	return &inProcessFixture{svc: svc, bus: bus, clock: mock}
+	return &inProcessFixture{svc: svc, bus: bus, clock: mock, dataDir: cfg.DataDir}
 }
 
 func (f *inProcessFixture) ensureBucket(t *testing.T, name string) {

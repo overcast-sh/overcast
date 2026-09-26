@@ -2,13 +2,13 @@ package s3
 
 import (
 	"context"
-	"crypto/md5"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"hash"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -172,18 +172,19 @@ func (o *Object) effectiveStorageClass() string {
 // Services should go through this rather than calling state.Store directly,
 // so that serialisation logic lives in one place.
 //
-// Object bodies are stored as files on disk under bodyDir rather than in the
-// state store. This avoids unbounded memory growth when storing large objects
-// and allows streaming reads without loading the full body into the heap.
+// Object bodies are stored as files on disk under <dataDir>/s3-bodies rather
+// than in the state store (see body_files.go). This avoids unbounded memory
+// growth when storing large objects and allows streaming reads without loading
+// the full body into the heap.
 type s3Store struct {
-	store   state.Store
-	bodyDir string // <dataDir>/s3-bodies
+	store  state.Store
+	bodies *bodyFiles
 }
 
 func newS3Store(store state.Store, dataDir string) *s3Store {
 	return &s3Store{
-		store:   store,
-		bodyDir: filepath.Join(dataDir, "s3-bodies"),
+		store:  store,
+		bodies: newBodyFiles(filepath.Join(dataDir, "s3-bodies")),
 	}
 }
 
@@ -235,7 +236,7 @@ func (s *s3Store) deleteBucket(ctx context.Context, name string) *protocol.AWSEr
 	}
 	// Remove the on-disk body directory for the bucket (and any remaining
 	// body files). Ignore errors — the directory may not exist.
-	_ = os.RemoveAll(filepath.Join(s.bodyDir, name))
+	_ = s.bodies.removeAll(name)
 	return nil
 }
 
@@ -309,52 +310,32 @@ func (s *s3Store) lookupObjectMeta(ctx context.Context, bucket, key string) (*Ob
 // openBody returns an open file handle for the given version's body.
 // The caller is responsible for closing it.
 func (s *s3Store) openBody(obj *Object) (*os.File, *protocol.AWSError) {
-	f, err := os.Open(s.bodyPath(obj.Bucket, obj.Key, obj.VersionID))
+	f, err := s.bodies.open(bodyRel(obj.Bucket, obj.Key, obj.VersionID))
 	if err != nil {
 		return nil, protocol.Wrap(protocol.ErrInternalError, fmt.Errorf("s3: open body %s/%s: %w", obj.Bucket, obj.Key, err))
 	}
 	return f, nil
 }
 
-// putObjectStream streams the request body to disk while computing size and
-// MD5 in a single pass, then persists metadata to the store. This avoids
-// buffering the entire body in memory.
-func (s *s3Store) putObjectStream(ctx context.Context, obj *Object, body io.Reader) (etag string, n int64, aerr *protocol.AWSError) {
-	p := s.bodyPath(obj.Bucket, obj.Key, obj.VersionID)
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-		return "", 0, protocol.Wrap(protocol.ErrInternalError, fmt.Errorf("s3: create body dir for %s/%s: %w", obj.Bucket, obj.Key, err))
+// bodyOf is the bodyFill that copies an existing version's body, for a write
+// whose bytes come from another object.
+func (s *s3Store) bodyOf(src *Object) bodyFill {
+	return func(w io.Writer) (int64, error) {
+		return s.bodies.copyTo(w, bodyRel(src.Bucket, src.Key, src.VersionID))
 	}
+}
 
-	f, err := os.Create(p)
-	if err != nil {
-		return "", 0, protocol.Wrap(protocol.ErrInternalError, fmt.Errorf("s3: create body file %s/%s: %w", obj.Bucket, obj.Key, err))
-	}
-
-	var h hash.Hash = md5.New()
-	w := io.MultiWriter(f, h)
-
-	n, err = io.Copy(w, body)
-	// Close file before checking io.Copy error so we don't leak the fd.
-	if cerr := f.Close(); cerr != nil && err == nil {
-		err = cerr
-	}
-	if err != nil {
-		os.Remove(p) // best-effort cleanup
-		return "", 0, protocol.Wrap(protocol.ErrInternalError, fmt.Errorf("s3: stream body %s/%s: %w", obj.Bucket, obj.Key, err))
-	}
-
-	etag = fmt.Sprintf(`"%x"`, h.Sum(nil))
-	obj.ETag = etag
-	obj.ContentLength = n
-
-	raw, err := json.Marshal(obj)
-	if err != nil {
-		return "", 0, protocol.Wrap(protocol.ErrInternalError, err)
-	}
-	if err := s.store.Set(ctx, nsObjects, objectStoreKey(obj.Bucket, obj.Key), string(raw)); err != nil {
-		return "", 0, protocol.Wrap(protocol.ErrInternalError, err)
-	}
-	return etag, n, nil
+// storeObject writes obj's body from fill and then runs commit to store the
+// records that make it the key's current object, as one step: obj takes its
+// ETag (from etagOf) and ContentLength from the body that was written, and if
+// the body cannot be written or commit fails, the key keeps the object it had,
+// byte for byte. See bodyFiles.replace. Streaming means the body is never
+// buffered in memory.
+func (s *s3Store) storeObject(obj *Object, fill bodyFill, etagOf func(bodyDigest) string, commit func() *protocol.AWSError) *protocol.AWSError {
+	return s.bodies.replace(bodyRel(obj.Bucket, obj.Key, obj.VersionID), fill, func(d bodyDigest) *protocol.AWSError {
+		obj.ETag, obj.ContentLength = etagOf(d), d.size
+		return commit()
+	})
 }
 
 // putObjectMeta persists object metadata changes (e.g. tags) without touching
@@ -375,18 +356,27 @@ func (s *s3Store) putObjectMeta(ctx context.Context, obj *Object) *protocol.AWSE
 // unversioned path: a key in a versioned bucket is never removed this way,
 // because a delete there either adds a delete marker or removes one specific
 // version — see handler_object.go's DeleteObject.
+//
+// It holds the body path's lock, so a concurrent write of the key either
+// lands entirely before the delete or entirely after it.
 func (s *s3Store) deleteObject(ctx context.Context, bucket, key string) *protocol.AWSError {
-	if err := s.store.Delete(ctx, nsObjects, objectStoreKey(bucket, key)); err != nil {
-		return protocol.Wrap(protocol.ErrInternalError, err)
-	}
-	// Remove body file — ignore "not found" since DeleteObject is idempotent.
-	p := s.bodyPath(bucket, key, "")
-	if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
-		return protocol.Wrap(protocol.ErrInternalError, fmt.Errorf("s3: remove body %s/%s: %w", bucket, key, err))
+	rel := bodyRel(bucket, key, "")
+	aerr := s.bodies.locked(rel, func() *protocol.AWSError {
+		if err := s.store.Delete(ctx, nsObjects, objectStoreKey(bucket, key)); err != nil {
+			return protocol.Wrap(protocol.ErrInternalError, err)
+		}
+		// Remove body file — ignore "not found" since DeleteObject is idempotent.
+		if err := s.bodies.remove(rel); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return protocol.Wrap(protocol.ErrInternalError, fmt.Errorf("s3: remove body %s/%s: %w", bucket, key, err))
+		}
+		return nil
+	})
+	if aerr != nil {
+		return aerr
 	}
 	// Remove the bucket directory if it is now empty; ignore errors since
 	// other objects may still be present or the directory may not exist.
-	_ = os.Remove(filepath.Dir(p))
+	_ = s.bodies.remove(bucket)
 	return nil
 }
 
@@ -402,7 +392,7 @@ func (s *s3Store) deleteObjectRecord(ctx context.Context, bucket, key string) *p
 
 // ---- Body file helpers -----------------------------------------------------
 
-// bodyPath returns the on-disk path for one version's body.
+// bodyRel returns one version's body path, relative to the body directory.
 //
 // Uses SHA-256 of the key to avoid filesystem issues with special characters,
 // deeply nested paths, or path traversal. The version id is appended for every
@@ -410,47 +400,13 @@ func (s *s3Store) deleteObjectRecord(ctx context.Context, bucket, key string) *p
 // object's body has always been — a key has at most one null version, so there
 // is nothing to disambiguate, and objects written before version history
 // existed stay readable without moving a byte.
-func (s *s3Store) bodyPath(bucket, key, versionID string) string {
+func bodyRel(bucket, key, versionID string) string {
 	h := sha256.Sum256([]byte(key))
 	name := hex.EncodeToString(h[:])
 	if versionID != "" {
 		name += "." + versionID
 	}
-	return filepath.Join(s.bodyDir, bucket, name)
-}
-
-// copyBody copies one version's body file to another while computing the MD5
-// ETag in a single streaming pass. Returns the ETag and byte count.
-func (s *s3Store) copyBody(src, dst *Object) (etag string, n int64, err error) {
-	srcBucket, srcKey, dstBucket, dstKey := src.Bucket, src.Key, dst.Bucket, dst.Key
-	srcFile, err := os.Open(s.bodyPath(srcBucket, srcKey, src.VersionID))
-	if err != nil {
-		return "", 0, fmt.Errorf("s3: open source body %s/%s: %w", srcBucket, srcKey, err)
-	}
-	defer srcFile.Close()
-
-	dstPath := s.bodyPath(dstBucket, dstKey, dst.VersionID)
-	if err := os.MkdirAll(filepath.Dir(dstPath), 0o755); err != nil {
-		return "", 0, fmt.Errorf("s3: create body dir for %s/%s: %w", dstBucket, dstKey, err)
-	}
-
-	dstFile, err := os.Create(dstPath)
-	if err != nil {
-		return "", 0, fmt.Errorf("s3: create dest body %s/%s: %w", dstBucket, dstKey, err)
-	}
-
-	h := md5.New()
-	w := io.MultiWriter(dstFile, h)
-	n, err = io.Copy(w, srcFile)
-	if cerr := dstFile.Close(); cerr != nil && err == nil {
-		err = cerr
-	}
-	if err != nil {
-		os.Remove(dstPath)
-		return "", 0, fmt.Errorf("s3: copy body %s/%s -> %s/%s: %w", srcBucket, srcKey, dstBucket, dstKey, err)
-	}
-
-	return fmt.Sprintf(`"%x"`, h.Sum(nil)), n, nil
+	return filepath.Join(bucket, name)
 }
 
 // listObjects returns all objects in bucket whose keys start with prefix.
@@ -705,9 +661,14 @@ func partStoreKey(uploadID string, partNumber int) string {
 	return fmt.Sprintf("%s/%d", uploadID, partNumber)
 }
 
-// partBodyPath returns the on-disk path for a part body.
-func (s *s3Store) partBodyPath(uploadID string, partNumber int) string {
-	return filepath.Join(s.bodyDir, "multipart", uploadID, fmt.Sprintf("%d", partNumber))
+// uploadRel is an upload's part directory, relative to the body directory.
+func uploadRel(uploadID string) string {
+	return filepath.Join("multipart", uploadID)
+}
+
+// partRel is a part body's path, relative to the body directory.
+func partRel(uploadID string, partNumber int) string {
+	return filepath.Join(uploadRel(uploadID), strconv.Itoa(partNumber))
 }
 
 func (s *s3Store) createMultipartUpload(ctx context.Context, upload *MultipartUpload) *protocol.AWSError {
@@ -765,29 +726,15 @@ func (s *s3Store) listMultipartUploads(ctx context.Context, bucket string) ([]*M
 	return result, nil
 }
 
-// putPartStream streams the part body to disk and returns the ETag and size.
-func (s *s3Store) putPartStream(uploadID string, partNumber int, body io.Reader) (etag string, n int64, err error) {
-	p := s.partBodyPath(uploadID, partNumber)
-	if mkErr := os.MkdirAll(filepath.Dir(p), 0o755); mkErr != nil {
-		return "", 0, fmt.Errorf("s3: create part dir %s/%d: %w", uploadID, partNumber, mkErr)
-	}
-
-	f, fErr := os.Create(p)
-	if fErr != nil {
-		return "", 0, fmt.Errorf("s3: create part file %s/%d: %w", uploadID, partNumber, fErr)
-	}
-
-	h := md5.New()
-	w := io.MultiWriter(f, h)
-	n, err = io.Copy(w, body)
-	if cerr := f.Close(); cerr != nil && err == nil {
-		err = cerr
-	}
-	if err != nil {
-		os.Remove(p)
-		return "", 0, fmt.Errorf("s3: stream part %s/%d: %w", uploadID, partNumber, err)
-	}
-	return fmt.Sprintf(`"%x"`, h.Sum(nil)), n, nil
+// storePart writes a part's body and then its record, as storeObject does an
+// object's: part takes its ETag and Size from the body written, and a part
+// number that is uploaded again keeps its previous part unless the new one is
+// stored in full.
+func (s *s3Store) storePart(ctx context.Context, uploadID string, part *Part, body io.Reader) *protocol.AWSError {
+	return s.bodies.replace(partRel(uploadID, part.PartNumber), copyFrom(body), func(d bodyDigest) *protocol.AWSError {
+		part.ETag, part.Size = d.etag(), d.size
+		return s.savePart(ctx, uploadID, part)
+	})
 }
 
 // savePart persists part metadata to the state store.
@@ -838,14 +785,24 @@ func (s *s3Store) deleteAllParts(ctx context.Context, uploadID string) *protocol
 		}
 	}
 	// Remove all part body files — ignore OS-level errors since they are non-critical.
-	dir := filepath.Join(s.bodyDir, "multipart", uploadID)
-	os.RemoveAll(dir)
+	_ = s.bodies.removeAll(uploadRel(uploadID))
 	return nil
 }
 
-// openPartBody opens a part body file for reading. Caller must close.
-func (s *s3Store) openPartBody(uploadID string, partNumber int) (*os.File, error) {
-	return os.Open(s.partBodyPath(uploadID, partNumber))
+// partsOf is the bodyFill that concatenates an upload's parts in the order
+// given, opening one part file at a time.
+func (s *s3Store) partsOf(uploadID string, parts []*Part) bodyFill {
+	return func(w io.Writer) (int64, error) {
+		var total int64
+		for _, p := range parts {
+			n, err := s.bodies.copyTo(w, partRel(uploadID, p.PartNumber))
+			total += n
+			if err != nil {
+				return total, err
+			}
+		}
+		return total, nil
+	}
 }
 
 // ---- Multipart-specific errors ---------------------------------------------

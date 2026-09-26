@@ -70,12 +70,15 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"math/rand/v2"
 	"net/http"
-	"os"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/overcast-sh/overcast/internal/protocol"
 	"github.com/overcast-sh/overcast/internal/state"
@@ -222,7 +225,7 @@ func splitVersionSuffix(suffix string) (key, seq string, ok bool) {
 // ---- Store access ----------------------------------------------------------
 
 // putVersion persists one version record. The body, when there is one, is
-// written by putObjectStream under the version's own body path.
+// written by storeObject under the version's own body path.
 func (s *s3Store) putVersion(ctx context.Context, obj *Object) *protocol.AWSError {
 	raw, err := json.Marshal(obj)
 	if err != nil {
@@ -234,15 +237,32 @@ func (s *s3Store) putVersion(ctx context.Context, obj *Object) *protocol.AWSErro
 	return nil
 }
 
-// deleteVersion removes one version record and its body file.
+// deleteVersion removes one version record and its body file, under the body
+// path's lock (see bodyFiles.paths).
 func (s *s3Store) deleteVersion(ctx context.Context, obj *Object) *protocol.AWSError {
-	if err := s.store.Delete(ctx, nsVersions, versionStoreKey(obj.Bucket, obj.Key, obj.Seq)); err != nil {
-		return protocol.Wrap(protocol.ErrInternalError, err)
+	return s.bodies.locked(bodyRel(obj.Bucket, obj.Key, obj.VersionID), func() *protocol.AWSError {
+		return s.dropVersion(ctx, obj)
+	})
+}
+
+// dropVersion is deleteVersion for a caller that already holds the lock.
+func (s *s3Store) dropVersion(ctx context.Context, obj *Object) *protocol.AWSError {
+	if aerr := s.deleteVersionRecord(ctx, obj); aerr != nil {
+		return aerr
 	}
 	if obj.DeleteMarker {
 		return nil // a delete marker has no body
 	}
-	if err := os.Remove(s.bodyPath(obj.Bucket, obj.Key, obj.VersionID)); err != nil && !os.IsNotExist(err) {
+	if err := s.bodies.remove(bodyRel(obj.Bucket, obj.Key, obj.VersionID)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return protocol.Wrap(protocol.ErrInternalError, err)
+	}
+	return nil
+}
+
+// deleteVersionRecord removes one version record and leaves its body path
+// alone, for a version whose body a newer one has already replaced on disk.
+func (s *s3Store) deleteVersionRecord(ctx context.Context, obj *Object) *protocol.AWSError {
+	if err := s.store.Delete(ctx, nsVersions, versionStoreKey(obj.Bucket, obj.Key, obj.Seq)); err != nil {
 		return protocol.Wrap(protocol.ErrInternalError, err)
 	}
 	return nil
@@ -448,22 +468,49 @@ func (h *Handler) beginVersion(ctx context.Context, b *Bucket, obj *Object, now 
 	if aerr := h.recordExistingVersion(ctx, prev); aerr != nil {
 		return stamp, aerr
 	}
-
-	if b.VersioningStatus == versioningSuspended {
-		if aerr := h.discardNullVersion(ctx, obj.Bucket, obj.Key); aerr != nil {
-			return stamp, aerr
-		}
-	}
 	return stamp, nil
 }
 
-// commitVersion records obj in the key's history once its body and current-
-// version record are in place. A no-op for an unversioned bucket.
-func (h *Handler) commitVersion(ctx context.Context, b *Bucket, obj *Object) *protocol.AWSError {
-	if !b.versioned() {
-		return nil
+// commitObject stores the records that make obj, whose body (if it has one) is
+// already in place, the key's current version: its history record first, so
+// the history never lacks the current version; then the current-version
+// record, which is what makes it visible; then, in a version-suspended bucket,
+// the removal of the null version it replaced.
+//
+// It runs under obj's body-path lock — as bodyFiles.replace's commit, or
+// through commitMarker — because every null version shares one body path. A
+// failure before obj is visible takes back the history record it added, so the
+// key is left exactly as it was (#2192); a failure after it is logged rather
+// than returned, because obj has been stored and a caller told otherwise would
+// have its body undone underneath a record that describes it.
+func (h *Handler) commitObject(ctx context.Context, b *Bucket, obj *Object) *protocol.AWSError {
+	if b.versioned() {
+		if aerr := h.store.putVersion(ctx, obj); aerr != nil {
+			return aerr
+		}
 	}
-	return h.store.putVersion(ctx, obj)
+	if aerr := h.store.putObjectMeta(ctx, obj); aerr != nil {
+		if b.versioned() {
+			_ = h.store.deleteVersionRecord(ctx, obj)
+		}
+		return aerr
+	}
+	if b.VersioningStatus == versioningSuspended {
+		if aerr := h.replaceNullVersion(ctx, obj); aerr != nil {
+			h.log.Warn("stored a null version but could not remove the one it replaced",
+				zap.String("bucket", obj.Bucket), zap.String("key", obj.Key), zap.Error(aerr))
+		}
+	}
+	return nil
+}
+
+// commitMarker commits a delete marker, which has no body, under the lock of
+// the body path its version maps to: in a suspended bucket that is the null
+// version's, whose body the marker's commit removes.
+func (h *Handler) commitMarker(ctx context.Context, b *Bucket, marker *Object) *protocol.AWSError {
+	return h.store.bodies.locked(bodyRel(marker.Bucket, marker.Key, marker.VersionID), func() *protocol.AWSError {
+		return h.commitObject(ctx, b, marker)
+	})
 }
 
 // saveCurrentObject persists a change to the key's current version and keeps
@@ -501,22 +548,31 @@ func (o *Object) headerVersionID() string {
 	return o.wireVersionID()
 }
 
-// discardNullVersion removes the key's existing null version, if it has one.
+// replaceNullVersion removes the null version that obj, a new null version
+// already committed, has replaced. The caller holds the null body path's lock.
 //
 // A version-suspended bucket keeps at most one null version per key: AWS
 // documents that storing an object in a suspended bucket "removes the existing
 // object with a version ID of null" and replaces it. Every other version is
 // left alone.
-func (h *Handler) discardNullVersion(ctx context.Context, bucket, key string) *protocol.AWSError {
-	versions, aerr := h.store.listKeyVersions(ctx, bucket, key)
+//
+// Every null version keeps its body at the same path, so a new object's body
+// has already taken the old one's place on disk and only the old record goes.
+// A delete marker has no body, so the old body goes with its record.
+func (h *Handler) replaceNullVersion(ctx context.Context, obj *Object) *protocol.AWSError {
+	versions, aerr := h.store.listKeyVersions(ctx, obj.Bucket, obj.Key)
 	if aerr != nil {
 		return aerr
 	}
+	drop := h.store.deleteVersionRecord
+	if obj.DeleteMarker {
+		drop = h.store.dropVersion
+	}
 	for _, v := range versions {
-		if !v.isNullVersion() {
+		if !v.isNullVersion() || v.Seq == obj.Seq {
 			continue
 		}
-		if aerr := h.store.deleteVersion(ctx, v); aerr != nil {
+		if aerr := drop(ctx, v); aerr != nil {
 			return aerr
 		}
 	}

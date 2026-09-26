@@ -146,9 +146,8 @@ func (h *Handler) PutObject(w http.ResponseWriter, r *http.Request) {
 	if cond.active() {
 		// Held until the handler returns, so the condition and the write it
 		// guards are one step against any other conditional writer for this
-		// key. It covers the body stream too: for an unversioned bucket the
-		// body file *is* the key's current bytes, so a check that released
-		// before the stream would let a loser overwrite the winner's object.
+		// key: a check that released before the write committed would let a
+		// loser overwrite the winner's object.
 		defer h.objectLocks.Lock(objectStoreKey(bucket, key))()
 		if aerr := h.checkConditionalWrite(r.Context(), cond, bucket, key); aerr != nil {
 			protocol.WriteXMLError(w, r, aerr)
@@ -196,23 +195,21 @@ func (h *Handler) PutObject(w http.ResponseWriter, r *http.Request) {
 // obj: it gives obj the key's next version identity, streams body to disk
 // while computing the MD5 ETag in one pass (the body is never fully
 // buffered), records the version, and publishes the ObjectCreated:Put event
-// the bucket's notifications are delivered from. The HTTP handler and the
-// in-process Service.PutObjectStream both call it, so an internal write is
+// the bucket's notifications are delivered from. A body that fails part way
+// leaves the key as it was. The HTTP handler and the in-process
+// Service.PutObjectStream both call it, so an internal write is
 // indistinguishable from a client's.
 func (h *Handler) writeObject(ctx context.Context, b *Bucket, obj *Object, body io.Reader) (string, *protocol.AWSError) {
 	stamp, aerr := h.beginVersion(ctx, b, obj, obj.LastModified)
 	if aerr != nil {
 		return "", aerr
 	}
-	etag, size, aerr := h.store.putObjectStream(ctx, obj, body)
-	if aerr != nil {
+	commit := func() *protocol.AWSError { return h.commitObject(ctx, b, obj) }
+	if aerr := h.store.storeObject(obj, copyFrom(body), bodyDigest.etag, commit); aerr != nil {
 		return "", aerr
 	}
-	if aerr := h.commitVersion(ctx, b, obj); aerr != nil {
-		return "", aerr
-	}
-	h.publishObjectEvent(ctx, events.S3ObjectCreated, obj, stamp, "ObjectCreated:Put", size, etag)
-	return etag, nil
+	h.publishObjectEvent(ctx, events.S3ObjectCreated, obj, stamp, "ObjectCreated:Put", obj.ContentLength, obj.ETag)
+	return obj.ETag, nil
 }
 
 // publishObjectEvent emits one object mutation onto the bus with the version
@@ -839,10 +836,7 @@ func (h *Handler) createDeleteMarker(r *http.Request, b *Bucket, key string) (de
 	if aerr != nil {
 		return deleteOutcome{}, aerr
 	}
-	if aerr := h.store.putObjectMeta(ctx, marker); aerr != nil {
-		return deleteOutcome{}, aerr
-	}
-	if aerr := h.commitVersion(ctx, b, marker); aerr != nil {
+	if aerr := h.commitMarker(ctx, b, marker); aerr != nil {
 		return deleteOutcome{}, aerr
 	}
 
@@ -941,7 +935,7 @@ func (h *Handler) CopyObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Load source metadata only — body is streamed via copyBody.
+	// Load source metadata only — the body is streamed by storeObject.
 	var src *Object
 	if srcVersionID == "" {
 		src, aerr = h.readObjectMeta(r.Context(), srcBucket, srcKey)
@@ -984,25 +978,17 @@ func (h *Handler) CopyObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Stream source body to destination file, computing MD5 incrementally.
-	etag, n, err := h.store.copyBody(src, dest)
-	if err != nil {
-		protocol.WriteXMLError(w, r, protocol.Wrap(protocol.ErrInternalError, err))
-		return
-	}
-	dest.ETag, dest.ContentLength = etag, n
-
-	// Persist destination metadata (body already on disk from copyBody).
-	if aerr := h.store.putObjectMeta(r.Context(), dest); aerr != nil {
-		protocol.WriteXMLError(w, r, aerr)
-		return
-	}
-	if aerr := h.commitVersion(r.Context(), destB, dest); aerr != nil {
+	// Stream the source body to the destination, computing its MD5 on the
+	// way. The source is read in full before the destination changes, which
+	// is what lets a copy onto itself (the documented way to replace an
+	// object's metadata) keep its bytes.
+	commit := func() *protocol.AWSError { return h.commitObject(r.Context(), destB, dest) }
+	if aerr := h.store.storeObject(dest, h.store.bodyOf(src), bodyDigest.etag, commit); aerr != nil {
 		protocol.WriteXMLError(w, r, aerr)
 		return
 	}
 
-	h.publishObjectEvent(r.Context(), events.S3ObjectCreated, dest, stamp, "ObjectCreated:Copy", n, etag)
+	h.publishObjectEvent(r.Context(), events.S3ObjectCreated, dest, stamp, "ObjectCreated:Copy", dest.ContentLength, dest.ETag)
 
 	setVersionIDHeader(w, dest)
 	if src.Seq != "" {
@@ -1012,7 +998,7 @@ func (h *Handler) CopyObject(w http.ResponseWriter, r *http.Request) {
 
 	protocol.WriteXML(w, r, http.StatusOK, &copyObjectResponse{
 		LastModified: now,
-		ETag:         etag,
+		ETag:         dest.ETag,
 	})
 }
 
