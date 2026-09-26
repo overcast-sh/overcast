@@ -20,6 +20,9 @@ mod scenarios_authored_eventbridge_events_gen;
 #[path = "scenarios_authored_eventbridge_rules_gen.rs"]
 mod scenarios_authored_eventbridge_rules_gen;
 
+#[path = "scenarios_authored_iam_groups_gen.rs"]
+mod scenarios_authored_iam_groups_gen;
+
 #[path = "scenarios_authored_iam_policies_gen.rs"]
 mod scenarios_authored_iam_policies_gen;
 
@@ -83,6 +86,7 @@ pub fn scenario_groups(clients: &Arc<AwsClients>) -> Vec<Box<dyn ServiceGroup>> 
         Box::new(scenarios_authored_eventbridge_buses_gen::ScenariosAuthoredEventbridgeBuses::new(clients)),
         Box::new(scenarios_authored_eventbridge_events_gen::ScenariosAuthoredEventbridgeEvents::new(clients)),
         Box::new(scenarios_authored_eventbridge_rules_gen::ScenariosAuthoredEventbridgeRules::new(clients)),
+        Box::new(scenarios_authored_iam_groups_gen::ScenariosAuthoredIamGroups::new(clients)),
         Box::new(scenarios_authored_iam_policies_gen::ScenariosAuthoredIamPolicies::new(clients)),
         Box::new(scenarios_authored_iam_roles_gen::ScenariosAuthoredIamRoles::new(clients)),
         Box::new(scenarios_authored_iam_users_gen::ScenariosAuthoredIamUsers::new(clients)),
