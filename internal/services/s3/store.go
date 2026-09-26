@@ -327,13 +327,24 @@ func (s *s3Store) bodyOf(src *Object) bodyFill {
 
 // storeObject writes obj's body from fill and then runs commit to store the
 // records that make it the key's current object, as one step: obj takes its
-// ETag (from etagOf) and ContentLength from the body that was written, and if
-// the body cannot be written or commit fails, the key keeps the object it had,
-// byte for byte. See bodyFiles.replace. Streaming means the body is never
-// buffered in memory.
-func (s *s3Store) storeObject(obj *Object, fill bodyFill, etagOf func(bodyDigest) string, commit func() *protocol.AWSError) *protocol.AWSError {
-	return s.bodies.replace(bodyRel(obj.Bucket, obj.Key, obj.VersionID), fill, func(d bodyDigest) *protocol.AWSError {
-		obj.ETag, obj.ContentLength = etagOf(d), d.size
+// ETag, the MD5 of the bytes, and its ContentLength from the body that was
+// written, and if the body cannot be written or commit fails, the key keeps
+// the object it had, byte for byte. See bodyFiles.replace. Streaming means the
+// body is never buffered in memory.
+func (s *s3Store) storeObject(obj *Object, fill bodyFill, commit func() *protocol.AWSError) *protocol.AWSError {
+	hashed, etag := md5Hashed(fill)
+	return s.storeAssembledObject(obj, hashed, func() *protocol.AWSError {
+		obj.ETag = etag()
+		return commit()
+	})
+}
+
+// storeAssembledObject is storeObject for an object whose ETag the caller has
+// already set — one assembled from multipart parts, whose ETag S3 derives
+// from the parts rather than the bytes, so they are not hashed again.
+func (s *s3Store) storeAssembledObject(obj *Object, fill bodyFill, commit func() *protocol.AWSError) *protocol.AWSError {
+	return s.bodies.replace(bodyRel(obj.Bucket, obj.Key, obj.VersionID), fill, func(size int64) *protocol.AWSError {
+		obj.ContentLength = size
 		return commit()
 	})
 }
@@ -647,8 +658,9 @@ type MultipartUpload struct {
 	Initiated   time.Time         `json:"initiated"`
 }
 
-// Part holds the metadata for one uploaded part.
-// The body is stored on disk at partBodyPath(uploadID, partNumber).
+// Part holds the metadata for one uploaded part. The body is stored on disk
+// at partRel(uploadID, PartNumber). ETag is the part's quoted MD5, which is
+// also what an assembled object's ETag is derived from (multipartETag).
 type Part struct {
 	PartNumber   int       `json:"part_number"`
 	ETag         string    `json:"etag"`
@@ -663,7 +675,7 @@ func partStoreKey(uploadID string, partNumber int) string {
 
 // uploadRel is an upload's part directory, relative to the body directory.
 func uploadRel(uploadID string) string {
-	return filepath.Join("multipart", uploadID)
+	return filepath.Join(partsDir, uploadID)
 }
 
 // partRel is a part body's path, relative to the body directory.
@@ -731,8 +743,9 @@ func (s *s3Store) listMultipartUploads(ctx context.Context, bucket string) ([]*M
 // number that is uploaded again keeps its previous part unless the new one is
 // stored in full.
 func (s *s3Store) storePart(ctx context.Context, uploadID string, part *Part, body io.Reader) *protocol.AWSError {
-	return s.bodies.replace(partRel(uploadID, part.PartNumber), copyFrom(body), func(d bodyDigest) *protocol.AWSError {
-		part.ETag, part.Size = d.etag(), d.size
+	hashed, etag := md5Hashed(copyFrom(body))
+	return s.bodies.replace(partRel(uploadID, part.PartNumber), hashed, func(size int64) *protocol.AWSError {
+		part.ETag, part.Size = etag(), size
 		return s.savePart(ctx, uploadID, part)
 	})
 }

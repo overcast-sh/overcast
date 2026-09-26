@@ -6,6 +6,8 @@ package s3
 // handler.go.
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/xml"
 	"fmt"
 	"net/http"
@@ -228,6 +230,11 @@ func (h *Handler) CompleteMultipartUpload(w http.ResponseWriter, r *http.Request
 		protocol.WriteXMLError(w, r, aerr)
 		return
 	}
+	etag, aerr := multipartETag(orderedParts)
+	if aerr != nil {
+		protocol.WriteXMLError(w, r, aerr)
+		return
+	}
 
 	// The finished object is a new version of the key, so its identity has to
 	// be settled before its body is assembled — the body path depends on it.
@@ -255,6 +262,7 @@ func (h *Handler) CompleteMultipartUpload(w http.ResponseWriter, r *http.Request
 		ContentType:  upload.ContentType,
 		LastModified: now,
 		Metadata:     upload.Metadata,
+		ETag:         etag,
 	}
 	stamp, aerr := h.beginVersion(r.Context(), b, obj, now)
 	if aerr != nil {
@@ -262,11 +270,11 @@ func (h *Handler) CompleteMultipartUpload(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Stream the parts, in order, into the object's body, computing its MD5
-	// on the way. A failure part way leaves the key as it was and the upload
-	// intact, so the client can retry the completion.
+	// Stream the parts, in order, into the object's body. A failure part way
+	// leaves the key as it was and the upload intact, so the client can retry
+	// the completion.
 	commit := func() *protocol.AWSError { return h.commitObject(r.Context(), b, obj) }
-	if aerr := h.store.storeObject(obj, h.store.partsOf(uploadID, orderedParts), multipartETag(len(orderedParts)), commit); aerr != nil {
+	if aerr := h.store.storeAssembledObject(obj, h.store.partsOf(uploadID, orderedParts), commit); aerr != nil {
 		protocol.WriteXMLError(w, r, aerr)
 		return
 	}
@@ -289,12 +297,26 @@ func (h *Handler) CompleteMultipartUpload(w http.ResponseWriter, r *http.Request
 	})
 }
 
-// multipartETag is the ETag Overcast gives an object assembled from parts: the
-// MD5 of its bytes, suffixed with the number of parts. S3 hashes the parts'
-// binary MD5s rather than the bytes, so the digest differs from AWS's while
-// the "-N" shape matches (#2232).
-func multipartETag(parts int) func(bodyDigest) string {
-	return func(d bodyDigest) string { return fmt.Sprintf(`"%x-%d"`, d.md5, parts) }
+// multipartETag is the ETag S3 gives an object assembled from parts: the hex
+// MD5 of the parts' binary MD5s concatenated in order, suffixed with the
+// number of parts — not a digest of the object's bytes (#2232). A client that
+// checks a multipart download against its ETag recomputes exactly this from
+// the part size. Each part's MD5 is read back from the ETag stored when it was
+// uploaded, so the bytes are never hashed a second time.
+//
+// A part record whose ETag is not an MD5 can only be a damaged record; it is
+// refused as S3 refuses a part it cannot use, InvalidPart, rather than
+// failing the request as an internal error.
+func multipartETag(parts []*Part) (string, *protocol.AWSError) {
+	h := md5.New()
+	for _, p := range parts {
+		sum, err := hex.DecodeString(unquoteETag(p.ETag))
+		if err != nil || len(sum) != md5.Size {
+			return "", errInvalidPart(p.PartNumber)
+		}
+		h.Write(sum)
+	}
+	return fmt.Sprintf(`"%x-%d"`, h.Sum(nil), len(parts)), nil
 }
 
 // minMultipartPartSize is AWS's floor for every part except the last: 5 MiB.
@@ -337,7 +359,7 @@ func resolveCompletedParts(requested []xmlCompletePart, stored []*Part) ([]*Part
 	last := len(requested) - 1
 	for i, rp := range requested {
 		found, ok := partByNum[rp.PartNumber]
-		if !ok || strings.Trim(found.ETag, `"`) != strings.Trim(rp.ETag, `"`) {
+		if !ok || unquoteETag(found.ETag) != unquoteETag(rp.ETag) {
 			return nil, errInvalidPart(rp.PartNumber)
 		}
 		if i != last && found.Size < minMultipartPartSize {
@@ -347,6 +369,11 @@ func resolveCompletedParts(requested []xmlCompletePart, stored []*Part) ([]*Part
 	}
 	return ordered, nil
 }
+
+// unquoteETag strips an ETag's surrounding quotes, so ETags compare equal
+// whether or not the client quoted them: S3 accepts either form, and SDKs
+// differ in which they send.
+func unquoteETag(etag string) string { return strings.Trim(etag, `"`) }
 
 func errMalformedMultipartXML() *protocol.AWSError {
 	return &protocol.AWSError{

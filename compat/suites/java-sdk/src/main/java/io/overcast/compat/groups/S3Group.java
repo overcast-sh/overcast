@@ -316,13 +316,18 @@ public final class S3Group implements ServiceGroup {
         String bucket   = ctx.getString("s3MpBucket");
         String uploadId = ctx.getString("s3UploadId");
         String eTag     = ctx.getString("s3PartETag");
-        s3().completeMultipartUpload(r -> r
+        var completed = s3().completeMultipartUpload(r -> r
                 .bucket(bucket).key("mp-key")
                 .uploadId(uploadId)
                 .multipartUpload(m -> m.parts(
                         CompletedPart.builder().partNumber(1).eTag(eTag).build())));
         var head = s3().headObject(r -> r.bucket(bucket).key("mp-key"));
         Assertions.assertGreaterThan(0L, head.contentLength(), "CompleteMultipartUpload: contentLength");
+        // S3 gives a multipart object the MD5 of its parts' binary MD5s, suffixed with the part count (#2232):
+        // md5(md5(5 MiB + 1 of "A"))-1 for uploadPart's single part.
+        String want = "\"c746886354dadfa4806f4c2d6745c2c8-1\"";
+        Assertions.assertEquals(want, completed.eTag(), "CompleteMultipartUpload: eTag");
+        Assertions.assertEquals(want, head.eTag(), "CompleteMultipartUpload: headObject eTag");
     }
 
     private void abortMultipartUpload(TestContext ctx) throws Exception {
