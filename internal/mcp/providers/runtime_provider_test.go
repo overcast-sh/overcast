@@ -161,6 +161,7 @@ var runtimeMutationToolNames = []string{
 	"runtime_acm_delete_certificate",
 	"runtime_acm_add_tags_to_certificate",
 	"runtime_acm_remove_tags_from_certificate",
+	"runtime_athena_run_query",
 }
 
 func TestRuntimeProvider_RuntimeMutationToolsAdvertiseExplicitOutputSchemas(t *testing.T) {

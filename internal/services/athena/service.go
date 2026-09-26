@@ -143,7 +143,7 @@ func (s *Service) Stop(ctx context.Context) {
 func (s *Service) Name() string { return serviceName }
 
 // RegisterRoutes serves the emulator-only engine status endpoint.
-func (s *Service) RegisterRoutes(r chi.Router) { r.Get(engineStatusPath, s.serveEngineStatus) }
+func (s *Service) RegisterRoutes(r chi.Router) { r.Get(EngineStatusPath, s.serveEngineStatus) }
 
 func (s *Service) TargetPrefix() string { return "AmazonAthena." }
 

@@ -98,7 +98,7 @@ func TestContributeTopology_workgroupsRunsAndEdges(t *testing.T) {
 		t.Errorf("newest run = %+v", got)
 	}
 	// And: the engine chip says the engine is off (the service has none)
-	if wgs[0].EngineState != engineOff {
+	if wgs[0].EngineState != EngineOff {
 		t.Errorf("engine state = %q", wgs[0].EngineState)
 	}
 	// And: results go where the newest query wrote them, and the recent
@@ -155,8 +155,8 @@ func TestSQLSnippet_cutsLongQueries(t *testing.T) {
 
 func TestEngineAttention(t *testing.T) {
 	for state, want := range map[string]string{
-		engineReady: "", engineStopped: "", engineOff: engineOff, engineStarting: engineStarting,
-		enginePulling: enginePulling, engineFailed: engineFailed, engineProbing: engineProbing,
+		EngineReady: "", EngineStopped: "", EngineOff: EngineOff, EngineStarting: EngineStarting,
+		EnginePulling: EnginePulling, EngineFailed: EngineFailed, EngineProbing: EngineProbing,
 	} {
 		t.Run(state, func(t *testing.T) {
 			// Given: an engine state; When: a node asks whether to show it;

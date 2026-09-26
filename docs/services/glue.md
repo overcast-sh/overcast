@@ -152,6 +152,7 @@ Per-operation status, notes and AWS API links: [Glue operations](glue/operations
 ## Related
 
 - [Athena](./athena.md)
+- [Querying and sample data](../cli/data.md) — a sample database with CSV and Parquet tables
 - [CDK resource type coverage](../cdk/resource-types.md)
 - [All service pages](./README.md)
 - [Service names and state overrides](../configuration.md#service-names)

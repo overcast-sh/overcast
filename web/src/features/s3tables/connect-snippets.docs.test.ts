@@ -1,18 +1,28 @@
 import { readFileSync, writeFileSync } from "node:fs"
 import { resolve } from "node:path"
-import { connectSnippets, DOCS_CONNECT_TARGET } from "./connect-snippets"
+import { connectSnippets, DOCS_CONNECT_TARGET, type ConnectClient } from "./connect-snippets"
 
 /**
- * The docs page and the console's *Connect a client* panel show the same
- * snippets, from the same source. Each one sits in the page under a
+ * The docs and the console's *Connect a client* panel show the same
+ * snippets, from the same source. Each one sits in a page under a
  * `<!-- connect-snippet:<client> -->` marker; this test fails when a block no
- * longer matches what `connectSnippets` generates for the documented bucket.
+ * longer matches what `connectSnippets` generates for the documented bucket,
+ * or when a page is missing a client it lists below.
  *
- * To regenerate the page after changing a snippet:
+ * To regenerate the pages after changing a snippet:
  *   UPDATE_DOCS=1 pnpm vitest run connect-snippets.docs
  */
 
-const DOCS = resolve(__dirname, "../../../../docs/services/s3tables/iceberg-rest.md")
+const DOCS_ROOT = resolve(__dirname, "../../../../docs")
+
+/** Each page that carries snippets, and the clients it shows. */
+const PAGES: { path: string; clients: readonly ConnectClient[] }[] = [
+  {
+    path: "services/s3tables/iceberg-rest.md",
+    clients: ["pyiceberg", "spark", "trino", "duckdb", "aws-cli"],
+  },
+  { path: "iceberg-locally.md", clients: ["pyiceberg", "spark"] },
+]
 
 /** The marker and opening fence, the block's lines, and the closing fence on a line of its own. */
 function blockPattern(client: string): RegExp {
@@ -24,28 +34,35 @@ function blockPattern(client: string): RegExp {
 
 const snippets = connectSnippets(DOCS_CONNECT_TARGET)
 
-if (process.env.UPDATE_DOCS) {
-  let page = readFileSync(DOCS, "utf8")
-  for (const snippet of snippets) {
-    page = page.replace(blockPattern(snippet.client), (_, open: string, __, close: string) => {
-      const fence = open.replace(/```[a-z]*/, `\`\`\`${snippet.language}`)
-      return `${fence}${snippet.code}
-${close}`
-    })
-  }
-  writeFileSync(DOCS, page)
+function snippetsOn(page: (typeof PAGES)[number]) {
+  return snippets.filter((s) => page.clients.includes(s.client))
 }
 
-describe("the S3 Tables Iceberg REST docs", () => {
-  const page = readFileSync(DOCS, "utf8")
+if (process.env.UPDATE_DOCS) {
+  for (const page of PAGES) {
+    const file = resolve(DOCS_ROOT, page.path)
+    let text = readFileSync(file, "utf8")
+    for (const snippet of snippetsOn(page)) {
+      text = text.replace(blockPattern(snippet.client), (_, open: string, __, close: string) => {
+        const fence = open.replace(/```[a-z]*/, `\`\`\`${snippet.language}`)
+        return `${fence}${snippet.code}
+${close}`
+      })
+    }
+    writeFileSync(file, text)
+  }
+}
 
-  it.each(snippets.map((s) => [s.label, s] as const))(
-    "show the %s snippet the console generates",
+describe.each(PAGES)("the docs page $path", (page) => {
+  const text = readFileSync(resolve(DOCS_ROOT, page.path), "utf8")
+
+  it.each(snippetsOn(page).map((s) => [s.label, s] as const))(
+    "shows the %s snippet the console generates",
     (_, snippet) => {
-      const block = blockPattern(snippet.client).exec(page)
+      const block = blockPattern(snippet.client).exec(text)
       expect(
         block,
-        `no <!-- connect-snippet:${snippet.client} --> block in the docs`,
+        `no <!-- connect-snippet:${snippet.client} --> block in ${page.path}`,
       ).not.toBeNull()
       expect(block?.[1]).toContain(`\`\`\`${snippet.language}\n`)
       expect(block?.[2]).toBe(`${snippet.code}

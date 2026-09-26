@@ -19,6 +19,8 @@
 //   - overcast config       — show the daemon's effective configuration
 //   - overcast env          — print AWS environment exports for the daemon
 //   - overcast aws          — run the host AWS CLI against the daemon
+//   - overcast athena       — run an Athena query and print its result
+//   - overcast samples      — load a sample dataset
 //
 // The workspace MCP server (repo-aware tools for agents/editors) is
 // dev-only tooling and does not live here — see cmd/overcast-mcp.
@@ -65,6 +67,8 @@ func main() {
 	root.AddCommand(newNetworkCmd())
 	root.AddCommand(newResetCmd())
 	root.AddCommand(newConfigCmd())
+	root.AddCommand(newAthenaCmd())
+	root.AddCommand(newSamplesCmd())
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "overcast:", err)

@@ -8,6 +8,7 @@ import (
 	"github.com/overcast-sh/overcast/internal/config"
 	"github.com/overcast-sh/overcast/internal/docker"
 	"github.com/overcast-sh/overcast/internal/listenstatus"
+	"github.com/overcast-sh/overcast/internal/services/athena"
 	"github.com/overcast-sh/overcast/internal/state"
 )
 
@@ -31,6 +32,11 @@ type healthResponse struct {
 	// Runtime API reports only once Docker has been probed. A failed listener
 	// makes Status "degraded".
 	Listeners map[string]listenstatus.Status `json:"listeners,omitempty"`
+	// AthenaEngine is the Athena query engine's status, the one
+	// /_overcast/athena/engine reports; omitted when Athena is not enabled.
+	// It never changes Status: the engine starts on the first query that
+	// needs it, so starting (or stopped for being idle) is not a fault.
+	AthenaEngine *athena.EngineStatus `json:"athenaEngine,omitempty"`
 }
 
 // healthStorage describes the active storage configuration.
@@ -64,15 +70,24 @@ type persistentHealth struct {
 	LastSuccessAt string `json:"lastSuccessAt,omitempty"`
 }
 
+// healthSources are the live parts of the health response; each is optional.
+type healthSources struct {
+	// Docker supplies the per-service Docker connectivity snapshot.
+	Docker func() *docker.Status
+	// AthenaEngine supplies the Athena query engine's status.
+	AthenaEngine func() athena.EngineStatus
+	// Listeners supplies the auxiliary listeners' bind outcomes.
+	Listeners func() map[string]listenstatus.Status
+}
+
 // newHealthHandler returns a handler for GET /_overcast/health.
 // Used by Docker HEALTHCHECK, load balancers, and readiness probes.
 // Returns 200 OK when the server is ready to accept requests.
 // enabledServices is the list of service names that are currently enabled.
 // enabledTiers maps each enabled service name to its emulation tier.
 // enabledGoalTiers maps each enabled service name to its goal emulation tier.
-// dockerStatus, when non-nil, supplies the per-service Docker connectivity snapshot.
-// listeners, when non-nil, supplies the auxiliary listeners' bind outcomes.
-func newHealthHandler(cfg *config.Config, store state.Store, enabledServices []string, enabledTiers map[string]string, enabledGoalTiers map[string]string, dockerStatus func() *docker.Status, listeners func() map[string]listenstatus.Status) http.HandlerFunc {
+// sources supplies the live sections.
+func newHealthHandler(cfg *config.Config, store state.Store, enabledServices []string, enabledTiers map[string]string, enabledGoalTiers map[string]string, sources healthSources) http.HandlerFunc {
 	// Build the storage section once — it's static for the process lifetime.
 	storage := healthStorage{Default: string(cfg.State), Configured: cfg.StateConfigured}
 	if len(cfg.ServiceStates) > 0 {
@@ -86,8 +101,8 @@ func newHealthHandler(cfg *config.Config, store state.Store, enabledServices []s
 		currentStorage := storage
 		currentStorage.Persistent = persistentHealthSnapshot(store)
 		var listenerStatuses map[string]listenstatus.Status
-		if listeners != nil {
-			listenerStatuses = listeners()
+		if sources.Listeners != nil {
+			listenerStatuses = sources.Listeners()
 		}
 		status := "ok"
 		if (currentStorage.Persistent != nil && !currentStorage.Persistent.Healthy) || listenstatus.Degraded(listenerStatuses) {
@@ -103,8 +118,12 @@ func newHealthHandler(cfg *config.Config, store state.Store, enabledServices []s
 			Storage:          currentStorage,
 			Listeners:        listenerStatuses,
 		}
-		if dockerStatus != nil {
-			resp.Docker = dockerStatus()
+		if sources.AthenaEngine != nil {
+			engine := sources.AthenaEngine()
+			resp.AthenaEngine = &engine
+		}
+		if sources.Docker != nil {
+			resp.Docker = sources.Docker()
 			// A Docker network that is not in the state this configuration asks
 			// for degrades the whole instance, because the failure it produces
 			// lands nowhere near here: a function that cannot reach the

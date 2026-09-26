@@ -8,6 +8,7 @@ import (
 
 	"github.com/overcast-sh/overcast/internal/config"
 	"github.com/overcast-sh/overcast/internal/listenstatus"
+	"github.com/overcast-sh/overcast/internal/services/athena"
 	"github.com/overcast-sh/overcast/internal/state"
 )
 
@@ -84,7 +85,7 @@ func TestHealthHandler_reportsAutoStateProvenance(t *testing.T) {
 		StateConfigured: "auto",
 		StateSource:     config.StateSourceAuto,
 	}
-	handler := newHealthHandler(cfg, state.NewMemoryStore(), nil, nil, nil, nil, nil)
+	handler := newHealthHandler(cfg, state.NewMemoryStore(), nil, nil, nil, healthSources{})
 	req := httptest.NewRequest(http.MethodGet, "/_overcast/health", nil)
 	rec := httptest.NewRecorder()
 
@@ -118,7 +119,7 @@ func TestHealthHandler_omitsConfiguredWhenNotPopulated(t *testing.T) {
 		AccountID: "000000000000",
 		State:     config.StateBackendMemory,
 	}
-	handler := newHealthHandler(cfg, state.NewMemoryStore(), nil, nil, nil, nil, nil)
+	handler := newHealthHandler(cfg, state.NewMemoryStore(), nil, nil, nil, healthSources{})
 	req := httptest.NewRequest(http.MethodGet, "/_overcast/health", nil)
 	rec := httptest.NewRecorder()
 
@@ -155,7 +156,7 @@ func TestHealthHandler_reportsListenersAndDegradesOnABindFailure(t *testing.T) {
 		listenstatus.LambdaRuntimeAPI: {State: listenstatus.Failed, Error: "address already in use", Fix: "set LAMBDA_RUNTIME_API_PORT to a free port, or 0 for an ephemeral one"},
 	}
 	cfg := &config.Config{Region: "us-east-1", AccountID: "000000000000", State: config.StateBackendMemory}
-	handler := newHealthHandler(cfg, state.NewMemoryStore(), nil, nil, nil, nil, func() map[string]listenstatus.Status { return reported })
+	handler := newHealthHandler(cfg, state.NewMemoryStore(), nil, nil, nil, healthSources{Listeners: func() map[string]listenstatus.Status { return reported }})
 	rec := httptest.NewRecorder()
 
 	// When: health is polled
@@ -186,7 +187,7 @@ func TestHealthHandler_reportsListenersAndDegradesOnABindFailure(t *testing.T) {
 func TestHealthHandler_omitsListenersUntilOneReports(t *testing.T) {
 	// Given: no listener has reported
 	cfg := &config.Config{Region: "us-east-1", AccountID: "000000000000", State: config.StateBackendMemory}
-	handler := newHealthHandler(cfg, state.NewMemoryStore(), nil, nil, nil, nil, func() map[string]listenstatus.Status { return nil })
+	handler := newHealthHandler(cfg, state.NewMemoryStore(), nil, nil, nil, healthSources{Listeners: func() map[string]listenstatus.Status { return nil }})
 	rec := httptest.NewRecorder()
 
 	// When: health is polled
@@ -207,7 +208,7 @@ func TestHealthHandler_omitsListenersUntilOneReports(t *testing.T) {
 
 	// Given: a listener bound on a fallback port
 	fellBack := map[string]listenstatus.Status{listenstatus.SMTP: {State: listenstatus.Listening, Addr: "127.0.0.1:49152", FellBack: true}}
-	handler = newHealthHandler(cfg, state.NewMemoryStore(), nil, nil, nil, nil, func() map[string]listenstatus.Status { return fellBack })
+	handler = newHealthHandler(cfg, state.NewMemoryStore(), nil, nil, nil, healthSources{Listeners: func() map[string]listenstatus.Status { return fellBack }})
 	rec = httptest.NewRecorder()
 
 	// When/Then: that is reported, but it is not a degradation
@@ -221,5 +222,45 @@ func TestHealthHandler_omitsListenersUntilOneReports(t *testing.T) {
 	}
 	if !got.Listeners[listenstatus.SMTP].FellBack {
 		t.Errorf("listeners.smtp = %+v, want fellBack", got.Listeners[listenstatus.SMTP])
+	}
+}
+
+// A starting engine is the first query's cold start, not a fault: health
+// reports it, and stays ok.
+func TestHealthHandler_athenaEngineStartingStaysOK(t *testing.T) {
+	// Given: an Athena engine pulling its image
+	cfg := &config.Config{Region: "us-east-1", AccountID: "000000000000", State: config.StateBackendMemory}
+	engine := func() athena.EngineStatus {
+		return athena.EngineStatus{Engine: config.AthenaEngineTrino, State: athena.EnginePulling, MemoryBytes: 2 << 30}
+	}
+	handler := newHealthHandler(cfg, state.NewMemoryStore(), nil, nil, nil, healthSources{AthenaEngine: engine})
+	rec := httptest.NewRecorder()
+
+	// When: health is asked
+	handler(rec, httptest.NewRequest(http.MethodGet, "/_overcast/health", nil))
+
+	// Then: it carries the engine's status and is still ok
+	var got healthResponse
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got.Status != "ok" || got.AthenaEngine == nil || got.AthenaEngine.State != athena.EnginePulling || got.AthenaEngine.MemoryBytes != 2<<30 {
+		t.Fatalf("health = %+v, engine = %+v", got, got.AthenaEngine)
+	}
+}
+
+func TestHealthHandler_omitsAthenaEngineWhenAthenaIsOff(t *testing.T) {
+	cfg := &config.Config{Region: "us-east-1", AccountID: "000000000000", State: config.StateBackendMemory}
+	handler := newHealthHandler(cfg, state.NewMemoryStore(), nil, nil, nil, healthSources{})
+	rec := httptest.NewRecorder()
+
+	handler(rec, httptest.NewRequest(http.MethodGet, "/_overcast/health", nil))
+
+	var got map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if _, ok := got["athenaEngine"]; ok {
+		t.Fatalf("athenaEngine present without Athena: %v", got)
 	}
 }

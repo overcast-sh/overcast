@@ -15,6 +15,7 @@ import { S3UriLink } from "@/components/ui/s3-uri-link"
 import { Skeleton } from "@/components/ui/skeleton"
 import { RawStateLink } from "@/features/debug/raw-state-link"
 import { ServiceDocsButton, useDocsFromHash } from "@/features/docs/service-docs-modal"
+import { LoadSampleDatasetAction } from "@/features/samples/load-sample-dataset-action"
 import { formatDate } from "@/lib/format"
 import type { CreateTableWizardState } from "../create-table-param"
 import { glueAllTablesQueryOptions, glueDatabasesQueryOptions } from "../data"
@@ -102,9 +103,16 @@ export function GluePage({ filter, onFilterChange, sort, onSortChange, wizard }:
         onClearFilter={() => onFilterChange("")}
         emptyIcon={FolderInput}
         emptyTitle="No databases yet"
-        emptyDescription="Point the wizard at data already in S3: it infers the schema, finds Hive partitions and creates the database and table."
+        emptyDescription="Point the wizard at data already in S3: it infers the schema, finds Hive partitions and creates the database and table. Or load a month of sample orders as CSV and Parquet."
         emptyAction={
-          <CreateAction onClick={() => wizard.onOpen()}>Create a table from S3 data</CreateAction>
+          <div className="flex flex-wrap justify-center gap-2">
+            <CreateAction onClick={() => wizard.onOpen()}>Create a table from S3 data</CreateAction>
+            <LoadSampleDatasetAction
+              onLoaded={(report) =>
+                void navigate({ to: "/glue/$database", params: { database: report.database } })
+              }
+            />
+          </div>
         }
         columns={[
           {

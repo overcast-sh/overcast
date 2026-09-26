@@ -18,15 +18,15 @@ tags:
 that reads from real AWS, and so far it copies Cognito users.
 
 ```bash
-overcast reset s3
+overcast reset athena glue s3
 overcast import cognito-users --from-pool-id us-east-1_abc123 --to-pool-id us-east-1_def456
 ```
 
 Part of the [CLI reference](../cli.md).
 
-## `overcast reset [service]`
+## `overcast reset [service...]`
 
-Wipes all emulated state, or one service's, via
+Wipes all emulated state, or the state of each service named, via
 `POST /_overcast/reset[/{service}]`. It is available on every daemon, not only
 a debug one: it grants no more power than deleting every resource by hand
 through the ordinary AWS API already does.
@@ -39,6 +39,7 @@ through the ordinary AWS API already does.
 ```bash
 overcast reset                # wipe everything, with a confirmation prompt
 overcast reset s3             # wipe only S3 state
+overcast reset athena glue s3 # wipe these three, such as the sample dataset
 overcast reset dynamodb --yes # skip the prompt
 ```
 

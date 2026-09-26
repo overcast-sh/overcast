@@ -14,8 +14,8 @@
  * 3. Advisories — what to *do*, when there is anything (see
  *    internal/router/advisories.go). Collapses to a single line when there
  *    isn't, which is the usual case.
- * 4. Storage activity, then Docker connectivity — per-subsystem diagnostics,
- *    read when something is already suspected.
+ * 4. Storage activity, the Athena engine, then Docker connectivity —
+ *    per-subsystem diagnostics, read when something is already suspected.
  *
  * Data comes from GET /_overcast/metrics (polled every 3 seconds, drives the
  * sparklines), GET /_overcast/health (always available), and GET
@@ -37,6 +37,7 @@ import { StatPill } from "./stat-pill"
 import { HealthPills } from "./health-pills"
 import { AdvisoriesList } from "./advisories"
 import { StorageActivity } from "./storage-activity"
+import { AthenaEnginePanel } from "./athena-engine-panel"
 import { DockerHealthPanel } from "./docker-health"
 import { debugMetricsQueryOptions } from "./data"
 
@@ -256,6 +257,9 @@ export function MetricsPage() {
 
       {/* ── Storage activity (reads/writes, memory vs SQL for hybrid) ───── */}
       <StorageActivity stores={diagnostics?.stores} isLoading={debugMetricsQuery.isLoading} />
+
+      {/* ── Athena query engine ───────────────────────────────────────── */}
+      <AthenaEnginePanel />
 
       {/* ── Docker connectivity ────────────────────────────────────────── */}
       <DockerHealthPanel />

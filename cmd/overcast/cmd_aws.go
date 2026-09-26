@@ -176,21 +176,7 @@ func runAWS(cmd *cobra.Command, args []string) error {
 	}
 	defer os.Remove(configPath) //nolint:errcheck // best-effort; see the awsExitError branch below for the one path that must clean up explicitly
 
-	caBundle := ""
-	if isHTTPSEndpoint(endpoint) {
-		home, herr := os.UserHomeDir()
-		if herr != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "overcast: could not resolve home directory for the overcast CA cache: %v\n", herr)
-		} else {
-			path, warning := ensureCABundle(cmd.Context(), endpoint, home, nil)
-			if warning != "" {
-				fmt.Fprintln(cmd.ErrOrStderr(), warning)
-			}
-			caBundle = path
-		}
-	}
-
-	env, err := buildAWSEnv(os.Environ(), endpoint, region, configPath, caBundle)
+	env, err := buildAWSEnv(os.Environ(), endpoint, region, configPath, resolveCABundle(cmd, endpoint))
 	if err != nil {
 		return err
 	}
@@ -337,6 +323,25 @@ func buildAWSEnv(environ []string, endpoint, region, configFile, caBundle string
 		out = append(out, "AWS_CA_BUNDLE="+caBundle)
 	}
 	return out, nil
+}
+
+// resolveCABundle is the path of a cached copy of an https endpoint's CA,
+// or "" for an http endpoint or when there is none to be had, in which case
+// the reason goes to stderr.
+func resolveCABundle(cmd *cobra.Command, endpoint string) string {
+	if !isHTTPSEndpoint(endpoint) {
+		return ""
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "overcast: could not resolve home directory for the overcast CA cache: %v\n", err)
+		return ""
+	}
+	path, warning := ensureCABundle(cmd.Context(), endpoint, home, nil)
+	if warning != "" {
+		fmt.Fprintln(cmd.ErrOrStderr(), warning)
+	}
+	return path
 }
 
 func isHTTPSEndpoint(endpoint string) bool {

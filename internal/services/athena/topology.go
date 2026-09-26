@@ -52,7 +52,7 @@ func (s *Service) ContributeTopology(ctx context.Context, g *topology.Graph) err
 	}
 
 	region := s.cfg.Region
-	engine := engineAttention(s.engineStatus().State)
+	engine := engineAttention(s.EngineStatus().State)
 	since := s.clk.Now().Add(-topologyQueryWindow)
 	for _, name := range drawnWorkGroups(configs, runs) {
 		wgRuns := runs[name]
@@ -113,7 +113,7 @@ func drawnWorkGroups(configs map[string]*WorkGroupConfiguration, runs map[string
 // state in which a query cannot run on the engine straight away. A stopped
 // engine is not one — the next query starts it, which is normal.
 func engineAttention(state string) string {
-	if state == engineReady || state == engineStopped {
+	if state == EngineReady || state == EngineStopped {
 		return ""
 	}
 	return state

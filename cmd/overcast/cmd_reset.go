@@ -1,8 +1,9 @@
 package main
 
-// cmd_reset.go — `overcast reset [service]`. POSTs to the daemon's always-on
-// reset endpoint (POST /_overcast/reset, or /_overcast/reset/{service} for a
-// single service) — see internal/router/reset.go. Reset was moved out from
+// cmd_reset.go — `overcast reset [service...]`. POSTs to the daemon's
+// always-on reset endpoint (POST /_overcast/reset, or
+// /_overcast/reset/{service} once per named service) — see
+// internal/router/reset.go. Reset was moved out from
 // under the OVERCAST_DEBUG gate on 2026-09-01: OVERCAST_DEBUG exists to gate
 // expensive or leaky instrumentation (state dumps, request tracing, pprof),
 // and reset is neither — it also grants no destructive power beyond what the
@@ -19,11 +20,14 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
+
+	"github.com/overcast-sh/overcast/internal/config"
 )
 
 // resetHTTPTimeout bounds the reset request itself. Longer than the 2s used
@@ -49,24 +53,24 @@ var resetStdinIsTerminal = func() bool {
 
 func newResetCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "reset [service]",
+		Use:   "reset [service...]",
 		Short: "Wipe emulated state",
-		Long: "Wipe all emulated state, or the state for a single service.\n\n" +
+		Long: "Wipe all emulated state, or the state of the services named.\n\n" +
 			"This is destructive. In an interactive terminal you are asked to\n" +
 			"confirm what will be wiped unless --yes is given; a non-interactive\n" +
 			"caller (CI, scripts, a pipe) proceeds without prompting.",
-		Args:              cobra.MaximumNArgs(1),
+		Args:              cobra.ArbitraryArgs,
 		ValidArgsFunction: completeResetServiceArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			endpoint, _ := cmd.Flags().GetString("endpoint")
 			yes, _ := cmd.Flags().GetBool("yes")
-			var service string
-			if len(args) > 0 {
-				service = args[0]
+			services, err := resetServices(args)
+			if err != nil {
+				return err
 			}
 
 			if !yes && resetStdinIsTerminal() {
-				confirmed, err := confirmReset(cmd, endpoint, service)
+				confirmed, err := confirmReset(cmd, endpoint, services)
 				if err != nil {
 					return err
 				}
@@ -76,7 +80,15 @@ func newResetCmd() *cobra.Command {
 				}
 			}
 
-			return runReset(cmd, endpoint, service)
+			if len(services) == 0 {
+				return runReset(cmd, endpoint, "")
+			}
+			for _, service := range services {
+				if err := runReset(cmd, endpoint, service); err != nil {
+					return err
+				}
+			}
+			return nil
 		},
 	}
 	cmd.Flags().BoolP("yes", "y", false, "skip the confirmation prompt")
@@ -86,9 +98,9 @@ func newResetCmd() *cobra.Command {
 // confirmReset prints what will be wiped and reads a y/N answer from stdin,
 // reporting whether the caller confirmed. It reads via cmd.InOrStdin() (not
 // os.Stdin directly) so tests can supply canned input.
-func confirmReset(cmd *cobra.Command, endpoint, service string) (bool, error) {
-	if service != "" {
-		fmt.Fprintf(cmd.OutOrStdout(), "This will wipe all %s state at %s.\n", service, endpoint)
+func confirmReset(cmd *cobra.Command, endpoint string, services []string) (bool, error) {
+	if len(services) > 0 {
+		fmt.Fprintf(cmd.OutOrStdout(), "This will wipe all %s state at %s.\n", listSentence(services), endpoint)
 	} else {
 		fmt.Fprintf(cmd.OutOrStdout(), "This will wipe all emulated state at %s.\n", endpoint)
 	}
@@ -102,6 +114,34 @@ func confirmReset(cmd *cobra.Command, endpoint, service string) (bool, error) {
 	}
 	answer := strings.ToLower(strings.TrimSpace(scanner.Text()))
 	return answer == "y" || answer == "yes", nil
+}
+
+// resetServices is the services named, each once, in the order given. Every
+// name is checked before anything is wiped, so a typo in the third name
+// cannot leave the first two reset and the rest not.
+func resetServices(args []string) ([]string, error) {
+	var services, unknown []string
+	for _, name := range args {
+		switch {
+		case slices.Contains(services, name):
+		case slices.Contains(config.AllServices(), name):
+			services = append(services, name)
+		default:
+			unknown = append(unknown, name)
+		}
+	}
+	if len(unknown) > 0 {
+		return nil, fmt.Errorf("unknown service: %s", strings.Join(unknown, ", "))
+	}
+	return services, nil
+}
+
+// listSentence joins items as prose: "a", "a and b", "a, b and c".
+func listSentence(items []string) string {
+	if len(items) < 2 {
+		return strings.Join(items, "")
+	}
+	return strings.Join(items[:len(items)-1], ", ") + " and " + items[len(items)-1]
 }
 
 // resetResponse is the JSON body POST /_overcast/reset[/{service}] returns on
@@ -173,16 +213,13 @@ func runReset(cmd *cobra.Command, endpoint, service string) error {
 // — daemon unreachable, bad response, timeout — falls back to no
 // candidates rather than surfacing an error.
 func completeResetServiceArgs(cmd *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
-	if len(args) > 0 {
-		// Args: cobra.MaximumNArgs(1) — one positional value is all this
-		// command ever takes.
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
 	endpoint, _ := cmd.Flags().GetString("endpoint")
 	services, err := fetchResetCompletionServices(cmd.Context(), endpoint)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
+	// A service already named is not offered again.
+	services = slices.DeleteFunc(services, func(s string) bool { return slices.Contains(args, s) })
 	return services, cobra.ShellCompDirectiveNoFileComp
 }
 

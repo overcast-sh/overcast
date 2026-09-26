@@ -2,7 +2,9 @@ package main
 
 // cmd_status.go — `overcast status`. Pings overcast's /_overcast/health
 // endpoint and reports whether the daemon is reachable. Deliberately minimal;
-// the goal is a human-friendly one-liner, not a dashboard — plus, when this
+// the goal is a human-friendly one-liner, not a dashboard. Two things follow
+// it: when Athena is enabled, a line for its query engine, whose state is
+// what explains a slow first query; and, when this
 // CLI's own instance registry (instances.go) is non-empty, a short table of
 // every instance it knows about (not just the one at --endpoint), since
 // `overcast start`/`stop` can manage several under different names.
@@ -18,6 +20,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+
+	athenasvc "github.com/overcast-sh/overcast/internal/services/athena"
 )
 
 func newStatusCmd() *cobra.Command {
@@ -51,6 +55,7 @@ func newStatusCmd() *cobra.Command {
 				Storage struct {
 					Default string `json:"default"`
 				} `json:"storage"`
+				AthenaEngine *athenasvc.EngineStatus `json:"athenaEngine"`
 			}
 			statusWord := "OK"
 			var details []string
@@ -70,6 +75,9 @@ func newStatusCmd() *cobra.Command {
 				line += " (" + strings.Join(details, ", ") + ")"
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), line)
+			if health.AthenaEngine != nil {
+				fmt.Fprintln(cmd.OutOrStdout(), athenaEngineLine(*health.AthenaEngine))
+			}
 
 			printInstanceTable(cmd.OutOrStdout())
 			return nil

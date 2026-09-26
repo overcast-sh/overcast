@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 import type * as ApiModule from "@/services/api"
-import { createTestQueryClient, renderWithRouter, screen } from "@/test/render"
+import { sampleReport, serveSamples } from "@/features/samples/testing/serve-samples"
+import { createTestQueryClient, renderWithRouter, screen, waitFor } from "@/test/render"
 import type { CreateTableWizardState } from "../create-table-param"
 import { glueKeys } from "../data"
 import { GluePage } from "./glue-page"
@@ -70,5 +71,16 @@ describe("GluePage > a catalog with databases", () => {
     await user.click(await screen.findByRole("button", { name: "Clear filter" }))
 
     expect(onFilterChange).toHaveBeenCalledWith("")
+  })
+})
+
+describe("GluePage > loading the sample dataset", () => {
+  it("offers it beside the wizard, and opens its database once loaded", async () => {
+    serveSamples({ report: sampleReport() })
+    const { user, router } = renderPage({ databases: [] })
+
+    await user.click(await screen.findByRole("button", { name: "Load sample dataset" }))
+
+    await waitFor(() => expect(router.state.location.pathname).toBe("/glue/sample_analytics"))
   })
 })

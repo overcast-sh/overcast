@@ -158,7 +158,7 @@ func TestEngineManager_startsOneEngineForConcurrentQueries(t *testing.T) {
 			t.Fatalf("endpoints = %v, want %s", endpoints, d.trino.srv.URL)
 		}
 	}
-	if st := m.snapshot(); st.State != engineReady || st.ContainerID != "engine1" || st.Engine != "trino" {
+	if st := m.snapshot(); st.State != EngineReady || st.ContainerID != "engine1" || st.Engine != "trino" {
 		t.Fatalf("status = %+v", st)
 	}
 
@@ -200,7 +200,7 @@ func TestEngineManager_failedStartIsReportedAndRetried(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "exited") || !strings.Contains(err.Error(), "Configuration is invalid") {
 		t.Fatalf("err = %v", err)
 	}
-	if st := m.snapshot(); st.State != engineFailed || st.LastError == "" {
+	if st := m.snapshot(); st.State != EngineFailed || st.LastError == "" {
 		t.Fatalf("status = %+v", st)
 	}
 	waitFor(t, func() bool { _, removed := d.snapshot(); return len(removed) == 1 })
@@ -239,7 +239,7 @@ func TestEngineManager_stopsWhenIdleAndRestartsOnDemand(t *testing.T) {
 
 	// Then: it is stopped and removed
 	waitFor(t, func() bool { _, removed := d.snapshot(); return len(removed) == 1 && removed[0] == "engine1" })
-	if st := m.snapshot(); st.State != engineStopped {
+	if st := m.snapshot(); st.State != EngineStopped {
 		t.Fatalf("status = %+v, want stopped", st)
 	}
 
@@ -256,6 +256,32 @@ func TestEngineManager_stopsWhenIdleAndRestartsOnDemand(t *testing.T) {
 	}
 }
 
+func TestEngineManager_reportsUptimeOnlyWhileReady(t *testing.T) {
+	// Given: an engine that has been up for 90 seconds
+	clk := clock.NewMock()
+	m, d := newTestEngine(t, clk)
+	_, release, err := m.acquire(context.Background())
+	if err != nil {
+		t.Fatalf("acquire: %v", err)
+	}
+	release()
+	clk.Add(90 * time.Second)
+
+	// Then: its status says so
+	if st := m.snapshot(); st.State != EngineReady || st.UptimeMillis != 90_000 {
+		t.Fatalf("status = %+v, want ready with 90s of uptime", st)
+	}
+
+	// When: it stops for being idle
+	clk.Add(engineIdleTimeout)
+	waitFor(t, func() bool { _, removed := d.snapshot(); return len(removed) == 1 })
+
+	// Then: it reports no uptime
+	if st := m.snapshot(); st.State != EngineStopped || st.UptimeMillis != 0 {
+		t.Fatalf("status = %+v, want stopped with no uptime", st)
+	}
+}
+
 func TestEngineManager_unavailableWithoutDocker(t *testing.T) {
 	m := newEngineManager(&config.Config{}, serviceutil.NewServiceLogger(zap.NewNop(), serviceName), clock.New(), nil)
 	if m.available() {
@@ -264,7 +290,7 @@ func TestEngineManager_unavailableWithoutDocker(t *testing.T) {
 	if _, _, err := m.acquire(context.Background()); err != errEngineUnavailable {
 		t.Fatalf("acquire = %v, want errEngineUnavailable", err)
 	}
-	if st := m.snapshot(); st.State != engineOff || st.Reason == "" {
+	if st := m.snapshot(); st.State != EngineOff || st.Reason == "" {
 		t.Fatalf("status = %+v", st)
 	}
 }
@@ -308,7 +334,7 @@ func TestEngineManager_queriesWaitForTheDockerProbe(t *testing.T) {
 	m := newEngineManager(cfg, serviceutil.NewServiceLogger(zap.NewNop(), serviceName), clock.New(), nil)
 
 	// Then: queries are routed to it, and the status says it is probing
-	if !m.available() || m.snapshot().State != engineProbing {
+	if !m.available() || m.snapshot().State != EngineProbing {
 		t.Fatalf("available = %v, status = %+v", m.available(), m.snapshot())
 	}
 
@@ -330,7 +356,7 @@ func TestEngineManager_queriesWaitForTheDockerProbe(t *testing.T) {
 	if err := <-got; err != errEngineUnavailable {
 		t.Fatalf("acquire = %v, want errEngineUnavailable", err)
 	}
-	if m.available() || m.snapshot().State != engineOff {
+	if m.available() || m.snapshot().State != EngineOff {
 		t.Fatalf("after the probe failed: available = %v, status = %+v", m.available(), m.snapshot())
 	}
 }
@@ -349,7 +375,7 @@ func TestEngineManager_idleStopArmsWhenAnAbandonedBootFinishes(t *testing.T) {
 		_, _, err := m.acquire(ctx)
 		gaveUp <- err
 	}()
-	waitFor(t, func() bool { return m.snapshot().State == engineStarting })
+	waitFor(t, func() bool { return m.snapshot().State == EngineStarting })
 	cancel()
 	if err := <-gaveUp; err != context.Canceled {
 		t.Fatalf("acquire = %v, want context.Canceled", err)
@@ -362,7 +388,7 @@ func TestEngineManager_idleStopArmsWhenAnAbandonedBootFinishes(t *testing.T) {
 	d.trino.mu.Unlock()
 	waitFor(t, func() bool {
 		clk.Add(engineReadyInterval)
-		return m.snapshot().State == engineReady
+		return m.snapshot().State == EngineReady
 	})
 	clk.Add(engineIdleTimeout)
 

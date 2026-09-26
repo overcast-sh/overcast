@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { FieldLabel, QueryListState } from "@/components/ui/primitives"
 import { Select } from "@/components/ui/select"
+import { LoadSampleDatasetAction } from "@/features/samples/load-sample-dataset-action"
 import { dataCatalogsQueryOptions, databasesQueryOptions, tablesQueryOptions } from "../../data"
 import { DEFAULT_CATALOG } from "../../query-tabs"
 import { TableEntry } from "./table-entry"
@@ -41,6 +42,9 @@ export function DataBrowser({
   const shown = (tables.data ?? []).filter((t) => (t.Name ?? "").toLowerCase().includes(needle))
   const catalogNames = catalogs.data?.map((c) => c.CatalogName ?? "") ?? [catalog]
   const databaseNames = databases.data?.map((d) => d.Name ?? "") ?? [database]
+  // A catalog with no databases at all, as on a fresh emulator, is empty
+  // rather than broken, though the database the tab names is not found.
+  const noDatabases = databases.data?.length === 0
 
   return (
     <aside aria-label="Data browser" className="flex min-h-0 flex-col gap-3">
@@ -90,23 +94,35 @@ export function DataBrowser({
           </ul>
         ) : (
           <QueryListState
-            isLoading={tables.isLoading}
+            isLoading={!noDatabases && tables.isLoading}
             isEmpty
-            error={databasesError ?? tables.error}
+            error={noDatabases ? null : (databasesError ?? tables.error)}
             loadingCount={4}
             loadingNoun="tables"
             loadingClassName="-mx-4"
             emptyClassName="py-8"
             emptyIcon={<Database className="size-8" />}
-            emptyTitle="No tables"
-            emptyDescription={`${database} has no tables yet.`}
+            emptyTitle={noDatabases ? "No databases" : "No tables"}
+            emptyDescription={
+              noDatabases ? `${catalog} has no databases yet.` : `${database} has no tables yet.`
+            }
             emptyAction={
-              <Button asChild variant="outline" size="sm">
-                <Link to="/glue">
-                  <LibraryBig aria-hidden className="size-3.5" />
-                  Create a table from S3 data
-                </Link>
-              </Button>
+              // Stacked, and free to wrap: the rail is too narrow for either
+              // label on one line beside its icon.
+              <div className="flex flex-col items-stretch gap-2">
+                <Button asChild variant="outline" size="sm" className={RAIL_ACTION}>
+                  <Link to="/glue">
+                    <LibraryBig aria-hidden className="size-3.5" />
+                    Create a table from S3 data
+                  </Link>
+                </Button>
+                {catalog === DEFAULT_CATALOG && (
+                  <LoadSampleDatasetAction
+                    className={RAIL_ACTION}
+                    onLoaded={(report) => onContextChange({ catalog, database: report.database })}
+                  />
+                )}
+              </div>
             }
             isFiltered={needle !== ""}
             onClearFilter={() => setFilter("")}
@@ -117,6 +133,9 @@ export function DataBrowser({
     </aside>
   )
 }
+
+/** A rail empty-state action: full width, its label wrapping when it must. */
+const RAIL_ACTION = "h-auto min-h-7 whitespace-normal py-1"
 
 /** The listed names, with the current one kept even when the list does not have it (yet). */
 function withCurrent(names: readonly string[], current: string): string[] {

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -394,7 +395,7 @@ func uniqueRuntimeURIs(uris []string) []string {
 }
 
 func (p *RuntimeProvider) Tools() []mcp.Tool {
-	return []mcp.Tool{
+	return append([]mcp.Tool{
 		{
 			Name:        "runtime_instance_info",
 			Description: "Return configuration and capability metadata for this running Overcast instance, including region, account ID, port, and enabled services.",
@@ -1826,7 +1827,7 @@ func (p *RuntimeProvider) Tools() []mcp.Tool {
 			Description: "Return the capabilities of each enabled service as seen by this running Overcast instance. In dev builds includes per-operation status; in prod builds returns the enabled service list only.",
 			InputSchema: json.RawMessage(`{"type":"object","properties":{"service":{"type":"string","description":"Filter to a single service (optional)"}}}`),
 		},
-	}
+	}, p.dataLakeTools()...)
 }
 
 func (p *RuntimeProvider) Handler(name string) (mcp.HandlerFunc, bool) {
@@ -1882,6 +1883,7 @@ func (p *RuntimeProvider) Handler(name string) (mcp.HandlerFunc, bool) {
 		"runtime_acm_remove_tags_from_certificate":   p.toolACMRemoveTagsFromCertificate,
 		"runtime_capabilities":                       p.toolRuntimeCapabilities,
 	}
+	maps.Copy(handlers, p.dataLakeHandlers())
 	fn, ok := handlers[name]
 	return fn, ok
 }
