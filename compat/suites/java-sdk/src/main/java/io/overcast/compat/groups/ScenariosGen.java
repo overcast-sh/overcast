@@ -20,6 +20,11 @@ public final class ScenariosGen {
     /** The generated groups, in service order. */
     public static List<ServiceGroup> all(AwsClients clients) {
         return List.of(
+                new ScenariosAuthoredAppconfigApplicationsGen(clients),
+                new ScenariosAuthoredAppconfigConfigurationProfilesGen(clients),
+                new ScenariosAuthoredAppconfigDeploymentsGen(clients),
+                new ScenariosAuthoredAppconfigEnvironmentsGen(clients),
+                new ScenariosAuthoredAppconfigTagsGen(clients),
                 new ScenariosAuthoredCognitoUserpoolsGen(clients),
                 new ScenariosAuthoredEventbridgeBusesGen(clients),
                 new ScenariosAuthoredEventbridgeEventsGen(clients),

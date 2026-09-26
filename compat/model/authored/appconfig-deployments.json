@@ -1,0 +1,143 @@
+{
+  "$comment": "Authored port of the hand-written registry group appconfig-deployments (docs/plans/compat-coverage-modelgen.md §3.11, G6 wave 3, #1116). The group had one native implementation, in the cli suite (compat/suites/cli/internal/groups/appconfig.go); the other six suites carry it as parity debt, 4 rows each, which the port closes. It runs today under the shadow name appconfig-deployments-shadow, beside the cli native, so the nightly can compare the two per (suite, test); the flip PR renames this group to appconfig-deployments, points the hand-written registry entry at this file, and deletes the native code. Overcast does not emulate deployments, so all four operations answer 501 today and every test is `unimplemented` in the native and the shadow alike; the tests are here, as the native says, because the URIs under an environment are the thing under test while the operations are unimplemented, and so that they assert something real on the day they are. Every scenario backend signs with AppConfig's own credential scope, as the cli native does.",
+  "version": 1,
+  "service": "appconfig",
+  "client": {
+    "sdkId": "AppConfig",
+    "endpointPrefix": "appconfig",
+    "signingName": "appconfig",
+    "protocol": "restJson1",
+    "apiVersion": "2019-10-09",
+    "awsQueryCompatible": false
+  },
+  "groups": [
+    {
+      "$comment": "Setup creates an application, an environment under it and a hosted configuration profile, as the native's setup hook does, so the deployment calls carry real ids rather than invented ones. The native does not create a hosted configuration version, and neither does this port: StartDeployment names ConfigurationVersion 1 of a profile that has none, exactly as the native does. It cannot be added here, because a CreateHostedConfigurationVersion in setup is a call the cli backend cannot make (see appconfig-hosted-versions, which is not ported for that reason), and a setup that fails in one backend skips the group there while the native reports `unimplemented` — a divergence manufactured by the port. The registry gives GetDeployment and StopDeployment no depends, so they cannot read the number StartDeployment returns; both address deployment 1, which is the native's own fallback when StartDeployment has not run, and the number AppConfig gives the first deployment in an environment, which this environment is fresh for. Teardown deletes the profile, the environment and the application in the native's order; each call is individually wrapped.",
+      "name": "appconfig-deployments-shadow",
+      "kind": "lifecycle",
+      "setup": [
+        {
+          "op": "CreateApplication",
+          "params": { "Name": { "$name": "app" } },
+          "export": { "app.id": "$.Id" }
+        },
+        {
+          "op": "CreateEnvironment",
+          "params": {
+            "ApplicationId": { "$ref": "app.id" },
+            "Name": { "$name": "env" }
+          },
+          "export": { "env.id": "$.Id" }
+        },
+        {
+          "op": "CreateConfigurationProfile",
+          "params": {
+            "ApplicationId": { "$ref": "app.id" },
+            "Name": { "$name": "prof" },
+            "LocationUri": "hosted"
+          },
+          "export": { "prof.id": "$.Id" }
+        }
+      ],
+      "tests": [
+        {
+          "$comment": "The native starts an AppConfig.AllAtOnce deployment (a predefined strategy every account has) of version 1 and asserts the response carries a DeploymentNumber. Carried as that: `nonEmpty` holds on any number, so it is the presence check the native makes.",
+          "name": "StartDeployment",
+          "op": "StartDeployment",
+          "call": {
+            "op": "StartDeployment",
+            "params": {
+              "ApplicationId": { "$ref": "app.id" },
+              "EnvironmentId": { "$ref": "env.id" },
+              "DeploymentStrategyId": "AppConfig.AllAtOnce",
+              "ConfigurationProfileId": { "$ref": "prof.id" },
+              "ConfigurationVersion": "1"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.DeploymentNumber": { "nonEmpty": true } }
+            }
+          ]
+        },
+        {
+          "$comment": "The native reads the deployment back and asserts the response carries a DeploymentNumber. The port asserts it is 1, the number it asked for (see the group's $comment for why 1): a GetDeployment answering with another deployment's number is answering the wrong question, and the presence the native checks is implied.",
+          "name": "GetDeployment",
+          "op": "GetDeployment",
+          "call": {
+            "op": "GetDeployment",
+            "params": {
+              "ApplicationId": { "$ref": "app.id" },
+              "EnvironmentId": { "$ref": "env.id" },
+              "DeploymentNumber": 1
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.DeploymentNumber": { "equals": 1 } }
+            }
+          ]
+        },
+        {
+          "$comment": "The native asserts the response has an Items member. `isList` is the page check, and it is the one IR check that states a page without requiring it to be non-empty; it also accepts an absent list, because an absent list and an empty one must read alike in every backend (README § Assertions) — the choice iam-groups and iam-users made for a native presence check on a page. Whether the page holds deployment 1 is not asserted: ListDeployments has no depends, and the native claims nothing about its contents.",
+          "name": "ListDeployments",
+          "op": "ListDeployments",
+          "call": {
+            "op": "ListDeployments",
+            "params": {
+              "ApplicationId": { "$ref": "app.id" },
+              "EnvironmentId": { "$ref": "env.id" }
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.Items": { "isList": true } }
+            }
+          ]
+        },
+        {
+          "$comment": "The native stops deployment 1 (its fallback, and the first deployment's number — see the group's $comment) and asserts the response carries a non-empty State. Carried as written.",
+          "name": "StopDeployment",
+          "op": "StopDeployment",
+          "call": {
+            "op": "StopDeployment",
+            "params": {
+              "ApplicationId": { "$ref": "app.id" },
+              "EnvironmentId": { "$ref": "env.id" },
+              "DeploymentNumber": 1
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.State": { "nonEmpty": true } }
+            }
+          ]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "DeleteConfigurationProfile",
+          "params": {
+            "ApplicationId": { "$ref": "app.id" },
+            "ConfigurationProfileId": { "$ref": "prof.id" }
+          }
+        },
+        {
+          "op": "DeleteEnvironment",
+          "params": {
+            "ApplicationId": { "$ref": "app.id" },
+            "EnvironmentId": { "$ref": "env.id" }
+          }
+        },
+        {
+          "op": "DeleteApplication",
+          "params": { "ApplicationId": { "$ref": "app.id" } }
+        }
+      ]
+    }
+  ]
+}

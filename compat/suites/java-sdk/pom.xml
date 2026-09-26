@@ -74,6 +74,10 @@
     <dependency><groupId>software.amazon.awssdk</groupId><artifactId>elasticloadbalancing</artifactId></dependency>
     <dependency><groupId>software.amazon.awssdk</groupId><artifactId>organizations</artifactId></dependency>
     <dependency><groupId>software.amazon.awssdk</groupId><artifactId>servicediscovery</artifactId></dependency>
+    <!-- G6 wave 3 (#1116): the authored appconfig-* shadows are the first thing
+         this suite runs against AppConfig. Versioned by the BOM like every
+         client above; 2.43.0 declares every operation those groups call. -->
+    <dependency><groupId>software.amazon.awssdk</groupId><artifactId>appconfig</artifactId></dependency>
     <!-- URL connection client (no Apache HTTP, keeps image small) -->
     <dependency><groupId>software.amazon.awssdk</groupId><artifactId>url-connection-client</artifactId></dependency>
     <!-- Async HTTP client — required by LambdaAsyncClient (InvokeWithResponseStream) -->

@@ -15,6 +15,11 @@ internal static class ScenarioGroups
 {
     internal static IServiceGroup[] All(AwsClients clients) =>
     [
+        new ScenariosAuthoredAppconfigApplications(clients),
+        new ScenariosAuthoredAppconfigConfigurationProfiles(clients),
+        new ScenariosAuthoredAppconfigDeployments(clients),
+        new ScenariosAuthoredAppconfigEnvironments(clients),
+        new ScenariosAuthoredAppconfigTags(clients),
         new ScenariosAuthoredCognitoUserpools(clients),
         new ScenariosAuthoredEventbridgeBuses(clients),
         new ScenariosAuthoredEventbridgeEvents(clients),

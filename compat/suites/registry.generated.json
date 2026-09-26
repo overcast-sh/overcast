@@ -214,6 +214,247 @@
   ],
   "groups": [
     {
+      "service": "appconfig",
+      "name": "appconfig-applications-shadow",
+      "generated": true,
+      "scenario": "compat/model/authored/appconfig-applications.json",
+      "state": "candidate",
+      "shadowOf": "appconfig-applications",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "CreateApplication"
+        },
+        {
+          "name": "GetApplication",
+          "depends": [
+            "CreateApplication"
+          ]
+        },
+        {
+          "name": "ListApplications",
+          "depends": [
+            "CreateApplication"
+          ]
+        },
+        {
+          "name": "UpdateApplication",
+          "depends": [
+            "CreateApplication"
+          ]
+        },
+        {
+          "name": "DeleteApplication",
+          "depends": [
+            "CreateApplication"
+          ]
+        },
+        {
+          "name": "GetApplicationNotFound",
+          "op": "GetApplication"
+        },
+        {
+          "name": "ListApplicationsInvalidToken",
+          "op": "ListApplications"
+        }
+      ]
+    },
+    {
+      "service": "appconfig",
+      "name": "appconfig-configuration-profiles-shadow",
+      "generated": true,
+      "scenario": "compat/model/authored/appconfig-configuration-profiles.json",
+      "state": "candidate",
+      "shadowOf": "appconfig-configuration-profiles",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "CreateConfigurationProfile"
+        },
+        {
+          "name": "GetConfigurationProfile",
+          "depends": [
+            "CreateConfigurationProfile"
+          ]
+        },
+        {
+          "name": "ListConfigurationProfiles",
+          "depends": [
+            "CreateConfigurationProfile"
+          ]
+        },
+        {
+          "name": "ListConfigurationProfilesByType",
+          "op": "ListConfigurationProfiles",
+          "depends": [
+            "CreateConfigurationProfile"
+          ]
+        },
+        {
+          "name": "UpdateConfigurationProfile",
+          "depends": [
+            "CreateConfigurationProfile"
+          ]
+        },
+        {
+          "name": "DeleteConfigurationProfile",
+          "depends": [
+            "CreateConfigurationProfile"
+          ]
+        },
+        {
+          "name": "GetConfigurationProfileNotFound",
+          "op": "GetConfigurationProfile"
+        }
+      ]
+    },
+    {
+      "service": "appconfig",
+      "name": "appconfig-deployments-shadow",
+      "generated": true,
+      "scenario": "compat/model/authored/appconfig-deployments.json",
+      "state": "candidate",
+      "shadowOf": "appconfig-deployments",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "StartDeployment"
+        },
+        {
+          "name": "GetDeployment"
+        },
+        {
+          "name": "ListDeployments"
+        },
+        {
+          "name": "StopDeployment"
+        }
+      ]
+    },
+    {
+      "service": "appconfig",
+      "name": "appconfig-environments-shadow",
+      "generated": true,
+      "scenario": "compat/model/authored/appconfig-environments.json",
+      "state": "candidate",
+      "shadowOf": "appconfig-environments",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "CreateEnvironment"
+        },
+        {
+          "name": "GetEnvironment",
+          "depends": [
+            "CreateEnvironment"
+          ]
+        },
+        {
+          "name": "ListEnvironments",
+          "depends": [
+            "CreateEnvironment"
+          ]
+        },
+        {
+          "name": "UpdateEnvironment",
+          "depends": [
+            "CreateEnvironment"
+          ]
+        },
+        {
+          "name": "DeleteEnvironment",
+          "depends": [
+            "CreateEnvironment"
+          ]
+        },
+        {
+          "name": "GetEnvironmentNotFound",
+          "op": "GetEnvironment"
+        },
+        {
+          "name": "ListEnvironmentsApplicationNotFound",
+          "op": "ListEnvironments"
+        }
+      ]
+    },
+    {
+      "service": "appconfig",
+      "name": "appconfig-tags-shadow",
+      "generated": true,
+      "scenario": "compat/model/authored/appconfig-tags.json",
+      "state": "candidate",
+      "shadowOf": "appconfig-tags",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "CreateApplicationWithTags",
+          "op": "CreateApplication"
+        },
+        {
+          "name": "TagResource",
+          "depends": [
+            "CreateApplicationWithTags"
+          ]
+        },
+        {
+          "name": "ListTagsForResource",
+          "depends": [
+            "TagResource"
+          ]
+        },
+        {
+          "name": "UntagResource",
+          "depends": [
+            "TagResource"
+          ]
+        },
+        {
+          "name": "ListTagsForResourceNotFound",
+          "op": "ListTagsForResource"
+        }
+      ]
+    },
+    {
       "service": "batch",
       "name": "batch-gen-computeenvironment",
       "generated": true,

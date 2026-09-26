@@ -9,6 +9,11 @@ import "github.com/overcast-sh/overcast-compat-go-sdk/internal/clients"
 // scenarioBackends table names go-sdk.
 func scenarioGroups(c *clients.Clients) []ServiceGroup {
 	return []ServiceGroup{
+		ScenariosAuthoredAppconfigApplications(c),
+		ScenariosAuthoredAppconfigConfigurationProfiles(c),
+		ScenariosAuthoredAppconfigDeployments(c),
+		ScenariosAuthoredAppconfigEnvironments(c),
+		ScenariosAuthoredAppconfigTags(c),
 		ScenariosAuthoredCognitoUserpools(c),
 		ScenariosAuthoredEventbridgeBuses(c),
 		ScenariosAuthoredEventbridgeEvents(c),
