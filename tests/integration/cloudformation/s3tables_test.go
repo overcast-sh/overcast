@@ -2,6 +2,7 @@ package cloudformation_test
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3tables"
 	"github.com/aws/aws-sdk-go-v2/service/s3tables/types"
 
+	"github.com/overcast-sh/overcast/internal/icebergmeta"
 	"github.com/overcast-sh/overcast/tests/helpers"
 )
 
@@ -204,5 +206,91 @@ func TestUpdateStack_S3TablesRenamesInPlaceAndDropsRemovedConfiguration(t *testi
 	bucketARN := after["BucketRef"]
 	if _, err := c.GetTableBucketReplication(ctx, &s3tables.GetTableBucketReplicationInput{TableBucketARN: aws.String(bucketARN)}); err == nil {
 		t.Error("bucket replication still configured after it left the template")
+	}
+}
+
+// s3tablesSchemaV2Template declares a table with IcebergSchemaV2, the way a
+// CDK CfnTable renders it: PascalCase properties, and each nested Type in the
+// Iceberg spec's lower-case JSON.
+const s3tablesSchemaV2Template = `{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Resources": {
+    "Bucket": {"Type": "AWS::S3Tables::TableBucket", "Properties": {"TableBucketName": "cfn-v2"}},
+    "Ns": {
+      "Type": "AWS::S3Tables::Namespace",
+      "Properties": {"TableBucketARN": {"Fn::GetAtt": ["Bucket", "TableBucketARN"]}, "Namespace": "sales"}
+    },
+    "Events": {
+      "Type": "AWS::S3Tables::Table",
+      "DependsOn": "Ns",
+      "Properties": {
+        "TableBucketARN": {"Fn::GetAtt": ["Bucket", "TableBucketARN"]},
+        "Namespace": "sales",
+        "TableName": "events",
+        "OpenTableFormat": "ICEBERG",
+        "IcebergMetadata": {
+          "IcebergSchemaV2": {
+            "SchemaV2FieldType": "struct",
+            "SchemaId": 0,
+            "IdentifierFieldIds": [1],
+            "SchemaV2FieldList": [
+              {"Id": 1, "Name": "id", "Required": true, "Type": "long", "Doc": "event id"},
+              {"Id": 2, "Name": "tags", "Required": false,
+               "Type": {"type": "list", "element-id": 3, "element": "string", "element-required": false}}
+            ]
+          },
+          "IcebergPartitionSpec": {"Fields": [{"SourceId": 1, "Transform": "bucket[4]", "Name": "id_bucket"}]}
+        }
+      }
+    }
+  },
+  "Outputs": {"TableRef": {"Value": {"Ref": "Events"}}}
+}`
+
+func TestCreateStack_S3TablesTableWithSchemaV2(t *testing.T) {
+	// Given: a stack whose table declares nested columns with IcebergSchemaV2
+	srv := helpers.NewTestServer(t)
+	resp := cfnQuery(t, srv, "CreateStack", url.Values{
+		"StackName":    []string{"s3tables-v2"},
+		"TemplateBody": []string{s3tablesSchemaV2Template},
+	})
+	defer resp.Body.Close()
+	helpers.AssertStatus(t, resp, http.StatusOK)
+
+	// When: it is created
+	waitForStackStatus(t, srv, "s3tables-v2", "CREATE_COMPLETE")
+
+	// Then: the table has a first metadata.json
+	c := s3tables.New(s3tables.Options{
+		Region:       "us-east-1",
+		Credentials:  credentials.NewStaticCredentialsProvider("test", "test", ""),
+		BaseEndpoint: aws.String(srv.URL),
+		HTTPClient:   http.DefaultClient,
+	})
+	tbl, err := c.GetTable(context.Background(), &s3tables.GetTableInput{TableArn: aws.String(describeStackOutputs(t, srv, "s3tables-v2")["TableRef"])})
+	if err != nil || !strings.HasSuffix(aws.ToString(tbl.MetadataLocation), ".metadata.json") {
+		t.Fatalf("GetTable = %+v, %v", tbl, err)
+	}
+
+	// And: every IcebergSchemaV2 property reached it, the nested Type included
+	obj, err := http.Get(srv.URL + "/" + strings.TrimPrefix(aws.ToString(tbl.MetadataLocation), "s3://"))
+	if err != nil {
+		t.Fatalf("GET metadata: %v", err)
+	}
+	defer obj.Body.Close()
+	raw, _ := io.ReadAll(obj.Body)
+	meta, err := icebergmeta.Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse: %v (%s)", err, raw)
+	}
+	s := meta.Schemas[0]
+	if len(s.Fields) != 2 || s.Fields[0].Doc != "event id" || len(s.IdentifierFieldIDs) != 1 || s.IdentifierFieldIDs[0] != 1 {
+		t.Errorf("schema = %+v", s)
+	}
+	if l := s.Fields[1].Type.List; l == nil || l.ElementID != 3 || l.Element.Primitive != "string" {
+		t.Errorf("tags type = %+v", s.Fields[1].Type)
+	}
+	if p := meta.PartitionSpecs[0].Fields; len(p) != 1 || p[0].SourceID != 1 || p[0].Transform != "bucket[4]" {
+		t.Errorf("partition fields = %+v", p)
 	}
 }

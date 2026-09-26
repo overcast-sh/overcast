@@ -250,7 +250,7 @@ func (c *typeChecker) typ(t Type, name string) (Type, error) {
 
 // validateSchema checks a schema the caller proposed — at least one field,
 // names unique within each struct, every id positive and used once, types
-// the spec defines, identifier fields that exist — and returns it with its
+// the spec defines, identifier fields the spec allows — and returns it with its
 // types in canonical form.
 func validateSchema(s Schema) (Schema, error) {
 	if len(s.Fields) == 0 {
@@ -262,8 +262,8 @@ func validateSchema(s Schema) (Schema, error) {
 		return Schema{}, err
 	}
 	for _, id := range s.IdentifierFieldIDs {
-		if !c.ids[id] {
-			return Schema{}, invalid("Identifier field id %d is not a field of the schema.", id)
+		if err := checkIdentifierField(Schema{Fields: fields}, id); err != nil {
+			return Schema{}, err
 		}
 	}
 	return Schema{Type: "struct", SchemaID: s.SchemaID, IdentifierFieldIDs: s.IdentifierFieldIDs, Fields: fields}, nil
@@ -299,13 +299,6 @@ func (s Schema) highestFieldID() int {
 	highest := 0
 	visitIDs(s.Fields, func(id int) { highest = max(highest, id) })
 	return highest
-}
-
-// hasFieldID reports whether the schema declares id anywhere.
-func (s Schema) hasFieldID(id int) bool {
-	found := false
-	visitIDs(s.Fields, func(v int) { found = found || v == id })
-	return found
 }
 
 // sameAs reports whether two schemas are the same apart from their ids, the

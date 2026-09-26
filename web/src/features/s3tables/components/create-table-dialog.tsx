@@ -1,7 +1,6 @@
 import { useState } from "react"
 import { useNavigate } from "@tanstack/react-router"
 import { Code2, Table2 } from "lucide-react"
-import { Advisory } from "@/components/ui/advisory"
 import { Button } from "@/components/ui/button"
 import { FormField } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
@@ -12,7 +11,6 @@ import { useCopyToClipboard } from "@/hooks/use-clipboard"
 import { useResourceMutation } from "@/hooks/use-resource-mutation"
 import {
   draftProblems,
-  hasNestedFields,
   newSchemaRow,
   partitionableColumns,
   toCdk,
@@ -76,7 +74,6 @@ function CreateTableForm({
 
   const draft = { tableBucketARN, namespace, name: name.trim(), rows, partitions }
   const problems = draftProblems(draft)
-  const nested = hasNestedFields(rows)
 
   return (
     <ResourceFormDialog
@@ -91,8 +88,7 @@ function CreateTableForm({
       busyLabel="Creating"
       pending={create.isPending}
       error={create.error}
-      // Nested structs need schemaV2, which Overcast does not emulate (the advisory says so).
-      canSubmit={!nested && (problems.length === 0 || !attempted)}
+      canSubmit={problems.length === 0 || !attempted}
       onSubmit={() => {
         setAttempted(true)
         if (problems.length === 0) create.mutate(toCreateTableInput(draft))
@@ -127,17 +123,6 @@ function CreateTableForm({
         </div>
         <SchemaBuilder rows={rows} onChange={setRows} />
       </section>
-
-      {nested && (
-        <Advisory
-          title="Nested structs are not emulated yet"
-          docsPath="services/s3tables/limitations.md#iceberg-metadata"
-        >
-          On AWS this table is created with <code>metadata.iceberg.schemaV2</code>, which Overcast
-          answers with 501 for now. Copy it as CDK for your stack, or create the table flat here and
-          add the struct columns through the Iceberg REST catalog.
-        </Advisory>
-      )}
 
       <section className="flex flex-col gap-2">
         <SectionLabel as="h3">Partition spec · optional</SectionLabel>

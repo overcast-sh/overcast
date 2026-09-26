@@ -224,6 +224,11 @@ and on ElastiCache's `SetDocker`, `Stop`, GC and readiness for everything else.
 > warehouse bucket and CloudFormation. `CreateTable` writes its first
 > `metadata.json` through a hand-rolled `internal/icebergmeta` (option (b) of
 > Decision 4). The console page is #2072.
+>
+> `schemaV2` implemented (2026-09-26, #2097): nested struct, list and map
+> columns, with fresh ids assigned depth-first and partition, sort and
+> identifier fields remapped. `icebergmeta.New` is verified against golden
+> tables captured from PyIceberg 0.12's `new_table_metadata`.
 
 - A new `internal/services/s3tables` package, copying the REST pattern of `scheduler/`.
 - **Dispatch.** Register it under the SigV4 signing-name dispatcher so that `/buckets`, `/namespaces`, `/tables`, `/get-table` and `/tag` reach S3 Tables only when `ServiceFromCredential(r)=="s3tables"`, and S3 otherwise. Add it to the `detectService` route test as `s3`-classified families. Also update `allServices`, `ServiceTiers`, `state/tier.go`, `topology.go` and `serviceidentity.go`.

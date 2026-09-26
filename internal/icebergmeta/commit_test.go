@@ -385,6 +385,12 @@ func TestCommit_refusesWhatTheSpecForbids(t *testing.T) {
 		"removing the current schema":     {Action: "remove-schemas", SchemaIDs: []int{0}},
 		"removing the default spec":       {Action: "remove-partition-specs", SpecIDs: []int{0}},
 		"an empty location":               {Action: "set-location"},
+		"an optional identifier field": {Action: "add-schema", Schema: &Schema{
+			Fields: []Field{{ID: 1, Name: "id", Type: PrimitiveType("long")}}, IdentifierFieldIDs: []int{1},
+		}},
+		"a double identifier field": {Action: "add-schema", Schema: &Schema{
+			Fields: []Field{{ID: 1, Name: "x", Type: PrimitiveType("double"), Required: true}}, IdentifierFieldIDs: []int{1},
+		}},
 	}
 	for name, u := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -397,6 +403,38 @@ func TestCommit_refusesWhatTheSpecForbids(t *testing.T) {
 				t.Errorf("err = %v, want ErrInvalid", err)
 			}
 		})
+	}
+}
+
+func TestCommit_holdsNestedReferencesToTheSpecsRules(t *testing.T) {
+	// Given: a table whose current schema adds a list of strings, tags (id 3,
+	// element 4)
+	withList := &Schema{SchemaID: 1, Fields: []Field{
+		{ID: 1, Name: "id", Type: PrimitiveType("long"), Required: true},
+		{ID: 2, Name: "name", Type: PrimitiveType("string")},
+		{ID: 3, Name: "tags", Type: Type{List: &ListType{ElementID: 4, Element: PrimitiveType("string")}}},
+	}}
+	base := mustCommit(t, baseTable(t), baseLocation, testNow,
+		Update{Action: "add-schema", Schema: withList},
+		Update{Action: "set-current-schema", SchemaID: ptr(lastAdded)})
+
+	// When: a partition spec on the list element is added
+	_, err := Commit(base, baseLocation, CommitRequest{Updates: []Update{
+		{Action: "add-spec", Spec: &PartitionSpec{Fields: []PartitionField{{SourceID: 4, Name: "tag", Transform: "identity"}}}},
+	}}, testNow)
+
+	// Then: it is refused, as the spec forbids a partition source in a list
+	if !errors.Is(err, ErrInvalid) {
+		t.Errorf("add-spec err = %v, want ErrInvalid", err)
+	}
+
+	// And: a sort order on the same element is accepted, as the reference
+	// implementation accepts it
+	m := mustCommit(t, base, baseLocation, testNow, Update{Action: "add-sort-order", SortOrder: &SortOrder{OrderID: 1, Fields: []SortField{
+		{SourceID: 4, Transform: "identity", Direction: "asc", NullOrder: "nulls-first"},
+	}}})
+	if !m.hasSortOrder(1) {
+		t.Errorf("sort orders = %+v", m.SortOrders)
 	}
 }
 

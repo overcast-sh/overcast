@@ -2,6 +2,8 @@ package icebergmeta
 
 import (
 	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 )
 
@@ -48,7 +50,6 @@ func TestNew_assignsFreshIDsTheWayIcebergDoes(t *testing.T) {
 	spec := CreateSpec{
 		TableUUID: "u", Location: "s3://w--table-s3", Fields: fields, IdentifierFieldIDs: []int{10},
 		PartitionFields: []PartitionField{{SourceID: 41, Name: "x", Transform: "identity"}},
-		SortOrderID:     1,
 		SortFields:      []SortField{{SourceID: 10, Transform: "identity", Direction: "asc", NullOrder: "nulls-first"}},
 	}
 
@@ -76,7 +77,7 @@ func TestNew_assignsFreshIDsTheWayIcebergDoes(t *testing.T) {
 	if got := m.PartitionSpecs[0].Fields[0].SourceID; got != 8 {
 		t.Errorf("partition source = %d, want 8 (point.x)", got)
 	}
-	if got := m.SortOrders[1].Fields[0].SourceID; got != 1 {
+	if got := m.SortOrders[0].Fields[0].SourceID; got != 1 {
 		t.Errorf("sort source = %d, want 1 (id)", got)
 	}
 }
@@ -99,5 +100,110 @@ func TestNew_versionOneOnRequest(t *testing.T) {
 	}
 	if _, stored := m.Properties[propFormatVersion]; stored || m.Properties["k"] != "v" {
 		t.Errorf("properties = %v", m.Properties)
+	}
+}
+
+// nestedSpec is the nested schema as a new table, with point.y made a long so
+// that the "identifier in an optional struct" case is refused for its
+// optional parent rather than for being a double.
+func nestedSpec(t *testing.T) CreateSpec {
+	t.Helper()
+	var fields []Field
+	if err := json.Unmarshal([]byte(nestedFields), &fields); err != nil {
+		t.Fatal(err)
+	}
+	fields[3].Type.Struct.Fields[1].Type = PrimitiveType("long")
+	return CreateSpec{TableUUID: "u", Location: "s3://w--table-s3", Fields: fields}
+}
+
+func TestNew_refusesReferencesTheSpecForbidsInANestedSchema(t *testing.T) {
+	// Given: the nested schema, with one reference into it the spec forbids;
+	// the message must name the id as the caller sent it
+	cases := map[string]struct {
+		mutate func(*CreateSpec)
+		names  string
+	}{
+		"partition by a struct": {func(in *CreateSpec) {
+			in.PartitionFields = []PartitionField{{SourceID: 40, Name: "p", Transform: "identity"}}
+		}, "source id 40"},
+		"partition by a list element": {func(in *CreateSpec) {
+			in.PartitionFields = []PartitionField{{SourceID: 21, Name: "p", Transform: "identity"}}
+		}, "source id 21"},
+		"partition by an undeclared id": {func(in *CreateSpec) {
+			in.PartitionFields = []PartitionField{{SourceID: 99, Name: "p", Transform: "identity"}}
+		}, "source id 99"},
+		"sort by a struct": {func(in *CreateSpec) {
+			in.SortFields = []SortField{{SourceID: 40, Transform: "identity", Direction: "asc", NullOrder: "nulls-first"}}
+		}, "source id 40"},
+		"identifier that is optional": {func(in *CreateSpec) {
+			in.Fields[0].Required = false
+			in.IdentifierFieldIDs = []int{10}
+		}, `"id"`},
+		"identifier that is a list":              {func(in *CreateSpec) { in.IdentifierFieldIDs = []int{20} }, "id 20"},
+		"identifier that is a double":            {func(in *CreateSpec) { in.IdentifierFieldIDs = []int{41} }, `"x"`},
+		"identifier in an optional struct":       {func(in *CreateSpec) { in.IdentifierFieldIDs = []int{42} }, `"y"`},
+		"identifier that is a map key":           {func(in *CreateSpec) { in.IdentifierFieldIDs = []int{31} }, "id 31"},
+		"identifier the schema does not declare": {func(in *CreateSpec) { in.IdentifierFieldIDs = []int{99} }, "id 99"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			in := nestedSpec(t)
+			tc.mutate(&in)
+
+			// When: the table is created
+			_, err := New(in, testNow)
+
+			// Then: it is refused as invalid, naming what the caller sent
+			if !errors.Is(err, ErrInvalid) || !strings.Contains(err.Error(), tc.names) {
+				t.Fatalf("New err = %v, want ErrInvalid naming %s", err, tc.names)
+			}
+		})
+	}
+}
+
+func TestNew_acceptsWhatTheReferenceImplementationAccepts(t *testing.T) {
+	// Given: a sort by a map value, which unlike a partition source may sit in
+	// a map, and a void partition field, whose source is never type-checked
+	in := nestedSpec(t)
+	in.SortFields = []SortField{{SourceID: 32, Transform: "identity", Direction: "asc", NullOrder: "nulls-first"}}
+	in.PartitionFields = []PartitionField{{SourceID: 40, Name: "dropped", Transform: "void"}}
+
+	// When: the table is created
+	m, err := New(in, testNow)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	// Then: both follow their sources to the fresh ids: attrs.value is 7, point 4
+	if got := m.SortOrders[0].Fields[0].SourceID; got != 7 {
+		t.Errorf("sort source = %d, want 7", got)
+	}
+	if got := m.PartitionSpecs[0].Fields[0].SourceID; got != 4 {
+		t.Errorf("partition source = %d, want 4", got)
+	}
+}
+
+func TestNew_acceptsAFieldOfARequiredStructAsIdentifierAndSource(t *testing.T) {
+	// Given: a required struct whose required primitive field is the identifier,
+	// the partition source and the sort source
+	fields := []Field{{ID: 7, Name: "key", Required: true, Type: Type{Struct: &StructType{Fields: []Field{
+		{ID: 3, Name: "tenant", Required: true, Type: PrimitiveType("string")},
+	}}}}}
+	in := CreateSpec{
+		TableUUID: "u", Location: "s3://w--table-s3", Fields: fields, IdentifierFieldIDs: []int{3},
+		PartitionFields: []PartitionField{{SourceID: 3, Name: "tenant", Transform: "identity"}},
+		SortFields:      []SortField{{SourceID: 3, Transform: "identity", Direction: "asc", NullOrder: "nulls-first"}},
+	}
+
+	// When: the table is created
+	m, err := New(in, testNow)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	// Then: every reference follows the field to its fresh id, 2
+	s := m.Schemas[0]
+	if s.IdentifierFieldIDs[0] != 2 || m.PartitionSpecs[0].Fields[0].SourceID != 2 || m.SortOrders[0].Fields[0].SourceID != 2 {
+		t.Errorf("identifier %v, partition %+v, sort %+v", s.IdentifierFieldIDs, m.PartitionSpecs[0].Fields, m.SortOrders[0].Fields)
 	}
 }

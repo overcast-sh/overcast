@@ -13,11 +13,6 @@ import (
 	"github.com/overcast-sh/overcast/internal/protocol"
 )
 
-// initialSortOrderID is the id a new table's sort order gets when it has
-// fields, as the reference implementation assigns it whatever the client
-// proposed.
-const initialSortOrderID = 1
-
 // icebergLoadTableResult is the spec's LoadTableResult, and its
 // CommitTableResponse. A staged table has no metadata location yet.
 type icebergLoadTableResult struct {
@@ -54,8 +49,8 @@ func (req *icebergCreateTableRequest) createSpec(tableUUID, location string) ice
 	if req.PartitionSpec != nil {
 		spec.PartitionFields = req.PartitionSpec.Fields
 	}
-	if req.WriteOrder != nil && len(req.WriteOrder.Fields) > 0 {
-		spec.SortOrderID, spec.SortFields = initialSortOrderID, req.WriteOrder.Fields
+	if req.WriteOrder != nil {
+		spec.SortFields = req.WriteOrder.Fields
 	}
 	return spec
 }

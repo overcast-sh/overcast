@@ -509,6 +509,12 @@
     {
       "suite": "dotnet-sdk",
       "service": "s3tables",
+      "group": "s3tables-schemav2",
+      "tests": 2
+    },
+    {
+      "suite": "dotnet-sdk",
+      "service": "s3tables",
       "group": "s3tables-tables",
       "tests": 13
     },
@@ -983,6 +989,12 @@
     {
       "suite": "java-sdk",
       "service": "s3tables",
+      "group": "s3tables-schemav2",
+      "tests": 2
+    },
+    {
+      "suite": "java-sdk",
+      "service": "s3tables",
       "group": "s3tables-tables",
       "tests": 13
     },
@@ -1195,6 +1207,12 @@
       "service": "opensearch",
       "group": "opensearch-tags",
       "tests": 4
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "s3tables",
+      "group": "s3tables-schemav2",
+      "tests": 2
     },
     {
       "suite": "node-js-sdk",
@@ -1903,6 +1921,12 @@
       "service": "rds",
       "group": "rds-subnet-groups",
       "tests": 3
+    },
+    {
+      "suite": "rust-sdk",
+      "service": "s3tables",
+      "group": "s3tables-schemav2",
+      "tests": 2
     },
     {
       "suite": "rust-sdk",

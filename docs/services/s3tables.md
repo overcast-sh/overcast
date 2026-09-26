@@ -44,7 +44,7 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | Namespaces | Create, get, list, delete; delete refuses a namespace that still has tables |
 | Tables | Create, get by ARN or by name, list, rename, delete; the ARN survives a rename |
 | Warehouse | Every table gets its own `s3://…--table-s3` bucket in S3, which `CreateBucket` itself refuses to create |
-| Initial metadata | `CreateTable` with `metadata.iceberg.schema` writes a format-version 2 `metadata.json` into the warehouse |
+| Initial metadata | `CreateTable` with `metadata.iceberg.schema`, or `schemaV2` for nested types, writes a format-version 2 `metadata.json` into the warehouse |
 | Commits | `UpdateTableMetadataLocation` is a compare-and-swap on `versionToken`: a stale token is `ConflictException` |
 | Iceberg REST catalog | Served at `/iceberg`: namespaces, tables, commits and staged create — see [the catalog page](./s3tables/iceberg-rest.md) |
 | Configuration | Policies, encryption, storage class, metrics, maintenance, record expiration and replication are stored and read back |

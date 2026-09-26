@@ -14,7 +14,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3tables"
-	"github.com/aws/aws-sdk-go-v2/service/s3tables/document"
 	"github.com/aws/aws-sdk-go-v2/service/s3tables/types"
 	smithy "github.com/aws/smithy-go"
 
@@ -767,24 +766,5 @@ func TestCreateBucket_refusesTheWarehouseSuffix(t *testing.T) {
 	// Then: S3 refuses the suffix it reserves for S3 Tables
 	if code := apiErrorCode(t, err); code != "InvalidBucketName" {
 		t.Errorf("code = %s", code)
-	}
-}
-
-// schemaV2 (nested types as documents) is not emulated: it must be a 501, not
-// a table whose metadata silently lacks the columns asked for.
-func TestCreateTable_schemaV2IsNotImplemented(t *testing.T) {
-	f := newFixture(t, "v2-bucket")
-	_, err := f.tables.CreateTable(f.ctx, &s3tables.CreateTableInput{
-		TableBucketARN: aws.String(f.bucketARN), Namespace: aws.String(f.namespace), Name: aws.String("v2"),
-		Format: types.OpenTableFormatIceberg,
-		Metadata: &types.TableMetadataMemberIceberg{Value: types.IcebergMetadata{SchemaV2: &types.IcebergSchemaV2{
-			Type: types.SchemaV2FieldTypeStruct,
-			Fields: []types.SchemaV2Field{{Id: aws.Int32(1), Name: aws.String("id"), Required: aws.Bool(true),
-				Type: document.NewLazyDocument("long")}},
-		}}},
-	})
-	var re interface{ HTTPStatusCode() int }
-	if !errors.As(err, &re) || re.HTTPStatusCode() != http.StatusNotImplemented {
-		t.Errorf("err = %v, want a 501", err)
 	}
 }

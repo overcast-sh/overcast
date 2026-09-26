@@ -7,7 +7,6 @@ package s3tables
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -439,54 +438,6 @@ func (s *Service) deleteNamespaceTyped(ctx context.Context, req *namespaceReques
 
 // ─── Tables ───────────────────────────────────────────────────────────────────
 
-// icebergSchemaField is SchemaField.
-type icebergSchemaField struct {
-	ID       *int   `json:"id,omitempty"`
-	Name     string `json:"name"`
-	Type     string `json:"type"`
-	Required bool   `json:"required,omitempty"`
-}
-
-type icebergSchema struct {
-	Fields []icebergSchemaField `json:"fields"`
-}
-
-type icebergPartitionField struct {
-	SourceID  int    `json:"source-id"`
-	Transform string `json:"transform"`
-	Name      string `json:"name"`
-	FieldID   int    `json:"field-id,omitempty"`
-}
-
-type icebergPartitionSpec struct {
-	Fields []icebergPartitionField `json:"fields"`
-	SpecID *int                    `json:"spec-id,omitempty"`
-}
-
-type icebergSortField struct {
-	SourceID  int    `json:"source-id"`
-	Transform string `json:"transform"`
-	Direction string `json:"direction"`
-	NullOrder string `json:"null-order"`
-}
-
-type icebergSortOrder struct {
-	OrderID int                `json:"order-id"`
-	Fields  []icebergSortField `json:"fields"`
-}
-
-type icebergMetadata struct {
-	Schema        *icebergSchema        `json:"schema,omitempty"`
-	SchemaV2      json.RawMessage       `json:"schemaV2,omitempty"`
-	PartitionSpec *icebergPartitionSpec `json:"partitionSpec,omitempty"`
-	WriteOrder    *icebergSortOrder     `json:"writeOrder,omitempty"`
-	Properties    map[string]string     `json:"properties,omitempty"`
-}
-
-type tableMetadata struct {
-	Iceberg *icebergMetadata `json:"iceberg,omitempty"`
-}
-
 type createTableRequest struct {
 	TableBucketARN            string                     `json:"tableBucketARN"`
 	Namespace                 string                     `json:"namespace"`
@@ -565,14 +516,10 @@ func validateCreateTable(req *createTableRequest) (*icebergMetadata, *protocol.A
 	if req.Metadata == nil || req.Metadata.Iceberg == nil {
 		return nil, nil
 	}
-	iceberg := req.Metadata.Iceberg
-	if len(iceberg.SchemaV2) > 0 {
-		return nil, notImplemented("CreateTable with metadata.iceberg.schemaV2 is not emulated; declare the columns with metadata.iceberg.schema.")
+	if aerr := validateIcebergSchemaChoice(req.Metadata.Iceberg); aerr != nil {
+		return nil, aerr
 	}
-	if iceberg.Schema == nil {
-		return nil, badRequest("metadata.iceberg.schema is required.")
-	}
-	return iceberg, nil
+	return req.Metadata.Iceberg, nil
 }
 
 // newTableRecord is a new table in namespace n of bucket b, with a fresh id,

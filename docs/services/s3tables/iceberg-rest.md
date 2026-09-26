@@ -186,6 +186,12 @@ A table created with `CreateTable` but no schema has no metadata, so loading it
 through the catalog answers `NoSuchTableException` until something commits to
 it.
 
+A commit's schemas, specs and sort orders are held to the Iceberg spec's rules
+for nested types, as the reference implementation holds them. A partition
+source inside a list or map, and an identifier field that is optional, `float`,
+`double` or nested in a list, map or optional struct, are a `400
+BadRequestException`.
+
 ## Related
 
 - [S3 Tables](../s3tables.md)

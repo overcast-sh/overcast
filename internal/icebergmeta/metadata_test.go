@@ -82,7 +82,6 @@ func TestNew_partitionAndSortOrder(t *testing.T) {
 	// Given: a table partitioned by bucket[16](id) and sorted by name
 	in := baseInput()
 	in.PartitionFields = []PartitionField{{SourceID: 1, Name: "id_bucket", Transform: "bucket[16]"}}
-	in.SortOrderID = 1
 	in.SortFields = []SortField{{SourceID: 2, Transform: "identity", Direction: "asc", NullOrder: "nulls-first"}}
 
 	// When: its metadata is built
@@ -95,7 +94,7 @@ func TestNew_partitionAndSortOrder(t *testing.T) {
 	if got := m.PartitionSpecs[0].Fields[0].FieldID; got != 1000 || m.LastPartitionID != 1000 {
 		t.Errorf("partition field id = %d, last = %d", got, m.LastPartitionID)
 	}
-	if m.DefaultSortOrderID != 1 || len(m.SortOrders) != 2 {
+	if m.DefaultSortOrderID != 1 || len(m.SortOrders) != 1 {
 		t.Errorf("sort orders = %+v default %d", m.SortOrders, m.DefaultSortOrderID)
 	}
 }
@@ -112,10 +111,10 @@ func TestNew_rejectsWhatTheSpecDoesNotAllow(t *testing.T) {
 		"bad partition": func(in *CreateSpec) {
 			in.PartitionFields = []PartitionField{{SourceID: 9, Name: "p", Transform: "identity"}}
 		},
-		"sort order id zero":  func(in *CreateSpec) { in.SortFields = []SortField{{SourceID: 1, Transform: "identity"}} },
-		"missing location":    func(in *CreateSpec) { in.Location = "" },
-		"column without name": func(in *CreateSpec) { in.Fields[1].Name = "" },
-		"v3-only type":        func(in *CreateSpec) { in.Fields[0].Type = PrimitiveType("timestamp_ns") },
+		"sort field without direction": func(in *CreateSpec) { in.SortFields = []SortField{{SourceID: 1, Transform: "identity"}} },
+		"missing location":             func(in *CreateSpec) { in.Location = "" },
+		"column without name":          func(in *CreateSpec) { in.Fields[1].Name = "" },
+		"v3-only type":                 func(in *CreateSpec) { in.Fields[0].Type = PrimitiveType("timestamp_ns") },
 		"duplicate partition id": func(in *CreateSpec) {
 			in.PartitionFields = []PartitionField{{SourceID: 1, Name: "a", Transform: "identity", FieldID: 1001}, {SourceID: 2, Name: "b", Transform: "identity", FieldID: 1001}}
 		},
@@ -123,7 +122,6 @@ func TestNew_rejectsWhatTheSpecDoesNotAllow(t *testing.T) {
 			in.PartitionFields = []PartitionField{{SourceID: 1, Name: "a", Transform: "identity"}, {SourceID: 2, Name: "a", Transform: "identity"}}
 		},
 		"bad sort direction": func(in *CreateSpec) {
-			in.SortOrderID = 1
 			in.SortFields = []SortField{{SourceID: 1, Transform: "identity", Direction: "up", NullOrder: "nulls-first"}}
 		},
 	}
