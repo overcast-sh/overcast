@@ -6,24 +6,26 @@ import (
 	"strings"
 
 	"github.com/overcast-sh/overcast/internal/protocol"
+	"github.com/overcast-sh/overcast/internal/services/glue"
 )
 
 // statement_router.go — which runner owns a statement (Decision 2 of
 // docs/plans/athena-s3tables-iceberg.md): Overcast runs Athena's Hive DDL
 // against the Glue Data Catalog itself, and everything else goes to the
-// engine — Trino when it can run, the inert engine when it cannot.
+// engine — Trino when it can run, the inert engine when it cannot. A
+// statement in a table bucket's catalog is routed in s3tables_statements.go.
 
 // runnerFor picks the runner for qe's statement.
 func (s *Service) runnerFor(ctx context.Context, qe QueryExecution) queryRunner {
-	if isS3TablesCatalog(qe.QueryExecutionContext.Catalog) {
-		return failedRunner{s3TablesQueryFailure()}
-	}
 	database := orDefault(qe.QueryExecutionContext.Database, defaultDatabase)
 	stmt, err := parseDDL(qe.Query)
 	if err != nil {
 		return failedRunner{syntaxFailure(err)}
 	}
 	if stmt != nil {
+		if catalog := ddlS3TablesCatalog(stmt, qe.QueryExecutionContext.Catalog); catalog != "" {
+			return s.s3TablesDDLRunner(ctx, qe, stmt, catalog, database)
+		}
 		env := ddlEnv{catalog: s.catalog, writer: s.catalogWriter, list: s.listObjects, database: database}
 		if engineSQL, ok := s.icebergDrop(ctx, stmt, env); ok {
 			return s.trinoRunnerFor(ctx, qe, engineSQL, database)
@@ -33,10 +35,11 @@ func (s *Service) runnerFor(ctx context.Context, qe QueryExecution) queryRunner 
 	if r, ok := s.preparedRunnerFor(qe); ok {
 		return r
 	}
-	if s.engine == nil || !s.engine.available() {
+	if !s.engineAvailable() {
 		return inertRunner{}
 	}
 	sql, err := rewriteForEngine(qe.Query, engineRewrite{
+		catalog:        qe.QueryExecutionContext.Catalog,
 		database:       database,
 		tablesLocation: tablesLocation(qe),
 		prepared:       func(name string) (string, bool) { return s.preparedQuery(ctx, qe.WorkGroup, name) },
@@ -52,7 +55,7 @@ func (s *Service) runnerFor(ctx context.Context, qe QueryExecution) queryRunner 
 // removes its data as Athena does; the catalog alone would only forget it.
 func (s *Service) icebergDrop(ctx context.Context, stmt ddlStatement, env ddlEnv) (string, bool) {
 	drop, ok := stmt.(*dropTableStmt)
-	if !ok || s.engine == nil || !s.engine.available() {
+	if !ok || !s.engineAvailable() {
 		return "", false
 	}
 	ref := env.resolve(drop.Table)
@@ -63,10 +66,22 @@ func (s *Service) icebergDrop(ctx context.Context, stmt ddlStatement, env ddlEnv
 	return "DROP TABLE " + qualified(icebergCatalog, ref, ref.Database), true
 }
 
+// engineAvailable reports whether statements can run on the engine.
+func (s *Service) engineAvailable() bool { return s.engine != nil && s.engine.available() }
+
+// trinoRunnerFor runs sql on the engine in the query's catalog: a table
+// bucket's, or else AwsDataCatalog's. A statement in or naming a table
+// bucket's catalog has the engine's table bucket catalogs brought up to date
+// first.
 func (s *Service) trinoRunnerFor(ctx context.Context, qe QueryExecution, sql, database string) trinoRunner {
+	catalog := asS3TablesCatalog(qe.QueryExecutionContext.Catalog)
+	s3Tables := catalog != "" || strings.Contains(strings.ToLower(sql), glue.S3TablesCatalogName)
+	if catalog == "" {
+		catalog = hiveCatalog
+	}
 	return trinoRunner{
-		engine: s.engine, sql: sql,
-		session: trinoSession{Catalog: hiveCatalog, Schema: database},
+		engine: s.engine, sql: sql, s3Tables: s3Tables,
+		session: trinoSession{Catalog: catalog, Schema: database},
 		header:  qe.StatementType == statementDML,
 		cutoff:  s.bytesScannedCutoff(ctx, qe.WorkGroup),
 		clk:     s.clk,
@@ -106,14 +121,6 @@ func orDefault(v, fallback string) string {
 		return fallback
 	}
 	return strings.ToLower(v)
-}
-
-// s3TablesQueryFailure fails a query run in an S3 Tables catalog, which the
-// engine has no catalog for yet (#2183): running it against AwsDataCatalog
-// instead would answer about the wrong tables.
-func s3TablesQueryFailure() *queryFailure {
-	return failure(errorCategoryUser, errorTypeNotSupported,
-		"NOT_SUPPORTED: Overcast cannot run queries in an s3tablescatalog/<bucket> catalog yet; its metadata operations can read it.")
 }
 
 func syntaxFailure(err error) *queryFailure {

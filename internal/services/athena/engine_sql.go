@@ -19,12 +19,16 @@ import (
 //     and lands on the Iceberg catalog when table_type is ICEBERG — and, when
 //     it names no location, under the query's result location, as Athena
 //     puts it;
+//   - either of those, in a table bucket's catalog, creates an Iceberg table
+//     in S3 Tables, which chooses its location itself;
 //   - EXECUTE of a prepared statement, and any query given
 //     ExecutionParameters, becomes EXECUTE IMMEDIATE … USING.
 
 // engineRewrite is what a rewrite knows beyond the statement itself.
 type engineRewrite struct {
-	// database is the query's database, which names an unqualified table.
+	// catalog is the query's catalog, and database its database: together
+	// they name an unqualified table.
+	catalog  string
 	database string
 	// tablesLocation is where a CTAS that names no location writes its
 	// data: "<result location>/tables/<query id>/". Empty for managed
@@ -52,6 +56,9 @@ func rewriteForEngine(sql string, rw engineRewrite) (string, error) {
 		if sql, err = rewriteCreateTable(p, rw); err != nil {
 			return "", err
 		}
+	case isCatalogStatement(p):
+		p.next()
+		return "", p.fail("mismatched input")
 	case p.peek().is("EXECUTE") && !p.peekAt(1).is("IMMEDIATE"):
 		p.next()
 		return rewriteExecute(p, rw)
@@ -59,6 +66,13 @@ func rewriteForEngine(sql string, rw engineRewrite) (string, error) {
 		sql = p.src
 	}
 	return bindParameters(sql, rw.parameters), nil
+}
+
+// isCatalogStatement reports whether p holds CREATE, ALTER or DROP CATALOG:
+// Trino's, not Athena's, and on the engine they would add or take away the
+// catalogs Overcast manages (engine_catalogs.go).
+func isCatalogStatement(p *ddlParser) bool {
+	return p.peekAt(1).is("CATALOG") && (p.peek().is("CREATE") || p.peek().is("ALTER") || p.peek().is("DROP"))
 }
 
 // engineStatement is sql without a final semicolon or trailing comments.
@@ -142,13 +156,23 @@ func rewriteCreateTable(p *ddlParser, rw engineRewrite) (string, error) {
 	if !isIcebergProperties(s.Properties) {
 		return "", &ddlSyntaxError{msg: "Only external table creation is supported. Use CREATE EXTERNAL TABLE, or CREATE TABLE with TBLPROPERTIES ('table_type'='ICEBERG')."}
 	}
-	return icebergCreateTable(s, rw.database)
+	return icebergCreateTable(s, rw)
 }
 
-// icebergCreateTable is an Iceberg table's DDL in Trino's form.
-func icebergCreateTable(s *createTableStmt, database string) (string, error) {
-	if s.Location == "" {
+// icebergCreateTable is an Iceberg table's DDL in Trino's form: on Glue's
+// Iceberg catalog, at its LOCATION, or in S3 Tables, which has none.
+func icebergCreateTable(s *createTableStmt, rw engineRewrite) (string, error) {
+	catalog := s3TablesCatalogOf(s.Table, rw.catalog)
+	inTableBucket := catalog != ""
+	var props []string
+	switch {
+	case inTableBucket && s.Location != "":
+		return "", errS3TablesLocation
+	case inTableBucket: // S3 Tables places the table
+	case s.Location == "":
 		return "", &statementError{errorType: errorTypeUser, msg: "LOCATION is required for an Iceberg table."}
+	default:
+		catalog, props = icebergCatalog, []string{"location = " + quoteString(s.Location)}
 	}
 	cols := make([]string, len(s.Columns))
 	for i, c := range s.Columns {
@@ -161,7 +185,7 @@ func icebergCreateTable(s *createTableStmt, database string) (string, error) {
 			cols[i] += " COMMENT " + quoteString(c.Comment)
 		}
 	}
-	props := []string{"location = " + quoteString(s.Location), "format = " + quoteString(icebergFormat(s.Properties))}
+	props = append(props, "format = "+quoteString(icebergFormat(s.Properties)))
 	if len(s.PartitionedBy) > 0 {
 		parts := make([]string, len(s.PartitionedBy))
 		for i, entry := range s.PartitionedBy {
@@ -170,11 +194,8 @@ func icebergCreateTable(s *createTableStmt, database string) (string, error) {
 		props = append(props, "partitioning = ARRAY["+strings.Join(parts, ", ")+"]")
 	}
 	var b strings.Builder
-	b.WriteString("CREATE TABLE ")
-	if s.IfNotExists {
-		b.WriteString("IF NOT EXISTS ")
-	}
-	b.WriteString(qualified(icebergCatalog, s.Table, database) + " (" + strings.Join(cols, ", ") + ")")
+	b.WriteString("CREATE TABLE " + ifClause(s.IfNotExists, "IF NOT EXISTS "))
+	b.WriteString(qualified(catalog, s.Table, rw.database) + " (" + strings.Join(cols, ", ") + ")")
 	if s.Comment != "" {
 		b.WriteString(" COMMENT " + quoteString(s.Comment))
 	}
@@ -225,15 +246,11 @@ func rewriteCTAS(p *ddlParser, rw engineRewrite, table tableRef, ifNotExists boo
 		return "", p.fail("expected AS")
 	}
 	query := p.src[p.peek().start:]
-	catalog, with, err := ctasTarget(props, rw.tablesLocation)
+	catalog, with, err := ctasTarget(props, s3TablesCatalogOf(table, rw.catalog), rw.tablesLocation)
 	if err != nil {
 		return "", err
 	}
-	head := "CREATE TABLE "
-	if ifNotExists {
-		head += "IF NOT EXISTS "
-	}
-	return head + qualified(catalog, table, rw.database) + " WITH (" + strings.Join(with, ", ") + ") " + query, nil
+	return "CREATE TABLE " + ifClause(ifNotExists, "IF NOT EXISTS ") + qualified(catalog, table, rw.database) + " WITH (" + strings.Join(with, ", ") + ") " + query, nil
 }
 
 // parseCTASProperties reads (name = value, …), each value as written.
@@ -273,11 +290,22 @@ var (
 	}
 )
 
-// ctasTarget decides a CTAS's catalog and its Trino table properties.
-func ctasTarget(props []ctasProperty, tablesLocation string) (catalog string, with []string, err error) {
+// ctasTarget decides a CTAS's catalog and its Trino table properties. A
+// table in s3Tables, a table bucket's catalog, is Iceberg, and has no
+// location of its own: S3 Tables places it.
+func ctasTarget(props []ctasProperty, s3Tables, tablesLocation string) (catalog string, with []string, err error) {
+	var tableType string
+	if i := slices.IndexFunc(props, func(p ctasProperty) bool { return p.Key == "table_type" }); i >= 0 {
+		tableType = strings.ToUpper(strings.Trim(props[i].Value, `'`))
+	}
+	inTableBucket := s3Tables != ""
 	catalog, names, locationKey := hiveCatalog, hiveCTASProperties, "external_location"
-	if i := slices.IndexFunc(props, func(p ctasProperty) bool { return p.Key == "table_type" }); i >= 0 &&
-		strings.EqualFold(strings.Trim(props[i].Value, `'`), "ICEBERG") {
+	switch {
+	case inTableBucket && tableType != "" && tableType != "ICEBERG":
+		return "", nil, &statementError{errorType: errorTypeUser, msg: "An S3 Tables table is an Iceberg table, not " + tableType + "."}
+	case inTableBucket:
+		catalog, names, locationKey = s3Tables, icebergCTASProperties, ""
+	case tableType == "ICEBERG":
 		catalog, names, locationKey = icebergCatalog, icebergCTASProperties, "location"
 	}
 	hasFormat, hasLocation := false, false
@@ -287,10 +315,12 @@ func ctasTarget(props []ctasProperty, tablesLocation string) (catalog string, wi
 			continue
 		}
 		value := prop.Value
-		switch name {
-		case "format":
+		switch {
+		case name == "format":
 			hasFormat, value = true, strings.ToUpper(value)
-		case locationKey:
+		case inTableBucket && name == "location":
+			return "", nil, errS3TablesLocation
+		case name == locationKey:
 			hasLocation = true
 		}
 		with = append(with, name+" = "+value)
@@ -298,7 +328,7 @@ func ctasTarget(props []ctasProperty, tablesLocation string) (catalog string, wi
 	if !hasFormat {
 		with = append(with, "format = 'PARQUET'")
 	}
-	if !hasLocation {
+	if !hasLocation && !inTableBucket {
 		if tablesLocation == "" {
 			return "", nil, &statementError{errorType: errorTypeUser, msg: "CREATE TABLE AS needs " + locationKey + " when the workgroup keeps no result location."}
 		}

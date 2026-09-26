@@ -79,7 +79,7 @@ func TestParseDDL_otherStatements(t *testing.T) {
 		"create schema Sales":                         &createDatabaseStmt{Name: "sales"},
 		"DROP DATABASE IF EXISTS sales CASCADE":       &dropDatabaseStmt{Name: "sales", IfExists: true, Cascade: true},
 		"DROP SCHEMA sales RESTRICT":                  &dropDatabaseStmt{Name: "sales"},
-		"DROP TABLE IF EXISTS awsdatacatalog.sales.t": &dropTableStmt{Table: tableRef{Database: "sales", Table: "t"}, IfExists: true},
+		"DROP TABLE IF EXISTS awsdatacatalog.sales.t": &dropTableStmt{Table: tableRef{Catalog: "awsdatacatalog", Database: "sales", Table: "t"}, IfExists: true},
 		"MSCK REPAIR TABLE t":                         &repairTableStmt{Table: tableRef{Table: "t"}},
 		"SHOW DATABASES LIKE 'sa*'":                   &showDatabasesStmt{Pattern: "sa*"},
 		"SHOW TABLES IN sales 'o*|l*'":                &showTablesStmt{Database: "sales", Pattern: "o*|l*"},

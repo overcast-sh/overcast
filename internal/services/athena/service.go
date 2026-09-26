@@ -100,6 +100,14 @@ func (s *Service) InitS3Access(put events.S3PutObjectStreamFunc, list events.S3L
 	s.listObjects = list
 }
 
+// InitS3Tables wires S3 Tables' table buckets, each of which the engine
+// queries as a catalog of its own; see engine_catalogs.go.
+func (s *Service) InitS3Tables(tables events.S3TablesCatalog) {
+	if s.engine != nil {
+		s.engine.tables = tables
+	}
+}
+
 // InitRouter hands the service the router the engine reaches Overcast's API
 // through; see engine_gateway.go.
 func (s *Service) InitRouter(h http.Handler) {

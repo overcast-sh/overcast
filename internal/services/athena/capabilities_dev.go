@@ -9,7 +9,7 @@ func init() {
 	capabilities.Default.Register(
 		// Queries
 		capabilities.Capability{Service: svc, Operation: "StartQueryExecution", Category: "Queries", Status: capabilities.StatusSupported,
-			Notes: "Runs on a Trino engine container started on the first query; Hive DDL runs against the Glue Data Catalog; results written to OutputLocation. Without Docker, or with ATHENA_ENGINE=inert, queries succeed with no rows"},
+			Notes: "Runs on a Trino engine container started on the first query; Hive DDL runs against the Glue Data Catalog; s3tablescatalog/<bucket> queries and writes S3 Tables; results written to OutputLocation. Without Docker, or with ATHENA_ENGINE=inert, queries succeed with no rows"},
 		capabilities.Capability{Service: svc, Operation: "GetQueryExecution", Category: "Queries", Status: capabilities.StatusSupported,
 			Notes: "Full QueryExecution: context, statement type, engine version, resolved result configuration, statistics"},
 		capabilities.Capability{Service: svc, Operation: "BatchGetQueryExecution", Category: "Queries", Status: capabilities.StatusSupported,

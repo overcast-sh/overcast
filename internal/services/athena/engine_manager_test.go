@@ -173,9 +173,17 @@ func TestEngineManager_startsOneEngineForConcurrentQueries(t *testing.T) {
 		t.Fatalf("create request = %+v", req)
 	}
 	files := untar(t, d.archives["engine1"])
-	if !strings.Contains(files["etc/athena/jvm.config"], "-Xmx512m") ||
-		!strings.Contains(files["etc/athena/catalog/awsdatacatalog.properties"], "hive.metastore.glue.endpoint-url=http://gateway.test:1") {
+	if !strings.Contains(files["etc/athena/jvm.config"], "-Xmx512m") {
 		t.Fatalf("configuration = %v", files)
+	}
+
+	// And: once it answered, it was given the Glue catalogs, pointed at the
+	// gateway, before any query ran on it
+	statements := d.trino.statements()
+	if len(statements) < 2 || !strings.HasPrefix(statements[0], `CREATE CATALOG IF NOT EXISTS "awsdatacatalog" USING hive`) ||
+		!strings.HasPrefix(statements[1], `CREATE CATALOG IF NOT EXISTS "awsdatacatalog_iceberg" USING iceberg`) ||
+		!strings.Contains(statements[0], `"hive.metastore.glue.endpoint-url" = 'http://gateway.test:1'`) {
+		t.Fatalf("statements = %q", statements)
 	}
 }
 

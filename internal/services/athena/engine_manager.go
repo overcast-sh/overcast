@@ -12,6 +12,7 @@ import (
 	"github.com/overcast-sh/overcast/internal/clock"
 	"github.com/overcast-sh/overcast/internal/config"
 	"github.com/overcast-sh/overcast/internal/docker"
+	"github.com/overcast-sh/overcast/internal/events"
 	"github.com/overcast-sh/overcast/internal/serviceutil"
 )
 
@@ -57,7 +58,13 @@ type engineBoot struct {
 	done        chan struct{}
 	endpoint    string
 	containerID string
+	settings    engineSettings
 	err         error
+
+	// catalogsMu serialises syncing the S3 Tables catalogs, and guards
+	// tableBuckets: the buckets this engine has a catalog for.
+	catalogsMu   sync.Mutex
+	tableBuckets map[string]bool
 }
 
 type engineManager struct {
@@ -67,8 +74,11 @@ type engineManager struct {
 	client    *trinoClient
 	instances *serviceutil.InstanceDomain
 	gateway   engineGateway
-	bgCtx     context.Context
-	bgCancel  context.CancelFunc
+	// tables lists the table buckets the engine gives a catalog each; until
+	// InitS3Tables sets it, the engine has no table bucket catalogs.
+	tables   events.S3TablesCatalog
+	bgCtx    context.Context
+	bgCancel context.CancelFunc
 
 	// settled closes once it is known whether Docker is there: SetDocker, or
 	// the probe failing. A query waits for it rather than running inert in
@@ -165,7 +175,7 @@ func (m *engineManager) acquire(ctx context.Context) (endpoint string, release f
 		return "", nil, errEngineUnavailable
 	}
 	if m.boot == nil {
-		m.boot = &engineBoot{done: make(chan struct{})}
+		m.boot = &engineBoot{done: make(chan struct{}), tableBuckets: map[string]bool{}}
 		go m.start(m.boot)
 	}
 	b := m.boot
@@ -252,8 +262,8 @@ func retire(gc *docker.GC, containerID string) {
 // starts a new one rather than dialling a dead one.
 func (m *engineManager) invalidate(endpoint string) {
 	m.mu.Lock()
-	b := m.boot
-	if b == nil || b.endpoint != endpoint {
+	b := m.bootAtLocked(endpoint)
+	if b == nil {
 		m.mu.Unlock()
 		return
 	}
@@ -263,6 +273,23 @@ func (m *engineManager) invalidate(endpoint string) {
 	m.mu.Unlock()
 	m.log.Warn("the query engine stopped answering; the next query starts a new one", zap.String("container", b.containerID))
 	retire(gc, b.containerID)
+}
+
+// bootAt is the running boot of the engine at endpoint, or nil when the
+// engine there has since been stopped or replaced.
+func (m *engineManager) bootAt(endpoint string) *engineBoot {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.bootAtLocked(endpoint)
+}
+
+// bootAtLocked is bootAt for a caller that holds mu. A boot still starting
+// is not yet anyone's, and its endpoint not yet written.
+func (m *engineManager) bootAtLocked(endpoint string) *engineBoot {
+	if m.boot == nil || !isDone(m.boot.done) || m.boot.endpoint != endpoint {
+		return nil
+	}
+	return m.boot
 }
 
 // start runs one boot of the engine: pull, create, configure, start, wait.
@@ -276,7 +303,9 @@ func (m *engineManager) start(b *engineBoot) {
 	pulled := m.clk.Now()
 	if err == nil {
 		m.setState(engineStarting, "")
-		b.containerID, b.endpoint, err = m.startContainer(m.bgCtx)
+		var c engineContainer
+		c, err = m.startContainer(m.bgCtx)
+		b.containerID, b.endpoint, b.settings = c.id, c.endpoint, c.settings
 	}
 	if err == nil {
 		err = m.awaitReady(b)
@@ -303,7 +332,8 @@ func (m *engineManager) start(b *engineBoot) {
 }
 
 // awaitReady waits for a started engine to report it has finished starting,
-// failing at once if its container exits.
+// failing at once if its container exits, and then gives it the Glue
+// catalogs, all within engineReadyTimeout.
 func (m *engineManager) awaitReady(b *engineBoot) error {
 	ctx, cancel := context.WithTimeout(m.bgCtx, engineReadyTimeout)
 	defer cancel()
@@ -311,7 +341,7 @@ func (m *engineManager) awaitReady(b *engineBoot) error {
 	defer tick.Stop()
 	for {
 		if starting, err := m.client.info(ctx, b.endpoint); err == nil && !starting {
-			return nil
+			return m.createCatalogs(ctx, b.endpoint, glueCatalogs(b.settings))
 		}
 		if exited := m.containerExited(ctx, b.containerID); exited != "" {
 			return errors.New(exited)

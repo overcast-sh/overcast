@@ -48,6 +48,7 @@ queries start at once.
 | Statistics | `Statistics` and `GetQueryRuntimeStatistics` from the engine's own timings and bytes scanned |
 | DDL | `CREATE EXTERNAL TABLE`, `CREATE DATABASE`, `DROP`, `ALTER TABLE ADD/DROP PARTITION`, `MSCK REPAIR TABLE`, `SHOW` and `DESCRIBE` write and read the Glue Data Catalog directly |
 | Iceberg | `CREATE TABLE … TBLPROPERTIES ('table_type'='ICEBERG')`, then `INSERT`, `MERGE`, `UPDATE` and `DELETE` commit through Glue's `metadata_location` |
+| S3 Tables | Each table bucket is the catalog `s3tablescatalog/<bucket>`, as the query's catalog or in a table's full name; see [S3 Tables](#s3-tables) |
 | Formats | CSV, JSON, Parquet, ORC and Avro tables in S3, partitioned or not |
 | Workgroups | Create, get, list, update and delete; the result location, its enforcement and `BytesScannedCutoffPerQuery` apply to each query |
 | Idempotency | A repeated `ClientRequestToken` returns the same query or named query |
@@ -71,13 +72,36 @@ settings, and `/_overcast/athena/engine` reports its state.
 | First query | Starts at once | Waits for the engine to start |
 | Result reuse | `ResultReuseConfiguration` reuses a recent result | Every query runs |
 | CloudWatch metrics | Published when the workgroup enables them | Not published |
-| S3 Tables catalogs | `s3tablescatalog/<bucket>` lists and queries a table bucket | Listed through the metadata operations; a query run in one fails `NOT_SUPPORTED` |
+| S3 Tables DDL | Iceberg DDL, except `ALTER TABLE RENAME`, `CREATE VIEW` and `ALTER DATABASE` | Also refuses a namespace's `COMMENT`, `LOCATION` or properties, and `SHOW PARTITIONS` |
 | Data catalogs | `FEDERATED` provisions a connector | `FEDERATED` is refused with a 501 |
 | Metadata | `LAMBDA` and `HIVE` catalogs are read through their connector | Only `GLUE` catalogs for this account are readable |
 | Spark | Spark workgroups, sessions and notebooks | Not emulated |
 
 The rest — result files, statistics, errors and the engine itself — is in
 [Athena limitations](./athena/limitations.md).
+
+## S3 Tables
+
+A table bucket is queried as `s3tablescatalog/<bucket>`, as on AWS: set it as
+the query's `Catalog` and a namespace as its `Database`, or name a table in
+full, `"s3tablescatalog/<bucket>"."<namespace>"."<table>"`. A bucket needs no
+registering, and one created while the engine runs is queryable at once.
+
+- `SELECT`, `INSERT`, `MERGE`, `UPDATE` and `DELETE` run on the engine, and
+  every write commits through S3 Tables' Iceberg REST catalog, moving the
+  table's metadata location.
+- `CREATE TABLE … TBLPROPERTIES ('table_type'='iceberg')` and CTAS create an
+  S3 Tables table. Leave out `LOCATION` and `location`: S3 Tables chooses
+  where a table lives. A CTAS is Iceberg and Parquet unless it says otherwise.
+- `CREATE DATABASE` creates a namespace, and `DROP TABLE` and `DROP DATABASE`
+  delete one. `SHOW` and `DESCRIBE` read the bucket.
+- Hive's own table statements — `CREATE EXTERNAL TABLE`, partitions and
+  `MSCK REPAIR TABLE` — fail `NOT_SUPPORTED`, since a table bucket holds only
+  Iceberg tables.
+
+With the engine off, `SHOW` and `DESCRIBE` still read a bucket, but a
+statement that would change one fails `NOT_SUPPORTED` rather than succeed
+having changed nothing.
 
 ## Gotchas
 

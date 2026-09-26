@@ -8099,7 +8099,7 @@
           "operation": "StartQueryExecution",
           "category": "Queries",
           "status": "✅ Supported",
-          "notes": "Runs on a Trino engine container started on the first query; Hive DDL runs against the Glue Data Catalog; results written to OutputLocation. Without Docker, or with ATHENA_ENGINE=inert, queries succeed with no rows"
+          "notes": "Runs on a Trino engine container started on the first query; Hive DDL runs against the Glue Data Catalog; s3tablescatalog/\u003cbucket\u003e queries and writes S3 Tables; results written to OutputLocation. Without Docker, or with ATHENA_ENGINE=inert, queries succeed with no rows"
         },
         {
           "operation": "GetQueryExecution",

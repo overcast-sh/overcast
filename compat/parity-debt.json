@@ -166,6 +166,12 @@
     },
     {
       "suite": "dotnet-sdk",
+      "service": "athena",
+      "group": "athena-s3tables",
+      "tests": 3
+    },
+    {
+      "suite": "dotnet-sdk",
       "service": "backup",
       "group": "backup-jobs",
       "tests": 4
@@ -826,6 +832,12 @@
     },
     {
       "suite": "java-sdk",
+      "service": "athena",
+      "group": "athena-s3tables",
+      "tests": 3
+    },
+    {
+      "suite": "java-sdk",
       "service": "backup",
       "group": "backup-jobs",
       "tests": 4
@@ -1039,6 +1051,12 @@
       "service": "appconfigdata",
       "group": "appconfigdata-sessions",
       "tests": 5
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "athena",
+      "group": "athena-s3tables",
+      "tests": 3
     },
     {
       "suite": "node-js-sdk",
@@ -1543,6 +1561,12 @@
       "service": "athena",
       "group": "athena-engine",
       "tests": 4
+    },
+    {
+      "suite": "rust-sdk",
+      "service": "athena",
+      "group": "athena-s3tables",
+      "tests": 3
     },
     {
       "suite": "rust-sdk",

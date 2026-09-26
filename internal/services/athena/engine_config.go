@@ -30,9 +30,10 @@ const (
 	// engineMinHeap is the smallest heap that runs ordinary queries.
 	engineMinHeap = 512 << 20
 
-	// The two catalogs: Hive on the Glue metastore, which is what Athena
-	// calls AwsDataCatalog, and Iceberg on the same Glue catalog, which the
-	// Hive catalog redirects Iceberg tables to.
+	// The two Glue catalogs: Hive on the Glue metastore, which is what
+	// Athena calls AwsDataCatalog, and Iceberg on the same Glue catalog,
+	// which the Hive catalog redirects Iceberg tables to. S3 Tables' catalogs
+	// are named as Athena names them (engine_catalogs.go).
 	hiveCatalog    = "awsdatacatalog"
 	icebergCatalog = "awsdatacatalog_iceberg"
 )
@@ -40,7 +41,8 @@ const (
 // engineSettings are the inputs the configuration is rendered from.
 type engineSettings struct {
 	// Overcast is the origin the container reaches Overcast's API on, for
-	// both Glue and S3, and AccessKey the key the gateway there accepts.
+	// Glue, S3 and S3 Tables' Iceberg REST catalog, and AccessKey the key
+	// the gateway there accepts.
 	Overcast  string
 	AccessKey string
 	Region    string
@@ -83,6 +85,10 @@ func renderEngineFiles(s engineSettings) map[string]string {
 			"sink.max-buffer-size=8MB",
 			"task.max-partial-aggregation-memory=4MB",
 			"query.max-history=10",
+			// Catalogs are created with CREATE CATALOG once the engine is
+			// up (engine_catalogs.go), and live only as long as it does.
+			"catalog.management=dynamic",
+			"catalog.store=memory",
 		),
 		"node.properties": lines(
 			"node.environment=overcast",
@@ -90,38 +96,36 @@ func renderEngineFiles(s engineSettings) map[string]string {
 			"node.data-dir=/data/trino",
 		),
 		"log.properties": lines("io.trino=WARN"),
-		"catalog/" + hiveCatalog + ".properties": lines(append([]string{
-			"connector.name=hive",
-			"hive.metastore=glue",
-			"hive.iceberg-catalog-name=" + icebergCatalog,
-			"hive.non-managed-table-writes-enabled=true",
-			"hive.non-managed-table-creates-enabled=true",
-		}, s.awsProperties()...)...),
-		"catalog/" + icebergCatalog + ".properties": lines(append([]string{
-			"connector.name=iceberg",
-			"iceberg.catalog.type=glue",
-		}, s.awsProperties()...)...),
 	}
 }
 
 // awsProperties point a catalog's Glue metastore and its S3 file system at
-// Overcast. S3 is path-style: the endpoint is an address, not a name a
-// bucket can be prefixed to. The secret is the one Overcast checks a
-// signature from an unknown key against, so the engine's calls pass
-// OVERCAST_SIGV4_VALIDATE.
-func (s engineSettings) awsProperties() []string {
-	return []string{
-		"hive.metastore.glue.region=" + s.Region,
-		"hive.metastore.glue.endpoint-url=" + s.Overcast,
-		"hive.metastore.glue.catalogid=" + s.AccountID,
-		"hive.metastore.glue.aws-access-key=" + s.AccessKey,
-		"hive.metastore.glue.aws-secret-key=" + middleware.DefaultSigV4Secret,
-		"fs.native-s3.enabled=true",
-		"s3.endpoint=" + s.Overcast,
-		"s3.region=" + s.Region,
-		"s3.path-style-access=true",
-		"s3.aws-access-key=" + s.AccessKey,
-		"s3.aws-secret-key=" + middleware.DefaultSigV4Secret,
+// Overcast.
+func (s engineSettings) awsProperties() map[string]string {
+	props := s.s3Properties()
+	maps.Copy(props, map[string]string{
+		"hive.metastore.glue.region":         s.Region,
+		"hive.metastore.glue.endpoint-url":   s.Overcast,
+		"hive.metastore.glue.catalogid":      s.AccountID,
+		"hive.metastore.glue.aws-access-key": s.AccessKey,
+		"hive.metastore.glue.aws-secret-key": middleware.DefaultSigV4Secret,
+	})
+	return props
+}
+
+// s3Properties point a catalog's S3 file system at Overcast, and give an
+// Iceberg REST catalog the key it signs with. S3 is path-style: the endpoint
+// is an address, not a name a bucket can be prefixed to. The secret is the
+// one Overcast checks a signature from an unknown key against, so the
+// engine's calls pass OVERCAST_SIGV4_VALIDATE.
+func (s engineSettings) s3Properties() map[string]string {
+	return map[string]string{
+		"fs.native-s3.enabled": "true",
+		"s3.endpoint":          s.Overcast,
+		"s3.region":            s.Region,
+		"s3.path-style-access": "true",
+		"s3.aws-access-key":    s.AccessKey,
+		"s3.aws-secret-key":    middleware.DefaultSigV4Secret,
 	}
 }
 

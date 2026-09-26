@@ -38,16 +38,19 @@ type glueS3TablesCliGroup struct{}
 
 const glueS3TablesCliTable = "orders"
 
-// glueS3TablesBucket is the run's table bucket: lowercase letters, digits
-// and hyphens only.
-func glueS3TablesBucket(runID string) string {
+// glueS3TablesBucket is the run's table bucket.
+func glueS3TablesBucket(runID string) string { return tableBucketName("glue-s3tables-", runID) }
+
+// tableBucketName is a run's table bucket name under prefix: lowercase
+// letters, digits and hyphens, at most 63 of them.
+func tableBucketName(prefix, runID string) string {
 	var b strings.Builder
 	for _, r := range strings.ToLower(runID) {
 		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
 			b.WriteRune(r)
 		}
 	}
-	name := "glue-s3tables-" + strings.Trim(b.String(), "-")
+	name := prefix + strings.Trim(b.String(), "-")
 	if len(name) > 63 {
 		name = strings.TrimRight(name[:63], "-")
 	}

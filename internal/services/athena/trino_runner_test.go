@@ -23,7 +23,7 @@ func readyEngine(t *testing.T, endpoint string) *engineManager {
 	done := make(chan struct{})
 	close(done)
 	m.docker = docker.NewClient("tcp://127.0.0.1:1", zap.NewNop())
-	m.boot = &engineBoot{done: done, endpoint: endpoint}
+	m.boot = &engineBoot{done: done, endpoint: endpoint, tableBuckets: map[string]bool{}}
 	return m
 }
 

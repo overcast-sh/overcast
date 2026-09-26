@@ -24,6 +24,9 @@ type trinoRunner struct {
 	engine  *engineManager
 	sql     string
 	session trinoSession
+	// s3Tables is whether the statement runs in, or names, a table bucket's
+	// catalog, which the engine is then given first.
+	s3Tables bool
 	// header puts the column names first, as a SELECT's result has them.
 	header bool
 	// cutoff is the workgroup's BytesScannedCutoffPerQuery; 0 is none.
@@ -43,6 +46,9 @@ func (r trinoRunner) run(ctx context.Context, running func(), out rowSink) (*que
 		return nil, failure(errorCategorySystem, errorTypeEngineInternal, err.Error())
 	}
 	defer release()
+	if r.s3Tables {
+		r.engine.syncS3TablesCatalogs(ctx, endpoint)
+	}
 	booted := r.clk.Since(queued).Milliseconds()
 
 	rows := &trinoRows{out: out, header: r.header}
