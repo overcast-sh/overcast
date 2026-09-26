@@ -154,12 +154,7 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	}, clk)
 
 	// ---- Middleware chain --------------------------------------------------
-	// The request chain is per-request plumbing, and none of it dispatches:
-	// the Athena engine gateway serves it in front of handlers that route by
-	// signing name alone (engine_api.go), so a middleware that sends a request
-	// to a service belongs after it, as queryGetMiddleware does. IAM
-	// enforcement is the one link that has to know how its router dispatches,
-	// which is why the chain is built per router.
+	// See request_chain.go.
 	//
 	// hostRoutes is populated further down, once the services HostAddressing
 	// dispatches to (API Gateway, Lambda, AppSync) are constructed — see
@@ -172,55 +167,8 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	// a Query call is authorised as the operation it is served as (#2229).
 	operationRegistry := awsapi.NewRegistry()
 	root := &rootDispatch{registry: operationRegistry}
-	// newRequestChain builds the chain for a router whose AWS Query dispatch
-	// is queries: the root router's, or nil for the Athena engine gateway,
-	// which serves no Query operation (its Glue POST / answers one with 501).
-	newRequestChain := func(queries middleware.QueryRouter) chi.Middlewares {
-		return chi.Middlewares{
-			middleware.RealIP,
-			middleware.CORS,
-			middleware.DrainBody,
-			// HostAddressing owns the whole Host-header decision: S3 virtual-hosted
-			// addressing AND host-routed services (execute-api / lambda-url /
-			// appsync-api). They are one middleware, not two, because the two
-			// schemes share a hostname space — when they were registered separately
-			// both claimed the same request and each rewrote the path the other had
-			// already rewritten. See docs/plans/host-routing-precedence.md.
-			middleware.HostAddressing(cfg.Hostname, &hostRoutes, logger),
-			middleware.RequestID,
-			middleware.Recovery(logger),
-			middleware.DebugTrace(cfg, traceBuf, clk),
-			middleware.Logger(logger, clk),
-			// NotReady short-circuits with a 503 while the storage backend is still
-			// completing a one-time startup migration (storage-plan.md item — see
-			// internal/middleware/notready.go) — placed after Logger so a rejected
-			// request is still observable in logs, and before every other
-			// middleware below so none of that work (event recording, SigV4, IAM,
-			// region/protocol detection) runs for a request about to be rejected
-			// anyway.
-			middleware.NotReady(store),
-			middleware.RequestEvents(&bus, clk),
-			middleware.SigV4(cfg.SigV4Validate, middleware.NewSecretResolver(store), logger, clk),
-			middleware.IAMEnforce(cfg.EnforceIAM, store, logger, queries),
-			middleware.Region,
-			// ClientEndpoint stamps the origin the caller dialled, so services that
-			// hand back resource URLs (SQS queue URLs above all) mint them on an
-			// origin that caller can reach. See internal/middleware/clientendpoint.go
-			// for why a single server-wide hostname cannot serve host CLIs and
-			// sibling containers at once.
-			middleware.ClientEndpoint,
-			// Environment preflight (deploy-failure-diagnosis.md W4): "the client's
-			// endpoint is pointed somewhere other than the developer thinks", the
-			// one shape of it Overcast can see for itself — see
-			// endpointpreflight.go's doc comment. Placed right after ClientEndpoint
-			// since both inspect the same Host header.
-			middleware.WarnRealAWSHost(cfg, logger),
-			// Protocol-detection middleware (Smithy alignment, see
-			// docs/plans/smithy.md). Always-on as of Phase 6 completion.
-			middleware.Protocol(codec.DefaultIdentifiers()),
-		}
-	}
-	r.Use(newRequestChain(root)...)
+	chain := requestChain{cfg: cfg, store: store, logger: logger, clk: clk, traceBuf: traceBuf, bus: &bus, hostRoutes: &hostRoutes}
+	r.Use(chain.api(root)...)
 	// queryGetMiddleware must be registered here, before any route is added
 	// (chi requirement). root is read at request time, so the service loop
 	// has populated it by then.
@@ -927,7 +875,7 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	schedulerSvc.InitRouter(r)
 	// Athena: the query engine reaches Glue, S3 and S3 Tables through a
 	// listener of its own (see athena's engine_gateway.go and engine_api.go).
-	athenaSvc.InitEngineAPI(engineAPI(newRequestChain(nil), serviceByName, s3Router, operationRegistry))
+	athenaSvc.InitEngineAPI(engineAPI(chain.engine(), serviceByName, s3Router, operationRegistry))
 	// ---- Docker Supervisor ------------------------------------------------
 	// A single Supervisor probes Docker once per unique socket, creates per-
 	// service networks, runs one event watcher, and reconciles container state.

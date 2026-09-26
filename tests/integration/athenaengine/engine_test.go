@@ -30,14 +30,7 @@ const (
 )
 
 func TestAthenaEngine(t *testing.T) {
-	helpers.SkipWithoutDocker(t)
-	// An image already present is not pulled here: it may be one built
-	// locally, which no registry has. The engine's own pull then fails and
-	// falls back to it.
-	dc, image := docker.NewClient(helpers.TestDockerSocket(), nil), helpers.AthenaEngineImage()
-	if present, err := dc.ImageExists(t.Context(), image); err != nil || !present {
-		helpers.PullOrSkip(t, dc, image)
-	}
+	requireEngineImage(t)
 	srv := helpers.NewTestServer(t, helpers.WithAthenaEngine())
 	e := newEnv(t, srv)
 	e.waitForDocker()
@@ -250,6 +243,18 @@ func (e *env) testStop() {
 
 // ─── Harness ─────────────────────────────────────────────────────────────────
 
+// requireEngineImage skips without Docker, and pulls the engine image when it
+// is not there. An image already present is not pulled: it may be one built
+// locally, which no registry has. The engine's own pull then fails and falls
+// back to it.
+func requireEngineImage(t *testing.T) {
+	helpers.SkipWithoutDocker(t)
+	dc, image := docker.NewClient(helpers.TestDockerSocket(), nil), helpers.AthenaEngineImage()
+	if present, err := dc.ImageExists(t.Context(), image); err != nil || !present {
+		helpers.PullOrSkip(t, dc, image)
+	}
+}
+
 type env struct {
 	t      *testing.T
 	ctx    context.Context
@@ -259,8 +264,11 @@ type env struct {
 	s3     *s3.Client
 }
 
-func newEnv(t *testing.T, srv *helpers.TestServer) *env {
-	creds := aws.Credentials{AccessKeyID: "test", SecretAccessKey: "test"}
+func newEnv(t *testing.T, srv *helpers.TestServer) *env { return newEnvAs(t, srv, "test") }
+
+// newEnvAs is an env whose clients sign with accessKey.
+func newEnvAs(t *testing.T, srv *helpers.TestServer, accessKey string) *env {
+	creds := aws.Credentials{AccessKeyID: accessKey, SecretAccessKey: "test"}
 	provider := aws.CredentialsProviderFunc(func(context.Context) (aws.Credentials, error) { return creds, nil })
 	return &env{t: t, ctx: t.Context(), srv: srv,
 		athena: athena.New(athena.Options{Region: "us-east-1", Credentials: provider, BaseEndpoint: aws.String(srv.URL)}),

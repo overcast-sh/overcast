@@ -341,21 +341,7 @@ func pipesCallWithAuth(t *testing.T, srv *helpers.TestServer, method, path strin
 
 func seedIAMPrincipal(t *testing.T, srv *helpers.TestServer, accessKey string, userDoc string) {
 	t.Helper()
-	if srv.Store == nil {
-		t.Fatal("test server store is nil")
-	}
-	user := map[string]any{
-		"UserName":       accessKey,
-		"AccessKeys":     []map[string]string{{"AccessKeyId": accessKey}},
-		"InlinePolicies": map[string]string{"inline-1": userDoc},
-	}
-	b, err := json.Marshal(user)
-	if err != nil {
-		t.Fatalf("marshal user seed: %v", err)
-	}
-	if err := srv.Store.Set(context.Background(), "iam:users", accessKey, string(b)); err != nil {
-		t.Fatalf("seed user: %v", err)
-	}
+	helpers.SeedIAMUser(t, srv, accessKey, userDoc)
 }
 
 func seedIAMGroupPrincipal(t *testing.T, srv *helpers.TestServer, groupName string, members []string, inlineDoc string) {

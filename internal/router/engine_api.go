@@ -16,8 +16,8 @@ type icebergCatalog interface {
 }
 
 // engineAPI is what the Athena engine gateway serves: Glue's JSON API, S3 and
-// S3 Tables' Iceberg REST catalog, each behind the API's request middleware
-// and each reaching only its own service.
+// S3 Tables' Iceberg REST catalog, each behind chain — the engine's request
+// chain, requestChain.engine — and each reaching only its own service.
 //
 // It is not the root router, which dispatches on more than the signing name.
 // There an X-Amz-Target, a Query Action (in the body or the query string) or a
