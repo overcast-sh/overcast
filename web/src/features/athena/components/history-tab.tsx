@@ -144,7 +144,9 @@ export function HistoryTab({
             id: "sql",
             header: "SQL",
             // A table cell ignores max-width, so the snippet's own box truncates.
-            cell: (e) => <span className="block max-w-72 truncate">{snippet(e.Query)}</span>,
+            cell: (e) => (
+              <span className="block max-w-40 truncate xl:max-w-72">{snippet(e.Query)}</span>
+            ),
           },
           {
             id: "workgroup",

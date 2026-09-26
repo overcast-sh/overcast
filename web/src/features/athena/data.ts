@@ -185,13 +185,21 @@ export function tablesQueryOptions(catalog: string, database: string) {
   })
 }
 
-export function engineStatusQueryOptions() {
+/**
+ * The engine's state, polled slowly at rest and every second while it is on
+ * its way somewhere — or while `queryWaiting`: a query that has just been
+ * started may be what starts the engine, and the chip must show that start
+ * as it happens rather than at the next idle poll.
+ */
+export function engineStatusQueryOptions(queryWaiting = false) {
   return queryOptions({
     queryKey: athenaKeys.engine(),
     queryFn: () => athena.getEngineStatus(),
     refetchInterval: (query) => {
       const state = query.state.data?.state
-      return state && !ENGINE_BUSY.has(state) ? ENGINE_IDLE_POLL_MS : ENGINE_BUSY_POLL_MS
+      return queryWaiting || !state || ENGINE_BUSY.has(state)
+        ? ENGINE_BUSY_POLL_MS
+        : ENGINE_IDLE_POLL_MS
     },
   })
 }

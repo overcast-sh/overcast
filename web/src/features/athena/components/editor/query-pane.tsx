@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query"
 import { ResizableSplit } from "@/components/ui/resizable-split"
 import { EmptyState } from "@/components/ui/primitives"
 import type { AthenaEngineStatus } from "@/types"
-import { preparedStatementQueryOptions } from "../../data"
+import { engineStatusQueryOptions, preparedStatementQueryOptions } from "../../data"
 import { isInert } from "../../engine-chip"
 import { queryRun } from "../../query-input"
 import type { QueryTab } from "../../query-tabs"
@@ -51,6 +51,8 @@ export function QueryPane({ tab, onChange, completion, engine, editorRef }: Quer
   const [saving, setSaving] = useState(false)
   const run = useQueryRun(tab, (executionId) => onChange({ executionId }))
   const executeCount = useExecuteCount(tab)
+  // While this tab's query waits, the engine may be starting for it: poll it closely.
+  useQuery({ ...engineStatusQueryOptions(true), enabled: run.running })
   const { execution } = run
   const failure = execution?.Status?.State === "FAILED" ? execution.Status : undefined
   const failureMessage = failure?.AthenaError?.ErrorMessage ?? failure?.StateChangeReason ?? ""

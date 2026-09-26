@@ -19,7 +19,9 @@ export function EngineStatusChip({ status }: { status: AthenaEngineStatus }) {
       <Badge variant={chip.tone} className="max-w-72 truncate">
         {/* Only the state is announced: the detail ticks while the engine starts. */}
         <span role="status">{chip.label}</span>
-        {chip.detail && <span className="normal-case opacity-80">&nbsp;· {chip.detail}</span>}
+        {chip.detail && (
+          <span className="normal-case opacity-80 max-xl:hidden">&nbsp;· {chip.detail}</span>
+        )}
       </Badge>
       {chip.busy && <BlinkingCursor />}
     </span>

@@ -36,7 +36,7 @@ export function engineChip(status: AthenaEngineStatus, now: number): EngineChip 
     case "stopped":
       return {
         label: "Engine stopped",
-        detail: "starts on the next query",
+        detail: "starts on demand",
         tone: "default",
         busy: false,
       }
