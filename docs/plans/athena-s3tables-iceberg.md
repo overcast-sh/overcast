@@ -1,7 +1,10 @@
 # Athena, S3 Tables and Iceberg — plan for real support
 
-> Status: proposal, 2026-09-23, based on `main` at `cb08d3d22`. A phase that
-> has been implemented says so at the top of its own section. Tracking issue: #2073, with one issue per phase below.
+> Status: implemented, 2026-09-26. Written as a proposal on 2026-09-23 against
+> `main` at `cb08d3d22`. Every phase has landed; each phase says what shipped at
+> the top of its own section. Tracking issue: #2073, which lists the open
+> follow-ups. The "Where things stand" table below describes `main` as it was
+> when the plan was written.
 
 ## Where things stand
 
@@ -266,11 +269,20 @@ and on ElastiCache's `SetDocker`, `Stop`, GC and readiness for everything else.
 
 ### Phase 6 — the catalog federation Athena uses (M) — #2070
 
+> Implemented (2026-09-26): Glue `GetCatalog`/`GetCatalogs` and
+> `s3tablescatalog/<bucket>` reads in #2205, and queries against those catalogs
+> on the engine in #2215 (#2183), through one Iceberg REST catalog per table
+> bucket.
+
 - Glue multi-level catalogs: `GetCatalog`, `GetCatalogs`, and the `s3tablescatalog` federated catalog with one child catalog per table bucket. Accept `CatalogId` of the form `<account>:s3tablescatalog/<bucket>` on the Glue table and database APIs, backed by S3 Tables. This is how the console and Athena list S3 Tables.
 - Athena `ListDatabases` and `ListTableMetadata` over those catalogs.
 - Lake Formation grants are out of scope. Document that everything is readable.
 
 ### Phase 7 — integrations and console (M) — #2071, #2072
+
+> Implemented (2026-09-26): Step Functions integrations (#2189); the console,
+> map and developer tooling in `data-lake-console.md`'s issues. The Distributed
+> Map `ItemReader` (#2040) and a Firehose Iceberg destination remain open.
 
 - **Step Functions:** add `athena:startQueryExecution` (`.sync`), `getQueryExecution`, `getQueryResults` and `stopQueryExecution` to `dispatchTask` (#2071, done). AWS offers no named-query or workgroup integration; those stay on `aws-sdk:athena:*`. Also add Athena as a Distributed Map `ItemReader` source (#2040).
 - **Firehose Iceberg destination:** this needs Firehose delivery to exist first, which is a separate programme. Record it as a follow-up, not part of this plan.
