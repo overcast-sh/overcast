@@ -21,7 +21,10 @@ const v1: IcebergSchema = {
       id: 5,
       name: "shipping",
       required: false,
-      type: { type: "struct", fields: [{ id: 6, name: "carrier", required: false, type: "string" }] },
+      type: {
+        type: "struct",
+        fields: [{ id: 6, name: "carrier", required: false, type: "string" }],
+      },
     },
   ],
 }

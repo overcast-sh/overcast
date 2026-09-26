@@ -158,7 +158,10 @@ describe("partitionLabel", () => {
 
 describe("typeName", () => {
   it.each([
-    [{ type: "map", "key-id": 1, key: "string", "value-id": 2, value: "long" }, "map<string, long>"],
+    [
+      { type: "map", "key-id": 1, key: "string", "value-id": 2, value: "long" },
+      "map<string, long>",
+    ],
     [{ type: "list", element: { type: "list", element: "int" } }, "list<list<int>>"],
     [{ type: "struct", fields: [{ id: 7, name: "city", type: "string" }] }, "struct<city: string>"],
   ])("spells %j as %s", (type, name) => {

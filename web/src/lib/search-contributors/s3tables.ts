@@ -1,7 +1,7 @@
 import type { NamespaceSummary, TableBucketSummary, TableSummary } from "@aws-sdk/client-s3tables"
 import { s3tables } from "@/services/api"
 import type { InTableBucket } from "@/services/api/s3tables"
-import { s3tablesKeys } from "@/features/s3tables/data"
+import { s3tablesKeys, tableIdOf } from "@/features/s3tables/data"
 import { createSearchContributor } from "./create-contributor"
 
 const bucketHref = (bucket: string) => `/s3tables/${encodeURIComponent(bucket)}`
@@ -36,7 +36,8 @@ createSearchContributor<InTableBucket<NamespaceSummary>>({
       service: "S3 Tables",
       serviceKey: "/s3tables",
       type: "Namespace",
-      href: `${bucketHref(n.tableBucketName)}?${new URLSearchParams({ namespace }).toString()}`,
+      // The bucket page's filter keeps a namespace whose name matches whole.
+      href: `${bucketHref(n.tableBucketName)}?${new URLSearchParams({ q: namespace }).toString()}`,
     }
   },
 })
@@ -47,8 +48,7 @@ createSearchContributor<InTableBucket<TableSummary>>({
   fetchAll: () => s3tables.listAllTables(),
   matchFields: (t) => [t.name, t.tableARN],
   toResult: (t) => {
-    // The ARN ends /table/<id>, the id the table's page is addressed by.
-    const tableId = t.tableARN?.split("/").pop() ?? ""
+    const tableId = tableIdOf(t.tableARN)
     return {
       id: `s3tables:table:${t.tableARN}`,
       label: t.name ?? "",

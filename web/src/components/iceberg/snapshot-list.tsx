@@ -6,7 +6,7 @@ import { ResourceTable } from "@/components/ui/resource-table"
 import { formatCount, formatDate } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { IcebergMetadata, IcebergSnapshot } from "./metadata"
-import { commitChanges, parentOf } from "./snapshot-changes"
+import { commitChanges, metric, parentOf } from "./snapshot-changes"
 import { SnapshotDiff } from "./snapshot-diff"
 
 /** The operations the spec defines, each in the tone of what it does to the data. */
@@ -43,11 +43,11 @@ export function IcebergSnapshotList({
   const refsOf = (s: IcebergSnapshot) =>
     refs.filter(
       (ref) =>
-        ref.snapshotId === s.snapshotId && !(ref.name === "main" && s.snapshotId === currentSnapshotId),
+        ref.snapshotId === s.snapshotId &&
+        !(ref.name === "main" && s.snapshotId === currentSnapshotId),
     )
   return (
     <ResourceTable
-      variant="embedded"
       query={{ data: snapshots, isLoading: false }}
       noun="snapshots"
       emptyIcon={History}
@@ -59,6 +59,7 @@ export function IcebergSnapshotList({
       expandedContent={(s) => <SnapshotDiff snapshot={s} parent={parentOf(snapshots, s)} />}
       defaultExpanded={openSnapshotId ? (s) => s.snapshotId === openSnapshotId : undefined}
       rowActions={snapshotActions}
+      columnToggle={false}
       columns={[
         {
           id: "snapshot",
@@ -78,55 +79,50 @@ export function IcebergSnapshotList({
           ),
         },
         {
-          header: "Operation",
-          sortValue: (s) => s.operation,
-          cell: (s) =>
-            s.operation ? (
-              <Badge variant={OPERATION_BADGE[s.operation] ?? "default"}>{s.operation}</Badge>
-            ) : (
-              <span className="text-fg-subtle">—</span>
-            ),
-        },
-        {
           id: "committed",
           header: "Committed",
           sortValue: (s) => new Date(s.timestampMs),
-          cellClassName: "text-fg-muted",
+          cellClassName: "whitespace-nowrap text-fg-muted",
           cell: (s) => formatDate(s.timestampMs),
         },
         {
-          header: "Changes",
-          cell: (s) => <CommitChanges snapshot={s} />,
+          id: "commit",
+          header: "Commit",
+          sortValue: (s) => s.operation,
+          cell: (s) => <Commit snapshot={s} />,
         },
         {
           header: "Records",
           cellClassName: "text-right tabular-nums",
           headerClassName: "text-right",
-          sortValue: (s) => Number(s.summary["total-records"] ?? Number.NaN),
-          cell: (s) =>
-            s.summary["total-records"] === undefined
-              ? "—"
-              : formatCount(Number(s.summary["total-records"])),
-        },
-        {
-          header: "Schema",
-          cellClassName: "text-fg-muted",
-          cell: (s) => (s.schemaId === undefined ? "—" : s.schemaId),
+          sortValue: (s) => metric(s.summary, "total-records"),
+          cell: (s) => {
+            const records = metric(s.summary, "total-records")
+            return records === undefined ? "—" : formatCount(records)
+          },
         },
       ]}
     />
   )
 }
 
-function CommitChanges({ snapshot }: { snapshot: IcebergSnapshot }) {
+/** The operation, and what it added and removed: `APPEND +540 records +1 file`. */
+function Commit({ snapshot }: { snapshot: IcebergSnapshot }) {
   const changes = commitChanges(snapshot)
-  if (changes.length === 0) return <span className="text-fg-subtle">—</span>
   return (
-    <span className="inline-flex flex-wrap gap-x-2">
+    <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
+      {snapshot.operation && (
+        <Badge variant={OPERATION_BADGE[snapshot.operation] ?? "default"}>
+          {snapshot.operation}
+        </Badge>
+      )}
       {changes.map((change) => (
         <span
           key={change.text}
-          className={cn(change.tone === "added" ? "text-success" : "text-danger")}
+          className={cn(
+            "whitespace-nowrap",
+            change.tone === "added" ? "text-success" : "text-danger",
+          )}
         >
           {change.text}
         </span>

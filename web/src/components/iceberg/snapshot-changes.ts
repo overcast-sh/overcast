@@ -35,7 +35,11 @@ export interface MetricDelta {
   after?: number
 }
 
-function metric(summary: Record<string, string> | undefined, key: string): number | undefined {
+/** A numeric summary value, or undefined when the snapshot does not report it. */
+export function metric(
+  summary: Record<string, string> | undefined,
+  key: string,
+): number | undefined {
   const raw = summary?.[key]
   if (raw === undefined || raw.trim() === "") return undefined
   const value = Number(raw)
@@ -61,6 +65,20 @@ export function totalsDelta(snapshot: IcebergSnapshot, parent?: IcebergSnapshot)
     const after = metric(snapshot.summary, key)
     return before === undefined && after === undefined ? [] : [{ label, unit, before, after }]
   })
+}
+
+/** The summary keys the totals and the commit's changes already show. */
+const SHOWN_KEYS = new Set([
+  ...TOTALS.map((t) => t.key),
+  "added-records",
+  "deleted-records",
+  "added-data-files",
+  "deleted-data-files",
+])
+
+/** The rest of the summary — engine-specific keys, sizes, partition counts — as the file writes it. */
+export function otherSummaryFields(snapshot: IcebergSnapshot): [string, string][] {
+  return Object.entries(snapshot.summary).filter(([key]) => !SHOWN_KEYS.has(key))
 }
 
 export interface CommitChange {

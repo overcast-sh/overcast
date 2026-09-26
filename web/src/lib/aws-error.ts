@@ -11,3 +11,17 @@
 export function isResourceNotFound(error: unknown): boolean {
   return error instanceof Error && error.name === "ResourceNotFoundException"
 }
+
+/**
+ * The call's result, or null when the service answered with `code` — the way
+ * a Get* for an optional configuration (a policy, a maintenance setting)
+ * says there is none.
+ */
+export async function nullWhen<T>(code: string, call: Promise<T>): Promise<T | null> {
+  try {
+    return await call
+  } catch (error) {
+    if (error instanceof Error && error.name === code) return null
+    throw error
+  }
+}

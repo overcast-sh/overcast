@@ -1,14 +1,23 @@
 import type { IcebergSnapshot } from "./metadata"
-import { commitChanges, parentOf, totalsDelta } from "./snapshot-changes"
+import { commitChanges, otherSummaryFields, parentOf, totalsDelta } from "./snapshot-changes"
 
 function snapshot(id: string, summary: Record<string, string>, parent?: string): IcebergSnapshot {
   return { snapshotId: id, parentSnapshotId: parent, timestampMs: 0, operation: "append", summary }
 }
 
-const first = snapshot("1", { "added-records": "1200", "total-records": "1200", "total-data-files": "3" })
+const first = snapshot("1", {
+  "added-records": "1200",
+  "total-records": "1200",
+  "total-data-files": "3",
+})
 const second = snapshot(
   "2",
-  { "added-records": "860", "added-data-files": "2", "total-records": "2060", "total-data-files": "5" },
+  {
+    "added-records": "860",
+    "added-data-files": "2",
+    "total-records": "2060",
+    "total-data-files": "5",
+  },
   "1",
 )
 
@@ -43,6 +52,21 @@ describe("commitChanges", () => {
   it("marks deletions as removals", () => {
     expect(commitChanges(snapshot("3", { "deleted-records": "1" }))).toEqual([
       { text: "−1 record", tone: "removed" },
+    ])
+  })
+})
+
+describe("otherSummaryFields", () => {
+  it("leaves out what the totals and the commit's changes already show", () => {
+    const s = snapshot("4", {
+      "added-records": "1",
+      "total-records": "2",
+      "added-files-size": "61",
+      "spark.app.id": "local-1",
+    })
+    expect(otherSummaryFields(s)).toEqual([
+      ["added-files-size", "61"],
+      ["spark.app.id", "local-1"],
     ])
   })
 })

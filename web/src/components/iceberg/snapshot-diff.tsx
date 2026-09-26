@@ -1,13 +1,12 @@
 import { Definition, DefinitionList } from "@/components/ui/definition-card"
 import { SectionLabel } from "@/components/ui/primitives"
 import { formatBytes, formatCount } from "@/lib/format"
-import { cn } from "@/lib/utils"
 import type { IcebergSnapshot } from "./metadata"
-import { totalsDelta, type MetricDelta } from "./snapshot-changes"
+import { otherSummaryFields, totalsDelta, type MetricDelta } from "./snapshot-changes"
 
 /**
  * *Diff with previous*: what one commit changed, as the table's running totals
- * before and after it, then the snapshot's whole summary for the engine-
+ * before and after it, then whatever else its summary says — the engine-
  * specific keys (a Spark app id, a changed-partition count) the totals skip.
  */
 export function SnapshotDiff({
@@ -18,12 +17,13 @@ export function SnapshotDiff({
   parent?: IcebergSnapshot
 }) {
   const totals = totalsDelta(snapshot, parent)
-  const summary = Object.entries(snapshot.summary)
+  const others = otherSummaryFields(snapshot)
   return (
     <div className="flex flex-col gap-4 py-1">
       <section className="flex flex-col gap-2">
         <SectionLabel>
           {parent ? `Since snapshot ${parent.snapshotId}` : "First snapshot — nothing before it"}
+          {snapshot.schemaId !== undefined && ` · written with schema ${snapshot.schemaId}`}
         </SectionLabel>
         {totals.length > 0 ? (
           <DefinitionList columns={3}>
@@ -35,11 +35,11 @@ export function SnapshotDiff({
           <p className="text-xs text-fg-subtle">This snapshot's summary carries no totals.</p>
         )}
       </section>
-      {summary.length > 0 && (
+      {others.length > 0 && (
         <section className="flex flex-col gap-2">
-          <SectionLabel>Summary</SectionLabel>
+          <SectionLabel>More from the summary</SectionLabel>
           <DefinitionList columns={3}>
-            {summary.map(([key, value]) => (
+            {others.map(([key, value]) => (
               <Definition key={key} label={key} value={value} />
             ))}
           </DefinitionList>
@@ -47,6 +47,13 @@ export function SnapshotDiff({
       )}
     </div>
   )
+}
+
+/** The tone of a change by its sign: growth, shrinkage, none. */
+const DIRECTION_TONE: Record<number, string> = {
+  1: "text-success",
+  [-1]: "text-danger",
+  0: "text-fg-subtle",
 }
 
 function format(value: number, unit: MetricDelta["unit"]): string {
@@ -66,13 +73,7 @@ function DeltaValue({ before, after, unit }: MetricDelta) {
       </span>
       <span className="sr-only">to</span>
       <span>{format(after, unit)}</span>
-      <span
-        className={cn(
-          change > 0 && "text-success",
-          change < 0 && "text-danger",
-          change === 0 && "text-fg-subtle",
-        )}
-      >
+      <span className={DIRECTION_TONE[Math.sign(change)]}>
         {change === 0 ? "unchanged" : `${change > 0 ? "+" : "−"}${format(Math.abs(change), unit)}`}
       </span>
     </span>

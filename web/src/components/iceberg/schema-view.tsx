@@ -39,17 +39,17 @@ export function IcebergSchemaView({ metadata }: { metadata: IcebergMetadata }) {
         <section className="flex flex-col gap-2">
           <SectionLabel>Evolution · {formatQuantity(history.length, "schema")}</SectionLabel>
           <ResourceTable
-            variant="embedded"
             query={{ data: history, isLoading: false }}
             noun="schemas"
             rowKey={(v) => v.schema.schemaId}
+            columnToggle={false}
             expandLabel="fields"
-            expandedContent={(v) => <SchemaFields schema={v.schema} />}
+            expandedContent={(v) => <SchemaFields schema={v.schema} variant="embedded" />}
             columns={[
               {
                 header: "Schema",
                 cell: (v) => (
-                  <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
                     <GitCommitVertical aria-hidden className="size-3.5 text-fg-subtle" />
                     id {v.schema.schemaId}
                     {v.schema.schemaId === current?.schemaId && (
@@ -75,20 +75,24 @@ export function IcebergSchemaView({ metadata }: { metadata: IcebergMetadata }) {
 function SchemaFields({
   schema,
   partitionSources,
+  variant,
 }: {
   schema?: IcebergSchema
+  /** `embedded` inside another table's expanded row, so the cards do not nest. */
+  variant?: "card" | "embedded"
   /** Field id → the transform partitioning by it, for the current spec's source columns. */
   partitionSources?: Map<number, string>
 }) {
   return (
     <ResourceTable
-      variant="embedded"
+      variant={variant}
       query={{ data: schema ? flattenFields(schema.fields) : [], isLoading: false }}
       noun="columns"
       emptyIcon={Columns3}
       emptyTitle="No columns"
       emptyDescription="This schema declares no columns."
       rowKey={(f) => f.field.id}
+      columnToggle={false}
       columns={[
         {
           header: "Column",

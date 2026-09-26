@@ -39,8 +39,8 @@ describe("parseJsonKeepingLargeIntegers", () => {
   })
 
   it("leaves safe numbers, decimals and strings alone", () => {
-    expect(
-      parseJsonKeepingLargeIntegers('{"n":-1,"f":1.5e300,"s":"3051729675574597004"}'),
-    ).toEqual({ n: -1, f: 1.5e300, s: "3051729675574597004" })
+    expect(parseJsonKeepingLargeIntegers('{"n":-1,"f":1.5e300,"s":"3051729675574597004"}')).toEqual(
+      { n: -1, f: 1.5e300, s: "3051729675574597004" },
+    )
   })
 })

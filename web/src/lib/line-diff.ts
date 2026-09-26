@@ -89,8 +89,7 @@ function rewrite(a: string[], b: string[]): DiffLine[] {
 
 /** A run of the diff to show, or a run of unchanged lines folded away. */
 export type DiffSegment =
-  | { kind: "lines"; lines: DiffLine[] }
-  | { kind: "folded"; lines: DiffLine[] }
+  { kind: "lines"; lines: DiffLine[] } | { kind: "folded"; lines: DiffLine[] }
 
 /**
  * The diff as a reader wants it: every change with `context` unchanged lines

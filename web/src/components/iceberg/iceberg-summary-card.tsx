@@ -31,7 +31,9 @@ export function IcebergSummaryCard({
       <Definition label="Format version" value={`v${metadata.formatVersion}`} />
       <Definition
         label="Last updated"
-        value={metadata.lastUpdatedMs === undefined ? undefined : formatDate(metadata.lastUpdatedMs)}
+        value={
+          metadata.lastUpdatedMs === undefined ? undefined : formatDate(metadata.lastUpdatedMs)
+        }
       />
       <Definition label="Table UUID" value={metadata.tableUuid} copyable />
       <Definition

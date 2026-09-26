@@ -27,10 +27,12 @@ describe("ConsolePendingPage > a service home", () => {
   })
 
   it("offers the service's docs from the header and the empty state", async () => {
-    renderPage({ service: "s3tables" })
+    renderPage({ service: "glue" })
 
     expect(await screen.findByRole("button", { name: "Docs" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Read the S3 Tables docs" })).toBeInTheDocument()
+    expect(
+      screen.getByRole("button", { name: "Read the Glue docs" }),
+    ).toBeInTheDocument()
   })
 })
 

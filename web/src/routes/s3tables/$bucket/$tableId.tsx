@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router"
-import { ConsolePendingPage } from "@/features/placeholder/console-pending-page"
+import { TableDetail } from "@/features/s3tables/components/table-detail"
+import { validateTableSearch, type TableSearch } from "@/features/s3tables/search"
 
 /**
  * A table is addressed by the id its ARN carries rather than by namespace and
@@ -7,12 +8,23 @@ import { ConsolePendingPage } from "@/features/placeholder/console-pending-page"
  */
 export const Route = createFileRoute("/s3tables/$bucket/$tableId")({
   head: ({ params }) => ({ meta: [{ title: `${params.tableId} — S3 Tables — Overcast` }] }),
+  validateSearch: validateTableSearch,
   component: function TableRoute() {
     const { bucket, tableId } = Route.useParams()
+    const search = Route.useSearch()
+    const navigate = Route.useNavigate()
     return (
-      <ConsolePendingPage
-        service="s3tables"
-        resource={{ name: tableId, kind: `Table in table bucket ${bucket}` }}
+      <TableDetail
+        bucketName={bucket}
+        tableId={tableId}
+        search={search}
+        onSearchChange={(patch: Partial<TableSearch>) =>
+          void navigate({
+            search: (prev) => ({ ...prev, ...patch }),
+            replace: true,
+            resetScroll: false,
+          })
+        }
       />
     )
   },
