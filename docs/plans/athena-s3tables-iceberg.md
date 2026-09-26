@@ -159,17 +159,20 @@ This phase needs no engine.
 > router and translator, results, statistics, the bytes-scanned cutoff and
 > the tests. Three deviations from the design below:
 >
-> - The image is the stock `trinodb/trino:483`, pinned by digest, with
->   `plugin.dir` pointed at links to the `hive` and `iceberg` plugins, since
->   nothing publishes a slim image yet (#2184). Measured on Docker Desktop,
->   Windows 11, 24 cores, a loaded host: ready in 9.7–16.6 s after the pull;
->   545–569 MiB after the first queries; 652 MiB after a CTAS and a `MERGE`.
->   The slim image now has a Dockerfile (`docker/athena-engine/`) and a
->   publishing workflow (#2184); the default moves to it once published
->   (#2187). It is 0.78 GB to pull (amd64, compressed) against the stock
->   image's 1.04 GB, and 1.86 GB on disk against 2.43 GB, not the 1.2 GB
->   estimated above: trino-core is 0.41 GB compressed on its own, and the two
->   plugins share only part of their jars. Start-up and memory are unchanged.
+> - The image was at first the stock `trinodb/trino:483`, pinned by digest,
+>   with `plugin.dir` pointed at links to the `hive` and `iceberg` plugins,
+>   since nothing published a slim image yet (#2184). Measured on Docker
+>   Desktop, Windows 11, 24 cores, a loaded host: ready in 9.7–16.6 s after
+>   the pull; 545–569 MiB after the first queries; 652 MiB after a CTAS and a
+>   `MERGE`. The slim image then got a Dockerfile (`docker/athena-engine/`)
+>   and a publishing workflow (#2184). It is 0.78 GB to pull (amd64,
+>   compressed) against the stock image's 1.04 GB, and 1.86 GB on disk against
+>   2.43 GB, not the 1.2 GB estimated above: trino-core is 0.41 GB compressed
+>   on its own, and the two plugins share only part of their jars. Start-up
+>   and memory are unchanged. It became the default (#2187), and `plugin.dir`
+>   went with the stock image: the engine loads the image's own plugins. On
+>   the same loaded host: the engine ready in 12.7–16.8 s, 542–588 MiB after
+>   the first query.
 > - The engine reaches Glue and S3 through a listener of its own, bound where
 >   `containerendpoint.ResolveListen` proves a container can connect, because
 >   Overcast's API binds loopback natively and may be TLS-only.

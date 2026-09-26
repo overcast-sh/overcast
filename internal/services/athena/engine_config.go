@@ -18,8 +18,8 @@ import (
 // (Decision 1): a 512 MiB heap is the floor — 384m and 256m ran out of memory
 // on ordinary queries — with G1, the C1 compiler only and a small code cache,
 // and the memory and concurrency settings of a single-node engine that runs
-// one small query at a time. Only the hive and iceberg plugins are loaded,
-// through a plugin directory of links into the image's own.
+// one small query at a time. The plugins loaded are the image's own: the
+// default image carries only hive and iceberg (docker/athena-engine).
 
 const (
 	// engineEtcDir is where the rendered configuration lands in the
@@ -29,8 +29,6 @@ const (
 	enginePort = 8080
 	// engineMinHeap is the smallest heap that runs ordinary queries.
 	engineMinHeap = 512 << 20
-	// engineImagePluginDir is where the Trino image installs its plugins.
-	engineImagePluginDir = "/usr/lib/trino/plugin"
 
 	// The two catalogs: Hive on the Glue metastore, which is what Athena
 	// calls AwsDataCatalog, and Iceberg on the same Glue catalog, which the
@@ -38,9 +36,6 @@ const (
 	hiveCatalog    = "awsdatacatalog"
 	icebergCatalog = "awsdatacatalog_iceberg"
 )
-
-// enginePlugins are the only plugins the engine loads.
-var enginePlugins = []string{"hive", "iceberg"}
 
 // engineSettings are the inputs the configuration is rendered from.
 type engineSettings struct {
@@ -79,7 +74,6 @@ func renderEngineFiles(s engineSettings) map[string]string {
 			"node-scheduler.include-coordinator=true",
 			fmt.Sprintf("http-server.http.port=%d", enginePort),
 			fmt.Sprintf("discovery.uri=http://localhost:%d", enginePort),
-			"plugin.dir="+engineEtcDir+"/plugin",
 			fmt.Sprintf("query.max-memory=%dMB", heapMB/2),
 			fmt.Sprintf("query.max-memory-per-node=%dMB", heapMB/4),
 			fmt.Sprintf("memory.heap-headroom-per-node=%dMB", heapMB/8),
@@ -134,8 +128,7 @@ func (s engineSettings) awsProperties() []string {
 func lines(ls ...string) string { return strings.Join(ls, "\n") + "\n" }
 
 // engineConfigArchive is the tar CopyToContainer extracts at the container's
-// root: the rendered files under engineEtcDir, and the plugin directory as
-// links to the image's own plugins.
+// root: the rendered files, each under engineEtcDir.
 func engineConfigArchive(files map[string]string) ([]byte, error) {
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
@@ -146,13 +139,6 @@ func engineConfigArchive(files map[string]string) ([]byte, error) {
 			return nil, err
 		}
 		if _, err := tw.Write([]byte(body)); err != nil {
-			return nil, err
-		}
-	}
-	for _, plugin := range enginePlugins {
-		hdr := &tar.Header{Typeflag: tar.TypeSymlink, Name: strings.TrimPrefix(engineEtcDir, "/") + "/plugin/" + plugin,
-			Linkname: engineImagePluginDir + "/" + plugin, Mode: 0o777}
-		if err := tw.WriteHeader(hdr); err != nil {
 			return nil, err
 		}
 	}

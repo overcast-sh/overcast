@@ -25,21 +25,32 @@ starts it again.
 | Setting | Default | Change it with |
 | --- | --- | --- |
 | Engine | `trino`; `inert` runs no SQL | `ATHENA_ENGINE` |
-| Image | `trinodb/trino:483`, pinned by digest, 2.4 GB on disk | `ATHENA_ENGINE_IMAGE` |
+| Image | `ghcr.io/overcast-sh/overcast-athena-engine:483`, Trino 483 with only the Hive and Iceberg connectors, pinned by digest: 0.78 GB to pull, 1.86 GB on disk | `ATHENA_ENGINE_IMAGE` |
 | Memory limit | 1 GiB, of which half is the engine's heap | `ATHENA_ENGINE_MEMORY` |
 | Docker endpoint | Lambda's | `ATHENA_DOCKER_SOCKET` |
 | Keep stopped containers | Off | `ATHENA_KEEP_CONTAINERS` |
 
-Only the Hive and Iceberg connectors are loaded, and the engine is tuned for
-one small query at a time. A query that needs more memory than the limit
-allows fails with an `EXCEEDED_*_MEMORY_LIMIT` error; raise
-`ATHENA_ENGINE_MEMORY`.
+The engine loads every connector its image carries, and the default image
+carries only Hive and Iceberg. A stock `trinodb/trino` image set through
+`ATHENA_ENGINE_IMAGE` works too, but loads all of its connectors, not just
+those two: it starts slower and uses more memory, and may need a larger
+`ATHENA_ENGINE_MEMORY`. The engine is tuned for one small query at a time. A query that
+needs more memory than the limit allows fails with an
+`EXCEEDED_*_MEMORY_LIMIT` error; raise `ATHENA_ENGINE_MEMORY`.
 
-Measured with the image already pulled, on Docker Desktop 29.7 on Windows 11
-with 24 cores and other containers running: the first query took 11.6 s, of
-which 9.7 s was the engine starting, and the container used 547 MiB after it
-and 658 MiB after a CTAS and an Iceberg `MERGE`, as Docker reports memory.
-Expect the start to be slower on a laptop.
+Measured over three runs of the engine's tests with the image already pulled,
+on Docker Desktop 29.8 on Windows 11 with 24 cores and other containers
+running. Memory is as Docker reports it. Expect the start to be slower on a
+laptop.
+
+| Measure | Default image |
+| --- | --- |
+| Pull, linux/amd64, compressed | 0.78 GB |
+| On disk (containerd image store) | 1.86 GB |
+| First query, including the engine's start | 14.7–19.1 s |
+| Engine start | 12.7–16.8 s |
+| Memory after the first query | 542–588 MiB |
+| Memory after a CTAS and an Iceberg `MERGE` | 646–705 MiB |
 
 `GET /_overcast/athena/engine` reports the engine's state — `off`, `probing`,
 `stopped`, `pulling`, `starting`, `ready` or `failed` — with the last start's
