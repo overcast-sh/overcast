@@ -27,30 +27,35 @@ const s3OnlyPolicy = `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Ac
 
 // queryScopeCase is one Query service's read-only operation, and the names AWS
 // gives it: the signing name its SDK signs with and the IAM action a policy
-// grants it by.
+// grants it by. denied is the error code AWS answers a caller without that
+// permission with, or "" for an operation AWS serves whatever the caller's
+// policies say.
 type queryScopeCase struct {
 	name        string
 	version     string
 	action      string
 	signingName string
 	iamAction   string
+	denied      string
 }
 
 // queryScopeCases covers every Query service Overcast serves on the root
 // listener. Each operation succeeds on an empty emulator, so a pass is a 200.
 var queryScopeCases = []queryScopeCase{
-	{"IAM", "2010-05-08", "ListUsers", "iam", "iam:ListUsers"},
-	{"STS", "2011-06-15", "GetCallerIdentity", "sts", "sts:GetCallerIdentity"},
-	{"SQS", "2012-11-05", "ListQueues", "sqs", "sqs:ListQueues"},
-	{"SNS", "2010-03-31", "ListTopics", "sns", "sns:ListTopics"},
-	{"CloudFormation", "2010-05-15", "ListStacks", "cloudformation", "cloudformation:ListStacks"},
-	{"EC2", "2016-11-15", "DescribeVpcs", "ec2", "ec2:DescribeVpcs"},
-	{"RDS", "2014-10-31", "DescribeDBInstances", "rds", "rds:DescribeDBInstances"},
-	{"ElastiCache", "2015-02-02", "DescribeCacheClusters", "elasticache", "elasticache:DescribeCacheClusters"},
-	{"ELBv2", "2015-12-01", "DescribeLoadBalancers", "elasticloadbalancing", "elasticloadbalancing:DescribeLoadBalancers"},
-	{"CloudWatch", "2010-08-01", "ListMetrics", "monitoring", "cloudwatch:ListMetrics"},
-	{"SES v1", "2010-12-01", "ListIdentities", "ses", "ses:ListIdentities"},
-	{"AutoScaling", "2011-01-01", "DescribeAutoScalingGroups", "autoscaling", "autoscaling:DescribeAutoScalingGroups"},
+	{"IAM", "2010-05-08", "ListUsers", "iam", "iam:ListUsers", "AccessDenied"},
+	// GetCallerIdentity needs no permission, even under an explicit Deny.
+	{"STS", "2011-06-15", "GetCallerIdentity", "sts", "sts:GetCallerIdentity", ""},
+	{"SQS", "2012-11-05", "ListQueues", "sqs", "sqs:ListQueues", "AccessDenied"},
+	// SNS models its own denial, AuthorizationErrorException.
+	{"SNS", "2010-03-31", "ListTopics", "sns", "sns:ListTopics", "AuthorizationError"},
+	{"CloudFormation", "2010-05-15", "ListStacks", "cloudformation", "cloudformation:ListStacks", "AccessDenied"},
+	{"EC2", "2016-11-15", "DescribeVpcs", "ec2", "ec2:DescribeVpcs", "UnauthorizedOperation"},
+	{"RDS", "2014-10-31", "DescribeDBInstances", "rds", "rds:DescribeDBInstances", "AccessDenied"},
+	{"ElastiCache", "2015-02-02", "DescribeCacheClusters", "elasticache", "elasticache:DescribeCacheClusters", "AccessDenied"},
+	{"ELBv2", "2015-12-01", "DescribeLoadBalancers", "elasticloadbalancing", "elasticloadbalancing:DescribeLoadBalancers", "AccessDenied"},
+	{"CloudWatch", "2010-08-01", "ListMetrics", "monitoring", "cloudwatch:ListMetrics", "AccessDenied"},
+	{"SES v1", "2010-12-01", "ListIdentities", "ses", "ses:ListIdentities", "AccessDenied"},
+	{"AutoScaling", "2011-01-01", "DescribeAutoScalingGroups", "autoscaling", "autoscaling:DescribeAutoScalingGroups", "AccessDenied"},
 }
 
 func sigV4Auth(accessKey, signingName string) string {
@@ -106,16 +111,20 @@ type queryTransport struct {
 
 var queryTransports = []queryTransport{{"POST", queryPost}, {"GET", queryGet}}
 
-// assertQueryDenied checks resp is the IAM denial tc's service answers a Query
-// call with: EC2's UnauthorizedOperation in its own Query dialect, and
-// AccessDenied in the awsQuery envelope everywhere else.
-func assertQueryDenied(t *testing.T, resp *http.Response, tc queryScopeCase) {
+// assertAnsweredWithoutPermission checks resp is what AWS answers a Query call
+// to tc by a caller its policies do not allow: a 200 for an operation that
+// needs no permission, and otherwise the service's denial — EC2's in its own
+// Query dialect, every other one in the awsQuery envelope.
+func assertAnsweredWithoutPermission(t *testing.T, resp *http.Response, tc queryScopeCase) {
 	t.Helper()
-	if tc.signingName == "ec2" {
-		helpers.AssertEC2QueryXMLError(t, resp, "UnauthorizedOperation")
-		return
+	switch {
+	case tc.denied == "":
+		helpers.AssertStatus(t, resp, http.StatusOK)
+	case tc.signingName == "ec2":
+		helpers.AssertEC2QueryXMLError(t, resp, tc.denied)
+	default:
+		helpers.AssertQueryXMLError(t, resp, tc.denied)
 	}
-	helpers.AssertQueryXMLError(t, resp, "AccessDenied")
 }
 
 func TestIAMEnforceQueryScope_s3OnlyPrincipalSignedForS3(t *testing.T) {
@@ -131,8 +140,8 @@ func TestIAMEnforceQueryScope_s3OnlyPrincipalSignedForS3(t *testing.T) {
 				defer resp.Body.Close()
 
 				// Then: it is authorised as the served operation, and denied in
-				// that service's Query envelope
-				assertQueryDenied(t, resp, tc)
+				// that service's Query envelope unless AWS never denies it
+				assertAnsweredWithoutPermission(t, resp, tc)
 			})
 		}
 	}
@@ -223,26 +232,65 @@ func TestIAMEnforceQueryScope_actionPastALargeLeadingParameter(t *testing.T) {
 }
 
 func TestIAMEnforceQueryScope_largeBodyServedAsTheAuthorisedAction(t *testing.T) {
-	// Given: a principal allowed sts:GetCallerIdentity and nothing else
+	// Given: a principal allowed iam:ListUsers and nothing else
 	srv := helpers.NewTestServer(t, helpers.WithEnforceIAM(true))
-	seedIAMPrincipal(t, srv, "caller", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"sts:GetCallerIdentity","Resource":"*"}]}`)
+	seedIAMPrincipal(t, srv, "lister", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"iam:ListUsers","Resource":"*"}]}`)
 
 	// When: its body, past the size the protocol middleware parses, names
-	// GetCallerIdentity while the query string names GetSessionToken
-	body := "Pad=" + strings.Repeat("a", 2<<20) + "&Action=GetCallerIdentity&Version=2011-06-15"
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/?Action=GetSessionToken", strings.NewReader(body))
+	// ListUsers while the query string names CreateUser
+	body := "Pad=" + strings.Repeat("a", 2<<20) + "&Action=ListUsers&Version=2010-05-08"
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/?Action=CreateUser&UserName=query-user", strings.NewReader(body))
 	if err != nil {
 		t.Fatalf("build request: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	resp := doSigned(t, req, sigV4Auth("caller", "sts"))
+	resp := doSigned(t, req, sigV4Auth("lister", "iam"))
 	defer resp.Body.Close()
 
-	// Then: the operation served is the GetCallerIdentity that was authorised
+	// Then: the operation served is the ListUsers that was authorised
 	helpers.AssertStatus(t, resp, http.StatusOK)
-	if got := helpers.ReadBody(t, resp); !strings.Contains(got, "<GetCallerIdentityResult>") {
+	if got := helpers.ReadBody(t, resp); !strings.Contains(got, "<ListUsersResult>") {
 		t.Fatalf("served a different operation from the one authorised:\n%s", got)
 	}
+}
+
+func TestIAMEnforceQueryScope_queryStringCannotBorrowAnActionNeedingNoPermission(t *testing.T) {
+	// Given: a principal allowed s3:* and nothing in IAM or STS
+	srv := helpers.NewTestServer(t, helpers.WithEnforceIAM(true))
+	seedIAMPrincipal(t, srv, "s3-only", s3OnlyPolicy)
+
+	// When: the query string names GetCallerIdentity, which AWS never denies,
+	// and the body, which the router dispatches on, names CreateUser
+	body := url.Values{"Action": {"CreateUser"}, "Version": {"2010-05-08"}, "UserName": {"borrowed"}}.Encode()
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/?Action=GetCallerIdentity&Version=2011-06-15", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp := doSigned(t, req, sigV4Auth("s3-only", "sts"))
+	defer resp.Body.Close()
+
+	// Then: it is authorised as the CreateUser that would be served, and denied
+	helpers.AssertQueryXMLError(t, resp, "AccessDenied")
+	assertNoIAMUser(t, srv, "borrowed")
+}
+
+func TestIAMEnforceQueryScope_restPathCannotBorrowAnActionNeedingNoPermission(t *testing.T) {
+	// Given: a principal allowed s3:* and nothing in STS, denied CreateBucket
+	srv := helpers.NewTestServer(t, helpers.WithEnforceIAM(true))
+	seedIAMPrincipal(t, srv, "no-create", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:*","Resource":"*"},{"Effect":"Deny","Action":"s3:CreateBucket","Resource":"*"}]}`)
+
+	// When: it sends S3 CreateBucket, signed for sts, with a query string
+	// naming GetCallerIdentity
+	req, err := http.NewRequest(http.MethodPut, srv.URL+"/borrowed-bucket?Action=GetCallerIdentity", nil)
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	resp := doSigned(t, req, sigV4Auth("no-create", "sts"))
+	defer resp.Body.Close()
+
+	// Then: STS's exemption does not reach an S3 call, and it is refused
+	helpers.AssertStatus(t, resp, http.StatusForbidden)
 }
 
 func TestIAMEnforceQueryScope_queryStringActionCannotStandInForTheBody(t *testing.T) {
@@ -288,23 +336,33 @@ func TestIAMEnforceQueryScope_resourceReadWhereTheHandlerReadsIt(t *testing.T) {
 }
 
 func TestIAMEnforceQueryScope_sdkSignedForAnotherService(t *testing.T) {
-	// Given: a principal allowed s3:* and nothing in STS
+	// Given: a principal allowed s3:* and nothing in STS, and an STS client
+	// that signs for s3
 	srv := helpers.NewTestServer(t, helpers.WithEnforceIAM(true))
 	seedIAMPrincipal(t, srv, "s3-only", s3OnlyPolicy)
-
-	// When: an STS client signs GetCallerIdentity for s3
 	client := sts.New(sts.Options{
 		Region:       "us-east-1",
 		Credentials:  credentials.NewStaticCredentialsProvider("s3-only", "secret", ""),
 		BaseEndpoint: aws.String(srv.URL),
 		HTTPClient:   http.DefaultClient,
 	}, sts.WithSigV4SigningName("s3"))
-	_, err := client.GetCallerIdentity(context.Background(), &sts.GetCallerIdentityInput{})
 
-	// Then: the SDK sees AccessDenied
+	// When: it calls AssumeRole, and GetCallerIdentity, which AWS serves
+	// whatever the caller's policies say
+	_, assumeErr := client.AssumeRole(context.Background(), &sts.AssumeRoleInput{
+		RoleArn:         aws.String("arn:aws:iam::000000000000:role/app"),
+		RoleSessionName: aws.String("scoped"),
+	})
+	_, identityErr := client.GetCallerIdentity(context.Background(), &sts.GetCallerIdentityInput{})
+
+	// Then: AssumeRole is authorised as itself and the SDK sees AccessDenied,
+	// while GetCallerIdentity is served
 	var apiErr smithy.APIError
-	if !errors.As(err, &apiErr) || apiErr.ErrorCode() != "AccessDenied" {
-		t.Fatalf("GetCallerIdentity signed for s3: err = %v, want AccessDenied", err)
+	if !errors.As(assumeErr, &apiErr) || apiErr.ErrorCode() != "AccessDenied" {
+		t.Fatalf("AssumeRole signed for s3: err = %v, want AccessDenied", assumeErr)
+	}
+	if identityErr != nil {
+		t.Fatalf("GetCallerIdentity signed for s3: %v; AWS needs no permission for it", identityErr)
 	}
 }
 

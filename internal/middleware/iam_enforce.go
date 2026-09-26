@@ -136,7 +136,7 @@ func IAMEnforce(enabled bool, st state.Store, logger *zap.Logger, queries QueryR
 			}
 
 			if !isSignedIAMRequest(r) {
-				denyIAMRequest(w, r, op, logger, "unsigned request")
+				denyIAMRequest(w, r, op, logger, "unsigned request", nil)
 				return
 			}
 
@@ -147,7 +147,7 @@ func IAMEnforce(enabled bool, st state.Store, logger *zap.Logger, queries QueryR
 
 			parts, signed, sigErr := extractSigV4Parts(r)
 			if sigErr != nil || !signed || strings.TrimSpace(parts.AccessKey) == "" {
-				denyIAMRequest(w, r, op, logger, "missing or malformed SigV4 access key")
+				denyIAMRequest(w, r, op, logger, "missing or malformed SigV4 access key", nil)
 				return
 			}
 
@@ -191,7 +191,7 @@ func IAMEnforce(enabled bool, st state.Store, logger *zap.Logger, queries QueryR
 
 			resource := requestIAMResource(r, op)
 			result := evaluateIAMDecision(r, st, parts.AccessKey, op, resource, cache)
-			if reason, denied := iamDenialReason(result); denied {
+			if reason, denied := iamDenialReason(result); denied && !iamServedWithoutPermission(op, result.principalARN) {
 				// A deny the evaluator could not reason about is a gap in
 				// Overcast, not a decision the user asked for: say so at warn
 				// level rather than burying it in debug output.
@@ -202,7 +202,7 @@ func IAMEnforce(enabled bool, st state.Store, logger *zap.Logger, queries QueryR
 						zap.String("reason", reason),
 					)
 				}
-				denyIAMRequest(w, r, op, logger, reason)
+				denyIAMRequest(w, r, op, logger, reason, result.denial(op.action, resource))
 				return
 			}
 
@@ -302,7 +302,9 @@ type iamManagedPolicyRecord struct {
 	Document string `json:"Document"`
 }
 
-func denyIAMRequest(w http.ResponseWriter, r *http.Request, op iamOperation, logger *zap.Logger, reason string) {
+// denyIAMRequest logs why r was denied and answers it. denial is what the
+// caller is told about the policy that decided it, nil when none did.
+func denyIAMRequest(w http.ResponseWriter, r *http.Request, op iamOperation, logger *zap.Logger, reason string, denial *iampolicy.Denial) {
 	if logger != nil {
 		logger.Debug("iam enforcement denied request",
 			zap.String("method", r.Method),
@@ -311,7 +313,7 @@ func denyIAMRequest(w http.ResponseWriter, r *http.Request, op iamOperation, log
 			zap.String("reason", reason),
 		)
 	}
-	writeIAMAccessDenied(w, r, op)
+	writeIAMAccessDenied(w, r, op, denial)
 }
 
 // iamOperation is the operation IAM enforcement authorises a request as.
@@ -1123,11 +1125,14 @@ func parseSQSQueueURL(queueURL string) (string, string) {
 	return "", ""
 }
 
-// iamEnforceResult is an evaluation plus whatever stopped it being one.
+// iamEnforceResult is an evaluation plus whatever stopped it being one, and
+// the ARN of the principal it was made for ("" when the access key names
+// none).
 type iamEnforceResult struct {
 	iampolicy.Result
-	compileErr  error
-	boundaryErr error
+	principalARN string
+	compileErr   error
+	boundaryErr  error
 }
 
 func evaluateIAMDecision(r *http.Request, st state.Store, accessKeyID string, op iamOperation, resource string, cache *iamEnforceCache) iamEnforceResult {
@@ -1145,11 +1150,12 @@ func evaluateIAMDecision(r *http.Request, st state.Store, accessKeyID string, op
 		}
 		cache.store(generation, accessKeyID, cached)
 	}
+	principalARN := cached.principalCtx["aws:principalarn"]
 	if cached.compileErr != nil {
-		return iamEnforceResult{compileErr: cached.compileErr}
+		return iamEnforceResult{principalARN: principalARN, compileErr: cached.compileErr}
 	}
 	if cached.boundaryErr != nil {
-		return iamEnforceResult{boundaryErr: cached.boundaryErr}
+		return iamEnforceResult{principalARN: principalARN, boundaryErr: cached.boundaryErr}
 	}
 
 	reqCtx := buildIAMRequestContext(r, op.service)
@@ -1157,12 +1163,12 @@ func evaluateIAMDecision(r *http.Request, st state.Store, accessKeyID string, op
 		reqCtx[k] = v
 	}
 
-	return iamEnforceResult{Result: iampolicy.Evaluate(iampolicy.Input{
+	return iamEnforceResult{principalARN: principalARN, Result: iampolicy.Evaluate(iampolicy.Input{
 		Request: iampolicy.Request{
 			Action:           op.action,
 			Resource:         resource,
 			Context:          reqCtx,
-			PrincipalARN:     cached.principalCtx["aws:principalarn"],
+			PrincipalARN:     principalARN,
 			PrincipalAccount: cached.principalCtx["aws:principalaccount"],
 		},
 		Identity: cached.statements,

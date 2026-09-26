@@ -65,8 +65,10 @@ order puts instance profiles before their roles. See
 
 ## `AccessDenied` after switching enforcement on
 
-**Cause.** Either the policy genuinely does not allow the action, or it names
-an action prefix Overcast does not evaluate under. The prefix is the one AWS
+**Cause.** The error message names the principal, the action and the resource
+that were checked, and whether a `Deny` statement or the lack of an `Allow`
+refused them. Either the policy genuinely does not allow that action, or it
+names an action prefix Overcast does not evaluate under. The prefix is the one AWS
 uses, which differs from the service key for ten services — see
 [IAM § Request-time enforcement](../iam.md#request-time-enforcement-opt-in).
 

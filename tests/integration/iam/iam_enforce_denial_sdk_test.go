@@ -11,6 +11,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/athena"
 	"github.com/aws/aws-sdk-go-v2/service/glue"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/sns"
+	snstypes "github.com/aws/aws-sdk-go-v2/service/sns/types"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/aws/smithy-go"
 	smithyhttp "github.com/aws/smithy-go/transport/http"
@@ -60,12 +62,7 @@ func TestIAMEnforceDenial_sdkReadsTheErrorCode(t *testing.T) {
 	// Given: enforcement on, and a principal allowed none of the calls below
 	srv := helpers.NewTestServer(t, helpers.WithEnforceIAM(true))
 	seedIAMPrincipal(t, srv, "sqs-only", sqsOnlyPolicy)
-	cfg := aws.Config{
-		Region:       "us-east-1",
-		Credentials:  credentials.NewStaticCredentialsProvider("sqs-only", "secret", ""),
-		BaseEndpoint: aws.String(srv.URL),
-		HTTPClient:   http.DefaultClient,
-	}
+	cfg := sdkConfigFor(srv, "sqs-only")
 
 	for _, tc := range deniedSDKCalls {
 		t.Run(tc.name, func(t *testing.T) {
@@ -82,5 +79,59 @@ func TestIAMEnforceDenial_sdkReadsTheErrorCode(t *testing.T) {
 				t.Fatalf("err = %v, want HTTP %d", err, tc.status)
 			}
 		})
+	}
+}
+
+// denyAllPolicy denies every action on every resource.
+const denyAllPolicy = `{"Version":"2012-10-17","Statement":[{"Effect":"Deny","Action":"*","Resource":"*"}]}`
+
+// sdkConfigFor is an SDK configuration that calls srv as accessKey.
+func sdkConfigFor(srv *helpers.TestServer, accessKey string) aws.Config {
+	return aws.Config{
+		Region:       "us-east-1",
+		Credentials:  credentials.NewStaticCredentialsProvider(accessKey, "secret", ""),
+		BaseEndpoint: aws.String(srv.URL),
+		HTTPClient:   http.DefaultClient,
+	}
+}
+
+func TestIAMEnforceDenial_getCallerIdentityServedUnderDenyAll(t *testing.T) {
+	// Given: enforcement on, and a principal whose only policy denies everything
+	srv := helpers.NewTestServer(t, helpers.WithEnforceIAM(true))
+	seedIAMPrincipal(t, srv, "deny-all", denyAllPolicy)
+
+	// When: it asks STS who it is
+	out, err := sts.NewFromConfig(sdkConfigFor(srv, "deny-all")).GetCallerIdentity(context.Background(), &sts.GetCallerIdentityInput{})
+
+	// Then: AWS needs no permission for that, so it is answered
+	if err != nil {
+		t.Fatalf("GetCallerIdentity under a Deny-all policy: %v", err)
+	}
+	if got := aws.ToString(out.Account); got != "000000000000" {
+		t.Fatalf("Account = %q, want 000000000000", got)
+	}
+}
+
+func TestIAMEnforceDenial_snsAuthorizationErrorNamesThePrincipalAndAction(t *testing.T) {
+	// Given: enforcement on, and a principal whose only policy denies everything
+	srv := helpers.NewTestServer(t, helpers.WithEnforceIAM(true))
+	seedIAMPrincipal(t, srv, "deny-all", denyAllPolicy)
+
+	// When: it lists SNS topics
+	_, err := sns.NewFromConfig(sdkConfigFor(srv, "deny-all")).ListTopics(context.Background(), &sns.ListTopicsInput{})
+
+	// Then: the SDK reads SNS's own denial, a 403 AuthorizationError, whose
+	// message says who was refused what and why
+	var authErr *snstypes.AuthorizationErrorException
+	if !errors.As(err, &authErr) {
+		t.Fatalf("err = %v, want *types.AuthorizationErrorException", err)
+	}
+	var respErr *smithyhttp.ResponseError
+	if !errors.As(err, &respErr) || respErr.HTTPStatusCode() != http.StatusForbidden {
+		t.Fatalf("err = %v, want HTTP 403", err)
+	}
+	want := "User: arn:aws:iam::000000000000:user/deny-all is not authorized to perform: sns:ListTopics with an explicit deny in an identity-based policy"
+	if got := authErr.ErrorMessage(); got != want {
+		t.Fatalf("message = %q\nwant      %q", got, want)
 	}
 }
