@@ -15,7 +15,7 @@ namespace OvercastCompat.Groups;
 /// </remarks>
 internal sealed class ScenariosAuthoredIamUsers : IServiceGroup
 {
-    private static readonly ScenarioGroup GroupIamUsersShadow = new("iam-users-shadow", "compat/model/authored/iam-users.json");
+    private static readonly ScenarioGroup GroupIamUsers = new("iam-users", "compat/model/authored/iam-users.json");
 
     private readonly Lazy<AmazonIdentityManagementServiceClient> _client;
 
@@ -35,37 +35,37 @@ internal sealed class ScenariosAuthoredIamUsers : IServiceGroup
 
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["iam-users-shadow:CreateUser"] = TestIamUsersShadowCreateUser,
-        ["iam-users-shadow:GetUser"] = TestIamUsersShadowGetUser,
-        ["iam-users-shadow:ListUsers"] = TestIamUsersShadowListUsers,
-        ["iam-users-shadow:CreateAccessKey"] = TestIamUsersShadowCreateAccessKey,
-        ["iam-users-shadow:DeleteAccessKey"] = TestIamUsersShadowDeleteAccessKey,
-        ["iam-users-shadow:PutUserPolicy"] = TestIamUsersShadowPutUserPolicy,
-        ["iam-users-shadow:GetUserPolicy"] = TestIamUsersShadowGetUserPolicy,
-        ["iam-users-shadow:DeleteUserPolicy"] = TestIamUsersShadowDeleteUserPolicy,
-        ["iam-users-shadow:UpdateUser"] = TestIamUsersShadowUpdateUser,
-        ["iam-users-shadow:ListAccessKeys"] = TestIamUsersShadowListAccessKeys,
-        ["iam-users-shadow:DeleteUser"] = TestIamUsersShadowDeleteUser,
+        ["iam-users:CreateUser"] = TestIamUsersCreateUser,
+        ["iam-users:GetUser"] = TestIamUsersGetUser,
+        ["iam-users:ListUsers"] = TestIamUsersListUsers,
+        ["iam-users:CreateAccessKey"] = TestIamUsersCreateAccessKey,
+        ["iam-users:DeleteAccessKey"] = TestIamUsersDeleteAccessKey,
+        ["iam-users:PutUserPolicy"] = TestIamUsersPutUserPolicy,
+        ["iam-users:GetUserPolicy"] = TestIamUsersGetUserPolicy,
+        ["iam-users:DeleteUserPolicy"] = TestIamUsersDeleteUserPolicy,
+        ["iam-users:UpdateUser"] = TestIamUsersUpdateUser,
+        ["iam-users:ListAccessKeys"] = TestIamUsersListAccessKeys,
+        ["iam-users:DeleteUser"] = TestIamUsersDeleteUser,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["iam-users-shadow"] = SetupIamUsersShadow,
+        ["iam-users"] = SetupIamUsers,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["iam-users-shadow"] = TeardownIamUsersShadow,
+        ["iam-users"] = TeardownIamUsers,
     };
 
     private AmazonIdentityManagementServiceClient Cl() => _client.Value;
 
-    private Task SetupIamUsersShadow(TestContext t) =>
+    private Task SetupIamUsers(TestContext t) =>
         // No setup steps: an empty phase is a no-op, not a missing one.
-        GroupIamUsersShadow.RunSetupAsync(t);
+        GroupIamUsers.RunSetupAsync(t);
 
-    private Task TeardownIamUsersShadow(TestContext t) =>
-        GroupIamUsersShadow.RunTeardownAsync(t,
+    private Task TeardownIamUsers(TestContext t) =>
+        GroupIamUsers.RunTeardownAsync(t,
             new ScenarioCall
             {
                 Op = "UpdateUser",
@@ -123,7 +123,7 @@ internal sealed class ScenariosAuthoredIamUsers : IServiceGroup
             }
         );
 
-    private Task TestIamUsersShadowCreateUser(TestContext t) => GroupIamUsersShadow.RunTestAsync(t, "CreateUser", new ScenarioTest
+    private Task TestIamUsersCreateUser(TestContext t) => GroupIamUsers.RunTestAsync(t, "CreateUser", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -172,7 +172,7 @@ internal sealed class ScenariosAuthoredIamUsers : IServiceGroup
         ],
     });
 
-    private Task TestIamUsersShadowGetUser(TestContext t) => GroupIamUsersShadow.RunTestAsync(t, "GetUser", new ScenarioTest
+    private Task TestIamUsersGetUser(TestContext t) => GroupIamUsers.RunTestAsync(t, "GetUser", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -196,7 +196,7 @@ internal sealed class ScenariosAuthoredIamUsers : IServiceGroup
         ],
     });
 
-    private Task TestIamUsersShadowListUsers(TestContext t) => GroupIamUsersShadow.RunTestAsync(t, "ListUsers", new ScenarioTest
+    private Task TestIamUsersListUsers(TestContext t) => GroupIamUsers.RunTestAsync(t, "ListUsers", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -222,7 +222,7 @@ internal sealed class ScenariosAuthoredIamUsers : IServiceGroup
         ],
     });
 
-    private Task TestIamUsersShadowCreateAccessKey(TestContext t) => GroupIamUsersShadow.RunTestAsync(t, "CreateAccessKey", new ScenarioTest
+    private Task TestIamUsersCreateAccessKey(TestContext t) => GroupIamUsers.RunTestAsync(t, "CreateAccessKey", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -272,7 +272,7 @@ internal sealed class ScenariosAuthoredIamUsers : IServiceGroup
         ],
     });
 
-    private Task TestIamUsersShadowDeleteAccessKey(TestContext t) => GroupIamUsersShadow.RunTestAsync(t, "DeleteAccessKey", new ScenarioTest
+    private Task TestIamUsersDeleteAccessKey(TestContext t) => GroupIamUsers.RunTestAsync(t, "DeleteAccessKey", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -312,7 +312,7 @@ internal sealed class ScenariosAuthoredIamUsers : IServiceGroup
         ],
     });
 
-    private Task TestIamUsersShadowPutUserPolicy(TestContext t) => GroupIamUsersShadow.RunTestAsync(t, "PutUserPolicy", new ScenarioTest
+    private Task TestIamUsersPutUserPolicy(TestContext t) => GroupIamUsers.RunTestAsync(t, "PutUserPolicy", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -353,7 +353,7 @@ internal sealed class ScenariosAuthoredIamUsers : IServiceGroup
         ],
     });
 
-    private Task TestIamUsersShadowGetUserPolicy(TestContext t) => GroupIamUsersShadow.RunTestAsync(t, "GetUserPolicy", new ScenarioTest
+    private Task TestIamUsersGetUserPolicy(TestContext t) => GroupIamUsers.RunTestAsync(t, "GetUserPolicy", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -379,7 +379,7 @@ internal sealed class ScenariosAuthoredIamUsers : IServiceGroup
         ],
     });
 
-    private Task TestIamUsersShadowDeleteUserPolicy(TestContext t) => GroupIamUsersShadow.RunTestAsync(t, "DeleteUserPolicy", new ScenarioTest
+    private Task TestIamUsersDeleteUserPolicy(TestContext t) => GroupIamUsers.RunTestAsync(t, "DeleteUserPolicy", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -437,7 +437,7 @@ internal sealed class ScenariosAuthoredIamUsers : IServiceGroup
         ],
     });
 
-    private Task TestIamUsersShadowUpdateUser(TestContext t) => GroupIamUsersShadow.RunTestAsync(t, "UpdateUser", new ScenarioTest
+    private Task TestIamUsersUpdateUser(TestContext t) => GroupIamUsers.RunTestAsync(t, "UpdateUser", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -500,7 +500,7 @@ internal sealed class ScenariosAuthoredIamUsers : IServiceGroup
         ],
     });
 
-    private Task TestIamUsersShadowListAccessKeys(TestContext t) => GroupIamUsersShadow.RunTestAsync(t, "ListAccessKeys", new ScenarioTest
+    private Task TestIamUsersListAccessKeys(TestContext t) => GroupIamUsers.RunTestAsync(t, "ListAccessKeys", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -528,7 +528,7 @@ internal sealed class ScenariosAuthoredIamUsers : IServiceGroup
         ],
     });
 
-    private Task TestIamUsersShadowDeleteUser(TestContext t) => GroupIamUsersShadow.RunTestAsync(t, "DeleteUser", new ScenarioTest
+    private Task TestIamUsersDeleteUser(TestContext t) => GroupIamUsers.RunTestAsync(t, "DeleteUser", new ScenarioTest
     {
         Call = new ScenarioCall
         {

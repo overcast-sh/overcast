@@ -11,10 +11,10 @@ import (
 // fresh data directory and so a fresh LabelInstance. When such a binary is
 // killed — most often by `go test -timeout` — its t.Cleanup never runs, no
 // later instance ever resolves to the same identity, and the containers it
-// started (ECS tasks, the ECR registry, Lambda functions) keep running on a daemon shared by
-// every other session on the machine. The owner labels let the next test
-// binary on that machine tell such an orphan from a resource a live test is
-// still using: see tests/helpers.ReapOrphanedTestContainers.
+// started (ECS tasks, the ECR registry, Lambda functions) keep running on a
+// daemon shared by every other session on the machine. The owner labels let
+// the next test binary on that machine tell such an orphan from a resource a
+// live test is still using: see tests/helpers.ReapOrphanedTestContainers.
 //
 // Production never sets them, so a resource that carries them was made by a
 // test, and a reaper keyed on them can never touch anything a user owns.
@@ -42,7 +42,9 @@ var ownerLabels atomic.Pointer[map[string]string]
 // init, and a registry's data volume by every run on its port — so an owner
 // label on a volume would hand it to the next test binary's reaper while other
 // processes still mount it. And an idle orphaned volume costs disk, not the CPU
-// an orphaned running container burns on a daemon every session shares. Passing nil clears them. It is process-wide by design — a test binary
+// an orphaned running container burns on a daemon every session shares.
+//
+// Passing nil clears them. It is process-wide by design — a test binary
 // declares its ownership once, for every Overcast instance it starts — so a
 // test that changes it must not run in parallel with one that creates.
 //

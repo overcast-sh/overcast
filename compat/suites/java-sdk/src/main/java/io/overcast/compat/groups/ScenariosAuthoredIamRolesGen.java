@@ -42,8 +42,8 @@ import software.amazon.awssdk.services.iam.model.Tag;
  */
 public final class ScenariosAuthoredIamRolesGen implements ServiceGroup {
 
-    private static final Group GROUP_IAM_ROLES_SHADOW =
-            new Group("iam-roles-shadow", "compat/model/authored/iam-roles.json");
+    private static final Group GROUP_IAM_ROLES =
+            new Group("iam-roles", "compat/model/authored/iam-roles.json");
 
     private final AwsClients clients;
     private volatile IamClient client;
@@ -60,34 +60,34 @@ public final class ScenariosAuthoredIamRolesGen implements ServiceGroup {
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("iam-roles-shadow:CreateRole", this::testIamRolesShadowCreateRole),
-                Map.entry("iam-roles-shadow:CreateRoleMalformedDocument", this::testIamRolesShadowCreateRoleMalformedDocument),
-                Map.entry("iam-roles-shadow:GetRole", this::testIamRolesShadowGetRole),
-                Map.entry("iam-roles-shadow:GetRoleReturnsTags", this::testIamRolesShadowGetRoleReturnsTags),
-                Map.entry("iam-roles-shadow:ListRoles", this::testIamRolesShadowListRoles),
-                Map.entry("iam-roles-shadow:AttachRolePolicy", this::testIamRolesShadowAttachRolePolicy),
-                Map.entry("iam-roles-shadow:ListAttachedRolePolicies", this::testIamRolesShadowListAttachedRolePolicies),
-                Map.entry("iam-roles-shadow:DetachRolePolicy", this::testIamRolesShadowDetachRolePolicy),
-                Map.entry("iam-roles-shadow:CreateInstanceProfile", this::testIamRolesShadowCreateInstanceProfile),
-                Map.entry("iam-roles-shadow:AddRoleToInstanceProfile", this::testIamRolesShadowAddRoleToInstanceProfile),
-                Map.entry("iam-roles-shadow:GetInstanceProfile", this::testIamRolesShadowGetInstanceProfile),
-                Map.entry("iam-roles-shadow:DeleteRole", this::testIamRolesShadowDeleteRole),
-                Map.entry("iam-roles-shadow:PutRolePolicy", this::testIamRolesShadowPutRolePolicy),
-                Map.entry("iam-roles-shadow:GetRolePolicy", this::testIamRolesShadowGetRolePolicy),
-                Map.entry("iam-roles-shadow:ListRolePolicies", this::testIamRolesShadowListRolePolicies),
-                Map.entry("iam-roles-shadow:DeleteRolePolicy", this::testIamRolesShadowDeleteRolePolicy));
+                Map.entry("iam-roles:CreateRole", this::testIamRolesCreateRole),
+                Map.entry("iam-roles:CreateRoleMalformedDocument", this::testIamRolesCreateRoleMalformedDocument),
+                Map.entry("iam-roles:GetRole", this::testIamRolesGetRole),
+                Map.entry("iam-roles:GetRoleReturnsTags", this::testIamRolesGetRoleReturnsTags),
+                Map.entry("iam-roles:ListRoles", this::testIamRolesListRoles),
+                Map.entry("iam-roles:AttachRolePolicy", this::testIamRolesAttachRolePolicy),
+                Map.entry("iam-roles:ListAttachedRolePolicies", this::testIamRolesListAttachedRolePolicies),
+                Map.entry("iam-roles:DetachRolePolicy", this::testIamRolesDetachRolePolicy),
+                Map.entry("iam-roles:CreateInstanceProfile", this::testIamRolesCreateInstanceProfile),
+                Map.entry("iam-roles:AddRoleToInstanceProfile", this::testIamRolesAddRoleToInstanceProfile),
+                Map.entry("iam-roles:GetInstanceProfile", this::testIamRolesGetInstanceProfile),
+                Map.entry("iam-roles:DeleteRole", this::testIamRolesDeleteRole),
+                Map.entry("iam-roles:PutRolePolicy", this::testIamRolesPutRolePolicy),
+                Map.entry("iam-roles:GetRolePolicy", this::testIamRolesGetRolePolicy),
+                Map.entry("iam-roles:ListRolePolicies", this::testIamRolesListRolePolicies),
+                Map.entry("iam-roles:DeleteRolePolicy", this::testIamRolesDeleteRolePolicy));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("iam-roles-shadow", this::setupIamRolesShadow));
+                Map.entry("iam-roles", this::setupIamRoles));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("iam-roles-shadow", this::teardownIamRolesShadow));
+                Map.entry("iam-roles", this::teardownIamRoles));
     }
 
     /**
@@ -107,8 +107,8 @@ public final class ScenariosAuthoredIamRolesGen implements ServiceGroup {
         return client;
     }
 
-    private void setupIamRolesShadow(TestContext t) {
-        GROUP_IAM_ROLES_SHADOW.runSetup(t,
+    private void setupIamRoles(TestContext t) {
+        GROUP_IAM_ROLES.runSetup(t,
                 new Call("CreateRole", "{\"AssumeRolePolicyDocument\":\"{\\\"Version\\\":\\\"2012-10-17\\\",\\\"Statement\\\":[{\\\"Effect\\\":\\\"Allow\\\",\\\"Principal\\\":{\\\"Service\\\":\\\"lambda.amazonaws.com\\\"},\\\"Action\\\":\\\"sts:AssumeRole\\\"}]}\",\"RoleName\":{\"$name\":\"doomed\"}}",
                         b -> CreateRoleRequest.builder()
                                 .assumeRolePolicyDocument("{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"lambda.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}")
@@ -117,8 +117,8 @@ public final class ScenariosAuthoredIamRolesGen implements ServiceGroup {
                         r -> cl().createRole((CreateRoleRequest) r)));
     }
 
-    private void teardownIamRolesShadow(TestContext t) {
-        GROUP_IAM_ROLES_SHADOW.runTeardown(t,
+    private void teardownIamRoles(TestContext t) {
+        GROUP_IAM_ROLES.runTeardown(t,
                 new Call("RemoveRoleFromInstanceProfile", "{\"InstanceProfileName\":{\"$name\":\"profile\"},\"RoleName\":{\"$name\":\"role\"}}",
                         b -> RemoveRoleFromInstanceProfileRequest.builder()
                                 .instanceProfileName(b.string("InstanceProfileName", Values.name("profile")))
@@ -159,8 +159,8 @@ public final class ScenariosAuthoredIamRolesGen implements ServiceGroup {
                         r -> cl().deleteRole((DeleteRoleRequest) r)));
     }
 
-    private void testIamRolesShadowCreateRole(TestContext t) {
-        GROUP_IAM_ROLES_SHADOW.runTest(t, "CreateRole",
+    private void testIamRolesCreateRole(TestContext t) {
+        GROUP_IAM_ROLES.runTest(t, "CreateRole",
                 new Call("CreateRole", "{\"AssumeRolePolicyDocument\":\"{\\\"Version\\\":\\\"2012-10-17\\\",\\\"Statement\\\":[{\\\"Effect\\\":\\\"Allow\\\",\\\"Principal\\\":{\\\"Service\\\":\\\"lambda.amazonaws.com\\\"},\\\"Action\\\":\\\"sts:AssumeRole\\\"}]}\",\"RoleName\":{\"$name\":\"role\"},\"Tags\":[{\"Key\":\"owner\",\"Value\":\"compat\"},{\"Key\":\"stage\",\"Value\":\"dev\"}]}",
                         b -> CreateRoleRequest.builder()
                                 .assumeRolePolicyDocument("{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"lambda.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}")
@@ -188,8 +188,8 @@ public final class ScenariosAuthoredIamRolesGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamRolesShadowCreateRoleMalformedDocument(TestContext t) {
-        GROUP_IAM_ROLES_SHADOW.runTest(t, "CreateRoleMalformedDocument",
+    private void testIamRolesCreateRoleMalformedDocument(TestContext t) {
+        GROUP_IAM_ROLES.runTest(t, "CreateRoleMalformedDocument",
                 new Call("CreateRole", "{\"AssumeRolePolicyDocument\":\"{\\\"Version\\\":\\\"2012-10-17\\\",\\\"Statement\\\":[{\\\"Effect\\\":\\\"Allow\\\",\\\"Resource\\\":\\\"*\\\"}]}\",\"RoleName\":{\"$name\":\"malformed\"}}",
                         b -> CreateRoleRequest.builder()
                                 .assumeRolePolicyDocument("{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Resource\":\"*\"}]}")
@@ -201,8 +201,8 @@ public final class ScenariosAuthoredIamRolesGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamRolesShadowGetRole(TestContext t) {
-        GROUP_IAM_ROLES_SHADOW.runTest(t, "GetRole",
+    private void testIamRolesGetRole(TestContext t) {
+        GROUP_IAM_ROLES.runTest(t, "GetRole",
                 new Call("GetRole", "{\"RoleName\":{\"$name\":\"role\"}}",
                         b -> GetRoleRequest.builder()
                                 .roleName(b.string("RoleName", Values.name("role")))
@@ -217,8 +217,8 @@ public final class ScenariosAuthoredIamRolesGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamRolesShadowGetRoleReturnsTags(TestContext t) {
-        GROUP_IAM_ROLES_SHADOW.runTest(t, "GetRoleReturnsTags",
+    private void testIamRolesGetRoleReturnsTags(TestContext t) {
+        GROUP_IAM_ROLES.runTest(t, "GetRoleReturnsTags",
                 new Call("GetRole", "{\"RoleName\":{\"$name\":\"role\"}}",
                         b -> GetRoleRequest.builder()
                                 .roleName(b.string("RoleName", Values.name("role")))
@@ -240,8 +240,8 @@ public final class ScenariosAuthoredIamRolesGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamRolesShadowListRoles(TestContext t) {
-        GROUP_IAM_ROLES_SHADOW.runTest(t, "ListRoles",
+    private void testIamRolesListRoles(TestContext t) {
+        GROUP_IAM_ROLES.runTest(t, "ListRoles",
                 new Call("ListRoles", "{\"MaxItems\":1000}",
                         b -> ListRolesRequest.builder()
                                 .maxItems(1000)
@@ -256,8 +256,8 @@ public final class ScenariosAuthoredIamRolesGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamRolesShadowAttachRolePolicy(TestContext t) {
-        GROUP_IAM_ROLES_SHADOW.runTest(t, "AttachRolePolicy",
+    private void testIamRolesAttachRolePolicy(TestContext t) {
+        GROUP_IAM_ROLES.runTest(t, "AttachRolePolicy",
                 new Call("AttachRolePolicy", "{\"PolicyArn\":\"arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess\",\"RoleName\":{\"$name\":\"role\"}}",
                         b -> AttachRolePolicyRequest.builder()
                                 .policyArn("arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess")
@@ -278,8 +278,8 @@ public final class ScenariosAuthoredIamRolesGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamRolesShadowListAttachedRolePolicies(TestContext t) {
-        GROUP_IAM_ROLES_SHADOW.runTest(t, "ListAttachedRolePolicies",
+    private void testIamRolesListAttachedRolePolicies(TestContext t) {
+        GROUP_IAM_ROLES.runTest(t, "ListAttachedRolePolicies",
                 new Call("ListAttachedRolePolicies", "{\"RoleName\":{\"$name\":\"role\"}}",
                         b -> ListAttachedRolePoliciesRequest.builder()
                                 .roleName(b.string("RoleName", Values.name("role")))
@@ -294,8 +294,8 @@ public final class ScenariosAuthoredIamRolesGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamRolesShadowDetachRolePolicy(TestContext t) {
-        GROUP_IAM_ROLES_SHADOW.runTest(t, "DetachRolePolicy",
+    private void testIamRolesDetachRolePolicy(TestContext t) {
+        GROUP_IAM_ROLES.runTest(t, "DetachRolePolicy",
                 new Call("DetachRolePolicy", "{\"PolicyArn\":\"arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess\",\"RoleName\":{\"$name\":\"role\"}}",
                         b -> DetachRolePolicyRequest.builder()
                                 .policyArn("arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess")
@@ -316,8 +316,8 @@ public final class ScenariosAuthoredIamRolesGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamRolesShadowCreateInstanceProfile(TestContext t) {
-        GROUP_IAM_ROLES_SHADOW.runTest(t, "CreateInstanceProfile",
+    private void testIamRolesCreateInstanceProfile(TestContext t) {
+        GROUP_IAM_ROLES.runTest(t, "CreateInstanceProfile",
                 new Call("CreateInstanceProfile", "{\"InstanceProfileName\":{\"$name\":\"profile\"}}",
                         b -> CreateInstanceProfileRequest.builder()
                                 .instanceProfileName(b.string("InstanceProfileName", Values.name("profile")))
@@ -331,8 +331,8 @@ public final class ScenariosAuthoredIamRolesGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamRolesShadowAddRoleToInstanceProfile(TestContext t) {
-        GROUP_IAM_ROLES_SHADOW.runTest(t, "AddRoleToInstanceProfile",
+    private void testIamRolesAddRoleToInstanceProfile(TestContext t) {
+        GROUP_IAM_ROLES.runTest(t, "AddRoleToInstanceProfile",
                 new Call("AddRoleToInstanceProfile", "{\"InstanceProfileName\":{\"$name\":\"profile\"},\"RoleName\":{\"$name\":\"role\"}}",
                         b -> AddRoleToInstanceProfileRequest.builder()
                                 .instanceProfileName(b.string("InstanceProfileName", Values.name("profile")))
@@ -353,8 +353,8 @@ public final class ScenariosAuthoredIamRolesGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamRolesShadowGetInstanceProfile(TestContext t) {
-        GROUP_IAM_ROLES_SHADOW.runTest(t, "GetInstanceProfile",
+    private void testIamRolesGetInstanceProfile(TestContext t) {
+        GROUP_IAM_ROLES.runTest(t, "GetInstanceProfile",
                 new Call("GetInstanceProfile", "{\"InstanceProfileName\":{\"$name\":\"profile\"}}",
                         b -> GetInstanceProfileRequest.builder()
                                 .instanceProfileName(b.string("InstanceProfileName", Values.name("profile")))
@@ -372,8 +372,8 @@ public final class ScenariosAuthoredIamRolesGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamRolesShadowDeleteRole(TestContext t) {
-        GROUP_IAM_ROLES_SHADOW.runTest(t, "DeleteRole",
+    private void testIamRolesDeleteRole(TestContext t) {
+        GROUP_IAM_ROLES.runTest(t, "DeleteRole",
                 new Call("DeleteRole", "{\"RoleName\":{\"$name\":\"doomed\"}}",
                         b -> DeleteRoleRequest.builder()
                                 .roleName(b.string("RoleName", Values.name("doomed")))
@@ -401,8 +401,8 @@ public final class ScenariosAuthoredIamRolesGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamRolesShadowPutRolePolicy(TestContext t) {
-        GROUP_IAM_ROLES_SHADOW.runTest(t, "PutRolePolicy",
+    private void testIamRolesPutRolePolicy(TestContext t) {
+        GROUP_IAM_ROLES.runTest(t, "PutRolePolicy",
                 new Call("PutRolePolicy", "{\"PolicyDocument\":\"{\\\"Version\\\":\\\"2012-10-17\\\",\\\"Statement\\\":[{\\\"Effect\\\":\\\"Allow\\\",\\\"Action\\\":\\\"logs:*\\\",\\\"Resource\\\":\\\"*\\\"}]}\",\"PolicyName\":\"inline-role-policy\",\"RoleName\":{\"$name\":\"role\"}}",
                         b -> PutRolePolicyRequest.builder()
                                 .policyDocument("{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"logs:*\",\"Resource\":\"*\"}]}")
@@ -424,8 +424,8 @@ public final class ScenariosAuthoredIamRolesGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamRolesShadowGetRolePolicy(TestContext t) {
-        GROUP_IAM_ROLES_SHADOW.runTest(t, "GetRolePolicy",
+    private void testIamRolesGetRolePolicy(TestContext t) {
+        GROUP_IAM_ROLES.runTest(t, "GetRolePolicy",
                 new Call("GetRolePolicy", "{\"PolicyName\":\"inline-role-policy\",\"RoleName\":{\"$name\":\"role\"}}",
                         b -> GetRolePolicyRequest.builder()
                                 .policyName("inline-role-policy")
@@ -441,8 +441,8 @@ public final class ScenariosAuthoredIamRolesGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamRolesShadowListRolePolicies(TestContext t) {
-        GROUP_IAM_ROLES_SHADOW.runTest(t, "ListRolePolicies",
+    private void testIamRolesListRolePolicies(TestContext t) {
+        GROUP_IAM_ROLES.runTest(t, "ListRolePolicies",
                 new Call("ListRolePolicies", "{\"RoleName\":{\"$name\":\"role\"}}",
                         b -> ListRolePoliciesRequest.builder()
                                 .roleName(b.string("RoleName", Values.name("role")))
@@ -457,8 +457,8 @@ public final class ScenariosAuthoredIamRolesGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamRolesShadowDeleteRolePolicy(TestContext t) {
-        GROUP_IAM_ROLES_SHADOW.runTest(t, "DeleteRolePolicy",
+    private void testIamRolesDeleteRolePolicy(TestContext t) {
+        GROUP_IAM_ROLES.runTest(t, "DeleteRolePolicy",
                 new Call("DeleteRolePolicy", "{\"PolicyName\":\"inline-role-policy\",\"RoleName\":{\"$name\":\"role\"}}",
                         b -> DeleteRolePolicyRequest.builder()
                                 .policyName("inline-role-policy")

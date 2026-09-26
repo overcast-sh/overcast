@@ -56,6 +56,45 @@
       ]
     },
     {
+      "group": "iam-roles",
+      "scenario": "compat/model/authored/iam-roles.json",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ]
+    },
+    {
+      "group": "iam-users",
+      "scenario": "compat/model/authored/iam-users.json",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ]
+    },
+    {
+      "group": "kinesis-records",
+      "scenario": "compat/model/authored/kinesis-records.json",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ]
+    },
+    {
       "group": "kinesis-shards",
       "scenario": "compat/model/authored/kinesis-shards.json",
       "suites": [
@@ -1347,245 +1386,6 @@
             "GetPolicy",
             "ListPolicies",
             "GetPolicyAttachmentCountAfterDetach"
-          ]
-        }
-      ]
-    },
-    {
-      "service": "iam",
-      "name": "iam-roles-shadow",
-      "generated": true,
-      "scenario": "compat/model/authored/iam-roles.json",
-      "state": "candidate",
-      "shadowOf": "iam-roles",
-      "suites": [
-        "cli",
-        "dotnet-sdk",
-        "go-sdk",
-        "java-sdk",
-        "node-js-sdk",
-        "python-sdk",
-        "rust-sdk"
-      ],
-      "tests": [
-        {
-          "name": "CreateRole"
-        },
-        {
-          "name": "CreateRoleMalformedDocument",
-          "op": "CreateRole"
-        },
-        {
-          "name": "GetRole",
-          "depends": [
-            "CreateRole"
-          ]
-        },
-        {
-          "name": "GetRoleReturnsTags",
-          "op": "GetRole",
-          "depends": [
-            "CreateRole"
-          ]
-        },
-        {
-          "name": "ListRoles",
-          "depends": [
-            "CreateRole"
-          ]
-        },
-        {
-          "name": "AttachRolePolicy",
-          "depends": [
-            "CreateRole"
-          ]
-        },
-        {
-          "name": "ListAttachedRolePolicies",
-          "depends": [
-            "AttachRolePolicy"
-          ]
-        },
-        {
-          "name": "DetachRolePolicy",
-          "depends": [
-            "ListAttachedRolePolicies"
-          ]
-        },
-        {
-          "name": "CreateInstanceProfile",
-          "depends": [
-            "CreateRole"
-          ]
-        },
-        {
-          "name": "AddRoleToInstanceProfile",
-          "depends": [
-            "CreateInstanceProfile"
-          ]
-        },
-        {
-          "name": "GetInstanceProfile",
-          "depends": [
-            "AddRoleToInstanceProfile"
-          ]
-        },
-        {
-          "name": "DeleteRole",
-          "depends": [
-            "DetachRolePolicy",
-            "DeleteRolePolicy",
-            "GetInstanceProfile"
-          ]
-        },
-        {
-          "name": "PutRolePolicy",
-          "depends": [
-            "CreateRole"
-          ]
-        },
-        {
-          "name": "GetRolePolicy",
-          "depends": [
-            "PutRolePolicy"
-          ]
-        },
-        {
-          "name": "ListRolePolicies",
-          "depends": [
-            "PutRolePolicy"
-          ]
-        },
-        {
-          "name": "DeleteRolePolicy",
-          "depends": [
-            "GetRolePolicy",
-            "ListRolePolicies"
-          ]
-        }
-      ]
-    },
-    {
-      "service": "iam",
-      "name": "iam-users-shadow",
-      "generated": true,
-      "scenario": "compat/model/authored/iam-users.json",
-      "state": "candidate",
-      "shadowOf": "iam-users",
-      "suites": [
-        "cli",
-        "dotnet-sdk",
-        "go-sdk",
-        "java-sdk",
-        "node-js-sdk",
-        "python-sdk",
-        "rust-sdk"
-      ],
-      "tests": [
-        {
-          "name": "CreateUser"
-        },
-        {
-          "name": "GetUser",
-          "depends": [
-            "CreateUser"
-          ]
-        },
-        {
-          "name": "ListUsers",
-          "depends": [
-            "CreateUser"
-          ]
-        },
-        {
-          "name": "CreateAccessKey",
-          "depends": [
-            "CreateUser"
-          ]
-        },
-        {
-          "name": "DeleteAccessKey",
-          "depends": [
-            "CreateAccessKey"
-          ]
-        },
-        {
-          "name": "PutUserPolicy",
-          "depends": [
-            "CreateUser"
-          ]
-        },
-        {
-          "name": "GetUserPolicy",
-          "depends": [
-            "PutUserPolicy"
-          ]
-        },
-        {
-          "name": "DeleteUserPolicy",
-          "depends": [
-            "GetUserPolicy"
-          ]
-        },
-        {
-          "name": "UpdateUser",
-          "depends": [
-            "CreateUser"
-          ]
-        },
-        {
-          "name": "ListAccessKeys",
-          "depends": [
-            "CreateUser"
-          ]
-        },
-        {
-          "name": "DeleteUser",
-          "depends": [
-            "DeleteAccessKey",
-            "DeleteUserPolicy",
-            "UpdateUser",
-            "ListAccessKeys"
-          ]
-        }
-      ]
-    },
-    {
-      "service": "kinesis",
-      "name": "kinesis-records-shadow",
-      "generated": true,
-      "scenario": "compat/model/authored/kinesis-records.json",
-      "state": "candidate",
-      "shadowOf": "kinesis-records",
-      "suites": [
-        "cli",
-        "dotnet-sdk",
-        "go-sdk",
-        "java-sdk",
-        "node-js-sdk",
-        "python-sdk",
-        "rust-sdk"
-      ],
-      "tests": [
-        {
-          "name": "PutRecord"
-        },
-        {
-          "name": "PutRecords",
-          "depends": [
-            "PutRecord"
-          ]
-        },
-        {
-          "name": "GetShardIterator",
-          "depends": [
-            "PutRecord"
-          ]
-        },
-        {
-          "name": "GetRecords",
-          "depends": [
-            "GetShardIterator"
           ]
         }
       ]

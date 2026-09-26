@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/kinesis-records.json";
 
-const GROUP_KINESIS_RECORDS_SHADOW: Group = Group {
-    name: "kinesis-records-shadow",
+const GROUP_KINESIS_RECORDS: Group = Group {
+    name: "kinesis-records",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredKinesisRecords {
         {
             let client = self.client.clone();
             impls.insert(
-                "kinesis-records-shadow:PutRecord".to_string(),
+                "kinesis-records:PutRecord".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_KINESIS_RECORDS_SHADOW
-                            .run_test(&ctx, "PutRecord", test_kinesis_records_shadow_put_record(&client))
+                        GROUP_KINESIS_RECORDS
+                            .run_test(&ctx, "PutRecord", test_kinesis_records_put_record(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredKinesisRecords {
         {
             let client = self.client.clone();
             impls.insert(
-                "kinesis-records-shadow:PutRecords".to_string(),
+                "kinesis-records:PutRecords".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_KINESIS_RECORDS_SHADOW
-                            .run_test(&ctx, "PutRecords", test_kinesis_records_shadow_put_records(&client))
+                        GROUP_KINESIS_RECORDS
+                            .run_test(&ctx, "PutRecords", test_kinesis_records_put_records(&client))
                             .await
                     })
                 }),
@@ -79,12 +79,12 @@ impl ServiceGroup for ScenariosAuthoredKinesisRecords {
         {
             let client = self.client.clone();
             impls.insert(
-                "kinesis-records-shadow:GetShardIterator".to_string(),
+                "kinesis-records:GetShardIterator".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_KINESIS_RECORDS_SHADOW
-                            .run_test(&ctx, "GetShardIterator", test_kinesis_records_shadow_get_shard_iterator(&client))
+                        GROUP_KINESIS_RECORDS
+                            .run_test(&ctx, "GetShardIterator", test_kinesis_records_get_shard_iterator(&client))
                             .await
                     })
                 }),
@@ -93,12 +93,12 @@ impl ServiceGroup for ScenariosAuthoredKinesisRecords {
         {
             let client = self.client.clone();
             impls.insert(
-                "kinesis-records-shadow:GetRecords".to_string(),
+                "kinesis-records:GetRecords".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_KINESIS_RECORDS_SHADOW
-                            .run_test(&ctx, "GetRecords", test_kinesis_records_shadow_get_records(&client))
+                        GROUP_KINESIS_RECORDS
+                            .run_test(&ctx, "GetRecords", test_kinesis_records_get_records(&client))
                             .await
                     })
                 }),
@@ -112,11 +112,11 @@ impl ServiceGroup for ScenariosAuthoredKinesisRecords {
         {
             let client = self.client.clone();
             setups.insert(
-                "kinesis-records-shadow".to_string(),
+                "kinesis-records".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_KINESIS_RECORDS_SHADOW.run_setup(&ctx, setup_kinesis_records_shadow(&client)).await
+                        GROUP_KINESIS_RECORDS.run_setup(&ctx, setup_kinesis_records(&client)).await
                     })
                 }),
             );
@@ -129,11 +129,11 @@ impl ServiceGroup for ScenariosAuthoredKinesisRecords {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "kinesis-records-shadow".to_string(),
+                "kinesis-records".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_KINESIS_RECORDS_SHADOW.run_teardown(&ctx, teardown_kinesis_records_shadow(&client)).await
+                        GROUP_KINESIS_RECORDS.run_teardown(&ctx, teardown_kinesis_records(&client)).await
                     })
                 }),
             );
@@ -142,7 +142,7 @@ impl ServiceGroup for ScenariosAuthoredKinesisRecords {
     }
 }
 
-fn setup_kinesis_records_shadow(client: &aws_sdk_kinesis::Client) -> Vec<Call> {
+fn setup_kinesis_records(client: &aws_sdk_kinesis::Client) -> Vec<Call> {
     vec![
         Call {
             op: "CreateStream",
@@ -171,7 +171,7 @@ fn setup_kinesis_records_shadow(client: &aws_sdk_kinesis::Client) -> Vec<Call> {
     ]
 }
 
-fn teardown_kinesis_records_shadow(client: &aws_sdk_kinesis::Client) -> Vec<Call> {
+fn teardown_kinesis_records(client: &aws_sdk_kinesis::Client) -> Vec<Call> {
     vec![
         Call {
             op: "DeleteStream",
@@ -196,7 +196,7 @@ fn teardown_kinesis_records_shadow(client: &aws_sdk_kinesis::Client) -> Vec<Call
     ]
 }
 
-fn test_kinesis_records_shadow_put_record(client: &aws_sdk_kinesis::Client) -> Test {
+fn test_kinesis_records_put_record(client: &aws_sdk_kinesis::Client) -> Test {
     Test {
         call: Call {
             op: "PutRecord",
@@ -236,7 +236,7 @@ fn test_kinesis_records_shadow_put_record(client: &aws_sdk_kinesis::Client) -> T
     }
 }
 
-fn test_kinesis_records_shadow_put_records(client: &aws_sdk_kinesis::Client) -> Test {
+fn test_kinesis_records_put_records(client: &aws_sdk_kinesis::Client) -> Test {
     Test {
         call: Call {
             op: "PutRecords",
@@ -292,7 +292,7 @@ fn test_kinesis_records_shadow_put_records(client: &aws_sdk_kinesis::Client) -> 
     }
 }
 
-fn test_kinesis_records_shadow_get_shard_iterator(client: &aws_sdk_kinesis::Client) -> Test {
+fn test_kinesis_records_get_shard_iterator(client: &aws_sdk_kinesis::Client) -> Test {
     Test {
         call: Call {
             op: "GetShardIterator",
@@ -356,7 +356,7 @@ fn test_kinesis_records_shadow_get_shard_iterator(client: &aws_sdk_kinesis::Clie
     }
 }
 
-fn test_kinesis_records_shadow_get_records(client: &aws_sdk_kinesis::Client) -> Test {
+fn test_kinesis_records_get_records(client: &aws_sdk_kinesis::Client) -> Test {
     Test {
         call: Call {
             op: "GetRecords",

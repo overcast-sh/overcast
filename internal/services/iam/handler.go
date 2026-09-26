@@ -433,7 +433,7 @@ func toRoleXML(r *Role) roleXML {
 		RoleId:                   r.RoleId,
 		Arn:                      r.Arn,
 		CreateDate:               r.CreateDate,
-		AssumeRolePolicyDocument: r.AssumeRolePolicyDocument,
+		AssumeRolePolicyDocument: encodePolicyDocument(r.AssumeRolePolicyDocument),
 		Description:              r.Description,
 		MaxSessionDuration:       duration,
 		PermissionsBoundary:      toPermissionsBoundaryXML(r.PermissionsBoundary),
@@ -599,11 +599,12 @@ type roleDetailXML struct {
 	PermissionsBoundary      *attachedPermissionsBoundaryXML   `xml:"PermissionsBoundary,omitempty"`
 }
 
-// inlinePolicyListXML packages a name→document map as an ordered XML member list.
+// inlinePolicyListXML packages a name→document map as an XML member list,
+// each document URL-encoded as PolicyDetail.PolicyDocument documents it.
 func inlinePolicyListXML(m map[string]string) listMembersXML[inlinePolicyXML] {
 	items := make([]inlinePolicyXML, 0, len(m))
 	for name, doc := range m {
-		items = append(items, inlinePolicyXML{PolicyName: name, PolicyDocument: doc})
+		items = append(items, inlinePolicyXML{PolicyName: name, PolicyDocument: encodePolicyDocument(doc)})
 	}
 	return listMembersXML[inlinePolicyXML]{Members: items, Tag: "member"}
 }
@@ -653,13 +654,23 @@ func policyNameFromARN(arn string) string {
 	return arn
 }
 
-// encodePolicyDocument URL-encodes an inline policy document the way IAM does.
+// encodePolicyDocument URL-encodes a policy document the way IAM does on the
+// way out. The store keeps every document raw; each response member that
+// carries one — Role.AssumeRolePolicyDocument (CreateRole, GetRole, ListRoles,
+// the roles inside an InstanceProfile), the Get{User,Role,Group}Policy
+// documents, and GetAccountAuthorizationDetails' RoleDetail trust policy and
+// inline PolicyDetail documents — goes through here (#2180).
 //
-// AWS documents the returned document as "URL-encoded compliant with RFC 3986"
-// and tells callers to URL-decode it. Go's url.QueryEscape is form encoding,
-// which renders a space as "+" — a client decoding per RFC 3986 then gets a
-// literal "+" where the space belonged, corrupting any policy document that is
-// not minified JSON. Percent-encoding the space keeps the round trip exact.
+// AWS documents each of them as "URL-encoded compliant with RFC 3986"
+// (IAM API Reference: API_Role.html, API_RoleDetail.html,
+// API_PolicyDetail.html, API_GetRolePolicy.html) and tells callers to
+// URL-decode it. botocore decodes on the client; the Go, JavaScript, Java,
+// Rust and .NET SDKs hand the caller the encoded string.
+//
+// Go's url.QueryEscape is form encoding, which renders a space as "+" — a
+// client decoding per RFC 3986 then gets a literal "+" where the space
+// belonged, corrupting any policy document that is not minified JSON.
+// Percent-encoding the space keeps the round trip exact.
 func encodePolicyDocument(doc string) string {
 	return strings.ReplaceAll(url.QueryEscape(doc), "+", "%20")
 }
