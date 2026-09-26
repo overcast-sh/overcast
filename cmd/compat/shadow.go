@@ -55,11 +55,19 @@ const (
 	// of the two below. This is the only outcome that blocks the flip.
 	shadowDiverge
 	// shadowDebtClosed: the suite never implemented the native group and says
-	// so with the shared not-implemented sentinel, while the shadow ran. There
-	// is no predecessor to match, and burning that debt down is the point of
-	// the migration (§3.11 step 4: "a ported group implemented by scenario
-	// counts as implemented in every suite with a backend"). Reported, never a
-	// blocker.
+	// so with the shared not-implemented sentinel, while the shadow ran and did
+	// not fail. There is no predecessor to match, and burning that debt down is
+	// the point of the migration (§3.11 step 4: "a ported group implemented by
+	// scenario counts as implemented in every suite with a backend"). Reported,
+	// never a blocker.
+	//
+	// A shadow that FAILS against that skip is not debt closed: it is a port
+	// that does not work in exactly the suites it was meant to cover, with no
+	// native there to diverge from, so it is classified as a divergence and
+	// blocks the flip. Counting it as debt closed is how a node-js-sdk
+	// interpreter bug went unseen (#2246). A shadow answering "unimplemented"
+	// still closes the debt — the natives elsewhere report the same 501, and
+	// that is the emulator's gap, not the port's.
 	shadowDebtClosed
 	// shadowUnexercised: neither half ran — a setup that failed the same way
 	// twice, a suite the run did not reach, a group scoped away. The statuses
@@ -76,7 +84,7 @@ func (p shadowPair) verdict() shadowVerdict {
 	switch {
 	case !nativeRan && !shadowRan:
 		return shadowUnexercised
-	case p.Native == compat.StatusSkip && isNotImplementedSkip(p.NativeReason) && shadowRan:
+	case p.Native == compat.StatusSkip && isNotImplementedSkip(p.NativeReason) && shadowRan && p.Shadow != compat.StatusFail:
 		return shadowDebtClosed
 	case p.Native == p.Shadow:
 		return shadowAgree
