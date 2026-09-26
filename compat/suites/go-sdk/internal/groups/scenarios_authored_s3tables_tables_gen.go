@@ -24,25 +24,25 @@ func ScenariosAuthoredS3tablesTables(c *clients.Clients) ServiceGroup {
 	return ServiceGroup{
 		Name: "scenarios/authored-s3tables-tables",
 		Impls: map[string]harness.TestFn{
-			"s3tables-tables-shadow:CreateTableBucket":                     g.testS3tablesTablesShadowCreateTableBucket,
-			"s3tables-tables-shadow:GetTableBucket":                        g.testS3tablesTablesShadowGetTableBucket,
-			"s3tables-tables-shadow:ListTableBuckets":                      g.testS3tablesTablesShadowListTableBuckets,
-			"s3tables-tables-shadow:CreateNamespace":                       g.testS3tablesTablesShadowCreateNamespace,
-			"s3tables-tables-shadow:ListNamespaces":                        g.testS3tablesTablesShadowListNamespaces,
-			"s3tables-tables-shadow:CreateTable":                           g.testS3tablesTablesShadowCreateTable,
-			"s3tables-tables-shadow:GetTable":                              g.testS3tablesTablesShadowGetTable,
-			"s3tables-tables-shadow:ListTables":                            g.testS3tablesTablesShadowListTables,
-			"s3tables-tables-shadow:UpdateTableMetadataLocation":           g.testS3tablesTablesShadowUpdateTableMetadataLocation,
-			"s3tables-tables-shadow:UpdateTableMetadataLocationStaleToken": g.testS3tablesTablesShadowUpdateTableMetadataLocationStaleToken,
-			"s3tables-tables-shadow:DeleteTable":                           g.testS3tablesTablesShadowDeleteTable,
-			"s3tables-tables-shadow:DeleteNamespace":                       g.testS3tablesTablesShadowDeleteNamespace,
-			"s3tables-tables-shadow:DeleteTableBucket":                     g.testS3tablesTablesShadowDeleteTableBucket,
+			"s3tables-tables:CreateTableBucket":                     g.testS3tablesTablesCreateTableBucket,
+			"s3tables-tables:GetTableBucket":                        g.testS3tablesTablesGetTableBucket,
+			"s3tables-tables:ListTableBuckets":                      g.testS3tablesTablesListTableBuckets,
+			"s3tables-tables:CreateNamespace":                       g.testS3tablesTablesCreateNamespace,
+			"s3tables-tables:ListNamespaces":                        g.testS3tablesTablesListNamespaces,
+			"s3tables-tables:CreateTable":                           g.testS3tablesTablesCreateTable,
+			"s3tables-tables:GetTable":                              g.testS3tablesTablesGetTable,
+			"s3tables-tables:ListTables":                            g.testS3tablesTablesListTables,
+			"s3tables-tables:UpdateTableMetadataLocation":           g.testS3tablesTablesUpdateTableMetadataLocation,
+			"s3tables-tables:UpdateTableMetadataLocationStaleToken": g.testS3tablesTablesUpdateTableMetadataLocationStaleToken,
+			"s3tables-tables:DeleteTable":                           g.testS3tablesTablesDeleteTable,
+			"s3tables-tables:DeleteNamespace":                       g.testS3tablesTablesDeleteNamespace,
+			"s3tables-tables:DeleteTableBucket":                     g.testS3tablesTablesDeleteTableBucket,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"s3tables-tables-shadow": g.setupS3tablesTablesShadow,
+			"s3tables-tables": g.setupS3tablesTables,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"s3tables-tables-shadow": g.teardownS3tablesTablesShadow,
+			"s3tables-tables": g.teardownS3tablesTables,
 		},
 	}
 }
@@ -62,15 +62,15 @@ func (g *authoredS3tablesTablesScenarios) cl() *s3tables.Client {
 	return g.client
 }
 
-var groupS3tablesTablesShadow = scenario.Group{Name: "s3tables-tables-shadow", File: "compat/model/authored/s3tables-tables.json"}
+var groupS3tablesTables = scenario.Group{Name: "s3tables-tables", File: "compat/model/authored/s3tables-tables.json"}
 
-func (g *authoredS3tablesTablesScenarios) setupS3tablesTablesShadow(ctx context.Context, t *harness.TestContext) error {
+func (g *authoredS3tablesTablesScenarios) setupS3tablesTables(ctx context.Context, t *harness.TestContext) error {
 	// No setup steps: an empty phase is a no-op, not a missing one.
-	return groupS3tablesTablesShadow.RunSetup(ctx, t)
+	return groupS3tablesTables.RunSetup(ctx, t)
 }
 
-func (g *authoredS3tablesTablesScenarios) teardownS3tablesTablesShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupS3tablesTablesShadow.RunTeardown(ctx, t,
+func (g *authoredS3tablesTablesScenarios) teardownS3tablesTables(ctx context.Context, t *harness.TestContext) error {
+	return groupS3tablesTables.RunTeardown(ctx, t,
 		scenario.Call{
 			Op:     "DeleteTable",
 			Params: `{"name":"orders","namespace":"compat","tableBucketARN":{"$ref":"bucket.arn"}}`,
@@ -113,8 +113,8 @@ func (g *authoredS3tablesTablesScenarios) teardownS3tablesTablesShadow(ctx conte
 	)
 }
 
-func (g *authoredS3tablesTablesScenarios) testS3tablesTablesShadowCreateTableBucket(ctx context.Context, t *harness.TestContext) error {
-	return groupS3tablesTablesShadow.RunTest(ctx, t, "CreateTableBucket", scenario.Test{
+func (g *authoredS3tablesTablesScenarios) testS3tablesTablesCreateTableBucket(ctx context.Context, t *harness.TestContext) error {
+	return groupS3tablesTables.RunTest(ctx, t, "CreateTableBucket", scenario.Test{
 		Call: scenario.Call{
 			Op:     "CreateTableBucket",
 			Params: `{"name":{"$name":"bucket"}}`,
@@ -153,8 +153,8 @@ func (g *authoredS3tablesTablesScenarios) testS3tablesTablesShadowCreateTableBuc
 	})
 }
 
-func (g *authoredS3tablesTablesScenarios) testS3tablesTablesShadowGetTableBucket(ctx context.Context, t *harness.TestContext) error {
-	return groupS3tablesTablesShadow.RunTest(ctx, t, "GetTableBucket", scenario.Test{
+func (g *authoredS3tablesTablesScenarios) testS3tablesTablesGetTableBucket(ctx context.Context, t *harness.TestContext) error {
+	return groupS3tablesTables.RunTest(ctx, t, "GetTableBucket", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetTableBucket",
 			Params: `{"tableBucketARN":{"$ref":"bucket.arn"}}`,
@@ -178,8 +178,8 @@ func (g *authoredS3tablesTablesScenarios) testS3tablesTablesShadowGetTableBucket
 	})
 }
 
-func (g *authoredS3tablesTablesScenarios) testS3tablesTablesShadowListTableBuckets(ctx context.Context, t *harness.TestContext) error {
-	return groupS3tablesTablesShadow.RunTest(ctx, t, "ListTableBuckets", scenario.Test{
+func (g *authoredS3tablesTablesScenarios) testS3tablesTablesListTableBuckets(ctx context.Context, t *harness.TestContext) error {
+	return groupS3tablesTables.RunTest(ctx, t, "ListTableBuckets", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListTableBuckets",
 			Params: `{"prefix":{"$name":"bucket"}}`,
@@ -203,8 +203,8 @@ func (g *authoredS3tablesTablesScenarios) testS3tablesTablesShadowListTableBucke
 	})
 }
 
-func (g *authoredS3tablesTablesScenarios) testS3tablesTablesShadowCreateNamespace(ctx context.Context, t *harness.TestContext) error {
-	return groupS3tablesTablesShadow.RunTest(ctx, t, "CreateNamespace", scenario.Test{
+func (g *authoredS3tablesTablesScenarios) testS3tablesTablesCreateNamespace(ctx context.Context, t *harness.TestContext) error {
+	return groupS3tablesTables.RunTest(ctx, t, "CreateNamespace", scenario.Test{
 		Call: scenario.Call{
 			Op:     "CreateNamespace",
 			Params: `{"namespace":["compat"],"tableBucketARN":{"$ref":"bucket.arn"}}`,
@@ -243,8 +243,8 @@ func (g *authoredS3tablesTablesScenarios) testS3tablesTablesShadowCreateNamespac
 	})
 }
 
-func (g *authoredS3tablesTablesScenarios) testS3tablesTablesShadowListNamespaces(ctx context.Context, t *harness.TestContext) error {
-	return groupS3tablesTablesShadow.RunTest(ctx, t, "ListNamespaces", scenario.Test{
+func (g *authoredS3tablesTablesScenarios) testS3tablesTablesListNamespaces(ctx context.Context, t *harness.TestContext) error {
+	return groupS3tablesTables.RunTest(ctx, t, "ListNamespaces", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListNamespaces",
 			Params: `{"tableBucketARN":{"$ref":"bucket.arn"}}`,
@@ -266,8 +266,8 @@ func (g *authoredS3tablesTablesScenarios) testS3tablesTablesShadowListNamespaces
 	})
 }
 
-func (g *authoredS3tablesTablesScenarios) testS3tablesTablesShadowCreateTable(ctx context.Context, t *harness.TestContext) error {
-	return groupS3tablesTablesShadow.RunTest(ctx, t, "CreateTable", scenario.Test{
+func (g *authoredS3tablesTablesScenarios) testS3tablesTablesCreateTable(ctx context.Context, t *harness.TestContext) error {
+	return groupS3tablesTables.RunTest(ctx, t, "CreateTable", scenario.Test{
 		Call: scenario.Call{
 			Op:     "CreateTable",
 			Params: `{"format":"ICEBERG","name":"orders","namespace":"compat","tableBucketARN":{"$ref":"bucket.arn"}}`,
@@ -318,8 +318,8 @@ func (g *authoredS3tablesTablesScenarios) testS3tablesTablesShadowCreateTable(ct
 	})
 }
 
-func (g *authoredS3tablesTablesScenarios) testS3tablesTablesShadowGetTable(ctx context.Context, t *harness.TestContext) error {
-	return groupS3tablesTablesShadow.RunTest(ctx, t, "GetTable", scenario.Test{
+func (g *authoredS3tablesTablesScenarios) testS3tablesTablesGetTable(ctx context.Context, t *harness.TestContext) error {
+	return groupS3tablesTables.RunTest(ctx, t, "GetTable", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetTable",
 			Params: `{"name":"orders","namespace":"compat","tableBucketARN":{"$ref":"bucket.arn"}}`,
@@ -346,8 +346,8 @@ func (g *authoredS3tablesTablesScenarios) testS3tablesTablesShadowGetTable(ctx c
 	})
 }
 
-func (g *authoredS3tablesTablesScenarios) testS3tablesTablesShadowListTables(ctx context.Context, t *harness.TestContext) error {
-	return groupS3tablesTablesShadow.RunTest(ctx, t, "ListTables", scenario.Test{
+func (g *authoredS3tablesTablesScenarios) testS3tablesTablesListTables(ctx context.Context, t *harness.TestContext) error {
+	return groupS3tablesTables.RunTest(ctx, t, "ListTables", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListTables",
 			Params: `{"namespace":"compat","tableBucketARN":{"$ref":"bucket.arn"}}`,
@@ -371,8 +371,8 @@ func (g *authoredS3tablesTablesScenarios) testS3tablesTablesShadowListTables(ctx
 	})
 }
 
-func (g *authoredS3tablesTablesScenarios) testS3tablesTablesShadowUpdateTableMetadataLocation(ctx context.Context, t *harness.TestContext) error {
-	return groupS3tablesTablesShadow.RunTest(ctx, t, "UpdateTableMetadataLocation", scenario.Test{
+func (g *authoredS3tablesTablesScenarios) testS3tablesTablesUpdateTableMetadataLocation(ctx context.Context, t *harness.TestContext) error {
+	return groupS3tablesTables.RunTest(ctx, t, "UpdateTableMetadataLocation", scenario.Test{
 		Call: scenario.Call{
 			Op:     "UpdateTableMetadataLocation",
 			Params: `{"metadataLocation":{"$concat":[{"$ref":"table.warehouse"},"/metadata/00001-compat.metadata.json"]},"name":"orders","namespace":"compat","tableBucketARN":{"$ref":"bucket.arn"},"versionToken":{"$ref":"table.token"}}`,
@@ -439,8 +439,8 @@ func (g *authoredS3tablesTablesScenarios) testS3tablesTablesShadowUpdateTableMet
 	})
 }
 
-func (g *authoredS3tablesTablesScenarios) testS3tablesTablesShadowUpdateTableMetadataLocationStaleToken(ctx context.Context, t *harness.TestContext) error {
-	return groupS3tablesTablesShadow.RunTest(ctx, t, "UpdateTableMetadataLocationStaleToken", scenario.Test{
+func (g *authoredS3tablesTablesScenarios) testS3tablesTablesUpdateTableMetadataLocationStaleToken(ctx context.Context, t *harness.TestContext) error {
+	return groupS3tablesTables.RunTest(ctx, t, "UpdateTableMetadataLocationStaleToken", scenario.Test{
 		Call: scenario.Call{
 			Op:     "UpdateTableMetadataLocation",
 			Params: `{"metadataLocation":{"$concat":[{"$ref":"table.warehouse"},"/metadata/00002-compat.metadata.json"]},"name":"orders","namespace":"compat","tableBucketARN":{"$ref":"bucket.arn"},"versionToken":{"$ref":"table.token"}}`,
@@ -481,8 +481,8 @@ func (g *authoredS3tablesTablesScenarios) testS3tablesTablesShadowUpdateTableMet
 	})
 }
 
-func (g *authoredS3tablesTablesScenarios) testS3tablesTablesShadowDeleteTable(ctx context.Context, t *harness.TestContext) error {
-	return groupS3tablesTablesShadow.RunTest(ctx, t, "DeleteTable", scenario.Test{
+func (g *authoredS3tablesTablesScenarios) testS3tablesTablesDeleteTable(ctx context.Context, t *harness.TestContext) error {
+	return groupS3tablesTables.RunTest(ctx, t, "DeleteTable", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteTable",
 			Params: `{"name":"orders","namespace":"compat","tableBucketARN":{"$ref":"bucket.arn"}}`,
@@ -536,8 +536,8 @@ func (g *authoredS3tablesTablesScenarios) testS3tablesTablesShadowDeleteTable(ct
 	})
 }
 
-func (g *authoredS3tablesTablesScenarios) testS3tablesTablesShadowDeleteNamespace(ctx context.Context, t *harness.TestContext) error {
-	return groupS3tablesTablesShadow.RunTest(ctx, t, "DeleteNamespace", scenario.Test{
+func (g *authoredS3tablesTablesScenarios) testS3tablesTablesDeleteNamespace(ctx context.Context, t *harness.TestContext) error {
+	return groupS3tablesTables.RunTest(ctx, t, "DeleteNamespace", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteNamespace",
 			Params: `{"namespace":"compat","tableBucketARN":{"$ref":"bucket.arn"}}`,
@@ -588,8 +588,8 @@ func (g *authoredS3tablesTablesScenarios) testS3tablesTablesShadowDeleteNamespac
 	})
 }
 
-func (g *authoredS3tablesTablesScenarios) testS3tablesTablesShadowDeleteTableBucket(ctx context.Context, t *harness.TestContext) error {
-	return groupS3tablesTablesShadow.RunTest(ctx, t, "DeleteTableBucket", scenario.Test{
+func (g *authoredS3tablesTablesScenarios) testS3tablesTablesDeleteTableBucket(ctx context.Context, t *harness.TestContext) error {
+	return groupS3tablesTables.RunTest(ctx, t, "DeleteTableBucket", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteTableBucket",
 			Params: `{"tableBucketARN":{"$ref":"bucket.arn"}}`,

@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/appconfig-environments.json";
 
-const GROUP_APPCONFIG_ENVIRONMENTS_SHADOW: Group = Group {
-    name: "appconfig-environments-shadow",
+const GROUP_APPCONFIG_ENVIRONMENTS: Group = Group {
+    name: "appconfig-environments",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigEnvironments {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-environments-shadow:CreateEnvironment".to_string(),
+                "appconfig-environments:CreateEnvironment".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_ENVIRONMENTS_SHADOW
-                            .run_test(&ctx, "CreateEnvironment", test_appconfig_environments_shadow_create_environment(&client))
+                        GROUP_APPCONFIG_ENVIRONMENTS
+                            .run_test(&ctx, "CreateEnvironment", test_appconfig_environments_create_environment(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigEnvironments {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-environments-shadow:GetEnvironment".to_string(),
+                "appconfig-environments:GetEnvironment".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_ENVIRONMENTS_SHADOW
-                            .run_test(&ctx, "GetEnvironment", test_appconfig_environments_shadow_get_environment(&client))
+                        GROUP_APPCONFIG_ENVIRONMENTS
+                            .run_test(&ctx, "GetEnvironment", test_appconfig_environments_get_environment(&client))
                             .await
                     })
                 }),
@@ -79,12 +79,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigEnvironments {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-environments-shadow:ListEnvironments".to_string(),
+                "appconfig-environments:ListEnvironments".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_ENVIRONMENTS_SHADOW
-                            .run_test(&ctx, "ListEnvironments", test_appconfig_environments_shadow_list_environments(&client))
+                        GROUP_APPCONFIG_ENVIRONMENTS
+                            .run_test(&ctx, "ListEnvironments", test_appconfig_environments_list_environments(&client))
                             .await
                     })
                 }),
@@ -93,12 +93,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigEnvironments {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-environments-shadow:UpdateEnvironment".to_string(),
+                "appconfig-environments:UpdateEnvironment".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_ENVIRONMENTS_SHADOW
-                            .run_test(&ctx, "UpdateEnvironment", test_appconfig_environments_shadow_update_environment(&client))
+                        GROUP_APPCONFIG_ENVIRONMENTS
+                            .run_test(&ctx, "UpdateEnvironment", test_appconfig_environments_update_environment(&client))
                             .await
                     })
                 }),
@@ -107,12 +107,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigEnvironments {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-environments-shadow:DeleteEnvironment".to_string(),
+                "appconfig-environments:DeleteEnvironment".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_ENVIRONMENTS_SHADOW
-                            .run_test(&ctx, "DeleteEnvironment", test_appconfig_environments_shadow_delete_environment(&client))
+                        GROUP_APPCONFIG_ENVIRONMENTS
+                            .run_test(&ctx, "DeleteEnvironment", test_appconfig_environments_delete_environment(&client))
                             .await
                     })
                 }),
@@ -121,12 +121,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigEnvironments {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-environments-shadow:GetEnvironmentNotFound".to_string(),
+                "appconfig-environments:GetEnvironmentNotFound".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_ENVIRONMENTS_SHADOW
-                            .run_test(&ctx, "GetEnvironmentNotFound", test_appconfig_environments_shadow_get_environment_not_found(&client))
+                        GROUP_APPCONFIG_ENVIRONMENTS
+                            .run_test(&ctx, "GetEnvironmentNotFound", test_appconfig_environments_get_environment_not_found(&client))
                             .await
                     })
                 }),
@@ -135,12 +135,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigEnvironments {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-environments-shadow:ListEnvironmentsApplicationNotFound".to_string(),
+                "appconfig-environments:ListEnvironmentsApplicationNotFound".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_ENVIRONMENTS_SHADOW
-                            .run_test(&ctx, "ListEnvironmentsApplicationNotFound", test_appconfig_environments_shadow_list_environments_application_not_found(&client))
+                        GROUP_APPCONFIG_ENVIRONMENTS
+                            .run_test(&ctx, "ListEnvironmentsApplicationNotFound", test_appconfig_environments_list_environments_application_not_found(&client))
                             .await
                     })
                 }),
@@ -154,11 +154,11 @@ impl ServiceGroup for ScenariosAuthoredAppconfigEnvironments {
         {
             let client = self.client.clone();
             setups.insert(
-                "appconfig-environments-shadow".to_string(),
+                "appconfig-environments".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_ENVIRONMENTS_SHADOW.run_setup(&ctx, setup_appconfig_environments_shadow(&client)).await
+                        GROUP_APPCONFIG_ENVIRONMENTS.run_setup(&ctx, setup_appconfig_environments(&client)).await
                     })
                 }),
             );
@@ -171,11 +171,11 @@ impl ServiceGroup for ScenariosAuthoredAppconfigEnvironments {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "appconfig-environments-shadow".to_string(),
+                "appconfig-environments".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_ENVIRONMENTS_SHADOW.run_teardown(&ctx, teardown_appconfig_environments_shadow(&client)).await
+                        GROUP_APPCONFIG_ENVIRONMENTS.run_teardown(&ctx, teardown_appconfig_environments(&client)).await
                     })
                 }),
             );
@@ -184,7 +184,7 @@ impl ServiceGroup for ScenariosAuthoredAppconfigEnvironments {
     }
 }
 
-fn setup_appconfig_environments_shadow(client: &aws_sdk_appconfig::Client) -> Vec<Call> {
+fn setup_appconfig_environments(client: &aws_sdk_appconfig::Client) -> Vec<Call> {
     vec![
         Call {
             op: "CreateApplication",
@@ -211,7 +211,7 @@ fn setup_appconfig_environments_shadow(client: &aws_sdk_appconfig::Client) -> Ve
     ]
 }
 
-fn teardown_appconfig_environments_shadow(client: &aws_sdk_appconfig::Client) -> Vec<Call> {
+fn teardown_appconfig_environments(client: &aws_sdk_appconfig::Client) -> Vec<Call> {
     vec![
         Call {
             op: "DeleteEnvironment",
@@ -262,7 +262,7 @@ fn teardown_appconfig_environments_shadow(client: &aws_sdk_appconfig::Client) ->
     ]
 }
 
-fn test_appconfig_environments_shadow_create_environment(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_environments_create_environment(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "CreateEnvironment",
@@ -332,7 +332,7 @@ fn test_appconfig_environments_shadow_create_environment(client: &aws_sdk_appcon
     }
 }
 
-fn test_appconfig_environments_shadow_get_environment(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_environments_get_environment(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "GetEnvironment",
@@ -367,7 +367,7 @@ fn test_appconfig_environments_shadow_get_environment(client: &aws_sdk_appconfig
     }
 }
 
-fn test_appconfig_environments_shadow_list_environments(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_environments_list_environments(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "ListEnvironments",
@@ -404,7 +404,7 @@ fn test_appconfig_environments_shadow_list_environments(client: &aws_sdk_appconf
     }
 }
 
-fn test_appconfig_environments_shadow_update_environment(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_environments_update_environment(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "UpdateEnvironment",
@@ -470,7 +470,7 @@ fn test_appconfig_environments_shadow_update_environment(client: &aws_sdk_appcon
     }
 }
 
-fn test_appconfig_environments_shadow_delete_environment(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_environments_delete_environment(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteEnvironment",
@@ -556,7 +556,7 @@ fn test_appconfig_environments_shadow_delete_environment(client: &aws_sdk_appcon
     }
 }
 
-fn test_appconfig_environments_shadow_get_environment_not_found(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_environments_get_environment_not_found(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "GetEnvironment",
@@ -588,7 +588,7 @@ fn test_appconfig_environments_shadow_get_environment_not_found(client: &aws_sdk
     }
 }
 
-fn test_appconfig_environments_shadow_list_environments_application_not_found(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_environments_list_environments_application_not_found(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "ListEnvironments",

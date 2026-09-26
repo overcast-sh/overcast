@@ -30,8 +30,8 @@ import software.amazon.awssdk.services.ecr.model.UntagResourceRequest;
  */
 public final class ScenariosAuthoredEcrTagsGen implements ServiceGroup {
 
-    private static final Group GROUP_ECR_TAGS_SHADOW =
-            new Group("ecr-tags-shadow", "compat/model/authored/ecr-tags.json");
+    private static final Group GROUP_ECR_TAGS =
+            new Group("ecr-tags", "compat/model/authored/ecr-tags.json");
 
     private final AwsClients clients;
     private volatile EcrClient client;
@@ -48,21 +48,21 @@ public final class ScenariosAuthoredEcrTagsGen implements ServiceGroup {
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("ecr-tags-shadow:TagResource", this::testEcrTagsShadowTagResource),
-                Map.entry("ecr-tags-shadow:ListTagsForResource", this::testEcrTagsShadowListTagsForResource),
-                Map.entry("ecr-tags-shadow:UntagResource", this::testEcrTagsShadowUntagResource));
+                Map.entry("ecr-tags:TagResource", this::testEcrTagsTagResource),
+                Map.entry("ecr-tags:ListTagsForResource", this::testEcrTagsListTagsForResource),
+                Map.entry("ecr-tags:UntagResource", this::testEcrTagsUntagResource));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("ecr-tags-shadow", this::setupEcrTagsShadow));
+                Map.entry("ecr-tags", this::setupEcrTags));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("ecr-tags-shadow", this::teardownEcrTagsShadow));
+                Map.entry("ecr-tags", this::teardownEcrTags));
     }
 
     /**
@@ -82,8 +82,8 @@ public final class ScenariosAuthoredEcrTagsGen implements ServiceGroup {
         return client;
     }
 
-    private void setupEcrTagsShadow(TestContext t) {
-        GROUP_ECR_TAGS_SHADOW.runSetup(t,
+    private void setupEcrTags(TestContext t) {
+        GROUP_ECR_TAGS.runSetup(t,
                 new Call("CreateRepository", "{\"repositoryName\":{\"$name\":\"repo\"}}",
                         b -> CreateRepositoryRequest.builder()
                                 .repositoryName(b.string("repositoryName", Values.name("repo")))
@@ -92,8 +92,8 @@ public final class ScenariosAuthoredEcrTagsGen implements ServiceGroup {
                         .export("repo.arn", "$.repository.repositoryArn"));
     }
 
-    private void teardownEcrTagsShadow(TestContext t) {
-        GROUP_ECR_TAGS_SHADOW.runTeardown(t,
+    private void teardownEcrTags(TestContext t) {
+        GROUP_ECR_TAGS.runTeardown(t,
                 new Call("UntagResource", "{\"resourceArn\":{\"$ref\":\"repo.arn\"},\"tagKeys\":[\"env\",\"owner\"]}",
                         b -> UntagResourceRequest.builder()
                                 .resourceArn(b.string("resourceArn", Values.ref("repo.arn")))
@@ -108,8 +108,8 @@ public final class ScenariosAuthoredEcrTagsGen implements ServiceGroup {
                         r -> cl().deleteRepository((DeleteRepositoryRequest) r)));
     }
 
-    private void testEcrTagsShadowTagResource(TestContext t) {
-        GROUP_ECR_TAGS_SHADOW.runTest(t, "TagResource",
+    private void testEcrTagsTagResource(TestContext t) {
+        GROUP_ECR_TAGS.runTest(t, "TagResource",
                 new Call("TagResource", "{\"resourceArn\":{\"$ref\":\"repo.arn\"},\"tags\":[{\"Key\":\"env\",\"Value\":\"compat\"},{\"Key\":\"owner\",\"Value\":\"ecr-tags\"}]}",
                         b -> TagResourceRequest.builder()
                                 .resourceArn(b.string("resourceArn", Values.ref("repo.arn")))
@@ -140,8 +140,8 @@ public final class ScenariosAuthoredEcrTagsGen implements ServiceGroup {
                 ));
     }
 
-    private void testEcrTagsShadowListTagsForResource(TestContext t) {
-        GROUP_ECR_TAGS_SHADOW.runTest(t, "ListTagsForResource",
+    private void testEcrTagsListTagsForResource(TestContext t) {
+        GROUP_ECR_TAGS.runTest(t, "ListTagsForResource",
                 new Call("ListTagsForResource", "{\"resourceArn\":{\"$ref\":\"repo.arn\"}}",
                         b -> ListTagsForResourceRequest.builder()
                                 .resourceArn(b.string("resourceArn", Values.ref("repo.arn")))
@@ -167,8 +167,8 @@ public final class ScenariosAuthoredEcrTagsGen implements ServiceGroup {
                 ));
     }
 
-    private void testEcrTagsShadowUntagResource(TestContext t) {
-        GROUP_ECR_TAGS_SHADOW.runTest(t, "UntagResource",
+    private void testEcrTagsUntagResource(TestContext t) {
+        GROUP_ECR_TAGS.runTest(t, "UntagResource",
                 new Call("UntagResource", "{\"resourceArn\":{\"$ref\":\"repo.arn\"},\"tagKeys\":[\"owner\"]}",
                         b -> UntagResourceRequest.builder()
                                 .resourceArn(b.string("resourceArn", Values.ref("repo.arn")))

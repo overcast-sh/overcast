@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/s3tables-tables.json";
 
-const GROUP_S3TABLES_TABLES_SHADOW: Group = Group {
-    name: "s3tables-tables-shadow",
+const GROUP_S3TABLES_TABLES: Group = Group {
+    name: "s3tables-tables",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredS3tablesTables {
         {
             let client = self.client.clone();
             impls.insert(
-                "s3tables-tables-shadow:CreateTableBucket".to_string(),
+                "s3tables-tables:CreateTableBucket".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_S3TABLES_TABLES_SHADOW
-                            .run_test(&ctx, "CreateTableBucket", test_s3tables_tables_shadow_create_table_bucket(&client))
+                        GROUP_S3TABLES_TABLES
+                            .run_test(&ctx, "CreateTableBucket", test_s3tables_tables_create_table_bucket(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredS3tablesTables {
         {
             let client = self.client.clone();
             impls.insert(
-                "s3tables-tables-shadow:GetTableBucket".to_string(),
+                "s3tables-tables:GetTableBucket".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_S3TABLES_TABLES_SHADOW
-                            .run_test(&ctx, "GetTableBucket", test_s3tables_tables_shadow_get_table_bucket(&client))
+                        GROUP_S3TABLES_TABLES
+                            .run_test(&ctx, "GetTableBucket", test_s3tables_tables_get_table_bucket(&client))
                             .await
                     })
                 }),
@@ -79,12 +79,12 @@ impl ServiceGroup for ScenariosAuthoredS3tablesTables {
         {
             let client = self.client.clone();
             impls.insert(
-                "s3tables-tables-shadow:ListTableBuckets".to_string(),
+                "s3tables-tables:ListTableBuckets".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_S3TABLES_TABLES_SHADOW
-                            .run_test(&ctx, "ListTableBuckets", test_s3tables_tables_shadow_list_table_buckets(&client))
+                        GROUP_S3TABLES_TABLES
+                            .run_test(&ctx, "ListTableBuckets", test_s3tables_tables_list_table_buckets(&client))
                             .await
                     })
                 }),
@@ -93,12 +93,12 @@ impl ServiceGroup for ScenariosAuthoredS3tablesTables {
         {
             let client = self.client.clone();
             impls.insert(
-                "s3tables-tables-shadow:CreateNamespace".to_string(),
+                "s3tables-tables:CreateNamespace".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_S3TABLES_TABLES_SHADOW
-                            .run_test(&ctx, "CreateNamespace", test_s3tables_tables_shadow_create_namespace(&client))
+                        GROUP_S3TABLES_TABLES
+                            .run_test(&ctx, "CreateNamespace", test_s3tables_tables_create_namespace(&client))
                             .await
                     })
                 }),
@@ -107,12 +107,12 @@ impl ServiceGroup for ScenariosAuthoredS3tablesTables {
         {
             let client = self.client.clone();
             impls.insert(
-                "s3tables-tables-shadow:ListNamespaces".to_string(),
+                "s3tables-tables:ListNamespaces".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_S3TABLES_TABLES_SHADOW
-                            .run_test(&ctx, "ListNamespaces", test_s3tables_tables_shadow_list_namespaces(&client))
+                        GROUP_S3TABLES_TABLES
+                            .run_test(&ctx, "ListNamespaces", test_s3tables_tables_list_namespaces(&client))
                             .await
                     })
                 }),
@@ -121,12 +121,12 @@ impl ServiceGroup for ScenariosAuthoredS3tablesTables {
         {
             let client = self.client.clone();
             impls.insert(
-                "s3tables-tables-shadow:CreateTable".to_string(),
+                "s3tables-tables:CreateTable".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_S3TABLES_TABLES_SHADOW
-                            .run_test(&ctx, "CreateTable", test_s3tables_tables_shadow_create_table(&client))
+                        GROUP_S3TABLES_TABLES
+                            .run_test(&ctx, "CreateTable", test_s3tables_tables_create_table(&client))
                             .await
                     })
                 }),
@@ -135,12 +135,12 @@ impl ServiceGroup for ScenariosAuthoredS3tablesTables {
         {
             let client = self.client.clone();
             impls.insert(
-                "s3tables-tables-shadow:GetTable".to_string(),
+                "s3tables-tables:GetTable".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_S3TABLES_TABLES_SHADOW
-                            .run_test(&ctx, "GetTable", test_s3tables_tables_shadow_get_table(&client))
+                        GROUP_S3TABLES_TABLES
+                            .run_test(&ctx, "GetTable", test_s3tables_tables_get_table(&client))
                             .await
                     })
                 }),
@@ -149,12 +149,12 @@ impl ServiceGroup for ScenariosAuthoredS3tablesTables {
         {
             let client = self.client.clone();
             impls.insert(
-                "s3tables-tables-shadow:ListTables".to_string(),
+                "s3tables-tables:ListTables".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_S3TABLES_TABLES_SHADOW
-                            .run_test(&ctx, "ListTables", test_s3tables_tables_shadow_list_tables(&client))
+                        GROUP_S3TABLES_TABLES
+                            .run_test(&ctx, "ListTables", test_s3tables_tables_list_tables(&client))
                             .await
                     })
                 }),
@@ -163,12 +163,12 @@ impl ServiceGroup for ScenariosAuthoredS3tablesTables {
         {
             let client = self.client.clone();
             impls.insert(
-                "s3tables-tables-shadow:UpdateTableMetadataLocation".to_string(),
+                "s3tables-tables:UpdateTableMetadataLocation".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_S3TABLES_TABLES_SHADOW
-                            .run_test(&ctx, "UpdateTableMetadataLocation", test_s3tables_tables_shadow_update_table_metadata_location(&client))
+                        GROUP_S3TABLES_TABLES
+                            .run_test(&ctx, "UpdateTableMetadataLocation", test_s3tables_tables_update_table_metadata_location(&client))
                             .await
                     })
                 }),
@@ -177,12 +177,12 @@ impl ServiceGroup for ScenariosAuthoredS3tablesTables {
         {
             let client = self.client.clone();
             impls.insert(
-                "s3tables-tables-shadow:UpdateTableMetadataLocationStaleToken".to_string(),
+                "s3tables-tables:UpdateTableMetadataLocationStaleToken".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_S3TABLES_TABLES_SHADOW
-                            .run_test(&ctx, "UpdateTableMetadataLocationStaleToken", test_s3tables_tables_shadow_update_table_metadata_location_stale_token(&client))
+                        GROUP_S3TABLES_TABLES
+                            .run_test(&ctx, "UpdateTableMetadataLocationStaleToken", test_s3tables_tables_update_table_metadata_location_stale_token(&client))
                             .await
                     })
                 }),
@@ -191,12 +191,12 @@ impl ServiceGroup for ScenariosAuthoredS3tablesTables {
         {
             let client = self.client.clone();
             impls.insert(
-                "s3tables-tables-shadow:DeleteTable".to_string(),
+                "s3tables-tables:DeleteTable".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_S3TABLES_TABLES_SHADOW
-                            .run_test(&ctx, "DeleteTable", test_s3tables_tables_shadow_delete_table(&client))
+                        GROUP_S3TABLES_TABLES
+                            .run_test(&ctx, "DeleteTable", test_s3tables_tables_delete_table(&client))
                             .await
                     })
                 }),
@@ -205,12 +205,12 @@ impl ServiceGroup for ScenariosAuthoredS3tablesTables {
         {
             let client = self.client.clone();
             impls.insert(
-                "s3tables-tables-shadow:DeleteNamespace".to_string(),
+                "s3tables-tables:DeleteNamespace".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_S3TABLES_TABLES_SHADOW
-                            .run_test(&ctx, "DeleteNamespace", test_s3tables_tables_shadow_delete_namespace(&client))
+                        GROUP_S3TABLES_TABLES
+                            .run_test(&ctx, "DeleteNamespace", test_s3tables_tables_delete_namespace(&client))
                             .await
                     })
                 }),
@@ -219,12 +219,12 @@ impl ServiceGroup for ScenariosAuthoredS3tablesTables {
         {
             let client = self.client.clone();
             impls.insert(
-                "s3tables-tables-shadow:DeleteTableBucket".to_string(),
+                "s3tables-tables:DeleteTableBucket".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_S3TABLES_TABLES_SHADOW
-                            .run_test(&ctx, "DeleteTableBucket", test_s3tables_tables_shadow_delete_table_bucket(&client))
+                        GROUP_S3TABLES_TABLES
+                            .run_test(&ctx, "DeleteTableBucket", test_s3tables_tables_delete_table_bucket(&client))
                             .await
                     })
                 }),
@@ -238,11 +238,11 @@ impl ServiceGroup for ScenariosAuthoredS3tablesTables {
         {
             let client = self.client.clone();
             setups.insert(
-                "s3tables-tables-shadow".to_string(),
+                "s3tables-tables".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_S3TABLES_TABLES_SHADOW.run_setup(&ctx, setup_s3tables_tables_shadow(&client)).await
+                        GROUP_S3TABLES_TABLES.run_setup(&ctx, setup_s3tables_tables(&client)).await
                     })
                 }),
             );
@@ -255,11 +255,11 @@ impl ServiceGroup for ScenariosAuthoredS3tablesTables {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "s3tables-tables-shadow".to_string(),
+                "s3tables-tables".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_S3TABLES_TABLES_SHADOW.run_teardown(&ctx, teardown_s3tables_tables_shadow(&client)).await
+                        GROUP_S3TABLES_TABLES.run_teardown(&ctx, teardown_s3tables_tables(&client)).await
                     })
                 }),
             );
@@ -268,12 +268,12 @@ impl ServiceGroup for ScenariosAuthoredS3tablesTables {
     }
 }
 
-fn setup_s3tables_tables_shadow(_client: &aws_sdk_s3tables::Client) -> Vec<Call> {
+fn setup_s3tables_tables(_client: &aws_sdk_s3tables::Client) -> Vec<Call> {
     // An empty phase is a no-op, not a missing one.
     Vec::new()
 }
 
-fn teardown_s3tables_tables_shadow(client: &aws_sdk_s3tables::Client) -> Vec<Call> {
+fn teardown_s3tables_tables(client: &aws_sdk_s3tables::Client) -> Vec<Call> {
     vec![
         Call {
             op: "DeleteTable",
@@ -350,7 +350,7 @@ fn teardown_s3tables_tables_shadow(client: &aws_sdk_s3tables::Client) -> Vec<Cal
     ]
 }
 
-fn test_s3tables_tables_shadow_create_table_bucket(client: &aws_sdk_s3tables::Client) -> Test {
+fn test_s3tables_tables_create_table_bucket(client: &aws_sdk_s3tables::Client) -> Test {
     Test {
         call: Call {
             op: "CreateTableBucket",
@@ -409,7 +409,7 @@ fn test_s3tables_tables_shadow_create_table_bucket(client: &aws_sdk_s3tables::Cl
     }
 }
 
-fn test_s3tables_tables_shadow_get_table_bucket(client: &aws_sdk_s3tables::Client) -> Test {
+fn test_s3tables_tables_get_table_bucket(client: &aws_sdk_s3tables::Client) -> Test {
     Test {
         call: Call {
             op: "GetTableBucket",
@@ -444,7 +444,7 @@ fn test_s3tables_tables_shadow_get_table_bucket(client: &aws_sdk_s3tables::Clien
     }
 }
 
-fn test_s3tables_tables_shadow_list_table_buckets(client: &aws_sdk_s3tables::Client) -> Test {
+fn test_s3tables_tables_list_table_buckets(client: &aws_sdk_s3tables::Client) -> Test {
     Test {
         call: Call {
             op: "ListTableBuckets",
@@ -479,7 +479,7 @@ fn test_s3tables_tables_shadow_list_table_buckets(client: &aws_sdk_s3tables::Cli
     }
 }
 
-fn test_s3tables_tables_shadow_create_namespace(client: &aws_sdk_s3tables::Client) -> Test {
+fn test_s3tables_tables_create_namespace(client: &aws_sdk_s3tables::Client) -> Test {
     Test {
         call: Call {
             op: "CreateNamespace",
@@ -543,7 +543,7 @@ fn test_s3tables_tables_shadow_create_namespace(client: &aws_sdk_s3tables::Clien
     }
 }
 
-fn test_s3tables_tables_shadow_list_namespaces(client: &aws_sdk_s3tables::Client) -> Test {
+fn test_s3tables_tables_list_namespaces(client: &aws_sdk_s3tables::Client) -> Test {
     Test {
         call: Call {
             op: "ListNamespaces",
@@ -576,7 +576,7 @@ fn test_s3tables_tables_shadow_list_namespaces(client: &aws_sdk_s3tables::Client
     }
 }
 
-fn test_s3tables_tables_shadow_create_table(client: &aws_sdk_s3tables::Client) -> Test {
+fn test_s3tables_tables_create_table(client: &aws_sdk_s3tables::Client) -> Test {
     Test {
         call: Call {
             op: "CreateTable",
@@ -653,7 +653,7 @@ fn test_s3tables_tables_shadow_create_table(client: &aws_sdk_s3tables::Client) -
     }
 }
 
-fn test_s3tables_tables_shadow_get_table(client: &aws_sdk_s3tables::Client) -> Test {
+fn test_s3tables_tables_get_table(client: &aws_sdk_s3tables::Client) -> Test {
     Test {
         call: Call {
             op: "GetTable",
@@ -693,7 +693,7 @@ fn test_s3tables_tables_shadow_get_table(client: &aws_sdk_s3tables::Client) -> T
     }
 }
 
-fn test_s3tables_tables_shadow_list_tables(client: &aws_sdk_s3tables::Client) -> Test {
+fn test_s3tables_tables_list_tables(client: &aws_sdk_s3tables::Client) -> Test {
     Test {
         call: Call {
             op: "ListTables",
@@ -729,7 +729,7 @@ fn test_s3tables_tables_shadow_list_tables(client: &aws_sdk_s3tables::Client) ->
     }
 }
 
-fn test_s3tables_tables_shadow_update_table_metadata_location(client: &aws_sdk_s3tables::Client) -> Test {
+fn test_s3tables_tables_update_table_metadata_location(client: &aws_sdk_s3tables::Client) -> Test {
     Test {
         call: Call {
             op: "UpdateTableMetadataLocation",
@@ -850,7 +850,7 @@ fn test_s3tables_tables_shadow_update_table_metadata_location(client: &aws_sdk_s
     }
 }
 
-fn test_s3tables_tables_shadow_update_table_metadata_location_stale_token(client: &aws_sdk_s3tables::Client) -> Test {
+fn test_s3tables_tables_update_table_metadata_location_stale_token(client: &aws_sdk_s3tables::Client) -> Test {
     Test {
         call: Call {
             op: "UpdateTableMetadataLocation",
@@ -926,7 +926,7 @@ fn test_s3tables_tables_shadow_update_table_metadata_location_stale_token(client
     }
 }
 
-fn test_s3tables_tables_shadow_delete_table(client: &aws_sdk_s3tables::Client) -> Test {
+fn test_s3tables_tables_delete_table(client: &aws_sdk_s3tables::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteTable",
@@ -1018,7 +1018,7 @@ fn test_s3tables_tables_shadow_delete_table(client: &aws_sdk_s3tables::Client) -
     }
 }
 
-fn test_s3tables_tables_shadow_delete_namespace(client: &aws_sdk_s3tables::Client) -> Test {
+fn test_s3tables_tables_delete_namespace(client: &aws_sdk_s3tables::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteNamespace",
@@ -1104,7 +1104,7 @@ fn test_s3tables_tables_shadow_delete_namespace(client: &aws_sdk_s3tables::Clien
     }
 }
 
-fn test_s3tables_tables_shadow_delete_table_bucket(client: &aws_sdk_s3tables::Client) -> Test {
+fn test_s3tables_tables_delete_table_bucket(client: &aws_sdk_s3tables::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteTableBucket",

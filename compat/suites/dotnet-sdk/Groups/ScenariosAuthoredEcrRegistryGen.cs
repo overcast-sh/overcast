@@ -15,7 +15,7 @@ namespace OvercastCompat.Groups;
 /// </remarks>
 internal sealed class ScenariosAuthoredEcrRegistry : IServiceGroup
 {
-    private static readonly ScenarioGroup GroupEcrRegistryShadow = new("ecr-registry-shadow", "compat/model/authored/ecr-registry.json");
+    private static readonly ScenarioGroup GroupEcrRegistry = new("ecr-registry", "compat/model/authored/ecr-registry.json");
 
     private readonly Lazy<AmazonECRClient> _client;
 
@@ -35,31 +35,31 @@ internal sealed class ScenariosAuthoredEcrRegistry : IServiceGroup
 
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["ecr-registry-shadow:GetAuthorizationToken"] = TestEcrRegistryShadowGetAuthorizationToken,
-        ["ecr-registry-shadow:DescribeRegistry"] = TestEcrRegistryShadowDescribeRegistry,
+        ["ecr-registry:GetAuthorizationToken"] = TestEcrRegistryGetAuthorizationToken,
+        ["ecr-registry:DescribeRegistry"] = TestEcrRegistryDescribeRegistry,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["ecr-registry-shadow"] = SetupEcrRegistryShadow,
+        ["ecr-registry"] = SetupEcrRegistry,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["ecr-registry-shadow"] = TeardownEcrRegistryShadow,
+        ["ecr-registry"] = TeardownEcrRegistry,
     };
 
     private AmazonECRClient Cl() => _client.Value;
 
-    private Task SetupEcrRegistryShadow(TestContext t) =>
+    private Task SetupEcrRegistry(TestContext t) =>
         // No setup steps: an empty phase is a no-op, not a missing one.
-        GroupEcrRegistryShadow.RunSetupAsync(t);
+        GroupEcrRegistry.RunSetupAsync(t);
 
-    private Task TeardownEcrRegistryShadow(TestContext t) =>
+    private Task TeardownEcrRegistry(TestContext t) =>
         // No teardown steps: an empty phase is a no-op, not a missing one.
-        GroupEcrRegistryShadow.RunTeardownAsync(t);
+        GroupEcrRegistry.RunTeardownAsync(t);
 
-    private Task TestEcrRegistryShadowGetAuthorizationToken(TestContext t) => GroupEcrRegistryShadow.RunTestAsync(t, "GetAuthorizationToken", new ScenarioTest
+    private Task TestEcrRegistryGetAuthorizationToken(TestContext t) => GroupEcrRegistry.RunTestAsync(t, "GetAuthorizationToken", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -83,7 +83,7 @@ internal sealed class ScenariosAuthoredEcrRegistry : IServiceGroup
         ],
     });
 
-    private Task TestEcrRegistryShadowDescribeRegistry(TestContext t) => GroupEcrRegistryShadow.RunTestAsync(t, "DescribeRegistry", new ScenarioTest
+    private Task TestEcrRegistryDescribeRegistry(TestContext t) => GroupEcrRegistry.RunTestAsync(t, "DescribeRegistry", new ScenarioTest
     {
         Call = new ScenarioCall
         {

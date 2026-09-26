@@ -30,8 +30,8 @@ import software.amazon.awssdk.services.appconfig.model.UpdateApplicationRequest;
  */
 public final class ScenariosAuthoredAppconfigApplicationsGen implements ServiceGroup {
 
-    private static final Group GROUP_APPCONFIG_APPLICATIONS_SHADOW =
-            new Group("appconfig-applications-shadow", "compat/model/authored/appconfig-applications.json");
+    private static final Group GROUP_APPCONFIG_APPLICATIONS =
+            new Group("appconfig-applications", "compat/model/authored/appconfig-applications.json");
 
     private final AwsClients clients;
     private volatile AppConfigClient client;
@@ -48,25 +48,25 @@ public final class ScenariosAuthoredAppconfigApplicationsGen implements ServiceG
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("appconfig-applications-shadow:CreateApplication", this::testAppconfigApplicationsShadowCreateApplication),
-                Map.entry("appconfig-applications-shadow:GetApplication", this::testAppconfigApplicationsShadowGetApplication),
-                Map.entry("appconfig-applications-shadow:ListApplications", this::testAppconfigApplicationsShadowListApplications),
-                Map.entry("appconfig-applications-shadow:UpdateApplication", this::testAppconfigApplicationsShadowUpdateApplication),
-                Map.entry("appconfig-applications-shadow:DeleteApplication", this::testAppconfigApplicationsShadowDeleteApplication),
-                Map.entry("appconfig-applications-shadow:GetApplicationNotFound", this::testAppconfigApplicationsShadowGetApplicationNotFound),
-                Map.entry("appconfig-applications-shadow:ListApplicationsInvalidToken", this::testAppconfigApplicationsShadowListApplicationsInvalidToken));
+                Map.entry("appconfig-applications:CreateApplication", this::testAppconfigApplicationsCreateApplication),
+                Map.entry("appconfig-applications:GetApplication", this::testAppconfigApplicationsGetApplication),
+                Map.entry("appconfig-applications:ListApplications", this::testAppconfigApplicationsListApplications),
+                Map.entry("appconfig-applications:UpdateApplication", this::testAppconfigApplicationsUpdateApplication),
+                Map.entry("appconfig-applications:DeleteApplication", this::testAppconfigApplicationsDeleteApplication),
+                Map.entry("appconfig-applications:GetApplicationNotFound", this::testAppconfigApplicationsGetApplicationNotFound),
+                Map.entry("appconfig-applications:ListApplicationsInvalidToken", this::testAppconfigApplicationsListApplicationsInvalidToken));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("appconfig-applications-shadow", this::setupAppconfigApplicationsShadow));
+                Map.entry("appconfig-applications", this::setupAppconfigApplications));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("appconfig-applications-shadow", this::teardownAppconfigApplicationsShadow));
+                Map.entry("appconfig-applications", this::teardownAppconfigApplications));
     }
 
     /**
@@ -86,13 +86,13 @@ public final class ScenariosAuthoredAppconfigApplicationsGen implements ServiceG
         return client;
     }
 
-    private void setupAppconfigApplicationsShadow(TestContext t) {
+    private void setupAppconfigApplications(TestContext t) {
         // No setup steps: an empty phase is a no-op, not a missing one.
-        GROUP_APPCONFIG_APPLICATIONS_SHADOW.runSetup(t);
+        GROUP_APPCONFIG_APPLICATIONS.runSetup(t);
     }
 
-    private void teardownAppconfigApplicationsShadow(TestContext t) {
-        GROUP_APPCONFIG_APPLICATIONS_SHADOW.runTeardown(t,
+    private void teardownAppconfigApplications(TestContext t) {
+        GROUP_APPCONFIG_APPLICATIONS.runTeardown(t,
                 new Call("DeleteApplication", "{\"ApplicationId\":{\"$ref\":\"app.id\"}}",
                         b -> DeleteApplicationRequest.builder()
                                 .applicationId(b.string("ApplicationId", Values.ref("app.id")))
@@ -100,8 +100,8 @@ public final class ScenariosAuthoredAppconfigApplicationsGen implements ServiceG
                         r -> cl().deleteApplication((DeleteApplicationRequest) r)));
     }
 
-    private void testAppconfigApplicationsShadowCreateApplication(TestContext t) {
-        GROUP_APPCONFIG_APPLICATIONS_SHADOW.runTest(t, "CreateApplication",
+    private void testAppconfigApplicationsCreateApplication(TestContext t) {
+        GROUP_APPCONFIG_APPLICATIONS.runTest(t, "CreateApplication",
                 new Call("CreateApplication", "{\"Description\":\"compat applications group\",\"Name\":{\"$name\":\"app\"}}",
                         b -> CreateApplicationRequest.builder()
                                 .description("compat applications group")
@@ -126,8 +126,8 @@ public final class ScenariosAuthoredAppconfigApplicationsGen implements ServiceG
                 ));
     }
 
-    private void testAppconfigApplicationsShadowGetApplication(TestContext t) {
-        GROUP_APPCONFIG_APPLICATIONS_SHADOW.runTest(t, "GetApplication",
+    private void testAppconfigApplicationsGetApplication(TestContext t) {
+        GROUP_APPCONFIG_APPLICATIONS.runTest(t, "GetApplication",
                 new Call("GetApplication", "{\"ApplicationId\":{\"$ref\":\"app.id\"}}",
                         b -> GetApplicationRequest.builder()
                                 .applicationId(b.string("ApplicationId", Values.ref("app.id")))
@@ -141,8 +141,8 @@ public final class ScenariosAuthoredAppconfigApplicationsGen implements ServiceG
                 ));
     }
 
-    private void testAppconfigApplicationsShadowListApplications(TestContext t) {
-        GROUP_APPCONFIG_APPLICATIONS_SHADOW.runTest(t, "ListApplications",
+    private void testAppconfigApplicationsListApplications(TestContext t) {
+        GROUP_APPCONFIG_APPLICATIONS.runTest(t, "ListApplications",
                 new Call("ListApplications", "{}",
                         b -> ListApplicationsRequest.builder()
                                 .build(),
@@ -157,8 +157,8 @@ public final class ScenariosAuthoredAppconfigApplicationsGen implements ServiceG
                 ));
     }
 
-    private void testAppconfigApplicationsShadowUpdateApplication(TestContext t) {
-        GROUP_APPCONFIG_APPLICATIONS_SHADOW.runTest(t, "UpdateApplication",
+    private void testAppconfigApplicationsUpdateApplication(TestContext t) {
+        GROUP_APPCONFIG_APPLICATIONS.runTest(t, "UpdateApplication",
                 new Call("UpdateApplication", "{\"ApplicationId\":{\"$ref\":\"app.id\"},\"Description\":\"updated by compat\"}",
                         b -> UpdateApplicationRequest.builder()
                                 .applicationId(b.string("ApplicationId", Values.ref("app.id")))
@@ -181,8 +181,8 @@ public final class ScenariosAuthoredAppconfigApplicationsGen implements ServiceG
                 ));
     }
 
-    private void testAppconfigApplicationsShadowDeleteApplication(TestContext t) {
-        GROUP_APPCONFIG_APPLICATIONS_SHADOW.runTest(t, "DeleteApplication",
+    private void testAppconfigApplicationsDeleteApplication(TestContext t) {
+        GROUP_APPCONFIG_APPLICATIONS.runTest(t, "DeleteApplication",
                 new Call("DeleteApplication", "{\"ApplicationId\":{\"$ref\":\"app.id\"}}",
                         b -> DeleteApplicationRequest.builder()
                                 .applicationId(b.string("ApplicationId", Values.ref("app.id")))
@@ -207,8 +207,8 @@ public final class ScenariosAuthoredAppconfigApplicationsGen implements ServiceG
                 ));
     }
 
-    private void testAppconfigApplicationsShadowGetApplicationNotFound(TestContext t) {
-        GROUP_APPCONFIG_APPLICATIONS_SHADOW.runTest(t, "GetApplicationNotFound",
+    private void testAppconfigApplicationsGetApplicationNotFound(TestContext t) {
+        GROUP_APPCONFIG_APPLICATIONS.runTest(t, "GetApplicationNotFound",
                 new Call("GetApplication", "{\"ApplicationId\":\"zzzzzzz\"}",
                         b -> GetApplicationRequest.builder()
                                 .applicationId("zzzzzzz")
@@ -219,8 +219,8 @@ public final class ScenariosAuthoredAppconfigApplicationsGen implements ServiceG
                 ));
     }
 
-    private void testAppconfigApplicationsShadowListApplicationsInvalidToken(TestContext t) {
-        GROUP_APPCONFIG_APPLICATIONS_SHADOW.runTest(t, "ListApplicationsInvalidToken",
+    private void testAppconfigApplicationsListApplicationsInvalidToken(TestContext t) {
+        GROUP_APPCONFIG_APPLICATIONS.runTest(t, "ListApplicationsInvalidToken",
                 new Call("ListApplications", "{\"MaxResults\":1,\"NextToken\":\"compat-not-a-real-token\"}",
                         b -> ListApplicationsRequest.builder()
                                 .maxResults(1)

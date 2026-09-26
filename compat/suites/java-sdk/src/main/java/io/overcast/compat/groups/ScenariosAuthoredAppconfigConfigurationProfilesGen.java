@@ -32,8 +32,8 @@ import software.amazon.awssdk.services.appconfig.model.UpdateConfigurationProfil
  */
 public final class ScenariosAuthoredAppconfigConfigurationProfilesGen implements ServiceGroup {
 
-    private static final Group GROUP_APPCONFIG_CONFIGURATION_PROFILES_SHADOW =
-            new Group("appconfig-configuration-profiles-shadow", "compat/model/authored/appconfig-configuration-profiles.json");
+    private static final Group GROUP_APPCONFIG_CONFIGURATION_PROFILES =
+            new Group("appconfig-configuration-profiles", "compat/model/authored/appconfig-configuration-profiles.json");
 
     private final AwsClients clients;
     private volatile AppConfigClient client;
@@ -50,25 +50,25 @@ public final class ScenariosAuthoredAppconfigConfigurationProfilesGen implements
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("appconfig-configuration-profiles-shadow:CreateConfigurationProfile", this::testAppconfigConfigurationProfilesShadowCreateConfigurationProfile),
-                Map.entry("appconfig-configuration-profiles-shadow:GetConfigurationProfile", this::testAppconfigConfigurationProfilesShadowGetConfigurationProfile),
-                Map.entry("appconfig-configuration-profiles-shadow:ListConfigurationProfiles", this::testAppconfigConfigurationProfilesShadowListConfigurationProfiles),
-                Map.entry("appconfig-configuration-profiles-shadow:ListConfigurationProfilesByType", this::testAppconfigConfigurationProfilesShadowListConfigurationProfilesByType),
-                Map.entry("appconfig-configuration-profiles-shadow:UpdateConfigurationProfile", this::testAppconfigConfigurationProfilesShadowUpdateConfigurationProfile),
-                Map.entry("appconfig-configuration-profiles-shadow:DeleteConfigurationProfile", this::testAppconfigConfigurationProfilesShadowDeleteConfigurationProfile),
-                Map.entry("appconfig-configuration-profiles-shadow:GetConfigurationProfileNotFound", this::testAppconfigConfigurationProfilesShadowGetConfigurationProfileNotFound));
+                Map.entry("appconfig-configuration-profiles:CreateConfigurationProfile", this::testAppconfigConfigurationProfilesCreateConfigurationProfile),
+                Map.entry("appconfig-configuration-profiles:GetConfigurationProfile", this::testAppconfigConfigurationProfilesGetConfigurationProfile),
+                Map.entry("appconfig-configuration-profiles:ListConfigurationProfiles", this::testAppconfigConfigurationProfilesListConfigurationProfiles),
+                Map.entry("appconfig-configuration-profiles:ListConfigurationProfilesByType", this::testAppconfigConfigurationProfilesListConfigurationProfilesByType),
+                Map.entry("appconfig-configuration-profiles:UpdateConfigurationProfile", this::testAppconfigConfigurationProfilesUpdateConfigurationProfile),
+                Map.entry("appconfig-configuration-profiles:DeleteConfigurationProfile", this::testAppconfigConfigurationProfilesDeleteConfigurationProfile),
+                Map.entry("appconfig-configuration-profiles:GetConfigurationProfileNotFound", this::testAppconfigConfigurationProfilesGetConfigurationProfileNotFound));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("appconfig-configuration-profiles-shadow", this::setupAppconfigConfigurationProfilesShadow));
+                Map.entry("appconfig-configuration-profiles", this::setupAppconfigConfigurationProfiles));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("appconfig-configuration-profiles-shadow", this::teardownAppconfigConfigurationProfilesShadow));
+                Map.entry("appconfig-configuration-profiles", this::teardownAppconfigConfigurationProfiles));
     }
 
     /**
@@ -88,8 +88,8 @@ public final class ScenariosAuthoredAppconfigConfigurationProfilesGen implements
         return client;
     }
 
-    private void setupAppconfigConfigurationProfilesShadow(TestContext t) {
-        GROUP_APPCONFIG_CONFIGURATION_PROFILES_SHADOW.runSetup(t,
+    private void setupAppconfigConfigurationProfiles(TestContext t) {
+        GROUP_APPCONFIG_CONFIGURATION_PROFILES.runSetup(t,
                 new Call("CreateApplication", "{\"Name\":{\"$name\":\"app\"}}",
                         b -> CreateApplicationRequest.builder()
                                 .name(b.string("Name", Values.name("app")))
@@ -107,8 +107,8 @@ public final class ScenariosAuthoredAppconfigConfigurationProfilesGen implements
                         .export("flags.id", "$.Id"));
     }
 
-    private void teardownAppconfigConfigurationProfilesShadow(TestContext t) {
-        GROUP_APPCONFIG_CONFIGURATION_PROFILES_SHADOW.runTeardown(t,
+    private void teardownAppconfigConfigurationProfiles(TestContext t) {
+        GROUP_APPCONFIG_CONFIGURATION_PROFILES.runTeardown(t,
                 new Call("DeleteConfigurationProfile", "{\"ApplicationId\":{\"$ref\":\"app.id\"},\"ConfigurationProfileId\":{\"$ref\":\"prof.id\"}}",
                         b -> DeleteConfigurationProfileRequest.builder()
                                 .applicationId(b.string("ApplicationId", Values.ref("app.id")))
@@ -128,8 +128,8 @@ public final class ScenariosAuthoredAppconfigConfigurationProfilesGen implements
                         r -> cl().deleteApplication((DeleteApplicationRequest) r)));
     }
 
-    private void testAppconfigConfigurationProfilesShadowCreateConfigurationProfile(TestContext t) {
-        GROUP_APPCONFIG_CONFIGURATION_PROFILES_SHADOW.runTest(t, "CreateConfigurationProfile",
+    private void testAppconfigConfigurationProfilesCreateConfigurationProfile(TestContext t) {
+        GROUP_APPCONFIG_CONFIGURATION_PROFILES.runTest(t, "CreateConfigurationProfile",
                 new Call("CreateConfigurationProfile", "{\"ApplicationId\":{\"$ref\":\"app.id\"},\"Description\":\"compat configuration profiles group\",\"LocationUri\":\"hosted\",\"Name\":{\"$name\":\"prof\"},\"Type\":\"AWS.Freeform\"}",
                         b -> CreateConfigurationProfileRequest.builder()
                                 .applicationId(b.string("ApplicationId", Values.ref("app.id")))
@@ -159,8 +159,8 @@ public final class ScenariosAuthoredAppconfigConfigurationProfilesGen implements
                 ));
     }
 
-    private void testAppconfigConfigurationProfilesShadowGetConfigurationProfile(TestContext t) {
-        GROUP_APPCONFIG_CONFIGURATION_PROFILES_SHADOW.runTest(t, "GetConfigurationProfile",
+    private void testAppconfigConfigurationProfilesGetConfigurationProfile(TestContext t) {
+        GROUP_APPCONFIG_CONFIGURATION_PROFILES.runTest(t, "GetConfigurationProfile",
                 new Call("GetConfigurationProfile", "{\"ApplicationId\":{\"$ref\":\"app.id\"},\"ConfigurationProfileId\":{\"$ref\":\"prof.id\"}}",
                         b -> GetConfigurationProfileRequest.builder()
                                 .applicationId(b.string("ApplicationId", Values.ref("app.id")))
@@ -175,8 +175,8 @@ public final class ScenariosAuthoredAppconfigConfigurationProfilesGen implements
                 ));
     }
 
-    private void testAppconfigConfigurationProfilesShadowListConfigurationProfiles(TestContext t) {
-        GROUP_APPCONFIG_CONFIGURATION_PROFILES_SHADOW.runTest(t, "ListConfigurationProfiles",
+    private void testAppconfigConfigurationProfilesListConfigurationProfiles(TestContext t) {
+        GROUP_APPCONFIG_CONFIGURATION_PROFILES.runTest(t, "ListConfigurationProfiles",
                 new Call("ListConfigurationProfiles", "{\"ApplicationId\":{\"$ref\":\"app.id\"}}",
                         b -> ListConfigurationProfilesRequest.builder()
                                 .applicationId(b.string("ApplicationId", Values.ref("app.id")))
@@ -192,8 +192,8 @@ public final class ScenariosAuthoredAppconfigConfigurationProfilesGen implements
                 ));
     }
 
-    private void testAppconfigConfigurationProfilesShadowListConfigurationProfilesByType(TestContext t) {
-        GROUP_APPCONFIG_CONFIGURATION_PROFILES_SHADOW.runTest(t, "ListConfigurationProfilesByType",
+    private void testAppconfigConfigurationProfilesListConfigurationProfilesByType(TestContext t) {
+        GROUP_APPCONFIG_CONFIGURATION_PROFILES.runTest(t, "ListConfigurationProfilesByType",
                 new Call("ListConfigurationProfiles", "{\"ApplicationId\":{\"$ref\":\"app.id\"},\"Type\":\"AWS.AppConfig.FeatureFlags\"}",
                         b -> ListConfigurationProfilesRequest.builder()
                                 .applicationId(b.string("ApplicationId", Values.ref("app.id")))
@@ -214,8 +214,8 @@ public final class ScenariosAuthoredAppconfigConfigurationProfilesGen implements
                 ));
     }
 
-    private void testAppconfigConfigurationProfilesShadowUpdateConfigurationProfile(TestContext t) {
-        GROUP_APPCONFIG_CONFIGURATION_PROFILES_SHADOW.runTest(t, "UpdateConfigurationProfile",
+    private void testAppconfigConfigurationProfilesUpdateConfigurationProfile(TestContext t) {
+        GROUP_APPCONFIG_CONFIGURATION_PROFILES.runTest(t, "UpdateConfigurationProfile",
                 new Call("UpdateConfigurationProfile", "{\"ApplicationId\":{\"$ref\":\"app.id\"},\"ConfigurationProfileId\":{\"$ref\":\"prof.id\"},\"Description\":\"updated by compat\"}",
                         b -> UpdateConfigurationProfileRequest.builder()
                                 .applicationId(b.string("ApplicationId", Values.ref("app.id")))
@@ -240,8 +240,8 @@ public final class ScenariosAuthoredAppconfigConfigurationProfilesGen implements
                 ));
     }
 
-    private void testAppconfigConfigurationProfilesShadowDeleteConfigurationProfile(TestContext t) {
-        GROUP_APPCONFIG_CONFIGURATION_PROFILES_SHADOW.runTest(t, "DeleteConfigurationProfile",
+    private void testAppconfigConfigurationProfilesDeleteConfigurationProfile(TestContext t) {
+        GROUP_APPCONFIG_CONFIGURATION_PROFILES.runTest(t, "DeleteConfigurationProfile",
                 new Call("DeleteConfigurationProfile", "{\"ApplicationId\":{\"$ref\":\"app.id\"},\"ConfigurationProfileId\":{\"$ref\":\"prof.id\"}}",
                         b -> DeleteConfigurationProfileRequest.builder()
                                 .applicationId(b.string("ApplicationId", Values.ref("app.id")))
@@ -269,8 +269,8 @@ public final class ScenariosAuthoredAppconfigConfigurationProfilesGen implements
                 ));
     }
 
-    private void testAppconfigConfigurationProfilesShadowGetConfigurationProfileNotFound(TestContext t) {
-        GROUP_APPCONFIG_CONFIGURATION_PROFILES_SHADOW.runTest(t, "GetConfigurationProfileNotFound",
+    private void testAppconfigConfigurationProfilesGetConfigurationProfileNotFound(TestContext t) {
+        GROUP_APPCONFIG_CONFIGURATION_PROFILES.runTest(t, "GetConfigurationProfileNotFound",
                 new Call("GetConfigurationProfile", "{\"ApplicationId\":{\"$ref\":\"app.id\"},\"ConfigurationProfileId\":\"zzzzzzz\"}",
                         b -> GetConfigurationProfileRequest.builder()
                                 .applicationId(b.string("ApplicationId", Values.ref("app.id")))

@@ -24,38 +24,20 @@ import (
 // The data plane (StartConfigurationSession, GetLatestConfiguration) is a
 // separate AWS model with its own signing name and lives in the appconfigdata
 // group, not here.
+//
+// Groups: appconfig-hosted-versions, appconfig-deployment-strategies,
+// appconfig-extensions, appconfig-experiments. appconfig-applications,
+// appconfig-environments, appconfig-configuration-profiles, appconfig-tags and
+// appconfig-deployments resolve through their authored scenarios
+// (compat/model/authored/appconfig-applications.json,
+// appconfig-environments.json, appconfig-configuration-profiles.json,
+// appconfig-tags.json, appconfig-deployments.json).
 func AppConfig() ServiceGroup {
 	g := &appconfigGroup{}
 	return ServiceGroup{
-		// Every key is group-qualified. Several of these test names are declared
-		// by other services' groups too — CreateApplication and ListApplications
-		// by AppRegistry's, TagResource by half the registry — and a bare key
-		// that two groups could claim is refused by the loader.
+		// Every key is group-qualified: a bare key that two groups could claim
+		// is refused by the loader.
 		Impls: map[string]harness.TestFn{
-			"appconfig-applications:CreateApplication":            g.CreateApplication,
-			"appconfig-applications:GetApplication":               g.GetApplication,
-			"appconfig-applications:ListApplications":             g.ListApplications,
-			"appconfig-applications:UpdateApplication":            g.UpdateApplication,
-			"appconfig-applications:DeleteApplication":            g.DeleteApplication,
-			"appconfig-applications:GetApplicationNotFound":       g.GetApplicationNotFound,
-			"appconfig-applications:ListApplicationsInvalidToken": g.ListApplicationsInvalidToken,
-
-			"appconfig-environments:CreateEnvironment":                   g.CreateEnvironment,
-			"appconfig-environments:GetEnvironment":                      g.GetEnvironment,
-			"appconfig-environments:ListEnvironments":                    g.ListEnvironments,
-			"appconfig-environments:UpdateEnvironment":                   g.UpdateEnvironment,
-			"appconfig-environments:DeleteEnvironment":                   g.DeleteEnvironment,
-			"appconfig-environments:GetEnvironmentNotFound":              g.GetEnvironmentNotFound,
-			"appconfig-environments:ListEnvironmentsApplicationNotFound": g.ListEnvironmentsApplicationNotFound,
-
-			"appconfig-configuration-profiles:CreateConfigurationProfile":      g.CreateConfigurationProfile,
-			"appconfig-configuration-profiles:GetConfigurationProfile":         g.GetConfigurationProfile,
-			"appconfig-configuration-profiles:ListConfigurationProfiles":       g.ListConfigurationProfiles,
-			"appconfig-configuration-profiles:ListConfigurationProfilesByType": g.ListConfigurationProfilesByType,
-			"appconfig-configuration-profiles:UpdateConfigurationProfile":      g.UpdateConfigurationProfile,
-			"appconfig-configuration-profiles:DeleteConfigurationProfile":      g.DeleteConfigurationProfile,
-			"appconfig-configuration-profiles:GetConfigurationProfileNotFound": g.GetConfigurationProfileNotFound,
-
 			"appconfig-hosted-versions:CreateHostedConfigurationVersion":             g.CreateHostedConfigurationVersion,
 			"appconfig-hosted-versions:GetHostedConfigurationVersion":                g.GetHostedConfigurationVersion,
 			"appconfig-hosted-versions:ListHostedConfigurationVersions":              g.ListHostedConfigurationVersions,
@@ -64,22 +46,11 @@ func AppConfig() ServiceGroup {
 			"appconfig-hosted-versions:DeleteHostedConfigurationVersion":             g.DeleteHostedConfigurationVersion,
 			"appconfig-hosted-versions:GetHostedConfigurationVersionNotFound":        g.GetHostedConfigurationVersionNotFound,
 
-			"appconfig-tags:CreateApplicationWithTags":   g.CreateApplicationWithTags,
-			"appconfig-tags:TagResource":                 g.TagResource,
-			"appconfig-tags:ListTagsForResource":         g.ListTagsForResource,
-			"appconfig-tags:UntagResource":               g.UntagResource,
-			"appconfig-tags:ListTagsForResourceNotFound": g.ListTagsForResourceNotFound,
-
 			"appconfig-deployment-strategies:CreateDeploymentStrategy": g.CreateDeploymentStrategy,
 			"appconfig-deployment-strategies:GetDeploymentStrategy":    g.GetDeploymentStrategy,
 			"appconfig-deployment-strategies:ListDeploymentStrategies": g.ListDeploymentStrategies,
 			"appconfig-deployment-strategies:UpdateDeploymentStrategy": g.UpdateDeploymentStrategy,
 			"appconfig-deployment-strategies:DeleteDeploymentStrategy": g.DeleteDeploymentStrategy,
-
-			"appconfig-deployments:StartDeployment": g.StartDeployment,
-			"appconfig-deployments:GetDeployment":   g.GetDeployment,
-			"appconfig-deployments:ListDeployments": g.ListDeployments,
-			"appconfig-deployments:StopDeployment":  g.StopDeployment,
 
 			"appconfig-extensions:CreateExtension":            g.CreateExtension,
 			"appconfig-extensions:GetExtension":               g.GetExtension,
@@ -97,20 +68,12 @@ func AppConfig() ServiceGroup {
 			"appconfig-experiments:ListExperimentRunEvents":   g.ListExperimentRunEvents,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"appconfig-environments":           g.setupEnvironments,
-			"appconfig-configuration-profiles": g.setupProfiles,
-			"appconfig-hosted-versions":        g.setupHostedVersions,
-			"appconfig-deployments":            g.setupDeployments,
+			"appconfig-hosted-versions": g.setupHostedVersions,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"appconfig-applications":           g.teardownApplications,
-			"appconfig-environments":           g.teardownEnvironments,
-			"appconfig-configuration-profiles": g.teardownProfiles,
-			"appconfig-hosted-versions":        g.teardownHostedVersions,
-			"appconfig-tags":                   g.teardownTags,
-			"appconfig-deployment-strategies":  g.teardownDeploymentStrategies,
-			"appconfig-deployments":            g.teardownDeployments,
-			"appconfig-extensions":             g.teardownExtensions,
+			"appconfig-hosted-versions":       g.teardownHostedVersions,
+			"appconfig-deployment-strategies": g.teardownDeploymentStrategies,
+			"appconfig-extensions":            g.teardownExtensions,
 		},
 	}
 }
@@ -119,13 +82,8 @@ type appconfigGroup struct{}
 
 // One namer per group so two groups running in parallel never share a name.
 var (
-	acAppsNamer     = harness.NewNamer("ac-app")
-	acEnvsNamer     = harness.NewNamer("ac-env")
-	acProfsNamer    = harness.NewNamer("ac-prof")
 	acHostedNamer   = harness.NewNamer("ac-hcv")
-	acTagsNamer     = harness.NewNamer("ac-tag")
 	acStrategyNamer = harness.NewNamer("ac-ds")
-	acDeployNamer   = harness.NewNamer("ac-dep")
 	acExtNamer      = harness.NewNamer("ac-ext")
 )
 
@@ -149,9 +107,8 @@ func acOut(t *harness.TestContext, args ...string) (map[string]any, error) {
 // on its own would not notice a status move, which is what alpha.35 did to
 // several other services.
 const (
-	acStatusBadRequest = 400 // BadRequestException
-	acStatusNotFound   = 404 // ResourceNotFoundException
-	acStatusConflict   = 409 // ConflictException
+	acStatusNotFound = 404 // ResourceNotFoundException
+	acStatusConflict = 409 // ConflictException
 )
 
 // acExpectFailure requires the command to fail with the given AWS error code
@@ -234,461 +191,6 @@ func acDeleteApp(t *harness.TestContext, key string) {
 	if id := t.GetString(key); id != "" {
 		acRun(t, "delete-application", "--application-id", id) //nolint:errcheck
 	}
-}
-
-// ─── appconfig-applications ───────────────────────────────────────────────────
-
-func (g *appconfigGroup) teardownApplications(_ context.Context, t *harness.TestContext) error {
-	acDeleteApp(t, "ac_app_id")
-	return nil
-}
-
-func (g *appconfigGroup) CreateApplication(_ context.Context, t *harness.TestContext) error {
-	name := acAppsNamer.Name(t)
-	out, err := acOut(t, "create-application", "--name", name, "--description", "compat applications group")
-	if err != nil {
-		return err
-	}
-	id := acString(out, "Id")
-	if id == "" {
-		return fmt.Errorf("appconfig CreateApplication: no Id in response: %v", out)
-	}
-	if got := acString(out, "Name"); got != name {
-		return fmt.Errorf("appconfig CreateApplication: expected Name %q, got %q", name, got)
-	}
-	t.Set("ac_app_id", id)
-	t.Set("ac_app_name", name)
-
-	got, err := acOut(t, "get-application", "--application-id", id)
-	if err != nil {
-		return fmt.Errorf("appconfig CreateApplication: get-application after create failed: %w", err)
-	}
-	if acString(got, "Name") != name || acString(got, "Description") != "compat applications group" {
-		return fmt.Errorf("appconfig CreateApplication: get-application returned %v, want Name %q with the created description", got, name)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) GetApplication(_ context.Context, t *harness.TestContext) error {
-	id, name := t.GetString("ac_app_id"), t.GetString("ac_app_name")
-	if id == "" {
-		return fmt.Errorf("appconfig GetApplication: no ac_app_id from CreateApplication")
-	}
-	out, err := acOut(t, "get-application", "--application-id", id)
-	if err != nil {
-		return err
-	}
-	if acString(out, "Id") != id || acString(out, "Name") != name {
-		return fmt.Errorf("appconfig GetApplication: expected Id %q / Name %q, got %v", id, name, out)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) ListApplications(_ context.Context, t *harness.TestContext) error {
-	id, name := t.GetString("ac_app_id"), t.GetString("ac_app_name")
-	if id == "" {
-		return fmt.Errorf("appconfig ListApplications: no ac_app_id from CreateApplication")
-	}
-	out, err := acOut(t, "list-applications")
-	if err != nil {
-		return err
-	}
-	items := acItems(out)
-	if len(items) == 0 {
-		return fmt.Errorf("appconfig ListApplications: no Items returned: %v", out)
-	}
-	found := acFindByID(items, "Id", id)
-	if found == nil {
-		return fmt.Errorf("appconfig ListApplications: application %q absent from %d items", id, len(items))
-	}
-	if acString(found, "Name") != name {
-		return fmt.Errorf("appconfig ListApplications: expected Name %q, got %v", name, found)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) UpdateApplication(_ context.Context, t *harness.TestContext) error {
-	id := t.GetString("ac_app_id")
-	if id == "" {
-		return fmt.Errorf("appconfig UpdateApplication: no ac_app_id from CreateApplication")
-	}
-	const updated = "updated by compat"
-	out, err := acOut(t, "update-application", "--application-id", id, "--description", updated)
-	if err != nil {
-		return err
-	}
-	if acString(out, "Description") != updated {
-		return fmt.Errorf("appconfig UpdateApplication: expected Description %q in the response, got %v", updated, out)
-	}
-	got, err := acOut(t, "get-application", "--application-id", id)
-	if err != nil {
-		return fmt.Errorf("appconfig UpdateApplication: get-application after update failed: %w", err)
-	}
-	if acString(got, "Description") != updated {
-		return fmt.Errorf("appconfig UpdateApplication: expected the stored Description to be %q, got %v", updated, got)
-	}
-	// An omitted member must leave the stored value alone.
-	if acString(got, "Name") != t.GetString("ac_app_name") {
-		return fmt.Errorf("appconfig UpdateApplication: Name changed by a description-only update: %v", got)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) DeleteApplication(_ context.Context, t *harness.TestContext) error {
-	id := t.GetString("ac_app_id")
-	if id == "" {
-		return fmt.Errorf("appconfig DeleteApplication: no ac_app_id from CreateApplication")
-	}
-	if err := acRun(t, "delete-application", "--application-id", id); err != nil {
-		return err
-	}
-	if err := acExpectFailure(t, "DeleteApplication", "ResourceNotFoundException", acStatusNotFound,
-		"get-application", "--application-id", id); err != nil {
-		return err
-	}
-	t.Set("ac_app_id", "")
-	return nil
-}
-
-func (g *appconfigGroup) GetApplicationNotFound(_ context.Context, t *harness.TestContext) error {
-	return acExpectFailure(t, "GetApplicationNotFound", "ResourceNotFoundException", acStatusNotFound,
-		"get-application", "--application-id", acMissingID)
-}
-
-func (g *appconfigGroup) ListApplicationsInvalidToken(_ context.Context, t *harness.TestContext) error {
-	// A next_token the service never issued is BadRequestException — 400 — not
-	// a silent restart from the first page.
-	return acExpectFailure(t, "ListApplicationsInvalidToken", "BadRequestException", acStatusBadRequest,
-		"list-applications", "--starting-token", "compat-not-a-real-token", "--page-size", "1")
-}
-
-// ─── appconfig-environments ───────────────────────────────────────────────────
-
-func (g *appconfigGroup) setupEnvironments(_ context.Context, t *harness.TestContext) error {
-	id, err := acCreateApp(t, acEnvsNamer.Name(t))
-	if err != nil {
-		return err
-	}
-	t.Set("ac_env_app_id", id)
-	return nil
-}
-
-func (g *appconfigGroup) teardownEnvironments(_ context.Context, t *harness.TestContext) error {
-	appID := t.GetString("ac_env_app_id")
-	if envID := t.GetString("ac_env_id"); envID != "" && appID != "" {
-		acRun(t, "delete-environment", "--application-id", appID, "--environment-id", envID) //nolint:errcheck
-	}
-	acDeleteApp(t, "ac_env_app_id")
-	return nil
-}
-
-func (g *appconfigGroup) CreateEnvironment(_ context.Context, t *harness.TestContext) error {
-	appID := t.GetString("ac_env_app_id")
-	name := acEnvsNamer.Name(t)
-	out, err := acOut(t, "create-environment",
-		"--application-id", appID, "--name", name, "--description", "compat environments group")
-	if err != nil {
-		return err
-	}
-	id := acString(out, "Id")
-	if id == "" {
-		return fmt.Errorf("appconfig CreateEnvironment: no Id in response: %v", out)
-	}
-	if acString(out, "Name") != name || acString(out, "ApplicationId") != appID {
-		return fmt.Errorf("appconfig CreateEnvironment: expected Name %q under application %q, got %v", name, appID, out)
-	}
-	if state := acString(out, "State"); state != "READY_FOR_DEPLOYMENT" {
-		return fmt.Errorf("appconfig CreateEnvironment: expected State READY_FOR_DEPLOYMENT, got %q", state)
-	}
-	t.Set("ac_env_id", id)
-	t.Set("ac_env_name", name)
-
-	got, err := acOut(t, "get-environment", "--application-id", appID, "--environment-id", id)
-	if err != nil {
-		return fmt.Errorf("appconfig CreateEnvironment: get-environment after create failed: %w", err)
-	}
-	if acString(got, "Name") != name {
-		return fmt.Errorf("appconfig CreateEnvironment: get-environment returned %v, want Name %q", got, name)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) GetEnvironment(_ context.Context, t *harness.TestContext) error {
-	appID, envID := t.GetString("ac_env_app_id"), t.GetString("ac_env_id")
-	if envID == "" {
-		return fmt.Errorf("appconfig GetEnvironment: no ac_env_id from CreateEnvironment")
-	}
-	out, err := acOut(t, "get-environment", "--application-id", appID, "--environment-id", envID)
-	if err != nil {
-		return err
-	}
-	if acString(out, "Id") != envID || acString(out, "Name") != t.GetString("ac_env_name") {
-		return fmt.Errorf("appconfig GetEnvironment: expected Id %q, got %v", envID, out)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) ListEnvironments(_ context.Context, t *harness.TestContext) error {
-	appID, envID := t.GetString("ac_env_app_id"), t.GetString("ac_env_id")
-	if envID == "" {
-		return fmt.Errorf("appconfig ListEnvironments: no ac_env_id from CreateEnvironment")
-	}
-	out, err := acOut(t, "list-environments", "--application-id", appID)
-	if err != nil {
-		return err
-	}
-	items := acItems(out)
-	found := acFindByID(items, "Id", envID)
-	if found == nil {
-		return fmt.Errorf("appconfig ListEnvironments: environment %q absent from %d items", envID, len(items))
-	}
-	if acString(found, "Name") != t.GetString("ac_env_name") {
-		return fmt.Errorf("appconfig ListEnvironments: expected Name %q, got %v", t.GetString("ac_env_name"), found)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) UpdateEnvironment(_ context.Context, t *harness.TestContext) error {
-	appID, envID := t.GetString("ac_env_app_id"), t.GetString("ac_env_id")
-	if envID == "" {
-		return fmt.Errorf("appconfig UpdateEnvironment: no ac_env_id from CreateEnvironment")
-	}
-	const updated = "updated by compat"
-	out, err := acOut(t, "update-environment",
-		"--application-id", appID, "--environment-id", envID, "--description", updated)
-	if err != nil {
-		return err
-	}
-	if acString(out, "Description") != updated {
-		return fmt.Errorf("appconfig UpdateEnvironment: expected Description %q in the response, got %v", updated, out)
-	}
-	got, err := acOut(t, "get-environment", "--application-id", appID, "--environment-id", envID)
-	if err != nil {
-		return fmt.Errorf("appconfig UpdateEnvironment: get-environment after update failed: %w", err)
-	}
-	if acString(got, "Description") != updated {
-		return fmt.Errorf("appconfig UpdateEnvironment: expected the stored Description to be %q, got %v", updated, got)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) DeleteEnvironment(_ context.Context, t *harness.TestContext) error {
-	appID, envID := t.GetString("ac_env_app_id"), t.GetString("ac_env_id")
-	if envID == "" {
-		return fmt.Errorf("appconfig DeleteEnvironment: no ac_env_id from CreateEnvironment")
-	}
-	if err := acRun(t, "delete-environment", "--application-id", appID, "--environment-id", envID); err != nil {
-		return err
-	}
-	if err := acExpectFailure(t, "DeleteEnvironment", "ResourceNotFoundException", acStatusNotFound,
-		"get-environment", "--application-id", appID, "--environment-id", envID); err != nil {
-		return err
-	}
-	out, err := acOut(t, "list-environments", "--application-id", appID)
-	if err != nil {
-		return fmt.Errorf("appconfig DeleteEnvironment: list-environments after delete failed: %w", err)
-	}
-	if acFindByID(acItems(out), "Id", envID) != nil {
-		return fmt.Errorf("appconfig DeleteEnvironment: environment %q still listed after delete", envID)
-	}
-	t.Set("ac_env_id", "")
-	return nil
-}
-
-func (g *appconfigGroup) GetEnvironmentNotFound(_ context.Context, t *harness.TestContext) error {
-	return acExpectFailure(t, "GetEnvironmentNotFound", "ResourceNotFoundException", acStatusNotFound,
-		"get-environment", "--application-id", t.GetString("ac_env_app_id"), "--environment-id", acMissingID)
-}
-
-func (g *appconfigGroup) ListEnvironmentsApplicationNotFound(_ context.Context, t *harness.TestContext) error {
-	// The collection URI under an application that does not exist is
-	// ResourceNotFoundException — 404 — not an empty page.
-	return acExpectFailure(t, "ListEnvironmentsApplicationNotFound", "ResourceNotFoundException", acStatusNotFound,
-		"list-environments", "--application-id", acMissingID)
-}
-
-// ─── appconfig-configuration-profiles ─────────────────────────────────────────
-
-func (g *appconfigGroup) setupProfiles(_ context.Context, t *harness.TestContext) error {
-	id, err := acCreateApp(t, acProfsNamer.Name(t))
-	if err != nil {
-		return err
-	}
-	t.Set("ac_prof_app_id", id)
-	return nil
-}
-
-func (g *appconfigGroup) teardownProfiles(_ context.Context, t *harness.TestContext) error {
-	appID := t.GetString("ac_prof_app_id")
-	for _, key := range []string{"ac_prof_id", "ac_prof_flag_id"} {
-		if id := t.GetString(key); id != "" && appID != "" {
-			acRun(t, "delete-configuration-profile", //nolint:errcheck
-				"--application-id", appID, "--configuration-profile-id", id)
-		}
-	}
-	acDeleteApp(t, "ac_prof_app_id")
-	return nil
-}
-
-func (g *appconfigGroup) CreateConfigurationProfile(_ context.Context, t *harness.TestContext) error {
-	appID := t.GetString("ac_prof_app_id")
-	name := acProfsNamer.Name(t)
-	out, err := acOut(t, "create-configuration-profile",
-		"--application-id", appID,
-		"--name", name,
-		"--location-uri", "hosted",
-		"--type", "AWS.Freeform",
-		"--description", "compat configuration profiles group",
-	)
-	if err != nil {
-		return err
-	}
-	id := acString(out, "Id")
-	if id == "" {
-		return fmt.Errorf("appconfig CreateConfigurationProfile: no Id in response: %v", out)
-	}
-	if acString(out, "Name") != name || acString(out, "LocationUri") != "hosted" {
-		return fmt.Errorf("appconfig CreateConfigurationProfile: expected Name %q with LocationUri \"hosted\", got %v", name, out)
-	}
-	t.Set("ac_prof_id", id)
-	t.Set("ac_prof_name", name)
-
-	got, err := acOut(t, "get-configuration-profile",
-		"--application-id", appID, "--configuration-profile-id", id)
-	if err != nil {
-		return fmt.Errorf("appconfig CreateConfigurationProfile: get after create failed: %w", err)
-	}
-	if acString(got, "Name") != name || acString(got, "Type") != "AWS.Freeform" {
-		return fmt.Errorf("appconfig CreateConfigurationProfile: get returned %v, want Name %q of Type AWS.Freeform", got, name)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) GetConfigurationProfile(_ context.Context, t *harness.TestContext) error {
-	appID, profID := t.GetString("ac_prof_app_id"), t.GetString("ac_prof_id")
-	if profID == "" {
-		return fmt.Errorf("appconfig GetConfigurationProfile: no ac_prof_id from CreateConfigurationProfile")
-	}
-	out, err := acOut(t, "get-configuration-profile",
-		"--application-id", appID, "--configuration-profile-id", profID)
-	if err != nil {
-		return err
-	}
-	if acString(out, "Id") != profID || acString(out, "Name") != t.GetString("ac_prof_name") {
-		return fmt.Errorf("appconfig GetConfigurationProfile: expected Id %q, got %v", profID, out)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) ListConfigurationProfiles(_ context.Context, t *harness.TestContext) error {
-	appID, profID := t.GetString("ac_prof_app_id"), t.GetString("ac_prof_id")
-	if profID == "" {
-		return fmt.Errorf("appconfig ListConfigurationProfiles: no ac_prof_id from CreateConfigurationProfile")
-	}
-	out, err := acOut(t, "list-configuration-profiles", "--application-id", appID)
-	if err != nil {
-		return err
-	}
-	items := acItems(out)
-	found := acFindByID(items, "Id", profID)
-	if found == nil {
-		return fmt.Errorf("appconfig ListConfigurationProfiles: profile %q absent from %d items", profID, len(items))
-	}
-	if acString(found, "Name") != t.GetString("ac_prof_name") {
-		return fmt.Errorf("appconfig ListConfigurationProfiles: expected Name %q, got %v", t.GetString("ac_prof_name"), found)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) ListConfigurationProfilesByType(_ context.Context, t *harness.TestContext) error {
-	appID, freeformID := t.GetString("ac_prof_app_id"), t.GetString("ac_prof_id")
-	if freeformID == "" {
-		return fmt.Errorf("appconfig ListConfigurationProfilesByType: no ac_prof_id from CreateConfigurationProfile")
-	}
-	flagName := acProfsNamer.Name(t) + "-flags"
-	created, err := acOut(t, "create-configuration-profile",
-		"--application-id", appID,
-		"--name", flagName,
-		"--location-uri", "hosted",
-		"--type", "AWS.AppConfig.FeatureFlags",
-	)
-	if err != nil {
-		return fmt.Errorf("appconfig ListConfigurationProfilesByType: creating the feature-flag profile failed: %w", err)
-	}
-	flagID := acString(created, "Id")
-	if flagID == "" {
-		return fmt.Errorf("appconfig ListConfigurationProfilesByType: no Id for the feature-flag profile: %v", created)
-	}
-	t.Set("ac_prof_flag_id", flagID)
-
-	out, err := acOut(t, "list-configuration-profiles",
-		"--application-id", appID, "--type", "AWS.AppConfig.FeatureFlags")
-	if err != nil {
-		return err
-	}
-	items := acItems(out)
-	if acFindByID(items, "Id", flagID) == nil {
-		return fmt.Errorf("appconfig ListConfigurationProfilesByType: feature-flag profile %q absent from the filtered page (%d items)", flagID, len(items))
-	}
-	if acFindByID(items, "Id", freeformID) != nil {
-		return fmt.Errorf("appconfig ListConfigurationProfilesByType: the type filter returned the AWS.Freeform profile %q as well", freeformID)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) UpdateConfigurationProfile(_ context.Context, t *harness.TestContext) error {
-	appID, profID := t.GetString("ac_prof_app_id"), t.GetString("ac_prof_id")
-	if profID == "" {
-		return fmt.Errorf("appconfig UpdateConfigurationProfile: no ac_prof_id from CreateConfigurationProfile")
-	}
-	const updated = "updated by compat"
-	out, err := acOut(t, "update-configuration-profile",
-		"--application-id", appID, "--configuration-profile-id", profID, "--description", updated)
-	if err != nil {
-		return err
-	}
-	if acString(out, "Description") != updated {
-		return fmt.Errorf("appconfig UpdateConfigurationProfile: expected Description %q in the response, got %v", updated, out)
-	}
-	got, err := acOut(t, "get-configuration-profile",
-		"--application-id", appID, "--configuration-profile-id", profID)
-	if err != nil {
-		return fmt.Errorf("appconfig UpdateConfigurationProfile: get after update failed: %w", err)
-	}
-	if acString(got, "Description") != updated {
-		return fmt.Errorf("appconfig UpdateConfigurationProfile: expected the stored Description to be %q, got %v", updated, got)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) DeleteConfigurationProfile(_ context.Context, t *harness.TestContext) error {
-	appID, profID := t.GetString("ac_prof_app_id"), t.GetString("ac_prof_id")
-	if profID == "" {
-		return fmt.Errorf("appconfig DeleteConfigurationProfile: no ac_prof_id from CreateConfigurationProfile")
-	}
-	if err := acRun(t, "delete-configuration-profile",
-		"--application-id", appID, "--configuration-profile-id", profID); err != nil {
-		return err
-	}
-	if err := acExpectFailure(t, "DeleteConfigurationProfile", "ResourceNotFoundException", acStatusNotFound,
-		"get-configuration-profile", "--application-id", appID, "--configuration-profile-id", profID); err != nil {
-		return err
-	}
-	out, err := acOut(t, "list-configuration-profiles", "--application-id", appID)
-	if err != nil {
-		return fmt.Errorf("appconfig DeleteConfigurationProfile: list after delete failed: %w", err)
-	}
-	if acFindByID(acItems(out), "Id", profID) != nil {
-		return fmt.Errorf("appconfig DeleteConfigurationProfile: profile %q still listed after delete", profID)
-	}
-	t.Set("ac_prof_id", "")
-	return nil
-}
-
-func (g *appconfigGroup) GetConfigurationProfileNotFound(_ context.Context, t *harness.TestContext) error {
-	return acExpectFailure(t, "GetConfigurationProfileNotFound", "ResourceNotFoundException", acStatusNotFound,
-		"get-configuration-profile",
-		"--application-id", t.GetString("ac_prof_app_id"), "--configuration-profile-id", acMissingID)
 }
 
 // ─── appconfig-hosted-versions ────────────────────────────────────────────────
@@ -916,119 +418,6 @@ func (g *appconfigGroup) GetHostedConfigurationVersionNotFound(_ context.Context
 		"--version-number", "9999", outPath)
 }
 
-// ─── appconfig-tags ───────────────────────────────────────────────────────────
-
-func (g *appconfigGroup) teardownTags(_ context.Context, t *harness.TestContext) error {
-	acDeleteApp(t, "ac_tag_app_id")
-	return nil
-}
-
-// acListTags returns the Tags map for the group's application ARN.
-func acListTags(t *harness.TestContext) (map[string]any, error) {
-	arn := t.GetString("ac_tag_arn")
-	if arn == "" {
-		return nil, fmt.Errorf("no ac_tag_arn from CreateApplicationWithTags")
-	}
-	out, err := acOut(t, "list-tags-for-resource", "--resource-arn", arn)
-	if err != nil {
-		return nil, err
-	}
-	tags, _ := out["Tags"].(map[string]any)
-	if tags == nil {
-		return nil, fmt.Errorf("no Tags member in the response: %v", out)
-	}
-	return tags, nil
-}
-
-func (g *appconfigGroup) CreateApplicationWithTags(_ context.Context, t *harness.TestContext) error {
-	name := acTagsNamer.Name(t)
-	out, err := acOut(t, "create-application", "--name", name, "--tags", "Owner=compat,Team=platform")
-	if err != nil {
-		return err
-	}
-	id := acString(out, "Id")
-	if id == "" {
-		return fmt.Errorf("appconfig CreateApplicationWithTags: no Id in response: %v", out)
-	}
-	t.Set("ac_tag_app_id", id)
-	t.Set("ac_tag_arn", acARN(t, "application/"+id))
-
-	tags, err := acListTags(t)
-	if err != nil {
-		return fmt.Errorf("appconfig CreateApplicationWithTags: %w", err)
-	}
-	if tags["Owner"] != "compat" || tags["Team"] != "platform" {
-		return fmt.Errorf("appconfig CreateApplicationWithTags: expected the inline tags to be stored, got %v", tags)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) TagResource(_ context.Context, t *harness.TestContext) error {
-	arn := t.GetString("ac_tag_arn")
-	if arn == "" {
-		return fmt.Errorf("appconfig TagResource: no ac_tag_arn from CreateApplicationWithTags")
-	}
-	if err := acRun(t, "tag-resource", "--resource-arn", arn, "--tags", "Stage=beta,Owner=compat-updated"); err != nil {
-		return err
-	}
-	tags, err := acListTags(t)
-	if err != nil {
-		return fmt.Errorf("appconfig TagResource: %w", err)
-	}
-	if tags["Stage"] != "beta" {
-		return fmt.Errorf("appconfig TagResource: expected Stage=beta after tagging, got %v", tags)
-	}
-	if tags["Owner"] != "compat-updated" {
-		return fmt.Errorf("appconfig TagResource: expected the existing Owner tag to be overwritten, got %v", tags)
-	}
-	if tags["Team"] != "platform" {
-		return fmt.Errorf("appconfig TagResource: expected the untouched Team tag to survive, got %v", tags)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) ListTagsForResource(_ context.Context, t *harness.TestContext) error {
-	tags, err := acListTags(t)
-	if err != nil {
-		return fmt.Errorf("appconfig ListTagsForResource: %w", err)
-	}
-	if len(tags) == 0 {
-		return fmt.Errorf("appconfig ListTagsForResource: expected the application's tags, got an empty map")
-	}
-	if tags["Team"] != "platform" {
-		return fmt.Errorf("appconfig ListTagsForResource: expected Team=platform, got %v", tags)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) UntagResource(_ context.Context, t *harness.TestContext) error {
-	arn := t.GetString("ac_tag_arn")
-	if arn == "" {
-		return fmt.Errorf("appconfig UntagResource: no ac_tag_arn from CreateApplicationWithTags")
-	}
-	if err := acRun(t, "untag-resource", "--resource-arn", arn, "--tag-keys", "Team"); err != nil {
-		return err
-	}
-	tags, err := acListTags(t)
-	if err != nil {
-		return fmt.Errorf("appconfig UntagResource: %w", err)
-	}
-	if _, still := tags["Team"]; still {
-		return fmt.Errorf("appconfig UntagResource: Team is still present after untagging: %v", tags)
-	}
-	if _, kept := tags["Owner"]; !kept {
-		return fmt.Errorf("appconfig UntagResource: untagging Team removed Owner as well: %v", tags)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) ListTagsForResourceNotFound(_ context.Context, t *harness.TestContext) error {
-	// An ARN naming no resource is ResourceNotFoundException — 404 — not an
-	// empty tag map from some other service's ARN-keyed store.
-	return acExpectFailure(t, "ListTagsForResourceNotFound", "ResourceNotFoundException", acStatusNotFound,
-		"list-tags-for-resource", "--resource-arn", acARN(t, "application/"+acMissingID))
-}
-
 // ─── appconfig-deployment-strategies ──────────────────────────────────────────
 //
 // Overcast does not emulate deployments, so these are expected to answer 501.
@@ -1128,129 +517,6 @@ func (g *appconfigGroup) DeleteDeploymentStrategy(_ context.Context, t *harness.
 	t.Set("ac_ds_id", "")
 	return acExpectFailure(t, "DeleteDeploymentStrategy", "ResourceNotFoundException", acStatusNotFound,
 		"get-deployment-strategy", "--deployment-strategy-id", id)
-}
-
-// ─── appconfig-deployments ────────────────────────────────────────────────────
-//
-// Also unimplemented, and given real application, environment, profile and
-// configuration-version inputs so the requests are the shape a working caller
-// would send rather than a probe with invented ids.
-
-func (g *appconfigGroup) setupDeployments(_ context.Context, t *harness.TestContext) error {
-	appID, err := acCreateApp(t, acDeployNamer.Name(t))
-	if err != nil {
-		return err
-	}
-	t.Set("ac_dep_app_id", appID)
-
-	env, err := acOut(t, "create-environment", "--application-id", appID, "--name", acDeployNamer.Name(t))
-	if err != nil {
-		return err
-	}
-	envID := acString(env, "Id")
-	if envID == "" {
-		return fmt.Errorf("appconfig deployments setup: no environment Id in response: %v", env)
-	}
-	t.Set("ac_dep_env_id", envID)
-
-	prof, err := acOut(t, "create-configuration-profile",
-		"--application-id", appID, "--name", acDeployNamer.Name(t), "--location-uri", "hosted")
-	if err != nil {
-		return err
-	}
-	profID := acString(prof, "Id")
-	if profID == "" {
-		return fmt.Errorf("appconfig deployments setup: no profile Id in response: %v", prof)
-	}
-	t.Set("ac_dep_prof_id", profID)
-	return nil
-}
-
-func (g *appconfigGroup) teardownDeployments(_ context.Context, t *harness.TestContext) error {
-	appID := t.GetString("ac_dep_app_id")
-	if appID == "" {
-		return nil
-	}
-	if profID := t.GetString("ac_dep_prof_id"); profID != "" {
-		acRun(t, "delete-configuration-profile", //nolint:errcheck
-			"--application-id", appID, "--configuration-profile-id", profID)
-	}
-	if envID := t.GetString("ac_dep_env_id"); envID != "" {
-		acRun(t, "delete-environment", //nolint:errcheck
-			"--application-id", appID, "--environment-id", envID)
-	}
-	acDeleteApp(t, "ac_dep_app_id")
-	return nil
-}
-
-func (g *appconfigGroup) StartDeployment(_ context.Context, t *harness.TestContext) error {
-	out, err := acOut(t, "start-deployment",
-		"--application-id", t.GetString("ac_dep_app_id"),
-		"--environment-id", t.GetString("ac_dep_env_id"),
-		"--deployment-strategy-id", "AppConfig.AllAtOnce",
-		"--configuration-profile-id", t.GetString("ac_dep_prof_id"),
-		"--configuration-version", "1",
-	)
-	if err != nil {
-		return err
-	}
-	if _, ok := out["DeploymentNumber"]; !ok {
-		return fmt.Errorf("appconfig StartDeployment: no DeploymentNumber in response: %v", out)
-	}
-	t.Set("ac_dep_number", fmt.Sprintf("%v", out["DeploymentNumber"]))
-	return nil
-}
-
-// acDeploymentNumber returns the started deployment's number, or "1" so the URI
-// is still exercised when StartDeployment is unimplemented.
-func acDeploymentNumber(t *harness.TestContext) string {
-	if n := t.GetString("ac_dep_number"); n != "" {
-		return n
-	}
-	return "1"
-}
-
-func (g *appconfigGroup) GetDeployment(_ context.Context, t *harness.TestContext) error {
-	out, err := acOut(t, "get-deployment",
-		"--application-id", t.GetString("ac_dep_app_id"),
-		"--environment-id", t.GetString("ac_dep_env_id"),
-		"--deployment-number", acDeploymentNumber(t),
-	)
-	if err != nil {
-		return err
-	}
-	if _, ok := out["DeploymentNumber"]; !ok {
-		return fmt.Errorf("appconfig GetDeployment: no DeploymentNumber in response: %v", out)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) ListDeployments(_ context.Context, t *harness.TestContext) error {
-	out, err := acOut(t, "list-deployments",
-		"--application-id", t.GetString("ac_dep_app_id"),
-		"--environment-id", t.GetString("ac_dep_env_id"))
-	if err != nil {
-		return err
-	}
-	if _, ok := out["Items"]; !ok {
-		return fmt.Errorf("appconfig ListDeployments: no Items member in the response: %v", out)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) StopDeployment(_ context.Context, t *harness.TestContext) error {
-	out, err := acOut(t, "stop-deployment",
-		"--application-id", t.GetString("ac_dep_app_id"),
-		"--environment-id", t.GetString("ac_dep_env_id"),
-		"--deployment-number", acDeploymentNumber(t),
-	)
-	if err != nil {
-		return err
-	}
-	if state := acString(out, "State"); state == "" {
-		return fmt.Errorf("appconfig StopDeployment: no State in response: %v", out)
-	}
-	return nil
 }
 
 // ─── appconfig-extensions ─────────────────────────────────────────────────────

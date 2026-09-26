@@ -23,19 +23,19 @@ func ScenariosAuthoredAppconfigConfigurationProfiles(c *clients.Clients) Service
 	return ServiceGroup{
 		Name: "scenarios/authored-appconfig-configuration-profiles",
 		Impls: map[string]harness.TestFn{
-			"appconfig-configuration-profiles-shadow:CreateConfigurationProfile":      g.testAppconfigConfigurationProfilesShadowCreateConfigurationProfile,
-			"appconfig-configuration-profiles-shadow:GetConfigurationProfile":         g.testAppconfigConfigurationProfilesShadowGetConfigurationProfile,
-			"appconfig-configuration-profiles-shadow:ListConfigurationProfiles":       g.testAppconfigConfigurationProfilesShadowListConfigurationProfiles,
-			"appconfig-configuration-profiles-shadow:ListConfigurationProfilesByType": g.testAppconfigConfigurationProfilesShadowListConfigurationProfilesByType,
-			"appconfig-configuration-profiles-shadow:UpdateConfigurationProfile":      g.testAppconfigConfigurationProfilesShadowUpdateConfigurationProfile,
-			"appconfig-configuration-profiles-shadow:DeleteConfigurationProfile":      g.testAppconfigConfigurationProfilesShadowDeleteConfigurationProfile,
-			"appconfig-configuration-profiles-shadow:GetConfigurationProfileNotFound": g.testAppconfigConfigurationProfilesShadowGetConfigurationProfileNotFound,
+			"appconfig-configuration-profiles:CreateConfigurationProfile":      g.testAppconfigConfigurationProfilesCreateConfigurationProfile,
+			"appconfig-configuration-profiles:GetConfigurationProfile":         g.testAppconfigConfigurationProfilesGetConfigurationProfile,
+			"appconfig-configuration-profiles:ListConfigurationProfiles":       g.testAppconfigConfigurationProfilesListConfigurationProfiles,
+			"appconfig-configuration-profiles:ListConfigurationProfilesByType": g.testAppconfigConfigurationProfilesListConfigurationProfilesByType,
+			"appconfig-configuration-profiles:UpdateConfigurationProfile":      g.testAppconfigConfigurationProfilesUpdateConfigurationProfile,
+			"appconfig-configuration-profiles:DeleteConfigurationProfile":      g.testAppconfigConfigurationProfilesDeleteConfigurationProfile,
+			"appconfig-configuration-profiles:GetConfigurationProfileNotFound": g.testAppconfigConfigurationProfilesGetConfigurationProfileNotFound,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"appconfig-configuration-profiles-shadow": g.setupAppconfigConfigurationProfilesShadow,
+			"appconfig-configuration-profiles": g.setupAppconfigConfigurationProfiles,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"appconfig-configuration-profiles-shadow": g.teardownAppconfigConfigurationProfilesShadow,
+			"appconfig-configuration-profiles": g.teardownAppconfigConfigurationProfiles,
 		},
 	}
 }
@@ -55,10 +55,10 @@ func (g *authoredAppconfigConfigurationProfilesScenarios) cl() *appconfig.Client
 	return g.client
 }
 
-var groupAppconfigConfigurationProfilesShadow = scenario.Group{Name: "appconfig-configuration-profiles-shadow", File: "compat/model/authored/appconfig-configuration-profiles.json"}
+var groupAppconfigConfigurationProfiles = scenario.Group{Name: "appconfig-configuration-profiles", File: "compat/model/authored/appconfig-configuration-profiles.json"}
 
-func (g *authoredAppconfigConfigurationProfilesScenarios) setupAppconfigConfigurationProfilesShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigConfigurationProfilesShadow.RunSetup(ctx, t,
+func (g *authoredAppconfigConfigurationProfilesScenarios) setupAppconfigConfigurationProfiles(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigConfigurationProfiles.RunSetup(ctx, t,
 		scenario.Call{
 			Op:     "CreateApplication",
 			Params: `{"Name":{"$name":"app"}}`,
@@ -95,8 +95,8 @@ func (g *authoredAppconfigConfigurationProfilesScenarios) setupAppconfigConfigur
 	)
 }
 
-func (g *authoredAppconfigConfigurationProfilesScenarios) teardownAppconfigConfigurationProfilesShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigConfigurationProfilesShadow.RunTeardown(ctx, t,
+func (g *authoredAppconfigConfigurationProfilesScenarios) teardownAppconfigConfigurationProfiles(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigConfigurationProfiles.RunTeardown(ctx, t,
 		scenario.Call{
 			Op:     "DeleteConfigurationProfile",
 			Params: `{"ApplicationId":{"$ref":"app.id"},"ConfigurationProfileId":{"$ref":"prof.id"}}`,
@@ -138,8 +138,8 @@ func (g *authoredAppconfigConfigurationProfilesScenarios) teardownAppconfigConfi
 	)
 }
 
-func (g *authoredAppconfigConfigurationProfilesScenarios) testAppconfigConfigurationProfilesShadowCreateConfigurationProfile(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigConfigurationProfilesShadow.RunTest(ctx, t, "CreateConfigurationProfile", scenario.Test{
+func (g *authoredAppconfigConfigurationProfilesScenarios) testAppconfigConfigurationProfilesCreateConfigurationProfile(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigConfigurationProfiles.RunTest(ctx, t, "CreateConfigurationProfile", scenario.Test{
 		Call: scenario.Call{
 			Op:     "CreateConfigurationProfile",
 			Params: `{"ApplicationId":{"$ref":"app.id"},"Description":"compat configuration profiles group","LocationUri":"hosted","Name":{"$name":"prof"},"Type":"AWS.Freeform"}`,
@@ -186,8 +186,8 @@ func (g *authoredAppconfigConfigurationProfilesScenarios) testAppconfigConfigura
 	})
 }
 
-func (g *authoredAppconfigConfigurationProfilesScenarios) testAppconfigConfigurationProfilesShadowGetConfigurationProfile(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigConfigurationProfilesShadow.RunTest(ctx, t, "GetConfigurationProfile", scenario.Test{
+func (g *authoredAppconfigConfigurationProfilesScenarios) testAppconfigConfigurationProfilesGetConfigurationProfile(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigConfigurationProfiles.RunTest(ctx, t, "GetConfigurationProfile", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetConfigurationProfile",
 			Params: `{"ApplicationId":{"$ref":"app.id"},"ConfigurationProfileId":{"$ref":"prof.id"}}`,
@@ -210,8 +210,8 @@ func (g *authoredAppconfigConfigurationProfilesScenarios) testAppconfigConfigura
 	})
 }
 
-func (g *authoredAppconfigConfigurationProfilesScenarios) testAppconfigConfigurationProfilesShadowListConfigurationProfiles(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigConfigurationProfilesShadow.RunTest(ctx, t, "ListConfigurationProfiles", scenario.Test{
+func (g *authoredAppconfigConfigurationProfilesScenarios) testAppconfigConfigurationProfilesListConfigurationProfiles(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigConfigurationProfiles.RunTest(ctx, t, "ListConfigurationProfiles", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListConfigurationProfiles",
 			Params: `{"ApplicationId":{"$ref":"app.id"}}`,
@@ -235,8 +235,8 @@ func (g *authoredAppconfigConfigurationProfilesScenarios) testAppconfigConfigura
 	})
 }
 
-func (g *authoredAppconfigConfigurationProfilesScenarios) testAppconfigConfigurationProfilesShadowListConfigurationProfilesByType(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigConfigurationProfilesShadow.RunTest(ctx, t, "ListConfigurationProfilesByType", scenario.Test{
+func (g *authoredAppconfigConfigurationProfilesScenarios) testAppconfigConfigurationProfilesListConfigurationProfilesByType(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigConfigurationProfiles.RunTest(ctx, t, "ListConfigurationProfilesByType", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListConfigurationProfiles",
 			Params: `{"ApplicationId":{"$ref":"app.id"},"Type":"AWS.AppConfig.FeatureFlags"}`,
@@ -265,8 +265,8 @@ func (g *authoredAppconfigConfigurationProfilesScenarios) testAppconfigConfigura
 	})
 }
 
-func (g *authoredAppconfigConfigurationProfilesScenarios) testAppconfigConfigurationProfilesShadowUpdateConfigurationProfile(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigConfigurationProfilesShadow.RunTest(ctx, t, "UpdateConfigurationProfile", scenario.Test{
+func (g *authoredAppconfigConfigurationProfilesScenarios) testAppconfigConfigurationProfilesUpdateConfigurationProfile(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigConfigurationProfiles.RunTest(ctx, t, "UpdateConfigurationProfile", scenario.Test{
 		Call: scenario.Call{
 			Op:     "UpdateConfigurationProfile",
 			Params: `{"ApplicationId":{"$ref":"app.id"},"ConfigurationProfileId":{"$ref":"prof.id"},"Description":"updated by compat"}`,
@@ -306,8 +306,8 @@ func (g *authoredAppconfigConfigurationProfilesScenarios) testAppconfigConfigura
 	})
 }
 
-func (g *authoredAppconfigConfigurationProfilesScenarios) testAppconfigConfigurationProfilesShadowDeleteConfigurationProfile(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigConfigurationProfilesShadow.RunTest(ctx, t, "DeleteConfigurationProfile", scenario.Test{
+func (g *authoredAppconfigConfigurationProfilesScenarios) testAppconfigConfigurationProfilesDeleteConfigurationProfile(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigConfigurationProfiles.RunTest(ctx, t, "DeleteConfigurationProfile", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteConfigurationProfile",
 			Params: `{"ApplicationId":{"$ref":"app.id"},"ConfigurationProfileId":{"$ref":"prof.id"}}`,
@@ -358,8 +358,8 @@ func (g *authoredAppconfigConfigurationProfilesScenarios) testAppconfigConfigura
 	})
 }
 
-func (g *authoredAppconfigConfigurationProfilesScenarios) testAppconfigConfigurationProfilesShadowGetConfigurationProfileNotFound(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigConfigurationProfilesShadow.RunTest(ctx, t, "GetConfigurationProfileNotFound", scenario.Test{
+func (g *authoredAppconfigConfigurationProfilesScenarios) testAppconfigConfigurationProfilesGetConfigurationProfileNotFound(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigConfigurationProfiles.RunTest(ctx, t, "GetConfigurationProfileNotFound", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetConfigurationProfile",
 			Params: `{"ApplicationId":{"$ref":"app.id"},"ConfigurationProfileId":"zzzzzzz"}`,

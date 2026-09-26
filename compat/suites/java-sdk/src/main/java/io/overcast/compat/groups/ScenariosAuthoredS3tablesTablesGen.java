@@ -39,8 +39,8 @@ import software.amazon.awssdk.services.s3tables.model.UpdateTableMetadataLocatio
  */
 public final class ScenariosAuthoredS3tablesTablesGen implements ServiceGroup {
 
-    private static final Group GROUP_S3TABLES_TABLES_SHADOW =
-            new Group("s3tables-tables-shadow", "compat/model/authored/s3tables-tables.json");
+    private static final Group GROUP_S3TABLES_TABLES =
+            new Group("s3tables-tables", "compat/model/authored/s3tables-tables.json");
 
     private final AwsClients clients;
     private volatile S3TablesClient client;
@@ -57,31 +57,31 @@ public final class ScenariosAuthoredS3tablesTablesGen implements ServiceGroup {
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("s3tables-tables-shadow:CreateTableBucket", this::testS3tablesTablesShadowCreateTableBucket),
-                Map.entry("s3tables-tables-shadow:GetTableBucket", this::testS3tablesTablesShadowGetTableBucket),
-                Map.entry("s3tables-tables-shadow:ListTableBuckets", this::testS3tablesTablesShadowListTableBuckets),
-                Map.entry("s3tables-tables-shadow:CreateNamespace", this::testS3tablesTablesShadowCreateNamespace),
-                Map.entry("s3tables-tables-shadow:ListNamespaces", this::testS3tablesTablesShadowListNamespaces),
-                Map.entry("s3tables-tables-shadow:CreateTable", this::testS3tablesTablesShadowCreateTable),
-                Map.entry("s3tables-tables-shadow:GetTable", this::testS3tablesTablesShadowGetTable),
-                Map.entry("s3tables-tables-shadow:ListTables", this::testS3tablesTablesShadowListTables),
-                Map.entry("s3tables-tables-shadow:UpdateTableMetadataLocation", this::testS3tablesTablesShadowUpdateTableMetadataLocation),
-                Map.entry("s3tables-tables-shadow:UpdateTableMetadataLocationStaleToken", this::testS3tablesTablesShadowUpdateTableMetadataLocationStaleToken),
-                Map.entry("s3tables-tables-shadow:DeleteTable", this::testS3tablesTablesShadowDeleteTable),
-                Map.entry("s3tables-tables-shadow:DeleteNamespace", this::testS3tablesTablesShadowDeleteNamespace),
-                Map.entry("s3tables-tables-shadow:DeleteTableBucket", this::testS3tablesTablesShadowDeleteTableBucket));
+                Map.entry("s3tables-tables:CreateTableBucket", this::testS3tablesTablesCreateTableBucket),
+                Map.entry("s3tables-tables:GetTableBucket", this::testS3tablesTablesGetTableBucket),
+                Map.entry("s3tables-tables:ListTableBuckets", this::testS3tablesTablesListTableBuckets),
+                Map.entry("s3tables-tables:CreateNamespace", this::testS3tablesTablesCreateNamespace),
+                Map.entry("s3tables-tables:ListNamespaces", this::testS3tablesTablesListNamespaces),
+                Map.entry("s3tables-tables:CreateTable", this::testS3tablesTablesCreateTable),
+                Map.entry("s3tables-tables:GetTable", this::testS3tablesTablesGetTable),
+                Map.entry("s3tables-tables:ListTables", this::testS3tablesTablesListTables),
+                Map.entry("s3tables-tables:UpdateTableMetadataLocation", this::testS3tablesTablesUpdateTableMetadataLocation),
+                Map.entry("s3tables-tables:UpdateTableMetadataLocationStaleToken", this::testS3tablesTablesUpdateTableMetadataLocationStaleToken),
+                Map.entry("s3tables-tables:DeleteTable", this::testS3tablesTablesDeleteTable),
+                Map.entry("s3tables-tables:DeleteNamespace", this::testS3tablesTablesDeleteNamespace),
+                Map.entry("s3tables-tables:DeleteTableBucket", this::testS3tablesTablesDeleteTableBucket));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("s3tables-tables-shadow", this::setupS3tablesTablesShadow));
+                Map.entry("s3tables-tables", this::setupS3tablesTables));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("s3tables-tables-shadow", this::teardownS3tablesTablesShadow));
+                Map.entry("s3tables-tables", this::teardownS3tablesTables));
     }
 
     /**
@@ -101,13 +101,13 @@ public final class ScenariosAuthoredS3tablesTablesGen implements ServiceGroup {
         return client;
     }
 
-    private void setupS3tablesTablesShadow(TestContext t) {
+    private void setupS3tablesTables(TestContext t) {
         // No setup steps: an empty phase is a no-op, not a missing one.
-        GROUP_S3TABLES_TABLES_SHADOW.runSetup(t);
+        GROUP_S3TABLES_TABLES.runSetup(t);
     }
 
-    private void teardownS3tablesTablesShadow(TestContext t) {
-        GROUP_S3TABLES_TABLES_SHADOW.runTeardown(t,
+    private void teardownS3tablesTables(TestContext t) {
+        GROUP_S3TABLES_TABLES.runTeardown(t,
                 new Call("DeleteTable", "{\"name\":\"orders\",\"namespace\":\"compat\",\"tableBucketARN\":{\"$ref\":\"bucket.arn\"}}",
                         b -> DeleteTableRequest.builder()
                                 .name("orders")
@@ -128,8 +128,8 @@ public final class ScenariosAuthoredS3tablesTablesGen implements ServiceGroup {
                         r -> cl().deleteTableBucket((DeleteTableBucketRequest) r)));
     }
 
-    private void testS3tablesTablesShadowCreateTableBucket(TestContext t) {
-        GROUP_S3TABLES_TABLES_SHADOW.runTest(t, "CreateTableBucket",
+    private void testS3tablesTablesCreateTableBucket(TestContext t) {
+        GROUP_S3TABLES_TABLES.runTest(t, "CreateTableBucket",
                 new Call("CreateTableBucket", "{\"name\":{\"$name\":\"bucket\"}}",
                         b -> CreateTableBucketRequest.builder()
                                 .name(b.string("name", Values.name("bucket")))
@@ -151,8 +151,8 @@ public final class ScenariosAuthoredS3tablesTablesGen implements ServiceGroup {
                 ));
     }
 
-    private void testS3tablesTablesShadowGetTableBucket(TestContext t) {
-        GROUP_S3TABLES_TABLES_SHADOW.runTest(t, "GetTableBucket",
+    private void testS3tablesTablesGetTableBucket(TestContext t) {
+        GROUP_S3TABLES_TABLES.runTest(t, "GetTableBucket",
                 new Call("GetTableBucket", "{\"tableBucketARN\":{\"$ref\":\"bucket.arn\"}}",
                         b -> GetTableBucketRequest.builder()
                                 .tableBucketARN(b.string("tableBucketARN", Values.ref("bucket.arn")))
@@ -168,8 +168,8 @@ public final class ScenariosAuthoredS3tablesTablesGen implements ServiceGroup {
                 ));
     }
 
-    private void testS3tablesTablesShadowListTableBuckets(TestContext t) {
-        GROUP_S3TABLES_TABLES_SHADOW.runTest(t, "ListTableBuckets",
+    private void testS3tablesTablesListTableBuckets(TestContext t) {
+        GROUP_S3TABLES_TABLES.runTest(t, "ListTableBuckets",
                 new Call("ListTableBuckets", "{\"prefix\":{\"$name\":\"bucket\"}}",
                         b -> ListTableBucketsRequest.builder()
                                 .prefix(b.string("prefix", Values.name("bucket")))
@@ -185,8 +185,8 @@ public final class ScenariosAuthoredS3tablesTablesGen implements ServiceGroup {
                 ));
     }
 
-    private void testS3tablesTablesShadowCreateNamespace(TestContext t) {
-        GROUP_S3TABLES_TABLES_SHADOW.runTest(t, "CreateNamespace",
+    private void testS3tablesTablesCreateNamespace(TestContext t) {
+        GROUP_S3TABLES_TABLES.runTest(t, "CreateNamespace",
                 new Call("CreateNamespace", "{\"namespace\":[\"compat\"],\"tableBucketARN\":{\"$ref\":\"bucket.arn\"}}",
                         b -> CreateNamespaceRequest.builder()
                                 .namespace(List.of("compat"))
@@ -210,8 +210,8 @@ public final class ScenariosAuthoredS3tablesTablesGen implements ServiceGroup {
                 ));
     }
 
-    private void testS3tablesTablesShadowListNamespaces(TestContext t) {
-        GROUP_S3TABLES_TABLES_SHADOW.runTest(t, "ListNamespaces",
+    private void testS3tablesTablesListNamespaces(TestContext t) {
+        GROUP_S3TABLES_TABLES.runTest(t, "ListNamespaces",
                 new Call("ListNamespaces", "{\"tableBucketARN\":{\"$ref\":\"bucket.arn\"}}",
                         b -> ListNamespacesRequest.builder()
                                 .tableBucketARN(b.string("tableBucketARN", Values.ref("bucket.arn")))
@@ -225,8 +225,8 @@ public final class ScenariosAuthoredS3tablesTablesGen implements ServiceGroup {
                 ));
     }
 
-    private void testS3tablesTablesShadowCreateTable(TestContext t) {
-        GROUP_S3TABLES_TABLES_SHADOW.runTest(t, "CreateTable",
+    private void testS3tablesTablesCreateTable(TestContext t) {
+        GROUP_S3TABLES_TABLES.runTest(t, "CreateTable",
                 new Call("CreateTable", "{\"format\":\"ICEBERG\",\"name\":\"orders\",\"namespace\":\"compat\",\"tableBucketARN\":{\"$ref\":\"bucket.arn\"}}",
                         b -> CreateTableRequest.builder()
                                 .format("ICEBERG")
@@ -258,8 +258,8 @@ public final class ScenariosAuthoredS3tablesTablesGen implements ServiceGroup {
                 ));
     }
 
-    private void testS3tablesTablesShadowGetTable(TestContext t) {
-        GROUP_S3TABLES_TABLES_SHADOW.runTest(t, "GetTable",
+    private void testS3tablesTablesGetTable(TestContext t) {
+        GROUP_S3TABLES_TABLES.runTest(t, "GetTable",
                 new Call("GetTable", "{\"name\":\"orders\",\"namespace\":\"compat\",\"tableBucketARN\":{\"$ref\":\"bucket.arn\"}}",
                         b -> GetTableRequest.builder()
                                 .name("orders")
@@ -278,8 +278,8 @@ public final class ScenariosAuthoredS3tablesTablesGen implements ServiceGroup {
                 ));
     }
 
-    private void testS3tablesTablesShadowListTables(TestContext t) {
-        GROUP_S3TABLES_TABLES_SHADOW.runTest(t, "ListTables",
+    private void testS3tablesTablesListTables(TestContext t) {
+        GROUP_S3TABLES_TABLES.runTest(t, "ListTables",
                 new Call("ListTables", "{\"namespace\":\"compat\",\"tableBucketARN\":{\"$ref\":\"bucket.arn\"}}",
                         b -> ListTablesRequest.builder()
                                 .namespace("compat")
@@ -295,8 +295,8 @@ public final class ScenariosAuthoredS3tablesTablesGen implements ServiceGroup {
                 ));
     }
 
-    private void testS3tablesTablesShadowUpdateTableMetadataLocation(TestContext t) {
-        GROUP_S3TABLES_TABLES_SHADOW.runTest(t, "UpdateTableMetadataLocation",
+    private void testS3tablesTablesUpdateTableMetadataLocation(TestContext t) {
+        GROUP_S3TABLES_TABLES.runTest(t, "UpdateTableMetadataLocation",
                 new Call("UpdateTableMetadataLocation", "{\"metadataLocation\":{\"$concat\":[{\"$ref\":\"table.warehouse\"},\"/metadata/00001-compat.metadata.json\"]},\"name\":\"orders\",\"namespace\":\"compat\",\"tableBucketARN\":{\"$ref\":\"bucket.arn\"},\"versionToken\":{\"$ref\":\"table.token\"}}",
                         b -> UpdateTableMetadataLocationRequest.builder()
                                 .metadataLocation(b.string("metadataLocation", Values.concat(Values.ref("table.warehouse"), "/metadata/00001-compat.metadata.json")))
@@ -338,8 +338,8 @@ public final class ScenariosAuthoredS3tablesTablesGen implements ServiceGroup {
                 ));
     }
 
-    private void testS3tablesTablesShadowUpdateTableMetadataLocationStaleToken(TestContext t) {
-        GROUP_S3TABLES_TABLES_SHADOW.runTest(t, "UpdateTableMetadataLocationStaleToken",
+    private void testS3tablesTablesUpdateTableMetadataLocationStaleToken(TestContext t) {
+        GROUP_S3TABLES_TABLES.runTest(t, "UpdateTableMetadataLocationStaleToken",
                 new Call("UpdateTableMetadataLocation", "{\"metadataLocation\":{\"$concat\":[{\"$ref\":\"table.warehouse\"},\"/metadata/00002-compat.metadata.json\"]},\"name\":\"orders\",\"namespace\":\"compat\",\"tableBucketARN\":{\"$ref\":\"bucket.arn\"},\"versionToken\":{\"$ref\":\"table.token\"}}",
                         b -> UpdateTableMetadataLocationRequest.builder()
                                 .metadataLocation(b.string("metadataLocation", Values.concat(Values.ref("table.warehouse"), "/metadata/00002-compat.metadata.json")))
@@ -365,8 +365,8 @@ public final class ScenariosAuthoredS3tablesTablesGen implements ServiceGroup {
                 ));
     }
 
-    private void testS3tablesTablesShadowDeleteTable(TestContext t) {
-        GROUP_S3TABLES_TABLES_SHADOW.runTest(t, "DeleteTable",
+    private void testS3tablesTablesDeleteTable(TestContext t) {
+        GROUP_S3TABLES_TABLES.runTest(t, "DeleteTable",
                 new Call("DeleteTable", "{\"name\":\"orders\",\"namespace\":\"compat\",\"tableBucketARN\":{\"$ref\":\"bucket.arn\"}}",
                         b -> DeleteTableRequest.builder()
                                 .name("orders")
@@ -397,8 +397,8 @@ public final class ScenariosAuthoredS3tablesTablesGen implements ServiceGroup {
                 ));
     }
 
-    private void testS3tablesTablesShadowDeleteNamespace(TestContext t) {
-        GROUP_S3TABLES_TABLES_SHADOW.runTest(t, "DeleteNamespace",
+    private void testS3tablesTablesDeleteNamespace(TestContext t) {
+        GROUP_S3TABLES_TABLES.runTest(t, "DeleteNamespace",
                 new Call("DeleteNamespace", "{\"namespace\":\"compat\",\"tableBucketARN\":{\"$ref\":\"bucket.arn\"}}",
                         b -> DeleteNamespaceRequest.builder()
                                 .namespace("compat")
@@ -426,8 +426,8 @@ public final class ScenariosAuthoredS3tablesTablesGen implements ServiceGroup {
                 ));
     }
 
-    private void testS3tablesTablesShadowDeleteTableBucket(TestContext t) {
-        GROUP_S3TABLES_TABLES_SHADOW.runTest(t, "DeleteTableBucket",
+    private void testS3tablesTablesDeleteTableBucket(TestContext t) {
+        GROUP_S3TABLES_TABLES.runTest(t, "DeleteTableBucket",
                 new Call("DeleteTableBucket", "{\"tableBucketARN\":{\"$ref\":\"bucket.arn\"}}",
                         b -> DeleteTableBucketRequest.builder()
                                 .tableBucketARN(b.string("tableBucketARN", Values.ref("bucket.arn")))

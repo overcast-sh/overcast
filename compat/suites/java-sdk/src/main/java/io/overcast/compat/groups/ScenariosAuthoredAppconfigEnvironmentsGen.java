@@ -32,8 +32,8 @@ import software.amazon.awssdk.services.appconfig.model.UpdateEnvironmentRequest;
  */
 public final class ScenariosAuthoredAppconfigEnvironmentsGen implements ServiceGroup {
 
-    private static final Group GROUP_APPCONFIG_ENVIRONMENTS_SHADOW =
-            new Group("appconfig-environments-shadow", "compat/model/authored/appconfig-environments.json");
+    private static final Group GROUP_APPCONFIG_ENVIRONMENTS =
+            new Group("appconfig-environments", "compat/model/authored/appconfig-environments.json");
 
     private final AwsClients clients;
     private volatile AppConfigClient client;
@@ -50,25 +50,25 @@ public final class ScenariosAuthoredAppconfigEnvironmentsGen implements ServiceG
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("appconfig-environments-shadow:CreateEnvironment", this::testAppconfigEnvironmentsShadowCreateEnvironment),
-                Map.entry("appconfig-environments-shadow:GetEnvironment", this::testAppconfigEnvironmentsShadowGetEnvironment),
-                Map.entry("appconfig-environments-shadow:ListEnvironments", this::testAppconfigEnvironmentsShadowListEnvironments),
-                Map.entry("appconfig-environments-shadow:UpdateEnvironment", this::testAppconfigEnvironmentsShadowUpdateEnvironment),
-                Map.entry("appconfig-environments-shadow:DeleteEnvironment", this::testAppconfigEnvironmentsShadowDeleteEnvironment),
-                Map.entry("appconfig-environments-shadow:GetEnvironmentNotFound", this::testAppconfigEnvironmentsShadowGetEnvironmentNotFound),
-                Map.entry("appconfig-environments-shadow:ListEnvironmentsApplicationNotFound", this::testAppconfigEnvironmentsShadowListEnvironmentsApplicationNotFound));
+                Map.entry("appconfig-environments:CreateEnvironment", this::testAppconfigEnvironmentsCreateEnvironment),
+                Map.entry("appconfig-environments:GetEnvironment", this::testAppconfigEnvironmentsGetEnvironment),
+                Map.entry("appconfig-environments:ListEnvironments", this::testAppconfigEnvironmentsListEnvironments),
+                Map.entry("appconfig-environments:UpdateEnvironment", this::testAppconfigEnvironmentsUpdateEnvironment),
+                Map.entry("appconfig-environments:DeleteEnvironment", this::testAppconfigEnvironmentsDeleteEnvironment),
+                Map.entry("appconfig-environments:GetEnvironmentNotFound", this::testAppconfigEnvironmentsGetEnvironmentNotFound),
+                Map.entry("appconfig-environments:ListEnvironmentsApplicationNotFound", this::testAppconfigEnvironmentsListEnvironmentsApplicationNotFound));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("appconfig-environments-shadow", this::setupAppconfigEnvironmentsShadow));
+                Map.entry("appconfig-environments", this::setupAppconfigEnvironments));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("appconfig-environments-shadow", this::teardownAppconfigEnvironmentsShadow));
+                Map.entry("appconfig-environments", this::teardownAppconfigEnvironments));
     }
 
     /**
@@ -88,8 +88,8 @@ public final class ScenariosAuthoredAppconfigEnvironmentsGen implements ServiceG
         return client;
     }
 
-    private void setupAppconfigEnvironmentsShadow(TestContext t) {
-        GROUP_APPCONFIG_ENVIRONMENTS_SHADOW.runSetup(t,
+    private void setupAppconfigEnvironments(TestContext t) {
+        GROUP_APPCONFIG_ENVIRONMENTS.runSetup(t,
                 new Call("CreateApplication", "{\"Name\":{\"$name\":\"app\"}}",
                         b -> CreateApplicationRequest.builder()
                                 .name(b.string("Name", Values.name("app")))
@@ -98,8 +98,8 @@ public final class ScenariosAuthoredAppconfigEnvironmentsGen implements ServiceG
                         .export("app.id", "$.Id"));
     }
 
-    private void teardownAppconfigEnvironmentsShadow(TestContext t) {
-        GROUP_APPCONFIG_ENVIRONMENTS_SHADOW.runTeardown(t,
+    private void teardownAppconfigEnvironments(TestContext t) {
+        GROUP_APPCONFIG_ENVIRONMENTS.runTeardown(t,
                 new Call("DeleteEnvironment", "{\"ApplicationId\":{\"$ref\":\"app.id\"},\"EnvironmentId\":{\"$ref\":\"env.id\"}}",
                         b -> DeleteEnvironmentRequest.builder()
                                 .applicationId(b.string("ApplicationId", Values.ref("app.id")))
@@ -113,8 +113,8 @@ public final class ScenariosAuthoredAppconfigEnvironmentsGen implements ServiceG
                         r -> cl().deleteApplication((DeleteApplicationRequest) r)));
     }
 
-    private void testAppconfigEnvironmentsShadowCreateEnvironment(TestContext t) {
-        GROUP_APPCONFIG_ENVIRONMENTS_SHADOW.runTest(t, "CreateEnvironment",
+    private void testAppconfigEnvironmentsCreateEnvironment(TestContext t) {
+        GROUP_APPCONFIG_ENVIRONMENTS.runTest(t, "CreateEnvironment",
                 new Call("CreateEnvironment", "{\"ApplicationId\":{\"$ref\":\"app.id\"},\"Description\":\"compat environments group\",\"Name\":{\"$name\":\"env\"}}",
                         b -> CreateEnvironmentRequest.builder()
                                 .applicationId(b.string("ApplicationId", Values.ref("app.id")))
@@ -142,8 +142,8 @@ public final class ScenariosAuthoredAppconfigEnvironmentsGen implements ServiceG
                 ));
     }
 
-    private void testAppconfigEnvironmentsShadowGetEnvironment(TestContext t) {
-        GROUP_APPCONFIG_ENVIRONMENTS_SHADOW.runTest(t, "GetEnvironment",
+    private void testAppconfigEnvironmentsGetEnvironment(TestContext t) {
+        GROUP_APPCONFIG_ENVIRONMENTS.runTest(t, "GetEnvironment",
                 new Call("GetEnvironment", "{\"ApplicationId\":{\"$ref\":\"app.id\"},\"EnvironmentId\":{\"$ref\":\"env.id\"}}",
                         b -> GetEnvironmentRequest.builder()
                                 .applicationId(b.string("ApplicationId", Values.ref("app.id")))
@@ -158,8 +158,8 @@ public final class ScenariosAuthoredAppconfigEnvironmentsGen implements ServiceG
                 ));
     }
 
-    private void testAppconfigEnvironmentsShadowListEnvironments(TestContext t) {
-        GROUP_APPCONFIG_ENVIRONMENTS_SHADOW.runTest(t, "ListEnvironments",
+    private void testAppconfigEnvironmentsListEnvironments(TestContext t) {
+        GROUP_APPCONFIG_ENVIRONMENTS.runTest(t, "ListEnvironments",
                 new Call("ListEnvironments", "{\"ApplicationId\":{\"$ref\":\"app.id\"}}",
                         b -> ListEnvironmentsRequest.builder()
                                 .applicationId(b.string("ApplicationId", Values.ref("app.id")))
@@ -175,8 +175,8 @@ public final class ScenariosAuthoredAppconfigEnvironmentsGen implements ServiceG
                 ));
     }
 
-    private void testAppconfigEnvironmentsShadowUpdateEnvironment(TestContext t) {
-        GROUP_APPCONFIG_ENVIRONMENTS_SHADOW.runTest(t, "UpdateEnvironment",
+    private void testAppconfigEnvironmentsUpdateEnvironment(TestContext t) {
+        GROUP_APPCONFIG_ENVIRONMENTS.runTest(t, "UpdateEnvironment",
                 new Call("UpdateEnvironment", "{\"ApplicationId\":{\"$ref\":\"app.id\"},\"Description\":\"updated by compat\",\"EnvironmentId\":{\"$ref\":\"env.id\"}}",
                         b -> UpdateEnvironmentRequest.builder()
                                 .applicationId(b.string("ApplicationId", Values.ref("app.id")))
@@ -201,8 +201,8 @@ public final class ScenariosAuthoredAppconfigEnvironmentsGen implements ServiceG
                 ));
     }
 
-    private void testAppconfigEnvironmentsShadowDeleteEnvironment(TestContext t) {
-        GROUP_APPCONFIG_ENVIRONMENTS_SHADOW.runTest(t, "DeleteEnvironment",
+    private void testAppconfigEnvironmentsDeleteEnvironment(TestContext t) {
+        GROUP_APPCONFIG_ENVIRONMENTS.runTest(t, "DeleteEnvironment",
                 new Call("DeleteEnvironment", "{\"ApplicationId\":{\"$ref\":\"app.id\"},\"EnvironmentId\":{\"$ref\":\"env.id\"}}",
                         b -> DeleteEnvironmentRequest.builder()
                                 .applicationId(b.string("ApplicationId", Values.ref("app.id")))
@@ -230,8 +230,8 @@ public final class ScenariosAuthoredAppconfigEnvironmentsGen implements ServiceG
                 ));
     }
 
-    private void testAppconfigEnvironmentsShadowGetEnvironmentNotFound(TestContext t) {
-        GROUP_APPCONFIG_ENVIRONMENTS_SHADOW.runTest(t, "GetEnvironmentNotFound",
+    private void testAppconfigEnvironmentsGetEnvironmentNotFound(TestContext t) {
+        GROUP_APPCONFIG_ENVIRONMENTS.runTest(t, "GetEnvironmentNotFound",
                 new Call("GetEnvironment", "{\"ApplicationId\":{\"$ref\":\"app.id\"},\"EnvironmentId\":\"zzzzzzz\"}",
                         b -> GetEnvironmentRequest.builder()
                                 .applicationId(b.string("ApplicationId", Values.ref("app.id")))
@@ -243,8 +243,8 @@ public final class ScenariosAuthoredAppconfigEnvironmentsGen implements ServiceG
                 ));
     }
 
-    private void testAppconfigEnvironmentsShadowListEnvironmentsApplicationNotFound(TestContext t) {
-        GROUP_APPCONFIG_ENVIRONMENTS_SHADOW.runTest(t, "ListEnvironmentsApplicationNotFound",
+    private void testAppconfigEnvironmentsListEnvironmentsApplicationNotFound(TestContext t) {
+        GROUP_APPCONFIG_ENVIRONMENTS.runTest(t, "ListEnvironmentsApplicationNotFound",
                 new Call("ListEnvironments", "{\"ApplicationId\":\"zzzzzzz\"}",
                         b -> ListEnvironmentsRequest.builder()
                                 .applicationId("zzzzzzz")

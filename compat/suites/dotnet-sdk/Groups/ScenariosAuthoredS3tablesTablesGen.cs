@@ -15,7 +15,7 @@ namespace OvercastCompat.Groups;
 /// </remarks>
 internal sealed class ScenariosAuthoredS3tablesTables : IServiceGroup
 {
-    private static readonly ScenarioGroup GroupS3tablesTablesShadow = new("s3tables-tables-shadow", "compat/model/authored/s3tables-tables.json");
+    private static readonly ScenarioGroup GroupS3tablesTables = new("s3tables-tables", "compat/model/authored/s3tables-tables.json");
 
     private readonly Lazy<AmazonS3TablesClient> _client;
 
@@ -35,39 +35,39 @@ internal sealed class ScenariosAuthoredS3tablesTables : IServiceGroup
 
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["s3tables-tables-shadow:CreateTableBucket"] = TestS3tablesTablesShadowCreateTableBucket,
-        ["s3tables-tables-shadow:GetTableBucket"] = TestS3tablesTablesShadowGetTableBucket,
-        ["s3tables-tables-shadow:ListTableBuckets"] = TestS3tablesTablesShadowListTableBuckets,
-        ["s3tables-tables-shadow:CreateNamespace"] = TestS3tablesTablesShadowCreateNamespace,
-        ["s3tables-tables-shadow:ListNamespaces"] = TestS3tablesTablesShadowListNamespaces,
-        ["s3tables-tables-shadow:CreateTable"] = TestS3tablesTablesShadowCreateTable,
-        ["s3tables-tables-shadow:GetTable"] = TestS3tablesTablesShadowGetTable,
-        ["s3tables-tables-shadow:ListTables"] = TestS3tablesTablesShadowListTables,
-        ["s3tables-tables-shadow:UpdateTableMetadataLocation"] = TestS3tablesTablesShadowUpdateTableMetadataLocation,
-        ["s3tables-tables-shadow:UpdateTableMetadataLocationStaleToken"] = TestS3tablesTablesShadowUpdateTableMetadataLocationStaleToken,
-        ["s3tables-tables-shadow:DeleteTable"] = TestS3tablesTablesShadowDeleteTable,
-        ["s3tables-tables-shadow:DeleteNamespace"] = TestS3tablesTablesShadowDeleteNamespace,
-        ["s3tables-tables-shadow:DeleteTableBucket"] = TestS3tablesTablesShadowDeleteTableBucket,
+        ["s3tables-tables:CreateTableBucket"] = TestS3tablesTablesCreateTableBucket,
+        ["s3tables-tables:GetTableBucket"] = TestS3tablesTablesGetTableBucket,
+        ["s3tables-tables:ListTableBuckets"] = TestS3tablesTablesListTableBuckets,
+        ["s3tables-tables:CreateNamespace"] = TestS3tablesTablesCreateNamespace,
+        ["s3tables-tables:ListNamespaces"] = TestS3tablesTablesListNamespaces,
+        ["s3tables-tables:CreateTable"] = TestS3tablesTablesCreateTable,
+        ["s3tables-tables:GetTable"] = TestS3tablesTablesGetTable,
+        ["s3tables-tables:ListTables"] = TestS3tablesTablesListTables,
+        ["s3tables-tables:UpdateTableMetadataLocation"] = TestS3tablesTablesUpdateTableMetadataLocation,
+        ["s3tables-tables:UpdateTableMetadataLocationStaleToken"] = TestS3tablesTablesUpdateTableMetadataLocationStaleToken,
+        ["s3tables-tables:DeleteTable"] = TestS3tablesTablesDeleteTable,
+        ["s3tables-tables:DeleteNamespace"] = TestS3tablesTablesDeleteNamespace,
+        ["s3tables-tables:DeleteTableBucket"] = TestS3tablesTablesDeleteTableBucket,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["s3tables-tables-shadow"] = SetupS3tablesTablesShadow,
+        ["s3tables-tables"] = SetupS3tablesTables,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["s3tables-tables-shadow"] = TeardownS3tablesTablesShadow,
+        ["s3tables-tables"] = TeardownS3tablesTables,
     };
 
     private AmazonS3TablesClient Cl() => _client.Value;
 
-    private Task SetupS3tablesTablesShadow(TestContext t) =>
+    private Task SetupS3tablesTables(TestContext t) =>
         // No setup steps: an empty phase is a no-op, not a missing one.
-        GroupS3tablesTablesShadow.RunSetupAsync(t);
+        GroupS3tablesTables.RunSetupAsync(t);
 
-    private Task TeardownS3tablesTablesShadow(TestContext t) =>
-        GroupS3tablesTablesShadow.RunTeardownAsync(t,
+    private Task TeardownS3tablesTables(TestContext t) =>
+        GroupS3tablesTables.RunTeardownAsync(t,
             new ScenarioCall
             {
                 Op = "DeleteTable",
@@ -112,7 +112,7 @@ internal sealed class ScenariosAuthoredS3tablesTables : IServiceGroup
             }
         );
 
-    private Task TestS3tablesTablesShadowCreateTableBucket(TestContext t) => GroupS3tablesTablesShadow.RunTestAsync(t, "CreateTableBucket", new ScenarioTest
+    private Task TestS3tablesTablesCreateTableBucket(TestContext t) => GroupS3tablesTables.RunTestAsync(t, "CreateTableBucket", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -155,7 +155,7 @@ internal sealed class ScenariosAuthoredS3tablesTables : IServiceGroup
         ],
     });
 
-    private Task TestS3tablesTablesShadowGetTableBucket(TestContext t) => GroupS3tablesTablesShadow.RunTestAsync(t, "GetTableBucket", new ScenarioTest
+    private Task TestS3tablesTablesGetTableBucket(TestContext t) => GroupS3tablesTables.RunTestAsync(t, "GetTableBucket", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -181,7 +181,7 @@ internal sealed class ScenariosAuthoredS3tablesTables : IServiceGroup
         ],
     });
 
-    private Task TestS3tablesTablesShadowListTableBuckets(TestContext t) => GroupS3tablesTablesShadow.RunTestAsync(t, "ListTableBuckets", new ScenarioTest
+    private Task TestS3tablesTablesListTableBuckets(TestContext t) => GroupS3tablesTables.RunTestAsync(t, "ListTableBuckets", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -207,7 +207,7 @@ internal sealed class ScenariosAuthoredS3tablesTables : IServiceGroup
         ],
     });
 
-    private Task TestS3tablesTablesShadowCreateNamespace(TestContext t) => GroupS3tablesTablesShadow.RunTestAsync(t, "CreateNamespace", new ScenarioTest
+    private Task TestS3tablesTablesCreateNamespace(TestContext t) => GroupS3tablesTables.RunTestAsync(t, "CreateNamespace", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -249,7 +249,7 @@ internal sealed class ScenariosAuthoredS3tablesTables : IServiceGroup
         ],
     });
 
-    private Task TestS3tablesTablesShadowListNamespaces(TestContext t) => GroupS3tablesTablesShadow.RunTestAsync(t, "ListNamespaces", new ScenarioTest
+    private Task TestS3tablesTablesListNamespaces(TestContext t) => GroupS3tablesTables.RunTestAsync(t, "ListNamespaces", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -273,7 +273,7 @@ internal sealed class ScenariosAuthoredS3tablesTables : IServiceGroup
         ],
     });
 
-    private Task TestS3tablesTablesShadowCreateTable(TestContext t) => GroupS3tablesTablesShadow.RunTestAsync(t, "CreateTable", new ScenarioTest
+    private Task TestS3tablesTablesCreateTable(TestContext t) => GroupS3tablesTables.RunTestAsync(t, "CreateTable", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -329,7 +329,7 @@ internal sealed class ScenariosAuthoredS3tablesTables : IServiceGroup
         ],
     });
 
-    private Task TestS3tablesTablesShadowGetTable(TestContext t) => GroupS3tablesTablesShadow.RunTestAsync(t, "GetTable", new ScenarioTest
+    private Task TestS3tablesTablesGetTable(TestContext t) => GroupS3tablesTables.RunTestAsync(t, "GetTable", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -358,7 +358,7 @@ internal sealed class ScenariosAuthoredS3tablesTables : IServiceGroup
         ],
     });
 
-    private Task TestS3tablesTablesShadowListTables(TestContext t) => GroupS3tablesTablesShadow.RunTestAsync(t, "ListTables", new ScenarioTest
+    private Task TestS3tablesTablesListTables(TestContext t) => GroupS3tablesTables.RunTestAsync(t, "ListTables", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -384,7 +384,7 @@ internal sealed class ScenariosAuthoredS3tablesTables : IServiceGroup
         ],
     });
 
-    private Task TestS3tablesTablesShadowUpdateTableMetadataLocation(TestContext t) => GroupS3tablesTablesShadow.RunTestAsync(t, "UpdateTableMetadataLocation", new ScenarioTest
+    private Task TestS3tablesTablesUpdateTableMetadataLocation(TestContext t) => GroupS3tablesTables.RunTestAsync(t, "UpdateTableMetadataLocation", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -455,7 +455,7 @@ internal sealed class ScenariosAuthoredS3tablesTables : IServiceGroup
         ],
     });
 
-    private Task TestS3tablesTablesShadowUpdateTableMetadataLocationStaleToken(TestContext t) => GroupS3tablesTablesShadow.RunTestAsync(t, "UpdateTableMetadataLocationStaleToken", new ScenarioTest
+    private Task TestS3tablesTablesUpdateTableMetadataLocationStaleToken(TestContext t) => GroupS3tablesTables.RunTestAsync(t, "UpdateTableMetadataLocationStaleToken", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -499,7 +499,7 @@ internal sealed class ScenariosAuthoredS3tablesTables : IServiceGroup
         ],
     });
 
-    private Task TestS3tablesTablesShadowDeleteTable(TestContext t) => GroupS3tablesTablesShadow.RunTestAsync(t, "DeleteTable", new ScenarioTest
+    private Task TestS3tablesTablesDeleteTable(TestContext t) => GroupS3tablesTables.RunTestAsync(t, "DeleteTable", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -556,7 +556,7 @@ internal sealed class ScenariosAuthoredS3tablesTables : IServiceGroup
         ],
     });
 
-    private Task TestS3tablesTablesShadowDeleteNamespace(TestContext t) => GroupS3tablesTablesShadow.RunTestAsync(t, "DeleteNamespace", new ScenarioTest
+    private Task TestS3tablesTablesDeleteNamespace(TestContext t) => GroupS3tablesTables.RunTestAsync(t, "DeleteNamespace", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -610,7 +610,7 @@ internal sealed class ScenariosAuthoredS3tablesTables : IServiceGroup
         ],
     });
 
-    private Task TestS3tablesTablesShadowDeleteTableBucket(TestContext t) => GroupS3tablesTablesShadow.RunTestAsync(t, "DeleteTableBucket", new ScenarioTest
+    private Task TestS3tablesTablesDeleteTableBucket(TestContext t) => GroupS3tablesTables.RunTestAsync(t, "DeleteTableBucket", new ScenarioTest
     {
         Call = new ScenarioCall
         {
