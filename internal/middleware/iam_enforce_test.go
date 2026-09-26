@@ -57,8 +57,8 @@ func TestIAMEnforce_enabled_deniesUnsignedJSON(t *testing.T) {
 
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
 	}
 	if !strings.Contains(rec.Body.String(), "AccessDeniedException") {
 		t.Fatalf("expected AccessDeniedException, got body %q", rec.Body.String())
@@ -103,8 +103,8 @@ func TestIAMEnforce_enabled_deniesSignedRequestWithoutPrincipal(t *testing.T) {
 	if called {
 		t.Fatal("expected next handler not to be called")
 	}
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
 	}
 }
 
@@ -221,8 +221,8 @@ func TestIAMEnforce_enabled_explicitDenyOverridesAllow(t *testing.T) {
 
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
 	}
 }
 
@@ -274,8 +274,8 @@ func TestIAMEnforce_enabled_groupExplicitDenyOverridesUserAllow(t *testing.T) {
 
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
 	}
 }
 
@@ -429,8 +429,8 @@ func TestIAMEnforce_enabled_notActionAllow_deniesExcludedAction(t *testing.T) {
 
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
 	}
 }
 
@@ -451,8 +451,8 @@ func TestIAMEnforce_enabled_notResourceAllow_deniesExcludedResource(t *testing.T
 
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
 	}
 }
 
@@ -536,8 +536,8 @@ func TestIAMEnforce_enabled_roleSessionInlinePolicy_denies(t *testing.T) {
 
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
 	}
 }
 
@@ -562,8 +562,8 @@ func TestIAMEnforce_enabled_roleSessionExplicitDeny_overridesAllow(t *testing.T)
 
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
 	}
 }
 
@@ -919,7 +919,7 @@ func TestIAMEnforce_enabled_policyChangeReachesAWarmCache(t *testing.T) {
 	InvalidateIAMEnforceCache()
 
 	// Then: the warm cache is discarded and the new policy decides
-	if code := send(); code != http.StatusForbidden {
-		t.Fatalf("status = %d, want %d — the cache survived an invalidation", code, http.StatusForbidden)
+	if code := send(); code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d — the cache survived an invalidation", code, http.StatusBadRequest)
 	}
 }

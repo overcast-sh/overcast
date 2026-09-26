@@ -106,6 +106,18 @@ type queryTransport struct {
 
 var queryTransports = []queryTransport{{"POST", queryPost}, {"GET", queryGet}}
 
+// assertQueryDenied checks resp is the IAM denial tc's service answers a Query
+// call with: EC2's UnauthorizedOperation in its own Query dialect, and
+// AccessDenied in the awsQuery envelope everywhere else.
+func assertQueryDenied(t *testing.T, resp *http.Response, tc queryScopeCase) {
+	t.Helper()
+	if tc.signingName == "ec2" {
+		helpers.AssertEC2QueryXMLError(t, resp, "UnauthorizedOperation")
+		return
+	}
+	helpers.AssertQueryXMLError(t, resp, "AccessDenied")
+}
+
 func TestIAMEnforceQueryScope_s3OnlyPrincipalSignedForS3(t *testing.T) {
 	for _, tc := range queryScopeCases {
 		for _, tr := range queryTransports {
@@ -120,7 +132,7 @@ func TestIAMEnforceQueryScope_s3OnlyPrincipalSignedForS3(t *testing.T) {
 
 				// Then: it is authorised as the served operation, and denied in
 				// that service's Query envelope
-				helpers.AssertQueryXMLError(t, resp, "AccessDenied")
+				assertQueryDenied(t, resp, tc)
 			})
 		}
 	}

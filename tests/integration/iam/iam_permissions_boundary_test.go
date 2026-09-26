@@ -507,8 +507,8 @@ func TestIAMEnforceIntegration_boundaryDoesNotAllow_denies(t *testing.T) {
 	seedBoundedUser(t, srv, "test", allowSQSDoc, arn, "test")
 
 	// When + Then: the boundary caps the identity allow
-	if got := createQueueAsTestPrincipal(t, srv, "boundary-denied"); got != http.StatusForbidden {
-		t.Fatalf("status = %d, want %d", got, http.StatusForbidden)
+	if got := createQueueAsTestPrincipal(t, srv, "boundary-denied"); got != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", got, http.StatusBadRequest)
 	}
 }
 
@@ -522,8 +522,8 @@ func TestIAMEnforceIntegration_boundaryExplicitDeny_denies(t *testing.T) {
 	seedBoundedUser(t, srv, "test", allowSQSDoc, arn, "test")
 
 	// When + Then: an explicit deny in the boundary is final
-	if got := createQueueAsTestPrincipal(t, srv, "boundary-explicit-deny"); got != http.StatusForbidden {
-		t.Fatalf("status = %d, want %d", got, http.StatusForbidden)
+	if got := createQueueAsTestPrincipal(t, srv, "boundary-explicit-deny"); got != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", got, http.StatusBadRequest)
 	}
 }
 
@@ -533,8 +533,8 @@ func TestIAMEnforceIntegration_boundaryPolicyMissing_denies(t *testing.T) {
 	seedBoundedUser(t, srv, "test", allowSQSDoc, "arn:aws:iam::000000000000:policy/ghost", "test")
 
 	// When + Then: enforcement fails closed rather than ignoring the boundary
-	if got := createQueueAsTestPrincipal(t, srv, "boundary-missing"); got != http.StatusForbidden {
-		t.Fatalf("status = %d, want %d", got, http.StatusForbidden)
+	if got := createQueueAsTestPrincipal(t, srv, "boundary-missing"); got != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", got, http.StatusBadRequest)
 	}
 }
 
@@ -555,7 +555,7 @@ func TestIAMEnforceIntegration_roleSessionBoundary_denies(t *testing.T) {
 	defer resp.Body.Close()
 
 	// Then: the role's boundary caps the session exactly as a user's does
-	helpers.AssertStatus(t, resp, http.StatusForbidden)
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
 }
 
 func TestIAMEnforceIntegration_boundaryAttached_invalidatesCache(t *testing.T) {
@@ -580,7 +580,7 @@ func TestIAMEnforceIntegration_boundaryAttached_invalidatesCache(t *testing.T) {
 	helpers.AssertStatus(t, putResp, http.StatusOK)
 
 	// Then: the warm cache is discarded and the next call is capped
-	if got := createQueueAsTestPrincipal(t, srv, "after-boundary"); got != http.StatusForbidden {
-		t.Fatalf("status after the boundary = %d, want %d", got, http.StatusForbidden)
+	if got := createQueueAsTestPrincipal(t, srv, "after-boundary"); got != http.StatusBadRequest {
+		t.Fatalf("status after the boundary = %d, want %d", got, http.StatusBadRequest)
 	}
 }

@@ -7,13 +7,12 @@ package athenaengine_test
 import (
 	"encoding/json"
 	"errors"
-	"net/http"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/athena"
 	"github.com/aws/aws-sdk-go-v2/service/athena/types"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
+	"github.com/aws/smithy-go"
 
 	"github.com/overcast-sh/overcast/tests/helpers"
 )
@@ -74,12 +73,11 @@ func TestAthenaEngine_IAMEnforcement(t *testing.T) {
 			ResultConfiguration: &types.ResultConfiguration{OutputLocation: aws.String(results)},
 		})
 
-		// Then: StartQueryExecution itself is denied. Its AccessDeniedException
-		// code cannot be read until the denial is in Athena's JSON envelope
-		// (#2259).
-		var re *smithyhttp.ResponseError
-		if !errors.As(err, &re) || re.HTTPStatusCode() != http.StatusForbidden {
-			t.Fatalf("StartQueryExecution error = %v, want 403", err)
+		// Then: StartQueryExecution itself is denied, with the
+		// AccessDeniedException the SDK reads from Athena's JSON envelope
+		var apiErr smithy.APIError
+		if !errors.As(err, &apiErr) || apiErr.ErrorCode() != "AccessDeniedException" {
+			t.Fatalf("StartQueryExecution error = %v, want AccessDeniedException", err)
 		}
 	})
 }

@@ -68,8 +68,8 @@ func TestIAMEnforce_condition_regionBlocks(t *testing.T) {
 	h.ServeHTTP(rec, req)
 
 	// Condition not met → Allow statement doesn't apply → NoMatch → deny.
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected %d, got %d", http.StatusForbidden, rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected %d, got %d", http.StatusBadRequest, rec.Code)
 	}
 }
 
@@ -93,8 +93,8 @@ func TestIAMEnforce_condition_unknownOperator_denies(t *testing.T) {
 
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected %d (fail closed), got %d", http.StatusForbidden, rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected %d (fail closed), got %d", http.StatusBadRequest, rec.Code)
 	}
 }
 
@@ -118,8 +118,8 @@ func TestIAMEnforce_condition_denyWithRegion_blocksMatchingRegion(t *testing.T) 
 
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected %d, got %d", http.StatusForbidden, rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected %d, got %d", http.StatusBadRequest, rec.Code)
 	}
 }
 
@@ -339,8 +339,8 @@ func TestIAMEnforce_condition_principalAccount_blocksMismatch(t *testing.T) {
 
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected %d, got %d", http.StatusForbidden, rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected %d, got %d", http.StatusBadRequest, rec.Code)
 	}
 }
 
@@ -465,8 +465,8 @@ func TestIAMEnforce_condition_dateGreaterThan_deniesWhenNotSatisfied(t *testing.
 
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected %d, got %d", http.StatusForbidden, rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected %d, got %d", http.StatusBadRequest, rec.Code)
 	}
 }
 
@@ -518,8 +518,8 @@ func TestIAMEnforce_condition_nullTrue_deniesWhenPrincipalArnPresent(t *testing.
 
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected %d, got %d", http.StatusForbidden, rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected %d, got %d", http.StatusBadRequest, rec.Code)
 	}
 }
 
@@ -613,8 +613,8 @@ func TestIAMEnforce_condition_numericLessThan_deniesLargeBody(t *testing.T) {
 
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected %d, got %d", http.StatusForbidden, rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected %d, got %d", http.StatusBadRequest, rec.Code)
 	}
 }
 
@@ -677,7 +677,7 @@ func TestIAMEnforce_policyVariable_username_deniesOtherUser(t *testing.T) {
 
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected %d, got %d", http.StatusForbidden, rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected %d, got %d", http.StatusBadRequest, rec.Code)
 	}
 }

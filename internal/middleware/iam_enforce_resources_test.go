@@ -112,8 +112,8 @@ func TestIAMEnforce_enabled_sqsResourcePolicyDeniesNonMatchingQueueFromQueueURL(
 
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
 	}
 }
 
@@ -222,8 +222,8 @@ func TestIAMEnforce_enabled_dynamodbResourcePolicyDeniesNonMatchingTable(t *test
 
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
 	}
 }
 
@@ -277,8 +277,8 @@ func TestIAMEnforce_enabled_ssmResourcePolicyDeniesNonMatchingParameter(t *testi
 
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
 	}
 }
 
@@ -332,8 +332,8 @@ func TestIAMEnforce_enabled_kmsResourcePolicyDeniesNonMatchingAlias(t *testing.T
 
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
 	}
 }
 
@@ -387,8 +387,8 @@ func TestIAMEnforce_enabled_kinesisResourcePolicyDeniesNonMatchingStreamARN(t *t
 
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
 	}
 }
 
@@ -442,8 +442,8 @@ func TestIAMEnforce_enabled_firehoseResourcePolicyDeniesNonMatchingDeliveryStrea
 
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
 	}
 }
 
@@ -497,8 +497,8 @@ func TestIAMEnforce_enabled_logsResourcePolicyDeniesNonMatchingLogGroup(t *testi
 
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
 	}
 }
 
@@ -552,8 +552,8 @@ func TestIAMEnforce_enabled_ecrResourcePolicyDeniesNonMatchingResourceArn(t *tes
 
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
 	}
 }
 
@@ -607,8 +607,8 @@ func TestIAMEnforce_enabled_secretsManagerResourcePolicyDeniesNonMatchingSecretI
 
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
 	}
 }
 
@@ -662,8 +662,8 @@ func TestIAMEnforce_enabled_stepFunctionsResourcePolicyDeniesNonMatchingStateMac
 
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
 	}
 }
 
@@ -772,8 +772,8 @@ func TestIAMEnforce_enabled_ecsResourcePolicyDeniesNonMatchingCluster(t *testing
 
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
 	}
 }
 

@@ -469,7 +469,7 @@ func TestIAMEnforceIntegration_signedDenyWithoutPolicyOnSQS(t *testing.T) {
 	)
 	defer resp.Body.Close()
 
-	helpers.AssertStatus(t, resp, http.StatusForbidden)
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
 }
 
 func TestIAMEnforceIntegration_signedAllowOnS3ListBuckets(t *testing.T) {
@@ -524,7 +524,7 @@ func TestIAMEnforceIntegration_groupExplicitDenyOverridesUserAllowOnSQS(t *testi
 	)
 	defer resp.Body.Close()
 
-	helpers.AssertStatus(t, resp, http.StatusForbidden)
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
 }
 
 func TestIAMEnforceIntegration_groupAllowWithoutUserInlineOnSQS(t *testing.T) {
@@ -717,7 +717,7 @@ func TestIAMEnforceIntegration_roleSession_deniesUnallowedAction(t *testing.T) {
 	)
 	defer resp.Body.Close()
 
-	helpers.AssertStatus(t, resp, http.StatusForbidden)
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
 }
 
 func TestIAMEnforceIntegration_roleSession_explicitDenyBlocksAllowedAction(t *testing.T) {
@@ -740,7 +740,7 @@ func TestIAMEnforceIntegration_roleSession_explicitDenyBlocksAllowedAction(t *te
 	)
 	defer resp.Body.Close()
 
-	helpers.AssertStatus(t, resp, http.StatusForbidden)
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
 }
 
 // ─── Condition-block integration tests ───────────────────────────────────────
@@ -786,7 +786,7 @@ func TestIAMEnforceIntegration_condition_regionBlocks(t *testing.T) {
 	)
 	defer resp.Body.Close()
 
-	helpers.AssertStatus(t, resp, http.StatusForbidden)
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
 }
 
 func TestIAMEnforceIntegration_condition_unknownOperator_denies(t *testing.T) {
@@ -807,7 +807,7 @@ func TestIAMEnforceIntegration_condition_unknownOperator_denies(t *testing.T) {
 	)
 	defer resp.Body.Close()
 
-	helpers.AssertStatus(t, resp, http.StatusForbidden)
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
 }
 
 func TestIAMEnforceIntegration_condition_denyInRegion_allowsOtherRegion(t *testing.T) {
@@ -851,7 +851,7 @@ func TestIAMEnforceIntegration_condition_denyInRegion_blocksMatchingRegion(t *te
 	)
 	defer resp.Body.Close()
 
-	helpers.AssertStatus(t, resp, http.StatusForbidden)
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
 }
 
 func TestIAMEnforceIntegration_condition_principalArnAllows(t *testing.T) {
@@ -966,7 +966,7 @@ func TestIAMEnforceIntegration_condition_nullTrue_deniesWhenPrincipalArnPresent(
 	)
 	defer resp.Body.Close()
 
-	helpers.AssertStatus(t, resp, http.StatusForbidden)
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
 }
 
 func TestIAMEnforceIntegration_condition_stringEqualsIfExists_allowsWhenKeyMissing(t *testing.T) {
@@ -1026,7 +1026,7 @@ func TestIAMEnforceIntegration_sqsResourceScopedDeniesQueueURLMismatch(t *testin
 	)
 	defer resp.Body.Close()
 
-	helpers.AssertStatus(t, resp, http.StatusForbidden)
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
 }
 
 func TestIAMEnforceIntegration_snsResourceScopedAllowsMatchingCreateTopicName(t *testing.T) {
@@ -1118,7 +1118,7 @@ func TestIAMEnforceIntegration_dynamodbResourceScopedDeniesMismatchedTable(t *te
 	}, "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/dynamodb/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	defer putResp.Body.Close()
 
-	helpers.AssertStatus(t, putResp, http.StatusForbidden)
+	helpers.AssertStatus(t, putResp, http.StatusBadRequest)
 }
 
 func TestIAMEnforceIntegration_ssmResourceScopedAllowsMatchingParameter(t *testing.T) {
@@ -1153,7 +1153,7 @@ func TestIAMEnforceIntegration_ssmResourceScopedDeniesMismatchedParameter(t *tes
 	}, "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/ssm/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	defer resp.Body.Close()
 
-	helpers.AssertStatus(t, resp, http.StatusForbidden)
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
 }
 
 func TestIAMEnforceIntegration_notActionAllow_allowsNonExcludedAction(t *testing.T) {
@@ -1193,7 +1193,7 @@ func TestIAMEnforceIntegration_notActionAllow_deniesExcludedAction(t *testing.T)
 	)
 	defer resp.Body.Close()
 
-	helpers.AssertStatus(t, resp, http.StatusForbidden)
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
 }
 
 func TestIAMEnforceIntegration_notResourceAllow_allowsOtherResource(t *testing.T) {
@@ -1233,7 +1233,7 @@ func TestIAMEnforceIntegration_notResourceAllow_deniesExcludedResource(t *testin
 	)
 	defer resp.Body.Close()
 
-	helpers.AssertStatus(t, resp, http.StatusForbidden)
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
 }
 
 // TestIAMEnforceIntegration_condition_numericLessThan_allowsRequest verifies
@@ -1304,7 +1304,7 @@ func TestIAMEnforceIntegration_policyVariable_username_deniesOtherResource(t *te
 	)
 	defer resp.Body.Close()
 
-	helpers.AssertStatus(t, resp, http.StatusForbidden)
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
 }
 
 func TestIAMEnforceIntegration_kmsResourceScopedDeniesMismatchedKeyID(t *testing.T) {
@@ -1324,7 +1324,7 @@ func TestIAMEnforceIntegration_kmsResourceScopedDeniesMismatchedKeyID(t *testing
 	)
 	defer resp.Body.Close()
 
-	helpers.AssertStatus(t, resp, http.StatusForbidden)
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
 }
 
 func TestIAMEnforceIntegration_kinesisResourceScopedDeniesMismatchedStreamName(t *testing.T) {
@@ -1344,7 +1344,7 @@ func TestIAMEnforceIntegration_kinesisResourceScopedDeniesMismatchedStreamName(t
 	)
 	defer resp.Body.Close()
 
-	helpers.AssertStatus(t, resp, http.StatusForbidden)
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
 }
 
 func TestIAMEnforceIntegration_firehoseResourceScopedDeniesMismatchedDeliveryStreamName(t *testing.T) {
@@ -1364,7 +1364,7 @@ func TestIAMEnforceIntegration_firehoseResourceScopedDeniesMismatchedDeliveryStr
 	)
 	defer resp.Body.Close()
 
-	helpers.AssertStatus(t, resp, http.StatusForbidden)
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
 }
 
 func TestIAMEnforceIntegration_logsResourceScopedDeniesMismatchedLogStream(t *testing.T) {
@@ -1384,7 +1384,7 @@ func TestIAMEnforceIntegration_logsResourceScopedDeniesMismatchedLogStream(t *te
 	)
 	defer resp.Body.Close()
 
-	helpers.AssertStatus(t, resp, http.StatusForbidden)
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
 }
 
 func TestIAMEnforceIntegration_ecrResourceScopedDeniesMismatchedRepositoryName(t *testing.T) {
@@ -1404,7 +1404,7 @@ func TestIAMEnforceIntegration_ecrResourceScopedDeniesMismatchedRepositoryName(t
 	)
 	defer resp.Body.Close()
 
-	helpers.AssertStatus(t, resp, http.StatusForbidden)
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
 }
 
 func TestIAMEnforceIntegration_secretsManagerResourceScopedDeniesMismatchedSecretID(t *testing.T) {
@@ -1424,7 +1424,7 @@ func TestIAMEnforceIntegration_secretsManagerResourceScopedDeniesMismatchedSecre
 	)
 	defer resp.Body.Close()
 
-	helpers.AssertStatus(t, resp, http.StatusForbidden)
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
 }
 
 func TestIAMEnforceIntegration_stepFunctionsResourceScopedDeniesMismatchedStateMachineArn(t *testing.T) {
@@ -1444,7 +1444,7 @@ func TestIAMEnforceIntegration_stepFunctionsResourceScopedDeniesMismatchedStateM
 	)
 	defer resp.Body.Close()
 
-	helpers.AssertStatus(t, resp, http.StatusForbidden)
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
 }
 
 func TestIAMEnforceIntegration_cloudFormationResourceScopedDeniesMismatchedStackName(t *testing.T) {
@@ -1488,7 +1488,7 @@ func TestIAMEnforceIntegration_ecsResourceScopedDeniesMismatchedCluster(t *testi
 	)
 	defer resp.Body.Close()
 
-	helpers.AssertStatus(t, resp, http.StatusForbidden)
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
 }
 
 func TestIAMEnforceIntegration_lambdaResourceScopedDeniesMismatchedInvokeFunction(t *testing.T) {
