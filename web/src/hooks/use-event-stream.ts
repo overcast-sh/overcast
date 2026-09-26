@@ -539,8 +539,13 @@ function getEventQueryMap(): Record<string, QueryKey[] | undefined> {
     // ── Athena ─────────────────────────────────────────────────────────
     [EventType.athena.QueryStateChanged]: [athenaKeys.executions()],
     // ── Glue ───────────────────────────────────────────────────────────
-    // Deleting a table deletes its partitions with it.
-    [EventType.glue.TableChanged]: [glueKeys.tables(), glueKeys.partitions()],
+    // Deleting a table deletes its partitions with it. Athena's data browser
+    // lists the same tables, through GetTableMetadata.
+    [EventType.glue.TableChanged]: [
+      glueKeys.tables(),
+      glueKeys.partitions(),
+      athenaKeys.metadata(),
+    ],
     [EventType.glue.PartitionsChanged]: [glueKeys.partitions()],
     // ── S3 Tables ──────────────────────────────────────────────────────
     // Tables are nodes on the map (internal/services/s3tables/topology.go).

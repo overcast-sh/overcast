@@ -1,7 +1,9 @@
 import * as PopoverPrimitive from "@radix-ui/react-popover"
+import { Link } from "@tanstack/react-router"
 import { Database } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CopyButton } from "@/components/ui/copy-button"
+import { athenaEditorLink } from "@/features/athena/links"
 import type { DataColumn } from "@/lib/data-sources/row-source"
 import type { TabularKind } from "../preview-kind"
 import { athenaSql } from "../athena-sql"
@@ -13,8 +15,8 @@ import { athenaSql } from "../athena-sql"
  * rows that needs an engine, and doing it over the loaded rows would misstate
  * the data. This hands the question to Athena instead: a `CREATE EXTERNAL
  * TABLE` over the object's folder, typed from the columns the grid already
- * knows, and a `SELECT` to start from. The Athena console lands with #2072;
- * until then the SQL is copied, for the CLI or an SDK.
+ * knows, and a `SELECT` to start from — opened in the Athena editor, or
+ * copied for the CLI or an SDK.
  */
 export function AthenaQuery({
   bucket,
@@ -47,8 +49,8 @@ export function AthenaQuery({
         >
           <p className="text-xs text-fg-muted">
             To sort or filter the whole file, query it. This SQL makes a table over the object’s
-            folder and selects from it; run it with{" "}
-            <code className="font-mono text-xs">aws athena</code> against this emulator.
+            folder and selects from it: run each statement in the Athena editor, or with{" "}
+            <code className="font-mono text-xs">aws athena</code>.
           </p>
           <div className="relative">
             <pre className="max-h-64 overflow-auto rounded-control border border-border bg-bg-muted p-2 pr-9 font-mono text-xs leading-relaxed text-fg">
@@ -61,6 +63,12 @@ export function AthenaQuery({
               className="absolute top-2 right-2"
             />
           </div>
+          <Button asChild size="sm" className="self-end">
+            <Link {...athenaEditorLink({ sql })}>
+              <Database aria-hidden className="size-3.5" />
+              Open in the Athena editor
+            </Link>
+          </Button>
         </PopoverPrimitive.Content>
       </PopoverPrimitive.Portal>
     </PopoverPrimitive.Root>

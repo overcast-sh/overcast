@@ -33,6 +33,7 @@ import {
 } from "lucide-react"
 import Editor from "@monaco-editor/react"
 import { Button } from "@/components/ui/button"
+import { MONACO_BASE_OPTIONS, monacoTheme } from "@/components/ui/monaco-setup"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { FormField, FormRow, fieldError } from "@/components/ui/form"
@@ -918,18 +919,9 @@ export function CreateFunctionWizard({ open, onOpenChange }: CreateFunctionWizar
                       height="35vh"
                       language={runtimeLanguage(runtime)}
                       value={editorValue}
-                      theme={isDark ? "vs-dark" : "light"}
+                      theme={monacoTheme(isDark)}
                       onChange={(val) => setEditorValue(val ?? "")}
-                      options={{
-                        fontSize: 13,
-                        minimap: { enabled: false },
-                        scrollBeyondLastLine: false,
-                        wordWrap: "on",
-                        lineNumbers: "on",
-                        renderLineHighlight: "line",
-                        padding: { top: 12, bottom: 12 },
-                        automaticLayout: true,
-                      }}
+                      options={{ ...MONACO_BASE_OPTIONS, padding: { top: 12, bottom: 12 } }}
                     />
                   </div>
                 </div>

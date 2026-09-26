@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import type { DebuggerTarget } from "@/types"
 import { debuggerTargetQueryOptions, debuggerTargetsQueryOptions } from "./data"
@@ -19,22 +19,6 @@ export function useDebugTargets() {
  */
 export function useDebugTarget(service: string, resource: string, container?: string) {
   return useQuery(debuggerTargetQueryOptions(service, resource, container ?? ""))
-}
-
-/**
- * A clock for the relative times on the live line, ticking once a second
- * while `active` and idle otherwise, so a panel with nothing time-based to
- * show — inert, unbound, listening, error — re-renders only when its data
- * does.
- */
-export function useNow(active: boolean, intervalMs = 1_000): number {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    if (!active) return
-    const id = setInterval(() => setNow(Date.now()), intervalMs)
-    return () => clearInterval(id)
-  }, [active, intervalMs])
-  return now
 }
 
 /**

@@ -1,0 +1,2877 @@
+{
+ "trinoVersion": "483",
+ "functions": [
+  {
+   "name": "abs",
+   "kind": "scalar",
+   "signatures": [
+    "abs(bigint) → bigint",
+    "abs(decimal(p,s)) → decimal(p,s)",
+    "abs(double) → double",
+    "abs(integer) → integer",
+    "abs(number) → number",
+    "abs(real) → real",
+    "abs(smallint) → smallint",
+    "abs(tinyint) → tinyint"
+   ],
+   "description": "Absolute value"
+  },
+  {
+   "name": "acos",
+   "kind": "scalar",
+   "signatures": [
+    "acos(double) → double"
+   ],
+   "description": "Arc cosine"
+  },
+  {
+   "name": "all_match",
+   "kind": "scalar",
+   "signatures": [
+    "all_match(array(T), function(T,boolean)) → boolean"
+   ],
+   "description": "Returns true if all elements of the array match the given predicate"
+  },
+  {
+   "name": "any_match",
+   "kind": "scalar",
+   "signatures": [
+    "any_match(array(T), function(T,boolean)) → boolean"
+   ],
+   "description": "Returns true if the array contains one or more elements that match the given predicate"
+  },
+  {
+   "name": "any_value",
+   "kind": "aggregate",
+   "signatures": [
+    "any_value(T) → T"
+   ],
+   "description": "Return an arbitrary non-null input value"
+  },
+  {
+   "name": "approx_distinct",
+   "kind": "aggregate",
+   "signatures": [
+    "approx_distinct(T) → bigint",
+    "approx_distinct(T, double) → bigint",
+    "approx_distinct(boolean) → bigint",
+    "approx_distinct(boolean, double) → bigint",
+    "approx_distinct(unknown) → bigint",
+    "approx_distinct(unknown, double) → bigint"
+   ],
+   "description": ""
+  },
+  {
+   "name": "approx_most_frequent",
+   "kind": "aggregate",
+   "signatures": [
+    "approx_most_frequent(bigint, bigint, bigint) → map(bigint,bigint)",
+    "approx_most_frequent(bigint, varchar, bigint) → map(varchar,bigint)"
+   ],
+   "description": ""
+  },
+  {
+   "name": "approx_percentile",
+   "kind": "aggregate",
+   "signatures": [
+    "approx_percentile(bigint, array(double)) → array(bigint)",
+    "approx_percentile(bigint, double, array(double)) → array(bigint)",
+    "approx_percentile(double, array(double)) → array(double)",
+    "approx_percentile(double, double, array(double)) → array(double)",
+    "approx_percentile(real, array(double)) → array(real)",
+    "approx_percentile(real, double, array(double)) → array(real)",
+    "approx_percentile(bigint, double) → bigint",
+    "approx_percentile(bigint, double, double) → bigint",
+    "approx_percentile(bigint, double, double, double) → bigint",
+    "approx_percentile(double, double) → double",
+    "approx_percentile(double, double, double) → double",
+    "approx_percentile(double, double, double, double) → double",
+    "approx_percentile(real, double) → real",
+    "approx_percentile(real, double, double) → real",
+    "approx_percentile(real, double, double, double) → real"
+   ],
+   "description": ""
+  },
+  {
+   "name": "approx_set",
+   "kind": "aggregate",
+   "signatures": [
+    "approx_set(bigint) → hyperloglog",
+    "approx_set(double) → hyperloglog",
+    "approx_set(varchar(x)) → hyperloglog"
+   ],
+   "description": ""
+  },
+  {
+   "name": "arbitrary",
+   "kind": "aggregate",
+   "signatures": [
+    "arbitrary(T) → T"
+   ],
+   "description": "Return an arbitrary non-null input value"
+  },
+  {
+   "name": "array_agg",
+   "kind": "aggregate",
+   "signatures": [
+    "array_agg(T) → array(T)"
+   ],
+   "description": "return an array of values"
+  },
+  {
+   "name": "array_distinct",
+   "kind": "scalar",
+   "signatures": [
+    "array_distinct(array(E)) → array(E)"
+   ],
+   "description": "Remove duplicate values from the given array"
+  },
+  {
+   "name": "array_except",
+   "kind": "scalar",
+   "signatures": [
+    "array_except(array(E), array(E)) → array(E)"
+   ],
+   "description": "Returns an array of elements that are in the first array but not the second, without duplicates."
+  },
+  {
+   "name": "array_first",
+   "kind": "scalar",
+   "signatures": [
+    "array_first(array(E)) → E",
+    "array_first(array(E), function(E,boolean)) → E"
+   ],
+   "description": "Get the first element of an array"
+  },
+  {
+   "name": "array_histogram",
+   "kind": "scalar",
+   "signatures": [
+    "array_histogram(array(T)) → map(T,bigint)"
+   ],
+   "description": "Return a map containing the counts of the elements in the array"
+  },
+  {
+   "name": "array_intersect",
+   "kind": "scalar",
+   "signatures": [
+    "array_intersect(array(E), array(E)) → array(E)"
+   ],
+   "description": "Intersects elements of the two given arrays"
+  },
+  {
+   "name": "array_join",
+   "kind": "scalar",
+   "signatures": [
+    "array_join(array(E), varchar) → varchar",
+    "array_join(array(E), varchar, varchar) → varchar"
+   ],
+   "description": "Concatenates the elements of the given array using a delimiter and an optional string to replace nulls"
+  },
+  {
+   "name": "array_last",
+   "kind": "scalar",
+   "signatures": [
+    "array_last(array(E)) → E"
+   ],
+   "description": "Get the last element of an array"
+  },
+  {
+   "name": "array_max",
+   "kind": "scalar",
+   "signatures": [
+    "array_max(array(T)) → T"
+   ],
+   "description": "Get maximum value of array"
+  },
+  {
+   "name": "array_min",
+   "kind": "scalar",
+   "signatures": [
+    "array_min(array(T)) → T"
+   ],
+   "description": "Get minimum value of array"
+  },
+  {
+   "name": "array_position",
+   "kind": "scalar",
+   "signatures": [
+    "array_position(array(T), T) → bigint"
+   ],
+   "description": "Returns the position of the first occurrence of the given value in array (or 0 if not found)"
+  },
+  {
+   "name": "array_remove",
+   "kind": "scalar",
+   "signatures": [
+    "array_remove(array(E), E) → array(E)"
+   ],
+   "description": "Remove specified values from the given array"
+  },
+  {
+   "name": "array_sort",
+   "kind": "scalar",
+   "signatures": [
+    "array_sort(array(E)) → array(E)",
+    "array_sort(array(T), function(T,T,integer)) → array(T)"
+   ],
+   "description": "Sorts the given array in ascending order according to the natural ordering of its elements."
+  },
+  {
+   "name": "array_union",
+   "kind": "scalar",
+   "signatures": [
+    "array_union(array(E), array(E)) → array(E)"
+   ],
+   "description": "Union elements of the two given arrays"
+  },
+  {
+   "name": "arrays_overlap",
+   "kind": "scalar",
+   "signatures": [
+    "arrays_overlap(array(E), array(E)) → boolean"
+   ],
+   "description": "Returns true if arrays have common elements"
+  },
+  {
+   "name": "asin",
+   "kind": "scalar",
+   "signatures": [
+    "asin(double) → double"
+   ],
+   "description": "Arc sine"
+  },
+  {
+   "name": "at_timezone",
+   "kind": "scalar",
+   "signatures": [
+    "at_timezone(timestamp(p) with time zone, varchar(x)) → timestamp(p) with time zone"
+   ],
+   "description": ""
+  },
+  {
+   "name": "atan",
+   "kind": "scalar",
+   "signatures": [
+    "atan(double) → double"
+   ],
+   "description": "Arc tangent"
+  },
+  {
+   "name": "atan2",
+   "kind": "scalar",
+   "signatures": [
+    "atan2(double, double) → double"
+   ],
+   "description": "Arc tangent of given fraction"
+  },
+  {
+   "name": "avg",
+   "kind": "aggregate",
+   "signatures": [
+    "avg(decimal(p,s)) → decimal(p,s)",
+    "avg(bigint) → double",
+    "avg(double) → double",
+    "avg(interval day to second) → interval day to second",
+    "avg(interval year to month) → interval year to month",
+    "avg(number) → number",
+    "avg(real) → real"
+   ],
+   "description": "Calculates the average value"
+  },
+  {
+   "name": "bar",
+   "kind": "scalar",
+   "signatures": [
+    "bar(double, bigint) → varchar",
+    "bar(double, bigint, color, color) → varchar"
+   ],
+   "description": ""
+  },
+  {
+   "name": "beta_cdf",
+   "kind": "scalar",
+   "signatures": [
+    "beta_cdf(double, double, double) → double"
+   ],
+   "description": "Beta cdf given the a, b parameters and value"
+  },
+  {
+   "name": "bit_count",
+   "kind": "scalar",
+   "signatures": [
+    "bit_count(bigint, bigint) → bigint"
+   ],
+   "description": "Count number of set bits in 2's complement representation"
+  },
+  {
+   "name": "bitwise_and",
+   "kind": "scalar",
+   "signatures": [
+    "bitwise_and(bigint, bigint) → bigint"
+   ],
+   "description": "Bitwise AND in 2's complement arithmetic"
+  },
+  {
+   "name": "bitwise_and_agg",
+   "kind": "aggregate",
+   "signatures": [
+    "bitwise_and_agg(bigint) → bigint"
+   ],
+   "description": ""
+  },
+  {
+   "name": "bitwise_left_shift",
+   "kind": "scalar",
+   "signatures": [
+    "bitwise_left_shift(bigint, integer) → bigint",
+    "bitwise_left_shift(integer, integer) → integer",
+    "bitwise_left_shift(smallint, integer) → smallint",
+    "bitwise_left_shift(tinyint, integer) → tinyint"
+   ],
+   "description": "bitwise left shift"
+  },
+  {
+   "name": "bitwise_not",
+   "kind": "scalar",
+   "signatures": [
+    "bitwise_not(bigint) → bigint"
+   ],
+   "description": "Bitwise NOT in 2's complement arithmetic"
+  },
+  {
+   "name": "bitwise_or",
+   "kind": "scalar",
+   "signatures": [
+    "bitwise_or(bigint, bigint) → bigint"
+   ],
+   "description": "Bitwise OR in 2's complement arithmetic"
+  },
+  {
+   "name": "bitwise_or_agg",
+   "kind": "aggregate",
+   "signatures": [
+    "bitwise_or_agg(bigint) → bigint"
+   ],
+   "description": ""
+  },
+  {
+   "name": "bitwise_right_shift",
+   "kind": "scalar",
+   "signatures": [
+    "bitwise_right_shift(bigint, integer) → bigint",
+    "bitwise_right_shift(integer, integer) → integer",
+    "bitwise_right_shift(smallint, integer) → smallint",
+    "bitwise_right_shift(tinyint, integer) → tinyint"
+   ],
+   "description": "bitwise logical right shift"
+  },
+  {
+   "name": "bitwise_right_shift_arithmetic",
+   "kind": "scalar",
+   "signatures": [
+    "bitwise_right_shift_arithmetic(bigint, integer) → bigint",
+    "bitwise_right_shift_arithmetic(integer, integer) → integer",
+    "bitwise_right_shift_arithmetic(smallint, integer) → smallint",
+    "bitwise_right_shift_arithmetic(tinyint, integer) → tinyint"
+   ],
+   "description": "bitwise arithmetic right shift"
+  },
+  {
+   "name": "bitwise_xor",
+   "kind": "scalar",
+   "signatures": [
+    "bitwise_xor(bigint, bigint) → bigint"
+   ],
+   "description": "Bitwise XOR in 2's complement arithmetic"
+  },
+  {
+   "name": "bitwise_xor_agg",
+   "kind": "aggregate",
+   "signatures": [
+    "bitwise_xor_agg(bigint) → bigint"
+   ],
+   "description": ""
+  },
+  {
+   "name": "bool_and",
+   "kind": "aggregate",
+   "signatures": [
+    "bool_and(boolean) → boolean"
+   ],
+   "description": ""
+  },
+  {
+   "name": "bool_or",
+   "kind": "aggregate",
+   "signatures": [
+    "bool_or(boolean) → boolean"
+   ],
+   "description": ""
+  },
+  {
+   "name": "cardinality",
+   "kind": "scalar",
+   "signatures": [
+    "cardinality(array(E)) → bigint",
+    "cardinality(hyperloglog) → bigint",
+    "cardinality(map(K,V)) → bigint",
+    "cardinality(setdigest) → bigint"
+   ],
+   "description": "Returns the cardinality (length) of the array"
+  },
+  {
+   "name": "cbrt",
+   "kind": "scalar",
+   "signatures": [
+    "cbrt(double) → double"
+   ],
+   "description": "Cube root"
+  },
+  {
+   "name": "ceil",
+   "kind": "scalar",
+   "signatures": [
+    "ceil(bigint) → bigint",
+    "ceil(decimal(p,s)) → decimal(rp,0)",
+    "ceil(double) → double",
+    "ceil(integer) → integer",
+    "ceil(number) → number",
+    "ceil(real) → real",
+    "ceil(smallint) → smallint",
+    "ceil(tinyint) → tinyint"
+   ],
+   "description": "Round up to nearest integer"
+  },
+  {
+   "name": "ceiling",
+   "kind": "scalar",
+   "signatures": [
+    "ceiling(bigint) → bigint",
+    "ceiling(decimal(p,s)) → decimal(rp,0)",
+    "ceiling(double) → double",
+    "ceiling(integer) → integer",
+    "ceiling(number) → number",
+    "ceiling(real) → real",
+    "ceiling(smallint) → smallint",
+    "ceiling(tinyint) → tinyint"
+   ],
+   "description": "Round up to nearest integer"
+  },
+  {
+   "name": "checksum",
+   "kind": "aggregate",
+   "signatures": [
+    "checksum(T) → varbinary"
+   ],
+   "description": "Checksum of the given values"
+  },
+  {
+   "name": "chr",
+   "kind": "scalar",
+   "signatures": [
+    "chr(bigint) → varchar(1)"
+   ],
+   "description": "Convert Unicode code point to a string"
+  },
+  {
+   "name": "codepoint",
+   "kind": "scalar",
+   "signatures": [
+    "codepoint(varchar(1)) → integer"
+   ],
+   "description": "Returns Unicode code point of a single character string"
+  },
+  {
+   "name": "color",
+   "kind": "scalar",
+   "signatures": [
+    "color(double, color, color) → color",
+    "color(double, double, double, color, color) → color",
+    "color(varchar(x)) → color"
+   ],
+   "description": ""
+  },
+  {
+   "name": "combinations",
+   "kind": "scalar",
+   "signatures": [
+    "combinations(array(T), integer) → array(array(T))"
+   ],
+   "description": "Return n-element subsets from array"
+  },
+  {
+   "name": "concat",
+   "kind": "scalar",
+   "signatures": [
+    "concat(E, array(E)) → array(E)",
+    "concat(array(E)) → array(E)",
+    "concat(array(E), E) → array(E)",
+    "concat(char(x), char(y)) → char(u)",
+    "concat(varbinary) → varbinary",
+    "concat(varchar) → varchar"
+   ],
+   "description": "Concatenates an element to an array"
+  },
+  {
+   "name": "concat_ws",
+   "kind": "scalar",
+   "signatures": [
+    "concat_ws(varchar, array(varchar)) → varchar",
+    "concat_ws(varchar, varchar) → varchar"
+   ],
+   "description": "Concatenates elements using separator"
+  },
+  {
+   "name": "contains",
+   "kind": "scalar",
+   "signatures": [
+    "contains(array(T), T) → boolean",
+    "contains(varchar, ipaddress) → boolean"
+   ],
+   "description": "Determines whether given value exists in the array"
+  },
+  {
+   "name": "contains_sequence",
+   "kind": "scalar",
+   "signatures": [
+    "contains_sequence(array(T), array(T)) → boolean"
+   ],
+   "description": "Determines whether an array contains a sequence, with the values in the exact order"
+  },
+  {
+   "name": "corr",
+   "kind": "aggregate",
+   "signatures": [
+    "corr(double, double) → double",
+    "corr(real, real) → real"
+   ],
+   "description": ""
+  },
+  {
+   "name": "cos",
+   "kind": "scalar",
+   "signatures": [
+    "cos(double) → double"
+   ],
+   "description": "Cosine"
+  },
+  {
+   "name": "cosh",
+   "kind": "scalar",
+   "signatures": [
+    "cosh(double) → double"
+   ],
+   "description": "Hyperbolic cosine"
+  },
+  {
+   "name": "cosine_distance",
+   "kind": "scalar",
+   "signatures": [
+    "cosine_distance(array(double), array(double)) → double",
+    "cosine_distance(map(varchar,double), map(varchar,double)) → double"
+   ],
+   "description": "Calculates the cosine distance between two vectors"
+  },
+  {
+   "name": "cosine_similarity",
+   "kind": "scalar",
+   "signatures": [
+    "cosine_similarity(array(double), array(double)) → double",
+    "cosine_similarity(map(varchar,double), map(varchar,double)) → double"
+   ],
+   "description": "Calculates the cosine similarity between two vectors"
+  },
+  {
+   "name": "count",
+   "kind": "aggregate",
+   "signatures": [
+    "count() → bigint",
+    "count(T) → bigint"
+   ],
+   "description": "Counts the non-null values"
+  },
+  {
+   "name": "count_if",
+   "kind": "aggregate",
+   "signatures": [
+    "count_if(boolean) → bigint"
+   ],
+   "description": ""
+  },
+  {
+   "name": "covar_pop",
+   "kind": "aggregate",
+   "signatures": [
+    "covar_pop(double, double) → double",
+    "covar_pop(real, real) → real"
+   ],
+   "description": ""
+  },
+  {
+   "name": "covar_samp",
+   "kind": "aggregate",
+   "signatures": [
+    "covar_samp(double, double) → double",
+    "covar_samp(real, real) → real"
+   ],
+   "description": ""
+  },
+  {
+   "name": "crc32",
+   "kind": "scalar",
+   "signatures": [
+    "crc32(varbinary) → bigint"
+   ],
+   "description": "Compute CRC-32"
+  },
+  {
+   "name": "cume_dist",
+   "kind": "window",
+   "signatures": [
+    "cume_dist() → double"
+   ],
+   "description": ""
+  },
+  {
+   "name": "current_date",
+   "kind": "scalar",
+   "signatures": [
+    "current_date() → date"
+   ],
+   "description": "Current date"
+  },
+  {
+   "name": "current_groups",
+   "kind": "scalar",
+   "signatures": [
+    "current_groups() → array(varchar)"
+   ],
+   "description": "Current groups of current user"
+  },
+  {
+   "name": "current_timezone",
+   "kind": "scalar",
+   "signatures": [
+    "current_timezone() → varchar"
+   ],
+   "description": "Current time zone"
+  },
+  {
+   "name": "date",
+   "kind": "scalar",
+   "signatures": [
+    "date(timestamp(p)) → date",
+    "date(timestamp(p) with time zone) → date",
+    "date(varchar(x)) → date"
+   ],
+   "description": ""
+  },
+  {
+   "name": "date_add",
+   "kind": "scalar",
+   "signatures": [
+    "date_add(varchar(x), bigint, date) → date",
+    "date_add(varchar(x), bigint, time(p)) → time(p)",
+    "date_add(varchar(x), bigint, time(p) with time zone) → time(p) with time zone",
+    "date_add(varchar(x), bigint, timestamp(p)) → timestamp(p)",
+    "date_add(varchar(x), bigint, timestamp(p) with time zone) → timestamp(p) with time zone"
+   ],
+   "description": "Add the specified amount of date to the given date"
+  },
+  {
+   "name": "date_diff",
+   "kind": "scalar",
+   "signatures": [
+    "date_diff(varchar(x), date, date) → bigint",
+    "date_diff(varchar(x), time(p) with time zone, time(p) with time zone) → bigint",
+    "date_diff(varchar(x), time(p), time(p)) → bigint",
+    "date_diff(varchar(x), timestamp(p) with time zone, timestamp(p) with time zone) → bigint",
+    "date_diff(varchar(x), timestamp(p), timestamp(p)) → bigint"
+   ],
+   "description": "Difference of the given dates in the given unit"
+  },
+  {
+   "name": "date_format",
+   "kind": "scalar",
+   "signatures": [
+    "date_format(timestamp(p) with time zone, varchar(x)) → varchar",
+    "date_format(timestamp(p), varchar(x)) → varchar"
+   ],
+   "description": "Formats the given timestamp by the given format"
+  },
+  {
+   "name": "date_parse",
+   "kind": "scalar",
+   "signatures": [
+    "date_parse(varchar(x), varchar(y)) → timestamp(3)"
+   ],
+   "description": ""
+  },
+  {
+   "name": "date_trunc",
+   "kind": "scalar",
+   "signatures": [
+    "date_trunc(varchar(x), date) → date",
+    "date_trunc(varchar(x), time(p)) → time(p)",
+    "date_trunc(varchar(x), time(p) with time zone) → time(p) with time zone",
+    "date_trunc(varchar(x), timestamp(p)) → timestamp(p)",
+    "date_trunc(varchar(x), timestamp(p) with time zone) → timestamp(p) with time zone"
+   ],
+   "description": "Truncate to the specified precision in the session timezone"
+  },
+  {
+   "name": "day",
+   "kind": "scalar",
+   "signatures": [
+    "day(date) → bigint",
+    "day(interval day to second) → bigint",
+    "day(timestamp(p)) → bigint",
+    "day(timestamp(p) with time zone) → bigint"
+   ],
+   "description": "Day of the month of the given date"
+  },
+  {
+   "name": "day_of_month",
+   "kind": "scalar",
+   "signatures": [
+    "day_of_month(date) → bigint",
+    "day_of_month(interval day to second) → bigint",
+    "day_of_month(timestamp(p)) → bigint",
+    "day_of_month(timestamp(p) with time zone) → bigint"
+   ],
+   "description": "Day of the month of the given date"
+  },
+  {
+   "name": "day_of_week",
+   "kind": "scalar",
+   "signatures": [
+    "day_of_week(date) → bigint",
+    "day_of_week(timestamp(p)) → bigint",
+    "day_of_week(timestamp(p) with time zone) → bigint"
+   ],
+   "description": "Day of the week of the given date"
+  },
+  {
+   "name": "day_of_year",
+   "kind": "scalar",
+   "signatures": [
+    "day_of_year(date) → bigint",
+    "day_of_year(timestamp(p)) → bigint",
+    "day_of_year(timestamp(p) with time zone) → bigint"
+   ],
+   "description": "Day of the year of the given date"
+  },
+  {
+   "name": "degrees",
+   "kind": "scalar",
+   "signatures": [
+    "degrees(double) → double"
+   ],
+   "description": "Converts an angle in radians to degrees"
+  },
+  {
+   "name": "dense_rank",
+   "kind": "window",
+   "signatures": [
+    "dense_rank() → bigint"
+   ],
+   "description": ""
+  },
+  {
+   "name": "dot_product",
+   "kind": "scalar",
+   "signatures": [
+    "dot_product(array(double), array(double)) → double"
+   ],
+   "description": "Calculates the dot product between two vectors"
+  },
+  {
+   "name": "dow",
+   "kind": "scalar",
+   "signatures": [
+    "dow(date) → bigint",
+    "dow(timestamp(p)) → bigint",
+    "dow(timestamp(p) with time zone) → bigint"
+   ],
+   "description": "Day of the week of the given date"
+  },
+  {
+   "name": "doy",
+   "kind": "scalar",
+   "signatures": [
+    "doy(date) → bigint",
+    "doy(timestamp(p)) → bigint",
+    "doy(timestamp(p) with time zone) → bigint"
+   ],
+   "description": "Day of the year of the given date"
+  },
+  {
+   "name": "e",
+   "kind": "scalar",
+   "signatures": [
+    "e() → double"
+   ],
+   "description": "Euler's number"
+  },
+  {
+   "name": "element_at",
+   "kind": "scalar",
+   "signatures": [
+    "element_at(array(E), bigint) → E",
+    "element_at(map(K,V), K) → V"
+   ],
+   "description": "Get element of array at given index"
+  },
+  {
+   "name": "empty_approx_set",
+   "kind": "scalar",
+   "signatures": [
+    "empty_approx_set() → hyperloglog"
+   ],
+   "description": "An empty HyperLogLog instance"
+  },
+  {
+   "name": "ends_with",
+   "kind": "scalar",
+   "signatures": [
+    "ends_with(varchar(x), varchar(y)) → boolean"
+   ],
+   "description": "Determine whether source ends with suffix or not"
+  },
+  {
+   "name": "euclidean_distance",
+   "kind": "scalar",
+   "signatures": [
+    "euclidean_distance(array(double), array(double)) → double"
+   ],
+   "description": "Calculates the euclidean distance between two vectors"
+  },
+  {
+   "name": "every",
+   "kind": "aggregate",
+   "signatures": [
+    "every(boolean) → boolean"
+   ],
+   "description": ""
+  },
+  {
+   "name": "exclude_columns",
+   "kind": "table",
+   "signatures": [
+    "exclude_columns(unknown, unknown) → unknown"
+   ],
+   "description": ""
+  },
+  {
+   "name": "exp",
+   "kind": "scalar",
+   "signatures": [
+    "exp(double) → double"
+   ],
+   "description": "Euler's number raised to the given power"
+  },
+  {
+   "name": "filter",
+   "kind": "scalar",
+   "signatures": [
+    "filter(array(T), function(T,boolean)) → array(T)"
+   ],
+   "description": "Return array containing elements that match the given predicate"
+  },
+  {
+   "name": "first_value",
+   "kind": "window",
+   "signatures": [
+    "first_value(T) → T"
+   ],
+   "description": ""
+  },
+  {
+   "name": "flatten",
+   "kind": "scalar",
+   "signatures": [
+    "flatten(array(array(E))) → array(E)"
+   ],
+   "description": "Flattens the given array"
+  },
+  {
+   "name": "floor",
+   "kind": "scalar",
+   "signatures": [
+    "floor(bigint) → bigint",
+    "floor(decimal(p,s)) → decimal(rp,0)",
+    "floor(double) → double",
+    "floor(integer) → integer",
+    "floor(number) → number",
+    "floor(real) → real",
+    "floor(smallint) → smallint",
+    "floor(tinyint) → tinyint"
+   ],
+   "description": "Round down to nearest integer"
+  },
+  {
+   "name": "format_datetime",
+   "kind": "scalar",
+   "signatures": [
+    "format_datetime(timestamp(p) with time zone, varchar(x)) → varchar",
+    "format_datetime(timestamp(p), varchar(x)) → varchar"
+   ],
+   "description": "Formats the given time by the given format"
+  },
+  {
+   "name": "format_number",
+   "kind": "scalar",
+   "signatures": [
+    "format_number(bigint) → varchar",
+    "format_number(double) → varchar"
+   ],
+   "description": "Formats large number using a unit symbol"
+  },
+  {
+   "name": "from_base",
+   "kind": "scalar",
+   "signatures": [
+    "from_base(varchar(x), bigint) → bigint"
+   ],
+   "description": "Convert a string in the given base to a number"
+  },
+  {
+   "name": "from_base32",
+   "kind": "scalar",
+   "signatures": [
+    "from_base32(varbinary) → varbinary",
+    "from_base32(varchar(x)) → varbinary"
+   ],
+   "description": "Decode base32 encoded binary data"
+  },
+  {
+   "name": "from_base64",
+   "kind": "scalar",
+   "signatures": [
+    "from_base64(varbinary) → varbinary",
+    "from_base64(varchar(x)) → varbinary"
+   ],
+   "description": "Decode base64 encoded binary data"
+  },
+  {
+   "name": "from_base64url",
+   "kind": "scalar",
+   "signatures": [
+    "from_base64url(varbinary) → varbinary",
+    "from_base64url(varchar(x)) → varbinary"
+   ],
+   "description": "Decode URL safe base64 encoded binary data"
+  },
+  {
+   "name": "from_big_endian_32",
+   "kind": "scalar",
+   "signatures": [
+    "from_big_endian_32(varbinary) → integer"
+   ],
+   "description": "Decode bigint value from a 32-bit 2's complement big endian varbinary"
+  },
+  {
+   "name": "from_big_endian_64",
+   "kind": "scalar",
+   "signatures": [
+    "from_big_endian_64(varbinary) → bigint"
+   ],
+   "description": "Decode bigint value from a 64-bit 2's complement big endian varbinary"
+  },
+  {
+   "name": "from_hex",
+   "kind": "scalar",
+   "signatures": [
+    "from_hex(varbinary) → varbinary",
+    "from_hex(varchar(x)) → varbinary"
+   ],
+   "description": "Decode hex encoded binary data"
+  },
+  {
+   "name": "from_ieee754_32",
+   "kind": "scalar",
+   "signatures": [
+    "from_ieee754_32(varbinary) → real"
+   ],
+   "description": "Decode the 32-bit big-endian binary in IEEE 754 single-precision floating-point format"
+  },
+  {
+   "name": "from_ieee754_64",
+   "kind": "scalar",
+   "signatures": [
+    "from_ieee754_64(varbinary) → double"
+   ],
+   "description": "Decode the 64-bit big-endian binary in IEEE 754 double-precision floating-point format"
+  },
+  {
+   "name": "from_iso8601_date",
+   "kind": "scalar",
+   "signatures": [
+    "from_iso8601_date(varchar(x)) → date"
+   ],
+   "description": ""
+  },
+  {
+   "name": "from_iso8601_timestamp",
+   "kind": "scalar",
+   "signatures": [
+    "from_iso8601_timestamp(varchar(x)) → timestamp(3) with time zone"
+   ],
+   "description": ""
+  },
+  {
+   "name": "from_iso8601_timestamp_nanos",
+   "kind": "scalar",
+   "signatures": [
+    "from_iso8601_timestamp_nanos(varchar(x)) → timestamp(9) with time zone"
+   ],
+   "description": ""
+  },
+  {
+   "name": "from_unixtime",
+   "kind": "scalar",
+   "signatures": [
+    "from_unixtime(double) → timestamp(3) with time zone",
+    "from_unixtime(double, bigint, bigint) → timestamp(3) with time zone",
+    "from_unixtime(double, varchar(x)) → timestamp(3) with time zone"
+   ],
+   "description": ""
+  },
+  {
+   "name": "from_unixtime_nanos",
+   "kind": "scalar",
+   "signatures": [
+    "from_unixtime_nanos(bigint) → timestamp(9) with time zone",
+    "from_unixtime_nanos(decimal(p,s)) → timestamp(9) with time zone"
+   ],
+   "description": ""
+  },
+  {
+   "name": "from_utf8",
+   "kind": "scalar",
+   "signatures": [
+    "from_utf8(varbinary) → varchar",
+    "from_utf8(varbinary, bigint) → varchar",
+    "from_utf8(varbinary, varchar(x)) → varchar"
+   ],
+   "description": "Decodes the UTF-8 encoded string"
+  },
+  {
+   "name": "geometric_mean",
+   "kind": "aggregate",
+   "signatures": [
+    "geometric_mean(bigint) → double",
+    "geometric_mean(double) → double",
+    "geometric_mean(real) → real"
+   ],
+   "description": ""
+  },
+  {
+   "name": "greatest",
+   "kind": "scalar",
+   "signatures": [
+    "greatest(E) → E"
+   ],
+   "description": "Get the largest of the given values"
+  },
+  {
+   "name": "hamming_distance",
+   "kind": "scalar",
+   "signatures": [
+    "hamming_distance(varchar(x), varchar(y)) → bigint"
+   ],
+   "description": "Computes Hamming distance between two strings"
+  },
+  {
+   "name": "hash_counts",
+   "kind": "scalar",
+   "signatures": [
+    "hash_counts(setdigest) → map(bigint,smallint)"
+   ],
+   "description": ""
+  },
+  {
+   "name": "histogram",
+   "kind": "aggregate",
+   "signatures": [
+    "histogram(T) → map(T,bigint)"
+   ],
+   "description": "Count the number of times each value occurs"
+  },
+  {
+   "name": "hmac_md5",
+   "kind": "scalar",
+   "signatures": [
+    "hmac_md5(varbinary, varbinary) → varbinary"
+   ],
+   "description": "Compute HMAC with MD5"
+  },
+  {
+   "name": "hmac_sha1",
+   "kind": "scalar",
+   "signatures": [
+    "hmac_sha1(varbinary, varbinary) → varbinary"
+   ],
+   "description": "Compute HMAC with SHA1"
+  },
+  {
+   "name": "hmac_sha256",
+   "kind": "scalar",
+   "signatures": [
+    "hmac_sha256(varbinary, varbinary) → varbinary"
+   ],
+   "description": "Compute HMAC with SHA256"
+  },
+  {
+   "name": "hmac_sha512",
+   "kind": "scalar",
+   "signatures": [
+    "hmac_sha512(varbinary, varbinary) → varbinary"
+   ],
+   "description": "Compute HMAC with SHA512"
+  },
+  {
+   "name": "hour",
+   "kind": "scalar",
+   "signatures": [
+    "hour(interval day to second) → bigint",
+    "hour(time(p)) → bigint",
+    "hour(time(p) with time zone) → bigint",
+    "hour(timestamp(p)) → bigint",
+    "hour(timestamp(p) with time zone) → bigint"
+   ],
+   "description": "Hour of the day of the given interval"
+  },
+  {
+   "name": "human_readable_seconds",
+   "kind": "scalar",
+   "signatures": [
+    "human_readable_seconds(double) → varchar"
+   ],
+   "description": ""
+  },
+  {
+   "name": "infinity",
+   "kind": "scalar",
+   "signatures": [
+    "infinity() → double"
+   ],
+   "description": "Infinity"
+  },
+  {
+   "name": "intersection_cardinality",
+   "kind": "scalar",
+   "signatures": [
+    "intersection_cardinality(setdigest, setdigest) → bigint"
+   ],
+   "description": ""
+  },
+  {
+   "name": "inverse_beta_cdf",
+   "kind": "scalar",
+   "signatures": [
+    "inverse_beta_cdf(double, double, double) → double"
+   ],
+   "description": "Inverse of Beta cdf given a, b parameters and probability"
+  },
+  {
+   "name": "inverse_normal_cdf",
+   "kind": "scalar",
+   "signatures": [
+    "inverse_normal_cdf(double, double, double) → double"
+   ],
+   "description": "Inverse of normal cdf given a mean, std, and probability"
+  },
+  {
+   "name": "is_finite",
+   "kind": "scalar",
+   "signatures": [
+    "is_finite(double) → boolean",
+    "is_finite(number) → boolean",
+    "is_finite(real) → boolean"
+   ],
+   "description": "Test if value is finite"
+  },
+  {
+   "name": "is_infinite",
+   "kind": "scalar",
+   "signatures": [
+    "is_infinite(double) → boolean",
+    "is_infinite(number) → boolean"
+   ],
+   "description": "Test if value is infinite"
+  },
+  {
+   "name": "is_json_scalar",
+   "kind": "scalar",
+   "signatures": [
+    "is_json_scalar(json) → boolean",
+    "is_json_scalar(varchar(x)) → boolean"
+   ],
+   "description": ""
+  },
+  {
+   "name": "is_nan",
+   "kind": "scalar",
+   "signatures": [
+    "is_nan(double) → boolean",
+    "is_nan(number) → boolean",
+    "is_nan(real) → boolean"
+   ],
+   "description": "Test if value is not-a-number"
+  },
+  {
+   "name": "jaccard_index",
+   "kind": "scalar",
+   "signatures": [
+    "jaccard_index(setdigest, setdigest) → double"
+   ],
+   "description": ""
+  },
+  {
+   "name": "json_array_contains",
+   "kind": "scalar",
+   "signatures": [
+    "json_array_contains(json, bigint) → boolean",
+    "json_array_contains(json, boolean) → boolean",
+    "json_array_contains(json, double) → boolean",
+    "json_array_contains(json, varchar(x)) → boolean",
+    "json_array_contains(varchar(x), bigint) → boolean",
+    "json_array_contains(varchar(x), boolean) → boolean",
+    "json_array_contains(varchar(x), double) → boolean",
+    "json_array_contains(varchar(x), varchar(y)) → boolean"
+   ],
+   "description": ""
+  },
+  {
+   "name": "json_array_get",
+   "kind": "scalar",
+   "signatures": [
+    "json_array_get(json, bigint) → json",
+    "json_array_get(varchar(x), bigint) → json"
+   ],
+   "description": ""
+  },
+  {
+   "name": "json_array_length",
+   "kind": "scalar",
+   "signatures": [
+    "json_array_length(json) → bigint",
+    "json_array_length(varchar(x)) → bigint"
+   ],
+   "description": ""
+  },
+  {
+   "name": "json_extract",
+   "kind": "scalar",
+   "signatures": [
+    "json_extract(json, jsonpath) → json",
+    "json_extract(varchar(x), jsonpath) → json"
+   ],
+   "description": ""
+  },
+  {
+   "name": "json_extract_scalar",
+   "kind": "scalar",
+   "signatures": [
+    "json_extract_scalar(json, jsonpath) → varchar",
+    "json_extract_scalar(varchar(x), jsonpath) → varchar(x)"
+   ],
+   "description": ""
+  },
+  {
+   "name": "json_format",
+   "kind": "scalar",
+   "signatures": [
+    "json_format(json) → varchar"
+   ],
+   "description": ""
+  },
+  {
+   "name": "json_parse",
+   "kind": "scalar",
+   "signatures": [
+    "json_parse(varchar(x)) → json"
+   ],
+   "description": ""
+  },
+  {
+   "name": "json_size",
+   "kind": "scalar",
+   "signatures": [
+    "json_size(json, jsonpath) → bigint",
+    "json_size(varchar(x), jsonpath) → bigint"
+   ],
+   "description": ""
+  },
+  {
+   "name": "kurtosis",
+   "kind": "aggregate",
+   "signatures": [
+    "kurtosis(bigint) → double",
+    "kurtosis(double) → double"
+   ],
+   "description": "Returns the (excess) kurtosis of the argument"
+  },
+  {
+   "name": "lag",
+   "kind": "window",
+   "signatures": [
+    "lag(T) → T",
+    "lag(T, bigint) → T",
+    "lag(T, bigint, T) → T"
+   ],
+   "description": ""
+  },
+  {
+   "name": "last_day_of_month",
+   "kind": "scalar",
+   "signatures": [
+    "last_day_of_month(date) → date",
+    "last_day_of_month(timestamp(p)) → date",
+    "last_day_of_month(timestamp(p) with time zone) → date"
+   ],
+   "description": "Last day of the month of the given date"
+  },
+  {
+   "name": "last_value",
+   "kind": "window",
+   "signatures": [
+    "last_value(T) → T"
+   ],
+   "description": ""
+  },
+  {
+   "name": "lead",
+   "kind": "window",
+   "signatures": [
+    "lead(T) → T",
+    "lead(T, bigint) → T",
+    "lead(T, bigint, T) → T"
+   ],
+   "description": ""
+  },
+  {
+   "name": "least",
+   "kind": "scalar",
+   "signatures": [
+    "least(E) → E"
+   ],
+   "description": "Get the smallest of the given values"
+  },
+  {
+   "name": "length",
+   "kind": "scalar",
+   "signatures": [
+    "length(char(x)) → bigint",
+    "length(varbinary) → bigint",
+    "length(varchar(x)) → bigint"
+   ],
+   "description": "Count of code points of the given string"
+  },
+  {
+   "name": "levenshtein_distance",
+   "kind": "scalar",
+   "signatures": [
+    "levenshtein_distance(varchar(x), varchar(y)) → bigint"
+   ],
+   "description": "Computes Levenshtein distance between two strings"
+  },
+  {
+   "name": "listagg",
+   "kind": "aggregate",
+   "signatures": [
+    "listagg(varchar, varchar, boolean, varchar, boolean) → varchar"
+   ],
+   "description": "concatenates the input values with the specified separator"
+  },
+  {
+   "name": "ln",
+   "kind": "scalar",
+   "signatures": [
+    "ln(double) → double"
+   ],
+   "description": "Natural logarithm"
+  },
+  {
+   "name": "log",
+   "kind": "scalar",
+   "signatures": [
+    "log(double, double) → double"
+   ],
+   "description": "Logarithm to given base"
+  },
+  {
+   "name": "log10",
+   "kind": "scalar",
+   "signatures": [
+    "log10(double) → double"
+   ],
+   "description": "Logarithm to base 10"
+  },
+  {
+   "name": "log2",
+   "kind": "scalar",
+   "signatures": [
+    "log2(double) → double"
+   ],
+   "description": "Logarithm to base 2"
+  },
+  {
+   "name": "lower",
+   "kind": "scalar",
+   "signatures": [
+    "lower(char(x)) → char(x)",
+    "lower(varchar(x)) → varchar(x)"
+   ],
+   "description": "Converts the string to lower case"
+  },
+  {
+   "name": "lpad",
+   "kind": "scalar",
+   "signatures": [
+    "lpad(varbinary, bigint, varbinary) → varbinary",
+    "lpad(char(x), bigint, varchar(y)) → varchar",
+    "lpad(varchar(x), bigint, varchar(y)) → varchar"
+   ],
+   "description": "Pads a varbinary on the left"
+  },
+  {
+   "name": "ltrim",
+   "kind": "scalar",
+   "signatures": [
+    "ltrim(char(x)) → varchar(x)",
+    "ltrim(char(x), codepoints) → varchar(x)",
+    "ltrim(varchar(x)) → varchar(x)",
+    "ltrim(varchar(x), codepoints) → varchar(x)"
+   ],
+   "description": "Removes whitespace from the beginning of a string"
+  },
+  {
+   "name": "luhn_check",
+   "kind": "scalar",
+   "signatures": [
+    "luhn_check(varchar) → boolean"
+   ],
+   "description": "Checks that a string of digits is valid according to the Luhn algorithm"
+  },
+  {
+   "name": "make_set_digest",
+   "kind": "aggregate",
+   "signatures": [
+    "make_set_digest(T) → setdigest"
+   ],
+   "description": ""
+  },
+  {
+   "name": "map",
+   "kind": "scalar",
+   "signatures": [
+    "map(array(K), array(V)) → map(K,V)",
+    "map() → map(unknown,unknown)"
+   ],
+   "description": "Constructs a map from the given key/value arrays"
+  },
+  {
+   "name": "map_agg",
+   "kind": "aggregate",
+   "signatures": [
+    "map_agg(K, V) → map(K,V)"
+   ],
+   "description": "Aggregates all the rows (key/value pairs) into a single map"
+  },
+  {
+   "name": "map_concat",
+   "kind": "scalar",
+   "signatures": [
+    "map_concat(map(K,V)) → map(K,V)"
+   ],
+   "description": "Concatenates given maps"
+  },
+  {
+   "name": "map_entries",
+   "kind": "scalar",
+   "signatures": [
+    "map_entries(map(K,V)) → array(row(K,V))"
+   ],
+   "description": "Construct an array of entries from a given map"
+  },
+  {
+   "name": "map_filter",
+   "kind": "scalar",
+   "signatures": [
+    "map_filter(map(K,V), function(K,V,boolean)) → map(K,V)"
+   ],
+   "description": "return map containing entries that match the given predicate"
+  },
+  {
+   "name": "map_from_entries",
+   "kind": "scalar",
+   "signatures": [
+    "map_from_entries(array(row(K,V))) → map(K,V)"
+   ],
+   "description": "Construct a map from an array of entries"
+  },
+  {
+   "name": "map_keys",
+   "kind": "scalar",
+   "signatures": [
+    "map_keys(map(K,V)) → array(K)"
+   ],
+   "description": "Returns the keys of the given map(K,V) as an array"
+  },
+  {
+   "name": "map_union",
+   "kind": "aggregate",
+   "signatures": [
+    "map_union(map(K,V)) → map(K,V)"
+   ],
+   "description": "Aggregate all the maps into a single map"
+  },
+  {
+   "name": "map_values",
+   "kind": "scalar",
+   "signatures": [
+    "map_values(map(K,V)) → array(V)"
+   ],
+   "description": "Returns the values of the given map(K,V) as an array"
+  },
+  {
+   "name": "map_zip_with",
+   "kind": "scalar",
+   "signatures": [
+    "map_zip_with(map(K,V1), map(K,V2), function(K,V1,V2,V3)) → map(K,V3)"
+   ],
+   "description": "Merge two maps into a single map by applying the lambda function to the pair of values with the same key"
+  },
+  {
+   "name": "max",
+   "kind": "aggregate",
+   "signatures": [
+    "max(T) → T",
+    "max(E, bigint) → array(E)"
+   ],
+   "description": "Returns the maximum value of the argument"
+  },
+  {
+   "name": "max_by",
+   "kind": "aggregate",
+   "signatures": [
+    "max_by(V, K) → V",
+    "max_by(V, K, bigint) → array(V)"
+   ],
+   "description": "Returns the value of the first argument, associated with the maximum value of the second argument"
+  },
+  {
+   "name": "md5",
+   "kind": "scalar",
+   "signatures": [
+    "md5(varbinary) → varbinary"
+   ],
+   "description": "Compute md5 hash"
+  },
+  {
+   "name": "merge",
+   "kind": "aggregate",
+   "signatures": [
+    "merge(hyperloglog) → hyperloglog",
+    "merge(qdigest(V)) → qdigest(V)",
+    "merge(tdigest) → tdigest"
+   ],
+   "description": "Merges the input quantile digests into a single quantile digest"
+  },
+  {
+   "name": "merge_set_digest",
+   "kind": "aggregate",
+   "signatures": [
+    "merge_set_digest(setdigest) → setdigest"
+   ],
+   "description": ""
+  },
+  {
+   "name": "millisecond",
+   "kind": "scalar",
+   "signatures": [
+    "millisecond(interval day to second) → bigint",
+    "millisecond(time(p)) → bigint",
+    "millisecond(time(p) with time zone) → bigint",
+    "millisecond(timestamp(p)) → bigint",
+    "millisecond(timestamp(p) with time zone) → bigint"
+   ],
+   "description": "Millisecond of the second of the given interval"
+  },
+  {
+   "name": "min",
+   "kind": "aggregate",
+   "signatures": [
+    "min(T) → T",
+    "min(E, bigint) → array(E)"
+   ],
+   "description": "Returns the minimum value of the argument"
+  },
+  {
+   "name": "min_by",
+   "kind": "aggregate",
+   "signatures": [
+    "min_by(V, K) → V",
+    "min_by(V, K, bigint) → array(V)"
+   ],
+   "description": "Returns the value of the first argument, associated with the minimum value of the second argument"
+  },
+  {
+   "name": "minute",
+   "kind": "scalar",
+   "signatures": [
+    "minute(interval day to second) → bigint",
+    "minute(time(p)) → bigint",
+    "minute(time(p) with time zone) → bigint",
+    "minute(timestamp(p)) → bigint",
+    "minute(timestamp(p) with time zone) → bigint"
+   ],
+   "description": "Minute of the hour of the given interval"
+  },
+  {
+   "name": "mod",
+   "kind": "scalar",
+   "signatures": [
+    "mod(bigint, bigint) → bigint",
+    "mod(decimal(a_precision,a_scale), decimal(b_precision,b_scale)) → decimal(r_precision,r_scale)",
+    "mod(double, double) → double",
+    "mod(integer, integer) → integer",
+    "mod(number, number) → number",
+    "mod(real, real) → real",
+    "mod(smallint, smallint) → smallint",
+    "mod(tinyint, tinyint) → tinyint"
+   ],
+   "description": "Remainder of given quotient"
+  },
+  {
+   "name": "month",
+   "kind": "scalar",
+   "signatures": [
+    "month(date) → bigint",
+    "month(interval year to month) → bigint",
+    "month(timestamp(p)) → bigint",
+    "month(timestamp(p) with time zone) → bigint"
+   ],
+   "description": "Month of the year of the given date"
+  },
+  {
+   "name": "multimap_agg",
+   "kind": "aggregate",
+   "signatures": [
+    "multimap_agg(K, V) → map(K,array(V))"
+   ],
+   "description": "Aggregates all the rows (key/value pairs) into a single multimap"
+  },
+  {
+   "name": "multimap_from_entries",
+   "kind": "scalar",
+   "signatures": [
+    "multimap_from_entries(array(row(K,V))) → map(K,array(V))"
+   ],
+   "description": "Construct a multimap from an array of entries"
+  },
+  {
+   "name": "murmur3",
+   "kind": "scalar",
+   "signatures": [
+    "murmur3(varbinary) → varbinary"
+   ],
+   "description": "Compute murmur3 hash"
+  },
+  {
+   "name": "nan",
+   "kind": "scalar",
+   "signatures": [
+    "nan() → double"
+   ],
+   "description": "Constant representing not-a-number"
+  },
+  {
+   "name": "ngrams",
+   "kind": "scalar",
+   "signatures": [
+    "ngrams(array(T), integer) → array(array(T))"
+   ],
+   "description": "Return N-grams for the input"
+  },
+  {
+   "name": "none_match",
+   "kind": "scalar",
+   "signatures": [
+    "none_match(array(T), function(T,boolean)) → boolean"
+   ],
+   "description": "Returns true if all elements of the array don't match the given predicate"
+  },
+  {
+   "name": "normal_cdf",
+   "kind": "scalar",
+   "signatures": [
+    "normal_cdf(double, double, double) → double"
+   ],
+   "description": "Normal cdf given a mean, standard deviation, and value"
+  },
+  {
+   "name": "normalize",
+   "kind": "scalar",
+   "signatures": [
+    "normalize(varchar(x), varchar(y)) → varchar"
+   ],
+   "description": "Transforms the string to normalized form"
+  },
+  {
+   "name": "now",
+   "kind": "scalar",
+   "signatures": [
+    "now() → timestamp(3) with time zone"
+   ],
+   "description": "Current timestamp with time zone"
+  },
+  {
+   "name": "nth_value",
+   "kind": "window",
+   "signatures": [
+    "nth_value(T, bigint) → T"
+   ],
+   "description": ""
+  },
+  {
+   "name": "ntile",
+   "kind": "window",
+   "signatures": [
+    "ntile(bigint) → bigint"
+   ],
+   "description": ""
+  },
+  {
+   "name": "numeric_histogram",
+   "kind": "aggregate",
+   "signatures": [
+    "numeric_histogram(bigint, double) → map(double,double)",
+    "numeric_histogram(bigint, double, double) → map(double,double)",
+    "numeric_histogram(bigint, real) → map(real,real)",
+    "numeric_histogram(bigint, real, double) → map(real,real)"
+   ],
+   "description": ""
+  },
+  {
+   "name": "parse_data_size",
+   "kind": "scalar",
+   "signatures": [
+    "parse_data_size(varchar(x)) → decimal(38,0)"
+   ],
+   "description": "Converts data size string to bytes"
+  },
+  {
+   "name": "parse_datetime",
+   "kind": "scalar",
+   "signatures": [
+    "parse_datetime(varchar(x), varchar(y)) → timestamp(3) with time zone"
+   ],
+   "description": "Parses the specified date/time by the given format"
+  },
+  {
+   "name": "parse_duration",
+   "kind": "scalar",
+   "signatures": [
+    "parse_duration(varchar(x)) → interval day to second"
+   ],
+   "description": "Convert duration string to an interval"
+  },
+  {
+   "name": "parse_presto_data_size",
+   "kind": "scalar",
+   "signatures": [
+    "parse_presto_data_size(varchar(x)) → decimal(38,0)"
+   ],
+   "description": "Converts data size string to bytes"
+  },
+  {
+   "name": "percent_rank",
+   "kind": "window",
+   "signatures": [
+    "percent_rank() → double"
+   ],
+   "description": ""
+  },
+  {
+   "name": "pi",
+   "kind": "scalar",
+   "signatures": [
+    "pi() → double"
+   ],
+   "description": "The constant Pi"
+  },
+  {
+   "name": "pow",
+   "kind": "scalar",
+   "signatures": [
+    "pow(double, double) → double"
+   ],
+   "description": "Value raised to the power of exponent"
+  },
+  {
+   "name": "power",
+   "kind": "scalar",
+   "signatures": [
+    "power(double, double) → double"
+   ],
+   "description": "Value raised to the power of exponent"
+  },
+  {
+   "name": "qdigest_agg",
+   "kind": "aggregate",
+   "signatures": [
+    "qdigest_agg(bigint) → qdigest(bigint)",
+    "qdigest_agg(bigint, bigint) → qdigest(bigint)",
+    "qdigest_agg(bigint, bigint, double) → qdigest(bigint)",
+    "qdigest_agg(double) → qdigest(double)",
+    "qdigest_agg(double, bigint) → qdigest(double)",
+    "qdigest_agg(double, bigint, double) → qdigest(double)",
+    "qdigest_agg(real) → qdigest(real)",
+    "qdigest_agg(real, bigint) → qdigest(real)",
+    "qdigest_agg(real, bigint, double) → qdigest(real)"
+   ],
+   "description": "Returns a qdigest from the set of bigints"
+  },
+  {
+   "name": "quantile_at_value",
+   "kind": "scalar",
+   "signatures": [
+    "quantile_at_value(qdigest(bigint), bigint) → double",
+    "quantile_at_value(qdigest(double), double) → double",
+    "quantile_at_value(qdigest(real), real) → double"
+   ],
+   "description": "Given an input x between min/max values of qdigest, find which quantile is represented by that value"
+  },
+  {
+   "name": "quarter",
+   "kind": "scalar",
+   "signatures": [
+    "quarter(date) → bigint",
+    "quarter(timestamp(p)) → bigint",
+    "quarter(timestamp(p) with time zone) → bigint"
+   ],
+   "description": "Quarter of the year of the given date"
+  },
+  {
+   "name": "radians",
+   "kind": "scalar",
+   "signatures": [
+    "radians(double) → double"
+   ],
+   "description": "Converts an angle in degrees to radians"
+  },
+  {
+   "name": "rand",
+   "kind": "scalar",
+   "signatures": [
+    "rand(bigint) → bigint",
+    "rand(bigint, bigint) → bigint",
+    "rand() → double",
+    "rand(integer) → integer",
+    "rand(integer, integer) → integer",
+    "rand(smallint) → smallint",
+    "rand(smallint, smallint) → smallint",
+    "rand(tinyint) → tinyint",
+    "rand(tinyint, tinyint) → tinyint"
+   ],
+   "description": "A pseudo-random number between 0 and value (exclusive)"
+  },
+  {
+   "name": "random",
+   "kind": "scalar",
+   "signatures": [
+    "random(bigint) → bigint",
+    "random(bigint, bigint) → bigint",
+    "random() → double",
+    "random(integer) → integer",
+    "random(integer, integer) → integer",
+    "random(smallint) → smallint",
+    "random(smallint, smallint) → smallint",
+    "random(tinyint) → tinyint",
+    "random(tinyint, tinyint) → tinyint"
+   ],
+   "description": "A pseudo-random number between 0 and value (exclusive)"
+  },
+  {
+   "name": "rank",
+   "kind": "window",
+   "signatures": [
+    "rank() → bigint"
+   ],
+   "description": ""
+  },
+  {
+   "name": "reduce",
+   "kind": "scalar",
+   "signatures": [
+    "reduce(array(T), S, function(S,T,S), function(S,R)) → R"
+   ],
+   "description": "Reduce elements of the array into a single value"
+  },
+  {
+   "name": "reduce_agg",
+   "kind": "aggregate",
+   "signatures": [
+    "reduce_agg(T, S, function(S,T,S), function(S,S,S)) → S"
+   ],
+   "description": "Reduce input elements into a single value"
+  },
+  {
+   "name": "regexp_count",
+   "kind": "scalar",
+   "signatures": [
+    "regexp_count(varchar(x), joniregexp) → bigint"
+   ],
+   "description": "Returns the number of times that a pattern occurs in a string"
+  },
+  {
+   "name": "regexp_extract",
+   "kind": "scalar",
+   "signatures": [
+    "regexp_extract(varchar(x), joniregexp) → varchar(x)",
+    "regexp_extract(varchar(x), joniregexp, bigint) → varchar(x)"
+   ],
+   "description": "String extracted using the given pattern"
+  },
+  {
+   "name": "regexp_extract_all",
+   "kind": "scalar",
+   "signatures": [
+    "regexp_extract_all(varchar(x), joniregexp) → array(varchar(x))",
+    "regexp_extract_all(varchar(x), joniregexp, bigint) → array(varchar(x))"
+   ],
+   "description": "String(s) extracted using the given pattern"
+  },
+  {
+   "name": "regexp_like",
+   "kind": "scalar",
+   "signatures": [
+    "regexp_like(varchar(x), joniregexp) → boolean"
+   ],
+   "description": "Returns whether the pattern is contained within the string"
+  },
+  {
+   "name": "regexp_position",
+   "kind": "scalar",
+   "signatures": [
+    "regexp_position(varchar(x), joniregexp) → integer",
+    "regexp_position(varchar(x), joniregexp, integer) → integer",
+    "regexp_position(varchar(x), joniregexp, integer, integer) → integer"
+   ],
+   "description": "Returns the index of the matched substring"
+  },
+  {
+   "name": "regexp_replace",
+   "kind": "scalar",
+   "signatures": [
+    "regexp_replace(varchar, joniregexp, function(array(varchar),varchar(x))) → varchar",
+    "regexp_replace(varchar(x), joniregexp) → varchar(x)",
+    "regexp_replace(varchar(x), joniregexp, varchar(y)) → varchar(z)"
+   ],
+   "description": "Replaces substrings matching a regular expression using a lambda function"
+  },
+  {
+   "name": "regexp_split",
+   "kind": "scalar",
+   "signatures": [
+    "regexp_split(varchar(x), joniregexp) → array(varchar(x))"
+   ],
+   "description": "Returns array of strings split by pattern"
+  },
+  {
+   "name": "regr_intercept",
+   "kind": "aggregate",
+   "signatures": [
+    "regr_intercept(double, double) → double",
+    "regr_intercept(real, real) → real"
+   ],
+   "description": ""
+  },
+  {
+   "name": "regr_slope",
+   "kind": "aggregate",
+   "signatures": [
+    "regr_slope(double, double) → double",
+    "regr_slope(real, real) → real"
+   ],
+   "description": ""
+  },
+  {
+   "name": "render",
+   "kind": "scalar",
+   "signatures": [
+    "render(boolean) → varchar(16)",
+    "render(bigint, color) → varchar(35)",
+    "render(double, color) → varchar(41)",
+    "render(varchar(x), color) → varchar(y)"
+   ],
+   "description": ""
+  },
+  {
+   "name": "repeat",
+   "kind": "scalar",
+   "signatures": [
+    "repeat(T, bigint) → array(T)"
+   ],
+   "description": "Repeat an element for a given number of times"
+  },
+  {
+   "name": "replace",
+   "kind": "scalar",
+   "signatures": [
+    "replace(varchar(x), varchar(y), varchar(z)) → varchar(u)",
+    "replace(varchar(x), varchar(y)) → varchar(x)"
+   ],
+   "description": "Greedily replaces occurrences of a pattern with a string"
+  },
+  {
+   "name": "reverse",
+   "kind": "scalar",
+   "signatures": [
+    "reverse(array(E)) → array(E)",
+    "reverse(char(x)) → char(x)",
+    "reverse(varbinary) → varbinary",
+    "reverse(varchar(x)) → varchar(x)"
+   ],
+   "description": "Returns an array which has the reversed order of the given array."
+  },
+  {
+   "name": "rgb",
+   "kind": "scalar",
+   "signatures": [
+    "rgb(bigint, bigint, bigint) → color"
+   ],
+   "description": ""
+  },
+  {
+   "name": "round",
+   "kind": "scalar",
+   "signatures": [
+    "round(bigint) → bigint",
+    "round(bigint, integer) → bigint",
+    "round(decimal(p,s)) → decimal(rp,rs)",
+    "round(decimal(p,s), integer) → decimal(rp,s)",
+    "round(double) → double",
+    "round(double, integer) → double",
+    "round(integer) → integer",
+    "round(integer, integer) → integer",
+    "round(number) → number",
+    "round(number, integer) → number",
+    "round(real) → real",
+    "round(real, integer) → real",
+    "round(smallint) → smallint",
+    "round(smallint, integer) → smallint",
+    "round(tinyint) → tinyint",
+    "round(tinyint, integer) → tinyint"
+   ],
+   "description": "Round to nearest integer"
+  },
+  {
+   "name": "row_number",
+   "kind": "window",
+   "signatures": [
+    "row_number() → bigint"
+   ],
+   "description": ""
+  },
+  {
+   "name": "rpad",
+   "kind": "scalar",
+   "signatures": [
+    "rpad(varbinary, bigint, varbinary) → varbinary",
+    "rpad(varchar(x), bigint, varchar(y)) → varchar"
+   ],
+   "description": "Pads a varbinary on the right"
+  },
+  {
+   "name": "rtrim",
+   "kind": "scalar",
+   "signatures": [
+    "rtrim(char(x)) → varchar(x)",
+    "rtrim(char(x), codepoints) → varchar(x)",
+    "rtrim(varchar(x)) → varchar(x)",
+    "rtrim(varchar(x), codepoints) → varchar(x)"
+   ],
+   "description": "Removes whitespace from the end of a string"
+  },
+  {
+   "name": "second",
+   "kind": "scalar",
+   "signatures": [
+    "second(interval day to second) → bigint",
+    "second(time(p)) → bigint",
+    "second(time(p) with time zone) → bigint",
+    "second(timestamp(p)) → bigint",
+    "second(timestamp(p) with time zone) → bigint"
+   ],
+   "description": "Second of the minute of the given interval"
+  },
+  {
+   "name": "sequence",
+   "kind": "scalar",
+   "signatures": [
+    "sequence(bigint, bigint) → array(bigint)",
+    "sequence(bigint, bigint, bigint) → array(bigint)",
+    "sequence(date, date) → array(date)",
+    "sequence(date, date, interval day to second) → array(date)",
+    "sequence(date, date, interval year to month) → array(date)",
+    "sequence(timestamp(p), timestamp(p), interval day to second) → array(timestamp(p))",
+    "sequence(timestamp(p), timestamp(p), interval year to month) → array(timestamp(p))",
+    "sequence(bigint, bigint, bigint) → unknown"
+   ],
+   "description": "Sequence function to generate synthetic arrays"
+  },
+  {
+   "name": "sha1",
+   "kind": "scalar",
+   "signatures": [
+    "sha1(varbinary) → varbinary"
+   ],
+   "description": "Compute sha1 hash"
+  },
+  {
+   "name": "sha256",
+   "kind": "scalar",
+   "signatures": [
+    "sha256(varbinary) → varbinary"
+   ],
+   "description": "Compute sha256 hash"
+  },
+  {
+   "name": "sha512",
+   "kind": "scalar",
+   "signatures": [
+    "sha512(varbinary) → varbinary"
+   ],
+   "description": "Compute sha512 hash"
+  },
+  {
+   "name": "shuffle",
+   "kind": "scalar",
+   "signatures": [
+    "shuffle(array(E)) → array(E)"
+   ],
+   "description": "Generates a random permutation of the given array."
+  },
+  {
+   "name": "sign",
+   "kind": "scalar",
+   "signatures": [
+    "sign(bigint) → bigint",
+    "sign(decimal(p,s)) → decimal(1,0)",
+    "sign(double) → double",
+    "sign(integer) → integer",
+    "sign(number) → number",
+    "sign(real) → real",
+    "sign(smallint) → smallint",
+    "sign(tinyint) → tinyint"
+   ],
+   "description": "Signum"
+  },
+  {
+   "name": "sin",
+   "kind": "scalar",
+   "signatures": [
+    "sin(double) → double"
+   ],
+   "description": "Sine"
+  },
+  {
+   "name": "sinh",
+   "kind": "scalar",
+   "signatures": [
+    "sinh(double) → double"
+   ],
+   "description": "Hyperbolic sine"
+  },
+  {
+   "name": "skewness",
+   "kind": "aggregate",
+   "signatures": [
+    "skewness(bigint) → double",
+    "skewness(double) → double"
+   ],
+   "description": "Returns the skewness of the argument"
+  },
+  {
+   "name": "slice",
+   "kind": "scalar",
+   "signatures": [
+    "slice(array(E), bigint, bigint) → array(E)"
+   ],
+   "description": "Subsets an array given an offset (1-indexed) and length"
+  },
+  {
+   "name": "soundex",
+   "kind": "scalar",
+   "signatures": [
+    "soundex(varchar) → varchar(4)"
+   ],
+   "description": "Encodes a string into a Soundex value"
+  },
+  {
+   "name": "split",
+   "kind": "scalar",
+   "signatures": [
+    "split(varchar(x), varchar(y)) → array(varchar(x))",
+    "split(varchar(x), varchar(y), bigint) → array(varchar(x))"
+   ],
+   "description": ""
+  },
+  {
+   "name": "split_part",
+   "kind": "scalar",
+   "signatures": [
+    "split_part(varchar(x), varchar(y), bigint) → varchar(x)"
+   ],
+   "description": "Splits a string by a delimiter and returns the specified field (counting from one)"
+  },
+  {
+   "name": "split_to_map",
+   "kind": "scalar",
+   "signatures": [
+    "split_to_map(varchar, varchar, varchar) → map(varchar,varchar)"
+   ],
+   "description": "Creates a map using entryDelimiter and keyValueDelimiter"
+  },
+  {
+   "name": "split_to_multimap",
+   "kind": "scalar",
+   "signatures": [
+    "split_to_multimap(varchar, varchar, varchar) → map(varchar,array(varchar))"
+   ],
+   "description": "Creates a multimap by splitting a string into key/value pairs"
+  },
+  {
+   "name": "spooky_hash_v2_32",
+   "kind": "scalar",
+   "signatures": [
+    "spooky_hash_v2_32(varbinary) → varbinary"
+   ],
+   "description": "Compute SpookyHashV2 32-bit hash"
+  },
+  {
+   "name": "spooky_hash_v2_64",
+   "kind": "scalar",
+   "signatures": [
+    "spooky_hash_v2_64(varbinary) → varbinary"
+   ],
+   "description": "Compute SpookyHashV2 64-bit hash"
+  },
+  {
+   "name": "sqrt",
+   "kind": "scalar",
+   "signatures": [
+    "sqrt(double) → double"
+   ],
+   "description": "Square root"
+  },
+  {
+   "name": "starts_with",
+   "kind": "scalar",
+   "signatures": [
+    "starts_with(varchar(x), varchar(y)) → boolean"
+   ],
+   "description": "Determine whether source starts with prefix or not"
+  },
+  {
+   "name": "stddev",
+   "kind": "aggregate",
+   "signatures": [
+    "stddev(bigint) → double",
+    "stddev(double) → double"
+   ],
+   "description": "Returns the sample standard deviation of the argument"
+  },
+  {
+   "name": "stddev_pop",
+   "kind": "aggregate",
+   "signatures": [
+    "stddev_pop(bigint) → double",
+    "stddev_pop(double) → double"
+   ],
+   "description": "Returns the population standard deviation of the argument"
+  },
+  {
+   "name": "stddev_samp",
+   "kind": "aggregate",
+   "signatures": [
+    "stddev_samp(bigint) → double",
+    "stddev_samp(double) → double"
+   ],
+   "description": "Returns the sample standard deviation of the argument"
+  },
+  {
+   "name": "strpos",
+   "kind": "scalar",
+   "signatures": [
+    "strpos(varchar(x), varchar(y)) → bigint",
+    "strpos(varchar(x), varchar(y), bigint) → bigint"
+   ],
+   "description": "Returns index of first occurrence of a substring (or 0 if not found)"
+  },
+  {
+   "name": "substr",
+   "kind": "scalar",
+   "signatures": [
+    "substr(varbinary, bigint) → varbinary",
+    "substr(varbinary, bigint, bigint) → varbinary",
+    "substr(char(x), bigint) → varchar(x)",
+    "substr(char(x), bigint, bigint) → varchar(x)",
+    "substr(varchar(x), bigint) → varchar(x)",
+    "substr(varchar(x), bigint, bigint) → varchar(x)"
+   ],
+   "description": "Suffix starting at given index"
+  },
+  {
+   "name": "substring",
+   "kind": "scalar",
+   "signatures": [
+    "substring(char(x), bigint) → varchar(x)",
+    "substring(char(x), bigint, bigint) → varchar(x)",
+    "substring(varchar(x), bigint) → varchar(x)",
+    "substring(varchar(x), bigint, bigint) → varchar(x)"
+   ],
+   "description": "Suffix starting at given index"
+  },
+  {
+   "name": "sum",
+   "kind": "aggregate",
+   "signatures": [
+    "sum(bigint) → bigint",
+    "sum(decimal(p,s)) → decimal(38,s)",
+    "sum(double) → double",
+    "sum(interval day to second) → interval day to second",
+    "sum(interval year to month) → interval year to month",
+    "sum(number) → number",
+    "sum(real) → real"
+   ],
+   "description": "Calculates the sum over the input values"
+  },
+  {
+   "name": "t_cdf",
+   "kind": "scalar",
+   "signatures": [
+    "t_cdf(double, double) → double"
+   ],
+   "description": "Student's t-distribution cumulative density function given the x and degrees of freedom"
+  },
+  {
+   "name": "t_pdf",
+   "kind": "scalar",
+   "signatures": [
+    "t_pdf(double, double) → double"
+   ],
+   "description": "Student's t-distribution given the x and degrees of freedom"
+  },
+  {
+   "name": "tan",
+   "kind": "scalar",
+   "signatures": [
+    "tan(double) → double"
+   ],
+   "description": "Tangent"
+  },
+  {
+   "name": "tanh",
+   "kind": "scalar",
+   "signatures": [
+    "tanh(double) → double"
+   ],
+   "description": "Hyperbolic tangent"
+  },
+  {
+   "name": "tdigest_agg",
+   "kind": "aggregate",
+   "signatures": [
+    "tdigest_agg(double) → tdigest",
+    "tdigest_agg(double, double) → tdigest"
+   ],
+   "description": ""
+  },
+  {
+   "name": "timezone",
+   "kind": "scalar",
+   "signatures": [
+    "timezone(time(p) with time zone) → varchar",
+    "timezone(timestamp(p) with time zone) → varchar"
+   ],
+   "description": "Time zone of the given time"
+  },
+  {
+   "name": "timezone_hour",
+   "kind": "scalar",
+   "signatures": [
+    "timezone_hour(time(p) with time zone) → bigint",
+    "timezone_hour(timestamp(p) with time zone) → bigint"
+   ],
+   "description": "Time zone hour of the given time"
+  },
+  {
+   "name": "timezone_minute",
+   "kind": "scalar",
+   "signatures": [
+    "timezone_minute(time(p) with time zone) → bigint",
+    "timezone_minute(timestamp(p) with time zone) → bigint"
+   ],
+   "description": "Time zone minute of the given time"
+  },
+  {
+   "name": "title_case",
+   "kind": "scalar",
+   "signatures": [
+    "title_case(char(x)) → char(x)",
+    "title_case(varchar(x)) → varchar(x)"
+   ],
+   "description": "Converts the string to title case"
+  },
+  {
+   "name": "to_base",
+   "kind": "scalar",
+   "signatures": [
+    "to_base(bigint, bigint) → varchar(64)"
+   ],
+   "description": "Convert a number to a string in the given base"
+  },
+  {
+   "name": "to_base32",
+   "kind": "scalar",
+   "signatures": [
+    "to_base32(varbinary) → varchar"
+   ],
+   "description": "Encode binary data as base32"
+  },
+  {
+   "name": "to_base64",
+   "kind": "scalar",
+   "signatures": [
+    "to_base64(varbinary) → varchar"
+   ],
+   "description": "Encode binary data as base64"
+  },
+  {
+   "name": "to_base64url",
+   "kind": "scalar",
+   "signatures": [
+    "to_base64url(varbinary) → varchar"
+   ],
+   "description": "Encode binary data as base64 using the URL safe alphabet"
+  },
+  {
+   "name": "to_big_endian_32",
+   "kind": "scalar",
+   "signatures": [
+    "to_big_endian_32(integer) → varbinary"
+   ],
+   "description": "Encode value as a 32-bit 2's complement big endian varbinary"
+  },
+  {
+   "name": "to_big_endian_64",
+   "kind": "scalar",
+   "signatures": [
+    "to_big_endian_64(bigint) → varbinary"
+   ],
+   "description": "Encode value as a 64-bit 2's complement big endian varbinary"
+  },
+  {
+   "name": "to_hex",
+   "kind": "scalar",
+   "signatures": [
+    "to_hex(varbinary) → varchar"
+   ],
+   "description": "Encode binary data as hex"
+  },
+  {
+   "name": "to_ieee754_32",
+   "kind": "scalar",
+   "signatures": [
+    "to_ieee754_32(real) → varbinary"
+   ],
+   "description": "Encode value as a big endian varbinary according to IEEE 754 single-precision floating-point format"
+  },
+  {
+   "name": "to_ieee754_64",
+   "kind": "scalar",
+   "signatures": [
+    "to_ieee754_64(double) → varbinary"
+   ],
+   "description": "Encode value as a big endian varbinary according to IEEE 754 double-precision floating-point format"
+  },
+  {
+   "name": "to_iso8601",
+   "kind": "scalar",
+   "signatures": [
+    "to_iso8601(date) → varchar(16)",
+    "to_iso8601(timestamp(p)) → varchar(n)",
+    "to_iso8601(timestamp(p) with time zone) → varchar(n)"
+   ],
+   "description": ""
+  },
+  {
+   "name": "to_milliseconds",
+   "kind": "scalar",
+   "signatures": [
+    "to_milliseconds(interval day to second) → bigint"
+   ],
+   "description": ""
+  },
+  {
+   "name": "to_unixtime",
+   "kind": "scalar",
+   "signatures": [
+    "to_unixtime(timestamp(p) with time zone) → double"
+   ],
+   "description": ""
+  },
+  {
+   "name": "to_utf8",
+   "kind": "scalar",
+   "signatures": [
+    "to_utf8(char(x)) → varbinary",
+    "to_utf8(varchar(x)) → varbinary"
+   ],
+   "description": "Encodes the string to UTF-8"
+  },
+  {
+   "name": "transform",
+   "kind": "scalar",
+   "signatures": [
+    "transform(array(T), function(T,U)) → array(U)"
+   ],
+   "description": "Apply lambda to each element of the array"
+  },
+  {
+   "name": "transform_keys",
+   "kind": "scalar",
+   "signatures": [
+    "transform_keys(map(K1,V), function(K1,V,K2)) → map(K2,V)"
+   ],
+   "description": "Apply lambda to each entry of the map and transform the key"
+  },
+  {
+   "name": "transform_values",
+   "kind": "scalar",
+   "signatures": [
+    "transform_values(map(K,V1), function(K,V1,V2)) → map(K,V2)"
+   ],
+   "description": "Apply lambda to each entry of the map and transform the value"
+  },
+  {
+   "name": "translate",
+   "kind": "scalar",
+   "signatures": [
+    "translate(varchar(x), varchar(y), varchar(z)) → varchar"
+   ],
+   "description": "Translate characters from the source string based on original and translations strings"
+  },
+  {
+   "name": "trim",
+   "kind": "scalar",
+   "signatures": [
+    "trim(char(x)) → varchar(x)",
+    "trim(char(x), codepoints) → varchar(x)",
+    "trim(varchar(x)) → varchar(x)",
+    "trim(varchar(x), codepoints) → varchar(x)"
+   ],
+   "description": "Removes whitespace from the beginning and end of a string"
+  },
+  {
+   "name": "trim_array",
+   "kind": "scalar",
+   "signatures": [
+    "trim_array(array(E), bigint) → array(E)"
+   ],
+   "description": "Remove elements from the end of array"
+  },
+  {
+   "name": "truncate",
+   "kind": "scalar",
+   "signatures": [
+    "truncate(decimal(p,s), integer) → decimal(p,s)",
+    "truncate(decimal(p,s)) → decimal(rp,0)",
+    "truncate(double) → double",
+    "truncate(number) → number",
+    "truncate(real) → real"
+   ],
+   "description": "Round to integer by dropping given number of digits after decimal point"
+  },
+  {
+   "name": "typeof",
+   "kind": "scalar",
+   "signatures": [
+    "typeof(T) → varchar"
+   ],
+   "description": "Textual representation of expression type"
+  },
+  {
+   "name": "upper",
+   "kind": "scalar",
+   "signatures": [
+    "upper(char(x)) → char(x)",
+    "upper(varchar(x)) → varchar(x)"
+   ],
+   "description": "Converts the string to upper case"
+  },
+  {
+   "name": "url_decode",
+   "kind": "scalar",
+   "signatures": [
+    "url_decode(varchar(x)) → varchar(x)"
+   ],
+   "description": "Unescape a URL-encoded string"
+  },
+  {
+   "name": "url_encode",
+   "kind": "scalar",
+   "signatures": [
+    "url_encode(varchar(x)) → varchar(y)"
+   ],
+   "description": "Escape a string for use in URL query parameter names and values"
+  },
+  {
+   "name": "url_extract_fragment",
+   "kind": "scalar",
+   "signatures": [
+    "url_extract_fragment(varchar(x)) → varchar(x)"
+   ],
+   "description": "Extract fragment from url"
+  },
+  {
+   "name": "url_extract_host",
+   "kind": "scalar",
+   "signatures": [
+    "url_extract_host(varchar(x)) → varchar(x)"
+   ],
+   "description": "Extract host from url"
+  },
+  {
+   "name": "url_extract_parameter",
+   "kind": "scalar",
+   "signatures": [
+    "url_extract_parameter(varchar(x), varchar(y)) → varchar(x)"
+   ],
+   "description": "Extract query parameter from url"
+  },
+  {
+   "name": "url_extract_path",
+   "kind": "scalar",
+   "signatures": [
+    "url_extract_path(varchar(x)) → varchar(x)"
+   ],
+   "description": "Extract part from url"
+  },
+  {
+   "name": "url_extract_port",
+   "kind": "scalar",
+   "signatures": [
+    "url_extract_port(varchar(x)) → bigint"
+   ],
+   "description": "Extract port from url"
+  },
+  {
+   "name": "url_extract_protocol",
+   "kind": "scalar",
+   "signatures": [
+    "url_extract_protocol(varchar(x)) → varchar(x)"
+   ],
+   "description": "Extract protocol from url"
+  },
+  {
+   "name": "url_extract_query",
+   "kind": "scalar",
+   "signatures": [
+    "url_extract_query(varchar(x)) → varchar(x)"
+   ],
+   "description": "Extract query from url"
+  },
+  {
+   "name": "uuid",
+   "kind": "scalar",
+   "signatures": [
+    "uuid() → uuid"
+   ],
+   "description": "Generates a random UUID"
+  },
+  {
+   "name": "value_at_quantile",
+   "kind": "scalar",
+   "signatures": [
+    "value_at_quantile(qdigest(bigint), double) → bigint",
+    "value_at_quantile(qdigest(double), double) → double",
+    "value_at_quantile(tdigest, double) → double",
+    "value_at_quantile(qdigest(real), double) → real"
+   ],
+   "description": "Given an input q between [0, 1], find the value whose rank in the sorted sequence of the n values represented by the qdigest is qn."
+  },
+  {
+   "name": "values_at_quantiles",
+   "kind": "scalar",
+   "signatures": [
+    "values_at_quantiles(qdigest(bigint), array(double)) → array(bigint)",
+    "values_at_quantiles(qdigest(double), array(double)) → array(double)",
+    "values_at_quantiles(tdigest, array(double)) → array(double)",
+    "values_at_quantiles(qdigest(real), array(double)) → array(real)"
+   ],
+   "description": "For each input q between [0, 1], find the value whose rank in the sorted sequence of the n values represented by the qdigest is qn."
+  },
+  {
+   "name": "var_pop",
+   "kind": "aggregate",
+   "signatures": [
+    "var_pop(bigint) → double",
+    "var_pop(double) → double"
+   ],
+   "description": "Returns the population variance of the argument"
+  },
+  {
+   "name": "var_samp",
+   "kind": "aggregate",
+   "signatures": [
+    "var_samp(bigint) → double",
+    "var_samp(double) → double"
+   ],
+   "description": "Returns the sample variance of the argument"
+  },
+  {
+   "name": "variance",
+   "kind": "aggregate",
+   "signatures": [
+    "variance(bigint) → double",
+    "variance(double) → double"
+   ],
+   "description": "Returns the sample variance of the argument"
+  },
+  {
+   "name": "variant_is_null",
+   "kind": "scalar",
+   "signatures": [
+    "variant_is_null(variant) → boolean"
+   ],
+   "description": ""
+  },
+  {
+   "name": "week",
+   "kind": "scalar",
+   "signatures": [
+    "week(date) → bigint",
+    "week(timestamp(p)) → bigint",
+    "week(timestamp(p) with time zone) → bigint"
+   ],
+   "description": "Week of the year of the given date"
+  },
+  {
+   "name": "week_of_year",
+   "kind": "scalar",
+   "signatures": [
+    "week_of_year(date) → bigint",
+    "week_of_year(timestamp(p)) → bigint",
+    "week_of_year(timestamp(p) with time zone) → bigint"
+   ],
+   "description": "Week of the year of the given date"
+  },
+  {
+   "name": "width_bucket",
+   "kind": "scalar",
+   "signatures": [
+    "width_bucket(double, array(double)) → bigint",
+    "width_bucket(double, double, double, bigint) → bigint"
+   ],
+   "description": "The bucket number of a value given an array of bins"
+  },
+  {
+   "name": "wilson_interval_lower",
+   "kind": "scalar",
+   "signatures": [
+    "wilson_interval_lower(bigint, bigint, double) → double"
+   ],
+   "description": "Binomial confidence interval lower bound using Wilson score"
+  },
+  {
+   "name": "wilson_interval_upper",
+   "kind": "scalar",
+   "signatures": [
+    "wilson_interval_upper(bigint, bigint, double) → double"
+   ],
+   "description": "Binomial confidence interval upper bound using Wilson score"
+  },
+  {
+   "name": "with_timezone",
+   "kind": "scalar",
+   "signatures": [
+    "with_timezone(timestamp(p), varchar(x)) → timestamp(p) with time zone"
+   ],
+   "description": ""
+  },
+  {
+   "name": "word_stem",
+   "kind": "scalar",
+   "signatures": [
+    "word_stem(varchar(x)) → varchar(x)",
+    "word_stem(varchar(x), varchar(2)) → varchar(x)"
+   ],
+   "description": "Returns the stem of a word in the English language"
+  },
+  {
+   "name": "xxhash64",
+   "kind": "scalar",
+   "signatures": [
+    "xxhash64(varbinary) → varbinary"
+   ],
+   "description": "Compute xxhash64 hash"
+  },
+  {
+   "name": "year",
+   "kind": "scalar",
+   "signatures": [
+    "year(date) → bigint",
+    "year(interval year to month) → bigint",
+    "year(timestamp(p)) → bigint",
+    "year(timestamp(p) with time zone) → bigint"
+   ],
+   "description": "Year of the given date"
+  },
+  {
+   "name": "year_of_week",
+   "kind": "scalar",
+   "signatures": [
+    "year_of_week(date) → bigint",
+    "year_of_week(timestamp(p)) → bigint",
+    "year_of_week(timestamp(p) with time zone) → bigint"
+   ],
+   "description": "Year of the ISO week of the given date"
+  },
+  {
+   "name": "yow",
+   "kind": "scalar",
+   "signatures": [
+    "yow(date) → bigint",
+    "yow(timestamp(p)) → bigint",
+    "yow(timestamp(p) with time zone) → bigint"
+   ],
+   "description": "Year of the ISO week of the given date"
+  },
+  {
+   "name": "zip",
+   "kind": "scalar",
+   "signatures": [
+    "zip(array(T1), array(T2)) → array(row(T1,T2))",
+    "zip(array(T1), array(T2), array(T3)) → array(row(T1,T2,T3))",
+    "zip(array(T1), array(T2), array(T3), array(T4)) → array(row(T1,T2,T3,T4))",
+    "zip(array(T1), array(T2), array(T3), array(T4), array(T5)) → array(row(T1,T2,T3,T4,T5))"
+   ],
+   "description": "Merges the given arrays, element-wise, into a single array of rows."
+  },
+  {
+   "name": "zip_with",
+   "kind": "scalar",
+   "signatures": [
+    "zip_with(array(T), array(U), function(T,U,R)) → array(R)"
+   ],
+   "description": "Merge two arrays, element-wise, into a single array using the lambda function"
+  }
+ ]
+}

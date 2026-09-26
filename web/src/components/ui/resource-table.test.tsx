@@ -370,6 +370,25 @@ describe("ResourceTable > expanding a row", () => {
     await user.click(screen.getByRole("button", { name: "Collapse row" }))
     expect(screen.queryByText("Detail for billing")).not.toBeInTheDocument()
   })
+
+  // The deep-link case: the page mounts while its query loads, and the rows
+  // the seed names arrive afterwards. The row model settling on that data
+  // must not undo the seed.
+  it("opens a defaultExpanded row that arrives after the table mounted", async () => {
+    const table = (data: Topic[] | undefined) => (
+      <ResourceTable
+        query={{ data, isLoading: data === undefined }}
+        noun="topics"
+        columns={columns}
+        rowKey={(t) => t.arn}
+        defaultExpanded={(t) => t.name === "billing"}
+        expandedContent={(t) => <p>Detail for {t.name}</p>}
+      />
+    )
+    const { rerender } = render(table(undefined))
+    rerender(table(topics))
+    expect(await screen.findByText("Detail for billing")).toBeInTheDocument()
+  })
 })
 
 describe("ResourceTable > delete variables and enablement", () => {
