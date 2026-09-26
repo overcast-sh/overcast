@@ -1024,20 +1024,24 @@ func newIAMRequestFieldResolver() *iamRequestFieldResolver {
 	return &iamRequestFieldResolver{}
 }
 
+// field reads key the way a handler does, which is r.FormValue's order: the
+// form body first, then the query string. Reading the query string first named
+// one resource while the handler acted on another — a QueueUrl in the URL
+// authorised, the body's served (#2229).
 func (f *iamRequestFieldResolver) field(r *http.Request, key string) string {
-	if v := strings.TrimSpace(r.URL.Query().Get(key)); v != "" {
-		return v
-	}
-
 	if strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/x-www-form-urlencoded") {
 		if !f.formParsed {
 			// Body-preserving for the same reason as requestIAMAction above.
 			_ = protocol.ParseFormPreservingBody(r)
 			f.formParsed = true
 		}
-		if v := strings.TrimSpace(r.Form.Get(key)); v != "" {
+		if v := strings.TrimSpace(r.PostForm.Get(key)); v != "" {
 			return v
 		}
+	}
+
+	if v := strings.TrimSpace(r.URL.Query().Get(key)); v != "" {
+		return v
 	}
 
 	payload := f.loadJSONBody(r)

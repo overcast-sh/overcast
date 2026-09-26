@@ -164,8 +164,8 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	// hostRoutes is populated further down, once the services HostAddressing
 	// dispatches to (API Gateway, Lambda, AppSync) are constructed — see
 	// "Host-based routing" below. The pointer is read at request time (same
-	// pattern as root below), so it only needs to be fully
-	// populated before Serve starts, not before this chain is built.
+	// pattern as root below), so it only needs to be fully populated before
+	// Serve starts, not before this chain is built.
 	var hostRoutes []middleware.HostRouteRow
 	// root is the dispatch of POST / and GET /?Action=, filled in by the
 	// service registration loop. IAM enforcement reads its Query decisions, so
@@ -174,7 +174,7 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	root := &rootDispatch{registry: operationRegistry}
 	// newRequestChain builds the chain for a router whose AWS Query dispatch
 	// is queries: the root router's, or nil for the Athena engine gateway,
-	// which dispatches no Query traffic.
+	// which serves no Query operation (its Glue POST / answers one with 501).
 	newRequestChain := func(queries middleware.QueryRouter) chi.Middlewares {
 		return chi.Middlewares{
 			middleware.RealIP,

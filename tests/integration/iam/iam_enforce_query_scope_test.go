@@ -38,7 +38,6 @@ type queryScopeCase struct {
 
 // queryScopeCases covers every Query service Overcast serves on the root
 // listener. Each operation succeeds on an empty emulator, so a pass is a 200.
-// SQS and STS carry no Version the router needs: their ownership is by Action.
 var queryScopeCases = []queryScopeCase{
 	{"IAM", "2010-05-08", "ListUsers", "iam", "iam:ListUsers"},
 	{"STS", "2011-06-15", "GetCallerIdentity", "sts", "sts:GetCallerIdentity"},
@@ -232,6 +231,48 @@ func TestIAMEnforceQueryScope_largeBodyServedAsTheAuthorisedAction(t *testing.T)
 	if got := helpers.ReadBody(t, resp); !strings.Contains(got, "<GetCallerIdentityResult>") {
 		t.Fatalf("served a different operation from the one authorised:\n%s", got)
 	}
+}
+
+func TestIAMEnforceQueryScope_queryStringActionCannotStandInForTheBody(t *testing.T) {
+	// Given: a principal allowed iam:ListUsers and nothing else
+	srv := helpers.NewTestServer(t, helpers.WithEnforceIAM(true))
+	seedIAMPrincipal(t, srv, "lister", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"iam:ListUsers","Resource":"*"}]}`)
+
+	// When: the query string names ListUsers and the body, which the router
+	// dispatches on, names CreateUser
+	body := url.Values{"Action": {"CreateUser"}, "Version": {"2010-05-08"}, "UserName": {"body-user"}}.Encode()
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/?Action=ListUsers", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp := doSigned(t, req, sigV4Auth("lister", "iam"))
+	defer resp.Body.Close()
+
+	// Then: it is authorised as the CreateUser that would be served, and denied
+	helpers.AssertQueryXMLError(t, resp, "AccessDenied")
+	assertNoIAMUser(t, srv, "body-user")
+}
+
+func TestIAMEnforceQueryScope_resourceReadWhereTheHandlerReadsIt(t *testing.T) {
+	// Given: a principal allowed SQS on one queue only
+	srv := helpers.NewTestServer(t, helpers.WithEnforceIAM(true))
+	seedIAMPrincipal(t, srv, "scoped", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"sqs:*","Resource":"arn:aws:sqs:us-east-1:000000000000:allowed"}]}`)
+
+	// When: the query string names the allowed queue and the body, which SQS
+	// acts on, names another
+	queueURL := func(name string) string { return srv.URL + "/000000000000/" + name }
+	body := url.Values{"Action": {"GetQueueAttributes"}, "Version": {"2012-11-05"}, "QueueUrl": {queueURL("protected")}}.Encode()
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/?"+url.Values{"QueueUrl": {queueURL("allowed")}}.Encode(), strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp := doSigned(t, req, sigV4Auth("scoped", "sqs"))
+	defer resp.Body.Close()
+
+	// Then: it is authorised against the queue that would be served, and denied
+	helpers.AssertQueryXMLError(t, resp, "AccessDenied")
 }
 
 func TestIAMEnforceQueryScope_sdkSignedForAnotherService(t *testing.T) {

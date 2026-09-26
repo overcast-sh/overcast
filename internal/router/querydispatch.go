@@ -33,10 +33,10 @@ type rootDispatch struct {
 	queries  []queryService
 }
 
-// queryRoute is how the router serves an AWS Query request: the service that
+// queryResolution is how the router serves an AWS Query request: the service that
 // owns its Action, nil when no enabled service does, and the Version and
 // Action it was resolved by.
-type queryRoute struct {
+type queryResolution struct {
 	owner   queryService
 	version string
 	action  string
@@ -117,17 +117,20 @@ func (d *rootDispatch) targetHandler(r *http.Request) http.HandlerFunc {
 
 // route resolves r as AWS Query traffic. isQuery is false when the router
 // does not dispatch r as Query, and err is the failure the router refuses a
-// Query form with. It is idempotent, because IAM enforcement resolves a
-// request before the router serves it and the two must agree.
-func (d *rootDispatch) route(w http.ResponseWriter, r *http.Request) (route queryRoute, isQuery bool, err error) {
+// Query form with. IAM enforcement resolves a request before the router serves
+// it, so a success must resolve the same way twice, and it does: the form is
+// cached on r. A failure is not repeatable — net/http leaves the partial form
+// set — so a caller that gets err must refuse the request, as IAMEnforce and
+// serveQuery do, rather than pass it on.
+func (d *rootDispatch) route(w http.ResponseWriter, r *http.Request) (route queryResolution, isQuery bool, err error) {
 	if !d.addressesQuery(r) {
-		return queryRoute{}, false, nil
+		return queryResolution{}, false, nil
 	}
 	if err := parseQueryForm(w, r); err != nil {
-		return queryRoute{}, true, err
+		return queryResolution{}, true, err
 	}
 	version, action := r.FormValue("Version"), r.FormValue("Action")
-	return queryRoute{owner: d.owner(version, action), version: version, action: action}, true, nil
+	return queryResolution{owner: d.owner(version, action), version: version, action: action}, true, nil
 }
 
 // addressesQuery reports whether the router dispatches r as AWS Query: a
@@ -188,7 +191,7 @@ func (d *rootDispatch) owner(version, action string) queryService {
 // The refusal of an unparseable form is written in the generic Query envelope
 // even for a service that uses EC2's: the Action naming the service was never
 // read.
-func (d *rootDispatch) serveQuery(w http.ResponseWriter, r *http.Request, route queryRoute, err error) {
+func (d *rootDispatch) serveQuery(w http.ResponseWriter, r *http.Request, route queryResolution, err error) {
 	if err != nil {
 		protocol.WriteQueryXMLError(w, r, protocol.QueryFormParseError(err))
 		return

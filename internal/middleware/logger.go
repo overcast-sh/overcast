@@ -265,7 +265,7 @@ func detectService(r *http.Request, body ...[]byte) string {
 	//
 	// It leads the credential scope below because it is the stronger signal and
 	// because it is the signal the *router* dispatches a Query request on
-	// (targetDispatch's queryOwner): a classifier that read the scope instead
+	// (rootDispatch's queryOwner): a classifier that read the scope instead
 	// could label a request with a service that did not answer it. Elastic Load
 	// Balancing is where the two disagree — Classic (2012-06-01) and ELBv2
 	// (2015-12-01) are both Query on POST "/" and both sign as
