@@ -42,7 +42,7 @@ func init() {
 		capabilities.Capability{Operation: "CreateTable", Category: catTables,
 			Status: capabilities.StatusPartial, Notes: "Creates the table's `--table-s3` warehouse bucket in S3; `metadata.iceberg.schema` (primitive types) or `schemaV2` (struct, list and map included), `partitionSpec`, `writeOrder` and `properties` write the first `metadata.json`, with field ids reassigned depth-first as Iceberg assigns them"},
 		capabilities.Capability{Operation: "GetTable", Category: catTables,
-			Status: capabilities.StatusSupported, Notes: "By `tableArn`, or by `tableBucketARN`, `namespace` and `name`"},
+			Status: capabilities.StatusSupported, Notes: "By `tableArn`, or by `tableBucketARN`, `namespace` and `name`; also served at its pre-2025-06 path binding, which older SDKs still send"},
 		capabilities.Capability{Operation: "ListTables", Category: catTables,
 			Status: capabilities.StatusSupported, Notes: "`namespace`, `prefix`, `maxTables` and `continuationToken`"},
 		capabilities.Capability{Operation: "DeleteTable", Category: catTables,

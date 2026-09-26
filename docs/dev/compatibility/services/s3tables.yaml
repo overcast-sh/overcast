@@ -1,0 +1,50 @@
+service: s3tables
+status: fixed
+priority: p2
+reference_policy: aws_docs_only_unless_user_approves_real_aws
+last_updated: 2026-09-27
+protocols: [rest_json]
+implementation: [internal/services/s3tables]
+integration_tests: [tests/integration/s3tables]
+capability_docs: docs/services/s3tables.md
+operation_count_estimate: >-
+  49 tracked in internal/services/s3tables/capabilities_dev.go. Every one is served at its
+  modeled binding, and GetTable is also served at its pre-2025-06-06 binding.
+current_support_level: >-
+  Table buckets, namespaces, tables, policies, encryption, storage class, metrics, maintenance,
+  replication, record expiration and tags, plus the Iceberg REST catalog under /iceberg. The
+  service review so far covers only the one wire-format finding below.
+operations:
+  GetTable:
+    status: fixed
+    scenarios:
+      - "Current binding: GET /get-table with tableBucketARN, namespace and name, or tableArn,
+        as query members (aws-sdk-go-v2, botocore, the CLI)."
+      - "Legacy binding: GET /tables/{tableBucketARN}/{namespace}/{name}, sent by SDKs generated
+        before the model moved GetTable on 2025-06-06 (aws/api-models-aws a4eef7c, botocore
+        75060cf). The compat suites pin two of them: aws-sdk-s3tables 1.0.0 (Rust) and
+        AWSSDK.S3Tables 4.0.0 (.NET)."
+    evidence:
+      - https://docs.aws.amazon.com/AmazonS3/latest/API/API_s3TableBuckets_GetTable.html
+      - https://docs.rs/crate/aws-sdk-s3tables/1.0.0/source/src/operation/get_table.rs
+      - https://github.com/aws/aws-sdk-net/blob/4.0.0.0/sdk/src/Services/S3Tables/Generated/Model/Internal/MarshallTransformations/GetTableRequestMarshaller.cs
+    tests:
+      - tests/integration/s3tables/legacy_gettable_test.go
+      - internal/middleware/restoperation_test.go (TestDetectOperationS3TablesLegacyGetTable)
+findings:
+  fixed:
+    - "#2264: the legacy GetTable binding answered 403 InvalidSignatureException 'Credential
+      should be scoped to correct service: mediastore'. The /tables sub-router served DELETE on the
+      path but not GET, so the request fell to restFallback, where MediaStore Data's root
+      catch-all /{Path+} was the only binding that matched. S3 Tables now serves the legacy
+      binding (s3tables.fillLegacyGetTable), and the logger and IAM name it GetTable
+      (middleware.retiredRESTOperation), so IAM does not fail open on it. Separately, the router
+      no longer treats a root catch-all match as evidence for a scope mismatch
+      (router.callerClaim). This is the only S3 Tables binding the model history has ever moved;
+      every other change only added operations."
+  remaining_gaps: []
+  intentionally_partial: []
+handoff:
+  start_with: []
+  do_not_redo: [GetTable]
+  commands: [go test -count=1 ./internal/services/s3tables/... ./tests/integration/s3tables/...]

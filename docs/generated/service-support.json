@@ -6335,7 +6335,7 @@
           "operation": "GetTable",
           "category": "Tables",
           "status": "✅ Supported",
-          "notes": "By `tableArn`, or by `tableBucketARN`, `namespace` and `name`"
+          "notes": "By `tableArn`, or by `tableBucketARN`, `namespace` and `name`; also served at its pre-2025-06 path binding, which older SDKs still send"
         },
         {
           "operation": "ListTables",
