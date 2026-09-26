@@ -69,13 +69,22 @@ When it is on:
 - The caller is resolved from the SigV4 access key to an IAM user (its inline,
   attached and group policies) or to a role assumed through STS, plus that
   entity's permissions boundary.
-- A refused request gets the calling service's own `AccessDenied`-shaped error,
-  in that service's wire format.
+- A refused request gets AWS's access-denied error for the wire protocol it
+  was made over, in that protocol's envelope, so an SDK reads the error code —
+  see the table below.
 - **Identity policies only.** Resource-based policies — S3 bucket policies,
   Lambda/SQS/SNS policies — are not consulted. Pass one to the simulator
   explicitly to test it.
 - Enforcement is **fail-closed**: an unsigned request, an unparseable policy, or
   a construct the evaluator does not implement all deny.
+
+| Protocol the call was made over | For example              | Error code              | Status |
+| ------------------------------- | ------------------------ | ----------------------- | ------ |
+| AWS JSON, Smithy RPC v2         | DynamoDB, KMS, Athena    | `AccessDeniedException` | 400    |
+| REST-JSON                       | Lambda, API Gateway      | `AccessDeniedException` | 403    |
+| Query                           | IAM, STS, CloudFormation | `AccessDenied`          | 403    |
+| EC2 Query                       | EC2                      | `UnauthorizedOperation` | 403    |
+| REST-XML                        | S3, CloudFront, Route 53 | `AccessDenied`          | 403    |
 
 The action evaluated is `<prefix>:<Operation>`, where the prefix is the IAM
 action prefix AWS itself uses — so write policies with the names the AWS

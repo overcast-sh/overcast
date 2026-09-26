@@ -321,7 +321,8 @@ type iamOperation struct {
 	// action is "<prefix>:<Op>", or "" when no operation can be named.
 	action string
 	// query is set when the router serves the request as AWS Query traffic,
-	// whose clients read an error only in the Query XML envelope.
+	// whose clients read an error only in a Query XML envelope, whatever
+	// other protocol the serving service also answers on.
 	query bool
 }
 
@@ -1534,46 +1535,6 @@ func isSignedIAMRequest(r *http.Request) bool {
 		return true
 	}
 	return false
-}
-
-// writeIAMAccessDenied answers a denied request in the error envelope its
-// client reads: a routed Query request's is Query XML whichever service serves
-// it, and everything else's is its service's.
-func writeIAMAccessDenied(w http.ResponseWriter, r *http.Request, op iamOperation) {
-	if op.query {
-		writeQueryAccessDenied(w, r)
-		return
-	}
-	switch op.service {
-	case "s3", "cloudfront":
-		protocol.WriteXMLError(w, r, &protocol.AWSError{
-			Code:       "AccessDenied",
-			Message:    "Access Denied",
-			HTTPStatus: http.StatusForbidden,
-		})
-	// MSK is deliberately absent: it is a REST-JSON service and its handlers
-	// write JSON errors (internal/services/msk/handler.go), so a denial in the
-	// Query XML envelope is a shape no MSK client can parse. It was listed here
-	// and unreachable for most of MSK's surface, because a signed request was
-	// classified by its "kafka" signing name and fell to the default; naming
-	// the service correctly is what would have made the wrong envelope real.
-	case "sns", "iam", "sts", "ec2", "cloudformation", "rds", "ses", "cloudwatch", "acm", "kinesis", "kms", "ssm", "stepfunctions", "ecs", "ecr", "glue", "firehose", "athena", "elasticache", "waf", "shield", "autoscaling", "route53", "elbv2", "organizations":
-		writeQueryAccessDenied(w, r)
-	default:
-		protocol.WriteJSONError(w, r, &protocol.AWSError{
-			Code:       "AccessDeniedException",
-			Message:    "User is not authorized to perform this action",
-			HTTPStatus: http.StatusForbidden,
-		})
-	}
-}
-
-func writeQueryAccessDenied(w http.ResponseWriter, r *http.Request) {
-	protocol.WriteQueryXMLError(w, r, &protocol.AWSError{
-		Code:       "AccessDenied",
-		Message:    "User is not authorized to perform this action",
-		HTTPStatus: http.StatusForbidden,
-	})
 }
 
 // buildIAMRequestContext constructs the set of IAM condition context keys that

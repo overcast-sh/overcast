@@ -95,17 +95,21 @@ func TestRequestChain_engineKeyOnTheAPIUnderIAMEnforcement(t *testing.T) {
 	api := chi.NewRouter()
 	api.Use(enforcingChain().api(nil)...)
 	api.HandleFunc("/*", func(_ http.ResponseWriter, r *http.Request) { rec.record("api", r) })
-	for _, c := range []engineCall{glueGetTable, s3GetObject} {
-		t.Run(c.signingName, func(t *testing.T) {
+	// Each denial is its protocol's: awsJson answers 400, S3 403.
+	for _, tc := range []struct {
+		call   engineCall
+		status int
+	}{{glueGetTable, http.StatusBadRequest}, {s3GetObject, http.StatusForbidden}} {
+		t.Run(tc.call.signingName, func(t *testing.T) {
 			// When: a caller signs with the engine's key on the API
 			*rec = serviceRecorder{}
 			w := httptest.NewRecorder()
-			api.ServeHTTP(w, c.request())
+			api.ServeHTTP(w, tc.call.request())
 
 			// Then: it is denied: the key is no principal's, and admits a
 			// call only at the gateway
-			if rec.reached != "" || w.Code != http.StatusForbidden || !strings.Contains(w.Body.String(), "AccessDenied") {
-				t.Fatalf("reached %q; status %d %s, want 403 AccessDenied", rec.reached, w.Code, w.Body)
+			if rec.reached != "" || w.Code != tc.status || !strings.Contains(w.Body.String(), "AccessDenied") {
+				t.Fatalf("reached %q; status %d %s, want %d AccessDenied", rec.reached, w.Code, w.Body, tc.status)
 			}
 		})
 	}

@@ -111,6 +111,22 @@ func AssertQueryXMLError(t *testing.T, resp *http.Response, expectedCode string)
 	}
 }
 
+// AssertEC2QueryXMLError decodes EC2's Query error envelope,
+// <Response><Errors><Error>, and checks its error code.
+func AssertEC2QueryXMLError(t *testing.T, resp *http.Response, expectedCode string) {
+	t.Helper()
+	var errResp struct {
+		Errors []struct {
+			Code    string `xml:"Code"`
+			Message string `xml:"Message"`
+		} `xml:"Errors>Error"`
+	}
+	DecodeXML(t, resp, &errResp)
+	if len(errResp.Errors) == 0 || errResp.Errors[0].Code != expectedCode {
+		t.Errorf("expected EC2 error code %q, got %+v", expectedCode, errResp.Errors)
+	}
+}
+
 // Eventually retries fn every interval until it returns true or timeout
 // elapses. Calls t.Fatal with msg if the deadline is reached without success.
 func Eventually(t *testing.T, timeout, interval time.Duration, fn func() bool, msg string) {
