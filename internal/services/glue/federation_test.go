@@ -238,8 +238,14 @@ func TestFederatedReads_answerEntityNotFound(t *testing.T) {
 	s := newFederatedService(t)
 	ctx := context.Background()
 
-	_, aerr := s.getDatabasesTyped(ctx, &getDatabasesReq{catalogRef: catalogRef{"123456789012:s3tablescatalog/absent"}})
-	wantCode(t, "GetDatabases(absent bucket)", aerr, codeEntityNotFound)
+	// A catalog under s3tablescatalog that Overcast does not have is not
+	// read as the account's own
+	for _, id := range []string{"123456789012:s3tablescatalog/absent", "s3tablescatalog/", "s3tablescatalog/lake/x", "999999999999:s3tablescatalog/lake"} {
+		_, aerr := s.getDatabasesTyped(ctx, &getDatabasesReq{catalogRef: catalogRef{id}})
+		wantCode(t, "GetDatabases("+id+")", aerr, codeEntityNotFound)
+	}
+	_, aerr := s.getDatabaseTyped(ctx, &getDatabaseReq{catalogRef: catalogRef{"999999999999:s3tablescatalog"}, Name: "sales"})
+	wantCode(t, "GetDatabase(other account)", aerr, codeEntityNotFound)
 	_, aerr = s.getDatabaseTyped(ctx, &getDatabaseReq{catalogRef: catalogRef{lakeCatalogID}, Name: "absent"})
 	wantCode(t, "GetDatabase(absent)", aerr, codeEntityNotFound)
 	_, aerr = s.getTableTyped(ctx, &getTableReq{catalogRef: catalogRef{lakeCatalogID}, DatabaseName: "sales", Name: "absent"})
@@ -258,17 +264,19 @@ func TestFederatedCatalog_refusesEveryOtherOperation(t *testing.T) {
 	s := newFederatedService(t)
 	h := http.HandlerFunc(s.Dispatch)
 
-	for _, target := range []string{"CreateDatabase", "CreateTable", "GetPartitions", "UpdateTable", "DeleteDatabase"} {
-		// When: an operation other than a database or table read names a bucket's catalog
-		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"CatalogId":"`+lakeCatalogID+`","DatabaseInput":{"Name":"x"},"DatabaseName":"sales","Name":"x","TableInput":{"Name":"x"}}`))
-		req.Header.Set("X-Amz-Target", "AWSGlue."+target)
-		req.Header.Set("Content-Type", "application/x-amz-json-1.1")
-		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, req)
+	for _, id := range []string{lakeCatalogID, "s3tablescatalog/", "999999999999:s3tablescatalog/lake"} {
+		for _, target := range []string{"CreateDatabase", "CreateTable", "GetPartitions", "UpdateTable", "DeleteDatabase"} {
+			// When: an operation other than a database or table read names a catalog under s3tablescatalog
+			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"CatalogId":"`+id+`","DatabaseInput":{"Name":"x"},"DatabaseName":"sales","Name":"x","TableInput":{"Name":"x"}}`))
+			req.Header.Set("X-Amz-Target", "AWSGlue."+target)
+			req.Header.Set("Content-Type", "application/x-amz-json-1.1")
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
 
-		// Then: it is not implemented, rather than applied to the account's catalog
-		if rec.Code != http.StatusNotImplemented {
-			t.Errorf("%s: status %d: %s", target, rec.Code, rec.Body)
+			// Then: it is not implemented, rather than applied to the account's catalog
+			if rec.Code != http.StatusNotImplemented {
+				t.Errorf("%s on %s: status %d: %s", target, id, rec.Code, rec.Body)
+			}
 		}
 	}
 	if _, found, _ := s.store.getDatabase(context.Background(), "x"); found {

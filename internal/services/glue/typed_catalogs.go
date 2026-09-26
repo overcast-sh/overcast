@@ -68,7 +68,7 @@ func (s *Service) getCatalogTyped(ctx context.Context, req *getCatalogReq) (*get
 		return &getCatalogResp{Catalog: s.rootCatalog(ctx)}, nil
 	}
 	p := s.parseCatalogID(req.CatalogId)
-	if !p.federated() || s.s3tables == nil {
+	if s.s3tables == nil || (p.kind != catalogS3Tables && p.kind != catalogTableBucket) {
 		return nil, errCatalogNotFound(req.CatalogId)
 	}
 	if p.kind == catalogS3Tables {
@@ -155,6 +155,7 @@ func (s *Service) catalogShape(ctx context.Context, p catalogPath, name string) 
 		arn += "/" + S3TablesCatalogName
 	case catalogTableBucket:
 		arn += "/" + S3TablesCatalogName + "/" + p.bucket
+	case catalogDefault, catalogUnknown:
 	}
 	return catalogInfo{
 		CatalogId: s.catalogIDOf(p), Name: name, ResourceArn: arn,

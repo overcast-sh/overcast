@@ -49,9 +49,31 @@ func TestS3TablesCatalog_metadataOperationsReadTheTableBucket(t *testing.T) {
 		t.Fatalf("DataCatalogsSummary = %+v", list)
 	}
 
-	// And: a bucket that does not exist is not a catalog
-	_, err := c.ListDatabases(ctx, &athena.ListDatabasesInput{CatalogName: aws.String("s3tablescatalog/absent")})
-	wantAPIError(t, "ListDatabases s3tablescatalog/absent", err, "InvalidRequestException")
+	// And: a bucket that does not exist, or no bucket, is not a catalog
+	for _, name := range []string{"s3tablescatalog/absent", "s3tablescatalog/"} {
+		_, err := c.ListDatabases(ctx, &athena.ListDatabasesInput{CatalogName: aws.String(name)})
+		wantAPIError(t, "ListDatabases "+name, err, "InvalidRequestException")
+	}
+}
+
+func TestS3TablesCatalog_queriesInItFailRatherThanReadAwsDataCatalog(t *testing.T) {
+	// Given: a table bucket's catalog, which the engine cannot query yet
+	srv := helpers.NewTestServer(t)
+	helpers.SeedS3Table(t, srv, "lake", "sales", "orders")
+	c, ctx := athenaClient(t, srv), context.Background()
+
+	// When: a statement runs in it
+	out := must[*athena.StartQueryExecutionOutput](t, "StartQueryExecution")(c.StartQueryExecution(ctx, &athena.StartQueryExecutionInput{
+		QueryString:           aws.String("SHOW TABLES"),
+		QueryExecutionContext: &types.QueryExecutionContext{Catalog: aws.String("s3tablescatalog/lake"), Database: aws.String("sales")},
+		ResultConfiguration:   &types.ResultConfiguration{OutputLocation: aws.String(resultsLocation)},
+	}))
+
+	// Then: it fails as not supported, rather than answering from AwsDataCatalog
+	qe := must[*athena.GetQueryExecutionOutput](t, "GetQueryExecution")(c.GetQueryExecution(ctx, &athena.GetQueryExecutionInput{QueryExecutionId: out.QueryExecutionId})).QueryExecution
+	if qe.Status.State != types.QueryExecutionStateFailed || qe.Status.AthenaError == nil || aws.ToInt32(qe.Status.AthenaError.ErrorType) != 1200 {
+		t.Fatalf("status = %+v", qe.Status)
+	}
 }
 
 func TestS3TablesCatalog_registeredAsAGlueDataCatalog(t *testing.T) {

@@ -40,12 +40,11 @@ func errCatalogNotFound(id string) *protocol.AWSError {
 	return glueError(codeEntityNotFound, "Catalog %s not found.", id)
 }
 
-// errFederatedNotImplemented answers an operation on a federated catalog
-// that Overcast serves only the database and table reads of.
-func errFederatedNotImplemented(operation, catalogID string) *protocol.AWSError {
+// errNotImplemented is a 501 saying what Overcast does not implement.
+func errNotImplemented(format string, args ...any) *protocol.AWSError {
 	return &protocol.AWSError{
 		Code:       protocol.ErrNotImplemented.Code,
-		Message:    fmt.Sprintf("%s is not implemented on the federated catalog %s: Overcast serves only its database and table reads through Glue.", operation, catalogID),
+		Message:    fmt.Sprintf(format, args...),
 		HTTPStatus: protocol.ErrNotImplemented.HTTPStatus,
 	}
 }

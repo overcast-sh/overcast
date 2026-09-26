@@ -28,8 +28,8 @@ type Catalogs interface {
 	Default() Catalog
 	// Resolve returns the catalog catalogID names: a table bucket's catalog
 	// for "<account>:s3tablescatalog/<bucket>", and otherwise as a Glue
-	// operation's CatalogId is read. found is false for a table bucket
-	// that does not exist.
+	// operation's CatalogId is read. found is false for a catalog Overcast
+	// does not have, such as a table bucket that does not exist.
 	Resolve(ctx context.Context, catalogID string) (cat Catalog, found bool, err error)
 }
 
@@ -44,16 +44,16 @@ func (c catalogs) Resolve(ctx context.Context, catalogID string) (Catalog, bool,
 	return c.s.resolveCatalog(ctx, c.s.parseCatalogID(catalogID))
 }
 
-// resolveCatalog is the catalog p names. found is false for s3tablescatalog
-// when S3 Tables is not wired, and for a table bucket that does not exist.
+// resolveCatalog is the catalog p names. found is false for a catalog
+// Overcast does not have: one under s3tablescatalog when S3 Tables is not
+// wired, a table bucket that does not exist, and any catalogUnknown.
 func (s *Service) resolveCatalog(ctx context.Context, p catalogPath) (Catalog, bool, error) {
-	if p.kind == catalogDefault {
+	switch {
+	case p.kind == catalogDefault:
 		return s.Catalog(), true, nil
-	}
-	if s.s3tables == nil {
+	case s.s3tables == nil || p.kind == catalogUnknown:
 		return nil, false, nil
-	}
-	if p.kind == catalogS3Tables {
+	case p.kind == catalogS3Tables:
 		return emptyCatalog{}, true, nil // the parent holds catalogs, not databases
 	}
 	if _, found, err := s.s3tables.GetTableBucket(ctx, p.bucket); !found || err != nil {

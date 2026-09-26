@@ -71,7 +71,7 @@ settings, and `/_overcast/athena/engine` reports its state.
 | First query | Starts at once | Waits for the engine to start |
 | Result reuse | `ResultReuseConfiguration` reuses a recent result | Every query runs |
 | CloudWatch metrics | Published when the workgroup enables them | Not published |
-| S3 Tables catalogs | `s3tablescatalog/<bucket>` lists and queries a table bucket | Listed through the metadata operations; not queryable yet |
+| S3 Tables catalogs | `s3tablescatalog/<bucket>` lists and queries a table bucket | Listed through the metadata operations; a query run in one fails `NOT_SUPPORTED` |
 | Data catalogs | `FEDERATED` provisions a connector | `FEDERATED` is refused with a 501 |
 | Metadata | `LAMBDA` and `HIVE` catalogs are read through their connector | Only `GLUE` catalogs for this account are readable |
 | Spark | Spark workgroups, sessions and notebooks | Not emulated |

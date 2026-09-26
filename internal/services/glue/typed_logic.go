@@ -3,7 +3,6 @@ package glue
 import (
 	"context"
 	"maps"
-	"regexp"
 	"strconv"
 
 	"github.com/overcast-sh/overcast/internal/events"
@@ -194,53 +193,6 @@ func (s *Service) createDatabaseTyped(ctx context.Context, req *createDatabaseRe
 		return nil, errInternal(err)
 	}
 	return &struct{}{}, nil
-}
-
-// The database and table reads resolve their CatalogId, so they serve the
-// account's own catalog and the federated S3 Tables catalogs alike.
-
-// requireCatalogDatabase loads a database from a resolved catalog, answering
-// EntityNotFoundException when it is not there.
-func requireCatalogDatabase(ctx context.Context, cat Catalog, name string) (Database, *protocol.AWSError) {
-	if name == "" {
-		return Database{}, errInvalidInput("DatabaseName is required.")
-	}
-	db, found, err := cat.GetDatabase(ctx, name)
-	if err != nil {
-		return db, errInternal(err)
-	}
-	if !found {
-		return db, errDatabaseNotFound(normName(name))
-	}
-	return db, nil
-}
-
-func (s *Service) getDatabaseTyped(ctx context.Context, req *getDatabaseReq) (*getDatabaseResp, *protocol.AWSError) {
-	cat, aerr := s.readCatalog(ctx, req.CatalogId)
-	if aerr != nil {
-		return nil, aerr
-	}
-	db, aerr := requireCatalogDatabase(ctx, cat, req.Name)
-	if aerr != nil {
-		return nil, aerr
-	}
-	return &getDatabaseResp{Database: &db}, nil
-}
-
-func (s *Service) getDatabasesTyped(ctx context.Context, req *getDatabasesReq) (*getDatabasesResp, *protocol.AWSError) {
-	cat, aerr := s.readCatalog(ctx, req.CatalogId)
-	if aerr != nil {
-		return nil, aerr
-	}
-	dbs, err := cat.ListDatabases(ctx)
-	if err != nil {
-		return nil, errInternal(err)
-	}
-	page, aerr := paginate(dbs, req.MaxResults, req.NextToken, catalogPageSize)
-	if aerr != nil {
-		return nil, aerr
-	}
-	return &getDatabasesResp{DatabaseList: page.Items, NextToken: page.NextToken}, nil
 }
 
 func (s *Service) updateDatabaseTyped(ctx context.Context, req *updateDatabaseReq) (*struct{}, *protocol.AWSError) {
@@ -463,62 +415,6 @@ func (s *Service) createTableTyped(ctx context.Context, req *createTableReq) (*c
 	return resp, nil
 }
 
-func (s *Service) getTableTyped(ctx context.Context, req *getTableReq) (*getTableResp, *protocol.AWSError) {
-	cat, aerr := s.readCatalog(ctx, req.CatalogId)
-	if aerr != nil {
-		return nil, aerr
-	}
-	if _, aerr := requireCatalogDatabase(ctx, cat, req.DatabaseName); aerr != nil {
-		return nil, aerr
-	}
-	if req.Name == "" {
-		return nil, errInvalidInput("Table name is required.")
-	}
-	t, found, err := cat.GetTable(ctx, req.DatabaseName, req.Name)
-	if err != nil {
-		return nil, errInternal(err)
-	}
-	if !found {
-		return nil, errTableNotFound(normName(req.Name))
-	}
-	return &getTableResp{Table: &t}, nil
-}
-
-func (s *Service) getTablesTyped(ctx context.Context, req *getTablesReq) (*getTablesResp, *protocol.AWSError) {
-	cat, aerr := s.readCatalog(ctx, req.CatalogId)
-	if aerr != nil {
-		return nil, aerr
-	}
-	if _, aerr := requireCatalogDatabase(ctx, cat, req.DatabaseName); aerr != nil {
-		return nil, aerr
-	}
-	// Expression is "a regular expression pattern. If present, only those
-	// tables whose names match the pattern are returned." It must match the
-	// whole name.
-	var re *regexp.Regexp
-	if req.Expression != "" {
-		var err error
-		if re, err = regexp.Compile("^(?:" + req.Expression + ")$"); err != nil {
-			return nil, errInvalidInput("Invalid Expression %q: %v", req.Expression, err)
-		}
-	}
-	all, err := cat.ListTables(ctx, req.DatabaseName)
-	if err != nil {
-		return nil, errInternal(err)
-	}
-	tables := make([]*Table, 0, len(all))
-	for i := range all {
-		if re == nil || re.MatchString(all[i].Name) {
-			tables = append(tables, &all[i])
-		}
-	}
-	page, aerr := paginate(tables, req.MaxResults, req.NextToken, catalogPageSize)
-	if aerr != nil {
-		return nil, aerr
-	}
-	return &getTablesResp{TableList: page.Items, NextToken: page.NextToken}, nil
-}
-
 // nextVersionID is the version UpdateTable gives a table whose current
 // version is cur.
 func nextVersionID(cur string) string {
@@ -536,11 +432,7 @@ func nextVersionID(cur string) string {
 // definition is kept as a table version.
 func (s *Service) updateTableTyped(ctx context.Context, req *updateTableReq) (*struct{}, *protocol.AWSError) {
 	if req.UpdateOpenTableFormatInput != nil {
-		return nil, &protocol.AWSError{
-			Code:       protocol.ErrNotImplemented.Code,
-			Message:    "UpdateOpenTableFormatInput is not implemented: Overcast does not write Iceberg metadata.",
-			HTTPStatus: protocol.ErrNotImplemented.HTTPStatus,
-		}
+		return nil, errNotImplemented("UpdateOpenTableFormatInput is not implemented: Overcast does not write Iceberg metadata.")
 	}
 	if req.TableInput == nil {
 		return nil, errInvalidInput("TableInput is required.")

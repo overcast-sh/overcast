@@ -27,6 +27,9 @@ const (
 	catalogS3Tables
 	// catalogTableBucket is one table bucket's child of s3tablescatalog.
 	catalogTableBucket
+	// catalogUnknown names s3tablescatalog but no catalog Overcast has: an
+	// empty or nested bucket, or another account's.
+	catalogUnknown
 )
 
 // catalogPath is a parsed CatalogId.
@@ -37,30 +40,32 @@ type catalogPath struct {
 
 // parseCatalogID reads a CatalogId: "[<account>:]s3tablescatalog" is the
 // federated parent and "[<account>:]s3tablescatalog/<bucket>" a table
-// bucket's catalog, for this account. Anything else — empty, the account ID,
-// or an ID Overcast has no catalog for — is the account's own catalog, which
-// is how every Data Catalog operation has always read it: Overcast emulates
-// one account.
+// bucket's catalog, for this account. Any other ID naming s3tablescatalog
+// is catalogUnknown. Everything else — empty, the account ID, or an ID
+// Overcast has no catalog for — is the account's own catalog, which is how
+// every Data Catalog operation has always read it: Overcast emulates one
+// account.
 func (s *Service) parseCatalogID(id string) catalogPath {
-	if account, rest, ok := strings.Cut(id, ":"); ok {
-		if account != s.cfg.AccountID {
-			return catalogPath{}
-		}
-		id = rest
+	account, rest, qualified := strings.Cut(id, ":")
+	if !qualified {
+		rest = id
 	}
-	name, bucket, child := strings.Cut(id, "/")
+	name, bucket, child := strings.Cut(rest, "/")
 	switch {
 	case !strings.EqualFold(name, S3TablesCatalogName):
-		return catalogPath{}
+		return catalogPath{kind: catalogDefault}
+	case qualified && account != s.cfg.AccountID:
+		return catalogPath{kind: catalogUnknown}
 	case !child:
 		return catalogPath{kind: catalogS3Tables}
 	case bucket == "" || strings.Contains(bucket, "/"):
-		return catalogPath{}
+		return catalogPath{kind: catalogUnknown}
 	}
 	return catalogPath{kind: catalogTableBucket, bucket: strings.ToLower(bucket)}
 }
 
-// federated reports whether the CatalogId names a catalog S3 Tables backs.
+// federated reports whether the CatalogId names s3tablescatalog or a
+// catalog under it, whether or not that catalog exists.
 func (p catalogPath) federated() bool { return p.kind != catalogDefault }
 
 // catalogIDOf is the CatalogId AWS reports for the path's catalog.
@@ -70,6 +75,7 @@ func (s *Service) catalogIDOf(p catalogPath) string {
 		return s.cfg.AccountID + ":" + S3TablesCatalogName
 	case catalogTableBucket:
 		return s.cfg.AccountID + ":" + S3TablesCatalogName + "/" + p.bucket
+	case catalogDefault, catalogUnknown:
 	}
 	return s.cfg.AccountID
 }
@@ -96,7 +102,7 @@ func ownCatalogOp[In any, Out any, P interface {
 	return op.NewTyped(name, func(ctx context.Context, in *In) (*Out, *protocol.AWSError) {
 		req := P(in)
 		if s.parseCatalogID(req.catalogID()).federated() {
-			return nil, errFederatedNotImplemented(name, req.catalogID())
+			return nil, errNotImplemented("%s is not implemented on the federated catalog %s: Overcast serves only its database and table reads through Glue.", name, req.catalogID())
 		}
 		return fn(ctx, req)
 	})

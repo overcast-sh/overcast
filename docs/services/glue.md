@@ -72,7 +72,8 @@ namespaces and whose tables are its Iceberg tables. Pass the child's ID as
 
 ```bash
 aws glue get-catalogs --parent-catalog-id s3tablescatalog
-aws glue get-tables --catalog-id 000000000000:s3tablescatalog/my-bucket   --database-name my_namespace
+aws glue get-tables --catalog-id 000000000000:s3tablescatalog/my-bucket \
+  --database-name my_namespace
 ```
 
 Each table has `table_type=ICEBERG`, its current `metadata_location`, its
@@ -102,7 +103,7 @@ that matches everything.
 | Cascading deletes | Asynchronous | Immediate |
 | Partition indexes, column statistics, transactions | Supported | Ignored |
 | `CatalogId` | Selects the catalog | The account's catalog, or an `s3tablescatalog` catalog; any other ID reads the account's |
-| `s3tablescatalog` | Created by enabling the S3 Tables integration (`CreateCatalog`) | Always present; any operation but the database and table reads is 501 there |
+| `s3tablescatalog` | Created by enabling the S3 Tables integration (`CreateCatalog`) | Always present and read-only: anything but the catalog, database and table reads is 501 there |
 | `GetCatalogs` `HasDatabases` | Filters the list | Ignored |
 | Lake Formation | Enforces grants | Not modelled: reports the default `IAM_ALLOWED_PRINCIPALS` permission, and every catalog, database and table is readable |
 
