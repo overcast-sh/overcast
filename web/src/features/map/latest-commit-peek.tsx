@@ -2,22 +2,26 @@
  * LatestCommitPeek — an S3 Tables table's latest commit, from the map: what
  * the commit did, how many records it added and removed, and when. The
  * question a developer has right after a write, answered without leaving
- * the graph.
- *
- * No *Query with Athena* here: Athena cannot run a query in a table bucket's
- * catalog yet (#2183), and an action that can only fail is not offered.
+ * the graph — and *Query with Athena* for what the table holds now, in the
+ * bucket's `s3tablescatalog/<bucket>` catalog, as the table page queries it.
  */
 
+import { useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { ExternalLink } from "lucide-react"
 import { Advisory } from "@/components/ui/advisory"
 import { DefinitionList, Definition } from "@/components/ui/definition-card"
 import { EmptyState } from "@/components/ui/primitives"
+import { InertEngineAdvisory } from "@/features/athena/components/editor/engine-status"
+import { engineStatusQueryOptions } from "@/features/athena/data"
+import { isInert } from "@/features/athena/engine-chip"
+import { s3tablesTableRef } from "@/features/s3tables/athena-sql"
 import { formatCount, formatDate } from "@/lib/format"
 import { parseS3Uri } from "@/lib/s3-uri"
 import type { TopologyDataTable } from "@/types"
 import { MapPeekPanel, peekActionClass } from "./map-peek-panel"
 import { s3TablesTableRoute } from "./node-route"
+import { QueryWithAthenaAction } from "./query-with-athena-action"
 
 interface LatestCommitPeekProps {
   bucket: string
@@ -29,6 +33,7 @@ export function LatestCommitPeek({ bucket, table, onClose }: LatestCommitPeekPro
   const namespace = table?.namespace ?? ""
   const name = table?.name ?? ""
   const route = s3TablesTableRoute(bucket, table?.id ?? "")
+  const ref = s3tablesTableRef(bucket, namespace, name)
   return (
     <MapPeekPanel
       open={table !== null}
@@ -36,10 +41,13 @@ export function LatestCommitPeek({ bucket, table, onClose }: LatestCommitPeekPro
       title={`${namespace}.${name}`}
       subtitle={`Table bucket ${bucket}`}
       actions={
-        <Link to={route.to} params={route.params} className={peekActionClass}>
-          <ExternalLink aria-hidden className="h-3.5 w-3.5" />
-          Open table
-        </Link>
+        <>
+          <QueryWithAthenaAction {...ref} />
+          <Link to={route.to} params={route.params} className={peekActionClass}>
+            <ExternalLink aria-hidden className="h-3.5 w-3.5" />
+            Open table
+          </Link>
+        </>
       }
     >
       {table && <CommitBody table={table} />}
@@ -70,6 +78,7 @@ function CommitBody({ table }: { table: TopologyDataTable }) {
           description="The table has no snapshot: nothing has been written to it since it was created."
         />
       )}
+      <EngineOffAdvisory />
       {warehouse && (
         <Advisory
           tone="info"
@@ -91,6 +100,12 @@ function CommitBody({ table }: { table: TopologyDataTable }) {
       )}
     </div>
   )
+}
+
+/** With the engine off, *Query with Athena* succeeds with no rows: said before it is clicked. */
+function EngineOffAdvisory() {
+  const engine = useQuery(engineStatusQueryOptions()).data
+  return engine && isInert(engine) ? <InertEngineAdvisory status={engine} /> : null
 }
 
 function records(n: number | undefined): string | undefined {

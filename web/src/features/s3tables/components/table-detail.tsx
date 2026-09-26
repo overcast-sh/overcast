@@ -8,13 +8,12 @@ import {
 import { IcebergSchemaView } from "@/components/iceberg/schema-view"
 import { IcebergSnapshotList } from "@/components/iceberg/snapshot-list"
 import { QueryAsOfSnapshot } from "@/components/iceberg/query-as-of"
-import type { IcebergTableRef } from "@/components/iceberg/snapshot-sql"
 import { useIcebergMetadataFile } from "@/components/iceberg/use-metadata-file"
 import { PageHeader } from "@/components/ui/primitives"
 import { RefreshAction } from "@/components/ui/resource-list-page"
 import { Tab, TabList, TabPanel, Tabs } from "@/components/ui/tabs"
 import { RawStateLink } from "@/features/debug/raw-state-link"
-import { s3tablesCatalog } from "../athena-sql"
+import { s3tablesTableRef } from "../athena-sql"
 import { tableArn, tableBucketsQueryOptions, tableQueryOptions, type ConfigTarget } from "../data"
 import type { TableSearch, TableTab } from "../search"
 import { DetailLayout, DetailLoading, DetailMissing } from "./detail-layout"
@@ -74,11 +73,7 @@ export function TableDetail({ bucketName, tableId, search, onSearchChange }: Tab
     arn,
   }
   const tab = search.tab ?? "overview"
-  const athenaRef: IcebergTableRef = {
-    catalog: s3tablesCatalog(bucketName),
-    database: namespace,
-    table: name,
-  }
+  const athenaRef = s3tablesTableRef(bucketName, namespace, name)
   const gate = {
     location: t.metadataLocation,
     query: metadata,

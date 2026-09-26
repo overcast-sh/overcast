@@ -51,7 +51,7 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | Tags | On table buckets and tables, on create or through the tagging operations |
 | Glue and Athena | Every table bucket is a catalog under Glue's `s3tablescatalog`, which Athena queries and writes as `s3tablescatalog/<bucket>` — see [Glue](./glue.md#s3-tables-through-s3tablescatalog) and [Athena](./athena.md#s3-tables) |
 | CloudFormation | `AWS::S3Tables::TableBucket`, `Namespace`, `Table`, `TableBucketPolicy` and `TablePolicy` |
-| System map | A table bucket node lists its tables by namespace, with their warehouse folded in, and peeks at a table's latest commit |
+| System map | A table bucket node lists its tables by namespace, with their warehouse folded in, and peeks at a table's latest commit, with *Query with Athena* |
 
 ## Differences from AWS
 
