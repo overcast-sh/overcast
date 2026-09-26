@@ -205,7 +205,7 @@ func (h *Handler) writeObject(ctx context.Context, b *Bucket, obj *Object, body 
 		return "", aerr
 	}
 	commit := func() *protocol.AWSError { return h.commitObject(ctx, b, obj) }
-	if aerr := h.store.storeObject(obj, copyFrom(body), bodyDigest.etag, commit); aerr != nil {
+	if aerr := h.store.storeObject(obj, copyFrom(body), commit); aerr != nil {
 		return "", aerr
 	}
 	h.publishObjectEvent(ctx, events.S3ObjectCreated, obj, stamp, "ObjectCreated:Put", obj.ContentLength, obj.ETag)
@@ -569,10 +569,10 @@ func parseByteRange(header string, totalSize int64) (start, end int64, outcome r
 // headerVal is a comma-separated list as sent in If-Match / If-None-Match.
 // Comparison strips surrounding quotes for robustness.
 func etagMatches(objectETag, headerVal string) bool {
-	bare := strings.Trim(objectETag, `"`)
+	bare := unquoteETag(objectETag)
 	for _, tok := range strings.Split(headerVal, ",") {
 		tok = strings.TrimSpace(tok)
-		if tok == "*" || strings.Trim(tok, `"`) == bare {
+		if tok == "*" || unquoteETag(tok) == bare {
 			return true
 		}
 	}
@@ -983,7 +983,7 @@ func (h *Handler) CopyObject(w http.ResponseWriter, r *http.Request) {
 	// is what lets a copy onto itself (the documented way to replace an
 	// object's metadata) keep its bytes.
 	commit := func() *protocol.AWSError { return h.commitObject(r.Context(), destB, dest) }
-	if aerr := h.store.storeObject(dest, h.store.bodyOf(src), bodyDigest.etag, commit); aerr != nil {
+	if aerr := h.store.storeObject(dest, h.store.bodyOf(src), commit); aerr != nil {
 		protocol.WriteXMLError(w, r, aerr)
 		return
 	}

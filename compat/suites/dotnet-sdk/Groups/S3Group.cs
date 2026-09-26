@@ -409,7 +409,7 @@ public sealed class S3Group(AwsClients clients) : IServiceGroup
         var uploadId = context.GetString("s3MpUploadId") ?? throw new InvalidOperationException("s3MpUploadId not set");
         var key = context.GetString("s3MpKey") ?? throw new InvalidOperationException("s3MpKey not set");
         var etag = context.GetString("s3MpEtag") ?? throw new InvalidOperationException("s3MpEtag not set");
-        await clients.S3().CompleteMultipartUploadAsync(new CompleteMultipartUploadRequest
+        var completed = await clients.S3().CompleteMultipartUploadAsync(new CompleteMultipartUploadRequest
         {
             BucketName = bucket,
             Key = key,
@@ -418,6 +418,11 @@ public sealed class S3Group(AwsClients clients) : IServiceGroup
         });
         var head = await clients.S3().GetObjectMetadataAsync(new GetObjectMetadataRequest { BucketName = bucket, Key = key });
         Assertions.GreaterThan(0, head.Headers.ContentLength, "CompleteMultipartUpload: ContentLength should be > 0");
+        // S3 gives a multipart object the MD5 of its parts' binary MD5s, suffixed with the part count (#2232):
+        // md5(md5(5 MiB of "A"))-1 for UploadPart's single part.
+        const string want = "\"ad68245c78c0fbbbe87df8ecf43247bf-1\"";
+        Assertions.Equal(want, completed.ETag, "CompleteMultipartUpload: ETag");
+        Assertions.Equal(want, head.ETag, "CompleteMultipartUpload: GetObjectMetadata ETag");
     }
 
     private async Task AbortMultipartUploadAsync(TestContext context)

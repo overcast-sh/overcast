@@ -327,6 +327,14 @@ def CompleteMultipartUpload(ctx: TestContext) -> None:
     if not resp.get("Key"):
         raise AssertionError("CompleteMultipartUpload: missing Key in response")
     ctx["mp_upload_id"] = None  # mark completed
+    # S3 gives a multipart object the MD5 of its parts' binary MD5s, suffixed with the part count (#2232):
+    # md5(md5(5 MiB + 1 of "a"))-1 for UploadPart's single part.
+    want = '"aa1280fb0be680ea1719f4afb3c9a638-1"'
+    if resp.get("ETag") != want:
+        raise AssertionError(f"CompleteMultipartUpload: ETag = {resp.get('ETag')}, want {want}")
+    head = s3.head_object(Bucket=bucket, Key="multipart.bin")
+    if head.get("ETag") != want:
+        raise AssertionError(f"CompleteMultipartUpload: HeadObject ETag = {head.get('ETag')}, want {want}")
 
 
 def AbortMultipartUpload(ctx: TestContext) -> None:
