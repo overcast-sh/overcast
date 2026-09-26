@@ -30,10 +30,15 @@ func servedOver(p awsapi.Protocol, modelService string) servedProtocol {
 // No codec or resolved Query route is on this request: middleware.Protocol
 // and the router run inside these middlewares, not before them. So a Query
 // call is recognised by its modeled Action, which for a form-encoded POST
-// means reading the form here. ParseFormPreservingBody leaves the body intact
-// for anything that still reads it.
+// means reading the form here; ParseFormPreservingBody leaves the body intact
+// for anything that still reads it. Only a POST carries a Query form: an S3
+// PUT sent with curl's default form content type is an object body.
+//
+// A recovered panic is classified from what is left of the request. The
+// handler has usually drained a Query POST's body by then, so that one falls
+// back to the attributed service's envelope, as it did before #2265.
 func writeUnroutedError(w http.ResponseWriter, r *http.Request, aerr *protocol.AWSError) {
-	if strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/x-www-form-urlencoded") {
+	if r.Method == http.MethodPost && strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/x-www-form-urlencoded") {
 		_ = protocol.ParseFormPreservingBody(r)
 	}
 	serviceutil.WriteError(w, r, requestProtocol(r, detectService(r), false).errors, aerr)
@@ -75,10 +80,31 @@ func requestProtocol(r *http.Request, service string, routedQuery bool) servedPr
 		// so no REST claim can speak for it.
 		return servedOver(awsapi.ProtocolRESTXML, "s3")
 	}
-	if claim, ok := awsapi.NewRegistry().ClaimRESTQuery(r.Method, r.URL.Path, r.URL.RawQuery); ok {
+	if claim, ok := awsapi.NewRegistry().ClaimRESTQuery(r.Method, r.URL.Path, r.URL.RawQuery); ok && !claim.CatchAll {
 		return servedProtocol{protocol: claim.Protocol, errors: claim.ErrorProfile}
 	}
+	if served, ok := signingNameProtocol(ServiceFromCredential(r)); ok {
+		return served
+	}
 	return servedOver(awsapi.ProtocolUnknown, "")
+}
+
+// signingNameProtocol names the REST protocol a SigV4 signing name's modeled
+// bindings speak, for a request no more specific binding claimed. A root
+// catch-all binding ("/{Path+}", MediaStore Data's) is no such claim: it
+// matches every path, so it says nothing about the service the caller
+// addressed, and the caller's credential scope is the better evidence. The
+// router's callerClaim follows the same reasoning (#2264).
+func signingNameProtocol(signingName string) (servedProtocol, bool) {
+	profile, ok := awsapi.SigningNameErrorProfile(signingName)
+	if !ok {
+		return servedProtocol{}, false
+	}
+	p := awsapi.ProtocolRESTJSON
+	if profile == awsapi.ErrorProfileRESTXML || profile == awsapi.ErrorProfileBareXML {
+		p = awsapi.ProtocolRESTXML
+	}
+	return servedProtocol{protocol: p, errors: profile}, true
 }
 
 // queryDialect names the Query protocol a Query call to claim's operation is

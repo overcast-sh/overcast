@@ -124,8 +124,8 @@ func signingNameForService(traits map[string]json.RawMessage) string {
 
 // restXMLNoErrorWrapping reports whether a service's restXml protocol trait
 // sets noErrorWrapping: its errors are a bare <Error> rather than the
-// <ErrorResponse><Error> the protocol otherwise wraps them in. S3 is the one
-// model that sets it.
+// <ErrorResponse><Error> the protocol otherwise wraps them in. S3's model
+// sets it.
 func restXMLNoErrorWrapping(traits map[string]json.RawMessage) bool {
 	raw, ok := traits["aws.protocols#restXml"]
 	if !ok {

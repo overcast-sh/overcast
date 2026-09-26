@@ -17,14 +17,14 @@ const (
 	ErrorProfileQueryXML
 	ErrorProfileEC2QueryXML
 	// ErrorProfileBareXML is a rest-xml error in a bare <Error>: the envelope
-	// of a service whose restXml trait sets noErrorWrapping. S3 is the only
-	// one.
+	// of a service whose restXml trait sets noErrorWrapping, which in the
+	// pinned models is S3.
 	ErrorProfileBareXML
 	ErrorProfileRPCV2CBOR
 	ErrorProfileRPCV2JSON
 	// ErrorProfileRESTXML is a rest-xml error wrapped in <ErrorResponse>, the
-	// protocol's default: CloudFront, Route 53 and S3 Control. An AWS SDK
-	// reads no error code from a bare <Error> for one of these.
+	// protocol's default, which CloudFront, Route 53 and S3 Control use. An
+	// AWS SDK reads no error code from a bare <Error> for one of these.
 	ErrorProfileRESTXML
 )
 

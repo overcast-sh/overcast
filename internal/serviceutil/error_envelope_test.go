@@ -99,7 +99,7 @@ func TestWriteError_sdkReadsTheCodeInEveryProfile(t *testing.T) {
 }
 
 // TestWriteNotImplemented_restXMLFollowsNoErrorWrapping is the 501 half of
-// #2265: CloudFront, Route 53 and S3 Control claims get the wrapped envelope
+// #2265: CloudFront and Route 53 claims get the wrapped envelope
 // their SDKs decode, where they used to get S3's bare <Error>.
 func TestWriteNotImplemented_restXMLFollowsNoErrorWrapping(t *testing.T) {
 	registry := awsapi.NewRegistry()

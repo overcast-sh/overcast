@@ -175,7 +175,7 @@ func TestSigningNameErrorProfile(t *testing.T) {
 }
 
 // TestSigningNameErrorProfile_isUnambiguous pins what SigningNameErrorProfile
-// relies on: no signing name's REST bindings span both REST protocols, so
+// relies on: no signing name's REST bindings span two error envelopes, so
 // "the first in generated order" is never a choice. S3's family is the
 // exception the router never asks about (addressesNonS3 rules it out first).
 func TestSigningNameErrorProfile_isUnambiguous(t *testing.T) {
@@ -187,7 +187,7 @@ func TestSigningNameErrorProfile_isUnambiguous(t *testing.T) {
 		}
 		profile := ErrorProfileFor(op.Protocol, op.ModelService)
 		if prior, ok := seen[name]; ok && prior != profile {
-			t.Errorf("signing name %q has bindings in both REST protocols (%s %s)", name, op.ModelService, op.Operation)
+			t.Errorf("signing name %q has bindings in two error envelopes (%s %s)", name, op.ModelService, op.Operation)
 		}
 		seen[name] = profile
 	}

@@ -14,11 +14,13 @@ import (
 // It is the one place an awsapi.ErrorProfile becomes bytes on the wire. The
 // router's 501 and scope-mismatch answers and middleware's IAM denial and
 // SigV4 errors all come through here, each with a profile the generated
-// registry derived from the pinned models (#2265). It lives in serviceutil,
-// the lowest package that already imports both the registry and the protocol
-// writers: router and middleware both import it, while middleware imports
-// serviceutil, so WriteNotImplemented could not reach a writer kept there, and
-// protocol and codec know nothing of the registry.
+// registry derived from the pinned models (#2265).
+//
+// It lives in serviceutil because every caller can reach it there without a
+// cycle. Router and middleware both import serviceutil. A writer kept in
+// middleware would be out of WriteNotImplemented's reach, since middleware
+// imports serviceutil. Protocol and codec sit below the registry and do not
+// import it.
 //
 // A rest-xml error is wrapped in <ErrorResponse> unless the service's
 // noErrorWrapping trait asks for a bare <Error>. The wrapped envelope carries
