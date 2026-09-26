@@ -43,7 +43,7 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | Area              | Behaviour                                                                                     |
 | ----------------- | ----------------------------------------------------------------------------------------------- |
 | Entities          | Users, roles, groups, managed and inline policies, instance profiles, access keys, tags on all of them |
-| Policy documents  | Parsed before they are stored — every operation that takes one refuses a malformed document with `MalformedPolicyDocument` (400) |
+| Policy documents  | Parsed before they are stored — every operation that takes one refuses a malformed document with `MalformedPolicyDocument` (400); every document a response returns is URL-encoded per RFC 3986, as AWS does, so decode it before parsing (botocore and the AWS CLI do this for you) |
 | Policy usage      | `GetPolicy` and `ListPolicies` count real attachments in `AttachmentCount`, and bounded entities in `PermissionsBoundaryUsageCount` |
 | Tags              | Applied inline at create, changed with `Tag*`/`Untag*`, and returned on the resource by `GetRole`, `GetUser`, `GetPolicy` and `GetInstanceProfile` — the `List*` operations omit them, as AWS does |
 | Group membership  | `GetGroup` resolves members into `Users`, paginated with `Marker` / `MaxItems` (default 100, cap 1000) |

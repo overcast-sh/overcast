@@ -40,7 +40,6 @@ func All() []ServiceGroup {
 		SecretsManager().named("secretsmanager"),
 		KMS().named("kms"),
 		SSM().named("ssm"),
-		Kinesis().named("kinesis"),
 		EventBridge().named("eventbridge"),
 		CloudFormation().named("cloudformation"),
 		EC2().named("ec2"),

@@ -244,6 +244,7 @@ func TestCommittedRegistryPortedGroups(t *testing.T) {
 		"eventbridge-buses":   "compat/model/authored/eventbridge-buses.json",
 		"eventbridge-events":  "compat/model/authored/eventbridge-events.json",
 		"cognito-userpools":   "compat/model/authored/cognito-userpools.json",
+		"kinesis-records":     "compat/model/authored/kinesis-records.json",
 		"logs-metric-filters": "compat/model/authored/logs-metric-filters.json",
 	}
 	if !reflect.DeepEqual(ported, want) {
