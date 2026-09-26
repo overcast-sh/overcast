@@ -13,6 +13,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/appconfig v1.53.0
 	github.com/aws/aws-sdk-go-v2/service/appsync v1.53.5
 	github.com/aws/aws-sdk-go-v2/service/athena v1.66.1
+	github.com/aws/aws-sdk-go-v2/service/backup v1.67.0
 	github.com/aws/aws-sdk-go-v2/service/batch v1.74.0
 	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.71.9
 	github.com/aws/aws-sdk-go-v2/service/cloudfront v1.60.4
