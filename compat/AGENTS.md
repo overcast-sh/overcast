@@ -865,6 +865,18 @@ group, or the group's `suites` no longer names the suite. Those are reported as
 other configuration change still takes the re-seed route above, because the row
 is one a run would still produce.
 
+One downgrade passes too: `skip` -> `unimplemented` for a `(suite, group)` whose
+parity debt the same change closes — listed in the base's
+[parity-debt.json](./parity-debt.json) (`--lint-parity-debt-from`), gone from the
+PR's (`--lint-parity-debt-to`). That skip was "not yet implemented in `<suite>`
+test suite"; once the suite runs the test, an operation the emulator lacks
+answers 501, which is adding an `unimplemented` test (flipping a group to its
+authored scenario does exactly this, #2263). Each one is reported as
+`compat baseline: <key> skip -> unimplemented — parity debt closed for
+<suite>/<group>`. Nothing else is excused: an environmental skip, debt still
+listed, any other status pair, and any new `fail` are still rejected, and a
+missing debt file on either side grants nothing.
+
 ### Generated groups soak in before they gate — never hand-edit them in
 
 A group in [suites/registry.generated.json](./suites/registry.generated.json)

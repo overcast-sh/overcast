@@ -72,7 +72,7 @@ func TestLintBaselineChange_downgrade(t *testing.T) {
 
 	// When: the baseline change is linted. No registry is needed: the scope
 	// only ever decides whether a *removal* is legitimate.
-	issues, notes := lintBaselineChange(oldBaseline, newBaseline, nil)
+	issues, notes, _ := lintBaselineChange(oldBaseline, newBaseline, nil, nil)
 
 	// Then: the downgrade is rejected.
 	if len(notes) != 0 {
@@ -98,9 +98,9 @@ func TestLintBaselineChange_removal(t *testing.T) {
 
 	// When: the baseline change is linted against a registry that still asks
 	// go-sdk to run the test.
-	issues, notes := lintBaselineChange(oldBaseline, newBaseline, scopeFor(parityGroup{
+	issues, notes, _ := lintBaselineChange(oldBaseline, newBaseline, scopeFor(parityGroup{
 		Service: "s3", Name: "s3-crud", Tests: []parityTest{{Name: "CreateBucket"}},
-	}))
+	}), nil)
 
 	// Then: removing the expectation is rejected.
 	if len(notes) != 0 {
@@ -188,7 +188,7 @@ func TestLintBaselineChange_newFailEntryRejected(t *testing.T) {
 	}}
 
 	// When: the change is linted
-	issues, _ := lintBaselineChange(oldBaseline, newBaseline, nil)
+	issues, _, _ := lintBaselineChange(oldBaseline, newBaseline, nil, nil)
 
 	// Then: the new fail expectation is rejected. Iterating only the old
 	// baseline let contributors grandfather fresh failures by adding them.
@@ -210,7 +210,7 @@ func TestLintBaselineChange_seedingAnEmptyBaselineIsAllowed(t *testing.T) {
 	}}
 
 	// When: the seeding change is linted
-	issues, _ := lintBaselineChange(oldBaseline, newBaseline, nil)
+	issues, _, _ := lintBaselineChange(oldBaseline, newBaseline, nil, nil)
 
 	// Then: it is allowed. There is nothing to regress from, and the burn-down
 	// starts from whatever the first run measured.
@@ -230,10 +230,10 @@ func TestLintBaselineChange_emptyingAPopulatedBaselineIsRejected(t *testing.T) {
 
 	// When/Then: every dropped expectation is reported, so the seeding
 	// exemption cannot be reached by wiping the file first.
-	issues, _ := lintBaselineChange(oldBaseline, newBaseline, scopeFor(parityGroup{
+	issues, _, _ := lintBaselineChange(oldBaseline, newBaseline, scopeFor(parityGroup{
 		Service: "s3", Name: "s3-crud",
 		Tests: []parityTest{{Name: "CreateBucket"}, {Name: "DeleteBucket"}},
-	}))
+	}), nil)
 	if len(issues) != 2 {
 		t.Fatalf("issues = %#v, want one per removed expectation", issues)
 	}
@@ -326,7 +326,7 @@ func TestLintBaselineChange_removalAgainstRegistryScope(t *testing.T) {
 			// registry the pull request itself carries.
 			oldBaseline := &compatBaseline{Version: baselineVersion, Entries: tc.old}
 			newBaseline := &compatBaseline{Version: baselineVersion, Entries: tc.new}
-			issues, notes := lintBaselineChange(oldBaseline, newBaseline, tc.scope)
+			issues, notes, _ := lintBaselineChange(oldBaseline, newBaseline, tc.scope, nil)
 
 			// Then: the removal either fails the gate or is reported for
 			// information, never both and never neither.
@@ -374,6 +374,171 @@ func TestLintBaselineChangeFiles_readsTheRegistryFlags(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "1 compat baseline downgrade(s)") {
 		t.Fatalf("error = %v, want exactly one issue", err)
+	}
+}
+
+// debtFile builds a parity-debt file listing the given suite/group pairs.
+func debtFile(keys ...[2]string) *parityDebtFile {
+	file := &parityDebtFile{Version: parityDebtVersion}
+	for _, k := range keys {
+		file.Debt = append(file.Debt, parityDebtEntry{Suite: k[0], Service: "appconfig", Group: k[1], Tests: 1})
+	}
+	return file
+}
+
+// TestLintBaselineChange_closedParityDebt covers the one downgrade the lint
+// lets through: a parity-debt skip ("not yet implemented in <suite> test
+// suite") becoming an honest `unimplemented` in the change that closes that
+// debt. The suite never had the test; now it runs it and the emulator answers
+// 501, which is exactly "adding a test that is unimplemented".
+func TestLintBaselineChange_closedParityDebt(t *testing.T) {
+	const suite, group = "python-sdk", "appconfig-deployments"
+	skipped := baselineEntry{Suite: suite, Service: "appconfig", Group: group, Test: "StartDeployment", Status: compat.StatusSkip}
+	withStatus := func(status compat.Status) baselineEntry {
+		e := skipped
+		e.Status = status
+		return e
+	}
+	listed := debtFile([2]string{suite, group})
+	other := debtFile([2]string{"go-sdk", group})
+
+	tests := []struct {
+		name    string
+		old     baselineEntry
+		new     baselineEntry
+		oldDebt *parityDebtFile
+		newDebt *parityDebtFile
+		// want is "note" for an allowed closed-debt change, or "issue" for a
+		// lint failure.
+		want string
+	}{
+		{
+			name: "skip to unimplemented is allowed when this change closes the debt",
+			old:  skipped, new: withStatus(compat.StatusUnimplemented),
+			oldDebt: listed, newDebt: debtFile(),
+			want: "note",
+		},
+		{
+			name: "a skip that was not parity debt may not be downgraded",
+			old:  skipped, new: withStatus(compat.StatusUnimplemented),
+			oldDebt: other, newDebt: debtFile(),
+			want: "issue",
+		},
+		{
+			name: "debt still listed afterwards has not been closed",
+			old:  skipped, new: withStatus(compat.StatusUnimplemented),
+			oldDebt: listed, newDebt: listed,
+			want: "issue",
+		},
+		{
+			name: "closing the debt never licenses a fail",
+			old:  skipped, new: withStatus(compat.StatusFail),
+			oldDebt: listed, newDebt: debtFile(),
+			want: "issue",
+		},
+		{
+			name: "closing the debt does not excuse a pass downgrade",
+			old:  withStatus(compat.StatusPass), new: withStatus(compat.StatusUnimplemented),
+			oldDebt: listed, newDebt: debtFile(),
+			want: "issue",
+		},
+		{
+			name: "closing the debt does not excuse an na downgrade",
+			old:  withStatus(compat.StatusNA), new: withStatus(compat.StatusUnimplemented),
+			oldDebt: listed, newDebt: debtFile(),
+			want: "issue",
+		},
+		{
+			name: "no parity-debt files means no allowance",
+			old:  skipped, new: withStatus(compat.StatusUnimplemented),
+			want: "issue",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Given: a one-row baseline change and the parity-debt files on
+			// either side of it.
+			oldBaseline := &compatBaseline{Version: baselineVersion, Entries: []baselineEntry{tc.old}}
+			newBaseline := &compatBaseline{Version: baselineVersion, Entries: []baselineEntry{tc.new}}
+			var closed closedParityDebt
+			if tc.oldDebt != nil {
+				closed = closedParityDebtBetween(tc.oldDebt, tc.newDebt)
+			}
+
+			// When: the change is linted.
+			issues, notes, debtNotes := lintBaselineChange(oldBaseline, newBaseline, nil, closed)
+
+			// Then: it is either a named, allowed closure or a failure — never
+			// silently accepted.
+			if len(notes) != 0 {
+				t.Fatalf("out-of-scope notes = %#v, want none", notes)
+			}
+			switch tc.want {
+			case "note":
+				if len(issues) != 0 || len(debtNotes) != 1 {
+					t.Fatalf("issues = %#v, debt notes = %#v; want exactly one debt note", issues, debtNotes)
+				}
+				if !strings.Contains(debtNotes[0], "python-sdk/appconfig-deployments/StartDeployment skip -> unimplemented") ||
+					!strings.Contains(debtNotes[0], "parity debt closed") {
+					t.Fatalf("debt note = %q", debtNotes[0])
+				}
+			case "issue":
+				if len(issues) != 1 || len(debtNotes) != 0 {
+					t.Fatalf("issues = %#v, debt notes = %#v; want exactly one issue", issues, debtNotes)
+				}
+				if !strings.Contains(issues[0], "downgrade") {
+					t.Fatalf("issue = %q", issues[0])
+				}
+			default:
+				t.Fatalf("unknown want %q", tc.want)
+			}
+		})
+	}
+}
+
+// TestLintBaselineChangeFiles_readsTheParityDebtFlags is the plumbing test for
+// the closed-debt allowance: the two files come from --lint-parity-debt-from
+// and --lint-parity-debt-to, and a side that is absent grants nothing.
+func TestLintBaselineChangeFiles_readsTheParityDebtFlags(t *testing.T) {
+	// Given: a baseline change that turns a parity-debt skip into
+	// unimplemented, and a debt file that no longer lists the group.
+	row := baselineEntry{Suite: "cli", Service: "appconfig", Group: "appconfig-deployments", Test: "StartDeployment", Status: compat.StatusSkip}
+	oldBaseline := writeTempJSON(t, "old-baseline.json", &compatBaseline{Version: baselineVersion, Entries: []baselineEntry{row}})
+	row.Status = compat.StatusUnimplemented
+	newBaseline := writeTempJSON(t, "new-baseline.json", &compatBaseline{Version: baselineVersion, Entries: []baselineEntry{row}})
+	oldDebt := writeTempJSON(t, "old-debt.json", debtFile([2]string{"cli", "appconfig-deployments"}))
+	newDebt := writeTempJSON(t, "new-debt.json", debtFile())
+	absent := filepath.Join(t.TempDir(), "absent.json")
+	defer swapFlag(registryFile, absent)()
+	defer swapFlag(generatedRegistryFile, absent)()
+
+	cases := []struct {
+		name     string
+		from, to string
+		wantPass bool
+	}{
+		{name: "both files present and the debt closed", from: oldDebt, to: newDebt, wantPass: true},
+		{name: "no old debt file grants nothing", from: absent, to: newDebt},
+		{name: "old debt flag unset grants nothing", from: "", to: newDebt},
+		{name: "no new debt file grants nothing", from: oldDebt, to: absent},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer swapFlag(lintParityDebtFrom, tc.from)()
+			defer swapFlag(lintParityDebtTo, tc.to)()
+
+			// When: the files are linted.
+			err := lintBaselineChangeFiles(oldBaseline, newBaseline)
+
+			// Then: only a debt closure both files attest to passes.
+			if tc.wantPass && err != nil {
+				t.Fatalf("lint failed: %v", err)
+			}
+			if !tc.wantPass && err == nil {
+				t.Fatal("lint passed, want the skip -> unimplemented downgrade rejected")
+			}
+		})
 	}
 }
 
