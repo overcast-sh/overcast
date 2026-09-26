@@ -22,8 +22,10 @@ import (
 // enforcement would decide.
 
 // permissionsBoundaryTypePolicy is the only value of AWS's
-// PermissionsBoundaryAttachmentType enum.
-const permissionsBoundaryTypePolicy = "Policy"
+// PermissionsBoundaryAttachmentType enum. The model names that member "Policy"
+// but gives it the wire value "PermissionsBoundaryPolicy", and the wire value
+// is what AWS sends and every SDK parses (#1920).
+const permissionsBoundaryTypePolicy = "PermissionsBoundaryPolicy"
 
 // ─── Request/response types ──────────────────────────────────────────────────
 
