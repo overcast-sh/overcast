@@ -182,8 +182,9 @@ func (s *Service) PutObjectBytes(ctx context.Context, bucket, key string, body [
 // MD5 ETag, and the bucket's event notifications (SQS, SNS, Lambda,
 // EventBridge) fire exactly as for an HTTP PutObject — and returns the errors
 // PutObject would (NoSuchBucket above all), before reading any of body. A
-// read that fails ends the write as an interrupted upload does, with no
-// notification. Satisfies events.S3PutObjectStreamFunc.
+// read that fails ends the write as an interrupted upload does: the key keeps
+// whatever it held, and nothing is announced. Satisfies
+// events.S3PutObjectStreamFunc.
 func (s *Service) PutObjectStream(ctx context.Context, bucket, key string, body io.Reader, opts events.S3PutObjectOptions) (events.S3PutObjectResult, *protocol.AWSError) {
 	h := s.handler
 	b, aerr := h.store.getBucket(ctx, bucket)

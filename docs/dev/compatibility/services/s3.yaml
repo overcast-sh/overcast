@@ -2,7 +2,7 @@ service: s3
 status: in_progress
 priority: p0
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-09-23
+last_updated: 2026-09-26
 protocols: [rest_xml]
 implementation: [internal/services/s3]
 integration_tests: [tests/integration/s3]
@@ -513,6 +513,17 @@ operations:
       - name: source key missing in an existing source bucket
         status: fixed
         notes: Unaffected by the fix — still NoSuchKey (regression-tested, pre-existing test).
+      - name: copy onto itself with MetadataDirective REPLACE
+        status: fixed
+        notes: >-
+          The documented way to change an existing object's metadata. The copy
+          opened the destination body path for writing — the source's own
+          file — before reading the source, so the object came back empty. The
+          source is now read in full into a staged file before the destination
+          changes (#2192; tests/integration/s3/s3_write_atomicity_test.go).
+      - name: copy whose result cannot be recorded
+        status: fixed
+        notes: The destination keeps the object it had (#2192).
   DeleteObject:
     status: fixed
     aws_docs:
@@ -587,7 +598,19 @@ operations:
       - internal/services/s3/handler_multipart.go
     tests:
       - tests/integration/s3/s3_conditional_write_test.go
+      - tests/integration/s3/s3_write_atomicity_test.go
+      - internal/services/s3/write_atomicity_test.go
     scenarios:
+      - name: upload interrupted over an existing key
+        status: fixed
+        notes: >-
+          AWS: "Amazon S3 never adds partial objects". A body that fails part
+          way (client disconnect, in-process producer error) or whose record
+          cannot be stored leaves the current object, its record and its version
+          history byte-identical, in unversioned, versioning-enabled and
+          suspended buckets alike, on both state backends. The body is staged
+          and renamed into place; a failed record write restores the previous
+          body from a hard link (#2192).
       - name: If-None-Match "*" against an absent key
         status: fixed
         notes: Succeeds with 200, on both PutObject and CompleteMultipartUpload.
@@ -671,6 +694,9 @@ operations:
       - name: parts uploaded but omitted from the list
         status: fixed
         notes: Discarded with the rest of the upload's storage once the completion succeeds.
+      - name: completion that cannot be recorded
+        status: fixed
+        notes: The key keeps its current object and the upload stays intact for a retry (#2192).
       - name: error document detail elements
         status: intentionally_partial
         gap: >-
@@ -696,6 +722,9 @@ operations:
       - name: part under 5 MiB
         status: fixed
         notes: Accepted, as S3 does; the minimum is enforced at CompleteMultipartUpload.
+      - name: re-upload of a part number interrupted mid-body
+        status: fixed
+        notes: The part uploaded before stays in place (#2192).
   PutBucketLifecycleConfiguration:
     status: fixed
     aws_docs:
@@ -844,6 +873,8 @@ findings:
     - CompleteMultipartUpload validates the parts list — InvalidPart for a wrong or unknown ETag, InvalidPartOrder for an out-of-order list, EntityTooSmall for a non-final part under 5 MiB, MalformedXML for an empty list — and leaves a refused upload intact (#1706).
     - CloudFormation AWS::S3::Bucket uses the S3 handlers for lifecycle, versioning, notifications, encryption, tags, CORS, and website configuration.
     - GetObject, GetObjectTagging and CopyObject's source lookup now answer NoSuchBucket for a bucket that does not exist, instead of NoSuchKey (#1635); HeadObject is wire-identical either way per AWS's own documented HEAD limitation.
+    - A PutObject, CopyObject, UploadPart or CompleteMultipartUpload that fails part way no longer destroys the object already at the key, and a CopyObject onto itself no longer empties it (#2192).
+    - Concurrent CreateBucket calls for one name create one bucket and publish one S3BucketCreated event; the others get BucketAlreadyOwnedByYou, or 200 in us-east-1 (#2126).
     - DeleteObject and DeleteObjects honour If-Match, so a conditional delete no longer silently succeeds; a mismatch is 412 PreconditionFailed (per-key for DeleteObjects) and a missing key is 404 NoSuchKey rather than DeleteObject's usual idempotent 204 (#2037).
   remaining_gaps:
     - S3 error documents omit HostId, which real AWS sends on every error. Not specific to InvalidRange; belongs in a change against the whole REST-XML envelope rather than one operation (noted while fixing #1864).

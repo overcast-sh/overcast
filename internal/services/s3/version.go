@@ -222,7 +222,7 @@ func splitVersionSuffix(suffix string) (key, seq string, ok bool) {
 // ---- Store access ----------------------------------------------------------
 
 // putVersion persists one version record. The body, when there is one, is
-// written by putObjectStream under the version's own body path.
+// written by storeObject under the version's own body path.
 func (s *s3Store) putVersion(ctx context.Context, obj *Object) *protocol.AWSError {
 	raw, err := json.Marshal(obj)
 	if err != nil {
@@ -236,13 +236,22 @@ func (s *s3Store) putVersion(ctx context.Context, obj *Object) *protocol.AWSErro
 
 // deleteVersion removes one version record and its body file.
 func (s *s3Store) deleteVersion(ctx context.Context, obj *Object) *protocol.AWSError {
-	if err := s.store.Delete(ctx, nsVersions, versionStoreKey(obj.Bucket, obj.Key, obj.Seq)); err != nil {
-		return protocol.Wrap(protocol.ErrInternalError, err)
+	if aerr := s.deleteVersionRecord(ctx, obj); aerr != nil {
+		return aerr
 	}
 	if obj.DeleteMarker {
 		return nil // a delete marker has no body
 	}
-	if err := os.Remove(s.bodyPath(obj.Bucket, obj.Key, obj.VersionID)); err != nil && !os.IsNotExist(err) {
+	if err := s.bodies.remove(bodyRel(obj.Bucket, obj.Key, obj.VersionID)); err != nil && !os.IsNotExist(err) {
+		return protocol.Wrap(protocol.ErrInternalError, err)
+	}
+	return nil
+}
+
+// deleteVersionRecord removes one version record and leaves its body path
+// alone, for a version whose body a newer one has already replaced on disk.
+func (s *s3Store) deleteVersionRecord(ctx context.Context, obj *Object) *protocol.AWSError {
+	if err := s.store.Delete(ctx, nsVersions, versionStoreKey(obj.Bucket, obj.Key, obj.Seq)); err != nil {
 		return protocol.Wrap(protocol.ErrInternalError, err)
 	}
 	return nil
@@ -448,22 +457,27 @@ func (h *Handler) beginVersion(ctx context.Context, b *Bucket, obj *Object, now 
 	if aerr := h.recordExistingVersion(ctx, prev); aerr != nil {
 		return stamp, aerr
 	}
-
-	if b.VersioningStatus == versioningSuspended {
-		if aerr := h.discardNullVersion(ctx, obj.Bucket, obj.Key); aerr != nil {
-			return stamp, aerr
-		}
-	}
 	return stamp, nil
 }
 
 // commitVersion records obj in the key's history once its body and current-
-// version record are in place. A no-op for an unversioned bucket.
+// version record are in place, and in a version-suspended bucket drops the
+// null version obj replaced. A no-op for an unversioned bucket.
+//
+// The null version goes only now, not in beginVersion: until obj is committed
+// the write can still fail, and a failed write must leave the key's history
+// exactly as it was (#2192).
 func (h *Handler) commitVersion(ctx context.Context, b *Bucket, obj *Object) *protocol.AWSError {
 	if !b.versioned() {
 		return nil
 	}
-	return h.store.putVersion(ctx, obj)
+	if aerr := h.store.putVersion(ctx, obj); aerr != nil {
+		return aerr
+	}
+	if b.VersioningStatus == versioningSuspended {
+		return h.replaceNullVersion(ctx, obj)
+	}
+	return nil
 }
 
 // saveCurrentObject persists a change to the key's current version and keeps
@@ -501,22 +515,31 @@ func (o *Object) headerVersionID() string {
 	return o.wireVersionID()
 }
 
-// discardNullVersion removes the key's existing null version, if it has one.
+// replaceNullVersion removes the null version that obj, a new null version
+// already committed, has replaced.
 //
 // A version-suspended bucket keeps at most one null version per key: AWS
 // documents that storing an object in a suspended bucket "removes the existing
 // object with a version ID of null" and replaces it. Every other version is
 // left alone.
-func (h *Handler) discardNullVersion(ctx context.Context, bucket, key string) *protocol.AWSError {
-	versions, aerr := h.store.listKeyVersions(ctx, bucket, key)
+//
+// Every null version keeps its body at the same path, so a new object's body
+// has already taken the old one's place on disk and only the old record goes.
+// A delete marker has no body, so the old body goes with its record.
+func (h *Handler) replaceNullVersion(ctx context.Context, obj *Object) *protocol.AWSError {
+	versions, aerr := h.store.listKeyVersions(ctx, obj.Bucket, obj.Key)
 	if aerr != nil {
 		return aerr
 	}
+	drop := h.store.deleteVersionRecord
+	if obj.DeleteMarker {
+		drop = h.store.deleteVersion
+	}
 	for _, v := range versions {
-		if !v.isNullVersion() {
+		if !v.isNullVersion() || v.Seq == obj.Seq {
 			continue
 		}
-		if aerr := h.store.deleteVersion(ctx, v); aerr != nil {
+		if aerr := drop(ctx, v); aerr != nil {
 			return aerr
 		}
 	}

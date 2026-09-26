@@ -65,6 +65,12 @@ type Handler struct {
 	// path is unchanged. See conditional_write.go.
 	objectLocks serviceutil.RecordLocks
 
+	// bucketLocks makes CreateBucket's existence check and store one step
+	// against every other create of the same name (#2126), so concurrent
+	// creators — clients, and in-process callers of EnsureBucket — produce one
+	// bucket and one S3BucketCreated event. See createBucket.
+	bucketLocks serviceutil.RecordLocks
+
 	bucketGetRoutes    []s3Route
 	bucketPutRoutes    []s3Route
 	bucketDeleteRoutes []s3Route

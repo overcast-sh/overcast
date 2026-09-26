@@ -239,7 +239,13 @@ func (h *Handler) validateNewBucketName(bucket, namespace, region string) *proto
 // leaves the existing bucket untouched, for the caller to answer the way its
 // operation requires. It stamps the creation date and announces the new
 // bucket on the event bus.
+//
+// The check and the store are held under the name's lock, so of any number of
+// concurrent creates exactly one sees the name free; every other one sees the
+// bucket it created. Bucket names are global, not per region, so the name
+// alone is the key.
 func (h *Handler) createBucket(ctx context.Context, b *Bucket) (created bool, aerr *protocol.AWSError) {
+	defer h.bucketLocks.Lock(b.Name)()
 	exists, aerr := h.store.bucketExists(ctx, b.Name)
 	if aerr != nil {
 		return false, aerr
