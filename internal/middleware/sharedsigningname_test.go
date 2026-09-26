@@ -107,7 +107,7 @@ func TestELBClassicInfersItsOwnIAMAction(t *testing.T) {
 	} {
 		t.Run(tt.body, func(t *testing.T) {
 			r, _ := signedFormRequest("elasticloadbalancing", tt.body)
-			if got := requestIAMAction(r); got != tt.want {
+			if got := classifyIAM(r).action; got != tt.want {
 				t.Errorf("requestIAMAction(%s) = %q, want %q", tt.body, got, tt.want)
 			}
 		})

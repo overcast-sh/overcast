@@ -113,7 +113,11 @@ func (c *iamEnforceCache) store(generation uint64, accessKeyID string, entry *ia
 }
 
 // IAMEnforce enforces opt-in IAM authorization.
-func IAMEnforce(enabled bool, st state.Store, logger *zap.Logger) func(http.Handler) http.Handler {
+//
+// queries is the router's AWS Query dispatch, which names the operation a
+// Query request is served as. A nil queries is a router that serves no Query
+// traffic, and every request is then classified from its own content.
+func IAMEnforce(enabled bool, st state.Store, logger *zap.Logger, queries QueryRouter) func(http.Handler) http.Handler {
 	cache := &iamEnforceCache{}
 
 	return func(next http.Handler) http.Handler {
@@ -123,8 +127,16 @@ func IAMEnforce(enabled bool, st state.Store, logger *zap.Logger) func(http.Hand
 				return
 			}
 
+			op, err := requestIAMOperation(w, r, queries)
+			if err != nil {
+				// The router refuses a Query form it cannot parse with this
+				// error, and a form parsed here cannot be parsed there again.
+				protocol.WriteQueryXMLError(w, r, protocol.QueryFormParseError(err))
+				return
+			}
+
 			if !isSignedIAMRequest(r) {
-				denyIAMRequest(w, r, logger, "unsigned request")
+				denyIAMRequest(w, r, op, logger, "unsigned request")
 				return
 			}
 
@@ -135,12 +147,11 @@ func IAMEnforce(enabled bool, st state.Store, logger *zap.Logger) func(http.Hand
 
 			parts, signed, sigErr := extractSigV4Parts(r)
 			if sigErr != nil || !signed || strings.TrimSpace(parts.AccessKey) == "" {
-				denyIAMRequest(w, r, logger, "missing or malformed SigV4 access key")
+				denyIAMRequest(w, r, op, logger, "missing or malformed SigV4 access key")
 				return
 			}
 
-			action := requestIAMAction(r)
-			if action == "" {
+			if op.action == "" {
 				// No action could be inferred, so there is nothing to evaluate
 				// a policy against and the request is not gated.
 				//
@@ -171,27 +182,27 @@ func IAMEnforce(enabled bool, st state.Store, logger *zap.Logger) func(http.Hand
 					logger.Debug("iam enforcement could not infer an action; request not gated",
 						zap.String("method", r.Method),
 						zap.String("path", r.URL.Path),
-						zap.String("service", detectService(r)),
+						zap.String("service", op.service),
 					)
 				}
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			resource := requestIAMResource(r)
-			result := evaluateIAMDecision(r, st, parts.AccessKey, action, resource, cache)
+			resource := requestIAMResource(r, op)
+			result := evaluateIAMDecision(r, st, parts.AccessKey, op, resource, cache)
 			if reason, denied := iamDenialReason(result); denied {
 				// A deny the evaluator could not reason about is a gap in
 				// Overcast, not a decision the user asked for: say so at warn
 				// level rather than burying it in debug output.
 				if logger != nil && (result.compileErr != nil || result.boundaryErr != nil || len(result.Unsupported) > 0) {
 					logger.Warn("iam enforcement denied a request it could not evaluate",
-						zap.String("service", detectService(r)),
-						zap.String("action", action),
+						zap.String("service", op.service),
+						zap.String("action", op.action),
 						zap.String("reason", reason),
 					)
 				}
-				denyIAMRequest(w, r, logger, reason)
+				denyIAMRequest(w, r, op, logger, reason)
 				return
 			}
 
@@ -291,27 +302,66 @@ type iamManagedPolicyRecord struct {
 	Document string `json:"Document"`
 }
 
-func denyIAMRequest(w http.ResponseWriter, r *http.Request, logger *zap.Logger, reason string) {
+func denyIAMRequest(w http.ResponseWriter, r *http.Request, op iamOperation, logger *zap.Logger, reason string) {
 	if logger != nil {
 		logger.Debug("iam enforcement denied request",
 			zap.String("method", r.Method),
 			zap.String("path", r.URL.Path),
-			zap.String("service", detectService(r)),
+			zap.String("service", op.service),
 			zap.String("reason", reason),
 		)
 	}
-	writeIAMAccessDenied(w, r)
+	writeIAMAccessDenied(w, r, op)
 }
 
-// requestIAMAction names the IAM action a request invokes, as "<prefix>:<Op>".
+// iamOperation is the operation IAM enforcement authorises a request as.
+type iamOperation struct {
+	// service is the key of the service that serves the request.
+	service string
+	// action is "<prefix>:<Op>", or "" when no operation can be named.
+	action string
+	// query is set when the router serves the request as AWS Query traffic,
+	// whose clients read an error only in the Query XML envelope.
+	query bool
+}
+
+// requestIAMOperation names the operation r is served as.
+//
+// A request the router dispatches as AWS Query is named by queries, from the
+// same Version and Action resolution the router serves it by, and never by its
+// credential scope: the two name different services whenever a caller signs
+// for one service and calls another's Action (#2229). Everything else is
+// classified from its own content by detectService.
+func requestIAMOperation(w http.ResponseWriter, r *http.Request, queries QueryRouter) (iamOperation, error) {
+	if queries != nil {
+		route, isQuery, err := queries.RouteQuery(w, r)
+		if err != nil || isQuery {
+			return queryIAMOperation(route), err
+		}
+	}
+	svc := detectService(r)
+	return iamOperation{service: svc, action: requestIAMAction(r, svc)}, nil
+}
+
+// queryIAMOperation names the operation a routed Query request is served as.
+// A route no service owns serves no operation, so it names none.
+func queryIAMOperation(route QueryRoute) iamOperation {
+	op := iamOperation{service: route.Service, query: true}
+	if route.Service != "" && route.Action != "" {
+		op.action = iamActionPrefix(route.Service) + ":" + route.Action
+	}
+	return op
+}
+
+// requestIAMAction names the IAM action a request to svc invokes, as
+// "<prefix>:<Op>".
 //
 // The prefix is AWS's IAM action prefix for the classified service, which is
 // not always Overcast's key for it: MSK is keyed "msk" and authorizes as
 // "kafka:", Step Functions as "states:", OpenSearch as "es:". The action is
 // evaluated against a policy the user wrote from the AWS documentation, so it
 // has to be the name that documentation gives — see iamActionPrefix.
-func requestIAMAction(r *http.Request) string {
-	svc := detectService(r)
+func requestIAMAction(r *http.Request, svc string) string {
 	if svc == "" || svc == "internal" || svc == "metrics" || svc == "events" {
 		return ""
 	}
@@ -353,16 +403,16 @@ func requestIAMAction(r *http.Request) string {
 	return ""
 }
 
-func requestIAMResource(r *http.Request) string {
-	svc := detectService(r)
+// requestIAMResource names the resource op acts on, as an ARN or "*".
+func requestIAMResource(r *http.Request, op iamOperation) string {
 	fields := newIAMRequestFieldResolver()
-	switch svc {
+	switch op.service {
 	case "s3":
 		return requestS3IAMResource(r)
 	case "sqs":
-		return requestSQSIAMResource(r, fields)
+		return requestSQSIAMResource(r, op.action, fields)
 	case "sns":
-		return requestSNSIAMResource(r, fields)
+		return requestSNSIAMResource(r, op.action, fields)
 	case "dynamodb":
 		return requestDynamoDBIAMResource(r, fields)
 	case "cloudformation":
@@ -462,10 +512,9 @@ func requestS3IAMResource(r *http.Request) string {
 	return fmt.Sprintf("arn:aws:s3:::%s/%s", bucket, objectKey)
 }
 
-func requestSQSIAMResource(r *http.Request, fields *iamRequestFieldResolver) string {
+func requestSQSIAMResource(r *http.Request, action string, fields *iamRequestFieldResolver) string {
 	region := iamRegionOrDefault(r)
 
-	action := requestIAMAction(r)
 	if strings.EqualFold(action, "sqs:CreateQueue") {
 		queueName := fields.field(r, "QueueName")
 		if queueName == "" {
@@ -489,10 +538,9 @@ func requestSQSIAMResource(r *http.Request, fields *iamRequestFieldResolver) str
 	return fmt.Sprintf("arn:aws:sqs:%s:%s:%s", region, accountID, queueName)
 }
 
-func requestSNSIAMResource(r *http.Request, fields *iamRequestFieldResolver) string {
+func requestSNSIAMResource(r *http.Request, action string, fields *iamRequestFieldResolver) string {
 	region := iamRegionOrDefault(r)
 
-	action := requestIAMAction(r)
 	if strings.EqualFold(action, "sns:CreateTopic") {
 		topicName := fields.field(r, "Name")
 		if topicName == "" {
@@ -1077,7 +1125,7 @@ type iamEnforceResult struct {
 	boundaryErr error
 }
 
-func evaluateIAMDecision(r *http.Request, st state.Store, accessKeyID, action, resource string, cache *iamEnforceCache) iamEnforceResult {
+func evaluateIAMDecision(r *http.Request, st state.Store, accessKeyID string, op iamOperation, resource string, cache *iamEnforceCache) iamEnforceResult {
 	cached, generation := cache.load(accessKeyID)
 	if cached == nil {
 		principal := collectPrincipalPolicies(r.Context(), st, accessKeyID)
@@ -1099,14 +1147,14 @@ func evaluateIAMDecision(r *http.Request, st state.Store, accessKeyID, action, r
 		return iamEnforceResult{boundaryErr: cached.boundaryErr}
 	}
 
-	reqCtx := buildIAMRequestContext(r)
+	reqCtx := buildIAMRequestContext(r, op.service)
 	for k, v := range cached.principalCtx {
 		reqCtx[k] = v
 	}
 
 	return iamEnforceResult{Result: iampolicy.Evaluate(iampolicy.Input{
 		Request: iampolicy.Request{
-			Action:           action,
+			Action:           op.action,
 			Resource:         resource,
 			Context:          reqCtx,
 			PrincipalARN:     cached.principalCtx["aws:principalarn"],
@@ -1484,9 +1532,15 @@ func isSignedIAMRequest(r *http.Request) bool {
 	return false
 }
 
-func writeIAMAccessDenied(w http.ResponseWriter, r *http.Request) {
-	svc := detectService(r)
-	switch svc {
+// writeIAMAccessDenied answers a denied request in the error envelope its
+// client reads: a routed Query request's is Query XML whichever service serves
+// it, and everything else's is its service's.
+func writeIAMAccessDenied(w http.ResponseWriter, r *http.Request, op iamOperation) {
+	if op.query {
+		writeQueryAccessDenied(w, r)
+		return
+	}
+	switch op.service {
 	case "s3", "cloudfront":
 		protocol.WriteXMLError(w, r, &protocol.AWSError{
 			Code:       "AccessDenied",
@@ -1500,11 +1554,7 @@ func writeIAMAccessDenied(w http.ResponseWriter, r *http.Request) {
 	// classified by its "kafka" signing name and fell to the default; naming
 	// the service correctly is what would have made the wrong envelope real.
 	case "sns", "iam", "sts", "ec2", "cloudformation", "rds", "ses", "cloudwatch", "acm", "kinesis", "kms", "ssm", "stepfunctions", "ecs", "ecr", "glue", "firehose", "athena", "elasticache", "waf", "shield", "autoscaling", "route53", "elbv2", "organizations":
-		protocol.WriteQueryXMLError(w, r, &protocol.AWSError{
-			Code:       "AccessDenied",
-			Message:    "User is not authorized to perform this action",
-			HTTPStatus: http.StatusForbidden,
-		})
+		writeQueryAccessDenied(w, r)
 	default:
 		protocol.WriteJSONError(w, r, &protocol.AWSError{
 			Code:       "AccessDeniedException",
@@ -1514,10 +1564,18 @@ func writeIAMAccessDenied(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func writeQueryAccessDenied(w http.ResponseWriter, r *http.Request) {
+	protocol.WriteQueryXMLError(w, r, &protocol.AWSError{
+		Code:       "AccessDenied",
+		Message:    "User is not authorized to perform this action",
+		HTTPStatus: http.StatusForbidden,
+	})
+}
+
 // buildIAMRequestContext constructs the set of IAM condition context keys that
 // are derivable from the HTTP request alone (no store access needed).
 // Supported keys: aws:RequestedRegion, aws:SourceIp, aws:CurrentTime.
-func buildIAMRequestContext(r *http.Request) map[string]string {
+func buildIAMRequestContext(r *http.Request, svc string) map[string]string {
 	ctx := make(map[string]string, 3)
 
 	// aws:RequestedRegion — extracted from the SigV4 credential scope.
@@ -1550,7 +1608,7 @@ func buildIAMRequestContext(r *http.Request) map[string]string {
 		ctx["aws:requestedcontentlength"] = strconv.FormatInt(cl, 10)
 	}
 
-	if populate, ok := serviceConditionKeyPopulators[detectService(r)]; ok {
+	if populate, ok := serviceConditionKeyPopulators[svc]; ok {
 		for k, v := range populate(r) {
 			ctx[k] = v
 		}

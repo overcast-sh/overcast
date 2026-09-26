@@ -206,7 +206,7 @@ func TestRequestIAMActionLambdaRESTSurface(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.method+" "+tt.path, func(t *testing.T) {
 			r := signedRequest(tt.method, tt.path, "lambda")
-			if got := requestIAMAction(r); got != tt.want {
+			if got := classifyIAM(r).action; got != tt.want {
 				t.Errorf("requestIAMAction(%s %s) = %q, want %q", tt.method, tt.path, got, tt.want)
 			}
 		})
@@ -233,7 +233,7 @@ func TestRequestIAMActionNeverBorrowsAnotherServicesOperation(t *testing.T) {
 	} {
 		for _, path := range lambdaRegisteredPaths() {
 			r := signedRequest(method, path, "lambda")
-			action := requestIAMAction(r)
+			action := classifyIAM(r).action
 			operation := strings.TrimPrefix(action, "lambda:")
 			if s3Operations[operation] {
 				t.Errorf("%s %s authorises as %q — an S3 operation", method, path, action)
@@ -291,7 +291,7 @@ func TestDetectOperationLoggerAndIAMAgree(t *testing.T) {
 		for _, path := range lambdaRegisteredPaths() {
 			r := signedRequest(method, path, "lambda")
 			label := detectOperation(r)
-			action := requestIAMAction(r)
+			action := classifyIAM(r).action
 			if label == "" {
 				if action != "" {
 					t.Errorf("%s %s: no log label but IAM action %q", method, path, action)

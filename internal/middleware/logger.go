@@ -274,21 +274,20 @@ func detectService(r *http.Request, body ...[]byte) string {
 	//
 	// A request with no version, or one the models do not carry, falls through
 	// to the scope, which is what classified it before this step moved.
-	if len(body) > 0 && len(body[0]) > 0 && bytes.Contains(body[0][:min(len(body[0]), 256)], []byte("Action=")) {
-		values, err := url.ParseQuery(string(body[0]))
-		if err == nil {
-			// claim.Service != "" for the same reason step 1 checks it: the
-			// generated index blanks the service of an action several modeled
-			// services declare rather than guess between them, and returning
-			// that blank labelled the request with the empty string — which is
-			// not a service key, reaches IAM enforcement as one, and is not
-			// even the documented s3 fall-through. RDS is the live case, its
-			// whole Query surface sharing an API version with DocumentDB and
-			// Neptune.
-			if claim, ok := awsapi.NewRegistry().ClaimQuery(values.Get("Version"), values.Get("Action")); ok && claim.Service != "" {
-				return middlewareServiceKey(claim.Service)
-			}
-		}
+	//
+	// claim.Service != "" for the same reason step 1 checks it: the generated
+	// index blanks the service of an action several modeled services declare
+	// rather than guess between them, and returning that blank labelled the
+	// request with the empty string — which is not a service key, and is not
+	// even the documented s3 fall-through. RDS is the live case, its whole
+	// Query surface sharing an API version with DocumentDB and Neptune.
+	//
+	// This labels a request; it does not authorise one. IAM enforcement names
+	// a Query call by the router's own dispatch (QueryRouter), because only
+	// the router knows which service owns an Action the models cannot
+	// attribute — one sent with no Version, above all.
+	if claim, ok := queryClaimFromBody(body...); ok && claim.Service != "" {
+		return middlewareServiceKey(claim.Service)
 	}
 
 	// 3b. Authorization Credential scope — covers the Query-protocol services
@@ -304,6 +303,29 @@ func detectService(r *http.Request, body ...[]byte) string {
 	// virtual-hosted URLs with no distinguishing header, so there is no
 	// positive signal to match on.
 	return "s3"
+}
+
+// queryClaimFromBody resolves a captured AWS Query form body to the modeled
+// operation its Version and Action name.
+//
+// The scan covers the whole body, not a prefix of it. Form parameters arrive in
+// whatever order the client encoded them, so a request with a large leading
+// parameter pushes Action= past any fixed window: a CreateStack whose
+// TemplateBody was serialised first went unnamed, while the same call with
+// Action= first was recognised. The service step had the same window at 256
+// bytes, so a padded body was labelled by its credential scope while the router
+// dispatched it by its Action (#2229). bytes.Contains over a body already
+// bounded by the capture cap is cheap, and a false positive — "Action="
+// appearing inside a value — costs one ParseQuery that ClaimQuery then rejects.
+func queryClaimFromBody(body ...[]byte) (awsapi.Claim, bool) {
+	if len(body) == 0 || !bytes.Contains(body[0], []byte("Action=")) {
+		return awsapi.Claim{}, false
+	}
+	values, err := url.ParseQuery(string(body[0]))
+	if err != nil {
+		return awsapi.Claim{}, false
+	}
+	return awsapi.NewRegistry().ClaimQuery(values.Get("Version"), values.Get("Action"))
 }
 
 // smithyRPCClaim classifies a Smithy RPC v2 request from its URI and the
@@ -613,22 +635,8 @@ func detectOperationForService(r *http.Request, svc string, body ...[]byte) stri
 	}
 
 	// 3. Query-protocol Action parameter.
-	//
-	// The scan covers the whole body, not a prefix of it. Form parameters
-	// arrive in whatever order the client encoded them, so a request with a
-	// large leading parameter pushes Action= past any fixed window: a
-	// CreateStack whose TemplateBody was serialised first went unnamed, while
-	// the same call with Action= first was recognised. bytes.Contains over a
-	// body already bounded by the capture cap is cheap, and a false positive
-	// — "Action=" appearing inside a value — costs one ParseQuery that
-	// ClaimQuery then rejects.
-	if len(body) > 0 && bytes.Contains(body[0], []byte("Action=")) {
-		values, err := url.ParseQuery(string(body[0]))
-		if err == nil {
-			if claim, ok := awsapi.NewRegistry().ClaimQuery(values.Get("Version"), values.Get("Action")); ok {
-				return claim.Operation
-			}
-		}
+	if claim, ok := queryClaimFromBody(body...); ok {
+		return claim.Operation
 	}
 
 	// 4. Smithy RPC v2 names the operation in the URI. Resolved through the

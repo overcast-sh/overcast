@@ -14,6 +14,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/glue v1.153.1
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.100.1
 	github.com/aws/aws-sdk-go-v2/service/s3tables v1.23.0
+	github.com/aws/aws-sdk-go-v2/service/sts v1.45.7
 	github.com/aws/smithy-go v1.28.1
 	github.com/benbjohnson/clock v1.3.5
 	github.com/coder/websocket v1.8.15
@@ -48,7 +49,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/signin v1.5.7 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.33.7 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.38.7 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sts v1.45.7 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect

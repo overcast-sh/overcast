@@ -2,9 +2,7 @@ package router
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -156,68 +154,77 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	}, clk)
 
 	// ---- Middleware chain --------------------------------------------------
-	// requestChain is per-request plumbing, and none of it dispatches: the
-	// Athena engine gateway serves it in front of handlers that route by
+	// The request chain is per-request plumbing, and none of it dispatches:
+	// the Athena engine gateway serves it in front of handlers that route by
 	// signing name alone (engine_api.go), so a middleware that sends a request
-	// to a service belongs after it, as queryGetMiddleware does.
+	// to a service belongs after it, as queryGetMiddleware does. IAM
+	// enforcement is the one link that has to know how its router dispatches,
+	// which is why the chain is built per router.
 	//
 	// hostRoutes is populated further down, once the services HostAddressing
 	// dispatches to (API Gateway, Lambda, AppSync) are constructed — see
 	// "Host-based routing" below. The pointer is read at request time (same
-	// pattern as queryDispatchers below), so it only needs to be fully
+	// pattern as root below), so it only needs to be fully
 	// populated before Serve starts, not before this chain is built.
 	var hostRoutes []middleware.HostRouteRow
-	requestChain := chi.Middlewares{
-		middleware.RealIP,
-		middleware.CORS,
-		middleware.DrainBody,
-		// HostAddressing owns the whole Host-header decision: S3 virtual-hosted
-		// addressing AND host-routed services (execute-api / lambda-url /
-		// appsync-api). They are one middleware, not two, because the two
-		// schemes share a hostname space — when they were registered separately
-		// both claimed the same request and each rewrote the path the other had
-		// already rewritten. See docs/plans/host-routing-precedence.md.
-		middleware.HostAddressing(cfg.Hostname, &hostRoutes, logger),
-		middleware.RequestID,
-		middleware.Recovery(logger),
-		middleware.DebugTrace(cfg, traceBuf, clk),
-		middleware.Logger(logger, clk),
-		// NotReady short-circuits with a 503 while the storage backend is still
-		// completing a one-time startup migration (storage-plan.md item — see
-		// internal/middleware/notready.go) — placed after Logger so a rejected
-		// request is still observable in logs, and before every other
-		// middleware below so none of that work (event recording, SigV4, IAM,
-		// region/protocol detection) runs for a request about to be rejected
-		// anyway.
-		middleware.NotReady(store),
-		middleware.RequestEvents(&bus, clk),
-		middleware.SigV4(cfg.SigV4Validate, middleware.NewSecretResolver(store), logger, clk),
-		middleware.IAMEnforce(cfg.EnforceIAM, store, logger),
-		middleware.Region,
-		// ClientEndpoint stamps the origin the caller dialled, so services that
-		// hand back resource URLs (SQS queue URLs above all) mint them on an
-		// origin that caller can reach. See internal/middleware/clientendpoint.go
-		// for why a single server-wide hostname cannot serve host CLIs and
-		// sibling containers at once.
-		middleware.ClientEndpoint,
-		// Environment preflight (deploy-failure-diagnosis.md W4): "the client's
-		// endpoint is pointed somewhere other than the developer thinks", the
-		// one shape of it Overcast can see for itself — see
-		// endpointpreflight.go's doc comment. Placed right after ClientEndpoint
-		// since both inspect the same Host header.
-		middleware.WarnRealAWSHost(cfg, logger),
-		// Protocol-detection middleware (Smithy alignment, see
-		// docs/plans/smithy.md). Always-on as of Phase 6 completion.
-		middleware.Protocol(codec.DefaultIdentifiers()),
-	}
-	r.Use(requestChain...)
-	// queryGetMiddleware must be registered here, before any route is added
-	// (chi requirement). It intercepts GET /?Action=... requests (e.g. SNS
-	// UnsubscribeURL) letting S3's GET / handle everything else. The pointer
-	// is read at request time, so the slice is fully populated by then.
-	var queryDispatchers []QueryDispatcher
+	// root is the dispatch of POST / and GET /?Action=, filled in by the
+	// service registration loop. IAM enforcement reads its Query decisions, so
+	// a Query call is authorised as the operation it is served as (#2229).
 	operationRegistry := awsapi.NewRegistry()
-	r.Use(queryGetMiddleware(&queryDispatchers, operationRegistry))
+	root := &rootDispatch{registry: operationRegistry}
+	// newRequestChain builds the chain for a router whose AWS Query dispatch
+	// is queries: the root router's, or nil for the Athena engine gateway,
+	// which dispatches no Query traffic.
+	newRequestChain := func(queries middleware.QueryRouter) chi.Middlewares {
+		return chi.Middlewares{
+			middleware.RealIP,
+			middleware.CORS,
+			middleware.DrainBody,
+			// HostAddressing owns the whole Host-header decision: S3 virtual-hosted
+			// addressing AND host-routed services (execute-api / lambda-url /
+			// appsync-api). They are one middleware, not two, because the two
+			// schemes share a hostname space — when they were registered separately
+			// both claimed the same request and each rewrote the path the other had
+			// already rewritten. See docs/plans/host-routing-precedence.md.
+			middleware.HostAddressing(cfg.Hostname, &hostRoutes, logger),
+			middleware.RequestID,
+			middleware.Recovery(logger),
+			middleware.DebugTrace(cfg, traceBuf, clk),
+			middleware.Logger(logger, clk),
+			// NotReady short-circuits with a 503 while the storage backend is still
+			// completing a one-time startup migration (storage-plan.md item — see
+			// internal/middleware/notready.go) — placed after Logger so a rejected
+			// request is still observable in logs, and before every other
+			// middleware below so none of that work (event recording, SigV4, IAM,
+			// region/protocol detection) runs for a request about to be rejected
+			// anyway.
+			middleware.NotReady(store),
+			middleware.RequestEvents(&bus, clk),
+			middleware.SigV4(cfg.SigV4Validate, middleware.NewSecretResolver(store), logger, clk),
+			middleware.IAMEnforce(cfg.EnforceIAM, store, logger, queries),
+			middleware.Region,
+			// ClientEndpoint stamps the origin the caller dialled, so services that
+			// hand back resource URLs (SQS queue URLs above all) mint them on an
+			// origin that caller can reach. See internal/middleware/clientendpoint.go
+			// for why a single server-wide hostname cannot serve host CLIs and
+			// sibling containers at once.
+			middleware.ClientEndpoint,
+			// Environment preflight (deploy-failure-diagnosis.md W4): "the client's
+			// endpoint is pointed somewhere other than the developer thinks", the
+			// one shape of it Overcast can see for itself — see
+			// endpointpreflight.go's doc comment. Placed right after ClientEndpoint
+			// since both inspect the same Host header.
+			middleware.WarnRealAWSHost(cfg, logger),
+			// Protocol-detection middleware (Smithy alignment, see
+			// docs/plans/smithy.md). Always-on as of Phase 6 completion.
+			middleware.Protocol(codec.DefaultIdentifiers()),
+		}
+	}
+	r.Use(newRequestChain(root)...)
+	// queryGetMiddleware must be registered here, before any route is added
+	// (chi requirement). root is read at request time, so the service loop
+	// has populated it by then.
+	r.Use(root.queryGetMiddleware)
 	prof.mark("middleware chain")
 
 	// ---- Internal endpoints (always available) ----------------------------
@@ -525,9 +532,8 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 		s3Svc, // must be last — registers /{bucket}/* wildcard
 	}
 
-	// Collect target dispatchers for services that share POST /.
-	var dispatchers []TargetDispatcher
-	// Query dispatchers are declared above, near middleware registration.
+	// Target and Query dispatchers are collected into root, declared above
+	// near middleware registration.
 	type namedStopper struct {
 		name string
 		Stopper
@@ -598,10 +604,10 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 		}
 		prof.mark("  routes: " + svc.Name())
 		if td, ok := svc.(TargetDispatcher); ok {
-			dispatchers = append(dispatchers, td)
+			root.targets = append(root.targets, td)
 		}
-		if qd, ok := svc.(QueryDispatcher); ok {
-			queryDispatchers = append(queryDispatchers, qd)
+		if qs, ok := svc.(queryService); ok {
+			root.queries = append(root.queries, qs)
 		}
 		if st, ok := svc.(Stopper); ok {
 			stoppers = append(stoppers, namedStopper{name: svc.Name(), Stopper: st})
@@ -921,7 +927,7 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	schedulerSvc.InitRouter(r)
 	// Athena: the query engine reaches Glue, S3 and S3 Tables through a
 	// listener of its own (see athena's engine_gateway.go and engine_api.go).
-	athenaSvc.InitEngineAPI(engineAPI(requestChain, serviceByName, s3Router, operationRegistry))
+	athenaSvc.InitEngineAPI(engineAPI(newRequestChain(nil), serviceByName, s3Router, operationRegistry))
 	// ---- Docker Supervisor ------------------------------------------------
 	// A single Supervisor probes Docker once per unique socket, creates per-
 	// service networks, runs one event watcher, and reconciles container state.
@@ -1308,7 +1314,7 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	// Register POST / handler for AWS target and query-protocol dispatch. The
 	// generated registry also owns modeled operations when no configured service
 	// dispatcher does, so this route is present even in a minimal S3-only setup.
-	r.Post("/", targetDispatch(dispatchers, queryDispatchers, operationRegistry))
+	r.Post("/", root.targetDispatch)
 	r.Post("/service/{service}/operation/{operation}", smithyRPCDispatch(smithyDispatchers, operationRegistry, s3Router))
 	// SigV4's service scope disambiguates the small number of modeled REST root
 	// bindings from S3 ListBuckets; unsigned and S3-signed root requests retain
@@ -1522,100 +1528,6 @@ func reconcileDockerDaemon(ctx context.Context, dc *docker.Client, targets []doc
 	}
 }
 
-// targetDispatch returns a handler that inspects the X-Amz-Target header and
-// delegates to the correct service dispatcher. SQS/DynamoDB use X-Amz-Target;
-// SNS uses the Query protocol (form-encoded body with Action field + XML).
-func targetDispatch(dispatchers []TargetDispatcher, queryDispatchers []QueryDispatcher, operationRegistry *awsapi.Registry) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		target := r.Header.Get("X-Amz-Target")
-		for _, td := range dispatchers {
-			if strings.HasPrefix(target, td.TargetPrefix()) {
-				td.Dispatch(w, r)
-				return
-			}
-		}
-		if target != "" {
-			if claim, ok := operationRegistry.ClaimTarget(target); ok {
-				writeNotImplemented(w, r, claim)
-				return
-			}
-		}
-		// No X-Amz-Target match — try AWS Query protocol services (SNS, SES v1).
-		if strings.Contains(r.Header.Get("Content-Type"), "application/x-www-form-urlencoded") {
-			// This is the parse that decides the operation for every Query
-			// service; it caches its results, so it is safe to call before
-			// dispatching. protocol.ParseFormPreservingBody may already have
-			// declined the body as too large to buffer speculatively, which is
-			// not a rejection — it leaves the body readable precisely so this
-			// parse can make the real decision on it.
-			//
-			// The cap is stated rather than inherited: ParseForm has its own
-			// undocumented ceiling, and MaxQueryRequestBody matches it so the
-			// set of accepted requests is unchanged. What changes is the
-			// failure: a body this parse refuses used to fall past every branch
-			// below to the NotImplementedQueryXML at the end of this handler,
-			// so an oversized CreateStack came back 501 with
-			// x-emulator-unsupported — an answer that names the wrong problem
-			// and sends the caller looking for a feature gap.
-			//
-			// The refusal is written in the generic Query envelope even for a
-			// service that uses EC2's. Nothing better is available: the failure
-			// is that the body could not be parsed, so the Action naming the
-			// service was never read. The 501 this replaced had the same
-			// constraint.
-			r.Body = http.MaxBytesReader(w, r.Body, protocol.MaxQueryRequestBody)
-			if err := r.ParseForm(); err != nil {
-				protocol.WriteQueryXMLError(w, r, protocol.QueryFormParseError(err))
-				return
-			}
-			action := r.FormValue("Action")
-			version := r.FormValue("Version")
-			// Version is a stricter discriminator than action name — it avoids
-			// action name collisions between services (e.g. both SES and
-			// CloudFormation implement "GetTemplate").
-			if qd, ok := queryOwner(operationRegistry, queryDispatchers, version, action); ok {
-				qd.DispatchQuery(w, r)
-				return
-			}
-			if claim, ok := operationRegistry.ClaimQuery(version, action); ok {
-				writeNotImplemented(w, r, claim)
-				return
-			}
-			// Final fallback: first dispatcher with no ownership declaration.
-			for _, qd := range queryDispatchers {
-				if _, isActionOwner := qd.(QueryActionOwner); isActionOwner {
-					continue
-				}
-				if _, isVersionOwner := qd.(QueryVersionOwner); isVersionOwner {
-					continue
-				}
-				qd.DispatchQuery(w, r)
-				return
-			}
-		}
-		// No match — return an error in the appropriate format.
-		// Query-protocol requests (IAM, STS, etc.) expect XML; JSON-target
-		// requests expect JSON. Sending JSON to an XML-expecting SDK causes
-		// a parse error ("char '{' is not expected").
-		if r.Body != nil {
-			io.Copy(io.Discard, r.Body) //nolint:errcheck
-			r.Body.Close()              //nolint:errcheck
-		}
-		if strings.Contains(r.Header.Get("Content-Type"), "application/x-www-form-urlencoded") {
-			protocol.NotImplementedQueryXML(w, r)
-			return
-		}
-		body, _ := json.Marshal(struct {
-			Type    string `json:"__type"`
-			Message string `json:"message"`
-		}{Type: "UnknownOperationException", Message: "Unknown target: " + target})
-		w.Header().Set("Content-Type", "application/x-amz-json-1.0")
-		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write(body)
-	}
-}
-
 type smithyRPCService struct {
 	dispatcher      TargetDispatcher
 	protocolService ProtocolService
@@ -1744,40 +1656,6 @@ func smithyRPCDispatch(dispatchers map[string]*smithyRPCService, operationRegist
 			Code:       "UnsupportedProtocol",
 			Message:    "This service does not support wire protocol " + wireCodec.Name() + ".",
 			HTTPStatus: http.StatusUnsupportedMediaType,
-		})
-	}
-}
-
-// queryGetMiddleware returns middleware that intercepts GET / requests carrying
-// an AWS Query-protocol Action param (e.g. SNS UnsubscribeURL).
-// It uses a pointer to the dispatchers slice so it reads the fully-populated
-// slice at request time — the slice is filled in by the service registration
-// loop after middleware registration.
-func queryGetMiddleware(queryDispatchers *[]QueryDispatcher, operationRegistry *awsapi.Registry) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodGet || r.URL.Path != "/" || r.URL.Query().Get("Action") == "" {
-				next.ServeHTTP(w, r)
-				return
-			}
-			if err := r.ParseForm(); err != nil {
-				next.ServeHTTP(w, r)
-				return
-			}
-			action := r.FormValue("Action")
-			version := r.FormValue("Version")
-			if qd, ok := queryOwner(operationRegistry, *queryDispatchers, version, action); ok {
-				qd.DispatchQuery(w, r)
-				return
-			}
-			if claim, ok := operationRegistry.ClaimQuery(version, action); ok {
-				writeNotImplemented(w, r, claim)
-				return
-			}
-			// A root GET carrying Action is AWS Query traffic, not S3. Returning
-			// Query XML keeps an unimplemented AWS command from becoming S3's
-			// ListBuckets response.
-			protocol.NotImplementedQueryXML(w, r)
 		})
 	}
 }
@@ -2011,70 +1889,6 @@ func writeScopeMismatch(w http.ResponseWriter, r *http.Request, claim awsapi.Cla
 	default:
 		protocol.WriteJSONError(w, r, aerr)
 	}
-}
-
-// queryOwner returns the dispatcher that explicitly owns an AWS Query request.
-// API version wins over action name because actions can be shared by services.
-//
-// The second pass matches on the action name alone, and AWS reuses names freely
-// across services. Elastic Load Balancing Classic (2012-06-01) and ELBv2
-// (2015-12-01) share the whole vocabulary a load balancer needs —
-// DescribeTags, DescribeLoadBalancers, CreateLoadBalancer,
-// DescribeLoadBalancerAttributes — and Overcast implements only v2, so every
-// Classic call fell into the action pass and was answered by ELBv2's handler:
-// a 200 in the 2015-12-01 namespace, or a 400 naming an ELBv2 member the
-// Classic caller never sent (#1884). Neither is an answer to the question that
-// was asked, and both hide the 501 an unimplemented service owes it.
-//
-// So the models decide first. queryVersionService resolves (Version, Action) to
-// exactly one service, which is the same fact each QueryVersionOwner states
-// about itself, read from the one place both can share.
-//
-// The guard only ever withdraws a claim, never grants one. Where the models can
-// attribute nothing — no Version at all, a version they do not carry, or a pair
-// several modeled services declare — it names no service and the action pass
-// decides exactly as it did before.
-func queryOwner(operationRegistry *awsapi.Registry, dispatchers []QueryDispatcher, version, action string) (QueryDispatcher, bool) {
-	for _, qd := range dispatchers {
-		if owner, ok := qd.(QueryVersionOwner); ok && owner.OwnsVersion(version) {
-			return qd, true
-		}
-	}
-	modeled := queryVersionService(operationRegistry, version, action)
-	for _, qd := range dispatchers {
-		owner, ok := qd.(QueryActionOwner)
-		if !ok || !owner.OwnsAction(action) {
-			continue
-		}
-		if modeled != "" && !dispatcherIsService(qd, modeled) {
-			continue
-		}
-		return qd, true
-	}
-	return nil, false
-}
-
-// queryVersionService names the Overcast service the pinned models attribute an
-// AWS Query (Version, Action) pair to, or "" when they cannot attribute it —
-// which Claim.Service already spells as the empty string for a pair that
-// several modeled services declare.
-func queryVersionService(operationRegistry *awsapi.Registry, version, action string) string {
-	claim, ok := operationRegistry.ClaimQuery(version, action)
-	if !ok {
-		return ""
-	}
-	return claim.Service
-}
-
-// dispatcherIsService reports whether a Query dispatcher is the named service.
-// A dispatcher that does not name itself gets the benefit of the doubt, because
-// this answer is only ever used to take a claim away.
-func dispatcherIsService(qd QueryDispatcher, service string) bool {
-	named, ok := qd.(Service)
-	if !ok {
-		return true
-	}
-	return named.Name() == service
 }
 
 // v2APIsDispatch returns a handler that dispatches /v2/apis requests to either

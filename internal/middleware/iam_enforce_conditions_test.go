@@ -23,7 +23,7 @@ func TestIAMEnforce_condition_regionAllows(t *testing.T) {
 	}, nil)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -53,7 +53,7 @@ func TestIAMEnforce_condition_regionBlocks(t *testing.T) {
 		`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"sqs:CreateQueue","Resource":"*","Condition":{"StringEquals":{"aws:RequestedRegion":"us-east-1"}}}]}`,
 	}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -80,7 +80,7 @@ func TestIAMEnforce_condition_unknownOperator_denies(t *testing.T) {
 		`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"sqs:CreateQueue","Resource":"*","Condition":{"WeirdUnknownOp":{"aws:RequestedRegion":"us-east-1"}}}]}`,
 	}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -105,7 +105,7 @@ func TestIAMEnforce_condition_denyWithRegion_blocksMatchingRegion(t *testing.T) 
 		`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"sqs:*","Resource":"*"},{"Effect":"Deny","Action":"sqs:*","Resource":"*","Condition":{"StringEquals":{"aws:RequestedRegion":"eu-west-1"}}}]}`,
 	}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -131,7 +131,7 @@ func TestIAMEnforce_condition_denyWithRegion_allowsOtherRegion(t *testing.T) {
 	}, nil)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -186,7 +186,7 @@ func TestIAMEnforce_condition_bucketNamespace_absentHeaderDenied(t *testing.T) {
 	st := state.NewMemoryStore()
 	seedIAMUserWithPolicies(t, st, "test", []string{denyNonAccountRegionalBucketNamespacePolicy()}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -211,7 +211,7 @@ func TestIAMEnforce_condition_bucketNamespace_accountRegionalAllowed(t *testing.
 	seedIAMUserWithPolicies(t, st, "test", []string{denyNonAccountRegionalBucketNamespacePolicy()}, nil)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -240,7 +240,7 @@ func TestIAMEnforce_condition_bucketNamespace_absentHeader_stringEqualsGlobalDoe
 		`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:CreateBucket","Resource":"*","Condition":{"StringEquals":{"s3:x-amz-bucket-namespace":"global"}}}]}`,
 	}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -283,7 +283,7 @@ func TestIAMEnforce_condition_principalArn_allowsMatchingUserArn(t *testing.T) {
 	}
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -326,7 +326,7 @@ func TestIAMEnforce_condition_principalAccount_blocksMismatch(t *testing.T) {
 		t.Fatalf("seed user: %v", err)
 	}
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -366,7 +366,7 @@ func TestIAMEnforce_condition_userID_allowsMatchingUserID(t *testing.T) {
 	}
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -395,7 +395,7 @@ func TestIAMEnforce_condition_currentTime_allowsMatchingSigV4Time(t *testing.T) 
 	}, nil)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -424,7 +424,7 @@ func TestIAMEnforce_condition_dateLessThan_allowsEarlierRequestTime(t *testing.T
 	}, nil)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -452,7 +452,7 @@ func TestIAMEnforce_condition_dateGreaterThan_deniesWhenNotSatisfied(t *testing.
 		`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"sqs:CreateQueue","Resource":"*","Condition":{"DateGreaterThan":{"aws:CurrentTime":"2026-04-24T00:00:00Z"}}}]}`,
 	}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -477,7 +477,7 @@ func TestIAMEnforce_condition_nullFalse_allowsWhenPrincipalArnPresent(t *testing
 	}, nil)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -505,7 +505,7 @@ func TestIAMEnforce_condition_nullTrue_deniesWhenPrincipalArnPresent(t *testing.
 		`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"sqs:CreateQueue","Resource":"*","Condition":{"Null":{"aws:PrincipalArn":"true"}}}]}`,
 	}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -530,7 +530,7 @@ func TestIAMEnforce_condition_stringEqualsIfExists_allowsWhenKeyMissing(t *testi
 	}, nil)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -565,7 +565,7 @@ func TestIAMEnforce_condition_numericLessThan_allowsSmallBody(t *testing.T) {
 	}, nil)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -598,7 +598,7 @@ func TestIAMEnforce_condition_numericLessThan_deniesLargeBody(t *testing.T) {
 		`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"sqs:CreateQueue","Resource":"*","Condition":{"NumericLessThan":{"aws:RequestedContentLength":"10"}}}]}`,
 	}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -631,7 +631,7 @@ func TestIAMEnforce_policyVariable_username_allowsMatchingUser(t *testing.T) {
 	}, nil)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -663,7 +663,7 @@ func TestIAMEnforce_policyVariable_username_deniesOtherUser(t *testing.T) {
 		`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"sqs:CreateQueue","Resource":"arn:aws:sqs:us-east-1:000000000000:${aws:username}-*"}]}`,
 	}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 

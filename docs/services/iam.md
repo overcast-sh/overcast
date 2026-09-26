@@ -94,12 +94,18 @@ documentation gives. Ten services differ from their Overcast service key:
 | DynamoDB Streams   | `dynamodb:`               |
 | AppConfig Data     | `appconfig:`              |
 
+An AWS Query call (IAM, STS, SQS, SNS, CloudFormation, EC2 and the rest) is
+authorised as the operation that serves it — the service that owns its
+`Action` and `Version` — whatever service its credential scope names. An IAM
+`CreateUser` signed for `s3` is checked as `iam:CreateUser`, not `s3:CreateUser`.
+
 ## Differences from AWS
 
 | Area                                                                         | On AWS                                    | Overcast                                                                              |
 | ---------------------------------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------- |
 | Enforcement                                                                  | Always on                                 | Off unless `OVERCAST_ENFORCE_IAM=true`; identity policies only                        |
 | Credentials                                                                  | Verified against the signing key          | Accepted without verification                                                         |
+| Credential scope naming another service                                      | Refused: `Credential should be scoped to correct service` | Accepted for an AWS Query call, which is served and authorised by its `Action`   |
 | Policy versions                                                              | Every version is retained and retrievable | A counter only — no `GetPolicyVersion`, `ListPolicyVersions` or `DeletePolicyVersion` |
 | Policy document validation                                                   | The full policy grammar                   | Structure only — see [Limitations](./iam/limitations.md#policy-documents-are-checked-at-the-api-boundary) |
 | Login profiles, MFA devices, SSH keys, signing certificates, Git credentials | Full API                                  | Not modelled                                                                          |

@@ -111,6 +111,22 @@ func ParseFormPreservingBody(r *http.Request) error {
 	return parseErr
 }
 
+// ParseQueryForm parses the form of a request that routing has established is
+// AWS Query traffic, reading up to MaxQueryRequestBody of it.
+//
+// A body within MaxQueryFormBody is parsed by ParseFormPreservingBody, which
+// leaves it readable. A larger one is read in full, which consumes it: only a
+// caller that knows the request is Query traffic may do that, because anything
+// else would lose an S3 payload. QueryFormParseError says how to answer a
+// failure.
+func ParseQueryForm(w http.ResponseWriter, r *http.Request) error {
+	if err := ParseFormPreservingBody(r); !errors.Is(err, ErrFormBodyTooLarge) {
+		return err
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, MaxQueryRequestBody)
+	return r.ParseForm()
+}
+
 // preservedBody hands the handler a replayable body while keeping the original
 // Close, so the server still releases the connection's read side.
 type preservedBody struct {

@@ -160,7 +160,7 @@ func TestSignedRESTRequestInfersAnIAMAction(t *testing.T) {
 
 			// When/Then: an action is inferred, so enforcement has something
 			// to evaluate rather than falling through the open branch.
-			if got := requestIAMAction(r); got != tt.want {
+			if got := classifyIAM(r).action; got != tt.want {
 				t.Errorf("requestIAMAction(%s %s, scope %q) = %q, want %q",
 					tt.method, tt.path, tt.signing, got, tt.want)
 			}
@@ -205,7 +205,7 @@ func TestRequestIAMActionUsesTheAWSActionPrefix(t *testing.T) {
 	for _, tt := range restTests {
 		t.Run(tt.method+" "+tt.path, func(t *testing.T) {
 			r := signedRequest(tt.method, tt.path, tt.signing)
-			if got := requestIAMAction(r); got != tt.want {
+			if got := classifyIAM(r).action; got != tt.want {
 				t.Errorf("requestIAMAction(%s %s) = %q, want %q (was %q)",
 					tt.method, tt.path, got, tt.want, tt.was)
 			}
@@ -235,7 +235,7 @@ func TestRequestIAMActionUsesTheAWSActionPrefix(t *testing.T) {
 	for _, tt := range targetTests {
 		t.Run(tt.target, func(t *testing.T) {
 			r := signedTargetRequest(tt.signing, tt.target)
-			if got := requestIAMAction(r); got != tt.want {
+			if got := classifyIAM(r).action; got != tt.want {
 				t.Errorf("requestIAMAction(%s) = %q, want %q (was %q)", tt.target, got, tt.want, tt.was)
 			}
 		})
@@ -259,7 +259,7 @@ func TestRequestIAMActionUsesTheAWSActionPrefix(t *testing.T) {
 	for _, tt := range queryTests {
 		t.Run(tt.body, func(t *testing.T) {
 			r, _ := signedFormRequest(tt.signing, tt.body)
-			if got := requestIAMAction(r); got != tt.want {
+			if got := classifyIAM(r).action; got != tt.want {
 				t.Errorf("requestIAMAction(%s, scope %q) = %q, want %q (was %q)",
 					tt.body, tt.signing, got, tt.want, tt.was)
 			}
