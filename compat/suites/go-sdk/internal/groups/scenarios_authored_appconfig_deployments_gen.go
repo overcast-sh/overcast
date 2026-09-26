@@ -23,16 +23,16 @@ func ScenariosAuthoredAppconfigDeployments(c *clients.Clients) ServiceGroup {
 	return ServiceGroup{
 		Name: "scenarios/authored-appconfig-deployments",
 		Impls: map[string]harness.TestFn{
-			"appconfig-deployments-shadow:StartDeployment": g.testAppconfigDeploymentsShadowStartDeployment,
-			"appconfig-deployments-shadow:GetDeployment":   g.testAppconfigDeploymentsShadowGetDeployment,
-			"appconfig-deployments-shadow:ListDeployments": g.testAppconfigDeploymentsShadowListDeployments,
-			"appconfig-deployments-shadow:StopDeployment":  g.testAppconfigDeploymentsShadowStopDeployment,
+			"appconfig-deployments:StartDeployment": g.testAppconfigDeploymentsStartDeployment,
+			"appconfig-deployments:GetDeployment":   g.testAppconfigDeploymentsGetDeployment,
+			"appconfig-deployments:ListDeployments": g.testAppconfigDeploymentsListDeployments,
+			"appconfig-deployments:StopDeployment":  g.testAppconfigDeploymentsStopDeployment,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"appconfig-deployments-shadow": g.setupAppconfigDeploymentsShadow,
+			"appconfig-deployments": g.setupAppconfigDeployments,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"appconfig-deployments-shadow": g.teardownAppconfigDeploymentsShadow,
+			"appconfig-deployments": g.teardownAppconfigDeployments,
 		},
 	}
 }
@@ -52,10 +52,10 @@ func (g *authoredAppconfigDeploymentsScenarios) cl() *appconfig.Client {
 	return g.client
 }
 
-var groupAppconfigDeploymentsShadow = scenario.Group{Name: "appconfig-deployments-shadow", File: "compat/model/authored/appconfig-deployments.json"}
+var groupAppconfigDeployments = scenario.Group{Name: "appconfig-deployments", File: "compat/model/authored/appconfig-deployments.json"}
 
-func (g *authoredAppconfigDeploymentsScenarios) setupAppconfigDeploymentsShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigDeploymentsShadow.RunSetup(ctx, t,
+func (g *authoredAppconfigDeploymentsScenarios) setupAppconfigDeployments(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigDeployments.RunSetup(ctx, t,
 		scenario.Call{
 			Op:     "CreateApplication",
 			Params: `{"Name":{"$name":"app"}}`,
@@ -107,8 +107,8 @@ func (g *authoredAppconfigDeploymentsScenarios) setupAppconfigDeploymentsShadow(
 	)
 }
 
-func (g *authoredAppconfigDeploymentsScenarios) teardownAppconfigDeploymentsShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigDeploymentsShadow.RunTeardown(ctx, t,
+func (g *authoredAppconfigDeploymentsScenarios) teardownAppconfigDeployments(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigDeployments.RunTeardown(ctx, t,
 		scenario.Call{
 			Op:     "DeleteConfigurationProfile",
 			Params: `{"ApplicationId":{"$ref":"app.id"},"ConfigurationProfileId":{"$ref":"prof.id"}}`,
@@ -150,8 +150,8 @@ func (g *authoredAppconfigDeploymentsScenarios) teardownAppconfigDeploymentsShad
 	)
 }
 
-func (g *authoredAppconfigDeploymentsScenarios) testAppconfigDeploymentsShadowStartDeployment(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigDeploymentsShadow.RunTest(ctx, t, "StartDeployment", scenario.Test{
+func (g *authoredAppconfigDeploymentsScenarios) testAppconfigDeploymentsStartDeployment(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigDeployments.RunTest(ctx, t, "StartDeployment", scenario.Test{
 		Call: scenario.Call{
 			Op:     "StartDeployment",
 			Params: `{"ApplicationId":{"$ref":"app.id"},"ConfigurationProfileId":{"$ref":"prof.id"},"ConfigurationVersion":"1","DeploymentStrategyId":"AppConfig.AllAtOnce","EnvironmentId":{"$ref":"env.id"}}`,
@@ -176,8 +176,8 @@ func (g *authoredAppconfigDeploymentsScenarios) testAppconfigDeploymentsShadowSt
 	})
 }
 
-func (g *authoredAppconfigDeploymentsScenarios) testAppconfigDeploymentsShadowGetDeployment(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigDeploymentsShadow.RunTest(ctx, t, "GetDeployment", scenario.Test{
+func (g *authoredAppconfigDeploymentsScenarios) testAppconfigDeploymentsGetDeployment(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigDeployments.RunTest(ctx, t, "GetDeployment", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetDeployment",
 			Params: `{"ApplicationId":{"$ref":"app.id"},"DeploymentNumber":1,"EnvironmentId":{"$ref":"env.id"}}`,
@@ -200,8 +200,8 @@ func (g *authoredAppconfigDeploymentsScenarios) testAppconfigDeploymentsShadowGe
 	})
 }
 
-func (g *authoredAppconfigDeploymentsScenarios) testAppconfigDeploymentsShadowListDeployments(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigDeploymentsShadow.RunTest(ctx, t, "ListDeployments", scenario.Test{
+func (g *authoredAppconfigDeploymentsScenarios) testAppconfigDeploymentsListDeployments(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigDeployments.RunTest(ctx, t, "ListDeployments", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListDeployments",
 			Params: `{"ApplicationId":{"$ref":"app.id"},"EnvironmentId":{"$ref":"env.id"}}`,
@@ -223,8 +223,8 @@ func (g *authoredAppconfigDeploymentsScenarios) testAppconfigDeploymentsShadowLi
 	})
 }
 
-func (g *authoredAppconfigDeploymentsScenarios) testAppconfigDeploymentsShadowStopDeployment(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigDeploymentsShadow.RunTest(ctx, t, "StopDeployment", scenario.Test{
+func (g *authoredAppconfigDeploymentsScenarios) testAppconfigDeploymentsStopDeployment(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigDeployments.RunTest(ctx, t, "StopDeployment", scenario.Test{
 		Call: scenario.Call{
 			Op:     "StopDeployment",
 			Params: `{"ApplicationId":{"$ref":"app.id"},"DeploymentNumber":1,"EnvironmentId":{"$ref":"env.id"}}`,

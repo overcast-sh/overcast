@@ -15,7 +15,7 @@ namespace OvercastCompat.Groups;
 /// </remarks>
 internal sealed class ScenariosAuthoredAppconfigDeployments : IServiceGroup
 {
-    private static readonly ScenarioGroup GroupAppconfigDeploymentsShadow = new("appconfig-deployments-shadow", "compat/model/authored/appconfig-deployments.json");
+    private static readonly ScenarioGroup GroupAppconfigDeployments = new("appconfig-deployments", "compat/model/authored/appconfig-deployments.json");
 
     private readonly Lazy<AmazonAppConfigClient> _client;
 
@@ -35,26 +35,26 @@ internal sealed class ScenariosAuthoredAppconfigDeployments : IServiceGroup
 
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["appconfig-deployments-shadow:StartDeployment"] = TestAppconfigDeploymentsShadowStartDeployment,
-        ["appconfig-deployments-shadow:GetDeployment"] = TestAppconfigDeploymentsShadowGetDeployment,
-        ["appconfig-deployments-shadow:ListDeployments"] = TestAppconfigDeploymentsShadowListDeployments,
-        ["appconfig-deployments-shadow:StopDeployment"] = TestAppconfigDeploymentsShadowStopDeployment,
+        ["appconfig-deployments:StartDeployment"] = TestAppconfigDeploymentsStartDeployment,
+        ["appconfig-deployments:GetDeployment"] = TestAppconfigDeploymentsGetDeployment,
+        ["appconfig-deployments:ListDeployments"] = TestAppconfigDeploymentsListDeployments,
+        ["appconfig-deployments:StopDeployment"] = TestAppconfigDeploymentsStopDeployment,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["appconfig-deployments-shadow"] = SetupAppconfigDeploymentsShadow,
+        ["appconfig-deployments"] = SetupAppconfigDeployments,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["appconfig-deployments-shadow"] = TeardownAppconfigDeploymentsShadow,
+        ["appconfig-deployments"] = TeardownAppconfigDeployments,
     };
 
     private AmazonAppConfigClient Cl() => _client.Value;
 
-    private Task SetupAppconfigDeploymentsShadow(TestContext t) =>
-        GroupAppconfigDeploymentsShadow.RunSetupAsync(t,
+    private Task SetupAppconfigDeployments(TestContext t) =>
+        GroupAppconfigDeployments.RunSetupAsync(t,
             new ScenarioCall
             {
                 Op = "CreateApplication",
@@ -111,8 +111,8 @@ internal sealed class ScenariosAuthoredAppconfigDeployments : IServiceGroup
             }
         );
 
-    private Task TeardownAppconfigDeploymentsShadow(TestContext t) =>
-        GroupAppconfigDeploymentsShadow.RunTeardownAsync(t,
+    private Task TeardownAppconfigDeployments(TestContext t) =>
+        GroupAppconfigDeployments.RunTeardownAsync(t,
             new ScenarioCall
             {
                 Op = "DeleteConfigurationProfile",
@@ -156,7 +156,7 @@ internal sealed class ScenariosAuthoredAppconfigDeployments : IServiceGroup
             }
         );
 
-    private Task TestAppconfigDeploymentsShadowStartDeployment(TestContext t) => GroupAppconfigDeploymentsShadow.RunTestAsync(t, "StartDeployment", new ScenarioTest
+    private Task TestAppconfigDeploymentsStartDeployment(TestContext t) => GroupAppconfigDeployments.RunTestAsync(t, "StartDeployment", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -183,7 +183,7 @@ internal sealed class ScenariosAuthoredAppconfigDeployments : IServiceGroup
         ],
     });
 
-    private Task TestAppconfigDeploymentsShadowGetDeployment(TestContext t) => GroupAppconfigDeploymentsShadow.RunTestAsync(t, "GetDeployment", new ScenarioTest
+    private Task TestAppconfigDeploymentsGetDeployment(TestContext t) => GroupAppconfigDeployments.RunTestAsync(t, "GetDeployment", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -208,7 +208,7 @@ internal sealed class ScenariosAuthoredAppconfigDeployments : IServiceGroup
         ],
     });
 
-    private Task TestAppconfigDeploymentsShadowListDeployments(TestContext t) => GroupAppconfigDeploymentsShadow.RunTestAsync(t, "ListDeployments", new ScenarioTest
+    private Task TestAppconfigDeploymentsListDeployments(TestContext t) => GroupAppconfigDeployments.RunTestAsync(t, "ListDeployments", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -232,7 +232,7 @@ internal sealed class ScenariosAuthoredAppconfigDeployments : IServiceGroup
         ],
     });
 
-    private Task TestAppconfigDeploymentsShadowStopDeployment(TestContext t) => GroupAppconfigDeploymentsShadow.RunTestAsync(t, "StopDeployment", new ScenarioTest
+    private Task TestAppconfigDeploymentsStopDeployment(TestContext t) => GroupAppconfigDeployments.RunTestAsync(t, "StopDeployment", new ScenarioTest
     {
         Call = new ScenarioCall
         {

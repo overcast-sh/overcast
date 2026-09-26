@@ -32,8 +32,8 @@ import software.amazon.awssdk.services.ecr.model.SetRepositoryPolicyRequest;
  */
 public final class ScenariosAuthoredEcrPoliciesGen implements ServiceGroup {
 
-    private static final Group GROUP_ECR_POLICIES_SHADOW =
-            new Group("ecr-policies-shadow", "compat/model/authored/ecr-policies.json");
+    private static final Group GROUP_ECR_POLICIES =
+            new Group("ecr-policies", "compat/model/authored/ecr-policies.json");
 
     private final AwsClients clients;
     private volatile EcrClient client;
@@ -50,25 +50,25 @@ public final class ScenariosAuthoredEcrPoliciesGen implements ServiceGroup {
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("ecr-policies-shadow:PutLifecyclePolicy", this::testEcrPoliciesShadowPutLifecyclePolicy),
-                Map.entry("ecr-policies-shadow:GetLifecyclePolicy", this::testEcrPoliciesShadowGetLifecyclePolicy),
-                Map.entry("ecr-policies-shadow:DeleteLifecyclePolicy", this::testEcrPoliciesShadowDeleteLifecyclePolicy),
-                Map.entry("ecr-policies-shadow:GetLifecyclePolicyNotFound", this::testEcrPoliciesShadowGetLifecyclePolicyNotFound),
-                Map.entry("ecr-policies-shadow:SetRepositoryPolicy", this::testEcrPoliciesShadowSetRepositoryPolicy),
-                Map.entry("ecr-policies-shadow:GetRepositoryPolicy", this::testEcrPoliciesShadowGetRepositoryPolicy),
-                Map.entry("ecr-policies-shadow:DeleteRepositoryPolicy", this::testEcrPoliciesShadowDeleteRepositoryPolicy));
+                Map.entry("ecr-policies:PutLifecyclePolicy", this::testEcrPoliciesPutLifecyclePolicy),
+                Map.entry("ecr-policies:GetLifecyclePolicy", this::testEcrPoliciesGetLifecyclePolicy),
+                Map.entry("ecr-policies:DeleteLifecyclePolicy", this::testEcrPoliciesDeleteLifecyclePolicy),
+                Map.entry("ecr-policies:GetLifecyclePolicyNotFound", this::testEcrPoliciesGetLifecyclePolicyNotFound),
+                Map.entry("ecr-policies:SetRepositoryPolicy", this::testEcrPoliciesSetRepositoryPolicy),
+                Map.entry("ecr-policies:GetRepositoryPolicy", this::testEcrPoliciesGetRepositoryPolicy),
+                Map.entry("ecr-policies:DeleteRepositoryPolicy", this::testEcrPoliciesDeleteRepositoryPolicy));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("ecr-policies-shadow", this::setupEcrPoliciesShadow));
+                Map.entry("ecr-policies", this::setupEcrPolicies));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("ecr-policies-shadow", this::teardownEcrPoliciesShadow));
+                Map.entry("ecr-policies", this::teardownEcrPolicies));
     }
 
     /**
@@ -88,8 +88,8 @@ public final class ScenariosAuthoredEcrPoliciesGen implements ServiceGroup {
         return client;
     }
 
-    private void setupEcrPoliciesShadow(TestContext t) {
-        GROUP_ECR_POLICIES_SHADOW.runSetup(t,
+    private void setupEcrPolicies(TestContext t) {
+        GROUP_ECR_POLICIES.runSetup(t,
                 new Call("CreateRepository", "{\"repositoryName\":{\"$name\":\"repo\"}}",
                         b -> CreateRepositoryRequest.builder()
                                 .repositoryName(b.string("repositoryName", Values.name("repo")))
@@ -102,8 +102,8 @@ public final class ScenariosAuthoredEcrPoliciesGen implements ServiceGroup {
                         r -> cl().createRepository((CreateRepositoryRequest) r)));
     }
 
-    private void teardownEcrPoliciesShadow(TestContext t) {
-        GROUP_ECR_POLICIES_SHADOW.runTeardown(t,
+    private void teardownEcrPolicies(TestContext t) {
+        GROUP_ECR_POLICIES.runTeardown(t,
                 new Call("DeleteRepositoryPolicy", "{\"repositoryName\":{\"$name\":\"repo\"}}",
                         b -> DeleteRepositoryPolicyRequest.builder()
                                 .repositoryName(b.string("repositoryName", Values.name("repo")))
@@ -128,8 +128,8 @@ public final class ScenariosAuthoredEcrPoliciesGen implements ServiceGroup {
                         r -> cl().deleteRepository((DeleteRepositoryRequest) r)));
     }
 
-    private void testEcrPoliciesShadowPutLifecyclePolicy(TestContext t) {
-        GROUP_ECR_POLICIES_SHADOW.runTest(t, "PutLifecyclePolicy",
+    private void testEcrPoliciesPutLifecyclePolicy(TestContext t) {
+        GROUP_ECR_POLICIES.runTest(t, "PutLifecyclePolicy",
                 new Call("PutLifecyclePolicy", "{\"lifecyclePolicyText\":\"{\\\"rules\\\":[{\\\"rulePriority\\\":1,\\\"description\\\":\\\"expire untagged\\\",\\\"selection\\\":{\\\"tagStatus\\\":\\\"untagged\\\",\\\"countType\\\":\\\"imageCountMoreThan\\\",\\\"countNumber\\\":5},\\\"action\\\":{\\\"type\\\":\\\"expire\\\"}}]}\",\"repositoryName\":{\"$name\":\"repo\"}}",
                         b -> PutLifecyclePolicyRequest.builder()
                                 .lifecyclePolicyText("{\"rules\":[{\"rulePriority\":1,\"description\":\"expire untagged\",\"selection\":{\"tagStatus\":\"untagged\",\"countType\":\"imageCountMoreThan\",\"countNumber\":5},\"action\":{\"type\":\"expire\"}}]}")
@@ -152,8 +152,8 @@ public final class ScenariosAuthoredEcrPoliciesGen implements ServiceGroup {
                 ));
     }
 
-    private void testEcrPoliciesShadowGetLifecyclePolicy(TestContext t) {
-        GROUP_ECR_POLICIES_SHADOW.runTest(t, "GetLifecyclePolicy",
+    private void testEcrPoliciesGetLifecyclePolicy(TestContext t) {
+        GROUP_ECR_POLICIES.runTest(t, "GetLifecyclePolicy",
                 new Call("GetLifecyclePolicy", "{\"repositoryName\":{\"$name\":\"repo\"}}",
                         b -> GetLifecyclePolicyRequest.builder()
                                 .repositoryName(b.string("repositoryName", Values.name("repo")))
@@ -167,8 +167,8 @@ public final class ScenariosAuthoredEcrPoliciesGen implements ServiceGroup {
                 ));
     }
 
-    private void testEcrPoliciesShadowDeleteLifecyclePolicy(TestContext t) {
-        GROUP_ECR_POLICIES_SHADOW.runTest(t, "DeleteLifecyclePolicy",
+    private void testEcrPoliciesDeleteLifecyclePolicy(TestContext t) {
+        GROUP_ECR_POLICIES.runTest(t, "DeleteLifecyclePolicy",
                 new Call("DeleteLifecyclePolicy", "{\"repositoryName\":{\"$name\":\"repo\"}}",
                         b -> DeleteLifecyclePolicyRequest.builder()
                                 .repositoryName(b.string("repositoryName", Values.name("repo")))
@@ -188,8 +188,8 @@ public final class ScenariosAuthoredEcrPoliciesGen implements ServiceGroup {
                 ));
     }
 
-    private void testEcrPoliciesShadowGetLifecyclePolicyNotFound(TestContext t) {
-        GROUP_ECR_POLICIES_SHADOW.runTest(t, "GetLifecyclePolicyNotFound",
+    private void testEcrPoliciesGetLifecyclePolicyNotFound(TestContext t) {
+        GROUP_ECR_POLICIES.runTest(t, "GetLifecyclePolicyNotFound",
                 new Call("GetLifecyclePolicy", "{\"repositoryName\":{\"$name\":\"bare\"}}",
                         b -> GetLifecyclePolicyRequest.builder()
                                 .repositoryName(b.string("repositoryName", Values.name("bare")))
@@ -200,8 +200,8 @@ public final class ScenariosAuthoredEcrPoliciesGen implements ServiceGroup {
                 ));
     }
 
-    private void testEcrPoliciesShadowSetRepositoryPolicy(TestContext t) {
-        GROUP_ECR_POLICIES_SHADOW.runTest(t, "SetRepositoryPolicy",
+    private void testEcrPoliciesSetRepositoryPolicy(TestContext t) {
+        GROUP_ECR_POLICIES.runTest(t, "SetRepositoryPolicy",
                 new Call("SetRepositoryPolicy", "{\"policyText\":\"{\\\"Version\\\":\\\"2012-10-17\\\",\\\"Statement\\\":[{\\\"Sid\\\":\\\"AllowPull\\\",\\\"Effect\\\":\\\"Allow\\\",\\\"Principal\\\":\\\"*\\\",\\\"Action\\\":[\\\"ecr:GetDownloadUrlForLayer\\\",\\\"ecr:BatchGetImage\\\"]}]}\",\"repositoryName\":{\"$name\":\"repo\"}}",
                         b -> SetRepositoryPolicyRequest.builder()
                                 .policyText("{\"Version\":\"2012-10-17\",\"Statement\":[{\"Sid\":\"AllowPull\",\"Effect\":\"Allow\",\"Principal\":\"*\",\"Action\":[\"ecr:GetDownloadUrlForLayer\",\"ecr:BatchGetImage\"]}]}")
@@ -224,8 +224,8 @@ public final class ScenariosAuthoredEcrPoliciesGen implements ServiceGroup {
                 ));
     }
 
-    private void testEcrPoliciesShadowGetRepositoryPolicy(TestContext t) {
-        GROUP_ECR_POLICIES_SHADOW.runTest(t, "GetRepositoryPolicy",
+    private void testEcrPoliciesGetRepositoryPolicy(TestContext t) {
+        GROUP_ECR_POLICIES.runTest(t, "GetRepositoryPolicy",
                 new Call("GetRepositoryPolicy", "{\"repositoryName\":{\"$name\":\"repo\"}}",
                         b -> GetRepositoryPolicyRequest.builder()
                                 .repositoryName(b.string("repositoryName", Values.name("repo")))
@@ -239,8 +239,8 @@ public final class ScenariosAuthoredEcrPoliciesGen implements ServiceGroup {
                 ));
     }
 
-    private void testEcrPoliciesShadowDeleteRepositoryPolicy(TestContext t) {
-        GROUP_ECR_POLICIES_SHADOW.runTest(t, "DeleteRepositoryPolicy",
+    private void testEcrPoliciesDeleteRepositoryPolicy(TestContext t) {
+        GROUP_ECR_POLICIES.runTest(t, "DeleteRepositoryPolicy",
                 new Call("DeleteRepositoryPolicy", "{\"repositoryName\":{\"$name\":\"repo\"}}",
                         b -> DeleteRepositoryPolicyRequest.builder()
                                 .repositoryName(b.string("repositoryName", Values.name("repo")))

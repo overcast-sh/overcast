@@ -64,22 +64,11 @@ func AppConfig() ServiceGroup {
 			"appconfig-hosted-versions:DeleteHostedConfigurationVersion":             g.DeleteHostedConfigurationVersion,
 			"appconfig-hosted-versions:GetHostedConfigurationVersionNotFound":        g.GetHostedConfigurationVersionNotFound,
 
-			"appconfig-tags:CreateApplicationWithTags":   g.CreateApplicationWithTags,
-			"appconfig-tags:TagResource":                 g.TagResource,
-			"appconfig-tags:ListTagsForResource":         g.ListTagsForResource,
-			"appconfig-tags:UntagResource":               g.UntagResource,
-			"appconfig-tags:ListTagsForResourceNotFound": g.ListTagsForResourceNotFound,
-
 			"appconfig-deployment-strategies:CreateDeploymentStrategy": g.CreateDeploymentStrategy,
 			"appconfig-deployment-strategies:GetDeploymentStrategy":    g.GetDeploymentStrategy,
 			"appconfig-deployment-strategies:ListDeploymentStrategies": g.ListDeploymentStrategies,
 			"appconfig-deployment-strategies:UpdateDeploymentStrategy": g.UpdateDeploymentStrategy,
 			"appconfig-deployment-strategies:DeleteDeploymentStrategy": g.DeleteDeploymentStrategy,
-
-			"appconfig-deployments:StartDeployment": g.StartDeployment,
-			"appconfig-deployments:GetDeployment":   g.GetDeployment,
-			"appconfig-deployments:ListDeployments": g.ListDeployments,
-			"appconfig-deployments:StopDeployment":  g.StopDeployment,
 
 			"appconfig-extensions:CreateExtension":            g.CreateExtension,
 			"appconfig-extensions:GetExtension":               g.GetExtension,
@@ -100,16 +89,13 @@ func AppConfig() ServiceGroup {
 			"appconfig-environments":           g.setupEnvironments,
 			"appconfig-configuration-profiles": g.setupProfiles,
 			"appconfig-hosted-versions":        g.setupHostedVersions,
-			"appconfig-deployments":            g.setupDeployments,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
 			"appconfig-applications":           g.teardownApplications,
 			"appconfig-environments":           g.teardownEnvironments,
 			"appconfig-configuration-profiles": g.teardownProfiles,
 			"appconfig-hosted-versions":        g.teardownHostedVersions,
-			"appconfig-tags":                   g.teardownTags,
 			"appconfig-deployment-strategies":  g.teardownDeploymentStrategies,
-			"appconfig-deployments":            g.teardownDeployments,
 			"appconfig-extensions":             g.teardownExtensions,
 		},
 	}
@@ -123,9 +109,7 @@ var (
 	acEnvsNamer     = harness.NewNamer("ac-env")
 	acProfsNamer    = harness.NewNamer("ac-prof")
 	acHostedNamer   = harness.NewNamer("ac-hcv")
-	acTagsNamer     = harness.NewNamer("ac-tag")
 	acStrategyNamer = harness.NewNamer("ac-ds")
-	acDeployNamer   = harness.NewNamer("ac-dep")
 	acExtNamer      = harness.NewNamer("ac-ext")
 )
 
@@ -916,119 +900,6 @@ func (g *appconfigGroup) GetHostedConfigurationVersionNotFound(_ context.Context
 		"--version-number", "9999", outPath)
 }
 
-// ─── appconfig-tags ───────────────────────────────────────────────────────────
-
-func (g *appconfigGroup) teardownTags(_ context.Context, t *harness.TestContext) error {
-	acDeleteApp(t, "ac_tag_app_id")
-	return nil
-}
-
-// acListTags returns the Tags map for the group's application ARN.
-func acListTags(t *harness.TestContext) (map[string]any, error) {
-	arn := t.GetString("ac_tag_arn")
-	if arn == "" {
-		return nil, fmt.Errorf("no ac_tag_arn from CreateApplicationWithTags")
-	}
-	out, err := acOut(t, "list-tags-for-resource", "--resource-arn", arn)
-	if err != nil {
-		return nil, err
-	}
-	tags, _ := out["Tags"].(map[string]any)
-	if tags == nil {
-		return nil, fmt.Errorf("no Tags member in the response: %v", out)
-	}
-	return tags, nil
-}
-
-func (g *appconfigGroup) CreateApplicationWithTags(_ context.Context, t *harness.TestContext) error {
-	name := acTagsNamer.Name(t)
-	out, err := acOut(t, "create-application", "--name", name, "--tags", "Owner=compat,Team=platform")
-	if err != nil {
-		return err
-	}
-	id := acString(out, "Id")
-	if id == "" {
-		return fmt.Errorf("appconfig CreateApplicationWithTags: no Id in response: %v", out)
-	}
-	t.Set("ac_tag_app_id", id)
-	t.Set("ac_tag_arn", acARN(t, "application/"+id))
-
-	tags, err := acListTags(t)
-	if err != nil {
-		return fmt.Errorf("appconfig CreateApplicationWithTags: %w", err)
-	}
-	if tags["Owner"] != "compat" || tags["Team"] != "platform" {
-		return fmt.Errorf("appconfig CreateApplicationWithTags: expected the inline tags to be stored, got %v", tags)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) TagResource(_ context.Context, t *harness.TestContext) error {
-	arn := t.GetString("ac_tag_arn")
-	if arn == "" {
-		return fmt.Errorf("appconfig TagResource: no ac_tag_arn from CreateApplicationWithTags")
-	}
-	if err := acRun(t, "tag-resource", "--resource-arn", arn, "--tags", "Stage=beta,Owner=compat-updated"); err != nil {
-		return err
-	}
-	tags, err := acListTags(t)
-	if err != nil {
-		return fmt.Errorf("appconfig TagResource: %w", err)
-	}
-	if tags["Stage"] != "beta" {
-		return fmt.Errorf("appconfig TagResource: expected Stage=beta after tagging, got %v", tags)
-	}
-	if tags["Owner"] != "compat-updated" {
-		return fmt.Errorf("appconfig TagResource: expected the existing Owner tag to be overwritten, got %v", tags)
-	}
-	if tags["Team"] != "platform" {
-		return fmt.Errorf("appconfig TagResource: expected the untouched Team tag to survive, got %v", tags)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) ListTagsForResource(_ context.Context, t *harness.TestContext) error {
-	tags, err := acListTags(t)
-	if err != nil {
-		return fmt.Errorf("appconfig ListTagsForResource: %w", err)
-	}
-	if len(tags) == 0 {
-		return fmt.Errorf("appconfig ListTagsForResource: expected the application's tags, got an empty map")
-	}
-	if tags["Team"] != "platform" {
-		return fmt.Errorf("appconfig ListTagsForResource: expected Team=platform, got %v", tags)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) UntagResource(_ context.Context, t *harness.TestContext) error {
-	arn := t.GetString("ac_tag_arn")
-	if arn == "" {
-		return fmt.Errorf("appconfig UntagResource: no ac_tag_arn from CreateApplicationWithTags")
-	}
-	if err := acRun(t, "untag-resource", "--resource-arn", arn, "--tag-keys", "Team"); err != nil {
-		return err
-	}
-	tags, err := acListTags(t)
-	if err != nil {
-		return fmt.Errorf("appconfig UntagResource: %w", err)
-	}
-	if _, still := tags["Team"]; still {
-		return fmt.Errorf("appconfig UntagResource: Team is still present after untagging: %v", tags)
-	}
-	if _, kept := tags["Owner"]; !kept {
-		return fmt.Errorf("appconfig UntagResource: untagging Team removed Owner as well: %v", tags)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) ListTagsForResourceNotFound(_ context.Context, t *harness.TestContext) error {
-	// An ARN naming no resource is ResourceNotFoundException — 404 — not an
-	// empty tag map from some other service's ARN-keyed store.
-	return acExpectFailure(t, "ListTagsForResourceNotFound", "ResourceNotFoundException", acStatusNotFound,
-		"list-tags-for-resource", "--resource-arn", acARN(t, "application/"+acMissingID))
-}
-
 // ─── appconfig-deployment-strategies ──────────────────────────────────────────
 //
 // Overcast does not emulate deployments, so these are expected to answer 501.
@@ -1128,129 +999,6 @@ func (g *appconfigGroup) DeleteDeploymentStrategy(_ context.Context, t *harness.
 	t.Set("ac_ds_id", "")
 	return acExpectFailure(t, "DeleteDeploymentStrategy", "ResourceNotFoundException", acStatusNotFound,
 		"get-deployment-strategy", "--deployment-strategy-id", id)
-}
-
-// ─── appconfig-deployments ────────────────────────────────────────────────────
-//
-// Also unimplemented, and given real application, environment, profile and
-// configuration-version inputs so the requests are the shape a working caller
-// would send rather than a probe with invented ids.
-
-func (g *appconfigGroup) setupDeployments(_ context.Context, t *harness.TestContext) error {
-	appID, err := acCreateApp(t, acDeployNamer.Name(t))
-	if err != nil {
-		return err
-	}
-	t.Set("ac_dep_app_id", appID)
-
-	env, err := acOut(t, "create-environment", "--application-id", appID, "--name", acDeployNamer.Name(t))
-	if err != nil {
-		return err
-	}
-	envID := acString(env, "Id")
-	if envID == "" {
-		return fmt.Errorf("appconfig deployments setup: no environment Id in response: %v", env)
-	}
-	t.Set("ac_dep_env_id", envID)
-
-	prof, err := acOut(t, "create-configuration-profile",
-		"--application-id", appID, "--name", acDeployNamer.Name(t), "--location-uri", "hosted")
-	if err != nil {
-		return err
-	}
-	profID := acString(prof, "Id")
-	if profID == "" {
-		return fmt.Errorf("appconfig deployments setup: no profile Id in response: %v", prof)
-	}
-	t.Set("ac_dep_prof_id", profID)
-	return nil
-}
-
-func (g *appconfigGroup) teardownDeployments(_ context.Context, t *harness.TestContext) error {
-	appID := t.GetString("ac_dep_app_id")
-	if appID == "" {
-		return nil
-	}
-	if profID := t.GetString("ac_dep_prof_id"); profID != "" {
-		acRun(t, "delete-configuration-profile", //nolint:errcheck
-			"--application-id", appID, "--configuration-profile-id", profID)
-	}
-	if envID := t.GetString("ac_dep_env_id"); envID != "" {
-		acRun(t, "delete-environment", //nolint:errcheck
-			"--application-id", appID, "--environment-id", envID)
-	}
-	acDeleteApp(t, "ac_dep_app_id")
-	return nil
-}
-
-func (g *appconfigGroup) StartDeployment(_ context.Context, t *harness.TestContext) error {
-	out, err := acOut(t, "start-deployment",
-		"--application-id", t.GetString("ac_dep_app_id"),
-		"--environment-id", t.GetString("ac_dep_env_id"),
-		"--deployment-strategy-id", "AppConfig.AllAtOnce",
-		"--configuration-profile-id", t.GetString("ac_dep_prof_id"),
-		"--configuration-version", "1",
-	)
-	if err != nil {
-		return err
-	}
-	if _, ok := out["DeploymentNumber"]; !ok {
-		return fmt.Errorf("appconfig StartDeployment: no DeploymentNumber in response: %v", out)
-	}
-	t.Set("ac_dep_number", fmt.Sprintf("%v", out["DeploymentNumber"]))
-	return nil
-}
-
-// acDeploymentNumber returns the started deployment's number, or "1" so the URI
-// is still exercised when StartDeployment is unimplemented.
-func acDeploymentNumber(t *harness.TestContext) string {
-	if n := t.GetString("ac_dep_number"); n != "" {
-		return n
-	}
-	return "1"
-}
-
-func (g *appconfigGroup) GetDeployment(_ context.Context, t *harness.TestContext) error {
-	out, err := acOut(t, "get-deployment",
-		"--application-id", t.GetString("ac_dep_app_id"),
-		"--environment-id", t.GetString("ac_dep_env_id"),
-		"--deployment-number", acDeploymentNumber(t),
-	)
-	if err != nil {
-		return err
-	}
-	if _, ok := out["DeploymentNumber"]; !ok {
-		return fmt.Errorf("appconfig GetDeployment: no DeploymentNumber in response: %v", out)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) ListDeployments(_ context.Context, t *harness.TestContext) error {
-	out, err := acOut(t, "list-deployments",
-		"--application-id", t.GetString("ac_dep_app_id"),
-		"--environment-id", t.GetString("ac_dep_env_id"))
-	if err != nil {
-		return err
-	}
-	if _, ok := out["Items"]; !ok {
-		return fmt.Errorf("appconfig ListDeployments: no Items member in the response: %v", out)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) StopDeployment(_ context.Context, t *harness.TestContext) error {
-	out, err := acOut(t, "stop-deployment",
-		"--application-id", t.GetString("ac_dep_app_id"),
-		"--environment-id", t.GetString("ac_dep_env_id"),
-		"--deployment-number", acDeploymentNumber(t),
-	)
-	if err != nil {
-		return err
-	}
-	if state := acString(out, "State"); state == "" {
-		return fmt.Errorf("appconfig StopDeployment: no State in response: %v", out)
-	}
-	return nil
 }
 
 // ─── appconfig-extensions ─────────────────────────────────────────────────────

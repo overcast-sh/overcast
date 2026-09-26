@@ -41,12 +41,6 @@
     {
       "suite": "dotnet-sdk",
       "service": "appconfig",
-      "group": "appconfig-deployments",
-      "tests": 4
-    },
-    {
-      "suite": "dotnet-sdk",
-      "service": "appconfig",
       "group": "appconfig-environments",
       "tests": 7
     },
@@ -67,12 +61,6 @@
       "service": "appconfig",
       "group": "appconfig-hosted-versions",
       "tests": 7
-    },
-    {
-      "suite": "dotnet-sdk",
-      "service": "appconfig",
-      "group": "appconfig-tags",
-      "tests": 5
     },
     {
       "suite": "dotnet-sdk",
@@ -191,12 +179,6 @@
     {
       "suite": "dotnet-sdk",
       "service": "backup",
-      "group": "backup-tags",
-      "tests": 3
-    },
-    {
-      "suite": "dotnet-sdk",
-      "service": "backup",
       "group": "backup-vaults",
       "tests": 10
     },
@@ -305,26 +287,8 @@
     {
       "suite": "dotnet-sdk",
       "service": "ecr",
-      "group": "ecr-policies",
-      "tests": 7
-    },
-    {
-      "suite": "dotnet-sdk",
-      "service": "ecr",
-      "group": "ecr-registry",
-      "tests": 2
-    },
-    {
-      "suite": "dotnet-sdk",
-      "service": "ecr",
       "group": "ecr-repositories",
       "tests": 10
-    },
-    {
-      "suite": "dotnet-sdk",
-      "service": "ecr",
-      "group": "ecr-tags",
-      "tests": 3
     },
     {
       "suite": "dotnet-sdk",
@@ -581,12 +545,6 @@
     {
       "suite": "go-sdk",
       "service": "appconfig",
-      "group": "appconfig-deployments",
-      "tests": 4
-    },
-    {
-      "suite": "go-sdk",
-      "service": "appconfig",
       "group": "appconfig-environments",
       "tests": 7
     },
@@ -607,12 +565,6 @@
       "service": "appconfig",
       "group": "appconfig-hosted-versions",
       "tests": 7
-    },
-    {
-      "suite": "go-sdk",
-      "service": "appconfig",
-      "group": "appconfig-tags",
-      "tests": 5
     },
     {
       "suite": "go-sdk",
@@ -647,12 +599,6 @@
     {
       "suite": "go-sdk",
       "service": "backup",
-      "group": "backup-tags",
-      "tests": 3
-    },
-    {
-      "suite": "go-sdk",
-      "service": "backup",
       "group": "backup-vaults",
       "tests": 10
     },
@@ -665,26 +611,8 @@
     {
       "suite": "go-sdk",
       "service": "ecr",
-      "group": "ecr-policies",
-      "tests": 7
-    },
-    {
-      "suite": "go-sdk",
-      "service": "ecr",
-      "group": "ecr-registry",
-      "tests": 2
-    },
-    {
-      "suite": "go-sdk",
-      "service": "ecr",
       "group": "ecr-repositories",
       "tests": 10
-    },
-    {
-      "suite": "go-sdk",
-      "service": "ecr",
-      "group": "ecr-tags",
-      "tests": 3
     },
     {
       "suite": "go-sdk",
@@ -779,12 +707,6 @@
     {
       "suite": "java-sdk",
       "service": "appconfig",
-      "group": "appconfig-deployments",
-      "tests": 4
-    },
-    {
-      "suite": "java-sdk",
-      "service": "appconfig",
       "group": "appconfig-environments",
       "tests": 7
     },
@@ -805,12 +727,6 @@
       "service": "appconfig",
       "group": "appconfig-hosted-versions",
       "tests": 7
-    },
-    {
-      "suite": "java-sdk",
-      "service": "appconfig",
-      "group": "appconfig-tags",
-      "tests": 5
     },
     {
       "suite": "java-sdk",
@@ -863,12 +779,6 @@
     {
       "suite": "java-sdk",
       "service": "backup",
-      "group": "backup-tags",
-      "tests": 3
-    },
-    {
-      "suite": "java-sdk",
-      "service": "backup",
       "group": "backup-vaults",
       "tests": 10
     },
@@ -881,26 +791,8 @@
     {
       "suite": "java-sdk",
       "service": "ecr",
-      "group": "ecr-policies",
-      "tests": 7
-    },
-    {
-      "suite": "java-sdk",
-      "service": "ecr",
-      "group": "ecr-registry",
-      "tests": 2
-    },
-    {
-      "suite": "java-sdk",
-      "service": "ecr",
       "group": "ecr-repositories",
       "tests": 10
-    },
-    {
-      "suite": "java-sdk",
-      "service": "ecr",
-      "group": "ecr-tags",
-      "tests": 3
     },
     {
       "suite": "java-sdk",
@@ -1019,12 +911,6 @@
     {
       "suite": "node-js-sdk",
       "service": "appconfig",
-      "group": "appconfig-deployments",
-      "tests": 4
-    },
-    {
-      "suite": "node-js-sdk",
-      "service": "appconfig",
       "group": "appconfig-environments",
       "tests": 7
     },
@@ -1045,12 +931,6 @@
       "service": "appconfig",
       "group": "appconfig-hosted-versions",
       "tests": 7
-    },
-    {
-      "suite": "node-js-sdk",
-      "service": "appconfig",
-      "group": "appconfig-tags",
-      "tests": 5
     },
     {
       "suite": "node-js-sdk",
@@ -1091,12 +971,6 @@
     {
       "suite": "node-js-sdk",
       "service": "backup",
-      "group": "backup-tags",
-      "tests": 3
-    },
-    {
-      "suite": "node-js-sdk",
-      "service": "backup",
       "group": "backup-vaults",
       "tests": 10
     },
@@ -1109,26 +983,8 @@
     {
       "suite": "node-js-sdk",
       "service": "ecr",
-      "group": "ecr-policies",
-      "tests": 7
-    },
-    {
-      "suite": "node-js-sdk",
-      "service": "ecr",
-      "group": "ecr-registry",
-      "tests": 2
-    },
-    {
-      "suite": "node-js-sdk",
-      "service": "ecr",
       "group": "ecr-repositories",
       "tests": 10
-    },
-    {
-      "suite": "node-js-sdk",
-      "service": "ecr",
-      "group": "ecr-tags",
-      "tests": 3
     },
     {
       "suite": "node-js-sdk",
@@ -1241,12 +1097,6 @@
     {
       "suite": "python-sdk",
       "service": "appconfig",
-      "group": "appconfig-deployments",
-      "tests": 4
-    },
-    {
-      "suite": "python-sdk",
-      "service": "appconfig",
       "group": "appconfig-environments",
       "tests": 7
     },
@@ -1267,12 +1117,6 @@
       "service": "appconfig",
       "group": "appconfig-hosted-versions",
       "tests": 7
-    },
-    {
-      "suite": "python-sdk",
-      "service": "appconfig",
-      "group": "appconfig-tags",
-      "tests": 5
     },
     {
       "suite": "python-sdk",
@@ -1307,12 +1151,6 @@
     {
       "suite": "python-sdk",
       "service": "backup",
-      "group": "backup-tags",
-      "tests": 3
-    },
-    {
-      "suite": "python-sdk",
-      "service": "backup",
       "group": "backup-vaults",
       "tests": 10
     },
@@ -1325,26 +1163,8 @@
     {
       "suite": "python-sdk",
       "service": "ecr",
-      "group": "ecr-policies",
-      "tests": 7
-    },
-    {
-      "suite": "python-sdk",
-      "service": "ecr",
-      "group": "ecr-registry",
-      "tests": 2
-    },
-    {
-      "suite": "python-sdk",
-      "service": "ecr",
       "group": "ecr-repositories",
       "tests": 10
-    },
-    {
-      "suite": "python-sdk",
-      "service": "ecr",
-      "group": "ecr-tags",
-      "tests": 3
     },
     {
       "suite": "python-sdk",
@@ -1457,12 +1277,6 @@
     {
       "suite": "rust-sdk",
       "service": "appconfig",
-      "group": "appconfig-deployments",
-      "tests": 4
-    },
-    {
-      "suite": "rust-sdk",
-      "service": "appconfig",
       "group": "appconfig-environments",
       "tests": 7
     },
@@ -1483,12 +1297,6 @@
       "service": "appconfig",
       "group": "appconfig-hosted-versions",
       "tests": 7
-    },
-    {
-      "suite": "rust-sdk",
-      "service": "appconfig",
-      "group": "appconfig-tags",
-      "tests": 5
     },
     {
       "suite": "rust-sdk",
@@ -1607,12 +1415,6 @@
     {
       "suite": "rust-sdk",
       "service": "backup",
-      "group": "backup-tags",
-      "tests": 3
-    },
-    {
-      "suite": "rust-sdk",
-      "service": "backup",
       "group": "backup-vaults",
       "tests": 10
     },
@@ -1721,26 +1523,8 @@
     {
       "suite": "rust-sdk",
       "service": "ecr",
-      "group": "ecr-policies",
-      "tests": 7
-    },
-    {
-      "suite": "rust-sdk",
-      "service": "ecr",
-      "group": "ecr-registry",
-      "tests": 2
-    },
-    {
-      "suite": "rust-sdk",
-      "service": "ecr",
       "group": "ecr-repositories",
       "tests": 10
-    },
-    {
-      "suite": "rust-sdk",
-      "service": "ecr",
-      "group": "ecr-tags",
-      "tests": 3
     },
     {
       "suite": "rust-sdk",

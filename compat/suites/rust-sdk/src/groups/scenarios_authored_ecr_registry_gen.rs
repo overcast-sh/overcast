@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/ecr-registry.json";
 
-const GROUP_ECR_REGISTRY_SHADOW: Group = Group {
-    name: "ecr-registry-shadow",
+const GROUP_ECR_REGISTRY: Group = Group {
+    name: "ecr-registry",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredEcrRegistry {
         {
             let client = self.client.clone();
             impls.insert(
-                "ecr-registry-shadow:GetAuthorizationToken".to_string(),
+                "ecr-registry:GetAuthorizationToken".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_REGISTRY_SHADOW
-                            .run_test(&ctx, "GetAuthorizationToken", test_ecr_registry_shadow_get_authorization_token(&client))
+                        GROUP_ECR_REGISTRY
+                            .run_test(&ctx, "GetAuthorizationToken", test_ecr_registry_get_authorization_token(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredEcrRegistry {
         {
             let client = self.client.clone();
             impls.insert(
-                "ecr-registry-shadow:DescribeRegistry".to_string(),
+                "ecr-registry:DescribeRegistry".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_REGISTRY_SHADOW
-                            .run_test(&ctx, "DescribeRegistry", test_ecr_registry_shadow_describe_registry(&client))
+                        GROUP_ECR_REGISTRY
+                            .run_test(&ctx, "DescribeRegistry", test_ecr_registry_describe_registry(&client))
                             .await
                     })
                 }),
@@ -84,11 +84,11 @@ impl ServiceGroup for ScenariosAuthoredEcrRegistry {
         {
             let client = self.client.clone();
             setups.insert(
-                "ecr-registry-shadow".to_string(),
+                "ecr-registry".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_REGISTRY_SHADOW.run_setup(&ctx, setup_ecr_registry_shadow(&client)).await
+                        GROUP_ECR_REGISTRY.run_setup(&ctx, setup_ecr_registry(&client)).await
                     })
                 }),
             );
@@ -101,11 +101,11 @@ impl ServiceGroup for ScenariosAuthoredEcrRegistry {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "ecr-registry-shadow".to_string(),
+                "ecr-registry".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_REGISTRY_SHADOW.run_teardown(&ctx, teardown_ecr_registry_shadow(&client)).await
+                        GROUP_ECR_REGISTRY.run_teardown(&ctx, teardown_ecr_registry(&client)).await
                     })
                 }),
             );
@@ -114,17 +114,17 @@ impl ServiceGroup for ScenariosAuthoredEcrRegistry {
     }
 }
 
-fn setup_ecr_registry_shadow(_client: &aws_sdk_ecr::Client) -> Vec<Call> {
+fn setup_ecr_registry(_client: &aws_sdk_ecr::Client) -> Vec<Call> {
     // An empty phase is a no-op, not a missing one.
     Vec::new()
 }
 
-fn teardown_ecr_registry_shadow(_client: &aws_sdk_ecr::Client) -> Vec<Call> {
+fn teardown_ecr_registry(_client: &aws_sdk_ecr::Client) -> Vec<Call> {
     // An empty phase is a no-op, not a missing one.
     Vec::new()
 }
 
-fn test_ecr_registry_shadow_get_authorization_token(client: &aws_sdk_ecr::Client) -> Test {
+fn test_ecr_registry_get_authorization_token(client: &aws_sdk_ecr::Client) -> Test {
     Test {
         call: Call {
             op: "GetAuthorizationToken",
@@ -155,7 +155,7 @@ fn test_ecr_registry_shadow_get_authorization_token(client: &aws_sdk_ecr::Client
     }
 }
 
-fn test_ecr_registry_shadow_describe_registry(client: &aws_sdk_ecr::Client) -> Test {
+fn test_ecr_registry_describe_registry(client: &aws_sdk_ecr::Client) -> Test {
     Test {
         call: Call {
             op: "DescribeRegistry",

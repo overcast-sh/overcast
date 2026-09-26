@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/appconfig-deployments.json";
 
-const GROUP_APPCONFIG_DEPLOYMENTS_SHADOW: Group = Group {
-    name: "appconfig-deployments-shadow",
+const GROUP_APPCONFIG_DEPLOYMENTS: Group = Group {
+    name: "appconfig-deployments",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigDeployments {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-deployments-shadow:StartDeployment".to_string(),
+                "appconfig-deployments:StartDeployment".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_DEPLOYMENTS_SHADOW
-                            .run_test(&ctx, "StartDeployment", test_appconfig_deployments_shadow_start_deployment(&client))
+                        GROUP_APPCONFIG_DEPLOYMENTS
+                            .run_test(&ctx, "StartDeployment", test_appconfig_deployments_start_deployment(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigDeployments {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-deployments-shadow:GetDeployment".to_string(),
+                "appconfig-deployments:GetDeployment".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_DEPLOYMENTS_SHADOW
-                            .run_test(&ctx, "GetDeployment", test_appconfig_deployments_shadow_get_deployment(&client))
+                        GROUP_APPCONFIG_DEPLOYMENTS
+                            .run_test(&ctx, "GetDeployment", test_appconfig_deployments_get_deployment(&client))
                             .await
                     })
                 }),
@@ -79,12 +79,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigDeployments {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-deployments-shadow:ListDeployments".to_string(),
+                "appconfig-deployments:ListDeployments".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_DEPLOYMENTS_SHADOW
-                            .run_test(&ctx, "ListDeployments", test_appconfig_deployments_shadow_list_deployments(&client))
+                        GROUP_APPCONFIG_DEPLOYMENTS
+                            .run_test(&ctx, "ListDeployments", test_appconfig_deployments_list_deployments(&client))
                             .await
                     })
                 }),
@@ -93,12 +93,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigDeployments {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-deployments-shadow:StopDeployment".to_string(),
+                "appconfig-deployments:StopDeployment".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_DEPLOYMENTS_SHADOW
-                            .run_test(&ctx, "StopDeployment", test_appconfig_deployments_shadow_stop_deployment(&client))
+                        GROUP_APPCONFIG_DEPLOYMENTS
+                            .run_test(&ctx, "StopDeployment", test_appconfig_deployments_stop_deployment(&client))
                             .await
                     })
                 }),
@@ -112,11 +112,11 @@ impl ServiceGroup for ScenariosAuthoredAppconfigDeployments {
         {
             let client = self.client.clone();
             setups.insert(
-                "appconfig-deployments-shadow".to_string(),
+                "appconfig-deployments".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_DEPLOYMENTS_SHADOW.run_setup(&ctx, setup_appconfig_deployments_shadow(&client)).await
+                        GROUP_APPCONFIG_DEPLOYMENTS.run_setup(&ctx, setup_appconfig_deployments(&client)).await
                     })
                 }),
             );
@@ -129,11 +129,11 @@ impl ServiceGroup for ScenariosAuthoredAppconfigDeployments {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "appconfig-deployments-shadow".to_string(),
+                "appconfig-deployments".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_DEPLOYMENTS_SHADOW.run_teardown(&ctx, teardown_appconfig_deployments_shadow(&client)).await
+                        GROUP_APPCONFIG_DEPLOYMENTS.run_teardown(&ctx, teardown_appconfig_deployments(&client)).await
                     })
                 }),
             );
@@ -142,7 +142,7 @@ impl ServiceGroup for ScenariosAuthoredAppconfigDeployments {
     }
 }
 
-fn setup_appconfig_deployments_shadow(client: &aws_sdk_appconfig::Client) -> Vec<Call> {
+fn setup_appconfig_deployments(client: &aws_sdk_appconfig::Client) -> Vec<Call> {
     vec![
         Call {
             op: "CreateApplication",
@@ -223,7 +223,7 @@ fn setup_appconfig_deployments_shadow(client: &aws_sdk_appconfig::Client) -> Vec
     ]
 }
 
-fn teardown_appconfig_deployments_shadow(client: &aws_sdk_appconfig::Client) -> Vec<Call> {
+fn teardown_appconfig_deployments(client: &aws_sdk_appconfig::Client) -> Vec<Call> {
     vec![
         Call {
             op: "DeleteConfigurationProfile",
@@ -298,7 +298,7 @@ fn teardown_appconfig_deployments_shadow(client: &aws_sdk_appconfig::Client) -> 
     ]
 }
 
-fn test_appconfig_deployments_shadow_start_deployment(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_deployments_start_deployment(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "StartDeployment",
@@ -338,7 +338,7 @@ fn test_appconfig_deployments_shadow_start_deployment(client: &aws_sdk_appconfig
     }
 }
 
-fn test_appconfig_deployments_shadow_get_deployment(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_deployments_get_deployment(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "GetDeployment",
@@ -374,7 +374,7 @@ fn test_appconfig_deployments_shadow_get_deployment(client: &aws_sdk_appconfig::
     }
 }
 
-fn test_appconfig_deployments_shadow_list_deployments(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_deployments_list_deployments(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "ListDeployments",
@@ -408,7 +408,7 @@ fn test_appconfig_deployments_shadow_list_deployments(client: &aws_sdk_appconfig
     }
 }
 
-fn test_appconfig_deployments_shadow_stop_deployment(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_deployments_stop_deployment(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "StopDeployment",
