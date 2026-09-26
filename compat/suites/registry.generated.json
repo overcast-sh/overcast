@@ -1443,6 +1443,45 @@
       ]
     },
     {
+      "service": "iam",
+      "name": "iam-simulate-shadow",
+      "generated": true,
+      "scenario": "compat/model/authored/iam-simulate.json",
+      "state": "candidate",
+      "shadowOf": "iam-simulate",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "SimulateCustomPolicyAllowed",
+          "op": "SimulateCustomPolicy"
+        },
+        {
+          "name": "SimulateCustomPolicyImplicitDeny",
+          "op": "SimulateCustomPolicy"
+        },
+        {
+          "name": "SimulateCustomPolicyExplicitDeny",
+          "op": "SimulateCustomPolicy"
+        },
+        {
+          "name": "SimulatePrincipalPolicyAllowed",
+          "op": "SimulatePrincipalPolicy"
+        },
+        {
+          "name": "SimulatePrincipalPolicyImplicitDeny",
+          "op": "SimulatePrincipalPolicy"
+        }
+      ]
+    },
+    {
       "service": "kms",
       "name": "kms-gen-key",
       "generated": true,

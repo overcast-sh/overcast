@@ -27,6 +27,7 @@ public final class ScenariosGen {
                 new ScenariosAuthoredIamGroupsGen(clients),
                 new ScenariosAuthoredIamPoliciesGen(clients),
                 new ScenariosAuthoredIamRolesGen(clients),
+                new ScenariosAuthoredIamSimulateGen(clients),
                 new ScenariosAuthoredIamUsersGen(clients),
                 new ScenariosAuthoredKinesisRecordsGen(clients),
                 new ScenariosAuthoredKinesisShardsGen(clients),

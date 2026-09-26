@@ -22,6 +22,7 @@ internal static class ScenarioGroups
         new ScenariosAuthoredIamGroups(clients),
         new ScenariosAuthoredIamPolicies(clients),
         new ScenariosAuthoredIamRoles(clients),
+        new ScenariosAuthoredIamSimulate(clients),
         new ScenariosAuthoredIamUsers(clients),
         new ScenariosAuthoredKinesisRecords(clients),
         new ScenariosAuthoredKinesisShards(clients),
