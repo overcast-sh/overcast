@@ -96,6 +96,14 @@ var (
 	lintFlakyFrom    = flag.String("lint-flaky-from", "", "Old flaky list for growth linting")
 	lintFlakyTo      = flag.String("lint-flaky-to", "", "New flaky list for growth linting")
 	flakyGrowthOK    = flag.Bool("flaky-growth-approved", false, "Accept new flaky-list entries: a reviewer has agreed to the quarantine (CI sets this from the PR's quarantine-approved label). Per-entry checks (reason, issue, date, deadline) still apply")
+
+	// The closed-debt allowance of --lint-baseline-from/--lint-baseline-to: a
+	// skip -> unimplemented change is accepted only for a (suite, group) the
+	// old parity-debt file lists and the new one does not. See
+	// lintBaselineChange.
+	lintParityDebtFrom = flag.String("lint-parity-debt-from", "", "Old parity-debt file for downgrade linting: a skip -> unimplemented row whose (suite, group) it lists and --lint-parity-debt-to does not is closed debt, not a downgrade. Unset or absent grants nothing")
+	lintParityDebtTo   = flag.String("lint-parity-debt-to", "", "New parity-debt file for downgrade linting (default: --parity-debt-file). Absent grants nothing")
+
 	// --publish-report: the public report overcast.sh renders. See publish.go.
 	publishReport     = flag.String("publish-report", "", "Join --results-file with the registry, gaps, flaky list and issue links into the public compatibility report at this path, then exit")
 	publishVersion    = flag.String("publish-version", "", "Release version recorded in --publish-report (e.g. v0.42.0)")
