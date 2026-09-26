@@ -396,10 +396,10 @@ func TestScheduler_multipleKeys(t *testing.T) {
 type fireRace struct {
 	s    *Scheduler
 	mock *clock.Mock
-	// witness is set by an uncontended transition halfway through the advance,
-	// so a test can say the advance really did drive the scheduler rather than
-	// finding nothing due and returning at once.
-	witness atomic.Bool
+	// witnessRan is closed by an uncontended transition halfway through the
+	// advance, so a test can say the advance really did drive the scheduler
+	// rather than finding nothing due and returning at once.
+	witnessRan chan struct{}
 	// ranAfterCancel counts callbacks that ran even though a Cancel had
 	// already reported cancelling that very transition.
 	ranAfterCancel atomic.Int64
@@ -427,9 +427,9 @@ func newFireRace() *fireRace {
 	for i := 1; i <= fireRaceMillis; i++ {
 		mock.AfterFunc(time.Duration(i)*time.Millisecond, func() {})
 	}
-	r := &fireRace{s: NewScheduler(mock), mock: mock}
+	r := &fireRace{s: NewScheduler(mock), mock: mock, witnessRan: make(chan struct{})}
 	r.s.After(fireRaceWitnessKey, fireRaceMillis/2*time.Millisecond, func() {
-		r.witness.Store(true)
+		close(r.witnessRan)
 	})
 	return r
 }
@@ -478,17 +478,32 @@ func (r *fireRace) advanceWhileContending(contend func()) {
 	stop()
 }
 
-// assertExercised fails if the uncontended witness transition never ran, which
-// would mean the advance drove no transition at all and the rest of the test
-// is vacuous. It has to be called after the scheduler has been stopped, which
-// is what waits for a callback already in flight.
+// awaitExercised fails if the uncontended witness transition does not run,
+// which would mean the advance drove no transition at all and the rest of the
+// test is vacuous. It must be called after the advance and before Stop.
+//
+// It waits for the witness rather than checking whether it has already run,
+// because the advance returning does not mean the witness's callback has run.
+// The mock clock launches each callback on a goroutine of its own and yields
+// for one millisecond, and that callback still has to take s.mu to claim its
+// entry — the mutex the contending goroutine is hammering. On a loaded runner
+// the test used to reach Stop first: Stop claimed the still-pending witness
+// and cancelled it, the callback correctly stood down, and the test reported
+// "the advance drove no transitions" about an advance that had driven one
+// (CI run 36200038193). A Stop that wins the claim is meant to cancel, so the
+// fault was in the test's timing, never the scheduler.
+//
+// The deadline is generous so that a witness that genuinely never fires still
+// fails the test rather than hanging it.
 //
 // The contended key cannot serve as the witness: a cancel that wins the claim
 // stands its callback down, so on a correct scheduler that key can legitimately
 // never run fn at all.
-func (r *fireRace) assertExercised(t *testing.T) {
+func (r *fireRace) awaitExercised(t *testing.T) {
 	t.Helper()
-	if !r.witness.Load() {
+	select {
+	case <-r.witnessRan:
+	case <-time.After(10 * time.Second):
 		t.Fatal("the witness transition never ran — the advance drove no transitions")
 	}
 }
@@ -541,10 +556,10 @@ func TestScheduler_Cancel_racesTheFiringTimer(t *testing.T) {
 		}
 	})
 
-	// Then the scheduler stops cleanly, and no transition ran after a Cancel
-	// reported cancelling it
+	// Then the advance really drove the scheduler, it stops cleanly, and no
+	// transition ran after a Cancel reported cancelling it
+	r.awaitExercised(t)
 	r.stop(t)
-	r.assertExercised(t)
 	if n := r.ranAfterCancel.Load(); n != 0 {
 		t.Fatalf("%d transition(s) ran after Cancel reported cancelling them", n)
 	}
@@ -564,9 +579,10 @@ func TestScheduler_After_reArmRacesTheFiringTimer(t *testing.T) {
 	// another goroutine keeps rescheduling the same key
 	r.advanceWhileContending(func() { r.arm() })
 
-	// Then nothing was orphaned or settled twice
+	// Then the advance really drove the scheduler, and nothing was orphaned or
+	// settled twice
+	r.awaitExercised(t)
 	r.stop(t)
-	r.assertExercised(t)
 }
 
 // TestScheduler_Stop_racesTheFiringTimer is the same race reached through
