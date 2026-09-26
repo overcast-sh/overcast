@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/overcast-sh/overcast/internal/iampolicy"
 	"github.com/overcast-sh/overcast/internal/middleware"
 	"github.com/overcast-sh/overcast/internal/protocol"
 )
@@ -335,8 +336,13 @@ func wildcardMatch(pattern, value string) bool {
 // resource-based policy allows.
 func invokeAccessDenied(principal, targetARN string) *protocol.AWSError {
 	return &protocol.AWSError{
-		Code:       "AccessDeniedException",
-		Message:    "User: " + principal + " is not authorized to perform: " + invokeFunctionAction + " on resource: " + targetARN + " because no resource-based policy allows the " + invokeFunctionAction + " action",
+		Code: "AccessDeniedException",
+		Message: iampolicy.Denial{
+			Principal: principal,
+			Action:    invokeFunctionAction,
+			Resource:  targetARN,
+			Policy:    iampolicy.PolicyTypeResourceBased,
+		}.Message(),
 		HTTPStatus: http.StatusForbidden,
 	}
 }

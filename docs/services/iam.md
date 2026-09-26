@@ -77,14 +77,37 @@ When it is on:
   explicitly to test it.
 - Enforcement is **fail-closed**: an unsigned request, an unparseable policy, or
   a construct the evaluator does not implement all deny.
+- `sts:GetCallerIdentity` and `sts:GetSessionToken` are served to any caller
+  whose access key names a principal, even under an explicit `Deny`, because
+  AWS documents that no policy controls them.
 
 | Protocol the call was made over | For example              | Error code              | Status |
 | ------------------------------- | ------------------------ | ----------------------- | ------ |
 | AWS JSON, Smithy RPC v2         | DynamoDB, KMS, Athena    | `AccessDeniedException` | 400    |
 | REST-JSON                       | Lambda, API Gateway      | `AccessDeniedException` | 403    |
 | Query                           | IAM, STS, CloudFormation | `AccessDenied`          | 403    |
+| Query                           | SNS                      | `AuthorizationError`    | 403    |
 | EC2 Query                       | EC2                      | `UnauthorizedOperation` | 403    |
 | REST-XML                        | S3, CloudFront, Route 53 | `AccessDenied`          | 403    |
+
+The message says who was refused what, and which kind of policy refused it, in
+the format the IAM User Guide documents:
+
+```text
+User: arn:aws:iam::000000000000:user/dev is not authorized to perform: sqs:DeleteQueue on resource: arn:aws:sqs:us-east-1:000000000000:jobs with an explicit deny in an identity-based policy
+User: arn:aws:iam::000000000000:user/dev is not authorized to perform: sns:ListTopics because no identity-based policy allows the sns:ListTopics action
+```
+
+`on resource:` is left out when the action names no particular resource. The
+policy named is the identity-based policy, or the permissions boundary when the
+boundary holds the `Deny`, or when the identity policies allowed the call and
+the boundary did not. A role session is named by its role ARN, where AWS names
+the `assumed-role/<role>/<session>` ARN. S3 quotes the resource ARN, and EC2
+puts the sentence after its own `You are not authorized to perform this
+operation.` A denial no policy decided
+— an unsigned call, an unknown access key, a policy that could not be evaluated
+— says only `User is not authorized to perform this action` (S3:
+`Access Denied`).
 
 The action evaluated is `<prefix>:<Operation>`, where the prefix is the IAM
 action prefix AWS itself uses — so write policies with the names the AWS

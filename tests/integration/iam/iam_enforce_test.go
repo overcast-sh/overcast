@@ -381,36 +381,6 @@ func s3CallWithAuth(t *testing.T, srv *helpers.TestServer, method, path, auth st
 	return resp
 }
 
-func queryCallWithAuth(
-	t *testing.T,
-	srv *helpers.TestServer,
-	action string,
-	version string,
-	auth string,
-) *http.Response {
-	t.Helper()
-	if version == "" {
-		version = "2011-06-15"
-	}
-	form := url.Values{}
-	form.Set("Action", action)
-	form.Set("Version", version)
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/?"+form.Encode(), strings.NewReader(form.Encode()))
-	if err != nil {
-		t.Fatalf("build query request: %v", err)
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	if auth != "" {
-		req.Header.Set("Authorization", auth)
-		req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("do query request: %v", err)
-	}
-	return resp
-}
-
 func queryCallWithAuthValues(
 	t *testing.T,
 	srv *helpers.TestServer,
@@ -584,17 +554,23 @@ func TestIAMEnforceIntegration_signedDenyOnS3GetObjectResourceMismatch(t *testin
 	helpers.AssertStatus(t, resp, http.StatusForbidden)
 }
 
+// getFederationTokenCall is an STS call IAM authorizes. The STS tests below
+// use it rather than GetCallerIdentity, which AWS serves whatever the caller's
+// policies say.
+func getFederationTokenCall() url.Values {
+	return url.Values{"Action": {"GetFederationToken"}, "Name": {"app"}}
+}
+
 func TestIAMEnforceIntegration_signedAllowOnSTSQuery(t *testing.T) {
 	srv := helpers.NewTestServer(t,
 		helpers.WithEnforceIAM(true),
 	)
-	seedIAMPrincipal(t, srv, "test", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"sts:GetCallerIdentity","Resource":"*"}]}`)
+	seedIAMPrincipal(t, srv, "test", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"sts:GetFederationToken","Resource":"*"}]}`)
 
-	resp := queryCallWithAuth(
+	resp := queryCallWithAuthValues(
 		t,
 		srv,
-		"GetCallerIdentity",
-		"2011-06-15",
+		getFederationTokenCall(),
 		"AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/sts/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc",
 	)
 	defer resp.Body.Close()
@@ -607,11 +583,10 @@ func TestIAMEnforceIntegration_signedDenyOnSTSQueryWithoutAllow(t *testing.T) {
 		helpers.WithEnforceIAM(true),
 	)
 
-	resp := queryCallWithAuth(
+	resp := queryCallWithAuthValues(
 		t,
 		srv,
-		"GetCallerIdentity",
-		"2011-06-15",
+		getFederationTokenCall(),
 		"AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/sts/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc",
 	)
 	defer resp.Body.Close()
@@ -623,14 +598,13 @@ func TestIAMEnforceIntegration_groupExplicitDenyOverridesUserAllowOnSTSQuery(t *
 	srv := helpers.NewTestServer(t,
 		helpers.WithEnforceIAM(true),
 	)
-	seedIAMPrincipal(t, srv, "test", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"sts:GetCallerIdentity","Resource":"*"}]}`)
-	seedIAMGroupPrincipal(t, srv, "security", []string{"test"}, `{"Version":"2012-10-17","Statement":[{"Effect":"Deny","Action":"sts:GetCallerIdentity","Resource":"*"}]}`)
+	seedIAMPrincipal(t, srv, "test", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"sts:GetFederationToken","Resource":"*"}]}`)
+	seedIAMGroupPrincipal(t, srv, "security", []string{"test"}, `{"Version":"2012-10-17","Statement":[{"Effect":"Deny","Action":"sts:GetFederationToken","Resource":"*"}]}`)
 
-	resp := queryCallWithAuth(
+	resp := queryCallWithAuthValues(
 		t,
 		srv,
-		"GetCallerIdentity",
-		"2011-06-15",
+		getFederationTokenCall(),
 		"AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/sts/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc",
 	)
 	defer resp.Body.Close()

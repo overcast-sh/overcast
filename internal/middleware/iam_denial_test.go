@@ -12,6 +12,9 @@ import (
 	awsxml "github.com/aws/aws-sdk-go-v2/aws/protocol/xml"
 	cborlib "github.com/fxamacker/cbor/v2"
 	"go.uber.org/zap"
+
+	"github.com/overcast-sh/overcast/internal/awsapi"
+	"github.com/overcast-sh/overcast/internal/awsshapes"
 )
 
 // These tests pin the envelope an IAM denial is written in, one per wire
@@ -82,11 +85,13 @@ func TestIAMDenial_awsJSON(t *testing.T) {
 
 func TestIAMDenial_awsQuery(t *testing.T) {
 	// CloudWatch's and SQS's canonical protocols are not awsQuery, but a
-	// Query call to either still reads a Query error.
-	cases := []struct{ service, form, action string }{
-		{"iam", "Action=ListUsers&Version=2010-05-08", "ListUsers"},
-		{"cloudwatch", "Action=ListMetrics&Version=2010-08-01", "ListMetrics"},
-		{"sqs", "Action=ListQueues&Version=2012-11-05", "ListQueues"},
+	// Query call to either still reads a Query error. SNS models its own
+	// denial code (#2266).
+	cases := []struct{ service, form, action, code string }{
+		{"iam", "Action=ListUsers&Version=2010-05-08", "ListUsers", "AccessDenied"},
+		{"cloudwatch", "Action=ListMetrics&Version=2010-08-01", "ListMetrics", "AccessDenied"},
+		{"sqs", "Action=ListQueues&Version=2012-11-05", "ListQueues", "AccessDenied"},
+		{"sns", "Action=ListTopics&Version=2010-03-31", "ListTopics", "AuthorizationError"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.service, func(t *testing.T) {
@@ -101,11 +106,49 @@ func TestIAMDenial_awsQuery(t *testing.T) {
 			// When: IAM denies it
 			rec := denyUnsigned(t, r, queries)
 
-			// Then: it is a 403 AccessDenied wrapped in <ErrorResponse>
+			// Then: it is a 403 with the service's code, wrapped in <ErrorResponse>
 			assertStatus(t, rec, http.StatusForbidden)
 			got, err := awsxml.GetErrorResponseComponents(rec.Body, false)
-			if err != nil || got.Code != "AccessDenied" {
-				t.Fatalf("error code = %q (%v), want AccessDenied", got.Code, err)
+			if err != nil || got.Code != tc.code {
+				t.Fatalf("error code = %q (%v), want %s", got.Code, err, tc.code)
+			}
+		})
+	}
+}
+
+// deniedShapeNames are the names an awsQuery model gives the error it answers
+// an IAM denial with.
+var deniedShapeNames = []string{"AccessDeniedException", "AccessDenied", "AuthorizationErrorException", "AuthorizationError"}
+
+// TestQueryDenialCodes_matchTheModels reads every awsQuery model and checks
+// the code IAM enforcement denies its calls with. queryDenialCodes is keyed by
+// Overcast's service key and the tables by the model's; the two agree for
+// every service whose model names its own denial code, and a service they
+// disagree on answers AccessDenied either way.
+func TestQueryDenialCodes_matchTheModels(t *testing.T) {
+	for _, key := range awsshapes.Services() {
+		svc, _, err := awsshapes.Lookup(key)
+		if err != nil {
+			t.Fatalf("lookup %s: %v", key, err)
+		}
+		if !svc.Supports(awsapi.ProtocolAWSQuery) {
+			continue
+		}
+		t.Run(key, func(t *testing.T) {
+			// Given: an awsQuery service's pinned model
+			want := "AccessDenied"
+			for _, name := range deniedShapeNames {
+				if shape, ok := svc.ErrorShape(name); ok && shape.HTTPError == http.StatusForbidden && shape.QueryErrorCode != "" {
+					want = shape.QueryErrorCode
+				}
+			}
+
+			// When: IAM enforcement names its denial code
+			got := queryAccessDenied(key, "").Code
+
+			// Then: it is the code the model gives the service's denial
+			if got != want {
+				t.Fatalf("queryDenialCodes[%q] gives %q; the model's denial is %q", key, got, want)
 			}
 		})
 	}
