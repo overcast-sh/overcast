@@ -156,54 +156,61 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	}, clk)
 
 	// ---- Middleware chain --------------------------------------------------
-	r.Use(middleware.RealIP)
-	r.Use(middleware.CORS)
-	r.Use(middleware.DrainBody)
-	// HostAddressing owns the whole Host-header decision: S3 virtual-hosted
-	// addressing AND host-routed services (execute-api / lambda-url /
-	// appsync-api). They are one middleware, not two, because the two schemes
-	// share a hostname space — when they were registered separately both
-	// claimed the same request and each rewrote the path the other had already
-	// rewritten. See docs/plans/host-routing-precedence.md.
+	// requestChain is per-request plumbing, and none of it dispatches: the
+	// Athena engine gateway serves it in front of handlers that route by
+	// signing name alone (engine_api.go), so a middleware that sends a request
+	// to a service belongs after it, as queryGetMiddleware does.
 	//
-	// hostRoutes is populated further down, once the services it dispatches
-	// to (API Gateway, Lambda, AppSync) are constructed — see "Host-based
-	// routing" below. The pointer is read at request time (same pattern as
-	// queryDispatchers just below), so it only needs to be fully populated
-	// before Serve starts, not before this Use call.
+	// hostRoutes is populated further down, once the services HostAddressing
+	// dispatches to (API Gateway, Lambda, AppSync) are constructed — see
+	// "Host-based routing" below. The pointer is read at request time (same
+	// pattern as queryDispatchers below), so it only needs to be fully
+	// populated before Serve starts, not before this chain is built.
 	var hostRoutes []middleware.HostRouteRow
-	r.Use(middleware.HostAddressing(cfg.Hostname, &hostRoutes, logger))
-	r.Use(middleware.RequestID)
-	r.Use(middleware.Recovery(logger))
-	r.Use(middleware.DebugTrace(cfg, traceBuf, clk))
-	r.Use(middleware.Logger(logger, clk))
-	// NotReady short-circuits with a 503 while the storage backend is still
-	// completing a one-time startup migration (storage-plan.md item — see
-	// internal/middleware/notready.go) — placed after Logger so a rejected
-	// request is still observable in logs, and before every other
-	// middleware below so none of that work (event recording, SigV4, IAM,
-	// region/protocol detection) runs for a request about to be rejected
-	// anyway.
-	r.Use(middleware.NotReady(store))
-	r.Use(middleware.RequestEvents(&bus, clk))
-	r.Use(middleware.SigV4(cfg.SigV4Validate, middleware.NewSecretResolver(store), logger, clk))
-	r.Use(middleware.IAMEnforce(cfg.EnforceIAM, store, logger))
-	r.Use(middleware.Region)
-	// ClientEndpoint stamps the origin the caller dialled, so services that
-	// hand back resource URLs (SQS queue URLs above all) mint them on an
-	// origin that caller can reach. See internal/middleware/clientendpoint.go
-	// for why a single server-wide hostname cannot serve host CLIs and sibling
-	// containers at once.
-	r.Use(middleware.ClientEndpoint)
-	// Environment preflight (deploy-failure-diagnosis.md W4): "the client's
-	// endpoint is pointed somewhere other than the developer thinks", the
-	// one shape of it Overcast can see for itself — see
-	// endpointpreflight.go's doc comment. Placed right after ClientEndpoint
-	// since both inspect the same Host header.
-	r.Use(middleware.WarnRealAWSHost(cfg, logger))
-	// Protocol-detection middleware (Smithy alignment, see
-	// docs/plans/smithy.md). Always-on as of Phase 6 completion.
-	r.Use(middleware.Protocol(codec.DefaultIdentifiers()))
+	requestChain := chi.Middlewares{
+		middleware.RealIP,
+		middleware.CORS,
+		middleware.DrainBody,
+		// HostAddressing owns the whole Host-header decision: S3 virtual-hosted
+		// addressing AND host-routed services (execute-api / lambda-url /
+		// appsync-api). They are one middleware, not two, because the two
+		// schemes share a hostname space — when they were registered separately
+		// both claimed the same request and each rewrote the path the other had
+		// already rewritten. See docs/plans/host-routing-precedence.md.
+		middleware.HostAddressing(cfg.Hostname, &hostRoutes, logger),
+		middleware.RequestID,
+		middleware.Recovery(logger),
+		middleware.DebugTrace(cfg, traceBuf, clk),
+		middleware.Logger(logger, clk),
+		// NotReady short-circuits with a 503 while the storage backend is still
+		// completing a one-time startup migration (storage-plan.md item — see
+		// internal/middleware/notready.go) — placed after Logger so a rejected
+		// request is still observable in logs, and before every other
+		// middleware below so none of that work (event recording, SigV4, IAM,
+		// region/protocol detection) runs for a request about to be rejected
+		// anyway.
+		middleware.NotReady(store),
+		middleware.RequestEvents(&bus, clk),
+		middleware.SigV4(cfg.SigV4Validate, middleware.NewSecretResolver(store), logger, clk),
+		middleware.IAMEnforce(cfg.EnforceIAM, store, logger),
+		middleware.Region,
+		// ClientEndpoint stamps the origin the caller dialled, so services that
+		// hand back resource URLs (SQS queue URLs above all) mint them on an
+		// origin that caller can reach. See internal/middleware/clientendpoint.go
+		// for why a single server-wide hostname cannot serve host CLIs and
+		// sibling containers at once.
+		middleware.ClientEndpoint,
+		// Environment preflight (deploy-failure-diagnosis.md W4): "the client's
+		// endpoint is pointed somewhere other than the developer thinks", the
+		// one shape of it Overcast can see for itself — see
+		// endpointpreflight.go's doc comment. Placed right after ClientEndpoint
+		// since both inspect the same Host header.
+		middleware.WarnRealAWSHost(cfg, logger),
+		// Protocol-detection middleware (Smithy alignment, see
+		// docs/plans/smithy.md). Always-on as of Phase 6 completion.
+		middleware.Protocol(codec.DefaultIdentifiers()),
+	}
+	r.Use(requestChain...)
 	// queryGetMiddleware must be registered here, before any route is added
 	// (chi requirement). It intercepts GET /?Action=... requests (e.g. SNS
 	// UnsubscribeURL) letting S3's GET / handle everything else. The pointer
@@ -912,9 +919,9 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	// EventBridge rule delivers through, so one target ARN behaves identically
 	// on a schedule and on a rule (#734).
 	schedulerSvc.InitRouter(r)
-	// Athena: the query engine reaches Glue and S3 through a listener of its
-	// own that serves the root router (see athena's engine_gateway.go).
-	athenaSvc.InitRouter(r)
+	// Athena: the query engine reaches Glue, S3 and S3 Tables through a
+	// listener of its own (see athena's engine_gateway.go and engine_api.go).
+	athenaSvc.InitEngineAPI(engineAPI(requestChain, serviceByName, s3Router, operationRegistry))
 	// ---- Docker Supervisor ------------------------------------------------
 	// A single Supervisor probes Docker once per unique socket, creates per-
 	// service networks, runs one event watcher, and reconciles container state.
