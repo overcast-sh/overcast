@@ -16,7 +16,7 @@ func TestIAMEnforce_enabled_s3ResourcePolicyAllowsMatchingObject(t *testing.T) {
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:GetObject","Resource":"arn:aws:s3:::demo/*"}]}`}, nil)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -24,10 +24,10 @@ func TestIAMEnforce_enabled_s3ResourcePolicyAllowsMatchingObject(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/demo/path/object.txt", nil)
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMAction(req); got != "s3:GetObject" {
+	if got := classifyIAM(req).action; got != "s3:GetObject" {
 		t.Fatalf("expected inferred action s3:GetObject, got %q", got)
 	}
-	if got := requestIAMResource(req); got != "arn:aws:s3:::demo/path/object.txt" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:s3:::demo/path/object.txt" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -46,7 +46,7 @@ func TestIAMEnforce_enabled_s3ResourcePolicyDeniesNonMatchingObject(t *testing.T
 	st := state.NewMemoryStore()
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:GetObject","Resource":"arn:aws:s3:::demo/allowed/*"}]}`}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -67,7 +67,7 @@ func TestIAMEnforce_enabled_sqsResourcePolicyAllowsMatchingQueueFromCreateQueue(
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"sqs:CreateQueue","Resource":"arn:aws:sqs:us-east-1:000000000000:allowed-queue"}]}`}, nil)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -77,7 +77,7 @@ func TestIAMEnforce_enabled_sqsResourcePolicyAllowsMatchingQueueFromCreateQueue(
 	req.Header.Set("X-Amz-Target", "AmazonSQS.CreateQueue")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/sqs/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMResource(req); got != "arn:aws:sqs:us-east-1:000000000000:allowed-queue" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:sqs:us-east-1:000000000000:allowed-queue" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -96,7 +96,7 @@ func TestIAMEnforce_enabled_sqsResourcePolicyDeniesNonMatchingQueueFromQueueURL(
 	st := state.NewMemoryStore()
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"sqs:DeleteQueue","Resource":"arn:aws:sqs:us-east-1:000000000000:allowed-queue"}]}`}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -105,7 +105,7 @@ func TestIAMEnforce_enabled_sqsResourcePolicyDeniesNonMatchingQueueFromQueueURL(
 	req.Header.Set("X-Amz-Target", "AmazonSQS.DeleteQueue")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/sqs/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMResource(req); got != "arn:aws:sqs:us-east-1:000000000000:other-queue" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:sqs:us-east-1:000000000000:other-queue" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -122,7 +122,7 @@ func TestIAMEnforce_enabled_snsResourcePolicyAllowsMatchingCreateTopicName(t *te
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"sns:CreateTopic","Resource":"arn:aws:sns:us-east-1:000000000000:allowed-topic"}]}`}, nil)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -132,7 +132,7 @@ func TestIAMEnforce_enabled_snsResourcePolicyAllowsMatchingCreateTopicName(t *te
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/sns/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMResource(req); got != "arn:aws:sns:us-east-1:000000000000:allowed-topic" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:sns:us-east-1:000000000000:allowed-topic" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -151,7 +151,7 @@ func TestIAMEnforce_enabled_snsResourcePolicyDeniesNonMatchingCreateTopicName(t 
 	st := state.NewMemoryStore()
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"sns:CreateTopic","Resource":"arn:aws:sns:us-east-1:000000000000:allowed-topic"}]}`}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -160,7 +160,7 @@ func TestIAMEnforce_enabled_snsResourcePolicyDeniesNonMatchingCreateTopicName(t 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/sns/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMResource(req); got != "arn:aws:sns:us-east-1:000000000000:other-topic" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:sns:us-east-1:000000000000:other-topic" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -177,7 +177,7 @@ func TestIAMEnforce_enabled_dynamodbResourcePolicyAllowsMatchingTable(t *testing
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"dynamodb:PutItem","Resource":"arn:aws:dynamodb:us-east-1:000000000000:table/allowed-table"}]}`}, nil)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -187,7 +187,7 @@ func TestIAMEnforce_enabled_dynamodbResourcePolicyAllowsMatchingTable(t *testing
 	req.Header.Set("X-Amz-Target", "DynamoDB_20120810.PutItem")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/dynamodb/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMResource(req); got != "arn:aws:dynamodb:us-east-1:000000000000:table/allowed-table" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:dynamodb:us-east-1:000000000000:table/allowed-table" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -206,7 +206,7 @@ func TestIAMEnforce_enabled_dynamodbResourcePolicyDeniesNonMatchingTable(t *test
 	st := state.NewMemoryStore()
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"dynamodb:PutItem","Resource":"arn:aws:dynamodb:us-east-1:000000000000:table/allowed-table"}]}`}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -215,7 +215,7 @@ func TestIAMEnforce_enabled_dynamodbResourcePolicyDeniesNonMatchingTable(t *test
 	req.Header.Set("X-Amz-Target", "DynamoDB_20120810.PutItem")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/dynamodb/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMResource(req); got != "arn:aws:dynamodb:us-east-1:000000000000:table/other-table" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:dynamodb:us-east-1:000000000000:table/other-table" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -232,7 +232,7 @@ func TestIAMEnforce_enabled_ssmResourcePolicyAllowsMatchingParameter(t *testing.
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"ssm:GetParameter","Resource":"arn:aws:ssm:us-east-1:000000000000:parameter/app/db/password"}]}`}, nil)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -242,7 +242,7 @@ func TestIAMEnforce_enabled_ssmResourcePolicyAllowsMatchingParameter(t *testing.
 	req.Header.Set("X-Amz-Target", "AmazonSSM.GetParameter")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/ssm/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMResource(req); got != "arn:aws:ssm:us-east-1:000000000000:parameter/app/db/password" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:ssm:us-east-1:000000000000:parameter/app/db/password" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -261,7 +261,7 @@ func TestIAMEnforce_enabled_ssmResourcePolicyDeniesNonMatchingParameter(t *testi
 	st := state.NewMemoryStore()
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"ssm:GetParameter","Resource":"arn:aws:ssm:us-east-1:000000000000:parameter/app/db/password"}]}`}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -270,7 +270,7 @@ func TestIAMEnforce_enabled_ssmResourcePolicyDeniesNonMatchingParameter(t *testi
 	req.Header.Set("X-Amz-Target", "AmazonSSM.GetParameter")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/ssm/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMResource(req); got != "arn:aws:ssm:us-east-1:000000000000:parameter/app/db/other" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:ssm:us-east-1:000000000000:parameter/app/db/other" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -287,7 +287,7 @@ func TestIAMEnforce_enabled_kmsResourcePolicyAllowsMatchingKeyID(t *testing.T) {
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"kms:Encrypt","Resource":"arn:aws:kms:us-east-1:000000000000:key/1234abcd"}]}`}, nil)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -297,7 +297,7 @@ func TestIAMEnforce_enabled_kmsResourcePolicyAllowsMatchingKeyID(t *testing.T) {
 	req.Header.Set("X-Amz-Target", "TrentService.Encrypt")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/kms/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMResource(req); got != "arn:aws:kms:us-east-1:000000000000:key/1234abcd" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:kms:us-east-1:000000000000:key/1234abcd" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -316,7 +316,7 @@ func TestIAMEnforce_enabled_kmsResourcePolicyDeniesNonMatchingAlias(t *testing.T
 	st := state.NewMemoryStore()
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"kms:Encrypt","Resource":"arn:aws:kms:us-east-1:000000000000:alias/app-key"}]}`}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -325,7 +325,7 @@ func TestIAMEnforce_enabled_kmsResourcePolicyDeniesNonMatchingAlias(t *testing.T
 	req.Header.Set("X-Amz-Target", "TrentService.Encrypt")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/kms/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMResource(req); got != "arn:aws:kms:us-east-1:000000000000:alias/other-key" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:kms:us-east-1:000000000000:alias/other-key" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -342,7 +342,7 @@ func TestIAMEnforce_enabled_kinesisResourcePolicyAllowsMatchingStreamName(t *tes
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"kinesis:DescribeStream","Resource":"arn:aws:kinesis:us-east-1:000000000000:stream/allowed-stream"}]}`}, nil)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -352,7 +352,7 @@ func TestIAMEnforce_enabled_kinesisResourcePolicyAllowsMatchingStreamName(t *tes
 	req.Header.Set("X-Amz-Target", "Kinesis_20131202.DescribeStream")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/kinesis/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMResource(req); got != "arn:aws:kinesis:us-east-1:000000000000:stream/allowed-stream" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:kinesis:us-east-1:000000000000:stream/allowed-stream" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -371,7 +371,7 @@ func TestIAMEnforce_enabled_kinesisResourcePolicyDeniesNonMatchingStreamARN(t *t
 	st := state.NewMemoryStore()
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"kinesis:DescribeStream","Resource":"arn:aws:kinesis:us-east-1:000000000000:stream/allowed-stream"}]}`}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -380,7 +380,7 @@ func TestIAMEnforce_enabled_kinesisResourcePolicyDeniesNonMatchingStreamARN(t *t
 	req.Header.Set("X-Amz-Target", "Kinesis_20131202.DescribeStream")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/kinesis/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMResource(req); got != "arn:aws:kinesis:us-east-1:000000000000:stream/other-stream" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:kinesis:us-east-1:000000000000:stream/other-stream" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -397,7 +397,7 @@ func TestIAMEnforce_enabled_firehoseResourcePolicyAllowsMatchingDeliveryStreamNa
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"firehose:DescribeDeliveryStream","Resource":"arn:aws:firehose:us-east-1:000000000000:deliverystream/allowed-stream"}]}`}, nil)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -407,7 +407,7 @@ func TestIAMEnforce_enabled_firehoseResourcePolicyAllowsMatchingDeliveryStreamNa
 	req.Header.Set("X-Amz-Target", "Firehose_20150804.DescribeDeliveryStream")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/firehose/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMResource(req); got != "arn:aws:firehose:us-east-1:000000000000:deliverystream/allowed-stream" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:firehose:us-east-1:000000000000:deliverystream/allowed-stream" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -426,7 +426,7 @@ func TestIAMEnforce_enabled_firehoseResourcePolicyDeniesNonMatchingDeliveryStrea
 	st := state.NewMemoryStore()
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"firehose:DescribeDeliveryStream","Resource":"arn:aws:firehose:us-east-1:000000000000:deliverystream/allowed-stream"}]}`}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -435,7 +435,7 @@ func TestIAMEnforce_enabled_firehoseResourcePolicyDeniesNonMatchingDeliveryStrea
 	req.Header.Set("X-Amz-Target", "Firehose_20150804.DescribeDeliveryStream")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/firehose/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMResource(req); got != "arn:aws:firehose:us-east-1:000000000000:deliverystream/other-stream" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:firehose:us-east-1:000000000000:deliverystream/other-stream" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -452,7 +452,7 @@ func TestIAMEnforce_enabled_logsResourcePolicyAllowsMatchingLogStream(t *testing
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"logs:PutLogEvents","Resource":"arn:aws:logs:us-east-1:000000000000:log-group:allowed-group:log-stream:allowed-stream"}]}`}, nil)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -462,7 +462,7 @@ func TestIAMEnforce_enabled_logsResourcePolicyAllowsMatchingLogStream(t *testing
 	req.Header.Set("X-Amz-Target", "Logs_20140328.PutLogEvents")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/logs/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMResource(req); got != "arn:aws:logs:us-east-1:000000000000:log-group:allowed-group:log-stream:allowed-stream" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:logs:us-east-1:000000000000:log-group:allowed-group:log-stream:allowed-stream" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -481,7 +481,7 @@ func TestIAMEnforce_enabled_logsResourcePolicyDeniesNonMatchingLogGroup(t *testi
 	st := state.NewMemoryStore()
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"logs:CreateLogStream","Resource":"arn:aws:logs:us-east-1:000000000000:log-group:allowed-group:*"}]}`}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -490,7 +490,7 @@ func TestIAMEnforce_enabled_logsResourcePolicyDeniesNonMatchingLogGroup(t *testi
 	req.Header.Set("X-Amz-Target", "Logs_20140328.CreateLogStream")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/logs/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMResource(req); got != "arn:aws:logs:us-east-1:000000000000:log-group:other-group:log-stream:demo" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:logs:us-east-1:000000000000:log-group:other-group:log-stream:demo" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -507,7 +507,7 @@ func TestIAMEnforce_enabled_ecrResourcePolicyAllowsMatchingRepositoryName(t *tes
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"ecr:CreateRepository","Resource":"arn:aws:ecr:us-east-1:000000000000:repository/allowed-repo"}]}`}, nil)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -517,7 +517,7 @@ func TestIAMEnforce_enabled_ecrResourcePolicyAllowsMatchingRepositoryName(t *tes
 	req.Header.Set("X-Amz-Target", "AmazonEC2ContainerRegistry_V20150921.CreateRepository")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/ecr/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMResource(req); got != "arn:aws:ecr:us-east-1:000000000000:repository/allowed-repo" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:ecr:us-east-1:000000000000:repository/allowed-repo" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -536,7 +536,7 @@ func TestIAMEnforce_enabled_ecrResourcePolicyDeniesNonMatchingResourceArn(t *tes
 	st := state.NewMemoryStore()
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"ecr:TagResource","Resource":"arn:aws:ecr:us-east-1:000000000000:repository/allowed-repo"}]}`}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -545,7 +545,7 @@ func TestIAMEnforce_enabled_ecrResourcePolicyDeniesNonMatchingResourceArn(t *tes
 	req.Header.Set("X-Amz-Target", "AmazonEC2ContainerRegistry_V20150921.TagResource")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/ecr/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMResource(req); got != "arn:aws:ecr:us-east-1:000000000000:repository/other-repo" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:ecr:us-east-1:000000000000:repository/other-repo" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -562,7 +562,7 @@ func TestIAMEnforce_enabled_secretsManagerResourcePolicyAllowsMatchingName(t *te
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"secretsmanager:CreateSecret","Resource":"arn:aws:secretsmanager:us-east-1:000000000000:secret:allowed-secret"}]}`}, nil)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -572,7 +572,7 @@ func TestIAMEnforce_enabled_secretsManagerResourcePolicyAllowsMatchingName(t *te
 	req.Header.Set("X-Amz-Target", "secretsmanager.CreateSecret")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/secretsmanager/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMResource(req); got != "arn:aws:secretsmanager:us-east-1:000000000000:secret:allowed-secret" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:secretsmanager:us-east-1:000000000000:secret:allowed-secret" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -591,7 +591,7 @@ func TestIAMEnforce_enabled_secretsManagerResourcePolicyDeniesNonMatchingSecretI
 	st := state.NewMemoryStore()
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"secretsmanager:GetSecretValue","Resource":"arn:aws:secretsmanager:us-east-1:000000000000:secret:allowed-secret"}]}`}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -600,7 +600,7 @@ func TestIAMEnforce_enabled_secretsManagerResourcePolicyDeniesNonMatchingSecretI
 	req.Header.Set("X-Amz-Target", "secretsmanager.GetSecretValue")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/secretsmanager/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMResource(req); got != "arn:aws:secretsmanager:us-east-1:000000000000:secret:other-secret" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:secretsmanager:us-east-1:000000000000:secret:other-secret" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -617,7 +617,7 @@ func TestIAMEnforce_enabled_stepFunctionsResourcePolicyAllowsMatchingName(t *tes
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"states:CreateStateMachine","Resource":"arn:aws:states:us-east-1:000000000000:stateMachine:allowed-sm"}]}`}, nil)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -627,7 +627,7 @@ func TestIAMEnforce_enabled_stepFunctionsResourcePolicyAllowsMatchingName(t *tes
 	req.Header.Set("X-Amz-Target", "AWSStepFunctions.CreateStateMachine")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/stepfunctions/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMResource(req); got != "arn:aws:states:us-east-1:000000000000:stateMachine:allowed-sm" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:states:us-east-1:000000000000:stateMachine:allowed-sm" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -646,7 +646,7 @@ func TestIAMEnforce_enabled_stepFunctionsResourcePolicyDeniesNonMatchingStateMac
 	st := state.NewMemoryStore()
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"states:StartExecution","Resource":"arn:aws:states:us-east-1:000000000000:stateMachine:allowed-sm"}]}`}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -655,7 +655,7 @@ func TestIAMEnforce_enabled_stepFunctionsResourcePolicyDeniesNonMatchingStateMac
 	req.Header.Set("X-Amz-Target", "AWSStepFunctions.StartExecution")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/stepfunctions/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMResource(req); got != "arn:aws:states:us-east-1:000000000000:stateMachine:other-sm" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:states:us-east-1:000000000000:stateMachine:other-sm" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -672,7 +672,7 @@ func TestIAMEnforce_enabled_cloudFormationResourcePolicyAllowsMatchingStackName(
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"cloudformation:CreateStack","Resource":"arn:aws:cloudformation:us-east-1:000000000000:stack/allowed-stack/*"}]}`}, nil)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -682,7 +682,7 @@ func TestIAMEnforce_enabled_cloudFormationResourcePolicyAllowsMatchingStackName(
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/cloudformation/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMResource(req); got != "arn:aws:cloudformation:us-east-1:000000000000:stack/allowed-stack/*" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:cloudformation:us-east-1:000000000000:stack/allowed-stack/*" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -701,7 +701,7 @@ func TestIAMEnforce_enabled_cloudFormationResourcePolicyDeniesNonMatchingStackNa
 	st := state.NewMemoryStore()
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"cloudformation:CreateStack","Resource":"arn:aws:cloudformation:us-east-1:000000000000:stack/allowed-stack/*"}]}`}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -710,7 +710,7 @@ func TestIAMEnforce_enabled_cloudFormationResourcePolicyDeniesNonMatchingStackNa
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/cloudformation/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMResource(req); got != "arn:aws:cloudformation:us-east-1:000000000000:stack/other-stack/*" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:cloudformation:us-east-1:000000000000:stack/other-stack/*" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -727,7 +727,7 @@ func TestIAMEnforce_enabled_ecsResourcePolicyAllowsMatchingCluster(t *testing.T)
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"ecs:DeleteCluster","Resource":"arn:aws:ecs:us-east-1:000000000000:cluster/allowed-cluster"}]}`}, nil)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -737,7 +737,7 @@ func TestIAMEnforce_enabled_ecsResourcePolicyAllowsMatchingCluster(t *testing.T)
 	req.Header.Set("X-Amz-Target", "AmazonEC2ContainerServiceV20141113.DeleteCluster")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/ecs/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMResource(req); got != "arn:aws:ecs:us-east-1:000000000000:cluster/allowed-cluster" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:ecs:us-east-1:000000000000:cluster/allowed-cluster" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -756,7 +756,7 @@ func TestIAMEnforce_enabled_ecsResourcePolicyDeniesNonMatchingCluster(t *testing
 	st := state.NewMemoryStore()
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"ecs:DeleteCluster","Resource":"arn:aws:ecs:us-east-1:000000000000:cluster/allowed-cluster"}]}`}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -765,7 +765,7 @@ func TestIAMEnforce_enabled_ecsResourcePolicyDeniesNonMatchingCluster(t *testing
 	req.Header.Set("X-Amz-Target", "AmazonEC2ContainerServiceV20141113.DeleteCluster")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/ecs/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMResource(req); got != "arn:aws:ecs:us-east-1:000000000000:cluster/other-cluster" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:ecs:us-east-1:000000000000:cluster/other-cluster" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -782,7 +782,7 @@ func TestIAMEnforce_enabled_lambdaResourcePolicyAllowsMatchingCreateFunctionName
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"lambda:CreateFunction","Resource":"arn:aws:lambda:us-east-1:000000000000:function:allowed-fn"}]}`}, nil)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -791,10 +791,10 @@ func TestIAMEnforce_enabled_lambdaResourcePolicyAllowsMatchingCreateFunctionName
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/lambda/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMAction(req); got != "lambda:CreateFunction" {
+	if got := classifyIAM(req).action; got != "lambda:CreateFunction" {
 		t.Fatalf("unexpected inferred action: %q", got)
 	}
-	if got := requestIAMResource(req); got != "arn:aws:lambda:us-east-1:000000000000:function:allowed-fn" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:lambda:us-east-1:000000000000:function:allowed-fn" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -813,7 +813,7 @@ func TestIAMEnforce_enabled_lambdaResourcePolicyDeniesNonMatchingInvokePath(t *t
 	st := state.NewMemoryStore()
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"lambda:InvokeFunction","Resource":"arn:aws:lambda:us-east-1:000000000000:function:allowed-fn"}]}`}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -821,10 +821,10 @@ func TestIAMEnforce_enabled_lambdaResourcePolicyDeniesNonMatchingInvokePath(t *t
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/lambda/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMAction(req); got != "lambda:InvokeFunction" {
+	if got := classifyIAM(req).action; got != "lambda:InvokeFunction" {
 		t.Fatalf("unexpected inferred action: %q", got)
 	}
-	if got := requestIAMResource(req); got != "arn:aws:lambda:us-east-1:000000000000:function:other-fn" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:lambda:us-east-1:000000000000:function:other-fn" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -841,7 +841,7 @@ func TestIAMEnforce_enabled_cloudWatchResourcePolicyAllowsMatchingAlarmName(t *t
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"cloudwatch:PutMetricAlarm","Resource":"arn:aws:cloudwatch:us-east-1:000000000000:alarm:allowed-alarm"}]}`}, nil)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -851,7 +851,7 @@ func TestIAMEnforce_enabled_cloudWatchResourcePolicyAllowsMatchingAlarmName(t *t
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/cloudwatch/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMResource(req); got != "arn:aws:cloudwatch:us-east-1:000000000000:alarm:allowed-alarm" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:cloudwatch:us-east-1:000000000000:alarm:allowed-alarm" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -870,7 +870,7 @@ func TestIAMEnforce_enabled_cloudWatchResourcePolicyDeniesNonMatchingAlarmName(t
 	st := state.NewMemoryStore()
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"cloudwatch:DeleteAlarms","Resource":"arn:aws:cloudwatch:us-east-1:000000000000:alarm:allowed-alarm"}]}`}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -879,7 +879,7 @@ func TestIAMEnforce_enabled_cloudWatchResourcePolicyDeniesNonMatchingAlarmName(t
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/cloudwatch/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMResource(req); got != "arn:aws:cloudwatch:us-east-1:000000000000:alarm:other-alarm" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:cloudwatch:us-east-1:000000000000:alarm:other-alarm" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -896,7 +896,7 @@ func TestIAMEnforce_enabled_lambdaAliasResourcePolicyAllowsMatchingFunction(t *t
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"lambda:CreateAlias","Resource":"arn:aws:lambda:us-east-1:000000000000:function:allowed-fn"}]}`}, nil)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -905,10 +905,10 @@ func TestIAMEnforce_enabled_lambdaAliasResourcePolicyAllowsMatchingFunction(t *t
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/lambda/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMAction(req); got != "lambda:CreateAlias" {
+	if got := classifyIAM(req).action; got != "lambda:CreateAlias" {
 		t.Fatalf("unexpected inferred action: %q", got)
 	}
-	if got := requestIAMResource(req); got != "arn:aws:lambda:us-east-1:000000000000:function:allowed-fn" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:lambda:us-east-1:000000000000:function:allowed-fn" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -927,7 +927,7 @@ func TestIAMEnforce_enabled_lambdaAliasResourcePolicyDeniesNonMatchingFunction(t
 	st := state.NewMemoryStore()
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"lambda:CreateAlias","Resource":"arn:aws:lambda:us-east-1:000000000000:function:allowed-fn"}]}`}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -935,10 +935,10 @@ func TestIAMEnforce_enabled_lambdaAliasResourcePolicyDeniesNonMatchingFunction(t
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/lambda/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMAction(req); got != "lambda:CreateAlias" {
+	if got := classifyIAM(req).action; got != "lambda:CreateAlias" {
 		t.Fatalf("unexpected inferred action: %q", got)
 	}
-	if got := requestIAMResource(req); got != "arn:aws:lambda:us-east-1:000000000000:function:other-fn" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:lambda:us-east-1:000000000000:function:other-fn" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -954,7 +954,7 @@ func TestIAMEnforce_enabled_lambdaResponseStreamingPathDeniesNonMatchingFunction
 	st := state.NewMemoryStore()
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"lambda:InvokeFunction","Resource":"arn:aws:lambda:us-east-1:000000000000:function:allowed-fn"}]}`}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -962,10 +962,10 @@ func TestIAMEnforce_enabled_lambdaResponseStreamingPathDeniesNonMatchingFunction
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/lambda/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMAction(req); got != "lambda:InvokeFunction" {
+	if got := classifyIAM(req).action; got != "lambda:InvokeFunction" {
 		t.Fatalf("unexpected inferred action: %q", got)
 	}
-	if got := requestIAMResource(req); got != "arn:aws:lambda:us-east-1:000000000000:function:other-fn" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:lambda:us-east-1:000000000000:function:other-fn" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -981,7 +981,7 @@ func TestIAMEnforce_enabled_lambdaTestEventsPathDeniesNonMatchingFunction(t *tes
 	st := state.NewMemoryStore()
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"lambda:PutTestEvent","Resource":"arn:aws:lambda:us-east-1:000000000000:function:allowed-fn"}]}`}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -989,10 +989,10 @@ func TestIAMEnforce_enabled_lambdaTestEventsPathDeniesNonMatchingFunction(t *tes
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/lambda/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMAction(req); got != "lambda:PutTestEvent" {
+	if got := classifyIAM(req).action; got != "lambda:PutTestEvent" {
 		t.Fatalf("unexpected inferred action: %q", got)
 	}
-	if got := requestIAMResource(req); got != "arn:aws:lambda:us-east-1:000000000000:function:other-fn" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:lambda:us-east-1:000000000000:function:other-fn" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -1008,17 +1008,17 @@ func TestIAMEnforce_enabled_lambdaLayerVersionPathDeniesNonMatchingLayer(t *test
 	st := state.NewMemoryStore()
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"lambda:GetLayerVersion","Resource":"arn:aws:lambda:us-east-1:000000000000:layer:allowed-layer:1"}]}`}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/2018-10-31/layers/other-layer/versions/1", nil)
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/lambda/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMAction(req); got != "lambda:GetLayerVersion" {
+	if got := classifyIAM(req).action; got != "lambda:GetLayerVersion" {
 		t.Fatalf("unexpected inferred action: %q", got)
 	}
-	if got := requestIAMResource(req); got != "arn:aws:lambda:us-east-1:000000000000:layer:other-layer:1" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:lambda:us-east-1:000000000000:layer:other-layer:1" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()
@@ -1034,17 +1034,17 @@ func TestIAMEnforce_enabled_pipesResourcePolicyDeniesNonMatchingPipe(t *testing.
 	st := state.NewMemoryStore()
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"pipes:DescribePipe","Resource":"arn:aws:pipes:us-east-1:000000000000:pipe/allowed-pipe"}]}`}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/pipes/other-pipe", nil)
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260423/us-east-1/pipes/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc")
 	req.Header.Set("X-Amz-Date", "20260423T000000Z")
-	if got := requestIAMAction(req); got != "pipes:DescribePipe" {
+	if got := classifyIAM(req).action; got != "pipes:DescribePipe" {
 		t.Fatalf("unexpected inferred action: %q", got)
 	}
-	if got := requestIAMResource(req); got != "arn:aws:pipes:us-east-1:000000000000:pipe/other-pipe" {
+	if got := requestIAMResource(req, classifyIAM(req)); got != "arn:aws:pipes:us-east-1:000000000000:pipe/other-pipe" {
 		t.Fatalf("unexpected inferred resource: %q", got)
 	}
 	rec := httptest.NewRecorder()

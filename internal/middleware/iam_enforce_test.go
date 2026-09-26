@@ -15,9 +15,17 @@ import (
 	"github.com/overcast-sh/overcast/internal/state"
 )
 
+// classifyIAM is requestIAMOperation for a router that serves no AWS Query
+// traffic, which is how every request is classified that does not reach the
+// router's Query dispatch.
+func classifyIAM(r *http.Request) iamOperation {
+	op, _ := requestIAMOperation(nil, r, nil)
+	return op
+}
+
 func TestIAMEnforce_disabled_passthroughUnsigned(t *testing.T) {
 	called := false
-	h := IAMEnforce(false, nil, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(false, nil, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -38,7 +46,7 @@ func TestIAMEnforce_disabled_passthroughUnsigned(t *testing.T) {
 }
 
 func TestIAMEnforce_enabled_deniesUnsignedJSON(t *testing.T) {
-	h := IAMEnforce(true, nil, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, nil, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -58,7 +66,7 @@ func TestIAMEnforce_enabled_deniesUnsignedJSON(t *testing.T) {
 }
 
 func TestIAMEnforce_enabled_deniesUnsignedQueryXML(t *testing.T) {
-	h := IAMEnforce(true, nil, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, nil, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -79,7 +87,7 @@ func TestIAMEnforce_enabled_deniesUnsignedQueryXML(t *testing.T) {
 
 func TestIAMEnforce_enabled_deniesSignedRequestWithoutPrincipal(t *testing.T) {
 	called := false
-	h := IAMEnforce(true, state.NewMemoryStore(), zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, state.NewMemoryStore(), zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -102,7 +110,7 @@ func TestIAMEnforce_enabled_deniesSignedRequestWithoutPrincipal(t *testing.T) {
 
 func TestIAMEnforce_enabled_bypassesInternalRoutes(t *testing.T) {
 	called := false
-	h := IAMEnforce(true, state.NewMemoryStore(), zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, state.NewMemoryStore(), zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -149,7 +157,7 @@ func TestIAMEnforce_enabled_deniesUnsignedRequestsUnderAPIPrefix(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			called := false
-			h := IAMEnforce(true, state.NewMemoryStore(), zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			h := IAMEnforce(true, state.NewMemoryStore(), zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				called = true
 				w.WriteHeader(http.StatusNoContent)
 			}))
@@ -174,7 +182,7 @@ func TestIAMEnforce_enabled_allowsSignedRequestWithMatchingPolicy(t *testing.T) 
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"sqs:CreateQueue","Resource":"*"}]}`}, nil)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -200,7 +208,7 @@ func TestIAMEnforce_enabled_explicitDenyOverridesAllow(t *testing.T) {
 	st := state.NewMemoryStore()
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"sqs:*","Resource":"*"},{"Effect":"Deny","Action":"sqs:DeleteQueue","Resource":"*"}]}`}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -224,7 +232,7 @@ func TestIAMEnforce_enabled_allowsSignedRequestWithGroupInlinePolicy(t *testing.
 	seedIAMGroupWithPolicies(t, st, "devs", []string{"test"}, []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"sqs:CreateQueue","Resource":"*"}]}`}, nil)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -253,7 +261,7 @@ func TestIAMEnforce_enabled_groupExplicitDenyOverridesUserAllow(t *testing.T) {
 		"arn:aws:iam::000000000000:policy/deny-delete": `{"Version":"2012-10-17","Statement":[{"Effect":"Deny","Action":"sqs:DeleteQueue","Resource":"*"}]}`,
 	})
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -285,7 +293,7 @@ func TestIAMEnforce_enabled_arnLabelledPathExplicitDenyBlocks(t *testing.T) {
 	st := state.NewMemoryStore()
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"kafka:*","Resource":"*"},{"Effect":"Deny","Action":"kafka:DeleteCluster","Resource":"*"}]}`}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -309,7 +317,7 @@ func TestIAMEnforce_enabled_arnLabelledPathAllowPasses(t *testing.T) {
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"kafka:DescribeCluster","Resource":"*"}]}`}, nil)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -333,7 +341,7 @@ func TestIAMEnforce_enabled_restFallbackS3ExplicitDenyBlocks(t *testing.T) {
 	st := state.NewMemoryStore()
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Deny","Action":"s3:ListBuckets","Resource":"*"}]}`}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -357,7 +365,7 @@ func TestIAMEnforce_enabled_restFallbackS3AllowPasses(t *testing.T) {
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:ListBuckets","Resource":"*"}]}`}, nil)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -382,7 +390,7 @@ func TestIAMEnforce_enabled_notActionAllow_allowsNonExcludedAction(t *testing.T)
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","NotAction":"sqs:DeleteQueue","Resource":"*"}]}`}, nil)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -408,7 +416,7 @@ func TestIAMEnforce_enabled_notActionAllow_deniesExcludedAction(t *testing.T) {
 	st := state.NewMemoryStore()
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","NotAction":"sqs:DeleteQueue","Resource":"*"}]}`}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -430,7 +438,7 @@ func TestIAMEnforce_enabled_notResourceAllow_deniesExcludedResource(t *testing.T
 	st := state.NewMemoryStore()
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"sqs:DeleteQueue","NotResource":"arn:aws:sqs:us-east-1:000000000000:blocked-queue"}]}`}, nil)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -453,7 +461,7 @@ func TestIAMEnforce_enabled_notResourceAllow_allowsOtherResource(t *testing.T) {
 	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"sqs:DeleteQueue","NotResource":"arn:aws:sqs:us-east-1:000000000000:blocked-queue"}]}`}, nil)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -485,7 +493,7 @@ func TestIAMEnforce_enabled_roleSessionInlinePolicy_allows(t *testing.T) {
 	)
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -515,7 +523,7 @@ func TestIAMEnforce_enabled_roleSessionInlinePolicy_denies(t *testing.T) {
 		nil,
 	)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -541,7 +549,7 @@ func TestIAMEnforce_enabled_roleSessionExplicitDeny_overridesAllow(t *testing.T)
 		nil,
 	)
 
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -567,7 +575,7 @@ func TestIAMEnforce_enabled_roleSessionManagedPolicy_allows(t *testing.T) {
 	})
 
 	called := false
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -820,7 +828,7 @@ func (c *countingStore) Scan(ctx context.Context, namespace, prefix string) ([]s
 func TestIAMEnforce_disabled_readsNothingFromTheStore(t *testing.T) {
 	// Given: enforcement off (the default) over a store that counts reads
 	st := &countingStore{Store: state.NewMemoryStore()}
-	h := IAMEnforce(false, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(false, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -846,7 +854,7 @@ func TestIAMEnforce_enabled_compilesPrincipalPoliciesOncePerPrincipal(t *testing
 	// Given: a user with a policy, and enforcement on
 	st := &countingStore{Store: state.NewMemoryStore()}
 	seedIAMUserWithPolicies(t, st, "AKIATEST", []string{`{"Statement":[{"Effect":"Allow","Action":"sqs:*","Resource":"*"}]}`}, nil)
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	InvalidateIAMEnforceCache()
@@ -885,7 +893,7 @@ func TestIAMEnforce_enabled_policyChangeReachesAWarmCache(t *testing.T) {
 	// running middleware instance
 	st := state.NewMemoryStore()
 	seedIAMUserWithPolicies(t, st, "AKIAWARM", []string{`{"Statement":[{"Effect":"Allow","Action":"sqs:*","Resource":"*"}]}`}, nil)
-	h := IAMEnforce(true, st, zap.NewNop())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	InvalidateIAMEnforceCache()

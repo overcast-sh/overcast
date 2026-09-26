@@ -55,6 +55,10 @@ func TestDetectService_labelsQueryProtocolByItsAction(t *testing.T) {
 		{"sqs create", "Action=CreateQueue&Version=2012-11-05&QueueName=q", "sqs"},
 		{"cloudwatch", "Action=PutMetricAlarm&Version=2010-08-01&AlarmName=a", "cloudwatch"},
 		{"version first", "Version=2012-11-05&Action=ListQueues", "sqs"},
+		// The router reads Action from anywhere in the form, so the label has
+		// to as well: this step once looked only at the first 256 bytes, and a
+		// padded call fell to its credential scope (#2229).
+		{"action past a large leading parameter", "Pad=" + strings.Repeat("a", 4096) + "&Action=ListUsers&Version=2010-05-08", "iam"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r, body := queryRequest(tc.body)

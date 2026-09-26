@@ -41,7 +41,7 @@ func engineAPI(chain chi.Middlewares, services map[string]Service, s3Router http
 	}
 	if glue, ok := services["glue"].(TargetDispatcher); ok {
 		glueAPI := chi.NewRouter()
-		glueAPI.Post("/", targetDispatch([]TargetDispatcher{glue}, nil, registry))
+		glueAPI.Post("/", (&rootDispatch{registry: registry, targets: []TargetDispatcher{glue}}).targetDispatch)
 		api.Glue = chain.Handler(glueAPI)
 	}
 	if catalog, ok := services["s3tables"].(icebergCatalog); ok {

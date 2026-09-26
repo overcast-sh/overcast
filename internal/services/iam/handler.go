@@ -222,7 +222,7 @@ func (h *Handler) dispatch(w http.ResponseWriter, r *http.Request) {
 	// InvalidAction needs no 501-for-a-real-operation split here, unlike the
 	// JSON dispatchers (#1645): the router hands a Query request to IAM only
 	// for an Action ownsAction claims, and answers a modeled IAM action
-	// nobody implements with the house-rule 501 itself (router.targetDispatch
+	// nobody implements with the house-rule 501 itself (router.rootDispatch
 	// via operationRegistry.ClaimQuery), so an Action reaching this arm
 	// bypassed the router.
 	protocol.WriteQueryXMLError(w, r, &protocol.AWSError{

@@ -993,7 +993,7 @@ global — it's built once in `router.New()` (`internal/router/router.go`,
 "Host-based routing" section) after the owning services exist, because a
 `Rewrite` closure typically calls back into its service (e.g.
 `apigwSvc.HostRouteRewrite`). It's registered early via the same
-declare-a-pointer-populate-later pattern already used for `queryDispatchers`
+declare-a-pointer-populate-later pattern already used for the root Query dispatch (`rootDispatch`)
 and the event `bus` (chi requires all `r.Use` calls before any route is
 registered, but the services those rows call into don't exist yet at that
 point in `New()`).
