@@ -26,6 +26,8 @@ github.com/aws/aws-sdk-go-v2/service/appsync v1.53.5 h1:G80ZgLaXuxRg6TvtxZUidNPj
 github.com/aws/aws-sdk-go-v2/service/appsync v1.53.5/go.mod h1:bfM1veTf52ESSCXHm0PmsV5qVI0NUvjIxqc+u0Ds76Y=
 github.com/aws/aws-sdk-go-v2/service/athena v1.66.1 h1:cy+Nz+SWQwDRfEI9OIac/i95u17ZBddpaPerdK/NJ5Q=
 github.com/aws/aws-sdk-go-v2/service/athena v1.66.1/go.mod h1:ENQofjcgYXxERkm6jFdI3HRcH0fbh99uqJVy6Sw0Zhc=
+github.com/aws/aws-sdk-go-v2/service/backup v1.67.0 h1:S06gfsWy6IVXBbLNMf7kQXAh4OezV9/ojAmtfg67Vw0=
+github.com/aws/aws-sdk-go-v2/service/backup v1.67.0/go.mod h1:/yu/vxVqQLU6+29yZgLfQRNdDkT/s3F8zS2mrLQy8FE=
 github.com/aws/aws-sdk-go-v2/service/batch v1.74.0 h1:LTPXlivKDHTioNpyKv18fcyxnhEBDmqutThyt9sprzQ=
 github.com/aws/aws-sdk-go-v2/service/batch v1.74.0/go.mod h1:GWZfjK4LbVjIxPZ6GOavjcrsgNwtSo2Q0/9SbFJQUU8=
 github.com/aws/aws-sdk-go-v2/service/cloudformation v1.71.9 h1:AISf54dn2oMUmhoWt4UH80xC8GqlZectZIcffiJzp6U=

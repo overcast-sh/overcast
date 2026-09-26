@@ -494,7 +494,14 @@ operations:
     tests:
       - tests/integration/s3/s3_test.go::TestCopyObject_missingSourceBucket
       - tests/integration/s3/s3_test.go::TestCopyObject_missingSourceKey
+      - tests/integration/s3/multipart_etag_test.go::TestSDKCopyObject_ofAMultipartObjectHasTheMD5OfItsBytes
     scenarios:
+      - name: copy of an object assembled by multipart upload
+        status: fixed
+        notes: >-
+          The copy's ETag is the plain MD5 of its bytes, with no "-N": the Object
+          reference says objects created by "the PUT Object, POST Object, or Copy
+          operation" have MD5 ETags (https://docs.aws.amazon.com/AmazonS3/latest/API/API_Object.html).
       - name: source bucket does not exist
         status: fixed
         notes: >-
@@ -664,8 +671,26 @@ operations:
       - internal/services/s3/handler_multipart.go
     tests:
       - tests/integration/s3/multipart_validation_test.go
+      - tests/integration/s3/multipart_etag_test.go
+      - tests/integration/s3/multipart_bucket_name_test.go
       - tests/integration/s3/s3_test.go::TestMultipartUpload_fullCycle
+      - internal/services/s3/multipart_parts_test.go
     scenarios:
+      - name: ETag of the assembled object
+        status: fixed
+        notes: >-
+          The hex MD5 of the parts' binary MD5s concatenated in order, suffixed
+          "-<part count>", derived from the part ETags stored at UploadPart;
+          CompleteMultipartUpload, HeadObject, GetObject, ListObjects and
+          ListObjectsV2 all report it. It used to hash the assembled bytes, so
+          the digest differed from S3's (#2232).
+      - name: an upload in progress while a bucket named "multipart" is deleted
+        status: fixed
+        notes: >-
+          Parts live under a dot-prefixed directory no bucket name can take; parts
+          an earlier release stored under "multipart/" are moved there on first
+          use. Deleting such a bucket used to discard every open upload's parts
+          (#2234).
       - name: part ETag does not match the uploaded part
         status: fixed
         notes: 400 InvalidPart, no object is created and the upload's parts stay staged (#1706).
@@ -875,6 +900,8 @@ findings:
     - CloudFormation AWS::S3::Bucket uses the S3 handlers for lifecycle, versioning, notifications, encryption, tags, CORS, and website configuration.
     - GetObject, GetObjectTagging and CopyObject's source lookup now answer NoSuchBucket for a bucket that does not exist, instead of NoSuchKey (#1635); HeadObject is wire-identical either way per AWS's own documented HEAD limitation.
     - A PutObject, CopyObject, UploadPart or CompleteMultipartUpload that fails part way no longer destroys the object already at the key, and a CopyObject onto itself no longer empties it (#2192).
+    - A multipart object's ETag is S3's digest of its parts' MD5s rather than of its assembled bytes (#2232).
+    - Deleting a bucket named "multipart" no longer discards every in-progress upload's parts (#2234).
     - Concurrent CreateBucket calls for one name create one bucket and publish one S3BucketCreated event; the others get BucketAlreadyOwnedByYou, or 200 in us-east-1 (#2126).
     - DeleteObject and DeleteObjects honour If-Match, so a conditional delete no longer silently succeeds; a mismatch is 412 PreconditionFailed (per-key for DeleteObjects) and a missing key is 404 NoSuchKey rather than DeleteObject's usual idempotent 204 (#2037).
     - Buckets named after a root the router shares between services — tags, applications, every S3 Tables root and iceberg — round-trip through the SDK and virtual-hosted, and unsigned path-style for any key the root's own services do not serve; they were read as the wrong bucket, or answered by AppRegistry (#2098, tests/integration/router/shared_root_buckets_test.go).
@@ -885,8 +912,6 @@ findings:
     - ListObjects (v1) omits the per-object Owner element AWS always returns, and per-object ChecksumAlgorithm/ChecksumType are absent from both listings.
     - S3 InvalidArgument responses omit the ArgumentName and ArgumentValue elements real S3 returns, because protocol.AWSError has no fields for them.
     - CORS rule Id and encryption BlockedEncryptionTypes are not represented by the current stored/wire models.
-    - A multipart object's ETag hashes its assembled bytes rather than its parts' MD5s, so the digest differs from S3's while the "-N" shape matches (#2232).
-    - A bucket named "multipart" shares its body directory with in-progress multipart parts, so deleting it discards every open upload's parts (#2234).
     - CopyObject does not yet honour If-None-Match or If-Match, which AWS accepts on it alongside PutObject and CompleteMultipartUpload (#1678).
   intentionally_partial:
     - Requester Pays and archive restore are unimplemented, so ListObjectsV2 accepts x-amz-request-payer and x-amz-optional-object-attributes and returns neither x-amz-request-charged nor RestoreStatus - which is what AWS returns for a bucket that is not Requester Pays and an object that was never restored.

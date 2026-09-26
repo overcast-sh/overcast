@@ -618,7 +618,7 @@ func (g *s3Group) CompleteMultipartUpload(_ context.Context, t *harness.TestCont
 		return fmt.Errorf("s3 CompleteMultipartUpload: missing upload_id or part_etag")
 	}
 	parts := fmt.Sprintf(`{"Parts":[{"PartNumber":1,"ETag":"%s"}]}`, etag)
-	_, err := awscli.RunOutput(t.Endpoint, t.Region,
+	completed, err := awscli.RunOutput(t.Endpoint, t.Region,
 		"s3api", "complete-multipart-upload",
 		"--bucket", g.bucket(t),
 		"--key", "multipart.bin",
@@ -639,6 +639,15 @@ func (g *s3Group) CompleteMultipartUpload(_ context.Context, t *harness.TestCont
 	}
 	if out["ContentLength"] == nil {
 		return fmt.Errorf("s3 CompleteMultipartUpload: missing ContentLength")
+	}
+	// S3 gives a multipart object the MD5 of its parts' binary MD5s, suffixed with the part count (#2232):
+	// md5(md5(1 KiB of "x"))-1 for UploadPart's single part.
+	const want = `"64a3b22c51ddc101b3e6d623279b60e9-1"`
+	if got, _ := completed["ETag"].(string); got != want {
+		return fmt.Errorf("s3 CompleteMultipartUpload: ETag = %s, want %s", got, want)
+	}
+	if got, _ := out["ETag"].(string); got != want {
+		return fmt.Errorf("s3 CompleteMultipartUpload: head-object ETag = %s, want %s", got, want)
 	}
 	return nil
 }
