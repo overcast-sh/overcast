@@ -1325,6 +1325,58 @@
     },
     {
       "service": "iam",
+      "name": "iam-groups-shadow",
+      "generated": true,
+      "scenario": "compat/model/authored/iam-groups.json",
+      "state": "candidate",
+      "shadowOf": "iam-groups",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "CreateGroup"
+        },
+        {
+          "name": "AddUserToGroup",
+          "depends": [
+            "CreateGroup"
+          ]
+        },
+        {
+          "name": "ListGroupsForUser",
+          "depends": [
+            "AddUserToGroup"
+          ]
+        },
+        {
+          "name": "RemoveUserFromGroup",
+          "depends": [
+            "ListGroupsForUser"
+          ]
+        },
+        {
+          "name": "GetGroup",
+          "depends": [
+            "CreateGroup"
+          ]
+        },
+        {
+          "name": "DeleteGroup",
+          "depends": [
+            "GetGroup"
+          ]
+        }
+      ]
+    },
+    {
+      "service": "iam",
       "name": "iam-policies-shadow",
       "generated": true,
       "scenario": "compat/model/authored/iam-policies.json",
