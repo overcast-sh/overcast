@@ -1781,9 +1781,10 @@ func queryGetMiddleware(queryDispatchers *[]QueryDispatcher, operationRegistry *
 // registeredForTest reports whether a service is part of the test-only subset.
 // Always true in production, where config.TestOnlyServiceSubset is nil.
 //
-// Only the two shared-path dispatchers below need this: /v2/apis and /v1/tags
-// are registered outside the service loop because more than one service answers
-// on them, so the loop's own subset check cannot reach them.
+// Only the shared-path dispatchers need this — /v2/apis, /v1/tags, /tags,
+// /applications and the S3 Tables roots: they are registered outside the
+// service loop because more than one service answers on them, so the loop's
+// own subset check cannot reach them.
 func registeredForTest(cfg *config.Config, service string) bool {
 	return cfg.TestOnlyServiceSubset == nil || cfg.TestOnlyServiceSubset[service]
 }
@@ -1807,10 +1808,6 @@ func writeNotImplemented(w http.ResponseWriter, r *http.Request, claim awsapi.Cl
 	serviceutil.WriteNotImplemented(w, r, claim)
 }
 
-// restFallback owns no AWS operation itself. It is deliberately registered
-// after every explicit service route, so a modeled binding reaches it only
-// when no implementation or disabled-service route claimed the request. S3 is
-// then the sole remaining legitimate catch-all.
 // hasBearerAuthorization reports whether the caller authenticated with a bearer
 // token rather than SigV4. S3 has no bearer-token mode, so for an API modeled
 // without an aws.auth#sigv4 name this is the only evidence that separates it
@@ -1952,6 +1949,10 @@ func claimModeledPath(operationRegistry *awsapi.Registry, r *http.Request) (awsa
 	return operationRegistry.ClaimRESTQuery(r.Method, r.URL.Path, r.URL.RawQuery)
 }
 
+// restFallback owns no AWS operation itself. It is deliberately registered
+// after every explicit service route, so a modeled binding reaches it only
+// when no implementation or disabled-service route claimed the request. S3 is
+// then the sole remaining legitimate catch-all.
 func restFallback(operationRegistry *awsapi.Registry, s3Router http.Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		claim, outcome := restClaimFor(operationRegistry, r)

@@ -30,7 +30,8 @@ import (
 //     answered by AppRegistry's ListApplications. mount sends every S3-signed
 //     request to s3 before the dispatcher sees it: no SDK signs for S3 a
 //     request meant for another service, which is the rule addressesNonS3
-//     applies to the REST fallback itself.
+//     applies to the REST fallback itself. A virtual-hosted request goes to
+//     s3 too, since its path starts with the bucket the Host named.
 type sharedRoots struct {
 	mux chi.Router
 	// s3 is the router's REST fallback, run on the whole request path.
@@ -44,7 +45,7 @@ func newSharedRoots(mux chi.Router, operationRegistry *awsapi.Registry, s3Router
 // mount serves root through dispatch, except that an S3-signed request goes
 // straight to S3. The single "/*" pattern also matches the bare root.
 func (s sharedRoots) mount(root string, dispatch http.Handler) {
-	h := s3SignedFirst(dispatch, s.s3)
+	h := s3First(dispatch, s.s3)
 	s.mux.Route(root, func(m chi.Router) {
 		m.HandleFunc("/*", h)
 	})
@@ -57,11 +58,12 @@ func (s sharedRoots) delegate(sub chi.Router) chi.Router {
 	return sub
 }
 
-// s3SignedFirst sends a request signed for the S3 object API to s3 and every
-// other request to dispatch.
-func s3SignedFirst(dispatch, s3 http.Handler) http.HandlerFunc {
+// s3First sends a request that positively addresses S3 — virtual-hosted to a
+// bucket, or signed for the S3 object API — to s3, and every other request to
+// dispatch.
+func s3First(dispatch, s3 http.Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if middleware.SignedForS3API(r, middleware.ServiceFromCredential(r)) {
+		if middleware.AddressesS3(r, middleware.ServiceFromCredential(r)) {
 			s3.ServeHTTP(w, r)
 			return
 		}

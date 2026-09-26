@@ -196,6 +196,7 @@ operations:
         - A non-numeric or out-of-int32 max-keys was silently replaced by the 1000 default, and a value above 1000 was honoured verbatim (#172).
         - encoding-type=url and fetch-owner were accepted and ignored (#173).
       remaining_gaps:
+    - Unsigned path-style requests to a bucket named after a shared root still reach that root's own service where it serves the path — GET /applications and GET /applications/{one-segment} are AppRegistry's (the web UI's contract), and /tags/{ARN-shaped key} goes to that ARN's tag owner — and an unsigned /applications/... request S3 does serve is still logged as appregistry. Path and no signature cannot tell the two apart; signed and virtual-hosted requests are unaffected (#2098).
         - Per-object ChecksumAlgorithm and ChecksumType are not returned.
         - ListObjects v1 does not return the per-object Owner AWS always includes.
         - An explicitly empty continuation-token, start-after or max-keys is treated as absent rather than echoed or validated.
@@ -845,7 +846,7 @@ findings:
     - CloudFormation AWS::S3::Bucket uses the S3 handlers for lifecycle, versioning, notifications, encryption, tags, CORS, and website configuration.
     - GetObject, GetObjectTagging and CopyObject's source lookup now answer NoSuchBucket for a bucket that does not exist, instead of NoSuchKey (#1635); HeadObject is wire-identical either way per AWS's own documented HEAD limitation.
     - DeleteObject and DeleteObjects honour If-Match, so a conditional delete no longer silently succeeds; a mismatch is 412 PreconditionFailed (per-key for DeleteObjects) and a missing key is 404 NoSuchKey rather than DeleteObject's usual idempotent 204 (#2037).
-    - Buckets named after a root the router shares between services — tags, applications, every S3 Tables root and iceberg — round-trip through the SDK, unsigned path-style and virtual-hosted; they were read as the wrong bucket, or answered by AppRegistry (#2098, tests/integration/router/shared_root_buckets_test.go).
+    - Buckets named after a root the router shares between services — tags, applications, every S3 Tables root and iceberg — round-trip through the SDK and virtual-hosted, and unsigned path-style for any key the root's own services do not serve; they were read as the wrong bucket, or answered by AppRegistry (#2098, tests/integration/router/shared_root_buckets_test.go).
   remaining_gaps:
     - S3 error documents omit HostId, which real AWS sends on every error. Not specific to InvalidRange; belongs in a change against the whole REST-XML envelope rather than one operation (noted while fixing #1864).
     - Bucket policies are stored and returned but never evaluated, so a policy authorises and denies nothing.

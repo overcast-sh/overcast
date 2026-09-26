@@ -53,12 +53,14 @@ func TestDetectService(t *testing.T) {
 		{name: "backup access point describe", method: "GET", path: "/backup-access-point/arn%3Aaws%3Abackup%3Aus-east-1%3A000000000000%3Aaccesspoint%2Fap-one", want: "backup"},
 		{name: "apigateway v2", method: "GET", path: "/v2/apis", want: "apigateway"},
 		{name: "appsync events v2", method: "GET", path: "/v2/apis", header: map[string]string{"Authorization": "AWS4-HMAC-SHA256 Credential=AKID/20260623/us-east-1/appsync/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc"}, want: "appsync"},
-		// /applications is S3's when S3-signed: the router sends such a
-		// request to a bucket named "applications" (#2098). S3 Control shares
-		// the signing name but not the routing.
+		// /applications is S3's when S3-signed or virtual-hosted: the router
+		// sends such a request to a bucket named "applications" (#2098). S3
+		// Control shares the signing name but not the routing.
 		{name: "s3-signed applications", method: "GET", path: "/applications", header: map[string]string{"Authorization": s3SignedAuth}, want: "s3"},
 		{name: "s3express-signed applications", method: "GET", path: "/applications/key.txt", header: map[string]string{"Authorization": "AWS4-HMAC-SHA256 Credential=AKID/20260623/us-east-1/s3express/aws4_request, SignedHeaders=host, Signature=abc"}, want: "s3"},
-		{name: "s3 control-signed applications", method: "GET", path: "/applications", header: map[string]string{"Authorization": s3SignedAuth, S3ControlAccountHeader: "000000000000"}, want: "appregistry"},
+		{name: "virtual-hosted bucket named applications", method: "GET", path: "/key.txt", host: "applications.s3.localhost:4566", want: "s3"},
+		{name: "bucket merely prefixed applications", method: "GET", path: "/applications-archive/key.txt", want: "s3"},
+		{name: "s3 control-signed applications", method: "GET", path: "/applications", header: map[string]string{"Authorization": s3SignedAuth, s3ControlAccountHeader: "000000000000"}, want: "appregistry"},
 
 		// Internal /_overcast/events and /_overcast/metrics
 		{name: "events", method: "GET", path: "/_overcast/events", want: "events"},

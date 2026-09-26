@@ -150,24 +150,25 @@ func TestS3BucketNamedLikeASharedRoot_answersUnsignedAndVirtualHostedReads(t *te
 	for _, root := range sharedRoots() {
 		bucket, key := strings.TrimPrefix(root, "/"), sharedRootKey
 		t.Run(bucket, func(t *testing.T) {
-			// Given: the object in a bucket named after the root, and the same
-			// key, root and all, in an ordinary bucket
-			for _, b := range []struct{ bucket, key string }{{bucket, key}, {plain, bucket + "/" + key}} {
-				if b.bucket == bucket {
-					if _, err := c.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String(bucket)}); err != nil {
-						t.Fatalf("CreateBucket: %v", err)
-					}
-				}
+			// Given: the nested object and a top-level one in a bucket named
+			// after the root, and the nested key, root and all, in an ordinary
+			// bucket
+			if _, err := c.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String(bucket)}); err != nil {
+				t.Fatalf("CreateBucket: %v", err)
+			}
+			for _, b := range []struct{ bucket, key string }{{bucket, key}, {bucket, "top.txt"}, {plain, bucket + "/" + key}} {
 				if _, err := c.PutObject(ctx, &s3.PutObjectInput{
 					Bucket: aws.String(b.bucket), Key: aws.String(b.key), Body: bytes.NewReader([]byte("payload")),
 				}); err != nil {
 					t.Fatalf("PutObject %s/%s: %v", b.bucket, b.key, err)
 				}
 			}
+			vhost := bucket + ".s3.localhost:4566"
 
 			cases := []struct{ name, host, path string }{
 				{name: "unsigned path-style", path: "/" + bucket + "/" + key},
-				{name: "virtual-hosted bucket named like the root", host: bucket + ".s3.localhost:4566", path: "/" + key},
+				{name: "virtual-hosted nested key", host: vhost, path: "/" + key},
+				{name: "virtual-hosted top-level key", host: vhost, path: "/top.txt"},
 				{name: "virtual-hosted key under the root", host: plain + ".s3.localhost:4566", path: root + "/" + key},
 			}
 			for _, tc := range cases {
@@ -179,6 +180,37 @@ func TestS3BucketNamedLikeASharedRoot_answersUnsignedAndVirtualHostedReads(t *te
 					t.Errorf("%s GET %s = %d %q, want 200 %q", tc.name, tc.path, status, body, "payload")
 				}
 			}
+
+			// And: the virtual-hosted bucket root lists the bucket
+			if status, body := unsignedGet(t, srv, vhost, "/"); status != http.StatusOK || !strings.Contains(body, "<ListBucketResult") {
+				t.Errorf("virtual-hosted GET / = %d %q, want 200 ListBucketResult", status, body)
+			}
 		})
+	}
+}
+
+func TestSharedRoot_s3ControlSignedRequestIsNotTakenToS3(t *testing.T) {
+	// Given: a request signed for "s3" that also names the account, which only
+	// S3 Control sends — the two APIs share a signing name
+	srv := helpers.NewTestServer(t)
+	req, err := http.NewRequest(http.MethodGet, srv.URL+"/applications", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260926/us-east-1/s3/aws4_request, SignedHeaders=host, Signature=x")
+	req.Header.Set("X-Amz-Account-Id", "000000000000")
+
+	// When: it reaches the shared /applications root
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	// Then: the dispatcher answers it (AppRegistry's ListApplications), not S3
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	if !strings.Contains(string(body), `"applications"`) {
+		t.Errorf("body = %q, want AppRegistry's ListApplications", body)
 	}
 }

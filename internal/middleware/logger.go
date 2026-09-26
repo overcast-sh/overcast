@@ -173,7 +173,7 @@ func detectService(r *http.Request, body ...[]byte) string {
 		strings.HasPrefix(r.URL.Path, "/apikeys"),
 		strings.HasPrefix(r.URL.Path, "/usageplans"):
 		return "apigateway"
-	case strings.HasPrefix(r.URL.Path, "/applications"):
+	case r.URL.Path == "/applications", strings.HasPrefix(r.URL.Path, "/applications/"):
 		// Shared with AppConfig, which models the same tree, so this is the
 		// second entry that has to consult the credential scope before
 		// answering — see /v2/apis above, and router.go's applicationsDispatch,
@@ -181,13 +181,15 @@ func detectService(r *http.Request, body ...[]byte) string {
 		// answer for its own "servicecatalog" scope and for unsigned callers,
 		// which is what the web UI sends.
 		//
-		// An S3-signed request is S3's: "applications" is a legal bucket name,
-		// and the router sends such a request there (sharedRoots, #2098).
+		// A virtual-hosted or S3-signed request is S3's: "applications" is a
+		// legal bucket name, and the router sends such a request there
+		// (sharedRoots, #2098). The segment boundary above leaves a bucket
+		// such as "applications-archive" to the S3 default.
 		switch svc := serviceFromAuthCredential(r); {
+		case AddressesS3(r, svc):
+			return "s3"
 		case svc == "appconfig":
 			return "appconfig"
-		case SignedForS3API(r, svc):
-			return "s3"
 		}
 		return "appregistry"
 	case r.URL.Path == "/configurationsessions":
