@@ -102,10 +102,6 @@ class Clients:
         return self._get("ssm")
 
     @property
-    def kinesis(self):
-        return self._get("kinesis")
-
-    @property
     def events(self):
         return self._get("events")
 

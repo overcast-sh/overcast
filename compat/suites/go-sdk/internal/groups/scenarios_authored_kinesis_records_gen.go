@@ -24,16 +24,16 @@ func ScenariosAuthoredKinesisRecords(c *clients.Clients) ServiceGroup {
 	return ServiceGroup{
 		Name: "scenarios/authored-kinesis-records",
 		Impls: map[string]harness.TestFn{
-			"kinesis-records-shadow:PutRecord":        g.testKinesisRecordsShadowPutRecord,
-			"kinesis-records-shadow:PutRecords":       g.testKinesisRecordsShadowPutRecords,
-			"kinesis-records-shadow:GetShardIterator": g.testKinesisRecordsShadowGetShardIterator,
-			"kinesis-records-shadow:GetRecords":       g.testKinesisRecordsShadowGetRecords,
+			"kinesis-records:PutRecord":        g.testKinesisRecordsPutRecord,
+			"kinesis-records:PutRecords":       g.testKinesisRecordsPutRecords,
+			"kinesis-records:GetShardIterator": g.testKinesisRecordsGetShardIterator,
+			"kinesis-records:GetRecords":       g.testKinesisRecordsGetRecords,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"kinesis-records-shadow": g.setupKinesisRecordsShadow,
+			"kinesis-records": g.setupKinesisRecords,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"kinesis-records-shadow": g.teardownKinesisRecordsShadow,
+			"kinesis-records": g.teardownKinesisRecords,
 		},
 	}
 }
@@ -53,10 +53,10 @@ func (g *authoredKinesisRecordsScenarios) cl() *kinesis.Client {
 	return g.client
 }
 
-var groupKinesisRecordsShadow = scenario.Group{Name: "kinesis-records-shadow", File: "compat/model/authored/kinesis-records.json"}
+var groupKinesisRecords = scenario.Group{Name: "kinesis-records", File: "compat/model/authored/kinesis-records.json"}
 
-func (g *authoredKinesisRecordsScenarios) setupKinesisRecordsShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupKinesisRecordsShadow.RunSetup(ctx, t,
+func (g *authoredKinesisRecordsScenarios) setupKinesisRecords(ctx context.Context, t *harness.TestContext) error {
+	return groupKinesisRecords.RunSetup(ctx, t,
 		scenario.Call{
 			Op:     "CreateStream",
 			Params: `{"ShardCount":1,"StreamName":{"$name":"s"}}`,
@@ -73,8 +73,8 @@ func (g *authoredKinesisRecordsScenarios) setupKinesisRecordsShadow(ctx context.
 	)
 }
 
-func (g *authoredKinesisRecordsScenarios) teardownKinesisRecordsShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupKinesisRecordsShadow.RunTeardown(ctx, t,
+func (g *authoredKinesisRecordsScenarios) teardownKinesisRecords(ctx context.Context, t *harness.TestContext) error {
+	return groupKinesisRecords.RunTeardown(ctx, t,
 		scenario.Call{
 			Op:     "DeleteStream",
 			Params: `{"StreamName":{"$name":"s"}}`,
@@ -90,8 +90,8 @@ func (g *authoredKinesisRecordsScenarios) teardownKinesisRecordsShadow(ctx conte
 	)
 }
 
-func (g *authoredKinesisRecordsScenarios) testKinesisRecordsShadowPutRecord(ctx context.Context, t *harness.TestContext) error {
-	return groupKinesisRecordsShadow.RunTest(ctx, t, "PutRecord", scenario.Test{
+func (g *authoredKinesisRecordsScenarios) testKinesisRecordsPutRecord(ctx context.Context, t *harness.TestContext) error {
+	return groupKinesisRecords.RunTest(ctx, t, "PutRecord", scenario.Test{
 		Call: scenario.Call{
 			Op:     "PutRecord",
 			Params: `{"Data":{"$base64":"cmVjb3JkLWRhdGE="},"PartitionKey":"pk1","StreamName":{"$name":"s"}}`,
@@ -119,8 +119,8 @@ func (g *authoredKinesisRecordsScenarios) testKinesisRecordsShadowPutRecord(ctx 
 	})
 }
 
-func (g *authoredKinesisRecordsScenarios) testKinesisRecordsShadowPutRecords(ctx context.Context, t *harness.TestContext) error {
-	return groupKinesisRecordsShadow.RunTest(ctx, t, "PutRecords", scenario.Test{
+func (g *authoredKinesisRecordsScenarios) testKinesisRecordsPutRecords(ctx context.Context, t *harness.TestContext) error {
+	return groupKinesisRecords.RunTest(ctx, t, "PutRecords", scenario.Test{
 		Call: scenario.Call{
 			Op:     "PutRecords",
 			Params: `{"Records":[{"Data":{"$base64":"cjE="},"PartitionKey":"pk1"},{"Data":{"$base64":"cjI="},"PartitionKey":"pk2"}],"StreamName":{"$name":"s"}}`,
@@ -145,8 +145,8 @@ func (g *authoredKinesisRecordsScenarios) testKinesisRecordsShadowPutRecords(ctx
 	})
 }
 
-func (g *authoredKinesisRecordsScenarios) testKinesisRecordsShadowGetShardIterator(ctx context.Context, t *harness.TestContext) error {
-	return groupKinesisRecordsShadow.RunTest(ctx, t, "GetShardIterator", scenario.Test{
+func (g *authoredKinesisRecordsScenarios) testKinesisRecordsGetShardIterator(ctx context.Context, t *harness.TestContext) error {
+	return groupKinesisRecords.RunTest(ctx, t, "GetShardIterator", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetShardIterator",
 			Params: `{"ShardId":{"$ref":"record.shard"},"ShardIteratorType":"TRIM_HORIZON","StreamName":{"$name":"s"}}`,
@@ -188,8 +188,8 @@ func (g *authoredKinesisRecordsScenarios) testKinesisRecordsShadowGetShardIterat
 	})
 }
 
-func (g *authoredKinesisRecordsScenarios) testKinesisRecordsShadowGetRecords(ctx context.Context, t *harness.TestContext) error {
-	return groupKinesisRecordsShadow.RunTest(ctx, t, "GetRecords", scenario.Test{
+func (g *authoredKinesisRecordsScenarios) testKinesisRecordsGetRecords(ctx context.Context, t *harness.TestContext) error {
+	return groupKinesisRecords.RunTest(ctx, t, "GetRecords", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetRecords",
 			Params: `{"Limit":10,"ShardIterator":{"$ref":"shard.iterator"}}`,
