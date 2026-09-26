@@ -163,16 +163,27 @@ func lintBaselineChangeFiles(oldPath, newPath string) error {
 	if err != nil {
 		return err
 	}
-	issues, notes := lintBaselineChange(oldBaseline, newBaseline, scope)
+	closedDebt, err := loadClosedParityDebt(*lintParityDebtFrom, *lintParityDebtTo)
+	if err != nil {
+		return err
+	}
+	issues, notes, debtNotes := lintBaselineChange(oldBaseline, newBaseline, scope, closedDebt)
 	// Notes print whether or not the lint passes. A removal the registry no
 	// longer asks for is exactly what a reviewer wants named, and suppressing
 	// it because some other entry tripped the gate would hide the half of the
-	// diff nothing else reports.
+	// diff nothing else reports. The same goes for a downgrade let through
+	// because this change closed its parity debt.
 	for _, note := range notes {
+		fmt.Println(note)
+	}
+	for _, note := range debtNotes {
 		fmt.Println(note)
 	}
 	if *annotate && len(notes) > 0 {
 		fmt.Print(outOfScopeAnnotation(notes))
+	}
+	if *annotate && len(debtNotes) > 0 {
+		fmt.Print(closedDebtAnnotation(debtNotes))
 	}
 	if len(issues) > 0 {
 		for _, issue := range issues {
@@ -183,9 +194,65 @@ func lintBaselineChangeFiles(oldPath, newPath string) error {
 		}
 		return fmt.Errorf("%d compat baseline downgrade(s)", len(issues))
 	}
-	fmt.Printf("compat: baseline change lint passed (%d expected result(s), %d out-of-scope removal(s))\n",
-		len(newBaseline.Entries), len(notes))
+	fmt.Printf("compat: baseline change lint passed (%d expected result(s), %d out-of-scope removal(s), %d closed-debt change(s))\n",
+		len(newBaseline.Entries), len(notes), len(debtNotes))
 	return nil
+}
+
+// closedParityDebt is the set of suite/group keys (parityDebtEntry.key) whose
+// parity debt the change under lint closes: listed in the old parity-debt file,
+// gone from the new one. A nil set closes nothing.
+type closedParityDebt map[string]bool
+
+func (c closedParityDebt) closes(suite, group string) bool {
+	return c[parityDebtEntry{Suite: suite, Group: group}.key()]
+}
+
+// closedParityDebtBetween is the debt oldDebt records and newDebt no longer
+// does.
+func closedParityDebtBetween(oldDebt, newDebt *parityDebtFile) closedParityDebt {
+	still := make(map[string]bool, len(newDebt.Debt))
+	for _, entry := range newDebt.Debt {
+		still[entry.key()] = true
+	}
+	closed := closedParityDebt{}
+	for _, entry := range oldDebt.Debt {
+		if !still[entry.key()] {
+			closed[entry.key()] = true
+		}
+	}
+	return closed
+}
+
+// loadClosedParityDebt reads the parity-debt files on either side of the
+// change; toPath defaults to --parity-debt-file. An unset or absent file on
+// either side yields a nil set — no allowance, the lint as it was before it
+// could ask. That is the safe direction for the old side (nothing proves the
+// skip was debt) and the only safe one for the new side: readParityDebtFile
+// reads an absent file as empty, which would mark every old entry closed.
+func loadClosedParityDebt(fromPath, toPath string) (closedParityDebt, error) {
+	if fromPath == "" {
+		return nil, nil
+	}
+	if toPath == "" {
+		toPath = *parityDebtFilePath
+	}
+	for _, path := range []string{fromPath, toPath} {
+		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+			fmt.Fprintf(os.Stderr,
+				"compat: no parity-debt file at %s — no skip -> unimplemented change counts as closed debt\n", path)
+			return nil, nil
+		}
+	}
+	oldDebt, err := readParityDebtFile(fromPath)
+	if err != nil {
+		return nil, err
+	}
+	newDebt, err := readParityDebtFile(toPath)
+	if err != nil {
+		return nil, err
+	}
+	return closedParityDebtBetween(oldDebt, newDebt), nil
 }
 
 // loadRegistryScope reads the registry pair the removal check consults.
@@ -556,7 +623,18 @@ func updateBaselineWith(baseline *compatBaseline, report *compat.RunReport, flak
 // make re-seeding every shard the only way to change what CI measures. This
 // does not weaken the gate: a row for a test the suite is still expected to run
 // is still a removed expectation, which is the whole anti-laundering property.
-func lintBaselineChange(oldBaseline, newBaseline *compatBaseline, scope *registryScope) (issues, notes []string) {
+//
+// One downgrade is legitimate too, and is returned in debtNotes rather than
+// issues: `skip` -> `unimplemented` for a (suite, group) whose parity debt this
+// change closes — closedDebt, built from the old parity-debt file listing it
+// and the new one not. That skip was "not yet implemented in <suite> test
+// suite": the suite never ran the test. Closing the debt makes it run, and an
+// operation the emulator does not implement answers 501, which is adding an
+// `unimplemented` test — and adding tests never blocks. Nothing else is
+// excused: a skip that was not debt (an environmental `requires: docker`)
+// cannot be downgraded, debt still listed afterwards is not closed, no other
+// status pair qualifies, and nothing may become `fail`.
+func lintBaselineChange(oldBaseline, newBaseline *compatBaseline, scope *registryScope, closedDebt closedParityDebt) (issues, notes, debtNotes []string) {
 	newByKey := baselineEntryMap(newBaseline.Entries)
 	oldByKey := baselineEntryMap(oldBaseline.Entries)
 	for _, oldEntry := range oldBaseline.Entries {
@@ -571,6 +649,12 @@ func lintBaselineChange(oldBaseline, newBaseline *compatBaseline, scope *registr
 			continue
 		}
 		if statusRank(newEntry.Status) < statusRank(oldEntry.Status) {
+			if oldEntry.Status == compat.StatusSkip && newEntry.Status == compat.StatusUnimplemented &&
+				closedDebt.closes(oldEntry.Suite, oldEntry.Group) {
+				debtNotes = append(debtNotes, fmt.Sprintf("compat baseline: %s skip -> unimplemented — parity debt closed for %s/%s",
+					baselineKey(oldEntry), oldEntry.Suite, oldEntry.Group))
+				continue
+			}
 			issues = append(issues, fmt.Sprintf("compat baseline downgrade: %s %s -> %s", baselineKey(oldEntry), oldEntry.Status, newEntry.Status))
 		}
 	}
@@ -588,7 +672,8 @@ func lintBaselineChange(oldBaseline, newBaseline *compatBaseline, scope *registr
 	if len(oldBaseline.Entries) == 0 {
 		sort.Strings(issues)
 		sort.Strings(notes)
-		return issues, notes
+		sort.Strings(debtNotes)
+		return issues, notes, debtNotes
 	}
 	for _, newEntry := range newBaseline.Entries {
 		if newEntry.Status != compat.StatusFail {
@@ -601,7 +686,8 @@ func lintBaselineChange(oldBaseline, newBaseline *compatBaseline, scope *registr
 	}
 	sort.Strings(issues)
 	sort.Strings(notes)
-	return issues, notes
+	sort.Strings(debtNotes)
+	return issues, notes, debtNotes
 }
 
 // outOfScopeAnnotationLimit is how many dropped keys the summary annotation
@@ -615,13 +701,26 @@ const outOfScopeAnnotationLimit = 10
 // They are not failures, so they must not compete with the ::error annotations
 // a reviewer is meant to read first.
 func outOfScopeAnnotation(notes []string) string {
+	return baselineNoticeAnnotation(notes, "dropped because the registry no longer asks those suites to run them")
+}
+
+// closedDebtAnnotation renders the skip -> unimplemented changes let through
+// because the change closed their parity debt as a single ::notice, sampled
+// the same way: a flipped group closes debt in several suites at once.
+func closedDebtAnnotation(notes []string) string {
+	return baselineNoticeAnnotation(notes, "moved skip -> unimplemented because this change closes their parity debt")
+}
+
+// baselineNoticeAnnotation renders informational lint notes as one ::notice
+// headed "<n> baseline expectation(s) <what>:", naming at most
+// outOfScopeAnnotationLimit of them.
+func baselineNoticeAnnotation(notes []string, what string) string {
 	shown := notes
 	if len(shown) > outOfScopeAnnotationLimit {
 		shown = shown[:outOfScopeAnnotationLimit]
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "%d baseline expectation(s) dropped because the registry no longer asks those suites to run them:\n",
-		len(notes))
+	fmt.Fprintf(&b, "%d baseline expectation(s) %s:\n", len(notes), what)
 	for _, note := range shown {
 		b.WriteString(strings.TrimPrefix(note, "compat baseline: "))
 		b.WriteString("\n")
