@@ -15,7 +15,7 @@ namespace OvercastCompat.Groups;
 /// </remarks>
 internal sealed class ScenariosAuthoredEcrPolicies : IServiceGroup
 {
-    private static readonly ScenarioGroup GroupEcrPoliciesShadow = new("ecr-policies-shadow", "compat/model/authored/ecr-policies.json");
+    private static readonly ScenarioGroup GroupEcrPolicies = new("ecr-policies", "compat/model/authored/ecr-policies.json");
 
     private readonly Lazy<AmazonECRClient> _client;
 
@@ -35,29 +35,29 @@ internal sealed class ScenariosAuthoredEcrPolicies : IServiceGroup
 
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["ecr-policies-shadow:PutLifecyclePolicy"] = TestEcrPoliciesShadowPutLifecyclePolicy,
-        ["ecr-policies-shadow:GetLifecyclePolicy"] = TestEcrPoliciesShadowGetLifecyclePolicy,
-        ["ecr-policies-shadow:DeleteLifecyclePolicy"] = TestEcrPoliciesShadowDeleteLifecyclePolicy,
-        ["ecr-policies-shadow:GetLifecyclePolicyNotFound"] = TestEcrPoliciesShadowGetLifecyclePolicyNotFound,
-        ["ecr-policies-shadow:SetRepositoryPolicy"] = TestEcrPoliciesShadowSetRepositoryPolicy,
-        ["ecr-policies-shadow:GetRepositoryPolicy"] = TestEcrPoliciesShadowGetRepositoryPolicy,
-        ["ecr-policies-shadow:DeleteRepositoryPolicy"] = TestEcrPoliciesShadowDeleteRepositoryPolicy,
+        ["ecr-policies:PutLifecyclePolicy"] = TestEcrPoliciesPutLifecyclePolicy,
+        ["ecr-policies:GetLifecyclePolicy"] = TestEcrPoliciesGetLifecyclePolicy,
+        ["ecr-policies:DeleteLifecyclePolicy"] = TestEcrPoliciesDeleteLifecyclePolicy,
+        ["ecr-policies:GetLifecyclePolicyNotFound"] = TestEcrPoliciesGetLifecyclePolicyNotFound,
+        ["ecr-policies:SetRepositoryPolicy"] = TestEcrPoliciesSetRepositoryPolicy,
+        ["ecr-policies:GetRepositoryPolicy"] = TestEcrPoliciesGetRepositoryPolicy,
+        ["ecr-policies:DeleteRepositoryPolicy"] = TestEcrPoliciesDeleteRepositoryPolicy,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["ecr-policies-shadow"] = SetupEcrPoliciesShadow,
+        ["ecr-policies"] = SetupEcrPolicies,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["ecr-policies-shadow"] = TeardownEcrPoliciesShadow,
+        ["ecr-policies"] = TeardownEcrPolicies,
     };
 
     private AmazonECRClient Cl() => _client.Value;
 
-    private Task SetupEcrPoliciesShadow(TestContext t) =>
-        GroupEcrPoliciesShadow.RunSetupAsync(t,
+    private Task SetupEcrPolicies(TestContext t) =>
+        GroupEcrPolicies.RunSetupAsync(t,
             new ScenarioCall
             {
                 Op = "CreateRepository",
@@ -86,8 +86,8 @@ internal sealed class ScenariosAuthoredEcrPolicies : IServiceGroup
             }
         );
 
-    private Task TeardownEcrPoliciesShadow(TestContext t) =>
-        GroupEcrPoliciesShadow.RunTeardownAsync(t,
+    private Task TeardownEcrPolicies(TestContext t) =>
+        GroupEcrPolicies.RunTeardownAsync(t,
             new ScenarioCall
             {
                 Op = "DeleteRepositoryPolicy",
@@ -144,7 +144,7 @@ internal sealed class ScenariosAuthoredEcrPolicies : IServiceGroup
             }
         );
 
-    private Task TestEcrPoliciesShadowPutLifecyclePolicy(TestContext t) => GroupEcrPoliciesShadow.RunTestAsync(t, "PutLifecyclePolicy", new ScenarioTest
+    private Task TestEcrPoliciesPutLifecyclePolicy(TestContext t) => GroupEcrPolicies.RunTestAsync(t, "PutLifecyclePolicy", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -185,7 +185,7 @@ internal sealed class ScenariosAuthoredEcrPolicies : IServiceGroup
         ],
     });
 
-    private Task TestEcrPoliciesShadowGetLifecyclePolicy(TestContext t) => GroupEcrPoliciesShadow.RunTestAsync(t, "GetLifecyclePolicy", new ScenarioTest
+    private Task TestEcrPoliciesGetLifecyclePolicy(TestContext t) => GroupEcrPolicies.RunTestAsync(t, "GetLifecyclePolicy", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -209,7 +209,7 @@ internal sealed class ScenariosAuthoredEcrPolicies : IServiceGroup
         ],
     });
 
-    private Task TestEcrPoliciesShadowDeleteLifecyclePolicy(TestContext t) => GroupEcrPoliciesShadow.RunTestAsync(t, "DeleteLifecyclePolicy", new ScenarioTest
+    private Task TestEcrPoliciesDeleteLifecyclePolicy(TestContext t) => GroupEcrPolicies.RunTestAsync(t, "DeleteLifecyclePolicy", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -247,7 +247,7 @@ internal sealed class ScenariosAuthoredEcrPolicies : IServiceGroup
         ],
     });
 
-    private Task TestEcrPoliciesShadowGetLifecyclePolicyNotFound(TestContext t) => GroupEcrPoliciesShadow.RunTestAsync(t, "GetLifecyclePolicyNotFound", new ScenarioTest
+    private Task TestEcrPoliciesGetLifecyclePolicyNotFound(TestContext t) => GroupEcrPolicies.RunTestAsync(t, "GetLifecyclePolicyNotFound", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -268,7 +268,7 @@ internal sealed class ScenariosAuthoredEcrPolicies : IServiceGroup
         ],
     });
 
-    private Task TestEcrPoliciesShadowSetRepositoryPolicy(TestContext t) => GroupEcrPoliciesShadow.RunTestAsync(t, "SetRepositoryPolicy", new ScenarioTest
+    private Task TestEcrPoliciesSetRepositoryPolicy(TestContext t) => GroupEcrPolicies.RunTestAsync(t, "SetRepositoryPolicy", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -309,7 +309,7 @@ internal sealed class ScenariosAuthoredEcrPolicies : IServiceGroup
         ],
     });
 
-    private Task TestEcrPoliciesShadowGetRepositoryPolicy(TestContext t) => GroupEcrPoliciesShadow.RunTestAsync(t, "GetRepositoryPolicy", new ScenarioTest
+    private Task TestEcrPoliciesGetRepositoryPolicy(TestContext t) => GroupEcrPolicies.RunTestAsync(t, "GetRepositoryPolicy", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -333,7 +333,7 @@ internal sealed class ScenariosAuthoredEcrPolicies : IServiceGroup
         ],
     });
 
-    private Task TestEcrPoliciesShadowDeleteRepositoryPolicy(TestContext t) => GroupEcrPoliciesShadow.RunTestAsync(t, "DeleteRepositoryPolicy", new ScenarioTest
+    private Task TestEcrPoliciesDeleteRepositoryPolicy(TestContext t) => GroupEcrPolicies.RunTestAsync(t, "DeleteRepositoryPolicy", new ScenarioTest
     {
         Call = new ScenarioCall
         {

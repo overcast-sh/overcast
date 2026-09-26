@@ -28,8 +28,8 @@ import software.amazon.awssdk.services.backup.model.UntagResourceRequest;
  */
 public final class ScenariosAuthoredBackupTagsGen implements ServiceGroup {
 
-    private static final Group GROUP_BACKUP_TAGS_SHADOW =
-            new Group("backup-tags-shadow", "compat/model/authored/backup-tags.json");
+    private static final Group GROUP_BACKUP_TAGS =
+            new Group("backup-tags", "compat/model/authored/backup-tags.json");
 
     private final AwsClients clients;
     private volatile BackupClient client;
@@ -46,21 +46,21 @@ public final class ScenariosAuthoredBackupTagsGen implements ServiceGroup {
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("backup-tags-shadow:TagResource", this::testBackupTagsShadowTagResource),
-                Map.entry("backup-tags-shadow:ListTags", this::testBackupTagsShadowListTags),
-                Map.entry("backup-tags-shadow:UntagResource", this::testBackupTagsShadowUntagResource));
+                Map.entry("backup-tags:TagResource", this::testBackupTagsTagResource),
+                Map.entry("backup-tags:ListTags", this::testBackupTagsListTags),
+                Map.entry("backup-tags:UntagResource", this::testBackupTagsUntagResource));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("backup-tags-shadow", this::setupBackupTagsShadow));
+                Map.entry("backup-tags", this::setupBackupTags));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("backup-tags-shadow", this::teardownBackupTagsShadow));
+                Map.entry("backup-tags", this::teardownBackupTags));
     }
 
     /**
@@ -80,8 +80,8 @@ public final class ScenariosAuthoredBackupTagsGen implements ServiceGroup {
         return client;
     }
 
-    private void setupBackupTagsShadow(TestContext t) {
-        GROUP_BACKUP_TAGS_SHADOW.runSetup(t,
+    private void setupBackupTags(TestContext t) {
+        GROUP_BACKUP_TAGS.runSetup(t,
                 new Call("CreateBackupVault", "{\"BackupVaultName\":{\"$name\":\"vault\"}}",
                         b -> CreateBackupVaultRequest.builder()
                                 .backupVaultName(b.string("BackupVaultName", Values.name("vault")))
@@ -90,8 +90,8 @@ public final class ScenariosAuthoredBackupTagsGen implements ServiceGroup {
                         .export("vault.arn", "$.BackupVaultArn"));
     }
 
-    private void teardownBackupTagsShadow(TestContext t) {
-        GROUP_BACKUP_TAGS_SHADOW.runTeardown(t,
+    private void teardownBackupTags(TestContext t) {
+        GROUP_BACKUP_TAGS.runTeardown(t,
                 new Call("UntagResource", "{\"ResourceArn\":{\"$ref\":\"vault.arn\"},\"TagKeyList\":[\"oc-compat\"]}",
                         b -> UntagResourceRequest.builder()
                                 .resourceArn(b.string("ResourceArn", Values.ref("vault.arn")))
@@ -105,8 +105,8 @@ public final class ScenariosAuthoredBackupTagsGen implements ServiceGroup {
                         r -> cl().deleteBackupVault((DeleteBackupVaultRequest) r)));
     }
 
-    private void testBackupTagsShadowTagResource(TestContext t) {
-        GROUP_BACKUP_TAGS_SHADOW.runTest(t, "TagResource",
+    private void testBackupTagsTagResource(TestContext t) {
+        GROUP_BACKUP_TAGS.runTest(t, "TagResource",
                 new Call("TagResource", "{\"ResourceArn\":{\"$ref\":\"vault.arn\"},\"Tags\":{\"oc-compat\":{\"$name\":\"vault\"}}}",
                         b -> TagResourceRequest.builder()
                                 .resourceArn(b.string("ResourceArn", Values.ref("vault.arn")))
@@ -125,8 +125,8 @@ public final class ScenariosAuthoredBackupTagsGen implements ServiceGroup {
                 ));
     }
 
-    private void testBackupTagsShadowListTags(TestContext t) {
-        GROUP_BACKUP_TAGS_SHADOW.runTest(t, "ListTags",
+    private void testBackupTagsListTags(TestContext t) {
+        GROUP_BACKUP_TAGS.runTest(t, "ListTags",
                 new Call("ListTags", "{\"ResourceArn\":{\"$ref\":\"vault.arn\"}}",
                         b -> ListTagsRequest.builder()
                                 .resourceArn(b.string("ResourceArn", Values.ref("vault.arn")))
@@ -139,8 +139,8 @@ public final class ScenariosAuthoredBackupTagsGen implements ServiceGroup {
                 ));
     }
 
-    private void testBackupTagsShadowUntagResource(TestContext t) {
-        GROUP_BACKUP_TAGS_SHADOW.runTest(t, "UntagResource",
+    private void testBackupTagsUntagResource(TestContext t) {
+        GROUP_BACKUP_TAGS.runTest(t, "UntagResource",
                 new Call("UntagResource", "{\"ResourceArn\":{\"$ref\":\"vault.arn\"},\"TagKeyList\":[\"oc-compat\"]}",
                         b -> UntagResourceRequest.builder()
                                 .resourceArn(b.string("ResourceArn", Values.ref("vault.arn")))

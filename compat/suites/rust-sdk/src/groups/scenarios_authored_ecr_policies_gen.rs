@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/ecr-policies.json";
 
-const GROUP_ECR_POLICIES_SHADOW: Group = Group {
-    name: "ecr-policies-shadow",
+const GROUP_ECR_POLICIES: Group = Group {
+    name: "ecr-policies",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredEcrPolicies {
         {
             let client = self.client.clone();
             impls.insert(
-                "ecr-policies-shadow:PutLifecyclePolicy".to_string(),
+                "ecr-policies:PutLifecyclePolicy".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_POLICIES_SHADOW
-                            .run_test(&ctx, "PutLifecyclePolicy", test_ecr_policies_shadow_put_lifecycle_policy(&client))
+                        GROUP_ECR_POLICIES
+                            .run_test(&ctx, "PutLifecyclePolicy", test_ecr_policies_put_lifecycle_policy(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredEcrPolicies {
         {
             let client = self.client.clone();
             impls.insert(
-                "ecr-policies-shadow:GetLifecyclePolicy".to_string(),
+                "ecr-policies:GetLifecyclePolicy".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_POLICIES_SHADOW
-                            .run_test(&ctx, "GetLifecyclePolicy", test_ecr_policies_shadow_get_lifecycle_policy(&client))
+                        GROUP_ECR_POLICIES
+                            .run_test(&ctx, "GetLifecyclePolicy", test_ecr_policies_get_lifecycle_policy(&client))
                             .await
                     })
                 }),
@@ -79,12 +79,12 @@ impl ServiceGroup for ScenariosAuthoredEcrPolicies {
         {
             let client = self.client.clone();
             impls.insert(
-                "ecr-policies-shadow:DeleteLifecyclePolicy".to_string(),
+                "ecr-policies:DeleteLifecyclePolicy".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_POLICIES_SHADOW
-                            .run_test(&ctx, "DeleteLifecyclePolicy", test_ecr_policies_shadow_delete_lifecycle_policy(&client))
+                        GROUP_ECR_POLICIES
+                            .run_test(&ctx, "DeleteLifecyclePolicy", test_ecr_policies_delete_lifecycle_policy(&client))
                             .await
                     })
                 }),
@@ -93,12 +93,12 @@ impl ServiceGroup for ScenariosAuthoredEcrPolicies {
         {
             let client = self.client.clone();
             impls.insert(
-                "ecr-policies-shadow:GetLifecyclePolicyNotFound".to_string(),
+                "ecr-policies:GetLifecyclePolicyNotFound".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_POLICIES_SHADOW
-                            .run_test(&ctx, "GetLifecyclePolicyNotFound", test_ecr_policies_shadow_get_lifecycle_policy_not_found(&client))
+                        GROUP_ECR_POLICIES
+                            .run_test(&ctx, "GetLifecyclePolicyNotFound", test_ecr_policies_get_lifecycle_policy_not_found(&client))
                             .await
                     })
                 }),
@@ -107,12 +107,12 @@ impl ServiceGroup for ScenariosAuthoredEcrPolicies {
         {
             let client = self.client.clone();
             impls.insert(
-                "ecr-policies-shadow:SetRepositoryPolicy".to_string(),
+                "ecr-policies:SetRepositoryPolicy".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_POLICIES_SHADOW
-                            .run_test(&ctx, "SetRepositoryPolicy", test_ecr_policies_shadow_set_repository_policy(&client))
+                        GROUP_ECR_POLICIES
+                            .run_test(&ctx, "SetRepositoryPolicy", test_ecr_policies_set_repository_policy(&client))
                             .await
                     })
                 }),
@@ -121,12 +121,12 @@ impl ServiceGroup for ScenariosAuthoredEcrPolicies {
         {
             let client = self.client.clone();
             impls.insert(
-                "ecr-policies-shadow:GetRepositoryPolicy".to_string(),
+                "ecr-policies:GetRepositoryPolicy".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_POLICIES_SHADOW
-                            .run_test(&ctx, "GetRepositoryPolicy", test_ecr_policies_shadow_get_repository_policy(&client))
+                        GROUP_ECR_POLICIES
+                            .run_test(&ctx, "GetRepositoryPolicy", test_ecr_policies_get_repository_policy(&client))
                             .await
                     })
                 }),
@@ -135,12 +135,12 @@ impl ServiceGroup for ScenariosAuthoredEcrPolicies {
         {
             let client = self.client.clone();
             impls.insert(
-                "ecr-policies-shadow:DeleteRepositoryPolicy".to_string(),
+                "ecr-policies:DeleteRepositoryPolicy".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_POLICIES_SHADOW
-                            .run_test(&ctx, "DeleteRepositoryPolicy", test_ecr_policies_shadow_delete_repository_policy(&client))
+                        GROUP_ECR_POLICIES
+                            .run_test(&ctx, "DeleteRepositoryPolicy", test_ecr_policies_delete_repository_policy(&client))
                             .await
                     })
                 }),
@@ -154,11 +154,11 @@ impl ServiceGroup for ScenariosAuthoredEcrPolicies {
         {
             let client = self.client.clone();
             setups.insert(
-                "ecr-policies-shadow".to_string(),
+                "ecr-policies".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_POLICIES_SHADOW.run_setup(&ctx, setup_ecr_policies_shadow(&client)).await
+                        GROUP_ECR_POLICIES.run_setup(&ctx, setup_ecr_policies(&client)).await
                     })
                 }),
             );
@@ -171,11 +171,11 @@ impl ServiceGroup for ScenariosAuthoredEcrPolicies {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "ecr-policies-shadow".to_string(),
+                "ecr-policies".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_POLICIES_SHADOW.run_teardown(&ctx, teardown_ecr_policies_shadow(&client)).await
+                        GROUP_ECR_POLICIES.run_teardown(&ctx, teardown_ecr_policies(&client)).await
                     })
                 }),
             );
@@ -184,7 +184,7 @@ impl ServiceGroup for ScenariosAuthoredEcrPolicies {
     }
 }
 
-fn setup_ecr_policies_shadow(client: &aws_sdk_ecr::Client) -> Vec<Call> {
+fn setup_ecr_policies(client: &aws_sdk_ecr::Client) -> Vec<Call> {
     vec![
         Call {
             op: "CreateRepository",
@@ -229,7 +229,7 @@ fn setup_ecr_policies_shadow(client: &aws_sdk_ecr::Client) -> Vec<Call> {
     ]
 }
 
-fn teardown_ecr_policies_shadow(client: &aws_sdk_ecr::Client) -> Vec<Call> {
+fn teardown_ecr_policies(client: &aws_sdk_ecr::Client) -> Vec<Call> {
     vec![
         Call {
             op: "DeleteRepositoryPolicy",
@@ -322,7 +322,7 @@ fn teardown_ecr_policies_shadow(client: &aws_sdk_ecr::Client) -> Vec<Call> {
     ]
 }
 
-fn test_ecr_policies_shadow_put_lifecycle_policy(client: &aws_sdk_ecr::Client) -> Test {
+fn test_ecr_policies_put_lifecycle_policy(client: &aws_sdk_ecr::Client) -> Test {
     Test {
         call: Call {
             op: "PutLifecyclePolicy",
@@ -384,7 +384,7 @@ fn test_ecr_policies_shadow_put_lifecycle_policy(client: &aws_sdk_ecr::Client) -
     }
 }
 
-fn test_ecr_policies_shadow_get_lifecycle_policy(client: &aws_sdk_ecr::Client) -> Test {
+fn test_ecr_policies_get_lifecycle_policy(client: &aws_sdk_ecr::Client) -> Test {
     Test {
         call: Call {
             op: "GetLifecyclePolicy",
@@ -415,7 +415,7 @@ fn test_ecr_policies_shadow_get_lifecycle_policy(client: &aws_sdk_ecr::Client) -
     }
 }
 
-fn test_ecr_policies_shadow_delete_lifecycle_policy(client: &aws_sdk_ecr::Client) -> Test {
+fn test_ecr_policies_delete_lifecycle_policy(client: &aws_sdk_ecr::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteLifecyclePolicy",
@@ -470,7 +470,7 @@ fn test_ecr_policies_shadow_delete_lifecycle_policy(client: &aws_sdk_ecr::Client
     }
 }
 
-fn test_ecr_policies_shadow_get_lifecycle_policy_not_found(client: &aws_sdk_ecr::Client) -> Test {
+fn test_ecr_policies_get_lifecycle_policy_not_found(client: &aws_sdk_ecr::Client) -> Test {
     Test {
         call: Call {
             op: "GetLifecyclePolicy",
@@ -498,7 +498,7 @@ fn test_ecr_policies_shadow_get_lifecycle_policy_not_found(client: &aws_sdk_ecr:
     }
 }
 
-fn test_ecr_policies_shadow_set_repository_policy(client: &aws_sdk_ecr::Client) -> Test {
+fn test_ecr_policies_set_repository_policy(client: &aws_sdk_ecr::Client) -> Test {
     Test {
         call: Call {
             op: "SetRepositoryPolicy",
@@ -560,7 +560,7 @@ fn test_ecr_policies_shadow_set_repository_policy(client: &aws_sdk_ecr::Client) 
     }
 }
 
-fn test_ecr_policies_shadow_get_repository_policy(client: &aws_sdk_ecr::Client) -> Test {
+fn test_ecr_policies_get_repository_policy(client: &aws_sdk_ecr::Client) -> Test {
     Test {
         call: Call {
             op: "GetRepositoryPolicy",
@@ -591,7 +591,7 @@ fn test_ecr_policies_shadow_get_repository_policy(client: &aws_sdk_ecr::Client) 
     }
 }
 
-fn test_ecr_policies_shadow_delete_repository_policy(client: &aws_sdk_ecr::Client) -> Test {
+fn test_ecr_policies_delete_repository_policy(client: &aws_sdk_ecr::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteRepositoryPolicy",

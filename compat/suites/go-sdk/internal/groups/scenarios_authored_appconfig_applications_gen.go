@@ -23,19 +23,19 @@ func ScenariosAuthoredAppconfigApplications(c *clients.Clients) ServiceGroup {
 	return ServiceGroup{
 		Name: "scenarios/authored-appconfig-applications",
 		Impls: map[string]harness.TestFn{
-			"appconfig-applications-shadow:CreateApplication":            g.testAppconfigApplicationsShadowCreateApplication,
-			"appconfig-applications-shadow:GetApplication":               g.testAppconfigApplicationsShadowGetApplication,
-			"appconfig-applications-shadow:ListApplications":             g.testAppconfigApplicationsShadowListApplications,
-			"appconfig-applications-shadow:UpdateApplication":            g.testAppconfigApplicationsShadowUpdateApplication,
-			"appconfig-applications-shadow:DeleteApplication":            g.testAppconfigApplicationsShadowDeleteApplication,
-			"appconfig-applications-shadow:GetApplicationNotFound":       g.testAppconfigApplicationsShadowGetApplicationNotFound,
-			"appconfig-applications-shadow:ListApplicationsInvalidToken": g.testAppconfigApplicationsShadowListApplicationsInvalidToken,
+			"appconfig-applications:CreateApplication":            g.testAppconfigApplicationsCreateApplication,
+			"appconfig-applications:GetApplication":               g.testAppconfigApplicationsGetApplication,
+			"appconfig-applications:ListApplications":             g.testAppconfigApplicationsListApplications,
+			"appconfig-applications:UpdateApplication":            g.testAppconfigApplicationsUpdateApplication,
+			"appconfig-applications:DeleteApplication":            g.testAppconfigApplicationsDeleteApplication,
+			"appconfig-applications:GetApplicationNotFound":       g.testAppconfigApplicationsGetApplicationNotFound,
+			"appconfig-applications:ListApplicationsInvalidToken": g.testAppconfigApplicationsListApplicationsInvalidToken,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"appconfig-applications-shadow": g.setupAppconfigApplicationsShadow,
+			"appconfig-applications": g.setupAppconfigApplications,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"appconfig-applications-shadow": g.teardownAppconfigApplicationsShadow,
+			"appconfig-applications": g.teardownAppconfigApplications,
 		},
 	}
 }
@@ -55,15 +55,15 @@ func (g *authoredAppconfigApplicationsScenarios) cl() *appconfig.Client {
 	return g.client
 }
 
-var groupAppconfigApplicationsShadow = scenario.Group{Name: "appconfig-applications-shadow", File: "compat/model/authored/appconfig-applications.json"}
+var groupAppconfigApplications = scenario.Group{Name: "appconfig-applications", File: "compat/model/authored/appconfig-applications.json"}
 
-func (g *authoredAppconfigApplicationsScenarios) setupAppconfigApplicationsShadow(ctx context.Context, t *harness.TestContext) error {
+func (g *authoredAppconfigApplicationsScenarios) setupAppconfigApplications(ctx context.Context, t *harness.TestContext) error {
 	// No setup steps: an empty phase is a no-op, not a missing one.
-	return groupAppconfigApplicationsShadow.RunSetup(ctx, t)
+	return groupAppconfigApplications.RunSetup(ctx, t)
 }
 
-func (g *authoredAppconfigApplicationsScenarios) teardownAppconfigApplicationsShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigApplicationsShadow.RunTeardown(ctx, t,
+func (g *authoredAppconfigApplicationsScenarios) teardownAppconfigApplications(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigApplications.RunTeardown(ctx, t,
 		scenario.Call{
 			Op:     "DeleteApplication",
 			Params: `{"ApplicationId":{"$ref":"app.id"}}`,
@@ -79,8 +79,8 @@ func (g *authoredAppconfigApplicationsScenarios) teardownAppconfigApplicationsSh
 	)
 }
 
-func (g *authoredAppconfigApplicationsScenarios) testAppconfigApplicationsShadowCreateApplication(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigApplicationsShadow.RunTest(ctx, t, "CreateApplication", scenario.Test{
+func (g *authoredAppconfigApplicationsScenarios) testAppconfigApplicationsCreateApplication(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigApplications.RunTest(ctx, t, "CreateApplication", scenario.Test{
 		Call: scenario.Call{
 			Op:     "CreateApplication",
 			Params: `{"Description":"compat applications group","Name":{"$name":"app"}}`,
@@ -122,8 +122,8 @@ func (g *authoredAppconfigApplicationsScenarios) testAppconfigApplicationsShadow
 	})
 }
 
-func (g *authoredAppconfigApplicationsScenarios) testAppconfigApplicationsShadowGetApplication(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigApplicationsShadow.RunTest(ctx, t, "GetApplication", scenario.Test{
+func (g *authoredAppconfigApplicationsScenarios) testAppconfigApplicationsGetApplication(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigApplications.RunTest(ctx, t, "GetApplication", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetApplication",
 			Params: `{"ApplicationId":{"$ref":"app.id"}}`,
@@ -145,8 +145,8 @@ func (g *authoredAppconfigApplicationsScenarios) testAppconfigApplicationsShadow
 	})
 }
 
-func (g *authoredAppconfigApplicationsScenarios) testAppconfigApplicationsShadowListApplications(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigApplicationsShadow.RunTest(ctx, t, "ListApplications", scenario.Test{
+func (g *authoredAppconfigApplicationsScenarios) testAppconfigApplicationsListApplications(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigApplications.RunTest(ctx, t, "ListApplications", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListApplications",
 			Params: `{}`,
@@ -169,8 +169,8 @@ func (g *authoredAppconfigApplicationsScenarios) testAppconfigApplicationsShadow
 	})
 }
 
-func (g *authoredAppconfigApplicationsScenarios) testAppconfigApplicationsShadowUpdateApplication(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigApplicationsShadow.RunTest(ctx, t, "UpdateApplication", scenario.Test{
+func (g *authoredAppconfigApplicationsScenarios) testAppconfigApplicationsUpdateApplication(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigApplications.RunTest(ctx, t, "UpdateApplication", scenario.Test{
 		Call: scenario.Call{
 			Op:     "UpdateApplication",
 			Params: `{"ApplicationId":{"$ref":"app.id"},"Description":"updated by compat"}`,
@@ -208,8 +208,8 @@ func (g *authoredAppconfigApplicationsScenarios) testAppconfigApplicationsShadow
 	})
 }
 
-func (g *authoredAppconfigApplicationsScenarios) testAppconfigApplicationsShadowDeleteApplication(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigApplicationsShadow.RunTest(ctx, t, "DeleteApplication", scenario.Test{
+func (g *authoredAppconfigApplicationsScenarios) testAppconfigApplicationsDeleteApplication(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigApplications.RunTest(ctx, t, "DeleteApplication", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteApplication",
 			Params: `{"ApplicationId":{"$ref":"app.id"}}`,
@@ -257,8 +257,8 @@ func (g *authoredAppconfigApplicationsScenarios) testAppconfigApplicationsShadow
 	})
 }
 
-func (g *authoredAppconfigApplicationsScenarios) testAppconfigApplicationsShadowGetApplicationNotFound(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigApplicationsShadow.RunTest(ctx, t, "GetApplicationNotFound", scenario.Test{
+func (g *authoredAppconfigApplicationsScenarios) testAppconfigApplicationsGetApplicationNotFound(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigApplications.RunTest(ctx, t, "GetApplicationNotFound", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetApplication",
 			Params: `{"ApplicationId":"zzzzzzz"}`,
@@ -277,8 +277,8 @@ func (g *authoredAppconfigApplicationsScenarios) testAppconfigApplicationsShadow
 	})
 }
 
-func (g *authoredAppconfigApplicationsScenarios) testAppconfigApplicationsShadowListApplicationsInvalidToken(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigApplicationsShadow.RunTest(ctx, t, "ListApplicationsInvalidToken", scenario.Test{
+func (g *authoredAppconfigApplicationsScenarios) testAppconfigApplicationsListApplicationsInvalidToken(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigApplications.RunTest(ctx, t, "ListApplicationsInvalidToken", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListApplications",
 			Params: `{"MaxResults":1,"NextToken":"compat-not-a-real-token"}`,

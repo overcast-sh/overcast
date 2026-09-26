@@ -23,19 +23,19 @@ func ScenariosAuthoredAppconfigEnvironments(c *clients.Clients) ServiceGroup {
 	return ServiceGroup{
 		Name: "scenarios/authored-appconfig-environments",
 		Impls: map[string]harness.TestFn{
-			"appconfig-environments-shadow:CreateEnvironment":                   g.testAppconfigEnvironmentsShadowCreateEnvironment,
-			"appconfig-environments-shadow:GetEnvironment":                      g.testAppconfigEnvironmentsShadowGetEnvironment,
-			"appconfig-environments-shadow:ListEnvironments":                    g.testAppconfigEnvironmentsShadowListEnvironments,
-			"appconfig-environments-shadow:UpdateEnvironment":                   g.testAppconfigEnvironmentsShadowUpdateEnvironment,
-			"appconfig-environments-shadow:DeleteEnvironment":                   g.testAppconfigEnvironmentsShadowDeleteEnvironment,
-			"appconfig-environments-shadow:GetEnvironmentNotFound":              g.testAppconfigEnvironmentsShadowGetEnvironmentNotFound,
-			"appconfig-environments-shadow:ListEnvironmentsApplicationNotFound": g.testAppconfigEnvironmentsShadowListEnvironmentsApplicationNotFound,
+			"appconfig-environments:CreateEnvironment":                   g.testAppconfigEnvironmentsCreateEnvironment,
+			"appconfig-environments:GetEnvironment":                      g.testAppconfigEnvironmentsGetEnvironment,
+			"appconfig-environments:ListEnvironments":                    g.testAppconfigEnvironmentsListEnvironments,
+			"appconfig-environments:UpdateEnvironment":                   g.testAppconfigEnvironmentsUpdateEnvironment,
+			"appconfig-environments:DeleteEnvironment":                   g.testAppconfigEnvironmentsDeleteEnvironment,
+			"appconfig-environments:GetEnvironmentNotFound":              g.testAppconfigEnvironmentsGetEnvironmentNotFound,
+			"appconfig-environments:ListEnvironmentsApplicationNotFound": g.testAppconfigEnvironmentsListEnvironmentsApplicationNotFound,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"appconfig-environments-shadow": g.setupAppconfigEnvironmentsShadow,
+			"appconfig-environments": g.setupAppconfigEnvironments,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"appconfig-environments-shadow": g.teardownAppconfigEnvironmentsShadow,
+			"appconfig-environments": g.teardownAppconfigEnvironments,
 		},
 	}
 }
@@ -55,10 +55,10 @@ func (g *authoredAppconfigEnvironmentsScenarios) cl() *appconfig.Client {
 	return g.client
 }
 
-var groupAppconfigEnvironmentsShadow = scenario.Group{Name: "appconfig-environments-shadow", File: "compat/model/authored/appconfig-environments.json"}
+var groupAppconfigEnvironments = scenario.Group{Name: "appconfig-environments", File: "compat/model/authored/appconfig-environments.json"}
 
-func (g *authoredAppconfigEnvironmentsScenarios) setupAppconfigEnvironmentsShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigEnvironmentsShadow.RunSetup(ctx, t,
+func (g *authoredAppconfigEnvironmentsScenarios) setupAppconfigEnvironments(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigEnvironments.RunSetup(ctx, t,
 		scenario.Call{
 			Op:     "CreateApplication",
 			Params: `{"Name":{"$name":"app"}}`,
@@ -77,8 +77,8 @@ func (g *authoredAppconfigEnvironmentsScenarios) setupAppconfigEnvironmentsShado
 	)
 }
 
-func (g *authoredAppconfigEnvironmentsScenarios) teardownAppconfigEnvironmentsShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigEnvironmentsShadow.RunTeardown(ctx, t,
+func (g *authoredAppconfigEnvironmentsScenarios) teardownAppconfigEnvironments(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigEnvironments.RunTeardown(ctx, t,
 		scenario.Call{
 			Op:     "DeleteEnvironment",
 			Params: `{"ApplicationId":{"$ref":"app.id"},"EnvironmentId":{"$ref":"env.id"}}`,
@@ -107,8 +107,8 @@ func (g *authoredAppconfigEnvironmentsScenarios) teardownAppconfigEnvironmentsSh
 	)
 }
 
-func (g *authoredAppconfigEnvironmentsScenarios) testAppconfigEnvironmentsShadowCreateEnvironment(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigEnvironmentsShadow.RunTest(ctx, t, "CreateEnvironment", scenario.Test{
+func (g *authoredAppconfigEnvironmentsScenarios) testAppconfigEnvironmentsCreateEnvironment(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigEnvironments.RunTest(ctx, t, "CreateEnvironment", scenario.Test{
 		Call: scenario.Call{
 			Op:     "CreateEnvironment",
 			Params: `{"ApplicationId":{"$ref":"app.id"},"Description":"compat environments group","Name":{"$name":"env"}}`,
@@ -153,8 +153,8 @@ func (g *authoredAppconfigEnvironmentsScenarios) testAppconfigEnvironmentsShadow
 	})
 }
 
-func (g *authoredAppconfigEnvironmentsScenarios) testAppconfigEnvironmentsShadowGetEnvironment(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigEnvironmentsShadow.RunTest(ctx, t, "GetEnvironment", scenario.Test{
+func (g *authoredAppconfigEnvironmentsScenarios) testAppconfigEnvironmentsGetEnvironment(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigEnvironments.RunTest(ctx, t, "GetEnvironment", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetEnvironment",
 			Params: `{"ApplicationId":{"$ref":"app.id"},"EnvironmentId":{"$ref":"env.id"}}`,
@@ -177,8 +177,8 @@ func (g *authoredAppconfigEnvironmentsScenarios) testAppconfigEnvironmentsShadow
 	})
 }
 
-func (g *authoredAppconfigEnvironmentsScenarios) testAppconfigEnvironmentsShadowListEnvironments(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigEnvironmentsShadow.RunTest(ctx, t, "ListEnvironments", scenario.Test{
+func (g *authoredAppconfigEnvironmentsScenarios) testAppconfigEnvironmentsListEnvironments(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigEnvironments.RunTest(ctx, t, "ListEnvironments", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListEnvironments",
 			Params: `{"ApplicationId":{"$ref":"app.id"}}`,
@@ -202,8 +202,8 @@ func (g *authoredAppconfigEnvironmentsScenarios) testAppconfigEnvironmentsShadow
 	})
 }
 
-func (g *authoredAppconfigEnvironmentsScenarios) testAppconfigEnvironmentsShadowUpdateEnvironment(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigEnvironmentsShadow.RunTest(ctx, t, "UpdateEnvironment", scenario.Test{
+func (g *authoredAppconfigEnvironmentsScenarios) testAppconfigEnvironmentsUpdateEnvironment(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigEnvironments.RunTest(ctx, t, "UpdateEnvironment", scenario.Test{
 		Call: scenario.Call{
 			Op:     "UpdateEnvironment",
 			Params: `{"ApplicationId":{"$ref":"app.id"},"Description":"updated by compat","EnvironmentId":{"$ref":"env.id"}}`,
@@ -243,8 +243,8 @@ func (g *authoredAppconfigEnvironmentsScenarios) testAppconfigEnvironmentsShadow
 	})
 }
 
-func (g *authoredAppconfigEnvironmentsScenarios) testAppconfigEnvironmentsShadowDeleteEnvironment(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigEnvironmentsShadow.RunTest(ctx, t, "DeleteEnvironment", scenario.Test{
+func (g *authoredAppconfigEnvironmentsScenarios) testAppconfigEnvironmentsDeleteEnvironment(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigEnvironments.RunTest(ctx, t, "DeleteEnvironment", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteEnvironment",
 			Params: `{"ApplicationId":{"$ref":"app.id"},"EnvironmentId":{"$ref":"env.id"}}`,
@@ -295,8 +295,8 @@ func (g *authoredAppconfigEnvironmentsScenarios) testAppconfigEnvironmentsShadow
 	})
 }
 
-func (g *authoredAppconfigEnvironmentsScenarios) testAppconfigEnvironmentsShadowGetEnvironmentNotFound(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigEnvironmentsShadow.RunTest(ctx, t, "GetEnvironmentNotFound", scenario.Test{
+func (g *authoredAppconfigEnvironmentsScenarios) testAppconfigEnvironmentsGetEnvironmentNotFound(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigEnvironments.RunTest(ctx, t, "GetEnvironmentNotFound", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetEnvironment",
 			Params: `{"ApplicationId":{"$ref":"app.id"},"EnvironmentId":"zzzzzzz"}`,
@@ -316,8 +316,8 @@ func (g *authoredAppconfigEnvironmentsScenarios) testAppconfigEnvironmentsShadow
 	})
 }
 
-func (g *authoredAppconfigEnvironmentsScenarios) testAppconfigEnvironmentsShadowListEnvironmentsApplicationNotFound(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigEnvironmentsShadow.RunTest(ctx, t, "ListEnvironmentsApplicationNotFound", scenario.Test{
+func (g *authoredAppconfigEnvironmentsScenarios) testAppconfigEnvironmentsListEnvironmentsApplicationNotFound(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigEnvironments.RunTest(ctx, t, "ListEnvironmentsApplicationNotFound", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListEnvironments",
 			Params: `{"ApplicationId":"zzzzzzz"}`,

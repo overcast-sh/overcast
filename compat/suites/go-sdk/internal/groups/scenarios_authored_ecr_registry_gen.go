@@ -22,14 +22,14 @@ func ScenariosAuthoredEcrRegistry(c *clients.Clients) ServiceGroup {
 	return ServiceGroup{
 		Name: "scenarios/authored-ecr-registry",
 		Impls: map[string]harness.TestFn{
-			"ecr-registry-shadow:GetAuthorizationToken": g.testEcrRegistryShadowGetAuthorizationToken,
-			"ecr-registry-shadow:DescribeRegistry":      g.testEcrRegistryShadowDescribeRegistry,
+			"ecr-registry:GetAuthorizationToken": g.testEcrRegistryGetAuthorizationToken,
+			"ecr-registry:DescribeRegistry":      g.testEcrRegistryDescribeRegistry,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"ecr-registry-shadow": g.setupEcrRegistryShadow,
+			"ecr-registry": g.setupEcrRegistry,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"ecr-registry-shadow": g.teardownEcrRegistryShadow,
+			"ecr-registry": g.teardownEcrRegistry,
 		},
 	}
 }
@@ -49,20 +49,20 @@ func (g *authoredEcrRegistryScenarios) cl() *ecr.Client {
 	return g.client
 }
 
-var groupEcrRegistryShadow = scenario.Group{Name: "ecr-registry-shadow", File: "compat/model/authored/ecr-registry.json"}
+var groupEcrRegistry = scenario.Group{Name: "ecr-registry", File: "compat/model/authored/ecr-registry.json"}
 
-func (g *authoredEcrRegistryScenarios) setupEcrRegistryShadow(ctx context.Context, t *harness.TestContext) error {
+func (g *authoredEcrRegistryScenarios) setupEcrRegistry(ctx context.Context, t *harness.TestContext) error {
 	// No setup steps: an empty phase is a no-op, not a missing one.
-	return groupEcrRegistryShadow.RunSetup(ctx, t)
+	return groupEcrRegistry.RunSetup(ctx, t)
 }
 
-func (g *authoredEcrRegistryScenarios) teardownEcrRegistryShadow(ctx context.Context, t *harness.TestContext) error {
+func (g *authoredEcrRegistryScenarios) teardownEcrRegistry(ctx context.Context, t *harness.TestContext) error {
 	// No teardown steps: an empty phase is a no-op, not a missing one.
-	return groupEcrRegistryShadow.RunTeardown(ctx, t)
+	return groupEcrRegistry.RunTeardown(ctx, t)
 }
 
-func (g *authoredEcrRegistryScenarios) testEcrRegistryShadowGetAuthorizationToken(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrRegistryShadow.RunTest(ctx, t, "GetAuthorizationToken", scenario.Test{
+func (g *authoredEcrRegistryScenarios) testEcrRegistryGetAuthorizationToken(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrRegistry.RunTest(ctx, t, "GetAuthorizationToken", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetAuthorizationToken",
 			Params: `{}`,
@@ -84,8 +84,8 @@ func (g *authoredEcrRegistryScenarios) testEcrRegistryShadowGetAuthorizationToke
 	})
 }
 
-func (g *authoredEcrRegistryScenarios) testEcrRegistryShadowDescribeRegistry(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrRegistryShadow.RunTest(ctx, t, "DescribeRegistry", scenario.Test{
+func (g *authoredEcrRegistryScenarios) testEcrRegistryDescribeRegistry(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrRegistry.RunTest(ctx, t, "DescribeRegistry", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DescribeRegistry",
 			Params: `{}`,

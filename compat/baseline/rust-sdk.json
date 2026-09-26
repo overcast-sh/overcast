@@ -181,7 +181,7 @@
       "service": "appconfig",
       "group": "appconfig-configuration-profiles",
       "test": "UpdateConfigurationProfile",
-      "status": "skip"
+      "status": "unimplemented"
     },
     {
       "suite": "rust-sdk",
@@ -223,28 +223,28 @@
       "service": "appconfig",
       "group": "appconfig-deployments",
       "test": "GetDeployment",
-      "status": "skip"
+      "status": "unimplemented"
     },
     {
       "suite": "rust-sdk",
       "service": "appconfig",
       "group": "appconfig-deployments",
       "test": "ListDeployments",
-      "status": "skip"
+      "status": "unimplemented"
     },
     {
       "suite": "rust-sdk",
       "service": "appconfig",
       "group": "appconfig-deployments",
       "test": "StartDeployment",
-      "status": "skip"
+      "status": "unimplemented"
     },
     {
       "suite": "rust-sdk",
       "service": "appconfig",
       "group": "appconfig-deployments",
       "test": "StopDeployment",
-      "status": "skip"
+      "status": "unimplemented"
     },
     {
       "suite": "rust-sdk",
@@ -293,7 +293,7 @@
       "service": "appconfig",
       "group": "appconfig-environments",
       "test": "UpdateEnvironment",
-      "status": "skip"
+      "status": "unimplemented"
     },
     {
       "suite": "rust-sdk",

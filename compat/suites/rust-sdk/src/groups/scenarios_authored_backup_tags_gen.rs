@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/backup-tags.json";
 
-const GROUP_BACKUP_TAGS_SHADOW: Group = Group {
-    name: "backup-tags-shadow",
+const GROUP_BACKUP_TAGS: Group = Group {
+    name: "backup-tags",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredBackupTags {
         {
             let client = self.client.clone();
             impls.insert(
-                "backup-tags-shadow:TagResource".to_string(),
+                "backup-tags:TagResource".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_TAGS_SHADOW
-                            .run_test(&ctx, "TagResource", test_backup_tags_shadow_tag_resource(&client))
+                        GROUP_BACKUP_TAGS
+                            .run_test(&ctx, "TagResource", test_backup_tags_tag_resource(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredBackupTags {
         {
             let client = self.client.clone();
             impls.insert(
-                "backup-tags-shadow:ListTags".to_string(),
+                "backup-tags:ListTags".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_TAGS_SHADOW
-                            .run_test(&ctx, "ListTags", test_backup_tags_shadow_list_tags(&client))
+                        GROUP_BACKUP_TAGS
+                            .run_test(&ctx, "ListTags", test_backup_tags_list_tags(&client))
                             .await
                     })
                 }),
@@ -79,12 +79,12 @@ impl ServiceGroup for ScenariosAuthoredBackupTags {
         {
             let client = self.client.clone();
             impls.insert(
-                "backup-tags-shadow:UntagResource".to_string(),
+                "backup-tags:UntagResource".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_TAGS_SHADOW
-                            .run_test(&ctx, "UntagResource", test_backup_tags_shadow_untag_resource(&client))
+                        GROUP_BACKUP_TAGS
+                            .run_test(&ctx, "UntagResource", test_backup_tags_untag_resource(&client))
                             .await
                     })
                 }),
@@ -98,11 +98,11 @@ impl ServiceGroup for ScenariosAuthoredBackupTags {
         {
             let client = self.client.clone();
             setups.insert(
-                "backup-tags-shadow".to_string(),
+                "backup-tags".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_TAGS_SHADOW.run_setup(&ctx, setup_backup_tags_shadow(&client)).await
+                        GROUP_BACKUP_TAGS.run_setup(&ctx, setup_backup_tags(&client)).await
                     })
                 }),
             );
@@ -115,11 +115,11 @@ impl ServiceGroup for ScenariosAuthoredBackupTags {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "backup-tags-shadow".to_string(),
+                "backup-tags".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_TAGS_SHADOW.run_teardown(&ctx, teardown_backup_tags_shadow(&client)).await
+                        GROUP_BACKUP_TAGS.run_teardown(&ctx, teardown_backup_tags(&client)).await
                     })
                 }),
             );
@@ -128,7 +128,7 @@ impl ServiceGroup for ScenariosAuthoredBackupTags {
     }
 }
 
-fn setup_backup_tags_shadow(client: &aws_sdk_backup::Client) -> Vec<Call> {
+fn setup_backup_tags(client: &aws_sdk_backup::Client) -> Vec<Call> {
     vec![
         Call {
             op: "CreateBackupVault",
@@ -157,7 +157,7 @@ fn setup_backup_tags_shadow(client: &aws_sdk_backup::Client) -> Vec<Call> {
     ]
 }
 
-fn teardown_backup_tags_shadow(client: &aws_sdk_backup::Client) -> Vec<Call> {
+fn teardown_backup_tags(client: &aws_sdk_backup::Client) -> Vec<Call> {
     vec![
         Call {
             op: "UntagResource",
@@ -208,7 +208,7 @@ fn teardown_backup_tags_shadow(client: &aws_sdk_backup::Client) -> Vec<Call> {
     ]
 }
 
-fn test_backup_tags_shadow_tag_resource(client: &aws_sdk_backup::Client) -> Test {
+fn test_backup_tags_tag_resource(client: &aws_sdk_backup::Client) -> Test {
     Test {
         call: Call {
             op: "TagResource",
@@ -266,7 +266,7 @@ fn test_backup_tags_shadow_tag_resource(client: &aws_sdk_backup::Client) -> Test
     }
 }
 
-fn test_backup_tags_shadow_list_tags(client: &aws_sdk_backup::Client) -> Test {
+fn test_backup_tags_list_tags(client: &aws_sdk_backup::Client) -> Test {
     Test {
         call: Call {
             op: "ListTags",
@@ -298,7 +298,7 @@ fn test_backup_tags_shadow_list_tags(client: &aws_sdk_backup::Client) -> Test {
     }
 }
 
-fn test_backup_tags_shadow_untag_resource(client: &aws_sdk_backup::Client) -> Test {
+fn test_backup_tags_untag_resource(client: &aws_sdk_backup::Client) -> Test {
     Test {
         call: Call {
             op: "UntagResource",

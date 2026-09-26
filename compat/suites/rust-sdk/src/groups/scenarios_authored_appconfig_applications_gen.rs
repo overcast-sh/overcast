@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/appconfig-applications.json";
 
-const GROUP_APPCONFIG_APPLICATIONS_SHADOW: Group = Group {
-    name: "appconfig-applications-shadow",
+const GROUP_APPCONFIG_APPLICATIONS: Group = Group {
+    name: "appconfig-applications",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigApplications {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-applications-shadow:CreateApplication".to_string(),
+                "appconfig-applications:CreateApplication".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_APPLICATIONS_SHADOW
-                            .run_test(&ctx, "CreateApplication", test_appconfig_applications_shadow_create_application(&client))
+                        GROUP_APPCONFIG_APPLICATIONS
+                            .run_test(&ctx, "CreateApplication", test_appconfig_applications_create_application(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigApplications {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-applications-shadow:GetApplication".to_string(),
+                "appconfig-applications:GetApplication".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_APPLICATIONS_SHADOW
-                            .run_test(&ctx, "GetApplication", test_appconfig_applications_shadow_get_application(&client))
+                        GROUP_APPCONFIG_APPLICATIONS
+                            .run_test(&ctx, "GetApplication", test_appconfig_applications_get_application(&client))
                             .await
                     })
                 }),
@@ -79,12 +79,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigApplications {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-applications-shadow:ListApplications".to_string(),
+                "appconfig-applications:ListApplications".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_APPLICATIONS_SHADOW
-                            .run_test(&ctx, "ListApplications", test_appconfig_applications_shadow_list_applications(&client))
+                        GROUP_APPCONFIG_APPLICATIONS
+                            .run_test(&ctx, "ListApplications", test_appconfig_applications_list_applications(&client))
                             .await
                     })
                 }),
@@ -93,12 +93,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigApplications {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-applications-shadow:UpdateApplication".to_string(),
+                "appconfig-applications:UpdateApplication".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_APPLICATIONS_SHADOW
-                            .run_test(&ctx, "UpdateApplication", test_appconfig_applications_shadow_update_application(&client))
+                        GROUP_APPCONFIG_APPLICATIONS
+                            .run_test(&ctx, "UpdateApplication", test_appconfig_applications_update_application(&client))
                             .await
                     })
                 }),
@@ -107,12 +107,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigApplications {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-applications-shadow:DeleteApplication".to_string(),
+                "appconfig-applications:DeleteApplication".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_APPLICATIONS_SHADOW
-                            .run_test(&ctx, "DeleteApplication", test_appconfig_applications_shadow_delete_application(&client))
+                        GROUP_APPCONFIG_APPLICATIONS
+                            .run_test(&ctx, "DeleteApplication", test_appconfig_applications_delete_application(&client))
                             .await
                     })
                 }),
@@ -121,12 +121,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigApplications {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-applications-shadow:GetApplicationNotFound".to_string(),
+                "appconfig-applications:GetApplicationNotFound".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_APPLICATIONS_SHADOW
-                            .run_test(&ctx, "GetApplicationNotFound", test_appconfig_applications_shadow_get_application_not_found(&client))
+                        GROUP_APPCONFIG_APPLICATIONS
+                            .run_test(&ctx, "GetApplicationNotFound", test_appconfig_applications_get_application_not_found(&client))
                             .await
                     })
                 }),
@@ -135,12 +135,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigApplications {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-applications-shadow:ListApplicationsInvalidToken".to_string(),
+                "appconfig-applications:ListApplicationsInvalidToken".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_APPLICATIONS_SHADOW
-                            .run_test(&ctx, "ListApplicationsInvalidToken", test_appconfig_applications_shadow_list_applications_invalid_token(&client))
+                        GROUP_APPCONFIG_APPLICATIONS
+                            .run_test(&ctx, "ListApplicationsInvalidToken", test_appconfig_applications_list_applications_invalid_token(&client))
                             .await
                     })
                 }),
@@ -154,11 +154,11 @@ impl ServiceGroup for ScenariosAuthoredAppconfigApplications {
         {
             let client = self.client.clone();
             setups.insert(
-                "appconfig-applications-shadow".to_string(),
+                "appconfig-applications".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_APPLICATIONS_SHADOW.run_setup(&ctx, setup_appconfig_applications_shadow(&client)).await
+                        GROUP_APPCONFIG_APPLICATIONS.run_setup(&ctx, setup_appconfig_applications(&client)).await
                     })
                 }),
             );
@@ -171,11 +171,11 @@ impl ServiceGroup for ScenariosAuthoredAppconfigApplications {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "appconfig-applications-shadow".to_string(),
+                "appconfig-applications".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_APPLICATIONS_SHADOW.run_teardown(&ctx, teardown_appconfig_applications_shadow(&client)).await
+                        GROUP_APPCONFIG_APPLICATIONS.run_teardown(&ctx, teardown_appconfig_applications(&client)).await
                     })
                 }),
             );
@@ -184,12 +184,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigApplications {
     }
 }
 
-fn setup_appconfig_applications_shadow(_client: &aws_sdk_appconfig::Client) -> Vec<Call> {
+fn setup_appconfig_applications(_client: &aws_sdk_appconfig::Client) -> Vec<Call> {
     // An empty phase is a no-op, not a missing one.
     Vec::new()
 }
 
-fn teardown_appconfig_applications_shadow(client: &aws_sdk_appconfig::Client) -> Vec<Call> {
+fn teardown_appconfig_applications(client: &aws_sdk_appconfig::Client) -> Vec<Call> {
     vec![
         Call {
             op: "DeleteApplication",
@@ -216,7 +216,7 @@ fn teardown_appconfig_applications_shadow(client: &aws_sdk_appconfig::Client) ->
     ]
 }
 
-fn test_appconfig_applications_shadow_create_application(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_applications_create_application(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "CreateApplication",
@@ -281,7 +281,7 @@ fn test_appconfig_applications_shadow_create_application(client: &aws_sdk_appcon
     }
 }
 
-fn test_appconfig_applications_shadow_get_application(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_applications_get_application(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "GetApplication",
@@ -314,7 +314,7 @@ fn test_appconfig_applications_shadow_get_application(client: &aws_sdk_appconfig
     }
 }
 
-fn test_appconfig_applications_shadow_list_applications(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_applications_list_applications(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "ListApplications",
@@ -348,7 +348,7 @@ fn test_appconfig_applications_shadow_list_applications(client: &aws_sdk_appconf
     }
 }
 
-fn test_appconfig_applications_shadow_update_application(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_applications_update_application(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "UpdateApplication",
@@ -410,7 +410,7 @@ fn test_appconfig_applications_shadow_update_application(client: &aws_sdk_appcon
     }
 }
 
-fn test_appconfig_applications_shadow_delete_application(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_applications_delete_application(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteApplication",
@@ -489,7 +489,7 @@ fn test_appconfig_applications_shadow_delete_application(client: &aws_sdk_appcon
     }
 }
 
-fn test_appconfig_applications_shadow_get_application_not_found(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_applications_get_application_not_found(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "GetApplication",
@@ -517,7 +517,7 @@ fn test_appconfig_applications_shadow_get_application_not_found(client: &aws_sdk
     }
 }
 
-fn test_appconfig_applications_shadow_list_applications_invalid_token(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_applications_list_applications_invalid_token(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "ListApplications",

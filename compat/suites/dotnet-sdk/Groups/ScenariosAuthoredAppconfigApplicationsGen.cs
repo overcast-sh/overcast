@@ -15,7 +15,7 @@ namespace OvercastCompat.Groups;
 /// </remarks>
 internal sealed class ScenariosAuthoredAppconfigApplications : IServiceGroup
 {
-    private static readonly ScenarioGroup GroupAppconfigApplicationsShadow = new("appconfig-applications-shadow", "compat/model/authored/appconfig-applications.json");
+    private static readonly ScenarioGroup GroupAppconfigApplications = new("appconfig-applications", "compat/model/authored/appconfig-applications.json");
 
     private readonly Lazy<AmazonAppConfigClient> _client;
 
@@ -35,33 +35,33 @@ internal sealed class ScenariosAuthoredAppconfigApplications : IServiceGroup
 
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["appconfig-applications-shadow:CreateApplication"] = TestAppconfigApplicationsShadowCreateApplication,
-        ["appconfig-applications-shadow:GetApplication"] = TestAppconfigApplicationsShadowGetApplication,
-        ["appconfig-applications-shadow:ListApplications"] = TestAppconfigApplicationsShadowListApplications,
-        ["appconfig-applications-shadow:UpdateApplication"] = TestAppconfigApplicationsShadowUpdateApplication,
-        ["appconfig-applications-shadow:DeleteApplication"] = TestAppconfigApplicationsShadowDeleteApplication,
-        ["appconfig-applications-shadow:GetApplicationNotFound"] = TestAppconfigApplicationsShadowGetApplicationNotFound,
-        ["appconfig-applications-shadow:ListApplicationsInvalidToken"] = TestAppconfigApplicationsShadowListApplicationsInvalidToken,
+        ["appconfig-applications:CreateApplication"] = TestAppconfigApplicationsCreateApplication,
+        ["appconfig-applications:GetApplication"] = TestAppconfigApplicationsGetApplication,
+        ["appconfig-applications:ListApplications"] = TestAppconfigApplicationsListApplications,
+        ["appconfig-applications:UpdateApplication"] = TestAppconfigApplicationsUpdateApplication,
+        ["appconfig-applications:DeleteApplication"] = TestAppconfigApplicationsDeleteApplication,
+        ["appconfig-applications:GetApplicationNotFound"] = TestAppconfigApplicationsGetApplicationNotFound,
+        ["appconfig-applications:ListApplicationsInvalidToken"] = TestAppconfigApplicationsListApplicationsInvalidToken,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["appconfig-applications-shadow"] = SetupAppconfigApplicationsShadow,
+        ["appconfig-applications"] = SetupAppconfigApplications,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["appconfig-applications-shadow"] = TeardownAppconfigApplicationsShadow,
+        ["appconfig-applications"] = TeardownAppconfigApplications,
     };
 
     private AmazonAppConfigClient Cl() => _client.Value;
 
-    private Task SetupAppconfigApplicationsShadow(TestContext t) =>
+    private Task SetupAppconfigApplications(TestContext t) =>
         // No setup steps: an empty phase is a no-op, not a missing one.
-        GroupAppconfigApplicationsShadow.RunSetupAsync(t);
+        GroupAppconfigApplications.RunSetupAsync(t);
 
-    private Task TeardownAppconfigApplicationsShadow(TestContext t) =>
-        GroupAppconfigApplicationsShadow.RunTeardownAsync(t,
+    private Task TeardownAppconfigApplications(TestContext t) =>
+        GroupAppconfigApplications.RunTeardownAsync(t,
             new ScenarioCall
             {
                 Op = "DeleteApplication",
@@ -77,7 +77,7 @@ internal sealed class ScenariosAuthoredAppconfigApplications : IServiceGroup
             }
         );
 
-    private Task TestAppconfigApplicationsShadowCreateApplication(TestContext t) => GroupAppconfigApplicationsShadow.RunTestAsync(t, "CreateApplication", new ScenarioTest
+    private Task TestAppconfigApplicationsCreateApplication(TestContext t) => GroupAppconfigApplications.RunTestAsync(t, "CreateApplication", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -123,7 +123,7 @@ internal sealed class ScenariosAuthoredAppconfigApplications : IServiceGroup
         ],
     });
 
-    private Task TestAppconfigApplicationsShadowGetApplication(TestContext t) => GroupAppconfigApplicationsShadow.RunTestAsync(t, "GetApplication", new ScenarioTest
+    private Task TestAppconfigApplicationsGetApplication(TestContext t) => GroupAppconfigApplications.RunTestAsync(t, "GetApplication", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -147,7 +147,7 @@ internal sealed class ScenariosAuthoredAppconfigApplications : IServiceGroup
         ],
     });
 
-    private Task TestAppconfigApplicationsShadowListApplications(TestContext t) => GroupAppconfigApplicationsShadow.RunTestAsync(t, "ListApplications", new ScenarioTest
+    private Task TestAppconfigApplicationsListApplications(TestContext t) => GroupAppconfigApplications.RunTestAsync(t, "ListApplications", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -172,7 +172,7 @@ internal sealed class ScenariosAuthoredAppconfigApplications : IServiceGroup
         ],
     });
 
-    private Task TestAppconfigApplicationsShadowUpdateApplication(TestContext t) => GroupAppconfigApplicationsShadow.RunTestAsync(t, "UpdateApplication", new ScenarioTest
+    private Task TestAppconfigApplicationsUpdateApplication(TestContext t) => GroupAppconfigApplications.RunTestAsync(t, "UpdateApplication", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -213,7 +213,7 @@ internal sealed class ScenariosAuthoredAppconfigApplications : IServiceGroup
         ],
     });
 
-    private Task TestAppconfigApplicationsShadowDeleteApplication(TestContext t) => GroupAppconfigApplicationsShadow.RunTestAsync(t, "DeleteApplication", new ScenarioTest
+    private Task TestAppconfigApplicationsDeleteApplication(TestContext t) => GroupAppconfigApplications.RunTestAsync(t, "DeleteApplication", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -264,7 +264,7 @@ internal sealed class ScenariosAuthoredAppconfigApplications : IServiceGroup
         ],
     });
 
-    private Task TestAppconfigApplicationsShadowGetApplicationNotFound(TestContext t) => GroupAppconfigApplicationsShadow.RunTestAsync(t, "GetApplicationNotFound", new ScenarioTest
+    private Task TestAppconfigApplicationsGetApplicationNotFound(TestContext t) => GroupAppconfigApplications.RunTestAsync(t, "GetApplicationNotFound", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -285,7 +285,7 @@ internal sealed class ScenariosAuthoredAppconfigApplications : IServiceGroup
         ],
     });
 
-    private Task TestAppconfigApplicationsShadowListApplicationsInvalidToken(TestContext t) => GroupAppconfigApplicationsShadow.RunTestAsync(t, "ListApplicationsInvalidToken", new ScenarioTest
+    private Task TestAppconfigApplicationsListApplicationsInvalidToken(TestContext t) => GroupAppconfigApplications.RunTestAsync(t, "ListApplicationsInvalidToken", new ScenarioTest
     {
         Call = new ScenarioCall
         {

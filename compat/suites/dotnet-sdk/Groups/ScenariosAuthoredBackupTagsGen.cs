@@ -15,7 +15,7 @@ namespace OvercastCompat.Groups;
 /// </remarks>
 internal sealed class ScenariosAuthoredBackupTags : IServiceGroup
 {
-    private static readonly ScenarioGroup GroupBackupTagsShadow = new("backup-tags-shadow", "compat/model/authored/backup-tags.json");
+    private static readonly ScenarioGroup GroupBackupTags = new("backup-tags", "compat/model/authored/backup-tags.json");
 
     private readonly Lazy<AmazonBackupClient> _client;
 
@@ -35,25 +35,25 @@ internal sealed class ScenariosAuthoredBackupTags : IServiceGroup
 
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["backup-tags-shadow:TagResource"] = TestBackupTagsShadowTagResource,
-        ["backup-tags-shadow:ListTags"] = TestBackupTagsShadowListTags,
-        ["backup-tags-shadow:UntagResource"] = TestBackupTagsShadowUntagResource,
+        ["backup-tags:TagResource"] = TestBackupTagsTagResource,
+        ["backup-tags:ListTags"] = TestBackupTagsListTags,
+        ["backup-tags:UntagResource"] = TestBackupTagsUntagResource,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["backup-tags-shadow"] = SetupBackupTagsShadow,
+        ["backup-tags"] = SetupBackupTags,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["backup-tags-shadow"] = TeardownBackupTagsShadow,
+        ["backup-tags"] = TeardownBackupTags,
     };
 
     private AmazonBackupClient Cl() => _client.Value;
 
-    private Task SetupBackupTagsShadow(TestContext t) =>
-        GroupBackupTagsShadow.RunSetupAsync(t,
+    private Task SetupBackupTags(TestContext t) =>
+        GroupBackupTags.RunSetupAsync(t,
             new ScenarioCall
             {
                 Op = "CreateBackupVault",
@@ -73,8 +73,8 @@ internal sealed class ScenariosAuthoredBackupTags : IServiceGroup
             }
         );
 
-    private Task TeardownBackupTagsShadow(TestContext t) =>
-        GroupBackupTagsShadow.RunTeardownAsync(t,
+    private Task TeardownBackupTags(TestContext t) =>
+        GroupBackupTags.RunTeardownAsync(t,
             new ScenarioCall
             {
                 Op = "UntagResource",
@@ -104,7 +104,7 @@ internal sealed class ScenariosAuthoredBackupTags : IServiceGroup
             }
         );
 
-    private Task TestBackupTagsShadowTagResource(TestContext t) => GroupBackupTagsShadow.RunTestAsync(t, "TagResource", new ScenarioTest
+    private Task TestBackupTagsTagResource(TestContext t) => GroupBackupTags.RunTestAsync(t, "TagResource", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -144,7 +144,7 @@ internal sealed class ScenariosAuthoredBackupTags : IServiceGroup
         ],
     });
 
-    private Task TestBackupTagsShadowListTags(TestContext t) => GroupBackupTagsShadow.RunTestAsync(t, "ListTags", new ScenarioTest
+    private Task TestBackupTagsListTags(TestContext t) => GroupBackupTags.RunTestAsync(t, "ListTags", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -167,7 +167,7 @@ internal sealed class ScenariosAuthoredBackupTags : IServiceGroup
         ],
     });
 
-    private Task TestBackupTagsShadowUntagResource(TestContext t) => GroupBackupTagsShadow.RunTestAsync(t, "UntagResource", new ScenarioTest
+    private Task TestBackupTagsUntagResource(TestContext t) => GroupBackupTags.RunTestAsync(t, "UntagResource", new ScenarioTest
     {
         Call = new ScenarioCall
         {

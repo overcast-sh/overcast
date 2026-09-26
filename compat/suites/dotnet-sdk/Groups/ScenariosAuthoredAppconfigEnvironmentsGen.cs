@@ -15,7 +15,7 @@ namespace OvercastCompat.Groups;
 /// </remarks>
 internal sealed class ScenariosAuthoredAppconfigEnvironments : IServiceGroup
 {
-    private static readonly ScenarioGroup GroupAppconfigEnvironmentsShadow = new("appconfig-environments-shadow", "compat/model/authored/appconfig-environments.json");
+    private static readonly ScenarioGroup GroupAppconfigEnvironments = new("appconfig-environments", "compat/model/authored/appconfig-environments.json");
 
     private readonly Lazy<AmazonAppConfigClient> _client;
 
@@ -35,29 +35,29 @@ internal sealed class ScenariosAuthoredAppconfigEnvironments : IServiceGroup
 
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["appconfig-environments-shadow:CreateEnvironment"] = TestAppconfigEnvironmentsShadowCreateEnvironment,
-        ["appconfig-environments-shadow:GetEnvironment"] = TestAppconfigEnvironmentsShadowGetEnvironment,
-        ["appconfig-environments-shadow:ListEnvironments"] = TestAppconfigEnvironmentsShadowListEnvironments,
-        ["appconfig-environments-shadow:UpdateEnvironment"] = TestAppconfigEnvironmentsShadowUpdateEnvironment,
-        ["appconfig-environments-shadow:DeleteEnvironment"] = TestAppconfigEnvironmentsShadowDeleteEnvironment,
-        ["appconfig-environments-shadow:GetEnvironmentNotFound"] = TestAppconfigEnvironmentsShadowGetEnvironmentNotFound,
-        ["appconfig-environments-shadow:ListEnvironmentsApplicationNotFound"] = TestAppconfigEnvironmentsShadowListEnvironmentsApplicationNotFound,
+        ["appconfig-environments:CreateEnvironment"] = TestAppconfigEnvironmentsCreateEnvironment,
+        ["appconfig-environments:GetEnvironment"] = TestAppconfigEnvironmentsGetEnvironment,
+        ["appconfig-environments:ListEnvironments"] = TestAppconfigEnvironmentsListEnvironments,
+        ["appconfig-environments:UpdateEnvironment"] = TestAppconfigEnvironmentsUpdateEnvironment,
+        ["appconfig-environments:DeleteEnvironment"] = TestAppconfigEnvironmentsDeleteEnvironment,
+        ["appconfig-environments:GetEnvironmentNotFound"] = TestAppconfigEnvironmentsGetEnvironmentNotFound,
+        ["appconfig-environments:ListEnvironmentsApplicationNotFound"] = TestAppconfigEnvironmentsListEnvironmentsApplicationNotFound,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["appconfig-environments-shadow"] = SetupAppconfigEnvironmentsShadow,
+        ["appconfig-environments"] = SetupAppconfigEnvironments,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["appconfig-environments-shadow"] = TeardownAppconfigEnvironmentsShadow,
+        ["appconfig-environments"] = TeardownAppconfigEnvironments,
     };
 
     private AmazonAppConfigClient Cl() => _client.Value;
 
-    private Task SetupAppconfigEnvironmentsShadow(TestContext t) =>
-        GroupAppconfigEnvironmentsShadow.RunSetupAsync(t,
+    private Task SetupAppconfigEnvironments(TestContext t) =>
+        GroupAppconfigEnvironments.RunSetupAsync(t,
             new ScenarioCall
             {
                 Op = "CreateApplication",
@@ -77,8 +77,8 @@ internal sealed class ScenariosAuthoredAppconfigEnvironments : IServiceGroup
             }
         );
 
-    private Task TeardownAppconfigEnvironmentsShadow(TestContext t) =>
-        GroupAppconfigEnvironmentsShadow.RunTeardownAsync(t,
+    private Task TeardownAppconfigEnvironments(TestContext t) =>
+        GroupAppconfigEnvironments.RunTeardownAsync(t,
             new ScenarioCall
             {
                 Op = "DeleteEnvironment",
@@ -108,7 +108,7 @@ internal sealed class ScenariosAuthoredAppconfigEnvironments : IServiceGroup
             }
         );
 
-    private Task TestAppconfigEnvironmentsShadowCreateEnvironment(TestContext t) => GroupAppconfigEnvironmentsShadow.RunTestAsync(t, "CreateEnvironment", new ScenarioTest
+    private Task TestAppconfigEnvironmentsCreateEnvironment(TestContext t) => GroupAppconfigEnvironments.RunTestAsync(t, "CreateEnvironment", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -157,7 +157,7 @@ internal sealed class ScenariosAuthoredAppconfigEnvironments : IServiceGroup
         ],
     });
 
-    private Task TestAppconfigEnvironmentsShadowGetEnvironment(TestContext t) => GroupAppconfigEnvironmentsShadow.RunTestAsync(t, "GetEnvironment", new ScenarioTest
+    private Task TestAppconfigEnvironmentsGetEnvironment(TestContext t) => GroupAppconfigEnvironments.RunTestAsync(t, "GetEnvironment", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -182,7 +182,7 @@ internal sealed class ScenariosAuthoredAppconfigEnvironments : IServiceGroup
         ],
     });
 
-    private Task TestAppconfigEnvironmentsShadowListEnvironments(TestContext t) => GroupAppconfigEnvironmentsShadow.RunTestAsync(t, "ListEnvironments", new ScenarioTest
+    private Task TestAppconfigEnvironmentsListEnvironments(TestContext t) => GroupAppconfigEnvironments.RunTestAsync(t, "ListEnvironments", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -208,7 +208,7 @@ internal sealed class ScenariosAuthoredAppconfigEnvironments : IServiceGroup
         ],
     });
 
-    private Task TestAppconfigEnvironmentsShadowUpdateEnvironment(TestContext t) => GroupAppconfigEnvironmentsShadow.RunTestAsync(t, "UpdateEnvironment", new ScenarioTest
+    private Task TestAppconfigEnvironmentsUpdateEnvironment(TestContext t) => GroupAppconfigEnvironments.RunTestAsync(t, "UpdateEnvironment", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -251,7 +251,7 @@ internal sealed class ScenariosAuthoredAppconfigEnvironments : IServiceGroup
         ],
     });
 
-    private Task TestAppconfigEnvironmentsShadowDeleteEnvironment(TestContext t) => GroupAppconfigEnvironmentsShadow.RunTestAsync(t, "DeleteEnvironment", new ScenarioTest
+    private Task TestAppconfigEnvironmentsDeleteEnvironment(TestContext t) => GroupAppconfigEnvironments.RunTestAsync(t, "DeleteEnvironment", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -305,7 +305,7 @@ internal sealed class ScenariosAuthoredAppconfigEnvironments : IServiceGroup
         ],
     });
 
-    private Task TestAppconfigEnvironmentsShadowGetEnvironmentNotFound(TestContext t) => GroupAppconfigEnvironmentsShadow.RunTestAsync(t, "GetEnvironmentNotFound", new ScenarioTest
+    private Task TestAppconfigEnvironmentsGetEnvironmentNotFound(TestContext t) => GroupAppconfigEnvironments.RunTestAsync(t, "GetEnvironmentNotFound", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -327,7 +327,7 @@ internal sealed class ScenariosAuthoredAppconfigEnvironments : IServiceGroup
         ],
     });
 
-    private Task TestAppconfigEnvironmentsShadowListEnvironmentsApplicationNotFound(TestContext t) => GroupAppconfigEnvironmentsShadow.RunTestAsync(t, "ListEnvironmentsApplicationNotFound", new ScenarioTest
+    private Task TestAppconfigEnvironmentsListEnvironmentsApplicationNotFound(TestContext t) => GroupAppconfigEnvironments.RunTestAsync(t, "ListEnvironmentsApplicationNotFound", new ScenarioTest
     {
         Call = new ScenarioCall
         {

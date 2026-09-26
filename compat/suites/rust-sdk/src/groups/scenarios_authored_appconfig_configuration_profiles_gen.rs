@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/appconfig-configuration-profiles.json";
 
-const GROUP_APPCONFIG_CONFIGURATION_PROFILES_SHADOW: Group = Group {
-    name: "appconfig-configuration-profiles-shadow",
+const GROUP_APPCONFIG_CONFIGURATION_PROFILES: Group = Group {
+    name: "appconfig-configuration-profiles",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigConfigurationProfiles {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-configuration-profiles-shadow:CreateConfigurationProfile".to_string(),
+                "appconfig-configuration-profiles:CreateConfigurationProfile".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_CONFIGURATION_PROFILES_SHADOW
-                            .run_test(&ctx, "CreateConfigurationProfile", test_appconfig_configuration_profiles_shadow_create_configuration_profile(&client))
+                        GROUP_APPCONFIG_CONFIGURATION_PROFILES
+                            .run_test(&ctx, "CreateConfigurationProfile", test_appconfig_configuration_profiles_create_configuration_profile(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigConfigurationProfiles {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-configuration-profiles-shadow:GetConfigurationProfile".to_string(),
+                "appconfig-configuration-profiles:GetConfigurationProfile".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_CONFIGURATION_PROFILES_SHADOW
-                            .run_test(&ctx, "GetConfigurationProfile", test_appconfig_configuration_profiles_shadow_get_configuration_profile(&client))
+                        GROUP_APPCONFIG_CONFIGURATION_PROFILES
+                            .run_test(&ctx, "GetConfigurationProfile", test_appconfig_configuration_profiles_get_configuration_profile(&client))
                             .await
                     })
                 }),
@@ -79,12 +79,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigConfigurationProfiles {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-configuration-profiles-shadow:ListConfigurationProfiles".to_string(),
+                "appconfig-configuration-profiles:ListConfigurationProfiles".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_CONFIGURATION_PROFILES_SHADOW
-                            .run_test(&ctx, "ListConfigurationProfiles", test_appconfig_configuration_profiles_shadow_list_configuration_profiles(&client))
+                        GROUP_APPCONFIG_CONFIGURATION_PROFILES
+                            .run_test(&ctx, "ListConfigurationProfiles", test_appconfig_configuration_profiles_list_configuration_profiles(&client))
                             .await
                     })
                 }),
@@ -93,12 +93,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigConfigurationProfiles {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-configuration-profiles-shadow:ListConfigurationProfilesByType".to_string(),
+                "appconfig-configuration-profiles:ListConfigurationProfilesByType".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_CONFIGURATION_PROFILES_SHADOW
-                            .run_test(&ctx, "ListConfigurationProfilesByType", test_appconfig_configuration_profiles_shadow_list_configuration_profiles_by_type(&client))
+                        GROUP_APPCONFIG_CONFIGURATION_PROFILES
+                            .run_test(&ctx, "ListConfigurationProfilesByType", test_appconfig_configuration_profiles_list_configuration_profiles_by_type(&client))
                             .await
                     })
                 }),
@@ -107,12 +107,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigConfigurationProfiles {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-configuration-profiles-shadow:UpdateConfigurationProfile".to_string(),
+                "appconfig-configuration-profiles:UpdateConfigurationProfile".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_CONFIGURATION_PROFILES_SHADOW
-                            .run_test(&ctx, "UpdateConfigurationProfile", test_appconfig_configuration_profiles_shadow_update_configuration_profile(&client))
+                        GROUP_APPCONFIG_CONFIGURATION_PROFILES
+                            .run_test(&ctx, "UpdateConfigurationProfile", test_appconfig_configuration_profiles_update_configuration_profile(&client))
                             .await
                     })
                 }),
@@ -121,12 +121,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigConfigurationProfiles {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-configuration-profiles-shadow:DeleteConfigurationProfile".to_string(),
+                "appconfig-configuration-profiles:DeleteConfigurationProfile".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_CONFIGURATION_PROFILES_SHADOW
-                            .run_test(&ctx, "DeleteConfigurationProfile", test_appconfig_configuration_profiles_shadow_delete_configuration_profile(&client))
+                        GROUP_APPCONFIG_CONFIGURATION_PROFILES
+                            .run_test(&ctx, "DeleteConfigurationProfile", test_appconfig_configuration_profiles_delete_configuration_profile(&client))
                             .await
                     })
                 }),
@@ -135,12 +135,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigConfigurationProfiles {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-configuration-profiles-shadow:GetConfigurationProfileNotFound".to_string(),
+                "appconfig-configuration-profiles:GetConfigurationProfileNotFound".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_CONFIGURATION_PROFILES_SHADOW
-                            .run_test(&ctx, "GetConfigurationProfileNotFound", test_appconfig_configuration_profiles_shadow_get_configuration_profile_not_found(&client))
+                        GROUP_APPCONFIG_CONFIGURATION_PROFILES
+                            .run_test(&ctx, "GetConfigurationProfileNotFound", test_appconfig_configuration_profiles_get_configuration_profile_not_found(&client))
                             .await
                     })
                 }),
@@ -154,11 +154,11 @@ impl ServiceGroup for ScenariosAuthoredAppconfigConfigurationProfiles {
         {
             let client = self.client.clone();
             setups.insert(
-                "appconfig-configuration-profiles-shadow".to_string(),
+                "appconfig-configuration-profiles".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_CONFIGURATION_PROFILES_SHADOW.run_setup(&ctx, setup_appconfig_configuration_profiles_shadow(&client)).await
+                        GROUP_APPCONFIG_CONFIGURATION_PROFILES.run_setup(&ctx, setup_appconfig_configuration_profiles(&client)).await
                     })
                 }),
             );
@@ -171,11 +171,11 @@ impl ServiceGroup for ScenariosAuthoredAppconfigConfigurationProfiles {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "appconfig-configuration-profiles-shadow".to_string(),
+                "appconfig-configuration-profiles".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_CONFIGURATION_PROFILES_SHADOW.run_teardown(&ctx, teardown_appconfig_configuration_profiles_shadow(&client)).await
+                        GROUP_APPCONFIG_CONFIGURATION_PROFILES.run_teardown(&ctx, teardown_appconfig_configuration_profiles(&client)).await
                     })
                 }),
             );
@@ -184,7 +184,7 @@ impl ServiceGroup for ScenariosAuthoredAppconfigConfigurationProfiles {
     }
 }
 
-fn setup_appconfig_configuration_profiles_shadow(client: &aws_sdk_appconfig::Client) -> Vec<Call> {
+fn setup_appconfig_configuration_profiles(client: &aws_sdk_appconfig::Client) -> Vec<Call> {
     vec![
         Call {
             op: "CreateApplication",
@@ -241,7 +241,7 @@ fn setup_appconfig_configuration_profiles_shadow(client: &aws_sdk_appconfig::Cli
     ]
 }
 
-fn teardown_appconfig_configuration_profiles_shadow(client: &aws_sdk_appconfig::Client) -> Vec<Call> {
+fn teardown_appconfig_configuration_profiles(client: &aws_sdk_appconfig::Client) -> Vec<Call> {
     vec![
         Call {
             op: "DeleteConfigurationProfile",
@@ -316,7 +316,7 @@ fn teardown_appconfig_configuration_profiles_shadow(client: &aws_sdk_appconfig::
     ]
 }
 
-fn test_appconfig_configuration_profiles_shadow_create_configuration_profile(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_configuration_profiles_create_configuration_profile(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "CreateConfigurationProfile",
@@ -390,7 +390,7 @@ fn test_appconfig_configuration_profiles_shadow_create_configuration_profile(cli
     }
 }
 
-fn test_appconfig_configuration_profiles_shadow_get_configuration_profile(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_configuration_profiles_get_configuration_profile(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "GetConfigurationProfile",
@@ -425,7 +425,7 @@ fn test_appconfig_configuration_profiles_shadow_get_configuration_profile(client
     }
 }
 
-fn test_appconfig_configuration_profiles_shadow_list_configuration_profiles(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_configuration_profiles_list_configuration_profiles(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "ListConfigurationProfiles",
@@ -462,7 +462,7 @@ fn test_appconfig_configuration_profiles_shadow_list_configuration_profiles(clie
     }
 }
 
-fn test_appconfig_configuration_profiles_shadow_list_configuration_profiles_by_type(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_configuration_profiles_list_configuration_profiles_by_type(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "ListConfigurationProfiles",
@@ -507,7 +507,7 @@ fn test_appconfig_configuration_profiles_shadow_list_configuration_profiles_by_t
     }
 }
 
-fn test_appconfig_configuration_profiles_shadow_update_configuration_profile(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_configuration_profiles_update_configuration_profile(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "UpdateConfigurationProfile",
@@ -573,7 +573,7 @@ fn test_appconfig_configuration_profiles_shadow_update_configuration_profile(cli
     }
 }
 
-fn test_appconfig_configuration_profiles_shadow_delete_configuration_profile(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_configuration_profiles_delete_configuration_profile(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteConfigurationProfile",
@@ -659,7 +659,7 @@ fn test_appconfig_configuration_profiles_shadow_delete_configuration_profile(cli
     }
 }
 
-fn test_appconfig_configuration_profiles_shadow_get_configuration_profile_not_found(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_configuration_profiles_get_configuration_profile_not_found(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "GetConfigurationProfile",

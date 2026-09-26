@@ -2,7 +2,6 @@ package groups
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"sort"
 	"strings"
@@ -21,6 +20,10 @@ import (
 // trailing-slash URI shape that started it cannot apply here, so
 // DescribeRepositoriesSigned drives the same read a second time with a signed
 // request and asserts it still lands on ECR.
+//
+// Groups: ecr-repositories, ecr-images. ecr-registry, ecr-policies and
+// ecr-tags resolve through their authored scenarios
+// (compat/model/authored/ecr-registry.json, ecr-policies.json, ecr-tags.json).
 func ECR() ServiceGroup {
 	g := &ecrGroup{}
 	return ServiceGroup{
@@ -37,10 +40,6 @@ func ECR() ServiceGroup {
 			"ecr-repositories:DeleteRepositoryNotEmpty":      g.DeleteRepositoryNotEmpty,
 			"ecr-repositories:DeleteRepositoryForce":         g.DeleteRepositoryForce,
 
-			// ecr-registry
-			"ecr-registry:GetAuthorizationToken": g.GetAuthorizationToken,
-			"ecr-registry:DescribeRegistry":      g.DescribeRegistry,
-
 			// ecr-images. EC2 models a DescribeImages of its own, so that key
 			// is ambiguous bare and the loader refuses it.
 			"ecr-images:PutImage":               g.PutImage,
@@ -50,34 +49,14 @@ func ECR() ServiceGroup {
 			"ecr-images:BatchGetImage":          g.BatchGetImage,
 			"ecr-images:BatchDeleteImage":       g.BatchDeleteImage,
 			"ecr-images:DescribeImagesNotFound": g.DescribeImagesNotFound,
-
-			// ecr-policies
-			"ecr-policies:PutLifecyclePolicy":         g.PutLifecyclePolicy,
-			"ecr-policies:GetLifecyclePolicy":         g.GetLifecyclePolicy,
-			"ecr-policies:DeleteLifecyclePolicy":      g.DeleteLifecyclePolicy,
-			"ecr-policies:GetLifecyclePolicyNotFound": g.GetLifecyclePolicyNotFound,
-			"ecr-policies:SetRepositoryPolicy":        g.SetRepositoryPolicy,
-			"ecr-policies:GetRepositoryPolicy":        g.GetRepositoryPolicy,
-			"ecr-policies:DeleteRepositoryPolicy":     g.DeleteRepositoryPolicy,
-
-			// ecr-tags. AppSync and Secrets Manager model the same three
-			// operations, so every bare key here is ambiguous and the suite
-			// loader refuses it.
-			"ecr-tags:TagResource":         g.TagResource,
-			"ecr-tags:ListTagsForResource": g.ListTagsForResource,
-			"ecr-tags:UntagResource":       g.UntagResource,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
 			"ecr-repositories": g.setupRepositories,
 			"ecr-images":       g.setupImages,
-			"ecr-policies":     g.setupPolicies,
-			"ecr-tags":         g.setupTags,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
 			"ecr-repositories": g.teardownRepositories,
 			"ecr-images":       g.teardownImages,
-			"ecr-policies":     g.teardownPolicies,
-			"ecr-tags":         g.teardownTags,
 		},
 	}
 }
@@ -89,10 +68,8 @@ type ecrGroup struct{}
 // the groups run in parallel. ECR repository names are lowercase, which the
 // run ID and these tags already are.
 var (
-	ecrReposNamer    = harness.NewNamer("ecr-repo")
-	ecrImagesNamer   = harness.NewNamer("ecr-img")
-	ecrPoliciesNamer = harness.NewNamer("ecr-pol")
-	ecrTagsNamer     = harness.NewNamer("ecr-tag")
+	ecrReposNamer  = harness.NewNamer("ecr-repo")
+	ecrImagesNamer = harness.NewNamer("ecr-img")
 )
 
 // Manifests are stored under the digest of their own bytes, so two images that
@@ -105,13 +82,6 @@ func ecrManifest(id string) string {
 			`"digest":"sha256:%064s"},"layers":[]}`,
 		len(id), id)
 }
-
-const ecrLifecyclePolicy = `{"rules":[{"rulePriority":1,"description":"expire untagged",` +
-	`"selection":{"tagStatus":"untagged","countType":"imageCountMoreThan","countNumber":5},` +
-	`"action":{"type":"expire"}}]}`
-
-const ecrRepositoryPolicy = `{"Version":"2012-10-17","Statement":[{"Sid":"AllowPull",` +
-	`"Effect":"Allow","Principal":"*","Action":["ecr:GetDownloadUrlForLayer","ecr:BatchGetImage"]}]}`
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -528,56 +498,6 @@ func (g *ecrGroup) DeleteRepositoryForce(_ context.Context, t *harness.TestConte
 		"ecr", "describe-repositories", "--repository-names", name)
 }
 
-// ─── ecr-registry ─────────────────────────────────────────────────────────────
-//
-// Both operations are registry-wide reads that create nothing, so this group
-// has no setup and nothing to tear down.
-
-// GetAuthorizationToken has no state to read back, so the assertion is the
-// shape of what it returns: ECR's token is base64("AWS:<password>"), which is
-// what `docker login --username AWS --password-stdin` consumes.
-func (g *ecrGroup) GetAuthorizationToken(_ context.Context, t *harness.TestContext) error {
-	out, err := awscli.RunOutput(t.Endpoint, t.Region, "ecr", "get-authorization-token")
-	if err != nil {
-		return fmt.Errorf("ecr GetAuthorizationToken: %w", err)
-	}
-	data, _ := out["authorizationData"].([]any)
-	if len(data) == 0 {
-		return fmt.Errorf("ecr GetAuthorizationToken: authorizationData is empty")
-	}
-	entry, _ := data[0].(map[string]any)
-	token, _ := entry["authorizationToken"].(string)
-	decoded, decErr := base64.StdEncoding.DecodeString(token)
-	if decErr != nil {
-		return fmt.Errorf("ecr GetAuthorizationToken: authorizationToken is not base64: %w", decErr)
-	}
-	user, password, found := strings.Cut(string(decoded), ":")
-	if !found || user != "AWS" || password == "" {
-		return fmt.Errorf("ecr GetAuthorizationToken: expected the token to decode to \"AWS:<password>\", got %q", decoded)
-	}
-	if ep, _ := entry["proxyEndpoint"].(string); !strings.HasPrefix(ep, "http") {
-		return fmt.Errorf("ecr GetAuthorizationToken: expected an http(s) proxyEndpoint, got %q", ep)
-	}
-	if entry["expiresAt"] == nil {
-		return fmt.Errorf("ecr GetAuthorizationToken: expiresAt is absent")
-	}
-	return nil
-}
-
-func (g *ecrGroup) DescribeRegistry(_ context.Context, t *harness.TestContext) error {
-	out, err := awscli.RunOutput(t.Endpoint, t.Region, "ecr", "describe-registry")
-	if err != nil {
-		return fmt.Errorf("ecr DescribeRegistry: %w", err)
-	}
-	if id, _ := out["registryId"].(string); id == "" {
-		return fmt.Errorf("ecr DescribeRegistry: registryId is empty")
-	}
-	if _, ok := out["replicationConfiguration"].(map[string]any); !ok {
-		return fmt.Errorf("ecr DescribeRegistry: replicationConfiguration is absent: %v", out)
-	}
-	return nil
-}
-
 // ─── ecr-images ───────────────────────────────────────────────────────────────
 
 func (g *ecrGroup) imagesRepo(t *harness.TestContext) string { return ecrImagesNamer.Name(t) }
@@ -783,255 +703,4 @@ func (g *ecrGroup) BatchDeleteImage(_ context.Context, t *harness.TestContext) e
 func (g *ecrGroup) DescribeImagesNotFound(_ context.Context, t *harness.TestContext) error {
 	return expectECRFailure(t, "ecr DescribeImagesNotFound", "ImageNotFoundException", 400,
 		"ecr", "describe-images", "--repository-name", g.imagesRepo(t), "--image-ids", "imageTag=no-such-tag")
-}
-
-// ─── ecr-policies ─────────────────────────────────────────────────────────────
-
-func (g *ecrGroup) policyRepo(t *harness.TestContext) string { return ecrPoliciesNamer.Name(t) }
-
-// policyBareRepo is the repository that never gets a lifecycle policy, so the
-// not-found test does not have to be sequenced against the delete test.
-func (g *ecrGroup) policyBareRepo(t *harness.TestContext) string {
-	return ecrPoliciesNamer.Suffixed(t, "-bare")
-}
-
-func (g *ecrGroup) setupPolicies(_ context.Context, t *harness.TestContext) error {
-	for _, name := range []string{g.policyRepo(t), g.policyBareRepo(t)} {
-		if _, err := ecrCreateRepo(t, "setupPolicies", name); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// teardownPolicies removes the policies explicitly before the repositories.
-// DeleteRepository does drop them, but that cascade is Overcast's own
-// behaviour rather than something the ECR API documents.
-func (g *ecrGroup) teardownPolicies(_ context.Context, t *harness.TestContext) error {
-	repo := g.policyRepo(t)
-	awscli.Run(t.Endpoint, t.Region, "ecr", "delete-repository-policy", "--repository-name", repo) //nolint:errcheck
-	awscli.Run(t.Endpoint, t.Region, "ecr", "delete-lifecycle-policy", "--repository-name", repo)  //nolint:errcheck
-	ecrDeleteRepo(t, g.policyBareRepo(t))
-	ecrDeleteRepo(t, repo)
-	return nil
-}
-
-func (g *ecrGroup) PutLifecyclePolicy(_ context.Context, t *harness.TestContext) error {
-	repo := g.policyRepo(t)
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"ecr", "put-lifecycle-policy",
-		"--repository-name", repo,
-		"--lifecycle-policy-text", ecrLifecyclePolicy,
-	)
-	if err != nil {
-		return fmt.Errorf("ecr PutLifecyclePolicy: %w", err)
-	}
-	if text, _ := out["lifecyclePolicyText"].(string); text != ecrLifecyclePolicy {
-		return fmt.Errorf("ecr PutLifecyclePolicy: the response echoed a different policy: %v", out["lifecyclePolicyText"])
-	}
-
-	got, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"ecr", "get-lifecycle-policy", "--repository-name", repo)
-	if err != nil {
-		return fmt.Errorf("ecr PutLifecyclePolicy: get after put: %w", err)
-	}
-	if text, _ := got["lifecyclePolicyText"].(string); text != ecrLifecyclePolicy {
-		return fmt.Errorf("ecr PutLifecyclePolicy: get returned a different policy: %v", got["lifecyclePolicyText"])
-	}
-	return nil
-}
-
-func (g *ecrGroup) GetLifecyclePolicy(_ context.Context, t *harness.TestContext) error {
-	repo := g.policyRepo(t)
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"ecr", "get-lifecycle-policy", "--repository-name", repo)
-	if err != nil {
-		return fmt.Errorf("ecr GetLifecyclePolicy: %w", err)
-	}
-	if text, _ := out["lifecyclePolicyText"].(string); text != ecrLifecyclePolicy {
-		return fmt.Errorf("ecr GetLifecyclePolicy: expected the stored policy, got %v", out["lifecyclePolicyText"])
-	}
-	if name, _ := out["repositoryName"].(string); name != repo {
-		return fmt.Errorf("ecr GetLifecyclePolicy: expected repositoryName %q, got %v", repo, out["repositoryName"])
-	}
-	return nil
-}
-
-func (g *ecrGroup) DeleteLifecyclePolicy(_ context.Context, t *harness.TestContext) error {
-	repo := g.policyRepo(t)
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"ecr", "delete-lifecycle-policy", "--repository-name", repo)
-	if err != nil {
-		return fmt.Errorf("ecr DeleteLifecyclePolicy: %w", err)
-	}
-	if name, _ := out["repositoryName"].(string); name != repo {
-		return fmt.Errorf("ecr DeleteLifecyclePolicy: expected repositoryName %q, got %v", repo, out["repositoryName"])
-	}
-	return expectECRFailure(t, "ecr DeleteLifecyclePolicy", "LifecyclePolicyNotFoundException", 400,
-		"ecr", "get-lifecycle-policy", "--repository-name", repo)
-}
-
-func (g *ecrGroup) GetLifecyclePolicyNotFound(_ context.Context, t *harness.TestContext) error {
-	return expectECRFailure(t, "ecr GetLifecyclePolicyNotFound", "LifecyclePolicyNotFoundException", 400,
-		"ecr", "get-lifecycle-policy", "--repository-name", g.policyBareRepo(t))
-}
-
-func (g *ecrGroup) SetRepositoryPolicy(_ context.Context, t *harness.TestContext) error {
-	repo := g.policyRepo(t)
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"ecr", "set-repository-policy",
-		"--repository-name", repo,
-		"--policy-text", ecrRepositoryPolicy,
-	)
-	if err != nil {
-		return fmt.Errorf("ecr SetRepositoryPolicy: %w", err)
-	}
-	if text, _ := out["policyText"].(string); text != ecrRepositoryPolicy {
-		return fmt.Errorf("ecr SetRepositoryPolicy: the response echoed a different policy: %v", out["policyText"])
-	}
-
-	got, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"ecr", "get-repository-policy", "--repository-name", repo)
-	if err != nil {
-		return fmt.Errorf("ecr SetRepositoryPolicy: get after set: %w", err)
-	}
-	if text, _ := got["policyText"].(string); text != ecrRepositoryPolicy {
-		return fmt.Errorf("ecr SetRepositoryPolicy: get returned a different policy: %v", got["policyText"])
-	}
-	return nil
-}
-
-func (g *ecrGroup) GetRepositoryPolicy(_ context.Context, t *harness.TestContext) error {
-	repo := g.policyRepo(t)
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"ecr", "get-repository-policy", "--repository-name", repo)
-	if err != nil {
-		return fmt.Errorf("ecr GetRepositoryPolicy: %w", err)
-	}
-	if text, _ := out["policyText"].(string); text != ecrRepositoryPolicy {
-		return fmt.Errorf("ecr GetRepositoryPolicy: expected the stored policy, got %v", out["policyText"])
-	}
-	if name, _ := out["repositoryName"].(string); name != repo {
-		return fmt.Errorf("ecr GetRepositoryPolicy: expected repositoryName %q, got %v", repo, out["repositoryName"])
-	}
-	return nil
-}
-
-func (g *ecrGroup) DeleteRepositoryPolicy(_ context.Context, t *harness.TestContext) error {
-	repo := g.policyRepo(t)
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"ecr", "delete-repository-policy", "--repository-name", repo)
-	if err != nil {
-		return fmt.Errorf("ecr DeleteRepositoryPolicy: %w", err)
-	}
-	if name, _ := out["repositoryName"].(string); name != repo {
-		return fmt.Errorf("ecr DeleteRepositoryPolicy: expected repositoryName %q, got %v", repo, out["repositoryName"])
-	}
-	return expectECRFailure(t, "ecr DeleteRepositoryPolicy", "RepositoryPolicyNotFoundException", 400,
-		"ecr", "get-repository-policy", "--repository-name", repo)
-}
-
-// ─── ecr-tags ─────────────────────────────────────────────────────────────────
-
-func (g *ecrGroup) tagsRepo(t *harness.TestContext) string { return ecrTagsNamer.Name(t) }
-
-func (g *ecrGroup) setupTags(_ context.Context, t *harness.TestContext) error {
-	arn, err := ecrCreateRepo(t, "setupTags", g.tagsRepo(t))
-	if err != nil {
-		return err
-	}
-	t.Set("_ecrTagsArn", arn)
-	return nil
-}
-
-// teardownTags removes the tags before the repository they hang off. ECR does
-// not document tags as cascading with the repository, and Overcast keys them
-// on the ARN in a namespace of their own.
-func (g *ecrGroup) teardownTags(_ context.Context, t *harness.TestContext) error {
-	if arn := t.GetString("_ecrTagsArn"); arn != "" {
-		awscli.Run(t.Endpoint, t.Region, "ecr", "untag-resource", //nolint:errcheck
-			"--resource-arn", arn, "--tag-keys", "env", "owner")
-	}
-	ecrDeleteRepo(t, g.tagsRepo(t))
-	return nil
-}
-
-// ecrTagMap reads a ListTagsForResource response into a key/value map.
-func ecrTagMap(out map[string]any) map[string]string {
-	raw, _ := out["tags"].([]any)
-	tags := make(map[string]string, len(raw))
-	for _, r := range raw {
-		m, _ := r.(map[string]any)
-		key, _ := m["Key"].(string)
-		value, _ := m["Value"].(string)
-		if key != "" {
-			tags[key] = value
-		}
-	}
-	return tags
-}
-
-func (g *ecrGroup) TagResource(_ context.Context, t *harness.TestContext) error {
-	arn := t.GetString("_ecrTagsArn")
-	if arn == "" {
-		return fmt.Errorf("ecr TagResource: no repository ARN from setup")
-	}
-	if err := awscli.Run(t.Endpoint, t.Region,
-		"ecr", "tag-resource", "--resource-arn", arn,
-		"--tags", "Key=env,Value=compat", "Key=owner,Value=ecr-tags",
-	); err != nil {
-		return fmt.Errorf("ecr TagResource: %w", err)
-	}
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"ecr", "list-tags-for-resource", "--resource-arn", arn)
-	if err != nil {
-		return fmt.Errorf("ecr TagResource: list-tags-for-resource after tagging: %w", err)
-	}
-	tags := ecrTagMap(out)
-	if tags["env"] != "compat" {
-		return fmt.Errorf("ecr TagResource: expected env=compat, got %q", tags["env"])
-	}
-	if tags["owner"] != "ecr-tags" {
-		return fmt.Errorf("ecr TagResource: expected owner=ecr-tags, got %q", tags["owner"])
-	}
-	return nil
-}
-
-func (g *ecrGroup) ListTagsForResource(_ context.Context, t *harness.TestContext) error {
-	arn := t.GetString("_ecrTagsArn")
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"ecr", "list-tags-for-resource", "--resource-arn", arn)
-	if err != nil {
-		return fmt.Errorf("ecr ListTagsForResource: %w", err)
-	}
-	tags := ecrTagMap(out)
-	if len(tags) != 2 {
-		return fmt.Errorf("ecr ListTagsForResource: expected exactly the 2 tags TagResource set, got %v", tags)
-	}
-	if tags["env"] != "compat" || tags["owner"] != "ecr-tags" {
-		return fmt.Errorf("ecr ListTagsForResource: expected env=compat and owner=ecr-tags, got %v", tags)
-	}
-	return nil
-}
-
-func (g *ecrGroup) UntagResource(_ context.Context, t *harness.TestContext) error {
-	arn := t.GetString("_ecrTagsArn")
-	if err := awscli.Run(t.Endpoint, t.Region,
-		"ecr", "untag-resource", "--resource-arn", arn, "--tag-keys", "owner",
-	); err != nil {
-		return fmt.Errorf("ecr UntagResource: %w", err)
-	}
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"ecr", "list-tags-for-resource", "--resource-arn", arn)
-	if err != nil {
-		return fmt.Errorf("ecr UntagResource: list-tags-for-resource after untagging: %w", err)
-	}
-	tags := ecrTagMap(out)
-	if _, still := tags["owner"]; still {
-		return fmt.Errorf("ecr UntagResource: owner is still tagged: %v", tags)
-	}
-	if tags["env"] != "compat" {
-		return fmt.Errorf("ecr UntagResource: removing owner also removed env: %v", tags)
-	}
-	return nil
 }

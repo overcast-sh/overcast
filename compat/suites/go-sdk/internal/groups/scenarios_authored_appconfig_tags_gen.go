@@ -23,17 +23,17 @@ func ScenariosAuthoredAppconfigTags(c *clients.Clients) ServiceGroup {
 	return ServiceGroup{
 		Name: "scenarios/authored-appconfig-tags",
 		Impls: map[string]harness.TestFn{
-			"appconfig-tags-shadow:CreateApplicationWithTags":   g.testAppconfigTagsShadowCreateApplicationWithTags,
-			"appconfig-tags-shadow:TagResource":                 g.testAppconfigTagsShadowTagResource,
-			"appconfig-tags-shadow:ListTagsForResource":         g.testAppconfigTagsShadowListTagsForResource,
-			"appconfig-tags-shadow:UntagResource":               g.testAppconfigTagsShadowUntagResource,
-			"appconfig-tags-shadow:ListTagsForResourceNotFound": g.testAppconfigTagsShadowListTagsForResourceNotFound,
+			"appconfig-tags:CreateApplicationWithTags":   g.testAppconfigTagsCreateApplicationWithTags,
+			"appconfig-tags:TagResource":                 g.testAppconfigTagsTagResource,
+			"appconfig-tags:ListTagsForResource":         g.testAppconfigTagsListTagsForResource,
+			"appconfig-tags:UntagResource":               g.testAppconfigTagsUntagResource,
+			"appconfig-tags:ListTagsForResourceNotFound": g.testAppconfigTagsListTagsForResourceNotFound,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"appconfig-tags-shadow": g.setupAppconfigTagsShadow,
+			"appconfig-tags": g.setupAppconfigTags,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"appconfig-tags-shadow": g.teardownAppconfigTagsShadow,
+			"appconfig-tags": g.teardownAppconfigTags,
 		},
 	}
 }
@@ -53,15 +53,15 @@ func (g *authoredAppconfigTagsScenarios) cl() *appconfig.Client {
 	return g.client
 }
 
-var groupAppconfigTagsShadow = scenario.Group{Name: "appconfig-tags-shadow", File: "compat/model/authored/appconfig-tags.json"}
+var groupAppconfigTags = scenario.Group{Name: "appconfig-tags", File: "compat/model/authored/appconfig-tags.json"}
 
-func (g *authoredAppconfigTagsScenarios) setupAppconfigTagsShadow(ctx context.Context, t *harness.TestContext) error {
+func (g *authoredAppconfigTagsScenarios) setupAppconfigTags(ctx context.Context, t *harness.TestContext) error {
 	// No setup steps: an empty phase is a no-op, not a missing one.
-	return groupAppconfigTagsShadow.RunSetup(ctx, t)
+	return groupAppconfigTags.RunSetup(ctx, t)
 }
 
-func (g *authoredAppconfigTagsScenarios) teardownAppconfigTagsShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigTagsShadow.RunTeardown(ctx, t,
+func (g *authoredAppconfigTagsScenarios) teardownAppconfigTags(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigTags.RunTeardown(ctx, t,
 		scenario.Call{
 			Op:     "DeleteApplication",
 			Params: `{"ApplicationId":{"$ref":"app.id"}}`,
@@ -77,8 +77,8 @@ func (g *authoredAppconfigTagsScenarios) teardownAppconfigTagsShadow(ctx context
 	)
 }
 
-func (g *authoredAppconfigTagsScenarios) testAppconfigTagsShadowCreateApplicationWithTags(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigTagsShadow.RunTest(ctx, t, "CreateApplicationWithTags", scenario.Test{
+func (g *authoredAppconfigTagsScenarios) testAppconfigTagsCreateApplicationWithTags(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigTags.RunTest(ctx, t, "CreateApplicationWithTags", scenario.Test{
 		Call: scenario.Call{
 			Op:     "CreateApplication",
 			Params: `{"Name":{"$name":"app"},"Tags":{"Owner":"compat","Team":"platform"}}`,
@@ -119,8 +119,8 @@ func (g *authoredAppconfigTagsScenarios) testAppconfigTagsShadowCreateApplicatio
 	})
 }
 
-func (g *authoredAppconfigTagsScenarios) testAppconfigTagsShadowTagResource(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigTagsShadow.RunTest(ctx, t, "TagResource", scenario.Test{
+func (g *authoredAppconfigTagsScenarios) testAppconfigTagsTagResource(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigTags.RunTest(ctx, t, "TagResource", scenario.Test{
 		Call: scenario.Call{
 			Op:     "TagResource",
 			Params: `{"ResourceArn":{"$concat":["arn:aws:appconfig:us-east-1:000000000000:application/",{"$ref":"app.id"}]},"Tags":{"Owner":"compat-updated","Stage":"beta"}}`,
@@ -156,8 +156,8 @@ func (g *authoredAppconfigTagsScenarios) testAppconfigTagsShadowTagResource(ctx 
 	})
 }
 
-func (g *authoredAppconfigTagsScenarios) testAppconfigTagsShadowListTagsForResource(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigTagsShadow.RunTest(ctx, t, "ListTagsForResource", scenario.Test{
+func (g *authoredAppconfigTagsScenarios) testAppconfigTagsListTagsForResource(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigTags.RunTest(ctx, t, "ListTagsForResource", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListTagsForResource",
 			Params: `{"ResourceArn":{"$concat":["arn:aws:appconfig:us-east-1:000000000000:application/",{"$ref":"app.id"}]}}`,
@@ -180,8 +180,8 @@ func (g *authoredAppconfigTagsScenarios) testAppconfigTagsShadowListTagsForResou
 	})
 }
 
-func (g *authoredAppconfigTagsScenarios) testAppconfigTagsShadowUntagResource(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigTagsShadow.RunTest(ctx, t, "UntagResource", scenario.Test{
+func (g *authoredAppconfigTagsScenarios) testAppconfigTagsUntagResource(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigTags.RunTest(ctx, t, "UntagResource", scenario.Test{
 		Call: scenario.Call{
 			Op:     "UntagResource",
 			Params: `{"ResourceArn":{"$concat":["arn:aws:appconfig:us-east-1:000000000000:application/",{"$ref":"app.id"}]},"TagKeys":["Team"]}`,
@@ -216,8 +216,8 @@ func (g *authoredAppconfigTagsScenarios) testAppconfigTagsShadowUntagResource(ct
 	})
 }
 
-func (g *authoredAppconfigTagsScenarios) testAppconfigTagsShadowListTagsForResourceNotFound(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigTagsShadow.RunTest(ctx, t, "ListTagsForResourceNotFound", scenario.Test{
+func (g *authoredAppconfigTagsScenarios) testAppconfigTagsListTagsForResourceNotFound(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigTags.RunTest(ctx, t, "ListTagsForResourceNotFound", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListTagsForResource",
 			Params: `{"ResourceArn":"arn:aws:appconfig:us-east-1:000000000000:application/zzzzzzz"}`,

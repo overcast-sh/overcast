@@ -33,8 +33,8 @@ import software.amazon.awssdk.services.appconfig.model.StopDeploymentRequest;
  */
 public final class ScenariosAuthoredAppconfigDeploymentsGen implements ServiceGroup {
 
-    private static final Group GROUP_APPCONFIG_DEPLOYMENTS_SHADOW =
-            new Group("appconfig-deployments-shadow", "compat/model/authored/appconfig-deployments.json");
+    private static final Group GROUP_APPCONFIG_DEPLOYMENTS =
+            new Group("appconfig-deployments", "compat/model/authored/appconfig-deployments.json");
 
     private final AwsClients clients;
     private volatile AppConfigClient client;
@@ -51,22 +51,22 @@ public final class ScenariosAuthoredAppconfigDeploymentsGen implements ServiceGr
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("appconfig-deployments-shadow:StartDeployment", this::testAppconfigDeploymentsShadowStartDeployment),
-                Map.entry("appconfig-deployments-shadow:GetDeployment", this::testAppconfigDeploymentsShadowGetDeployment),
-                Map.entry("appconfig-deployments-shadow:ListDeployments", this::testAppconfigDeploymentsShadowListDeployments),
-                Map.entry("appconfig-deployments-shadow:StopDeployment", this::testAppconfigDeploymentsShadowStopDeployment));
+                Map.entry("appconfig-deployments:StartDeployment", this::testAppconfigDeploymentsStartDeployment),
+                Map.entry("appconfig-deployments:GetDeployment", this::testAppconfigDeploymentsGetDeployment),
+                Map.entry("appconfig-deployments:ListDeployments", this::testAppconfigDeploymentsListDeployments),
+                Map.entry("appconfig-deployments:StopDeployment", this::testAppconfigDeploymentsStopDeployment));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("appconfig-deployments-shadow", this::setupAppconfigDeploymentsShadow));
+                Map.entry("appconfig-deployments", this::setupAppconfigDeployments));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("appconfig-deployments-shadow", this::teardownAppconfigDeploymentsShadow));
+                Map.entry("appconfig-deployments", this::teardownAppconfigDeployments));
     }
 
     /**
@@ -86,8 +86,8 @@ public final class ScenariosAuthoredAppconfigDeploymentsGen implements ServiceGr
         return client;
     }
 
-    private void setupAppconfigDeploymentsShadow(TestContext t) {
-        GROUP_APPCONFIG_DEPLOYMENTS_SHADOW.runSetup(t,
+    private void setupAppconfigDeployments(TestContext t) {
+        GROUP_APPCONFIG_DEPLOYMENTS.runSetup(t,
                 new Call("CreateApplication", "{\"Name\":{\"$name\":\"app\"}}",
                         b -> CreateApplicationRequest.builder()
                                 .name(b.string("Name", Values.name("app")))
@@ -111,8 +111,8 @@ public final class ScenariosAuthoredAppconfigDeploymentsGen implements ServiceGr
                         .export("prof.id", "$.Id"));
     }
 
-    private void teardownAppconfigDeploymentsShadow(TestContext t) {
-        GROUP_APPCONFIG_DEPLOYMENTS_SHADOW.runTeardown(t,
+    private void teardownAppconfigDeployments(TestContext t) {
+        GROUP_APPCONFIG_DEPLOYMENTS.runTeardown(t,
                 new Call("DeleteConfigurationProfile", "{\"ApplicationId\":{\"$ref\":\"app.id\"},\"ConfigurationProfileId\":{\"$ref\":\"prof.id\"}}",
                         b -> DeleteConfigurationProfileRequest.builder()
                                 .applicationId(b.string("ApplicationId", Values.ref("app.id")))
@@ -132,8 +132,8 @@ public final class ScenariosAuthoredAppconfigDeploymentsGen implements ServiceGr
                         r -> cl().deleteApplication((DeleteApplicationRequest) r)));
     }
 
-    private void testAppconfigDeploymentsShadowStartDeployment(TestContext t) {
-        GROUP_APPCONFIG_DEPLOYMENTS_SHADOW.runTest(t, "StartDeployment",
+    private void testAppconfigDeploymentsStartDeployment(TestContext t) {
+        GROUP_APPCONFIG_DEPLOYMENTS.runTest(t, "StartDeployment",
                 new Call("StartDeployment", "{\"ApplicationId\":{\"$ref\":\"app.id\"},\"ConfigurationProfileId\":{\"$ref\":\"prof.id\"},\"ConfigurationVersion\":\"1\",\"DeploymentStrategyId\":\"AppConfig.AllAtOnce\",\"EnvironmentId\":{\"$ref\":\"env.id\"}}",
                         b -> StartDeploymentRequest.builder()
                                 .applicationId(b.string("ApplicationId", Values.ref("app.id")))
@@ -150,8 +150,8 @@ public final class ScenariosAuthoredAppconfigDeploymentsGen implements ServiceGr
                 ));
     }
 
-    private void testAppconfigDeploymentsShadowGetDeployment(TestContext t) {
-        GROUP_APPCONFIG_DEPLOYMENTS_SHADOW.runTest(t, "GetDeployment",
+    private void testAppconfigDeploymentsGetDeployment(TestContext t) {
+        GROUP_APPCONFIG_DEPLOYMENTS.runTest(t, "GetDeployment",
                 new Call("GetDeployment", "{\"ApplicationId\":{\"$ref\":\"app.id\"},\"DeploymentNumber\":1,\"EnvironmentId\":{\"$ref\":\"env.id\"}}",
                         b -> GetDeploymentRequest.builder()
                                 .applicationId(b.string("ApplicationId", Values.ref("app.id")))
@@ -166,8 +166,8 @@ public final class ScenariosAuthoredAppconfigDeploymentsGen implements ServiceGr
                 ));
     }
 
-    private void testAppconfigDeploymentsShadowListDeployments(TestContext t) {
-        GROUP_APPCONFIG_DEPLOYMENTS_SHADOW.runTest(t, "ListDeployments",
+    private void testAppconfigDeploymentsListDeployments(TestContext t) {
+        GROUP_APPCONFIG_DEPLOYMENTS.runTest(t, "ListDeployments",
                 new Call("ListDeployments", "{\"ApplicationId\":{\"$ref\":\"app.id\"},\"EnvironmentId\":{\"$ref\":\"env.id\"}}",
                         b -> ListDeploymentsRequest.builder()
                                 .applicationId(b.string("ApplicationId", Values.ref("app.id")))
@@ -181,8 +181,8 @@ public final class ScenariosAuthoredAppconfigDeploymentsGen implements ServiceGr
                 ));
     }
 
-    private void testAppconfigDeploymentsShadowStopDeployment(TestContext t) {
-        GROUP_APPCONFIG_DEPLOYMENTS_SHADOW.runTest(t, "StopDeployment",
+    private void testAppconfigDeploymentsStopDeployment(TestContext t) {
+        GROUP_APPCONFIG_DEPLOYMENTS.runTest(t, "StopDeployment",
                 new Call("StopDeployment", "{\"ApplicationId\":{\"$ref\":\"app.id\"},\"DeploymentNumber\":1,\"EnvironmentId\":{\"$ref\":\"env.id\"}}",
                         b -> StopDeploymentRequest.builder()
                                 .applicationId(b.string("ApplicationId", Values.ref("app.id")))

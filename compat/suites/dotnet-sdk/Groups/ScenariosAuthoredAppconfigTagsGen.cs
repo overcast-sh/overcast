@@ -15,7 +15,7 @@ namespace OvercastCompat.Groups;
 /// </remarks>
 internal sealed class ScenariosAuthoredAppconfigTags : IServiceGroup
 {
-    private static readonly ScenarioGroup GroupAppconfigTagsShadow = new("appconfig-tags-shadow", "compat/model/authored/appconfig-tags.json");
+    private static readonly ScenarioGroup GroupAppconfigTags = new("appconfig-tags", "compat/model/authored/appconfig-tags.json");
 
     private readonly Lazy<AmazonAppConfigClient> _client;
 
@@ -35,31 +35,31 @@ internal sealed class ScenariosAuthoredAppconfigTags : IServiceGroup
 
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["appconfig-tags-shadow:CreateApplicationWithTags"] = TestAppconfigTagsShadowCreateApplicationWithTags,
-        ["appconfig-tags-shadow:TagResource"] = TestAppconfigTagsShadowTagResource,
-        ["appconfig-tags-shadow:ListTagsForResource"] = TestAppconfigTagsShadowListTagsForResource,
-        ["appconfig-tags-shadow:UntagResource"] = TestAppconfigTagsShadowUntagResource,
-        ["appconfig-tags-shadow:ListTagsForResourceNotFound"] = TestAppconfigTagsShadowListTagsForResourceNotFound,
+        ["appconfig-tags:CreateApplicationWithTags"] = TestAppconfigTagsCreateApplicationWithTags,
+        ["appconfig-tags:TagResource"] = TestAppconfigTagsTagResource,
+        ["appconfig-tags:ListTagsForResource"] = TestAppconfigTagsListTagsForResource,
+        ["appconfig-tags:UntagResource"] = TestAppconfigTagsUntagResource,
+        ["appconfig-tags:ListTagsForResourceNotFound"] = TestAppconfigTagsListTagsForResourceNotFound,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["appconfig-tags-shadow"] = SetupAppconfigTagsShadow,
+        ["appconfig-tags"] = SetupAppconfigTags,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["appconfig-tags-shadow"] = TeardownAppconfigTagsShadow,
+        ["appconfig-tags"] = TeardownAppconfigTags,
     };
 
     private AmazonAppConfigClient Cl() => _client.Value;
 
-    private Task SetupAppconfigTagsShadow(TestContext t) =>
+    private Task SetupAppconfigTags(TestContext t) =>
         // No setup steps: an empty phase is a no-op, not a missing one.
-        GroupAppconfigTagsShadow.RunSetupAsync(t);
+        GroupAppconfigTags.RunSetupAsync(t);
 
-    private Task TeardownAppconfigTagsShadow(TestContext t) =>
-        GroupAppconfigTagsShadow.RunTeardownAsync(t,
+    private Task TeardownAppconfigTags(TestContext t) =>
+        GroupAppconfigTags.RunTeardownAsync(t,
             new ScenarioCall
             {
                 Op = "DeleteApplication",
@@ -75,7 +75,7 @@ internal sealed class ScenariosAuthoredAppconfigTags : IServiceGroup
             }
         );
 
-    private Task TestAppconfigTagsShadowCreateApplicationWithTags(TestContext t) => GroupAppconfigTagsShadow.RunTestAsync(t, "CreateApplicationWithTags", new ScenarioTest
+    private Task TestAppconfigTagsCreateApplicationWithTags(TestContext t) => GroupAppconfigTags.RunTestAsync(t, "CreateApplicationWithTags", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -120,7 +120,7 @@ internal sealed class ScenariosAuthoredAppconfigTags : IServiceGroup
         ],
     });
 
-    private Task TestAppconfigTagsShadowTagResource(TestContext t) => GroupAppconfigTagsShadow.RunTestAsync(t, "TagResource", new ScenarioTest
+    private Task TestAppconfigTagsTagResource(TestContext t) => GroupAppconfigTags.RunTestAsync(t, "TagResource", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -159,7 +159,7 @@ internal sealed class ScenariosAuthoredAppconfigTags : IServiceGroup
         ],
     });
 
-    private Task TestAppconfigTagsShadowListTagsForResource(TestContext t) => GroupAppconfigTagsShadow.RunTestAsync(t, "ListTagsForResource", new ScenarioTest
+    private Task TestAppconfigTagsListTagsForResource(TestContext t) => GroupAppconfigTags.RunTestAsync(t, "ListTagsForResource", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -184,7 +184,7 @@ internal sealed class ScenariosAuthoredAppconfigTags : IServiceGroup
         ],
     });
 
-    private Task TestAppconfigTagsShadowUntagResource(TestContext t) => GroupAppconfigTagsShadow.RunTestAsync(t, "UntagResource", new ScenarioTest
+    private Task TestAppconfigTagsUntagResource(TestContext t) => GroupAppconfigTags.RunTestAsync(t, "UntagResource", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -222,7 +222,7 @@ internal sealed class ScenariosAuthoredAppconfigTags : IServiceGroup
         ],
     });
 
-    private Task TestAppconfigTagsShadowListTagsForResourceNotFound(TestContext t) => GroupAppconfigTagsShadow.RunTestAsync(t, "ListTagsForResourceNotFound", new ScenarioTest
+    private Task TestAppconfigTagsListTagsForResourceNotFound(TestContext t) => GroupAppconfigTags.RunTestAsync(t, "ListTagsForResourceNotFound", new ScenarioTest
     {
         Call = new ScenarioCall
         {

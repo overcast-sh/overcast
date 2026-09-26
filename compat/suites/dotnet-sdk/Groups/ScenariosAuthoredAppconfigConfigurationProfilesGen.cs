@@ -15,7 +15,7 @@ namespace OvercastCompat.Groups;
 /// </remarks>
 internal sealed class ScenariosAuthoredAppconfigConfigurationProfiles : IServiceGroup
 {
-    private static readonly ScenarioGroup GroupAppconfigConfigurationProfilesShadow = new("appconfig-configuration-profiles-shadow", "compat/model/authored/appconfig-configuration-profiles.json");
+    private static readonly ScenarioGroup GroupAppconfigConfigurationProfiles = new("appconfig-configuration-profiles", "compat/model/authored/appconfig-configuration-profiles.json");
 
     private readonly Lazy<AmazonAppConfigClient> _client;
 
@@ -35,29 +35,29 @@ internal sealed class ScenariosAuthoredAppconfigConfigurationProfiles : IService
 
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["appconfig-configuration-profiles-shadow:CreateConfigurationProfile"] = TestAppconfigConfigurationProfilesShadowCreateConfigurationProfile,
-        ["appconfig-configuration-profiles-shadow:GetConfigurationProfile"] = TestAppconfigConfigurationProfilesShadowGetConfigurationProfile,
-        ["appconfig-configuration-profiles-shadow:ListConfigurationProfiles"] = TestAppconfigConfigurationProfilesShadowListConfigurationProfiles,
-        ["appconfig-configuration-profiles-shadow:ListConfigurationProfilesByType"] = TestAppconfigConfigurationProfilesShadowListConfigurationProfilesByType,
-        ["appconfig-configuration-profiles-shadow:UpdateConfigurationProfile"] = TestAppconfigConfigurationProfilesShadowUpdateConfigurationProfile,
-        ["appconfig-configuration-profiles-shadow:DeleteConfigurationProfile"] = TestAppconfigConfigurationProfilesShadowDeleteConfigurationProfile,
-        ["appconfig-configuration-profiles-shadow:GetConfigurationProfileNotFound"] = TestAppconfigConfigurationProfilesShadowGetConfigurationProfileNotFound,
+        ["appconfig-configuration-profiles:CreateConfigurationProfile"] = TestAppconfigConfigurationProfilesCreateConfigurationProfile,
+        ["appconfig-configuration-profiles:GetConfigurationProfile"] = TestAppconfigConfigurationProfilesGetConfigurationProfile,
+        ["appconfig-configuration-profiles:ListConfigurationProfiles"] = TestAppconfigConfigurationProfilesListConfigurationProfiles,
+        ["appconfig-configuration-profiles:ListConfigurationProfilesByType"] = TestAppconfigConfigurationProfilesListConfigurationProfilesByType,
+        ["appconfig-configuration-profiles:UpdateConfigurationProfile"] = TestAppconfigConfigurationProfilesUpdateConfigurationProfile,
+        ["appconfig-configuration-profiles:DeleteConfigurationProfile"] = TestAppconfigConfigurationProfilesDeleteConfigurationProfile,
+        ["appconfig-configuration-profiles:GetConfigurationProfileNotFound"] = TestAppconfigConfigurationProfilesGetConfigurationProfileNotFound,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["appconfig-configuration-profiles-shadow"] = SetupAppconfigConfigurationProfilesShadow,
+        ["appconfig-configuration-profiles"] = SetupAppconfigConfigurationProfiles,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["appconfig-configuration-profiles-shadow"] = TeardownAppconfigConfigurationProfilesShadow,
+        ["appconfig-configuration-profiles"] = TeardownAppconfigConfigurationProfiles,
     };
 
     private AmazonAppConfigClient Cl() => _client.Value;
 
-    private Task SetupAppconfigConfigurationProfilesShadow(TestContext t) =>
-        GroupAppconfigConfigurationProfilesShadow.RunSetupAsync(t,
+    private Task SetupAppconfigConfigurationProfiles(TestContext t) =>
+        GroupAppconfigConfigurationProfiles.RunSetupAsync(t,
             new ScenarioCall
             {
                 Op = "CreateApplication",
@@ -97,8 +97,8 @@ internal sealed class ScenariosAuthoredAppconfigConfigurationProfiles : IService
             }
         );
 
-    private Task TeardownAppconfigConfigurationProfilesShadow(TestContext t) =>
-        GroupAppconfigConfigurationProfilesShadow.RunTeardownAsync(t,
+    private Task TeardownAppconfigConfigurationProfiles(TestContext t) =>
+        GroupAppconfigConfigurationProfiles.RunTeardownAsync(t,
             new ScenarioCall
             {
                 Op = "DeleteConfigurationProfile",
@@ -142,7 +142,7 @@ internal sealed class ScenariosAuthoredAppconfigConfigurationProfiles : IService
             }
         );
 
-    private Task TestAppconfigConfigurationProfilesShadowCreateConfigurationProfile(TestContext t) => GroupAppconfigConfigurationProfilesShadow.RunTestAsync(t, "CreateConfigurationProfile", new ScenarioTest
+    private Task TestAppconfigConfigurationProfilesCreateConfigurationProfile(TestContext t) => GroupAppconfigConfigurationProfiles.RunTestAsync(t, "CreateConfigurationProfile", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -193,7 +193,7 @@ internal sealed class ScenariosAuthoredAppconfigConfigurationProfiles : IService
         ],
     });
 
-    private Task TestAppconfigConfigurationProfilesShadowGetConfigurationProfile(TestContext t) => GroupAppconfigConfigurationProfilesShadow.RunTestAsync(t, "GetConfigurationProfile", new ScenarioTest
+    private Task TestAppconfigConfigurationProfilesGetConfigurationProfile(TestContext t) => GroupAppconfigConfigurationProfiles.RunTestAsync(t, "GetConfigurationProfile", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -218,7 +218,7 @@ internal sealed class ScenariosAuthoredAppconfigConfigurationProfiles : IService
         ],
     });
 
-    private Task TestAppconfigConfigurationProfilesShadowListConfigurationProfiles(TestContext t) => GroupAppconfigConfigurationProfilesShadow.RunTestAsync(t, "ListConfigurationProfiles", new ScenarioTest
+    private Task TestAppconfigConfigurationProfilesListConfigurationProfiles(TestContext t) => GroupAppconfigConfigurationProfiles.RunTestAsync(t, "ListConfigurationProfiles", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -244,7 +244,7 @@ internal sealed class ScenariosAuthoredAppconfigConfigurationProfiles : IService
         ],
     });
 
-    private Task TestAppconfigConfigurationProfilesShadowListConfigurationProfilesByType(TestContext t) => GroupAppconfigConfigurationProfilesShadow.RunTestAsync(t, "ListConfigurationProfilesByType", new ScenarioTest
+    private Task TestAppconfigConfigurationProfilesListConfigurationProfilesByType(TestContext t) => GroupAppconfigConfigurationProfiles.RunTestAsync(t, "ListConfigurationProfilesByType", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -275,7 +275,7 @@ internal sealed class ScenariosAuthoredAppconfigConfigurationProfiles : IService
         ],
     });
 
-    private Task TestAppconfigConfigurationProfilesShadowUpdateConfigurationProfile(TestContext t) => GroupAppconfigConfigurationProfilesShadow.RunTestAsync(t, "UpdateConfigurationProfile", new ScenarioTest
+    private Task TestAppconfigConfigurationProfilesUpdateConfigurationProfile(TestContext t) => GroupAppconfigConfigurationProfiles.RunTestAsync(t, "UpdateConfigurationProfile", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -318,7 +318,7 @@ internal sealed class ScenariosAuthoredAppconfigConfigurationProfiles : IService
         ],
     });
 
-    private Task TestAppconfigConfigurationProfilesShadowDeleteConfigurationProfile(TestContext t) => GroupAppconfigConfigurationProfilesShadow.RunTestAsync(t, "DeleteConfigurationProfile", new ScenarioTest
+    private Task TestAppconfigConfigurationProfilesDeleteConfigurationProfile(TestContext t) => GroupAppconfigConfigurationProfiles.RunTestAsync(t, "DeleteConfigurationProfile", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -372,7 +372,7 @@ internal sealed class ScenariosAuthoredAppconfigConfigurationProfiles : IService
         ],
     });
 
-    private Task TestAppconfigConfigurationProfilesShadowGetConfigurationProfileNotFound(TestContext t) => GroupAppconfigConfigurationProfilesShadow.RunTestAsync(t, "GetConfigurationProfileNotFound", new ScenarioTest
+    private Task TestAppconfigConfigurationProfilesGetConfigurationProfileNotFound(TestContext t) => GroupAppconfigConfigurationProfiles.RunTestAsync(t, "GetConfigurationProfileNotFound", new ScenarioTest
     {
         Call = new ScenarioCall
         {

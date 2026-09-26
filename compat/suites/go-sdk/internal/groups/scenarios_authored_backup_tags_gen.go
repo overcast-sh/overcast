@@ -23,15 +23,15 @@ func ScenariosAuthoredBackupTags(c *clients.Clients) ServiceGroup {
 	return ServiceGroup{
 		Name: "scenarios/authored-backup-tags",
 		Impls: map[string]harness.TestFn{
-			"backup-tags-shadow:TagResource":   g.testBackupTagsShadowTagResource,
-			"backup-tags-shadow:ListTags":      g.testBackupTagsShadowListTags,
-			"backup-tags-shadow:UntagResource": g.testBackupTagsShadowUntagResource,
+			"backup-tags:TagResource":   g.testBackupTagsTagResource,
+			"backup-tags:ListTags":      g.testBackupTagsListTags,
+			"backup-tags:UntagResource": g.testBackupTagsUntagResource,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"backup-tags-shadow": g.setupBackupTagsShadow,
+			"backup-tags": g.setupBackupTags,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"backup-tags-shadow": g.teardownBackupTagsShadow,
+			"backup-tags": g.teardownBackupTags,
 		},
 	}
 }
@@ -51,10 +51,10 @@ func (g *authoredBackupTagsScenarios) cl() *backup.Client {
 	return g.client
 }
 
-var groupBackupTagsShadow = scenario.Group{Name: "backup-tags-shadow", File: "compat/model/authored/backup-tags.json"}
+var groupBackupTags = scenario.Group{Name: "backup-tags", File: "compat/model/authored/backup-tags.json"}
 
-func (g *authoredBackupTagsScenarios) setupBackupTagsShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupTagsShadow.RunSetup(ctx, t,
+func (g *authoredBackupTagsScenarios) setupBackupTags(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupTags.RunSetup(ctx, t,
 		scenario.Call{
 			Op:     "CreateBackupVault",
 			Params: `{"BackupVaultName":{"$name":"vault"}}`,
@@ -73,8 +73,8 @@ func (g *authoredBackupTagsScenarios) setupBackupTagsShadow(ctx context.Context,
 	)
 }
 
-func (g *authoredBackupTagsScenarios) teardownBackupTagsShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupTagsShadow.RunTeardown(ctx, t,
+func (g *authoredBackupTagsScenarios) teardownBackupTags(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupTags.RunTeardown(ctx, t,
 		scenario.Call{
 			Op:     "UntagResource",
 			Params: `{"ResourceArn":{"$ref":"vault.arn"},"TagKeyList":["oc-compat"]}`,
@@ -103,8 +103,8 @@ func (g *authoredBackupTagsScenarios) teardownBackupTagsShadow(ctx context.Conte
 	)
 }
 
-func (g *authoredBackupTagsScenarios) testBackupTagsShadowTagResource(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupTagsShadow.RunTest(ctx, t, "TagResource", scenario.Test{
+func (g *authoredBackupTagsScenarios) testBackupTagsTagResource(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupTags.RunTest(ctx, t, "TagResource", scenario.Test{
 		Call: scenario.Call{
 			Op:     "TagResource",
 			Params: `{"ResourceArn":{"$ref":"vault.arn"},"Tags":{"oc-compat":{"$name":"vault"}}}`,
@@ -140,8 +140,8 @@ func (g *authoredBackupTagsScenarios) testBackupTagsShadowTagResource(ctx contex
 	})
 }
 
-func (g *authoredBackupTagsScenarios) testBackupTagsShadowListTags(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupTagsShadow.RunTest(ctx, t, "ListTags", scenario.Test{
+func (g *authoredBackupTagsScenarios) testBackupTagsListTags(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupTags.RunTest(ctx, t, "ListTags", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListTags",
 			Params: `{"ResourceArn":{"$ref":"vault.arn"}}`,
@@ -162,8 +162,8 @@ func (g *authoredBackupTagsScenarios) testBackupTagsShadowListTags(ctx context.C
 	})
 }
 
-func (g *authoredBackupTagsScenarios) testBackupTagsShadowUntagResource(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupTagsShadow.RunTest(ctx, t, "UntagResource", scenario.Test{
+func (g *authoredBackupTagsScenarios) testBackupTagsUntagResource(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupTags.RunTest(ctx, t, "UntagResource", scenario.Test{
 		Call: scenario.Call{
 			Op:     "UntagResource",
 			Params: `{"ResourceArn":{"$ref":"vault.arn"},"TagKeyList":["oc-compat"]}`,
