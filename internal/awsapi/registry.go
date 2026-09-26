@@ -6,19 +6,64 @@ import (
 	"strings"
 )
 
-// ErrorProfile identifies the AWS error envelope an unsupported operation
-// expects. It is derived from the modeled wire protocol, with the router
-// retaining responsibility for writing the response.
+// ErrorProfile identifies the AWS error envelope a caller of an operation
+// reads an error from. It is derived from the modeled wire protocol and, for
+// rest-xml, the protocol trait's noErrorWrapping flag; serviceutil.WriteError
+// writes it.
 type ErrorProfile uint8
 
 const (
 	ErrorProfileJSON ErrorProfile = iota + 1
 	ErrorProfileQueryXML
 	ErrorProfileEC2QueryXML
-	ErrorProfileXML
+	// ErrorProfileBareXML is a rest-xml error in a bare <Error>: the envelope
+	// of a service whose restXml trait sets noErrorWrapping, which in the
+	// pinned models is S3.
+	ErrorProfileBareXML
 	ErrorProfileRPCV2CBOR
 	ErrorProfileRPCV2JSON
+	// ErrorProfileRESTXML is a rest-xml error wrapped in <ErrorResponse>, the
+	// protocol's default, which CloudFront, Route 53 and S3 Control use. An
+	// AWS SDK reads no error code from a bare <Error> for one of these.
+	ErrorProfileRESTXML
 )
+
+// ErrorProfileFor names the error envelope modelService's callers read over
+// protocol p. modelService is a modeled service identity (Claim.ModelService),
+// and matters only for rest-xml, whose envelope the service's noErrorWrapping
+// trait chooses; an empty one — an ambiguous binding — gets the protocol's
+// default, wrapped envelope.
+//
+// It maps the protocol a request is served over, not necessarily the model's
+// canonical one: a Query call to SQS, whose canonical protocol is awsJson1_0,
+// is ErrorProfileFor(ProtocolAWSQuery, "sqs").
+func ErrorProfileFor(p Protocol, modelService string) ErrorProfile {
+	switch p {
+	case ProtocolAWSQuery:
+		return ErrorProfileQueryXML
+	case ProtocolEC2Query:
+		return ErrorProfileEC2QueryXML
+	case ProtocolRESTXML:
+		if noErrorWrapping(modelService) {
+			return ErrorProfileBareXML
+		}
+		return ErrorProfileRESTXML
+	case ProtocolRPCV2CBOR:
+		return ErrorProfileRPCV2CBOR
+	case ProtocolRPCV2JSON:
+		return ErrorProfileRPCV2JSON
+	case ProtocolAWSJSON10, ProtocolAWSJSON11, ProtocolRESTJSON, ProtocolUnknown:
+		return ErrorProfileJSON
+	}
+	return ErrorProfileJSON
+}
+
+// noErrorWrapping reports whether modelService's restXml trait sets
+// noErrorWrapping, from the generated noErrorWrappingServices.
+func noErrorWrapping(modelService string) bool {
+	i := sort.SearchStrings(noErrorWrappingServices, modelService)
+	return i < len(noErrorWrappingServices) && noErrorWrappingServices[i] == modelService
+}
 
 // Claim is immutable routing metadata for one modeled AWS operation.
 // Service uses Overcast's service key where it differs from the modeled SDK
@@ -70,7 +115,7 @@ func (r *Registry) ClaimTarget(target string) (Claim, bool) {
 		ModelService: op.ModelService,
 		Operation:    op.Operation,
 		Protocol:     op.Protocol,
-		ErrorProfile: ErrorProfileJSON,
+		ErrorProfile: ErrorProfileFor(op.Protocol, op.ModelService),
 		Ambiguous:    ambiguous,
 	}, true
 }
@@ -92,9 +137,12 @@ func (r *Registry) ClaimQuery(version, action string) (Claim, bool) {
 	if op.Version != version || op.Operation != action {
 		return Claim{}, false
 	}
-	profile := ErrorProfileQueryXML
+	// A Query call is served over awsQuery even where awsQuery is only the
+	// model's compatibility protocol (SQS's awsJson1_0), so only EC2's own
+	// dialect changes the envelope.
+	queryProtocol := ProtocolAWSQuery
 	if op.Protocol == ProtocolEC2Query {
-		profile = ErrorProfileEC2QueryXML
+		queryProtocol = ProtocolEC2Query
 	}
 	service, ambiguous := overcastService(op.ModelService), op.Ambiguous
 	if ambiguous {
@@ -110,7 +158,7 @@ func (r *Registry) ClaimQuery(version, action string) (Claim, bool) {
 		ModelService: op.ModelService,
 		Operation:    op.Operation,
 		Protocol:     op.Protocol,
-		ErrorProfile: profile,
+		ErrorProfile: ErrorProfileFor(queryProtocol, op.ModelService),
 		Ambiguous:    ambiguous,
 	}, true
 }
@@ -131,16 +179,12 @@ func (r *Registry) ClaimRPC(protocol Protocol, serviceShape, operation string) (
 		return Claim{}, false
 	}
 	op := rpcOperations[i]
-	profile := ErrorProfileRPCV2CBOR
-	if protocol == ProtocolRPCV2JSON {
-		profile = ErrorProfileRPCV2JSON
-	}
 	return Claim{
 		Service:      overcastService(op.ModelService),
 		ModelService: op.ModelService,
 		Operation:    op.Operation,
 		Protocol:     op.Protocol,
-		ErrorProfile: profile,
+		ErrorProfile: ErrorProfileFor(protocol, op.ModelService),
 		Ambiguous:    op.Ambiguous,
 	}, true
 }
@@ -202,7 +246,7 @@ func (r *Registry) ClaimRESTQuery(method, path, rawQuery string) (Claim, bool) {
 		SigningName:  op.SigningName,
 		Operation:    op.Operation,
 		Protocol:     op.Protocol,
-		ErrorProfile: restErrorProfile(op.Protocol),
+		ErrorProfile: ErrorProfileFor(op.Protocol, op.ModelService),
 		Ambiguous:    op.Ambiguous,
 		CatchAll:     isRootCatchAll(operationIndex),
 	}, true
@@ -244,17 +288,10 @@ var signingNameProfiles = func() map[string]ErrorProfile {
 		if _, seen := profiles[name]; seen {
 			continue
 		}
-		profiles[name] = restErrorProfile(op.Protocol)
+		profiles[name] = ErrorProfileFor(op.Protocol, op.ModelService)
 	}
 	return profiles
 }()
-
-func restErrorProfile(p Protocol) ErrorProfile {
-	if p == ProtocolRESTXML {
-		return ErrorProfileXML
-	}
-	return ErrorProfileJSON
-}
 
 // RESTOperation returns the operation the pinned models bind to this request
 // for one already-classified service, or "" when that service binds no

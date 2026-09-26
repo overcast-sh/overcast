@@ -19,7 +19,6 @@ import (
 
 	"github.com/overcast-sh/overcast/internal/clock"
 	"github.com/overcast-sh/overcast/internal/protocol"
-	"github.com/overcast-sh/overcast/internal/protocol/codec"
 )
 
 type sigV4AccessKeyContextKey struct{}
@@ -85,7 +84,7 @@ func SigV4(validate bool, secretResolver SecretResolver, logger *zap.Logger, clk
 			if validate {
 				signed, err := validateSigV4Request(r, clk, secretResolver)
 				if err != nil {
-					writeSigV4Error(w, r, err)
+					writeUnroutedError(w, r, err)
 					return
 				}
 				if signed {
@@ -381,24 +380,6 @@ func invalidSignature(msg string) *protocol.AWSError {
 		Code:       "InvalidSignatureException",
 		Message:    msg,
 		HTTPStatus: http.StatusForbidden,
-	}
-}
-
-func writeSigV4Error(w http.ResponseWriter, r *http.Request, aerr *protocol.AWSError) {
-	// Use identified codec from protocol middleware (always-on).
-	if c, _ := codec.FromContext(r.Context()); c != nil {
-		c.WriteError(w, r, aerr)
-		return
-	}
-	// Legacy fallback: codec not identified (e.g. S3 bespoke routes).
-	service := detectService(r)
-	switch service {
-	case "s3", "cloudfront":
-		protocol.WriteXMLError(w, r, aerr)
-	case "sns", "iam", "sts", "ec2", "cloudformation", "rds", "ses", "cloudwatch":
-		protocol.WriteQueryXMLError(w, r, aerr)
-	default:
-		protocol.WriteJSONError(w, r, aerr)
 	}
 }
 

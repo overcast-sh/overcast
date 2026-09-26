@@ -28,6 +28,8 @@ import (
 	"net/http"
 	"testing"
 
+	awsxml "github.com/aws/aws-sdk-go-v2/aws/protocol/xml"
+
 	"github.com/overcast-sh/overcast/tests/helpers"
 )
 
@@ -303,7 +305,12 @@ func TestScopeMismatch_rootCatchAllBinding_answersCallersOwn501(t *testing.T) {
 			helpers.AssertStatus(t, resp, http.StatusNotImplemented)
 			helpers.AssertHeader(t, resp, "x-emulator-unsupported", "true")
 			if tc.xml {
-				helpers.AssertXMLError(t, resp, "NotImplemented")
+				// Route 53 is not modeled with noErrorWrapping, so its SDK
+				// reads the code from <ErrorResponse> (#2265).
+				got, err := awsxml.GetErrorResponseComponents(resp.Body, false)
+				if err != nil || got.Code != "NotImplemented" {
+					t.Errorf("code = %q (%v), want NotImplemented", got.Code, err)
+				}
 				return
 			}
 			code, message := jsonErrorBody(t, resp)

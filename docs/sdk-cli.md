@@ -370,7 +370,10 @@ provider "aws" {
 Overcast accepts any credentials. Use `test`/`test` or any non-empty strings.
 SigV4 signatures are accepted but not verified unless you opt in with
 `OVERCAST_SIGV4_VALIDATE=true`, which rejects an invalid or expired signature
-with `403 InvalidSignatureException`.
+with `403 InvalidSignatureException`. The error comes in the envelope of the
+protocol the call was made over, so the SDK reads the code: JSON for the JSON
+protocols, CBOR for Smithy RPC v2 CBOR, `<ErrorResponse>` for Query, CloudFront
+and Route 53, EC2's `<Response><Errors>`, and a bare `<Error>` for S3.
 
 ### Single endpoint
 
