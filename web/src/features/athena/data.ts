@@ -11,6 +11,7 @@
  *   athenaKeys.executionList()         -> [...executions(), "list"]
  *   athenaKeys.execution(id)           -> [...executions(), "detail", id]
  *   athenaKeys.runtimeStatistics(id)   -> [...executions(), "runtime", id]
+ *   athenaKeys.firstResultPage(id)     -> [...executions(), "results", id]
  *   athenaKeys.dataCatalogs()          -> [...endpoint, "athena", "catalogs"]
  *   athenaKeys.metadata()              -> [...endpoint, "athena", "metadata"]
  *   athenaKeys.databases(catalog)      -> [...metadata(), catalog]
@@ -50,6 +51,7 @@ export const athenaKeys = {
   executionList: () => [...athenaKeys.executions(), "list"] as const,
   execution: (id: string) => [...athenaKeys.executions(), "detail", id] as const,
   runtimeStatistics: (id: string) => [...athenaKeys.executions(), "runtime", id] as const,
+  firstResultPage: (id: string) => [...athenaKeys.executions(), "results", id] as const,
   dataCatalogs: () => [...athenaKeys.all(), "catalogs"] as const,
   metadata: () => [...athenaKeys.all(), "metadata"] as const,
   databases: (catalog: string) => [...athenaKeys.metadata(), catalog] as const,
@@ -124,6 +126,20 @@ export function runtimeStatisticsQueryOptions(id: string) {
   return queryOptions({
     queryKey: athenaKeys.runtimeStatistics(id),
     queryFn: () => athena.getQueryRuntimeStatistics(id),
+    staleTime: Infinity,
+  })
+}
+
+/**
+ * A finished execution's first `GetQueryResults` page: its columns, its
+ * `UpdateCount`, and whether there is more. A result never changes once
+ * written, so it is never refetched.
+ */
+export function firstResultPageQueryOptions(id: string) {
+  return queryOptions({
+    queryKey: athenaKeys.firstResultPage(id),
+    queryFn: ({ signal }) => athena.getQueryResults(id, undefined, signal),
+    staleTime: Infinity,
   })
 }
 

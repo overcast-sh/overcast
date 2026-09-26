@@ -102,5 +102,6 @@ function tableItems(context: CompletionContext, qualify: boolean): CompletionIte
 export function qualifierBefore(textBeforeCursor: string): string | undefined {
   const match = /(?:"((?:[^"]|"")+)"|([A-Za-z_][\w]*))\.\w*$/.exec(textBeforeCursor)
   if (!match) return undefined
-  return (match[1]?.replaceAll('""', '"') ?? match[2]).toLowerCase()
+  const [, quoted, bare]: (string | undefined)[] = match
+  return (quoted?.replaceAll('""', '"') ?? bare ?? "").toLowerCase()
 }

@@ -16,7 +16,7 @@ const BY_CLASS: [RegExp, TableFormat][] = [
 ]
 
 export function tableFormat(table: TableMetadata): TableFormat | undefined {
-  const params = table.Parameters ?? {}
+  const params: Partial<Record<string, string>> = table.Parameters ?? {}
   if (params.table_type?.toUpperCase() === "ICEBERG") return "ICEBERG"
   if (table.TableType === "VIRTUAL_VIEW") return "VIEW"
   const hints = [params.classification, params.inputformat, params["serde.serialization.lib"]]
