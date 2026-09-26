@@ -23,23 +23,23 @@ func ScenariosAuthoredIamUsers(c *clients.Clients) ServiceGroup {
 	return ServiceGroup{
 		Name: "scenarios/authored-iam-users",
 		Impls: map[string]harness.TestFn{
-			"iam-users-shadow:CreateUser":       g.testIamUsersShadowCreateUser,
-			"iam-users-shadow:GetUser":          g.testIamUsersShadowGetUser,
-			"iam-users-shadow:ListUsers":        g.testIamUsersShadowListUsers,
-			"iam-users-shadow:CreateAccessKey":  g.testIamUsersShadowCreateAccessKey,
-			"iam-users-shadow:DeleteAccessKey":  g.testIamUsersShadowDeleteAccessKey,
-			"iam-users-shadow:PutUserPolicy":    g.testIamUsersShadowPutUserPolicy,
-			"iam-users-shadow:GetUserPolicy":    g.testIamUsersShadowGetUserPolicy,
-			"iam-users-shadow:DeleteUserPolicy": g.testIamUsersShadowDeleteUserPolicy,
-			"iam-users-shadow:UpdateUser":       g.testIamUsersShadowUpdateUser,
-			"iam-users-shadow:ListAccessKeys":   g.testIamUsersShadowListAccessKeys,
-			"iam-users-shadow:DeleteUser":       g.testIamUsersShadowDeleteUser,
+			"iam-users:CreateUser":       g.testIamUsersCreateUser,
+			"iam-users:GetUser":          g.testIamUsersGetUser,
+			"iam-users:ListUsers":        g.testIamUsersListUsers,
+			"iam-users:CreateAccessKey":  g.testIamUsersCreateAccessKey,
+			"iam-users:DeleteAccessKey":  g.testIamUsersDeleteAccessKey,
+			"iam-users:PutUserPolicy":    g.testIamUsersPutUserPolicy,
+			"iam-users:GetUserPolicy":    g.testIamUsersGetUserPolicy,
+			"iam-users:DeleteUserPolicy": g.testIamUsersDeleteUserPolicy,
+			"iam-users:UpdateUser":       g.testIamUsersUpdateUser,
+			"iam-users:ListAccessKeys":   g.testIamUsersListAccessKeys,
+			"iam-users:DeleteUser":       g.testIamUsersDeleteUser,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"iam-users-shadow": g.setupIamUsersShadow,
+			"iam-users": g.setupIamUsers,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"iam-users-shadow": g.teardownIamUsersShadow,
+			"iam-users": g.teardownIamUsers,
 		},
 	}
 }
@@ -59,15 +59,15 @@ func (g *authoredIamUsersScenarios) cl() *iam.Client {
 	return g.client
 }
 
-var groupIamUsersShadow = scenario.Group{Name: "iam-users-shadow", File: "compat/model/authored/iam-users.json"}
+var groupIamUsers = scenario.Group{Name: "iam-users", File: "compat/model/authored/iam-users.json"}
 
-func (g *authoredIamUsersScenarios) setupIamUsersShadow(ctx context.Context, t *harness.TestContext) error {
+func (g *authoredIamUsersScenarios) setupIamUsers(ctx context.Context, t *harness.TestContext) error {
 	// No setup steps: an empty phase is a no-op, not a missing one.
-	return groupIamUsersShadow.RunSetup(ctx, t)
+	return groupIamUsers.RunSetup(ctx, t)
 }
 
-func (g *authoredIamUsersScenarios) teardownIamUsersShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupIamUsersShadow.RunTeardown(ctx, t,
+func (g *authoredIamUsersScenarios) teardownIamUsers(ctx context.Context, t *harness.TestContext) error {
+	return groupIamUsers.RunTeardown(ctx, t,
 		scenario.Call{
 			Op:     "UpdateUser",
 			Params: `{"NewUserName":{"$name":"user"},"UserName":{"$name":"user-upd"}}`,
@@ -122,8 +122,8 @@ func (g *authoredIamUsersScenarios) teardownIamUsersShadow(ctx context.Context, 
 	)
 }
 
-func (g *authoredIamUsersScenarios) testIamUsersShadowCreateUser(ctx context.Context, t *harness.TestContext) error {
-	return groupIamUsersShadow.RunTest(ctx, t, "CreateUser", scenario.Test{
+func (g *authoredIamUsersScenarios) testIamUsersCreateUser(ctx context.Context, t *harness.TestContext) error {
+	return groupIamUsers.RunTest(ctx, t, "CreateUser", scenario.Test{
 		Call: scenario.Call{
 			Op:     "CreateUser",
 			Params: `{"UserName":{"$name":"user"}}`,
@@ -168,8 +168,8 @@ func (g *authoredIamUsersScenarios) testIamUsersShadowCreateUser(ctx context.Con
 	})
 }
 
-func (g *authoredIamUsersScenarios) testIamUsersShadowGetUser(ctx context.Context, t *harness.TestContext) error {
-	return groupIamUsersShadow.RunTest(ctx, t, "GetUser", scenario.Test{
+func (g *authoredIamUsersScenarios) testIamUsersGetUser(ctx context.Context, t *harness.TestContext) error {
+	return groupIamUsers.RunTest(ctx, t, "GetUser", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetUser",
 			Params: `{"UserName":{"$ref":"user.name"}}`,
@@ -191,8 +191,8 @@ func (g *authoredIamUsersScenarios) testIamUsersShadowGetUser(ctx context.Contex
 	})
 }
 
-func (g *authoredIamUsersScenarios) testIamUsersShadowListUsers(ctx context.Context, t *harness.TestContext) error {
-	return groupIamUsersShadow.RunTest(ctx, t, "ListUsers", scenario.Test{
+func (g *authoredIamUsersScenarios) testIamUsersListUsers(ctx context.Context, t *harness.TestContext) error {
+	return groupIamUsers.RunTest(ctx, t, "ListUsers", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListUsers",
 			Params: `{"MaxItems":1000}`,
@@ -216,8 +216,8 @@ func (g *authoredIamUsersScenarios) testIamUsersShadowListUsers(ctx context.Cont
 	})
 }
 
-func (g *authoredIamUsersScenarios) testIamUsersShadowCreateAccessKey(ctx context.Context, t *harness.TestContext) error {
-	return groupIamUsersShadow.RunTest(ctx, t, "CreateAccessKey", scenario.Test{
+func (g *authoredIamUsersScenarios) testIamUsersCreateAccessKey(ctx context.Context, t *harness.TestContext) error {
+	return groupIamUsers.RunTest(ctx, t, "CreateAccessKey", scenario.Test{
 		Call: scenario.Call{
 			Op:     "CreateAccessKey",
 			Params: `{"UserName":{"$ref":"user.name"}}`,
@@ -263,8 +263,8 @@ func (g *authoredIamUsersScenarios) testIamUsersShadowCreateAccessKey(ctx contex
 	})
 }
 
-func (g *authoredIamUsersScenarios) testIamUsersShadowDeleteAccessKey(ctx context.Context, t *harness.TestContext) error {
-	return groupIamUsersShadow.RunTest(ctx, t, "DeleteAccessKey", scenario.Test{
+func (g *authoredIamUsersScenarios) testIamUsersDeleteAccessKey(ctx context.Context, t *harness.TestContext) error {
+	return groupIamUsers.RunTest(ctx, t, "DeleteAccessKey", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteAccessKey",
 			Params: `{"AccessKeyId":{"$ref":"key.id"},"UserName":{"$ref":"user.name"}}`,
@@ -301,8 +301,8 @@ func (g *authoredIamUsersScenarios) testIamUsersShadowDeleteAccessKey(ctx contex
 	})
 }
 
-func (g *authoredIamUsersScenarios) testIamUsersShadowPutUserPolicy(ctx context.Context, t *harness.TestContext) error {
-	return groupIamUsersShadow.RunTest(ctx, t, "PutUserPolicy", scenario.Test{
+func (g *authoredIamUsersScenarios) testIamUsersPutUserPolicy(ctx context.Context, t *harness.TestContext) error {
+	return groupIamUsers.RunTest(ctx, t, "PutUserPolicy", scenario.Test{
 		Call: scenario.Call{
 			Op:     "PutUserPolicy",
 			Params: `{"PolicyDocument":"{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:GetObject\",\"Resource\":\"*\"}]}","PolicyName":"inline-policy","UserName":{"$ref":"user.name"}}`,
@@ -340,8 +340,8 @@ func (g *authoredIamUsersScenarios) testIamUsersShadowPutUserPolicy(ctx context.
 	})
 }
 
-func (g *authoredIamUsersScenarios) testIamUsersShadowGetUserPolicy(ctx context.Context, t *harness.TestContext) error {
-	return groupIamUsersShadow.RunTest(ctx, t, "GetUserPolicy", scenario.Test{
+func (g *authoredIamUsersScenarios) testIamUsersGetUserPolicy(ctx context.Context, t *harness.TestContext) error {
+	return groupIamUsers.RunTest(ctx, t, "GetUserPolicy", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetUserPolicy",
 			Params: `{"PolicyName":"inline-policy","UserName":{"$ref":"user.name"}}`,
@@ -365,8 +365,8 @@ func (g *authoredIamUsersScenarios) testIamUsersShadowGetUserPolicy(ctx context.
 	})
 }
 
-func (g *authoredIamUsersScenarios) testIamUsersShadowDeleteUserPolicy(ctx context.Context, t *harness.TestContext) error {
-	return groupIamUsersShadow.RunTest(ctx, t, "DeleteUserPolicy", scenario.Test{
+func (g *authoredIamUsersScenarios) testIamUsersDeleteUserPolicy(ctx context.Context, t *harness.TestContext) error {
+	return groupIamUsers.RunTest(ctx, t, "DeleteUserPolicy", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteUserPolicy",
 			Params: `{"PolicyName":"inline-policy","UserName":{"$ref":"user.name"}}`,
@@ -421,8 +421,8 @@ func (g *authoredIamUsersScenarios) testIamUsersShadowDeleteUserPolicy(ctx conte
 	})
 }
 
-func (g *authoredIamUsersScenarios) testIamUsersShadowUpdateUser(ctx context.Context, t *harness.TestContext) error {
-	return groupIamUsersShadow.RunTest(ctx, t, "UpdateUser", scenario.Test{
+func (g *authoredIamUsersScenarios) testIamUsersUpdateUser(ctx context.Context, t *harness.TestContext) error {
+	return groupIamUsers.RunTest(ctx, t, "UpdateUser", scenario.Test{
 		Call: scenario.Call{
 			Op:     "UpdateUser",
 			Params: `{"NewPath":"/newpath/","NewUserName":{"$name":"user-upd"},"UserName":{"$ref":"user.name"}}`,
@@ -481,8 +481,8 @@ func (g *authoredIamUsersScenarios) testIamUsersShadowUpdateUser(ctx context.Con
 	})
 }
 
-func (g *authoredIamUsersScenarios) testIamUsersShadowListAccessKeys(ctx context.Context, t *harness.TestContext) error {
-	return groupIamUsersShadow.RunTest(ctx, t, "ListAccessKeys", scenario.Test{
+func (g *authoredIamUsersScenarios) testIamUsersListAccessKeys(ctx context.Context, t *harness.TestContext) error {
+	return groupIamUsers.RunTest(ctx, t, "ListAccessKeys", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListAccessKeys",
 			Params: `{"UserName":{"$ref":"user.name"}}`,
@@ -508,8 +508,8 @@ func (g *authoredIamUsersScenarios) testIamUsersShadowListAccessKeys(ctx context
 	})
 }
 
-func (g *authoredIamUsersScenarios) testIamUsersShadowDeleteUser(ctx context.Context, t *harness.TestContext) error {
-	return groupIamUsersShadow.RunTest(ctx, t, "DeleteUser", scenario.Test{
+func (g *authoredIamUsersScenarios) testIamUsersDeleteUser(ctx context.Context, t *harness.TestContext) error {
+	return groupIamUsers.RunTest(ctx, t, "DeleteUser", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteUser",
 			Params: `{"UserName":{"$ref":"user.name"}}`,

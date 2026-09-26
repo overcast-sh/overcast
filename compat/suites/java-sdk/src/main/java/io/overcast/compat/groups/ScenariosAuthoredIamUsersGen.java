@@ -37,8 +37,8 @@ import software.amazon.awssdk.services.iam.model.UpdateUserRequest;
  */
 public final class ScenariosAuthoredIamUsersGen implements ServiceGroup {
 
-    private static final Group GROUP_IAM_USERS_SHADOW =
-            new Group("iam-users-shadow", "compat/model/authored/iam-users.json");
+    private static final Group GROUP_IAM_USERS =
+            new Group("iam-users", "compat/model/authored/iam-users.json");
 
     private final AwsClients clients;
     private volatile IamClient client;
@@ -55,29 +55,29 @@ public final class ScenariosAuthoredIamUsersGen implements ServiceGroup {
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("iam-users-shadow:CreateUser", this::testIamUsersShadowCreateUser),
-                Map.entry("iam-users-shadow:GetUser", this::testIamUsersShadowGetUser),
-                Map.entry("iam-users-shadow:ListUsers", this::testIamUsersShadowListUsers),
-                Map.entry("iam-users-shadow:CreateAccessKey", this::testIamUsersShadowCreateAccessKey),
-                Map.entry("iam-users-shadow:DeleteAccessKey", this::testIamUsersShadowDeleteAccessKey),
-                Map.entry("iam-users-shadow:PutUserPolicy", this::testIamUsersShadowPutUserPolicy),
-                Map.entry("iam-users-shadow:GetUserPolicy", this::testIamUsersShadowGetUserPolicy),
-                Map.entry("iam-users-shadow:DeleteUserPolicy", this::testIamUsersShadowDeleteUserPolicy),
-                Map.entry("iam-users-shadow:UpdateUser", this::testIamUsersShadowUpdateUser),
-                Map.entry("iam-users-shadow:ListAccessKeys", this::testIamUsersShadowListAccessKeys),
-                Map.entry("iam-users-shadow:DeleteUser", this::testIamUsersShadowDeleteUser));
+                Map.entry("iam-users:CreateUser", this::testIamUsersCreateUser),
+                Map.entry("iam-users:GetUser", this::testIamUsersGetUser),
+                Map.entry("iam-users:ListUsers", this::testIamUsersListUsers),
+                Map.entry("iam-users:CreateAccessKey", this::testIamUsersCreateAccessKey),
+                Map.entry("iam-users:DeleteAccessKey", this::testIamUsersDeleteAccessKey),
+                Map.entry("iam-users:PutUserPolicy", this::testIamUsersPutUserPolicy),
+                Map.entry("iam-users:GetUserPolicy", this::testIamUsersGetUserPolicy),
+                Map.entry("iam-users:DeleteUserPolicy", this::testIamUsersDeleteUserPolicy),
+                Map.entry("iam-users:UpdateUser", this::testIamUsersUpdateUser),
+                Map.entry("iam-users:ListAccessKeys", this::testIamUsersListAccessKeys),
+                Map.entry("iam-users:DeleteUser", this::testIamUsersDeleteUser));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("iam-users-shadow", this::setupIamUsersShadow));
+                Map.entry("iam-users", this::setupIamUsers));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("iam-users-shadow", this::teardownIamUsersShadow));
+                Map.entry("iam-users", this::teardownIamUsers));
     }
 
     /**
@@ -97,13 +97,13 @@ public final class ScenariosAuthoredIamUsersGen implements ServiceGroup {
         return client;
     }
 
-    private void setupIamUsersShadow(TestContext t) {
+    private void setupIamUsers(TestContext t) {
         // No setup steps: an empty phase is a no-op, not a missing one.
-        GROUP_IAM_USERS_SHADOW.runSetup(t);
+        GROUP_IAM_USERS.runSetup(t);
     }
 
-    private void teardownIamUsersShadow(TestContext t) {
-        GROUP_IAM_USERS_SHADOW.runTeardown(t,
+    private void teardownIamUsers(TestContext t) {
+        GROUP_IAM_USERS.runTeardown(t,
                 new Call("UpdateUser", "{\"NewUserName\":{\"$name\":\"user\"},\"UserName\":{\"$name\":\"user-upd\"}}",
                         b -> UpdateUserRequest.builder()
                                 .newUserName(b.string("NewUserName", Values.name("user")))
@@ -129,8 +129,8 @@ public final class ScenariosAuthoredIamUsersGen implements ServiceGroup {
                         r -> cl().deleteUser((DeleteUserRequest) r)));
     }
 
-    private void testIamUsersShadowCreateUser(TestContext t) {
-        GROUP_IAM_USERS_SHADOW.runTest(t, "CreateUser",
+    private void testIamUsersCreateUser(TestContext t) {
+        GROUP_IAM_USERS.runTest(t, "CreateUser",
                 new Call("CreateUser", "{\"UserName\":{\"$name\":\"user\"}}",
                         b -> CreateUserRequest.builder()
                                 .userName(b.string("UserName", Values.name("user")))
@@ -157,8 +157,8 @@ public final class ScenariosAuthoredIamUsersGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamUsersShadowGetUser(TestContext t) {
-        GROUP_IAM_USERS_SHADOW.runTest(t, "GetUser",
+    private void testIamUsersGetUser(TestContext t) {
+        GROUP_IAM_USERS.runTest(t, "GetUser",
                 new Call("GetUser", "{\"UserName\":{\"$ref\":\"user.name\"}}",
                         b -> GetUserRequest.builder()
                                 .userName(b.string("UserName", Values.ref("user.name")))
@@ -172,8 +172,8 @@ public final class ScenariosAuthoredIamUsersGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamUsersShadowListUsers(TestContext t) {
-        GROUP_IAM_USERS_SHADOW.runTest(t, "ListUsers",
+    private void testIamUsersListUsers(TestContext t) {
+        GROUP_IAM_USERS.runTest(t, "ListUsers",
                 new Call("ListUsers", "{\"MaxItems\":1000}",
                         b -> ListUsersRequest.builder()
                                 .maxItems(1000)
@@ -189,8 +189,8 @@ public final class ScenariosAuthoredIamUsersGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamUsersShadowCreateAccessKey(TestContext t) {
-        GROUP_IAM_USERS_SHADOW.runTest(t, "CreateAccessKey",
+    private void testIamUsersCreateAccessKey(TestContext t) {
+        GROUP_IAM_USERS.runTest(t, "CreateAccessKey",
                 new Call("CreateAccessKey", "{\"UserName\":{\"$ref\":\"user.name\"}}",
                         b -> CreateAccessKeyRequest.builder()
                                 .userName(b.string("UserName", Values.ref("user.name")))
@@ -218,8 +218,8 @@ public final class ScenariosAuthoredIamUsersGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamUsersShadowDeleteAccessKey(TestContext t) {
-        GROUP_IAM_USERS_SHADOW.runTest(t, "DeleteAccessKey",
+    private void testIamUsersDeleteAccessKey(TestContext t) {
+        GROUP_IAM_USERS.runTest(t, "DeleteAccessKey",
                 new Call("DeleteAccessKey", "{\"AccessKeyId\":{\"$ref\":\"key.id\"},\"UserName\":{\"$ref\":\"user.name\"}}",
                         b -> DeleteAccessKeyRequest.builder()
                                 .accessKeyId(b.string("AccessKeyId", Values.ref("key.id")))
@@ -240,8 +240,8 @@ public final class ScenariosAuthoredIamUsersGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamUsersShadowPutUserPolicy(TestContext t) {
-        GROUP_IAM_USERS_SHADOW.runTest(t, "PutUserPolicy",
+    private void testIamUsersPutUserPolicy(TestContext t) {
+        GROUP_IAM_USERS.runTest(t, "PutUserPolicy",
                 new Call("PutUserPolicy", "{\"PolicyDocument\":\"{\\\"Version\\\":\\\"2012-10-17\\\",\\\"Statement\\\":[{\\\"Effect\\\":\\\"Allow\\\",\\\"Action\\\":\\\"s3:GetObject\\\",\\\"Resource\\\":\\\"*\\\"}]}\",\"PolicyName\":\"inline-policy\",\"UserName\":{\"$ref\":\"user.name\"}}",
                         b -> PutUserPolicyRequest.builder()
                                 .policyDocument("{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:GetObject\",\"Resource\":\"*\"}]}")
@@ -263,8 +263,8 @@ public final class ScenariosAuthoredIamUsersGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamUsersShadowGetUserPolicy(TestContext t) {
-        GROUP_IAM_USERS_SHADOW.runTest(t, "GetUserPolicy",
+    private void testIamUsersGetUserPolicy(TestContext t) {
+        GROUP_IAM_USERS.runTest(t, "GetUserPolicy",
                 new Call("GetUserPolicy", "{\"PolicyName\":\"inline-policy\",\"UserName\":{\"$ref\":\"user.name\"}}",
                         b -> GetUserPolicyRequest.builder()
                                 .policyName("inline-policy")
@@ -280,8 +280,8 @@ public final class ScenariosAuthoredIamUsersGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamUsersShadowDeleteUserPolicy(TestContext t) {
-        GROUP_IAM_USERS_SHADOW.runTest(t, "DeleteUserPolicy",
+    private void testIamUsersDeleteUserPolicy(TestContext t) {
+        GROUP_IAM_USERS.runTest(t, "DeleteUserPolicy",
                 new Call("DeleteUserPolicy", "{\"PolicyName\":\"inline-policy\",\"UserName\":{\"$ref\":\"user.name\"}}",
                         b -> DeleteUserPolicyRequest.builder()
                                 .policyName("inline-policy")
@@ -311,8 +311,8 @@ public final class ScenariosAuthoredIamUsersGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamUsersShadowUpdateUser(TestContext t) {
-        GROUP_IAM_USERS_SHADOW.runTest(t, "UpdateUser",
+    private void testIamUsersUpdateUser(TestContext t) {
+        GROUP_IAM_USERS.runTest(t, "UpdateUser",
                 new Call("UpdateUser", "{\"NewPath\":\"/newpath/\",\"NewUserName\":{\"$name\":\"user-upd\"},\"UserName\":{\"$ref\":\"user.name\"}}",
                         b -> UpdateUserRequest.builder()
                                 .newPath("/newpath/")
@@ -344,8 +344,8 @@ public final class ScenariosAuthoredIamUsersGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamUsersShadowListAccessKeys(TestContext t) {
-        GROUP_IAM_USERS_SHADOW.runTest(t, "ListAccessKeys",
+    private void testIamUsersListAccessKeys(TestContext t) {
+        GROUP_IAM_USERS.runTest(t, "ListAccessKeys",
                 new Call("ListAccessKeys", "{\"UserName\":{\"$ref\":\"user.name\"}}",
                         b -> ListAccessKeysRequest.builder()
                                 .userName(b.string("UserName", Values.ref("user.name")))
@@ -363,8 +363,8 @@ public final class ScenariosAuthoredIamUsersGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamUsersShadowDeleteUser(TestContext t) {
-        GROUP_IAM_USERS_SHADOW.runTest(t, "DeleteUser",
+    private void testIamUsersDeleteUser(TestContext t) {
+        GROUP_IAM_USERS.runTest(t, "DeleteUser",
                 new Call("DeleteUser", "{\"UserName\":{\"$ref\":\"user.name\"}}",
                         b -> DeleteUserRequest.builder()
                                 .userName(b.string("UserName", Values.ref("user.name")))

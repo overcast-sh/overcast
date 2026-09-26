@@ -1058,6 +1058,7 @@
     {
       "service": "iam",
       "name": "iam-users",
+      "scenario": "compat/model/authored/iam-users.json",
       "tests": [
         {
           "name": "CreateUser"
@@ -1130,6 +1131,7 @@
     {
       "service": "iam",
       "name": "iam-roles",
+      "scenario": "compat/model/authored/iam-roles.json",
       "tests": [
         {
           "name": "CreateRole"

@@ -24,28 +24,28 @@ func ScenariosAuthoredIamRoles(c *clients.Clients) ServiceGroup {
 	return ServiceGroup{
 		Name: "scenarios/authored-iam-roles",
 		Impls: map[string]harness.TestFn{
-			"iam-roles-shadow:CreateRole":                  g.testIamRolesShadowCreateRole,
-			"iam-roles-shadow:CreateRoleMalformedDocument": g.testIamRolesShadowCreateRoleMalformedDocument,
-			"iam-roles-shadow:GetRole":                     g.testIamRolesShadowGetRole,
-			"iam-roles-shadow:GetRoleReturnsTags":          g.testIamRolesShadowGetRoleReturnsTags,
-			"iam-roles-shadow:ListRoles":                   g.testIamRolesShadowListRoles,
-			"iam-roles-shadow:AttachRolePolicy":            g.testIamRolesShadowAttachRolePolicy,
-			"iam-roles-shadow:ListAttachedRolePolicies":    g.testIamRolesShadowListAttachedRolePolicies,
-			"iam-roles-shadow:DetachRolePolicy":            g.testIamRolesShadowDetachRolePolicy,
-			"iam-roles-shadow:CreateInstanceProfile":       g.testIamRolesShadowCreateInstanceProfile,
-			"iam-roles-shadow:AddRoleToInstanceProfile":    g.testIamRolesShadowAddRoleToInstanceProfile,
-			"iam-roles-shadow:GetInstanceProfile":          g.testIamRolesShadowGetInstanceProfile,
-			"iam-roles-shadow:DeleteRole":                  g.testIamRolesShadowDeleteRole,
-			"iam-roles-shadow:PutRolePolicy":               g.testIamRolesShadowPutRolePolicy,
-			"iam-roles-shadow:GetRolePolicy":               g.testIamRolesShadowGetRolePolicy,
-			"iam-roles-shadow:ListRolePolicies":            g.testIamRolesShadowListRolePolicies,
-			"iam-roles-shadow:DeleteRolePolicy":            g.testIamRolesShadowDeleteRolePolicy,
+			"iam-roles:CreateRole":                  g.testIamRolesCreateRole,
+			"iam-roles:CreateRoleMalformedDocument": g.testIamRolesCreateRoleMalformedDocument,
+			"iam-roles:GetRole":                     g.testIamRolesGetRole,
+			"iam-roles:GetRoleReturnsTags":          g.testIamRolesGetRoleReturnsTags,
+			"iam-roles:ListRoles":                   g.testIamRolesListRoles,
+			"iam-roles:AttachRolePolicy":            g.testIamRolesAttachRolePolicy,
+			"iam-roles:ListAttachedRolePolicies":    g.testIamRolesListAttachedRolePolicies,
+			"iam-roles:DetachRolePolicy":            g.testIamRolesDetachRolePolicy,
+			"iam-roles:CreateInstanceProfile":       g.testIamRolesCreateInstanceProfile,
+			"iam-roles:AddRoleToInstanceProfile":    g.testIamRolesAddRoleToInstanceProfile,
+			"iam-roles:GetInstanceProfile":          g.testIamRolesGetInstanceProfile,
+			"iam-roles:DeleteRole":                  g.testIamRolesDeleteRole,
+			"iam-roles:PutRolePolicy":               g.testIamRolesPutRolePolicy,
+			"iam-roles:GetRolePolicy":               g.testIamRolesGetRolePolicy,
+			"iam-roles:ListRolePolicies":            g.testIamRolesListRolePolicies,
+			"iam-roles:DeleteRolePolicy":            g.testIamRolesDeleteRolePolicy,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"iam-roles-shadow": g.setupIamRolesShadow,
+			"iam-roles": g.setupIamRoles,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"iam-roles-shadow": g.teardownIamRolesShadow,
+			"iam-roles": g.teardownIamRoles,
 		},
 	}
 }
@@ -65,10 +65,10 @@ func (g *authoredIamRolesScenarios) cl() *iam.Client {
 	return g.client
 }
 
-var groupIamRolesShadow = scenario.Group{Name: "iam-roles-shadow", File: "compat/model/authored/iam-roles.json"}
+var groupIamRoles = scenario.Group{Name: "iam-roles", File: "compat/model/authored/iam-roles.json"}
 
-func (g *authoredIamRolesScenarios) setupIamRolesShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupIamRolesShadow.RunSetup(ctx, t,
+func (g *authoredIamRolesScenarios) setupIamRoles(ctx context.Context, t *harness.TestContext) error {
+	return groupIamRoles.RunSetup(ctx, t,
 		scenario.Call{
 			Op:     "CreateRole",
 			Params: `{"AssumeRolePolicyDocument":"{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"lambda.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}","RoleName":{"$name":"doomed"}}`,
@@ -85,8 +85,8 @@ func (g *authoredIamRolesScenarios) setupIamRolesShadow(ctx context.Context, t *
 	)
 }
 
-func (g *authoredIamRolesScenarios) teardownIamRolesShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupIamRolesShadow.RunTeardown(ctx, t,
+func (g *authoredIamRolesScenarios) teardownIamRoles(ctx context.Context, t *harness.TestContext) error {
+	return groupIamRoles.RunTeardown(ctx, t,
 		scenario.Call{
 			Op:     "RemoveRoleFromInstanceProfile",
 			Params: `{"InstanceProfileName":{"$name":"profile"},"RoleName":{"$name":"role"}}`,
@@ -177,8 +177,8 @@ func (g *authoredIamRolesScenarios) teardownIamRolesShadow(ctx context.Context, 
 	)
 }
 
-func (g *authoredIamRolesScenarios) testIamRolesShadowCreateRole(ctx context.Context, t *harness.TestContext) error {
-	return groupIamRolesShadow.RunTest(ctx, t, "CreateRole", scenario.Test{
+func (g *authoredIamRolesScenarios) testIamRolesCreateRole(ctx context.Context, t *harness.TestContext) error {
+	return groupIamRoles.RunTest(ctx, t, "CreateRole", scenario.Test{
 		Call: scenario.Call{
 			Op:     "CreateRole",
 			Params: `{"AssumeRolePolicyDocument":"{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"lambda.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}","RoleName":{"$name":"role"},"Tags":[{"Key":"owner","Value":"compat"},{"Key":"stage","Value":"dev"}]}`,
@@ -227,8 +227,8 @@ func (g *authoredIamRolesScenarios) testIamRolesShadowCreateRole(ctx context.Con
 	})
 }
 
-func (g *authoredIamRolesScenarios) testIamRolesShadowCreateRoleMalformedDocument(ctx context.Context, t *harness.TestContext) error {
-	return groupIamRolesShadow.RunTest(ctx, t, "CreateRoleMalformedDocument", scenario.Test{
+func (g *authoredIamRolesScenarios) testIamRolesCreateRoleMalformedDocument(ctx context.Context, t *harness.TestContext) error {
+	return groupIamRoles.RunTest(ctx, t, "CreateRoleMalformedDocument", scenario.Test{
 		Call: scenario.Call{
 			Op:     "CreateRole",
 			Params: `{"AssumeRolePolicyDocument":"{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Resource\":\"*\"}]}","RoleName":{"$name":"malformed"}}`,
@@ -248,8 +248,8 @@ func (g *authoredIamRolesScenarios) testIamRolesShadowCreateRoleMalformedDocumen
 	})
 }
 
-func (g *authoredIamRolesScenarios) testIamRolesShadowGetRole(ctx context.Context, t *harness.TestContext) error {
-	return groupIamRolesShadow.RunTest(ctx, t, "GetRole", scenario.Test{
+func (g *authoredIamRolesScenarios) testIamRolesGetRole(ctx context.Context, t *harness.TestContext) error {
+	return groupIamRoles.RunTest(ctx, t, "GetRole", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetRole",
 			Params: `{"RoleName":{"$name":"role"}}`,
@@ -272,8 +272,8 @@ func (g *authoredIamRolesScenarios) testIamRolesShadowGetRole(ctx context.Contex
 	})
 }
 
-func (g *authoredIamRolesScenarios) testIamRolesShadowGetRoleReturnsTags(ctx context.Context, t *harness.TestContext) error {
-	return groupIamRolesShadow.RunTest(ctx, t, "GetRoleReturnsTags", scenario.Test{
+func (g *authoredIamRolesScenarios) testIamRolesGetRoleReturnsTags(ctx context.Context, t *harness.TestContext) error {
+	return groupIamRoles.RunTest(ctx, t, "GetRoleReturnsTags", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetRole",
 			Params: `{"RoleName":{"$name":"role"}}`,
@@ -303,8 +303,8 @@ func (g *authoredIamRolesScenarios) testIamRolesShadowGetRoleReturnsTags(ctx con
 	})
 }
 
-func (g *authoredIamRolesScenarios) testIamRolesShadowListRoles(ctx context.Context, t *harness.TestContext) error {
-	return groupIamRolesShadow.RunTest(ctx, t, "ListRoles", scenario.Test{
+func (g *authoredIamRolesScenarios) testIamRolesListRoles(ctx context.Context, t *harness.TestContext) error {
+	return groupIamRoles.RunTest(ctx, t, "ListRoles", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListRoles",
 			Params: `{"MaxItems":1000}`,
@@ -327,8 +327,8 @@ func (g *authoredIamRolesScenarios) testIamRolesShadowListRoles(ctx context.Cont
 	})
 }
 
-func (g *authoredIamRolesScenarios) testIamRolesShadowAttachRolePolicy(ctx context.Context, t *harness.TestContext) error {
-	return groupIamRolesShadow.RunTest(ctx, t, "AttachRolePolicy", scenario.Test{
+func (g *authoredIamRolesScenarios) testIamRolesAttachRolePolicy(ctx context.Context, t *harness.TestContext) error {
+	return groupIamRoles.RunTest(ctx, t, "AttachRolePolicy", scenario.Test{
 		Call: scenario.Call{
 			Op:     "AttachRolePolicy",
 			Params: `{"PolicyArn":"arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess","RoleName":{"$name":"role"}}`,
@@ -365,8 +365,8 @@ func (g *authoredIamRolesScenarios) testIamRolesShadowAttachRolePolicy(ctx conte
 	})
 }
 
-func (g *authoredIamRolesScenarios) testIamRolesShadowListAttachedRolePolicies(ctx context.Context, t *harness.TestContext) error {
-	return groupIamRolesShadow.RunTest(ctx, t, "ListAttachedRolePolicies", scenario.Test{
+func (g *authoredIamRolesScenarios) testIamRolesListAttachedRolePolicies(ctx context.Context, t *harness.TestContext) error {
+	return groupIamRoles.RunTest(ctx, t, "ListAttachedRolePolicies", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListAttachedRolePolicies",
 			Params: `{"RoleName":{"$name":"role"}}`,
@@ -389,8 +389,8 @@ func (g *authoredIamRolesScenarios) testIamRolesShadowListAttachedRolePolicies(c
 	})
 }
 
-func (g *authoredIamRolesScenarios) testIamRolesShadowDetachRolePolicy(ctx context.Context, t *harness.TestContext) error {
-	return groupIamRolesShadow.RunTest(ctx, t, "DetachRolePolicy", scenario.Test{
+func (g *authoredIamRolesScenarios) testIamRolesDetachRolePolicy(ctx context.Context, t *harness.TestContext) error {
+	return groupIamRoles.RunTest(ctx, t, "DetachRolePolicy", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DetachRolePolicy",
 			Params: `{"PolicyArn":"arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess","RoleName":{"$name":"role"}}`,
@@ -427,8 +427,8 @@ func (g *authoredIamRolesScenarios) testIamRolesShadowDetachRolePolicy(ctx conte
 	})
 }
 
-func (g *authoredIamRolesScenarios) testIamRolesShadowCreateInstanceProfile(ctx context.Context, t *harness.TestContext) error {
-	return groupIamRolesShadow.RunTest(ctx, t, "CreateInstanceProfile", scenario.Test{
+func (g *authoredIamRolesScenarios) testIamRolesCreateInstanceProfile(ctx context.Context, t *harness.TestContext) error {
+	return groupIamRoles.RunTest(ctx, t, "CreateInstanceProfile", scenario.Test{
 		Call: scenario.Call{
 			Op:     "CreateInstanceProfile",
 			Params: `{"InstanceProfileName":{"$name":"profile"}}`,
@@ -450,8 +450,8 @@ func (g *authoredIamRolesScenarios) testIamRolesShadowCreateInstanceProfile(ctx 
 	})
 }
 
-func (g *authoredIamRolesScenarios) testIamRolesShadowAddRoleToInstanceProfile(ctx context.Context, t *harness.TestContext) error {
-	return groupIamRolesShadow.RunTest(ctx, t, "AddRoleToInstanceProfile", scenario.Test{
+func (g *authoredIamRolesScenarios) testIamRolesAddRoleToInstanceProfile(ctx context.Context, t *harness.TestContext) error {
+	return groupIamRoles.RunTest(ctx, t, "AddRoleToInstanceProfile", scenario.Test{
 		Call: scenario.Call{
 			Op:     "AddRoleToInstanceProfile",
 			Params: `{"InstanceProfileName":{"$name":"profile"},"RoleName":{"$name":"role"}}`,
@@ -488,8 +488,8 @@ func (g *authoredIamRolesScenarios) testIamRolesShadowAddRoleToInstanceProfile(c
 	})
 }
 
-func (g *authoredIamRolesScenarios) testIamRolesShadowGetInstanceProfile(ctx context.Context, t *harness.TestContext) error {
-	return groupIamRolesShadow.RunTest(ctx, t, "GetInstanceProfile", scenario.Test{
+func (g *authoredIamRolesScenarios) testIamRolesGetInstanceProfile(ctx context.Context, t *harness.TestContext) error {
+	return groupIamRoles.RunTest(ctx, t, "GetInstanceProfile", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetInstanceProfile",
 			Params: `{"InstanceProfileName":{"$name":"profile"}}`,
@@ -515,8 +515,8 @@ func (g *authoredIamRolesScenarios) testIamRolesShadowGetInstanceProfile(ctx con
 	})
 }
 
-func (g *authoredIamRolesScenarios) testIamRolesShadowDeleteRole(ctx context.Context, t *harness.TestContext) error {
-	return groupIamRolesShadow.RunTest(ctx, t, "DeleteRole", scenario.Test{
+func (g *authoredIamRolesScenarios) testIamRolesDeleteRole(ctx context.Context, t *harness.TestContext) error {
+	return groupIamRoles.RunTest(ctx, t, "DeleteRole", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteRole",
 			Params: `{"RoleName":{"$name":"doomed"}}`,
@@ -569,8 +569,8 @@ func (g *authoredIamRolesScenarios) testIamRolesShadowDeleteRole(ctx context.Con
 	})
 }
 
-func (g *authoredIamRolesScenarios) testIamRolesShadowPutRolePolicy(ctx context.Context, t *harness.TestContext) error {
-	return groupIamRolesShadow.RunTest(ctx, t, "PutRolePolicy", scenario.Test{
+func (g *authoredIamRolesScenarios) testIamRolesPutRolePolicy(ctx context.Context, t *harness.TestContext) error {
+	return groupIamRoles.RunTest(ctx, t, "PutRolePolicy", scenario.Test{
 		Call: scenario.Call{
 			Op:     "PutRolePolicy",
 			Params: `{"PolicyDocument":"{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"logs:*\",\"Resource\":\"*\"}]}","PolicyName":"inline-role-policy","RoleName":{"$name":"role"}}`,
@@ -608,8 +608,8 @@ func (g *authoredIamRolesScenarios) testIamRolesShadowPutRolePolicy(ctx context.
 	})
 }
 
-func (g *authoredIamRolesScenarios) testIamRolesShadowGetRolePolicy(ctx context.Context, t *harness.TestContext) error {
-	return groupIamRolesShadow.RunTest(ctx, t, "GetRolePolicy", scenario.Test{
+func (g *authoredIamRolesScenarios) testIamRolesGetRolePolicy(ctx context.Context, t *harness.TestContext) error {
+	return groupIamRoles.RunTest(ctx, t, "GetRolePolicy", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetRolePolicy",
 			Params: `{"PolicyName":"inline-role-policy","RoleName":{"$name":"role"}}`,
@@ -633,8 +633,8 @@ func (g *authoredIamRolesScenarios) testIamRolesShadowGetRolePolicy(ctx context.
 	})
 }
 
-func (g *authoredIamRolesScenarios) testIamRolesShadowListRolePolicies(ctx context.Context, t *harness.TestContext) error {
-	return groupIamRolesShadow.RunTest(ctx, t, "ListRolePolicies", scenario.Test{
+func (g *authoredIamRolesScenarios) testIamRolesListRolePolicies(ctx context.Context, t *harness.TestContext) error {
+	return groupIamRoles.RunTest(ctx, t, "ListRolePolicies", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListRolePolicies",
 			Params: `{"RoleName":{"$name":"role"}}`,
@@ -657,8 +657,8 @@ func (g *authoredIamRolesScenarios) testIamRolesShadowListRolePolicies(ctx conte
 	})
 }
 
-func (g *authoredIamRolesScenarios) testIamRolesShadowDeleteRolePolicy(ctx context.Context, t *harness.TestContext) error {
-	return groupIamRolesShadow.RunTest(ctx, t, "DeleteRolePolicy", scenario.Test{
+func (g *authoredIamRolesScenarios) testIamRolesDeleteRolePolicy(ctx context.Context, t *harness.TestContext) error {
+	return groupIamRoles.RunTest(ctx, t, "DeleteRolePolicy", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteRolePolicy",
 			Params: `{"PolicyName":"inline-role-policy","RoleName":{"$name":"role"}}`,
