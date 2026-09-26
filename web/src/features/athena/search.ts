@@ -5,6 +5,7 @@
  */
 
 import { ATHENA_TAB } from "@/components/ui/arn-routes"
+import { searchText } from "@/lib/search-params"
 
 /**
  * The page's tabs, in order. The list tabs' ids are `ATHENA_TAB`'s, which
@@ -29,7 +30,7 @@ export interface AthenaSearch {
   sort?: string
   /** One query execution, expanded in History. */
   execution?: string
-  /** One workgroup, open in the Workgroups tab. */
+  /** In Workgroups, the workgroup open in detail; in an editor link, the one the new tab runs in. */
   workgroup?: string
   /** Deep link into the editor: the query context and SQL for a new query tab. */
   catalog?: string
@@ -41,26 +42,15 @@ function isAthenaTab(value: unknown): value is AthenaTab {
   return typeof value === "string" && (ATHENA_TABS as readonly string[]).includes(value)
 }
 
-/**
- * The router parses each search value as JSON first, so `sql=42` arrives as a
- * number. A deep link's values are always text, so numbers and booleans are
- * read back as the text they were written as.
- */
-function text(value: unknown): string | undefined {
-  if (typeof value === "string") return value
-  if (typeof value === "number" || typeof value === "boolean") return String(value)
-  return undefined
-}
-
 export function validateAthenaSearch(search: Record<string, unknown>): AthenaSearch {
   return {
     tab: isAthenaTab(search.tab) ? search.tab : undefined,
-    q: text(search.q),
-    sort: text(search.sort),
-    execution: text(search.execution),
-    workgroup: text(search.workgroup),
-    catalog: text(search.catalog),
-    database: text(search.database),
-    sql: text(search.sql),
+    q: searchText(search.q),
+    sort: searchText(search.sort),
+    execution: searchText(search.execution),
+    workgroup: searchText(search.workgroup),
+    catalog: searchText(search.catalog),
+    database: searchText(search.database),
+    sql: searchText(search.sql),
   }
 }

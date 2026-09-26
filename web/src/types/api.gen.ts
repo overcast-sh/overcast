@@ -604,6 +604,57 @@ export type AdvisorySeverity = "info" | "warning" | "critical"
 export type DiagnosticProvenance = "aws-api" | "overcast-capture" | "overcast-inference"
 
 /**
+ * engineStatus is what engineStatusPath reports.
+ *
+ * Generated from Go `athena.engineStatus` (internal/services/athena/engine_status.go).
+ */
+export interface AthenaEngineStatus {
+  /** Engine is ATHENA_ENGINE: trino or inert. */
+  engine: AthenaEngineMode
+  /** State is off, probing, stopped, pulling, starting, ready or failed. */
+  state: AthenaEngineState
+  /** Reason says why an engine is off. */
+  reason?: string
+  image?: string
+  memoryBytes?: number
+  containerId?: string
+  endpoint?: string
+  /**
+   * PullMillis and StartMillis are how long the last start spent pulling
+   * the image and waiting for the engine to answer.
+   */
+  pullMillis?: number
+  startMillis?: number
+  startedAt?: string
+  lastUsedAt?: string
+  /** RunningQueries is how many queries hold the engine now. */
+  runningQueries: number
+  lastError?: string
+}
+
+/**
+ * engineState is the engine's state, as the status endpoint reports it. An
+ * alias, so cmd/tsgen renders the constants below as the console's union.
+ *
+ * Generated from Go `athena.engineState` (internal/services/athena/engine_manager.go).
+ */
+export type AthenaEngineState =
+  | "off"
+  | "probing"
+  | "stopped"
+  | "pulling"
+  | "starting"
+  | "ready"
+  | "failed"
+
+/**
+ * AthenaEngine names what runs Athena's queries.
+ *
+ * Generated from Go `config.AthenaEngine` (internal/config/config.go).
+ */
+export type AthenaEngineMode = "trino" | "inert"
+
+/**
  * Response is the body of GET /_overcast/topology.
  *
  * Generated from Go `topology.Response` (internal/topology/types.go).

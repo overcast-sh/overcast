@@ -128,6 +128,11 @@ var manifest = []target{
 	// section carries (web/src/services/api/cloudformation.ts).
 	{"internal/services/cloudformation", "DiagnosticProvenance", "DiagnosticProvenance"},
 
+	// GET /_overcast/athena/engine — the Athena editor's engine chip.
+	{"internal/services/athena", "engineStatus", "AthenaEngineStatus"},
+	{"internal/services/athena", "engineState", "AthenaEngineState"},
+	{"internal/config", "AthenaEngine", "AthenaEngineMode"},
+
 	// GET /_overcast/topology — the Map page's graph.
 	{"internal/topology", "Response", "TopologyResponse"},
 	{"internal/topology", "Node", "TopologyNode"},

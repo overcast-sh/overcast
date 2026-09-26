@@ -540,16 +540,32 @@ function getEventQueryMap(): Record<string, QueryKey[] | undefined> {
     // A workgroup's node lists its latest executions (athena/topology.go).
     [EventType.athena.QueryStateChanged]: [athenaKeys.executions(), topologyKey],
     // ── Glue ───────────────────────────────────────────────────────────
-    // Deleting a table deletes its partitions with it. A database's node
-    // lists its tables and their partition counts (glue/topology.go).
-    [EventType.glue.TableChanged]: [glueKeys.tables(), glueKeys.partitions(), topologyKey],
+    // Deleting a table deletes its partitions with it. Athena's data browser
+    // lists the same tables, through GetTableMetadata. A database's node lists
+    // its tables and their partition counts (glue/topology.go).
+    [EventType.glue.TableChanged]: [
+      glueKeys.tables(),
+      glueKeys.partitions(),
+      athenaKeys.metadata(),
+      topologyKey,
+    ],
     [EventType.glue.PartitionsChanged]: [glueKeys.partitions(), topologyKey],
     // ── S3 Tables ──────────────────────────────────────────────────────
     // A table bucket's node lists its tables and their snapshots
-    // (s3tables/topology.go).
-    [EventType.s3tables.TableCreated]: [s3tablesKeys.tables(), topologyKey],
+    // (s3tables/topology.go). A table can arrive in a namespace created a
+    // moment earlier, which no event announces, so its creation also
+    // re-reads the namespaces.
+    [EventType.s3tables.TableCreated]: [
+      s3tablesKeys.tables(),
+      s3tablesKeys.namespaces(),
+      topologyKey,
+    ],
     [EventType.s3tables.TableDeleted]: [s3tablesKeys.tables(), topologyKey],
-    [EventType.s3tables.TableRenamed]: [s3tablesKeys.tables(), topologyKey],
+    [EventType.s3tables.TableRenamed]: [
+      s3tablesKeys.tables(),
+      s3tablesKeys.namespaces(),
+      topologyKey,
+    ],
     [EventType.s3tables.TableCommitted]: [s3tablesKeys.tables(), topologyKey],
   }
 }

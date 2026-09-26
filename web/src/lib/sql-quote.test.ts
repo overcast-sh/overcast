@@ -1,14 +1,23 @@
-import { describe, expect, it } from "vitest"
-import { previewSql, trinoIdentifier } from "./sql-quote"
+import { hiveIdentifier, hiveString, tableIdentifier, trinoIdentifier } from "./sql-quote"
 
-describe("trinoIdentifier", () => {
-  it("double-quotes a name and doubles any quote in it", () => {
-    expect(trinoIdentifier('order "date"')).toBe('"order ""date"""')
+describe("sql-quote", () => {
+  it("backquotes a Hive name, doubling any backquote", () => {
+    expect(hiveIdentifier("a`b")).toBe("`a``b`")
   })
-})
 
-describe("previewSql", () => {
-  it("selects the first rows of the table, both names quoted", () => {
-    expect(previewSql("sales", "orders")).toBe('SELECT * FROM "sales"."orders" LIMIT 10;')
+  it("double-quotes a Trino name, doubling any double quote", () => {
+    expect(trinoIdentifier('a"b')).toBe('"a""b"')
+  })
+
+  it("escapes a Hive string with backslashes, a tab as \\t", () => {
+    expect(hiveString("it's\t\\")).toBe("'it\\'s\\t\\\\'")
+  })
+
+  it.each([
+    ["Orders 2026.csv", "orders_2026_csv"],
+    ["2026-data", "t_2026_data"],
+    ["---", "data"],
+  ])("makes a table name of %s", (text, name) => {
+    expect(tableIdentifier(text)).toBe(name)
   })
 })

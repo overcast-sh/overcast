@@ -123,6 +123,23 @@ Iceberg clients that write their own metadata, such as PyIceberg's
 `GlueCatalog`, commit through `UpdateTable` with `VersionId`. A lost race is
 the same `ConcurrentModificationException` they retry on AWS.
 
+## In the console
+
+The Glue page lists databases, then each database's tables with their format,
+location, partition keys and column count. A table opens on its schema, with
+*Copy DDL* for the `CREATE EXTERNAL TABLE` that recreates it. The Partitions
+tab sends a filter to `GetPartitions` as an `Expression`, exactly as typed, and
+shows the service's parse error under the box. *Discover partitions* runs
+`MSCK REPAIR TABLE` through Athena. The Data tab previews rows through Athena,
+or lists the table's files when the query engine is off. The Versions tab diffs
+any two table versions side by side.
+
+*Create table from S3* stands in for a crawler, which Overcast does not
+emulate. Pick a prefix, and the console reads the schema from one CSV, JSON
+Lines or Parquet file, turns Hive `key=value/` folders into partition keys, and
+creates the table with `CreateTable` and its partitions with
+`BatchCreatePartition`. *Copy as CDK* gives the same table as a `CfnTable`.
+
 <!-- BEGIN overcast:capabilities -->
 
 ## Operations

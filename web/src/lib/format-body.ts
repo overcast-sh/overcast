@@ -1,5 +1,6 @@
 import { highlightCode } from "@/lib/highlight-code"
 import { highlightGoStack } from "@/lib/go-stack-prism"
+import { reindentJson } from "@/lib/json-text"
 
 export type BodyLanguage = "json" | "xml" | "text"
 
@@ -61,7 +62,9 @@ export function formatBodyText(
 ): { text: string; language: "json" | "markup" | null } {
   if (hint === "json" || (hint === "text" && looksLikeJSON(raw))) {
     try {
-      return { text: JSON.stringify(JSON.parse(raw), null, 2), language: "json" }
+      // Re-indented as text, not round-tripped through JSON.parse: a large
+      // integer (an Iceberg snapshot id, a DynamoDB number) keeps its digits.
+      return { text: reindentJson(raw), language: "json" }
     } catch {
       return { text: raw, language: null }
     }

@@ -239,11 +239,23 @@ describe("useEventStreamSubscription > data-lake events", () => {
   // makes stale. Each also changes a node on the map (#2089).
   it.each([
     ["athena:QueryStateChanged", "athena", [athenaKeys.executions(), topologyKey]],
-    ["glue:TableChanged", "glue", [glueKeys.tables(), glueKeys.partitions(), topologyKey]],
+    [
+      "glue:TableChanged",
+      "glue",
+      [glueKeys.tables(), glueKeys.partitions(), athenaKeys.metadata(), topologyKey],
+    ],
     ["glue:PartitionsChanged", "glue", [glueKeys.partitions(), topologyKey]],
-    ["s3tables:TableCreated", "s3tables", [s3tablesKeys.tables(), topologyKey]],
+    [
+      "s3tables:TableCreated",
+      "s3tables",
+      [s3tablesKeys.tables(), s3tablesKeys.namespaces(), topologyKey],
+    ],
     ["s3tables:TableDeleted", "s3tables", [s3tablesKeys.tables(), topologyKey]],
-    ["s3tables:TableRenamed", "s3tables", [s3tablesKeys.tables(), topologyKey]],
+    [
+      "s3tables:TableRenamed",
+      "s3tables",
+      [s3tablesKeys.tables(), s3tablesKeys.namespaces(), topologyKey],
+    ],
     ["s3tables:TableCommitted", "s3tables", [s3tablesKeys.tables(), topologyKey]],
   ])("invalidates what %s makes stale", (type, source, keys) => {
     const client = makeClient()

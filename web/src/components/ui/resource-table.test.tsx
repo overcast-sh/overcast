@@ -284,6 +284,7 @@ describe("ResourceTable > expanding a row", () => {
     onRowClick?: (t: Topic) => void
     canExpand?: (t: Topic) => boolean
     defaultExpanded?: (t: Topic) => boolean
+    expandLabel?: string
   }) {
     return (
       <ResourceTable
@@ -294,6 +295,7 @@ describe("ResourceTable > expanding a row", () => {
         onRowClick={props.onRowClick}
         canExpand={props.canExpand}
         defaultExpanded={props.defaultExpanded}
+        expandLabel={props.expandLabel}
         expandedContent={(t) => <p>Detail for {t.name}</p>}
       />
     )
@@ -309,6 +311,13 @@ describe("ResourceTable > expanding a row", () => {
 
     await user.click(within(row).getByRole("button", { name: "Collapse row" }))
     expect(screen.queryByText("Detail for alerts")).not.toBeInTheDocument()
+  })
+
+  it("names the chevron after what the panel shows when the page says", async () => {
+    const { user } = render(<ExpandableTopics expandLabel="subscriptions" />)
+    const row = screen.getByRole("row", { name: /alerts/ })
+    await user.click(within(row).getByRole("button", { name: "Show subscriptions" }))
+    expect(within(row).getByRole("button", { name: "Hide subscriptions" })).toBeInTheDocument()
   })
 
   // Reading two events side by side is the reason this is a row rather than a
@@ -360,6 +369,25 @@ describe("ResourceTable > expanding a row", () => {
     // Closing it stays closed — the seed runs once, not on every render.
     await user.click(screen.getByRole("button", { name: "Collapse row" }))
     expect(screen.queryByText("Detail for billing")).not.toBeInTheDocument()
+  })
+
+  // The deep-link case: the page mounts while its query loads, and the rows
+  // the seed names arrive afterwards. The row model settling on that data
+  // must not undo the seed.
+  it("opens a defaultExpanded row that arrives after the table mounted", async () => {
+    const table = (data: Topic[] | undefined) => (
+      <ResourceTable
+        query={{ data, isLoading: data === undefined }}
+        noun="topics"
+        columns={columns}
+        rowKey={(t) => t.arn}
+        defaultExpanded={(t) => t.name === "billing"}
+        expandedContent={(t) => <p>Detail for {t.name}</p>}
+      />
+    )
+    const { rerender } = render(table(undefined))
+    rerender(table(topics))
+    expect(await screen.findByText("Detail for billing")).toBeInTheDocument()
   })
 })
 
