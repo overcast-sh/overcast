@@ -455,6 +455,34 @@
       ]
     },
     {
+      "service": "backup",
+      "name": "backup-tags-shadow",
+      "generated": true,
+      "scenario": "compat/model/authored/backup-tags.json",
+      "state": "candidate",
+      "shadowOf": "backup-tags",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "TagResource"
+        },
+        {
+          "name": "ListTags"
+        },
+        {
+          "name": "UntagResource"
+        }
+      ]
+    },
+    {
       "service": "batch",
       "name": "batch-gen-computeenvironment",
       "generated": true,
