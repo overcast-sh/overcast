@@ -23,15 +23,15 @@ func servedOver(p awsapi.Protocol, modelService string) servedProtocol {
 	return servedProtocol{protocol: p, errors: awsapi.ErrorProfileFor(p, modelService)}
 }
 
-// writeUnroutedError answers a request that middleware rejects before the
-// router has resolved it — a failed signature, a store still migrating, a
+// writeUnroutedError answers a request that middleware rejects without the
+// router's resolution of it — a failed signature, a store still migrating, a
 // recovered panic — in the error envelope of the protocol it is served over.
 //
-// Neither a codec nor a resolved Query route exists yet, since
-// middleware.Protocol and the router both run later, so a Query call is
-// recognised by its modeled Action; for a form-encoded POST that means
-// reading the form here. ParseFormPreservingBody leaves the body intact for
-// anything that still reads it.
+// No codec or resolved Query route is on this request: middleware.Protocol
+// and the router run inside these middlewares, not before them. So a Query
+// call is recognised by its modeled Action, which for a form-encoded POST
+// means reading the form here. ParseFormPreservingBody leaves the body intact
+// for anything that still reads it.
 func writeUnroutedError(w http.ResponseWriter, r *http.Request, aerr *protocol.AWSError) {
 	if strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/x-www-form-urlencoded") {
 		_ = protocol.ParseFormPreservingBody(r)
