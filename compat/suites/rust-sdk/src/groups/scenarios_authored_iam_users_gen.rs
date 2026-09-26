@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/iam-users.json";
 
-const GROUP_IAM_USERS_SHADOW: Group = Group {
-    name: "iam-users-shadow",
+const GROUP_IAM_USERS: Group = Group {
+    name: "iam-users",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredIamUsers {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-users-shadow:CreateUser".to_string(),
+                "iam-users:CreateUser".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_USERS_SHADOW
-                            .run_test(&ctx, "CreateUser", test_iam_users_shadow_create_user(&client))
+                        GROUP_IAM_USERS
+                            .run_test(&ctx, "CreateUser", test_iam_users_create_user(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredIamUsers {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-users-shadow:GetUser".to_string(),
+                "iam-users:GetUser".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_USERS_SHADOW
-                            .run_test(&ctx, "GetUser", test_iam_users_shadow_get_user(&client))
+                        GROUP_IAM_USERS
+                            .run_test(&ctx, "GetUser", test_iam_users_get_user(&client))
                             .await
                     })
                 }),
@@ -79,12 +79,12 @@ impl ServiceGroup for ScenariosAuthoredIamUsers {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-users-shadow:ListUsers".to_string(),
+                "iam-users:ListUsers".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_USERS_SHADOW
-                            .run_test(&ctx, "ListUsers", test_iam_users_shadow_list_users(&client))
+                        GROUP_IAM_USERS
+                            .run_test(&ctx, "ListUsers", test_iam_users_list_users(&client))
                             .await
                     })
                 }),
@@ -93,12 +93,12 @@ impl ServiceGroup for ScenariosAuthoredIamUsers {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-users-shadow:CreateAccessKey".to_string(),
+                "iam-users:CreateAccessKey".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_USERS_SHADOW
-                            .run_test(&ctx, "CreateAccessKey", test_iam_users_shadow_create_access_key(&client))
+                        GROUP_IAM_USERS
+                            .run_test(&ctx, "CreateAccessKey", test_iam_users_create_access_key(&client))
                             .await
                     })
                 }),
@@ -107,12 +107,12 @@ impl ServiceGroup for ScenariosAuthoredIamUsers {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-users-shadow:DeleteAccessKey".to_string(),
+                "iam-users:DeleteAccessKey".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_USERS_SHADOW
-                            .run_test(&ctx, "DeleteAccessKey", test_iam_users_shadow_delete_access_key(&client))
+                        GROUP_IAM_USERS
+                            .run_test(&ctx, "DeleteAccessKey", test_iam_users_delete_access_key(&client))
                             .await
                     })
                 }),
@@ -121,12 +121,12 @@ impl ServiceGroup for ScenariosAuthoredIamUsers {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-users-shadow:PutUserPolicy".to_string(),
+                "iam-users:PutUserPolicy".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_USERS_SHADOW
-                            .run_test(&ctx, "PutUserPolicy", test_iam_users_shadow_put_user_policy(&client))
+                        GROUP_IAM_USERS
+                            .run_test(&ctx, "PutUserPolicy", test_iam_users_put_user_policy(&client))
                             .await
                     })
                 }),
@@ -135,12 +135,12 @@ impl ServiceGroup for ScenariosAuthoredIamUsers {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-users-shadow:GetUserPolicy".to_string(),
+                "iam-users:GetUserPolicy".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_USERS_SHADOW
-                            .run_test(&ctx, "GetUserPolicy", test_iam_users_shadow_get_user_policy(&client))
+                        GROUP_IAM_USERS
+                            .run_test(&ctx, "GetUserPolicy", test_iam_users_get_user_policy(&client))
                             .await
                     })
                 }),
@@ -149,12 +149,12 @@ impl ServiceGroup for ScenariosAuthoredIamUsers {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-users-shadow:DeleteUserPolicy".to_string(),
+                "iam-users:DeleteUserPolicy".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_USERS_SHADOW
-                            .run_test(&ctx, "DeleteUserPolicy", test_iam_users_shadow_delete_user_policy(&client))
+                        GROUP_IAM_USERS
+                            .run_test(&ctx, "DeleteUserPolicy", test_iam_users_delete_user_policy(&client))
                             .await
                     })
                 }),
@@ -163,12 +163,12 @@ impl ServiceGroup for ScenariosAuthoredIamUsers {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-users-shadow:UpdateUser".to_string(),
+                "iam-users:UpdateUser".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_USERS_SHADOW
-                            .run_test(&ctx, "UpdateUser", test_iam_users_shadow_update_user(&client))
+                        GROUP_IAM_USERS
+                            .run_test(&ctx, "UpdateUser", test_iam_users_update_user(&client))
                             .await
                     })
                 }),
@@ -177,12 +177,12 @@ impl ServiceGroup for ScenariosAuthoredIamUsers {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-users-shadow:ListAccessKeys".to_string(),
+                "iam-users:ListAccessKeys".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_USERS_SHADOW
-                            .run_test(&ctx, "ListAccessKeys", test_iam_users_shadow_list_access_keys(&client))
+                        GROUP_IAM_USERS
+                            .run_test(&ctx, "ListAccessKeys", test_iam_users_list_access_keys(&client))
                             .await
                     })
                 }),
@@ -191,12 +191,12 @@ impl ServiceGroup for ScenariosAuthoredIamUsers {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-users-shadow:DeleteUser".to_string(),
+                "iam-users:DeleteUser".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_USERS_SHADOW
-                            .run_test(&ctx, "DeleteUser", test_iam_users_shadow_delete_user(&client))
+                        GROUP_IAM_USERS
+                            .run_test(&ctx, "DeleteUser", test_iam_users_delete_user(&client))
                             .await
                     })
                 }),
@@ -210,11 +210,11 @@ impl ServiceGroup for ScenariosAuthoredIamUsers {
         {
             let client = self.client.clone();
             setups.insert(
-                "iam-users-shadow".to_string(),
+                "iam-users".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_USERS_SHADOW.run_setup(&ctx, setup_iam_users_shadow(&client)).await
+                        GROUP_IAM_USERS.run_setup(&ctx, setup_iam_users(&client)).await
                     })
                 }),
             );
@@ -227,11 +227,11 @@ impl ServiceGroup for ScenariosAuthoredIamUsers {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "iam-users-shadow".to_string(),
+                "iam-users".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_USERS_SHADOW.run_teardown(&ctx, teardown_iam_users_shadow(&client)).await
+                        GROUP_IAM_USERS.run_teardown(&ctx, teardown_iam_users(&client)).await
                     })
                 }),
             );
@@ -240,12 +240,12 @@ impl ServiceGroup for ScenariosAuthoredIamUsers {
     }
 }
 
-fn setup_iam_users_shadow(_client: &aws_sdk_iam::Client) -> Vec<Call> {
+fn setup_iam_users(_client: &aws_sdk_iam::Client) -> Vec<Call> {
     // An empty phase is a no-op, not a missing one.
     Vec::new()
 }
 
-fn teardown_iam_users_shadow(client: &aws_sdk_iam::Client) -> Vec<Call> {
+fn teardown_iam_users(client: &aws_sdk_iam::Client) -> Vec<Call> {
     vec![
         Call {
             op: "UpdateUser",
@@ -342,7 +342,7 @@ fn teardown_iam_users_shadow(client: &aws_sdk_iam::Client) -> Vec<Call> {
     ]
 }
 
-fn test_iam_users_shadow_create_user(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_users_create_user(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "CreateUser",
@@ -405,7 +405,7 @@ fn test_iam_users_shadow_create_user(client: &aws_sdk_iam::Client) -> Test {
     }
 }
 
-fn test_iam_users_shadow_get_user(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_users_get_user(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "GetUser",
@@ -438,7 +438,7 @@ fn test_iam_users_shadow_get_user(client: &aws_sdk_iam::Client) -> Test {
     }
 }
 
-fn test_iam_users_shadow_list_users(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_users_list_users(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "ListUsers",
@@ -473,7 +473,7 @@ fn test_iam_users_shadow_list_users(client: &aws_sdk_iam::Client) -> Test {
     }
 }
 
-fn test_iam_users_shadow_create_access_key(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_users_create_access_key(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "CreateAccessKey",
@@ -541,7 +541,7 @@ fn test_iam_users_shadow_create_access_key(client: &aws_sdk_iam::Client) -> Test
     }
 }
 
-fn test_iam_users_shadow_delete_access_key(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_users_delete_access_key(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteAccessKey",
@@ -602,7 +602,7 @@ fn test_iam_users_shadow_delete_access_key(client: &aws_sdk_iam::Client) -> Test
     }
 }
 
-fn test_iam_users_shadow_put_user_policy(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_users_put_user_policy(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "PutUserPolicy",
@@ -665,7 +665,7 @@ fn test_iam_users_shadow_put_user_policy(client: &aws_sdk_iam::Client) -> Test {
     }
 }
 
-fn test_iam_users_shadow_get_user_policy(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_users_get_user_policy(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "GetUserPolicy",
@@ -701,7 +701,7 @@ fn test_iam_users_shadow_get_user_policy(client: &aws_sdk_iam::Client) -> Test {
     }
 }
 
-fn test_iam_users_shadow_delete_user_policy(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_users_delete_user_policy(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteUserPolicy",
@@ -791,7 +791,7 @@ fn test_iam_users_shadow_delete_user_policy(client: &aws_sdk_iam::Client) -> Tes
     }
 }
 
-fn test_iam_users_shadow_update_user(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_users_update_user(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "UpdateUser",
@@ -884,7 +884,7 @@ fn test_iam_users_shadow_update_user(client: &aws_sdk_iam::Client) -> Test {
     }
 }
 
-fn test_iam_users_shadow_list_access_keys(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_users_list_access_keys(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "ListAccessKeys",
@@ -923,7 +923,7 @@ fn test_iam_users_shadow_list_access_keys(client: &aws_sdk_iam::Client) -> Test 
     }
 }
 
-fn test_iam_users_shadow_delete_user(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_users_delete_user(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteUser",

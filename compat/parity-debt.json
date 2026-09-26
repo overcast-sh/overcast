@@ -424,12 +424,6 @@
     },
     {
       "suite": "dotnet-sdk",
-      "service": "kinesis",
-      "group": "kinesis-records",
-      "tests": 4
-    },
-    {
-      "suite": "dotnet-sdk",
       "service": "msk",
       "group": "msk-clusters",
       "tests": 16
@@ -1805,26 +1799,8 @@
     {
       "suite": "rust-sdk",
       "service": "iam",
-      "group": "iam-roles",
-      "tests": 16
-    },
-    {
-      "suite": "rust-sdk",
-      "service": "iam",
       "group": "iam-simulate",
       "tests": 5
-    },
-    {
-      "suite": "rust-sdk",
-      "service": "iam",
-      "group": "iam-users",
-      "tests": 11
-    },
-    {
-      "suite": "rust-sdk",
-      "service": "kinesis",
-      "group": "kinesis-records",
-      "tests": 4
     },
     {
       "suite": "rust-sdk",

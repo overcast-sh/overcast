@@ -51,7 +51,6 @@ func handWritten(c *clients.Clients) []ServiceGroup {
 		SecretsManager(c).named("secretsmanager"),
 		KMS(c).named("kms"),
 		SSM(c).named("ssm"),
-		Kinesis(c).named("kinesis"),
 		EventBridge(c).named("eventbridge"),
 		CloudFormation(c).named("cloudformation"),
 		EC2(c).named("ec2"),

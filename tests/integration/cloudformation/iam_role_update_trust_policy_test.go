@@ -63,8 +63,14 @@ func TestUpdateStack_IAMRole_stringFormTrustPolicy_doesNotDoubleEncode(t *testin
 			} `json:"Principal"`
 		} `json:"Statement"`
 	}
-	if err := json.Unmarshal([]byte(out.Document), &doc); err != nil {
-		t.Fatalf("AssumeRolePolicyDocument did not decode as a policy document (looks double-encoded): %v; got %q", err, out.Document)
+	// IAM returns the trust policy URL-encoded per RFC 3986 (API_Role.html;
+	// #2180), so decode it once, as a caller of the real service must.
+	decoded, err := url.PathUnescape(out.Document)
+	if err != nil {
+		t.Fatalf("AssumeRolePolicyDocument is not RFC 3986 encoded: %v; got %q", err, out.Document)
+	}
+	if err := json.Unmarshal([]byte(decoded), &doc); err != nil {
+		t.Fatalf("AssumeRolePolicyDocument did not decode as a policy document (looks double-encoded): %v; got %q", err, decoded)
 	}
 	if len(doc.Statement) != 1 || doc.Statement[0].Principal.Service != "lambda.amazonaws.com" {
 		t.Fatalf("AssumeRolePolicyDocument = %q, want the updated principal lambda.amazonaws.com", out.Document)
