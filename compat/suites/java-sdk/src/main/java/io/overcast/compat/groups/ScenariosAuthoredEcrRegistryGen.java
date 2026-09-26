@@ -24,8 +24,8 @@ import software.amazon.awssdk.services.ecr.model.GetAuthorizationTokenRequest;
  */
 public final class ScenariosAuthoredEcrRegistryGen implements ServiceGroup {
 
-    private static final Group GROUP_ECR_REGISTRY_SHADOW =
-            new Group("ecr-registry-shadow", "compat/model/authored/ecr-registry.json");
+    private static final Group GROUP_ECR_REGISTRY =
+            new Group("ecr-registry", "compat/model/authored/ecr-registry.json");
 
     private final AwsClients clients;
     private volatile EcrClient client;
@@ -42,20 +42,20 @@ public final class ScenariosAuthoredEcrRegistryGen implements ServiceGroup {
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("ecr-registry-shadow:GetAuthorizationToken", this::testEcrRegistryShadowGetAuthorizationToken),
-                Map.entry("ecr-registry-shadow:DescribeRegistry", this::testEcrRegistryShadowDescribeRegistry));
+                Map.entry("ecr-registry:GetAuthorizationToken", this::testEcrRegistryGetAuthorizationToken),
+                Map.entry("ecr-registry:DescribeRegistry", this::testEcrRegistryDescribeRegistry));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("ecr-registry-shadow", this::setupEcrRegistryShadow));
+                Map.entry("ecr-registry", this::setupEcrRegistry));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("ecr-registry-shadow", this::teardownEcrRegistryShadow));
+                Map.entry("ecr-registry", this::teardownEcrRegistry));
     }
 
     /**
@@ -75,18 +75,18 @@ public final class ScenariosAuthoredEcrRegistryGen implements ServiceGroup {
         return client;
     }
 
-    private void setupEcrRegistryShadow(TestContext t) {
+    private void setupEcrRegistry(TestContext t) {
         // No setup steps: an empty phase is a no-op, not a missing one.
-        GROUP_ECR_REGISTRY_SHADOW.runSetup(t);
+        GROUP_ECR_REGISTRY.runSetup(t);
     }
 
-    private void teardownEcrRegistryShadow(TestContext t) {
+    private void teardownEcrRegistry(TestContext t) {
         // No teardown steps: an empty phase is a no-op, not a missing one.
-        GROUP_ECR_REGISTRY_SHADOW.runTeardown(t);
+        GROUP_ECR_REGISTRY.runTeardown(t);
     }
 
-    private void testEcrRegistryShadowGetAuthorizationToken(TestContext t) {
-        GROUP_ECR_REGISTRY_SHADOW.runTest(t, "GetAuthorizationToken",
+    private void testEcrRegistryGetAuthorizationToken(TestContext t) {
+        GROUP_ECR_REGISTRY.runTest(t, "GetAuthorizationToken",
                 new Call("GetAuthorizationToken", "{}",
                         b -> GetAuthorizationTokenRequest.builder()
                                 .build(),
@@ -100,8 +100,8 @@ public final class ScenariosAuthoredEcrRegistryGen implements ServiceGroup {
                 ));
     }
 
-    private void testEcrRegistryShadowDescribeRegistry(TestContext t) {
-        GROUP_ECR_REGISTRY_SHADOW.runTest(t, "DescribeRegistry",
+    private void testEcrRegistryDescribeRegistry(TestContext t) {
+        GROUP_ECR_REGISTRY.runTest(t, "DescribeRegistry",
                 new Call("DescribeRegistry", "{}",
                         b -> DescribeRegistryRequest.builder()
                                 .build(),

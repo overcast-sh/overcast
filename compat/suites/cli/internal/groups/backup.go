@@ -10,14 +10,13 @@ import (
 	"github.com/overcast-sh/overcast-compat-cli/internal/harness"
 )
 
-// One Namer per Backup sub-group so the five groups, which run in parallel,
+// One Namer per Backup sub-group so the four groups, which run in parallel,
 // never share a vault, plan, selection or job name.
 var (
 	backupVaultsNamer     = harness.NewNamer("bkv")
 	backupPlansNamer      = harness.NewNamer("bkp")
 	backupSelectionsNamer = harness.NewNamer("bks")
 	backupJobsNamer       = harness.NewNamer("bkj")
-	backupTagsNamer       = harness.NewNamer("bkt")
 )
 
 // backupMissingPlanID is a well-formed BackupPlanId that was never created. The
@@ -40,6 +39,9 @@ const backupMissingPlanID = "00000000-0000-0000-0000-000000000000"
 // (#963, fixed in #966). Every List/Get test below therefore asserts that the
 // resource it created is *in* the response, because "the call did not throw" is
 // exactly what that bug looked like.
+//
+// backup-tags has no native here: it resolves through its authored scenario
+// (compat/model/authored/backup-tags.json).
 func Backup() ServiceGroup {
 	g := &backupCliGroup{}
 	return ServiceGroup{
@@ -76,24 +78,18 @@ func Backup() ServiceGroup {
 			"backup-jobs:ListBackupJobs":                  g.ListBackupJobs,
 			"backup-jobs:DescribeBackupJob":               g.DescribeBackupJob,
 			"backup-jobs:ListRecoveryPointsByBackupVault": g.ListRecoveryPointsByBackupVault,
-			// backup-tags
-			"backup-tags:TagResource":   g.TagResource,
-			"backup-tags:ListTags":      g.ListTags,
-			"backup-tags:UntagResource": g.UntagResource,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
 			"backup-vaults":     g.setupVaults,
 			"backup-plans":      g.setupPlans,
 			"backup-selections": g.setupSelections,
 			"backup-jobs":       g.setupJobs,
-			"backup-tags":       g.setupTags,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
 			"backup-vaults":     g.teardownVaults,
 			"backup-plans":      g.teardownPlans,
 			"backup-selections": g.teardownSelections,
 			"backup-jobs":       g.teardownJobs,
-			"backup-tags":       g.teardownTags,
 		},
 	}
 }
@@ -885,147 +881,6 @@ func (g *backupCliGroup) ListRecoveryPointsByBackupVault(_ context.Context, t *h
 	}
 	if _, ok := backupList(out, "RecoveryPoints"); !ok {
 		return fmt.Errorf("backup ListRecoveryPointsByBackupVault: the response carries no RecoveryPoints: %#v", out)
-	}
-	return nil
-}
-
-// ─── backup-tags ──────────────────────────────────────────────────────────────
-//
-// Tagging is outside the nine operations Overcast implements, so this group
-// follows the two above: signed calls, `unimplemented` recorded against the
-// 501, no `depends`, and every assertion a working implementation would have
-// to satisfy already written.
-//
-// These tests were deliberately left out of the group's introduction (#975)
-// because they could not record the truth. `GET /tags/{resourceArn}` is a URI
-// dozens of services model, and the dispatcher's fallback owner was API
-// Gateway's ARN-keyed tag store: it answered HTTP 200 `{"tags":{}}` for every
-// ARN no other service claimed — signed or not — so `aws backup list-tags`
-// read as success and the test would have recorded `fail` rather than
-// `unimplemented` (#976). Since #1122 the store is a keyed owner and an
-// unclaimed ARN falls through to the router's usual answer: a signed caller
-// gets the generated 501. If that regresses, these tests say so — the fake
-// body's lowercase "tags" key matches no modeled member, so ListTags would
-// come back with no Tags member at all and record `fail`, which is correct.
-
-// backupTagKey is the one key the group writes. The value is the vault's own
-// name, which the run id already makes unique.
-const backupTagKey = "oc-compat"
-
-// setupTags creates the vault the tags hang off. Tag operations address a
-// resource by ARN, so the group owns a real, taggable resource rather than
-// inventing an ARN — the day tagging lands, the happy path must actually work.
-func (g *backupCliGroup) setupTags(_ context.Context, t *harness.TestContext) error {
-	vault := backupTagsNamer.Suffixed(t, "-vault")
-	t.Set("tags_vault", vault)
-	out, err := awscli.RunOutput(t.Endpoint, t.Region,
-		"backup", "create-backup-vault", "--backup-vault-name", vault)
-	if err != nil {
-		return err
-	}
-	arn := backupString(out, "BackupVaultArn")
-	if arn == "" {
-		return fmt.Errorf("backup tags setup: CreateBackupVault returned no BackupVaultArn: %#v", out)
-	}
-	t.Set("tags_vault_arn", arn)
-	return nil
-}
-
-func (g *backupCliGroup) teardownTags(_ context.Context, t *harness.TestContext) error {
-	// Reverse creation order: the tag (if one was ever written), then the
-	// vault it was written on.
-	if key := t.GetString("tags_key"); key != "" {
-		if arn := t.GetString("tags_vault_arn"); arn != "" {
-			awscli.RunSigned(t.Endpoint, t.Region, "backup", "untag-resource", //nolint:errcheck
-				"--resource-arn", arn, "--tag-key-list", key)
-		}
-	}
-	if vault := t.GetString("tags_vault"); vault != "" {
-		awscli.Run(t.Endpoint, t.Region, "backup", "delete-backup-vault", "--backup-vault-name", vault) //nolint:errcheck
-	}
-	return nil
-}
-
-func (g *backupCliGroup) TagResource(_ context.Context, t *harness.TestContext) error {
-	arn := t.GetString("tags_vault_arn")
-	vault := t.GetString("tags_vault")
-	if arn == "" {
-		return fmt.Errorf("backup TagResource: no tags_vault_arn from setup")
-	}
-	if err := awscli.RunSigned(t.Endpoint, t.Region, "backup", "tag-resource",
-		"--resource-arn", arn, "--tags", backupTagKey+"="+vault); err != nil {
-		return err
-	}
-	t.Set("tags_key", backupTagKey)
-	// TagResource's modeled output is Unit, so the tag is proved by reading it
-	// back — checking the mutation here means a broken TagResource fails at
-	// TagResource, not one test later.
-	out, err := awscli.RunOutputSigned(t.Endpoint, t.Region,
-		"backup", "list-tags", "--resource-arn", arn)
-	if err != nil {
-		return err
-	}
-	tags, ok := out["Tags"].(map[string]any)
-	if !ok {
-		return fmt.Errorf("backup TagResource: the ListTags response carries no Tags — GET /tags/{resourceArn} was not answered by Backup: %#v", out)
-	}
-	if got := backupString(tags, backupTagKey); got != vault {
-		return fmt.Errorf("backup TagResource: Tags[%q] = %q after tagging, want %q", backupTagKey, got, vault)
-	}
-	return nil
-}
-
-func (g *backupCliGroup) ListTags(_ context.Context, t *harness.TestContext) error {
-	arn := t.GetString("tags_vault_arn")
-	if arn == "" {
-		return fmt.Errorf("backup ListTags: no tags_vault_arn from setup")
-	}
-	out, err := awscli.RunOutputSigned(t.Endpoint, t.Region,
-		"backup", "list-tags", "--resource-arn", arn)
-	if err != nil {
-		return err
-	}
-	// An absent Tags member is the shape of an answer from somewhere other
-	// than Backup: the #976 fallback's `{"tags":{}}` body matches no modeled
-	// member, so the CLI surfaces it as exactly this.
-	tags, ok := out["Tags"].(map[string]any)
-	if !ok {
-		return fmt.Errorf("backup ListTags: the response carries no Tags — GET /tags/{resourceArn} was not answered by Backup: %#v", out)
-	}
-	if key := t.GetString("tags_key"); key != "" {
-		if got := backupString(tags, key); got != t.GetString("tags_vault") {
-			return fmt.Errorf("backup ListTags: Tags[%q] = %q, want the value TagResource wrote (%q)", key, got, t.GetString("tags_vault"))
-		}
-	}
-	return nil
-}
-
-func (g *backupCliGroup) UntagResource(_ context.Context, t *harness.TestContext) error {
-	arn := t.GetString("tags_vault_arn")
-	if arn == "" {
-		return fmt.Errorf("backup UntagResource: no tags_vault_arn from setup")
-	}
-	// If TagResource could not mint the tag, untag the key anyway: AWS treats
-	// removing an absent key as success, and the point of the call is that
-	// Backup answers it at all.
-	if err := awscli.RunSigned(t.Endpoint, t.Region, "backup", "untag-resource",
-		"--resource-arn", arn, "--tag-key-list", backupTagKey); err != nil {
-		return err
-	}
-	t.Set("tags_key", "")
-	// UntagResource's modeled output is Unit, so the removal is proved by the
-	// key no longer being listed. A Tags member absent here is accepted too:
-	// the vault now carries no tags, and either spelling of "nothing" is fine
-	// — what must not happen is the removed key still being present.
-	out, err := awscli.RunOutputSigned(t.Endpoint, t.Region,
-		"backup", "list-tags", "--resource-arn", arn)
-	if err != nil {
-		return err
-	}
-	if tags, ok := out["Tags"].(map[string]any); ok {
-		if _, present := tags[backupTagKey]; present {
-			return fmt.Errorf("backup UntagResource: Tags still carries %q after the untag: %#v", backupTagKey, tags)
-		}
 	}
 	return nil
 }

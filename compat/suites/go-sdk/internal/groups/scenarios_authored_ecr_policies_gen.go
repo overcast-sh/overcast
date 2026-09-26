@@ -23,19 +23,19 @@ func ScenariosAuthoredEcrPolicies(c *clients.Clients) ServiceGroup {
 	return ServiceGroup{
 		Name: "scenarios/authored-ecr-policies",
 		Impls: map[string]harness.TestFn{
-			"ecr-policies-shadow:PutLifecyclePolicy":         g.testEcrPoliciesShadowPutLifecyclePolicy,
-			"ecr-policies-shadow:GetLifecyclePolicy":         g.testEcrPoliciesShadowGetLifecyclePolicy,
-			"ecr-policies-shadow:DeleteLifecyclePolicy":      g.testEcrPoliciesShadowDeleteLifecyclePolicy,
-			"ecr-policies-shadow:GetLifecyclePolicyNotFound": g.testEcrPoliciesShadowGetLifecyclePolicyNotFound,
-			"ecr-policies-shadow:SetRepositoryPolicy":        g.testEcrPoliciesShadowSetRepositoryPolicy,
-			"ecr-policies-shadow:GetRepositoryPolicy":        g.testEcrPoliciesShadowGetRepositoryPolicy,
-			"ecr-policies-shadow:DeleteRepositoryPolicy":     g.testEcrPoliciesShadowDeleteRepositoryPolicy,
+			"ecr-policies:PutLifecyclePolicy":         g.testEcrPoliciesPutLifecyclePolicy,
+			"ecr-policies:GetLifecyclePolicy":         g.testEcrPoliciesGetLifecyclePolicy,
+			"ecr-policies:DeleteLifecyclePolicy":      g.testEcrPoliciesDeleteLifecyclePolicy,
+			"ecr-policies:GetLifecyclePolicyNotFound": g.testEcrPoliciesGetLifecyclePolicyNotFound,
+			"ecr-policies:SetRepositoryPolicy":        g.testEcrPoliciesSetRepositoryPolicy,
+			"ecr-policies:GetRepositoryPolicy":        g.testEcrPoliciesGetRepositoryPolicy,
+			"ecr-policies:DeleteRepositoryPolicy":     g.testEcrPoliciesDeleteRepositoryPolicy,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"ecr-policies-shadow": g.setupEcrPoliciesShadow,
+			"ecr-policies": g.setupEcrPolicies,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"ecr-policies-shadow": g.teardownEcrPoliciesShadow,
+			"ecr-policies": g.teardownEcrPolicies,
 		},
 	}
 }
@@ -55,10 +55,10 @@ func (g *authoredEcrPoliciesScenarios) cl() *ecr.Client {
 	return g.client
 }
 
-var groupEcrPoliciesShadow = scenario.Group{Name: "ecr-policies-shadow", File: "compat/model/authored/ecr-policies.json"}
+var groupEcrPolicies = scenario.Group{Name: "ecr-policies", File: "compat/model/authored/ecr-policies.json"}
 
-func (g *authoredEcrPoliciesScenarios) setupEcrPoliciesShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrPoliciesShadow.RunSetup(ctx, t,
+func (g *authoredEcrPoliciesScenarios) setupEcrPolicies(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrPolicies.RunSetup(ctx, t,
 		scenario.Call{
 			Op:     "CreateRepository",
 			Params: `{"repositoryName":{"$name":"repo"}}`,
@@ -86,8 +86,8 @@ func (g *authoredEcrPoliciesScenarios) setupEcrPoliciesShadow(ctx context.Contex
 	)
 }
 
-func (g *authoredEcrPoliciesScenarios) teardownEcrPoliciesShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrPoliciesShadow.RunTeardown(ctx, t,
+func (g *authoredEcrPoliciesScenarios) teardownEcrPolicies(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrPolicies.RunTeardown(ctx, t,
 		scenario.Call{
 			Op:     "DeleteRepositoryPolicy",
 			Params: `{"repositoryName":{"$name":"repo"}}`,
@@ -141,8 +141,8 @@ func (g *authoredEcrPoliciesScenarios) teardownEcrPoliciesShadow(ctx context.Con
 	)
 }
 
-func (g *authoredEcrPoliciesScenarios) testEcrPoliciesShadowPutLifecyclePolicy(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrPoliciesShadow.RunTest(ctx, t, "PutLifecyclePolicy", scenario.Test{
+func (g *authoredEcrPoliciesScenarios) testEcrPoliciesPutLifecyclePolicy(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrPolicies.RunTest(ctx, t, "PutLifecyclePolicy", scenario.Test{
 		Call: scenario.Call{
 			Op:     "PutLifecyclePolicy",
 			Params: `{"lifecyclePolicyText":"{\"rules\":[{\"rulePriority\":1,\"description\":\"expire untagged\",\"selection\":{\"tagStatus\":\"untagged\",\"countType\":\"imageCountMoreThan\",\"countNumber\":5},\"action\":{\"type\":\"expire\"}}]}","repositoryName":{"$name":"repo"}}`,
@@ -180,8 +180,8 @@ func (g *authoredEcrPoliciesScenarios) testEcrPoliciesShadowPutLifecyclePolicy(c
 	})
 }
 
-func (g *authoredEcrPoliciesScenarios) testEcrPoliciesShadowGetLifecyclePolicy(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrPoliciesShadow.RunTest(ctx, t, "GetLifecyclePolicy", scenario.Test{
+func (g *authoredEcrPoliciesScenarios) testEcrPoliciesGetLifecyclePolicy(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrPolicies.RunTest(ctx, t, "GetLifecyclePolicy", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetLifecyclePolicy",
 			Params: `{"repositoryName":{"$name":"repo"}}`,
@@ -203,8 +203,8 @@ func (g *authoredEcrPoliciesScenarios) testEcrPoliciesShadowGetLifecyclePolicy(c
 	})
 }
 
-func (g *authoredEcrPoliciesScenarios) testEcrPoliciesShadowDeleteLifecyclePolicy(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrPoliciesShadow.RunTest(ctx, t, "DeleteLifecyclePolicy", scenario.Test{
+func (g *authoredEcrPoliciesScenarios) testEcrPoliciesDeleteLifecyclePolicy(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrPolicies.RunTest(ctx, t, "DeleteLifecyclePolicy", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteLifecyclePolicy",
 			Params: `{"repositoryName":{"$name":"repo"}}`,
@@ -240,8 +240,8 @@ func (g *authoredEcrPoliciesScenarios) testEcrPoliciesShadowDeleteLifecyclePolic
 	})
 }
 
-func (g *authoredEcrPoliciesScenarios) testEcrPoliciesShadowGetLifecyclePolicyNotFound(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrPoliciesShadow.RunTest(ctx, t, "GetLifecyclePolicyNotFound", scenario.Test{
+func (g *authoredEcrPoliciesScenarios) testEcrPoliciesGetLifecyclePolicyNotFound(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrPolicies.RunTest(ctx, t, "GetLifecyclePolicyNotFound", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetLifecyclePolicy",
 			Params: `{"repositoryName":{"$name":"bare"}}`,
@@ -260,8 +260,8 @@ func (g *authoredEcrPoliciesScenarios) testEcrPoliciesShadowGetLifecyclePolicyNo
 	})
 }
 
-func (g *authoredEcrPoliciesScenarios) testEcrPoliciesShadowSetRepositoryPolicy(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrPoliciesShadow.RunTest(ctx, t, "SetRepositoryPolicy", scenario.Test{
+func (g *authoredEcrPoliciesScenarios) testEcrPoliciesSetRepositoryPolicy(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrPolicies.RunTest(ctx, t, "SetRepositoryPolicy", scenario.Test{
 		Call: scenario.Call{
 			Op:     "SetRepositoryPolicy",
 			Params: `{"policyText":"{\"Version\":\"2012-10-17\",\"Statement\":[{\"Sid\":\"AllowPull\",\"Effect\":\"Allow\",\"Principal\":\"*\",\"Action\":[\"ecr:GetDownloadUrlForLayer\",\"ecr:BatchGetImage\"]}]}","repositoryName":{"$name":"repo"}}`,
@@ -299,8 +299,8 @@ func (g *authoredEcrPoliciesScenarios) testEcrPoliciesShadowSetRepositoryPolicy(
 	})
 }
 
-func (g *authoredEcrPoliciesScenarios) testEcrPoliciesShadowGetRepositoryPolicy(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrPoliciesShadow.RunTest(ctx, t, "GetRepositoryPolicy", scenario.Test{
+func (g *authoredEcrPoliciesScenarios) testEcrPoliciesGetRepositoryPolicy(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrPolicies.RunTest(ctx, t, "GetRepositoryPolicy", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetRepositoryPolicy",
 			Params: `{"repositoryName":{"$name":"repo"}}`,
@@ -322,8 +322,8 @@ func (g *authoredEcrPoliciesScenarios) testEcrPoliciesShadowGetRepositoryPolicy(
 	})
 }
 
-func (g *authoredEcrPoliciesScenarios) testEcrPoliciesShadowDeleteRepositoryPolicy(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrPoliciesShadow.RunTest(ctx, t, "DeleteRepositoryPolicy", scenario.Test{
+func (g *authoredEcrPoliciesScenarios) testEcrPoliciesDeleteRepositoryPolicy(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrPolicies.RunTest(ctx, t, "DeleteRepositoryPolicy", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteRepositoryPolicy",
 			Params: `{"repositoryName":{"$name":"repo"}}`,

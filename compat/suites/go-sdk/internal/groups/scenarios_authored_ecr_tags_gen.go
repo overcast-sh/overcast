@@ -24,15 +24,15 @@ func ScenariosAuthoredEcrTags(c *clients.Clients) ServiceGroup {
 	return ServiceGroup{
 		Name: "scenarios/authored-ecr-tags",
 		Impls: map[string]harness.TestFn{
-			"ecr-tags-shadow:TagResource":         g.testEcrTagsShadowTagResource,
-			"ecr-tags-shadow:ListTagsForResource": g.testEcrTagsShadowListTagsForResource,
-			"ecr-tags-shadow:UntagResource":       g.testEcrTagsShadowUntagResource,
+			"ecr-tags:TagResource":         g.testEcrTagsTagResource,
+			"ecr-tags:ListTagsForResource": g.testEcrTagsListTagsForResource,
+			"ecr-tags:UntagResource":       g.testEcrTagsUntagResource,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"ecr-tags-shadow": g.setupEcrTagsShadow,
+			"ecr-tags": g.setupEcrTags,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"ecr-tags-shadow": g.teardownEcrTagsShadow,
+			"ecr-tags": g.teardownEcrTags,
 		},
 	}
 }
@@ -52,10 +52,10 @@ func (g *authoredEcrTagsScenarios) cl() *ecr.Client {
 	return g.client
 }
 
-var groupEcrTagsShadow = scenario.Group{Name: "ecr-tags-shadow", File: "compat/model/authored/ecr-tags.json"}
+var groupEcrTags = scenario.Group{Name: "ecr-tags", File: "compat/model/authored/ecr-tags.json"}
 
-func (g *authoredEcrTagsScenarios) setupEcrTagsShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrTagsShadow.RunSetup(ctx, t,
+func (g *authoredEcrTagsScenarios) setupEcrTags(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrTags.RunSetup(ctx, t,
 		scenario.Call{
 			Op:     "CreateRepository",
 			Params: `{"repositoryName":{"$name":"repo"}}`,
@@ -74,8 +74,8 @@ func (g *authoredEcrTagsScenarios) setupEcrTagsShadow(ctx context.Context, t *ha
 	)
 }
 
-func (g *authoredEcrTagsScenarios) teardownEcrTagsShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrTagsShadow.RunTeardown(ctx, t,
+func (g *authoredEcrTagsScenarios) teardownEcrTags(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrTags.RunTeardown(ctx, t,
 		scenario.Call{
 			Op:     "UntagResource",
 			Params: `{"resourceArn":{"$ref":"repo.arn"},"tagKeys":["env","owner"]}`,
@@ -105,8 +105,8 @@ func (g *authoredEcrTagsScenarios) teardownEcrTagsShadow(ctx context.Context, t 
 	)
 }
 
-func (g *authoredEcrTagsScenarios) testEcrTagsShadowTagResource(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrTagsShadow.RunTest(ctx, t, "TagResource", scenario.Test{
+func (g *authoredEcrTagsScenarios) testEcrTagsTagResource(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrTags.RunTest(ctx, t, "TagResource", scenario.Test{
 		Call: scenario.Call{
 			Op:     "TagResource",
 			Params: `{"resourceArn":{"$ref":"repo.arn"},"tags":[{"Key":"env","Value":"compat"},{"Key":"owner","Value":"ecr-tags"}]}`,
@@ -162,8 +162,8 @@ func (g *authoredEcrTagsScenarios) testEcrTagsShadowTagResource(ctx context.Cont
 	})
 }
 
-func (g *authoredEcrTagsScenarios) testEcrTagsShadowListTagsForResource(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrTagsShadow.RunTest(ctx, t, "ListTagsForResource", scenario.Test{
+func (g *authoredEcrTagsScenarios) testEcrTagsListTagsForResource(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrTags.RunTest(ctx, t, "ListTagsForResource", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListTagsForResource",
 			Params: `{"resourceArn":{"$ref":"repo.arn"}}`,
@@ -197,8 +197,8 @@ func (g *authoredEcrTagsScenarios) testEcrTagsShadowListTagsForResource(ctx cont
 	})
 }
 
-func (g *authoredEcrTagsScenarios) testEcrTagsShadowUntagResource(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrTagsShadow.RunTest(ctx, t, "UntagResource", scenario.Test{
+func (g *authoredEcrTagsScenarios) testEcrTagsUntagResource(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrTags.RunTest(ctx, t, "UntagResource", scenario.Test{
 		Call: scenario.Call{
 			Op:     "UntagResource",
 			Params: `{"resourceArn":{"$ref":"repo.arn"},"tagKeys":["owner"]}`,

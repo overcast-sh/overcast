@@ -1,5 +1,5 @@
 {
-  "$comment": "Authored port of the hand-written registry group ecr-tags (docs/plans/compat-coverage-modelgen.md §3.11, G6 wave 3, #1116). The group's only native is the cli suite's (compat/suites/cli/internal/groups/ecr.go); go-sdk, python-sdk, node-js-sdk, java-sdk, dotnet-sdk and rust-sdk never implemented it and carry it as parity debt, which the port closes. It runs as ecr-tags-shadow beside that native until a nightly --compare-shadow agrees; the clauses are what the native asserts — see compat/model/README.md § Authored scenarios.",
+  "$comment": "Authored port of the hand-written registry group ecr-tags (docs/plans/compat-coverage-modelgen.md §3.11, G6 wave 3, #1116). The group's only native is the cli suite's (compat/suites/cli/internal/groups/ecr.go); go-sdk, python-sdk, node-js-sdk, java-sdk, dotnet-sdk and rust-sdk never implemented it and carry it as parity debt, which the port closes. It soaked as ecr-tags-shadow beside that native until the nightly comparison (run 36267202659) found none of its 21 (suite, test) pairs diverged in any of three soak runs; the flip then renamed it to ecr-tags, pointed the hand-written registry entry at it and deleted the native code; the clauses are what the native asserted — see compat/model/README.md § Authored scenarios.",
   "version": 1,
   "service": "ecr",
   "client": {
@@ -13,8 +13,8 @@
   },
   "groups": [
     {
-      "$comment": "Setup creates one repository, as the native's does, and exports its ARN, which every test addresses it by. It is named by $name — {runId}-ecr-tags-shadow-repo — so it is never the native group's (whose namer is ecr-tag) or another ECR group's. Teardown mirrors the native's: both tag keys are removed before the repository, because ECR does not document tags as cascading with it, then the repository is deleted with force. The tag pairs are the native's: env=compat and owner=ecr-tags. No clause is wrapped in `eventually`: the native reads every write back immediately and polls nothing.",
-      "name": "ecr-tags-shadow",
+      "$comment": "Setup creates one repository, as the native's does, and exports its ARN, which every test addresses it by. It is named by $name — {runId}-ecr-tags-repo — so it is never the native group's (whose namer is ecr-tag) or another ECR group's. Teardown mirrors the native's: both tag keys are removed before the repository, because ECR does not document tags as cascading with it, then the repository is deleted with force. The tag pairs are the native's: env=compat and owner=ecr-tags. No clause is wrapped in `eventually`: the native reads every write back immediately and polls nothing.",
+      "name": "ecr-tags",
       "kind": "lifecycle",
       "setup": [
         {

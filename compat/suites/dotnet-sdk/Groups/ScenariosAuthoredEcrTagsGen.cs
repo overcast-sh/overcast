@@ -15,7 +15,7 @@ namespace OvercastCompat.Groups;
 /// </remarks>
 internal sealed class ScenariosAuthoredEcrTags : IServiceGroup
 {
-    private static readonly ScenarioGroup GroupEcrTagsShadow = new("ecr-tags-shadow", "compat/model/authored/ecr-tags.json");
+    private static readonly ScenarioGroup GroupEcrTags = new("ecr-tags", "compat/model/authored/ecr-tags.json");
 
     private readonly Lazy<AmazonECRClient> _client;
 
@@ -35,25 +35,25 @@ internal sealed class ScenariosAuthoredEcrTags : IServiceGroup
 
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["ecr-tags-shadow:TagResource"] = TestEcrTagsShadowTagResource,
-        ["ecr-tags-shadow:ListTagsForResource"] = TestEcrTagsShadowListTagsForResource,
-        ["ecr-tags-shadow:UntagResource"] = TestEcrTagsShadowUntagResource,
+        ["ecr-tags:TagResource"] = TestEcrTagsTagResource,
+        ["ecr-tags:ListTagsForResource"] = TestEcrTagsListTagsForResource,
+        ["ecr-tags:UntagResource"] = TestEcrTagsUntagResource,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["ecr-tags-shadow"] = SetupEcrTagsShadow,
+        ["ecr-tags"] = SetupEcrTags,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["ecr-tags-shadow"] = TeardownEcrTagsShadow,
+        ["ecr-tags"] = TeardownEcrTags,
     };
 
     private AmazonECRClient Cl() => _client.Value;
 
-    private Task SetupEcrTagsShadow(TestContext t) =>
-        GroupEcrTagsShadow.RunSetupAsync(t,
+    private Task SetupEcrTags(TestContext t) =>
+        GroupEcrTags.RunSetupAsync(t,
             new ScenarioCall
             {
                 Op = "CreateRepository",
@@ -73,8 +73,8 @@ internal sealed class ScenariosAuthoredEcrTags : IServiceGroup
             }
         );
 
-    private Task TeardownEcrTagsShadow(TestContext t) =>
-        GroupEcrTagsShadow.RunTeardownAsync(t,
+    private Task TeardownEcrTags(TestContext t) =>
+        GroupEcrTags.RunTeardownAsync(t,
             new ScenarioCall
             {
                 Op = "UntagResource",
@@ -105,7 +105,7 @@ internal sealed class ScenariosAuthoredEcrTags : IServiceGroup
             }
         );
 
-    private Task TestEcrTagsShadowTagResource(TestContext t) => GroupEcrTagsShadow.RunTestAsync(t, "TagResource", new ScenarioTest
+    private Task TestEcrTagsTagResource(TestContext t) => GroupEcrTags.RunTestAsync(t, "TagResource", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -165,7 +165,7 @@ internal sealed class ScenariosAuthoredEcrTags : IServiceGroup
         ],
     });
 
-    private Task TestEcrTagsShadowListTagsForResource(TestContext t) => GroupEcrTagsShadow.RunTestAsync(t, "ListTagsForResource", new ScenarioTest
+    private Task TestEcrTagsListTagsForResource(TestContext t) => GroupEcrTags.RunTestAsync(t, "ListTagsForResource", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -201,7 +201,7 @@ internal sealed class ScenariosAuthoredEcrTags : IServiceGroup
         ],
     });
 
-    private Task TestEcrTagsShadowUntagResource(TestContext t) => GroupEcrTagsShadow.RunTestAsync(t, "UntagResource", new ScenarioTest
+    private Task TestEcrTagsUntagResource(TestContext t) => GroupEcrTags.RunTestAsync(t, "UntagResource", new ScenarioTest
     {
         Call = new ScenarioCall
         {

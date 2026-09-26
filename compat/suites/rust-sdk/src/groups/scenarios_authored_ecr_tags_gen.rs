@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/ecr-tags.json";
 
-const GROUP_ECR_TAGS_SHADOW: Group = Group {
-    name: "ecr-tags-shadow",
+const GROUP_ECR_TAGS: Group = Group {
+    name: "ecr-tags",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredEcrTags {
         {
             let client = self.client.clone();
             impls.insert(
-                "ecr-tags-shadow:TagResource".to_string(),
+                "ecr-tags:TagResource".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_TAGS_SHADOW
-                            .run_test(&ctx, "TagResource", test_ecr_tags_shadow_tag_resource(&client))
+                        GROUP_ECR_TAGS
+                            .run_test(&ctx, "TagResource", test_ecr_tags_tag_resource(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredEcrTags {
         {
             let client = self.client.clone();
             impls.insert(
-                "ecr-tags-shadow:ListTagsForResource".to_string(),
+                "ecr-tags:ListTagsForResource".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_TAGS_SHADOW
-                            .run_test(&ctx, "ListTagsForResource", test_ecr_tags_shadow_list_tags_for_resource(&client))
+                        GROUP_ECR_TAGS
+                            .run_test(&ctx, "ListTagsForResource", test_ecr_tags_list_tags_for_resource(&client))
                             .await
                     })
                 }),
@@ -79,12 +79,12 @@ impl ServiceGroup for ScenariosAuthoredEcrTags {
         {
             let client = self.client.clone();
             impls.insert(
-                "ecr-tags-shadow:UntagResource".to_string(),
+                "ecr-tags:UntagResource".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_TAGS_SHADOW
-                            .run_test(&ctx, "UntagResource", test_ecr_tags_shadow_untag_resource(&client))
+                        GROUP_ECR_TAGS
+                            .run_test(&ctx, "UntagResource", test_ecr_tags_untag_resource(&client))
                             .await
                     })
                 }),
@@ -98,11 +98,11 @@ impl ServiceGroup for ScenariosAuthoredEcrTags {
         {
             let client = self.client.clone();
             setups.insert(
-                "ecr-tags-shadow".to_string(),
+                "ecr-tags".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_TAGS_SHADOW.run_setup(&ctx, setup_ecr_tags_shadow(&client)).await
+                        GROUP_ECR_TAGS.run_setup(&ctx, setup_ecr_tags(&client)).await
                     })
                 }),
             );
@@ -115,11 +115,11 @@ impl ServiceGroup for ScenariosAuthoredEcrTags {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "ecr-tags-shadow".to_string(),
+                "ecr-tags".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_TAGS_SHADOW.run_teardown(&ctx, teardown_ecr_tags_shadow(&client)).await
+                        GROUP_ECR_TAGS.run_teardown(&ctx, teardown_ecr_tags(&client)).await
                     })
                 }),
             );
@@ -128,7 +128,7 @@ impl ServiceGroup for ScenariosAuthoredEcrTags {
     }
 }
 
-fn setup_ecr_tags_shadow(client: &aws_sdk_ecr::Client) -> Vec<Call> {
+fn setup_ecr_tags(client: &aws_sdk_ecr::Client) -> Vec<Call> {
     vec![
         Call {
             op: "CreateRepository",
@@ -155,7 +155,7 @@ fn setup_ecr_tags_shadow(client: &aws_sdk_ecr::Client) -> Vec<Call> {
     ]
 }
 
-fn teardown_ecr_tags_shadow(client: &aws_sdk_ecr::Client) -> Vec<Call> {
+fn teardown_ecr_tags(client: &aws_sdk_ecr::Client) -> Vec<Call> {
     vec![
         Call {
             op: "UntagResource",
@@ -209,7 +209,7 @@ fn teardown_ecr_tags_shadow(client: &aws_sdk_ecr::Client) -> Vec<Call> {
     ]
 }
 
-fn test_ecr_tags_shadow_tag_resource(client: &aws_sdk_ecr::Client) -> Test {
+fn test_ecr_tags_tag_resource(client: &aws_sdk_ecr::Client) -> Test {
     Test {
         call: Call {
             op: "TagResource",
@@ -311,7 +311,7 @@ fn test_ecr_tags_shadow_tag_resource(client: &aws_sdk_ecr::Client) -> Test {
     }
 }
 
-fn test_ecr_tags_shadow_list_tags_for_resource(client: &aws_sdk_ecr::Client) -> Test {
+fn test_ecr_tags_list_tags_for_resource(client: &aws_sdk_ecr::Client) -> Test {
     Test {
         call: Call {
             op: "ListTagsForResource",
@@ -360,7 +360,7 @@ fn test_ecr_tags_shadow_list_tags_for_resource(client: &aws_sdk_ecr::Client) -> 
     }
 }
 
-fn test_ecr_tags_shadow_untag_resource(client: &aws_sdk_ecr::Client) -> Test {
+fn test_ecr_tags_untag_resource(client: &aws_sdk_ecr::Client) -> Test {
     Test {
         call: Call {
             op: "UntagResource",

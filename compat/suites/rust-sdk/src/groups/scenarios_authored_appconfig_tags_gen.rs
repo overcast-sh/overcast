@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/appconfig-tags.json";
 
-const GROUP_APPCONFIG_TAGS_SHADOW: Group = Group {
-    name: "appconfig-tags-shadow",
+const GROUP_APPCONFIG_TAGS: Group = Group {
+    name: "appconfig-tags",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigTags {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-tags-shadow:CreateApplicationWithTags".to_string(),
+                "appconfig-tags:CreateApplicationWithTags".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_TAGS_SHADOW
-                            .run_test(&ctx, "CreateApplicationWithTags", test_appconfig_tags_shadow_create_application_with_tags(&client))
+                        GROUP_APPCONFIG_TAGS
+                            .run_test(&ctx, "CreateApplicationWithTags", test_appconfig_tags_create_application_with_tags(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigTags {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-tags-shadow:TagResource".to_string(),
+                "appconfig-tags:TagResource".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_TAGS_SHADOW
-                            .run_test(&ctx, "TagResource", test_appconfig_tags_shadow_tag_resource(&client))
+                        GROUP_APPCONFIG_TAGS
+                            .run_test(&ctx, "TagResource", test_appconfig_tags_tag_resource(&client))
                             .await
                     })
                 }),
@@ -79,12 +79,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigTags {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-tags-shadow:ListTagsForResource".to_string(),
+                "appconfig-tags:ListTagsForResource".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_TAGS_SHADOW
-                            .run_test(&ctx, "ListTagsForResource", test_appconfig_tags_shadow_list_tags_for_resource(&client))
+                        GROUP_APPCONFIG_TAGS
+                            .run_test(&ctx, "ListTagsForResource", test_appconfig_tags_list_tags_for_resource(&client))
                             .await
                     })
                 }),
@@ -93,12 +93,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigTags {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-tags-shadow:UntagResource".to_string(),
+                "appconfig-tags:UntagResource".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_TAGS_SHADOW
-                            .run_test(&ctx, "UntagResource", test_appconfig_tags_shadow_untag_resource(&client))
+                        GROUP_APPCONFIG_TAGS
+                            .run_test(&ctx, "UntagResource", test_appconfig_tags_untag_resource(&client))
                             .await
                     })
                 }),
@@ -107,12 +107,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigTags {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-tags-shadow:ListTagsForResourceNotFound".to_string(),
+                "appconfig-tags:ListTagsForResourceNotFound".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_TAGS_SHADOW
-                            .run_test(&ctx, "ListTagsForResourceNotFound", test_appconfig_tags_shadow_list_tags_for_resource_not_found(&client))
+                        GROUP_APPCONFIG_TAGS
+                            .run_test(&ctx, "ListTagsForResourceNotFound", test_appconfig_tags_list_tags_for_resource_not_found(&client))
                             .await
                     })
                 }),
@@ -126,11 +126,11 @@ impl ServiceGroup for ScenariosAuthoredAppconfigTags {
         {
             let client = self.client.clone();
             setups.insert(
-                "appconfig-tags-shadow".to_string(),
+                "appconfig-tags".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_TAGS_SHADOW.run_setup(&ctx, setup_appconfig_tags_shadow(&client)).await
+                        GROUP_APPCONFIG_TAGS.run_setup(&ctx, setup_appconfig_tags(&client)).await
                     })
                 }),
             );
@@ -143,11 +143,11 @@ impl ServiceGroup for ScenariosAuthoredAppconfigTags {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "appconfig-tags-shadow".to_string(),
+                "appconfig-tags".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_TAGS_SHADOW.run_teardown(&ctx, teardown_appconfig_tags_shadow(&client)).await
+                        GROUP_APPCONFIG_TAGS.run_teardown(&ctx, teardown_appconfig_tags(&client)).await
                     })
                 }),
             );
@@ -156,12 +156,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigTags {
     }
 }
 
-fn setup_appconfig_tags_shadow(_client: &aws_sdk_appconfig::Client) -> Vec<Call> {
+fn setup_appconfig_tags(_client: &aws_sdk_appconfig::Client) -> Vec<Call> {
     // An empty phase is a no-op, not a missing one.
     Vec::new()
 }
 
-fn teardown_appconfig_tags_shadow(client: &aws_sdk_appconfig::Client) -> Vec<Call> {
+fn teardown_appconfig_tags(client: &aws_sdk_appconfig::Client) -> Vec<Call> {
     vec![
         Call {
             op: "DeleteApplication",
@@ -188,7 +188,7 @@ fn teardown_appconfig_tags_shadow(client: &aws_sdk_appconfig::Client) -> Vec<Cal
     ]
 }
 
-fn test_appconfig_tags_shadow_create_application_with_tags(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_tags_create_application_with_tags(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "CreateApplication",
@@ -256,7 +256,7 @@ fn test_appconfig_tags_shadow_create_application_with_tags(client: &aws_sdk_appc
     }
 }
 
-fn test_appconfig_tags_shadow_tag_resource(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_tags_tag_resource(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "TagResource",
@@ -323,7 +323,7 @@ fn test_appconfig_tags_shadow_tag_resource(client: &aws_sdk_appconfig::Client) -
     }
 }
 
-fn test_appconfig_tags_shadow_list_tags_for_resource(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_tags_list_tags_for_resource(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "ListTagsForResource",
@@ -360,7 +360,7 @@ fn test_appconfig_tags_shadow_list_tags_for_resource(client: &aws_sdk_appconfig:
     }
 }
 
-fn test_appconfig_tags_shadow_untag_resource(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_tags_untag_resource(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "UntagResource",
@@ -425,7 +425,7 @@ fn test_appconfig_tags_shadow_untag_resource(client: &aws_sdk_appconfig::Client)
     }
 }
 
-fn test_appconfig_tags_shadow_list_tags_for_resource_not_found(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_tags_list_tags_for_resource_not_found(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "ListTagsForResource",

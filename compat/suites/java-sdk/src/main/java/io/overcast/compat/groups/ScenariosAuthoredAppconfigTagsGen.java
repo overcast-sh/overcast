@@ -29,8 +29,8 @@ import software.amazon.awssdk.services.appconfig.model.UntagResourceRequest;
  */
 public final class ScenariosAuthoredAppconfigTagsGen implements ServiceGroup {
 
-    private static final Group GROUP_APPCONFIG_TAGS_SHADOW =
-            new Group("appconfig-tags-shadow", "compat/model/authored/appconfig-tags.json");
+    private static final Group GROUP_APPCONFIG_TAGS =
+            new Group("appconfig-tags", "compat/model/authored/appconfig-tags.json");
 
     private final AwsClients clients;
     private volatile AppConfigClient client;
@@ -47,23 +47,23 @@ public final class ScenariosAuthoredAppconfigTagsGen implements ServiceGroup {
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("appconfig-tags-shadow:CreateApplicationWithTags", this::testAppconfigTagsShadowCreateApplicationWithTags),
-                Map.entry("appconfig-tags-shadow:TagResource", this::testAppconfigTagsShadowTagResource),
-                Map.entry("appconfig-tags-shadow:ListTagsForResource", this::testAppconfigTagsShadowListTagsForResource),
-                Map.entry("appconfig-tags-shadow:UntagResource", this::testAppconfigTagsShadowUntagResource),
-                Map.entry("appconfig-tags-shadow:ListTagsForResourceNotFound", this::testAppconfigTagsShadowListTagsForResourceNotFound));
+                Map.entry("appconfig-tags:CreateApplicationWithTags", this::testAppconfigTagsCreateApplicationWithTags),
+                Map.entry("appconfig-tags:TagResource", this::testAppconfigTagsTagResource),
+                Map.entry("appconfig-tags:ListTagsForResource", this::testAppconfigTagsListTagsForResource),
+                Map.entry("appconfig-tags:UntagResource", this::testAppconfigTagsUntagResource),
+                Map.entry("appconfig-tags:ListTagsForResourceNotFound", this::testAppconfigTagsListTagsForResourceNotFound));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("appconfig-tags-shadow", this::setupAppconfigTagsShadow));
+                Map.entry("appconfig-tags", this::setupAppconfigTags));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("appconfig-tags-shadow", this::teardownAppconfigTagsShadow));
+                Map.entry("appconfig-tags", this::teardownAppconfigTags));
     }
 
     /**
@@ -83,13 +83,13 @@ public final class ScenariosAuthoredAppconfigTagsGen implements ServiceGroup {
         return client;
     }
 
-    private void setupAppconfigTagsShadow(TestContext t) {
+    private void setupAppconfigTags(TestContext t) {
         // No setup steps: an empty phase is a no-op, not a missing one.
-        GROUP_APPCONFIG_TAGS_SHADOW.runSetup(t);
+        GROUP_APPCONFIG_TAGS.runSetup(t);
     }
 
-    private void teardownAppconfigTagsShadow(TestContext t) {
-        GROUP_APPCONFIG_TAGS_SHADOW.runTeardown(t,
+    private void teardownAppconfigTags(TestContext t) {
+        GROUP_APPCONFIG_TAGS.runTeardown(t,
                 new Call("DeleteApplication", "{\"ApplicationId\":{\"$ref\":\"app.id\"}}",
                         b -> DeleteApplicationRequest.builder()
                                 .applicationId(b.string("ApplicationId", Values.ref("app.id")))
@@ -97,8 +97,8 @@ public final class ScenariosAuthoredAppconfigTagsGen implements ServiceGroup {
                         r -> cl().deleteApplication((DeleteApplicationRequest) r)));
     }
 
-    private void testAppconfigTagsShadowCreateApplicationWithTags(TestContext t) {
-        GROUP_APPCONFIG_TAGS_SHADOW.runTest(t, "CreateApplicationWithTags",
+    private void testAppconfigTagsCreateApplicationWithTags(TestContext t) {
+        GROUP_APPCONFIG_TAGS.runTest(t, "CreateApplicationWithTags",
                 new Call("CreateApplication", "{\"Name\":{\"$name\":\"app\"},\"Tags\":{\"Owner\":\"compat\",\"Team\":\"platform\"}}",
                         b -> CreateApplicationRequest.builder()
                                 .name(b.string("Name", Values.name("app")))
@@ -122,8 +122,8 @@ public final class ScenariosAuthoredAppconfigTagsGen implements ServiceGroup {
                 ));
     }
 
-    private void testAppconfigTagsShadowTagResource(TestContext t) {
-        GROUP_APPCONFIG_TAGS_SHADOW.runTest(t, "TagResource",
+    private void testAppconfigTagsTagResource(TestContext t) {
+        GROUP_APPCONFIG_TAGS.runTest(t, "TagResource",
                 new Call("TagResource", "{\"ResourceArn\":{\"$concat\":[\"arn:aws:appconfig:us-east-1:000000000000:application/\",{\"$ref\":\"app.id\"}]},\"Tags\":{\"Owner\":\"compat-updated\",\"Stage\":\"beta\"}}",
                         b -> TagResourceRequest.builder()
                                 .resourceArn(b.string("ResourceArn", Values.concat("arn:aws:appconfig:us-east-1:000000000000:application/", Values.ref("app.id"))))
@@ -144,8 +144,8 @@ public final class ScenariosAuthoredAppconfigTagsGen implements ServiceGroup {
                 ));
     }
 
-    private void testAppconfigTagsShadowListTagsForResource(TestContext t) {
-        GROUP_APPCONFIG_TAGS_SHADOW.runTest(t, "ListTagsForResource",
+    private void testAppconfigTagsListTagsForResource(TestContext t) {
+        GROUP_APPCONFIG_TAGS.runTest(t, "ListTagsForResource",
                 new Call("ListTagsForResource", "{\"ResourceArn\":{\"$concat\":[\"arn:aws:appconfig:us-east-1:000000000000:application/\",{\"$ref\":\"app.id\"}]}}",
                         b -> ListTagsForResourceRequest.builder()
                                 .resourceArn(b.string("ResourceArn", Values.concat("arn:aws:appconfig:us-east-1:000000000000:application/", Values.ref("app.id"))))
@@ -160,8 +160,8 @@ public final class ScenariosAuthoredAppconfigTagsGen implements ServiceGroup {
                 ));
     }
 
-    private void testAppconfigTagsShadowUntagResource(TestContext t) {
-        GROUP_APPCONFIG_TAGS_SHADOW.runTest(t, "UntagResource",
+    private void testAppconfigTagsUntagResource(TestContext t) {
+        GROUP_APPCONFIG_TAGS.runTest(t, "UntagResource",
                 new Call("UntagResource", "{\"ResourceArn\":{\"$concat\":[\"arn:aws:appconfig:us-east-1:000000000000:application/\",{\"$ref\":\"app.id\"}]},\"TagKeys\":[\"Team\"]}",
                         b -> UntagResourceRequest.builder()
                                 .resourceArn(b.string("ResourceArn", Values.concat("arn:aws:appconfig:us-east-1:000000000000:application/", Values.ref("app.id"))))
@@ -181,8 +181,8 @@ public final class ScenariosAuthoredAppconfigTagsGen implements ServiceGroup {
                 ));
     }
 
-    private void testAppconfigTagsShadowListTagsForResourceNotFound(TestContext t) {
-        GROUP_APPCONFIG_TAGS_SHADOW.runTest(t, "ListTagsForResourceNotFound",
+    private void testAppconfigTagsListTagsForResourceNotFound(TestContext t) {
+        GROUP_APPCONFIG_TAGS.runTest(t, "ListTagsForResourceNotFound",
                 new Call("ListTagsForResource", "{\"ResourceArn\":\"arn:aws:appconfig:us-east-1:000000000000:application/zzzzzzz\"}",
                         b -> ListTagsForResourceRequest.builder()
                                 .resourceArn("arn:aws:appconfig:us-east-1:000000000000:application/zzzzzzz")

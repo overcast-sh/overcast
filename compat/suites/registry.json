@@ -2498,6 +2498,7 @@
     {
       "service": "ecr",
       "name": "ecr-registry",
+      "scenario": "compat/model/authored/ecr-registry.json",
       "tests": [
         {
           "name": "GetAuthorizationToken"
@@ -2551,6 +2552,7 @@
     {
       "service": "ecr",
       "name": "ecr-policies",
+      "scenario": "compat/model/authored/ecr-policies.json",
       "tests": [
         {
           "name": "PutLifecyclePolicy"
@@ -2591,6 +2593,7 @@
     {
       "service": "ecr",
       "name": "ecr-tags",
+      "scenario": "compat/model/authored/ecr-tags.json",
       "tests": [
         {
           "name": "TagResource"
@@ -4260,6 +4263,7 @@
     {
       "service": "backup",
       "name": "backup-tags",
+      "scenario": "compat/model/authored/backup-tags.json",
       "tests": [
         {
           "name": "TagResource"
@@ -4663,6 +4667,7 @@
     {
       "service": "appconfig",
       "name": "appconfig-tags",
+      "scenario": "compat/model/authored/appconfig-tags.json",
       "tests": [
         {
           "name": "CreateApplicationWithTags",
@@ -4716,6 +4721,7 @@
     {
       "service": "appconfig",
       "name": "appconfig-deployments",
+      "scenario": "compat/model/authored/appconfig-deployments.json",
       "tests": [
         {
           "name": "StartDeployment"
