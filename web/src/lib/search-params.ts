@@ -20,3 +20,15 @@ export function searchOneOf<T extends string>(
 ): T | undefined {
   return (options as readonly unknown[]).includes(value) ? (value as T) : undefined
 }
+
+/**
+ * An integer id that can be past 2^53 — an Iceberg snapshot id. The app's own
+ * links write it quoted, so it arrives as the string it was. A bare id typed
+ * into the address bar has already been parsed as a double, and one past 2^53
+ * rounded to an id that does not exist, so it is dropped rather than naming
+ * the wrong thing.
+ */
+export function searchLargeId(value: unknown): string | undefined {
+  if (typeof value === "string") return value
+  return typeof value === "number" && Number.isSafeInteger(value) ? String(value) : undefined
+}

@@ -3,7 +3,7 @@ import { SquareTerminal } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { RowAction } from "@/components/ui/resource-list-page"
 import { athenaEditorLink } from "@/features/athena/links"
-import { previewSql } from "../athena-link"
+import { ATHENA_CATALOG, previewSql } from "../athena-link"
 
 interface QueryInAthenaProps {
   database: string
@@ -11,11 +11,9 @@ interface QueryInAthenaProps {
   table?: string
 }
 
-const CATALOG = "AwsDataCatalog"
-
 function linkFor({ database, table }: QueryInAthenaProps) {
   return athenaEditorLink({
-    catalog: CATALOG,
+    catalog: ATHENA_CATALOG,
     database,
     sql: table ? previewSql(database, table) : "",
   })

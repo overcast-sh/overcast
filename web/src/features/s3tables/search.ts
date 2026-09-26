@@ -1,4 +1,4 @@
-import { searchOneOf, searchText } from "@/lib/search-params"
+import { searchLargeId, searchOneOf, searchText } from "@/lib/search-params"
 
 /**
  * The S3 Tables routes' search params: which tab, the list filter, and the
@@ -39,17 +39,6 @@ export interface TableSearch {
   compare?: string
 }
 
-/**
- * A snapshot id. The router's own links write it quoted, so it arrives as the
- * string it was. A bare id typed into the address bar has already been parsed
- * as a double, and one past 2^53 has been rounded to an id that does not
- * exist, so it is dropped rather than opening the wrong snapshot.
- */
-function snapshotId(value: unknown): string | undefined {
-  if (typeof value === "string") return value
-  return typeof value === "number" && Number.isSafeInteger(value) ? String(value) : undefined
-}
-
 export const validateTableBucketsSearch = (s: Record<string, unknown>): TableBucketsSearch => ({
   q: searchText(s.q),
   sort: searchText(s.sort),
@@ -62,7 +51,7 @@ export const validateTableBucketSearch = (s: Record<string, unknown>): TableBuck
 
 export const validateTableSearch = (s: Record<string, unknown>): TableSearch => ({
   tab: searchOneOf(TABLE_TABS, s.tab),
-  snapshot: snapshotId(s.snapshot),
+  snapshot: searchLargeId(s.snapshot),
   version: searchText(s.version),
   compare: searchText(s.compare),
 })

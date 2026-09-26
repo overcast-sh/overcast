@@ -132,7 +132,16 @@ export function TableDetail({ database, name, search, onSearchChange }: TableDet
               <DataTab table={table} />
             </TabPanel>
             <TabPanel id="iceberg">
-              <IcebergTab table={table} />
+              <IcebergTab
+                database={database}
+                table={table}
+                selection={{
+                  snapshot: search.snapshot,
+                  version: search.version,
+                  compare: search.compare,
+                }}
+                onSelectionChange={onSearchChange}
+              />
             </TabPanel>
             <TabPanel id="versions">
               <VersionsTab
