@@ -98,6 +98,66 @@ func TestRegistryClaimREST_rootBinding(t *testing.T) {
 	}
 }
 
+func TestRegistryClaimREST_rootCatchAll(t *testing.T) {
+	registry := NewRegistry()
+	for _, tc := range []struct {
+		method, path string
+		want         bool
+	}{
+		// MediaStore Data's "/{Path+}" matches any path at all
+		{"GET", "/tables/a/b/c", true},
+		{"PUT", "/tables/a/b/c", true},
+		{"HEAD", "/anything", true},
+		// A root binding and a specific binding are evidence
+		{"GET", "/", false},
+		{"GET", "/analyzer", false},
+		// A greedy label followed by a literal is too
+		{"GET", "/v20180820/mrap/instances/one/two/policy", false},
+	} {
+		// Given: a request only the named kind of binding matches
+		// When: it is classified
+		claim, ok := registry.ClaimREST(tc.method, tc.path)
+
+		// Then: only the root greedy binding is marked a catch-all
+		if !ok || claim.CatchAll != tc.want {
+			t.Errorf("ClaimREST(%s %s) = %+v, %v; want CatchAll %v", tc.method, tc.path, claim, ok, tc.want)
+		}
+	}
+}
+
+func TestSigningNameErrorProfile(t *testing.T) {
+	// Given: signing names of a restJson1 service, a restXml one, and no service
+	// When: each is looked up
+	// Then: each gets its protocol's envelope, and the non-name none
+	for name, want := range map[string]ErrorProfile{"s3tables": ErrorProfileJSON, "lambda": ErrorProfileJSON, "route53": ErrorProfileXML, "Route53": ErrorProfileXML} {
+		if got, ok := SigningNameErrorProfile(name); !ok || got != want {
+			t.Errorf("SigningNameErrorProfile(%q) = %v, %v; want %v", name, got, ok, want)
+		}
+	}
+	if _, ok := SigningNameErrorProfile("not-a-real-aws-service"); ok {
+		t.Error("SigningNameErrorProfile answered for a name no model declares")
+	}
+}
+
+// TestSigningNameErrorProfile_isUnambiguous pins what SigningNameErrorProfile
+// relies on: no signing name's REST bindings span both REST protocols, so
+// "the first in generated order" is never a choice. S3's family is the
+// exception the router never asks about (addressesNonS3 rules it out first).
+func TestSigningNameErrorProfile_isUnambiguous(t *testing.T) {
+	seen := map[string]ErrorProfile{}
+	for _, op := range restOperations {
+		name := strings.ToLower(op.SigningName)
+		if name == "" || name == "s3" {
+			continue
+		}
+		profile := restErrorProfile(op.Protocol)
+		if prior, ok := seen[name]; ok && prior != profile {
+			t.Errorf("signing name %q has bindings in both REST protocols (%s %s)", name, op.ModelService, op.Operation)
+		}
+		seen[name] = profile
+	}
+}
+
 func TestRegistryClaimREST_literalQueryBinding(t *testing.T) {
 	// Given: two modeled operations share a path and method but use distinct
 	// literal query bindings.
