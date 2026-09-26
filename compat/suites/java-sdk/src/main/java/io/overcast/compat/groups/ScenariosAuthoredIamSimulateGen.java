@@ -29,8 +29,8 @@ import software.amazon.awssdk.services.iam.model.SimulatePrincipalPolicyRequest;
  */
 public final class ScenariosAuthoredIamSimulateGen implements ServiceGroup {
 
-    private static final Group GROUP_IAM_SIMULATE_SHADOW =
-            new Group("iam-simulate-shadow", "compat/model/authored/iam-simulate.json");
+    private static final Group GROUP_IAM_SIMULATE =
+            new Group("iam-simulate", "compat/model/authored/iam-simulate.json");
 
     private final AwsClients clients;
     private volatile IamClient client;
@@ -47,23 +47,23 @@ public final class ScenariosAuthoredIamSimulateGen implements ServiceGroup {
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("iam-simulate-shadow:SimulateCustomPolicyAllowed", this::testIamSimulateShadowSimulateCustomPolicyAllowed),
-                Map.entry("iam-simulate-shadow:SimulateCustomPolicyImplicitDeny", this::testIamSimulateShadowSimulateCustomPolicyImplicitDeny),
-                Map.entry("iam-simulate-shadow:SimulateCustomPolicyExplicitDeny", this::testIamSimulateShadowSimulateCustomPolicyExplicitDeny),
-                Map.entry("iam-simulate-shadow:SimulatePrincipalPolicyAllowed", this::testIamSimulateShadowSimulatePrincipalPolicyAllowed),
-                Map.entry("iam-simulate-shadow:SimulatePrincipalPolicyImplicitDeny", this::testIamSimulateShadowSimulatePrincipalPolicyImplicitDeny));
+                Map.entry("iam-simulate:SimulateCustomPolicyAllowed", this::testIamSimulateSimulateCustomPolicyAllowed),
+                Map.entry("iam-simulate:SimulateCustomPolicyImplicitDeny", this::testIamSimulateSimulateCustomPolicyImplicitDeny),
+                Map.entry("iam-simulate:SimulateCustomPolicyExplicitDeny", this::testIamSimulateSimulateCustomPolicyExplicitDeny),
+                Map.entry("iam-simulate:SimulatePrincipalPolicyAllowed", this::testIamSimulateSimulatePrincipalPolicyAllowed),
+                Map.entry("iam-simulate:SimulatePrincipalPolicyImplicitDeny", this::testIamSimulateSimulatePrincipalPolicyImplicitDeny));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("iam-simulate-shadow", this::setupIamSimulateShadow));
+                Map.entry("iam-simulate", this::setupIamSimulate));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("iam-simulate-shadow", this::teardownIamSimulateShadow));
+                Map.entry("iam-simulate", this::teardownIamSimulate));
     }
 
     /**
@@ -83,8 +83,8 @@ public final class ScenariosAuthoredIamSimulateGen implements ServiceGroup {
         return client;
     }
 
-    private void setupIamSimulateShadow(TestContext t) {
-        GROUP_IAM_SIMULATE_SHADOW.runSetup(t,
+    private void setupIamSimulate(TestContext t) {
+        GROUP_IAM_SIMULATE.runSetup(t,
                 new Call("CreateUser", "{\"UserName\":{\"$name\":\"user\"}}",
                         b -> CreateUserRequest.builder()
                                 .userName(b.string("UserName", Values.name("user")))
@@ -100,8 +100,8 @@ public final class ScenariosAuthoredIamSimulateGen implements ServiceGroup {
                         r -> cl().putUserPolicy((PutUserPolicyRequest) r)));
     }
 
-    private void teardownIamSimulateShadow(TestContext t) {
-        GROUP_IAM_SIMULATE_SHADOW.runTeardown(t,
+    private void teardownIamSimulate(TestContext t) {
+        GROUP_IAM_SIMULATE.runTeardown(t,
                 new Call("DeleteUserPolicy", "{\"PolicyName\":\"sim-allow-read\",\"UserName\":{\"$name\":\"user\"}}",
                         b -> DeleteUserPolicyRequest.builder()
                                 .policyName("sim-allow-read")
@@ -115,8 +115,8 @@ public final class ScenariosAuthoredIamSimulateGen implements ServiceGroup {
                         r -> cl().deleteUser((DeleteUserRequest) r)));
     }
 
-    private void testIamSimulateShadowSimulateCustomPolicyAllowed(TestContext t) {
-        GROUP_IAM_SIMULATE_SHADOW.runTest(t, "SimulateCustomPolicyAllowed",
+    private void testIamSimulateSimulateCustomPolicyAllowed(TestContext t) {
+        GROUP_IAM_SIMULATE.runTest(t, "SimulateCustomPolicyAllowed",
                 new Call("SimulateCustomPolicy", "{\"ActionNames\":[\"s3:GetObject\"],\"PolicyInputList\":[{\"$concat\":[\"{\\\"Version\\\":\\\"2012-10-17\\\",\\\"Statement\\\":[{\\\"Effect\\\":\\\"Allow\\\",\\\"Action\\\":\\\"s3:GetObject\\\",\\\"Resource\\\":\\\"arn:aws:s3:::\",{\"$name\":\"sim\"},\"/*\\\"}]}\"]}],\"ResourceArns\":[{\"$concat\":[\"arn:aws:s3:::\",{\"$name\":\"sim\"},\"/report.csv\"]}]}",
                         b -> SimulateCustomPolicyRequest.builder()
                                 .actionNames(List.of("s3:GetObject"))
@@ -134,8 +134,8 @@ public final class ScenariosAuthoredIamSimulateGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamSimulateShadowSimulateCustomPolicyImplicitDeny(TestContext t) {
-        GROUP_IAM_SIMULATE_SHADOW.runTest(t, "SimulateCustomPolicyImplicitDeny",
+    private void testIamSimulateSimulateCustomPolicyImplicitDeny(TestContext t) {
+        GROUP_IAM_SIMULATE.runTest(t, "SimulateCustomPolicyImplicitDeny",
                 new Call("SimulateCustomPolicy", "{\"ActionNames\":[\"s3:PutObject\"],\"PolicyInputList\":[{\"$concat\":[\"{\\\"Version\\\":\\\"2012-10-17\\\",\\\"Statement\\\":[{\\\"Effect\\\":\\\"Allow\\\",\\\"Action\\\":\\\"s3:GetObject\\\",\\\"Resource\\\":\\\"arn:aws:s3:::\",{\"$name\":\"sim\"},\"/*\\\"}]}\"]}],\"ResourceArns\":[{\"$concat\":[\"arn:aws:s3:::\",{\"$name\":\"sim\"},\"/report.csv\"]}]}",
                         b -> SimulateCustomPolicyRequest.builder()
                                 .actionNames(List.of("s3:PutObject"))
@@ -153,8 +153,8 @@ public final class ScenariosAuthoredIamSimulateGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamSimulateShadowSimulateCustomPolicyExplicitDeny(TestContext t) {
-        GROUP_IAM_SIMULATE_SHADOW.runTest(t, "SimulateCustomPolicyExplicitDeny",
+    private void testIamSimulateSimulateCustomPolicyExplicitDeny(TestContext t) {
+        GROUP_IAM_SIMULATE.runTest(t, "SimulateCustomPolicyExplicitDeny",
                 new Call("SimulateCustomPolicy", "{\"ActionNames\":[\"s3:DeleteObject\"],\"PolicyInputList\":[\"{\\\"Version\\\":\\\"2012-10-17\\\",\\\"Statement\\\":[{\\\"Effect\\\":\\\"Allow\\\",\\\"Action\\\":\\\"s3:*\\\",\\\"Resource\\\":\\\"*\\\"},{\\\"Effect\\\":\\\"Deny\\\",\\\"Action\\\":\\\"s3:DeleteObject\\\",\\\"Resource\\\":\\\"*\\\"}]}\"],\"ResourceArns\":[{\"$concat\":[\"arn:aws:s3:::\",{\"$name\":\"sim\"},\"/report.csv\"]}]}",
                         b -> SimulateCustomPolicyRequest.builder()
                                 .actionNames(List.of("s3:DeleteObject"))
@@ -172,8 +172,8 @@ public final class ScenariosAuthoredIamSimulateGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamSimulateShadowSimulatePrincipalPolicyAllowed(TestContext t) {
-        GROUP_IAM_SIMULATE_SHADOW.runTest(t, "SimulatePrincipalPolicyAllowed",
+    private void testIamSimulateSimulatePrincipalPolicyAllowed(TestContext t) {
+        GROUP_IAM_SIMULATE.runTest(t, "SimulatePrincipalPolicyAllowed",
                 new Call("SimulatePrincipalPolicy", "{\"ActionNames\":[\"s3:GetObject\"],\"PolicySourceArn\":{\"$ref\":\"user.arn\"},\"ResourceArns\":[{\"$concat\":[\"arn:aws:s3:::\",{\"$name\":\"sim\"},\"/report.csv\"]}]}",
                         b -> SimulatePrincipalPolicyRequest.builder()
                                 .actionNames(List.of("s3:GetObject"))
@@ -196,8 +196,8 @@ public final class ScenariosAuthoredIamSimulateGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamSimulateShadowSimulatePrincipalPolicyImplicitDeny(TestContext t) {
-        GROUP_IAM_SIMULATE_SHADOW.runTest(t, "SimulatePrincipalPolicyImplicitDeny",
+    private void testIamSimulateSimulatePrincipalPolicyImplicitDeny(TestContext t) {
+        GROUP_IAM_SIMULATE.runTest(t, "SimulatePrincipalPolicyImplicitDeny",
                 new Call("SimulatePrincipalPolicy", "{\"ActionNames\":[\"s3:DeleteObject\"],\"PolicySourceArn\":{\"$ref\":\"user.arn\"},\"ResourceArns\":[{\"$concat\":[\"arn:aws:s3:::\",{\"$name\":\"sim\"},\"/report.csv\"]}]}",
                         b -> SimulatePrincipalPolicyRequest.builder()
                                 .actionNames(List.of("s3:DeleteObject"))

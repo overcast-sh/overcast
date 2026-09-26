@@ -72,7 +72,6 @@ compat/suites/node-js-sdk/
       sns.ts
       lambda.ts
       ses.ts
-      iam.ts
       sts.ts
       secretsmanager.ts
       kms.ts

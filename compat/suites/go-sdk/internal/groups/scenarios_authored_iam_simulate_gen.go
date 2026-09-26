@@ -23,17 +23,17 @@ func ScenariosAuthoredIamSimulate(c *clients.Clients) ServiceGroup {
 	return ServiceGroup{
 		Name: "scenarios/authored-iam-simulate",
 		Impls: map[string]harness.TestFn{
-			"iam-simulate-shadow:SimulateCustomPolicyAllowed":         g.testIamSimulateShadowSimulateCustomPolicyAllowed,
-			"iam-simulate-shadow:SimulateCustomPolicyImplicitDeny":    g.testIamSimulateShadowSimulateCustomPolicyImplicitDeny,
-			"iam-simulate-shadow:SimulateCustomPolicyExplicitDeny":    g.testIamSimulateShadowSimulateCustomPolicyExplicitDeny,
-			"iam-simulate-shadow:SimulatePrincipalPolicyAllowed":      g.testIamSimulateShadowSimulatePrincipalPolicyAllowed,
-			"iam-simulate-shadow:SimulatePrincipalPolicyImplicitDeny": g.testIamSimulateShadowSimulatePrincipalPolicyImplicitDeny,
+			"iam-simulate:SimulateCustomPolicyAllowed":         g.testIamSimulateSimulateCustomPolicyAllowed,
+			"iam-simulate:SimulateCustomPolicyImplicitDeny":    g.testIamSimulateSimulateCustomPolicyImplicitDeny,
+			"iam-simulate:SimulateCustomPolicyExplicitDeny":    g.testIamSimulateSimulateCustomPolicyExplicitDeny,
+			"iam-simulate:SimulatePrincipalPolicyAllowed":      g.testIamSimulateSimulatePrincipalPolicyAllowed,
+			"iam-simulate:SimulatePrincipalPolicyImplicitDeny": g.testIamSimulateSimulatePrincipalPolicyImplicitDeny,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"iam-simulate-shadow": g.setupIamSimulateShadow,
+			"iam-simulate": g.setupIamSimulate,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"iam-simulate-shadow": g.teardownIamSimulateShadow,
+			"iam-simulate": g.teardownIamSimulate,
 		},
 	}
 }
@@ -53,10 +53,10 @@ func (g *authoredIamSimulateScenarios) cl() *iam.Client {
 	return g.client
 }
 
-var groupIamSimulateShadow = scenario.Group{Name: "iam-simulate-shadow", File: "compat/model/authored/iam-simulate.json"}
+var groupIamSimulate = scenario.Group{Name: "iam-simulate", File: "compat/model/authored/iam-simulate.json"}
 
-func (g *authoredIamSimulateScenarios) setupIamSimulateShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupIamSimulateShadow.RunSetup(ctx, t,
+func (g *authoredIamSimulateScenarios) setupIamSimulate(ctx context.Context, t *harness.TestContext) error {
+	return groupIamSimulate.RunSetup(ctx, t,
 		scenario.Call{
 			Op:     "CreateUser",
 			Params: `{"UserName":{"$name":"user"}}`,
@@ -89,8 +89,8 @@ func (g *authoredIamSimulateScenarios) setupIamSimulateShadow(ctx context.Contex
 	)
 }
 
-func (g *authoredIamSimulateScenarios) teardownIamSimulateShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupIamSimulateShadow.RunTeardown(ctx, t,
+func (g *authoredIamSimulateScenarios) teardownIamSimulate(ctx context.Context, t *harness.TestContext) error {
+	return groupIamSimulate.RunTeardown(ctx, t,
 		scenario.Call{
 			Op:     "DeleteUserPolicy",
 			Params: `{"PolicyName":"sim-allow-read","UserName":{"$name":"user"}}`,
@@ -119,8 +119,8 @@ func (g *authoredIamSimulateScenarios) teardownIamSimulateShadow(ctx context.Con
 	)
 }
 
-func (g *authoredIamSimulateScenarios) testIamSimulateShadowSimulateCustomPolicyAllowed(ctx context.Context, t *harness.TestContext) error {
-	return groupIamSimulateShadow.RunTest(ctx, t, "SimulateCustomPolicyAllowed", scenario.Test{
+func (g *authoredIamSimulateScenarios) testIamSimulateSimulateCustomPolicyAllowed(ctx context.Context, t *harness.TestContext) error {
+	return groupIamSimulate.RunTest(ctx, t, "SimulateCustomPolicyAllowed", scenario.Test{
 		Call: scenario.Call{
 			Op:     "SimulateCustomPolicy",
 			Params: `{"ActionNames":["s3:GetObject"],"PolicyInputList":[{"$concat":["{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:GetObject\",\"Resource\":\"arn:aws:s3:::",{"$name":"sim"},"/*\"}]}"]}],"ResourceArns":[{"$concat":["arn:aws:s3:::",{"$name":"sim"},"/report.csv"]}]}`,
@@ -150,8 +150,8 @@ func (g *authoredIamSimulateScenarios) testIamSimulateShadowSimulateCustomPolicy
 	})
 }
 
-func (g *authoredIamSimulateScenarios) testIamSimulateShadowSimulateCustomPolicyImplicitDeny(ctx context.Context, t *harness.TestContext) error {
-	return groupIamSimulateShadow.RunTest(ctx, t, "SimulateCustomPolicyImplicitDeny", scenario.Test{
+func (g *authoredIamSimulateScenarios) testIamSimulateSimulateCustomPolicyImplicitDeny(ctx context.Context, t *harness.TestContext) error {
+	return groupIamSimulate.RunTest(ctx, t, "SimulateCustomPolicyImplicitDeny", scenario.Test{
 		Call: scenario.Call{
 			Op:     "SimulateCustomPolicy",
 			Params: `{"ActionNames":["s3:PutObject"],"PolicyInputList":[{"$concat":["{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:GetObject\",\"Resource\":\"arn:aws:s3:::",{"$name":"sim"},"/*\"}]}"]}],"ResourceArns":[{"$concat":["arn:aws:s3:::",{"$name":"sim"},"/report.csv"]}]}`,
@@ -181,8 +181,8 @@ func (g *authoredIamSimulateScenarios) testIamSimulateShadowSimulateCustomPolicy
 	})
 }
 
-func (g *authoredIamSimulateScenarios) testIamSimulateShadowSimulateCustomPolicyExplicitDeny(ctx context.Context, t *harness.TestContext) error {
-	return groupIamSimulateShadow.RunTest(ctx, t, "SimulateCustomPolicyExplicitDeny", scenario.Test{
+func (g *authoredIamSimulateScenarios) testIamSimulateSimulateCustomPolicyExplicitDeny(ctx context.Context, t *harness.TestContext) error {
+	return groupIamSimulate.RunTest(ctx, t, "SimulateCustomPolicyExplicitDeny", scenario.Test{
 		Call: scenario.Call{
 			Op:     "SimulateCustomPolicy",
 			Params: `{"ActionNames":["s3:DeleteObject"],"PolicyInputList":["{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:*\",\"Resource\":\"*\"},{\"Effect\":\"Deny\",\"Action\":\"s3:DeleteObject\",\"Resource\":\"*\"}]}"],"ResourceArns":[{"$concat":["arn:aws:s3:::",{"$name":"sim"},"/report.csv"]}]}`,
@@ -212,8 +212,8 @@ func (g *authoredIamSimulateScenarios) testIamSimulateShadowSimulateCustomPolicy
 	})
 }
 
-func (g *authoredIamSimulateScenarios) testIamSimulateShadowSimulatePrincipalPolicyAllowed(ctx context.Context, t *harness.TestContext) error {
-	return groupIamSimulateShadow.RunTest(ctx, t, "SimulatePrincipalPolicyAllowed", scenario.Test{
+func (g *authoredIamSimulateScenarios) testIamSimulateSimulatePrincipalPolicyAllowed(ctx context.Context, t *harness.TestContext) error {
+	return groupIamSimulate.RunTest(ctx, t, "SimulatePrincipalPolicyAllowed", scenario.Test{
 		Call: scenario.Call{
 			Op:     "SimulatePrincipalPolicy",
 			Params: `{"ActionNames":["s3:GetObject"],"PolicySourceArn":{"$ref":"user.arn"},"ResourceArns":[{"$concat":["arn:aws:s3:::",{"$name":"sim"},"/report.csv"]}]}`,
@@ -246,8 +246,8 @@ func (g *authoredIamSimulateScenarios) testIamSimulateShadowSimulatePrincipalPol
 	})
 }
 
-func (g *authoredIamSimulateScenarios) testIamSimulateShadowSimulatePrincipalPolicyImplicitDeny(ctx context.Context, t *harness.TestContext) error {
-	return groupIamSimulateShadow.RunTest(ctx, t, "SimulatePrincipalPolicyImplicitDeny", scenario.Test{
+func (g *authoredIamSimulateScenarios) testIamSimulateSimulatePrincipalPolicyImplicitDeny(ctx context.Context, t *harness.TestContext) error {
+	return groupIamSimulate.RunTest(ctx, t, "SimulatePrincipalPolicyImplicitDeny", scenario.Test{
 		Call: scenario.Call{
 			Op:     "SimulatePrincipalPolicy",
 			Params: `{"ActionNames":["s3:DeleteObject"],"PolicySourceArn":{"$ref":"user.arn"},"ResourceArns":[{"$concat":["arn:aws:s3:::",{"$name":"sim"},"/report.csv"]}]}`,

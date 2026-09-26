@@ -1834,24 +1834,6 @@
     },
     {
       "suite": "rust-sdk",
-      "service": "iam",
-      "group": "iam-groups",
-      "tests": 6
-    },
-    {
-      "suite": "rust-sdk",
-      "service": "iam",
-      "group": "iam-policies",
-      "tests": 8
-    },
-    {
-      "suite": "rust-sdk",
-      "service": "iam",
-      "group": "iam-simulate",
-      "tests": 5
-    },
-    {
-      "suite": "rust-sdk",
       "service": "msk",
       "group": "msk-clusters",
       "tests": 16

@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/iam-simulate.json";
 
-const GROUP_IAM_SIMULATE_SHADOW: Group = Group {
-    name: "iam-simulate-shadow",
+const GROUP_IAM_SIMULATE: Group = Group {
+    name: "iam-simulate",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredIamSimulate {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-simulate-shadow:SimulateCustomPolicyAllowed".to_string(),
+                "iam-simulate:SimulateCustomPolicyAllowed".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_SIMULATE_SHADOW
-                            .run_test(&ctx, "SimulateCustomPolicyAllowed", test_iam_simulate_shadow_simulate_custom_policy_allowed(&client))
+                        GROUP_IAM_SIMULATE
+                            .run_test(&ctx, "SimulateCustomPolicyAllowed", test_iam_simulate_simulate_custom_policy_allowed(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredIamSimulate {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-simulate-shadow:SimulateCustomPolicyImplicitDeny".to_string(),
+                "iam-simulate:SimulateCustomPolicyImplicitDeny".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_SIMULATE_SHADOW
-                            .run_test(&ctx, "SimulateCustomPolicyImplicitDeny", test_iam_simulate_shadow_simulate_custom_policy_implicit_deny(&client))
+                        GROUP_IAM_SIMULATE
+                            .run_test(&ctx, "SimulateCustomPolicyImplicitDeny", test_iam_simulate_simulate_custom_policy_implicit_deny(&client))
                             .await
                     })
                 }),
@@ -79,12 +79,12 @@ impl ServiceGroup for ScenariosAuthoredIamSimulate {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-simulate-shadow:SimulateCustomPolicyExplicitDeny".to_string(),
+                "iam-simulate:SimulateCustomPolicyExplicitDeny".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_SIMULATE_SHADOW
-                            .run_test(&ctx, "SimulateCustomPolicyExplicitDeny", test_iam_simulate_shadow_simulate_custom_policy_explicit_deny(&client))
+                        GROUP_IAM_SIMULATE
+                            .run_test(&ctx, "SimulateCustomPolicyExplicitDeny", test_iam_simulate_simulate_custom_policy_explicit_deny(&client))
                             .await
                     })
                 }),
@@ -93,12 +93,12 @@ impl ServiceGroup for ScenariosAuthoredIamSimulate {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-simulate-shadow:SimulatePrincipalPolicyAllowed".to_string(),
+                "iam-simulate:SimulatePrincipalPolicyAllowed".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_SIMULATE_SHADOW
-                            .run_test(&ctx, "SimulatePrincipalPolicyAllowed", test_iam_simulate_shadow_simulate_principal_policy_allowed(&client))
+                        GROUP_IAM_SIMULATE
+                            .run_test(&ctx, "SimulatePrincipalPolicyAllowed", test_iam_simulate_simulate_principal_policy_allowed(&client))
                             .await
                     })
                 }),
@@ -107,12 +107,12 @@ impl ServiceGroup for ScenariosAuthoredIamSimulate {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-simulate-shadow:SimulatePrincipalPolicyImplicitDeny".to_string(),
+                "iam-simulate:SimulatePrincipalPolicyImplicitDeny".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_SIMULATE_SHADOW
-                            .run_test(&ctx, "SimulatePrincipalPolicyImplicitDeny", test_iam_simulate_shadow_simulate_principal_policy_implicit_deny(&client))
+                        GROUP_IAM_SIMULATE
+                            .run_test(&ctx, "SimulatePrincipalPolicyImplicitDeny", test_iam_simulate_simulate_principal_policy_implicit_deny(&client))
                             .await
                     })
                 }),
@@ -126,11 +126,11 @@ impl ServiceGroup for ScenariosAuthoredIamSimulate {
         {
             let client = self.client.clone();
             setups.insert(
-                "iam-simulate-shadow".to_string(),
+                "iam-simulate".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_SIMULATE_SHADOW.run_setup(&ctx, setup_iam_simulate_shadow(&client)).await
+                        GROUP_IAM_SIMULATE.run_setup(&ctx, setup_iam_simulate(&client)).await
                     })
                 }),
             );
@@ -143,11 +143,11 @@ impl ServiceGroup for ScenariosAuthoredIamSimulate {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "iam-simulate-shadow".to_string(),
+                "iam-simulate".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_SIMULATE_SHADOW.run_teardown(&ctx, teardown_iam_simulate_shadow(&client)).await
+                        GROUP_IAM_SIMULATE.run_teardown(&ctx, teardown_iam_simulate(&client)).await
                     })
                 }),
             );
@@ -156,7 +156,7 @@ impl ServiceGroup for ScenariosAuthoredIamSimulate {
     }
 }
 
-fn setup_iam_simulate_shadow(client: &aws_sdk_iam::Client) -> Vec<Call> {
+fn setup_iam_simulate(client: &aws_sdk_iam::Client) -> Vec<Call> {
     vec![
         Call {
             op: "CreateUser",
@@ -213,7 +213,7 @@ fn setup_iam_simulate_shadow(client: &aws_sdk_iam::Client) -> Vec<Call> {
     ]
 }
 
-fn teardown_iam_simulate_shadow(client: &aws_sdk_iam::Client) -> Vec<Call> {
+fn teardown_iam_simulate(client: &aws_sdk_iam::Client) -> Vec<Call> {
     vec![
         Call {
             op: "DeleteUserPolicy",
@@ -262,7 +262,7 @@ fn teardown_iam_simulate_shadow(client: &aws_sdk_iam::Client) -> Vec<Call> {
     ]
 }
 
-fn test_iam_simulate_shadow_simulate_custom_policy_allowed(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_simulate_simulate_custom_policy_allowed(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "SimulateCustomPolicy",
@@ -315,7 +315,7 @@ fn test_iam_simulate_shadow_simulate_custom_policy_allowed(client: &aws_sdk_iam:
     }
 }
 
-fn test_iam_simulate_shadow_simulate_custom_policy_implicit_deny(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_simulate_simulate_custom_policy_implicit_deny(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "SimulateCustomPolicy",
@@ -368,7 +368,7 @@ fn test_iam_simulate_shadow_simulate_custom_policy_implicit_deny(client: &aws_sd
     }
 }
 
-fn test_iam_simulate_shadow_simulate_custom_policy_explicit_deny(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_simulate_simulate_custom_policy_explicit_deny(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "SimulateCustomPolicy",
@@ -415,7 +415,7 @@ fn test_iam_simulate_shadow_simulate_custom_policy_explicit_deny(client: &aws_sd
     }
 }
 
-fn test_iam_simulate_shadow_simulate_principal_policy_allowed(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_simulate_simulate_principal_policy_allowed(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "SimulatePrincipalPolicy",
@@ -469,7 +469,7 @@ fn test_iam_simulate_shadow_simulate_principal_policy_allowed(client: &aws_sdk_i
     }
 }
 
-fn test_iam_simulate_shadow_simulate_principal_policy_implicit_deny(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_simulate_simulate_principal_policy_implicit_deny(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "SimulatePrincipalPolicy",

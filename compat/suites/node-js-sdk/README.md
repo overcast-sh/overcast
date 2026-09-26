@@ -119,16 +119,15 @@ node-js-sdk/
         backend.ts  ← makeScenarioSupport(): the hook runner.ts passes in
     groups/
       index.ts      ← makeAllGroups() + makeImplMap() — the registration point
-      apigateway.ts       elasticache.ts     ses.ts
-      appsync.ts          eventbridge.ts     shield.ts
-      athena.ts           glue.ts            sns.ts
-      cloudformation.ts   iam.ts             sqs.ts
-      cloudfront.ts       kms.ts             ssm.ts
-      cognito.ts          lambda.ts          stepfunctions.ts
-      dynamodb.ts         pipes.ts           sts.ts
-      ec2.ts              rds.ts             waf.ts
-      ecs.ts              s3.ts
-      efs.ts              secretsmanager.ts
+      apigateway.ts       efs.ts             secretsmanager.ts
+      appsync.ts          elasticache.ts     ses.ts
+      athena.ts           eventbridge.ts     shield.ts
+      cloudformation.ts   glue.ts            sns.ts
+      cloudfront.ts       kms.ts             sqs.ts
+      cognito.ts          lambda.ts          ssm.ts
+      dynamodb.ts         pipes.ts           stepfunctions.ts
+      ec2.ts              rds.ts             sts.ts
+      ecs.ts              s3.ts              waf.ts
 ```
 
 ### Key types (`lib/harness.ts`)

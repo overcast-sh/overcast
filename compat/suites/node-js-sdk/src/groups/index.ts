@@ -14,7 +14,6 @@ import { makeDynamoDBGroups } from "./dynamodb.ts";
 import { makeSNSGroups } from "./sns.ts";
 import { makeLambdaGroups } from "./lambda.ts";
 import { makeSESGroups } from "./ses.ts";
-import { makeIAMGroups } from "./iam.ts";
 import { makeSTSGroups } from "./sts.ts";
 import { makeSecretsManagerGroups } from "./secretsmanager.ts";
 import { makeKMSGroups } from "./kms.ts";
@@ -46,7 +45,6 @@ export function makeAllGroups(suite: string): TestGroup[] {
     ...makeSNSGroups(suite),
     ...makeLambdaGroups(suite),
     ...makeSESGroups(suite),
-    ...makeIAMGroups(suite),
     ...makeSTSGroups(suite),
     ...makeSecretsManagerGroups(suite),
     ...makeKMSGroups(suite),

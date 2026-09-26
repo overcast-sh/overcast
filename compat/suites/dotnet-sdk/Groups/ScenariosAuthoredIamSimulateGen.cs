@@ -15,7 +15,7 @@ namespace OvercastCompat.Groups;
 /// </remarks>
 internal sealed class ScenariosAuthoredIamSimulate : IServiceGroup
 {
-    private static readonly ScenarioGroup GroupIamSimulateShadow = new("iam-simulate-shadow", "compat/model/authored/iam-simulate.json");
+    private static readonly ScenarioGroup GroupIamSimulate = new("iam-simulate", "compat/model/authored/iam-simulate.json");
 
     private readonly Lazy<AmazonIdentityManagementServiceClient> _client;
 
@@ -35,27 +35,27 @@ internal sealed class ScenariosAuthoredIamSimulate : IServiceGroup
 
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["iam-simulate-shadow:SimulateCustomPolicyAllowed"] = TestIamSimulateShadowSimulateCustomPolicyAllowed,
-        ["iam-simulate-shadow:SimulateCustomPolicyImplicitDeny"] = TestIamSimulateShadowSimulateCustomPolicyImplicitDeny,
-        ["iam-simulate-shadow:SimulateCustomPolicyExplicitDeny"] = TestIamSimulateShadowSimulateCustomPolicyExplicitDeny,
-        ["iam-simulate-shadow:SimulatePrincipalPolicyAllowed"] = TestIamSimulateShadowSimulatePrincipalPolicyAllowed,
-        ["iam-simulate-shadow:SimulatePrincipalPolicyImplicitDeny"] = TestIamSimulateShadowSimulatePrincipalPolicyImplicitDeny,
+        ["iam-simulate:SimulateCustomPolicyAllowed"] = TestIamSimulateSimulateCustomPolicyAllowed,
+        ["iam-simulate:SimulateCustomPolicyImplicitDeny"] = TestIamSimulateSimulateCustomPolicyImplicitDeny,
+        ["iam-simulate:SimulateCustomPolicyExplicitDeny"] = TestIamSimulateSimulateCustomPolicyExplicitDeny,
+        ["iam-simulate:SimulatePrincipalPolicyAllowed"] = TestIamSimulateSimulatePrincipalPolicyAllowed,
+        ["iam-simulate:SimulatePrincipalPolicyImplicitDeny"] = TestIamSimulateSimulatePrincipalPolicyImplicitDeny,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["iam-simulate-shadow"] = SetupIamSimulateShadow,
+        ["iam-simulate"] = SetupIamSimulate,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["iam-simulate-shadow"] = TeardownIamSimulateShadow,
+        ["iam-simulate"] = TeardownIamSimulate,
     };
 
     private AmazonIdentityManagementServiceClient Cl() => _client.Value;
 
-    private Task SetupIamSimulateShadow(TestContext t) =>
-        GroupIamSimulateShadow.RunSetupAsync(t,
+    private Task SetupIamSimulate(TestContext t) =>
+        GroupIamSimulate.RunSetupAsync(t,
             new ScenarioCall
             {
                 Op = "CreateUser",
@@ -90,8 +90,8 @@ internal sealed class ScenariosAuthoredIamSimulate : IServiceGroup
             }
         );
 
-    private Task TeardownIamSimulateShadow(TestContext t) =>
-        GroupIamSimulateShadow.RunTeardownAsync(t,
+    private Task TeardownIamSimulate(TestContext t) =>
+        GroupIamSimulate.RunTeardownAsync(t,
             new ScenarioCall
             {
                 Op = "DeleteUserPolicy",
@@ -121,7 +121,7 @@ internal sealed class ScenariosAuthoredIamSimulate : IServiceGroup
             }
         );
 
-    private Task TestIamSimulateShadowSimulateCustomPolicyAllowed(TestContext t) => GroupIamSimulateShadow.RunTestAsync(t, "SimulateCustomPolicyAllowed", new ScenarioTest
+    private Task TestIamSimulateSimulateCustomPolicyAllowed(TestContext t) => GroupIamSimulate.RunTestAsync(t, "SimulateCustomPolicyAllowed", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -153,7 +153,7 @@ internal sealed class ScenariosAuthoredIamSimulate : IServiceGroup
         ],
     });
 
-    private Task TestIamSimulateShadowSimulateCustomPolicyImplicitDeny(TestContext t) => GroupIamSimulateShadow.RunTestAsync(t, "SimulateCustomPolicyImplicitDeny", new ScenarioTest
+    private Task TestIamSimulateSimulateCustomPolicyImplicitDeny(TestContext t) => GroupIamSimulate.RunTestAsync(t, "SimulateCustomPolicyImplicitDeny", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -185,7 +185,7 @@ internal sealed class ScenariosAuthoredIamSimulate : IServiceGroup
         ],
     });
 
-    private Task TestIamSimulateShadowSimulateCustomPolicyExplicitDeny(TestContext t) => GroupIamSimulateShadow.RunTestAsync(t, "SimulateCustomPolicyExplicitDeny", new ScenarioTest
+    private Task TestIamSimulateSimulateCustomPolicyExplicitDeny(TestContext t) => GroupIamSimulate.RunTestAsync(t, "SimulateCustomPolicyExplicitDeny", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -217,7 +217,7 @@ internal sealed class ScenariosAuthoredIamSimulate : IServiceGroup
         ],
     });
 
-    private Task TestIamSimulateShadowSimulatePrincipalPolicyAllowed(TestContext t) => GroupIamSimulateShadow.RunTestAsync(t, "SimulatePrincipalPolicyAllowed", new ScenarioTest
+    private Task TestIamSimulateSimulatePrincipalPolicyAllowed(TestContext t) => GroupIamSimulate.RunTestAsync(t, "SimulatePrincipalPolicyAllowed", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -252,7 +252,7 @@ internal sealed class ScenariosAuthoredIamSimulate : IServiceGroup
         ],
     });
 
-    private Task TestIamSimulateShadowSimulatePrincipalPolicyImplicitDeny(TestContext t) => GroupIamSimulateShadow.RunTestAsync(t, "SimulatePrincipalPolicyImplicitDeny", new ScenarioTest
+    private Task TestIamSimulateSimulatePrincipalPolicyImplicitDeny(TestContext t) => GroupIamSimulate.RunTestAsync(t, "SimulatePrincipalPolicyImplicitDeny", new ScenarioTest
     {
         Call = new ScenarioCall
         {
