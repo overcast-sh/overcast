@@ -18,6 +18,7 @@ import { ServiceDocsButton, useDocsFromHash } from "@/features/docs/service-docs
 import { formatDate } from "@/lib/format"
 import type { CreateTableWizardState } from "../create-table-param"
 import { glueAllTablesQueryOptions, glueDatabasesQueryOptions } from "../data"
+import { CreateTableWizard } from "./create-table/create-table-wizard"
 
 interface GluePageProps {
   /** The filter, owned by the route's `q` search param. */
@@ -146,6 +147,7 @@ export function GluePage({ filter, onFilterChange, sort, onSortChange, wizard }:
           },
         ]}
       />
+      <CreateTableWizard state={wizard} />
     </ResourceListPage>
   )
 }

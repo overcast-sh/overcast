@@ -22,8 +22,10 @@
 
 import { mutationOptions, queryOptions } from "@tanstack/react-query"
 import type { PartitionInput, TableInput } from "@aws-sdk/client-glue"
-import { athena, glue } from "@/services/api"
+import { glue } from "@/services/api"
 import { endpointStore } from "@/services/endpoint-store"
+import { PREVIEW_ROWS, runQuery, selectRows } from "./athena-query"
+import { previewSql } from "./athena-link"
 import type { ListedObject } from "./hive-partitions"
 import { sampleSchema, scanPrefix } from "./scan-prefix"
 
@@ -41,6 +43,8 @@ export const glueKeys = {
   partitions: () => [...glueKeys.all(), "partitions"] as const,
   partitionList: (database: string, table: string, expression: string) =>
     [...glueKeys.partitions(), database, table, expression] as const,
+  preview: (database: string, table: string) =>
+    [...glueKeys.all(), "preview", database, table] as const,
   s3: () => [...glueKeys.all(), "s3"] as const,
   prefixScan: (bucket: string, prefix: string) =>
     [...glueKeys.s3(), "scan", bucket, prefix] as const,
@@ -117,6 +121,23 @@ export function glueSampleSchemaQueryOptions(bucket: string, object: ListedObjec
   })
 }
 
+/**
+ * *Preview*: the table's first rows, through Athena. Keyed apart from
+ * `tables()` and from Athena's executions, so neither a catalog change nor
+ * the preview's own `athena:QueryStateChanged` starts it again: it runs when
+ * the reader asks, and again only when they ask.
+ */
+export function gluePreviewQueryOptions(database: string, table: string) {
+  return queryOptions({
+    queryKey: glueKeys.preview(database, table),
+    queryFn: ({ signal }) =>
+      selectRows(previewSql(database, table, PREVIEW_ROWS), { Database: database }, signal),
+    enabled: false,
+    staleTime: Infinity,
+    retry: false,
+  })
+}
+
 // ─── Mutations ─────────────────────────────────────────────────────────────
 
 export interface CreateTableVars {
@@ -156,6 +177,6 @@ export function createPartitionMutationOptions(database: string, table: string) 
 export function repairTableMutationOptions(database: string) {
   return mutationOptions({
     mutationKey: [...glueKeys.partitions(), "repair", database] as const,
-    mutationFn: (sql: string) => athena.runQuery({ sql, context: { Database: database } }),
+    mutationFn: (sql: string) => runQuery(sql, { Database: database }),
   })
 }
