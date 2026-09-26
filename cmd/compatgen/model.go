@@ -124,6 +124,7 @@ func loadModel(shapesDir, modelService string) (*serviceModel, error) {
 func (m *serviceModel) readServiceTraits(service awsmodel.SnapshotShape) error {
 	var trait struct {
 		EndpointPrefix string `json:"endpointPrefix"`
+		ARNNamespace   string `json:"arnNamespace"`
 	}
 	if raw, ok := service.Traits["aws.api#service"]; ok {
 		if err := json.Unmarshal(raw, &trait); err != nil {
@@ -131,6 +132,18 @@ func (m *serviceModel) readServiceTraits(service awsmodel.SnapshotShape) error {
 		}
 	}
 	m.EndpointPrefix = trait.EndpointPrefix
+	if m.EndpointPrefix == "" {
+		// The trait's endpointPrefix is optional, and the AWS model for S3
+		// Tables omits it, stating only arnNamespace "s3tables". Every
+		// consumer of the client block needs a prefix — the cli and python-sdk
+		// interpreters derive the aws command and the botocore service name
+		// from it — and botocore's own metadata for that service
+		// (service-2.json, measured with botocore 1.43.67) gives
+		// endpointPrefix "s3tables", the arnNamespace. So an absent prefix
+		// reads as the arnNamespace; with neither, it stays empty and the
+		// interpreters refuse the file as before.
+		m.EndpointPrefix = trait.ARNNamespace
+	}
 	var sigv4 struct {
 		Name string `json:"name"`
 	}

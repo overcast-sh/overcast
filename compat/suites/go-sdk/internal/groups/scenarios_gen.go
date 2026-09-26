@@ -33,6 +33,7 @@ func scenarioGroups(c *clients.Clients) []ServiceGroup {
 		ScenariosAuthoredLogsEvents(c),
 		ScenariosAuthoredLogsGroups(c),
 		ScenariosAuthoredLogsMetricFilters(c),
+		ScenariosAuthoredS3tablesTables(c),
 		ScenariosAuthoredSqsQueues(c),
 		ScenariosBatch(c),
 		ScenariosElasticLoadBalancing(c),

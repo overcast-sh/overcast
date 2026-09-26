@@ -38,6 +38,7 @@
     "@aws-sdk/client-pipes": "^3.1101.0",
     "@aws-sdk/client-rds": "^3.1020.0",
     "@aws-sdk/client-s3": "^3",
+    "@aws-sdk/client-s3tables": "^3.1127.0",
     "@aws-sdk/client-secrets-manager": "^3",
     "@aws-sdk/client-servicediscovery": "^3.1101.0",
     "@aws-sdk/client-ses": "^3",

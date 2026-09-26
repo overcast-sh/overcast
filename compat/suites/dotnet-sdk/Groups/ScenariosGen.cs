@@ -39,6 +39,7 @@ internal static class ScenarioGroups
         new ScenariosAuthoredLogsEvents(clients),
         new ScenariosAuthoredLogsGroups(clients),
         new ScenariosAuthoredLogsMetricFilters(clients),
+        new ScenariosAuthoredS3tablesTables(clients),
         new ScenariosAuthoredSqsQueues(clients),
         new ScenariosBatch(clients),
         new ScenariosElasticLoadBalancing(clients),

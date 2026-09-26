@@ -65,6 +65,10 @@
     <dependency><groupId>software.amazon.awssdk</groupId><artifactId>shield</artifactId></dependency>
     <dependency><groupId>software.amazon.awssdk</groupId><artifactId>elasticache</artifactId></dependency>
     <dependency><groupId>software.amazon.awssdk</groupId><artifactId>efs</artifactId></dependency>
+    <!-- G6 wave 3 (#1116): the authored s3tables-tables scenario is the first
+         thing this suite runs against S3 Tables, so the client is added with it;
+         the BOM above declares it. -->
+    <dependency><groupId>software.amazon.awssdk</groupId><artifactId>s3tables</artifactId></dependency>
     <!-- Generated scenario groups (compat/suites/registry.generated.json) need
          the client for every service cmd/compatgen emits a Scenarios*Gen class
          for. None of organizations, batch, elasticloadbalancing and
