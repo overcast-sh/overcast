@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/iam-roles.json";
 
-const GROUP_IAM_ROLES_SHADOW: Group = Group {
-    name: "iam-roles-shadow",
+const GROUP_IAM_ROLES: Group = Group {
+    name: "iam-roles",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredIamRoles {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-roles-shadow:CreateRole".to_string(),
+                "iam-roles:CreateRole".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_ROLES_SHADOW
-                            .run_test(&ctx, "CreateRole", test_iam_roles_shadow_create_role(&client))
+                        GROUP_IAM_ROLES
+                            .run_test(&ctx, "CreateRole", test_iam_roles_create_role(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredIamRoles {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-roles-shadow:CreateRoleMalformedDocument".to_string(),
+                "iam-roles:CreateRoleMalformedDocument".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_ROLES_SHADOW
-                            .run_test(&ctx, "CreateRoleMalformedDocument", test_iam_roles_shadow_create_role_malformed_document(&client))
+                        GROUP_IAM_ROLES
+                            .run_test(&ctx, "CreateRoleMalformedDocument", test_iam_roles_create_role_malformed_document(&client))
                             .await
                     })
                 }),
@@ -79,12 +79,12 @@ impl ServiceGroup for ScenariosAuthoredIamRoles {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-roles-shadow:GetRole".to_string(),
+                "iam-roles:GetRole".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_ROLES_SHADOW
-                            .run_test(&ctx, "GetRole", test_iam_roles_shadow_get_role(&client))
+                        GROUP_IAM_ROLES
+                            .run_test(&ctx, "GetRole", test_iam_roles_get_role(&client))
                             .await
                     })
                 }),
@@ -93,12 +93,12 @@ impl ServiceGroup for ScenariosAuthoredIamRoles {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-roles-shadow:GetRoleReturnsTags".to_string(),
+                "iam-roles:GetRoleReturnsTags".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_ROLES_SHADOW
-                            .run_test(&ctx, "GetRoleReturnsTags", test_iam_roles_shadow_get_role_returns_tags(&client))
+                        GROUP_IAM_ROLES
+                            .run_test(&ctx, "GetRoleReturnsTags", test_iam_roles_get_role_returns_tags(&client))
                             .await
                     })
                 }),
@@ -107,12 +107,12 @@ impl ServiceGroup for ScenariosAuthoredIamRoles {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-roles-shadow:ListRoles".to_string(),
+                "iam-roles:ListRoles".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_ROLES_SHADOW
-                            .run_test(&ctx, "ListRoles", test_iam_roles_shadow_list_roles(&client))
+                        GROUP_IAM_ROLES
+                            .run_test(&ctx, "ListRoles", test_iam_roles_list_roles(&client))
                             .await
                     })
                 }),
@@ -121,12 +121,12 @@ impl ServiceGroup for ScenariosAuthoredIamRoles {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-roles-shadow:AttachRolePolicy".to_string(),
+                "iam-roles:AttachRolePolicy".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_ROLES_SHADOW
-                            .run_test(&ctx, "AttachRolePolicy", test_iam_roles_shadow_attach_role_policy(&client))
+                        GROUP_IAM_ROLES
+                            .run_test(&ctx, "AttachRolePolicy", test_iam_roles_attach_role_policy(&client))
                             .await
                     })
                 }),
@@ -135,12 +135,12 @@ impl ServiceGroup for ScenariosAuthoredIamRoles {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-roles-shadow:ListAttachedRolePolicies".to_string(),
+                "iam-roles:ListAttachedRolePolicies".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_ROLES_SHADOW
-                            .run_test(&ctx, "ListAttachedRolePolicies", test_iam_roles_shadow_list_attached_role_policies(&client))
+                        GROUP_IAM_ROLES
+                            .run_test(&ctx, "ListAttachedRolePolicies", test_iam_roles_list_attached_role_policies(&client))
                             .await
                     })
                 }),
@@ -149,12 +149,12 @@ impl ServiceGroup for ScenariosAuthoredIamRoles {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-roles-shadow:DetachRolePolicy".to_string(),
+                "iam-roles:DetachRolePolicy".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_ROLES_SHADOW
-                            .run_test(&ctx, "DetachRolePolicy", test_iam_roles_shadow_detach_role_policy(&client))
+                        GROUP_IAM_ROLES
+                            .run_test(&ctx, "DetachRolePolicy", test_iam_roles_detach_role_policy(&client))
                             .await
                     })
                 }),
@@ -163,12 +163,12 @@ impl ServiceGroup for ScenariosAuthoredIamRoles {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-roles-shadow:CreateInstanceProfile".to_string(),
+                "iam-roles:CreateInstanceProfile".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_ROLES_SHADOW
-                            .run_test(&ctx, "CreateInstanceProfile", test_iam_roles_shadow_create_instance_profile(&client))
+                        GROUP_IAM_ROLES
+                            .run_test(&ctx, "CreateInstanceProfile", test_iam_roles_create_instance_profile(&client))
                             .await
                     })
                 }),
@@ -177,12 +177,12 @@ impl ServiceGroup for ScenariosAuthoredIamRoles {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-roles-shadow:AddRoleToInstanceProfile".to_string(),
+                "iam-roles:AddRoleToInstanceProfile".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_ROLES_SHADOW
-                            .run_test(&ctx, "AddRoleToInstanceProfile", test_iam_roles_shadow_add_role_to_instance_profile(&client))
+                        GROUP_IAM_ROLES
+                            .run_test(&ctx, "AddRoleToInstanceProfile", test_iam_roles_add_role_to_instance_profile(&client))
                             .await
                     })
                 }),
@@ -191,12 +191,12 @@ impl ServiceGroup for ScenariosAuthoredIamRoles {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-roles-shadow:GetInstanceProfile".to_string(),
+                "iam-roles:GetInstanceProfile".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_ROLES_SHADOW
-                            .run_test(&ctx, "GetInstanceProfile", test_iam_roles_shadow_get_instance_profile(&client))
+                        GROUP_IAM_ROLES
+                            .run_test(&ctx, "GetInstanceProfile", test_iam_roles_get_instance_profile(&client))
                             .await
                     })
                 }),
@@ -205,12 +205,12 @@ impl ServiceGroup for ScenariosAuthoredIamRoles {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-roles-shadow:DeleteRole".to_string(),
+                "iam-roles:DeleteRole".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_ROLES_SHADOW
-                            .run_test(&ctx, "DeleteRole", test_iam_roles_shadow_delete_role(&client))
+                        GROUP_IAM_ROLES
+                            .run_test(&ctx, "DeleteRole", test_iam_roles_delete_role(&client))
                             .await
                     })
                 }),
@@ -219,12 +219,12 @@ impl ServiceGroup for ScenariosAuthoredIamRoles {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-roles-shadow:PutRolePolicy".to_string(),
+                "iam-roles:PutRolePolicy".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_ROLES_SHADOW
-                            .run_test(&ctx, "PutRolePolicy", test_iam_roles_shadow_put_role_policy(&client))
+                        GROUP_IAM_ROLES
+                            .run_test(&ctx, "PutRolePolicy", test_iam_roles_put_role_policy(&client))
                             .await
                     })
                 }),
@@ -233,12 +233,12 @@ impl ServiceGroup for ScenariosAuthoredIamRoles {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-roles-shadow:GetRolePolicy".to_string(),
+                "iam-roles:GetRolePolicy".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_ROLES_SHADOW
-                            .run_test(&ctx, "GetRolePolicy", test_iam_roles_shadow_get_role_policy(&client))
+                        GROUP_IAM_ROLES
+                            .run_test(&ctx, "GetRolePolicy", test_iam_roles_get_role_policy(&client))
                             .await
                     })
                 }),
@@ -247,12 +247,12 @@ impl ServiceGroup for ScenariosAuthoredIamRoles {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-roles-shadow:ListRolePolicies".to_string(),
+                "iam-roles:ListRolePolicies".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_ROLES_SHADOW
-                            .run_test(&ctx, "ListRolePolicies", test_iam_roles_shadow_list_role_policies(&client))
+                        GROUP_IAM_ROLES
+                            .run_test(&ctx, "ListRolePolicies", test_iam_roles_list_role_policies(&client))
                             .await
                     })
                 }),
@@ -261,12 +261,12 @@ impl ServiceGroup for ScenariosAuthoredIamRoles {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-roles-shadow:DeleteRolePolicy".to_string(),
+                "iam-roles:DeleteRolePolicy".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_ROLES_SHADOW
-                            .run_test(&ctx, "DeleteRolePolicy", test_iam_roles_shadow_delete_role_policy(&client))
+                        GROUP_IAM_ROLES
+                            .run_test(&ctx, "DeleteRolePolicy", test_iam_roles_delete_role_policy(&client))
                             .await
                     })
                 }),
@@ -280,11 +280,11 @@ impl ServiceGroup for ScenariosAuthoredIamRoles {
         {
             let client = self.client.clone();
             setups.insert(
-                "iam-roles-shadow".to_string(),
+                "iam-roles".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_ROLES_SHADOW.run_setup(&ctx, setup_iam_roles_shadow(&client)).await
+                        GROUP_IAM_ROLES.run_setup(&ctx, setup_iam_roles(&client)).await
                     })
                 }),
             );
@@ -297,11 +297,11 @@ impl ServiceGroup for ScenariosAuthoredIamRoles {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "iam-roles-shadow".to_string(),
+                "iam-roles".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_ROLES_SHADOW.run_teardown(&ctx, teardown_iam_roles_shadow(&client)).await
+                        GROUP_IAM_ROLES.run_teardown(&ctx, teardown_iam_roles(&client)).await
                     })
                 }),
             );
@@ -310,7 +310,7 @@ impl ServiceGroup for ScenariosAuthoredIamRoles {
     }
 }
 
-fn setup_iam_roles_shadow(client: &aws_sdk_iam::Client) -> Vec<Call> {
+fn setup_iam_roles(client: &aws_sdk_iam::Client) -> Vec<Call> {
     vec![
         Call {
             op: "CreateRole",
@@ -339,7 +339,7 @@ fn setup_iam_roles_shadow(client: &aws_sdk_iam::Client) -> Vec<Call> {
     ]
 }
 
-fn teardown_iam_roles_shadow(client: &aws_sdk_iam::Client) -> Vec<Call> {
+fn teardown_iam_roles(client: &aws_sdk_iam::Client) -> Vec<Call> {
     vec![
         Call {
             op: "RemoveRoleFromInstanceProfile",
@@ -498,7 +498,7 @@ fn teardown_iam_roles_shadow(client: &aws_sdk_iam::Client) -> Vec<Call> {
     ]
 }
 
-fn test_iam_roles_shadow_create_role(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_roles_create_role(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "CreateRole",
@@ -579,7 +579,7 @@ fn test_iam_roles_shadow_create_role(client: &aws_sdk_iam::Client) -> Test {
     }
 }
 
-fn test_iam_roles_shadow_create_role_malformed_document(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_roles_create_role_malformed_document(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "CreateRole",
@@ -611,7 +611,7 @@ fn test_iam_roles_shadow_create_role_malformed_document(client: &aws_sdk_iam::Cl
     }
 }
 
-fn test_iam_roles_shadow_get_role(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_roles_get_role(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "GetRole",
@@ -643,7 +643,7 @@ fn test_iam_roles_shadow_get_role(client: &aws_sdk_iam::Client) -> Test {
     }
 }
 
-fn test_iam_roles_shadow_get_role_returns_tags(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_roles_get_role_returns_tags(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "GetRole",
@@ -686,7 +686,7 @@ fn test_iam_roles_shadow_get_role_returns_tags(client: &aws_sdk_iam::Client) -> 
     }
 }
 
-fn test_iam_roles_shadow_list_roles(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_roles_list_roles(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "ListRoles",
@@ -720,7 +720,7 @@ fn test_iam_roles_shadow_list_roles(client: &aws_sdk_iam::Client) -> Test {
     }
 }
 
-fn test_iam_roles_shadow_attach_role_policy(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_roles_attach_role_policy(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "AttachRolePolicy",
@@ -781,7 +781,7 @@ fn test_iam_roles_shadow_attach_role_policy(client: &aws_sdk_iam::Client) -> Tes
     }
 }
 
-fn test_iam_roles_shadow_list_attached_role_policies(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_roles_list_attached_role_policies(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "ListAttachedRolePolicies",
@@ -815,7 +815,7 @@ fn test_iam_roles_shadow_list_attached_role_policies(client: &aws_sdk_iam::Clien
     }
 }
 
-fn test_iam_roles_shadow_detach_role_policy(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_roles_detach_role_policy(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "DetachRolePolicy",
@@ -876,7 +876,7 @@ fn test_iam_roles_shadow_detach_role_policy(client: &aws_sdk_iam::Client) -> Tes
     }
 }
 
-fn test_iam_roles_shadow_create_instance_profile(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_roles_create_instance_profile(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "CreateInstanceProfile",
@@ -909,7 +909,7 @@ fn test_iam_roles_shadow_create_instance_profile(client: &aws_sdk_iam::Client) -
     }
 }
 
-fn test_iam_roles_shadow_add_role_to_instance_profile(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_roles_add_role_to_instance_profile(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "AddRoleToInstanceProfile",
@@ -970,7 +970,7 @@ fn test_iam_roles_shadow_add_role_to_instance_profile(client: &aws_sdk_iam::Clie
     }
 }
 
-fn test_iam_roles_shadow_get_instance_profile(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_roles_get_instance_profile(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "GetInstanceProfile",
@@ -1009,7 +1009,7 @@ fn test_iam_roles_shadow_get_instance_profile(client: &aws_sdk_iam::Client) -> T
     }
 }
 
-fn test_iam_roles_shadow_delete_role(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_roles_delete_role(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteRole",
@@ -1091,7 +1091,7 @@ fn test_iam_roles_shadow_delete_role(client: &aws_sdk_iam::Client) -> Test {
     }
 }
 
-fn test_iam_roles_shadow_put_role_policy(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_roles_put_role_policy(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "PutRolePolicy",
@@ -1155,7 +1155,7 @@ fn test_iam_roles_shadow_put_role_policy(client: &aws_sdk_iam::Client) -> Test {
     }
 }
 
-fn test_iam_roles_shadow_get_role_policy(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_roles_get_role_policy(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "GetRolePolicy",
@@ -1191,7 +1191,7 @@ fn test_iam_roles_shadow_get_role_policy(client: &aws_sdk_iam::Client) -> Test {
     }
 }
 
-fn test_iam_roles_shadow_list_role_policies(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_roles_list_role_policies(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "ListRolePolicies",
@@ -1225,7 +1225,7 @@ fn test_iam_roles_shadow_list_role_policies(client: &aws_sdk_iam::Client) -> Tes
     }
 }
 
-fn test_iam_roles_shadow_delete_role_policy(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_roles_delete_role_policy(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteRolePolicy",

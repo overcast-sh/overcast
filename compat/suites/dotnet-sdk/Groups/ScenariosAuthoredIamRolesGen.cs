@@ -15,7 +15,7 @@ namespace OvercastCompat.Groups;
 /// </remarks>
 internal sealed class ScenariosAuthoredIamRoles : IServiceGroup
 {
-    private static readonly ScenarioGroup GroupIamRolesShadow = new("iam-roles-shadow", "compat/model/authored/iam-roles.json");
+    private static readonly ScenarioGroup GroupIamRoles = new("iam-roles", "compat/model/authored/iam-roles.json");
 
     private readonly Lazy<AmazonIdentityManagementServiceClient> _client;
 
@@ -35,38 +35,38 @@ internal sealed class ScenariosAuthoredIamRoles : IServiceGroup
 
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["iam-roles-shadow:CreateRole"] = TestIamRolesShadowCreateRole,
-        ["iam-roles-shadow:CreateRoleMalformedDocument"] = TestIamRolesShadowCreateRoleMalformedDocument,
-        ["iam-roles-shadow:GetRole"] = TestIamRolesShadowGetRole,
-        ["iam-roles-shadow:GetRoleReturnsTags"] = TestIamRolesShadowGetRoleReturnsTags,
-        ["iam-roles-shadow:ListRoles"] = TestIamRolesShadowListRoles,
-        ["iam-roles-shadow:AttachRolePolicy"] = TestIamRolesShadowAttachRolePolicy,
-        ["iam-roles-shadow:ListAttachedRolePolicies"] = TestIamRolesShadowListAttachedRolePolicies,
-        ["iam-roles-shadow:DetachRolePolicy"] = TestIamRolesShadowDetachRolePolicy,
-        ["iam-roles-shadow:CreateInstanceProfile"] = TestIamRolesShadowCreateInstanceProfile,
-        ["iam-roles-shadow:AddRoleToInstanceProfile"] = TestIamRolesShadowAddRoleToInstanceProfile,
-        ["iam-roles-shadow:GetInstanceProfile"] = TestIamRolesShadowGetInstanceProfile,
-        ["iam-roles-shadow:DeleteRole"] = TestIamRolesShadowDeleteRole,
-        ["iam-roles-shadow:PutRolePolicy"] = TestIamRolesShadowPutRolePolicy,
-        ["iam-roles-shadow:GetRolePolicy"] = TestIamRolesShadowGetRolePolicy,
-        ["iam-roles-shadow:ListRolePolicies"] = TestIamRolesShadowListRolePolicies,
-        ["iam-roles-shadow:DeleteRolePolicy"] = TestIamRolesShadowDeleteRolePolicy,
+        ["iam-roles:CreateRole"] = TestIamRolesCreateRole,
+        ["iam-roles:CreateRoleMalformedDocument"] = TestIamRolesCreateRoleMalformedDocument,
+        ["iam-roles:GetRole"] = TestIamRolesGetRole,
+        ["iam-roles:GetRoleReturnsTags"] = TestIamRolesGetRoleReturnsTags,
+        ["iam-roles:ListRoles"] = TestIamRolesListRoles,
+        ["iam-roles:AttachRolePolicy"] = TestIamRolesAttachRolePolicy,
+        ["iam-roles:ListAttachedRolePolicies"] = TestIamRolesListAttachedRolePolicies,
+        ["iam-roles:DetachRolePolicy"] = TestIamRolesDetachRolePolicy,
+        ["iam-roles:CreateInstanceProfile"] = TestIamRolesCreateInstanceProfile,
+        ["iam-roles:AddRoleToInstanceProfile"] = TestIamRolesAddRoleToInstanceProfile,
+        ["iam-roles:GetInstanceProfile"] = TestIamRolesGetInstanceProfile,
+        ["iam-roles:DeleteRole"] = TestIamRolesDeleteRole,
+        ["iam-roles:PutRolePolicy"] = TestIamRolesPutRolePolicy,
+        ["iam-roles:GetRolePolicy"] = TestIamRolesGetRolePolicy,
+        ["iam-roles:ListRolePolicies"] = TestIamRolesListRolePolicies,
+        ["iam-roles:DeleteRolePolicy"] = TestIamRolesDeleteRolePolicy,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["iam-roles-shadow"] = SetupIamRolesShadow,
+        ["iam-roles"] = SetupIamRoles,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["iam-roles-shadow"] = TeardownIamRolesShadow,
+        ["iam-roles"] = TeardownIamRoles,
     };
 
     private AmazonIdentityManagementServiceClient Cl() => _client.Value;
 
-    private Task SetupIamRolesShadow(TestContext t) =>
-        GroupIamRolesShadow.RunSetupAsync(t,
+    private Task SetupIamRoles(TestContext t) =>
+        GroupIamRoles.RunSetupAsync(t,
             new ScenarioCall
             {
                 Op = "CreateRole",
@@ -83,8 +83,8 @@ internal sealed class ScenariosAuthoredIamRoles : IServiceGroup
             }
         );
 
-    private Task TeardownIamRolesShadow(TestContext t) =>
-        GroupIamRolesShadow.RunTeardownAsync(t,
+    private Task TeardownIamRoles(TestContext t) =>
+        GroupIamRoles.RunTeardownAsync(t,
             new ScenarioCall
             {
                 Op = "RemoveRoleFromInstanceProfile",
@@ -181,7 +181,7 @@ internal sealed class ScenariosAuthoredIamRoles : IServiceGroup
             }
         );
 
-    private Task TestIamRolesShadowCreateRole(TestContext t) => GroupIamRolesShadow.RunTestAsync(t, "CreateRole", new ScenarioTest
+    private Task TestIamRolesCreateRole(TestContext t) => GroupIamRoles.RunTestAsync(t, "CreateRole", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -234,7 +234,7 @@ internal sealed class ScenariosAuthoredIamRoles : IServiceGroup
         ],
     });
 
-    private Task TestIamRolesShadowCreateRoleMalformedDocument(TestContext t) => GroupIamRolesShadow.RunTestAsync(t, "CreateRoleMalformedDocument", new ScenarioTest
+    private Task TestIamRolesCreateRoleMalformedDocument(TestContext t) => GroupIamRoles.RunTestAsync(t, "CreateRoleMalformedDocument", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -256,7 +256,7 @@ internal sealed class ScenariosAuthoredIamRoles : IServiceGroup
         ],
     });
 
-    private Task TestIamRolesShadowGetRole(TestContext t) => GroupIamRolesShadow.RunTestAsync(t, "GetRole", new ScenarioTest
+    private Task TestIamRolesGetRole(TestContext t) => GroupIamRoles.RunTestAsync(t, "GetRole", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -281,7 +281,7 @@ internal sealed class ScenariosAuthoredIamRoles : IServiceGroup
         ],
     });
 
-    private Task TestIamRolesShadowGetRoleReturnsTags(TestContext t) => GroupIamRolesShadow.RunTestAsync(t, "GetRoleReturnsTags", new ScenarioTest
+    private Task TestIamRolesGetRoleReturnsTags(TestContext t) => GroupIamRoles.RunTestAsync(t, "GetRoleReturnsTags", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -313,7 +313,7 @@ internal sealed class ScenariosAuthoredIamRoles : IServiceGroup
         ],
     });
 
-    private Task TestIamRolesShadowListRoles(TestContext t) => GroupIamRolesShadow.RunTestAsync(t, "ListRoles", new ScenarioTest
+    private Task TestIamRolesListRoles(TestContext t) => GroupIamRoles.RunTestAsync(t, "ListRoles", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -338,7 +338,7 @@ internal sealed class ScenariosAuthoredIamRoles : IServiceGroup
         ],
     });
 
-    private Task TestIamRolesShadowAttachRolePolicy(TestContext t) => GroupIamRolesShadow.RunTestAsync(t, "AttachRolePolicy", new ScenarioTest
+    private Task TestIamRolesAttachRolePolicy(TestContext t) => GroupIamRoles.RunTestAsync(t, "AttachRolePolicy", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -378,7 +378,7 @@ internal sealed class ScenariosAuthoredIamRoles : IServiceGroup
         ],
     });
 
-    private Task TestIamRolesShadowListAttachedRolePolicies(TestContext t) => GroupIamRolesShadow.RunTestAsync(t, "ListAttachedRolePolicies", new ScenarioTest
+    private Task TestIamRolesListAttachedRolePolicies(TestContext t) => GroupIamRoles.RunTestAsync(t, "ListAttachedRolePolicies", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -403,7 +403,7 @@ internal sealed class ScenariosAuthoredIamRoles : IServiceGroup
         ],
     });
 
-    private Task TestIamRolesShadowDetachRolePolicy(TestContext t) => GroupIamRolesShadow.RunTestAsync(t, "DetachRolePolicy", new ScenarioTest
+    private Task TestIamRolesDetachRolePolicy(TestContext t) => GroupIamRoles.RunTestAsync(t, "DetachRolePolicy", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -443,7 +443,7 @@ internal sealed class ScenariosAuthoredIamRoles : IServiceGroup
         ],
     });
 
-    private Task TestIamRolesShadowCreateInstanceProfile(TestContext t) => GroupIamRolesShadow.RunTestAsync(t, "CreateInstanceProfile", new ScenarioTest
+    private Task TestIamRolesCreateInstanceProfile(TestContext t) => GroupIamRoles.RunTestAsync(t, "CreateInstanceProfile", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -467,7 +467,7 @@ internal sealed class ScenariosAuthoredIamRoles : IServiceGroup
         ],
     });
 
-    private Task TestIamRolesShadowAddRoleToInstanceProfile(TestContext t) => GroupIamRolesShadow.RunTestAsync(t, "AddRoleToInstanceProfile", new ScenarioTest
+    private Task TestIamRolesAddRoleToInstanceProfile(TestContext t) => GroupIamRoles.RunTestAsync(t, "AddRoleToInstanceProfile", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -507,7 +507,7 @@ internal sealed class ScenariosAuthoredIamRoles : IServiceGroup
         ],
     });
 
-    private Task TestIamRolesShadowGetInstanceProfile(TestContext t) => GroupIamRolesShadow.RunTestAsync(t, "GetInstanceProfile", new ScenarioTest
+    private Task TestIamRolesGetInstanceProfile(TestContext t) => GroupIamRoles.RunTestAsync(t, "GetInstanceProfile", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -535,7 +535,7 @@ internal sealed class ScenariosAuthoredIamRoles : IServiceGroup
         ],
     });
 
-    private Task TestIamRolesShadowDeleteRole(TestContext t) => GroupIamRolesShadow.RunTestAsync(t, "DeleteRole", new ScenarioTest
+    private Task TestIamRolesDeleteRole(TestContext t) => GroupIamRoles.RunTestAsync(t, "DeleteRole", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -591,7 +591,7 @@ internal sealed class ScenariosAuthoredIamRoles : IServiceGroup
         ],
     });
 
-    private Task TestIamRolesShadowPutRolePolicy(TestContext t) => GroupIamRolesShadow.RunTestAsync(t, "PutRolePolicy", new ScenarioTest
+    private Task TestIamRolesPutRolePolicy(TestContext t) => GroupIamRoles.RunTestAsync(t, "PutRolePolicy", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -632,7 +632,7 @@ internal sealed class ScenariosAuthoredIamRoles : IServiceGroup
         ],
     });
 
-    private Task TestIamRolesShadowGetRolePolicy(TestContext t) => GroupIamRolesShadow.RunTestAsync(t, "GetRolePolicy", new ScenarioTest
+    private Task TestIamRolesGetRolePolicy(TestContext t) => GroupIamRoles.RunTestAsync(t, "GetRolePolicy", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -658,7 +658,7 @@ internal sealed class ScenariosAuthoredIamRoles : IServiceGroup
         ],
     });
 
-    private Task TestIamRolesShadowListRolePolicies(TestContext t) => GroupIamRolesShadow.RunTestAsync(t, "ListRolePolicies", new ScenarioTest
+    private Task TestIamRolesListRolePolicies(TestContext t) => GroupIamRoles.RunTestAsync(t, "ListRolePolicies", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -683,7 +683,7 @@ internal sealed class ScenariosAuthoredIamRoles : IServiceGroup
         ],
     });
 
-    private Task TestIamRolesShadowDeleteRolePolicy(TestContext t) => GroupIamRolesShadow.RunTestAsync(t, "DeleteRolePolicy", new ScenarioTest
+    private Task TestIamRolesDeleteRolePolicy(TestContext t) => GroupIamRoles.RunTestAsync(t, "DeleteRolePolicy", new ScenarioTest
     {
         Call = new ScenarioCall
         {

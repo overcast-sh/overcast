@@ -18,26 +18,6 @@ func IAM(c *clients.Clients) ServiceGroup {
 	g := &iamGroup{c: c}
 	return ServiceGroup{
 		Impls: map[string]harness.TestFn{
-			"iam-users:CreateUser":                             g.CreateUser,
-			"iam-users:GetUser":                                g.GetUser,
-			"iam-users:ListUsers":                              g.ListUsers,
-			"iam-users:DeleteUser":                             g.DeleteUser,
-			"iam-users:CreateAccessKey":                        g.CreateAccessKey,
-			"iam-users:DeleteAccessKey":                        g.DeleteAccessKey,
-			"iam-users:PutUserPolicy":                          g.PutUserPolicy,
-			"iam-users:GetUserPolicy":                          g.GetUserPolicy,
-			"iam-users:DeleteUserPolicy":                       g.DeleteUserPolicy,
-			"iam-users:UpdateUser":                             g.UpdateUser,
-			"iam-users:ListAccessKeys":                         g.ListAccessKeys,
-			"iam-roles:CreateRole":                             g.CreateRole,
-			"iam-roles:CreateRoleMalformedDocument":            g.CreateRoleMalformedDocument,
-			"iam-roles:GetRole":                                g.GetRole,
-			"iam-roles:GetRoleReturnsTags":                     g.GetRoleReturnsTags,
-			"iam-roles:ListRoles":                              g.ListRoles,
-			"iam-roles:DeleteRole":                             g.DeleteRole,
-			"iam-roles:CreateInstanceProfile":                  g.CreateInstanceProfile,
-			"iam-roles:AddRoleToInstanceProfile":               g.AddRoleToInstanceProfile,
-			"iam-roles:GetInstanceProfile":                     g.GetInstanceProfile,
 			"iam-policies:CreatePolicy":                        g.CreatePolicy,
 			"iam-policies:CreatePolicyMalformedDocument":       g.CreatePolicyMalformedDocument,
 			"iam-policies:GetPolicy":                           g.GetPolicy,
@@ -46,13 +26,6 @@ func IAM(c *clients.Clients) ServiceGroup {
 			"iam-policies:GetPolicyAttachmentCountAfterAttach": g.GetPolicyAttachmentCountAfterAttach,
 			"iam-policies:GetPolicyAttachmentCountAfterDetach": g.GetPolicyAttachmentCountAfterDetach,
 			"iam-policies:DeletePolicy":                        g.DeletePolicy,
-			"iam-roles:AttachRolePolicy":                       g.AttachRolePolicy,
-			"iam-roles:ListAttachedRolePolicies":               g.ListAttachedRolePolicies,
-			"iam-roles:DetachRolePolicy":                       g.DetachRolePolicy,
-			"iam-roles:PutRolePolicy":                          g.PutRolePolicy,
-			"iam-roles:GetRolePolicy":                          g.GetRolePolicy,
-			"iam-roles:ListRolePolicies":                       g.ListRolePolicies,
-			"iam-roles:DeleteRolePolicy":                       g.DeleteRolePolicy,
 			"iam-groups:CreateGroup":                           g.CreateGroup,
 			"iam-groups:AddUserToGroup":                        g.AddUserToGroup,
 			"iam-groups:ListGroupsForUser":                     g.ListGroupsForUser,
@@ -67,15 +40,11 @@ func IAM(c *clients.Clients) ServiceGroup {
 			"iam-simulate:SimulatePrincipalPolicyImplicitDeny": g.SimulatePrincipalPolicyImplicitDeny,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"iam-users":    g.setupUsers,
-			"iam-roles":    g.setupRoles,
 			"iam-policies": g.setupPolicies,
 			"iam-groups":   g.setupGroups,
 			"iam-simulate": g.setupSimulate,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"iam-users":    g.teardownUsers,
-			"iam-roles":    g.teardownRoles,
 			"iam-policies": g.teardownPolicies,
 			"iam-groups":   g.teardownGroups,
 			"iam-simulate": g.teardownSimulate,
@@ -109,8 +78,8 @@ func iamAssumePolicy() string {
 // API_CreateRole.html, Errors).
 const iamMalformedPolicy = `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Resource":"*"}]}`
 
-// iamResourceTags is the tag set the role and policy fixtures are created with,
-// and the one GetRole and GetPolicy must hand back on the resource itself.
+// iamResourceTags is the tag set the policy fixture is created with, and the
+// one GetPolicy must hand back on the resource itself.
 func iamResourceTags() []iamtypes.Tag {
 	return []iamtypes.Tag{
 		{Key: aws.String("owner"), Value: aws.String("compat")},
@@ -146,320 +115,6 @@ func assertResourceTags(op string, tags []iamtypes.Tag) error {
 		if got[key] != value {
 			return fmt.Errorf("%s: tag %s = %q, want %q (tags: %v)", op, key, got[key], value, got)
 		}
-	}
-	return nil
-}
-
-// ── iam-users ──────────────────────────────────────────────────────────────────
-
-func (g *iamGroup) setupUsers(ctx context.Context, t *harness.TestContext) error {
-	name := fmt.Sprintf("oc-user-%s", t.RunID)
-	resp, err := g.cl().CreateUser(ctx, &iam.CreateUserInput{UserName: aws.String(name)})
-	if err != nil {
-		return err
-	}
-	t.Set("iam_user", name)
-	t.Set("iam_user_arn", aws.ToString(resp.User.Arn))
-	return nil
-}
-
-func (g *iamGroup) teardownUsers(ctx context.Context, t *harness.TestContext) error {
-	if name := t.GetString("iam_user"); name != "" {
-		g.cl().DeleteUser(ctx, &iam.DeleteUserInput{UserName: aws.String(name)}) //nolint:errcheck
-	}
-	return nil
-}
-
-func (g *iamGroup) CreateUser(ctx context.Context, t *harness.TestContext) error {
-	name := fmt.Sprintf("oc-cu-%s", t.RunID)
-	_, err := g.cl().CreateUser(ctx, &iam.CreateUserInput{UserName: aws.String(name)})
-	if err == nil {
-		g.cl().DeleteUser(ctx, &iam.DeleteUserInput{UserName: aws.String(name)}) //nolint:errcheck
-	}
-	return err
-}
-
-func (g *iamGroup) GetUser(ctx context.Context, t *harness.TestContext) error {
-	resp, err := g.cl().GetUser(ctx, &iam.GetUserInput{UserName: aws.String(t.GetString("iam_user"))})
-	if err != nil {
-		return err
-	}
-	if aws.ToString(resp.User.UserName) != t.GetString("iam_user") {
-		return fmt.Errorf("GetUser name mismatch")
-	}
-	return nil
-}
-
-func (g *iamGroup) ListUsers(ctx context.Context, t *harness.TestContext) error {
-	_, err := g.cl().ListUsers(ctx, &iam.ListUsersInput{})
-	return err
-}
-
-func (g *iamGroup) UpdateUser(ctx context.Context, t *harness.TestContext) error {
-	old := t.GetString("iam_user")
-	newName := fmt.Sprintf("oc-upd-%s", t.RunID)
-	if _, err := g.cl().UpdateUser(ctx, &iam.UpdateUserInput{
-		UserName:    aws.String(old),
-		NewUserName: aws.String(newName),
-	}); err != nil {
-		return err
-	}
-	// rename back
-	g.cl().UpdateUser(ctx, &iam.UpdateUserInput{UserName: aws.String(newName), NewUserName: aws.String(old)}) //nolint:errcheck
-	return nil
-}
-
-func (g *iamGroup) DeleteUser(ctx context.Context, t *harness.TestContext) error {
-	name := fmt.Sprintf("oc-del-u-%s", t.RunID)
-	g.cl().CreateUser(ctx, &iam.CreateUserInput{UserName: aws.String(name)}) //nolint:errcheck
-	_, err := g.cl().DeleteUser(ctx, &iam.DeleteUserInput{UserName: aws.String(name)})
-	return err
-}
-
-func (g *iamGroup) CreateAccessKey(ctx context.Context, t *harness.TestContext) error {
-	resp, err := g.cl().CreateAccessKey(ctx, &iam.CreateAccessKeyInput{
-		UserName: aws.String(t.GetString("iam_user")),
-	})
-	if err != nil {
-		return err
-	}
-	if resp.AccessKey == nil || resp.AccessKey.AccessKeyId == nil {
-		return fmt.Errorf("CreateAccessKey: missing AccessKeyId")
-	}
-	t.Set("iam_ak_id", aws.ToString(resp.AccessKey.AccessKeyId))
-	return nil
-}
-
-func (g *iamGroup) DeleteAccessKey(ctx context.Context, t *harness.TestContext) error {
-	akID := t.GetString("iam_ak_id")
-	if akID == "" {
-		return fmt.Errorf("DeleteAccessKey: no AccessKeyId from CreateAccessKey")
-	}
-	_, err := g.cl().DeleteAccessKey(ctx, &iam.DeleteAccessKeyInput{
-		UserName:    aws.String(t.GetString("iam_user")),
-		AccessKeyId: aws.String(akID),
-	})
-	return err
-}
-
-func (g *iamGroup) PutUserPolicy(ctx context.Context, t *harness.TestContext) error {
-	_, err := g.cl().PutUserPolicy(ctx, &iam.PutUserPolicyInput{
-		UserName:       aws.String(t.GetString("iam_user")),
-		PolicyName:     aws.String("inline-policy"),
-		PolicyDocument: aws.String(iamPolicyDoc()),
-	})
-	return err
-}
-
-func (g *iamGroup) GetUserPolicy(ctx context.Context, t *harness.TestContext) error {
-	resp, err := g.cl().GetUserPolicy(ctx, &iam.GetUserPolicyInput{
-		UserName:   aws.String(t.GetString("iam_user")),
-		PolicyName: aws.String("inline-policy"),
-	})
-	if err != nil {
-		return err
-	}
-	if resp.PolicyDocument == nil {
-		return fmt.Errorf("GetUserPolicy: missing PolicyDocument")
-	}
-	return nil
-}
-
-func (g *iamGroup) DeleteUserPolicy(ctx context.Context, t *harness.TestContext) error {
-	_, err := g.cl().DeleteUserPolicy(ctx, &iam.DeleteUserPolicyInput{
-		UserName:   aws.String(t.GetString("iam_user")),
-		PolicyName: aws.String("inline-policy"),
-	})
-	return err
-}
-
-func (g *iamGroup) ListAccessKeys(ctx context.Context, t *harness.TestContext) error {
-	_, err := g.cl().ListAccessKeys(ctx, &iam.ListAccessKeysInput{
-		UserName: aws.String(t.GetString("iam_user")),
-	})
-	return err
-}
-
-// ── iam-roles ──────────────────────────────────────────────────────────────────
-
-func (g *iamGroup) setupRoles(ctx context.Context, t *harness.TestContext) error {
-	name := fmt.Sprintf("oc-role-%s", t.RunID)
-	resp, err := g.cl().CreateRole(ctx, &iam.CreateRoleInput{
-		RoleName:                 aws.String(name),
-		AssumeRolePolicyDocument: aws.String(iamAssumePolicy()),
-		Tags:                     iamResourceTags(),
-	})
-	if err != nil {
-		return err
-	}
-	t.Set("iam_role", name)
-	t.Set("iam_role_arn", aws.ToString(resp.Role.Arn))
-	return nil
-}
-
-func (g *iamGroup) teardownRoles(ctx context.Context, t *harness.TestContext) error {
-	if name := t.GetString("iam_role"); name != "" {
-		g.cl().DeleteRolePolicy(ctx, &iam.DeleteRolePolicyInput{RoleName: aws.String(name), PolicyName: aws.String("inline-role-policy")}) //nolint:errcheck
-		g.cl().DeleteRole(ctx, &iam.DeleteRoleInput{RoleName: aws.String(name)})                                                           //nolint:errcheck
-	}
-	return nil
-}
-
-func (g *iamGroup) CreateRole(ctx context.Context, t *harness.TestContext) error {
-	name := fmt.Sprintf("oc-cr-%s", t.RunID)
-	_, err := g.cl().CreateRole(ctx, &iam.CreateRoleInput{
-		RoleName:                 aws.String(name),
-		AssumeRolePolicyDocument: aws.String(iamAssumePolicy()),
-	})
-	if err == nil {
-		g.cl().DeleteRole(ctx, &iam.DeleteRoleInput{RoleName: aws.String(name)}) //nolint:errcheck
-	}
-	return err
-}
-
-func (g *iamGroup) GetRole(ctx context.Context, t *harness.TestContext) error {
-	resp, err := g.cl().GetRole(ctx, &iam.GetRoleInput{RoleName: aws.String(t.GetString("iam_role"))})
-	if err != nil {
-		return err
-	}
-	if aws.ToString(resp.Role.RoleName) != t.GetString("iam_role") {
-		return fmt.Errorf("GetRole name mismatch")
-	}
-	return nil
-}
-
-// CreateRoleMalformedDocument pins that a trust policy AWS would refuse is
-// refused here too, rather than stored unparsed.
-func (g *iamGroup) CreateRoleMalformedDocument(ctx context.Context, t *harness.TestContext) error {
-	name := fmt.Sprintf("oc-crmd-%s", t.RunID)
-	_, err := g.cl().CreateRole(ctx, &iam.CreateRoleInput{
-		RoleName:                 aws.String(name),
-		AssumeRolePolicyDocument: aws.String(iamMalformedPolicy),
-	})
-	if err == nil {
-		g.cl().DeleteRole(ctx, &iam.DeleteRoleInput{RoleName: aws.String(name)}) //nolint:errcheck
-	}
-	return assertMalformedPolicyDocument("CreateRoleMalformedDocument", err)
-}
-
-// GetRoleReturnsTags pins that Tags supplied to CreateRole come back on the
-// role itself, which is where AWS documents them (API_Role.html).
-func (g *iamGroup) GetRoleReturnsTags(ctx context.Context, t *harness.TestContext) error {
-	resp, err := g.cl().GetRole(ctx, &iam.GetRoleInput{RoleName: aws.String(t.GetString("iam_role"))})
-	if err != nil {
-		return err
-	}
-	if resp.Role == nil {
-		return fmt.Errorf("GetRoleReturnsTags: missing Role")
-	}
-	return assertResourceTags("GetRoleReturnsTags", resp.Role.Tags)
-}
-
-func (g *iamGroup) ListRoles(ctx context.Context, t *harness.TestContext) error {
-	_, err := g.cl().ListRoles(ctx, &iam.ListRolesInput{})
-	return err
-}
-
-func (g *iamGroup) UpdateRole(ctx context.Context, t *harness.TestContext) error {
-	_, err := g.cl().UpdateRole(ctx, &iam.UpdateRoleInput{
-		RoleName:    aws.String(t.GetString("iam_role")),
-		Description: aws.String("updated"),
-	})
-	return err
-}
-
-func (g *iamGroup) DeleteRole(ctx context.Context, t *harness.TestContext) error {
-	name := fmt.Sprintf("oc-dr-%s", t.RunID)
-	g.cl().CreateRole(ctx, &iam.CreateRoleInput{
-		RoleName: aws.String(name), AssumeRolePolicyDocument: aws.String(iamAssumePolicy()),
-	}) //nolint:errcheck
-	_, err := g.cl().DeleteRole(ctx, &iam.DeleteRoleInput{RoleName: aws.String(name)})
-	return err
-}
-
-func (g *iamGroup) PutRolePolicy(ctx context.Context, t *harness.TestContext) error {
-	_, err := g.cl().PutRolePolicy(ctx, &iam.PutRolePolicyInput{
-		RoleName:       aws.String(t.GetString("iam_role")),
-		PolicyName:     aws.String("inline-role-policy"),
-		PolicyDocument: aws.String(iamPolicyDoc()),
-	})
-	return err
-}
-
-func (g *iamGroup) GetRolePolicy(ctx context.Context, t *harness.TestContext) error {
-	resp, err := g.cl().GetRolePolicy(ctx, &iam.GetRolePolicyInput{
-		RoleName:   aws.String(t.GetString("iam_role")),
-		PolicyName: aws.String("inline-role-policy"),
-	})
-	if err != nil {
-		return err
-	}
-	if resp.PolicyDocument == nil {
-		return fmt.Errorf("GetRolePolicy: missing PolicyDocument")
-	}
-	return nil
-}
-
-func (g *iamGroup) ListRolePolicies(ctx context.Context, t *harness.TestContext) error {
-	resp, err := g.cl().ListRolePolicies(ctx, &iam.ListRolePoliciesInput{
-		RoleName: aws.String(t.GetString("iam_role")),
-	})
-	if err != nil {
-		return err
-	}
-	for _, name := range resp.PolicyNames {
-		if name == "inline-role-policy" {
-			return nil
-		}
-	}
-	return fmt.Errorf("ListRolePolicies: inline-role-policy not found")
-}
-
-func (g *iamGroup) DeleteRolePolicy(ctx context.Context, t *harness.TestContext) error {
-	_, err := g.cl().DeleteRolePolicy(ctx, &iam.DeleteRolePolicyInput{
-		RoleName:   aws.String(t.GetString("iam_role")),
-		PolicyName: aws.String("inline-role-policy"),
-	})
-	return err
-}
-
-func (g *iamGroup) CreateInstanceProfile(ctx context.Context, t *harness.TestContext) error {
-	name := fmt.Sprintf("%s-profile", t.RunID)
-	_, err := g.cl().CreateInstanceProfile(ctx, &iam.CreateInstanceProfileInput{
-		InstanceProfileName: aws.String(name),
-	})
-	if err != nil {
-		return err
-	}
-	t.Set("iam_instance_profile", name)
-	return nil
-}
-
-func (g *iamGroup) AddRoleToInstanceProfile(ctx context.Context, t *harness.TestContext) error {
-	profileName := t.GetString("iam_instance_profile")
-	if profileName == "" {
-		return fmt.Errorf("AddRoleToInstanceProfile: no profile from CreateInstanceProfile")
-	}
-	_, err := g.cl().AddRoleToInstanceProfile(ctx, &iam.AddRoleToInstanceProfileInput{
-		InstanceProfileName: aws.String(profileName),
-		RoleName:            aws.String(t.GetString("iam_role")),
-	})
-	return err
-}
-
-func (g *iamGroup) GetInstanceProfile(ctx context.Context, t *harness.TestContext) error {
-	profileName := t.GetString("iam_instance_profile")
-	if profileName == "" {
-		return fmt.Errorf("GetInstanceProfile: no profile from CreateInstanceProfile")
-	}
-	resp, err := g.cl().GetInstanceProfile(ctx, &iam.GetInstanceProfileInput{
-		InstanceProfileName: aws.String(profileName),
-	})
-	if err != nil {
-		return err
-	}
-	if resp.InstanceProfile == nil {
-		return fmt.Errorf("GetInstanceProfile: missing InstanceProfile")
 	}
 	return nil
 }
@@ -510,12 +165,6 @@ func (g *iamGroup) teardownPolicies(ctx context.Context, t *harness.TestContext)
 	}
 	// detach from all roles first
 	if role := t.GetString("iam_policy_role"); role != "" {
-		g.cl().DetachRolePolicy(ctx, &iam.DetachRolePolicyInput{
-			RoleName: aws.String(role), PolicyArn: aws.String(arn),
-		}) //nolint:errcheck
-		g.cl().DeleteRole(ctx, &iam.DeleteRoleInput{RoleName: aws.String(role)}) //nolint:errcheck
-	}
-	if role := t.GetString("iam_attach_role"); role != "" {
 		g.cl().DetachRolePolicy(ctx, &iam.DetachRolePolicyInput{
 			RoleName: aws.String(role), PolicyArn: aws.String(arn),
 		}) //nolint:errcheck
@@ -645,47 +294,6 @@ func (g *iamGroup) GetPolicyAttachmentCountAfterDetach(ctx context.Context, t *h
 		return fmt.Errorf("%s: AttachmentCount = %d after the detach, want 0", op, after)
 	}
 	return nil
-}
-
-// iamManagedPolicy is an AWS-managed policy that always exists; used to
-// test Attach/DetachRolePolicy without depending on a customer-managed policy
-// created by a different test group.
-const iamManagedPolicy = "arn:aws:iam::aws:policy/ReadOnlyAccess"
-
-func (g *iamGroup) AttachRolePolicy(ctx context.Context, t *harness.TestContext) error {
-	roleName := fmt.Sprintf("oc-ar-%s", t.RunID)
-	g.cl().CreateRole(ctx, &iam.CreateRoleInput{
-		RoleName: aws.String(roleName), AssumeRolePolicyDocument: aws.String(iamAssumePolicy()),
-	}) //nolint:errcheck
-	t.Set("iam_attach_role", roleName)
-	_, err := g.cl().AttachRolePolicy(ctx, &iam.AttachRolePolicyInput{
-		RoleName:  aws.String(roleName),
-		PolicyArn: aws.String(iamManagedPolicy),
-	})
-	return err
-}
-
-func (g *iamGroup) ListAttachedRolePolicies(ctx context.Context, t *harness.TestContext) error {
-	role := t.GetString("iam_attach_role")
-	if role == "" {
-		return nil
-	}
-	_, err := g.cl().ListAttachedRolePolicies(ctx, &iam.ListAttachedRolePoliciesInput{
-		RoleName: aws.String(role),
-	})
-	return err
-}
-
-func (g *iamGroup) DetachRolePolicy(ctx context.Context, t *harness.TestContext) error {
-	role := t.GetString("iam_attach_role")
-	if role == "" {
-		return nil
-	}
-	_, err := g.cl().DetachRolePolicy(ctx, &iam.DetachRolePolicyInput{
-		RoleName:  aws.String(role),
-		PolicyArn: aws.String(iamManagedPolicy),
-	})
-	return err
 }
 
 func (g *iamGroup) DeletePolicy(ctx context.Context, t *harness.TestContext) error {

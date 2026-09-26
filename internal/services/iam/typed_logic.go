@@ -2208,7 +2208,7 @@ func (h *Handler) getAccountAuthorizationDetailsTyped(ctx context.Context, _ *ge
 			RoleId:                   ro.RoleId,
 			Arn:                      ro.Arn,
 			CreateDate:               ro.CreateDate,
-			AssumeRolePolicyDocument: ro.AssumeRolePolicyDocument,
+			AssumeRolePolicyDocument: encodePolicyDocument(ro.AssumeRolePolicyDocument),
 			RolePolicyList:           inlinePolicyListXML(ro.InlinePolicies),
 			AttachedManagedPolicies:  attachedPolicyListXML(ro.AttachedPolicies),
 			PermissionsBoundary:      toPermissionsBoundaryXML(ro.PermissionsBoundary),

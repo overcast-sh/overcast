@@ -20,7 +20,6 @@ import software.amazon.awssdk.services.efs.EfsClient;
 import software.amazon.awssdk.services.elasticache.ElastiCacheClient;
 import software.amazon.awssdk.services.eventbridge.EventBridgeClient;
 import software.amazon.awssdk.services.iam.IamClient;
-import software.amazon.awssdk.services.kinesis.KinesisClient;
 import software.amazon.awssdk.services.pipes.PipesClient;
 import software.amazon.awssdk.services.kms.KmsClient;
 import software.amazon.awssdk.services.lambda.LambdaAsyncClient;
@@ -72,7 +71,6 @@ public final class AwsClients {
     private volatile SecretsManagerClient secretsManager;
     private volatile SsmClient ssm;
     private volatile IamClient iam;
-    private volatile KinesisClient kinesis;
     private volatile CloudWatchLogsClient cloudWatchLogs;
     private volatile SesClient ses;
     private volatile EventBridgeClient eventBridge;
@@ -296,22 +294,6 @@ public final class AwsClients {
             }
         }
         return iam;
-    }
-
-    public KinesisClient kinesis() {
-        if (kinesis == null) {
-            synchronized (this) {
-                if (kinesis == null) {
-                    kinesis = KinesisClient.builder()
-                            .endpointOverride(endpoint)
-                            .region(region)
-                            .credentialsProvider(credentials)
-                            .httpClient(UrlConnectionHttpClient.create())
-                            .build();
-                }
-            }
-        }
-        return kinesis;
     }
 
     public CloudWatchLogsClient cloudWatchLogs() {

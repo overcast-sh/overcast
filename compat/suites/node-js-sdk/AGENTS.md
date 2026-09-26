@@ -71,14 +71,12 @@ compat/suites/node-js-sdk/
       dynamodb.ts
       sns.ts
       lambda.ts
-      cloudwatch-logs.ts
       ses.ts
       iam.ts
       sts.ts
       secretsmanager.ts
       kms.ts
       ssm.ts
-      kinesis.ts
       eventbridge.ts
 ```
 

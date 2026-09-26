@@ -32,8 +32,8 @@ import software.amazon.awssdk.services.kinesis.model.PutRecordsRequestEntry;
  */
 public final class ScenariosAuthoredKinesisRecordsGen implements ServiceGroup {
 
-    private static final Group GROUP_KINESIS_RECORDS_SHADOW =
-            new Group("kinesis-records-shadow", "compat/model/authored/kinesis-records.json");
+    private static final Group GROUP_KINESIS_RECORDS =
+            new Group("kinesis-records", "compat/model/authored/kinesis-records.json");
 
     private final AwsClients clients;
     private volatile KinesisClient client;
@@ -50,22 +50,22 @@ public final class ScenariosAuthoredKinesisRecordsGen implements ServiceGroup {
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("kinesis-records-shadow:PutRecord", this::testKinesisRecordsShadowPutRecord),
-                Map.entry("kinesis-records-shadow:PutRecords", this::testKinesisRecordsShadowPutRecords),
-                Map.entry("kinesis-records-shadow:GetShardIterator", this::testKinesisRecordsShadowGetShardIterator),
-                Map.entry("kinesis-records-shadow:GetRecords", this::testKinesisRecordsShadowGetRecords));
+                Map.entry("kinesis-records:PutRecord", this::testKinesisRecordsPutRecord),
+                Map.entry("kinesis-records:PutRecords", this::testKinesisRecordsPutRecords),
+                Map.entry("kinesis-records:GetShardIterator", this::testKinesisRecordsGetShardIterator),
+                Map.entry("kinesis-records:GetRecords", this::testKinesisRecordsGetRecords));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("kinesis-records-shadow", this::setupKinesisRecordsShadow));
+                Map.entry("kinesis-records", this::setupKinesisRecords));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("kinesis-records-shadow", this::teardownKinesisRecordsShadow));
+                Map.entry("kinesis-records", this::teardownKinesisRecords));
     }
 
     /**
@@ -85,8 +85,8 @@ public final class ScenariosAuthoredKinesisRecordsGen implements ServiceGroup {
         return client;
     }
 
-    private void setupKinesisRecordsShadow(TestContext t) {
-        GROUP_KINESIS_RECORDS_SHADOW.runSetup(t,
+    private void setupKinesisRecords(TestContext t) {
+        GROUP_KINESIS_RECORDS.runSetup(t,
                 new Call("CreateStream", "{\"ShardCount\":1,\"StreamName\":{\"$name\":\"s\"}}",
                         b -> CreateStreamRequest.builder()
                                 .shardCount(1)
@@ -95,8 +95,8 @@ public final class ScenariosAuthoredKinesisRecordsGen implements ServiceGroup {
                         r -> cl().createStream((CreateStreamRequest) r)));
     }
 
-    private void teardownKinesisRecordsShadow(TestContext t) {
-        GROUP_KINESIS_RECORDS_SHADOW.runTeardown(t,
+    private void teardownKinesisRecords(TestContext t) {
+        GROUP_KINESIS_RECORDS.runTeardown(t,
                 new Call("DeleteStream", "{\"StreamName\":{\"$name\":\"s\"}}",
                         b -> DeleteStreamRequest.builder()
                                 .streamName(b.string("StreamName", Values.name("s")))
@@ -104,8 +104,8 @@ public final class ScenariosAuthoredKinesisRecordsGen implements ServiceGroup {
                         r -> cl().deleteStream((DeleteStreamRequest) r)));
     }
 
-    private void testKinesisRecordsShadowPutRecord(TestContext t) {
-        GROUP_KINESIS_RECORDS_SHADOW.runTest(t, "PutRecord",
+    private void testKinesisRecordsPutRecord(TestContext t) {
+        GROUP_KINESIS_RECORDS.runTest(t, "PutRecord",
                 new Call("PutRecord", "{\"Data\":{\"$base64\":\"cmVjb3JkLWRhdGE=\"},\"PartitionKey\":\"pk1\",\"StreamName\":{\"$name\":\"s\"}}",
                         b -> PutRecordRequest.builder()
                                 .data(software.amazon.awssdk.core.SdkBytes.fromByteArray(java.util.Base64.getDecoder().decode("cmVjb3JkLWRhdGE=")))
@@ -123,8 +123,8 @@ public final class ScenariosAuthoredKinesisRecordsGen implements ServiceGroup {
                 ));
     }
 
-    private void testKinesisRecordsShadowPutRecords(TestContext t) {
-        GROUP_KINESIS_RECORDS_SHADOW.runTest(t, "PutRecords",
+    private void testKinesisRecordsPutRecords(TestContext t) {
+        GROUP_KINESIS_RECORDS.runTest(t, "PutRecords",
                 new Call("PutRecords", "{\"Records\":[{\"Data\":{\"$base64\":\"cjE=\"},\"PartitionKey\":\"pk1\"},{\"Data\":{\"$base64\":\"cjI=\"},\"PartitionKey\":\"pk2\"}],\"StreamName\":{\"$name\":\"s\"}}",
                         b -> PutRecordsRequest.builder()
                                 .records(List.of(PutRecordsRequestEntry.builder().data(software.amazon.awssdk.core.SdkBytes.fromByteArray(java.util.Base64.getDecoder().decode("cjE="))).partitionKey("pk1").build(), PutRecordsRequestEntry.builder().data(software.amazon.awssdk.core.SdkBytes.fromByteArray(java.util.Base64.getDecoder().decode("cjI="))).partitionKey("pk2").build()))
@@ -138,8 +138,8 @@ public final class ScenariosAuthoredKinesisRecordsGen implements ServiceGroup {
                 ));
     }
 
-    private void testKinesisRecordsShadowGetShardIterator(TestContext t) {
-        GROUP_KINESIS_RECORDS_SHADOW.runTest(t, "GetShardIterator",
+    private void testKinesisRecordsGetShardIterator(TestContext t) {
+        GROUP_KINESIS_RECORDS.runTest(t, "GetShardIterator",
                 new Call("GetShardIterator", "{\"ShardId\":{\"$ref\":\"record.shard\"},\"ShardIteratorType\":\"TRIM_HORIZON\",\"StreamName\":{\"$name\":\"s\"}}",
                         b -> GetShardIteratorRequest.builder()
                                 .shardId(b.string("ShardId", Values.ref("record.shard")))
@@ -164,8 +164,8 @@ public final class ScenariosAuthoredKinesisRecordsGen implements ServiceGroup {
                 ));
     }
 
-    private void testKinesisRecordsShadowGetRecords(TestContext t) {
-        GROUP_KINESIS_RECORDS_SHADOW.runTest(t, "GetRecords",
+    private void testKinesisRecordsGetRecords(TestContext t) {
+        GROUP_KINESIS_RECORDS.runTest(t, "GetRecords",
                 new Call("GetRecords", "{\"Limit\":10,\"ShardIterator\":{\"$ref\":\"shard.iterator\"}}",
                         b -> GetRecordsRequest.builder()
                                 .limit(10)
