@@ -54,6 +54,21 @@ func TestModelProtocols_preservesAdditiveTraits(t *testing.T) {
 	}
 }
 
+func TestRESTXMLNoErrorWrapping_readsTheRestXmlTrait(t *testing.T) {
+	for name, tc := range map[string]struct {
+		traits map[string]json.RawMessage
+		want   bool
+	}{
+		"S3's trait":         {map[string]json.RawMessage{"aws.protocols#restXml": json.RawMessage(`{"noErrorWrapping": true}`)}, true},
+		"CloudFront's trait": {map[string]json.RawMessage{"aws.protocols#restXml": json.RawMessage(`{}`)}, false},
+		"another protocol":   {map[string]json.RawMessage{"aws.protocols#restJson1": json.RawMessage(`{"noErrorWrapping": true}`)}, false},
+	} {
+		if got := restXMLNoErrorWrapping(tc.traits); got != tc.want {
+			t.Errorf("%s: restXMLNoErrorWrapping() = %v, want %v", name, got, tc.want)
+		}
+	}
+}
+
 func TestShapeName_takesSuffixAfterHash(t *testing.T) {
 	if got, want := ShapeName("com.amazonaws.example#Widget"), "Widget"; got != want {
 		t.Errorf("ShapeName() = %q, want %q", got, want)

@@ -274,6 +274,7 @@ func writeRegistryIndexes(out *bytes.Buffer, operations []operation) {
 	writeRESTTrie(out, rest)
 	writeRPCIndex(out, rpc)
 	writeModelServiceIndex(out, operations)
+	writeNoErrorWrappingIndex(out, operations)
 }
 
 // writeModelServiceIndex emits every modeled service identity, sorted, so the
@@ -285,17 +286,31 @@ func writeRegistryIndexes(out *bytes.Buffer, operations []operation) {
 // pair either resolves or does not — but a service label has nothing attached
 // to it to resolve against.
 func writeModelServiceIndex(out *bytes.Buffer, operations []operation) {
+	writeServiceIndex(out, "modelServices", operations, func(operation) bool { return true })
+}
+
+// writeNoErrorWrappingIndex emits the modeled service identities whose restXml
+// protocol trait sets noErrorWrapping, sorted, so the registry picks a
+// rest-xml error envelope from the model rather than from a list of service
+// names someone has to keep in step with it (#2265).
+func writeNoErrorWrappingIndex(out *bytes.Buffer, operations []operation) {
+	writeServiceIndex(out, "noErrorWrappingServices", operations, func(op operation) bool { return op.NoErrorWrapping })
+}
+
+// writeServiceIndex emits a sorted, deduplicated []string of the modeled
+// service identities of the operations keep accepts.
+func writeServiceIndex(out *bytes.Buffer, name string, operations []operation, keep func(operation) bool) {
 	seen := make(map[string]bool, len(operations))
 	services := make([]string, 0, 512)
 	for _, op := range operations {
-		if op.Service == "" || seen[op.Service] {
+		if op.Service == "" || seen[op.Service] || !keep(op) {
 			continue
 		}
 		seen[op.Service] = true
 		services = append(services, op.Service)
 	}
 	sort.Strings(services)
-	out.WriteString("\nvar modelServices = []string{\n")
+	fmt.Fprintf(out, "\nvar %s = []string{\n", name)
 	for _, service := range services {
 		fmt.Fprintf(out, "\t%q,\n", service)
 	}

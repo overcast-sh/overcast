@@ -44,6 +44,11 @@ type sigV4Trait struct {
 	Name string `json:"name"`
 }
 
+// restXMLTrait is the aws.protocols#restXml trait's one field awsmodel reads.
+type restXMLTrait struct {
+	NoErrorWrapping bool `json:"noErrorWrapping"`
+}
+
 type httpTrait struct {
 	Method string `json:"method"`
 	URI    string `json:"uri"`
@@ -78,6 +83,7 @@ func ParseModel(path string) ([]Operation, error) {
 		protocol := modelProtocol(svc.Traits)
 		targetPrefix := targetPrefixForService(shapeID, protocols)
 		signingName := signingNameForService(svc.Traits)
+		noErrorWrapping := restXMLNoErrorWrapping(svc.Traits)
 		refs, err := serviceOperationReferences(parsed.Shapes, shapeID, svc)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", path, err)
@@ -97,6 +103,7 @@ func ParseModel(path string) ([]Operation, error) {
 				Service: strings.ToLower(strings.ReplaceAll(trait.SDKID, " ", "-")), ServiceShape: ShapeName(shapeID), SDKID: trait.SDKID,
 				APIVersion: svc.Version, Name: ShapeName(ref.Target), Protocol: protocol, Protocols: protocols,
 				TargetPrefix: targetPrefix, SigningName: signingName, HTTPMethod: http.Method, URI: http.URI,
+				NoErrorWrapping: noErrorWrapping,
 			})
 		}
 	}
@@ -113,6 +120,22 @@ func signingNameForService(traits map[string]json.RawMessage) string {
 		return ""
 	}
 	return trait.Name
+}
+
+// restXMLNoErrorWrapping reports whether a service's restXml protocol trait
+// sets noErrorWrapping: its errors are a bare <Error> rather than the
+// <ErrorResponse><Error> the protocol otherwise wraps them in. S3's model
+// sets it.
+func restXMLNoErrorWrapping(traits map[string]json.RawMessage) bool {
+	raw, ok := traits["aws.protocols#restXml"]
+	if !ok {
+		return false
+	}
+	var trait restXMLTrait
+	if err := json.Unmarshal(raw, &trait); err != nil {
+		return false
+	}
+	return trait.NoErrorWrapping
 }
 
 // serviceOperationReferences returns every operation a service shape reaches,

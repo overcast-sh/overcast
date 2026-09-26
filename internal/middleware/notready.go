@@ -104,11 +104,7 @@ func NotReady(store state.Store) func(http.Handler) http.Handler {
 				return
 			}
 			w.Header().Set("Retry-After", strconv.Itoa(notReadyRetryAfterSeconds))
-			if detectService(r) == "s3" {
-				protocol.WriteXMLError(w, r, protocol.ErrStorageMigrating)
-			} else {
-				protocol.WriteJSONError(w, r, protocol.ErrStorageMigrating)
-			}
+			writeUnroutedError(w, r, protocol.ErrStorageMigrating)
 		})
 	}
 }

@@ -1,7 +1,7 @@
 source=https://github.com/aws/api-models-aws
 revision=56df161c2ae2797c7127dec62cb068a95852a204
 model-date=2026-09-18
-manifest-sha256=1b91be5f1b7e26c708bc548cb621006c80e179693a6992ca935fb89d6cb386e3
+manifest-sha256=aa145bf2d3b1355743477015a75db7a69c27da91d6872d3ea209a885017990fc
 shapes-sha256=759c32601ecdb392119a5dc65edcd340fe8f3e1584931a53273e2ddea8f9e3ff
 sdk-shapes-sha256=d943712a0d7febd3b4a02fc0f06d487f16291854f063eeaf82957d4dbc2615ac
 license=Apache-2.0

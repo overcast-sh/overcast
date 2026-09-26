@@ -29,6 +29,10 @@ import (
 type Operation struct {
 	Service, ServiceShape, SDKID, APIVersion, Name, Protocol, TargetPrefix, SigningName, HTTPMethod, URI string
 	Protocols                                                                                            []string
+	// NoErrorWrapping records the restXml protocol trait's noErrorWrapping
+	// flag: the service answers errors in a bare <Error>, not the
+	// <ErrorResponse> envelope rest-xml otherwise wraps them in.
+	NoErrorWrapping bool
 }
 
 // VerifyRevision checks that the Smithy model checkout at modelsDir — the
