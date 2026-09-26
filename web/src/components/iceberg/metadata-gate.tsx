@@ -6,16 +6,19 @@ import { SkeletonRows } from "@/components/ui/skeleton"
 import type { MetadataFile } from "./data"
 import type { IcebergMetadata } from "./metadata"
 
-const unreadable = (reason?: string) => (
-  <EmptyState
-    icon={<FileJson className="size-8" />}
-    title="Could not read the table's metadata"
-    description={
-      reason ??
-      "The metadata file is not Iceberg table metadata, or is larger than the console reads."
-    }
-  />
-)
+/** A metadata file that could not be read, or does not read as Iceberg table metadata. */
+export function UnreadableMetadata({ reason }: { reason?: string }) {
+  return (
+    <EmptyState
+      icon={<FileJson className="size-8" />}
+      title="Could not read the table's metadata"
+      description={
+        reason ??
+        "The metadata file is not Iceberg table metadata, or is larger than the console reads."
+      }
+    />
+  )
+}
 
 interface MetadataGateProps {
   /** The table's metadata location; absent while the table has none. */
@@ -45,7 +48,7 @@ export function MetadataGate({
     )
   }
   if (query.isLoading) return <SkeletonRows rows={6} noun="metadata" />
-  return query.data ? children(query.data) : unreadable(query.error?.message)
+  return query.data ? children(query.data) : <UnreadableMetadata reason={query.error?.message} />
 }
 
 /** The same gate, for a view that needs the file to read as Iceberg table metadata. */
@@ -55,7 +58,7 @@ export function ParsedMetadataGate({
 }: MetadataGateProps & { children: (metadata: IcebergMetadata) => ReactNode }) {
   return (
     <MetadataGate {...gate}>
-      {(file) => (file.metadata ? children(file.metadata) : unreadable())}
+      {(file) => (file.metadata ? children(file.metadata) : <UnreadableMetadata />)}
     </MetadataGate>
   )
 }

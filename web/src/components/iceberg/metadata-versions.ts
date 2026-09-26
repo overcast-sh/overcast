@@ -14,6 +14,11 @@ export function fileNameOf(location: string): string {
   return location.slice(location.lastIndexOf("/") + 1)
 }
 
+/** The folder a metadata file sits in: every version of one table shares it. */
+export function metadataFolderOf(location: string): string {
+  return location.slice(0, location.lastIndexOf("/"))
+}
+
 /**
  * Every version the current file knows of, newest first: the current file,
  * then its `metadata-log`. The log is capped at

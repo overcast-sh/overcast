@@ -3,7 +3,7 @@ import { ATHENA_TAB } from "@/components/ui/arn-routes"
 import { trinoIdentifier } from "@/lib/sql-quote"
 
 /** The Athena catalog every Glue database and table is queried through. */
-export const ATHENA_CATALOG = "AwsDataCatalog"
+export const AWS_DATA_CATALOG = "AwsDataCatalog"
 
 /** The Athena workgroups tab, filtered to one workgroup: where its result location is set. */
 export function athenaWorkGroupLink(name: string) {

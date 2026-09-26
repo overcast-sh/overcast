@@ -1,7 +1,10 @@
 import type { Table } from "@aws-sdk/client-glue"
 import { IcebergSummaryCard } from "@/components/iceberg/iceberg-summary-card"
-import { MetadataGate } from "@/components/iceberg/metadata-gate"
-import { IcebergMetadataFiles } from "@/components/iceberg/metadata-file-viewer"
+import { MetadataGate, UnreadableMetadata } from "@/components/iceberg/metadata-gate"
+import {
+  IcebergMetadataFiles,
+  type MetadataSelection,
+} from "@/components/iceberg/metadata-file-viewer"
 import { QueryAsOfSnapshot } from "@/components/iceberg/query-as-of"
 import { IcebergSnapshotList } from "@/components/iceberg/snapshot-list"
 import type { IcebergTableRef } from "@/components/iceberg/snapshot-sql"
@@ -9,17 +12,19 @@ import { useIcebergMetadataFile } from "@/components/iceberg/use-metadata-file"
 import { Definition, DefinitionCard } from "@/components/ui/definition-card"
 import { SectionLabel } from "@/components/ui/primitives"
 import { S3UriLink } from "@/components/ui/s3-uri-link"
-import { ATHENA_CATALOG } from "../../athena-link"
+import { AWS_DATA_CATALOG } from "../../athena-link"
 import { metadataLocation, tableParameter } from "../../table-format"
 import type { GlueTableSearch } from "../../views"
 
-export type IcebergSelection = Pick<GlueTableSearch, "snapshot" | "version" | "compare">
+type IcebergSelection = Pick<GlueTableSearch, "snapshot" | "version" | "compare">
 
 interface IcebergTabProps {
   database: string
   table: Table
+  /** The snapshot whose diff is open, and the metadata files shown — the page's search params. */
   selection: IcebergSelection
-  onSelectionChange: (next: IcebergSelection) => void
+  /** The metadata files picked; the snapshot is only ever opened by a deep link. */
+  onSelectionChange: (next: MetadataSelection) => void
 }
 
 /**
@@ -35,7 +40,7 @@ export function IcebergTab({ database, table, selection, onSelectionChange }: Ic
   const current = metadataLocation(table)
   const previous = tableParameter(table, "previous_metadata_location")
   const metadata = useIcebergMetadataFile(current)
-  const ref: IcebergTableRef = { catalog: ATHENA_CATALOG, database, table: table.Name ?? "" }
+  const ref: IcebergTableRef = { catalog: AWS_DATA_CATALOG, database, table: table.Name ?? "" }
   return (
     <div className="flex flex-col gap-4">
       <DefinitionCard>
@@ -59,7 +64,7 @@ export function IcebergTab({ database, table, selection, onSelectionChange }: Ic
       >
         {(file) => (
           <>
-            {file.metadata && (
+            {file.metadata ? (
               <>
                 <IcebergSummaryCard metadata={file.metadata} />
                 <section className="flex flex-col gap-2">
@@ -71,13 +76,15 @@ export function IcebergTab({ database, table, selection, onSelectionChange }: Ic
                   />
                 </section>
               </>
+            ) : (
+              <UnreadableMetadata />
             )}
             <section className="flex flex-col gap-2">
               <SectionLabel>Metadata files</SectionLabel>
               <IcebergMetadataFiles
                 current={file}
                 selection={{ version: selection.version, compare: selection.compare }}
-                onSelectionChange={(next) => onSelectionChange({ ...selection, ...next })}
+                onSelectionChange={onSelectionChange}
               />
             </section>
           </>

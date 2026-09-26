@@ -27,9 +27,9 @@ const file: MetadataFile = {
   metadata: parseIcebergMetadata(text),
 }
 
-function renderTab(table: Table = icebergTable) {
+function renderTab(table: Table = icebergTable, metadataFile: MetadataFile = file) {
   const queryClient = createTestQueryClient()
-  queryClient.setQueryData(icebergMetadataFileQueryOptions(LOCATION).queryKey, file)
+  queryClient.setQueryData(icebergMetadataFileQueryOptions(LOCATION).queryKey, metadataFile)
   return renderWithRouter(
     () => <IcebergTab database="sales" table={table} selection={{}} onSelectionChange={() => {}} />,
     { queryClient },
@@ -58,6 +58,11 @@ describe("IcebergTab", () => {
     renderTab()
     const picker = await screen.findByRole("combobox", { name: "Version" })
     expect(within(picker).getAllByRole("option")).toHaveLength(2)
+  })
+
+  it("says the file could not be read when it is not Iceberg metadata", async () => {
+    renderTab(icebergTable, { ...file, text: "{}", metadata: null })
+    expect(await screen.findByText("Could not read the table's metadata")).toBeInTheDocument()
   })
 
   it("says so when the table names no metadata_location", async () => {
