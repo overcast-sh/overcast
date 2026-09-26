@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/iam-policies.json";
 
-const GROUP_IAM_POLICIES_SHADOW: Group = Group {
-    name: "iam-policies-shadow",
+const GROUP_IAM_POLICIES: Group = Group {
+    name: "iam-policies",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredIamPolicies {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-policies-shadow:CreatePolicy".to_string(),
+                "iam-policies:CreatePolicy".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_POLICIES_SHADOW
-                            .run_test(&ctx, "CreatePolicy", test_iam_policies_shadow_create_policy(&client))
+                        GROUP_IAM_POLICIES
+                            .run_test(&ctx, "CreatePolicy", test_iam_policies_create_policy(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredIamPolicies {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-policies-shadow:CreatePolicyMalformedDocument".to_string(),
+                "iam-policies:CreatePolicyMalformedDocument".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_POLICIES_SHADOW
-                            .run_test(&ctx, "CreatePolicyMalformedDocument", test_iam_policies_shadow_create_policy_malformed_document(&client))
+                        GROUP_IAM_POLICIES
+                            .run_test(&ctx, "CreatePolicyMalformedDocument", test_iam_policies_create_policy_malformed_document(&client))
                             .await
                     })
                 }),
@@ -79,12 +79,12 @@ impl ServiceGroup for ScenariosAuthoredIamPolicies {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-policies-shadow:GetPolicy".to_string(),
+                "iam-policies:GetPolicy".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_POLICIES_SHADOW
-                            .run_test(&ctx, "GetPolicy", test_iam_policies_shadow_get_policy(&client))
+                        GROUP_IAM_POLICIES
+                            .run_test(&ctx, "GetPolicy", test_iam_policies_get_policy(&client))
                             .await
                     })
                 }),
@@ -93,12 +93,12 @@ impl ServiceGroup for ScenariosAuthoredIamPolicies {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-policies-shadow:GetPolicyReturnsTags".to_string(),
+                "iam-policies:GetPolicyReturnsTags".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_POLICIES_SHADOW
-                            .run_test(&ctx, "GetPolicyReturnsTags", test_iam_policies_shadow_get_policy_returns_tags(&client))
+                        GROUP_IAM_POLICIES
+                            .run_test(&ctx, "GetPolicyReturnsTags", test_iam_policies_get_policy_returns_tags(&client))
                             .await
                     })
                 }),
@@ -107,12 +107,12 @@ impl ServiceGroup for ScenariosAuthoredIamPolicies {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-policies-shadow:ListPolicies".to_string(),
+                "iam-policies:ListPolicies".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_POLICIES_SHADOW
-                            .run_test(&ctx, "ListPolicies", test_iam_policies_shadow_list_policies(&client))
+                        GROUP_IAM_POLICIES
+                            .run_test(&ctx, "ListPolicies", test_iam_policies_list_policies(&client))
                             .await
                     })
                 }),
@@ -121,12 +121,12 @@ impl ServiceGroup for ScenariosAuthoredIamPolicies {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-policies-shadow:GetPolicyAttachmentCountAfterAttach".to_string(),
+                "iam-policies:GetPolicyAttachmentCountAfterAttach".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_POLICIES_SHADOW
-                            .run_test(&ctx, "GetPolicyAttachmentCountAfterAttach", test_iam_policies_shadow_get_policy_attachment_count_after_attach(&client))
+                        GROUP_IAM_POLICIES
+                            .run_test(&ctx, "GetPolicyAttachmentCountAfterAttach", test_iam_policies_get_policy_attachment_count_after_attach(&client))
                             .await
                     })
                 }),
@@ -135,12 +135,12 @@ impl ServiceGroup for ScenariosAuthoredIamPolicies {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-policies-shadow:GetPolicyAttachmentCountAfterDetach".to_string(),
+                "iam-policies:GetPolicyAttachmentCountAfterDetach".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_POLICIES_SHADOW
-                            .run_test(&ctx, "GetPolicyAttachmentCountAfterDetach", test_iam_policies_shadow_get_policy_attachment_count_after_detach(&client))
+                        GROUP_IAM_POLICIES
+                            .run_test(&ctx, "GetPolicyAttachmentCountAfterDetach", test_iam_policies_get_policy_attachment_count_after_detach(&client))
                             .await
                     })
                 }),
@@ -149,12 +149,12 @@ impl ServiceGroup for ScenariosAuthoredIamPolicies {
         {
             let client = self.client.clone();
             impls.insert(
-                "iam-policies-shadow:DeletePolicy".to_string(),
+                "iam-policies:DeletePolicy".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_POLICIES_SHADOW
-                            .run_test(&ctx, "DeletePolicy", test_iam_policies_shadow_delete_policy(&client))
+                        GROUP_IAM_POLICIES
+                            .run_test(&ctx, "DeletePolicy", test_iam_policies_delete_policy(&client))
                             .await
                     })
                 }),
@@ -168,11 +168,11 @@ impl ServiceGroup for ScenariosAuthoredIamPolicies {
         {
             let client = self.client.clone();
             setups.insert(
-                "iam-policies-shadow".to_string(),
+                "iam-policies".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_POLICIES_SHADOW.run_setup(&ctx, setup_iam_policies_shadow(&client)).await
+                        GROUP_IAM_POLICIES.run_setup(&ctx, setup_iam_policies(&client)).await
                     })
                 }),
             );
@@ -185,11 +185,11 @@ impl ServiceGroup for ScenariosAuthoredIamPolicies {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "iam-policies-shadow".to_string(),
+                "iam-policies".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_IAM_POLICIES_SHADOW.run_teardown(&ctx, teardown_iam_policies_shadow(&client)).await
+                        GROUP_IAM_POLICIES.run_teardown(&ctx, teardown_iam_policies(&client)).await
                     })
                 }),
             );
@@ -198,7 +198,7 @@ impl ServiceGroup for ScenariosAuthoredIamPolicies {
     }
 }
 
-fn setup_iam_policies_shadow(client: &aws_sdk_iam::Client) -> Vec<Call> {
+fn setup_iam_policies(client: &aws_sdk_iam::Client) -> Vec<Call> {
     vec![
         Call {
             op: "CreateRole",
@@ -227,7 +227,7 @@ fn setup_iam_policies_shadow(client: &aws_sdk_iam::Client) -> Vec<Call> {
     ]
 }
 
-fn teardown_iam_policies_shadow(client: &aws_sdk_iam::Client) -> Vec<Call> {
+fn teardown_iam_policies(client: &aws_sdk_iam::Client) -> Vec<Call> {
     vec![
         Call {
             op: "DetachRolePolicy",
@@ -298,7 +298,7 @@ fn teardown_iam_policies_shadow(client: &aws_sdk_iam::Client) -> Vec<Call> {
     ]
 }
 
-fn test_iam_policies_shadow_create_policy(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_policies_create_policy(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "CreatePolicy",
@@ -380,7 +380,7 @@ fn test_iam_policies_shadow_create_policy(client: &aws_sdk_iam::Client) -> Test 
     }
 }
 
-fn test_iam_policies_shadow_create_policy_malformed_document(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_policies_create_policy_malformed_document(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "CreatePolicy",
@@ -412,7 +412,7 @@ fn test_iam_policies_shadow_create_policy_malformed_document(client: &aws_sdk_ia
     }
 }
 
-fn test_iam_policies_shadow_get_policy(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_policies_get_policy(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "GetPolicy",
@@ -445,7 +445,7 @@ fn test_iam_policies_shadow_get_policy(client: &aws_sdk_iam::Client) -> Test {
     }
 }
 
-fn test_iam_policies_shadow_get_policy_returns_tags(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_policies_get_policy_returns_tags(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "GetPolicy",
@@ -490,7 +490,7 @@ fn test_iam_policies_shadow_get_policy_returns_tags(client: &aws_sdk_iam::Client
     }
 }
 
-fn test_iam_policies_shadow_list_policies(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_policies_list_policies(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "ListPolicies",
@@ -526,7 +526,7 @@ fn test_iam_policies_shadow_list_policies(client: &aws_sdk_iam::Client) -> Test 
     }
 }
 
-fn test_iam_policies_shadow_get_policy_attachment_count_after_attach(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_policies_get_policy_attachment_count_after_attach(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "GetPolicy",
@@ -616,7 +616,7 @@ fn test_iam_policies_shadow_get_policy_attachment_count_after_attach(client: &aw
     }
 }
 
-fn test_iam_policies_shadow_get_policy_attachment_count_after_detach(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_policies_get_policy_attachment_count_after_detach(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "GetPolicy",
@@ -706,7 +706,7 @@ fn test_iam_policies_shadow_get_policy_attachment_count_after_detach(client: &aw
     }
 }
 
-fn test_iam_policies_shadow_delete_policy(client: &aws_sdk_iam::Client) -> Test {
+fn test_iam_policies_delete_policy(client: &aws_sdk_iam::Client) -> Test {
     Test {
         call: Call {
             op: "DeletePolicy",

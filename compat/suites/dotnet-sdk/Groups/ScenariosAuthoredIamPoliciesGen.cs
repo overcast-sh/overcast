@@ -15,7 +15,7 @@ namespace OvercastCompat.Groups;
 /// </remarks>
 internal sealed class ScenariosAuthoredIamPolicies : IServiceGroup
 {
-    private static readonly ScenarioGroup GroupIamPoliciesShadow = new("iam-policies-shadow", "compat/model/authored/iam-policies.json");
+    private static readonly ScenarioGroup GroupIamPolicies = new("iam-policies", "compat/model/authored/iam-policies.json");
 
     private readonly Lazy<AmazonIdentityManagementServiceClient> _client;
 
@@ -35,30 +35,30 @@ internal sealed class ScenariosAuthoredIamPolicies : IServiceGroup
 
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["iam-policies-shadow:CreatePolicy"] = TestIamPoliciesShadowCreatePolicy,
-        ["iam-policies-shadow:CreatePolicyMalformedDocument"] = TestIamPoliciesShadowCreatePolicyMalformedDocument,
-        ["iam-policies-shadow:GetPolicy"] = TestIamPoliciesShadowGetPolicy,
-        ["iam-policies-shadow:GetPolicyReturnsTags"] = TestIamPoliciesShadowGetPolicyReturnsTags,
-        ["iam-policies-shadow:ListPolicies"] = TestIamPoliciesShadowListPolicies,
-        ["iam-policies-shadow:GetPolicyAttachmentCountAfterAttach"] = TestIamPoliciesShadowGetPolicyAttachmentCountAfterAttach,
-        ["iam-policies-shadow:GetPolicyAttachmentCountAfterDetach"] = TestIamPoliciesShadowGetPolicyAttachmentCountAfterDetach,
-        ["iam-policies-shadow:DeletePolicy"] = TestIamPoliciesShadowDeletePolicy,
+        ["iam-policies:CreatePolicy"] = TestIamPoliciesCreatePolicy,
+        ["iam-policies:CreatePolicyMalformedDocument"] = TestIamPoliciesCreatePolicyMalformedDocument,
+        ["iam-policies:GetPolicy"] = TestIamPoliciesGetPolicy,
+        ["iam-policies:GetPolicyReturnsTags"] = TestIamPoliciesGetPolicyReturnsTags,
+        ["iam-policies:ListPolicies"] = TestIamPoliciesListPolicies,
+        ["iam-policies:GetPolicyAttachmentCountAfterAttach"] = TestIamPoliciesGetPolicyAttachmentCountAfterAttach,
+        ["iam-policies:GetPolicyAttachmentCountAfterDetach"] = TestIamPoliciesGetPolicyAttachmentCountAfterDetach,
+        ["iam-policies:DeletePolicy"] = TestIamPoliciesDeletePolicy,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["iam-policies-shadow"] = SetupIamPoliciesShadow,
+        ["iam-policies"] = SetupIamPolicies,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["iam-policies-shadow"] = TeardownIamPoliciesShadow,
+        ["iam-policies"] = TeardownIamPolicies,
     };
 
     private AmazonIdentityManagementServiceClient Cl() => _client.Value;
 
-    private Task SetupIamPoliciesShadow(TestContext t) =>
-        GroupIamPoliciesShadow.RunSetupAsync(t,
+    private Task SetupIamPolicies(TestContext t) =>
+        GroupIamPolicies.RunSetupAsync(t,
             new ScenarioCall
             {
                 Op = "CreateRole",
@@ -75,8 +75,8 @@ internal sealed class ScenariosAuthoredIamPolicies : IServiceGroup
             }
         );
 
-    private Task TeardownIamPoliciesShadow(TestContext t) =>
-        GroupIamPoliciesShadow.RunTeardownAsync(t,
+    private Task TeardownIamPolicies(TestContext t) =>
+        GroupIamPolicies.RunTeardownAsync(t,
             new ScenarioCall
             {
                 Op = "DetachRolePolicy",
@@ -119,7 +119,7 @@ internal sealed class ScenariosAuthoredIamPolicies : IServiceGroup
             }
         );
 
-    private Task TestIamPoliciesShadowCreatePolicy(TestContext t) => GroupIamPoliciesShadow.RunTestAsync(t, "CreatePolicy", new ScenarioTest
+    private Task TestIamPoliciesCreatePolicy(TestContext t) => GroupIamPolicies.RunTestAsync(t, "CreatePolicy", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -173,7 +173,7 @@ internal sealed class ScenariosAuthoredIamPolicies : IServiceGroup
         ],
     });
 
-    private Task TestIamPoliciesShadowCreatePolicyMalformedDocument(TestContext t) => GroupIamPoliciesShadow.RunTestAsync(t, "CreatePolicyMalformedDocument", new ScenarioTest
+    private Task TestIamPoliciesCreatePolicyMalformedDocument(TestContext t) => GroupIamPolicies.RunTestAsync(t, "CreatePolicyMalformedDocument", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -195,7 +195,7 @@ internal sealed class ScenariosAuthoredIamPolicies : IServiceGroup
         ],
     });
 
-    private Task TestIamPoliciesShadowGetPolicy(TestContext t) => GroupIamPoliciesShadow.RunTestAsync(t, "GetPolicy", new ScenarioTest
+    private Task TestIamPoliciesGetPolicy(TestContext t) => GroupIamPolicies.RunTestAsync(t, "GetPolicy", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -219,7 +219,7 @@ internal sealed class ScenariosAuthoredIamPolicies : IServiceGroup
         ],
     });
 
-    private Task TestIamPoliciesShadowGetPolicyReturnsTags(TestContext t) => GroupIamPoliciesShadow.RunTestAsync(t, "GetPolicyReturnsTags", new ScenarioTest
+    private Task TestIamPoliciesGetPolicyReturnsTags(TestContext t) => GroupIamPolicies.RunTestAsync(t, "GetPolicyReturnsTags", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -251,7 +251,7 @@ internal sealed class ScenariosAuthoredIamPolicies : IServiceGroup
         ],
     });
 
-    private Task TestIamPoliciesShadowListPolicies(TestContext t) => GroupIamPoliciesShadow.RunTestAsync(t, "ListPolicies", new ScenarioTest
+    private Task TestIamPoliciesListPolicies(TestContext t) => GroupIamPolicies.RunTestAsync(t, "ListPolicies", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -278,7 +278,7 @@ internal sealed class ScenariosAuthoredIamPolicies : IServiceGroup
         ],
     });
 
-    private Task TestIamPoliciesShadowGetPolicyAttachmentCountAfterAttach(TestContext t) => GroupIamPoliciesShadow.RunTestAsync(t, "GetPolicyAttachmentCountAfterAttach", new ScenarioTest
+    private Task TestIamPoliciesGetPolicyAttachmentCountAfterAttach(TestContext t) => GroupIamPolicies.RunTestAsync(t, "GetPolicyAttachmentCountAfterAttach", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -336,7 +336,7 @@ internal sealed class ScenariosAuthoredIamPolicies : IServiceGroup
         ],
     });
 
-    private Task TestIamPoliciesShadowGetPolicyAttachmentCountAfterDetach(TestContext t) => GroupIamPoliciesShadow.RunTestAsync(t, "GetPolicyAttachmentCountAfterDetach", new ScenarioTest
+    private Task TestIamPoliciesGetPolicyAttachmentCountAfterDetach(TestContext t) => GroupIamPolicies.RunTestAsync(t, "GetPolicyAttachmentCountAfterDetach", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -394,7 +394,7 @@ internal sealed class ScenariosAuthoredIamPolicies : IServiceGroup
         ],
     });
 
-    private Task TestIamPoliciesShadowDeletePolicy(TestContext t) => GroupIamPoliciesShadow.RunTestAsync(t, "DeletePolicy", new ScenarioTest
+    private Task TestIamPoliciesDeletePolicy(TestContext t) => GroupIamPolicies.RunTestAsync(t, "DeletePolicy", new ScenarioTest
     {
         Call = new ScenarioCall
         {

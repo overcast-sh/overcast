@@ -24,7 +24,6 @@ public static class ServiceGroups
         new KmsGroup(clients),
         new SecretsManagerGroup(clients),
         new SsmGroup(clients),
-        new IamGroup(clients),
         new EventBridgeGroup(clients),
     ];
 }

@@ -23,18 +23,18 @@ func ScenariosAuthoredIamGroups(c *clients.Clients) ServiceGroup {
 	return ServiceGroup{
 		Name: "scenarios/authored-iam-groups",
 		Impls: map[string]harness.TestFn{
-			"iam-groups-shadow:CreateGroup":         g.testIamGroupsShadowCreateGroup,
-			"iam-groups-shadow:AddUserToGroup":      g.testIamGroupsShadowAddUserToGroup,
-			"iam-groups-shadow:ListGroupsForUser":   g.testIamGroupsShadowListGroupsForUser,
-			"iam-groups-shadow:RemoveUserFromGroup": g.testIamGroupsShadowRemoveUserFromGroup,
-			"iam-groups-shadow:GetGroup":            g.testIamGroupsShadowGetGroup,
-			"iam-groups-shadow:DeleteGroup":         g.testIamGroupsShadowDeleteGroup,
+			"iam-groups:CreateGroup":         g.testIamGroupsCreateGroup,
+			"iam-groups:AddUserToGroup":      g.testIamGroupsAddUserToGroup,
+			"iam-groups:ListGroupsForUser":   g.testIamGroupsListGroupsForUser,
+			"iam-groups:RemoveUserFromGroup": g.testIamGroupsRemoveUserFromGroup,
+			"iam-groups:GetGroup":            g.testIamGroupsGetGroup,
+			"iam-groups:DeleteGroup":         g.testIamGroupsDeleteGroup,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"iam-groups-shadow": g.setupIamGroupsShadow,
+			"iam-groups": g.setupIamGroups,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"iam-groups-shadow": g.teardownIamGroupsShadow,
+			"iam-groups": g.teardownIamGroups,
 		},
 	}
 }
@@ -54,10 +54,10 @@ func (g *authoredIamGroupsScenarios) cl() *iam.Client {
 	return g.client
 }
 
-var groupIamGroupsShadow = scenario.Group{Name: "iam-groups-shadow", File: "compat/model/authored/iam-groups.json"}
+var groupIamGroups = scenario.Group{Name: "iam-groups", File: "compat/model/authored/iam-groups.json"}
 
-func (g *authoredIamGroupsScenarios) setupIamGroupsShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupIamGroupsShadow.RunSetup(ctx, t,
+func (g *authoredIamGroupsScenarios) setupIamGroups(ctx context.Context, t *harness.TestContext) error {
+	return groupIamGroups.RunSetup(ctx, t,
 		scenario.Call{
 			Op:     "CreateUser",
 			Params: `{"UserName":{"$name":"user"}}`,
@@ -73,8 +73,8 @@ func (g *authoredIamGroupsScenarios) setupIamGroupsShadow(ctx context.Context, t
 	)
 }
 
-func (g *authoredIamGroupsScenarios) teardownIamGroupsShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupIamGroupsShadow.RunTeardown(ctx, t,
+func (g *authoredIamGroupsScenarios) teardownIamGroups(ctx context.Context, t *harness.TestContext) error {
+	return groupIamGroups.RunTeardown(ctx, t,
 		scenario.Call{
 			Op:     "RemoveUserFromGroup",
 			Params: `{"GroupName":{"$name":"group"},"UserName":{"$name":"user"}}`,
@@ -115,8 +115,8 @@ func (g *authoredIamGroupsScenarios) teardownIamGroupsShadow(ctx context.Context
 	)
 }
 
-func (g *authoredIamGroupsScenarios) testIamGroupsShadowCreateGroup(ctx context.Context, t *harness.TestContext) error {
-	return groupIamGroupsShadow.RunTest(ctx, t, "CreateGroup", scenario.Test{
+func (g *authoredIamGroupsScenarios) testIamGroupsCreateGroup(ctx context.Context, t *harness.TestContext) error {
+	return groupIamGroups.RunTest(ctx, t, "CreateGroup", scenario.Test{
 		Call: scenario.Call{
 			Op:     "CreateGroup",
 			Params: `{"GroupName":{"$name":"group"}}`,
@@ -160,8 +160,8 @@ func (g *authoredIamGroupsScenarios) testIamGroupsShadowCreateGroup(ctx context.
 	})
 }
 
-func (g *authoredIamGroupsScenarios) testIamGroupsShadowAddUserToGroup(ctx context.Context, t *harness.TestContext) error {
-	return groupIamGroupsShadow.RunTest(ctx, t, "AddUserToGroup", scenario.Test{
+func (g *authoredIamGroupsScenarios) testIamGroupsAddUserToGroup(ctx context.Context, t *harness.TestContext) error {
+	return groupIamGroups.RunTest(ctx, t, "AddUserToGroup", scenario.Test{
 		Call: scenario.Call{
 			Op:     "AddUserToGroup",
 			Params: `{"GroupName":{"$name":"group"},"UserName":{"$name":"user"}}`,
@@ -198,8 +198,8 @@ func (g *authoredIamGroupsScenarios) testIamGroupsShadowAddUserToGroup(ctx conte
 	})
 }
 
-func (g *authoredIamGroupsScenarios) testIamGroupsShadowListGroupsForUser(ctx context.Context, t *harness.TestContext) error {
-	return groupIamGroupsShadow.RunTest(ctx, t, "ListGroupsForUser", scenario.Test{
+func (g *authoredIamGroupsScenarios) testIamGroupsListGroupsForUser(ctx context.Context, t *harness.TestContext) error {
+	return groupIamGroups.RunTest(ctx, t, "ListGroupsForUser", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListGroupsForUser",
 			Params: `{"UserName":{"$name":"user"}}`,
@@ -223,8 +223,8 @@ func (g *authoredIamGroupsScenarios) testIamGroupsShadowListGroupsForUser(ctx co
 	})
 }
 
-func (g *authoredIamGroupsScenarios) testIamGroupsShadowRemoveUserFromGroup(ctx context.Context, t *harness.TestContext) error {
-	return groupIamGroupsShadow.RunTest(ctx, t, "RemoveUserFromGroup", scenario.Test{
+func (g *authoredIamGroupsScenarios) testIamGroupsRemoveUserFromGroup(ctx context.Context, t *harness.TestContext) error {
+	return groupIamGroups.RunTest(ctx, t, "RemoveUserFromGroup", scenario.Test{
 		Call: scenario.Call{
 			Op:     "RemoveUserFromGroup",
 			Params: `{"GroupName":{"$name":"group"},"UserName":{"$name":"user"}}`,
@@ -279,8 +279,8 @@ func (g *authoredIamGroupsScenarios) testIamGroupsShadowRemoveUserFromGroup(ctx 
 	})
 }
 
-func (g *authoredIamGroupsScenarios) testIamGroupsShadowGetGroup(ctx context.Context, t *harness.TestContext) error {
-	return groupIamGroupsShadow.RunTest(ctx, t, "GetGroup", scenario.Test{
+func (g *authoredIamGroupsScenarios) testIamGroupsGetGroup(ctx context.Context, t *harness.TestContext) error {
+	return groupIamGroups.RunTest(ctx, t, "GetGroup", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetGroup",
 			Params: `{"GroupName":{"$name":"group"}}`,
@@ -303,8 +303,8 @@ func (g *authoredIamGroupsScenarios) testIamGroupsShadowGetGroup(ctx context.Con
 	})
 }
 
-func (g *authoredIamGroupsScenarios) testIamGroupsShadowDeleteGroup(ctx context.Context, t *harness.TestContext) error {
-	return groupIamGroupsShadow.RunTest(ctx, t, "DeleteGroup", scenario.Test{
+func (g *authoredIamGroupsScenarios) testIamGroupsDeleteGroup(ctx context.Context, t *harness.TestContext) error {
+	return groupIamGroups.RunTest(ctx, t, "DeleteGroup", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteGroup",
 			Params: `{"GroupName":{"$name":"group"}}`,

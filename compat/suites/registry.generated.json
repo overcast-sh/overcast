@@ -56,8 +56,47 @@
       ]
     },
     {
+      "group": "iam-groups",
+      "scenario": "compat/model/authored/iam-groups.json",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ]
+    },
+    {
+      "group": "iam-policies",
+      "scenario": "compat/model/authored/iam-policies.json",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ]
+    },
+    {
       "group": "iam-roles",
       "scenario": "compat/model/authored/iam-roles.json",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ]
+    },
+    {
+      "group": "iam-simulate",
+      "scenario": "compat/model/authored/iam-simulate.json",
       "suites": [
         "cli",
         "dotnet-sdk",
@@ -1320,164 +1359,6 @@
           "depends": [
             "CreateUser"
           ]
-        }
-      ]
-    },
-    {
-      "service": "iam",
-      "name": "iam-groups-shadow",
-      "generated": true,
-      "scenario": "compat/model/authored/iam-groups.json",
-      "state": "candidate",
-      "shadowOf": "iam-groups",
-      "suites": [
-        "cli",
-        "dotnet-sdk",
-        "go-sdk",
-        "java-sdk",
-        "node-js-sdk",
-        "python-sdk",
-        "rust-sdk"
-      ],
-      "tests": [
-        {
-          "name": "CreateGroup"
-        },
-        {
-          "name": "AddUserToGroup",
-          "depends": [
-            "CreateGroup"
-          ]
-        },
-        {
-          "name": "ListGroupsForUser",
-          "depends": [
-            "AddUserToGroup"
-          ]
-        },
-        {
-          "name": "RemoveUserFromGroup",
-          "depends": [
-            "ListGroupsForUser"
-          ]
-        },
-        {
-          "name": "GetGroup",
-          "depends": [
-            "CreateGroup"
-          ]
-        },
-        {
-          "name": "DeleteGroup",
-          "depends": [
-            "GetGroup"
-          ]
-        }
-      ]
-    },
-    {
-      "service": "iam",
-      "name": "iam-policies-shadow",
-      "generated": true,
-      "scenario": "compat/model/authored/iam-policies.json",
-      "state": "candidate",
-      "shadowOf": "iam-policies",
-      "suites": [
-        "cli",
-        "dotnet-sdk",
-        "go-sdk",
-        "java-sdk",
-        "node-js-sdk",
-        "python-sdk",
-        "rust-sdk"
-      ],
-      "tests": [
-        {
-          "name": "CreatePolicy"
-        },
-        {
-          "name": "CreatePolicyMalformedDocument",
-          "op": "CreatePolicy"
-        },
-        {
-          "name": "GetPolicy",
-          "depends": [
-            "CreatePolicy"
-          ]
-        },
-        {
-          "name": "GetPolicyReturnsTags",
-          "op": "GetPolicy",
-          "depends": [
-            "CreatePolicy"
-          ]
-        },
-        {
-          "name": "ListPolicies",
-          "depends": [
-            "CreatePolicy"
-          ]
-        },
-        {
-          "name": "GetPolicyAttachmentCountAfterAttach",
-          "op": "GetPolicy",
-          "depends": [
-            "CreatePolicy"
-          ]
-        },
-        {
-          "name": "GetPolicyAttachmentCountAfterDetach",
-          "op": "GetPolicy",
-          "depends": [
-            "GetPolicyAttachmentCountAfterAttach"
-          ]
-        },
-        {
-          "name": "DeletePolicy",
-          "depends": [
-            "GetPolicy",
-            "ListPolicies",
-            "GetPolicyAttachmentCountAfterDetach"
-          ]
-        }
-      ]
-    },
-    {
-      "service": "iam",
-      "name": "iam-simulate-shadow",
-      "generated": true,
-      "scenario": "compat/model/authored/iam-simulate.json",
-      "state": "candidate",
-      "shadowOf": "iam-simulate",
-      "suites": [
-        "cli",
-        "dotnet-sdk",
-        "go-sdk",
-        "java-sdk",
-        "node-js-sdk",
-        "python-sdk",
-        "rust-sdk"
-      ],
-      "tests": [
-        {
-          "name": "SimulateCustomPolicyAllowed",
-          "op": "SimulateCustomPolicy"
-        },
-        {
-          "name": "SimulateCustomPolicyImplicitDeny",
-          "op": "SimulateCustomPolicy"
-        },
-        {
-          "name": "SimulateCustomPolicyExplicitDeny",
-          "op": "SimulateCustomPolicy"
-        },
-        {
-          "name": "SimulatePrincipalPolicyAllowed",
-          "op": "SimulatePrincipalPolicy"
-        },
-        {
-          "name": "SimulatePrincipalPolicyImplicitDeny",
-          "op": "SimulatePrincipalPolicy"
         }
       ]
     },

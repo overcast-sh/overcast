@@ -82,10 +82,6 @@ class Clients:
         return self._get("ses")
 
     @property
-    def iam(self):
-        return self._get("iam")
-
-    @property
     def sts(self):
         return self._get("sts")
 

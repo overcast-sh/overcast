@@ -33,8 +33,8 @@ import software.amazon.awssdk.services.iam.model.RemoveUserFromGroupRequest;
  */
 public final class ScenariosAuthoredIamGroupsGen implements ServiceGroup {
 
-    private static final Group GROUP_IAM_GROUPS_SHADOW =
-            new Group("iam-groups-shadow", "compat/model/authored/iam-groups.json");
+    private static final Group GROUP_IAM_GROUPS =
+            new Group("iam-groups", "compat/model/authored/iam-groups.json");
 
     private final AwsClients clients;
     private volatile IamClient client;
@@ -51,24 +51,24 @@ public final class ScenariosAuthoredIamGroupsGen implements ServiceGroup {
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("iam-groups-shadow:CreateGroup", this::testIamGroupsShadowCreateGroup),
-                Map.entry("iam-groups-shadow:AddUserToGroup", this::testIamGroupsShadowAddUserToGroup),
-                Map.entry("iam-groups-shadow:ListGroupsForUser", this::testIamGroupsShadowListGroupsForUser),
-                Map.entry("iam-groups-shadow:RemoveUserFromGroup", this::testIamGroupsShadowRemoveUserFromGroup),
-                Map.entry("iam-groups-shadow:GetGroup", this::testIamGroupsShadowGetGroup),
-                Map.entry("iam-groups-shadow:DeleteGroup", this::testIamGroupsShadowDeleteGroup));
+                Map.entry("iam-groups:CreateGroup", this::testIamGroupsCreateGroup),
+                Map.entry("iam-groups:AddUserToGroup", this::testIamGroupsAddUserToGroup),
+                Map.entry("iam-groups:ListGroupsForUser", this::testIamGroupsListGroupsForUser),
+                Map.entry("iam-groups:RemoveUserFromGroup", this::testIamGroupsRemoveUserFromGroup),
+                Map.entry("iam-groups:GetGroup", this::testIamGroupsGetGroup),
+                Map.entry("iam-groups:DeleteGroup", this::testIamGroupsDeleteGroup));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("iam-groups-shadow", this::setupIamGroupsShadow));
+                Map.entry("iam-groups", this::setupIamGroups));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("iam-groups-shadow", this::teardownIamGroupsShadow));
+                Map.entry("iam-groups", this::teardownIamGroups));
     }
 
     /**
@@ -88,8 +88,8 @@ public final class ScenariosAuthoredIamGroupsGen implements ServiceGroup {
         return client;
     }
 
-    private void setupIamGroupsShadow(TestContext t) {
-        GROUP_IAM_GROUPS_SHADOW.runSetup(t,
+    private void setupIamGroups(TestContext t) {
+        GROUP_IAM_GROUPS.runSetup(t,
                 new Call("CreateUser", "{\"UserName\":{\"$name\":\"user\"}}",
                         b -> CreateUserRequest.builder()
                                 .userName(b.string("UserName", Values.name("user")))
@@ -97,8 +97,8 @@ public final class ScenariosAuthoredIamGroupsGen implements ServiceGroup {
                         r -> cl().createUser((CreateUserRequest) r)));
     }
 
-    private void teardownIamGroupsShadow(TestContext t) {
-        GROUP_IAM_GROUPS_SHADOW.runTeardown(t,
+    private void teardownIamGroups(TestContext t) {
+        GROUP_IAM_GROUPS.runTeardown(t,
                 new Call("RemoveUserFromGroup", "{\"GroupName\":{\"$name\":\"group\"},\"UserName\":{\"$name\":\"user\"}}",
                         b -> RemoveUserFromGroupRequest.builder()
                                 .groupName(b.string("GroupName", Values.name("group")))
@@ -117,8 +117,8 @@ public final class ScenariosAuthoredIamGroupsGen implements ServiceGroup {
                         r -> cl().deleteUser((DeleteUserRequest) r)));
     }
 
-    private void testIamGroupsShadowCreateGroup(TestContext t) {
-        GROUP_IAM_GROUPS_SHADOW.runTest(t, "CreateGroup",
+    private void testIamGroupsCreateGroup(TestContext t) {
+        GROUP_IAM_GROUPS.runTest(t, "CreateGroup",
                 new Call("CreateGroup", "{\"GroupName\":{\"$name\":\"group\"}}",
                         b -> CreateGroupRequest.builder()
                                 .groupName(b.string("GroupName", Values.name("group")))
@@ -144,8 +144,8 @@ public final class ScenariosAuthoredIamGroupsGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamGroupsShadowAddUserToGroup(TestContext t) {
-        GROUP_IAM_GROUPS_SHADOW.runTest(t, "AddUserToGroup",
+    private void testIamGroupsAddUserToGroup(TestContext t) {
+        GROUP_IAM_GROUPS.runTest(t, "AddUserToGroup",
                 new Call("AddUserToGroup", "{\"GroupName\":{\"$name\":\"group\"},\"UserName\":{\"$name\":\"user\"}}",
                         b -> AddUserToGroupRequest.builder()
                                 .groupName(b.string("GroupName", Values.name("group")))
@@ -166,8 +166,8 @@ public final class ScenariosAuthoredIamGroupsGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamGroupsShadowListGroupsForUser(TestContext t) {
-        GROUP_IAM_GROUPS_SHADOW.runTest(t, "ListGroupsForUser",
+    private void testIamGroupsListGroupsForUser(TestContext t) {
+        GROUP_IAM_GROUPS.runTest(t, "ListGroupsForUser",
                 new Call("ListGroupsForUser", "{\"UserName\":{\"$name\":\"user\"}}",
                         b -> ListGroupsForUserRequest.builder()
                                 .userName(b.string("UserName", Values.name("user")))
@@ -183,8 +183,8 @@ public final class ScenariosAuthoredIamGroupsGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamGroupsShadowRemoveUserFromGroup(TestContext t) {
-        GROUP_IAM_GROUPS_SHADOW.runTest(t, "RemoveUserFromGroup",
+    private void testIamGroupsRemoveUserFromGroup(TestContext t) {
+        GROUP_IAM_GROUPS.runTest(t, "RemoveUserFromGroup",
                 new Call("RemoveUserFromGroup", "{\"GroupName\":{\"$name\":\"group\"},\"UserName\":{\"$name\":\"user\"}}",
                         b -> RemoveUserFromGroupRequest.builder()
                                 .groupName(b.string("GroupName", Values.name("group")))
@@ -215,8 +215,8 @@ public final class ScenariosAuthoredIamGroupsGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamGroupsShadowGetGroup(TestContext t) {
-        GROUP_IAM_GROUPS_SHADOW.runTest(t, "GetGroup",
+    private void testIamGroupsGetGroup(TestContext t) {
+        GROUP_IAM_GROUPS.runTest(t, "GetGroup",
                 new Call("GetGroup", "{\"GroupName\":{\"$name\":\"group\"}}",
                         b -> GetGroupRequest.builder()
                                 .groupName(b.string("GroupName", Values.name("group")))
@@ -231,8 +231,8 @@ public final class ScenariosAuthoredIamGroupsGen implements ServiceGroup {
                 ));
     }
 
-    private void testIamGroupsShadowDeleteGroup(TestContext t) {
-        GROUP_IAM_GROUPS_SHADOW.runTest(t, "DeleteGroup",
+    private void testIamGroupsDeleteGroup(TestContext t) {
+        GROUP_IAM_GROUPS.runTest(t, "DeleteGroup",
                 new Call("DeleteGroup", "{\"GroupName\":{\"$name\":\"group\"}}",
                         b -> DeleteGroupRequest.builder()
                                 .groupName(b.string("GroupName", Values.name("group")))

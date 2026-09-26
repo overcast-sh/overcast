@@ -1233,6 +1233,7 @@
     {
       "service": "iam",
       "name": "iam-policies",
+      "scenario": "compat/model/authored/iam-policies.json",
       "tests": [
         {
           "name": "CreatePolicy"
@@ -1287,6 +1288,7 @@
     {
       "service": "iam",
       "name": "iam-groups",
+      "scenario": "compat/model/authored/iam-groups.json",
       "tests": [
         {
           "name": "CreateGroup"
@@ -1326,6 +1328,7 @@
     {
       "service": "iam",
       "name": "iam-simulate",
+      "scenario": "compat/model/authored/iam-simulate.json",
       "tests": [
         {
           "name": "SimulateCustomPolicyAllowed",

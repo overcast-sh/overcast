@@ -46,7 +46,6 @@ func handWritten(c *clients.Clients) []ServiceGroup {
 		SNS(c).named("sns"),
 		Lambda(c).named("lambda"),
 		SES(c).named("ses"),
-		IAM(c).named("iam"),
 		STS(c).named("sts"),
 		SecretsManager(c).named("secretsmanager"),
 		KMS(c).named("kms"),
