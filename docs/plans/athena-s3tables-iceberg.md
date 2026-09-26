@@ -242,6 +242,16 @@ and on ElastiCache's `SetDocker`, `Stop`, GC and readiness for everything else.
 > 0.12 end to end and against golden commits captured from it. Trino's
 > per-bucket REST catalogs and the end-to-end test move to Phase 3 (#2066),
 > which has no engine to wire them into yet.
+>
+> Trino's per-bucket REST catalogs implemented (2026-09-26, #2183). The engine
+> runs with `catalog.management=dynamic` and an in-memory catalog store, and
+> gets every catalog with `CREATE CATALOG`: the two Glue catalogs once it is
+> up, and one Iceberg REST catalog per table bucket, synced to the bucket list
+> before each query, so a bucket created or deleted while the engine runs
+> needs no restart. Each is named `s3tablescatalog/<bucket>`, exactly as
+> Athena names it (Trino takes any quoted identifier), so no SQL is rewritten
+> to reach one. The catalog signs SigV4 for `s3tables` with the gateway's
+> key, and the gateway admits S3 Tables only under `/iceberg/`.
 
 - Serve the Iceberg REST spec that AWS exposes at `https://s3tables.<region>.amazonaws.com/iceberg`:
   - `GET /iceberg/v1/config?warehouse=<bucketARN>`;

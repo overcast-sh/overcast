@@ -70,17 +70,24 @@ func (g *athenaEngineGroup) teardown(ctx context.Context, t *harness.TestContext
 // run starts query and waits for it to finish, returning its id; a query
 // that does not succeed is the test's failure.
 func (g *athenaEngineGroup) run(ctx context.Context, t *harness.TestContext, query string) (string, error) {
-	out, err := g.c.Athena().StartQueryExecution(ctx, &athena.StartQueryExecutionInput{
+	return runAthenaQuery(ctx, g.c, &athena.StartQueryExecutionInput{
 		QueryString:         aws.String(query),
 		ResultConfiguration: &types.ResultConfiguration{OutputLocation: aws.String("s3://" + athenaEngineBucket(t) + "/results/")},
 	})
+}
+
+// runAthenaQuery starts a query and waits for it to finish, returning its
+// id; a query that does not succeed is an error.
+func runAthenaQuery(ctx context.Context, c *clients.Clients, in *athena.StartQueryExecutionInput) (string, error) {
+	query := aws.ToString(in.QueryString)
+	out, err := c.Athena().StartQueryExecution(ctx, in)
 	if err != nil {
 		return "", err
 	}
 	id := aws.ToString(out.QueryExecutionId)
 	deadline := time.Now().Add(athenaEngineQueryWait)
 	for {
-		resp, err := g.c.Athena().GetQueryExecution(ctx, &athena.GetQueryExecutionInput{QueryExecutionId: aws.String(id)})
+		resp, err := c.Athena().GetQueryExecution(ctx, &athena.GetQueryExecutionInput{QueryExecutionId: aws.String(id)})
 		if err != nil {
 			return "", err
 		}
@@ -89,6 +96,7 @@ func (g *athenaEngineGroup) run(ctx context.Context, t *harness.TestContext, que
 			return id, nil
 		case types.QueryExecutionStateFailed, types.QueryExecutionStateCancelled:
 			return "", fmt.Errorf("%s: %s: %s", query, st.State, aws.ToString(st.StateChangeReason))
+		case types.QueryExecutionStateQueued, types.QueryExecutionStateRunning:
 		}
 		if time.Now().After(deadline) {
 			return "", fmt.Errorf("%s: still unfinished after %s", query, athenaEngineQueryWait)
@@ -99,6 +107,19 @@ func (g *athenaEngineGroup) run(ctx context.Context, t *harness.TestContext, que
 		case <-time.After(500 * time.Millisecond):
 		}
 	}
+}
+
+// queryRows is a query result's rows, each as its comma-joined cells.
+func queryRows(out *athena.GetQueryResultsOutput) []string {
+	var rows []string
+	for _, r := range out.ResultSet.Rows {
+		var cells []string
+		for _, d := range r.Data {
+			cells = append(cells, aws.ToString(d.VarCharValue))
+		}
+		rows = append(rows, strings.Join(cells, ","))
+	}
+	return rows
 }
 
 func (g *athenaEngineGroup) CreateDatabaseStatement(ctx context.Context, t *harness.TestContext) error {
@@ -147,15 +168,7 @@ func (g *athenaEngineGroup) SelectFromTable(ctx context.Context, t *harness.Test
 	if err != nil {
 		return err
 	}
-	var rows []string
-	for _, r := range resp.ResultSet.Rows {
-		var cells []string
-		for _, d := range r.Data {
-			cells = append(cells, aws.ToString(d.VarCharValue))
-		}
-		rows = append(rows, strings.Join(cells, ","))
-	}
-	if got := strings.Join(rows, ";"); got != "id,name;1,alice;2,bob" {
+	if got := strings.Join(queryRows(resp), ";"); got != "id,name;1,alice;2,bob" {
 		return fmt.Errorf("GetQueryResults: rows %q, want the header then 1,alice and 2,bob", got)
 	}
 	if cols := resp.ResultSet.ResultSetMetadata.ColumnInfo; len(cols) != 2 || aws.ToString(cols[0].Type) != "integer" || aws.ToString(cols[1].Type) != "varchar" {

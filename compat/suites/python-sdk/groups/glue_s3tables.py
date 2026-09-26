@@ -20,10 +20,14 @@ def _client(ctx: TestContext, service: str):
     return make_clients(ctx.endpoint, ctx.region)._get(service)
 
 
+def table_bucket_name(prefix: str, run_id: str) -> str:
+    """A run's table bucket under prefix: lowercase letters, digits and hyphens only."""
+    run = re.sub(r"[^a-z0-9-]", "", run_id.lower()).strip("-")
+    return (prefix + run)[:63].rstrip("-")
+
+
 def _bucket(ctx: TestContext) -> str:
-    """The run's table bucket: lowercase letters, digits and hyphens only."""
-    run = re.sub(r"[^a-z0-9-]", "", ctx.run_id.lower()).strip("-")
-    return ("glue-s3tables-" + run)[:63].rstrip("-")
+    return table_bucket_name("glue-s3tables-", ctx.run_id)
 
 
 def _namespace(ctx: TestContext) -> str:

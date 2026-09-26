@@ -118,6 +118,12 @@ func (f *fakeTrino) page(w http.ResponseWriter, q, n int) {
 	_ = json.NewEncoder(w).Encode(page)
 }
 
+func (f *fakeTrino) statements() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.statement...)
+}
+
 func (f *fakeTrino) deletes() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()

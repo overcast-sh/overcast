@@ -57,8 +57,13 @@ func (g *athenaEngineCliGroup) teardown(_ context.Context, t *harness.TestContex
 
 // run starts query and waits for it to succeed, returning its id.
 func (g *athenaEngineCliGroup) run(ctx context.Context, t *harness.TestContext, query string) (string, error) {
-	out, err := awscli.RunOutput(t.Endpoint, t.Region, "athena", "start-query-execution", "--query-string", query,
-		"--result-configuration", "OutputLocation=s3://"+athenaEngineCliBucket(t)+"/results/")
+	return runAthenaQuery(ctx, t, query, "--result-configuration", "OutputLocation=s3://"+athenaEngineCliBucket(t)+"/results/")
+}
+
+// runAthenaQuery starts query with the further start-query-execution
+// arguments args, and waits for it to succeed, returning its id.
+func runAthenaQuery(ctx context.Context, t *harness.TestContext, query string, args ...string) (string, error) {
+	out, err := awscli.RunOutput(t.Endpoint, t.Region, append([]string{"athena", "start-query-execution", "--query-string", query}, args...)...)
 	if err != nil {
 		return "", err
 	}
@@ -86,6 +91,26 @@ func (g *athenaEngineCliGroup) run(ctx context.Context, t *harness.TestContext, 
 		case <-time.After(500 * time.Millisecond):
 		}
 	}
+}
+
+// queryResultRows is a get-query-results output's rows, each as its
+// comma-joined cells.
+func queryResultRows(out map[string]any) []string {
+	rs, _ := out["ResultSet"].(map[string]any)
+	rowsIn, _ := rs["Rows"].([]any)
+	var rows []string
+	for _, r := range rowsIn {
+		row, _ := r.(map[string]any)
+		data, _ := row["Data"].([]any)
+		var cells []string
+		for _, d := range data {
+			datum, _ := d.(map[string]any)
+			v, _ := datum["VarCharValue"].(string)
+			cells = append(cells, v)
+		}
+		rows = append(rows, strings.Join(cells, ","))
+	}
+	return rows
 }
 
 func (g *athenaEngineCliGroup) CreateDatabaseStatement(ctx context.Context, t *harness.TestContext) error {
@@ -140,23 +165,10 @@ func (g *athenaEngineCliGroup) SelectFromTable(ctx context.Context, t *harness.T
 	if err != nil {
 		return err
 	}
-	rs, _ := out["ResultSet"].(map[string]any)
-	rowsIn, _ := rs["Rows"].([]any)
-	var rows []string
-	for _, r := range rowsIn {
-		row, _ := r.(map[string]any)
-		data, _ := row["Data"].([]any)
-		var cells []string
-		for _, d := range data {
-			datum, _ := d.(map[string]any)
-			v, _ := datum["VarCharValue"].(string)
-			cells = append(cells, v)
-		}
-		rows = append(rows, strings.Join(cells, ","))
-	}
-	if got := strings.Join(rows, ";"); got != "id,name;1,alice;2,bob" {
+	if got := strings.Join(queryResultRows(out), ";"); got != "id,name;1,alice;2,bob" {
 		return fmt.Errorf("GetQueryResults: rows %q, want the header then 1,alice and 2,bob", got)
 	}
+	rs, _ := out["ResultSet"].(map[string]any)
 	meta, _ := rs["ResultSetMetadata"].(map[string]any)
 	info, _ := meta["ColumnInfo"].([]any)
 	var types []string

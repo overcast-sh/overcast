@@ -20,6 +20,7 @@ import (
 	"github.com/overcast-sh/overcast/internal/dataplane"
 	"github.com/overcast-sh/overcast/internal/docker"
 	"github.com/overcast-sh/overcast/internal/middleware"
+	"github.com/overcast-sh/overcast/internal/services/s3tables"
 )
 
 // engine_gateway.go — where the engine reaches Overcast's API.
@@ -33,9 +34,9 @@ import (
 // the control plane can connect, and plain HTTP.
 //
 // That address may be reachable from more than the engine, so the gateway
-// serves only what the engine calls — Glue's JSON API and S3 — and only to
-// requests signed with an access key minted for this process, which only the
-// engine's configuration carries.
+// serves only what the engine calls — Glue's JSON API, S3 and S3 Tables'
+// Iceberg REST catalog — and only to requests signed with an access key
+// minted for this process, which only the engine's catalogs carry.
 
 // gatewayShutdownTimeout bounds closing the gateway at shutdown.
 const gatewayShutdownTimeout = 5 * time.Second
@@ -109,8 +110,7 @@ func mintAccessKey() (string, error) {
 }
 
 // engineOnly serves the engine's calls and refuses everything else: a
-// request not signed with accessKey, an emulator-only path, and any JSON
-// operation that is not Glue's.
+// request not signed with accessKey, and any that engineCall does not name.
 //
 // It also serves every request as addressed to "localhost". The engine
 // addresses S3 path-style, but the Host it sends is whatever it dialled —
@@ -118,15 +118,29 @@ func mintAccessKey() (string, error) {
 // as a bucket label on an unknown domain.
 func engineOnly(accessKey string, h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		target := r.Header.Get("X-Amz-Target")
-		if middleware.CredentialAccessKey(r) != accessKey || strings.HasPrefix(r.URL.Path, "/_") ||
-			(target != "" && !strings.HasPrefix(target, glueTargetPrefix)) {
-			http.Error(w, "the Athena engine gateway serves only the engine's Glue and S3 calls", http.StatusForbidden)
+		if middleware.CredentialAccessKey(r) != accessKey || !engineCall(r) {
+			http.Error(w, "the Athena engine gateway serves only the engine's Glue, S3 and S3 Tables Iceberg calls", http.StatusForbidden)
 			return
 		}
 		r.Host = "localhost"
 		h.ServeHTTP(w, r)
 	})
+}
+
+// engineCall reports whether r is a call the engine makes, by the service
+// it is signed for: Glue's JSON operations; S3, on a path no other service
+// is routed by; and S3 Tables' Iceberg REST catalog, but nothing else of S3
+// Tables' API.
+func engineCall(r *http.Request) bool {
+	switch middleware.ServiceFromCredential(r) {
+	case "glue":
+		return strings.HasPrefix(r.Header.Get("X-Amz-Target"), glueTargetPrefix)
+	case "s3":
+		return middleware.ServiceOf(r) == "s3"
+	case "s3tables":
+		return r.Header.Get("X-Amz-Target") == "" && strings.HasPrefix(r.URL.Path, s3tables.IcebergRoot+"/")
+	}
+	return false
 }
 
 func (g *engineGateway) serve(ln net.Listener, log *zap.Logger) {

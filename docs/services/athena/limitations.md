@@ -101,11 +101,12 @@ state, in memory unless state is persisted.
 
 ## Credentials
 
-The engine calls Glue and S3 in Overcast through a listener of its own, on an
-address a container can reach: natively Overcast's API listens on loopback
-only. The listener is plain HTTP and serves only Glue's JSON operations and
-S3, and only to requests signed with an access key minted when Overcast
-starts, which only the engine's configuration carries. When no narrower
+The engine calls Glue, S3 and S3 Tables' Iceberg REST catalog in Overcast
+through a listener of its own, on an address a container can reach: natively
+Overcast's API listens on loopback only. The listener is plain HTTP and serves
+only Glue's JSON operations, S3 and the Iceberg REST catalog, each only when
+signed for that service, and only with an access key minted when Overcast
+starts, which only the engine's catalogs carry. When no narrower
 address can be proved reachable it binds every interface, and Overcast logs a
 warning.
 

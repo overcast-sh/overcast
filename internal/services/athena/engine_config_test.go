@@ -35,18 +35,18 @@ func TestRenderEngineFiles_heapFollowsTheMemoryLimit(t *testing.T) {
 	}
 }
 
-func TestRenderEngineFiles_catalogsPointAtOvercast(t *testing.T) {
-	files := renderEngineFiles(engineSettings{Overcast: "http://gw:9", Region: "eu-west-1", AccountID: "111122223333", Memory: 1 << 30})
-	for _, name := range []string{"catalog/awsdatacatalog.properties", "catalog/awsdatacatalog_iceberg.properties"} {
-		for _, want := range []string{"hive.metastore.glue.endpoint-url=http://gw:9", "s3.endpoint=http://gw:9",
-			"hive.metastore.glue.region=eu-west-1", "hive.metastore.glue.catalogid=111122223333", "s3.path-style-access=true"} {
-			if !strings.Contains(files[name], want+"\n") {
-				t.Errorf("%s lacks %q:\n%s", name, want, files[name])
-			}
+func TestRenderEngineFiles_catalogsAreDynamic(t *testing.T) {
+	// The catalogs are created once the engine is up, so none is a file.
+	files := renderEngineFiles(engineSettings{Overcast: "http://o:1", Region: "eu-west-1", AccountID: "1", Memory: 1 << 30})
+	for _, want := range []string{"catalog.management=dynamic\n", "catalog.store=memory\n"} {
+		if !strings.Contains(files["config.properties"], want) {
+			t.Errorf("config.properties lacks %q:\n%s", want, files["config.properties"])
 		}
 	}
-	if !strings.Contains(files["catalog/awsdatacatalog.properties"], "hive.iceberg-catalog-name=awsdatacatalog_iceberg\n") {
-		t.Error("the Hive catalog does not redirect Iceberg tables")
+	for name := range files {
+		if strings.HasPrefix(name, "catalog/") {
+			t.Errorf("rendered a catalog file %s", name)
+		}
 	}
 }
 
@@ -143,37 +143,43 @@ func icebergTableInput(name string) glue.TableInput {
 	return glue.TableInput{Name: name, TableType: "EXTERNAL_TABLE", Parameters: map[string]string{"table_type": "ICEBERG"}}
 }
 
-func TestRenderEngineFiles_signsWithTheGatewayKey(t *testing.T) {
-	files := renderEngineFiles(engineSettings{Overcast: "http://gw:9", AccessKey: "OVERCASTATHENAKEY", Region: "eu-west-1", AccountID: "111122223333", Memory: 1 << 30})
-	for _, name := range []string{"catalog/awsdatacatalog.properties", "catalog/awsdatacatalog_iceberg.properties"} {
-		if !strings.Contains(files[name], "=OVERCASTATHENAKEY\n") {
-			t.Errorf("%s does not sign with the gateway's key:\n%s", name, files[name])
-		}
-	}
-}
-
 func TestEngineOnly_servesOnlyTheEnginesCalls(t *testing.T) {
 	// Given: the gateway's handler in front of an API that records the Host
 	var host string
 	h := engineOnly("OVERCASTATHENAKEY", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { host = r.Host }))
-	signed := func(key string) string {
-		return "AWS4-HMAC-SHA256 Credential=" + key + "/20260925/us-east-1/glue/aws4_request, SignedHeaders=host, Signature=00"
+	signed := func(key, service string) string {
+		return "AWS4-HMAC-SHA256 Credential=" + key + "/20260925/us-east-1/" + service + "/aws4_request, SignedHeaders=host, Signature=00"
 	}
+	const key = "OVERCASTATHENAKEY"
 	cases := []struct {
-		name, path, auth, target string
-		want                     int
+		name, method, path, auth, target string
+		want                             int
 	}{
-		{"a Glue call", "/", signed("OVERCASTATHENAKEY"), "AWSGlue.GetTable", http.StatusOK},
-		{"an S3 call", "/bucket/key", signed("OVERCASTATHENAKEY"), "", http.StatusOK},
-		{"another key", "/", signed("AKIAOTHER"), "AWSGlue.GetTable", http.StatusForbidden},
-		{"no signature", "/bucket/key", "", "", http.StatusForbidden},
-		{"another service", "/", signed("OVERCASTATHENAKEY"), "AmazonAthena.ListWorkGroups", http.StatusForbidden},
-		{"an emulator path", "/_overcast/health", signed("OVERCASTATHENAKEY"), "", http.StatusForbidden},
+		{"a Glue call", http.MethodPost, "/", signed(key, "glue"), "AWSGlue.GetTable", http.StatusOK},
+		{"an S3 call", http.MethodGet, "/bucket/key", signed(key, "s3"), "", http.StatusOK},
+		{"an Iceberg REST config call", http.MethodGet, "/iceberg/v1/config?warehouse=arn", signed(key, "s3tables"), "", http.StatusOK},
+		{"an Iceberg REST commit", http.MethodPost, "/iceberg/v1/arn%3Aaws/namespaces/ns/tables/t", signed(key, "s3tables"), "", http.StatusOK},
+		{"another key", http.MethodPost, "/", signed("AKIAOTHER", "glue"), "AWSGlue.GetTable", http.StatusForbidden},
+		{"another key on the Iceberg catalog", http.MethodGet, "/iceberg/v1/config", signed("AKIAOTHER", "s3tables"), "", http.StatusForbidden},
+		{"no signature", http.MethodGet, "/bucket/key", "", "", http.StatusForbidden},
+		{"no signature on the Iceberg catalog", http.MethodGet, "/iceberg/v1/config", "", "", http.StatusForbidden},
+		{"another service", http.MethodPost, "/", signed(key, "athena"), "AmazonAthena.ListWorkGroups", http.StatusForbidden},
+		{"another service's target signed for Glue", http.MethodPost, "/", signed(key, "glue"), "AmazonAthena.ListWorkGroups", http.StatusForbidden},
+		{"a JSON target signed for S3", http.MethodPost, "/", signed(key, "s3"), "AWSGlue.GetTable", http.StatusForbidden},
+		{"an emulator path", http.MethodGet, "/_overcast/health", signed(key, "s3"), "", http.StatusForbidden},
+		{"the unsigned Iceberg mount", http.MethodGet, "/_overcast/s3tables/iceberg/v1/config", signed(key, "s3tables"), "", http.StatusForbidden},
+		{"S3 Tables' control plane", http.MethodPut, "/buckets", signed(key, "s3tables"), "", http.StatusForbidden},
+		{"S3 Tables' own table API", http.MethodGet, "/tables/arn", signed(key, "s3tables"), "", http.StatusForbidden},
+		{"the Iceberg root alone", http.MethodGet, "/iceberg", signed(key, "s3tables"), "", http.StatusForbidden},
+		{"another service's REST path", http.MethodGet, "/2015-03-31/functions", signed(key, "lambda"), "", http.StatusForbidden},
+		{"Lambda's path signed for S3", http.MethodPost, "/2015-03-31/functions/f/invocations", signed(key, "s3"), "", http.StatusForbidden},
+		{"API Gateway's path signed for S3", http.MethodGet, "/restapis", signed(key, "s3"), "", http.StatusForbidden},
+		{"a path shared by signing name, signed for S3", http.MethodGet, "/v2/apis", signed(key, "s3"), "", http.StatusForbidden},
 	}
 	for _, c := range cases {
 		// When: the request reaches the gateway
 		host = ""
-		req := httptest.NewRequest(http.MethodPost, "http://host.docker.internal:9"+c.path, nil)
+		req := httptest.NewRequest(c.method, "http://host.docker.internal:9"+c.path, nil)
 		if c.auth != "" {
 			req.Header.Set("Authorization", c.auth)
 		}

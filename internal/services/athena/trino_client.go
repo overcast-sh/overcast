@@ -152,6 +152,13 @@ func (c *trinoClient) execute(ctx context.Context, baseURL, sql string, session 
 	return nil, err
 }
 
+// run runs a statement whose result is of no interest, such as CREATE
+// CATALOG, outside any session.
+func (c *trinoClient) run(ctx context.Context, baseURL, sql string) error {
+	_, err := c.execute(ctx, baseURL, sql, trinoSession{}, func(*trinoResponse) error { return nil })
+	return err
+}
+
 // do sends one protocol request and decodes its page. Numbers are kept as
 // written, so a bigint or a decimal is never rounded through a float64.
 //

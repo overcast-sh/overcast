@@ -30,37 +30,47 @@ const engineLogTail = "40"
 
 var enginePortKey = strconv.Itoa(enginePort) + "/tcp"
 
-// startContainer creates, configures and starts one engine container, and
-// returns its ID and the endpoint Overcast reaches it on.
-func (m *engineManager) startContainer(ctx context.Context) (id, endpoint string, err error) {
+// engineContainer is one started engine container: its ID, the endpoint
+// Overcast reaches it on, and the settings it was configured with.
+type engineContainer struct {
+	id       string
+	endpoint string
+	settings engineSettings
+}
+
+// startContainer creates, configures and starts one engine container. A
+// container that was created is returned even with an error, so that it can
+// be removed.
+func (m *engineManager) startContainer(ctx context.Context) (engineContainer, error) {
+	var c engineContainer
 	dc := m.docker
 	gateway, accessKey, err := m.gateway.open(ctx, dc, m.cfg, m.log.ZapLogger())
 	if err != nil {
-		return "", "", fmt.Errorf("reach Overcast from the engine: %w", err)
+		return c, fmt.Errorf("reach Overcast from the engine: %w", err)
 	}
 	overcast := containerendpoint.New(m.cfg, gateway)
-	archive, err := engineConfigArchive(renderEngineFiles(engineSettings{
+	c.settings = engineSettings{
 		Overcast:  overcast.Endpoint(),
 		AccessKey: accessKey,
 		Region:    m.cfg.Region,
 		AccountID: m.cfg.AccountID,
 		Memory:    m.cfg.AthenaEngineMemory,
-	}))
+	}
+	archive, err := engineConfigArchive(renderEngineFiles(c.settings))
 	if err != nil {
-		return "", "", err
+		return c, err
 	}
-	id, err = dc.CreateContainer(ctx, "overcast-athena-engine-"+uuid.NewString()[:8], m.containerRequest(ctx, overcast.ExtraHosts()))
-	if err != nil {
-		return "", "", fmt.Errorf("create container: %w", err)
+	if c.id, err = dc.CreateContainer(ctx, "overcast-athena-engine-"+uuid.NewString()[:8], m.containerRequest(ctx, overcast.ExtraHosts())); err != nil {
+		return c, fmt.Errorf("create container: %w", err)
 	}
-	if err := dc.CopyToContainer(ctx, id, "/", bytes.NewReader(archive)); err != nil {
-		return id, "", fmt.Errorf("configure container: %w", err)
+	if err := dc.CopyToContainer(ctx, c.id, "/", bytes.NewReader(archive)); err != nil {
+		return c, fmt.Errorf("configure container: %w", err)
 	}
-	if err := dc.StartContainer(ctx, id); err != nil {
-		return id, "", fmt.Errorf("start container: %w", err)
+	if err := dc.StartContainer(ctx, c.id); err != nil {
+		return c, fmt.Errorf("start container: %w", err)
 	}
-	endpoint, err = m.containerEndpoint(ctx, id)
-	return id, endpoint, err
+	c.endpoint, err = m.containerEndpoint(ctx, c.id)
+	return c, err
 }
 
 // containerRequest is the engine's container: the image's launcher pointed

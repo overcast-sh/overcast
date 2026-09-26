@@ -58,6 +58,7 @@ func All() []ServiceGroup {
 		GlueS3Tables().named("glue_s3tables"),
 		Athena().named("athena"),
 		AthenaEngine().named("athena_engine"),
+		AthenaS3Tables().named("athena_s3tables"),
 		ElastiCache().named("elasticache"),
 		EFS().named("efs"),
 		S3Tables().named("s3tables"),

@@ -10,8 +10,10 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/athena"
 	"github.com/aws/aws-sdk-go-v2/service/athena/types"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 
 	"github.com/overcast-sh/overcast/tests/helpers"
 )
@@ -56,23 +58,42 @@ func TestS3TablesCatalog_metadataOperationsReadTheTableBucket(t *testing.T) {
 	}
 }
 
-func TestS3TablesCatalog_queriesInItFailRatherThanReadAwsDataCatalog(t *testing.T) {
-	// Given: a table bucket's catalog, which the engine cannot query yet
+func TestS3TablesCatalog_ddlInItReadsTheTableBucket(t *testing.T) {
+	// Given: a table in namespace "sales" of bucket "lake", and no engine
 	srv := helpers.NewTestServer(t)
 	helpers.SeedS3Table(t, srv, "lake", "sales", "orders")
 	c, ctx := athenaClient(t, srv), context.Background()
+	must[*s3.CreateBucketOutput](t, "CreateBucket")(s3.New(s3.Options{
+		Region: "us-east-1", Credentials: credentials.NewStaticCredentialsProvider("test", "test", ""),
+		BaseEndpoint: aws.String(srv.URL), UsePathStyle: true,
+	}).CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String("athena-results")}))
+	run := func(query string) *types.QueryExecution {
+		out := must[*athena.StartQueryExecutionOutput](t, "StartQueryExecution")(c.StartQueryExecution(ctx, &athena.StartQueryExecutionInput{
+			QueryString:           aws.String(query),
+			QueryExecutionContext: &types.QueryExecutionContext{Catalog: aws.String("s3tablescatalog/lake"), Database: aws.String("sales")},
+			ResultConfiguration:   &types.ResultConfiguration{OutputLocation: aws.String(resultsLocation)},
+		}))
+		return must[*athena.GetQueryExecutionOutput](t, "GetQueryExecution")(c.GetQueryExecution(ctx,
+			&athena.GetQueryExecutionInput{QueryExecutionId: out.QueryExecutionId})).QueryExecution
+	}
 
-	// When: a statement runs in it
-	out := must[*athena.StartQueryExecutionOutput](t, "StartQueryExecution")(c.StartQueryExecution(ctx, &athena.StartQueryExecutionInput{
-		QueryString:           aws.String("SHOW TABLES"),
-		QueryExecutionContext: &types.QueryExecutionContext{Catalog: aws.String("s3tablescatalog/lake"), Database: aws.String("sales")},
-		ResultConfiguration:   &types.ResultConfiguration{OutputLocation: aws.String(resultsLocation)},
-	}))
+	// When: SHOW TABLES runs in its catalog
+	qe := run("SHOW TABLES")
 
-	// Then: it fails as not supported, rather than answering from AwsDataCatalog
-	qe := must[*athena.GetQueryExecutionOutput](t, "GetQueryExecution")(c.GetQueryExecution(ctx, &athena.GetQueryExecutionInput{QueryExecutionId: out.QueryExecutionId})).QueryExecution
+	// Then: it lists the bucket's namespace, not AwsDataCatalog's database
+	if qe.Status.State != types.QueryExecutionStateSucceeded {
+		t.Fatalf("SHOW TABLES: %s", aws.ToString(qe.Status.StateChangeReason))
+	}
+	rows := must[*athena.GetQueryResultsOutput](t, "GetQueryResults")(c.GetQueryResults(ctx,
+		&athena.GetQueryResultsInput{QueryExecutionId: qe.QueryExecutionId})).ResultSet.Rows
+	if len(rows) != 1 || aws.ToString(rows[0].Data[0].VarCharValue) != "orders" {
+		t.Fatalf("SHOW TABLES rows = %+v", rows)
+	}
+
+	// And: a Hive table, which a table bucket cannot hold, fails as not supported
+	qe = run("CREATE EXTERNAL TABLE logs (line string) LOCATION 's3://logs/'")
 	if qe.Status.State != types.QueryExecutionStateFailed || qe.Status.AthenaError == nil || aws.ToInt32(qe.Status.AthenaError.ErrorType) != 1200 {
-		t.Fatalf("status = %+v", qe.Status)
+		t.Fatalf("CREATE EXTERNAL TABLE status = %+v", qe.Status)
 	}
 }
 

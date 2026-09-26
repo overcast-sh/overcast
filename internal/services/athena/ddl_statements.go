@@ -10,8 +10,8 @@ import (
 // ddl_catalog.go. The partition statements are in ddl_partitions.go and
 // SHOW and DESCRIBE in ddl_show.go, grammar and run together.
 
-// tableRef names a table; an empty Database is the query's own.
-type tableRef struct{ Database, Table string }
+// tableRef names a table; an empty Catalog or Database is the query's own.
+type tableRef struct{ Catalog, Database, Table string }
 
 // columnDef is one column as a DDL statement declares it, its type as
 // written in Hive's notation.

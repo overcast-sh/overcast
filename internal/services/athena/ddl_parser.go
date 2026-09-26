@@ -161,8 +161,7 @@ func (p *ddlParser) name() (string, error) {
 	return strings.ToLower(t.text), nil
 }
 
-// tableName reads [catalog.][database.]table; the catalog, which is the
-// query's own, is dropped.
+// tableName reads [catalog.][database.]table.
 func (p *ddlParser) tableName() (tableRef, error) {
 	parts := []string{}
 	for {
@@ -178,8 +177,10 @@ func (p *ddlParser) tableName() (tableRef, error) {
 	switch len(parts) {
 	case 1:
 		return tableRef{Table: parts[0]}, nil
-	case 2, 3:
-		return tableRef{Database: parts[len(parts)-2], Table: parts[len(parts)-1]}, nil
+	case 2:
+		return tableRef{Database: parts[0], Table: parts[1]}, nil
+	case 3:
+		return tableRef{Catalog: parts[0], Database: parts[1], Table: parts[2]}, nil
 	}
 	return tableRef{}, p.fail("too many name parts")
 }

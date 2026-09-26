@@ -5523,6 +5523,39 @@
           ]
         }
       ]
+    },
+    {
+      "service": "athena",
+      "name": "athena-s3tables",
+      "tests": [
+        {
+          "name": "CreateTableStatement",
+          "op": "StartQueryExecution",
+          "requires": [
+            "docker"
+          ]
+        },
+        {
+          "name": "InsertStatement",
+          "op": "StartQueryExecution",
+          "requires": [
+            "docker"
+          ],
+          "depends": [
+            "CreateTableStatement"
+          ]
+        },
+        {
+          "name": "SelectFromTable",
+          "op": "GetQueryResults",
+          "requires": [
+            "docker"
+          ],
+          "depends": [
+            "InsertStatement"
+          ]
+        }
+      ]
     }
   ]
 }

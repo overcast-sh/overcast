@@ -17,6 +17,12 @@ import (
 	"github.com/overcast-sh/overcast/internal/trace"
 )
 
+// ServiceOf is the service a request is attributed to by its headers and
+// URL alone: detectService without the body, which only a Query-protocol
+// request's Action is read from. A caller that has the body, and may be
+// handed a Query request, classifies with detectService instead.
+func ServiceOf(r *http.Request) string { return detectService(r) }
+
 // detectService infers the AWS service from a request using the same signals
 // the real AWS SDKs embed: X-Amz-Target prefix (JSON services), well-known URL
 // prefixes (Lambda REST API), the Smithy RPC v2 URI and its Smithy-Protocol

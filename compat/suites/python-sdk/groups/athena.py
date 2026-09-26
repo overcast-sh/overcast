@@ -4,7 +4,8 @@ groups/athena.py — Athena control-plane compatibility test implementations for
 athena-control drives a workgroup with a result location, a query run in it,
 a named query, a prepared statement and a data catalog. athena-engine runs
 Hive DDL that writes the Glue Data Catalog, then a query over a CSV table in
-S3 on the engine.
+S3 on the engine. athena-s3tables creates, writes and reads an Iceberg table
+in a table bucket's catalog, "s3tablescatalog/<bucket>".
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ import time
 
 from botocore.exceptions import ClientError
 
+from groups.glue_s3tables import table_bucket_name
 from lib.harness import TestContext
 from lib.clients import make_clients
 
@@ -168,11 +170,14 @@ def _engine_db(ctx: TestContext) -> str:
 
 def _run(ctx: TestContext, query: str) -> str:
     """Start query and wait for it to succeed, returning its id."""
+    return _run_query(ctx, query, ResultConfiguration={"OutputLocation": f"s3://{_engine_bucket(ctx)}/results/"})
+
+
+def _run_query(ctx: TestContext, query: str, **start) -> str:
+    """Start query with the further StartQueryExecution arguments start, and
+    wait for it to succeed, returning its id."""
     a = _athena(ctx)
-    qid = a.start_query_execution(
-        QueryString=query,
-        ResultConfiguration={"OutputLocation": f"s3://{_engine_bucket(ctx)}/results/"},
-    )["QueryExecutionId"]
+    qid = a.start_query_execution(QueryString=query, **start)["QueryExecutionId"]
     deadline = time.monotonic() + _ENGINE_QUERY_WAIT
     while True:
         status = a.get_query_execution(QueryExecutionId=qid)["QueryExecution"]["Status"]
@@ -240,6 +245,97 @@ def _engine_teardown(ctx: TestContext) -> None:
         pass
 
 
+# ── athena-s3tables ───────────────────────────────────────────────────────────
+
+_TABLES_NAMESPACE = "sales"
+_TABLES_TABLE = "orders"
+
+
+def _tables_bucket(ctx: TestContext) -> str:
+    return table_bucket_name("athena-s3tables-", ctx.run_id)
+
+
+def _tables_catalog(ctx: TestContext) -> str:
+    return "s3tablescatalog/" + _tables_bucket(ctx)
+
+
+def _tables_results(ctx: TestContext) -> str:
+    """The S3 bucket query results are written to."""
+    return f"{ctx.run_id}-athena-s3tables-results"
+
+
+def _s3tables(ctx: TestContext):
+    return make_clients(ctx.endpoint, ctx.region)._get("s3tables")
+
+
+def _run_in_bucket(ctx: TestContext, query: str) -> str:
+    """Run query in the table bucket's catalog, in the namespace."""
+    return _run_query(ctx, query, ResultConfiguration={"OutputLocation": f"s3://{_tables_results(ctx)}/"},
+                      QueryExecutionContext={"Catalog": _tables_catalog(ctx), "Database": _TABLES_NAMESPACE})
+
+
+def _metadata_location(ctx: TestContext) -> str:
+    return _s3tables(ctx).get_table_metadata_location(
+        tableBucketARN=ctx["athena_s3tables_bucket_arn"], namespace=_TABLES_NAMESPACE, name=_TABLES_TABLE,
+    ).get("metadataLocation", "")
+
+
+def CreateTableStatement(ctx: TestContext) -> None:
+    _run_in_bucket(ctx, f"CREATE TABLE {_TABLES_TABLE} (id int, amount double) TBLPROPERTIES ('table_type' = 'iceberg')")
+    location = _metadata_location(ctx)
+    if not location:
+        raise AssertionError("GetTableMetadataLocation: the created table has no metadata location")
+    ctx["athena_s3tables_metadata_location"] = location
+
+
+def InsertStatement(ctx: TestContext) -> None:
+    qid = _run_in_bucket(ctx, f"INSERT INTO {_TABLES_TABLE} VALUES (1, 9.5), (2, 20.0)")
+    count = _athena(ctx).get_query_results(QueryExecutionId=qid).get("UpdateCount")
+    if count != 2:
+        raise AssertionError(f"GetQueryResults: UpdateCount {count!r}, want 2")
+    location = _metadata_location(ctx)
+    if location == ctx["athena_s3tables_metadata_location"]:
+        raise AssertionError(f"GetTableMetadataLocation: still {location!r} after the INSERT")
+
+
+def SelectTableBucketRows(ctx: TestContext) -> None:
+    query = f'SELECT id, amount FROM "{_tables_catalog(ctx)}"."{_TABLES_NAMESPACE}"."{_TABLES_TABLE}" ORDER BY id'
+    qid = _run_query(ctx, query, ResultConfiguration={"OutputLocation": f"s3://{_tables_results(ctx)}/"})
+    rs = _athena(ctx).get_query_results(QueryExecutionId=qid)["ResultSet"]
+    rows = [[d.get("VarCharValue") for d in r["Data"]] for r in rs["Rows"]]
+    if rows != [["id", "amount"], ["1", "9.5"], ["2", "20.0"]]:
+        raise AssertionError(f"GetQueryResults: rows {rows!r}, want the header then 1, 9.5 and 2, 20.0")
+
+
+def _tables_setup(ctx: TestContext) -> None:
+    _s3(ctx).create_bucket(Bucket=_tables_results(ctx))
+    arn = _s3tables(ctx).create_table_bucket(name=_tables_bucket(ctx))["arn"]
+    ctx["athena_s3tables_bucket_arn"] = arn
+    _s3tables(ctx).create_namespace(tableBucketARN=arn, namespace=[_TABLES_NAMESPACE])
+
+
+def _tables_teardown(ctx: TestContext) -> None:
+    arn = ctx.get("athena_s3tables_bucket_arn")
+    if arn:
+        s3tables = _s3tables(ctx)
+        for call in (
+            lambda: s3tables.delete_table(tableBucketARN=arn, namespace=_TABLES_NAMESPACE, name=_TABLES_TABLE),
+            lambda: s3tables.delete_namespace(tableBucketARN=arn, namespace=_TABLES_NAMESPACE),
+            lambda: s3tables.delete_table_bucket(tableBucketARN=arn),
+        ):
+            try:
+                call()
+            except Exception:
+                pass
+    s3, results = _s3(ctx), _tables_results(ctx)
+    try:
+        for obj in s3.list_objects_v2(Bucket=results).get("Contents", []):
+            s3.delete_object(Bucket=results, Key=obj["Key"])
+        s3.delete_bucket(Bucket=results)
+    except Exception:
+        pass
+
+
 # ── ImplMap ───────────────────────────────────────────────────────────────────
 
 IMPLS = {
@@ -259,14 +355,19 @@ IMPLS = {
     "athena-engine:CreateExternalTableStatement": CreateExternalTableStatement,
     "athena-engine:SelectFromTable": SelectFromTable,
     "athena-engine:GetQueryRuntimeStatistics": GetQueryRuntimeStatistics,
+    "athena-s3tables:CreateTableStatement": CreateTableStatement,
+    "athena-s3tables:InsertStatement": InsertStatement,
+    "athena-s3tables:SelectFromTable": SelectTableBucketRows,
 }
 
 SETUP = {
     "athena-engine": lambda ctx: _engine_setup(ctx),
+    "athena-s3tables": lambda ctx: _tables_setup(ctx),
 }
 TEARDOWN = {
     "athena-control": lambda ctx: _teardown(ctx),
     "athena-engine": lambda ctx: _engine_teardown(ctx),
+    "athena-s3tables": lambda ctx: _tables_teardown(ctx),
 }
 
 

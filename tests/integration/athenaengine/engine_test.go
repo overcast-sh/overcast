@@ -55,6 +55,7 @@ func TestAthenaEngine(t *testing.T) {
 		{"CTAS writes a Parquet table", (*env).testCTASParquet},
 		{"partitions", (*env).testPartitions},
 		{"Iceberg INSERT and MERGE", (*env).testIceberg},
+		{"S3 Tables", (*env).testS3Tables},
 		{"failure", (*env).testFailure},
 		{"stop", (*env).testStop},
 	} {

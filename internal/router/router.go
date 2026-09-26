@@ -645,6 +645,8 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	// Glue ← S3 Tables: s3tablescatalog, the federated catalog Athena and
 	// Glue read table buckets through, is read live from S3 Tables.
 	glueSvc.InitS3Tables(s3tablesSvc.Catalog())
+	// Athena ← S3 Tables: the query engine has a catalog per table bucket.
+	athenaSvc.InitS3Tables(s3tablesSvc.Catalog())
 	// Athena → S3: query results are written to their OutputLocation, and
 	// MSCK REPAIR TABLE lists a table's partitions, through S3's own paths.
 	athenaSvc.InitS3Access(s3Svc.PutObjectStream, s3Svc.ListObjects)
