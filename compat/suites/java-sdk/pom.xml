@@ -90,8 +90,11 @@
          thing this suite runs against AWS Backup, so the client is added with
          it. Its version comes from the BOM above, like every client here. -->
     <dependency><groupId>software.amazon.awssdk</groupId><artifactId>backup</artifactId></dependency>
-    <!-- URL connection client (no Apache HTTP, keeps image small) -->
-    <dependency><groupId>software.amazon.awssdk</groupId><artifactId>url-connection-client</artifactId></dependency>
+    <!-- Sync HTTP client: the SDK's Apache client, its default. Not
+         url-connection-client: java.net.HttpURLConnection refuses PATCH, which
+         AppConfig's Update* operations (and other REST APIs) are bound to
+         (#2261). BOM-managed like the service clients above. -->
+    <dependency><groupId>software.amazon.awssdk</groupId><artifactId>apache-client</artifactId></dependency>
     <!-- Async HTTP client — required by LambdaAsyncClient (InvokeWithResponseStream) -->
     <dependency><groupId>software.amazon.awssdk</groupId><artifactId>netty-nio-client</artifactId></dependency>
 
