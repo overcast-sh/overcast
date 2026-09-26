@@ -174,23 +174,23 @@ func TestResultLocation(t *testing.T) {
 		return &WorkGroupConfiguration{EnforceWorkGroupConfiguration: enforce,
 			ResultConfiguration: &ResultConfiguration{OutputLocation: "s3://workgroup/"}}
 	}
-	ran := []*QueryExecution{{ResultConfiguration: ResultConfiguration{OutputLocation: "s3://client/q.csv"}}}
+	const ran = "s3://client/q.csv"
 	cases := []struct {
 		name string
 		cfg  *WorkGroupConfiguration
-		runs []*QueryExecution
+		last string
 		want string
 	}{
 		{"enforced wins over the last query", cfg(&enforced), ran, "s3://workgroup/"},
 		{"otherwise the last query's", cfg(&open), ran, "s3://client/q.csv"},
-		{"before any query, the configured one", cfg(&open), nil, "s3://workgroup/"},
-		{"none at all", nil, nil, ""},
+		{"before any query, the configured one", cfg(&open), "", "s3://workgroup/"},
+		{"none at all", nil, "", ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			// Given: a workgroup and its runs; When: its results bucket is read;
-			// Then: it is where a query's results go
-			if got := resultLocation(c.cfg, c.runs); got != c.want {
+			// Given: a workgroup and where its last query wrote; When: its
+			// results bucket is read; Then: it is where a query's results go
+			if got := resultLocation(c.cfg, c.last); got != c.want {
 				t.Errorf("resultLocation = %q, want %q", got, c.want)
 			}
 		})

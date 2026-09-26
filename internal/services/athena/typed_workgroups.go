@@ -288,6 +288,9 @@ func (s *Service) deleteWorkGroupTyped(ctx context.Context, req *deleteWorkGroup
 	if err := s.deleteContents(ctx, contents); err != nil {
 		return nil, errInternal(err)
 	}
+	if recursive {
+		s.store.forgetRecentQueries(ctx, req.WorkGroup)
+	}
 	if err := s.store.delete(ctx, nsWorkGroups, req.WorkGroup); err != nil {
 		return nil, errInternal(err)
 	}

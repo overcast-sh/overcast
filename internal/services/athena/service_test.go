@@ -16,10 +16,17 @@ import (
 func newTestService(t *testing.T) (*Service, state.Store) {
 	t.Helper()
 	st := state.NewMemoryStore()
+	return newTestServiceOn(t, st), st
+}
+
+// newTestServiceOn is a service over st, at a fixed time. Two over one store
+// are two processes, one after the other, over the same data.
+func newTestServiceOn(t *testing.T, st state.Store) *Service {
+	t.Helper()
 	clk := clock.NewMock()
 	clk.Set(time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC))
 	cfg := &config.Config{Region: "us-east-1", AccountID: "123456789012"}
-	return New(cfg, st, zap.NewNop(), clk), st
+	return New(cfg, st, zap.NewNop(), clk)
 }
 
 func mustOK(t *testing.T, what string, aerr *protocol.AWSError) {

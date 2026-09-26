@@ -13,10 +13,10 @@
 > - S3 Tables console and the shared Iceberg viewer: #2206;
 > - S3 previews: #2092;
 > - DataGrid: #2121;
-> - map: #2218;
+> - map: #2218 and #2222;
 > - CLI, MCP tools and sample dataset: #2223.
 >
-> Open refinements are #2216, #2222, #2127, #2128 and #2135.
+> Open refinements are #2216, #2127, #2128 and #2135.
 
 ## What a developer is doing
 
@@ -385,7 +385,7 @@ smuggled in.
 | --- | --- | --- | --- |
 | Athena workgroup | service node; `primary` shown only once it has executions | Last 3 executions as rows: state dot, SQL snippet, duration. Running rows pulse, and finished rows ghost out after a short dwell (the SQS row model). An engine chip in the header when starting or off. | **Run query**: a compact popover editor with the workgroup's last SQL and a result count. *Open in editor* for anything more. |
 | Glue database | group node, collapsing on zoom like `stackGroup` | Table rows with a format badge and partition count | **Preview** a table: the first rows in a peek panel, the same pattern as `log-stream-peek` |
-| S3 Tables bucket | group node | Namespace, then table rows with snapshot count | **Latest commit** peek: operation, added and removed records, time |
+| S3 Tables bucket | group node | Namespace, then table rows with snapshot count | **Latest commit** peek: operation, added and removed records, time; *Query with Athena* in `s3tablescatalog/<bucket>` |
 
 Iceberg tables in Glue and S3 Tables share one table-row component and one
 visual-state model: a *write flash* on commit, and a *ghost* on drop.

@@ -10,17 +10,16 @@
 
 import { Link } from "@tanstack/react-router"
 import { useQuery } from "@tanstack/react-query"
-import { Database, ExternalLink } from "lucide-react"
+import { ExternalLink } from "lucide-react"
 import { Advisory } from "@/components/ui/advisory"
 import { EmptyState } from "@/components/ui/primitives"
 import { SkeletonRows } from "@/components/ui/skeleton"
-import { athenaEditorLink } from "@/features/athena/links"
 import { DataFilePreview } from "@/features/s3/components/data-file-preview"
-import { previewSql } from "@/features/glue/athena-link"
 import type { TopologyDataTable } from "@/types"
 import { firstDataFileQueryOptions } from "./data-lake-data"
 import { MapPeekPanel, peekActionClass } from "./map-peek-panel"
 import { glueTableRoute } from "./node-route"
+import { QueryWithAthenaAction } from "./query-with-athena-action"
 
 interface TablePreviewPeekProps {
   database: string
@@ -39,13 +38,7 @@ export function TablePreviewPeek({ database, table, onClose }: TablePreviewPeekP
       subtitle={table?.location || "No location"}
       actions={
         <>
-          <Link
-            {...athenaEditorLink({ database, sql: previewSql(database, name) })}
-            className={peekActionClass}
-          >
-            <Database aria-hidden className="h-3.5 w-3.5" />
-            Query with Athena
-          </Link>
+          <QueryWithAthenaAction database={database} table={name} />
           <Link to={route.to} params={route.params} className={peekActionClass}>
             <ExternalLink aria-hidden className="h-3.5 w-3.5" />
             Open table
