@@ -7,6 +7,7 @@ import { Select } from "@/components/ui/select"
 import {
   maxDepth,
   newSchemaRow,
+  normalizeDepths,
   PRIMITIVE_TYPES,
   type ColumnType,
   type SchemaRow,
@@ -24,8 +25,12 @@ export function SchemaBuilder({
   rows: SchemaRow[]
   onChange: (rows: SchemaRow[]) => void
 }) {
+  // Every edit goes through normalizeDepths: a struct turned into a string, or
+  // a field outdented from under its siblings, lifts what was nested under it
+  // rather than leaving it orphaned.
+  const commit = (next: SchemaRow[]) => onChange(normalizeDepths(next))
   const update = (index: number, patch: Partial<SchemaRow>) =>
-    onChange(rows.map((r, i) => (i === index ? { ...r, ...patch } : r)))
+    commit(rows.map((r, i) => (i === index ? { ...r, ...patch } : r)))
 
   /** Moves a row and the fields under it one level in or out. */
   const shift = (index: number, delta: 1 | -1) => {
@@ -34,13 +39,13 @@ export function SchemaBuilder({
     if (target < 0 || target > maxDepth(rows, index)) return
     let end = index + 1
     while (end < rows.length && rows[end].depth > row.depth) end++
-    onChange(rows.map((r, i) => (i >= index && i < end ? { ...r, depth: r.depth + delta } : r)))
+    commit(rows.map((r, i) => (i >= index && i < end ? { ...r, depth: r.depth + delta } : r)))
   }
 
   const remove = (index: number) => {
     let end = index + 1
     while (end < rows.length && rows[end].depth > rows[index].depth) end++
-    onChange(rows.filter((_, i) => i < index || i >= end))
+    commit(rows.filter((_, i) => i < index || i >= end))
   }
 
   const onNameKeyDown = (index: number) => (event: KeyboardEvent) => {
@@ -90,6 +95,7 @@ export function SchemaBuilder({
           <label className="flex shrink-0 items-center gap-1.5 text-xs text-fg-muted">
             <input
               type="checkbox"
+              aria-label={`Column ${index + 1} required`}
               checked={row.required}
               onChange={(event) => update(index, { required: event.target.checked })}
               className="accent-accent"

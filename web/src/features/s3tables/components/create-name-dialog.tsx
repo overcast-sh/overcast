@@ -24,9 +24,16 @@ interface CreateNameDialogProps {
  * A create dialog whose only field is the new resource's name — a table
  * bucket, a namespace. The naming rule shows as the hint until a typed name
  * breaks it, and then as the error.
+ *
+ * The form mounts only while the dialog is open, so each opening starts empty
+ * however the last one closed — by Cancel, by `esc`, or by the create
+ * succeeding.
  */
-export function CreateNameDialog({
-  open,
+export function CreateNameDialog(props: CreateNameDialogProps) {
+  return props.open ? <CreateNameForm {...props} /> : null
+}
+
+function CreateNameForm({
   onOpenChange,
   icon,
   title,
@@ -42,14 +49,10 @@ export function CreateNameDialog({
   const [name, setName] = useState("")
   const trimmed = name.trim()
   const issue = trimmed === "" ? undefined : problem(trimmed)
-  const close = (next: boolean) => {
-    if (!next) setName("")
-    onOpenChange(next)
-  }
   return (
     <ResourceFormDialog
-      open={open}
-      onOpenChange={close}
+      open
+      onOpenChange={onOpenChange}
       icon={icon}
       title={title}
       description={description}

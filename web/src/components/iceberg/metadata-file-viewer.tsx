@@ -64,7 +64,12 @@ export function IcebergMetadataFiles({
           label="Version"
           versions={versions}
           value={selected.fileName}
-          onChange={(version) => onSelectionChange({ ...selection, version })}
+          onChange={(fileName) => {
+            // The current file is followed rather than pinned, so a commit moves the view on.
+            const version = fileName === versions[0].fileName ? undefined : fileName
+            const compare = selection.compare === fileName ? undefined : selection.compare
+            onSelectionChange({ version, compare })
+          }}
         />
         <VersionPicker
           label="Diff against"

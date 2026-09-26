@@ -1,11 +1,11 @@
-import { useQuery } from "@tanstack/react-query"
+import { useIsFetching, useQuery, useQueryClient } from "@tanstack/react-query"
 import { CopyButton } from "@/components/ui/copy-button"
 import { PageHeader } from "@/components/ui/primitives"
 import { RefreshAction } from "@/components/ui/resource-list-page"
 import { Tab, TabList, TabPanel, Tabs } from "@/components/ui/tabs"
 import { RawStateLink } from "@/features/debug/raw-state-link"
 import { formatDate } from "@/lib/format"
-import { tableBucketsQueryOptions, type ConfigTarget } from "../data"
+import { s3tablesKeys, tableBucketsQueryOptions, type ConfigTarget } from "../data"
 import type { BucketTab } from "../search"
 import { BucketTablesTab } from "./bucket-tables-tab"
 import { DetailLayout, DetailLoading, DetailMissing } from "./detail-layout"
@@ -30,14 +30,16 @@ export function TableBucketDetail({
   filter,
   onFilterChange,
 }: TableBucketDetailProps) {
+  const queryClient = useQueryClient()
+  // Refresh covers the whole page — the bucket, its namespaces and tables, and
+  // the configuration tabs — so it shows busy while any of them refetches.
+  const refreshing = useIsFetching({ queryKey: s3tablesKeys.all() }) > 0
   // The bucket is found by name in the list: GetTableBucket wants the ARN,
   // and the list answers from the same cache the index page filled.
   const {
     data: bucket,
     isLoading,
     error,
-    isFetching,
-    refetch,
   } = useQuery({
     ...tableBucketsQueryOptions(),
     select: (buckets) => buckets.find((b) => b.name === bucketName),
@@ -72,7 +74,10 @@ export function TableBucketDetail({
           actions={
             <>
               <RawStateLink service="s3tables" />
-              <RefreshAction isFetching={isFetching} onClick={() => void refetch()} />
+              <RefreshAction
+                isFetching={refreshing}
+                onClick={() => void queryClient.invalidateQueries({ queryKey: s3tablesKeys.all() })}
+              />
             </>
           }
         />

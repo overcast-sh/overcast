@@ -1,3 +1,5 @@
+import { searchOneOf, searchText } from "@/lib/search-params"
+
 /**
  * The S3 Tables routes' search params: which tab, the list filter, and the
  * selection within a tab, so every view of a bucket or table deep-links.
@@ -38,16 +40,6 @@ export interface TableSearch {
 }
 
 /**
- * The router parses each search value as JSON first, so `q=42` arrives as a
- * number; it is read back as the text it was.
- */
-function text(value: unknown): string | undefined {
-  if (typeof value === "string") return value
-  if (typeof value === "number" || typeof value === "boolean") return String(value)
-  return undefined
-}
-
-/**
  * A snapshot id. The router's own links write it quoted, so it arrives as the
  * string it was. A bare id typed into the address bar has already been parsed
  * as a double, and one past 2^53 has been rounded to an id that does not
@@ -58,23 +50,19 @@ function snapshotId(value: unknown): string | undefined {
   return typeof value === "number" && Number.isSafeInteger(value) ? String(value) : undefined
 }
 
-function oneOf<T extends string>(options: readonly T[], value: unknown): T | undefined {
-  return (options as readonly unknown[]).includes(value) ? (value as T) : undefined
-}
-
 export const validateTableBucketsSearch = (s: Record<string, unknown>): TableBucketsSearch => ({
-  q: text(s.q),
-  sort: text(s.sort),
+  q: searchText(s.q),
+  sort: searchText(s.sort),
 })
 
 export const validateTableBucketSearch = (s: Record<string, unknown>): TableBucketSearch => ({
-  tab: oneOf(BUCKET_TABS, s.tab),
-  q: text(s.q),
+  tab: searchOneOf(BUCKET_TABS, s.tab),
+  q: searchText(s.q),
 })
 
 export const validateTableSearch = (s: Record<string, unknown>): TableSearch => ({
-  tab: oneOf(TABLE_TABS, s.tab),
+  tab: searchOneOf(TABLE_TABS, s.tab),
   snapshot: snapshotId(s.snapshot),
-  version: text(s.version),
-  compare: text(s.compare),
+  version: searchText(s.version),
+  compare: searchText(s.compare),
 })

@@ -52,6 +52,34 @@ export const PARTITION_TRANSFORMS = [
 
 export type PartitionTransform = (typeof PARTITION_TRANSFORMS)[number]
 
+const TEMPORAL = new Set(["date", "timestamp", "timestamptz"])
+const TRUNCATABLE = new Set(["int", "long", "string", "binary", "decimal(10,2)"])
+
+/**
+ * The transforms Iceberg defines for a column of `type`: the date parts need
+ * a date or timestamp (`hour` a timestamp), `truncate` a number, string or
+ * binary, and `bucket` anything hashable.
+ * https://iceberg.apache.org/spec/#partition-transforms
+ */
+export function transformsFor(type: ColumnType | undefined): PartitionTransform[] {
+  return PARTITION_TRANSFORMS.filter((t) => {
+    switch (t) {
+      case "identity":
+        return true
+      case "year":
+      case "month":
+      case "day":
+        return TEMPORAL.has(type ?? "")
+      case "hour":
+        return type === "timestamp" || type === "timestamptz"
+      case "truncate[10]":
+        return TRUNCATABLE.has(type ?? "")
+      case "bucket[16]":
+        return type !== "boolean" && type !== "float" && type !== "double"
+    }
+  })
+}
+
 export interface PartitionRow {
   key: string
   /** The top-level column partitioned by, by name. */
@@ -89,6 +117,21 @@ export function maxDepth(rows: SchemaRow[], index: number): number {
   if (index === 0) return 0
   const above = rows[index - 1]
   return above.type === "struct" ? above.depth + 1 : above.depth
+}
+
+/**
+ * Every row at a depth it can have: none deeper than one level under the row
+ * above it (and that only under a struct). An edit that would leave a field
+ * under a column that is no longer a struct lifts it instead, so no row is
+ * ever orphaned out of the schema.
+ */
+export function normalizeDepths(rows: SchemaRow[]): SchemaRow[] {
+  const out: SchemaRow[] = []
+  for (const row of rows) {
+    const depth = Math.min(row.depth, maxDepth(out, out.length))
+    out.push(depth === row.depth ? row : { ...row, depth })
+  }
+  return out
 }
 
 /** The rows as a tree, field ids assigned depth-first from 1 as Iceberg assigns them. */
@@ -145,16 +188,28 @@ export function draftProblems(draft: TableDraft): string[] {
     if (row.name && siblings.has(key)) problems.push(`Two fields are called ${row.name}.`)
     siblings.set(key, i)
   })
-  const partitionable = partitionableColumns(draft.rows)
+  const types = new Map(
+    draft.rows.filter((r) => r.depth === 0).map((r) => [r.name, r.type] as const),
+  )
+  const partitionable = partitionableColumns(draft.rows).map((c) => c.name)
+  const seen = new Set<string>()
   draft.partitions.forEach((p, i) => {
     if (!partitionable.includes(p.column)) problems.push(`Partition ${i + 1} needs a column.`)
+    else if (!transformsFor(types.get(p.column)).includes(p.transform)) {
+      problems.push(`Partition ${i + 1}: ${p.transform} does not apply to ${p.column}.`)
+    }
+    const name = partitionFieldName(p)
+    if (seen.has(name)) problems.push(`Two partition fields are called ${name}.`)
+    seen.add(name)
   })
   return problems
 }
 
 /** Top-level columns a partition can use: not structs. */
-export function partitionableColumns(rows: SchemaRow[]): string[] {
-  return rows.filter((r) => r.depth === 0 && r.type !== "struct").map((r) => r.name)
+export function partitionableColumns(rows: SchemaRow[]): { name: string; type: ColumnType }[] {
+  return rows
+    .filter((r) => r.depth === 0 && r.type !== "struct")
+    .map((r) => ({ name: r.name, type: r.type }))
 }
 
 /** `ordered_at_day`, `id_bucket` — the partition field names Iceberg's own API picks. */
@@ -228,11 +283,8 @@ export function toCdk(draft: TableDraft): string {
   const metadata: Record<string, unknown> = {}
   if (iceberg?.schema) {
     metadata.icebergSchema = {
-      schemaFieldList: iceberg.schema.fields?.map(({ name, type, required }) => ({
-        name,
-        type,
-        required,
-      })),
+      // Ids included: the partition spec's sourceIds refer to them.
+      schemaFieldList: iceberg.schema.fields,
     }
   }
   if (iceberg?.schemaV2) metadata.icebergSchemaV2 = iceberg.schemaV2

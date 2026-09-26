@@ -18,22 +18,32 @@ import {
   type ConfigTarget,
 } from "../data"
 
-/** A starting point for a new policy: read access for one role, on this resource. */
+/** A starting point for a new policy: read access for one role in the resource's account. */
 function templatePolicy(target: ConfigTarget): string {
   const resource = target.resource.kind === "bucket" ? `${target.arn}/table/*` : target.arn
+  const account = target.arn.split(":")[4] ?? ""
   return reindentJson(
     JSON.stringify({
       Version: "2012-10-17",
       Statement: [
         {
           Effect: "Allow",
-          Principal: { AWS: "arn:aws:iam::000000000000:role/reader" },
+          Principal: { AWS: `arn:aws:iam::${account}:role/reader` },
           Action: ["s3tables:GetTable", "s3tables:GetTableData"],
           Resource: resource,
         },
       ],
     }),
   )
+}
+
+/** Pretty-printed; a stored policy that is somehow not JSON shows as it is. */
+function formatted(policy: string): string {
+  try {
+    return reindentJson(policy)
+  } catch {
+    return policy
+  }
 }
 
 function parseProblem(text: string): string | null {
@@ -87,7 +97,7 @@ export function PolicyTab({ target }: { target: ConfigTarget }) {
       />
     )
   }
-  const stored = policy.data ? reindentJson(policy.data) : null
+  const stored = policy.data ? formatted(policy.data) : null
   if (stored === null && draft === null) {
     return (
       <div className="flex flex-col gap-3">

@@ -1,4 +1,4 @@
-import { useQuery, type UseQueryResult } from "@tanstack/react-query"
+import { keepPreviousData, useQuery, type UseQueryResult } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { FileJson, TextSearch } from "lucide-react"
 import type { ReactNode } from "react"
@@ -45,9 +45,24 @@ export function TableDetail({ bucketName, tableId, search, onSearchChange }: Tab
   const bucketArn = bucket.data?.arn ?? ""
   const arn = bucketArn ? tableArn(bucketArn, tableId) : ""
   const table = useQuery(tableQueryOptions(arn))
-  const metadata = useQuery(icebergMetadataFileQueryOptions(table.data?.metadataLocation ?? ""))
+  // A commit moves the table to a new metadata file, and so to a new query.
+  // The last file stays on screen while the next one loads, so the tabs do
+  // not flash to a skeleton and lose their expanded rows on every commit.
+  const metadata = useQuery({
+    ...icebergMetadataFileQueryOptions(table.data?.metadataLocation ?? ""),
+    placeholderData: keepPreviousData,
+  })
 
   if (bucket.isLoading || table.isLoading) return <DetailLoading title={tableId} />
+  if (!bucket.isLoading && !bucket.data) {
+    return (
+      <DetailMissing
+        title={tableId}
+        heading={bucket.error ? "Could not load the table bucket" : "No such table bucket"}
+        description={bucket.error?.message ?? `There is no table bucket called ${bucketName}.`}
+      />
+    )
+  }
   if (!table.data) {
     return (
       <DetailMissing
@@ -55,7 +70,6 @@ export function TableDetail({ bucketName, tableId, search, onSearchChange }: Tab
         heading="No such table"
         description={
           table.error?.message ??
-          bucket.error?.message ??
           `Table bucket ${bucketName} has no table with this id; it may have been deleted.`
         }
       />

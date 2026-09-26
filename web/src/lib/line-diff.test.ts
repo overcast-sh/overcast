@@ -1,7 +1,8 @@
-import { diffLines, foldUnchanged, type DiffLine } from "./line-diff"
+import { diffLines, foldUnchanged, MAX_EDITS, type DiffLine } from "./line-diff"
 
 /** The diff as `" a"`, `"-b"`, `"+c"` lines, the way a unified diff prints it. */
-function unified(lines: DiffLine[]): string[] {
+function unified(lines: DiffLine[] | null): string[] {
+  if (!lines) throw new Error("no diff")
   const sign = { same: " ", removed: "-", added: "+" } as const
   return lines.map((line) => sign[line.kind] + line.text)
 }
@@ -20,11 +21,17 @@ describe("diffLines", () => {
   })
 
   it("numbers each side's lines from one", () => {
-    const [, added, same] = diffLines("a\nc", "a\nb\nc")
+    const [, added, same] = diffLines("a\nc", "a\nb\nc") ?? []
     expect([added, same]).toEqual([
       { kind: "added", text: "b", newLine: 2 },
       { kind: "same", text: "c", oldLine: 2, newLine: 3 },
     ])
+  })
+
+  it("gives up on texts more than MAX_EDITS lines apart", () => {
+    const lines = (prefix: string) =>
+      Array.from({ length: MAX_EDITS }, (_, i) => `${prefix}${i}`).join("\n")
+    expect(diffLines(lines("a"), lines("b"))).toBeNull()
   })
 
   it("reports a whole rewrite when the texts share nothing", () => {
@@ -37,7 +44,7 @@ describe("foldUnchanged", () => {
   const after = before.replace("line 10", "line ten")
 
   it("keeps the context either side of a change and folds the rest", () => {
-    const segments = foldUnchanged(diffLines(before, after), 2)
+    const segments = foldUnchanged(diffLines(before, after) ?? [], 2)
     expect(segments.map((s) => [s.kind, s.lines.length])).toEqual([
       ["folded", 8],
       ["lines", 6],
@@ -46,8 +53,7 @@ describe("foldUnchanged", () => {
   })
 
   it("folds nothing when nothing changed around it", () => {
-    expect(foldUnchanged(diffLines("a", "b"))).toEqual([
-      { kind: "lines", lines: diffLines("a", "b") },
-    ])
+    const lines = diffLines("a", "b") ?? []
+    expect(foldUnchanged(lines)).toEqual([{ kind: "lines", lines }])
   })
 })

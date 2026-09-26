@@ -4,7 +4,8 @@ import { RowAction } from "@/components/ui/resource-list-page"
 import { Select } from "@/components/ui/select"
 import { createId } from "@/lib/id"
 import {
-  PARTITION_TRANSFORMS,
+  transformsFor,
+  type ColumnType,
   type PartitionRow,
   type PartitionTransform,
 } from "../create-table-model"
@@ -19,14 +20,15 @@ export function PartitionSpecEditor({
   rows,
   onChange,
 }: {
-  /** The top-level columns that can be partitioned by, by name. */
-  columns: string[]
+  /** The top-level columns that can be partitioned by, with their types. */
+  columns: { name: string; type: ColumnType }[]
   rows: PartitionRow[]
   onChange: (rows: PartitionRow[]) => void
 }) {
   const update = (index: number, patch: Partial<PartitionRow>) =>
     onChange(rows.map((r, i) => (i === index ? { ...r, ...patch } : r)))
-  const usable = columns.filter((c) => c !== "")
+  const usable = columns.filter((c) => c.name !== "")
+  const typeOf = (name: string) => usable.find((c) => c.name === name)?.type
   return (
     <div className="flex flex-col gap-1.5" role="group" aria-label="Partition fields">
       {rows.map((row, index) => (
@@ -39,7 +41,7 @@ export function PartitionSpecEditor({
             }
             className="w-36"
           >
-            {PARTITION_TRANSFORMS.map((t) => (
+            {transformsFor(typeOf(row.column)).map((t) => (
               <option key={t} value={t}>
                 {t}
               </option>
@@ -51,13 +53,18 @@ export function PartitionSpecEditor({
           <Select
             aria-label={`Partition ${index + 1} column`}
             value={row.column}
-            onChange={(event) => update(index, { column: event.target.value })}
+            onChange={(event) => {
+              const column = event.target.value
+              // A transform the new column cannot take falls back to identity.
+              const valid = transformsFor(typeOf(column)).includes(row.transform)
+              update(index, { column, transform: valid ? row.transform : "identity" })
+            }}
             className="min-w-0 flex-1"
           >
-            {!usable.includes(row.column) && <option value={row.column}>pick a column</option>}
+            {!typeOf(row.column) && <option value={row.column}>pick a column</option>}
             {usable.map((c) => (
-              <option key={c} value={c}>
-                {c}
+              <option key={c.name} value={c.name}>
+                {c.name}
               </option>
             ))}
           </Select>
@@ -78,7 +85,10 @@ export function PartitionSpecEditor({
           variant="ghost"
           disabled={usable.length === 0}
           onClick={() =>
-            onChange([...rows, { key: createId(), column: usable[0] ?? "", transform: "identity" }])
+            onChange([
+              ...rows,
+              { key: createId(), column: usable[0]?.name ?? "", transform: "identity" },
+            ])
           }
         >
           <Plus className="size-3.5" />

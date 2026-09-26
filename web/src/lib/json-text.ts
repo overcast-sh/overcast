@@ -39,8 +39,9 @@ function nextNonSpace(text: string, start: number): number {
 }
 
 /**
- * `text` re-indented the way `JSON.stringify(value, null, 2)` lays it out,
- * with every string and number spelled exactly as the source spelled it.
+ * `text` laid out exactly as `JSON.stringify(JSON.parse(text), null, 2)`
+ * would — strings decoded and re-escaped the same way, so `"é"` reads
+ * `"é"` — except that every number keeps the digits the source wrote.
  * Throws a `SyntaxError` for text that is not JSON.
  */
 export function reindentJson(text: string, indent = "  "): string {
@@ -54,7 +55,7 @@ export function reindentJson(text: string, indent = "  "): string {
       i++
     } else if (c === '"') {
       const end = stringEnd(text, i)
-      out.push(text.slice(i, end))
+      out.push(JSON.stringify(JSON.parse(text.slice(i, end))))
       i = end
     } else if (c === "{" || c === "[") {
       const close = c === "{" ? "}" : "]"

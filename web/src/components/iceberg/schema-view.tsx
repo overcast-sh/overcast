@@ -22,9 +22,11 @@ import { schemaHistory, type SchemaChange, type SchemaVersion } from "./schema-e
 export function IcebergSchemaView({ metadata }: { metadata: IcebergMetadata }) {
   const current = metadata.currentSchema
   const history = schemaHistory(metadata.schemas).reverse()
-  const partitionSources = new Map(
-    (metadata.defaultSpec?.fields ?? []).map((f) => [f.sourceId, f.transform]),
-  )
+  // A column can be partitioned by more than one transform: `bucket[16](id)` and `identity(id)`.
+  const partitionSources = new Map<number, string[]>()
+  for (const f of metadata.defaultSpec?.fields ?? []) {
+    partitionSources.set(f.sourceId, [...(partitionSources.get(f.sourceId) ?? []), f.transform])
+  }
   return (
     <div className="flex flex-col gap-6">
       <section className="flex flex-col gap-2">
@@ -80,8 +82,8 @@ function SchemaFields({
   schema?: IcebergSchema
   /** `embedded` inside another table's expanded row, so the cards do not nest. */
   variant?: "card" | "embedded"
-  /** Field id → the transform partitioning by it, for the current spec's source columns. */
-  partitionSources?: Map<number, string>
+  /** Field id → the transforms partitioning by it, for the current spec's source columns. */
+  partitionSources?: Map<number, string[]>
 }) {
   return (
     <ResourceTable
@@ -91,7 +93,8 @@ function SchemaFields({
       emptyIcon={Columns3}
       emptyTitle="No columns"
       emptyDescription="This schema declares no columns."
-      rowKey={(f) => f.field.id}
+      // By path: an id-less field (a hand-written file) reads as -1.
+      rowKey={(f) => f.path}
       columnToggle={false}
       columns={[
         {
@@ -118,8 +121,16 @@ function SchemaFields({
               {
                 header: "Partition",
                 cell: (f: FieldAtPath) => {
-                  const transform = partitionSources.get(f.field.id)
-                  return transform ? <Badge variant="accent">{transform}</Badge> : null
+                  const transforms = partitionSources.get(f.field.id) ?? []
+                  return (
+                    <span className="inline-flex gap-1">
+                      {transforms.map((t) => (
+                        <Badge key={t} variant="accent">
+                          {t}
+                        </Badge>
+                      ))}
+                    </span>
+                  )
                 },
               },
             ]

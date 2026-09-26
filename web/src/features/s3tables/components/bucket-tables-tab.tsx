@@ -192,7 +192,12 @@ function NamespaceSection({
           {formatQuantity(tables.length, "table")}
         </span>
         <span className="ml-auto flex items-center gap-1">
-          <Button size="sm" variant="ghost" onClick={onCreateTable}>
+          <Button
+            size="sm"
+            variant="ghost"
+            aria-label={`Create table in ${namespace}`}
+            onClick={onCreateTable}
+          >
             <Plus className="size-3.5" />
             Table
           </Button>

@@ -22,7 +22,11 @@ export interface MetadataText {
   truncated: boolean
 }
 
-/** Reads the metadata file at a location (`s3://…`). */
+/**
+ * Reads the metadata file at a location (`s3://…`). Files are cached by
+ * location alone, so any two readers must return the same bytes for one
+ * location — true of every reader of one emulator's S3.
+ */
 export type MetadataReader = (location: string) => Promise<MetadataText>
 
 /**

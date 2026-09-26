@@ -22,6 +22,12 @@ describe("groupByNamespace", () => {
     ])
   })
 
+  it("lists a table whose namespace the namespace list does not have yet", () => {
+    expect(groupByNamespace([], [table("fresh", "t")], "")).toEqual([
+      { namespace: "fresh", tables: [table("fresh", "t")] },
+    ])
+  })
+
   it("keeps a namespace whose name matches whole", () => {
     expect(groupByNamespace(["sales", "web"], tables, "sal")[0].tables).toHaveLength(2)
   })

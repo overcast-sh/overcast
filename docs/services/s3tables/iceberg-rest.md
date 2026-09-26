@@ -35,6 +35,14 @@ table = catalog.load_table("sales.orders")
 print(table.scan().to_arrow())
 ```
 
+On a fresh bucket, create the namespace and table first, then write to it:
+
+```python
+catalog.create_namespace("sales")
+table = catalog.create_table("sales.orders", schema=schema)
+table.append(rows)
+```
+
 Set `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_REGION` to anything:
 Overcast checks the signing name, not the signature. There is no S3 endpoint to
 configure, because the catalog's config response supplies Overcast's.

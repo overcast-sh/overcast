@@ -9,13 +9,18 @@ export interface NamespaceGroup {
 /**
  * Tables under their namespace, namespaces A→Z, tables A→Z. A filter keeps a
  * namespace whose name matches whole, and otherwise only its matching tables.
+ *
+ * The namespaces are the ones listed plus any a table names: the two lists
+ * refresh separately, and a table created in a brand-new namespace (PyIceberg's
+ * `create_namespace` then `create_table`) must not vanish until both have.
  */
 export function groupByNamespace(
   namespaces: string[],
   tables: TableSummary[],
   needle: string,
 ): NamespaceGroup[] {
-  return [...namespaces].sort().flatMap((namespace) => {
+  const all = new Set([...namespaces, ...tables.map((t) => t.namespace?.join(".") ?? "")])
+  return [...all].sort().flatMap((namespace) => {
     const own = tables
       .filter((t) => t.namespace?.join(".") === namespace)
       .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""))

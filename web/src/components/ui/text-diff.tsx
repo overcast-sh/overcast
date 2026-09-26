@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import { ChevronsUpDown } from "lucide-react"
-import { diffLines, foldUnchanged, type DiffLine } from "@/lib/line-diff"
-import { formatQuantity } from "@/lib/format"
+import { diffLines, foldUnchanged, MAX_EDITS, type DiffLine } from "@/lib/line-diff"
+import { formatCount, formatQuantity } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 /**
@@ -27,8 +27,11 @@ export function TextDiff({
   className?: string
   "aria-label"?: string
 }) {
-  const segments = useMemo(() => foldUnchanged(diffLines(before, after)), [before, after])
-  const changed = segments.some((s) => s.lines.some((l) => l.kind !== "same"))
+  const segments = useMemo(() => {
+    const lines = diffLines(before, after)
+    return lines && foldUnchanged(lines)
+  }, [before, after])
+  const changed = segments?.some((s) => s.lines.some((l) => l.kind !== "same")) ?? true
   return (
     <div
       role="region"
@@ -38,10 +41,16 @@ export function TextDiff({
         className,
       )}
     >
-      {!changed ? (
+      {!segments ? (
+        <p className="px-3 py-6 text-center text-fg-subtle">
+          These versions differ in more than {formatCount(MAX_EDITS)} lines — too far apart to diff
+          line by line. Compare versions closer together.
+        </p>
+      ) : !changed ? (
         <p className="px-3 py-6 text-center text-fg-subtle">The two versions are identical.</p>
       ) : (
-        <table className="w-full border-collapse">
+        // Keyed on the pair, so a fold opened on one diff is closed on the next.
+        <table key={`${before.length}:${after.length}`} className="w-full border-collapse">
           <tbody>
             {segments.map((segment) =>
               segment.kind === "folded" ? (

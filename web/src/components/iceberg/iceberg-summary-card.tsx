@@ -56,9 +56,10 @@ export function IcebergSummaryCard({
           // A run of name/type pairs rather than a table: this is a glance at
           // what the columns are, and the schema view has the rest.
           <ul className="flex flex-wrap gap-1.5">
-            {fields.map((field) => (
+            {fields.map((field, index) => (
               <li
-                key={field.id}
+                // An id-less field (a hand-written file) reads as -1; the position keeps keys unique.
+                key={field.id < 0 ? `#${index}` : field.id}
                 title={`${field.name}: ${typeName(field.type)}${field.required ? " (required)" : ""}`}
                 className="inline-flex max-w-full min-w-0 items-baseline gap-1.5 rounded-control border border-border bg-bg-muted px-2 py-0.5"
               >

@@ -5,7 +5,7 @@ export interface MetadataVersion {
   location: string
   /** The file's own name, `00003-<uuid>.metadata.json` — unique within a table, and what a deep link carries. */
   fileName: string
-  /** When the table moved off this file; for the current one, when it was last updated. */
+  /** When the file was written: its own `last-updated-ms`, as the metadata log records it. */
   timestampMs?: number
   current: boolean
 }

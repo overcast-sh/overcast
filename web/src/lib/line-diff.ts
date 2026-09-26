@@ -12,15 +12,22 @@ export type DiffLine =
   | { kind: "removed"; text: string; oldLine: number }
   | { kind: "added"; text: string; newLine: number }
 
-/** Edit distance past which the diff gives up and reports a full rewrite. */
-const MAX_EDITS = 1000
+/**
+ * Edit distance past which the diff gives up. Two versions that far apart
+ * are not a change a reader can follow line by line, and rendering every
+ * line of both would cost more than it shows.
+ */
+export const MAX_EDITS = 1000
 
-/** The lines of `before` and `after`, each marked same, removed or added, in reading order. */
-export function diffLines(before: string, after: string): DiffLine[] {
+/**
+ * The lines of `before` and `after`, each marked same, removed or added, in
+ * reading order — or null when they differ in more than `MAX_EDITS` lines.
+ */
+export function diffLines(before: string, after: string): DiffLine[] | null {
   const a = before.split("\n")
   const b = after.split("\n")
   const trace = shortestEditTrace(a, b)
-  return trace ? backtrack(a, b, trace) : rewrite(a, b)
+  return trace ? backtrack(a, b, trace) : null
 }
 
 /**
@@ -78,13 +85,6 @@ function backtrack(a: string[], b: string[], trace: Int32Array[]): DiffLine[] {
     }
   }
   return lines.reverse()
-}
-
-function rewrite(a: string[], b: string[]): DiffLine[] {
-  return [
-    ...a.map((text, i): DiffLine => ({ kind: "removed", text, oldLine: i + 1 })),
-    ...b.map((text, i): DiffLine => ({ kind: "added", text, newLine: i + 1 })),
-  ]
 }
 
 /** A run of the diff to show, or a run of unchanged lines folded away. */

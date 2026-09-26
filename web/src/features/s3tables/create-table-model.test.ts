@@ -1,9 +1,11 @@
 import {
   draftProblems,
   maxDepth,
+  normalizeDepths,
   partitionableColumns,
   toCdk,
   toCreateTableInput,
+  transformsFor,
   type SchemaRow,
   type TableDraft,
 } from "./create-table-model"
@@ -108,8 +110,47 @@ describe("draftProblems", () => {
     expect(draftProblems({ ...flat, partitions })).toEqual(["Partition 1 needs a column."])
   })
 
+  it("refuses a transform the column's type does not take", () => {
+    const partitions = [{ key: "p", column: "order_id", transform: "day" as const }]
+    expect(draftProblems({ ...flat, partitions })).toEqual([
+      "Partition 1: day does not apply to order_id.",
+    ])
+  })
+
+  it("refuses two partition fields with one name", () => {
+    const p = { key: "p", column: "ordered_at", transform: "day" as const }
+    expect(draftProblems({ ...flat, partitions: [p, { ...p, key: "q" }] })).toEqual([
+      "Two partition fields are called ordered_at_day.",
+    ])
+  })
+
   it("refuses a table name S3 Tables would", () => {
     expect(draftProblems({ ...flat, name: "Orders" })[0]).toMatch(/^Table name:/)
+  })
+})
+
+describe("normalizeDepths", () => {
+  it("lifts the fields of a column that is no longer a struct", () => {
+    const rows = [row("shipping", "string"), row("carrier", "string", 1)]
+    expect(normalizeDepths(rows).map((r) => r.depth)).toEqual([0, 0])
+  })
+
+  it("leaves a well-formed nesting alone", () => {
+    expect(normalizeDepths(nested.rows)).toEqual(nested.rows)
+  })
+})
+
+describe("transformsFor", () => {
+  it("offers the date parts only for dates and timestamps", () => {
+    expect(transformsFor("date")).toEqual(["identity", "year", "month", "day", "bucket[16]"])
+  })
+
+  it("offers truncate and bucket for a string", () => {
+    expect(transformsFor("string")).toEqual(["identity", "bucket[16]", "truncate[10]"])
+  })
+
+  it("offers only identity for a double", () => {
+    expect(transformsFor("double")).toEqual(["identity"])
   })
 })
 
@@ -126,7 +167,7 @@ describe("maxDepth", () => {
 
 describe("partitionableColumns", () => {
   it("offers the top-level columns that are not structs", () => {
-    expect(partitionableColumns(nested.rows)).toEqual(["order_id", "channel"])
+    expect(partitionableColumns(nested.rows).map((c) => c.name)).toEqual(["order_id", "channel"])
   })
 })
 
@@ -143,11 +184,13 @@ new CfnTable(this, "OrdersTable", {
     icebergSchema: {
       schemaFieldList: [
         {
+          id: 1,
           name: "order_id",
           type: "long",
           required: true
         },
         {
+          id: 2,
           name: "ordered_at",
           type: "timestamptz",
           required: false

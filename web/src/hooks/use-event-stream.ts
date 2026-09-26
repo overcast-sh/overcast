@@ -544,9 +544,19 @@ function getEventQueryMap(): Record<string, QueryKey[] | undefined> {
     [EventType.glue.PartitionsChanged]: [glueKeys.partitions()],
     // ── S3 Tables ──────────────────────────────────────────────────────
     // Tables are nodes on the map (internal/services/s3tables/topology.go).
-    [EventType.s3tables.TableCreated]: [s3tablesKeys.tables(), topologyKey],
+    // A table can arrive in a namespace created a moment earlier, which no
+    // event announces, so its creation also re-reads the namespaces.
+    [EventType.s3tables.TableCreated]: [
+      s3tablesKeys.tables(),
+      s3tablesKeys.namespaces(),
+      topologyKey,
+    ],
     [EventType.s3tables.TableDeleted]: [s3tablesKeys.tables(), topologyKey],
-    [EventType.s3tables.TableRenamed]: [s3tablesKeys.tables(), topologyKey],
+    [EventType.s3tables.TableRenamed]: [
+      s3tablesKeys.tables(),
+      s3tablesKeys.namespaces(),
+      topologyKey,
+    ],
     [EventType.s3tables.TableCommitted]: [s3tablesKeys.tables()],
   }
 }

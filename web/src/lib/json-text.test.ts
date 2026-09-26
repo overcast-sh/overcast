@@ -16,8 +16,8 @@ describe("reindentJson", () => {
     )
   })
 
-  it("keeps a string's escapes as written", () => {
-    expect(reindentJson('["a\\"b\\u00e9"]')).toBe('[\n  "a\\"b\\u00e9"\n]')
+  it("decodes a string's escapes as JSON.stringify would", () => {
+    expect(reindentJson('["a\\"b\\u00e9\\/c"]')).toBe('[\n  "a\\"bé/c"\n]')
   })
 
   it("throws on text that is not JSON", () => {
