@@ -39,19 +39,19 @@ const (
 	engineResourceID = "engine"
 )
 
-// engineState is the engine's state, as the status endpoint reports it. An
+// EngineState is the engine's state, as the status endpoint reports it. An
 // alias, so cmd/tsgen renders the constants below as the console's union.
-type engineState = string
+type EngineState = string
 
 // Engine states.
 const (
-	engineOff      engineState = "off"      // ATHENA_ENGINE=inert, or no Docker: queries run inert
-	engineProbing  engineState = "probing"  // waiting to learn whether Docker is there
-	engineStopped  engineState = "stopped"  // not running; the next query starts it
-	enginePulling  engineState = "pulling"  // pulling the image
-	engineStarting engineState = "starting" // container started, engine not answering yet
-	engineReady    engineState = "ready"
-	engineFailed   engineState = "failed" // the last start failed; the next query tries again
+	EngineOff      EngineState = "off"      // ATHENA_ENGINE=inert, or no Docker: queries run inert
+	EngineProbing  EngineState = "probing"  // waiting to learn whether Docker is there
+	EngineStopped  EngineState = "stopped"  // not running; the next query starts it
+	EnginePulling  EngineState = "pulling"  // pulling the image
+	EngineStarting EngineState = "starting" // container started, engine not answering yet
+	EngineReady    EngineState = "ready"
+	EngineFailed   EngineState = "failed" // the last start failed; the next query tries again
 )
 
 var errEngineUnavailable = errors.New("athena: no Docker daemon to run the query engine on")
@@ -98,17 +98,17 @@ type engineManager struct {
 	inflight int
 	idle     *clock.Timer
 	stopping bool
-	status   engineStatus
+	status   EngineStatus
 }
 
 func newEngineManager(cfg *config.Config, log *serviceutil.ServiceLogger, clk clock.Clock, instances *serviceutil.InstanceDomain) *engineManager {
 	ctx, cancel := context.WithCancel(context.Background())
 	m := &engineManager{cfg: cfg, log: log, clk: clk, client: newTrinoClient(), instances: instances,
-		bgCtx: ctx, bgCancel: cancel, settled: make(chan struct{}), status: engineStatus{State: engineOff}}
+		bgCtx: ctx, bgCancel: cancel, settled: make(chan struct{}), status: EngineStatus{State: EngineOff}}
 	if cfg.AthenaDockerSocket == "" { // no probe will run
 		m.settle()
 	} else {
-		m.status.State = engineProbing
+		m.status.State = EngineProbing
 	}
 	return m
 }
@@ -125,7 +125,7 @@ func (m *engineManager) setDocker(dc *docker.Client) {
 	}
 	m.mu.Lock()
 	m.docker, m.puller, m.gc = dc, docker.NewImagePuller(dc), gc
-	m.status.State = engineStopped
+	m.status.State = EngineStopped
 	m.mu.Unlock()
 	m.settle()
 }
@@ -133,7 +133,7 @@ func (m *engineManager) setDocker(dc *docker.Client) {
 // dockerUnavailable records that no daemon answered: queries run inert.
 func (m *engineManager) dockerUnavailable() {
 	m.mu.Lock()
-	m.status.State = engineOff
+	m.status.State = EngineOff
 	m.mu.Unlock()
 	m.settle()
 }
@@ -162,7 +162,7 @@ func (m *engineManager) reclaim(dc *docker.Client) {
 func (m *engineManager) available() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return !m.stopping && (m.docker != nil || m.status.State == engineProbing)
+	return !m.stopping && (m.docker != nil || m.status.State == EngineProbing)
 }
 
 // acquire returns the engine's endpoint, starting it first if it is not
@@ -246,7 +246,7 @@ func (m *engineManager) stopIdle() {
 		return
 	}
 	m.boot, m.idle = nil, nil
-	m.status.State, m.status.ContainerID, m.status.Endpoint = engineStopped, "", ""
+	m.status.State, m.status.ContainerID, m.status.Endpoint = EngineStopped, "", ""
 	gc := m.gc
 	m.mu.Unlock()
 	m.log.Info("stopping the idle query engine", zap.String("container", b.containerID))
@@ -272,7 +272,7 @@ func (m *engineManager) invalidate(endpoint string) {
 		return
 	}
 	m.boot = nil
-	m.status.State, m.status.ContainerID, m.status.Endpoint = engineStopped, "", ""
+	m.status.State, m.status.ContainerID, m.status.Endpoint = EngineStopped, "", ""
 	gc := m.gc
 	m.mu.Unlock()
 	m.log.Warn("the query engine stopped answering; the next query starts a new one", zap.String("container", b.containerID))
@@ -300,13 +300,13 @@ func (m *engineManager) bootAtLocked(endpoint string) *engineBoot {
 func (m *engineManager) start(b *engineBoot) {
 	defer close(b.done)
 	begun := m.clk.Now()
-	m.setState(enginePulling, "")
+	m.setState(EnginePulling, "")
 	pullCtx, cancel := context.WithTimeout(m.bgCtx, enginePullTimeout)
 	err := m.puller.Ensure(pullCtx, m.cfg.AthenaEngineImage)
 	cancel()
 	pulled := m.clk.Now()
 	if err == nil {
-		m.setState(engineStarting, "")
+		m.setState(EngineStarting, "")
 		var c engineContainer
 		c, err = m.startContainer(m.bgCtx)
 		b.containerID, b.endpoint, b.settings = c.id, c.endpoint, c.settings
@@ -321,12 +321,12 @@ func (m *engineManager) start(b *engineBoot) {
 	if err != nil {
 		b.err = fmt.Errorf("the query engine did not start: %w", err)
 		m.boot = nil
-		m.status.State, m.status.LastError = engineFailed, err.Error()
+		m.status.State, m.status.LastError = EngineFailed, err.Error()
 		m.log.Warn("query engine did not start", zap.Error(err))
 		retire(m.gc, b.containerID)
 		return
 	}
-	m.status.State, m.status.LastError = engineReady, ""
+	m.status.State, m.status.LastError = EngineReady, ""
 	if m.inflight == 0 { // every query that wanted it gave up while it started
 		m.armIdleLocked()
 	}
@@ -358,7 +358,7 @@ func (m *engineManager) awaitReady(b *engineBoot) error {
 	}
 }
 
-func (m *engineManager) setState(state engineState, lastError string) {
+func (m *engineManager) setState(state EngineState, lastError string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.status.State, m.status.LastError = state, lastError

@@ -27,7 +27,9 @@ Part of the [CLI reference](../cli.md).
 ## `overcast status`
 
 Pings `/_overcast/health` and prints one line — reachability, version, storage
-backend. When the local instance registry is not empty it also prints a table
+backend. When Athena is enabled, a second line gives its query engine's state
+(off, starting, ready or stopped-idle), the memory it is given and how long it
+has been up. When the local instance registry is not empty it also prints a table
 of every instance [`overcast start`](./daemon.md#overcast-start) knows about —
 name, backend, endpoint and lifecycle state — whichever one `--endpoint`
 pointed at.
@@ -35,7 +37,12 @@ pointed at.
 ```bash
 overcast status
 overcast status --endpoint http://localhost:4570
+# overcast OK at http://localhost:4566 (version 0.0.1, storage memory)
+# athena engine: ready, memory 1.0 GiB, up 4m12s
 ```
+
+A starting engine is how the first query begins, so it never makes the
+daemon report anything but OK.
 
 ## `overcast wait`
 

@@ -33,6 +33,7 @@ that command's flags.
 | [Checking a running daemon](./cli/inspect.md) | `status`, `wait`, `services`, `config` |
 | [Wiping and importing state](./cli/state.md) | `reset`, `import cognito-users` |
 | [Pointing AWS tools at Overcast](./cli/aws.md) | `env`, `aws` |
+| [Querying and sample data](./cli/data.md) | `athena query`, `samples load` |
 | [Docker networks](./cli/networks.md) | `network status`, `network reset` |
 | [Reaching Overcast by name](./cli/bridge.md) | `bridge` |
 | [HTTPS and the trust store](./cli/tls.md) | `https`, `trust` |

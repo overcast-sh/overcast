@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -1255,8 +1256,15 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 		}
 	}
 
-	healthHandler := newHealthHandler(cfg, store, enabledServiceNames, enabledTiers, enabledGoalTiers, dockerStatusFn, listenerStatusFn(listeners, lambdaSvc))
+	var athenaEngine func() athena.EngineStatus
+	if slices.Contains(enabledServiceNames, "athena") {
+		athenaEngine = athenaSvc.EngineStatus
+	}
+	healthHandler := newHealthHandler(cfg, store, enabledServiceNames, enabledTiers, enabledGoalTiers, healthSources{
+		Docker: dockerStatusFn, AthenaEngine: athenaEngine, Listeners: listenerStatusFn(listeners, lambdaSvc),
+	})
 	r.Get("/_overcast/health", healthHandler)
+	r.Post(samplesPath, newSamplesHandler(cfg, r, enabledServiceNames, athenaSvc.EngineStatus))
 
 	// The two health URLs Overcast answers that are not its own: /_health (its
 	// own, before #927) and /_localstack/health (LocalStack's). Both are what

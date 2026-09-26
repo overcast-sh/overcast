@@ -16,8 +16,6 @@ package bff
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -38,6 +36,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/overcast-sh/overcast/internal/docsindex"
 	"github.com/overcast-sh/overcast/internal/docssearch"
+	"github.com/overcast-sh/overcast/internal/hostbridge/trust"
 )
 
 const (
@@ -238,17 +237,7 @@ func configureAPITransports(cfg UIConfig) {
 		bffStreamingClient.Transport = nil
 		return
 	}
-	pool, err := x509.SystemCertPool()
-	if err != nil || pool == nil {
-		pool = x509.NewCertPool()
-	}
-	pool.AppendCertsFromPEM(cfg.TLSTrustPEM)
-	tr, ok := http.DefaultTransport.(*http.Transport)
-	if !ok {
-		tr = &http.Transport{}
-	}
-	tr = tr.Clone()
-	tr.TLSClientConfig = &tls.Config{RootCAs: pool}
+	tr := trust.TransportTrusting(cfg.TLSTrustPEM)
 	bffHTTPClient.Transport = tr
 	bffStreamingClient.Transport = tr.Clone()
 }

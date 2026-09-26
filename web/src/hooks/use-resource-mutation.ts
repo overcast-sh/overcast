@@ -8,8 +8,8 @@ interface ResourceMutationConfig<TData, TError extends Error, TVariables, TConte
   invalidateKeys?: QueryKey[]
   /** Toast title shown on success. */
   successTitle?: string
-  /** Derive the toast description from the mutation variables. */
-  successDescription?: (variables: TVariables) => string
+  /** Derive the toast description from the mutation variables and its result. */
+  successDescription?: (variables: NoInfer<TVariables>, data: NoInfer<TData>) => string
   /** Toast variant on success. Defaults to "success". */
   successVariant?: "default" | "success" | "danger"
   /** Toast title shown on error. Defaults to "Operation failed". */
@@ -57,7 +57,7 @@ export function useResourceMutation<
       if (config.successTitle) {
         toast({
           title: config.successTitle,
-          description: config.successDescription?.(variables),
+          description: config.successDescription?.(variables, data),
           variant: config.successVariant ?? "success",
         })
       }

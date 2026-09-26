@@ -6,9 +6,9 @@ import { awsCommand, type AwsService } from "@/lib/aws-command"
  * endpoint, region and table bucket filled in.
  *
  * One source for two readers. The console's panel renders these for the
- * bucket or table on screen; `docs/services/s3tables/iceberg-rest.md` carries
- * the same snippets for the documented example bucket, and
- * `connect-snippets.docs.test.ts` fails when the two drift. Change a snippet
+ * bucket or table on screen; `docs/services/s3tables/iceberg-rest.md` and
+ * `docs/iceberg-locally.md` carry the same snippets for the documented example
+ * bucket, and `connect-snippets.docs.test.ts` fails when they drift. Change a snippet
  * here, then regenerate the docs with
  * `UPDATE_DOCS=1 pnpm vitest run connect-snippets.docs`.
  */

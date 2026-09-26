@@ -109,6 +109,13 @@ export interface HealthResponse {
    * makes Status "degraded".
    */
   listeners?: Record<string, ListenerStatus>
+  /**
+   * AthenaEngine is the Athena query engine's status, the one
+   * /_overcast/athena/engine reports; omitted when Athena is not enabled.
+   * It never changes Status: the engine starts on the first query that
+   * needs it, so starting (or stopped for being idle) is not a fault.
+   */
+  athenaEngine?: AthenaEngineStatus
 }
 
 /**
@@ -604,9 +611,9 @@ export type AdvisorySeverity = "info" | "warning" | "critical"
 export type DiagnosticProvenance = "aws-api" | "overcast-capture" | "overcast-inference"
 
 /**
- * engineStatus is what engineStatusPath reports.
+ * EngineStatus is what EngineStatusPath reports.
  *
- * Generated from Go `athena.engineStatus` (internal/services/athena/engine_status.go).
+ * Generated from Go `athena.EngineStatus` (internal/services/athena/engine_status.go).
  */
 export interface AthenaEngineStatus {
   /** Engine is ATHENA_ENGINE: trino or inert. */
@@ -626,6 +633,8 @@ export interface AthenaEngineStatus {
   pullMillis?: number
   startMillis?: number
   startedAt?: string
+  /** UptimeMillis is how long a ready engine has been up; zero otherwise. */
+  uptimeMillis?: number
   lastUsedAt?: string
   /** RunningQueries is how many queries hold the engine now. */
   runningQueries: number
@@ -633,10 +642,10 @@ export interface AthenaEngineStatus {
 }
 
 /**
- * engineState is the engine's state, as the status endpoint reports it. An
+ * EngineState is the engine's state, as the status endpoint reports it. An
  * alias, so cmd/tsgen renders the constants below as the console's union.
  *
- * Generated from Go `athena.engineState` (internal/services/athena/engine_manager.go).
+ * Generated from Go `athena.EngineState` (internal/services/athena/engine_manager.go).
  */
 export type AthenaEngineState =
   | "off"
@@ -653,6 +662,33 @@ export type AthenaEngineState =
  * Generated from Go `config.AthenaEngine` (internal/config/config.go).
  */
 export type AthenaEngineMode = "trino" | "inert"
+
+/**
+ * Report is what a load left in place.
+ *
+ * Generated from Go `samples.Report` (internal/samples/samples.go).
+ */
+export interface SampleDatasetReport {
+  dataset: string
+  bucket: string
+  database: string
+  tables: SampleDatasetTable[]
+  /** IcebergSkipped says why there is no Iceberg copy, when there is none. */
+  icebergSkipped?: string
+}
+
+/**
+ * Table is one table the dataset has.
+ *
+ * Generated from Go `samples.Table` (internal/samples/samples.go).
+ */
+export interface SampleDatasetTable {
+  name: string
+  format: string
+  location: string
+  partitions?: number
+  rows: number
+}
 
 /**
  * Response is the body of GET /_overcast/topology.

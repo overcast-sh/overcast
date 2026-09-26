@@ -71,7 +71,8 @@ and does not run it.
 Without a Docker daemon, or with `ATHENA_ENGINE=inert`, the engine is off:
 queries succeed at once with no rows, and DDL still reaches Glue. The
 [configuration reference](../configuration/reference.md) lists the engine's
-settings, and `/_overcast/athena/engine` reports its state.
+settings. `/_overcast/athena/engine`, `/_overcast/health` and
+`overcast status` report its state.
 
 ## Differences from AWS
 
@@ -132,6 +133,8 @@ Per-operation status, notes and AWS API links: [Athena operations](athena/operat
 
 - [Athena limitations](./athena/limitations.md) — the engine, the dialect and the results in detail
 - [Glue Data Catalog](./glue.md) — where Athena's table metadata lives
+- [Querying and sample data](../cli/data.md) — `overcast athena query` and a dataset to run it on
+- [Iceberg locally](../iceberg-locally.md) — Iceberg tables from PyIceberg, Spark and Athena
 - [All service pages](./README.md)
 - [Service names and state overrides](../configuration.md#service-names)
 - [AWS API reference](https://docs.aws.amazon.com/athena/latest/APIReference/)

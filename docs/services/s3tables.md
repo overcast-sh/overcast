@@ -87,6 +87,7 @@ Per-operation status, notes and AWS API links: [S3 Tables operations](s3tables/o
 - [S3 Tables Iceberg REST catalog](./s3tables/iceberg-rest.md) — PyIceberg, Spark and the catalog's endpoints
 - [S3](./s3.md) — where each table's warehouse bucket lives
 - [Glue Data Catalog](./glue.md)
+- [Iceberg locally](../iceberg-locally.md) — writing a table with PyIceberg and Spark, end to end
 - [All service pages](./README.md)
 - [Service names and state overrides](../configuration.md#service-names)
 - [AWS API reference](https://docs.aws.amazon.com/AmazonS3/latest/API/API_Operations_Amazon_S3_Tables.html)

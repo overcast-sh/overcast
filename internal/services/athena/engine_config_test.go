@@ -86,14 +86,14 @@ func TestEngineStatus_reportsTheInertEngine(t *testing.T) {
 
 	// When: the status endpoint is read
 	rec := httptest.NewRecorder()
-	s.serveEngineStatus(rec, httptest.NewRequestWithContext(context.Background(), http.MethodGet, engineStatusPath, nil))
+	s.serveEngineStatus(rec, httptest.NewRequestWithContext(context.Background(), http.MethodGet, EngineStatusPath, nil))
 
 	// Then: it says the engine is off, and why
-	var st engineStatus
+	var st EngineStatus
 	if err := json.Unmarshal(rec.Body.Bytes(), &st); err != nil || rec.Code != http.StatusOK {
 		t.Fatalf("status %d: %s (%v)", rec.Code, rec.Body, err)
 	}
-	if st.Engine != "inert" || st.State != engineOff || !strings.Contains(st.Reason, "ATHENA_ENGINE=inert") {
+	if st.Engine != "inert" || st.State != EngineOff || !strings.Contains(st.Reason, "ATHENA_ENGINE=inert") {
 		t.Fatalf("status = %+v", st)
 	}
 }

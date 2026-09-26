@@ -62,7 +62,8 @@ func TestStatusCmd_againstRealRouter(t *testing.T) {
 	out, err := runStatusCmd(t, srv.URL)
 
 	// Then: it reports the daemon healthy, in one line, enriched with the
-	// version and storage backend the health endpoint already reports.
+	// version and storage backend the health endpoint already reports, then
+	// the Athena engine's line.
 	if err != nil {
 		t.Fatalf("status against a healthy daemon: %v (output: %q)", err, out)
 	}
@@ -75,8 +76,27 @@ func TestStatusCmd_againstRealRouter(t *testing.T) {
 	if !strings.Contains(out, "memory") {
 		t.Errorf("output %q does not include the storage backend", out)
 	}
-	if n := strings.Count(strings.TrimRight(out, "\n"), "\n"); n != 0 {
-		t.Errorf("output is %d lines, want a one-liner:\n%s", n+1, out)
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if len(lines) != 2 || lines[1] != "athena engine: off, queries run inert" {
+		t.Errorf("output = %q, want the status line then the engine's", lines)
+	}
+}
+
+// TestStatusCmd_reportsARunningAthenaEngine covers the engine line for an
+// engine that is up: its memory and how long it has been up.
+func TestStatusCmd_reportsARunningAthenaEngine(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte(`{"status":"ok","athenaEngine":{"engine":"trino","state":"ready","memoryBytes":2147483648,"uptimeMillis":192400,"runningQueries":1}}`))
+	}))
+	defer srv.Close()
+
+	out, err := runStatusCmd(t, srv.URL)
+
+	if err != nil {
+		t.Fatalf("status: %v", err)
+	}
+	if !strings.Contains(out, "\nathena engine: ready, memory 2.0 GiB, up 3m12s, 1 query running\n") {
+		t.Errorf("output %q does not report the running engine", out)
 	}
 }
 

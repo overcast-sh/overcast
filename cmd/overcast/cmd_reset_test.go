@@ -265,19 +265,16 @@ func TestResetCmd_non200(t *testing.T) {
 }
 
 // TestResetCmd_commandShape pins the parts of the command declaration that
-// don't need a server: at most one positional arg, --yes registered, and
+// don't need a server: any number of services, --yes registered, and
 // completion for [service] falls back to no candidates against an
 // unreachable endpoint rather than erroring or hanging.
 func TestResetCmd_commandShape(t *testing.T) {
 	cmd := newResetCmd()
 	if cmd.Args == nil {
-		t.Fatal("newResetCmd: Args is nil, want cobra.MaximumNArgs(1)")
+		t.Fatal("newResetCmd: Args is nil, want cobra.ArbitraryArgs")
 	}
-	if err := cmd.Args(cmd, []string{"one"}); err != nil {
-		t.Errorf("newResetCmd: Args rejected a single positional argument: %v", err)
-	}
-	if err := cmd.Args(cmd, []string{"one", "two"}); err == nil {
-		t.Error("newResetCmd: Args accepted two positional arguments")
+	if err := cmd.Args(cmd, []string{"one", "two", "three"}); err != nil {
+		t.Errorf("newResetCmd: Args rejected several services: %v", err)
 	}
 	if cmd.Flag("yes") == nil {
 		t.Fatal("newResetCmd: --yes flag not registered")
@@ -325,18 +322,72 @@ func TestResetCmd_completionListsEnabledServices(t *testing.T) {
 	}
 }
 
-// TestResetCmd_completionStopsAfterOneArg proves the [service] completer
-// offers nothing once a positional argument is already present — the
-// command takes at most one.
-func TestResetCmd_completionStopsAfterOneArg(t *testing.T) {
+// TestResetCmd_completionOmitsServicesAlreadyNamed proves the [service...]
+// completer does not offer a service the command line already names.
+func TestResetCmd_completionOmitsServicesAlreadyNamed(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"services":["athena","glue","s3"]}`))
+	}))
+	defer srv.Close()
+
 	cmd := newResetCmd()
-	cmd.Flags().String("endpoint", "http://127.0.0.1:1", "")
+	cmd.Flags().String("endpoint", srv.URL, "")
 	cmd.SetContext(context.Background())
-	candidates, directive := cmd.ValidArgsFunction(cmd, []string{"s3"}, "")
+	candidates, directive := cmd.ValidArgsFunction(cmd, []string{"s3", "athena"}, "")
 	if directive != cobra.ShellCompDirectiveNoFileComp {
 		t.Errorf("directive = %v, want ShellCompDirectiveNoFileComp", directive)
 	}
-	if candidates != nil {
-		t.Errorf("candidates = %v, want nil once an argument is already present", candidates)
+	if len(candidates) != 1 || candidates[0] != "glue" {
+		t.Errorf("candidates = %v, want [glue]", candidates)
+	}
+}
+
+// TestResetCmd_unknownServiceAmongSeveralWipesNothing proves every name is
+// checked before the first reset, and a repeated name is reset once.
+func TestResetCmd_unknownServiceAmongSeveralWipesNothing(t *testing.T) {
+	withResetStdinIsTerminal(t, false)
+	srv := newResetFixtureServer(t)
+
+	root, _ := resetTestRoot()
+	root.SetArgs([]string{"reset", "athena", "glu", "s3", "--endpoint", srv.URL})
+	err := root.Execute()
+
+	if err == nil || !strings.Contains(err.Error(), "unknown service: glu") {
+		t.Fatalf("err = %v, want the unknown name", err)
+	}
+	if len(srv.requests) != 0 {
+		t.Fatalf("got %d reset requests, want none", len(srv.requests))
+	}
+
+	root, _ = resetTestRoot()
+	root.SetArgs([]string{"reset", "s3", "s3", "--endpoint", srv.URL})
+	if err := root.Execute(); err != nil || len(srv.requests) != 1 {
+		t.Fatalf("reset s3 s3 = %v with %d requests, want one", err, len(srv.requests))
+	}
+}
+
+// TestResetCmd_resetsSeveralServices covers naming more than one service:
+// each is reset in turn, and a confirmation names them all.
+func TestResetCmd_resetsSeveralServices(t *testing.T) {
+	withResetStdinIsTerminal(t, true)
+	srv := newResetFixtureServer(t)
+
+	root, buf := resetTestRoot()
+	root.SetIn(strings.NewReader("y\n"))
+	root.SetArgs([]string{"reset", "athena", "glue", "s3", "--endpoint", srv.URL})
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("reset athena glue s3: %v (output: %q)", err, buf.String())
+	}
+	if !strings.Contains(buf.String(), "wipe all athena, glue and s3 state at "+srv.URL) {
+		t.Errorf("output %q does not name every service", buf.String())
+	}
+	var paths []string
+	for _, r := range srv.requests {
+		paths = append(paths, r.URL.Path)
+	}
+	if strings.Join(paths, " ") != "/_overcast/reset/athena /_overcast/reset/glue /_overcast/reset/s3" {
+		t.Errorf("requests = %v, want one reset per service, in order", paths)
 	}
 }
