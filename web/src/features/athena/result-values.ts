@@ -54,10 +54,10 @@ function json(text: string): unknown {
 
 /**
  * One value, from the text `GetQueryResults` or the result CSV carries. A
- * NULL (a missing `VarCharValue`, an unquoted empty CSV field) is `null`. A DECIMAL stays the text Athena wrote — a
- * `decimal(38,2)` has more digits than a double holds — and so do the types
- * the grid has nothing to add to: dates, timestamps with their zone,
- * intervals.
+ * NULL (a missing `VarCharValue`, an unquoted empty CSV field) is `null`.
+ * A DECIMAL stays the text Athena wrote — a `decimal(38,2)` has more digits
+ * than a double holds — and so do the types the grid has nothing to add to:
+ * dates, timestamps with their zone, intervals.
  */
 export function resultValue(text: Field, type: string): unknown {
   if (text === null) return null

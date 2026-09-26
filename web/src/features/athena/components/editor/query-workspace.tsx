@@ -18,6 +18,7 @@ import {
   createQueryTab,
   initialQueryTabs,
   openQueryTab,
+  queryContext,
   QUERY_TABS_STORAGE_KEY,
   restoreQueryTabs,
   selectQueryTab,
@@ -124,13 +125,7 @@ export function QueryWorkspace({
     errorTitle: "Could not run the query",
   })
   const runInNewTab = (sql: string, title: string) => {
-    const draft = createQueryTab(state.tabs, {
-      ...tab,
-      title,
-      sql,
-      parameters: [],
-      executionId: undefined,
-    })
+    const draft = createQueryTab(state.tabs, { ...queryContext(tab), title, sql })
     setState((current) => addQueryTab(current, draft))
     void start.mutateAsync(startQueryInput(draft)).then(
       (executionId) => update(draft.id, { executionId }),
@@ -162,15 +157,7 @@ export function QueryWorkspace({
               setState((current) => closeQueryTab(current, id))
               disposeSqlModel(id)
             }}
-            onNew={() =>
-              setState((current) =>
-                openQueryTab(current, {
-                  catalog: tab.catalog,
-                  database: tab.database,
-                  workGroup: tab.workGroup,
-                }),
-              )
-            }
+            onNew={() => setState((current) => openQueryTab(current, queryContext(tab)))}
           />
           {engine && (
             <div className="mb-1.5 shrink-0">

@@ -21,6 +21,32 @@ function openText(
   return { fake, opening }
 }
 
+describe("openTextSource > CSV with quoted values (Athena's result CSV)", () => {
+  it.each([
+    ["LF", "\n"],
+    ["CRLF", "\r\n"],
+  ])("reads a NULL line as a row, at a block boundary too (%s)", async (_, eol) => {
+    // Given: a one-column result whose every 500th value is a NULL — a blank
+    // line — so NULLs open the second and third blocks
+    const values = Array.from({ length: 2_500 }, (_, i) => (i % 500 === 0 ? "" : `"${i}"`))
+    const { opening } = openText(bytesObject(['"n"', ...values, ""].join(eol)), {
+      quotedValues: true,
+    })
+    // When: it is opened and indexed
+    const source = await opening
+    await indexSettled(source)
+    // Then: every line is a row, and the NULLs are where they were written
+    expect(source.rowCount).toEqual({ value: 2_500, exact: true })
+    expect((await readRows(source, 998, BLOCK_ROWS)).columns[0]).toEqual(["998", "999"])
+    expect((await readRows(source, BLOCK_ROWS, BLOCK_ROWS + 1)).columns[0]).toEqual([null])
+    expect((await readRows(source, BLOCK_ROWS * 2, BLOCK_ROWS * 2 + 2)).columns[0]).toEqual([
+      null,
+      "2001",
+    ])
+    source.dispose()
+  })
+})
+
 describe("openTextSource > CSV", () => {
   it("opens on the header and the first rows, then indexes the rest", async () => {
     // Given: a CSV of 5,500 rows

@@ -121,4 +121,20 @@ describe("useGridColumns", () => {
     const typed = render([{ name: "id", type: "INT64", numeric: true }]).result.current.headerHeight
     expect(typed).toBeGreaterThan(plain)
   })
+
+  it("reports a drag that starts and ends between two renders", () => {
+    // Given: a caller keeping widths, and nothing reported on opening
+    const onWidthsChange = vi.fn()
+    const { result } = render(COLUMNS, undefined, { onWidthsChange })
+    expect(onWidthsChange).not.toHaveBeenCalled()
+    const before = result.current.columns[1].width
+    // When: a flick of the edge presses, moves and releases within one frame
+    act(() => {
+      result.current.columns[1].onResizeStart(new MouseEvent("mousedown", { clientX: 100 }))
+      fireEvent.mouseMove(document, { clientX: 130 })
+      fireEvent.mouseUp(document, { clientX: 130 })
+    })
+    // Then: the new width is still reported
+    expect(onWidthsChange).toHaveBeenCalledWith({ comment: before + 30 })
+  })
 })

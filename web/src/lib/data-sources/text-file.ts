@@ -123,6 +123,8 @@ export class TextFile {
       every: this.options.every,
       delimiter: delimited ? delimiterByte(layout.delimiter) : null,
       header: delimited,
+      // The parser reads a quoted-values file's blank line as a NULL record
+      // (`parseDelimited`), so the index must count it, or the two disagree.
       blankRecords: delimited && layout.quotedValues,
     })
   }

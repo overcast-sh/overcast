@@ -65,6 +65,14 @@ export function createQueryTab(tabs: readonly QueryTab[], init: Partial<QueryTab
   }
 }
 
+/**
+ * What a tab opened from another carries over: the query context — the
+ * workgroup, catalog and database — and nothing of its SQL, run or result.
+ */
+export function queryContext(tab: QueryTab): Pick<QueryTab, "workGroup" | "catalog" | "database"> {
+  return { workGroup: tab.workGroup, catalog: tab.catalog, database: tab.database }
+}
+
 export function initialQueryTabs(): QueryTabs {
   const tab = createQueryTab([])
   return { tabs: [tab], activeId: tab.id }

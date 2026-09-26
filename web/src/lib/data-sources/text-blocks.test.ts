@@ -90,7 +90,11 @@ describe("jsonlHead", () => {
 
 describe("textBlock", () => {
   it("parses a CSV block with the head's delimiter and width", () => {
-    const block = textBlock("1;x\n2\n", { kind: "delimited", delimiter: ";", width: 2, quotedValues: false }, 10)
+    const block = textBlock(
+      "1;x\n2\n",
+      { kind: "delimited", delimiter: ";", width: 2, quotedValues: false },
+      10,
+    )
     expect(block).toEqual({
       count: 2,
       columns: [

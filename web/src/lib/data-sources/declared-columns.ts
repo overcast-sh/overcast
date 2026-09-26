@@ -84,8 +84,7 @@ class DeclaredColumnsSource implements RowSource {
       ...block,
       columns: block.columns.map(
         (values, index) =>
-          values &&
-          Array.from(values, (text) => this.declared.value(text as Field, index)),
+          values && Array.from(values, (text) => this.declared.value(text as Field, index)),
       ),
     }
   }

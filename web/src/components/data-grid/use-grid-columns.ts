@@ -21,9 +21,9 @@ import { MONO_CHAR_WIDTH, sampleColumnWidth } from "./cell-format"
  *
  * Each data column's id is its index in the source, so a hidden column's
  * neighbours still read their values from the right place. Widths the caller
- * keeps (`ColumnWidths`) are by name instead, so they outlive the result they
- * were set on: a query run again, or edited, keeps the widths of the columns
- * it still has.
+ * keeps (`ColumnWidths`) are by name instead, so they outlive the source they
+ * were set on: a query run again, or edited, opens with the widths of the
+ * columns it still has.
  */
 
 const gridFeatures = tableFeatures({
@@ -52,15 +52,19 @@ const TYPED_HEADER_HEIGHT = 44
 const ROW_NUMBER_PADDING = 24
 
 /**
- * Column widths the user set, in px, by column name. Two columns with the
- * same name share one width.
+ * Column widths in px, by column name. Two columns with the same name
+ * (`SELECT a.id, b.id`) open at one width, and the later one's is reported.
  */
 export type ColumnWidths = Readonly<Record<string, number>>
 
 export interface ColumnWidthsOptions {
   /** Widths to open with, for the columns they name; the rest are sampled. */
   initialWidths?: ColumnWidths
-  /** Called with every resized column's width when a resize ends. */
+  /**
+   * Called when a resize ends with the width of every column of this source
+   * that has one — resized, or opened at an initial width. Widths for columns
+   * the source lacks are not in it.
+   */
   onWidthsChange?: (widths: ColumnWidths) => void
 }
 
@@ -119,7 +123,7 @@ function sizingByIndex(columns: readonly DataColumn[], widths: ColumnWidths): Co
 function widthsByName(columns: readonly DataColumn[], sizing: ColumnSizingState): ColumnWidths {
   return Object.fromEntries(
     Object.entries(sizing).flatMap(([id, width]) => {
-      const column = columns.at(Number(id))
+      const column = columns[Number(id)] as DataColumn | undefined
       return column ? [[column.name, width]] : []
     }),
   )
@@ -163,7 +167,7 @@ export function useGridColumns(
 
   // The caller's widths are read once, when the table is made: the grid
   // remounts for each source, and after that the table owns its sizes.
-  const [columnSizing] = useState(() => initialWidths && sizingByIndex(columns, initialWidths))
+  const [columnSizing] = useState(() => sizingByIndex(columns, initialWidths ?? {}))
 
   // The options object is memoized because `useTable` hands back a new table
   // for new options: inline, every render (a frame, while scrolling) would
@@ -219,19 +223,26 @@ export function useGridColumns(
 }
 
 /**
- * Reports the widths when a resize ends — once per drag, not every frame of
- * it — so a caller that stores them writes once.
+ * Reports the widths once they settle — when a resize ends, not on every
+ * frame of it — so a caller that stores them writes once per drag. Keyed on
+ * the sizes themselves rather than on the drag starting and stopping: a drag
+ * quick enough to start and end between two renders still changed them.
  */
 function useReportWidths(
   columns: readonly DataColumn[],
   state: { columnSizing: ColumnSizingState; columnResizing: { isResizingColumn: false | string } },
   onWidthsChange: ColumnWidthsOptions["onWidthsChange"],
 ) {
+  const { columnSizing } = state
   const resizing = state.columnResizing.isResizingColumn !== false
-  const wasResizing = useRef(false)
-  const report = useEffectEvent(() => onWidthsChange?.(widthsByName(columns, state.columnSizing)))
+  // The sizes the grid opened with are the caller's own: nothing to report.
+  const reported = useRef(columnSizing)
+  const report = useEffectEvent((sizing: ColumnSizingState) =>
+    onWidthsChange?.(widthsByName(columns, sizing)),
+  )
   useEffect(() => {
-    if (wasResizing.current && !resizing) report()
-    wasResizing.current = resizing
-  }, [resizing])
+    if (resizing || columnSizing === reported.current) return
+    reported.current = columnSizing
+    report(columnSizing)
+  }, [resizing, columnSizing])
 }
