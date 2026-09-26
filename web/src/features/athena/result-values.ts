@@ -1,12 +1,15 @@
 import type { ColumnInfo, GetQueryResultsOutput } from "@aws-sdk/client-athena"
 import type { AthenaResultPage } from "@/lib/data-sources/athena-result-source"
+import type { DeclaredColumns } from "@/lib/data-sources/declared-columns"
+import type { Field } from "@/lib/data-sources/delimited-parse"
 import type { DataColumn } from "@/lib/data-sources/row-source"
 
 /**
- * `GetQueryResults` pages in the grid's terms: typed columns, and values
- * turned back from the text Athena renders them as into what they are, so a
- * number right-aligns, a NULL reads as NULL rather than as an empty string,
- * and an array opens as a tree in the cell inspector.
+ * An Athena result in the grid's terms: typed columns, and values turned
+ * back from the text Athena renders them as into what they are, so a number
+ * right-aligns, a NULL reads as NULL rather than as an empty string, and an
+ * array opens as a tree in the cell inspector. The same mapping serves both
+ * of the result source's paths: `GetQueryResults` pages, and the result CSV.
  */
 
 const INTEGER_TYPES = new Set(["tinyint", "smallint", "integer", "int", "bigint"])
@@ -50,14 +53,14 @@ function json(text: string): unknown {
 }
 
 /**
- * One value, from the text `GetQueryResults` carries. A missing
- * `VarCharValue` is a NULL. A DECIMAL stays the text Athena wrote — a
+ * One value, from the text `GetQueryResults` or the result CSV carries. A
+ * NULL (a missing `VarCharValue`, an unquoted empty CSV field) is `null`. A DECIMAL stays the text Athena wrote — a
  * `decimal(38,2)` has more digits than a double holds — and so do the types
  * the grid has nothing to add to: dates, timestamps with their zone,
  * intervals.
  */
-export function resultValue(text: string | undefined, type: string): unknown {
-  if (text === undefined) return null
+export function resultValue(text: Field, type: string): unknown {
+  if (text === null) return null
   if (INTEGER_TYPES.has(type)) return integer(text)
   if (FLOAT_TYPES.has(type)) return Number(text)
   if (type === "boolean") return text === "true"
@@ -67,19 +70,27 @@ export function resultValue(text: string | undefined, type: string): unknown {
   return text
 }
 
+/** A result's columns, from any page's `ColumnInfo`, and how each reads a field. */
+export function resultSchema(output: GetQueryResultsOutput): DeclaredColumns {
+  const info = output.ResultSet?.ResultSetMetadata?.ColumnInfo ?? []
+  const types = info.map((c) => (c.Type ?? "").toLowerCase())
+  return {
+    columns: info.map(resultColumn),
+    value: (text, index) => resultValue(text, types[index]),
+  }
+}
+
 /**
  * A page of `GetQueryResults` as the result source takes it. A `SELECT`'s
  * first page opens with a header row of column names, which `hasHeader`
  * drops; DDL and utility statements have none.
  */
 export function resultPage(output: GetQueryResultsOutput, hasHeader: boolean): AthenaResultPage {
-  const info = output.ResultSet?.ResultSetMetadata?.ColumnInfo ?? []
-  const columns = info.map(resultColumn)
-  const types = info.map((c) => (c.Type ?? "").toLowerCase())
+  const { columns, value } = resultSchema(output)
   const rows = (output.ResultSet?.Rows ?? []).slice(hasHeader ? 1 : 0)
   return {
     columns,
-    rows: rows.map((row) => types.map((type, i) => resultValue(row.Data?.[i]?.VarCharValue, type))),
+    rows: rows.map((row) => columns.map((_, i) => value(row.Data?.[i]?.VarCharValue ?? null, i))),
     nextToken: output.NextToken,
   }
 }

@@ -246,6 +246,27 @@ describe("DataGrid", () => {
       ).toBe(before + 60)
     })
 
+    it("opens with the caller's widths and hands a resize back to it", () => {
+      // Given: a caller that kept a width for col_1
+      const onWidthsChange = vi.fn()
+      render(
+        <DataGrid
+          source={new FakeSource(10)}
+          label="Rows"
+          initialWidths={{ col_1: 250 }}
+          onWidthsChange={onWidthsChange}
+        />,
+      )
+      const header = (name: string) => within(grid()).getByRole("columnheader", { name })
+      expect(header("col_1").style.width).toBe("250px")
+      // When: the reader widens col_1 by 40 px
+      fireEvent.mouseDown(header("col_1").lastElementChild as HTMLElement, { clientX: 100 })
+      fireEvent.mouseMove(document, { clientX: 140 })
+      fireEvent.mouseUp(document, { clientX: 140 })
+      // Then: the caller hears the new width, by name
+      expect(onWidthsChange).toHaveBeenCalledWith({ col_1: 290 })
+    })
+
     it("shows indexing progress, and offers Continue at the byte limit", async () => {
       // Given: a source indexing in the background
       const source = new FakeSource(1_200_000, {

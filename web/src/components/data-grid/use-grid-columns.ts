@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react"
 import {
   columnPinningFeature,
   columnResizingFeature,
@@ -7,6 +7,7 @@ import {
   tableFeatures,
   useTable,
   type ColumnDef,
+  type ColumnSizingState,
 } from "@tanstack/react-table"
 import type { DataColumn, RowBlock } from "@/lib/data-sources/row-source"
 import { formatCount } from "@/lib/format"
@@ -19,7 +20,10 @@ import { MONO_CHAR_WIDTH, sampleColumnWidth } from "./cell-format"
  * business; the table only knows columns (`data` is always empty).
  *
  * Each data column's id is its index in the source, so a hidden column's
- * neighbours still read their values from the right place.
+ * neighbours still read their values from the right place. Widths the caller
+ * keeps (`ColumnWidths`) are by name instead, so they outlive the result they
+ * were set on: a query run again, or edited, keeps the widths of the columns
+ * it still has.
  */
 
 const gridFeatures = tableFeatures({
@@ -46,6 +50,19 @@ const TYPED_HEADER_HEIGHT = 44
 
 /** The row number's padding either side of its digits. */
 const ROW_NUMBER_PADDING = 24
+
+/**
+ * Column widths the user set, in px, by column name. Two columns with the
+ * same name share one width.
+ */
+export type ColumnWidths = Readonly<Record<string, number>>
+
+export interface ColumnWidthsOptions {
+  /** Widths to open with, for the columns they name; the rest are sampled. */
+  initialWidths?: ColumnWidths
+  /** Called with every resized column's width when a resize ends. */
+  onWidthsChange?: (widths: ColumnWidths) => void
+}
 
 export interface LaidOutColumn {
   /** Place in display order, among the visible columns: what the cell cursor moves over. */
@@ -86,9 +103,36 @@ export function rowNumberWidth(rowCount: number): number {
   return Math.round(characters * MONO_CHAR_WIDTH + ROW_NUMBER_PADDING)
 }
 
+/** Widths by name as the table's sizing state, by column index. */
+function sizingByIndex(columns: readonly DataColumn[], widths: ColumnWidths): ColumnSizingState {
+  const sizing: ColumnSizingState = {}
+  columns.forEach((column, index) => {
+    const width = widths[column.name]
+    if (Number.isFinite(width)) {
+      sizing[String(index)] = Math.min(Math.max(width, MIN_WIDTH), MAX_WIDTH)
+    }
+  })
+  return sizing
+}
+
+/** The table's sizing state as widths by name. */
+function widthsByName(columns: readonly DataColumn[], sizing: ColumnSizingState): ColumnWidths {
+  return Object.fromEntries(
+    Object.entries(sizing).flatMap(([id, width]) => {
+      const column = columns.at(Number(id))
+      return column ? [[column.name, width]] : []
+    }),
+  )
+}
+
 export function useGridColumns(
   columns: readonly DataColumn[],
-  { rowCount, sample }: { rowCount: number; sample: RowBlock | undefined },
+  {
+    rowCount,
+    sample,
+    initialWidths,
+    onWidthsChange,
+  }: { rowCount: number; sample: RowBlock | undefined } & ColumnWidthsOptions,
 ): GridColumns {
   // Each column's width is sampled once, from the first of its values to
   // arrive, wherever the grid opened (a projecting source delivers columns
@@ -117,6 +161,10 @@ export function useGridColumns(
     [columns, sampled, numbersWidth],
   )
 
+  // The caller's widths are read once, when the table is made: the grid
+  // remounts for each source, and after that the table owns its sizes.
+  const [columnSizing] = useState(() => initialWidths && sizingByIndex(columns, initialWidths))
+
   // The options object is memoized because `useTable` hands back a new table
   // for new options: inline, every render (a frame, while scrolling) would
   // rebuild the layout below and everything downstream of it.
@@ -126,13 +174,14 @@ export function useGridColumns(
       data: NO_ROWS,
       columns: definitions,
       columnResizeMode: "onChange" as const,
-      initialState: { columnPinning: { start: [ROW_NUMBER_ID], end: [] } },
+      initialState: { columnPinning: { start: [ROW_NUMBER_ID], end: [] }, columnSizing },
     }),
-    [definitions],
+    [definitions, columnSizing],
   )
   const table = useTable<GridFeatures, never>(options)
 
   const { state } = table
+  useReportWidths(columns, state, onWidthsChange)
   return useMemo(() => {
     const headers = new Map(table.getCenterFlatHeaders().map((header) => [header.id, header]))
     const laidOut = table.getCenterVisibleLeafColumns().map((column, position) => {
@@ -167,4 +216,22 @@ export function useGridColumns(
     // `state` is the table's change signal: sizes, visibility and order live in it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [table, columns, state, definitions])
+}
+
+/**
+ * Reports the widths when a resize ends — once per drag, not every frame of
+ * it — so a caller that stores them writes once.
+ */
+function useReportWidths(
+  columns: readonly DataColumn[],
+  state: { columnSizing: ColumnSizingState; columnResizing: { isResizingColumn: false | string } },
+  onWidthsChange: ColumnWidthsOptions["onWidthsChange"],
+) {
+  const resizing = state.columnResizing.isResizingColumn !== false
+  const wasResizing = useRef(false)
+  const report = useEffectEvent(() => onWidthsChange?.(widthsByName(columns, state.columnSizing)))
+  useEffect(() => {
+    if (wasResizing.current && !resizing) report()
+    wasResizing.current = resizing
+  }, [resizing])
 }

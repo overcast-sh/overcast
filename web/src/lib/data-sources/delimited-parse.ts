@@ -13,6 +13,9 @@ import { bomLength } from "./byte-order-mark"
 
 export type Delimiter = "," | "\t" | ";" | "|"
 
+/** One field: its text, or `null` for a NULL in a `quotedValues` file. */
+export type Field = string | null
+
 const CANDIDATES: readonly Delimiter[] = [",", "\t", ";", "|"]
 
 /** Why a text is not CSV: the one failure both the parser and the indexer detect. */
@@ -28,7 +31,7 @@ export const MAX_FIELD_CHARS = 64 * 1024
 
 export interface DelimitedParse {
   /** Every complete record read, header included, up to `maxRecords`. */
-  records: string[][]
+  records: Field[][]
   /**
    * Why the text is not CSV after all, when it is not. The table is withheld
    * and the raw text shown with this as the note, rather than a table that
@@ -48,6 +51,12 @@ interface ParseOptions {
    * end is the cut's doing, not the file's.
    */
   truncated: boolean
+  /**
+   * Every value is quoted, as in the CSV Athena writes a result to, so an
+   * unquoted empty field is a NULL (`null`) and a blank line is a record of
+   * one NULL rather than a separator.
+   */
+  quotedValues?: boolean
 }
 
 /**
@@ -68,10 +77,10 @@ interface ParseOptions {
  * at the end of a complete object is `malformed`.
  */
 export function parseDelimited(text: string, options: ParseOptions): DelimitedParse {
-  const { delimiter, maxRecords, truncated } = options
-  const records: string[][] = []
+  const { delimiter, maxRecords, truncated, quotedValues = false } = options
+  const records: Field[][] = []
 
-  let record: string[] = []
+  let record: Field[] = []
   let field = ""
   let fieldClipped = false
   let inQuotes = false
@@ -94,7 +103,7 @@ export function parseDelimited(text: string, options: ParseOptions): DelimitedPa
   }
   const endField = () => {
     lastFieldWasQuoted = quotedField
-    record.push(field)
+    record.push(quotedValues && !quotedField && field === "" ? null : field)
     field = ""
     fieldClipped = false
     quotedField = false
@@ -102,6 +111,7 @@ export function parseDelimited(text: string, options: ParseOptions): DelimitedPa
   const endRecord = () => {
     endField()
     // A blank line is one empty unquoted field; it separates, it is not data.
+    // (With `quotedValues` that field is a NULL, so the line is a record.)
     const blank = record.length === 1 && record[0] === "" && !lastFieldWasQuoted
     if (!blank) records.push(record)
     record = []
@@ -223,7 +233,7 @@ function fieldCount(line: string, delimiter: string): number {
  * name is suffixed, so every column can be told apart. `width` may exceed the
  * header — a row longer than it gets `column_N` for the extra fields.
  */
-export function columnNames(header: readonly string[], width: number): string[] {
+export function columnNames(header: readonly Field[], width: number): string[] {
   const seen = new Map<string, number>()
   return Array.from({ length: width }, (_, index) => {
     const raw = (header[index] ?? "").trim()
@@ -235,11 +245,11 @@ export function columnNames(header: readonly string[], width: number): string[] 
 }
 
 /** Records to columns, padding a short record with empty strings. */
-export function recordFields(records: readonly string[][], width: number): string[][] {
-  const columns = Array.from({ length: width }, () => new Array<string>(records.length))
+export function recordFields(records: readonly Field[][], width: number): Field[][] {
+  const columns = Array.from({ length: width }, () => new Array<Field>(records.length))
   for (let r = 0; r < records.length; r++) {
     const record = records[r]
-    for (let c = 0; c < width; c++) columns[c][r] = record[c] ?? ""
+    for (let c = 0; c < width; c++) columns[c][r] = c < record.length ? record[c] : ""
   }
   return columns
 }

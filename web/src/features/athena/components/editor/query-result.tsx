@@ -7,6 +7,7 @@ import { ChevronDown, Copy, Download, FolderOpen } from "lucide-react"
 // a resource list. It is the shared DataGrid over the Athena result source
 // (docs/plans/data-lake-console.md, *Result grid*).
 import { DataGrid } from "@/components/data-grid/data-grid"
+import type { ColumnWidths } from "@/components/data-grid/use-grid-columns"
 import { Button } from "@/components/ui/button"
 import { CopyButton } from "@/components/ui/copy-button"
 import { Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/menu"
@@ -22,12 +23,20 @@ import { formatResult, readAllRows, RESULT_FORMATS, type ResultFormat } from "..
 import { useResultSource } from "../../use-result-source"
 import { StatementOutcome } from "./run-status"
 
+interface QueryResultProps {
+  execution: QueryExecution
+  inert: boolean
+  /** The tab's column widths: the grid opens with them and reports a resize. */
+  columnWidths: ColumnWidths | undefined
+  onColumnWidthsChange: (widths: ColumnWidths) => void
+}
+
 /**
  * A succeeded query's result: what a DDL or DML statement did, and the rows
  * in the shared `DataGrid` with the result's actions — copy, download the
  * real CSV Athena wrote, open it in S3, copy the execution id.
  */
-export function QueryResult({ execution, inert }: { execution: QueryExecution; inert: boolean }) {
+export function QueryResult({ execution, ...grid }: QueryResultProps) {
   const id = execution.QueryExecutionId ?? ""
   const firstPage = useQuery(firstResultPageQueryOptions(id))
   const runtime = useQuery(runtimeStatisticsQueryOptions(id))
@@ -44,7 +53,7 @@ export function QueryResult({ execution, inert }: { execution: QueryExecution; i
           execution={execution}
           firstPage={firstPage.data}
           outputRows={runtime.data?.Rows?.OutputRows}
-          inert={inert}
+          {...grid}
         />
       )}
     </div>
@@ -56,11 +65,11 @@ function ResultGrid({
   firstPage,
   outputRows,
   inert,
-}: {
-  execution: QueryExecution
+  columnWidths,
+  onColumnWidthsChange,
+}: QueryResultProps & {
   firstPage: GetQueryResultsOutput
   outputRows: number | undefined
-  inert: boolean
 }) {
   const { source, error } = useResultSource(execution, firstPage, outputRows)
   if (error) return <EmptyState title="Could not read the result" description={error.message} />
@@ -72,6 +81,8 @@ function ResultGrid({
       className="min-h-40 flex-1 rounded-md border border-border"
       emptyMessage={inert ? "No rows: the query engine is off." : "The query returned no rows."}
       toolbarEnd={<ResultActions execution={execution} source={source} />}
+      initialWidths={columnWidths}
+      onWidthsChange={onColumnWidthsChange}
     />
   )
 }

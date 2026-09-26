@@ -73,6 +73,13 @@ describe("restoreQueryTabs", () => {
     expect(restored.tabs.map((t) => t.sql)).toEqual(["1"])
   })
 
+  it("keeps a tab's column widths, dropping any that are not widths", () => {
+    const restored = restoreQueryTabs({
+      tabs: [{ id: "a", columnWidths: { id: 120, name: "wide", note: -1 } }],
+    })
+    expect(restored.tabs[0].columnWidths).toEqual({ id: 120 })
+  })
+
   it("repairs missing fields and drops entries that are not tabs", () => {
     const restored = restoreQueryTabs({
       tabs: [{ id: "a", sql: "SELECT 1", parameters: ["1", 2] }, 42],

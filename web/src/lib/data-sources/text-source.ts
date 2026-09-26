@@ -13,6 +13,8 @@ export interface TextSourceOptions {
   url: string
   size: number
   kind: TextKind
+  /** CSV: every value is quoted (Athena's result CSV), so an unquoted empty field is a NULL. */
+  quotedValues?: boolean
   port: DataWorkerPort
   /** `Save-Data`: index only as far as the user scrolls. */
   saveData?: boolean
@@ -74,7 +76,7 @@ class TextSource extends BaseSource implements TextRowSource {
   }
 
   async open(signal?: AbortSignal): Promise<void> {
-    const { url, size, kind, byteLimit = INDEX_BYTE_LIMIT, saveData } = this.options
+    const { url, size, kind, quotedValues, byteLimit = INDEX_BYTE_LIMIT, saveData } = this.options
     const head = await this.channel.request(
       "text-head",
       (id) => ({
@@ -83,6 +85,7 @@ class TextSource extends BaseSource implements TextRowSource {
         url,
         size,
         kind,
+        quotedValues,
         every: BLOCK_ROWS,
         byteLimit,
         mode: saveData ? "on-demand" : "background",
