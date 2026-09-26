@@ -15,12 +15,16 @@ import (
 	"errors"
 	"io"
 	"io/fs"
+	"math/rand/v2"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/overcast-sh/overcast/internal/config"
 	"github.com/overcast-sh/overcast/internal/events"
@@ -338,5 +342,104 @@ func TestPutObjectStream_concurrentOverwritesStayConsistent(t *testing.T) {
 	meta := f.meta(t, "bkt", "k")
 	if meta.ETag != md5ETag(got) || meta.ContentLength != int64(len(got)) {
 		t.Errorf("body %q does not match its metadata (ETag %s, length %d)", got, meta.ETag, meta.ContentLength)
+	}
+}
+
+// slowVersionScans pauses a random few milliseconds either side of reading a
+// key's version history, so suspended-bucket null-version bookkeeping that is
+// not serialised against other writers of the key interleaves with theirs.
+type slowVersionScans struct {
+	state.Store
+}
+
+func (s slowVersionScans) Scan(ctx context.Context, namespace, prefix string) ([]state.KV, error) {
+	if namespace == nsVersions {
+		time.Sleep(time.Duration(rand.IntN(4000)) * time.Microsecond)
+	}
+	kvs, err := s.Store.Scan(ctx, namespace, prefix)
+	if namespace == nsVersions {
+		time.Sleep(time.Duration(rand.IntN(4000)) * time.Microsecond)
+	}
+	return kvs, err
+}
+
+// assertOneNullVersion checks a suspended key's invariant: exactly one null
+// version in its history, and it is the current object, readable in full.
+func (f *inProcessFixture) assertOneNullVersion(t *testing.T, bucket, key string) {
+	t.Helper()
+	versions, aerr := f.svc.handler.store.listKeyVersions(context.Background(), bucket, key)
+	if aerr != nil {
+		t.Fatalf("list versions: %v", aerr)
+	}
+	var nulls []*Object
+	for _, v := range versions {
+		if v.isNullVersion() {
+			nulls = append(nulls, v)
+		}
+	}
+	current := f.meta(t, bucket, key)
+	if len(nulls) != 1 || nulls[0].Seq != current.Seq {
+		t.Fatalf("null versions = %d, want exactly the current one (%s)", len(nulls), current.Seq)
+	}
+	if current.DeleteMarker {
+		return
+	}
+	if got := f.read(t, bucket, key, ""); current.ETag != md5ETag(got) {
+		t.Errorf("current body %q does not match its ETag %s", got, current.ETag)
+	}
+}
+
+func TestPutObjectStream_concurrentWritesToASuspendedKey(t *testing.T) {
+	for range 10 {
+		// Given: a version-suspended bucket, where every write of a key
+		// replaces its one null version
+		f := newInProcessFixtureOn(t, slowVersionScans{state.NewMemoryStore()})
+		f.ensureBucket(t, "bkt")
+		f.setVersioning(t, "bkt", versioningSuspended)
+		f.put(t, "bkt", "k", "first")
+
+		// When: writers overwrite the key at once
+		var wg sync.WaitGroup
+		for i := range 8 {
+			wg.Go(func() {
+				body := strings.Repeat("x", i+1)
+				if _, aerr := f.svc.PutObjectBytes(context.Background(), "bkt", "k", []byte(body), events.S3PutObjectOptions{}); aerr != nil {
+					t.Errorf("put %q: %v", body, aerr)
+				}
+			})
+		}
+		wg.Wait()
+
+		// Then: the key still has exactly one null version, and it is readable
+		f.assertOneNullVersion(t, "bkt", "k")
+	}
+}
+
+func TestCreateDeleteMarker_racingAWriteToASuspendedKey(t *testing.T) {
+	for range 10 {
+		// Given: a version-suspended key
+		f := newInProcessFixtureOn(t, slowVersionScans{state.NewMemoryStore()})
+		f.ensureBucket(t, "bkt")
+		f.setVersioning(t, "bkt", versioningSuspended)
+		f.put(t, "bkt", "k", "first")
+		b := f.bucket(t, "bkt")
+
+		// When: a delete and a write of the key race
+		var wg sync.WaitGroup
+		wg.Go(func() {
+			if _, aerr := f.svc.handler.createDeleteMarker(httptest.NewRequest(http.MethodDelete, "/bkt/k", nil), b, "k"); aerr != nil {
+				t.Errorf("delete: %v", aerr)
+			}
+		})
+		wg.Go(func() {
+			if _, aerr := f.svc.PutObjectBytes(context.Background(), "bkt", "k", []byte("second"), events.S3PutObjectOptions{}); aerr != nil {
+				t.Errorf("put: %v", aerr)
+			}
+		})
+		wg.Wait()
+
+		// Then: whichever landed last is the key's one null version, and a
+		// current object still has its body
+		f.assertOneNullVersion(t, "bkt", "k")
 	}
 }

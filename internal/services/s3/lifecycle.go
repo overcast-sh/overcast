@@ -859,14 +859,9 @@ func (h *Handler) expireCurrentVersion(ctx context.Context, b *Bucket, current *
 		marker.VersionID = marker.Seq
 	}
 
-	if aerr := h.store.putObjectMeta(ctx, marker); aerr != nil {
-		h.log.Error("lifecycle: promote expiration delete marker",
-			zap.String("bucket", marker.Bucket), zap.String("key", marker.Key), zap.Error(aerr))
-		return
-	}
 	// In a suspended bucket the marker is the key's null version, so this
 	// also drops the null version it replaced.
-	if aerr := h.commitVersion(ctx, b, marker); aerr != nil {
+	if aerr := h.commitMarker(ctx, b, marker); aerr != nil {
 		h.log.Error("lifecycle: add expiration delete marker",
 			zap.String("bucket", marker.Bucket), zap.String("key", marker.Key), zap.Error(aerr))
 		return

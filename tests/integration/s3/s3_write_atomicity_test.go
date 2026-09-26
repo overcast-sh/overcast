@@ -14,12 +14,14 @@ package s3_test
 // and every read that checks the outcome, goes through the AWS SDK.
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"net/url"
 	"strings"
 	"sync"
@@ -109,8 +111,10 @@ func assertSDKObject(t *testing.T, client *s3.Client, bucket, key, wantBody, wan
 // abandonedUpload sends a request whose declared Content-Length is longer than
 // the body that follows, then half-closes the connection: the server sees the
 // client go away part way through the body. It returns once the server has
-// finished with the request and closed its side, so the write's outcome is
-// settled before the test looks at it.
+// answered and closed its side, so the write's outcome is settled before the
+// test looks at it, and it fails the test unless the server reports the write
+// as failed — an answer given before the body was read would leave the test
+// proving nothing.
 func abandonedUpload(t *testing.T, srv *helpers.TestServer, method, path, partialBody string) {
 	t.Helper()
 	u, err := url.Parse(srv.URL)
@@ -129,7 +133,18 @@ func abandonedUpload(t *testing.T, srv *helpers.TestServer, method, path, partia
 	if err := conn.(*net.TCPConn).CloseWrite(); err != nil {
 		t.Fatalf("half-close: %v", err)
 	}
-	_, _ = io.Copy(io.Discard, conn) // returns when the server closes the connection
+	reply, err := io.ReadAll(conn) // returns when the server closes the connection
+	if err != nil {
+		t.Fatalf("read reply: %v", err)
+	}
+	resp, err := http.ReadResponse(bufio.NewReader(bytes.NewReader(reply)), nil)
+	if err != nil {
+		t.Fatalf("parse reply %q: %v", reply, err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("abandoned upload answered %s, want the failed write's 500", resp.Status)
+	}
 }
 
 // ---- PutObject -------------------------------------------------------------

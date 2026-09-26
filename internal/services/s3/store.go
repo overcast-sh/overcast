@@ -5,8 +5,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -319,24 +321,20 @@ func (s *s3Store) openBody(obj *Object) (*os.File, *protocol.AWSError) {
 // whose bytes come from another object.
 func (s *s3Store) bodyOf(src *Object) bodyFill {
 	return func(w io.Writer) (int64, error) {
-		f, aerr := s.openBody(src)
-		if aerr != nil {
-			return 0, aerr
-		}
-		defer f.Close()
-		return io.Copy(w, f)
+		return s.bodies.copyTo(w, bodyRel(src.Bucket, src.Key, src.VersionID))
 	}
 }
 
-// storeObject writes obj's body from fill and then the record that makes it
-// the key's current object, as one step: obj takes its ETag (from etagOf) and
-// ContentLength from the body that was written, and if either the body or the
-// record cannot be stored, the key keeps the object it had, byte for byte. See
-// bodyFiles.replace. Streaming means the body is never buffered in memory.
-func (s *s3Store) storeObject(ctx context.Context, obj *Object, fill bodyFill, etagOf func(bodyDigest) string) *protocol.AWSError {
+// storeObject writes obj's body from fill and then runs commit to store the
+// records that make it the key's current object, as one step: obj takes its
+// ETag (from etagOf) and ContentLength from the body that was written, and if
+// the body cannot be written or commit fails, the key keeps the object it had,
+// byte for byte. See bodyFiles.replace. Streaming means the body is never
+// buffered in memory.
+func (s *s3Store) storeObject(obj *Object, fill bodyFill, etagOf func(bodyDigest) string, commit func() *protocol.AWSError) *protocol.AWSError {
 	return s.bodies.replace(bodyRel(obj.Bucket, obj.Key, obj.VersionID), fill, func(d bodyDigest) *protocol.AWSError {
 		obj.ETag, obj.ContentLength = etagOf(d), d.size
-		return s.putObjectMeta(ctx, obj)
+		return commit()
 	})
 }
 
@@ -358,13 +356,23 @@ func (s *s3Store) putObjectMeta(ctx context.Context, obj *Object) *protocol.AWSE
 // unversioned path: a key in a versioned bucket is never removed this way,
 // because a delete there either adds a delete marker or removes one specific
 // version — see handler_object.go's DeleteObject.
+//
+// It holds the body path's lock, so a concurrent write of the key either
+// lands entirely before the delete or entirely after it.
 func (s *s3Store) deleteObject(ctx context.Context, bucket, key string) *protocol.AWSError {
-	if err := s.store.Delete(ctx, nsObjects, objectStoreKey(bucket, key)); err != nil {
-		return protocol.Wrap(protocol.ErrInternalError, err)
-	}
-	// Remove body file — ignore "not found" since DeleteObject is idempotent.
-	if err := s.bodies.remove(bodyRel(bucket, key, "")); err != nil && !os.IsNotExist(err) {
-		return protocol.Wrap(protocol.ErrInternalError, fmt.Errorf("s3: remove body %s/%s: %w", bucket, key, err))
+	rel := bodyRel(bucket, key, "")
+	aerr := s.bodies.locked(rel, func() *protocol.AWSError {
+		if err := s.store.Delete(ctx, nsObjects, objectStoreKey(bucket, key)); err != nil {
+			return protocol.Wrap(protocol.ErrInternalError, err)
+		}
+		// Remove body file — ignore "not found" since DeleteObject is idempotent.
+		if err := s.bodies.remove(rel); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return protocol.Wrap(protocol.ErrInternalError, fmt.Errorf("s3: remove body %s/%s: %w", bucket, key, err))
+		}
+		return nil
+	})
+	if aerr != nil {
+		return aerr
 	}
 	// Remove the bucket directory if it is now empty; ignore errors since
 	// other objects may still be present or the directory may not exist.
@@ -787,7 +795,7 @@ func (s *s3Store) partsOf(uploadID string, parts []*Part) bodyFill {
 	return func(w io.Writer) (int64, error) {
 		var total int64
 		for _, p := range parts {
-			n, err := s.copyPart(w, uploadID, p.PartNumber)
+			n, err := s.bodies.copyTo(w, partRel(uploadID, p.PartNumber))
 			total += n
 			if err != nil {
 				return total, err
@@ -795,16 +803,6 @@ func (s *s3Store) partsOf(uploadID string, parts []*Part) bodyFill {
 		}
 		return total, nil
 	}
-}
-
-// copyPart copies one part's body into w.
-func (s *s3Store) copyPart(w io.Writer, uploadID string, partNumber int) (int64, error) {
-	f, err := s.bodies.open(partRel(uploadID, partNumber))
-	if err != nil {
-		return 0, err
-	}
-	defer f.Close()
-	return io.Copy(w, f)
 }
 
 // ---- Multipart-specific errors ---------------------------------------------

@@ -883,6 +883,8 @@ findings:
     - ListObjects (v1) omits the per-object Owner element AWS always returns, and per-object ChecksumAlgorithm/ChecksumType are absent from both listings.
     - S3 InvalidArgument responses omit the ArgumentName and ArgumentValue elements real S3 returns, because protocol.AWSError has no fields for them.
     - CORS rule Id and encryption BlockedEncryptionTypes are not represented by the current stored/wire models.
+    - A multipart object's ETag hashes its assembled bytes rather than its parts' MD5s, so the digest differs from S3's while the "-N" shape matches (#2232).
+    - A bucket named "multipart" shares its body directory with in-progress multipart parts, so deleting it discards every open upload's parts (#2234).
     - CopyObject does not yet honour If-None-Match or If-Match, which AWS accepts on it alongside PutObject and CompleteMultipartUpload (#1678).
   intentionally_partial:
     - Requester Pays and archive restore are unimplemented, so ListObjectsV2 accepts x-amz-request-payer and x-amz-optional-object-attributes and returns neither x-amz-request-charged nor RestoreStatus - which is what AWS returns for a bucket that is not Requester Pays and an object that was never restored.

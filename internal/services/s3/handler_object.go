@@ -146,9 +146,8 @@ func (h *Handler) PutObject(w http.ResponseWriter, r *http.Request) {
 	if cond.active() {
 		// Held until the handler returns, so the condition and the write it
 		// guards are one step against any other conditional writer for this
-		// key. It covers the body stream too: for an unversioned bucket the
-		// body file *is* the key's current bytes, so a check that released
-		// before the stream would let a loser overwrite the winner's object.
+		// key: a check that released before the write committed would let a
+		// loser overwrite the winner's object.
 		defer h.objectLocks.Lock(objectStoreKey(bucket, key))()
 		if aerr := h.checkConditionalWrite(r.Context(), cond, bucket, key); aerr != nil {
 			protocol.WriteXMLError(w, r, aerr)
@@ -205,10 +204,8 @@ func (h *Handler) writeObject(ctx context.Context, b *Bucket, obj *Object, body 
 	if aerr != nil {
 		return "", aerr
 	}
-	if aerr := h.store.storeObject(ctx, obj, copyFrom(body), bodyDigest.etag); aerr != nil {
-		return "", aerr
-	}
-	if aerr := h.commitVersion(ctx, b, obj); aerr != nil {
+	commit := func() *protocol.AWSError { return h.commitObject(ctx, b, obj) }
+	if aerr := h.store.storeObject(obj, copyFrom(body), bodyDigest.etag, commit); aerr != nil {
 		return "", aerr
 	}
 	h.publishObjectEvent(ctx, events.S3ObjectCreated, obj, stamp, "ObjectCreated:Put", obj.ContentLength, obj.ETag)
@@ -839,10 +836,7 @@ func (h *Handler) createDeleteMarker(r *http.Request, b *Bucket, key string) (de
 	if aerr != nil {
 		return deleteOutcome{}, aerr
 	}
-	if aerr := h.store.putObjectMeta(ctx, marker); aerr != nil {
-		return deleteOutcome{}, aerr
-	}
-	if aerr := h.commitVersion(ctx, b, marker); aerr != nil {
+	if aerr := h.commitMarker(ctx, b, marker); aerr != nil {
 		return deleteOutcome{}, aerr
 	}
 
@@ -988,11 +982,8 @@ func (h *Handler) CopyObject(w http.ResponseWriter, r *http.Request) {
 	// way. The source is read in full before the destination changes, which
 	// is what lets a copy onto itself (the documented way to replace an
 	// object's metadata) keep its bytes.
-	if aerr := h.store.storeObject(r.Context(), dest, h.store.bodyOf(src), bodyDigest.etag); aerr != nil {
-		protocol.WriteXMLError(w, r, aerr)
-		return
-	}
-	if aerr := h.commitVersion(r.Context(), destB, dest); aerr != nil {
+	commit := func() *protocol.AWSError { return h.commitObject(r.Context(), destB, dest) }
+	if aerr := h.store.storeObject(dest, h.store.bodyOf(src), bodyDigest.etag, commit); aerr != nil {
 		protocol.WriteXMLError(w, r, aerr)
 		return
 	}

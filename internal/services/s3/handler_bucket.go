@@ -239,23 +239,8 @@ func (h *Handler) validateNewBucketName(bucket, namespace, region string) *proto
 // leaves the existing bucket untouched, for the caller to answer the way its
 // operation requires. It stamps the creation date and announces the new
 // bucket on the event bus.
-//
-// The check and the store are held under the name's lock, so of any number of
-// concurrent creates exactly one sees the name free; every other one sees the
-// bucket it created. Bucket names are global, not per region, so the name
-// alone is the key.
 func (h *Handler) createBucket(ctx context.Context, b *Bucket) (created bool, aerr *protocol.AWSError) {
-	defer h.bucketLocks.Lock(b.Name)()
-	exists, aerr := h.store.bucketExists(ctx, b.Name)
-	if aerr != nil {
-		return false, aerr
-	}
-	if exists {
-		return false, nil
-	}
-
-	b.CreationDate = h.clk.Now().UTC()
-	if aerr := h.store.putBucket(ctx, b); aerr != nil {
+	if created, aerr = h.claimBucketName(ctx, b); !created {
 		return false, aerr
 	}
 
@@ -280,6 +265,24 @@ func (h *Handler) createBucket(ctx context.Context, b *Bucket) (created bool, ae
 			Source:  "s3",
 			Payload: events.ResourcePayload{Name: b.Name, ARN: protocol.ARN("", "", "s3", b.Name)},
 		})
+	}
+	return true, nil
+}
+
+// claimBucketName stores b unless a bucket of its name exists, holding the
+// name's lock across the check and the store, so of any number of concurrent
+// creates exactly one sees the name free and every other one sees the bucket
+// it created (#2126). Bucket names are global, not per region, so the name
+// alone is the key.
+func (h *Handler) claimBucketName(ctx context.Context, b *Bucket) (bool, *protocol.AWSError) {
+	defer h.bucketLocks.Lock(b.Name)()
+	exists, aerr := h.store.bucketExists(ctx, b.Name)
+	if aerr != nil || exists {
+		return false, aerr
+	}
+	b.CreationDate = h.clk.Now().UTC()
+	if aerr := h.store.putBucket(ctx, b); aerr != nil {
+		return false, aerr
 	}
 	return true, nil
 }

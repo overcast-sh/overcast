@@ -265,11 +265,8 @@ func (h *Handler) CompleteMultipartUpload(w http.ResponseWriter, r *http.Request
 	// Stream the parts, in order, into the object's body, computing its MD5
 	// on the way. A failure part way leaves the key as it was and the upload
 	// intact, so the client can retry the completion.
-	if aerr := h.store.storeObject(r.Context(), obj, h.store.partsOf(uploadID, orderedParts), multipartETag(len(orderedParts))); aerr != nil {
-		protocol.WriteXMLError(w, r, aerr)
-		return
-	}
-	if aerr := h.commitVersion(r.Context(), b, obj); aerr != nil {
+	commit := func() *protocol.AWSError { return h.commitObject(r.Context(), b, obj) }
+	if aerr := h.store.storeObject(obj, h.store.partsOf(uploadID, orderedParts), multipartETag(len(orderedParts)), commit); aerr != nil {
 		protocol.WriteXMLError(w, r, aerr)
 		return
 	}
@@ -292,8 +289,10 @@ func (h *Handler) CompleteMultipartUpload(w http.ResponseWriter, r *http.Request
 	})
 }
 
-// multipartETag is the ETag of an object assembled from parts: the MD5 of its
-// bytes, suffixed with the number of parts.
+// multipartETag is the ETag Overcast gives an object assembled from parts: the
+// MD5 of its bytes, suffixed with the number of parts. S3 hashes the parts'
+// binary MD5s rather than the bytes, so the digest differs from AWS's while
+// the "-N" shape matches (#2232).
 func multipartETag(parts int) func(bodyDigest) string {
 	return func(d bodyDigest) string { return fmt.Sprintf(`"%x-%d"`, d.md5, parts) }
 }

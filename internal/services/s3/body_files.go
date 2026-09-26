@@ -55,34 +55,51 @@ func (d bodyDigest) etag() string { return fmt.Sprintf(`"%x"`, d.md5) }
 type bodyFiles struct {
 	dir string
 
-	// prepared guards prepare, which runs on first use rather than at
+	// swept guards sweepStaged, which runs on first use rather than at
 	// construction — New must not touch the disk (AGENTS.md startup budget).
-	prepared sync.Once
+	swept sync.Once
 
-	// installs serialises installing a body at a path with committing the
-	// record that describes it, so two writers of one path cannot leave one's
-	// bytes under the other's record.
-	installs serviceutil.RecordLocks
+	// paths serialises every change to what a body path holds together with
+	// the records that describe it — installing a body and committing its
+	// records, or removing a body with its record — so two writers of one path
+	// cannot leave one's bytes under the other's records. Every null version of
+	// a key shares one path, which is why a suspended bucket's null-version
+	// bookkeeping happens under it too.
+	paths serviceutil.RecordLocks
 }
 
 func newBodyFiles(dir string) *bodyFiles {
 	return &bodyFiles{dir: dir}
 }
 
-// root opens the body directory. The caller closes it.
+// root opens the body directory, creating it on first need. The caller
+// closes it.
 func (b *bodyFiles) root() (*os.Root, error) {
-	b.prepared.Do(b.prepare)
-	return os.OpenRoot(b.dir)
+	b.swept.Do(b.sweepStaged)
+	root, err := os.OpenRoot(b.dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		if err := os.MkdirAll(b.dir, 0o755); err != nil {
+			return nil, err
+		}
+		root, err = os.OpenRoot(b.dir)
+	}
+	return root, err
 }
 
-// prepare creates the directory and discards whatever a previous process left
-// staged: a staged body belongs to a write that never completed, so no record
-// refers to it. Neither step can usefully fail here — a directory that cannot
-// be created fails the OpenRoot that follows, and a leftover that cannot be
-// removed costs only disk space.
-func (b *bodyFiles) prepare() {
-	_ = os.MkdirAll(b.dir, 0o755)
+// sweepStaged discards whatever a previous process left staged: a staged body
+// belongs to a write that never completed, so no record refers to it. A
+// leftover that cannot be removed costs only disk space, so a failure here is
+// not worth failing a request over.
+func (b *bodyFiles) sweepStaged() {
 	_ = os.RemoveAll(filepath.Join(b.dir, stagingDir))
+}
+
+// locked runs fn holding rel's path lock, for a change to what rel holds that
+// installs no new body: removing a version, or a delete marker replacing the
+// null version whose body is stored there.
+func (b *bodyFiles) locked(rel string, fn func() *protocol.AWSError) *protocol.AWSError {
+	defer b.paths.Lock(rel)()
+	return fn()
 }
 
 // open opens the body at rel for reading. The caller closes it.
@@ -93,6 +110,16 @@ func (b *bodyFiles) open(rel string) (*os.File, error) {
 	}
 	defer root.Close()
 	return root.Open(rel)
+}
+
+// copyTo copies the body at rel into w.
+func (b *bodyFiles) copyTo(w io.Writer, rel string) (int64, error) {
+	f, err := b.open(rel)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+	return io.Copy(w, f)
 }
 
 // remove deletes the file, or empty directory, at rel.
@@ -122,10 +149,11 @@ func (b *bodyFiles) removeAll(rel string) error {
 // runs, so a fill that fails — a client that disconnects, a producer that
 // gives up — leaves whatever rel held untouched. Once fill has succeeded the
 // staged file is renamed over rel, and commit is handed its digest to store
-// the record that describes it. If commit fails, rel is put back as it was:
-// the previous body is restored from a hard link taken before the rename, or
-// the new file is removed when there was no previous body. No staged file
-// outlives the call.
+// the records that describe it, under rel's path lock. If commit fails, rel is
+// put back as it was: the previous body is restored from where it was kept
+// before the rename, or the new file is removed when there was no previous
+// body. commit must therefore fail only before anything it stored is visible.
+// No staged file outlives the call.
 func (b *bodyFiles) replace(rel string, fill bodyFill, commit func(bodyDigest) *protocol.AWSError) *protocol.AWSError {
 	root, err := b.root()
 	if err != nil {
@@ -139,16 +167,18 @@ func (b *bodyFiles) replace(rel string, fill bodyFill, commit func(bodyDigest) *
 	}
 	defer func() { _ = root.Remove(staged) }() // already gone once installed
 
-	defer b.installs.Lock(rel)()
-	undo, done, err := installBody(root, staged, rel)
+	defer b.paths.Lock(rel)()
+	inst, err := installBody(root, staged, rel)
 	if err != nil {
 		return bodyError(rel, err)
 	}
 	if aerr := commit(digest); aerr != nil {
-		undo()
+		if err := inst.undo(); err != nil {
+			return bodyError(rel, errors.Join(aerr, fmt.Errorf("restore previous body: %w", err)))
+		}
 		return aerr
 	}
-	done()
+	inst.done()
 	return nil
 }
 
@@ -175,35 +205,70 @@ func stageBody(root *os.Root, fill bodyFill) (string, bodyDigest, error) {
 	return name, bodyDigest{md5: h.Sum(nil), size: n}, nil
 }
 
-// installBody renames staged over rel in one step. Before it does, it keeps a
-// hard link to whatever rel held, so the swap can be reversed: undo puts rel
-// back as it was, and done drops the kept link once the swap is final.
+// installation is a body renamed into place, with what rel held before it
+// kept aside until the swap is final.
+type installation struct {
+	root *os.Root
+	rel  string
+	kept string // "" when rel held nothing
+}
+
+// installBody keeps whatever rel holds, then renames staged over it.
 //
-// On a filesystem without hard links the previous body cannot be kept, so undo
-// leaves the new one in place rather than lose both.
-func installBody(root *os.Root, staged, rel string) (undo, done func(), err error) {
-	if err := root.MkdirAll(filepath.Dir(rel), 0o755); err != nil {
-		return nil, nil, err
-	}
-	kept := staged + ".prev"
-	linkErr := root.Link(rel, kept)
-	if err := root.Rename(staged, rel); err != nil {
-		if linkErr == nil {
-			_ = root.Remove(kept)
-		}
-		return nil, nil, err
-	}
-	switch {
-	case linkErr == nil:
-		undo = func() { _ = root.Rename(kept, rel) }
-		done = func() { _ = root.Remove(kept) }
-	case errors.Is(linkErr, fs.ErrNotExist):
-		undo = func() { _ = root.Remove(rel) }
-		done = func() {}
+// The previous body is kept as a hard link, so rel is replaced in one atomic
+// rename and a concurrent reader never finds it missing. On a filesystem
+// without hard links it is renamed aside instead, which leaves rel briefly
+// absent but still lets a failed commit put it back.
+func installBody(root *os.Root, staged, rel string) (installation, error) {
+	inst := installation{root: root, rel: rel, kept: staged + ".prev"}
+	switch err := root.Link(rel, inst.kept); {
+	case err == nil:
+	case errors.Is(err, fs.ErrNotExist):
+		inst.kept = ""
 	default:
-		undo, done = func() {}, func() {}
+		if err := root.Rename(rel, inst.kept); err != nil {
+			return installation{}, err
+		}
 	}
-	return undo, done, nil
+	if err := renameInto(root, staged, rel); err != nil {
+		_ = inst.undo()
+		return installation{}, err
+	}
+	return inst, nil
+}
+
+// renameInto renames staged to rel, creating rel's directory. A deleteObject
+// that removes a bucket directory it just emptied can race the directory's
+// creation, so a rename that finds it gone creates it again once.
+func renameInto(root *os.Root, staged, rel string) error {
+	var err error
+	for range 2 {
+		if err = root.MkdirAll(filepath.Dir(rel), 0o755); err != nil {
+			return err
+		}
+		if err = root.Rename(staged, rel); !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+	}
+	return err
+}
+
+// undo puts rel back as it was before the installation.
+func (i installation) undo() error {
+	if i.kept == "" {
+		if err := i.root.Remove(i.rel); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+		return nil
+	}
+	return i.root.Rename(i.kept, i.rel)
+}
+
+// done drops the previous body once the swap is final.
+func (i installation) done() {
+	if i.kept != "" {
+		_ = i.root.Remove(i.kept)
+	}
 }
 
 // bodyError reports a body file that could not be written as S3's
