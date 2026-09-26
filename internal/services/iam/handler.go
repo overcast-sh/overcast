@@ -246,7 +246,8 @@ type userXML struct {
 
 // attachedPermissionsBoundaryXML is AWS's AttachedPermissionsBoundary, the
 // shape User and Role carry their boundary in. The type member is AWS's
-// PermissionsBoundaryAttachmentType enum, whose only value is "Policy".
+// PermissionsBoundaryAttachmentType enum, whose only value is
+// "PermissionsBoundaryPolicy".
 type attachedPermissionsBoundaryXML struct {
 	PermissionsBoundaryType string `xml:"PermissionsBoundaryType"`
 	PermissionsBoundaryArn  string `xml:"PermissionsBoundaryArn"`

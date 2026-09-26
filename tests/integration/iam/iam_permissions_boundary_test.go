@@ -197,8 +197,11 @@ func TestCreateUser_permissionsBoundary_roundTrips(t *testing.T) {
 	if boundary == nil {
 		t.Fatal("GetUser returned no PermissionsBoundary")
 	}
-	if boundary.PermissionsBoundaryType != "Policy" || boundary.PermissionsBoundaryArn != arn {
-		t.Fatalf("PermissionsBoundary = %+v, want type Policy and arn %s", *boundary, arn)
+	// The type is the enum's wire value, not its member name: the model names
+	// the one member of PermissionsBoundaryAttachmentType "Policy" but gives it
+	// the value "PermissionsBoundaryPolicy", and the value is what AWS sends.
+	if boundary.PermissionsBoundaryType != "PermissionsBoundaryPolicy" || boundary.PermissionsBoundaryArn != arn {
+		t.Fatalf("PermissionsBoundary = %+v, want type PermissionsBoundaryPolicy and arn %s", *boundary, arn)
 	}
 }
 
@@ -216,10 +219,10 @@ func TestCreateRole_permissionsBoundary_roundTrips(t *testing.T) {
 	defer resp.Body.Close()
 	helpers.AssertStatus(t, resp, http.StatusOK)
 
-	// Then: GetRole reports it
+	// Then: GetRole reports it, typed with the enum's wire value
 	boundary := getRoleBoundary(t, srv, "bounded-role")
-	if boundary == nil || boundary.PermissionsBoundaryArn != arn {
-		t.Fatalf("PermissionsBoundary = %+v, want arn %s", boundary, arn)
+	if boundary == nil || boundary.PermissionsBoundaryArn != arn || boundary.PermissionsBoundaryType != "PermissionsBoundaryPolicy" {
+		t.Fatalf("PermissionsBoundary = %+v, want type PermissionsBoundaryPolicy and arn %s", boundary, arn)
 	}
 }
 
