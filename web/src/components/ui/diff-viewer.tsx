@@ -46,11 +46,8 @@ export function DiffViewer({
       className={cn("overflow-hidden rounded-card border border-border bg-bg-elevated", className)}
     >
       <div className="grid grid-cols-2 border-b border-border bg-bg-muted">
-        {[originalLabel, modifiedLabel].map((label) => (
-          <span key={label} className={cn(fieldLabel, "px-3 py-2 text-fg-subtle")}>
-            {label}
-          </span>
-        ))}
+        <span className={cn(fieldLabel, "px-3 py-2 text-fg-subtle")}>{originalLabel}</span>
+        <span className={cn(fieldLabel, "px-3 py-2 text-fg-subtle")}>{modifiedLabel}</span>
       </div>
       <DiffEditor
         height={height}

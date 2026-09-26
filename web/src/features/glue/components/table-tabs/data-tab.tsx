@@ -10,6 +10,7 @@ import { ResourceListCard } from "@/components/ui/resource-list-page"
 import { SkeletonRows } from "@/components/ui/skeleton"
 import { engineStatusQueryOptions } from "@/features/athena/data"
 import { memorySource } from "@/lib/data-sources/memory-source"
+import { parseS3Uri } from "@/lib/s3-uri"
 import { formatQuantity } from "@/lib/format"
 import { PREVIEW_ROWS, queryFailure } from "../../athena-query"
 import { gluePreviewQueryOptions } from "../../data"
@@ -48,10 +49,23 @@ export function DataTab({ table }: { table: Table }) {
       </div>
     )
   }
-  return <AthenaPreview database={database} table={name} />
+  return (
+    <AthenaPreview
+      database={database}
+      table={name}
+      bucket={location ? parseS3Uri(location)?.bucket : undefined}
+    />
+  )
 }
 
-function AthenaPreview({ database, table }: { database: string; table: string }) {
+interface AthenaPreviewProps {
+  database: string
+  table: string
+  /** The table's bucket, where the advisory suggests results go. */
+  bucket?: string
+}
+
+function AthenaPreview({ database, table, bucket }: AthenaPreviewProps) {
   const preview = useQuery(gluePreviewQueryOptions(database, table))
   const result = preview.data
   const source = useMemo(
@@ -63,7 +77,7 @@ function AthenaPreview({ database, table }: { database: string; table: string })
 
   return (
     <div className="flex flex-col gap-3">
-      <ResultLocationAdvisory />
+      <ResultLocationAdvisory suggestedBucket={bucket} />
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" busy={preview.isFetching} busyLabel="Running" onClick={run}>
           <Play className="h-3.5 w-3.5" />
@@ -95,6 +109,7 @@ function AthenaPreview({ database, table }: { database: string; table: string })
         />
       ) : (
         !preview.isFetching &&
+        !preview.error &&
         !failure && (
           <ResourceListCard>
             <EmptyState

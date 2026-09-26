@@ -1,9 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
-import { AlertTriangle } from "lucide-react"
 import { ArnText } from "@/components/ui/arn-link"
 import { Definition, DefinitionCard } from "@/components/ui/definition-card"
-import { EmptyState } from "@/components/ui/primitives"
 import {
   CreateAction,
   RefreshAction,
@@ -19,6 +17,7 @@ import { databaseArn } from "../arns"
 import type { CreateTableWizardState } from "../create-table-param"
 import { glueDatabaseQueryOptions, glueTablesQueryOptions } from "../data"
 import { CreateTableWizard } from "./create-table/create-table-wizard"
+import { LoadErrorPage } from "./load-error-page"
 import { QueryInAthenaButton } from "./query-in-athena"
 import { TablesTable } from "./tables-table"
 
@@ -50,15 +49,7 @@ export function DatabaseDetail({
     : tables.data
 
   if (database.error) {
-    return (
-      <ResourceListPage title={name} meta="Database">
-        <EmptyState
-          icon={<AlertTriangle className="h-10 w-10" />}
-          title="Database not found"
-          description={database.error.message}
-        />
-      </ResourceListPage>
-    )
+    return <LoadErrorPage title={name} meta="Database" noun="database" error={database.error} />
   }
 
   const db = database.data

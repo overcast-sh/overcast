@@ -1,5 +1,6 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { ChevronRight, File, Folder } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { Combobox } from "@/components/ui/combobox"
 import { Input } from "@/components/ui/input"
 import { ResourceName } from "@/components/ui/resource-list-page"
@@ -44,11 +45,15 @@ function lastSegment(prefix: string): string {
 export function PrefixPicker({ value, onChange }: PrefixPickerProps) {
   const location = parseS3Uri(value)
   const bucket = location?.bucket ?? ""
-  const prefix = location?.key ?? ""
+  // A half-typed name lists the folder it is in, as the object browser's search does.
+  const prefix = (location?.key ?? "").replace(/[^/]*$/, "")
   const buckets = useQuery(s3BucketsQueryOptions())
+  // Nothing is listed until the text names a bucket that exists, so typing
+  // `s3://la…` does not list (and fail on) every prefix of a name on the way.
+  const known = !!buckets.data?.some((b) => b.name === bucket)
   const listing = useInfiniteQuery({
     ...s3ObjectsQueryOptions(bucket, prefix),
-    enabled: bucket !== "",
+    enabled: known,
   })
   const pages = listing.data?.pages ?? []
   const entries: Entry[] = [
@@ -79,7 +84,7 @@ export function PrefixPicker({ value, onChange }: PrefixPickerProps) {
           onChange={(e) => onChange(e.target.value)}
         />
       </div>
-      {bucket && (
+      {known && (
         <nav aria-label="Folder" className="flex flex-wrap items-center gap-1 font-mono text-xs">
           {ancestors(prefix).map((p, i) => (
             <span key={p} className="flex items-center gap-1">
@@ -95,7 +100,7 @@ export function PrefixPicker({ value, onChange }: PrefixPickerProps) {
           ))}
         </nav>
       )}
-      {bucket && (
+      {known && (
         <div className="max-h-72 overflow-y-auto rounded-card border border-border">
           <ResourceTable<Entry>
             variant="embedded"
@@ -125,6 +130,19 @@ export function PrefixPicker({ value, onChange }: PrefixPickerProps) {
               },
             ]}
           />
+          {listing.hasNextPage && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="m-1"
+              busy={listing.isFetchingNextPage}
+              busyLabel="Loading"
+              onClick={() => void listing.fetchNextPage()}
+            >
+              Load more
+            </Button>
+          )}
         </div>
       )}
     </div>

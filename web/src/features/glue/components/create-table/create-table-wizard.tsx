@@ -18,7 +18,7 @@ import { useResourceMutation } from "@/hooks/use-resource-mutation"
 import { formatQuantity } from "@/lib/format"
 import { cfnTableSnippet } from "../../cdk-snippet"
 import type { CreateTableWizardState } from "../../create-table-param"
-import { createTableMutationOptions, glueKeys } from "../../data"
+import { createTableMutationOptions } from "../../data"
 import { LocationStep } from "./location-step"
 import { ReviewStep } from "./review-step"
 import { SchemaStep } from "./schema-step"
@@ -70,7 +70,6 @@ function WizardBody({ initialLocation, database, onClose }: WizardBodyProps) {
 
   const create = useResourceMutation({
     options: createTableMutationOptions(),
-    invalidateKeys: [glueKeys.databases(), glueKeys.tables(), glueKeys.partitions()],
     successTitle: "Table created",
     successDescription: (vars) => `${vars.database}.${vars.tableInput.Name ?? ""}`,
     errorTitle: "Could not create the table",

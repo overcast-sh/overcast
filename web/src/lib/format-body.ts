@@ -157,7 +157,7 @@ function formatXML(text: string, useHtmlVoidTags = false): string {
     if (trimmed) lines.push(`${"  ".repeat(lineDepth)}${trimmed}`)
   }
 
-  for (let i = 0; i < compact.length;) {
+  for (let i = 0; i < compact.length; ) {
     if (compact[i] !== "<") {
       const nextTag = compact.indexOf("<", i)
       const end = nextTag === -1 ? compact.length : nextTag

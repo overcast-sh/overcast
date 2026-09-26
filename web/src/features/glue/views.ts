@@ -20,8 +20,8 @@ export function isTableTab(value: unknown): value is TableTab {
 
 /**
  * The create-table wizard, open over the page: `?create=s3`, optionally
- * with the prefix and database to start from — the link S3's *Create Glue
- * table from this prefix* builds.
+ * with the prefix to start from (`/glue/<database>?create=s3&location=…`
+ * also names the database), so any page can link to it on a prefix.
  */
 export interface CreateTableSearch {
   create?: "s3"

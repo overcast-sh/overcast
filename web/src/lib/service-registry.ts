@@ -57,7 +57,13 @@ import {
 // ── Category types ─────────────────────────────────────────────────────────
 
 export type ServiceCategory =
-  "storage" | "analytics" | "compute" | "messaging" | "security" | "networking" | "monitoring"
+  | "storage"
+  | "analytics"
+  | "compute"
+  | "messaging"
+  | "security"
+  | "networking"
+  | "monitoring"
 
 export const CATEGORY_LABELS: Record<ServiceCategory, string> = {
   storage: "Storage & Database",
@@ -484,8 +490,7 @@ export const SERVICES = {
     to: "/ses",
     category: "messaging",
     description: "Email sending service",
-    dashboardDescription:
-      "Email identities — verify addresses and domains; mail lands in the Inbox.",
+    dashboardDescription: "Email identities — verify addresses and domains; mail lands in the Inbox.",
     docKey: "ses",
   },
   pipes: {

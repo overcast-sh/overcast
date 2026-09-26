@@ -1,10 +1,8 @@
 import { useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import type { Table } from "@aws-sdk/client-glue"
-import { AlertTriangle } from "lucide-react"
-import { ArnText } from "@/components/ui/arn-link"
+import { ArnText, LINK_CLASS } from "@/components/ui/arn-link"
 import { Definition, DefinitionCard } from "@/components/ui/definition-card"
-import { EmptyState } from "@/components/ui/primitives"
 import { RefreshAction, ResourceListPage } from "@/components/ui/resource-list-page"
 import { S3UriLink } from "@/components/ui/s3-uri-link"
 import { SkeletonRows } from "@/components/ui/skeleton"
@@ -16,6 +14,7 @@ import { glueTableQueryOptions } from "../data"
 import { isIcebergTable, tableLocation } from "../table-format"
 import type { GlueTableSearch, TableTab } from "../views"
 import { FormatBadge } from "./format-badge"
+import { LoadErrorPage } from "./load-error-page"
 import { QueryInAthenaButton } from "./query-in-athena"
 import { DataTab } from "./table-tabs/data-tab"
 import { IcebergTab } from "./table-tabs/iceberg-tab"
@@ -62,7 +61,7 @@ function Overview({ table }: { table: Table }) {
           <Link
             to="/glue/$database"
             params={{ database: table.DatabaseName ?? "" }}
-            className="text-accent hover:underline"
+            className={LINK_CLASS}
           >
             {table.DatabaseName}
           </Link>
@@ -88,13 +87,7 @@ export function TableDetail({ database, name, search, onSearchChange }: TableDet
 
   if (query.error) {
     return (
-      <ResourceListPage title={name} meta={`Table in ${database}`}>
-        <EmptyState
-          icon={<AlertTriangle className="h-10 w-10" />}
-          title="Table not found"
-          description={query.error.message}
-        />
-      </ResourceListPage>
+      <LoadErrorPage title={name} meta={`Table in ${database}`} noun="table" error={query.error} />
     )
   }
 

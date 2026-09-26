@@ -21,7 +21,12 @@
  */
 
 import { mutationOptions, queryOptions } from "@tanstack/react-query"
-import type { PartitionInput, TableInput } from "@aws-sdk/client-glue"
+import {
+  AlreadyExistsException,
+  type PartitionError,
+  type PartitionInput,
+  type TableInput,
+} from "@aws-sdk/client-glue"
 import { glue } from "@/services/api"
 import { endpointStore } from "@/services/endpoint-store"
 import { PREVIEW_ROWS, runQuery, selectRows } from "./athena-query"
@@ -106,7 +111,6 @@ export function gluePrefixScanQueryOptions(bucket: string, prefix: string) {
     queryKey: glueKeys.prefixScan(bucket, prefix),
     queryFn: () => scanPrefix(bucket, prefix),
     enabled: bucket !== "",
-    staleTime: Infinity,
   })
 }
 
@@ -149,15 +153,46 @@ export interface CreateTableVars {
   partitions: PartitionInput[]
 }
 
-/** CreateTable, then the partitions; resolves with any partition BatchCreatePartition refused. */
+/** A database someone else created in the meantime is the database this wanted. */
+function ignoreAlreadyExists(error: unknown): void {
+  if (!(error instanceof AlreadyExistsException)) throw error
+}
+
+/**
+ * Adds the partitions of a table that now exists. A failed request does not
+ * undo the table, so it is reported as every partition refused, not thrown.
+ */
+async function addPartitions(
+  database: string,
+  table: string,
+  partitions: PartitionInput[],
+): Promise<PartitionError[]> {
+  try {
+    return await glue.batchCreatePartitions(database, table, partitions)
+  } catch (error) {
+    const ErrorMessage = error instanceof Error ? error.message : String(error)
+    return partitions.map((p) => ({ PartitionValues: p.Values, ErrorDetail: { ErrorMessage } }))
+  }
+}
+
+/**
+ * CreateDatabase when asked, CreateTable, then the partitions; resolves with
+ * any partition that was refused. The catalog is refetched however it ends,
+ * so a retry after a partial failure sees what was already created.
+ */
 export function createTableMutationOptions() {
   return mutationOptions({
     mutationKey: [...glueKeys.tables(), "create"] as const,
     mutationFn: async ({ database, createDatabase, tableInput, partitions }: CreateTableVars) => {
-      if (createDatabase) await glue.createDatabase(database)
+      if (createDatabase) await glue.createDatabase(database).catch(ignoreAlreadyExists)
       await glue.createTable(database, tableInput)
       if (partitions.length === 0) return []
-      return glue.batchCreatePartitions(database, tableInput.Name ?? "", partitions)
+      return addPartitions(database, tableInput.Name ?? "", partitions)
+    },
+    onSettled: (_data, _error, _vars, _result, { client }) => {
+      for (const queryKey of [glueKeys.databases(), glueKeys.tables(), glueKeys.partitions()]) {
+        void client.invalidateQueries({ queryKey })
+      }
     },
   })
 }

@@ -13,8 +13,12 @@ const INTEGER_TEXT = /^[-+]?(0|[1-9]\d*)$/
 const DECIMAL_TEXT = /^[-+]?(\d+\.\d*|\.\d+|\d+)([eE][-+]?\d+)?$/
 const LEADING_ZERO = /^[-+]?0\d/
 const DATE_TEXT = /^\d{4}-\d{2}-\d{2}$/
-/** Hive's timestamp text: a space or a `T` between date and time, optional fraction. */
-const TIMESTAMP_TEXT = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d{1,9})?$/
+/**
+ * Hive's timestamp text, `yyyy-MM-dd HH:mm:ss[.f]`. An ISO `T` between date
+ * and time is not it: LazySimpleSerDe reads such a value as NULL, so a
+ * crawler leaves that column a string, and so does this.
+ */
+const TIMESTAMP_TEXT = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d{1,9})?$/
 const BOOLEAN_TEXT = /^(true|false)$/i
 
 /** Integers are `bigint`, as a crawler registers them: `int` would break on the first large value. */

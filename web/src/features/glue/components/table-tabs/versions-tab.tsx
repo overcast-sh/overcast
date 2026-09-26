@@ -57,8 +57,10 @@ export function VersionsTab({ table, from, to, onCompare }: VersionsTabProps) {
         noun="versions"
         rowKey={(v) => v.VersionId ?? ""}
         onRowClick={(v) => {
-          const id = v.VersionId ?? ""
-          onCompare(ids[ids.indexOf(id) + 1] ?? id, id)
+          // With its predecessor; the oldest has none, so with the next newer.
+          const i = ids.indexOf(v.VersionId ?? "")
+          if (i < ids.length - 1) onCompare(ids[i + 1], ids[i])
+          else if (i > 0) onCompare(ids[i], ids[i - 1])
         }}
         rowClassName={(v) => (v.VersionId === toId ? "bg-accent-muted" : undefined)}
         emptyIcon={History}

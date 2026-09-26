@@ -44,6 +44,7 @@ export function isDataObject(object: ListedObject, prefix: string): boolean {
 }
 
 interface Segment {
+  /** The key, in lower case: Athena and Glue fold partition keys, as they fold columns. */
   key: string
   /** The value, with Hive's `%XX` escapes decoded. */
   value: string
@@ -58,18 +59,44 @@ function partitionSegments(relativeKey: string): Segment[] {
   for (const folder of folders) {
     const match = SEGMENT.exec(folder)
     if (!match) break
-    segments.push({ key: match[1], value: safeDecode(match[2]), folder })
+    segments.push({ key: match[1].toLowerCase(), value: hiveUnescapePath(match[2]), folder })
   }
   return segments
 }
 
-/** Hive escapes `:`, `/`, `=` and friends in partition values as `%XX`. */
-function safeDecode(value: string): string {
-  try {
-    return decodeURIComponent(value)
-  } catch {
-    return value
+/**
+ * The characters Hive's `FileUtils.escapePathName` writes as `%XX` in a
+ * partition folder's name, beside the control characters: the same set
+ * Overcast's own `MSCK REPAIR TABLE` and `INSERT` use. Anything else, spaces
+ * and non-ASCII included, is written as itself.
+ */
+const HIVE_ESCAPED = new Set("\"#%'*/:=?\\{[]^\x7f")
+
+function escapeChar(c: string): string {
+  return `%${c.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`
+}
+
+/** A partition value as Hive names its folder: `10:00` becomes `10%3A00`. */
+export function hiveEscapePath(value: string): string {
+  return [...value].map((c) => (c < " " || HIVE_ESCAPED.has(c) ? escapeChar(c) : c)).join("")
+}
+
+const HEX_PAIR = /^[0-9a-fA-F]{2}$/
+
+/** The inverse of `hiveEscapePath`: each `%XX` is the byte it names, anything else itself. */
+export function hiveUnescapePath(folder: string): string {
+  const input = new TextEncoder().encode(folder)
+  const bytes: number[] = []
+  for (let i = 0; i < input.length; i++) {
+    const pair = String.fromCharCode(input[i + 1] ?? 0, input[i + 2] ?? 0)
+    if (input[i] === 0x25 && HEX_PAIR.test(pair)) {
+      bytes.push(parseInt(pair, 16))
+      i += 2
+    } else {
+      bytes.push(input[i])
+    }
   }
+  return new TextDecoder().decode(new Uint8Array(bytes))
 }
 
 /**

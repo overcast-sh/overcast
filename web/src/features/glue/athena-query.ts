@@ -16,6 +16,12 @@ export const QUERY_WORKGROUP = "primary"
 /** How often a query the page is waiting on is polled. */
 const POLL_MS = 250
 
+/**
+ * How long the page waits for a query before handing it over to Athena's
+ * history. Generous: the first query after start-up may pull the engine image.
+ */
+export const QUERY_WAIT_MS = 5 * 60_000
+
 const FINISHED = new Set(["SUCCEEDED", "FAILED", "CANCELLED"])
 
 /** Athena's numeric types, which the grid right-aligns. */
@@ -41,6 +47,8 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
 /**
  * Starts `sql` and resolves with its execution once it has finished, however
  * it finished: a FAILED query is an answer for the page to show, not an error.
+ * Aborting stops the query as well as the wait; a query still running after
+ * `QUERY_WAIT_MS` is left to run, and the error names it.
  */
 export async function runQuery(
   sql: string,
@@ -52,10 +60,22 @@ export async function runQuery(
     QueryExecutionContext: context,
     WorkGroup: QUERY_WORKGROUP,
   })
-  for (;;) {
-    const execution = await athena.getQueryExecution(id)
-    if (FINISHED.has(execution.Status?.State ?? "")) return execution
-    await delay(POLL_MS, signal)
+  const deadline = Date.now() + QUERY_WAIT_MS
+  try {
+    for (;;) {
+      const execution = await athena.getQueryExecution(id)
+      const state = execution.Status?.State ?? ""
+      if (FINISHED.has(state)) return execution
+      if (Date.now() > deadline) {
+        throw new Error(
+          `Query ${id} is still ${state} after five minutes; Athena's history has it.`,
+        )
+      }
+      await delay(POLL_MS, signal)
+    }
+  } catch (error) {
+    if (signal?.aborted) void athena.stopQueryExecution(id).catch(() => undefined)
+    throw error
   }
 }
 

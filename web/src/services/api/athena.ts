@@ -4,6 +4,7 @@ import {
   GetQueryResultsCommand,
   GetWorkGroupCommand,
   StartQueryExecutionCommand,
+  StopQueryExecutionCommand,
   paginateListNamedQueries,
   paginateListWorkGroups,
   type GetQueryResultsOutput,
@@ -64,6 +65,10 @@ export const athena = {
   startQueryExecution: async (input: StartQueryExecutionInput): Promise<string> => {
     const out = await awsClients.athena().send(new StartQueryExecutionCommand(input))
     return out.QueryExecutionId ?? ""
+  },
+
+  stopQueryExecution: async (id: string): Promise<void> => {
+    await awsClients.athena().send(new StopQueryExecutionCommand({ QueryExecutionId: id }))
   },
 
   getQueryExecution: async (id: string): Promise<QueryExecution> => {

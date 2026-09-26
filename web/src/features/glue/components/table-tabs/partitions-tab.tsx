@@ -7,7 +7,9 @@ import { CreateAction, ResourceListCard } from "@/components/ui/resource-list-pa
 import { ResourceTable } from "@/components/ui/resource-table"
 import { S3UriLink } from "@/components/ui/s3-uri-link"
 import { formatDate } from "@/lib/format"
+import { parseS3Uri } from "@/lib/s3-uri"
 import { gluePartitionsQueryOptions } from "../../data"
+import { tableLocation } from "../../table-format"
 import { AddPartitionDialog } from "./add-partition-dialog"
 import { DiscoverPartitionsButton } from "./discover-partitions-button"
 import { ExpressionFilter } from "./expression-filter"
@@ -50,7 +52,7 @@ export function PartitionsTab({ table, expression, onExpressionChange }: Partiti
   const add = <CreateAction onClick={() => setAdding(true)}>Add partition</CreateAction>
   return (
     <div className="flex flex-col gap-3">
-      <ResultLocationAdvisory />
+      <ResultLocationAdvisory suggestedBucket={parseS3Uri(tableLocation(table) ?? "")?.bucket} />
       <div className="flex flex-wrap items-start gap-2">
         <ExpressionFilter
           // Remounts on a change from outside (Clear filter, Back), so the box shows it.

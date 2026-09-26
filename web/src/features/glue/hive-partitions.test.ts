@@ -1,4 +1,9 @@
-import { discoverPartitions, isDataObject } from "./hive-partitions"
+import {
+  discoverPartitions,
+  hiveEscapePath,
+  hiveUnescapePath,
+  isDataObject,
+} from "./hive-partitions"
 
 const obj = (key: string, size = 10) => ({ key, size })
 
@@ -44,5 +49,25 @@ describe("isDataObject", () => {
     ["t/folder/", 0, false],
   ])("treats %s (%i bytes) as data: %s", (key, size, data) => {
     expect(isDataObject({ key, size }, "t/")).toBe(data)
+  })
+})
+
+describe("Hive path escaping", () => {
+  it.each([
+    ["10:00", "10%3A00"],
+    ["2026-09-01 10:00", "2026-09-01 10%3A00"],
+    ["a/b=c", "a%2Fb%3Dc"],
+    ["café", "café"],
+  ])("escapes %s as Hive names its folder: %s", (value, folder) => {
+    expect(hiveEscapePath(value)).toBe(folder)
+  })
+
+  it("reads back what it escapes", () => {
+    const value = "é %/#:x"
+    expect(hiveUnescapePath(hiveEscapePath(value))).toBe(value)
+  })
+
+  it("lower-cases a folder's key, as Athena folds partition keys", () => {
+    expect(discoverPartitions("lake", "t/", [obj("t/Region=eu/a.csv")]).keys).toEqual(["region"])
   })
 })

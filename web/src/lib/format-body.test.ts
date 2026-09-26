@@ -4,8 +4,7 @@ import { formatBodyForDisplay, MAX_FORMAT_BYTES } from "./format-body"
 describe("formatBodyForDisplay", () => {
   it("does not indent after HTML void tags when the content type is HTML", () => {
     // Given: an S3-style HTML preview with void tags that never close.
-    const html =
-      '<html><head><meta charset="utf-8"><link rel="icon" href="/f.ico"></head><body>Hi<br><img src="x.png"><p>after</p></body></html>'
+    const html = "<html><head><meta charset=\"utf-8\"><link rel=\"icon\" href=\"/f.ico\"></head><body>Hi<br><img src=\"x.png\"><p>after</p></body></html>"
 
     const { text } = formatBodyForDisplay(html, "xml", "text/html")
 
@@ -15,13 +14,13 @@ describe("formatBodyForDisplay", () => {
       [
         "<html>",
         "  <head>",
-        '    <meta charset="utf-8">',
-        '    <link rel="icon" href="/f.ico">',
+        "    <meta charset=\"utf-8\">",
+        "    <link rel=\"icon\" href=\"/f.ico\">",
         "  </head>",
         "  <body>",
         "    Hi",
         "    <br>",
-        '    <img src="x.png">',
+        "    <img src=\"x.png\">",
         "    <p>",
         "      after",
         "    </p>",
@@ -38,9 +37,7 @@ describe("formatBodyForDisplay", () => {
     const { text } = formatBodyForDisplay(xml, "xml", "application/xml")
 
     expect(text).toBe(
-      ["<feed>", "  <link>", "    <href>", "      x", "    </href>", "  </link>", "</feed>"].join(
-        "\n",
-      ),
+      ["<feed>", "  <link>", "    <href>", "      x", "    </href>", "  </link>", "</feed>"].join("\n"),
     )
   })
 
@@ -49,7 +46,9 @@ describe("formatBodyForDisplay", () => {
       htmlVoidTags: true,
     })
 
-    expect(text).toBe(["<div>", "  <br>", "  <span>", "    x", "  </span>", "</div>"].join("\n"))
+    expect(text).toBe(
+      ["<div>", "  <br>", "  <span>", "    x", "  </span>", "</div>"].join("\n"),
+    )
   })
 
   it("returns oversized bodies as plain text without formatting or highlighting", () => {

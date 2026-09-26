@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { ResourceFormDialog } from "@/components/ui/resource-form-dialog"
 import { useResourceMutation } from "@/hooks/use-resource-mutation"
 import { createPartitionMutationOptions, glueKeys } from "../../data"
+import { hiveEscapePath } from "../../hive-partitions"
 import { tableLocation } from "../../table-format"
 import { buildPartitionInput } from "../../table-input"
 
@@ -18,7 +19,9 @@ interface AddPartitionDialogProps {
 /** Where Hive puts a partition by default: `key=value/` folders under the table's location. */
 function defaultLocation(table: Table, keys: string[], values: string[]): string {
   const base = tableLocation(table) ?? ""
-  const folders = keys.map((k, i) => `${k}=${encodeURIComponent(values[i] ?? "")}/`).join("")
+  const folders = keys
+    .map((k, i) => `${k.toLowerCase()}=${hiveEscapePath(values[i] ?? "")}/`)
+    .join("")
   return `${base.endsWith("/") ? base : `${base}/`}${folders}`
 }
 

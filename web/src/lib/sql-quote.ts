@@ -1,7 +1,7 @@
 /**
  * Quoting for the two SQL dialects Athena speaks: Hive DDL (`CREATE EXTERNAL
  * TABLE`, `MSCK REPAIR TABLE`) quotes names in backticks, and Trino DML
- * (`SELECT`) in double quotes. String literals are single-quoted in both.
+ * (`SELECT`) in double quotes.
  */
 
 /** A name as Hive DDL quotes it: `` `order date` ``. */
@@ -12,11 +12,6 @@ export function hiveIdentifier(name: string): string {
 /** A name as Trino quotes it: `"order date"`. */
 export function trinoIdentifier(name: string): string {
   return `"${name.replace(/"/g, '""')}"`
-}
-
-/** A string literal: `'it''s'`. */
-export function sqlString(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`
 }
 
 /**

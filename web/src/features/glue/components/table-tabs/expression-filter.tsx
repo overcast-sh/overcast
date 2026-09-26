@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useId, useState } from "react"
 import { Filter } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
@@ -28,6 +28,7 @@ export function ExpressionFilter({
   className,
 }: ExpressionFilterProps) {
   const [draft, setDraft] = useState(value)
+  const errorId = useId()
   const message = error instanceof Error ? error.message : error ? String(error) : undefined
   return (
     <form
@@ -43,7 +44,7 @@ export function ExpressionFilter({
         <Input
           aria-label="Partition expression"
           aria-invalid={message ? true : undefined}
-          aria-describedby={message ? "partition-expression-error" : undefined}
+          aria-describedby={message ? errorId : undefined}
           placeholder={`Glue expression, e.g. ${example} — ⏎ to apply`}
           className="pl-8 font-mono text-xs"
           value={draft}
@@ -51,7 +52,7 @@ export function ExpressionFilter({
         />
       </div>
       {message && (
-        <p id="partition-expression-error" role="alert" className="font-mono text-xs text-danger">
+        <p id={errorId} role="alert" className="font-mono text-xs text-danger">
           {message}
         </p>
       )}

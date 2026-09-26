@@ -19,6 +19,15 @@ describe("schemaFromText", () => {
     expect(schemaFromText("csv", 'a,b\n"x, y",2\n', false).quoted).toBe(true)
   })
 
+  it("does not call a quote inside a value quoting", () => {
+    expect(schemaFromText("csv", 'a,b\nsays "hi",2\n', false).quoted).toBe(false)
+  })
+
+  it("keeps a quoted CSV's dates as strings, which OpenCSVSerde cannot read as dates", () => {
+    const schema = schemaFromText("csv", 'name,day\n"x",2026-09-01\n', false)
+    expect(schema.columns[1]).toEqual({ Name: "day", Type: "string" })
+  })
+
   it("types JSON Lines keys from their values", () => {
     const schema = schemaFromText("jsonl", '{"id":1,"tags":["a"]}\n{"id":2,"tags":[]}\n', false)
     expect(schema.columns).toEqual([

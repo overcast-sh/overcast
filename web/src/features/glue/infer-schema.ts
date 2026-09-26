@@ -48,14 +48,32 @@ export function schemaFromText(
     }
   }
   const { head } = delimitedHead(text, format === "tsv" ? "\t" : ",", options)
+  const delimiter = head.delimiter ?? ","
+  const quoted = hasQuotedField(text, delimiter)
   return {
     format,
-    delimiter: head.delimiter,
-    quoted: text.includes('"'),
-    columns: head.columns.map((c, i) =>
-      column(c.name, inferTextHiveType(head.first.columns[i] ?? [])),
-    ),
+    delimiter,
+    quoted,
+    columns: head.columns.map((c, i) => {
+      const type = inferTextHiveType(head.first.columns[i] ?? [])
+      return column(c.name, quoted ? openCsvType(type) : type)
+    }),
   }
+}
+
+/** A field opens with a quote: the table needs OpenCSVSerde, which honours them. */
+function hasQuotedField(text: string, delimiter: string): boolean {
+  const escaped = delimiter.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  return new RegExp(`(^|[${escaped}\\n])"`).test(text)
+}
+
+/**
+ * OpenCSVSerde reads a DATE only as days since the epoch and a TIMESTAMP only
+ * as epoch millis, so text dates would read as NULL: like a crawler, keep them
+ * strings and let the query cast.
+ */
+function openCsvType(type: string): string {
+  return type === "date" || type === "timestamp" ? "string" : type
 }
 
 /** The schema of a Parquet object from its footer's fields. */
