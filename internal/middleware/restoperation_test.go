@@ -391,6 +391,52 @@ func TestDetectOperationOtherRESTServices(t *testing.T) {
 	}
 }
 
+// TestDetectOperationS3TablesLegacyGetTable pins the label and IAM action for
+// GetTable's pre-2025-06-06 binding, GET /tables/{tableBucketARN}/{namespace}/{name}
+// (#2264). The pinned model binds GetTable only at /get-table, so without an
+// explicit mapping the legacy request carries no operation. IAMEnforce treats
+// an unnamed request as its one fail-open case, so a policy denying
+// s3tables:GetTable would not have covered the SDKs that still send the path
+// form.
+func TestDetectOperationS3TablesLegacyGetTable(t *testing.T) {
+	const table = "/tables/arn%3Aaws%3As3tables%3Aus-east-1%3A000000000000%3Abucket%2Fb1/ns/orders"
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		want   string
+	}{
+		{"current binding", http.MethodGet, "/get-table?tableBucketARN=a&namespace=ns&name=orders", "GetTable"},
+		{"legacy binding", http.MethodGet, table, "GetTable"},
+		{"legacy binding, unescaped ARN", http.MethodGet, "/tables/arn:aws:s3tables:us-east-1:000000000000:bucket%2Fb1/ns/orders", "GetTable"},
+		{"delete on the same path", http.MethodDelete, table, "DeleteTable"},
+		{"sub-resource", http.MethodGet, table + "/policy", "GetTablePolicy"},
+		{"no fourth segment", http.MethodPut, table, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Given: a request signed for S3 Tables
+			r := signedRequest(tt.method, tt.path, "s3tables")
+
+			// When: the logger and IAM classify it
+			label := detectOperation(r)
+			action := classifyIAM(r).action
+
+			// Then: both name the operation S3 Tables serves there
+			if label != tt.want {
+				t.Errorf("detectOperation(%s %s) = %q, want %q", tt.method, tt.path, label, tt.want)
+			}
+			wantAction := ""
+			if tt.want != "" {
+				wantAction = "s3tables:" + tt.want
+			}
+			if action != wantAction {
+				t.Errorf("IAM action(%s %s) = %q, want %q", tt.method, tt.path, action, wantAction)
+			}
+		})
+	}
+}
+
 // TestDetectOperationS3Unchanged is the counterweight to the fix: it must not
 // have been achieved by labelling less. Every S3 shape the old switch knew
 // still resolves.

@@ -1741,10 +1741,36 @@ func restClaimFor(operationRegistry *awsapi.Registry, r *http.Request) (awsapi.C
 	if claimAnswersCaller(claim, credentialService) {
 		return claim, restClaimAnswers
 	}
+	if claim.CatchAll {
+		return callerClaim(credentialService)
+	}
 	if claimScopeMismatchesCaller(claim, credentialService) {
 		return claim, restClaimScopeMismatch
 	}
 	return awsapi.Claim{}, restClaimNone
+}
+
+// callerClaim classifies a request that only a root catch-all binding matched
+// ("/{Path+}", MediaStore Data's object operations) and that the caller did not
+// sign for the catch-all's own service.
+//
+// A catch-all matches every path, so the match is no evidence of the service
+// the caller addressed, and #887's scope-mismatch answer has nothing to stand
+// on. Before #2264 it fired anyway, so every signed request on a binding the
+// pinned models do not know was told "Credential should be scoped to correct
+// service: 'mediastore'". Such bindings are ones a model has retired or an SDK
+// newer than the pin has added, and S3 Tables' old GetTable binding is how the
+// .NET and Rust SDKs found it. The caller's own scope is the only evidence
+// left, and it names a real non-S3 service (addressesNonS3 established that),
+// so the request gets that service's generated 501, in the envelope its
+// protocol expects. A scope no REST model declares keeps today's S3 fallback,
+// as claimScopeMismatchesCaller does for the same reason.
+func callerClaim(credentialService string) (awsapi.Claim, restClaimOutcome) {
+	profile, ok := awsapi.SigningNameErrorProfile(credentialService)
+	if !ok {
+		return awsapi.Claim{}, restClaimNone
+	}
+	return awsapi.Claim{SigningName: credentialService, ErrorProfile: profile}, restClaimAnswers
 }
 
 // claimModeledPath walks the generated trie for a request, trying the escaped

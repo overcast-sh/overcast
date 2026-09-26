@@ -70,6 +70,7 @@ func (s *Service) RootRouters() map[string]chi.Router {
 	t := routers["/tables"]
 	t.Get("/{tableBucketARN}", serve(http.StatusOK, fillListTables, s.listTablesTyped))
 	t.Put("/{tableBucketARN}/{namespace}", serve(http.StatusOK, fillCreateTable, s.createTableTyped))
+	t.Get("/{tableBucketARN}/{namespace}/{name}", serve(http.StatusOK, fillLegacyGetTable, s.getTableTyped))
 	t.Delete("/{tableBucketARN}/{namespace}/{name}", serveAny(http.StatusNoContent, fillTable, s.deleteTableTyped))
 	t.Get("/{tableBucketARN}/{namespace}/{name}/encryption", serve(http.StatusOK, fillTable, s.getTableEncryptionTyped))
 	t.Get("/{tableBucketARN}/{namespace}/{name}/maintenance", serve(http.StatusOK, fillTable, s.getTableMaintenanceConfigurationTyped))
@@ -303,6 +304,23 @@ func fillTable(r *http.Request, req *tableRequest) *protocol.AWSError {
 func fillGetTable(r *http.Request, req *getTableRequest) *protocol.AWSError {
 	q := r.URL.Query()
 	req.TableBucketARN, req.Namespace, req.Name, req.TableARN = q.Get("tableBucketARN"), q.Get("namespace"), q.Get("name"), q.Get("tableArn")
+	return nil
+}
+
+// fillLegacyGetTable lifts GetTable's original binding,
+// GET /tables/{tableBucketARN}/{namespace}/{name}. The model moved GetTable to
+// /get-table with query members on 2025-06-06, when tableArn was added
+// (aws/api-models-aws a4eef7c, botocore 75060cf). It is the only S3 Tables
+// binding ever moved. SDKs generated before then still send the path form,
+// among them aws-sdk-s3tables 1.0.0 (Rust) and AWSSDK.S3Tables 4.0.0 (.NET).
+// That AWS still answers them is inferred, not verified against real AWS: the
+// release shipped as a non-breaking api-change ("S3 Tables now supports getting
+// details about a table via its table ARN"), which a shipped SDK's binding
+// going dead would contradict. The pinned model no longer
+// describes the binding, so middleware.overcastRESTOperation names it for the
+// logger and IAM (#2264).
+func fillLegacyGetTable(r *http.Request, req *getTableRequest) *protocol.AWSError {
+	req.TableBucketARN, req.Namespace, req.Name = label(r, "tableBucketARN"), label(r, "namespace"), label(r, "name")
 	return nil
 }
 
