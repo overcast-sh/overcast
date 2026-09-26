@@ -60,12 +60,17 @@ func (f fakeS3Tables) IcebergRouter() chi.Router {
 // buildEngineAPI builds the engine API over services, with an S3 router that
 // records, behind a chain that marks every request it runs for.
 func buildEngineAPI(rec *serviceRecorder, services ...Service) (glue, s3, iceberg http.Handler) {
-	chain := chi.Middlewares{func(next http.Handler) http.Handler {
+	return buildEngineAPIBehind(chi.Middlewares{func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			r.Header.Set("X-Chained", "1")
 			next.ServeHTTP(w, r)
 		})
-	}}
+	}}, rec, services...)
+}
+
+// buildEngineAPIBehind builds the engine API over services, with an S3 router
+// that records, behind chain.
+func buildEngineAPIBehind(chain chi.Middlewares, rec *serviceRecorder, services ...Service) (glue, s3, iceberg http.Handler) {
 	byName := make(map[string]Service, len(services))
 	for _, svc := range services {
 		byName[svc.Name()] = svc

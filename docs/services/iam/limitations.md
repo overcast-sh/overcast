@@ -108,7 +108,7 @@ That last row is the one divergence, and it needs a simulation supplying a
 
 ## What enforcement does not see
 
-`OVERCAST_ENFORCE_IAM` gates identity policies only. Two further gaps:
+`OVERCAST_ENFORCE_IAM` gates identity policies only. Three further gaps:
 
 - **Resource-based policies** — S3 bucket policies, Lambda/SQS/SNS policies —
   are not consulted at request time. The simulator accepts one explicitly,
@@ -118,6 +118,10 @@ That last row is the one divergence, and it needs a simulation supplying a
   `?legal-hold`, …) are identified by query parameters rather than by path.
   Denying them would break ordinary S3 traffic the moment enforcement was
   switched on. The gap is logged at debug level rather than passing silently.
+- **Calls a service makes for its caller** are not checked as that caller.
+  Athena's query engine reads Glue and S3 without enforcement, so only
+  `StartQueryExecution` is checked; see
+  [Athena credentials](../athena/limitations.md#credentials).
 
 Enforcement decides only what this evaluator can see. It is a development aid
 for catching a missing permission early, not a security control.

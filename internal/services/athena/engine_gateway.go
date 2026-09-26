@@ -46,7 +46,7 @@ const gatewayShutdownTimeout = 5 * time.Second
 
 // EngineAPI is the part of Overcast's API the engine calls, as one handler per
 // SigV4 signing name its catalogs sign with. Each is served with the API's
-// request middleware and reaches only its own service. A nil handler is a
+// request middleware, less IAM enforcement, and reaches only its own service. A nil handler is a
 // service that is not enabled, whose calls the gateway refuses.
 type EngineAPI struct {
 	Glue    http.Handler // Glue's JSON API, signed "glue"

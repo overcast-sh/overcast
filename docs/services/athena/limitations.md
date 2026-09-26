@@ -111,9 +111,23 @@ address can be proved reachable it binds every interface, and Overcast logs a
 warning.
 
 The engine signs with Overcast's default secret key, so
-`OVERCAST_SIGV4_VALIDATE` accepts its requests. With `OVERCAST_ENFORCE_IAM`
-on, they are evaluated like any other, and a key with no policies is denied,
-so queries that read tables fail.
+`OVERCAST_SIGV4_VALIDATE` accepts its requests.
+
+With `OVERCAST_ENFORCE_IAM` on, what is checked differs from AWS:
+
+| What is checked | On AWS | Overcast |
+| --- | --- | --- |
+| The `athena:` action of each Athena operation | Checked | Checked |
+| The engine's Glue, S3 and Iceberg REST catalog calls | Checked as the principal that started the query | Not checked |
+| DDL's Glue writes, and the result written to `OutputLocation` | Checked as the principal that started the query | Not checked |
+| The Glue reads behind `GetTableMetadata` and `ListDatabases`, and the S3 read behind `GetQueryResults` | Checked as the caller | Not checked |
+
+So a principal allowed `athena:StartQueryExecution` can query any table,
+whether or not it may call `glue:GetTable` or `s3:GetObject` itself. On AWS
+that query fails with an access-denied `StateChangeReason`. The engine's
+calls do not say which query they serve, so Overcast cannot check them as
+the principal that started it. Overcast's own reads and writes for Athena
+are made in-process, where no request is authorised.
 
 ## Related
 

@@ -86,6 +86,7 @@ settings. `/_overcast/athena/engine`, `/_overcast/health` and
 | Data catalogs | `FEDERATED` provisions a connector | `FEDERATED` is refused with a 501 |
 | Metadata | `LAMBDA` and `HIVE` catalogs are read through their connector | Only `GLUE` catalogs for this account are readable |
 | Spark | Spark workgroups, sessions and notebooks | Not emulated |
+| IAM enforcement | A query's Glue and S3 access is checked as the principal that started it | Only its `athena:StartQueryExecution` is checked; see [Credentials](./athena/limitations.md#credentials) |
 
 The rest — result files, statistics, errors and the engine itself — is in
 [Athena limitations](./athena/limitations.md).
