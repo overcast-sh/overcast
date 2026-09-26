@@ -163,6 +163,19 @@
         '# renovate: datasource=(?<datasource>[a-z-]+) depName=(?<depName>\\S+)\\n[A-Z_]+_VERSION\\s*:=\\s*(?<currentValue>\\S+)',
       ],
     },
+    {
+      // Athena's engine image default, config.DefaultAthenaEngineImage: a Go
+      // constant, which no built-in manager reads. It is pinned as
+      // name:tag@digest, so a republished tag arrives as a digest update and
+      // a new Trino release as a version update. `\\s*` around the `=`,
+      // because gofmt aligns it if the constant ever joins a const block.
+      customType: 'regex',
+      managerFilePatterns: ['/^internal/config/config\\.go$/'],
+      matchStrings: [
+        'DefaultAthenaEngineImage\\s*=\\s*"(?<depName>[^":@]+):(?<currentValue>[^"@]+)@(?<currentDigest>sha256:[a-f0-9]{64})"',
+      ],
+      datasourceTemplate: 'docker',
+    },
   ],
 
   packageRules: [
@@ -252,6 +265,25 @@
       enabled: false,
     },
     {
+      // The engine image pinned by the config.go custom manager moves only
+      // after .github/workflows/athena-engine-image.yml has published a new
+      // build, having run the engine's integration tests on it first. Its own
+      // PR, never automerged: the pin decides what every user's queries run
+      // on, the main test run never starts the engine, and the PR edits Go
+      // source, so the changelog check asks its reviewer for a fragment. A
+      // new Trino release also moves the tag and sizes the docs quote
+      // (RELEASE.md says where), which the reviewer updates by hand.
+      //
+      // No age floor: the image is ours, published only after the release
+      // environment's approval, and GHCR may give no release timestamp, which
+      // would hold a version update pending indefinitely (see
+      // minimumReleaseAge above).
+      matchPackageNames: ['ghcr.io/overcast-sh/overcast-athena-engine'],
+      groupName: 'athena engine image',
+      automerge: false,
+      minimumReleaseAge: null,
+    },
+    {
       // Non-major Go deps automerge once every required check is green: the
       // full test matrix, lint, the compat suites and both image builds run
       // on the updated modules (scripts/ci-scope.py counts go.mod/go.sum as
@@ -296,6 +328,7 @@
       // a linter bump can surface new findings, and the Lint job is the
       // place to read them.
       matchManagers: ['custom.regex'],
+      matchFileNames: ['Makefile'],
       matchUpdateTypes: ['minor', 'patch'],
       groupName: 'makefile tool pins (non-major)',
     },

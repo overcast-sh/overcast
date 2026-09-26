@@ -174,8 +174,7 @@ func TestEngineManager_startsOneEngineForConcurrentQueries(t *testing.T) {
 	}
 	files := untar(t, d.archives["engine1"])
 	if !strings.Contains(files["etc/athena/jvm.config"], "-Xmx512m") ||
-		!strings.Contains(files["etc/athena/catalog/awsdatacatalog.properties"], "hive.metastore.glue.endpoint-url=http://gateway.test:1") ||
-		files["etc/athena/plugin/hive"] != "->/usr/lib/trino/plugin/hive" {
+		!strings.Contains(files["etc/athena/catalog/awsdatacatalog.properties"], "hive.metastore.glue.endpoint-url=http://gateway.test:1") {
 		t.Fatalf("configuration = %v", files)
 	}
 }
@@ -262,7 +261,8 @@ func TestEngineManager_unavailableWithoutDocker(t *testing.T) {
 	}
 }
 
-// untar reads an archive into name → content, a link as "->target".
+// untar reads an archive of regular files into name → content, and fails
+// the test on any other kind of entry.
 func untar(t *testing.T, archive []byte) map[string]string {
 	t.Helper()
 	out := map[string]string{}
@@ -275,9 +275,8 @@ func untar(t *testing.T, archive []byte) map[string]string {
 		if err != nil {
 			t.Fatalf("archive: %v", err)
 		}
-		if hdr.Typeflag == tar.TypeSymlink {
-			out[hdr.Name] = "->" + hdr.Linkname
-			continue
+		if hdr.Typeflag != tar.TypeReg {
+			t.Fatalf("archive: %q is not a regular file (type %c)", hdr.Name, hdr.Typeflag)
 		}
 		body, _ := io.ReadAll(tr)
 		out[hdr.Name] = string(body)

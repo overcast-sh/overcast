@@ -33,9 +33,9 @@ aws athena get-query-results --query-execution-id <id>
 Any credentials work; with none configured, run `eval "$(overcast env)"` first
 — see [Using AWS SDKs and CLI](../sdk-cli.md#credentials).
 
-The first query waits, `QUEUED`, while the engine starts — about ten seconds
-with the image already pulled, plus the pull of a 2.4 GB image the first time
-ever. Later queries start at once.
+The first query waits, `QUEUED`, while the engine starts — 10–20 seconds with
+the image already pulled, plus a 0.78 GB pull the first time ever. Later
+queries start at once.
 
 ## What works
 
