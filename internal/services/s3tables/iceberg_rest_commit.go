@@ -120,7 +120,7 @@ func (s *Service) newCatalogTable(ctx context.Context, b *tableBucket, n *namesp
 // stage-create or the client that chose it may have been against another
 // Overcast.
 func (s *Service) claimWarehouse(ctx context.Context, b *tableBucket, owner *tableRecord, location string) *protocol.AWSError {
-	warehouse, key, ok := splitS3URI(location)
+	warehouse, key, ok := serviceutil.SplitS3URI(location)
 	if !ok || key != "" || serviceutil.TableWarehouseBucketName(warehouse) != nil {
 		return badRequest("A table's location must be a whole --table-s3 warehouse bucket, not " + location + ".")
 	}

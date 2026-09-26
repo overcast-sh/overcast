@@ -48,14 +48,16 @@ const (
 )
 
 // AthenaQueryStatePayload carries one state an Athena query execution
-// reached. Database is the one the query's unqualified names resolve in: its
-// QueryExecutionContext database, or "default". Tables lists the table a DDL
-// statement names, qualified as "database.table"; the tables of a statement
-// the engine runs are not parsed out, so it is empty for them.
+// reached. Catalog is its QueryExecutionContext catalog, empty when it named
+// none (AwsDataCatalog). Database is the one the query's unqualified names
+// resolve in: its QueryExecutionContext database, or "default". Tables lists
+// the table a DDL statement names, qualified as "database.table"; the tables
+// of a statement the engine runs are not parsed out, so it is empty for them.
 type AthenaQueryStatePayload struct {
 	QueryExecutionID string   `json:"queryExecutionId"`
 	WorkGroup        string   `json:"workGroup"`
 	State            string   `json:"state"`
+	Catalog          string   `json:"catalog,omitempty"`
 	Database         string   `json:"database"`
 	Tables           []string `json:"tables,omitempty"`
 }
@@ -95,8 +97,9 @@ func (p S3TablesTablePayload) arnFromPayload() string { return p.ARN }
 
 // S3TablesCommitPayload carries one move of a table's metadata pointer.
 // PreviousMetadataLocation is empty for a table's first metadata file.
-// SnapshotID and Operation describe the new metadata's current snapshot, when
-// it has one and the file could be read; SnapshotID is a decimal string
+// SnapshotID, Operation and AddedRecords describe the new metadata's current
+// snapshot, when it has one and the file could be read; AddedRecords is set
+// only when the snapshot summary records it. SnapshotID is a decimal string
 // because Iceberg's 64-bit ids do not survive a JavaScript number.
 type S3TablesCommitPayload struct {
 	S3TablesTablePayload
@@ -104,4 +107,5 @@ type S3TablesCommitPayload struct {
 	MetadataLocation         string `json:"metadataLocation"`
 	SnapshotID               string `json:"snapshotId,omitempty"`
 	Operation                string `json:"operation,omitempty"`
+	AddedRecords             *int64 `json:"addedRecords,omitempty"`
 }

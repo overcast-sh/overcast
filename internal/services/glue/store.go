@@ -463,6 +463,27 @@ func (s *glueStore) listPartitions(ctx context.Context, dbName, tableName string
 	return out, nil
 }
 
+// partitionCounts is how many partitions each table has, by table key. It
+// lists keys only, so it decodes no partition however many there are.
+func (s *glueStore) partitionCounts(ctx context.Context) (map[string]int, error) {
+	if err := s.ready(ctx); err != nil {
+		return nil, err
+	}
+	keys, err := s.store.List(ctx, nsPartitions, "")
+	if err != nil {
+		return nil, fmt.Errorf("glue: list %s: %w", nsPartitions, err)
+	}
+	counts := make(map[string]int)
+	for _, key := range keys {
+		// "<db>/<table>/<values>": every component is escaped, so the
+		// second slash ends the table's key.
+		db, rest, _ := strings.Cut(key, "/")
+		table, _, _ := strings.Cut(rest, "/")
+		counts[db+"/"+table]++
+	}
+	return counts, nil
+}
+
 func (s *glueStore) deletePartition(ctx context.Context, dbName, tableName string, values []string) error {
 	key := partitionKey(dbName, tableName, values)
 	if err := s.store.Delete(ctx, nsPartitions, key); err != nil {

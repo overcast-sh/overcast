@@ -35,6 +35,10 @@ export interface TopologyEdgeData extends Record<string, unknown> {
     | "dlq"
     | "esm-filter"
     | "apigw-integration"
+    | "table-location"
+    | "federation"
+    | "query-results"
+    | "queries"
   /** pipe/dlq label shown at mid-point */
   label?: string
   /** pipe state — only relevant when edgeType === "pipe" */

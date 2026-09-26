@@ -537,20 +537,24 @@ function getEventQueryMap(): Record<string, QueryKey[] | undefined> {
     [EventType.waf.WebACLCreated]: [wafKeys.webACLs(), topologyKey],
     [EventType.waf.WebACLDeleted]: [wafKeys.webACLs(), topologyKey],
     // ── Athena ─────────────────────────────────────────────────────────
-    [EventType.athena.QueryStateChanged]: [athenaKeys.executions()],
+    // A workgroup's node lists its latest executions (athena/topology.go).
+    [EventType.athena.QueryStateChanged]: [athenaKeys.executions(), topologyKey],
     // ── Glue ───────────────────────────────────────────────────────────
     // Deleting a table deletes its partitions with it. Athena's data browser
-    // lists the same tables, through GetTableMetadata.
+    // lists the same tables, through GetTableMetadata. A database's node lists
+    // its tables and their partition counts (glue/topology.go).
     [EventType.glue.TableChanged]: [
       glueKeys.tables(),
       glueKeys.partitions(),
       athenaKeys.metadata(),
+      topologyKey,
     ],
-    [EventType.glue.PartitionsChanged]: [glueKeys.partitions()],
+    [EventType.glue.PartitionsChanged]: [glueKeys.partitions(), topologyKey],
     // ── S3 Tables ──────────────────────────────────────────────────────
-    // Tables are nodes on the map (internal/services/s3tables/topology.go).
-    // A table can arrive in a namespace created a moment earlier, which no
-    // event announces, so its creation also re-reads the namespaces.
+    // A table bucket's node lists its tables and their snapshots
+    // (s3tables/topology.go). A table can arrive in a namespace created a
+    // moment earlier, which no event announces, so its creation also
+    // re-reads the namespaces.
     [EventType.s3tables.TableCreated]: [
       s3tablesKeys.tables(),
       s3tablesKeys.namespaces(),
@@ -562,7 +566,7 @@ function getEventQueryMap(): Record<string, QueryKey[] | undefined> {
       s3tablesKeys.namespaces(),
       topologyKey,
     ],
-    [EventType.s3tables.TableCommitted]: [s3tablesKeys.tables()],
+    [EventType.s3tables.TableCommitted]: [s3tablesKeys.tables(), topologyKey],
   }
 }
 

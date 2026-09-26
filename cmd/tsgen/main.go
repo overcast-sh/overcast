@@ -138,6 +138,10 @@ var manifest = []target{
 	{"internal/topology", "Node", "TopologyNode"},
 	{"internal/topology", "Edge", "TopologyEdge"},
 	{"internal/topology", "ECSResourceType", "TopologyECSResourceType"},
+	{"internal/topology", "GlueResourceType", "TopologyGlueResourceType"},
+	{"internal/topology", "QueryRun", "TopologyQueryRun"},
+	{"internal/topology", "DataTable", "TopologyDataTable"},
+	{"internal/topology", "TableCommit", "TopologyTableCommit"},
 
 	// GET /_overcast/ses/inbox/messages — the Inbox page.
 	{"internal/smtp", "CapturedMessage", "CapturedMessage"},

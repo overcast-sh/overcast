@@ -449,6 +449,16 @@ func (m *Metadata) hasSortOrder(id int) bool {
 	return slices.ContainsFunc(m.SortOrders, func(o SortOrder) bool { return o.OrderID == id })
 }
 
+// CurrentSnapshot is the table's current snapshot; ok is false for a table
+// with none.
+func (m *Metadata) CurrentSnapshot() (Snapshot, bool) {
+	i := m.snapshotIndex(m.CurrentSnapshotID)
+	if i < 0 {
+		return Snapshot{}, false
+	}
+	return m.Snapshots[i], true
+}
+
 func (m *Metadata) snapshotIndex(id int64) int {
 	return slices.IndexFunc(m.Snapshots, func(s Snapshot) bool { return s.SnapshotID == id })
 }

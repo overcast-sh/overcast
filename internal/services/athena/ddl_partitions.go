@@ -9,6 +9,7 @@ import (
 
 	"github.com/overcast-sh/overcast/internal/protocol"
 	"github.com/overcast-sh/overcast/internal/services/glue"
+	"github.com/overcast-sh/overcast/internal/serviceutil"
 )
 
 // ddl_partitions.go — ALTER TABLE ADD/DROP PARTITION, MSCK REPAIR TABLE and
@@ -196,7 +197,7 @@ type partitionDir struct {
 // partitionDirectories lists the table's location and returns every
 // partition directory holding an object, in the order found.
 func (env ddlEnv) partitionDirectories(ctx context.Context, t glue.Table) ([]partitionDir, *queryFailure) {
-	bucket, prefix, ok := splitS3URI(tableLocation(t))
+	bucket, prefix, ok := serviceutil.SplitS3URI(tableLocation(t))
 	if !ok || len(t.PartitionKeys) == 0 {
 		return nil, nil
 	}

@@ -66,6 +66,7 @@ and does not run it.
 | Metadata | `GetDatabase`, `ListDatabases`, `GetTableMetadata` and `ListTableMetadata` read the Glue Data Catalog, including an S3 Tables bucket's `s3tablescatalog/<bucket>` catalog |
 | Tags | On workgroup and data catalog ARNs |
 | CloudFormation | `AWS::Athena::WorkGroup` (updated in place), `NamedQuery`, `PreparedStatement` and `DataCatalog` |
+| System map | A workgroup node lists its latest queries and runs one from the map; edges lead to its results bucket and what it read |
 
 Without a Docker daemon, or with `ATHENA_ENGINE=inert`, the engine is off:
 queries succeed at once with no rows, and DDL still reaches Glue. The

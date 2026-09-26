@@ -2,7 +2,6 @@ package s3tables
 
 import (
 	"context"
-	"slices"
 	"strconv"
 
 	"github.com/overcast-sh/overcast/internal/events"
@@ -34,8 +33,8 @@ func (s *Service) publishTable(ctx context.Context, typ events.Type, t *tableRec
 }
 
 // publishSwap reports a metadata swap: the table's creation when the swap
-// created it, then the commit. The commit names the new metadata's current
-// snapshot; metadata the proposer did not parse — an
+// created it, then the commit. The commit describes the new metadata's
+// current snapshot; metadata the proposer did not parse — an
 // UpdateTableMetadataLocation's, written by the client — is read back for it,
 // and a file that cannot be read leaves the snapshot out.
 func (s *Service) publishSwap(ctx context.Context, swap *metadataSwap) {
@@ -49,14 +48,17 @@ func (s *Service) publishSwap(ctx context.Context, swap *metadataSwap) {
 	if meta == nil && s.getObject != nil {
 		meta, _ = s.readMetadata(ctx, swap.table.MetadataLocation)
 	}
-	snapshotID, operation := currentSnapshot(meta)
-	s.publish(ctx, events.S3TablesTableCommitted, events.S3TablesCommitPayload{
+	payload := events.S3TablesCommitPayload{
 		S3TablesTablePayload:     tablePayload(&swap.table),
 		PreviousMetadataLocation: swap.previous,
 		MetadataLocation:         swap.table.MetadataLocation,
-		SnapshotID:               snapshotID,
-		Operation:                operation,
-	})
+	}
+	if sn, ok := currentSnapshot(meta); ok {
+		payload.SnapshotID = strconv.FormatInt(sn.SnapshotID, 10)
+		payload.Operation = sn.Summary[summaryOperation]
+		payload.AddedRecords = summaryCount(sn, summaryAddedRecords)
+	}
+	s.publish(ctx, events.S3TablesTableCommitted, payload)
 }
 
 func (s *Service) publish(ctx context.Context, typ events.Type, payload any) {
@@ -66,15 +68,28 @@ func (s *Service) publish(ctx context.Context, typ events.Type, payload any) {
 	s.bus.Publish(ctx, events.Event{Type: typ, Time: s.clk.Now(), Source: serviceName, Payload: payload})
 }
 
-// currentSnapshot is the id, in decimal, and the summary's operation of m's
-// current snapshot; both are empty when m is nil or has no current snapshot.
-func currentSnapshot(m *icebergmeta.Metadata) (id, operation string) {
+// Snapshot summary keys, from the Iceberg table spec's "Snapshot Summary".
+const (
+	summaryOperation      = "operation"
+	summaryAddedRecords   = "added-records"
+	summaryDeletedRecords = "deleted-records"
+)
+
+// currentSnapshot is m's current snapshot; ok is false when m is nil or has
+// no current snapshot.
+func currentSnapshot(m *icebergmeta.Metadata) (icebergmeta.Snapshot, bool) {
 	if m == nil {
-		return "", ""
+		return icebergmeta.Snapshot{}, false
 	}
-	i := slices.IndexFunc(m.Snapshots, func(sn icebergmeta.Snapshot) bool { return sn.SnapshotID == m.CurrentSnapshotID })
-	if i < 0 {
-		return "", ""
+	return m.CurrentSnapshot()
+}
+
+// summaryCount is a count the snapshot's summary records under key, or nil
+// when it records none (or something that is not a count).
+func summaryCount(sn icebergmeta.Snapshot, key string) *int64 {
+	n, err := strconv.ParseInt(sn.Summary[key], 10, 64)
+	if err != nil {
+		return nil
 	}
-	return strconv.FormatInt(m.CurrentSnapshotID, 10), m.Snapshots[i].Summary["operation"]
+	return &n
 }

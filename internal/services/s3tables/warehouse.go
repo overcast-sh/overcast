@@ -10,24 +10,15 @@ import (
 
 	"github.com/overcast-sh/overcast/internal/icebergmeta"
 	"github.com/overcast-sh/overcast/internal/protocol"
+	"github.com/overcast-sh/overcast/internal/serviceutil"
 )
 
 const s3Scheme = "s3://"
 
-// splitS3URI takes "s3://bucket/key" apart; ok is false for anything else.
-func splitS3URI(uri string) (bucket, key string, ok bool) {
-	rest, found := strings.CutPrefix(uri, s3Scheme)
-	if !found {
-		return "", "", false
-	}
-	bucket, key, _ = strings.Cut(rest, "/")
-	return bucket, key, bucket != ""
-}
-
 // writeMetadataFile writes raw as the version-th metadata file under the
 // table location and returns the file's s3:// location.
 func (s *Service) writeMetadataFile(ctx context.Context, tableLocation string, version int, raw []byte) (string, *protocol.AWSError) {
-	bucket, prefix, ok := splitS3URI(tableLocation)
+	bucket, prefix, ok := serviceutil.SplitS3URI(tableLocation)
 	if !ok {
 		return "", badRequest("The table location " + tableLocation + " is not an s3:// location.")
 	}
@@ -46,7 +37,7 @@ func (s *Service) writeMetadataFile(ctx context.Context, tableLocation string, v
 // answered as the table's absence rather than a server fault: the file is the
 // caller's data, and nothing Overcast holds is broken.
 func (s *Service) readMetadata(ctx context.Context, location string) (*icebergmeta.Metadata, *protocol.AWSError) {
-	bucket, key, ok := splitS3URI(location)
+	bucket, key, ok := serviceutil.SplitS3URI(location)
 	if !ok || key == "" {
 		return nil, errUnreadableMetadata(location, "it is not an s3:// object")
 	}

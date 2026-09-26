@@ -18,7 +18,6 @@
  */
 
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
-import * as Dialog from "@radix-ui/react-dialog"
 import { infiniteQueryOptions, useInfiniteQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { useVirtualizer } from "@tanstack/react-virtual"
@@ -41,6 +40,7 @@ import { useForwardLogPages } from "@/features/cloudwatch/logs/use-forward-log-p
 import { useLogTailBuffer } from "@/features/cloudwatch/logs/use-log-tail-buffer"
 import { useLogViewPrefs } from "@/features/cloudwatch/logs/use-log-view-prefs"
 import { TriggerEventViewer } from "./trigger-event-viewer"
+import { MapPeekPanel, peekActionClass } from "./map-peek-panel"
 
 type Tab = "logs" | "trigger"
 
@@ -158,128 +158,81 @@ export const LogStreamPeek = memo(function LogStreamPeek({ target, onClose }: Lo
   }, [storedEvents, tail.events, logStream])
 
   return (
-    <Dialog.Root
+    <MapPeekPanel
       open={visible}
-      onOpenChange={(open) => {
-        if (!open) onClose()
-      }}
+      onClose={onClose}
+      title={target?.title ?? "Log stream"}
+      subtitle={target?.subtitle}
+      // Clicking another peek trigger (a lambda instance or log stream row)
+      // switches this panel to the new target rather than closing it — that
+      // trigger's own onClick already calls onPeek with the new target.
+      retargetable
+      actions={
+        target?.logGroup &&
+        target.logStream && (
+          // Everything the peek does not do — time ranges, server-side
+          // search, deep links, export — lives one click away.
+          <Link
+            to="/cloudwatch/logs/stream"
+            search={{ groupName: target.logGroup, streamName: target.logStream }}
+            className={peekActionClass}
+            title="Open this stream in the CloudWatch Logs viewer"
+          >
+            <ExternalLink aria-hidden className="h-3.5 w-3.5" />
+            Open in Logs
+          </Link>
+        )
+      }
     >
-      <Dialog.Portal>
-        {/* Backdrop — pointer-events-none so clicking another peek-able node on the
-            canvas (e.g. a different log stream) reaches that node instead of being
-            swallowed here. Outside-click-to-close is still handled below via
-            onInteractOutside. */}
-        <Dialog.Overlay className="pointer-events-none fixed inset-0 z-60" />
+      {target && (
+        <>
+          {/* Tabs */}
+          <div className="flex shrink-0 gap-0 border-b border-border">
+            <TabButton
+              active={activeTab === "logs"}
+              onClick={() => setActiveTab("logs")}
+              icon={<FileText className="h-3.5 w-3.5" />}
+              label="Logs"
+              disabled={!target.logGroup || !target.logStream}
+              trailing={
+                tail.status !== "idle" ? (
+                  <LiveTailIndicator status={tail.status} className="ml-0.5" />
+                ) : null
+              }
+            />
+            {target.triggerEvent && (
+              <TabButton
+                active={activeTab === "trigger"}
+                onClick={() => setActiveTab("trigger")}
+                icon={<Zap className="h-3.5 w-3.5" />}
+                label="Trigger Event"
+              />
+            )}
+          </div>
 
-        {/* Slide-in panel. Wide enough for a pretty-printed document beside
-            its timestamp; capped at the viewport so it never overflows a
-            small window. */}
-        <Dialog.Content
-          aria-describedby={undefined}
-          onEscapeKeyDown={onClose}
-          onInteractOutside={(e) => {
-            // Clicking another peek trigger (a lambda instance or log stream row)
-            // should switch this panel to the new target, not close it — that
-            // trigger's own onClick already calls onPeek with the new target.
-            const target = e.detail.originalEvent.target as HTMLElement | null
-            if (target?.closest("[data-peek-trigger]")) {
-              e.preventDefault()
-              return
-            }
-            onClose()
-          }}
-          className={cn(
-            "fixed inset-y-0 right-0 z-70 flex w-[min(44rem,100vw)] flex-col border-l border-border bg-bg-elevated shadow-2xl",
-            "transition-transform duration-300",
-            "data-[state=closed]:translate-x-full data-[state=open]:translate-x-0",
-          )}
-        >
-          <Dialog.Title className="sr-only">{target?.title ?? "Log stream"}</Dialog.Title>
-          {target && (
-            <>
-              {/* Header */}
-              <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-4 py-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold">{target.title}</p>
-                  <p className="truncate font-mono text-xs text-fg-muted" title={target.subtitle}>
-                    {target.subtitle}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  {target.logGroup && target.logStream && (
-                    // Everything the peek does not do — time ranges, server-side
-                    // search, deep links, export — lives one click away.
-                    <Link
-                      to="/cloudwatch/logs/stream"
-                      search={{ groupName: target.logGroup, streamName: target.logStream }}
-                      className="flex items-center gap-1 rounded px-2 py-1 font-mono text-2xs text-fg-muted uppercase hover:bg-fg-muted/15 hover:text-fg"
-                      title="Open this stream in the CloudWatch Logs viewer"
-                    >
-                      <ExternalLink aria-hidden className="h-3.5 w-3.5" />
-                      Open in Logs
-                    </Link>
-                  )}
-                  <Dialog.Close asChild>
-                    <button
-                      type="button"
-                      className="shrink-0 rounded p-1 text-fg-muted hover:bg-fg-muted/15 hover:text-fg"
-                      aria-label="Close"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </Dialog.Close>
-                </div>
-              </div>
-
-              {/* Tabs */}
-              <div className="flex shrink-0 gap-0 border-b border-border">
-                <TabButton
-                  active={activeTab === "logs"}
-                  onClick={() => setActiveTab("logs")}
-                  icon={<FileText className="h-3.5 w-3.5" />}
-                  label="Logs"
-                  disabled={!target.logGroup || !target.logStream}
-                  trailing={
-                    tail.status !== "idle" ? (
-                      <LiveTailIndicator status={tail.status} className="ml-0.5" />
-                    ) : null
-                  }
-                />
-                {target.triggerEvent && (
-                  <TabButton
-                    active={activeTab === "trigger"}
-                    onClick={() => setActiveTab("trigger")}
-                    icon={<Zap className="h-3.5 w-3.5" />}
-                    label="Trigger Event"
-                  />
-                )}
-              </div>
-
-              {/* Body */}
-              <div className="min-h-0 flex-1 overflow-hidden">
-                {activeTab === "logs" && (
-                  <LogsPane
-                    key={`${target.logGroup}::${target.logStream}`}
-                    logEvents={logEvents}
-                    loading={logQuery.isLoading}
-                    hasStream={Boolean(target.logGroup && target.logStream)}
-                    hasMore={logQuery.hasNextPage}
-                    loadingMore={logQuery.isFetchingNextPage}
-                    onLoadMore={() => logQuery.fetchNextPage()}
-                    tailOverflowed={tail.overflowed}
-                    tailDead={tailDead}
-                    hasNewer={tailDead && !forward.exhausted}
-                    loadingNewer={forward.loading}
-                    onLoadNewer={forward.loadNewer}
-                  />
-                )}
-                {activeTab === "trigger" && <TriggerPane triggerEvent={target.triggerEvent} />}
-              </div>
-            </>
-          )}
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+          {/* Body */}
+          <div className="min-h-0 flex-1 overflow-hidden">
+            {activeTab === "logs" && (
+              <LogsPane
+                key={`${target.logGroup}::${target.logStream}`}
+                logEvents={logEvents}
+                loading={logQuery.isLoading}
+                hasStream={Boolean(target.logGroup && target.logStream)}
+                hasMore={logQuery.hasNextPage}
+                loadingMore={logQuery.isFetchingNextPage}
+                onLoadMore={() => logQuery.fetchNextPage()}
+                tailOverflowed={tail.overflowed}
+                tailDead={tailDead}
+                hasNewer={tailDead && !forward.exhausted}
+                loadingNewer={forward.loading}
+                onLoadNewer={forward.loadNewer}
+              />
+            )}
+            {activeTab === "trigger" && <TriggerPane triggerEvent={target.triggerEvent} />}
+          </div>
+        </>
+      )}
+    </MapPeekPanel>
   )
 })
 

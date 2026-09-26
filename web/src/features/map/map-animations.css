@@ -114,3 +114,35 @@
     transform: scale(0.3);
   }
 }
+
+/* Data-lake rows (data-lake-overlay.ts). A partition count that just
+   changed pops once; a dropped table's ghost fades over its lifetime; a query
+   that just failed flashes its row. */
+@keyframes overcastTick {
+  0% {
+    transform: scale(1.35);
+    color: var(--color-accent);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes overcastGhostFade {
+  from {
+    opacity: 0.6;
+  }
+  to {
+    opacity: 0.15;
+  }
+}
+
+@keyframes overcastFailFlash {
+  0%,
+  40% {
+    background-color: var(--color-danger-muted);
+  }
+  100% {
+    background-color: transparent;
+  }
+}

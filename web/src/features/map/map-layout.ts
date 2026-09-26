@@ -130,6 +130,11 @@ function nodeType(service: string): string {
       return "vpcNetworkNode"
     case "igw":
       return "igwNode"
+    case "athena":
+      return "athenaWorkgroup"
+    case "glue":
+    case "s3tables":
+      return "dataCatalog"
     default:
       return "serviceNode"
   }

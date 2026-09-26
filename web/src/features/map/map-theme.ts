@@ -44,6 +44,11 @@ export const EDGE_THEME: Record<
   "cfn-export": { color: "var(--cat-6)", dash: true, label: "CFN Export" },
   "cfn-ref": { color: "var(--fg-subtle)", dash: true, label: "CFN Reference" },
   "apigw-integration": { color: "var(--cat-4)", dash: false, label: "API Gateway → Lambda" },
+  "table-location": { color: "var(--cat-9)", dash: false, label: "Glue table data" },
+  federation: { color: "var(--cat-9)", dash: true, label: "Glue federation" },
+  "query-results": { color: "var(--cat-8)", dash: false, label: "Athena results" },
+  // Drawn from recent executions, not configuration: dashed, and "recent" in the legend.
+  queries: { color: "var(--cat-8)", dash: true, label: "Athena queries (recent)" },
 }
 
 /** Colour for a node or edge whose type the registry has no entry for. */

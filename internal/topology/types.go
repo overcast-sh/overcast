@@ -66,6 +66,70 @@ type Node struct {
 	TaskID          string          `json:"taskId,omitempty"`          // ECS task only — task UUID used by the task detail route
 	DesiredCount    *int            `json:"desiredCount,omitempty"`    // ECS service only — configured task count
 	RunningCount    *int            `json:"runningCount,omitempty"`    // ECS service only — currently running task count
+
+	RecentQueries    []QueryRun       `json:"recentQueries,omitempty"`    // Athena workgroup only — its latest executions, newest first
+	EngineState      string           `json:"engineState,omitempty"`      // Athena workgroup only — the query engine's state while it cannot run a query yet
+	GlueResourceType GlueResourceType `json:"glueResourceType,omitempty"` // Glue only — whether this node is a database or a federated catalog
+	Tables           []DataTable      `json:"tables,omitempty"`           // Glue database and S3 Tables bucket only — the tables it holds
+}
+
+// GlueResourceType says which kind of Data Catalog resource a Glue node is:
+// one of the constants below. The Map page draws and routes each differently.
+type GlueResourceType = string
+
+const (
+	GlueDatabase GlueResourceType = "database"
+	GlueCatalog  GlueResourceType = "catalog"
+)
+
+// QueryRun is one Athena query execution, as a workgroup node lists it.
+type QueryRun struct {
+	ID string `json:"id"`
+	// State is the execution's state: QUEUED, RUNNING, SUCCEEDED, FAILED or
+	// CANCELLED.
+	State string `json:"state"`
+	// Query is the start of the SQL, on one line.
+	Query string `json:"query"`
+	// SubmittedAt and CompletedAt are Unix milliseconds; CompletedAt is zero
+	// until the execution finishes.
+	SubmittedAt int64 `json:"submittedAt"`
+	CompletedAt int64 `json:"completedAt,omitempty"`
+}
+
+// DataTable is one table inside a Glue database or S3 Tables bucket node.
+type DataTable struct {
+	Name string `json:"name"`
+	// Namespace is the S3 Tables namespace the table is in.
+	Namespace string `json:"namespace,omitempty"`
+	// ID is the S3 Tables table id, which its console route names.
+	ID string `json:"id,omitempty"`
+	// Format is what a Glue table holds: ICEBERG, PARQUET, ORC, AVRO, JSON,
+	// CSV or VIEW, and empty when nothing on the table says.
+	Format string `json:"format,omitempty"`
+	// Location is where the table's files are: a Glue table's storage
+	// location, an S3 Tables table's warehouse.
+	Location string `json:"location,omitempty"`
+	// Partitions is how many partitions a Glue table has.
+	Partitions *int `json:"partitions,omitempty"`
+	// Snapshots is how many snapshots an Iceberg table's current metadata
+	// keeps, when that metadata could be read.
+	Snapshots *int `json:"snapshots,omitempty"`
+	// LastCommit is the Iceberg table's current snapshot.
+	LastCommit *TableCommit `json:"lastCommit,omitempty"`
+}
+
+// TableCommit is an Iceberg snapshot, as the Map's latest-commit peek shows it.
+type TableCommit struct {
+	// SnapshotID is decimal: Iceberg's 64-bit ids do not survive a
+	// JavaScript number.
+	SnapshotID string `json:"snapshotId"`
+	Operation  string `json:"operation,omitempty"`
+	// AddedRecords and DeletedRecords are from the snapshot summary, when it
+	// records them.
+	AddedRecords   *int64 `json:"addedRecords,omitempty"`
+	DeletedRecords *int64 `json:"deletedRecords,omitempty"`
+	// CommittedAt is the snapshot's timestamp, in Unix milliseconds.
+	CommittedAt int64 `json:"committedAt"`
 }
 
 // Edge is one connection of GET /_overcast/topology's graph.

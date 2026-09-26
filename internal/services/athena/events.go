@@ -28,6 +28,7 @@ func (s *Service) publishQueryState(ctx context.Context, qe *QueryExecution) {
 			QueryExecutionID: qe.QueryExecutionId,
 			WorkGroup:        qe.WorkGroup,
 			State:            qe.Status.State,
+			Catalog:          qe.QueryExecutionContext.Catalog,
 			Database:         database,
 			Tables:           statementTables(qe.Query, database),
 		},
