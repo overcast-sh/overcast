@@ -398,6 +398,29 @@ func TestHostAddressing_stampsClaimForLogging(t *testing.T) {
 	}
 }
 
+// TestHostAddressing_stampsS3Claim proves a virtual-hosted request carries its
+// claim downstream, so a root the router shares with other services can tell
+// that the rewritten path starts with a bucket (#2098).
+func TestHostAddressing_stampsS3Claim(t *testing.T) {
+	// Given: a middleware with no rows registered
+	var rows []HostRouteRow
+	var got HostClaim
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got, _ = HostClaimFromContext(r.Context())
+	})
+	mw := HostAddressing("", &rows, nil)(next)
+
+	// When: a request virtual-hosted to a bucket named "applications" passes through
+	req := httptest.NewRequest(http.MethodGet, "/key.txt", nil)
+	req.Host = "applications.s3.localhost:4566"
+	mw.ServeHTTP(httptest.NewRecorder(), req)
+
+	// Then: the S3 claim is available downstream
+	if got.Kind != HostClaimS3 || got.Bucket != "applications" {
+		t.Errorf("stamped claim = %s, want s3:applications", claimString(got))
+	}
+}
+
 // TestFoldHostname_lowercaseInputIsNotCopied pins the pay-per-use property the
 // allocation-free contract depends on: a host that needs no folding must be
 // returned as-is, not copied. Without it, the fold would quietly put an

@@ -166,10 +166,12 @@ func (c *HostClassifier) Classify(host string) HostClaim {
 // hostClaimContextKey is the context key for the per-request HostClaim.
 type hostClaimContextKey struct{}
 
-// HostClaimFromContext returns the claim stamped by HostAddressing. Only
-// host-routed claims are stamped: S3 and unclaimed requests both end at the S3
-// handler, which is already detectService's default, so stamping them would
-// allocate a context on the hottest path for no benefit.
+// HostClaimFromContext returns the claim stamped by HostAddressing. Host-routed
+// and S3 virtual-hosted claims are stamped; an unclaimed (path-style) request
+// is not, so ordinary path-style traffic allocates no context. The S3 claim
+// matters where the rewritten path starts with a root the router shares with
+// other services: a virtual-hosted bucket named "applications" is S3's, which
+// its path alone no longer says (#2098).
 func HostClaimFromContext(ctx context.Context) (HostClaim, bool) {
 	c, ok := ctx.Value(hostClaimContextKey{}).(HostClaim)
 	return c, ok
@@ -196,6 +198,9 @@ func HostAddressing(configuredHostname string, rows *[]HostRouteRow, logger *zap
 				if r.URL.RawPath != "" {
 					r.URL.RawPath = "/" + claim.Bucket + r.URL.RawPath
 				}
+				// Stamped so a root the router shares with other services
+				// can tell that this path starts with a bucket (AddressesS3).
+				r = r.WithContext(context.WithValue(r.Context(), hostClaimContextKey{}, claim))
 			case HostClaimHostRoute:
 				for _, row := range *rows {
 					if row.Label == claim.Route.Label {

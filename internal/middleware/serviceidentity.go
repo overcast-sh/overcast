@@ -1,5 +1,10 @@
 package middleware
 
+import (
+	"net/http"
+	"strings"
+)
+
 // An AWS service answers to three names, and middleware needs all three.
 //
 //   - The **Overcast service key** ("msk") is the one this package already had.
@@ -147,4 +152,42 @@ func iamActionPrefix(serviceKey string) string {
 	default:
 		return serviceKey
 	}
+}
+
+// s3ControlAccountHeader is sent by S3 Control on every operation and never by
+// S3 itself. It is what separates the two APIs, which share a signing name.
+const s3ControlAccountHeader = "X-Amz-Account-Id"
+
+// SignedForS3API reports whether a request whose credential scope names
+// signingName is signed for the S3 object API: an S3-family signing name, and
+// not S3 Control. It is the positive evidence of S3 the router reads where a
+// path could belong to S3 or to another service.
+func SignedForS3API(r *http.Request, signingName string) bool {
+	return isS3APISigningName(signingName) && r.Header.Get(s3ControlAccountHeader) == ""
+}
+
+// AddressesS3 reports whether a request positively addresses the S3 object
+// API: it was virtual-hosted to a bucket, or it is signed for S3
+// (SignedForS3API) under signingName, its credential scope's service. Where a
+// path could belong to S3 or to another service, either settles it for S3.
+func AddressesS3(r *http.Request, signingName string) bool {
+	if claim, ok := HostClaimFromContext(r.Context()); ok && claim.Kind == HostClaimS3 {
+		return true
+	}
+	return SignedForS3API(r, signingName)
+}
+
+// isS3APISigningName reports whether a SigV4 credential scope belongs to a
+// service that speaks the S3 object API itself, and whose traffic must
+// therefore reach S3's routes. Object Lambda and S3 Express are S3 under
+// another signing name.
+//
+// "s3-outposts" is deliberately absent. It signs the separate s3outposts
+// control API, whose modeled paths cannot be mistaken for an object path.
+func isS3APISigningName(signingName string) bool {
+	switch strings.ToLower(signingName) {
+	case "s3", "s3-object-lambda", "s3express":
+		return true
+	}
+	return false
 }
