@@ -92,12 +92,24 @@
       ]
     },
     "iam-gen-role": {
-      "state": "candidate",
-      "firstSeen": "2026-09-06"
+      "state": "gated",
+      "firstSeen": "2026-09-06",
+      "promotedAt": "2026-09-26",
+      "runs": [
+        "run-36216883533-1",
+        "run-36216883533-2",
+        "run-36216883533-3"
+      ]
     },
     "iam-gen-user": {
-      "state": "candidate",
-      "firstSeen": "2026-09-06"
+      "state": "gated",
+      "firstSeen": "2026-09-06",
+      "promotedAt": "2026-09-26",
+      "runs": [
+        "run-36216883533-1",
+        "run-36216883533-2",
+        "run-36216883533-3"
+      ]
     },
     "kms-gen-key": {
       "state": "gated",

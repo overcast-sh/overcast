@@ -1056,7 +1056,7 @@
       "name": "iam-gen-role",
       "generated": true,
       "scenario": "compat/model/scenarios/iam.json",
-      "state": "candidate",
+      "state": "gated",
       "suites": [
         "cli",
         "dotnet-sdk",
@@ -1191,7 +1191,7 @@
       "name": "iam-gen-user",
       "generated": true,
       "scenario": "compat/model/scenarios/iam.json",
-      "state": "candidate",
+      "state": "gated",
       "suites": [
         "cli",
         "dotnet-sdk",
