@@ -108,11 +108,11 @@ func (s *Service) InitS3Tables(tables events.S3TablesCatalog) {
 	}
 }
 
-// InitRouter hands the service the router the engine reaches Overcast's API
-// through; see engine_gateway.go.
-func (s *Service) InitRouter(h http.Handler) {
+// InitEngineAPI hands the service the part of Overcast's API the engine
+// reaches through its gateway; see engine_gateway.go.
+func (s *Service) InitEngineAPI(api EngineAPI) {
 	if s.engine != nil {
-		s.engine.gateway.setHandler(h)
+		s.engine.gateway.setAPI(api)
 	}
 }
 
