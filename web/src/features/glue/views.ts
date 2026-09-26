@@ -3,6 +3,8 @@
  * so route files can validate search params against it.
  */
 
+import { searchLargeId, searchText } from "@/lib/search-params"
+
 export const TABLE_TABS = [
   "schema",
   "partitions",
@@ -42,17 +44,12 @@ export interface GlueTableSearch {
   /** The two table versions the Versions tab compares. */
   from?: string
   to?: string
-}
-
-/**
- * The router parses each search value as JSON first, so `?q=42` arrives as a
- * number and a version id always does. Deep-link values are text, so numbers
- * and booleans are read back as the text they were written as.
- */
-export function searchText(value: unknown): string | undefined {
-  if (typeof value === "string") return value
-  if (typeof value === "number" || typeof value === "boolean") return String(value)
-  return undefined
+  /** The Iceberg tab's snapshot whose diff with the previous one is open. */
+  snapshot?: string
+  /** The Iceberg tab's metadata file, by file name; the current one when absent. */
+  version?: string
+  /** The metadata file `version` is diffed against. */
+  compare?: string
 }
 
 export function validateListSearch(search: Record<string, unknown>): GlueListSearch {
@@ -70,5 +67,8 @@ export function validateTableSearch(search: Record<string, unknown>): GlueTableS
     q: searchText(search.q),
     from: searchText(search.from),
     to: searchText(search.to),
+    snapshot: searchLargeId(search.snapshot),
+    version: searchText(search.version),
+    compare: searchText(search.compare),
   }
 }
