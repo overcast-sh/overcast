@@ -26,6 +26,15 @@ mod scenarios_authored_appconfig_tags_gen;
 #[path = "scenarios_authored_cognito_userpools_gen.rs"]
 mod scenarios_authored_cognito_userpools_gen;
 
+#[path = "scenarios_authored_ecr_policies_gen.rs"]
+mod scenarios_authored_ecr_policies_gen;
+
+#[path = "scenarios_authored_ecr_registry_gen.rs"]
+mod scenarios_authored_ecr_registry_gen;
+
+#[path = "scenarios_authored_ecr_tags_gen.rs"]
+mod scenarios_authored_ecr_tags_gen;
+
 #[path = "scenarios_authored_eventbridge_buses_gen.rs"]
 mod scenarios_authored_eventbridge_buses_gen;
 
@@ -106,6 +115,9 @@ pub fn scenario_groups(clients: &Arc<AwsClients>) -> Vec<Box<dyn ServiceGroup>> 
         Box::new(scenarios_authored_appconfig_environments_gen::ScenariosAuthoredAppconfigEnvironments::new(clients)),
         Box::new(scenarios_authored_appconfig_tags_gen::ScenariosAuthoredAppconfigTags::new(clients)),
         Box::new(scenarios_authored_cognito_userpools_gen::ScenariosAuthoredCognitoUserpools::new(clients)),
+        Box::new(scenarios_authored_ecr_policies_gen::ScenariosAuthoredEcrPolicies::new(clients)),
+        Box::new(scenarios_authored_ecr_registry_gen::ScenariosAuthoredEcrRegistry::new(clients)),
+        Box::new(scenarios_authored_ecr_tags_gen::ScenariosAuthoredEcrTags::new(clients)),
         Box::new(scenarios_authored_eventbridge_buses_gen::ScenariosAuthoredEventbridgeBuses::new(clients)),
         Box::new(scenarios_authored_eventbridge_events_gen::ScenariosAuthoredEventbridgeEvents::new(clients)),
         Box::new(scenarios_authored_eventbridge_rules_gen::ScenariosAuthoredEventbridgeRules::new(clients)),

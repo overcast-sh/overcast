@@ -798,6 +798,118 @@
       ]
     },
     {
+      "service": "ecr",
+      "name": "ecr-policies-shadow",
+      "generated": true,
+      "scenario": "compat/model/authored/ecr-policies.json",
+      "state": "candidate",
+      "shadowOf": "ecr-policies",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "PutLifecyclePolicy"
+        },
+        {
+          "name": "GetLifecyclePolicy",
+          "depends": [
+            "PutLifecyclePolicy"
+          ]
+        },
+        {
+          "name": "DeleteLifecyclePolicy",
+          "depends": [
+            "GetLifecyclePolicy"
+          ]
+        },
+        {
+          "name": "GetLifecyclePolicyNotFound",
+          "op": "GetLifecyclePolicy"
+        },
+        {
+          "name": "SetRepositoryPolicy"
+        },
+        {
+          "name": "GetRepositoryPolicy",
+          "depends": [
+            "SetRepositoryPolicy"
+          ]
+        },
+        {
+          "name": "DeleteRepositoryPolicy",
+          "depends": [
+            "GetRepositoryPolicy"
+          ]
+        }
+      ]
+    },
+    {
+      "service": "ecr",
+      "name": "ecr-registry-shadow",
+      "generated": true,
+      "scenario": "compat/model/authored/ecr-registry.json",
+      "state": "candidate",
+      "shadowOf": "ecr-registry",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "GetAuthorizationToken"
+        },
+        {
+          "name": "DescribeRegistry"
+        }
+      ]
+    },
+    {
+      "service": "ecr",
+      "name": "ecr-tags-shadow",
+      "generated": true,
+      "scenario": "compat/model/authored/ecr-tags.json",
+      "state": "candidate",
+      "shadowOf": "ecr-tags",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "TagResource"
+        },
+        {
+          "name": "ListTagsForResource",
+          "depends": [
+            "TagResource"
+          ]
+        },
+        {
+          "name": "UntagResource",
+          "depends": [
+            "ListTagsForResource"
+          ]
+        }
+      ]
+    },
+    {
       "service": "elastic-load-balancing",
       "name": "elastic-load-balancing-gen-loadbalancer",
       "generated": true,

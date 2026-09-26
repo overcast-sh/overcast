@@ -533,13 +533,17 @@ export function asJsonDocument(value: unknown): JsonValue | undefined {
 
 /**
  * `nonEmpty`: not `null`, `""`, `[]` or `{}`. Numbers and booleans are never
- * empty, so `0` and `false` pass (README § Assertions).
+ * empty, so `0` and `false` pass (README § Assertions). Nor is a timestamp,
+ * which the SDK hands back as a `Date`: it has no enumerable own properties,
+ * and read as a record it would look like `{}` (README § Values: `nonEmpty`
+ * holds on every form a timestamp takes).
  */
 export function isEmpty(value: unknown): boolean {
   if (value === null || value === undefined) return true;
   if (typeof value === "string") return value === "";
   if (Array.isArray(value)) return value.length === 0;
   if (typeof value === "number" || typeof value === "boolean") return false;
+  if (value instanceof Date) return false;
   if (isRecord(value)) {
     return Object.values(value).every((v) => v === undefined);
   }

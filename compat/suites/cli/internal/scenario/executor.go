@@ -593,11 +593,17 @@ func acceptedCodes(want *ErrorClause) string {
 // of the four rather than up front, which is `elastic-load-balancing`; the other
 // three are here because they are one documented set and a table with one entry
 // invites the next author to add theirs somewhere else.
+//
+// ECR is a fifth, of a different kind: its endpoint prefix is "api.ecr" — the
+// host is api.ecr.<region>.amazonaws.com — which is no command at all, and the
+// CLI's is plain "ecr". It landed with the authored ecr-* ports (#1116), the
+// first scenarios to name ECR.
 var awsCommandOverrides = map[string]string{
 	"elasticloadbalancing": "elb",
 	"monitoring":           "cloudwatch",
 	"email":                "ses",
 	"states":               "stepfunctions",
+	"api.ecr":              "ecr",
 }
 
 // awsCommand is the `aws` subcommand for a scenario's service.

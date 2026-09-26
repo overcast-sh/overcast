@@ -167,6 +167,8 @@ func TestAwsCommandUsesTheCLIsOwnNameForTheFourServicesThatDiffer(t *testing.T) 
 		"monitoring":           "cloudwatch",
 		"email":                "ses",
 		"states":               "stepfunctions",
+		// ECR's endpoint prefix is a host label, not a command.
+		"api.ecr": "ecr",
 		// Everything else is the endpoint prefix, unchanged.
 		"sqs":           "sqs",
 		"organizations": "organizations",

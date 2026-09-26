@@ -1,0 +1,65 @@
+{
+  "$comment": "Authored port of the hand-written registry group ecr-registry (docs/plans/compat-coverage-modelgen.md §3.11, G6 wave 3, #1116). The group's only native is the cli suite's (compat/suites/cli/internal/groups/ecr.go); go-sdk, python-sdk, node-js-sdk, java-sdk, dotnet-sdk and rust-sdk never implemented it and carry it as parity debt, which the port closes. It runs as ecr-registry-shadow beside that native until a nightly --compare-shadow agrees; the clauses are what the native asserts — see compat/model/README.md § Authored scenarios.",
+  "version": 1,
+  "service": "ecr",
+  "client": {
+    "sdkId": "ECR",
+    "endpointPrefix": "api.ecr",
+    "signingName": "ecr",
+    "protocol": "awsJson1_1",
+    "apiVersion": "2015-09-21",
+    "targetPrefix": "AmazonEC2ContainerRegistry_V20150921",
+    "awsQueryCompatible": false
+  },
+  "groups": [
+    {
+      "$comment": "Two registry-wide reads that create nothing, so there is no setup and nothing to tear down — as in the native, which registers no hooks for this group.",
+      "name": "ecr-registry-shadow",
+      "kind": "lifecycle",
+      "setup": [],
+      "tests": [
+        {
+          "$comment": "The native decodes authorizationToken as standard base64 and requires `AWS:<password>` with a non-empty password — the credential `docker login --username AWS --password-stdin` consumes — then requires an http(s) proxyEndpoint and an expiresAt. The IR cannot decode, so the token is held to a pattern that admits exactly the padded standard-base64 texts whose bytes begin `AWS:` and continue with at least one more byte: `QVdT` is `AWS`, `O` followed by one of `g`–`v` spells the eight bits of `:` (the second character also carries the next byte's top four bits, which are free), and the three alternatives after it are a 5-byte, 6-byte and longer decoding. `QVdTOg==`, which is `AWS:` with an empty password, does not match. Like Go's base64 decoder the native uses, the pattern does not insist that the padding bits are zero. The proxyEndpoint pattern is the native's HasPrefix(\"http\"). expiresAt is a timestamp, so it is asserted present and nothing more (compat/model/README.md § Values). authorizationToken is modeled as a string (Base64), not a blob, so it reaches every backend as the text the service sent.",
+          "name": "GetAuthorizationToken",
+          "op": "GetAuthorizationToken",
+          "call": {
+            "op": "GetAuthorizationToken",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.authorizationData[0].authorizationToken": {
+                  "matches": "^QVdTO[g-v](?:[A-Za-z0-9+/]=|[A-Za-z0-9+/]{2}(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?)$"
+                },
+                "$.authorizationData[0].proxyEndpoint": { "matches": "^http" },
+                "$.authorizationData[0].expiresAt": { "nonEmpty": true }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "The native requires a non-empty registryId and a replicationConfiguration object. `nonEmpty` on the object is that presence check: a registry with no replication rules still answers `{\"rules\": []}`, which is not an empty object. That `rules` is a list is added: the ECR API Reference documents ReplicationConfiguration.rules as a required array, and `isList` holds on an empty one.",
+          "name": "DescribeRegistry",
+          "op": "DescribeRegistry",
+          "call": {
+            "op": "DescribeRegistry",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.registryId": { "nonEmpty": true },
+                "$.replicationConfiguration": { "nonEmpty": true },
+                "$.replicationConfiguration.rules": { "isList": true }
+              }
+            }
+          ]
+        }
+      ],
+      "teardown": []
+    }
+  ]
+}
