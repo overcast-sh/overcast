@@ -47,7 +47,8 @@ type Service struct {
 	typedOp map[string]op.Operation
 
 	// Wired after construction; see glue_catalog.go and InitS3Access.
-	catalog       glue.Catalog
+	catalogs      glue.Catalogs
+	catalog       glue.Catalog // catalogs.Default(): the one DDL reads and writes
 	catalogWriter glue.CatalogWriter
 	listObjects   events.S3ListObjectsFunc
 	// bus receives each query's state changes; nil until InitBus.

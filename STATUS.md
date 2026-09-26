@@ -41,7 +41,7 @@
 | RDS             | 34  | DB instances (Docker), start/stop, modify, subnet/parameter groups                                                                                                                                         |
 | ElastiCache     | 24  | Clusters (Docker Redis), replication groups, subnet groups, tagging                                                                                                                                        |
 | EFS             | 31  | File systems (Docker-volume-backed, `live` mode default), mount targets, access points, file-system policies, lifecycle/backup config, tagging                                                            |
-| S3 Tables       | 49  | Table buckets, namespaces, Iceberg tables with a real `--table-s3` warehouse bucket each, `versionToken` commits, and the Iceberg REST catalog at `/iceberg` (commits, staged create); maintenance/replication stored, never run |
+| S3 Tables       | 49  | Table buckets, namespaces, Iceberg tables with a real `--table-s3` warehouse bucket each, `versionToken` commits, and the Iceberg REST catalog at `/iceberg` (commits, staged create); each bucket a Glue `s3tablescatalog` catalog; maintenance/replication stored, never run |
 | AppConfig       | 20  | Apps, environments, profiles, hosted config versions (CRUD + version counter)                                                                                                                              |
 | AppConfigData   | 2   | StartConfigurationSession, GetLatestConfiguration; poll-based delivery with "unchanged" detection                                                                                                          |
 | Secrets Manager | 22  | Secret CRUD, versioning, tags, real rotation (invokes the configured Lambda, all four steps), resource policies (stored, not evaluated — #496)                                                            |
@@ -108,7 +108,7 @@
 | CloudWatch      | 17  |
 | DynamoDB Streams | 4   |
 | Firehose        | 9   |
-| Glue            | 32  |
+| Glue            | 34  |
 | OpenSearch      | 8   |
 | AppRegistry     | 24  |
 | Backup          | 18  |

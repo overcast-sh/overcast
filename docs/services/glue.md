@@ -54,12 +54,33 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | Errors | `AlreadyExistsException` on a duplicate, `EntityNotFoundException` for a missing parent, both HTTP 400 |
 | Paging | `GetDatabases`, `GetTables`, `GetTableVersions` and `GetPartitions` take `MaxResults` and `NextToken` |
 | Tags | `Tags` on `CreateDatabase`, and `TagResource`, `UntagResource` and `GetTags` on database and table ARNs |
+| S3 Tables | `s3tablescatalog`, with one catalog per table bucket, through `GetCatalog`, `GetCatalogs` and the database and table reads |
 | CloudFormation | `AWS::Glue::Database`, `AWS::Glue::Table` and `AWS::Glue::Partition` |
 
 A stored table keeps everything `TableInput` carries — `StorageDescriptor`
 with its columns, serde and `Location`, `PartitionKeys`, `Parameters` such as
 `table_type` and `metadata_location`, view text — and gains `CreateTime`,
 `UpdateTime` and `VersionId`.
+
+### S3 Tables through `s3tablescatalog`
+
+[S3 Tables](./s3tables.md) appear in the catalog as they do once AWS's
+analytics integration is enabled: the federated catalog `s3tablescatalog`
+holds one child catalog per table bucket, whose databases are the bucket's
+namespaces and whose tables are its Iceberg tables. Pass the child's ID as
+`CatalogId`:
+
+```bash
+aws glue get-catalogs --parent-catalog-id s3tablescatalog
+aws glue get-tables --catalog-id 000000000000:s3tablescatalog/my-bucket \
+  --database-name my_namespace
+```
+
+Each table has `table_type=ICEBERG`, its current `metadata_location`, its
+warehouse as the storage location and its current schema's columns in Hive
+type names. The catalog is read live, so a bucket, namespace or table appears
+as soon as S3 Tables creates it. Through Glue it is read-only: create and
+change tables with the S3 Tables API or its Iceberg REST catalog.
 
 ### Partition expressions
 
@@ -81,8 +102,10 @@ that matches everything.
 | Rename through an update | Not offered | A differing input `Name` is `InvalidInputException` |
 | Cascading deletes | Asynchronous | Immediate |
 | Partition indexes, column statistics, transactions | Supported | Ignored |
-| `CatalogId` | Selects the catalog | Echoed, never used to separate catalogs |
-| Lake Formation | Enforces grants | Reports the default `IAM_ALLOWED_PRINCIPALS` permission and enforces nothing |
+| `CatalogId` | Selects the catalog | The account's catalog, or an `s3tablescatalog` catalog; any other ID reads the account's |
+| `s3tablescatalog` | Created by enabling the S3 Tables integration (`CreateCatalog`) | Always present and read-only: anything but the catalog, database and table reads is 501 there |
+| `GetCatalogs` `HasDatabases` | Filters the list | Ignored |
+| Lake Formation | Enforces grants | Not modelled: reports the default `IAM_ALLOWED_PRINCIPALS` permission, and every catalog, database and table is readable |
 
 An Iceberg table created through `IcebergInput` has no `metadata_location`,
 and the response carries an `x-overcast-emulation-limitation` header saying
@@ -99,11 +122,28 @@ Iceberg clients that write their own metadata, such as PyIceberg's
 `GlueCatalog`, commit through `UpdateTable` with `VersionId`. A lost race is
 the same `ConcurrentModificationException` they retry on AWS.
 
+## In the console
+
+The Glue page lists databases, then each database's tables with their format,
+location, partition keys and column count. A table opens on its schema, with
+*Copy DDL* for the `CREATE EXTERNAL TABLE` that recreates it. The Partitions
+tab sends a filter to `GetPartitions` as an `Expression`, exactly as typed, and
+shows the service's parse error under the box. *Discover partitions* runs
+`MSCK REPAIR TABLE` through Athena. The Data tab previews rows through Athena,
+or lists the table's files when the query engine is off. The Versions tab diffs
+any two table versions side by side.
+
+*Create table from S3* stands in for a crawler, which Overcast does not
+emulate. Pick a prefix, and the console reads the schema from one CSV, JSON
+Lines or Parquet file, turns Hive `key=value/` folders into partition keys, and
+creates the table with `CreateTable` and its partitions with
+`BatchCreatePartition`. *Copy as CDK* gives the same table as a `CfnTable`.
+
 <!-- BEGIN overcast:capabilities -->
 
 ## Operations
 
-All 32 listed operations are implemented.
+All 34 listed operations are implemented.
 Per-operation status, notes and AWS API links: [Glue operations](glue/operations.md).
 
 <!-- END overcast:capabilities -->

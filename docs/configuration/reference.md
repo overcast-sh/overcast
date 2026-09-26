@@ -140,7 +140,7 @@ explaining.
 | `EFS_NFS_PORT_BASE`              | `22049`                | Starting host port for the NFS export containers                                     |
 | `EFS_NFS_IMAGE`                  | `registry.k8s.io/sig-storage/nfs-provisioner@sha256:…` | Digest-pinned image used for the NFS export containers               |
 | `ATHENA_ENGINE`                  | `trino`                | `trino` runs queries on an engine container; `inert` runs no SQL — see [Athena](../services/athena.md) |
-| `ATHENA_ENGINE_IMAGE`            | `trinodb/trino:483@sha256:…` | Digest-pinned image the Athena engine runs                                     |
+| `ATHENA_ENGINE_IMAGE`            | `ghcr.io/overcast-sh/overcast-athena-engine:483@sha256:…` | Digest-pinned image the Athena engine runs; the engine loads every connector the image carries |
 | `ATHENA_ENGINE_MEMORY`           | `1g`                   | Memory limit for the Athena engine container, at least `1g`; bytes or a `k`, `m` or `g` suffix |
 | `ATHENA_DOCKER_SOCKET`           | _(Lambda socket)_      | Docker endpoint for the Athena engine — Unix path or `tcp://host:port`               |
 | `ATHENA_KEEP_CONTAINERS`         | `false`                | Keep the stopped Athena engine container after it stops                              |

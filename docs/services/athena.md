@@ -33,9 +33,9 @@ aws athena get-query-results --query-execution-id <id>
 Any credentials work; with none configured, run `eval "$(overcast env)"` first
 — see [Using AWS SDKs and CLI](../sdk-cli.md#credentials).
 
-The first query waits, `QUEUED`, while the engine starts — about ten seconds
-with the image already pulled, plus the pull of a 2.4 GB image the first time
-ever. Later queries start at once.
+The first query waits, `QUEUED`, while the engine starts — 10–20 seconds with
+the image already pulled, plus a 0.78 GB pull the first time ever. Later
+queries start at once.
 
 In the console, **Athena** opens on a query editor. It has a browser of the
 catalog's databases and tables, completion for their names and for every
@@ -62,7 +62,7 @@ and does not run it.
 | Listing | `ListQueryExecutions` and `ListNamedQueries` cover one workgroup, `primary` by default, and paginate |
 | Saved queries | Named queries and prepared statements, through the API or SQL `PREPARE` and `DEALLOCATE PREPARE`; `EXECUTE … USING` and `ExecutionParameters` bind their parameters |
 | Data catalogs | `AwsDataCatalog` is built in; `GLUE`, `HIVE` and `LAMBDA` catalogs can be registered |
-| Metadata | `GetDatabase`, `ListDatabases`, `GetTableMetadata` and `ListTableMetadata` read the Glue Data Catalog |
+| Metadata | `GetDatabase`, `ListDatabases`, `GetTableMetadata` and `ListTableMetadata` read the Glue Data Catalog, including an S3 Tables bucket's `s3tablescatalog/<bucket>` catalog |
 | Tags | On workgroup and data catalog ARNs |
 | CloudFormation | `AWS::Athena::WorkGroup` (updated in place), `NamedQuery`, `PreparedStatement` and `DataCatalog` |
 
@@ -79,7 +79,7 @@ settings, and `/_overcast/athena/engine` reports its state.
 | First query | Starts at once | Waits for the engine to start |
 | Result reuse | `ResultReuseConfiguration` reuses a recent result | Every query runs |
 | CloudWatch metrics | Published when the workgroup enables them | Not published |
-| S3 Tables catalogs | `s3tablescatalog/<bucket>` queries a table bucket | Not queryable yet |
+| S3 Tables catalogs | `s3tablescatalog/<bucket>` lists and queries a table bucket | Listed through the metadata operations; a query run in one fails `NOT_SUPPORTED` |
 | Data catalogs | `FEDERATED` provisions a connector | `FEDERATED` is refused with a 501 |
 | Metadata | `LAMBDA` and `HIVE` catalogs are read through their connector | Only `GLUE` catalogs for this account are readable |
 | Spark | Spark workgroups, sessions and notebooks | Not emulated |

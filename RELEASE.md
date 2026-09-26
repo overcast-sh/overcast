@@ -97,10 +97,13 @@ part of a release. It carries a Trino release rather than an Overcast one, and
 changes `docker/athena-engine/` or that workflow, after the same `release`
 environment approval. Overcast pins it by digest in
 `config.DefaultAthenaEngineImage`, so a new build reaches users only through a
-pull request that moves that pin; the workflow's run summary prints the
-reference to pin. The package must be public, like `overcast` and
-`overcast-slim`: after its first publish, check that an anonymous
-`docker pull` works and that the package is linked to this repository.
+pull request that moves that pin. Renovate opens it once the build is
+published, and the workflow's run summary prints the reference to pin. A new
+Trino release also moves the tag and sizes quoted in
+`docs/services/athena/limitations.md` and `docs/configuration/reference.md`. The
+package must be public, like `overcast` and `overcast-slim`: after its first
+publish, check that an anonymous `docker pull` works and that the package is
+linked to this repository.
 
 ## Version Format
 

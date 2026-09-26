@@ -5389,6 +5389,33 @@
       ]
     },
     {
+      "service": "glue",
+      "name": "glue-s3tables-catalog",
+      "tests": [
+        {
+          "name": "GetCatalogs"
+        },
+        {
+          "name": "GetCatalog",
+          "depends": [
+            "GetCatalogs"
+          ]
+        },
+        {
+          "name": "GetDatabases",
+          "depends": [
+            "GetCatalogs"
+          ]
+        },
+        {
+          "name": "GetTable",
+          "depends": [
+            "GetCatalogs"
+          ]
+        }
+      ]
+    },
+    {
       "service": "athena",
       "name": "athena-control",
       "tests": [

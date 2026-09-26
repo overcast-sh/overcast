@@ -5,15 +5,16 @@
  * from the Trino version Overcast's query engine runs.
  *
  * The version is pinned, not assumed. The engine's image is
- * `DefaultAthenaEngineImage` in internal/config/config.go
- * (`trinodb/trino:<version>@sha256:…`); this script refuses to write the list
- * from a Trino that reports any other version, and records the version in the
- * file. `trino-functions.test.ts` fails when the config's version moves on
- * without the list, so bumping the engine means regenerating it.
+ * `DefaultAthenaEngineImage` in internal/config/config.go, tagged with the
+ * Trino release it runs (`…/overcast-athena-engine:<version>@sha256:…`); this
+ * script refuses to write the list from a Trino that reports any other
+ * version, and records the version in the file. `trino-functions.test.ts`
+ * fails when the config's version moves on without the list, so bumping the
+ * engine means regenerating it.
  *
- * Usage, with the engine's own image (digest from the config):
+ * Usage, with the engine's own image (the reference from the config):
  *
- *   docker run -d --name trino-functions -p 127.0.0.1:18080:8080 trinodb/trino@sha256:…
+ *   docker run -d --name trino-functions -p 127.0.0.1:18080:8080 <DefaultAthenaEngineImage>
  *   node scripts/generate-trino-functions.mjs http://127.0.0.1:18080
  *   docker rm -f trino-functions
  */
@@ -28,7 +29,7 @@ const OUTPUT = resolve(here, "../src/features/athena/trino-functions.gen.json")
 
 /** The Trino version the engine image is pinned to. */
 export function pinnedTrinoVersion(configSource) {
-  const match = /DefaultAthenaEngineImage\s*=\s*"trinodb\/trino:(\d+)@/.exec(configSource)
+  const match = /DefaultAthenaEngineImage\s*=\s*"[^":@]+:(\d+)@/.exec(configSource)
   if (!match) throw new Error("DefaultAthenaEngineImage not found in internal/config/config.go")
   return match[1]
 }

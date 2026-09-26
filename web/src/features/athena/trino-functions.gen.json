@@ -297,64 +297,6 @@
    "description": "Beta cdf given the a, b parameters and value"
   },
   {
-   "name": "bing_tile",
-   "kind": "scalar",
-   "signatures": [
-    "bing_tile(integer, integer, integer) → bingtile",
-    "bing_tile(varchar) → bingtile"
-   ],
-   "description": "Creates a Bing tile from XY coordinates and zoom level"
-  },
-  {
-   "name": "bing_tile_at",
-   "kind": "scalar",
-   "signatures": [
-    "bing_tile_at(double, double, integer) → bingtile"
-   ],
-   "description": "Given a (latitude, longitude) point, returns the containing Bing tile at the specified zoom level"
-  },
-  {
-   "name": "bing_tile_coordinates",
-   "kind": "scalar",
-   "signatures": [
-    "bing_tile_coordinates(bingtile) → row(\"x\" integer,\"y\" integer)"
-   ],
-   "description": "Given a Bing tile, returns XY coordinates of the tile"
-  },
-  {
-   "name": "bing_tile_polygon",
-   "kind": "scalar",
-   "signatures": [
-    "bing_tile_polygon(bingtile) → geometry"
-   ],
-   "description": "Given a Bing tile, returns the polygon representation of the tile"
-  },
-  {
-   "name": "bing_tile_quadkey",
-   "kind": "scalar",
-   "signatures": [
-    "bing_tile_quadkey(bingtile) → varchar"
-   ],
-   "description": "Given a Bing tile, returns its QuadKey"
-  },
-  {
-   "name": "bing_tile_zoom_level",
-   "kind": "scalar",
-   "signatures": [
-    "bing_tile_zoom_level(bingtile) → tinyint"
-   ],
-   "description": "Given a Bing tile, returns zoom level of the tile"
-  },
-  {
-   "name": "bing_tiles_around",
-   "kind": "scalar",
-   "signatures": [
-    "bing_tiles_around(double, double, integer) → array(bingtile)",
-    "bing_tiles_around(double, double, integer, double) → array(bingtile)"
-   ],
-   "description": "Given a (longitude, latitude) point, returns the surrounding Bing tiles at the specified zoom level"
-  },
-  {
    "name": "bit_count",
    "kind": "scalar",
    "signatures": [
@@ -517,14 +459,6 @@
    "description": "Round up to nearest integer"
   },
   {
-   "name": "char2hexint",
-   "kind": "scalar",
-   "signatures": [
-    "char2hexint(varchar) → varchar"
-   ],
-   "description": "Returns the hexadecimal representation of the UTF-16BE encoding of the argument"
-  },
-  {
    "name": "checksum",
    "kind": "aggregate",
    "signatures": [
@@ -539,15 +473,6 @@
     "chr(bigint) → varchar(1)"
    ],
    "description": "Convert Unicode code point to a string"
-  },
-  {
-   "name": "classify",
-   "kind": "scalar",
-   "signatures": [
-    "classify(map(bigint,double), classifier(bigint)) → bigint",
-    "classify(map(bigint,double), classifier(varchar)) → varchar"
-   ],
-   "description": ""
   },
   {
    "name": "codepoint",
@@ -613,14 +538,6 @@
     "contains_sequence(array(T), array(T)) → boolean"
    ],
    "description": "Determines whether an array contains a sequence, with the values in the exact order"
-  },
-  {
-   "name": "convex_hull_agg",
-   "kind": "aggregate",
-   "signatures": [
-    "convex_hull_agg(geometry) → geometry"
-   ],
-   "description": "Returns a geometry that is the convex hull of all the geometries in the set."
   },
   {
    "name": "corr",
@@ -931,15 +848,6 @@
    "description": "Calculates the euclidean distance between two vectors"
   },
   {
-   "name": "evaluate_classifier_predictions",
-   "kind": "aggregate",
-   "signatures": [
-    "evaluate_classifier_predictions(bigint, bigint) → varchar",
-    "evaluate_classifier_predictions(varchar(x), varchar(y)) → varchar"
-   ],
-   "description": ""
-  },
-  {
    "name": "every",
    "kind": "aggregate",
    "signatures": [
@@ -962,23 +870,6 @@
     "exp(double) → double"
    ],
    "description": "Euler's number raised to the given power"
-  },
-  {
-   "name": "features",
-   "kind": "scalar",
-   "signatures": [
-    "features(double) → map(bigint,double)",
-    "features(double, double) → map(bigint,double)",
-    "features(double, double, double) → map(bigint,double)",
-    "features(double, double, double, double) → map(bigint,double)",
-    "features(double, double, double, double, double) → map(bigint,double)",
-    "features(double, double, double, double, double, double) → map(bigint,double)",
-    "features(double, double, double, double, double, double, double) → map(bigint,double)",
-    "features(double, double, double, double, double, double, double, double) → map(bigint,double)",
-    "features(double, double, double, double, double, double, double, double, double) → map(bigint,double)",
-    "features(double, double, double, double, double, double, double, double, double, double) → map(bigint,double)"
-   ],
-   "description": ""
   },
   {
    "name": "filter",
@@ -1089,22 +980,6 @@
    "description": "Decode bigint value from a 64-bit 2's complement big endian varbinary"
   },
   {
-   "name": "from_encoded_polyline",
-   "kind": "scalar",
-   "signatures": [
-    "from_encoded_polyline(varchar) → geometry"
-   ],
-   "description": "Decodes a polyline to a linestring"
-  },
-  {
-   "name": "from_geojson_geometry",
-   "kind": "scalar",
-   "signatures": [
-    "from_geojson_geometry(varchar) → sphericalgeography"
-   ],
-   "description": "Returns a spherical geography from a GeoJSON string"
-  },
-  {
    "name": "from_hex",
    "kind": "scalar",
    "signatures": [
@@ -1193,70 +1068,6 @@
    "description": ""
   },
   {
-   "name": "geometry_collect_agg",
-   "kind": "aggregate",
-   "signatures": [
-    "geometry_collect_agg(geometry) → geometry"
-   ],
-   "description": "Returns a geometry collection containing the input geometries."
-  },
-  {
-   "name": "geometry_from_hadoop_shape",
-   "kind": "scalar",
-   "signatures": [
-    "geometry_from_hadoop_shape(varbinary) → geometry"
-   ],
-   "description": "Returns a Geometry type object from Spatial Framework for Hadoop representation"
-  },
-  {
-   "name": "geometry_invalid_reason",
-   "kind": "scalar",
-   "signatures": [
-    "geometry_invalid_reason(geometry) → varchar"
-   ],
-   "description": "Returns the reason for why the input geometry is not valid. Returns null if the input is valid."
-  },
-  {
-   "name": "geometry_nearest_points",
-   "kind": "scalar",
-   "signatures": [
-    "geometry_nearest_points(geometry, geometry) → row(geometry,geometry)"
-   ],
-   "description": "Return the closest points on the two geometries"
-  },
-  {
-   "name": "geometry_to_bing_tiles",
-   "kind": "scalar",
-   "signatures": [
-    "geometry_to_bing_tiles(geometry, integer) → array(bingtile)"
-   ],
-   "description": "Given a geometry and a zoom level, returns the minimum set of Bing tiles that fully covers that geometry"
-  },
-  {
-   "name": "geometry_union",
-   "kind": "scalar",
-   "signatures": [
-    "geometry_union(array(geometry)) → geometry"
-   ],
-   "description": "Returns a geometry that represents the point set union of the input geometries."
-  },
-  {
-   "name": "geometry_union_agg",
-   "kind": "aggregate",
-   "signatures": [
-    "geometry_union_agg(geometry) → geometry"
-   ],
-   "description": "Returns a geometry that represents the point set union of the input geometries."
-  },
-  {
-   "name": "great_circle_distance",
-   "kind": "scalar",
-   "signatures": [
-    "great_circle_distance(double, double, double, double) → double"
-   ],
-   "description": "Calculates the great-circle distance between two points on the Earth's surface in kilometers"
-  },
-  {
    "name": "greatest",
    "kind": "scalar",
    "signatures": [
@@ -1339,14 +1150,6 @@
     "human_readable_seconds(double) → varchar"
    ],
    "description": ""
-  },
-  {
-   "name": "index",
-   "kind": "scalar",
-   "signatures": [
-    "index(varchar, varchar) → bigint"
-   ],
-   "description": "Returns index of first occurrence of a substring (or 0 if not found)"
   },
   {
    "name": "infinity",
@@ -1550,44 +1353,6 @@
    "description": ""
   },
   {
-   "name": "learn_classifier",
-   "kind": "aggregate",
-   "signatures": [
-    "learn_classifier(bigint, map(bigint,double)) → classifier(bigint)",
-    "learn_classifier(double, map(bigint,double)) → classifier(bigint)",
-    "learn_classifier(varchar, map(bigint,double)) → classifier(varchar)"
-   ],
-   "description": ""
-  },
-  {
-   "name": "learn_libsvm_classifier",
-   "kind": "aggregate",
-   "signatures": [
-    "learn_libsvm_classifier(bigint, map(bigint,double), varchar(x)) → classifier(bigint)",
-    "learn_libsvm_classifier(double, map(bigint,double), varchar) → classifier(bigint)",
-    "learn_libsvm_classifier(varchar, map(bigint,double), varchar) → classifier(varchar)"
-   ],
-   "description": ""
-  },
-  {
-   "name": "learn_libsvm_regressor",
-   "kind": "aggregate",
-   "signatures": [
-    "learn_libsvm_regressor(bigint, map(bigint,double), varchar) → regressor",
-    "learn_libsvm_regressor(double, map(bigint,double), varchar) → regressor"
-   ],
-   "description": ""
-  },
-  {
-   "name": "learn_regressor",
-   "kind": "aggregate",
-   "signatures": [
-    "learn_regressor(bigint, map(bigint,double)) → regressor",
-    "learn_regressor(double, map(bigint,double)) → regressor"
-   ],
-   "description": ""
-  },
-  {
    "name": "least",
    "kind": "scalar",
    "signatures": [
@@ -1612,30 +1377,6 @@
     "levenshtein_distance(varchar(x), varchar(y)) → bigint"
    ],
    "description": "Computes Levenshtein distance between two strings"
-  },
-  {
-   "name": "line_interpolate_point",
-   "kind": "scalar",
-   "signatures": [
-    "line_interpolate_point(geometry, double) → geometry"
-   ],
-   "description": "Returns a Point interpolated along a LineString at the fraction given."
-  },
-  {
-   "name": "line_interpolate_points",
-   "kind": "scalar",
-   "signatures": [
-    "line_interpolate_points(geometry, double) → array(geometry)"
-   ],
-   "description": "Returns an array of Points interpolated along a LineString."
-  },
-  {
-   "name": "line_locate_point",
-   "kind": "scalar",
-   "signatures": [
-    "line_locate_point(geometry, geometry) → double"
-   ],
-   "description": "Returns a float between 0 and 1 representing the location of the closest point on the LineString to the given Point, as a fraction of total 2d line length."
   },
   {
    "name": "listagg",
@@ -2016,23 +1757,6 @@
    "description": ""
   },
   {
-   "name": "objectid",
-   "kind": "scalar",
-   "signatures": [
-    "objectid() → objectid",
-    "objectid(varchar) → objectid"
-   ],
-   "description": "Mongodb ObjectId"
-  },
-  {
-   "name": "objectid_timestamp",
-   "kind": "scalar",
-   "signatures": [
-    "objectid_timestamp(objectid) → timestamp(3) with time zone"
-   ],
-   "description": "Timestamp from the given Mongodb ObjectId"
-  },
-  {
    "name": "parse_data_size",
    "kind": "scalar",
    "signatures": [
@@ -2277,14 +2001,6 @@
    "description": ""
   },
   {
-   "name": "regress",
-   "kind": "scalar",
-   "signatures": [
-    "regress(map(bigint,double), regressor) → double"
-   ],
-   "description": ""
-  },
-  {
    "name": "render",
    "kind": "scalar",
    "signatures": [
@@ -2457,14 +2173,6 @@
    "description": "Signum"
   },
   {
-   "name": "simplify_geometry",
-   "kind": "scalar",
-   "signatures": [
-    "simplify_geometry(geometry, double) → geometry"
-   ],
-   "description": "Returns a \"simplified\" version of the given geometry"
-  },
-  {
    "name": "sin",
    "kind": "scalar",
    "signatures": [
@@ -2504,23 +2212,6 @@
     "soundex(varchar) → varchar(4)"
    ],
    "description": "Encodes a string into a Soundex value"
-  },
-  {
-   "name": "spatial_partitioning",
-   "kind": "aggregate",
-   "signatures": [
-    "spatial_partitioning(geometry) → varchar"
-   ],
-   "description": ""
-  },
-  {
-   "name": "spatial_partitions",
-   "kind": "scalar",
-   "signatures": [
-    "spatial_partitions(kdbtree, geometry) → array(integer)",
-    "spatial_partitions(kdbtree, geometry, double) → array(integer)"
-   ],
-   "description": "Returns an array of spatial partition IDs for a given geometry"
   },
   {
    "name": "split",
@@ -2703,14 +2394,6 @@
    "description": ""
   },
   {
-   "name": "timestamp_objectid",
-   "kind": "scalar",
-   "signatures": [
-    "timestamp_objectid(timestamp(0) with time zone) → objectid"
-   ],
-   "description": "Mongodb ObjectId from the given timestamp"
-  },
-  {
    "name": "timezone",
    "kind": "scalar",
    "signatures": [
@@ -2795,47 +2478,6 @@
    "description": "Encode value as a 64-bit 2's complement big endian varbinary"
   },
   {
-   "name": "to_char",
-   "kind": "scalar",
-   "signatures": [
-    "to_char(timestamp(p) with time zone, varchar) → varchar"
-   ],
-   "description": "Formats a timestamp"
-  },
-  {
-   "name": "to_date",
-   "kind": "scalar",
-   "signatures": [
-    "to_date(varchar, varchar) → date"
-   ],
-   "description": "Converts a string to a DATE data type"
-  },
-  {
-   "name": "to_encoded_polyline",
-   "kind": "scalar",
-   "signatures": [
-    "to_encoded_polyline(geometry) → varchar"
-   ],
-   "description": "Encodes a linestring or multipoint geometry to a polyline"
-  },
-  {
-   "name": "to_geojson_geometry",
-   "kind": "scalar",
-   "signatures": [
-    "to_geojson_geometry(geometry) → varchar",
-    "to_geojson_geometry(sphericalgeography) → varchar"
-   ],
-   "description": "Returns GeoJSON string based on the input geometry"
-  },
-  {
-   "name": "to_geometry",
-   "kind": "scalar",
-   "signatures": [
-    "to_geometry(sphericalgeography) → geometry"
-   ],
-   "description": "Converts a SphericalGeography object to a Geometry object."
-  },
-  {
    "name": "to_hex",
    "kind": "scalar",
    "signatures": [
@@ -2876,22 +2518,6 @@
     "to_milliseconds(interval day to second) → bigint"
    ],
    "description": ""
-  },
-  {
-   "name": "to_spherical_geography",
-   "kind": "scalar",
-   "signatures": [
-    "to_spherical_geography(geometry) → sphericalgeography"
-   ],
-   "description": "Converts a Geometry object to a SphericalGeography object"
-  },
-  {
-   "name": "to_timestamp",
-   "kind": "scalar",
-   "signatures": [
-    "to_timestamp(varchar, varchar) → timestamp(3)"
-   ],
-   "description": "Converts a string to a TIMESTAMP data type"
   },
   {
    "name": "to_unixtime",
