@@ -63,6 +63,16 @@ describe("restoreQueryTabs", () => {
     expect(restoreQueryTabs("nonsense").tabs).toHaveLength(1)
   })
 
+  it("drops a tab whose id repeats an earlier one's", () => {
+    const restored = restoreQueryTabs({
+      tabs: [
+        { id: "a", sql: "1" },
+        { id: "a", sql: "2" },
+      ],
+    })
+    expect(restored.tabs.map((t) => t.sql)).toEqual(["1"])
+  })
+
   it("repairs missing fields and drops entries that are not tabs", () => {
     const restored = restoreQueryTabs({
       tabs: [{ id: "a", sql: "SELECT 1", parameters: ["1", 2] }, 42],

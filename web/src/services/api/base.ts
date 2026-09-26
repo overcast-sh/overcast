@@ -58,3 +58,20 @@ export async function apiFetch<T>(
 }
 
 export { endpointResolver }
+
+/**
+ * GETs one of the emulator's own `/_overcast/*` endpoints, straight from the
+ * browser: they have no SDK client, so `fetch` is the policy's allowed
+ * exception. Throws the emulator's message on a non-2xx status.
+ */
+export async function overcastFetch<T>(path: string): Promise<T> {
+  const ep = endpointResolver.get()
+  const res = await fetch(`${ep.baseUrl}${path}`, {
+    headers: { "x-overcast-region": ep.region },
+  })
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { message?: string; __type?: string }
+    throw new Error(body.message ?? body.__type ?? `HTTP ${res.status}`)
+  }
+  return (await res.json()) as T
+}

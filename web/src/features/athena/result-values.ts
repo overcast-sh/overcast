@@ -10,7 +10,7 @@ import type { DataColumn } from "@/lib/data-sources/row-source"
  */
 
 const INTEGER_TYPES = new Set(["tinyint", "smallint", "integer", "int", "bigint"])
-const DECIMAL_TYPES = new Set(["real", "float", "double", "decimal"])
+const FLOAT_TYPES = new Set(["real", "float", "double"])
 const COMPLEX_TYPES = new Set(["array", "map", "row"])
 
 export function resultColumn(info: ColumnInfo): DataColumn {
@@ -18,8 +18,7 @@ export function resultColumn(info: ColumnInfo): DataColumn {
   return {
     name: info.Name ?? info.Label ?? "",
     type: type === "decimal" ? `decimal(${info.Precision ?? 38},${info.Scale ?? 0})` : type,
-    numeric: INTEGER_TYPES.has(type) || DECIMAL_TYPES.has(type),
-    scale: type === "decimal" ? (info.Scale ?? 0) : undefined,
+    numeric: INTEGER_TYPES.has(type) || FLOAT_TYPES.has(type) || type === "decimal",
     dateOnly: type === "date" || undefined,
   }
 }
@@ -52,14 +51,15 @@ function json(text: string): unknown {
 
 /**
  * One value, from the text `GetQueryResults` carries. A missing
- * `VarCharValue` is a NULL. Types the grid has nothing to add to — dates,
- * timestamps with their zone, intervals — stay text, exactly as Athena wrote
- * them.
+ * `VarCharValue` is a NULL. A DECIMAL stays the text Athena wrote — a
+ * `decimal(38,2)` has more digits than a double holds — and so do the types
+ * the grid has nothing to add to: dates, timestamps with their zone,
+ * intervals.
  */
 export function resultValue(text: string | undefined, type: string): unknown {
   if (text === undefined) return null
   if (INTEGER_TYPES.has(type)) return integer(text)
-  if (DECIMAL_TYPES.has(type)) return Number(text)
+  if (FLOAT_TYPES.has(type)) return Number(text)
   if (type === "boolean") return text === "true"
   if (type === "varbinary") return hexBytes(text)
   if (type === "json") return json(text)

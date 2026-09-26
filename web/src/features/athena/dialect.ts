@@ -45,7 +45,7 @@ const DIFFERENCES: [RegExp, DialectDifference][] = [
     },
   ],
   [
-    /^DESCRIBE\s+\S+\s+(?:PARTITION\b|\w+\s*$)/i,
+    /^DESCRIBE\s+(?!EXTENDED\b|FORMATTED\b)\S+\s+(?:PARTITION\b|\w+\s*$)/i,
     {
       title: "DESCRIBE of one column or partition is not parsed",
       detail: "DESCRIBE the whole table instead.",

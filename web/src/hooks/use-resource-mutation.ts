@@ -14,6 +14,11 @@ interface ResourceMutationConfig<TData, TError extends Error, TVariables, TConte
   successVariant?: "default" | "success" | "danger"
   /** Toast title shown on error. Defaults to "Operation failed". */
   errorTitle?: string
+  /**
+   * False when the page shows the error itself, where it happened — beside
+   * the input that caused it — so a toast would say it twice.
+   */
+  errorToast?: boolean
   /** Additional callback after invalidation + toast. */
   onSuccess?: (data: TData, variables: TVariables) => void
 }
@@ -59,6 +64,7 @@ export function useResourceMutation<
       config.onSuccess?.(data, variables)
     },
     onError: (error) => {
+      if (config.errorToast === false) return
       toast({
         title: config.errorTitle ?? "Operation failed",
         description: error.message,

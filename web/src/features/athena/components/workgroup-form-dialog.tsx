@@ -25,7 +25,8 @@ export function WorkGroupFormDialog({
   onClose: () => void
 }) {
   const editing = workGroup !== undefined
-  const [form, setForm] = useState(() => workGroupForm(workGroup))
+  const [original] = useState(() => workGroupForm(workGroup))
+  const [form, setForm] = useState(original)
   const [touched, setTouched] = useState(false)
   const errors = workGroupFormErrors(form)
   const shownErrors = touched ? errors : {}
@@ -60,7 +61,7 @@ export function WorkGroupFormDialog({
       onSubmit={() => {
         setTouched(true)
         if (Object.keys(errors).length > 0) return
-        if (editing) update.mutate(updateWorkGroupInput(form))
+        if (editing) update.mutate(updateWorkGroupInput(original, form))
         else create.mutate(createWorkGroupInput(form))
       }}
     >
@@ -103,7 +104,7 @@ export function WorkGroupFormDialog({
         error={shownErrors.cutoffMb}
       >
         <Input
-          inputMode="numeric"
+          inputMode="decimal"
           value={form.cutoffMb}
           onChange={(e) => set({ cutoffMb: e.target.value })}
         />

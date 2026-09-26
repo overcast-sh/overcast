@@ -9,6 +9,13 @@ describe("tableFormat", () => {
     [{ "serde.serialization.lib": "org.apache.hadoop.hive.serde2.OpenCSVSerde" }, "CSV"],
     [{ inputformat: "org.apache.hadoop.mapred.TextInputFormat" }, "CSV"],
     [{ classification: "avro" }, "AVRO"],
+    [
+      {
+        inputformat: "org.apache.hadoop.mapred.TextInputFormat",
+        "serde.serialization.lib": "org.openx.data.jsonserde.JsonSerDe",
+      },
+      "JSON",
+    ],
   ])("reads %j as %s", (Parameters, format) => {
     expect(tableFormat({ Name: "t", Parameters })).toBe(format)
   })

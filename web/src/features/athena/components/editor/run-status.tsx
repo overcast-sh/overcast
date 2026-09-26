@@ -29,7 +29,7 @@ export function RunStatus({
 }) {
   const state = execution.Status?.State
   const finished = isFinished(state)
-  const now = useNow(!finished, 100)
+  const now = useNow(!finished, 250)
   const elapsed = elapsedMs(execution, now)
   const waitingOnEngine = !finished && engine && ["pulling", "starting"].includes(engine.state)
 
@@ -166,7 +166,9 @@ export function StatementOutcome({
   const label = summary.name
     ? qualifiedName(summary.database, summary.name)
     : qualifiedName(summary.database)
-  const linked = summary.verb !== "Dropped" && summary.kind !== "view"
+  // Only AwsDataCatalog's tables are Glue's, where the link goes.
+  const inGlue = (execution.QueryExecutionContext?.Catalog ?? "AwsDataCatalog") === "AwsDataCatalog"
+  const linked = inGlue && summary.verb !== "Dropped" && summary.kind !== "view"
   return (
     <p className="font-mono text-xs text-fg">
       {summary.verb} {summary.kind}{" "}

@@ -1,5 +1,6 @@
 import {
   errorPosition,
+  executedStatement,
   formatSql,
   placeholderCount,
   qualifiedName,
@@ -54,6 +55,21 @@ describe("placeholderCount", () => {
     ["a block comment", "SELECT /* ? */ 1"],
   ])("ignores a ? inside %s", (_, sql) => {
     expect(placeholderCount(sql)).toBe(0)
+  })
+})
+
+describe("placeholderCount and prepared statements", () => {
+  it("gives a PREPARE no parameters of its own", () => {
+    expect(placeholderCount("PREPARE by_id FROM SELECT * FROM t WHERE id = ?")).toBe(0)
+  })
+
+  it.each([
+    ["EXECUTE by_id", "by_id"],
+    ["-- run it\nEXECUTE by_id;", "by_id"],
+    ["EXECUTE by_id USING 1", undefined],
+    ["SELECT 1", undefined],
+  ])("names the statement %j executes with ExecutionParameters", (sql, name) => {
+    expect(executedStatement(sql)).toBe(name)
   })
 })
 

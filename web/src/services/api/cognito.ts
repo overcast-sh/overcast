@@ -306,8 +306,7 @@ export const cognito = {
         UserPoolId: poolId,
         VerificationMessageTemplate: {
           DefaultEmailOption: (template.defaultEmailOption || "CONFIRM_WITH_CODE") as
-            | "CONFIRM_WITH_CODE"
-            | "CONFIRM_WITH_LINK",
+            "CONFIRM_WITH_CODE" | "CONFIRM_WITH_LINK",
           EmailMessage: template.emailMessage || undefined,
           EmailSubject: template.emailSubject || undefined,
           SmsMessage: template.smsMessage || undefined,

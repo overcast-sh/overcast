@@ -7,6 +7,7 @@ import {
   DeleteDataCatalogCommand,
   DeleteNamedQueryCommand,
   DeleteWorkGroupCommand,
+  GetPreparedStatementCommand,
   GetQueryExecutionCommand,
   GetQueryResultsCommand,
   GetQueryRuntimeStatisticsCommand,
@@ -29,6 +30,7 @@ import {
   type Database,
   type GetQueryResultsOutput,
   type NamedQuery,
+  type PreparedStatement,
   type PreparedStatementSummary,
   type QueryExecution,
   type QueryRuntimeStatistics,
@@ -41,7 +43,7 @@ import {
 } from "@aws-sdk/client-athena"
 import type { AthenaEngineStatus } from "@/types"
 import { awsClients } from "../aws-clients"
-import { endpointStore } from "../endpoint-store"
+import { overcastFetch } from "./base"
 import { collectPages } from "./paginate"
 
 /** BatchGetNamedQuery's and BatchGetQueryExecution's limit on ids per call. */
@@ -101,6 +103,13 @@ export const athena = {
       paginateListPreparedStatements({ client: awsClients.athena() }, { WorkGroup: workGroup }),
       (page) => page.PreparedStatements,
     ),
+
+  getPreparedStatement: async (workGroup: string, name: string): Promise<PreparedStatement> => {
+    const out = await awsClients
+      .athena()
+      .send(new GetPreparedStatementCommand({ WorkGroup: workGroup, StatementName: name }))
+    return out.PreparedStatement ?? { StatementName: name }
+  },
 
   // ─── Saved queries ─────────────────────────────────────────────────────
 
@@ -229,11 +238,7 @@ export const athena = {
 
   // ─── The emulator's query engine ───────────────────────────────────────
 
-  /** `GET /_overcast/athena/engine`: emulator-only, so plain `fetch`. */
-  getEngineStatus: async (): Promise<AthenaEngineStatus> => {
-    const { baseUrl } = endpointStore.get()
-    const res = await fetch(`${baseUrl}/_overcast/athena/engine`)
-    if (!res.ok) throw new Error(`Engine status: HTTP ${res.status}`)
-    return (await res.json()) as AthenaEngineStatus
-  },
+  /** `GET /_overcast/athena/engine`: the emulator's query engine, and how its last start went. */
+  getEngineStatus: (): Promise<AthenaEngineStatus> =>
+    overcastFetch<AthenaEngineStatus>("/_overcast/athena/engine"),
 }

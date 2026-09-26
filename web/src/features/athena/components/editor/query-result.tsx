@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
-import type { QueryExecution } from "@aws-sdk/client-athena"
+import type { GetQueryResultsOutput, QueryExecution } from "@aws-sdk/client-athena"
 import { ChevronDown, Copy, Download, FolderOpen } from "lucide-react"
 // The query result is the one deliberate exception to ResourceTable: a result
 // set has arbitrary typed columns and can hold millions of rows, and it is not
@@ -12,6 +12,7 @@ import { CopyButton } from "@/components/ui/copy-button"
 import { Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/menu"
 import { EmptyState } from "@/components/ui/primitives"
 import { SkeletonRows } from "@/components/ui/skeleton"
+import { useToast } from "@/components/ui/toast"
 import { useCopyToClipboard } from "@/hooks/use-clipboard"
 import type { RowSource } from "@/lib/data-sources/row-source"
 import { parseS3Uri } from "@/lib/s3-uri"
@@ -57,7 +58,7 @@ function ResultGrid({
   inert,
 }: {
   execution: QueryExecution
-  firstPage: Parameters<typeof useResultSource>[1]
+  firstPage: GetQueryResultsOutput
   outputRows: number | undefined
   inert: boolean
 }) {
@@ -68,7 +69,7 @@ function ResultGrid({
     <DataGrid
       source={source}
       label="Query result"
-      className="min-h-64 flex-1 rounded-md border border-border"
+      className="min-h-40 flex-1 rounded-md border border-border"
       emptyMessage={inert ? "No rows: the query engine is off." : "The query returned no rows."}
       toolbarEnd={<ResultActions execution={execution} source={source} />}
     />
@@ -77,13 +78,20 @@ function ResultGrid({
 
 function ResultActions({ execution, source }: { execution: QueryExecution; source: RowSource }) {
   const { copy } = useCopyToClipboard()
+  const { toast } = useToast()
   const id = execution.QueryExecutionId ?? ""
   const location = parseS3Uri(execution.ResultConfiguration?.OutputLocation ?? "")
   // A result held in memory is copied whole; a large one is the CSV's to download.
   const inMemory = source.rowCount.exact && !source.indexing
   const copyAs = (format: ResultFormat) => {
-    void readAllRows(source, new AbortController().signal).then((rows) =>
-      copy(formatResult(rows, format), { noun: `result as ${format.toUpperCase()}` }),
+    readAllRows(source, new AbortController().signal).then(
+      (rows) => copy(formatResult(rows, format), { noun: `result as ${format.toUpperCase()}` }),
+      (error: unknown) =>
+        toast({
+          title: "Could not copy the result",
+          description: error instanceof Error ? error.message : String(error),
+          variant: "danger",
+        }),
     )
   }
   return (
@@ -111,7 +119,7 @@ function ResultActions({ execution, source }: { execution: QueryExecution; sourc
           <Button asChild variant="ghost" size="sm">
             <a href={s3.getObjectDownloadUrl(location.bucket, location.key)} download>
               <Download aria-hidden className="size-3.5" />
-              Download CSV
+              Download {location.key.endsWith(".csv") ? "CSV" : "result"}
             </a>
           </Button>
           <Button asChild variant="ghost" size="sm">

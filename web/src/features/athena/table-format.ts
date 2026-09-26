@@ -19,7 +19,9 @@ export function tableFormat(table: TableMetadata): TableFormat | undefined {
   const params: Partial<Record<string, string>> = table.Parameters ?? {}
   if (params.table_type?.toUpperCase() === "ICEBERG") return "ICEBERG"
   if (table.TableType === "VIRTUAL_VIEW") return "VIEW"
-  const hints = [params.classification, params.inputformat, params["serde.serialization.lib"]]
+  // The SerDe decides how rows read; the input format is TextInputFormat for
+  // CSV and JSON alike, so it comes last.
+  const hints = [params.classification, params["serde.serialization.lib"], params.inputformat]
   for (const hint of hints) {
     if (!hint) continue
     const match = BY_CLASS.find(([pattern]) => pattern.test(hint))

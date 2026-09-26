@@ -18,6 +18,8 @@ import { TableEntry } from "./table-entry"
 export interface DataBrowserProps {
   catalog: string
   database: string
+  /** Why the catalog's databases could not be listed, if they could not. */
+  databasesError: Error | null
   onContextChange: (context: { catalog: string; database: string }) => void
   onInsert: (text: string) => void
   onRunInNewTab: (sql: string, title: string) => void
@@ -26,6 +28,7 @@ export interface DataBrowserProps {
 export function DataBrowser({
   catalog,
   database,
+  databasesError,
   onContextChange,
   onInsert,
   onRunInNewTab,
@@ -45,7 +48,8 @@ export function DataBrowser({
         <FieldLabel>Catalog</FieldLabel>
         <Select
           value={catalog}
-          onChange={(e) => onContextChange({ catalog: e.target.value, database })}
+          // The database belongs to the catalog: a new catalog starts on its first one.
+          onChange={(e) => onContextChange({ catalog: e.target.value, database: "" })}
         >
           {withCurrent(catalogNames, catalog).map((name) => (
             <option key={name}>{name}</option>
@@ -88,7 +92,7 @@ export function DataBrowser({
           <QueryListState
             isLoading={tables.isLoading}
             isEmpty
-            error={tables.error}
+            error={databasesError ?? tables.error}
             loadingCount={4}
             loadingNoun="tables"
             loadingClassName="-mx-4"

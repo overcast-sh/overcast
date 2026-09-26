@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import type { QueryExecution } from "@aws-sdk/client-athena"
-import { FileText, History, RotateCcw, SquarePen } from "lucide-react"
+import { FileText, History, RotateCcw, SquareCode } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { CopyButton } from "@/components/ui/copy-button"
 import { HighlightedCode } from "@/components/ui/highlighted-code"
 import { RefreshAction, ResourceListFilter, RowAction } from "@/components/ui/resource-list-page"
 import { ResourceListSection } from "@/components/ui/resource-list-section"
@@ -18,7 +19,7 @@ import { QueryError } from "./editor/query-error"
 /** The first line of the SQL, for the table: the whole of it is one expand away. */
 function snippet(sql: string | undefined): string {
   const line = (sql ?? "").trim().split("\n")[0] ?? ""
-  return line.length > 90 ? `${line.slice(0, 90)}…` : line
+  return line.length > 120 ? `${line.slice(0, 120)}…` : line
 }
 
 function matches(execution: QueryExecution, needle: string): boolean {
@@ -35,6 +36,7 @@ function editorLinkFor(execution: QueryExecution) {
   return athenaEditorLink({
     catalog: execution.QueryExecutionContext?.Catalog,
     database: execution.QueryExecutionContext?.Database,
+    workGroup: execution.WorkGroup,
     sql: execution.Query ?? "",
   })
 }
@@ -113,6 +115,10 @@ export function HistoryTab({
         defaultExpanded={(e) => e.QueryExecutionId === execution}
         expandedContent={(e) => (
           <div className="flex flex-col gap-2 py-1">
+            <p className="flex items-center gap-1 font-mono text-2xs text-fg-subtle">
+              {e.QueryExecutionId}
+              <CopyButton value={e.QueryExecutionId ?? ""} noun="execution id" tone="inline" />
+            </p>
             <HighlightedCode
               text={e.Query ?? ""}
               language="sql"
@@ -137,8 +143,8 @@ export function HistoryTab({
           {
             id: "sql",
             header: "SQL",
-            cellClassName: "max-w-md truncate",
-            cell: (e) => snippet(e.Query),
+            // A table cell ignores max-width, so the snippet's own box truncates.
+            cell: (e) => <span className="block max-w-72 truncate">{snippet(e.Query)}</span>,
           },
           {
             id: "workgroup",
@@ -149,7 +155,7 @@ export function HistoryTab({
           {
             id: "submitted",
             header: "Submitted",
-            cellClassName: "text-fg-muted",
+            cellClassName: "whitespace-nowrap text-fg-muted",
             sortValue: (e) => e.Status?.SubmissionDateTime,
             cell: (e) => formatDate(e.Status?.SubmissionDateTime),
           },
@@ -182,7 +188,7 @@ export function HistoryTab({
           <>
             <RowAction asChild label="Open in editor">
               <Link {...editorLinkFor(e)}>
-                <SquarePen aria-hidden className="size-3.5" />
+                <SquareCode aria-hidden className="size-3.5" />
               </Link>
             </RowAction>
             <RowAction

@@ -13,12 +13,12 @@ export function EngineStatusChip({ status }: { status: AthenaEngineStatus }) {
   const chip = engineChip(status, now)
   return (
     <span
-      role="status"
       title={[chip.label, chip.detail].filter(Boolean).join(" · ")}
       className="inline-flex min-w-0 items-center gap-1.5"
     >
       <Badge variant={chip.tone} className="max-w-72 truncate">
-        {chip.label}
+        {/* Only the state is announced: the detail ticks while the engine starts. */}
+        <span role="status">{chip.label}</span>
         {chip.detail && <span className="normal-case opacity-80">&nbsp;· {chip.detail}</span>}
       </Badge>
       {chip.busy && <BlinkingCursor />}

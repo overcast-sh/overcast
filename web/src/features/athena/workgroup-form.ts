@@ -2,8 +2,12 @@ import type { CreateWorkGroupInput, UpdateWorkGroupInput, WorkGroup } from "@aws
 
 /**
  * The workgroup dialog's fields, and the `CreateWorkGroup` and
- * `UpdateWorkGroup` requests they make. An edit that clears a field sends
- * the matching `Remove…` flag, as the API asks, rather than an empty value.
+ * `UpdateWorkGroup` requests they make.
+ *
+ * An edit sends only what changed: a field left as it was is not sent, so
+ * saving a new description cannot rewrite a cutoff the form could only show
+ * rounded. A field that was cleared sends the matching `Remove…` flag, as
+ * the API asks, rather than an empty value.
  */
 export interface WorkGroupForm {
   name: string
@@ -15,9 +19,10 @@ export interface WorkGroupForm {
   cutoffMb: string
 }
 
-const MB = 1024 * 1024
+/** AWS states the cutoff in bytes and its floor as 10 MB: decimal megabytes. */
+const MB = 1_000_000
 
-/** AWS's floor for `BytesScannedCutoffPerQuery`: 10 MB. */
+/** AWS's floor for `BytesScannedCutoffPerQuery`: 10,000,000 bytes. */
 export const MIN_CUTOFF_MB = 10
 
 export function workGroupForm(workGroup?: WorkGroup): WorkGroupForm {
@@ -28,7 +33,7 @@ export function workGroupForm(workGroup?: WorkGroup): WorkGroupForm {
     description: workGroup?.Description ?? "",
     outputLocation: config?.ResultConfiguration?.OutputLocation ?? "",
     enforce: config?.EnforceWorkGroupConfiguration ?? true,
-    cutoffMb: cutoff ? String(Math.round(cutoff / MB)) : "",
+    cutoffMb: cutoff ? String(cutoff / MB) : "",
   }
 }
 
@@ -44,14 +49,14 @@ export function workGroupFormErrors(
     errors.outputLocation = "An S3 location: s3://bucket/prefix/"
   }
   const cutoff = form.cutoffMb.trim()
-  if (cutoff && !(Number.isInteger(Number(cutoff)) && Number(cutoff) >= MIN_CUTOFF_MB)) {
-    errors.cutoffMb = `A whole number of MB, at least ${MIN_CUTOFF_MB}.`
+  if (cutoff && !(Number(cutoff) >= MIN_CUTOFF_MB)) {
+    errors.cutoffMb = `A number of MB, at least ${MIN_CUTOFF_MB}.`
   }
   return errors
 }
 
 function cutoffBytes(form: WorkGroupForm): number | undefined {
-  return form.cutoffMb.trim() ? Number(form.cutoffMb) * MB : undefined
+  return form.cutoffMb.trim() ? Math.round(Number(form.cutoffMb) * MB) : undefined
 }
 
 export function createWorkGroupInput(form: WorkGroupForm): CreateWorkGroupInput {
@@ -67,20 +72,31 @@ export function createWorkGroupInput(form: WorkGroupForm): CreateWorkGroupInput 
   }
 }
 
-export function updateWorkGroupInput(form: WorkGroupForm): UpdateWorkGroupInput {
+/** The edit from `original` to `form`: only the fields that changed. */
+export function updateWorkGroupInput(
+  original: WorkGroupForm,
+  form: WorkGroupForm,
+): UpdateWorkGroupInput {
   const location = form.outputLocation.trim()
   const cutoff = cutoffBytes(form)
+  const locationChanged = location !== original.outputLocation.trim()
+  const cutoffChanged = form.cutoffMb.trim() !== original.cutoffMb.trim()
   return {
     WorkGroup: form.name,
-    Description: form.description.trim(),
+    Description:
+      form.description.trim() !== original.description.trim() ? form.description.trim() : undefined,
     ConfigurationUpdates: {
-      ResultConfigurationUpdates: location
-        ? { OutputLocation: location }
-        : { RemoveOutputLocation: true },
-      EnforceWorkGroupConfiguration: form.enforce,
-      ...(cutoff === undefined
-        ? { RemoveBytesScannedCutoffPerQuery: true }
-        : { BytesScannedCutoffPerQuery: cutoff }),
+      ResultConfigurationUpdates: !locationChanged
+        ? undefined
+        : location
+          ? { OutputLocation: location }
+          : { RemoveOutputLocation: true },
+      EnforceWorkGroupConfiguration: form.enforce !== original.enforce ? form.enforce : undefined,
+      ...(!cutoffChanged
+        ? {}
+        : cutoff === undefined
+          ? { RemoveBytesScannedCutoffPerQuery: true }
+          : { BytesScannedCutoffPerQuery: cutoff }),
     },
   }
 }

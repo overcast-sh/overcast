@@ -67,7 +67,11 @@ export function initialQueryTabs(): QueryTabs {
 
 /** Opens a new tab after the others and selects it. */
 export function openQueryTab(state: QueryTabs, init: Partial<QueryTab> = {}): QueryTabs {
-  const tab = createQueryTab(state.tabs, init)
+  return addQueryTab(state, createQueryTab(state.tabs, init))
+}
+
+/** Adds a tab made with `createQueryTab` after the others, and selects it. */
+export function addQueryTab(state: QueryTabs, tab: QueryTab): QueryTabs {
   return { tabs: [...state.tabs, tab], activeId: tab.id }
 }
 
@@ -125,7 +129,11 @@ function restoreTab(value: unknown): QueryTab | null {
 /** Whatever `localStorage` held, as valid tabs: at least one, with a selected one. */
 export function restoreQueryTabs(value: unknown): QueryTabs {
   if (!isRecord(value) || !Array.isArray(value.tabs)) return initialQueryTabs()
-  const tabs = value.tabs.map(restoreTab).filter((t): t is QueryTab => t !== null)
+  const tabs: QueryTab[] = []
+  for (const tab of value.tabs.map(restoreTab)) {
+    // A tab whose id repeats an earlier one's is dropped: ids key edits and React.
+    if (tab && !tabs.some((t) => t.id === tab.id)) tabs.push(tab)
+  }
   if (tabs.length === 0) return initialQueryTabs()
   const activeId = tabs.some((t) => t.id === value.activeId) ? String(value.activeId) : tabs[0].id
   return { tabs, activeId }

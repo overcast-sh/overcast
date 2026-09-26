@@ -17,6 +17,7 @@ describe("dialectDifference", () => {
     "ALTER TABLE orders ADD PARTITION (dt = '2026-09-26')",
     "SELECT 'UNLOAD' AS word",
     "DESCRIBE orders",
+    "DESCRIBE EXTENDED orders",
   ])("finds none in %s", (sql) => {
     expect(dialectDifference(sql)).toBeNull()
   })

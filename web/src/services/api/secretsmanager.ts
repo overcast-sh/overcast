@@ -1,5 +1,5 @@
 import { awsClients } from "../aws-clients"
-import { endpointResolver } from "../discovery"
+import { overcastFetch } from "./base"
 import {
   ListSecretsCommand,
   CreateSecretCommand,
@@ -50,18 +50,6 @@ export interface SecretRotationStatus {
   versions: SecretVersionSummary[]
   steps: string[]
   lastAttempt?: RotationAttempt
-}
-
-async function overcastFetch<T>(path: string): Promise<T> {
-  const ep = endpointResolver.get()
-  const res = await fetch(`${ep.baseUrl}${path}`, {
-    headers: { "x-overcast-region": ep.region },
-  })
-  if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { message?: string; __type?: string }
-    throw new Error(body.message ?? body.__type ?? `HTTP ${res.status}`)
-  }
-  return (await res.json()) as T
 }
 
 export const secretsmanager = {

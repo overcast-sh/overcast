@@ -13,6 +13,16 @@ export const Route = createFileRoute("/athena/")({
     const [filter, setFilter] = useFilterSearchParam(search, navigate)
     const [sort, setSort] = useSortSearchParam(search, navigate)
     const tab = search.tab ?? "editor"
+    const editorLink =
+      tab === "editor" && search.sql !== undefined
+        ? {
+            catalog: search.catalog,
+            database: search.database,
+            workGroup: search.workgroup,
+            sql: search.sql,
+            executionId: search.execution,
+          }
+        : undefined
     return (
       <AthenaPage
         tab={tab}
@@ -24,19 +34,10 @@ export const Route = createFileRoute("/athena/")({
         onFilterChange={setFilter}
         sort={sort}
         onSortChange={setSort}
-        link={
-          tab === "editor" && search.sql !== undefined
-            ? {
-                catalog: search.catalog,
-                database: search.database,
-                sql: search.sql,
-                executionId: search.execution,
-              }
-            : undefined
-        }
+        link={editorLink}
         onLinkOpened={() => void navigate({ search: { tab: "editor" }, replace: true })}
         execution={search.execution}
-        workGroup={search.workgroup}
+        workGroup={tab === "workgroups" ? search.workgroup : undefined}
         onWorkGroupChange={(workgroup) =>
           void navigate({ search: (prev) => ({ ...prev, workgroup }) })
         }

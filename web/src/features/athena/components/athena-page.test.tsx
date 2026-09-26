@@ -6,10 +6,11 @@ import { routeTree } from "@/routeTree.gen"
 import type * as ApiModule from "@/services/api"
 import type { AthenaEngineStatus } from "@/types"
 import { athenaEditorLink } from "../links"
+import { QUERY_TABS_STORAGE_KEY } from "../query-tabs"
 
 vi.mock("@monaco-editor/react", async () => {
   const { FakeMonacoEditor } = await import("@/test/monaco")
-  return { default: FakeMonacoEditor }
+  return { default: FakeMonacoEditor, loader: { __getMonacoInstance: () => null } }
 })
 vi.mock("@/components/application-ownership-banner", () => ({
   ApplicationOwnershipBanner: () => null,
@@ -22,6 +23,15 @@ const api = vi.hoisted(() => ({
   engine: { engine: "trino", state: "ready", runningQueries: 0 } as AthenaEngineStatus,
   executions: [] as QueryExecution[],
   start: vi.fn((_input: unknown) => Promise.resolve("q-new")),
+  getExecution: vi.fn((id: string) =>
+    id === "gone"
+      ? Promise.reject(new Error(`QueryExecution ${id} was not found`))
+      : Promise.resolve({
+          QueryExecutionId: id,
+          Query: "SELECT 1",
+          Status: { State: "RUNNING", SubmissionDateTime: new Date() },
+        }),
+  ),
 }))
 
 vi.mock("@/services/api", async (importOriginal) => {
@@ -31,7 +41,11 @@ vi.mock("@/services/api", async (importOriginal) => {
     athena: {
       ...actual.athena,
       getEngineStatus: () => Promise.resolve(api.engine),
-      listWorkGroups: () => Promise.resolve([{ Name: "primary", State: "ENABLED" }]),
+      listWorkGroups: () =>
+        Promise.resolve([
+          { Name: "primary", State: "ENABLED" },
+          { Name: "analytics", State: "ENABLED" },
+        ]),
       getWorkGroup: (name: string) => Promise.resolve({ Name: name, Configuration: {} }),
       listDataCatalogs: () => Promise.resolve([{ CatalogName: "AwsDataCatalog", Type: "GLUE" }]),
       listDatabases: () => Promise.resolve([{ Name: "default" }, { Name: "sales" }]),
@@ -47,12 +61,7 @@ vi.mock("@/services/api", async (importOriginal) => {
       listAllQueryExecutions: () => Promise.resolve(api.executions),
       listAllNamedQueries: () => Promise.resolve([]),
       startQueryExecution: api.start,
-      getQueryExecution: (id: string) =>
-        Promise.resolve({
-          QueryExecutionId: id,
-          Query: "SELECT 1",
-          Status: { State: "RUNNING", SubmissionDateTime: new Date() },
-        }),
+      getQueryExecution: api.getExecution,
     },
   }
 })
@@ -72,6 +81,7 @@ beforeEach(() => {
   localStorage.clear()
   resetFakeEditors()
   api.start.mockClear()
+  api.getExecution.mockClear()
   api.engine = { engine: "trino", state: "ready", runningQueries: 0 }
   api.executions = []
 })
@@ -97,6 +107,17 @@ describe("Athena > editor deep link", () => {
   it("takes the SQL out of the URL, so a reload does not open it again", async () => {
     const { router } = renderAthena(url)
     await waitFor(() => expect(router.state.location.search).toEqual({ tab: "editor" }))
+  })
+
+  it("runs the new tab in the workgroup the link names", async () => {
+    renderAthena(`${url}&workgroup=analytics`)
+    await screen.findByRole("tab", { name: "Query 2" })
+    expect(await screen.findByRole("combobox", { name: "workgroup" })).toHaveValue("analytics")
+  })
+
+  it("opens a past execution's result when the link names it", async () => {
+    renderAthena(`${url}&execution=q-past`)
+    await waitFor(() => expect(api.getExecution).toHaveBeenCalledWith("q-past"))
   })
 })
 
@@ -130,6 +151,28 @@ describe("Athena > running a query", () => {
     act(() => editor.runAction("athena.run"))
     expect(await screen.findByRole("button", { name: /Stop/ })).toBeInTheDocument()
   })
+
+  it("does not start a second run while the first is starting", async () => {
+    renderAthena("/athena")
+    const editor = await waitFor(() => latestFakeEditor())
+    act(() => editor.runAction("athena.run"))
+    act(() => editor.runAction("athena.run"))
+    await screen.findByRole("button", { name: /Stop/ })
+    expect(api.start).toHaveBeenCalledOnce()
+  })
+
+  it("says why a restored tab's last execution cannot be shown, and stops asking", async () => {
+    localStorage.setItem(
+      QUERY_TABS_STORAGE_KEY,
+      JSON.stringify({
+        tabs: [{ id: "t1", sql: "SELECT 1", executionId: "gone" }],
+        activeId: "t1",
+      }),
+    )
+    renderAthena("/athena")
+    expect(await screen.findByRole("alert")).toHaveTextContent("QueryExecution gone was not found")
+    expect(api.getExecution).toHaveBeenCalledOnce()
+  })
 })
 
 describe("Athena > engine", () => {
@@ -144,18 +187,16 @@ describe("Athena > engine", () => {
   it("shows a pull as progress in the chip", async () => {
     api.engine = { engine: "trino", state: "pulling", runningQueries: 1 }
     renderAthena("/athena")
-    expect(
-      await screen.findByRole("status", { name: /Starting engine · pulling image/ }),
-    ).toBeInTheDocument()
+    const state = await screen.findByText("Starting engine")
+    expect(state).toHaveAttribute("role", "status")
+    expect(state.parentElement).toHaveTextContent("pulling image")
   })
 })
 
 describe("Athena > data browser", () => {
-  it("inserts a table's qualified name at the cursor", async () => {
-    const { user } = renderAthena("/athena?tab=editor&database=sales&sql=SELECT%201")
-    await user.click(await screen.findByRole("button", { name: "orders" }))
-    // The fake editor records the insert as an edit to its model.
-    expect(screen.getByRole("list", { name: "Tables in sales" })).toBeInTheDocument()
+  it("offers a table's qualified name to insert at the cursor", async () => {
+    renderAthena("/athena?tab=editor&database=sales&sql=SELECT%201")
+    expect(await screen.findByRole("button", { name: "Insert sales.orders" })).toBeInTheDocument()
   })
 
   it("marks an Iceberg table and its partition keys", async () => {
@@ -164,6 +205,16 @@ describe("Athena > data browser", () => {
     expect(within(tables).getByText("ICEBERG")).toBeInTheDocument()
     await user.click(within(tables).getByRole("button", { name: "Expand orders" }))
     expect(within(tables).getByText("◆ partition")).toBeInTheDocument()
+  })
+
+  it("previews a table in a new tab, and runs it", async () => {
+    const { user } = renderAthena("/athena?tab=editor&database=sales&sql=SELECT%201")
+    await user.click(await screen.findByRole("button", { name: "Actions for orders" }))
+    await user.click(await screen.findByRole("menuitem", { name: "Preview" }))
+    expect(await screen.findByRole("tab", { name: "orders", selected: true })).toBeInTheDocument()
+    expect(api.start.mock.calls[0][0]).toMatchObject({
+      QueryString: "SELECT * FROM sales.orders LIMIT 10",
+    })
   })
 })
 
@@ -196,7 +247,9 @@ describe("Athena > history", () => {
     renderAthena("/athena?tab=history&execution=q-new")
     const rows = await screen.findAllByRole("row")
     expect(rows[1]).toHaveTextContent("SELECT nope")
-    expect(await screen.findByRole("alert")).toHaveTextContent("Column 'nope' cannot be resolved")
+    expect(
+      await screen.findByText(/Column 'nope' cannot be resolved/, { selector: "p" }),
+    ).toBeInTheDocument()
   })
 
   it("runs an execution again from its row", async () => {
@@ -216,5 +269,21 @@ describe("Athena > history", () => {
       QueryString: "SELECT 1",
       QueryExecutionContext: { Database: "sales" },
     })
+  })
+
+  it("opens an execution in the editor in the workgroup it ran in", async () => {
+    api.executions = [
+      {
+        QueryExecutionId: "q-1",
+        Query: "SELECT 1",
+        WorkGroup: "analytics",
+        Status: { State: "SUCCEEDED", SubmissionDateTime: new Date() },
+      },
+    ]
+    renderAthena("/athena?tab=history")
+    const link = await screen.findByRole("link", { name: "Open in editor" })
+    expect(new URL(link.getAttribute("href") ?? "", "http://x").searchParams.get("workgroup")).toBe(
+      "analytics",
+    )
   })
 })

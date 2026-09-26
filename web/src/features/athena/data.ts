@@ -10,17 +10,20 @@
  *   athenaKeys.executions()            -> [...endpoint, "athena", "executions"]
  *   athenaKeys.executionList()         -> [...executions(), "list"]
  *   athenaKeys.execution(id)           -> [...executions(), "detail", id]
- *   athenaKeys.runtimeStatistics(id)   -> [...executions(), "runtime", id]
- *   athenaKeys.firstResultPage(id)     -> [...executions(), "results", id]
+ *   athenaKeys.result(id)              -> [...endpoint, "athena", "results", id]
+ *   athenaKeys.runtimeStatistics(id)   -> [...result(id), "runtime"]
+ *   athenaKeys.firstResultPage(id)     -> [...result(id), "first-page"]
+ *   athenaKeys.preparedStatement(wg,n) -> [...workGroups(), "prepared", wg, n]
  *   athenaKeys.dataCatalogs()          -> [...endpoint, "athena", "catalogs"]
  *   athenaKeys.metadata()              -> [...endpoint, "athena", "metadata"]
- *   athenaKeys.databases(catalog)      -> [...metadata(), catalog]
- *   athenaKeys.tables(catalog, db)     -> [...metadata(), catalog, db]
+ *   athenaKeys.databases(catalog)      -> [...metadata(), "databases", catalog]
+ *   athenaKeys.tables(catalog, db)     -> [...metadata(), "tables", catalog, db]
  *   athenaKeys.engine()                -> [...endpoint, "athena", "engine"]
  *
- * Every query execution query — the history list, one execution, its
- * statistics — hangs under `executions()`, which is what an
- * `athena:QueryStateChanged` event invalidates. The data browser's databases
+ * Every query execution query — the history list, one execution — hangs
+ * under `executions()`, which is what an `athena:QueryStateChanged` event
+ * invalidates. A finished query's result and statistics never change, so
+ * they hang elsewhere, under `result(id)`, out of the events' way. The data browser's databases
  * and tables hang under `metadata()`, which Glue's table events invalidate.
  */
 
@@ -46,17 +49,20 @@ export const athenaKeys = {
   workGroup: (name: string) => [...athenaKeys.workGroups(), "detail", name] as const,
   preparedStatements: (workGroup: string) =>
     [...athenaKeys.workGroups(), "prepared", workGroup] as const,
+  preparedStatement: (workGroup: string, name: string) =>
+    [...athenaKeys.preparedStatements(workGroup), name] as const,
   namedQueries: () => [...athenaKeys.all(), "named-queries"] as const,
   executions: () => [...athenaKeys.all(), "executions"] as const,
   executionList: () => [...athenaKeys.executions(), "list"] as const,
   execution: (id: string) => [...athenaKeys.executions(), "detail", id] as const,
-  runtimeStatistics: (id: string) => [...athenaKeys.executions(), "runtime", id] as const,
-  firstResultPage: (id: string) => [...athenaKeys.executions(), "results", id] as const,
+  result: (id: string) => [...athenaKeys.all(), "results", id] as const,
+  runtimeStatistics: (id: string) => [...athenaKeys.result(id), "runtime"] as const,
+  firstResultPage: (id: string) => [...athenaKeys.result(id), "first-page"] as const,
   dataCatalogs: () => [...athenaKeys.all(), "catalogs"] as const,
   metadata: () => [...athenaKeys.all(), "metadata"] as const,
-  databases: (catalog: string) => [...athenaKeys.metadata(), catalog] as const,
+  databases: (catalog: string) => [...athenaKeys.metadata(), "databases", catalog] as const,
   tables: (catalog: string, database: string) =>
-    [...athenaKeys.metadata(), catalog, database] as const,
+    [...athenaKeys.metadata(), "tables", catalog, database] as const,
   engine: () => [...athenaKeys.all(), "engine"] as const,
 }
 
@@ -93,6 +99,15 @@ export function preparedStatementsQueryOptions(workGroup: string) {
   })
 }
 
+/** A prepared statement, for the `?` count an `EXECUTE` of it needs values for. */
+export function preparedStatementQueryOptions(workGroup: string, name: string) {
+  return queryOptions({
+    queryKey: athenaKeys.preparedStatement(workGroup, name),
+    queryFn: () => athena.getPreparedStatement(workGroup, name),
+    enabled: name !== "",
+  })
+}
+
 export function namedQueriesQueryOptions() {
   return queryOptions({
     queryKey: athenaKeys.namedQueries(),
@@ -110,15 +125,19 @@ export function executionsQueryOptions() {
 /**
  * One execution, polled until it finishes. Its state-change event already
  * invalidates it; the poll is what keeps a query that started before the
- * page opened moving when events are off.
+ * page opened moving when events are off. An execution that cannot be read
+ * — gone after the emulator restarted — is not polled again.
  */
 export function executionQueryOptions(id: string) {
   return queryOptions({
     queryKey: athenaKeys.execution(id),
     queryFn: () => athena.getQueryExecution(id),
     enabled: id !== "",
+    retry: false,
     refetchInterval: (query) =>
-      isFinished(query.state.data?.Status?.State) ? false : RUNNING_POLL_MS,
+      query.state.status === "error" || isFinished(query.state.data?.Status?.State)
+        ? false
+        : RUNNING_POLL_MS,
   })
 }
 

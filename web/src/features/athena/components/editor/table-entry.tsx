@@ -52,6 +52,7 @@ export function TableEntry({ table, database, inGlue, onInsert, onRunInNewTab }:
         <button
           type="button"
           title={`Insert ${qualified}`}
+          aria-label={`Insert ${qualified}`}
           onClick={() => onInsert(qualified)}
           className="flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left font-mono text-xs text-fg"
         >
@@ -119,6 +120,7 @@ function ColumnList({
       <button
         type="button"
         title={partition ? "Partition key" : column.Comment || undefined}
+        aria-label={`Insert ${column.Name}${partition ? ", partition key" : ""}`}
         onClick={() => onInsert(qualifiedName(column.Name ?? ""))}
         className="flex w-full items-center gap-2 rounded-sm px-1 py-0.5 text-left font-mono text-2xs hover:bg-bg-muted"
       >

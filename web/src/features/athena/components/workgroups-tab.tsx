@@ -47,7 +47,7 @@ function WorkGroupList({
   const [deleting, setDeleting] = useState<WorkGroupSummary>()
   const remove = useResourceMutation({
     options: deleteWorkGroupMutationOptions(),
-    invalidateKeys: [athenaKeys.workGroups(), athenaKeys.namedQueries()],
+    invalidateKeys: [athenaKeys.workGroups(), athenaKeys.namedQueries(), athenaKeys.executions()],
     successTitle: "Workgroup deleted",
     errorTitle: "Could not delete the workgroup",
     onSuccess: () => setDeleting(undefined),
@@ -133,8 +133,8 @@ function WorkGroupList({
           noun: "workgroup",
           description: (w) => (
             <>
-              Delete <span className="font-mono font-semibold">{w.Name}</span> and its saved
-              queries?
+              Delete <span className="font-mono font-semibold">{w.Name}</span>, with its saved
+              queries and query history?
             </>
           ),
         }}

@@ -16,8 +16,11 @@ export function QueryError({
   sql,
   error,
   message,
+  announce = false,
 }: {
   sql: string
+  /** An alert where the error just happened (the editor), not where it is looked up (History). */
+  announce?: boolean
   /** The execution's `AthenaError`, when it ran and failed. */
   error?: AthenaError
   /** The message: the `AthenaError`'s, its `StateChangeReason`, or the refused request's. */
@@ -28,7 +31,7 @@ export function QueryError({
   return (
     <div className="flex flex-col gap-2">
       <div
-        role="alert"
+        role={announce ? "alert" : undefined}
         className="flex items-start gap-2.5 rounded-md border border-danger/40 bg-danger-muted px-3 py-2"
       >
         <AlertTriangle aria-hidden className="mt-0.5 size-3.5 shrink-0 text-danger" />

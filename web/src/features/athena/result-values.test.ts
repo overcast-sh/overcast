@@ -2,12 +2,11 @@ import type { GetQueryResultsOutput } from "@aws-sdk/client-athena"
 import { parseComplexValue, resultColumn, resultPage, resultValue } from "./result-values"
 
 describe("resultColumn", () => {
-  it("marks numeric types right-aligned and carries a decimal's scale", () => {
+  it("marks a decimal right-aligned, with its precision and scale", () => {
     expect(resultColumn({ Name: "amount", Type: "decimal", Precision: 10, Scale: 2 })).toEqual({
       name: "amount",
       type: "decimal(10,2)",
       numeric: true,
-      scale: 2,
       dateOnly: undefined,
     })
   })
@@ -24,6 +23,7 @@ describe("resultValue", () => {
     ["42", "integer", 42],
     ["9007199254740993", "bigint", 9007199254740993n],
     ["1.5", "double", 1.5],
+    ["12345678901234567.89", "decimal", "12345678901234567.89"],
     ["true", "boolean", true],
     ['{"a":1}', "json", { a: 1 }],
     ["2026-09-26 10:00:00.000 UTC", "timestamp with time zone", "2026-09-26 10:00:00.000 UTC"],

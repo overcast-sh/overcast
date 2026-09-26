@@ -66,10 +66,7 @@ export function AthenaPage({
   return (
     // The editor fills the window, so its result grid scrolls rather than the page.
     <div
-      className={cn(
-        "flex flex-col gap-4",
-        tab === "editor" && "h-[calc(100dvh-7rem)] min-h-[36rem]",
-      )}
+      className={cn("flex flex-col gap-4", tab === "editor" && "h-[calc(100dvh-7rem)] min-h-144")}
     >
       <PageHeader
         title={entry.label}

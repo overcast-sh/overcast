@@ -60,11 +60,34 @@ export function scanSql(sql: string): SqlSegment[] {
   return segments
 }
 
-/** How many `?` placeholders the SQL has: the values `ExecutionParameters` must supply. */
+/** The statement's code alone, comments dropped: what its keywords are read from. */
+function codeText(sql: string): string {
+  return scanSql(sql)
+    .filter((s) => s.kind !== "comment")
+    .map((s) => (s.kind === "code" ? s.text : " x "))
+    .join("")
+    .trim()
+}
+
+/**
+ * How many `?` placeholders the SQL has: the values `ExecutionParameters`
+ * must supply. A `PREPARE`'s placeholders belong to the statement it
+ * prepares, which is given its values when it is executed, so it has none.
+ */
 export function placeholderCount(sql: string): number {
+  if (/^PREPARE\b/i.test(codeText(sql))) return 0
   return scanSql(sql)
     .filter((s) => s.kind === "code")
     .reduce((n, s) => n + (s.text.match(/\?/g)?.length ?? 0), 0)
+}
+
+/**
+ * The prepared statement an `EXECUTE name` runs, when it takes its values
+ * from `ExecutionParameters` rather than a `USING` clause — the form those
+ * parameters exist for. Its placeholders are in the prepared statement.
+ */
+export function executedStatement(sql: string): string | undefined {
+  return /^EXECUTE\s+(\w+)\s*;?$/i.exec(codeText(sql))?.[1]
 }
 
 // ─── Formatting ────────────────────────────────────────────────────────────

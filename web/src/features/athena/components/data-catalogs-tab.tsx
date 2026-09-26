@@ -5,6 +5,7 @@ import { Library } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { FormField } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
+import { ResourceArnCombobox } from "@/components/ui/resource-arn-combobox"
 import { ResourceFormDialog } from "@/components/ui/resource-form-dialog"
 import {
   CreateAction,
@@ -136,6 +137,9 @@ const PARAMETER: Record<"GLUE" | "LAMBDA" | "HIVE", { key: string; hint: string 
   HIVE: { key: "metadata-function", hint: "The ARN of the Hive metastore's Lambda function." },
 }
 
+/** `CreateDataCatalog`'s name pattern: 1–127 letters, digits, `@`, `_` and `-`. */
+const CATALOG_NAME = /^[\w@-]{1,127}$/
+
 function DataCatalogDialog({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState("")
   const [type, setType] = useState<keyof typeof PARAMETER>("GLUE")
@@ -159,7 +163,7 @@ function DataCatalogDialog({ onClose }: { onClose: () => void }) {
       busyLabel="Registering"
       pending={create.isPending}
       error={create.error}
-      canSubmit={name.trim() !== "" && value.trim() !== ""}
+      canSubmit={CATALOG_NAME.test(name.trim()) && value.trim() !== ""}
       onSubmit={() =>
         create.mutate({
           Name: name.trim(),
@@ -168,7 +172,7 @@ function DataCatalogDialog({ onClose }: { onClose: () => void }) {
         })
       }
     >
-      <FormField label="Name" required>
+      <FormField label="Name" required hint="Letters, digits, @, _ and -.">
         <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} />
       </FormField>
       <FormField label="Type">
@@ -179,7 +183,12 @@ function DataCatalogDialog({ onClose }: { onClose: () => void }) {
         </Select>
       </FormField>
       <FormField label={parameter.key} hint={parameter.hint} required>
-        <Input value={value} onChange={(e) => setValue(e.target.value)} />
+        {type === "GLUE" ? (
+          <Input value={value} onChange={(e) => setValue(e.target.value)} />
+        ) : (
+          // LAMBDA and HIVE name a Lambda function by ARN.
+          <ResourceArnCombobox resourceType="lambda" value={value} onChange={setValue} />
+        )}
       </FormField>
     </ResourceFormDialog>
   )

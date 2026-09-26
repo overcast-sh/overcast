@@ -6,17 +6,22 @@ import { Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/menu"
 import { Select } from "@/components/ui/select"
 import { useCopyToClipboard } from "@/hooks/use-clipboard"
 import { AWS_COMMAND_FLAVORS, copyAwsCommand, type AwsCommandFlavor } from "@/lib/aws-command"
-import type { AthenaEngineStatus } from "@/types"
 import { workGroupQueryOptions, workGroupsQueryOptions } from "../../data"
-import { startQueryCall } from "../../query-input"
+import { startQueryCall, type QueryRunRequest } from "../../query-input"
 import type { QueryTab } from "../../query-tabs"
-import { EngineStatusChip } from "./engine-status"
 
 const MOD =
   typeof navigator !== "undefined" && /Mac|iP(hone|ad)/.test(navigator.platform) ? "⌘" : "Ctrl+"
 
+/** A secondary button's text: its icon alone where the toolbar is narrow. */
+function Label({ children }: { children: string }) {
+  return <span className="max-xl:sr-only">{children}</span>
+}
+
 export interface EditorToolbarProps {
   tab: QueryTab
+  /** What Run would send: the *Copy as* snippets are that same request. */
+  request: QueryRunRequest
   onWorkGroupChange: (workGroup: string) => void
   running: boolean
   stopping: boolean
@@ -25,7 +30,6 @@ export interface EditorToolbarProps {
   onStop: () => void
   onFormat: () => void
   onSave: () => void
-  engine: AthenaEngineStatus | undefined
 }
 
 /**
@@ -35,6 +39,7 @@ export interface EditorToolbarProps {
  */
 export function EditorToolbar({
   tab,
+  request,
   onWorkGroupChange,
   running,
   stopping,
@@ -43,7 +48,6 @@ export function EditorToolbar({
   onStop,
   onFormat,
   onSave,
-  engine,
 }: EditorToolbarProps) {
   const workGroups = useQuery(workGroupsQueryOptions())
   const { data: workGroup } = useQuery(workGroupQueryOptions(tab.workGroup))
@@ -75,6 +79,9 @@ export function EditorToolbar({
           title="This workgroup's settings override the query's, including where its results go"
         >
           enforced
+          <span className="sr-only">
+            : this workgroup's result location and settings override the query's
+          </span>
         </Badge>
       )}
       <Button
@@ -96,7 +103,7 @@ export function EditorToolbar({
         title={`Run the selected SQL (⇧${MOD}⏎)`}
       >
         <TextSelect aria-hidden className="size-3.5" />
-        Run selection
+        <Label>Run selection</Label>
       </Button>
       {running && (
         <Button
@@ -118,11 +125,11 @@ export function EditorToolbar({
         title="Normalise whitespace and keyword case"
       >
         <AlignLeft aria-hidden className="size-3.5" />
-        Format
+        <Label>Format</Label>
       </Button>
       <Button size="sm" variant="ghost" onClick={onSave}>
         <Save aria-hidden className="size-3.5" />
-        Save
+        <Label>Save</Label>
       </Button>
       <Menu>
         <MenuTrigger asChild>
@@ -134,18 +141,13 @@ export function EditorToolbar({
           {(Object.keys(AWS_COMMAND_FLAVORS) as AwsCommandFlavor[]).map((flavor) => (
             <MenuItem
               key={flavor}
-              onSelect={() => copyAwsCommand(copy, startQueryCall(tab), flavor)}
+              onSelect={() => copyAwsCommand(copy, startQueryCall(tab, request), flavor)}
             >
               {AWS_COMMAND_FLAVORS[flavor].label}
             </MenuItem>
           ))}
         </MenuContent>
       </Menu>
-      {engine && (
-        <div className="ml-auto">
-          <EngineStatusChip status={engine} />
-        </div>
-      )}
     </div>
   )
 }

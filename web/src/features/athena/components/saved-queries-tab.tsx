@@ -2,7 +2,7 @@ import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import type { NamedQuery } from "@aws-sdk/client-athena"
-import { BookmarkCheck, Pencil, SquarePen } from "lucide-react"
+import { BookmarkCheck, Pencil, SquareCode } from "lucide-react"
 import { FormField } from "@/components/ui/form"
 import { HighlightedCode } from "@/components/ui/highlighted-code"
 import { Input } from "@/components/ui/input"
@@ -117,8 +117,14 @@ export function SavedQueriesTab({
         rowActions={(q) => (
           <>
             <RowAction asChild label={`Open ${q.Name} in the editor`}>
-              <Link {...athenaEditorLink({ database: q.Database, sql: q.QueryString ?? "" })}>
-                <SquarePen aria-hidden className="size-3.5" />
+              <Link
+                {...athenaEditorLink({
+                  database: q.Database,
+                  workGroup: q.WorkGroup,
+                  sql: q.QueryString ?? "",
+                })}
+              >
+                <SquareCode aria-hidden className="size-3.5" />
               </Link>
             </RowAction>
             <RowAction label={`Edit ${q.Name}`} onClick={() => setEditing(q)}>

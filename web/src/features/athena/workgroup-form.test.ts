@@ -14,14 +14,14 @@ const filled = {
 }
 
 describe("workGroupForm", () => {
-  it("reads a workgroup's configuration, the cutoff in MB", () => {
+  it("reads a workgroup's configuration, the cutoff in decimal MB", () => {
     expect(
       workGroupForm({
         Name: "adhoc",
         Configuration: {
           ResultConfiguration: { OutputLocation: "s3://r/" },
           EnforceWorkGroupConfiguration: false,
-          BytesScannedCutoffPerQuery: 100 * 1024 * 1024,
+          BytesScannedCutoffPerQuery: 10_000_000,
         },
       }),
     ).toEqual({
@@ -29,7 +29,7 @@ describe("workGroupForm", () => {
       description: "",
       outputLocation: "s3://r/",
       enforce: false,
-      cutoffMb: "100",
+      cutoffMb: "10",
     })
   })
 })
@@ -56,19 +56,39 @@ describe("createWorkGroupInput", () => {
       Configuration: {
         ResultConfiguration: { OutputLocation: "s3://results/adhoc/" },
         EnforceWorkGroupConfiguration: true,
-        BytesScannedCutoffPerQuery: 100 * 1024 * 1024,
+        BytesScannedCutoffPerQuery: 100_000_000,
       },
     })
   })
 })
 
 describe("updateWorkGroupInput", () => {
+  it("sends nothing for fields left as they were", () => {
+    const original = workGroupForm({
+      Name: "adhoc",
+      Configuration: { BytesScannedCutoffPerQuery: 12_345_678 },
+    })
+    const input = updateWorkGroupInput(original, { ...original, description: "New" })
+    expect(input).toEqual({
+      WorkGroup: "adhoc",
+      Description: "New",
+      ConfigurationUpdates: {
+        ResultConfigurationUpdates: undefined,
+        EnforceWorkGroupConfiguration: undefined,
+      },
+    })
+  })
+
   it("removes a cleared location and cutoff rather than sending them empty", () => {
-    const input = updateWorkGroupInput({ ...filled, outputLocation: "", cutoffMb: "" })
-    expect(input.ConfigurationUpdates).toEqual({
+    const input = updateWorkGroupInput(filled, { ...filled, outputLocation: "", cutoffMb: "" })
+    expect(input.ConfigurationUpdates).toMatchObject({
       ResultConfigurationUpdates: { RemoveOutputLocation: true },
-      EnforceWorkGroupConfiguration: true,
       RemoveBytesScannedCutoffPerQuery: true,
     })
+  })
+
+  it("sends a changed cutoff in bytes", () => {
+    const input = updateWorkGroupInput(filled, { ...filled, cutoffMb: "25" })
+    expect(input.ConfigurationUpdates?.BytesScannedCutoffPerQuery).toBe(25_000_000)
   })
 })

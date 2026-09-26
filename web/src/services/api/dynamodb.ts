@@ -316,10 +316,7 @@ export const dynamodb = {
           StreamEnabled: opts.streamEnabled,
           StreamViewType: opts.streamEnabled
             ? ((opts.streamViewType ?? "NEW_AND_OLD_IMAGES") as
-                | "KEYS_ONLY"
-                | "NEW_IMAGE"
-                | "OLD_IMAGE"
-                | "NEW_AND_OLD_IMAGES")
+                "KEYS_ONLY" | "NEW_IMAGE" | "OLD_IMAGE" | "NEW_AND_OLD_IMAGES")
             : undefined,
         },
       }),

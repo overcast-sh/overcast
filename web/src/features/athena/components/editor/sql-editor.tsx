@@ -17,12 +17,20 @@ import type { SqlPosition } from "../../sql-text"
  * functions, and the workspace's keys —
  *
  * - `⌘/Ctrl+⏎` runs the query, `⇧⌘⏎` runs the selection;
- * - `esc` stops the running query, and only while one runs and no widget
- *   (completion, find) is open, so it never steals Monaco's own `esc`.
+ * - `esc` stops the running query, and only while one runs and nothing of
+ *   Monaco's own wants `esc` (completion, find, parameter hints, several
+ *   cursors, rename).
  *
- * One Monaco model per query tab (`path`), so each tab keeps its own undo
- * history and cursor.
+ * One Monaco model per query tab (`path`), kept when the tab is switched
+ * away from (`keepCurrentModel`), so each tab keeps its own undo history,
+ * cursor and scroll. `disposeSqlModel` (sql-model.ts) drops a closed tab's.
  */
+
+export interface SqlSelection {
+  sql: string
+  /** Where the selection starts in the whole query, in characters. */
+  offset: number
+}
 
 export interface SqlEditorHandle {
   /** Inserts text at the cursor, replacing any selection, and focuses the editor. */
@@ -33,23 +41,40 @@ export interface SqlEditorHandle {
   runSelection: () => void
 }
 
+/** Where the last failed run points, and which run it was. */
+export interface SqlError extends SqlPosition {
+  message: string
+  /** The failed execution: the editor scrolls to the error once per failure. */
+  executionId: string
+}
+
 export interface SqlEditorProps {
   /** The query tab's id: one model, undo history and view state per tab. */
   path: string
   defaultValue: string
   onChange: (sql: string) => void
   /** Runs the query, or `selection` when the selection is being run. */
-  onRun: (selection?: string) => void
+  onRun: (selection?: SqlSelection) => void
   onStop: () => void
   running: boolean
   completion: CompletionContext
-  /** Where the last run's error points, underlined. */
-  error?: SqlPosition & { message: string }
+  error?: SqlError
   ref?: Ref<SqlEditorHandle>
 }
 
 const MARKER_OWNER = "athena"
 const RUNNING_KEY = "athenaQueryRunning"
+/** Every Monaco state in which `esc` already means something. */
+const ESC_IS_MONACOS = [
+  "suggestWidgetVisible",
+  "findWidgetVisible",
+  "parameterHintsVisible",
+  "editorHasMultipleSelections",
+  "inlineSuggestionVisible",
+  "renameInputVisible",
+]
+  .map((key) => `!${key}`)
+  .join(" && ")
 
 const COMPLETION_KIND: Record<CompletionKind, keyof typeof Monaco.languages.CompletionItemKind> = {
   keyword: "Keyword",
@@ -70,11 +95,43 @@ const SORT_PREFIX: Record<CompletionKind, string> = {
   function: "5",
 }
 
-/** The selected SQL, or undefined when nothing but blanks is selected. */
-function selectedText(editor: Monaco.editor.ICodeEditor): string | undefined {
+/** The selected SQL and where it starts, or undefined when nothing but blanks is selected. */
+function selectedSql(editor: Monaco.editor.ICodeEditor): SqlSelection | undefined {
   const selection = editor.getSelection()
-  const text = selection ? editor.getModel()?.getValueInRange(selection) : undefined
-  return text?.trim() ? text : undefined
+  const model = editor.getModel()
+  if (!selection || !model) return undefined
+  const sql = model.getValueInRange(selection)
+  if (!sql.trim()) return undefined
+  return { sql, offset: model.getOffsetAt(selection.getStartPosition()) }
+}
+
+/** Underlines the error (or clears the underline), and scrolls to it when `reveal`. */
+function applyErrorMarker(
+  editor: Monaco.editor.ICodeEditor,
+  monaco: typeof Monaco,
+  error: SqlError | undefined,
+  reveal: boolean,
+): void {
+  const model = editor.getModel()
+  if (!model) return
+  if (!error) {
+    monaco.editor.setModelMarkers(model, MARKER_OWNER, [])
+    return
+  }
+  const line = Math.min(error.line, model.getLineCount())
+  const column = Math.min(error.column, model.getLineMaxColumn(line))
+  const end = model.getWordAtPosition({ lineNumber: line, column })?.endColumn ?? column + 1
+  monaco.editor.setModelMarkers(model, MARKER_OWNER, [
+    {
+      severity: monaco.MarkerSeverity.Error,
+      message: error.message,
+      startLineNumber: line,
+      startColumn: column,
+      endLineNumber: line,
+      endColumn: end,
+    },
+  ])
+  if (reveal) editor.revealPositionInCenterIfOutsideViewport({ lineNumber: line, column })
 }
 
 export function SqlEditor({
@@ -92,10 +149,12 @@ export function SqlEditor({
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null)
   const monacoRef = useRef<typeof Monaco | null>(null)
   const runningKey = useRef<Monaco.editor.IContextKey<boolean> | null>(null)
-  // Monaco's listeners are registered once at mount; they read the latest props here.
-  const latest = useRef({ onRun, onStop, completion })
+  const revealed = useRef<string | null>(null)
+  // Monaco's listeners are registered once at mount, and `@monaco-editor/react`
+  // keeps the first `onMount` it was given: both read the latest props here.
+  const latest = useRef({ onRun, onStop, completion, running, error })
   useEffect(() => {
-    latest.current = { onRun, onStop, completion }
+    latest.current = { onRun, onStop, completion, running, error }
   })
 
   useImperativeHandle(ref, () => ({
@@ -115,7 +174,7 @@ export function SqlEditor({
     },
     runSelection: () => {
       const editor = editorRef.current
-      if (editor) latest.current.onRun(selectedText(editor))
+      if (editor) latest.current.onRun(selectedSql(editor))
     },
   }))
 
@@ -124,35 +183,27 @@ export function SqlEditor({
     runningKey.current?.set(running)
   }, [running])
 
+  // Keyed on the error's parts, not its object: a new object each render
+  // would re-mark and re-scroll on every keystroke.
+  const errorKey = error ? `${error.executionId}:${error.line}:${error.column}` : ""
   useEffect(() => {
     const editor = editorRef.current
     const monaco = monacoRef.current
-    const model = editor?.getModel()
-    if (!editor || !monaco || !model) return
-    if (!error) {
-      monaco.editor.setModelMarkers(model, MARKER_OWNER, [])
-      return
-    }
-    const line = Math.min(error.line, model.getLineCount())
-    const column = Math.min(error.column, model.getLineMaxColumn(line))
-    const end = model.getWordAtPosition({ lineNumber: line, column })?.endColumn ?? column + 1
-    monaco.editor.setModelMarkers(model, MARKER_OWNER, [
-      {
-        severity: monaco.MarkerSeverity.Error,
-        message: error.message,
-        startLineNumber: line,
-        startColumn: column,
-        endLineNumber: line,
-        endColumn: end,
-      },
-    ])
-    editor.revealPositionInCenterIfOutsideViewport({ lineNumber: line, column })
-  }, [error, path])
+    if (!editor || !monaco) return
+    const current = latest.current.error
+    const reveal = current !== undefined && revealed.current !== current.executionId
+    applyErrorMarker(editor, monaco, current, reveal)
+    if (reveal) revealed.current = current.executionId
+  }, [errorKey, path])
 
   const handleMount: OnMount = (editor, monaco) => {
     editorRef.current = editor
     monacoRef.current = monaco
-    runningKey.current = editor.createContextKey(RUNNING_KEY, running)
+    runningKey.current = editor.createContextKey(RUNNING_KEY, latest.current.running)
+    // Mounted after the error arrived: mark it now, as the effect found no editor.
+    const current = latest.current.error
+    applyErrorMarker(editor, monaco, current, current !== undefined)
+    if (current) revealed.current = current.executionId
     editor.addAction({
       id: "athena.run",
       label: "Run query",
@@ -163,13 +214,13 @@ export function SqlEditor({
       id: "athena.run-selection",
       label: "Run selection",
       keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.Enter],
-      run: (ed) => latest.current.onRun(selectedText(ed)),
+      run: (ed) => latest.current.onRun(selectedSql(ed)),
     })
     editor.addAction({
       id: "athena.stop",
       label: "Stop query",
       keybindings: [monaco.KeyCode.Escape],
-      precondition: `${RUNNING_KEY} && !suggestWidgetVisible && !findWidgetVisible`,
+      precondition: `${RUNNING_KEY} && ${ESC_IS_MONACOS}`,
       run: () => latest.current.onStop(),
     })
     const provider = monaco.languages.registerCompletionItemProvider("sql", {
@@ -216,6 +267,7 @@ export function SqlEditor({
       theme={monacoTheme(isDark)}
       onChange={(value) => onChange(value ?? "")}
       onMount={handleMount}
+      keepCurrentModel
       saveViewState
       options={{ ...MONACO_BASE_OPTIONS, fixedOverflowWidgets: true, wordWrap: "off" }}
     />
